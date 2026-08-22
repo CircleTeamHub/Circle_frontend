@@ -54,7 +54,6 @@ test('realtime notification.created only prepends bell types but banners everyth
     'CIRCLE_INVITATION_APPROVED',
     'CIRCLE_INVITATION_REJECTED',
     'CIRCLE_ADMIN_OVERRIDE_APPROVED',
-    'CIRCLE_POST_SIGNUP_CREATED',
     'CIRCLE_POST_AUTO_ENDED',
     'PROFILE_LIKE',
   ]) {

@@ -3,7 +3,7 @@ import type { NotificationType } from '@/types';
 /**
  * 铃铛的域。两个入口互不越界：
  * - `moments` —— 朋友圈页右上角铃铛：别人对「我」和「我的动态」的互动。
- * - `circle`  —— 广场页右上角铃铛：担保验证 / 入圈审批 / 圈子帖动态 + 报名管理。
+ * - `circle`  —— 广场页右上角铃铛：担保验证 / 入圈审批 / 圈子帖动态。
  *
  * 类型白名单镜像后端 notification.constants.ts 的 MOMENT_/CIRCLE_NOTIFICATION_TYPES。
  * 两边改一边就会出现「服务端算进未读数、客户端不显示」的幽灵红点，务必同改。
@@ -24,7 +24,6 @@ const CIRCLE_TYPES: ReadonlySet<string> = new Set([
   'CIRCLE_INVITATION_REJECTED',
   'CIRCLE_ADMIN_OVERRIDE_APPROVED',
   'CIRCLE_POST_PUBLISHED',
-  'CIRCLE_POST_SIGNUP_CREATED',
   'CIRCLE_POST_AUTO_ENDED',
   'CIRCLE_POST_COLLABORATION_RECOGNIZED',
 ]);
