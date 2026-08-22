@@ -18,8 +18,8 @@ const FRAME_STYLE = {
  *
  * sandbox 只给 allow-scripts、不给 allow-same-origin：srcDoc 默认继承宿主
  * 页面的 origin，那样从 CDN 拉进来的 leaflet 就能读到 App 自己的
- * localStorage（里面有登录态）。牺牲的只是同源能力，地图和 nominatim 请求
- * 都不需要。
+ * localStorage（里面有登录态）。牺牲的只是同源能力，地图和已显式配置的
+ * 地理编码服务都不需要。
  *
  * 自动化测试的坑：opaque origin 会让这个 iframe 进独立进程(OOPIF)，CDP 的
  * Input.dispatchMouseEvent 打到顶层 target 上送不进去 —— 用 Playwright/CDP

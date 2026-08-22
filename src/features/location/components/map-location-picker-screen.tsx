@@ -50,6 +50,25 @@ type MapLocationPickerScreenProps = {
 const MAX_LOCATION_TITLE_LENGTH = 120;
 const MAX_LOCATION_ADDRESS_LENGTH = 500;
 
+function readGeocoderBaseUrl(): string | null {
+  const raw = process.env.EXPO_PUBLIC_GEOCODER_BASE_URL?.trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    const isLocalHttp =
+      url.protocol === 'http:' &&
+      (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    if (url.protocol !== 'https:' && !isLocalHttp) return null;
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
 function readCoordinate(
   value: string | string[] | undefined,
   fallback: number,
@@ -144,11 +163,24 @@ function buildMapHtml(
   const scriptSelectedLabel = serializeForInlineScript(labels.selectedLabel);
   const scriptTitle = serializeForInlineScript(title || '');
   const scriptAddress = serializeForInlineScript(address || '');
+  const geocoderBaseUrl = readGeocoderBaseUrl();
+  const scriptGeocoderBaseUrl = geocoderBaseUrl
+    ? serializeForInlineScript(geocoderBaseUrl)
+    : 'null';
+  const geocoderConnectSource = geocoderBaseUrl
+    ? `; connect-src ${escapeHtml(new URL(geocoderBaseUrl).origin)}`
+    : '';
+  const searchControls = geocoderBaseUrl
+    ? `<div class="search">
+      <input id="query" maxlength="120" placeholder="${safeSearchPlaceholder}" value="${safeTitle || safeAddress}">
+      <button id="search">${safeSearchButton}</button>
+    </div>`
+    : '';
   return `<!doctype html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-circle-map'; style-src 'nonce-circle-map' 'unsafe-inline'; img-src https://basemaps.cartocdn.com data: blob:; connect-src https://nominatim.openstreetmap.org">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-circle-map'; style-src 'nonce-circle-map' 'unsafe-inline'; img-src https://basemaps.cartocdn.com data: blob:${geocoderConnectSource}">
   <style nonce="circle-map">${LEAFLET_1_9_4_CSS}</style>
   <style nonce="circle-map">
     html, body, #map { height: 100%; width: 100%; margin: 0; background: ${scheme === 'dark' ? '#0b0f19' : '#e8e5df'}; }
@@ -208,10 +240,7 @@ function buildMapHtml(
 <body>
   <div id="map"></div>
   <div class="bottomSheet">
-    <div class="search">
-      <input id="query" maxlength="120" placeholder="${safeSearchPlaceholder}" value="${safeTitle || safeAddress}">
-      <button id="search">${safeSearchButton}</button>
-    </div>
+    ${searchControls}
     <div class="picked">
       <div id="picked-title">${safeTitle || safeSelectedLabel}</div>
       <small id="picked-address">${safeAddress}</small>
@@ -220,6 +249,7 @@ function buildMapHtml(
   <script nonce="circle-map">${LEAFLET_1_9_4_JS}</script>
   <script nonce="circle-map">
     const SELECTED_LABEL = ${scriptSelectedLabel};
+    const GEOCODER_BASE_URL = ${scriptGeocoderBaseUrl};
     const bridge = window.ReactNativeWebView || {
       postMessage: (data) => window.parent.postMessage(data, '*')
     };
@@ -262,12 +292,28 @@ function buildMapHtml(
       }
 
       let pickGeneration = 0;
+      let geocoderTail = Promise.resolve();
+      let lastGeocoderStart = 0;
 
-      async function fetchReversePlace(lat, lon) {
-        const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon);
-        const response = await fetch(url, { headers: { Accept: 'application/json' } });
-        if (!response.ok) throw new Error('reverse request failed');
-        return response.json();
+      function requestGeocoder(path, params) {
+        if (!GEOCODER_BASE_URL) return Promise.resolve(null);
+        const run = async () => {
+          const delay = Math.max(0, 1000 - (Date.now() - lastGeocoderStart));
+          if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+          lastGeocoderStart = Date.now();
+          const url = new URL(GEOCODER_BASE_URL + path);
+          Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, String(value)));
+          const response = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
+          if (!response.ok) throw new Error('geocoder request failed');
+          return response.json();
+        };
+        const request = geocoderTail.then(run, run);
+        geocoderTail = request.catch(() => undefined);
+        return request;
+      }
+
+      function fetchReversePlace(lat, lon) {
+        return requestGeocoder('/reverse', { format: 'jsonv2', lat, lon });
       }
 
       async function reverseGeocode(lat, lon) {
@@ -279,6 +325,7 @@ function buildMapHtml(
           title: SELECTED_LABEL,
           address: lat.toFixed(5) + ', ' + lon.toFixed(5)
         });
+        if (!GEOCODER_BASE_URL) return;
         try {
           const data = await fetchReversePlace(lat, lon);
           if (generation !== pickGeneration) return;
@@ -292,6 +339,7 @@ function buildMapHtml(
       }
 
       async function refineInitialAddress() {
+        if (!GEOCODER_BASE_URL) return;
         const coordsOnly = /^\\s*-?\\d{1,3}(\\.\\d+)?\\s*,\\s*-?\\d{1,3}(\\.\\d+)?\\s*$/;
         if (picked.address && !coordsOnly.test(picked.address)) return;
         const generation = pickGeneration;
@@ -308,15 +356,13 @@ function buildMapHtml(
       }
 
       async function searchPlace() {
+        if (!GEOCODER_BASE_URL) return;
         const query = document.getElementById('query').value.trim();
         if (!query) return;
         pickGeneration += 1;
         const generation = pickGeneration;
         try {
-          const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(query);
-          const response = await fetch(url, { headers: { Accept: 'application/json' } });
-          if (!response.ok) throw new Error('search request failed');
-          const rows = await response.json();
+          const rows = await requestGeocoder('/search', { format: 'jsonv2', limit: 1, q: query });
           if (generation !== pickGeneration) return;
           if (!rows.length) return;
           const row = rows[0];
@@ -340,10 +386,14 @@ function buildMapHtml(
         const pos = marker.getLatLng();
         reverseGeocode(pos.lat, pos.lng);
       });
-      document.getElementById('search').addEventListener('click', searchPlace);
-      document.getElementById('query').addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') searchPlace();
-      });
+      const searchButton = document.getElementById('search');
+      const searchInput = document.getElementById('query');
+      if (searchButton && searchInput) {
+        searchButton.addEventListener('click', searchPlace);
+        searchInput.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') searchPlace();
+        });
+      }
       refineInitialAddress();
     } catch {
       post({ type: 'map-runtime-unavailable' });

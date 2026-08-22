@@ -74,6 +74,10 @@ export function getInitialLiveKitModule(): LiveKitModule | null | undefined {
 }
 
 type ComponentsReactModule = typeof import('@livekit/components-react');
+type ComponentsReactLoader = () => Promise<ComponentsReactModule>;
+
+const importComponentsReact: ComponentsReactLoader = () =>
+  import('@livekit/components-react');
 
 function adaptComponentsReact(m: ComponentsReactModule): LiveKitModule {
   const VideoTrack: LiveKitModule['VideoTrack'] = function WebVideoTrack({
@@ -127,7 +131,9 @@ function adaptComponentsReact(m: ComponentsReactModule): LiveKitModule {
   };
 }
 
-export function loadLiveKitModule(): Promise<LiveKitModule | null> {
+export function loadLiveKitModule(
+  loader: ComponentsReactLoader = importComponentsReact,
+): Promise<LiveKitModule | null> {
   if (!isWebRtcAvailable()) {
     return Promise.resolve(null);
   }
@@ -138,7 +144,7 @@ export function loadLiveKitModule(): Promise<LiveKitModule | null> {
     return liveKitModulePromise;
   }
 
-  liveKitModulePromise = import('@livekit/components-react')
+  liveKitModulePromise = loader()
     .then((module) => {
       cachedLiveKitModule = adaptComponentsReact(module);
       return cachedLiveKitModule;

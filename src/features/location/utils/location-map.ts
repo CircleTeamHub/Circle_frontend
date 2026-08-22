@@ -270,20 +270,12 @@ export function buildSystemMapUrls(
 ) {
   const coordinates = `${latitude},${longitude}`;
   const encodedLabel = encodeURIComponent(label || coordinates);
-  // 国内的 geo: 由高德 / 百度 / 腾讯地图接管，它们把 URI 里的坐标当 GCJ-02 读。
-  // 传 WGS-84 进去，图钉会落在 500 米开外。境外 isOutOfChina 会让它原样返回，
-  // 所以 Google Maps 那条路径不受影响。
-  // 加偏后的值是算出来的，带一长串无意义的浮点尾数；6 位小数已经是 0.1 米量级，
-  // 远超 GPS 本身的精度。境外不加偏时这里等价于原样输出。
-  const round6 = (value: number) => String(Math.round(value * 1e6) / 1e6);
-  const shifted = wgs84ToGcj02(latitude, longitude);
-  const geoCoordinates = shifted
-    ? `${round6(shifted.latitude)},${round6(shifted.longitude)}`
-    : coordinates;
   return {
     // Apple Maps 收 WGS-84，中国区的显示偏移由它自己处理。
     ios: `maps://?ll=${coordinates}&q=${encodedLabel}`,
-    android: `geo:${geoCoordinates}?q=${geoCoordinates}(${encodedLabel})`,
+    // RFC 5870 的 geo: 默认坐标系是 WGS-84。它是通用 intent，不能预先按某个
+    // 国内地图供应商转换成 GCJ-02，否则 Google Maps / OsmAnd 等会偏移数百米。
+    android: `geo:${coordinates}?q=${coordinates}(${encodedLabel})`,
     fallback: `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=16/${latitude}/${longitude}`,
   };
 }

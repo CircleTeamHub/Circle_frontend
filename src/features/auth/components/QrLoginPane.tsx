@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useTranslation } from 'react-i18next';
-import { buildQrUrl } from '@/features/qr/qr-payload';
+import { buildQrLoginUrl } from '@/features/qr/qr-payload';
 import {
   createQrLoginSession,
   pollQrLoginStatus,
@@ -123,7 +123,7 @@ export function QrLoginPane({ onTokens }: QrLoginPaneProps) {
     <View style={s.root}>
       <View style={[s.qrCard, { backgroundColor: colors.white }]}>
         {status === 'active' && session ? (
-          <QRCode value={buildQrUrl(session.qrToken)} size={QR_SIZE} />
+          <QRCode value={buildQrLoginUrl(session.qrToken)} size={QR_SIZE} />
         ) : status === 'loading' ? (
           <ActivityIndicator color={colors.primary} />
         ) : (

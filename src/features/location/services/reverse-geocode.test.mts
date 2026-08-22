@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolvePlace } from './reverse-geocode.ts';
 
+const GEOCODER_BASE_URL = 'https://geocoder.example.test';
+
 type FetchStub = {
   calls: string[];
   restore: () => void;
@@ -32,8 +34,8 @@ test('a resolved place is cached so the same pin never asks twice', async () => 
     ok({ name: '民田路', display_name: '民田路, 福田区, 深圳市, 中国' }),
   );
   try {
-    const first = await resolvePlace(22.54001, 114.05001);
-    const second = await resolvePlace(22.54001, 114.05001);
+    const first = await resolvePlace(22.54001, 114.05001, GEOCODER_BASE_URL);
+    const second = await resolvePlace(22.54001, 114.05001, GEOCODER_BASE_URL);
 
     assert.deepEqual(first, {
       title: '民田路',
@@ -52,9 +54,9 @@ test('concurrent lookups for one pin share a single request', async () => {
   );
   try {
     const [a, b, c] = await Promise.all([
-      resolvePlace(37.32002, -122.03002),
-      resolvePlace(37.32002, -122.03002),
-      resolvePlace(37.32002, -122.03002),
+      resolvePlace(37.32002, -122.03002, GEOCODER_BASE_URL),
+      resolvePlace(37.32002, -122.03002, GEOCODER_BASE_URL),
+      resolvePlace(37.32002, -122.03002, GEOCODER_BASE_URL),
     ]);
 
     assert.deepEqual(a, b);
@@ -74,8 +76,8 @@ test('a failed lookup is not cached and retries on the next reveal', async () =>
     return ok({ name: '西湖', display_name: '西湖, 杭州市, 中国' });
   });
   try {
-    assert.equal(await resolvePlace(30.24003, 120.15003), null);
-    assert.deepEqual(await resolvePlace(30.24003, 120.15003), {
+    assert.equal(await resolvePlace(30.24003, 120.15003, GEOCODER_BASE_URL), null);
+    assert.deepEqual(await resolvePlace(30.24003, 120.15003, GEOCODER_BASE_URL), {
       title: '西湖',
       address: '西湖, 杭州市, 中国',
     });
@@ -88,7 +90,7 @@ test('a failed lookup is not cached and retries on the next reveal', async () =>
 test('a response without any usable name resolves to null', async () => {
   const stub = stubFetch(async () => ok({ error: 'Unable to geocode' }));
   try {
-    assert.equal(await resolvePlace(0.00004, 0.00004), null);
+    assert.equal(await resolvePlace(0.00004, 0.00004, GEOCODER_BASE_URL), null);
   } finally {
     stub.restore();
   }
@@ -100,7 +102,7 @@ test('the leading segment of display_name becomes the title when name is absent'
     ok({ display_name: '  金田路 , 福中社区, 深圳市' }),
   );
   try {
-    assert.deepEqual(await resolvePlace(22.53005, 114.04005), {
+    assert.deepEqual(await resolvePlace(22.53005, 114.04005, GEOCODER_BASE_URL), {
       title: '金田路',
       address: '金田路 , 福中社区, 深圳市',
     });
@@ -122,9 +124,9 @@ test('lookups for different pins are serialized, never overlapping', async () =>
   });
   try {
     await Promise.all([
-      resolvePlace(1.00006, 1.00006),
-      resolvePlace(2.00006, 2.00006),
-      resolvePlace(3.00006, 3.00006),
+      resolvePlace(1.00006, 1.00006, GEOCODER_BASE_URL),
+      resolvePlace(2.00006, 2.00006, GEOCODER_BASE_URL),
+      resolvePlace(3.00006, 3.00006, GEOCODER_BASE_URL),
     ]);
 
     assert.equal(maxInFlight, 1, '反查必须串行');
@@ -137,9 +139,19 @@ test('lookups for different pins are serialized, never overlapping', async () =>
 test('out-of-range coordinates never reach the network', async () => {
   const stub = stubFetch(async () => ok({ name: 'nope', display_name: 'nope' }));
   try {
-    assert.equal(await resolvePlace(91, 0), null);
-    assert.equal(await resolvePlace(0, 181), null);
-    assert.equal(await resolvePlace(Number.NaN, 0), null);
+    assert.equal(await resolvePlace(91, 0, GEOCODER_BASE_URL), null);
+    assert.equal(await resolvePlace(0, 181, GEOCODER_BASE_URL), null);
+    assert.equal(await resolvePlace(Number.NaN, 0, GEOCODER_BASE_URL), null);
+    assert.equal(stub.calls.length, 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('no provider configured means no public geocoder request', async () => {
+  const stub = stubFetch(async () => ok({ name: 'unexpected' }));
+  try {
+    assert.equal(await resolvePlace(22.5, 114.0, null), null);
     assert.equal(stub.calls.length, 0);
   } finally {
     stub.restore();

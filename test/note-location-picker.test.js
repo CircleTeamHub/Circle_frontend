@@ -18,8 +18,9 @@ test('NoteLocationPickerScreen renders a WebView-backed map picker', () => {
   const nativeSurface = read('src/features/location/components/map-surface.tsx');
 
   assert.match(nativeSurface, /react-native-webview/);
-  assert.match(src, /openstreetmap\.org/);
-  assert.match(src, /nominatim\.openstreetmap\.org/);
+  assert.match(src, /getBasemapUrlTemplate/);
+  assert.match(src, /EXPO_PUBLIC_GEOCODER_BASE_URL/);
+  assert.doesNotMatch(src, /https:\/\/nominatim\.openstreetmap\.org/);
   assert.match(src, /onMessage=\{handleMapMessage\}/);
   assert.match(screen, /MapLocationPickerScreen/);
   assert.match(screen, /setPickedLocation/);

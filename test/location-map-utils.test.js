@@ -142,14 +142,13 @@ test('非法坐标不参与加偏', () => {
   assert.equal(wgs84ToGcj02(22, Number.NaN), null);
 });
 
-// 国内 geo: 由高德/百度/腾讯接管，它们把 URI 里的坐标当 GCJ-02 读。传 WGS-84
-// 进去，图钉就落在 500 米开外。
-test('geo: 用 GCJ-02，Apple Maps 与 OSM 网页版仍用 WGS-84', () => {
+// geo: 是可能被任意地图应用接管的 RFC 5870 通用 URI，缺省坐标系必须保持 WGS-84。
+test('geo:、Apple Maps 与 OSM 网页版都保持 WGS-84', () => {
   const { buildSystemMapUrls } = loadUtils();
   const urls = buildSystemMapUrls(22.545, 114.0575, '深圳市民中心');
 
-  assert.ok(urls.android.includes('22.542282,114.062614'));
-  assert.ok(!urls.android.includes('22.545,114.0575'));
+  assert.ok(urls.android.includes('22.545,114.0575'));
+  assert.ok(!urls.android.includes('22.542282,114.062614'));
   // Apple Maps 收 WGS-84，中国区的偏移由它自己处理；OSM 网页版本身就是 WGS-84。
   assert.ok(urls.ios.includes('22.545,114.0575'));
   assert.ok(urls.fallback.includes('mlat=22.545'));

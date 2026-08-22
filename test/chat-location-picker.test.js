@@ -28,9 +28,11 @@ test('chat exposes a full-screen OpenStreetMap picker route', () => {
 
   assert.match(route, /ChatLocationPickerScreen/);
   assert.match(screen, /MapLocationPickerScreen/);
-  // 底图渲染换成了 CARTO（同一份 OSM 数据的底图向样式），反查仍走 nominatim。
+  // 底图用 CARTO；地理编码仅走显式配置的自建/商用兼容服务。
   assert.match(sharedMap, /getBasemapUrlTemplate/);
-  assert.match(sharedMap, /nominatim\.openstreetmap\.org\/search/);
+  assert.match(sharedMap, /EXPO_PUBLIC_GEOCODER_BASE_URL/);
+  assert.match(sharedMap, /requestGeocoder\('\/search'/);
+  assert.doesNotMatch(sharedMap, /https:\/\/nominatim\.openstreetmap\.org/);
   assert.match(sharedMap, /location-changed/);
   assert.doesNotMatch(sharedMap, /location-selected/);
   assert.doesNotMatch(sharedMap, /unpkg\.com|<script src=|<link rel="stylesheet" href="https:/);

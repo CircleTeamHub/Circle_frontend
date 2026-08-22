@@ -78,3 +78,84 @@ test('shows a recoverable failure when token finalization rejects', async () => 
     expect(screen.queryByTestId('qr-code')).toBeNull();
   });
 });
+
+test('keeps polling through PENDING and finalizes APPROVED tokens once', async () => {
+  jest
+    .mocked(pollQrLoginStatus)
+    .mockResolvedValueOnce({ status: 'PENDING' })
+    .mockResolvedValueOnce({
+      status: 'APPROVED',
+      tokens: { accessToken: 'access', refreshToken: 'refresh' },
+    });
+  const onTokens = jest.fn().mockResolvedValue(true);
+
+  render(<QrLoginPane onTokens={onTokens} />);
+  await waitFor(() => expect(screen.getByTestId('qr-code')).toBeTruthy());
+
+  await act(async () => {
+    jest.advanceTimersByTime(4_000);
+    await Promise.resolve();
+  });
+  expect(onTokens).not.toHaveBeenCalled();
+  expect(screen.getByTestId('qr-code')).toBeTruthy();
+
+  await act(async () => {
+    jest.advanceTimersByTime(4_000);
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(onTokens).toHaveBeenCalledTimes(1));
+  expect(pollQrLoginStatus).toHaveBeenCalledTimes(2);
+
+  await act(async () => {
+    jest.advanceTimersByTime(8_000);
+    await Promise.resolve();
+  });
+  expect(onTokens).toHaveBeenCalledTimes(1);
+});
+
+test('shows the refresh path when the server reports EXPIRED', async () => {
+  jest.mocked(pollQrLoginStatus).mockResolvedValue({ status: 'EXPIRED' });
+
+  render(<QrLoginPane onTokens={jest.fn()} />);
+  await waitFor(() => expect(screen.getByTestId('qr-code')).toBeTruthy());
+
+  await act(async () => {
+    jest.advanceTimersByTime(4_000);
+    await Promise.resolve();
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText('auth.qrLoginExpired')).toBeTruthy();
+    expect(screen.getByText('auth.qrLoginRefresh')).toBeTruthy();
+    expect(screen.queryByTestId('qr-code')).toBeNull();
+  });
+});
+
+test('does not overlap polling requests and resumes after the pending one settles', async () => {
+  let resolvePoll!: (value: { status: 'PENDING' }) => void;
+  jest.mocked(pollQrLoginStatus).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolvePoll = resolve;
+      }),
+  );
+
+  render(<QrLoginPane onTokens={jest.fn()} />);
+  await waitFor(() => expect(screen.getByTestId('qr-code')).toBeTruthy());
+
+  await act(async () => {
+    jest.advanceTimersByTime(8_000);
+    await Promise.resolve();
+  });
+  expect(pollQrLoginStatus).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    resolvePoll({ status: 'PENDING' });
+    await Promise.resolve();
+  });
+  await act(async () => {
+    jest.advanceTimersByTime(4_000);
+    await Promise.resolve();
+  });
+  expect(pollQrLoginStatus).toHaveBeenCalledTimes(2);
+});
