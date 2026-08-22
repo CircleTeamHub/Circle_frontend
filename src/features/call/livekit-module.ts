@@ -61,8 +61,20 @@ export type LiveKitModule = {
   useRoomContext: () => {
     disconnect: () => Promise<void>;
   };
+  /**
+   * 远端音轨的播放载体。web 上 LiveKitRoom 只负责连接和发布，订阅到的远端
+   * 音轨需要真实的 <audio> 元素才出声 —— 少了它，通话界面一切正常、双方
+   * 却互相听不到。原生端音频由 SDK 的 AudioSession 直接走系统播放，
+   * 这里是个 no-op，只为让两档导出面一致。
+   */
+  RoomAudioRenderer: ComponentType<Record<string, never>>;
   registerGlobals?: () => void;
 };
+
+/** 原生端不需要 DOM 音频载体（AudioSession 已经在放）。 */
+function NativeRoomAudioRenderer(): null {
+  return null;
+}
 
 let cachedLiveKitModule: LiveKitModule | null | undefined;
 let liveKitModulePromise: Promise<LiveKitModule | null> | null = null;
@@ -88,7 +100,12 @@ export function loadLiveKitModule(): Promise<LiveKitModule | null> {
 
   liveKitModulePromise = import('@livekit/react-native')
     .then((module) => {
-      cachedLiveKitModule = module as LiveKitModule;
+      const native = module as unknown as Partial<LiveKitModule>;
+      cachedLiveKitModule = {
+        ...(native as LiveKitModule),
+        RoomAudioRenderer:
+          native.RoomAudioRenderer ?? NativeRoomAudioRenderer,
+      };
       if (cachedLiveKitModule.registerGlobals) {
         ensureLiveKitGlobals(cachedLiveKitModule.registerGlobals);
       }

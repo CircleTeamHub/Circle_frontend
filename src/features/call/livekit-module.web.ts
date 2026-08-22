@@ -52,6 +52,8 @@ export type LiveKitModule = {
   useRoomContext: () => {
     disconnect: () => Promise<void>;
   };
+  /** 见原生档注释：web 上少了它远端就是哑的。 */
+  RoomAudioRenderer: ComponentType<Record<string, never>>;
   registerGlobals?: () => void;
 };
 
@@ -116,6 +118,10 @@ function adaptComponentsReact(m: ComponentsReactModule): LiveKitModule {
       m.useParticipants as unknown as LiveKitModule['useParticipants'],
     useRoomContext:
       m.useRoomContext as unknown as LiveKitModule['useRoomContext'],
+    // LiveKitRoom 连接 + 发布本地轨，但不创建播放远端的 <audio>：
+    // 没有这个 renderer，网页端通话看着已连接，每个远端参与者都是静音的。
+    RoomAudioRenderer:
+      m.RoomAudioRenderer as unknown as LiveKitModule['RoomAudioRenderer'],
     // 浏览器 WebRTC 是原生 API，无需注册 globals。
     registerGlobals: undefined,
   };

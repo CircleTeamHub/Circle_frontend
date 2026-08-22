@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
+import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { Radius, Spacing } from '@/theme';
 
@@ -19,10 +20,11 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
   onPress,
   containerWidth: containerWidthProp,
 }) => {
-  const { width: screenWidth } = useWindowDimensions();
+  // 桌面网页版里这是居中栏宽（640），不是 1440 的视口宽。
+  const availableWidth = useContentColumnWidth();
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const containerWidth =
-    containerWidthProp ?? screenWidth - Spacing.lg * 2 - Spacing.md * 2;
+    containerWidthProp ?? availableWidth - Spacing.lg * 2 - Spacing.md * 2;
 
   const layout = useMemo(() => {
     const count = images.length;

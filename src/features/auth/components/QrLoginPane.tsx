@@ -15,8 +15,9 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
  *
  * 生命周期：挂载即建会话 → 渲染二维码（与名片/群码同一深链格式，手机端
  * 现有扫码器直接吃）→ 1.5s 轮询；手机确认后首个轮询拿到 token 交给
- * onTokens（use-auth.completeQrLogin，与密码登录同一收尾链）。过期给
- * 刷新按钮，不自动无限续（避免后台标签页里静默轰炸接口）。
+ * onTokens（use-auth.completeQrLogin，与密码登录同一收尾链）。收尾失败同样
+ * 落到失败态 —— 二维码亮着却不再轮询是最糟的状态。过期给刷新按钮，
+ * 不自动无限续（避免后台标签页里静默轰炸接口）。
  */
 const POLL_INTERVAL_MS = 1_500;
 const QR_SIZE = 200;
@@ -24,7 +25,14 @@ const QR_SIZE = 200;
 type PaneStatus = 'loading' | 'active' | 'expired' | 'failed';
 
 interface QrLoginPaneProps {
-  onTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
+  /**
+   * 收尾回调。返回 false = 收尾失败（拉用户信息或落 session 出错），
+   * 面板转失败态给出重新扫码的出路。
+   */
+  onTokens: (tokens: {
+    accessToken: string;
+    refreshToken: string;
+  }) => Promise<boolean>;
 }
 
 export function QrLoginPane({ onTokens }: QrLoginPaneProps) {
@@ -72,7 +80,12 @@ export function QrLoginPane({ onTokens }: QrLoginPaneProps) {
         if (generationRef.current !== generation) return;
         if (result.status === 'APPROVED') {
           clearInterval(timer);
-          onTokensRef.current(result.tokens);
+          // 必须等收尾结果。不等的话，一旦 /auth/me 或落 session 失败，
+          // 轮询已停、二维码还亮着 —— 用户对着一张永远不会生效的码干等，
+          // 再扫一次也没用（服务端那次消费已经发生）。
+          const ok = await onTokensRef.current(result.tokens);
+          if (generationRef.current !== generation) return;
+          if (!ok) setStatus('failed');
         } else if (result.status === 'EXPIRED') {
           clearInterval(timer);
           setStatus('expired');

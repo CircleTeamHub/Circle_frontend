@@ -1209,6 +1209,7 @@
     "partialUploadFailed": "有{{count}}张图片上传失败，请重试",
     "publishFailed": "发布失败",
     "detail": "动态详情",
+    "openDetail": "查看动态详情",
     "notExist": "动态不存在或已被删除",
     "loadFailed": "动态加载失败，请稍后重试",
     "detailRefreshFailed": "无法刷新最新评论。",

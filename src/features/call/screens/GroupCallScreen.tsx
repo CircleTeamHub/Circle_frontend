@@ -534,6 +534,7 @@ export default function GroupCallScreen() {
   }
 
   const LiveKitRoom = liveKitModule.LiveKitRoom;
+  const RoomAudioRenderer = liveKitModule.RoomAudioRenderer;
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
@@ -564,6 +565,8 @@ export default function GroupCallScreen() {
           );
         }}
       >
+        {/* 必须在 Room 内：远端音轨的播放载体（web 是 <audio>，原生 no-op）。 */}
+        <RoomAudioRenderer />
         <CallRoomContent liveKitModule={liveKitModule} />
       </LiveKitRoom>
       {connectError ? (

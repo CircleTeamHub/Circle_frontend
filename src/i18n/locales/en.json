@@ -1210,6 +1210,7 @@
     "partialUploadFailed": "{{count}} images failed to upload",
     "publishFailed": "Publish Failed",
     "detail": "Moment",
+    "openDetail": "View moment details",
     "notExist": "Moment not found or deleted",
     "loadFailed": "Failed to load, please try again",
     "detailRefreshFailed": "Could not refresh the latest comments.",

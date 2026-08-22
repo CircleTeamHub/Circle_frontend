@@ -23,12 +23,19 @@ export function createQrLoginSession(): Promise<QrLoginSession> {
   return apiClient<QrLoginSession>('/auth/qr-login', { method: 'POST' });
 }
 
+/**
+ * 轮询走 POST，pollKey 放 body。曾经是 `GET ...?key=<pollKey>`：那把钥匙能直接
+ * 换走 access/refresh 令牌，进了 URL 就会沿「开发日志 → 反代访问日志 → 异常
+ * 上报的 request.url」一路留痕，捡到日志的人可以在用户确认后抢先兑换。
+ * 顺带解决另一半：GET 是可缓存的，带令牌的那次响应可能被中间层留存重放。
+ */
 export function pollQrLoginStatus(
   qrToken: string,
   pollKey: string,
 ): Promise<QrLoginPollResult> {
   return apiClient<QrLoginPollResult>(
-    `/auth/qr-login/${encodeURIComponent(qrToken)}?key=${encodeURIComponent(pollKey)}`,
+    `/auth/qr-login/${encodeURIComponent(qrToken)}/status`,
+    { method: 'POST', body: { pollKey } },
   );
 }
 

@@ -1062,6 +1062,7 @@
     "partialUploadFailed": "{{count}} imágenes no se pudieron subir",
     "publishFailed": "Error al publicar",
     "detail": "Momento",
+    "openDetail": "Ver detalles del momento",
     "notExist": "Momento no encontrado o eliminado",
     "loadFailed": "Error al cargar, inténtalo de nuevo",
     "detailRefreshFailed": "No se pudieron actualizar los comentarios más recientes.",
