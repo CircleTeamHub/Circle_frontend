@@ -25,7 +25,8 @@ test('chat exposes a full-screen OpenStreetMap picker route', () => {
 
   assert.match(route, /ChatLocationPickerScreen/);
   assert.match(screen, /MapLocationPickerScreen/);
-  assert.match(sharedMap, /tile\.openstreetmap\.org/);
+  // 底图渲染换成了 CARTO（同一份 OSM 数据的底图向样式），反查仍走 nominatim。
+  assert.match(sharedMap, /getBasemapUrlTemplate/);
   assert.match(sharedMap, /nominatim\.openstreetmap\.org\/search/);
   assert.match(sharedMap, /location-selected/);
   assert.match(sharedMap, /serializeForInlineScript/);

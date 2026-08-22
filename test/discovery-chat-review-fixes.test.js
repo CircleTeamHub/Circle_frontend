@@ -128,10 +128,12 @@ test('the map picker discards superseded geocoding responses', () => {
     2,
     'reverseGeocode 和 searchPlace 都要领号',
   );
+  // 三条异步写回路径都要比对：reverseGeocode / searchPlace / refineInitialAddress。
+  // refineInitialAddress 故意不领号（它不是用户操作），但同样不许覆盖用户的选择。
   assert.equal(
     (picker.match(/if \(generation !== pickGeneration\) return;/g) ?? []).length,
-    2,
-    '两条异步路径都要在写回前比对',
+    3,
+    '每条异步写回路径都要在写回前比对',
   );
 });
 
@@ -143,7 +145,7 @@ test('the map picker reports a missing map runtime instead of going inert', () =
   assert.match(picker, /if \(typeof L === 'undefined'\) \{\s*\n\s*post\(\{ type: 'map-runtime-unavailable' \}\);/);
   assert.match(picker, /payload\.type === 'map-runtime-unavailable'/);
   assert.match(picker, /setMapUnavailable\(true\)/);
-  assert.match(picker, /setWebViewKey\(\(key\) => key \+ 1\)/);
+  assert.match(picker, /setSurfaceKey\(\(key\) => key \+ 1\)/);
   assert.match(picker, /labels\.retryButton/);
   assert.match(picker, /labels\.unavailableMessage/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
