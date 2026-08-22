@@ -2452,6 +2452,9 @@
     }
   },
   "media": {
+    "saveBlockedTitle": "바로 저장할 수 없어요",
+    "saveBlockedMessage": "이 이미지의 호스트가 직접 다운로드를 허용하지 않습니다. 원본을 열어 저장해 주세요.",
+    "openOriginal": "원본 열기",
     "saveImage": "이미지 저장",
     "savedTitle": "저장됨",
     "savedMessage": "이미지를 사진 보관함에 저장했습니다.",

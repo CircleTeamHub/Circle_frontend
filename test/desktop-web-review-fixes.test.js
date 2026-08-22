@@ -107,3 +107,51 @@ test('the cross-origin save fallback can tell an opened tab from a blocked one',
   assert.match(source, /const opened = window\.open\(url, '_blank'\);/);
   assert.match(source, /opened\.opener = null;/);
 });
+
+test('opening the original never sits behind an await', () => {
+  const source = read('src/utils/save-image.web.ts');
+
+  // window.open 只在用户手势那一拍获准执行。放在 await 之后 = 异步弹窗，
+  // Safari/Firefox 直接拦掉，Chrome 也只是靠手势有效期没过才侥幸放行。
+  // 所以它必须待在一个**同步**函数里，由调用方在新的手势里调。
+  const opener = /export function openImageInNewTab\(url: string\): boolean \{[\s\S]*?\n\}/.exec(
+    source,
+  );
+  assert.ok(opener, '找不到同步的 openImageInNewTab');
+  assert.doesNotMatch(opener[0], /await/, 'openImageInNewTab 里不许出现 await');
+  assert.doesNotMatch(
+    opener[0],
+    /async/,
+    'openImageInNewTab 不能是 async —— 返回 Promise 就等于把调用方推进异步',
+  );
+
+  // 异步的保存函数只负责回状态，绝不自己开标签页。
+  const saver = /export async function saveImageToLibrary[\s\S]*?\n\}/.exec(source);
+  assert.ok(saver);
+  assert.doesNotMatch(
+    saver[0],
+    /window\.open/,
+    'await 之后开标签页，正是被弹窗拦截的那个老问题',
+  );
+  assert.match(saver[0], /return 'blocked'/);
+
+  // 调用方得在按钮的 onPress 里开 —— 那是一次全新的用户手势。
+  const viewer = read('src/components/ui/image-viewer.tsx');
+  assert.match(
+    viewer,
+    /outcome === 'blocked'[\s\S]{0,600}onPress: \(\) => \{\s*\n\s*openImageInNewTab\(url\);/,
+  );
+});
+
+test('the web alert runs a button handler inside the click, not after it', () => {
+  // 承重的一环:「打开原图」能绕开弹窗拦截,全靠 onPress 跑在点击那一拍里。
+  // 哪天给弹窗加个退场动画、把回调挪进 setTimeout 或 await 之后,手势就没了 ——
+  // 弹窗被拦、用户点了没反应,而且不会有任何报错。
+  const host = read('src/components/app/web-alert-host.tsx');
+  const handler = /const handleButtonPress = \(button: WebAlertButton\) => \{[\s\S]*?\n  \};/.exec(
+    host,
+  );
+  assert.ok(handler, '找不到 handleButtonPress');
+  assert.doesNotMatch(handler[0], /setTimeout|requestAnimationFrame|await|then\(/);
+  assert.match(handler[0], /button\.onPress\?\.\(\)/);
+});

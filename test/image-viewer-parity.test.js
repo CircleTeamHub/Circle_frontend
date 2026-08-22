@@ -28,9 +28,11 @@ test('save-image keeps the same export surface on both platforms', () => {
     exportedNames(web),
     '平台档导出面漂移：Metro 按平台择档，一边多导出一个符号，另一边的 import 会直接炸',
   );
-  // 三态语义两边一致，调用方才能共用一套提示分支。
+  // 四态语义两边一致，调用方才能共用一套提示分支。
+  // 'blocked' = 拿不到字节，得让用户在新的手势里自己打开原图（只在 web 出现，
+  // 但类型两边必须一致，否则调用方的分支在另一档上是类型错误）。
   for (const source of [native, web]) {
-    for (const outcome of ["'saved'", "'denied'", "'failed'"]) {
+    for (const outcome of ["'saved'", "'denied'", "'failed'", "'blocked'"]) {
       assert.match(source, new RegExp(outcome));
     }
   }

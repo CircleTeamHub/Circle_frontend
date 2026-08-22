@@ -2452,6 +2452,9 @@
     }
   },
   "media": {
+    "saveBlockedTitle": "直接保存できません",
+    "saveBlockedMessage": "この画像の配信元が直接ダウンロードを許可していません。元画像を開いて保存してください。",
+    "openOriginal": "元画像を開く",
     "saveImage": "画像を保存",
     "savedTitle": "保存しました",
     "savedMessage": "画像を写真ライブラリに保存しました。",

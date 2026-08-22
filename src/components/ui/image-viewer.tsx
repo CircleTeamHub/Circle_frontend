@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { ZoomableImage } from '@/components/ui/zoomable-image';
-import { saveImageToLibrary } from '@/utils/save-image';
+import { openImageInNewTab, saveImageToLibrary } from '@/utils/save-image';
 import { Spacing, Typography } from '@/theme';
 
 /**
@@ -84,11 +84,25 @@ export function ImageViewer({
     if (saving) return;
     setSaving(true);
     try {
-      const outcome = await saveImageToLibrary(images[index]);
+      const url = images[index];
+      const outcome = await saveImageToLibrary(url);
       if (outcome === 'denied') {
         Alert.alert(t('media.saveDeniedTitle'), t('media.saveDeniedMessage'));
       } else if (outcome === 'failed') {
         Alert.alert(t('media.saveFailedTitle'), t('media.saveFailedMessage'));
+      } else if (outcome === 'blocked') {
+        // 拿不到字节，只能让用户自己打开原图另存。开标签页必须落在**这个按钮**
+        // 的点击里 —— 那是一次全新的用户手势，不会被弹窗拦截；如果在上面
+        // await 之后直接开，Safari/Firefox 会当成异步弹窗拦掉。
+        Alert.alert(t('media.saveBlockedTitle'), t('media.saveBlockedMessage'), [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('media.openOriginal'),
+            onPress: () => {
+              openImageInNewTab(url);
+            },
+          },
+        ]);
       } else if (Platform.OS !== 'web') {
         // web 由浏览器自己的下载提示反馈，不再叠一层弹窗。
         Alert.alert(t('media.savedTitle'), t('media.savedMessage'));

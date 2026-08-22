@@ -6,6 +6,9 @@
     "empty": "No other accounts"
   },
   "media": {
+    "saveBlockedTitle": "Can't save directly",
+    "saveBlockedMessage": "This image's host doesn't allow direct download. Open the original and save it from there.",
+    "openOriginal": "Open original",
     "saveImage": "Save image",
     "savedTitle": "Saved",
     "savedMessage": "The image was saved to your photo library.",

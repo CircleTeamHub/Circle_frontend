@@ -6,6 +6,9 @@
     "empty": "暂无其他账号"
   },
   "media": {
+    "saveBlockedTitle": "无法直接保存",
+    "saveBlockedMessage": "这张图片的来源不允许直接下载。可以打开原图，再长按或右键另存。",
+    "openOriginal": "打开原图",
     "saveImage": "保存图片",
     "savedTitle": "已保存",
     "savedMessage": "图片已保存到相册。",

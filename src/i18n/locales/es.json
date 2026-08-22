@@ -2455,6 +2455,9 @@
     }
   },
   "media": {
+    "saveBlockedTitle": "No se puede guardar directamente",
+    "saveBlockedMessage": "El servidor de esta imagen no permite la descarga directa. Abre el original y guárdalo desde ahí.",
+    "openOriginal": "Abrir original",
     "saveImage": "Guardar imagen",
     "savedTitle": "Guardada",
     "savedMessage": "La imagen se guardó en tu fototeca.",

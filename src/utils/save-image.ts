@@ -10,7 +10,7 @@ import * as MediaLibrary from 'expo-media-library';
  *
  * ⚠️ 与 save-image.web.ts 的导出面必须保持一致（Metro 按平台择档）。
  */
-export type SaveImageResult = 'saved' | 'denied' | 'failed';
+export type SaveImageResult = 'saved' | 'denied' | 'failed' | 'blocked';
 
 /** 从 URL 猜扩展名；猜不到按 jpg（相册按内容识别，扩展名只影响文件名）。 */
 function guessExtension(url: string): string {
@@ -42,4 +42,12 @@ export async function saveImageToLibrary(
   } catch {
     return 'failed';
   }
+}
+
+/**
+ * 两档导出面对齐用。原生直接写系统相册，不存在「拿不到字节只能开浏览器」
+ * 那条路（saveImageToLibrary 在原生永远不会回 'blocked'），所以这里不做事。
+ */
+export function openImageInNewTab(_url: string): boolean {
+  return false;
 }
