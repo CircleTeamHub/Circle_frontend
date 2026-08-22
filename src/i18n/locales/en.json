@@ -2471,6 +2471,8 @@
       "selectedLabel": "Selected location"
     },
     "list": {
+      "selectedCardA11y": "Selected, {{title}}",
+      "unselectedCardA11y": "Not selected, {{title}}",
       "fromSource": "From {{name}}",
       "remark": "Remark: {{text}}",
       "openSenderChat": "Chat with {{name}}",

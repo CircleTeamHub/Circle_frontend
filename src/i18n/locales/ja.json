@@ -960,6 +960,8 @@
       "selectedLabel": "選択した位置"
     },
     "list": {
+      "selectedCardA11y": "選択済み、{{title}}",
+      "unselectedCardA11y": "未選択、{{title}}",
       "fromSource": "{{name}}から",
       "remark": "メモ：{{text}}",
       "openSenderChat": "{{name}}とチャット",

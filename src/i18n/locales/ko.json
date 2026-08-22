@@ -960,6 +960,8 @@
       "selectedLabel": "선택한 위치"
     },
     "list": {
+      "selectedCardA11y": "선택됨, {{title}}",
+      "unselectedCardA11y": "선택 안 됨, {{title}}",
       "fromSource": "{{name}}에서",
       "remark": "메모: {{text}}",
       "openSenderChat": "{{name}}님과 채팅",

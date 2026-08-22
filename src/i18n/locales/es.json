@@ -961,6 +961,8 @@
       "selectedLabel": "Ubicación seleccionada"
     },
     "list": {
+      "selectedCardA11y": "Seleccionado, {{title}}",
+      "unselectedCardA11y": "No seleccionado, {{title}}",
       "fromSource": "De {{name}}",
       "remark": "Comentario: {{text}}",
       "openSenderChat": "Chatear con {{name}}",

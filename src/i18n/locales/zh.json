@@ -2468,6 +2468,8 @@
       "selectedLabel": "已选择位置"
     },
     "list": {
+      "selectedCardA11y": "已选中，{{title}}",
+      "unselectedCardA11y": "未选中，{{title}}",
       "fromSource": "来自 {{name}}",
       "remark": "备注：{{text}}",
       "openSenderChat": "和 {{name}} 私聊",
