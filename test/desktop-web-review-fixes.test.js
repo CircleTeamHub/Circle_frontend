@@ -224,3 +224,25 @@ test('the document language follows the selected locale on web', () => {
   // 初值也要同步一次，否则首屏仍是模板里那个写死的值。
   assert.match(source, /syncDocumentLang\(i18n\.language\)/);
 });
+
+test('CI launches the client-only production export in a real browser', () => {
+  const workflow = read('.github/workflows/ci.yml');
+  const smoke = read('.github/scripts/smoke-web-export.js');
+
+  // The app bootstraps auth and secure storage on the client; exporting a
+  // server-rendered shell would reintroduce the production-only hydration
+  // failure this smoke test is intended to catch.
+  const appConfig = JSON.parse(read('app.json'));
+  assert.equal(appConfig.expo.web.output, 'single');
+  assert.match(workflow, /expo export --platform web/);
+  assert.doesNotMatch(workflow, /--no-ssg/);
+  assert.match(workflow, /EXPO_PUBLIC_API_URL: https:\/\/api\.web-export\.invalid/);
+  assert.match(workflow, /node \.github\/scripts\/smoke-web-export\.js/);
+
+  // Exercise both the entry route and a direct SPA deep link, and fail on
+  // exceptions even when React still leaves markup behind in #root.
+  assert.match(smoke, /'Runtime\.exceptionThrown'/);
+  assert.match(smoke, /rootChildren/);
+  assert.match(smoke, /\/qr-login\?token=/);
+  assert.match(smoke, /path\.join\(DIST, 'index\.html'\)/);
+});

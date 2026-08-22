@@ -48,13 +48,14 @@ test('web geocoder runs in the trusted parent origin instead of the opaque ifram
   const web = read('src/features/location/components/map-surface.web.tsx');
   const screen = read('src/features/location/components/map-location-picker-screen.tsx');
 
-  assert.match(web, /type === 'geocoder-request'/);
+  assert.match(web, /handleWebGeocoderBridgeRequest/);
   assert.match(web, /const requestSource = frameRef\.current\?\.contentWindow/);
-  assert.match(web, /requestSource\.postMessage/);
-  assert.match(web, /payload\.path !== '\/search'/);
-  assert.match(web, /fetch\(url/);
+  const bridge = read('src/features/location/components/web-geocoder-bridge.ts');
+  assert.match(bridge, /requestSource\.postMessage/);
+  assert.match(bridge, /payload\.path !== '\/search'/);
+  assert.match(bridge, /fetchImpl\(url/);
   assert.match(screen, /USE_PARENT_GEOCODER_BRIDGE/);
-  assert.match(web, /type: 'geocoder-response'/);
+  assert.match(bridge, /type: 'geocoder-response'/);
   assert.match(screen, /requestParentGeocoder\(path, params\)/);
   assert.match(screen, /geocoderBaseUrl=\{readGeocoderBaseUrl\(\)\}/);
 });

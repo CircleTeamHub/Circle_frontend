@@ -191,6 +191,9 @@ jobs:
             exit 1
           fi
 
+      - name: Browser smoke exported web routes
+        run: node .github/scripts/smoke-web-export.js
+
       # babel.config.js 只在 production 构建挂 transform-remove-console，而
       # api.env('production') 没解析到是「静默失效」——strip 哪天不生效，没有人会知道。
       # 复用上一步 Web Export 已经产出的 dist/（NODE_ENV=production，strip 生效），
