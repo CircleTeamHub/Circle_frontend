@@ -21,6 +21,7 @@ import {
   fetchChatMembers,
 } from '@/chat-core/api';
 import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchCircleDetail, inviteToCircle } from '@/services/api/circles';
 import type { CircleInvitation } from '@/types';
@@ -29,7 +30,10 @@ import {
   filterInvitableCircleFriends,
   pruneSelectedCircleInvitees,
 } from '@/features/discover/utils/circle-invite';
-import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import {
+  diagnosticErrorMessage,
+  logClientDiagnostic,
+} from '@/utils/client-diagnostics';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -345,11 +349,14 @@ export default function InviteToCircleScreen() {
     } catch (error) {
       Alert.alert(
         t('circle.invite.failed', { defaultValue: '邀请失败' }),
-        error instanceof Error ? error.message : String(error),
+        getApiErrorMessage(
+          error,
+          t('common.networkError', { defaultValue: '网络异常，请稍后重试' }),
+        ),
       );
       logClientDiagnostic('circle_invite_submit_failed', {
         circleId,
-        message: error instanceof Error ? error.message : String(error),
+        message: diagnosticErrorMessage(error),
       });
     } finally {
       setSubmitting(false);

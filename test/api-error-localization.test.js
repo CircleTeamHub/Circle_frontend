@@ -50,6 +50,23 @@ function loadServerErrorCodes() {
   return moduleObj.exports;
 }
 
+// 与 loadServerErrorCodes 同款宿主 realm 加载(new Function 而非 vm) ——
+// isUserFacingError 里有 `instanceof Error`,vm 的独立 realm 会让宿主造的
+// Error 全部判失败。
+function loadUserFacingError() {
+  const filePath = path.join(process.cwd(), 'src/utils/user-facing-error.ts');
+  const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    fileName: filePath,
+  }).outputText;
+  const moduleObj = { exports: {} };
+  const fn = new Function('module', 'exports', 'require', transpiled);
+  fn(moduleObj, moduleObj.exports, require);
+  return moduleObj.exports;
+}
+
+const USER_FACING_ERROR = loadUserFacingError();
+
 const BACKEND_CODES_PATH =
   process.env.BACKEND_CODES_PATH ||
   path.join(process.cwd(), '..', 'circle_be', 'src/common/app-error-codes.ts');
@@ -79,6 +96,7 @@ function loadErrors() {
     if (spec === '@/i18n') return I18N;
     if (spec === '@/services/api/client') return { ApiError: FakeApiError };
     if (spec === '@/services/api/server-error-codes') return loadServerErrorCodes();
+    if (spec === '@/utils/user-facing-error') return USER_FACING_ERROR;
     return require(spec);
   };
   // new Function runs in the host realm, so `error instanceof Error` inside errors.ts
@@ -110,9 +128,44 @@ test('uses the caller fallback when ApiError has no errorCode', () => {
   assert.equal(getApiErrorMessage(err, 'fallback'), 'fallback');
 });
 
-test('non-ApiError falls through to Error.message, then the fallback', () => {
-  assert.equal(getApiErrorMessage(new Error('boom'), 'fallback'), 'boom');
+// 普通 Error 的 message 是「Failed to fetch」「websocket error」这一类底层文本,
+// 一律不上屏 —— 这正是「会话加载失败：websocket error」那次泄漏的根因。
+test('plain Error.message is never shown to users', () => {
+  assert.equal(getApiErrorMessage(new Error('boom'), 'fallback'), 'fallback');
+  assert.equal(
+    getApiErrorMessage(new Error('websocket error'), 'fallback'),
+    'fallback',
+  );
   assert.equal(getApiErrorMessage('weird', 'fallback'), 'fallback');
+});
+
+test('UserFacingError message passes through — it was written for the user', () => {
+  const { UserFacingError } = USER_FACING_ERROR;
+  assert.equal(
+    getApiErrorMessage(new UserFacingError('资料已提交，但刷新用户信息失败'), 'fallback'),
+    '资料已提交，但刷新用户信息失败',
+  );
+});
+
+test('client-built status-0 ApiError copy (timeout/offline) passes through', () => {
+  const err = new FakeApiError('请求超时，请检查网络连接后重试', undefined);
+  err.status = 0;
+  assert.equal(
+    getApiErrorMessage(err, 'fallback'),
+    '请求超时，请检查网络连接后重试',
+  );
+});
+
+test('server-status ApiError without errorCode still hides the raw message', () => {
+  const err = new FakeApiError('Internal Server Error', undefined);
+  err.status = 500;
+  assert.equal(getApiErrorMessage(err, 'fallback'), 'fallback');
+});
+
+test('StorageUploadError sanitized copy passes through (send-errors precedent)', () => {
+  const error = new Error('上传失败 (403: AccessDenied)');
+  error.name = 'StorageUploadError';
+  assert.equal(getApiErrorMessage(error, 'fallback'), '上传失败 (403: AccessDenied)');
 });
 
 test('avatar-frame response diagnostics are never exposed to users', () => {

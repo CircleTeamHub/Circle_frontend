@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { NavHeader } from '@/components/ui/nav-header';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { updateUserProfile } from '@/services/api/profile';
 import {
   requestUploadPresign,
@@ -406,8 +407,7 @@ export default function EditProfileFieldScreen() {
         setUser(nextUser);
         router.back();
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : t('validation.avatarSaveFailed');
+        const message = getApiErrorMessage(error, t('validation.avatarSaveFailed'));
         Alert.alert(t('validation.saveFailed'), message);
       } finally {
         setIsSaving(false);
@@ -434,8 +434,7 @@ export default function EditProfileFieldScreen() {
       setUser(nextUser);
       router.back();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : t('validation.saveFailed');
+      const message = getApiErrorMessage(error, t('validation.saveFailed'));
       Alert.alert(t('validation.saveFailed'), message);
     } finally {
       setIsSaving(false);

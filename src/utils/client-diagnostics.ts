@@ -69,6 +69,17 @@ function toBreadcrumbDetails(
 }
 
 /**
+ * 埋点专用的原始错误文本。业务代码不许自己写 `instanceof Error ? x.message : …`
+ * 三元——那个指纹一旦散落在 feature 里，下一步往往就是被顺手塞进 Alert 上屏
+ * （「会话加载失败：websocket error」就是这么来的）。展示走 getApiErrorMessage /
+ * getChatSendErrorMessage；只有埋点走这里。message 字段不在 SENTRY_BREADCRUMB_ALLOWLIST
+ * 里，所以这段文本只进 dev console，不随上报离开设备。
+ */
+export function diagnosticErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
  * 仅 dev 的诊断日志 + 仅本地的面包屑缓冲。三层防护，缺一不可：
  * - __DEV__ 短路：production 里连 console 字符串拼接都不做。babel 的
  *   transform-remove-console 已经会剥掉 console.warn，但那是构建配置——配置一旦漏掉

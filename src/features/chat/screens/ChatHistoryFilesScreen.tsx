@@ -16,6 +16,7 @@ import {
   resolveChatHistoryRouteParams,
 } from '@/features/chat/chat-history';
 import { searchChatMessages } from '@/chat-core/api';
+import { getApiErrorMessage } from '@/services/api/errors';
 import type { ChatMessageDto } from '@/chat-core/protocol';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -85,9 +86,10 @@ export default function ChatHistoryFilesScreen() {
       .catch((e: unknown) => {
         if (!cancelled) {
           setError(
-            e instanceof Error
-              ? e.message
-              : t('chat.history.loadFailed', { defaultValue: '加载失败' }),
+            getApiErrorMessage(
+              e,
+              t('chat.history.loadFailed', { defaultValue: '加载失败' }),
+            ),
           );
         }
       })
@@ -147,9 +149,10 @@ export default function ChatHistoryFilesScreen() {
       })
       .catch((e: unknown) => {
         setError(
-          e instanceof Error
-            ? e.message
-            : t('chat.history.loadFailed', { defaultValue: '加载失败' }),
+          getApiErrorMessage(
+            e,
+            t('chat.history.loadFailed', { defaultValue: '加载失败' }),
+          ),
         );
       })
       .finally(() => {

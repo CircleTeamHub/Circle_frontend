@@ -17,6 +17,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchPlazaPost } from '@/services/api/plaza';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { toPlazaPostCardData } from '@/features/discover/utils/plaza-post-card';
@@ -74,9 +75,10 @@ export default function SharePlazaPostScreen() {
       } catch (err) {
         if (!cancelled) {
           setError(
-            err instanceof Error
-              ? err.message
-              : t('share.loadFailed', { defaultValue: '加载失败' }),
+            getApiErrorMessage(
+              err,
+              t('share.loadFailed', { defaultValue: '加载失败' }),
+            ),
           );
         }
       } finally {
@@ -128,9 +130,10 @@ export default function SharePlazaPostScreen() {
         );
       } catch (err) {        Alert.alert(
           t('userProfile.openChatFailedTitle', { defaultValue: '打开聊天失败' }),
-          err instanceof Error
-            ? err.message
-            : t('common.networkError', { defaultValue: '网络错误，请重试' }),
+          getApiErrorMessage(
+            err,
+            t('common.networkError', { defaultValue: '网络错误，请重试' }),
+          ),
         );
       } finally {
         sendingRef.current = false;

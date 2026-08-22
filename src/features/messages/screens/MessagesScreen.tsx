@@ -1187,7 +1187,7 @@ export default function MessagesScreen() {
         ListEmptyComponent={
           <Text style={d.emptyText}>
             {connectionError
-              ? t('messages.loadFailed', { error: connectionError })
+              ? t('messages.loadFailed')
               : t('messages.noConversations')}
           </Text>
         }

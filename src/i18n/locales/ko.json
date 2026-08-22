@@ -675,7 +675,7 @@
     "scanAlbumFailedMessage": "잠시 후 다시 시도해 주세요.",
     "seatManagement": "임시 그룹 채팅",
     "groupManagement": "그룹 관리",
-    "loadFailed": "대화를 불러오지 못했습니다: {{error}}",
+    "loadFailed": "대화를 불러오지 못했습니다. 네트워크 확인 후 다시 시도해 주세요",
     "noConversations": "대화가 없습니다",
     "desktopEmptyDetail": "대화를 선택해 채팅을 시작하세요",
     "imNotConnected": "IM에 연결되어 있지 않습니다. 다시 로그인해 주세요.",

@@ -177,7 +177,7 @@
     "scanAlbumFailedMessage": "请稍后重试。",
     "seatManagement": "临时群聊",
     "groupManagement": "群组管理",
-    "loadFailed": "会话加载失败：{{error}}",
+    "loadFailed": "会话加载失败，请检查网络后重试",
     "noConversations": "暂无会话",
     "desktopEmptyDetail": "选择一个会话开始聊天",
     "imNotConnected": "IM 未连接，请重新登录后重试",
