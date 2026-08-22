@@ -135,6 +135,35 @@ export function useAuth() {
     [onAuthSuccess, safeSetError, safeSetSubmitting],
   );
 
+  /**
+   * 扫码登录收尾（桌面网页版）：轮询侧拿到后端换发的 token 后走与
+   * 密码/验证码登录完全相同的收尾链（拉用户、落 session、记账号、跳转）。
+   */
+  const completeQrLogin = useCallback(
+    async (tokens: AuthTokens): Promise<boolean> => {
+      // 返回收尾是否成功。调用方（扫码面板）据此决定要不要转失败态 ——
+      // 静默吞掉的话，面板会停在"二维码还亮着但已经不轮询"的死态。
+      if (inFlightRef.current) return false;
+      safeSetError(null);
+      inFlightRef.current = true;
+      safeSetSubmitting(true);
+      try {
+        await onAuthSuccess(tokens);
+        return true;
+      } catch (requestError) {
+        await clearLocalSession();
+        safeSetError(
+          getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')),
+        );
+        return false;
+      } finally {
+        inFlightRef.current = false;
+        safeSetSubmitting(false);
+      }
+    },
+    [onAuthSuccess, safeSetError, safeSetSubmitting],
+  );
+
   const loginWithCode = useCallback(
     async (email: string, code: string) => {
       if (inFlightRef.current) return;
@@ -350,6 +379,7 @@ export function useAuth() {
   return {
     login,
     loginWithCode,
+    completeQrLogin,
     register,
     logout,
     switchAccount,

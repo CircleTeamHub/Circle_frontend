@@ -7,7 +7,19 @@ export type ContactFriendSection = {
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-export function getFriendDisplayName(friend: Pick<FriendProfile, 'nickname' | 'accountId'>) {
+/**
+ * 通讯录里这位好友该显示的名字：备注 > 昵称 > 账号。
+ *
+ * 备注优先是「设了备注就该看见备注」的直觉（微信同款），也是加好友时
+ * 填的备注真正生效的地方 —— 后端在 accept 时把申请里的备注提升成
+ * remarkA，这里必须读它，否则用户会觉得那次填写石沉大海。
+ * 排序与字母分组都基于本函数，因此备注同样决定好友落在哪个字母段。
+ */
+export function getFriendDisplayName(
+  friend: Pick<FriendProfile, 'nickname' | 'accountId' | 'remark'>,
+) {
+  const remark = friend.remark?.trim();
+  if (remark) return remark;
   const nickname = friend.nickname?.trim();
   return nickname || friend.accountId;
 }
@@ -17,12 +29,16 @@ function getAlphaInitial(value: string) {
   return LETTERS.includes(initial) ? initial : null;
 }
 
-export function getFriendSortKey(friend: Pick<FriendProfile, 'nickname' | 'accountId'>) {
+export function getFriendSortKey(
+  friend: Pick<FriendProfile, 'nickname' | 'accountId' | 'remark'>,
+) {
   const displayName = getFriendDisplayName(friend);
   return getAlphaInitial(displayName) ? displayName : friend.accountId;
 }
 
-export function getFriendSectionTitle(friend: Pick<FriendProfile, 'nickname' | 'accountId'>) {
+export function getFriendSectionTitle(
+  friend: Pick<FriendProfile, 'nickname' | 'accountId' | 'remark'>,
+) {
   return getAlphaInitial(getFriendSortKey(friend)) ?? '#';
 }
 

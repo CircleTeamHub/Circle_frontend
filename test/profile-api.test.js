@@ -36,6 +36,17 @@ function loadProfileApi(deps) {
         };
       }
 
+      if (request === '@/utils/user-facing-error') {
+        return {
+          UserFacingError: class UserFacingError extends Error {
+            constructor(message) {
+              super(message);
+              this.name = 'UserFacingError';
+            }
+          },
+        };
+      }
+
       throw new Error(`Unexpected import: ${request}`);
     },
   };

@@ -536,7 +536,7 @@ export default function CircleDetailScreen() {
       if (mountedRef.current) {
         Alert.alert(
           t('circle.error'),
-          error instanceof Error ? error.message : t('circle.loadError'),
+          getApiErrorMessage(error, t('circle.loadError')),
         );
       }
     } finally {

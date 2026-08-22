@@ -18,7 +18,8 @@ for (const file of walk(APP)) {
   const rel = relative(APP, file).replace(/\.(tsx|ts|jsx|js)$/, '');
   for (const seg of rel.split('/')) {
     // _layout 不是 URL 段；index 代表父路径本身；[param] 单独处理。
-    if (seg === '_layout' || seg === 'index' || seg.startsWith('[')) continue;
+    // + 前缀是 expo-router 特殊文件(+html/+not-found),不是 URL 段。
+    if (seg === '_layout' || seg === 'index' || seg.startsWith('[') || seg.startsWith('+')) continue;
     segments.add(seg);
   }
 }

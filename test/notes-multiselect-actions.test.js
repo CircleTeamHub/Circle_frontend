@@ -85,7 +85,14 @@ test('NoteCard renders selection state, owner remark, and tappable source chips'
   assert.match(card, /selectionMode/);
   assert.match(card, /checkmark-circle/);
   assert.match(card, /ellipse-outline/);
-  assert.match(card, /accessibilityState=\{selectionMode \? \{ selected \} : undefined\}/);
+  // 原生侧的选中态仍走 accessibilityState;web 侧它是死代码(RNW 0.21 的
+  // createDOMProps 不认这个属性),状态改写进覆盖按钮的无障碍名。
+  // 两条都要在,少哪条都会让一端的读屏听不出勾没勾。
+  assert.match(
+    card,
+    /accessibilityState=\{!isWeb && selectionMode \? \{ selected \} : undefined\}/,
+  );
+  assert.match(card, /notes\.list\.(un)?selectedCardA11y/);
 
   // 备注行：仅笔记主人可见的私人标注。
   assert.match(card, /note\.remark/);

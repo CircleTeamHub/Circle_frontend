@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { OptionPickerSheet, type PickerOption } from '@/components/ui/option-picker-sheet';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
@@ -474,12 +475,11 @@ function MethodSwitch({
   return (
     <View style={s.methodRow}>
       <Text style={[s.methodLabel, { color: colors.text }]}>{label}</Text>
-      <Switch
+      <ThemedSwitch
+        tint={colors.blue}
         value={value}
         disabled={disabled}
         onValueChange={onValueChange}
-        trackColor={{ false: colors.surfaceBorder, true: colors.blue }}
-        thumbColor={colors.white}
       />
     </View>
   );

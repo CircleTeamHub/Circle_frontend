@@ -26,8 +26,16 @@ test('GroupCallScreen reports native module and room connection failures without
 
   assert.match(source, /import \{ reportError \} from '@\/observability\/sentry'/);
   assert.match(source, /operation: 'livekit'/);
-  assert.match(source, /kind: 'moduleLoad'/);
   assert.match(source, /kind: 'roomConnection'/);
+  // moduleLoad 上报随装载逻辑迁去 livekit-module 平台档（两档都要有）。
+  for (const modulePath of [
+    'src/features/call/livekit-module.ts',
+    'src/features/call/livekit-module.web.ts',
+  ]) {
+    const moduleSource = read(modulePath);
+    assert.match(moduleSource, /operation: 'livekit'/);
+    assert.match(moduleSource, /kind: 'moduleLoad'/);
+  }
   assert.doesNotMatch(source, /reportError\([^\n]*activeCall\.id/);
   assert.doesNotMatch(source, /reportError\([^\n]*livekit\.token/);
 });
@@ -156,4 +164,24 @@ test('call type chooser copy exists in all five locales', () => {
       `${locale}.json call.livekit.connectedVideo`,
     );
   }
+});
+
+test('web calls mount a room audio renderer so remote participants are audible', () => {
+  // web 的 LiveKitRoom 只连接 + 发布本地轨；订阅到的远端音轨需要真实的
+  // <audio> 元素才出声。少了它，通话界面显示"已连接"、双方却互相听不到 ——
+  // 一个不会报错、只能靠真人拨一通才发现的缺陷。
+  const screen = read('src/features/call/screens/GroupCallScreen.tsx');
+  assert.match(
+    screen,
+    /<RoomAudioRenderer \/>[\s\S]{0,200}<\/LiveKitRoom>/,
+    'RoomAudioRenderer 必须挂在 LiveKitRoom 内部（要拿 room context）',
+  );
+
+  const web = read('src/features/call/livekit-module.web.ts');
+  assert.match(web, /RoomAudioRenderer:\s*\n?\s*m\.RoomAudioRenderer/);
+
+  // 原生档同名导出（AudioSession 已在放，这里是 no-op），两档导出面必须一致。
+  const native = read('src/features/call/livekit-module.ts');
+  assert.match(native, /RoomAudioRenderer: ComponentType/);
+  assert.match(native, /NativeRoomAudioRenderer/);
 });

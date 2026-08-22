@@ -33,6 +33,7 @@
     "@blocknote/react": "^0.47.3",
     "@config-plugins/react-native-webrtc": "^14.0.0",
     "@expo/vector-icons": "^15.0.2",
+    "@livekit/components-react": "^2.9.24",
     "@livekit/react-native": "^2.11.0",
     "@livekit/react-native-expo-plugin": "^1.0.2",
     "@livekit/react-native-webrtc": "^144.1.0",

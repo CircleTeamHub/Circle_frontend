@@ -11,7 +11,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 // 必须在入口文件最早引入，启用动画引擎。
 import 'react-native-reanimated';
-import { ActivityIndicator, NativeModules, View } from 'react-native';
+import { ActivityIndicator, NativeModules, Platform, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { installLocalizedAlertDefaults } from '@/utils/localized-alert';
 import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
@@ -34,6 +34,8 @@ import { NotificationSnackbarHost } from '@/features/notifications/components/No
 import { PushNotificationRouteHandler } from '@/features/notifications/components/PushNotificationRouteHandler';
 import { PushNotificationTokenRegistrar } from '@/features/notifications/components/PushNotificationTokenRegistrar';
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
+import { WebAlertHost } from '@/components/app/web-alert-host';
+import { WebDocumentTitle } from '@/components/app/web-document-title';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
   initSentry,
@@ -304,6 +306,11 @@ function RootLayout() {
           <CallInviteHost />
           <AccountSwitcherSheet />
           <LoginSecurityCodeGate />
+          {/* Web 专属：Alert.alert 的渲染宿主（RNW 的 Alert 是空操作）。
+              原生平台不挂 —— localized-alert 只在 web 把调用指过来。 */}
+          {Platform.OS === 'web' ? <WebAlertHost /> : null}
+          {/* Web 专属：标签页标题 + 未读数前缀（经 expo-router/head）。 */}
+          {Platform.OS === 'web' ? <WebDocumentTitle /> : null}
         </AuthRouteGuard>
       </MemberNameAnimationProvider>
     </ThemeProvider>

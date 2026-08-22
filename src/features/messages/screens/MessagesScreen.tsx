@@ -12,6 +12,9 @@ import {
 import { mapChatConversationToUI } from "@/chat-core/mappers";
 import { markConversationRead } from "@/chat-core/socket-manager";
 import { selectTotalUnread, type StoredChatMessage, useChatStore } from "@/chat-core/store";
+import ChatDetailScreen, {
+  type EmbeddedChatParams,
+} from "@/features/chat/screens/ChatDetailScreen";
 import { hasFailedLatestMessage } from "@/features/messages/utils/failed-preview";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { orderMessageFilters } from "@/features/messages/utils/message-filter-order";
@@ -22,6 +25,9 @@ import {
   type ConversationWithLocalUnread,
 } from "@/features/messages/utils/local-unread";
 import { getUserProfileHref } from "@/features/user/utils/routes";
+import { SplitPaneResizer } from "@/components/app/split-pane-resizer";
+import { useDesktopSplitLayout } from "@/hooks/use-desktop-split-layout";
+import { useSplitPaneStore } from "@/stores/splitPaneStore";
 import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
 import { Radius, Spacing, Typography, useTheme } from "@/theme";
@@ -38,6 +44,7 @@ import {
   ListRenderItemInfo,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -93,6 +100,27 @@ function getPinnedGroupPosition(
 
 // 静态样式（不依赖主题色，提取到组件外避免每次渲染重建）
 const s = StyleSheet.create({
+  // —— 桌面网页版分栏（useDesktopSplitLayout 命中时启用）——
+  splitRoot: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  splitListPane: {
+    // 宽度是用户可拖的（splitPaneStore），右侧描边交给 SplitPaneResizer，
+    // 这里不再画边框，否则拖拽时会出现双线。
+  },
+  splitDetailPane: {
+    flex: 1,
+  },
+  splitEmptyPane: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.md,
+  },
+  splitEmptyText: {
+    ...Typography.body,
+  },
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: 100,
@@ -174,6 +202,9 @@ const s = StyleSheet.create({
   },
   swipeForeground: {
     zIndex: 1,
+    // 桌面分栏的选中高亮铺在这一层:给圆角,方角块在窄栏里太生硬。
+    // 手机端这层是透明的(底色由 rowSurface 给),圆角无副作用。
+    borderRadius: Radius.lg,
   },
   swipeActions: {
     position: "absolute",
@@ -308,6 +339,8 @@ type ConversationRowProps = {
   onTogglePinned: (conversation: Conversation) => void;
   onToggleMuted: (conversation: Conversation) => void;
   onDelete: (conversation: Conversation) => void;
+  /** 桌面分栏下禁用：鼠标点击/框选的横向抖动会误触滑动，把操作条卡在半开。 */
+  swipeEnabled: boolean;
 };
 
 function ConversationRowImpl({
@@ -325,6 +358,7 @@ function ConversationRowImpl({
   onTogglePinned,
   onToggleMuted,
   onDelete,
+  swipeEnabled,
 }: ConversationRowProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -414,6 +448,41 @@ function ConversationRowImpl({
     [closeSwipe, item],
   );
 
+  // 桌面网页版没有滑动手势(鼠标拖拽会误触),用右键 / 长按唤出同样的三个动作。
+  // 菜单走 Alert(web 上由 WebAlertHost 渲染),与全 app 其他菜单同一套。
+  const showRowActionMenu = useCallback(() => {
+    Alert.alert('', '', [
+      {
+        text: item.pinned ? labels.unpin : labels.pin,
+        onPress: () => onTogglePinned(item),
+      },
+      {
+        text: item.muted ? labels.unmute : labels.mute,
+        onPress: () => onToggleMuted(item),
+      },
+      {
+        text: labels.delete,
+        style: 'destructive',
+        onPress: () => onDelete(item),
+      },
+      { text: t('common.cancel'), style: 'cancel' },
+    ]);
+  }, [item, labels, onDelete, onToggleMuted, onTogglePinned, t]);
+
+  // Web 的右键:RN 没有这个手势,直接给宿主节点挂 DOM 监听。
+  const rowRef = useRef<View>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || swipeEnabled) return;
+    const node = rowRef.current as unknown as HTMLElement | null;
+    if (!node?.addEventListener) return;
+    const onContextMenu = (event: Event) => {
+      event.preventDefault();
+      showRowActionMenu();
+    };
+    node.addEventListener('contextmenu', onContextMenu);
+    return () => node.removeEventListener('contextmenu', onContextMenu);
+  }, [showRowActionMenu, swipeEnabled]);
+
   const renderSwipeActions = () => (
     <View style={s.swipeActions}>
       <Pressable
@@ -451,10 +520,12 @@ function ConversationRowImpl({
   );
 
   return (
-    <View style={[s.row, getPinnedRowStyle(pinnedGroupPosition)]}>
-      {renderSwipeActions()}
+    <View ref={rowRef} style={[s.row, getPinnedRowStyle(pinnedGroupPosition)]}>
+      {/* 桌面分栏：选中高亮是半透明色，垫在下面的操作层会透出来；
+          手势也已禁用，这层不渲染。 */}
+      {swipeEnabled ? renderSwipeActions() : null}
       <Animated.View
-        {...panResponder.panHandlers}
+        {...(swipeEnabled ? panResponder.panHandlers : null)}
         style={[
           s.swipeForeground,
           { backgroundColor: rowBackgroundColor, transform: [{ translateX }] },
@@ -489,6 +560,8 @@ function ConversationRowImpl({
             testID={testID}
             style={s.rowContent}
             onPress={() => onOpenConversation(item)}
+            // 桌面没有滑动手势:长按(鼠标按住)与右键都能唤出置顶/静音/删除。
+            onLongPress={swipeEnabled ? undefined : showRowActionMenu}
           >
             <View style={s.rowTop}>
               <View style={s.nameRow}>
@@ -787,6 +860,13 @@ export default function MessagesScreen() {
     return conversations;
   }, [activeFilterId, conversationGroups, conversations]);
 
+  // 桌面网页版（宽视口）分栏状态：右栏当前内嵌的会话。窄窗/原生恒为 null。
+  const isSplitLayout = useDesktopSplitLayout();
+  const listPaneWidth = useSplitPaneStore((state) => state.listPaneWidth);
+  const [embeddedChat, setEmbeddedChat] = useState<EmbeddedChatParams | null>(
+    null,
+  );
+
   // 点击会话行 → 进入聊天详情页（立即跳转，不等服务端 mark-read / refresh）
   const handleConversationPress = useCallback(
     (conversation: Conversation) => {
@@ -798,19 +878,28 @@ export default function MessagesScreen() {
         .conversations.find((c) => c.id === conversation.id);
       markConversationRead(conversation.id, dto?.lastMessage?.height ?? 0);
 
+      const detailParams: EmbeddedChatParams = {
+        conversationID: conversation.id,
+        sourceID: conversation.sourceID,
+        title: conversation.name,
+        conversationType: conversation.conversationType,
+        conversationKind: dto?.type.toLowerCase() as
+          | EmbeddedChatParams["conversationKind"],
+        avatarUrl: conversation.avatarUrl,
+      };
+
+      // 分栏模式：右栏内嵌详情，不做路由跳转（窄窗仍走原页栈，行为不变）。
+      if (isSplitLayout) {
+        setEmbeddedChat(detailParams);
+        return;
+      }
+
       router.push({
         pathname: "/(tabs)/messages/chat-detail",
-        params: {
-          conversationID: conversation.id,
-          sourceID: conversation.sourceID,
-          title: conversation.name,
-          conversationType: conversation.conversationType,
-          conversationKind: dto?.type.toLowerCase(),
-          avatarUrl: conversation.avatarUrl,
-        },
+        params: detailParams,
       });
     },
-    [clearLocalUnread, router],
+    [clearLocalUnread, isSplitLayout, router],
   );
 
   const handleOpenUserProfile = useCallback(
@@ -899,6 +988,14 @@ export default function MessagesScreen() {
                   await updateChatConversationPreferences(conversation.id, {
                     hidden: true,
                   });
+                  // 分栏模式:删掉的正好是右栏正在显示的那个会话时,把右栏收回
+                  // 空态。不收的话左边的行没了、右边还挂着一段已经被清空的
+                  // 聊天,往里发消息等于把会话原地复活。
+                  // 用函数式更新读当前值,免得把 embeddedChat 塞进依赖 ——
+                  // 那会让这个回调随每次切会话重建。
+                  setEmbeddedChat((current) =>
+                    current?.conversationID === conversation.id ? null : current,
+                  );
                 } catch (err) {
                   if (isDev) {
                     console.warn("[messages] swipe delete failed", err);
@@ -968,7 +1065,11 @@ export default function MessagesScreen() {
         testID={E2E_TEST_IDS.messagesConversation(item.id)}
         pinnedGroupPosition={getPinnedGroupPosition(visibleConversations, index)}
         labels={swipeLabels}
-        rowBackgroundColor={colors.background}
+        rowBackgroundColor={
+          isSplitLayout && embeddedChat?.conversationID === item.id
+            ? colors.primaryLight
+            : colors.background
+        }
         nameStyle={d.name}
         timeStyle={d.time}
         previewStyle={d.preview}
@@ -978,16 +1079,20 @@ export default function MessagesScreen() {
         onTogglePinned={handleToggleConversationPinned}
         onToggleMuted={handleToggleConversationMuted}
         onDelete={handleConfirmDeleteConversation}
+        swipeEnabled={!isSplitLayout}
       />
     ),
     [
       colors.background,
+      colors.primaryLight,
       d,
+      embeddedChat?.conversationID,
       handleConfirmDeleteConversation,
       handleConversationPress,
       handleToggleConversationMuted,
       handleToggleConversationPinned,
       handleOpenUserProfile,
+      isSplitLayout,
       swipeLabels,
       visibleConversations,
     ],
@@ -1075,7 +1180,7 @@ export default function MessagesScreen() {
     </View>
   ), [activeTab, colors, d, filterItems, handleClearUnread, handleFilterPress, handleOpenFind, handleOpenGroups, imConnected, imConnecting, t]);
 
-  return (
+  const listPane = (
     <View
       testID={E2E_TEST_IDS.messagesScreen}
       style={[d.container, { paddingTop: insets.top }]}
@@ -1090,7 +1195,7 @@ export default function MessagesScreen() {
         ListEmptyComponent={
           <Text style={d.emptyText}>
             {connectionError
-              ? t('messages.loadFailed', { error: connectionError })
+              ? t('messages.loadFailed')
               : t('messages.noConversations')}
           </Text>
         }
@@ -1128,6 +1233,40 @@ export default function MessagesScreen() {
           </View>
         </Pressable>
       </Modal>
+    </View>
+  );
+
+  if (!isSplitLayout) {
+    return listPane;
+  }
+
+  // 桌面网页版分栏：左栏放会话列表（宽度用户可拖），右栏内嵌聊天详情。
+  // key 用会话 ID：切换会话时详情整树重挂，各会话内部状态互不串扰。
+  return (
+    <View style={s.splitRoot}>
+      <View style={[s.splitListPane, { width: listPaneWidth }]}>{listPane}</View>
+      <SplitPaneResizer paneWidth={listPaneWidth} />
+      <View style={s.splitDetailPane}>
+        {embeddedChat ? (
+          <ChatDetailScreen
+            key={embeddedChat.conversationID}
+            embedded={embeddedChat}
+          />
+        ) : (
+          <View style={s.splitEmptyPane}>
+            <Ionicons
+              name="chatbubbles-outline"
+              size={44}
+              color={colors.textSecondary}
+            />
+            <Text style={[s.splitEmptyText, { color: colors.textSecondary }]}>
+              {t("messages.desktopEmptyDetail", {
+                defaultValue: "选择一个会话开始聊天",
+              })}
+            </Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }

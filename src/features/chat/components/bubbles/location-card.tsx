@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Linking,
+  PixelRatio,
   View,
   Text,
   StyleSheet,
@@ -13,10 +14,16 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography } from '@/theme';
 import type { ChatMessage } from '@/types';
 import {
+  BASEMAP_ATTRIBUTION,
   buildSystemMapUrls,
   getOpenStreetMapPreviewTiles,
   hasValidLocationCoordinates,
+  isCoordinateOnlyAddress,
 } from '@/features/location/utils/location-map';
+import {
+  resolvePlace,
+  type ResolvedPlace,
+} from '@/features/location/services/reverse-geocode';
 import {
   CHAT_CARD_PADDING_VERTICAL,
   LOCATION_CARD_WIDTH,
@@ -122,12 +129,17 @@ export const LocationCard: React.FC<LocationCardProps> = ({
   onAvatarPress,
   onLongPress,
 }) => {
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
   // 地图瓦片来自第三方(tile.openstreetmap.org)。挂在渲染里就意味着:只要这条
   // 位置消息进了列表,私聊里的坐标 + 收件人的网络元数据就自动交给了 OSM,收件人
   // 没做任何操作。改成显式点开才请求 —— 未展开时只画本地占位图,不发任何请求。
-  const [previewRevealed, setPreviewRevealed] = useState(false);
+  //
+  // 自己发出去的那条不受这条门禁约束:坐标是本人刚在选点页选的,那一页已经拉过
+  // 一整屏 OSM 瓦片了,再让本人点一次「显示地图」只是把自己的消息变成一块灰板。
+  const [previewRevealed, setPreviewRevealed] = useState(outgoing);
+  // 反查回来的真实地名,只用来补掉「只有经纬度」的地址栏。
+  const [resolvedPlace, setResolvedPlace] = useState<ResolvedPlace | null>(null);
 
   const d = useMemo(
     () => ({
@@ -189,13 +201,35 @@ export const LocationCard: React.FC<LocationCardProps> = ({
             LOCATION_CARD_WIDTH,
             LOCATION_MAP_HEIGHT,
             15,
+            { scheme: resolvedMode, retina: PixelRatio.get() > 1 },
           )
         : null,
-    [coordinates, previewRevealed],
+    [coordinates, previewRevealed, resolvedMode],
   );
   const revealPreview = useCallback(() => {
     setPreviewRevealed(true);
   }, []);
+
+  // 地址栏只有经纬度时补一次反查。严格跟着 previewRevealed 走:没展开地图的
+  // 消息一个第三方请求都不发,和瓦片用的是同一道门禁。
+  const needsResolvedAddress =
+    hasCoordinates && isCoordinateOnlyAddress(message.locationAddress);
+  useEffect(() => {
+    if (!previewRevealed || !needsResolvedAddress || !coordinates) return;
+    let cancelled = false;
+    void resolvePlace(coordinates.latitude, coordinates.longitude).then(
+      (place) => {
+        if (!cancelled) setResolvedPlace(place);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [coordinates, needsResolvedAddress, previewRevealed]);
+
+  // 标题优先用消息自带的（「我的位置」是用户的真实意图，别拿路名盖掉）。
+  const displayTitle = message.locationTitle || resolvedPlace?.title || '';
+  const displayAddress = resolvedPlace?.address || message.locationAddress || '';
 
   const openLocationInMaps = useCallback(async () => {
     if (!coordinates) return;
@@ -258,7 +292,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
                 </View>
               </View>
               <Text pointerEvents="none" style={[sLocation.attribution, d.attribution]}>
-                © OpenStreetMap
+                {BASEMAP_ATTRIBUTION}
               </Text>
             </>
           ) : (
@@ -282,8 +316,16 @@ export const LocationCard: React.FC<LocationCardProps> = ({
           )}
         </View>
         <View style={[sLocation.locationInfo, sLocation.locationCardContent]}>
-          <Text style={d.locationTitle}>{message.locationTitle}</Text>
-          <Text style={d.locationAddress}>{message.locationAddress}</Text>
+          {displayTitle ? (
+            <Text numberOfLines={1} style={d.locationTitle}>
+              {displayTitle}
+            </Text>
+          ) : null}
+          {displayAddress ? (
+            <Text numberOfLines={2} style={d.locationAddress}>
+              {displayAddress}
+            </Text>
+          ) : null}
         </View>
       </Pressable>
       {message.time ? <Text style={d.timeText}>{message.time}</Text> : null}

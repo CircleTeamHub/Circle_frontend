@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { memo, useCallback, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
@@ -93,6 +93,23 @@ function NoteCardInner({
     [note, onLongPress],
   );
 
+  // Web 覆盖按钮的处理器。停冒泡，避免点在卡片内边距上时覆盖层和外层各触发一次。
+  const handleOverlayPress = useCallback(
+    (e: { stopPropagation: () => void }) => {
+      e.stopPropagation();
+      onPress(note);
+    },
+    [note, onPress],
+  );
+
+  const handleOverlayLongPress = useCallback(
+    (e: { stopPropagation: () => void }) => {
+      e.stopPropagation();
+      onLongPress?.(note);
+    },
+    [note, onLongPress],
+  );
+
   const handleMore = useCallback(
     (e: { stopPropagation: () => void }) => {
       e.stopPropagation();
@@ -117,6 +134,26 @@ function NoteCardInner({
     [note, onSourcePress],
   );
 
+  const isWeb = Platform.OS === 'web';
+  const baseLabel = accessibilityLabel ?? note.title;
+  /**
+   * 覆盖按钮念出来的名字。多选模式把勾选状态并进名字里,而不是走
+   * accessibilityState —— RNW 0.21 的 createDOMProps 根本不认这个属性
+   * (源码里零命中),写了也不会变成任何 aria-*;而 aria-selected 又不是
+   * role="button" 的合法属性。写进名字是各家读屏都稳的那条路。
+   */
+  const overlayLabel = selectionMode
+    ? t(
+        selected
+          ? 'notes.list.selectedCardA11y'
+          : 'notes.list.unselectedCardA11y',
+        {
+          defaultValue: selected ? '已选中，{{title}}' : '未选中，{{title}}',
+          title: baseLabel,
+        },
+      )
+    : baseLabel;
+
   // 多选模式下 chip 不再跳聊天，避免和「点卡片=勾选」抢手势。
   const chipsEnabled = Boolean(onSourcePress) && !selectionMode;
   const canShowActions = showActions && Boolean(onMorePress) && !selectionMode;
@@ -129,10 +166,33 @@ function NoteCardInner({
       ]}
       onPress={handlePress}
       onLongPress={onLongPress ? handleLongPress : undefined}
-      accessibilityRole={accessibilityRole}
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={selectionMode ? { selected } : undefined}
+      // Web:卡片内部还有 chip/更多等真按钮,外层再当 <button> 就是
+      // button 套 button(非法 HTML,React DOM 告警+点击路由混乱)。
+      // 外层退成普通容器,「可操作」语义交给下面那层覆盖按钮;原生不变。
+      accessibilityRole={isWeb ? undefined : accessibilityRole}
+      accessibilityLabel={isWeb ? undefined : accessibilityLabel}
+      accessibilityState={!isWeb && selectionMode ? { selected } : undefined}
+      // RNW 的 Pressable 默认 focusable,不给 tabIndex=-1 的话外层这个 div
+      // 自己也是一个 tab 停靠点 —— 每张卡片要按两次 Tab,而其中一次落在
+      // 没有角色、读屏只会念一串文本的容器上。停靠点归覆盖按钮独有。
+      tabIndex={isWeb ? -1 : undefined}
     >
+      {isWeb ? (
+        /* 铺满整卡的透明按钮。它是真 <button> 但**没有子节点**,所以不构成
+           button 套 button —— 卡内那三个按钮是它的兄弟,不是后代。
+           由此拿回三件事:Tab 停得下来、Enter/Space 走浏览器原生激活、
+           读屏念得出「按钮」而不是一团 div。
+           渲染在最前面 → 绘制层在内容之下,鼠标点内容/「更多」/来源 chip
+           的路径与改动前完全一致,只有内边距那一圈会落到它身上。 */
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={handleOverlayPress}
+          onLongPress={onLongPress ? handleOverlayLongPress : undefined}
+          accessibilityRole="button"
+          // 覆盖层没有子节点,读屏无从推名字,必须显式给 —— 缺省用标题。
+          accessibilityLabel={overlayLabel}
+        />
+      ) : null}
       <View style={s.topRow}>
       {note.cover ? (
         <Image

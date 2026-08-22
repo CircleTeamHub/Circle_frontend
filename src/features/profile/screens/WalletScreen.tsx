@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
+import { GradientCover } from '@/components/ui/gradient-cover';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import {
@@ -10,29 +12,115 @@ import {
   fetchWallet,
   type CoinTransaction,
 } from '@/services/api/coin';
+import { useAuthStore } from '@/stores/authStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Gradients, Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
   content: {
     paddingHorizontal: Spacing.lg,
     gap: Spacing.lg,
   },
+  // 信用卡质感:ISO 7810 ID-1 卡片比例(85.6×54mm ≈ 1.586),品牌紫渐变
+  // 底 + 芯片/掩码卡号/持卡人,配实体卡投影。
   balanceCard: {
     borderRadius: Radius.xl,
-    minHeight: 150,
+    aspectRatio: 1.586,
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    // 贵金属感三件套之一:细金描边卡缘(其余是烫金 ID 数字与金弧线)。
+    borderWidth: 1,
+    borderColor: 'rgba(231,197,102,0.5)',
     padding: Spacing.xl,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    elevation: 10,
   },
   balanceOrb: {
     position: 'absolute',
-    width: 180,
-    height: 180,
     borderRadius: 999,
-    right: -40,
-    bottom: -70,
-    opacity: 0.18,
+    backgroundColor: '#FFFFFF',
+  },
+  balanceOrbTop: {
+    width: 220,
+    height: 220,
+    right: -80,
+    top: -110,
+    opacity: 0.1,
+  },
+  balanceOrbBottom: {
+    width: 160,
+    height: 160,
+    left: -60,
+    bottom: -80,
+    opacity: 0.08,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardLabel: {
+    ...Typography.h3,
+    color: 'rgba(255,255,255,0.92)',
+  },
+  cardBrand: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontStyle: 'italic',
+    letterSpacing: 0.5,
+    color: '#F0D48A',
+  },
+  cardLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  goldCoin: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#E7C566',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goldCoinInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(146,110,38,0.7)',
+  },
+  cardBalance: {
+    color: '#FFFFFF',
+    fontSize: 44,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+  },
+  // 压印数字质感:真实银行卡的卡号就是烫金/烫银压印。
+  cardNumber: {
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 3,
+    color: '#F0D48A',
+    fontVariant: ['tabular-nums'],
+  },
+  cardHolder: {
+    ...Typography.small,
+    color: 'rgba(255,255,255,0.8)',
+    flexShrink: 1,
+    textAlign: 'right',
   },
   notice: {
     borderRadius: Radius.md,
@@ -76,6 +164,11 @@ export default function WalletScreen() {
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const realtimeBalance = useWalletRealtimeStore((state) => state.balance);
+  // 信用卡下沿:左侧直接展示账号 ID(与个人页「ID: xxxxxx」同一口径),
+  // 右侧持卡人昵称。
+  const authUser = useAuthStore((state) => state.user);
+  const cardNumber = authUser?.accountId ?? '';
+  const cardHolder = authUser?.nickname ?? '';
   const walletVersion = useWalletRealtimeStore((state) => state.version);
   // 首屏之后由 walletVersion 触发的那几次只是对账:实时通道已经把权威余额写
   // 进来了,再翻回「...」等一次 GET(最坏 15s 超时)是把已经正确的数字藏起来。
@@ -192,27 +285,55 @@ export default function WalletScreen() {
             })}
           </Text>
         ) : null}
-        <View style={[s.balanceCard, { backgroundColor: colors.blue }]}>
-          <View style={[s.balanceOrb, { backgroundColor: colors.white }]} />
-          <Text style={[Typography.h3, { color: 'rgba(0,0,0,0.62)' }]}>
-            {t('profile.wallet.balance', { defaultValue: '积分余额' })}
-          </Text>
-          <Text
-            style={{
-              color: 'rgba(0,0,0,0.72)',
-              fontSize: 54,
-              fontWeight: '700',
-              marginTop: Spacing.lg,
-              fontVariant: ['tabular-nums'],
-            }}
+        <View style={s.balanceCard}>
+          <GradientCover colors={Gradients.memberCard} />
+          <View style={[s.balanceOrb, s.balanceOrbTop]} />
+          <View style={[s.balanceOrb, s.balanceOrbBottom]} />
+          {/* 两道极细金弧线扫过卡面(viewBox 随卡面拉伸,分辨率无关)。 */}
+          <Svg
+            style={StyleSheet.absoluteFill}
+            viewBox="0 0 400 252"
+            preserveAspectRatio="none"
+            pointerEvents="none"
           >
-            {loadingWallet ? '...' : balance}
-          </Text>
+            <Path
+              d="M-10 214 Q 208 150 410 34"
+              stroke="#F0D48A"
+              strokeWidth={1.5}
+              strokeOpacity={0.4}
+              fill="none"
+            />
+            <Path
+              d="M-10 236 Q 228 178 410 66"
+              stroke="#F0D48A"
+              strokeWidth={1}
+              strokeOpacity={0.22}
+              fill="none"
+            />
+          </Svg>
+          <View style={s.cardTopRow}>
+            <View style={s.cardLabelRow}>
+              <View style={s.goldCoin}>
+                <View style={s.goldCoinInner} />
+              </View>
+              <Text style={s.cardLabel}>
+                {t('profile.wallet.balance', { defaultValue: '积分余额' })}
+              </Text>
+            </View>
+            <Text style={s.cardBrand}>WindNote</Text>
+          </View>
+          <Text style={s.cardBalance}>{loadingWallet ? '...' : balance}</Text>
           {walletError ? (
             <Text style={[Typography.caption, { color: colors.error }]}>
               {walletError}
             </Text>
           ) : null}
+          <View style={s.cardBottomRow}>
+            <Text style={s.cardNumber}>{cardNumber}</Text>
+            <Text style={s.cardHolder} numberOfLines={1}>
+              {cardHolder}
+            </Text>
+          </View>
         </View>
 
         <View style={[s.notice, { backgroundColor: colors.surface }]}>

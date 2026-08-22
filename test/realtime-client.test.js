@@ -54,7 +54,6 @@ test('realtime notification.created only prepends bell types but banners everyth
     'CIRCLE_INVITATION_APPROVED',
     'CIRCLE_INVITATION_REJECTED',
     'CIRCLE_ADMIN_OVERRIDE_APPROVED',
-    'CIRCLE_POST_SIGNUP_CREATED',
     'CIRCLE_POST_AUTO_ENDED',
     'PROFILE_LIKE',
   ]) {
@@ -62,6 +61,8 @@ test('realtime notification.created only prepends bell types but banners everyth
   }
   // 好友申请不进铃铛列表（专属「新的朋友」收件箱），横幅不受影响。
   assert.doesNotMatch(domain, /'FRIEND_REQUEST_RECEIVED'/);
+  // 报名通知同理：未读走 signupUnread + 「报名管理」页，进铃铛会双重计数。
+  assert.doesNotMatch(domain, /'CIRCLE_POST_SIGNUP_CREATED'/);
   // prepend 受白名单门控；横幅入队在铃铛门外执行（圈子类另受「圈子通知设置」门控，见下）。
   assert.match(
     client,

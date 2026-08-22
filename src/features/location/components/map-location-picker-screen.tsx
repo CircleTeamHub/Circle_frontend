@@ -10,11 +10,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MapSurface } from '@/features/location/components/map-surface';
 import {
-  WebView,
-  type WebViewMessageEvent,
-  type WebViewNavigation,
-} from 'react-native-webview';
+  BASEMAP_ATTRIBUTION,
+  BASEMAP_MAX_ZOOM,
+  getBasemapUrlTemplate,
+  type BasemapScheme,
+} from '@/features/location/utils/location-map';
 import type { PickedLocation } from '@/features/location/types';
 import { Spacing, Typography, useTheme } from '@/theme';
 import {
@@ -45,7 +47,6 @@ type MapLocationPickerScreenProps = {
   onConfirm: (location: PickedLocation) => void;
 };
 
-const MAP_ORIGIN = 'https://appassets.invalid';
 const MAX_LOCATION_TITLE_LENGTH = 120;
 const MAX_LOCATION_ADDRESS_LENGTH = 500;
 
@@ -133,6 +134,7 @@ function buildMapHtml(
     MapLocationPickerLabels,
     'searchPlaceholder' | 'searchButton' | 'selectedLabel'
   >,
+  scheme: BasemapScheme,
 ) {
   const safeTitle = escapeHtml(title);
   const safeAddress = escapeHtml(address);
@@ -146,10 +148,10 @@ function buildMapHtml(
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-circle-map'; style-src 'nonce-circle-map' 'unsafe-inline'; img-src https://tile.openstreetmap.org data: blob:; connect-src https://nominatim.openstreetmap.org">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-circle-map'; style-src 'nonce-circle-map' 'unsafe-inline'; img-src https://basemaps.cartocdn.com data: blob:; connect-src https://nominatim.openstreetmap.org">
   <style nonce="circle-map">${LEAFLET_1_9_4_CSS}</style>
   <style nonce="circle-map">
-    html, body, #map { height: 100%; width: 100%; margin: 0; background: #111827; }
+    html, body, #map { height: 100%; width: 100%; margin: 0; background: ${scheme === 'dark' ? '#0b0f19' : '#e8e5df'}; }
     .bottomSheet {
       position: fixed;
       left: 0;
@@ -218,15 +220,21 @@ function buildMapHtml(
   <script nonce="circle-map">${LEAFLET_1_9_4_JS}</script>
   <script nonce="circle-map">
     const SELECTED_LABEL = ${scriptSelectedLabel};
-    const post = (payload) => window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+    // 原生装在 WebView 里（window.ReactNativeWebView），web 装在 srcDoc iframe 里
+    // （只能 postMessage 给宿主页）。同一份 HTML 两边都要能把结果送回去。
+    const bridge = window.ReactNativeWebView || {
+      postMessage: (data) => window.parent.postMessage(data, '*')
+    };
+    const post = (payload) => bridge.postMessage(JSON.stringify(payload));
 
     try {
       if (typeof L === 'undefined') throw new Error('leaflet unavailable');
 
       const map = L.map('map', { zoomControl: false }).setView([${latitude}, ${longitude}], 15);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap'
+      const retinaSuffix = window.devicePixelRatio > 1 ? '@2x' : '';
+      L.tileLayer('${getBasemapUrlTemplate(scheme)}'.replace('{r}', retinaSuffix), {
+        maxZoom: ${BASEMAP_MAX_ZOOM},
+        attribution: '${escapeHtml(BASEMAP_ATTRIBUTION)}'
       }).addTo(map);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -257,6 +265,13 @@ function buildMapHtml(
 
       let pickGeneration = 0;
 
+      async function fetchReversePlace(lat, lon) {
+        const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon);
+        const response = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('reverse request failed');
+        return response.json();
+      }
+
       async function reverseGeocode(lat, lon) {
         pickGeneration += 1;
         const generation = pickGeneration;
@@ -267,10 +282,7 @@ function buildMapHtml(
           address: lat.toFixed(5) + ', ' + lon.toFixed(5)
         });
         try {
-          const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon);
-          const response = await fetch(url, { headers: { Accept: 'application/json' } });
-          if (!response.ok) throw new Error('reverse request failed');
-          const data = await response.json();
+          const data = await fetchReversePlace(lat, lon);
           if (generation !== pickGeneration) return;
           updatePicked({
             title: data.name || data.display_name?.split(',')[0] || SELECTED_LABEL,
@@ -278,6 +290,26 @@ function buildMapHtml(
           });
         } catch {
           post({ type: 'map-error', message: 'reverse failed' });
+        }
+      }
+
+      // 进来时 address 常常只是一串经纬度：web 上 expo-location 根本没有
+      // reverseGeocodeAsync，原生端也可能反查失败。不补这一次的话，用户开图直接点
+      // 「发送位置」，收件人拿到的就是「我的位置 / 37.32698, -121.88435」。
+      // 故意**不**推进 pickGeneration：用户自己点地图永远优先，这次晚到就丢掉。
+      async function refineInitialAddress() {
+        const coordsOnly = /^\\s*-?\\d{1,3}(\\.\\d+)?\\s*,\\s*-?\\d{1,3}(\\.\\d+)?\\s*$/;
+        if (picked.address && !coordsOnly.test(picked.address)) return;
+        const generation = pickGeneration;
+        try {
+          const data = await fetchReversePlace(picked.latitude, picked.longitude);
+          if (generation !== pickGeneration) return;
+          updatePicked({
+            title: picked.title || data.name || SELECTED_LABEL,
+            address: data.display_name || picked.address
+          });
+        } catch (error) {
+          // 反查不到就保留「我的位置 + 坐标」，不打断选点。
         }
       }
 
@@ -317,6 +349,7 @@ function buildMapHtml(
       document.getElementById('query').addEventListener('keydown', (event) => {
         if (event.key === 'Enter') searchPlace();
       });
+      refineInitialAddress();
     } catch {
       post({ type: 'map-runtime-unavailable' });
     }
@@ -331,7 +364,7 @@ export function MapLocationPickerScreen({
   onConfirm,
 }: MapLocationPickerScreenProps) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const params = useLocalSearchParams<{
     latitude?: string;
     longitude?: string;
@@ -339,8 +372,9 @@ export function MapLocationPickerScreen({
     address?: string;
   }>();
   const [loading, setLoading] = useState(true);
+  // 地图运行时(leaflet)没加载出来时的失败态 + 重挂地图载体的 key。
   const [mapUnavailable, setMapUnavailable] = useState(false);
-  const [webViewKey, setWebViewKey] = useState(0);
+  const [surfaceKey, setSurfaceKey] = useState(0);
 
   const initialLocation = useMemo<PickedLocation>(
     () => ({
@@ -362,21 +396,23 @@ export function MapLocationPickerScreen({
   useEffect(() => setCandidateLocation(initialLocation), [initialLocation]);
 
   const mapHtml = useMemo(
-    () => buildMapHtml(initialLocation, labels),
-    [initialLocation, labels],
+    () => buildMapHtml(initialLocation, labels, resolvedMode),
+    [initialLocation, labels, resolvedMode],
   );
+
+  const handleLoadEnd = useCallback(() => setLoading(false), []);
 
   const handleRetry = useCallback(() => {
     setMapUnavailable(false);
     setLoading(true);
-    setWebViewKey((key) => key + 1);
+    setSurfaceKey((key) => key + 1);
   }, []);
 
   const handleMapMessage = useCallback(
-    (event: WebViewMessageEvent) => {
+    (data: string) => {
       let payload: unknown;
       try {
-        payload = JSON.parse(event.nativeEvent.data) as unknown;
+        payload = JSON.parse(data) as unknown;
       } catch {
         return;
       }
@@ -402,12 +438,6 @@ export function MapLocationPickerScreen({
   const handleConfirm = useCallback(() => {
     onConfirm(candidateLocation);
   }, [candidateLocation, onConfirm]);
-
-  const handleNavigation = useCallback((request: WebViewNavigation) => {
-    return (
-      request.url === 'about:blank' || request.url.startsWith(`${MAP_ORIGIN}/`)
-    );
-  }, []);
 
   return (
     <View
@@ -435,17 +465,12 @@ export function MapLocationPickerScreen({
             <ActivityIndicator color={colors.primary} />
           </View>
         ) : null}
-        <WebView
-          key={webViewKey}
-          originWhitelist={[`${MAP_ORIGIN}/*`]}
-          source={{ html: mapHtml, baseUrl: `${MAP_ORIGIN}/` }}
-          javaScriptEnabled
-          domStorageEnabled={false}
-          setSupportMultipleWindows={false}
-          onShouldStartLoadWithRequest={handleNavigation}
-          onLoadEnd={() => setLoading(false)}
+        <MapSurface
+          reloadKey={surfaceKey}
+          title={labels.title}
+          html={mapHtml}
+          onLoadEnd={handleLoadEnd}
           onMessage={handleMapMessage}
-          style={s.webView}
         />
         <View
           style={[
@@ -539,7 +564,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  webView: { flex: 1 },
   nativeConfirm: {
     position: 'absolute',
     left: 0,

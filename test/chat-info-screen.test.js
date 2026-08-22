@@ -270,8 +270,11 @@ test('chat info screen uses the shared primary switch color for group toggles', 
   const filePath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /trackColor=\{\{ false: colors\.surfaceBorder, true: colors\.primary \}\}/);
-  assert.doesNotMatch(source, /trackColor=\{\{ false: colors\.surfaceBorder, true: colors\.success \}\}/);
+  // 开关统一走 ThemedSwitch(默认 primary 轨道 + 白滑块);原本此处断言
+  // trackColor 字面量,收口后改为守住"不得回退成绿色系"这个原意。
+  assert.match(source, /<ThemedSwitch/);
+  assert.doesNotMatch(source, /trackColor=/);
+  assert.doesNotMatch(source, /tint=\{colors\.(?:success|green)\}/);
 });
 
 // 契约随自研栈迁移更新(意图不变):群公告即圈子简介,保存走 updateCircle。

@@ -1,4 +1,5 @@
 import { AuthInput } from "@/components/ui/auth-input";
+import { QrLoginPane } from "@/features/auth/components/QrLoginPane";
 import { useAuth } from "@/hooks/use-auth";
 import { useSendEmailCode } from "@/hooks/use-send-email-code";
 import { useNetworkStatus } from "@/hooks/use-network-status";
@@ -10,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,7 +21,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
-type Mode = "password" | "code";
+// qr 档只在桌面网页版放出（手机自己就是扫码器）。
+type Mode = "password" | "code" | "qr";
 
 const APP_LOGO_SOURCE = require("../../../../assets/images/login-logo-plane.png");
 
@@ -68,7 +71,7 @@ const s = StyleSheet.create({
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { login, loginWithCode, submitting, error } = useAuth();
+  const { login, loginWithCode, completeQrLogin, submitting, error } = useAuth();
   const { t } = useTranslation();
   // 从「切换账号」过期分支或注册成功跳来时预填邮箱。
   const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
@@ -142,7 +145,10 @@ export default function LoginScreen() {
 
       {/* 登录方式切换 */}
       <View style={[s.segment, d.segment]}>
-        {(["password", "code"] as Mode[]).map((m) => (
+        {(Platform.OS === "web"
+          ? (["password", "code", "qr"] as Mode[])
+          : (["password", "code"] as Mode[])
+        ).map((m) => (
           <Pressable
             key={m}
             testID={
@@ -159,13 +165,22 @@ export default function LoginScreen() {
                 mode === m ? d.segmentTextActive : d.segmentText,
               ]}
             >
-              {t(m === "password" ? "auth.passwordLogin" : "auth.codeLogin")}
+              {t(
+                m === "password"
+                  ? "auth.passwordLogin"
+                  : m === "code"
+                    ? "auth.codeLogin"
+                    : "auth.qrLogin",
+              )}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      {/* Form */}
+      {/* Form:qr 档整体换成扫码面板(邮箱/密码输入无意义) */}
+      {mode === "qr" ? (
+        <QrLoginPane onTokens={completeQrLogin} />
+      ) : (
       <View style={s.form}>
         <AuthInput
           testID={E2E_TEST_IDS.authEmailInput}
@@ -235,6 +250,7 @@ export default function LoginScreen() {
           />
         )}
       </View>
+      )}
 
       {/* Offline / Error */}
       {isOffline ? (
@@ -245,19 +261,21 @@ export default function LoginScreen() {
       ) : null}
       {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
 
-      {/* Login button */}
-      <Pressable
-        testID={E2E_TEST_IDS.authSubmit}
-        style={[s.loginBtn, d.loginBtn, submitting && s.btnDisabled]}
-        onPress={onSubmit}
-        disabled={submitting}
-      >
-        {submitting ? (
-          <ActivityIndicator color={colors.white} />
-        ) : (
-          <Text style={[s.loginBtnText, d.loginBtnText]}>{t("auth.login")}</Text>
-        )}
-      </Pressable>
+      {/* Login button(qr 档没有提交动作,轮询自动完成) */}
+      {mode === "qr" ? null : (
+        <Pressable
+          testID={E2E_TEST_IDS.authSubmit}
+          style={[s.loginBtn, d.loginBtn, submitting && s.btnDisabled]}
+          onPress={onSubmit}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <Text style={[s.loginBtnText, d.loginBtnText]}>{t("auth.login")}</Text>
+          )}
+        </Pressable>
+      )}
 
       {/* Register link */}
       <View style={s.registerRow}>

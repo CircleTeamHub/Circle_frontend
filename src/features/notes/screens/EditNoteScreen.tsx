@@ -36,6 +36,7 @@ import {
   fetchNoteGroups,
   updateNote,
 } from '@/services/api/notes';
+import { getApiErrorMessage } from '@/services/api/errors';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -514,7 +515,7 @@ export default function EditNoteScreen() {
       const fallback = t('notes.edit.saveFailedMessage', {
         defaultValue: '保存失败，请稍后重试',
       });
-      const message = error instanceof Error ? error.message : fallback;
+      const message = getApiErrorMessage(error, fallback);
       Alert.alert(
         t('notes.edit.saveFailedTitle', { defaultValue: '保存失败' }),
         message,

@@ -110,10 +110,14 @@ test('discover tab badge combines moments and signup unread state', () => {
   const source = read('app/(tabs)/_layout.tsx');
 
   assert.match(source, /signupUnread: state\.signupUnread/);
+  // 只统计动态 tab 自己辖下的三样。曾经读 discoverUnread（= 好友申请 +
+  // 朋友圈 + 圈子 的并集，互动消息列表页的全集口径），一条未读好友申请
+  // 就会把动态 tab 也点亮 —— 好友申请的规范 UI 是「新的朋友」，归联系人。
   assert.match(
     source,
-    /discover: discoverUnread > 0 \|\| signupUnread > 0/,
+    /discover: momentsUnread > 0 \|\| circleUnread > 0 \|\| signupUnread > 0/,
   );
+  assert.doesNotMatch(source, /discover: discoverUnread/);
 });
 
 test('circle management screen reuses the panel and owns notification settings', () => {

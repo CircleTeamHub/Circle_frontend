@@ -15,6 +15,7 @@ import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { loadChatConversations } from '@/chat-core/api';
 import { sendCardMessage } from '@/chat-core/client';
+import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
 import type { Conversation } from '@/types';
@@ -141,9 +142,10 @@ export default function RecommendFriendScreen() {
                 .catch((error: unknown) => {
                   Alert.alert(
                     t('chat.recommend.sendFailed', { defaultValue: '发送失败' }),
-                    error instanceof Error
-                      ? error.message
-                      : t('common.retryLater', { defaultValue: '请稍后重试' }),
+                    getChatSendErrorMessage(
+                      error,
+                      t('common.retryLater', { defaultValue: '请稍后重试' }),
+                    ),
                   );
                 })
                 .finally(() => {

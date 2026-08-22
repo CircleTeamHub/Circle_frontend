@@ -14,8 +14,10 @@ test('profile notes stack exposes a real map location picker route', () => {
 test('NoteLocationPickerScreen renders a WebView-backed map picker', () => {
   const screen = read('src/features/notes/screens/NoteLocationPickerScreen.tsx');
   const src = read('src/features/location/components/map-location-picker-screen.tsx');
+  // WebView 只剩在原生载体里；web 走 map-surface.web.tsx 的 iframe。
+  const nativeSurface = read('src/features/location/components/map-surface.tsx');
 
-  assert.match(src, /react-native-webview/);
+  assert.match(nativeSurface, /react-native-webview/);
   assert.match(src, /openstreetmap\.org/);
   assert.match(src, /nominatim\.openstreetmap\.org/);
   assert.match(src, /onMessage=\{handleMapMessage\}/);

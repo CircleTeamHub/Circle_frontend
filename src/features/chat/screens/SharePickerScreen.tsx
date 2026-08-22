@@ -24,6 +24,7 @@ import {
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { fetchCollections, type UserCollection } from '@/services/api/collections';
+import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchNotes } from '@/services/api/notes';
 import i18n from '@/i18n';
@@ -210,9 +211,10 @@ export default function SharePickerScreen() {
         if (!cancelled) {
           // 不再只 dev-warn —— 暴露给用户 + 提供重试，"加载失败"和"真的空"区分开。
           setError(
-            err instanceof Error
-              ? err.message
-              : i18n.t('share.loadFailed', { defaultValue: '加载失败' }),
+            getApiErrorMessage(
+              err,
+              i18n.t('share.loadFailed', { defaultValue: '加载失败' }),
+            ),
           );
         }
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
