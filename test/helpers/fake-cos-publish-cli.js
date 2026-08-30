@@ -39,6 +39,19 @@ function parseMetadata(value = '') {
 }
 
 if (command === 'gh') {
+  if (args.some((arg) => arg.includes('/compare/'))) {
+    const cutoverSha = 'e09582dc7583fb7b69600e231dd76eb792d122f5';
+    const compareHead =
+      process.env.FAKE_EXPECTED_COMPARE_SHA || process.env.GITHUB_SHA;
+    const expectedPath = `repos/${process.env.GITHUB_REPOSITORY}/compare/${cutoverSha}...${compareHead}`;
+    const actualPath = args.find((arg) => arg.includes('/compare/'));
+    if (actualPath !== expectedPath || flag('--jq') !== '.status') {
+      process.stderr.write(`unexpected compare request: ${args.join(' ')}\n`);
+      process.exit(2);
+    }
+    process.stdout.write(`${process.env.FAKE_GH_COMPARE_STATUS || 'ahead'}\n`);
+    process.exit(0);
+  }
   const responses = (process.env.FAKE_GH_SHAS || process.env.GITHUB_SHA).split(',');
   const counterPath = path.join(stateDir, '.gh-counter');
   const count = fs.existsSync(counterPath)
@@ -58,12 +71,35 @@ if (command === 'curl') {
     process.exit(0);
   }
 
+  if (fakeKey && args.includes('--head')) {
+    const key = Buffer.from(fakeKey, 'base64url').toString();
+    const object = readObject(key);
+    if (!object) process.exit(22);
+    const body = Buffer.from(object.body, 'base64');
+    fs.writeFileSync(
+      flag('--dump-header'),
+      [
+        'HTTP/1.1 200 OK',
+        `content-type: ${object.metadata['content-type'] ?? 'application/octet-stream'}`,
+        `content-disposition: ${object.metadata['content-disposition'] ?? ''}`,
+        `cache-control: ${object.metadata['cache-control'] ?? ''}`,
+        `content-length: ${body.length}`,
+        `x-cos-meta-sha256: ${object.metadata['x-cos-meta-sha256'] ?? ''}`,
+        `x-cos-meta-package: ${object.metadata['x-cos-meta-package'] ?? ''}`,
+        '',
+        '',
+      ].join('\r\n'),
+    );
+    process.exit(0);
+  }
+
   const latest = readObject(`${process.env.COS_KEY_PREFIX}/latest/windnote.apk`);
   if (!latest) process.exit(22);
   let body = Buffer.from(latest.body, 'base64');
   if (
     process.env.FAKE_CORRUPT_PUBLIC === '1' &&
-    requestUrl.includes('verification=build-')
+    !requestUrl.includes('verification=rollback-') &&
+    !requestUrl.includes('rollback=restore-')
   ) {
     body = Buffer.alloc(body.length, 120);
   }
@@ -125,7 +161,7 @@ if (!sourceIsCos && destinationIsCos) {
   }
   if (
     destinationKey.endsWith('/latest/windnote.apk') &&
-    source.endsWith('cos-previous.apk') &&
+    source.endsWith('previous.apk') &&
     process.env.FAKE_FAIL_RESTORE === '1'
   ) {
     process.exit(45);
@@ -135,6 +171,19 @@ if (!sourceIsCos && destinationIsCos) {
     metadata: parseMetadata(flag('--meta')),
     acl: flag('--acl') || 'private',
   });
+  if (
+    destinationKey.includes('/rollback/') &&
+    process.env.FAKE_FAIL_BACKUP === 'ambiguous'
+  ) {
+    process.exit(43);
+  }
+  if (
+    destinationKey.endsWith('/latest/windnote.apk') &&
+    source.endsWith('source.apk') &&
+    process.env.FAKE_FAIL_PROMOTE === 'ambiguous'
+  ) {
+    process.exit(42);
+  }
   process.exit(0);
 }
 

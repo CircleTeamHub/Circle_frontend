@@ -21,7 +21,7 @@ These values identify the Tokyo test stack, not production. A preproduction work
 
 ## Preproduction APK
 
-`.github/workflows/android-preprod-build.yml` is the controlled Android inner-test path. It runs automatically for every push to `main`; `workflow_dispatch` remains available for an explicit rebuild of the exact commit selected in the Actions ref picker. Only a run whose ref is `refs/heads/main` may publish to the website download channel. Runs are queued instead of cancelled so a verified artifact cannot be interrupted during promotion; the stable website object is updated only after every build and byte-level verification succeeds.
+`.github/workflows/android-preprod-build.yml` is the controlled Android inner-test path. It runs automatically for every push to `main`; `workflow_dispatch` remains available for an explicit rebuild or a verified rollback. Only a run whose ref is the current `refs/heads/main` may publish to the website download channel. Up to 100 runs can wait in the concurrency queue instead of cancelling or replacing one another, and a run rechecks the current `main` SHA immediately before and after promotion so a historical rerun cannot become `latest`.
 
 The test APK is a separately installable application named `风信测试版` with package ID `com.yiboding.circleim.preprod`. It registers and generates only the dedicated `windnoteai-preprod` / `circleim-preprod` deep-link schemes, while its in-app scanner can still parse legacy QR payloads. It may use the existing signing certificate, but its different package ID prevents it from overwriting the formal `com.yiboding.circleim` app. It also does not read the formal APK update manifest, so an inner-test install cannot offer or install the production package as its own update.
 
@@ -36,7 +36,7 @@ The successful build retains one private Actions artifact named `android-preprod
 - `THIRD_PARTY_NOTICES.txt`
 - `cyclonedx-sbom.json`
 
-The separate publish job downloads that exact artifact and verifies its checksum before receiving any Tencent COS credentials. It verifies the pinned Tencent COSCLI binary before use and creates the private commit-addressed object at `android/preprod/builds/<commit SHA>/windnote.apk` only when absent; a rerun never overwrites it and must prove its downloaded bytes have the candidate checksum. Before promotion it verifies that the run still targets the current `main`, saves the current stable bytes and metadata, then copies the verified object to `android/preprod/latest/windnote.apk` with object-level `public-read`. It verifies authenticated and public bytes, headers, and `main` again before accepting the promotion. Any ambiguous copy result or post-promotion failure restores the previous stable object (or removes the first unverified stable object). The bucket remains private, so media outside this single download object is not exposed.
+The separate publish job downloads that exact artifact and verifies its checksum before receiving any Tencent COS credentials. It is skipped unless all three repository variables below explicitly authorize the inner-test channel, and it runs in the `android-preprod-publish` environment. The job verifies a pinned COSCLI binary, creates the private commit-addressed object at `android/preprod/builds/<commit SHA>/windnote.apk` only when absent, and requires its bytes, SHA-256 metadata, package metadata, immutable cache policy, and APK headers to match. Before promotion it verifies that the run still targets the current `main`, saves a private recovery object, arms rollback before mutating `latest`, and copies the candidate to `android/preprod/latest/windnote.apk` with object-level `public-read`. It then rechecks `main` immediately after mutation and again after authenticated and public byte/header verification. An ambiguous copy response, stale run, or post-promotion failure restores the prior stable object (or removes an unverified first object); a failed restore retains the private recovery object for incident handling. The bucket remains private, so media and commit-addressed APKs are not exposed.
 
 Repository variable `TENCENT_COS_PUBLIC_APK_URL` must contain the credential-free custom HTTPS URL ending in `/android/preprod/latest/windnote.apk`. Tencent COS default `*.myqcloud.com` domains reject APK downloads for newer buckets, so the workflow rejects those domains and will not publish until a custom COS origin or CDN domain is bound and anonymously reachable.
 
@@ -44,11 +44,37 @@ This URL is public and unauthenticated: anyone who knows it can download the pre
 
 The publish job requires repository secrets `TENCENT_COS_SECRET_ID` and `TENCENT_COS_SECRET_KEY`. Use the dedicated CAM sub-user, not a root-account key. COSCLI is invoked with `--bucket-type COS` so it does not need bucket-type discovery. Scope object permissions to `windnote-preprod-tokyo-1447743949/android/preprod/*` and grant only `cos:HeadObject`, `cos:GetObject`, `cos:PutObject`, `cos:DeleteObject`, `cos:InitiateMultipartUpload`, `cos:UploadPart`, `cos:CompleteMultipartUpload`, `cos:ListParts`, and `cos:ListMultipartUploads`; if the selected CAM policy model requires bucket listing for multipart operations, grant `cos:GetBucket` only on this bucket. Never place either credential in repository variables, workflow files, or logs. Validate the exact policy with first publish, rerun, promotion, forced rollback, and cleanup probes before enabling the workflow.
 
+The two distribution channels are deliberately different:
+
+| Channel | Trigger | Successful build location | Public stable location |
+| --- | --- | --- | --- |
+| Inner-test / ordinary `main` build | Every push to `main`, or a manual rebuild | Private Actions artifact `android-preprod-v1.0.1`, retained 30 days | `android/preprod/latest/windnote.apk` after the dedicated preproduction gate passes |
+| Formal production release | A reviewed immutable `v*` tag | Private Actions artifact and GitHub Release candidate | `android/latest/windnote.apk` only after the formal protected release gate passes |
+
+Required preproduction publishing configuration:
+
+- repository variable `ANDROID_PREPROD_PUBLIC_ENABLED=true`;
+- repository variable `ANDROID_PREPROD_DISTRIBUTION_APPROVED=true`;
+- repository variable `ANDROID_PREPROD_DISTRIBUTION_EVIDENCE_URL`: credential-free HTTPS evidence for the approval;
+- repository variable `TENCENT_COS_PUBLIC_APK_URL`: the bound custom HTTPS COS/CDN URL;
+- environment `android-preprod-publish`, limited to the `main` branch;
+- Tencent COS credentials used only by that environment/job.
+
+These are separate from the formal `ANDROID_PUBLIC_RELEASE_ENABLED`, `ANDROID_DISTRIBUTION_APPROVED`, and `ANDROID_DISTRIBUTION_EVIDENCE_URL` variables. Enabling the test channel must never enable the formal channel.
+
 To start the candidate after the reviewed commit is pushed:
 
 ```sh
 gh workflow run .github/workflows/android-preprod-build.yml --ref main
 ```
+
+To restore a commit-addressed APK that this workflow previously verified, dispatch the same protected workflow from `main`:
+
+```sh
+gh workflow run .github/workflows/android-preprod-build.yml --ref main -f rollback_sha=<40-character-main-sha>
+```
+
+The rollback refuses mutable aliases, commits before the package-identity cutover, and objects without the preproduction package metadata. It rewrites `latest` with the stable five-minute cache policy, verifies authenticated COS and public bytes/headers, and restores the pre-rollback object if verification fails.
 
 Record the run URL, commit SHA, certificate fingerprint, and checksum with the inner-test record. A failed metadata, CI, signing, identity, endpoint, or checksum check is a stop condition; do not substitute a locally signed APK.
 
@@ -93,11 +119,11 @@ Source-map upload policy:
 
 ## Current verified blocker
 
-The current verified organization plan is CircleTeamHub GitHub Free. The `CircleTeamHub/Circle_frontend` repository is private. On this plan, GitHub required reviewers are unavailable for this private repository, and environment secrets are unavailable for this private repository. Therefore the protected promotion design cannot presently be enforced.
+As verified on 2026-08-30, the CircleTeamHub organization is on GitHub Team and `CircleTeamHub/Circle_frontend` is public. The earlier Free/private limitation no longer applies. However, the formal `android-release-publish` environment is still absent, and the formal enablement/approval/evidence variables are absent. Therefore formal production promotion remains disabled.
 
-`ANDROID_PUBLIC_RELEASE_ENABLED` must remain absent or false. Public promotion is unavailable. Do not bypass the gate with a repository token, a personal local upload, a duplicate workflow, or an unprotected environment. A private, signed Actions artifact may still be produced for controlled verification, but it is not approval to distribute the binary.
+`ANDROID_PUBLIC_RELEASE_ENABLED` must remain absent or false until the complete formal gate below exists and its release-specific evidence passes. Do not bypass it with a repository token, a personal local upload, a duplicate workflow, or an unprotected environment. A private, signed Actions artifact may still be produced for controlled verification, but it is not approval to distribute the binary.
 
-**Workflow enforcement status.** The `publish` job in `.github/workflows/android-release.yml` now carries `if: vars.ANDROID_PUBLIC_RELEASE_ENABLED == 'true'`, so the default-disabled promotion described above is enforced by the workflow itself: with the variable absent or not `'true'`, a `v*` tag push ends at the private artifact and `publish`/R2 upload are skipped (issue #84 closed this doc-vs-workflow gap). The job additionally runs `validate-android-release.js distribution` before any publishing step, requiring the repository variables `ANDROID_DISTRIBUTION_APPROVED=true` and a credential-free HTTPS `ANDROID_DISTRIBUTION_EVIDENCE_URL` — a single mis-set `ANDROID_PUBLIC_RELEASE_ENABLED` can no longer ship a public APK without automated evidence validation. Two deviations from the full design remain and are tracked, not hidden: (1) `RELEASES_TOKEN` currently exists at repository scope and is read directly by the job — on the current plan there is no protected environment to move it into; migrate it to the `android-release-publish` environment when the plan allows, then delete the repository-scoped copy. (2) Required reviewers / environment protection remain unavailable on the current plan, so enabling the variable is a single-administrator action; treat setting it as the release-approval act itself.
+**Workflow enforcement status.** The `publish` job in `.github/workflows/android-release.yml` carries `if: vars.ANDROID_PUBLIC_RELEASE_ENABLED == 'true'`, so a `v*` tag push ends at the private artifact while the variable is absent or not `'true'`. The job additionally runs `validate-android-release.js distribution` before publishing and requires `ANDROID_DISTRIBUTION_APPROVED=true` plus a credential-free HTTPS `ANDROID_DISTRIBUTION_EVIDENCE_URL`. This code gate does not replace the missing protected environment, required reviewer, deployment tag policy, or environment-only credential.
 
 Verify the blocker from an authenticated `gh` session:
 
@@ -109,7 +135,7 @@ gh api repos/CircleTeamHub/Circle_frontend/environments/android-release-publish
 gh api repos/CircleTeamHub/Circle_frontend/environments/android-release-publish/deployment-branch-policies
 ```
 
-The first two commands must show a plan with the needed private-repository environment capabilities and the expected visibility before enablement is considered. The secret inventory must confirm there is no `RELEASES_TOKEN` at repository scope; the command lists names only and must never be used to expose values. Inspect the environment response for required reviewers, `prevent_self_review`, and its deployment branch/tag policy. Inspect the deployment policy response for an allowlisted tag pattern such as `v*`, not an unrestricted branch or tag. A 404 from either environment command, or the current plan result, means do not enable public promotion.
+The first two commands must continue to show the expected plan and visibility before enablement is considered. The secret inventory must confirm there is no `RELEASES_TOKEN` at repository scope; the command lists names only and must never be used to expose values. Inspect the environment response for required reviewers, `prevent_self_review`, and its deployment branch/tag policy. Inspect the deployment policy response for an allowlisted tag pattern such as `v*`, not an unrestricted branch or tag. A 404 from either environment command means do not enable public promotion.
 
 ## Future enablement gate
 

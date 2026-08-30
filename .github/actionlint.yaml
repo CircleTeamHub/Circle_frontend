@@ -1,0 +1,4 @@
+paths:
+  ".github/workflows/android-preprod-build.yml":
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section'

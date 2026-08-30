@@ -72,15 +72,15 @@ test('release rollout documentation records the fail-closed operating contract',
     /RELEASES_TOKEN[^\n]*(?:must not|never)[^\n]*repository/i,
   );
 
-  assert.match(documentation, /CircleTeamHub[^\n]*GitHub Free/i);
-  assert.match(documentation, /Circle_frontend[^\n]*private/i);
-  assert.match(documentation, /required reviewers[^\n]*unavailable/i);
-  assert.match(documentation, /environment secrets[^\n]*unavailable/i);
+  assert.match(documentation, /CircleTeamHub[^\n]*GitHub Team/i);
+  assert.match(documentation, /Circle_frontend[^\n]*public/i);
+  assert.match(documentation, /android-release-publish[^\n]*absent/i);
+  assert.match(documentation, /formal[^\n]*variables[^\n]*absent/i);
   assert.match(
     documentation,
     /ANDROID_PUBLIC_RELEASE_ENABLED[^\n]*(?:absent|false)/i,
   );
-  assert.match(documentation, /public promotion[^\n]*unavailable/i);
+  assert.match(documentation, /formal production promotion[^\n]*disabled/i);
   assert.match(documentation, /(?:do not|never)[^\n]*repo(?:sitory)? token/i);
 
   assert.match(
