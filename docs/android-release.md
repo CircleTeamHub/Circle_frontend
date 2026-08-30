@@ -19,25 +19,29 @@ The current preproduction candidate is Android `v1.0.1` (`versionCode` `1000001`
 
 These values identify the Tokyo test stack, not production. A preproduction workflow must verify both expected hostnames are embedded and that obsolete tunnel/OpenIM hostnames are absent before retaining its private artifact.
 
-## Private preproduction APK
+## Preproduction APK
 
-`.github/workflows/android-preprod-build.yml` is the controlled Android inner-test path. It runs only through `workflow_dispatch` and builds the exact commit selected in the Actions ref picker. Select the reviewed `codex/android-preprod-cd` branch while this change is under review; after merge, select `main`. A newer dispatch cancels an older in-progress preproduction build so testers do not accidentally download a stale candidate.
+`.github/workflows/android-preprod-build.yml` is the controlled Android inner-test path. It runs automatically for every push to `main`; `workflow_dispatch` remains available for an explicit rebuild of the exact commit selected in the Actions ref picker. Only a run whose ref is `refs/heads/main` may publish to the website download channel. Runs are queued instead of cancelled so a verified artifact cannot be interrupted during promotion; the stable website object is updated only after every build and byte-level verification succeeds.
 
-The workflow validates the exact `v1.0.1` metadata and Tokyo endpoint contract, checks the generated dependency notices/SBOM, runs the full application CI, signs with the configured production signing identity, then verifies the APK certificate, package ID, version, and embedded endpoints. It deliberately sets `SENTRY_DISABLE_AUTO_UPLOAD=true`: a private inner-test build must not create a production Sentry release or upload source maps. The canonical tagged public-release path does not set that opt-out and remains fail-closed on its complete Sentry configuration.
+The workflow validates the exact `v1.0.1` metadata and Tokyo endpoint contract, checks the generated dependency notices/SBOM, runs the full application CI, signs with the configured production signing identity, then verifies the APK certificate, package ID, version, and embedded endpoints. It deliberately sets `SENTRY_DISABLE_AUTO_UPLOAD=true`: a preproduction build must not create a production Sentry release or upload source maps. The canonical tagged public-release path does not set that opt-out and remains fail-closed on its complete Sentry configuration.
 
-The successful run retains one private Actions artifact named `android-preprod-v1.0.1` for 30 days. It contains:
+The successful build retains one private Actions artifact named `android-preprod-v1.0.1` for 30 days. It contains:
 
 - `windnote-preprod-v1.0.1.apk`
 - `windnote-preprod-v1.0.1.apk.sha256`
 - `THIRD_PARTY_NOTICES.txt`
 - `cyclonedx-sbom.json`
 
-Download it only from the authenticated Actions run. Verify the checksum before installation. This workflow has read-only repository permissions and no GitHub Release, R2, or public-promotion credentials; its artifact is not a public release and does not satisfy the legal distribution gate below.
+The separate publish job downloads that exact artifact and verifies its checksum before receiving any R2 credentials. It creates the commit-addressed object at `android/preprod/builds/<commit SHA>/windnote.apk` only when absent; a rerun never overwrites it and must prove its downloaded bytes have the candidate checksum. Before promotion it saves the current stable object, copies the verified object to `android/preprod/latest/windnote.apk`, and verifies the R2 versioned object, R2 stable object, and public download byte-for-byte. Any post-promotion failure restores the previous stable object (or removes the first unverified stable object). The website uses the stable URL:
+
+`https://pub-9d36120697ca455b9fb0e430da8b9481.r2.dev/android/preprod/latest/windnote.apk`
+
+This URL is public and unauthenticated: anyone who knows it can download the preproduction APK. The `r2.dev` hostname is suitable for the current inner test, but move the stable object behind a custom R2 domain before broad production traffic. This preproduction path is intentionally separate from the formal `android/latest/windnote.apk` channel. It does not create a GitHub Release, does not enable `ANDROID_PUBLIC_RELEASE_ENABLED`, and is not evidence that the formal legal distribution gate below passed. To roll back deliberately, copy a previously verified commit-addressed object to the preproduction `latest` key; never rebuild or mutate an old commit-addressed object.
 
 To start the candidate after the reviewed commit is pushed:
 
 ```sh
-gh workflow run .github/workflows/android-preprod-build.yml --ref codex/android-preprod-cd
+gh workflow run .github/workflows/android-preprod-build.yml --ref main
 ```
 
 Record the run URL, commit SHA, certificate fingerprint, and checksum with the inner-test record. A failed metadata, CI, signing, identity, endpoint, or checksum check is a stop condition; do not substitute a locally signed APK.

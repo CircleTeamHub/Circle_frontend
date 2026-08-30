@@ -183,6 +183,35 @@ async function stopProcess(child, timeoutMs = 5_000) {
   await exited;
 }
 
+async function closeBrowser(cdp, timeoutMs = 5_000) {
+  if (!cdp) return;
+
+  try {
+    await Promise.race([
+      cdp.send('Browser.close').catch(() => undefined),
+      sleep(timeoutMs),
+    ]);
+  } finally {
+    cdp.close();
+  }
+}
+
+function removeUserDataDir(userDataDir) {
+  try {
+    fs.rmSync(userDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 200,
+    });
+  } catch (error) {
+    if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error;
+    process.stderr.write(
+      `Warning: Chrome profile cleanup is still busy; the ephemeral runner will remove ${userDataDir}.\n`,
+    );
+  }
+}
+
 async function main() {
   if (!fs.existsSync(path.join(DIST, 'index.html'))) {
     throw new Error('dist/index.html missing; run expo export first');
@@ -202,13 +231,14 @@ async function main() {
     ],
     { stdio: 'ignore' },
   );
+  let cdp;
 
   try {
     const port = await waitForDevTools(userDataDir);
     const page = await fetch(`http://127.0.0.1:${port}/json/new`, {
       method: 'PUT',
     }).then((response) => response.json());
-    const cdp = new CdpClient(page.webSocketDebuggerUrl);
+    cdp = new CdpClient(page.webSocketDebuggerUrl);
     await cdp.open();
     const exceptions = [];
     cdp.on('Runtime.exceptionThrown', (event) => {
@@ -243,20 +273,15 @@ async function main() {
         throw new Error(`Web runtime exception on ${route}: ${exceptions.join('; ')}`);
       }
     }
-    cdp.close();
     if (web.missing.length) {
       throw new Error(`Web export referenced missing local assets: ${web.missing.join(', ')}`);
     }
     process.stdout.write('Web export browser smoke passed for / and /qr-login deep link.\n');
   } finally {
+    await closeBrowser(cdp);
     await stopProcess(chrome);
     await new Promise((resolve) => web.server.close(resolve));
-    fs.rmSync(userDataDir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 200,
-    });
+    removeUserDataDir(userDataDir);
   }
 }
 
