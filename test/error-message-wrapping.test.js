@@ -69,7 +69,7 @@ test('deliberate user-facing throws are marked as UserFacingError', () => {
 // 埋点走 diagnosticErrorMessage。report-failure 是纯上报通道,豁免。
 test('no feature code extracts raw error.message for display', () => {
   const allow = new Set([
-    'src/features/notifications/utils/report-failure.ts',
+    path.normalize('src/features/notifications/utils/report-failure.ts'),
   ]);
   const root = path.join(process.cwd(), 'src', 'features');
   const offenders = [];

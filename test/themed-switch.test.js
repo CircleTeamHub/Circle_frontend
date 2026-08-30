@@ -13,7 +13,7 @@ const path = require('node:path');
 //   2. ThemedSwitch 自己必须保留 web 注入这一行。
 const ROOTS = ['src', 'app'];
 const ALLOWED = new Set([
-  'src/components/ui/themed-switch.tsx',
+  path.normalize('src/components/ui/themed-switch.tsx'),
 ]);
 
 function walk(dir) {

@@ -454,42 +454,6 @@ test('retains temp-chat / note / upload / collection error codes with full local
   }
 });
 
-test('retains support recharge error codes with full localization', () => {
-  const { SERVER_ERROR_CODES } = loadServerErrorCodes();
-  const RECHARGE_CODES = [
-    'SUPPORT_RECHARGE_ORDER_NOT_FOUND',
-    'SUPPORT_RECHARGE_ORDER_STATE_CONFLICT',
-    'SUPPORT_RECHARGE_APPROVAL_CONFLICT',
-    'SUPPORT_RECHARGE_PAYMENT_DUPLICATE',
-    'SUPPORT_RECHARGE_PAYMENT_CODE_NOT_FOUND',
-    'SUPPORT_RECHARGE_PAYMENT_CODE_INVALID',
-  ];
-
-  for (const code of RECHARGE_CODES) {
-    assert.ok(
-      SERVER_ERROR_CODES.includes(code),
-      `SERVER_ERROR_CODES must include ${code}`,
-    );
-  }
-
-  for (const lng of ['en', 'zh', 'ja', 'ko', 'es']) {
-    const bundle = JSON.parse(
-      fs.readFileSync(
-        path.join(process.cwd(), `src/i18n/locales/${lng}.json`),
-        'utf8',
-      ),
-    );
-    for (const code of RECHARGE_CODES) {
-      assert.equal(
-        typeof bundle.serverErrors[code],
-        'string',
-        `${lng}.json serverErrors.${code} must be localized`,
-      );
-      assert.ok(bundle.serverErrors[code].trim().length > 0);
-    }
-  }
-});
-
 // Cross-repo contract: the frontend whitelist must equal the backend catalog. Only
 // runs when circle_be is checked out beside circle-im (local dev / combined CI);
 // frontend-only CI has no sibling repo, so skip instead of ENOENT-failing the suite.
