@@ -159,7 +159,7 @@
   node --test test/android-release-workflow.test.js
   ```
 
-- [ ] Commit the release metadata and validation contract.
+- [x] Commit the release metadata and validation contract.
 
   ```powershell
   git add app.json .github/scripts/validate-android-release.js test/android-release-workflow.test.js docs/android-release.md
@@ -172,40 +172,43 @@
 - Create: `scripts/generate-third-party-notices.mjs`
 - Create: `test/third-party-notices.test.js`
 - Create: `assets/legal/THIRD_PARTY_NOTICES.txt`
+- Create: `assets/legal/third-party-notices.json`
 - Create: `assets/legal/cyclonedx-sbom.json`
 - Modify: `package.json`
 - Modify: `src/features/profile/screens/AboutVersionScreen.tsx`
+- Create: `src/features/profile/screens/ThirdPartyLicensesScreen.tsx`
+- Create: `app/(tabs)/profile/settings-about-licenses.tsx`
 - Modify: the locale resources used by `AboutVersionScreen.tsx`
 
-- [ ] Add failing tests that require deterministic, non-empty notices and SBOM files, reject `UNKNOWN` licenses, and prove `@openim/rn-client-sdk` is absent from production dependencies.
+- [x] Add failing tests that require deterministic, non-empty notices and SBOM files, reject `UNKNOWN` licenses, and prove `@openim/rn-client-sdk` is absent from production dependencies.
 
   The test must execute:
 
   ```powershell
-  npm ls --omit=dev --all --json
+  npm ls --omit=dev --all --json --long --package-lock-only
   ```
 
   and assert that every reachable production package has a package name, version, declared license, and a matching notice entry.
 
-- [ ] Run the focused test and confirm it fails while the generated artifacts are absent.
+- [x] Run the focused test and confirm it fails while the generated artifacts are absent.
 
   ```powershell
   node --test test/third-party-notices.test.js
   ```
 
-- [ ] Implement `generate-third-party-notices.mjs`.
+- [x] Implement `generate-third-party-notices.mjs`.
 
   The script must:
 
-  1. Read the production dependency tree using `npm ls --omit=dev --all --json`.
+  1. Read the production dependency tree using `npm ls --omit=dev --all --json --long --package-lock-only`.
   2. Deduplicate by `name@version` and sort lexically.
-  3. Resolve each installed package directory from the root dependency graph.
+  3. Resolve each installed package directory from the root dependency graph, skipping only uninstalled platform-specific optional packages.
   4. Read SPDX license metadata and the package's `LICENSE*`, `LICENCE*`, `COPYING*`, or `NOTICE*` files.
   5. Fail on missing or ambiguous license metadata rather than silently labeling it unknown.
   6. Write deterministic UTF-8 notices and CycloneDX 1.5 JSON without timestamps or host paths.
   7. Fail if the production tree contains `@openim/rn-client-sdk`.
 
-- [ ] Add scripts to `package.json`.
+- [x] Add scripts to `package.json`.
 
   ```json
   {
@@ -216,21 +219,22 @@
   }
   ```
 
-- [ ] Add a “Third-party licenses” action to the existing About/version screen and render the bundled notice text in a scrollable, selectable view. Do not fetch legal text from the network.
+- [x] Add a “Third-party licenses” action to the existing About/version screen and render the bundled notice text in a scrollable, selectable view. Do not fetch legal text from the network.
 
-- [ ] Generate the artifacts, run the focused test, and confirm a second generation produces no diff.
+- [x] Generate the artifacts, run the focused test, and confirm `licenses:check` reports no generated diff.
 
   ```powershell
   npm run licenses:generate
   node --test test/third-party-notices.test.js
-  git diff --exit-code -- assets/legal/THIRD_PARTY_NOTICES.txt assets/legal/cyclonedx-sbom.json
+  npm run licenses:check
   ```
 
-- [ ] Commit the dependency evidence.
+- [x] Commit the dependency evidence.
 
   ```powershell
-  git add scripts/generate-third-party-notices.mjs test/third-party-notices.test.js assets/legal package.json src/features/profile/screens/AboutVersionScreen.tsx
-  git add src/locales
+  git add scripts/generate-third-party-notices.mjs test/third-party-notices.test.js assets/legal package.json
+  git add src/features/profile/screens/AboutVersionScreen.tsx src/features/profile/screens/ThirdPartyLicensesScreen.tsx
+  git add app/(tabs)/profile/settings-about-licenses.tsx src/i18n/locales docs/superpowers/plans/2026-08-30-android-preprod-cd.md
   git commit -m "feat(legal): bundle Android dependency notices"
   ```
 
