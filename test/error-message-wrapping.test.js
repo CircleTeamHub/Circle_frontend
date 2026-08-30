@@ -80,7 +80,7 @@ test('no feature code extracts raw error.message for display', () => {
         continue;
       }
       if (!/\.(ts|tsx)$/.test(entry.name) || /\.spec\./.test(entry.name)) continue;
-      const rel = path.relative(process.cwd(), abs);
+      const rel = path.relative(process.cwd(), abs).split(path.sep).join('/');
       if (allow.has(rel)) continue;
       const src = fs.readFileSync(abs, 'utf8');
       if (/instanceof Error\s*\?\s*\w+\.message/.test(src)) {

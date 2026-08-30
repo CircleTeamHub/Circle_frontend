@@ -2,7 +2,7 @@
   "expo": {
     "name": "风信",
     "slug": "windnote-ai",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": [
@@ -46,7 +46,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "allowBackup": false,
-      "versionCode": 1000000,
+      "versionCode": 1000001,
       "package": "com.yiboding.circleim"
     },
     "web": {

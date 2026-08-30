@@ -25,6 +25,8 @@
     "perf:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/perf-android.ps1",
     "perf:ios": "bash scripts/perf-ios.sh",
     "fixture:performance": "node scripts/prepare-performance-fixture.mjs",
+    "licenses:generate": "node scripts/generate-third-party-notices.mjs",
+    "licenses:check": "node scripts/generate-third-party-notices.mjs --check",
     "ci": "npm run typecheck && npm run expo:config && npm run lint && npm test && npm run test:behavior",
     "postinstall": "patch-package"
   },

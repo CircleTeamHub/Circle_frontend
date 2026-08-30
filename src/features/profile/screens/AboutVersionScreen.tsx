@@ -7,7 +7,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { AboutArticleScreen } from '@/features/profile/screens/about-article-screen';
 import {
@@ -17,6 +19,9 @@ import {
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const styles = StyleSheet.create({
+  actions: {
+    gap: Spacing.sm,
+  },
   button: {
     minHeight: 48,
     borderRadius: Radius.lg,
@@ -32,6 +37,7 @@ const styles = StyleSheet.create({
 });
 
 export default function AboutVersionScreen() {
+  const router = useRouter();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const checkingRef = useRef(false);
@@ -137,30 +143,52 @@ export default function AboutVersionScreen() {
         },
       ]}
       footer={
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('appUpdate.checkNow')}
-          disabled={busy}
-          onPress={() => {
-            void checkNow();
-          }}
-          style={({ pressed }) => [
-            styles.button,
-            {
-              backgroundColor: colors.primary,
-              opacity: pressed || busy ? 0.65 : 1,
-            },
-          ]}
-        >
-          {busy ? <ActivityIndicator color={colors.white} /> : null}
-          <Text style={[styles.buttonText, { color: colors.white }]}>
-            {checking
-              ? t('appUpdate.checking')
-              : installing
-                ? t('appUpdate.updateNow')
-                : t('appUpdate.checkNow')}
-          </Text>
-        </Pressable>
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('appUpdate.checkNow')}
+            disabled={busy}
+            onPress={() => {
+              void checkNow();
+            }}
+            style={({ pressed }) => [
+              styles.button,
+              {
+                backgroundColor: colors.primary,
+                opacity: pressed || busy ? 0.65 : 1,
+              },
+            ]}
+          >
+            {busy ? <ActivityIndicator color={colors.white} /> : null}
+            <Text style={[styles.buttonText, { color: colors.white }]}>
+              {checking
+                ? t('appUpdate.checking')
+                : installing
+                  ? t('appUpdate.updateNow')
+                  : t('appUpdate.checkNow')}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('settingsDetails.about.thirdPartyLicenses')}
+            onPress={() => {
+              router.push('/(tabs)/profile/settings-about-licenses' as never);
+            }}
+            style={({ pressed }) => [
+              styles.button,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.surfaceBorder,
+                borderWidth: StyleSheet.hairlineWidth,
+                opacity: pressed ? 0.65 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.buttonText, { color: colors.text }]}>
+              {t('settingsDetails.about.thirdPartyLicenses')}
+            </Text>
+          </Pressable>
+        </View>
       }
     />
   );

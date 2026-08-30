@@ -168,6 +168,21 @@ async function waitForDevTools(userDataDir) {
   throw new Error('Chrome DevTools did not start');
 }
 
+async function stopProcess(child, timeoutMs = 5_000) {
+  if (child.exitCode !== null) return;
+
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  child.kill('SIGTERM');
+  const stopped = await Promise.race([
+    exited.then(() => true),
+    sleep(timeoutMs).then(() => false),
+  ]);
+  if (stopped || child.exitCode !== null) return;
+
+  child.kill('SIGKILL');
+  await exited;
+}
+
 async function main() {
   if (!fs.existsSync(path.join(DIST, 'index.html'))) {
     throw new Error('dist/index.html missing; run expo export first');
@@ -234,9 +249,14 @@ async function main() {
     }
     process.stdout.write('Web export browser smoke passed for / and /qr-login deep link.\n');
   } finally {
-    chrome.kill('SIGTERM');
+    await stopProcess(chrome);
     await new Promise((resolve) => web.server.close(resolve));
-    fs.rmSync(userDataDir, { recursive: true, force: true });
+    fs.rmSync(userDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 200,
+    });
   }
 }
 

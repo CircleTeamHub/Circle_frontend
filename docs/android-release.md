@@ -12,12 +12,42 @@ PR #57 does not by itself authorize public distribution. A successful private bu
 
 Configure metadata and signing for the private build without putting secret values in documentation, logs, issues, or pull requests.
 
+The current preproduction candidate is Android `v1.0.1` (`versionCode` `1000001`). Its test deployment contract is:
+
+- API and chat fallback: `https://api-43-133-201-42.sslip.io`
+- media origin: `https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com`
+
+These values identify the Tokyo test stack, not production. A preproduction workflow must verify both expected hostnames are embedded and that obsolete tunnel/OpenIM hostnames are absent before retaining its private artifact.
+
+## Private preproduction APK
+
+`.github/workflows/android-preprod-build.yml` is the controlled Android inner-test path. It runs only through `workflow_dispatch` and builds the exact commit selected in the Actions ref picker. Select the reviewed `codex/android-preprod-cd` branch while this change is under review; after merge, select `main`. A newer dispatch cancels an older in-progress preproduction build so testers do not accidentally download a stale candidate.
+
+The workflow validates the exact `v1.0.1` metadata and Tokyo endpoint contract, checks the generated dependency notices/SBOM, runs the full application CI, signs with the configured production signing identity, then verifies the APK certificate, package ID, version, and embedded endpoints. It deliberately sets `SENTRY_DISABLE_AUTO_UPLOAD=true`: a private inner-test build must not create a production Sentry release or upload source maps. The canonical tagged public-release path does not set that opt-out and remains fail-closed on its complete Sentry configuration.
+
+The successful run retains one private Actions artifact named `android-preprod-v1.0.1` for 30 days. It contains:
+
+- `windnote-preprod-v1.0.1.apk`
+- `windnote-preprod-v1.0.1.apk.sha256`
+- `THIRD_PARTY_NOTICES.txt`
+- `cyclonedx-sbom.json`
+
+Download it only from the authenticated Actions run. Verify the checksum before installation. This workflow has read-only repository permissions and no GitHub Release, R2, or public-promotion credentials; its artifact is not a public release and does not satisfy the legal distribution gate below.
+
+To start the candidate after the reviewed commit is pushed:
+
+```sh
+gh workflow run .github/workflows/android-preprod-build.yml --ref codex/android-preprod-cd
+```
+
+Record the run URL, commit SHA, certificate fingerprint, and checksum with the inner-test record. A failed metadata, CI, signing, identity, endpoint, or checksum check is a stop condition; do not substitute a locally signed APK.
+
 - Repository variable `EXPO_PUBLIC_API_URL`: production HTTPS API base URL, without embedded credentials.
 - Repository variable `EXPO_PUBLIC_CHAT_WS_URL` (optional): WSS origin of the chat gateway
   when it is not served from the API origin. Repository variables are not injected into
   `process.env` automatically — without this the build silently compiles the API-origin
   fallback and ships with REST working but the chat socket unable to connect at all.
-- Repository variable `EXPO_PUBLIC_MEDIA_ORIGINS` (optional, comma-separated): extra
+- Repository variable `EXPO_PUBLIC_MEDIA_ORIGINS` (required for release candidates, comma-separated): extra
   object-storage / CDN origins that serve chat media. The upload contract returns an
   independent `fileUrl`, so when storage lives on its own hostname it must be listed here —
   otherwise the peer-media allowlist rejects every legitimate URL and images, voice notes,
