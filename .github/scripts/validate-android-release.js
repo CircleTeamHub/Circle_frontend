@@ -288,6 +288,27 @@ function validateDistributionApproval({ env }) {
   return errors;
 }
 
+function validatePreprodDistributionApproval({ env }) {
+  const errors = [];
+
+  for (const name of [
+    'ANDROID_PREPROD_PUBLIC_ENABLED',
+    'ANDROID_PREPROD_DISTRIBUTION_APPROVED',
+  ]) {
+    if (env[name] !== 'true') errors.push(`${name} must be true.`);
+  }
+
+  requireValues(errors, env, ['ANDROID_PREPROD_DISTRIBUTION_EVIDENCE_URL']);
+  validateUrl(
+    errors,
+    'ANDROID_PREPROD_DISTRIBUTION_EVIDENCE_URL',
+    env.ANDROID_PREPROD_DISTRIBUTION_EVIDENCE_URL,
+    'https:',
+  );
+
+  return errors;
+}
+
 function readApp() {
   return JSON.parse(
     fs.readFileSync(path.join(process.cwd(), 'app.json'), 'utf8'),
@@ -378,6 +399,9 @@ function main() {
       case 'distribution':
         errors = validateDistributionApproval({ env: process.env });
         break;
+      case 'preprod-distribution':
+        errors = validatePreprodDistributionApproval({ env: process.env });
+        break;
       case 'all':
         errors = [
           ...validateReleaseMetadata({ env: process.env, app: readApp() }),
@@ -407,6 +431,8 @@ module.exports = {
   validateBuildEnv,
   validateBuildEnvShape,
   validateDistributionApproval,
+  validatePreprodBuildEnv,
+  validatePreprodDistributionApproval,
   validateReleaseMetadata,
   validateSigningConfig,
   validateSentryUploadConfig,
