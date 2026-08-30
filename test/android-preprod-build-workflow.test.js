@@ -63,6 +63,7 @@ test('preproduction workflow publishes the verified artifact to an isolated R2 c
     publish,
     'Publish verified preproduction APK to Cloudflare R2',
   );
+  const publisher = read('.github/scripts/publish-android-preprod.sh');
 
   assert.match(publish, /needs: build/);
   assert.match(publish, /if: \$\{\{ github\.ref == 'refs\/heads\/main' \}\}/);
@@ -81,27 +82,28 @@ test('preproduction workflow publishes the verified artifact to an isolated R2 c
   ]) {
     assert.ok(upload.includes(credential), `publish step injects ${credential}`);
   }
-  assert.match(upload, /android\/preprod\/builds\/\$\{GITHUB_SHA\}\/windnote\.apk/);
-  assert.match(upload, /android\/preprod\/latest\/windnote\.apk/);
+  assert.match(upload, /publish-android-preprod\.sh/);
+  assert.match(publisher, /android\/preprod\/builds\/\$\{GITHUB_SHA\}\/windnote\.apk/);
+  assert.match(publisher, /android\/preprod\/latest\/windnote\.apk/);
   assert.doesNotMatch(workflow, /android\/latest\/windnote\.apk/);
-  assert.match(upload, /aws s3api put-object/);
-  assert.match(upload, /--if-none-match ['"]\*['"]/);
-  assert.match(upload, /aws s3api head-object/);
-  assert.match(upload, /aws s3api get-object/);
-  assert.match(upload, /aws s3api copy-object/);
-  assert.match(upload, /android\/preprod\/rollback\/\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}\/windnote\.apk/);
-  assert.match(upload, /rollback_latest/);
-  assert.match(upload, /aws s3api delete-object/);
-  assert.match(upload, /--metadata-directive REPLACE/);
-  assert.match(upload, /application\/vnd\.android\.package-archive/);
-  assert.match(upload, /max-age=31536000, immutable/);
-  assert.match(upload, /max-age=300/);
-  assert.match(upload, /Metadata\.sha256/);
-  assert.match(upload, /ContentLength/);
-  assert.match(upload, /\?build=\$GITHUB_SHA/);
-  assert.match(upload, /curl --fail --silent --show-error/);
+  assert.match(publisher, /aws s3api put-object/);
+  assert.match(publisher, /--if-none-match ['"]\*['"]/);
+  assert.match(publisher, /aws s3api head-object/);
+  assert.match(publisher, /aws s3api get-object/);
+  assert.match(publisher, /aws s3api copy-object/);
+  assert.match(publisher, /android\/preprod\/rollback\/\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}\/windnote\.apk/);
+  assert.match(publisher, /rollback_latest/);
+  assert.match(publisher, /aws s3api delete-object/);
+  assert.match(publisher, /--metadata-directive REPLACE/);
+  assert.match(publisher, /application\/vnd\.android\.package-archive/);
+  assert.match(publisher, /max-age=31536000, immutable/);
+  assert.match(publisher, /max-age=300/);
+  assert.match(publisher, /Metadata\.sha256/);
+  assert.match(publisher, /ContentLength/);
+  assert.match(publisher, /\?build=\$GITHUB_SHA/);
+  assert.match(publisher, /curl --fail --silent --show-error/);
   assert.ok(
-    (upload.match(/sha256sum -c/g) || []).length >= 3,
+    (publisher.match(/sha256sum -c/g) || []).length >= 3,
     'versioned, latest, and public APK bytes must each be hashed',
   );
 });
