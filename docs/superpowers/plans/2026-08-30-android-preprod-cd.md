@@ -246,14 +246,14 @@
 - Create: `test/android-preprod-build-workflow.test.js`
 - Modify: `docs/android-release.md`
 
-- [ ] Write failing workflow-contract tests requiring all of these properties:
+- [x] Write failing workflow-contract tests requiring all of these properties:
 
   ```text
   workflow_dispatch only
   concurrency cancels an older preproduction build
   npm ci and npm run ci run before Gradle
   Android signing secrets are required
-  SENTRY_DISABLE_AUTO_UPLOAD=true is limited to this private workflow
+  SENTRY_DISABLE_AUTO_UPLOAD=true is limited to non-distributable workflows and absent from the public tag workflow
   EXPO_PUBLIC_API_URL and EXPO_PUBLIC_MEDIA_ORIGINS come from repository variables
   assembleRelease produces a signed release APK
   apksigner verifies the configured certificate fingerprint
@@ -263,13 +263,13 @@
   no GitHub Release, R2, RELEASES_TOKEN, or public-publish step exists
   ```
 
-- [ ] Run the focused test and confirm failure before creating the workflow.
+- [x] Run the focused test and confirm failure before creating the workflow.
 
   ```powershell
   node --test test/android-preprod-build-workflow.test.js
   ```
 
-- [ ] Implement `verify-android-preprod.js` with two commands:
+- [x] Implement `verify-android-preprod.js` with two commands:
 
   ```text
   metadata: verify version 1.0.1, versionCode 1000001, HTTPS test endpoints
@@ -279,7 +279,7 @@
 
   It must exit non-zero on an absent expected string, a forbidden string, a malformed APK, or an unexpected version.
 
-- [ ] Implement `android-preprod-build.yml` as a manually dispatched, private artifact workflow:
+- [x] Implement `android-preprod-build.yml` as a manually dispatched, private artifact workflow:
 
   ```yaml
   on:
@@ -295,25 +295,25 @@
 
   Required build order:
 
-  1. Checkout the selected `main` commit.
+  1. Checkout the exact commit selected in the manual Actions ref picker (the reviewed branch before merge, then `main`).
   2. Install pinned Node and Java versions used by the existing Android workflow.
   3. Run `npm ci`, `npm run licenses:check`, and `npm run ci`.
   4. Decode the signing keystore into the runner temporary directory.
-  5. Export repository-variable endpoints and `SENTRY_DISABLE_AUTO_UPLOAD=true`.
+  5. Export repository-variable endpoints and `SENTRY_DISABLE_AUTO_UPLOAD=true` (the daily non-distributable build has the same opt-out; the public tag workflow must not).
   6. Run the same Expo prebuild/Gradle release commands and ABI selection as the existing release workflow.
   7. Verify package ID, versionCode, signature certificate, expected endpoints, and forbidden endpoints.
   8. Create `windnote-preprod-v1.0.1.apk` and its lowercase SHA-256 file.
   9. Upload the APK, checksum, notices, and SBOM as one Actions artifact retained for 30 days.
   10. Remove decoded signing material in an `if: always()` step.
 
-- [ ] Run workflow lint/contract tests.
+- [x] Run workflow lint/contract tests.
 
   ```powershell
   node --test test/android-preprod-build-workflow.test.js
-  npm run test:workflow-lint
+  actionlint
   ```
 
-- [ ] Commit the private build workflow.
+- [x] Commit the private build workflow.
 
   ```powershell
   git add .github/workflows/android-preprod-build.yml .github/scripts/verify-android-preprod.js test/android-preprod-build-workflow.test.js docs/android-release.md
