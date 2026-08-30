@@ -9,7 +9,13 @@
  *
  * 解析不依赖 URL/URLSearchParams(RN 运行时 searchParams 支持不齐),手工拆串。
  */
-const APP_DEEP_LINK_SCHEMES = ['windnoteai', 'circleim'] as const;
+const APP_DEEP_LINK_SCHEMES = [
+  'windnoteai',
+  'circleim',
+  'windnoteai-preprod',
+  'circleim-preprod',
+] as const;
+export type AppQrScheme = (typeof APP_DEEP_LINK_SCHEMES)[number];
 const APP_UNIVERSAL_LINK_HOSTS = [
   'windnote.ai',
   'www.windnote.ai',
@@ -37,16 +43,26 @@ export function normalizeQrToken(raw: string): string | null {
   return parseQrToken(value);
 }
 
-export function buildQrUrl(token: string): string {
-  return `${SCHEME_PREFIXES[0]}qr?t=${encodeURIComponent(token)}`;
+export function qrSchemeForAppVariant(appVariant: unknown): AppQrScheme {
+  return appVariant === 'preprod' ? 'windnoteai-preprod' : 'windnoteai';
+}
+
+export function buildQrUrl(
+  token: string,
+  scheme: AppQrScheme = 'windnoteai',
+): string {
+  return `${scheme}://qr?t=${encodeURIComponent(token)}`;
 }
 
 /**
  * 网页登录使用独立路由，旧版客户端只认识 `qr`，因此会明确拒绝/按普通文本
  * 处理，而不会把新增的 LOGIN 类型误当成圈子加入流程。
  */
-export function buildQrLoginUrl(token: string): string {
-  return `${SCHEME_PREFIXES[0]}qr-login?t=${encodeURIComponent(token)}`;
+export function buildQrLoginUrl(
+  token: string,
+  scheme: AppQrScheme = 'windnoteai',
+): string {
+  return `${scheme}://qr-login?t=${encodeURIComponent(token)}`;
 }
 
 function safeDecodeURIComponent(value: string): string | null {

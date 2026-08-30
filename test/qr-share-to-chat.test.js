@@ -125,7 +125,10 @@ test('二维码卡片把「是谁的码、扫了会怎样」写在卡面上', ()
   assert.match(bubble, /GroupChatAvatar/);
   assert.match(bubble, /CircleAvatar/);
   // 码是本端按令牌就地画的,不依赖任何上传上去的图。
-  assert.match(bubble, /buildQrUrl\(card\.token\)/);
+  assert.match(
+    bubble,
+    /buildQrUrl\(card\.token, OUTBOUND_APP_QR_SCHEME\)/,
+  );
   // 二维码永远黑白:暗色主题下跟着换底色就直接扫不出来了。
   assert.match(bubble, /const QR_DARK = '#111111'/);
   assert.match(bubble, /const QR_LIGHT = '#FFFFFF'/);

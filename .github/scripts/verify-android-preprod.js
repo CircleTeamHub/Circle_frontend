@@ -5,7 +5,9 @@ const { spawnSync } = require('node:child_process');
 const EXPECTED = Object.freeze({
   version: '1.0.1',
   versionCode: 1000001,
-  packageName: 'com.yiboding.circleim',
+  packageName: 'com.yiboding.circleim.preprod',
+  appName: '风信测试版',
+  appVariant: 'preprod',
   apiUrl: 'https://api-43-133-201-42.sslip.io',
   apiHost: 'api-43-133-201-42.sslip.io',
   mediaOrigin:
@@ -47,6 +49,12 @@ function validateMetadata({ app, env }) {
   if (app?.android?.package !== EXPECTED.packageName) {
     errors.push(`Android package must be ${EXPECTED.packageName}.`);
   }
+  if (app?.name !== EXPECTED.appName) {
+    errors.push(`App name must be ${EXPECTED.appName}.`);
+  }
+  if (app?.extra?.appVariant !== EXPECTED.appVariant) {
+    errors.push(`App variant must be ${EXPECTED.appVariant}.`);
+  }
   if (!isExactHttpsUrl(env.EXPO_PUBLIC_API_URL, EXPECTED.apiUrl)) {
     errors.push(`EXPO_PUBLIC_API_URL must be ${EXPECTED.apiUrl}.`);
   }
@@ -73,6 +81,25 @@ function validateApkContents(contents) {
   for (const forbidden of EXPECTED.forbiddenStrings) {
     if (haystack.includes(forbidden.toLowerCase())) {
       errors.push(`APK contains forbidden preproduction value: ${forbidden}`);
+    }
+  }
+  return errors;
+}
+
+function validateAndroidManifest(contents) {
+  const errors = [];
+  const hasScheme = (scheme) =>
+    contents.includes(`android:scheme="${scheme}"`) ||
+    contents.includes(`android:scheme='${scheme}'`);
+
+  for (const scheme of ['windnoteai-preprod', 'circleim-preprod']) {
+    if (!hasScheme(scheme)) {
+      errors.push(`Android manifest is missing preproduction scheme: ${scheme}`);
+    }
+  }
+  for (const scheme of ['windnoteai', 'circleim']) {
+    if (hasScheme(scheme)) {
+      errors.push(`Android manifest still registers production scheme: ${scheme}`);
     }
   }
   return errors;
@@ -114,9 +141,9 @@ function verifyApk(apkPath, run = spawnSync) {
 function main(argv = process.argv.slice(2)) {
   const [command, argument] = argv;
   if (command === 'metadata') {
-    const app = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'app.json'), 'utf8'),
-    ).expo;
+    const configPath = path.join(process.cwd(), 'app.config.js');
+    delete require.cache[require.resolve(configPath)];
+    const app = require(configPath)();
     failOnErrors(validateMetadata({ app, env: process.env }));
     return;
   }
@@ -124,7 +151,14 @@ function main(argv = process.argv.slice(2)) {
     verifyApk(argument);
     return;
   }
-  throw new Error('Usage: verify-android-preprod.js <metadata|apk> [apk-path]');
+  if (command === 'manifest') {
+    const contents = fs.readFileSync(argument, 'utf8');
+    failOnErrors(validateAndroidManifest(contents));
+    return;
+  }
+  throw new Error(
+    'Usage: verify-android-preprod.js <metadata|manifest|apk> [file-path]',
+  );
 }
 
 if (require.main === module) {
@@ -140,6 +174,7 @@ module.exports = {
   EXPECTED,
   main,
   validateApkContents,
+  validateAndroidManifest,
   validateMetadata,
   verifyApk,
 };

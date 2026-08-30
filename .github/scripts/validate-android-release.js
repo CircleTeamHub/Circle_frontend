@@ -165,6 +165,12 @@ function validateBuildEnv({ env }) {
   return [...collectReleaseConfigGaps({ env }), ...validateBuildEnvShape({ env })];
 }
 
+function validatePreprodBuildEnv({ env }) {
+  const errors = validateBuildEnv({ env });
+  requireValues(errors, env, ['EXPO_PUBLIC_SENTRY_DSN']);
+  return errors;
+}
+
 function validateReleaseMetadata({ env, app }) {
   const errors = validateBuildEnv({ env });
 
@@ -299,7 +305,13 @@ function validateLegacyReleaseConfig({ env, app }) {
 
 // 哪些 scope 会编译出一个真正的包 —— 只有这些需要提醒「这个包没有崩溃上报」。
 // signing / distribution 只读凭证与审批位，跟包内可观测性无关。
-const BUILD_ENV_SCOPES = new Set([undefined, 'metadata', 'build-env', 'all']);
+const BUILD_ENV_SCOPES = new Set([
+  undefined,
+  'metadata',
+  'build-env',
+  'preprod-build-env',
+  'all',
+]);
 
 // 降级成告警之后，缺口在 40 分钟的构建日志里等同于不存在。所以除了 ::warning::
 // 还要写进 job summary —— 每日构建绿了，但页面顶部仍然列着「这些变量没配，现在
@@ -353,6 +365,9 @@ function main() {
       case 'build-env':
         reportReleaseConfigGaps({ env: process.env });
         errors = validateBuildEnvShape({ env: process.env });
+        break;
+      case 'preprod-build-env':
+        errors = validatePreprodBuildEnv({ env: process.env });
         break;
       case 'signing':
         errors = validateSigningConfig({ env: process.env });
