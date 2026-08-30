@@ -82,3 +82,20 @@ test('the resizer keeps its pan handlers intact', () => {
   // 拖出热区后不许被祖先抢走手势。
   assert.match(source, /onPanResponderTerminationRequest: \(\) => false/);
 });
+
+test('the resizer is keyboard reachable and exposes its current range', () => {
+  const source = read('src/components/app/split-pane-resizer.tsx');
+
+  assert.match(source, /Platform\.OS === 'web'[\s\S]*?tabIndex: 0/);
+  assert.match(source, /onKeyDown:/);
+  assert.match(source, /key === 'ArrowLeft'/);
+  assert.match(source, /key === 'ArrowRight'/);
+  assert.match(source, /key === 'Home'/);
+  assert.match(source, /key === 'End'/);
+  assert.match(source, /key === 'Enter' \|\| key === ' '/);
+  assert.match(source, /accessibilityValue=\{\{/);
+  assert.match(source, /min: SPLIT_LIST_PANE_MIN_WIDTH/);
+  assert.match(source, /max: SPLIT_LIST_PANE_MAX_WIDTH/);
+  assert.match(source, /now: clampListPaneWidth\(paneWidth\)/);
+  assert.match(source, /active \|\| hovered \|\| focused/);
+});

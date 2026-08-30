@@ -12,7 +12,9 @@ const path = require('node:path');
 //   1. 业务代码不许再直接用 react-native 的 Switch（漏传即复发）；
 //   2. ThemedSwitch 自己必须保留 web 注入这一行。
 const ROOTS = ['src', 'app'];
-const ALLOWED = new Set(['src/components/ui/themed-switch.tsx']);
+const ALLOWED = new Set([
+  path.normalize('src/components/ui/themed-switch.tsx'),
+]);
 
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

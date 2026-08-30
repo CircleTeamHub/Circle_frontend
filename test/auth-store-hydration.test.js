@@ -82,12 +82,13 @@ function loadAuthStore() {
 }
 
 function spyClearSession(useAuthStore) {
-  const counter = { calls: 0 };
+  const counter = { calls: 0, args: [] };
   const realClear = useAuthStore.getState().clearSession;
   useAuthStore.setState({
-    clearSession: () => {
+    clearSession: (...args) => {
       counter.calls += 1;
-      realClear();
+      counter.args.push(args);
+      realClear(...args);
     },
   });
   return counter;
@@ -109,15 +110,37 @@ test('authStore unblocks startup but does NOT clearSession when hydration read f
 });
 
 test('authStore clears the session when hydration succeeds but tokens are structurally invalid', () => {
-  const { useAuthStore, persistOptions } = loadAuthStore();
-  useAuthStore.setState({ accessToken: '', refreshToken: '', isAuthenticated: true });
-  const cleared = spyClearSession(useAuthStore);
+  const invalidTokens = [
+    { label: 'empty strings', accessToken: '', refreshToken: '' },
+    { label: 'null tokens', accessToken: null, refreshToken: null },
+    { label: 'access only', accessToken: 'access', refreshToken: null },
+    { label: 'refresh only', accessToken: null, refreshToken: 'refresh' },
+    { label: 'non-string access', accessToken: 42, refreshToken: 'refresh' },
+    { label: 'non-string refresh', accessToken: 'access', refreshToken: {} },
+    { label: 'missing tokens', accessToken: undefined, refreshToken: undefined },
+  ];
 
-  const finishHydration = persistOptions.onRehydrateStorage();
-  finishHydration(useAuthStore.getState(), undefined);
+  for (const tokenCase of invalidTokens) {
+    const { useAuthStore, persistOptions } = loadAuthStore();
+    useAuthStore.setState({
+      accessToken: tokenCase.accessToken,
+      refreshToken: tokenCase.refreshToken,
+      isAuthenticated: true,
+    });
+    const cleared = spyClearSession(useAuthStore);
 
-  assert.equal(cleared.calls, 1);
-  assert.equal(useAuthStore.getState().isAuthenticated, false);
+    const finishHydration = persistOptions.onRehydrateStorage();
+    finishHydration(useAuthStore.getState(), undefined);
+
+    assert.equal(cleared.calls, 1, tokenCase.label);
+    assert.equal(cleared.args[0][0].preserveLoading, true, tokenCase.label);
+    assert.equal(useAuthStore.getState().isAuthenticated, false, tokenCase.label);
+    assert.equal(
+      useAuthStore.getState().isLoading,
+      true,
+      `${tokenCase.label}: startup must stay gated until account-scoped caches are cleared`,
+    );
+  }
 });
 
 test('authStore keeps valid hydrated tokens without clearing', () => {

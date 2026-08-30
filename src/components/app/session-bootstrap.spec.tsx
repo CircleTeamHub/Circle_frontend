@@ -4,6 +4,7 @@ import { SessionBootstrap } from './session-bootstrap';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
 import { connectChat } from '@/chat-core/socket-manager';
+import { reportError } from '@/observability/sentry';
 import { ApiError } from '@/services/api/client';
 import type { AuthUser } from '@/stores/authStore';
 
@@ -20,6 +21,7 @@ jest.mock('@/stores/authStore', () => ({
   ),
 }));
 jest.mock('@/services/api/auth', () => ({ fetchCurrentUser: jest.fn() }));
+jest.mock('@/observability/sentry', () => ({ reportError: jest.fn() }));
 // 真实 api/client 要进来（isDefinitiveAuthFailure / ApiError 是被测逻辑的一部分），
 // 但它的 i18n 依赖会一路拉起 AsyncStorage native module。
 jest.mock('@/i18n', () => ({
@@ -59,6 +61,7 @@ const mockClearLocalSession = clearLocalSession as jest.MockedFunction<
   typeof clearLocalSession
 >;
 const mockConnectChat = connectChat as jest.MockedFunction<typeof connectChat>;
+const mockReportError = reportError as jest.MockedFunction<typeof reportError>;
 
 // bootstrap 只读 user.id，宽松对象足够。
 const storedUser = { id: 'user-1' } as AuthUser;
@@ -145,6 +148,64 @@ test('a forbidden account on cold start still clears the session', async () => {
   render(<SessionBootstrap />);
 
   await waitFor(() => expect(mockClearLocalSession).toHaveBeenCalledTimes(1));
+});
+
+test('an authless hydration clears account-scoped state before unlocking login', async () => {
+  let releaseCleanup: (() => void) | undefined;
+  mockAuth.state = {
+    ...mockAuth.state,
+    accessToken: null,
+    refreshToken: null,
+    user: null,
+    isAuthenticated: false,
+  };
+  mockClearLocalSession.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        releaseCleanup = resolve;
+      }),
+  );
+
+  render(<SessionBootstrap />);
+
+  await waitFor(() =>
+    expect(mockClearLocalSession).toHaveBeenCalledWith(undefined, {
+      preserveLoading: true,
+    }),
+  );
+  expect(mockAuth.state.setLoading).not.toHaveBeenCalledWith(false);
+
+  releaseCleanup?.();
+  await waitFor(() =>
+    expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false),
+  );
+});
+
+test('an authless hydration unlocks login even when local cleanup rejects', async () => {
+  const cleanupError = new Error('store import failed');
+  mockAuth.state = {
+    ...mockAuth.state,
+    accessToken: null,
+    refreshToken: null,
+    user: null,
+    isAuthenticated: false,
+  };
+  mockClearLocalSession.mockRejectedValueOnce(cleanupError);
+
+  render(<SessionBootstrap />);
+
+  await waitFor(() =>
+    expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false),
+  );
+  expect(mockClearLocalSession).toHaveBeenCalledWith(undefined, {
+    preserveLoading: true,
+  });
+  expect(mockReportError).toHaveBeenCalledTimes(1);
+  expect(mockReportError).toHaveBeenCalledWith(cleanupError, {
+    component: 'SessionBootstrap',
+    operation: 'clearTokenlessSession',
+    kind: 'cleanup-failed',
+  });
 });
 
 test('a successful cold start restores the user', async () => {

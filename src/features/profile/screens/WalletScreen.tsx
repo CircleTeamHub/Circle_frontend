@@ -285,7 +285,7 @@ export default function WalletScreen() {
             })}
           </Text>
         ) : null}
-        <View style={s.balanceCard}>
+        <View testID="wallet-balance-card" style={s.balanceCard}>
           <GradientCover colors={Gradients.memberCard} />
           <View style={[s.balanceOrb, s.balanceOrbTop]} />
           <View style={[s.balanceOrb, s.balanceOrbBottom]} />
@@ -323,11 +323,6 @@ export default function WalletScreen() {
             <Text style={s.cardBrand}>WindNote</Text>
           </View>
           <Text style={s.cardBalance}>{loadingWallet ? '...' : balance}</Text>
-          {walletError ? (
-            <Text style={[Typography.caption, { color: colors.error }]}>
-              {walletError}
-            </Text>
-          ) : null}
           <View style={s.cardBottomRow}>
             <Text style={s.cardNumber}>{cardNumber}</Text>
             <Text style={s.cardHolder} numberOfLines={1}>
@@ -335,6 +330,15 @@ export default function WalletScreen() {
             </Text>
           </View>
         </View>
+        {walletError ? (
+          <Text
+            testID="wallet-balance-error"
+            selectable
+            style={[Typography.caption, { color: colors.error }]}
+          >
+            {walletError}
+          </Text>
+        ) : null}
 
         <View style={[s.notice, { backgroundColor: colors.surface }]}>
           <Text style={[Typography.bodyRegular, { color: colors.textSecondary }]}>
