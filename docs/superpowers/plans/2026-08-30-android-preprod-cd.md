@@ -101,7 +101,7 @@
   node .github/scripts/smoke-web-export.js
   ```
 
-- [ ] Commit the isolated fix.
+- [x] Commit the isolated fix.
 
   ```powershell
   git add .github/scripts/smoke-web-export.js test/desktop-web-review-fixes.test.js
@@ -114,9 +114,10 @@
 - Modify: `app.json`
 - Modify: `.github/scripts/validate-android-release.js`
 - Modify: `test/android-release-workflow.test.js`
+- Modify: `test/daily-android-build-workflow.test.js`
 - Modify: `docs/android-release.md`
 
-- [ ] Add failing release-validator tests for the exact version and deployment inputs.
+- [x] Add failing release-validator tests for the exact version and deployment inputs.
 
   Tests must cover:
 
@@ -124,16 +125,16 @@
   tag v1.0.1 -> app version 1.0.1 -> Android versionCode 1000001
   EXPO_PUBLIC_API_URL must be HTTPS
   EXPO_PUBLIC_MEDIA_ORIGINS must contain only HTTPS origins
-  public distribution rejects an absent media-origin value
+  every release candidate rejects an absent media-origin value
   ```
 
-- [ ] Run the focused test and confirm the new expectations fail.
+- [x] Run the focused test and confirm the new expectations fail.
 
   ```powershell
   node --test test/android-release-workflow.test.js
   ```
 
-- [ ] Update application metadata.
+- [x] Update application metadata.
 
   In `app.json`, set:
 
@@ -148,11 +149,11 @@
   }
   ```
 
-- [ ] Extend `validate-android-release.js` so release validation parses `EXPO_PUBLIC_MEDIA_ORIGINS` as a comma-separated list, rejects credentials, query strings, fragments, non-HTTPS schemes, and missing hostnames, and requires at least one origin when distribution mode is `public`.
+- [x] Extend `validate-android-release.js` so release validation parses `EXPO_PUBLIC_MEDIA_ORIGINS` as a comma-separated list, rejects credentials, paths, query strings, fragments, non-HTTPS schemes, and missing hostnames, and requires at least one origin for every release candidate.
 
-- [ ] Document the preproduction values and the distinction between private artifacts and public distribution in `docs/android-release.md`.
+- [x] Document the preproduction values and the distinction between private artifacts and public distribution in `docs/android-release.md`.
 
-- [ ] Run the focused tests.
+- [x] Run the focused tests.
 
   ```powershell
   node --test test/android-release-workflow.test.js

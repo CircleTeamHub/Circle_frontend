@@ -29,6 +29,13 @@ const workflowStep = (job, stepName) => {
 test('release rollout documentation records the fail-closed operating contract', () => {
   const documentation = read('docs/android-release.md');
 
+  assert.match(documentation, /https:\/\/api-43-133-201-42\.sslip\.io/);
+  assert.match(
+    documentation,
+    /https:\/\/windnote-preprod-tokyo-1447743949\.cos\.ap-tokyo\.myqcloud\.com/,
+  );
+  assert.match(documentation, /v1\.0\.1/);
+
   assert.match(documentation, /PR #57/);
   assert.match(documentation, /\.github\/workflows\/android-release\.yml/);
   assert.match(documentation, /only canonical workflow/i);
@@ -162,6 +169,13 @@ test('release rollout documentation records the fail-closed operating contract',
   );
   assert.match(documentation, /new higher semver/i);
   assert.match(documentation, /keystore[^\n]*backup/i);
+});
+
+test('Android release candidate metadata is v1.0.1', () => {
+  const app = JSON.parse(read('app.json')).expo;
+
+  assert.equal(app.version, '1.0.1');
+  assert.equal(app.android.versionCode, 1_000_001);
 });
 
 test('Android release workflow has one controlled release entry point', () => {
@@ -519,15 +533,17 @@ test('release validation metadata requires matching app versions and secure publ
     validateReleaseMetadata,
   } = require('../.github/scripts/validate-android-release');
   const env = {
-    RELEASE_TAG: 'v1.0.0',
+    RELEASE_TAG: 'v1.0.1',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
+    EXPO_PUBLIC_MEDIA_ORIGINS: 'https://media.windnote.test',
   };
-  const app = { version: '1.0.0', android: { versionCode: 1_000_000 } };
+  const app = { version: '1.0.1', android: { versionCode: 1_000_001 } };
 
   assert.deepEqual(validateReleaseMetadata({ env, app }), []);
 
   for (const name of [
     'EXPO_PUBLIC_API_URL',
+    'EXPO_PUBLIC_MEDIA_ORIGINS',
   ]) {
     assert.match(
       validateReleaseMetadata({ env: { ...env, [name]: '' }, app }).join('\n'),
@@ -542,22 +558,37 @@ test('release validation metadata requires matching app versions and secure publ
     }).join('\n'),
     /EXPO_PUBLIC_API_URL.*https/,
   );
+  for (const mediaOrigins of [
+    'http://media.windnote.test',
+    'https://user:secret@media.windnote.test',
+    'https://media.windnote.test?signature=secret',
+    'https://media.windnote.test#fragment',
+    'https://media.windnote.test,',
+  ]) {
+    assert.match(
+      validateReleaseMetadata({
+        env: { ...env, EXPO_PUBLIC_MEDIA_ORIGINS: mediaOrigins },
+        app,
+      }).join('\n'),
+      /EXPO_PUBLIC_MEDIA_ORIGINS/,
+    );
+  }
   assert.match(
-    validateReleaseMetadata({ env: { ...env, RELEASE_TAG: 'v1.0.1' }, app }).join(
+    validateReleaseMetadata({ env: { ...env, RELEASE_TAG: 'v1.0.2' }, app }).join(
       '\n',
     ),
     /does not match app version/,
   );
   assert.match(
     validateReleaseMetadata({
-      env: { ...env, RELEASE_TAG: 'v1.0.0-beta.1' },
+      env: { ...env, RELEASE_TAG: 'v1.0.1-beta.1' },
       app,
     }).join('\n'),
     /stable semantic version/,
   );
   assert.match(
     validateReleaseMetadata({
-      env: { ...env, RELEASE_TAG: 'v01.0.0' },
+      env: { ...env, RELEASE_TAG: 'v01.0.1' },
       app,
     }).join('\n'),
     /stable semantic version/,
@@ -567,7 +598,7 @@ test('release validation metadata requires matching app versions and secure publ
       env,
       app: { ...app, android: { versionCode: 1 } },
     }).join('\n'),
-    /versionCode.*1000000/,
+    /versionCode.*1000001/,
   );
 
   assert.deepEqual(
@@ -739,8 +770,9 @@ test('release validation CLI supports scoped and legacy validation', () => {
     '.github/scripts/validate-android-release.js',
   );
   const metadataEnv = {
-    RELEASE_TAG: 'v1.0.0',
+    RELEASE_TAG: 'v1.0.1',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
+    EXPO_PUBLIC_MEDIA_ORIGINS: 'https://media.windnote.test',
   };
   const signingEnv = {
     ANDROID_KEYSTORE_BASE64: 'a2V5c3RvcmU=',

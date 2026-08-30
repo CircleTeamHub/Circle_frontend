@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const METADATA_ENV = ['EXPO_PUBLIC_API_URL'];
+const METADATA_ENV = ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_MEDIA_ORIGINS'];
 
 const SIGNING_ENV = [
   'ANDROID_KEYSTORE_BASE64',
@@ -27,6 +27,40 @@ function validateUrl(errors, name, value, protocol) {
     }
   } catch {
     errors.push(`${name} must be a valid ${protocol} URL.`);
+  }
+}
+
+function validateOriginList(errors, name, value) {
+  if (!value) return;
+
+  for (const candidate of value.split(',')) {
+    const origin = candidate.trim();
+    if (!origin) {
+      errors.push(`${name} must be a comma-separated list of HTTPS origins.`);
+      continue;
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(origin);
+    } catch {
+      errors.push(`${name} contains an invalid HTTPS origin.`);
+      continue;
+    }
+
+    if (
+      parsed.protocol !== 'https:' ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash ||
+      (parsed.pathname !== '' && parsed.pathname !== '/')
+    ) {
+      errors.push(
+        `${name} entries must be HTTPS origins without credentials, paths, queries, or fragments.`,
+      );
+    }
   }
 }
 
@@ -115,6 +149,11 @@ function validateBuildEnvShape({ env }) {
   const errors = [];
 
   validateUrl(errors, 'EXPO_PUBLIC_API_URL', env.EXPO_PUBLIC_API_URL, 'https:');
+  validateOriginList(
+    errors,
+    'EXPO_PUBLIC_MEDIA_ORIGINS',
+    env.EXPO_PUBLIC_MEDIA_ORIGINS,
+  );
   validateSentryDsn(errors, env);
 
   return errors;

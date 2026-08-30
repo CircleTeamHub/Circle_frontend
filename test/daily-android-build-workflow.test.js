@@ -190,7 +190,10 @@ test('build-env validation shares the tag-time env contract', () => {
     validateBuildEnv,
     validateReleaseMetadata,
   } = require('../.github/scripts/validate-android-release');
-  const env = { EXPO_PUBLIC_API_URL: 'https://api.windnote.test' };
+  const env = {
+    EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
+    EXPO_PUBLIC_MEDIA_ORIGINS: 'https://media.windnote.test',
+  };
 
   // 没有 RELEASE_TAG 也能通过 —— 每日构建本来就没有 tag。
   assert.deepEqual(validateBuildEnv({ env }), []);
@@ -239,6 +242,7 @@ test('daily build-env keeps compiling when production config is merely absent', 
   // 降级不等于消音：缺失必须仍然被报出来，否则就成了偷偷放行。
   const gaps = collectReleaseConfigGaps({ env: empty }).join('\n');
   assert.match(gaps, /EXPO_PUBLIC_API_URL is required/);
+  assert.match(gaps, /EXPO_PUBLIC_MEDIA_ORIGINS is required/);
 });
 
 // 门禁是被搬走，不是被删掉：打 tag 那条线必须原样硬失败。
@@ -266,6 +270,10 @@ test('daily build-env still hard-fails on malformed values', () => {
 
   for (const [what, env] of [
     ['non-https API URL', { EXPO_PUBLIC_API_URL: 'http://a.test' }],
+    [
+      'malformed media origin',
+      { EXPO_PUBLIC_MEDIA_ORIGINS: 'https://media.test?token=secret' },
+    ],
     [
       'malformed Sentry DSN',
       { EXPO_PUBLIC_SENTRY_DSN: 'https://o42.ingest.sentry.io/4507' },
@@ -312,7 +320,10 @@ test('Sentry DSN is warned about when missing and rejected when malformed', () =
     collectBuildEnvWarnings,
     validateBuildEnv,
   } = require('../.github/scripts/validate-android-release');
-  const env = { EXPO_PUBLIC_API_URL: 'https://api.windnote.test' };
+  const env = {
+    EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
+    EXPO_PUBLIC_MEDIA_ORIGINS: 'https://media.windnote.test',
+  };
 
   // 缺失 = 告警，不是错误：没有 DSN 时 app 完全正常，只是不上报。硬 fail 会把
   // 「还没接 Sentry」变成「不能发版」。
