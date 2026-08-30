@@ -179,4 +179,4 @@ jobs:
           R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
           R2_BUCKET: windnote-apk-releases
           R2_PUBLIC_APK_URL: https://pub-9d36120697ca455b9fb0e430da8b9481.r2.dev/android/preprod/latest/windnote.apk
-        run: "$GITHUB_WORKSPACE/.github/scripts/publish-android-preprod.sh"
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/publish-android-preprod.sh"
