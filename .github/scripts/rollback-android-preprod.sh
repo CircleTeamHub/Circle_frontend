@@ -1,36 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+rollback_sha="${1:-}"
+if [[ ! "$rollback_sha" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "usage: rollback-android-preprod.sh <40-character-main-sha>" >&2
+  exit 2
+fi
+
 : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}"
 : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}"
 : "${R2_ACCOUNT_ID:?R2_ACCOUNT_ID is required}"
 : "${R2_BUCKET:?R2_BUCKET is required}"
 : "${R2_PUBLIC_APK_URL:?R2_PUBLIC_APK_URL is required}"
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
-: "${GITHUB_SHA:?GITHUB_SHA is required}"
-: "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
-: "${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required}"
-: "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 
-apk_path="${APK_PATH:-windnote-preprod-v1.0.1.apk}"
-checksum_path="${CHECKSUM_PATH:-windnote-preprod-v1.0.1.apk.sha256}"
 endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-versioned_key="android/preprod/builds/${GITHUB_SHA}/windnote.apk"
+versioned_key="android/preprod/builds/${rollback_sha}/windnote.apk"
 latest_key="android/preprod/latest/windnote.apk"
-rollback_key="android/preprod/rollback/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/windnote.apk"
+rollback_key="android/preprod/rollback/manual-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}/windnote.apk"
 expected_package="com.yiboding.circleim.preprod"
 identity_cutover_sha="e09582dc7583fb7b69600e231dd76eb792d122f5"
-apk_sha="$(awk '{print $1}' "$checksum_path")"
-apk_size="$(wc -c < "$apk_path" | tr -d '[:space:]')"
-versioned_download="$RUNNER_TEMP/r2-versioned.apk"
-latest_download="$RUNNER_TEMP/r2-latest.apk"
-public_download="$RUNNER_TEMP/r2-public.apk"
+temp_dir="$(mktemp -d)"
 latest_existed=false
 promoted=false
 
 object_exists() {
   local key="$1"
-  local error_file="$RUNNER_TEMP/r2-head-error.txt"
+  local error_file="$temp_dir/head-error.txt"
   if aws s3api head-object \
     --endpoint-url "$endpoint" \
     --bucket "$R2_BUCKET" \
@@ -52,7 +48,7 @@ verify_package_attestation() {
     return 0
   fi
   if [[ -n "$package_metadata" && "$package_metadata" != "None" ]]; then
-    echo "::error::Versioned APK package metadata is not preproduction."
+    echo "::error::Rollback source package metadata is not preproduction."
     return 1
   fi
 
@@ -61,17 +57,16 @@ verify_package_attestation() {
     "repos/${GITHUB_REPOSITORY}/compare/${identity_cutover_sha}...${candidate_sha}" \
     --jq .status)"
   if [[ "$comparison_status" != "ahead" && "$comparison_status" != "identical" ]]; then
-    echo "::error::Legacy APK metadata is accepted only for commits at or after the preproduction identity cutover."
+    echo "::error::Legacy rollback metadata is accepted only for commits at or after the preproduction identity cutover."
     return 1
   fi
-  echo "::warning::Accepted a legacy preproduction object using its verified digest and cutover commit attestation."
+  echo "::warning::Accepted a legacy rollback source using its verified digest and cutover commit attestation."
 }
 
 rollback_latest() {
   local rollback_status=0
   set +e
   if [[ "$latest_existed" == "true" ]]; then
-    echo "Restoring the previous preproduction APK after failed verification."
     aws s3api copy-object \
       --endpoint-url "$endpoint" \
       --bucket "$R2_BUCKET" \
@@ -87,12 +82,8 @@ rollback_latest() {
         --key "$rollback_key" \
         >/dev/null
       rollback_status=$?
-      if [[ $rollback_status -ne 0 ]]; then
-        echo "::error::Restored latest but could not remove the rollback object."
-      fi
     fi
   else
-    echo "Removing the unverified first preproduction APK."
     aws s3api delete-object \
       --endpoint-url "$endpoint" \
       --bucket "$R2_BUCKET" \
@@ -101,7 +92,7 @@ rollback_latest() {
     rollback_status=$?
   fi
   if [[ $rollback_status -ne 0 ]]; then
-    echo "::error::Failed to roll back the preproduction latest object."
+    echo "::error::Failed to restore the pre-rollback latest object."
   fi
   return "$rollback_status"
 }
@@ -112,59 +103,39 @@ handle_exit() {
   if [[ $status -ne 0 && "$promoted" == "true" ]]; then
     rollback_latest || true
   fi
+  rm -rf "$temp_dir"
   exit "$status"
 }
 trap handle_exit EXIT
 
-if object_exists "$versioned_key"; then
-  echo "Commit-addressed APK already exists; verifying it without overwriting it."
-else
-  object_status=$?
-  if [[ $object_status -ne 1 ]]; then
-    exit "$object_status"
-  fi
-  if ! aws s3api put-object \
-    --endpoint-url "$endpoint" \
-    --bucket "$R2_BUCKET" \
-    --key "$versioned_key" \
-    --body "$apk_path" \
-    --if-none-match '*' \
-    --content-type application/vnd.android.package-archive \
-    --content-disposition 'attachment; filename="windnote-preprod.apk"' \
-    --cache-control "public, max-age=31536000, immutable" \
-    --metadata "sha256=$apk_sha,package=$expected_package" \
-    >/dev/null; then
-    object_exists "$versioned_key" || exit 1
-  fi
-fi
-
-read -r versioned_size versioned_sha versioned_package <<< "$(aws s3api head-object \
+read -r expected_size expected_sha source_package <<< "$(aws s3api head-object \
   --endpoint-url "$endpoint" \
   --bucket "$R2_BUCKET" \
   --key "$versioned_key" \
   --query '[ContentLength, Metadata.sha256, Metadata.package]' \
   --output text)"
-test "$versioned_size" = "$apk_size"
-test "$versioned_sha" = "$apk_sha"
-verify_package_attestation "$GITHUB_SHA" "$versioned_package"
+test -n "$expected_size"
+[[ "$expected_sha" =~ ^[0-9a-f]{64}$ ]]
+verify_package_attestation "$rollback_sha" "$source_package"
 
+source_download="$temp_dir/source.apk"
 aws s3api get-object \
   --endpoint-url "$endpoint" \
   --bucket "$R2_BUCKET" \
   --key "$versioned_key" \
-  "$versioned_download" \
+  "$source_download" \
   >/dev/null
-printf '%s  %s\n' "$apk_sha" "$versioned_download" | sha256sum -c -
-test "$(wc -c < "$versioned_download" | tr -d '[:space:]')" = "$apk_size"
-
-current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-if [[ "$current_main_sha" != "$GITHUB_SHA" ]]; then
-  echo "::error::Refusing to publish stale commit $GITHUB_SHA; main is $current_main_sha."
-  exit 1
-fi
+printf '%s  %s\n' "$expected_sha" "$source_download" | sha256sum -c -
+test "$(wc -c < "$source_download" | tr -d '[:space:]')" = "$expected_size"
 
 if object_exists "$latest_key"; then
   latest_existed=true
+  read -r previous_size previous_sha <<< "$(aws s3api head-object \
+    --endpoint-url "$endpoint" \
+    --bucket "$R2_BUCKET" \
+    --key "$latest_key" \
+    --query '[ContentLength, Metadata.sha256]' \
+    --output text)"
   if ! aws s3api copy-object \
     --endpoint-url "$endpoint" \
     --bucket "$R2_BUCKET" \
@@ -174,6 +145,14 @@ if object_exists "$latest_key"; then
     >/dev/null; then
     object_exists "$rollback_key" || exit 1
   fi
+  read -r backup_size backup_sha <<< "$(aws s3api head-object \
+    --endpoint-url "$endpoint" \
+    --bucket "$R2_BUCKET" \
+    --key "$rollback_key" \
+    --query '[ContentLength, Metadata.sha256]' \
+    --output text)"
+  test "$backup_size" = "$previous_size"
+  test "$backup_sha" = "$previous_sha"
 else
   object_status=$?
   if [[ $object_status -ne 1 ]]; then
@@ -191,7 +170,7 @@ aws s3api copy-object \
   --content-type application/vnd.android.package-archive \
   --content-disposition 'attachment; filename="windnote-preprod.apk"' \
   --cache-control "public, max-age=300" \
-  --metadata "sha256=$apk_sha,package=$expected_package" \
+  --metadata "sha256=$expected_sha,package=$expected_package" \
   >/dev/null
 
 read -r latest_size latest_sha latest_package <<< "$(aws s3api head-object \
@@ -200,42 +179,43 @@ read -r latest_size latest_sha latest_package <<< "$(aws s3api head-object \
   --key "$latest_key" \
   --query '[ContentLength, Metadata.sha256, Metadata.package]' \
   --output text)"
-test "$latest_size" = "$apk_size"
-test "$latest_sha" = "$apk_sha"
+test "$latest_size" = "$expected_size"
+test "$latest_sha" = "$expected_sha"
 test "$latest_package" = "$expected_package"
+test "$(aws s3api head-object \
+  --endpoint-url "$endpoint" \
+  --bucket "$R2_BUCKET" \
+  --key "$latest_key" \
+  --query CacheControl \
+  --output text)" = "public, max-age=300"
+test "$(aws s3api head-object \
+  --endpoint-url "$endpoint" \
+  --bucket "$R2_BUCKET" \
+  --key "$latest_key" \
+  --query ContentType \
+  --output text)" = "application/vnd.android.package-archive"
 
+latest_download="$temp_dir/latest.apk"
+public_download="$temp_dir/public.apk"
 aws s3api get-object \
   --endpoint-url "$endpoint" \
   --bucket "$R2_BUCKET" \
   --key "$latest_key" \
   "$latest_download" \
   >/dev/null
-printf '%s  %s\n' "$apk_sha" "$latest_download" | sha256sum -c -
-test "$(wc -c < "$latest_download" | tr -d '[:space:]')" = "$apk_size"
-
-current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-if [[ "$current_main_sha" != "$GITHUB_SHA" ]]; then
-  echo "::error::Main advanced to $current_main_sha during promotion; restoring the previous APK."
-  exit 1
-fi
+printf '%s  %s\n' "$expected_sha" "$latest_download" | sha256sum -c -
+test "$(wc -c < "$latest_download" | tr -d '[:space:]')" = "$expected_size"
 
 curl --fail --silent --show-error --location --retry 5 --retry-all-errors \
-  --dump-header "$RUNNER_TEMP/r2-preprod-headers.txt" \
+  --dump-header "$temp_dir/public-headers.txt" \
   --output "$public_download" \
-  "$R2_PUBLIC_APK_URL?build=$GITHUB_SHA"
-tr -d '\r' < "$RUNNER_TEMP/r2-preprod-headers.txt" > "$RUNNER_TEMP/r2-preprod-headers-lf.txt"
+  "$R2_PUBLIC_APK_URL?rollback=$rollback_sha"
+tr -d '\r' < "$temp_dir/public-headers.txt" > "$temp_dir/public-headers-lf.txt"
 grep -qi '^content-type: application/vnd.android.package-archive$' \
-  "$RUNNER_TEMP/r2-preprod-headers-lf.txt"
-grep -qi "^content-length: $apk_size$" \
-  "$RUNNER_TEMP/r2-preprod-headers-lf.txt"
-printf '%s  %s\n' "$apk_sha" "$public_download" | sha256sum -c -
-test "$(wc -c < "$public_download" | tr -d '[:space:]')" = "$apk_size"
-
-current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-if [[ "$current_main_sha" != "$GITHUB_SHA" ]]; then
-  echo "::error::Main advanced to $current_main_sha during public verification; restoring the previous APK."
-  exit 1
-fi
+  "$temp_dir/public-headers-lf.txt"
+grep -qi "^content-length: $expected_size$" "$temp_dir/public-headers-lf.txt"
+printf '%s  %s\n' "$expected_sha" "$public_download" | sha256sum -c -
+test "$(wc -c < "$public_download" | tr -d '[:space:]')" = "$expected_size"
 
 promoted=false
 if [[ "$latest_existed" == "true" ]]; then
@@ -245,4 +225,7 @@ if [[ "$latest_existed" == "true" ]]; then
     --key "$rollback_key" \
     >/dev/null || echo "::warning::Could not remove the temporary rollback object."
 fi
+
 trap - EXIT
+rm -rf "$temp_dir"
+echo "Restored preproduction latest to $rollback_sha ($expected_sha)."
