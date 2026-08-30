@@ -42,13 +42,15 @@ jobs:
 
       - name: Validate preproduction metadata
         env:
+          APP_VARIANT: preprod
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_CHAT_WS_URL: ${{ vars.EXPO_PUBLIC_CHAT_WS_URL }}
           EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
         run: |
           set -euo pipefail
           node .github/scripts/verify-android-preprod.js metadata
-          node .github/scripts/validate-android-release.js build-env
+          node .github/scripts/validate-android-release.js preprod-build-env
 
       - name: Install dependencies
         run: npm ci
@@ -60,7 +62,12 @@ jobs:
         run: npm run ci
 
       - name: Generate Android project
+        env:
+          APP_VARIANT: preprod
         run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Verify generated preproduction deep links
+        run: node .github/scripts/verify-android-preprod.js manifest android/app/src/main/AndroidManifest.xml
 
       - name: Restore and verify signing key
         env:
@@ -91,6 +98,7 @@ jobs:
       - name: Build signed preproduction APK
         working-directory: android
         env:
+          APP_VARIANT: preprod
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -120,7 +128,7 @@ jobs:
             exit 1
           fi
           badging="$("$aapt_path" dump badging "$apk_source" | head -n 1)"
-          grep -Fq "package: name='com.yiboding.circleim'" <<< "$badging"
+          grep -Fq "package: name='com.yiboding.circleim.preprod'" <<< "$badging"
           grep -Fq "versionCode='1000001'" <<< "$badging"
           grep -Fq "versionName='1.0.1'" <<< "$badging"
           node .github/scripts/verify-android-preprod.js apk "$apk_source"

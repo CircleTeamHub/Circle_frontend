@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const WORKFLOW_PATH = '.github/workflows/android-preprod-build.yml';
 
@@ -117,6 +118,7 @@ test('preproduction build runs checks before the signed release build', () => {
   assert.match(build, /\.\/gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a/);
 
   const gradle = workflowStep(build, 'Build signed preproduction APK');
+  assert.match(gradle, /APP_VARIANT: preprod/);
   for (const name of [
     'ANDROID_KEYSTORE_PASSWORD',
     'ANDROID_KEY_ALIAS',
@@ -157,7 +159,7 @@ test('preproduction build verifies signing, identity, version, and embedded endp
   const verify = workflowStep(build, 'Verify and stage preproduction APK');
   assert.match(verify, /apksigner.*verify --verbose --print-certs/);
   assert.match(verify, /aapt.*dump badging/);
-  assert.match(verify, /com\.yiboding\.circleim/);
+  assert.match(verify, /com\.yiboding\.circleim\.preprod/);
   assert.match(verify, /versionCode='1000001'/);
   assert.match(verify, /versionName='1\.0\.1'/);
   assert.match(verify, /verify-android-preprod\.js apk/);
@@ -184,16 +186,30 @@ test('preproduction artifact contains APK, digest, notices, and SBOM for 30 days
   assert.match(upload, /if-no-files-found: error/);
 });
 
+test('preproduction package cutover requires retiring the old install', () => {
+  const documentation = read('docs/android-release.md');
+
+  assert.match(documentation, /one-time cutover/i);
+  assert.match(documentation, /uninstall the old website APK/i);
+  assert.match(documentation, /install `风信测试版`/i);
+  assert.match(documentation, /sign in again/i);
+  assert.match(documentation, /cannot migrate across Android package IDs/i);
+  assert.match(documentation, /卸载旧测试版、安装风信测试版、重新登录/);
+});
+
 test('preproduction verifier fails closed for metadata and APK endpoint drift', () => {
   const {
     EXPECTED,
     validateApkContents,
+    validateAndroidManifest,
     validateMetadata,
     verifyApk,
   } = require('../.github/scripts/verify-android-preprod');
   const app = {
+    name: EXPECTED.appName,
     version: '1.0.1',
-    android: { versionCode: 1000001, package: 'com.yiboding.circleim' },
+    extra: { appVariant: EXPECTED.appVariant },
+    android: { versionCode: 1000001, package: EXPECTED.packageName },
   };
   const env = {
     EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
@@ -205,6 +221,32 @@ test('preproduction verifier fails closed for metadata and APK endpoint drift', 
   assert.match(
     validateMetadata({ app: { ...app, version: '1.0.0' }, env }).join('\n'),
     /version.*1\.0\.1/i,
+  );
+  assert.match(
+    validateMetadata({ app: { ...app, extra: {} }, env }).join('\n'),
+    /variant.*preprod/i,
+  );
+  assert.match(
+    validateMetadata({
+      app: {
+        ...app,
+        android: { ...app.android, package: 'com.yiboding.circleim' },
+      },
+      env,
+    }).join('\n'),
+    /package.*preprod/i,
+  );
+  assert.deepEqual(
+    validateAndroidManifest(
+      '<data android:scheme="windnoteai-preprod"/><data android:scheme="circleim-preprod"/>',
+    ),
+    [],
+  );
+  assert.match(
+    validateAndroidManifest(
+      '<data android:scheme="windnoteai"/><data android:scheme="circleim-preprod"/>',
+    ).join('\n'),
+    /production scheme|missing preproduction scheme/i,
   );
   assert.match(
     validateMetadata({ app, env: { ...env, EXPO_PUBLIC_API_URL: 'http://api.test' } }).join('\n'),

@@ -19,11 +19,24 @@ test('qr-payload inlined constants stay in sync with constants/branding', () => 
   );
   assert.match(
     payload,
-    /APP_DEEP_LINK_SCHEMES = \['windnoteai', 'circleim'\] as const/,
+    /'windnoteai-preprod'/,
   );
   for (const host of ['windnote.ai', 'www.windnote.ai', 'circle.im', 'www.circle.im']) {
     assert.ok(branding.includes(`'${host}'`), `branding missing ${host}`);
     assert.ok(payload.includes(`'${host}'`), `qr-payload missing ${host}`);
+  }
+});
+
+test('native QR surfaces emit the scheme for the installed app variant', () => {
+  const runtimeScheme = read('src/features/qr/app-qr-scheme.ts');
+  const qrScreen = read('src/features/qr/screens/QrCodeScreen.tsx');
+  const qrBubble = read('src/features/chat/components/bubbles/qr-card-bubble.tsx');
+
+  assert.match(runtimeScheme, /Constants\.expoConfig\?\.extra\?\.appVariant/);
+  assert.match(runtimeScheme, /qrSchemeForAppVariant/);
+  for (const source of [qrScreen, qrBubble]) {
+    assert.match(source, /OUTBOUND_APP_QR_SCHEME/);
+    assert.match(source, /buildQrUrl\([^)]*OUTBOUND_APP_QR_SCHEME\)/);
   }
 });
 
@@ -75,7 +88,10 @@ test('top-level /qr and /qr-code routes point at the qr feature screens', () => 
 test('QrCodeScreen issues a server token and renders it as a deep link QR', () => {
   const source = read('src/features/qr/screens/QrCodeScreen.tsx');
   assert.match(source, /issueQrToken\(\{ type: TYPE_MAP\[routeType\], targetId \}\)/);
-  assert.match(source, /buildQrUrl\(result\.token\)/);
+  assert.match(
+    source,
+    /buildQrUrl\(result\.token, OUTBOUND_APP_QR_SCHEME\)/,
+  );
   assert.match(source, /saveQrPngToLibrary/);
   assert.match(source, /toDataURL/);
   // 群/圈码显示七天有效期,个人码显示长期有效。
@@ -97,7 +113,10 @@ test('personal QR can be rotated after confirmation without exposing the action 
   assert.match(screen, /qr\.resetConfirmTitle/);
   assert.match(screen, /qr\.resetConfirmMessage/);
   assert.match(screen, /setQrToken\(result\.token\)/);
-  assert.match(screen, /setQrValue\(buildQrUrl\(result\.token\)\)/);
+  assert.match(
+    screen,
+    /setQrValue\(buildQrUrl\(result\.token, OUTBOUND_APP_QR_SCHEME\)\)/,
+  );
   assert.match(screen, /qr\.resetSuccessTitle/);
   assert.match(screen, /qr\.resetFailedTitle/);
 });

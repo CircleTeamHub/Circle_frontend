@@ -25,6 +25,7 @@ interface UpdateCheckDependencies {
   executionEnvironment: string;
   nativeBuildVersion: string | null;
   isDevelopment: boolean;
+  appVariant?: unknown;
   fetchImpl: typeof fetch;
 }
 
@@ -68,12 +69,14 @@ export async function checkForAndroidUpdate(
     executionEnvironment: Constants.executionEnvironment,
     nativeBuildVersion: Application.nativeBuildVersion,
     isDevelopment: typeof __DEV__ !== 'undefined' && __DEV__,
+    appVariant: Constants.expoConfig?.extra?.appVariant,
     fetchImpl: fetch,
   },
 ): Promise<AndroidReleaseManifest | null> {
   if (
     dependencies.platform !== 'android' ||
     dependencies.isDevelopment ||
+    dependencies.appVariant === 'preprod' ||
     dependencies.executionEnvironment === ExecutionEnvironment.StoreClient
   ) {
     return null;
