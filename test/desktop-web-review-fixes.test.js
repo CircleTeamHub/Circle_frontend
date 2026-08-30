@@ -248,7 +248,13 @@ test('CI launches the client-only production export in a real browser', () => {
   assert.match(smoke, /maxRetries:\s*5/);
   assert.match(smoke, /retryDelay:\s*200/);
   assert.match(smoke, /async function stopProcess/);
+  assert.match(smoke, /await closeBrowser\(cdp\)/);
+  const closeBrowserAt = smoke.indexOf('await closeBrowser(cdp)');
   const stopAt = smoke.indexOf('await stopProcess(chrome)');
   const removeAt = smoke.indexOf('fs.rmSync(userDataDir');
+  assert.ok(
+    closeBrowserAt > -1 && stopAt > closeBrowserAt,
+    '先让 Chrome 通过 CDP 优雅退出，避免子进程继续占用 profile',
+  );
   assert.ok(stopAt > -1 && removeAt > stopAt, 'Chrome 必须完全退出后才能删除 profile');
 });
