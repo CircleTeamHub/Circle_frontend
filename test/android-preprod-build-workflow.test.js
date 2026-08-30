@@ -27,29 +27,82 @@ const workflowStep = (job, stepName) => {
   return nextStep === -1 ? remainder : remainder.slice(0, nextStep + 1);
 };
 
-test('preproduction APK workflow is manual, private, and supersedes stale runs', () => {
+test('preproduction APK workflow builds on main or manually and queues verified runs', () => {
   const workflow = read(WORKFLOW_PATH);
 
-  assert.match(workflow, /^on:\s*\n\s+workflow_dispatch:\s*$/m);
-  for (const forbiddenTrigger of ['push', 'pull_request', 'schedule']) {
+  assert.match(
+    workflow,
+    /^on:\s*\n\s+push:\s*\n\s+branches:\s*\[main\]\s*\n\s+workflow_dispatch:\s*$/m,
+  );
+  for (const forbiddenTrigger of ['pull_request', 'schedule']) {
     assert.doesNotMatch(workflow, new RegExp(`^\\s+${forbiddenTrigger}:`, 'm'));
   }
   assert.match(workflow, /permissions:\s*\n\s+contents: read/);
   assert.doesNotMatch(workflow, /contents: write/);
   assert.match(workflow, /group: android-preprod/);
-  assert.match(workflow, /cancel-in-progress: true/);
+  assert.match(workflow, /cancel-in-progress: false/);
 
   for (const forbidden of [
     'RELEASES_TOKEN',
     'publish-android-release.js',
     'windnote-releases',
-    'R2_ACCESS_KEY_ID',
-    'r2.cloudflarestorage.com',
     'gh release',
     'contents: write',
   ]) {
     assert.doesNotMatch(workflow, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
+});
+
+test('preproduction workflow publishes the verified artifact to an isolated R2 channel only from main', () => {
+  const workflow = read(WORKFLOW_PATH);
+  const build = workflowJob(workflow, 'build');
+  const publish = workflowJob(workflow, 'publish');
+  const download = workflowStep(publish, 'Download verified preproduction artifact');
+  const upload = workflowStep(
+    publish,
+    'Publish verified preproduction APK to Cloudflare R2',
+  );
+
+  assert.match(publish, /needs: build/);
+  assert.match(publish, /if: \$\{\{ github\.ref == 'refs\/heads\/main' \}\}/);
+  assert.doesNotMatch(build, /R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|R2_ACCOUNT_ID/);
+  assert.match(
+    download,
+    /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8\.0\.1/,
+  );
+  assert.match(download, /name: android-preprod-v1\.0\.1/);
+  assert.match(publish, /sha256sum -c windnote-preprod-v1\.0\.1\.apk\.sha256/);
+
+  for (const credential of [
+    'AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}',
+    'AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}',
+    'R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}',
+  ]) {
+    assert.ok(upload.includes(credential), `publish step injects ${credential}`);
+  }
+  assert.match(upload, /android\/preprod\/builds\/\$\{GITHUB_SHA\}\/windnote\.apk/);
+  assert.match(upload, /android\/preprod\/latest\/windnote\.apk/);
+  assert.doesNotMatch(workflow, /android\/latest\/windnote\.apk/);
+  assert.match(upload, /aws s3api put-object/);
+  assert.match(upload, /--if-none-match ['"]\*['"]/);
+  assert.match(upload, /aws s3api head-object/);
+  assert.match(upload, /aws s3api get-object/);
+  assert.match(upload, /aws s3api copy-object/);
+  assert.match(upload, /android\/preprod\/rollback\/\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}\/windnote\.apk/);
+  assert.match(upload, /rollback_latest/);
+  assert.match(upload, /aws s3api delete-object/);
+  assert.match(upload, /--metadata-directive REPLACE/);
+  assert.match(upload, /application\/vnd\.android\.package-archive/);
+  assert.match(upload, /max-age=31536000, immutable/);
+  assert.match(upload, /max-age=300/);
+  assert.match(upload, /Metadata\.sha256/);
+  assert.match(upload, /ContentLength/);
+  assert.match(upload, /\?build=\$GITHUB_SHA/);
+  assert.match(upload, /curl --fail --silent --show-error/);
+  assert.ok(
+    (upload.match(/sha256sum -c/g) || []).length >= 3,
+    'versioned, latest, and public APK bytes must each be hashed',
+  );
 });
 
 test('preproduction build runs checks before the signed release build', () => {
