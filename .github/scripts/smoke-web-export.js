@@ -196,6 +196,22 @@ async function closeBrowser(cdp, timeoutMs = 5_000) {
   }
 }
 
+function removeUserDataDir(userDataDir) {
+  try {
+    fs.rmSync(userDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 200,
+    });
+  } catch (error) {
+    if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error;
+    process.stderr.write(
+      `Warning: Chrome profile cleanup is still busy; the ephemeral runner will remove ${userDataDir}.\n`,
+    );
+  }
+}
+
 async function main() {
   if (!fs.existsSync(path.join(DIST, 'index.html'))) {
     throw new Error('dist/index.html missing; run expo export first');
@@ -265,12 +281,7 @@ async function main() {
     await closeBrowser(cdp);
     await stopProcess(chrome);
     await new Promise((resolve) => web.server.close(resolve));
-    fs.rmSync(userDataDir, {
-      recursive: true,
-      force: true,
-      maxRetries: 5,
-      retryDelay: 200,
-    });
+    removeUserDataDir(userDataDir);
   }
 }
 

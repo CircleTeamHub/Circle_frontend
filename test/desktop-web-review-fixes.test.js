@@ -249,9 +249,12 @@ test('CI launches the client-only production export in a real browser', () => {
   assert.match(smoke, /retryDelay:\s*200/);
   assert.match(smoke, /async function stopProcess/);
   assert.match(smoke, /await closeBrowser\(cdp\)/);
+  assert.match(smoke, /function removeUserDataDir/);
+  assert.match(smoke, /\['EBUSY', 'ENOTEMPTY', 'EPERM'\]/);
+  assert.match(smoke, /throw error/);
   const closeBrowserAt = smoke.indexOf('await closeBrowser(cdp)');
   const stopAt = smoke.indexOf('await stopProcess(chrome)');
-  const removeAt = smoke.indexOf('fs.rmSync(userDataDir');
+  const removeAt = smoke.lastIndexOf('removeUserDataDir(userDataDir)');
   assert.ok(
     closeBrowserAt > -1 && stopAt > closeBrowserAt,
     '先让 Chrome 通过 CDP 优雅退出，避免子进程继续占用 profile',
