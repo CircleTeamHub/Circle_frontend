@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const WORKFLOW_PATH = '.github/workflows/android-preprod-build.yml';
+const COS_PUBLISHER_PATH = '.github/scripts/publish-android-preprod-cos.sh';
 
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
@@ -53,19 +54,27 @@ test('preproduction APK workflow builds on main or manually and queues verified 
   }
 });
 
-test('preproduction workflow publishes the verified artifact to an isolated R2 channel only from main', () => {
+test('preproduction workflow publishes the verified artifact to Tencent COS only from main', () => {
   const workflow = read(WORKFLOW_PATH);
   const build = workflowJob(workflow, 'build');
   const publish = workflowJob(workflow, 'publish');
+  const checkout = workflowStep(publish, 'Checkout selected commit');
   const download = workflowStep(publish, 'Download verified preproduction artifact');
+  const install = workflowStep(publish, 'Install verified Tencent COSCLI');
   const upload = workflowStep(
     publish,
-    'Publish verified preproduction APK to Cloudflare R2',
+    'Publish verified preproduction APK to Tencent COS',
   );
+  const publisher = read(COS_PUBLISHER_PATH);
 
   assert.match(publish, /needs: build/);
   assert.match(publish, /if: \$\{\{ github\.ref == 'refs\/heads\/main' \}\}/);
-  assert.doesNotMatch(build, /R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|R2_ACCOUNT_ID/);
+  assert.match(checkout, /ref: \$\{\{ github\.sha \}\}/);
+  assert.match(checkout, /persist-credentials: false/);
+  assert.doesNotMatch(
+    build,
+    /TENCENT_COS_SECRET_ID|TENCENT_COS_SECRET_KEY|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY/,
+  );
   assert.match(
     download,
     /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8\.0\.1/,
@@ -74,35 +83,63 @@ test('preproduction workflow publishes the verified artifact to an isolated R2 c
   assert.match(publish, /sha256sum -c windnote-preprod-v1\.0\.1\.apk\.sha256/);
 
   for (const credential of [
-    'AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}',
-    'AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}',
-    'R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}',
+    'COS_SECRET_ID: ${{ secrets.TENCENT_COS_SECRET_ID }}',
+    'COS_SECRET_KEY: ${{ secrets.TENCENT_COS_SECRET_KEY }}',
   ]) {
     assert.ok(upload.includes(credential), `publish step injects ${credential}`);
   }
-  assert.match(upload, /android\/preprod\/builds\/\$\{GITHUB_SHA\}\/windnote\.apk/);
-  assert.match(upload, /android\/preprod\/latest\/windnote\.apk/);
-  assert.doesNotMatch(workflow, /android\/latest\/windnote\.apk/);
-  assert.match(upload, /aws s3api put-object/);
-  assert.match(upload, /--if-none-match ['"]\*['"]/);
-  assert.match(upload, /aws s3api head-object/);
-  assert.match(upload, /aws s3api get-object/);
-  assert.match(upload, /aws s3api copy-object/);
-  assert.match(upload, /android\/preprod\/rollback\/\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}\/windnote\.apk/);
-  assert.match(upload, /rollback_latest/);
-  assert.match(upload, /aws s3api delete-object/);
-  assert.match(upload, /--metadata-directive REPLACE/);
-  assert.match(upload, /application\/vnd\.android\.package-archive/);
-  assert.match(upload, /max-age=31536000, immutable/);
-  assert.match(upload, /max-age=300/);
-  assert.match(upload, /Metadata\.sha256/);
-  assert.match(upload, /ContentLength/);
-  assert.match(upload, /\?build=\$GITHUB_SHA/);
-  assert.match(upload, /curl --fail --silent --show-error/);
-  assert.ok(
-    (upload.match(/sha256sum -c/g) || []).length >= 3,
-    'versioned, latest, and public APK bytes must each be hashed',
+
+  assert.match(
+    install,
+    /https:\/\/github\.com\/tencentyun\/coscli\/releases\/download\/v1\.0\.8\/coscli-v1\.0\.8-linux-amd64/,
   );
+  assert.match(
+    install,
+    /7165f2ae16c5f7ac495864c963ca574a76e04ec72680d7bc8a8eee3234d8cf91/,
+  );
+  assert.match(install, /sha256sum -c/);
+  assert.match(install, /coscli version v1\.0\.8/);
+  assert.match(upload, /COS_BUCKET: windnote-preprod-tokyo-1447743949/);
+  assert.match(upload, /COS_ENDPOINT: cos\.ap-tokyo\.myqcloud\.com/);
+  assert.match(upload, /COS_KEY_PREFIX: android\/preprod/);
+  assert.match(
+    upload,
+    /COS_PUBLIC_APK_URL: https:\/\/windnote-preprod-tokyo-1447743949\.cos\.ap-tokyo\.myqcloud\.com\/android\/preprod\/latest\/windnote\.apk/,
+  );
+  assert.match(upload, /publish-android-preprod-cos\.sh/);
+
+  for (const forbidden of [
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+    'R2_ACCOUNT_ID',
+    'r2.dev',
+    'r2.cloudflarestorage.com',
+    'aws s3api',
+  ]) {
+    assert.doesNotMatch(workflow, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+
+  assert.match(publisher, /\$\{COS_KEY_PREFIX\}\/builds\/\$\{GITHUB_SHA\}\/windnote\.apk/);
+  assert.match(publisher, /\$\{COS_KEY_PREFIX\}\/latest\/windnote\.apk/);
+  assert.doesNotMatch(publisher, /android\/latest\/windnote\.apk/);
+  assert.match(publisher, /--forbid-overwrite=true/);
+  assert.match(publisher, /--acl private/);
+  assert.match(publisher, /--acl public-read/);
+  assert.doesNotMatch(publisher, /\bcos stat\b/);
+  assert.match(publisher, /cos signurl/);
+  assert.match(publisher, /--simple-output/);
+  assert.match(publisher, /--range 0-0/);
+  assert.match(publisher, /\bx-cos-meta-sha256:/);
+  assert.match(publisher, /\$\{COS_KEY_PREFIX\}\/rollback\/\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}\/windnote\.apk/);
+  assert.match(publisher, /rollback_latest/);
+  assert.match(publisher, /application\/vnd\.android\.package-archive/);
+  assert.match(publisher, /max-age=31536000, immutable/);
+  assert.match(publisher, /max-age=300/);
+  assert.match(publisher, /\?build=\$GITHUB_SHA/);
+  assert.match(publisher, /curl --fail --silent --show-error/);
+  assert.match(publisher, /verify_object "\$versioned_key"/);
+  assert.match(publisher, /verify_object "\$latest_key"/);
+  assert.ok((publisher.match(/sha256sum -c/g) || []).length >= 2);
 });
 
 test('preproduction build runs checks before the signed release build', () => {
