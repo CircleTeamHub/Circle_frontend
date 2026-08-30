@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { PanResponder, Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 import {
+  SPLIT_LIST_PANE_MAX_WIDTH,
+  SPLIT_LIST_PANE_MIN_WIDTH,
   SPLIT_RESIZER_HIT_WIDTH,
 } from '@/hooks/use-desktop-split-layout';
 import { clampListPaneWidth, useSplitPaneStore } from '@/stores/splitPaneStore';
@@ -21,6 +23,11 @@ interface SplitPaneResizerProps {
   paneWidth: number;
 }
 
+type WebKeyboardEvent = {
+  nativeEvent: { key: string };
+  preventDefault: () => void;
+};
+
 export function SplitPaneResizer({ paneWidth }: SplitPaneResizerProps) {
   const { colors } = useTheme();
   const setListPaneWidth = useSplitPaneStore((state) => state.setListPaneWidth);
@@ -29,6 +36,7 @@ export function SplitPaneResizer({ paneWidth }: SplitPaneResizerProps) {
   );
   const [active, setActive] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   // 当前宽度的镜像。responder 只能读 ref，**绝不能**把 paneWidth 写进下面的
   // useMemo 依赖：拖动第一帧宽度就会变，依赖一变 PanResponder 整个重建，
   // 进行中的手势当场失去响应者 —— 表现就是"按住能拖一下就断，像拖不动"。
@@ -58,11 +66,39 @@ export function SplitPaneResizer({ paneWidth }: SplitPaneResizerProps) {
     [setListPaneWidth],
   );
 
-  const highlighted = active || hovered;
+  const highlighted = active || hovered || focused;
+
+  const webKeyboardProps =
+    Platform.OS === 'web'
+      ? {
+          tabIndex: 0 as const,
+          onKeyDown: (event: WebKeyboardEvent) => {
+            const key = event.nativeEvent.key;
+            if (key === 'ArrowLeft') {
+              event.preventDefault();
+              setListPaneWidth(clampListPaneWidth(paneWidth - 24));
+            } else if (key === 'ArrowRight') {
+              event.preventDefault();
+              setListPaneWidth(clampListPaneWidth(paneWidth + 24));
+            } else if (key === 'Home') {
+              event.preventDefault();
+              setListPaneWidth(SPLIT_LIST_PANE_MIN_WIDTH);
+            } else if (key === 'End') {
+              event.preventDefault();
+              setListPaneWidth(SPLIT_LIST_PANE_MAX_WIDTH);
+            } else if (key === 'Enter' || key === ' ') {
+              event.preventDefault();
+              resetListPaneWidth();
+            }
+          },
+        }
+      : {};
 
   return (
     <View
       {...panResponder.panHandlers}
+      {...webKeyboardProps}
+      testID="split-pane-resizer"
       style={[
         s.hitArea,
         cursorStyle,
@@ -70,8 +106,15 @@ export function SplitPaneResizer({ paneWidth }: SplitPaneResizerProps) {
       ]}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       accessibilityRole="adjustable"
       accessibilityLabel="调整会话列表宽度"
+      accessibilityValue={{
+        min: SPLIT_LIST_PANE_MIN_WIDTH,
+        max: SPLIT_LIST_PANE_MAX_WIDTH,
+        now: clampListPaneWidth(paneWidth),
+      }}
       onAccessibilityAction={(event) => {
         // 键盘/辅助技术：左右各 24px 一档，双击手柄以外的复位入口。
         if (event.nativeEvent.actionName === 'increment') {

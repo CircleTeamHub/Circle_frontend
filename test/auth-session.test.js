@@ -47,13 +47,15 @@ function loadSessionModule(mocks) {
 function makeBaseMocks() {
   const calls = [];
   const secureAuthRemovals = [];
+  const clearSessionOptions = [];
 
   const authState = {
     sessionEpoch: 1,
     accessToken: 'access-a',
     refreshToken: 'refresh-a',
-    clearSession: () => {
+    clearSession: (options) => {
       calls.push('clearSession');
+      clearSessionOptions.push(options);
       authState.sessionEpoch += 1;
     },
   };
@@ -126,7 +128,14 @@ function makeBaseMocks() {
     },
   };
 
-  return { mocks, calls, secureAuthRemovals, authStore, authState };
+  return {
+    mocks,
+    calls,
+    secureAuthRemovals,
+    clearSessionOptions,
+    authStore,
+    authState,
+  };
 }
 
 test('clearLocalSession runs registered teardown handlers, then resets stores auth-first, then clears persistence', async () => {
@@ -162,6 +171,45 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetDiagnosticBreadcrumbs',
     'clearStorage',
   ]);
+});
+
+test('clearLocalSession preserves the startup gate until account cleanup settles', async () => {
+  const { mocks, clearSessionOptions } = makeBaseMocks();
+  const storageClearStarted = deferred();
+  const releaseStorageClear = deferred();
+  mocks['@/features/messages/store/use-local-unread-store'] = {
+    useLocalUnreadStore: {
+      getState: () => ({ resetForLogout: () => {} }),
+      persist: {
+        clearStorage: async () => {
+          storageClearStarted.resolve();
+          await releaseStorageClear.promise;
+        },
+      },
+    },
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  const clearing = clearLocalSession(undefined, { preserveLoading: true });
+  let clearingSettled = false;
+  void clearing.then(
+    () => {
+      clearingSettled = true;
+    },
+    () => {
+      clearingSettled = true;
+    },
+  );
+  await storageClearStarted.promise;
+
+  assert.equal(clearSessionOptions.length, 1);
+  assert.equal(clearSessionOptions[0].preserveLoading, true);
+  await Promise.resolve();
+  assert.equal(clearingSettled, false);
+
+  releaseStorageClear.resolve();
+  await clearing;
+  assert.equal(clearingSettled, true);
 });
 
 test('session module avoids a static message-groups import that cycles back into apiClient', () => {

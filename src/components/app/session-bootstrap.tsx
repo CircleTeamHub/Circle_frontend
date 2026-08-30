@@ -16,6 +16,7 @@ import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { hasCompletedOnboardingProfile } from '@/features/auth/onboarding-completion';
+import { reportError } from '@/observability/sentry';
 import { retry } from '@/utils/retry';
 
 /**
@@ -138,9 +139,20 @@ export function SessionBootstrap() {
       if (!accessToken || !refreshToken) {
         // Web 凭证只驻内存，刷新后 token 会消失，但账号级 MMKV 缓存仍在
         // localStorage。先走完整登出清理，避免下一账号水合出前一账号的数据。
-        await clearLocalSession(undefined, { preserveLoading: true });
-        if (!cancelled) {
-          setLoading(false);
+        try {
+          await clearLocalSession(undefined, { preserveLoading: true });
+        } catch (error) {
+          reportError(error, {
+            component: 'SessionBootstrap',
+            operation: 'clearTokenlessSession',
+            kind: 'cleanup-failed',
+          });
+        } finally {
+          // 清理是 best-effort；即使某个懒加载的 store 清理失败，也不能把路由
+          // 永久锁在启动页。
+          if (!cancelled) {
+            setLoading(false);
+          }
         }
         return;
       }

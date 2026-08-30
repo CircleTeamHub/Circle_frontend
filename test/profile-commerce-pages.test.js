@@ -617,6 +617,19 @@ test('WalletScreen shows the balance without an unsupported recharge action', ()
   assert.doesNotMatch(src, /帮积分/);
 });
 
+test('WalletScreen keeps balance errors outside the clipped card artwork', () => {
+  const src = read('src/features/profile/screens/WalletScreen.tsx');
+  assert.match(
+    src,
+    /<View style=\{s\.cardBottomRow\}>[\s\S]*?<\/View>\s*<\/View>\s*\{walletError \?/,
+    'walletError should render after balanceCard closes',
+  );
+  assert.match(
+    src,
+    /\{walletError \? \(\s*<Text[\s\S]{0,120}?\sselectable/,
+  );
+});
+
 test('MallScreen shows the remaining product areas without membership or points sections', () => {
   const src = read('src/features/profile/screens/MallScreen.tsx');
   const api = read('src/services/api/mall.ts');

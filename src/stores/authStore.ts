@@ -213,7 +213,9 @@ export const useAuthStore = create<AuthState>()(
         const memoryHasLiveSession =
           live.isAuthenticated &&
           typeof live.accessToken === 'string' &&
-          live.accessToken.length > 0;
+          live.accessToken.length > 0 &&
+          typeof live.refreshToken === 'string' &&
+          live.refreshToken.length > 0;
         if (memoryHasLiveSession) {
           return;
         }
