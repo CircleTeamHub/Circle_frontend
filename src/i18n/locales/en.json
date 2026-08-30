@@ -2184,6 +2184,20 @@
       "updateBody": "This version will continue to evolve. New security, chat, and circle features will be shared through system notices and release updates."
     }
   },
+  "appUpdate": {
+    "availableTitle": "New Version Available",
+    "availableMessage": "windnote.ai {{version}} is available. Download and install it now?",
+    "updateNow": "Update Now",
+    "checkNow": "Check for Updates",
+    "checking": "Checking…",
+    "latestTitle": "You're Up to Date",
+    "latestMessage": "The latest version is already installed.",
+    "checkFailedTitle": "Unable to Check for Updates",
+    "checkFailedMessage": "The latest version is unavailable right now. Check your connection and try again.",
+    "installFailedTitle": "Update Failed",
+    "installFailedMessage": "The installer could not be downloaded or opened. Check your connection and install permissions, then try again.",
+    "androidOnlyMessage": "Automatic APK updates are available only on Android."
+  },
   "shareScreen": {
     "inviteCode": "Invite Code",
     "copyInviteTitle": "Copy Invite Code",

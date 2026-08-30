@@ -2324,6 +2324,20 @@
     "groupCount": "{{count}} 件のチャット",
     "assignChats": "チャットをこのグループに割り当て"
   },
+  "appUpdate": {
+    "availableTitle": "新しいバージョンがあります",
+    "availableMessage": "windnote.ai {{version}} が公開されました。今すぐダウンロードしてインストールしますか？",
+    "updateNow": "今すぐ更新",
+    "checkNow": "アップデートを確認",
+    "checking": "確認中…",
+    "latestTitle": "最新バージョンです",
+    "latestMessage": "最新バージョンがすでにインストールされています。",
+    "checkFailedTitle": "アップデートを確認できません",
+    "checkFailedMessage": "最新バージョンを取得できません。通信状況を確認して、もう一度お試しください。",
+    "installFailedTitle": "アップデートに失敗しました",
+    "installFailedMessage": "インストーラーをダウンロードまたは開けません。通信状況とインストール権限を確認してください。",
+    "androidOnlyMessage": "APK の自動更新は Android 版でのみ利用できます。"
+  },
   "shareScreen": {
     "inviteUnavailable": "招待コードを利用できません",
     "inviteUnavailableSubtitle": "アカウント情報を更新してもう一度お試しください",

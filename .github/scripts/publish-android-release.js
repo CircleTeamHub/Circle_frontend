@@ -57,6 +57,7 @@ function publishRelease({
   releaseTag,
   repository,
   apkPath,
+  manifestPath,
   runGh = defaultRunGh,
 }) {
   const encodedTag = encodeURIComponent(releaseTag);
@@ -78,27 +79,38 @@ function publishRelease({
   );
   const latestTag = latestResult.status === 0 ? latestResult.stdout.trim() : '';
   const promoteLatest = shouldPromoteLatest(releaseTag, latestTag);
-  const assetSpec = `${apkPath}#windnote.apk`;
+  const assets = [
+    { name: 'windnote.apk', path: apkPath },
+    { name: 'release.json', path: manifestPath },
+  ];
 
   if (releaseResult.status === 0) {
     const release = JSON.parse(releaseResult.stdout);
-    const existingAsset = release.assets?.find(
-      (asset) => asset.name === 'windnote.apk',
-    );
+    const missingAssets = [];
 
-    if (existingAsset) {
-      const localDigest = fileDigest(apkPath);
+    for (const asset of assets) {
+      const existingAsset = release.assets?.find(
+        (candidate) => candidate.name === asset.name,
+      );
+      if (!existingAsset) {
+        missingAssets.push(asset);
+        continue;
+      }
+
+      const localDigest = fileDigest(asset.path);
       if (existingAsset.digest !== localDigest) {
         throw new Error(
-          `Release ${releaseTag} already has windnote.apk with a different digest. Publish a new version tag instead.`,
+          `Release ${releaseTag} already has ${asset.name} with a different digest. Publish a new version tag instead.`,
         );
       }
-    } else {
+    }
+
+    if (missingAssets.length > 0) {
       invoke(runGh, [
         'release',
         'upload',
         releaseTag,
-        assetSpec,
+        ...missingAssets.map((asset) => `${asset.path}#${asset.name}`),
         '--repo',
         repository,
       ]);
@@ -108,7 +120,7 @@ function publishRelease({
       'release',
       'create',
       releaseTag,
-      assetSpec,
+      ...assets.map((asset) => `${asset.path}#${asset.name}`),
       '--repo',
       repository,
       '--title',
@@ -142,6 +154,7 @@ function main() {
     releaseTag: process.env.RELEASE_TAG,
     repository: process.env.RELEASE_REPOSITORY,
     apkPath: process.env.APK_PATH,
+    manifestPath: process.env.MANIFEST_PATH,
   });
   writePromoteLatestOutput(promoteLatest, process.env.GITHUB_OUTPUT);
 }

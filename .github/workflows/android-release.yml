@@ -260,6 +260,35 @@ jobs:
         working-directory: ${{ runner.temp }}/android-release
         run: sha256sum -c windnote.apk.sha256
 
+      - name: Generate app update manifest
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          APK_PATH: ${{ runner.temp }}/android-release/windnote.apk
+          CHECKSUM_PATH: ${{ runner.temp }}/android-release/windnote.apk.sha256
+          MANIFEST_PATH: ${{ runner.temp }}/android-release/release.json
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          version_code="$(node -p "require('./app.json').expo.android.versionCode")"
+          apk_sha="$(awk '{print $1}' "$CHECKSUM_PATH")"
+          apk_size="$(wc -c < "$APK_PATH" | tr -d '[:space:]')"
+          apk_url="https://github.com/CircleTeamHub/windnote-releases/releases/download/${RELEASE_TAG}/windnote.apk"
+          jq -n \
+            --arg version "$version" \
+            --argjson versionCode "$version_code" \
+            --arg apkUrl "$apk_url" \
+            --arg sha256 "$apk_sha" \
+            --argjson sizeBytes "$apk_size" \
+            '{
+              schemaVersion: 1,
+              version: $version,
+              versionCode: $versionCode,
+              apkUrl: $apkUrl,
+              sha256: $sha256,
+              sizeBytes: $sizeBytes
+            }' > "$MANIFEST_PATH"
+          jq -e '.schemaVersion == 1 and (.versionCode | type == "number") and (.sizeBytes | type == "number")' "$MANIFEST_PATH" >/dev/null
+
       - name: Publish public GitHub release
         id: publish_release
         env:
@@ -267,6 +296,7 @@ jobs:
           RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
           RELEASE_REPOSITORY: CircleTeamHub/windnote-releases
           APK_PATH: ${{ runner.temp }}/android-release/windnote.apk
+          MANIFEST_PATH: ${{ runner.temp }}/android-release/release.json
         run: node .github/scripts/publish-android-release.js
 
       - name: Upload versioned APK to Cloudflare R2

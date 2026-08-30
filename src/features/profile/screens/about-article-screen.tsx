@@ -1,10 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface AboutArticleScreenProps {
   titleKey: string;
+  footer?: React.ReactNode;
   sections: {
     titleKey: string;
     bodyKey?: string;
@@ -37,7 +39,11 @@ const s = StyleSheet.create({
   },
 });
 
-export function AboutArticleScreen({ titleKey, sections }: AboutArticleScreenProps) {
+export function AboutArticleScreen({
+  titleKey,
+  sections,
+  footer,
+}: AboutArticleScreenProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
 
@@ -88,6 +94,7 @@ export function AboutArticleScreen({ titleKey, sections }: AboutArticleScreenPro
               ))}
             </View>
           ))}
+          {footer}
         </View>
       }
     />
