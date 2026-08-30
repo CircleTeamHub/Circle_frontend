@@ -220,6 +220,8 @@
       "policyTitle": "Política de privacidad",
       "policySummary": "Conoce cómo se tratan los datos de perfil, sesión y seguridad de los dispositivos.",
       "policyBody": "1. Ámbito de aplicación\nEsta política de privacidad se aplica al tratamiento de datos personales por parte de windnote.ai cuando te registras, inicias sesión y usas el chat, los chats de grupo, el Círculo, la visualización del perfil, la gestión de seguridad, las notificaciones y funciones relacionadas. Seguimos los principios de licitud, legitimidad, necesidad, buena fe, apertura y transparencia al explicar los fines, métodos, alcance y periodo de conservación del tratamiento de datos personales.\n\n2. Recopilación y uso de datos personales\nPara prestar los servicios básicos, podemos tratar identificadores de cuenta, apodo, avatar, datos de perfil, relaciones de amistad, relaciones de grupo, contenido de mensajes y metadatos de mensajes necesarios. Para proteger la seguridad de la cuenta y del servicio, podemos tratar datos del dispositivo, estado de la red, dirección IP, registros de actividad, estado del código de seguridad y registros de accesos anómalos. Los permisos de cámara, fototeca, micrófono, ubicación y notificaciones se usan solo cuando utilizas activamente la función correspondiente y das tu autorización; puedes gestionar o retirar los permisos en los ajustes del sistema.\n\n3. Fines del tratamiento\nTratamos los datos personales principalmente para registrar e iniciar sesión en cuentas, enviar y recibir mensajes, sincronizar chats, mostrar perfiles, gestionar amigos y listas negras, identificar dispositivos, proteger la seguridad de la cuenta, enviar avisos del servicio, atender quejas y denuncias, cumplir la ley y mejorar la experiencia del producto. Salvo que la ley lo exija o cuentes con tu consentimiento aparte, no trataremos tus datos personales más allá de estos fines.\n\n4. Cesión, transferencia y divulgación pública\nNo vendemos tus datos personales. Para ofrecer las funciones necesarias, podemos encargar a proveedores de servicios en la nube, notificaciones push, almacenamiento, control de riesgos o analítica el tratamiento de la información dentro de un alcance controlado, exigiéndoles que la traten según los fines, plazos, métodos y medidas de seguridad acordados. Cuando la ley exija facilitar información a otro responsable, la divulgación pública, el tratamiento de datos personales sensibles o un consentimiento aparte, ofreceremos el aviso requerido y obtendremos la autorización necesaria.\n\n5. Conservación y seguridad\nConservamos los datos personales solo durante el periodo más breve necesario para lograr los fines del tratamiento, salvo que la ley exija otra cosa o sea necesario para resolver controversias o proteger la seguridad. Usamos control de acceso, cifrado en la transmisión, aislamiento de permisos, auditoría de registros y monitorización de seguridad para proteger la información, pero internet no es totalmente seguro; tú también debes proteger tu cuenta, contraseña y código de seguridad de acceso.\n\n6. Derechos del usuario\nPuedes acceder, corregir, completar, eliminar o copiar tus datos personales, o solicitar su eliminación conforme a la ley; retirar tu consentimiento; eliminar tu cuenta; y gestionar la visibilidad del perfil, la lista negra, los dispositivos con sesión y el código de seguridad. Por motivos legales, técnicos, de seguridad de la cuenta o de necesidad contractual, es posible que algunas solicitudes no se atiendan de inmediato, pero te explicaremos el motivo en un plazo razonable y ofreceremos vías de gestión viables.\n\n7. Protección de menores\nSi eres menor de 14 años, debes usar el servicio con el consentimiento y la orientación de tu tutor. No recopilamos intencionadamente datos personales innecesarios de menores. Si un tutor descubre que se han tratado datos de un menor sin su consentimiento, puede contactarnos para corregirlos o eliminarlos.\n\n8. Actualizaciones de la política\nPodemos actualizar esta política según los cambios en las leyes, las funciones del producto o las reglas de tratamiento. Ante cambios importantes, te avisaremos mediante mensajes en la página, avisos del sistema u otros medios razonables. Si sigues usando el servicio, se entenderá que conoces y aceptas la política de privacidad actualizada.",
+      "thirdPartyLicenses": "Licencias de terceros",
+      "thirdPartyLicensesDescription": "Estas licencias y avisos se incluyen con esta versión para consultarlos sin conexión. El texto se puede seleccionar.",
       "updateTitle": "Estado de la versión",
       "updateBody": "Esta versión seguirá evolucionando. Las nuevas funciones de seguridad, chat y Círculo se anunciarán en avisos del sistema y notas de la versión."
     }
@@ -2326,6 +2328,20 @@
     "myCustomGroups": "Mis grupos personalizados",
     "groupCount": "{{count}} chats",
     "assignChats": "Asignar chats a este grupo"
+  },
+  "appUpdate": {
+    "availableTitle": "Nueva versión disponible",
+    "availableMessage": "windnote.ai {{version}} está disponible. ¿Quieres descargarla e instalarla ahora?",
+    "updateNow": "Actualizar ahora",
+    "checkNow": "Buscar actualizaciones",
+    "checking": "Buscando…",
+    "latestTitle": "Tienes la última versión",
+    "latestMessage": "La última versión ya está instalada.",
+    "checkFailedTitle": "No se pudo buscar actualizaciones",
+    "checkFailedMessage": "No se puede obtener la última versión. Comprueba la conexión e inténtalo de nuevo.",
+    "installFailedTitle": "Error de actualización",
+    "installFailedMessage": "No se pudo descargar o abrir el instalador. Comprueba la conexión y los permisos de instalación.",
+    "androidOnlyMessage": "Las actualizaciones automáticas por APK solo están disponibles en Android."
   },
   "shareScreen": {
     "inviteUnavailable": "Código de invitación no disponible",

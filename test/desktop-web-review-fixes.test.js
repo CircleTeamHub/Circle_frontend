@@ -245,4 +245,10 @@ test('CI launches the client-only production export in a real browser', () => {
   assert.match(smoke, /rootChildren/);
   assert.match(smoke, /\/qr-login\?token=/);
   assert.match(smoke, /path\.join\(DIST, 'index\.html'\)/);
+  assert.match(smoke, /maxRetries:\s*5/);
+  assert.match(smoke, /retryDelay:\s*200/);
+  assert.match(smoke, /async function stopProcess/);
+  const stopAt = smoke.indexOf('await stopProcess(chrome)');
+  const removeAt = smoke.indexOf('fs.rmSync(userDataDir');
+  assert.ok(stopAt > -1 && removeAt > stopAt, 'Chrome 必须完全退出后才能删除 profile');
 });

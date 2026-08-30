@@ -28,7 +28,10 @@ test('business code never uses the raw react-native Switch', () => {
   const offenders = [];
   for (const root of ROOTS) {
     for (const file of walk(path.join(process.cwd(), root))) {
-      const relative = path.relative(process.cwd(), file);
+      const relative = path
+        .relative(process.cwd(), file)
+        .split(path.sep)
+        .join('/');
       if (ALLOWED.has(relative)) continue;
       const source = fs.readFileSync(file, 'utf8');
       if (/<Switch\b/.test(source)) offenders.push(relative);
