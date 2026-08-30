@@ -137,7 +137,7 @@ verify_object_headers() {
   signed_url="$(cos signurl "cos://$COS_BUCKET/$key" --time 300 --simple-output)"
   curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
     --connect-timeout 10 --max-time 60 \
-    --head \
+    --range 0-0 \
     --dump-header "$headers" \
     --output /dev/null \
     "$signed_url"
@@ -145,7 +145,8 @@ verify_object_headers() {
   grep -qi '^content-type: application/vnd.android.package-archive$' "$headers_lf"
   grep -qi '^content-disposition: attachment; filename=windnote-preprod.apk$' "$headers_lf"
   grep -qi "^cache-control: ${expected_cache_control}$" "$headers_lf"
-  grep -qi "^content-length: ${expected_size}$" "$headers_lf"
+  grep -qi '^content-length: 1$' "$headers_lf"
+  grep -qi "^content-range: bytes 0-0/${expected_size}$" "$headers_lf"
   grep -qi "^x-cos-meta-sha256: ${expected_sha}$" "$headers_lf"
   grep -qi "^x-cos-meta-package: ${expected_package}$" "$headers_lf"
 }

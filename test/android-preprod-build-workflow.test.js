@@ -48,6 +48,28 @@ const fakeObjectKeys = (stateDir) =>
       Buffer.from(name.slice(0, -'.json'.length), 'base64url').toString(),
     );
 
+const expectedCosMetadata = (sha, cacheControl) => ({
+  'content-type': 'application/vnd.android.package-archive',
+  'content-disposition': 'attachment; filename=windnote-preprod.apk',
+  'cache-control': cacheControl,
+  'x-cos-meta-sha256': sha,
+  'x-cos-meta-package': EXPECTED_PACKAGE,
+});
+
+const assertStoredObject = (
+  object,
+  { body, acl, cacheControl, sha, label },
+) => {
+  assert.ok(object, `${label} must exist`);
+  assert.deepEqual(Buffer.from(object.body, 'base64'), body, label);
+  assert.equal(object.acl, acl, `${label} ACL`);
+  assert.deepEqual(
+    object.metadata,
+    expectedCosMetadata(sha, cacheControl),
+    `${label} metadata`,
+  );
+};
+
 function writeFakeObject(
   stateDir,
   key,
@@ -56,6 +78,10 @@ function writeFakeObject(
 ) {
   const acl = options.acl ?? 'public-read';
   const cacheControl = options.cacheControl ?? 'public, max-age=300';
+  const contentDisposition =
+    options.contentDisposition ?? 'attachment; filename=windnote-preprod.apk';
+  const contentType =
+    options.contentType ?? 'application/vnd.android.package-archive';
   const packageName = Object.hasOwn(options, 'packageName')
     ? options.packageName
     : EXPECTED_PACKAGE;
@@ -66,8 +92,8 @@ function writeFakeObject(
     JSON.stringify({
       body: Buffer.from(body).toString('base64'),
       metadata: {
-        'content-type': 'application/vnd.android.package-archive',
-        'content-disposition': 'attachment; filename=windnote-preprod.apk',
+        'content-type': contentType,
+        'content-disposition': contentDisposition,
         'cache-control': cacheControl,
         'x-cos-meta-sha256': sha,
         ...(packageName === undefined
@@ -153,7 +179,11 @@ function runCosPublisher(options = {}) {
       options.versionedBody ?? harness.candidate,
       {
         acl: 'private',
-        cacheControl: 'public, max-age=31536000, immutable',
+        cacheControl:
+          options.versionedCacheControl ??
+          'public, max-age=31536000, immutable',
+        contentDisposition: options.versionedContentDisposition,
+        contentType: options.versionedContentType,
         packageName: options.legacyVersioned
           ? undefined
           : (options.versionedPackage ?? EXPECTED_PACKAGE),
@@ -194,7 +224,11 @@ function runRollback(options = {}) {
       options.versionedBody ?? harness.candidate,
       {
         acl: 'private',
-        cacheControl: 'public, max-age=31536000, immutable',
+        cacheControl:
+          options.versionedCacheControl ??
+          'public, max-age=31536000, immutable',
+        contentDisposition: options.versionedContentDisposition,
+        contentType: options.versionedContentType,
         packageName: options.legacyVersioned
           ? undefined
           : (options.versionedPackage ?? EXPECTED_PACKAGE),
@@ -266,6 +300,10 @@ test('preproduction workflow publishes the verified artifact to Tencent COS only
     /github\.ref == 'refs\/heads\/main'.*inputs\.rollback_sha == ''.*vars\.ANDROID_PREPROD_PUBLIC_ENABLED == 'true'/,
   );
   assert.match(publish, /name: android-preprod-publish/);
+  assert.match(
+    publish,
+    /url: \$\{\{ vars\.TENCENT_COS_PUBLIC_APK_URL \}\}/,
+  );
   assert.match(checkout, /ref: \$\{\{ github\.sha \}\}/);
   assert.match(checkout, /persist-credentials: false/);
   assert.doesNotMatch(
@@ -367,25 +405,89 @@ test('preproduction workflow publishes the verified artifact to Tencent COS only
   assert.ok((publisher.match(/sha256sum -c/g) || []).length >= 2);
 });
 
-test('Tencent COS publisher rejects default APK domains before mutation', () => {
-  const outcome = runCosPublisher({
-    extraEnv: {
-      COS_PUBLIC_APK_URL:
-        'https://fake-bucket.cos.ap-tokyo.myqcloud.com/android/preprod/latest/windnote.apk',
+test('Tencent COS scripts reject unsafe public APK URLs before mutation', () => {
+  const invalidUrls = [
+    {
+      name: 'default COS APK domain',
+      url: 'https://fake-bucket.cos.ap-tokyo.myqcloud.com/android/preprod/latest/windnote.apk',
+      error: /default domains cannot distribute APK/,
     },
-  });
-  try {
-    assert.equal(outcome.result.status, 1);
-    assert.match(outcome.result.stdout, /default domains cannot distribute APK/);
-    assert.equal(
-      readFakeObject(
-        outcome.stateDir,
-        'android/preprod/builds/' + outcome.sha + '/windnote.apk',
-      ),
-      null,
-    );
-  } finally {
-    fs.rmSync(outcome.tempDir, { recursive: true, force: true });
+    {
+      name: 'insecure HTTP URL',
+      url: 'http://downloads.example.com/android/preprod/latest/windnote.apk',
+      error: /credential-free custom HTTPS URL/,
+    },
+    {
+      name: 'wrong stable object path',
+      url: 'https://downloads.example.com/android/preprod/builds/windnote.apk',
+      error: /credential-free custom HTTPS URL/,
+    },
+    {
+      name: 'credential-bearing URL',
+      url: 'https://user@downloads.example.com/android/preprod/latest/windnote.apk',
+      error: /must not contain credentials/,
+    },
+    {
+      name: 'URL with query',
+      url: 'https://downloads.example.com/android/preprod/latest/windnote.apk?token=secret',
+      error: /credential-free custom HTTPS URL|must not contain credentials/,
+    },
+    {
+      name: 'URL with fragment',
+      url: 'https://downloads.example.com/android/preprod/latest/windnote.apk#download',
+      error: /credential-free custom HTTPS URL|must not contain credentials/,
+    },
+  ];
+  const runners = [
+    { name: 'publisher', run: runCosPublisher },
+    { name: 'rollback', run: runRollback },
+  ];
+
+  for (const runner of runners) {
+    for (const invalid of invalidUrls) {
+      const outcome = runner.run({
+        extraEnv: { COS_PUBLIC_APK_URL: invalid.url },
+      });
+      try {
+        const label = `${runner.name}: ${invalid.name}`;
+        assert.equal(outcome.result.status, 1, label);
+        assert.match(
+          `${outcome.result.stdout}\n${outcome.result.stderr}`,
+          invalid.error,
+          label,
+        );
+        assert.deepEqual(
+          Buffer.from(
+            readFakeObject(
+              outcome.stateDir,
+              'android/preprod/latest/windnote.apk',
+            ).body,
+            'base64',
+          ),
+          outcome.oldLatest,
+          `${label} must not mutate latest`,
+        );
+        assert.equal(
+          fakeObjectKeys(outcome.stateDir).some((key) =>
+            key.startsWith('android/preprod/rollback/'),
+          ),
+          false,
+          `${label} must not create a recovery object`,
+        );
+        if (runner.name === 'publisher') {
+          assert.equal(
+            readFakeObject(
+              outcome.stateDir,
+              `android/preprod/builds/${outcome.sha}/windnote.apk`,
+            ),
+            null,
+            `${label} must fail before versioned upload`,
+          );
+        }
+      } finally {
+        fs.rmSync(outcome.tempDir, { recursive: true, force: true });
+      }
+    }
   }
 });
 
@@ -393,6 +495,8 @@ test('manual preproduction rollback is gated and skips the build path', () => {
   const workflow = read(WORKFLOW_PATH);
   const build = workflowJob(workflow, 'build');
   const rollback = workflowJob(workflow, 'rollback');
+  const install = workflowStep(rollback, 'Install verified Tencent COSCLI');
+  const restore = workflowStep(rollback, 'Restore verified preproduction APK');
 
   assert.match(workflow, /rollback_sha:/);
   assert.match(build, /inputs\.rollback_sha == ''/);
@@ -402,17 +506,39 @@ test('manual preproduction rollback is gated and skips the build path', () => {
   assert.match(rollback, /vars\.ANDROID_PREPROD_PUBLIC_ENABLED == 'true'/);
   assert.match(rollback, /name: android-preprod-publish/);
   assert.match(
+    rollback,
+    /url: \$\{\{ vars\.TENCENT_COS_PUBLIC_APK_URL \}\}/,
+  );
+  assert.match(
     workflowStep(rollback, 'Validate preproduction distribution approval'),
     /validate-android-release\.js preprod-distribution/,
   );
   assert.match(
-    workflowStep(rollback, 'Restore verified preproduction APK'),
+    restore,
     /rollback-android-preprod-cos\.sh "\$\{\{ inputs\.rollback_sha \}\}"/,
   );
   assert.match(
-    workflowStep(rollback, 'Restore verified preproduction APK'),
-    /GH_TOKEN: \$\{\{ github\.token \}\}/,
+    install,
+    /https:\/\/github\.com\/tencentyun\/coscli\/releases\/download\/v1\.0\.8\/coscli-v1\.0\.8-linux-amd64/,
   );
+  assert.match(
+    install,
+    /7165f2ae16c5f7ac495864c963ca574a76e04ec72680d7bc8a8eee3234d8cf91/,
+  );
+  assert.match(install, /sha256sum -c/);
+  assert.match(install, /coscli version v1\.0\.8/);
+  for (const binding of [
+    'COSCLI_PATH: ${{ runner.temp }}/coscli-v1.0.8',
+    'COS_SECRET_ID: ${{ secrets.TENCENT_COS_SECRET_ID }}',
+    'COS_SECRET_KEY: ${{ secrets.TENCENT_COS_SECRET_KEY }}',
+    'COS_BUCKET: windnote-preprod-tokyo-1447743949',
+    'COS_ENDPOINT: cos.ap-tokyo.myqcloud.com',
+    'COS_KEY_PREFIX: android/preprod',
+    'COS_PUBLIC_APK_URL: ${{ vars.TENCENT_COS_PUBLIC_APK_URL }}',
+    'GH_TOKEN: ${{ github.token }}',
+  ]) {
+    assert.ok(restore.includes(binding), `rollback step injects ${binding}`);
+  }
 });
 
 test('manual preproduction rollback verifies source and restores failures safely', () => {
@@ -449,6 +575,33 @@ test('manual preproduction rollback verifies source and restores failures safely
       expected: 'missing',
       hasLatest: false,
       extraEnv: { FAKE_CORRUPT_PUBLIC: '1' },
+    },
+    {
+      name: 'stale workflow before rollback mutation',
+      expectedStatus: 1,
+      expected: 'old',
+      extraEnv: { FAKE_GH_SHAS: 'b'.repeat(40) },
+    },
+    {
+      name: 'main advances during rollback promotion',
+      expectedStatus: 1,
+      expected: 'old',
+      extraEnv: { FAKE_GH_SHAS: `${'a'.repeat(40)},${'b'.repeat(40)}` },
+    },
+    {
+      name: 'main advances during first rollback promotion',
+      expectedStatus: 1,
+      expected: 'missing',
+      hasLatest: false,
+      extraEnv: { FAKE_GH_SHAS: `${'a'.repeat(40)},${'b'.repeat(40)}` },
+    },
+    {
+      name: 'main advances during rollback public verification',
+      expectedStatus: 1,
+      expected: 'old',
+      extraEnv: {
+        FAKE_GH_SHAS: `${'a'.repeat(40)},${'a'.repeat(40)},${'b'.repeat(40)}`,
+      },
     },
   ];
 
@@ -505,12 +658,22 @@ test('manual preproduction rollback verifies source and restores failures safely
       `${restoreFailure.result.stdout}\n${restoreFailure.result.stderr}`,
       /Failed to restore/,
     );
-    assert.equal(
-      fakeObjectKeys(restoreFailure.stateDir).some((key) =>
-        key.startsWith('android/preprod/rollback/'),
-      ),
-      true,
-      'failed restoration keeps its recovery object',
+    const recoveryKey = fakeObjectKeys(restoreFailure.stateDir).find((key) =>
+      key.startsWith('android/preprod/rollback/'),
+    );
+    assert.ok(recoveryKey, 'failed manual rollback keeps its recovery object');
+    assertStoredObject(
+      readFakeObject(restoreFailure.stateDir, recoveryKey),
+      {
+        body: restoreFailure.oldLatest,
+        acl: 'private',
+        cacheControl: 'public, max-age=300',
+        sha: crypto
+          .createHash('sha256')
+          .update(restoreFailure.oldLatest)
+          .digest('hex'),
+        label: 'failed manual rollback recovery object',
+      },
     );
   } finally {
     fs.rmSync(restoreFailure.tempDir, { recursive: true, force: true });
@@ -550,8 +713,21 @@ test('manual preproduction rollback verifies source and restores failures safely
   const invalidSources = [
     { name: 'missing source', missingVersioned: true },
     { name: 'wrong package', versionedPackage: 'com.yiboding.circleim' },
+    { name: 'missing package attestation', legacyVersioned: true },
     { name: 'invalid digest', versionedSha: 'not-a-digest' },
     { name: 'digest does not match bytes', versionedSha: 'b'.repeat(64) },
+    {
+      name: 'wrong immutable cache policy',
+      versionedCacheControl: 'public, max-age=300',
+    },
+    {
+      name: 'wrong content type',
+      versionedContentType: 'application/octet-stream',
+    },
+    {
+      name: 'wrong content disposition',
+      versionedContentDisposition: 'inline',
+    },
   ];
   for (const source of invalidSources) {
     const outcome = runRollback(source);
@@ -681,6 +857,19 @@ test('Tencent COS publisher restores bytes and headers across failed promotions'
           scenario.name,
         );
       }
+      assertStoredObject(
+        readFakeObject(
+          outcome.stateDir,
+          `android/preprod/builds/${outcome.sha}/windnote.apk`,
+        ),
+        {
+          body: outcome.candidate,
+          acl: 'private',
+          cacheControl: 'public, max-age=31536000, immutable',
+          sha: outcome.candidateSha,
+          label: `${scenario.name} versioned object`,
+        },
+      );
       assert.equal(
         fakeObjectKeys(outcome.stateDir).some((key) =>
           key.startsWith('android/preprod/rollback/'),
@@ -705,12 +894,22 @@ test('Tencent COS publisher restores bytes and headers across failed promotions'
       `${restoreFailure.result.stdout}\n${restoreFailure.result.stderr}`,
       /Failed to fully verify.*rollback/,
     );
-    assert.equal(
-      fakeObjectKeys(restoreFailure.stateDir).some((key) =>
-        key.startsWith('android/preprod/rollback/'),
-      ),
-      true,
-      'failed restoration keeps its recovery object for incident handling',
+    const recoveryKey = fakeObjectKeys(restoreFailure.stateDir).find((key) =>
+      key.startsWith('android/preprod/rollback/'),
+    );
+    assert.ok(recoveryKey, 'failed restoration keeps its recovery object');
+    assertStoredObject(
+      readFakeObject(restoreFailure.stateDir, recoveryKey),
+      {
+        body: restoreFailure.oldLatest,
+        acl: 'private',
+        cacheControl: 'public, max-age=300',
+        sha: crypto
+          .createHash('sha256')
+          .update(restoreFailure.oldLatest)
+          .digest('hex'),
+        label: 'failed publisher recovery object',
+      },
     );
   } finally {
     fs.rmSync(restoreFailure.tempDir, { recursive: true, force: true });
@@ -735,6 +934,21 @@ test('Tencent COS publisher restores bytes and headers across failed promotions'
     {
       name: 'preexisting object without package attestation',
       legacyVersioned: true,
+    },
+    {
+      name: 'preexisting object with wrong immutable cache policy',
+      preexistingVersioned: true,
+      versionedCacheControl: 'public, max-age=300',
+    },
+    {
+      name: 'preexisting object with wrong content type',
+      preexistingVersioned: true,
+      versionedContentType: 'application/octet-stream',
+    },
+    {
+      name: 'preexisting object with wrong content disposition',
+      preexistingVersioned: true,
+      versionedContentDisposition: 'inline',
     },
   ];
   for (const object of invalidExistingObjects) {
@@ -854,6 +1068,16 @@ test('preproduction package cutover requires retiring the old install', () => {
   assert.match(documentation, /sign in again/i);
   assert.match(documentation, /cannot migrate across Android package IDs/i);
   assert.match(documentation, /卸载旧测试版、安装风信测试版、重新登录/);
+  assert.match(documentation, /mandatory rollback checkpoint/i);
+  assert.match(
+    documentation,
+    /7cb7cb9f4e6f29fb5d6d3f6cb326d5d1338403a7/,
+  );
+  assert.match(
+    documentation,
+    /4e31cb02949f838e372e469f2b9ad28bba11fc58b32b305bf0f56f1435237253/,
+  );
+  assert.match(documentation, /private immutable object/i);
 });
 
 test('preproduction verifier fails closed for metadata and APK endpoint drift', () => {

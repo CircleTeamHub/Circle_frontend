@@ -66,6 +66,7 @@
 - Run `npm run check`, `npm test`, and the production website build in the website repository.
 - Review both diffs for credential exposure, bucket-wide public access, and rollback regressions.
 - Create ready-for-review PRs.
+- Before merging, seed the last successful preproduction-identity build (`7cb7cb9f4e6f29fb5d6d3f6cb326d5d1338403a7`, Actions run `33302647501`, SHA-256 `4e31cb02949f838e372e469f2b9ad28bba11fc58b32b305bf0f56f1435237253`) as a private immutable COS object and verify its bytes and metadata. This is the rollback bridge for the one-time R2 cutover.
 - Add the two Tencent credential values to GitHub Actions without echoing them.
 - Merge the app PR first and wait for a successful `main` workflow.
 - Compare the Actions artifact SHA256 with the public COS object and verify its headers.

@@ -72,6 +72,11 @@ if (command === 'curl') {
   }
 
   if (fakeKey && args.includes('--head')) {
+    process.stderr.write('GET-signed URLs cannot authorize HEAD requests\n');
+    process.exit(22);
+  }
+
+  if (fakeKey) {
     const key = Buffer.from(fakeKey, 'base64url').toString();
     const object = readObject(key);
     if (!object) process.exit(22);
@@ -79,11 +84,12 @@ if (command === 'curl') {
     fs.writeFileSync(
       flag('--dump-header'),
       [
-        'HTTP/1.1 200 OK',
+        'HTTP/1.1 206 Partial Content',
         `content-type: ${object.metadata['content-type'] ?? 'application/octet-stream'}`,
         `content-disposition: ${object.metadata['content-disposition'] ?? ''}`,
         `cache-control: ${object.metadata['cache-control'] ?? ''}`,
-        `content-length: ${body.length}`,
+        'content-length: 1',
+        `content-range: bytes 0-0/${body.length}`,
         `x-cos-meta-sha256: ${object.metadata['x-cos-meta-sha256'] ?? ''}`,
         `x-cos-meta-package: ${object.metadata['x-cos-meta-package'] ?? ''}`,
         '',
