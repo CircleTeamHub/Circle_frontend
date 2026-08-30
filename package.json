@@ -43,6 +43,7 @@
     "@sentry/react-native": "~7.11.0",
     "@shopify/react-native-skia": "2.4.18",
     "expo": "~55.0.6",
+    "expo-application": "~55.0.15",
     "expo-audio": "~55.0.14",
     "expo-build-properties": "~55.0.16",
     "expo-camera": "~55.0.19",

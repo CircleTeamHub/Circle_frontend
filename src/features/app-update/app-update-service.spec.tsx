@@ -15,6 +15,23 @@ const manifest = {
 };
 
 describe('Android app update service', () => {
+  it('checks for updates in a production bare build using its native build version', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => manifest,
+    });
+    const dependencies = {
+      platform: 'android',
+      executionEnvironment: 'bare',
+      nativeBuildVersion: '1000000',
+      isDevelopment: false,
+      fetchImpl,
+    };
+
+    await expect(checkForAndroidUpdate(dependencies)).resolves.toEqual(manifest);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('returns a strictly newer validated release manifest', async () => {
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
@@ -28,8 +45,9 @@ describe('Android app update service', () => {
     await expect(
       checkForAndroidUpdate({
         platform: 'android',
-        isStandalone: true,
-        versionCode: 1_000_000,
+        executionEnvironment: 'standalone',
+        nativeBuildVersion: '1000000',
+        isDevelopment: false,
         fetchImpl,
       }),
     ).resolves.toEqual(manifest);
@@ -57,8 +75,9 @@ describe('Android app update service', () => {
     await expect(
       checkForAndroidUpdate({
         platform: 'android',
-        isStandalone: true,
-        versionCode: 1_000_000,
+        executionEnvironment: 'standalone',
+        nativeBuildVersion: '1000000',
+        isDevelopment: false,
         fetchImpl,
       }),
     ).resolves.toBeNull();
@@ -70,8 +89,9 @@ describe('Android app update service', () => {
     await expect(
       checkForAndroidUpdate({
         platform: 'ios',
-        isStandalone: true,
-        versionCode: 1_000_000,
+        executionEnvironment: 'standalone',
+        nativeBuildVersion: '1000000',
+        isDevelopment: false,
         fetchImpl,
       }),
     ).resolves.toBeNull();
@@ -79,16 +99,19 @@ describe('Android app update service', () => {
   });
 
   it('does not offer this app APK while running inside a development client', async () => {
-    const fetchImpl = jest.fn();
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => manifest,
+    });
+    const dependencies = {
+      platform: 'android',
+      executionEnvironment: 'bare',
+      nativeBuildVersion: '1000000',
+      isDevelopment: true,
+      fetchImpl,
+    };
 
-    await expect(
-      checkForAndroidUpdate({
-        platform: 'android',
-        isStandalone: false,
-        versionCode: 1_000_000,
-        fetchImpl,
-      }),
-    ).resolves.toBeNull();
+    await expect(checkForAndroidUpdate(dependencies)).resolves.toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -108,6 +131,10 @@ describe('Android app update service', () => {
       getContentUriAsync: jest
         .fn()
         .mockResolvedValue('content://windnote/update.apk'),
+      hashFile: jest.fn().mockResolvedValue(manifest.sha256),
+      readDirectoryAsync: jest
+        .fn()
+        .mockResolvedValue(['windnote-update-1000000.apk', 'other-cache.bin']),
       deleteAsync: jest.fn().mockResolvedValue(undefined),
       startActivityAsync: jest.fn().mockResolvedValue({ resultCode: 0 }),
     };
@@ -126,7 +153,17 @@ describe('Android app update service', () => {
         type: 'application/vnd.android.package-archive',
       },
     );
-    expect(dependencies.deleteAsync).not.toHaveBeenCalled();
+    expect(dependencies.deleteAsync).toHaveBeenNthCalledWith(
+      1,
+      'file:///cache/windnote-update-1000000.apk',
+      { idempotent: true },
+    );
+    expect(dependencies.deleteAsync).toHaveBeenNthCalledWith(
+      2,
+      'file:///cache/windnote-update-1000001.apk',
+      { idempotent: true },
+    );
+    expect(dependencies.deleteAsync).toHaveBeenCalledTimes(2);
   });
 
   it('deletes a downloaded APK whose byte size does not match the manifest', async () => {
@@ -143,6 +180,8 @@ describe('Android app update service', () => {
         size: 41,
       }),
       getContentUriAsync: jest.fn(),
+      hashFile: jest.fn(),
+      readDirectoryAsync: jest.fn().mockResolvedValue([]),
       deleteAsync: jest.fn().mockResolvedValue(undefined),
       startActivityAsync: jest.fn(),
     };
@@ -155,5 +194,80 @@ describe('Android app update service', () => {
       { idempotent: true },
     );
     expect(dependencies.startActivityAsync).not.toHaveBeenCalled();
+  });
+
+  it('deletes a same-sized APK whose SHA-256 does not match the manifest', async () => {
+    const dependencies = {
+      platform: 'android',
+      cacheDirectory: 'file:///cache/',
+      downloadAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///cache/windnote-update-1000001.apk',
+        status: 200,
+      }),
+      getInfoAsync: jest.fn().mockResolvedValue({
+        exists: true,
+        isDirectory: false,
+        size: 42,
+      }),
+      getContentUriAsync: jest.fn(),
+      hashFile: jest.fn().mockResolvedValue('b'.repeat(64)),
+      readDirectoryAsync: jest.fn().mockResolvedValue([]),
+      deleteAsync: jest.fn().mockResolvedValue(undefined),
+      startActivityAsync: jest.fn(),
+    };
+
+    await expect(
+      downloadAndInstallAndroidUpdate(manifest, dependencies),
+    ).rejects.toThrow(/verification failed/i);
+    expect(dependencies.hashFile).toHaveBeenCalledWith(
+      'file:///cache/windnote-update-1000001.apk',
+      'sha256',
+    );
+    expect(dependencies.deleteAsync).toHaveBeenCalledWith(
+      'file:///cache/windnote-update-1000001.apk',
+      { idempotent: true },
+    );
+    expect(dependencies.startActivityAsync).not.toHaveBeenCalled();
+  });
+
+  it('shares one in-flight install across the startup and manual entry points', async () => {
+    let finishDownload!: (result: { uri: string; status: number }) => void;
+    const downloadResult = new Promise<{ uri: string; status: number }>(
+      (resolve) => {
+        finishDownload = resolve;
+      },
+    );
+    const dependencies = {
+      platform: 'android',
+      cacheDirectory: 'file:///cache/',
+      downloadAsync: jest.fn().mockReturnValue(downloadResult),
+      getInfoAsync: jest.fn().mockResolvedValue({
+        exists: true,
+        isDirectory: false,
+        size: 42,
+      }),
+      getContentUriAsync: jest
+        .fn()
+        .mockResolvedValue('content://windnote/update.apk'),
+      hashFile: jest.fn().mockResolvedValue(manifest.sha256),
+      readDirectoryAsync: jest.fn().mockResolvedValue([]),
+      deleteAsync: jest.fn().mockResolvedValue(undefined),
+      startActivityAsync: jest.fn().mockResolvedValue({ resultCode: 0 }),
+    };
+
+    const startupInstall = downloadAndInstallAndroidUpdate(
+      manifest,
+      dependencies,
+    );
+    const manualInstall = downloadAndInstallAndroidUpdate(manifest, dependencies);
+    finishDownload({
+      uri: 'file:///cache/windnote-update-1000001.apk',
+      status: 200,
+    });
+
+    await Promise.all([startupInstall, manualInstall]);
+    expect(dependencies.downloadAsync).toHaveBeenCalledTimes(1);
+    expect(dependencies.hashFile).toHaveBeenCalledTimes(1);
+    expect(dependencies.startActivityAsync).toHaveBeenCalledTimes(1);
   });
 });

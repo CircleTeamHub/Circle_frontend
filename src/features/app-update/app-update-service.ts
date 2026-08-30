@@ -1,10 +1,12 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import * as Application from 'expo-application';
 import {
   cacheDirectory,
   deleteAsync as deleteFileAsync,
   downloadAsync,
   getContentUriAsync,
   getInfoAsync,
+  readDirectoryAsync,
 } from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform } from 'react-native';
@@ -20,8 +22,9 @@ const UPDATE_CHECK_TIMEOUT_MS = 10_000;
 
 interface UpdateCheckDependencies {
   platform: string;
-  isStandalone: boolean;
-  versionCode: number;
+  executionEnvironment: string;
+  nativeBuildVersion: string | null;
+  isDevelopment: boolean;
   fetchImpl: typeof fetch;
 }
 
@@ -31,12 +34,26 @@ interface AndroidInstallerDependencies {
   downloadAsync: typeof downloadAsync;
   getInfoAsync: typeof getInfoAsync;
   getContentUriAsync: typeof getContentUriAsync;
+  hashFile: (filePath: string, algorithm: 'sha256') => Promise<string>;
+  readDirectoryAsync: typeof readDirectoryAsync;
   deleteAsync: typeof deleteFileAsync;
   startActivityAsync: typeof IntentLauncher.startActivityAsync;
 }
 
 export const ANDROID_UPDATE_MANIFEST_URL =
   DEFAULT_ANDROID_UPDATE_MANIFEST_URL;
+
+type NativeFS = typeof import('react-native-fs');
+type NativeFSModule = NativeFS & { default?: NativeFS };
+
+async function hashAndroidUpdateFile(
+  filePath: string,
+  algorithm: 'sha256',
+): Promise<string> {
+  const loaded = (await import('react-native-fs')) as NativeFSModule;
+  const nativeFs = loaded.default ?? loaded;
+  return nativeFs.hash(filePath, algorithm);
+}
 
 function assertSecureManifestUrl(): void {
   const url = new URL(ANDROID_UPDATE_MANIFEST_URL);
@@ -48,13 +65,17 @@ function assertSecureManifestUrl(): void {
 export async function checkForAndroidUpdate(
   dependencies: UpdateCheckDependencies = {
     platform: Platform.OS,
-    isStandalone:
-      Constants.executionEnvironment === ExecutionEnvironment.Standalone,
-    versionCode: Constants.platform?.android?.versionCode ?? 0,
+    executionEnvironment: Constants.executionEnvironment,
+    nativeBuildVersion: Application.nativeBuildVersion,
+    isDevelopment: typeof __DEV__ !== 'undefined' && __DEV__,
     fetchImpl: fetch,
   },
 ): Promise<AndroidReleaseManifest | null> {
-  if (dependencies.platform !== 'android' || !dependencies.isStandalone) {
+  if (
+    dependencies.platform !== 'android' ||
+    dependencies.isDevelopment ||
+    dependencies.executionEnvironment === ExecutionEnvironment.StoreClient
+  ) {
     return null;
   }
 
@@ -73,7 +94,8 @@ export async function checkForAndroidUpdate(
     }
 
     const manifest = parseGitHubReleaseManifest(await response.json());
-    return isAndroidUpdateAvailable(dependencies.versionCode, manifest)
+    const versionCode = Number(dependencies.nativeBuildVersion ?? '');
+    return isAndroidUpdateAvailable(versionCode, manifest)
       ? manifest
       : null;
   } finally {
@@ -88,28 +110,33 @@ async function removeCachedApk(
   await deleteAsync(uri, { idempotent: true }).catch(() => undefined);
 }
 
-export async function downloadAndInstallAndroidUpdate(
-  manifest: AndroidReleaseManifest,
-  dependencies: AndroidInstallerDependencies = {
-    platform: Platform.OS,
-    cacheDirectory,
-    downloadAsync,
-    getInfoAsync,
-    getContentUriAsync,
-    deleteAsync: deleteFileAsync,
-    startActivityAsync: IntentLauncher.startActivityAsync,
-  },
+async function removeStaleCachedApks(
+  directory: string,
+  readDirectory: typeof readDirectoryAsync,
+  deleteAsync: typeof deleteFileAsync,
 ): Promise<void> {
-  if (dependencies.platform !== 'android') {
-    throw new Error('APK installation is only available on Android');
-  }
-  if (!dependencies.cacheDirectory) {
-    throw new Error('Android update cache is unavailable');
-  }
+  const entries = await readDirectory(directory).catch(() => []);
+  await Promise.all(
+    entries
+      .filter((name) => /^windnote-update-\d+\.apk$/.test(name))
+      .map((name) => removeCachedApk(`${directory}${name}`, deleteAsync)),
+  );
+}
 
-  const targetUri = `${dependencies.cacheDirectory}windnote-update-${manifest.versionCode}.apk`;
+let activeAndroidInstall: Promise<void> | null = null;
+
+async function performAndroidUpdateInstall(
+  manifest: AndroidReleaseManifest,
+  dependencies: AndroidInstallerDependencies,
+  resolvedCacheDirectory: string,
+): Promise<void> {
+  await removeStaleCachedApks(
+    resolvedCacheDirectory,
+    dependencies.readDirectoryAsync,
+    dependencies.deleteAsync,
+  );
+  const targetUri = `${resolvedCacheDirectory}windnote-update-${manifest.versionCode}.apk`;
   let downloadedUri = targetUri;
-  let installerStarted = false;
 
   try {
     const download = await dependencies.downloadAsync(manifest.apkUrl, targetUri);
@@ -122,6 +149,10 @@ export async function downloadAndInstallAndroidUpdate(
     if (!info.exists || info.isDirectory || info.size !== manifest.sizeBytes) {
       throw new Error('Android update verification failed');
     }
+    const digest = await dependencies.hashFile(downloadedUri, 'sha256');
+    if (digest.toLowerCase() !== manifest.sha256.toLowerCase()) {
+      throw new Error('Android update verification failed');
+    }
 
     const contentUri = await dependencies.getContentUriAsync(downloadedUri);
     await dependencies.startActivityAsync('android.intent.action.VIEW', {
@@ -129,10 +160,46 @@ export async function downloadAndInstallAndroidUpdate(
       flags: 1,
       type: 'application/vnd.android.package-archive',
     });
-    installerStarted = true;
   } finally {
-    if (!installerStarted) {
-      await removeCachedApk(downloadedUri, dependencies.deleteAsync);
+    await removeCachedApk(downloadedUri, dependencies.deleteAsync);
+  }
+}
+
+export async function downloadAndInstallAndroidUpdate(
+  manifest: AndroidReleaseManifest,
+  dependencies: AndroidInstallerDependencies = {
+    platform: Platform.OS,
+    cacheDirectory,
+    downloadAsync,
+    getInfoAsync,
+    getContentUriAsync,
+    hashFile: hashAndroidUpdateFile,
+    readDirectoryAsync,
+    deleteAsync: deleteFileAsync,
+    startActivityAsync: IntentLauncher.startActivityAsync,
+  },
+): Promise<void> {
+  if (dependencies.platform !== 'android') {
+    throw new Error('APK installation is only available on Android');
+  }
+  if (!dependencies.cacheDirectory) {
+    throw new Error('Android update cache is unavailable');
+  }
+  if (activeAndroidInstall) {
+    return activeAndroidInstall;
+  }
+
+  const install = performAndroidUpdateInstall(
+    manifest,
+    dependencies,
+    dependencies.cacheDirectory,
+  );
+  activeAndroidInstall = install;
+  try {
+    await install;
+  } finally {
+    if (activeAndroidInstall === install) {
+      activeAndroidInstall = null;
     }
   }
 }
