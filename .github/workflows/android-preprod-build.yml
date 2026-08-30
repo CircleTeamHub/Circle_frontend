@@ -189,7 +189,8 @@ jobs:
           COS_BUCKET: windnote-preprod-tokyo-1447743949
           COS_ENDPOINT: cos.ap-tokyo.myqcloud.com
           COS_KEY_PREFIX: android/preprod
-          COS_PUBLIC_APK_URL: https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com/android/preprod/latest/windnote.apk
+          COS_PUBLIC_APK_URL: ${{ vars.TENCENT_COS_PUBLIC_APK_URL }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           bash "$GITHUB_WORKSPACE/.github/scripts/publish-android-preprod-cos.sh" \

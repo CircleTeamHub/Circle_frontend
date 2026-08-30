@@ -56,7 +56,7 @@
 - Modify: `Circle_Web/tests/e2e/site.spec.ts`
 - Modify: `Circle_Web/README.md`
 
-- Change the stable fallback to `https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com/android/preprod/latest/windnote.apk`.
+- Bind a custom COS origin or CDN domain because Tencent blocks APK downloads on the default `*.myqcloud.com` domain, then configure that URL through `TENCENT_COS_PUBLIC_APK_URL` and the website environment.
 - Preserve the environment override and the fail-soft build-time probe behavior.
 
 ## Task 4: Verify and deploy in dependency order
@@ -71,4 +71,3 @@
 - Compare the Actions artifact SHA256 with the public COS object and verify its headers.
 - Merge the website PR only after the COS URL is reachable.
 - Verify the deployed Chinese and English pages link to the COS object.
-

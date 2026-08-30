@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -27,6 +29,110 @@ const workflowStep = (job, stepName) => {
   const nextStep = remainder.slice(1).search(/^      - name:/m);
   return nextStep === -1 ? remainder : remainder.slice(0, nextStep + 1);
 };
+
+const fakeObjectPath = (stateDir, key) =>
+  path.join(stateDir, `${Buffer.from(key).toString('base64url')}.json`);
+
+const readFakeObject = (stateDir, key) => {
+  const file = fakeObjectPath(stateDir, key);
+  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+};
+
+const fakeObjectKeys = (stateDir) =>
+  fs
+    .readdirSync(stateDir)
+    .filter((name) => name.endsWith('.json'))
+    .map((name) =>
+      Buffer.from(name.slice(0, -'.json'.length), 'base64url').toString(),
+    );
+
+function writeFakeObject(stateDir, key, body) {
+  const sha = crypto.createHash('sha256').update(body).digest('hex');
+  fs.writeFileSync(
+    fakeObjectPath(stateDir, key),
+    JSON.stringify({
+      body: Buffer.from(body).toString('base64'),
+      metadata: {
+        'content-type': 'application/vnd.android.package-archive',
+        'content-disposition': 'attachment; filename=windnote-preprod.apk',
+        'cache-control': 'public, max-age=300',
+        'x-cos-meta-sha256': sha,
+      },
+      acl: 'public-read',
+    }),
+  );
+  return sha;
+}
+
+function runCosPublisher({ hasLatest = true, extraEnv = {} } = {}) {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cos-publish-'));
+  const stateDir = path.join(tempDir, 'cos');
+  const binDir = path.join(tempDir, 'bin');
+  fs.mkdirSync(stateDir);
+  fs.mkdirSync(binDir);
+  const fakeCli = path.join(
+    process.cwd(),
+    'test/helpers/fake-cos-publish-cli.js',
+  );
+  for (const name of ['coscli', 'curl', 'gh']) {
+    fs.symlinkSync(fakeCli, path.join(binDir, name));
+  }
+
+  const candidate = Buffer.from('verified-tencent-preproduction-apk');
+  const candidateSha = crypto.createHash('sha256').update(candidate).digest('hex');
+  const apkPath = path.join(tempDir, 'windnote.apk');
+  const checksumPath = path.join(tempDir, 'windnote.apk.sha256');
+  fs.writeFileSync(apkPath, candidate);
+  fs.writeFileSync(checksumPath, `${candidateSha}  windnote.apk\n`);
+
+  const oldLatest = Buffer.from('previous-tencent-preproduction-apk');
+  if (hasLatest) {
+    writeFakeObject(
+      stateDir,
+      'android/preprod/latest/windnote.apk',
+      oldLatest,
+    );
+  }
+
+  const sha = 'a'.repeat(40);
+  const result = spawnSync(
+    'bash',
+    [
+      path.join(
+        process.cwd(),
+        '.github/scripts/publish-android-preprod-cos.sh',
+      ),
+      apkPath,
+      checksumPath,
+    ],
+    {
+      cwd: tempDir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH}`,
+        COSCLI_PATH: path.join(binDir, 'coscli'),
+        COS_SECRET_ID: 'fake-id',
+        COS_SECRET_KEY: 'fake-key',
+        COS_BUCKET: 'fake-bucket',
+        COS_ENDPOINT: 'cos.ap-tokyo.myqcloud.com',
+        COS_KEY_PREFIX: 'android/preprod',
+        COS_PUBLIC_APK_URL:
+          'https://downloads.example.com/android/preprod/latest/windnote.apk',
+        GH_TOKEN: 'fake-token',
+        GITHUB_REPOSITORY: 'CircleTeamHub/Circle_frontend',
+        GITHUB_SHA: sha,
+        GITHUB_RUN_ID: '123',
+        GITHUB_RUN_ATTEMPT: '1',
+        RUNNER_TEMP: tempDir,
+        FAKE_COS_DIR: stateDir,
+        ...extraEnv,
+      },
+    },
+  );
+
+  return { candidate, candidateSha, oldLatest, result, sha, stateDir, tempDir };
+}
 
 test('preproduction APK workflow builds on main or manually and queues verified runs', () => {
   const workflow = read(WORKFLOW_PATH);
@@ -104,8 +210,9 @@ test('preproduction workflow publishes the verified artifact to Tencent COS only
   assert.match(upload, /COS_KEY_PREFIX: android\/preprod/);
   assert.match(
     upload,
-    /COS_PUBLIC_APK_URL: https:\/\/windnote-preprod-tokyo-1447743949\.cos\.ap-tokyo\.myqcloud\.com\/android\/preprod\/latest\/windnote\.apk/,
+    /COS_PUBLIC_APK_URL: \$\{\{ vars\.TENCENT_COS_PUBLIC_APK_URL \}\}/,
   );
+  assert.match(upload, /GH_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(upload, /publish-android-preprod-cos\.sh/);
 
   for (const forbidden of [
@@ -123,6 +230,7 @@ test('preproduction workflow publishes the verified artifact to Tencent COS only
   assert.match(publisher, /\$\{COS_KEY_PREFIX\}\/latest\/windnote\.apk/);
   assert.doesNotMatch(publisher, /android\/latest\/windnote\.apk/);
   assert.match(publisher, /--forbid-overwrite=true/);
+  assert.match(publisher, /--bucket-type COS/);
   assert.match(publisher, /--acl private/);
   assert.match(publisher, /--acl public-read/);
   assert.doesNotMatch(publisher, /\bcos stat\b/);
@@ -135,11 +243,152 @@ test('preproduction workflow publishes the verified artifact to Tencent COS only
   assert.match(publisher, /application\/vnd\.android\.package-archive/);
   assert.match(publisher, /max-age=31536000, immutable/);
   assert.match(publisher, /max-age=300/);
-  assert.match(publisher, /\?build=\$GITHUB_SHA/);
+  assert.match(publisher, /\?verification=\$nonce/);
   assert.match(publisher, /curl --fail --silent --show-error/);
   assert.match(publisher, /verify_object "\$versioned_key"/);
   assert.match(publisher, /verify_object "\$latest_key"/);
+  assert.match(publisher, /gh api .*git\/ref\/heads\/main.*--jq \.object\.sha/);
+  assert.ok((publisher.match(/assert_current_main/g) || []).length >= 3);
+  assert.doesNotMatch(
+    publisher,
+    /https:\/\/[^\s"']*\.myqcloud\.com\/android\/preprod\/latest\/windnote\.apk/,
+  );
+  const rollbackArmedAt = publisher.indexOf('rollback_armed=true');
+  const promotionAt = publisher.indexOf(
+    'cos cp "cos://$COS_BUCKET/$versioned_key" "cos://$COS_BUCKET/$latest_key"',
+  );
+  assert.ok(
+    rollbackArmedAt > -1 && rollbackArmedAt < promotionAt,
+    'rollback must be armed before latest is mutated',
+  );
   assert.ok((publisher.match(/sha256sum -c/g) || []).length >= 2);
+});
+
+test('Tencent COS publisher restores bytes and headers across failed promotions', () => {
+  const cases = [
+    { name: 'successful promotion', expectedStatus: 0, expected: 'candidate' },
+    {
+      name: 'ambiguous promotion response',
+      expectedStatus: 42,
+      expected: 'old',
+      extraEnv: { FAKE_FAIL_PROMOTE: 'ambiguous' },
+    },
+    {
+      name: 'public verification failure',
+      expectedStatus: 1,
+      expected: 'old',
+      extraEnv: { FAKE_CORRUPT_PUBLIC: '1' },
+    },
+    {
+      name: 'stale before promotion',
+      expectedStatus: 1,
+      expected: 'old',
+      extraEnv: { FAKE_GH_SHAS: 'b'.repeat(40) },
+    },
+    {
+      name: 'main advances during promotion',
+      expectedStatus: 1,
+      expected: 'old',
+      extraEnv: { FAKE_GH_SHAS: `${'a'.repeat(40)},${'b'.repeat(40)}` },
+    },
+    {
+      name: 'ambiguous first promotion',
+      expectedStatus: 42,
+      expected: 'missing',
+      hasLatest: false,
+      extraEnv: { FAKE_FAIL_PROMOTE: 'ambiguous' },
+    },
+  ];
+
+  for (const scenario of cases) {
+    const outcome = runCosPublisher(scenario);
+    try {
+      assert.equal(
+        outcome.result.status,
+        scenario.expectedStatus,
+        `${scenario.name}: ${outcome.result.stderr || outcome.result.stdout}`,
+      );
+      const latest = readFakeObject(
+        outcome.stateDir,
+        'android/preprod/latest/windnote.apk',
+      );
+      if (scenario.expected === 'missing') {
+        assert.equal(latest, null, scenario.name);
+        continue;
+      }
+
+      const expectedBody =
+        scenario.expected === 'candidate'
+          ? outcome.candidate
+          : outcome.oldLatest;
+      const expectedSha = crypto
+        .createHash('sha256')
+        .update(expectedBody)
+        .digest('hex');
+      assert.deepEqual(Buffer.from(latest.body, 'base64'), expectedBody);
+      assert.equal(latest.acl, 'public-read');
+      assert.deepEqual(latest.metadata, {
+        'content-type': 'application/vnd.android.package-archive',
+        'content-disposition': 'attachment; filename=windnote-preprod.apk',
+        'cache-control': 'public, max-age=300',
+        'x-cos-meta-sha256': expectedSha,
+      });
+      assert.equal(
+        fakeObjectKeys(outcome.stateDir).some((key) =>
+          key.startsWith('android/preprod/rollback/'),
+        ),
+        false,
+        `${scenario.name} must clean its rollback object`,
+      );
+    } finally {
+      fs.rmSync(outcome.tempDir, { recursive: true, force: true });
+    }
+  }
+
+  const restoreFailure = runCosPublisher({
+    extraEnv: {
+      FAKE_CORRUPT_PUBLIC: '1',
+      FAKE_FAIL_RESTORE: '1',
+    },
+  });
+  try {
+    assert.equal(restoreFailure.result.status, 1);
+    assert.match(
+      `${restoreFailure.result.stdout}\n${restoreFailure.result.stderr}`,
+      /Failed to fully verify.*rollback/,
+    );
+    assert.equal(
+      fakeObjectKeys(restoreFailure.stateDir).some((key) =>
+        key.startsWith('android/preprod/rollback/'),
+      ),
+      true,
+      'failed restoration must retain its private recovery object',
+    );
+  } finally {
+    fs.rmSync(restoreFailure.tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Tencent COS publisher rejects default APK domains before mutation', () => {
+  const outcome = runCosPublisher({
+    extraEnv: {
+      COS_PUBLIC_APK_URL:
+        'https://fake-bucket.cos.ap-tokyo.myqcloud.com/android/preprod/latest/windnote.apk',
+    },
+  });
+  try {
+    assert.equal(outcome.result.status, 1);
+    assert.match(outcome.result.stdout, /default domains cannot distribute APK/);
+    assert.equal(
+      readFakeObject(
+        outcome.stateDir,
+        'android/preprod/builds/' + outcome.sha + '/windnote.apk',
+      ),
+      null,
+    );
+  } finally {
+    fs.rmSync(outcome.tempDir, { recursive: true, force: true });
+  }
 });
 
 test('preproduction build runs checks before the signed release build', () => {
