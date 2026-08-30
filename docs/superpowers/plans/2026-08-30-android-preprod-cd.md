@@ -56,7 +56,7 @@
 
 - [x] Run the three focused tests, then the complete `npm run ci` baseline.
 
-- [ ] Commit the baseline portability fix.
+- [x] Commit the baseline portability fix.
 
 ### Task 2: Fix the Chrome smoke-test cleanup race blocking CI
 
@@ -64,7 +64,7 @@
 - Modify: `.github/scripts/smoke-web-export.js`
 - Test: `test/desktop-web-review-fixes.test.js`
 
-- [ ] Add a failing source-contract assertion to the existing browser-smoke test.
+- [x] Add a failing source-contract assertion to the existing browser-smoke test.
 
   The assertion must require bounded retry options on the recursive removal:
 
@@ -73,13 +73,13 @@
   assert.match(smokeScript, /retryDelay:\s*200/);
   ```
 
-- [ ] Run the focused test and confirm that it fails before implementation.
+- [x] Run the focused test and confirm that it fails before implementation.
 
   ```powershell
   node --test test/desktop-web-review-fixes.test.js
   ```
 
-- [ ] Make cleanup tolerate the Windows/Linux Chromium profile-release race without hiding persistent failures.
+- [x] Make cleanup tolerate the Windows/Linux Chromium profile-release race without hiding persistent failures.
 
   Replace the final profile cleanup with:
 
@@ -92,7 +92,9 @@
   });
   ```
 
-- [ ] Run both the focused contract test and the browser smoke command.
+  Real-browser verification must additionally prove the process has emitted `exit` after `SIGTERM` (falling back to `SIGKILL` after five seconds) before recursive profile removal begins.
+
+- [x] Run both the focused contract test and the browser smoke command.
 
   ```powershell
   node --test test/desktop-web-review-fixes.test.js
