@@ -41,6 +41,23 @@
   {"assets":[],"draft":false,"id":354862640,"tag_name":"v1.0.0"}
   ```
 
+### Task 1A: Restore a cross-platform clean baseline in the isolated worktree
+
+**Files:**
+- Modify: `test/error-message-wrapping.test.js`
+- Modify: `test/themed-switch.test.js`
+- Modify: `test/repo-hygiene.test.js`
+
+- [x] Run `npm run ci` before implementation and record the three expected failures: two Windows path-separator allowlist mismatches and Git's worktree ownership guard.
+
+- [x] Normalize paths returned by `path.relative` to `/` before comparing them with repository-relative allowlists.
+
+- [x] Invoke the repository-hygiene test's read-only Git command with `-c safe.directory=<current worktree>` so it does not require persistent global Git configuration.
+
+- [x] Run the three focused tests, then the complete `npm run ci` baseline.
+
+- [ ] Commit the baseline portability fix.
+
 ### Task 2: Fix the Chrome smoke-test cleanup race blocking CI
 
 **Files:**

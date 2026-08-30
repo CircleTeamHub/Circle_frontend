@@ -8,9 +8,16 @@ const { execFileSync } = require('node:child_process');
 // 某台机器绝对路径的符号链接，别人检出就得到一条悬空链接，`npm ci` 之后工作区
 // 还一直是脏的。.gitignore 里只有 `node_modules/`（带斜杠）挡不住符号链接。
 test('node_modules never enters the index', () => {
+  const safeDirectory = process.cwd().split(path.sep).join('/');
   const tracked = execFileSync(
     'git',
-    ['ls-files', '--', 'node_modules'],
+    [
+      '-c',
+      `safe.directory=${safeDirectory}`,
+      'ls-files',
+      '--',
+      'node_modules',
+    ],
     { cwd: process.cwd(), encoding: 'utf8' },
   ).trim();
 
