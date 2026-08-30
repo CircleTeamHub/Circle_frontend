@@ -35,6 +35,9 @@
       }
     },
     "android": {
+      "permissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "backgroundImage": "./assets/images/android-icon-background.png",

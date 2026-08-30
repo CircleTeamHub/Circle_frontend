@@ -36,6 +36,7 @@ import { PushNotificationTokenRegistrar } from '@/features/notifications/compone
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { WebAlertHost } from '@/components/app/web-alert-host';
 import { WebDocumentTitle } from '@/components/app/web-document-title';
+import { AppUpdateHost } from '@/features/app-update/AppUpdateHost';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
   initSentry,
@@ -295,6 +296,7 @@ function RootLayout() {
     // ThemeProvider：提供全局主题上下文（颜色、深浅色模式等）
     <ThemeProvider>
       <MemberNameAnimationProvider>
+        <AppUpdateHost />
         <SessionBootstrap />
         <AuthRouteGuard>
           <View style={{ flex: 1 }}>

@@ -2181,6 +2181,20 @@
       "updateBody": "当前版本会持续迭代。新的安全、聊天和圈子能力会优先在系统通知和更新说明里同步。"
     }
   },
+  "appUpdate": {
+    "availableTitle": "发现新版本",
+    "availableMessage": "风信 {{version}} 已发布，是否现在下载并安装？",
+    "updateNow": "立即更新",
+    "checkNow": "检查更新",
+    "checking": "正在检查…",
+    "latestTitle": "已是最新版本",
+    "latestMessage": "当前已安装最新版本。",
+    "checkFailedTitle": "检查更新失败",
+    "checkFailedMessage": "暂时无法获取最新版本，请检查网络后重试。",
+    "installFailedTitle": "更新失败",
+    "installFailedMessage": "无法下载安装包，请检查网络和安装权限后重试。",
+    "androidOnlyMessage": "APK 自动更新仅适用于 Android 版本。"
+  },
   "shareScreen": {
     "inviteCode": "邀请码",
     "copyInviteTitle": "复制邀请码",

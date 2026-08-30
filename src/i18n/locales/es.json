@@ -2327,6 +2327,20 @@
     "groupCount": "{{count}} chats",
     "assignChats": "Asignar chats a este grupo"
   },
+  "appUpdate": {
+    "availableTitle": "Nueva versión disponible",
+    "availableMessage": "windnote.ai {{version}} está disponible. ¿Quieres descargarla e instalarla ahora?",
+    "updateNow": "Actualizar ahora",
+    "checkNow": "Buscar actualizaciones",
+    "checking": "Buscando…",
+    "latestTitle": "Tienes la última versión",
+    "latestMessage": "La última versión ya está instalada.",
+    "checkFailedTitle": "No se pudo buscar actualizaciones",
+    "checkFailedMessage": "No se puede obtener la última versión. Comprueba la conexión e inténtalo de nuevo.",
+    "installFailedTitle": "Error de actualización",
+    "installFailedMessage": "No se pudo descargar o abrir el instalador. Comprueba la conexión y los permisos de instalación.",
+    "androidOnlyMessage": "Las actualizaciones automáticas por APK solo están disponibles en Android."
+  },
   "shareScreen": {
     "inviteUnavailable": "Código de invitación no disponible",
     "inviteUnavailableSubtitle": "Actualiza la información de tu cuenta e inténtalo de nuevo",
