@@ -7,6 +7,9 @@ node_modules/
 # claude code worktrees
 .claude/worktrees/
 
+# Codex implementation worktrees
+/.worktrees/
+
 # superpowers brainstorm scratch (ephemeral mockups/preview server state)
 .superpowers/
 
