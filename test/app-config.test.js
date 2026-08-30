@@ -7,6 +7,7 @@ const appJson = require('../app.json');
 
 function loadConfig(env = {}) {
   const previous = {
+    APP_VARIANT: process.env.APP_VARIANT,
     EXPO_PUBLIC_EAS_PROJECT_ID: process.env.EXPO_PUBLIC_EAS_PROJECT_ID,
     GOOGLE_SERVICES_FILE: process.env.GOOGLE_SERVICES_FILE,
   };
@@ -54,6 +55,25 @@ test('dynamic app config omits unset optional push build values', () => {
 
   assert.equal(config.extra?.eas?.projectId, undefined);
   assert.equal(config.android.googleServicesFile, undefined);
+});
+
+test('preproduction is a separately installable Android app', () => {
+  const config = loadConfig({ APP_VARIANT: 'preprod' });
+
+  assert.equal(config.name, `${appJson.expo.name}测试版`);
+  assert.equal(config.android.package, `${appJson.expo.android.package}.preprod`);
+  assert.deepEqual(config.scheme, ['windnoteai-preprod', 'circleim-preprod']);
+  assert.equal(config.extra.appVariant, 'preprod');
+  assert.notEqual(config.android.package, appJson.expo.android.package);
+});
+
+test('production keeps the canonical identity and runtime update channel', () => {
+  const config = loadConfig();
+
+  assert.equal(config.name, appJson.expo.name);
+  assert.equal(config.android.package, appJson.expo.android.package);
+  assert.deepEqual(config.scheme, appJson.expo.scheme);
+  assert.equal(config.extra.appVariant, 'production');
 });
 
 test('iOS 声明 audio 后台模式让通话在退后台后存活，且不带 voip (#118)', () => {

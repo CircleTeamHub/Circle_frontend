@@ -5,12 +5,19 @@ import {
   buildQrUrl,
   parseQrLoginToken,
   parseQrToken,
+  qrSchemeForAppVariant,
 } from './qr-payload.ts';
 
 const TOKEN = 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6';
 
 test('build 出的载荷能被 parse 回读(往返)', () => {
   assert.equal(parseQrToken(buildQrUrl(TOKEN)), TOKEN);
+  assert.equal(
+    parseQrToken(buildQrUrl(TOKEN, qrSchemeForAppVariant('preprod'))),
+    TOKEN,
+  );
+  assert.equal(qrSchemeForAppVariant('production'), 'windnoteai');
+  assert.equal(qrSchemeForAppVariant('preprod'), 'windnoteai-preprod');
 });
 
 test('登录码使用独立路由，旧版普通 QR 解析器不会误认', () => {
@@ -25,6 +32,8 @@ test('两个注册 scheme 都能解析,query 与 path 两种形态都认', () =>
   assert.equal(parseQrToken(`circleim://qr?t=${TOKEN}`), TOKEN);
   assert.equal(parseQrToken(`windnoteai://qr?t=${TOKEN}`), TOKEN);
   assert.equal(parseQrToken(`circleim://qr/${TOKEN}`), TOKEN);
+  assert.equal(parseQrToken(`windnoteai-preprod://qr?t=${TOKEN}`), TOKEN);
+  assert.equal(parseQrToken(`circleim-preprod://qr/${TOKEN}`), TOKEN);
 });
 
 test('universal link 域名解析,其他域名拒绝', () => {

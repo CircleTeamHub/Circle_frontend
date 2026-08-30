@@ -20,6 +20,7 @@ test('update service uses a bounded no-store check and the Android package insta
   const source = read('src/features/app-update/app-update-service.ts');
 
   assert.match(source, /dependencies\.platform !== 'android'/);
+  assert.match(source, /dependencies\.appVariant === 'preprod'/);
   assert.match(
     source,
     /CircleTeamHub\/windnote-releases\/releases\/latest\/download\/release\.json/,

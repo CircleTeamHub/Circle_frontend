@@ -25,6 +25,7 @@ describe('Android app update service', () => {
       executionEnvironment: 'bare',
       nativeBuildVersion: '1000000',
       isDevelopment: false,
+      appVariant: 'production',
       fetchImpl,
     };
 
@@ -48,6 +49,7 @@ describe('Android app update service', () => {
         executionEnvironment: 'standalone',
         nativeBuildVersion: '1000000',
         isDevelopment: false,
+        appVariant: 'production',
         fetchImpl,
       }),
     ).resolves.toEqual(manifest);
@@ -112,6 +114,22 @@ describe('Android app update service', () => {
     };
 
     await expect(checkForAndroidUpdate(dependencies)).resolves.toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('does not offer the production APK to the separately installed preproduction app', async () => {
+    const fetchImpl = jest.fn();
+
+    await expect(
+      checkForAndroidUpdate({
+        platform: 'android',
+        executionEnvironment: 'standalone',
+        nativeBuildVersion: '1000000',
+        isDevelopment: false,
+        appVariant: 'preprod',
+        fetchImpl,
+      }),
+    ).resolves.toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 

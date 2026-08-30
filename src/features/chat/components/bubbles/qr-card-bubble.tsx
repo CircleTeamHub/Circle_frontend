@@ -4,6 +4,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { Avatar } from '@/components/ui/avatar';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
+import { OUTBOUND_APP_QR_SCHEME } from '@/features/qr/app-qr-scheme';
 import { buildQrUrl } from '@/features/qr/qr-payload';
 import { Radius, Spacing } from '@/theme';
 import type { ChatMessage, QrCardData, QrCardType } from '@/types';
@@ -111,7 +112,7 @@ export const QrCardBubble: React.FC<QrCardBubbleProps> = ({
       media={
         <View style={s.qrPlate}>
           <QRCode
-            value={buildQrUrl(card.token)}
+            value={buildQrUrl(card.token, OUTBOUND_APP_QR_SCHEME)}
             size={QR_SIZE}
             color={QR_DARK}
             backgroundColor={QR_LIGHT}

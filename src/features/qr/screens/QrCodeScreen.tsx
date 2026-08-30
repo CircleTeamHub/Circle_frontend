@@ -16,6 +16,7 @@ import { CircleAvatar } from '@/components/ui/circle-avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { ShareQrSheet } from '@/features/qr/components/ShareQrSheet';
+import { OUTBOUND_APP_QR_SCHEME } from '@/features/qr/app-qr-scheme';
 import { buildQrUrl } from '@/features/qr/qr-payload';
 import { saveQrPngToLibrary } from '@/features/qr/save-qr-image';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -87,7 +88,7 @@ export default function QrCodeScreen() {
       .then((result) => {
         if (cancelled) return;
         setQrToken(result.token);
-        setQrValue(buildQrUrl(result.token));
+        setQrValue(buildQrUrl(result.token, OUTBOUND_APP_QR_SCHEME));
         setExpiresAt(result.expiresAt);
       })
       .catch((error) => {
@@ -148,7 +149,7 @@ export default function QrCodeScreen() {
     try {
       const result = await rotateUserQrToken();
       setQrToken(result.token);
-      setQrValue(buildQrUrl(result.token));
+      setQrValue(buildQrUrl(result.token, OUTBOUND_APP_QR_SCHEME));
       setExpiresAt(result.expiresAt);
       setErrorText(null);
       Alert.alert(t('qr.resetSuccessTitle'), t('qr.resetSuccessMessage'));
