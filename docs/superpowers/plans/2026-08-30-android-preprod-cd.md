@@ -202,7 +202,7 @@
 
   1. Read the production dependency tree using `npm ls --omit=dev --all --json --long --package-lock-only`.
   2. Deduplicate by `name@version` and sort lexically.
-  3. Resolve each installed package directory from the root dependency graph, skipping only uninstalled platform-specific optional packages.
+  3. Resolve each installed package directory from the root dependency graph. Include every platform-specific optional package from the lock-derived tree on every host; use its locked metadata without host-specific license-file contents so Windows and Linux generate identical evidence.
   4. Read SPDX license metadata and the package's `LICENSE*`, `LICENCE*`, `COPYING*`, or `NOTICE*` files.
   5. Fail on missing or ambiguous license metadata rather than silently labeling it unknown.
   6. Write deterministic UTF-8 notices and CycloneDX 1.5 JSON without timestamps or host paths.
@@ -325,7 +325,7 @@
 **Files:**
 - No repository files
 
-- [ ] Set the current test endpoints on `CircleTeamHub/Circle_frontend`.
+- [x] Set the current test endpoints on `CircleTeamHub/Circle_frontend`.
 
   ```powershell
   gh variable set EXPO_PUBLIC_API_URL --repo CircleTeamHub/Circle_frontend --body "https://api-43-133-201-42.sslip.io"
@@ -333,7 +333,7 @@
   gh variable set EXPO_PUBLIC_MEDIA_ORIGINS --repo CircleTeamHub/Circle_frontend --body "https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com"
   ```
 
-- [ ] Remove the two obsolete OpenIM variables after confirming the application code does not reference them.
+- [x] Remove the two obsolete OpenIM variables after confirming the application code does not reference them.
 
   ```powershell
   rg -n "EXPO_PUBLIC_OPENIM_(API|WS)_URL" .
@@ -341,7 +341,7 @@
   gh variable delete EXPO_PUBLIC_OPENIM_WS_URL --repo CircleTeamHub/Circle_frontend
   ```
 
-- [ ] Verify the variable names and non-secret values.
+- [x] Verify the variable names and non-secret values.
 
   ```powershell
   gh variable list --repo CircleTeamHub/Circle_frontend

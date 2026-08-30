@@ -61,6 +61,7 @@ test('license artifacts are deterministic, complete, and machine-readable', () =
 
   assert.match(notices, /^WindNote third-party software notices/m);
   assert.match(notices, /@blocknote\/core@0\.47\.3/);
+  assert.doesNotMatch(notices, /\r/, 'notices must be LF-only on every runner OS');
   assert.doesNotMatch(notices, /^License:\s*(?:UNKNOWN|UNLICENSED)\s*$/im);
   assert.doesNotMatch(notices, /^@openim\/rn-client-sdk@/m);
   assert.equal(bundled.text, notices);
@@ -69,6 +70,18 @@ test('license artifacts are deterministic, complete, and machine-readable', () =
   assert.equal(sbom.specVersion, '1.5');
   assert.equal(sbom.metadata.component.version, '1.0.1');
   assert.ok(sbom.components.length > 100);
+  const componentNames = new Set(sbom.components.map((component) => component.name));
+  for (const platformPackage of [
+    '@sentry/cli-linux-x64',
+    '@sentry/cli-win32-x64',
+    'lightningcss-linux-x64-gnu',
+    'lightningcss-win32-x64-msvc',
+  ]) {
+    assert.ok(
+      componentNames.has(platformPackage),
+      `SBOM must be independent of the generator host: ${platformPackage}`,
+    );
+  }
   assert.equal(
     sbom.components.some((component) => component.name === '@openim/rn-client-sdk'),
     false,
@@ -83,6 +96,13 @@ test('license artifacts are deterministic, complete, and machine-readable', () =
         licenseChoice?.expression,
       `${component.name}@${component.version} is missing license metadata`,
     );
+    for (const reference of component.externalReferences ?? []) {
+      const parsed = new URL(reference.url);
+      assert.match(reference.type, /^(?:distribution|vcs|website)$/);
+      assert.equal(parsed.protocol, 'https:');
+      assert.equal(parsed.username, '');
+      assert.equal(parsed.password, '');
+    }
   }
   const refs = sbom.components.map((component) => component['bom-ref']);
   assert.deepEqual(refs, [...refs].sort());

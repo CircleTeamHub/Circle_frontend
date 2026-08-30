@@ -100,6 +100,7 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'select-verifier',
   'settings',
   'settings-about',
+  'settings-about-licenses',
   'settings-about-privacy-policy',
   'settings-about-product',
   'settings-about-user-agreement',

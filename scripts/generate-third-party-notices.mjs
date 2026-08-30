@@ -10,6 +10,8 @@ const BUNDLED_NOTICE_PATH = path.join(OUTPUT_DIR, 'third-party-notices.json');
 const SBOM_PATH = path.join(OUTPUT_DIR, 'cyclonedx-sbom.json');
 const CHECK_ONLY = process.argv.includes('--check');
 const MAX_BUFFER = 20 * 1024 * 1024;
+const compareLexically = (left, right) =>
+  left < right ? -1 : left > right ? 1 : 0;
 
 function runNpmLs() {
   const args = [
@@ -57,7 +59,9 @@ function collectInstalledComponents(tree) {
             version: child.version,
             packagePath: child.path,
             treeLicense: child.license,
-            optional: child.optional === true,
+            os: child.os,
+            cpu: child.cpu,
+            resolved: child.resolved,
           });
         }
       }
@@ -66,7 +70,7 @@ function collectInstalledComponents(tree) {
   };
   walk(tree);
 
-  return [...components.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return [...components.values()].sort((a, b) => compareLexically(a.key, b.key));
 }
 
 function declaredLicense(pkg, fallback) {
@@ -85,10 +89,47 @@ function declaredLicense(pkg, fallback) {
   return unique.join(' OR ');
 }
 
-function repositoryUrl(pkg) {
+function normalizeHttpsSource(rawValue) {
+  if (typeof rawValue !== 'string' || !rawValue.trim()) return null;
+  let value = rawValue.trim().replace(/^git\+/, '');
+  const scpStyle = value.match(/^git@([^:]+):(.+)$/);
+  if (scpStyle) value = `https://${scpStyle[1]}/${scpStyle[2]}`;
+  if (/^[\w.-]+\/[\w./-]+(?:\.git)?$/.test(value)) {
+    value = `https://github.com/${value}`;
+  }
+
+  try {
+    const parsed = new URL(value);
+    if (['git:', 'http:', 'ssh:'].includes(parsed.protocol)) {
+      parsed.protocol = 'https:';
+    }
+    if (parsed.protocol !== 'https:') return null;
+    parsed.username = '';
+    parsed.password = '';
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function sourceReference(pkg) {
   const repository =
     typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url;
-  return repository || pkg.homepage || null;
+  const repositoryUrl = normalizeHttpsSource(repository);
+  if (repositoryUrl) return { type: 'vcs', url: repositoryUrl };
+  const homepageUrl = normalizeHttpsSource(pkg.homepage);
+  return homepageUrl ? { type: 'website', url: homepageUrl } : null;
+}
+
+function platformPackageSource(component) {
+  const distributionUrl = normalizeHttpsSource(component.resolved);
+  if (distributionUrl) return { type: 'distribution', url: distributionUrl };
+  return {
+    type: 'website',
+    url: `https://www.npmjs.com/package/${encodeURIComponent(component.name)}`,
+  };
 }
 
 function readLicenseMaterials(packagePath) {
@@ -100,11 +141,14 @@ function readLicenseMaterials(packagePath) {
         /^(?:licen[cs]e|copying|notice)(?:$|[._-])/i.test(entry.name),
     )
     .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b));
+    .sort(compareLexically);
 
   return names.map((name) => ({
     name,
-    text: fs.readFileSync(path.join(packagePath, name), 'utf8').trim(),
+    text: fs
+      .readFileSync(path.join(packagePath, name), 'utf8')
+      .replace(/\r\n?/g, '\n')
+      .trim(),
   }));
 }
 
@@ -138,9 +182,25 @@ function buildOutputs() {
 
   const missing = [];
   const records = components.map((component) => {
+    const platformSpecific =
+      (Array.isArray(component.os) && component.os.length > 0) ||
+      (Array.isArray(component.cpu) && component.cpu.length > 0);
+    if (platformSpecific) {
+      const license = declaredLicense({}, component.treeLicense);
+      if (!license) {
+        missing.push(`${component.key}: license metadata missing`);
+        return null;
+      }
+      return {
+        ...component,
+        license,
+        materials: [],
+        source: platformPackageSource(component),
+        purl: packageUrl(component.name, component.version),
+      };
+    }
     const packageJsonPath = path.join(component.packagePath, 'package.json');
     if (!fs.existsSync(packageJsonPath)) {
-      if (component.optional) return null;
       missing.push(`${component.key}: package.json missing`);
       return null;
     }
@@ -154,7 +214,7 @@ function buildOutputs() {
       ...component,
       license,
       materials: readLicenseMaterials(component.packagePath),
-      repository: repositoryUrl(pkg),
+      source: sourceReference(pkg),
       purl: packageUrl(component.name, component.version),
     };
   });
@@ -164,7 +224,7 @@ function buildOutputs() {
 
   const validRecords = records.filter(Boolean);
   const noticeSections = validRecords.map((record) => {
-    const source = record.repository ? `Source: ${record.repository}\n` : '';
+    const source = record.source ? `Source: ${record.source.url}\n` : '';
     const materials =
       record.materials.length > 0
         ? record.materials
@@ -173,7 +233,7 @@ function buildOutputs() {
                 `--- ${material.name} ---\n${material.text || '[empty license file]'}`,
             )
             .join('\n\n')
-        : 'No license file was included in the installed package; see the declared license and source above.';
+        : 'No license file was included in the installed package; see the declared license metadata above.';
     return `${record.key}\nLicense: ${record.license}\n${source}${materials}`;
   });
   const notices = [
@@ -197,11 +257,11 @@ function buildOutputs() {
       version: record.version,
       purl: record.purl,
       licenses: [cyclonedxLicense(record.license)],
-      ...(record.repository
-        ? { externalReferences: [{ type: 'website', url: record.repository }] }
+      ...(record.source
+        ? { externalReferences: [record.source] }
         : {}),
     }))
-    .sort((a, b) => a['bom-ref'].localeCompare(b['bom-ref']));
+    .sort((a, b) => compareLexically(a['bom-ref'], b['bom-ref']));
   const sbom = {
     $schema: 'http://cyclonedx.org/schema/bom-1.5.schema.json',
     bomFormat: 'CycloneDX',
