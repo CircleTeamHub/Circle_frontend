@@ -1,7 +1,7 @@
 WindNote third-party software notices
 
 This file is generated from the installed production dependency tree.
-Components: 1169
+Components: 1170
 
 ================================================================================
 @babel/code-frame@7.10.4
@@ -14870,6 +14870,12 @@ No license file was included in the installed package; see the declared license 
 
 ================================================================================
 expo-audio@55.0.14
+License: MIT
+Source: https://github.com/expo/expo.git
+No license file was included in the installed package; see the declared license metadata above.
+
+================================================================================
+expo-blur@55.0.18
 License: MIT
 Source: https://github.com/expo/expo.git
 No license file was included in the installed package; see the declared license metadata above.

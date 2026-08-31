@@ -10,7 +10,7 @@ test('动态 tab 使用社交动态语义的光圈图标', () => {
 
   assert.match(
     layout,
-    /name: 'discover', icon: 'aperture-outline', key: 'tabs\.discover'/,
+    /name: 'discover',[\s\S]*?icon: 'aperture-outline',[\s\S]*?selectedIcon: 'aperture',[\s\S]*?key: 'tabs\.discover'/,
   );
   assert.doesNotMatch(layout, /play-circle-outline/);
 });
@@ -45,7 +45,7 @@ test('tab bar 通过 Reanimated 动画滑入/滑出，而非瞬间 display 切�
   assert.match(layout, /pointerEvents/);
 });
 
-test('自绘 tab bar：避开系统导航栏，选中态保持胶囊形状而不是方块色带', () => {
+test('自绘 tab bar：避开系统导航栏，选中态只染色 icon，不渲染椭圆', () => {
   const layout = read('app/(tabs)/_layout.tsx');
 
   // bar 是完整胶囊
@@ -62,16 +62,55 @@ test('自绘 tab bar：避开系统导航栏，选中态保持胶囊形状而不
   assert.match(layout, /const TAB_BAR_PAD_V/);
   assert.match(layout, /const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V \* 2/);
   assert.match(layout, /paddingVertical: TAB_BAR_PAD_V/);
-  // 选中药丸：固定高度 + 半圆 radius，避免 Android 上出现矩形紫色块。
+  // 每个 tab 保持固定点击区域，回弹时不会挤压整条 tab bar。
   assert.match(layout, /const TAB_PILL_RADIUS/);
   assert.match(layout, /const TAB_PILL_RADIUS = TAB_PILL_HEIGHT \/ 2/);
   assert.match(layout, /height: TAB_PILL_HEIGHT/);
   assert.match(layout, /borderRadius: TAB_PILL_RADIUS/);
-  // 切换 tab 后，紫色 active 层必须被稳定的 pill 外壳裁剪，不能靠同一个 View 改背景色。
+  // 选中态不能渲染任何胶囊或椭圆背景。
   assert.match(layout, /overflow: 'hidden'/);
-  assert.match(layout, /activePillFill: \{/);
-  assert.match(layout, /\.\.\.StyleSheet\.absoluteFillObject/);
-  assert.match(layout, /focused \? <View style=\{styles\.activePillFill\} \/> : null/);
+  assert.doesNotMatch(layout, /activePillFill/);
   assert.doesNotMatch(layout, /focused && styles\.pillActive/);
   assert.doesNotMatch(layout, /pill:\s*\{[\s\S]*?flex:\s*1/);
+});
+
+test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降级', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+  const pkg = JSON.parse(read('package.json'));
+
+  assert.equal(pkg.dependencies['expo-glass-effect'], '~55.0.8');
+  assert.equal(pkg.dependencies['expo-blur'], '~55.0.9');
+  assert.match(layout, /GlassView/);
+  assert.match(layout, /isGlassEffectAPIAvailable\(\)/);
+  assert.match(layout, /isLiquidGlassAvailable\(\)/);
+  assert.match(layout, /glassEffectStyle=\{\{/);
+  assert.match(layout, /style: hidden \? 'none' : 'regular'/);
+  assert.doesNotMatch(layout, /<GlassView[\s\S]*?isInteractive/);
+  assert.doesNotMatch(layout, /tintColor=\{colors\.primaryLight\}/);
+  assert.match(layout, /colorScheme=\{colorScheme\}/);
+  assert.match(layout, /intensity=\{90\}/);
+  assert.match(layout, /tint="systemMaterial"/);
+  assert.match(layout, /Platform\.OS === 'ios' \? 'transparent' : colors\.surface/);
+  assert.match(
+    layout,
+    /const iconTint = focused \? colors\.brandPurple : colors\.textSecondary/,
+  );
+  assert.match(
+    layout,
+    /const labelTint = focused \? colors\.brandPurple : colors\.textSecondary/,
+  );
+  assert.match(layout, /name=\{focused \? tab\.selectedIcon : tab\.icon\}/);
+  assert.match(layout, /focused && styles\.labelActive/);
+  assert.match(layout, /labelActive: \{\s*fontWeight: '700'/);
+  assert.doesNotMatch(layout, /activePillFill/);
+  assert.match(layout, /onPressIn=\{\(\) => \{/);
+  assert.match(layout, /void Haptics\.selectionAsync\(\)/);
+  assert.match(layout, /pressScale\.value = withSpring\(0\.92/);
+  assert.match(layout, /pressScale\.value = withSpring\(1/);
+
+  // GlassView 的父级 opacity 不能参与淡出，否则 iOS 26 会丢失折射层。
+  assert.match(
+    layout,
+    /opacity: Platform\.OS === 'ios' \? 1 : 1 - hiddenProgress\.value/,
+  );
 });

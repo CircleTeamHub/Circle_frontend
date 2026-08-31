@@ -9495,6 +9495,26 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:npm/expo-blur@55.0.18",
+      "name": "expo-blur",
+      "version": "55.0.18",
+      "purl": "pkg:npm/expo-blur@55.0.18",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/expo/expo.git"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:npm/expo-build-properties@55.0.16",
       "name": "expo-build-properties",
       "version": "55.0.16",
