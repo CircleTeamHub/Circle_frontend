@@ -18,6 +18,10 @@ const MIME = {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Chrome 冷启动在共享 runner 上偶尔要十几秒。原来的 10s 预算会把一次慢启动
+// 判成失败，红在与改动完全无关的 PR 上。
+const CHROME_STARTUP_TIMEOUT_MS = 30_000;
+
 function findChrome() {
   const candidates = [
     process.env.CHROME_PATH,
@@ -156,16 +160,25 @@ class CdpClient {
   }
 }
 
-async function waitForDevTools(userDataDir) {
+async function waitForDevTools(userDataDir, child, readStderr) {
   const activePort = path.join(userDataDir, 'DevToolsActivePort');
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  const deadline = Date.now() + CHROME_STARTUP_TIMEOUT_MS;
+  while (Date.now() < deadline) {
     if (fs.existsSync(activePort)) {
       const [port] = fs.readFileSync(activePort, 'utf8').trim().split('\n');
       return Number(port);
     }
+    // 启动失败时 Chrome 会立刻退出；继续空轮询只会把真错误拖成一句超时。
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(
+        `Chrome exited before DevTools was ready (code=${child.exitCode}, signal=${child.signalCode})\n${readStderr()}`,
+      );
+    }
     await sleep(100);
   }
-  throw new Error('Chrome DevTools did not start');
+  throw new Error(
+    `Chrome DevTools did not start within ${CHROME_STARTUP_TIMEOUT_MS}ms\n${readStderr()}`,
+  );
 }
 
 async function stopProcess(child, timeoutMs = 5_000) {
@@ -229,12 +242,31 @@ async function main() {
       `--user-data-dir=${userDataDir}`,
       'about:blank',
     ],
-    { stdio: 'ignore' },
+    { stdio: ['ignore', 'ignore', 'pipe'] },
   );
+  // Chrome 的 stderr 是启动失败时唯一的线索，丢掉它等于让 CI 只能靠重跑碰运气。
+  // 只留尾部若干 KB：既够定位原因，也不会把日志刷爆。
+  let chromeStderr = '';
+  chrome.stderr.setEncoding('utf8');
+  chrome.stderr.on('data', (chunk) => {
+    chromeStderr = `${chromeStderr}${chunk}`.slice(-8_000);
+  });
+  // spawn 自身失败（EACCES/ENOEXEC）走 'error' 事件；没有监听器时 Node 直接
+  // 抛未捕获异常，栈里看不出跟 Chrome 有关。
+  let spawnError = null;
+  chrome.on('error', (error) => {
+    spawnError = error;
+  });
+  const readStderr = () => {
+    const parts = [];
+    if (spawnError) parts.push(`Chrome spawn error: ${spawnError.message}`);
+    parts.push(chromeStderr.trim() ? `Chrome stderr:\n${chromeStderr.trim()}` : 'Chrome stderr: (empty)');
+    return parts.join('\n');
+  };
   let cdp;
 
   try {
-    const port = await waitForDevTools(userDataDir);
+    const port = await waitForDevTools(userDataDir, chrome, readStderr);
     const page = await fetch(`http://127.0.0.1:${port}/json/new`, {
       method: 'PUT',
     }).then((response) => response.json());

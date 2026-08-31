@@ -261,3 +261,23 @@ test('CI launches the client-only production export in a real browser', () => {
   );
   assert.ok(stopAt > -1 && removeAt > stopAt, 'Chrome 必须完全退出后才能删除 profile');
 });
+
+test('Chrome 启动失败必须带着浏览器自己的输出立刻报错，而不是静默超时', () => {
+  const smoke = read('.github/scripts/smoke-web-export.js');
+
+  // 曾经 stdio 全丢弃 + 固定 10s 轮询：Chrome 在 runner 上没起来时，CI 只会
+  // 留下一句「Chrome DevTools did not start」，看不到任何浏览器侧原因，
+  // 于是每次都只能靠重跑碰运气。诊断信息必须留在日志里。
+  assert.doesNotMatch(smoke, /stdio: 'ignore'/);
+  assert.match(smoke, /stdio: \['ignore', 'ignore', 'pipe'\]/);
+  assert.match(smoke, /chrome\.stderr\.on\('data'/);
+  assert.match(smoke, /readStderr/);
+
+  // spawn 自身失败（EACCES/ENOEXEC）会触发 'error' 事件；没有监听器时
+  // Node 直接抛未捕获异常，错误信息与真正原因无关。
+  assert.match(smoke, /chrome\.on\('error'/);
+
+  // 进程已经退出还继续轮询，只会把真错误拖成一句超时。
+  assert.match(smoke, /child\.exitCode !== null/);
+  assert.match(smoke, /CHROME_STARTUP_TIMEOUT_MS/);
+});
