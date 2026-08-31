@@ -35,7 +35,6 @@ import {
   isGlassEffectAPIAvailable,
   isLiquidGlassAvailable,
 } from 'expo-glass-effect';
-import * as Haptics from 'expo-haptics';
 
 type TabKey = {
   name: string;
@@ -190,17 +189,14 @@ const TabSlot = memo(function TabSlot({
   const pressStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pressScale.value }],
   }));
-  const iconTint = focused ? colors.brandPurple : colors.textSecondary;
-  const labelTint = focused ? colors.brandPurple : colors.textSecondary;
+  const iconTint = focused ? colors.tabBarActive : colors.textSecondary;
+  const labelTint = focused ? colors.tabBarActive : colors.textSecondary;
 
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
       onPressIn={() => {
-        if (Platform.OS === 'ios') {
-          void Haptics.selectionAsync();
-        }
         pressScale.value = withSpring(0.92, {
           damping: 18,
           stiffness: 420,
@@ -474,7 +470,9 @@ export default function TabLayout() {
       height: 11,
       borderRadius: 999,
       backgroundColor: colors.error,
-      borderWidth: 2,
+      // 这圈描边原本是为了融进 colors.surface 的 bar 底色；iOS 改成玻璃后
+      // 底下没有固定色可融，留着只会变成浮在材质上的一圈实心光晕。
+      borderWidth: Platform.OS === 'ios' ? 0 : 2,
       borderColor: colors.surface,
     },
     label: {

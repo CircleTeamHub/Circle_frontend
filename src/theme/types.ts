@@ -12,6 +12,12 @@ export interface ThemeColors {
   primaryDeep: string;
   /** 品牌紫：会员卡渐变（Gradients.memberCard）的核心色，白字配它已在会员卡验证 */
   brandPurple: string;
+  /**
+   * 底部 tab 选中态的前景色（icon + 文字）。单独成 token 是因为它必须在
+   * 各自主题的 bar 底色上读得清：暗色直接用 brandPurple 只有 3.3~3.8:1，
+   * 达不到 9px 文字要求的 4.5:1，反而比纯白的未选中项更糊。
+   */
+  tabBarActive: string;
   text: string;
   textSecondary: string;
   white: string;

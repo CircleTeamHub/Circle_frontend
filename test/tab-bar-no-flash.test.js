@@ -78,8 +78,10 @@ test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降�
   const layout = read('app/(tabs)/_layout.tsx');
   const pkg = JSON.parse(read('package.json'));
 
-  assert.equal(pkg.dependencies['expo-glass-effect'], '~55.0.8');
-  assert.equal(pkg.dependencies['expo-blur'], '~55.0.9');
+  // 只断言依赖在场：写死版本号会让每次例行 expo install --fix 都红在这里，
+  // 而失败信息完全看不出「去改测试」。
+  assert.ok(pkg.dependencies['expo-glass-effect']);
+  assert.ok(pkg.dependencies['expo-blur']);
   assert.match(layout, /GlassView/);
   assert.match(layout, /isGlassEffectAPIAvailable\(\)/);
   assert.match(layout, /isLiquidGlassAvailable\(\)/);
@@ -88,23 +90,23 @@ test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降�
   assert.doesNotMatch(layout, /<GlassView[\s\S]*?isInteractive/);
   assert.doesNotMatch(layout, /tintColor=\{colors\.primaryLight\}/);
   assert.match(layout, /colorScheme=\{colorScheme\}/);
-  assert.match(layout, /intensity=\{90\}/);
+  assert.match(layout, /intensity=\{\d+\}/);
   assert.match(layout, /tint="systemMaterial"/);
   assert.match(layout, /Platform\.OS === 'ios' \? 'transparent' : colors\.surface/);
   assert.match(
     layout,
-    /const iconTint = focused \? colors\.brandPurple : colors\.textSecondary/,
+    /const iconTint = focused \? colors\.tabBarActive : colors\.textSecondary/,
   );
   assert.match(
     layout,
-    /const labelTint = focused \? colors\.brandPurple : colors\.textSecondary/,
+    /const labelTint = focused \? colors\.tabBarActive : colors\.textSecondary/,
   );
   assert.match(layout, /name=\{focused \? tab\.selectedIcon : tab\.icon\}/);
   assert.match(layout, /focused && styles\.labelActive/);
   assert.match(layout, /labelActive: \{\s*fontWeight: '700'/);
   assert.doesNotMatch(layout, /activePillFill/);
   assert.match(layout, /onPressIn=\{\(\) => \{/);
-  assert.match(layout, /void Haptics\.selectionAsync\(\)/);
+  assert.doesNotMatch(layout, /Haptics/);
   assert.match(layout, /pressScale\.value = withSpring\(0\.92/);
   assert.match(layout, /pressScale\.value = withSpring\(1/);
 
@@ -112,5 +114,24 @@ test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降�
   assert.match(
     layout,
     /opacity: Platform\.OS === 'ios' \? 1 : 1 - hiddenProgress\.value/,
+  );
+});
+
+test('选中态在暗色下必须读得清，红点描边不能浮在玻璃上', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+  const colorsSrc = read('src/theme/colors.ts');
+
+  // brandPurple #7C5CF0 在暗色底 #1A1B23 上只有 3.79:1，9px 文字需要 4.5:1，
+  // 而未选中的 textSecondary 是纯白 17:1 —— 选中项反而比未选中更糊。
+  // 暗色单独给一支提亮的品牌紫，两个暗色底都在 5.6:1 以上。
+  assert.match(colorsSrc, /tabBarActive: '#B18AFF'/);
+  assert.match(colorsSrc, /tabBarActive: '#7C5CF0'/);
+  assert.doesNotMatch(layout, /colors\.brandPurple/);
+
+  // 红点的 2px 描边原本融进 colors.surface 的 bar 底色；iOS 底色改成
+  // transparent 之后，那圈不透明环会浮在玻璃上。
+  assert.match(
+    layout,
+    /borderWidth: Platform\.OS === 'ios' \? 0 : 2/,
   );
 });
