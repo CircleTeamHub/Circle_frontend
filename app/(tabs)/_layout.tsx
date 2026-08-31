@@ -102,6 +102,7 @@ const TAB_BAR_EASING = Easing.out(Easing.cubic);
 type TabBarStyles = {
   tabBarWrapper: ViewStyle;
   tabBar: ViewStyle;
+  tabBarBlurLayer: ViewStyle;
   tabItem: ViewStyle;
   pill: ViewStyle;
   iconWrap: ViewStyle;
@@ -149,13 +150,14 @@ function TabBarSurface({
 
   if (Platform.OS === 'ios') {
     return (
-      <BlurView
-        intensity={90}
-        tint="systemMaterial"
-        style={styles.tabBar}
-      >
+      <View style={styles.tabBar}>
+        <BlurView
+          intensity={90}
+          tint="systemMaterial"
+          style={styles.tabBarBlurLayer}
+        />
         {children}
-      </BlurView>
+      </View>
     );
   }
 
@@ -441,6 +443,14 @@ export default function TabLayout() {
       shadowOpacity: 0.08,
       shadowRadius: 24,
       elevation: 10,
+    },
+    // UIVisualEffectView 的圆角只有在 clipsToBounds 打开时才生效，而 tabBar
+    // 本身刻意不裁剪（要留完整投影）。所以模糊层自己铺一张绝对定位背景、
+    // 自己裁成胶囊；否则 iOS 26 以下整条 bar 会渲染成硬边矩形。
+    tabBarBlurLayer: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: TAB_BAR_RADIUS,
+      overflow: 'hidden',
     },
     // 每格等宽：flex:1 平分整条 bar，点击动效只作用于当前 tab。
     tabItem: {

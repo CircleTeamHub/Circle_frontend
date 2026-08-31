@@ -134,4 +134,17 @@ test('选中态在暗色下必须读得清，红点描边不能浮在玻璃上',
     layout,
     /borderWidth: Platform\.OS === 'ios' \? 0 : 2/,
   );
+
+  // iOS 26 以下走 BlurView 降级：UIVisualEffectView 的圆角只有在
+  // clipsToBounds 打开时才生效，而 styles.tabBar 刻意不裁剪（要留完整投影）。
+  // 模糊层必须自己铺一张带 overflow 的绝对定位背景，否则整条 bar 会渲染成
+  // 硬边矩形——模拟器上实测材质从外接矩形边缘 x=96 就开始，而不是胶囊圆弧的 x=134。
+  assert.match(
+    layout,
+    /tabBarBlurLayer: \{\s*\.\.\.StyleSheet\.absoluteFillObject,\s*borderRadius: TAB_BAR_RADIUS,\s*overflow: 'hidden',/,
+  );
+  // [^>]* 限定在 BlurView 标签内匹配：跨标签的 [\s\S]*? 会一路吃到后面
+  // Android/web 分支的 <View style={styles.tabBar}>，把断言变成永远成立。
+  assert.match(layout, /<BlurView[^>]*style=\{styles\.tabBarBlurLayer\}/);
+  assert.doesNotMatch(layout, /<BlurView[^>]*style=\{styles\.tabBar\}/);
 });
