@@ -10,6 +10,10 @@ export const darkColors: ThemeColors = {
   primaryDeep: '#4F46E5',
   // 会员卡渐变 ['#5B4BE6','#7C5CF0','#A86BF0'] 的核心色，app 的品牌紫
   brandPurple: '#7C5CF0',
+  // tab 选中态：暗色下 brandPurple 在 #1A1B23 上只有 3.79:1、在 surface
+  // #252630 上 3.32:1，都低于 9px 文字要求的 4.5:1。这里提亮到品牌紫同色系
+  // 的 #B18AFF —— 两个底色上分别是 6.49:1 / 5.68:1。
+  tabBarActive: '#B18AFF',
   text: '#FFFFFF',
   // 暗色下次要文字一律纯白 —— 任何灰阶在 #1A1B23 上都糊。层级靠字号/字重区分,不靠明度。
   textSecondary: '#FFFFFF',
@@ -56,6 +60,8 @@ export const lightColors: ThemeColors = {
   primaryDeep: '#4F46E5',
   // 会员卡渐变 ['#5B4BE6','#7C5CF0','#A86BF0'] 的核心色，app 的品牌紫
   brandPurple: '#7C5CF0',
+  // 浅色底（#FFFFFF）上 brandPurple 本身就有 4.52:1，直接沿用品牌紫。
+  tabBarActive: '#7C5CF0',
   text: '#1A1B23',
   textSecondary: '#6B7280',
   white: '#FFFFFF',

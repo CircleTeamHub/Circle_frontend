@@ -15,8 +15,10 @@ import { useDesktopSplitLayout } from '@/hooks/use-desktop-split-layout';
 import { useSplitPaneStore } from '@/stores/splitPaneStore';
 import Animated, {
   Easing,
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
@@ -27,18 +29,45 @@ import { useTheme } from '@/theme';
 import type { ThemeColors } from '@/theme/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { BlurView } from 'expo-blur';
+import {
+  GlassView,
+  isGlassEffectAPIAvailable,
+  isLiquidGlassAvailable,
+} from 'expo-glass-effect';
 
 type TabKey = {
   name: string;
   icon: keyof typeof Ionicons.glyphMap;
+  selectedIcon: keyof typeof Ionicons.glyphMap;
   key: string;
 };
 
 const TAB_KEYS: TabKey[] = [
-  { name: 'messages', icon: 'chatbubble-outline', key: 'tabs.messages' },
-  { name: 'contacts', icon: 'people-outline', key: 'tabs.contacts' },
-  { name: 'discover', icon: 'aperture-outline', key: 'tabs.discover' },
-  { name: 'profile', icon: 'person-outline', key: 'tabs.profile' },
+  {
+    name: 'messages',
+    icon: 'chatbubble-outline',
+    selectedIcon: 'chatbubble',
+    key: 'tabs.messages',
+  },
+  {
+    name: 'contacts',
+    icon: 'people-outline',
+    selectedIcon: 'people',
+    key: 'tabs.contacts',
+  },
+  {
+    name: 'discover',
+    icon: 'aperture-outline',
+    selectedIcon: 'aperture',
+    key: 'tabs.discover',
+  },
+  {
+    name: 'profile',
+    icon: 'person-outline',
+    selectedIcon: 'person',
+    key: 'tabs.profile',
+  },
 ];
 
 const TAB_BY_NAME: Record<string, TabKey> = Object.fromEntries(
@@ -60,11 +89,11 @@ const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2; // 整条 bar 是完整胶囊，两�
 const TAB_BAR_MARGIN_H = 32; // 左右外边距：再缩一圈后留白更多，bar 更窄
 const TAB_BAR_MARGIN_B = 2; // 距安全区底部（浮动）
 const TAB_BAR_SAFE_AREA_OVERLAP = 14; // 向下吃掉部分 iOS home indicator 安全区
-const TAB_BAR_PAD_H = 4; // 内边距：首尾药丸不贴 bar 内沿
-const TAB_BAR_PAD_V = 4; // 上下内边距：药丸高 = bar 高 - 8
+const TAB_BAR_PAD_H = 4; // 内边距：首尾 tab 内容不贴 bar 内沿
+const TAB_BAR_PAD_V = 4; // 上下内边距：tab 内容高 = bar 高 - 8
 const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V * 2;
-const TAB_PILL_RADIUS = TAB_PILL_HEIGHT / 2; // 选中药丸：和 tab bar 一样是完整胶囊形状
-const TAB_PILL_GAP = 2; // 每格药丸左右留白，互不相贴
+const TAB_PILL_RADIUS = TAB_PILL_HEIGHT / 2; // 只裁剪单个 tab 的按压反馈，不绘制背景
+const TAB_PILL_GAP = 2; // 每格 tab 左右留白，互不相贴
 const TAB_ICON_SIZE = 18;
 // 滑入/滑出：偏短 + ease-out，返回主页时弹得干脆。
 const TAB_BAR_ANIM_DURATION = 200;
@@ -73,13 +102,67 @@ const TAB_BAR_EASING = Easing.out(Easing.cubic);
 type TabBarStyles = {
   tabBarWrapper: ViewStyle;
   tabBar: ViewStyle;
+  tabBarBlurLayer: ViewStyle;
   tabItem: ViewStyle;
   pill: ViewStyle;
-  activePillFill: ViewStyle;
   iconWrap: ViewStyle;
   badge: ViewStyle;
   label: TextStyle;
+  labelActive: TextStyle;
 };
+
+interface TabBarSurfaceProps {
+  children: React.ReactNode;
+  colorScheme: 'light' | 'dark';
+  hidden: boolean;
+  styles: TabBarStyles;
+}
+
+function TabBarSurface({
+  children,
+  colorScheme,
+  hidden,
+  styles,
+}: TabBarSurfaceProps) {
+  // GlassView 在旧系统上只是普通 View，显式使用 BlurView 才能让 iOS 18/17
+  // 也保留 Squady 式的半透明导航材质。API 可用性检查同时规避早期 iOS 26
+  // beta 上实例化 GlassView 会崩溃的问题。
+  const canRenderLiquidGlass =
+    Platform.OS === 'ios' &&
+    isGlassEffectAPIAvailable() &&
+    isLiquidGlassAvailable();
+
+  if (canRenderLiquidGlass) {
+    return (
+      <GlassView
+        colorScheme={colorScheme}
+        glassEffectStyle={{
+          style: hidden ? 'none' : 'regular',
+          animate: true,
+          animationDuration: TAB_BAR_ANIM_DURATION / 1000,
+        }}
+        style={styles.tabBar}
+      >
+        {children}
+      </GlassView>
+    );
+  }
+
+  if (Platform.OS === 'ios') {
+    return (
+      <View style={styles.tabBar}>
+        <BlurView
+          intensity={90}
+          tint="systemMaterial"
+          style={styles.tabBarBlurLayer}
+        />
+        {children}
+      </View>
+    );
+  }
+
+  return <View style={styles.tabBar}>{children}</View>;
+}
 
 interface TabSlotProps {
   tab: TabKey;
@@ -104,12 +187,33 @@ const TabSlot = memo(function TabSlot({
   accessibilityLabel,
   testID,
 }: TabSlotProps) {
-  const tint = focused ? colors.white : colors.textSecondary;
+  const pressScale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressScale.value }],
+  }));
+  const iconTint = focused ? colors.tabBarActive : colors.textSecondary;
+  const labelTint = focused ? colors.tabBarActive : colors.textSecondary;
 
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
+      onPressIn={() => {
+        pressScale.value = withSpring(0.92, {
+          damping: 18,
+          stiffness: 420,
+          mass: 0.45,
+          reduceMotion: ReduceMotion.System,
+        });
+      }}
+      onPressOut={() => {
+        pressScale.value = withSpring(1, {
+          damping: 13,
+          stiffness: 340,
+          mass: 0.5,
+          reduceMotion: ReduceMotion.System,
+        });
+      }}
       style={styles.tabItem}
       accessibilityRole="button"
       accessibilityState={{ selected: focused }}
@@ -117,30 +221,34 @@ const TabSlot = memo(function TabSlot({
       hitSlop={6}
     >
       {({ pressed }) => (
-        <View
+        <Animated.View
           style={[
             styles.pill,
-            pressed && { opacity: 0.7 },
+            pressStyle,
+            pressed && Platform.OS !== 'ios' && { opacity: 0.7 },
           ]}
         >
-          {focused ? <View style={styles.activePillFill} /> : null}
           <View style={styles.iconWrap}>
-            <Ionicons name={tab.icon} size={TAB_ICON_SIZE} color={tint} />
+            <Ionicons
+              name={focused ? tab.selectedIcon : tab.icon}
+              size={focused ? TAB_ICON_SIZE + 1 : TAB_ICON_SIZE}
+              color={iconTint}
+            />
             {showBadgeDot ? (
-              // 红点描边：未选中时混入 bar(surface)，选中时混入紫色药丸(primary)，
-              // 否则会在彩色背景上露出一圈异色描边。
-              <View
-                style={[
-                  styles.badge,
-                  focused && { borderColor: colors.primary },
-                ]}
-              />
+              <View style={styles.badge} />
             ) : null}
           </View>
-          <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.label,
+              focused && styles.labelActive,
+              { color: labelTint },
+            ]}
+            numberOfLines={1}
+          >
             {label}
           </Text>
-        </View>
+        </Animated.View>
       )}
     </Pressable>
   );
@@ -148,17 +256,19 @@ const TabSlot = memo(function TabSlot({
 
 // 浮动 tab bar：Reanimated translateY+opacity 平滑滑入/滑出（取代 display 瞬切，
 // 消除「返回 tab 根页时浮动条闪一下」）。内部整行自绘，每格 flex:1，
-// 选中药丸填满本格 → 不溢出、无缝隙、对齐精确。
+// 选中态只改变 icon/文字，不绘制椭圆背景。
 function CustomTabBar({
   state,
   navigation,
   descriptors,
   hidden,
+  colorScheme,
   colors,
   badgeMap,
   styles,
 }: BottomTabBarProps & {
   hidden: boolean;
+  colorScheme: 'light' | 'dark';
   colors: ThemeColors;
   badgeMap: Record<string, boolean>;
   styles: TabBarStyles;
@@ -180,7 +290,9 @@ function CustomTabBar({
     transform: [
       { translateY: hiddenProgress.value * TAB_BAR_HIDDEN_OFFSET },
     ],
-    opacity: 1 - hiddenProgress.value,
+    // GlassView 的父级 opacity < 1 会让系统折射层停止渲染。iOS 仅做位移，
+    // 其它平台保留原有淡出；移出屏幕后 pointerEvents 已禁用。
+    opacity: Platform.OS === 'ios' ? 1 : 1 - hiddenProgress.value,
   }));
 
   return (
@@ -188,7 +300,11 @@ function CustomTabBar({
       pointerEvents={hidden ? 'none' : 'box-none'}
       style={[styles.tabBarWrapper, animatedStyle]}
     >
-      <View style={styles.tabBar}>
+      <TabBarSurface
+        colorScheme={colorScheme}
+        hidden={hidden}
+        styles={styles}
+      >
         {state.routes.map((route, index) => {
           const tab = TAB_BY_NAME[route.name];
           if (!tab) {
@@ -238,13 +354,13 @@ function CustomTabBar({
             />
           );
         })}
-      </View>
+      </TabBarSurface>
     </Animated.View>
   );
 }
 
 export default function TabLayout() {
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const segments = useSegments();
@@ -300,28 +416,43 @@ export default function TabLayout() {
     tabBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      // 居中模式下 wrapper 不再限宽，药丸给固定宽（与左栏模式同宽，只
+      // 居中模式下 wrapper 不再限宽，tab 内容给固定宽（与左栏模式同宽，只
       // 平移不变形）。
       ...(isSplitLayout && !pinTabBarLeft
         ? { width: listPaneWidth - TAB_BAR_MARGIN_H * 2 }
         : null),
       height: TAB_BAR_HEIGHT,
       borderRadius: TAB_BAR_RADIUS,
-      backgroundColor: colors.surface,
+      // iOS 的底色必须透明，才能让 GlassView / BlurView 采样下方内容；
+      // Android/Web 仍使用原来的不透明 surface，避免低端设备额外合成开销。
+      backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.surface,
       borderWidth: 1,
-      borderColor: colors.surfaceBorder,
+      borderColor:
+        Platform.OS === 'ios'
+          ? resolvedMode === 'dark'
+            ? 'rgba(255, 255, 255, 0.34)'
+            : 'rgba(0, 0, 0, 0.12)'
+          : colors.surfaceBorder,
       marginHorizontal: TAB_BAR_MARGIN_H,
       marginBottom: TAB_BAR_MARGIN_B + Math.max(insets.bottom - TAB_BAR_SAFE_AREA_OVERLAP, 0),
       paddingHorizontal: TAB_BAR_PAD_H,
       paddingVertical: TAB_BAR_PAD_V,
-      // 不裁剪：阴影完整显示，且药丸本就在内部不会溢出。
+      // 不裁剪：阴影完整显示，且 tab 内容本就在内部不会溢出。
       shadowColor: colors.black,
       shadowOffset: { width: 0, height: 10 },
       shadowOpacity: 0.08,
       shadowRadius: 24,
       elevation: 10,
     },
-    // 每格等宽：flex:1 平分整条 bar，选中药丸填满本格 → 不溢出、不留缝。
+    // UIVisualEffectView 的圆角只有在 clipsToBounds 打开时才生效，而 tabBar
+    // 本身刻意不裁剪（要留完整投影）。所以模糊层自己铺一张绝对定位背景、
+    // 自己裁成胶囊；否则 iOS 26 以下整条 bar 会渲染成硬边矩形。
+    tabBarBlurLayer: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: TAB_BAR_RADIUS,
+      overflow: 'hidden',
+    },
+    // 每格等宽：flex:1 平分整条 bar，点击动效只作用于当前 tab。
     tabItem: {
       flex: 1,
       justifyContent: 'center',
@@ -336,11 +467,6 @@ export default function TabLayout() {
       overflow: 'hidden',
       gap: 2,
     },
-    activePillFill: {
-      ...StyleSheet.absoluteFillObject,
-      borderRadius: TAB_PILL_RADIUS,
-      backgroundColor: colors.primary,
-    },
     iconWrap: {
       position: 'relative',
       alignItems: 'center',
@@ -354,7 +480,9 @@ export default function TabLayout() {
       height: 11,
       borderRadius: 999,
       backgroundColor: colors.error,
-      borderWidth: 2,
+      // 这圈描边原本是为了融进 colors.surface 的 bar 底色；iOS 改成玻璃后
+      // 底下没有固定色可融，留着只会变成浮在材质上的一圈实心光晕。
+      borderWidth: Platform.OS === 'ios' ? 0 : 2,
       borderColor: colors.surface,
     },
     label: {
@@ -362,7 +490,10 @@ export default function TabLayout() {
       fontWeight: '500',
       letterSpacing: 0.2,
     },
-  }), [colors, insets.bottom, isSplitLayout, listPaneWidth, pinTabBarLeft]);
+    labelActive: {
+      fontWeight: '700',
+    },
+  }), [colors, insets.bottom, isSplitLayout, listPaneWidth, pinTabBarLeft, resolvedMode]);
 
   // 动态 tab 只统计它自己辖下的三样：朋友圈铃铛 + 圈子铃铛 + 报名管理。
   // 曾经读的 discoverUnread 是「好友申请 + 朋友圈 + 圈子」的并集（互动消息
@@ -388,6 +519,7 @@ export default function TabLayout() {
         <CustomTabBar
           {...props}
           hidden={hideTabBar}
+          colorScheme={resolvedMode}
           colors={colors}
           badgeMap={badgeMap}
           styles={styles}
