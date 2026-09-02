@@ -75,6 +75,13 @@ function zustandStub() {
 }
 
 function loadSendStack({ onSend }) {
+  const outboxEntries = [];
+  const localDbStub = {
+    ...__localDbStub,
+    outboxUpsert: async (entry) => {
+      outboxEntries.push(entry);
+    },
+  };
   const store = runModule('src/chat-core/store.ts', (request) => {
     if (request === 'zustand') return zustandStub();
     // protocol.ts 零依赖:跑真的,别桩 —— SERVER_COMPENSATED_TYPES 是生产常量。
@@ -114,7 +121,7 @@ function loadSendStack({ onSend }) {
     if (request === '@/storage') {
       return { storage: { set: () => {}, getString: () => undefined } };
     }
-    if (request === './local-db') return __localDbStub;
+    if (request === './local-db') return localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
 
@@ -153,11 +160,11 @@ function loadSendStack({ onSend }) {
       return runModule('src/chat-core/protocol.ts', () => {
         throw new Error('protocol should have no runtime deps');
       });
-    if (request === './local-db') return __localDbStub;
+    if (request === './local-db') return localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
 
-  return { client, store };
+  return { client, store, outboxEntries };
 }
 
 test('a server echo that beats the ack is not overwritten by the synthetic confirmation', async () => {
@@ -244,6 +251,36 @@ test('without an echo the ack still confirms the optimistic message', async () =
   assert.equal(timeline[0].id, 'srv-2');
   assert.equal(timeline[0].height, 4);
   assert.equal(result.id, 'srv-2');
+});
+
+test('send captures the current server height for a later failure position', async () => {
+  const { client, store, outboxEntries } = loadSendStack({
+    onSend: async () => {
+      throw new Error('offline');
+    },
+  });
+  const state = store.useChatStore.getState();
+  state.ingestMessages('c1', [
+    {
+      id: 'srv-7',
+      conversationId: 'c1',
+      height: 7,
+      type: 'text',
+      content: { text: 'before' },
+      sender: { id: 'peer' },
+      replyToId: null,
+      d: null,
+      createdAt: '2026-08-05T12:00:00.000Z',
+    },
+  ]);
+
+  await assert.rejects(
+    client.sendTextMessage({ conversationId: 'c1', text: 'will fail' }),
+    /offline/,
+  );
+
+  assert.equal(outboxEntries.length, 1);
+  assert.equal(outboxEntries[0].failedAfterHeight, 7);
 });
 
 test('video send keeps local preview off the wire while retaining playback metadata', async () => {

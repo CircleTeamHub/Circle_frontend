@@ -184,6 +184,9 @@ export async function sendWithOptimism(
   assertLocalCanSendMessage();
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
+  const failedAfterHeight = (
+    store.messagesByConversation[options.conversationId] ?? []
+  ).reduce((latest, message) => Math.max(latest, message.height), 0);
   const optimistic: StoredChatMessage = {
     id: `local:${d}`,
     conversationId: options.conversationId,
@@ -196,6 +199,7 @@ export async function sendWithOptimism(
     replyToId: options.replyToId ?? null,
     d,
     createdAt: new Date().toISOString(),
+    failedAfterHeight,
   };
   store.ingestMessages(options.conversationId, [optimistic]);
   store.applyIncomingMessage(optimistic);
@@ -226,6 +230,7 @@ export async function sendWithOptimism(
         : {}),
     },
     createdAt: optimistic.createdAt,
+    failedAfterHeight,
   }).catch(() => undefined);
   try {
     const ack = await sendChatMessage({
@@ -493,6 +498,10 @@ export function startMediaSend(options: {
   retry: (deliveryId: string) => Promise<void>;
 }): string {
   const d = createDeliveryId();
+  const store = useChatStore.getState();
+  const failedAfterHeight = (
+    store.messagesByConversation[options.conversationId] ?? []
+  ).reduce((latest, message) => Math.max(latest, message.height), 0);
   const optimistic: StoredChatMessage = {
     id: `local:${d}`,
     conversationId: options.conversationId,
@@ -503,8 +512,8 @@ export function startMediaSend(options: {
     replyToId: null,
     d,
     createdAt: new Date().toISOString(),
+    failedAfterHeight,
   };
-  const store = useChatStore.getState();
   store.ingestMessages(options.conversationId, [optimistic]);
   store.applyIncomingMessage(optimistic);
   mediaRetries.set(d, () => options.retry(d));
@@ -572,6 +581,15 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
     (item) => item.d === d && item.conversationId === conversationId,
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
+  const retrying = (
+    useChatStore.getState().messagesByConversation[conversationId] ?? []
+  ).find((message) => message.d === d) as StoredChatMessage | undefined;
+  const retryAnchor = retrying?.failedAfterHeight;
+  // 重启恢复时也必须保留这次重发的位置；否则再次失败后会重新跑到最底部。
+  await outboxUpsert({
+    ...entry,
+    ...(Number.isFinite(retryAnchor) ? { failedAfterHeight: retryAnchor } : {}),
+  });
   const ack = await sendChatMessage(entry.payload);
   void outboxDelete(d);
   // 原来只出队就完事了。可首次发送其实**已经在服务端落库**、只是 ack 和回声

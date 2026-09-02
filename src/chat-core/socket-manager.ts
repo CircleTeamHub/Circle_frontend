@@ -446,6 +446,9 @@ async function hydrateFromLocalDb(
         replyToId: entry.payload.replyToId ?? null,
         d: entry.d,
         createdAt: entry.createdAt,
+        ...(Number.isFinite(entry.failedAfterHeight)
+          ? { failedAfterHeight: entry.failedAfterHeight }
+          : {}),
       };
       useChatStore
         .getState()

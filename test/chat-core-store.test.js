@@ -183,6 +183,31 @@ test('optimistic (height=0) messages sort after confirmed ones', () => {
   assert.deepEqual(Array.from(messages, (m) => m.id), ['srv-5', 'local:d2']);
 });
 
+test('failed optimistic message stays at the server height where it was sent', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [
+    msg({ id: 'srv-5', height: 5 }),
+    msg({
+      id: 'local:d2',
+      height: 0,
+      d: 'd2',
+      failedAfterHeight: 5,
+      createdAt: '2026-08-05T12:01:00.000Z',
+    }),
+  ]);
+  // ack 超时之前可能已经收到后续消息；失败位置必须以点击发送那一刻为准。
+  store.ingestMessages('conv-1', [msg({ id: 'srv-6', height: 6 })]);
+  store.markMessageFailed('conv-1', 'd2');
+
+  const messages = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.deepEqual(Array.from(messages, (m) => m.id), [
+    'srv-5',
+    'local:d2',
+    'srv-6',
+  ]);
+});
+
 test('caps per-conversation messages at 200 keeping the newest', () => {
   const { useChatStore, MESSAGES_CAP } = loadChatStore();
   const store = useChatStore.getState();

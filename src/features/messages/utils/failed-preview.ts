@@ -22,7 +22,7 @@ function finiteOrZero(value: unknown): number {
  * 前缀撤不掉。用户手机时间不准是常态,不是边缘情况。
  *
  * 所以改用 height:它是服务端在 advisory lock 下发的单调号,天然与时钟无关。
- * `markMessageFailed` 标红时快照下当时会话里的最大 height(failedAfterHeight),
+ * 点击发送时快照下当时会话里的最大 height(failedAfterHeight),
  * 之后只要出现更大的 height,就说明这次失败之后确实又有消息落库了。
  * 拉历史带回来的旧消息 height 更小,不会误清前缀。
  */
@@ -37,8 +37,8 @@ export function hasFailedLatestMessage(
   }
   for (const message of messages) {
     if (!message.failed) continue;
-    // 缺 failedAfterHeight 只会发生在本函数之外构造的对象上(标红是唯一写入
-    // 点,且失败气泡 height=0 从不落本地库、不存在历史脏数据):按 0 处理 ——
+    // 缺 failedAfterHeight 只会发生在旧版 outbox 或本函数之外构造的对象上:
+    // 按 0 处理 ——
     // 会话里一旦有任何已确认消息就不提示,宁可漏提示不误报。
     if (finiteOrZero(message.failedAfterHeight) >= maxHeight) return true;
   }

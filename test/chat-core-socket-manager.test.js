@@ -1038,6 +1038,7 @@ test('冷启动水合:真没发出去的那条照旧还原成失败气泡', asyn
         // 相对时间:写死日期会在「日期 + 2 天视角自毁窗口」过点后转入过期
         // 清除分支,测试从此不再走自己声称的路径(2026-08-13 就爆过一次)。
         createdAt: new Date(Date.now() - 60_000).toISOString(),
+        failedAfterHeight: 4,
       },
     ],
     outboxDelete: async (d) => {
@@ -1049,6 +1050,11 @@ test('冷启动水合:真没发出去的那条照旧还原成失败气泡', asyn
   await flush();
 
   assert.deepEqual(store.failedMarks, [{ conversationId: 'c1', d: 'd-lost' }]);
+  assert.equal(
+    store.messagesByConversation.c1[0].failedAfterHeight,
+    4,
+    '冷启动后失败气泡的位置锚点丢失',
+  );
   assert.deepEqual(deleted, []);
 });
 

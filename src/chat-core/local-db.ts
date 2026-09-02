@@ -25,7 +25,7 @@ const KEYCHAIN_ACCESS = {
 
 /** 每会话本地保留的消息上限(超出删最旧;更早历史回落 REST 翻页)。 */
 const RETENTION_PER_CONVERSATION = 500;
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 interface DbHandle {
   db: SQLite.SQLiteDatabase;
@@ -95,14 +95,23 @@ async function applySchema(db: SQLite.SQLiteDatabase): Promise<boolean> {
       d TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL,
       payload TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      failed_after_height INTEGER
     );
     CREATE TABLE IF NOT EXISTS pending_reads (
       conversation_id TEXT PRIMARY KEY,
       height INTEGER NOT NULL
     );
-    PRAGMA user_version = ${SCHEMA_VERSION};
   `);
+  const outboxColumns = await db.getAllAsync<{ name: string }>(
+    'PRAGMA table_info(outbox);',
+  );
+  if (!outboxColumns.some((column) => column.name === 'failed_after_height')) {
+    await db.execAsync(
+      'ALTER TABLE outbox ADD COLUMN failed_after_height INTEGER;',
+    );
+  }
+  await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
   // FTS5 与触发器单独建:老构建缺 FTS5 时只损失离线搜索,不影响其余表。
   try {
     await db.execAsync(`
@@ -715,6 +724,8 @@ export interface OutboxEntry {
     forwardFromMessageId?: string;
   };
   createdAt: string;
+  /** 点击发送时的服务端消息水位，用于失败气泡重启后的稳定定位。 */
+  failedAfterHeight?: number;
 }
 
 export async function outboxUpsert(entry: OutboxEntry): Promise<void> {
@@ -723,11 +734,12 @@ export async function outboxUpsert(entry: OutboxEntry): Promise<void> {
   try {
     await writeStatement(() =>
       current.db.runAsync(
-        'INSERT OR REPLACE INTO outbox (d, conversation_id, payload, created_at) VALUES (?, ?, ?, ?);',
+        'INSERT OR REPLACE INTO outbox (d, conversation_id, payload, created_at, failed_after_height) VALUES (?, ?, ?, ?, ?);',
         entry.d,
         entry.conversationId,
         JSON.stringify(entry.payload),
         entry.createdAt,
+        entry.failedAfterHeight ?? null,
       ),
     );
   } catch (error) {
@@ -756,8 +768,9 @@ export async function outboxList(): Promise<OutboxEntry[]> {
       conversation_id: string;
       payload: string;
       created_at: string;
+      failed_after_height: number | null;
     }>(
-      'SELECT d, conversation_id, payload, created_at FROM outbox ORDER BY created_at ASC;',
+      'SELECT d, conversation_id, payload, created_at, failed_after_height FROM outbox ORDER BY created_at ASC;',
     );
     const parsed: OutboxEntry[] = [];
     for (const row of rows) {
@@ -767,6 +780,9 @@ export async function outboxList(): Promise<OutboxEntry[]> {
           conversationId: row.conversation_id,
           payload: JSON.parse(row.payload) as OutboxEntry['payload'],
           createdAt: row.created_at,
+          ...(Number.isFinite(row.failed_after_height)
+            ? { failedAfterHeight: row.failed_after_height ?? 0 }
+            : {}),
         });
       } catch {
         // skip
