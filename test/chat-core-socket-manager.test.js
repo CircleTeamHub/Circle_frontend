@@ -106,6 +106,7 @@ function fakeSocketFactory() {
 function loadManager(localDbOverrides = {}, options = {}) {
   const { io, socket, captured } = fakeSocketFactory();
   const reports = [];
+  const diagnostics = [];
   const storeModule = (() => {
     const state = {
       connected: false,
@@ -215,6 +216,11 @@ function loadManager(localDbOverrides = {}, options = {}) {
   const manager = runModule('src/chat-core/socket-manager.ts', {
     'socket.io-client': { io },
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
+    'react-native': { Platform: { OS: 'android' } },
+    '@/utils/client-diagnostics': {
+      logClientDiagnostic: (event, details) =>
+        diagnostics.push({ event, details }),
+    },
     '@/services/api/privacy': {
       fetchPrivacySettings: () => {
         apiCalls.privacyFetches += 1;
@@ -295,6 +301,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     bound,
     apiCalls,
     reports,
+    diagnostics,
     mmkvStore,
   };
 }
@@ -717,13 +724,32 @@ test('reconnect with an empty active timeline loads the first history page', () 
 });
 
 test('connects with token in the handshake auth frame, never in the URL', () => {
-  const { manager, captured } = loadManager();
+  const { manager, socket, captured, diagnostics } = loadManager();
   manager.connectChat('jwt-token', 'u1');
   assert.equal(captured.url, 'http://api.test');
   assert.equal(captured.opts.path, '/chat-ws');
   assert.equal(captured.opts.auth.token, 'jwt-token');
+  assert.match(captured.opts.auth.traceId, /^ws-[a-z0-9-]+$/);
+  assert.equal(
+    captured.opts.extraHeaders['x-connection-trace-id'],
+    captured.opts.auth.traceId,
+  );
   assert.deepEqual(Array.from(captured.opts.transports), ['websocket']);
   assert.doesNotMatch(captured.url, /token=/);
+
+  assert.equal(diagnostics[0].event, 'chat.ws.connecting');
+  assert.equal(diagnostics[0].details.stage, 'handshake');
+  assert.equal(diagnostics[0].details.platform, 'android');
+  socket.fire('connect');
+  assert.equal(diagnostics[1].event, 'chat.ws.connected');
+  assert.equal(diagnostics[1].details.stage, 'ready');
+  assert.equal(diagnostics[1].details.platform, 'android');
+  socket.fire('disconnect', 'transport error');
+  assert.equal(diagnostics[2].event, 'chat.ws.disconnected');
+  assert.equal(diagnostics[2].details.stage, 'ready');
+  assert.equal(diagnostics[2].details.reason, 'transport_error');
+  assert.equal(diagnostics[2].details.platform, 'android');
+  assert.doesNotMatch(JSON.stringify(diagnostics), /jwt-token/);
 });
 
 test('sendChatMessage rejects when not connected', async () => {
@@ -945,26 +971,32 @@ test('reconnecting as the same user on a live socket stays a no-op', () => {
   assert.ok(!store.calls.some(([name]) => name === 'reset'));
 });
 
-test('reports one sanitized chat connection issue after three consecutive failures', () => {
-  const { manager, socket, reports } = loadManager();
+test('reports the first chat connection failure with bounded correlation context', () => {
+  const { manager, socket, reports, diagnostics, captured } = loadManager();
   manager.connectChat('jwt-secret', 'u1');
 
-  socket.fire('connect_error', new Error('failed with jwt-secret'));
-  socket.fire('connect_error', new Error('failed with jwt-secret'));
-  assert.equal(reports.length, 0);
-
-  socket.fire('connect_error', new Error('failed with jwt-secret'));
-  socket.fire('connect_error', new Error('failed with jwt-secret'));
+  socket.fire('connect_error', new Error('unauthorized jwt-secret'));
   assert.equal(reports.length, 1);
-  assert.equal(reports[0].error.message, 'chat connection failed repeatedly');
+  assert.equal(reports[0].error.message, 'chat connection failed');
   assert.equal(reports[0].context.operation, 'chatConnect');
-  assert.equal(reports[0].context.kind, 'consecutiveFailures');
-  assert.equal(reports[0].context.attempts, 3);
+  assert.equal(reports[0].context.kind, 'unauthorized');
+  assert.equal(reports[0].context.failureKind, 'connect_error');
+  assert.equal(reports[0].context.attempts, 1);
+  assert.equal(reports[0].context.stage, 'handshake');
+  assert.equal(reports[0].context.reason, 'unauthorized');
+  assert.equal(reports[0].context.source, 'websocket');
+  assert.equal(reports[0].context.endpointPath, '/chat-ws');
+  assert.equal(reports[0].context.platform, 'android');
+  assert.equal(reports[0].context.traceId, captured.opts.auth.traceId);
   assert.doesNotMatch(JSON.stringify(reports), /jwt-secret/);
+  assert.equal(diagnostics.at(-1).event, 'chat.ws.connect_error');
+  assert.equal(diagnostics.at(-1).details.stage, 'handshake');
+  assert.equal(diagnostics.at(-1).details.reason, 'unauthorized');
+  assert.equal(diagnostics.at(-1).details.platform, 'android');
 
+  socket.fire('connect_error', new Error('unauthorized jwt-secret'));
+  assert.equal(reports.length, 1, 'one outage must not spam Sentry');
   socket.fire('connect');
-  socket.fire('connect_error', new Error('new outage'));
-  socket.fire('connect_error', new Error('new outage'));
   socket.fire('connect_error', new Error('new outage'));
   assert.equal(reports.length, 2, 'a recovered connection starts a new outage window');
 });
