@@ -153,7 +153,7 @@ function TabBarSurface({
       <View style={styles.tabBar}>
         <BlurView
           intensity={90}
-          tint="systemMaterial"
+          tint={colorScheme === 'dark' ? 'systemMaterialDark' : 'systemMaterialLight'}
           style={styles.tabBarBlurLayer}
         />
         {children}
