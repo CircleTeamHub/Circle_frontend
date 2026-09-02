@@ -2822,6 +2822,9 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     try {
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
+        // Never hand Android off to the Google Play Services settings flow.
+        // Devices without GMS continue with the picker's manual/default center.
+        mayShowUserSettingsDialog: false,
       });
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;

@@ -42,7 +42,7 @@ test('native QR surfaces emit the scheme for the installed app variant', () => {
 
 // ─── 扫码器接线 ───────────────────────────────────────────────────────────────
 
-test('scan result resolves app qr payloads into the /qr landing route first', () => {
+test('in-app scan resolves QR payloads inside the messages stack', () => {
   const source = read('src/features/messages/utils/scan-result.ts');
   assert.match(source, /parseQrLoginToken, parseQrToken/);
   const qrIndex = source.indexOf('parseQrToken(value)');
@@ -52,7 +52,10 @@ test('scan result resolves app qr payloads into the /qr landing route first', ()
     routeMapIndex > qrIndex,
     'qr token must take precedence over static route map',
   );
-  assert.match(source, /pathname: '\/qr', params: \{ t: qrToken \}/);
+  assert.match(
+    source,
+    /pathname: '\/\(tabs\)\/messages\/qr', params: \{ t: qrToken \}/,
+  );
 });
 
 test('login QR uses a distinct route that old clients cannot misread as a join QR', () => {
@@ -63,7 +66,7 @@ test('login QR uses a distinct route that old clients cannot misread as a join Q
   assert.match(payload, /export function buildQrLoginUrl/);
   assert.match(payload, /qr-login\?t=/);
   assert.match(pane, /buildQrLoginUrl\(session\.qrToken\)/);
-  assert.match(resolver, /pathname: '\/qr-login'/);
+  assert.match(resolver, /pathname: '\/\(tabs\)\/messages\/qr-login'/);
   assert.match(
     read('app/qr-login.tsx'),
     /QrLandingScreen/,

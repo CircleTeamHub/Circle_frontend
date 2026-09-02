@@ -59,6 +59,8 @@ export default function MessagesLayout() {
           title: t('messages.scan', { defaultValue: '扫一扫' }),
         }}
       />
+      <Stack.Screen name="qr" />
+      <Stack.Screen name="qr-login" />
       <Stack.Screen name="search-group-members" />
       <Stack.Screen name="edit-group-notice" />
       <Stack.Screen name="notifications" />

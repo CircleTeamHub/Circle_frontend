@@ -166,6 +166,29 @@ test('friend activity detail screen supports request handling and single-item re
   assert.match(screenSource, /REQUEST_RECEIVED/);
 });
 
+test('groups screen exposes created, joined, and managed filters with local search', () => {
+  const source = read('src/features/contacts/screens/GroupsScreen.tsx');
+  const filterSource = read(
+    'src/features/contacts/utils/group-list-filter.ts',
+  );
+
+  assert.match(source, /useState<GroupListFilter>\('created'\)/);
+  assert.match(source, /contacts\.groupsScreen\.myManaged/);
+  assert.match(source, /accessibilityRole="tab"/);
+  assert.match(source, /<TextInput/);
+  assert.match(source, /contacts\.groupsScreen\.searchPlaceholder/);
+  assert.match(source, /filterGroupList\(groups, activeFilter, currentUserID, query\)/);
+  assert.match(filterSource, /group\.myRole === 'ADMIN'/);
+  assert.match(filterSource, /group\.groupName, group\.introduction/);
+
+  const controlsSource = source.slice(source.indexOf('<View style={s.controls}>'));
+  assert.ok(
+    controlsSource.indexOf('s.searchBox') < controlsSource.indexOf('s.filterRow'),
+    'group search should render above category buttons',
+  );
+  assert.match(source, /filterButton: \{[\s\S]{0,160}borderRadius: Radius\.md/);
+});
+
 test('contacts and profile flow screens use i18n instead of hardcoded Chinese UI copy', () => {
   const componentFiles = [
     'src/features/contacts/screens/NewFriendsScreen.tsx',

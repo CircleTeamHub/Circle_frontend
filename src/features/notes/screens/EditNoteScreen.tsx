@@ -423,6 +423,10 @@ export default function EditNoteScreen() {
     try {
       const position = await ExpoLocation.getCurrentPositionAsync({
         accuracy: ExpoLocation.Accuracy.Balanced,
+        // Android's default can invoke the Google Play Services settings
+        // resolution flow. Mainland devices without GMS must stay in-app and
+        // fall back to the manual title/address fields below instead.
+        mayShowUserSettingsDialog: false,
       });
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
