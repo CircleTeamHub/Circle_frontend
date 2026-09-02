@@ -5,20 +5,22 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-test('login screen uses the existing app logo plane asset without an app-icon frame', () => {
-  const source = read('src/features/auth/screens/LoginScreen.tsx');
+test('login sky uses the existing app logo plane asset without an app-icon frame', () => {
+  const sky = read('src/features/auth/components/LoginSky.tsx');
+  const screen = read('src/features/auth/screens/LoginScreen.tsx');
 
-  assert.match(source, /APP_LOGO_SOURCE/);
-  assert.match(source, /assets\/images\/login-logo-plane\.png/);
-  assert.match(source, /<Image/);
-  assert.match(source, /logoPlane/);
-  assert.match(source, /logoPlane:\s*\{\s*width:\s*80,\s*height:\s*80,\s*marginBottom:\s*-4\s*\}/);
-  assert.doesNotMatch(source, /Ionicons/);
-  assert.doesNotMatch(source, /paper-plane/);
-  assert.doesNotMatch(source, /logoShell/);
-  assert.doesNotMatch(source, /logoOuter/);
-  assert.doesNotMatch(source, /logoMiddle/);
-  assert.doesNotMatch(source, /logoDot/);
+  assert.match(sky, /APP_LOGO_SOURCE/);
+  assert.match(sky, /assets\/images\/login-logo-plane\.png/);
+  assert.match(sky, /<Animated\.Image|<Image/);
+  assert.match(screen, /<LoginSky/);
+  for (const source of [sky, screen]) {
+    assert.doesNotMatch(source, /Ionicons/);
+    assert.doesNotMatch(source, /paper-plane/);
+    assert.doesNotMatch(source, /logoShell/);
+    assert.doesNotMatch(source, /logoOuter/);
+    assert.doesNotMatch(source, /logoMiddle/);
+    assert.doesNotMatch(source, /logoDot/);
+  }
 });
 
 test('login logo asset is transparent and does not carry the white app-icon background', () => {
@@ -52,14 +54,25 @@ test('login logo asset is transparent and does not carry the white app-icon back
   assert.equal(image.data[(image.height * image.width - 1) * 4 + 3], 0);
 });
 
-test('login screen keeps the original form layout below the logo', () => {
+test('login screen follows the night-flight layout: sky hero, no slogan, reserved message slot', () => {
   const source = read('src/features/auth/screens/LoginScreen.tsx');
 
-  assert.doesNotMatch(source, /formPanel/);
-  assert.doesNotMatch(source, /flexGrow:\s*1/);
-  assert.doesNotMatch(source, /container:\s*\{[^}]*justifyContent:\s*"center"/);
-  assert.doesNotMatch(source, /Math\.max\(insets\.bottom \+ 24,\s*40\)/);
-  assert.match(source, /container:\s*\{\s*paddingHorizontal:\s*Spacing\.lg,\s*alignItems:\s*"center",\s*gap:\s*28\s*\}/);
+  // 夜航定稿去掉了 slogan，登录页只保留标题 + 表单。
+  assert.doesNotMatch(source, /让聊天/);
+  assert.doesNotMatch(source, /splash-tagline/);
+  // hero 是绝对定位的天空，表单从设计稿的 contentTop 开始，跟着屏宽缩放。
+  assert.match(source, /getSkyLayout\(/);
+  assert.match(source, /paddingTop:\s*sky\.contentTop/);
   assert.match(source, /paddingBottom:\s*insets\.bottom \+ 24/);
-  assert.match(source, /segment:\s*\{\s*backgroundColor:\s*colors\.surface\s*\}/);
+  // 登录方式切换与主按钮拆成独立组件，便于两个主题各自处理光效。
+  assert.match(source, /<LoginModeSegment/);
+  assert.match(source, /<LoginPrimaryButton/);
+  // 错误 / 离线提示占位始终保留，按钮不会因提示出现而跳动。
+  assert.match(source, /messageSlot:\s*\{[^}]*minHeight:\s*20/);
+  // 键盘：iOS 用 padding 避让，安卓靠 adjustResize；拖动列表收起键盘。
+  assert.match(source, /KeyboardAvoidingView/);
+  assert.match(source, /\{\.\.\.keyboardDismissOnDragProps\}/);
+  // 链接用 link token（暗色 #6366F1 在 #1A1B23 上不够对比度），不再直接用 primary。
+  assert.match(source, /colors\.link/);
+  assert.doesNotMatch(source, /color:\s*colors\.primary\b/);
 });
