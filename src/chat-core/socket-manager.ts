@@ -278,12 +278,19 @@ export function connectChat(token: string, userId: string): void {
     readFlushRequested = false;
     hadConnectedForUser = null;
     lastMutationSyncAt = null;
+    // 换账号是真正的会话边界:新账号的第一次连不上,值得单独报一次。
+    reportedCurrentConnectOutage = false;
   }
   teardownSocket();
   sessionGen += 1;
   const gen = sessionGen;
   consecutiveConnectErrors = 0;
-  reportedCurrentConnectOutage = false;
+  // 这里**不能**重置 reportedCurrentConnectOutage。设备一直离线时,回前台恢复
+  // (SessionBootstrap 每次 active 都会 connectChat)和 token 轮换都会走到这里替换
+  // 掉那个连不上的 socket;在这里清标志,等于每回一次前台就让下一条 connect_error
+  // 重新上报一次。一次长断网被前后台切几十次,就是几十条同样的 Sentry 事件,
+  // 「一次断网只报一条」的抑制就形同虚设了。只有真正连上(connect 回调)或换账号
+  // 才算这次断网结束。
   const connectionTraceId = createConnectionTraceId();
   store.setConnecting(true);
   store.setCurrentUserId(userId);

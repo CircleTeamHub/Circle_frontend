@@ -1001,6 +1001,43 @@ test('reports the first chat connection failure with bounded correlation context
   assert.equal(reports.length, 2, 'a recovered connection starts a new outage window');
 });
 
+test('one prolonged outage stays one report across socket replacements', () => {
+  // 设备一直离线时,SessionBootstrap 每次回到前台都会调 connectChat,access token
+  // 轮换也会。那条路会换掉这个连不上的 socket —— 如果顺手把「本次断网已上报」
+  // 的标志清掉,用户每切一次前后台就多一条同样的 Sentry 事件。
+  const { manager, socket, reports } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect_error', new Error('network down'));
+  assert.equal(reports.length, 1);
+
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect_error', new Error('network down'));
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect_error', new Error('network down'));
+  assert.equal(
+    reports.length,
+    1,
+    '同一次断网里换 socket 不该重新开一次上报窗口',
+  );
+
+  // 真的连上过,才算这次断网结束。
+  socket.fire('connect');
+  socket.fire('connect_error', new Error('network down again'));
+  assert.equal(reports.length, 2);
+});
+
+test('switching accounts starts a fresh outage window', () => {
+  // 换账号是真正的会话边界:新账号第一次就连不上,值得单独报一条。
+  const { manager, socket, reports } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect_error', new Error('network down'));
+  assert.equal(reports.length, 1);
+
+  manager.connectChat('jwt', 'u2');
+  socket.fire('connect_error', new Error('network down'));
+  assert.equal(reports.length, 2);
+});
+
 test('typing is throttled locally per conversation', () => {
   const { manager, socket } = loadManager();
   manager.connectChat('jwt', 'u1');
