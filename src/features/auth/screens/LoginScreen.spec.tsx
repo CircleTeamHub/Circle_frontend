@@ -1,5 +1,5 @@
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import LoginScreen from './LoginScreen';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
@@ -12,6 +12,8 @@ const mockAuthState: { submitting: boolean; error: string | null } = {
   submitting: false,
   error: null,
 };
+const mockSendCodeState: { error: string | null } = { error: null };
+const mockNetworkState: { isOffline: boolean } = { isOffline: false };
 
 jest.mock('expo-router', () => ({
   Link: ({ children }: { children: React.ReactNode }) => children,
@@ -62,12 +64,12 @@ jest.mock('@/hooks/use-send-email-code', () => ({
     sending: false,
     running: false,
     seconds: 0,
-    error: null,
+    error: mockSendCodeState.error,
   }),
 }));
 
 jest.mock('@/hooks/use-network-status', () => ({
-  useNetworkStatus: () => ({ isOffline: false }),
+  useNetworkStatus: () => ({ isOffline: mockNetworkState.isOffline }),
 }));
 
 jest.mock('@/hooks/use-reduce-motion', () => ({
@@ -93,6 +95,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockAuthState.submitting = false;
   mockAuthState.error = null;
+  mockSendCodeState.error = null;
+  mockNetworkState.isOffline = false;
 });
 
 test('renders the night-flight login: sky, heading, password form, no slogan', () => {
@@ -164,4 +168,53 @@ test('shows the auth error in the reserved message slot, announces it, and disab
   expect(announce).toHaveBeenCalledWith('boom');
   expect(screen.getByTestId(E2E_TEST_IDS.authSubmit)).toBeDisabled();
   announce.mockRestore();
+});
+
+test('offline and auth errors resolve to a single bounded status message', () => {
+  // 三条提示同时渲染会把保留高度的提示槽撑高，登录键跟着往下跳 —— 保留高度就白留了。
+  mockNetworkState.isOffline = true;
+  mockSendCodeState.error = 'code failed';
+  mockAuthState.error = 'boom';
+  render(<LoginScreen />);
+
+  // 优先级：登录错误 > 发码错误 > 离线提示，只呈现最靠前的那条。
+  expect(screen.getByText('boom')).toBeTruthy();
+  expect(screen.queryByText('code failed')).toBeNull();
+  expect(screen.queryByText('auth.offlineHint')).toBeNull();
+  // 长文案要有上界，否则换行照样顶动登录键。
+  expect(screen.getByText('boom').props.numberOfLines).toBe(2);
+});
+
+test('offline alone still shows the offline hint', () => {
+  mockNetworkState.isOffline = true;
+  render(<LoginScreen />);
+
+  expect(screen.getByText('auth.offlineHint')).toBeTruthy();
+});
+
+test('android relies on the live region instead of announcing twice', () => {
+  // 提示槽本身是 accessibilityLiveRegion="polite"：安卓上再主动播一次，
+  // 同一句会被念两遍。
+  const announce = jest
+    .spyOn(AccessibilityInfo, 'announceForAccessibility')
+    .mockImplementation(() => undefined);
+  const originalOS = Platform.OS;
+  Object.defineProperty(Platform, 'OS', {
+    value: 'android',
+    configurable: true,
+  });
+  mockAuthState.error = 'boom';
+
+  try {
+    render(<LoginScreen />);
+
+    expect(screen.getByText('boom')).toBeTruthy();
+    expect(announce).not.toHaveBeenCalled();
+  } finally {
+    Object.defineProperty(Platform, 'OS', {
+      value: originalOS,
+      configurable: true,
+    });
+    announce.mockRestore();
+  }
 });

@@ -49,11 +49,20 @@ const s = StyleSheet.create({
   subtitle: { ...Typography.body, lineHeight: 20, marginTop: 14 },
   segmentWrap: { marginTop: Spacing.lg },
   form: { marginTop: 20, gap: 12 },
-  forgotRow: { marginTop: Spacing.sm, height: 18, alignItems: 'flex-end', justifyContent: 'center' },
+  // 用 minHeight 而不是 height:系统字号调大、或西语/日语这类更长的译文下,
+  // 「忘记密码」会换行或超过 18pt。写死高度的话溢出的文字会压到下面的提示槽上,
+  // 这个登录入口既看不清也不好点。
+  forgotRow: {
+    marginTop: Spacing.sm,
+    minHeight: 18,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
   forgotLink: { ...Typography.caption },
   // 错误 / 离线提示的占位始终保留，提示出现时登录键不会往下跳。
-  messageSlot: { marginTop: 12, minHeight: 20, gap: 4 },
-  message: { ...Typography.caption },
+  // 槽里只会有一条消息(见 statusMessage),上限两行,所以按两行预留。
+  messageSlot: { marginTop: 12, minHeight: 36 },
+  message: { ...Typography.caption, lineHeight: 18 },
   buttonWrap: { marginTop: Spacing.md },
   registerRow: {
     marginTop: Spacing.lg,
@@ -115,11 +124,17 @@ export default function LoginScreen() {
     }
   }, [mode, login, loginWithCode, email, password, code]);
 
+  // 三条提示（登录错误 / 发码错误 / 离线）按优先级只呈现一条。同时渲染会把提示槽
+  // 撑高、把登录键顶下去 —— 保留高度就白留了。播报用的也是这一条,两边不会打架。
+  const statusMessage =
+    error ?? sendCode.error ?? (isOffline ? t('auth.offlineHint') : null);
+  const statusIsError = Boolean(error ?? sendCode.error);
   // 提示槽的 accessibilityLiveRegion 只在安卓 / 网页生效，iOS VoiceOver 要主动播报。
-  const announcement = error ?? sendCode.error ?? (isOffline ? t('auth.offlineHint') : null);
+  // 安卓上不能也主动播一次:live region 已经会播,再调一次就是同一句念两遍。
   useEffect(() => {
-    if (announcement) AccessibilityInfo.announceForAccessibility(announcement);
-  }, [announcement]);
+    if (Platform.OS !== 'ios' || !statusMessage) return;
+    AccessibilityInfo.announceForAccessibility(statusMessage);
+  }, [statusMessage]);
 
   const sendCodeBusy = sendCode.running || sendCode.sending;
   const sendCodeLabel = sendCode.running
@@ -227,15 +242,18 @@ export default function LoginScreen() {
 
           {/* 离线 / 发码错误 / 登录错误共用一个保留高度的提示槽 */}
           <View style={s.messageSlot} accessibilityLiveRegion="polite">
-            {isOffline ? (
-              <Text style={[s.message, { color: colors.textSecondary }]}>
-                {t('auth.offlineHint')}
+            {statusMessage ? (
+              <Text
+                style={[
+                  s.message,
+                  { color: statusIsError ? colors.error : colors.textSecondary },
+                ]}
+                // 长错误文案要有上界,否则换行照样把登录键顶下去。
+                numberOfLines={2}
+              >
+                {statusMessage}
               </Text>
             ) : null}
-            {sendCode.error ? (
-              <Text style={[s.message, { color: colors.error }]}>{sendCode.error}</Text>
-            ) : null}
-            {error ? <Text style={[s.message, { color: colors.error }]}>{error}</Text> : null}
           </View>
 
           {/* 登录键（qr 档没有提交动作，轮询自动完成） */}

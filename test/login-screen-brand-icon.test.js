@@ -67,8 +67,13 @@ test('login screen follows the night-flight layout: sky hero, no slogan, reserve
   // 登录方式切换与主按钮拆成独立组件，便于两个主题各自处理光效。
   assert.match(source, /<LoginModeSegment/);
   assert.match(source, /<LoginPrimaryButton/);
-  // 错误 / 离线提示占位始终保留，按钮不会因提示出现而跳动。
-  assert.match(source, /messageSlot:\s*\{[^}]*minHeight:\s*20/);
+  // 错误 / 离线提示占位始终保留，按钮不会因提示出现而跳动。槽里只放一条按优先级
+  // 选出来的消息、上限两行，所以按两行(2 × lineHeight 18)预留高度。
+  assert.match(source, /messageSlot:\s*\{[^}]*minHeight:\s*36/);
+  assert.match(source, /message:\s*\{[^}]*lineHeight:\s*18/);
+  // 「忘记密码」那行不能写死高度：系统字号调大或译文更长时会溢出压到提示槽上。
+  assert.match(source, /forgotRow:\s*\{[^}]*minHeight:\s*18/);
+  assert.doesNotMatch(source, /forgotRow:\s*\{[^}]*[^n]height:\s*18/);
   // 键盘：iOS 用 padding 避让，安卓靠 adjustResize；拖动列表收起键盘。
   assert.match(source, /KeyboardAvoidingView/);
   assert.match(source, /\{\.\.\.keyboardDismissOnDragProps\}/);
