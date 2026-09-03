@@ -106,6 +106,8 @@ function loadClient({ blocked, sendFails = false, retryOutbox = [] }) {
           createCircleChatConversation: async () => ({ id: 'c1' }),
           createDirectChatConversation: async () => ({ id: 'c1' }),
           loadChatHistory: async () => ({ messages: [], nextBeforeHeight: null }),
+          // 无回声的重发若带过本地预览,runRetry 会补拉一次权威消息。
+          backfillConversationSince: async () => {},
         };
       }
       if (request === './socket-manager') {

@@ -1,6 +1,7 @@
 import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
 import { useAuthStore } from '@/stores/authStore';
 import {
+  backfillConversationSince,
   createCircleChatConversation,
   createDirectChatConversation,
   createGroupChatConversation,
@@ -578,8 +579,7 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
     (item) => item.d === d && item.conversationId === conversationId,
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
-  const { localPreviewContent: _localPreviewContent, ...wirePayload } =
-    entry.payload;
+  const { localPreviewContent, ...wirePayload } = entry.payload;
   const ack = await sendChatMessage(wirePayload);
   void outboxDelete(d);
   // 原来只出队就完事了。可首次发送其实**已经在服务端落库**、只是 ack 和回声
@@ -607,4 +607,15 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
   };
   store.ingestMessages(conversationId, [confirmed]);
   store.applyIncomingMessage(confirmed);
+  // 上面这条 confirmed 是本地合成的,content 用的是乐观气泡的内容。带过
+  // localPreviewContent 的发送(目前只有转发媒体)那份内容**不权威**:它是源对象
+  // 的展示字段,object key 已被刻意剥掉。就这么当成已确认落库的话,签名 url 一
+  // 过期本地就是坏图,而且没有 key 可以重新签。补拉一次权威消息把它换掉。
+  // 拉失败不回滚 —— 气泡已经不红了,下一次进会话的历史加载还会再纠一次。
+  if (localPreviewContent) {
+    void backfillConversationSince(
+      conversationId,
+      Math.max(ack.height - 1, 0),
+    ).catch(() => undefined);
+  }
 }
