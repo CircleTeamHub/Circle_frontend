@@ -42,6 +42,7 @@ import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { MomentPost } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 // Unified icon scale for the post action row so like / comment read as one
 // system instead of 26 / 24.
@@ -300,9 +301,7 @@ export default function MomentDetailScreen() {
     } catch (error) {
       setPost((p) => p ? { ...p, isLikedByMe: post.isLikedByMe, likeCount: post.likeCount } : p);
       storeToggleLike(post.id, post.isLikedByMe, post.likeCount);
-      if (__DEV__) {
-        console.warn('[MomentDetailScreen] toggleMomentLike failed, rolled back', error);
-      }
+      reportHandledFailure('moments', 'toggleLike', error);
     }
   }, [post, storeToggleLike]);
 
@@ -347,9 +346,7 @@ export default function MomentDetailScreen() {
             }),
           ),
         );
-        if (__DEV__) {
-          console.warn('[MomentDetailScreen] addMomentComment failed', error);
-        }
+        reportHandledFailure('moments', 'addComment', error);
         throw error;
       }
     },

@@ -28,6 +28,7 @@ import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { getUserProfileHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { Conversation } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type ChatResult = {
   kind: 'chat';
@@ -128,9 +129,7 @@ export default function SearchScreen() {
   useEffect(() => {
     if (snapshotLoaded) return;
     loadChatConversations().catch((error: unknown) => {
-      if (__DEV__) {
-        console.warn('[SearchScreen] loadChatConversations failed', error);
-      }
+      reportHandledFailure('search', 'loadConversations', error);
     });
   }, [snapshotLoaded]);
 
@@ -160,9 +159,7 @@ export default function SearchScreen() {
               defaultValue: '好友列表加载失败，请稍后重试',
             }),
           );
-          if (__DEV__) {
-            console.warn('[SearchScreen] fetchFriends failed', error);
-          }
+          reportHandledFailure('search', 'fetchFriends', error);
         })
         .finally(() => {
           if (!signal?.cancelled) setFriendsLoading(false);
@@ -205,9 +202,7 @@ export default function SearchScreen() {
           // 再消失。searchAllChatMessagesLocalFirst 自身已经把服务端失败
           // 收敛成「返回本地结果」,能走到这里的只有本地检索也失败的情况。
           setMessageMatches([]);
-          if (__DEV__) {
-            console.warn('[SearchScreen] searchAllChatMessages failed', error);
-          }
+          reportHandledFailure('search', 'searchMessages', error);
         });
     }, 250);
     return () => {

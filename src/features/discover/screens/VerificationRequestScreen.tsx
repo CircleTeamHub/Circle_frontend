@@ -19,6 +19,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { useAuthStore } from '@/stores/authStore';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { CircleInvitation } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   content: {
@@ -144,9 +145,7 @@ export default function VerificationRequestScreen() {
       setLoadError(
         t('invitation.loadFailed', { defaultValue: '加载失败，请稍后重试' }),
       );
-      if (__DEV__) {
-        console.warn('[VerificationRequestScreen] fetchInvitation failed', error);
-      }
+      reportHandledFailure('circleInvitation', 'fetch', error);
     } finally {
       if (mountedRef.current && requestId === requestRef.current) {
         setLoading(false);

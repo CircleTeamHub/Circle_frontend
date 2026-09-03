@@ -3,6 +3,7 @@ import { NativeModules } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
 import { reportError } from '@/observability/sentry';
+import { devWarn } from '@/utils/dev-log';
 
 /**
  * LiveKit 模块的平台间接层（原生档）：动态 import @livekit/react-native，
@@ -117,9 +118,7 @@ export function loadLiveKitModule(): Promise<LiveKitModule | null> {
         operation: 'livekit',
         kind: 'moduleLoad',
       });
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[call] LiveKit native module unavailable', error);
-      }
+      devWarn('[call] LiveKit native module unavailable', error);
       return cachedLiveKitModule;
     });
 

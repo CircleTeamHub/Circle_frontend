@@ -27,6 +27,7 @@ import { MomentAlbumRow } from '@/features/discover/components/moment-album-row'
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { getProfileSignature } from '@/features/profile/profile-display';
 import type { MomentPost } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -108,9 +109,7 @@ export default function UserMomentsScreen() {
       } catch (err) {
         if (!active) return;
         setProfileError(getApiErrorMessage(err, t('common.networkError')));
-        if (__DEV__) {
-          console.warn('[UserMomentsScreen] fetchUserProfile failed', err);
-        }
+        reportHandledFailure('userProfile', 'fetchProfile', err);
       } finally {
         if (active) setProfileResolving(false);
       }

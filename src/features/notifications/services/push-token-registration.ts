@@ -10,6 +10,7 @@ import { storage } from '@/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type NotificationsModule = typeof import('expo-notifications');
 type NotificationPermissionResult = Awaited<
@@ -329,9 +330,7 @@ function generateRevocationSecret() {
       if (typeof uuid === 'string' && uuid.length >= 32) return uuid;
     }
   } catch (error) {
-    if (isDev) {
-      console.warn('[notifications] expo-crypto unavailable', error);
-    }
+    reportHandledFailure('notifications', 'expoCryptoUnavailable', error);
   }
   return generateFallbackRevocationSecret();
 }
@@ -694,7 +693,7 @@ async function loadNotificationsModule() {
   try {
     return await import('expo-notifications');
   } catch (error) {
-    if (isDev) console.warn('[notifications] module unavailable', error);
+    reportHandledFailure('notifications', 'moduleUnavailable', error);
     return null;
   }
 }

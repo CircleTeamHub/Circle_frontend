@@ -22,6 +22,7 @@ import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -116,9 +117,7 @@ export default function InviteGroupMembersScreen() {
         setFriends(friendList);
         setMemberIDs(new Set(members.map((member) => member.userId)));
       } catch (error) {
-        if (__DEV__) {
-          console.warn('[InviteGroupMembersScreen] load failed', error);
-        }
+        reportHandledFailure('group', 'loadInviteCandidates', error);
       } finally {
         if (!cancelled) setLoading(false);
       }

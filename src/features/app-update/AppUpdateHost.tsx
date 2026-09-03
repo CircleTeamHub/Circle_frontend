@@ -5,6 +5,7 @@ import {
   checkForAndroidUpdate,
   downloadAndInstallAndroidUpdate,
 } from './app-update-service';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 let startupCheckPromise: ReturnType<typeof checkForAndroidUpdate> | null = null;
 let startupPromptShown = false;
@@ -45,7 +46,8 @@ export function AppUpdateHost() {
                 if (installing) return;
                 installing = true;
                 void downloadAndInstallAndroidUpdate(manifest)
-                  .catch(() => {
+                  .catch((error: unknown) => {
+                    reportHandledFailure('appUpdate', 'install', error);
                     Alert.alert(
                       t('appUpdate.installFailedTitle', {
                         defaultValue: '更新失败',
@@ -63,8 +65,9 @@ export function AppUpdateHost() {
           ],
         );
       })
-      .catch(() => {
-        // 启动检查是尽力而为；网络异常不能阻塞登录或启动流程。
+      .catch((error: unknown) => {
+        // 启动检查是尽力而为；网络异常不能阻塞登录或启动流程，但要留信号。
+        reportHandledFailure('appUpdate', 'check', error);
       });
 
     return () => {

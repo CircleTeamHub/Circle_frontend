@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { getRandomBytesAsync } from 'expo-crypto';
 import { createMMKV, type MMKV } from 'react-native-mmkv';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * encrypted-init.ts — MMKV 加密初始化（FE#87）
@@ -41,12 +42,6 @@ const KEYCHAIN_ACCESS = {
 let instance: MMKV | null = null;
 let initPromise: Promise<MMKV> | null = null;
 
-function warnDev(message: string, error?: unknown): void {
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    console.warn(message, error);
-  }
-}
-
 async function readOrCreateKey(): Promise<{ key: string; fresh: boolean }> {
   const existing = await SecureStore.getItemAsync(ENCRYPTION_KEY_STORE_KEY);
   if (existing) return { key: existing, fresh: false };
@@ -68,7 +63,7 @@ async function openRecoveryStore(key: string): Promise<MMKV> {
   try {
     recovery = createMMKV({ id: RECOVERY_STORE_ID, encryptionKey: key });
   } catch (recoveryError) {
-    warnDev('[storage] recovery store open failed; rebuilding it', recoveryError);
+    reportHandledFailure('storage', 'recoveryStoreOpen', recoveryError);
     const rebuilt = createMMKV({ id: RECOVERY_STORE_ID });
     rebuilt.clearAll();
     rebuilt.recrypt(key);
@@ -93,10 +88,7 @@ async function openStore(key: string, fresh: boolean): Promise<MMKV> {
     } catch (markedError) {
       // review P2：标记着的恢复库自己也打不开时不能让 init 每次启动都拒绝 ——
       // 清标记回落主库阶梯（阶梯尽头的 openRecoveryStore 会重建并重写标记）。
-      warnDev(
-        '[storage] marked recovery store failed to open; retrying primary ladder',
-        markedError,
-      );
+      reportHandledFailure('storage', 'markedRecoveryStoreOpen', markedError);
       await SecureStore.deleteItemAsync(ACTIVE_STORE_MARKER_KEY).catch(
         () => undefined,
       );
@@ -113,7 +105,7 @@ async function openStore(key: string, fresh: boolean): Promise<MMKV> {
     }
     return createMMKV({ id: STORE_ID, encryptionKey: key });
   } catch (primaryError) {
-    warnDev('[storage] primary MMKV open failed; rebuilding store', primaryError);
+    reportHandledFailure('storage', 'primaryStoreOpen', primaryError);
     try {
       // 阶梯 2：明文重开 + 清库 + 就地加密。任何一步失败都不得把明文实例
       // 放出去（review P1：那会让后续写入静默明文落盘，加密保证归零）。
@@ -122,10 +114,7 @@ async function openStore(key: string, fresh: boolean): Promise<MMKV> {
       rebuilt.recrypt(key);
       return rebuilt;
     } catch (rebuildError) {
-      warnDev(
-        '[storage] plaintext rebuild failed; switching to recovery store',
-        rebuildError,
-      );
+      reportHandledFailure('storage', 'plaintextRebuild', rebuildError);
       return openRecoveryStore(key);
     }
   }

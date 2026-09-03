@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { fetchCurrentCall } from '@/services/api/calls';
 import { useCallStore } from '@/features/call/store/use-call-store';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { devWarn } from '@/utils/dev-log';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * 重连对账（#93，配合 circle_be 的 GET /calls/current）。
@@ -49,18 +49,14 @@ export function useCallReconciliation(): void {
             return;
           }
           if (!current || current.call.id !== localCallId) {
-            if (isDev) {
-              console.warn(
-                `[call] reconciliation: local call ${localCallId} is gone server-side; resetting`,
-              );
-            }
+            devWarn(
+              `[call] reconciliation: local call ${localCallId} is gone server-side; resetting`,
+            );
             resetCallState();
           }
         })
         .catch((error) => {
-          if (isDev) {
-            console.warn('[call] reconciliation fetch failed', error);
-          }
+          reportHandledFailure('call', 'reconciliationFetch', error);
         })
         .finally(() => {
           inFlightRef.current = false;

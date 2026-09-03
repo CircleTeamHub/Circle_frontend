@@ -11,6 +11,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type NoteBlockEditorDOMComponent =
   typeof import('@/features/notes/dom/NoteBlockEditor.dom').default;
@@ -216,9 +217,7 @@ function NoteBlockEditorImpl({
             }),
           );
         }
-        if (__DEV__) {
-          console.warn(`[NoteBlockEditor] ${kind} upload failed`, error);
-        }
+        reportHandledFailure('noteEditor', 'upload', error, { reason: kind });
       } finally {
         inFlightRef.current = false;
       }
@@ -254,9 +253,7 @@ function NoteBlockEditorImpl({
       } catch (error) {
         // malformed JSON from bridge — drop the update, but surface in dev so
         // bridge serialization regressions don't go unnoticed.
-        if (__DEV__) {
-          console.warn('[NoteBlockEditor] malformed JSON from DOM bridge', error);
-        }
+        reportHandledFailure('noteEditor', 'bridgePayloadParse', error);
       }
     },
     [onContentChange],

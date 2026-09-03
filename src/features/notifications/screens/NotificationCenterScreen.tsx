@@ -40,8 +40,7 @@ import {
 } from '@/features/notifications/components/ReadFilterBar';
 import { NotificationRow } from '@/features/notifications/components/NotificationRow';
 import { NotificationEmptyState } from '@/features/notifications/components/NotificationEmptyState';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { reportHandledFailure } from '@/observability/report-failure';
 
 interface Row {
   raw: NotificationItem | MyCirclePost;
@@ -113,24 +112,22 @@ export default function NotificationCenterScreen() {
         store().setInteractiveForDomain(domain, notificationsResult.value);
       } else {
         failed = true;
-        if (isDev) {
-          console.warn(
-            '[NotificationCenterScreen] load notifications failed',
-            notificationsResult.reason,
-          );
-        }
+        reportHandledFailure(
+          'notificationCenter',
+          'loadNotifications',
+          notificationsResult.reason,
+        );
       }
 
       if (postsResult.status === 'fulfilled') {
         if (postsResult.value) store().setSignupPosts(postsResult.value);
       } else {
         failed = true;
-        if (isDev) {
-          console.warn(
-            '[NotificationCenterScreen] load signup posts failed',
-            postsResult.reason,
-          );
-        }
+        reportHandledFailure(
+          'notificationCenter',
+          'loadSignupPosts',
+          postsResult.reason,
+        );
       }
 
       setLoadError(
@@ -239,7 +236,7 @@ export default function NotificationCenterScreen() {
       try {
         await markAllNotificationsRead(domain);
       } catch (error) {
-        if (isDev) console.warn('[NotificationCenterScreen] mark all failed', error);
+        reportHandledFailure('notificationCenter', 'markAllRead', error);
         store().setInteractive(previousInteractive);
         const rollback = useTabBadgeStore.getState();
         rollback.setDiscoverUnread(previousBadges.discoverUnread);
@@ -262,7 +259,7 @@ export default function NotificationCenterScreen() {
     try {
       await Promise.all(unreadPostIds.map((id) => markMyPostSignupsRead(id)));
     } catch (error) {
-      if (isDev) console.warn('[NotificationCenterScreen] mark all signups failed', error);
+      reportHandledFailure('notificationCenter', 'markAllSignupsRead', error);
       store().setSignupPosts(previousSignupPosts);
       useTabBadgeStore.getState().setSignupUnread(previousSignupUnread);
       await load();
@@ -274,7 +271,9 @@ export default function NotificationCenterScreen() {
       if ('type' in raw) {
         store().markInteractiveReadLocal(raw.id);
         if (!raw.read) decrementUnreadBadges(raw.type);
-        void markNotificationRead(raw.id).catch((e) => isDev && console.warn(e));
+        void markNotificationRead(raw.id).catch((e) =>
+          reportHandledFailure('notificationCenter', 'markRead', e),
+        );
         const route = getSnackbarRoute(
           { ...raw, kind: 'notification' },
           {

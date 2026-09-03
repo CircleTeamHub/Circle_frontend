@@ -25,6 +25,7 @@ import {
 } from '@/services/api/referrals';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const PUBLIC_INVITE_BASE_URL =
   process.env.EXPO_PUBLIC_INVITE_BASE_URL?.trim().replace(/\/+$/, '') || null;
@@ -154,7 +155,7 @@ export default function ShareScreen() {
     } catch (requestError) {
       if (generation !== requestGeneration.current) return;
       setError(t('referral.errors.loadFailed'));
-      if (__DEV__) console.warn('[ShareScreen] fetchMyReferrals failed', requestError);
+      reportHandledFailure('referral', 'load', requestError);
     } finally {
       if (generation === requestGeneration.current) {
         setLoading(false);
@@ -207,7 +208,7 @@ export default function ShareScreen() {
       // 这个 rejection 直接逃出事件处理器,用户既看不到原因也没有退路 ——
       // 文案里指回复制按钮,那条路不依赖分享面板。
       Alert.alert(t('referral.errors.shareFailed'));
-      if (__DEV__) console.warn('[ShareScreen] share sheet failed', shareError);
+      reportHandledFailure('referral', 'shareSheet', shareError);
     }
   }, [inviteCode, inviteUrl, t]);
 
@@ -232,8 +233,7 @@ export default function ShareScreen() {
       );
     } catch (requestError) {
       Alert.alert(t('referral.errors.loadMoreFailed'));
-      if (__DEV__)
-        console.warn('[ShareScreen] referral pagination failed', requestError);
+      reportHandledFailure('referral', 'loadMore', requestError);
     } finally {
       setLoadingMore(false);
     }

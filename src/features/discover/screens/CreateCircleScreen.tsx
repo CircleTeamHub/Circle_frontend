@@ -30,6 +30,7 @@ import { CircleFormBody } from '@/features/discover/components/circle-form-body'
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { resolveMembershipEntitlementLevel } from '@/features/profile/membership-plans';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -125,12 +126,7 @@ export default function CreateCircleScreen() {
           uploadedAvatarUrl = presign.fileUrl;
         } catch (error) {
           // 头像上传是非阻塞的 —— 失败时圈子还能创建（avatarUrl 留空）。
-          if (__DEV__) {
-            console.warn(
-              '[CreateCircleScreen] avatar upload failed, creating without avatar',
-              error,
-            );
-          }
+          reportHandledFailure('circle', 'avatarUpload', error);
         }
       }
 

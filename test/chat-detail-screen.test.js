@@ -145,22 +145,33 @@ test('chat detail screen logs text send failures without logging message bodies'
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /\[chat\] text send failed/);
-  assert.match(source, /error instanceof Error/);
-  // Both send paths route failures through one shared, dev-only helper.
+  // All send paths route failures through one shared helper: a local breadcrumb
+  // plus a dev-only line. The production signal lives in chat-core/client
+  // (reportChatSendFailure), so the helper must not report to Sentry itself.
   assert.match(source, /function logChatSendFailure/);
+  const helperStart = source.indexOf('function logChatSendFailure');
+  const helperEnd = source.indexOf('\n}\n', helperStart);
+  const helper = source.slice(helperStart, helperEnd);
+  assert.match(helper, /logClientDiagnostic\(`chatSend\.\$\{context\.kind\}\.failed`/);
+  assert.match(helper, /devWarn\(/);
+  assert.doesNotMatch(helper, /reportError|reportHandledFailure|console\.warn/);
+  // The helper never logs the message body.
+  assert.doesNotMatch(helper, /\btext:/);
+  assert.doesNotMatch(helper, /\bnextText\b/);
+  assert.match(helper, /diagnosticErrorMessage\(error\)/);
+
   const helperCalls = [...source.matchAll(/logChatSendFailure\(error, \{/g)];
-  assert.equal(helperCalls.length, 2);
-  // The single warn site never logs the message body.
-  const warnBlocks = [
-    ...source.matchAll(
-      /console\.warn\(\s*'\[chat\] text send failed'[\s\S]*?\n\s*\);/g,
-    ),
-  ].map((match) => match[0]);
-  assert.equal(warnBlocks.length, 1);
-  for (const block of warnBlocks) {
-    assert.doesNotMatch(block, /\btext:/);
-    assert.doesNotMatch(block, /\bnextText\b/);
+  assert.ok(helperCalls.length >= 2, `expected >=2 helper calls, got ${helperCalls.length}`);
+  const textCalls = [
+    ...source.matchAll(/logChatSendFailure\(error, \{\s*kind: 'text',/g),
+  ];
+  assert.equal(textCalls.length, 2);
+  for (const kind of ['voice', 'image', 'video', 'collectedItem']) {
+    assert.match(
+      source,
+      new RegExp(`logChatSendFailure\\(error, \\{\\s*kind: '${kind}',`),
+      `send path '${kind}' must route through logChatSendFailure`,
+    );
   }
 });
 

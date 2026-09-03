@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 function deferred() {
   let resolve;
@@ -27,13 +28,13 @@ function loadSessionModule(mocks) {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: (request) => {
+    require: withObservabilityStubs((request) => {
       mocks.__onRequire?.(request);
       if (request in mocks) {
         return mocks[request];
       }
       throw new Error(`Unexpected import: ${request}`);
-    },
+    }),
     // session.ts gates console.warn on `typeof __DEV__ !== 'undefined' && __DEV__`.
     // Leave __DEV__ undefined so dev logs stay silent during tests.
     console: { warn: () => {} },

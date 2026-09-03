@@ -29,6 +29,7 @@ import {
 import { createNoteGroup, updateNoteGroupIds } from '@/services/api/notes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 interface NoteGroupPickerSheetProps {
   /** 非空即打开；单条编辑传 [note]，多选批量传所有选中笔记 */
@@ -112,9 +113,7 @@ export function NoteGroupPickerSheet({
           }),
         ),
       );
-      if (__DEV__) {
-        console.warn('[NoteGroupPickerSheet] createNoteGroup failed', error);
-      }
+      reportHandledFailure('noteGroups', 'create', error);
     } finally {
       setCreatingGroup(false);
     }

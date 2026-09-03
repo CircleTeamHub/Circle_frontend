@@ -20,6 +20,7 @@ import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
 import type { Conversation } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -85,9 +86,7 @@ export default function RecommendFriendScreen() {
 
     loadChatConversations().catch((err) => {
       // 失败时保留已有的会话（即便为空），dev 下让我们知道这里失败过。
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[recommend-friend] loadChatConversations failed', err);
-      }
+      reportHandledFailure('recommendFriend', 'loadConversations', err);
     });
   }, [rawConversations.length]);
 

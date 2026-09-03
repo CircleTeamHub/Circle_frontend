@@ -32,6 +32,7 @@ import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
 import { NOTES_TAB_ALL, mergeTabOrder } from '@/features/notes/utils/tab-order';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 // 抽自 NotesScreen 的"管理分组"Modal —— 把 group CRUD、拖拽排序、成员选择器一并搬过来。
 // state 全部内聚到这个组件，父组件只关心：何时显示、关掉时回调、需要刷新外层 notes 时回调。
@@ -202,9 +203,7 @@ export function GroupManagerSheet({
           }),
         ),
       );
-      if (__DEV__) {
-        console.warn('[GroupManagerSheet] saveGroup failed', error);
-      }
+      reportHandledFailure('noteGroups', 'save', error);
     }
   }, [
     draftGroupName,
@@ -356,9 +355,7 @@ export function GroupManagerSheet({
               defaultValue: '笔记分组保存失败，请稍后再试。',
             }),
       );
-      if (__DEV__) {
-        console.warn('[GroupManagerSheet] saveGroupMemberships failed', error);
-      }
+      reportHandledFailure('noteGroups', 'saveMemberships', error);
     }
   }, [
     editingMembershipGroup,
@@ -400,9 +397,7 @@ export function GroupManagerSheet({
                     defaultValue: '分组删除失败，请稍后再试。',
                   }),
                 );
-                if (__DEV__) {
-                  console.warn('[GroupManagerSheet] deleteNoteGroup failed', error);
-                }
+                reportHandledFailure('noteGroups', 'delete', error);
               }
             },
           },
@@ -428,9 +423,7 @@ export function GroupManagerSheet({
             defaultValue: '分组顺序保存失败，请稍后再试。',
           }),
         );
-        if (__DEV__) {
-          console.warn('[GroupManagerSheet] reorderNoteGroups failed', error);
-        }
+        reportHandledFailure('noteGroups', 'reorder', error);
       }
     },
     [setGroups, t],

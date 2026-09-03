@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 function loadTsModule(relativePath, stubs = {}) {
   const filePath = path.join(process.cwd(), relativePath);
@@ -21,8 +22,8 @@ function loadTsModule(relativePath, stubs = {}) {
     module: { exports: {} },
     exports: {},
     __DEV__: false,
-    require: (specifier) =>
-      specifier in stubs ? stubs[specifier] : require(specifier),
+    require: withObservabilityStubs((specifier) =>
+      specifier in stubs ? stubs[specifier] : require(specifier)),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

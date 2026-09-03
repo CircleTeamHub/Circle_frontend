@@ -26,6 +26,7 @@ import { MomentCard } from './moment-card';
 import { MomentCommentInput } from './moment-comment-input';
 import { MomentMentionNotice } from './moment-mention-notice';
 import type { MomentPost } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   // MomentCommentInput 是 absolute 全铺浮层，需要一个定位上下文来托管。
@@ -113,9 +114,7 @@ export const MomentsFeed: React.FC = () => {
       setNewCount(count);
       return true;
     } catch (error) {
-      if (__DEV__) {
-        console.warn('[MomentsFeed] fetchNewMomentsCount failed', error);
-      }
+      reportHandledFailure('moments', 'fetchNewCount', error);
       return false;
     }
   }, [lastRefreshTime]);
@@ -186,9 +185,7 @@ export const MomentsFeed: React.FC = () => {
         storeToggleLike(postId, result.liked, result.likeCount);
       } catch (error) {
         storeToggleLike(postId, post.isLikedByMe, post.likeCount);
-        if (__DEV__) {
-          console.warn('[MomentsFeed] toggleMomentLike failed, rolled back', error);
-        }
+        reportHandledFailure('moments', 'toggleLike', error);
       }
     },
     [moments, storeToggleLike],
@@ -251,9 +248,7 @@ export const MomentsFeed: React.FC = () => {
             }),
           ),
         );
-        if (__DEV__) {
-          console.warn('[MomentsFeed] addMomentComment failed', error);
-        }
+        reportHandledFailure('moments', 'addComment', error);
         throw error;
       }
     },

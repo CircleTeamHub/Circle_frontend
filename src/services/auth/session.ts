@@ -8,6 +8,7 @@ import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { resetDiagnosticBreadcrumbs } from '@/utils/client-diagnostics';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type PersistCapableAuthStore = {
   persist?: {
@@ -32,8 +33,6 @@ type LogoutHandler = (context: LogoutContext) => void | Promise<void>;
 const logoutHandlers: LogoutHandler[] = [];
 let activeClearPromise: Promise<void> | null = null;
 let activeClearSessionEpoch: number | null = null;
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 async function loadMessageGroupsStore() {
   const { useMessageGroupsStore } = await import(
@@ -131,9 +130,7 @@ async function clearAccountScopedPersistedStores(
       }
       await Promise.resolve(store.persist?.clearStorage?.());
     } catch (err) {
-      if (isDev) {
-        console.warn('[session] account-scoped store clear failed', err);
-      }
+      reportHandledFailure('session', 'accountScopedStoreClear', err);
     }
   }
 }
@@ -227,7 +224,7 @@ async function performClearLocalSession(
     }
     persistCleared = true;
   } catch (err) {
-    if (isDev) console.warn('[session] persist.clearStorage failed', err);
+    reportHandledFailure('session', 'persistClear', err);
   }
   // 兜底：persist 未挂或 clearStorage 抛错时，直接对 SecureStore + legacy MMKV key 显式清理。
   // tokens 留在磁盘比"登出失败"提示风险更高 —— 下次启动会自动重新认证回这个用户。
@@ -235,7 +232,7 @@ async function performClearLocalSession(
     try {
       await secureAuthStorage.removeItem('circle-im-auth');
     } catch (err) {
-      if (isDev) console.warn('[session] secure auth removeItem fallback failed', err);
+      reportHandledFailure('session', 'secureAuthRemoveFallback', err);
     }
   }
 
@@ -243,12 +240,12 @@ async function performClearLocalSession(
     try {
       await persistCurrentAuthState();
     } catch (err) {
-      if (isDev) console.warn('[session] persist newer auth session failed', err);
+      reportHandledFailure('session', 'persistNewerSession', err);
     }
   }
 
-  if (isDev && handlerFailures.length > 0) {
-    console.warn('[session] logout handlers failed', handlerFailures);
+  for (const failure of handlerFailures) {
+    reportHandledFailure('session', 'logoutHandler', failure);
   }
 }
 

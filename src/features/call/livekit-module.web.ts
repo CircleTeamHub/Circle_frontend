@@ -2,6 +2,7 @@ import { createElement, type ComponentType, type CSSProperties, type PropsWithCh
 import { StyleSheet } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { reportError } from '@/observability/sentry';
+import { devWarn } from '@/utils/dev-log';
 
 /**
  * LiveKit 模块的 Web 档：用 @livekit/components-react + 浏览器原生 WebRTC
@@ -154,9 +155,7 @@ export function loadLiveKitModule(
         operation: 'livekit',
         kind: 'moduleLoad',
       });
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[call] LiveKit web module unavailable', error);
-      }
+      devWarn('[call] LiveKit web module unavailable', error);
       // Chunk/CDN 瞬时失败不能把 null 固化到整个页面会话；本次降级，
       // 下次进入通话允许重新 import。
       return null;

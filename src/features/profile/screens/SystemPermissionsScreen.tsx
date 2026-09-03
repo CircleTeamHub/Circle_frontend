@@ -11,6 +11,7 @@ import {
 } from 'expo-audio';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type PermissionId =
   | 'location'
@@ -73,7 +74,7 @@ async function loadNotificationsModule() {
   try {
     return await import('expo-notifications');
   } catch (error) {
-    console.warn('[permissions] notifications module unavailable', error);
+    reportHandledFailure('permissions', 'notificationsModule', error);
     return null;
   }
 }

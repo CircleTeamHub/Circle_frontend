@@ -39,6 +39,7 @@ import {
   type MomentMentionOccurrence,
   type MomentTextSelection,
 } from '@/features/discover/utils/moment-comment-mentions';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 interface MomentCommentInputProps {
   replyTo: { id: string; nickname: string } | null;
@@ -215,9 +216,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
         .then(setFriends)
         .catch((err) => {
           setFriendsError(true);
-          if (__DEV__) {
-            console.warn('[MomentCommentInput] fetchFriends failed', err);
-          }
+          reportHandledFailure('moments', 'fetchFriends', err);
         });
     }
   }, [friends]);

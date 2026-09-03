@@ -3,6 +3,8 @@ import type { StateStorage } from 'zustand/middleware';
 import { mmkvJsonStorage } from '@/storage';
 import { getSecureKv, type SecureKvApi } from '@/storage/secure-kv';
 import { sanitizeUserForPersist } from '@/stores/persisted-user';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { devWarn } from '@/utils/dev-log';
 
 type SecureStoreApi = SecureKvApi;
 type SecureStoreOptions = SecureStoreModule.SecureStoreOptions;
@@ -49,8 +51,6 @@ interface TokenBundle {
   refreshToken: string;
   imToken: string | null;
 }
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 function legacyTokenBundleKey(key: string) {
   return `${key}.tokens`;
@@ -154,9 +154,7 @@ async function bestEffortLegacyCleanup(action: () => void | Promise<void>) {
   try {
     await action();
   } catch (err) {
-    if (isDev) {
-      console.warn('[secure-auth-storage] legacy MMKV cleanup failed', err);
-    }
+    reportHandledFailure('secureStorage', 'legacyCleanup', err);
   }
 }
 
@@ -260,9 +258,7 @@ async function getAuthItem(key: string): Promise<string | null> {
     // 读失败：标记降级并向 persist 抛出（触发 onRehydrateStorage 的 error 分支）。
     // 磁盘凭证保持不动，等下次启动重新 hydration 时恢复。
     authReadDegraded = true;
-    if (isDev) {
-      console.warn('[secure-auth-storage] auth read failed; entering degraded mode', err);
-    }
+    reportHandledFailure('secureStorage', 'authReadDegraded', err);
     throw err;
   }
 }
@@ -275,9 +271,7 @@ async function setAuthItem(key: string, value: string): Promise<void> {
   // 降级期间写回的空态来自「读失败后的初始内存」，不是真实登出——直接忽略，
   // 保留磁盘上完好的 token 与 metadata。真实登出走 removeItem，不受此影响。
   if (!tokens && authReadDegraded) {
-    if (isDev) {
-      console.warn('[secure-auth-storage] auth degraded: ignore empty write to preserve stored session');
-    }
+    devWarn('[secure-auth-storage] auth degraded: ignore empty write to preserve stored session');
     return;
   }
   // 拿到真实 token 说明存储已恢复正常，解除降级。
@@ -395,9 +389,7 @@ async function getKnownAccountsItem(key: string): Promise<string | null> {
     return result;
   } catch (err) {
     knownAccountsReadDegraded = true;
-    if (isDev) {
-      console.warn('[secure-auth-storage] known-accounts read failed; entering degraded mode', err);
-    }
+    reportHandledFailure('secureStorage', 'knownAccountsReadDegraded', err);
     throw err;
   }
 }
@@ -428,9 +420,7 @@ async function setKnownAccountsItem(key: string, value: string): Promise<void> {
     // 当成移除去删 token；并把本次变更合并进既有 metadata，避免把读不到的账号
     // （及其 Keychain 凭证）从列表里弄丢。显式 removeAccount 例外：用户主动删除
     // 的账号必须立即清凭证，避免退出登录后又被 merge 回账号切换器。
-    if (isDev) {
-      console.warn('[secure-auth-storage] known-accounts degraded: merge-only, skip token pruning');
-    }
+    devWarn('[secure-auth-storage] known-accounts degraded: merge-only, skip token pruning');
     for (const userId of explicitlyRemovedIds) {
       await writeKnownAccountTokens(userId, null);
     }
