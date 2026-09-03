@@ -33,6 +33,9 @@ module.exports = { API_URL };
     // release-mode blocking logic is covered directly in transport-security.test.mts.
     __DEV__: options.dev ?? true,
     evaluateTransportGuard: () => null,
+    // RUNTIME_API_TARGET_ID 只在 E2E 断言运行时目标时用到，这里的断言不碰它；
+    // 真实实现由 src/testing/runtime-api-target.test.mts 直接覆盖。
+    buildRuntimeApiTargetId: () => 'windnote_runtime_api_origin_stub',
     Constants: {
       expoConfig: {
         hostUri: options.hostUri ?? '10.0.0.195:8081',
