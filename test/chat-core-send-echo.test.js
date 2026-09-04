@@ -283,6 +283,116 @@ test('send captures the current server height for a later failure position', asy
   assert.equal(outboxEntries[0].failedAfterHeight, 7);
 });
 
+function loadFailedPreview() {
+  // 只 import type,零运行时依赖。
+  return runModule('src/features/messages/utils/failed-preview.ts', () => {
+    throw new Error('failed-preview should have no runtime deps');
+  });
+}
+
+function confirmed(conversationId, height) {
+  return {
+    id: `h-${height}`,
+    conversationId,
+    height,
+    type: 'text',
+    content: { text: `#${height}` },
+    sender: { id: 'peer', nickname: '对方', avatarUrl: null },
+    replyToId: null,
+    d: null,
+    createdAt: `2026-08-05T12:00:${String(height).padStart(2, '0')}.000Z`,
+  };
+}
+
+test('forwarding into a conversation with no loaded timeline keeps the failure visible once history arrives', async () => {
+  const { client, store, outboxEntries } = loadSendStack({
+    onSend: async () => {
+      throw new Error('offline');
+    },
+  });
+  const { hasFailedLatestMessage } = loadFailedPreview();
+  const state = store.useChatStore.getState();
+  state.setCurrentUserId('me');
+  state.setConversations([]);
+
+  // ForwardPicker/分享:发进本次会话从未打开过的会话,时间线里什么都没有。
+  await assert.rejects(
+    client.sendTextMessage({ conversationId: 'c-fwd', text: 'forwarded' }),
+    /offline/,
+  );
+  // 拿不到任何水位时不能写 0,留空等第一批真消息补锚。
+  assert.equal(outboxEntries.length, 1);
+  assert.equal(outboxEntries[0].failedAfterHeight, undefined);
+
+  // 用户之后打开会话,拉到一页真历史。
+  const history = [];
+  for (let height = 10; height <= 15; height += 1) {
+    history.push(confirmed('c-fwd', height));
+  }
+  state.ingestMessages('c-fwd', history);
+
+  const timeline = store.useChatStore.getState().messagesByConversation['c-fwd'];
+  assert.deepEqual(Array.from(timeline, (m) => m.id), [
+    'h-10',
+    'h-11',
+    'h-12',
+    'h-13',
+    'h-14',
+    'h-15',
+    'local:d-test',
+  ]);
+  assert.equal(timeline[6].failed, true);
+  // 会话列表的「发送失败」前缀也必须还在。
+  assert.equal(hasFailedLatestMessage(timeline), true);
+});
+
+test('a send without a loaded timeline anchors to the conversation preview height', async () => {
+  const { client, store, outboxEntries } = loadSendStack({
+    onSend: async () => {
+      throw new Error('offline');
+    },
+  });
+  const state = store.useChatStore.getState();
+  state.setCurrentUserId('me');
+  state.setConversations([
+    {
+      id: 'c1',
+      type: 'DIRECT',
+      peer: { id: 'peer', nickname: '对方', avatarUrl: null },
+      circleId: null,
+      circle: null,
+      lastMessage: confirmed('c1', 12),
+      unreadCount: 0,
+      pinned: false,
+      muted: false,
+      lastMessageAt: '2026-08-05T12:00:12.000Z',
+    },
+  ]);
+
+  await assert.rejects(
+    client.sendTextMessage({ conversationId: 'c1', text: 'forwarded' }),
+    /offline/,
+  );
+  assert.equal(outboxEntries.length, 1);
+  assert.equal(outboxEntries[0].failedAfterHeight, 12);
+
+  const history = [];
+  for (let height = 10; height <= 15; height += 1) {
+    history.push(confirmed('c1', height));
+  }
+  state.ingestMessages('c1', history);
+  const timeline = store.useChatStore.getState().messagesByConversation['c1'];
+  assert.deepEqual(Array.from(timeline, (m) => m.id), [
+    'h-10',
+    'h-11',
+    'h-12',
+    'local:d-test',
+    'h-13',
+    'h-14',
+    'h-15',
+  ]);
+});
+
 test('video send keeps local preview off the wire while retaining playback metadata', async () => {
   let sentPayload;
   const { client } = loadSendStack({

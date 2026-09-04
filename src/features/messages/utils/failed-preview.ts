@@ -37,9 +37,10 @@ export function hasFailedLatestMessage(
   }
   for (const message of messages) {
     if (!message.failed) continue;
-    // 缺 failedAfterHeight 只会发生在旧版 outbox 或本函数之外构造的对象上:
-    // 按 0 处理 ——
-    // 会话里一旦有任何已确认消息就不提示,宁可漏提示不误报。
+    // 缺 failedAfterHeight 意味着锚点未知:发送时拿不到水位、此后又还没来过
+    // 任何真消息(store 的 mergeMessages 会在第一批真消息抵达时补锚),或者是
+    // 本函数之外构造的对象。按 0 处理 —— 会话里一旦有任何已确认消息就不提示,
+    // 宁可漏提示不误报。
     if (finiteOrZero(message.failedAfterHeight) >= maxHeight) return true;
   }
   return false;
