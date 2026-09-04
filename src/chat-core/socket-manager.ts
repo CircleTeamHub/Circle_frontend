@@ -41,7 +41,6 @@ import {
   viewerSelfDestructDaysStorageKey,
 } from './store';
 import { devWarn } from '@/utils/dev-log';
-import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
