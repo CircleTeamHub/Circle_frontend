@@ -213,6 +213,7 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'source',
   'stage',
   'reason',
+  'traceId',
   'page',
 ]);
 const SAFE_EVENT_TAG_KEYS = new Set([
@@ -225,6 +226,7 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'component',
   'operation',
   'kind',
+  'traceId',
 ]);
 const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'circleId',
@@ -251,6 +253,7 @@ const REDACTED_TRANSACTION = '[REDACTED_TRANSACTION]';
 /** Expo Router 的动态段字面量，如 `[conversationId]`；本身不含用户数据。 */
 const ROUTE_PARAM_SEGMENT = /^\[\.{0,3}[A-Za-z][A-Za-z0-9_]*\]$/;
 const MAX_ROUTE_SEGMENTS = 8;
+const SAFE_WS_TRACE_ID = /^ws-[a-z0-9-]{8,96}$/i;
 
 /**
  * 把 transaction 名收敛成「路由形状」。
@@ -333,6 +336,12 @@ function sanitizeReportContext(
   for (const key of SAFE_REPORT_CONTEXT_KEYS) {
     if (!(key in context)) continue;
     const value = context[key];
+    if (
+      key === 'traceId' &&
+      (typeof value !== 'string' || !SAFE_WS_TRACE_ID.test(value))
+    ) {
+      continue;
+    }
     if (
       value == null ||
       typeof value === 'string' ||
@@ -434,6 +443,12 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
   const safe: Record<string, unknown> = {};
   for (const key of SAFE_EVENT_TAG_KEYS) {
     const child = (value as Record<string, unknown>)[key];
+    if (
+      key === 'traceId' &&
+      (typeof child !== 'string' || !SAFE_WS_TRACE_ID.test(child))
+    ) {
+      continue;
+    }
     if (typeof child === 'string' || typeof child === 'number') {
       safe[key] = sanitizeContextForSentry(child);
     }
@@ -692,6 +707,7 @@ function buildCaptureContext(
     'component',
     'operation',
     'kind',
+    'traceId',
   ];
   const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
     const value = safeContext ? readTagValue(safeContext, key) : undefined;
