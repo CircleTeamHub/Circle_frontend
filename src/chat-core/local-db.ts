@@ -713,6 +713,8 @@ export interface OutboxEntry {
     d: string;
     replyToId?: string;
     forwardFromMessageId?: string;
+    /** 仅供本地失败气泡恢复；重发前必须从 websocket 载荷剥离。 */
+    localPreviewContent?: Record<string, unknown>;
   };
   createdAt: string;
 }

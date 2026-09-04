@@ -550,6 +550,41 @@ test('message forward picker routes media through authenticated server-side copy
   assert.match(client, /forwardFromMessageId:\s*options\.sourceMessageId/);
 });
 
+test('message forward picker only offers media forwarding for confirmed sources', () => {
+  const pickerPath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ForwardPickerScreen.tsx',
+  );
+  const picker = fs.readFileSync(pickerPath, 'utf8');
+  const body = picker.match(
+    /export function canForwardMessage\([^)]*\): boolean \{([\s\S]*?)\n\}/,
+  );
+  assert.ok(body, 'canForwardMessage implementation missing');
+  const canForwardMessage = new Function('message', 'dto', body[1]);
+
+  const pendingImage = { id: 'local:d-1', type: 'image', sendStatus: 1 };
+  const failedVoice = { id: 'outbox-d-2', type: 'voice', sendStatus: 3 };
+  const confirmedVideo = { id: 'm-3', type: 'video', sendStatus: 2 };
+  assert.equal(
+    canForwardMessage(pendingImage, { id: 'local:d-1', height: 0 }),
+    false,
+  );
+  assert.equal(
+    canForwardMessage(failedVoice, { id: 'outbox-d-2', height: 0 }),
+    false,
+  );
+  assert.equal(
+    canForwardMessage(confirmedVideo, { id: 'm-3', height: 12 }),
+    true,
+  );
+
+  const detail = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  assert.match(detail, /canForwardMessage\(message,\s*dto\)/);
+});
+
 test('note detail routes exist in every tab stack so back returns to the source tab', () => {
   for (const relativePath of [
     'app/(tabs)/messages/notes/[id].tsx',
