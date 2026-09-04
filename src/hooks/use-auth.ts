@@ -37,8 +37,7 @@ import {
 import i18n from '@/i18n';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type AuthSuccessOptions = {
   onboardingRequired?: boolean;
@@ -255,9 +254,7 @@ export function useAuth() {
     // 失败也不阻塞本地登出 —— 但要在 dev 把错误打出来，避免长期静默回归。
     if (refreshToken) {
       void logoutRequest(refreshToken).catch((err) => {
-        if (isDev) {
-          console.warn('[auth] server logout failed (local session still cleared)', err);
-        }
+        reportHandledFailure('auth', 'serverLogout', err);
       });
     }
 
@@ -337,9 +334,7 @@ export function useAuth() {
           useKnownAccountsStore.getState().removeAccount(account.user.id);
           await clearLocalSession();
           useAccountSwitcherStore.getState().close();
-          if (isDev) {
-            console.warn('[auth] switch account failed (session expired)', switchError);
-          }
+          reportHandledFailure('auth', 'switchAccountExpired', switchError);
           router.replace({
             pathname: '/(auth)/login',
             params: { email: account.user.email ?? '' },
@@ -363,9 +358,7 @@ export function useAuth() {
           // 这里只补拉会话分组，不阻塞导航。
           void useMessageGroupsStore.getState().load();
           useAccountSwitcherStore.getState().close();
-          if (isDev) {
-            console.warn('[auth] switch account degraded (transient)', switchError);
-          }
+          reportHandledFailure('auth', 'switchAccountDegraded', switchError);
           router.replace('/(tabs)/messages');
         }
       } finally {

@@ -42,6 +42,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 export default function NoteDetailScreen() {
   const router = useRouter();
@@ -93,9 +94,7 @@ export default function NoteDetailScreen() {
               defaultValue: '笔记加载失败，请稍后重试',
             }),
           );
-          if (__DEV__) {
-            console.warn('[NoteDetailScreen] fetchNoteDetail failed', error);
-          }
+          reportHandledFailure('notes', 'fetchDetail', error);
         }
         setLoading(false);
       });

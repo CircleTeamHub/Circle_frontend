@@ -29,6 +29,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   content: {
@@ -199,13 +200,7 @@ export default function NewFriendsScreen() {
                 await Promise.all(
                   item.unreadActivityIds.map((activityId) =>
                     markFriendActivityRead(activityId).catch((error) => {
-                      if (__DEV__) {
-                        console.warn(
-                          '[NewFriendsScreen] markFriendActivityRead failed',
-                          { activityId },
-                          error,
-                        );
-                      }
+                      reportHandledFailure('friendActivity', 'markRead', error);
                     }),
                   ),
                 );

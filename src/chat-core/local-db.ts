@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
 import { getRandomBytesAsync } from 'expo-crypto';
 import type { ChatConversationDto, ChatMessageDto } from './protocol';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * G-01 本地持久化:把 OpenIM SDK 当年内置的本地消息库补回来。
@@ -42,7 +43,11 @@ const warn = (() => {
   return (key: string, message: string, error?: unknown) => {
     if (seen.has(key)) return;
     seen.add(key);
+    // 本地库是缓存,任何失败都降级吞掉 —— 但「吞掉」不等于「无声」:每种失败每个
+    // 进程留一次信号(reportHandledFailure 自身还会按签名去重)。console.warn 不走
+    // devWarn:这里是本模块唯一的输出口,测试靠它观测降级路径。
     console.warn(message, error ?? '');
+    reportHandledFailure('chatLocalDb', key, error ?? new Error(message));
   };
 })();
 

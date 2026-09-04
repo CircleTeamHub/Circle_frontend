@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 const __localDbStub = {
   persistLocalConversations: async () => {},
@@ -53,7 +54,7 @@ function runModule(rel, requireImpl, extraContext = {}) {
     console: { warn: () => {} },
     module: { exports: {} },
     exports: {},
-    require: requireImpl,
+    require: withObservabilityStubs(requireImpl),
     ...extraContext,
   };
   context.exports = context.module.exports;

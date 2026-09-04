@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 // 用 dynamic import 避免 friends API 与 api/client → session → 本 store 的模块循环。
 // refresh 仅在用户操作时调用，dynamic import 的延迟可忽略。
@@ -30,9 +31,7 @@ export const useFriendActivityUnreadStore = create<FriendActivityUnreadState>(
         useTabBadgeStore.getState().setContactsUnread(count);
       } catch (err) {
         // 拉取失败时保留上一次的本地计数。dev 下打印出来，避免长期 silent 回归。
-        if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn('[friend-activity] refresh failed', err);
-        }
+        reportHandledFailure('friendActivity', 'refreshUnread', err);
         return get().count;
       }
 

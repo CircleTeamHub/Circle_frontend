@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 function loadUseAuth(fixtures = {}) {
   const filePath = path.join(process.cwd(), 'src/hooks/use-auth.ts');
@@ -121,12 +122,12 @@ function loadUseAuth(fixtures = {}) {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: (request) => {
+    require: withObservabilityStubs((request) => {
       if (request in modules) {
         return modules[request];
       }
       throw new Error(`Unexpected import: ${request}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

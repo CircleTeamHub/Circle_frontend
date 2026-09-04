@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { BubbleStatusText, MessageAvatar } from './shared';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 interface ImageBubbleProps {
   message: ChatMessage;
@@ -126,12 +127,11 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
             // 就加上，而不是等真正出 iOS 包时再补（那时容易漏）。
             enforceEarlyResizing
             onError={(event) => {
-              if (__DEV__) {
-                console.warn('[chat] image load failed', {
-                  uri: displayUri,
-                  error: event.error,
-                });
-              }
+              reportHandledFailure(
+                'chatMedia',
+                'imageLoad',
+                new Error(event.error),
+              );
             }}
           />
         ) : null}

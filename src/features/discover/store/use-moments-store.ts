@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { fetchMomentsFeed } from '@/services/api/moments';
 import type { MomentComment, MomentPost } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 interface MomentsState {
   moments: MomentPost[];
@@ -84,9 +85,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
       });
     } catch (error) {
       set(reset ? { refreshing: false } : { loading: false });
-      if (__DEV__) {
-        console.warn('[useMomentsStore] fetchMoments failed', error);
-      }
+      reportHandledFailure('moments', 'fetch', error);
       throw error;
     }
   },

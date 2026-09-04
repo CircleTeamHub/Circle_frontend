@@ -23,6 +23,7 @@ import { searchChatMessages } from '@/chat-core/api';
 import type { ChatMessageDto } from '@/chat-core/protocol';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const PAGE_SIZE = 30;
 const MEDIA_GRID_COLUMNS = 3;
@@ -223,7 +224,7 @@ export default function ChatHistoryMediaScreen() {
         setHasMore(page.nextBeforeHeight !== null);
       })
       .catch((e: unknown) => {
-        if (__DEV__) console.warn('[chat-history-media] load failed', e);
+        reportHandledFailure('chatHistory', 'mediaLoad', e);
         if (!mountedRef.current) return;
         setError(t('chat.history.loadFailed'));
         setResults([]);
@@ -257,7 +258,7 @@ export default function ChatHistoryMediaScreen() {
         }
       })
       .catch((e: unknown) => {
-        if (__DEV__) console.warn('[chat-history-media] load failed', e);
+        reportHandledFailure('chatHistory', 'mediaLoad', e);
         if (!cancelled) {
           setError(t('chat.history.loadFailed'));
           setResults([]);
@@ -295,9 +296,7 @@ export default function ChatHistoryMediaScreen() {
       setHasMore(page.nextBeforeHeight !== null);
     } catch (err) {
       setHasMore(false);
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat-history-media] load-more failed', err);
-      }
+      reportHandledFailure('chatHistory', 'mediaLoadMore', err);
     } finally {
       setLoadingMore(false);
     }

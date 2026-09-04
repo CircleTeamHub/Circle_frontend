@@ -21,6 +21,7 @@ import {
 } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { CircleInvitation } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   listContent: {
@@ -89,9 +90,7 @@ export default function AdminReviewScreen() {
       setLoadError(
         t('invitation.loadFailed', { defaultValue: '加载失败，请稍后重试' }),
       );
-      if (__DEV__) {
-        console.warn('[AdminReviewScreen] fetchPendingInvitationsForCircle failed', error);
-      }
+      reportHandledFailure('circleInvitation', 'fetchPending', error);
     } finally {
       if (isActive()) setLoading(false);
     }

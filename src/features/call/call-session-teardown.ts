@@ -3,6 +3,7 @@ import { registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import type { CallSession } from '@/features/call/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * 登出时清空通话状态，避免账号 A 的来电弹窗 / 活动通话残留进账号 B 的会话。
@@ -31,9 +32,7 @@ async function notifyCallExit(call: CallSession): Promise<void> {
     }
   } catch (error) {
     // 通知失败不能挡住本地退出，否则用户会卡在一个 LiveKit 已经断开的通话界面上。
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn('[call] leave notification failed', error);
-    }
+    reportHandledFailure('call', 'leaveNotify', error);
   }
 }
 

@@ -16,6 +16,7 @@ import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
 import { updateCircle } from '@/services/api/circles';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   container: {
@@ -99,9 +100,7 @@ export default function EditGroupNoticeScreen() {
       await updateCircle(groupID, { description: nextNotice });
       router.back();
     } catch (error) {
-      if (__DEV__) {
-        console.warn('[chat] update group notice failed', error);
-      }
+      reportHandledFailure('chatInfo', 'updateGroupNotice', error);
       Alert.alert(t('chat.groupNotice'), t('common.networkError'));
     } finally {
       setSubmitting(false);

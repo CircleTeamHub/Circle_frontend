@@ -29,6 +29,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const QUICK_ACTION_KEYS: {
   id: string;
@@ -140,9 +141,7 @@ export default function ContactsScreen() {
     } catch (error) {
       if (!mountedRef.current) return;
       setError(t('contacts.loadFailed'));
-      if (__DEV__) {
-        console.warn('[ContactsScreen] fetchFriends failed', error);
-      }
+      reportHandledFailure('contacts', 'fetchFriends', error);
     } finally {
       if (mountedRef.current) setLoading(false);
     }

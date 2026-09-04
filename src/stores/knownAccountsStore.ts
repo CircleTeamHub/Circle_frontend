@@ -23,8 +23,7 @@ import {
   type KnownAccount,
 } from '@/stores/knownAccountsLogic';
 import { sanitizeUserForPersist } from '@/stores/persisted-user';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { reportHandledFailure } from '@/observability/report-failure';
 
 export type { KnownAccount };
 
@@ -71,11 +70,8 @@ export const useKnownAccountsStore = create<KnownAccountsState>()(
       // 读失败时 secureAuthStorage 已进入 degraded（merge-only、不删 token），
       // 这里仅做可观测性记录，避免静默吞掉 Keychain 读错误。
       onRehydrateStorage: () => (_state, error) => {
-        if (error && isDev) {
-          console.warn(
-            '[knownAccountsStore] hydration read failed; switcher tokens preserved (degraded)',
-            error,
-          );
+        if (error) {
+          reportHandledFailure('knownAccountsStore', 'hydrationRead', error);
         }
       },
     },

@@ -15,6 +15,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { Gradients, Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   content: {
@@ -191,7 +192,7 @@ export default function WalletScreen() {
             defaultValue: '积分余额加载失败，请稍后重试',
           }),
         );
-        if (__DEV__) console.warn('[WalletScreen] fetchWallet failed', error);
+        reportHandledFailure('wallet', 'fetch', error);
       } finally {
         if (!cancelled) {
           balanceSettledRef.current = true;
@@ -214,8 +215,7 @@ export default function WalletScreen() {
             defaultValue: '积分流水加载失败',
           }),
         );
-        if (__DEV__)
-          console.warn('[WalletScreen] fetchCoinTransactions failed', error);
+        reportHandledFailure('wallet', 'fetchTransactions', error);
       } finally {
         if (!cancelled) setLoadingHistory(false);
       }

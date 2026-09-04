@@ -17,8 +17,7 @@ import { secureAuthStorage } from '@/storage/secure-auth-storage';
 import type { AvatarFrameAppearance, DisplayIcon } from '@/types';
 import { migrateAuthPersist, AUTH_PERSIST_VERSION } from './authPersist';
 import { sanitizeUserForPersist } from './persisted-user';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { reportHandledFailure } from '@/observability/report-failure';
 
 export interface AuthUser {
   id: string;
@@ -196,12 +195,7 @@ export const useAuthStore = create<AuthState>()(
           // 关键：绝不能在这里 clearSession —— 它会把空态写回，连带删掉磁盘上完好的 token，
           // 让「一次读抖动 = 永久登出」。这里只解除启动阻塞、保留磁盘凭证，留待下次启动恢复；
           // secureAuthStorage 已进入 degraded 模式，会拦截随后写回的空态、不动磁盘数据。
-          if (isDev) {
-            console.warn(
-              '[authStore] persisted auth hydration read failed; preserving stored credentials',
-              error,
-            );
-          }
+          reportHandledFailure('authStore', 'hydrationRead', error);
           nextState.setLoading(false);
           return;
         }

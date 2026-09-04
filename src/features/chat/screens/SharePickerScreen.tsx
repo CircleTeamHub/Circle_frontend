@@ -30,6 +30,7 @@ import { fetchNotes } from '@/services/api/notes';
 import i18n from '@/i18n';
 import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type ShareType = 'note' | 'friend' | 'favorite' | 'quick-reply';
 
@@ -217,9 +218,7 @@ export default function SharePickerScreen() {
             ),
           );
         }
-        if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn(`[share-picker] fetch ${shareType} failed`, err);
-        }
+        reportHandledFailure('sharePicker', 'fetch', err, { reason: shareType });
       } finally {
         if (!cancelled) setLoading(false);
       }

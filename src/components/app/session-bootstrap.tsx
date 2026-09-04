@@ -18,6 +18,8 @@ import { useMessageGroupsStore } from '@/features/messages/store/use-message-gro
 import { hasCompletedOnboardingProfile } from '@/features/auth/onboarding-completion';
 import { reportError } from '@/observability/sentry';
 import { retry } from '@/utils/retry';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * SessionBootstrap — 无 UI 的启动引导组件，挂载在 app 根节点。
@@ -191,7 +193,14 @@ export function SessionBootstrap() {
         // app 照常进入，后续请求自然会重试。chat 长连接由上面的 effect 独立建立，
         // 不依赖本次 /auth/me 成功。
         if (isDefinitiveAuthFailure(error)) {
+          logClientDiagnostic('session.bootstrap.rejected', {
+            reason: 'credentials_rejected',
+          });
           await clearLocalSession();
+        } else {
+          // 瞬时失败只留面包屑（ApiError 已由 api/client 决定过是否上报）；
+          // 非 API 错误（存储 / 序列化）才会真的进 Sentry。
+          reportHandledFailure('session', 'bootstrap', error);
         }
       } finally {
         // 无论成功还是失败，都要结束 loading 状态，防止 app 永久卡在加载中

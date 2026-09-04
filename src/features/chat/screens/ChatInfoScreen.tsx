@@ -63,6 +63,7 @@ import { fetchMyTempChats } from '@/services/api/temp-chat';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -638,9 +639,7 @@ export default function ChatInfoScreen() {
 
   const openActionError = useCallback(
     (error: unknown) => {
-      if (__DEV__) {
-        console.warn('[chat-info] action failed', error);
-      }
+      reportHandledFailure('chatInfo', 'action', error);
       // getApiErrorMessage only surfaces whitelisted localized copy (never the
       // raw backend text), falling back to the generic message otherwise.
       Alert.alert(

@@ -197,19 +197,29 @@ import {
 } from '@/features/chat/utils/chat-media-policy';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
 import { assertMyTempChatConversationOpen } from '@/services/api/temp-chat';
+import { diagnosticErrorMessage, logClientDiagnostic } from '@/utils/client-diagnostics';
+import { devWarn } from '@/utils/dev-log';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 // Dev-only structured log for a failed send. Never logs the message body —
 // only the error and conversation kind — to avoid leaking content into logs.
+//
+// 发送失败的生产信号已由 chat-core/client 的 reportChatSendFailure（Sentry，按类型 +
+// 错误码去重）与上传模块各自留档；这里只补一条本地面包屑 + dev 日志，不再重复上报。
 function logChatSendFailure(
   error: unknown,
-  context: { sessionType: ConversationKind; isGroupChat: boolean },
+  context: { kind: string; sessionType: ConversationKind; isGroupChat: boolean },
 ) {
-  if (!__DEV__) return;
-  const base =
-    error instanceof Error
-      ? { name: error.name, message: error.message }
-      : { message: String(error) };
-  console.warn('[chat] text send failed', { ...base, ...context });
+  logClientDiagnostic(`chatSend.${context.kind}.failed`, {
+    sessionType: context.sessionType,
+    isGroupChat: context.isGroupChat,
+    errorName: error instanceof Error ? error.name : typeof error,
+  });
+  devWarn(`[chat] ${context.kind} send failed`, {
+    name: error instanceof Error ? error.name : typeof error,
+    message: diagnosticErrorMessage(error),
+    ...context,
+  });
 }
 
 type AttachmentId =
@@ -764,9 +774,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         if (!cancelled) setResolvedConversationID(conv.conversationID);
       } catch (error) {
         // 未连通等：保持预览模式，不阻断页面。
-        if (__DEV__) {
-          console.warn('[ChatDetailScreen] resolve conversation failed', error);
-        }
+        reportHandledFailure('chatDetail', 'resolveConversation', error);
       }
     })();
     return () => {
@@ -977,9 +985,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         markConversationAsRead(conversationID);
       })
       .catch((err) => {
-        if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn('[chat] load conversation messages failed', err);
-        }
+        reportHandledFailure('chatDetail', 'loadMessages', err);
       });
 
     return () => {
@@ -993,9 +999,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const handleLoadOlder = useCallback(() => {
     if (!conversationID) return;
     void loadOlderConversationMessages(conversationID).catch((err) => {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat] load older messages failed', err);
-      }
+      reportHandledFailure('chatDetail', 'loadOlderMessages', err);
     });
   }, [conversationID]);
 
@@ -1123,9 +1127,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     searchPagingRef.current = true;
     void loadOlderConversationMessages(conversationID)
       .catch((err) => {
-        if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn('[chat] paging to searched message failed', err);
-        }
+        reportHandledFailure('chatDetail', 'pageToSearchedMessage', err);
       })
       .finally(() => {
         searchPagingRef.current = false;
@@ -1188,9 +1190,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
               : undefined,
           );
         } catch (error) {
-          if (__DEV__) {
-            console.warn('[ChatDetail] collect note failed', error);
-          }
+          reportHandledFailure('chatDetail', 'collectNote', error);
           Alert.alert(
             t('chat.messageActions.collectFailed'),
             getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
@@ -1239,9 +1239,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           t('chat.messageActions.collectedHint'),
         );
       } catch (error) {
-        if (__DEV__) {
-          console.warn('[ChatDetail] collect message failed', error);
-        }
+        reportHandledFailure('chatDetail', 'collectMessage', error);
         Alert.alert(
           t('chat.messageActions.collectFailed'),
           t('chat.messageActions.collectFailedHint'),
@@ -1820,9 +1818,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           getApiErrorMessage(error, t('chat.call.initiateFailed')),
         );
       }
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat] start call failed', error);
-      }
+      reportHandledFailure('call', 'start', error);
     } finally {
       callStartingRef.current = false;
       if (mountedRef.current) {
@@ -1925,9 +1921,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           }
         }
       } catch (err) {
-        if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.warn('[chat] paging to quoted message failed', err);
-        }
+        reportHandledFailure('chatDetail', 'pageToQuotedMessage', err);
       } finally {
         quotePagingRef.current = false;
       }
@@ -2335,9 +2329,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       if (!mountedRef.current) return;
       setMentionCandidates([allMentionTarget, ...candidates]);
     } catch (error) {
-      if (__DEV__) {
-        console.warn('[chat] load mention candidates failed', error);
-      }
+      reportHandledFailure('chatDetail', 'loadMentionCandidates', error);
       if (mountedRef.current) setMentionCandidates([]);
     }
   }, [allMentionTarget, canViewGroupMemberProfiles, conversationID, currentUserID, isGroupChat, sourceID]);
@@ -2361,9 +2353,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         setGroupMemberNames(map);
       })
       .catch((error) => {
-        if (__DEV__) {
-          console.warn('[chat] load group member names failed', error);
-        }
+        reportHandledFailure('chatDetail', 'loadGroupMemberNames', error);
       });
     return () => {
       cancelled = true;
@@ -2446,6 +2436,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         await sendTextMessage({ conversationId: conversationID, text });
       } catch (error) {
         logChatSendFailure(error, {
+          kind: 'text',
           sessionType: conversationType,
           isGroupChat,
         });
@@ -2526,14 +2517,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       setVoiceRecordingStartedAt(Date.now());
       inFlightRef.current = true;
     } catch (error) {
-      if (__DEV__) {
-        console.warn(
-          '[chat] voice record failed',
-          error instanceof Error
-            ? { name: error.name, message: error.message }
-            : String(error),
-        );
-      }
+      reportHandledFailure('chatDetail', 'voiceRecord', error);
       inFlightRef.current = false;
       if (mountedRef.current) {
         setVoiceRecordingStartedAt(null);
@@ -2597,14 +2581,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         });
         finishMediaSend(deliveryId);
       } catch (error) {
-        if (__DEV__) {
-          console.warn(
-            '[chat] voice send failed',
-            error instanceof Error
-              ? { name: error.name, message: error.message }
-              : String(error),
-          );
-        }
+        logChatSendFailure(error, {
+          kind: 'voice',
+          sessionType: conversationType,
+          isGroupChat,
+        });
         // 气泡标红留在原地(长按可重发),而不是让那段录音凭空消失。
         failMediaSend(conversationID, deliveryId);
         if (mountedRef.current) {
@@ -2619,7 +2600,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         }
       }
     },
-    [conversationID, isTempChat, t],
+    [conversationID, conversationType, isGroupChat, isTempChat, t],
   );
 
   const finishHoldRecording = useCallback(
@@ -2655,14 +2636,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         });
         void uploadAndSendVoice(soundPath, duration, deliveryId);
       } catch (error) {
-        if (__DEV__) {
-          console.warn(
-            '[chat] voice send failed',
-            error instanceof Error
-              ? { name: error.name, message: error.message }
-              : String(error),
-          );
-        }
+        logChatSendFailure(error, {
+          kind: 'voice',
+          sessionType: conversationType,
+          isGroupChat,
+        });
         if (mountedRef.current) {
           setVoiceRecordingStartedAt(null);
           if (!cancel) {
@@ -2686,6 +2664,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     },
     [
       conversationID,
+      conversationType,
+      isGroupChat,
       restoreRecordingAudioMode,
       t,
       uploadAndSendVoice,
@@ -2921,14 +2901,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         });
         finishMediaSend(deliveryId);
       } catch (error) {
-        if (__DEV__) {
-          console.warn(
-            '[chat] image send failed',
-            error instanceof Error
-              ? { name: error.name, message: error.message }
-              : String(error),
-          );
-        }
+        logChatSendFailure(error, {
+          kind: 'image',
+          sessionType: conversationType,
+          isGroupChat,
+        });
         // 气泡标红留在原地(长按可重发),而不是让这张图凭空消失。
         failMediaSend(conversationID, deliveryId);
         if (mountedRef.current) {
@@ -2943,7 +2920,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         }
       }
     },
-    [conversationID, isTempChat, t],
+    [conversationID, conversationType, isGroupChat, isTempChat, t],
   );
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
   const uploadAndSendImageAsset = useCallback(
@@ -3052,14 +3029,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         uploadedVideoKeysRef.current.delete(deliveryId);
         finishMediaSend(deliveryId);
       } catch (error) {
-        if (__DEV__) {
-          console.warn(
-            '[chat] video send failed',
-            error instanceof Error
-              ? { name: error.name, message: error.message }
-              : String(error),
-          );
-        }
+        logChatSendFailure(error, {
+          kind: 'video',
+          sessionType: conversationType,
+          isGroupChat,
+        });
         failMediaSend(conversationID, deliveryId);
         if (mountedRef.current) {
           setSendError(
@@ -3073,7 +3047,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         }
       }
     },
-    [conversationID, isTempChat, t],
+    [conversationID, conversationType, isGroupChat, isTempChat, t],
   );
 
   const uploadAndSendVideoAsset = useCallback(
@@ -3313,9 +3287,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           } catch (error) {
             failures += 1;
             firstError ??= error;
-            if (__DEV__) {
-              console.warn('[ChatDetail] import note media failed', error);
-            }
+            reportHandledFailure('chatDetail', 'importNoteMedia', error);
           }
         }
         let location = note.sections?.location ?? null;
@@ -3333,9 +3305,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             failures += 1;
             firstError ??= error;
             location = null;
-            if (__DEV__) {
-              console.warn('[ChatDetail] fetch note location failed', error);
-            }
+            reportHandledFailure('chatDetail', 'fetchNoteLocation', error);
           }
         }
         perNote.push(buildNoteSendTasks(note, options, imported, location));
@@ -3405,9 +3375,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           failures += 1;
           firstError ??= error;
           reportChatSendFailure(task.kind, error);
-          if (__DEV__) {
-            console.warn('[ChatDetail] note batch send failed', error);
-          }
+          devWarn('[ChatDetail] note batch send failed', error);
         }
       }
 
@@ -3541,9 +3509,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             break;
         }
       } catch (error) {
-        if (__DEV__) {
-          console.warn('[ChatDetail] send collected item failed', error);
-        }
+        logChatSendFailure(error, {
+          kind: 'collectedItem',
+          sessionType: conversationType,
+          isGroupChat,
+        });
         if (mountedRef.current) {
           setSendError(
             getChatSendErrorMessage(
@@ -3558,7 +3528,15 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         inFlightRef.current = false;
       }
     },
-    [conversationID, isPreviewMode, sendDraftAsText, sourceID, t],
+    [
+      conversationID,
+      conversationType,
+      isGroupChat,
+      isPreviewMode,
+      sendDraftAsText,
+      sourceID,
+      t,
+    ],
   );
 
   const handlePickQuickReply = useCallback(
@@ -3699,6 +3677,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       if (mountedRef.current) setMentionPickerVisible(false);
     } catch (error) {
       logChatSendFailure(error, {
+        kind: 'text',
         sessionType: conversationType,
         isGroupChat,
       });

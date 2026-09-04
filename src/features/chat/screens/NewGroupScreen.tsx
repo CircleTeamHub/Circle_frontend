@@ -21,6 +21,7 @@ import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /** 服务端 CreateGroupConversationDto 的同款下限:除自己外至少 2 位好友。 */
 const MIN_MEMBERS = 2;
@@ -114,7 +115,7 @@ export default function NewGroupScreen() {
         const list = await fetchFriends();
         if (!cancelled) setFriends(list);
       } catch (error) {
-        if (__DEV__) console.warn('[NewGroupScreen] load friends failed', error);
+        reportHandledFailure('group', 'loadFriends', error);
       } finally {
         if (!cancelled) setLoading(false);
       }

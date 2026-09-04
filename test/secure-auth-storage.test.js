@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 function deferred() {
   let resolve;
@@ -95,7 +96,7 @@ function loadSecureAuthStorage({
   const context = {
     module: { exports: {} },
     exports: {},
-    require: (request) => {
+    require: withObservabilityStubs((request) => {
       if (request === 'expo-secure-store') {
         if (failSecureStoreImport) {
           throw new Error("Cannot find native module 'ExpoSecureStore'");
@@ -134,7 +135,7 @@ function loadSecureAuthStorage({
         };
       }
       throw new Error(`Unexpected import: ${request}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
 
