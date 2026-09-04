@@ -8,3 +8,5 @@ appId: ${APP_ID}
     visible:
       id: "windnote\\.(auth\\.login\\.screen|tabs\\.messages)"
     timeout: 60000
+- assertVisible:
+    id: ${E2E_API_TARGET_ID}
