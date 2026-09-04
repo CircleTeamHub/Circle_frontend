@@ -261,6 +261,11 @@ export async function sendWithOptimism(
     };
     next.ingestMessages(options.conversationId, [confirmed]);
     next.applyIncomingMessage(confirmed);
+    // 首发和重发一样会撞上「ack 到了、回声丢了」:转发媒体的乐观内容不权威,
+    // 就这么当成已确认的话气泡会永远停在源对象的签名 url 上。
+    if (options.outboxPreviewContent) {
+      reconcileUnauthoritativeConfirmation(options.conversationId, ack.height);
+    }
     return confirmed;
   } catch (error) {
     const failed = useChatStore.getState();
@@ -607,15 +612,32 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
   };
   store.ingestMessages(conversationId, [confirmed]);
   store.applyIncomingMessage(confirmed);
-  // 上面这条 confirmed 是本地合成的,content 用的是乐观气泡的内容。带过
-  // localPreviewContent 的发送(目前只有转发媒体)那份内容**不权威**:它是源对象
-  // 的展示字段,object key 已被刻意剥掉。就这么当成已确认落库的话,签名 url 一
-  // 过期本地就是坏图,而且没有 key 可以重新签。补拉一次权威消息把它换掉。
-  // 拉失败不回滚 —— 气泡已经不红了,下一次进会话的历史加载还会再纠一次。
   if (localPreviewContent) {
-    void backfillConversationSince(
-      conversationId,
-      Math.max(ack.height - 1, 0),
-    ).catch(() => undefined);
+    reconcileUnauthoritativeConfirmation(conversationId, ack.height);
   }
+}
+
+/**
+ * 无回声确认的对账。ack 没有伴随 chat:msg 回声时,本地只能拿乐观内容合成一条
+ * confirmed 落库。带本地预览的发送(目前只有转发媒体)那份内容**不权威**:它是
+ * 源对象的展示字段,object key 已被刻意剥掉。就这么当成已确认的话,签名 url 一
+ * 过期本地就是坏图,而且没有 key 可以重新签。补拉一次权威消息把它换掉。
+ *
+ * 补拉只写时间线;会话列表的 lastMessage 是 applyIncomingMessage 写进去的那个
+ * 合成对象,不会自己跟着换 —— 拉完再从时间线重算一次预览。
+ * 拉失败不回滚 —— 气泡已经不红了,下一次进会话的历史加载还会再纠一次。
+ * 调用方不等它(fire-and-forget),错误在这里吞掉。
+ */
+function reconcileUnauthoritativeConfirmation(
+  conversationId: string,
+  ackHeight: number,
+): void {
+  const epoch = useAuthStore.getState().sessionEpoch;
+  void backfillConversationSince(conversationId, Math.max(ackHeight - 1, 0))
+    .then(() => {
+      // 切号后落地的补拉不该去动新账号的会话列表。
+      if (useAuthStore.getState().sessionEpoch !== epoch) return;
+      useChatStore.getState().revertConversationPreview(conversationId);
+    })
+    .catch(() => undefined);
 }
