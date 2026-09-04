@@ -5,7 +5,7 @@
  * 分支被 babel 剥掉之后，失败在生产上完全无声——「全网都打不开会话」与「某个用户
  * 网不好」看起来一模一样。这里把三件事收口成一次调用：
  *
- * 1. dev：console.warn 原始错误（本地排障要看全量；经 redactSensitiveFields 脱敏）；
+ * 1. dev：console.warn 错误类型和结构化上下文（不输出自由文本 message / Error）；
  * 2. 面包屑：logClientDiagnostic 记一条 `<operation>.<kind>.failed`。面包屑只进本地
  *    缓冲，只有随「本来就要发的」错误上报搭车才离开设备（见 utils/client-diagnostics）；
  * 3. Sentry：预期内的失败不报——ApiError 已由 services/api/client 按 network/5xx 规则
@@ -124,9 +124,8 @@ export function reportHandledFailure(
         `[${safeOperation}] ${safeKind} failed`,
         redactSensitiveFields({
           ...details,
-          message: diagnosticErrorMessage(error),
+          errorName: errorName(error),
         }),
-        error,
       );
     }
 

@@ -121,8 +121,8 @@ test('upload failures show generic copy and log redacted diagnostics', async () 
     expect.stringContaining('upload.example.com'),
   );
   expect(warnSpy).toHaveBeenCalledWith(
-    '[useChangeCover] cover update failed',
-    expect.objectContaining({ message: expect.stringContaining('[redacted-url]') }),
+    '[profile] coverUpdate failed',
+    expect.objectContaining({ errorName: 'Error' }),
   );
   expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('upload.example.com');
   warnSpy.mockRestore();

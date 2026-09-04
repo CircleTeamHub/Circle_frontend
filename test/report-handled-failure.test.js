@@ -156,13 +156,20 @@ test('caller context cannot override operation/kind and unstable tags fall back'
 
 test('dev console output is redacted and silent in production', () => {
   const dev = loadReportFailure({ dev: true });
-  dev.reportHandledFailure('auth', 'serverLogout', new Error('boom'), {
-    token: 'secret-token',
-  });
+  dev.reportHandledFailure(
+    'auth',
+    'serverLogout',
+    new Error('private response data'),
+    {
+      token: 'secret-token',
+    },
+  );
   assert.equal(dev.warnCalls.length, 1);
   assert.equal(dev.warnCalls[0][0], '[auth] serverLogout failed');
   assert.equal(dev.warnCalls[0][1].token, '[REDACTED]');
-  assert.equal(dev.warnCalls[0][1].message, 'boom');
+  assert.equal(dev.warnCalls[0][1].errorName, 'Error');
+  assert.equal(dev.warnCalls[0].length, 2);
+  assert.doesNotMatch(JSON.stringify(dev.warnCalls), /private response data/);
 
   const prod = loadReportFailure({ dev: false });
   prod.reportHandledFailure('auth', 'serverLogout', new Error('boom'));
