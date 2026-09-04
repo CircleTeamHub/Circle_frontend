@@ -89,8 +89,10 @@ export interface OutboxEntry {
     content: Record<string, unknown>;
     d: string;
     replyToId?: string;
+    forwardFromMessageId?: string;
   };
   createdAt: string;
+  failedAfterHeight?: number;
 }
 
 export async function outboxUpsert(_entry: OutboxEntry): Promise<void> {}

@@ -129,11 +129,12 @@ function scheduleNextBurnPurge(
 export type StoredChatMessage = ChatMessageDto & {
   failed?: boolean;
   /**
-   * 标红那一刻会话里的最大 height —— 「这次失败之前服务端已确认到第几条」。
+   * 点击发送那一刻会话里的最大 height —— 「这次发送发生在第几条之后」。
    *
-   * 会话预览的「发送失败」前缀据此判断这次失败是不是最新一次尝试。不能拿
-   * createdAt 比:失败气泡是设备时钟、已确认消息是服务端时钟,跨域比大小会
-   * 让时钟快的设备一直挂着撤不掉的前缀。详见 features/messages/utils/failed-preview。
+   * 发送中仍临时置底；一旦失败，气泡回到这个服务端位置。会话预览的
+   * 「发送失败」前缀也用它判断这次失败是不是最新一次尝试。不能拿 createdAt
+   * 比:失败气泡是设备时钟、已确认消息是服务端时钟,跨域比大小会让时钟快的
+   * 设备一直挂着撤不掉的前缀。详见 features/messages/utils/failed-preview。
    */
   failedAfterHeight?: number;
 };
@@ -316,9 +317,40 @@ interface ChatStoreState {
 }
 
 function sortKey(message: ChatMessageDto): number {
-  // height=0 的本地乐观消息永远排在已确认消息之后，内部按发送时间稳定排序。
   if (message.height > 0) return message.height;
+  const local = message as StoredChatMessage;
+  // 失败消息固定在点击发送时的服务端水位后面；后续抵达的真消息继续排在它下面。
+  if (local.failed && Number.isFinite(local.failedAfterHeight)) {
+    return (local.failedAfterHeight ?? 0) + 0.5;
+  }
+  // 仍在发送中的本地乐观消息临时置底，内部按发送时间稳定排序。
   return Number.MAX_SAFE_INTEGER / 2 + Date.parse(message.createdAt);
+}
+
+function latestConfirmedHeight(messages: ChatMessageDto[]): number {
+  let latest = 0;
+  for (const message of messages) {
+    if (message.height > latest) latest = message.height;
+  }
+  return latest;
+}
+
+/**
+ * 发送时拿不到水位的失败气泡(转发/分享进从未打开过的会话,见 client 的
+ * captureSendAnchor)在这里补锚:第一批抵达的已确认消息几乎总是用户打开会话
+ * 时拉的那页历史,都发生在这次发送之前,所以锚在它们的最大 height 后面。
+ * 不补的话它会一直沉底,而预览前缀在任何真消息到达后就再也不提示。
+ */
+function resolveUnknownFailureAnchors(
+  messages: ChatMessageDto[],
+): ChatMessageDto[] {
+  const latest = latestConfirmedHeight(messages);
+  if (latest === 0) return messages;
+  return messages.map((message) => {
+    const local = message as StoredChatMessage;
+    if (!local.failed || Number.isFinite(local.failedAfterHeight)) return message;
+    return { ...local, failedAfterHeight: latest };
+  });
 }
 
 /**
@@ -440,8 +472,27 @@ export function mergeMessages(
     const prior = byId.get(message.id);
     byId.set(message.id, prior ? mergeMessageState(prior, message) : message);
   }
-  const merged = [...byId.values()].sort((a, b) => sortKey(a) - sortKey(b));
-  return merged.length > cap ? merged.slice(merged.length - cap) : merged;
+  const merged = resolveUnknownFailureAnchors([...byId.values()]).sort(
+    (a, b) => sortKey(a) - sortKey(b),
+  );
+  if (merged.length <= cap) return merged;
+  // 截断只淘汰已确认消息,失败气泡不占名额也不被挤掉。它锚在点击发送时的
+  // 旧水位上,之后每来一条新消息就往窗口顶部退一格;而 height=0 的行从不落
+  // messages 表 —— 一旦被截掉,气泡连同会话列表的「发送失败」前缀就一起
+  // 消失,要到冷启动从 outbox 回放才重新出现。
+  const isFailed = (message: ChatMessageDto): boolean =>
+    (message as StoredChatMessage).failed === true;
+  let confirmedCount = 0;
+  for (const message of merged) {
+    if (!isFailed(message)) confirmedCount += 1;
+  }
+  let toDrop = confirmedCount - cap;
+  if (toDrop <= 0) return merged;
+  return merged.filter((message) => {
+    if (toDrop <= 0 || isFailed(message)) return true;
+    toDrop -= 1;
+    return false;
+  });
 }
 
 /**
@@ -709,25 +760,33 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       (m) => m.d === d && m.height === 0 && !(m as StoredChatMessage).failed,
     );
     if (index < 0) return;
-    // 快照当前最大 height:会话预览据此判断这次失败是不是最新一次尝试
-    // (跨时钟域比 createdAt 会误报,见 failed-preview)。
-    let failedAfterHeight = 0;
-    for (const message of existing) {
-      if (message.height > failedAfterHeight) failedAfterHeight = message.height;
-    }
+    const pending = existing[index] as StoredChatMessage;
+    // 发送侧(文本与媒体都是)在点击发送时就预捕获水位。没有预捕获值的只有
+    // 两种:旧版 outbox 回放的行,以及发送时时间线没加载、会话列表也给不出
+    // lastMessage.height 的会话(转发/分享进从未打开过的会话)。这里按失败
+    // 那一刻的时间线补齐;时间线仍然一条已确认消息都没有就保持未知,交给
+    // mergeMessages 在第一批真消息抵达时补锚 —— 写死 0 的话,拉到真历史后
+    // 0+0.5 会把气泡顶到整段历史最上面,预览前缀也随之消失。
+    const latest = latestConfirmedHeight(existing);
+    const failedAfterHeight = Number.isFinite(pending.failedAfterHeight)
+      ? pending.failedAfterHeight
+      : latest > 0
+        ? latest
+        : undefined;
     const next: StoredChatMessage = {
-      ...existing[index],
+      ...pending,
       failed: true,
-      failedAfterHeight,
+      ...(failedAfterHeight === undefined ? {} : { failedAfterHeight }),
     };
+    const messages = [
+      ...existing.slice(0, index),
+      next,
+      ...existing.slice(index + 1),
+    ].sort((a, b) => sortKey(a) - sortKey(b));
     set({
       messagesByConversation: {
         ...messagesByConversation,
-        [conversationId]: [
-          ...existing.slice(0, index),
-          next,
-          ...existing.slice(index + 1),
-        ],
+        [conversationId]: messages,
       },
     });
   },
@@ -739,16 +798,27 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       (m) => m.d === d && m.height === 0 && (m as StoredChatMessage).failed,
     );
     if (index < 0) return;
-    const { failed: _failed, failedAfterHeight: _at, ...rest } =
-      existing[index] as StoredChatMessage;
+    const { failed: _failed, ...rest } = existing[index] as StoredChatMessage;
+    // 重发是一次新的发送位置；若再次失败，应停在重发时所在的位置。
+    // 水位只进不退:时间线当前没有已确认消息(窗口被截空/没加载)时,
+    // 保住原来的锚点(含「未知」),别退回 0 把气泡顶到历史最上面。
+    const anchor = Math.max(
+      latestConfirmedHeight(existing),
+      rest.failedAfterHeight ?? 0,
+    );
+    const retrying: StoredChatMessage = {
+      ...rest,
+      ...(anchor > 0 ? { failedAfterHeight: anchor } : {}),
+    };
+    const messages = [
+      ...existing.slice(0, index),
+      retrying,
+      ...existing.slice(index + 1),
+    ].sort((a, b) => sortKey(a) - sortKey(b));
     set({
       messagesByConversation: {
         ...messagesByConversation,
-        [conversationId]: [
-          ...existing.slice(0, index),
-          rest,
-          ...existing.slice(index + 1),
-        ],
+        [conversationId]: messages,
       },
     });
   },

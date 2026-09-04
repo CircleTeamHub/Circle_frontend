@@ -169,6 +169,39 @@ function selfSenderInfo() {
 }
 
 /**
+ * 点击发送那一刻的服务端水位(failedAfterHeight 的预捕获值)。
+ *
+ * 不能无脑取时间线最大 height:转发/分享会发进本次会话里从未打开过的会话,
+ * 时间线根本没加载,算出来是 0。之后只要拉到一页真历史,0+0.5 就把失败气泡
+ * 顶到整段历史最上面,预览的「发送失败」前缀也因为 maxHeight > 0 不再提示 ——
+ * 一次失败就这样悄悄消失了。
+ *
+ * 时间线没有已确认消息时退回会话列表的 lastMessage.height;两边都没有就留空
+ * (锚点未知):markMessageFailed 在失败那一刻按当时的时间线补齐,仍补不上的
+ * 由 store 的 mergeMessages 在第一批真消息抵达时补锚。
+ */
+function captureSendAnchor(conversationId: string): number | undefined {
+  const store = useChatStore.getState();
+  let latest = 0;
+  for (const message of store.messagesByConversation[conversationId] ?? []) {
+    if (message.height > latest) latest = message.height;
+  }
+  if (latest > 0) return latest;
+  const preview = store.conversations.find(
+    (conversation) => conversation.id === conversationId,
+  )?.lastMessage;
+  const previewHeight = preview?.height;
+  if (
+    typeof previewHeight === 'number' &&
+    Number.isFinite(previewHeight) &&
+    previewHeight > 0
+  ) {
+    return previewHeight;
+  }
+  return undefined;
+}
+
+/**
  * 发送核心:乐观 DTO(height=0, id=local:{d})立即入库并联动会话列表;
  * ack 返回后以真 id/height 替换(store 按 d 对账);失败置失败态并抛出。
  * 断线重发语义:失败后重试应复用同一 d —— 服务端幂等约束保证不重复。
@@ -187,6 +220,9 @@ export async function sendWithOptimism(
   assertLocalCanSendMessage();
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
+  const failedAfterHeight = captureSendAnchor(options.conversationId);
+  const anchorFields =
+    failedAfterHeight === undefined ? {} : { failedAfterHeight };
   const optimistic: StoredChatMessage = {
     id: `local:${d}`,
     conversationId: options.conversationId,
@@ -199,6 +235,7 @@ export async function sendWithOptimism(
     replyToId: options.replyToId ?? null,
     d,
     createdAt: new Date().toISOString(),
+    ...anchorFields,
   };
   store.ingestMessages(options.conversationId, [optimistic]);
   store.applyIncomingMessage(optimistic);
@@ -232,6 +269,7 @@ export async function sendWithOptimism(
         : {}),
     },
     createdAt: optimistic.createdAt,
+    ...anchorFields,
   }).catch(() => undefined);
   try {
     const ack = await sendChatMessage({
@@ -505,6 +543,8 @@ export function startMediaSend(options: {
   retry: (deliveryId: string) => Promise<void>;
 }): string {
   const d = createDeliveryId();
+  const store = useChatStore.getState();
+  const failedAfterHeight = captureSendAnchor(options.conversationId);
   const optimistic: StoredChatMessage = {
     id: `local:${d}`,
     conversationId: options.conversationId,
@@ -515,8 +555,8 @@ export function startMediaSend(options: {
     replyToId: null,
     d,
     createdAt: new Date().toISOString(),
+    ...(failedAfterHeight === undefined ? {} : { failedAfterHeight }),
   };
-  const store = useChatStore.getState();
   store.ingestMessages(options.conversationId, [optimistic]);
   store.applyIncomingMessage(optimistic);
   mediaRetries.set(d, () => options.retry(d));
@@ -584,6 +624,15 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
     (item) => item.d === d && item.conversationId === conversationId,
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
+  const retrying = (
+    useChatStore.getState().messagesByConversation[conversationId] ?? []
+  ).find((message) => message.d === d) as StoredChatMessage | undefined;
+  const retryAnchor = retrying?.failedAfterHeight;
+  // 重启恢复时也必须保留这次重发的位置；否则再次失败后会重新跑到最底部。
+  await outboxUpsert({
+    ...entry,
+    ...(Number.isFinite(retryAnchor) ? { failedAfterHeight: retryAnchor } : {}),
+  });
   const { localPreviewContent, ...wirePayload } = entry.payload;
   const ack = await sendChatMessage(wirePayload);
   void outboxDelete(d);

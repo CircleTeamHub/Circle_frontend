@@ -74,7 +74,10 @@ function zustandStub() {
   };
 }
 
+// outboxEntries 是 outboxList 回放给客户端的种子行;outboxWrites 收集客户端写进
+// outbox 的每一行(断言发送时捕获的失败锚点用)。
 function loadSendStack({ onSend, outboxEntries = [], onBackfill = () => {} }) {
+  const outboxWrites = [];
   const store = runModule('src/chat-core/store.ts', (request) => {
     if (request === 'zustand') return zustandStub();
     // protocol.ts 零依赖:跑真的,别桩 —— SERVER_COMPENSATED_TYPES 是生产常量。
@@ -157,11 +160,17 @@ function loadSendStack({ onSend, outboxEntries = [], onBackfill = () => {} }) {
         throw new Error('protocol should have no runtime deps');
       });
     if (request === './local-db')
-      return { ...__localDbStub, outboxList: async () => outboxEntries };
+      return {
+        ...__localDbStub,
+        outboxList: async () => outboxEntries,
+        outboxUpsert: async (entry) => {
+          outboxWrites.push(entry);
+        },
+      };
     throw new Error(`unexpected require: ${request}`);
   });
 
-  return { client, store };
+  return { client, store, outboxWrites };
 }
 
 test('a server echo that beats the ack is not overwritten by the synthetic confirmation', async () => {
@@ -423,6 +432,139 @@ test('a no-echo retry without a local preview does not backfill', async () => {
   await client.retryFailedChatMessage('c1', 'd-text');
 
   assert.deepEqual(backfills, []);
+});
+
+test('send captures the current server height for a later failure position', async () => {
+  const { client, store, outboxWrites } = loadSendStack({
+    onSend: async () => {
+      throw new Error('offline');
+    },
+  });
+  const state = store.useChatStore.getState();
+  state.ingestMessages('c1', [
+    {
+      id: 'srv-7',
+      conversationId: 'c1',
+      height: 7,
+      type: 'text',
+      content: { text: 'before' },
+      sender: { id: 'peer' },
+      replyToId: null,
+      d: null,
+      createdAt: '2026-08-05T12:00:00.000Z',
+    },
+  ]);
+
+  await assert.rejects(
+    client.sendTextMessage({ conversationId: 'c1', text: 'will fail' }),
+    /offline/,
+  );
+
+  assert.equal(outboxWrites.length, 1);
+  assert.equal(outboxWrites[0].failedAfterHeight, 7);
+});
+
+function loadFailedPreview() {
+  // 只 import type,零运行时依赖。
+  return runModule('src/features/messages/utils/failed-preview.ts', () => {
+    throw new Error('failed-preview should have no runtime deps');
+  });
+}
+
+function confirmed(conversationId, height) {
+  return {
+    id: `h-${height}`,
+    conversationId,
+    height,
+    type: 'text',
+    content: { text: `#${height}` },
+    sender: { id: 'peer', nickname: '对方', avatarUrl: null },
+    replyToId: null,
+    d: null,
+    createdAt: `2026-08-05T12:00:${String(height).padStart(2, '0')}.000Z`,
+  };
+}
+
+test('forwarding into a conversation with no loaded timeline keeps the failure visible once history arrives', async () => {
+  const { client, store, outboxWrites } = loadSendStack({
+    onSend: async () => {
+      throw new Error('offline');
+    },
+  });
+  const { hasFailedLatestMessage } = loadFailedPreview();
+  const state = store.useChatStore.getState();
+  state.setCurrentUserId('me');
+  state.setConversations([]);
+
+  // ForwardPicker/分享:发进本次会话从未打开过的会话,时间线里什么都没有。
+  await assert.rejects(
+    client.sendTextMessage({ conversationId: 'c-fwd', text: 'forwarded' }),
+    /offline/,
+  );
+  // 拿不到任何水位时不能写 0,留空等第一批真消息补锚。
+  assert.equal(outboxWrites.length, 1);
+  assert.equal(outboxWrites[0].failedAfterHeight, undefined);
+
+  // 用户之后打开会话,拉到一页真历史。
+  const history = [];
+  for (let height = 10; height <= 15; height += 1) {
+    history.push(confirmed('c-fwd', height));
+  }
+  state.ingestMessages('c-fwd', history);
+
+  const timeline = store.useChatStore.getState().messagesByConversation['c-fwd'];
+  assert.deepEqual(Array.from(timeline, (m) => m.id), [
+    'h-10',
+    'h-11',
+    'h-12',
+    'h-13',
+    'h-14',
+    'h-15',
+    'local:d-test',
+  ]);
+  assert.equal(timeline[6].failed, true);
+  // 会话列表的「发送失败」前缀也必须还在。
+  assert.equal(hasFailedLatestMessage(timeline), true);
+});
+
+test('a send without a loaded timeline anchors to the conversation preview height', async () => {
+  const { client, store, outboxWrites } = loadSendStack({
+    onSend: async () => {
+      throw new Error('offline');
+    },
+  });
+  const state = store.useChatStore.getState();
+  state.setCurrentUserId('me');
+  state.setConversations([
+    {
+      ...directConversation('c1'),
+      lastMessage: confirmed('c1', 12),
+      lastMessageAt: '2026-08-05T12:00:12.000Z',
+    },
+  ]);
+
+  await assert.rejects(
+    client.sendTextMessage({ conversationId: 'c1', text: 'forwarded' }),
+    /offline/,
+  );
+  assert.equal(outboxWrites.length, 1);
+  assert.equal(outboxWrites[0].failedAfterHeight, 12);
+
+  const history = [];
+  for (let height = 10; height <= 15; height += 1) {
+    history.push(confirmed('c1', height));
+  }
+  state.ingestMessages('c1', history);
+  const timeline = store.useChatStore.getState().messagesByConversation['c1'];
+  assert.deepEqual(Array.from(timeline, (m) => m.id), [
+    'h-10',
+    'h-11',
+    'h-12',
+    'local:d-test',
+    'h-13',
+    'h-14',
+    'h-15',
+  ]);
 });
 
 test('video send keeps local preview off the wire while retaining playback metadata', async () => {
