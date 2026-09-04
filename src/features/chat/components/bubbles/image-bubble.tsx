@@ -1,10 +1,11 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { BubbleStatusText, MessageAvatar } from './shared';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { ImageViewer } from '@/components/ui/image-viewer';
 
 interface ImageBubbleProps {
   message: ChatMessage;
@@ -69,6 +70,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   selfDestructCacheKey = '',
 }) => {
   const { colors } = useTheme();
+  const [previewVisible, setPreviewVisible] = useState(false);
   const avatarNode = (
     <MessageAvatar
       message={message}
@@ -106,10 +108,15 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
 
   // 列表气泡优先渲染缩略图；缺失时回退到原图。原图查看留给点击放大流程。
   const displayUri = message.imageThumbUrl ?? message.imageUrl;
+  const previewUri = message.imageUrl ?? displayUri;
+  const handleOpenPreview = useCallback(() => {
+    if (previewUri) setPreviewVisible(true);
+  }, [previewUri]);
   const imageNode = (
     <View style={[sImage.body, outgoing ? sImage.bodyOutgoing : null]}>
       <Pressable
         style={sImage.imageWrap}
+        onPress={handleOpenPreview}
         onLongPress={onLongPress}
         delayLongPress={350}
       >
@@ -154,23 +161,37 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
 
   if (outgoing) {
     return (
-      <View style={[sImage.row, sImage.rowOutgoing]}>
-        {imageNode}
-        <View style={sImage.avatarSlot}>{avatarNode}</View>
-      </View>
+      <>
+        <View style={[sImage.row, sImage.rowOutgoing]}>
+          {imageNode}
+          <View style={sImage.avatarSlot}>{avatarNode}</View>
+        </View>
+        <ImageViewer
+          images={previewUri ? [previewUri] : []}
+          visible={previewVisible}
+          onClose={() => setPreviewVisible(false)}
+        />
+      </>
     );
   }
 
   return (
-    <View style={sImage.row}>
-      {onAvatarPress ? (
-        <Pressable style={sImage.avatarSlot} onPress={onAvatarPress}>
-          {avatarNode}
-        </Pressable>
-      ) : (
-        <View style={sImage.avatarSlot}>{avatarNode}</View>
-      )}
-      {imageNode}
-    </View>
+    <>
+      <View style={sImage.row}>
+        {onAvatarPress ? (
+          <Pressable style={sImage.avatarSlot} onPress={onAvatarPress}>
+            {avatarNode}
+          </Pressable>
+        ) : (
+          <View style={sImage.avatarSlot}>{avatarNode}</View>
+        )}
+        {imageNode}
+      </View>
+      <ImageViewer
+        images={previewUri ? [previewUri] : []}
+        visible={previewVisible}
+        onClose={() => setPreviewVisible(false)}
+      />
+    </>
   );
 };

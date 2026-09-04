@@ -11,6 +11,7 @@ import {
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -40,7 +41,8 @@ const QUICK_ACTION_KEYS: {
   { id: 'new-friends', icon: 'person-add', key: 'contacts.newFriends', iconBg: '#F97316' },
   { id: 'seats', icon: 'chatbubble', key: 'contacts.seats', iconBg: '#3B82F6' },
   { id: 'groups', icon: 'chatbubbles', key: 'contacts.groups', iconBg: '#22C55E' },
-  { id: 'circles', icon: 'people-circle', key: 'contacts.circles', iconBg: '#14B8A6' },
+  { id: 'moments', icon: 'images', key: 'discover.moments', iconBg: '#F97316' },
+  { id: 'circles', icon: 'people-circle', key: 'discover.management', iconBg: '#14B8A6' },
   { id: 'tags', icon: 'pricetag', key: 'contacts.tags', iconBg: '#A855F7' },
 ];
 
@@ -126,6 +128,7 @@ export default function ContactsScreen() {
   const unreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.count,
   );
+  const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
   const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.refresh,
   );
@@ -252,6 +255,8 @@ export default function ContactsScreen() {
         router.push('/(tabs)/contacts/seats');
       } else if (id === 'groups') {
         router.push('/(tabs)/contacts/groups');
+      } else if (id === 'moments') {
+        router.push('/(tabs)/contacts/moments');
       } else if (id === 'circles') {
         router.push('/(tabs)/contacts/circles');
       } else if (id === 'tags') {
@@ -316,11 +321,17 @@ export default function ContactsScreen() {
         {QUICK_ACTIONS.map((action, index) => (
           <View key={action.label}>
             <MenuRow
+              testID={
+                action.id === 'moments'
+                  ? E2E_TEST_IDS.discoverMomentsEntry
+                  : undefined
+              }
               icon={action.icon}
               iconBgColor={action.iconBg}
               label={action.label}
               showIndicatorDot={
-                action.id === 'new-friends' && unreadFriendActivityCount > 0
+                (action.id === 'new-friends' && unreadFriendActivityCount > 0) ||
+                (action.id === 'moments' && momentsUnread > 0)
               }
               onPress={() => handleQuickActionPress(action.id)}
             />

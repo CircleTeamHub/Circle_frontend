@@ -68,6 +68,12 @@
       "circleRingtone": "Tono de notificaciones de Círculo",
       "circleDefault": "Predeterminado de Círculo"
     },
+    "autoReply": {
+      "title": "Respuesta automática de mensajes directos",
+      "enabled": "Activar respuesta automática",
+      "help": "Responde automáticamente, como máximo una vez por conversación cada 30 segundos.",
+      "placeholder": "Escribe una respuesta automática"
+    },
     "appearance": {
       "title": "Pantalla",
       "themeMode": "Modo de tema",
@@ -95,6 +101,7 @@
       "showOriginalGroupNameHint": "Al activarlo: alias (apodo original del grupo)",
       "pinnedFoldCount": "Chats fijados visibles",
       "pinnedFoldCountHint": "Muestra los primeros N chats fijados y contrae el resto",
+      "showCollapsedPinned": "Mostrar {{count}} chats fijados más",
       "unlimited": "Sin límite",
       "batteryOptimization": "Aviso de optimización de batería",
       "batteryOptimizationHint": "Solo en Android. Si se desactiva, no aparecerá la guía de permisos en segundo plano"
@@ -432,6 +439,12 @@
     "burn1m": "1 minuto",
     "burn5m": "5 minutos",
     "clearHistory": "Vaciar historial de chat",
+    "clearHistoryForMe": "Eliminar para mí",
+    "clearHistoryForEveryone": "Eliminar para todos",
+    "groupLog": "Registro del grupo",
+    "groupLogLoadFailed": "No se pudo cargar el registro del grupo",
+    "noGroupLog": "Aún no hay actividad del grupo",
+    "groupActivity": "Actividad del grupo",
     "clearHistoryWarning": "Esto eliminará permanentemente todos los mensajes de esta conversación.",
     "clear": "Borrar",
     "deleteFriend": "Eliminar contacto",
@@ -1490,6 +1503,7 @@
       "pleaseSelect": "Elige una opción",
       "expiryLabel": "Caducidad de la publicación",
       "expiryPickerTitle": "Elige la caducidad",
+      "expiry6h": "Caduca en 6 horas",
       "expiry24h": "Caduca en 24 horas",
       "expiry3d": "Caduca en 3 días",
       "expiry7d": "Caduca en 7 días",
@@ -1697,7 +1711,10 @@
       "categoryTitle": "Categorías de amigos",
       "categoryDesc": "Ver amigos por etiquetas para acceder rápido a grupos concretos.",
       "friendCount": "{{count}} amigos",
-      "viewByTag": "Ver amigos por etiqueta"
+      "viewByTag": "Ver amigos por etiqueta",
+      "addTag": "Crear etiqueta",
+      "tagNamePlaceholder": "Escribe un nombre de etiqueta",
+      "createFailedTitle": "No se pudo crear la etiqueta"
     },
     "tagDetail": {
       "fallbackTitle": "Amigos de la etiqueta",
@@ -1709,8 +1726,10 @@
     },
     "groupsScreen": {
       "title": "Grupos",
+      "newGroups": "Grupos nuevos",
       "myCreated": "Grupos que creé",
       "myJoined": "Grupos a los que me uní",
+      "myManaged": "Grupos que administro",
       "memberCount": "{{count}} miembros",
       "empty": "Sin grupos",
       "loading": "Cargando grupos",
@@ -1792,7 +1811,7 @@
     "phonePlaceholder": "Escribe tu número de teléfono",
     "qq": "QQ",
     "qqPlaceholder": "Escribe tu número de QQ",
-    "notBound": "Sin definir",
+    "notBound": "Sin completar",
     "accountId": "ID de cuenta",
     "tapToChange": "Toca para ver",
     "accountIdNotSupported": "Los ID de cuenta los asigna el sistema y no se pueden cambiar.",
@@ -2299,6 +2318,9 @@
       },
       "notifications": {
         "label": "Notificaciones"
+      },
+      "autoReply": {
+        "label": "Respuesta automática de mensajes directos"
       },
       "appearance": {
         "label": "Pantalla"

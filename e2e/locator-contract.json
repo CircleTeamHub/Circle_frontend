@@ -23,7 +23,7 @@
     { "key": "contactsScreen", "id": "windnote.contacts.screen", "source": "src/features/contacts/screens/ContactsScreen.tsx" },
     { "key": "contactsAddFriend", "id": "windnote.contacts.add-friend", "source": "src/features/contacts/screens/ContactsScreen.tsx" },
     { "key": "discoverScreen", "id": "windnote.discover.screen", "source": "src/features/discover/screens/DiscoverScreen.tsx" },
-    { "key": "discoverMomentsEntry", "id": "windnote.discover.moments-entry", "source": "src/features/discover/screens/DiscoverScreen.tsx" },
+    { "key": "discoverMomentsEntry", "id": "windnote.discover.moments-entry", "source": "src/features/contacts/screens/ContactsScreen.tsx" },
     { "key": "discoverPlazaEntry", "id": "windnote.discover.plaza-entry", "source": "src/features/discover/screens/DiscoverScreen.tsx" },
     { "key": "momentsScreen", "id": "windnote.moments.screen", "source": "src/features/discover/screens/MomentsScreen.tsx" },
     { "key": "momentsCreate", "id": "windnote.moments.create", "source": "src/features/discover/screens/MomentsScreen.tsx" },

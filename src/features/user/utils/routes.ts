@@ -306,6 +306,28 @@ export function getEditGroupNoticeHref(
   }
 }
 
+export function getGroupLogHref(
+  scope: UserProfileScope,
+  params: { conversationID: string; title?: string },
+): Href {
+  const routeParams = {
+    conversationID: params.conversationID,
+    ...(params.title ? { title: params.title } : {}),
+  };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/group-log', params: routeParams } as unknown as Href;
+    case 'profile':
+      return { pathname: '/(tabs)/profile/group-log', params: routeParams } as unknown as Href;
+    case 'discover':
+      return { pathname: '/(tabs)/discover/group-log', params: routeParams } as unknown as Href;
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/group-log', params: routeParams } as unknown as Href;
+  }
+}
+
 export function getGroupMemberSearchHref(
   scope: UserProfileScope,
   params: {

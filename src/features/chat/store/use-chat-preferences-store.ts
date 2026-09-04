@@ -24,7 +24,11 @@ export const CHAT_BACKGROUND_PRESETS: ChatBackgroundPreset[] = [
 ];
 
 type ChatPreferencesState = {
+  globalBackgroundPreference: ChatBackgroundPreference | null;
   backgroundsByConversationID: Record<string, ChatBackgroundPreference>;
+  setGlobalBackgroundPreference: (
+    preference: ChatBackgroundPreference | null,
+  ) => void;
   getChatBackgroundPreference: (conversationID: string) => ChatBackgroundPreference;
   setChatBackgroundPreference: (
     conversationID: string,
@@ -59,10 +63,27 @@ export function resolveChatBackgroundStyle(
   }
 }
 
+export function resolveEffectiveChatBackgroundPreference(
+  conversationPreference: ChatBackgroundPreference | null | undefined,
+  globalBackgroundPreference: ChatBackgroundPreference | null | undefined,
+): ChatBackgroundPreference {
+  if (!conversationPreference || conversationPreference.mode === 'global') {
+    return globalBackgroundPreference ?? DEFAULT_CHAT_BACKGROUND_PREFERENCE;
+  }
+  return conversationPreference;
+}
+
 export const useChatPreferencesStore = create<ChatPreferencesState>()(
   persist(
     (set, get) => ({
+      globalBackgroundPreference: null,
       backgroundsByConversationID: {},
+
+      setGlobalBackgroundPreference: (preference) =>
+        set({
+          globalBackgroundPreference:
+            preference?.mode === 'global' ? null : preference,
+        }),
 
       getChatBackgroundPreference: (conversationID) =>
         get().backgroundsByConversationID[conversationID] ??
@@ -101,12 +122,17 @@ export const useChatPreferencesStore = create<ChatPreferencesState>()(
           };
         }),
 
-      resetForLogout: () => set({ backgroundsByConversationID: {} }),
+      resetForLogout: () =>
+        set({
+          globalBackgroundPreference: null,
+          backgroundsByConversationID: {},
+        }),
     }),
     {
       name: 'circle-im-chat-preferences',
       storage: createJSONStorage(() => mmkvJsonStorage),
       partialize: (state) => ({
+        globalBackgroundPreference: state.globalBackgroundPreference,
         backgroundsByConversationID: state.backgroundsByConversationID,
       }),
     },

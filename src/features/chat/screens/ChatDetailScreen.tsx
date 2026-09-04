@@ -165,6 +165,7 @@ import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { AVATAR_SIZE } from '@/features/chat/components/bubbles/shared';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
+  resolveEffectiveChatBackgroundPreference,
   resolveChatBackgroundStyle,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
@@ -292,6 +293,13 @@ const PANEL_LAYOUT_ANIM = {
 
 /** 会话形态判别(旧 OpenIM SessionType 枚举的最小替代)。 */
 type ConversationKind = 'single' | 'group';
+
+function getAvatarMergeKey(message: ChatMessage | undefined) {
+  if (!message) return null;
+  if (message.type === 'date' || message.type === 'system-notice') return null;
+  if (message.outgoing || message.type === 'sent') return 'self';
+  return message.senderID ? `sender:${message.senderID}` : 'peer';
+}
 
 const s = StyleSheet.create({
   // 群聊接收气泡上方的发送者名字（缩进对齐气泡起点 = 头像宽 + 间距）。
@@ -805,9 +813,19 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       state.backgroundsByConversationID[conversationID] ??
       DEFAULT_CHAT_BACKGROUND_PREFERENCE,
   );
+  const globalBackgroundPreference = useChatPreferencesStore(
+    (state) => state.globalBackgroundPreference,
+  );
   const backgroundStyle = useMemo(
-    () => resolveChatBackgroundStyle(backgroundPreference, colors.background),
-    [backgroundPreference, colors.background],
+    () =>
+      resolveChatBackgroundStyle(
+        resolveEffectiveChatBackgroundPreference(
+          backgroundPreference,
+          globalBackgroundPreference,
+        ),
+        colors.background,
+      ),
+    [backgroundPreference, colors.background, globalBackgroundPreference],
   );
 
   const handleBack = useCallback(() => {
@@ -899,6 +917,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   // 输入状态开关(设置页早就有这两项,这里真正接上:关掉就不向对方上报)。
   const typingSingle = useAppSettingsStore((state) => state.settings.singleTyping);
   const typingGroup = useAppSettingsStore((state) => state.settings.groupTyping);
+  const mergeAvatar = useAppSettingsStore((state) => state.settings.mergeAvatar);
   // 对端「正在输入」有效期;到期自动回落在线状态。
   const typingUntil = useChatStore(
     (state) => state.typingUntilByConversation[conversationID] ?? 0,
@@ -1040,6 +1059,16 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     );
     return mapped;
   }, [currentUserID, conversationMessages, peerReadHeight, peerDeliveredHeight]);
+  const displayMessages = useMemo(() => {
+    if (!mergeAvatar) return messages;
+    return messages.map((message, index) => {
+      const key = getAvatarMergeKey(message);
+      const olderKey = getAvatarMergeKey(messages[index + 1]);
+      return key && key === olderKey
+        ? { ...message, suppressAvatar: true }
+        : message;
+    });
+  }, [mergeAvatar, messages]);
   messagesLengthRef.current = messages.length;
 
   // 在此会话页时来新消息 → 即时推进已读水位(socket pending 队列自带去重合并)。
@@ -3805,7 +3834,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           testID={E2E_TEST_IDS.chatMessageList}
           ref={flatListRef}
           style={s.messageListSurface}
-          data={messages}
+          data={displayMessages}
           inverted
           renderItem={renderItem}
           keyExtractor={keyExtractor}

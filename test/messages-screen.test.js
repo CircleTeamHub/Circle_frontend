@@ -13,7 +13,7 @@ test('messages screen renders pinned conversations as compact grouped surfaces w
   assert.match(source, /pinnedSurface/);
   assert.match(source, /type PinnedGroupPosition = "single" \| "first" \| "middle" \| "last" \| "none"/);
   assert.match(source, /getPinnedGroupPosition/);
-  assert.match(source, /pinnedGroupPosition=\{getPinnedGroupPosition\(visibleConversations, index\)\}/);
+  assert.match(source, /pinnedGroupPosition=\{getPinnedGroupPosition\(displayedConversations, index\)\}/);
   assert.match(source, /getPinnedRowStyle\(pinnedGroupPosition\)/);
   assert.match(source, /getPinnedSurfaceStyle\(pinnedGroupPosition\)/);
   assert.match(source, /pinnedSurfaceStyle=\{d\.pinnedSurface\}/);
@@ -21,21 +21,21 @@ test('messages screen renders pinned conversations as compact grouped surfaces w
   assert.match(source, /pinnedSurfaceMiddle/);
   assert.doesNotMatch(source, /name="pin"/);
   assert.match(source, /const hiddenPinnedSeparatorIDs = useMemo/);
-  assert.match(source, /visibleConversations\[index \+ 1\]\?\.pinned/);
+  assert.match(source, /displayedConversations\[index \+ 1\]\?\.pinned/);
   assert.match(source, /hiddenPinnedSeparatorIDs\.has\(leadingItem\.id\) \? null : <Divider \/>/);
   assert.doesNotMatch(source, /trailingItem/);
   assert.match(source, /ItemSeparatorComponent=\{renderSeparator\}/);
 });
 
-test('messages screen darkens pinned conversation surfaces in light mode', () => {
+test('messages screen keeps pinned conversation surfaces visually consistent', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/messages/screens/MessagesScreen.tsx',
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /resolvedMode/);
-  assert.match(source, /resolvedMode === "light" \? colors\.surfaceBorder : colors\.surface/);
+  assert.match(source, /pinnedSurface:\s*\{\s*backgroundColor:\s*colors\.surface/);
+  assert.doesNotMatch(source, /resolvedMode === "light" \? colors\.surfaceBorder : colors\.surface/);
 });
 
 test('messages screen distinguishes temporary chats with only an avatar clock badge', () => {

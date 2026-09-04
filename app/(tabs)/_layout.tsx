@@ -500,8 +500,8 @@ export default function TabLayout() {
   // tab —— 而好友申请的规范 UI 是「新的朋友」，归联系人。
   const badgeMap: Record<string, boolean> = useMemo(() => ({
     messages: messagesUnread > 0,
-    contacts: contactsUnread > 0,
-    discover: momentsUnread > 0 || circleUnread > 0 || signupUnread > 0,
+    contacts: contactsUnread > 0 || momentsUnread > 0,
+    discover: circleUnread > 0 || signupUnread > 0,
     profile: profileUnread > 0,
   }), [
     messagesUnread,

@@ -52,6 +52,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 
 const SWIPE_ACTION_WIDTH = 76;
 const SWIPE_ACTIONS_WIDTH = SWIPE_ACTION_WIDTH * 3;
@@ -178,6 +179,13 @@ const s = StyleSheet.create({
     fontSize: 22,
     lineHeight: 24,
     transform: [{ translateY: -2 }],
+  },
+  collapsedPinnedButton: {
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
   },
   // 单条会话行外层：保留普通列表分隔线和行间距
   row: {
@@ -616,7 +624,7 @@ const ConversationRow = memo(ConversationRowImpl);
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { colors, resolvedMode } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
 
   // useMemo 让 BASE_FILTERS / MENU_ACTIONS 在 `t` 不变时保持同一引用 ——
@@ -652,6 +660,8 @@ export default function MessagesScreen() {
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
   const [refreshing, setRefreshing] = useState(false);
+  const [showAllPinned, setShowAllPinned] = useState(false);
+  const pinnedFoldCount = useAppSettingsStore((state) => state.pinnedFoldCount);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
   const preferenceWriteInFlightRef = useRef(new Set<string>());
@@ -743,12 +753,12 @@ export default function MessagesScreen() {
         color: colors.text,
         ...Typography.body,
       },
-      // 置顶内容面：用 surface 色做轻微背景区分
+      // 所有置顶行使用同一 surface，避免首尾行或浅色主题出现色差。
       pinnedSurface: {
-        backgroundColor: resolvedMode === "light" ? colors.surfaceBorder : colors.surface,
+        backgroundColor: colors.surface,
       },
     }),
-    [colors, resolvedMode],
+    [colors],
   );
 
   // 筛选标签列表 = 固定标签 + 用户自定义群组（动态追加）
@@ -856,6 +866,29 @@ export default function MessagesScreen() {
     return conversations;
   }, [activeFilterId, conversationGroups, conversations]);
 
+  const collapsedPinnedCount = useMemo(() => {
+    if (showAllPinned || pinnedFoldCount === 0) return 0;
+    return Math.max(
+      0,
+      visibleConversations.filter((conversation) => conversation.pinned).length -
+        pinnedFoldCount,
+    );
+  }, [pinnedFoldCount, showAllPinned, visibleConversations]);
+
+  const displayedConversations = useMemo(() => {
+    if (collapsedPinnedCount === 0) return visibleConversations;
+    let visiblePinned = 0;
+    return visibleConversations.filter((conversation) => {
+      if (!conversation.pinned) return true;
+      visiblePinned += 1;
+      return visiblePinned <= pinnedFoldCount;
+    });
+  }, [collapsedPinnedCount, pinnedFoldCount, visibleConversations]);
+
+  useEffect(() => {
+    setShowAllPinned(false);
+  }, [activeFilterId, pinnedFoldCount]);
+
   // 桌面网页版（宽视口）分栏状态：右栏当前内嵌的会话。窄窗/原生恒为 null。
   const isSplitLayout = useDesktopSplitLayout();
   const listPaneWidth = useSplitPaneStore((state) => state.listPaneWidth);
@@ -949,6 +982,29 @@ export default function MessagesScreen() {
 
   const handleConfirmDeleteConversation = useCallback(
     (conversation: Conversation) => {
+      const deleteConversation = (deleteForEveryone: boolean) => {
+        clearLocalUnread(conversation.id);
+        void (async () => {
+          try {
+            await clearChatConversationHistory(conversation.id, {
+              forEveryone: deleteForEveryone,
+            });
+            await updateChatConversationPreferences(conversation.id, {
+              hidden: true,
+            });
+            setEmbeddedChat((current) =>
+              current?.conversationID === conversation.id ? null : current,
+            );
+          } catch (err) {
+            reportHandledFailure("messages", "swipeDelete", err);
+            Alert.alert(
+              t("messages.deleteChat"),
+              getApiErrorMessage(err, t("common.networkError")),
+            );
+          }
+        })();
+      };
+
       Alert.alert(
         t("messages.deleteChat"),
         conversation.conversationType === "private"
@@ -960,45 +1016,25 @@ export default function MessagesScreen() {
                 "删除「{{name}}」的聊天记录？对方的记录也会同时删除，此操作无法撤销。",
             })
           : t("messages.deleteChatConfirm", { name: conversation.name }),
-        [
+        conversation.conversationType === "group"
+          ? [
+              { text: t("common.cancel"), style: "cancel" as const },
+              {
+                text: t("chat.clearHistoryForMe", { defaultValue: "仅删除我的记录" }),
+                onPress: () => deleteConversation(false),
+              },
+              {
+                text: t("chat.clearHistoryForEveryone", { defaultValue: "删除所有人的记录" }),
+                style: "destructive" as const,
+                onPress: () => deleteConversation(true),
+              },
+            ]
+          : [
           { text: t("common.cancel"), style: "cancel" },
           {
             text: t("common.delete"),
             style: "destructive",
-            onPress: () => {
-              clearLocalUnread(conversation.id);
-              // G-14:删除会话 = 清空历史水位 + 隐藏。私聊由服务端同步推进双方
-              // 水位；群聊只清本人。新消息到达时会话会重新浮出，但旧历史不再可见。
-              //
-              // 两个请求必须串行且失败要出声。原来是并发 + 只在 __DEV__ 里
-              // console.warn:清空失败时会话照样消失,而旧历史会随下一条新消息
-              // 整段浮回来;隐藏失败时行还在、时间线却已经空了。两种都是静默的。
-              // 先清后隐:清失败就不隐,列表保持原样,用户能看出没成功。
-              void (async () => {
-                try {
-                  await clearChatConversationHistory(conversation.id, {
-                    forEveryone: conversation.conversationType === "private",
-                  });
-                  await updateChatConversationPreferences(conversation.id, {
-                    hidden: true,
-                  });
-                  // 分栏模式:删掉的正好是右栏正在显示的那个会话时,把右栏收回
-                  // 空态。不收的话左边的行没了、右边还挂着一段已经被清空的
-                  // 聊天,往里发消息等于把会话原地复活。
-                  // 用函数式更新读当前值,免得把 embeddedChat 塞进依赖 ——
-                  // 那会让这个回调随每次切会话重建。
-                  setEmbeddedChat((current) =>
-                    current?.conversationID === conversation.id ? null : current,
-                  );
-                } catch (err) {
-                  reportHandledFailure("messages", "swipeDelete", err);
-                  Alert.alert(
-                    t("messages.deleteChat"),
-                    getApiErrorMessage(err, t("common.networkError")),
-                  );
-                }
-              })();
-            },
+            onPress: () => deleteConversation(true),
           },
         ],
       );
@@ -1055,7 +1091,7 @@ export default function MessagesScreen() {
       <ConversationRow
         item={item}
         testID={E2E_TEST_IDS.messagesConversation(item.id)}
-        pinnedGroupPosition={getPinnedGroupPosition(visibleConversations, index)}
+        pinnedGroupPosition={getPinnedGroupPosition(displayedConversations, index)}
         labels={swipeLabels}
         rowBackgroundColor={
           isSplitLayout && embeddedChat?.conversationID === item.id
@@ -1086,19 +1122,19 @@ export default function MessagesScreen() {
       handleOpenUserProfile,
       isSplitLayout,
       swipeLabels,
-      visibleConversations,
+      displayedConversations,
     ],
   );
 
   const hiddenPinnedSeparatorIDs = useMemo(() => {
     const ids = new Set<string>();
-    visibleConversations.forEach((conversation, index) => {
-      if (conversation.pinned && visibleConversations[index + 1]?.pinned) {
+    displayedConversations.forEach((conversation, index) => {
+      if (conversation.pinned && displayedConversations[index + 1]?.pinned) {
         ids.add(conversation.id);
       }
     });
     return ids;
-  }, [visibleConversations]);
+  }, [displayedConversations]);
 
   const renderSeparator = useCallback(
     ({
@@ -1169,8 +1205,23 @@ export default function MessagesScreen() {
           </Text>
         </View>
       ) : null}
+      {collapsedPinnedCount > 0 ? (
+        <Pressable
+          style={s.collapsedPinnedButton}
+          onPress={() => setShowAllPinned(true)}
+          accessibilityRole="button"
+        >
+          <Text style={d.preview}>
+            {t('settingsDetails.appearance.showCollapsedPinned', {
+              defaultValue: '展开另外 {{count}} 个置顶会话',
+              count: collapsedPinnedCount,
+            })}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
     </View>
-  ), [activeTab, colors, d, filterItems, handleClearUnread, handleFilterPress, handleOpenFind, handleOpenGroups, imConnected, imConnecting, t]);
+  ), [activeTab, collapsedPinnedCount, colors, d, filterItems, handleClearUnread, handleFilterPress, handleOpenFind, handleOpenGroups, imConnected, imConnecting, t]);
 
   const listPane = (
     <View
@@ -1179,7 +1230,7 @@ export default function MessagesScreen() {
     >
       <FlatList
         testID={E2E_TEST_IDS.messagesList}
-        data={visibleConversations}
+        data={displayedConversations}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ItemSeparatorComponent={renderSeparator}

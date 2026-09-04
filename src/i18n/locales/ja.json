@@ -68,6 +68,12 @@
       "circleRingtone": "サークル通知の着信音",
       "circleDefault": "サークル既定"
     },
+    "autoReply": {
+      "title": "DM自動返信",
+      "enabled": "自動返信を有効にする",
+      "help": "DM受信時、同じ会話には30秒に1回まで自動返信します。",
+      "placeholder": "自動返信の内容を入力"
+    },
     "appearance": {
       "title": "表示",
       "themeMode": "テーマモード",
@@ -95,6 +101,7 @@
       "showOriginalGroupNameHint": "オンにすると表示：メモ名（元のグループ名）",
       "pinnedFoldCount": "ピン留めの表示件数",
       "pinnedFoldCountHint": "ピン留めした会話を先頭からN件表示し、残りは折りたたむ",
+      "showCollapsedPinned": "残り{{count}}件のピン留めを表示",
       "unlimited": "無制限",
       "batteryOptimization": "バッテリー最適化の案内",
       "batteryOptimizationHint": "Androidのみ有効。オフにするとバックグラウンド権限の案内は表示されません"
@@ -431,6 +438,12 @@
     "burn1m": "1分",
     "burn5m": "5分",
     "clearHistory": "チャット履歴を削除",
+    "clearHistoryForMe": "自分の履歴のみ削除",
+    "clearHistoryForEveryone": "全員の履歴を削除",
+    "groupLog": "グループログ",
+    "groupLogLoadFailed": "グループログを読み込めませんでした",
+    "noGroupLog": "グループ活動はまだありません",
+    "groupActivity": "グループ活動",
     "clearHistoryWarning": "この会話のすべてのメッセージが完全に削除されます。",
     "clear": "消去",
     "deleteFriend": "連絡先を削除",
@@ -1487,6 +1500,8 @@
       "pleaseSelect": "選択してください",
       "expiryLabel": "投稿の有効期限",
       "expiryPickerTitle": "有効期限を選択",
+      "expiry6h": "6時間後に期限切れ",
+      "expiry6h": "6時間後に期限切れ",
       "expiry24h": "24時間後に期限切れ",
       "expiry3d": "3日後に期限切れ",
       "expiry7d": "7日後に期限切れ",
@@ -1694,7 +1709,10 @@
       "categoryTitle": "友だちの分類",
       "categoryDesc": "タグで友だちを分類し、特定のグループをすばやく見つけられます。",
       "friendCount": "友だち {{count}} 人",
-      "viewByTag": "タグで友だちを表示"
+      "viewByTag": "タグで友だちを表示",
+      "addTag": "タグを作成",
+      "tagNamePlaceholder": "タグ名を入力",
+      "createFailedTitle": "タグを作成できませんでした"
     },
     "tagDetail": {
       "fallbackTitle": "タグの友だち",
@@ -1706,8 +1724,10 @@
     },
     "groupsScreen": {
       "title": "グループ",
+      "newGroups": "新しいグループ",
       "myCreated": "作成したグループ",
       "myJoined": "参加中のグループ",
+      "myManaged": "管理中のグループ",
       "memberCount": "{{count}} 人",
       "empty": "グループはありません",
       "loading": "グループを読み込み中",
@@ -1789,7 +1809,7 @@
     "phonePlaceholder": "電話番号を入力",
     "qq": "QQ",
     "qqPlaceholder": "QQ番号を入力",
-    "notBound": "未設定",
+    "notBound": "未入力",
     "accountId": "アカウントID",
     "tapToChange": "タップして表示",
     "accountIdNotSupported": "アカウントIDはシステムが割り当てるため変更できません。",
@@ -2296,6 +2316,9 @@
       },
       "notifications": {
         "label": "通知"
+      },
+      "autoReply": {
+        "label": "DM自動返信"
       },
       "appearance": {
         "label": "表示"

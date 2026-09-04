@@ -7,12 +7,12 @@ function read(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 }
 
-test('registration authenticates with returned tokens and starts onboarding', () => {
+test('registration authenticates with returned tokens and enters the app directly', () => {
   const source = read('src/hooks/use-auth.ts');
 
   assert.match(source, /const tokens = await registerRequest\(/);
-  assert.match(source, /await onAuthSuccess\(tokens,\s*\{[\s\S]*onboardingRequired:\s*true/);
-  assert.match(source, /startAppServices:\s*false/);
+  assert.match(source, /await onAuthSuccess\(tokens,\s*\{[\s\S]*onboardingRequired:\s*false/);
+  assert.doesNotMatch(source, /onboardingRequired:\s*true,\s*startAppServices:\s*false/);
   assert.doesNotMatch(source, /redirectHref:/);
   assert.match(source, /if \(options\.startAppServices !== false\)/);
   assert.doesNotMatch(source, /pathname:\s*['"]\/\(auth\)\/login['"][\s\S]*email:\s*normalizedEmail/);

@@ -132,6 +132,8 @@ export interface TransferCardData {
 
 export interface ChatMessage {
   id: string;
+  /** 仅用于本地展示：连续消息合并时隐藏本条旁边的头像。 */
+  suppressAvatar?: boolean;
   type:
     | 'sent'
     | 'received'
