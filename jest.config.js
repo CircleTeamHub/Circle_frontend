@@ -5,15 +5,18 @@
 // Git worktrees are checked out inside this repo (see .gitignore). Each one is
 // a full copy of the tree with its own *.spec.tsx files and usually no
 // node_modules, so an unfiltered run collects hundreds of duplicate specs that
-// fail on import. Jest matches these against absolute paths using the host
-// separator, hence the [\\/] classes rather than a plain '/'.
+// fail on import. Write the patterns with '/' like jest's own default
+// '/node_modules/': jest-config rewrites '/' to the host separator before
+// compiling them (jest-regex-util replacePathSepForRegex), so they match
+// Windows paths too. A hand-written [\\/] class would be rewritten as well and
+// only creates a false sense of portability.
 // Caveat: these patterns are not anchored at this checkout, so running jest
 // from *inside* one of those worktrees ignores its own specs too ("No tests
 // found"). Run the suite from the main checkout.
 const nestedWorktreeCheckouts = [
-  '[\\\\/]\\.worktrees[\\\\/]',
-  '[\\\\/]\\.codex-worktrees[\\\\/]',
-  '[\\\\/]\\.claude[\\\\/]worktrees[\\\\/]',
+  '/\\.worktrees/',
+  '/\\.codex-worktrees/',
+  '/\\.claude/worktrees/',
 ];
 
 module.exports = {

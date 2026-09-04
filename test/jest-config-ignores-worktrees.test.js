@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+// jest-config runs every ignore pattern through this before compiling it, which
+// is how jest's own default '/node_modules/' matches Windows paths. Using the
+// same transform here means the test exercises what jest actually matches on
+// this host instead of a hand-rolled approximation of it.
+const { replacePathSepForRegex } = require('jest-regex-util');
 
 const jestConfig = require('../jest.config.js');
 
@@ -15,39 +20,45 @@ const worktreeCheckouts = [
 
 const ownSpec = ['src', 'features', 'auth', 'screens', 'LoginScreen.spec.tsx'];
 
-// Jest matches these patterns against absolute paths written with the host's
-// native separator, so every pattern has to accept backslashes and slashes.
-function nativePaths(segments) {
-  return {
-    windows: path.win32.join('C:', 'repo', ...segments),
-    posix: path.posix.join('/repo', ...segments),
-  };
+// Jest matches against absolute paths written with the host's native separator.
+function nativePath(segments) {
+  return path.resolve(path.sep, 'repo', ...segments);
 }
 
-// Same shape jest builds internally: one alternation over the pattern list.
+// Same shape jest builds internally: normalize each pattern for this host, then
+// one alternation over the list.
 function toMatcher(patterns) {
   assert.ok(
     Array.isArray(patterns) && patterns.length > 0,
     'expected a non-empty list of ignore patterns',
   );
-  return new RegExp(patterns.join('|'));
+  return new RegExp(patterns.map(replacePathSepForRegex).join('|'));
 }
 
 for (const key of ['testPathIgnorePatterns', 'modulePathIgnorePatterns']) {
-  test(`${key} hides worktree checkouts on Windows and POSIX`, () => {
+  test(`${key} hides worktree checkouts on this host`, () => {
     const matcher = toMatcher(jestConfig[key]);
     for (const checkout of worktreeCheckouts) {
-      const paths = nativePaths([...checkout, ...ownSpec]);
-      assert.match(paths.windows, matcher);
-      assert.match(paths.posix, matcher);
+      assert.match(nativePath([...checkout, ...ownSpec]), matcher);
     }
   });
 
   test(`${key} keeps this checkout's own spec files visible`, () => {
     const matcher = toMatcher(jestConfig[key]);
-    const paths = nativePaths(ownSpec);
-    assert.doesNotMatch(paths.windows, matcher);
-    assert.doesNotMatch(paths.posix, matcher);
+    assert.doesNotMatch(nativePath(ownSpec), matcher);
+    // A directory that merely contains the word must not be swept up either.
+    assert.doesNotMatch(
+      nativePath(['src', 'worktrees-ui', 'Worktrees.spec.tsx']),
+      matcher,
+    );
+  });
+
+  test(`${key} is written with '/' like jest's own defaults`, () => {
+    // Jest rewrites '/' to the host separator itself; a hand-written [\\/]
+    // class would be rewritten too and only pretends to add portability.
+    for (const pattern of jestConfig[key]) {
+      assert.doesNotMatch(pattern, /\[\\\\\/\]/);
+    }
   });
 }
 
