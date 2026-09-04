@@ -146,6 +146,16 @@ export const API_URL = assertSecureTransport(
 
 export const RUNTIME_API_TARGET_ID = buildRuntimeApiTargetId(API_URL);
 
+// E2E 运行时目标标记（app/_layout.tsx 挂的 1x1 可访问 View）只在 dev 构建或显式
+// 声明为测试构建（EXPO_PUBLIC_E2E_BUILD=1）时渲染。商店包不该在每个页面多出一个
+// 无标签的可访问元素污染无障碍树，也不该通过 accessibility id 暴露 API origin。
+// Maestro 用的 release-like 包在构建时与 EXPO_PUBLIC_API_URL 一起设置这个变量。
+const IS_E2E_BUILD =
+  process.env.EXPO_PUBLIC_E2E_BUILD === '1' ||
+  process.env.EXPO_PUBLIC_E2E_BUILD === 'true';
+
+export const E2E_TARGET_MARKER_ENABLED = IS_DEV_BUILD || IS_E2E_BUILD;
+
 /**
  * 从 API_URL 推导 realtime WebSocket URL：复用相同 host:port，把 protocol
  * http → ws、https → wss，丢掉 `/api/v1` 路径，挂上 `/realtime`。

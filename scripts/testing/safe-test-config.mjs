@@ -153,6 +153,14 @@ function validateAuth(env) {
   return mode;
 }
 
+// 前提：validateAuth 已经保证 authMode 合法且对应凭据非空。
+function buildMaestroSecretEnv(env, authMode) {
+  if (authMode === 'password') {
+    return { MAESTRO_E2E_PASSWORD: env.E2E_PASSWORD.trim() };
+  }
+  return { MAESTRO_E2E_VERIFICATION_CODE: env.E2E_VERIFICATION_CODE.trim() };
+}
+
 function copyDefined(env, names) {
   return Object.fromEntries(
     names
@@ -177,7 +185,7 @@ export function parseE2EConfig(env, suiteName) {
   requireExactTrue(env, 'E2E_EXECUTE');
   const origins = validateOrigins(env, 'E2E');
 
-  if (suite.auth) validateAuth(env);
+  const authMode = suite.auth ? validateAuth(env) : null;
   for (const fixture of suite.fixtures ?? []) requireValue(env, fixture);
 
   if (suite.mutates) {
@@ -209,14 +217,10 @@ export function parseE2EConfig(env, suiteName) {
       'E2E_PERF_SECOND_CONVERSATION_ID',
     ]),
   };
-  const maestroSecretEnv = {
-    ...(env.E2E_AUTH_MODE === 'password'
-      ? { MAESTRO_E2E_PASSWORD: env.E2E_PASSWORD.trim() }
-      : {}),
-    ...(env.E2E_AUTH_MODE === 'verification-code'
-      ? { MAESTRO_E2E_VERIFICATION_CODE: env.E2E_VERIFICATION_CODE.trim() }
-      : {}),
-  };
+  // 只有需要登录的 suite 才把凭据交给 Maestro。非认证 suite（如 smoke）不读
+  // E2E_PASSWORD / E2E_VERIFICATION_CODE：环境里残留 E2E_AUTH_MODE 却没配对应
+  // 凭据时不能在这里炸掉，也不该把无关的凭据带进子进程。
+  const maestroSecretEnv = authMode ? buildMaestroSecretEnv(env, authMode) : {};
 
   return Object.freeze({
     suite: suiteName,

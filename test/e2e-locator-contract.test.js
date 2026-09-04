@@ -46,4 +46,6 @@ test('the app root mounts the runtime API target marker', () => {
   const layout = fs.readFileSync(path.join(root, 'app', '_layout.tsx'), 'utf8');
   assert.match(layout, /testID=\{RUNTIME_API_TARGET_ID\}/);
   assert.match(layout, /pointerEvents="none"/);
+  // 标记只能在 dev / 测试构建里挂载：商店包不多出无标签可访问元素、不暴露 API origin。
+  assert.match(layout, /\{E2E_TARGET_MARKER_ENABLED \? \(\s*<View\s+accessible\s+testID=\{RUNTIME_API_TARGET_ID\}/);
 });

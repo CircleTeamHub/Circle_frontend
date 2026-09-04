@@ -207,6 +207,31 @@ test('authentication modes never silently fall back', async () => {
   );
 });
 
+test('non-auth suites ignore a stale auth mode without credentials', async () => {
+  const { parseE2EConfig } = await loadConfig();
+  // 操作者的 shell / e2e/.env 里常年留着 E2E_AUTH_MODE，但 smoke 不登录，
+  // 缺 E2E_PASSWORD 不能让它崩在 undefined.trim()。
+  const config = parseE2EConfig(
+    baseE2EEnv({ E2E_AUTH_MODE: 'password', E2E_PASSWORD: undefined }),
+    'smoke',
+  );
+  assert.equal(config.auth, false);
+  assert.deepEqual(config.maestroSecretEnv, {});
+
+  const codeConfig = parseE2EConfig(
+    baseE2EEnv({ E2E_AUTH_MODE: 'verification-code' }),
+    'smoke',
+  );
+  assert.deepEqual(codeConfig.maestroSecretEnv, {});
+
+  // 即使凭据在环境里，非认证 suite 也不把它们带给 Maestro 子进程。
+  const withSecrets = parseE2EConfig(
+    baseE2EEnv({ E2E_AUTH_MODE: 'password', E2E_PASSWORD: 'unused-secret' }),
+    'smoke',
+  );
+  assert.deepEqual(withSecrets.maestroSecretEnv, {});
+});
+
 test('E2E config binds Maestro to the installed app runtime target', async () => {
   const { parseE2EConfig } = await loadConfig();
   const config = parseE2EConfig(baseE2EEnv(), 'smoke');

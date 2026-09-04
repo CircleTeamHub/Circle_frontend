@@ -48,6 +48,9 @@ test('E2E and load documentation covers setup, fixtures, commands, thresholds, a
   assert.match(e2e, /Android/i);
   assert.match(e2e, /iOS/i);
   assert.match(e2e, /真机.*尚未|deferred/i);
+  // 被测包必须是 EXPO_PUBLIC_E2E_BUILD=1 的构建，否则 launch 子流程的目标断言必失败。
+  assert.match(e2e, /EXPO_PUBLIC_E2E_BUILD=1/);
+  assert.match(read('e2e/env.example'), /EXPO_PUBLIC_E2E_BUILD=1/);
   assert.match(fixtures, /E2E_PERF_CONVERSATION_ID/);
   assert.match(fixtures, /不得.*生产|production/i);
   for (const scenario of ['chat-send', 'chat-fan-in', 'circle-join', 'inbox-seed']) {
