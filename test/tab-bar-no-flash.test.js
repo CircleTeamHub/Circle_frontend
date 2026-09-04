@@ -91,7 +91,13 @@ test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降�
   assert.doesNotMatch(layout, /tintColor=\{colors\.primaryLight\}/);
   assert.match(layout, /colorScheme=\{colorScheme\}/);
   assert.match(layout, /intensity=\{\d+\}/);
-  assert.match(layout, /tint="systemMaterial"/);
+  // 应用允许主题与系统外观不同；旧版 iOS 的自适应 systemMaterial 只跟随
+  // 系统，可能把暗色主题的白字放到浅色材质上。降级材质必须跟随 resolvedMode。
+  assert.match(
+    layout,
+    /tint=\{colorScheme === 'dark' \? 'systemMaterialDark' : 'systemMaterialLight'\}/,
+  );
+  assert.doesNotMatch(layout, /tint="systemMaterial"/);
   assert.match(layout, /Platform\.OS === 'ios' \? 'transparent' : colors\.surface/);
   assert.match(
     layout,

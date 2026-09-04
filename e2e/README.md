@@ -7,6 +7,7 @@
 - Node.js 22、已执行 `npm ci`。
 - Maestro CLI；Android 需要 `adb`，iOS 需要 macOS、Xcode、`xcrun` 和已启动的 Simulator。
 - 安装指向专用非生产后端的 release-like App。App 构建时的 `EXPO_PUBLIC_API_URL` / `EXPO_PUBLIC_CHAT_WS_URL` 必须与测试目标一致；`E2E_API_URL` 只承担运行前安全校验，不会重写已安装二进制的配置。
+- 该 App 构建时还必须设置 `EXPO_PUBLIC_E2E_BUILD=1`（与 `EXPO_PUBLIC_API_URL` 一样是编译期变量，在 `expo prebuild` / `gradlew assembleRelease` / `expo run:android --variant release` 的环境里注入）。每条流程启动后都会断言根布局上的运行时目标标记（`E2E_API_TARGET_ID`），该标记只在 dev 构建或 `EXPO_PUBLIC_E2E_BUILD=1` 的构建里渲染；用商店/正式包跑 Maestro 会在 `launch` 子流程处失败。
 - 按 [fixtures.md](./fixtures.md) 准备独立账号、会话、好友和圈子。
 
 先复制 `e2e/env.example` 为被 git 忽略的 `e2e/.env`，替换假值。文件默认所有执行开关均为 `false`。Node 22 可这样加载：

@@ -207,6 +207,41 @@ test('authentication modes never silently fall back', async () => {
   );
 });
 
+test('non-auth suites ignore a stale auth mode without credentials', async () => {
+  const { parseE2EConfig } = await loadConfig();
+  // 操作者的 shell / e2e/.env 里常年留着 E2E_AUTH_MODE，但 smoke 不登录，
+  // 缺 E2E_PASSWORD 不能让它崩在 undefined.trim()。
+  const config = parseE2EConfig(
+    baseE2EEnv({ E2E_AUTH_MODE: 'password', E2E_PASSWORD: undefined }),
+    'smoke',
+  );
+  assert.equal(config.auth, false);
+  assert.deepEqual(config.maestroSecretEnv, {});
+
+  const codeConfig = parseE2EConfig(
+    baseE2EEnv({ E2E_AUTH_MODE: 'verification-code' }),
+    'smoke',
+  );
+  assert.deepEqual(codeConfig.maestroSecretEnv, {});
+
+  // 即使凭据在环境里，非认证 suite 也不把它们带给 Maestro 子进程。
+  const withSecrets = parseE2EConfig(
+    baseE2EEnv({ E2E_AUTH_MODE: 'password', E2E_PASSWORD: 'unused-secret' }),
+    'smoke',
+  );
+  assert.deepEqual(withSecrets.maestroSecretEnv, {});
+});
+
+test('E2E config binds Maestro to the installed app runtime target', async () => {
+  const { parseE2EConfig } = await loadConfig();
+  const config = parseE2EConfig(baseE2EEnv(), 'smoke');
+
+  assert.equal(
+    config.maestroEnv.E2E_API_TARGET_ID,
+    'windnote_runtime_api_origin_00680074007400700073003a002f002f006500320065002d006100700069002e00770069006e0064006e006f00740065002e0074006500730074',
+  );
+});
+
 test('social flow requires exact friend and circle fixture ids', async () => {
   const { parseE2EConfig } = await loadConfig();
   const auth = {
@@ -312,4 +347,45 @@ test('runners build argv arrays without logging or shell interpolation', async (
       '.maestro/performance/chat-history-scroll.yaml',
     ],
   );
+});
+
+test('Maestro credentials are inherited through MAESTRO shell variables, never argv', async () => {
+  const { parseE2EConfig } = await loadConfig();
+  const { buildMaestroInvocation } = await import('../scripts/run-e2e.mjs');
+  const password = 'secret-password-value';
+  const code = '123456';
+  const config = parseE2EConfig(
+    baseE2EEnv({
+      E2E_AUTH_MODE: 'password',
+      E2E_EMAIL: 'runner@example.test',
+      E2E_PASSWORD: password,
+    }),
+    'auth-navigation',
+  );
+  const invocation = buildMaestroInvocation(config, {
+    PATH: 'test-path',
+    MAESTRO_E2E_VERIFICATION_CODE: code,
+  });
+
+  const commandLine = invocation.args.join(' ');
+  assert.doesNotMatch(commandLine, new RegExp(password));
+  assert.doesNotMatch(commandLine, new RegExp(code));
+  assert.equal(invocation.env.MAESTRO_E2E_PASSWORD, password);
+  assert.equal(invocation.env.MAESTRO_E2E_VERIFICATION_CODE, undefined);
+  assert.equal(invocation.env.PATH, 'test-path');
+  assert.equal(config.maestroEnv.E2E_PASSWORD, undefined);
+  assert.equal(config.maestroSecretEnv.MAESTRO_E2E_PASSWORD, password);
+
+  const codeConfig = parseE2EConfig(
+    baseE2EEnv({
+      E2E_AUTH_MODE: 'verification-code',
+      E2E_EMAIL: 'runner@example.test',
+      E2E_VERIFICATION_CODE: code,
+    }),
+    'auth-navigation',
+  );
+  const codeInvocation = buildMaestroInvocation(codeConfig, { PATH: 'test-path' });
+  assert.doesNotMatch(codeInvocation.args.join(' '), new RegExp(code));
+  assert.equal(codeInvocation.env.MAESTRO_E2E_VERIFICATION_CODE, code);
+  assert.equal(codeConfig.maestroEnv.E2E_VERIFICATION_CODE, undefined);
 });

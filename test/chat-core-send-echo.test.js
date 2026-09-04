@@ -74,14 +74,10 @@ function zustandStub() {
   };
 }
 
-function loadSendStack({ onSend }) {
-  const outboxEntries = [];
-  const localDbStub = {
-    ...__localDbStub,
-    outboxUpsert: async (entry) => {
-      outboxEntries.push(entry);
-    },
-  };
+// outboxEntries 是 outboxList 回放给客户端的种子行;outboxWrites 收集客户端写进
+// outbox 的每一行(断言发送时捕获的失败锚点用)。
+function loadSendStack({ onSend, outboxEntries = [], onBackfill = () => {} }) {
+  const outboxWrites = [];
   const store = runModule('src/chat-core/store.ts', (request) => {
     if (request === 'zustand') return zustandStub();
     // protocol.ts 零依赖:跑真的,别桩 —— SERVER_COMPENSATED_TYPES 是生产常量。
@@ -121,7 +117,7 @@ function loadSendStack({ onSend }) {
     if (request === '@/storage') {
       return { storage: { set: () => {}, getString: () => undefined } };
     }
-    if (request === './local-db') return localDbStub;
+    if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
 
@@ -144,6 +140,9 @@ function loadSendStack({ onSend }) {
         createCircleChatConversation: async () => ({ id: 'c1' }),
         createDirectChatConversation: async () => ({ id: 'c1' }),
         loadChatHistory: async () => ({ messages: [], nextBeforeHeight: null }),
+        backfillConversationSince: async (conversationId, afterHeight) => {
+          onBackfill(conversationId, afterHeight);
+        },
       };
     }
     if (request === './send-errors') return { reportChatSendFailure: () => {} };
@@ -160,11 +159,18 @@ function loadSendStack({ onSend }) {
       return runModule('src/chat-core/protocol.ts', () => {
         throw new Error('protocol should have no runtime deps');
       });
-    if (request === './local-db') return localDbStub;
+    if (request === './local-db')
+      return {
+        ...__localDbStub,
+        outboxList: async () => outboxEntries,
+        outboxUpsert: async (entry) => {
+          outboxWrites.push(entry);
+        },
+      };
     throw new Error(`unexpected require: ${request}`);
   });
 
-  return { client, store, outboxEntries };
+  return { client, store, outboxWrites };
 }
 
 test('a server echo that beats the ack is not overwritten by the synthetic confirmation', async () => {
@@ -253,8 +259,183 @@ test('without an echo the ack still confirms the optimistic message', async () =
   assert.equal(result.id, 'srv-2');
 });
 
+function directConversation(id) {
+  return {
+    id,
+    type: 'DIRECT',
+    peer: { id: 'peer', nickname: '对方', avatarUrl: null },
+    circleId: null,
+    circle: null,
+    lastMessage: null,
+    unreadCount: 0,
+    pinned: false,
+    muted: false,
+    lastMessageAt: null,
+  };
+}
+
+// 补拉是 fire-and-forget 的:调用方 resolve 时它的 then 链可能还没跑完。
+function flushBackfill() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+// 服务端复制到转发者命名空间下的那条:带新 key、新签的 url。
+const SOURCE_PREVIEW = { url: 'https://signed/source.jpg', width: 800, height: 600 };
+function canonicalForward(id, height, d) {
+  return {
+    id,
+    conversationId: 'c1',
+    height,
+    type: 'image',
+    content: { key: `chat/me/${id}.jpg`, url: `https://cdn.trusted/${id}.jpg`, width: 800, height: 600 },
+    sender: { id: 'me', nickname: '我', avatarUrl: null },
+    replyToId: null,
+    d,
+    createdAt: '2026-08-19T10:00:05.000Z',
+  };
+}
+
+// 重发命中服务端幂等分支时不会有 chat:msg 回声,只能拿本地乐观内容拼一条
+// confirmed 落库。对转发媒体来说那份内容是**源**对象的展示字段(object key 被
+// 刻意剥掉了):签名 url 一过期本地就是坏图,而且没有 key 可以重新签。
+test('a no-echo retry of forwarded media reconciles against the canonical message', async () => {
+  const backfills = [];
+  const canonical = canonicalForward('srv-9', 12, 'd-fwd');
+  let store;
+  const stack = loadSendStack({
+    onSend: async () => ({ messageId: 'srv-9', height: 12 }),
+    outboxEntries: [
+      {
+        d: 'd-fwd',
+        conversationId: 'c1',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        payload: {
+          type: 'image',
+          content: {},
+          forwardFromMessageId: 'src-1',
+          localPreviewContent: { ...SOURCE_PREVIEW },
+        },
+      },
+    ],
+    onBackfill: (conversationId, afterHeight) => {
+      backfills.push([conversationId, afterHeight]);
+      // 真的 backfillConversationSince 只写时间线,不碰会话列表。
+      store.useChatStore.getState().ingestMessages(conversationId, [canonical]);
+    },
+  });
+  store = stack.store;
+  const client = stack.client;
+  const state = store.useChatStore.getState();
+  state.setCurrentUserId('me');
+  state.setConversations([directConversation('c1')]);
+
+  await client.retryFailedChatMessage('c1', 'd-fwd');
+
+  // 气泡还是要先转正,否则「明明发出去了却一直红着」那个老毛病就回来了。
+  let timeline = store.useChatStore.getState().messagesByConversation['c1'];
+  assert.equal(timeline.length, 1);
+  assert.equal(timeline[0].id, 'srv-9');
+  assert.equal(timeline[0].height, 12);
+  // 转正之后必须补拉权威消息,把那份非权威 content 换掉。
+  assert.deepEqual(backfills, [['c1', 11]]);
+
+  await flushBackfill();
+  timeline = store.useChatStore.getState().messagesByConversation['c1'];
+  assert.equal(timeline.length, 1);
+  assert.deepEqual(timeline[0].content, canonical.content);
+  // 会话列表的预览是 applyIncomingMessage 写的合成品,补拉只写时间线 ——
+  // 不重算的话列表会一直拿着源对象的签名 url、没有 key。
+  const preview = store.useChatStore.getState().conversations[0].lastMessage;
+  assert.equal(preview.id, 'srv-9');
+  assert.deepEqual(preview.content, canonical.content);
+});
+
+// 首发同样会撞上「ack 到了、chat:msg 广播丢了」。这条路和重发的合成确认结构
+// 一模一样,漏掉的话气泡会被永久标成已送达、内容却是源对象的签名 url。
+test('a no-echo first send of forwarded media reconciles against the canonical message', async () => {
+  const backfills = [];
+  const canonical = canonicalForward('srv-11', 20, 'd-test');
+  let store;
+  const stack = loadSendStack({
+    onSend: async () => ({ messageId: 'srv-11', height: 20 }),
+    onBackfill: (conversationId, afterHeight) => {
+      backfills.push([conversationId, afterHeight]);
+      store.useChatStore.getState().ingestMessages(conversationId, [canonical]);
+    },
+  });
+  store = stack.store;
+  const client = stack.client;
+  const state = store.useChatStore.getState();
+  state.setCurrentUserId('me');
+  state.setConversations([directConversation('c1')]);
+
+  const result = await client.sendForwardedMediaMessage({
+    conversationId: 'c1',
+    sourceMessageId: 'src-1',
+    type: 'image',
+    previewContent: { key: 'chat/peer/source.jpg', ...SOURCE_PREVIEW },
+  });
+  assert.equal(result.id, 'srv-11');
+  // 源 key 绝不能进乐观内容。
+  assert.equal(result.content.key, undefined);
+  assert.deepEqual(backfills, [['c1', 19]]);
+
+  await flushBackfill();
+  const timeline = store.useChatStore.getState().messagesByConversation['c1'];
+  assert.equal(timeline.length, 1);
+  assert.equal(timeline[0].id, 'srv-11');
+  assert.deepEqual(timeline[0].content, canonical.content);
+  const preview = store.useChatStore.getState().conversations[0].lastMessage;
+  assert.equal(preview.id, 'srv-11');
+  assert.deepEqual(preview.content, canonical.content);
+});
+
+test('a no-echo first send without a local preview does not backfill', async () => {
+  const backfills = [];
+  const { client, store } = loadSendStack({
+    onSend: async () => ({ messageId: 'srv-12', height: 5 }),
+    onBackfill: (...args) => backfills.push(args),
+  });
+  const state = store.useChatStore.getState();
+  state.setCurrentUserId('me');
+  state.setConversations([]);
+
+  await client.sendImageMessage({
+    conversationId: 'c1',
+    key: 'chat/me/a.jpg',
+    localUri: 'file:///tmp/a.jpg',
+  });
+  await flushBackfill();
+
+  assert.deepEqual(backfills, []);
+});
+
+test('a no-echo retry without a local preview does not backfill', async () => {
+  // 纯文本重发的乐观内容就是发出去的那份,本来就权威,不该多跑一趟网络。
+  const backfills = [];
+  const { client, store } = loadSendStack({
+    onSend: async () => ({ messageId: 'srv-10', height: 3 }),
+    outboxEntries: [
+      {
+        d: 'd-text',
+        conversationId: 'c1',
+        createdAt: '2026-08-19T10:00:00.000Z',
+        payload: { type: 'text', content: { text: 'hi' } },
+      },
+    ],
+    onBackfill: (...args) => backfills.push(args),
+  });
+  const state = store.useChatStore.getState();
+  state.setCurrentUserId('me');
+  state.setConversations([]);
+
+  await client.retryFailedChatMessage('c1', 'd-text');
+
+  assert.deepEqual(backfills, []);
+});
+
 test('send captures the current server height for a later failure position', async () => {
-  const { client, store, outboxEntries } = loadSendStack({
+  const { client, store, outboxWrites } = loadSendStack({
     onSend: async () => {
       throw new Error('offline');
     },
@@ -279,8 +460,8 @@ test('send captures the current server height for a later failure position', asy
     /offline/,
   );
 
-  assert.equal(outboxEntries.length, 1);
-  assert.equal(outboxEntries[0].failedAfterHeight, 7);
+  assert.equal(outboxWrites.length, 1);
+  assert.equal(outboxWrites[0].failedAfterHeight, 7);
 });
 
 function loadFailedPreview() {
@@ -305,7 +486,7 @@ function confirmed(conversationId, height) {
 }
 
 test('forwarding into a conversation with no loaded timeline keeps the failure visible once history arrives', async () => {
-  const { client, store, outboxEntries } = loadSendStack({
+  const { client, store, outboxWrites } = loadSendStack({
     onSend: async () => {
       throw new Error('offline');
     },
@@ -321,8 +502,8 @@ test('forwarding into a conversation with no loaded timeline keeps the failure v
     /offline/,
   );
   // 拿不到任何水位时不能写 0,留空等第一批真消息补锚。
-  assert.equal(outboxEntries.length, 1);
-  assert.equal(outboxEntries[0].failedAfterHeight, undefined);
+  assert.equal(outboxWrites.length, 1);
+  assert.equal(outboxWrites[0].failedAfterHeight, undefined);
 
   // 用户之后打开会话,拉到一页真历史。
   const history = [];
@@ -347,7 +528,7 @@ test('forwarding into a conversation with no loaded timeline keeps the failure v
 });
 
 test('a send without a loaded timeline anchors to the conversation preview height', async () => {
-  const { client, store, outboxEntries } = loadSendStack({
+  const { client, store, outboxWrites } = loadSendStack({
     onSend: async () => {
       throw new Error('offline');
     },
@@ -356,15 +537,8 @@ test('a send without a loaded timeline anchors to the conversation preview heigh
   state.setCurrentUserId('me');
   state.setConversations([
     {
-      id: 'c1',
-      type: 'DIRECT',
-      peer: { id: 'peer', nickname: '对方', avatarUrl: null },
-      circleId: null,
-      circle: null,
+      ...directConversation('c1'),
       lastMessage: confirmed('c1', 12),
-      unreadCount: 0,
-      pinned: false,
-      muted: false,
       lastMessageAt: '2026-08-05T12:00:12.000Z',
     },
   ]);
@@ -373,8 +547,8 @@ test('a send without a loaded timeline anchors to the conversation preview heigh
     client.sendTextMessage({ conversationId: 'c1', text: 'forwarded' }),
     /offline/,
   );
-  assert.equal(outboxEntries.length, 1);
-  assert.equal(outboxEntries[0].failedAfterHeight, 12);
+  assert.equal(outboxWrites.length, 1);
+  assert.equal(outboxWrites[0].failedAfterHeight, 12);
 
   const history = [];
   for (let height = 10; height <= 15; height += 1) {

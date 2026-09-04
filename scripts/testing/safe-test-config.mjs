@@ -153,12 +153,28 @@ function validateAuth(env) {
   return mode;
 }
 
+// 前提：validateAuth 已经保证 authMode 合法且对应凭据非空。
+function buildMaestroSecretEnv(env, authMode) {
+  if (authMode === 'password') {
+    return { MAESTRO_E2E_PASSWORD: env.E2E_PASSWORD.trim() };
+  }
+  return { MAESTRO_E2E_VERIFICATION_CODE: env.E2E_VERIFICATION_CODE.trim() };
+}
+
 function copyDefined(env, names) {
   return Object.fromEntries(
     names
       .filter((name) => typeof env[name] === 'string' && env[name].trim())
       .map((name) => [name, env[name].trim()]),
   );
+}
+
+export function buildRuntimeApiTargetId(apiUrl) {
+  const origin = new URL(apiUrl).origin;
+  const encoded = Array.from(origin, (character) =>
+    character.charCodeAt(0).toString(16).padStart(4, '0'),
+  ).join('');
+  return `windnote_runtime_api_origin_${encoded}`;
 }
 
 export function parseE2EConfig(env, suiteName) {
@@ -169,7 +185,7 @@ export function parseE2EConfig(env, suiteName) {
   requireExactTrue(env, 'E2E_EXECUTE');
   const origins = validateOrigins(env, 'E2E');
 
-  if (suite.auth) validateAuth(env);
+  const authMode = suite.auth ? validateAuth(env) : null;
   for (const fixture of suite.fixtures ?? []) requireValue(env, fixture);
 
   if (suite.mutates) {
@@ -184,11 +200,10 @@ export function parseE2EConfig(env, suiteName) {
     APP_ID,
     E2E_API_URL: origins.apiOrigin,
     E2E_SOCKET_URL: origins.socketOrigin,
+    E2E_API_TARGET_ID: buildRuntimeApiTargetId(origins.apiOrigin),
     ...copyDefined(env, [
       'E2E_AUTH_MODE',
       'E2E_EMAIL',
-      'E2E_PASSWORD',
-      'E2E_VERIFICATION_CODE',
       'E2E_RUN_ID',
       'E2E_CONVERSATION_ID',
       'E2E_CONVERSATION_NAME',
@@ -202,6 +217,10 @@ export function parseE2EConfig(env, suiteName) {
       'E2E_PERF_SECOND_CONVERSATION_ID',
     ]),
   };
+  // 只有需要登录的 suite 才把凭据交给 Maestro。非认证 suite（如 smoke）不读
+  // E2E_PASSWORD / E2E_VERIFICATION_CODE：环境里残留 E2E_AUTH_MODE 却没配对应
+  // 凭据时不能在这里炸掉，也不该把无关的凭据带进子进程。
+  const maestroSecretEnv = authMode ? buildMaestroSecretEnv(env, authMode) : {};
 
   return Object.freeze({
     suite: suiteName,
@@ -211,6 +230,7 @@ export function parseE2EConfig(env, suiteName) {
     appId: APP_ID,
     origins,
     maestroEnv,
+    maestroSecretEnv,
   });
 }
 

@@ -1,8 +1,10 @@
 import { io, type Socket } from 'socket.io-client';
+import { Platform } from 'react-native';
 import { CHAT_WS_URL } from '@/constants/config';
 import { storage } from '@/storage';
 import { reportError } from '@/observability/sentry';
 import { fetchPrivacySettings } from '@/services/api/privacy';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import {
   backfillConversationSince,
   fetchChatMutationsSince,
@@ -54,7 +56,86 @@ const READ_ACK_TIMEOUT_MS = 8_000;
 const TYPING_THROTTLE_MS = 2_000;
 /** 一次追平最多翻几页离线变更;翻不完留给下一次连接(游标已持久化)。 */
 const MUTATION_CATCH_UP_PAGES_MAX = 20;
-const CONNECT_ERROR_REPORT_THRESHOLD = 3;
+
+type ChatConnectFailureReason =
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'rate_limited'
+  | 'timeout'
+  | 'server_error'
+  | 'transport_error'
+  | 'network_error'
+  | 'unknown';
+
+type ChatDisconnectReason =
+  | 'server_disconnect'
+  | 'client_disconnect'
+  | 'timeout'
+  | 'transport_error'
+  | 'unknown';
+
+function createConnectionTraceId(): string {
+  const random = `${Math.random().toString(36).slice(2, 10)}${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
+  return `ws-${Date.now().toString(36)}-${random}`;
+}
+
+function readConnectErrorStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const source = error as Record<string, unknown>;
+  const candidates = [source.status, source.statusCode];
+  for (const nested of [source.description, source.context, source.data]) {
+    if (nested && typeof nested === 'object') {
+      const record = nested as Record<string, unknown>;
+      candidates.push(record.status, record.statusCode);
+    }
+  }
+  return candidates.find(
+    (candidate): candidate is number =>
+      typeof candidate === 'number' && candidate >= 100 && candidate <= 599,
+  );
+}
+
+function classifyConnectFailure(error: unknown): ChatConnectFailureReason {
+  const status = readConnectErrorStatus(error);
+  if (status === 401) return 'unauthorized';
+  if (status === 403) return 'forbidden';
+  if (status === 404) return 'not_found';
+  if (status === 429) return 'rate_limited';
+  if (status !== undefined && status >= 500) return 'server_error';
+
+  const source =
+    error && typeof error === 'object'
+      ? (error as Record<string, unknown>)
+      : undefined;
+  const text = [source?.name, source?.type, source?.message]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase();
+  if (/unauthori[sz]ed|authentication|\bjwt\b/.test(text)) {
+    return 'unauthorized';
+  }
+  if (/forbidden|origin/.test(text)) return 'forbidden';
+  if (/not[ _-]?found|\b404\b/.test(text)) return 'not_found';
+  if (/rate[ _-]?limit|\b429\b/.test(text)) return 'rate_limited';
+  if (/timeout|timed out/.test(text)) return 'timeout';
+  if (/server error|\b5\d\d\b/.test(text)) return 'server_error';
+  if (/websocket|transport/.test(text)) return 'transport_error';
+  if (/network|offline|internet/.test(text)) return 'network_error';
+  return 'unknown';
+}
+
+function classifyDisconnectReason(reason: unknown): ChatDisconnectReason {
+  if (reason === 'io server disconnect') return 'server_disconnect';
+  if (reason === 'io client disconnect') return 'client_disconnect';
+  if (reason === 'ping timeout') return 'timeout';
+  if (reason === 'transport close' || reason === 'transport error') {
+    return 'transport_error';
+  }
+  return 'unknown';
+}
 
 function readViewerSelfDestructDays(userId: string): number {
   try {
@@ -197,12 +278,20 @@ export function connectChat(token: string, userId: string): void {
     readFlushRequested = false;
     hadConnectedForUser = null;
     lastMutationSyncAt = null;
+    // 换账号是真正的会话边界:新账号的第一次连不上,值得单独报一次。
+    reportedCurrentConnectOutage = false;
   }
   teardownSocket();
   sessionGen += 1;
   const gen = sessionGen;
   consecutiveConnectErrors = 0;
-  reportedCurrentConnectOutage = false;
+  // 这里**不能**重置 reportedCurrentConnectOutage。设备一直离线时,回前台恢复
+  // (SessionBootstrap 每次 active 都会 connectChat)和 token 轮换都会走到这里替换
+  // 掉那个连不上的 socket;在这里清标志,等于每回一次前台就让下一条 connect_error
+  // 重新上报一次。一次长断网被前后台切几十次,就是几十条同样的 Sentry 事件,
+  // 「一次断网只报一条」的抑制就形同虚设了。只有真正连上(connect 回调)或换账号
+  // 才算这次断网结束。
+  const connectionTraceId = createConnectionTraceId();
   store.setConnecting(true);
   store.setCurrentUserId(userId);
   store.setViewerSelfDestructDays(readViewerSelfDestructDays(userId));
@@ -211,16 +300,27 @@ export function connectChat(token: string, userId: string): void {
   void hydrateWithResolvedViewerPolicy(userId, gen);
 
   // token 走握手 auth 帧，绝不进 URL query（与 realtime 网关同一条安全线）。
+  logClientDiagnostic('chat.ws.connecting', {
+    stage: 'handshake',
+    platform: Platform.OS,
+  });
   const next = io(CHAT_WS_URL, {
     path: CHAT_WS_PATH,
     transports: ['websocket'],
-    auth: { token },
+    auth: { token, traceId: connectionTraceId },
+    // React Native WebSocket 会把该头带到 HTTP upgrade，供 Caddy 与网关日志
+    // 串联；auth 里的副本覆盖不支持自定义头的 web 运行时。
+    extraHeaders: { 'x-connection-trace-id': connectionTraceId },
   });
 
   next.on('connect', () => {
     if (gen !== sessionGen) return;
     consecutiveConnectErrors = 0;
     reportedCurrentConnectOutage = false;
+    logClientDiagnostic('chat.ws.connected', {
+      stage: 'ready',
+      platform: Platform.OS,
+    });
     // 首连不对账(冷启动全量拉取由页面 focus 负责),重连才补断线窗口。
     // 判据必须跨 socket 实例:access token 轮换走的是 suspendChat + connectChat,
     // 换的是**一条新 socket**。判据挂在 socket 上的话,这条新连接永远算首连,
@@ -243,30 +343,45 @@ export function connectChat(token: string, userId: string): void {
     // 任何补拉都够不着它。
     void catchUpMutations(userId);
   });
-  next.on('disconnect', () => {
+  next.on('disconnect', (reason) => {
     if (gen !== sessionGen) return;
+    logClientDiagnostic('chat.ws.disconnected', {
+      stage: 'ready',
+      reason: classifyDisconnectReason(reason),
+      platform: Platform.OS,
+    });
     useChatStore.getState().setConnected(false);
   });
   next.on('connect_error', (err) => {
     if (gen !== sessionGen) return;
     console.warn('[chat] connect error', err?.message ?? err);
     consecutiveConnectErrors += 1;
-    if (
-      consecutiveConnectErrors >= CONNECT_ERROR_REPORT_THRESHOLD &&
-      !reportedCurrentConnectOutage
-    ) {
+    const reason = classifyConnectFailure(err);
+    logClientDiagnostic('chat.ws.connect_error', {
+      stage: 'handshake',
+      reason,
+      platform: Platform.OS,
+    });
+    if (!reportedCurrentConnectOutage) {
       reportedCurrentConnectOutage = true;
-      reportError(new Error('chat connection failed repeatedly'), {
+      reportError(new Error('chat connection failed'), {
         operation: 'chatConnect',
-        kind: 'consecutiveFailures',
+        kind: reason,
+        failureKind: 'connect_error',
         attempts: consecutiveConnectErrors,
+        stage: 'handshake',
+        reason,
+        source: 'websocket',
+        endpointPath: CHAT_WS_PATH,
+        platform: Platform.OS,
+        traceId: connectionTraceId,
       });
     }
     const state = useChatStore.getState();
     state.setConnecting(false);
     // 只放规范化标记进 store —— err.message 是 socket.io 的底层文本
     // ("websocket error"/"timeout"),会被 UI 原样展示给用户。原始原因
-    // 上面的 console.warn 和 reportError 已经留档。
+    // 上面的本地诊断与一次/故障窗口的 Sentry 事件已经留档。
     state.setError('connect_error');
   });
 
@@ -286,6 +401,11 @@ export function disconnectChat(): void {
   // 游标只清内存那份:MMKV 里按 userId 存,下次同一账号登录还要用它追平
   // 「上次退出之后发生的撤回」。
   lastMutationSyncAt = null;
+  // 登出是真正的会话边界:store.reset() 之后 currentUserId 归 null,下次
+  // connectChat 走不到「换账号」分支,若不在这里清掉「本次断网已上报」的标志,
+  // 断网中登出再登回同一账号,新会话的第一条 connect_error 就永远报不出去。
+  consecutiveConnectErrors = 0;
+  reportedCurrentConnectOutage = false;
   useChatStore.getState().reset();
 }
 
@@ -438,7 +558,12 @@ async function hydrateFromLocalDb(
         conversationId: entry.conversationId,
         height: 0,
         type: entry.payload.type,
-        content: entry.payload.content,
+        content: entry.payload.localPreviewContent
+          ? {
+              ...entry.payload.content,
+              ...entry.payload.localPreviewContent,
+            }
+          : entry.payload.content,
         // sender 必须是本人。留 null 的话 mapChatMessageDtoToUI 判成「收到的」,
         // 气泡渲染到左边、也拿不到失败态 —— 长按重发那条依赖 sendStatus=3 的
         // 菜单项因此不出现,这条消息就再也发不出去了。

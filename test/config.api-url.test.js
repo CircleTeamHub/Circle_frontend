@@ -21,7 +21,7 @@ function loadConfigWithEnv(env = {}, options = {}) {
     .replace(/export function /g, 'function ')
     .replace(/\)\s*:\s*[A-Za-z0-9_<>\[\]\s|]+/g, ')')
     .replace(/ as const/g, '')}
-module.exports = { API_URL };
+module.exports = { API_URL, E2E_TARGET_MARKER_ENABLED };
 `;
 
   const context = {
@@ -33,6 +33,9 @@ module.exports = { API_URL };
     // release-mode blocking logic is covered directly in transport-security.test.mts.
     __DEV__: options.dev ?? true,
     evaluateTransportGuard: () => null,
+    // RUNTIME_API_TARGET_ID 只在 E2E 断言运行时目标时用到，这里的断言不碰它；
+    // 真实实现由 src/testing/runtime-api-target.test.mts 直接覆盖。
+    buildRuntimeApiTargetId: () => 'windnote_runtime_api_origin_stub',
     Constants: {
       expoConfig: {
         hostUri: options.hostUri ?? '10.0.0.195:8081',
@@ -90,4 +93,40 @@ test('web static render requires the release API URL before baking the bundle', 
     { dev: false, platform: 'web' },
   );
   assert.equal(API_URL, 'https://api.example.test/api/v1');
+});
+
+// 运行时目标标记（app/_layout.tsx 的 1x1 可访问 View）只属于 dev / 测试构建：
+// 商店包不该在无障碍树里多一个无标签元素，也不该通过 accessibility id 暴露 API origin。
+test('the E2E target marker is always available in dev builds', () => {
+  const { E2E_TARGET_MARKER_ENABLED } = loadConfigWithEnv({}, { dev: true });
+  assert.equal(E2E_TARGET_MARKER_ENABLED, true);
+});
+
+test('release builds hide the E2E target marker unless flagged as a test build', () => {
+  const release = { EXPO_PUBLIC_API_URL: 'https://api.example.test' };
+
+  assert.equal(
+    loadConfigWithEnv(release, { dev: false }).E2E_TARGET_MARKER_ENABLED,
+    false,
+  );
+  for (const rejected of ['0', 'false', 'yes', '']) {
+    assert.equal(
+      loadConfigWithEnv(
+        { ...release, EXPO_PUBLIC_E2E_BUILD: rejected },
+        { dev: false },
+      ).E2E_TARGET_MARKER_ENABLED,
+      false,
+      `EXPO_PUBLIC_E2E_BUILD=${JSON.stringify(rejected)} must not enable the marker`,
+    );
+  }
+  for (const accepted of ['1', 'true']) {
+    assert.equal(
+      loadConfigWithEnv(
+        { ...release, EXPO_PUBLIC_E2E_BUILD: accepted },
+        { dev: false },
+      ).E2E_TARGET_MARKER_ENABLED,
+      true,
+      `EXPO_PUBLIC_E2E_BUILD=${accepted} must enable the marker`,
+    );
+  }
 });

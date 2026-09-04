@@ -23,6 +23,10 @@ import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
+import {
+  E2E_TARGET_MARKER_ENABLED,
+  RUNTIME_API_TARGET_ID,
+} from '@/constants/config';
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
@@ -301,6 +305,23 @@ function RootLayout() {
         <AuthRouteGuard>
           <View style={{ flex: 1 }}>
             <RootStack />
+            {/* E2E 运行时目标标记：只在 dev / 测试构建挂载（见 config.ts），
+                商店包不多出无标签可访问元素、也不暴露 API origin。 */}
+            {E2E_TARGET_MARKER_ENABLED ? (
+              <View
+                accessible
+                testID={RUNTIME_API_TARGET_ID}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: 1,
+                  height: 1,
+                  opacity: 0.01,
+                }}
+              />
+            ) : null}
           </View>
           <NotificationSnackbarHost />
           <PushNotificationRouteHandler />

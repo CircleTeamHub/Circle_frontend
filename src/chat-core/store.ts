@@ -197,7 +197,10 @@ interface ChatStoreState {
    * 返回 false 表示该会话不在列表里(调用方应去补拉会话元信息)。
    */
   applyIncomingMessage: (message: ChatMessageDto) => boolean;
-  /** 发送失败后把会话预览退回上一条真实消息(乐观写入的回滚)。 */
+  /**
+   * 把会话预览重算成时间线里最后一条权威消息:发送失败后回滚乐观写入,
+   * 或补拉换掉了同 id 的合成确认之后让预览跟上时间线。
+   */
   revertConversationPreview: (conversationId: string) => void;
   /** 本端已读的乐观归零(socket 上报之外的即时 UI 反馈)。 */
   markConversationReadLocal: (conversationId: string) => void;
@@ -733,7 +736,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       }
     }
     const target = conversations[index];
-    if (target.lastMessage?.id === authoritative?.id) return;
+    // 按引用而不是按 id 比:无回声确认先把合成品写进预览,随后补拉的权威消息
+    // 在时间线里替换的是**同 id** 的另一个对象。只比 id 的话预览会一直指着合成品
+    // (源对象的签名 url、没有 key),补拉等于白拉。
+    if (target.lastMessage === authoritative) return;
     const next: ChatConversationDto = {
       ...target,
       lastMessage: authoritative,

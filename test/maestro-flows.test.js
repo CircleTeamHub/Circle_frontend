@@ -69,6 +69,36 @@ test('shared sign-in chooses one explicit authentication mode', () => {
   assert.match(source, /E2E_AUTH_MODE == 'verification-code'/);
   assert.match(source, /windnote\.auth\.login\.password-input/);
   assert.match(source, /windnote\.auth\.login\.code-input/);
+  assert.match(source, /\$\{MAESTRO_E2E_PASSWORD\}/);
+  assert.match(source, /\$\{MAESTRO_E2E_VERIFICATION_CODE\}/);
+  assert.doesNotMatch(source, /\$\{E2E_PASSWORD\}/);
+  assert.doesNotMatch(source, /\$\{E2E_VERIFICATION_CODE\}/);
+});
+
+test('every top-level flow attests the installed app target before continuing', () => {
+  const launch = fs.readFileSync(
+    path.join(root, '.maestro', 'subflows', 'launch.yaml'),
+    'utf8',
+  );
+  assert.match(launch, /assertVisible:\s*\n\s+id:\s*["']?\$\{E2E_API_TARGET_ID\}/);
+
+  for (const directory of ['flows', 'performance']) {
+    const names = fs
+      .readdirSync(path.join(root, '.maestro', directory))
+      .filter((name) => name.endsWith('.yaml'));
+    for (const name of names) {
+      const source = fs.readFileSync(
+        path.join(root, '.maestro', directory, name),
+        'utf8',
+      );
+      const firstCommand = source.split('---')[1] ?? '';
+      assert.match(
+        firstCommand,
+        /^\s*- runFlow:\s*\n\s+file:\s+\.\.\/subflows\/launch\.yaml/m,
+        `${directory}/${name} must attest through launch before other commands`,
+      );
+    }
+  }
 });
 
 test('Maestro eraseText counts stay within the documented CLI limit', () => {

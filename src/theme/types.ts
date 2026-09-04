@@ -18,6 +18,11 @@ export interface ThemeColors {
    * 达不到 9px 文字要求的 4.5:1，反而比纯白的未选中项更糊。
    */
   tabBarActive: string;
+  /**
+   * 链接 / 文字按钮色。亮色用 primaryDeep（白底 ≥ 5.9:1）；
+   * 暗色用会员卡渐变的亮紫 #A86BF0（#6366F1 在 #1A1B23 上只有 ~3.8:1，不够 13px 小字用）。
+   */
+  link: string;
   text: string;
   textSecondary: string;
   white: string;

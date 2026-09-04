@@ -32,6 +32,9 @@ module.exports = { MEDIA_ORIGINS };
     process: { env: { EXPO_PUBLIC_MEDIA_ORIGINS: raw } },
     __DEV__: true,
     evaluateTransportGuard: () => null,
+    // config.ts 现在导出 RUNTIME_API_TARGET_ID，harness 需要提供这个符号；
+    // 真实实现由 src/testing/runtime-api-target.test.mts 直接覆盖。
+    buildRuntimeApiTargetId: () => 'windnote_runtime_api_origin_stub',
     URL,
     console: { warn: (message) => warnings.push(String(message)) },
     Constants: { expoConfig: { hostUri: '10.0.0.195:8081' } },
