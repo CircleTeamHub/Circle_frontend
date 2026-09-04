@@ -72,3 +72,19 @@ test('a failed read falls back to animations enabled and unsubscribes on unmount
   unmount();
   expect(remove).toHaveBeenCalledTimes(1);
 });
+
+test('unmount tolerates a listener API that hands back no subscription', async () => {
+  // react-native-web 的 AccessibilityInfo.addEventListener 在没有 matchMedia 的
+  // 环境(旧 WebView、未 polyfill 的 jsdom)里直接 return undefined。
+  jest
+    .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
+    .mockResolvedValue(false);
+  jest
+    .spyOn(AccessibilityInfo, 'addEventListener')
+    .mockImplementation((() => undefined) as never);
+
+  const { result, unmount } = renderHook(() => useReduceMotion());
+  await waitFor(() => expect(result.current).toBe(false));
+
+  expect(() => unmount()).not.toThrow();
+});

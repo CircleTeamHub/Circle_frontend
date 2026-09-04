@@ -35,7 +35,7 @@ export function useReduceMotion(): boolean | null {
 
     return () => {
       mounted = false;
-      subscription.remove();
+      subscription?.remove();
     };
   }, []);
 
