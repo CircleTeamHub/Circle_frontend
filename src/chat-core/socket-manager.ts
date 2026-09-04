@@ -401,6 +401,11 @@ export function disconnectChat(): void {
   // 游标只清内存那份:MMKV 里按 userId 存,下次同一账号登录还要用它追平
   // 「上次退出之后发生的撤回」。
   lastMutationSyncAt = null;
+  // 登出是真正的会话边界:store.reset() 之后 currentUserId 归 null,下次
+  // connectChat 走不到「换账号」分支,若不在这里清掉「本次断网已上报」的标志,
+  // 断网中登出再登回同一账号,新会话的第一条 connect_error 就永远报不出去。
+  consecutiveConnectErrors = 0;
+  reportedCurrentConnectOutage = false;
   useChatStore.getState().reset();
 }
 

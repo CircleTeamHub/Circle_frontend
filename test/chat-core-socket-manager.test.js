@@ -1038,6 +1038,22 @@ test('switching accounts starts a fresh outage window', () => {
   assert.equal(reports.length, 2);
 });
 
+test('logging out and back in starts a fresh outage window', () => {
+  // 登出会 reset store(currentUserId 归 null),再登录同一账号走不到「换账号」
+  // 分支;「本次断网已上报」的标志必须在登出边界清掉,否则新会话第一次连不上
+  // 就永远报不出去。
+  const { manager, socket, reports } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect_error', new Error('network down'));
+  assert.equal(reports.length, 1);
+
+  manager.disconnectChat();
+  manager.connectChat('jwt', 'u1');
+  socket.fire('connect_error', new Error('network still down'));
+  assert.equal(reports.length, 2, '登出再登录是新的会话,首个失败要重新上报');
+  assert.equal(reports[1].context.attempts, 1, '失败计数也要从头数');
+});
+
 test('typing is throttled locally per conversation', () => {
   const { manager, socket } = loadManager();
   manager.connectChat('jwt', 'u1');
