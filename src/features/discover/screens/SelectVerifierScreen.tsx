@@ -21,6 +21,7 @@ import {
 } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { CircleInvitationUser } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   listContent: {
@@ -93,12 +94,7 @@ export default function SelectVerifierScreen() {
           defaultValue: '加载候选人失败，请稍后重试',
         }),
       );
-      if (__DEV__) {
-        console.warn(
-          '[SelectVerifierScreen] fetchEligibleVerifiers failed',
-          error,
-        );
-      }
+      reportHandledFailure('circleInvitation', 'fetchVerifiers', error);
     } finally {
       if (loadedForRef.current === invitationId) setLoading(false);
     }

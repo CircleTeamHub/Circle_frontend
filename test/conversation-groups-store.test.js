@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 function loadStore(apiMocks) {
   const filePath = path.join(
@@ -37,7 +38,7 @@ function loadStore(apiMocks) {
     setTimeout,
     clearTimeout,
     console: { warn: () => {} },
-    require: (specifier) => {
+    require: withObservabilityStubs((specifier) => {
       if (specifier === 'zustand') return require('zustand');
       if (specifier === 'zustand/middleware') return require('zustand/middleware');
       if (specifier === '@/storage') return { mmkvJsonStorage };
@@ -49,7 +50,7 @@ function loadStore(apiMocks) {
         };
       }
       throw new Error(`Unexpected import: ${specifier}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

@@ -17,10 +17,9 @@ import {
   getChatHistoryDateHref,
 } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const PAGE_SIZE = 50;
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
-
 const s = StyleSheet.create({
   container: { flex: 1 },
   content: {
@@ -133,9 +132,7 @@ export default function ChatHistoryDateResultsScreen() {
           }
           setHasMore(false);
         }
-        if (isDev) {
-          console.warn('[chat-history-date-results] search failed', err);
-        }
+        reportHandledFailure('chatHistory', 'dateResultsSearch', err);
       } finally {
         if (mountedRef.current) {
           setLoading(false);

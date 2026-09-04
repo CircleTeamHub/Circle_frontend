@@ -9,6 +9,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { setCircleAvatar } from '@/services/api/circles';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
 
@@ -99,9 +100,7 @@ export function useChangeCircleAvatar(
         await setCircleAvatar(circleId, fileUrl);
         onChanged(fileUrl);
       } catch (error) {
-        if (__DEV__) {
-          console.warn('[useChangeCircleAvatar] avatar update failed', error);
-        }
+        reportHandledFailure('circle', 'avatarUpdate', error);
         Alert.alert(
           t('circle.avatarUpdateFailed', { defaultValue: '头像更新失败' }),
           t('common.networkError'),

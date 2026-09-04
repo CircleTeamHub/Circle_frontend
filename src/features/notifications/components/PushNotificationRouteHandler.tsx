@@ -20,8 +20,8 @@ import {
 } from '@/services/api/notifications';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { useAuthStore } from '@/stores/authStore';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { devWarn } from '@/utils/dev-log';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 export function PushNotificationRouteHandler() {
   const router = useRouter();
@@ -92,9 +92,7 @@ export function PushNotificationRouteHandler() {
           requestIdentifier,
           stage,
         });
-        if (isDev) {
-          console.warn('[notifications] response handling failed', error);
-        }
+        devWarn('[notifications] response handling failed', error);
       },
       reportDrop: (reason, requestIdentifier) => {
         // 只报「这次 tap 被终态放弃」的两种：
@@ -155,9 +153,7 @@ export function PushNotificationRouteHandler() {
           notifications,
           controller.handleResponse,
           (error) => {
-            if (isDev) {
-              console.warn('[notifications] get last response failed', error);
-            }
+            reportHandledFailure('notifications', 'getLastResponse', error);
           },
         );
         notifications.setNotificationHandler({
@@ -170,9 +166,7 @@ export function PushNotificationRouteHandler() {
         });
       })
       .catch((error) => {
-        if (isDev) {
-          console.warn('[notifications] response listener unavailable', error);
-        }
+        reportHandledFailure('notifications', 'responseListenerUnavailable', error);
       });
 
     return () => {

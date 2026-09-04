@@ -48,9 +48,11 @@ import {
   captureSentryTestError,
   setSentryUserId,
 } from '@/observability/sentry';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { devWarn } from '@/utils/dev-log';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
-export { ErrorBoundary } from 'expo-router';
+export { RouteErrorBoundary as ErrorBoundary } from '@/observability/RouteErrorBoundary';
 
 // 崩溃/错误上报：仅当配置了 DSN（EXPO_PUBLIC_SENTRY_DSN 或 app.json extra.sentryDsn）
 // 时才真正初始化，否则为完全 no-op。尽早调用以捕获启动期错误。
@@ -83,9 +85,7 @@ async function registerLiveKitGlobals() {
     const { registerGlobals } = await import('@livekit/react-native');
     ensureLiveKitGlobals(registerGlobals);
   } catch (error) {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn('[startup] LiveKit globals unavailable', error);
-    }
+    reportHandledFailure('startup', 'livekitGlobals', error);
   }
 }
 
@@ -94,18 +94,14 @@ void registerLiveKitGlobals();
 async function rehydratePersistedStore(name: string, store: PersistedStore) {
   const rehydrate = store.persist?.rehydrate;
   if (typeof rehydrate !== 'function') {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn(`[startup] ${name} store persist API unavailable; skipping rehydrate`);
-    }
+    devWarn(`[startup] ${name} store persist API unavailable; skipping rehydrate`);
     return;
   }
 
   try {
     await Promise.resolve(rehydrate());
   } catch (error) {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn(`[startup] ${name} store rehydrate failed`, error);
-    }
+    reportHandledFailure('startup', 'storeRehydrate', error, { reason: name });
   }
 }
 
@@ -125,12 +121,7 @@ function ensureStartupBootstrap(): Promise<void> {
       await initEncryptedStorage();
       await migrateFromAsyncStorage();
     } catch (err) {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn(
-          '[startup] migration failed, continuing without migrated data',
-          err,
-        );
-      }
+      reportHandledFailure('startup', 'storageInit', err);
     }
     await Promise.all([
       rehydratePersistedStore('auth', useAuthStore),

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 const __localDbStub = {
   persistLocalConversations: async () => {},
@@ -50,11 +51,11 @@ function runModule(rel, stubs) {
     Promise,
     module: { exports: {} },
     exports: {},
-    require: (request) => {
+    require: withObservabilityStubs((request) => {
       if (request in stubs) return stubs[request];
       if (request === './local-db') return __localDbStub;
-    throw new Error(`unexpected require: ${request}`);
-    },
+      throw new Error(`unexpected require: ${request}`);
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpile(rel), context);

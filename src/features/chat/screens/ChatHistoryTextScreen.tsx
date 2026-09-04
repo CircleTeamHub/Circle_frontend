@@ -21,6 +21,7 @@ import type { ChatMessageDto } from '@/chat-core/protocol';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const PAGE_SIZE = 20;
 
@@ -168,9 +169,7 @@ export default function ChatHistoryTextScreen() {
       setResults([]);
       setHasMore(false);
       setError(t('chat.history.loadFailed'));
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat-history-text] search failed', err);
-      }
+      reportHandledFailure('chatHistory', 'textSearch', err);
     } finally {
       // 更新的一次搜索已经接管了 loading,别替它关掉。
       if (generation === requestGenerationRef.current) setLoading(false);
@@ -212,9 +211,7 @@ export default function ChatHistoryTextScreen() {
       if (generation !== requestGenerationRef.current) return;
       // 翻页失败：停止继续翻，留住已加载部分。
       setHasMore(false);
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[chat-history-text] load-more failed', err);
-      }
+      reportHandledFailure('chatHistory', 'textLoadMore', err);
     } finally {
       // 这个开关无条件收:它只是本次翻页的进度位,不归新搜索管。
       // 过期请求若不收,loadingMore 会卡在 true,新关键词从此翻不了页。

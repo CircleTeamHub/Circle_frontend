@@ -30,6 +30,7 @@ import { useTranslation } from "react-i18next";
 import { FlatList, Pressable, StyleSheet, Text, type TextStyle, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const MENU_ID = {
   SYSTEM_ANNOUNCEMENTS: "system-announcements",
@@ -282,9 +283,7 @@ export default function ProfileScreen() {
       } catch (error) {
         // Best-effort refresh; keep existing state on failure. Surface in dev so
         // a broken /auth/me + notifications round-trip doesn't pass silently.
-        if (__DEV__) {
-          console.warn('[ProfileScreen] refreshCurrentUser failed', error);
-        }
+        reportHandledFailure('profile', 'refreshCurrentUser', error);
       }
     },
     [setUser, user],

@@ -1,6 +1,7 @@
 import { markNotificationRead } from '@/services/api/notifications';
 import type { NotificationItem } from '@/types';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 export type NotificationSeenTarget = {
   traceId?: string;
@@ -12,8 +13,6 @@ export type NotificationSeenTarget = {
   circlePostId?: string;
   friendRequests?: boolean;
 };
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 function same(left: string | undefined | null, right: string | undefined) {
   return Boolean(left && right && left === right);
@@ -93,9 +92,7 @@ export async function markMatchingTargetNotificationsRead(
   await Promise.all(
     unreadMatches.map((notification) =>
       markNotificationRead(notification.id).catch((error) => {
-        if (isDev) {
-          console.warn('[notifications] mark seen target failed', error);
-        }
+        reportHandledFailure('notifications', 'markSeenTarget', error);
       }),
     ),
   );

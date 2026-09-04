@@ -38,6 +38,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 // VIP 档位对齐 app 实际会员体系（VIP1–VIP5，见 MemberCenterScreen）。
 // 仅存 value，label 在组件内按当前语言生成（见 useMemo）。
@@ -344,13 +345,7 @@ export default function CreatePostScreen() {
           uploadedUrls.push(presign.fileUrl);
         } catch (uploadError) {
           failedUploads += 1;
-          if (__DEV__) {
-            console.warn(
-              '[CreatePostScreen] image upload failed',
-              { uri },
-              uploadError,
-            );
-          }
+          reportHandledFailure('createPost', 'imageUpload', uploadError);
         }
       }
 

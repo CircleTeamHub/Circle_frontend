@@ -44,6 +44,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 LogBox.ignoreLogs([
   "Calling the 'injectJavaScript' function has failed",
@@ -370,9 +371,7 @@ export default function EditNoteScreen() {
             defaultValue: '请稍后重试',
           }),
         );
-        if (__DEV__) {
-          console.warn('[EditNoteScreen] section media upload failed', error);
-        }
+        reportHandledFailure('noteEditor', 'sectionMediaUpload', error);
       } finally {
         uploadInFlightRef.current = false;
         setUploadingSection(null);
@@ -520,9 +519,7 @@ export default function EditNoteScreen() {
         t('notes.edit.saveFailedTitle', { defaultValue: '保存失败' }),
         message,
       );
-      if (__DEV__) {
-        console.warn('[EditNoteScreen] save failed', error);
-      }
+      reportHandledFailure('noteEditor', 'save', error);
     }
   }, [
     id,

@@ -6,6 +6,7 @@ import { useTheme, Spacing, Typography } from '@/theme';
 import { toPlayableUri } from '@/features/chat/utils/media-uri';
 import type { ChatMessage } from '@/types';
 import { BubbleStatusText, MessageAvatar } from './shared';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 interface VoiceBubbleProps {
   message: ChatMessage;
@@ -167,14 +168,7 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
       }
       player.play();
     })().catch((error) => {
-      if (__DEV__) {
-        console.warn(
-          '[chat] voice play failed',
-          error instanceof Error
-            ? { name: error.name, message: error.message }
-            : String(error),
-        );
-      }
+      reportHandledFailure('chatMedia', 'voicePlay', error);
     });
   };
 

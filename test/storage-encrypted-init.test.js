@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 // FE#87：MMKV 整库加密初始化（密钥在 SecureStore、明文库 recrypt 就地迁移、
 // 密钥在库坏时清库重建）+ storage 同步壳的未就绪回退。
@@ -99,7 +100,7 @@ function loadEncryptedInit({
   const context = {
     module: { exports: {} },
     exports: {},
-    require: requireShim,
+    require: withObservabilityStubs(requireShim),
     console,
     __DEV__: false,
   };
@@ -291,7 +292,7 @@ function loadStorageShell() {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: requireShim,
+    require: withObservabilityStubs(requireShim),
     console,
     __DEV__: false,
   };

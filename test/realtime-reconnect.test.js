@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 const RECONNECT_MAX_MS = 30_000;
 // scheduleReconnect 里 delay = baseDelay + baseDelay * 0.2 * Math.random()
@@ -71,7 +72,7 @@ function loadRealtimeHarness() {
     clearTimeout: (id) => {
       timers.delete(id);
     },
-    require: (request) => {
+    require: withObservabilityStubs((request) => {
       switch (request) {
         case '@/constants/config':
           return { REALTIME_WS_URL: 'wss://realtime.example.test/ws' };
@@ -177,7 +178,7 @@ function loadRealtimeHarness() {
         default:
           return require(request);
       }
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

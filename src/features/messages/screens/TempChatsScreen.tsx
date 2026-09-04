@@ -25,6 +25,7 @@ import ShareTempChatModal from '@/features/messages/components/ShareTempChatModa
 import TempChatRow from '@/features/messages/components/TempChatRow';
 import TempChatListState from '@/features/messages/components/TempChatListState';
 import { Spacing, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   listContent: {
@@ -71,9 +72,7 @@ export default function TempChatsScreen() {
       } catch (caughtError) {
         if (options?.cancelled?.()) return;
         setError(getApiErrorMessage(caughtError, t('tempChats.loadFailed')));
-        if (__DEV__) {
-          console.warn('[TempChatsScreen] fetchMyTempChats failed', caughtError);
-        }
+        reportHandledFailure('tempChats', 'fetch', caughtError);
       } finally {
         if (!options?.cancelled?.()) {
           setLoading(false);
@@ -130,9 +129,7 @@ export default function TempChatsScreen() {
         setShareTarget({ title: created.title, shareUrl: created.shareUrl });
       } catch (caughtError) {
         setError(getApiErrorMessage(caughtError, t('tempChats.createFailed')));
-        if (__DEV__) {
-          console.warn('[TempChatsScreen] create temp chat failed', caughtError);
-        }
+        reportHandledFailure('tempChats', 'create', caughtError);
       } finally {
         creatingRoomRef.current = false;
         setCreatingRoom(false);
@@ -153,9 +150,7 @@ export default function TempChatsScreen() {
         await loadRooms({ refresh: true });
       } catch (caughtError) {
         setError(getApiErrorMessage(caughtError, t('tempChats.endFailed')));
-        if (__DEV__) {
-          console.warn('[TempChatsScreen] end temp chat failed', caughtError);
-        }
+        reportHandledFailure('tempChats', 'end', caughtError);
       } finally {
         endingRoomRef.current = null;
         setEndingRoomId(null);

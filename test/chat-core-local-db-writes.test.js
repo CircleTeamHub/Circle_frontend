@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 /**
  * 本地库写入的并发契约:真源码 + 假 expo-sqlite,在 vm 里跑。
@@ -87,7 +88,7 @@ function loadLocalDb(db, opened = []) {
     module: { exports: {} },
     exports: {},
     __warnings: [],
-    require: (request) => {
+    require: withObservabilityStubs((request) => {
       if (request === 'expo-sqlite') {
         return {
           openDatabaseAsync: async (name, options) => {
@@ -107,7 +108,7 @@ function loadLocalDb(db, opened = []) {
         return { getRandomBytesAsync: async () => new Uint8Array(32) };
       }
       throw new Error(`unexpected require: ${request}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpile('src/chat-core/local-db.ts'), context);

@@ -21,12 +21,11 @@ import { notificationDomain } from '@/features/notifications/utils/notification-
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const AUTO_DISMISS_MS = 4_000;
 const ENTER_MS = 220;
 const EXIT_MS = 180;
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
-
 export function NotificationSnackbarHost() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -189,9 +188,7 @@ export function NotificationSnackbarHost() {
         }
       }
       void markNotificationRead(shown.id).catch((error) => {
-        if (isDev) {
-          console.warn('[NotificationSnackbarHost] mark read failed', error);
-        }
+        reportHandledFailure('notifications', 'markRead', error);
       });
     }
     logClientDiagnostic('notification_open', {

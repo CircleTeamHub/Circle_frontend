@@ -5,17 +5,15 @@ import {
   getEncryptedInstance,
   initEncryptedStorage,
 } from './encrypted-init';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { devWarn } from '@/utils/dev-log';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 function warnNotReady(op: string, key?: string): void {
-  if (isDev) {
-    console.warn(
-      `[storage] ${op}(${key ?? ''}) before initEncryptedStorage() resolved — ` +
-        'returning fallback. Startup-path readers must tolerate this and ' +
-        're-apply after the app gate (see i18n rehydrateLanguageFromStorage).',
-    );
-  }
+  devWarn(
+    `[storage] ${op}(${key ?? ''}) before initEncryptedStorage() resolved — ` +
+      'returning fallback. Startup-path readers must tolerate this and ' +
+      're-apply after the app gate (see i18n rehydrateLanguageFromStorage).',
+  );
 }
 
 /**
@@ -189,12 +187,7 @@ export function migrateFromAsyncStorage(): Promise<void> {
       // 避免半迁移状态被 "已完成" 标记永久封死。
       storage.set(MIGRATION_FLAG, true);
     } catch (err) {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn(
-          '[storage] AsyncStorage → MMKV migration failed; will retry next launch',
-          err,
-        );
-      }
+      reportHandledFailure('storage', 'asyncStorageMigration', err);
       // 故意不 rethrow：调用方（app/_layout.tsx）必须始终前进，
       // 否则启动屏会无限挂住。
     }

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 function loadAuthStore() {
   const filePath = path.join(process.cwd(), 'src/stores/authStore.ts');
@@ -22,7 +23,7 @@ function loadAuthStore() {
     module: { exports: {} },
     exports: {},
     console,
-    require: (request) => {
+    require: withObservabilityStubs((request) => {
       if (request === 'zustand') {
         return {
           create: () => (initializer) => {
@@ -73,7 +74,7 @@ function loadAuthStore() {
       }
       if (request === '@/types') return {};
       throw new Error(`Unexpected import: ${request}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
 

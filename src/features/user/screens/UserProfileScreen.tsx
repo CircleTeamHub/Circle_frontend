@@ -49,6 +49,7 @@ import {
 import { fetchUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const INFO_ROW_IDS = [
   'moments',
@@ -359,9 +360,7 @@ export default function UserProfileScreen() {
             setRemoteProfile(null);
             setFetchError(t('userProfile.loadFailed'));
           }
-          if (__DEV__) {
-            console.warn('[UserProfileScreen] fetchUserProfile failed', error);
-          }
+          reportHandledFailure('userProfile', 'fetchProfile', error);
         });
 
       return () => {
@@ -396,9 +395,7 @@ export default function UserProfileScreen() {
             setFriendStatusLoadError(true);
             setFriendStatus(null);
           }
-          if (__DEV__) {
-            console.warn('[UserProfileScreen] fetchFriendStatus failed', error);
-          }
+          reportHandledFailure('userProfile', 'fetchFriendStatus', error);
         });
 
       return () => {
@@ -432,9 +429,7 @@ export default function UserProfileScreen() {
           if (!cancelled) {
             setFriendSettings(null);
           }
-          if (__DEV__) {
-            console.warn('[UserProfileScreen] fetchFriendSettings failed', error);
-          }
+          reportHandledFailure('userProfile', 'fetchFriendSettings', error);
         });
 
       return () => {

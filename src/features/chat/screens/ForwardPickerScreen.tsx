@@ -31,6 +31,7 @@ import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type PendingForward = {
   message: ChatMessage;
@@ -236,9 +237,7 @@ export default function ForwardPickerScreen() {
   useEffect(() => {
     if (conversations.length > 0) return;
     loadChatConversations().catch((err) => {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[ForwardPicker] loadChatConversations failed', err);
-      }
+      reportHandledFailure('forward', 'loadConversations', err);
     });
   }, [conversations.length]);
 
@@ -265,9 +264,7 @@ export default function ForwardPickerScreen() {
         },
       ]);
     } catch (error) {
-      if (__DEV__) {
-        console.warn('[ForwardPicker] forward message failed', error);
-      }
+      reportHandledFailure('forward', 'forwardMessage', error);
       if (!mountedRef.current) return;
       Alert.alert(t('chat.forward.failed'), t('chat.forward.failedRetry'));
     } finally {

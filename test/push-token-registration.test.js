@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 const SECRET_A = '11111111-1111-4111-8111-111111111111';
 const SECRET_B = '22222222-2222-4222-8222-222222222222';
@@ -38,7 +39,7 @@ function loadRegistrar(storageOverride, sharedGlobal, options = {}) {
     module: { exports: {} },
     exports: {},
     ...(sharedGlobal ? { globalThis: sharedGlobal } : {}),
-    require: (specifier) => {
+    require: withObservabilityStubs((specifier) => {
       if (specifier === 'react') {
         return {
           useEffect() {},
@@ -97,7 +98,7 @@ function loadRegistrar(storageOverride, sharedGlobal, options = {}) {
       }
       if (specifier.startsWith('@/')) return {};
       return require(specifier);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

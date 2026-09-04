@@ -18,6 +18,7 @@ import { useCallStore } from '@/features/call/store/use-call-store';
 import { useIncomingCallExpiry } from '@/features/call/hooks/use-incoming-call-expiry';
 import { useCallReconciliation } from '@/features/call/hooks/use-call-reconciliation';
 import '@/features/call/call-session-teardown';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   overlay: {
@@ -100,9 +101,7 @@ export function CallInviteHost() {
         t('common.errorOccurred'),
         getApiErrorMessage(error, t('common.errorOccurred')),
       );
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[call] accept failed', error);
-      }
+      reportHandledFailure('call', 'accept', error);
     } finally {
       setBusyAction(null);
     }
@@ -114,9 +113,7 @@ export function CallInviteHost() {
     try {
       await rejectCall(incomingCall.callId);
     } catch (error) {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[call] reject failed', error);
-      }
+      reportHandledFailure('call', 'reject', error);
     } finally {
       resetCallState();
       setBusyAction(null);

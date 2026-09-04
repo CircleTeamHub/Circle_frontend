@@ -40,6 +40,9 @@ import {
   useChatStore,
   viewerSelfDestructDaysStorageKey,
 } from './store';
+import { devWarn } from '@/utils/dev-log';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * 自研聊天 socket 管理器（squady SocketManager 的 TS 移植，按本仓
@@ -354,7 +357,7 @@ export function connectChat(token: string, userId: string): void {
   });
   next.on('connect_error', (err) => {
     if (gen !== sessionGen) return;
-    console.warn('[chat] connect error', err?.message ?? err);
+    devWarn('[chat] connect error', err?.message ?? err);
     consecutiveConnectErrors += 1;
     const reason = classifyConnectFailure(err);
     logClientDiagnostic('chat.ws.connect_error', {
@@ -596,7 +599,7 @@ async function hydrateFromLocalDb(
     // 下一次重连才发得出去,服务端那边一直是未读。
     if (restored) void flushPendingReads();
   } catch (err) {
-    console.warn('[chat] local hydrate failed', err);
+    reportHandledFailure('chatSync', 'localHydrate', err);
   }
 }
 
@@ -637,13 +640,14 @@ async function catchUpMutations(userId: string): Promise<void> {
       sinceId = result.nextSinceId;
     }
   } catch (err) {
-    console.warn('[chat] mutation catch-up failed', err);
+    reportHandledFailure('chatSync', 'mutationCatchUp', err);
   }
 }
 
 /** 丢掉全部缓存消息(会话行留着,列表不至于空掉),下次进屏幕重新拉。 */
 async function resetLocalMessageCache(): Promise<void> {
-  console.warn('[chat] mutation cursor expired; dropping cached messages');
+  logClientDiagnostic('chatSync.mutationCursorExpired');
+  devWarn('[chat] mutation cursor expired; dropping cached messages');
   useChatStore.getState().dropCachedMessages();
   await dropAllLocalMessages().catch(() => undefined);
 }
@@ -657,7 +661,7 @@ async function resetLocalMessageCache(): Promise<void> {
  */
 function resyncAfterReconnect(userId: string): void {
   void loadChatConversations().catch((err: unknown) =>
-    console.warn('[chat] reconnect conversation refresh failed', err),
+    reportHandledFailure('chatSync', 'reconnectConversationRefresh', err),
   );
   void catchUpMutations(userId);
   const state = useChatStore.getState();
@@ -672,12 +676,12 @@ function resyncAfterReconnect(userId: string): void {
     // 直接 return 的话这条唯一的恢复路径也放弃了,而屏幕上的历史加载 effect
     // 不随连通性重跑:会话就这么一直空着,直到用户退出重进。
     void loadChatHistory(active).catch((err: unknown) =>
-      console.warn('[chat] reconnect initial history failed', err),
+      reportHandledFailure('chatSync', 'reconnectInitialHistory', err),
     );
     return;
   }
   void backfillConversationSince(active, maxHeight).catch((err: unknown) =>
-    console.warn('[chat] reconnect gap backfill failed', err),
+    reportHandledFailure('chatSync', 'reconnectGapBackfill', err),
   );
 }
 
@@ -755,7 +759,7 @@ async function flushPendingReads(): Promise<void> {
         }
       } catch (err) {
         // 保留 pending,断线重连的 connect 钩子会再次 flush。
-        console.warn('[chat] read ack failed, will retry on reconnect', err);
+        reportHandledFailure('chatSync', 'readAck', err);
       }
     }
   } finally {

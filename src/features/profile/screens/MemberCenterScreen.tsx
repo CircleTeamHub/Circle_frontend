@@ -34,6 +34,7 @@ import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 import { useSupportConfigStore } from '@/stores/supportConfigStore';
 import { selectSupportAgents } from '@/stores/support-config-selectors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 
 const DEFAULT_TIER_NAMES: Record<MembershipTier, string> = {
@@ -353,9 +354,9 @@ export default function MemberCenterScreen() {
               });
             }
           })
-          .catch(() => {
-            if (active && typeof __DEV__ !== 'undefined' && __DEV__) {
-              console.warn('[MemberCenterScreen] user refresh failed');
+          .catch((error: unknown) => {
+            if (active) {
+              reportHandledFailure('memberCenter', 'userRefresh', error);
             }
           });
       }

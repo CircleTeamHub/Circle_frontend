@@ -19,6 +19,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { clearLocalSession } from '@/services/auth/session';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   container: {
@@ -117,9 +118,7 @@ export default function ChangePasswordScreen() {
         await logoutAll();
       } catch (logoutError) {
         // 服务端登出全部设备失败不阻断本地退出流程，但 dev 还是想看到原因。
-        if (__DEV__) {
-          console.warn('[ChangePasswordScreen] logoutAll failed', logoutError);
-        }
+        reportHandledFailure('auth', 'logoutAllAfterPasswordChange', logoutError);
       }
       await clearLocalSession();
       router.replace('/(auth)/login');

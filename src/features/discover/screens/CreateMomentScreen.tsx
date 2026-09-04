@@ -29,6 +29,7 @@ import { useMomentsStore } from '@/features/discover/store/use-moments-store';
 import { mapWithConcurrency } from '@/utils/concurrency';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -182,13 +183,7 @@ export default function CreateMomentScreen() {
           );
           return presign.fileUrl;
         } catch (error) {
-          if (__DEV__) {
-            console.warn(
-              '[CreateMomentScreen] image upload failed',
-              { uri },
-              error,
-            );
-          }
+          reportHandledFailure('moments', 'imageUpload', error);
           return null;
         }
       });

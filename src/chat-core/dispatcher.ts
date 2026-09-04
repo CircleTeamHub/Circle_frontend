@@ -24,6 +24,8 @@ import { reportChatDelivered } from './socket-manager';
 import { getChatMessagePreview } from './mappers';
 import { useChatStore } from './store';
 import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { devWarn } from '@/utils/dev-log';
 
 /**
  * 服务端事件 → store 的分发层（squady RealtimeEventDispatcher 的移植）。
@@ -135,7 +137,7 @@ function scheduleConversationBackfill(isLive: () => boolean): void {
         }
       })
       .catch((err: unknown) => {
-        console.warn('[chat] conversation backfill failed', err);
+        reportHandledFailure('chatSync', 'conversationBackfill', err);
         // 只丢这一次请求负责的那批:在途期间攒下的候选归下一次补拉,
         // 一次失败不该连累它们。
         takePendingBannersFor(issued);
@@ -215,7 +217,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // (getChatMessagePreview 读 content['text']),那已经在这个 try/catch
       // 之外了 —— 一条畸形广播就能让消息页每次进都白屏,且它还落了库。
       if (!isChatMessageDto(payload)) {
-        console.warn('[chat] dropped malformed message payload');
+        devWarn('[chat] dropped malformed message payload');
         reportChatEventFailureOnce('incomingMessage', 'malformedPayload');
         return;
       }
@@ -267,7 +269,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         scheduleConversationBackfill(isLive);
       }
     } catch (err) {
-      console.warn('[chat] message handler failed', err);
+      devWarn('[chat] message handler failed', err);
       reportChatEventFailureOnce('incomingMessage', 'handlerFailure');
     }
   });
@@ -284,7 +286,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         !Number.isSafeInteger(payload.height) ||
         payload.height < 0
       ) {
-        console.warn('[chat] dropped malformed read payload');
+        devWarn('[chat] dropped malformed read payload');
         reportChatEventFailureOnce('readReceipt', 'malformedPayload');
         return;
       }
@@ -292,7 +294,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         .getState()
         .applyRead(payload.conversationId, payload.userId, payload.height);
     } catch (err) {
-      console.warn('[chat] read handler failed', err);
+      devWarn('[chat] read handler failed', err);
       reportChatEventFailureOnce('readReceipt', 'handlerFailure');
     }
   });
@@ -322,7 +324,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           );
         useLocalUnreadStore.getState().clearUnread(payload.conversationId);
       } catch (err) {
-        console.warn('[chat] history-cleared handler failed', err);
+        devWarn('[chat] history-cleared handler failed', err);
         reportChatEventFailureOnce('historyCleared', 'handlerFailure');
       }
     },
@@ -341,7 +343,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       }
       useChatStore.getState().applyPresence(payload.userId, payload.online);
     } catch (err) {
-      console.warn('[chat] presence handler failed', err);
+      devWarn('[chat] presence handler failed', err);
       reportChatEventFailureOnce('presence', 'handlerFailure');
     }
   });
@@ -362,7 +364,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       if (payload.userId === store.currentUserId) return;
       store.applyTyping(payload.conversationId);
     } catch (err) {
-      console.warn('[chat] typing handler failed', err);
+      devWarn('[chat] typing handler failed', err);
+      reportChatEventFailureOnce('typing', 'handlerFailure');
     }
   });
 
@@ -381,7 +384,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         .getState()
         .applyDelivered(payload.conversationId, payload.userId, payload.height);
     } catch (err) {
-      console.warn('[chat] delivered handler failed', err);
+      devWarn('[chat] delivered handler failed', err);
+      reportChatEventFailureOnce('delivered', 'handlerFailure');
     }
   });
 
@@ -396,7 +400,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         typeof payload.userId !== 'string' ||
         (payload.op !== 'add' && payload.op !== 'remove')
       ) {
-        console.warn('[chat] dropped malformed reaction payload');
+        devWarn('[chat] dropped malformed reaction payload');
+        reportChatEventFailureOnce('reaction', 'malformedPayload');
         return;
       }
       useChatStore
@@ -409,7 +414,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           payload.op,
         );
     } catch (err) {
-      console.warn('[chat] reaction handler failed', err);
+      devWarn('[chat] reaction handler failed', err);
+      reportChatEventFailureOnce('reaction', 'handlerFailure');
     }
   });
 
@@ -424,7 +430,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         typeof payload.content !== 'object' ||
         payload.content === null
       ) {
-        console.warn('[chat] dropped malformed edit payload');
+        devWarn('[chat] dropped malformed edit payload');
+        reportChatEventFailureOnce('edit', 'malformedPayload');
         return;
       }
       useChatStore
@@ -436,7 +443,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           payload.editedAt,
         );
     } catch (err) {
-      console.warn('[chat] edit handler failed', err);
+      devWarn('[chat] edit handler failed', err);
+      reportChatEventFailureOnce('edit', 'handlerFailure');
     }
   });
 
@@ -449,14 +457,16 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         typeof payload.messageId !== 'string' ||
         typeof payload.revokedBy !== 'string'
       ) {
-        console.warn('[chat] dropped malformed revoke payload');
+        devWarn('[chat] dropped malformed revoke payload');
+        reportChatEventFailureOnce('revoke', 'malformedPayload');
         return;
       }
       useChatStore
         .getState()
         .applyRevoke(payload.conversationId, payload.messageId, payload.revokedBy);
     } catch (err) {
-      console.warn('[chat] revoke handler failed', err);
+      devWarn('[chat] revoke handler failed', err);
+      reportChatEventFailureOnce('revoke', 'handlerFailure');
     }
   });
 
@@ -470,7 +480,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         typeof payload.userId !== 'string' ||
         !CONVERSATION_CHANGE_KINDS.has(payload.kind)
       ) {
-        console.warn('[chat] dropped malformed conversation payload');
+        devWarn('[chat] dropped malformed conversation payload');
+        reportChatEventFailureOnce('conversation', 'malformedPayload');
         return;
       }
       const store = useChatStore.getState();
@@ -506,7 +517,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       removedConversations.delete(payload.conversationId);
       scheduleConversationBackfill(isLive);
     } catch (err) {
-      console.warn('[chat] conversation handler failed', err);
+      devWarn('[chat] conversation handler failed', err);
+      reportChatEventFailureOnce('conversation', 'handlerFailure');
     }
   });
 }

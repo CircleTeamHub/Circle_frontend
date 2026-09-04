@@ -26,6 +26,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type SearchState = 'idle' | 'loading' | 'result' | 'not-found' | 'error';
 
@@ -179,9 +180,7 @@ export default function AddFriendScreen() {
     } catch (error) {
       setResult(null);
       setSearchState('error');
-      if (__DEV__) {
-        console.warn('[AddFriendScreen] searchUsersByAccountId failed', error);
-      }
+      reportHandledFailure('addFriend', 'searchByAccountId', error);
     }
   }, [keyword, searchState]);
 

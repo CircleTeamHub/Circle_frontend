@@ -24,6 +24,7 @@ import { clearLocalSession } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type GateState = 'checking' | 'locked' | 'verifying' | 'unlocked';
 
@@ -149,9 +150,7 @@ export function LoginSecurityCodeGate() {
       // 从而把已开启安全码的账号静默放行。已知已开启 -> 保持锁定（fail-closed），
       // 未知/未开启 -> 维持解锁，避免后端抖动时把所有人挡在门外。
       setGateState(securityCodeEnabledRef.current ? 'locked' : 'unlocked');
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[security-code] status check failed', requestError);
-      }
+      reportHandledFailure('securityCode', 'statusCheck', requestError);
     }
   }, [isAuthenticated, isLoading, onboardingRequired]);
 
