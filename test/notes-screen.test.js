@@ -378,7 +378,7 @@ test('EditNoteScreen renders four large structured note edit regions', () => {
   assert.doesNotMatch(src, /sectionGrid/);
 });
 
-test('EditNoteScreen adds content directly inside media showcase and location sections', () => {
+test('EditNoteScreen keeps location selection map-only with a read-only selected-location card', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
   assert.match(src, /mediaItems/);
@@ -389,19 +389,39 @@ test('EditNoteScreen adds content directly inside media showcase and location se
   assert.match(src, /renderMediaList/);
   assert.match(src, /mediaToolbarEnabled=\{false\}/);
   assert.match(src, /locationDraft/);
-  assert.match(src, /locationTitlePlaceholder/);
-  assert.match(src, /locationAddressPlaceholder/);
+  assert.match(src, /notes\.edit\.sections\.location.*defaultValue: '位置'/);
+  assert.match(src, /notes\.edit\.pickLocation/);
+  assert.match(src, /notes\.edit\.locationPlaceNameLabel/);
+  assert.match(src, /notes\.edit\.locationAddressLabel/);
+  assert.match(src, /notes\.edit\.clearLocation/);
+  assert.match(src, /handleClearLocation/);
+  assert.match(src, /accessibilityRole="button"/);
+  assert.match(src, /locationClearAction:\s*\{[\s\S]*?minHeight:\s*44/);
+  assert.doesNotMatch(src, /from 'expo-location'/);
+  assert.doesNotMatch(src, /handleUseCurrentLocation/);
+  assert.doesNotMatch(src, /notes\.edit\.useCurrentLocation/);
+  assert.doesNotMatch(src, /locationTitlePlaceholder/);
+  assert.doesNotMatch(src, /locationAddressPlaceholder/);
+  assert.doesNotMatch(src, /locationCoordinatePill/);
   assert.match(src, /const nextLocation =/);
   assert.match(src, /location: nextLocation/);
 });
 
-test('EditNoteScreen can select a real map location and save coordinates', () => {
+test('EditNoteScreen keeps showcase video-only when rendering and saving stale drafts', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /normalizeNoteMediaSections/);
+  assert.doesNotMatch(src, /'showcase',\s*'image'/);
+  assert.match(src, /normalizeNoteMediaSections\(\{\s*media: rawSectionMedia,\s*showcase: rawSectionShowcase/);
+  assert.match(src, /showcase: \{ items: sectionShowcase \}/);
+});
+
+test('EditNoteScreen can select a real map location and save the existing location payload', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
   assert.match(src, /useNoteLocationPickerStore/);
   assert.match(src, /useFocusEffect/);
   assert.match(src, /handleOpenLocationPicker/);
-  assert.match(src, /handleUseCurrentLocation/);
   assert.match(src, /latitude: locationDraft\.latitude/);
   assert.match(src, /longitude: locationDraft\.longitude/);
   assert.match(src, /notes\/location-picker/);
@@ -434,14 +454,56 @@ test('EditNoteScreen renders media as a stable preview grid', () => {
   assert.match(src, /contentFit="cover"/);
 });
 
-test('EditNoteScreen shows a real map preview for selected locations', () => {
+test('EditNoteScreen reports upload state in the affected media section without remounting its controls', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /const mediaSectionStatus =/);
+  assert.match(src, /const showcaseSectionStatus =/);
+  assert.match(src, /notes\.edit\.mediaUploading/);
+  assert.match(src, /const renderAddButton = useCallback/);
+  assert.match(src, /const renderMediaList = useCallback/);
+});
+
+test('EditNoteScreen batches bounded media selection and keeps local previews out of the payload', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /allowsMultipleSelection:\s*true/);
+  assert.match(src, /selectionLimit:\s*MAX_NOTE_MEDIA_SELECTION/);
+  assert.match(src, /splitPickerAssets/);
+  assert.match(src, /overflowAssets/);
+  assert.match(src, /selectionLimitExceededMessage/);
+  assert.match(src, /createPickerPreviewDisposer/);
+  assert.match(src, /uploadNoteMediaBatch/);
+  assert.match(src, /item\.previewUri\s*\?\?/);
+  assert.match(src, /stripEditorMediaDrafts/);
+  assert.match(src, /orderedSelection:\s*true/);
+  assert.match(src, /uploadingSection !== null/);
+  assert.match(src, /createNoteMediaUploadOperationGuard/);
+  assert.match(src, /VideoDraftPreview/);
+  assert.match(src, /item\.previewUri \?\? item\.posterUrl/);
+  assert.match(src, /key=\{item\.clientId\}/);
+});
+
+test('EditNoteScreen resets media upload ownership when its route loses focus', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  assert.match(src, /const invalidateUploadOwnership = useCallback\(\(\) => \{[\s\S]*?invalidate\(\)[\s\S]*?uploadInFlightRef\.current = false/);
+  assert.match(src, /const resetUploadOwnership = useCallback\(\(\) => \{[\s\S]*?invalidateUploadOwnership\(\)[\s\S]*?setUploadingSection\(null\)/);
+  assert.match(src, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*resetUploadOwnership\(\);[\s\S]*?return invalidateUploadOwnership/);
+  assert.match(src, /if \(!isRouteDataReady \|\| uploadInFlightRef\.current\) return;[\s\S]*?router\.push/);
+  assert.match(src, /onPress=\{handleOpenLocationPicker\}[\s\S]*?disabled=\{!isRouteDataReady \|\| uploadingSection !== null\}/);
+  assert.match(src, /const isRouteDataReady = !isEdit \|\| loadedNoteId === id/);
+  assert.match(src, /loading \|\|\s*!isRouteDataReady \|\|\s*isSubmitting/);
+});
+
+test('EditNoteScreen shows a real map preview without exposing raw coordinates', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
   assert.match(src, /buildMapPreviewUrl/);
   assert.match(src, /staticmap\.openstreetmap\.de/);
   assert.match(src, /locationPreviewCard/);
   assert.match(src, /locationMapPreview/);
-  assert.match(src, /locationCoordinatePill/);
+  assert.doesNotMatch(src, /locationCoordinatePill/);
 });
 
 test('NoteCard renders title and meta', () => {

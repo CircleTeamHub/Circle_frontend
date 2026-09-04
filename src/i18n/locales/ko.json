@@ -831,9 +831,14 @@
       "groupsLabel": "그룹",
       "imageItem": "이미지",
       "itemsCount": "개",
-      "locationAddressPlaceholder": "주소",
+      "legacyMediaUnavailableMessage": "이 노트에는 복구할 수 없는 이전 미디어가 포함되어 있습니다. 콘텐츠 손실을 막으려면 저장하지 말고 돌아가세요.",
+      "legacyMediaUnavailableTitle": "미디어를 안전하게 저장할 수 없습니다",
+      "clearLocation": "위치 지우기",
+      "locationAddressLabel": "상세 주소",
+      "locationAddressUnavailable": "제공되지 않음",
       "locationPreviewTitle": "선택한 위치",
-      "locationTitlePlaceholder": "장소 이름",
+      "locationPlaceNameLabel": "장소 이름",
+      "mediaUploading": "업로드 중",
       "newTitle": "새 노트",
       "noGroups": "그룹에 속하지 않음",
       "pickLocation": "위치 선택",
@@ -843,7 +848,7 @@
       "sections": {
         "location": "위치",
         "locationEmpty": "선택 사항",
-        "locationHint": "장소 이름과 주소를 입력하세요",
+        "locationHint": "지도에서 위치를 선택하세요",
         "locationSelected": "선택됨",
         "media": "이미지/동영상",
         "mediaHint": "본문 콘텐츠, 이미지와 동영상 지원",
@@ -855,12 +860,14 @@
       },
       "titlePlaceholder": "제목",
       "uploading": "업로드 중...",
-      "useCurrentLocation": "현재 위치",
       "videoItem": "동영상"
     },
     "editor": {
       "mediaUploadFailedMessage": "다시 시도해 주세요",
       "mediaUploadFailedTitle": "업로드 실패",
+      "mediaUploadsFailedMessage": "{{count}}개 파일을 업로드하지 못했습니다. 다시 시도해 주세요.",
+      "selectionLimitExceededTitle": "선택 한도에 도달했습니다",
+      "selectionLimitExceededMessage": "최대 {{count}}개 파일을 선택할 수 있습니다. 추가 {{overflow}}개 파일은 추가되지 않았습니다.",
       "toolbar": {
         "bulletList": "목록",
         "code": "코드",
@@ -870,6 +877,7 @@
         "videoTitle": "동영상"
       },
       "videoRejectedTitle": "동영상을 업로드할 수 없습니다",
+      "videosRejectedMessage": "요건을 충족하지 않는 동영상 {{count}}개를 건너뛰었습니다.",
       "videoTooLargeMessage": "200MB 이하의 동영상을 선택하세요",
       "videoTooLongMessage": "10분 이하의 동영상을 선택하세요"
     },

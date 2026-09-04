@@ -4,6 +4,7 @@ import '@blocknote/react/style.css';
 
 import type { PartialBlock } from '@blocknote/core';
 import { en, zh } from '@blocknote/core/locales';
+import { buildPendingEditorBlocks } from '../utils/note-media-upload';
 import {
   BlockNoteViewRaw,
   useCreateBlockNote,
@@ -37,7 +38,7 @@ export interface NoteEditorToolbarLabels {
 interface Props {
   dom?: import('expo/dom').DOMProps;
   initialContent: string | null; // JSON string of Block[]
-  pendingInsert: PendingInsert | null;
+  pendingInserts: PendingInsert[];
   onContentChange: (blocksJson: string) => void; // JSON string — avoids bridge serialization errors
   onInsertHandled: () => void;
   onImageRequest: () => void;
@@ -50,9 +51,22 @@ interface Props {
 
 type ActiveType = 'paragraph' | 'heading' | 'bulletListItem';
 
+function insertPendingMedia(
+  editor: Pick<ReturnType<typeof useCreateBlockNote>, 'getTextCursorPosition' | 'insertBlocks'>,
+  pendingInserts: readonly PendingInsert[],
+) {
+  const pos = editor.getTextCursorPosition();
+  if (!pos?.block) return;
+  editor.insertBlocks(
+    buildPendingEditorBlocks(pendingInserts),
+    pos.block,
+    'after',
+  );
+}
+
 export default function NoteBlockEditor({
   initialContent,
-  pendingInsert,
+  pendingInserts,
   onContentChange,
   onInsertHandled,
   onImageRequest,
@@ -126,32 +140,18 @@ export default function NoteBlockEditor({
     };
   }, []);
 
-  // Insert a pending image/video block from native
+  // A batch is inserted in one call so every item stays anchored after the
+  // original cursor block in the same order the picker returned it.
   useEffect(() => {
-    if (!pendingInsert || unmounted.current) return;
-    const pos = editor.getTextCursorPosition();
-    editor.insertBlocks(
-      [
-        {
-          // BlockNote's default schema ships both `image` and `video` blocks;
-          // they share the url/previewWidth/caption props.
-          type: pendingInsert.type,
-          props: {
-            url: pendingInsert.url,
-            previewWidth: 300,
-            caption: '',
-          },
-        },
-      ],
-      pos.block,
-      'after',
-    );
+    if (pendingInserts.length === 0 || unmounted.current) return;
+    insertPendingMedia(editor, pendingInserts);
     onInsertHandled();
-  }, [pendingInsert, editor, onInsertHandled]);
+  }, [pendingInserts, editor, onInsertHandled]);
 
   function applyType(type: ActiveType) {
     const pos = editor.getTextCursorPosition();
     if (!pos?.block) return;
+
     if (type === 'heading') {
       editor.updateBlock(pos.block, { type: 'heading', props: { level: 1 } });
     } else {

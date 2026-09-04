@@ -832,9 +832,14 @@
       "groupsLabel": "Grupos",
       "imageItem": "Imagen",
       "itemsCount": "elementos",
-      "locationAddressPlaceholder": "Dirección",
+      "legacyMediaUnavailableMessage": "Esta nota contiene archivos multimedia antiguos que no se pueden recuperar. Vuelve sin guardar para evitar perder contenido.",
+      "legacyMediaUnavailableTitle": "No se puede guardar el contenido multimedia de forma segura",
+      "clearLocation": "Borrar ubicación",
+      "locationAddressLabel": "Dirección detallada",
+      "locationAddressUnavailable": "No proporcionada",
       "locationPreviewTitle": "Ubicación seleccionada",
-      "locationTitlePlaceholder": "Nombre del lugar",
+      "locationPlaceNameLabel": "Nombre del lugar",
+      "mediaUploading": "Subiendo",
       "newTitle": "Nueva nota",
       "noGroups": "Sin grupo",
       "pickLocation": "Elegir ubicación",
@@ -844,7 +849,7 @@
       "sections": {
         "location": "Ubicación",
         "locationEmpty": "Opcional",
-        "locationHint": "Añade el nombre del lugar y la dirección",
+        "locationHint": "Elige una ubicación en el mapa",
         "locationSelected": "Seleccionada",
         "media": "Imágenes/Videos",
         "mediaHint": "Contenido principal de la nota, admite imágenes y videos",
@@ -856,12 +861,14 @@
       },
       "titlePlaceholder": "Título",
       "uploading": "Subiendo...",
-      "useCurrentLocation": "Ubicación actual",
       "videoItem": "Video"
     },
     "editor": {
       "mediaUploadFailedMessage": "Inténtalo de nuevo",
       "mediaUploadFailedTitle": "Error al subir",
+      "mediaUploadsFailedMessage": "No se pudieron subir {{count}} archivos. Inténtalo de nuevo.",
+      "selectionLimitExceededTitle": "Se alcanzó el límite de selección",
+      "selectionLimitExceededMessage": "Puedes seleccionar hasta {{count}} archivos. No se añadieron {{overflow}} archivos adicionales.",
       "toolbar": {
         "bulletList": "Lista",
         "code": "Código",
@@ -871,6 +878,7 @@
         "videoTitle": "Video"
       },
       "videoRejectedTitle": "No se puede subir el video",
+      "videosRejectedMessage": "Se omitieron {{count}} videos que no cumplen los requisitos de carga.",
       "videoTooLargeMessage": "Elige un video de menos de 200MB",
       "videoTooLongMessage": "Elige un video de menos de 10 minutos"
     },

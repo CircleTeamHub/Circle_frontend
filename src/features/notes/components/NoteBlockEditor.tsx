@@ -5,6 +5,14 @@ import { useTranslation } from 'react-i18next';
 import type { CreateNoteMediaInput } from '@/features/notes/types';
 import { getNoteVideoUploadPolicyViolation } from '@/features/notes/utils/note-media-policy';
 import {
+  createPickerPreviewDisposer,
+  splitPickerAssets,
+} from '@/features/notes/utils/note-picker-assets';
+import {
+  MAX_NOTE_MEDIA_SELECTION,
+  uploadNoteMediaBatch,
+} from '@/features/notes/utils/note-media-upload';
+import {
   requestUploadPresign,
   resolveUploadContentType,
   sanitizeUploadFilename,
@@ -102,17 +110,20 @@ function NoteBlockEditorImpl({
     }),
     [t],
   );
-  const [pendingInsert, setPendingInsert] = useState<PendingInsert | null>(null);
+  const [pendingInserts, setPendingInserts] = useState<PendingInsert[]>([]);
   // Prevent async setState calls after unmount — these are the root cause of
   // the "Unable to find the 'DomWebView' view" bridge error: a state update
   // after unmount causes React to try to push new props into the torn-down WebView.
   const isMounted = useRef(true);
+  const pickerPreviewDisposerRef = useRef(createPickerPreviewDisposer());
   // 防止用户连点"图"两下触发并发上传（每次都会跑 presign + S3 PUT 一整条链路）。
   const inFlightRef = useRef(false);
   useEffect(() => {
+    const pickerPreviewDisposer = pickerPreviewDisposerRef.current;
     isMounted.current = true;
     return () => {
       isMounted.current = false;
+      pickerPreviewDisposer.disposeAll();
     };
   }, []);
 
@@ -122,6 +133,7 @@ function NoteBlockEditorImpl({
     async (kind: 'image' | 'video') => {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
+      let acceptedAssets: ImagePicker.ImagePickerAsset[] = [];
       try {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) return;
@@ -129,83 +141,115 @@ function NoteBlockEditorImpl({
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: kind === 'video' ? ['videos'] : ['images'],
           quality: 0.85,
-          allowsMultipleSelection: false,
+          allowsMultipleSelection: true,
+          selectionLimit: MAX_NOTE_MEDIA_SELECTION,
+          orderedSelection: true,
         });
         if (result.canceled || !result.assets.length) return;
 
-        const asset = result.assets[0];
-        if (kind === 'video') {
-          const violation = getNoteVideoUploadPolicyViolation({
-            fileSize: asset.fileSize,
-            duration: asset.duration,
-          });
-          if (violation) {
+        pickerPreviewDisposerRef.current.retainAssets(result.assets);
+        const { selectedAssets, overflowAssets } = splitPickerAssets(result.assets);
+        if (overflowAssets.length) {
+          pickerPreviewDisposerRef.current.disposeAssets(overflowAssets);
+          if (isMounted.current) {
             Alert.alert(
-              t('notes.editor.videoRejectedTitle', {
-                defaultValue: '视频无法上传',
+              t('notes.editor.selectionLimitExceededTitle', { defaultValue: '选择数量已达上限' }),
+              t('notes.editor.selectionLimitExceededMessage', {
+                defaultValue: '最多可选择 {{count}} 个文件，已忽略其余 {{overflow}} 个。',
+                count: MAX_NOTE_MEDIA_SELECTION,
+                overflow: overflowAssets.length,
               }),
-              violation === 'size'
-                ? t('notes.editor.videoTooLargeMessage', {
-                    defaultValue: '请选择 200MB 以内的视频',
-                  })
-                : t('notes.editor.videoTooLongMessage', {
-                    defaultValue: '请选择 10 分钟以内的视频',
-                  }),
             );
-            return;
           }
         }
+        acceptedAssets =
+          kind === 'video'
+            ? selectedAssets.filter(
+                (asset) =>
+                  !getNoteVideoUploadPolicyViolation({
+                    fileSize: asset.fileSize,
+                    duration: asset.duration,
+                  }),
+              )
+            : selectedAssets;
+        const rejectedAssets = selectedAssets.filter((asset) => !acceptedAssets.includes(asset));
+        const rejectedCount = rejectedAssets.length;
+        pickerPreviewDisposerRef.current.disposeAssets(rejectedAssets);
+        if (rejectedCount && isMounted.current) {
+          Alert.alert(
+            t('notes.editor.videoRejectedTitle', { defaultValue: '视频无法上传' }),
+            t('notes.editor.videosRejectedMessage', {
+              defaultValue: '已跳过 {{count}} 个不符合要求的视频',
+              count: rejectedCount,
+            }),
+          );
+        }
 
-        const fallbackName = kind === 'video' ? 'video.mp4' : 'image.jpg';
-        const fallbackType = kind === 'video' ? 'video/mp4' : 'image/jpeg';
-        const filename = asset.uri.split('/').pop() ?? fallbackName;
-        const contentType =
-          resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
-          fallbackType;
-
-        const presign = await requestUploadPresign({
-          filename: sanitizeUploadFilename(filename),
-          contentType,
-          folder: 'notes',
-          fileUri: asset.uri,
+        const batch = await uploadNoteMediaBatch(acceptedAssets, async (asset) => {
+          const fallbackName = kind === 'video' ? 'video.mp4' : 'image.jpg';
+          const fallbackType = kind === 'video' ? 'video/mp4' : 'image/jpeg';
+          const filename = asset.uri.split('/').pop() ?? fallbackName;
+          const contentType =
+            resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
+            fallbackType;
+          const presign = await requestUploadPresign({
+            filename: sanitizeUploadFilename(filename),
+            contentType,
+            folder: 'notes',
+            fileUri: asset.uri,
+          });
+          await uploadLocalFileToPresignedUrl(
+            presign.uploadUrl,
+            contentType,
+            asset.uri,
+            presign.requiredHeaders,
+            kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
+          );
+          const durationMs =
+            kind === 'video' && typeof asset.duration === 'number'
+              ? Math.round(asset.duration)
+              : undefined;
+          return {
+            pending: {
+              type: kind,
+              url: presign.fileUrl,
+              objectKey: presign.key,
+              width: asset.width ?? undefined,
+              height: asset.height ?? undefined,
+              mimeType: contentType,
+              size: asset.fileSize ?? undefined,
+              durationMs,
+            },
+            media: {
+              type: kind === 'video' ? 'VIDEO' : 'IMAGE',
+              objectKey: presign.key,
+              url: presign.fileUrl,
+              width: asset.width ?? undefined,
+              height: asset.height ?? undefined,
+              mimeType: contentType,
+              size: asset.fileSize ?? undefined,
+              durationMs,
+              sortOrder: 0,
+            } satisfies CreateNoteMediaInput,
+          };
         });
-
-        await uploadLocalFileToPresignedUrl(
-          presign.uploadUrl,
-          contentType,
-          asset.uri,
-          presign.requiredHeaders,
-          kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
-        );
-
         if (!isMounted.current) return;
-
-        const durationMs =
-          kind === 'video' && typeof asset.duration === 'number'
-            ? Math.round(asset.duration)
-            : undefined;
-
-        setPendingInsert({
-          type: kind,
-          url: presign.fileUrl,
-          objectKey: presign.key,
-          width: asset.width ?? undefined,
-          height: asset.height ?? undefined,
-          mimeType: contentType,
-          size: asset.fileSize ?? undefined,
-          durationMs,
-        });
-        onMediaUploaded?.({
-          type: kind === 'video' ? 'VIDEO' : 'IMAGE',
-          objectKey: presign.key,
-          url: presign.fileUrl,
-          width: asset.width ?? undefined,
-          height: asset.height ?? undefined,
-          mimeType: contentType,
-          size: asset.fileSize ?? undefined,
-          durationMs,
-          sortOrder: 0,
-        });
+        if (batch.items.length) {
+          setPendingInserts((current) => [
+            ...current,
+            ...batch.items.map((item) => item.pending),
+          ]);
+          batch.items.forEach((item) => onMediaUploaded?.(item.media));
+        }
+        if (batch.failedCount) {
+          Alert.alert(
+            t('notes.editor.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
+            t('notes.editor.mediaUploadsFailedMessage', {
+              defaultValue: '{{count}} 个文件上传失败，请稍后重试',
+              count: batch.failedCount,
+            }),
+          );
+        }
       } catch (error) {
         if (isMounted.current) {
           Alert.alert(
@@ -219,6 +263,9 @@ function NoteBlockEditorImpl({
         }
         reportHandledFailure('noteEditor', 'upload', error, { reason: kind });
       } finally {
+        // Standalone editor inserts only remote URLs, so picker object URLs are no
+        // longer needed after this upload attempt settles (including failures).
+        pickerPreviewDisposerRef.current.disposeAssets(acceptedAssets);
         inFlightRef.current = false;
       }
     },
@@ -236,7 +283,7 @@ function NoteBlockEditorImpl({
 
   const handleInsertHandled = useCallback(() => {
     if (!isMounted.current) return;
-    setPendingInsert(null);
+    setPendingInserts([]);
   }, []);
 
   // DOM bridge only supports primitives — pass content as JSON string and
@@ -271,7 +318,7 @@ function NoteBlockEditorImpl({
         <DOMEditor
           dom={DOM_WEBVIEW_PROPS}
           initialContent={initialContentJson}
-          pendingInsert={pendingInsert}
+          pendingInserts={pendingInserts}
           onContentChange={handleContentChangeJson}
           onInsertHandled={handleInsertHandled}
           onImageRequest={handleImageRequest}

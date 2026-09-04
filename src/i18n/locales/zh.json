@@ -2354,9 +2354,14 @@
       "groupsLabel": "分组",
       "imageItem": "图片",
       "itemsCount": "项",
-      "locationAddressPlaceholder": "地址",
+      "legacyMediaUnavailableMessage": "这篇笔记含有无法恢复的旧媒体。为避免丢失内容，请返回且不要保存。",
+      "legacyMediaUnavailableTitle": "无法安全保存媒体",
+      "clearLocation": "清除位置",
+      "locationAddressLabel": "详细地址",
+      "locationAddressUnavailable": "未提供",
       "locationPreviewTitle": "已选择位置",
-      "locationTitlePlaceholder": "位置名称",
+      "locationPlaceNameLabel": "地点名称",
+      "mediaUploading": "正在上传",
       "newTitle": "新建笔记",
       "noGroups": "未加入任何分组",
       "pickLocation": "选择位置",
@@ -2364,9 +2369,9 @@
       "saveFailedTitle": "保存失败",
       "saving": "保存中...",
       "sections": {
-        "location": "地址",
+        "location": "位置",
         "locationEmpty": "可选",
-        "locationHint": "填写位置名称和地址",
+        "locationHint": "在地图上选择位置",
         "locationSelected": "已选择",
         "media": "图片/视频",
         "mediaHint": "正文素材，支持图片和视频",
@@ -2378,12 +2383,14 @@
       },
       "titlePlaceholder": "标题",
       "uploading": "上传中...",
-      "useCurrentLocation": "当前位置",
       "videoItem": "视频"
     },
     "editor": {
       "mediaUploadFailedMessage": "请稍后重试",
       "mediaUploadFailedTitle": "上传失败",
+      "mediaUploadsFailedMessage": "{{count}} 个文件上传失败，请稍后重试",
+      "selectionLimitExceededTitle": "选择数量已达上限",
+      "selectionLimitExceededMessage": "最多可选择 {{count}} 个文件，已忽略其余 {{overflow}} 个。",
       "toolbar": {
         "bulletList": "列表",
         "code": "代码",
@@ -2393,6 +2400,7 @@
         "videoTitle": "视频"
       },
       "videoRejectedTitle": "视频无法上传",
+      "videosRejectedMessage": "已跳过 {{count}} 个不符合要求的视频",
       "videoTooLargeMessage": "请选择 200MB 以内的视频",
       "videoTooLongMessage": "请选择 10 分钟以内的视频"
     },

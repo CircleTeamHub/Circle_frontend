@@ -45,7 +45,8 @@ test('buildNoteSections uses explicit sections when present', () => {
   });
 
   assert.equal(sections.text.content, 'structured');
-  assert.equal(sections.showcase.items.length, 1);
+  assert.equal(sections.media.items.length, 1);
+  assert.equal(sections.showcase.items.length, 0);
   assert.equal(sections.location?.title, 'Shenzhen');
 });
 
@@ -55,7 +56,7 @@ test('buildNoteSections derives four sections from legacy content and media', ()
   assert.equal(sections.text.content, 'plain fallback');
   assert.equal(sections.text.contentJson?.length, 1);
   assert.equal(sections.media.items.length, 1);
-  assert.equal(sections.showcase.items.length, 1);
+  assert.equal(sections.showcase.items.length, 0);
   assert.equal(sections.location, null);
 });
 
@@ -88,16 +89,18 @@ test('getNoteSectionAvailability reports addressable sections', () => {
   assert.deepEqual(availability, {
     hasText: true,
     hasMedia: true,
-    hasShowcase: true,
+    hasShowcase: false,
     hasLocation: false,
   });
 });
 
-test('getInitialNoteSection 只认显式请求，其余一律不定位', () => {
+test('getInitialNoteSection redirects stale legacy showcase card requests to migrated media', () => {
   const sections = buildNoteSections(legacyNote);
 
   // 显式请求且该区块有内容 → 定位过去。
   assert.equal(getInitialNoteSection('media', sections), 'media');
+  // 滚动升级期间，旧卡片可能还带 showcase 参数；图片已迁到 media，必须落到内容处。
+  assert.equal(getInitialNoteSection('showcase', sections), 'media');
 
   // 请求的区块没内容（笔记被编辑过）→ 不定位，停顶部比滚到空处强。
   assert.equal(getInitialNoteSection('location', sections), null);
@@ -108,4 +111,14 @@ test('getInitialNoteSection 只认显式请求，其余一律不定位', () => {
   assert.equal(getInitialNoteSection(null, sections), null);
   assert.equal(getInitialNoteSection('', sections), null);
   assert.equal(getInitialNoteSection('bogus', sections), null);
+});
+
+test('getInitialNoteSection keeps real video showcases addressable', () => {
+  const sections = buildNoteSections({
+    sections: {
+      showcase: { items: [{ type: 'VIDEO', url: 'https://cdn.test/showcase.mp4' }] },
+    },
+  });
+
+  assert.equal(getInitialNoteSection('showcase', sections), 'showcase');
 });

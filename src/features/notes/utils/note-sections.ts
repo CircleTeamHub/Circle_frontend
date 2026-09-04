@@ -96,6 +96,114 @@ function normalizeItems(items: unknown): StructuredNoteMediaItem[] {
   });
 }
 
+type MediaAliasGroup = {
+  item: StructuredNoteMediaItem;
+  aliases: Set<string>;
+};
+
+function getMediaAliases(item: StructuredNoteMediaItem) {
+  const aliases = new Set<string>();
+  const objectKey = typeof item.objectKey === 'string' ? item.objectKey.trim() : '';
+  if (objectKey) aliases.add(`${item.type}:key:${objectKey}`);
+  const url = item.url.trim();
+  if (url) aliases.add(`${item.type}:url:${url}`);
+  return aliases;
+}
+
+function aliasesOverlap(left: Set<string>, right: Set<string>) {
+  return [...left].some((alias) => right.has(alias));
+}
+
+function mergeMissingMediaMetadata(
+  primary: StructuredNoteMediaItem,
+  duplicate: StructuredNoteMediaItem,
+) {
+  const merged = { ...primary } as Record<string, unknown>;
+  for (const [key, value] of Object.entries(duplicate)) {
+    const current = merged[key];
+    if (value != null && (current == null || current === '')) {
+      merged[key] = value;
+    }
+  }
+  return merged as StructuredNoteMediaItem;
+}
+
+function enrichMediaItems(
+  items: StructuredNoteMediaItem[],
+  references: StructuredNoteMediaItem[],
+) {
+  const referenceGroups = groupMediaItems(references);
+  return items.map((item) =>
+    referenceGroups.reduce(
+      (enriched, reference) =>
+        aliasesOverlap(getMediaAliases(enriched), reference.aliases)
+          ? mergeMissingMediaMetadata(enriched, reference.item)
+          : enriched,
+      item,
+    ),
+  );
+}
+
+function dedupeAndNormalizeMedia(items: StructuredNoteMediaItem[]) {
+  return groupMediaItems(items).map(({ item }, sortOrder) => ({ ...item, sortOrder }));
+}
+
+function groupMediaItems(items: StructuredNoteMediaItem[]) {
+  const groups: MediaAliasGroup[] = [];
+  for (const item of items) {
+    const aliases = getMediaAliases(item);
+    const matchingIndexes = groups.flatMap((group, index) =>
+      aliasesOverlap(group.aliases, aliases) ? [index] : [],
+    );
+    if (!matchingIndexes.length) {
+      groups.push({ item, aliases });
+      continue;
+    }
+
+    const primaryIndex = matchingIndexes[0];
+    let merged = groups[primaryIndex].item;
+    const mergedAliases = new Set(groups[primaryIndex].aliases);
+    for (const index of matchingIndexes.slice(1)) {
+      merged = mergeMissingMediaMetadata(merged, groups[index].item);
+      for (const alias of groups[index].aliases) mergedAliases.add(alias);
+    }
+    groups[primaryIndex] = {
+      item: mergeMissingMediaMetadata(merged, item),
+      aliases: new Set([...mergedAliases, ...aliases]),
+    };
+    for (const index of matchingIndexes.slice(1).reverse()) {
+      groups.splice(index, 1);
+    }
+  }
+  return groups;
+}
+
+/**
+ * Canonicalizes the two editable media regions. Showcase is intentionally video-only;
+ * older showcase images are retained by moving them into ordinary media.
+ */
+export function normalizeNoteMediaSections({
+  media,
+  showcase,
+  mediaReferences,
+}: {
+  media?: unknown;
+  showcase?: unknown;
+  mediaReferences?: unknown;
+}) {
+  const references = normalizeItems(mediaReferences);
+  const ordinaryMedia = enrichMediaItems(normalizeItems(media), references);
+  const showcaseItems = enrichMediaItems(normalizeItems(showcase), references);
+  const migratedShowcaseImages = showcaseItems.filter((item) => item.type === 'IMAGE');
+
+  return {
+    media: dedupeAndNormalizeMedia([...ordinaryMedia, ...migratedShowcaseImages]),
+    showcase: dedupeAndNormalizeMedia(
+      showcaseItems.filter((item) => item.type === 'VIDEO'),
+    ),
+  };
+}
+
 function hasExplicitItems(items: unknown) {
   return Array.isArray(items);
 }
@@ -108,6 +216,19 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
   const hasExplicitShowcase = hasExplicitItems(explicit?.showcase?.items);
   const explicitMedia = normalizeItems(explicit?.media?.items);
   const explicitShowcase = normalizeItems(explicit?.showcase?.items);
+  const legacyShowcaseImages = legacyShowcase.filter((item) => item.type === 'IMAGE');
+
+  const mediaSections = normalizeNoteMediaSections({
+    media: hasExplicitMedia
+      ? explicitMedia
+      : [...legacyMedia, ...legacyShowcaseImages],
+    showcase: hasExplicitShowcase
+      ? explicitShowcase
+      : hasExplicitMedia
+        ? []
+        : legacyShowcase,
+    mediaReferences: legacyMedia,
+  });
 
   return {
     text: {
@@ -115,18 +236,10 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
       contentJson: getTextBlocks(explicit?.text?.contentJson ?? note.contentJson),
     },
     media: {
-      items: hasExplicitMedia
-        ? explicitMedia
-        : hasExplicitShowcase
-          ? []
-          : legacyMedia,
+      items: mediaSections.media,
     },
     showcase: {
-      items: hasExplicitShowcase
-        ? explicitShowcase
-        : hasExplicitMedia
-          ? []
-          : legacyShowcase,
+      items: mediaSections.showcase,
     },
     location: explicit?.location ?? null,
   };
@@ -170,6 +283,9 @@ export function getInitialNoteSection(
     return null;
   }
   const availability = getNoteSectionAvailability(sections);
+  if (requested === 'showcase' && !availability.hasShowcase && availability.hasMedia) {
+    return 'media';
+  }
   const key = `has${requested[0].toUpperCase()}${requested.slice(1)}` as keyof typeof availability;
   // 请求的区块没内容（笔记被编辑过）：不滚，停顶部比滚到空处强。
   return availability[key] ? requested : null;

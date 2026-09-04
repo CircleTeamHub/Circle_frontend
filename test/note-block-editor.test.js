@@ -2,8 +2,28 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
+const ts = require('typescript');
+const vm = require('node:vm');
 
-const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
+
+function loadNoteMediaUpload() {
+  const filePath = path.join(process.cwd(), 'src/features/notes/utils/note-media-upload.ts');
+  const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+    fileName: filePath,
+  }).outputText;
+  const context = {
+    module: { exports: {} },
+    exports: {},
+  };
+  context.exports = context.module.exports;
+  vm.runInNewContext(transpiled, context, { filename: filePath });
+  return context.module.exports;
+}
 
 test("NoteBlockEditor.dom.tsx has 'use dom' directive", () => {
   const src = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
@@ -91,7 +111,9 @@ test('NoteBlockEditor can hide media toolbar buttons for structured note text se
 
 test('DOM editor inserts the pending block by its type (image or video)', () => {
   const src = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
-  assert.match(src, /type: pendingInsert\.type/);
+  const uploadSrc = read('src/features/notes/utils/note-media-upload.ts');
+  assert.match(src, /buildPendingEditorBlocks\(pendingInserts\)/);
+  assert.match(uploadSrc, /type: pendingInsert\.type/);
   assert.match(src, /type: 'image' \| 'video'/);
 });
 
@@ -106,6 +128,39 @@ test('Native editor has a video request handler and uploads as VIDEO', () => {
 test('Native editor gives video uploads a longer timeout', () => {
   const src = read('src/features/notes/components/NoteBlockEditor.tsx');
   assert.match(src, /VIDEO_UPLOAD_TIMEOUT_MS/);
+});
+
+test('Native editor supports bounded multi-selection for standalone media insertion', () => {
+  const src = read('src/features/notes/components/NoteBlockEditor.tsx');
+  assert.match(src, /allowsMultipleSelection:\s*true/);
+  assert.match(src, /selectionLimit:\s*MAX_NOTE_MEDIA_SELECTION/);
+  assert.match(src, /splitPickerAssets/);
+  assert.match(src, /overflowAssets/);
+  assert.match(src, /selectionLimitExceededMessage/);
+  assert.match(src, /createPickerPreviewDisposer/);
+  assert.match(src, /uploadNoteMediaBatch/);
+  assert.match(src, /orderedSelection:\s*true/);
+});
+
+test('DOM insertion seam inserts a successful picker batch in picker order', () => {
+  const { buildPendingEditorBlocks } = loadNoteMediaUpload();
+  const blocks = buildPendingEditorBlocks(
+    [
+      { type: 'image', url: 'A', objectKey: 'a' },
+      { type: 'image', url: 'B', objectKey: 'b' },
+      { type: 'video', url: 'C', objectKey: 'c' },
+    ],
+  );
+  assert.deepEqual(
+    blocks.map((block) => block.props.url),
+    ['A', 'B', 'C'],
+  );
+  assert.match(read('src/features/notes/dom/NoteBlockEditor.dom.tsx'), /insertBlocks\(\s*buildPendingEditorBlocks\(pendingInserts\)/);
+});
+
+test('DOM formatting actions ignore a missing cursor block', () => {
+  const src = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
+  assert.match(src, /function applyType[\s\S]*?if \(!pos\?\.block\) return/);
 });
 
 test('extractMediaFromBlocks extracts video blocks as VIDEO media', () => {

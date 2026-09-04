@@ -831,9 +831,14 @@
       "groupsLabel": "グループ",
       "imageItem": "画像",
       "itemsCount": "項目",
-      "locationAddressPlaceholder": "住所",
+      "legacyMediaUnavailableMessage": "このノートには復元できない古いメディアが含まれています。内容を失わないよう、保存せずに戻ってください。",
+      "legacyMediaUnavailableTitle": "メディアを安全に保存できません",
+      "clearLocation": "場所を削除",
+      "locationAddressLabel": "詳細住所",
+      "locationAddressUnavailable": "未登録",
       "locationPreviewTitle": "選択した場所",
-      "locationTitlePlaceholder": "場所の名前",
+      "locationPlaceNameLabel": "場所の名前",
+      "mediaUploading": "アップロード中",
       "newTitle": "新規ノート",
       "noGroups": "どのグループにも未所属",
       "pickLocation": "場所を選択",
@@ -843,7 +848,7 @@
       "sections": {
         "location": "場所",
         "locationEmpty": "任意",
-        "locationHint": "場所の名前と住所を入力",
+        "locationHint": "地図上で場所を選択",
         "locationSelected": "選択済み",
         "media": "画像/動画",
         "mediaHint": "本文の素材、画像と動画に対応",
@@ -855,12 +860,14 @@
       },
       "titlePlaceholder": "タイトル",
       "uploading": "アップロード中...",
-      "useCurrentLocation": "現在地",
       "videoItem": "動画"
     },
     "editor": {
       "mediaUploadFailedMessage": "もう一度お試しください",
       "mediaUploadFailedTitle": "アップロードに失敗しました",
+      "mediaUploadsFailedMessage": "{{count}} 件のファイルをアップロードできませんでした。もう一度お試しください。",
+      "selectionLimitExceededTitle": "選択上限に達しました",
+      "selectionLimitExceededMessage": "選択できるのは {{count}} 件までです。追加の {{overflow}} 件は追加されませんでした。",
       "toolbar": {
         "bulletList": "リスト",
         "code": "コード",
@@ -870,6 +877,7 @@
         "videoTitle": "動画"
       },
       "videoRejectedTitle": "動画をアップロードできません",
+      "videosRejectedMessage": "要件を満たさない動画を {{count}} 件スキップしました。",
       "videoTooLargeMessage": "200MB以内の動画を選んでください",
       "videoTooLongMessage": "10分以内の動画を選んでください"
     },
