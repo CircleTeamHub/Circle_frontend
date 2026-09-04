@@ -68,9 +68,9 @@ test('deliberate user-facing throws are marked as UserFacingError', () => {
 // 这就是这批泄漏的统一指纹。展示走 getApiErrorMessage / getChatSendErrorMessage,
 // 埋点走 diagnosticErrorMessage。report-failure 是纯上报通道,豁免。
 test('no feature code extracts raw error.message for display', () => {
-  const allow = new Set([
-    path.normalize('src/features/notifications/utils/report-failure.ts'),
-  ]);
+  // 允许名单固定写 POSIX 斜杠:下面的 rel 已经 split(path.sep) 再用 '/' 拼回,
+  // 这里套 path.normalize 在 Windows 上会变成反斜杠,永远匹配不上。
+  const allow = new Set(['src/features/notifications/utils/report-failure.ts']);
   const root = path.join(process.cwd(), 'src', 'features');
   const offenders = [];
 
