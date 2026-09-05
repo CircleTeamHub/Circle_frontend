@@ -117,6 +117,7 @@ export default function FriendTagsScreen() {
   const [creatingTag, setCreatingTag] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  const createInFlightRef = useRef(false);
 
   const loadTags = useCallback(async (signal?: { cancelled: boolean }) => {
     const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
@@ -221,7 +222,8 @@ export default function FriendTagsScreen() {
 
   const handleCreateTag = useCallback(async () => {
     const trimmed = newTagName.trim();
-    if (!trimmed || creatingTag) return;
+    if (!trimmed || createInFlightRef.current) return;
+    createInFlightRef.current = true;
     setCreatingTag(true);
     try {
       const created = await createFriendTag(trimmed);
@@ -243,9 +245,10 @@ export default function FriendTagsScreen() {
         getApiErrorMessage(caughtError, t('common.networkError')),
       );
     } finally {
+      createInFlightRef.current = false;
       if (mountedRef.current) setCreatingTag(false);
     }
-  }, [creatingTag, newTagName, t]);
+  }, [newTagName, t]);
 
   const stateBlock = loading && tags.length === 0 ? (
     <View style={s.stateBlock}>

@@ -72,7 +72,10 @@
       "title": "DM自動返信",
       "enabled": "自動返信を有効にする",
       "help": "DM受信時、同じ会話には30秒に1回まで自動返信します。",
-      "placeholder": "自動返信の内容を入力"
+      "placeholder": "自動返信の内容を入力",
+      "loadFailed": "自動返信設定を読み込めませんでした",
+      "saveFailed": "自動返信設定を保存できませんでした",
+      "unsaved": "未保存の変更があります"
     },
     "appearance": {
       "title": "表示",

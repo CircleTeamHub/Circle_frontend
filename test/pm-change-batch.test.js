@@ -44,6 +44,8 @@ test('groups screen exposes new, joined, created, and managed categories', () =>
   for (const key of ['newGroups', 'myJoined', 'myCreated', 'myManaged']) {
     assert.match(source, new RegExp(`contacts\\.groupsScreen\\.${key}`));
   }
+  assert.match(source, /createGroupsRequestGuard/);
+  assert.match(source, /state\.sessionEpoch/);
 });
 
 test('chat input remains keyboard-safe and pinned rows use one surface color', () => {
@@ -88,6 +90,7 @@ test('chat image bubble opens the full-screen viewer on tap', () => {
   assert.match(source, /ImageViewer/);
   assert.match(source, /onPress=\{handleOpenPreview\}/);
   assert.match(source, /visible=\{previewVisible\}/);
+  assert.match(source, /privacyMode=\{selfDestructEnabled \? 'ephemeral' : 'standard'\}/);
 });
 
 test('post expiry defaults to six hours and remains manually selectable', () => {
@@ -150,6 +153,16 @@ test('friend-tag list can create a tag directly', () => {
   assert.match(source, /createFriendTag/);
   assert.match(source, /newTagName/);
   assert.match(source, /createTagVisible/);
+  assert.match(source, /createInFlightRef\.current/);
+});
+
+test('auto-reply status and error copy exists in every supported locale', () => {
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    for (const key of ['loadFailed', 'saveFailed', 'unsaved']) {
+      assert.ok(dict?.settingsDetails?.autoReply?.[key], `${locale} autoReply.${key}`);
+    }
+  }
 });
 
 test('appearance settings wire all four requested chat display controls', () => {

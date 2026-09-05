@@ -2047,7 +2047,10 @@
       "title": "Direct-message auto reply",
       "enabled": "Enable auto reply",
       "help": "Automatically reply to direct messages, at most once per conversation every 30 seconds.",
-      "placeholder": "Enter an automatic reply"
+      "placeholder": "Enter an automatic reply",
+      "loadFailed": "Could not load auto-reply settings",
+      "saveFailed": "Could not save auto-reply settings",
+      "unsaved": "You have unsaved changes"
     },
     "appearance": {
       "title": "Display",

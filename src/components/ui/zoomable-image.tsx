@@ -31,6 +31,8 @@ const MOVE_TOLERANCE = 8;
 
 interface ZoomableImageProps {
   uri: string;
+  /** Ephemeral media can opt out of the shared disk/memory cache. */
+  cachePolicy?: 'none' | 'disk' | 'memory' | 'memory-disk';
   width: number;
   height: number;
   /** 离开当前页时复位缩放（查看器翻页用）。 */
@@ -48,6 +50,7 @@ function distance(touches: { pageX: number; pageY: number }[]): number {
 
 export function ZoomableImage({
   uri,
+  cachePolicy = 'memory-disk',
   width,
   height,
   active,
@@ -301,6 +304,7 @@ export function ZoomableImage({
       >
         <Image
           source={{ uri }}
+          cachePolicy={cachePolicy}
           style={s.fill}
           contentFit="contain"
           transition={150}

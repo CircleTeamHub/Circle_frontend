@@ -2044,7 +2044,10 @@
       "title": "私信自动回复",
       "enabled": "启用自动回复",
       "help": "收到私聊消息时自动发送；同一会话 30 秒内最多回复一次。",
-      "placeholder": "填写自动回复内容"
+      "placeholder": "填写自动回复内容",
+      "loadFailed": "自动回复设置加载失败",
+      "saveFailed": "自动回复设置保存失败",
+      "unsaved": "有未保存的更改"
     },
     "appearance": {
       "title": "界面与显示",

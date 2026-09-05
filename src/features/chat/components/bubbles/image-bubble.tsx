@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
@@ -71,6 +71,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
 }) => {
   const { colors } = useTheme();
   const [previewVisible, setPreviewVisible] = useState(false);
+  const previewPolicyRef = useRef(`${selfDestructEnabled}:${selfDestructCacheKey}`);
   const avatarNode = (
     <MessageAvatar
       message={message}
@@ -104,6 +105,15 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
     // expo-image 不能按 URI 移除已落盘内容；首次启用阅后即焚时清一次磁盘缓存，
     // 确保此前的聊天图片不会绕过后续的内存缓存策略。
     void Image.clearDiskCache().catch(() => undefined);
+    void Image.clearMemoryCache().catch(() => undefined);
+  }, [selfDestructCacheKey, selfDestructEnabled]);
+
+  useEffect(() => {
+    const policy = `${selfDestructEnabled}:${selfDestructCacheKey}`;
+    if (previewPolicyRef.current !== policy) {
+      previewPolicyRef.current = policy;
+      setPreviewVisible(false);
+    }
   }, [selfDestructCacheKey, selfDestructEnabled]);
 
   // 列表气泡优先渲染缩略图；缺失时回退到原图。原图查看留给点击放大流程。
@@ -169,6 +179,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
         <ImageViewer
           images={previewUri ? [previewUri] : []}
           visible={previewVisible}
+          privacyMode={selfDestructEnabled ? 'ephemeral' : 'standard'}
           onClose={() => setPreviewVisible(false)}
         />
       </>
@@ -190,6 +201,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
       <ImageViewer
         images={previewUri ? [previewUri] : []}
         visible={previewVisible}
+        privacyMode={selfDestructEnabled ? 'ephemeral' : 'standard'}
         onClose={() => setPreviewVisible(false)}
       />
     </>

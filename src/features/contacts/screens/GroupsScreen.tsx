@@ -19,6 +19,8 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchMyCircles } from '@/services/api/circles';
 import type { MyCircle } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
+import { createGroupsRequestGuard } from '@/features/contacts/groups-request-guard';
 
 /** 自研栈下「群聊」= 圈子;沿用旧字段名以少动渲染层。 */
 interface GroupItem {
@@ -107,20 +109,34 @@ export default function GroupsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
 
   const [activeCategory, setActiveCategory] = useState<GroupCategory>('joined');
-  const [groupsByCategory, setGroupsByCategory] = useState(
-    EMPTY_GROUPS_BY_CATEGORY,
-  );
+  const [groupsState, setGroupsState] = useState(() => ({
+    sessionEpoch,
+    groupsByCategory: EMPTY_GROUPS_BY_CATEGORY,
+  }));
+  const groupsByCategory =
+    groupsState.sessionEpoch === sessionEpoch
+      ? groupsState.groupsByCategory
+      : EMPTY_GROUPS_BY_CATEGORY;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  const requestGuardRef = useRef(createGroupsRequestGuard());
 
   const loadGroups = useCallback(
     async (signal?: { cancelled: boolean }) => {
-      const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
+      const token = requestGuardRef.current.begin(sessionEpoch);
+      const isCancelled = () =>
+        Boolean(signal?.cancelled) ||
+        !mountedRef.current ||
+        !requestGuardRef.current.isActive(
+          token,
+          useAuthStore.getState().sessionEpoch,
+        );
       setLoading(true);
       try {
         const [applied, joined, created] = await Promise.all([
@@ -134,13 +150,16 @@ export default function GroupsScreen() {
         const managed = allActive.filter(
           (circle) => circle.myRole === 'OWNER' || circle.myRole === 'ADMIN',
         );
-        setGroupsByCategory({
-          new: dedupeCircles(applied).map(circleToGroupItem),
-          joined: dedupeCircles(
-            joined.filter((circle) => !createdIDs.has(circle.id)),
-          ).map(circleToGroupItem),
-          created: dedupeCircles(created).map(circleToGroupItem),
-          managed: managed.map(circleToGroupItem),
+        setGroupsState({
+          sessionEpoch: token.sessionEpoch,
+          groupsByCategory: {
+            new: dedupeCircles(applied).map(circleToGroupItem),
+            joined: dedupeCircles(
+              joined.filter((circle) => !createdIDs.has(circle.id)),
+            ).map(circleToGroupItem),
+            created: dedupeCircles(created).map(circleToGroupItem),
+            managed: managed.map(circleToGroupItem),
+          },
         });
         setError(null);
       } catch (caughtError) {
@@ -153,7 +172,7 @@ export default function GroupsScreen() {
         }
       }
     },
-    [t],
+    [sessionEpoch, t],
   );
 
   useEffect(() => {
@@ -171,12 +190,13 @@ export default function GroupsScreen() {
     }, [loadGroups]),
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
       mountedRef.current = false;
-    },
-    [],
-  );
+      requestGuardRef.current.invalidate();
+    };
+  }, []);
 
   const handleRefreshGroups = useCallback(async () => {
     if (refreshInFlightRef.current) return;
