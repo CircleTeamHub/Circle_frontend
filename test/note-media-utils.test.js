@@ -83,6 +83,28 @@ test('note video upload policy rejects videos that are too large or too long', (
   );
 });
 
+// 笔记侧的视频上限一旦超过上传链路的上限，超出的那一段会先通过本地策略校验、
+// 变成 PENDING 草稿，再在 presign 阶段被拒；批量上传只回传失败条数，用户看到的
+// 是「N 个文件上传失败」，拿不到「文件太大」这个真正的原因。
+test('note video size cap never exceeds the upload pipeline cap', () => {
+  const { MAX_NOTE_VIDEO_BYTES } = loadTsModule(
+    'src/features/notes/utils/note-media-policy.ts',
+  );
+  const uploadSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/services/api/upload.ts'),
+    'utf8',
+  );
+  const match = uploadSource.match(
+    /const MAX_UPLOAD_BYTES = (\d+) \* 1024 \* 1024;/,
+  );
+  assert.ok(match, 'MAX_UPLOAD_BYTES literal not found in upload.ts');
+  const maxUploadBytes = Number(match[1]) * 1024 * 1024;
+  assert.ok(
+    MAX_NOTE_VIDEO_BYTES <= maxUploadBytes,
+    `MAX_NOTE_VIDEO_BYTES (${MAX_NOTE_VIDEO_BYTES}) exceeds MAX_UPLOAD_BYTES (${maxUploadBytes})`,
+  );
+});
+
 test('media payload merge preserves known media and drops unmatched blocks without object keys', () => {
   const { mergeExtractedMediaWithMediaMap } = loadTsModule(
     'src/features/notes/utils/note-blocks.ts',
@@ -125,7 +147,7 @@ test('media payload merge preserves known media and drops unmatched blocks witho
   ]);
 });
 
-test('structured showcase media does not backfill the body media section from the legacy aggregate', () => {
+test('showcase images migrate to ordinary media while showcase keeps only videos', () => {
   const { buildNoteSections } = loadTsModule('src/features/notes/utils/note-sections.ts');
 
   const showcaseImage = {
@@ -140,16 +162,254 @@ test('structured showcase media does not backfill the body media section from th
   const sections = buildNoteSections({
     content: '',
     contentJson: [],
-    media: [showcaseImage],
+    media: [],
     sections: {
       text: { content: '', contentJson: [] },
-      showcase: { items: [showcaseImage] },
+      media: { items: [] },
+      showcase: {
+        items: [
+          showcaseImage,
+          {
+            id: 'showcase-video',
+            type: 'VIDEO',
+            objectKey: 'notes/showcase.mp4',
+            url: 'https://cdn.example.test/showcase.mp4',
+            mimeType: 'video/mp4',
+            durationMs: 4200,
+            sortOrder: 9,
+          },
+        ],
+      },
     },
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(sections.media.items)), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(sections.media.items)), [
+    { ...showcaseImage, sortOrder: 0 },
+  ]);
   assert.deepEqual(
-    sections.showcase.items.map((item) => item.url),
-    ['https://cdn.example.test/showcase.jpg'],
+    JSON.parse(JSON.stringify(sections.showcase.items.map((item) => item.url))),
+    ['https://cdn.example.test/showcase.mp4'],
   );
+  assert.equal(sections.showcase.items[0].sortOrder, 0);
+});
+
+test('normalization migrates legacy showcase images, dedupes by durable identity, and preserves metadata', () => {
+  const { normalizeNoteMediaSections } = loadTsModule(
+    'src/features/notes/utils/note-sections.ts',
+  );
+
+  const image = {
+    id: 'legacy-showcase-image',
+    type: 'IMAGE',
+    objectKey: 'notes/same-image.jpg',
+    url: 'https://cdn.example.test/same-image.jpg',
+    mimeType: 'image/jpeg',
+    size: 42,
+    width: 640,
+    height: 480,
+    posterUrl: 'https://cdn.example.test/same-image-poster.jpg',
+    sortOrder: 99,
+  };
+
+  const sections = normalizeNoteMediaSections({
+    media: [
+      { ...image, id: 'ordinary-image', sortOrder: 8 },
+      {
+        id: 'ordinary-video',
+        type: 'VIDEO',
+        objectKey: 'notes/ordinary.mp4',
+        url: 'https://cdn.example.test/ordinary.mp4',
+        mimeType: 'video/mp4',
+        durationMs: 4000,
+        sortOrder: 2,
+      },
+    ],
+    showcase: [
+      image,
+      { ...image, id: 'same-file-with-new-url', url: 'https://signed.example.test/same-image.jpg' },
+      {
+        id: 'showcase-video',
+        type: 'VIDEO',
+        objectKey: 'notes/showcase.mp4',
+        url: 'https://cdn.example.test/showcase.mp4',
+        mimeType: 'video/mp4',
+        durationMs: 7000,
+        sortOrder: 77,
+      },
+    ],
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(sections.media)), [
+    { ...image, id: 'ordinary-image', sortOrder: 0 },
+    {
+      id: 'ordinary-video',
+      type: 'VIDEO',
+      objectKey: 'notes/ordinary.mp4',
+      url: 'https://cdn.example.test/ordinary.mp4',
+      mimeType: 'video/mp4',
+      durationMs: 4000,
+      sortOrder: 1,
+    },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(sections.showcase)), [
+    {
+      id: 'showcase-video',
+      type: 'VIDEO',
+      objectKey: 'notes/showcase.mp4',
+      url: 'https://cdn.example.test/showcase.mp4',
+      mimeType: 'video/mp4',
+      durationMs: 7000,
+      sortOrder: 0,
+    },
+  ]);
+});
+
+test('partial structured sections retain missing legacy media while explicit empty media stays authoritative', () => {
+  const { buildNoteSections } = loadTsModule('src/features/notes/utils/note-sections.ts');
+  const image = {
+    id: 'legacy-image',
+    type: 'IMAGE',
+    objectKey: 'notes/legacy.jpg',
+    url: 'https://cdn.example.test/legacy.jpg',
+    mimeType: 'image/jpeg',
+    width: 640,
+    height: 480,
+    sortOrder: 4,
+  };
+
+  const missingMedia = buildNoteSections({
+    contentJson: [
+      { type: 'image', props: { url: image.url } },
+      { type: 'image', props: { url: 'https://legacy.example.test/inline-only.jpg' } },
+    ],
+    media: [image],
+    sections: {
+      showcase: {
+        items: [{ type: 'VIDEO', url: 'https://cdn.example.test/showcase.mp4' }],
+      },
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(missingMedia.media.items)), [
+    { ...image, sortOrder: 0 },
+    {
+      id: 'image-1',
+      type: 'IMAGE',
+      url: 'https://legacy.example.test/inline-only.jpg',
+      sortOrder: 1,
+    },
+  ]);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(missingMedia.showcase.items.map((item) => item.type))),
+    ['VIDEO'],
+  );
+
+  const explicitEmptyMedia = buildNoteSections({
+    contentJson: [
+      { type: 'image', props: { url: image.url } },
+      { type: 'image', props: { url: 'https://legacy.example.test/inline-only.jpg' } },
+    ],
+    media: [image],
+    sections: {
+      media: { items: [] },
+      showcase: {
+        items: [{ type: 'VIDEO', url: 'https://cdn.example.test/showcase.mp4' }],
+      },
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(explicitEmptyMedia.media.items)), []);
+});
+
+test('normalization joins object-key and URL aliases while unioning duplicate metadata', () => {
+  const { normalizeNoteMediaSections } = loadTsModule(
+    'src/features/notes/utils/note-sections.ts',
+  );
+
+  const sections = normalizeNoteMediaSections({
+    media: [
+      {
+        id: 'ordinary',
+        type: 'IMAGE',
+        objectKey: 'notes/photo.jpg',
+        url: 'https://cdn.example.test/photo.jpg',
+        mimeType: 'image/jpeg',
+      },
+    ],
+    showcase: [
+      {
+        type: 'IMAGE',
+        url: 'https://cdn.example.test/photo.jpg',
+        width: 640,
+        height: 480,
+        size: 42,
+        posterUrl: 'https://cdn.example.test/poster.jpg',
+      },
+      {
+        type: 'IMAGE',
+        objectKey: 'notes/photo.jpg',
+        url: 'https://signed.example.test/photo.jpg',
+        durationMs: 123,
+      },
+    ],
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(sections.media)), [
+    {
+      id: 'ordinary',
+      type: 'IMAGE',
+      objectKey: 'notes/photo.jpg',
+      url: 'https://cdn.example.test/photo.jpg',
+      mimeType: 'image/jpeg',
+      width: 640,
+      height: 480,
+      size: 42,
+      posterUrl: 'https://cdn.example.test/poster.jpg',
+      durationMs: 123,
+      sortOrder: 0,
+    },
+  ]);
+});
+
+test('normalization merges transitive key and renewed-URL aliases in either order', () => {
+  const { normalizeNoteMediaSections } = loadTsModule(
+    'src/features/notes/utils/note-sections.ts',
+  );
+  const old = {
+    id: 'ordinary',
+    type: 'IMAGE',
+    objectKey: 'notes/photo.jpg',
+    url: 'https://cdn.example.test/photo-old.jpg',
+    mimeType: 'image/jpeg',
+  };
+  const keyedRenewed = {
+    type: 'IMAGE',
+    objectKey: 'notes/photo.jpg',
+    url: 'https://signed.example.test/photo-new.jpg',
+    width: 640,
+    posterUrl: 'https://cdn.example.test/poster.jpg',
+  };
+  const urlOnlyRenewed = {
+    type: 'IMAGE',
+    url: 'https://signed.example.test/photo-new.jpg',
+    height: 480,
+    durationMs: 123,
+  };
+
+  for (const showcase of [
+    [keyedRenewed, urlOnlyRenewed],
+    [urlOnlyRenewed, keyedRenewed],
+  ]) {
+    const sections = normalizeNoteMediaSections({ media: [old], showcase });
+    assert.deepEqual(JSON.parse(JSON.stringify(sections.media)), [
+      {
+        ...old,
+        width: 640,
+        height: 480,
+        posterUrl: 'https://cdn.example.test/poster.jpg',
+        durationMs: 123,
+        sortOrder: 0,
+      },
+    ]);
+  }
 });

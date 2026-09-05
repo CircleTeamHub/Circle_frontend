@@ -2357,9 +2357,16 @@
       "groupsLabel": "Groups",
       "imageItem": "Image",
       "itemsCount": "items",
-      "locationAddressPlaceholder": "Address",
+      "legacyMediaUnavailableMessage": "This note contains legacy media that cannot be recovered. Go back without saving to avoid losing content.",
+      "legacyMediaUnavailableTitle": "Cannot safely save media",
+      "loadFailedMessage": "This note failed to load. Go back and try again.",
+      "loadFailedTitle": "Could not load note",
+      "clearLocation": "Clear location",
+      "locationAddressLabel": "Detailed address",
+      "locationAddressUnavailable": "Not provided",
       "locationPreviewTitle": "Selected location",
-      "locationTitlePlaceholder": "Location name",
+      "locationPlaceNameLabel": "Place name",
+      "mediaUploading": "Uploading",
       "newTitle": "New note",
       "noGroups": "Not in any group",
       "pickLocation": "Choose location",
@@ -2369,7 +2376,7 @@
       "sections": {
         "location": "Location",
         "locationEmpty": "Optional",
-        "locationHint": "Add the place name and address",
+        "locationHint": "Choose a place on the map",
         "locationSelected": "Selected",
         "media": "Images/Videos",
         "mediaHint": "Main note media, images and videos supported",
@@ -2381,12 +2388,14 @@
       },
       "titlePlaceholder": "Title",
       "uploading": "Uploading...",
-      "useCurrentLocation": "Current location",
       "videoItem": "Video"
     },
     "editor": {
       "mediaUploadFailedMessage": "Please try again",
       "mediaUploadFailedTitle": "Upload failed",
+      "mediaUploadsFailedMessage": "{{count}} files failed to upload. Please try again.",
+      "selectionLimitExceededTitle": "Selection limit reached",
+      "selectionLimitExceededMessage": "You can select up to {{count}} files. {{overflow}} extra file(s) were not added.",
       "toolbar": {
         "bulletList": "List",
         "code": "Code",
@@ -2396,6 +2405,7 @@
         "videoTitle": "Video"
       },
       "videoRejectedTitle": "Video can't be uploaded",
+      "videosRejectedMessage": "Skipped {{count}} videos that do not meet the upload requirements.",
       "videoTooLargeMessage": "Choose a video under 200MB",
       "videoTooLongMessage": "Choose a video under 10 minutes"
     },

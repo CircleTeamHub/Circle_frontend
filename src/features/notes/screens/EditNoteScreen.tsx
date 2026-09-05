@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import * as ExpoLocation from 'expo-location';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -20,16 +19,37 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
+import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
 import { useNoteLocationPickerStore } from '@/features/notes/store/use-note-location-picker-store';
-import type { CreateNoteMediaInput, NoteGroup, NoteSections } from '@/features/notes/types';
+import type {
+  CreateNoteMediaInput,
+  EditorNoteMediaDraft,
+  NoteGroup,
+  NoteSections,
+} from '@/features/notes/types';
 import {
-  buildNoteMediaMap,
-  extractMediaFromBlocks,
   extractPlainText,
-  mergeExtractedMediaWithMediaMap,
 } from '@/features/notes/utils/note-blocks';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { getNoteVideoUploadPolicyViolation } from '@/features/notes/utils/note-media-policy';
+import {
+  createPickerPreviewDisposer,
+  splitPickerAssets,
+} from '@/features/notes/utils/note-picker-assets';
+import {
+  buildNoteSections,
+  normalizeNoteMediaSections,
+  type StructuredNoteMediaItem,
+} from '@/features/notes/utils/note-sections';
+import {
+  canSubmitNoteMedia,
+  createNoteMediaUploadOperationGuard,
+  createPendingNoteMediaDrafts,
+  MAX_NOTE_MEDIA_SELECTION,
+  reconcileNoteMediaDrafts,
+  stripEditorMediaDrafts,
+  uploadNoteMediaBatch,
+} from '@/features/notes/utils/note-media-upload';
 import {
   createNote,
   fetchNoteDetail,
@@ -74,6 +94,15 @@ function buildLocationDraft(location: NoteSections['location'] | undefined): Loc
   };
 }
 
+function hasLocationDraftValue(location: LocationDraft) {
+  return Boolean(
+    location.title.trim() ||
+      location.address.trim() ||
+      location.latitude != null ||
+      location.longitude != null,
+  );
+}
+
 function buildMapPreviewUrl(latitude: number, longitude: number) {
   const center = `${latitude.toFixed(6)},${longitude.toFixed(6)}`;
   return `https://staticmap.openstreetmap.de/staticmap.php?center=${encodeURIComponent(center)}&zoom=15&size=640x260&markers=${encodeURIComponent(`${center},red-pushpin`)}`;
@@ -84,9 +113,7 @@ function getTextOnlyBlocks(blocks: Record<string, unknown>[]) {
 }
 
 function normalizeSectionMedia(
-  items:
-    | (CreateNoteMediaInput | NoteSections['media']['items'][number])[]
-    | undefined,
+  items: readonly StructuredNoteMediaItem[] | undefined,
 ) {
   if (!Array.isArray(items)) return [];
   return items
@@ -98,7 +125,7 @@ function normalizeSectionMedia(
           (item.type === 'IMAGE' || item.type === 'VIDEO'),
       ),
     )
-    .map((item, index): CreateNoteMediaInput => ({
+    .map((item, index): EditorNoteMediaDraft => ({
       type: item.type,
       objectKey: item.objectKey,
       url: item.url,
@@ -108,18 +135,20 @@ function normalizeSectionMedia(
       ...(typeof item.height === 'number' ? { height: item.height } : {}),
       ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}),
       ...(typeof item.posterUrl === 'string' ? { posterUrl: item.posterUrl } : {}),
+      clientId: `stored:${item.objectKey}:${item.url}`,
       sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
+      uploadStatus: 'UPLOADED',
     }));
 }
 
-function hasSectionMediaItems(
-  items: NoteSections['media']['items'] | NoteSections['showcase']['items'] | undefined,
-) {
-  return Array.isArray(items);
+function countUnrecoverableSectionMedia(items: readonly StructuredNoteMediaItem[]) {
+  return items.filter(
+    (item) => typeof item.objectKey !== 'string' || !item.objectKey.trim(),
+  ).length;
 }
 
-function mergeMedia(items: CreateNoteMediaInput[]) {
-  return items.reduce<CreateNoteMediaInput[]>((merged, item) => {
+function mergeMedia<T extends CreateNoteMediaInput>(items: T[]) {
+  return items.reduce<T[]>((merged, item) => {
     const key = `${item.objectKey}:${item.url}`;
     if (merged.some((existing) => `${existing.objectKey}:${existing.url}` === key)) {
       return merged;
@@ -146,15 +175,22 @@ export default function EditNoteScreen() {
   const pinnedRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEdit);
+  const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
   const [dateStr, setDateStr] = useState(() =>
     formatNoteFullDate(new Date().toISOString(), t),
   );
   const existingSectionsRef = useRef<Partial<NoteSections> | null>(null);
   const uploadInFlightRef = useRef(false);
+  const uploadOperationGuardRef = useRef(createNoteMediaUploadOperationGuard());
+  const activeUploadDraftIdsRef = useRef<Set<string>>(new Set());
+  const pickerPreviewDisposerRef = useRef(createPickerPreviewDisposer());
+  const saveGenerationRef = useRef(0);
+  const saveInFlightRef = useRef(false);
   const [editorMounted, setEditorMounted] = useState(false);
   const [navigating, setNavigating] = useState(false);
-  const [mediaItems, setMediaItems] = useState<CreateNoteMediaInput[]>([]);
-  const [showcaseItems, setShowcaseItems] = useState<CreateNoteMediaInput[]>([]);
+  const [mediaItems, setMediaItems] = useState<EditorNoteMediaDraft[]>([]);
+  const [showcaseItems, setShowcaseItems] = useState<EditorNoteMediaDraft[]>([]);
+  const [unrecoverableMediaCount, setUnrecoverableMediaCount] = useState(0);
   const [uploadingSection, setUploadingSection] = useState<UploadingSection>(null);
   const [locationDraft, setLocationDraft] = useState<LocationDraft>({
     title: '',
@@ -165,12 +201,55 @@ export default function EditNoteScreen() {
   const consumePickedLocation = useNoteLocationPickerStore(
     (state) => state.consumePickedLocation,
   );
+  const isRouteDataReady = !isEdit || loadedNoteId === id;
+
+  useEffect(() => () => pickerPreviewDisposerRef.current.disposeAll(), []);
+
+  const invalidateUploadOwnership = useCallback(() => {
+    uploadOperationGuardRef.current.invalidate();
+    uploadInFlightRef.current = false;
+  }, []);
+
+  const resetUploadOwnership = useCallback(() => {
+    const abandonedDraftIds = activeUploadDraftIdsRef.current;
+    activeUploadDraftIdsRef.current = new Set();
+    invalidateUploadOwnership();
+    if (abandonedDraftIds.size) {
+      const discardAbandonedPendingDrafts = (items: EditorNoteMediaDraft[]) =>
+        items.filter((item) => {
+          const shouldKeep =
+            item.uploadStatus === 'UPLOADED' || !abandonedDraftIds.has(item.clientId);
+          if (!shouldKeep) pickerPreviewDisposerRef.current.dispose(item.previewUri);
+          return shouldKeep;
+        });
+      setMediaItems(discardAbandonedPendingDrafts);
+      setShowcaseItems(discardAbandonedPendingDrafts);
+    }
+    setUploadingSection(null);
+  }, [invalidateUploadOwnership]);
 
   useEffect(() => {
     if (!navigating) return;
     const timer = setTimeout(() => router.back(), 200);
     return () => clearTimeout(timer);
   }, [navigating, router]);
+
+  useEffect(() => {
+    resetUploadOwnership();
+    return invalidateUploadOwnership;
+  }, [id, invalidateUploadOwnership, resetUploadOwnership]);
+
+  useEffect(() => {
+    const routeGeneration = ++saveGenerationRef.current;
+    saveInFlightRef.current = false;
+    setIsSubmitting(false);
+    setNavigating(false);
+    return () => {
+      if (saveGenerationRef.current === routeGeneration) {
+        saveGenerationRef.current += 1;
+      }
+    };
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,8 +264,13 @@ export default function EditNoteScreen() {
 
     if (!isEdit || !id) {
       existingSectionsRef.current = null;
+      blocksRef.current = [];
+      setInitialBlocks(null);
+      setLoadedNoteId(null);
+      pickerPreviewDisposerRef.current.disposeAll();
       setMediaItems([]);
       setShowcaseItems([]);
+      setUnrecoverableMediaCount(0);
       setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
       setEditorMounted(true);
       setLoading(false);
@@ -195,55 +279,69 @@ export default function EditNoteScreen() {
       };
     }
 
+    setLoading(true);
+    setLoadedNoteId(null);
+    blocksRef.current = [];
+    setInitialBlocks(null);
+    setTitle('');
+    pickerPreviewDisposerRef.current.disposeAll();
+    setMediaItems([]);
+    setShowcaseItems([]);
+    setUnrecoverableMediaCount(0);
+    setSelectedGroupIds([]);
+    setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
+    pinnedRef.current = false;
+    setEditorMounted(false);
+
     fetchNoteDetail(id)
       .then((note) => {
         if (cancelled) return;
         setTitle(note.title);
         existingSectionsRef.current = note.sections ?? null;
 
-        const loaded = note.sections?.text?.contentJson ?? note.contentJson ?? [];
+        const normalizedSections = buildNoteSections(note);
+        const loaded = normalizedSections.text.contentJson ?? [];
         const textBlocks = getTextOnlyBlocks(loaded);
-        const noteMediaMap = buildNoteMediaMap(note.media);
-        const legacyInlineMedia = mergeExtractedMediaWithMediaMap(
-          extractMediaFromBlocks(loaded),
-          noteMediaMap,
-        );
-        const hasExplicitMedia = hasSectionMediaItems(note.sections?.media?.items);
-        const hasExplicitShowcase = hasSectionMediaItems(note.sections?.showcase?.items);
 
         blocksRef.current = textBlocks;
         setInitialBlocks(textBlocks.length > 0 ? textBlocks : null);
-        setMediaItems(
-          hasExplicitMedia
-            ? normalizeSectionMedia(note.sections?.media?.items)
-            : hasExplicitShowcase
-              ? []
-              : normalizeSectionMedia(note.media),
-        );
-        setShowcaseItems(
-          hasExplicitShowcase
-            ? normalizeSectionMedia(note.sections?.showcase?.items)
-            : hasExplicitMedia
-              ? []
-              : normalizeSectionMedia(
-                  legacyInlineMedia.filter((item) => item.type === 'IMAGE'),
-                ),
+        setMediaItems(normalizeSectionMedia(normalizedSections.media.items));
+        setShowcaseItems(normalizeSectionMedia(normalizedSections.showcase.items));
+        setUnrecoverableMediaCount(
+          countUnrecoverableSectionMedia([
+            ...normalizedSections.media.items,
+            ...normalizedSections.showcase.items,
+          ]),
         );
         setLocationDraft(buildLocationDraft(note.sections?.location));
         setSelectedGroupIds(note.groups.map((group) => group.id));
         pinnedRef.current = note.pinned;
         setDateStr(formatNoteFullDate(note.createdAt, t));
+        setLoadedNoteId(id);
         setLoading(false);
         setEditorMounted(true);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
           existingSectionsRef.current = null;
+          pickerPreviewDisposerRef.current.disposeAll();
           setMediaItems([]);
           setShowcaseItems([]);
+          setUnrecoverableMediaCount(0);
           setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
+          setLoadedNoteId(null);
           setLoading(false);
           setEditorMounted(true);
+          // loadedNoteId 留在 null 上是有意的：正文没加载出来就允许保存，等于用空
+          // 内容覆盖服务端的笔记。但失败必须说出来——否则用户面对的是一个空编辑器
+          // 加一个永远点不动的「完成」，既没有报错也没有重试入口，线上也无声。
+          reportHandledFailure('noteEditor', 'load', error);
+          Alert.alert(
+            t('notes.edit.loadFailedTitle', { defaultValue: '加载失败' }),
+            t('notes.edit.loadFailedMessage', {
+              defaultValue: '笔记加载失败，请返回后重试',
+            }),
+          );
         }
       });
 
@@ -254,15 +352,18 @@ export default function EditNoteScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      resetUploadOwnership();
       const picked = consumePickedLocation();
-      if (!picked) return;
-      setLocationDraft({
-        title: picked.title,
-        address: picked.address,
-        latitude: picked.latitude,
-        longitude: picked.longitude,
-      });
-    }, [consumePickedLocation]),
+      if (picked) {
+        setLocationDraft({
+          title: picked.title,
+          address: picked.address,
+          latitude: picked.latitude,
+          longitude: picked.longitude,
+        });
+      }
+      return invalidateUploadOwnership;
+    }, [consumePickedLocation, invalidateUploadOwnership, resetUploadOwnership]),
   );
 
   const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
@@ -277,92 +378,163 @@ export default function EditNoteScreen() {
       target: SectionMediaTarget;
       kind: SectionUploadKind;
     }) => {
-      if (uploadInFlightRef.current) return;
+      if (!isRouteDataReady || uploadInFlightRef.current) return;
       uploadInFlightRef.current = true;
+      const operationToken = uploadOperationGuardRef.current.begin();
+      activeUploadDraftIdsRef.current = new Set();
       const uploadKey: UploadingSection = `${target}:${kind}`;
       setUploadingSection(uploadKey);
       try {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
         if (!permission.granted) return;
 
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: kind === 'video' ? ['videos'] : ['images'],
           quality: 0.85,
-          allowsMultipleSelection: false,
+          allowsMultipleSelection: true,
+          selectionLimit: MAX_NOTE_MEDIA_SELECTION,
+          orderedSelection: true,
         });
-        if (result.canceled || !result.assets.length) return;
+        const pickerAssets = result.assets ?? [];
+        if (!uploadOperationGuardRef.current.isActive(operationToken)) {
+          pickerPreviewDisposerRef.current.retainAssets(pickerAssets);
+          pickerPreviewDisposerRef.current.disposeAssets(pickerAssets);
+          return;
+        }
+        if (result.canceled || !pickerAssets.length) return;
 
-        const asset = result.assets[0];
-        if (kind === 'video') {
-          const violation = getNoteVideoUploadPolicyViolation({
-            fileSize: asset.fileSize,
-            duration: asset.duration,
-          });
-          if (violation) {
-            Alert.alert(
-              t('notes.editor.videoRejectedTitle', {
-                defaultValue: '视频无法上传',
-              }),
-              violation === 'size'
-                ? t('notes.editor.videoTooLargeMessage', {
-                    defaultValue: '请选择 200MB 以内的视频',
-                  })
-                : t('notes.editor.videoTooLongMessage', {
-                    defaultValue: '请选择 10 分钟以内的视频',
+        pickerPreviewDisposerRef.current.retainAssets(pickerAssets);
+        const { selectedAssets, overflowAssets } = splitPickerAssets(pickerAssets);
+        if (overflowAssets.length) {
+          pickerPreviewDisposerRef.current.disposeAssets(overflowAssets);
+          Alert.alert(
+            t('notes.editor.selectionLimitExceededTitle', { defaultValue: '选择数量已达上限' }),
+            t('notes.editor.selectionLimitExceededMessage', {
+              defaultValue: '最多可选择 {{count}} 个文件，已忽略其余 {{overflow}} 个。',
+              count: MAX_NOTE_MEDIA_SELECTION,
+              overflow: overflowAssets.length,
+            }),
+          );
+        }
+        const acceptedAssets =
+          kind === 'video'
+            ? selectedAssets.filter(
+                (asset) =>
+                  !getNoteVideoUploadPolicyViolation({
+                    fileSize: asset.fileSize,
+                    duration: asset.duration,
                   }),
-            );
-            return;
-          }
+              )
+            : selectedAssets;
+        const rejectedAssets = selectedAssets.filter((asset) => !acceptedAssets.includes(asset));
+        const rejectedCount = rejectedAssets.length;
+        pickerPreviewDisposerRef.current.disposeAssets(rejectedAssets);
+        if (rejectedCount) {
+          Alert.alert(
+            t('notes.editor.videoRejectedTitle', { defaultValue: '视频无法上传' }),
+            t('notes.editor.videosRejectedMessage', {
+              defaultValue: '已跳过 {{count}} 个不符合要求的视频',
+              count: rejectedCount,
+            }),
+          );
         }
 
-        const fallbackName = kind === 'video' ? 'video.mp4' : 'image.jpg';
-        const fallbackType = kind === 'video' ? 'video/mp4' : 'image/jpeg';
-        const filename = asset.uri.split('/').pop() ?? fallbackName;
-        const contentType =
-          resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
-          fallbackType;
-        const presign = await requestUploadPresign({
-          filename: sanitizeUploadFilename(filename),
-          contentType,
-          folder: 'notes',
-          fileUri: asset.uri,
-        });
-
-        await uploadLocalFileToPresignedUrl(
-          presign.uploadUrl,
-          contentType,
-          asset.uri,
-          presign.requiredHeaders,
-          kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
+        const pendingDrafts = createPendingNoteMediaDrafts(
+          acceptedAssets,
+          kind === 'video' ? 'VIDEO' : 'IMAGE',
         );
+        activeUploadDraftIdsRef.current = new Set(pendingDrafts.map((item) => item.clientId));
+        if (pendingDrafts.length) {
+          const appendPending = (current: EditorNoteMediaDraft[]) => [
+            ...current,
+            ...pendingDrafts.map((item, index) => ({
+              ...item,
+              sortOrder: current.length + index,
+            })),
+          ];
+          if (target === 'media') setMediaItems(appendPending);
+          else setShowcaseItems(appendPending);
+        }
 
-        const nextItem: CreateNoteMediaInput = {
-          type: kind === 'video' ? 'VIDEO' : 'IMAGE',
-          objectKey: presign.key,
-          url: presign.fileUrl,
-          width: asset.width ?? undefined,
-          height: asset.height ?? undefined,
-          mimeType: contentType,
-          size: asset.fileSize ?? undefined,
-          durationMs:
-            kind === 'video' && typeof asset.duration === 'number'
-              ? Math.round(asset.duration)
-              : undefined,
-          sortOrder: 0,
-        };
-
+        const batch = await uploadNoteMediaBatch(
+          acceptedAssets.map((asset, index) => ({ asset, clientId: pendingDrafts[index].clientId })),
+          async ({ asset, clientId }) => {
+          const fallbackName = kind === 'video' ? 'video.mp4' : 'image.jpg';
+          const fallbackType = kind === 'video' ? 'video/mp4' : 'image/jpeg';
+          const filename = asset.uri.split('/').pop() ?? fallbackName;
+          const contentType =
+            resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
+            fallbackType;
+          const presign = await requestUploadPresign({
+            filename: sanitizeUploadFilename(filename),
+            contentType,
+            folder: 'notes',
+            fileUri: asset.uri,
+          });
+          await uploadLocalFileToPresignedUrl(
+            presign.uploadUrl,
+            contentType,
+            asset.uri,
+            presign.requiredHeaders,
+            kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
+          );
+          return {
+            clientId,
+            type: kind === 'video' ? 'VIDEO' : 'IMAGE',
+            objectKey: presign.key,
+            url: presign.fileUrl,
+            width: asset.width ?? undefined,
+            height: asset.height ?? undefined,
+            mimeType: contentType,
+            size: asset.fileSize ?? undefined,
+            durationMs:
+              kind === 'video' && typeof asset.duration === 'number'
+                ? Math.round(asset.duration)
+                : undefined,
+            sortOrder: 0,
+          };
+        },
+        );
+        if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
+        batch.failedIndexes.forEach((index) =>
+          pickerPreviewDisposerRef.current.dispose(acceptedAssets[index]?.uri),
+        );
         if (target === 'media') {
-          setMediaItems((current) => [
-            ...current,
-            { ...nextItem, sortOrder: current.length },
-          ]);
+          setMediaItems((current) => reconcileNoteMediaDrafts(current, batch.items));
         } else {
-          setShowcaseItems((current) => [
-            ...current,
-            { ...nextItem, sortOrder: current.length },
-          ]);
+          setShowcaseItems((current) => reconcileNoteMediaDrafts(current, batch.items));
+        }
+        if (batch.failedCount) {
+          reportHandledFailure(
+            'noteEditor',
+            'sectionMediaUploadBatch',
+            new Error('note media batch upload failed'),
+            {
+              failed: batch.failedCount,
+              total: acceptedAssets.length,
+              reason: `${target}.${kind}`,
+            },
+          );
+          Alert.alert(
+            t('notes.editor.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
+            t('notes.editor.mediaUploadsFailedMessage', {
+              defaultValue: '{{count}} 个文件上传失败，请稍后重试',
+              count: batch.failedCount,
+            }),
+          );
         }
       } catch (error) {
+        if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
+        const failedDraftIds = activeUploadDraftIdsRef.current;
+        const discardFailedDrafts = (items: EditorNoteMediaDraft[]) =>
+          items.filter((item) => {
+            const shouldKeep = !failedDraftIds.has(item.clientId);
+            if (!shouldKeep) pickerPreviewDisposerRef.current.dispose(item.previewUri);
+            return shouldKeep;
+          });
+        if (target === 'media') setMediaItems(discardFailedDrafts);
+        else setShowcaseItems(discardFailedDrafts);
         Alert.alert(
           t('notes.editor.mediaUploadFailedTitle', {
             defaultValue: '上传失败',
@@ -373,26 +545,32 @@ export default function EditNoteScreen() {
         );
         reportHandledFailure('noteEditor', 'sectionMediaUpload', error);
       } finally {
-        uploadInFlightRef.current = false;
-        setUploadingSection(null);
+        if (uploadOperationGuardRef.current.complete(operationToken)) {
+          uploadInFlightRef.current = false;
+          activeUploadDraftIdsRef.current = new Set();
+          setUploadingSection(null);
+        }
       }
     },
-    [t],
+    [isRouteDataReady, t],
   );
 
-  const handleRemoveSectionMedia = useCallback((target: SectionMediaTarget, url: string) => {
-    const removeByUrl = (items: CreateNoteMediaInput[]) =>
-      items
-        .filter((item) => item.url !== url)
+  const handleRemoveSectionMedia = useCallback((target: SectionMediaTarget, clientId: string) => {
+    const removeByClientId = (items: EditorNoteMediaDraft[]) =>
+      items.filter((item) => {
+        if (item.clientId === clientId) pickerPreviewDisposerRef.current.dispose(item.previewUri);
+        return item.clientId !== clientId;
+      })
         .map((item, index) => ({ ...item, sortOrder: index }));
     if (target === 'media') {
-      setMediaItems((current) => removeByUrl(current));
+      setMediaItems((current) => removeByClientId(current));
     } else {
-      setShowcaseItems((current) => removeByUrl(current));
+      setShowcaseItems((current) => removeByClientId(current));
     }
   }, []);
 
   const handleOpenLocationPicker = useCallback(() => {
+    if (!isRouteDataReady || uploadInFlightRef.current) return;
     router.push({
       pathname: '/(tabs)/profile/notes/location-picker',
       params: {
@@ -403,61 +581,20 @@ export default function EditNoteScreen() {
       },
     } as never);
   }, [
-    locationDraft.address,
-    locationDraft.latitude,
-    locationDraft.longitude,
-    locationDraft.title,
+    locationDraft,
+    isRouteDataReady,
     router,
   ]);
 
-  const handleUseCurrentLocation = useCallback(async () => {
-    const permission = await ExpoLocation.requestForegroundPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        t('permissions.insufficientTitle', { defaultValue: '权限不足' }),
-        t('permissions.location', { defaultValue: '请在系统设置开启定位权限' }),
-      );
-      return;
-    }
-    try {
-      const position = await ExpoLocation.getCurrentPositionAsync({
-        accuracy: ExpoLocation.Accuracy.Balanced,
-      });
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-      let title = t('notes.edit.useCurrentLocation', { defaultValue: '当前位置' });
-      let address = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-      try {
-        const places = await ExpoLocation.reverseGeocodeAsync({ latitude, longitude });
-        const place = places[0];
-        if (place) {
-          const parts = [
-            place.city ?? place.region,
-            place.district ?? place.subregion,
-            place.street,
-            place.name,
-          ].filter((part): part is string => Boolean(part));
-          if (parts.length) {
-            title = parts.at(-1) ?? title;
-            address = parts.join(' ');
-          }
-        }
-      } catch {
-        // Geocoding failure should not block coordinate selection.
-      }
-      setLocationDraft({ title, address, latitude, longitude });
-    } catch {
-      Alert.alert(
-        t('notes.location.failedTitle', { defaultValue: '定位失败' }),
-        t('common.retryLater', { defaultValue: '请稍后重试' }),
-      );
-    }
-  }, [t]);
+  const handleClearLocation = useCallback(() => {
+    setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
+  }, []);
 
   const navigateBack = useCallback(() => {
+    invalidateUploadOwnership();
     setEditorMounted(false);
     setNavigating(true);
-  }, []);
+  }, [invalidateUploadOwnership]);
 
   const toggleGroup = useCallback((groupId: string) => {
     setSelectedGroupIds((prev) =>
@@ -466,21 +603,48 @@ export default function EditNoteScreen() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (isSubmitting) return;
+    if (
+      loading ||
+      !isRouteDataReady ||
+      isSubmitting ||
+      saveInFlightRef.current ||
+      uploadingSection !== null ||
+      !canSubmitNoteMedia(mediaItems) ||
+      !canSubmitNoteMedia(showcaseItems)
+    )
+      return;
+    if (unrecoverableMediaCount) {
+      Alert.alert(
+        t('notes.edit.legacyMediaUnavailableTitle', { defaultValue: '无法安全保存媒体' }),
+        t('notes.edit.legacyMediaUnavailableMessage', {
+          defaultValue: '这篇笔记含有无法恢复的旧媒体。为避免丢失内容，请返回且不要保存。',
+        }),
+      );
+      return;
+    }
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
+    saveInFlightRef.current = true;
+    const saveGeneration = saveGenerationRef.current;
     setIsSubmitting(true);
     try {
       const currentBlocks = getTextOnlyBlocks(blocksRef.current);
       const plainText = extractPlainText(currentBlocks);
-      const sectionMedia = mergeMedia(mediaItems);
-      const sectionShowcase = mergeMedia(showcaseItems);
+      const rawSectionMedia = stripEditorMediaDrafts(mergeMedia(mediaItems));
+      const rawSectionShowcase = stripEditorMediaDrafts(mergeMedia(showcaseItems));
+      const normalizedMediaSections = normalizeNoteMediaSections({
+        media: rawSectionMedia,
+        showcase: rawSectionShowcase,
+      });
+      const sectionMedia = stripEditorMediaDrafts(
+        normalizeSectionMedia(normalizedMediaSections.media),
+      );
+      const sectionShowcase = stripEditorMediaDrafts(
+        normalizeSectionMedia(normalizedMediaSections.showcase),
+      );
       const legacyMedia = mergeMedia([...sectionMedia, ...sectionShowcase]);
       const nextLocation =
-        locationDraft.title.trim() ||
-        locationDraft.address.trim() ||
-        locationDraft.latitude != null ||
-        locationDraft.longitude != null
+        hasLocationDraftValue(locationDraft)
           ? {
               title: locationDraft.title.trim() || null,
               address: locationDraft.address.trim() || null,
@@ -508,8 +672,11 @@ export default function EditNoteScreen() {
       } else {
         await createNote({ ...input, status: 'ACTIVE' });
       }
+      if (saveGenerationRef.current !== saveGeneration) return;
       navigateBack();
     } catch (error) {
+      if (saveGenerationRef.current !== saveGeneration) return;
+      saveInFlightRef.current = false;
       setIsSubmitting(false);
       const fallback = t('notes.edit.saveFailedMessage', {
         defaultValue: '保存失败，请稍后重试',
@@ -524,17 +691,18 @@ export default function EditNoteScreen() {
   }, [
     id,
     isEdit,
+    isRouteDataReady,
     isSubmitting,
-    locationDraft.address,
-    locationDraft.latitude,
-    locationDraft.longitude,
-    locationDraft.title,
+    locationDraft,
     mediaItems,
     navigateBack,
     selectedGroupIds,
     showcaseItems,
     t,
     title,
+    uploadingSection,
+    unrecoverableMediaCount,
+    loading,
   ]);
 
   const d = useMemo(
@@ -581,33 +749,38 @@ export default function EditNoteScreen() {
       },
       sectionAction: { borderColor: colors.surfaceBorder },
       sectionActionText: { color: colors.text },
-      locationInput: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-        color: colors.text,
-      },
       locationPreviewCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      locationCoordinatePill: { backgroundColor: colors.background },
+      locationDetailLabel: { color: colors.textSecondary },
+      locationClearAction: { borderColor: colors.surfaceBorder },
+      locationClearText: { color: colors.textSecondary },
     }),
     [colors],
   );
 
-  if (loading) {
-    return (
-      <View style={[s.container, d.container, s.center, { paddingTop: insets.top }]}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
-  }
-
-  const isDoneDisabled = isSubmitting || !title.trim();
+  const isDoneDisabled =
+    loading ||
+    !isRouteDataReady ||
+    isSubmitting ||
+    uploadingSection !== null ||
+    !canSubmitNoteMedia(mediaItems) ||
+    !canSubmitNoteMedia(showcaseItems) ||
+    !title.trim();
   const locationPreviewUrl =
     locationDraft.latitude != null && locationDraft.longitude != null
       ? buildMapPreviewUrl(locationDraft.latitude, locationDraft.longitude)
       : null;
+  const hasLocation = hasLocationDraftValue(locationDraft);
+  const mediaSectionStatus =
+    uploadingSection?.startsWith('media:')
+      ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
+      : `${mediaItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
+  const showcaseSectionStatus =
+    uploadingSection?.startsWith('showcase:')
+      ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
+      : `${showcaseItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
 
   // 眉标式小节头：图标 + 标签 + 右侧计数，去掉解释性副标题让内容当主角。
   const renderSectionHeader = (
@@ -624,7 +797,7 @@ export default function EditNoteScreen() {
     </View>
   );
 
-  const renderAddButton = (
+  const renderAddButton = useCallback((
     target: SectionMediaTarget,
     kind: SectionUploadKind,
     label: string,
@@ -636,7 +809,7 @@ export default function EditNoteScreen() {
       <Pressable
         style={[s.sectionAction, d.sectionAction]}
         onPress={() => void handleAddSectionMedia({ target, kind })}
-        disabled={uploadingSection !== null}
+        disabled={!isRouteDataReady || uploadingSection !== null}
       >
         <Ionicons name={icon} size={17} color={colors.text} />
         <Text style={[s.sectionActionText, d.sectionActionText]}>
@@ -644,9 +817,9 @@ export default function EditNoteScreen() {
         </Text>
       </Pressable>
     );
-  };
+  }, [colors.text, d.sectionAction, d.sectionActionText, handleAddSectionMedia, isRouteDataReady, t, uploadingSection]);
 
-  const renderMediaList = (items: CreateNoteMediaInput[], target: SectionMediaTarget) => {
+  const renderMediaList = useCallback((items: EditorNoteMediaDraft[], target: SectionMediaTarget) => {
     if (items.length === 0) {
       return (
         <View style={[s.emptyTray, d.emptyTray]}>
@@ -660,16 +833,27 @@ export default function EditNoteScreen() {
     return (
       <View style={s.mediaPreviewGrid}>
         {items.map((item) => {
-          const thumbUri = item.type === 'IMAGE' ? item.url : item.posterUrl;
+          const thumbUri =
+            item.type === 'VIDEO' ? item.posterUrl : item.previewUri ?? item.url;
           return (
             <View
-              key={`${item.objectKey}:${item.url}`}
+              key={item.clientId}
               style={[s.mediaPreviewTile, d.mediaPreviewTile]}
             >
-              {thumbUri ? (
-                <Image source={{ uri: thumbUri }} style={s.mediaThumb} contentFit="cover" />
+              {item.type === 'VIDEO' && item.previewUri ? (
+                <VideoDraftPreview uri={item.previewUri} />
+              ) : thumbUri ? (
+                <Image
+                  testID="note-media-preview-image"
+                  source={{ uri: thumbUri }}
+                  style={s.mediaThumb}
+                  contentFit="cover"
+                />
               ) : (
-                <View style={s.mediaThumbFallback}>
+                <View
+                  testID={item.type === 'VIDEO' ? 'note-media-video-fallback' : undefined}
+                  style={s.mediaThumbFallback}
+                >
                   <Ionicons
                     name={item.type === 'VIDEO' ? 'videocam-outline' : 'image-outline'}
                     size={24}
@@ -691,7 +875,7 @@ export default function EditNoteScreen() {
               </View>
               <Pressable
                 style={s.mediaRemoveButton}
-                onPress={() => handleRemoveSectionMedia(target, item.url)}
+                onPress={() => handleRemoveSectionMedia(target, item.clientId)}
                 hitSlop={8}
               >
                 <Ionicons name="close" size={15} color={colors.text} />
@@ -701,7 +885,26 @@ export default function EditNoteScreen() {
         })}
       </View>
     );
-  };
+  }, [
+    colors.primary,
+    colors.text,
+    colors.textSecondary,
+    d.emptyText,
+    d.emptyTray,
+    d.mediaBadge,
+    d.mediaMeta,
+    d.mediaPreviewTile,
+    handleRemoveSectionMedia,
+    t,
+  ]);
+
+  if (loading) {
+    return (
+      <View style={[s.container, d.container, s.center, { paddingTop: insets.top }]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -812,7 +1015,7 @@ export default function EditNoteScreen() {
           {renderSectionHeader(
             'images-outline',
             t('notes.edit.sections.media', { defaultValue: '图片/视频' }),
-            `${mediaItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
+            mediaSectionStatus,
           )}
           <View style={s.sectionActions}>
             {renderAddButton(
@@ -835,15 +1038,9 @@ export default function EditNoteScreen() {
           {renderSectionHeader(
             'albums-outline',
             t('notes.edit.sections.showcase', { defaultValue: '展示' }),
-            `${showcaseItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
+            showcaseSectionStatus,
           )}
           <View style={s.sectionActions}>
-            {renderAddButton(
-              'showcase',
-              'image',
-              t('notes.edit.addShowcaseImage', { defaultValue: '添加展示图片' }),
-              'image-outline',
-            )}
             {renderAddButton(
               'showcase',
               'video',
@@ -857,8 +1054,8 @@ export default function EditNoteScreen() {
         <View style={[s.sectionBlock, d.sectionShell]}>
           {renderSectionHeader(
             'location-outline',
-            t('notes.edit.sections.location', { defaultValue: '地址' }),
-            locationPreviewUrl
+            t('notes.edit.sections.location', { defaultValue: '位置' }),
+            hasLocation
               ? t('notes.edit.sections.locationSelected', { defaultValue: '已选择' })
               : t('notes.edit.sections.locationEmpty', { defaultValue: '可选' }),
           )}
@@ -866,76 +1063,53 @@ export default function EditNoteScreen() {
             <Pressable
               style={[s.sectionAction, d.sectionAction]}
               onPress={handleOpenLocationPicker}
+              disabled={!isRouteDataReady || uploadingSection !== null}
             >
               <Ionicons name="map-outline" size={17} color={colors.text} />
               <Text style={[s.sectionActionText, d.sectionActionText]}>
                 {t('notes.edit.pickLocation', { defaultValue: '选择位置' })}
               </Text>
             </Pressable>
-            <Pressable
-              style={[s.sectionAction, d.sectionAction]}
-              onPress={() => void handleUseCurrentLocation()}
-            >
-              <Ionicons name="navigate-outline" size={17} color={colors.text} />
-              <Text style={[s.sectionActionText, d.sectionActionText]}>
-                {t('notes.edit.useCurrentLocation', { defaultValue: '当前位置' })}
-              </Text>
-            </Pressable>
           </View>
-          <View style={s.locationInputs}>
-            <TextInput
-              style={[s.locationInput, d.locationInput]}
-              placeholder={t('notes.edit.locationTitlePlaceholder', {
-                defaultValue: '位置名称',
-              })}
-              placeholderTextColor={colors.textSecondary}
-              value={locationDraft.title}
-              onChangeText={(value) =>
-                setLocationDraft((current) => ({ ...current, title: value }))
-              }
-              maxLength={80}
-              returnKeyType="next"
-            />
-            <TextInput
-              style={[s.locationInput, d.locationInput]}
-              placeholder={t('notes.edit.locationAddressPlaceholder', {
-                defaultValue: '地址',
-              })}
-              placeholderTextColor={colors.textSecondary}
-              value={locationDraft.address}
-              onChangeText={(value) =>
-                setLocationDraft((current) => ({ ...current, address: value }))
-              }
-              maxLength={160}
-              returnKeyType="done"
-            />
-          </View>
-          {locationPreviewUrl ? (
+          {hasLocation ? (
             <View style={[s.locationPreviewCard, d.locationPreviewCard]}>
-              <Image
-                source={{ uri: locationPreviewUrl }}
-                style={s.locationMapPreview}
-                contentFit="cover"
-              />
+              {locationPreviewUrl ? (
+                <Image
+                  source={{ uri: locationPreviewUrl }}
+                  style={s.locationMapPreview}
+                  contentFit="cover"
+                />
+              ) : null}
               <View style={s.locationPreviewInfo}>
                 <View style={s.locationPreviewTitleRow}>
                   <Ionicons name="location" size={16} color={colors.primary} />
-                  <Text style={[s.mediaTitle, d.mediaTitle]} numberOfLines={1}>
-                    {locationDraft.title ||
-                      t('notes.edit.locationPreviewTitle', {
-                        defaultValue: '已选择位置',
-                      })}
+                  <Text style={[s.locationDetailLabel, d.locationDetailLabel]}>
+                    {t('notes.edit.locationPlaceNameLabel', { defaultValue: '地点名称' })}
                   </Text>
                 </View>
-                {locationDraft.address ? (
-                  <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={2}>
-                    {locationDraft.address}
-                  </Text>
-                ) : null}
-                <View style={[s.locationCoordinatePill, d.locationCoordinatePill]}>
-                  <Text style={[s.locationCoords, d.sectionSubtitle]} selectable>
-                    {locationDraft.latitude?.toFixed(5)}, {locationDraft.longitude?.toFixed(5)}
-                  </Text>
+                <Text style={[s.mediaTitle, d.mediaTitle]} numberOfLines={1}>
+                  {locationDraft.title ||
+                    t('notes.edit.locationPreviewTitle', { defaultValue: '已选择位置' })}
+                </Text>
+                <Text style={[s.locationDetailLabel, d.locationDetailLabel]}>
+                  {t('notes.edit.locationAddressLabel', { defaultValue: '详细地址' })}
+                </Text>
+                <Text style={[s.mediaMeta, d.mediaMeta]} numberOfLines={2}>
+                  {locationDraft.address ||
+                    t('notes.edit.locationAddressUnavailable', { defaultValue: '未提供' })}
+                </Text>
+                <View style={s.locationClearRow}>
+                  <Pressable
+                    style={[s.locationClearAction, d.locationClearAction]}
+                    onPress={handleClearLocation}
+                    accessibilityLabel={t('notes.edit.clearLocation', { defaultValue: '清除位置' })}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="close-circle-outline" size={16} color={colors.textSecondary} />
+                    <Text style={[s.locationClearText, d.locationClearText]}>
+                      {t('notes.edit.clearLocation', { defaultValue: '清除位置' })}
+                    </Text>
+                  </Pressable>
                 </View>
               </View>
             </View>
@@ -1113,15 +1287,6 @@ const s = StyleSheet.create({
   mediaTitle: { ...Typography.caption, fontWeight: '700' },
   mediaMeta: { ...Typography.small },
   emptySectionText: { ...Typography.small },
-  locationInputs: { gap: Spacing.sm },
-  locationInput: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    ...Typography.body,
-    fontWeight: '400',
-  },
   locationPreviewCard: {
     borderWidth: 1,
     borderRadius: Radius.md,
@@ -1141,11 +1306,13 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xs,
   },
-  locationCoordinatePill: {
-    alignSelf: 'flex-start',
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+  locationDetailLabel: { ...Typography.small, fontWeight: '600' },
+  locationClearRow: { alignItems: 'flex-end', paddingTop: Spacing.xs },
+  locationClearAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    minHeight: 44,
   },
-  locationCoords: { ...Typography.small },
+  locationClearText: { ...Typography.small, fontWeight: '600' },
 });
