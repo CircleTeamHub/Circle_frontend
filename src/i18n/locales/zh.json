@@ -2356,6 +2356,8 @@
       "itemsCount": "项",
       "legacyMediaUnavailableMessage": "这篇笔记含有无法恢复的旧媒体。为避免丢失内容，请返回且不要保存。",
       "legacyMediaUnavailableTitle": "无法安全保存媒体",
+      "loadFailedMessage": "笔记加载失败，请返回后重试",
+      "loadFailedTitle": "加载失败",
       "clearLocation": "清除位置",
       "locationAddressLabel": "详细地址",
       "locationAddressUnavailable": "未提供",

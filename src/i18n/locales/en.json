@@ -2359,6 +2359,8 @@
       "itemsCount": "items",
       "legacyMediaUnavailableMessage": "This note contains legacy media that cannot be recovered. Go back without saving to avoid losing content.",
       "legacyMediaUnavailableTitle": "Cannot safely save media",
+      "loadFailedMessage": "This note failed to load. Go back and try again.",
+      "loadFailedTitle": "Could not load note",
       "clearLocation": "Clear location",
       "locationAddressLabel": "Detailed address",
       "locationAddressUnavailable": "Not provided",

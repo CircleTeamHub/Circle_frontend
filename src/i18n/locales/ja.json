@@ -833,6 +833,8 @@
       "itemsCount": "項目",
       "legacyMediaUnavailableMessage": "このノートには復元できない古いメディアが含まれています。内容を失わないよう、保存せずに戻ってください。",
       "legacyMediaUnavailableTitle": "メディアを安全に保存できません",
+      "loadFailedMessage": "ノートを読み込めませんでした。戻ってからもう一度お試しください。",
+      "loadFailedTitle": "読み込みに失敗しました",
       "clearLocation": "場所を削除",
       "locationAddressLabel": "詳細住所",
       "locationAddressUnavailable": "未登録",

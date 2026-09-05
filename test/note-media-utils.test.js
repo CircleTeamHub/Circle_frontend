@@ -83,6 +83,28 @@ test('note video upload policy rejects videos that are too large or too long', (
   );
 });
 
+// 笔记侧的视频上限一旦超过上传链路的上限，超出的那一段会先通过本地策略校验、
+// 变成 PENDING 草稿，再在 presign 阶段被拒；批量上传只回传失败条数，用户看到的
+// 是「N 个文件上传失败」，拿不到「文件太大」这个真正的原因。
+test('note video size cap never exceeds the upload pipeline cap', () => {
+  const { MAX_NOTE_VIDEO_BYTES } = loadTsModule(
+    'src/features/notes/utils/note-media-policy.ts',
+  );
+  const uploadSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/services/api/upload.ts'),
+    'utf8',
+  );
+  const match = uploadSource.match(
+    /const MAX_UPLOAD_BYTES = (\d+) \* 1024 \* 1024;/,
+  );
+  assert.ok(match, 'MAX_UPLOAD_BYTES literal not found in upload.ts');
+  const maxUploadBytes = Number(match[1]) * 1024 * 1024;
+  assert.ok(
+    MAX_NOTE_VIDEO_BYTES <= maxUploadBytes,
+    `MAX_NOTE_VIDEO_BYTES (${MAX_NOTE_VIDEO_BYTES}) exceeds MAX_UPLOAD_BYTES (${maxUploadBytes})`,
+  );
+});
+
 test('media payload merge preserves known media and drops unmatched blocks without object keys', () => {
   const { mergeExtractedMediaWithMediaMap } = loadTsModule(
     'src/features/notes/utils/note-blocks.ts',

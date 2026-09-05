@@ -321,7 +321,7 @@ export default function EditNoteScreen() {
         setLoading(false);
         setEditorMounted(true);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
           existingSectionsRef.current = null;
           pickerPreviewDisposerRef.current.disposeAll();
@@ -332,6 +332,16 @@ export default function EditNoteScreen() {
           setLoadedNoteId(null);
           setLoading(false);
           setEditorMounted(true);
+          // loadedNoteId 留在 null 上是有意的：正文没加载出来就允许保存，等于用空
+          // 内容覆盖服务端的笔记。但失败必须说出来——否则用户面对的是一个空编辑器
+          // 加一个永远点不动的「完成」，既没有报错也没有重试入口，线上也无声。
+          reportHandledFailure('noteEditor', 'load', error);
+          Alert.alert(
+            t('notes.edit.loadFailedTitle', { defaultValue: '加载失败' }),
+            t('notes.edit.loadFailedMessage', {
+              defaultValue: '笔记加载失败，请返回后重试',
+            }),
+          );
         }
       });
 
