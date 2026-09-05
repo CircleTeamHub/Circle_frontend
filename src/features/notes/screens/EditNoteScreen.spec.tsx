@@ -53,8 +53,10 @@ const imageSources: unknown[] = [];
 jest.mock('expo-image', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    Image: (props: { source?: unknown }) => {
-      imageSources.push(props.source);
+    // props 保持 object：<View {...props} /> 只接受 ViewProps，收窄成
+    // { source?: unknown } 会让这个展开在 tsc 下无重载可匹配。
+    Image: (props: object) => {
+      imageSources.push((props as { source?: unknown }).source);
       return <View {...props} />;
     },
   };
