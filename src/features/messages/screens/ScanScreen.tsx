@@ -22,6 +22,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   container: {
@@ -174,9 +175,7 @@ export default function ScanScreen() {
           ],
         );
       } catch (error) {
-        if (__DEV__) {
-          console.warn('[ScanScreen] copy scanned QR result failed', error);
-        }
+        reportHandledFailure('scan', 'copyResult', error);
         Alert.alert(t('messages.scanCopyFailedTitle'), t('messages.scanCopyFailedMessage'), [
           {
             text: t('common.ok'),
@@ -235,9 +234,7 @@ export default function ScanScreen() {
       }
       handleBarcodeScanned(found);
     } catch (error) {
-      if (__DEV__) {
-        console.warn('[ScanScreen] scan from album failed', error);
-      }
+      reportHandledFailure('scan', 'scanFromAlbum', error);
       Alert.alert(
         t('messages.scanAlbumFailedTitle'),
         t('messages.scanAlbumFailedMessage'),

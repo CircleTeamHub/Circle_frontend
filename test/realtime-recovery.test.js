@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 function loadRealtimeClient(mocks) {
   const filePath = path.join(process.cwd(), 'src/realtime/client.ts');
@@ -25,11 +26,11 @@ function loadRealtimeClient(mocks) {
     WebSocket: function WebSocket() {},
     setTimeout,
     clearTimeout,
-    require: (specifier) => {
+    require: withObservabilityStubs((specifier) => {
       if (specifier in mocks) return mocks[specifier];
       if (specifier.startsWith('@/')) return {};
       return require(specifier);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

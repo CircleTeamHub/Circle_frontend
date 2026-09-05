@@ -145,22 +145,33 @@ test('chat detail screen logs text send failures without logging message bodies'
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /\[chat\] text send failed/);
-  assert.match(source, /error instanceof Error/);
-  // Both send paths route failures through one shared, dev-only helper.
+  // All send paths route failures through one shared helper: a local breadcrumb
+  // plus a dev-only line. The production signal lives in chat-core/client
+  // (reportChatSendFailure), so the helper must not report to Sentry itself.
   assert.match(source, /function logChatSendFailure/);
+  const helperStart = source.indexOf('function logChatSendFailure');
+  const helperEnd = source.indexOf('\n}\n', helperStart);
+  const helper = source.slice(helperStart, helperEnd);
+  assert.match(helper, /logClientDiagnostic\(`chatSend\.\$\{context\.kind\}\.failed`/);
+  assert.match(helper, /devWarn\(/);
+  assert.doesNotMatch(helper, /reportError|reportHandledFailure|console\.warn/);
+  // The helper never logs the message body.
+  assert.doesNotMatch(helper, /\btext:/);
+  assert.doesNotMatch(helper, /\bnextText\b/);
+  assert.match(helper, /diagnosticErrorMessage\(error\)/);
+
   const helperCalls = [...source.matchAll(/logChatSendFailure\(error, \{/g)];
-  assert.equal(helperCalls.length, 2);
-  // The single warn site never logs the message body.
-  const warnBlocks = [
-    ...source.matchAll(
-      /console\.warn\(\s*'\[chat\] text send failed'[\s\S]*?\n\s*\);/g,
-    ),
-  ].map((match) => match[0]);
-  assert.equal(warnBlocks.length, 1);
-  for (const block of warnBlocks) {
-    assert.doesNotMatch(block, /\btext:/);
-    assert.doesNotMatch(block, /\bnextText\b/);
+  assert.ok(helperCalls.length >= 2, `expected >=2 helper calls, got ${helperCalls.length}`);
+  const textCalls = [
+    ...source.matchAll(/logChatSendFailure\(error, \{\s*kind: 'text',/g),
+  ];
+  assert.equal(textCalls.length, 2);
+  for (const kind of ['voice', 'image', 'video', 'collectedItem']) {
+    assert.match(
+      source,
+      new RegExp(`logChatSendFailure\\(error, \\{\\s*kind: '${kind}',`),
+      `send path '${kind}' must route through logChatSendFailure`,
+    );
   }
 });
 
@@ -548,6 +559,41 @@ test('message forward picker routes media through authenticated server-side copy
     'utf8',
   );
   assert.match(client, /forwardFromMessageId:\s*options\.sourceMessageId/);
+});
+
+test('message forward picker only offers media forwarding for confirmed sources', () => {
+  const pickerPath = path.join(
+    process.cwd(),
+    'src/features/chat/screens/ForwardPickerScreen.tsx',
+  );
+  const picker = fs.readFileSync(pickerPath, 'utf8');
+  const body = picker.match(
+    /export function canForwardMessage\([^)]*\): boolean \{([\s\S]*?)\n\}/,
+  );
+  assert.ok(body, 'canForwardMessage implementation missing');
+  const canForwardMessage = new Function('message', 'dto', body[1]);
+
+  const pendingImage = { id: 'local:d-1', type: 'image', sendStatus: 1 };
+  const failedVoice = { id: 'outbox-d-2', type: 'voice', sendStatus: 3 };
+  const confirmedVideo = { id: 'm-3', type: 'video', sendStatus: 2 };
+  assert.equal(
+    canForwardMessage(pendingImage, { id: 'local:d-1', height: 0 }),
+    false,
+  );
+  assert.equal(
+    canForwardMessage(failedVoice, { id: 'outbox-d-2', height: 0 }),
+    false,
+  );
+  assert.equal(
+    canForwardMessage(confirmedVideo, { id: 'm-3', height: 12 }),
+    true,
+  );
+
+  const detail = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  assert.match(detail, /canForwardMessage\(message,\s*dto\)/);
 });
 
 test('note detail routes exist in every tab stack so back returns to the source tab', () => {

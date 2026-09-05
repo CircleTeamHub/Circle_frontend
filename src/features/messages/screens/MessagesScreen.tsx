@@ -51,8 +51,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { reportHandledFailure } from '@/observability/report-failure';
 
-const isDev = typeof __DEV__ !== "undefined" && __DEV__;
 const SWIPE_ACTION_WIDTH = 76;
 const SWIPE_ACTIONS_WIDTH = SWIPE_ACTION_WIDTH * 3;
 const SWIPE_OPEN_THRESHOLD = SWIPE_ACTION_WIDTH;
@@ -673,9 +673,7 @@ export default function MessagesScreen() {
       loadChatConversations().catch((err) => {
         // 列表加载失败时保留已有会话,empty state 兜底显示。
         // dev 下额外打印，便于排查"为啥列表是空的"。
-        if (isDev) {
-          console.warn("[messages] focus loadConversationList failed", err);
-        }
+        reportHandledFailure("messages", "focusLoadConversations", err);
       });
     }, []),
   );
@@ -687,9 +685,7 @@ export default function MessagesScreen() {
     try {
       await loadChatConversations();
     } catch (err) {
-      if (isDev) {
-        console.warn("[messages] pull refresh loadConversationList failed", err);
-      }
+      reportHandledFailure("messages", "refreshConversations", err);
     } finally {
       refreshInFlightRef.current = false;
       if (mountedRef.current) setRefreshing(false);
@@ -921,9 +917,7 @@ export default function MessagesScreen() {
       try {
         await updateChatConversationPreferences(conversation.id, preference);
       } catch (err) {
-        if (isDev) {
-          console.warn("[messages] swipe preference update failed", err);
-        }
+        reportHandledFailure("messages", "swipePreferenceUpdate", err);
         Alert.alert(
           t("messages.swipeActionFailed", { defaultValue: "操作失败" }),
           getApiErrorMessage(err, t("common.networkError")),
@@ -997,9 +991,7 @@ export default function MessagesScreen() {
                     current?.conversationID === conversation.id ? null : current,
                   );
                 } catch (err) {
-                  if (isDev) {
-                    console.warn("[messages] swipe delete failed", err);
-                  }
+                  reportHandledFailure("messages", "swipeDelete", err);
                   Alert.alert(
                     t("messages.deleteChat"),
                     getApiErrorMessage(err, t("common.networkError")),

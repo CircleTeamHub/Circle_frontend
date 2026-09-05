@@ -41,7 +41,7 @@ const sent = (height, createdAt = '2026-08-11T01:00:00.000Z') => ({
 });
 
 /**
- * 失败气泡:height 恒为 0,failedAfterHeight 是标红那一刻会话里的最大 height
+ * 失败气泡:height 恒为 0,failedAfterHeight 是点击发送时会话里的最大 height
  * —— 也就是「这次失败之前,服务端已经确认到第几条」。
  */
 const failed = (afterHeight, createdAt = '2026-08-11T01:00:00.000Z') => ({

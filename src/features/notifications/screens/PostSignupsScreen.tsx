@@ -38,8 +38,7 @@ import { useNotificationCenterStore } from '@/features/notifications/store/use-n
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import type { CirclePlazaPost, PlazaPostCardData, PostSignupItem } from '@/types';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { reportHandledFailure } from '@/observability/report-failure';
 
 export default function PostSignupsScreen() {
   const insets = useSafeAreaInsets();
@@ -116,11 +115,11 @@ export default function PostSignupsScreen() {
             Math.max(0, badgeStore.signupUnread - unreadCount),
           );
         } catch (error) {
-          if (isDev) console.warn('[PostSignupsScreen] mark read failed', error);
+          reportHandledFailure('postSignups', 'markRead', error);
         }
       }
     } catch (error) {
-      if (isDev) console.warn('[PostSignupsScreen] load failed', error);
+      reportHandledFailure('postSignups', 'load', error);
       if (mountedRef.current) {
         setLoadError(
           t('notifications.signupMgmt.loadFailed', {

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 /**
  * 本地库写入的并发契约:真源码 + 假 expo-sqlite,在 vm 里跑。
@@ -87,7 +88,7 @@ function loadLocalDb(db, opened = []) {
     module: { exports: {} },
     exports: {},
     __warnings: [],
-    require: (request) => {
+    require: withObservabilityStubs((request) => {
       if (request === 'expo-sqlite') {
         return {
           openDatabaseAsync: async (name, options) => {
@@ -107,7 +108,7 @@ function loadLocalDb(db, opened = []) {
         return { getRandomBytesAsync: async () => new Uint8Array(32) };
       }
       throw new Error(`unexpected require: ${request}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpile('src/chat-core/local-db.ts'), context);
@@ -171,6 +172,54 @@ test('开库时关掉 finalizeUnusedStatementsBeforeClosing(否则 FTS5 二次�
 
   assert.equal(opened.length, 1);
   assert.equal(opened[0].options?.finalizeUnusedStatementsBeforeClosing, false);
+});
+
+test('outbox persists and restores the failed message position anchor', async () => {
+  const db = fakeDatabase();
+  db.getAllAsync = async (sql) => {
+    if (sql.includes('PRAGMA table_info(outbox)')) {
+      return [{ name: 'failed_after_height' }];
+    }
+    if (sql.includes('FROM outbox')) {
+      return [
+        {
+          d: 'd-anchor',
+          conversation_id: 'conv-1',
+          payload: JSON.stringify({
+            conversationId: 'conv-1',
+            type: 'text',
+            content: { text: 'hi' },
+            d: 'd-anchor',
+          }),
+          created_at: '2026-08-11T00:00:00.000Z',
+          failed_after_height: 7,
+        },
+      ];
+    }
+    return [];
+  };
+  const { api } = loadLocalDb(db);
+  await api.initChatLocalDb('user-1');
+
+  await api.outboxUpsert({
+    d: 'd-anchor',
+    conversationId: 'conv-1',
+    payload: {
+      conversationId: 'conv-1',
+      type: 'text',
+      content: { text: 'hi' },
+      d: 'd-anchor',
+    },
+    createdAt: '2026-08-11T00:00:00.000Z',
+    failedAfterHeight: 7,
+  });
+
+  const write = db.state.statements.find((statement) =>
+    statement.sql.includes('INSERT OR REPLACE INTO outbox'),
+  );
+  assert.equal(write.params[4], 7);
+  const restored = await api.outboxList();
+  assert.equal(restored[0].failedAfterHeight, 7);
 });
 
 test('串行化不吃掉失败:一批炸了后面的照常写', async () => {

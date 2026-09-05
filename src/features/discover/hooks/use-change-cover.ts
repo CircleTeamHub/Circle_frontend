@@ -10,28 +10,13 @@ import {
 } from '@/services/api/upload';
 import { updateUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const MAX_COVER_BYTES = 10 * 1024 * 1024;
-const URL_PATTERN = /\b(?:https?|file):\/\/[^\s"'<>]+/gi;
 
 interface UseChangeCoverResult {
   changeCover: () => Promise<void>;
   changing: boolean;
-}
-
-function redactForLog(value: string): string {
-  return value.replace(URL_PATTERN, '[redacted-url]');
-}
-
-function getSafeErrorDiagnostic(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: redactForLog(error.message),
-    };
-  }
-
-  return { message: redactForLog(String(error)) };
 }
 
 /**
@@ -130,10 +115,7 @@ export function useChangeCover(
         setUser(nextUser);
         onChanged(fileUrl);
       } catch (error) {
-        console.warn(
-          '[useChangeCover] cover update failed',
-          getSafeErrorDiagnostic(error),
-        );
+        reportHandledFailure('profile', 'coverUpdate', error);
         Alert.alert(
           t('moment.coverUpdateFailed'),
           t('common.networkError'),

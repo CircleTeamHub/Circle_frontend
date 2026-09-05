@@ -23,6 +23,10 @@ import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
+import {
+  E2E_TARGET_MARKER_ENABLED,
+  RUNTIME_API_TARGET_ID,
+} from '@/constants/config';
 
 // 项目自定义主题系统：ThemeProvider 提供主题上下文，useTheme 读取当前主题
 import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
@@ -44,9 +48,11 @@ import {
   captureSentryTestError,
   setSentryUserId,
 } from '@/observability/sentry';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { devWarn } from '@/utils/dev-log';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
-export { ErrorBoundary } from 'expo-router';
+export { RouteErrorBoundary as ErrorBoundary } from '@/observability/RouteErrorBoundary';
 
 // 崩溃/错误上报：仅当配置了 DSN（EXPO_PUBLIC_SENTRY_DSN 或 app.json extra.sentryDsn）
 // 时才真正初始化，否则为完全 no-op。尽早调用以捕获启动期错误。
@@ -79,9 +85,7 @@ async function registerLiveKitGlobals() {
     const { registerGlobals } = await import('@livekit/react-native');
     ensureLiveKitGlobals(registerGlobals);
   } catch (error) {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn('[startup] LiveKit globals unavailable', error);
-    }
+    reportHandledFailure('startup', 'livekitGlobals', error);
   }
 }
 
@@ -90,18 +94,14 @@ void registerLiveKitGlobals();
 async function rehydratePersistedStore(name: string, store: PersistedStore) {
   const rehydrate = store.persist?.rehydrate;
   if (typeof rehydrate !== 'function') {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn(`[startup] ${name} store persist API unavailable; skipping rehydrate`);
-    }
+    devWarn(`[startup] ${name} store persist API unavailable; skipping rehydrate`);
     return;
   }
 
   try {
     await Promise.resolve(rehydrate());
   } catch (error) {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn(`[startup] ${name} store rehydrate failed`, error);
-    }
+    reportHandledFailure('startup', 'storeRehydrate', error, { reason: name });
   }
 }
 
@@ -121,12 +121,7 @@ function ensureStartupBootstrap(): Promise<void> {
       await initEncryptedStorage();
       await migrateFromAsyncStorage();
     } catch (err) {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn(
-          '[startup] migration failed, continuing without migrated data',
-          err,
-        );
-      }
+      reportHandledFailure('startup', 'storageInit', err);
     }
     await Promise.all([
       rehydratePersistedStore('auth', useAuthStore),
@@ -301,6 +296,23 @@ function RootLayout() {
         <AuthRouteGuard>
           <View style={{ flex: 1 }}>
             <RootStack />
+            {/* E2E 运行时目标标记：只在 dev / 测试构建挂载（见 config.ts），
+                商店包不多出无标签可访问元素、也不暴露 API origin。 */}
+            {E2E_TARGET_MARKER_ENABLED ? (
+              <View
+                accessible
+                testID={RUNTIME_API_TARGET_ID}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: 1,
+                  height: 1,
+                  opacity: 0.01,
+                }}
+              />
+            ) : null}
           </View>
           <NotificationSnackbarHost />
           <PushNotificationRouteHandler />

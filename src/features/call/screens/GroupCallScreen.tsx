@@ -20,6 +20,8 @@ import {
   type LiveKitTrackReference,
 } from '@/features/call/livekit-module';
 import { reportError } from '@/observability/sentry';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { devWarn } from '@/utils/dev-log';
 
 
 const s = StyleSheet.create({
@@ -228,9 +230,7 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
     try {
       await localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
     } catch (error) {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[call] toggle mic failed', error);
-      }
+      reportHandledFailure('call', 'toggleMic', error);
     } finally {
       setMuting(false);
     }
@@ -242,9 +242,7 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
     try {
       await localParticipant.setCameraEnabled(!isCameraEnabled);
     } catch (error) {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[call] toggle camera failed', error);
-      }
+      reportHandledFailure('call', 'toggleCamera', error);
     } finally {
       setCameraBusy(false);
     }
@@ -466,9 +464,7 @@ export default function GroupCallScreen() {
       setConnectError(null);
       setRoomVersion((current) => current + 1);
     } catch (error) {
-      if (mountedRef.current && typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[call] retry connection failed', error);
-      }
+      reportHandledFailure('call', 'retryConnection', error);
     } finally {
       if (mountedRef.current) {
         setRetrying(false);
@@ -557,9 +553,7 @@ export default function GroupCallScreen() {
               kind: 'roomConnection',
             });
           }
-          if (typeof __DEV__ !== 'undefined' && __DEV__) {
-            console.warn('[call] LiveKit room error', error);
-          }
+          devWarn('[call] LiveKit room error', error);
           setConnectError(
             t('call.connectionFailed', { defaultValue: '通话连接失败，请重试' }),
           );

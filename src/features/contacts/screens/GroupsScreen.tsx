@@ -23,6 +23,7 @@ import {
   filterGroupList,
   type GroupListFilter,
 } from '@/features/contacts/utils/group-list-filter';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /** 自研栈下「群聊」= 圈子;沿用旧字段名以少动渲染层。 */
 interface GroupItem {
@@ -156,9 +157,7 @@ export default function GroupsScreen() {
       } catch (caughtError) {
         if (isCancelled()) return;
         setError(t('contacts.groupsScreen.loadFailed'));
-        if (__DEV__) {
-          console.warn('[GroupsScreen] fetchMyCircles failed', caughtError);
-        }
+        reportHandledFailure('contacts', 'fetchMyCircles', caughtError);
       } finally {
         if (!isCancelled()) {
           setLoading(false);

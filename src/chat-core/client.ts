@@ -1,6 +1,7 @@
 import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
 import { useAuthStore } from '@/stores/authStore';
 import {
+  backfillConversationSince,
   createCircleChatConversation,
   createDirectChatConversation,
   createGroupChatConversation,
@@ -151,6 +152,8 @@ interface SendOptions {
    * 会把它当成可渲染地址 —— 对端就能借此投放一个静默追踪信标。
    */
   localContent?: Record<string, unknown>;
+  /** 允许冷启动从 outbox 恢复的无 object-key 本地预览。 */
+  outboxPreviewContent?: Record<string, unknown>;
   replyToId?: string;
   /** 服务端鉴权复制媒体所需的源消息 ID。 */
   forwardFromMessageId?: string;
@@ -163,6 +166,39 @@ function selfSenderInfo() {
   return user
     ? { id: user.id, nickname: user.nickname ?? '', avatarUrl: user.avatarUrl ?? null }
     : null;
+}
+
+/**
+ * 点击发送那一刻的服务端水位(failedAfterHeight 的预捕获值)。
+ *
+ * 不能无脑取时间线最大 height:转发/分享会发进本次会话里从未打开过的会话,
+ * 时间线根本没加载,算出来是 0。之后只要拉到一页真历史,0+0.5 就把失败气泡
+ * 顶到整段历史最上面,预览的「发送失败」前缀也因为 maxHeight > 0 不再提示 ——
+ * 一次失败就这样悄悄消失了。
+ *
+ * 时间线没有已确认消息时退回会话列表的 lastMessage.height;两边都没有就留空
+ * (锚点未知):markMessageFailed 在失败那一刻按当时的时间线补齐,仍补不上的
+ * 由 store 的 mergeMessages 在第一批真消息抵达时补锚。
+ */
+function captureSendAnchor(conversationId: string): number | undefined {
+  const store = useChatStore.getState();
+  let latest = 0;
+  for (const message of store.messagesByConversation[conversationId] ?? []) {
+    if (message.height > latest) latest = message.height;
+  }
+  if (latest > 0) return latest;
+  const preview = store.conversations.find(
+    (conversation) => conversation.id === conversationId,
+  )?.lastMessage;
+  const previewHeight = preview?.height;
+  if (
+    typeof previewHeight === 'number' &&
+    Number.isFinite(previewHeight) &&
+    previewHeight > 0
+  ) {
+    return previewHeight;
+  }
+  return undefined;
 }
 
 /**
@@ -184,6 +220,9 @@ export async function sendWithOptimism(
   assertLocalCanSendMessage();
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
+  const failedAfterHeight = captureSendAnchor(options.conversationId);
+  const anchorFields =
+    failedAfterHeight === undefined ? {} : { failedAfterHeight };
   const optimistic: StoredChatMessage = {
     id: `local:${d}`,
     conversationId: options.conversationId,
@@ -196,6 +235,7 @@ export async function sendWithOptimism(
     replyToId: options.replyToId ?? null,
     d,
     createdAt: new Date().toISOString(),
+    ...anchorFields,
   };
   store.ingestMessages(options.conversationId, [optimistic]);
   store.applyIncomingMessage(optimistic);
@@ -224,8 +264,12 @@ export async function sendWithOptimism(
       ...(options.forwardFromMessageId
         ? { forwardFromMessageId: options.forwardFromMessageId }
         : {}),
+      ...(options.outboxPreviewContent
+        ? { localPreviewContent: options.outboxPreviewContent }
+        : {}),
     },
     createdAt: optimistic.createdAt,
+    ...anchorFields,
   }).catch(() => undefined);
   try {
     const ack = await sendChatMessage({
@@ -255,6 +299,11 @@ export async function sendWithOptimism(
     };
     next.ingestMessages(options.conversationId, [confirmed]);
     next.applyIncomingMessage(confirmed);
+    // 首发和重发一样会撞上「ack 到了、回声丢了」:转发媒体的乐观内容不权威,
+    // 就这么当成已确认的话气泡会永远停在源对象的签名 url 上。
+    if (options.outboxPreviewContent) {
+      reconcileUnauthoritativeConfirmation(options.conversationId, ack.height);
+    }
     return confirmed;
   } catch (error) {
     const failed = useChatStore.getState();
@@ -403,6 +452,7 @@ export function sendForwardedMediaMessage(options: {
     type: options.type,
     content: {},
     localContent: preview,
+    outboxPreviewContent: preview,
     forwardFromMessageId: options.sourceMessageId,
   });
 }
@@ -493,6 +543,8 @@ export function startMediaSend(options: {
   retry: (deliveryId: string) => Promise<void>;
 }): string {
   const d = createDeliveryId();
+  const store = useChatStore.getState();
+  const failedAfterHeight = captureSendAnchor(options.conversationId);
   const optimistic: StoredChatMessage = {
     id: `local:${d}`,
     conversationId: options.conversationId,
@@ -503,8 +555,8 @@ export function startMediaSend(options: {
     replyToId: null,
     d,
     createdAt: new Date().toISOString(),
+    ...(failedAfterHeight === undefined ? {} : { failedAfterHeight }),
   };
-  const store = useChatStore.getState();
   store.ingestMessages(options.conversationId, [optimistic]);
   store.applyIncomingMessage(optimistic);
   mediaRetries.set(d, () => options.retry(d));
@@ -572,7 +624,17 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
     (item) => item.d === d && item.conversationId === conversationId,
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
-  const ack = await sendChatMessage(entry.payload);
+  const retrying = (
+    useChatStore.getState().messagesByConversation[conversationId] ?? []
+  ).find((message) => message.d === d) as StoredChatMessage | undefined;
+  const retryAnchor = retrying?.failedAfterHeight;
+  // 重启恢复时也必须保留这次重发的位置；否则再次失败后会重新跑到最底部。
+  await outboxUpsert({
+    ...entry,
+    ...(Number.isFinite(retryAnchor) ? { failedAfterHeight: retryAnchor } : {}),
+  });
+  const { localPreviewContent, ...wirePayload } = entry.payload;
+  const ack = await sendChatMessage(wirePayload);
   void outboxDelete(d);
   // 原来只出队就完事了。可首次发送其实**已经在服务端落库**、只是 ack 和回声
   // 都丢了的情况下,重发命中幂等分支:服务端返回成功但刻意不再广播 chat:msg。
@@ -599,4 +661,32 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
   };
   store.ingestMessages(conversationId, [confirmed]);
   store.applyIncomingMessage(confirmed);
+  if (localPreviewContent) {
+    reconcileUnauthoritativeConfirmation(conversationId, ack.height);
+  }
+}
+
+/**
+ * 无回声确认的对账。ack 没有伴随 chat:msg 回声时,本地只能拿乐观内容合成一条
+ * confirmed 落库。带本地预览的发送(目前只有转发媒体)那份内容**不权威**:它是
+ * 源对象的展示字段,object key 已被刻意剥掉。就这么当成已确认的话,签名 url 一
+ * 过期本地就是坏图,而且没有 key 可以重新签。补拉一次权威消息把它换掉。
+ *
+ * 补拉只写时间线;会话列表的 lastMessage 是 applyIncomingMessage 写进去的那个
+ * 合成对象,不会自己跟着换 —— 拉完再从时间线重算一次预览。
+ * 拉失败不回滚 —— 气泡已经不红了,下一次进会话的历史加载还会再纠一次。
+ * 调用方不等它(fire-and-forget),错误在这里吞掉。
+ */
+function reconcileUnauthoritativeConfirmation(
+  conversationId: string,
+  ackHeight: number,
+): void {
+  const epoch = useAuthStore.getState().sessionEpoch;
+  void backfillConversationSince(conversationId, Math.max(ackHeight - 1, 0))
+    .then(() => {
+      // 切号后落地的补拉不该去动新账号的会话列表。
+      if (useAuthStore.getState().sessionEpoch !== epoch) return;
+      useChatStore.getState().revertConversationPreview(conversationId);
+    })
+    .catch(() => undefined);
 }

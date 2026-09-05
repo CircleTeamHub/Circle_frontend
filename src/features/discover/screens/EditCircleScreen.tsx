@@ -30,6 +30,7 @@ import { useCircleForm } from '@/features/discover/hooks/use-circle-form';
 import { CircleFormBody } from '@/features/discover/components/circle-form-body';
 import type { CircleDetail } from '@/types';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -161,12 +162,7 @@ export default function EditCircleScreen() {
         } catch (error) {
           // 头像上传失败时保留旧头像（不阻塞整个编辑流程）。
           uploadedAvatarUrl = circle.avatarUrl ?? undefined;
-          if (__DEV__) {
-            console.warn(
-              '[EditCircleScreen] avatar upload failed, keeping previous avatar',
-              error,
-            );
-          }
+          reportHandledFailure('circle', 'avatarUpload', error);
         }
       }
 

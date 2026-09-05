@@ -14,10 +14,9 @@ import {
   getChatHistoryDateResultsHref,
 } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const CALENDAR_COLUMNS = 7;
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
-
 // Localized single-letter weekday headers (2023-01-01 is a Sunday).
 function getWeekdayLabels(locale: string) {
   return Array.from({ length: 7 }, (_, i) =>
@@ -197,9 +196,7 @@ export default function ChatHistoryDateScreen() {
         setRecordDays(new Set(days));
       })
       .catch((err) => {
-        if (isDev) {
-          console.warn('[chat-history-date] load month records failed', err);
-        }
+        reportHandledFailure('chatHistory', 'loadMonthRecords', err);
       });
   }, [conversationID, visibleMonth]);
 

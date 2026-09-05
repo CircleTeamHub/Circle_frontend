@@ -9,6 +9,7 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { setCircleCover } from '@/services/api/circles';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const MAX_COVER_BYTES = 10 * 1024 * 1024;
 
@@ -101,9 +102,7 @@ export function useChangeCircleCover(
         await setCircleCover(circleId, fileUrl);
         onChanged(fileUrl);
       } catch (error) {
-        if (__DEV__) {
-          console.warn('[useChangeCircleCover] cover update failed', error);
-        }
+        reportHandledFailure('circle', 'coverUpdate', error);
         Alert.alert(
           t('circle.coverUpdateFailed', { defaultValue: '封面更新失败' }),
           t('common.networkError'),

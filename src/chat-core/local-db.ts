@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
 import { getRandomBytesAsync } from 'expo-crypto';
 import type { ChatConversationDto, ChatMessageDto } from './protocol';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * G-01 本地持久化:把 OpenIM SDK 当年内置的本地消息库补回来。
@@ -25,7 +26,7 @@ const KEYCHAIN_ACCESS = {
 
 /** 每会话本地保留的消息上限(超出删最旧;更早历史回落 REST 翻页)。 */
 const RETENTION_PER_CONVERSATION = 500;
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 interface DbHandle {
   db: SQLite.SQLiteDatabase;
@@ -42,7 +43,11 @@ const warn = (() => {
   return (key: string, message: string, error?: unknown) => {
     if (seen.has(key)) return;
     seen.add(key);
+    // 本地库是缓存,任何失败都降级吞掉 —— 但「吞掉」不等于「无声」:每种失败每个
+    // 进程留一次信号(reportHandledFailure 自身还会按签名去重)。console.warn 不走
+    // devWarn:这里是本模块唯一的输出口,测试靠它观测降级路径。
     console.warn(message, error ?? '');
+    reportHandledFailure('chatLocalDb', key, error ?? new Error(message));
   };
 })();
 
@@ -95,14 +100,23 @@ async function applySchema(db: SQLite.SQLiteDatabase): Promise<boolean> {
       d TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL,
       payload TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      failed_after_height INTEGER
     );
     CREATE TABLE IF NOT EXISTS pending_reads (
       conversation_id TEXT PRIMARY KEY,
       height INTEGER NOT NULL
     );
-    PRAGMA user_version = ${SCHEMA_VERSION};
   `);
+  const outboxColumns = await db.getAllAsync<{ name: string }>(
+    'PRAGMA table_info(outbox);',
+  );
+  if (!outboxColumns.some((column) => column.name === 'failed_after_height')) {
+    await db.execAsync(
+      'ALTER TABLE outbox ADD COLUMN failed_after_height INTEGER;',
+    );
+  }
+  await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
   // FTS5 与触发器单独建:老构建缺 FTS5 时只损失离线搜索,不影响其余表。
   try {
     await db.execAsync(`
@@ -713,8 +727,12 @@ export interface OutboxEntry {
     d: string;
     replyToId?: string;
     forwardFromMessageId?: string;
+    /** 仅供本地失败气泡恢复；重发前必须从 websocket 载荷剥离。 */
+    localPreviewContent?: Record<string, unknown>;
   };
   createdAt: string;
+  /** 点击发送时的服务端消息水位，用于失败气泡重启后的稳定定位。 */
+  failedAfterHeight?: number;
 }
 
 export async function outboxUpsert(entry: OutboxEntry): Promise<void> {
@@ -723,11 +741,12 @@ export async function outboxUpsert(entry: OutboxEntry): Promise<void> {
   try {
     await writeStatement(() =>
       current.db.runAsync(
-        'INSERT OR REPLACE INTO outbox (d, conversation_id, payload, created_at) VALUES (?, ?, ?, ?);',
+        'INSERT OR REPLACE INTO outbox (d, conversation_id, payload, created_at, failed_after_height) VALUES (?, ?, ?, ?, ?);',
         entry.d,
         entry.conversationId,
         JSON.stringify(entry.payload),
         entry.createdAt,
+        entry.failedAfterHeight ?? null,
       ),
     );
   } catch (error) {
@@ -756,8 +775,9 @@ export async function outboxList(): Promise<OutboxEntry[]> {
       conversation_id: string;
       payload: string;
       created_at: string;
+      failed_after_height: number | null;
     }>(
-      'SELECT d, conversation_id, payload, created_at FROM outbox ORDER BY created_at ASC;',
+      'SELECT d, conversation_id, payload, created_at, failed_after_height FROM outbox ORDER BY created_at ASC;',
     );
     const parsed: OutboxEntry[] = [];
     for (const row of rows) {
@@ -767,6 +787,9 @@ export async function outboxList(): Promise<OutboxEntry[]> {
           conversationId: row.conversation_id,
           payload: JSON.parse(row.payload) as OutboxEntry['payload'],
           createdAt: row.created_at,
+          ...(Number.isFinite(row.failed_after_height)
+            ? { failedAfterHeight: row.failed_after_height ?? 0 }
+            : {}),
         });
       } catch {
         // skip

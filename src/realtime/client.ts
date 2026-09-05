@@ -29,6 +29,8 @@ import {
   isCallStatePayload,
 } from '@/features/call/realtime-guards';
 import { BELL_NOTIFICATION_TYPES } from '@/features/notifications/utils/notification-domain';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { devWarn } from '@/utils/dev-log';
 
 type BadgeSnapshotPayload = {
   messagesUnread?: number;
@@ -388,9 +390,7 @@ async function refreshCurrentUserSummary() {
 
 function refreshCurrentUserSummaryBestEffort() {
   void refreshCurrentUserSummary().catch((err) => {
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn('[realtime] profile summary refresh failed', err);
-    }
+    reportHandledFailure('realtime', 'profileSummaryRefresh', err);
   });
 }
 
@@ -573,9 +573,7 @@ function handleSocketMessage(rawData: string) {
     reportRealtimeFailureOnce('malformedPayload');
     // Ignore malformed realtime messages to keep the connection alive — but dev-log
     // 出来，避免后端推一坨脏数据时本地长期静默丢消息。
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn('[realtime] dropped malformed message', err);
-    }
+    devWarn('[realtime] dropped malformed message', err);
   }
 }
 
@@ -607,9 +605,7 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
     });
   } catch (err) {
     // Recovery is best-effort; keep the latest known badge state on failure.
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn('[realtime] badge snapshot recovery failed', err);
-    }
+    reportHandledFailure('realtime', 'badgeSnapshotRecovery', err);
   }
 
   try {
@@ -617,9 +613,7 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
   } catch (err) {
     // Recovery is best-effort; the notification center screen still has its
     // own pull-to-refresh path if this list backfill fails.
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn('[realtime] notification list recovery failed', err);
-    }
+    reportHandledFailure('realtime', 'notificationListRecovery', err);
   }
 }
 
@@ -653,9 +647,7 @@ function openRealtimeSocket(normalizedToken: string) {
       reportRealtimeFailureOnce('authFrameSend');
       useTabBadgeStore.getState().setRealtimeConnected(false);
       nextSocket.close();
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[realtime] failed to send auth frame', err);
-      }
+      devWarn('[realtime] failed to send auth frame', err);
       return;
     }
     useTabBadgeStore.getState().setRealtimeConnected(true);

@@ -20,6 +20,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchInvitation } from '@/services/api/circles';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { CircleInvitation, CircleInvitationVerifier } from '@/types';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 // 席位数是每张担保单自己的快照(建单那一刻圈子的 requiredVerifierCount),
 // 不是常量:圈子把验证人数调成 2 / 5 之后,写死 10 会让申请人被告知「需要
@@ -123,9 +124,7 @@ export default function InvitationVerificationScreen() {
       setLoadError(
         t('invitation.loadFailed', { defaultValue: '加载失败，请稍后重试' }),
       );
-      if (__DEV__) {
-        console.warn('[InvitationVerificationScreen] fetchInvitation failed', error);
-      }
+      reportHandledFailure('circleInvitation', 'fetch', error);
     } finally {
       setLoading(false);
     }

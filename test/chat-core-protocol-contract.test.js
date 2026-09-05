@@ -43,7 +43,11 @@ test('frontend protocol declares the canonical event names and path', () => {
 
 test('socket manager authenticates via handshake auth frame, not the URL', () => {
   const manager = read('src/chat-core/socket-manager.ts');
-  assert.match(manager, /auth:\s*\{\s*token\s*\}/);
+  assert.match(manager, /auth:\s*\{\s*token,\s*traceId:\s*connectionTraceId\s*\}/);
+  assert.match(
+    manager,
+    /extraHeaders:\s*\{\s*'x-connection-trace-id':\s*connectionTraceId\s*\}/,
+  );
   assert.doesNotMatch(manager, /[?&]token=/);
   assert.doesNotMatch(manager, /encodeURIComponent\(token\)/);
   // 只走 websocket 传输,禁用 polling(移动端弱网下 polling 只会放大延迟)。

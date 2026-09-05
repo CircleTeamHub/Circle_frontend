@@ -343,6 +343,50 @@ test("reportError forwards to captureException with extra context", () => {
   assert.equal(calls[0][1].extra.status, 500);
 });
 
+test("reportError preserves a bounded websocket trace id for cross-service correlation", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  const client = {
+    captureException: (...args) => calls.push(args),
+  };
+
+  reportError(
+    new Error("unauthorized bearer secret"),
+    {
+      operation: "chatConnect",
+      kind: "unauthorized",
+      failureKind: "connect_error",
+      traceId: "ws-matching-trace-123",
+      endpointPath: "/chat-ws",
+      token: "must-not-leave-device",
+    },
+    client,
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].extra.traceId, "ws-matching-trace-123");
+  assert.equal(calls[0][1].tags.traceId, "ws-matching-trace-123");
+  assert.equal(calls[0][1].extra.endpointPath, "/chat-ws");
+  assert.equal(calls[0][1].extra.token, undefined);
+});
+
+test("reportError drops caller-controlled values that are not websocket trace ids", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+
+  reportError(
+    new Error("failed"),
+    {
+      operation: "chatConnect",
+      traceId: "Bearer attacker-controlled-secret",
+    },
+    { captureException: (...args) => calls.push(args) },
+  );
+
+  assert.equal(calls[0][1].extra.traceId, undefined);
+  assert.equal(calls[0][1].tags.traceId, undefined);
+});
+
 test("reportError promotes API context to tags and fingerprint", () => {
   const { reportError } = loadSentry();
   const calls = [];

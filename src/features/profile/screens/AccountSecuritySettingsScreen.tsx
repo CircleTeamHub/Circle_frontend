@@ -7,7 +7,7 @@ import {
   fetchSingleDeviceLoginStatus,
   setSingleDeviceLogin,
 } from "@/services/api/auth";
-import { getApiErrorMessage } from "@/services/api/errors";
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const SECURITY_CODE_ROUTE = "/(tabs)/profile/change-security-code" as const;
 
@@ -38,9 +38,7 @@ export default function AccountSecuritySettingsScreen() {
       if (securityCodeRequestRef.current !== requestId) return;
       // 拿不到状态时不静默当作「未开启」——置为错误态并禁用开关，避免误导用户。
       setSecurityCodeError(true);
-      if (typeof __DEV__ !== "undefined" && __DEV__) {
-        console.warn("[security-code] status check failed", requestError);
-      }
+      reportHandledFailure("securityCode", "statusCheck", requestError);
     } finally {
       if (securityCodeRequestRef.current === requestId) {
         setSecurityCodeLoading(false);
@@ -74,11 +72,8 @@ export default function AccountSecuritySettingsScreen() {
           setSingleDeviceLoginValue(status.enabled);
         }
       } catch (requestError) {
-        if (!cancelled && typeof __DEV__ !== "undefined" && __DEV__) {
-          console.warn(
-            "[single-device-login] status check failed",
-            requestError,
-          );
+        if (!cancelled) {
+          reportHandledFailure("singleDeviceLogin", "statusCheck", requestError);
         }
       } finally {
         if (!cancelled) {
@@ -105,12 +100,7 @@ export default function AccountSecuritySettingsScreen() {
       await setSingleDeviceLogin(value);
     } catch (requestError) {
       setSingleDeviceLoginValue(previousValue);
-      if (typeof __DEV__ !== "undefined" && __DEV__) {
-        console.warn(
-          "[single-device-login] update failed",
-          getApiErrorMessage(requestError, "update failed"),
-        );
-      }
+      reportHandledFailure("singleDeviceLogin", "update", requestError);
     } finally {
       singleDeviceInFlightRef.current = false;
       setSingleDeviceSubmitting(false);

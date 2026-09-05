@@ -18,6 +18,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { useAuth } from '@/hooks/use-auth';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type AppSettingsRoute =
   | string
@@ -445,9 +446,7 @@ export default function AppSettingsScreen() {
           if (isActive) {
             setCacheSizeLabel(formatCacheSize(0));
           }
-          if (__DEV__) {
-            console.warn('[AppSettingsScreen] getAppCacheSize failed', error);
-          }
+          reportHandledFailure('appSettings', 'cacheSize', error);
         });
 
       return () => {

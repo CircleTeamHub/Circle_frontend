@@ -21,6 +21,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   content: {
@@ -116,12 +117,7 @@ export default function EditFriendRemarkScreen() {
         if (!cancelled) {
           setError(t('userProfile.editRemark.loadFailed'));
         }
-        if (__DEV__) {
-          console.warn(
-            '[EditFriendRemarkScreen] fetchFriendSettings failed',
-            nextError,
-          );
-        }
+        reportHandledFailure('friendRemark', 'loadSettings', nextError);
       })
       .finally(() => {
         if (!cancelled) {

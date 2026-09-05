@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 function read(rel) {
   return fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
@@ -22,7 +23,9 @@ function load(rel) {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: (specifier) => (specifier.startsWith('@/') ? {} : require(specifier)),
+    require: withObservabilityStubs((specifier) =>
+      specifier.startsWith('@/') ? {} : require(specifier),
+    ),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

@@ -103,8 +103,12 @@ Each surface ≈ 30–50 min for a focused review pass using `/expo-rn-productio
 - ⚠️ Migration is one-shot — verify idempotence and failure handling.
 
 ### Observability
-- **Logger**: no central logger. ~11 `console.log` in src/ (mostly `ChatDetailScreen` debug).
-- ⚠️ No structured logs, no request-id, no error reporting (Sentry / Crashlytics not in deps).
+- **Sentry** (`src/observability/sentry.ts`): dormant until `EXPO_PUBLIC_SENTRY_DSN` / `extra.sentryDsn` is set. Every event is rebuilt from an allowlist in `beforeSend` (sanitized stack, redacted message, route-shaped transaction names, no account identity).
+- **Handled failures** (`src/observability/report-failure.ts`): `reportHandledFailure(operation, kind, error)` is the only allowed outlet for a business `catch` block — dev console + local breadcrumb + deduplicated Sentry report. `ApiError` / `ChatSendError` / `CreditPolicyError` / `UserFacingError` are treated as expected and never reach Sentry from here (the API client and chat send path decide that themselves).
+- **Render errors**: `RouteErrorBoundary` (exported as `ErrorBoundary` from `app/_layout.tsx`) reports what expo-router catches; `silenceDomBridgeRejection` forwards filtered unhandled rejections (it replaces Sentry's own tracker hook).
+- **Breadcrumbs**: `logClientDiagnostic` buffers allowlisted keys only; they leave the device solely as context of a Sentry report and are cleared on logout.
+- **Dev-only output**: `devWarn` (`src/utils/dev-log.ts`). Direct `console.*` calls are forbidden by `test/handled-failure-coverage.test.js`.
+- ⚠️ No request-id propagation to the backend yet (backend generates one; the app does not send `x-request-id`).
 
 ---
 

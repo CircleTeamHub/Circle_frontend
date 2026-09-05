@@ -41,6 +41,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const MESSAGE_MAX_LENGTH = 500;
 
@@ -175,13 +176,7 @@ export default function FriendActivityDetailScreen() {
       return markFriendActivityRead(activityId)
         .catch((markError) => {
           // mark-read failures are non-critical — continue loading detail
-          if (__DEV__) {
-            console.warn(
-              '[FriendActivityDetailScreen] markFriendActivityRead failed',
-              { activityId },
-              markError,
-            );
-          }
+          reportHandledFailure('friendActivity', 'markRead', markError);
         })
         .then(() => fetchFriendActivityDetail(activityId))
         .then((nextActivity) => {
@@ -221,13 +216,7 @@ export default function FriendActivityDetailScreen() {
         setMessages(rows);
       })
       .catch((fetchError) => {
-        if (__DEV__) {
-          console.warn(
-            '[FriendActivityDetailScreen] fetchFriendRequestMessages failed',
-            { requestId },
-            fetchError,
-          );
-        }
+        reportHandledFailure('friendActivity', 'fetchRequestMessages', fetchError);
       });
     return () => {
       signal.cancelled = true;

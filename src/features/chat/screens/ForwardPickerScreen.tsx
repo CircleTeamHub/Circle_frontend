@@ -31,6 +31,7 @@ import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 type PendingForward = {
   message: ChatMessage;
@@ -116,9 +117,19 @@ function conversationAvatarUrl(conversation: ChatConversationDto): string | unde
  * 必走到最后那个 throw;catch 提示「请重试」,可重试永远不会成功。
  * 通话记录本身也没有转发语义(它是一次通话在本会话里的留痕),所以直接不提供入口。
  */
-export function canForwardMessage(message: ChatMessage): boolean {
+export function canForwardMessage(
+  message: ChatMessage,
+  dto?: ChatMessageDto,
+): boolean {
   if (message.type === 'call-record') return false;
   if (message.type === 'system-notice') return false;
+  if (
+    message.type === 'image' ||
+    message.type === 'video' ||
+    message.type === 'voice'
+  ) {
+    return dto !== undefined && dto.height > 0;
+  }
   return true;
 }
 
@@ -154,7 +165,10 @@ async function sendForwardedMessage(pending: PendingForward, conversationId: str
   const content = dto?.content ?? {};
 
   if (dto) {
-    if (dto.type === 'image' || dto.type === 'video' || dto.type === 'voice') {
+    if (
+      dto.height > 0 &&
+      (dto.type === 'image' || dto.type === 'video' || dto.type === 'voice')
+    ) {
       return sendForwardedMediaMessage({
         conversationId,
         sourceMessageId: dto.id,
@@ -223,9 +237,7 @@ export default function ForwardPickerScreen() {
   useEffect(() => {
     if (conversations.length > 0) return;
     loadChatConversations().catch((err) => {
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn('[ForwardPicker] loadChatConversations failed', err);
-      }
+      reportHandledFailure('forward', 'loadConversations', err);
     });
   }, [conversations.length]);
 
@@ -252,9 +264,7 @@ export default function ForwardPickerScreen() {
         },
       ]);
     } catch (error) {
-      if (__DEV__) {
-        console.warn('[ForwardPicker] forward message failed', error);
-      }
+      reportHandledFailure('forward', 'forwardMessage', error);
       if (!mountedRef.current) return;
       Alert.alert(t('chat.forward.failed'), t('chat.forward.failedRetry'));
     } finally {

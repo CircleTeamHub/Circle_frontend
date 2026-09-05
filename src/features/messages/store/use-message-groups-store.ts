@@ -22,8 +22,7 @@ import {
   updateConversationGroup,
 } from '@/services/api/conversation-groups';
 import type { CustomConversationGroup } from '@/types';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { reportHandledFailure } from '@/observability/report-failure';
 
 interface ConversationGroupsState {
   groups: CustomConversationGroup[];
@@ -57,10 +56,6 @@ const initialState: Pick<
   lastSyncedAt: null,
   error: null,
 };
-
-function devWarn(...args: unknown[]) {
-  if (isDev) console.warn(...args);
-}
 
 function sortGroups(groups: CustomConversationGroup[]): CustomConversationGroup[] {
   // 与后端排序保持一致：sortOrder asc，createdAt asc 作 tiebreaker。
@@ -97,7 +92,7 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
             error: null,
           });
         } catch (err) {
-          devWarn('[conversation-groups] load failed', err);
+          reportHandledFailure('messageGroups', 'load', err);
           // 用 duck-typing 而非 `instanceof Error` —— 后者在 vm.runInNewContext / 跨 realm
           // 场景下不可靠；任意带 string message 的对象都接受。
           const message =
@@ -139,7 +134,7 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
             lastSyncedAt: Date.now(),
           }));
         } catch (err) {
-          devWarn('[conversation-groups] rename failed', err);
+          reportHandledFailure('messageGroups', 'rename', err);
           set({ groups: previous });
           throw err;
         }
@@ -158,7 +153,7 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
             lastSyncedAt: Date.now(),
           }));
         } catch (err) {
-          devWarn('[conversation-groups] setPinnedToTabs failed', err);
+          reportHandledFailure('messageGroups', 'setPinnedToTabs', err);
           set({ groups: previous });
           throw err;
         }
@@ -177,7 +172,7 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
           await deleteConversationGroup(id);
           set({ lastSyncedAt: Date.now() });
         } catch (err) {
-          devWarn('[conversation-groups] remove failed', err);
+          reportHandledFailure('messageGroups', 'remove', err);
           set({ groups: previous, filterOrder: previousFilterOrder });
           throw err;
         }
@@ -197,7 +192,7 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
             lastSyncedAt: Date.now(),
           }));
         } catch (err) {
-          devWarn('[conversation-groups] setMembers failed', err);
+          reportHandledFailure('messageGroups', 'setMembers', err);
           set({ groups: previous });
           throw err;
         }
@@ -254,12 +249,12 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
             lastSyncedAt: Date.now(),
           }));
         } catch (err) {
-          devWarn('[conversation-groups] reorder failed', err);
+          reportHandledFailure('messageGroups', 'reorder', err);
           try {
             const serverGroups = await fetchConversationGroups();
             set({ groups: sortGroups(serverGroups) });
           } catch (reconcileError) {
-            devWarn('[conversation-groups] reorder reconcile failed', reconcileError);
+            reportHandledFailure('messageGroups', 'reorderReconcile', reconcileError);
             set({ groups: previous });
           }
           throw err;
@@ -277,7 +272,7 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
           try {
             await mmkvJsonStorage.removeItem('circle-im-conversation-groups');
           } catch (err) {
-            devWarn('[conversation-groups] reset: failed to clear MMKV cache', err);
+            reportHandledFailure('messageGroups', 'clearCache', err);
           }
         })();
       },

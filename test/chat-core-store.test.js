@@ -183,6 +183,31 @@ test('optimistic (height=0) messages sort after confirmed ones', () => {
   assert.deepEqual(Array.from(messages, (m) => m.id), ['srv-5', 'local:d2']);
 });
 
+test('failed optimistic message stays at the server height where it was sent', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [
+    msg({ id: 'srv-5', height: 5 }),
+    msg({
+      id: 'local:d2',
+      height: 0,
+      d: 'd2',
+      failedAfterHeight: 5,
+      createdAt: '2026-08-05T12:01:00.000Z',
+    }),
+  ]);
+  // ack 超时之前可能已经收到后续消息；失败位置必须以点击发送那一刻为准。
+  store.ingestMessages('conv-1', [msg({ id: 'srv-6', height: 6 })]);
+  store.markMessageFailed('conv-1', 'd2');
+
+  const messages = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.deepEqual(Array.from(messages, (m) => m.id), [
+    'srv-5',
+    'local:d2',
+    'srv-6',
+  ]);
+});
+
 test('caps per-conversation messages at 200 keeping the newest', () => {
   const { useChatStore, MESSAGES_CAP } = loadChatStore();
   const store = useChatStore.getState();
@@ -195,6 +220,86 @@ test('caps per-conversation messages at 200 keeping the newest', () => {
   assert.equal(messages.length, MESSAGES_CAP);
   assert.equal(messages[0].height, 51);
   assert.equal(messages[messages.length - 1].height, 250);
+});
+
+test('failed messages survive the cap trim and keep their anchored position', () => {
+  const { useChatStore, MESSAGES_CAP } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [
+    msg({ id: 'srv-1', height: 1 }),
+    msg({ id: 'local:d-old', height: 0, d: 'd-old', failedAfterHeight: 1 }),
+  ]);
+  store.markMessageFailed('conv-1', 'd-old');
+  // height=0 的失败气泡从不落 messages 表:被截断挤掉就等于连同会话列表的
+  // 「发送失败」前缀一起消失,直到冷启动从 outbox 回放才回来。
+  const batch = [];
+  for (let height = 2; height <= MESSAGES_CAP + 50; height += 1) {
+    batch.push(msg({ id: `m-${height}`, height }));
+  }
+  store.ingestMessages('conv-1', batch);
+
+  const messages = useChatStore.getState().messagesByConversation['conv-1'];
+  const failed = messages.find((m) => m.d === 'd-old');
+  assert.ok(failed, '失败气泡被窗口截断挤掉了');
+  assert.equal(failed.failed, true);
+  // 名额只算已确认消息:窗口仍保留最新 200 条真消息,失败气泡是额外的一条。
+  assert.equal(messages.filter((m) => m.height > 0).length, MESSAGES_CAP);
+  assert.equal(messages[0].id, 'local:d-old');
+  assert.equal(messages[1].height, 51);
+  assert.equal(messages[messages.length - 1].height, MESSAGES_CAP + 50);
+});
+
+test('a failure without a known anchor is anchored by the first confirmed messages that arrive', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  // 转发进从未打开过的会话:发送时时间线没加载,拿不到任何水位。
+  store.ingestMessages('conv-1', [
+    msg({ id: 'local:d-fwd', height: 0, d: 'd-fwd' }),
+  ]);
+  store.markMessageFailed('conv-1', 'd-fwd');
+  const [pending] = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.equal(pending.failed, true);
+  // 不能写死 0:拉到真历史后 0+0.5 会把气泡顶到整段历史最上面。
+  assert.equal(pending.failedAfterHeight, undefined);
+
+  const history = [];
+  for (let height = 10; height <= 15; height += 1) {
+    history.push(msg({ id: `m-${height}`, height }));
+  }
+  store.ingestMessages('conv-1', history);
+  let messages = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.deepEqual(Array.from(messages, (m) => m.id), [
+    'm-10',
+    'm-11',
+    'm-12',
+    'm-13',
+    'm-14',
+    'm-15',
+    'local:d-fwd',
+  ]);
+  assert.equal(messages[6].failedAfterHeight, 15);
+
+  // 锚定之后抵达的真消息继续排在它下面。
+  store.ingestMessages('conv-1', [msg({ id: 'm-16', height: 16 })]);
+  messages = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.deepEqual(Array.from(messages, (m) => m.id).slice(-2), [
+    'local:d-fwd',
+    'm-16',
+  ]);
+});
+
+test('retrying never moves the failure anchor backwards', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  // 窗口里当前一条已确认消息都没有(截空/没加载),重发不能把锚点退回 0。
+  store.ingestMessages('conv-1', [
+    msg({ id: 'local:d1', height: 0, d: 'd1', failedAfterHeight: 7 }),
+  ]);
+  store.markMessageFailed('conv-1', 'd1');
+  store.markMessageRetrying('conv-1', 'd1');
+  const [retrying] = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.equal(retrying.failed, undefined);
+  assert.equal(retrying.failedAfterHeight, 7);
 });
 
 test('untouched conversations keep their array reference (ref stability)', () => {

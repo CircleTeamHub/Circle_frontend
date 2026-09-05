@@ -226,7 +226,7 @@ test("login security code status error is surfaced explicitly instead of silentl
   assert.doesNotMatch(settings, /setSecurityCodeEnabled\(false\)/);
   assert.match(
     settings,
-    /console\.warn\("\[security-code\] status check failed"/,
+    /reportHandledFailure\("securityCode", "statusCheck", requestError\)/,
   );
   // 回到本页时重新拉取，保证从子页返回后开关同步
   assert.match(settings, /useFocusEffect/);
@@ -311,7 +311,7 @@ test("login security code gate only appears after backend confirms the account h
   // 状态拉取失败时保留上一次已知状态（已开启 -> 保持锁定），不再静默放行
   assert.match(
     gate,
-    /setGateState\(securityCodeEnabledRef\.current \? 'locked' : 'unlocked'\);\s*if \(typeof __DEV__/,
+    /setGateState\(securityCodeEnabledRef\.current \? 'locked' : 'unlocked'\);\s*reportHandledFailure\('securityCode', 'statusCheck'/,
   );
   assert.match(gate, /securityCodeEnabledRef\.current/);
   assert.match(
@@ -831,7 +831,10 @@ test("system permissions screen lazy-loads notifications so missing native modul
     /import\s+\*\s+as\s+Notifications\s+from\s+['"]expo-notifications['"]/,
   );
   assert.match(source, /catch \(error\)/);
-  assert.match(source, /console\.warn\('\[permissions\] notifications module unavailable'/);
+  assert.match(
+    source,
+    /reportHandledFailure\('permissions', 'notificationsModule', error\)/,
+  );
   assert.match(source, /if \(!notifications\)/);
 });
 

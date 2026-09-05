@@ -35,6 +35,7 @@ import {
   isGlassEffectAPIAvailable,
   isLiquidGlassAvailable,
 } from 'expo-glass-effect';
+import { devWarn } from '@/utils/dev-log';
 
 type TabKey = {
   name: string;
@@ -153,7 +154,7 @@ function TabBarSurface({
       <View style={styles.tabBar}>
         <BlurView
           intensity={90}
-          tint="systemMaterial"
+          tint={colorScheme === 'dark' ? 'systemMaterialDark' : 'systemMaterialLight'}
           style={styles.tabBarBlurLayer}
         />
         {children}
@@ -308,11 +309,9 @@ function CustomTabBar({
         {state.routes.map((route, index) => {
           const tab = TAB_BY_NAME[route.name];
           if (!tab) {
-            if (__DEV__) {
-              console.warn(
-                `[CustomTabBar] route "${route.name}" 未在 TAB_KEYS 中登记，已跳过该 tab。`,
-              );
-            }
+            devWarn(
+              `[CustomTabBar] route "${route.name}" 未在 TAB_KEYS 中登记，已跳过该 tab。`,
+            );
             return null;
           }
 

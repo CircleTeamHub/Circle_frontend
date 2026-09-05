@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
-
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * iOS：把 MMKV 目录排除出 iCloud/iTunes 备份（#88）。
@@ -30,8 +29,6 @@ export async function excludeMmkvDirFromIOSBackup(): Promise<void> {
       NSURLIsExcludedFromBackupKey: true,
     });
   } catch (err) {
-    if (isDev) {
-      console.warn('[storage] mmkv iOS backup exclusion failed', err);
-    }
+    reportHandledFailure('storage', 'iosBackupExclusion', err);
   }
 }
