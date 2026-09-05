@@ -212,7 +212,10 @@ function excludeAliasedMedia(
   items: StructuredNoteMediaItem[],
   excluded: StructuredNoteMediaItem[],
 ) {
-  const excludedGroups = groupMediaItems(excluded);
+  const excludedAliases = excluded.map(getMediaAliases);
+  const excludedGroups = groupMediaItems([...items, ...excluded]).filter((group) =>
+    excludedAliases.some((aliases) => aliasesOverlap(aliases, group.aliases)),
+  );
   return items.filter((item) => {
     const aliases = getMediaAliases(item);
     return !excludedGroups.some((group) => aliasesOverlap(aliases, group.aliases));

@@ -147,3 +147,29 @@ test('partial structured sections keep explicit showcase videos out of derived m
   assert.deepEqual(sections.media.items.map((item) => item.url), [ordinaryImage.url]);
   assert.deepEqual(sections.showcase.items.map((item) => item.url), [showcaseVideo.url]);
 });
+
+test('transitive aliases keep a URL-only showcase video out of derived media', () => {
+  const sections = buildNoteSections({
+    media: [
+      {
+        type: 'VIDEO',
+        objectKey: 'notes/showcase.mp4',
+        url: 'https://cdn.test/showcase-old.mp4',
+      },
+      {
+        type: 'VIDEO',
+        objectKey: 'notes/showcase.mp4',
+        url: 'https://cdn.test/showcase-new.mp4',
+      },
+    ],
+    sections: {
+      showcase: {
+        items: [{ type: 'VIDEO', url: 'https://cdn.test/showcase-new.mp4' }],
+      },
+    },
+  });
+
+  assert.deepEqual(sections.media.items, []);
+  assert.equal(sections.showcase.items.length, 1);
+  assert.equal(sections.showcase.items[0].objectKey, 'notes/showcase.mp4');
+});
