@@ -192,9 +192,10 @@ export default function GroupsScreen() {
 
   useEffect(() => {
     mountedRef.current = true;
+    const requestGuard = requestGuardRef.current;
     return () => {
       mountedRef.current = false;
-      requestGuardRef.current.invalidate();
+      requestGuard.invalidate();
     };
   }, []);
 
