@@ -73,6 +73,8 @@ test('group chat offers local and two-sided deletion plus management log access'
   assert.match(info, /forEveryone/);
   assert.match(api, /pendingHistoryClears/);
   assert.match(api, /targetHeight/);
+  assert.match(api, /getKnownClearTargetHeight\([\s\S]*?\)\s*\?\?\s*0/);
+  assert.match(api, /targetHeight:\s*operation\.targetHeight/);
   assert.match(info, /groupLog/);
   assert.match(messages, /deleteForEveryone/);
   assert.match(logScreen, /system/);

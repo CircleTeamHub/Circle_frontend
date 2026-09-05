@@ -36,7 +36,7 @@ function sessionGate(): () => boolean {
   return () => useAuthStore.getState().sessionEpoch === epoch;
 }
 
-type PendingHistoryClear = { targetHeight?: number };
+type PendingHistoryClear = { targetHeight: number };
 const pendingHistoryClears = new Map<string, PendingHistoryClear>();
 let pendingHistoryClearEpoch: number | null = null;
 
@@ -58,7 +58,7 @@ function getPendingHistoryClear(
     targetHeight: getKnownClearTargetHeight(
       store.conversations.find((conversation) => conversation.id === conversationId),
       store.messagesByConversation[conversationId] ?? [],
-    ),
+    ) ?? 0,
   };
   pendingHistoryClears.set(key, operation);
   return operation;
@@ -521,9 +521,7 @@ export async function clearChatConversationHistory(
       method: 'POST',
       body: {
         forEveryone,
-        ...(operation.targetHeight !== undefined
-          ? { targetHeight: operation.targetHeight }
-          : {}),
+        targetHeight: operation.targetHeight,
       },
     },
   );
