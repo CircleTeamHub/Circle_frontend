@@ -496,11 +496,23 @@ test('EditNoteScreen resets media upload ownership when its route loses focus', 
   assert.match(src, /loading \|\|\s*!isRouteDataReady \|\|\s*isSubmitting/);
 });
 
-test('EditNoteScreen shows a real map preview without exposing raw coordinates', () => {
+test('EditNoteScreen gates its map preview behind an explicit tap', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(src, /buildMapPreviewUrl/);
-  assert.match(src, /staticmap\.openstreetmap\.de/);
+  // 底图瓦片走共享助手，而不是笔记页自带的第二套地图机制。旧实现直接拼
+  // staticmap.openstreetmap.de 的 URL 并无条件渲染，打开笔记就把精确坐标交给
+  // 了第三方；那个 host 不许再出现。
+  assert.match(src, /getOpenStreetMapPreviewTiles/);
+  assert.doesNotMatch(src, /staticmap\.openstreetmap\.de/);
+  assert.doesNotMatch(src, /buildMapPreviewUrl/);
+
+  // 门禁本身：未展开就不算出瓦片，展开由用户点击驱动。
+  assert.match(src, /const \[mapRevealed, setMapRevealed\] = useState\(false\)/);
+  assert.match(src, /mapRevealed &&/);
+  assert.match(src, /onPress=\{revealMap\}/);
+  // 例外只有一处：本次会话里刚在选点页选好的位置。
+  assert.match(src, /consumePickedLocation\(\)[\s\S]*?setMapRevealed\(true\)/);
+
   assert.match(src, /locationPreviewCard/);
   assert.match(src, /locationMapPreview/);
   assert.doesNotMatch(src, /locationCoordinatePill/);

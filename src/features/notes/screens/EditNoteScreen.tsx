@@ -8,6 +8,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   LogBox,
+  PixelRatio,
   Platform,
   Pressable,
   ScrollView,
@@ -20,6 +21,11 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
+import {
+  BASEMAP_ATTRIBUTION,
+  getOpenStreetMapPreviewTiles,
+  hasValidLocationCoordinates,
+} from '@/features/location/utils/location-map';
 import { useNoteLocationPickerStore } from '@/features/notes/store/use-note-location-picker-store';
 import type {
   CreateNoteMediaInput,
@@ -103,10 +109,7 @@ function hasLocationDraftValue(location: LocationDraft) {
   );
 }
 
-function buildMapPreviewUrl(latitude: number, longitude: number) {
-  const center = `${latitude.toFixed(6)},${longitude.toFixed(6)}`;
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${encodeURIComponent(center)}&zoom=15&size=640x260&markers=${encodeURIComponent(`${center},red-pushpin`)}`;
-}
+const LOCATION_MAP_HEIGHT = 126;
 
 function getTextOnlyBlocks(blocks: Record<string, unknown>[]) {
   return blocks.filter((block) => block.type !== 'image' && block.type !== 'video');
@@ -160,7 +163,7 @@ function mergeMedia<T extends CreateNoteMediaInput>(items: T[]) {
 export default function EditNoteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEdit = Boolean(id);
@@ -198,6 +201,16 @@ export default function EditNoteScreen() {
     latitude: null,
     longitude: null,
   });
+  // 底图瓦片来自第三方（basemaps.cartocdn.com）。挂在渲染里就意味着：只要打开
+  // 一篇存过位置的笔记，精确坐标 + 本机的网络元数据就自动交给了对方，用户没做
+  // 任何操作。与 chat 的位置卡片同一道门禁：显式点开才请求。
+  //
+  // 唯一的例外是本次会话里刚在选点页选好的位置 —— 那一页已经拉过一整屏瓦片，
+  // 再让本人点一次「显示地图」只是把自己刚选的位置变成一块灰板。
+  const [mapRevealed, setMapRevealed] = useState(false);
+  // 瓦片要按像素绝对定位，需要一个具体宽度。预览卡片是撑满内容区的，所以量出来
+  // 而不是把内边距抄一遍 —— 未展开时先渲染占位图，点开时宽度早已就绪。
+  const [mapWidth, setMapWidth] = useState(0);
   const consumePickedLocation = useNoteLocationPickerStore(
     (state) => state.consumePickedLocation,
   );
@@ -272,6 +285,7 @@ export default function EditNoteScreen() {
       setShowcaseItems([]);
       setUnrecoverableMediaCount(0);
       setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
+      setMapRevealed(false);
       setEditorMounted(true);
       setLoading(false);
       return () => {
@@ -290,6 +304,8 @@ export default function EditNoteScreen() {
     setUnrecoverableMediaCount(0);
     setSelectedGroupIds([]);
     setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
+    // 换一篇笔记就重新收起地图：上一篇是用户点开过的，不代表这一篇也同意了。
+    setMapRevealed(false);
     pinnedRef.current = false;
     setEditorMounted(false);
 
@@ -361,6 +377,10 @@ export default function EditNoteScreen() {
           latitude: picked.latitude,
           longitude: picked.longitude,
         });
+        // 门禁的例外：这份坐标是本人刚在选点页选的，那一页已经拉过一整屏瓦片，
+        // 这里再要求点一次「显示地图」保护不到任何东西，只会让刚选完的位置显示
+        // 成一块灰板。
+        setMapRevealed(true);
       }
       return invalidateUploadOwnership;
     }, [consumePickedLocation, invalidateUploadOwnership, resetUploadOwnership]),
@@ -588,6 +608,12 @@ export default function EditNoteScreen() {
 
   const handleClearLocation = useCallback(() => {
     setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
+    // 清掉位置也把地图收回去：下一个位置要重新征得同意。
+    setMapRevealed(false);
+  }, []);
+
+  const revealMap = useCallback(() => {
+    setMapRevealed(true);
   }, []);
 
   const navigateBack = useCallback(() => {
@@ -756,6 +782,17 @@ export default function EditNoteScreen() {
       locationDetailLabel: { color: colors.textSecondary },
       locationClearAction: { borderColor: colors.surfaceBorder },
       locationClearText: { color: colors.textSecondary },
+      locationMapFallback: { backgroundColor: colors.surface },
+      locationMapRevealButton: { backgroundColor: colors.overlay },
+      locationMapRevealText: {
+        color: colors.textSecondary,
+        ...Typography.small,
+      },
+      locationMapMarkerDot: { backgroundColor: colors.primary },
+      locationMapAttribution: {
+        color: colors.textSecondary,
+        backgroundColor: colors.overlay,
+      },
     }),
     [colors],
   );
@@ -768,9 +805,20 @@ export default function EditNoteScreen() {
     !canSubmitNoteMedia(mediaItems) ||
     !canSubmitNoteMedia(showcaseItems) ||
     !title.trim();
-  const locationPreviewUrl =
-    locationDraft.latitude != null && locationDraft.longitude != null
-      ? buildMapPreviewUrl(locationDraft.latitude, locationDraft.longitude)
+  const hasLocationCoordinates = hasValidLocationCoordinates(
+    locationDraft.latitude,
+    locationDraft.longitude,
+  );
+  const mapPreview =
+    hasLocationCoordinates && mapRevealed && mapWidth > 0
+      ? getOpenStreetMapPreviewTiles(
+          locationDraft.latitude as number,
+          locationDraft.longitude as number,
+          mapWidth,
+          LOCATION_MAP_HEIGHT,
+          15,
+          { scheme: resolvedMode, retina: PixelRatio.get() > 1 },
+        )
       : null;
   const hasLocation = hasLocationDraftValue(locationDraft);
   const mediaSectionStatus =
@@ -1073,13 +1121,54 @@ export default function EditNoteScreen() {
           </View>
           {hasLocation ? (
             <View style={[s.locationPreviewCard, d.locationPreviewCard]}>
-              {locationPreviewUrl ? (
-                <Image
-                  source={{ uri: locationPreviewUrl }}
-                  style={s.locationMapPreview}
-                  contentFit="cover"
-                />
-              ) : null}
+              <View
+                testID="note-location-map"
+                style={s.locationMapPreview}
+                onLayout={(event) => setMapWidth(event.nativeEvent.layout.width)}
+              >
+                {mapPreview ? (
+                  <>
+                    {mapPreview.tiles.map((tile) => (
+                      <Image
+                        key={`${tile.url}:${tile.left}:${tile.top}`}
+                        source={tile.url}
+                        style={[s.locationMapTile, { left: tile.left, top: tile.top }]}
+                        contentFit="cover"
+                        transition={150}
+                      />
+                    ))}
+                    <View pointerEvents="none" style={s.locationMapMarker}>
+                      <View style={[s.locationMapMarkerDot, d.locationMapMarkerDot]}>
+                        <Ionicons name="location" size={20} color={colors.white} />
+                      </View>
+                    </View>
+                    <Text
+                      pointerEvents="none"
+                      style={[s.locationMapAttribution, d.locationMapAttribution]}
+                    >
+                      {BASEMAP_ATTRIBUTION}
+                    </Text>
+                  </>
+                ) : (
+                  <View style={[s.locationMapFallback, d.locationMapFallback]}>
+                    <Ionicons name="location" size={28} color={colors.textSecondary} />
+                    {hasLocationCoordinates ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={revealMap}
+                        hitSlop={8}
+                        style={[s.locationMapRevealButton, d.locationMapRevealButton]}
+                      >
+                        <Text style={d.locationMapRevealText}>
+                          {t('chat.location.showPreview', {
+                            defaultValue: '轻点显示地图',
+                          })}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                )}
+              </View>
               <View style={s.locationPreviewInfo}>
                 <View style={s.locationPreviewTitleRow}>
                   <Ionicons name="location" size={16} color={colors.primary} />
@@ -1294,7 +1383,45 @@ const s = StyleSheet.create({
   },
   locationMapPreview: {
     width: '100%',
-    height: 126,
+    height: LOCATION_MAP_HEIGHT,
+    overflow: 'hidden',
+  },
+  locationMapTile: {
+    position: 'absolute',
+    width: 256,
+    height: 256,
+  },
+  locationMapMarker: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationMapMarkerDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationMapAttribution: {
+    position: 'absolute',
+    right: 4,
+    bottom: 2,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    fontSize: 8,
+    borderRadius: 3,
+  },
+  locationMapFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  locationMapRevealButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
   locationPreviewInfo: {
     paddingHorizontal: Spacing.md,

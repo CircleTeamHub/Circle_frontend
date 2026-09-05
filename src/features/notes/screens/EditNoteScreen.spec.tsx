@@ -47,9 +47,19 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: (...args: unknown[]) => mockLaunchPicker(...args),
 }));
 
+// 记录每一个 <Image> 的 source：位置预览那组断言关心的就是「渲染时有没有把
+// 坐标交给第三方主机」，只有把 source 收集起来才看得见。
+const imageSources: unknown[] = [];
 jest.mock('expo-image', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return { Image: (props: object) => <View {...props} /> };
+  return {
+    // props 保持 object：<View {...props} /> 只接受 ViewProps，收窄成
+    // { source?: unknown } 会让这个展开在 tsc 下无重载可匹配。
+    Image: (props: object) => {
+      imageSources.push((props as { source?: unknown }).source);
+      return <View {...props} />;
+    },
+  };
 });
 
 jest.mock('expo-video', () => {
@@ -79,9 +89,11 @@ jest.mock('@/theme', () => ({
   Spacing: { xs: 4, sm: 8, md: 12, lg: 16 },
   Typography: { small: {}, caption: {}, body: {}, h: {} },
   useTheme: () => ({
+    resolvedMode: 'light',
     colors: {
       background: '#fff', surface: '#fff', surfaceBorder: '#ddd', text: '#111',
       textSecondary: '#666', primary: '#6200ee', brandPurple: '#6200ee', white: '#fff',
+      overlay: 'rgba(0,0,0,.4)',
     },
   }),
 }));
@@ -399,6 +411,7 @@ test('releases an in-flight main-editor blob preview when its route is replaced'
 
 beforeEach(() => {
   jest.clearAllMocks();
+  imageSources.length = 0;
   mockRouteId = undefined;
   mockFocusCallback = undefined;
   mockFocusCleanup = undefined;
@@ -602,6 +615,142 @@ test('renders a map-selected location as read-only details and clears the saved 
         sections: expect.objectContaining({ location: null }),
       }),
     );
+  });
+});
+
+// 底图瓦片来自第三方主机。打开一篇存过位置的笔记就自动请求，等于把精确坐标 +
+// 本机网络元数据交出去，而用户什么都没点。chat 的位置卡片早就定了规矩（见
+// location-card.tsx 的注释与 location-card.spec.tsx）：显式点开才请求。
+const MAP_LABEL = 'chat.location.showPreview';
+
+// 断言「有没有向任何外部主机发图片请求」而不是盯某一个域名：修复前用的是
+// staticmap.openstreetmap.de，修复后用共享瓦片助手的 basemaps.cartocdn.com，
+// 只盯其中一个都会让这条断言在另一侧变成永久绿灯。
+const remoteImageRequests = () =>
+  imageSources.filter((source) => {
+    const uri =
+      typeof source === 'string'
+        ? source
+        : typeof (source as { uri?: unknown })?.uri === 'string'
+          ? ((source as { uri: string }).uri)
+          : '';
+    return /^https?:\/\//.test(uri);
+  });
+
+function locatedNote() {
+  return {
+    title: 'Located note',
+    contentJson: [],
+    media: [],
+    sections: {
+      location: {
+        title: 'Harbor Cafe',
+        address: '1 Ocean Drive, Seaside',
+        latitude: 37.7749,
+        longitude: -122.4194,
+      },
+    },
+    groups: [],
+    pinned: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+function layoutMap() {
+  fireEvent(screen.getByTestId('note-location-map'), 'layout', {
+    nativeEvent: { layout: { width: 320, height: 126 } },
+  });
+}
+
+describe('note location map preview', () => {
+  it('requests no third-party map tile just by opening a note with a stored location', async () => {
+    mockRouteId = 'located-note';
+    mockFetchNoteDetail.mockResolvedValue(locatedNote());
+
+    render(<EditNoteScreen />);
+    await screen.findByDisplayValue('Located note');
+    layoutMap();
+
+    expect(remoteImageRequests()).toHaveLength(0);
+  });
+
+  // 收起地图不等于把「存的是哪儿」也藏起来：地点名和详细地址仍然要在。
+  it('still shows the saved place while the map stays collapsed', async () => {
+    mockRouteId = 'located-note';
+    mockFetchNoteDetail.mockResolvedValue(locatedNote());
+
+    render(<EditNoteScreen />);
+    await screen.findByDisplayValue('Located note');
+
+    expect(screen.getByText('Harbor Cafe')).toBeTruthy();
+    expect(screen.getByText('1 Ocean Drive, Seaside')).toBeTruthy();
+    expect(screen.getByText(MAP_LABEL)).toBeTruthy();
+  });
+
+  it('loads tiles only after the author asks for the map', async () => {
+    mockRouteId = 'located-note';
+    mockFetchNoteDetail.mockResolvedValue(locatedNote());
+
+    render(<EditNoteScreen />);
+    await screen.findByDisplayValue('Located note');
+    layoutMap();
+    expect(remoteImageRequests()).toHaveLength(0);
+
+    fireEvent.press(screen.getByText(MAP_LABEL));
+
+    expect(remoteImageRequests().length).toBeGreaterThan(0);
+  });
+
+  // 门禁的例外：坐标是本人刚在选点页选的，那一页已经拉过一整屏瓦片了。
+  it('renders the map immediately for a location picked in this session', async () => {
+    mockConsumePickedLocation.mockReturnValue({
+      title: 'Harbor Cafe',
+      address: '1 Ocean Drive, Seaside',
+      latitude: 37.7749,
+      longitude: -122.4194,
+    });
+
+    render(<EditNoteScreen />);
+    await screen.findByText('Harbor Cafe');
+    layoutMap();
+
+    expect(screen.queryByText(MAP_LABEL)).toBeNull();
+    expect(remoteImageRequests().length).toBeGreaterThan(0);
+  });
+
+  // 清掉位置要把同意也收回：下一个位置得重新点一次。
+  it('collapses the map again once the location is cleared', async () => {
+    mockConsumePickedLocation.mockReturnValue({
+      title: 'Harbor Cafe',
+      address: '1 Ocean Drive, Seaside',
+      latitude: 37.7749,
+      longitude: -122.4194,
+    });
+
+    render(<EditNoteScreen />);
+    await screen.findByText('Harbor Cafe');
+    layoutMap();
+    expect(remoteImageRequests().length).toBeGreaterThan(0);
+
+    fireEvent.press(screen.getByText('notes.edit.clearLocation'));
+    imageSources.length = 0;
+
+    expect(screen.queryByText('Harbor Cafe')).toBeNull();
+    expect(remoteImageRequests()).toHaveLength(0);
+  });
+
+  it('offers no map affordance for a legacy location without usable coordinates', async () => {
+    mockRouteId = 'partial-location-note';
+    const note = locatedNote();
+    note.sections.location.longitude = null as unknown as number;
+    mockFetchNoteDetail.mockResolvedValue(note);
+
+    render(<EditNoteScreen />);
+    await screen.findByDisplayValue('Located note');
+    layoutMap();
+
+    expect(screen.queryByText(MAP_LABEL)).toBeNull();
+    expect(remoteImageRequests()).toHaveLength(0);
   });
 });
 
