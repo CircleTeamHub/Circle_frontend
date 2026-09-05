@@ -36,7 +36,7 @@ function sessionGate(): () => boolean {
   return () => useAuthStore.getState().sessionEpoch === epoch;
 }
 
-type PendingHistoryClear = { targetHeight: number };
+type PendingHistoryClear = { targetHeight: number | undefined };
 const pendingHistoryClears = new Map<string, PendingHistoryClear>();
 let pendingHistoryClearEpoch: number | null = null;
 
@@ -54,11 +54,16 @@ function getPendingHistoryClear(
   if (pending) return pending;
 
   const store = useChatStore.getState();
+  // 拿不到本地水位就不要传 targetHeight —— 服务端对 undefined 会退到会话当前
+  // 顶端(targetHeight ?? currentTop),对 0 则走 `clearThrough <= 0` 直接返回、
+  // 一条都不清。而本地水位缺失是常态:时间线没加载、上一次"仅清我的"已经把
+  // lastMessage 置空、或从消息列表侧滑删除。传 0 的话服务端什么都没做,客户端
+  // 却照样清空本地并提示"已清空",群聊里其他人的记录原封不动。
   const operation = {
     targetHeight: getKnownClearTargetHeight(
       store.conversations.find((conversation) => conversation.id === conversationId),
       store.messagesByConversation[conversationId] ?? [],
-    ) ?? 0,
+    ),
   };
   pendingHistoryClears.set(key, operation);
   return operation;
@@ -521,7 +526,9 @@ export async function clearChatConversationHistory(
       method: 'POST',
       body: {
         forEveryone,
-        targetHeight: operation.targetHeight,
+        ...(operation.targetHeight !== undefined
+          ? { targetHeight: operation.targetHeight }
+          : {}),
       },
     },
   );

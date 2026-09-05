@@ -73,8 +73,13 @@ test('group chat offers local and two-sided deletion plus management log access'
   assert.match(info, /forEveryone/);
   assert.match(api, /pendingHistoryClears/);
   assert.match(api, /targetHeight/);
-  assert.match(api, /getKnownClearTargetHeight\([\s\S]*?\)\s*\?\?\s*0/);
-  assert.match(api, /targetHeight:\s*operation\.targetHeight/);
+  // 本地水位未知时必须**不带** targetHeight：服务端对 undefined 退到会话顶端，
+  // 对 0 走 `clearThrough <= 0` 一条都不清，而客户端仍会清空本地并提示成功。
+  assert.doesNotMatch(api, /getKnownClearTargetHeight\([\s\S]*?\)\s*\?\?\s*0/);
+  assert.match(
+    api,
+    /operation\.targetHeight !== undefined[\s\S]{0,80}targetHeight: operation\.targetHeight/,
+  );
   assert.match(info, /groupLog/);
   assert.match(messages, /deleteForEveryone/);
   assert.match(logScreen, /system/);
