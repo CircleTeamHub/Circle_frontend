@@ -208,6 +208,17 @@ function hasExplicitItems(items: unknown) {
   return Array.isArray(items);
 }
 
+function excludeAliasedMedia(
+  items: StructuredNoteMediaItem[],
+  excluded: StructuredNoteMediaItem[],
+) {
+  const excludedGroups = groupMediaItems(excluded);
+  return items.filter((item) => {
+    const aliases = getMediaAliases(item);
+    return !excludedGroups.some((group) => aliasesOverlap(aliases, group.aliases));
+  });
+}
+
 export function buildNoteSections(note: StructuredNoteInput): NoteSections {
   const explicit = note.sections;
   const legacyMedia = normalizeItems(note.media);
@@ -217,11 +228,18 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
   const explicitMedia = normalizeItems(explicit?.media?.items);
   const explicitShowcase = normalizeItems(explicit?.showcase?.items);
   const legacyShowcaseImages = legacyShowcase.filter((item) => item.type === 'IMAGE');
+  const derivedLegacyMedia =
+    !hasExplicitMedia && hasExplicitShowcase
+      ? excludeAliasedMedia(
+          legacyMedia,
+          explicitShowcase.filter((item) => item.type === 'VIDEO'),
+        )
+      : legacyMedia;
 
   const mediaSections = normalizeNoteMediaSections({
     media: hasExplicitMedia
       ? explicitMedia
-      : [...legacyMedia, ...legacyShowcaseImages],
+      : [...derivedLegacyMedia, ...legacyShowcaseImages],
     showcase: hasExplicitShowcase
       ? explicitShowcase
       : hasExplicitMedia

@@ -242,6 +242,12 @@ function NoteBlockEditorImpl({
           batch.items.forEach((item) => onMediaUploaded?.(item.media));
         }
         if (batch.failedCount) {
+          reportHandledFailure(
+            'noteEditor',
+            'uploadBatch',
+            new Error('note media batch upload failed'),
+            { failed: batch.failedCount, total: acceptedAssets.length, reason: kind },
+          );
           Alert.alert(
             t('notes.editor.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
             t('notes.editor.mediaUploadsFailedMessage', {

@@ -122,3 +122,28 @@ test('getInitialNoteSection keeps real video showcases addressable', () => {
 
   assert.equal(getInitialNoteSection('showcase', sections), 'showcase');
 });
+
+test('partial structured sections keep explicit showcase videos out of derived media', () => {
+  const showcaseVideo = {
+    id: 'showcase-video',
+    type: 'VIDEO' as const,
+    objectKey: 'notes/showcase.mp4',
+    url: 'https://cdn.test/showcase.mp4',
+  };
+  const ordinaryImage = {
+    id: 'ordinary-image',
+    type: 'IMAGE' as const,
+    objectKey: 'notes/photo.jpg',
+    url: 'https://cdn.test/photo.jpg',
+  };
+
+  const sections = buildNoteSections({
+    media: [showcaseVideo, ordinaryImage],
+    sections: {
+      showcase: { items: [showcaseVideo] },
+    },
+  });
+
+  assert.deepEqual(sections.media.items.map((item) => item.url), [ordinaryImage.url]);
+  assert.deepEqual(sections.showcase.items.map((item) => item.url), [showcaseVideo.url]);
+});

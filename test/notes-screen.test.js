@@ -480,7 +480,7 @@ test('EditNoteScreen batches bounded media selection and keeps local previews ou
   assert.match(src, /uploadingSection !== null/);
   assert.match(src, /createNoteMediaUploadOperationGuard/);
   assert.match(src, /VideoDraftPreview/);
-  assert.match(src, /item\.previewUri \?\? item\.posterUrl/);
+  assert.match(src, /item\.type === 'VIDEO' \? item\.posterUrl : item\.previewUri \?\? item\.url/);
   assert.match(src, /key=\{item\.clientId\}/);
 });
 

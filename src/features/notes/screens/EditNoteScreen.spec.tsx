@@ -17,6 +17,7 @@ const mockVideoThumbnailRelease = jest.fn();
 const mockGeneratedVideoThumbnail = { nativeRefType: 'image', release: mockVideoThumbnailRelease };
 const mockVideoPlayerRelease = jest.fn();
 const mockGenerateThumbnails = jest.fn();
+const mockReportHandledFailure = jest.fn();
 let mockRouteId: string | undefined;
 let mockFocusCallback: (() => void | (() => void)) | undefined;
 let mockFocusCleanup: (() => void) | undefined;
@@ -110,6 +111,10 @@ jest.mock('@/services/api/upload', () => ({
   resolveUploadContentType: () => 'image/jpeg',
   sanitizeUploadFilename: (name: string) => name,
   uploadLocalFileToPresignedUrl: (...args: unknown[]) => mockUploadFile(...args),
+}));
+
+jest.mock('@/observability/report-failure', () => ({
+  reportHandledFailure: (...args: unknown[]) => mockReportHandledFailure(...args),
 }));
 
 function createDeferred<T>() {
@@ -495,6 +500,69 @@ test('a replacement route cannot submit note A data as note B before B loads', a
   upload.resolve();
 });
 
+test('a completed save cannot navigate away from a replacement note route', async () => {
+  const save = createDeferred<Awaited<ReturnType<typeof updateNote>>>();
+  mockRouteId = 'note-a';
+  mockFetchNoteDetail.mockImplementation((noteId: string) =>
+    Promise.resolve({
+      title: noteId === 'note-a' ? 'Note A' : 'Note B',
+      contentJson: [], media: [], sections: null, groups: [], pinned: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }),
+  );
+  jest.mocked(updateNote).mockReturnValue(save.promise);
+  const rendered = render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Note A');
+  fireEvent.press(screen.getByText('notes.edit.done'));
+  await waitFor(() => expect(updateNote).toHaveBeenCalledWith('note-a', expect.any(Object)));
+
+  mockRouteId = 'note-b';
+  rendered.rerender(<EditNoteScreen />);
+  await screen.findByDisplayValue('Note B');
+
+  await act(async () => {
+    save.resolve({} as Awaited<ReturnType<typeof updateNote>>);
+    await save.promise;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  });
+
+  expect(mockRouter.back).not.toHaveBeenCalled();
+  expect(screen.getByText('notes.edit.done')).toBeTruthy();
+});
+
+test('a failed save cannot alert over a replacement note route', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const save = createDeferred<Awaited<ReturnType<typeof updateNote>>>();
+  mockRouteId = 'note-a';
+  mockFetchNoteDetail.mockImplementation((noteId: string) =>
+    Promise.resolve({
+      title: noteId === 'note-a' ? 'Note A' : 'Note B',
+      contentJson: [], media: [], sections: null, groups: [], pinned: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }),
+  );
+  jest.mocked(updateNote).mockReturnValue(save.promise);
+  const rendered = render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Note A');
+  fireEvent.press(screen.getByText('notes.edit.done'));
+  await waitFor(() => expect(updateNote).toHaveBeenCalledWith('note-a', expect.any(Object)));
+
+  mockRouteId = 'note-b';
+  rendered.rerender(<EditNoteScreen />);
+  await screen.findByDisplayValue('Note B');
+  await act(async () => {
+    save.reject(new Error('late save failure'));
+    try {
+      await save.promise;
+    } catch {
+      // The component owns the rejection; this await only drains the deferred promise.
+    }
+  });
+
+  expect(alert).not.toHaveBeenCalled();
+  expect(screen.getByText('notes.edit.done')).toBeTruthy();
+});
+
 test('renders a map-selected location as read-only details and clears the saved payload', async () => {
   mockRouteId = 'located-note';
   mockFetchNoteDetail.mockResolvedValue({
@@ -624,6 +692,66 @@ test('saving a legacy URL-only showcase image retains its recovered ordinary med
       }),
     );
   });
+});
+
+test('stored videos without posters render a video fallback instead of an image URL', async () => {
+  mockRouteId = 'video-without-poster';
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Stored video',
+    contentJson: [],
+    media: [{
+      id: 'video-1', type: 'VIDEO', objectKey: 'notes/video.mp4',
+      url: 'https://cdn.example/video.mp4', posterUrl: null, sortOrder: 0,
+    }],
+    sections: {
+      media: { items: [] },
+      showcase: { items: [{
+        id: 'video-1', type: 'VIDEO', objectKey: 'notes/video.mp4',
+        url: 'https://cdn.example/video.mp4', posterUrl: null, sortOrder: 0,
+      }] },
+    },
+    groups: [], pinned: false, createdAt: '2026-01-01T00:00:00.000Z',
+  });
+
+  render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Stored video');
+
+  expect(screen.getByTestId('note-media-video-fallback')).toBeTruthy();
+  expect(
+    screen.queryAllByTestId('note-media-preview-image').some(
+      (node) => node.props.source?.uri === 'https://cdn.example/video.mp4',
+    ),
+  ).toBe(false);
+});
+
+test('reports a redacted aggregate when a section upload batch partially fails', async () => {
+  const uploadError = new Error('https://signed.example/private?token=secret');
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockRequestPermission.mockResolvedValue({ granted: true });
+  mockLaunchPicker.mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'file:///one.jpg' }, { uri: 'file:///two.jpg' }],
+  });
+  mockRequestPresign.mockImplementation(({ filename }: { filename: string }) =>
+    Promise.resolve({
+      uploadUrl: `https://upload.example/${filename}`,
+      fileUrl: `https://cdn.example/${filename}`,
+      key: `notes/${filename}`,
+      requiredHeaders: {},
+    }),
+  );
+  mockUploadFile.mockRejectedValueOnce(uploadError).mockResolvedValueOnce(undefined);
+
+  render(<EditNoteScreen />);
+  fireEvent.press(screen.getByText('notes.edit.addImage'));
+
+  await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(2));
+  expect(mockReportHandledFailure).toHaveBeenCalledWith(
+    'noteEditor',
+    'sectionMediaUploadBatch',
+    expect.objectContaining({ message: 'note media batch upload failed' }),
+    { failed: 1, total: 2, reason: 'media.image' },
+  );
 });
 
 test('unrecoverable legacy media blocks save with an actionable warning', async () => {

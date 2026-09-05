@@ -7,6 +7,7 @@ const mockRequestPermission = jest.fn();
 const mockLaunchPicker = jest.fn();
 const mockRequestPresign = jest.fn();
 const mockUploadFile = jest.fn();
+const mockReportHandledFailure = jest.fn();
 
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: (...args: unknown[]) => mockRequestPermission(...args),
@@ -26,6 +27,10 @@ jest.mock('@/services/api/upload', () => ({
   resolveUploadContentType: () => 'image/jpeg',
   sanitizeUploadFilename: (name: string) => name,
   uploadLocalFileToPresignedUrl: (...args: unknown[]) => mockUploadFile(...args),
+}));
+
+jest.mock('@/observability/report-failure', () => ({
+  reportHandledFailure: (...args: unknown[]) => mockReportHandledFailure(...args),
 }));
 
 jest.mock('@/features/notes/dom/NoteBlockEditor.dom', () => ({
@@ -138,4 +143,24 @@ test('releases a standalone blob picker URL after a failed upload', async () => 
     Object.defineProperty(global, 'window', { configurable: true, value: previousWindow });
     Object.defineProperty(global, 'URL', { configurable: true, value: previousURL });
   }
+});
+
+test('reports a redacted aggregate when standalone media upload fails', async () => {
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockLaunchPicker.mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'file:///failed.jpg', width: 100, height: 80 }],
+  });
+  mockUploadFile.mockRejectedValue(new Error('https://signed.example/private?token=secret'));
+
+  render(<NoteBlockEditor initialContent={null} onContentChange={jest.fn()} />);
+  fireEvent.press(screen.getByTestId('request-image'));
+
+  await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
+  expect(mockReportHandledFailure).toHaveBeenCalledWith(
+    'noteEditor',
+    'uploadBatch',
+    expect.objectContaining({ message: 'note media batch upload failed' }),
+    { failed: 1, total: 1, reason: 'image' },
+  );
 });

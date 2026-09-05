@@ -54,9 +54,9 @@
 
 **Steps:**
 
-1. Write failing source-behavior tests requiring the section to be named “位置”, retaining “选择位置” and “使用当前位置” as clear actions, removing editable duplicate name/address fields and raw coordinate pills, and adding a clear-location action.
+1. Write failing source-behavior tests requiring the section to be named “位置”, retaining map-based “选择位置” as the sole location action, removing “使用当前位置”, editable duplicate name/address fields, and raw coordinate pills, and adding a clear-location action.
 2. Run the focused screen test and confirm failure.
-3. Replace the two free-form location inputs with a compact read-only selected-location card. Show the resolved place name and address with explicit labels, keep map selection/current GPS as mutually understandable acquisition paths, and add removal. Persist the same title/address/latitude/longitude contract.
+3. Replace the two free-form location inputs with a compact read-only selected-location card. Show the resolved place name and address with explicit labels, keep map selection as the only acquisition path, and add removal. Persist the same title/address/latitude/longitude contract.
 4. Refine section descriptions, spacing, media status text, disabled/loading states, and stable render callbacks so title/location edits do not cause avoidable media upload churn. Do not replace the BlockNote editor or change persisted rich-text format.
 5. Re-run the focused screen tests and confirm they pass.
 

@@ -184,6 +184,8 @@ export default function EditNoteScreen() {
   const uploadOperationGuardRef = useRef(createNoteMediaUploadOperationGuard());
   const activeUploadDraftIdsRef = useRef<Set<string>>(new Set());
   const pickerPreviewDisposerRef = useRef(createPickerPreviewDisposer());
+  const saveGenerationRef = useRef(0);
+  const saveInFlightRef = useRef(false);
   const [editorMounted, setEditorMounted] = useState(false);
   const [navigating, setNavigating] = useState(false);
   const [mediaItems, setMediaItems] = useState<EditorNoteMediaDraft[]>([]);
@@ -236,6 +238,18 @@ export default function EditNoteScreen() {
     resetUploadOwnership();
     return invalidateUploadOwnership;
   }, [id, invalidateUploadOwnership, resetUploadOwnership]);
+
+  useEffect(() => {
+    const routeGeneration = ++saveGenerationRef.current;
+    saveInFlightRef.current = false;
+    setIsSubmitting(false);
+    setNavigating(false);
+    return () => {
+      if (saveGenerationRef.current === routeGeneration) {
+        saveGenerationRef.current += 1;
+      }
+    };
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -482,6 +496,16 @@ export default function EditNoteScreen() {
           setShowcaseItems((current) => reconcileNoteMediaDrafts(current, batch.items));
         }
         if (batch.failedCount) {
+          reportHandledFailure(
+            'noteEditor',
+            'sectionMediaUploadBatch',
+            new Error('note media batch upload failed'),
+            {
+              failed: batch.failedCount,
+              total: acceptedAssets.length,
+              reason: `${target}.${kind}`,
+            },
+          );
           Alert.alert(
             t('notes.editor.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
             t('notes.editor.mediaUploadsFailedMessage', {
@@ -573,6 +597,7 @@ export default function EditNoteScreen() {
       loading ||
       !isRouteDataReady ||
       isSubmitting ||
+      saveInFlightRef.current ||
       uploadingSection !== null ||
       !canSubmitNoteMedia(mediaItems) ||
       !canSubmitNoteMedia(showcaseItems)
@@ -589,6 +614,8 @@ export default function EditNoteScreen() {
     }
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
+    saveInFlightRef.current = true;
+    const saveGeneration = saveGenerationRef.current;
     setIsSubmitting(true);
     try {
       const currentBlocks = getTextOnlyBlocks(blocksRef.current);
@@ -635,8 +662,11 @@ export default function EditNoteScreen() {
       } else {
         await createNote({ ...input, status: 'ACTIVE' });
       }
+      if (saveGenerationRef.current !== saveGeneration) return;
       navigateBack();
     } catch (error) {
+      if (saveGenerationRef.current !== saveGeneration) return;
+      saveInFlightRef.current = false;
       setIsSubmitting(false);
       const fallback = t('notes.edit.saveFailedMessage', {
         defaultValue: '保存失败，请稍后重试',
@@ -793,7 +823,8 @@ export default function EditNoteScreen() {
     return (
       <View style={s.mediaPreviewGrid}>
         {items.map((item) => {
-          const thumbUri = item.previewUri ?? item.posterUrl ?? item.url;
+          const thumbUri =
+            item.type === 'VIDEO' ? item.posterUrl : item.previewUri ?? item.url;
           return (
             <View
               key={item.clientId}
@@ -802,9 +833,17 @@ export default function EditNoteScreen() {
               {item.type === 'VIDEO' && item.previewUri ? (
                 <VideoDraftPreview uri={item.previewUri} />
               ) : thumbUri ? (
-                <Image source={{ uri: thumbUri }} style={s.mediaThumb} contentFit="cover" />
+                <Image
+                  testID="note-media-preview-image"
+                  source={{ uri: thumbUri }}
+                  style={s.mediaThumb}
+                  contentFit="cover"
+                />
               ) : (
-                <View style={s.mediaThumbFallback}>
+                <View
+                  testID={item.type === 'VIDEO' ? 'note-media-video-fallback' : undefined}
+                  style={s.mediaThumbFallback}
+                >
                   <Ionicons
                     name={item.type === 'VIDEO' ? 'videocam-outline' : 'image-outline'}
                     size={24}
