@@ -434,7 +434,8 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /const SELF_INFO_ROW_IDS = \['moments'\] as const;/);
-  assert.match(source, /const NON_FRIEND_INFO_ROW_IDS = \['moments', 'giftCoins', 'moreInfo'\] as const;/);
+  assert.match(source, /const NON_FRIEND_INFO_ROW_IDS = \['moments', 'moreInfo'\] as const;/);
+  assert.doesNotMatch(source, /giftCoins/);
   assert.match(source, /friendStatus === 'ACCEPTED'/);
   assert.match(source, /const showProfileActions = !isCurrentUser;/);
   assert.match(source, /t\('contacts\.accountId', \{ id: profile\.accountId \}\)/);

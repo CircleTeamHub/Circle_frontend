@@ -565,6 +565,20 @@ test("app settings detail screens include the requested rows", () => {
   }
 });
 
+test("privacy settings use the global burn-after-reading label", () => {
+  const zh = JSON.parse(
+    fs.readFileSync(
+      path.join(process.cwd(), "src/i18n/locales/zh.json"),
+      "utf8",
+    ),
+  );
+
+  assert.equal(
+    zh.settingsDetails.privacy.selfDestruct,
+    "全局阅后即焚",
+  );
+});
+
 test("about settings screen presents real product content", () => {
   const source = fs.readFileSync(
     path.join(

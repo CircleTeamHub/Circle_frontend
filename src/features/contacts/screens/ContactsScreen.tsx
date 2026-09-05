@@ -38,8 +38,8 @@ const QUICK_ACTION_KEYS: {
   iconBg: string;
 }[] = [
   { id: 'new-friends', icon: 'person-add', key: 'contacts.newFriends', iconBg: '#F97316' },
-  { id: 'seats', icon: 'chatbubble', key: 'contacts.seats', iconBg: '#3B82F6' },
   { id: 'groups', icon: 'chatbubbles', key: 'contacts.groups', iconBg: '#22C55E' },
+  { id: 'seats', icon: 'chatbubble', key: 'contacts.seats', iconBg: '#3B82F6' },
   { id: 'circles', icon: 'people-circle', key: 'contacts.circles', iconBg: '#14B8A6' },
   { id: 'tags', icon: 'pricetag', key: 'contacts.tags', iconBg: '#A855F7' },
 ];

@@ -48,3 +48,36 @@ test('note location picker store carries selected coordinates back to edit scree
   assert.match(src, /setPickedLocation/);
   assert.match(src, /consumePickedLocation/);
 });
+
+test('Android notes keeps in-app map selection without invoking Google settings', () => {
+  const editor = read('src/features/notes/screens/EditNoteScreen.tsx');
+  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const mapConfig = read('src/features/location/utils/location-map.ts');
+
+  // expo-location defaults this option to true and may launch the Google Play
+  // Services location-settings resolution UI on Android.
+  assert.match(
+    editor,
+    /getCurrentPositionAsync\(\{[\s\S]*?mayShowUserSettingsDialog:\s*false/,
+  );
+  assert.match(
+    chat,
+    /getCurrentPositionAsync\(\{[\s\S]*?mayShowUserSettingsDialog:\s*false/,
+  );
+
+  // Android keeps the same in-app map entry; only the Google settings handoff
+  // is disabled. The picker itself uses non-Google basemap providers.
+  assert.match(
+    editor,
+    /onPress=\{handleOpenLocationPicker\}[\s\S]*?notes\.edit\.pickLocation/,
+  );
+  assert.doesNotMatch(
+    editor,
+    /Platform\.OS !== 'android' \? \([\s\S]*?onPress=\{handleOpenLocationPicker\}/,
+  );
+  assert.match(mapConfig, /https:\/\/basemaps\.cartocdn\.com/);
+  assert.doesNotMatch(
+    mapConfig,
+    /https?:\/\/[^\s'"`]*(?:googleapis\.com|google\.com)/i,
+  );
+});

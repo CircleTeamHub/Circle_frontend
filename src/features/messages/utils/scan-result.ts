@@ -61,17 +61,21 @@ export function resolveMessageScanResult(data: string): MessageScanAction {
   if (loginToken) {
     return {
       type: 'route',
-      href: { pathname: '/qr-login', params: { t: loginToken } },
+      href: {
+        pathname: '/(tabs)/messages/qr-login',
+        params: { t: loginToken },
+      },
     };
   }
 
-  // 二维码令牌(名片/群/圈子)优先:扫到本应用的 qr 载荷直接进落地页,
-  // 由落地页 resolve 预览 + 用户确认后再执行加入。
+  // App 内扫码必须留在 messages 栈内。ScanScreen 会 replace 当前摄像头页；若跳到
+  // 顶层 /qr，会跨导航器丢失返回历史，加好友申请完成后便无法可靠退出结果页。
+  // 外部系统相机的深链仍由顶层 /qr 接收。
   const qrToken = parseQrToken(value);
   if (qrToken) {
     return {
       type: 'route',
-      href: { pathname: '/qr', params: { t: qrToken } },
+      href: { pathname: '/(tabs)/messages/qr', params: { t: qrToken } },
     };
   }
 

@@ -57,10 +57,9 @@ const INFO_ROW_IDS = [
   'tags',
   'description',
   'permission',
-  'giftCoins',
   'moreInfo',
 ] as const;
-const NON_FRIEND_INFO_ROW_IDS = ['moments', 'giftCoins', 'moreInfo'] as const;
+const NON_FRIEND_INFO_ROW_IDS = ['moments', 'moreInfo'] as const;
 const SELF_INFO_ROW_IDS = ['moments'] as const;
 
 type InfoRowId = (typeof INFO_ROW_IDS)[number];
@@ -70,7 +69,7 @@ type InfoRowId = (typeof INFO_ROW_IDS)[number];
 const INFO_ROW_GROUPS = [
   ['moments'],
   ['setRemark', 'tags', 'description'],
-  ['permission', 'giftCoins', 'moreInfo'],
+  ['permission', 'moreInfo'],
 ] as const;
 
 interface InfoRowItem {
@@ -89,7 +88,6 @@ const ROW_ICON: Record<InfoRowId, keyof typeof Ionicons.glyphMap> = {
   tags: 'pricetags',
   description: 'document-text',
   permission: 'eye',
-  giftCoins: 'gift',
   moreInfo: 'information-circle',
 };
 
@@ -99,7 +97,6 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
   tags: 'success',
   description: 'orange',
   permission: 'deepPurple',
-  giftCoins: 'warning',
   moreInfo: 'purple',
 };
 

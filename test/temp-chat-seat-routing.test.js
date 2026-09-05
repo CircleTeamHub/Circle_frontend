@@ -16,6 +16,10 @@ test('seat management entry points route to the temp chat list screen', () => {
   assert.match(messagesSource, /id === "seatManagement"[\s\S]{0,120}router\.push\("\/\(tabs\)\/messages\/temp-chats"\)/);
   assert.doesNotMatch(messagesSource, /id === "scan" \|\| id === "seatManagement"/);
   assert.match(contactsSource, /id === 'seats'[\s\S]{0,120}router\.push\('\/\(tabs\)\/contacts\/seats'\)/);
+  assert.match(
+    contactsSource,
+    /id: 'new-friends'[\s\S]*id: 'groups'[\s\S]*id: 'seats'[\s\S]*id: 'circles'/,
+  );
 });
 
 test('the app presents the former seat feature as temporary group chats', () => {

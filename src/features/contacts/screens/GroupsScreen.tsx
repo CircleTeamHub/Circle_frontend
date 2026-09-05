@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
-  SectionList,
-  SectionListData,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +19,10 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchMyCircles } from '@/services/api/circles';
 import type { MyCircle } from '@/types';
 import { useAuthStore } from '@/stores/authStore';
+import {
+  filterGroupList,
+  type GroupListFilter,
+} from '@/features/contacts/utils/group-list-filter';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 /** 自研栈下「群聊」= 圈子;沿用旧字段名以少动渲染层。 */
@@ -28,6 +33,7 @@ interface GroupItem {
   memberCount: number;
   introduction: string | null;
   ownerUserID: string;
+  myRole: MyCircle['myRole'];
 }
 
 function circleToGroupItem(circle: MyCircle): GroupItem {
@@ -38,18 +44,47 @@ function circleToGroupItem(circle: MyCircle): GroupItem {
     memberCount: circle.memberCount,
     introduction: circle.description || null,
     ownerUserID: circle.ownerID,
+    myRole: circle.myRole,
   };
 }
 
-interface GroupSection {
-  title: string;
-  data: GroupItem[];
-}
-
 const s = StyleSheet.create({
-  sectionHeader: {
-    paddingTop: Spacing.lg,
+  controls: {
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  filterButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: Radius.md,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.sm,
+  },
+  searchBox: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: Spacing.xs,
   },
   groupRow: {
     flexDirection: 'row',
@@ -93,6 +128,9 @@ export default function GroupsScreen() {
   const currentUserID = useAuthStore((state) => state.user?.id ?? null);
 
   const [groups, setGroups] = useState<GroupItem[]>([]);
+  const [activeFilter, setActiveFilter] =
+    useState<GroupListFilter>('created');
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -163,31 +201,28 @@ export default function GroupsScreen() {
     }
   }, [loadGroups]);
 
-  const sections = useMemo<GroupSection[]>(() => {
-    if (!currentUserID) {
-      return [{ title: t('contacts.groupsScreen.myJoined'), data: groups }];
-    }
+  const filterItems = useMemo(
+    () => [
+      {
+        id: 'created' as const,
+        label: t('contacts.groupsScreen.myCreated'),
+      },
+      {
+        id: 'joined' as const,
+        label: t('contacts.groupsScreen.myJoined'),
+      },
+      {
+        id: 'managed' as const,
+        label: t('contacts.groupsScreen.myManaged'),
+      },
+    ],
+    [t],
+  );
 
-    // 拆"我创建"与"我加入"两段。
-    const created: GroupItem[] = [];
-    const joined: GroupItem[] = [];
-    for (const group of groups) {
-      if (group.ownerUserID === currentUserID) {
-        created.push(group);
-      } else {
-        joined.push(group);
-      }
-    }
-
-    const result: GroupSection[] = [];
-    if (created.length > 0) {
-      result.push({ title: t('contacts.groupsScreen.myCreated'), data: created });
-    }
-    if (joined.length > 0) {
-      result.push({ title: t('contacts.groupsScreen.myJoined'), data: joined });
-    }
-    return result;
-  }, [groups, currentUserID, t]);
+  const visibleGroups = useMemo(
+    () => filterGroupList(groups, activeFilter, currentUserID, query),
+    [activeFilter, currentUserID, groups, query],
+  );
 
   const d = useMemo(
     () => ({
@@ -199,9 +234,29 @@ export default function GroupsScreen() {
         paddingHorizontal: Spacing.lg,
         paddingBottom: insets.bottom + Spacing.xl,
       },
-      sectionTitle: {
+      filterButton: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      filterButtonActive: {
+        backgroundColor: colors.brandPurple,
+        borderColor: colors.brandPurple,
+      },
+      filterButtonText: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+        fontWeight: '600' as const,
+      },
+      filterButtonTextActive: {
+        color: colors.white,
+      },
+      searchBox: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      searchInput: {
         color: colors.text,
-        ...Typography.h3,
+        ...Typography.bodyRegular,
       },
       groupName: {
         color: colors.text,
@@ -255,6 +310,7 @@ export default function GroupsScreen() {
     [router],
   );
 
+  const hasSearchQuery = query.trim().length > 0;
   const emptyState =
     loading ? (
       <View style={s.stateBlock}>
@@ -274,27 +330,90 @@ export default function GroupsScreen() {
         </Pressable>
       </View>
     ) : (
-      <Text style={d.emptyText}>{t('contacts.groupsScreen.empty')}</Text>
+      <Text style={d.emptyText}>
+        {hasSearchQuery
+          ? t('contacts.groupsScreen.noMatches')
+          : t('contacts.groupsScreen.empty')}
+      </Text>
     );
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('contacts.groupsScreen.title')} />
-      <SectionList
-        sections={sections}
+      <View style={s.controls}>
+        <View style={[s.searchBox, d.searchBox]}>
+          <Ionicons
+            name="search-outline"
+            size={19}
+            color={colors.textSecondary}
+          />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            style={[s.searchInput, d.searchInput]}
+            placeholder={t('contacts.groupsScreen.searchPlaceholder')}
+            placeholderTextColor={colors.textSecondary}
+            returnKeyType="search"
+            autoCorrect={false}
+            clearButtonMode="never"
+            accessibilityLabel={t('contacts.groupsScreen.searchPlaceholder')}
+          />
+          {query.length > 0 ? (
+            <Pressable
+              style={s.clearButton}
+              onPress={() => setQuery('')}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.clear')}
+            >
+              <Ionicons
+                name="close-circle"
+                size={19}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <View style={s.filterRow} accessibilityRole="tablist">
+          {filterItems.map((item) => {
+            const selected = activeFilter === item.id;
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => setActiveFilter(item.id)}
+                style={({ pressed }) => [
+                  s.filterButton,
+                  d.filterButton,
+                  selected && d.filterButtonActive,
+                  pressed && { opacity: 0.78 },
+                ]}
+                accessibilityRole="tab"
+                accessibilityLabel={item.label}
+                accessibilityState={{ selected }}
+              >
+                <Text
+                  style={[
+                    d.filterButtonText,
+                    selected && d.filterButtonTextActive,
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.82}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <FlatList
+        data={visibleGroups}
         keyExtractor={(item) => item.groupID}
         contentContainerStyle={d.listContent}
-        stickySectionHeadersEnabled={false}
-        renderSectionHeader={({
-          section,
-        }: {
-          section: SectionListData<GroupItem, GroupSection>;
-        }) => (
-          <View style={s.sectionHeader}>
-            <Text style={d.sectionTitle}>{section.title}</Text>
-          </View>
-        )}
-        renderItem={({ item, index, section }) => (
+        renderItem={({ item, index }) => (
           <View>
             <Pressable style={s.groupRow} onPress={() => handleOpenGroup(item)}>
               <GroupChatAvatar
@@ -320,11 +439,13 @@ export default function GroupsScreen() {
                 ) : null}
               </View>
             </Pressable>
-            {index < section.data.length - 1 ? <Divider /> : null}
+            {index < visibleGroups.length - 1 ? <Divider /> : null}
           </View>
         )}
         ListEmptyComponent={emptyState}
         showsVerticalScrollIndicator={false}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
         refreshing={refreshing}
         onRefresh={handleRefreshGroups}
       />
