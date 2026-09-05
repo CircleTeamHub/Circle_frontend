@@ -66,6 +66,32 @@ test('CI runs only the fast credential-free testing contract gate', () => {
   assert.doesNotMatch(ci, /npm run e2e:all|npm run load:|npm run perf:/);
 });
 
+// `npm run ci` 是「本地跑一遍等同于 CI」的承诺，但它和 ci.yml 是两份各自维护的
+// 清单，漂移是静默的：test:behavior 长期只有安卓构建工作流跑得到，PR 上一条
+// jest 都不跑，直到 main 的预生产构建红了约一天才暴露。这里把方向钉死 ——
+// `npm run ci` 里的每个套件都必须出现在 PR 工作流里。反向不要求：CI 可以多跑
+// （test:testing-tools、web export、bundle 断言都只在 CI 里）。
+test('the pull-request workflow runs every suite npm run ci promises', () => {
+  const ci = read('.github/workflows/ci.yml');
+  const { scripts } = JSON.parse(read('package.json'));
+  const commands = scripts.ci
+    .split('&&')
+    .map((command) => command.trim())
+    .filter(Boolean);
+
+  assert.ok(
+    commands.includes('npm run test:behavior'),
+    'npm run ci no longer runs the jest behavior suite',
+  );
+
+  for (const command of commands) {
+    assert.ok(
+      new RegExp(`run:\\s*${command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(ci),
+      `.github/workflows/ci.yml has no step running "${command}", so a pull request would not exercise it`,
+    );
+  }
+});
+
 test('root README links the complete testing guides', () => {
   const readme = read('README.md');
   assert.match(readme, /e2e\/README\.md/);
