@@ -621,6 +621,24 @@ export function systemNoticeText(content: Record<string, unknown>): string {
         duration: formatBurnDuration(seconds),
       });
     }
+    // 以下四种由后端的群管理动作写入。载荷只有 kind + actorId(+ targetUserId /
+    // role),没有昵称——所以文案一律被动、不点名,与上面的「有成员退出群聊」
+    // 同一口径;真要点名也得先拿 ID 换昵称,那不是这个纯函数该做的事。
+    case 'history-cleared':
+      return i18n.t('im.notification.historyCleared');
+    case 'member-removed':
+      // 与旧的踢人提示是同一件事,复用同一条文案,别让两处措辞漂移。
+      return i18n.t('im.notification.memberKicked');
+    case 'member-role-changed': {
+      const role = typeof content['role'] === 'string' ? content['role'] : '';
+      if (role === 'ADMIN') return i18n.t('im.notification.memberPromoted');
+      if (role === 'MEMBER') return i18n.t('im.notification.memberDemoted');
+      // 后端目前只发这两种。多出第三种角色时宁可说得笼统,也不能因为落进
+      // default 而渲染成一条空白系统消息(它照样占位、照样计未读)。
+      return i18n.t('im.notification.memberRoleChanged');
+    }
+    case 'group-notice-updated':
+      return i18n.t('im.notification.groupNoticeUpdated');
     default:
       return '';
   }
