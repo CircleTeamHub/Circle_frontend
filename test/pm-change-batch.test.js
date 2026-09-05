@@ -66,10 +66,13 @@ test('group chat offers local and two-sided deletion plus management log access'
   const messages = read('src/features/messages/screens/MessagesScreen.tsx');
   const logScreen = read('src/features/chat/screens/GroupLogScreen.tsx');
   const logRoute = read('app/(tabs)/messages/group-log.tsx');
+  const api = read('src/chat-core/api.ts');
 
   assert.match(info, /clearHistoryForMe/);
   assert.match(info, /clearHistoryForEveryone/);
   assert.match(info, /forEveryone/);
+  assert.match(api, /pendingHistoryClears/);
+  assert.match(api, /targetHeight/);
   assert.match(info, /groupLog/);
   assert.match(messages, /deleteForEveryone/);
   assert.match(logScreen, /system/);

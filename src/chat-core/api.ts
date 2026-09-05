@@ -9,6 +9,7 @@ import type {
 } from './protocol';
 import { resolveLocalDaySearchWindow } from '../features/chat/chat-history-date-window';
 import { withoutLocallyDeleted } from './deleted-messages';
+import { getKnownClearTargetHeight } from './clear-history-target';
 import {
   deleteLocalMessagesBelow,
   readRecentLocalMessages,
@@ -33,6 +34,45 @@ import { useChatStore } from './store';
 function sessionGate(): () => boolean {
   const epoch = useAuthStore.getState().sessionEpoch;
   return () => useAuthStore.getState().sessionEpoch === epoch;
+}
+
+type PendingHistoryClear = { targetHeight?: number };
+const pendingHistoryClears = new Map<string, PendingHistoryClear>();
+let pendingHistoryClearEpoch: number | null = null;
+
+function getPendingHistoryClear(
+  conversationId: string,
+  forEveryone: boolean,
+): PendingHistoryClear {
+  const epoch = useAuthStore.getState().sessionEpoch;
+  if (pendingHistoryClearEpoch !== epoch) {
+    pendingHistoryClears.clear();
+    pendingHistoryClearEpoch = epoch;
+  }
+  const key = `${conversationId}:${forEveryone ? 'everyone' : 'self'}`;
+  const pending = pendingHistoryClears.get(key);
+  if (pending) return pending;
+
+  const store = useChatStore.getState();
+  const operation = {
+    targetHeight: getKnownClearTargetHeight(
+      store.conversations.find((conversation) => conversation.id === conversationId),
+      store.messagesByConversation[conversationId] ?? [],
+    ),
+  };
+  pendingHistoryClears.set(key, operation);
+  return operation;
+}
+
+function completePendingHistoryClear(
+  conversationId: string,
+  forEveryone: boolean,
+  operation: PendingHistoryClear,
+) {
+  const key = `${conversationId}:${forEveryone ? 'everyone' : 'self'}`;
+  if (pendingHistoryClears.get(key) === operation) {
+    pendingHistoryClears.delete(key);
+  }
 }
 
 /** 拉全量会话列表并写入 store(消息页 focus / 下拉刷新用)。 */
@@ -473,10 +513,21 @@ export async function clearChatConversationHistory(
   options: { forEveryone?: boolean } = {},
 ): Promise<void> {
   const sameSession = sessionGate();
+  const forEveryone = options.forEveryone ?? false;
+  const operation = getPendingHistoryClear(conversationId, forEveryone);
   const result = await apiClient<{ clearedBeforeHeight?: number }>(
     `/chat/conversations/${conversationId}/clear`,
-    { method: 'POST', body: { forEveryone: options.forEveryone ?? false } },
+    {
+      method: 'POST',
+      body: {
+        forEveryone,
+        ...(operation.targetHeight !== undefined
+          ? { targetHeight: operation.targetHeight }
+          : {}),
+      },
+    },
   );
+  completePendingHistoryClear(conversationId, forEveryone, operation);
   if (sameSession()) {
     // 带上服务端的权威水位:在途的历史请求/延迟的 chat:msg 会在清空之后
     // 落地,没有水位挡的话它们把刚清掉的时间线原样填回来。
