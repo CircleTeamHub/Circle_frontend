@@ -589,7 +589,7 @@ export function mapChatMessageDtosToUI(
 }
 
 /** 结构化系统消息 → 本地化文案(im.notification.* 词表;未知 kind 兜底空串隐藏)。 */
-function systemNoticeText(content: Record<string, unknown>): string {
+export function systemNoticeText(content: Record<string, unknown>): string {
   const kind = typeof content['kind'] === 'string' ? content['kind'] : '';
   switch (kind) {
     case 'member-joined': {

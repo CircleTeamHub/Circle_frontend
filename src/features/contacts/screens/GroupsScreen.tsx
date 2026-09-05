@@ -14,11 +14,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import { FilterTabs } from '@/components/ui/filter-tabs';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchMyCircles } from '@/services/api/circles';
 import type { MyCircle } from '@/types';
-import { useAuthStore } from '@/stores/authStore';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
+import { createGroupsRequestGuard } from '@/features/contacts/groups-request-guard';
 
 /** 自研栈下「群聊」= 圈子;沿用旧字段名以少动渲染层。 */
 interface GroupItem {
@@ -28,6 +30,7 @@ interface GroupItem {
   memberCount: number;
   introduction: string | null;
   ownerUserID: string;
+  myRole: MyCircle['myRole'];
 }
 
 function circleToGroupItem(circle: MyCircle): GroupItem {
@@ -38,12 +41,26 @@ function circleToGroupItem(circle: MyCircle): GroupItem {
     memberCount: circle.memberCount,
     introduction: circle.description || null,
     ownerUserID: circle.ownerID,
+    myRole: circle.myRole,
   };
 }
 
 interface GroupSection {
   title: string;
   data: GroupItem[];
+}
+
+type GroupCategory = 'new' | 'joined' | 'created' | 'managed';
+
+const EMPTY_GROUPS_BY_CATEGORY: Record<GroupCategory, GroupItem[]> = {
+  new: [],
+  joined: [],
+  created: [],
+  managed: [],
+};
+
+function dedupeCircles(circles: MyCircle[]) {
+  return [...new Map(circles.map((circle) => [circle.id, circle])).values()];
 }
 
 const s = StyleSheet.create({
@@ -81,6 +98,10 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
   },
+  categoryTabs: {
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
 });
 
 export default function GroupsScreen() {
@@ -88,33 +109,58 @@ export default function GroupsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
 
-  // 当前账号 ID 决定哪些群是"我创建的"（ownerUserID === 我）。
-  const currentUserID = useAuthStore((state) => state.user?.id ?? null);
-
-  const [groups, setGroups] = useState<GroupItem[]>([]);
+  const [activeCategory, setActiveCategory] = useState<GroupCategory>('joined');
+  const [groupsState, setGroupsState] = useState(() => ({
+    sessionEpoch,
+    groupsByCategory: EMPTY_GROUPS_BY_CATEGORY,
+  }));
+  const groupsByCategory =
+    groupsState.sessionEpoch === sessionEpoch
+      ? groupsState.groupsByCategory
+      : EMPTY_GROUPS_BY_CATEGORY;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  const requestGuardRef = useRef(createGroupsRequestGuard());
 
   const loadGroups = useCallback(
     async (signal?: { cancelled: boolean }) => {
-      const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
+      const token = requestGuardRef.current.begin(sessionEpoch);
+      const isCancelled = () =>
+        Boolean(signal?.cancelled) ||
+        !mountedRef.current ||
+        !requestGuardRef.current.isActive(
+          token,
+          useAuthStore.getState().sessionEpoch,
+        );
       setLoading(true);
       try {
-        // created/joined 两个 tab 并发拉全量,按 id 去重(自研栈 群=圈子)。
-        const [created, joined] = await Promise.all([
-          fetchMyCircles('created'),
+        const [applied, joined, created] = await Promise.all([
+          fetchMyCircles('applied'),
           fetchMyCircles('joined'),
+          fetchMyCircles('created'),
         ]);
         if (isCancelled()) return;
-        const byId = new Map<string, MyCircle>();
-        for (const circle of [...created, ...joined]) {
-          byId.set(circle.id, circle);
-        }
-        setGroups([...byId.values()].map(circleToGroupItem));
+        const createdIDs = new Set(created.map((circle) => circle.id));
+        const allActive = dedupeCircles([...created, ...joined]);
+        const managed = allActive.filter(
+          (circle) => circle.myRole === 'OWNER' || circle.myRole === 'ADMIN',
+        );
+        setGroupsState({
+          sessionEpoch: token.sessionEpoch,
+          groupsByCategory: {
+            new: dedupeCircles(applied).map(circleToGroupItem),
+            joined: dedupeCircles(
+              joined.filter((circle) => !createdIDs.has(circle.id)),
+            ).map(circleToGroupItem),
+            created: dedupeCircles(created).map(circleToGroupItem),
+            managed: managed.map(circleToGroupItem),
+          },
+        });
         setError(null);
       } catch (caughtError) {
         if (isCancelled()) return;
@@ -126,7 +172,7 @@ export default function GroupsScreen() {
         }
       }
     },
-    [t],
+    [sessionEpoch, t],
   );
 
   useEffect(() => {
@@ -144,12 +190,14 @@ export default function GroupsScreen() {
     }, [loadGroups]),
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    const requestGuard = requestGuardRef.current;
+    return () => {
       mountedRef.current = false;
-    },
-    [],
-  );
+      requestGuard.invalidate();
+    };
+  }, []);
 
   const handleRefreshGroups = useCallback(async () => {
     if (refreshInFlightRef.current) return;
@@ -163,31 +211,23 @@ export default function GroupsScreen() {
     }
   }, [loadGroups]);
 
+  const categories = useMemo(
+    () => [
+      { id: 'new' as const, label: t('contacts.groupsScreen.newGroups') },
+      { id: 'joined' as const, label: t('contacts.groupsScreen.myJoined') },
+      { id: 'created' as const, label: t('contacts.groupsScreen.myCreated') },
+      { id: 'managed' as const, label: t('contacts.groupsScreen.myManaged') },
+    ],
+    [t],
+  );
+
   const sections = useMemo<GroupSection[]>(() => {
-    if (!currentUserID) {
-      return [{ title: t('contacts.groupsScreen.myJoined'), data: groups }];
-    }
-
-    // 拆"我创建"与"我加入"两段。
-    const created: GroupItem[] = [];
-    const joined: GroupItem[] = [];
-    for (const group of groups) {
-      if (group.ownerUserID === currentUserID) {
-        created.push(group);
-      } else {
-        joined.push(group);
-      }
-    }
-
-    const result: GroupSection[] = [];
-    if (created.length > 0) {
-      result.push({ title: t('contacts.groupsScreen.myCreated'), data: created });
-    }
-    if (joined.length > 0) {
-      result.push({ title: t('contacts.groupsScreen.myJoined'), data: joined });
-    }
-    return result;
-  }, [groups, currentUserID, t]);
+    const active = categories.find((category) => category.id === activeCategory);
+    return [{
+      title: active?.label ?? '',
+      data: groupsByCategory[activeCategory],
+    }];
+  }, [activeCategory, categories, groupsByCategory]);
 
   const d = useMemo(
     () => ({
@@ -285,6 +325,22 @@ export default function GroupsScreen() {
         keyExtractor={(item) => item.groupID}
         contentContainerStyle={d.listContent}
         stickySectionHeadersEnabled={false}
+        ListHeaderComponent={
+          <View style={s.categoryTabs}>
+            <FilterTabs
+              tabs={categories.map((category) => category.label)}
+              activeIndex={categories.findIndex(
+                (category) => category.id === activeCategory,
+              )}
+              onTabPress={(index) => {
+                const category = categories[index];
+                if (category) setActiveCategory(category.id);
+              }}
+              scrollable
+              compact
+            />
+          </View>
+        }
         renderSectionHeader={({
           section,
         }: {

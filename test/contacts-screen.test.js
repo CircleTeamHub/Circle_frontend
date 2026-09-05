@@ -127,7 +127,7 @@ test('contacts list screens support pull-to-refresh', () => {
     );
     assert.match(
       screen.source,
-      /if \(!mountedRef\.current\) return;|const isCancelled = \(\) => Boolean\(signal\?\.cancelled\) \|\| !mountedRef\.current/,
+      /if \(!mountedRef\.current\) return;|const isCancelled = \(\) =>[\s\S]{0,160}!mountedRef\.current/,
       `${screen.name} should guard load completion by mount state`,
     );
     assert.match(

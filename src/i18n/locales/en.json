@@ -520,6 +520,12 @@
     "burn1m": "1 minute",
     "burn5m": "5 minutes",
     "clearHistory": "Clear chat history",
+    "clearHistoryForMe": "Delete for me",
+    "clearHistoryForEveryone": "Delete for everyone",
+    "groupLog": "Group log",
+    "groupLogLoadFailed": "Failed to load group log",
+    "noGroupLog": "No group activity yet",
+    "groupActivity": "Group activity",
     "clearHistoryWarning": "This will permanently delete all messages in this conversation.",
     "clear": "Clear",
     "deleteFriend": "Remove Contact",
@@ -802,7 +808,10 @@
       "categoryTitle": "Friend Categories",
       "categoryDesc": "View friends by tags for quick access to specific groups.",
       "friendCount": "{{count}} friends",
-      "viewByTag": "View friends by tag"
+      "viewByTag": "View friends by tag",
+      "addTag": "Create tag",
+      "tagNamePlaceholder": "Enter a tag name",
+      "createFailedTitle": "Could not create tag"
     },
     "tagDetail": {
       "fallbackTitle": "Tag Friends",
@@ -814,8 +823,10 @@
     },
     "groupsScreen": {
       "title": "Groups",
+      "newGroups": "New Groups",
       "myCreated": "Groups I Created",
       "myJoined": "Groups I Joined",
+      "myManaged": "Groups I Manage",
       "memberCount": "{{count}} members",
       "empty": "No groups",
       "loading": "Loading groups",
@@ -1126,6 +1137,7 @@
       "pleaseSelect": "Please select",
       "expiryLabel": "Post expiry",
       "expiryPickerTitle": "Choose post expiry",
+      "expiry6h": "Expires in 6 hours",
       "expiry24h": "Expires in 24 hours",
       "expiry3d": "Expires in 3 days",
       "expiry7d": "Expires in 7 days",
@@ -1526,7 +1538,7 @@
     "notes": "Notes",
     "viewNotes": "View",
     "notLoggedIn": "Not logged in",
-    "notBound": "Not set",
+    "notBound": "Not filled in",
     "vipLevel": "VIP Level",
     "reputationValue": "Reputation",
     "share": "Share",
@@ -1837,7 +1849,7 @@
     "phonePlaceholder": "Enter phone number",
     "qq": "QQ",
     "qqPlaceholder": "Enter QQ number",
-    "notBound": "Not set",
+    "notBound": "Not filled in",
     "accountId": "Account ID",
     "tapToChange": "Tap to view",
     "accountIdNotSupported": "Account IDs are assigned by the system and cannot be changed.",
@@ -1913,6 +1925,9 @@
       },
       "notifications": {
         "label": "Notifications"
+      },
+      "autoReply": {
+        "label": "Direct-message auto reply"
       },
       "appearance": {
         "label": "Display"
@@ -2028,6 +2043,15 @@
       "circleRingtone": "Circle Notification Ringtone",
       "circleDefault": "Circle Default"
     },
+    "autoReply": {
+      "title": "Direct-message auto reply",
+      "enabled": "Enable auto reply",
+      "help": "Automatically reply to direct messages, at most once per conversation every 30 seconds.",
+      "placeholder": "Enter an automatic reply",
+      "loadFailed": "Could not load auto-reply settings",
+      "saveFailed": "Could not save auto-reply settings",
+      "unsaved": "You have unsaved changes"
+    },
     "appearance": {
       "title": "Display",
       "themeMode": "Theme Mode",
@@ -2055,6 +2079,7 @@
       "showOriginalGroupNameHint": "When enabled: remark name (original group nickname)",
       "pinnedFoldCount": "Pinned Fold Count",
       "pinnedFoldCountHint": "Show the first N pinned conversations and fold the rest",
+      "showCollapsedPinned": "Show {{count}} more pinned conversations",
       "unlimited": "Unlimited",
       "batteryOptimization": "Battery Optimization Reminder",
       "batteryOptimizationHint": "Android only. When off, background permission guidance will no longer pop up"

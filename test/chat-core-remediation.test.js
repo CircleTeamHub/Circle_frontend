@@ -162,7 +162,9 @@ test('swipe delete clears history before hiding and warns for direct chats', () 
   assert.match(screen, /clearChatConversationHistory/);
   assert.match(screen, /deleteChatConfirmDirect/);
   assert.match(screen, /deleteChatConfirmDirect[\s\S]{0,250}defaultValue/);
-  assert.match(screen, /forEveryone:\s*conversation\.conversationType === ["']private["']/);
+  assert.match(screen, /deleteForEveryone/);
+  assert.match(screen, /clearHistoryForMe/);
+  assert.match(screen, /clearHistoryForEveryone/);
 });
 
 test('the settings clear-all path writes server watermarks before wiping cache', () => {

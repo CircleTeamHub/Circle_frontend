@@ -47,6 +47,7 @@ import {
   getEditGroupNoticeHref,
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
+  getGroupLogHref,
   getGroupMemberSearchHref,
   getRecommendFriendHref,
   getUserProfileHref,
@@ -1299,49 +1300,75 @@ export default function ChatInfoScreen() {
   // G-14 清空聊天记录:私聊推进双方水位,群聊只推进本人水位。
   const handleClearHistory = useCallback(() => {
     if (!resolvedConversationID) return;
+
+    const clearHistory = (forEveryone: boolean) => {
+      void clearChatConversationHistory(resolvedConversationID, {
+        forEveryone,
+      })
+        .then(() => {
+          useLocalUnreadStore.getState().clearUnread(resolvedConversationID);
+          Alert.alert(
+            forEveryone
+              ? t('chat.clearHistoryDoneDirect', {
+                  defaultValue: '双方聊天记录已删除',
+                })
+              : t('chat.clearHistoryDone'),
+          );
+        })
+        .catch((error: unknown) => {
+          Alert.alert(
+            t('chat.clearHistory'),
+            getApiErrorMessage(error, t('common.networkError')),
+          );
+        });
+    };
+
+    if (isGroupConversation) {
+      Alert.alert(
+        t('chat.clearHistory'),
+        t('chat.clearHistoryConfirm'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('chat.clearHistoryForMe', { defaultValue: '仅删除我的记录' }),
+            onPress: () => clearHistory(false),
+          },
+          {
+            text: t('chat.clearHistoryForEveryone', { defaultValue: '删除所有人的记录' }),
+            style: 'destructive',
+            onPress: () => clearHistory(true),
+          },
+        ],
+      );
+      return;
+    }
+
     Alert.alert(
       t('chat.clearHistory'),
-      isGroupConversation
-        ? t('chat.clearHistoryConfirm')
-        : t('chat.clearHistoryConfirmDirect', {
-            defaultValue:
-              '确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。',
-          }),
+      t('chat.clearHistoryConfirmDirect', {
+        defaultValue:
+          '确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。',
+      }),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
           text: t('chat.clearHistory'),
           style: 'destructive',
-          onPress: () => {
-            void clearChatConversationHistory(resolvedConversationID, {
-              forEveryone: !isGroupConversation,
-            })
-              .then(() => {
-                // 「标记为未读」的本地覆盖也要清掉:只清 chat-core 的未读数,
-                // 那条覆盖还在,消息页和 tab 上这个会话继续顶着红点 —— 而里面
-                // 已经是空的。
-                useLocalUnreadStore
-                  .getState()
-                  .clearUnread(resolvedConversationID);
-                Alert.alert(
-                  isGroupConversation
-                    ? t('chat.clearHistoryDone')
-                    : t('chat.clearHistoryDoneDirect', {
-                        defaultValue: '双方聊天记录已删除',
-                      }),
-                );
-              })
-              .catch((error: unknown) => {
-                Alert.alert(
-                  t('chat.clearHistory'),
-                  getApiErrorMessage(error, t('common.networkError')),
-                );
-              });
-          },
+          onPress: () => clearHistory(true),
         },
       ],
     );
   }, [isGroupConversation, resolvedConversationID, t]);
+
+  const handleOpenGroupLog = useCallback(() => {
+    if (!resolvedConversationID) return;
+    router.push(
+      getGroupLogHref(scope, {
+        conversationID: resolvedConversationID,
+        title: groupTitle,
+      }),
+    );
+  }, [groupTitle, resolvedConversationID, scope]);
 
   const d = useMemo(
     () => ({
@@ -1525,6 +1552,11 @@ export default function ChatInfoScreen() {
             )}
             <Divider />
             <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
+            <Divider />
+            <GroupInfoRow
+              label={t('chat.groupLog', { defaultValue: '群日志' })}
+              onPress={handleOpenGroupLog}
+            />
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>

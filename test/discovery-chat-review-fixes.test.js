@@ -61,14 +61,15 @@ test('a picked location survives an in-flight send instead of vanishing', () => 
 // 必须能走到真正能看到并清掉它的地方（铃铛中心的 moments 域）。
 test('the moments screen reaches the moment notifications its badge counts', () => {
   const moments = read('src/features/discover/screens/MomentsScreen.tsx');
-  const discover = read('src/features/discover/screens/DiscoverScreen.tsx');
+  const contacts = read('src/features/contacts/screens/ContactsScreen.tsx');
 
   assert.match(moments, /momentsUnread/);
   assert.match(moments, /\(tabs\)\/discover\/notification-center/);
   assert.match(moments, /params: \{ domain: 'moments' \}/);
   assert.match(moments, /<Badge count=\{momentsUnread\}/);
-  // 发现页那一行的红点仍然读同一个计数，两边不能漂移。
-  assert.match(discover, /momentsUnread = useTabBadgeStore\(\(state\) => state\.momentsUnread\)/);
+  // 朋友圈入口已迁入联系人页。
+  assert.match(contacts, /id: 'moments'/);
+  assert.match(contacts, /momentsUnread = useTabBadgeStore/);
   // 圈子的未读不许混进朋友圈铃铛。
   assert.doesNotMatch(moments, /circleUnread|discoverUnread|signupUnread/);
 });

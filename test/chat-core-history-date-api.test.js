@@ -53,6 +53,9 @@ function loadApi(requests) {
       if (request === './deleted-messages') {
         return { withoutLocallyDeleted: (messages) => messages };
       }
+      if (request === './clear-history-target') {
+        return { getKnownClearTargetHeight: () => null };
+      }
       if (request === './local-db') {
         return {
           deleteLocalMessagesBelow: async () => {},

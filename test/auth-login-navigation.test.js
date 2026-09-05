@@ -223,7 +223,7 @@ test('auth success session flags map to the expected global route guard redirect
       isLoading: false,
       onboardingRequired: registerOptions.onboardingRequired,
     }))),
-    { type: 'redirect', href: '/(onboarding)/profile' },
+    { type: 'redirect', href: '/(tabs)/messages' },
   );
 });
 

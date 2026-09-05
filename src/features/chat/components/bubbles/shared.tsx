@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage } from '@/types';
+import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 
 export const AVATAR_SIZE = 36;
 export const CHAT_CARD_STANDARD_WIDTH = 260;
@@ -33,12 +34,17 @@ interface MessageAvatarProps {
  * 所有消息气泡共用这一颗圆角方形头像，避免不同消息类型产生形状差异。
  */
 export const MessageAvatar: React.FC<MessageAvatarProps> = ({
+  message,
   outgoing,
   selfName,
   selfAvatarUri,
   senderName,
   senderAvatarUri,
 }) => {
+  const hideChatAvatar = useAppSettingsStore(
+    (state) => state.settings.hideChatAvatar,
+  );
+  if (hideChatAvatar || message.suppressAvatar) return null;
   return (
     <Avatar
       size={AVATAR_SIZE}

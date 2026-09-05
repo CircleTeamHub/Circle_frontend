@@ -7,32 +7,27 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
 const DISCOVER = 'src/features/discover/screens/DiscoverScreen.tsx';
 
-test('discover home is a grouped list that routes to three dedicated screens', () => {
+test('discover home only routes to the plaza', () => {
   const source = read(DISCOVER);
 
-  assert.match(source, /t\('discover\.moments'\)/);
-  assert.match(source, /t\('contacts\.circles'\)/);
   assert.match(source, /t\('discover\.plaza'\)/);
-  assert.match(source, /t\('discover\.management'\)/);
-  assert.match(source, /\/\(tabs\)\/discover\/moments/);
   assert.match(source, /\/\(tabs\)\/discover\/plaza/);
-  assert.match(source, /\/\(tabs\)\/discover\/management/);
+  assert.doesNotMatch(source, /\/\(tabs\)\/discover\/moments/);
+  assert.doesNotMatch(source, /\/\(tabs\)\/discover\/management/);
   assert.doesNotMatch(source, /<FilterTabs/);
   assert.doesNotMatch(source, /<MomentsFeed/);
   assert.doesNotMatch(source, /<PlazaFeed/);
   assert.doesNotMatch(source, /<MyCirclesPanel/);
 });
 
-test('discover home shows separate unread dots for moments and circle plaza', () => {
+test('discover home shows only the plaza unread dot', () => {
   const source = read(DISCOVER);
 
-  // 两行各自对应一个铃铛的域，不再共用 discoverUnread 这个混合计数。
-  assert.match(source, /useTabBadgeStore\(\(state\) => state\.momentsUnread\)/);
   assert.match(source, /useTabBadgeStore\(\(state\) => state\.circleUnread\)/);
   assert.match(source, /useTabBadgeStore\(\(state\) => state\.signupUnread\)/);
   assert.doesNotMatch(source, /state\.discoverUnread/);
-  assert.match(source, /showIndicatorDot=\{momentsUnread > 0\}/);
   assert.match(source, /showIndicatorDot=\{plazaUnread > 0\}/);
+  assert.doesNotMatch(source, /state\.momentsUnread/);
   assert.doesNotMatch(source, /name="notifications-outline"/);
   assert.doesNotMatch(source, /<Badge/);
   assert.doesNotMatch(source, /name="search-outline"/);
@@ -106,7 +101,7 @@ test('notification center scopes its list to the requested bell domain', () => {
   assert.match(source, /domain !== 'moments'/);
 });
 
-test('discover tab badge combines moments and signup unread state', () => {
+test('tab badges follow the moved moments and plaza ownership', () => {
   const source = read('app/(tabs)/_layout.tsx');
 
   assert.match(source, /signupUnread: state\.signupUnread/);
@@ -115,8 +110,9 @@ test('discover tab badge combines moments and signup unread state', () => {
   // 就会把动态 tab 也点亮 —— 好友申请的规范 UI 是「新的朋友」，归联系人。
   assert.match(
     source,
-    /discover: momentsUnread > 0 \|\| circleUnread > 0 \|\| signupUnread > 0/,
+    /contacts: contactsUnread > 0 \|\| momentsUnread > 0/,
   );
+  assert.match(source, /discover: circleUnread > 0 \|\| signupUnread > 0/);
   assert.doesNotMatch(source, /discover: discoverUnread/);
 });
 

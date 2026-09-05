@@ -1093,7 +1093,7 @@ test("notification settings toggles are backed by persisted app settings instead
   assert.doesNotMatch(source, /initialValue:/);
 });
 
-test("appearance settings only controls theme and language preferences", () => {
+test("appearance settings includes the requested chat display controls", () => {
   const source = fs.readFileSync(
     path.join(
       process.cwd(),
@@ -1115,20 +1115,16 @@ test("appearance settings only controls theme and language preferences", () => {
   assert.match(source, /settingsDetails\.appearance\.themeSheet\.dark/);
   assert.match(source, /APP_LANGUAGE_OPTIONS\.map/);
   assert.doesNotMatch(source, /value:\s*'zh'[\s\S]*value:\s*'en'/);
-  for (const removedKey of [
-    "displayMode",
-    "fontSize",
+  for (const requiredKey of [
     "globalChatBackground",
     "hideChatAvatar",
     "mergeAvatar",
-    "showGroupTags",
-    "showOriginalGroupName",
     "pinnedFoldCount",
-    "batteryOptimization",
   ]) {
-    assert.doesNotMatch(source, new RegExp(`settingsDetails\\.appearance\\.${removedKey}`));
+    assert.match(source, new RegExp(`settingsDetails\\.appearance\\.${requiredKey}`));
   }
-  assert.doesNotMatch(source, /useAppSettingsStore/);
+  assert.match(source, /useAppSettingsStore/);
+  assert.match(source, /settings-chat-background/);
 });
 
 test("account security settings reuse real auth actions", () => {

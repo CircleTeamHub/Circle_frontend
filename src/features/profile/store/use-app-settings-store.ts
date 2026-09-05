@@ -29,18 +29,22 @@ export const appSettingsDefaults = {
 } as const;
 
 export type AppSettingKey = keyof typeof appSettingsDefaults;
+export const DEFAULT_PINNED_FOLD_COUNT = 5;
 
 type AppSettingsValues = Record<AppSettingKey, boolean>;
 
 interface AppSettingsState {
   settings: AppSettingsValues;
+  pinnedFoldCount: number;
   setSetting: (key: AppSettingKey, value: boolean) => void;
+  setPinnedFoldCount: (value: number) => void;
 }
 
 export const useAppSettingsStore = create<AppSettingsState>()(
   persist(
     (set) => ({
       settings: appSettingsDefaults,
+      pinnedFoldCount: DEFAULT_PINNED_FOLD_COUNT,
       setSetting: (key, value) =>
         set((state) => ({
           settings: {
@@ -48,6 +52,13 @@ export const useAppSettingsStore = create<AppSettingsState>()(
             [key]: value,
           },
         })),
+      setPinnedFoldCount: (value) =>
+        set({
+          pinnedFoldCount:
+            Number.isFinite(value) && value >= 0
+              ? Math.floor(value)
+              : DEFAULT_PINNED_FOLD_COUNT,
+        }),
     }),
     {
       name: 'circle-im-app-settings',
@@ -61,6 +72,10 @@ export const useAppSettingsStore = create<AppSettingsState>()(
         return {
           ...current,
           ...persistedState,
+          pinnedFoldCount:
+            typeof persistedState.pinnedFoldCount === 'number'
+              ? persistedState.pinnedFoldCount
+              : DEFAULT_PINNED_FOLD_COUNT,
           settings: {
             ...appSettingsDefaults,
             ...persistedState.settings,

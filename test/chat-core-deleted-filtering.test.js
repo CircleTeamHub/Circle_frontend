@@ -131,6 +131,9 @@ test('search responses drop locally deleted messages', () => {
       return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
     }
     if (request === './deleted-messages') return deleted;
+    if (request === './clear-history-target') {
+      return { getKnownClearTargetHeight: () => null };
+    }
     if (request === '../features/chat/chat-history-date-window') {
       return loadDateWindow();
     }
@@ -183,6 +186,9 @@ function loadApi(deleted, respond) {
       return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
     }
     if (request === './deleted-messages') return deleted;
+    if (request === './clear-history-target') {
+      return { getKnownClearTargetHeight: () => null };
+    }
     if (request === '../features/chat/chat-history-date-window') {
       return loadDateWindow();
     }

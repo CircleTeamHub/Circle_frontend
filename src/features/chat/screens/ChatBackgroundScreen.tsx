@@ -42,6 +42,7 @@ export default function ChatBackgroundScreen() {
   const params = useLocalSearchParams<{
     conversationID?: string;
     title?: string;
+    scope?: string;
   }>();
 
   // Guard against setState after the screen unmounts mid-upload.
@@ -55,12 +56,18 @@ export default function ChatBackgroundScreen() {
 
   const conversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
+  const isGlobal = params.scope === 'global';
 
-  const backgroundPreference = useChatPreferencesStore(
-    (state) => state.backgroundsByConversationID[conversationID],
+  const backgroundPreference = useChatPreferencesStore((state) =>
+    isGlobal
+      ? state.globalBackgroundPreference ?? undefined
+      : state.backgroundsByConversationID[conversationID],
   );
   const setChatBackgroundPreference = useChatPreferencesStore(
     (state) => state.setChatBackgroundPreference,
+  );
+  const setGlobalBackgroundPreference = useChatPreferencesStore(
+    (state) => state.setGlobalBackgroundPreference,
   );
   const [uploadingImage, setUploadingImage] = useState(false);
   const customImageStatusText = useMemo(
@@ -74,7 +81,7 @@ export default function ChatBackgroundScreen() {
   );
 
   const handlePickCustomImage = useCallback(async () => {
-    if (!conversationID) {
+    if (!isGlobal && !conversationID) {
       Alert.alert(
         t('chat.background.paramMissing'),
         t('chat.background.cannotModify'),
@@ -117,10 +124,12 @@ export default function ChatBackgroundScreen() {
       );
       if (!mountedRef.current) return;
       setUploadingImage(false);
-      setChatBackgroundPreference(conversationID, {
-        mode: 'image',
-        uri: presign.fileUrl,
-      });
+      const preference = { mode: 'image' as const, uri: presign.fileUrl };
+      if (isGlobal) {
+        setGlobalBackgroundPreference(preference);
+      } else {
+        setChatBackgroundPreference(conversationID, preference);
+      }
       router.back();
     } catch {
       if (!mountedRef.current) return;
@@ -130,7 +139,14 @@ export default function ChatBackgroundScreen() {
         t('chat.background.failedBody'),
       );
     }
-  }, [conversationID, setChatBackgroundPreference, uploadingImage, t]);
+  }, [
+    conversationID,
+    isGlobal,
+    setChatBackgroundPreference,
+    setGlobalBackgroundPreference,
+    uploadingImage,
+    t,
+  ]);
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.background }}>

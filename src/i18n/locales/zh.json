@@ -519,6 +519,12 @@
     "burn1m": "1分钟",
     "burn5m": "5分钟",
     "clearHistory": "清空聊天记录",
+    "clearHistoryForMe": "仅删除我的记录",
+    "clearHistoryForEveryone": "删除所有人的记录",
+    "groupLog": "群日志",
+    "groupLogLoadFailed": "群日志加载失败",
+    "noGroupLog": "暂无群日志",
+    "groupActivity": "群聊活动",
     "clearHistoryWarning": "清空后将删除当前会话的聊天记录，且无法恢复。",
     "clear": "清空",
     "deleteFriend": "删除联系人",
@@ -801,7 +807,10 @@
       "categoryTitle": "好友分类",
       "categoryDesc": "按标签分类查看好友，便于快速找到特定分组。",
       "friendCount": "{{count}} 位好友",
-      "viewByTag": "按标签查看好友"
+      "viewByTag": "按标签查看好友",
+      "addTag": "新建标签",
+      "tagNamePlaceholder": "输入标签名称",
+      "createFailedTitle": "创建标签失败"
     },
     "tagDetail": {
       "fallbackTitle": "标签好友",
@@ -813,8 +822,10 @@
     },
     "groupsScreen": {
       "title": "群聊",
+      "newGroups": "新的群组",
       "myCreated": "我创建的群聊",
       "myJoined": "我加入的群聊",
+      "myManaged": "我管理的群聊",
       "memberCount": "{{count}}人",
       "empty": "暂无群聊",
       "loading": "正在加载群聊",
@@ -1125,6 +1136,7 @@
       "pleaseSelect": "请选择",
       "expiryLabel": "帖子到期时间",
       "expiryPickerTitle": "选择帖子到期时间",
+      "expiry6h": "6 小时后到期",
       "expiry24h": "24 小时后到期",
       "expiry3d": "3 天后到期",
       "expiry7d": "7 天后到期",
@@ -1523,7 +1535,7 @@
     "notes": "我的笔记",
     "viewNotes": "查看笔记",
     "notLoggedIn": "未登录用户",
-    "notBound": "未绑定",
+    "notBound": "未填写",
     "vipLevel": "VIP等级",
     "reputationValue": "信誉值",
     "share": "分享",
@@ -1828,13 +1840,13 @@
     "editBio": "修改个人简介",
     "bioPlaceholder": "介绍一下你自己",
     "bioNotSet": "未填写",
-    "wechat": "绑定微信",
-    "wechatPlaceholder": "请输入微信号",
-    "phone": "绑定手机号",
-    "phonePlaceholder": "请输入手机号",
-    "qq": "绑定QQ号",
-    "qqPlaceholder": "请输入QQ号",
-    "notBound": "未绑定",
+    "wechat": "微信号",
+    "wechatPlaceholder": "请填写微信号",
+    "phone": "手机号",
+    "phonePlaceholder": "请填写手机号",
+    "qq": "QQ号",
+    "qqPlaceholder": "请填写QQ号",
+    "notBound": "未填写",
     "accountId": "账号",
     "tapToChange": "点击查看",
     "accountIdNotSupported": "账号由系统自动分配，暂不支持修改。",
@@ -1910,6 +1922,9 @@
       },
       "notifications": {
         "label": "消息通知"
+      },
+      "autoReply": {
+        "label": "私信自动回复"
       },
       "appearance": {
         "label": "界面与显示"
@@ -2025,6 +2040,15 @@
       "circleRingtone": "圈子通知铃声",
       "circleDefault": "圈子默认"
     },
+    "autoReply": {
+      "title": "私信自动回复",
+      "enabled": "启用自动回复",
+      "help": "收到私聊消息时自动发送；同一会话 30 秒内最多回复一次。",
+      "placeholder": "填写自动回复内容",
+      "loadFailed": "自动回复设置加载失败",
+      "saveFailed": "自动回复设置保存失败",
+      "unsaved": "有未保存的更改"
+    },
     "appearance": {
       "title": "界面与显示",
       "themeMode": "主题模式",
@@ -2052,6 +2076,7 @@
       "showOriginalGroupNameHint": "开启后显示：备注名(原始群昵称)",
       "pinnedFoldCount": "置顶折叠数量",
       "pinnedFoldCountHint": "显示前N个置顶会话，超出部分自动折叠",
+      "showCollapsedPinned": "显示其余 {{count}} 个置顶会话",
       "unlimited": "无限制",
       "batteryOptimization": "电池优化提醒",
       "batteryOptimizationHint": "仅安卓生效，关闭后不再弹出后台运行权限引导"

@@ -164,7 +164,7 @@ export default function CreatePostScreen() {
     number | null
   >(null);
   const [signupFancyEnabled, setSignupFancyEnabled] = useState(false);
-  const [expiresInHours, setExpiresInHours] = useState(24);
+  const [expiresInHours, setExpiresInHours] = useState(6);
   const [activePicker, setActivePicker] = useState<
     'postExpiry' | 'signupVip' | 'signupCredit' | null
   >(null);
@@ -256,6 +256,10 @@ export default function CreatePostScreen() {
   );
   const expiryOptions = useMemo(
     () => [
+      {
+        value: 6,
+        label: t('plaza.create.expiry6h', { defaultValue: '6 小时后到期' }),
+      },
       {
         value: 24,
         label: t('plaza.create.expiry24h', { defaultValue: '24 小时后到期' }),
