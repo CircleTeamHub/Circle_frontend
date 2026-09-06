@@ -178,6 +178,31 @@ export function getChatDetailHref(
   }
 }
 
+/**
+ * 扫码落地页。四个 tab 栈各镜像一份 —— 落地页自己还要往下跳(看资料 / 加好友 /
+ * 进群聊),它得和调用它的页面在同一个栈里,下一跳才不会把用户甩去别的 tab、返回
+ * 也才落在上一层。外部系统相机的深链另走顶层 app/qr.tsx:那种进入方式本来就没有
+ * 来源栈。App 内扫码器(#202)走的 messages 这一份,就是本函数 scope='messages'。
+ */
+export function getQrLandingHref(
+  scope: UserProfileScope,
+  token: string,
+): Href {
+  const params = { t: token };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/qr', params };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/qr', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/qr', params };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/qr', params };
+  }
+}
+
 export function getNoteDetailHref(
   scope: UserProfileScope,
   id: string,

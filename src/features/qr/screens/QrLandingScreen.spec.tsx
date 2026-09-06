@@ -11,9 +11,13 @@ const mockRouter = {
   replace: jest.fn(),
 };
 
+// 落地页按 segments 决定往下跳进哪一栈,所以这里得可改。
+let mockSegments: string[] = ['(tabs)', 'messages', 'qr'];
+
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ t: 'l'.repeat(32) }),
   useRouter: () => mockRouter,
+  useSegments: () => mockSegments,
 }));
 
 jest.mock('react-i18next', () => {
@@ -74,8 +78,20 @@ const loginPreview = {
   verificationCode: '123456',
 };
 
+const userPreview = {
+  type: 'USER' as const,
+  targetId: 'u-9',
+  name: '小李',
+  avatarUrl: null,
+  memberCount: null,
+  issuerNickname: '',
+  expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  viewerState: 'NONE' as const,
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSegments = ['(tabs)', 'messages', 'qr'];
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   jest.mocked(resolveQrToken).mockResolvedValue(loginPreview);
 });
@@ -109,6 +125,36 @@ test('shows the verification context and submits login approval only once', asyn
       expect.any(Array),
     );
   });
+});
+
+// 「从哪进就从哪回」:落地页往下跳必须留在进来的那一栈,否则加完好友返回时用户
+// 已经在别的 tab 里,上一层就不再是他出发的那个页面。
+test('加好友跳转跟随进入落地页的那一栈，不写死 messages', async () => {
+  jest.mocked(resolveQrToken).mockResolvedValue(userPreview);
+  mockSegments = ['(tabs)', 'contacts', 'qr'];
+
+  render(<QrLandingScreen />);
+  fireEvent.press(await screen.findByRole('button'));
+
+  expect(mockRouter.push).toHaveBeenCalledWith(
+    expect.objectContaining({
+      pathname: '/(tabs)/contacts/user/[id]/request',
+    }),
+  );
+});
+
+test('顶层 /qr（外部相机深链）没有 tab 段时回落 messages', async () => {
+  jest.mocked(resolveQrToken).mockResolvedValue(userPreview);
+  mockSegments = ['qr'];
+
+  render(<QrLandingScreen />);
+  fireEvent.press(await screen.findByRole('button'));
+
+  expect(mockRouter.push).toHaveBeenCalledWith(
+    expect.objectContaining({
+      pathname: '/(tabs)/messages/user/[id]/request',
+    }),
+  );
 });
 
 test('keeps the confirmation screen recoverable when approval fails', async () => {
