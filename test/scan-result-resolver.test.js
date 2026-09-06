@@ -82,7 +82,24 @@ test('routes versioned login QR payloads separately from join QR payloads', () =
     plain(resolveMessageScanResult(`windnoteai://qr-login?t=${token}`)),
     {
       type: 'route',
-      href: { pathname: '/qr-login', params: { t: token } },
+      href: {
+        pathname: '/(tabs)/messages/qr-login',
+        params: { t: token },
+      },
+    },
+  );
+});
+
+test('keeps an in-app contact QR result inside the messages stack', () => {
+  const token = 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6';
+  assert.deepEqual(
+    plain(resolveMessageScanResult(`windnoteai://qr?t=${token}`)),
+    {
+      type: 'route',
+      href: {
+        pathname: '/(tabs)/messages/qr',
+        params: { t: token },
+      },
     },
   );
 });
