@@ -849,6 +849,7 @@
       "groupsLabel": "Grupos",
       "imageItem": "Imagen",
       "itemsCount": "elementos",
+      "legacyMediaUnavailableInline": "Esta nota tiene {{count}} archivo(s) multimedia antiguo(s) que no se pueden recuperar. Guardar los perdería, así que vuelve sin guardar.",
       "legacyMediaUnavailableMessage": "Esta nota contiene archivos multimedia antiguos que no se pueden recuperar. Vuelve sin guardar para evitar perder contenido.",
       "legacyMediaUnavailableTitle": "No se puede guardar el contenido multimedia de forma segura",
       "loadFailedMessage": "No se pudo cargar esta nota. Vuelve e inténtalo de nuevo.",

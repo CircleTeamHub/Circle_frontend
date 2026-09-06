@@ -181,8 +181,13 @@ export default function EditNoteScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
-  const [dateStr, setDateStr] = useState(() =>
-    formatNoteFullDate(new Date().toISOString(), t),
+  // 存时间戳而不是格式化后的字符串：日期文案随语言变，笔记的创建时刻不变。
+  // 存字符串就得在加载 effect 里用 t 格式化，t 于是成了 effect 的依赖 —— 切一次
+  // 语言就重新拉一遍这篇笔记，把没保存的编辑整个冲掉（见下面的加载 effect）。
+  const [createdAtIso, setCreatedAtIso] = useState(() => new Date().toISOString());
+  const dateStr = useMemo(
+    () => formatNoteFullDate(createdAtIso, t),
+    [createdAtIso, t],
   );
   const existingSectionsRef = useRef<Partial<NoteSections> | null>(null);
   const uploadInFlightRef = useRef(false);
@@ -191,6 +196,9 @@ export default function EditNoteScreen() {
   // 是同一篇。失去焦点（去选位置、去选分组）不属于这个判断 —— 那时列表还是同一
   // 份，把已经传完的对象丢掉纯粹是白扔用户刚等完的那几十秒。
   const editedNoteKeyRef = useRef<string>('');
+  // 加载 effect 只在弹窗文案上用到 t。把它挪进 ref，effect 就不必依赖 t。
+  const tRef = useRef(t);
+  tRef.current = t;
   const pickerPreviewDisposerRef = useRef(createPickerPreviewDisposer());
   const saveGenerationRef = useRef(0);
   const saveInFlightRef = useRef(false);
@@ -331,7 +339,7 @@ export default function EditNoteScreen() {
         setLocationDraft(buildLocationDraft(note.sections?.location));
         setSelectedGroupIds(note.groups.map((group) => group.id));
         pinnedRef.current = note.pinned;
-        setDateStr(formatNoteFullDate(note.createdAt, t));
+        setCreatedAtIso(note.createdAt);
         setLoadedNoteId(id);
         setLoading(false);
         setEditorMounted(true);
@@ -352,8 +360,8 @@ export default function EditNoteScreen() {
           // 加一个永远点不动的「完成」，既没有报错也没有重试入口，线上也无声。
           reportHandledFailure('noteEditor', 'load', error);
           Alert.alert(
-            t('notes.edit.loadFailedTitle', { defaultValue: '加载失败' }),
-            t('notes.edit.loadFailedMessage', {
+            tRef.current('notes.edit.loadFailedTitle', { defaultValue: '加载失败' }),
+            tRef.current('notes.edit.loadFailedMessage', {
               defaultValue: '笔记加载失败，请返回后重试',
             }),
           );
@@ -363,7 +371,10 @@ export default function EditNoteScreen() {
     return () => {
       cancelled = true;
     };
-  }, [id, isEdit, t]);
+    // t 刻意不在依赖里：切一次语言就会让这个 effect 重跑，setTitle('')、
+    // setMediaItems([]) 再重新拉服务端版本 —— 作者没保存的编辑当场消失。effect
+    // 里用到 t 的只有一条失败弹窗文案，走 tRef 取最新的即可。
+  }, [id, isEdit]);
 
   useFocusEffect(
     useCallback(() => {
@@ -405,7 +416,6 @@ export default function EditNoteScreen() {
       let batchDraftIds: Set<string> = new Set();
       const stillEditingSameNote = () => editedNoteKeyRef.current === batchNoteKey;
       const uploadKey: UploadingSection = `${target}:${kind}`;
-      setUploadingSection(uploadKey);
       try {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
@@ -462,6 +472,10 @@ export default function EditNoteScreen() {
           );
         }
 
+        // 「上传中…」直到这里才亮。此前是进函数就亮，而系统相册可以开着好几分钟：
+        // 网页端对话框背后的页面仍然可见，作者一个文件都还没选，两个按钮就已经
+        // 变成上传中并且全部禁用了。重入由 uploadInFlightRef 挡住，与这个标签无关。
+        setUploadingSection(uploadKey);
         const pendingDrafts = createPendingNoteMediaDrafts(
           acceptedAssets,
           kind === 'video' ? 'VIDEO' : 'IMAGE',
@@ -784,6 +798,8 @@ export default function EditNoteScreen() {
       },
       sectionAction: { borderColor: colors.surfaceBorder },
       sectionActionText: { color: colors.text },
+      legacyMediaWarning: { borderColor: colors.warning },
+      legacyMediaWarningText: { color: colors.text },
       locationPreviewCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -1068,6 +1084,26 @@ export default function EditNoteScreen() {
           </View>
         </View>
 
+        {unrecoverableMediaCount > 0 ? (
+          // 这些旧媒体在 sections 里只剩一个 url，附件表里也找不到对应的 objectKey，
+          // 恢复不出来，因此既渲染不出来也删不掉。保存会把它们丢掉，所以「完成」被
+          // 挡住了 —— 但此前这件事只在点「完成」时才弹一次，作者已经改完标题和正文
+          // 才发现这篇笔记根本存不了。放在这里，一进页面就看得见。
+          <View
+            testID="note-unrecoverable-media-warning"
+            style={[s.legacyMediaWarning, d.legacyMediaWarning]}
+          >
+            <Ionicons name="warning-outline" size={16} color={colors.warning} />
+            <Text style={[s.legacyMediaWarningText, d.legacyMediaWarningText]}>
+              {t('notes.edit.legacyMediaUnavailableInline', {
+                defaultValue:
+                  '这篇笔记有 {{count}} 项无法恢复的旧媒体，保存会丢失它们，请返回且不要保存。',
+                count: unrecoverableMediaCount,
+              })}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={[s.sectionBlock, d.sectionShell]}>
           {renderSectionHeader(
             'images-outline',
@@ -1313,6 +1349,17 @@ const s = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
   },
+  legacyMediaWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  legacyMediaWarningText: { ...Typography.small, flex: 1, lineHeight: 18 },
   sectionActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',

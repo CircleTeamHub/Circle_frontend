@@ -4,7 +4,10 @@ import '@blocknote/react/style.css';
 
 import type { PartialBlock } from '@blocknote/core';
 import { en, zh } from '@blocknote/core/locales';
-import { buildPendingEditorBlocks } from '../utils/note-media-upload';
+import {
+  buildPendingEditorBlocks,
+  resolveMediaInsertAnchor,
+} from '../utils/note-media-upload';
 import {
   BlockNoteViewRaw,
   useCreateBlockNote,
@@ -52,16 +55,19 @@ interface Props {
 type ActiveType = 'paragraph' | 'heading' | 'bulletListItem';
 
 function insertPendingMedia(
-  editor: Pick<ReturnType<typeof useCreateBlockNote>, 'getTextCursorPosition' | 'insertBlocks'>,
+  editor: Pick<
+    ReturnType<typeof useCreateBlockNote>,
+    'getTextCursorPosition' | 'insertBlocks' | 'document'
+  >,
   pendingInserts: readonly PendingInsert[],
-) {
-  const pos = editor.getTextCursorPosition();
-  if (!pos?.block) return;
-  editor.insertBlocks(
-    buildPendingEditorBlocks(pendingInserts),
-    pos.block,
-    'after',
+): boolean {
+  const anchor = resolveMediaInsertAnchor(
+    editor.getTextCursorPosition()?.block,
+    editor.document,
   );
+  if (!anchor) return false;
+  editor.insertBlocks(buildPendingEditorBlocks(pendingInserts), anchor, 'after');
+  return true;
 }
 
 export default function NoteBlockEditor({
@@ -144,7 +150,13 @@ export default function NoteBlockEditor({
   // original cursor block in the same order the picker returned it.
   useEffect(() => {
     if (pendingInserts.length === 0 || unmounted.current) return;
-    insertPendingMedia(editor, pendingInserts);
+    if (!insertPendingMedia(editor, pendingInserts)) {
+      // 文档连一个块都没有，BlockNote 正常不会到这里。仍然把这批交割掉：留着
+      // 不消费只会让 effect 依赖不变、永远不再触发，等于换一种方式卡死。
+      console.warn(
+        '[NoteBlockEditor.dom] dropped a media batch: the document had no block to anchor to',
+      );
+    }
     onInsertHandled();
   }, [pendingInserts, editor, onInsertHandled]);
 
