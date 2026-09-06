@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Alert } from 'react-native';
 import EditNoteScreen from './EditNoteScreen';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
-import { updateNote } from '@/services/api/notes';
+import { createNote, updateNote } from '@/services/api/notes';
 
 const mockRouter = { back: jest.fn(), push: jest.fn() };
 const mockRequestPermission = jest.fn();
@@ -447,6 +447,45 @@ test('blurred uploads cannot alert over another route and focus restores usable 
     mockFocusCleanup = typeof cleanup === 'function' ? cleanup : undefined;
   });
   expect(locationAction().props.disabled).toBe(false);
+});
+
+// 一次上传是 presign + PUT，几十秒起步。这段时间里去选个位置、挑个分组，本页就
+// 失去焦点 —— 而完成路径原本头一句就是查所有权、失去就 return，于是**已经传完**的
+// 对象被整批丢掉：字节已经躺在对象存储里，用户等的那几十秒白等。
+test('失焦期间传完的媒体，回到页面后仍然保存得出去', async () => {
+  jest.mocked(createNote).mockResolvedValue({} as Awaited<ReturnType<typeof createNote>>);
+  render(<EditNoteScreen />);
+  const upload = await beginDeferredImageUpload();
+
+  act(() => mockFocusCleanup?.());
+  await act(async () => {
+    upload.resolve();
+    await Promise.resolve();
+  });
+  act(() => {
+    const cleanup = mockFocusCallback?.();
+    mockFocusCleanup = typeof cleanup === 'function' ? cleanup : undefined;
+  });
+
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '标题');
+  fireEvent.press(screen.getByText('notes.edit.done'));
+
+  await waitFor(() => {
+    expect(createNote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sections: expect.objectContaining({
+          media: {
+            items: [
+              expect.objectContaining({
+                objectKey: 'notes/slow.jpg',
+                url: 'https://cdn.example/slow.jpg',
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
 });
 
 test('a route id change abandons the previous upload without keeping controls locked', async () => {
@@ -895,12 +934,21 @@ test('reports a redacted aggregate when a section upload batch partially fails',
   fireEvent.press(screen.getByText('notes.edit.addImage'));
 
   await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(2));
+  // 签名里带上失败种类，让网络断 / 预签名 403 / 超时在聚合里分得开；
+  // 但原始 message 一个字都不能带出去 —— 它整条带着预签名 URL 和令牌。
   expect(mockReportHandledFailure).toHaveBeenCalledWith(
     'noteEditor',
     'sectionMediaUploadBatch',
-    expect.objectContaining({ message: 'note media batch upload failed' }),
-    { failed: 1, total: 2, reason: 'media.image' },
+    expect.objectContaining({
+      message: 'note media batch upload failed [Error]',
+    }),
+    { failed: 1, total: 2, reason: 'media.image', errorNames: 'Error' },
   );
+  const reported = mockReportHandledFailure.mock.calls.find(
+    (call: unknown[]) => call[1] === 'sectionMediaUploadBatch',
+  );
+  expect(JSON.stringify(reported)).not.toContain('signed.example');
+  expect(JSON.stringify(String((reported?.[2] as Error)?.message))).not.toContain('token');
 });
 
 test('unrecoverable legacy media blocks save with an actionable warning', async () => {
