@@ -31,6 +31,20 @@ export const appSettingsDefaults = {
 export type AppSettingKey = keyof typeof appSettingsDefaults;
 export const DEFAULT_PINNED_FOLD_COUNT = 5;
 
+/**
+ * 折叠阈值的唯一收口。
+ *
+ * setter 一直就有这道校验，但**水合**只查了 `typeof === 'number'` —— NaN、
+ * Infinity、负数全都是 number，于是持久化里存进去的任何一个坏值都会原样活过重启。
+ * NaN 尤其安静：`pinnedFoldCount === 0` 是假、`visiblePinned <= NaN` 也是假，
+ * 于是置顶折叠既不展开也不收起，用户只看到列表不对，没有任何报错。
+ */
+function normalizePinnedFoldCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : DEFAULT_PINNED_FOLD_COUNT;
+}
+
 type AppSettingsValues = Record<AppSettingKey, boolean>;
 
 interface AppSettingsState {
@@ -53,12 +67,7 @@ export const useAppSettingsStore = create<AppSettingsState>()(
           },
         })),
       setPinnedFoldCount: (value) =>
-        set({
-          pinnedFoldCount:
-            Number.isFinite(value) && value >= 0
-              ? Math.floor(value)
-              : DEFAULT_PINNED_FOLD_COUNT,
-        }),
+        set({ pinnedFoldCount: normalizePinnedFoldCount(value) }),
     }),
     {
       name: 'circle-im-app-settings',
@@ -72,10 +81,9 @@ export const useAppSettingsStore = create<AppSettingsState>()(
         return {
           ...current,
           ...persistedState,
-          pinnedFoldCount:
-            typeof persistedState.pinnedFoldCount === 'number'
-              ? persistedState.pinnedFoldCount
-              : DEFAULT_PINNED_FOLD_COUNT,
+          pinnedFoldCount: normalizePinnedFoldCount(
+            persistedState.pinnedFoldCount,
+          ),
           settings: {
             ...appSettingsDefaults,
             ...persistedState.settings,

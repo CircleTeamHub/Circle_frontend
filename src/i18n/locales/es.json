@@ -495,6 +495,7 @@
       "cannotModify": "No se puede cambiar el fondo del chat.",
       "statusUploading": "Subiendo...",
       "statusSet": "Definido",
+      "restoreDefault": "Restaurar el fondo predeterminado",
       "statusChoose": "Elegir",
       "failedTitle": "Error de configuración",
       "failedBody": "No se pudo definir el fondo con la imagen. Inténtalo de nuevo."

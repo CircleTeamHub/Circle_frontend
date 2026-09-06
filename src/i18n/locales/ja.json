@@ -494,6 +494,7 @@
       "cannotModify": "チャットの背景を変更できません。",
       "statusUploading": "アップロード中...",
       "statusSet": "設定済み",
+      "restoreDefault": "既定の背景に戻す",
       "statusChoose": "選択",
       "failedTitle": "設定に失敗しました",
       "failedBody": "画像の背景を設定できませんでした。もう一度お試しください。"
