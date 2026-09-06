@@ -306,6 +306,34 @@ export function getEditGroupNoticeHref(
   }
 }
 
+/**
+ * 圈子通知设置。入口在联系人页的圈子页（#195 把圈子管理迁到了联系人栈），但
+ * 屏幕本身仍住在 discover 域下，所以要按当前栈解析 —— 从联系人页直接 push
+ * discover 路由会把用户甩进另一个 tab，返回时也回不到他出发的那一栈。
+ */
+export function getCircleNotificationSettingsHref(
+  scope: UserProfileScope,
+): Href {
+  switch (scope) {
+    case 'contacts':
+      return '/(tabs)/contacts/circle-notifications' as unknown as Href;
+    case 'discover':
+    default:
+      return '/(tabs)/discover/notifications' as unknown as Href;
+  }
+}
+
+/** 圈子玩法说明。与上面同理：它是从通知设置页里点进去的，得留在同一栈。 */
+export function getCircleGuideHref(scope: UserProfileScope): Href {
+  switch (scope) {
+    case 'contacts':
+      return '/(tabs)/contacts/circle-guide' as unknown as Href;
+    case 'discover':
+    default:
+      return '/(tabs)/discover/guide' as unknown as Href;
+  }
+}
+
 export function getGroupLogHref(
   scope: UserProfileScope,
   params: { conversationID: string; title?: string },

@@ -8,9 +8,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { NavHeader } from '@/components/ui/nav-header';
+import {
+  getCircleNotificationSettingsHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { MyCirclesPanel } from '@/features/discover/components/my-circles-panel';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -57,7 +61,19 @@ export default function MyCirclesScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
+  const segments = useSegments();
   const [joinId, setJoinId] = useState('');
+
+  // 圈子通知设置此前只有 CircleManagementScreen 一个入口，而 #195 把发现页那行
+  // 「圈子管理」删掉之后再没有任何地方 push 到它 —— 设置页就此从 App 里消失。
+  // 挂回圈子页的齿轮位，并按当前栈解析路由，免得从联系人页点进去被甩到发现 tab。
+  const handleOpenNotificationSettings = useCallback(() => {
+    router.push(
+      getCircleNotificationSettingsHref(
+        getUserProfileScopeFromSegments(segments),
+      ),
+    );
+  }, [router, segments]);
 
   const handleOpenById = useCallback(() => {
     const id = joinId.trim();
@@ -75,7 +91,12 @@ export default function MyCirclesScreen() {
         { backgroundColor: colors.background, paddingTop: insets.top },
       ]}
     >
-      <NavHeader title={t('contacts.circles', { defaultValue: '圈子' })} />
+      <NavHeader
+        title={t('contacts.circles', { defaultValue: '圈子' })}
+        rightIcon="settings-outline"
+        onRightPress={handleOpenNotificationSettings}
+        rightAccessibilityLabel={t('discover.notifications.title')}
+      />
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.content}
