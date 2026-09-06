@@ -62,3 +62,15 @@ test('location bubbles show a real map tile and open the system map', () => {
   assert.match(bubble, /locationLongitude/);
   assert.match(bubble, /<Image/);
 });
+
+test('picking a location never hands Android off to Play Services settings', () => {
+  const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+
+  // expo-location 的 mayShowUserSettingsDialog 默认为 true：定位不可用时它会拉起
+  // Google Play Services 的定位设置弹窗，国内无 GMS 的机器上那是条死路。这里是
+  // 全 App 唯一还在取当前坐标的地方（选点页自己只读路由参数）。
+  assert.match(
+    source,
+    /getCurrentPositionAsync\(\{[\s\S]*?mayShowUserSettingsDialog:\s*false/,
+  );
+});
