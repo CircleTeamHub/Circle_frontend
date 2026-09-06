@@ -19,6 +19,28 @@ test('contacts screen loads real friends and routes quick actions to dedicated s
   assert.match(source, /mountedRef/);
 });
 
+test('contacts quick actions keep the agreed order and entries', () => {
+  const source = read('src/features/contacts/screens/ContactsScreen.tsx');
+  const block = source.slice(
+    source.indexOf('const QUICK_ACTION_KEYS'),
+    source.indexOf('const ALPHABET'),
+  );
+  const ids = [...block.matchAll(/id: '([\w-]+)'/g)].map((match) => match[1]);
+
+  // 顺序是产品定的；朋友圈入口是 #195 从发现页搬过来的，圈子行也在那时改用
+  // discover.management 文案。这里钉住整张列表，避免哪次重排又把它们挤掉。
+  assert.deepEqual(ids, [
+    'new-friends',
+    'groups',
+    'seats',
+    'moments',
+    'circles',
+    'tags',
+  ]);
+  assert.match(block, /id: 'moments'[^}]*key: 'discover\.moments'/);
+  assert.match(block, /id: 'circles'[^}]*key: 'discover\.management'/);
+});
+
 test('new friends screen exists as a friend-activity inbox with per-item read flow', () => {
   const routeSource = read('app/(tabs)/contacts/new-friends.tsx');
   const screenSource = read('src/features/contacts/screens/NewFriendsScreen.tsx');
@@ -164,6 +186,38 @@ test('friend activity detail screen supports request handling and single-item re
   assert.match(screenSource, /rejectFriendRequest/);
   assert.match(screenSource, /canHandleFriendActivity/);
   assert.match(screenSource, /REQUEST_RECEIVED/);
+});
+
+test('groups screen filters the active category with a local search box', () => {
+  const source = read('src/features/contacts/screens/GroupsScreen.tsx');
+  const filterSource = read('src/features/contacts/utils/group-list-filter.ts');
+
+  assert.match(source, /const \[query, setQuery\] = useState\(''\)/);
+  assert.match(source, /<TextInput/);
+  assert.match(source, /contacts\.groupsScreen\.searchPlaceholder/);
+  assert.match(source, /contacts\.groupsScreen\.noMatches/);
+  assert.match(
+    source,
+    /filterGroupsByQuery\(groupsByCategory\[activeCategory\], query\)/,
+  );
+
+  // 分类是三次服务端查询算出来的；过滤器只做本地文本匹配，不能再自己判断身份，
+  // 否则同一份数据会有两套互相矛盾的分类规则。
+  assert.doesNotMatch(filterSource, /myRole|ownerUserID/);
+
+  const header = source.slice(source.indexOf('ListHeaderComponent='));
+  assert.ok(
+    header.indexOf('s.searchBox') < header.indexOf('s.categoryTabs'),
+    'search box should render above the category tabs',
+  );
+
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const groupsScreen = JSON.parse(
+      read(`src/i18n/locales/${locale}.json`),
+    ).contacts.groupsScreen;
+    assert.ok(groupsScreen.searchPlaceholder, `${locale} searchPlaceholder`);
+    assert.ok(groupsScreen.noMatches, `${locale} noMatches`);
+  }
 });
 
 test('contacts and profile flow screens use i18n instead of hardcoded Chinese UI copy', () => {

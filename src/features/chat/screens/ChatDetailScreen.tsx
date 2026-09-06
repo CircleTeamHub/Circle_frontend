@@ -2836,6 +2836,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     try {
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
+        // 这个选项默认是 true：拿不到定位时 expo-location 会拉起 Google Play
+        // Services 的定位设置弹窗，国内无 GMS 的机器上等于把用户甩去一个装不了
+        // 的系统页。关掉它，取点失败就照下面的 catch 用默认中心开图。
+        mayShowUserSettingsDialog: false,
       });
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
