@@ -21,7 +21,9 @@ const mockReportHandledFailure = jest.fn();
 let mockRouteId: string | undefined;
 let mockFocusCallback: (() => void | (() => void)) | undefined;
 let mockFocusCleanup: (() => void) | undefined;
-const mockTranslate = (key: string) => key;
+const identityTranslate = (key: string) => key;
+// 语言切换会换掉 t 的身份 —— 用例要能模拟这一点。
+let mockTranslate: (key: string) => string = identityTranslate;
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -93,7 +95,7 @@ jest.mock('@/theme', () => ({
     colors: {
       background: '#fff', surface: '#fff', surfaceBorder: '#ddd', text: '#111',
       textSecondary: '#666', primary: '#6200ee', brandPurple: '#6200ee', white: '#fff',
-      overlay: 'rgba(0,0,0,.4)',
+      overlay: 'rgba(0,0,0,.4)', warning: '#f59e0b',
     },
   }),
 }));
@@ -412,6 +414,7 @@ test('releases an in-flight main-editor blob preview when its route is replaced'
 beforeEach(() => {
   jest.clearAllMocks();
   imageSources.length = 0;
+  mockTranslate = identityTranslate;
   mockRouteId = undefined;
   mockFocusCallback = undefined;
   mockFocusCleanup = undefined;
@@ -975,6 +978,75 @@ test('unrecoverable legacy media blocks save with an actionable warning', async 
     'notes.edit.legacyMediaUnavailableTitle',
     'notes.edit.legacyMediaUnavailableMessage',
   );
+});
+
+// 这些旧媒体渲染不出来也删不掉，所以「完成」被永久挡住。此前这件事只在点「完成」
+// 时才弹一次 —— 作者已经改完标题和正文，才发现这篇笔记根本存不了。
+test('无法恢复的旧媒体一进页面就给出警告，而不是等到点完成', async () => {
+  mockRouteId = 'unrecoverable-note';
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Unrecoverable note',
+    contentJson: [{ type: 'image', props: { url: 'https://removed.example/legacy.jpg' } }],
+    media: [],
+    sections: {
+      showcase: { items: [{ type: 'IMAGE', url: 'https://removed.example/legacy.jpg' }] },
+    },
+    groups: [],
+    pinned: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  });
+
+  render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Unrecoverable note');
+
+  expect(screen.getByTestId('note-unrecoverable-media-warning')).toBeTruthy();
+});
+
+test('没有无法恢复的旧媒体时不出现这条警告', async () => {
+  mockRouteId = 'clean-note';
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Clean note',
+    contentJson: [],
+    media: [],
+    sections: { media: { items: [] }, showcase: { items: [] } },
+    groups: [],
+    pinned: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  });
+
+  render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Clean note');
+
+  expect(screen.queryByTestId('note-unrecoverable-media-warning')).toBeNull();
+});
+
+// t 在加载 effect 的依赖里时，切一次语言就会重跑整个 effect：setTitle('')、
+// setMediaItems([]) 再重新拉服务端版本，作者没保存的编辑当场消失。
+test('切换语言不会重新拉取笔记、冲掉未保存的编辑', async () => {
+  mockRouteId = 'language-note';
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Language note',
+    contentJson: [],
+    media: [],
+    sections: { media: { items: [] }, showcase: { items: [] } },
+    groups: [],
+    pinned: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  });
+
+  const rendered = render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Language note');
+  fireEvent.changeText(
+    screen.getByPlaceholderText('notes.edit.titlePlaceholder'),
+    '改了一半的标题',
+  );
+  expect(mockFetchNoteDetail).toHaveBeenCalledTimes(1);
+
+  mockTranslate = (key: string) => `en:${key}`;
+  rendered.rerender(<EditNoteScreen />);
+
+  expect(mockFetchNoteDetail).toHaveBeenCalledTimes(1);
+  expect(screen.getByDisplayValue('改了一半的标题')).toBeTruthy();
 });
 
 test('transitively aliased legacy media saves as one recovered ordinary item', async () => {

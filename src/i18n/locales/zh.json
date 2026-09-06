@@ -2381,6 +2381,7 @@
       "groupsLabel": "分组",
       "imageItem": "图片",
       "itemsCount": "项",
+      "legacyMediaUnavailableInline": "这篇笔记有 {{count}} 项无法恢复的旧媒体，保存会丢失它们，请返回且不要保存。",
       "legacyMediaUnavailableMessage": "这篇笔记含有无法恢复的旧媒体。为避免丢失内容，请返回且不要保存。",
       "legacyMediaUnavailableTitle": "无法安全保存媒体",
       "loadFailedMessage": "笔记加载失败，请返回后重试",

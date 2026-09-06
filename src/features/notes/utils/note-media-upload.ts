@@ -180,6 +180,21 @@ export function createNoteMediaUploadOperationGuard() {
   };
 }
 
+/**
+ * 这批媒体块插在哪个块之后。
+ *
+ * 没有文字光标是常态，不是异常：作者往往直接点工具栏的图片按钮，从没在正文里点
+ * 过一下。此前 DOM 侧遇到这种情况直接返回，而调用方紧接着就把这批 pendingInserts
+ * 交割掉 —— 图已经传完、流量已经付过，却一张都没进文档，也没有任何提示。
+ * 没有光标就落到文末，那正是作者期待它出现的位置。
+ */
+export function resolveMediaInsertAnchor<TBlock>(
+  cursorBlock: TBlock | null | undefined,
+  documentBlocks: readonly TBlock[],
+): TBlock | null {
+  return cursorBlock ?? documentBlocks[documentBlocks.length - 1] ?? null;
+}
+
 export function buildPendingEditorBlocks(
   pendingInserts: readonly { type: 'image' | 'video'; url: string }[],
 ) {

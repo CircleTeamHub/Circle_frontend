@@ -2384,6 +2384,7 @@
       "groupsLabel": "Groups",
       "imageItem": "Image",
       "itemsCount": "items",
+      "legacyMediaUnavailableInline": "This note has {{count}} legacy media item(s) that cannot be recovered. Saving would lose them, so go back without saving.",
       "legacyMediaUnavailableMessage": "This note contains legacy media that cannot be recovered. Go back without saving to avoid losing content.",
       "legacyMediaUnavailableTitle": "Cannot safely save media",
       "loadFailedMessage": "This note failed to load. Go back and try again.",

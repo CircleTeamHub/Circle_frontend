@@ -848,6 +848,7 @@
       "groupsLabel": "그룹",
       "imageItem": "이미지",
       "itemsCount": "개",
+      "legacyMediaUnavailableInline": "이 노트에는 복구할 수 없는 이전 미디어가 {{count}}개 있습니다. 저장하면 사라지므로 저장하지 말고 돌아가세요.",
       "legacyMediaUnavailableMessage": "이 노트에는 복구할 수 없는 이전 미디어가 포함되어 있습니다. 콘텐츠 손실을 막으려면 저장하지 말고 돌아가세요.",
       "legacyMediaUnavailableTitle": "미디어를 안전하게 저장할 수 없습니다",
       "loadFailedMessage": "노트를 불러오지 못했습니다. 돌아간 뒤 다시 시도해 주세요.",

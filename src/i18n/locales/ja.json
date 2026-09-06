@@ -848,6 +848,7 @@
       "groupsLabel": "グループ",
       "imageItem": "画像",
       "itemsCount": "項目",
+      "legacyMediaUnavailableInline": "このノートには復元できない古いメディアが {{count}} 件あります。保存すると失われるため、保存せずに戻ってください。",
       "legacyMediaUnavailableMessage": "このノートには復元できない古いメディアが含まれています。内容を失わないよう、保存せずに戻ってください。",
       "legacyMediaUnavailableTitle": "メディアを安全に保存できません",
       "loadFailedMessage": "ノートを読み込めませんでした。戻ってからもう一度お試しください。",

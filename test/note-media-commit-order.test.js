@@ -77,3 +77,17 @@ test('批量上传失败上报真实错误而不是自造的占位错误', () =>
   assert.match(handler, /summarizeNoteMediaBatchFailure\(batch\.errors\)/);
   assert.doesNotMatch(handler, /new Error\('note media batch upload failed'\)/);
 });
+
+// 系统相册可以开着好几分钟。网页端对话框背后的页面仍然可见，作者一个文件都还没
+// 选，两个「添加」按钮就已经变成上传中并且全部禁用了。重入由 uploadInFlightRef
+// 挡住，与这个标签无关。
+test('「上传中」直到相册返回文件之后才亮', () => {
+  const handler = sectionMediaHandler();
+  const picker = handler.indexOf('launchImageLibraryAsync(');
+  const indicator = handler.indexOf('setUploadingSection(uploadKey)');
+
+  assert.ok(picker > 0 && indicator > 0);
+  assert.ok(indicator > picker, '上传中标签不该在相册打开之前就亮');
+  // 重入闸仍然在函数最开头。
+  assert.match(handler.slice(0, 400), /uploadInFlightRef\.current = true;/);
+});
