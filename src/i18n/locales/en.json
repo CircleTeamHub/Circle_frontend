@@ -1593,7 +1593,6 @@
     "tags": "Tags",
     "description": "Description",
     "permission": "Friend Permissions",
-    "giftCoins": "Gift Coins",
     "moreInfo": "More Info",
     "editProfile": "Edit Profile",
     "fieldNotEditable": "This field cannot be edited",
