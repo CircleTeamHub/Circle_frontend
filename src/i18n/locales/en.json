@@ -827,6 +827,8 @@
       "myCreated": "Groups I Created",
       "myJoined": "Groups I Joined",
       "myManaged": "Groups I Manage",
+      "searchPlaceholder": "Search groups",
+      "noMatches": "No matching groups",
       "memberCount": "{{count}} members",
       "empty": "No groups",
       "loading": "Loading groups",

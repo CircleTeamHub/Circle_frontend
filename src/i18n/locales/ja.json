@@ -1740,6 +1740,8 @@
       "myCreated": "作成したグループ",
       "myJoined": "参加中のグループ",
       "myManaged": "管理中のグループ",
+      "searchPlaceholder": "グループを検索",
+      "noMatches": "一致するグループはありません",
       "memberCount": "{{count}} 人",
       "empty": "グループはありません",
       "loading": "グループを読み込み中",
