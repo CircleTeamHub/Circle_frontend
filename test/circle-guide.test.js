@@ -27,7 +27,13 @@ test('circle settings screen links to the guide screen', () => {
     'src/features/discover/screens/CircleNotificationSettingsScreen.tsx',
   );
   assert.match(settings, /discover\.guide\.title/);
-  assert.match(settings, /router\.push\('\/\(tabs\)\/discover\/guide'\)/);
+  // 这一页现在也从联系人栈打开，所以入口按当前栈解析而不是写死 discover ——
+  // 写死的话用户会被甩去另一个 tab，返回时回不到他出发的那一栈。
+  assert.match(settings, /getCircleGuideHref/);
+  assert.doesNotMatch(
+    settings,
+    /router\.push\('\/\(tabs\)\/discover\/guide'\)/,
+  );
 });
 
 test('discover guide route re-exports the guide screen', () => {
