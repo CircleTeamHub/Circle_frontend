@@ -52,8 +52,10 @@ import {
   createNoteMediaUploadOperationGuard,
   createPendingNoteMediaDrafts,
   MAX_NOTE_MEDIA_SELECTION,
+  partitionUnsettledDrafts,
   reconcileNoteMediaDrafts,
   stripEditorMediaDrafts,
+  summarizeNoteMediaBatchFailure,
   uploadNoteMediaBatch,
 } from '@/features/notes/utils/note-media-upload';
 import {
@@ -185,7 +187,10 @@ export default function EditNoteScreen() {
   const existingSectionsRef = useRef<Partial<NoteSections> | null>(null);
   const uploadInFlightRef = useRef(false);
   const uploadOperationGuardRef = useRef(createNoteMediaUploadOperationGuard());
-  const activeUploadDraftIdsRef = useRef<Set<string>>(new Set());
+  // 「结果还能不能写进这份列表」只看这一条：批次开始时是哪一篇笔记，落地时还得
+  // 是同一篇。失去焦点（去选位置、去选分组）不属于这个判断 —— 那时列表还是同一
+  // 份，把已经传完的对象丢掉纯粹是白扔用户刚等完的那几十秒。
+  const editedNoteKeyRef = useRef<string>('');
   const pickerPreviewDisposerRef = useRef(createPickerPreviewDisposer());
   const saveGenerationRef = useRef(0);
   const saveInFlightRef = useRef(false);
@@ -223,21 +228,14 @@ export default function EditNoteScreen() {
     uploadInFlightRef.current = false;
   }, []);
 
+  // 交回上传的「所有权」，但**不动**已经放进列表的草稿。
+  //
+  // 这里原本还会把在飞批次的占位图删掉。那正是丢文件的入口：失焦后回到本页时批次
+  // 往往还没落地，占位图一删，等它落地时就没有东西可并 —— 已经传完、已经付过流量
+  // 的对象凭空消失。批次落地时自己会收尾（成功的转 UPLOADED，失败的丢掉），那才是
+  // 唯一该决定去留的地方。
   const resetUploadOwnership = useCallback(() => {
-    const abandonedDraftIds = activeUploadDraftIdsRef.current;
-    activeUploadDraftIdsRef.current = new Set();
     invalidateUploadOwnership();
-    if (abandonedDraftIds.size) {
-      const discardAbandonedPendingDrafts = (items: EditorNoteMediaDraft[]) =>
-        items.filter((item) => {
-          const shouldKeep =
-            item.uploadStatus === 'UPLOADED' || !abandonedDraftIds.has(item.clientId);
-          if (!shouldKeep) pickerPreviewDisposerRef.current.dispose(item.previewUri);
-          return shouldKeep;
-        });
-      setMediaItems(discardAbandonedPendingDrafts);
-      setShowcaseItems(discardAbandonedPendingDrafts);
-    }
     setUploadingSection(null);
   }, [invalidateUploadOwnership]);
 
@@ -248,6 +246,7 @@ export default function EditNoteScreen() {
   }, [navigating, router]);
 
   useEffect(() => {
+    editedNoteKeyRef.current = id ?? '';
     resetUploadOwnership();
     return invalidateUploadOwnership;
   }, [id, invalidateUploadOwnership, resetUploadOwnership]);
@@ -401,7 +400,10 @@ export default function EditNoteScreen() {
       if (!isRouteDataReady || uploadInFlightRef.current) return;
       uploadInFlightRef.current = true;
       const operationToken = uploadOperationGuardRef.current.begin();
-      activeUploadDraftIdsRef.current = new Set();
+      // 结果能否落库只认这一条：批次开始时编辑的是哪一篇笔记。
+      const batchNoteKey = editedNoteKeyRef.current;
+      let batchDraftIds: Set<string> = new Set();
+      const stillEditingSameNote = () => editedNoteKeyRef.current === batchNoteKey;
       const uploadKey: UploadingSection = `${target}:${kind}`;
       setUploadingSection(uploadKey);
       try {
@@ -464,7 +466,7 @@ export default function EditNoteScreen() {
           acceptedAssets,
           kind === 'video' ? 'VIDEO' : 'IMAGE',
         );
-        activeUploadDraftIdsRef.current = new Set(pendingDrafts.map((item) => item.clientId));
+        batchDraftIds = new Set(pendingDrafts.map((item) => item.clientId));
         if (pendingDrafts.length) {
           const appendPending = (current: EditorNoteMediaDraft[]) => [
             ...current,
@@ -516,26 +518,27 @@ export default function EditNoteScreen() {
           };
         },
         );
-        if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
-        batch.failedIndexes.forEach((index) =>
-          pickerPreviewDisposerRef.current.dispose(acceptedAssets[index]?.uri),
-        );
-        if (target === 'media') {
-          setMediaItems((current) => reconcileNoteMediaDrafts(current, batch.items));
-        } else {
-          setShowcaseItems((current) => reconcileNoteMediaDrafts(current, batch.items));
-        }
-        if (batch.failedCount) {
-          reportHandledFailure(
-            'noteEditor',
-            'sectionMediaUploadBatch',
-            new Error('note media batch upload failed'),
-            {
-              failed: batch.failedCount,
-              total: acceptedAssets.length,
-              reason: `${target}.${kind}`,
-            },
+        // 结果先落库，再谈 UI。此前这里先查「本次操作是否仍持有所有权」，失焦就
+        // 直接 return —— 于是**已经传完**的对象被整批丢掉：字节已经躺在对象存储里，
+        // 丢掉的是用户刚等完的那几十秒和一份已经付过的流量。所有权只管弹窗和按钮态。
+        if (stillEditingSameNote()) {
+          batch.failedIndexes.forEach((index) =>
+            pickerPreviewDisposerRef.current.dispose(acceptedAssets[index]?.uri),
           );
+          const commitBatch = (current: EditorNoteMediaDraft[]) =>
+            reconcileNoteMediaDrafts(current, batch.items, batchDraftIds);
+          if (target === 'media') setMediaItems(commitBatch);
+          else setShowcaseItems(commitBatch);
+        }
+        if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
+        if (batch.failedCount) {
+          const { error, errorNames } = summarizeNoteMediaBatchFailure(batch.errors);
+          reportHandledFailure('noteEditor', 'sectionMediaUploadBatch', error, {
+            failed: batch.failedCount,
+            total: acceptedAssets.length,
+            reason: `${target}.${kind}`,
+            errorNames,
+          });
           Alert.alert(
             t('notes.editor.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
             t('notes.editor.mediaUploadsFailedMessage', {
@@ -545,16 +548,24 @@ export default function EditNoteScreen() {
           );
         }
       } catch (error) {
+        // 同样先清理，再谈 UI：占位图不清掉就永远卡在 PENDING，保存按钮再也点不动。
+        if (stillEditingSameNote()) {
+          const discardUnsettled = (items: EditorNoteMediaDraft[]) => {
+            // 只丢这一批里**还没传完**的。按 clientId 一刀切会把同批中已经成功、
+            // 已经并回列表的那几条连同已上传的文件一起删掉。
+            const { kept, discarded } = partitionUnsettledDrafts(items, batchDraftIds);
+            for (const item of discarded) {
+              pickerPreviewDisposerRef.current.dispose(item.previewUri);
+            }
+            return discarded.length ? kept : items;
+          };
+          if (target === 'media') setMediaItems(discardUnsettled);
+          else setShowcaseItems(discardUnsettled);
+        }
+        // 上报也不看所有权：失焦时抛的错和在焦点里抛的错是同一个故障，只因为
+        // 用户正好切走就在线上消失，等于给自己留了一片盲区。
+        reportHandledFailure('noteEditor', 'sectionMediaUpload', error);
         if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
-        const failedDraftIds = activeUploadDraftIdsRef.current;
-        const discardFailedDrafts = (items: EditorNoteMediaDraft[]) =>
-          items.filter((item) => {
-            const shouldKeep = !failedDraftIds.has(item.clientId);
-            if (!shouldKeep) pickerPreviewDisposerRef.current.dispose(item.previewUri);
-            return shouldKeep;
-          });
-        if (target === 'media') setMediaItems(discardFailedDrafts);
-        else setShowcaseItems(discardFailedDrafts);
         Alert.alert(
           t('notes.editor.mediaUploadFailedTitle', {
             defaultValue: '上传失败',
@@ -563,11 +574,9 @@ export default function EditNoteScreen() {
             defaultValue: '请稍后重试',
           }),
         );
-        reportHandledFailure('noteEditor', 'sectionMediaUpload', error);
       } finally {
         if (uploadOperationGuardRef.current.complete(operationToken)) {
           uploadInFlightRef.current = false;
-          activeUploadDraftIdsRef.current = new Set();
           setUploadingSection(null);
         }
       }
