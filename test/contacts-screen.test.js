@@ -19,6 +19,28 @@ test('contacts screen loads real friends and routes quick actions to dedicated s
   assert.match(source, /mountedRef/);
 });
 
+test('contacts quick actions keep the agreed order and entries', () => {
+  const source = read('src/features/contacts/screens/ContactsScreen.tsx');
+  const block = source.slice(
+    source.indexOf('const QUICK_ACTION_KEYS'),
+    source.indexOf('const ALPHABET'),
+  );
+  const ids = [...block.matchAll(/id: '([\w-]+)'/g)].map((match) => match[1]);
+
+  // 顺序是产品定的；朋友圈入口是 #195 从发现页搬过来的，圈子行也在那时改用
+  // discover.management 文案。这里钉住整张列表，避免哪次重排又把它们挤掉。
+  assert.deepEqual(ids, [
+    'new-friends',
+    'groups',
+    'seats',
+    'moments',
+    'circles',
+    'tags',
+  ]);
+  assert.match(block, /id: 'moments'[^}]*key: 'discover\.moments'/);
+  assert.match(block, /id: 'circles'[^}]*key: 'discover\.management'/);
+});
+
 test('new friends screen exists as a friend-activity inbox with per-item read flow', () => {
   const routeSource = read('app/(tabs)/contacts/new-friends.tsx');
   const screenSource = read('src/features/contacts/screens/NewFriendsScreen.tsx');
