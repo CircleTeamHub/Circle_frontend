@@ -100,7 +100,7 @@ test('chat image bubble opens the full-screen viewer on tap', () => {
   assert.match(source, /ImageViewer/);
   assert.match(source, /onPress=\{handleOpenPreview\}/);
   assert.match(source, /visible=\{previewVisible\}/);
-  assert.match(source, /privacyMode=\{selfDestructEnabled \? 'ephemeral' : 'standard'\}/);
+  assert.match(source, /privacyMode=\{ephemeral \? 'ephemeral' : 'standard'\}/);
 });
 
 test('post expiry defaults to six hours and remains manually selectable', () => {

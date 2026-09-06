@@ -320,6 +320,9 @@ export function mapChatMessageDtoToUI(
   const base = {
     id: dto.id,
     time: formatChatTimestamp(dto.createdAt),
+    // 会话级设置，逐条带下来。渲染阅后即焚图片的判定不能依赖会话列表是否已
+    // 加载（推送冷启动时它可能还没到）。老后端不发 → undefined → 调用方回落。
+    burnDurationSec: dto.burnDurationSec ?? undefined,
     senderID: isSent ? undefined : (dto.sender?.id ?? undefined),
     senderName: isSent ? undefined : (dto.sender?.nickname ?? undefined),
     senderAvatarUrl: isSent
