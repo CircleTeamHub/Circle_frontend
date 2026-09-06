@@ -71,6 +71,7 @@ import {
   getNoteDetailHref,
   getCircleDetailHref,
   getPlazaPostDetailHref,
+  getQrLandingHref,
   getVerificationDetailHref,
 } from '@/features/user/utils/routes';
 import * as ImagePicker from 'expo-image-picker';
@@ -2138,10 +2139,13 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onLongPress={getMessageLongPressHandler(item)}
-            // 点卡片 = 扫这张码:走扫码同一条落地页,由 /qr 按令牌自己判类型与有效性。
-            onPress={(card) =>
-              router.push({ pathname: '/qr', params: { t: card.token } })
-            }
+            // 点卡片 = 扫这张码:走扫码同一条落地页,由落地页按令牌自己判类型与有效性。
+            // 进本栈那一份镜像,不能跳顶层 /qr:本页在四个 tab 栈和 (chat) 下都有挂载
+            // 点,而落地页自己还要往下跳(看资料 / 加好友 / 进群聊)—— 从顶层进去那些
+            // 下一跳只会落回 messages 栈,把用户甩出他出发的 tab,返回也不是上一层。
+            // 同理 push 不能改成 replace:顶掉当前页,落地页走完就没有可返回的上一层
+            // 了,正是 #202 修掉的那个 bug。
+            onPress={(card) => router.push(getQrLandingHref(scope, card.token))}
             hideStatus={isGroupChat}
           />
         ));

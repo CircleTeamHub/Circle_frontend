@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
@@ -16,8 +16,10 @@ import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
+  getChatDetailHref,
   getSendFriendRequestHref,
   getUserProfileHref,
+  getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { approveQrLogin } from '@/services/api/qr-login';
@@ -40,6 +42,11 @@ export default function QrLandingScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ t?: string }>();
   const token = typeof params.t === 'string' ? params.t : '';
+  // 落地页在四个 tab 栈各有一份镜像。下面三处跳转(看资料 / 加好友 / 进群聊)都得
+  // 留在进来的那一栈里,否则用户会被甩出出发的 tab,返回也不再是上一层。顶层
+  // app/qr.tsx(外部相机深链)取不到 tab 段,回落 messages —— 冷启动本来就没有来源栈。
+  const segments = useSegments();
+  const scope = getUserProfileScopeFromSegments(segments);
 
   const [preview, setPreview] = useState<QrResolveResult | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -68,18 +75,19 @@ export default function QrLandingScreen() {
   const openConversation = useCallback(
     (conversationId: string, name: string) => {
       // 独立群聊:sourceID 就是会话 id(与消息列表进入同一形状)。
-      router.replace({
-        pathname: '/(tabs)/messages/chat-detail',
-        params: {
-          conversationID: conversationId,
-          sourceID: conversationId,
-          title: name,
-          conversationType: 'group',
-          conversationKind: 'group',
-        },
-      });
+      router.replace(
+        getChatDetailHref(
+          scope,
+          conversationId,
+          name,
+          undefined,
+          conversationId,
+          undefined,
+          'group',
+        ),
+      );
     },
-    [router],
+    [router, scope],
   );
 
   const handlePrimary = useCallback(async () => {
@@ -109,13 +117,13 @@ export default function QrLandingScreen() {
       if (preview.viewerState === 'SELF') return;
       if (preview.viewerState === 'FRIEND') {
         router.replace(
-          getUserProfileHref('messages', preview.targetId, preview.name),
+          getUserProfileHref(scope, preview.targetId, preview.name),
         );
         return;
       }
       // 加好友:跳申请页,qrToken 一路带到服务端换 addMeByQrCode 放行。
       router.push(
-        getSendFriendRequestHref('messages', preview.targetId, preview.name, {
+        getSendFriendRequestHref(scope, preview.targetId, preview.name, {
           qrToken: token,
         }),
       );
@@ -156,7 +164,7 @@ export default function QrLandingScreen() {
     } finally {
       setJoining(false);
     }
-  }, [joining, openConversation, preview, router, t, token]);
+  }, [joining, openConversation, preview, router, scope, t, token]);
 
   const primaryLabel = useMemo(() => {
     if (!preview) return '';

@@ -135,8 +135,8 @@ test('QrLandingScreen previews before joining and never auto-joins', () => {
   assert.doesNotMatch(effectBlock, /joinByQrToken/);
   assert.match(source, /const handlePrimary = useCallback/);
   assert.match(source, /joinByQrToken\(token\)/);
-  // 名片码走加好友申请页并透传 qrToken。
-  assert.match(source, /getSendFriendRequestHref\('messages', preview\.targetId, preview\.name, \{\s*qrToken: token,\s*\}\)/);
+  // 名片码走加好友申请页并透传 qrToken。scope 按进来的那一栈取,不能写死。
+  assert.match(source, /getSendFriendRequestHref\(scope, preview\.targetId, preview\.name, \{\s*qrToken: token,\s*\}\)/);
   // 严格招新 PENDING 与直接入圈 JOINED 各有文案。
   assert.match(source, /qr\.circleJoinedTitle/);
   assert.match(source, /qr\.circlePendingTitle/);
