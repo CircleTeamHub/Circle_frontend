@@ -56,8 +56,20 @@ test('messages scan screen routes recognized app results and copies unknown resu
   assert.match(resolver, /pathname: '\/\(tabs\)\/messages\/qr-login'/);
   assert.match(layout, /<Stack\.Screen name="qr" \/>/);
   assert.match(layout, /<Stack\.Screen name="qr-login" \/>/);
-  assert.equal(exists('app/(tabs)/messages/qr.tsx'), true);
-  assert.equal(exists('app/(tabs)/messages/qr-login.tsx'), true);
+  // 钉住这两个路由的内容而不只是存在性：它们是顶层 app/qr.tsx、app/qr-login.tsx
+  // 的重复入口，而 qr-feature.test.js 只钉了顶层那两个。落地页管着扫码登录审批，
+  // 哪天有人把这里改指到一个门禁更松的组件上，光查存在性是发现不了的。
+  for (const route of [
+    'app/(tabs)/messages/qr.tsx',
+    'app/(tabs)/messages/qr-login.tsx',
+  ]) {
+    assert.equal(exists(route), true, `${route} should exist`);
+    assert.match(
+      read(route),
+      /export \{ default \} from '@\/features\/qr\/screens\/QrLandingScreen'/,
+      `${route} should re-export QrLandingScreen`,
+    );
+  }
   assert.match(source, /Clipboard\.setStringAsync\(value\)/);
   assert.match(source, /handleCopyFallback\(action\.value\)/);
   assert.match(resolver, /type MessageScanAction/);
