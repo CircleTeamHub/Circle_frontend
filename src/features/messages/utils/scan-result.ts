@@ -57,11 +57,17 @@ function normalizeMessagePath(rawValue: string): string | null {
 export function resolveMessageScanResult(data: string): MessageScanAction {
   const value = data.trim();
 
+  // 这里的结果由 ScanScreen 用 router.replace 消费:落地页必须留在 messages 栈内。
+  // 跳去顶层的 /qr、/qr-login 会把整个 messages 栈换掉,加好友申请走完之后落地页
+  // 就没有可返回的目标了。外部系统相机扫出来的深链另走顶层路由,不经过这里。
   const loginToken = parseQrLoginToken(value);
   if (loginToken) {
     return {
       type: 'route',
-      href: { pathname: '/qr-login', params: { t: loginToken } },
+      href: {
+        pathname: '/(tabs)/messages/qr-login',
+        params: { t: loginToken },
+      },
     };
   }
 
@@ -71,7 +77,7 @@ export function resolveMessageScanResult(data: string): MessageScanAction {
   if (qrToken) {
     return {
       type: 'route',
-      href: { pathname: '/qr', params: { t: qrToken } },
+      href: { pathname: '/(tabs)/messages/qr', params: { t: qrToken } },
     };
   }
 
