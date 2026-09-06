@@ -311,6 +311,9 @@ const s = StyleSheet.create({
     marginLeft: AVATAR_SIZE + Spacing.sm,
     marginBottom: Spacing.xs + 2,
   },
+  // 「隐藏聊天头像」把整列去掉，气泡贴边；名字要跟着回到 0，否则名字缩进、
+  // 它自己的气泡贴边，两者对不上。合并头像不走这条 —— 那时占位还在。
+  senderLabelWithoutAvatarColumn: { marginLeft: 0 },
   header: {
     height: 60,
     flexDirection: 'row',
@@ -929,6 +932,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const typingSingle = useAppSettingsStore((state) => state.settings.singleTyping);
   const typingGroup = useAppSettingsStore((state) => state.settings.groupTyping);
   const mergeAvatar = useAppSettingsStore((state) => state.settings.mergeAvatar);
+  // 名字的缩进必须与真实的头像列一致（MessageAvatar 里同一条规则）。
+  const hideChatAvatar = useAppSettingsStore(
+    (state) => state.settings.hideChatAvatar,
+  );
   // 对端「正在输入」有效期;到期自动回落在线状态。
   const typingUntil = useChatStore(
     (state) => state.typingUntilByConversation[conversationID] ?? 0,
@@ -1070,14 +1077,23 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     );
     return mapped;
   }, [currentUserID, conversationMessages, peerReadHeight, peerDeliveredHeight]);
+  // 上游 mapChatMessageDtosToUI 用 WeakMap 保住了每条消息的对象身份，好让列表
+  // 跳过没变的行。这里原来每次都 spread 一个新对象，等于把那份身份在「同一个人
+  // 连着发的消息」上全部作废 —— 而群聊里那恰恰是多数行，来一条新消息或对端已读
+  // 水位推进一次，整片都要重渲染。变体按源对象缓存，身份跟着源走。
+  const avatarMergeCacheRef = useRef(new WeakMap<ChatMessage, ChatMessage>());
   const displayMessages = useMemo(() => {
     if (!mergeAvatar) return messages;
+    const cache = avatarMergeCacheRef.current;
     return messages.map((message, index) => {
       const key = getAvatarMergeKey(message);
       const olderKey = getAvatarMergeKey(messages[index + 1]);
-      return key && key === olderKey
-        ? { ...message, suppressAvatar: true }
-        : message;
+      if (!key || key !== olderKey) return message;
+      const cached = cache.get(message);
+      if (cached) return cached;
+      const merged: ChatMessage = { ...message, suppressAvatar: true };
+      cache.set(message, merged);
+      return merged;
     });
   }, [mergeAvatar, messages]);
   messagesLengthRef.current = messages.length;
@@ -1761,13 +1777,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           <MemberName
             name={receivedDisplayName(message)}
             userId={message.senderID}
-            style={[s.senderLabel, { color: colors.textSecondary }]}
+            style={[
+              s.senderLabel,
+              hideChatAvatar && s.senderLabelWithoutAvatarColumn,
+              { color: colors.textSecondary },
+            ]}
           />
           {node}
         </View>
       );
     },
-    [isGroupChat, receivedDisplayName, colors.textSecondary],
+    [isGroupChat, receivedDisplayName, colors.textSecondary, hideChatAvatar],
   );
 
   const withMessageActions = useCallback(

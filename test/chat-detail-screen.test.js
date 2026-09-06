@@ -793,3 +793,51 @@ test('losing member access clears stale mention state before the next send', () 
     /if \(!isGroupChat \|\| canViewGroupMemberProfiles\) return;\s*\n\s*setMentionTargets\(\[\]\);\s*\n\s*setMentionCandidates\(\[\]\);\s*\n\s*setMentionQuery\(null\);\s*\n\s*setMentionPickerVisible\(false\);\s*\n\s*mentionCandidatesCacheRef\.current\.clear\(\);/,
   );
 });
+
+// 合并头像只是这一条不画，同一个人连着发的那一串仍要对齐在同一条竖线上；而
+// 「隐藏聊天头像」是把整列去掉，气泡本来就该贴边。之前两种情况都返回 null，
+// 行里的头像位和 gap 一起塌掉，群聊的发送者名字却仍按「头像宽 + 间距」缩进 ——
+// 名字和它自己的气泡对不上。
+test('合并头像留等宽占位，隐藏头像才真的去掉那一列', () => {
+  const shared = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/components/bubbles/shared.tsx'),
+    'utf8',
+  );
+  const start = shared.indexOf('export const MessageAvatar');
+  assert.ok(start > 0);
+  const body = shared.slice(start, shared.indexOf('\n};', start));
+
+  assert.match(body, /if \(hideChatAvatar\) return null;/);
+  assert.match(body, /message\.suppressAvatar/);
+  assert.match(body, /mergedPlaceholder/);
+  // 两种情况不能再共用一个 return null。
+  assert.doesNotMatch(body, /hideChatAvatar \|\| message\.suppressAvatar/);
+  assert.match(shared, /mergedPlaceholder: \{ width: AVATAR_SIZE \}/);
+});
+
+test('群聊发送者名字的缩进跟着真实的头像列走', () => {
+  const detail = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(detail, /senderLabelWithoutAvatarColumn: \{ marginLeft: 0 \}/);
+  assert.match(detail, /hideChatAvatar && s\.senderLabelWithoutAvatarColumn/);
+});
+
+// mapChatMessageDtosToUI 用 WeakMap 保住每条消息的对象身份，好让列表跳过没变的
+// 行。displayMessages 每次 spread 一个新对象，等于把那份身份在「同一个人连着发的
+// 消息」上全部作废 —— 群聊里那恰恰是多数行。
+test('合并头像的变体按源对象缓存，不作废上游的身份缓存', () => {
+  const detail = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const start = detail.indexOf('const displayMessages = useMemo(');
+  assert.ok(start > 0);
+  const body = detail.slice(start, detail.indexOf('}, [mergeAvatar, messages]);', start));
+
+  assert.match(body, /const cached = cache\.get\(message\);/);
+  assert.match(body, /cache\.set\(message, merged\)/);
+  assert.match(detail, /avatarMergeCacheRef = useRef\(new WeakMap<ChatMessage, ChatMessage>\(\)\)/);
+});
