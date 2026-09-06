@@ -571,6 +571,7 @@
       "cannotModify": "无法修改当前会话的聊天背景。",
       "statusUploading": "上传中...",
       "statusSet": "已设置",
+      "restoreDefault": "恢复默认背景",
       "statusChoose": "请选择",
       "failedTitle": "设置失败",
       "failedBody": "图片背景设置失败，请重试。"

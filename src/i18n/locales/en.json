@@ -572,6 +572,7 @@
       "cannotModify": "Cannot modify chat background.",
       "statusUploading": "Uploading...",
       "statusSet": "Set",
+      "restoreDefault": "Restore default background",
       "statusChoose": "Choose",
       "failedTitle": "Setup failed",
       "failedBody": "Failed to set image background. Please try again."

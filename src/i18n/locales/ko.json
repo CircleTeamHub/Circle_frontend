@@ -494,6 +494,7 @@
       "cannotModify": "채팅 배경을 변경할 수 없습니다.",
       "statusUploading": "업로드 중...",
       "statusSet": "설정됨",
+      "restoreDefault": "기본 배경으로 되돌리기",
       "statusChoose": "선택",
       "failedTitle": "설정 실패",
       "failedBody": "이미지 배경 설정에 실패했습니다. 다시 시도해 주세요."
