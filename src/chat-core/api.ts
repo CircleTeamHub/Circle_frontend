@@ -387,11 +387,16 @@ export async function searchChatMessages(
     });
     const messages = withoutLocallyDeleted(page.messages);
     const next = page.nextBeforeHeight;
+    // 游标必须严格向更早推进,否则就是原地打转。
+    const advanced = next !== null && (beforeHeight === undefined || next < beforeHeight);
+    // 停住的游标要**归一成 null 再交出去**。原来是原样返回的,而六个历史列表屏
+    // (文本/媒体/文件/日期结果/群日志,以及各自的首页与翻页两条路径)一律写成
+    // `setHasMore(page.nextBeforeHeight !== null)` —— 于是 hasMore 永远为真,
+    // 用户每滑一下就发一次一模一样的请求,列表一行都不涨,而且永远停不下来。
+    // 这个循环本身早就靠 advanced 收了手;把结论咽回去不告诉调用方才是漏的那半。
     // 游标始终用**最后一次**请求返回的那个,否则下一次翻页会退回已经看过的区间。
-    if (messages.length > 0 || next === null) return { ...page, messages };
-    // 游标必须严格向更早推进,否则就是原地打转 —— 宁可返回空页也不能挂死。
-    if (beforeHeight !== undefined && next >= beforeHeight) {
-      return { ...page, messages };
+    if (messages.length > 0 || !advanced) {
+      return { ...page, messages, nextBeforeHeight: advanced ? next : null };
     }
     beforeHeight = next;
   }
@@ -520,19 +525,27 @@ export async function clearChatConversationHistory(
   const sameSession = sessionGate();
   const forEveryone = options.forEveryone ?? false;
   const operation = getPendingHistoryClear(conversationId, forEveryone);
-  const result = await apiClient<{ clearedBeforeHeight?: number }>(
-    `/chat/conversations/${conversationId}/clear`,
-    {
-      method: 'POST',
-      body: {
-        forEveryone,
-        ...(operation.targetHeight !== undefined
-          ? { targetHeight: operation.targetHeight }
-          : {}),
+  let result: { clearedBeforeHeight?: number };
+  try {
+    result = await apiClient<{ clearedBeforeHeight?: number }>(
+      `/chat/conversations/${conversationId}/clear`,
+      {
+        method: 'POST',
+        body: {
+          forEveryone,
+          ...(operation.targetHeight !== undefined
+            ? { targetHeight: operation.targetHeight }
+            : {}),
+        },
       },
-    },
-  );
-  completePendingHistoryClear(conversationId, forEveryone, operation);
+    );
+  } finally {
+    // finally,不是成功之后。这张表的用途是「同一次点击的并发去重」,请求一结束
+    // 它就不再 pending 了。原来只在成功路径上删,一次失败就把当时的 targetHeight
+    // 钉在表里直到换账号 —— 用户过几分钟重试,清的还是那个旧水位,这中间收到的
+    // 消息一条不清,而界面照样提示「已清空」。
+    completePendingHistoryClear(conversationId, forEveryone, operation);
+  }
   if (sameSession()) {
     // 带上服务端的权威水位:在途的历史请求/延迟的 chat:msg 会在清空之后
     // 落地,没有水位挡的话它们把刚清掉的时间线原样填回来。
