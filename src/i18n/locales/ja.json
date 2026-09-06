@@ -75,6 +75,7 @@
       "placeholder": "自動返信の内容を入力",
       "loadFailed": "自動返信設定を読み込めませんでした",
       "saveFailed": "自動返信設定を保存できませんでした",
+      "messageRequired": "自動返信を有効にする前に返信内容を入力してください",
       "unsaved": "未保存の変更があります"
     },
     "appearance": {

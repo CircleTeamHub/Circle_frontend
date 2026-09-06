@@ -2048,6 +2048,7 @@
       "placeholder": "填写自动回复内容",
       "loadFailed": "自动回复设置加载失败",
       "saveFailed": "自动回复设置保存失败",
+      "messageRequired": "开启自动回复前请填写回复内容",
       "unsaved": "有未保存的更改"
     },
     "appearance": {
