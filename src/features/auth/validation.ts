@@ -34,6 +34,17 @@ export function validateEmail(email: string): ValidationError {
   return null;
 }
 
+export function validateLoginIdentifier(identifier: string): ValidationError {
+  const trimmed = identifier.trim();
+  if (!trimmed) return 'auth.errors.loginIdentifierRequired';
+  if (trimmed.includes('@')) {
+    return isValidEmail(trimmed) ? null : 'auth.errors.invalidLoginIdentifier';
+  }
+  return INVITE_CODE_RE.test(trimmed)
+    ? null
+    : 'auth.errors.invalidLoginIdentifier';
+}
+
 export function validatePassword(password: string): ValidationError {
   // 密码不 trim：首尾空格是合法字符，长度按原样计。
   if (!password) return 'auth.errors.passwordRequired';
@@ -62,12 +73,11 @@ export function validateInviteCode(inviteCode: string): ValidationError {
 }
 
 /** 复合校验：返回第一个未通过项的 key（?? 短路，顺序即展示优先级）。 */
-export function validateLoginForm(email: string, password: string): ValidationError {
-  return validateEmail(email) ?? validatePassword(password);
-}
-
-export function validateLoginCodeForm(email: string, code: string): ValidationError {
-  return validateEmail(email) ?? validateCode(code);
+export function validateLoginForm(
+  identifier: string,
+  password: string,
+): ValidationError {
+  return validateLoginIdentifier(identifier) ?? validatePassword(password);
 }
 
 export function validateRegisterForm(

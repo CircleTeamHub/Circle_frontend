@@ -135,30 +135,21 @@ function validateOrigins(env, prefix) {
 
 function validateAuth(env) {
   const mode = requireValue(env, 'E2E_AUTH_MODE');
-  if (!['password', 'verification-code'].includes(mode)) {
-    throw new Error('E2E_AUTH_MODE must be password or verification-code.');
+  if (mode !== 'password') {
+    throw new Error('E2E_AUTH_MODE must be password.');
   }
   const email = requireValue(env, 'E2E_EMAIL');
   if (!/^[^\s@]+@[^\s@]+$/.test(email)) {
     throw new Error('E2E_EMAIL must contain one valid email address.');
   }
-  if (mode === 'password') {
-    requireValue(env, 'E2E_PASSWORD');
-  } else {
-    const code = requireValue(env, 'E2E_VERIFICATION_CODE');
-    if (!/^\d{6}$/.test(code)) {
-      throw new Error('E2E_VERIFICATION_CODE must contain exactly six digits.');
-    }
-  }
+  requireValue(env, 'E2E_PASSWORD');
   return mode;
 }
 
 // 前提：validateAuth 已经保证 authMode 合法且对应凭据非空。
 function buildMaestroSecretEnv(env, authMode) {
-  if (authMode === 'password') {
-    return { MAESTRO_E2E_PASSWORD: env.E2E_PASSWORD.trim() };
-  }
-  return { MAESTRO_E2E_VERIFICATION_CODE: env.E2E_VERIFICATION_CODE.trim() };
+  if (authMode !== 'password') throw new Error('Unsupported authentication mode.');
+  return { MAESTRO_E2E_PASSWORD: env.E2E_PASSWORD.trim() };
 }
 
 function copyDefined(env, names) {
@@ -218,7 +209,7 @@ export function parseE2EConfig(env, suiteName) {
     ]),
   };
   // 只有需要登录的 suite 才把凭据交给 Maestro。非认证 suite（如 smoke）不读
-  // E2E_PASSWORD / E2E_VERIFICATION_CODE：环境里残留 E2E_AUTH_MODE 却没配对应
+  // E2E_PASSWORD：环境里残留 E2E_AUTH_MODE 却没配对应
   // 凭据时不能在这里炸掉，也不该把无关的凭据带进子进程。
   const maestroSecretEnv = authMode ? buildMaestroSecretEnv(env, authMode) : {};
 

@@ -100,19 +100,6 @@ test('web auth credentials never persist in browser storage', () => {
   assert.match(source, /key\?\.startsWith\(PREFIX\)/);
 });
 
-test('a failed QR finalization leaves the pane recoverable', () => {
-  const pane = read('src/features/auth/components/QrLoginPane.tsx');
-  // 不等收尾结果的话：轮询已停、二维码还亮着，用户对着一张永远不会生效的
-  // 码干等。后端那边失败时会把消费位回滚，前端不给出路就白回滚了。
-  assert.match(pane, /const ok = await onTokensRef\.current\(result\.tokens\)/);
-  assert.match(pane, /if \(!ok\) setStatus\('failed'\)/);
-  assert.match(pane, /\}\) => Promise<boolean>;/);
-
-  const auth = read('src/hooks/use-auth.ts');
-  assert.match(auth, /completeQrLogin[\s\S]{0,120}Promise<boolean>/);
-  assert.match(auth, /await onAuthSuccess\(tokens\);\s*\n\s*return true;/);
-});
-
 test('the cross-origin save fallback can tell an opened tab from a blocked one', () => {
   const source = read('src/utils/save-image.web.ts');
   // window.open 带 noopener/noreferrer 时规范规定返回 null —— 拿它判断成败
@@ -194,26 +181,6 @@ test('deleting the open conversation collapses the split detail pane', () => {
   assert.match(deleteFlow[0], /setEmbeddedChat/);
 });
 
-test('the QR pane expires on its own clock, not only on the server reply', () => {
-  const source = read('src/features/auth/components/QrLoginPane.tsx');
-
-  // 断网时每一发轮询都被 catch 吞掉，服务端那句 EXPIRED 永远送不到。
-  assert.match(source, /const expiresAtMs = Date\.parse\(session\.expiresAt\)/);
-  assert.match(
-    source,
-    /if \(Number\.isFinite\(expiresAtMs\) && expiresAtMs <= Date\.now\(\)\) \{[\s\S]{0,120}setStatus\('expired'\)/,
-  );
-  // 检查必须早于 inFlight 短路：离线时上一发请求可能一直挂着不回来。
-  const tick = /const timer = setInterval\(async \(\) => \{[\s\S]*?inFlight = true;/.exec(
-    source,
-  );
-  assert.ok(tick);
-  assert.ok(
-    tick[0].indexOf('expiresAtMs <= Date.now()') < tick[0].indexOf('if (inFlight) return;'),
-    '有效期检查被挡在 inFlight 短路后面，离线时永远轮不到执行',
-  );
-});
-
 test('the document language follows the selected locale on web', () => {
   const source = read('src/i18n/index.ts');
 
@@ -243,7 +210,7 @@ test('CI launches the client-only production export in a real browser', () => {
   // exceptions even when React still leaves markup behind in #root.
   assert.match(smoke, /'Runtime\.exceptionThrown'/);
   assert.match(smoke, /rootChildren/);
-  assert.match(smoke, /\/qr-login\?token=/);
+  assert.match(smoke, /\/qr\?t=/);
   assert.match(smoke, /path\.join\(DIST, 'index\.html'\)/);
   assert.match(smoke, /maxRetries:\s*5/);
   assert.match(smoke, /retryDelay:\s*200/);

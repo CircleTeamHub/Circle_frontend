@@ -34,8 +34,7 @@ const QR_SIZE = 220;
 
 type RouteType = 'user' | 'group' | 'circle';
 
-// 展示码只有三种实体类型；LOGIN 是网页端登录会话，不在本屏签发。
-const TYPE_MAP: Record<RouteType, Exclude<QrTokenType, 'LOGIN'>> = {
+const TYPE_MAP: Record<RouteType, QrTokenType> = {
   user: 'USER',
   group: 'GROUP',
   circle: 'CIRCLE',

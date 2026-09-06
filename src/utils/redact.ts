@@ -18,9 +18,8 @@ const SENSITIVE_KEYS = new Set([
   'accesstoken',
   'refreshtoken',
   'revocationsecret',
-  // 扫码登录的轮询凭证：拿到它就能换走 access/refresh 令牌。把它从 URL 挪进
-  // body 只挡住了访问日志那一路 —— dev 下 apiClient 连请求体一起打，
-  // 不进这张名单等于换个地方继续泄漏。
+  // 二维码令牌和轮询凭证可能授权加入好友、群组或圈子。即使只放在请求体，
+  // dev 下 apiClient 也会记录请求体，因此必须统一脱敏。
   'qrtoken',
   'pollkey',
   'imtoken',

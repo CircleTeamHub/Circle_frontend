@@ -40,6 +40,7 @@ import { PushNotificationTokenRegistrar } from '@/features/notifications/compone
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { WebAlertHost } from '@/components/app/web-alert-host';
 import { WebDocumentTitle } from '@/components/app/web-document-title';
+import { StartupSplash } from '@/components/app/startup-splash';
 import { AppUpdateHost } from '@/features/app-update/AppUpdateHost';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
@@ -234,6 +235,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
 // 职责：迁移旧版 AsyncStorage 数据到 MMKV → 加载字体 → 隐藏启动屏 → 挂载主题 Provider → 渲染路由结构
 function RootLayout() {
   const sentryUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authLoading = useAuthStore((state) => state.isLoading);
   // 加载自定义字体，loaded 为 true 时字体就绪，error 表示加载失败
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -247,6 +249,7 @@ function RootLayout() {
    * 主题在迁移完成后才挂载 ThemeProvider，初始 useState 即可读到迁移过的值。
    */
   const [migrated, setMigrated] = useState(false);
+  const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
   useEffect(() => {
     setSentryUserId(sentryUserId);
   }, [sentryUserId]);
@@ -273,21 +276,32 @@ function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  // 字体和迁移都就绪后隐藏系统启动屏，直接显示 App。
+  // 字体和迁移都就绪后隐藏系统启动屏，再交给 React 启动动画平滑过渡到 App。
   useEffect(() => {
     if (!loaded || !migrated) {
       return;
     }
 
-    SplashScreen.hideAsync().catch(() => {
-      // 已经被隐藏；忽略即可。
-    });
+    let cancelled = false;
+    SplashScreen.hideAsync()
+      .catch(() => {
+        // 已经被隐藏；忽略即可。
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setNativeSplashHidden(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [loaded, migrated]);
 
-  // 字体或迁移未就绪前不渲染任何内容（启动屏仍显示）
-  if (!loaded || !migrated) return null;
+  // 字体或迁移未就绪前不渲染任何内容（原生启动屏仍显示）。
+  if (!loaded || !migrated || !nativeSplashHidden) return null;
 
-  return (
+  const appContent = (
     // ThemeProvider：提供全局主题上下文（颜色、深浅色模式等）
     <ThemeProvider>
       <MemberNameAnimationProvider>
@@ -328,6 +342,12 @@ function RootLayout() {
         </AuthRouteGuard>
       </MemberNameAnimationProvider>
     </ThemeProvider>
+  );
+
+  return (
+    <StartupSplash canFinish={!authLoading}>
+      {appContent}
+    </StartupSplash>
   );
 }
 

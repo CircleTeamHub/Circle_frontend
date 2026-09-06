@@ -287,7 +287,7 @@ async function main() {
       cdp.send('Network.enable'),
     ]);
 
-    for (const route of ['/', `/qr-login?token=${'q'.repeat(32)}`]) {
+    for (const route of ['/', `/qr?t=${'q'.repeat(32)}`]) {
       exceptions.length = 0;
       const loaded = cdp.once('Page.loadEventFired');
       await cdp.send('Page.navigate', { url: `${web.origin}${route}` });
@@ -308,7 +308,7 @@ async function main() {
     if (web.missing.length) {
       throw new Error(`Web export referenced missing local assets: ${web.missing.join(', ')}`);
     }
-    process.stdout.write('Web export browser smoke passed for / and /qr-login deep link.\n');
+    process.stdout.write('Web export browser smoke passed for / and /qr deep link.\n');
   } finally {
     await closeBrowser(cdp);
     await stopProcess(chrome);

@@ -5,14 +5,11 @@ import LoginScreen from './LoginScreen';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const mockLogin = jest.fn();
-const mockLoginWithCode = jest.fn();
-const mockSend = jest.fn();
 const mockPush = jest.fn();
 const mockAuthState: { submitting: boolean; error: string | null } = {
   submitting: false,
   error: null,
 };
-const mockSendCodeState: { error: string | null } = { error: null };
 const mockNetworkState: { isOffline: boolean } = { isOffline: false };
 
 jest.mock('expo-router', () => ({
@@ -51,20 +48,8 @@ jest.mock('@/theme', () => {
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({
     login: mockLogin,
-    loginWithCode: mockLoginWithCode,
-    completeQrLogin: jest.fn(),
     submitting: mockAuthState.submitting,
     error: mockAuthState.error,
-  }),
-}));
-
-jest.mock('@/hooks/use-send-email-code', () => ({
-  useSendEmailCode: () => ({
-    send: mockSend,
-    sending: false,
-    running: false,
-    seconds: 0,
-    error: mockSendCodeState.error,
   }),
 }));
 
@@ -82,10 +67,6 @@ jest.mock('@/features/auth/components/LoginSky', () => {
   return { LoginSky: () => <View testID="login-sky" /> };
 });
 
-jest.mock('@/features/auth/components/QrLoginPane', () => ({
-  QrLoginPane: () => null,
-}));
-
 // AuthInput 里的眼睛图标会异步加载字体并 setState，测试里只会制造 act 警告。
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: () => null,
@@ -95,7 +76,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockAuthState.submitting = false;
   mockAuthState.error = null;
-  mockSendCodeState.error = null;
   mockNetworkState.isOffline = false;
 });
 
@@ -113,40 +93,20 @@ test('renders the night-flight login: sky, heading, password form, no slogan', (
   expect(screen.getByText('auth.registerNow')).toBeTruthy();
   expect(screen.queryByText(/让聊天/)).toBeNull();
 
-  expect(screen.getByTestId(E2E_TEST_IDS.authPasswordMode)).toBeSelected();
-  expect(screen.getByTestId(E2E_TEST_IDS.authCodeMode)).not.toBeSelected();
-  expect(screen.queryByTestId(E2E_TEST_IDS.authCodeInput)).toBeNull();
 });
 
-test('switching to code mode swaps the second field and hides the forgot link', () => {
+test('submits email or user ID with the password and exposes no alternate login controls', () => {
   render(<LoginScreen />);
 
-  fireEvent.press(screen.getByTestId(E2E_TEST_IDS.authCodeMode));
-
-  expect(screen.getByTestId(E2E_TEST_IDS.authCodeInput)).toBeTruthy();
-  expect(screen.getByTestId(E2E_TEST_IDS.authSendCode)).toBeTruthy();
-  expect(screen.queryByTestId(E2E_TEST_IDS.authPasswordInput)).toBeNull();
-  expect(screen.queryByText('auth.forgotPassword')).toBeNull();
-  expect(screen.getByTestId(E2E_TEST_IDS.authCodeMode)).toBeSelected();
-
-  fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.authEmailInput), 'a@b.co');
-  fireEvent.press(screen.getByTestId(E2E_TEST_IDS.authSendCode));
-  expect(mockSend).toHaveBeenCalledWith('a@b.co');
-});
-
-test('submits password credentials, and code credentials in code mode', () => {
-  render(<LoginScreen />);
-
-  fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.authEmailInput), 'a@b.co');
+  fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.authEmailInput), 'user_123');
   fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.authPasswordInput), 'secret');
   fireEvent.press(screen.getByTestId(E2E_TEST_IDS.authSubmit));
-  expect(mockLogin).toHaveBeenCalledWith('a@b.co', 'secret');
-  expect(mockLoginWithCode).not.toHaveBeenCalled();
-
-  fireEvent.press(screen.getByTestId(E2E_TEST_IDS.authCodeMode));
-  fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.authCodeInput), '123456');
-  fireEvent.press(screen.getByTestId(E2E_TEST_IDS.authSubmit));
-  expect(mockLoginWithCode).toHaveBeenCalledWith('a@b.co', '123456');
+  expect(mockLogin).toHaveBeenCalledWith('user_123', 'secret');
+  expect(screen.getByPlaceholderText('auth.loginIdentifierPlaceholder')).toBeTruthy();
+  expect(screen.queryByTestId('windnote.auth.login.mode.code')).toBeNull();
+  expect(screen.queryByTestId('windnote.auth.login.mode.qr')).toBeNull();
+  expect(screen.queryByTestId('windnote.auth.login.code-input')).toBeNull();
+  expect(screen.queryByTestId('windnote.auth.login.send-code')).toBeNull();
 });
 
 test('forgot password opens the reset flow', () => {
@@ -171,15 +131,13 @@ test('shows the auth error in the reserved message slot, announces it, and disab
 });
 
 test('offline and auth errors resolve to a single bounded status message', () => {
-  // 三条提示同时渲染会把保留高度的提示槽撑高，登录键跟着往下跳 —— 保留高度就白留了。
+  // 两条提示同时渲染会把保留高度的提示槽撑高，登录键跟着往下跳。
   mockNetworkState.isOffline = true;
-  mockSendCodeState.error = 'code failed';
   mockAuthState.error = 'boom';
   render(<LoginScreen />);
 
-  // 优先级：登录错误 > 发码错误 > 离线提示，只呈现最靠前的那条。
+  // 优先级：登录错误 > 离线提示，只呈现最靠前的那条。
   expect(screen.getByText('boom')).toBeTruthy();
-  expect(screen.queryByText('code failed')).toBeNull();
   expect(screen.queryByText('auth.offlineHint')).toBeNull();
   // 长文案要有上界，否则换行照样顶动登录键。
   expect(screen.getByText('boom').props.numberOfLines).toBe(2);

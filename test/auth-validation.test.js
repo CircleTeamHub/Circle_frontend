@@ -88,23 +88,18 @@ test("validateInviteCode is optional and follows the account-id format", () => {
 });
 
 test("composite validators short-circuit in display order", () => {
-  // 邮箱先错，即使密码也错，也只报邮箱。
+  // 登录标识先错，即使密码也错，也只报标识。
   assert.equal(
     V.validateLoginForm("bad", "123"),
-    "auth.errors.invalidEmail",
+    "auth.errors.invalidLoginIdentifier",
   );
-  // 邮箱过、密码太短。
+  // 邮箱或用户 ID 通过后，再校验密码。
   assert.equal(
     V.validateLoginForm("a@b.com", "123"),
     "auth.errors.passwordTooShort",
   );
   assert.equal(V.validateLoginForm("a@b.com", "123456"), null);
-
-  assert.equal(
-    V.validateLoginCodeForm("a@b.com", "12"),
-    "auth.errors.invalidCode",
-  );
-  assert.equal(V.validateLoginCodeForm("a@b.com", "123456"), null);
+  assert.equal(V.validateLoginForm("user_123", "123456"), null);
 
   // register：邮箱→验证码→密码→昵称 顺序。
   assert.equal(

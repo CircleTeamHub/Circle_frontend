@@ -17,7 +17,7 @@ const I18N = {
     language: 'en',
     t: (key, opts) => {
       const table = {
-        'serverErrors.AUTH_INVALID_CREDENTIALS': 'Incorrect email or password',
+        'serverErrors.AUTH_INVALID_CREDENTIALS': 'Incorrect email, user ID, or password',
         'serverErrors.TRACE_EMPTY_COMMENT': 'Comment cannot be empty',
         'serverErrors.MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED':
           "You've reached your membership tier's joined-circle limit",
@@ -110,7 +110,10 @@ const { getApiErrorMessage } = loadErrors();
 
 test('maps a known errorCode to its localized serverErrors string', () => {
   const err = new FakeApiError('邮箱或密码错误', 'AUTH_INVALID_CREDENTIALS');
-  assert.equal(getApiErrorMessage(err, 'fallback'), 'Incorrect email or password');
+  assert.equal(
+    getApiErrorMessage(err, 'fallback'),
+    'Incorrect email, user ID, or password',
+  );
 });
 
 test('maps the empty-comment backend code to localized copy', () => {

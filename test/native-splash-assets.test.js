@@ -100,7 +100,7 @@ function assertSolidWhitePng(rel) {
   }
 }
 
-test('expo splash config uses a white background and the app icon with its tagline', () => {
+test('expo splash config uses a white background and the standalone chat icon', () => {
   const app = readJson('app.json').expo;
 
   assert.equal(app.splash.backgroundColor, '#FFFFFF');
@@ -184,8 +184,9 @@ test('expo splash config uses a white background and the app icon with its tagli
   }
 
   const splashBands = getNonWhiteRowBands('assets/images/splash-tagline.png');
-  assert.equal(splashBands.length, 2, 'splash image should contain separate icon and tagline rows');
-  assert.ok(splashBands[1].start > 0.7, 'tagline should sit below the app icon');
+  assert.equal(splashBands.length, 1, 'splash image should contain only the chat icon');
+  assert.ok(splashBands[0].start > 0.2, 'chat icon should be vertically centered');
+  assert.ok(splashBands[0].end < 0.8, 'chat icon should be vertically centered');
 
   assertSolidWhitePng('assets/images/android-icon-background.png');
 });

@@ -1,12 +1,8 @@
 {
   "locators": [
     { "key": "authLoginScreen", "id": "windnote.auth.login.screen", "source": "src/features/auth/screens/LoginScreen.tsx" },
-    { "key": "authPasswordMode", "id": "windnote.auth.login.mode.password", "source": "src/features/auth/screens/LoginScreen.tsx" },
-    { "key": "authCodeMode", "id": "windnote.auth.login.mode.code", "source": "src/features/auth/screens/LoginScreen.tsx" },
     { "key": "authEmailInput", "id": "windnote.auth.login.email-input", "source": "src/features/auth/screens/LoginScreen.tsx" },
     { "key": "authPasswordInput", "id": "windnote.auth.login.password-input", "source": "src/features/auth/screens/LoginScreen.tsx" },
-    { "key": "authCodeInput", "id": "windnote.auth.login.code-input", "source": "src/features/auth/screens/LoginScreen.tsx" },
-    { "key": "authSendCode", "id": "windnote.auth.login.send-code", "source": "src/features/auth/screens/LoginScreen.tsx" },
     { "key": "authSubmit", "id": "windnote.auth.login.submit", "source": "src/features/auth/screens/LoginScreen.tsx" },
     { "key": "tabsMessages", "id": "windnote.tabs.messages", "source": "app/(tabs)/_layout.tsx" },
     { "key": "tabsContacts", "id": "windnote.tabs.contacts", "source": "app/(tabs)/_layout.tsx" },

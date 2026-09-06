@@ -82,7 +82,6 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'profile',
   'qr',
   'qr-code',
-  'qr-login',
   'recommend-friend',
   'recycle-bin',
   'register',

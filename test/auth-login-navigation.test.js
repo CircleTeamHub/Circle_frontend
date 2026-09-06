@@ -66,7 +66,6 @@ function loadUseAuth(fixtures = {}) {
       fetchCurrentUserWithToken:
         fixtures.fetchCurrentUserWithToken ?? (async () => fixtures.user),
       login: fixtures.loginRequest ?? (async () => fixtures.tokens),
-      loginWithCode: async () => fixtures.tokens,
       logout: async () => {},
       register: fixtures.registerRequest ?? (async () => fixtures.tokens),
     },
@@ -111,7 +110,6 @@ function loadUseAuth(fixtures = {}) {
     },
     '@/features/auth/validation': {
       validateLoginForm: () => null,
-      validateLoginCodeForm: () => null,
       validateRegisterForm: () => null,
     },
     '@/i18n': {

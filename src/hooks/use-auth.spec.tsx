@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { useAuth } from './use-auth';
-import { fetchCurrentUserWithToken } from '@/services/api/auth';
+import { fetchCurrentUserWithToken, login as loginRequest } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
 
 const mockSetSession = jest.fn();
@@ -42,7 +42,6 @@ jest.mock('@/services/api/auth', () => ({
   fetchCurrentUser: jest.fn(),
   fetchCurrentUserWithToken: jest.fn(),
   login: jest.fn(),
-  loginWithCode: jest.fn(),
   logout: jest.fn(),
   register: jest.fn(),
 }));
@@ -58,22 +57,22 @@ jest.mock('@/utils/retry', () => ({ retry: (task: () => Promise<unknown>) => tas
 jest.mock('@/i18n', () => ({ t: (key: string) => key }));
 
 const tokens = { accessToken: 'access', refreshToken: 'refresh' };
-const user = { id: 'user-1', nickname: 'QR User' };
+const user = { id: 'user-1', nickname: 'Test User' };
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
-test('completeQrLogin runs the normal session finalization path', async () => {
+test('login by user ID runs the normal session finalization path', async () => {
+  jest.mocked(loginRequest).mockResolvedValue(tokens);
   jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(user as never);
   const { result } = renderHook(() => useAuth());
 
-  let completed = false;
   await act(async () => {
-    completed = await result.current.completeQrLogin(tokens);
+    await result.current.login('user_123', 'password1');
   });
 
-  expect(completed).toBe(true);
+  expect(loginRequest).toHaveBeenCalledWith({ identifier: 'user_123', password: 'password1' });
   expect(fetchCurrentUserWithToken).toHaveBeenCalledWith('access');
   expect(mockSetSession).toHaveBeenCalledWith(tokens, user, {
     onboardingRequired: false,
@@ -85,18 +84,17 @@ test('completeQrLogin runs the normal session finalization path', async () => {
   expect(clearLocalSession).not.toHaveBeenCalled();
 });
 
-test('completeQrLogin clears partial credentials and reports failure', async () => {
+test('login clears partial credentials and reports failure', async () => {
+  jest.mocked(loginRequest).mockResolvedValue(tokens);
   jest
     .mocked(fetchCurrentUserWithToken)
     .mockRejectedValue(new Error('profile unavailable'));
   const { result } = renderHook(() => useAuth());
 
-  let completed = true;
   await act(async () => {
-    completed = await result.current.completeQrLogin(tokens);
+    await result.current.login('user_123', 'password1');
   });
 
-  expect(completed).toBe(false);
   expect(clearLocalSession).toHaveBeenCalledTimes(1);
   expect(mockSetSession).not.toHaveBeenCalled();
   expect(result.current.error).toBe('auth.errors.loginFailed');
