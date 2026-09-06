@@ -2050,6 +2050,7 @@
       "placeholder": "Enter an automatic reply",
       "loadFailed": "Could not load auto-reply settings",
       "saveFailed": "Could not save auto-reply settings",
+      "messageRequired": "Enter a reply before enabling auto reply",
       "unsaved": "You have unsaved changes"
     },
     "appearance": {

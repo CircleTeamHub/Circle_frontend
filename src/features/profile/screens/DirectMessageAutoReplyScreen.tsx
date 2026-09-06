@@ -135,7 +135,15 @@ export default function DirectMessageAutoReplyScreen() {
 
   const savePreference = useCallback(
     async (next: DirectMessageAutoReplyPreference) => {
-      if (!userId || !loaded || loading || saving) return;
+      if (
+        !userId ||
+        !loaded ||
+        loading ||
+        saving ||
+        (next.enabled && !next.message.trim())
+      ) {
+        return;
+      }
       const request = ++requestSequence.current;
       const previous = serverPreference.current;
       setPreference(userId, next);
@@ -182,6 +190,9 @@ export default function DirectMessageAutoReplyScreen() {
     loaded &&
     (preference.enabled !== serverPreference.current.enabled ||
       preference.message !== serverPreference.current.message);
+  const replyTextRequired =
+    loaded && preference.enabled && !preference.message.trim();
+  const canSave = dirty && !replyTextRequired && !loading && !saving;
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
@@ -190,15 +201,16 @@ export default function DirectMessageAutoReplyScreen() {
         rightSlot={
           <Pressable
             style={s.headerAction}
-            disabled={!dirty || loading || saving}
+            disabled={!canSave}
             accessibilityRole="button"
             accessibilityLabel={t('common.save', { defaultValue: '保存' })}
+            accessibilityState={{ disabled: !canSave }}
             onPress={() => void savePreference(preference)}
           >
             <Text
               style={[
                 d.label,
-                { color: dirty ? colors.primary : colors.textSecondary },
+                { color: canSave ? colors.primary : colors.textSecondary },
               ]}
             >
               {t('common.save', { defaultValue: '保存' })}
@@ -247,7 +259,14 @@ export default function DirectMessageAutoReplyScreen() {
               </Text>
             </Pressable>
           ) : null}
-          {dirty && !saving ? (
+          {replyTextRequired && !saving ? (
+            <Text style={[s.error, d.error]}>
+              {t('settingsDetails.autoReply.messageRequired', {
+                defaultValue: '开启自动回复前请填写回复内容',
+              })}
+            </Text>
+          ) : null}
+          {dirty && !replyTextRequired && !saving ? (
             <Text style={d.help}>
               {t('settingsDetails.autoReply.unsaved', {
                 defaultValue: '有未保存的更改',

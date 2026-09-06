@@ -166,3 +166,26 @@ it('saves an edited reply through an explicit action without relying on blur', a
     });
   });
 });
+
+it('prevents saving an enabled auto reply without message text', async () => {
+  fetchSettings.mockResolvedValue({
+    ...settings,
+    directMessageAutoReplyEnabled: false,
+    directMessageAutoReplyText: '',
+  });
+
+  render(<DirectMessageAutoReplyScreen />);
+  await waitFor(() => {
+    expect(
+      screen.getByLabelText('auto-reply-switch').props.accessibilityState,
+    ).toEqual({ disabled: false });
+  });
+
+  fireEvent.press(screen.getByLabelText('auto-reply-switch'));
+
+  expect(screen.getByText('开启自动回复前请填写回复内容')).toBeTruthy();
+  const save = screen.getByLabelText('保存');
+  expect(save.props.accessibilityState).toEqual({ disabled: true });
+  fireEvent.press(save);
+  expect(patchSettings).not.toHaveBeenCalled();
+});
