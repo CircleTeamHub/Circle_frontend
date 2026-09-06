@@ -83,6 +83,20 @@ function extractToken(rest: string): string | null {
   return candidate && TOKEN_PATTERN.test(candidate) ? candidate : null;
 }
 
+function extractLoginToken(rest: string): string | null {
+  if (!rest.startsWith('qr-login')) return null;
+  const after = rest.slice('qr-login'.length);
+  if (!after.startsWith('?')) return null;
+  for (const pair of after.slice(1).split('#')[0].split('&')) {
+    const eq = pair.indexOf('=');
+    if (eq > 0 && pair.slice(0, eq) === 't') {
+      const candidate = safeDecodeURIComponent(pair.slice(eq + 1));
+      return candidate && TOKEN_PATTERN.test(candidate) ? candidate : null;
+    }
+  }
+  return null;
+}
+
 /** 从任意扫码文本中提取二维码令牌;不是本应用的 QR 载荷时返回 null。 */
 export function parseQrToken(raw: string): string | null {
   const value = raw.trim();
@@ -102,6 +116,30 @@ export function parseQrToken(raw: string): string | null {
       return null;
     }
     return extractToken(withoutProtocol.slice(slash + 1));
+  }
+
+  return null;
+}
+
+/** Recognize retired web-login QR links so old scanners can show a clear message. */
+export function parseQrLoginToken(raw: string): string | null {
+  const value = raw.trim();
+
+  for (const prefix of SCHEME_PREFIXES) {
+    if (value.startsWith(prefix)) {
+      return extractLoginToken(value.slice(prefix.length));
+    }
+  }
+
+  if (value.startsWith('https://')) {
+    const withoutProtocol = value.slice('https://'.length);
+    const slash = withoutProtocol.indexOf('/');
+    if (slash < 0) return null;
+    const host = withoutProtocol.slice(0, slash).toLowerCase();
+    if (!(APP_UNIVERSAL_LINK_HOSTS as readonly string[]).includes(host)) {
+      return null;
+    }
+    return extractLoginToken(withoutProtocol.slice(slash + 1));
   }
 
   return null;

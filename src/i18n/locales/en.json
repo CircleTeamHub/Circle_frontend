@@ -3097,6 +3097,8 @@
     "CHAT_GROUP_FULL": "This group chat is full"
   },
   "qr": {
+    "loginDeprecatedTitle": "QR login is no longer available",
+    "loginDeprecatedMessage": "This QR login link was created by an older version. Open the latest web login page and sign in with your account and password.",
     "userTitle": "My QR Code",
     "groupTitle": "Group QR Code",
     "circleTitle": "Circle QR Code",

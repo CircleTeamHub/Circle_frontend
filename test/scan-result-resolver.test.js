@@ -83,6 +83,17 @@ test('keeps routing legacy https universal links', () => {
   );
 });
 
+test('routes retired QR-login links to the compatibility screen', () => {
+  const value = 'windnoteai://qr-login?t=ABCDEFGHIJKLMNOP';
+  assert.deepEqual(
+    plain(resolveMessageScanResult(value)),
+    {
+      type: 'route',
+      href: { pathname: '/qr-login', params: { t: 'ABCDEFGHIJKLMNOP' } },
+    },
+  );
+});
+
 test('does NOT route http universal links', () => {
   const value = 'http://windnote.ai/messages/add-friend';
   assert.deepEqual(

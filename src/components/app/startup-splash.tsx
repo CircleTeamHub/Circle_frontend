@@ -9,6 +9,7 @@ import { ChatBubbleIcon } from '@/components/app/chat-bubble-icon';
 
 const STARTUP_SPLASH_BACKGROUND = '#FFFFFF';
 const STARTUP_ICON_SIZE = 165;
+const STARTUP_SPLASH_MAX_WAIT_MS = 5000;
 
 type StartupSplashProps = {
   canFinish?: boolean;
@@ -29,6 +30,19 @@ export function StartupSplash({ canFinish = true, children }: StartupSplashProps
   const appScale = useRef(new Animated.Value(children ? 0.9 : 1)).current;
   const [rotationDone, setRotationDone] = useState(false);
   const [revealDone, setRevealDone] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Authentication may be waiting on a pair of network timeouts. Keep the
+  // branded transition short, then expose the normal route guard/loading UI
+  // instead of leaving users on a static splash with no progress indication.
+  useEffect(() => {
+    if (canFinish) {
+      setTimedOut(false);
+      return;
+    }
+    const timeout = setTimeout(() => setTimedOut(true), STARTUP_SPLASH_MAX_WAIT_MS);
+    return () => clearTimeout(timeout);
+  }, [canFinish]);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +84,7 @@ export function StartupSplash({ canFinish = true, children }: StartupSplashProps
   }, [rotation, scale]);
 
   useEffect(() => {
-    if (!rotationDone || !canFinish) {
+    if (!rotationDone || (!canFinish && !timedOut)) {
       return;
     }
 
@@ -118,7 +132,16 @@ export function StartupSplash({ canFinish = true, children }: StartupSplashProps
       cancelled = true;
       reveal.stop();
     };
-  }, [appOpacity, appScale, canFinish, iconOpacity, overlayOpacity, overlayScale, rotationDone]);
+  }, [
+    appOpacity,
+    appScale,
+    canFinish,
+    iconOpacity,
+    overlayOpacity,
+    overlayScale,
+    rotationDone,
+    timedOut,
+  ]);
 
   const rotate = rotation.interpolate({
     inputRange: [0, 1],

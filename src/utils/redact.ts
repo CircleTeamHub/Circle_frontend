@@ -36,11 +36,13 @@ const PRESIGNED_URL_MARKERS = [
   'X-Amz-Signature=',
   'x-id=PutObject',
 ];
+const SENSITIVE_URL_PATTERN = /https?:\/\/[^\s"'<>)]*\?[^\s"'<>)]*/gi;
 
 function redactSensitiveString(value: string): string {
-  return PRESIGNED_URL_MARKERS.some((marker) => value.includes(marker))
-    ? '[REDACTED_URL]'
-    : value;
+  if (PRESIGNED_URL_MARKERS.some((marker) => value.includes(marker))) {
+    return '[REDACTED_URL]';
+  }
+  return value.replace(SENSITIVE_URL_PATTERN, '[REDACTED_URL]');
 }
 
 function shouldRedactObjectKey(key: string, value: unknown): boolean {

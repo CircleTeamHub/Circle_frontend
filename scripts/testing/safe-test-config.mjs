@@ -136,7 +136,9 @@ function validateOrigins(env, prefix) {
 function validateAuth(env) {
   const mode = requireValue(env, 'E2E_AUTH_MODE');
   if (mode !== 'password') {
-    throw new Error('E2E_AUTH_MODE must be password.');
+    throw new Error(
+      'E2E_AUTH_MODE must be password; verification-code login was removed. Update E2E_AUTH_MODE and provide E2E_PASSWORD.',
+    );
   }
   const email = requireValue(env, 'E2E_EMAIL');
   if (!/^[^\s@]+@[^\s@]+$/.test(email)) {

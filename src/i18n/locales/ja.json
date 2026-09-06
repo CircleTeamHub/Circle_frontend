@@ -3094,6 +3094,8 @@
     "CHAT_GROUP_FULL": "このグループは満員です"
   },
   "qr": {
+    "loginDeprecatedTitle": "QRログインは利用できません",
+    "loginDeprecatedMessage": "このQRログインリンクは古いバージョンで作成されました。最新のウェブログインページを開き、アカウントとパスワードでログインしてください。",
     "userTitle": "マイQRコード",
     "groupTitle": "グループQRコード",
     "circleTitle": "サークルQRコード",

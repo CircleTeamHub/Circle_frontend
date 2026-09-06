@@ -68,6 +68,17 @@ test('top-level /qr and /qr-code routes point at the qr feature screens', () => 
   );
 });
 
+test('retired QR-login links land on an explicit compatibility screen', () => {
+  assert.match(
+    read('app/qr-login.tsx'),
+    /QrLoginDeprecatedScreen/,
+  );
+  assert.match(
+    read('src/features/qr/screens/QrLoginDeprecatedScreen.tsx'),
+    /loginDeprecatedMessage/,
+  );
+});
+
 // ─── 展示页与落地页关键行为 ───────────────────────────────────────────────────
 
 test('QrCodeScreen issues a server token and renders it as a deep link QR', () => {

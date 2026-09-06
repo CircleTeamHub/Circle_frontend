@@ -53,7 +53,17 @@ export default function QrLandingScreen() {
     }
     resolveQrToken(token)
       .then((result) => {
-        if (!cancelled) setPreview(result);
+        if (cancelled) return;
+        const type = (result as { type?: unknown }).type;
+        if (type !== 'USER' && type !== 'GROUP' && type !== 'CIRCLE') {
+          setErrorText(
+            t('qr.loginDeprecatedMessage', {
+              defaultValue: '此二维码登录方式已停用，请重新打开最新版本的登录页面。',
+            }),
+          );
+          return;
+        }
+        setPreview(result);
       })
       .catch((error) => {
         if (!cancelled) setErrorText(getApiErrorMessage(error, t('qr.invalid')));
@@ -82,6 +92,10 @@ export default function QrLandingScreen() {
 
   const handlePrimary = useCallback(async () => {
     if (!preview || joining) return;
+
+    if (preview.type !== 'USER' && preview.type !== 'GROUP' && preview.type !== 'CIRCLE') {
+      return;
+    }
 
     if (preview.type === 'USER') {
       if (preview.viewerState === 'SELF') return;

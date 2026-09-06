@@ -3,7 +3,7 @@ import {
   APP_LINK_PROTOCOLS,
   APP_UNIVERSAL_LINK_HOSTS,
 } from '../../../constants/branding';
-import { parseQrToken } from '../../qr/qr-payload';
+import { parseQrLoginToken, parseQrToken } from '../../qr/qr-payload';
 
 type MessageScanAction =
   | { type: 'route'; href: Href }
@@ -64,6 +64,14 @@ export function resolveMessageScanResult(data: string): MessageScanAction {
     return {
       type: 'route',
       href: { pathname: '/qr', params: { t: qrToken } },
+    };
+  }
+
+  const retiredLoginToken = parseQrLoginToken(value);
+  if (retiredLoginToken) {
+    return {
+      type: 'route',
+      href: { pathname: '/qr-login', params: { t: retiredLoginToken } },
     };
   }
 

@@ -126,7 +126,6 @@ export function reportHandledFailure(
           ...details,
           message: diagnosticErrorMessage(error),
         }),
-        error,
       );
     }
 

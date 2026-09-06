@@ -3097,6 +3097,8 @@
     "CHAT_GROUP_FULL": "Este grupo está lleno"
   },
   "qr": {
+    "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",
+    "loginDeprecatedMessage": "Este enlace de inicio de sesión por QR fue creado por una versión anterior. Abre la página web más reciente e inicia sesión con tu cuenta y contraseña.",
     "userTitle": "Mi código QR",
     "groupTitle": "Código QR del grupo",
     "circleTitle": "Código QR del círculo",

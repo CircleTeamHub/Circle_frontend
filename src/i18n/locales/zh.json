@@ -3094,6 +3094,8 @@
     "CHAT_GROUP_FULL": "群聊人数已达上限"
   },
   "qr": {
+    "loginDeprecatedTitle": "二维码登录已停用",
+    "loginDeprecatedMessage": "此二维码登录链接由旧版本生成。请打开最新的网页登录页面，使用账号和密码登录。",
     "userTitle": "我的二维码",
     "groupTitle": "群二维码",
     "circleTitle": "圈子二维码",
