@@ -561,17 +561,51 @@ test('message forward picker routes media through authenticated server-side copy
   assert.match(client, /forwardFromMessageId:\s*options\.sourceMessageId/);
 });
 
-test('message forward picker only offers media forwarding for confirmed sources', () => {
-  const pickerPath = path.join(
+function loadEphemeralGuard() {
+  const ts = require('typescript');
+  const vm = require('node:vm');
+  const filePath = path.join(
     process.cwd(),
-    'src/features/chat/screens/ForwardPickerScreen.tsx',
+    'src/features/chat/utils/ephemeral-message.ts',
   );
-  const picker = fs.readFileSync(pickerPath, 'utf8');
+  const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+    fileName: filePath,
+  }).outputText;
+  const context = { module: { exports: {} }, exports: {}, require: () => ({}) };
+  context.exports = context.module.exports;
+  vm.runInNewContext(transpiled, context, { filename: filePath });
+  return context.module.exports.isEphemeralPeerMessage;
+}
+
+// 真的把 canForwardMessage 的函数体跑起来，并注入**真实**的 isEphemeralPeerMessage。
+// 桩一个的话两边会各自漂移，而这道闸的全部意义就在于它和服务端口径一致。
+function loadCanForwardMessage() {
+  const picker = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ForwardPickerScreen.tsx'),
+    'utf8',
+  );
   const body = picker.match(
     /export function canForwardMessage\([^)]*\): boolean \{([\s\S]*?)\n\}/,
   );
   assert.ok(body, 'canForwardMessage implementation missing');
-  const canForwardMessage = new Function('message', 'dto', body[1]);
+  const compiled = new Function(
+    'isEphemeralPeerMessage',
+    'message',
+    'dto',
+    'conversationBurnEnabled',
+    body[1],
+  );
+  const guard = loadEphemeralGuard();
+  return (message, dto, conversationBurnEnabled = false) =>
+    compiled(guard, message, dto, conversationBurnEnabled);
+}
+
+test('message forward picker only offers media forwarding for confirmed sources', () => {
+  const canForwardMessage = loadCanForwardMessage();
 
   const pendingImage = { id: 'local:d-1', type: 'image', sendStatus: 1 };
   const failedVoice = { id: 'outbox-d-2', type: 'voice', sendStatus: 3 };
@@ -593,7 +627,86 @@ test('message forward picker only offers media forwarding for confirmed sources'
     path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
     'utf8',
   );
-  assert.match(detail, /canForwardMessage\(message,\s*dto\)/);
+  assert.match(
+    detail,
+    /canForwardMessage\(message,\s*dto,\s*conversationBurnEnabled\)/,
+  );
+});
+
+// 服务端已经按 CHAT_FORWARD_FORBIDDEN 拒掉焚毁会话里别人发的消息（「短暂性是发送者
+// 对收件人的承诺」）。端上不挡的话，用户点「转发」、挑好目标会话，才在最后一步吃到
+// 那个错误 —— 与 call-record 那个「永远不会成功的重试」是同一个毛病。
+test('阅后即焚会话里别人发的消息不提供转发入口', () => {
+  const canForwardMessage = loadCanForwardMessage();
+
+  assert.equal(
+    canForwardMessage(
+      { id: 'm-1', type: 'image', outgoing: false },
+      { id: 'm-1', height: 9 },
+      true,
+    ),
+    false,
+  );
+  // 会话开关还没到（推送冷启动时会话列表可能还没拉回来），消息自带的秒数同样算数。
+  assert.equal(
+    canForwardMessage(
+      { id: 'm-2', type: 'image', outgoing: false, burnDurationSec: 30 },
+      { id: 'm-2', height: 9 },
+      false,
+    ),
+    false,
+  );
+});
+
+// 自己发的不拦，与服务端口径一致：那是你自己的内容，打开相册重发一次效果完全一样。
+test('自己在焚毁会话里发的消息仍然可以转发', () => {
+  const canForwardMessage = loadCanForwardMessage();
+
+  assert.equal(
+    canForwardMessage(
+      { id: 'm-1', type: 'image', outgoing: true },
+      { id: 'm-1', height: 9 },
+      true,
+    ),
+    true,
+  );
+  assert.equal(
+    canForwardMessage({ id: 'm-2', type: 'sent', text: 'hi' }, undefined, true),
+    true,
+  );
+});
+
+// 「收藏」走的是另一扇门：它把客户端拼出来的快照写进用户自己的收藏列表，服务端
+// 从头到尾没看过这条消息，所以转发那条规则根本管不到它。
+test('阅后即焚会话里别人发的消息也不提供收藏入口', () => {
+  const detail = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const collectAt = detail.indexOf("key: 'collect'");
+  assert.ok(collectAt > 0);
+  const before = detail.slice(0, collectAt);
+  const gateAt = before.lastIndexOf(
+    'if (!isEphemeralPeerMessage(message, conversationBurnEnabled)) {',
+  );
+  assert.ok(gateAt > 0, '收藏入口必须被焚毁闸包住');
+  // 闸和入口之间不能再多一个 actions.push —— 那一个会漏在闸外面。
+  assert.equal(before.slice(gateAt).match(/actions\.push\(/g).length, 1);
+});
+
+// 这道闸只认会话上的焚毁设置。本人的全局自动销毁天数是我对自己视图的设置，
+// 不是发送者对我的承诺，不该连带禁掉转发和收藏。
+test('焚毁闸只看会话开关，不掺本人的全局自动销毁天数', () => {
+  const detail = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const start = detail.indexOf('const conversationBurnEnabled = useChatStore(');
+  assert.ok(start > 0);
+  const body = detail.slice(start, detail.indexOf('});', start));
+
+  assert.match(body, /burnDurationSec/);
+  assert.doesNotMatch(body, /viewerSelfDestructDays/);
 });
 
 test('note detail routes exist in every tab stack so back returns to the source tab', () => {

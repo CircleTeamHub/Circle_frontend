@@ -161,6 +161,7 @@ import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { useChatLocationPickerStore } from '@/features/chat/store/use-chat-location-picker-store';
 import { canForwardMessage } from '@/features/chat/screens/ForwardPickerScreen';
+import { isEphemeralPeerMessage } from '@/features/chat/utils/ephemeral-message';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { AVATAR_SIZE } from '@/features/chat/components/bubbles/shared';
@@ -683,6 +684,15 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       state.viewerSelfDestructDays > 0 ||
       (conversation?.burnDurationSec ?? 0) > 0
     );
+  });
+  // 与 selfDestructEnabled 分开：那一个还掺了「本人的全局自动销毁天数」，那是
+  // 我对自己视图的设置，不是发送者对我的承诺。转发 / 收藏的闸只认会话上的焚毁
+  // 开关 —— 服务端的转发拒绝也正是按这一条判的。
+  const conversationBurnEnabled = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    return (conversation?.burnDurationSec ?? 0) > 0;
   });
   const selfDestructCacheKey = useChatStore(
     (state) => `${state.currentUserId ?? ''}:${state.selfDestructPolicyEpoch}`,
@@ -1641,7 +1651,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     });
     // 只在真能转发时给入口:通话记录走到转发页只会抛「不支持」,
     // 而 catch 提示的是「请重试」—— 一个永远不会成功的重试。
-    if (canForwardMessage(message, dto)) {
+    if (canForwardMessage(message, dto, conversationBurnEnabled)) {
       actions.push({
         key: 'forward',
         icon: 'arrow-redo-outline',
@@ -1649,25 +1659,31 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         onPress: () => handleForwardMessage(message),
       });
     }
-    // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
-    // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。
-    actions.push(
-      message.type === 'note-card'
-        ? {
-            key: 'collect',
-            icon: 'add-circle-outline',
-            label: t('chat.messageActions.addToNotes', {
-              defaultValue: '添加',
-            }),
-            onPress: () => void handleCollectMessage(message),
-          }
-        : {
-            key: 'collect',
-            icon: 'star-outline',
-            label: t('chat.messageActions.collect'),
-            onPress: () => void handleCollectMessage(message),
-          },
-    );
+    // 「收藏」走的是另一扇门：它把客户端拼出来的快照写进用户自己的收藏列表，
+    // 服务端从头到尾没看过这条消息，所以转发那条 CHAT_FORWARD_FORBIDDEN 管不到
+    // 它 —— 对端在焚毁会话里发的图，收藏一下就永久留在了本机账号下。同一份承诺，
+    // 同一道闸；自己发的照旧可收。
+    if (!isEphemeralPeerMessage(message, conversationBurnEnabled)) {
+      // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
+      // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。
+      actions.push(
+        message.type === 'note-card'
+          ? {
+              key: 'collect',
+              icon: 'add-circle-outline',
+              label: t('chat.messageActions.addToNotes', {
+                defaultValue: '添加',
+              }),
+              onPress: () => void handleCollectMessage(message),
+            }
+          : {
+              key: 'collect',
+              icon: 'star-outline',
+              label: t('chat.messageActions.collect'),
+              onPress: () => void handleCollectMessage(message),
+            },
+      );
+    }
     actions.push({
       key: 'delete',
       icon: 'trash-outline',
@@ -1685,6 +1701,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     actionMenu,
     canEditMessage,
     canRevokeMessage,
+    conversationBurnEnabled,
     conversationID,
     handleOpenReactionPicker,
     handleShowReaders,
