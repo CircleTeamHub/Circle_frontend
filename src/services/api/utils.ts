@@ -3,11 +3,15 @@
  */
 import { apiClient } from '@/services/api/client';
 import { API_URL, MEDIA_ORIGINS } from '@/constants/config';
+import { devWarn } from '@/utils/dev-log';
 import type { AuthUser } from '@/stores/authStore';
 import type { BackendAuthUser } from '@/services/api/auth';
 import type { AvatarFrameAppearance } from '@/types';
 
 const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1']);
+
+/** dev 下已经提示过的未授权媒体来源,每个只说一次。 */
+const warnedUnlistedMediaOrigins = new Set<string>();
 
 function isPrivateIpv4(hostname: string) {
   const parts = hostname.split('.').map((part) => Number(part));
@@ -119,6 +123,22 @@ export function allowPeerMediaUrl(
       } catch {
         // 配置里的地址不合法就跳过它,不要因此把合法媒体也拒掉。
       }
+    }
+
+    // 走到这里 = 地址本身合法,只是来源不在白名单里。
+    //
+    // 对端塞进来的地址被拒是这道白名单的**本职工作**,不该有生产信号 ——
+    // 否则对端可以随手刷我们的日志。但另一种情况长得一模一样:后端把媒体
+    // 切到新的投递域名(circle_be 的 OBJECT_STORAGE_DELIVERY_URL),而 App
+    // 构建没同步 EXPO_PUBLIC_MEDIA_ORIGINS —— 那是**每一个合法媒体**都被丢掉,
+    // 图片、语音、封面整片空白,而后端一切正常、监控无异常。
+    // dev 下每个来源提示一次,把这种配置事故从「静默」变成一眼看见。
+    // 只在 dev 记 Set:生产环境下来源由对端控制,记下来就是无界增长。
+    if (isDev && !warnedUnlistedMediaOrigins.has(mediaUrl.origin)) {
+      warnedUnlistedMediaOrigins.add(mediaUrl.origin);
+      devWarn(
+        `[media] dropped a media URL from ${mediaUrl.origin} — that origin is neither API_URL nor listed in EXPO_PUBLIC_MEDIA_ORIGINS. If the backend just moved media to a CDN domain, ship that origin in the app build.`,
+      );
     }
   } catch {
     return null;

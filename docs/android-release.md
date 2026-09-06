@@ -86,6 +86,14 @@ Record the run URL, commit SHA, certificate fingerprint, and checksum with the i
   otherwise the peer-media allowlist rejects every legitimate URL and images, voice notes,
   and share covers all come back blank while REST keeps working. Only the listed origins are
   trusted; the allowlist still blocks arbitrary third-party hosts (tracking beacons).
+
+  This is the client half of a cross-repo contract, and nothing validates it automatically:
+  it must list whatever `circle_be` serves permanent media from — `OBJECT_STORAGE_DELIVERY_URL`
+  when the bucket is externally managed, otherwise `MINIO_PUBLIC_URL`. A backend cutover to a
+  CDN domain has to ship in the **same release** as the matching value here; the backend stays
+  green either way, so the only symptom is blank media in the app. Keep the previous origin
+  listed as well until every stored URL has been backfilled — media saved before the cutover
+  still points at the old domain. In a dev build the console names each dropped origin once.
 - Repository variable `ANDROID_CERT_SHA256`: expected signing certificate SHA-256 fingerprint.
 - Repository variable `EXPO_PUBLIC_SENTRY_DSN`: production Sentry DSN compiled into the app.
   It is not a secret, but must point to the intended production project.
