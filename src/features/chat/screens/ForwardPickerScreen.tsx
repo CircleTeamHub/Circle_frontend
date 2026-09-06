@@ -18,6 +18,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
+import { isEphemeralPeerMessage } from '@/features/chat/utils/ephemeral-message';
 import { loadChatConversations } from '@/chat-core/api';
 import {
   sendCardMessage,
@@ -120,9 +121,13 @@ function conversationAvatarUrl(conversation: ChatConversationDto): string | unde
 export function canForwardMessage(
   message: ChatMessage,
   dto?: ChatMessageDto,
+  conversationBurnEnabled = false,
 ): boolean {
   if (message.type === 'call-record') return false;
   if (message.type === 'system-notice') return false;
+  // 阅后即焚会话里别人发的东西，服务端已经按 CHAT_FORWARD_FORBIDDEN 拒了。
+  // 端上不挡，用户就得挑完目标会话才在最后一步吃到那个错误。
+  if (isEphemeralPeerMessage(message, conversationBurnEnabled)) return false;
   if (
     message.type === 'image' ||
     message.type === 'video' ||

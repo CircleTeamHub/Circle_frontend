@@ -2875,6 +2875,7 @@
     "NOTE_SHARE_LINK_LIMIT": "分享链接数量已达上限，请先撤销不再使用的链接",
     "UPLOAD_INVALID_CONTENT_TYPE": "不支持的文件类型",
     "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
+    "COLLECTION_EPHEMERAL_FORBIDDEN": "阅后即焚会话中的消息不能收藏",
     "COLLECTION_LIMIT": "收藏数量已达上限，请先清理不再需要的收藏",
     "ADMIN_USER_NOT_FOUND": "用户不存在",
     "ADMIN_USER_SELF_STATUS_CHANGE": "不能封禁或删除当前管理员账号",
