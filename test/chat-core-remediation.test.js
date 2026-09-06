@@ -580,7 +580,13 @@ test('burn expiry is scheduled and self-destruct images avoid disk caching', () 
   assert.match(store, /scheduleNextBurnPurge/);
   assert.match(store, /BURN_PURGE_SWEEP_MS/);
   const image = read('src/features/chat/components/bubbles/image-bubble.tsx');
-  assert.match(image, /cachePolicy=\{selfDestructEnabled \? 'memory' : 'memory-disk'\}/);
+  // 判定来自 ephemeral：消息自带的焚毁秒数优先于屏幕级标志。屏幕级那个要等
+  // 会话列表加载完，推送冷启动时会读成 false，于是该焚毁的图片原图落盘。
+  assert.match(image, /cachePolicy=\{ephemeral \? 'memory' : 'memory-disk'\}/);
+  assert.match(
+    image,
+    /const ephemeral = \(message\.burnDurationSec \?\? 0\) > 0 \|\| selfDestructEnabled/,
+  );
   assert.match(image, /selfDestructCacheKey/);
 });
 
