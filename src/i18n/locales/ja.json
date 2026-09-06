@@ -2874,6 +2874,7 @@
     "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
     "UPLOAD_INVALID_CONTENT_TYPE": "対応していないファイル形式です",
     "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
+    "COLLECTION_EPHEMERAL_FORBIDDEN": "消えるメッセージのチャット内のメッセージは保存できません",
     "COLLECTION_LIMIT": "コレクションの上限に達しました。不要なものを削除してください",
     "ADMIN_USER_NOT_FOUND": "ユーザーが存在しません",
     "ADMIN_USER_SELF_STATUS_CHANGE": "現在の管理者アカウントを停止または削除することはできません",

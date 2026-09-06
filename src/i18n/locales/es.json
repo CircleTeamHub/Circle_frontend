@@ -2877,6 +2877,7 @@
     "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
     "UPLOAD_INVALID_CONTENT_TYPE": "Este tipo de archivo no es compatible",
     "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
+    "COLLECTION_EPHEMERAL_FORBIDDEN": "Los mensajes de un chat de mensajes temporales no se pueden guardar",
     "COLLECTION_LIMIT": "Límite de colecciones alcanzado; elimina las que no necesites",
     "ADMIN_USER_NOT_FOUND": "El usuario no existe.",
     "ADMIN_USER_SELF_STATUS_CHANGE": "No puedes bloquear ni eliminar tu propia cuenta de administrador.",

@@ -2877,6 +2877,7 @@
     "NOTE_SHARE_LINK_LIMIT": "Share link limit reached — revoke unused links first",
     "UPLOAD_INVALID_CONTENT_TYPE": "This file type is not supported",
     "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
+    "COLLECTION_EPHEMERAL_FORBIDDEN": "Messages in a disappearing-message chat cannot be collected",
     "COLLECTION_LIMIT": "Collection limit reached — remove items you no longer need",
     "ADMIN_USER_NOT_FOUND": "User not found.",
     "ADMIN_USER_SELF_STATUS_CHANGE": "You can't ban or delete your own admin account.",
