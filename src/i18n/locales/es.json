@@ -1743,6 +1743,8 @@
       "myCreated": "Grupos que creé",
       "myJoined": "Grupos a los que me uní",
       "myManaged": "Grupos que administro",
+      "searchPlaceholder": "Buscar grupos",
+      "noMatches": "No hay grupos coincidentes",
       "memberCount": "{{count}} miembros",
       "empty": "Sin grupos",
       "loading": "Cargando grupos",

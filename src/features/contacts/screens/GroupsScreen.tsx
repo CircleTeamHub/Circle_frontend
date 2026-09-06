@@ -6,8 +6,10 @@ import {
   SectionListData,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +22,7 @@ import { fetchMyCircles } from '@/services/api/circles';
 import type { MyCircle } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAuthStore } from '@/stores/authStore';
+import { filterGroupsByQuery } from '@/features/contacts/utils/group-list-filter';
 import { createGroupsRequestGuard } from '@/features/contacts/groups-request-guard';
 
 /** 自研栈下「群聊」= 圈子;沿用旧字段名以少动渲染层。 */
@@ -99,8 +102,24 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   categoryTabs: {
-    paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
+  },
+  searchBox: {
+    height: 42,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    ...Typography.bodyRegular,
+    paddingVertical: 0,
   },
 });
 
@@ -112,6 +131,9 @@ export default function GroupsScreen() {
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
 
   const [activeCategory, setActiveCategory] = useState<GroupCategory>('joined');
+  // 关键词跨分类保留：用户常常只记得群名、不记得它算「我加入的」还是「我管理的」，
+  // 切页签时清空会逼他们重打一遍。
+  const [query, setQuery] = useState('');
   const [groupsState, setGroupsState] = useState(() => ({
     sessionEpoch,
     groupsByCategory: EMPTY_GROUPS_BY_CATEGORY,
@@ -225,9 +247,10 @@ export default function GroupsScreen() {
     const active = categories.find((category) => category.id === activeCategory);
     return [{
       title: active?.label ?? '',
-      data: groupsByCategory[activeCategory],
+      // 只过滤当前分类：页签是主轴，分区标题写的就是它，跨分类搜会让标题说谎。
+      data: filterGroupsByQuery(groupsByCategory[activeCategory], query),
     }];
-  }, [activeCategory, categories, groupsByCategory]);
+  }, [activeCategory, categories, groupsByCategory, query]);
 
   const d = useMemo(
     () => ({
@@ -277,6 +300,13 @@ export default function GroupsScreen() {
         textAlign: 'center' as const,
         paddingTop: Spacing.xl,
       },
+      searchBox: {
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.surface,
+      },
+      searchInput: {
+        color: colors.text,
+      },
     }),
     [colors, insets.bottom],
   );
@@ -313,6 +343,8 @@ export default function GroupsScreen() {
           <Text style={d.retryButtonText}>{t('common.retry')}</Text>
         </Pressable>
       </View>
+    ) : query.trim() ? (
+      <Text style={d.emptyText}>{t('contacts.groupsScreen.noMatches')}</Text>
     ) : (
       <Text style={d.emptyText}>{t('contacts.groupsScreen.empty')}</Text>
     );
@@ -326,19 +358,52 @@ export default function GroupsScreen() {
         contentContainerStyle={d.listContent}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
-          <View style={s.categoryTabs}>
-            <FilterTabs
-              tabs={categories.map((category) => category.label)}
-              activeIndex={categories.findIndex(
-                (category) => category.id === activeCategory,
-              )}
-              onTabPress={(index) => {
-                const category = categories[index];
-                if (category) setActiveCategory(category.id);
-              }}
-              scrollable
-              compact
-            />
+          <View>
+            <View style={[s.searchBox, d.searchBox]}>
+              <Ionicons
+                name="search-outline"
+                size={18}
+                color={colors.textSecondary}
+              />
+              <TextInput
+                style={[s.searchInput, d.searchInput]}
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t('contacts.groupsScreen.searchPlaceholder')}
+                placeholderTextColor={colors.textSecondary}
+                autoCorrect={false}
+                returnKeyType="search"
+                accessibilityLabel={t('contacts.groupsScreen.searchPlaceholder')}
+              />
+              {query ? (
+                <Pressable
+                  onPress={() => setQuery('')}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.clear', { defaultValue: '清除' })}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+            <View style={s.categoryTabs}>
+              <FilterTabs
+                tabs={categories.map((category) => category.label)}
+                activeIndex={categories.findIndex(
+                  (category) => category.id === activeCategory,
+                )}
+                onTabPress={(index) => {
+                  const category = categories[index];
+                  if (category) setActiveCategory(category.id);
+                }}
+                scrollable
+                compact
+              />
+            </View>
           </View>
         }
         renderSectionHeader={({
