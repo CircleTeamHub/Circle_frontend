@@ -76,6 +76,34 @@ test('routes a whitelisted https universal link', () => {
   );
 });
 
+test('routes versioned login QR payloads separately from join QR payloads', () => {
+  const token = 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6';
+  assert.deepEqual(
+    plain(resolveMessageScanResult(`windnoteai://qr-login?t=${token}`)),
+    {
+      type: 'route',
+      href: {
+        pathname: '/(tabs)/messages/qr-login',
+        params: { t: token },
+      },
+    },
+  );
+});
+
+test('keeps an in-app contact QR result inside the messages stack', () => {
+  const token = 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6';
+  assert.deepEqual(
+    plain(resolveMessageScanResult(`windnoteai://qr?t=${token}`)),
+    {
+      type: 'route',
+      href: {
+        pathname: '/(tabs)/messages/qr',
+        params: { t: token },
+      },
+    },
+  );
+});
+
 test('keeps routing legacy https universal links', () => {
   assert.deepEqual(
     plain(resolveMessageScanResult('https://circle.im/messages/add-friend')),
@@ -83,13 +111,16 @@ test('keeps routing legacy https universal links', () => {
   );
 });
 
-test('routes retired QR-login links to the compatibility screen', () => {
+test('routes retired QR-login links to the in-app compatibility screen', () => {
   const value = 'windnoteai://qr-login?t=ABCDEFGHIJKLMNOP';
   assert.deepEqual(
     plain(resolveMessageScanResult(value)),
     {
       type: 'route',
-      href: { pathname: '/qr-login', params: { t: 'ABCDEFGHIJKLMNOP' } },
+      href: {
+        pathname: '/(tabs)/messages/qr-login',
+        params: { t: 'ABCDEFGHIJKLMNOP' },
+      },
     },
   );
 });

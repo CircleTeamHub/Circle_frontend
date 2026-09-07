@@ -42,6 +42,7 @@ export default function ChatBackgroundScreen() {
   const params = useLocalSearchParams<{
     conversationID?: string;
     title?: string;
+    scope?: string;
   }>();
 
   // Guard against setState after the screen unmounts mid-upload.
@@ -55,12 +56,18 @@ export default function ChatBackgroundScreen() {
 
   const conversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
+  const isGlobal = params.scope === 'global';
 
-  const backgroundPreference = useChatPreferencesStore(
-    (state) => state.backgroundsByConversationID[conversationID],
+  const backgroundPreference = useChatPreferencesStore((state) =>
+    isGlobal
+      ? state.globalBackgroundPreference ?? undefined
+      : state.backgroundsByConversationID[conversationID],
   );
   const setChatBackgroundPreference = useChatPreferencesStore(
     (state) => state.setChatBackgroundPreference,
+  );
+  const setGlobalBackgroundPreference = useChatPreferencesStore(
+    (state) => state.setGlobalBackgroundPreference,
   );
   const [uploadingImage, setUploadingImage] = useState(false);
   const customImageStatusText = useMemo(
@@ -73,8 +80,31 @@ export default function ChatBackgroundScreen() {
     [backgroundPreference?.mode, uploadingImage, t],
   );
 
+  // mode 'global' means "defer to the layer above" for a conversation and "no
+  // custom background" for the global preference, so both clear the same way.
+  const hasBackground = Boolean(
+    backgroundPreference && backgroundPreference.mode !== 'global',
+  );
+
+  const handleRestoreDefault = useCallback(() => {
+    if (uploadingImage) return;
+    if (isGlobal) {
+      setGlobalBackgroundPreference({ mode: 'global' });
+    } else {
+      if (!conversationID) return;
+      setChatBackgroundPreference(conversationID, { mode: 'global' });
+    }
+    router.back();
+  }, [
+    conversationID,
+    isGlobal,
+    setChatBackgroundPreference,
+    setGlobalBackgroundPreference,
+    uploadingImage,
+  ]);
+
   const handlePickCustomImage = useCallback(async () => {
-    if (!conversationID) {
+    if (!isGlobal && !conversationID) {
       Alert.alert(
         t('chat.background.paramMissing'),
         t('chat.background.cannotModify'),
@@ -117,10 +147,12 @@ export default function ChatBackgroundScreen() {
       );
       if (!mountedRef.current) return;
       setUploadingImage(false);
-      setChatBackgroundPreference(conversationID, {
-        mode: 'image',
-        uri: presign.fileUrl,
-      });
+      const preference = { mode: 'image' as const, uri: presign.fileUrl };
+      if (isGlobal) {
+        setGlobalBackgroundPreference(preference);
+      } else {
+        setChatBackgroundPreference(conversationID, preference);
+      }
       router.back();
     } catch {
       if (!mountedRef.current) return;
@@ -130,7 +162,14 @@ export default function ChatBackgroundScreen() {
         t('chat.background.failedBody'),
       );
     }
-  }, [conversationID, setChatBackgroundPreference, uploadingImage, t]);
+  }, [
+    conversationID,
+    isGlobal,
+    setChatBackgroundPreference,
+    setGlobalBackgroundPreference,
+    uploadingImage,
+    t,
+  ]);
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: colors.background }}>
@@ -147,6 +186,17 @@ export default function ChatBackgroundScreen() {
             rightText={customImageStatusText}
             onPress={handlePickCustomImage}
           />
+          {/* Picking an image was the only action here, and the store clears a
+              background only when it receives a 'global' preference, which
+              nothing on screen ever sent. So once set, the default was
+              unreachable. */}
+          {hasBackground ? (
+            <MenuRow
+              icon="refresh-outline"
+              label={t('chat.background.restoreDefault')}
+              onPress={handleRestoreDefault}
+            />
+          ) : null}
         </View>
       </ScrollView>
     </View>

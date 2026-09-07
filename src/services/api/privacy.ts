@@ -23,6 +23,9 @@ export type PrivacySettings = {
   addMeByGroup: boolean;
   callPermission: PrivacyPermission;
   groupInvitePermission: PrivacyPermission;
+  // Optional during a rolling backend deployment; new servers always return both.
+  directMessageAutoReplyEnabled?: boolean;
+  directMessageAutoReplyText?: string;
 };
 
 export type UpdatePrivacySettingsPayload = Partial<PrivacySettings>;

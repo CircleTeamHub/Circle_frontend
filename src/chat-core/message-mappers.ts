@@ -320,6 +320,9 @@ export function mapChatMessageDtoToUI(
   const base = {
     id: dto.id,
     time: formatChatTimestamp(dto.createdAt),
+    // 会话级设置，逐条带下来。渲染阅后即焚图片的判定不能依赖会话列表是否已
+    // 加载（推送冷启动时它可能还没到）。老后端不发 → undefined → 调用方回落。
+    burnDurationSec: dto.burnDurationSec ?? undefined,
     senderID: isSent ? undefined : (dto.sender?.id ?? undefined),
     senderName: isSent ? undefined : (dto.sender?.nickname ?? undefined),
     senderAvatarUrl: isSent
@@ -589,7 +592,7 @@ export function mapChatMessageDtosToUI(
 }
 
 /** 结构化系统消息 → 本地化文案(im.notification.* 词表;未知 kind 兜底空串隐藏)。 */
-function systemNoticeText(content: Record<string, unknown>): string {
+export function systemNoticeText(content: Record<string, unknown>): string {
   const kind = typeof content['kind'] === 'string' ? content['kind'] : '';
   switch (kind) {
     case 'member-joined': {
@@ -621,6 +624,24 @@ function systemNoticeText(content: Record<string, unknown>): string {
         duration: formatBurnDuration(seconds),
       });
     }
+    // 以下四种由后端的群管理动作写入。载荷只有 kind + actorId(+ targetUserId /
+    // role),没有昵称——所以文案一律被动、不点名,与上面的「有成员退出群聊」
+    // 同一口径;真要点名也得先拿 ID 换昵称,那不是这个纯函数该做的事。
+    case 'history-cleared':
+      return i18n.t('im.notification.historyCleared');
+    case 'member-removed':
+      // 与旧的踢人提示是同一件事,复用同一条文案,别让两处措辞漂移。
+      return i18n.t('im.notification.memberKicked');
+    case 'member-role-changed': {
+      const role = typeof content['role'] === 'string' ? content['role'] : '';
+      if (role === 'ADMIN') return i18n.t('im.notification.memberPromoted');
+      if (role === 'MEMBER') return i18n.t('im.notification.memberDemoted');
+      // 后端目前只发这两种。多出第三种角色时宁可说得笼统,也不能因为落进
+      // default 而渲染成一条空白系统消息(它照样占位、照样计未读)。
+      return i18n.t('im.notification.memberRoleChanged');
+    }
+    case 'group-notice-updated':
+      return i18n.t('im.notification.groupNoticeUpdated');
     default:
       return '';
   }

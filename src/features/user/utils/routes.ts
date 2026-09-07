@@ -178,6 +178,31 @@ export function getChatDetailHref(
   }
 }
 
+/**
+ * 扫码落地页。四个 tab 栈各镜像一份 —— 落地页自己还要往下跳(看资料 / 加好友 /
+ * 进群聊),它得和调用它的页面在同一个栈里,下一跳才不会把用户甩去别的 tab、返回
+ * 也才落在上一层。外部系统相机的深链另走顶层 app/qr.tsx:那种进入方式本来就没有
+ * 来源栈。App 内扫码器(#202)走的 messages 这一份,就是本函数 scope='messages'。
+ */
+export function getQrLandingHref(
+  scope: UserProfileScope,
+  token: string,
+): Href {
+  const params = { t: token };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/qr', params };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/qr', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/qr', params };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/qr', params };
+  }
+}
+
 export function getNoteDetailHref(
   scope: UserProfileScope,
   id: string,
@@ -303,6 +328,56 @@ export function getEditGroupNoticeHref(
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/edit-group-notice', params: routeParams } as unknown as Href;
+  }
+}
+
+/**
+ * 圈子通知设置。入口在联系人页的圈子页（#195 把圈子管理迁到了联系人栈），但
+ * 屏幕本身仍住在 discover 域下，所以要按当前栈解析 —— 从联系人页直接 push
+ * discover 路由会把用户甩进另一个 tab，返回时也回不到他出发的那一栈。
+ */
+export function getCircleNotificationSettingsHref(
+  scope: UserProfileScope,
+): Href {
+  switch (scope) {
+    case 'contacts':
+      return '/(tabs)/contacts/circle-notifications' as unknown as Href;
+    case 'discover':
+    default:
+      return '/(tabs)/discover/notifications' as unknown as Href;
+  }
+}
+
+/** 圈子玩法说明。与上面同理：它是从通知设置页里点进去的，得留在同一栈。 */
+export function getCircleGuideHref(scope: UserProfileScope): Href {
+  switch (scope) {
+    case 'contacts':
+      return '/(tabs)/contacts/circle-guide' as unknown as Href;
+    case 'discover':
+    default:
+      return '/(tabs)/discover/guide' as unknown as Href;
+  }
+}
+
+export function getGroupLogHref(
+  scope: UserProfileScope,
+  params: { conversationID: string; title?: string },
+): Href {
+  const routeParams = {
+    conversationID: params.conversationID,
+    ...(params.title ? { title: params.title } : {}),
+  };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/group-log', params: routeParams } as unknown as Href;
+    case 'profile':
+      return { pathname: '/(tabs)/profile/group-log', params: routeParams } as unknown as Href;
+    case 'discover':
+      return { pathname: '/(tabs)/discover/group-log', params: routeParams } as unknown as Href;
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/group-log', params: routeParams } as unknown as Href;
   }
 }
 

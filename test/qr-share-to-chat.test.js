@@ -7,6 +7,7 @@ const ts = require('typescript');
 
 const root = process.cwd();
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+const exists = (rel) => fs.existsSync(path.join(root, rel));
 
 const LOCALES = ['zh', 'en', 'ja', 'ko', 'es'];
 const readLocale = (lng) => JSON.parse(read(`src/i18n/locales/${lng}.json`));
@@ -139,10 +140,58 @@ test('二维码卡片把「是谁的码、扫了会怎样」写在卡面上', ()
 test('点卡片走扫码同一条落地页，路径写死在本端', () => {
   const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
   assert.match(screen, /<QrCardBubble/);
+  // 目的地由本端的 helper 决定,对端只能提供令牌 —— 这是「路径写死在本端」的实质。
   assert.match(
     screen,
-    /router\.push\(\{ pathname: '\/qr', params: \{ t: card\.token \} \}\)/,
+    /router\.push\(getQrLandingHref\(scope, card\.token\)\)/,
   );
+});
+
+test('二维码落地页跟随来源栈：进哪一栈由 scope 决定，且只能 push', () => {
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const landing = read('src/features/qr/screens/QrLandingScreen.tsx');
+  const routes = read('src/features/user/utils/routes.ts');
+
+  // 规则:从哪个页面进另一个页面,返回永远是上一层。聊天页在四个 tab 栈和 (chat)
+  // 下都有挂载点,所以落地页得进本栈那一份镜像 —— 跳顶层 /qr 或写死 messages,
+  // 落地页的下一跳(看资料/加好友/进群聊)就会把用户甩出他出发的 tab。
+  assert.doesNotMatch(
+    screen,
+    /pathname: '\/(?:\(tabs\)\/[a-z]+\/)?qr'/,
+    'QR 落地页目标必须走 getQrLandingHref(scope),不能写死 pathname',
+  );
+  assert.match(routes, /export function getQrLandingHref\(/);
+  for (const scope of ['messages', 'contacts', 'profile', 'discover']) {
+    const route = `app/(tabs)/${scope}/qr.tsx`;
+    assert.ok(routes.includes(`'/(tabs)/${scope}/qr'`), `helper 缺 ${scope} 分支`);
+    assert.equal(exists(route), true, `${route} should exist`);
+    assert.match(
+      read(route),
+      /export \{ default \} from '@\/features\/qr\/screens\/QrLandingScreen'/,
+      `${route} should re-export QrLandingScreen`,
+    );
+  }
+
+  // 落地页自己的三处跳转也不能写死 scope,否则镜像路由白做。
+  assert.doesNotMatch(
+    landing,
+    /Href\('messages'/,
+    '落地页的下一跳必须用 segments 解出的 scope',
+  );
+  assert.match(landing, /getUserProfileScopeFromSegments\(segments\)/);
+
+  // push 而非 replace:replace 顶掉当前页后,落地页走完就没有可返回的上一层
+  // —— 正是 #202 给扫码器修掉的那个 bug,别为了防连点顺手换过来。
+  assert.doesNotMatch(
+    screen,
+    /router\.replace\(getQrLandingHref/,
+    'QR 落地页只能 push,不能 replace',
+  );
+  const callIndex = screen.indexOf('getQrLandingHref(scope, card.token)');
+  assert.ok(callIndex > 0, '找不到 QR 卡片的跳转调用');
+  const preamble = screen.slice(Math.max(0, callIndex - 600), callIndex);
+  assert.match(preamble, /replace/, '调用点缺少「为什么不能用 replace」的注释');
+  assert.match(preamble, /#202/, '调用点注释应指回 #202');
 });
 
 // ─── 安全:卡片载荷完全由对端构造 ─────────────────────────────────────────────

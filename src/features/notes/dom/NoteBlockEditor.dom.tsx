@@ -5,6 +5,10 @@ import '@blocknote/react/style.css';
 import type { PartialBlock } from '@blocknote/core';
 import { en, zh } from '@blocknote/core/locales';
 import {
+  buildPendingEditorBlocks,
+  resolveMediaInsertAnchor,
+} from '../utils/note-media-upload';
+import {
   BlockNoteViewRaw,
   useCreateBlockNote,
   useEditorChange,
@@ -37,7 +41,7 @@ export interface NoteEditorToolbarLabels {
 interface Props {
   dom?: import('expo/dom').DOMProps;
   initialContent: string | null; // JSON string of Block[]
-  pendingInsert: PendingInsert | null;
+  pendingInserts: PendingInsert[];
   onContentChange: (blocksJson: string) => void; // JSON string — avoids bridge serialization errors
   onInsertHandled: () => void;
   onImageRequest: () => void;
@@ -50,9 +54,25 @@ interface Props {
 
 type ActiveType = 'paragraph' | 'heading' | 'bulletListItem';
 
+function insertPendingMedia(
+  editor: Pick<
+    ReturnType<typeof useCreateBlockNote>,
+    'getTextCursorPosition' | 'insertBlocks' | 'document'
+  >,
+  pendingInserts: readonly PendingInsert[],
+): boolean {
+  const anchor = resolveMediaInsertAnchor(
+    editor.getTextCursorPosition()?.block,
+    editor.document,
+  );
+  if (!anchor) return false;
+  editor.insertBlocks(buildPendingEditorBlocks(pendingInserts), anchor, 'after');
+  return true;
+}
+
 export default function NoteBlockEditor({
   initialContent,
-  pendingInsert,
+  pendingInserts,
   onContentChange,
   onInsertHandled,
   onImageRequest,
@@ -126,32 +146,24 @@ export default function NoteBlockEditor({
     };
   }, []);
 
-  // Insert a pending image/video block from native
+  // A batch is inserted in one call so every item stays anchored after the
+  // original cursor block in the same order the picker returned it.
   useEffect(() => {
-    if (!pendingInsert || unmounted.current) return;
-    const pos = editor.getTextCursorPosition();
-    editor.insertBlocks(
-      [
-        {
-          // BlockNote's default schema ships both `image` and `video` blocks;
-          // they share the url/previewWidth/caption props.
-          type: pendingInsert.type,
-          props: {
-            url: pendingInsert.url,
-            previewWidth: 300,
-            caption: '',
-          },
-        },
-      ],
-      pos.block,
-      'after',
-    );
+    if (pendingInserts.length === 0 || unmounted.current) return;
+    if (!insertPendingMedia(editor, pendingInserts)) {
+      // 文档连一个块都没有，BlockNote 正常不会到这里。仍然把这批交割掉：留着
+      // 不消费只会让 effect 依赖不变、永远不再触发，等于换一种方式卡死。
+      console.warn(
+        '[NoteBlockEditor.dom] dropped a media batch: the document had no block to anchor to',
+      );
+    }
     onInsertHandled();
-  }, [pendingInsert, editor, onInsertHandled]);
+  }, [pendingInserts, editor, onInsertHandled]);
 
   function applyType(type: ActiveType) {
     const pos = editor.getTextCursorPosition();
     if (!pos?.block) return;
+
     if (type === 'heading') {
       editor.updateBlock(pos.block, { type: 'heading', props: { level: 1 } });
     } else {

@@ -131,6 +131,9 @@ test('search responses drop locally deleted messages', () => {
       return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
     }
     if (request === './deleted-messages') return deleted;
+    if (request === './clear-history-target') {
+      return { getKnownClearTargetHeight: () => null };
+    }
     if (request === '../features/chat/chat-history-date-window') {
       return loadDateWindow();
     }
@@ -183,6 +186,9 @@ function loadApi(deleted, respond) {
       return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
     }
     if (request === './deleted-messages') return deleted;
+    if (request === './clear-history-target') {
+      return { getKnownClearTargetHeight: () => null };
+    }
     if (request === '../features/chat/chat-history-date-window') {
       return loadDateWindow();
     }
@@ -291,4 +297,7 @@ test('a cursor that stops advancing ends the chase instead of hanging', async ()
   const page = await api.searchChatMessages('c1', { beforeHeight: 900 });
   assert.deepEqual(page.messages, []);
   assert.equal(calls, 1);
+  // 收手之后还得**告诉调用方**。六个历史列表屏都靠 nextBeforeHeight !== null 决定
+  // 还有没有更多,把停住的游标原样交回去,它们就会一直请求同一页。
+  assert.equal(page.nextBeforeHeight, null);
 });

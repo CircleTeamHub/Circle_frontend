@@ -172,8 +172,7 @@ export function useAuth() {
             : {}),
         });
         await onAuthSuccess(tokens, {
-          onboardingRequired: true,
-          startAppServices: false,
+          onboardingRequired: false,
         });
       } catch (requestError) {
         safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.registerFailed')));

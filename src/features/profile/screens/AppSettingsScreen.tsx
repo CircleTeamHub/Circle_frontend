@@ -114,6 +114,11 @@ const ACCOUNT_SEARCH_ROWS = [
 
 const GENERAL_ROWS: AppSettingsRow[] = [
   {
+    id: 'autoReply',
+    labelKey: 'appSettings.rows.autoReply.label',
+    route: '/(tabs)/profile/settings-auto-reply',
+  },
+  {
     id: 'notifications',
     labelKey: 'appSettings.rows.notifications.label',
     route: '/(tabs)/profile/settings-notifications',
@@ -168,6 +173,26 @@ const APPEARANCE_SEARCH_ROWS: AppSettingsRow[] = [
   {
     id: 'appearance-language',
     labelKey: 'settingsDetails.appearance.language',
+    route: '/(tabs)/profile/settings-appearance',
+  },
+  {
+    id: 'appearance-global-chat-background',
+    labelKey: 'settingsDetails.appearance.globalChatBackground',
+    route: '/(tabs)/profile/settings-appearance',
+  },
+  {
+    id: 'appearance-hide-chat-avatar',
+    labelKey: 'settingsDetails.appearance.hideChatAvatar',
+    route: '/(tabs)/profile/settings-appearance',
+  },
+  {
+    id: 'appearance-merge-avatar',
+    labelKey: 'settingsDetails.appearance.mergeAvatar',
+    route: '/(tabs)/profile/settings-appearance',
+  },
+  {
+    id: 'appearance-pinned-fold-count',
+    labelKey: 'settingsDetails.appearance.pinnedFoldCount',
     route: '/(tabs)/profile/settings-appearance',
   },
 ];

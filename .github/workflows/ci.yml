@@ -172,6 +172,17 @@ jobs:
       - name: Test
         run: npm test
 
+      # `npm test` 只跑 node --test（test/*.js 与 src/**/*.test.mts）。jest 的行为
+      # 测试（**/*.spec.tsx）此前只有 android-preprod-build.yml / android-release.yml
+      # 经 `npm run ci` 跑得到，PR 上一条都不跑。后果是真实发生过的：#193 改了
+      # observability/report-failure.ts，MemberCenterScreen 与 use-change-cover 两条
+      # spec 在 main 上过期，PR CI 全绿放行，直到 main 的安卓预生产构建红了约一天
+      # （run 33834209065）才被发现。发布构建不该是行为测试的第一道闸门。
+      # 整套 42 个 suite / 207 条本地约 16 秒，放在 Web Export 之前，过期 spec 就能
+      # 在昂贵的导出之前快速失败。
+      - name: Behavior Tests
+        run: npm run test:behavior
+
       - name: Web Export
         env:
           # CI 只做可部署性 smoke；真实发布必须把这里替换为生产 HTTPS API origin。

@@ -132,6 +132,8 @@ export interface TransferCardData {
 
 export interface ChatMessage {
   id: string;
+  /** 仅用于本地展示：连续消息合并时隐藏本条旁边的头像。 */
+  suppressAvatar?: boolean;
   type:
     | 'sent'
     | 'received'
@@ -162,6 +164,10 @@ export interface ChatMessage {
   isDelivered?: boolean;
   // 发送幂等键(重发失败消息用;仅本端)。
   deliveryId?: string;
+  // 所属会话的阅后即焚秒数（服务端逐条下发）；null/缺省 = 未知，由调用方回落到
+  // 会话查找。带在消息上是为了不依赖「会话列表已加载」——推送冷启动时消息可能
+  // 先到，查不到就会把该焚毁的图片按普通图片渲染（落盘 + 可存相册）。
+  burnDurationSec?: number | null;
   time?: string;
   senderName?: string;
   // 发送者用户 id（UUID 形式），仅接收消息携带；群聊点头像跳对方资料用。

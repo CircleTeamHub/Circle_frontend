@@ -133,6 +133,13 @@ export interface CreateNoteMediaInput {
   sortOrder: number;
 }
 
+/** Local-only state used while media is being uploaded in the note editor. */
+export interface EditorNoteMediaDraft extends CreateNoteMediaInput {
+  clientId: string;
+  uploadStatus: 'PENDING' | 'UPLOADED';
+  previewUri?: string;
+}
+
 export interface CreateNoteInput {
   title: string;
   content?: string;

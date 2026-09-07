@@ -110,3 +110,31 @@ test('en.json and zh.json have identical key sets (ignoring plural categories)',
     `locale base-key sets diverged — en-only: ${onlyEn.join(', ')}; zh-only: ${onlyZh.join(', ')}`,
   );
 });
+
+test('every supported note-editor locale defines legacy-media save protection copy', () => {
+  for (const lng of ['en', 'es', 'ja', 'ko', 'zh']) {
+    const flat = flatten(
+      JSON.parse(
+        fs.readFileSync(path.join(process.cwd(), `src/i18n/locales/${lng}.json`), 'utf8'),
+      ),
+    );
+    assert.equal(typeof flat['notes.edit.legacyMediaUnavailableTitle'], 'string');
+    assert.notEqual(flat['notes.edit.legacyMediaUnavailableTitle'], '');
+    assert.equal(typeof flat['notes.edit.legacyMediaUnavailableMessage'], 'string');
+    assert.notEqual(flat['notes.edit.legacyMediaUnavailableMessage'], '');
+  }
+});
+
+test('every supported note-editor locale explains picker overflow', () => {
+  for (const lng of ['en', 'es', 'ja', 'ko', 'zh']) {
+    const flat = flatten(
+      JSON.parse(
+        fs.readFileSync(path.join(process.cwd(), `src/i18n/locales/${lng}.json`), 'utf8'),
+      ),
+    );
+    assert.equal(typeof flat['notes.editor.selectionLimitExceededTitle'], 'string');
+    assert.notEqual(flat['notes.editor.selectionLimitExceededTitle'], '');
+    assert.equal(typeof flat['notes.editor.selectionLimitExceededMessage'], 'string');
+    assert.notEqual(flat['notes.editor.selectionLimitExceededMessage'], '');
+  }
+});

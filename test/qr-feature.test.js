@@ -42,8 +42,9 @@ test('native QR surfaces emit the scheme for the installed app variant', () => {
 
 // ─── 扫码器接线 ───────────────────────────────────────────────────────────────
 
-test('scan result resolves app qr payloads into the /qr landing route first', () => {
+test('in-app scan resolves QR payloads into the messages-stack landing route first', () => {
   const source = read('src/features/messages/utils/scan-result.ts');
+  assert.match(source, /parseQrLoginToken, parseQrToken/);
   assert.match(source, /parseQrToken/);
   const qrIndex = source.indexOf('parseQrToken(value)');
   const routeMapIndex = source.indexOf('normalizeMessagePath(value)', qrIndex);
@@ -52,7 +53,10 @@ test('scan result resolves app qr payloads into the /qr landing route first', ()
     routeMapIndex > qrIndex,
     'qr token must take precedence over static route map',
   );
-  assert.match(source, /pathname: '\/qr', params: \{ t: qrToken \}/);
+  assert.match(
+    source,
+    /pathname: '\/\(tabs\)\/messages\/qr', params: \{ t: qrToken \}/,
+  );
 });
 
 // ─── 顶层路由与深链 ───────────────────────────────────────────────────────────
@@ -128,8 +132,8 @@ test('QrLandingScreen previews before joining and never auto-joins', () => {
   assert.doesNotMatch(effectBlock, /joinByQrToken/);
   assert.match(source, /const handlePrimary = useCallback/);
   assert.match(source, /joinByQrToken\(token\)/);
-  // 名片码走加好友申请页并透传 qrToken。
-  assert.match(source, /getSendFriendRequestHref\('messages', preview\.targetId, preview\.name, \{\s*qrToken: token,\s*\}\)/);
+  // 名片码走加好友申请页并透传 qrToken。scope 按进来的那一栈取,不能写死。
+  assert.match(source, /getSendFriendRequestHref\(scope, preview\.targetId, preview\.name, \{\s*qrToken: token,\s*\}\)/);
   // 严格招新 PENDING 与直接入圈 JOINED 各有文案。
   assert.match(source, /qr\.circleJoinedTitle/);
   assert.match(source, /qr\.circlePendingTitle/);

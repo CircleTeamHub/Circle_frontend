@@ -6,19 +6,24 @@ import {
   SectionListData,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import { FilterTabs } from '@/components/ui/filter-tabs';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { fetchMyCircles } from '@/services/api/circles';
 import type { MyCircle } from '@/types';
-import { useAuthStore } from '@/stores/authStore';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
+import { filterGroupsByQuery } from '@/features/contacts/utils/group-list-filter';
+import { createGroupsRequestGuard } from '@/features/contacts/groups-request-guard';
 
 /** 自研栈下「群聊」= 圈子;沿用旧字段名以少动渲染层。 */
 interface GroupItem {
@@ -28,6 +33,7 @@ interface GroupItem {
   memberCount: number;
   introduction: string | null;
   ownerUserID: string;
+  myRole: MyCircle['myRole'];
 }
 
 function circleToGroupItem(circle: MyCircle): GroupItem {
@@ -38,12 +44,26 @@ function circleToGroupItem(circle: MyCircle): GroupItem {
     memberCount: circle.memberCount,
     introduction: circle.description || null,
     ownerUserID: circle.ownerID,
+    myRole: circle.myRole,
   };
 }
 
 interface GroupSection {
   title: string;
   data: GroupItem[];
+}
+
+type GroupCategory = 'new' | 'joined' | 'created' | 'managed';
+
+const EMPTY_GROUPS_BY_CATEGORY: Record<GroupCategory, GroupItem[]> = {
+  new: [],
+  joined: [],
+  created: [],
+  managed: [],
+};
+
+function dedupeCircles(circles: MyCircle[]) {
+  return [...new Map(circles.map((circle) => [circle.id, circle])).values()];
 }
 
 const s = StyleSheet.create({
@@ -81,6 +101,26 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
   },
+  categoryTabs: {
+    paddingBottom: Spacing.sm,
+  },
+  searchBox: {
+    height: 42,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    ...Typography.bodyRegular,
+    paddingVertical: 0,
+  },
 });
 
 export default function GroupsScreen() {
@@ -88,33 +128,61 @@ export default function GroupsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
 
-  // 当前账号 ID 决定哪些群是"我创建的"（ownerUserID === 我）。
-  const currentUserID = useAuthStore((state) => state.user?.id ?? null);
-
-  const [groups, setGroups] = useState<GroupItem[]>([]);
+  const [activeCategory, setActiveCategory] = useState<GroupCategory>('joined');
+  // 关键词跨分类保留：用户常常只记得群名、不记得它算「我加入的」还是「我管理的」，
+  // 切页签时清空会逼他们重打一遍。
+  const [query, setQuery] = useState('');
+  const [groupsState, setGroupsState] = useState(() => ({
+    sessionEpoch,
+    groupsByCategory: EMPTY_GROUPS_BY_CATEGORY,
+  }));
+  const groupsByCategory =
+    groupsState.sessionEpoch === sessionEpoch
+      ? groupsState.groupsByCategory
+      : EMPTY_GROUPS_BY_CATEGORY;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  const requestGuardRef = useRef(createGroupsRequestGuard());
 
   const loadGroups = useCallback(
     async (signal?: { cancelled: boolean }) => {
-      const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
+      const token = requestGuardRef.current.begin(sessionEpoch);
+      const isCancelled = () =>
+        Boolean(signal?.cancelled) ||
+        !mountedRef.current ||
+        !requestGuardRef.current.isActive(
+          token,
+          useAuthStore.getState().sessionEpoch,
+        );
       setLoading(true);
       try {
-        // created/joined 两个 tab 并发拉全量,按 id 去重(自研栈 群=圈子)。
-        const [created, joined] = await Promise.all([
-          fetchMyCircles('created'),
+        const [applied, joined, created] = await Promise.all([
+          fetchMyCircles('applied'),
           fetchMyCircles('joined'),
+          fetchMyCircles('created'),
         ]);
         if (isCancelled()) return;
-        const byId = new Map<string, MyCircle>();
-        for (const circle of [...created, ...joined]) {
-          byId.set(circle.id, circle);
-        }
-        setGroups([...byId.values()].map(circleToGroupItem));
+        const createdIDs = new Set(created.map((circle) => circle.id));
+        const allActive = dedupeCircles([...created, ...joined]);
+        const managed = allActive.filter(
+          (circle) => circle.myRole === 'OWNER' || circle.myRole === 'ADMIN',
+        );
+        setGroupsState({
+          sessionEpoch: token.sessionEpoch,
+          groupsByCategory: {
+            new: dedupeCircles(applied).map(circleToGroupItem),
+            joined: dedupeCircles(
+              joined.filter((circle) => !createdIDs.has(circle.id)),
+            ).map(circleToGroupItem),
+            created: dedupeCircles(created).map(circleToGroupItem),
+            managed: managed.map(circleToGroupItem),
+          },
+        });
         setError(null);
       } catch (caughtError) {
         if (isCancelled()) return;
@@ -126,7 +194,7 @@ export default function GroupsScreen() {
         }
       }
     },
-    [t],
+    [sessionEpoch, t],
   );
 
   useEffect(() => {
@@ -144,12 +212,14 @@ export default function GroupsScreen() {
     }, [loadGroups]),
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    const requestGuard = requestGuardRef.current;
+    return () => {
       mountedRef.current = false;
-    },
-    [],
-  );
+      requestGuard.invalidate();
+    };
+  }, []);
 
   const handleRefreshGroups = useCallback(async () => {
     if (refreshInFlightRef.current) return;
@@ -163,31 +233,24 @@ export default function GroupsScreen() {
     }
   }, [loadGroups]);
 
+  const categories = useMemo(
+    () => [
+      { id: 'new' as const, label: t('contacts.groupsScreen.newGroups') },
+      { id: 'joined' as const, label: t('contacts.groupsScreen.myJoined') },
+      { id: 'created' as const, label: t('contacts.groupsScreen.myCreated') },
+      { id: 'managed' as const, label: t('contacts.groupsScreen.myManaged') },
+    ],
+    [t],
+  );
+
   const sections = useMemo<GroupSection[]>(() => {
-    if (!currentUserID) {
-      return [{ title: t('contacts.groupsScreen.myJoined'), data: groups }];
-    }
-
-    // 拆"我创建"与"我加入"两段。
-    const created: GroupItem[] = [];
-    const joined: GroupItem[] = [];
-    for (const group of groups) {
-      if (group.ownerUserID === currentUserID) {
-        created.push(group);
-      } else {
-        joined.push(group);
-      }
-    }
-
-    const result: GroupSection[] = [];
-    if (created.length > 0) {
-      result.push({ title: t('contacts.groupsScreen.myCreated'), data: created });
-    }
-    if (joined.length > 0) {
-      result.push({ title: t('contacts.groupsScreen.myJoined'), data: joined });
-    }
-    return result;
-  }, [groups, currentUserID, t]);
+    const active = categories.find((category) => category.id === activeCategory);
+    return [{
+      title: active?.label ?? '',
+      // 只过滤当前分类：页签是主轴，分区标题写的就是它，跨分类搜会让标题说谎。
+      data: filterGroupsByQuery(groupsByCategory[activeCategory], query),
+    }];
+  }, [activeCategory, categories, groupsByCategory, query]);
 
   const d = useMemo(
     () => ({
@@ -237,6 +300,13 @@ export default function GroupsScreen() {
         textAlign: 'center' as const,
         paddingTop: Spacing.xl,
       },
+      searchBox: {
+        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.surface,
+      },
+      searchInput: {
+        color: colors.text,
+      },
     }),
     [colors, insets.bottom],
   );
@@ -273,6 +343,8 @@ export default function GroupsScreen() {
           <Text style={d.retryButtonText}>{t('common.retry')}</Text>
         </Pressable>
       </View>
+    ) : query.trim() ? (
+      <Text style={d.emptyText}>{t('contacts.groupsScreen.noMatches')}</Text>
     ) : (
       <Text style={d.emptyText}>{t('contacts.groupsScreen.empty')}</Text>
     );
@@ -285,6 +357,55 @@ export default function GroupsScreen() {
         keyExtractor={(item) => item.groupID}
         contentContainerStyle={d.listContent}
         stickySectionHeadersEnabled={false}
+        ListHeaderComponent={
+          <View>
+            <View style={[s.searchBox, d.searchBox]}>
+              <Ionicons
+                name="search-outline"
+                size={18}
+                color={colors.textSecondary}
+              />
+              <TextInput
+                style={[s.searchInput, d.searchInput]}
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t('contacts.groupsScreen.searchPlaceholder')}
+                placeholderTextColor={colors.textSecondary}
+                autoCorrect={false}
+                returnKeyType="search"
+                accessibilityLabel={t('contacts.groupsScreen.searchPlaceholder')}
+              />
+              {query ? (
+                <Pressable
+                  onPress={() => setQuery('')}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.clear', { defaultValue: '清除' })}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+            <View style={s.categoryTabs}>
+              <FilterTabs
+                tabs={categories.map((category) => category.label)}
+                activeIndex={categories.findIndex(
+                  (category) => category.id === activeCategory,
+                )}
+                onTabPress={(index) => {
+                  const category = categories[index];
+                  if (category) setActiveCategory(category.id);
+                }}
+                scrollable
+                compact
+              />
+            </View>
+          </View>
+        }
         renderSectionHeader={({
           section,
         }: {

@@ -46,9 +46,28 @@ test('messages scan screen routes recognized app results and copies unknown resu
   const source = read('src/features/messages/screens/ScanScreen.tsx');
   const resolver = read('src/features/messages/utils/scan-result.ts');
   const branding = read('src/constants/branding.ts');
+  const layout = read('app/(tabs)/messages/_layout.tsx');
 
   assert.match(source, /resolveMessageScanResult/);
+  // replace 换掉摄像头页可以防止返回时重复扫码，但目标必须留在同一个 messages
+  // 栈：跳去顶层 /qr 会把栈换掉，落地页走完加好友就没有可返回的目标。
   assert.match(source, /router\.replace\(action\.href\)/);
+  assert.match(resolver, /pathname: '\/\(tabs\)\/messages\/qr'/);
+  assert.match(resolver, /pathname: '\/\(tabs\)\/messages\/qr-login'/);
+  assert.match(layout, /<Stack\.Screen name="qr" \/>/);
+  assert.match(layout, /<Stack\.Screen name="qr-login" \/>/);
+  // 钉住两个路由的内容而不只是存在性。普通二维码进入落地页；已停用的
+  // 登录二维码进入明确的兼容提示页，避免误走已删除的登录审批流程。
+  assert.equal(exists('app/(tabs)/messages/qr.tsx'), true);
+  assert.match(
+    read('app/(tabs)/messages/qr.tsx'),
+    /export \{ default \} from '@\/features\/qr\/screens\/QrLandingScreen'/,
+  );
+  assert.equal(exists('app/(tabs)/messages/qr-login.tsx'), true);
+  assert.match(
+    read('app/(tabs)/messages/qr-login.tsx'),
+    /export \{ default \} from '@\/features\/qr\/screens\/QrLoginDeprecatedScreen'/,
+  );
   assert.match(source, /Clipboard\.setStringAsync\(value\)/);
   assert.match(source, /handleCopyFallback\(action\.value\)/);
   assert.match(resolver, /type MessageScanAction/);

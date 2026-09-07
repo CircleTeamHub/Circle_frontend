@@ -1,13 +1,17 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
+import {
+  getCircleGuideHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 
 interface NotificationItemProps {
   title: string;
@@ -102,6 +106,7 @@ export default function CircleNotificationSettingsScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
+  const segments = useSegments();
 
   const inAppEnabled = useCircleNotificationStore((st) => st.inAppEnabled);
   const bannerEnabled = useCircleNotificationStore((st) => st.bannerEnabled);
@@ -140,7 +145,11 @@ export default function CircleNotificationSettingsScreen() {
         {/* 圈子玩法说明入口：讲清卡片颜色含义 + 活动怎么玩。 */}
         <Pressable
           style={s.guideRow}
-          onPress={() => router.push('/(tabs)/discover/guide')}
+          // 这一页现在也从联系人栈打开，写死 discover 路由会把用户甩去另一个
+          // tab，返回时回不到他出发的那一栈。按当前栈解析。
+          onPress={() =>
+            router.push(getCircleGuideHref(getUserProfileScopeFromSegments(segments)))
+          }
           accessibilityRole="button"
           accessibilityLabel={t('discover.guide.title')}
         >

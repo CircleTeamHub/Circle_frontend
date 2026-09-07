@@ -534,9 +534,10 @@ test('focus refresh ignores unmount and reports failure without error data', asy
   await waitFor(() =>
     expect(warn).toHaveBeenCalledWith(
       '[memberCenter] userRefresh failed',
-      expect.objectContaining({ message: 'private response data' }),
+      expect.objectContaining({ errorName: 'Error' }),
     ),
   );
+  expect(JSON.stringify(warn.mock.calls)).not.toContain('private response data');
 });
 
 test('tier headers wrap long content instead of forcing a single line', async () => {

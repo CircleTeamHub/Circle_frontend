@@ -62,7 +62,14 @@ test('the viewer drives zoom/save through the shared cross-platform pieces', () 
 
   // 缩放走 ZoomableImage（PanResponder，两端共用），不是 web 专属实现。
   assert.match(viewer, /<ZoomableImage/);
-  assert.match(viewer, /onLongPress=\{handleLongPress\}/);
+  assert.match(
+    viewer,
+    /onLongPress=\{privacyMode === 'ephemeral' \? undefined : handleLongPress\}/,
+  );
+  assert.match(
+    viewer,
+    /cachePolicy=\{privacyMode === 'ephemeral' \? 'none' : 'memory-disk'\}/,
+  );
   assert.match(viewer, /saveImageToLibrary/);
 
   const zoomable = read('src/components/ui/zoomable-image.tsx');

@@ -152,6 +152,17 @@ export interface ChatMessageDto {
   editedAt?: string | null;
   /** 表情回应聚合；无回应缺省。 */
   reactions?: ChatReactionSummary[];
+  /**
+   * 所属会话的阅后即焚秒数；null/缺省 = 未开启。
+   *
+   * 与会话 DTO 上那个是同一个值，逐条消息带一份是有意的：从会话列表缓存里查
+   * 这个值要赌「列表已经加载好」，而推送冷启动时消息可能先到 —— 查不到就当成
+   * 没开焚毁，原图落盘、长按可存相册，等缓存补齐已经晚了。带在消息上，渲染这
+   * 条消息所需的一切就都在消息里。
+   *
+   * 缺省要按「未知」处理而不是「关」：老后端不发这个字段，此时回落到会话查找。
+   */
+  burnDurationSec?: number | null;
   /** 幂等键：本地乐观消息靠它与服务端回执/广播对账替换。 */
   d: string | null;
   createdAt: string;

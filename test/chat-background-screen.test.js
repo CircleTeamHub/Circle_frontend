@@ -18,11 +18,15 @@ test('chat background screen lets users choose and upload a custom image backgro
   assert.doesNotMatch(src, /图片背景稍后提供/);
 });
 
-test('chat background screen only exposes the custom image background option', () => {
+test('chat background screen exposes the custom image option and a way back to default', () => {
   const src = read('src/features/chat/screens/ChatBackgroundScreen.tsx');
 
   assert.match(src, /label=\{t\('chat\.background\.customImage'\)\}/);
   assert.match(src, /rightText=\{customImageStatusText\}/);
+  // 只有「选图」的话，设过一次就再也退不回默认：store 里清除背景的唯一入口是
+  // 传一个 mode: 'global' 的偏好，界面上原本没有任何地方会那么做。
+  assert.match(src, /chat\.background\.restoreDefault/);
+  assert.match(src, /hasBackground \? \(/);
   assert.doesNotMatch(src, /CHAT_BACKGROUND_PRESETS/);
   assert.doesNotMatch(src, /DEFAULT_CHAT_BACKGROUND_PREFERENCE/);
   assert.doesNotMatch(src, /跟随全局/);

@@ -33,6 +33,7 @@ interface ImageViewerProps {
   images: string[];
   visible: boolean;
   initialIndex?: number;
+  privacyMode?: 'standard' | 'ephemeral';
   onClose: () => void;
 }
 
@@ -40,6 +41,7 @@ export function ImageViewer({
   images,
   visible,
   initialIndex = 0,
+  privacyMode = 'standard',
   onClose,
 }: ImageViewerProps) {
   const { t } = useTranslation();
@@ -144,13 +146,14 @@ export function ImageViewer({
           renderItem={({ item, index: itemIndex }) => (
             <ZoomableImage
               uri={item}
+              cachePolicy={privacyMode === 'ephemeral' ? 'none' : 'memory-disk'}
               width={width}
               height={height}
               active={itemIndex === index}
               onZoomedChange={setZoomed}
               // 单击关闭：全屏查看器里最顺手的退出方式（双击留给放大）。
               onTap={onClose}
-              onLongPress={handleLongPress}
+              onLongPress={privacyMode === 'ephemeral' ? undefined : handleLongPress}
             />
           )}
         />

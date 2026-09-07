@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 
 function loadApiUtils(options = {}) {
+  const warnings = options.warnings ?? [];
   const filePath = path.join(process.cwd(), 'src/services/api/utils.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -38,6 +39,14 @@ function loadApiUtils(options = {}) {
         return {
           apiClient: {},
           ApiError: class ApiError extends Error {},
+        };
+      }
+
+      if (specifier === '@/utils/dev-log') {
+        return {
+          devWarn: (...args) => {
+            warnings.push(args.join(' '));
+          },
         };
       }
 
@@ -442,4 +451,62 @@ test('allowPeerMediaUrl tolerates junk without throwing', () => {
   for (const junk of [null, undefined, '', 'not a url', 'javascript:alert(1)']) {
     assert.equal(allowPeerMediaUrl(junk), null);
   }
+});
+
+test('allowPeerMediaUrl names an unlisted media origin once, in dev only', () => {
+  const warnings = [];
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: true,
+    warnings,
+  });
+
+  // 后端刚把媒体切到 CDN 域名、构建里没配 EXPO_PUBLIC_MEDIA_ORIGINS 时长这样：
+  // 地址完全合法，却每一条都被丢掉。
+  assert.equal(allowPeerMediaUrl('https://media.example.com/circle/a.jpg'), null);
+  assert.equal(allowPeerMediaUrl('https://media.example.com/circle/b.jpg'), null);
+
+  assert.equal(warnings.length, 1, '同一个来源只提示一次');
+  assert.match(warnings[0], /https:\/\/media\.example\.com/);
+  assert.match(warnings[0], /EXPO_PUBLIC_MEDIA_ORIGINS/);
+
+  // 另一个来源仍然值得提示。
+  assert.equal(allowPeerMediaUrl('https://other.example.com/a.jpg'), null);
+  assert.equal(warnings.length, 2);
+});
+
+test('allowPeerMediaUrl stays silent in production builds', () => {
+  const warnings = [];
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    isDev: false,
+    warnings,
+  });
+
+  // 对端可控的地址被拒是白名单的本职工作；生产上出声等于让对端刷日志，
+  // 而且按来源记 Set 会随对端输入无界增长。
+  for (let index = 0; index < 5; index += 1) {
+    assert.equal(
+      allowPeerMediaUrl(`https://tracker-${index}.example.com/a.jpg`),
+      null,
+    );
+  }
+
+  assert.equal(warnings.length, 0);
+});
+
+test('allowPeerMediaUrl says nothing when the origin is allowlisted', () => {
+  const warnings = [];
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: 'https://api.example.com/api/v1',
+    mediaOrigins: ['https://media.example.com'],
+    isDev: true,
+    warnings,
+  });
+
+  assert.equal(
+    allowPeerMediaUrl('https://media.example.com/circle/a.jpg'),
+    'https://media.example.com/circle/a.jpg',
+  );
+  assert.equal(warnings.length, 0);
 });

@@ -11,8 +11,13 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
 import type { ChatMessage } from '@/types';
+import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 
 export const AVATAR_SIZE = 36;
+/** 合并头像时的等宽占位：这一条不画头像，但那一列的宽度必须留着。 */
+const sAvatar = StyleSheet.create({
+  mergedPlaceholder: { width: AVATAR_SIZE },
+});
 export const CHAT_CARD_STANDARD_WIDTH = 260;
 export const LOCATION_CARD_WIDTH = 248;
 export const CHAT_CARD_PADDING_VERTICAL = 10;
@@ -33,12 +38,28 @@ interface MessageAvatarProps {
  * 所有消息气泡共用这一颗圆角方形头像，避免不同消息类型产生形状差异。
  */
 export const MessageAvatar: React.FC<MessageAvatarProps> = ({
+  message,
   outgoing,
   selfName,
   selfAvatarUri,
   senderName,
   senderAvatarUri,
 }) => {
+  const hideChatAvatar = useAppSettingsStore(
+    (state) => state.settings.hideChatAvatar,
+  );
+  // 两件事，处理方式相反。
+  //
+  // 「隐藏聊天头像」是把这一列整个去掉，气泡本来就该左移到贴边。
+  //
+  // 合并头像只是这一条不画：同一个人连着发的那一串必须仍然对齐在同一条竖线上，
+  // 否则第一条缩进、后面几条贴边，一串消息看着像来自两个人。之前两种情况都返回
+  // null，行里的头像位和 gap 一起塌掉，而群聊的发送者名字仍按「头像宽 + 间距」
+  // 缩进 —— 名字和它自己的气泡对不上。合并时留一个等宽占位。
+  if (hideChatAvatar) return null;
+  if (message.suppressAvatar) {
+    return <View style={sAvatar.mergedPlaceholder} />;
+  }
   return (
     <Avatar
       size={AVATAR_SIZE}

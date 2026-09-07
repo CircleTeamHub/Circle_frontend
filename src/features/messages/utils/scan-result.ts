@@ -57,21 +57,27 @@ function normalizeMessagePath(rawValue: string): string | null {
 export function resolveMessageScanResult(data: string): MessageScanAction {
   const value = data.trim();
 
+  // 这里的结果由 ScanScreen 用 router.replace 消费:落地页必须留在 messages 栈内。
+  // 跳去顶层的 /qr、/qr-login 会把整个 messages 栈换掉,加好友申请走完之后落地页
+  // 就没有可返回的目标了。外部系统相机扫出来的深链另走顶层路由,不经过这里。
+  const loginToken = parseQrLoginToken(value);
+  if (loginToken) {
+    return {
+      type: 'route',
+      href: {
+        pathname: '/(tabs)/messages/qr-login',
+        params: { t: loginToken },
+      },
+    };
+  }
+
   // 二维码令牌(名片/群/圈子)优先:扫到本应用的 qr 载荷直接进落地页,
   // 由落地页 resolve 预览 + 用户确认后再执行加入。
   const qrToken = parseQrToken(value);
   if (qrToken) {
     return {
       type: 'route',
-      href: { pathname: '/qr', params: { t: qrToken } },
-    };
-  }
-
-  const retiredLoginToken = parseQrLoginToken(value);
-  if (retiredLoginToken) {
-    return {
-      type: 'route',
-      href: { pathname: '/qr-login', params: { t: retiredLoginToken } },
+      href: { pathname: '/(tabs)/messages/qr', params: { t: qrToken } },
     };
   }
 

@@ -101,7 +101,11 @@ export function loadOlderConversationMessages(
   if (inFlight) return inFlight;
   const request = loadChatHistory(conversationId, { beforeHeight: cursor })
     .then((page) => {
-      historyCursors.set(conversationId, page.nextBeforeHeight);
+      const next = page.nextBeforeHeight;
+      // 游标必须严格向更早推进。服务端返回一个不前进的游标时（整页都被过滤掉、
+      // 或者分页本身有 bug），照原样存回去就等于把「还有更多」永远钉住:用户每次
+      // 触顶都发一次一模一样的请求,一条更早的消息也翻不出来,而且不会停。
+      historyCursors.set(conversationId, next !== null && next < cursor ? next : null);
     })
     .finally(() => {
       inFlightPages.delete(conversationId);

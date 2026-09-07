@@ -71,6 +71,7 @@ import {
   getNoteDetailHref,
   getCircleDetailHref,
   getPlazaPostDetailHref,
+  getQrLandingHref,
   getVerificationDetailHref,
 } from '@/features/user/utils/routes';
 import * as ImagePicker from 'expo-image-picker';
@@ -160,11 +161,13 @@ import { usePendingChatCardStore } from '@/features/chat/store/use-pending-chat-
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { useChatLocationPickerStore } from '@/features/chat/store/use-chat-location-picker-store';
 import { canForwardMessage } from '@/features/chat/screens/ForwardPickerScreen';
+import { isEphemeralPeerMessage } from '@/features/chat/utils/ephemeral-message';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { AVATAR_SIZE } from '@/features/chat/components/bubbles/shared';
 import {
   DEFAULT_CHAT_BACKGROUND_PREFERENCE,
+  resolveEffectiveChatBackgroundPreference,
   resolveChatBackgroundStyle,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
@@ -293,6 +296,13 @@ const PANEL_LAYOUT_ANIM = {
 /** 会话形态判别(旧 OpenIM SessionType 枚举的最小替代)。 */
 type ConversationKind = 'single' | 'group';
 
+function getAvatarMergeKey(message: ChatMessage | undefined) {
+  if (!message) return null;
+  if (message.type === 'date' || message.type === 'system-notice') return null;
+  if (message.outgoing || message.type === 'sent') return 'self';
+  return message.senderID ? `sender:${message.senderID}` : 'peer';
+}
+
 const s = StyleSheet.create({
   // 群聊接收气泡上方的发送者名字（缩进对齐气泡起点 = 头像宽 + 间距）。
   // marginBottom 给名字与气泡之间留一点呼吸空间，避免名字贴着气泡显得拥挤。
@@ -301,6 +311,9 @@ const s = StyleSheet.create({
     marginLeft: AVATAR_SIZE + Spacing.sm,
     marginBottom: Spacing.xs + 2,
   },
+  // 「隐藏聊天头像」把整列去掉，气泡贴边；名字要跟着回到 0，否则名字缩进、
+  // 它自己的气泡贴边，两者对不上。合并头像不走这条 —— 那时占位还在。
+  senderLabelWithoutAvatarColumn: { marginLeft: 0 },
   header: {
     height: 60,
     flexDirection: 'row',
@@ -675,6 +688,15 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       (conversation?.burnDurationSec ?? 0) > 0
     );
   });
+  // 与 selfDestructEnabled 分开：那一个还掺了「本人的全局自动销毁天数」，那是
+  // 我对自己视图的设置，不是发送者对我的承诺。转发 / 收藏的闸只认会话上的焚毁
+  // 开关 —— 服务端的转发拒绝也正是按这一条判的。
+  const conversationBurnEnabled = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    return (conversation?.burnDurationSec ?? 0) > 0;
+  });
   const selfDestructCacheKey = useChatStore(
     (state) => `${state.currentUserId ?? ''}:${state.selfDestructPolicyEpoch}`,
   );
@@ -805,9 +827,19 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       state.backgroundsByConversationID[conversationID] ??
       DEFAULT_CHAT_BACKGROUND_PREFERENCE,
   );
+  const globalBackgroundPreference = useChatPreferencesStore(
+    (state) => state.globalBackgroundPreference,
+  );
   const backgroundStyle = useMemo(
-    () => resolveChatBackgroundStyle(backgroundPreference, colors.background),
-    [backgroundPreference, colors.background],
+    () =>
+      resolveChatBackgroundStyle(
+        resolveEffectiveChatBackgroundPreference(
+          backgroundPreference,
+          globalBackgroundPreference,
+        ),
+        colors.background,
+      ),
+    [backgroundPreference, colors.background, globalBackgroundPreference],
   );
 
   const handleBack = useCallback(() => {
@@ -899,6 +931,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   // 输入状态开关(设置页早就有这两项,这里真正接上:关掉就不向对方上报)。
   const typingSingle = useAppSettingsStore((state) => state.settings.singleTyping);
   const typingGroup = useAppSettingsStore((state) => state.settings.groupTyping);
+  const mergeAvatar = useAppSettingsStore((state) => state.settings.mergeAvatar);
+  // 名字的缩进必须与真实的头像列一致（MessageAvatar 里同一条规则）。
+  const hideChatAvatar = useAppSettingsStore(
+    (state) => state.settings.hideChatAvatar,
+  );
   // 对端「正在输入」有效期;到期自动回落在线状态。
   const typingUntil = useChatStore(
     (state) => state.typingUntilByConversation[conversationID] ?? 0,
@@ -1040,6 +1077,25 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     );
     return mapped;
   }, [currentUserID, conversationMessages, peerReadHeight, peerDeliveredHeight]);
+  // 上游 mapChatMessageDtosToUI 用 WeakMap 保住了每条消息的对象身份，好让列表
+  // 跳过没变的行。这里原来每次都 spread 一个新对象，等于把那份身份在「同一个人
+  // 连着发的消息」上全部作废 —— 而群聊里那恰恰是多数行，来一条新消息或对端已读
+  // 水位推进一次，整片都要重渲染。变体按源对象缓存，身份跟着源走。
+  const avatarMergeCacheRef = useRef(new WeakMap<ChatMessage, ChatMessage>());
+  const displayMessages = useMemo(() => {
+    if (!mergeAvatar) return messages;
+    const cache = avatarMergeCacheRef.current;
+    return messages.map((message, index) => {
+      const key = getAvatarMergeKey(message);
+      const olderKey = getAvatarMergeKey(messages[index + 1]);
+      if (!key || key !== olderKey) return message;
+      const cached = cache.get(message);
+      if (cached) return cached;
+      const merged: ChatMessage = { ...message, suppressAvatar: true };
+      cache.set(message, merged);
+      return merged;
+    });
+  }, [mergeAvatar, messages]);
   messagesLengthRef.current = messages.length;
 
   // 在此会话页时来新消息 → 即时推进已读水位(socket pending 队列自带去重合并)。
@@ -1611,7 +1667,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     });
     // 只在真能转发时给入口:通话记录走到转发页只会抛「不支持」,
     // 而 catch 提示的是「请重试」—— 一个永远不会成功的重试。
-    if (canForwardMessage(message, dto)) {
+    if (canForwardMessage(message, dto, conversationBurnEnabled)) {
       actions.push({
         key: 'forward',
         icon: 'arrow-redo-outline',
@@ -1619,25 +1675,31 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         onPress: () => handleForwardMessage(message),
       });
     }
-    // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
-    // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。
-    actions.push(
-      message.type === 'note-card'
-        ? {
-            key: 'collect',
-            icon: 'add-circle-outline',
-            label: t('chat.messageActions.addToNotes', {
-              defaultValue: '添加',
-            }),
-            onPress: () => void handleCollectMessage(message),
-          }
-        : {
-            key: 'collect',
-            icon: 'star-outline',
-            label: t('chat.messageActions.collect'),
-            onPress: () => void handleCollectMessage(message),
-          },
-    );
+    // 「收藏」走的是另一扇门：它把客户端拼出来的快照写进用户自己的收藏列表，
+    // 服务端从头到尾没看过这条消息，所以转发那条 CHAT_FORWARD_FORBIDDEN 管不到
+    // 它 —— 对端在焚毁会话里发的图，收藏一下就永久留在了本机账号下。同一份承诺，
+    // 同一道闸；自己发的照旧可收。
+    if (!isEphemeralPeerMessage(message, conversationBurnEnabled)) {
+      // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
+      // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。
+      actions.push(
+        message.type === 'note-card'
+          ? {
+              key: 'collect',
+              icon: 'add-circle-outline',
+              label: t('chat.messageActions.addToNotes', {
+                defaultValue: '添加',
+              }),
+              onPress: () => void handleCollectMessage(message),
+            }
+          : {
+              key: 'collect',
+              icon: 'star-outline',
+              label: t('chat.messageActions.collect'),
+              onPress: () => void handleCollectMessage(message),
+            },
+      );
+    }
     actions.push({
       key: 'delete',
       icon: 'trash-outline',
@@ -1655,6 +1717,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     actionMenu,
     canEditMessage,
     canRevokeMessage,
+    conversationBurnEnabled,
     conversationID,
     handleOpenReactionPicker,
     handleShowReaders,
@@ -1714,13 +1777,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           <MemberName
             name={receivedDisplayName(message)}
             userId={message.senderID}
-            style={[s.senderLabel, { color: colors.textSecondary }]}
+            style={[
+              s.senderLabel,
+              hideChatAvatar && s.senderLabelWithoutAvatarColumn,
+              { color: colors.textSecondary },
+            ]}
           />
           {node}
         </View>
       );
     },
-    [isGroupChat, receivedDisplayName, colors.textSecondary],
+    [isGroupChat, receivedDisplayName, colors.textSecondary, hideChatAvatar],
   );
 
   const withMessageActions = useCallback(
@@ -2109,10 +2176,13 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onLongPress={getMessageLongPressHandler(item)}
-            // 点卡片 = 扫这张码:走扫码同一条落地页,由 /qr 按令牌自己判类型与有效性。
-            onPress={(card) =>
-              router.push({ pathname: '/qr', params: { t: card.token } })
-            }
+            // 点卡片 = 扫这张码:走扫码同一条落地页,由落地页按令牌自己判类型与有效性。
+            // 进本栈那一份镜像,不能跳顶层 /qr:本页在四个 tab 栈和 (chat) 下都有挂载
+            // 点,而落地页自己还要往下跳(看资料 / 加好友 / 进群聊)—— 从顶层进去那些
+            // 下一跳只会落回 messages 栈,把用户甩出他出发的 tab,返回也不是上一层。
+            // 同理 push 不能改成 replace:顶掉当前页,落地页走完就没有可返回的上一层
+            // 了,正是 #202 修掉的那个 bug。
+            onPress={(card) => router.push(getQrLandingHref(scope, card.token))}
             hideStatus={isGroupChat}
           />
         ));
@@ -2807,6 +2877,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     try {
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
+        // 这个选项默认是 true：拿不到定位时 expo-location 会拉起 Google Play
+        // Services 的定位设置弹窗，国内无 GMS 的机器上等于把用户甩去一个装不了
+        // 的系统页。关掉它，取点失败就照下面的 catch 用默认中心开图。
+        mayShowUserSettingsDialog: false,
       });
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
@@ -3805,7 +3879,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           testID={E2E_TEST_IDS.chatMessageList}
           ref={flatListRef}
           style={s.messageListSurface}
-          data={messages}
+          data={displayMessages}
           inverted
           renderItem={renderItem}
           keyExtractor={keyExtractor}

@@ -59,6 +59,11 @@ export default function MessagesLayout() {
           title: t('messages.scan', { defaultValue: '扫一扫' }),
         }}
       />
+      {/* 扫一扫的两个落地页：ScanScreen 用 replace 换掉摄像头页，目标必须也在这个
+          栈里，否则返回历史会连同 messages 栈一起被顶掉。外部系统相机的深链仍走
+          顶层的 app/qr.tsx、app/qr-login.tsx。 */}
+      <Stack.Screen name="qr" />
+      <Stack.Screen name="qr-login" />
       <Stack.Screen name="search-group-members" />
       <Stack.Screen name="edit-group-notice" />
       <Stack.Screen name="notifications" />
