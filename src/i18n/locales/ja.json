@@ -457,6 +457,9 @@
     "leave": "退出",
     "leaveGroup": "グループを退出",
     "leaveGroupWarning": "退出するとこのグループのメッセージを受信しなくなります。",
+    "dissolve": "解散",
+    "dissolveGroup": "グループを解散",
+    "dissolveGroupWarning": "解散するとグループは全メンバーの一覧から消え、全員のチャット履歴も削除されます。この操作は取り消せません。",
     "notSet": "未設定",
     "friend": "友だち",
     "notSupported": "未対応",
@@ -663,6 +666,7 @@
     "lowCreditScore": "信用スコアが {{minScore}} を下回っているため、現在メッセージを送信できません",
     "burnAfterReading": "消えるメッセージ",
     "clearHistoryConfirm": "自分側の履歴のみ削除されます。削除しますか？",
+    "clearHistoryConfirmGroupOwner": "「自分の記録のみ削除」は自分の分だけを消します。「全員の記録を削除」は全メンバーのチャット履歴を削除し、取り消せません。",
     "clearHistoryConfirmDirect": "チャット履歴を削除しますか？相手側の履歴も削除され、元に戻せません。",
     "clearHistoryDone": "削除しました",
     "clearHistoryDoneDirect": "双方のチャット履歴を削除しました"
@@ -3140,7 +3144,8 @@
     "QR_EXPIRED": "このQRコードは期限切れです。新しいコードをもらってください",
     "QR_TYPE_UNSUPPORTED": "このQRコードではこの操作はできません",
     "QR_ISSUE_FORBIDDEN": "このQRコードを発行する権限がありません",
-    "CHAT_GROUP_FULL": "このグループは満員です"
+    "CHAT_GROUP_FULL": "このグループは満員です",
+    "CHAT_GROUP_OWNER_ONLY": "グループを解散できるのはグループ主のみです"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",

@@ -24,6 +24,7 @@ import {
   clearChatConversationHistory,
   createCircleChatConversation,
   fetchChatMembers,
+  dissolveGroupChatConversation,
   leaveGroupChatConversation,
   renameGroupChatConversation,
   setChatBurnDuration,
@@ -409,8 +410,19 @@ export default function ChatInfoScreen() {
     isTempConversation || isStandaloneGroup || canViewCircleMemberDirectory;
   const currentRole = currentGroupMember?.roleLevel ?? null;
   const isOwner = currentGroupMember?.role === 'OWNER';
+  // 独立群聊没有圈子角色(useGroupMemberViewAccess 对它是关的),群主只能从
+  // 会话 dto 的 ownerId 认。老后端不返这个字段时按非群主处理,退出仍然可用。
+  const isStandaloneGroupOwner =
+    isStandaloneGroup &&
+    Boolean(currentUserID) &&
+    conversation?.ownerId === currentUserID;
   const isAdmin = currentGroupMember?.role === 'ADMIN';
   const canManageGroup = isOwner || isAdmin;
+  // 全群清空和阅后即焚都是「替所有人做决定」的破坏性设置,判据必须和服务端
+  // 一致:圈子群=圈主或管理员,独立群聊=群主。前端放宽一点,普通成员就会拿到
+  // 一个必然报 403 的按钮;收紧一点,群主就找不到入口(独立群聊原来就是这样,
+  // canManageGroup 靠圈子角色算,独立群永远是 false)。
+  const canWipeGroupForEveryone = canManageGroup || isStandaloneGroupOwner;
   const collapsedGroupMemberLimit = GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
   const visibleGroupMembers = useMemo(
     () => (groupMembersExpanded ? groupMembers : groupMembers.slice(0, collapsedGroupMemberLimit)),
@@ -1142,6 +1154,31 @@ export default function ChatInfoScreen() {
     ]);
   }, [conversationID, groupID, isStandaloneGroup, openActionError, t]);
 
+  const handleDissolveGroup = useCallback(() => {
+    if (!isStandaloneGroupOwner) {
+      return;
+    }
+
+    Alert.alert(t('chat.dissolveGroup'), t('chat.dissolveGroupWarning'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('chat.dissolve'),
+        style: 'destructive',
+        onPress: () => {
+          dissolveGroupChatConversation(conversationID)
+            .then(() => {
+              // 服务端会给全员广播 removed;本机不等推送先摘掉,免得刚解散
+              // 完退回列表还看得见这个群。
+              useChatStore.getState().removeConversation(conversationID);
+              router.replace('/(tabs)/messages');
+            })
+            .catch(openActionError);
+        },
+      },
+    ]);
+  }, [conversationID, isStandaloneGroupOwner, openActionError, t]);
+
+
   const handleToggleBlacklist = useCallback(
     (nextValue: boolean) => {
       if (!friendId || blacklistPending || blacklistInFlightRef.current) {
@@ -1297,7 +1334,8 @@ export default function ChatInfoScreen() {
     [resolvedConversationID, t],
   );
 
-  // G-14 清空聊天记录:私聊推进双方水位,群聊只推进本人水位。
+  // G-14 清空聊天记录:私聊推进双方水位;群聊看身份 —— 群主/管理员可以推进
+  // 全员水位(删所有人的记录),普通成员只能推进自己的。
   const handleClearHistory = useCallback(() => {
     if (!resolvedConversationID) return;
 
@@ -1324,9 +1362,22 @@ export default function ChatInfoScreen() {
     };
 
     if (isGroupConversation) {
+      // 普通成员只能清自己那份:摆一个「删除所有人的记录」给他,点了必定 403。
+      if (!canWipeGroupForEveryone) {
+        Alert.alert(t('chat.clearHistory'), t('chat.clearHistoryConfirm'), [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('chat.clearHistory'),
+            style: 'destructive',
+            onPress: () => clearHistory(false),
+          },
+        ]);
+        return;
+      }
+
       Alert.alert(
         t('chat.clearHistory'),
-        t('chat.clearHistoryConfirm'),
+        t('chat.clearHistoryConfirmGroupOwner'),
         [
           { text: t('common.cancel'), style: 'cancel' },
           {
@@ -1358,7 +1409,12 @@ export default function ChatInfoScreen() {
         },
       ],
     );
-  }, [isGroupConversation, resolvedConversationID, t]);
+  }, [
+    canWipeGroupForEveryone,
+    isGroupConversation,
+    resolvedConversationID,
+    t,
+  ]);
 
   const handleOpenGroupLog = useCallback(() => {
     if (!resolvedConversationID) return;
@@ -1557,6 +1613,7 @@ export default function ChatInfoScreen() {
               label={t('chat.groupLog', { defaultValue: '群日志' })}
               onPress={handleOpenGroupLog}
             />
+            <Divider />
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
@@ -1575,7 +1632,7 @@ export default function ChatInfoScreen() {
               onToggle={actionPending.pin ? undefined : handleTogglePinned}
               showArrow={false}
             />
-            {canManageGroup ? (
+            {canWipeGroupForEveryone ? (
               <>
                 <Divider />
                 <GroupInfoRow
@@ -1596,19 +1653,32 @@ export default function ChatInfoScreen() {
               destructive
               showArrow={false}
             />
+            <Divider />
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
             <GroupInfoRow label={t('chat.chatBackground')} onPress={handleOpenChatBackground} />
+            <Divider />
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
             <GroupInfoRow label={t('chat.report.title')} onPress={handleOpenGroupReport} />
+            <Divider />
           </View>
 
           <View style={[d.groupSection]}>
-            <Pressable style={s.leaveButton} onPress={handleLeaveGroup}>
-              <Text style={d.leaveText}>{t('chat.leave')}</Text>
+            {/* 群主按的是解散(微信语义:群没了,所有人的记录一起没),
+                普通成员按的是退出。两者后果完全不同,不共用一个按钮。 */}
+            <Pressable
+              style={s.leaveButton}
+              onPress={
+                isStandaloneGroupOwner ? handleDissolveGroup : handleLeaveGroup
+              }
+              accessibilityRole="button"
+            >
+              <Text style={d.leaveText}>
+                {isStandaloneGroupOwner ? t('chat.dissolve') : t('chat.leave')}
+              </Text>
             </Pressable>
           </View>
         </ScrollView>

@@ -529,6 +529,9 @@
     "leave": "退出",
     "leaveGroup": "退出群聊",
     "leaveGroupWarning": "退出后将不再接收该群聊的消息。",
+    "dissolve": "解散",
+    "dissolveGroup": "解散群聊",
+    "dissolveGroupWarning": "解散后群聊将从所有成员的列表中消失，所有人的聊天记录也会一并删除。此操作无法撤销。",
     "notSet": "未设置",
     "friend": "好友",
     "notSupported": "暂未开放",
@@ -735,6 +738,7 @@
     "lowCreditScore": "信誉值低于 {{minScore}}，暂时无法发送消息",
     "burnAfterReading": "阅后即焚",
     "clearHistoryConfirm": "清空后仅自己看不到这些消息，对方不受影响。确定清空？",
+    "clearHistoryConfirmGroupOwner": "「仅删除我的记录」只清空你自己的；「删除所有人的记录」会同时删除全部成员的聊天记录，无法撤销。",
     "clearHistoryConfirmDirect": "确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。",
     "clearHistoryDone": "已清空",
     "clearHistoryDoneDirect": "双方聊天记录已删除"
@@ -3140,7 +3144,8 @@
     "QR_EXPIRED": "二维码已过期，请对方重新出示",
     "QR_TYPE_UNSUPPORTED": "该二维码不支持此操作",
     "QR_ISSUE_FORBIDDEN": "没有签发该二维码的权限",
-    "CHAT_GROUP_FULL": "群聊人数已达上限"
+    "CHAT_GROUP_FULL": "群聊人数已达上限",
+    "CHAT_GROUP_OWNER_ONLY": "只有群主可以解散群聊"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",

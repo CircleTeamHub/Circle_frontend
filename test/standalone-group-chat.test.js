@@ -113,6 +113,7 @@ test(
     assert.match(controller, /@Post\('conversations\/group'\)/);
     assert.match(controller, /@Post\('conversations\/:id\/members'\)/);
     assert.match(controller, /@Post\('conversations\/:id\/leave'\)/);
+    assert.match(controller, /@Post\('conversations\/:id\/dissolve'\)/);
     assert.match(controller, /@Patch\('conversations\/:id\/name'\)/);
   },
 );
@@ -130,9 +131,105 @@ test(
       'CHAT_GROUP_FRIENDS_ONLY',
       'CHAT_GROUP_MIN_MEMBERS',
       'CHAT_GROUP_CIRCLE_MANAGED',
+      'CHAT_GROUP_OWNER_ONLY',
     ]) {
       assert.match(backendCodes, new RegExp(`'${code}'`), `BE missing ${code}`);
       assert.match(feCodes, new RegExp(`'${code}'`), `FE missing ${code}`);
     }
   },
 );
+
+test('group owner dissolves instead of leaving, and dissolve wipes everyone', () => {
+  const screen = read('src/features/chat/screens/ChatInfoScreen.tsx');
+
+  // 群主只能从会话 dto 的 ownerId 认:独立群没有圈子角色可查。
+  assert.match(screen, /const isStandaloneGroupOwner =\s*\n\s*isStandaloneGroup &&/);
+  assert.match(screen, /conversation\?\.ownerId === currentUserID/);
+  // 底部按钮按身份分叉:群主=解散,成员=退出。
+  assert.match(
+    screen,
+    /isStandaloneGroupOwner \? handleDissolveGroup : handleLeaveGroup/,
+  );
+  assert.match(
+    screen,
+    /isStandaloneGroupOwner \? t\('chat\.dissolve'\) : t\('chat\.leave'\)/,
+  );
+  // 解散必须走二次确认,并且警示文案要说清「所有人的记录都会删」。
+  assert.match(screen, /Alert\.alert\(\s*t\('chat\.dissolveGroup'\),\s*t\('chat\.dissolveGroupWarning'\)/);
+  assert.match(screen, /dissolveGroupChatConversation\(conversationID\)/);
+
+  const api = read('src/chat-core/api.ts');
+  assert.match(
+    api,
+    /export function dissolveGroupChatConversation\([\s\S]*?\/chat\/conversations\/\$\{conversationId\}\/dissolve/,
+  );
+
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const bundle = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    for (const key of ['dissolve', 'dissolveGroup', 'dissolveGroupWarning']) {
+      assert.ok(bundle.chat[key], `${locale} chat.${key}`);
+    }
+    assert.ok(
+      bundle.serverErrors.CHAT_GROUP_OWNER_ONLY,
+      `${locale} serverErrors.CHAT_GROUP_OWNER_ONLY`,
+    );
+  }
+
+  const codes = read('src/services/api/server-error-codes.ts');
+  assert.match(codes, /'CHAT_GROUP_OWNER_ONLY'/);
+});
+
+test('group info sections are separated by dividers at every boundary', () => {
+  const screen = read('src/features/chat/screens/ChatInfoScreen.tsx');
+  const groupLayout = screen.slice(screen.indexOf('if (isGroupConversation) {'));
+
+  // groupContent 没有 gap,各段是同一块 surface 直接相接的 —— 段尾不补
+  // Divider 就会出现「有的行有线、有的行没线」。每个 groupSection 收尾都要有。
+  const sections = groupLayout.split('<View style={[s.groupSection, d.groupSection]}>').slice(1);
+  assert.equal(sections.length, 4, 'expected four group info sections');
+  for (const [index, section] of sections.entries()) {
+    const body = section.slice(0, section.indexOf('\n          </View>'));
+    assert.match(
+      body.trimEnd().slice(-40),
+      /<Divider \/>$/,
+      `group section ${index + 1} must end with a divider`,
+    );
+  }
+});
+
+test('only the group owner gets two-way clear and the burn timer', () => {
+  const screen = read('src/features/chat/screens/ChatInfoScreen.tsx');
+
+  // 能不能全群清空/设置焚毁,前端判据必须和后端一致:圈子群=圈主或管理员,
+  // 独立群=群主。不一致就会给普通成员摆一个必然报错的按钮。
+  assert.match(
+    screen,
+    /const canWipeGroupForEveryone =\s*\n?\s*canManageGroup \|\| isStandaloneGroupOwner;/,
+  );
+  // 焚毁入口:原来只认 canManageGroup,独立群聊的群主永远看不到它。
+  assert.match(screen, /\{canWipeGroupForEveryone \? \(/);
+  // 普通成员那条分支:先于双选对话框返回,只留一个「只清我这份」的动作。
+  assert.match(
+    screen,
+    /if \(!canWipeGroupForEveryone\) \{[\s\S]*?clearHistory\(false\)[\s\S]*?return;\s*\n\s*\}/,
+  );
+  const memberBranch = screen.slice(
+    screen.indexOf('if (!canWipeGroupForEveryone) {'),
+  );
+  const memberBranchBody = memberBranch.slice(0, memberBranch.indexOf('return;'));
+  assert.doesNotMatch(
+    memberBranchBody,
+    /clearHistoryForEveryone|clearHistory\(true\)/,
+    'member branch must never offer a delete-for-everyone action',
+  );
+  // 群主的对话框文案要说清两个按钮的区别。
+  assert.match(screen, /t\('chat\.clearHistoryConfirmGroupOwner'\)/);
+
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const bundle = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.ok(
+      bundle.chat.clearHistoryConfirmGroupOwner,
+      `${locale} chat.clearHistoryConfirmGroupOwner`,
+    );
+  }
+});
