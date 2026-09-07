@@ -458,6 +458,9 @@
     "leave": "Salir",
     "leaveGroup": "Salir del grupo",
     "leaveGroupWarning": "Dejarás de recibir mensajes de este grupo.",
+    "dissolve": "Disolver",
+    "dissolveGroup": "Disolver grupo",
+    "dissolveGroupWarning": "El grupo desaparecerá para todos los miembros y se eliminará el historial de chat de todos. Esta acción no se puede deshacer.",
     "notSet": "Sin definir",
     "friend": "Amigo",
     "notSupported": "No disponible",
@@ -664,6 +667,7 @@
     "lowCreditScore": "Tu puntuación de crédito es inferior a {{minScore}}, por lo que no puedes enviar mensajes ahora",
     "burnAfterReading": "Mensajes temporales",
     "clearHistoryConfirm": "Solo se borra tu copia del historial. ¿Vaciar?",
+    "clearHistoryConfirmGroupOwner": "«Eliminar para mí» solo borra tu copia. «Eliminar para todos» borra el historial de chat de todos los miembros y no se puede deshacer.",
     "clearHistoryConfirmDirect": "¿Vaciar el historial? También se eliminará para la otra persona y no se podrá deshacer.",
     "clearHistoryDone": "Vaciado",
     "clearHistoryDoneDirect": "Historial eliminado para ambas personas"
@@ -3143,7 +3147,8 @@
     "QR_EXPIRED": "Este código QR ha caducado, pide uno nuevo",
     "QR_TYPE_UNSUPPORTED": "Este código QR no admite esta acción",
     "QR_ISSUE_FORBIDDEN": "No tienes permiso para emitir este código QR",
-    "CHAT_GROUP_FULL": "Este grupo está lleno"
+    "CHAT_GROUP_FULL": "Este grupo está lleno",
+    "CHAT_GROUP_OWNER_ONLY": "Solo el propietario del grupo puede disolverlo"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",

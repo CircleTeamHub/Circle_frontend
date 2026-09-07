@@ -457,6 +457,9 @@
     "leave": "나가기",
     "leaveGroup": "그룹 나가기",
     "leaveGroupWarning": "나가면 이 그룹의 메시지를 더 이상 받지 않습니다.",
+    "dissolve": "해산",
+    "dissolveGroup": "그룹 해산",
+    "dissolveGroupWarning": "해산하면 모든 멤버의 목록에서 그룹이 사라지고 모두의 대화 기록도 함께 삭제됩니다. 되돌릴 수 없습니다.",
     "notSet": "설정 안 함",
     "friend": "친구",
     "notSupported": "제공 예정",
@@ -663,6 +666,7 @@
     "lowCreditScore": "신용 점수가 {{minScore}} 미만이어서 지금은 메시지를 보낼 수 없습니다",
     "burnAfterReading": "사라지는 메시지",
     "clearHistoryConfirm": "내 쪽 기록만 지워집니다. 지울까요?",
+    "clearHistoryConfirmGroupOwner": "‘내 기록만 삭제’는 본인 기록만 지웁니다. ‘모두의 기록 삭제’는 모든 멤버의 대화 기록을 삭제하며 되돌릴 수 없습니다.",
     "clearHistoryConfirmDirect": "채팅 기록을 삭제할까요? 상대방의 기록도 함께 삭제되며 되돌릴 수 없습니다.",
     "clearHistoryDone": "지웠습니다",
     "clearHistoryDoneDirect": "양쪽 채팅 기록을 삭제했습니다"
@@ -3140,7 +3144,8 @@
     "QR_EXPIRED": "QR 코드가 만료되었습니다. 새 코드를 요청해 주세요",
     "QR_TYPE_UNSUPPORTED": "이 QR 코드는 해당 작업을 지원하지 않습니다",
     "QR_ISSUE_FORBIDDEN": "이 QR 코드를 발급할 권한이 없습니다",
-    "CHAT_GROUP_FULL": "그룹 채팅 인원이 가득 찼습니다"
+    "CHAT_GROUP_FULL": "그룹 채팅 인원이 가득 찼습니다",
+    "CHAT_GROUP_OWNER_ONLY": "그룹은 그룹장만 해산할 수 있습니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",
