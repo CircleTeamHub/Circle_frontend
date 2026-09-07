@@ -233,12 +233,30 @@ export default function GroupsScreen() {
     }
   }, [loadGroups]);
 
+  // tabLabel 是横向页签用的短文案（PM 定的「新的群组 / 我加入的 / 我创建的 / 我管理的」），
+  // 长文案留给分区标题——四个长标题会把最后一个页签挤出屏幕。
   const categories = useMemo(
     () => [
-      { id: 'new' as const, label: t('contacts.groupsScreen.newGroups') },
-      { id: 'joined' as const, label: t('contacts.groupsScreen.myJoined') },
-      { id: 'created' as const, label: t('contacts.groupsScreen.myCreated') },
-      { id: 'managed' as const, label: t('contacts.groupsScreen.myManaged') },
+      {
+        id: 'new' as const,
+        tabLabel: t('contacts.groupsScreen.tabNewGroups'),
+        label: t('contacts.groupsScreen.newGroups'),
+      },
+      {
+        id: 'joined' as const,
+        tabLabel: t('contacts.groupsScreen.tabMyJoined'),
+        label: t('contacts.groupsScreen.myJoined'),
+      },
+      {
+        id: 'created' as const,
+        tabLabel: t('contacts.groupsScreen.tabMyCreated'),
+        label: t('contacts.groupsScreen.myCreated'),
+      },
+      {
+        id: 'managed' as const,
+        tabLabel: t('contacts.groupsScreen.tabMyManaged'),
+        label: t('contacts.groupsScreen.myManaged'),
+      },
     ],
     [t],
   );
@@ -392,7 +410,7 @@ export default function GroupsScreen() {
             </View>
             <View style={s.categoryTabs}>
               <FilterTabs
-                tabs={categories.map((category) => category.label)}
+                tabs={categories.map((category) => category.tabLabel)}
                 activeIndex={categories.findIndex(
                   (category) => category.id === activeCategory,
                 )}
