@@ -54,17 +54,6 @@ export function buildQrUrl(
   return `${scheme}://qr?t=${encodeURIComponent(token)}`;
 }
 
-/**
- * 网页登录使用独立路由，旧版客户端只认识 `qr`，因此会明确拒绝/按普通文本
- * 处理，而不会把新增的 LOGIN 类型误当成圈子加入流程。
- */
-export function buildQrLoginUrl(
-  token: string,
-  scheme: AppQrScheme = 'windnoteai',
-): string {
-  return `${scheme}://qr-login?t=${encodeURIComponent(token)}`;
-}
-
 function safeDecodeURIComponent(value: string): string | null {
   try {
     return decodeURIComponent(value);
@@ -132,7 +121,7 @@ export function parseQrToken(raw: string): string | null {
   return null;
 }
 
-/** 只解析新版扫码登录路由；与普通名片/群/圈二维码保持版本隔离。 */
+/** Recognize retired web-login QR links so old scanners can show a clear message. */
 export function parseQrLoginToken(raw: string): string | null {
   const value = raw.trim();
 

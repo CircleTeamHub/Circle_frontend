@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  buildQrLoginUrl,
   buildQrUrl,
-  parseQrLoginToken,
   parseQrToken,
   qrSchemeForAppVariant,
 } from './qr-payload.ts';
@@ -18,14 +16,6 @@ test('build 出的载荷能被 parse 回读(往返)', () => {
   );
   assert.equal(qrSchemeForAppVariant('production'), 'windnoteai');
   assert.equal(qrSchemeForAppVariant('preprod'), 'windnoteai-preprod');
-});
-
-test('登录码使用独立路由，旧版普通 QR 解析器不会误认', () => {
-  const value = buildQrLoginUrl(TOKEN);
-  assert.equal(value, `windnoteai://qr-login?t=${TOKEN}`);
-  assert.equal(parseQrLoginToken(value), TOKEN);
-  assert.equal(parseQrToken(value), null);
-  assert.equal(parseQrLoginToken(buildQrUrl(TOKEN)), null);
 });
 
 test('两个注册 scheme 都能解析,query 与 path 两种形态都认', () => {

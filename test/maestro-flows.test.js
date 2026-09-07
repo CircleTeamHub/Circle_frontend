@@ -60,19 +60,15 @@ test('all referenced subflows exist and mutation flows carry the run id', () => 
   }
 });
 
-test('shared sign-in chooses one explicit authentication mode', () => {
+test('shared sign-in always uses password authentication', () => {
   const source = fs.readFileSync(
     path.join(root, '.maestro', 'subflows', 'sign-in.yaml'),
     'utf8',
   );
-  assert.match(source, /E2E_AUTH_MODE == 'password'/);
-  assert.match(source, /E2E_AUTH_MODE == 'verification-code'/);
   assert.match(source, /windnote\.auth\.login\.password-input/);
-  assert.match(source, /windnote\.auth\.login\.code-input/);
   assert.match(source, /\$\{MAESTRO_E2E_PASSWORD\}/);
-  assert.match(source, /\$\{MAESTRO_E2E_VERIFICATION_CODE\}/);
   assert.doesNotMatch(source, /\$\{E2E_PASSWORD\}/);
-  assert.doesNotMatch(source, /\$\{E2E_VERIFICATION_CODE\}/);
+  assert.doesNotMatch(source, /verification-code|code-input|send-code/i);
 });
 
 test('every top-level flow attests the installed app target before continuing', () => {

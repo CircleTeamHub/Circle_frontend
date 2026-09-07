@@ -29,9 +29,7 @@ export function buildMaestroInvocation(config, parentEnv = process.env) {
   const childEnv = { ...parentEnv };
   for (const name of [
     'E2E_PASSWORD',
-    'E2E_VERIFICATION_CODE',
     'MAESTRO_E2E_PASSWORD',
-    'MAESTRO_E2E_VERIFICATION_CODE',
   ]) {
     delete childEnv[name];
   }

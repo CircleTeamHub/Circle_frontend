@@ -4,7 +4,7 @@
 
 ## 业务 E2E fixture
 
-- Runner 账号支持密码登录；若测验证码模式，验证码必须由测试环境固定或测试 API 提供，不能读取真实邮箱。
+- Runner 账号只支持密码登录；测试凭据通过环境变量提供，不能读取真实邮箱。
 - `E2E_CONVERSATION_ID` 是 runner 已加入且可发送文本的会话，对应列表标题为 `E2E_CONVERSATION_NAME`。
 - `E2E_ORIGINAL_NICKNAME` 必须与执行前昵称完全一致，保证资料流程可还原。
 - 好友与圈子 fixture 同时提供精确 ID 和可搜索账号/名称，避免同名误点。

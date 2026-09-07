@@ -1,8 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import QrLandingScreen from './QrLandingScreen';
-import { approveQrLogin } from '@/services/api/qr-login';
 import { resolveQrToken } from '@/services/api/qr';
 
 const mockRouter = {
@@ -57,26 +56,9 @@ jest.mock('@/services/api/qr', () => ({
   joinByQrToken: jest.fn(),
 }));
 
-jest.mock('@/services/api/qr-login', () => ({
-  approveQrLogin: jest.fn(),
-}));
-
 jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
-
-const loginPreview = {
-  type: 'LOGIN' as const,
-  targetId: '',
-  name: '',
-  avatarUrl: null,
-  memberCount: null,
-  issuerNickname: '',
-  expiresAt: new Date(Date.now() + 60_000).toISOString(),
-  viewerState: 'NONE' as const,
-  requestDevice: 'Chrome · macOS',
-  verificationCode: '123456',
-};
 
 const userPreview = {
   type: 'USER' as const,
@@ -93,38 +75,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockSegments = ['(tabs)', 'messages', 'qr'];
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  jest.mocked(resolveQrToken).mockResolvedValue(loginPreview);
+  jest.mocked(resolveQrToken).mockResolvedValue(userPreview);
 });
 
 afterEach(() => {
   jest.restoreAllMocks();
-});
-
-test('shows the verification context and submits login approval only once', async () => {
-  let finishApproval!: (value: { ok: boolean }) => void;
-  jest.mocked(approveQrLogin).mockImplementation(
-    () => new Promise((resolve) => (finishApproval = resolve)),
-  );
-
-  render(<QrLandingScreen />);
-
-  expect(await screen.findByText('Chrome · macOS')).toBeTruthy();
-  expect(screen.getByText('123456')).toBeTruthy();
-  const confirm = screen.getByRole('button');
-  fireEvent.press(confirm);
-  fireEvent.press(confirm);
-
-  expect(approveQrLogin).toHaveBeenCalledTimes(1);
-  expect(approveQrLogin).toHaveBeenCalledWith('l'.repeat(32));
-
-  finishApproval({ ok: true });
-  await waitFor(() => {
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'qr.loginDoneTitle',
-      'qr.loginDoneMessage',
-      expect.any(Array),
-    );
-  });
 });
 
 // 「从哪进就从哪回」:落地页往下跳必须留在进来的那一栈,否则加完好友返回时用户
@@ -155,20 +110,4 @@ test('顶层 /qr（外部相机深链）没有 tab 段时回落 messages', async
       pathname: '/(tabs)/messages/user/[id]/request',
     }),
   );
-});
-
-test('keeps the confirmation screen recoverable when approval fails', async () => {
-  jest.mocked(approveQrLogin).mockRejectedValue(new Error('offline'));
-  render(<QrLandingScreen />);
-
-  await screen.findByText('qr.loginConfirm');
-  fireEvent.press(screen.getByRole('button'));
-
-  await waitFor(() => {
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'qr.joinFailedTitle',
-      expect.any(String),
-    );
-  });
-  expect(screen.getByText('qr.loginConfirm')).toBeTruthy();
 });

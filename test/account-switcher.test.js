@@ -69,8 +69,7 @@ test("switch-to-account validates the session and falls back to login on expiry"
   // 拆旧会话 -> 激活存储 token -> 校验 /auth/me（401 自动续期）
   assert.match(useAuth, /await clearLocalSession\(\)/);
   assert.match(useAuth, /retry\(\(\) => fetchCurrentUser\(\)\)/);
-  // 过期分支：移除死账号 + 跳登录页并预填邮箱。登录已改为邮箱制，
-  // 登录表单只有 email 输入框，故预填 email 而非 accountId。
+  // 过期分支：移除死账号 + 跳登录页并预填邮箱，方便用户继续登录。
   assert.match(useAuth, /removeAccount\(account\.user\.id\)/);
   assert.match(
     useAuth,

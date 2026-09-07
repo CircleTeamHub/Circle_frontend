@@ -19,8 +19,8 @@ import { normalizeEmail } from '@/utils/email';
 import { validateEmail } from '@/features/auth/validation';
 import i18n from '@/i18n';
 
-// 'reset-password' 走独立端点（FE#92），其余两个走通用 email/request-code。
-type Purpose = 'login' | 'register' | 'reset-password';
+// 'reset-password' 走独立端点（FE#92），注册走通用 email/request-code。
+type Purpose = 'register' | 'reset-password';
 
 const RESEND_SECONDS = 60;
 

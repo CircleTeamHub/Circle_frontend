@@ -19,7 +19,6 @@ import {
   fetchCurrentUser,
   fetchCurrentUserWithToken,
   login as loginRequest,
-  loginWithCode as loginWithCodeRequest,
   logout as logoutRequest,
   register as registerRequest,
   type AuthTokens,
@@ -31,7 +30,6 @@ import { useMessageGroupsStore } from '@/features/messages/store/use-message-gro
 import { retry } from '@/utils/retry';
 import {
   validateLoginForm,
-  validateLoginCodeForm,
   validateRegisterForm,
 } from '@/features/auth/validation';
 import i18n from '@/i18n';
@@ -74,7 +72,7 @@ export function useAuth() {
   // 才生效；用 ref 在 hook 入口处再判断一次，确保同一时刻只有一次登录/注册/登出。
   const inFlightRef = useRef(false);
 
-  // 密码登录与验证码登录的共同收尾：拉用户、落 session、记账号、登 IM、跳转。
+  // 登录成功后的共同收尾：拉用户、落 session、记账号、登 IM、跳转。
   const onAuthSuccess = useCallback(
     async (tokens: AuthTokens, options: AuthSuccessOptions = {}) => {
       // 拿到 token 后立刻拉 /auth/me；这是登录链路最容易被瞬时网络抖动击穿的一步。
@@ -108,12 +106,12 @@ export function useAuth() {
   );
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (identifier: string, password: string) => {
       if (inFlightRef.current) return;
       safeSetError(null);
-      const normalizedEmail = email.trim();
+      const normalizedIdentifier = identifier.trim();
 
-      const invalid = validateLoginForm(normalizedEmail, password);
+      const invalid = validateLoginForm(normalizedIdentifier, password);
       if (invalid) {
         safeSetError(i18n.t(invalid));
         return;
@@ -121,64 +119,9 @@ export function useAuth() {
       inFlightRef.current = true;
       safeSetSubmitting(true);
       try {
-        const tokens = await loginRequest({ email: normalizedEmail, password });
-        await onAuthSuccess(tokens);
-      } catch (requestError) {
-        await clearLocalSession();
-        safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')));
-      } finally {
-        inFlightRef.current = false;
-        safeSetSubmitting(false);
-      }
-    },
-    [onAuthSuccess, safeSetError, safeSetSubmitting],
-  );
-
-  /**
-   * 扫码登录收尾（桌面网页版）：轮询侧拿到后端换发的 token 后走与
-   * 密码/验证码登录完全相同的收尾链（拉用户、落 session、记账号、跳转）。
-   */
-  const completeQrLogin = useCallback(
-    async (tokens: AuthTokens): Promise<boolean> => {
-      // 返回收尾是否成功。调用方（扫码面板）据此决定要不要转失败态 ——
-      // 静默吞掉的话，面板会停在"二维码还亮着但已经不轮询"的死态。
-      if (inFlightRef.current) return false;
-      safeSetError(null);
-      inFlightRef.current = true;
-      safeSetSubmitting(true);
-      try {
-        await onAuthSuccess(tokens);
-        return true;
-      } catch (requestError) {
-        await clearLocalSession();
-        safeSetError(
-          getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')),
-        );
-        return false;
-      } finally {
-        inFlightRef.current = false;
-        safeSetSubmitting(false);
-      }
-    },
-    [onAuthSuccess, safeSetError, safeSetSubmitting],
-  );
-
-  const loginWithCode = useCallback(
-    async (email: string, code: string) => {
-      if (inFlightRef.current) return;
-      safeSetError(null);
-      const normalizedEmail = email.trim();
-      const invalid = validateLoginCodeForm(normalizedEmail, code);
-      if (invalid) {
-        safeSetError(i18n.t(invalid));
-        return;
-      }
-      inFlightRef.current = true;
-      safeSetSubmitting(true);
-      try {
-        const tokens = await loginWithCodeRequest({
-          email: normalizedEmail,
-          code: code.trim(),
+        const tokens = await loginRequest({
+          identifier: normalizedIdentifier,
+          password,
         });
         await onAuthSuccess(tokens);
       } catch (requestError) {
@@ -370,8 +313,6 @@ export function useAuth() {
 
   return {
     login,
-    loginWithCode,
-    completeQrLogin,
     register,
     logout,
     switchAccount,

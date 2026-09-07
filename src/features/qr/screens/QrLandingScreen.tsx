@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
-import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   getChatDetailHref,
@@ -22,7 +21,6 @@ import {
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { approveQrLogin } from '@/services/api/qr-login';
 import {
   joinByQrToken,
   resolveQrToken,
@@ -62,7 +60,17 @@ export default function QrLandingScreen() {
     }
     resolveQrToken(token)
       .then((result) => {
-        if (!cancelled) setPreview(result);
+        if (cancelled) return;
+        const type = (result as { type?: unknown }).type;
+        if (type !== 'USER' && type !== 'GROUP' && type !== 'CIRCLE') {
+          setErrorText(
+            t('qr.loginDeprecatedMessage', {
+              defaultValue: '此二维码登录方式已停用，请重新打开最新版本的登录页面。',
+            }),
+          );
+          return;
+        }
+        setPreview(result);
       })
       .catch((error) => {
         if (!cancelled) setErrorText(getApiErrorMessage(error, t('qr.invalid')));
@@ -93,23 +101,7 @@ export default function QrLandingScreen() {
   const handlePrimary = useCallback(async () => {
     if (!preview || joining) return;
 
-    if (preview.type === 'LOGIN') {
-      setJoining(true);
-      try {
-        await approveQrLogin(token);
-        Alert.alert(
-          t('qr.loginDoneTitle', { defaultValue: '已确认登录' }),
-          t('qr.loginDoneMessage', { defaultValue: '网页端正在登录你的账号' }),
-          [{ text: t('common.ok'), onPress: () => router.back() }],
-        );
-      } catch (error) {
-        Alert.alert(
-          t('qr.joinFailedTitle'),
-          getApiErrorMessage(error, t('qr.invalid')),
-        );
-      } finally {
-        setJoining(false);
-      }
+    if (preview.type !== 'USER' && preview.type !== 'GROUP' && preview.type !== 'CIRCLE') {
       return;
     }
 
@@ -168,9 +160,6 @@ export default function QrLandingScreen() {
 
   const primaryLabel = useMemo(() => {
     if (!preview) return '';
-    if (preview.type === 'LOGIN') {
-      return t('qr.loginConfirm', { defaultValue: '确认登录' });
-    }
     if (preview.type === 'USER') {
       if (preview.viewerState === 'SELF') return t('qr.thisIsYou');
       if (preview.viewerState === 'FRIEND') return t('qr.viewProfile');
@@ -184,11 +173,6 @@ export default function QrLandingScreen() {
 
   const subtitle = useMemo(() => {
     if (!preview) return null;
-    if (preview.type === 'LOGIN') {
-      return t('qr.loginSubtitle', {
-        defaultValue: '确认后将在网页端登录你的账号',
-      });
-    }
     if (preview.type === 'USER') return t('qr.userSubtitle');
     const base =
       preview.type === 'GROUP'
@@ -202,10 +186,7 @@ export default function QrLandingScreen() {
   const primaryDisabled =
     !preview ||
     joining ||
-    (preview.type === 'USER' && preview.viewerState === 'SELF') ||
-    (preview.type === 'LOGIN' &&
-      (!preview.requestDevice ||
-        !/^\d{6}$/.test(preview.verificationCode ?? '')));
+    (preview.type === 'USER' && preview.viewerState === 'SELF');
 
   const d = useMemo(
     () => ({
@@ -226,9 +207,7 @@ export default function QrLandingScreen() {
       <View style={s.body}>
         {preview ? (
           <View style={[s.card, d.card]}>
-            {preview.type === 'LOGIN' ? (
-              <Ionicons name="desktop-outline" size={56} color={colors.primary} />
-            ) : preview.type === 'GROUP' ? (
+            {preview.type === 'GROUP' ? (
               <GroupChatAvatar size={64} name={preview.name} uri={preview.avatarUrl} />
             ) : preview.type === 'CIRCLE' ? (
               <CircleAvatar size={64} uri={preview.avatarUrl} />
@@ -236,25 +215,10 @@ export default function QrLandingScreen() {
               <Avatar size={64} name={preview.name} uri={preview.avatarUrl ?? undefined} />
             )}
             <Text style={[s.name, d.name]} numberOfLines={2}>
-              {preview.type === 'LOGIN'
-                ? t('qr.loginTitle', { defaultValue: '登录网页版' })
-                : preview.name || t('qr.unnamed')}
+              {preview.name || t('qr.unnamed')}
             </Text>
             {subtitle ? (
               <Text style={[s.subtitle, d.subtitle]}>{subtitle}</Text>
-            ) : null}
-            {preview.type === 'LOGIN' ? (
-              <View style={s.loginContext}>
-                <Text style={[s.loginDevice, d.name]}>
-                  {preview.requestDevice || t('qr.loginUnknownDevice')}
-                </Text>
-                <Text style={[s.loginCode, d.name]}>
-                  {preview.verificationCode || '----'}
-                </Text>
-                <Text style={[s.loginWarning, d.subtitle]}>
-                  {t('qr.loginWarning')}
-                </Text>
-              </View>
             ) : null}
             <Pressable
               style={[s.primaryButton, d.primaryButton, primaryDisabled && s.disabled]}
@@ -305,25 +269,6 @@ const s = StyleSheet.create({
   },
   subtitle: {
     ...Typography.bodyRegular,
-    textAlign: 'center',
-  },
-  loginContext: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingVertical: Spacing.sm,
-  },
-  loginDevice: {
-    ...Typography.body,
-    textAlign: 'center',
-  },
-  loginCode: {
-    ...Typography.h2,
-    letterSpacing: 6,
-    fontVariant: ['tabular-nums'],
-  },
-  loginWarning: {
-    ...Typography.small,
     textAlign: 'center',
   },
   errorText: {

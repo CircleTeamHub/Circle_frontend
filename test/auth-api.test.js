@@ -284,7 +284,7 @@ test("single-device login APIs read and update the account-level setting", async
   ]);
 });
 
-test("login posts normalized email and password", async () => {
+test("login posts the trimmed email-or-user-id identifier and password", async () => {
   const calls = [];
   const apiClientMock = async (endpoint, options) => {
     calls.push({ endpoint, options });
@@ -295,10 +295,10 @@ test("login posts normalized email and password", async () => {
   };
   const { login } = loadAuthApi(apiClientMock);
 
-  await login({ email: "  USER@Example.com ", password: "pw" });
+  await login({ identifier: "  USER_123 ", password: "pw" });
 
   assert.equal(calls[0].endpoint, "/auth/login");
-  assert.equal(calls[0].options.body.email, "user@example.com");
+  assert.equal(calls[0].options.body.identifier, "USER_123");
   assert.equal(calls[0].options.body.password, "pw");
 });
 
@@ -309,7 +309,7 @@ test("login throws when accessToken or refreshToken missing (response shape drif
     refreshToken: "r-token",
   }));
   await assert.rejects(
-    () => loginA({ email: "a@b.com", password: "p" }),
+    () => loginA({ identifier: "a@b.com", password: "p" }),
     /认证返回数据格式异常/,
   );
 
@@ -320,7 +320,7 @@ test("login throws when accessToken or refreshToken missing (response shape drif
     im_token: "i",
   }));
   await assert.rejects(
-    () => loginB({ email: "a@b.com", password: "p" }),
+    () => loginB({ identifier: "a@b.com", password: "p" }),
     /认证返回数据格式异常/,
   );
 
@@ -330,7 +330,7 @@ test("login throws when accessToken or refreshToken missing (response shape drif
     refreshToken: "r-token",
   }));
   await assert.rejects(
-    () => loginC({ email: "a@b.com", password: "p" }),
+    () => loginC({ identifier: "a@b.com", password: "p" }),
     /认证返回数据格式异常/,
   );
 });
@@ -343,7 +343,7 @@ test("register posts email/code/password/nickname", async () => {
   };
   const { register } = loadAuthApi(apiClientMock);
 
-  const tokens = await register({
+  await register({
     email: "  NEW@Example.com ",
     code: "123456",
     password: "pw",
@@ -400,25 +400,10 @@ test("requestEmailCode posts email and purpose", async () => {
   };
   const { requestEmailCode } = loadAuthApi(apiClientMock);
 
-  await requestEmailCode({ email: "  A@B.com ", purpose: "login" });
+  await requestEmailCode({ email: "  A@B.com ", purpose: "register" });
 
   assert.equal(calls[0].endpoint, "/auth/email/request-code");
   assert.equal(calls[0].options.body.email, "a@b.com");
-  assert.equal(calls[0].options.body.purpose, "login");
+  assert.equal(calls[0].options.body.purpose, "register");
   assert.equal(calls[0].options.auth, false);
-});
-
-test("loginWithCode posts normalized email and code", async () => {
-  const calls = [];
-  const apiClientMock = async (endpoint, options) => {
-    calls.push({ endpoint, options });
-    return { accessToken: "a", refreshToken: "r" };
-  };
-  const { loginWithCode } = loadAuthApi(apiClientMock);
-
-  await loginWithCode({ email: "  A@B.com ", code: " 123456 " });
-
-  assert.equal(calls[0].endpoint, "/auth/login/code");
-  assert.equal(calls[0].options.body.email, "a@b.com");
-  assert.equal(calls[0].options.body.code, "123456");
 });

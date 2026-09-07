@@ -45,6 +45,7 @@ test('native QR surfaces emit the scheme for the installed app variant', () => {
 test('in-app scan resolves QR payloads into the messages-stack landing route first', () => {
   const source = read('src/features/messages/utils/scan-result.ts');
   assert.match(source, /parseQrLoginToken, parseQrToken/);
+  assert.match(source, /parseQrToken/);
   const qrIndex = source.indexOf('parseQrToken(value)');
   const routeMapIndex = source.indexOf('normalizeMessagePath(value)', qrIndex);
   assert.ok(qrIndex > 0, 'scan-result must call parseQrToken');
@@ -58,21 +59,6 @@ test('in-app scan resolves QR payloads into the messages-stack landing route fir
   );
 });
 
-test('login QR uses a distinct route that old clients cannot misread as a join QR', () => {
-  const payload = read('src/features/qr/qr-payload.ts');
-  const pane = read('src/features/auth/components/QrLoginPane.tsx');
-  const resolver = read('src/features/messages/utils/scan-result.ts');
-
-  assert.match(payload, /export function buildQrLoginUrl/);
-  assert.match(payload, /qr-login\?t=/);
-  assert.match(pane, /buildQrLoginUrl\(session\.qrToken\)/);
-  assert.match(resolver, /pathname: '\/\(tabs\)\/messages\/qr-login'/);
-  assert.match(
-    read('app/qr-login.tsx'),
-    /QrLandingScreen/,
-  );
-});
-
 // ─── 顶层路由与深链 ───────────────────────────────────────────────────────────
 
 test('top-level /qr and /qr-code routes point at the qr feature screens', () => {
@@ -83,6 +69,17 @@ test('top-level /qr and /qr-code routes point at the qr feature screens', () => 
   assert.match(
     read('app/qr-code.tsx'),
     /export \{ default \} from '@\/features\/qr\/screens\/QrCodeScreen'/,
+  );
+});
+
+test('retired QR-login links land on an explicit compatibility screen', () => {
+  assert.match(
+    read('app/qr-login.tsx'),
+    /QrLoginDeprecatedScreen/,
+  );
+  assert.match(
+    read('src/features/qr/screens/QrLoginDeprecatedScreen.tsx'),
+    /loginDeprecatedMessage/,
   );
 });
 

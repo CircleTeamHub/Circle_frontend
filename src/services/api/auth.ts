@@ -90,7 +90,7 @@ function getDeviceName() {
 
 export async function requestEmailCode(payload: {
   email: string;
-  purpose: "register" | "login";
+  purpose: "register";
 }) {
   return apiClient<void>("/auth/email/request-code", {
     method: "POST",
@@ -102,30 +102,17 @@ export async function requestEmailCode(payload: {
   });
 }
 
-export async function login(payload: { email: string; password: string }) {
-  const email = payload.email.trim().toLowerCase();
+export async function login(payload: { identifier: string; password: string }) {
+  const identifier = payload.identifier.trim();
   const raw = await apiClient<AuthTokens>("/auth/login", {
     method: "POST",
     auth: false,
     headers: {
       "x-device-name": getDeviceName(),
     },
-    body: { email, password: payload.password, platform: getClientPlatformID() },
-  });
-  return ensureAuthTokens(raw);
-}
-
-export async function loginWithCode(payload: { email: string; code: string }) {
-  const email = payload.email.trim().toLowerCase();
-  const raw = await apiClient<AuthTokens>("/auth/login/code", {
-    method: "POST",
-    auth: false,
-    headers: {
-      "x-device-name": getDeviceName(),
-    },
     body: {
-      email,
-      code: payload.code.trim(),
+      identifier,
+      password: payload.password,
       platform: getClientPlatformID(),
     },
   });

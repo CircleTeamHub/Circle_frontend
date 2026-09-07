@@ -6,12 +6,8 @@ function dynamicTestId(prefix: string, identifier: string): string {
 
 export const E2E_TEST_IDS = Object.freeze({
   authLoginScreen: 'windnote.auth.login.screen',
-  authPasswordMode: 'windnote.auth.login.mode.password',
-  authCodeMode: 'windnote.auth.login.mode.code',
   authEmailInput: 'windnote.auth.login.email-input',
   authPasswordInput: 'windnote.auth.login.password-input',
-  authCodeInput: 'windnote.auth.login.code-input',
-  authSendCode: 'windnote.auth.login.send-code',
   authSubmit: 'windnote.auth.login.submit',
   tabsMessages: 'windnote.tabs.messages',
   tabsContacts: 'windnote.tabs.contacts',

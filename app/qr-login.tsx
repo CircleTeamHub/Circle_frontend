@@ -1,1 +1,1 @@
-export { default } from '@/features/qr/screens/QrLandingScreen';
+export { default } from '@/features/qr/screens/QrLoginDeprecatedScreen';

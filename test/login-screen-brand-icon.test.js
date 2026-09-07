@@ -64,8 +64,6 @@ test('login screen follows the night-flight layout: sky hero, no slogan, reserve
   assert.match(source, /getSkyLayout\(/);
   assert.match(source, /paddingTop:\s*sky\.contentTop/);
   assert.match(source, /paddingBottom:\s*insets\.bottom \+ 24/);
-  // 登录方式切换与主按钮拆成独立组件，便于两个主题各自处理光效。
-  assert.match(source, /<LoginModeSegment/);
   assert.match(source, /<LoginPrimaryButton/);
   // 错误 / 离线提示占位始终保留，按钮不会因提示出现而跳动。槽里只放一条按优先级
   // 选出来的消息、上限两行，所以按两行(2 × lineHeight 18)预留高度。
