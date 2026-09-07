@@ -279,7 +279,9 @@ export function useAuth() {
           reportHandledFailure('auth', 'switchAccountExpired', switchError);
           router.replace({
             pathname: '/(auth)/login',
-            params: { email: account.user.email ?? '' },
+            // Accounts created without an email still need a usable login
+            // identifier after their session expires.
+            params: { identifier: account.user.email ?? account.user.accountId },
           });
         } else {
           // 瞬时失败：目标账号 token 已乐观激活（上面 setSession），与冷启动

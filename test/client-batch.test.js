@@ -60,6 +60,16 @@ test('重置凭据在 dev 日志中被脱敏（code / newPassword）(review)', (
   assert.equal(plain.email, 'a@b.com');
 });
 
+test('二维码 bearer token 在请求 URL 日志中被脱敏 (review)', () => {
+  const { redactSensitiveUrl } = loadTsModule('src/utils/redact.ts');
+  const token = 'qr-token-012345678901234567890123';
+  const redacted = redactSensitiveUrl(
+    `https://api.example.com/qr/tokens/${token}/join`,
+  );
+  assert.doesNotMatch(redacted, new RegExp(token));
+  assert.match(redacted, /\/qr\/tokens\/\[REDACTED\]\/join/);
+});
+
 test('回收站：列表 + 恢复接线 (FE#92)', () => {
   const api = read('src/services/api/notes.ts');
   assert.match(api, /\/note\/recycle-bin/);
