@@ -73,9 +73,11 @@ export default function LoginScreen() {
   const reduceMotion = useReduceMotion();
   const { login, submitting, error } = useAuth();
   const { t } = useTranslation();
-  // 从「切换账号」过期分支或注册成功跳来时预填邮箱。
-  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
-  const [identifier, setIdentifier] = useState(emailParam ?? "");
+  // 从「切换账号」过期分支或注册成功跳来时预填登录标识。
+  // 保留 email 作为旧深链参数，避免已有链接失效。
+  const { email: emailParam, identifier: identifierParam } =
+    useLocalSearchParams<{ email?: string; identifier?: string }>();
+  const [identifier, setIdentifier] = useState(identifierParam ?? emailParam ?? "");
   const [password, setPassword] = useState('');
   const { isOffline } = useNetworkStatus();
   const sky = getSkyLayout(width);

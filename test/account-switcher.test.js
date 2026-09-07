@@ -69,11 +69,11 @@ test("switch-to-account validates the session and falls back to login on expiry"
   // 拆旧会话 -> 激活存储 token -> 校验 /auth/me（401 自动续期）
   assert.match(useAuth, /await clearLocalSession\(\)/);
   assert.match(useAuth, /retry\(\(\) => fetchCurrentUser\(\)\)/);
-  // 过期分支：移除死账号 + 跳登录页并预填邮箱，方便用户继续登录。
+  // 过期分支：移除死账号 + 跳登录页并预填登录标识，方便用户继续登录。
   assert.match(useAuth, /removeAccount\(account\.user\.id\)/);
   assert.match(
     useAuth,
-    /pathname:\s*['"]\/\(auth\)\/login['"][\s\S]*email:\s*account\.user\.email/,
+    /pathname:\s*['"]\/\(auth\)\/login['"][\s\S]*identifier:\s*account\.user\.email\s*\?\?\s*account\.user\.accountId/,
   );
 });
 
@@ -119,10 +119,13 @@ test("the account switcher sheet is mounted once at the app root", () => {
   assert.match(layout, /rehydratePersistedStore\(['"]known accounts['"],\s*useKnownAccountsStore\)/);
 });
 
-test("login screen prefills the email passed from an expired switch", () => {
+test("login screen prefills the identifier passed from an expired switch", () => {
   const login = read("src/features/auth/screens/LoginScreen.tsx");
-  assert.match(login, /useLocalSearchParams<\{ email\?: string \}>\(\)/);
-  assert.match(login, /useState\(emailParam \?\? ['"]['"]\)/);
+  assert.match(login, /useLocalSearchParams<\{ email\?: string; identifier\?: string \}>\(\)/);
+  assert.match(login, /useState\(identifierParam \?\? emailParam \?\? ['"]['"]\)/);
+
+  const auth = read("src/hooks/use-auth.ts");
+  assert.match(auth, /params: \{ identifier: account\.user\.email \?\? account\.user\.accountId \}/);
 });
 
 test("account switcher copy exists in both locales", () => {

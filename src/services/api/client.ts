@@ -12,7 +12,11 @@ import { clearLocalSession, registerLogoutHandler } from '@/services/auth/sessio
 import { useAuthStore } from '@/stores/authStore';
 import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
-import { redactSensitiveFields, redactSensitiveHeaders } from '@/utils/redact';
+import {
+  redactSensitiveFields,
+  redactSensitiveHeaders,
+  redactSensitiveUrl,
+} from '@/utils/redact';
 
 type RequestOptions = {
   method?: string;
@@ -324,7 +328,7 @@ async function executeRequest<T>(
   const url = `${API_URL}${endpoint}`;
 
   logApiEvent('request', {
-    url,
+    url: redactSensitiveUrl(url),
     method,
     auth,
     hasAccessToken: Boolean(accessToken),

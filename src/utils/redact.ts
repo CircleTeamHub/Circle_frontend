@@ -37,12 +37,22 @@ const PRESIGNED_URL_MARKERS = [
   'x-id=PutObject',
 ];
 const SENSITIVE_URL_PATTERN = /https?:\/\/[^\s"'<>)]*\?[^\s"'<>)]*/gi;
+// QR tokens are bearer credentials carried in the path, so query-string
+// redaction alone would still expose them in dev request logs.
+const QR_TOKEN_PATH_PATTERN = /(\/qr\/tokens\/)[A-Za-z0-9_-]{16,128}(?=\/|$)/gi;
 
 function redactSensitiveString(value: string): string {
   if (PRESIGNED_URL_MARKERS.some((marker) => value.includes(marker))) {
     return '[REDACTED_URL]';
   }
   return value.replace(SENSITIVE_URL_PATTERN, '[REDACTED_URL]');
+}
+
+export function redactSensitiveUrl(value: string): string {
+  return redactSensitiveString(value).replace(
+    QR_TOKEN_PATH_PATTERN,
+    '$1[REDACTED]',
+  );
 }
 
 function shouldRedactObjectKey(key: string, value: unknown): boolean {
