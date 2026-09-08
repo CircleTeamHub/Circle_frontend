@@ -35,6 +35,7 @@ import { ensureDirectConversation } from '@/chat-core/client';
 import type { ChatConversationDto, ChatMemberDto } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
 import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
+import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import {
   canChangeGroupMemberRole,
   roleLevelFromCircleRole,
@@ -59,7 +60,11 @@ import {
   fetchFriendStatus,
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
-import { fetchCircleDetail, updateCircle } from '@/services/api/circles';
+import {
+  dissolveCircle,
+  fetchCircleDetail,
+  updateCircle,
+} from '@/services/api/circles';
 import { leaveGroup, removeGroupMember, updateGroupMemberRole } from '@/services/api/groups';
 import { fetchMyTempChats } from '@/services/api/temp-chat';
 import { getApiErrorMessage } from '@/services/api/errors';
@@ -416,6 +421,10 @@ export default function ChatInfoScreen() {
     isStandaloneGroup &&
     Boolean(currentUserID) &&
     conversation?.ownerId === currentUserID;
+  // 圈子群的圈主同样按不了「退出」——后端 CIRCLE_OWNER_CANNOT_LEAVE 直接 403。
+  // 圈主要撤掉圈子只有解散一条路,与独立群聊的群主同一语义,只是作用域是整个
+  // 圈子(圈子从所有人的列表消失 + 群聊全员离座),所以走的是另一个端点。
+  const isCircleOwner = Boolean(groupID) && isOwner;
   const isAdmin = currentGroupMember?.role === 'ADMIN';
   const canManageGroup = isOwner || isAdmin;
   // 全群清空和阅后即焚都是「替所有人做决定」的破坏性设置,判据必须和服务端
@@ -1178,6 +1187,43 @@ export default function ChatInfoScreen() {
     ]);
   }, [conversationID, isStandaloneGroupOwner, openActionError, t]);
 
+  const handleDissolveCircle = useCallback(() => {
+    if (!isCircleOwner || !groupID) {
+      return;
+    }
+
+    Alert.alert(t('chat.dissolveCircle'), t('chat.dissolveCircleWarning'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('chat.dissolve'),
+        style: 'destructive',
+        onPress: () => {
+          dissolveCircle(groupID)
+            .then(() => {
+              // 服务端会给全员广播 removed;本机不等推送先把圈子和会话摘掉,
+              // 免得退回列表还看得见一个已经不存在的圈子。
+              useCirclesStore.getState().removeCircle(groupID);
+              const dissolvedConversationID =
+                resolvedConversationID || conversationID;
+              if (dissolvedConversationID) {
+                useChatStore
+                  .getState()
+                  .removeConversation(dissolvedConversationID);
+              }
+              router.replace('/(tabs)/messages');
+            })
+            .catch(openActionError);
+        },
+      },
+    ]);
+  }, [
+    conversationID,
+    groupID,
+    isCircleOwner,
+    openActionError,
+    resolvedConversationID,
+    t,
+  ]);
 
   const handleToggleBlacklist = useCallback(
     (nextValue: boolean) => {
@@ -1667,17 +1713,24 @@ export default function ChatInfoScreen() {
           </View>
 
           <View style={[d.groupSection]}>
-            {/* 群主按的是解散(微信语义:群没了,所有人的记录一起没),
-                普通成员按的是退出。两者后果完全不同,不共用一个按钮。 */}
+            {/* 群主/圈主按的是解散(微信语义:群没了,所有人的记录一起没),
+                普通成员按的是退出。两者后果完全不同,不共用一个按钮。
+                独立群聊解散的是会话,圈子群解散的是整个圈子 —— 端点不同。 */}
             <Pressable
               style={s.leaveButton}
               onPress={
-                isStandaloneGroupOwner ? handleDissolveGroup : handleLeaveGroup
+                isStandaloneGroupOwner
+                  ? handleDissolveGroup
+                  : isCircleOwner
+                    ? handleDissolveCircle
+                    : handleLeaveGroup
               }
               accessibilityRole="button"
             >
               <Text style={d.leaveText}>
-                {isStandaloneGroupOwner ? t('chat.dissolve') : t('chat.leave')}
+                {isStandaloneGroupOwner || isCircleOwner
+                  ? t('chat.dissolve')
+                  : t('chat.leave')}
               </Text>
             </Pressable>
           </View>
