@@ -457,7 +457,7 @@ function ConversationRowImpl({
   );
 
   // 桌面网页版没有滑动手势(鼠标拖拽会误触),用右键 / 长按唤出同样的三个动作。
-  // 菜单走 Alert(web 上由 WebAlertHost 渲染),与全 app 其他菜单同一套。
+  // 菜单走 Alert(三端都由 AppDialogHost 渲染),与全 app 其他菜单同一套。
   const showRowActionMenu = useCallback(() => {
     Alert.alert('', '', [
       {
