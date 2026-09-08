@@ -113,15 +113,15 @@
       "passwordRequired": "Please enter your password",
       "passwordTooShort": "Password must be at least 6 characters",
       "passwordTooLong": "Password must be at most 64 characters",
+      "passwordMismatch": "Passwords do not match",
       "invalidCode": "Enter the 6-digit code",
       "nicknameRequired": "Please enter a nickname",
       "nicknameTooLong": "Nickname must be at most 50 characters",
       "invalidInviteCode": "Invalid invite code format",
       "loginFailed": "Login failed, please try again",
       "registerFailed": "Registration failed, please try again",
-      "sendCodeFailed": "Failed to send, please try again",
-      "passwordMismatch": "Passwords do not match",
-      "registerSucceededSessionFailed": "Your account was created, but we could not sign you in automatically. Please log in with this email."
+      "registerSucceededSessionFailed": "Your account was created, but we could not sign you in automatically. Please log in with this email.",
+      "sendCodeFailed": "Failed to send, please try again"
     },
     "hidePassword": "Hide password",
     "showPassword": "Show password",
@@ -1771,12 +1771,14 @@
     "unlike": "Unlike",
     "likesReceived": "Likes received",
     "photoNotesTitle": "Photo Notes",
+    "contactCopied": "{{field}} copied",
+    "contactCopyFailed": "Copy failed. Please try again.",
+    "contactCopyHint": "{{field}} {{value}}, tap to copy",
     "permissionValues": {
       "FULL": "Chat & Moments",
       "CHAT_ONLY": "Chat only"
     },
     "loadFailed": "Failed to load profile, showing cached data",
-    "phoneHidden": "Hidden",
     "startChat": "Start Chat",
     "openingChat": "Opening chat...",
     "avCall": "Voice / Video Call",
@@ -1845,6 +1847,7 @@
     "wechatPlaceholder": "Enter WeChat ID",
     "phone": "Phone",
     "phonePlaceholder": "Enter phone number",
+    "email": "Email",
     "qq": "QQ",
     "qqPlaceholder": "Enter QQ number",
     "notBound": "Not filled in",
@@ -2096,6 +2099,7 @@
       "singleTyping": "Private Chat Typing Status",
       "groupTyping": "Group Chat Typing Status",
       "showPhone": "Show Phone on Profile",
+      "showEmail": "Show Email on Profile",
       "showWechat": "Show WeChat on Profile",
       "showQQ": "Show QQ on Profile",
       "personalizedRecommendation": "Personalized Recommendations",
@@ -2968,6 +2972,7 @@
     "GROUP_REPORT_DESC_EMPTY": "The report description can't be empty",
     "AUTH_SECURITY_CODE_FORMAT": "The security code must be 4–6 digits",
     "AUTH_PASSWORD_INCORRECT": "The current password is incorrect",
+    "AUTH_PASSWORD_MISMATCH": "Passwords do not match",
     "AUTH_ACCOUNT_DISABLED": "This account has been disabled",
     "AUTH_ACCOUNT_ID_UNCHANGED": "The new account ID is the same as your current one",
     "AUTH_ACCOUNT_ID_INVALID": "Account ID must be 4–32 letters, numbers, underscores, or hyphens",
@@ -3152,8 +3157,7 @@
     "QR_TYPE_UNSUPPORTED": "This QR code does not support this action",
     "QR_ISSUE_FORBIDDEN": "You are not allowed to issue this QR code",
     "CHAT_GROUP_FULL": "This group chat is full",
-    "CHAT_GROUP_OWNER_ONLY": "Only the group owner can dissolve this group",
-    "AUTH_PASSWORD_MISMATCH": "Passwords do not match"
+    "CHAT_GROUP_OWNER_ONLY": "Only the group owner can dissolve this group"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",

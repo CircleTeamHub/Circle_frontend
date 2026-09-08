@@ -89,6 +89,8 @@ const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   momentsVisibility: 'ALL',
   allowStrangerMessages: true,
   showPhone: false,
+  // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐：邮箱跟手机号同档，默认不外露。
+  showEmail: false,
   showWechat: true,
   showQQ: true,
   // 无对应开关：whatsup 字段本身在 App 里还没有界面（见 privacy.ts 的说明）。
@@ -284,6 +286,15 @@ export default function PrivacySettingsScreen() {
                 type: 'toggle',
                 value: currentSettings.showPhone,
                 onValueChange: (value) => void patchSettings({ showPhone: value }),
+                disabled: loading || saving,
+              },
+              {
+                id: 'show-email',
+                labelKey: 'settingsDetails.privacy.showEmail',
+                type: 'toggle',
+                value: currentSettings.showEmail,
+                onValueChange: (value) =>
+                  void patchSettings({ showEmail: value }),
                 disabled: loading || saving,
               },
               {

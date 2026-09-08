@@ -12,6 +12,8 @@ export type PrivacySettings = {
   momentsVisibility: MomentsVisibility;
   allowStrangerMessages: boolean;
   showPhone: boolean;
+  // 注册邮箱：后端默认 false（与 showPhone 同档），不是 wechat/qq 那档默认 true。
+  showEmail: boolean;
   showWechat: boolean;
   showQQ: boolean;
   // 后端 canViewProfileField 认这个字段，但它守的 whatsup profile 字段在 App 里

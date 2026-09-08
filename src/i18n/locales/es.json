@@ -123,6 +123,7 @@
       "singleTyping": "Estado de escritura en chat privado",
       "groupTyping": "Estado de escritura en grupo",
       "showPhone": "Mostrar teléfono en el perfil",
+      "showEmail": "Mostrar correo en el perfil",
       "showWechat": "Mostrar WeChat en el perfil",
       "showQQ": "Mostrar QQ en el perfil",
       "personalizedRecommendation": "Recomendaciones personalizadas",
@@ -1824,6 +1825,7 @@
     "wechatPlaceholder": "Escribe tu ID de WeChat",
     "phone": "Teléfono",
     "phonePlaceholder": "Escribe tu número de teléfono",
+    "email": "Correo",
     "qq": "QQ",
     "qqPlaceholder": "Escribe tu número de QQ",
     "notBound": "Sin completar",
@@ -1849,12 +1851,14 @@
     "unlike": "Ya no me gusta",
     "likesReceived": "Me gusta recibidos",
     "photoNotesTitle": "Notas con fotos",
+    "contactCopied": "{{field}} copiado",
+    "contactCopyFailed": "No se pudo copiar. Inténtalo de nuevo.",
+    "contactCopyHint": "{{field}} {{value}}, toca para copiar",
     "permissionValues": {
       "FULL": "Chat y Momentos",
       "CHAT_ONLY": "Solo chat"
     },
     "loadFailed": "No se pudo cargar el perfil, mostrando datos en caché",
-    "phoneHidden": "Oculto",
     "startChat": "Iniciar chat",
     "openingChat": "Abriendo chat...",
     "avCall": "Llamada de voz o video",
@@ -2479,15 +2483,15 @@
       "passwordRequired": "Introduce tu contraseña",
       "passwordTooShort": "La contraseña debe tener al menos 6 caracteres",
       "passwordTooLong": "La contraseña debe tener como máximo 64 caracteres",
+      "passwordMismatch": "Las contraseñas no coinciden",
       "invalidCode": "Introduce el código de 6 dígitos",
       "nicknameRequired": "Introduce un apodo",
       "nicknameTooLong": "El apodo debe tener como máximo 50 caracteres",
       "invalidInviteCode": "El formato del código de invitación no es válido",
       "loginFailed": "Error al iniciar sesión, inténtalo de nuevo",
       "registerFailed": "Error al registrarse, inténtalo de nuevo",
-      "sendCodeFailed": "Error al enviar, inténtalo de nuevo",
-      "passwordMismatch": "Las contraseñas no coinciden",
-      "registerSucceededSessionFailed": "Tu cuenta se creó, pero no pudimos iniciar sesión automáticamente. Inicia sesión con este correo."
+      "registerSucceededSessionFailed": "Tu cuenta se creó, pero no pudimos iniciar sesión automáticamente. Inicia sesión con este correo.",
+      "sendCodeFailed": "Error al enviar, inténtalo de nuevo"
     },
     "hidePassword": "Ocultar contraseña",
     "showPassword": "Mostrar contraseña",
@@ -2968,6 +2972,7 @@
     "GROUP_REPORT_DESC_EMPTY": "La descripción del reporte no puede estar vacía",
     "AUTH_SECURITY_CODE_FORMAT": "El código de seguridad debe tener entre 4 y 6 dígitos",
     "AUTH_PASSWORD_INCORRECT": "La contraseña actual es incorrecta",
+    "AUTH_PASSWORD_MISMATCH": "Las contraseñas no coinciden",
     "AUTH_ACCOUNT_DISABLED": "Esta cuenta ha sido deshabilitada",
     "AUTH_ACCOUNT_ID_UNCHANGED": "El nuevo ID de cuenta es igual al actual",
     "AUTH_ACCOUNT_ID_INVALID": "El ID de cuenta debe tener de 4 a 32 letras, números, guiones bajos o guiones",
@@ -3152,8 +3157,7 @@
     "QR_TYPE_UNSUPPORTED": "Este código QR no admite esta acción",
     "QR_ISSUE_FORBIDDEN": "No tienes permiso para emitir este código QR",
     "CHAT_GROUP_FULL": "Este grupo está lleno",
-    "CHAT_GROUP_OWNER_ONLY": "Solo el propietario del grupo puede disolverlo",
-    "AUTH_PASSWORD_MISMATCH": "Las contraseñas no coinciden"
+    "CHAT_GROUP_OWNER_ONLY": "Solo el propietario del grupo puede disolverlo"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",

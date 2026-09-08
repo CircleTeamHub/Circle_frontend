@@ -123,6 +123,7 @@
       "singleTyping": "個人チャットの入力状態",
       "groupTyping": "グループチャットの入力状態",
       "showPhone": "プロフィールに電話番号を表示",
+      "showEmail": "プロフィールにメールアドレスを表示",
       "showWechat": "プロフィールにWeChatを表示",
       "showQQ": "プロフィールにQQを表示",
       "personalizedRecommendation": "パーソナライズされたおすすめ",
@@ -1821,6 +1822,7 @@
     "wechatPlaceholder": "WeChat IDを入力",
     "phone": "電話番号",
     "phonePlaceholder": "電話番号を入力",
+    "email": "メールアドレス",
     "qq": "QQ",
     "qqPlaceholder": "QQ番号を入力",
     "notBound": "未入力",
@@ -1846,12 +1848,14 @@
     "unlike": "いいねを取り消す",
     "likesReceived": "受け取ったいいね",
     "photoNotesTitle": "写真メモ",
+    "contactCopied": "{{field}}をコピーしました",
+    "contactCopyFailed": "コピーに失敗しました。もう一度お試しください。",
+    "contactCopyHint": "{{field}} {{value}}、タップしてコピー",
     "permissionValues": {
       "FULL": "チャット・モーメンツ",
       "CHAT_ONLY": "チャットのみ"
     },
     "loadFailed": "プロフィールの読み込みに失敗しました。キャッシュデータを表示しています",
-    "phoneHidden": "非公開",
     "startChat": "チャットを開始",
     "openingChat": "チャットを開いています...",
     "avCall": "音声・ビデオ通話",
@@ -2476,15 +2480,15 @@
       "passwordRequired": "パスワードを入力してください",
       "passwordTooShort": "パスワードは6文字以上にしてください",
       "passwordTooLong": "パスワードは64文字以内にしてください",
+      "passwordMismatch": "パスワードが一致しません",
       "invalidCode": "6桁の認証コードを入力してください",
       "nicknameRequired": "ニックネームを入力してください",
       "nicknameTooLong": "ニックネームは50文字以内にしてください",
       "invalidInviteCode": "招待コードの形式が正しくありません",
       "loginFailed": "ログインに失敗しました。もう一度お試しください",
       "registerFailed": "登録に失敗しました。もう一度お試しください",
-      "sendCodeFailed": "送信に失敗しました。もう一度お試しください",
-      "passwordMismatch": "パスワードが一致しません",
-      "registerSucceededSessionFailed": "アカウントは作成されましたが、自動ログインに失敗しました。このメールアドレスでログインしてください。"
+      "registerSucceededSessionFailed": "アカウントは作成されましたが、自動ログインに失敗しました。このメールアドレスでログインしてください。",
+      "sendCodeFailed": "送信に失敗しました。もう一度お試しください"
     },
     "hidePassword": "パスワードを非表示",
     "showPassword": "パスワードを表示",
@@ -2965,6 +2969,7 @@
     "GROUP_REPORT_DESC_EMPTY": "通報の説明は空にできません",
     "AUTH_SECURITY_CODE_FORMAT": "セキュリティコードは4〜6桁の数字で入力してください",
     "AUTH_PASSWORD_INCORRECT": "現在のパスワードが正しくありません",
+    "AUTH_PASSWORD_MISMATCH": "パスワードが一致しません",
     "AUTH_ACCOUNT_DISABLED": "このアカウントは無効化されています",
     "AUTH_ACCOUNT_ID_UNCHANGED": "新しいアカウントIDが現在のものと同じです",
     "AUTH_ACCOUNT_ID_INVALID": "アカウントIDは4〜32文字の英数字、アンダースコア、ハイフンで入力してください",
@@ -3149,8 +3154,7 @@
     "QR_TYPE_UNSUPPORTED": "このQRコードではこの操作はできません",
     "QR_ISSUE_FORBIDDEN": "このQRコードを発行する権限がありません",
     "CHAT_GROUP_FULL": "このグループは満員です",
-    "CHAT_GROUP_OWNER_ONLY": "グループを解散できるのはグループ主のみです",
-    "AUTH_PASSWORD_MISMATCH": "パスワードが一致しません"
+    "CHAT_GROUP_OWNER_ONLY": "グループを解散できるのはグループ主のみです"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",
