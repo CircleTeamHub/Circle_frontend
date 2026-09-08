@@ -2495,7 +2495,9 @@
       "invalidInviteCode": "招待コードの形式が正しくありません",
       "loginFailed": "ログインに失敗しました。もう一度お試しください",
       "registerFailed": "登録に失敗しました。もう一度お試しください",
-      "sendCodeFailed": "送信に失敗しました。もう一度お試しください"
+      "sendCodeFailed": "送信に失敗しました。もう一度お試しください",
+      "passwordMismatch": "パスワードが一致しません",
+      "registerSucceededSessionFailed": "アカウントは作成されましたが、自動ログインに失敗しました。このメールアドレスでログインしてください。"
     },
     "hidePassword": "パスワードを非表示",
     "showPassword": "パスワードを表示",
@@ -3148,7 +3150,8 @@
     "QR_TYPE_UNSUPPORTED": "このQRコードではこの操作はできません",
     "QR_ISSUE_FORBIDDEN": "このQRコードを発行する権限がありません",
     "CHAT_GROUP_FULL": "このグループは満員です",
-    "CHAT_GROUP_OWNER_ONLY": "グループを解散できるのはグループ主のみです"
+    "CHAT_GROUP_OWNER_ONLY": "グループを解散できるのはグループ主のみです",
+    "AUTH_PASSWORD_MISMATCH": "パスワードが一致しません"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",

@@ -200,7 +200,12 @@ test('auth success session flags map to the expected global route guard redirect
   });
 
   await useAuth().login('alice@example.com', 'password123');
-  await useAuth().register('bob@example.com', '123456', 'password123', 'Bob');
+  await useAuth().register(
+    'bob@example.com',
+    'password123',
+    'password123',
+    'Bob',
+  );
 
   const loginOptions = setSessionCalls[0][2];
   const registerOptions = setSessionCalls[1][2];
@@ -243,7 +248,7 @@ test('register forwards the optional invite code to the API request', async () =
 
   await useAuth().register(
     'bob@example.com',
-    '123456',
+    'password123',
     'password123',
     'Bob',
     ' AbC123 ',
@@ -252,8 +257,8 @@ test('register forwards the optional invite code to the API request', async () =
   assert.deepEqual(JSON.parse(JSON.stringify(requests)), [
     {
       email: 'bob@example.com',
-      code: '123456',
       password: 'password123',
+      confirmPassword: 'password123',
       nickname: 'Bob',
       inviteCode: 'AbC123',
     },

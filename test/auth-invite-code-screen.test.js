@@ -14,5 +14,22 @@ test('registration screen renders and submits an optional invite code', () => {
   assert.match(source, /auth\.inviteCode/);
   assert.match(source, /auth\.inviteCodePlaceholder/);
   assert.match(source, /setInviteCode\(value\.toUpperCase\(\)\)/);
-  assert.match(source, /register\(email, code, password, nickname, inviteCode\)/);
+  assert.match(source, /register\(email, password, confirmPassword, nickname, inviteCode\)/);
+});
+
+test('registration uses password confirmation instead of an email code', () => {
+  const screen = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/auth/screens/RegisterScreen.tsx'),
+    'utf8',
+  );
+  const api = fs.readFileSync(
+    path.join(process.cwd(), 'src/services/api/auth.ts'),
+    'utf8',
+  );
+
+  assert.match(screen, /const \[confirmPassword, setConfirmPassword\]/);
+  assert.match(screen, /auth\.confirmPassword/);
+  assert.doesNotMatch(screen, /useSendEmailCode|sendCode|codePlaceholder/);
+  assert.doesNotMatch(api, /requestEmailCode|auth\/email\/request-code/);
+  assert.match(api, /confirmPassword: payload\.confirmPassword/);
 });

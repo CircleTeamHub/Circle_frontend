@@ -8,7 +8,6 @@
  * 边界对齐后端 DTO（circle_be/src/auth/dto）：
  *  - password: @Length(6, 64)
  *  - nickname: @Length(1, 50)
- *  - code:     @Length(6, 6)
  * 本地先挡一层，避免确定性输入也要往返一次拿 422。
  */
 import { isValidEmail } from '@/utils/email';
@@ -53,6 +52,13 @@ export function validatePassword(password: string): ValidationError {
   return null;
 }
 
+export function validatePasswordConfirmation(
+  password: string,
+  confirmPassword: string,
+): ValidationError {
+  return password === confirmPassword ? null : 'auth.errors.passwordMismatch';
+}
+
 export function validateCode(code: string): ValidationError {
   if (!CODE_RE.test(code.trim())) return 'auth.errors.invalidCode';
   return null;
@@ -82,15 +88,16 @@ export function validateLoginForm(
 
 export function validateRegisterForm(
   email: string,
-  code: string,
   password: string,
+  confirmPassword: string,
   nickname: string,
   inviteCode = '',
 ): ValidationError {
   return (
     validateEmail(email) ??
-    validateCode(code) ??
     validatePassword(password) ??
+    validatePassword(confirmPassword) ??
+    validatePasswordConfirmation(password, confirmPassword) ??
     validateNickname(nickname) ??
     validateInviteCode(inviteCode)
   );

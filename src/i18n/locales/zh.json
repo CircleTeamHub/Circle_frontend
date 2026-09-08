@@ -119,7 +119,9 @@
       "invalidInviteCode": "邀请码格式不正确",
       "loginFailed": "登录失败，请重试",
       "registerFailed": "注册失败，请重试",
-      "sendCodeFailed": "发送失败，请重试"
+      "sendCodeFailed": "发送失败，请重试",
+      "passwordMismatch": "两次输入的密码不一致",
+      "registerSucceededSessionFailed": "账号已创建成功，但自动登录失败。请直接用该邮箱登录。"
     },
     "hidePassword": "隐藏密码",
     "showPassword": "显示密码",
@@ -3148,7 +3150,8 @@
     "QR_TYPE_UNSUPPORTED": "该二维码不支持此操作",
     "QR_ISSUE_FORBIDDEN": "没有签发该二维码的权限",
     "CHAT_GROUP_FULL": "群聊人数已达上限",
-    "CHAT_GROUP_OWNER_ONLY": "只有群主可以解散群聊"
+    "CHAT_GROUP_OWNER_ONLY": "只有群主可以解散群聊",
+    "AUTH_PASSWORD_MISMATCH": "两次输入的密码不一致"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",

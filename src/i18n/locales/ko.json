@@ -2495,7 +2495,9 @@
       "invalidInviteCode": "초대 코드 형식이 올바르지 않습니다",
       "loginFailed": "로그인에 실패했습니다. 다시 시도해 주세요",
       "registerFailed": "가입에 실패했습니다. 다시 시도해 주세요",
-      "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요"
+      "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요",
+      "passwordMismatch": "비밀번호가 일치하지 않습니다",
+      "registerSucceededSessionFailed": "계정은 생성되었지만 자동 로그인에 실패했습니다. 해당 이메일로 로그인해 주세요."
     },
     "hidePassword": "비밀번호 숨기기",
     "showPassword": "비밀번호 표시",
@@ -3148,7 +3150,8 @@
     "QR_TYPE_UNSUPPORTED": "이 QR 코드는 해당 작업을 지원하지 않습니다",
     "QR_ISSUE_FORBIDDEN": "이 QR 코드를 발급할 권한이 없습니다",
     "CHAT_GROUP_FULL": "그룹 채팅 인원이 가득 찼습니다",
-    "CHAT_GROUP_OWNER_ONLY": "그룹은 그룹장만 해산할 수 있습니다"
+    "CHAT_GROUP_OWNER_ONLY": "그룹은 그룹장만 해산할 수 있습니다",
+    "AUTH_PASSWORD_MISMATCH": "비밀번호가 일치하지 않습니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",
