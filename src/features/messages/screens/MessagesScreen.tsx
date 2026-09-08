@@ -416,6 +416,15 @@ function ConversationRowImpl({
     [translateX],
   );
 
+  // 静止时（translateX = 0）整层透明：swipeForeground 带 borderRadius，圆角那
+  // 一小块不上色，常驻在底下的操作层最右是 colors.error，红色会从缺口里透成
+  // 两道月牙 —— 行背景越暗越扎眼。一开始滑就立刻实体化，不影响揭示动画。
+  const swipeActionsOpacity = translateX.interpolate({
+    inputRange: [-SWIPE_ACTIONS_WIDTH, -1, 0],
+    outputRange: [1, 1, 0],
+    extrapolate: 'clamp',
+  });
+
   const closeSwipe = useCallback(() => animateTo(0), [animateTo]);
   const openSwipe = useCallback(
     () => animateTo(-SWIPE_ACTIONS_WIDTH),
@@ -492,7 +501,7 @@ function ConversationRowImpl({
   }, [showRowActionMenu, swipeEnabled]);
 
   const renderSwipeActions = () => (
-    <View style={s.swipeActions}>
+    <Animated.View style={[s.swipeActions, { opacity: swipeActionsOpacity }]}>
       <Pressable
         style={[s.swipeAction, { backgroundColor: colors.primary }]}
         onPress={() => handleSwipeAction(onTogglePinned)}
@@ -524,7 +533,7 @@ function ConversationRowImpl({
           {labels.delete}
         </Text>
       </Pressable>
-    </View>
+    </Animated.View>
   );
 
   return (

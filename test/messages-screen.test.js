@@ -265,3 +265,21 @@ test('group management lets users add group and direct chats to a custom group',
   assert.match(source, /accessibilityState=\{\{ selected \}\}/);
   assert.match(source, /backgroundColor: colors\.primaryLight/);
 });
+
+test('会话行静止时不画滑动操作层——否则红色删除键会从前景圆角里透出来', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+
+  // 事故形态：暗色模式下每行右边缘有两道红色月牙。
+  // 成因是叠层 —— swipeActions 常驻渲染在行底下（最右那颗是 colors.error），
+  // 上面盖的 swipeForeground 带 borderRadius，圆角那一小块不上色，
+  // 底下的红就从缺口里露出来。行背景越暗，这道红越扎眼。
+  // 根治：静止（translateX = 0）时把操作层的不透明度压到 0，压根不画。
+  assert.match(source, /const swipeActionsOpacity = translateX\.interpolate\(/);
+  assert.match(source, /outputRange: \[1, 1, 0\]/);
+  assert.match(source, /<Animated\.View style=\{\[s\.swipeActions, \{ opacity: swipeActionsOpacity \}\]\}>/);
+  // 操作层不能再是静态 View，否则 opacity 绑不上动画值。
+  assert.doesNotMatch(source, /<View style=\{s\.swipeActions\}>/);
+});
