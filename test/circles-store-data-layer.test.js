@@ -87,24 +87,8 @@ test('fetchMyCircles 并发合并为一次请求，且不预清已渲染列表 (
   assert.equal(calls.my.length, 6);
 });
 
-test('fetchAllCircles 同样单飞 (#106)', async () => {
-  const gate = deferred();
-  const { mod, calls } = loadCirclesStore({
-    fetchCirclesImpl: async () => {
-      await gate.promise;
-      return { items: [], total: 0 };
-    },
-  });
-  const store = mod.useCirclesStore;
-
-  const first = store.getState().fetchAllCircles();
-  const second = store.getState().fetchAllCircles();
-  gate.resolve();
-  await Promise.all([first, second]);
-
-  assert.equal(calls.all, 1);
-});
-
+// fetchAllCircles 已随「发现圈子」整片移除（圈子纯邀请制），
+// 对应的单飞用例一并删除；守护改由 circles-invite-only.test.js 承担。
 test('mapWithConcurrency 保序、限并发、冒泡 mapper 异常', async () => {
   const { mapWithConcurrency } = loadTsModule('src/utils/concurrency.ts');
 

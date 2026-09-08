@@ -7,7 +7,6 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
 const SCREEN = 'src/features/discover/screens/PendingVerificationsScreen.tsx';
 const ROUTE = 'app/(tabs)/discover/verifications.tsx';
-const DISCOVER = 'src/features/discover/screens/DiscoverScreen.tsx';
 const CIRCLE_PLAZA = 'src/features/discover/screens/CirclePlazaScreen.tsx';
 
 test('PendingVerificationsScreen lists the current user pending verifications', () => {
@@ -46,7 +45,8 @@ test('verifications route re-exports the screen', () => {
 });
 
 test('Discover header does not expose a pending-verifications entry', () => {
-  const src = read(DISCOVER);
+  // 动态 tab 的根屏现在就是圈子广场，原来 DiscoverScreen 的约束落到它头上。
+  const src = read(CIRCLE_PLAZA);
   assert.doesNotMatch(src, /handlePendingVerificationsPress/);
   assert.doesNotMatch(src, /["'`]\/\(tabs\)\/discover\/verifications["'`]/);
   assert.doesNotMatch(src, /name="shield-checkmark-outline"/);
