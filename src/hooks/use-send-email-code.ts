@@ -5,22 +5,22 @@
  * **在途防抖**：
  *
  *   旧实现按钮只有 `disabled={countdown.running}`，而 countdown 在
- *   `await requestEmailCode()` 成功之后才启动。也就是说在网络请求飞行的这段时间里
+ *   `await requestPasswordReset()` 成功之后才启动。也就是说在网络请求飞行的这段时间里
  *   按钮仍可点 —— 慢网下用户连点会真发出 2+ 封验证码 / 撞后端限流，第二封还可能
  *   失败覆盖掉已成功的 UI（倒计时已走 + 又冒一条错误）。
  *
  * 这里用 inFlightRef + sending 双重把关，确保同一时刻只有一次发码请求在途。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { requestEmailCode, requestPasswordReset } from '@/services/api/auth';
+import { requestPasswordReset } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useCountdown } from '@/hooks/use-countdown';
 import { normalizeEmail } from '@/utils/email';
 import { validateEmail } from '@/features/auth/validation';
 import i18n from '@/i18n';
 
-// 'reset-password' 走独立端点（FE#92），注册走通用 email/request-code。
-type Purpose = 'register' | 'reset-password';
+// 注册不再发送邮箱验证码；此 hook 只服务忘记密码流程。
+type Purpose = 'reset-password';
 
 const RESEND_SECONDS = 60;
 
@@ -70,11 +70,7 @@ export function useSendEmailCode(purpose: Purpose): SendEmailCode {
       inFlightRef.current = true;
       setSending(true);
       try {
-        if (purpose === 'reset-password') {
-          await requestPasswordReset(normalized);
-        } else {
-          await requestEmailCode({ email: normalized, purpose });
-        }
+        await requestPasswordReset(normalized);
         if (mountedRef.current) countdown.start(RESEND_SECONDS);
       } catch (e) {
         if (mountedRef.current) {
@@ -85,7 +81,7 @@ export function useSendEmailCode(purpose: Purpose): SendEmailCode {
         if (mountedRef.current) setSending(false);
       }
     },
-    [purpose, countdown],
+    [countdown],
   );
 
   return {

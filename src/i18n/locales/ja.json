@@ -457,6 +457,11 @@
     "leave": "退出",
     "leaveGroup": "グループを退出",
     "leaveGroupWarning": "退出するとこのグループのメッセージを受信しなくなります。",
+    "dissolve": "解散",
+    "dissolveGroup": "グループを解散",
+    "dissolveGroupWarning": "解散するとグループは全メンバーの一覧から消え、全員のチャット履歴も削除されます。この操作は取り消せません。",
+    "dissolveCircle": "サークルを解散",
+    "dissolveCircleWarning": "解散するとサークルは全メンバーの一覧から消え、サークルのグループチャットも閉じられます。この操作は取り消せません。",
     "notSet": "未設定",
     "friend": "友だち",
     "notSupported": "未対応",
@@ -663,6 +668,7 @@
     "lowCreditScore": "信用スコアが {{minScore}} を下回っているため、現在メッセージを送信できません",
     "burnAfterReading": "消えるメッセージ",
     "clearHistoryConfirm": "自分側の履歴のみ削除されます。削除しますか？",
+    "clearHistoryConfirmGroupOwner": "「自分の記録のみ削除」は自分の分だけを消します。「全員の記録を削除」は全メンバーのチャット履歴を削除し、取り消せません。",
     "clearHistoryConfirmDirect": "チャット履歴を削除しますか？相手側の履歴も削除され、元に戻せません。",
     "clearHistoryDone": "削除しました",
     "clearHistoryDoneDirect": "双方のチャット履歴を削除しました"
@@ -1743,6 +1749,10 @@
       "myCreated": "作成したグループ",
       "myJoined": "参加中のグループ",
       "myManaged": "管理中のグループ",
+      "tabNewGroups": "新しいグループ",
+      "tabMyJoined": "参加中",
+      "tabMyCreated": "作成した",
+      "tabMyManaged": "管理中",
       "searchPlaceholder": "グループを検索",
       "noMatches": "一致するグループはありません",
       "memberCount": "{{count}} 人",
@@ -2485,7 +2495,9 @@
       "invalidInviteCode": "招待コードの形式が正しくありません",
       "loginFailed": "ログインに失敗しました。もう一度お試しください",
       "registerFailed": "登録に失敗しました。もう一度お試しください",
-      "sendCodeFailed": "送信に失敗しました。もう一度お試しください"
+      "sendCodeFailed": "送信に失敗しました。もう一度お試しください",
+      "passwordMismatch": "パスワードが一致しません",
+      "registerSucceededSessionFailed": "アカウントは作成されましたが、自動ログインに失敗しました。このメールアドレスでログインしてください。"
     },
     "hidePassword": "パスワードを非表示",
     "showPassword": "パスワードを表示",
@@ -2974,6 +2986,7 @@
     "CIRCLE_AVATAR_URL_INVALID": "そのアバター画像は使用できません",
     "CIRCLE_ALREADY_MEMBER_OR_PENDING": "すでにメンバーであるか、申請が処理中です",
     "CIRCLE_OWNER_CANNOT_LEAVE": "サークルを退出する前にオーナーを譲渡してください",
+    "CIRCLE_OWNER_ONLY_DISSOLVE": "サークルを解散できるのはオーナーだけです",
     "CIRCLE_JOIN_VIP_REQUIRED": "このサークルに参加するにはより高いVIPレベルが必要です",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "このサークルに参加するにはより高い信用スコアが必要です",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "このサークルに参加するにはファンシーナンバーが必要です",
@@ -3136,7 +3149,9 @@
     "QR_EXPIRED": "このQRコードは期限切れです。新しいコードをもらってください",
     "QR_TYPE_UNSUPPORTED": "このQRコードではこの操作はできません",
     "QR_ISSUE_FORBIDDEN": "このQRコードを発行する権限がありません",
-    "CHAT_GROUP_FULL": "このグループは満員です"
+    "CHAT_GROUP_FULL": "このグループは満員です",
+    "CHAT_GROUP_OWNER_ONLY": "グループを解散できるのはグループ主のみです",
+    "AUTH_PASSWORD_MISMATCH": "パスワードが一致しません"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",

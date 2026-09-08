@@ -119,7 +119,9 @@
       "invalidInviteCode": "邀请码格式不正确",
       "loginFailed": "登录失败，请重试",
       "registerFailed": "注册失败，请重试",
-      "sendCodeFailed": "发送失败，请重试"
+      "sendCodeFailed": "发送失败，请重试",
+      "passwordMismatch": "两次输入的密码不一致",
+      "registerSucceededSessionFailed": "账号已创建成功，但自动登录失败。请直接用该邮箱登录。"
     },
     "hidePassword": "隐藏密码",
     "showPassword": "显示密码",
@@ -529,6 +531,11 @@
     "leave": "退出",
     "leaveGroup": "退出群聊",
     "leaveGroupWarning": "退出后将不再接收该群聊的消息。",
+    "dissolve": "解散",
+    "dissolveGroup": "解散群聊",
+    "dissolveGroupWarning": "解散后群聊将从所有成员的列表中消失，所有人的聊天记录也会一并删除。此操作无法撤销。",
+    "dissolveCircle": "解散圈子",
+    "dissolveCircleWarning": "解散后圈子将从所有成员的列表中消失，圈子群聊也会一并关闭。此操作无法撤销。",
     "notSet": "未设置",
     "friend": "好友",
     "notSupported": "暂未开放",
@@ -735,6 +742,7 @@
     "lowCreditScore": "信誉值低于 {{minScore}}，暂时无法发送消息",
     "burnAfterReading": "阅后即焚",
     "clearHistoryConfirm": "清空后仅自己看不到这些消息，对方不受影响。确定清空？",
+    "clearHistoryConfirmGroupOwner": "「仅删除我的记录」只清空你自己的；「删除所有人的记录」会同时删除全部成员的聊天记录，无法撤销。",
     "clearHistoryConfirmDirect": "确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。",
     "clearHistoryDone": "已清空",
     "clearHistoryDoneDirect": "双方聊天记录已删除"
@@ -822,6 +830,10 @@
       "myCreated": "我创建的群聊",
       "myJoined": "我加入的群聊",
       "myManaged": "我管理的群聊",
+      "tabNewGroups": "新的群组",
+      "tabMyJoined": "我加入的",
+      "tabMyCreated": "我创建的",
+      "tabMyManaged": "我管理的",
       "searchPlaceholder": "搜索群聊",
       "noMatches": "没有匹配的群聊",
       "memberCount": "{{count}}人",
@@ -2974,6 +2986,7 @@
     "CIRCLE_AVATAR_URL_INVALID": "该头像图片不被允许",
     "CIRCLE_ALREADY_MEMBER_OR_PENDING": "你已是成员或申请正在处理中",
     "CIRCLE_OWNER_CANNOT_LEAVE": "圈主需先转让圈子才能退出",
+    "CIRCLE_OWNER_ONLY_DISSOLVE": "只有圈主可以解散圈子",
     "CIRCLE_JOIN_VIP_REQUIRED": "加入该圈子需要更高的 VIP 等级",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "加入该圈子需要更高的信用分",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "加入该圈子需要靓号",
@@ -3136,7 +3149,9 @@
     "QR_EXPIRED": "二维码已过期，请对方重新出示",
     "QR_TYPE_UNSUPPORTED": "该二维码不支持此操作",
     "QR_ISSUE_FORBIDDEN": "没有签发该二维码的权限",
-    "CHAT_GROUP_FULL": "群聊人数已达上限"
+    "CHAT_GROUP_FULL": "群聊人数已达上限",
+    "CHAT_GROUP_OWNER_ONLY": "只有群主可以解散群聊",
+    "AUTH_PASSWORD_MISMATCH": "两次输入的密码不一致"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",

@@ -458,6 +458,11 @@
     "leave": "Salir",
     "leaveGroup": "Salir del grupo",
     "leaveGroupWarning": "Dejarás de recibir mensajes de este grupo.",
+    "dissolve": "Disolver",
+    "dissolveGroup": "Disolver grupo",
+    "dissolveGroupWarning": "El grupo desaparecerá para todos los miembros y se eliminará el historial de chat de todos. Esta acción no se puede deshacer.",
+    "dissolveCircle": "Disolver círculo",
+    "dissolveCircleWarning": "El círculo desaparecerá para todos los miembros y su chat grupal se cerrará. Esta acción no se puede deshacer.",
     "notSet": "Sin definir",
     "friend": "Amigo",
     "notSupported": "No disponible",
@@ -664,6 +669,7 @@
     "lowCreditScore": "Tu puntuación de crédito es inferior a {{minScore}}, por lo que no puedes enviar mensajes ahora",
     "burnAfterReading": "Mensajes temporales",
     "clearHistoryConfirm": "Solo se borra tu copia del historial. ¿Vaciar?",
+    "clearHistoryConfirmGroupOwner": "«Eliminar para mí» solo borra tu copia. «Eliminar para todos» borra el historial de chat de todos los miembros y no se puede deshacer.",
     "clearHistoryConfirmDirect": "¿Vaciar el historial? También se eliminará para la otra persona y no se podrá deshacer.",
     "clearHistoryDone": "Vaciado",
     "clearHistoryDoneDirect": "Historial eliminado para ambas personas"
@@ -1746,6 +1752,10 @@
       "myCreated": "Grupos que creé",
       "myJoined": "Grupos a los que me uní",
       "myManaged": "Grupos que administro",
+      "tabNewGroups": "Nuevos",
+      "tabMyJoined": "Unidos",
+      "tabMyCreated": "Creados",
+      "tabMyManaged": "Administrados",
       "searchPlaceholder": "Buscar grupos",
       "noMatches": "No hay grupos coincidentes",
       "memberCount": "{{count}} miembros",
@@ -2488,7 +2498,9 @@
       "invalidInviteCode": "El formato del código de invitación no es válido",
       "loginFailed": "Error al iniciar sesión, inténtalo de nuevo",
       "registerFailed": "Error al registrarse, inténtalo de nuevo",
-      "sendCodeFailed": "Error al enviar, inténtalo de nuevo"
+      "sendCodeFailed": "Error al enviar, inténtalo de nuevo",
+      "passwordMismatch": "Las contraseñas no coinciden",
+      "registerSucceededSessionFailed": "Tu cuenta se creó, pero no pudimos iniciar sesión automáticamente. Inicia sesión con este correo."
     },
     "hidePassword": "Ocultar contraseña",
     "showPassword": "Mostrar contraseña",
@@ -2977,6 +2989,7 @@
     "CIRCLE_AVATAR_URL_INVALID": "Esa imagen de avatar no está permitida",
     "CIRCLE_ALREADY_MEMBER_OR_PENDING": "Ya eres miembro o tu solicitud está pendiente",
     "CIRCLE_OWNER_CANNOT_LEAVE": "Transfiere la propiedad antes de salir del círculo",
+    "CIRCLE_OWNER_ONLY_DISSOLVE": "Solo el propietario puede disolver el círculo",
     "CIRCLE_JOIN_VIP_REQUIRED": "Se requiere un nivel VIP más alto para unirse a este círculo",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "Se requiere una puntuación de crédito más alta para unirse a este círculo",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "Se requiere un número especial para unirse a este círculo",
@@ -3139,7 +3152,9 @@
     "QR_EXPIRED": "Este código QR ha caducado, pide uno nuevo",
     "QR_TYPE_UNSUPPORTED": "Este código QR no admite esta acción",
     "QR_ISSUE_FORBIDDEN": "No tienes permiso para emitir este código QR",
-    "CHAT_GROUP_FULL": "Este grupo está lleno"
+    "CHAT_GROUP_FULL": "Este grupo está lleno",
+    "CHAT_GROUP_OWNER_ONLY": "Solo el propietario del grupo puede disolverlo",
+    "AUTH_PASSWORD_MISMATCH": "Las contraseñas no coinciden"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",

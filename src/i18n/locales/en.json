@@ -119,7 +119,9 @@
       "invalidInviteCode": "Invalid invite code format",
       "loginFailed": "Login failed, please try again",
       "registerFailed": "Registration failed, please try again",
-      "sendCodeFailed": "Failed to send, please try again"
+      "sendCodeFailed": "Failed to send, please try again",
+      "passwordMismatch": "Passwords do not match",
+      "registerSucceededSessionFailed": "Your account was created, but we could not sign you in automatically. Please log in with this email."
     },
     "hidePassword": "Hide password",
     "showPassword": "Show password",
@@ -530,6 +532,11 @@
     "leave": "Leave",
     "leaveGroup": "Leave Group",
     "leaveGroupWarning": "You will stop receiving messages from this group.",
+    "dissolve": "Dissolve",
+    "dissolveGroup": "Dissolve Group",
+    "dissolveGroupWarning": "The group will disappear for every member and everyone’s chat history will be deleted. This cannot be undone.",
+    "dissolveCircle": "Dissolve Circle",
+    "dissolveCircleWarning": "The circle will disappear for every member and its group chat will be closed. This cannot be undone.",
     "notSet": "Not Set",
     "friend": "Friend",
     "notSupported": "Not Available",
@@ -736,6 +743,7 @@
     "lowCreditScore": "Your credit score is below {{minScore}}, so you cannot send messages right now",
     "burnAfterReading": "Disappearing messages",
     "clearHistoryConfirm": "This only clears the history on your side. Clear it?",
+    "clearHistoryConfirmGroupOwner": "“Delete for me” clears only your copy. “Delete for everyone” deletes the chat history for every member and cannot be undone.",
     "clearHistoryConfirmDirect": "Clear this chat history? It will also be deleted for the other person and cannot be undone.",
     "clearHistoryDone": "Cleared",
     "clearHistoryDoneDirect": "Chat history deleted for both people"
@@ -823,6 +831,10 @@
       "myCreated": "Groups I Created",
       "myJoined": "Groups I Joined",
       "myManaged": "Groups I Manage",
+      "tabNewGroups": "New Groups",
+      "tabMyJoined": "Joined",
+      "tabMyCreated": "Created",
+      "tabMyManaged": "Managed",
       "searchPlaceholder": "Search groups",
       "noMatches": "No matching groups",
       "memberCount": "{{count}} members",
@@ -2977,6 +2989,7 @@
     "CIRCLE_AVATAR_URL_INVALID": "That avatar image isn't allowed",
     "CIRCLE_ALREADY_MEMBER_OR_PENDING": "You're already a member or your request is pending",
     "CIRCLE_OWNER_CANNOT_LEAVE": "Transfer ownership before leaving the circle",
+    "CIRCLE_OWNER_ONLY_DISSOLVE": "Only the circle owner can dissolve the circle",
     "CIRCLE_JOIN_VIP_REQUIRED": "A higher VIP level is required to join this circle",
     "CIRCLE_JOIN_CREDIT_REQUIRED": "A higher credit score is required to join this circle",
     "CIRCLE_JOIN_FANCY_NUMBER_REQUIRED": "A fancy number is required to join this circle",
@@ -3139,7 +3152,9 @@
     "QR_EXPIRED": "This QR code has expired, please ask for a new one",
     "QR_TYPE_UNSUPPORTED": "This QR code does not support this action",
     "QR_ISSUE_FORBIDDEN": "You are not allowed to issue this QR code",
-    "CHAT_GROUP_FULL": "This group chat is full"
+    "CHAT_GROUP_FULL": "This group chat is full",
+    "CHAT_GROUP_OWNER_ONLY": "Only the group owner can dissolve this group",
+    "AUTH_PASSWORD_MISMATCH": "Passwords do not match"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",
