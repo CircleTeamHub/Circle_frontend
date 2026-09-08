@@ -9,6 +9,12 @@ interface ProfileActionRowProps {
   label: string;
   value?: string;
   onPress?: () => void;
+  /**
+   * 末尾的 `>` 表示「点进去还有一页」。联系方式那几行点了是复制到剪贴板、不跳转,
+   * 带着箭头就是在承诺一个不存在的下级页面 —— 这类行传 false。
+   */
+  showChevron?: boolean;
+  accessibilityLabel?: string;
 }
 
 // 行内边距(16) + 图标块(28) + 图标与文字间距(12)，分隔线据此左缩进对齐文字
@@ -59,6 +65,8 @@ export const ProfileActionRow = ({
   label,
   value,
   onPress,
+  showChevron = true,
+  accessibilityLabel,
 }: ProfileActionRowProps) => {
   const { colors } = useTheme();
 
@@ -75,6 +83,8 @@ export const ProfileActionRow = ({
     <Pressable
       style={({ pressed }) => [s.row, pressed && s.pressed]}
       onPress={onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={accessibilityLabel}
     >
       <View style={[s.iconBadge, d.iconBadge]}>
         <Ionicons name={icon} size={17} color={colors.white} />
@@ -87,11 +97,13 @@ export const ProfileActionRow = ({
               {value}
             </Text>
           ) : null}
-          <Ionicons
-            name="chevron-forward"
-            size={16}
-            color={colors.textSecondary}
-          />
+          {showChevron ? (
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={colors.textSecondary}
+            />
+          ) : null}
         </View>
       </View>
     </Pressable>

@@ -21,6 +21,28 @@ export interface UserProfileData {
   gender?: string | null;
   city?: string | null;
   signature: string;
-  phone: string;
+  contact: ProfileContact;
   remarkHint?: string;
 }
+
+/**
+ * 对方**选择公开**给当前查看者的联系方式。
+ *
+ * 后端 applyProfilePrivacy 已按 showPhone / showEmail / showWechat / showQQ 把
+ * 关掉的字段置成 null,所以客户端的规则只有一条:**有值就展示,没值就整行不渲染**。
+ * 千万别在这里再叠一层自己的可见性判断 —— 那等于让客户端和服务端各裁决一次,
+ * 两边一旦不同步,要么泄露(客户端更松)、要么开关看着失灵(客户端更严)。
+ */
+export interface ProfileContact {
+  phone: string | null;
+  email: string | null;
+  wechat: string | null;
+  qq: string | null;
+}
+
+export const EMPTY_PROFILE_CONTACT: ProfileContact = {
+  phone: null,
+  email: null,
+  wechat: null,
+  qq: null,
+};

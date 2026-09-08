@@ -516,3 +516,62 @@ test('scope-specific chat info route files exist for contacts and profile stacks
   assert.match(contactsRoute, /ChatInfoScreen/);
   assert.match(profileRoute, /ChatInfoScreen/);
 });
+
+test('user profile screen renders the contact card from server-filtered fields only', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/user/screens/UserProfileScreen.tsx'),
+    'utf8',
+  );
+
+  // 三个隐私开关（showPhone / showEmail / showWechat / showQQ）此前是「能拨、不通电」的:
+  // 后端照它们裁决,但资料页从来没渲染过任何一个字段。这几条断言守住那根线接上了。
+  assert.match(source, /getVisibleProfileContacts\(profile\.contact\)/);
+  assert.match(source, /\{contactRows\.length > 0 \? \(/);
+  assert.match(source, /showChevron=\{false\}/);
+  assert.match(source, /void handleCopyContact\(row\)/);
+
+  // 后端 applyProfilePrivacy 已把关掉的字段置 null,客户端原样收下 ——
+  // 任何一处客户端自己的 show* 判断都会和服务端裁决打架。
+  assert.match(source, /phone: profile\.phoneNumber/);
+  assert.match(source, /email: profile\.email/);
+  assert.match(source, /wechat: profile\.wechat/);
+  assert.match(source, /qq: profile\.qq/);
+  // 资料页不该自己去查对方的隐私设置来决定显不显示 —— /privacy/settings 只返回
+  // 当前登录者自己的开关,拿它判别人等于永远判错;真正的裁决在后端 findOne 里。
+  assert.doesNotMatch(source, /fetchPrivacySettings/);
+
+  // 看自己时后端走 isSelf 短路、四个字段一律返回,画出来会让人误以为别人也看得到。
+  assert.match(source, /isCurrentUser \? \[\] : getVisibleProfileContacts/);
+
+  // 复制失败必须有反馈:静默失败在这里表现为「点了没反应」,与「这行不可点」无法区分。
+  assert.match(source, /userProfile\.contactCopyFailed/);
+  assert.match(source, /reportHandledFailure\('userProfile', 'copyContact'/);
+});
+
+test('contact rows share the info cards container so the gap between them survives', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/user/screens/UserProfileScreen.tsx'),
+    'utf8',
+  );
+
+  // s.sections 只有 gap，而 gap 作用于同一个 flex 容器的直接子节点。联系方式卡
+  // 若自己包一层 sections，两张卡之间就没有留白、会贴死成一张长卡。
+  assert.match(
+    source,
+    /\{contactRows\.length > 0 \|\| infoRowGroups\.length > 0 \? \([\s\S]*?<View style=\{s\.sections\}>/,
+  );
+  const sectionsOpenings = source.match(/<View style=\{s\.sections\}>/g) ?? [];
+  assert.equal(sectionsOpenings.length, 1);
+});
+
+test('contact rows are copy targets, not navigation rows', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/user/components/profile-action-row.tsx'),
+    'utf8',
+  );
+
+  // 末尾的 `>` 表示「点进去还有一页」。复制行没有下级页面，带箭头就是假承诺。
+  assert.match(source, /showChevron = true/);
+  assert.match(source, /\{showChevron \? \(/);
+  assert.match(source, /accessibilityRole=\{onPress \? 'button' : undefined\}/);
+});

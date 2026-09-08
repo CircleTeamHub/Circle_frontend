@@ -108,6 +108,7 @@ const settings = {
   momentsVisibility: 'ALL' as const,
   allowStrangerMessages: true,
   showPhone: false,
+  showEmail: false,
   showWechat: true,
   showQQ: true,
   showWhatsup: true,
