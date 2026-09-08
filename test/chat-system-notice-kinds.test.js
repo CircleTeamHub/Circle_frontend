@@ -5,6 +5,35 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+// 焚毁档位表(burn-durations.ts)只依赖 i18n —— 这里加载**真实实现**而不是桩:
+// 档位白名单是 setViewerSelfDestructSec 的唯一闸门,用假的等于没测。
+let __burnDurationsSource = null;
+function loadBurnDurations(translate = (key) => key) {
+  if (!__burnDurationsSource) {
+    const filePath = path.join(process.cwd(), 'src/chat-core/burn-durations.ts');
+    __burnDurationsSource = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2020,
+      },
+      fileName: filePath,
+    }).outputText;
+  }
+  const ctx = {
+    module: { exports: {} },
+    exports: {},
+    require: (request) => {
+      if (request === '@/i18n') {
+        return { __esModule: true, default: { t: translate, language: 'zh' } };
+      }
+      throw new Error(`unexpected require: ${request}`);
+    },
+  };
+  ctx.exports = ctx.module.exports;
+  vm.runInNewContext(__burnDurationsSource, ctx);
+  return ctx.module.exports;
+}
+
 // systemNoticeText 把结构化系统消息映射成一行文案。未知 kind 兜底空串，而空串
 // 在时间线上不是「隐藏」——SystemNoticePill 照样占一行内边距，会话照样多一条
 // 未读、预览还是空的。所以后端每加一种 kind，这里不加 case 就是一条肉眼可见的
@@ -40,6 +69,7 @@ function loadSystemNoticeText(translate) {
       if (request === './mappers') {
         return { formatChatTimestamp: () => '' };
       }
+      if (request === './burn-durations') return loadBurnDurations();
       throw new Error(`unexpected require: ${request}`);
     },
   };

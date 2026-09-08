@@ -5,6 +5,35 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+// 焚毁档位表(burn-durations.ts)只依赖 i18n —— 这里加载**真实实现**而不是桩:
+// 档位白名单是 setViewerSelfDestructSec 的唯一闸门,用假的等于没测。
+let __burnDurationsSource = null;
+function loadBurnDurations(translate = (key) => key) {
+  if (!__burnDurationsSource) {
+    const filePath = path.join(process.cwd(), 'src/chat-core/burn-durations.ts');
+    __burnDurationsSource = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2020,
+      },
+      fileName: filePath,
+    }).outputText;
+  }
+  const ctx = {
+    module: { exports: {} },
+    exports: {},
+    require: (request) => {
+      if (request === '@/i18n') {
+        return { __esModule: true, default: { t: translate, language: 'zh' } };
+      }
+      throw new Error(`unexpected require: ${request}`);
+    },
+  };
+  ctx.exports = ctx.module.exports;
+  vm.runInNewContext(__burnDurationsSource, ctx);
+  return ctx.module.exports;
+}
+
 // 名片 payload 完全由对端构造 —— 服务端只管 content 的总字节数,不认识里面的形状。
 // 拆栈前这层加固在 src/im/mappers.ts,自研栈把它挪到了 chat-core 的映射层;
 // 这份用例跟着搬过来,保证「一条恶意消息不能把会话页永久搞坏」的保证不随迁移丢掉。
@@ -57,6 +86,7 @@ function loadMappers() {
       if (request === './store') return {};
       if (request === '@/types') return {};
       if (request === '@/features/qr/qr-payload') return loadQrPayload();
+      if (request === './burn-durations') return loadBurnDurations();
       throw new Error(`unexpected require: ${request}`);
     },
   };

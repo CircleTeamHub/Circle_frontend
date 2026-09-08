@@ -5,6 +5,35 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+// 焚毁档位表(burn-durations.ts)只依赖 i18n —— 这里加载**真实实现**而不是桩:
+// 档位白名单是 setViewerSelfDestructSec 的唯一闸门,用假的等于没测。
+let __burnDurationsSource = null;
+function loadBurnDurations(translate = (key) => key) {
+  if (!__burnDurationsSource) {
+    const filePath = path.join(process.cwd(), 'src/chat-core/burn-durations.ts');
+    __burnDurationsSource = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2020,
+      },
+      fileName: filePath,
+    }).outputText;
+  }
+  const ctx = {
+    module: { exports: {} },
+    exports: {},
+    require: (request) => {
+      if (request === '@/i18n') {
+        return { __esModule: true, default: { t: translate, language: 'zh' } };
+      }
+      throw new Error(`unexpected require: ${request}`);
+    },
+  };
+  ctx.exports = ctx.module.exports;
+  vm.runInNewContext(__burnDurationsSource, ctx);
+  return ctx.module.exports;
+}
+
 // 聊天记录·媒体页的缩略图和气泡走的是同一份对端可控的 content。
 // 拆栈时气泡侧补上了 allowPeerMediaUrl,媒体页却还停在 normalizeMediaUrl ——
 // 而后者对「已经能直连的外部 https 地址」原样返回,于是同一个追踪信标
@@ -49,7 +78,8 @@ function loadChatHistory() {
     // qr-payload 运行时零依赖,直接跑真实实现。
     if (request === '@/features/qr/qr-payload')
       return runModule('src/features/qr/qr-payload.ts', () => ({}));
-    throw new Error(`unexpected require: ${request}`);
+    if (request === './burn-durations') return loadBurnDurations();
+      throw new Error(`unexpected require: ${request}`);
   });
 
   return runModule('src/features/chat/chat-history.ts', (request) => {
@@ -66,7 +96,8 @@ function loadChatHistory() {
     if (request === '@/utils/locale') {
       return { getLocalizedDateTimeLocale: () => 'zh-CN' };
     }
-    throw new Error(`unexpected require: ${request}`);
+    if (request === './burn-durations') return loadBurnDurations();
+      throw new Error(`unexpected require: ${request}`);
   });
 }
 

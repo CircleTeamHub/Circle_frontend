@@ -1,11 +1,14 @@
+import type { BurnDurationSec } from '@/chat-core/burn-durations';
 import { apiClient } from '@/services/api/client';
 
-export type SelfDestructDays = 0 | 1 | 2 | 7 | 30;
 export type MomentsVisibility = 'ALL' | 'FRIENDS_ONLY' | 'PRIVATE';
 export type PrivacyPermission = 'EVERYONE' | 'FRIENDS_ONLY' | 'NONE';
 
 export type PrivacySettings = {
-  messageSelfDestructDays: SelfDestructDays;
+  // 全局阅后即焚窗口(秒)。与会话级焚毁共用 BURN_DURATION_CHOICES 那张表 ——
+  // 旧字段是 messageSelfDestructDays,只能选整天,于是同一个功能在两个入口给出
+  // 两张不一样的档位表。
+  messageSelfDestructSec: BurnDurationSec;
   momentsVisibility: MomentsVisibility;
   allowStrangerMessages: boolean;
   showPhone: boolean;

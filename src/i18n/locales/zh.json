@@ -682,11 +682,6 @@
       "image": "图片",
       "video": "视频"
     },
-    "disappearing": {
-      "off": "关闭",
-      "minutes": "{{duration}}分钟",
-      "seconds": "{{duration}}秒"
-    },
     "message": {
       "sending": "发送中",
       "sendFailed": "发送失败",
@@ -2082,7 +2077,6 @@
     "privacy": {
       "title": "隐私设置",
       "selfDestruct": "全局阅后即焚",
-      "twoDays": "2天",
       "selfDestructTip": "显示会话阅后即焚提示",
       "selfDestructTipHint": "控制会话顶部阅后即焚条目与底部提示条的显示",
       "blacklist": "黑名单管理",
@@ -2103,7 +2097,6 @@
       "loadFailed": "隐私设置加载失败",
       "saveFailed": "隐私设置保存失败",
       "selfDestructOff": "关闭",
-      "days": "{{count}}天",
       "enabledCount": "已开启 {{count}} 项",
       "blacklistLoading": "正在加载黑名单",
       "blacklistEmpty": "暂无黑名单用户",
@@ -2749,11 +2742,23 @@
       "unsupported": "[暂不支持的消息类型]"
     },
     "burn": {
-      "s30": "30秒",
+      "m1": "1分钟",
       "m5": "5分钟",
+      "m10": "10分钟",
+      "m30": "30分钟",
       "h1": "1小时",
+      "h2": "2小时",
+      "h6": "6小时",
       "d1": "1天",
-      "d7": "7天"
+      "d2": "2天",
+      "d3": "3天",
+      "d4": "4天",
+      "d5": "5天",
+      "d6": "6天",
+      "w1": "1周",
+      "w2": "2周",
+      "w3": "3周",
+      "mo1": "1个月"
     }
   },
   "location": {

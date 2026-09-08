@@ -14,8 +14,13 @@ import type {
   TransferCardData,
   VerificationCardData,
 } from '@/types';
+import { formatBurnDuration } from './burn-durations';
 import { formatChatTimestamp } from './mappers';
 import type { StoredChatMessage } from './store';
+
+// 档位表和标签都收进 burn-durations(全局隐私设置也要用同一份),
+// 这里保留出口:调用方一直是从 message-mappers 拿这个格式化函数的。
+export { formatBurnDuration };
 
 /**
  * chat-core 消息 DTO → UI ChatMessage(替代 src/im/mappers 的消息侧)。
@@ -645,17 +650,4 @@ export function systemNoticeText(content: Record<string, unknown>): string {
     default:
       return '';
   }
-}
-
-/** 焚毁档位 → 本地化时长标签(白名单外的值回落成秒数)。 */
-export function formatBurnDuration(seconds: number): string {
-  const key: Record<number, string> = {
-    30: 'im.burn.s30',
-    300: 'im.burn.m5',
-    3600: 'im.burn.h1',
-    86400: 'im.burn.d1',
-    604800: 'im.burn.d7',
-  };
-  const found = key[seconds];
-  return found ? i18n.t(found) : `${seconds}s`;
 }

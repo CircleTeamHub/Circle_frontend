@@ -11,11 +11,16 @@ import {
   type MomentsVisibility,
   type PrivacyPermission,
   type PrivacySettings,
-  type SelfDestructDays,
   updatePrivacySettings,
   type UpdatePrivacySettingsPayload,
 } from '@/services/api/privacy';
 import { getApiErrorMessage } from '@/services/api/errors';
+import {
+  BURN_DURATION_CHOICES,
+  BURN_DURATION_OFF,
+  formatBurnDuration,
+  type BurnDurationSec,
+} from '@/chat-core/burn-durations';
 import { useChatStore } from '@/chat-core/store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -64,7 +69,9 @@ const s = StyleSheet.create({
   },
 });
 
-const SELF_DESTRUCT_OPTIONS: readonly SelfDestructDays[] = [0, 1, 2, 7, 30];
+// 全局档位就是会话级那张表 —— 这个开关和聊天信息页的「阅后即焚」是同一个功能,
+// 各挑各的档位只会让用户以为它们是两回事。
+const SELF_DESTRUCT_OPTIONS: readonly BurnDurationSec[] = BURN_DURATION_CHOICES;
 const MOMENTS_OPTIONS: readonly MomentsVisibility[] = [
   'ALL',
   'FRIENDS_ONLY',
@@ -77,8 +84,8 @@ const PERMISSION_OPTIONS: readonly PrivacyPermission[] = [
 ];
 
 const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
-  // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐:0 = 关闭自动销毁。
-  messageSelfDestructDays: 0,
+  // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐:0 = 关闭阅后即焚。
+  messageSelfDestructSec: BURN_DURATION_OFF,
   momentsVisibility: 'ALL',
   allowStrangerMessages: true,
   showPhone: false,
@@ -134,7 +141,7 @@ export default function PrivacySettingsScreen() {
       setSettings(loaded);
       useChatStore
         .getState()
-        .setViewerSelfDestructDays(loaded.messageSelfDestructDays);
+        .setViewerSelfDestructSec(loaded.messageSelfDestructSec);
     } catch (requestError) {
       setError(
         getApiErrorMessage(
@@ -170,7 +177,7 @@ export default function PrivacySettingsScreen() {
       setSettings(updated);
       useChatStore
         .getState()
-        .setViewerSelfDestructDays(updated.messageSelfDestructDays);
+        .setViewerSelfDestructSec(updated.messageSelfDestructSec);
     } catch (requestError) {
       if (
         request !== privacyRequestSequence.current ||
@@ -190,7 +197,7 @@ export default function PrivacySettingsScreen() {
     }
   }
 
-  const selfDestructOptions = useMemo<PickerOption<SelfDestructDays>[]>(
+  const selfDestructOptions = useMemo<PickerOption<BurnDurationSec>[]>(
     () =>
       SELF_DESTRUCT_OPTIONS.map((value) => ({
         value,
@@ -236,7 +243,7 @@ export default function PrivacySettingsScreen() {
                 id: 'self-destruct',
                 labelKey: 'settingsDetails.privacy.selfDestruct',
                 valueText: selfDestructLabel(
-                  currentSettings.messageSelfDestructDays,
+                  currentSettings.messageSelfDestructSec,
                   t,
                 ),
                 onPress: () => setActiveSheet('self-destruct'),
@@ -345,8 +352,8 @@ export default function PrivacySettingsScreen() {
         visible={activeSheet === 'self-destruct'}
         title={t('settingsDetails.privacy.selfDestruct')}
         options={selfDestructOptions}
-        selectedValue={currentSettings.messageSelfDestructDays}
-        onSelect={(value) => void patchSettings({ messageSelfDestructDays: value })}
+        selectedValue={currentSettings.messageSelfDestructSec}
+        onSelect={(value) => void patchSettings({ messageSelfDestructSec: value })}
         onClose={() => setActiveSheet(null)}
       />
       <OptionPickerSheet
@@ -385,11 +392,13 @@ export default function PrivacySettingsScreen() {
 }
 
 function selfDestructLabel(
-  value: SelfDestructDays,
+  value: BurnDurationSec,
   t: (key: string, options?: Record<string, unknown>) => string,
 ) {
-  if (value === 0) return t('settingsDetails.privacy.selfDestructOff');
-  return t('settingsDetails.privacy.days', { count: value });
+  if (value === BURN_DURATION_OFF) {
+    return t('settingsDetails.privacy.selfDestructOff');
+  }
+  return formatBurnDuration(value);
 }
 
 function privacyEnumLabel(

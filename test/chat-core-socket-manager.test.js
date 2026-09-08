@@ -125,17 +125,17 @@ function loadManager(localDbOverrides = {}, options = {}) {
       setCurrentUserId(v) {
         state.currentUserId = v;
       },
-      viewerSelfDestructDays: 0,
+      viewerSelfDestructSec: 0,
       viewerSelfDestructPolicyRevision: 0,
-      setViewerSelfDestructDays(v, writeOptions) {
-        state.viewerSelfDestructDays = v;
+      setViewerSelfDestructSec(v, writeOptions) {
+        state.viewerSelfDestructSec = v;
         if (!writeOptions?.remoteRefresh) {
           state.viewerSelfDestructPolicyRevision += 1;
         }
-        state.calls.push(['setViewerSelfDestructDays', v]);
+        state.calls.push(['setViewerSelfDestructSec', v]);
         if (state.currentUserId) {
           mmkvStore.set(
-            `chat.viewerSelfDestructDays.${state.currentUserId}`,
+            `chat.viewerSelfDestructSec.${state.currentUserId}`,
             String(v),
           );
         }
@@ -180,16 +180,16 @@ function loadManager(localDbOverrides = {}, options = {}) {
     };
     return {
       useChatStore: { getState: () => state },
-      sanitizeExpiredConversationPreviews: (conversations, days, now = Date.now()) =>
+      sanitizeExpiredConversationPreviews: (conversations, viewerSeconds, now = Date.now()) =>
         conversations.map((conversation) => {
-          const seconds = days > 0 ? days * 24 * 60 * 60 : null;
+          const seconds = viewerSeconds > 0 ? viewerSeconds : null;
           const createdAt = Date.parse(conversation.lastMessage?.createdAt ?? '');
           return seconds && Number.isFinite(createdAt) && createdAt < now - seconds * 1000
             ? { ...conversation, lastMessage: null, lastMessageAt: null, unreadCount: 0 }
             : conversation;
         }),
-      viewerSelfDestructDaysStorageKey: (userId) =>
-        `chat.viewerSelfDestructDays.${userId}`,
+      viewerSelfDestructSecStorageKey: (userId) =>
+        `chat.viewerSelfDestructSec.${userId}`,
       state,
     };
   })();
@@ -205,7 +205,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     droppedLocalMessages: 0,
     initialHistory: [],
     privacyFetches: 0,
-    privacyResponse: { messageSelfDestructDays: 2 },
+    privacyResponse: { messageSelfDestructSec: 2 * 24 * 60 * 60 },
   };
   const mmkvStore = new Map();
   const mmkv = {
@@ -309,17 +309,17 @@ function loadManager(localDbOverrides = {}, options = {}) {
 
 test('viewer self-destruct uses the cached policy offline and refreshes it after connect', async () => {
   const { manager, socket, store, apiCalls, mmkvStore } = loadManager();
-  mmkvStore.set('chat.viewerSelfDestructDays.u1', '7');
+  mmkvStore.set('chat.viewerSelfDestructSec.u1', String(7 * 24 * 60 * 60));
 
   manager.connectChat('jwt', 'u1');
-  assert.equal(store.viewerSelfDestructDays, 7);
+  assert.equal(store.viewerSelfDestructSec, 7 * 24 * 60 * 60);
 
   socket.fire('connect');
   for (let i = 0; i < 4; i += 1) await Promise.resolve();
 
   assert.equal(apiCalls.privacyFetches, 1);
-  assert.equal(store.viewerSelfDestructDays, 2);
-  assert.equal(mmkvStore.get('chat.viewerSelfDestructDays.u1'), '2');
+  assert.equal(store.viewerSelfDestructSec, 2 * 24 * 60 * 60);
+  assert.equal(mmkvStore.get('chat.viewerSelfDestructSec.u1'), String(2 * 24 * 60 * 60));
 });
 
 test('cold hydration waits for the authoritative self-destruct policy', async () => {
@@ -342,11 +342,11 @@ test('cold hydration waits for the authoritative self-destruct policy', async ()
   assert.equal(apiCalls.privacyFetches, 1);
   assert.equal(store.hydrated.length, 0);
 
-  resolvePolicy({ messageSelfDestructDays: 2 });
+  resolvePolicy({ messageSelfDestructSec: 2 * 24 * 60 * 60 });
   await flush();
   await flush();
 
-  assert.equal(store.viewerSelfDestructDays, 2);
+  assert.equal(store.viewerSelfDestructSec, 2 * 24 * 60 * 60);
   assert.ok(store.hydrated.length > 0);
 });
 
@@ -371,7 +371,7 @@ test('account switch starts the local database switch before privacy resolves', 
   await Promise.resolve();
 
   assert.deepEqual(openedFor, ['account-b']);
-  resolvePolicy({ messageSelfDestructDays: 2 });
+  resolvePolicy({ messageSelfDestructSec: 2 * 24 * 60 * 60 });
   await flush();
 });
 
@@ -559,11 +559,11 @@ test('a stale policy refresh cannot overwrite a newer local setting', async () =
 
   manager.connectChat('jwt', 'u1');
   socket.fire('connect');
-  store.setViewerSelfDestructDays(7);
-  resolvePolicy({ messageSelfDestructDays: 2 });
+  store.setViewerSelfDestructSec(7 * 24 * 60 * 60);
+  resolvePolicy({ messageSelfDestructSec: 2 * 24 * 60 * 60 });
   await flush();
 
-  assert.equal(store.viewerSelfDestructDays, 7);
+  assert.equal(store.viewerSelfDestructSec, 7 * 24 * 60 * 60);
 });
 
 test('reconnect (not first connect) refreshes conversations and backfills the active gap', () => {
