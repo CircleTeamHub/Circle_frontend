@@ -26,12 +26,6 @@ const FEATURE_KEYS = [
   'invitation.youRejected',
   'invitation.loadFailed',
   'circle.inviteVerifiers',
-  'discover.discoverCircles',
-  'discover.searchCirclePlaceholder',
-  'discover.noCirclesFound',
-  'discover.memberCount',
-  'discover.needsApproval',
-  'discover.searchCappedNotice',
   'common.clear',
   'common.retryLater',
 ];
@@ -74,7 +68,6 @@ test('every t(...defaultValue) reference for this feature exists in en.json', ()
     'src/features/chat/components/chat-bubble.tsx',
     'src/features/discover/screens/VerificationRequestScreen.tsx',
     'src/features/discover/screens/PendingVerificationsScreen.tsx',
-    'src/features/discover/screens/DiscoverCirclesScreen.tsx',
   ];
   const flat = flatten(require('../src/i18n/locales/en.json'));
   const missing = [];

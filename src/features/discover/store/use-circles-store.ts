@@ -1,13 +1,8 @@
 import { create } from 'zustand';
-import { fetchCircles, fetchMyCircles } from '@/services/api/circles';
+import { fetchMyCircles } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import type { Circle } from '@/types';
 import { deriveManagedCircles } from './managed-circles';
-
-// 「发现圈子」一次最多拉取的圈子数。本地搜索只在这批里过滤，超出部分搜不到——
-// total 超过它时记一条诊断并由 UI 提示，避免「搜了真实存在的圈子却查无结果」的静默错误。
-const ALL_CIRCLES_LIMIT = 100;
 
 // fetchMyCircles 的「本次 run 快照」——即便随后被更新代际（force/reset）取代、
 // guardedSet 写入被丢弃，调用方拿到的仍是这次请求自己的权威结果。
@@ -22,20 +17,14 @@ interface CirclesState {
   createdCircles: Circle[];
   managedCircles: Circle[];
   appliedCircles: Circle[];
-  allCircles: Circle[];
-  // 服务端报告的圈子总数；> allCircles.length 时说明列表被 limit 截断。
-  allCirclesTotal: number;
   myCirclesLoading: boolean;
-  allCirclesLoading: boolean;
   myCirclesError: string | null;
-  allCirclesError: string | null;
 
   // force：变更后（建圈/退圈等）绕过在飞合并强制重拉 —— 否则可能 await 到
   // 变更前就出发的快照。
   fetchMyCircles: (options?: {
     force?: boolean;
   }) => Promise<MyCirclesFetchResult>;
-  fetchAllCircles: (options?: { force?: boolean }) => Promise<void>;
   // Patch one circle across every cached list (avatar/cover changes from the
   // detail screen, etc.) so lists don't show stale data until the next refetch.
   patchCircle: (id: string, patch: Partial<Circle>) => void;
@@ -52,21 +41,15 @@ interface CirclesState {
 // 否则 A 号的在飞 /circle/my 会把 A 的圈子写进 B 号的 store，建圈后的
 // await 也可能等到建圈前的快照。
 let myCirclesInFlight: Promise<MyCirclesFetchResult> | null = null;
-let allCirclesInFlight: Promise<void> | null = null;
 let myCirclesRunSeq = 0;
-let allCirclesRunSeq = 0;
 
 export const useCirclesStore = create<CirclesState>((set) => ({
   joinedCircles: [],
   createdCircles: [],
   managedCircles: [],
   appliedCircles: [],
-  allCircles: [],
-  allCirclesTotal: 0,
   myCirclesLoading: false,
-  allCirclesLoading: false,
   myCirclesError: null,
-  allCirclesError: null,
 
   fetchMyCircles: (options = {}) => {
     if (myCirclesInFlight && !options.force) {
@@ -125,49 +108,6 @@ export const useCirclesStore = create<CirclesState>((set) => ({
     return run;
   },
 
-  fetchAllCircles: (options = {}) => {
-    if (allCirclesInFlight && !options.force) {
-      return allCirclesInFlight;
-    }
-    const runId = ++allCirclesRunSeq;
-    const guardedSet: typeof set = (partial) => {
-      if (runId === allCirclesRunSeq) set(partial);
-    };
-    const run = (async () => {
-      guardedSet({ allCirclesLoading: true, allCirclesError: null });
-      try {
-        const result = await fetchCircles({ limit: ALL_CIRCLES_LIMIT });
-        if (result.total > result.items.length) {
-          logClientDiagnostic('circle_discover_list_capped', {
-            total: result.total,
-            loaded: result.items.length,
-            limit: ALL_CIRCLES_LIMIT,
-          });
-        }
-        guardedSet({
-          allCircles: result.items,
-          allCirclesTotal: result.total,
-          allCirclesError: null,
-        });
-      } catch (error) {
-        guardedSet({
-          allCirclesError: getApiErrorMessage(
-            error,
-            '加载圈子筛选失败，请稍后重试',
-          ),
-        });
-      } finally {
-        guardedSet({ allCirclesLoading: false });
-      }
-    })().finally(() => {
-      if (allCirclesInFlight === run) {
-        allCirclesInFlight = null;
-      }
-    });
-    allCirclesInFlight = run;
-    return run;
-  },
-
   patchCircle: (id, patch) =>
     set((state) => {
       const apply = (list: Circle[]) =>
@@ -179,7 +119,6 @@ export const useCirclesStore = create<CirclesState>((set) => ({
         createdCircles: apply(state.createdCircles),
         managedCircles: apply(state.managedCircles),
         appliedCircles: apply(state.appliedCircles),
-        allCircles: apply(state.allCircles),
       };
     }),
 
@@ -197,7 +136,6 @@ export const useCirclesStore = create<CirclesState>((set) => ({
         createdCircles: remove(state.createdCircles),
         managedCircles: remove(state.managedCircles),
         appliedCircles: remove(state.appliedCircles),
-        allCircles: remove(state.allCircles),
         // round 3 review：被作废的在飞请求再也走不到它的 guardedSet finally
         // —— loading 不清会让没有后续 focus 刷新的面板永远转圈。
         myCirclesLoading: false,
@@ -210,20 +148,14 @@ export const useCirclesStore = create<CirclesState>((set) => ({
     // 落地写入被丢弃，并清句柄让下一个会话的 fetch 重新起飞（而不是复用
     // 上一个账号的在飞请求）。
     myCirclesRunSeq += 1;
-    allCirclesRunSeq += 1;
     myCirclesInFlight = null;
-    allCirclesInFlight = null;
     set({
       joinedCircles: [],
       createdCircles: [],
       managedCircles: [],
       appliedCircles: [],
-      allCircles: [],
-      allCirclesTotal: 0,
       myCirclesLoading: false,
-      allCirclesLoading: false,
       myCirclesError: null,
-      allCirclesError: null,
     });
   },
 }));

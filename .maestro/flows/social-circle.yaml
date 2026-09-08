@@ -30,31 +30,12 @@ tags:
     id: windnote.user-profile.screen
 - tapOn:
     id: windnote.tabs.discover
-- tapOn:
-    id: windnote.discover.plaza-entry
+# 动态 tab 的根屏就是圈子广场，不再有中间的入口列表要点。
 - extendedWaitUntil:
     visible:
       id: windnote.circle-plaza.screen
     timeout: 30000
-- tapOn:
-    id: windnote.circle-plaza.discover-circles
-- extendedWaitUntil:
-    visible:
-      id: windnote.circle-search.screen
-    timeout: 30000
-- tapOn:
-    id: windnote.circle-search.input
-- inputText: ${E2E_CIRCLE_NAME}
-- extendedWaitUntil:
-    visible:
-      id: windnote.circle-search.result.${E2E_CIRCLE_ID}
-    timeout: 30000
-- tapOn:
-    id: windnote.circle-search.result.${E2E_CIRCLE_ID}
-- assertVisible:
-    id: windnote.circle-detail.screen
-- tapOn:
-    id: windnote.circle-detail.chat-entry
-- assertVisible:
-    id: windnote.chat.screen
+# 「发现圈子」的入口（广场右上角搜索键）已按要求移除，App 内不再有任何路径
+# 能走到圈子搜索 → 圈子详情 → 群聊。这段流程原本覆盖那条链路，现在够不着了，
+# 只能一并摘掉。等发现圈子重新有入口，把这段按新入口接回来。
 - takeScreenshot: windnote-social-circle

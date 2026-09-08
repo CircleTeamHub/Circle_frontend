@@ -41,7 +41,6 @@ const INPUT_SCROLL_FILES = [
   'src/features/discover/screens/CreateMomentScreen.tsx',
   'src/features/discover/screens/CreateCircleScreen.tsx',
   'src/features/discover/screens/EditCircleScreen.tsx',
-  'src/features/discover/screens/DiscoverCirclesScreen.tsx',
   'src/features/discover/screens/InviteToCircleScreen.tsx',
   'src/features/discover/screens/MyCirclesScreen.tsx',
   'src/features/discover/screens/SelectCityScreen.tsx',
