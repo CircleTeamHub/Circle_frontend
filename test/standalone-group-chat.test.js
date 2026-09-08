@@ -146,13 +146,15 @@ test('group owner dissolves instead of leaving, and dissolve wipes everyone', ()
   assert.match(screen, /const isStandaloneGroupOwner =\s*\n\s*isStandaloneGroup &&/);
   assert.match(screen, /conversation\?\.ownerId === currentUserID/);
   // 底部按钮按身份分叉:群主=解散,成员=退出。
+  // (圈子群的圈主也走解散,但解散的是整个圈子、端点不同 —— 见
+  //  circle-owner-dissolve.test.js。)
   assert.match(
     screen,
-    /isStandaloneGroupOwner \? handleDissolveGroup : handleLeaveGroup/,
+    /isStandaloneGroupOwner\s*\n?\s*\? handleDissolveGroup/,
   );
   assert.match(
     screen,
-    /isStandaloneGroupOwner \? t\('chat\.dissolve'\) : t\('chat\.leave'\)/,
+    /isStandaloneGroupOwner \|\| isCircleOwner\s*\n?\s*\? t\('chat\.dissolve'\)\s*\n?\s*: t\('chat\.leave'\)/,
   );
   // 解散必须走二次确认,并且警示文案要说清「所有人的记录都会删」。
   assert.match(screen, /Alert\.alert\(\s*t\('chat\.dissolveGroup'\),\s*t\('chat\.dissolveGroupWarning'\)/);

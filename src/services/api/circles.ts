@@ -110,6 +110,14 @@ export async function leaveCircle(id: string): Promise<void> {
   await apiClient<void>(`/circle/${id}/leave`, { method: 'DELETE' });
 }
 
+/**
+ * 圈主解散圈子。圈主退不了圈(后端 CIRCLE_OWNER_CANNOT_LEAVE),要撤掉圈子
+ * 只有这一条路:圈子从所有成员的列表里消失,群聊全员离座。不可逆。
+ */
+export async function dissolveCircle(id: string): Promise<void> {
+  await apiClient<void>(`/circle/${id}`, { method: 'DELETE' });
+}
+
 export async function uploadCircleIcon(
   id: string,
   input: { imageUrl: string; name?: string },
