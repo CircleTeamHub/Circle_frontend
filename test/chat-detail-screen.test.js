@@ -696,7 +696,7 @@ test('阅后即焚会话里别人发的消息也不提供收藏入口', () => {
 
 // 这道闸只认会话上的焚毁设置。本人的全局自动销毁天数是我对自己视图的设置，
 // 不是发送者对我的承诺，不该连带禁掉转发和收藏。
-test('焚毁闸只看会话开关，不掺本人的全局自动销毁天数', () => {
+test('焚毁闸只看会话开关，不掺本人的全局阅后即焚窗口', () => {
   const detail = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
     'utf8',
@@ -706,7 +706,7 @@ test('焚毁闸只看会话开关，不掺本人的全局自动销毁天数', ()
   const body = detail.slice(start, detail.indexOf('});', start));
 
   assert.match(body, /burnDurationSec/);
-  assert.doesNotMatch(body, /viewerSelfDestructDays/);
+  assert.doesNotMatch(body, /viewerSelfDestruct/);
 });
 
 test('note detail routes exist in every tab stack so back returns to the source tab', () => {

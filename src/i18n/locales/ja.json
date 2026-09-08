@@ -113,7 +113,6 @@
     "privacy": {
       "title": "プライバシー",
       "selfDestruct": "全体の消えるメッセージ",
-      "twoDays": "2日",
       "selfDestructTip": "消えるメッセージのヒントを表示",
       "selfDestructTipHint": "会話の上部と下部の消えるメッセージバナーの表示を制御します",
       "blacklist": "ブロックリストの管理",
@@ -134,7 +133,6 @@
       "loadFailed": "プライバシー設定の読み込みに失敗しました",
       "saveFailed": "プライバシー設定の保存に失敗しました",
       "selfDestructOff": "オフ",
-      "days": "{{count}}日",
       "enabledCount": "{{count}}件をオン",
       "blacklistLoading": "ブロックリストを読み込み中",
       "blacklistEmpty": "ブロックしたユーザーはいません",
@@ -614,11 +612,6 @@
     "media": {
       "image": "画像",
       "video": "動画"
-    },
-    "disappearing": {
-      "off": "オフ",
-      "minutes": "{{duration}}分",
-      "seconds": "{{duration}}秒"
     },
     "message": {
       "sending": "送信中",
@@ -2790,11 +2783,23 @@
       "unsupported": "[未対応のメッセージ]"
     },
     "burn": {
-      "s30": "30秒",
+      "m1": "1分",
       "m5": "5分",
+      "m10": "10分",
+      "m30": "30分",
       "h1": "1時間",
+      "h2": "2時間",
+      "h6": "6時間",
       "d1": "1日",
-      "d7": "7日"
+      "d2": "2日",
+      "d3": "3日",
+      "d4": "4日",
+      "d5": "5日",
+      "d6": "6日",
+      "w1": "1週間",
+      "w2": "2週間",
+      "w3": "3週間",
+      "mo1": "1か月"
     }
   },
   "location": {

@@ -38,7 +38,7 @@ import {
 import {
   sanitizeExpiredConversationPreviews,
   useChatStore,
-  viewerSelfDestructDaysStorageKey,
+  viewerSelfDestructSecStorageKey,
 } from './store';
 import { devWarn } from '@/utils/dev-log';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -139,10 +139,10 @@ function classifyDisconnectReason(reason: unknown): ChatDisconnectReason {
   return 'unknown';
 }
 
-function readViewerSelfDestructDays(userId: string): number {
+function readViewerSelfDestructSec(userId: string): number {
   try {
     const value = Number(
-      storage.getString(viewerSelfDestructDaysStorageKey(userId)) ?? '0',
+      storage.getString(viewerSelfDestructSecStorageKey(userId)) ?? '0',
     );
     return Number.isFinite(value) ? value : 0;
   } catch {
@@ -152,7 +152,7 @@ function readViewerSelfDestructDays(userId: string): number {
 
 let viewerPolicyRefreshGeneration = 0;
 
-async function refreshViewerSelfDestructDays(userId: string): Promise<void> {
+async function refreshViewerSelfDestructSec(userId: string): Promise<void> {
   const request = ++viewerPolicyRefreshGeneration;
   const revision = useChatStore.getState().viewerSelfDestructPolicyRevision;
   try {
@@ -165,7 +165,7 @@ async function refreshViewerSelfDestructDays(userId: string): Promise<void> {
     ) {
       return;
     }
-    store.setViewerSelfDestructDays(settings.messageSelfDestructDays, {
+    store.setViewerSelfDestructSec(settings.messageSelfDestructSec, {
       remoteRefresh: true,
     });
   } catch {
@@ -180,7 +180,7 @@ async function hydrateWithResolvedViewerPolicy(
   // 先摘掉上一账号的句柄并开始开新库；隐私策略只阻塞快照发布，不能让旧库在
   // 慢 REST 请求期间继续服务新账号的 local-first 读写。
   const localDbReady = initChatLocalDb(userId);
-  await refreshViewerSelfDestructDays(userId);
+  await refreshViewerSelfDestructSec(userId);
   if (
     generation !== sessionGen ||
     useChatStore.getState().currentUserId !== userId
@@ -296,7 +296,7 @@ export function connectChat(token: string, userId: string): void {
   const connectionTraceId = createConnectionTraceId();
   store.setConnecting(true);
   store.setCurrentUserId(userId);
-  store.setViewerSelfDestructDays(readViewerSelfDestructDays(userId));
+  store.setViewerSelfDestructSec(readViewerSelfDestructSec(userId));
   initChatAppBadgeSync();
   // 在线时先解析服务器策略，失败才使用上面的账户缓存，避免冷启动展示已到期内容。
   void hydrateWithResolvedViewerPolicy(userId, gen);
@@ -334,7 +334,7 @@ export function connectChat(token: string, userId: string): void {
     state.setConnecting(false);
     state.setConnected(true);
     state.setError(null);
-    if (isReconnect) void refreshViewerSelfDestructDays(userId);
+    if (isReconnect) void refreshViewerSelfDestructSec(userId);
     void flushPendingReads();
     if (isReconnect) {
       resyncAfterReconnect(userId);
@@ -452,12 +452,9 @@ function teardownSocket(): void {
  */
 function effectiveSelfDestructSeconds(
   conversation: ChatConversationDto | undefined,
-  viewerSelfDestructDays: number,
+  viewerSelfDestructSec: number,
 ): number | null {
-  const viewerSeconds =
-    viewerSelfDestructDays > 0
-      ? viewerSelfDestructDays * 24 * 60 * 60
-      : null;
+  const viewerSeconds = viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
   const conversationSeconds =
     conversation?.burnDurationSec && conversation.burnDurationSec > 0
       ? conversation.burnDurationSec
@@ -482,7 +479,7 @@ async function hydrateFromLocalDb(
     if (!isCurrentSession()) return;
     const conversations = sanitizeExpiredConversationPreviews(
       persistedConversations,
-      useChatStore.getState().viewerSelfDestructDays,
+      useChatStore.getState().viewerSelfDestructSec,
     );
     for (let index = 0; index < conversations.length; index += 1) {
       if (conversations[index] !== persistedConversations[index]) {
@@ -520,12 +517,12 @@ async function hydrateFromLocalDb(
         conversation,
       ]),
     );
-    const viewerSelfDestructDays = policyState.viewerSelfDestructDays;
+    const viewerSelfDestructSec = policyState.viewerSelfDestructSec;
     const outboxCutoffNow = Date.now();
     for (const entry of pending) {
       const selfDestructSeconds = effectiveSelfDestructSeconds(
         conversationsById.get(entry.conversationId),
-        viewerSelfDestructDays,
+        viewerSelfDestructSec,
       );
       const createdAt = Date.parse(entry.createdAt);
       // SQLite 删除失败会被本地缓存层降级吞掉；水合入口仍须执行同一策略，不能把

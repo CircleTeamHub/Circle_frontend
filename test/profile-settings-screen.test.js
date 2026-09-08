@@ -1296,6 +1296,10 @@ test("privacy self-destruct updates the chat cache policy immediately", () => {
   assert.match(source, /useChatStore/);
   assert.match(
     source,
-    /setViewerSelfDestructDays\(updated\.messageSelfDestructDays\)/,
+    /setViewerSelfDestructSec\(updated\.messageSelfDestructSec\)/,
   );
+  // 全局档位与会话级焚毁读同一张表 —— 这个页面自己再列一份 [0,1,2,7,30]
+  // 就是「同一个功能两张档位表」那个 bug 的原样复发。
+  assert.match(source, /BURN_DURATION_CHOICES/);
+  assert.doesNotMatch(source, /\[0,\s*1,\s*2,\s*7,\s*30\]/);
 });

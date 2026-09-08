@@ -5,6 +5,35 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+// 焚毁档位表(burn-durations.ts)只依赖 i18n —— 这里加载**真实实现**而不是桩:
+// 档位白名单是 setViewerSelfDestructSec 的唯一闸门,用假的等于没测。
+let __burnDurationsSource = null;
+function loadBurnDurations(translate = (key) => key) {
+  if (!__burnDurationsSource) {
+    const filePath = path.join(process.cwd(), 'src/chat-core/burn-durations.ts');
+    __burnDurationsSource = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2020,
+      },
+      fileName: filePath,
+    }).outputText;
+  }
+  const ctx = {
+    module: { exports: {} },
+    exports: {},
+    require: (request) => {
+      if (request === '@/i18n') {
+        return { __esModule: true, default: { t: translate, language: 'zh' } };
+      }
+      throw new Error(`unexpected require: ${request}`);
+    },
+  };
+  ctx.exports = ctx.module.exports;
+  vm.runInNewContext(__burnDurationsSource, ctx);
+  return ctx.module.exports;
+}
+
 /**
  * 媒体重发的并发合流(codex review)。
  *
@@ -95,7 +124,8 @@ function loadStack({ onSend = async () => ({ messageId: 'srv-1', height: 9 }) } 
     if (request === '@/storage') {
       return { storage: { set: () => {}, getString: () => undefined } };
     }
-    throw new Error(`unexpected require: ${request}`);
+    if (request === './burn-durations') return loadBurnDurations();
+      throw new Error(`unexpected require: ${request}`);
   });
 
   const client = runModule('src/chat-core/client.ts', (request) => {
@@ -132,7 +162,8 @@ function loadStack({ onSend = async () => ({ messageId: 'srv-1', height: 9 }) } 
         throw new Error('protocol should have no runtime deps');
       });
     if (request === './local-db') return __localDbStub;
-    throw new Error(`unexpected require: ${request}`);
+    if (request === './burn-durations') return loadBurnDurations();
+      throw new Error(`unexpected require: ${request}`);
   });
 
   const state = store.useChatStore.getState();

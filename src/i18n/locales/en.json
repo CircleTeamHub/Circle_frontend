@@ -690,11 +690,6 @@
       "image": "Photo",
       "video": "Video"
     },
-    "disappearing": {
-      "off": "Off",
-      "minutes": "{{duration}} min",
-      "seconds": "{{duration}}s"
-    },
     "message": {
       "sending": "Sending",
       "sendFailed": "Failed",
@@ -2091,7 +2086,6 @@
     "privacy": {
       "title": "Privacy",
       "selfDestruct": "Global Disappearing Messages",
-      "twoDays": "2 days",
       "selfDestructTip": "Show Disappearing Message Tips",
       "selfDestructTipHint": "Controls disappearing message banners at the top and bottom of conversations",
       "blacklist": "Blacklist Management",
@@ -2112,7 +2106,6 @@
       "loadFailed": "Failed to load privacy settings",
       "saveFailed": "Failed to save privacy settings",
       "selfDestructOff": "Off",
-      "days": "{{count}} days",
       "enabledCount": "{{count}} enabled",
       "blacklistLoading": "Loading blacklist",
       "blacklistEmpty": "No blocked users",
@@ -2758,11 +2751,23 @@
       "unsupported": "[Unsupported message type]"
     },
     "burn": {
-      "s30": "30 seconds",
+      "m1": "1 minute",
       "m5": "5 minutes",
+      "m10": "10 minutes",
+      "m30": "30 minutes",
       "h1": "1 hour",
+      "h2": "2 hours",
+      "h6": "6 hours",
       "d1": "1 day",
-      "d7": "7 days"
+      "d2": "2 days",
+      "d3": "3 days",
+      "d4": "4 days",
+      "d5": "5 days",
+      "d6": "6 days",
+      "w1": "1 week",
+      "w2": "2 weeks",
+      "w3": "3 weeks",
+      "mo1": "1 month"
     }
   },
   "location": {

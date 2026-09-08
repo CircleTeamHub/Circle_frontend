@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   Pressable,
   ScrollView,
   StyleSheet,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,6 +75,25 @@ export function OptionPickerSheet<T extends string | number | null>({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const scrollRef = useRef<ScrollView>(null);
+  // 列表比可视区长时(阅后即焚是 18 档),已选项可能整个在折叠线以下 —— 打开面板
+  // 只看到「关闭」在最上面,看起来像一项都没选。每次打开时把它滚进视野。
+  // 用行自己的 onLayout 而不是 index * 行高:标签会折行,行高不是常数。
+  const hasRevealedSelection = useRef(false);
+  useEffect(() => {
+    if (!visible) hasRevealedSelection.current = false;
+  }, [visible]);
+
+  const revealIfSelected = useCallback(
+    (isSelected: boolean) => (event: LayoutChangeEvent) => {
+      if (!isSelected || hasRevealedSelection.current) return;
+      hasRevealedSelection.current = true;
+      // 上面留一行的余量,让人看得出还有更靠前的选项。
+      const y = Math.max(0, event.nativeEvent.layout.y - 52);
+      scrollRef.current?.scrollTo({ y, animated: false });
+    },
+    [],
+  );
 
   const d = useMemo(
     () => ({
@@ -108,6 +128,7 @@ export function OptionPickerSheet<T extends string | number | null>({
         </Pressable>
       </View>
       <ScrollView
+        ref={scrollRef}
         bounces={false}
         showsVerticalScrollIndicator={false}
         style={{ maxHeight: 360 }}
@@ -115,7 +136,10 @@ export function OptionPickerSheet<T extends string | number | null>({
         {options.map((option, index) => {
           const isSelected = option.value === selectedValue;
           return (
-            <View key={`${String(option.value)}-${index}`}>
+            <View
+              key={`${String(option.value)}-${index}`}
+              onLayout={revealIfSelected(isSelected)}
+            >
               <Pressable
                 style={s.optionRow}
                 onPress={() => {

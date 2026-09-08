@@ -30,7 +30,10 @@ import {
   setChatBurnDuration,
   updateChatConversationPreferences,
 } from '@/chat-core/api';
-import { formatBurnDuration } from '@/chat-core/message-mappers';
+import {
+  buildBurnDurationOptions,
+  formatBurnDuration,
+} from '@/chat-core/burn-durations';
 import { ensureDirectConversation } from '@/chat-core/client';
 import type { ChatConversationDto, ChatMemberDto } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
@@ -1337,19 +1340,12 @@ export default function ChatInfoScreen() {
   // S-01 会话级阅后即焚:当前档位跟随会话 DTO(REST 回执会经 store 更新)。
   const burnDurationSec = activeConversation?.burnDurationSec ?? null;
 
-  // 六个档位 + 取消 = 7 个按钮,而 Android 的 Alert 最多渲染 3 个 —— 用
-  // Alert 的话安卓用户根本够不到后面几档。改用应用内的选项面板(两端一致)。
+  // 十七个档位 + 关闭,而 Android 的 Alert 最多渲染 3 个按钮 —— 用 Alert 的话
+  // 安卓用户根本够不到后面几档。改用应用内的选项面板(两端一致,自带滚动)。
   const [burnPickerVisible, setBurnPickerVisible] = useState(false);
   const [burnPending, setBurnPending] = useState(false);
   const burnRequestRef = useRef(0);
-  const burnOptions = useMemo(
-    () =>
-      [0, 30, 300, 3600, 86400, 604800].map((seconds) => ({
-        value: seconds,
-        label: seconds === 0 ? t('chat.burnOff') : formatBurnDuration(seconds),
-      })),
-    [t],
-  );
+  const burnOptions = useMemo(() => buildBurnDurationOptions(t), [t]);
 
   const handleOpenBurnOptions = useCallback(() => {
     if (!resolvedConversationID || burnPending) return;
@@ -1894,7 +1890,7 @@ export default function ChatInfoScreen() {
   );
 }
 
-/** 焚毁档位选择面板(六档 + 关闭:Android 的 Alert 装不下这么多按钮)。 */
+/** 焚毁档位选择面板(BURN_DURATION_CHOICES 全表:Android 的 Alert 装不下这么多按钮)。 */
 function BurnDurationPicker({
   visible,
   options,

@@ -104,7 +104,7 @@ jest.mock('@/components/ui/themed-switch', () => {
 const fetchSettings = jest.mocked(fetchPrivacySettings);
 const patchSettings = jest.mocked(updatePrivacySettings);
 const settings = {
-  messageSelfDestructDays: 0 as const,
+  messageSelfDestructSec: 0 as const,
   momentsVisibility: 'ALL' as const,
   allowStrangerMessages: true,
   showPhone: false,
