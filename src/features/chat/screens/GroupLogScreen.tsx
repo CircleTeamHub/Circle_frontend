@@ -3,37 +3,59 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
-import { searchChatMessages } from '@/chat-core/api';
-import type { ChatMessageDto } from '@/chat-core/protocol';
-import { systemNoticeText } from '@/chat-core/message-mappers';
+import { fetchChatGroupEvents } from '@/chat-core/api';
+import { groupEventText } from '@/chat-core/group-events';
+import type { ChatGroupEventDto } from '@/chat-core/protocol';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 
 const s = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: Spacing.lg, gap: Spacing.sm },
-  card: { padding: Spacing.md, borderRadius: Radius.lg, borderWidth: 1, gap: Spacing.xs },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardBody: { flex: 1, gap: Spacing.xs },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
   retry: { marginTop: Spacing.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: Radius.lg },
 });
 
-function getSystemLogText(message: ChatMessageDto): string {
-  const localized = systemNoticeText(message.content);
-  if (localized) return localized;
-  for (const key of ['text', 'message', 'title', 'description']) {
-    const value = message.content[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return '';
-}
+/** 每种事件一个图标;未知种类用通用图标(文案已由 groupEventText 兜底)。 */
+const EVENT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  'group-created': 'sparkles-outline',
+  'member-joined': 'person-add-outline',
+  'member-left': 'exit-outline',
+  'member-removed': 'person-remove-outline',
+  'member-role-changed': 'shield-checkmark-outline',
+  'member-silenced': 'volume-mute-outline',
+  'member-unsilenced': 'volume-high-outline',
+  'owner-transferred': 'key-outline',
+  'group-renamed': 'create-outline',
+  'group-notice-updated': 'megaphone-outline',
+  'history-cleared': 'trash-outline',
+};
 
-export function mergeGroupLogEntries(
-  current: ChatMessageDto[],
-  incoming: ChatMessageDto[],
-) {
+/** 翻页合并去重:服务端在两页之间新增事件时,游标页可能重叠一条。 */
+export function mergeGroupLogEntries<T extends { id: string }>(
+  current: T[],
+  incoming: T[],
+): T[] {
   const seen = new Set(current.map((entry) => entry.id));
   return [
     ...current,
@@ -45,18 +67,22 @@ export function mergeGroupLogEntries(
   ];
 }
 
+/**
+ * 群日志:读的是独立于聊天记录的群事件账本(GET /chat/conversations/:id/events),
+ * 不受清空/焚毁影响,后入群的人也能翻到入群前的记录。倒序游标分页。
+ */
 export default function GroupLogScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ conversationID?: string; title?: string }>();
   const conversationID = typeof params.conversationID === 'string' ? params.conversationID : '';
-  const [entries, setEntries] = useState<ChatMessageDto[]>([]);
+  const [entries, setEntries] = useState<ChatGroupEventDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState(false);
-  const cursorRef = useRef<number | null>(null);
+  const cursorRef = useRef<string | null>(null);
   const requestGenerationRef = useRef(0);
   const loadingMoreRef = useRef(false);
   const mountedRef = useRef(true);
@@ -76,14 +102,11 @@ export default function GroupLogScreen() {
     setLoading(true);
     setError(false);
     try {
-      const page = await searchChatMessages(conversationID, {
-        types: ['system'],
-        limit: PAGE_SIZE,
-      });
+      const page = await fetchChatGroupEvents(conversationID, { limit: PAGE_SIZE });
       if (!mountedRef.current || generation !== requestGenerationRef.current) return;
-      cursorRef.current = page.nextBeforeHeight;
-      setEntries([...page.messages].reverse());
-      setHasMore(page.nextBeforeHeight !== null);
+      cursorRef.current = page.nextCursor;
+      setEntries(page.events);
+      setHasMore(page.nextCursor !== null);
     } catch (err) {
       if (!mountedRef.current || generation !== requestGenerationRef.current) return;
       setError(true);
@@ -112,29 +135,27 @@ export default function GroupLogScreen() {
 
   const loadMore = useCallback(async () => {
     const cursor = cursorRef.current;
-    if (
-      !conversationID ||
-      !hasMore ||
-      cursor === null ||
-      loadingMoreRef.current
-    ) {
+    if (!conversationID || !hasMore || cursor === null || loadingMoreRef.current) {
       return;
     }
     loadingMoreRef.current = true;
     setLoadingMore(true);
     const generation = requestGenerationRef.current;
     try {
-      const page = await searchChatMessages(conversationID, {
-        types: ['system'],
+      const page = await fetchChatGroupEvents(conversationID, {
         limit: PAGE_SIZE,
-        beforeHeight: cursor,
+        cursor,
       });
       if (!mountedRef.current || generation !== requestGenerationRef.current) return;
-      cursorRef.current = page.nextBeforeHeight;
-      setEntries((current) =>
-        mergeGroupLogEntries(current, [...page.messages].reverse()),
-      );
-      setHasMore(page.nextBeforeHeight !== null);
+      // 服务端游标不前进就停:否则触底事件会在同一页上无限打转。
+      if (page.nextCursor === cursor) {
+        cursorRef.current = null;
+        setHasMore(false);
+      } else {
+        cursorRef.current = page.nextCursor;
+        setHasMore(page.nextCursor !== null);
+      }
+      setEntries((current) => mergeGroupLogEntries(current, page.events));
     } catch (err) {
       if (mountedRef.current && generation === requestGenerationRef.current) {
         reportHandledFailure('groupLog', 'loadMore', err);
@@ -151,6 +172,7 @@ export default function GroupLogScreen() {
     () => ({
       container: { backgroundColor: colors.background },
       card: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
+      iconWrap: { backgroundColor: colors.background },
       text: { color: colors.text, ...Typography.bodyRegular },
       meta: { color: colors.textSecondary, ...Typography.small },
       empty: { color: colors.textSecondary, ...Typography.bodyRegular, textAlign: 'center' as const },
@@ -186,8 +208,17 @@ export default function GroupLogScreen() {
           onEndReachedThreshold={0.3}
           renderItem={({ item }) => (
             <View style={[s.card, d.card]}>
-              <Text style={d.text}>{getSystemLogText(item) || t('chat.groupActivity', { defaultValue: '群聊活动' })}</Text>
-              <Text style={d.meta}>{new Date(item.createdAt).toLocaleString()}</Text>
+              <View style={[s.iconWrap, d.iconWrap]}>
+                <Ionicons
+                  name={EVENT_ICONS[item.kind] ?? 'time-outline'}
+                  size={18}
+                  color={colors.textSecondary}
+                />
+              </View>
+              <View style={s.cardBody}>
+                <Text style={d.text}>{groupEventText(item)}</Text>
+                <Text style={d.meta}>{new Date(item.createdAt).toLocaleString()}</Text>
+              </View>
             </View>
           )}
         />

@@ -392,6 +392,17 @@ const s = StyleSheet.create({
     ...Typography.bodyRegular,
     flex: 1,
   },
+  silencedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  silencedBarText: {
+    ...Typography.small,
+    flex: 1,
+  },
   inputBar: {
     paddingTop: 10,
     paddingHorizontal: Spacing.md,
@@ -679,6 +690,37 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   );
   const isStandaloneGroup =
     storedConversationType === 'GROUP' && storedCircleId === null;
+  // 本人被禁言(群主/管理员施加):输入区锁住并说明原因,免得每次都撞服务端拒绝。
+  // 到期后的禁言服务端读侧已按未禁言返回;缓存里的旧值在这里再兜一次。
+  const selfSilencedFlag = useChatStore((state) =>
+    Boolean(
+      state.conversations.find((candidate) => candidate.id === conversationID)
+        ?.silenced,
+    ),
+  );
+  const selfSilencedUntil = useChatStore(
+    (state) =>
+      state.conversations.find((candidate) => candidate.id === conversationID)
+        ?.silencedUntil ?? null,
+  );
+  const [silenceClock, setSilenceClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!selfSilencedFlag || !selfSilencedUntil) return;
+    const expiresAt = new Date(selfSilencedUntil).getTime();
+    const remaining = expiresAt - Date.now();
+    if (!Number.isFinite(remaining) || remaining <= 0) {
+      setSilenceClock(Date.now());
+      return;
+    }
+    const timer = setTimeout(() => setSilenceClock(Date.now()), remaining + 1);
+    return () => clearTimeout(timer);
+  }, [selfSilencedFlag, selfSilencedUntil]);
+  const selfSilenced = useMemo(() => {
+    if (!selfSilencedFlag) return false;
+    if (!selfSilencedUntil) return true;
+    const until = new Date(selfSilencedUntil).getTime();
+    return Number.isNaN(until) || until > silenceClock;
+  }, [selfSilencedFlag, selfSilencedUntil, silenceClock]);
   const selfDestructEnabled = useChatStore((state) => {
     const conversation = state.conversations.find(
       (candidate) => candidate.id === conversationID,
@@ -971,6 +1013,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     onlineDot: { backgroundColor: statusColor },
     headerStatusText: { color: statusColor },
     inputBar: { backgroundColor: colors.background },
+    silencedBar: { backgroundColor: colors.surface },
+    silencedBarText: { color: colors.textSecondary },
     circleBtn: { backgroundColor: colors.surface },
     composerActionBtn: { backgroundColor: colors.surfaceBorder },
     composerShell: { backgroundColor: colors.inputBg, borderColor: colors.surfaceBorder },
@@ -2536,17 +2580,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
 
   // 切换「语音输入模式」：文本框 ↔ 按住说话。退出时若在录音则一并取消。
   const toggleVoiceInputMode = useCallback(() => {
-    if (isPreviewMode) return;
+    if (isPreviewMode || selfSilenced) return;
     Keyboard.dismiss();
     LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
     setAttachmentOpen(false);
     setEmojiOpen(false);
     setVoiceInputMode((prev) => !prev);
-  }, [isPreviewMode]);
+  }, [isPreviewMode, selfSilenced]);
 
   // 按住开始录音。权限/音频模式准备好后 record()，失败时复位状态。
   const startHoldRecording = useCallback(async () => {
-    if (!sourceID || isPreviewMode || voiceActionBusy) return;
+    if (!sourceID || isPreviewMode || selfSilenced || voiceActionBusy) return;
     if (inFlightRef.current || voiceStartInProgressRef.current) return;
     voicePressActiveRef.current = true;
     voiceStartInProgressRef.current = true;
@@ -2609,6 +2653,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   }, [
     isPreviewMode,
     restoreRecordingAudioMode,
+    selfSilenced,
     sourceID,
     t,
     voiceActionBusy,
@@ -4055,6 +4100,21 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           </Pressable>
         </View>
       ) : null}
+      {selfSilenced ? (
+        <View style={[s.silencedBar, d.silencedBar]} testID="chat-silenced-bar">
+          <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
+          <Text style={[s.silencedBarText, d.silencedBarText]} numberOfLines={2}>
+            {selfSilencedUntil
+              ? t('chat.youAreSilencedUntil', {
+                  time: new Date(selfSilencedUntil).toLocaleString(),
+                  defaultValue: '你已被禁言，{{time}} 解除',
+                })
+              : t('chat.youAreSilencedIndefinitely', {
+                  defaultValue: '你已被禁言，等待管理员解除',
+                })}
+          </Text>
+        </View>
+      ) : null}
       <View
         style={[
           s.inputBar,
@@ -4077,7 +4137,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             key="voice-left"
             style={[s.circleBtn, d.circleBtn]}
             onPress={toggleVoiceInputMode}
-            disabled={isPreviewMode || isVoiceRecording}
+            disabled={isPreviewMode || isVoiceRecording || selfSilenced}
             hitSlop={8}
           >
             <Ionicons
@@ -4124,13 +4184,15 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
               testID={E2E_TEST_IDS.chatInput}
               style={[s.composerInput, d.composerInput]}
               placeholder={
-                isPreviewMode
-                  ? t('chat.detail.previewPlaceholder', {
-                      defaultValue: '连接尚未完成',
-                    })
-                  : t('chat.detail.inputPlaceholder', {
-                      defaultValue: '输入消息...',
-                    })
+                selfSilenced
+                  ? t('chat.youAreSilenced', { defaultValue: '你已被禁言' })
+                  : isPreviewMode
+                    ? t('chat.detail.previewPlaceholder', {
+                        defaultValue: '连接尚未完成',
+                      })
+                    : t('chat.detail.inputPlaceholder', {
+                        defaultValue: '输入消息...',
+                      })
               }
               placeholderTextColor={colors.textSecondary}
               value={draft}
@@ -4169,7 +4231,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
                 setEmojiOpen(false);
                 setMentionPickerVisible(false);
               }}
-              editable={!isPreviewMode}
+              editable={!isPreviewMode && !selfSilenced}
             />
             <Pressable onPress={handleEmojiToggle} hitSlop={8} disabled={isPreviewMode}>
               <Ionicons
@@ -4187,7 +4249,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           testID={E2E_TEST_IDS.chatSend}
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
           onPress={draft.trim() || pendingCard ? handleSend : handleAttachmentToggle}
-          disabled={sending || isPreviewMode || isVoiceRecording}
+          disabled={sending || isPreviewMode || isVoiceRecording || selfSilenced}
           accessibilityRole="button"
           accessibilityLabel={
             draft.trim() || pendingCard

@@ -13,7 +13,7 @@ import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（�
 import 'react-native-reanimated';
 import { ActivityIndicator, NativeModules, Platform, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
-import { installLocalizedAlertDefaults } from '@/utils/localized-alert';
+import { installAlertBridge } from '@/utils/alert-bridge';
 import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
 import { excludeMmkvDirFromIOSBackup } from '@/storage/ios-backup-exclusion';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
@@ -38,7 +38,9 @@ import { NotificationSnackbarHost } from '@/features/notifications/components/No
 import { PushNotificationRouteHandler } from '@/features/notifications/components/PushNotificationRouteHandler';
 import { PushNotificationTokenRegistrar } from '@/features/notifications/components/PushNotificationTokenRegistrar';
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
-import { WebAlertHost } from '@/components/app/web-alert-host';
+import { AppBlurTarget } from '@/components/app/app-blur-target';
+import { AppDialogHost } from '@/components/app/app-dialog-host';
+import { TopNoticeHost } from '@/components/app/top-notice-host';
 import { WebDocumentTitle } from '@/components/app/web-document-title';
 import { StartupSplash } from '@/components/app/startup-splash';
 import { AppUpdateHost } from '@/features/app-update/AppUpdateHost';
@@ -132,8 +134,8 @@ function ensureStartupBootstrap(): Promise<void> {
       rehydratePersistedStore('circle notification', useCircleNotificationStore),
     ]);
     rehydrateLanguageFromStorage();
-    // 语言就位后再装：RN 的 Alert 默认按钮不跟随 App 语言（见该模块注释）。
-    installLocalizedAlertDefaults();
+    // 语言就位后再装：Alert.alert / Alert.prompt 全部改投自绘弹窗，默认按钮取当前语言。
+    installAlertBridge();
     // 尽力而为，不 await：MMKV 目录的 iOS 备份排除（#88），失败不影响启动。
     void excludeMmkvDirFromIOSBackup();
   })();
@@ -308,6 +310,8 @@ function RootLayout() {
         <AppUpdateHost />
         <SessionBootstrap />
         <AuthRouteGuard>
+          {/* Android 玻璃面（弹窗 / 顶部横幅）的模糊靶子：整棵 App 内容。 */}
+          <AppBlurTarget>
           <View style={{ flex: 1 }}>
             <RootStack />
             {/* E2E 运行时目标标记：只在 dev / 测试构建挂载（见 config.ts），
@@ -328,15 +332,17 @@ function RootLayout() {
               />
             ) : null}
           </View>
+          </AppBlurTarget>
           <NotificationSnackbarHost />
+          {/* 顶部提醒（操作回执 toast），与消息横幅同一套外壳。 */}
+          <TopNoticeHost />
           <PushNotificationRouteHandler />
           <PushNotificationTokenRegistrar />
           <CallInviteHost />
           <AccountSwitcherSheet />
           <LoginSecurityCodeGate />
-          {/* Web 专属：Alert.alert 的渲染宿主（RNW 的 Alert 是空操作）。
-              原生平台不挂 —— localized-alert 只在 web 把调用指过来。 */}
-          {Platform.OS === 'web' ? <WebAlertHost /> : null}
+          {/* 三端统一的弹窗宿主：Alert.alert / Alert.prompt 经 alert-bridge 全部投到这里。 */}
+          <AppDialogHost />
           {/* Web 专属：标签页标题 + 未读数前缀（经 expo-router/head）。 */}
           {Platform.OS === 'web' ? <WebDocumentTitle /> : null}
         </AuthRouteGuard>

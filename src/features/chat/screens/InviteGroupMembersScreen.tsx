@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { topNotice } from '@/components/app/top-notice-store';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { fetchChatMembers, inviteGroupChatMembers } from '@/chat-core/api';
@@ -174,7 +175,8 @@ export default function InviteGroupMembersScreen() {
       );
       useChatStore.getState().upsertConversation(dto);
       if (!mountedRef.current) return;
-      Alert.alert(t('messages.inviteGroupMembersSent'));
+      // 回执用顶部提醒：返回上一页的同时看到「已发送」，不用多点一次「知道了」。
+      topNotice.success(t('messages.inviteGroupMembersSent'));
       router.back();
     } catch (error) {
       if (mountedRef.current) {

@@ -2,8 +2,10 @@ import { apiClient } from '@/services/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import type {
   ChatConversationDto,
+  ChatGroupEventsPageDto,
   ChatHistoryPageDto,
   ChatMemberDto,
+  ChatMemberSilenceDto,
   ChatMessageDto,
   ChatMutationsPageDto,
 } from './protocol';
@@ -165,6 +167,71 @@ export function renameGroupChatConversation(
   return apiClient<ChatConversationDto>(
     `/chat/conversations/${conversationId}/name`,
     { method: 'PATCH', body: { name } },
+  );
+}
+
+/**
+ * 群日志:独立于聊天记录的群事件账本(进退群/移出/角色/禁言/改名/公告/清空/转让),
+ * 倒序游标分页。圈子群与成员目录同闸(圈主/管理员),独立群聊全员可读。
+ */
+export function fetchChatGroupEvents(
+  conversationId: string,
+  options: { cursor?: string | null; limit?: number } = {},
+): Promise<ChatGroupEventsPageDto> {
+  const query = [
+    options.cursor ? `cursor=${encodeURIComponent(options.cursor)}` : '',
+    options.limit ? `limit=${options.limit}` : '',
+  ]
+    .filter(Boolean)
+    .join('&');
+  return apiClient<ChatGroupEventsPageDto>(
+    `/chat/conversations/${conversationId}/events${query ? `?${query}` : ''}`,
+  );
+}
+
+/** 独立群聊:群主设/撤管理员(圈子群走 services/api/groups 的 updateGroupMemberRole)。 */
+export function setGroupChatMemberRole(
+  conversationId: string,
+  userId: string,
+  role: 'ADMIN' | 'MEMBER',
+): Promise<{ userId: string; role: 'ADMIN' | 'MEMBER' }> {
+  return apiClient<{ userId: string; role: 'ADMIN' | 'MEMBER' }>(
+    `/chat/conversations/${conversationId}/members/${userId}/role`,
+    { method: 'PATCH', body: { role } },
+  );
+}
+
+/** 独立群聊:群主/管理员移出成员(圈子群走 services/api/groups 的 removeGroupMember)。 */
+export function removeGroupChatMember(
+  conversationId: string,
+  userId: string,
+): Promise<void> {
+  return apiClient<void>(
+    `/chat/conversations/${conversationId}/members/${userId}`,
+    { method: 'DELETE' },
+  );
+}
+
+/** 禁言成员(两种群;群主/管理员)。durationSec = null 表示直到解除;重复调用覆盖时长。 */
+export function silenceChatMember(
+  conversationId: string,
+  userId: string,
+  durationSec: number | null,
+): Promise<ChatMemberSilenceDto> {
+  return apiClient<ChatMemberSilenceDto>(
+    `/chat/conversations/${conversationId}/members/${userId}/silence`,
+    { method: 'PUT', body: { durationSec } },
+  );
+}
+
+/** 解除禁言(两种群;群主/管理员;未禁言时幂等)。 */
+export function unsilenceChatMember(
+  conversationId: string,
+  userId: string,
+): Promise<ChatMemberSilenceDto> {
+  return apiClient<ChatMemberSilenceDto>(
+    `/chat/conversations/${conversationId}/members/${userId}/silence`,
+    { method: 'DELETE' },
   );
 }
 
