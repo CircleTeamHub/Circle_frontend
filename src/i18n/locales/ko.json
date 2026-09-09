@@ -2533,7 +2533,9 @@
       "invalidInviteCode": "초대 코드 형식이 올바르지 않습니다",
       "loginFailed": "로그인에 실패했습니다. 다시 시도해 주세요",
       "registerFailed": "가입에 실패했습니다. 다시 시도해 주세요",
-      "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요"
+      "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요",
+      "passwordMismatch": "비밀번호가 일치하지 않습니다",
+      "registerSucceededSessionFailed": "계정은 생성되었지만 자동 로그인에 실패했습니다. 해당 이메일로 로그인해 주세요."
     },
     "hidePassword": "비밀번호 숨기기",
     "showPassword": "비밀번호 표시",
@@ -3215,7 +3217,8 @@
     "CHAT_GROUP_TARGET_PROTECTED": "그룹장이나 같은 등급의 관리자에게는 할 수 없습니다",
     "CHAT_GROUP_SELF_TARGET": "자기 자신에게는 할 수 없습니다",
     "CHAT_MEMBER_SILENCED": "채팅이 금지되어 지금은 메시지를 보낼 수 없습니다",
-    "CHAT_SILENCE_DURATION_INVALID": "채팅 금지 기간이 올바르지 않습니다"
+    "CHAT_SILENCE_DURATION_INVALID": "채팅 금지 기간이 올바르지 않습니다",
+    "AUTH_PASSWORD_MISMATCH": "비밀번호가 일치하지 않습니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",

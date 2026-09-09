@@ -2533,7 +2533,9 @@
       "invalidInviteCode": "招待コードの形式が正しくありません",
       "loginFailed": "ログインに失敗しました。もう一度お試しください",
       "registerFailed": "登録に失敗しました。もう一度お試しください",
-      "sendCodeFailed": "送信に失敗しました。もう一度お試しください"
+      "sendCodeFailed": "送信に失敗しました。もう一度お試しください",
+      "passwordMismatch": "パスワードが一致しません",
+      "registerSucceededSessionFailed": "アカウントは作成されましたが、自動ログインに失敗しました。このメールアドレスでログインしてください。"
     },
     "hidePassword": "パスワードを非表示",
     "showPassword": "パスワードを表示",
@@ -3215,7 +3217,8 @@
     "CHAT_GROUP_TARGET_PROTECTED": "オーナーや同格の管理者には実行できません",
     "CHAT_GROUP_SELF_TARGET": "自分自身には実行できません",
     "CHAT_MEMBER_SILENCED": "発言禁止中のため送信できません",
-    "CHAT_SILENCE_DURATION_INVALID": "発言禁止の期間が無効です"
+    "CHAT_SILENCE_DURATION_INVALID": "発言禁止の期間が無効です",
+    "AUTH_PASSWORD_MISMATCH": "パスワードが一致しません"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",
