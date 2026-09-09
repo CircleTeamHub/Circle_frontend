@@ -29,6 +29,20 @@ export interface ThemeColors {
   black: string;
   online: string;
   error: string;
+  /**
+   * 危险操作的文字 / 图标色（弹窗菜单里的红字、顶部提醒的错误图标）。
+   * 亮色不能直接用 error(#FF6B6B 在白底只有 2.9:1)，换更深的红保证 ≥4.5:1；
+   * 暗色沿用 error —— 它在 surface 上有 6.5:1。
+   */
+  danger: string;
+  /** 危险操作的实心按钮底色（配白字，4.7:1），两个主题同值。 */
+  dangerFill: string;
+  /** 比 surface 再低一级的柔和底：弹窗次要按钮、弹窗输入框底。 */
+  surfaceMuted: string;
+  /** 玻璃面（弹窗 / 顶部横幅）的边缘高光描边。 */
+  glassBorder: string;
+  /** 玻璃面之上的半透明按钮 / 输入框底：透一点玻璃本身，不用实心 surfaceMuted。 */
+  glassButton: string;
   success: string;
   warning: string;
   orange: string;

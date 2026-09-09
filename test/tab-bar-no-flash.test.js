@@ -90,12 +90,14 @@ test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降�
   assert.doesNotMatch(layout, /<GlassView[\s\S]*?isInteractive/);
   assert.doesNotMatch(layout, /tintColor=\{colors\.primaryLight\}/);
   assert.match(layout, /colorScheme=\{colorScheme\}/);
-  assert.match(layout, /intensity=\{\d+\}/);
+  assert.match(layout, /intensity=\{TAB_BAR_BLUR_INTENSITY\}/);
   // 应用允许主题与系统外观不同；旧版 iOS 的自适应 systemMaterial 只跟随
   // 系统，可能把暗色主题的白字放到浅色材质上。降级材质必须跟随 resolvedMode。
+  // Thick 是给 sheet/弹窗用的最厚材质，本身接近不透明 —— 叠上 intensity 100
+  // 和纯色遮罩就成了实心板，玻璃感全丢。Thin 保留磨砂扩散又还透光。
   assert.match(
     layout,
-    /tint=\{colorScheme === 'dark' \? 'systemMaterialDark' : 'systemMaterialLight'\}/,
+    /tint=\{colorScheme === 'dark' \? 'systemThinMaterialDark' : 'systemThinMaterialLight'\}/,
   );
   assert.doesNotMatch(layout, /tint="systemMaterial"/);
   assert.match(layout, /Platform\.OS === 'ios' \? 'transparent' : colors\.surface/);
@@ -153,4 +155,47 @@ test('选中态在暗色下必须读得清，红点描边不能浮在玻璃上',
   // Android/web 分支的 <View style={styles.tabBar}>，把断言变成永远成立。
   assert.match(layout, /<BlurView[^>]*style=\{styles\.tabBarBlurLayer\}/);
   assert.doesNotMatch(layout, /<BlurView[^>]*style=\{styles\.tabBar\}/);
+});
+
+test('玻璃 tab bar 上要垫一层半透明底色，不能让下方内容直接透穿', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+
+  // iOS 上 tabBar 自身底色是 transparent —— GlassView / BlurView 必须采样下方
+  // 内容才有材质。代价是身下一有真实内容（动态 tab 现在直接就是圈子广场的
+  // 卡片流，而不再是一屏空白菜单），整条 bar 就被看穿。
+  // 解法是在玻璃/模糊之上、tab 项之下垫一层 surface 调透明度的遮罩。
+  assert.match(layout, /const TAB_BAR_TINT_ALPHA = 0\.\d+;/);
+  assert.match(layout, /backgroundColor: withAlpha\(colors\.surface, TAB_BAR_TINT_ALPHA\)/);
+  assert.match(layout, /borderRadius: TAB_BAR_RADIUS/);
+
+  // 两条 iOS 路径（液态玻璃 / 旧系统模糊降级）都必须垫，少一条就只修一半。
+  const tintLayers = layout.match(/style=\{styles\.tabBarTint\}/g) ?? [];
+  assert.equal(tintLayers.length, 2);
+  // 遮罩纯装饰，不能吃掉 tab 的点击。
+  assert.match(layout, /style=\{styles\.tabBarTint\} pointerEvents="none"/);
+
+  // Android / Web 本来就是不透明 surface，不该再叠一层。
+  assert.match(layout, /Platform\.OS === 'ios' \? 'transparent' : colors\.surface/);
+});
+
+test('磨砂层在两条 iOS 路径上都要有——液态玻璃本身不提供磨砂强度', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+
+  // expo-glass-effect 的 GlassView 只有 clear/regular/none，没有磨砂强度旋钮，
+  // 液态玻璃偏"清透折射"而不是"磨砂扩散"。所以 iOS 26 这条路径要在玻璃之上
+  // 再叠一层 BlurView 才有磨砂；否则只有旧系统的降级路径是磨砂的，两代观感分裂。
+  const frostLayers = layout.match(/<TabBarFrostLayer /g) ?? [];
+  assert.equal(frostLayers.length, 2);
+  // 抽成共用组件，两代用的是同一档材质与强度，不会各调各的。
+  assert.match(layout, /function TabBarFrostLayer\(/);
+
+  // 叠放次序：玻璃/磨砂在下，纯色遮罩在上，tab 项在最上。
+  assert.match(
+    layout,
+    /<TabBarFrostLayer [\s\S]{0,120}?styles\.tabBarTint\}[\s\S]{0,120}?\{children\}/,
+  );
+
+  // 磨砂拉满，让扩散本身承担遮蔽；纯色遮罩退回去，否则质感被压成一块平板。
+  assert.match(layout, /const TAB_BAR_BLUR_INTENSITY = \d+;/);
+  assert.match(layout, /intensity=\{TAB_BAR_BLUR_INTENSITY\}/);
 });

@@ -1,1 +1,1 @@
-export { default } from '@/features/discover/screens/DiscoverScreen';
+export { default } from '@/features/discover/screens/CirclePlazaScreen';

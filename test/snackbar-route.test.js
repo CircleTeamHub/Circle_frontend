@@ -40,7 +40,7 @@ const DISCOVER_OPTS = { untitledPost: "(untitled post)", scope: "discover" };
 test('notification center routes stay checked by Expo typed routes', () => {
   const files = [
     'src/features/notifications/utils/snackbar-route.ts',
-    'src/features/discover/screens/DiscoverScreen.tsx',
+    'src/features/discover/screens/CirclePlazaScreen.tsx',
   ];
 
   for (const rel of files) {

@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Animated,
-  PanResponder,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, PanResponder, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
+import {
+  TopBannerCard,
+  topBannerHiddenOffset,
+  topBannerSurface,
+} from '@/components/ui/top-banner-card';
 import { markNotificationRead } from '@/services/api/notifications';
-import { Radius, Spacing, useTheme } from '@/theme';
+import { Spacing, useTheme } from '@/theme';
 import { mapNotificationToRow } from '@/features/notifications/utils/notification-summary';
 import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
 import { useNotificationFeedback } from '@/features/notifications/hooks/use-notification-feedback';
@@ -211,90 +209,49 @@ export function NotificationSnackbarHost() {
   return (
     <View
       pointerEvents="box-none"
-      style={[s.host, { paddingTop: insets.top + Spacing.sm }]}
+      style={[topBannerSurface.host, { paddingTop: insets.top + Spacing.sm }]}
     >
       <Animated.View
         {...pan.panHandlers}
-        style={{
-          opacity: anim,
-          transform: [
-            {
-              translateY: Animated.add(
-                anim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-12, 0],
-                }),
-                dragY,
-              ),
-            },
-          ],
-        }}
+        // 只做位移不做淡入：卡片是玻璃材质，祖先 opacity < 1 会让磨砂失效。
+        style={[
+          topBannerSurface.frame,
+          {
+            transform: [
+              {
+                translateY: Animated.add(
+                  anim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [topBannerHiddenOffset(insets.top), 0],
+                  }),
+                  dragY,
+                ),
+              },
+            ],
+          },
+        ]}
       >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${row.title}. ${row.summary}`}
         onPress={handlePress}
-        style={[
-          s.banner,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.surfaceBorder,
-            shadowColor: colors.black,
-          },
-        ]}
       >
-        <Avatar size={38} name={row.avatarName} uri={row.avatarUrl ?? undefined} />
-        <View style={s.textBlock}>
-          <Text style={[s.title, { color: colors.text }]} numberOfLines={1}>
-            {row.title}
-          </Text>
-          <Text
-            style={[s.summary, { color: colors.textSecondary }]}
-            numberOfLines={2}
-          >
-            {row.summary}
-          </Text>
-        </View>
+        <TopBannerCard>
+          <Avatar size={36} name={row.avatarName} uri={row.avatarUrl ?? undefined} />
+          <View style={topBannerSurface.textBlock}>
+            <Text style={[topBannerSurface.title, { color: colors.text }]} numberOfLines={1}>
+              {row.title}
+            </Text>
+            <Text
+              style={[topBannerSurface.summary, { color: colors.textSecondary }]}
+              numberOfLines={2}
+            >
+              {row.summary}
+            </Text>
+          </View>
+        </TopBannerCard>
       </Pressable>
       </Animated.View>
     </View>
   );
 }
-
-const s = StyleSheet.create({
-  host: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
-    paddingHorizontal: Spacing.md,
-  },
-  banner: {
-    minHeight: 68,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
-  textBlock: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  summary: {
-    marginTop: 2,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-});

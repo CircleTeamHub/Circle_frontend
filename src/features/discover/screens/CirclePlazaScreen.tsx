@@ -1,21 +1,25 @@
 import { useCallback, useMemo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/badge';
-import { NavHeader } from '@/components/ui/nav-header';
 import { PlazaFeed } from '@/features/discover/components/plaza-feed';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
-import { Radius, Spacing, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
-  content: {
-    flex: 1,
+  // tab 根屏的头部：大标题 + 右侧动作，没有返回箭头（对齐 ContactsScreen）。
+  // 这里不能用 NavHeader —— 它无条件渲染 chevron-back，根屏上会留一个
+  // 按了没反应的返回键。
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
   },
   headerActions: {
     flexDirection: 'row',
@@ -31,6 +35,10 @@ const s = StyleSheet.create({
     position: 'absolute',
     top: -8,
     right: -12,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: Spacing.lg,
   },
   fab: {
     position: 'absolute',
@@ -62,16 +70,16 @@ export default function CirclePlazaScreen() {
         paddingTop: insets.top,
         backgroundColor: colors.background,
       },
+      title: {
+        color: colors.text,
+        ...Typography.title,
+      },
       fab: {
         backgroundColor: colors.primary,
       },
     }),
     [colors, insets.top],
   );
-
-  const handleDiscoverCircles = useCallback(() => {
-    router.push('/(tabs)/discover/circles');
-  }, [router]);
 
   const handleFilter = useCallback(() => {
     router.push('/(tabs)/discover/filter');
@@ -90,55 +98,41 @@ export default function CirclePlazaScreen() {
 
   return (
     <View testID={E2E_TEST_IDS.circlePlazaScreen} style={d.container}>
-      <NavHeader
-        title={t('discover.plaza')}
-        fallbackHref="/(tabs)/discover"
-        rightSlot={
-          <View style={s.headerActions}>
-            <Pressable
-              testID={E2E_TEST_IDS.circlePlazaDiscoverCircles}
-              onPress={handleDiscoverCircles}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t('discover.discoverCircles')}
-            >
-              <Ionicons
-                name="search-outline"
-                size={22}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-            <Pressable
-              onPress={handleFilter}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t('discover.filter.title')}
-            >
-              <Ionicons
-                name="options-outline"
-                size={22}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-            <Pressable
-              style={s.notificationButton}
-              onPress={handleOpenNotifications}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t('notifications.title')}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={22}
-                color={colors.textSecondary}
-              />
-              <View style={s.notificationBadge}>
-                <Badge count={circleBellUnread} />
-              </View>
-            </Pressable>
-          </View>
-        }
-      />
+      <View style={[s.header, { paddingTop: Spacing.md }]}>
+        <Text style={d.title} accessibilityRole="header">
+          {t('discover.title')}
+        </Text>
+        <View style={s.headerActions}>
+          <Pressable
+            onPress={handleFilter}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('discover.filter.title')}
+          >
+            <Ionicons
+              name="options-outline"
+              size={22}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+          <Pressable
+            style={s.notificationButton}
+            onPress={handleOpenNotifications}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('notifications.title')}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={22}
+              color={colors.textSecondary}
+            />
+            <View style={s.notificationBadge}>
+              <Badge count={circleBellUnread} />
+            </View>
+          </Pressable>
+        </View>
+      </View>
       <View style={s.content}>
         <PlazaFeed />
       </View>

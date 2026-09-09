@@ -18,13 +18,10 @@
     { "key": "chatSend", "id": "windnote.chat.composer.send", "source": "src/features/chat/screens/ChatDetailScreen.tsx" },
     { "key": "contactsScreen", "id": "windnote.contacts.screen", "source": "src/features/contacts/screens/ContactsScreen.tsx" },
     { "key": "contactsAddFriend", "id": "windnote.contacts.add-friend", "source": "src/features/contacts/screens/ContactsScreen.tsx" },
-    { "key": "discoverScreen", "id": "windnote.discover.screen", "source": "src/features/discover/screens/DiscoverScreen.tsx" },
     { "key": "discoverMomentsEntry", "id": "windnote.discover.moments-entry", "source": "src/features/contacts/screens/ContactsScreen.tsx" },
-    { "key": "discoverPlazaEntry", "id": "windnote.discover.plaza-entry", "source": "src/features/discover/screens/DiscoverScreen.tsx" },
     { "key": "momentsScreen", "id": "windnote.moments.screen", "source": "src/features/discover/screens/MomentsScreen.tsx" },
     { "key": "momentsCreate", "id": "windnote.moments.create", "source": "src/features/discover/screens/MomentsScreen.tsx" },
     { "key": "circlePlazaScreen", "id": "windnote.circle-plaza.screen", "source": "src/features/discover/screens/CirclePlazaScreen.tsx" },
-    { "key": "circlePlazaDiscoverCircles", "id": "windnote.circle-plaza.discover-circles", "source": "src/features/discover/screens/CirclePlazaScreen.tsx" },
     { "key": "momentCreateScreen", "id": "windnote.moment.create.screen", "source": "src/features/discover/screens/CreateMomentScreen.tsx" },
     { "key": "momentContentInput", "id": "windnote.moment.create.content-input", "source": "src/features/discover/screens/CreateMomentScreen.tsx" },
     { "key": "momentPublish", "id": "windnote.moment.create.publish", "source": "src/features/discover/screens/CreateMomentScreen.tsx" },
@@ -45,9 +42,6 @@
     { "key": "addFriendInput", "id": "windnote.friend-search.input", "source": "src/features/social/screens/AddFriendScreen.tsx" },
     { "key": "addFriendResult", "id": "windnote.friend-search.result", "source": "src/features/social/screens/AddFriendScreen.tsx" },
     { "key": "userProfileScreen", "id": "windnote.user-profile.screen", "source": "src/features/user/screens/UserProfileScreen.tsx" },
-    { "key": "circleSearchScreen", "id": "windnote.circle-search.screen", "source": "src/features/discover/screens/DiscoverCirclesScreen.tsx" },
-    { "key": "circleSearchInput", "id": "windnote.circle-search.input", "source": "src/features/discover/screens/DiscoverCirclesScreen.tsx" },
-    { "key": "circleSearchResult", "id": "windnote.circle-search.result", "source": "src/features/discover/screens/DiscoverCirclesScreen.tsx" },
     { "key": "circleDetailScreen", "id": "windnote.circle-detail.screen", "source": "src/features/discover/screens/CircleDetailScreen.tsx" },
     { "key": "circleChatEntry", "id": "windnote.circle-detail.chat-entry", "source": "src/features/discover/screens/CircleDetailScreen.tsx" }
   ]

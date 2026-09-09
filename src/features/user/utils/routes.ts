@@ -381,6 +381,30 @@ export function getGroupLogHref(
   }
 }
 
+/** 群管理(设管理员/禁言/移出)。与群日志同栈:从群设置页 push 进去。 */
+export function getGroupManageHref(
+  scope: UserProfileScope,
+  params: { conversationID: string; groupID?: string; title?: string },
+): Href {
+  const routeParams = {
+    conversationID: params.conversationID,
+    ...(params.groupID ? { groupID: params.groupID } : {}),
+    ...(params.title ? { title: params.title } : {}),
+  };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/group-manage', params: routeParams } as unknown as Href;
+    case 'profile':
+      return { pathname: '/(tabs)/profile/group-manage', params: routeParams } as unknown as Href;
+    case 'discover':
+      return { pathname: '/(tabs)/discover/group-manage', params: routeParams } as unknown as Href;
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/group-manage', params: routeParams } as unknown as Href;
+  }
+}
+
 export function getGroupMemberSearchHref(
   scope: UserProfileScope,
   params: {

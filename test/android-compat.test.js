@@ -50,7 +50,9 @@ test('all React Native Modal usages handle Android hardware back', () => {
 });
 
 test('Alert.prompt calls are guarded for Android compatibility', () => {
-  const unguarded = SOURCE_DIRS.flatMap(walkSources).flatMap((rel) => {
+  // spec 直接调 Alert.prompt 是为了验证 alert-bridge 的接管，不是业务调用点。
+  const isSpec = (rel) => /\.spec\.tsx?$/.test(rel);
+  const unguarded = SOURCE_DIRS.flatMap(walkSources).filter((rel) => !isSpec(rel)).flatMap((rel) => {
     const source = readSource(rel);
     const matches = [...source.matchAll(/Alert\.prompt\s*\(/g)];
 

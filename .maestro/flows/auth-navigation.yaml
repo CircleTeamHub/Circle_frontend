@@ -19,7 +19,7 @@ tags:
 - tapOn:
     id: windnote.tabs.discover
 - assertVisible:
-    id: windnote.discover.screen
+    id: windnote.circle-plaza.screen
 - tapOn:
     id: windnote.tabs.profile
 - assertVisible:

@@ -642,9 +642,42 @@ export function systemNoticeText(content: Record<string, unknown>): string {
     }
     case 'group-notice-updated':
       return i18n.t('im.notification.groupNoticeUpdated');
+    // 逐人禁言/解除:载荷同样只有 ID,文案被动不点名;时长带上(有的话)。
+    case 'member-silenced': {
+      const durationSec =
+        typeof content['durationSec'] === 'number' ? content['durationSec'] : null;
+      return durationSec
+        ? i18n.t('im.notification.memberSilenced', {
+            duration: formatSilenceDuration(durationSec),
+          })
+        : i18n.t('im.notification.memberSilencedIndefinitely');
+    }
+    case 'member-unsilenced':
+      return i18n.t('im.notification.memberUnsilenced');
+    // 群主退群自动转让:后端顺手带了新群主昵称(与 member-joined 的 names 同一取舍)。
+    case 'owner-transferred': {
+      const name = typeof content['name'] === 'string' ? content['name'] : '';
+      return name
+        ? i18n.t('im.notification.ownerTransferred', { name })
+        : i18n.t('im.notification.ownerTransferredUnnamed');
+    }
     default:
       return '';
   }
+}
+
+/**
+ * 禁言时长 → 本地化标签。档位表在 silence-durations.ts;这里按整天/整小时/分钟
+ * 兜底任意秒数(服务端只限 60s–30d,不限具体档位)。
+ */
+export function formatSilenceDuration(seconds: number): string {
+  if (seconds >= 86_400 && seconds % 86_400 === 0) {
+    return i18n.t('im.silence.days', { n: seconds / 86_400 });
+  }
+  if (seconds >= 3600 && seconds % 3600 === 0) {
+    return i18n.t('im.silence.hours', { n: seconds / 3600 });
+  }
+  return i18n.t('im.silence.minutes', { n: Math.max(1, Math.round(seconds / 60)) });
 }
 
 /** 焚毁档位 → 本地化时长标签(白名单外的值回落成秒数)。 */
