@@ -683,16 +683,3 @@ export function formatSilenceDuration(seconds: number): string {
   }
   return i18n.t('im.silence.minutes', { n: Math.max(1, Math.round(seconds / 60)) });
 }
-
-/** 焚毁档位 → 本地化时长标签(白名单外的值回落成秒数)。 */
-export function formatBurnDuration(seconds: number): string {
-  const key: Record<number, string> = {
-    30: 'im.burn.s30',
-    300: 'im.burn.m5',
-    3600: 'im.burn.h1',
-    86400: 'im.burn.d1',
-    604800: 'im.burn.d7',
-  };
-  const found = key[seconds];
-  return found ? i18n.t(found) : `${seconds}s`;
-}
