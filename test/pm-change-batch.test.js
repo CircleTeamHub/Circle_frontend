@@ -202,3 +202,29 @@ test('appearance settings wire all four requested chat display controls', () => 
   assert.match(chat, /suppressAvatar/);
   assert.match(messages, /collapsedPinnedCount/);
 });
+
+test('groups screen tabs use the short PM labels and keep long section titles', () => {
+  const source = read('src/features/contacts/screens/GroupsScreen.tsx');
+
+  // 页签是横向滚动的，长文案会把第四个分类挤出屏幕，PM 要求的是短文案。
+  for (const key of ['tabNewGroups', 'tabMyJoined', 'tabMyCreated', 'tabMyManaged']) {
+    assert.match(source, new RegExp(`contacts\\.groupsScreen\\.${key}`));
+  }
+  // FilterTabs 只吃短文案，分区标题仍用完整文案。
+  assert.match(source, /tabs=\{categories\.map\(\(category\) => category\.tabLabel\)\}/);
+
+  const zh = JSON.parse(read('src/i18n/locales/zh.json')).contacts.groupsScreen;
+  assert.equal(zh.tabNewGroups, '新的群组');
+  assert.equal(zh.tabMyJoined, '我加入的');
+  assert.equal(zh.tabMyCreated, '我创建的');
+  assert.equal(zh.tabMyManaged, '我管理的');
+
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const groupsScreen = JSON.parse(
+      read(`src/i18n/locales/${locale}.json`),
+    ).contacts.groupsScreen;
+    for (const key of ['tabNewGroups', 'tabMyJoined', 'tabMyCreated', 'tabMyManaged']) {
+      assert.ok(groupsScreen[key], `${locale} ${key}`);
+    }
+  }
+});
