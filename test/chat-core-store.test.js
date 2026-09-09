@@ -5,6 +5,35 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+// 焚毁档位表(burn-durations.ts)只依赖 i18n —— 这里加载**真实实现**而不是桩:
+// 档位白名单是 setViewerSelfDestructSec 的唯一闸门,用假的等于没测。
+let __burnDurationsSource = null;
+function loadBurnDurations(translate = (key) => key) {
+  if (!__burnDurationsSource) {
+    const filePath = path.join(process.cwd(), 'src/chat-core/burn-durations.ts');
+    __burnDurationsSource = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2020,
+      },
+      fileName: filePath,
+    }).outputText;
+  }
+  const ctx = {
+    module: { exports: {} },
+    exports: {},
+    require: (request) => {
+      if (request === '@/i18n') {
+        return { __esModule: true, default: { t: translate, language: 'zh' } };
+      }
+      throw new Error(`unexpected require: ${request}`);
+    },
+  };
+  ctx.exports = ctx.module.exports;
+  vm.runInNewContext(__burnDurationsSource, ctx);
+  return ctx.module.exports;
+}
+
 const __localDbStub = {
   persistLocalConversations: async () => {},
   upsertLocalConversation: async () => {},
@@ -93,7 +122,8 @@ function loadChatStore() {
     // 墓碑超上限时会报一次(淘汰=消息复活,必须可观测)。
     if (request === '@/observability/sentry') return { reportError: () => {} };
     if (request === './local-db') return __localDbStub;
-    throw new Error(`unexpected require: ${request}`);
+    if (request === './burn-durations') return loadBurnDurations();
+      throw new Error(`unexpected require: ${request}`);
   });
   const store = runModule('src/chat-core/store.ts', (request) => {
     if (request === 'zustand') return zustandStub();
@@ -108,7 +138,8 @@ function loadChatStore() {
     if (request === '@/storage') {
       return { storage: { set: () => {}, getString: () => undefined } };
     }
-    throw new Error(`unexpected require: ${request}`);
+    if (request === './burn-durations') return loadBurnDurations();
+      throw new Error(`unexpected require: ${request}`);
   });
   return { ...store, ...deletedMessages };
 }
@@ -862,7 +893,7 @@ test('burn expiry clears the stale unread badge with its expired preview', () =>
 test('viewer self-destruct policy purges cached content without conversation burn', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
-  assert.equal(typeof store.setViewerSelfDestructDays, 'function');
+  assert.equal(typeof store.setViewerSelfDestructSec, 'function');
   const expired = msg({
     id: 'expired-viewer-message',
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
@@ -877,7 +908,7 @@ test('viewer self-destruct policy purges cached content without conversation bur
   ]);
   store.ingestMessages('conv-1', [expired]);
 
-  store.setViewerSelfDestructDays(1);
+  store.setViewerSelfDestructSec(24 * 60 * 60);
 
   assert.equal(
     useChatStore.getState().messagesByConversation['conv-1'].length,
@@ -904,10 +935,15 @@ test('invalid viewer self-destruct policy cannot weaken a cached policy', () => 
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
 
-  store.setViewerSelfDestructDays(7);
-  store.setViewerSelfDestructDays(999);
+  store.setViewerSelfDestructSec(7 * 24 * 60 * 60);
+  // 999 不在 BURN_DURATION_CHOICES 里 —— 白名单外的值必须被整条丢掉,
+  // 而不是「取个近似档位」把用户已生效的窗口悄悄放宽。
+  store.setViewerSelfDestructSec(999);
 
-  assert.equal(useChatStore.getState().viewerSelfDestructDays, 7);
+  assert.equal(
+    useChatStore.getState().viewerSelfDestructSec,
+    7 * 24 * 60 * 60,
+  );
 });
 
 test('a membership teardown clears the cache without leaving a watermark', () => {

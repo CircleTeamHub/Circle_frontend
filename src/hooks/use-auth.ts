@@ -138,8 +138,8 @@ export function useAuth() {
   const register = useCallback(
     async (
       email: string,
-      code: string,
       password: string,
+      confirmPassword: string,
       nickname: string,
       inviteCode = '',
     ) => {
@@ -148,8 +148,8 @@ export function useAuth() {
       const normalizedEmail = email.trim();
       const invalid = validateRegisterForm(
         normalizedEmail,
-        code,
         password,
+        confirmPassword,
         nickname,
         inviteCode,
       );
@@ -160,22 +160,36 @@ export function useAuth() {
 
       inFlightRef.current = true;
       safeSetSubmitting(true);
+      // 账号是否已经落到服务端 —— 决定失败了该怎么报。
+      // registerRequest 一旦返回，邮箱就被占用了，此后再失败都不是「注册失败」。
+      let accountCreated = false;
       try {
         const normalizedInviteCode = inviteCode.trim();
         const tokens = await registerRequest({
           email: normalizedEmail,
-          code: code.trim(),
           password,
+          confirmPassword,
           nickname: nickname.trim(),
           ...(normalizedInviteCode
             ? { inviteCode: normalizedInviteCode }
             : {}),
         });
+        accountCreated = true;
         await onAuthSuccess(tokens, {
           onboardingRequired: false,
         });
       } catch (requestError) {
-        safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.registerFailed')));
+        if (accountCreated) {
+          // 注册成功、只是建会话那步崩了（真实事故：/auth/me 连着 500）。
+          // 这里若报「注册失败」，用户会原样重试并撞上自己刚占掉的邮箱拿 409，
+          // 而密码其实早已生效 —— 邮箱就这么废在半路上。必须告诉他去登录。
+          await clearLocalSession().catch((cleanupError) => {
+            reportHandledFailure('auth', 'registerSessionCleanup', cleanupError);
+          });
+          safeSetError(i18n.t('auth.errors.registerSucceededSessionFailed'));
+        } else {
+          safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.registerFailed')));
+        }
       } finally {
         inFlightRef.current = false;
         safeSetSubmitting(false);

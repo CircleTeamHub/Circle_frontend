@@ -335,7 +335,7 @@ test("login throws when accessToken or refreshToken missing (response shape drif
   );
 });
 
-test("register posts email/code/password/nickname", async () => {
+test("register posts email/password/confirmation/nickname", async () => {
   const calls = [];
   const apiClientMock = async (endpoint, options) => {
     calls.push(options.body);
@@ -345,13 +345,15 @@ test("register posts email/code/password/nickname", async () => {
 
   await register({
     email: "  NEW@Example.com ",
-    code: "123456",
     password: "pw",
+    confirmPassword: "pw",
     nickname: "  Hi  ",
   });
 
   assert.equal(calls[0].email, "new@example.com");
-  assert.equal(calls[0].code, "123456");
+  assert.equal(Object.hasOwn(calls[0], "code"), false);
+  assert.equal(calls[0].password, "pw");
+  assert.equal(calls[0].confirmPassword, "pw");
   assert.equal(calls[0].nickname, "Hi");
   assert.equal(calls[0].inviteCode, undefined);
 });
@@ -365,8 +367,8 @@ test("register normalizes and posts a populated invite code", async () => {
 
   await register({
     email: "new@example.com",
-    code: "123456",
     password: "password1",
+    confirmPassword: "password1",
     nickname: "New User",
     inviteCode: "  AbC-123  ",
   });
@@ -383,27 +385,11 @@ test("register omits a whitespace-only invite code", async () => {
 
   await register({
     email: "new@example.com",
-    code: "123456",
     password: "password1",
+    confirmPassword: "password1",
     nickname: "New User",
     inviteCode: "   ",
   });
 
   assert.equal(Object.hasOwn(calls[0], "inviteCode"), false);
-});
-
-test("requestEmailCode posts email and purpose", async () => {
-  const calls = [];
-  const apiClientMock = async (endpoint, options) => {
-    calls.push({ endpoint, options });
-    return undefined;
-  };
-  const { requestEmailCode } = loadAuthApi(apiClientMock);
-
-  await requestEmailCode({ email: "  A@B.com ", purpose: "register" });
-
-  assert.equal(calls[0].endpoint, "/auth/email/request-code");
-  assert.equal(calls[0].options.body.email, "a@b.com");
-  assert.equal(calls[0].options.body.purpose, "register");
-  assert.equal(calls[0].options.auth, false);
 });

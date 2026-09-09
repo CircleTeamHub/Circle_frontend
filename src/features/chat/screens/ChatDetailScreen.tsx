@@ -726,11 +726,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       (candidate) => candidate.id === conversationID,
     );
     return (
-      state.viewerSelfDestructDays > 0 ||
+      state.viewerSelfDestructSec > 0 ||
       (conversation?.burnDurationSec ?? 0) > 0
     );
   });
-  // 与 selfDestructEnabled 分开：那一个还掺了「本人的全局自动销毁天数」，那是
+  // 与 selfDestructEnabled 分开：那一个还掺了「本人的全局阅后即焚窗口」，那是
   // 我对自己视图的设置，不是发送者对我的承诺。转发 / 收藏的闸只认会话上的焚毁
   // 开关 —— 服务端的转发拒绝也正是按这一条判的。
   const conversationBurnEnabled = useChatStore((state) => {
