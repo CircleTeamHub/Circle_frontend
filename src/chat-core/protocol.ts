@@ -368,6 +368,8 @@ export interface ChatPresenceBroadcast {
 export interface ChatMemberDto {
   userId: string;
   nickname: string;
+  /** 本人在该群设的群昵称(群备注),对全群可见;缺省/null = 用账号昵称。 */
+  alias?: string | null;
   avatarUrl: string | null;
   /** 群角色:圈子群来自 CircleMember;独立群聊 = ownerId / 座位上的管理员标记。 */
   role: 'OWNER' | 'ADMIN' | 'MEMBER' | null;

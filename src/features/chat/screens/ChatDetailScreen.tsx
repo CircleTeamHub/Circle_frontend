@@ -86,6 +86,7 @@ import {
 // (OpenIM groupID === circle.id,ID 同值,Phase 3 随成员子系统一起迁)。
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import { isGroupManager } from '@/features/chat/group-admin-permissions';
+import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import {
   ensureCircleConversation,
   ensureDirectConversation,
@@ -2471,7 +2472,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             .slice(0, MENTION_CANDIDATE_LIMIT)
             .map((member) => ({
               userID: member.userId,
-              nickname: member.nickname || member.userId,
+              // @ 出去的名字也用群昵称:群里认得的是这个。
+              nickname: groupMemberDisplayName(member),
             })),
         )
         .then((candidates) => {
@@ -2507,8 +2509,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         if (cancelled) return;
         const map: Record<string, string> = {};
         for (const member of members) {
-          const nickname = member.nickname?.trim();
-          if (nickname) map[member.userId] = nickname;
+          // 群昵称优先:群里所有人看到的就是它。我自己给这位好友起的备注
+          // 优先级更高,但那条在 receivedDisplayName 里另接。
+          const nickname = groupMemberDisplayName(member);
+          if (nickname && nickname !== member.userId) map[member.userId] = nickname;
         }
         setGroupMemberNames(map);
       })

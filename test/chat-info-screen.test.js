@@ -216,10 +216,12 @@ test('chat info screen gives group rows real actions instead of unsupported plac
   assert.match(source, /handleEditGroupNotice/);
   assert.match(source, /getEditGroupNoticeHref/);
   assert.doesNotMatch(source, /updateGroupNotice\(groupID,\s*trimmed\)/);
-  // 「我的群内昵称」在自研栈无后端支持:整块 UI 已删除,不留假开关。
-  assert.doesNotMatch(source, /handleEditMyGroupAlias/);
+  // 「我在群里的昵称」曾因自研栈无后端支持整块删掉;现在 ChatMember.alias 与
+  // PATCH /chat/conversations/:id/my-alias 都有了,入口回来了,且接的是真端点。
+  assert.match(source, /handleEditMyGroupAlias/);
+  assert.match(source, /chat\.myAliasInGroup/);
+  assert.match(source, /setMyGroupChatAlias\(target, value\)/);
   assert.doesNotMatch(source, /updateGroupMemberAlias/);
-  assert.doesNotMatch(source, /chat\.myAliasInGroup/);
   assert.doesNotMatch(source, /handleMinimizeGroupChat/);
   assert.doesNotMatch(source, /hideConversation\(resolvedConversationID\)/);
   assert.doesNotMatch(source, /label=\{t\('chat\.minimizeChat'\)\}/);
@@ -357,8 +359,9 @@ test('group member search screen loads and filters group members', () => {
 
   assert.match(source, /createCircleChatConversation\(groupID\)/);
   assert.match(source, /fetchChatMembers\(conversation\.id\)/);
-  assert.match(source, /member\.nickname\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
-  assert.match(source, /member\.userId\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
+  // 过滤收进共用解析器:群昵称、账号昵称、userId 任一命中即可 —— 只按账号昵称
+  // 搜的话,给自己起了群昵称的人在群里就搜不到。
+  assert.match(source, /groupMemberMatchesQuery\(member, trimmedQuery\)/);
   assert.match(source, /getUserProfileHref\(scope,/);
   assert.match(source, /member\.userId, member\.nickname/);
   assert.doesNotMatch(source, /fromImUserId\(item\.userID\)/);

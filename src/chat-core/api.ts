@@ -236,6 +236,17 @@ export function unsilenceChatMember(
   );
 }
 
+/** 群昵称(群备注):改自己在本群的显示名。任一在座成员可改;空串清除回落账号昵称。 */
+export function setMyGroupChatAlias(
+  conversationId: string,
+  alias: string,
+): Promise<{ alias: string | null }> {
+  return apiClient<{ alias: string | null }>(
+    `/chat/conversations/${conversationId}/my-alias`,
+    { method: 'PATCH', body: { alias } },
+  );
+}
+
 /** 全员禁言开关(两种群;群主/管理员;管理员与群主豁免)。 */
 export function setGroupChatMuteAll(
   conversationId: string,

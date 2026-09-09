@@ -14,6 +14,10 @@ import { Avatar } from '@/components/ui/avatar';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import type { ChatMemberDto } from '@/chat-core/protocol';
+import {
+  groupMemberDisplayName,
+  groupMemberMatchesQuery,
+} from '@/features/chat/group-member-display';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface GroupMemberPickerSheetProps {
@@ -88,9 +92,7 @@ export function GroupMemberPickerSheet({
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return members;
-    return members.filter((member) =>
-      (member.nickname || member.userId).toLowerCase().includes(keyword),
-    );
+    return members.filter((member) => groupMemberMatchesQuery(member, keyword));
   }, [members, query]);
 
   const d = useMemo(
@@ -107,7 +109,7 @@ export function GroupMemberPickerSheet({
   );
 
   const renderItem = ({ item }: ListRenderItemInfo<ChatMemberDto>) => {
-    const name = item.nickname || item.userId;
+    const name = groupMemberDisplayName(item);
     const role =
       item.role === 'OWNER'
         ? t('chat.groupOwner')

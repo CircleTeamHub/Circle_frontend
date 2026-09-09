@@ -41,6 +41,7 @@ import {
   isSilencedMember,
   useGroupAdminActions,
 } from '@/features/chat/hooks/use-group-admin-actions';
+import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import { fetchCircleDetail } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -307,7 +308,7 @@ export default function GroupManageScreen() {
 
   const handleTransferOwner = useCallback(
     (member: ChatMemberDto) => {
-      const name = member.nickname || member.userId;
+      const name = groupMemberDisplayName(member);
       Alert.alert(
         t('chat.transferOwner', { defaultValue: '转让群主' }),
         t('chat.transferOwnerConfirm', { name }),
@@ -409,7 +410,7 @@ export default function GroupManageScreen() {
     action: { label: string; destructive?: boolean; onPress: () => void },
     meta?: string,
   ) => {
-    const name = member.nickname || member.userId;
+    const name = groupMemberDisplayName(member);
     const pending = groupAdmin.pendingUserID === member.userId;
     return (
       <View key={member.userId} style={s.row}>

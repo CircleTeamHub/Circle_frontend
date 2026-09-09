@@ -23,6 +23,7 @@ import { UserIconRow } from '@/components/ui/user-icon-row';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
   setGroupChatAvatar,
+  setMyGroupChatAlias,
   clearChatConversationHistory,
   createCircleChatConversation,
   fetchChatMembers,
@@ -46,6 +47,7 @@ import {
   isGroupManager,
   resolveStandaloneSelfRole,
 } from '@/features/chat/group-admin-permissions';
+import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import { useChangeGroupAvatar } from '@/features/chat/hooks/use-change-group-avatar';
 import { useGroupAdminActions } from '@/features/chat/hooks/use-group-admin-actions';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
@@ -1225,7 +1227,7 @@ export default function ChatInfoScreen() {
       }
       if (actions.length === 0) return;
       actions.push({ text: t('common.cancel'), style: 'cancel' });
-      Alert.alert(member.nickname || member.userId, undefined, actions);
+      Alert.alert(groupMemberDisplayName(member), undefined, actions);
     },
     [groupAdmin, silenceClock, t],
   );
@@ -1577,6 +1579,46 @@ export default function ChatInfoScreen() {
     );
   }, [groupTitle, resolvedConversationID, scope]);
 
+  // 我在群里的昵称(群备注):任一在座成员都能改自己的,不需要群主/管理员。
+  // 空串 = 清除,回落账号昵称。改完就地更新成员表,网格与聊天页的名字立刻跟上。
+  const myGroupAlias = useMemo(
+    () =>
+      groupMembers.find((member) => member.userId === currentUserID)?.alias ?? '',
+    [currentUserID, groupMembers],
+  );
+
+  const handleEditMyGroupAlias = useCallback(() => {
+    const target = resolvedConversationID || conversationID;
+    if (!target) return;
+
+    promptForText(
+      t('chat.myAliasInGroup', { defaultValue: '我在群里的昵称' }),
+      myGroupAlias,
+      (value) => {
+        if (value.trim() === myGroupAlias.trim()) return;
+        setMyGroupChatAlias(target, value)
+          .then((result) => {
+            setGroupMembers((members) =>
+              members.map((member) =>
+                member.userId === currentUserID
+                  ? { ...member, alias: result.alias }
+                  : member,
+              ),
+            );
+          })
+          .catch(openActionError);
+      },
+    );
+  }, [
+    conversationID,
+    currentUserID,
+    myGroupAlias,
+    openActionError,
+    promptForText,
+    resolvedConversationID,
+    t,
+  ]);
+
   const handleOpenGroupManage = useCallback(() => {
     const target = resolvedConversationID || conversationID;
     if (!target) return;
@@ -1681,7 +1723,7 @@ export default function ChatInfoScreen() {
             <View style={s.groupMemberSection}>
             <View style={s.groupMemberGrid}>
               {visibleGroupMembers.map((member) => {
-                const memberName = member.nickname || member.userId;
+                const memberName = groupMemberDisplayName(member);
                 const roleBadge =
                   member.role === 'OWNER'
                     ? t('chat.groupOwner')
@@ -1822,6 +1864,16 @@ export default function ChatInfoScreen() {
                 />
               </>
             ) : null}
+            {isTempConversation ? null : (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.myAliasInGroup', { defaultValue: '我在群里的昵称' })}
+                  value={myGroupAlias || t('chat.notSet')}
+                  onPress={handleEditMyGroupAlias}
+                />
+              </>
+            )}
             {canManageGroup ? (
               <>
                 <Divider />

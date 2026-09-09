@@ -13,6 +13,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { isGroupManager } from '@/features/chat/group-admin-permissions';
+import {
+  groupMemberDisplayName,
+  groupMemberMatchesQuery,
+} from '@/features/chat/group-member-display';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
@@ -145,14 +149,11 @@ export default function SearchGroupMembersScreen() {
   const loading = !accessResolved || membersLoading;
 
   const trimmedQuery = query.trim().toLowerCase();
-  const filteredMembers = useMemo(() => {
-    if (!trimmedQuery) return members;
-    return members.filter(
-      (member) =>
-        member.nickname.toLowerCase().includes(trimmedQuery) ||
-        member.userId.toLowerCase().includes(trimmedQuery),
-    );
-  }, [members, trimmedQuery]);
+  // 搜索也认群昵称:群里认得的是它,只按账号昵称搜会搜不到人。
+  const filteredMembers = useMemo(
+    () => members.filter((member) => groupMemberMatchesQuery(member, trimmedQuery)),
+    [members, trimmedQuery],
+  );
 
   const d = useMemo(
     () => ({
@@ -229,7 +230,7 @@ export default function SearchGroupMembersScreen() {
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<ChatMemberDto>) => {
-      const memberName = item.nickname || item.userId;
+      const memberName = groupMemberDisplayName(item);
       return (
         <Pressable
           style={[s.row, d.surface]}
