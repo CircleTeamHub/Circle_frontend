@@ -25,7 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useShallow } from 'zustand/react/shallow';
-import { useTheme } from '@/theme';
+import { useTheme, withAlpha } from '@/theme';
 import type { ThemeColors } from '@/theme/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
@@ -96,6 +96,12 @@ const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V * 2;
 const TAB_PILL_RADIUS = TAB_PILL_HEIGHT / 2; // 只裁剪单个 tab 的按压反馈，不绘制背景
 const TAB_PILL_GAP = 2; // 每格 tab 左右留白，互不相贴
 const TAB_ICON_SIZE = 18;
+// 磨砂靠材质散射，不靠纯色板。这两个数和材质档位是一组，一起决定"透多少"：
+// systemThickMaterial + intensity 100 + alpha 0.5 曾经把透明度吃干净 ——
+// Thick 是给 sheet/弹窗用的最厚材质，本身就接近不透明，三层叠上就成了实心板。
+// 现在退回 Thin：保留磨砂扩散，但还看得出是块玻璃。
+const TAB_BAR_BLUR_INTENSITY = 30;
+const TAB_BAR_TINT_ALPHA = 0.06;
 // 滑入/滑出：偏短 + ease-out，返回主页时弹得干脆。
 const TAB_BAR_ANIM_DURATION = 200;
 const TAB_BAR_EASING = Easing.out(Easing.cubic);
@@ -104,6 +110,7 @@ type TabBarStyles = {
   tabBarWrapper: ViewStyle;
   tabBar: ViewStyle;
   tabBarBlurLayer: ViewStyle;
+  tabBarTint: ViewStyle;
   tabItem: ViewStyle;
   pill: ViewStyle;
   iconWrap: ViewStyle;
@@ -117,6 +124,26 @@ interface TabBarSurfaceProps {
   colorScheme: 'light' | 'dark';
   hidden: boolean;
   styles: TabBarStyles;
+}
+
+// 两条 iOS 路径共用的磨砂层。抽出来是为了让 iOS 26（玻璃 + 磨砂）和
+// iOS 17/18（仅磨砂）用的是同一档材质与强度，观感不分裂。
+function TabBarFrostLayer({
+  colorScheme,
+  styles,
+}: {
+  colorScheme: 'light' | 'dark';
+  styles: TabBarStyles;
+}) {
+  return (
+    <BlurView
+      intensity={TAB_BAR_BLUR_INTENSITY}
+      // 应用允许主题与系统外观不同；自适应的 systemThickMaterial 只跟随系统，
+      // 可能把暗色主题的白字放到浅色材质上。必须跟随 resolvedMode。
+      tint={colorScheme === 'dark' ? 'systemThinMaterialDark' : 'systemThinMaterialLight'}
+      style={styles.tabBarBlurLayer}
+    />
+  );
 }
 
 function TabBarSurface({
@@ -144,6 +171,11 @@ function TabBarSurface({
         }}
         style={styles.tabBar}
       >
+        {/* GlassView 只有 clear/regular/none，液态玻璃偏清透折射、没有磨砂强度
+            可调。要磨砂就得在玻璃之上自己叠一层材质，否则 iOS 26 和旧系统
+            会长成两种东西。 */}
+        <TabBarFrostLayer colorScheme={colorScheme} styles={styles} />
+        <View style={styles.tabBarTint} pointerEvents="none" />
         {children}
       </GlassView>
     );
@@ -152,11 +184,8 @@ function TabBarSurface({
   if (Platform.OS === 'ios') {
     return (
       <View style={styles.tabBar}>
-        <BlurView
-          intensity={90}
-          tint={colorScheme === 'dark' ? 'systemMaterialDark' : 'systemMaterialLight'}
-          style={styles.tabBarBlurLayer}
-        />
+        <TabBarFrostLayer colorScheme={colorScheme} styles={styles} />
+        <View style={styles.tabBarTint} pointerEvents="none" />
         {children}
       </View>
     );
@@ -450,6 +479,13 @@ export default function TabLayout() {
       ...StyleSheet.absoluteFillObject,
       borderRadius: TAB_BAR_RADIUS,
       overflow: 'hidden',
+    },
+    // 玻璃/模糊之上的半透明底色，压住透穿的内容。和 tabBarBlurLayer 一样
+    // 自己带圆角 —— tabBar 刻意不裁剪（要留完整投影），指望父级裁不到。
+    tabBarTint: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: TAB_BAR_RADIUS,
+      backgroundColor: withAlpha(colors.surface, TAB_BAR_TINT_ALPHA),
     },
     // 每格等宽：flex:1 平分整条 bar，点击动效只作用于当前 tab。
     tabItem: {
