@@ -741,6 +741,11 @@
       "image": "Photo",
       "video": "Video"
     },
+    "disappearing": {
+      "off": "Off",
+      "minutes": "{{duration}} min",
+      "seconds": "{{duration}}s"
+    },
     "message": {
       "sending": "Sending",
       "sendFailed": "Failed",

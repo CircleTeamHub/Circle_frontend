@@ -665,6 +665,11 @@
       "image": "사진",
       "video": "동영상"
     },
+    "disappearing": {
+      "off": "끔",
+      "minutes": "{{duration}}분",
+      "seconds": "{{duration}}초"
+    },
     "message": {
       "sending": "전송 중",
       "sendFailed": "전송 실패",

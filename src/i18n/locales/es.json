@@ -666,6 +666,11 @@
       "image": "Foto",
       "video": "Vídeo"
     },
+    "disappearing": {
+      "off": "Desactivado",
+      "minutes": "{{duration}} min",
+      "seconds": "{{duration}} s"
+    },
     "message": {
       "sending": "Enviando",
       "sendFailed": "Fallido",

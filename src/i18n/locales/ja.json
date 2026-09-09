@@ -665,6 +665,11 @@
       "image": "画像",
       "video": "動画"
     },
+    "disappearing": {
+      "off": "オフ",
+      "minutes": "{{duration}}分",
+      "seconds": "{{duration}}秒"
+    },
     "message": {
       "sending": "送信中",
       "sendFailed": "送信失敗",

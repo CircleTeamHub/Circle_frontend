@@ -740,6 +740,11 @@
       "image": "图片",
       "video": "视频"
     },
+    "disappearing": {
+      "off": "关闭",
+      "minutes": "{{duration}}分钟",
+      "seconds": "{{duration}}秒"
+    },
     "message": {
       "sending": "发送中",
       "sendFailed": "发送失败",
