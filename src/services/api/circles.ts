@@ -26,24 +26,6 @@ function normalizeCircle<T extends Circle>(circle: T): T {
 
 // ── Circle CRUD ──────────────────────────────────────────────────────────────
 
-export async function fetchCircles(params?: {
-  city?: string;
-  page?: number;
-  limit?: number;
-}) {
-  const result = await apiClient<{
-    items: Circle[];
-    total: number;
-    page: number;
-    limit: number;
-  }>(`/circle${buildQuery(params ?? {})}`);
-
-  return {
-    ...result,
-    items: result.items.map(normalizeCircle),
-  };
-}
-
 export async function fetchMyCircles(
   tab: 'joined' | 'created' | 'applied',
 ): Promise<MyCircle[]> {

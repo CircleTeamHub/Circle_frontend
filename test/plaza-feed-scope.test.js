@@ -241,7 +241,7 @@ test('discover filter chips use a neutral close affordance', () => {
 });
 
 test('discover header filter button does not show an applied-filter dot', () => {
-  const source = read('src/features/discover/screens/DiscoverScreen.tsx');
+  const source = read('src/features/discover/screens/CirclePlazaScreen.tsx');
 
   assert.doesNotMatch(source, /filterDot/);
   assert.doesNotMatch(source, /hasActiveFilter/);

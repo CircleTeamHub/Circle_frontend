@@ -27,6 +27,8 @@ import { ChatSendError } from './socket-manager';
 export const EXPECTED_CHAT_SEND_ERROR_CODES: ReadonlySet<string> = new Set([
   'CHAT_SENSITIVE_WORD_BLOCKED',
   'CHAT_CONVERSATION_MUTED',
+  // 逐人禁言(群主/管理员对某个成员)。与全员禁言分开码,文案是「你已被禁言」。
+  'CHAT_MEMBER_SILENCED',
   'CHAT_BLOCKED',
   'CHAT_STRANGER_NOT_ALLOWED',
   'CHAT_RATE_LIMITED',

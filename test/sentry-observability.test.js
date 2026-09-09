@@ -518,8 +518,8 @@ test("transaction names keep static route shape but drop anything id-like", () =
   assert.equal(sanitizeTransactionName("/settings"), "/settings");
   assert.equal(sanitizeTransactionName("/app-settings"), "/app-settings");
   assert.equal(
-    sanitizeTransactionName("/(tabs)/discover/circles"),
-    "/(tabs)/discover/circles",
+    sanitizeTransactionName("/(tabs)/discover/filter"),
+    "/(tabs)/discover/filter",
   );
 
   // Expo Router 的参数占位本身不含用户数据,归一化后保留。
@@ -570,11 +570,11 @@ test("beforeSendTransaction applies the route-shape rule to the event", () => {
   const kept = calls[0].beforeSendTransaction({
     type: "transaction",
     event_id: "e1",
-    transaction: "/(tabs)/discover/circles",
+    transaction: "/(tabs)/discover/filter",
     start_timestamp: 1,
     timestamp: 2,
   });
-  assert.equal(kept.transaction, "/(tabs)/discover/circles");
+  assert.equal(kept.transaction, "/(tabs)/discover/filter");
 
   const scrubbed = calls[0].beforeSendTransaction({
     type: "transaction",

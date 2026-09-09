@@ -21,7 +21,8 @@ test('registration enters the app without requiring the optional profile step', 
 
 test('contacts owns moments and circle management while discover only owns plaza', () => {
   const contacts = read('src/features/contacts/screens/ContactsScreen.tsx');
-  const discover = read('src/features/discover/screens/DiscoverScreen.tsx');
+  // 动态 tab 的根屏就是圈子广场本身（不再有中转的入口列表）。
+  const discover = read('src/features/discover/screens/CirclePlazaScreen.tsx');
   const momentsRoute = read('app/(tabs)/contacts/moments.tsx');
 
   assert.match(contacts, /id: 'moments'/);
@@ -29,7 +30,7 @@ test('contacts owns moments and circle management while discover only owns plaza
   assert.match(contacts, /id: 'circles'[\s\S]*key: 'discover\.management'/);
   assert.match(contacts, /\/(?:\(tabs\)\/)?contacts\/moments/);
   assert.match(momentsRoute, /MomentsScreen/);
-  assert.match(discover, /\/\(tabs\)\/discover\/plaza/);
+  assert.match(read('app/(tabs)/discover/index.tsx'), /CirclePlazaScreen/);
   assert.doesNotMatch(discover, /\/\(tabs\)\/discover\/moments/);
   assert.doesNotMatch(discover, /\/\(tabs\)\/discover\/management/);
 });
@@ -82,7 +83,9 @@ test('group chat offers local and two-sided deletion plus management log access'
   );
   assert.match(info, /groupLog/);
   assert.match(messages, /deleteForEveryone/);
-  assert.match(logScreen, /system/);
+  // 群日志读的是独立于聊天记录的事件账本,不再从 system 消息里筛。
+  assert.match(logScreen, /fetchChatGroupEvents/);
+  assert.doesNotMatch(logScreen, /searchChatMessages/);
   assert.match(logRoute, /GroupLogScreen/);
 });
 
@@ -198,4 +201,30 @@ test('appearance settings wire all four requested chat display controls', () => 
   assert.match(chatPrefs, /globalBackgroundPreference/);
   assert.match(chat, /suppressAvatar/);
   assert.match(messages, /collapsedPinnedCount/);
+});
+
+test('groups screen tabs use the short PM labels and keep long section titles', () => {
+  const source = read('src/features/contacts/screens/GroupsScreen.tsx');
+
+  // 页签是横向滚动的，长文案会把第四个分类挤出屏幕，PM 要求的是短文案。
+  for (const key of ['tabNewGroups', 'tabMyJoined', 'tabMyCreated', 'tabMyManaged']) {
+    assert.match(source, new RegExp(`contacts\\.groupsScreen\\.${key}`));
+  }
+  // FilterTabs 只吃短文案，分区标题仍用完整文案。
+  assert.match(source, /tabs=\{categories\.map\(\(category\) => category\.tabLabel\)\}/);
+
+  const zh = JSON.parse(read('src/i18n/locales/zh.json')).contacts.groupsScreen;
+  assert.equal(zh.tabNewGroups, '新的群组');
+  assert.equal(zh.tabMyJoined, '我加入的');
+  assert.equal(zh.tabMyCreated, '我创建的');
+  assert.equal(zh.tabMyManaged, '我管理的');
+
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const groupsScreen = JSON.parse(
+      read(`src/i18n/locales/${locale}.json`),
+    ).contacts.groupsScreen;
+    for (const key of ['tabNewGroups', 'tabMyJoined', 'tabMyCreated', 'tabMyManaged']) {
+      assert.ok(groupsScreen[key], `${locale} ${key}`);
+    }
+  }
 });
