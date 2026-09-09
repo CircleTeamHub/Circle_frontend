@@ -31,7 +31,7 @@ import {
 } from '@/stores/auth-session-identity';
 import { useAuthStore } from '@/stores/authStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { iconForeground, Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { MyCircle } from '@/types';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
 
@@ -157,7 +157,7 @@ const s = StyleSheet.create({
 export default function GroupExpansionScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { isOffline } = useNetworkStatus();
   const walletBalance = useWalletRealtimeStore((state) => state.balance);
   const [circles, setCircles] = useState<MyCircle[]>([]);
@@ -624,7 +624,7 @@ export default function GroupExpansionScreen() {
 
         <View style={[s.card, d.surface]}>
           <View style={s.titleRow}>
-            <Ionicons name="albums-outline" size={20} color={colors.primary} />
+            <Ionicons name="albums-outline" size={20} color={colors.iconAccent} />
             <Text style={[Typography.h3, d.text]}>
               {t('profile.groupExpansion.chooseCircle', {
                 defaultValue: '选择要扩容的群',
@@ -685,7 +685,7 @@ export default function GroupExpansionScreen() {
                 <Ionicons
                   name="people-outline"
                   size={22}
-                  color={colors.primary}
+                  color={colors.iconAccent}
                 />
               </View>
               <View style={s.circleRowText}>
@@ -711,7 +711,7 @@ export default function GroupExpansionScreen() {
                 <Ionicons
                   name="chevron-forward"
                   size={18}
-                  color={colors.primary}
+                  color={colors.iconAccent}
                 />
               </View>
             </Pressable>
@@ -763,7 +763,7 @@ export default function GroupExpansionScreen() {
         {selectedCircleId ? (
           <View style={[s.card, d.surface]}>
             <View style={s.titleRow}>
-              <Ionicons name="card-outline" size={20} color={colors.primary} />
+              <Ionicons name="card-outline" size={20} color={colors.iconAccent} />
               <Text style={[Typography.h3, d.text]}>
                 {t('profile.groupExpansion.chooseProduct', {
                   defaultValue: '选择扩容档位',
@@ -813,7 +813,7 @@ export default function GroupExpansionScreen() {
                           <Ionicons
                             name="people-circle-outline"
                             size={30}
-                            color={productColor}
+                            color={iconForeground(productColor, resolvedMode)}
                           />
                         </View>
                         <View style={s.productText}>

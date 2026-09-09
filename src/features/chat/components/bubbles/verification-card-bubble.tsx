@@ -62,7 +62,7 @@ export const VerificationCardBubble: React.FC<VerificationCardBubbleProps> = ({
           <Ionicons
             name="shield-checkmark"
             size={26}
-            color={outgoing ? colors.white : colors.primary}
+            color={outgoing ? colors.white : colors.iconAccent}
           />
         </View>
       }

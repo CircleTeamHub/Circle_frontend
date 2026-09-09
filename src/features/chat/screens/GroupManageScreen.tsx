@@ -322,7 +322,7 @@ export default function GroupManageScreen() {
 
   const renderAddRow = (label: string, onPress: () => void, testID: string) => (
     <Pressable style={s.actionRow} onPress={onPress} accessibilityRole="button" testID={testID}>
-      <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+      <Ionicons name="add-circle-outline" size={22} color={colors.iconAccent} />
       <Text style={d.addText}>{label}</Text>
     </Pressable>
   );

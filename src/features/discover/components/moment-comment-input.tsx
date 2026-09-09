@@ -459,7 +459,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
             <Ionicons
               name="at"
               size={22}
-              color={panel === 'friends' ? colors.primary : colors.textSecondary}
+              color={panel === 'friends' ? colors.iconAccent : colors.textSecondary}
             />
           </Pressable>
           <Pressable
@@ -474,7 +474,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
             <Ionicons
               name="happy-outline"
               size={22}
-              color={panel === 'emoji' ? colors.primary : colors.textSecondary}
+              color={panel === 'emoji' ? colors.iconAccent : colors.textSecondary}
             />
           </Pressable>
           <Pressable

@@ -551,7 +551,7 @@ export default function SendFriendRequestScreen() {
                       selected ? 'radio-button-on' : 'radio-button-off'
                     }
                     size={20}
-                    color={selected ? colors.primary : colors.textSecondary}
+                    color={selected ? colors.iconAccent : colors.textSecondary}
                   />
                 </Pressable>
               );

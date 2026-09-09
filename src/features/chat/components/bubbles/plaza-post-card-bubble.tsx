@@ -309,7 +309,7 @@ export const PlazaPostCardBubble: React.FC<PlazaPostCardBubbleProps> = ({
 
           <View style={s.signupRow}>
             <View style={s.signupInfo}>
-              <Ionicons name="flame" size={13} color={colors.primary} />
+              <Ionicons name="flame" size={13} color={colors.iconAccent} />
               <Text
                 style={[s.signupText, { color: colors.primary }]}
                 numberOfLines={1}

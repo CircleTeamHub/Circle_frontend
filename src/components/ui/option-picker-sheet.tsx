@@ -163,7 +163,7 @@ export function OptionPickerSheet<T extends string | number | null>({
                   <Ionicons
                     name="checkmark"
                     size={20}
-                    color={colors.primary}
+                    color={colors.iconAccent}
                   />
                 ) : null}
               </Pressable>

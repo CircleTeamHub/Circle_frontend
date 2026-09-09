@@ -28,7 +28,7 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchNotes } from '@/services/api/notes';
 import i18n from '@/i18n';
-import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
+import { iconForeground, Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -117,7 +117,7 @@ function NoteOptionChip({
   checked,
   onToggle,
 }: NoteOptionChipProps) {
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
 
   return (
     <Pressable
@@ -135,7 +135,7 @@ function NoteOptionChip({
       <Ionicons
         name={icon}
         size={20}
-        color={checked ? accent : colors.textSecondary}
+        color={checked ? iconForeground(accent, resolvedMode) : colors.textSecondary}
       />
       <Text
         style={[
@@ -152,7 +152,7 @@ function NoteOptionChip({
       <Ionicons
         name={checked ? 'checkmark-circle' : 'ellipse-outline'}
         size={15}
-        color={checked ? accent : colors.surfaceBorder}
+        color={checked ? iconForeground(accent, resolvedMode) : colors.surfaceBorder}
       />
     </Pressable>
   );

@@ -3,6 +3,7 @@ export type { ThemeMode, ResolvedMode, ThemeColors, ThemeContextValue } from './
 
 // Color palettes
 export { darkColors, lightColors } from './colors';
+export { iconForeground } from './icon-color';
 
 // Design tokens (theme-independent)
 export { Spacing, Typography, Radius, Gradients, withAlpha } from './tokens';

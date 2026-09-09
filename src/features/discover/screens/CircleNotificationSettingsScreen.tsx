@@ -153,7 +153,7 @@ export default function CircleNotificationSettingsScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('discover.guide.title')}
         >
-          <Ionicons name="book-outline" size={22} color={colors.primary} />
+          <Ionicons name="book-outline" size={22} color={colors.iconAccent} />
           <View style={s.guideText}>
             <Text style={[s.guideTitle, { color: colors.text }]}>
               {t('discover.guide.title')}

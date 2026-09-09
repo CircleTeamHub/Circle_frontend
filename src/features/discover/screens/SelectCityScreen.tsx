@@ -362,7 +362,7 @@ export default function SelectCityScreen() {
         </View>
         <View style={s.checkIcon}>
           {isNationwide ? (
-            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+            <Ionicons name="checkmark-circle" size={20} color={colors.iconAccent} />
           ) : null}
         </View>
       </Pressable>
@@ -398,7 +398,7 @@ export default function SelectCityScreen() {
               </Text>
               <View style={s.checkIcon}>
                 {isSelected ? (
-                  <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+                  <Ionicons name="checkmark-circle" size={18} color={colors.iconAccent} />
                 ) : null}
               </View>
             </Pressable>

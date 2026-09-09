@@ -91,7 +91,7 @@ export const NotificationRow = memo(function NotificationRow({
               onPress={(event) => handleAction(event, onMarkRead)}
               style={[s.actionButton, { backgroundColor: colors.primaryLight }]}
             >
-              <Ionicons name="checkmark-done-outline" size={17} color={colors.primary} />
+              <Ionicons name="checkmark-done-outline" size={17} color={colors.iconAccent} />
             </Pressable>
           ) : null}
           {onDelete ? (

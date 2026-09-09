@@ -33,7 +33,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 import { useSupportConfigStore } from '@/stores/supportConfigStore';
 import { selectSupportAgents } from '@/stores/support-config-selectors';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { iconForeground, Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 
@@ -285,7 +285,7 @@ export default function MemberCenterScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const visibleBenefits = MEMBERSHIP_BENEFITS.filter(
     (benefit) =>
       FEATURE_FLAGS.fancyNumbers || benefit.id !== 'fancy-number',
@@ -796,7 +796,7 @@ export default function MemberCenterScreen() {
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
-                      color={visual.accent}
+                      color={iconForeground(visual.accent, resolvedMode)}
                     />
                   ) : null}
                 </View>
@@ -834,7 +834,7 @@ export default function MemberCenterScreen() {
                 <Ionicons
                   name="checkmark-circle"
                   size={20}
-                  color={TIER_VISUALS[selectedPlan.tier].accent}
+                  color={iconForeground(TIER_VISUALS[selectedPlan.tier].accent, resolvedMode)}
                 />
                 <View style={s.benefitText}>
                   <Text style={d.benefitLabel}>

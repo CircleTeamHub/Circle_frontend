@@ -446,7 +446,7 @@ export default function AvatarFrameDetailScreen() {
                   name={equipped ? 'checkmark-circle' : 'ellipse-outline'}
                   size={16}
                   color={
-                    equipped ? colors.primary : colors.textSecondary
+                    equipped ? colors.iconAccent : colors.textSecondary
                   }
                 />
                 <Text
@@ -495,7 +495,7 @@ export default function AvatarFrameDetailScreen() {
                           : 'shield-checkmark-outline'
                       }
                       size={18}
-                      color={colors.primary}
+                      color={colors.iconAccent}
                     />
                     <View style={s.sourceText}>
                       <Text style={[s.body, { color: colors.text }]}>

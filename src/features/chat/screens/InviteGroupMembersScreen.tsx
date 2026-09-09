@@ -206,7 +206,7 @@ export default function InviteGroupMembersScreen() {
           <Ionicons
             name={checked ? 'checkmark-circle' : 'ellipse-outline'}
             size={22}
-            color={checked ? colors.primary : colors.textSecondary}
+            color={checked ? colors.iconAccent : colors.textSecondary}
           />
           <Avatar name={displayName} uri={item.avatarUrl ?? undefined} size={40} />
           <View style={s.rowText}>

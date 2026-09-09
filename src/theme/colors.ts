@@ -6,6 +6,7 @@ export const darkColors: ThemeColors = {
   surfaceBorder: '#565A6B',
   divider: '#3C3E4B',
   primary: '#6366F1',
+  iconAccent: '#B18AFF',
   primaryLight: 'rgba(99, 102, 241, 0.25)',
   primaryDeep: '#4F46E5',
   // 会员卡渐变 ['#5B4BE6','#7C5CF0','#A86BF0'] 的核心色，app 的品牌紫
@@ -62,6 +63,7 @@ export const lightColors: ThemeColors = {
   surfaceBorder: '#E5E7EB',
   divider: '#F0F0F0',
   primary: '#6366F1',
+  iconAccent: '#6366F1',
   primaryLight: 'rgba(99, 102, 241, 0.15)',
   primaryDeep: '#4F46E5',
   // 会员卡渐变 ['#5B4BE6','#7C5CF0','#A86BF0'] 的核心色，app 的品牌紫

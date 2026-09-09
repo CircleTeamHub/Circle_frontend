@@ -250,7 +250,7 @@ export default function ScanScreen() {
     return (
       <View style={[s.statusPane, d.statusPane, { paddingTop: insets.top }]}>
         <View style={[s.statusIcon, d.statusIcon]}>
-          <Ionicons name="camera-outline" size={26} color={colors.primary} />
+          <Ionicons name="camera-outline" size={26} color={colors.iconAccent} />
         </View>
         <Text style={[s.statusTitle, d.statusTitle]}>
           {t('messages.scanPermissionTitle')}

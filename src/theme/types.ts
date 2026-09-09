@@ -7,6 +7,8 @@ export interface ThemeColors {
   surfaceBorder: string;
   divider: string;
   primary: string;
+  /** 强调图标的前景色；暗色提亮，浅色沿用 primary。 */
+  iconAccent: string;
   primaryLight: string;
   /** 比 primary 深一档的靛蓝，用于需要更重的实心按钮/强调面 */
   primaryDeep: string;

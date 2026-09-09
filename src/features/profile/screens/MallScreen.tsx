@@ -13,7 +13,7 @@ import {
   type MallProduct,
   type MallSection,
 } from '@/services/api/mall';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { iconForeground, Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
   content: {
@@ -59,7 +59,7 @@ export default function MallScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { isOffline } = useNetworkStatus();
   const [sections, setSections] = useState<MallSection[]>(FALLBACK_SECTIONS);
   const [statusText, setStatusText] = useState<string | null>(null);
@@ -206,7 +206,7 @@ export default function MallScreen() {
                   onPress={() => handleProductPress(product)}
                 >
                   <View style={[s.iconWrap, { backgroundColor: `${product.color}22` }]}>
-                    <Ionicons name={product.icon as any} size={28} color={product.color} />
+                    <Ionicons name={product.icon as any} size={28} color={iconForeground(product.color, resolvedMode)} />
                   </View>
                   <Text style={d.productText}>
                     {t(product.nameKey, { defaultValue: product.defaultName })}

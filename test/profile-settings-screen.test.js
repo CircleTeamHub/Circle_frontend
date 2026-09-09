@@ -854,7 +854,7 @@ test("system permissions screen omits unsupported bluetooth permission", () => {
   assert.doesNotMatch(source, /BLUETOOTH_CONNECT|BLUETOOTH_SCAN/);
 });
 
-test("system permissions screen uses primary purple accents and a real settings button", () => {
+test("system permissions screen uses bright icon accents and a real settings button", () => {
   const screenSource = fs.readFileSync(
     path.join(
       process.cwd(),
@@ -870,7 +870,7 @@ test("system permissions screen uses primary purple accents and a real settings 
     "utf8",
   );
 
-  assert.match(screenSource, /iconColor:\s*colors\.primary/);
+  assert.match(screenSource, /iconColor:\s*colors\.iconAccent/);
   assert.match(screenSource, /iconBackgroundColor:\s*colors\.primaryLight/);
   assert.match(screenSource, /statusColor:\s*colors\.primary/);
   assert.match(screenSource, /settingsButton/);

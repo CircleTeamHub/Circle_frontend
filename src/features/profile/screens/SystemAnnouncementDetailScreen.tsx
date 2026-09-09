@@ -78,7 +78,7 @@ export default function SystemAnnouncementDetailScreen() {
         {announcement ? (
           <View style={[s.card, d.card]}>
             <View style={s.titleRow}>
-              <Ionicons name="megaphone-outline" size={24} color={colors.primary} />
+              <Ionicons name="megaphone-outline" size={24} color={colors.iconAccent} />
               <Text selectable style={d.title}>
                 {t(announcement.titleKey)}
               </Text>

@@ -206,7 +206,7 @@ export default function UnlistedNotesScreen() {
             defaultValue: '上架',
           })}
         >
-          <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
+          <Ionicons name="cloud-upload-outline" size={20} color={colors.iconAccent} />
           <Text style={[s.sheetLabel, d.primary]}>
             {t('notes.actions.relist', { defaultValue: '上架' })}
           </Text>

@@ -259,7 +259,7 @@ export default function FilterScreen() {
                     onPress={() => removeDraftCircle(circle.id)}
                     hitSlop={6}
                   >
-                    <Ionicons name="close" size={13} color={colors.primary} />
+                    <Ionicons name="close" size={13} color={colors.iconAccent} />
                   </Pressable>
                 </View>
               ))}
@@ -298,7 +298,7 @@ export default function FilterScreen() {
                   onPress={() => setDraftNationwide(false)}
                   hitSlop={6}
                 >
-                  <Ionicons name="close" size={13} color={colors.primary} />
+                  <Ionicons name="close" size={13} color={colors.iconAccent} />
                 </Pressable>
               </View>
             </View>
@@ -319,7 +319,7 @@ export default function FilterScreen() {
                     onPress={() => removeDraftCity(city)}
                     hitSlop={6}
                   >
-                    <Ionicons name="close" size={13} color={colors.primary} />
+                    <Ionicons name="close" size={13} color={colors.iconAccent} />
                   </Pressable>
                 </View>
               ))}
@@ -337,7 +337,7 @@ export default function FilterScreen() {
           style={[s.actionBtn, d.clearBtn]}
           onPress={handleClear}
         >
-          <Ionicons name="trash-outline" size={18} color={colors.primary} />
+          <Ionicons name="trash-outline" size={18} color={colors.iconAccent} />
           <Text style={d.clearText}>{t('discover.filter.clear')}</Text>
         </Pressable>
         <Pressable style={[s.actionBtn, d.saveBtn]} onPress={handleSave}>

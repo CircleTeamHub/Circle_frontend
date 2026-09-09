@@ -228,7 +228,7 @@ export default function RecycleBinScreen() {
             defaultValue: '恢复',
           })}
         >
-          <Ionicons name="refresh-outline" size={20} color={colors.primary} />
+          <Ionicons name="refresh-outline" size={20} color={colors.iconAccent} />
           <Text style={[s.sheetLabel, d.primary]}>
             {t('notes.actions.restore', { defaultValue: '恢复' })}
           </Text>

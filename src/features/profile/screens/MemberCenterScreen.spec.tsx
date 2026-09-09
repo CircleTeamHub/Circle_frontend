@@ -55,6 +55,7 @@ jest.mock('@expo/vector-icons', () => {
 });
 
 jest.mock('@/theme', () => ({
+  ...jest.requireActual<typeof import('@/theme/icon-color')>('@/theme/icon-color'),
   Radius: { xs: 4, sm: 8 },
   Spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
   Typography: {
@@ -68,6 +69,7 @@ jest.mock('@/theme', () => ({
     h3: {},
   },
   useTheme: () => ({
+    resolvedMode: 'light',
     colors: {
       background: '#fff',
       surface: '#fff',

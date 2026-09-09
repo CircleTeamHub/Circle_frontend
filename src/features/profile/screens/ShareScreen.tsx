@@ -381,7 +381,7 @@ export default function ShareScreen() {
                 !inviteCode && s.disabled,
               ]}
             >
-              <Ionicons name="share-social-outline" size={18} color={colors.primary} />
+              <Ionicons name="share-social-outline" size={18} color={colors.iconAccent} />
               <Text style={[Typography.body, { color: colors.primary }]}>
                 {t('referral.share')}
               </Text>
