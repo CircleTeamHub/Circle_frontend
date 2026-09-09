@@ -112,6 +112,14 @@ function hasLocationDraftValue(location: LocationDraft) {
 }
 
 const LOCATION_MAP_HEIGHT = 126;
+// 与 CreateNoteDto / NoteTextSectionDto 的校验保持一致。
+const MAX_NOTE_TITLE_LENGTH = 120;
+const MAX_NOTE_TEXT_LENGTH = 20_000;
+const MAX_NOTE_TEXT_BLOCKS = 500;
+
+function getTextStats(blocks: Record<string, unknown>[]) {
+  return { characters: Array.from(extractPlainText(blocks)).length, blocks: blocks.length };
+}
 
 function getTextOnlyBlocks(blocks: Record<string, unknown>[]) {
   return blocks.filter((block) => block.type !== 'image' && block.type !== 'video');
@@ -171,6 +179,10 @@ export default function EditNoteScreen() {
   const isEdit = Boolean(id);
 
   const [title, setTitle] = useState('');
+  const titleInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const [titleValidationVisible, setTitleValidationVisible] = useState(false);
+  const [textStats, setTextStats] = useState({ characters: 0, blocks: 0 });
   const blocksRef = useRef<Record<string, unknown>[]>([]);
   const [initialBlocks, setInitialBlocks] = useState<Record<string, unknown>[] | null>(null);
   const [availableGroups, setAvailableGroups] = useState<NoteGroup[]>([]);
@@ -285,6 +297,8 @@ export default function EditNoteScreen() {
     if (!isEdit || !id) {
       existingSectionsRef.current = null;
       blocksRef.current = [];
+      setTextStats({ characters: 0, blocks: 0 });
+      setTitleValidationVisible(false);
       setInitialBlocks(null);
       setLoadedNoteId(null);
       pickerPreviewDisposerRef.current.disposeAll();
@@ -303,6 +317,8 @@ export default function EditNoteScreen() {
     setLoading(true);
     setLoadedNoteId(null);
     blocksRef.current = [];
+    setTextStats({ characters: 0, blocks: 0 });
+    setTitleValidationVisible(false);
     setInitialBlocks(null);
     setTitle('');
     pickerPreviewDisposerRef.current.disposeAll();
@@ -325,8 +341,16 @@ export default function EditNoteScreen() {
         const normalizedSections = buildNoteSections(note);
         const loaded = normalizedSections.text.contentJson ?? [];
         const textBlocks = getTextOnlyBlocks(loaded);
+        // 旧笔记可能只有纯文本，进入编辑时也必须带上，避免保存后清空正文。
+        if (textBlocks.length === 0 && normalizedSections.text.content) {
+          textBlocks.push({
+            type: 'paragraph',
+            content: [{ type: 'text', text: normalizedSections.text.content, styles: {} }],
+          });
+        }
 
         blocksRef.current = textBlocks;
+        setTextStats(getTextStats(textBlocks));
         setInitialBlocks(textBlocks.length > 0 ? textBlocks : null);
         setMediaItems(normalizeSectionMedia(normalizedSections.media.items));
         setShowcaseItems(normalizeSectionMedia(normalizedSections.showcase.items));
@@ -398,6 +422,7 @@ export default function EditNoteScreen() {
 
   const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
     blocksRef.current = getTextOnlyBlocks(newBlocks);
+    setTextStats(getTextStats(blocksRef.current));
   }, []);
 
   const handleAddSectionMedia = useCallback(
@@ -651,6 +676,25 @@ export default function EditNoteScreen() {
     );
   }, []);
 
+  const getTextError = useCallback((stats: ReturnType<typeof getTextStats>) => {
+    if (stats.characters > MAX_NOTE_TEXT_LENGTH) {
+      return t('notes.edit.textTooLong', {
+        defaultValue: '正文最多 {{max}} 字符，当前 {{count}} 字符。内容已保留，请缩短后保存。',
+        max: MAX_NOTE_TEXT_LENGTH,
+        count: stats.characters,
+      });
+    }
+    if (stats.blocks > MAX_NOTE_TEXT_BLOCKS) {
+      return t('notes.edit.tooManyParagraphs', {
+        defaultValue: '正文最多 {{max}} 段。内容已保留，请合并部分段落后保存。',
+        max: MAX_NOTE_TEXT_BLOCKS,
+      });
+    }
+    return null;
+  }, [t]);
+  const textError = getTextError(textStats);
+  const titleError = titleValidationVisible && !title.trim();
+
   const handleSubmit = useCallback(async () => {
     if (
       loading ||
@@ -672,12 +716,29 @@ export default function EditNoteScreen() {
       return;
     }
     const trimmedTitle = title.trim();
-    if (!trimmedTitle) return;
+    if (!trimmedTitle) {
+      setTitleValidationVisible(true);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      Alert.alert(
+        t('notes.edit.validationTitle', { defaultValue: '请检查笔记内容' }),
+        t('notes.edit.titleRequired', { defaultValue: '请填写标题' }),
+        [{ text: t('common.ok'), onPress: () => titleInputRef.current?.focus() }],
+      );
+      return;
+    }
+    const currentBlocks = getTextOnlyBlocks(blocksRef.current);
+    const currentTextError = getTextError(getTextStats(currentBlocks));
+    if (currentTextError) {
+      Alert.alert(
+        t('notes.edit.validationTitle', { defaultValue: '请检查笔记内容' }),
+        currentTextError,
+      );
+      return;
+    }
     saveInFlightRef.current = true;
     const saveGeneration = saveGenerationRef.current;
     setIsSubmitting(true);
     try {
-      const currentBlocks = getTextOnlyBlocks(blocksRef.current);
       const plainText = extractPlainText(currentBlocks);
       const rawSectionMedia = stripEditorMediaDrafts(mergeMedia(mediaItems));
       const rawSectionShowcase = stripEditorMediaDrafts(mergeMedia(showcaseItems));
@@ -738,6 +799,7 @@ export default function EditNoteScreen() {
       reportHandledFailure('noteEditor', 'save', error);
     }
   }, [
+    getTextError,
     id,
     isEdit,
     isRouteDataReady,
@@ -828,8 +890,7 @@ export default function EditNoteScreen() {
     isSubmitting ||
     uploadingSection !== null ||
     !canSubmitNoteMedia(mediaItems) ||
-    !canSubmitNoteMedia(showcaseItems) ||
-    !title.trim();
+    !canSubmitNoteMedia(showcaseItems);
   const hasLocationCoordinates = hasValidLocationCoordinates(
     locationDraft.latitude,
     locationDraft.longitude,
@@ -995,6 +1056,7 @@ export default function EditNoteScreen() {
             : t('notes.edit.newTitle', { defaultValue: '新建笔记' })}
         </Text>
         <Pressable
+          accessibilityRole="button"
           style={[s.doneBtn, d.doneBtn, isDoneDisabled && d.doneBtnDisabled]}
           onPress={handleSubmit}
           disabled={isDoneDisabled}
@@ -1008,20 +1070,34 @@ export default function EditNoteScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <TextInput
+          ref={titleInputRef}
           style={[s.titleInput, d.titleInput]}
           placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
           placeholderTextColor={colors.textSecondary}
           value={title}
           onChangeText={setTitle}
-          maxLength={120}
+          maxLength={MAX_NOTE_TITLE_LENGTH}
           returnKeyType="next"
         />
+        <Text
+          accessibilityRole={titleError ? 'alert' : undefined}
+          accessibilityLiveRegion="polite"
+          style={[s.titleHint, { color: titleError ? colors.danger : colors.textSecondary }]}
+        >
+          {titleError
+            ? t('notes.edit.titleRequired', { defaultValue: '请填写标题' })
+            : t('notes.edit.titleHint', {
+                defaultValue: '标题必填，最多 {{max}} 字符',
+                max: MAX_NOTE_TITLE_LENGTH,
+              })}
+        </Text>
 
         <View style={s.metaRow}>
           <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
@@ -1071,7 +1147,11 @@ export default function EditNoteScreen() {
           {renderSectionHeader(
             'text-outline',
             t('notes.edit.sections.text', { defaultValue: '文字' }),
-            t('notes.edit.sections.required', { defaultValue: '必填' }),
+            t('notes.edit.textCount', {
+              defaultValue: '{{count}} / {{max}} 字符',
+              count: textStats.characters,
+              max: MAX_NOTE_TEXT_LENGTH,
+            }),
           )}
           <View style={[s.textEditorFrame, d.editorFrame]}>
             {editorMounted ? (
@@ -1082,6 +1162,15 @@ export default function EditNoteScreen() {
               />
             ) : null}
           </View>
+          <Text
+            accessibilityRole={textError ? 'alert' : undefined}
+            accessibilityLiveRegion="polite"
+            style={[s.sectionSubtitle, { color: textError ? colors.danger : colors.textSecondary }]}
+          >
+            {textError ?? t('notes.edit.textScrollHint', {
+              defaultValue: '正文可选，可在框内上下滑动查看全文',
+            })}
+          </Text>
         </View>
 
         {unrecoverableMediaCount > 0 ? (
@@ -1285,6 +1374,7 @@ const s = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 36,
   },
+  titleHint: { ...Typography.small, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xs },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',

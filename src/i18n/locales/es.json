@@ -931,6 +931,13 @@
         "text": "Texto",
         "textHint": "Editar solo el contenido de texto"
       },
+      "validationTitle": "Revisa tu nota",
+      "titleRequired": "Introduce un título",
+      "titleHint": "Título obligatorio, hasta {{max}} caracteres",
+      "textCount": "{{count}} / {{max}} caracteres",
+      "textScrollHint": "El texto es opcional. Desliza dentro del editor para leer la nota completa.",
+      "textTooLong": "El texto admite hasta {{max}} caracteres; tienes {{count}}. Se ha conservado el texto. Acórtalo antes de guardar.",
+      "tooManyParagraphs": "El texto admite hasta {{max}} párrafos. Se ha conservado el texto. Combina algunos párrafos antes de guardar.",
       "titlePlaceholder": "Título",
       "uploading": "Subiendo...",
       "videoItem": "Video"

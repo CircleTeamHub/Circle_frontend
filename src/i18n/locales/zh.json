@@ -2462,6 +2462,13 @@
         "text": "文字",
         "textHint": "只编辑文字内容"
       },
+      "validationTitle": "请检查笔记内容",
+      "titleRequired": "请填写标题",
+      "titleHint": "标题必填，最多 {{max}} 字符",
+      "textCount": "{{count}} / {{max}} 字符",
+      "textScrollHint": "正文可选，可在框内上下滑动查看全文",
+      "textTooLong": "正文最多 {{max}} 字符，当前 {{count}} 字符。内容已保留，请缩短后保存。",
+      "tooManyParagraphs": "正文最多 {{max}} 段。内容已保留，请合并部分段落后保存。",
       "titlePlaceholder": "标题",
       "uploading": "上传中...",
       "videoItem": "视频"

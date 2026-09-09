@@ -2465,6 +2465,13 @@
         "text": "Text",
         "textHint": "Edit text content only"
       },
+      "validationTitle": "Check your note",
+      "titleRequired": "Please enter a title",
+      "titleHint": "Title required, up to {{max}} characters",
+      "textCount": "{{count}} / {{max}} characters",
+      "textScrollHint": "Text is optional. Scroll inside the editor to read the full note.",
+      "textTooLong": "Text can contain up to {{max}} characters; you have {{count}}. Your text is preserved. Shorten it before saving.",
+      "tooManyParagraphs": "Text can contain up to {{max}} paragraphs. Your text is preserved. Combine some paragraphs before saving.",
       "titlePlaceholder": "Title",
       "uploading": "Uploading...",
       "videoItem": "Video"

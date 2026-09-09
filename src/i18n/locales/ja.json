@@ -930,6 +930,13 @@
         "text": "テキスト",
         "textHint": "テキストのみを編集"
       },
+      "validationTitle": "ノートの内容を確認してください",
+      "titleRequired": "タイトルを入力してください",
+      "titleHint": "タイトルは必須です（最大{{max}}文字）",
+      "textCount": "{{count}} / {{max}}文字",
+      "textScrollHint": "本文は任意です。入力欄内をスクロールすると全文を確認できます。",
+      "textTooLong": "本文は最大{{max}}文字です（現在{{count}}文字）。入力内容は保持されています。短くしてから保存してください。",
+      "tooManyParagraphs": "本文は最大{{max}}段落です。入力内容は保持されています。一部の段落をまとめてから保存してください。",
       "titlePlaceholder": "タイトル",
       "uploading": "アップロード中...",
       "videoItem": "動画"

@@ -353,7 +353,14 @@ const s = StyleSheet.create({
     height: 40,
     borderRadius: Radius.xxl,
   },
-  searchInput: { flex: 1, ...Typography.bodyRegular, padding: 0 },
+  searchInput: {
+    flex: 1,
+    ...Typography.bodyRegular,
+    lineHeight: 20,
+    minHeight: 24,
+    padding: 0,
+    textAlignVertical: 'center',
+  },
   list: { maxHeight: 420 },
   row: {
     flexDirection: 'row',

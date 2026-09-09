@@ -413,3 +413,25 @@ test('normalization merges transitive key and renewed-URL aliases in either orde
     ]);
   }
 });
+
+test('plain text retains pasted links, nested lists, code and table cell text', () => {
+  const { extractPlainText } = loadTsModule('src/features/notes/utils/note-blocks.ts');
+  const text = extractPlainText([
+    {
+      type: 'bulletListItem',
+      content: [{ type: 'text', text: '主项' }, { type: 'link', content: [{ text: '链接文字' }] }],
+      children: [{ type: 'checkListItem', content: [{ text: '子项' }], children: [null] }],
+    },
+    { type: 'codeBlock', content: [{ text: 'const answer = 42;' }] },
+    { type: 'table', content: { type: 'tableContent', rows: [
+      { cells: [[{ text: '旧格式单元格' }], { type: 'tableCell', content: [{ text: '新格式单元格' }] }] },
+    ] } },
+  ]);
+  assert.equal(text, '主项链接文字\n子项\nconst answer = 42;\n旧格式单元格\t新格式单元格');
+});
+
+test('extracting a long pasted document never truncates its tail', () => {
+  const { extractPlainText } = loadTsModule('src/features/notes/utils/note-blocks.ts');
+  const text = '长文测试\n'.repeat(5000) + '正文结束';
+  assert.equal(extractPlainText([{ type: 'paragraph', content: [{ text }] }]), text);
+});
