@@ -443,7 +443,9 @@ export default function ChatInfoScreen() {
       })
     : (currentGroupMember?.role ?? null);
   const isOwner = selfGroupRole === 'OWNER';
-  const isStandaloneGroupOwner = isStandaloneGroup && isOwner;
+  const isStandaloneGroupOwner =
+    isStandaloneGroup &&
+    (conversation?.ownerId === currentUserID || isOwner);
   // 圈子群的圈主同样按不了「退出」——后端 CIRCLE_OWNER_CANNOT_LEAVE 直接 403。
   // 圈主要撤掉圈子只有解散一条路,与独立群聊的群主同一语义,只是作用域是整个
   // 圈子(圈子从所有人的列表消失 + 群聊全员离座),所以走的是另一个端点。
@@ -1663,11 +1665,6 @@ export default function ChatInfoScreen() {
             )}
             <Divider />
             <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
-            <Divider />
-            <GroupInfoRow
-              label={t('chat.groupLog', { defaultValue: '群日志' })}
-              onPress={handleOpenGroupLog}
-            />
             {canViewMemberDirectory ? (
               <>
                 <Divider />
@@ -1686,6 +1683,7 @@ export default function ChatInfoScreen() {
                 />
               </>
             ) : null}
+            <Divider />
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
