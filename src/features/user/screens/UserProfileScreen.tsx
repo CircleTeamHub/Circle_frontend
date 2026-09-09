@@ -24,7 +24,14 @@ import {
   ROW_PADDING_H,
   ROW_GAP,
 } from '@/features/user/components/profile-action-row';
-import type { UserProfileData } from '@/features/user/data/profiles';
+import {
+  EMPTY_PROFILE_CONTACT,
+  type UserProfileData,
+} from '@/features/user/data/profiles';
+import {
+  getVisibleProfileContacts,
+  type VisibleProfileContact,
+} from '@/features/user/profile-contact';
 import {
   canOpenSendFriendRequest,
   getProfileMetaItems,
@@ -271,7 +278,7 @@ export default function UserProfileScreen() {
       gender: null,
       city: null,
       signature: '',
-      phone: '',
+      contact: EMPTY_PROFILE_CONTACT,
       likeCount: 0,
       recognitionCount: 0,
     }),
@@ -316,7 +323,12 @@ export default function UserProfileScreen() {
           displayIcons: currentUser.displayIcons ?? [],
           likeCount: currentUser.likeCount ?? 0,
           recognitionCount: currentUser.recognitionCount ?? 0,
-          phone: currentUser.phoneNumber ?? t('userProfile.phoneHidden'),
+          contact: {
+            phone: currentUser.phoneNumber,
+            email: currentUser.email,
+            wechat: currentUser.wechat,
+            qq: currentUser.qq,
+          },
           remarkHint: currentUser.nickname,
         });
         return () => {
@@ -348,7 +360,14 @@ export default function UserProfileScreen() {
             gender: profile.gender,
             city: profile.city,
             signature: getProfileSignature(profile.persona, profile.helloWords, t),
-            phone: profile.phoneNumber ?? t('userProfile.phoneHidden'),
+            // 后端已按对方的 showPhone / showEmail / showWechat / showQQ 把关掉的
+            // 字段置成 null，这里原样收下即可，不要在客户端再判一次可见性。
+            contact: {
+              phone: profile.phoneNumber,
+              email: profile.email,
+              wechat: profile.wechat,
+              qq: profile.qq,
+            },
             remarkHint: profile.nickname,
           });
         })
@@ -478,6 +497,34 @@ export default function UserProfileScreen() {
   });
   const showAddFriendButton = canSendFriendRequest;
   const likeCount = Math.max(0, profile.likeCount ?? 0);
+
+  // 联系方式卡只在看**别人**的资料时出现。
+  //
+  // 看自己时后端 canViewProfileField 走的是 isSelf 短路,四个字段一律原样返回 ——
+  // 也就是说这张卡在自视图里跟隐私开关完全无关。把它照样画出来,用户会以为「我在
+  // 资料页看得到邮箱 = 别人也看得到」,而开关可能正关着。自己的联系方式在
+  // 我的 → 个人资料 里看和改,那里才是权威入口。
+  const contactRows = useMemo<VisibleProfileContact[]>(
+    () => (isCurrentUser ? [] : getVisibleProfileContacts(profile.contact)),
+    [isCurrentUser, profile.contact],
+  );
+
+  const handleCopyContact = useCallback(
+    async (row: VisibleProfileContact) => {
+      try {
+        const Clipboard = await import('expo-clipboard');
+        await Clipboard.setStringAsync(row.value);
+        Alert.alert(
+          t('userProfile.contactCopied', { field: t(row.labelKey) }),
+        );
+      } catch (error) {
+        // 复制失败不该只是静默:用户点了没反应,会以为是这一行不可点。
+        Alert.alert(t('userProfile.contactCopyFailed'));
+        reportHandledFailure('userProfile', 'copyContact', error);
+      }
+    },
+    [t],
+  );
 
   const handleAddFriend = useCallback(() => {
     if (!canSendFriendRequest || profileId === 'unknown') {
@@ -904,8 +951,36 @@ export default function UserProfileScreen() {
           ) : null}
         </View>
 
-        {infoRowGroups.length > 0 ? (
+        {contactRows.length > 0 || infoRowGroups.length > 0 ? (
+          // 联系方式卡与下面的资料卡共用同一个 s.sections 容器 —— gap 只作用于
+          // 同一个 flex 容器的直接子节点,拆成两个并列的 sections 会让这两张卡贴死。
           <View style={s.sections}>
+            {contactRows.length > 0 ? (
+              <View style={[s.card, d.card]}>
+                {contactRows.map((row, index) => (
+                  <View key={row.id}>
+                    <ProfileActionRow
+                      icon={row.icon}
+                      iconColor={colors[row.color]}
+                      label={t(row.labelKey)}
+                      value={row.value}
+                      showChevron={false}
+                      accessibilityLabel={t('userProfile.contactCopyHint', {
+                        field: t(row.labelKey),
+                        value: row.value,
+                      })}
+                      onPress={() => {
+                        void handleCopyContact(row);
+                      }}
+                    />
+                    {index < contactRows.length - 1 ? (
+                      <View style={[s.rowDivider, d.rowDivider]} />
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
             {infoRowGroups.map((group, groupIndex) => (
               <View key={`info-group-${groupIndex}`} style={[s.card, d.card]}>
                 {group.map((item, index) => (

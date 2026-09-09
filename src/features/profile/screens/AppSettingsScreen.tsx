@@ -224,6 +224,11 @@ const PRIVACY_SEARCH_ROWS: AppSettingsRow[] = [
     route: '/(tabs)/profile/settings-privacy',
   },
   {
+    id: 'privacy-show-email',
+    labelKey: 'settingsDetails.privacy.showEmail',
+    route: '/(tabs)/profile/settings-privacy',
+  },
+  {
     id: 'privacy-show-wechat',
     labelKey: 'settingsDetails.privacy.showWechat',
     route: '/(tabs)/profile/settings-privacy',
