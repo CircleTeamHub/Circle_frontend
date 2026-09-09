@@ -391,9 +391,18 @@ test('group member mutations go straight to the backend without an OpenIM fallba
   assert.match(infoSource, /leaveGroup\(groupID\)/);
   // 独立群聊退的是会话本身(/chat/conversations/:id/leave),与退圈并存。
   assert.match(infoSource, /leaveGroupChatConversation\(conversationID\)/);
-  assert.match(infoSource, /removeGroupMember\(groupID,\s*member\.userId\)/);
+  // 踢人收进 useGroupAdminActions:圈子群仍直连 /group/:id/members/:userId,
+  // 独立群聊走 /chat/conversations/:id/members/:userId;群信息页只消费 hook。
+  const hookSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/hooks/use-group-admin-actions.ts'),
+    'utf8',
+  );
+  assert.match(infoSource, /useGroupAdminActions\(\{/);
+  assert.match(hookSource, /await removeGroupMember\(groupID, member\.userId\)/);
+  assert.match(hookSource, /await removeGroupChatMember\(conversationID, member\.userId\)/);
   assert.doesNotMatch(infoSource, /kickGroupMembers/);
   assert.doesNotMatch(infoSource, /result\.handled/);
+  assert.doesNotMatch(hookSource, /result\.handled/);
 });
 
 
@@ -660,6 +669,21 @@ test('chat info screen resolves back navigation from the explicit origin instead
   assert.doesNotMatch(source, /<NavHeader[\s\S]{0,200}onBackPress=/s);
 });
 
+test('chat info only exposes group logs to members allowed by the backend', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(
+    source,
+    /canViewMemberDirectory \? \(\s*<>\s*<Divider \/>\s*<GroupInfoRow\s*label=\{t\('chat\.groupLog'/s,
+  );
+  assert.match(source, /const canViewMemberDirectory =\s*isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory;/s);
+  assert.match(source, /const \[silenceClock, setSilenceClock\] = useState\(\(\) => Date\.now\(\)\);/);
+  assert.match(source, /const silenceOptions = SILENCE_DURATION_OPTIONS\.map\(\(seconds\) => \(\{/);
+});
+
 test('messages layout registers chat history search routes', () => {
   const filePath = path.join(process.cwd(), 'app/(tabs)/messages/_layout.tsx');
   const source = fs.readFileSync(filePath, 'utf8');
@@ -790,28 +814,28 @@ test('chat history media grid sanitizes urls and falls back across image candida
   assert.match(mediaSource, /onError=\{handleImageError\}/);
 });
 
-test('chat info revalidates ownership before mutating a member role', () => {
+test('group admin actions revalidate the live role before mutating a member', () => {
   const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx'),
+    path.join(process.cwd(), 'src/features/chat/hooks/use-group-admin-actions.ts'),
     'utf8',
   );
 
   // review R3：action sheet 打开到点确认之间可能失去群主身份，PATCH 前
-  // 现场重查自己的角色（不吃创建 alert 时捕获的 currentRole），fail-closed。
-  // 契约随自研栈迁移更新(意图不变):现场重查改走 fetchCircleDetail 的
-  // myRole/myStatus(圈子角色即群角色事实源)。
-  assert.match(source, /const freshDetail = await fetchCircleDetail\(groupID\);/);
+  // 现场重查自己的角色（不吃挂载时捕获的 selfRole），fail-closed。
+  // 契约随群管理 hook 迁移更新(意图不变):圈子群重查 fetchCircleDetail 的
+  // myRole/myStatus,独立群聊重查成员目录里自己的角色;查询抛错按无权处理。
+  assert.match(source, /const detail = await fetchCircleDetail\(groupID\);/);
+  assert.match(source, /return detail\.myStatus === 'ACTIVE' \? detail\.myRole : null;/);
+  assert.match(source, /const members = await fetchChatMembers\(conversationID\);/);
+  assert.match(source, /freshRole = await revalidateSelfRole\(\);[\s\S]{0,80}catch \{\s*freshRole = null;/);
+  assert.match(source, /if \(!allowed\(freshRole\)\) \{\s*\n\s*Alert\.alert\(/);
+  // 重查通过后才发 PATCH / DELETE。
   assert.match(
     source,
-    /const freshRole = freshDetail\.myStatus === 'ACTIVE' \? freshDetail\.myRole : null;/,
+    /\(fresh\) => canAssignGroupRole\(fresh, targetRole\(member\)\)[\s\S]{0,400}await updateGroupMemberRole\(groupID, member\.userId, nextRole\)/,
   );
   assert.match(
     source,
-    /if \(!canChangeGroupMemberRole\(freshSelfRoleLevel, memberRoleLevel\(member\)\)\) \{\s*\n\s*Alert\.alert\(t\('chat\.groupMembersRestricted'\)\);/,
-  );
-  // 重查通过后才发 PATCH。
-  assert.match(
-    source,
-    /canChangeGroupMemberRole\(freshSelfRoleLevel[\s\S]{0,220}await updateGroupMemberRole\(groupID, member\.userId, nextRole\)/,
+    /\(fresh\) => canManageGroupTarget\(fresh, targetRole\(member\)\)[\s\S]{0,500}await removeGroupMember\(groupID, member\.userId\)/,
   );
 });
