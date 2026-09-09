@@ -147,6 +147,18 @@ export function leaveGroupChatConversation(
   });
 }
 
+/**
+ * 独立群聊:群主解散(微信语义)。群从所有人的列表消失,所有人的记录一并清空。
+ * 不可逆 —— 服务端全员离座之后没人能再把群拉起来。
+ */
+export function dissolveGroupChatConversation(
+  conversationId: string,
+): Promise<void> {
+  return apiClient<void>(`/chat/conversations/${conversationId}/dissolve`, {
+    method: 'POST',
+  });
+}
+
 /** 独立群聊:改群名(任一在座成员)。 */
 export function renameGroupChatConversation(
   conversationId: string,
