@@ -358,7 +358,8 @@ test('ProfileScreen shows a red dot on system announcements when profile notific
   assert.match(src, /useTabBadgeStore/);
   assert.match(src, /profileUnread/);
   assert.match(src, /item\.id === MENU_ID\.SYSTEM_ANNOUNCEMENTS/);
-  assert.match(src, /showIndicatorDot=\{/);
+  assert.match(src, /const hasUnread = item\.id === MENU_ID\.SYSTEM_ANNOUNCEMENTS && profileUnread > 0/);
+  assert.match(src, /\{hasUnread \? \([\s\S]*?s\.menuUnreadDot[\s\S]*?backgroundColor: colors\.error/);
 });
 
 test('MemberCenterScreen renders the daily offer and four-tier catalog without legacy commerce APIs', () => {
