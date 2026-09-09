@@ -34,7 +34,7 @@ test('messages screen keeps pinned conversation surfaces visually consistent', (
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /pinnedSurface:\s*\{\s*backgroundColor:\s*colors\.surface/);
+  assert.match(source, /pinnedSurface:\s*\{\s*backgroundColor:\s*colors\.pinnedSurface/);
   assert.doesNotMatch(source, /resolvedMode === "light" \? colors\.surfaceBorder : colors\.surface/);
 });
 

@@ -594,13 +594,13 @@ function ConversationRowImpl({
                 />
               </View>
               <View style={s.rowMeta}>
-                <Text style={timeStyle}>{item.time}</Text>
+                <Text style={[timeStyle, item.pinned && { color: colors.pinnedTextSecondary }]}>{item.time}</Text>
                 {item.muted ? (
                   <View style={s.mutedIndicator}>
                     <Ionicons
                       name="notifications-off-outline"
                       size={15}
-                      color={colors.textSecondary}
+                      color={item.pinned ? colors.pinnedTextSecondary : colors.textSecondary}
                       accessibilityLabel={t("messages.mutedA11y", {
                         defaultValue: "消息免打扰",
                       })}
@@ -610,7 +610,7 @@ function ConversationRowImpl({
               </View>
             </View>
             <View style={s.rowBottom}>
-              <Text style={previewStyle} numberOfLines={1}>
+              <Text style={[previewStyle, item.pinned && { color: colors.pinnedTextSecondary }]} numberOfLines={1}>
                 {item.message}
               </Text>
               <Badge count={item.unreadCount} />
@@ -762,9 +762,9 @@ export default function MessagesScreen() {
         color: colors.text,
         ...Typography.body,
       },
-      // 所有置顶行使用同一 surface，避免首尾行或浅色主题出现色差。
+      // 所有置顶行使用同一底色；浅色主题用中性灰底与普通会话区分。
       pinnedSurface: {
-        backgroundColor: colors.surface,
+        backgroundColor: colors.pinnedSurface,
       },
     }),
     [colors],
