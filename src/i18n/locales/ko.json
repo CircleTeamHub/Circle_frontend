@@ -113,7 +113,6 @@
     "privacy": {
       "title": "개인정보 보호",
       "selfDestruct": "전체 사라지는 메시지",
-      "twoDays": "2일",
       "selfDestructTip": "사라지는 메시지 안내 표시",
       "selfDestructTipHint": "대화 상단과 하단의 사라지는 메시지 배너 표시를 제어합니다",
       "blacklist": "차단 목록 관리",
@@ -134,7 +133,6 @@
       "loadFailed": "개인정보 설정을 불러오지 못했습니다",
       "saveFailed": "개인정보 설정을 저장하지 못했습니다",
       "selfDestructOff": "끄기",
-      "days": "{{count}}일",
       "enabledCount": "{{count}}개 켜짐",
       "blacklistLoading": "차단 목록 불러오는 중",
       "blacklistEmpty": "차단한 사용자 없음",
@@ -665,11 +663,6 @@
     "media": {
       "image": "사진",
       "video": "동영상"
-    },
-    "disappearing": {
-      "off": "끔",
-      "minutes": "{{duration}}분",
-      "seconds": "{{duration}}초"
     },
     "message": {
       "sending": "전송 중",
@@ -2852,11 +2845,23 @@
       "unsupported": "[지원되지 않는 메시지]"
     },
     "burn": {
-      "s30": "30초",
+      "m1": "1분",
       "m5": "5분",
+      "m10": "10분",
+      "m30": "30분",
       "h1": "1시간",
+      "h2": "2시간",
+      "h6": "6시간",
       "d1": "1일",
-      "d7": "7일"
+      "d2": "2일",
+      "d3": "3일",
+      "d4": "4일",
+      "d5": "5일",
+      "d6": "6일",
+      "w1": "1주",
+      "w2": "2주",
+      "w3": "3주",
+      "mo1": "1개월"
     }
   },
   "location": {

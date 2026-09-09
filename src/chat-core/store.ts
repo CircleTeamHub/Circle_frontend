@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { storage } from '@/storage';
+import { isBurnDurationChoice } from './burn-durations';
 import {
   isMessageDeletedLocally,
   markMessageDeletedLocally,
@@ -29,24 +30,26 @@ export const TYPING_DISPLAY_MS = 4_000;
 /** Keep self-destruct purges below the browser timer clamp and cover cached rows. */
 const BURN_PURGE_SWEEP_MS = 60_000;
 
-export function viewerSelfDestructDaysStorageKey(userId: string): string {
-  return `chat.viewerSelfDestructDays.${userId}`;
+/**
+ * 缓存键带 `.sec` 后缀:上一版这里存的是**天数**,同名键会让升级后的第一次冷启动
+ * 把 `7`(天)读成 7 秒,冷启动那一瞬间几乎所有历史消息都会被判过期清掉。
+ * 换个键等于让旧值自然失效,下一次策略 GET 会把真实值补回来。
+ */
+export function viewerSelfDestructSecStorageKey(userId: string): string {
+  return `chat.viewerSelfDestructSec.${userId}`;
 }
 
-function normalizeViewerSelfDestructDays(days: number): number | null {
-  return [0, 1, 2, 7, 30].includes(days) ? days : null;
+function normalizeViewerSelfDestructSec(seconds: number): number | null {
+  return isBurnDurationChoice(seconds) ? seconds : null;
 }
 
 /** Removes expired local previews before a cold-start snapshot reaches the UI. */
 export function sanitizeExpiredConversationPreviews(
   conversations: ChatConversationDto[],
-  viewerSelfDestructDays: number,
+  viewerSelfDestructSec: number,
   now = Date.now(),
 ): ChatConversationDto[] {
-  const viewerSeconds =
-    viewerSelfDestructDays > 0
-      ? viewerSelfDestructDays * 24 * 60 * 60
-      : null;
+  const viewerSeconds = viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
   return conversations.map((conversation) => {
     const conversationSeconds =
       conversation.burnDurationSec && conversation.burnDurationSec > 0
@@ -145,8 +148,8 @@ interface ChatStoreState {
   /** 最近一次连接失败的原因文案(消息页空态提示用)。 */
   error: string | null;
   currentUserId: string | null;
-  /** 当前查看者的全局消息自毁窗口；0 表示关闭。 */
-  viewerSelfDestructDays: number;
+  /** 当前查看者的全局阅后即焚窗口（秒）；0 表示关闭。 */
+  viewerSelfDestructSec: number;
   /** 本地权威写入递增，防止较早发出的策略 GET 覆盖设置页刚保存的值。 */
   viewerSelfDestructPolicyRevision: number;
   /** 每次有效自毁策略切换都会前进，用于使媒体磁盘缓存失效。 */
@@ -161,8 +164,8 @@ interface ChatStoreState {
   setConnecting: (connecting: boolean) => void;
   setError: (error: string | null) => void;
   setCurrentUserId: (userId: string | null) => void;
-  setViewerSelfDestructDays: (
-    days: number,
+  setViewerSelfDestructSec: (
+    seconds: number,
     options?: { remoteRefresh?: boolean },
   ) => void;
   setConversations: (conversations: ChatConversationDto[]) => void;
@@ -535,7 +538,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   connecting: false,
   error: null,
   currentUserId: null,
-  viewerSelfDestructDays: 0,
+  viewerSelfDestructSec: 0,
   viewerSelfDestructPolicyRevision: 0,
   selfDestructPolicyEpoch: 0,
   conversations: [],
@@ -554,19 +557,19 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   setConnecting: (connecting) => set({ connecting }),
   setError: (error) => set({ error }),
   setCurrentUserId: (userId) => set({ currentUserId: userId }),
-  setViewerSelfDestructDays: (days, options) => {
-    const normalized = normalizeViewerSelfDestructDays(days);
+  setViewerSelfDestructSec: (seconds, options) => {
+    const normalized = normalizeViewerSelfDestructSec(seconds);
     if (normalized === null) return;
     const {
       currentUserId,
-      viewerSelfDestructDays,
+      viewerSelfDestructSec,
       viewerSelfDestructPolicyRevision,
       selfDestructPolicyEpoch,
     } = get();
     if (currentUserId) {
       try {
         storage.set(
-          viewerSelfDestructDaysStorageKey(currentUserId),
+          viewerSelfDestructSecStorageKey(currentUserId),
           String(normalized),
         );
       } catch {
@@ -576,16 +579,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // 设置页/缓存初始化是本地权威写入；远程刷新只有在 socket manager 确认
     // 期间没有新写入时才带 remoteRefresh 标记落进来。
     set({
-      viewerSelfDestructDays: normalized,
+      viewerSelfDestructSec: normalized,
       viewerSelfDestructPolicyRevision: options?.remoteRefresh
         ? viewerSelfDestructPolicyRevision
         : viewerSelfDestructPolicyRevision + 1,
       selfDestructPolicyEpoch:
-        viewerSelfDestructDays === normalized
+        viewerSelfDestructSec === normalized
           ? selfDestructPolicyEpoch
           : selfDestructPolicyEpoch + 1,
     });
-    if (viewerSelfDestructDays !== normalized || !options?.remoteRefresh) {
+    if (viewerSelfDestructSec !== normalized || !options?.remoteRefresh) {
       void get().purgeExpiredBurnMessages();
     }
   },
@@ -1072,7 +1075,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const {
       conversations,
       messagesByConversation,
-      viewerSelfDestructDays,
+      viewerSelfDestructSec,
     } = get();
     let nextTimelines: Record<string, ChatMessageDto[]> | null = null;
     let nextConversations: ChatConversationDto[] | null = null;
@@ -1080,9 +1083,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const localPurges: { conversationId: string; cutoff: Date }[] = [];
     let nextExpiryAt: number | null = null;
     const viewerSeconds =
-      viewerSelfDestructDays > 0
-        ? viewerSelfDestructDays * 24 * 60 * 60
-        : null;
+      viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
     for (const conversation of conversations) {
       const conversationSeconds =
         conversation.burnDurationSec && conversation.burnDurationSec > 0
@@ -1333,7 +1334,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       connecting: false,
       error: null,
       currentUserId: null,
-      viewerSelfDestructDays: 0,
+      viewerSelfDestructSec: 0,
       viewerSelfDestructPolicyRevision: 0,
       selfDestructPolicyEpoch: 0,
       conversations: [],

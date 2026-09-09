@@ -113,7 +113,6 @@
     "privacy": {
       "title": "Privacidad",
       "selfDestruct": "Mensajes temporales globales",
-      "twoDays": "2 días",
       "selfDestructTip": "Mostrar avisos de mensajes temporales",
       "selfDestructTipHint": "Controla los banners de mensajes temporales arriba y abajo del chat",
       "blacklist": "Gestión de la lista negra",
@@ -134,7 +133,6 @@
       "loadFailed": "No se pudo cargar la configuración de privacidad",
       "saveFailed": "No se pudo guardar la configuración de privacidad",
       "selfDestructOff": "Desactivado",
-      "days": "{{count}} días",
       "enabledCount": "{{count}} activadas",
       "blacklistLoading": "Cargando lista negra",
       "blacklistEmpty": "Sin usuarios bloqueados",
@@ -666,11 +664,6 @@
     "media": {
       "image": "Foto",
       "video": "Vídeo"
-    },
-    "disappearing": {
-      "off": "Desactivado",
-      "minutes": "{{duration}} min",
-      "seconds": "{{duration}} s"
     },
     "message": {
       "sending": "Enviando",
@@ -2855,11 +2848,23 @@
       "unsupported": "[Tipo de mensaje no compatible]"
     },
     "burn": {
-      "s30": "30 segundos",
+      "m1": "1 minuto",
       "m5": "5 minutos",
+      "m10": "10 minutos",
+      "m30": "30 minutos",
       "h1": "1 hora",
+      "h2": "2 horas",
+      "h6": "6 horas",
       "d1": "1 día",
-      "d7": "7 días"
+      "d2": "2 días",
+      "d3": "3 días",
+      "d4": "4 días",
+      "d5": "5 días",
+      "d6": "6 días",
+      "w1": "1 semana",
+      "w2": "2 semanas",
+      "w3": "3 semanas",
+      "mo1": "1 mes"
     }
   },
   "location": {
