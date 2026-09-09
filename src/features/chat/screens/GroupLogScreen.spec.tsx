@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import GroupLogScreen from './GroupLogScreen';
-import { searchChatMessages } from '@/chat-core/api';
+import { fetchChatGroupEvents } from '@/chat-core/api';
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ conversationID: 'group-1' }),
@@ -15,9 +15,11 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+
 jest.mock('@/theme', () => ({
-  Radius: { lg: 12 },
-  Spacing: { sm: 4, md: 8, lg: 16, xl: 24 },
+  Radius: { lg: 12, full: 999 },
+  Spacing: { xs: 2, sm: 4, md: 8, lg: 16, xl: 24 },
   Typography: { body: {}, bodyRegular: {}, small: {} },
   useTheme: () => ({
     colors: {
@@ -28,9 +30,13 @@ jest.mock('@/theme', () => ({
 }));
 
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
-jest.mock('@/chat-core/message-mappers', () => ({ systemNoticeText: () => null }));
+jest.mock('@/chat-core/group-events', () => ({
+  groupEventText: (event: { payload: { text: string } }) => event.payload.text,
+}));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
-jest.mock('@/chat-core/api', () => ({ searchChatMessages: jest.fn() }));
+jest.mock('@/chat-core/api', () => ({ fetchChatGroupEvents: jest.fn() }));
+
+type Page = Awaited<ReturnType<typeof fetchChatGroupEvents>>;
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -38,14 +44,25 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function message(id: string, text: string) {
-  return { id, createdAt: '2026-01-01T00:00:00.000Z', content: { text } } as never;
+function event(id: string, text: string) {
+  return {
+    id,
+    kind: 'member-joined',
+    actor: null,
+    targets: [],
+    payload: { text },
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
 }
 
+beforeEach(() => {
+  jest.mocked(fetchChatGroupEvents).mockReset();
+});
+
 test('loads every cursor page once and de-duplicates overlapping group logs', async () => {
-  const secondPage = deferred<Awaited<ReturnType<typeof searchChatMessages>>>();
-  jest.mocked(searchChatMessages)
-    .mockResolvedValueOnce({ messages: [message('2', 'newer')], nextBeforeHeight: 50 } as never)
+  const secondPage = deferred<Page>();
+  jest.mocked(fetchChatGroupEvents)
+    .mockResolvedValueOnce({ events: [event('2', 'newer')], nextCursor: 'cursor-1' })
     .mockReturnValueOnce(secondPage.promise);
 
   render(<GroupLogScreen />);
@@ -54,19 +71,48 @@ test('loads every cursor page once and de-duplicates overlapping group logs', as
   const list = screen.getByTestId('group-log-list');
   fireEvent(list, 'onEndReached');
   fireEvent(list, 'onEndReached');
-  expect(searchChatMessages).toHaveBeenCalledTimes(2);
-  expect(searchChatMessages).toHaveBeenLastCalledWith('group-1', {
-    types: ['system'], limit: 100, beforeHeight: 50,
+  expect(fetchChatGroupEvents).toHaveBeenCalledTimes(2);
+  expect(fetchChatGroupEvents).toHaveBeenLastCalledWith('group-1', {
+    limit: 50, cursor: 'cursor-1',
   });
 
   await act(async () => {
+    // 两页之间服务端新增了事件,游标页与上一页重叠一条:合并后只出现一次。
     secondPage.resolve({
-      messages: [message('1', 'older'), message('2', 'newer')],
-      nextBeforeHeight: null,
-    } as never);
+      events: [event('1', 'older'), event('2', 'newer')],
+      nextCursor: null,
+    });
     await secondPage.promise;
   });
 
   await waitFor(() => expect(screen.getByText('older')).toBeTruthy());
   expect(screen.getAllByText('newer')).toHaveLength(1);
+});
+
+test('stops paging when the server hands back the same cursor', async () => {
+  jest.mocked(fetchChatGroupEvents)
+    .mockResolvedValueOnce({ events: [event('3', 'latest')], nextCursor: 'stuck' })
+    .mockResolvedValueOnce({ events: [event('3', 'latest')], nextCursor: 'stuck' });
+
+  render(<GroupLogScreen />);
+  await screen.findByText('latest');
+
+  const list = screen.getByTestId('group-log-list');
+  fireEvent(list, 'onEndReached');
+  await waitFor(() => expect(fetchChatGroupEvents).toHaveBeenCalledTimes(2));
+
+  // 游标没前进就视为到头,再触底不再请求 —— 否则会在同一页上无限打转。
+  fireEvent(list, 'onEndReached');
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(fetchChatGroupEvents).toHaveBeenCalledTimes(2);
+  expect(screen.getAllByText('latest')).toHaveLength(1);
+});
+
+test('shows the empty state when the log has no entries', async () => {
+  jest.mocked(fetchChatGroupEvents).mockResolvedValueOnce({ events: [], nextCursor: null });
+
+  render(<GroupLogScreen />);
+  await screen.findByText('chat.noGroupLog');
 });

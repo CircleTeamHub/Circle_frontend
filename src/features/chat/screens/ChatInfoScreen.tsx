@@ -38,10 +38,16 @@ import type { ChatConversationDto, ChatMemberDto } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
 import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
 import {
-  canChangeGroupMemberRole,
-  roleLevelFromCircleRole,
-} from '@/features/chat/group-member-permissions';
+  type GroupRole,
+  resolveStandaloneSelfRole,
+} from '@/features/chat/group-admin-permissions';
+import { useGroupAdminActions } from '@/features/chat/hooks/use-group-admin-actions';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
+import {
+  SILENCE_DURATION_OPTIONS,
+  isMemberSilencedNow,
+  silenceDurationLabel,
+} from '@/chat-core/silence-durations';
 import {
   getChatDetailHref,
   getChatBackgroundHref,
@@ -51,6 +57,7 @@ import {
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
   getGroupLogHref,
+  getGroupManageHref,
   getGroupMemberSearchHref,
   getRecommendFriendHref,
   getUserProfileHref,
@@ -62,9 +69,10 @@ import {
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
 import { fetchCircleDetail, updateCircle } from '@/services/api/circles';
-import { leaveGroup, removeGroupMember, updateGroupMemberRole } from '@/services/api/groups';
+import { leaveGroup } from '@/services/api/groups';
 import { fetchMyTempChats } from '@/services/api/temp-chat';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { topNotice } from '@/components/app/top-notice-store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -217,11 +225,6 @@ type CircleGroupInfo = {
   memberCount: number;
 };
 
-/** 目录成员的圈子角色 → OpenIM 兼容数字(canChangeGroupMemberRole 按数字比较)。 */
-function memberRoleLevel(member: ChatMemberDto): number {
-  return roleLevelFromCircleRole(member.role ?? 'MEMBER');
-}
-
 type GroupInfoRowProps = {
   label: string;
   value?: string;
@@ -318,8 +321,8 @@ export default function ChatInfoScreen() {
   // 还没有该会话,置顶/免打扰的当前值与目标会话 id 都以它兜底。
   const [groupConversation, setGroupConversation] = useState<ChatConversationDto | null>(null);
   const [groupMembersExpanded, setGroupMembersExpanded] = useState(false);
-  const [kickPendingUserID, setKickPendingUserID] = useState<string | null>(null);
-  const [rolePendingUserID, setRolePendingUserID] = useState<string | null>(null);
+  // 头像长按选了「禁言」的目标:先挑时长再调接口。
+  const [silenceTarget, setSilenceTarget] = useState<ChatMemberDto | null>(null);
   const [renameDialogVisible, setRenameDialogVisible] = useState(false);
   const [renameDraft, setRenameDraft] = useState('');
   const [renameSubmitting, setRenameSubmitting] = useState(false);
@@ -394,6 +397,22 @@ export default function ChatInfoScreen() {
   const groupNotice = groupInfo?.notice?.trim() ?? '';
   const memberCount = groupInfo?.memberCount ?? groupMembers.length;
   const currentUserID = useChatStore((state) => state.currentUserId);
+  const [silenceClock, setSilenceClock] = useState(() => Date.now());
+  useEffect(() => {
+    const now = Date.now();
+    const nextExpiry = groupMembers.reduce<number | null>((earliest, member) => {
+      if (!member.silenced || !member.silencedUntil) return earliest;
+      const expiresAt = new Date(member.silencedUntil).getTime();
+      if (!Number.isFinite(expiresAt) || expiresAt <= now) return earliest;
+      return earliest === null || expiresAt < earliest ? expiresAt : earliest;
+    }, null);
+    if (nextExpiry === null) return;
+    const timer = setTimeout(
+      () => setSilenceClock(Date.now()),
+      Math.max(1, nextExpiry - now + 1),
+    );
+    return () => clearTimeout(timer);
+  }, [groupMembers, silenceClock]);
   // review R2 P1：自己的群成员身份走活体 hook——群主在本页存活期间撤掉管理员
   // 时，订阅推送立即收紧目录/搜索/管理入口，不再等重新聚焦。
   const {
@@ -410,9 +429,18 @@ export default function ChatInfoScreen() {
   // 不放开的话本页会渲染群布局却永远 0 成员、没有成员目录。
   const canViewMemberDirectory =
     isTempConversation || isStandaloneGroup || canViewCircleMemberDirectory;
-  const currentRole = currentGroupMember?.roleLevel ?? null;
-  const isOwner = currentGroupMember?.role === 'OWNER';
-  const isAdmin = currentGroupMember?.role === 'ADMIN';
+  // 独立群聊没有圈子角色(useGroupMemberViewAccess 对它是关的):本人角色从成员目录
+  // 取 —— 服务端按 ownerId + 座位上的管理员标记派生;目录还没到位时按会话 dto 的
+  // ownerId 兜底认群主。圈子群仍按圈子角色。
+  const selfGroupRole: GroupRole | null = isStandaloneGroup
+    ? resolveStandaloneSelfRole({
+        members: groupMembers,
+        currentUserID,
+        ownerId: conversation?.ownerId ?? null,
+      })
+    : (currentGroupMember?.role ?? null);
+  const isOwner = selfGroupRole === 'OWNER';
+  const isAdmin = selfGroupRole === 'ADMIN';
   const canManageGroup = isOwner || isAdmin;
   const collapsedGroupMemberLimit = GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
   const visibleGroupMembers = useMemo(
@@ -830,9 +858,9 @@ export default function ChatInfoScreen() {
 
       const Clipboard = await import('expo-clipboard');
       await Clipboard.setStringAsync(room.shareUrl);
-      Alert.alert(t('tempChats.linkCopied'));
+      topNotice.success(t('tempChats.linkCopied'));
     } catch {
-      Alert.alert(t('tempChats.copyFailed'));
+      topNotice.error(t('tempChats.copyFailed'));
     } finally {
       inviteLinkCopyInFlightRef.current = false;
     }
@@ -990,114 +1018,80 @@ export default function ChatInfoScreen() {
     [conversationID, isStandaloneGroup, isTempConversation, resolvedConversationID, revalidateMemberAccess, scope],
   );
 
-  const handleChangeMemberRole = useCallback(
-    (member: ChatMemberDto) => {
-      if (!groupID || rolePendingUserID || !canChangeGroupMemberRole(currentRole, memberRoleLevel(member))) {
-        return;
-      }
-
-      const nextRole = member.role === 'ADMIN' ? 'MEMBER' : 'ADMIN';
-      setRolePendingUserID(member.userId);
-      // review R3：action sheet 打开到点确认之间可能已失去群主身份，PATCH 前
-      // 现场重查自己的圈子角色（不吃创建 alert 时捕获的 currentRole），fail-closed。
-      void (async () => {
-        try {
-          const freshDetail = await fetchCircleDetail(groupID);
-          const freshRole = freshDetail.myStatus === 'ACTIVE' ? freshDetail.myRole : null;
-          const freshSelfRoleLevel = freshRole ? roleLevelFromCircleRole(freshRole) : null;
-          if (!canChangeGroupMemberRole(freshSelfRoleLevel, memberRoleLevel(member))) {
-            Alert.alert(t('chat.groupMembersRestricted'));
-            return;
-          }
-          await updateGroupMemberRole(groupID, member.userId, nextRole);
-          setGroupMembers((members) =>
-            members.map((item) =>
-              item.userId === member.userId ? { ...item, role: nextRole } : item,
-            ),
-          );
-          Alert.alert(
-            t('common.done'),
-            nextRole === 'ADMIN'
-              ? t('chat.adminGranted', { name: member.nickname || member.userId })
-              : t('chat.adminRevoked', { name: member.nickname || member.userId }),
-          );
-        } catch (error) {
-          openActionError(error);
-        } finally {
-          setRolePendingUserID(null);
-        }
-      })();
+  // 群管理动作(设/撤管理员、禁言/解除、移出)收进 hook:两种群共用同一张权限矩阵,
+  // 圈子群走 /group/... 端点、独立群聊走 chat 端点;每个动作执行前都现场重查本人角色
+  // (review R3 的 fail-closed 语义原样保留在 hook 里)。
+  const groupAdmin = useGroupAdminActions({
+    conversationID: resolvedConversationID || conversationID,
+    groupID,
+    isStandaloneGroup,
+    currentUserID,
+    selfRole: selfGroupRole,
+    onMemberUpdated: (userId, patch) =>
+      setGroupMembers((members) =>
+        members.map((item) => (item.userId === userId ? { ...item, ...patch } : item)),
+      ),
+    onMemberRemoved: (userId) => {
+      setGroupMembers((members) => members.filter((m) => m.userId !== userId));
+      setGroupInfo((current) =>
+        current && current.memberCount > 0 ? { ...current, memberCount: current.memberCount - 1 } : current,
+      );
     },
-    [currentRole, groupID, openActionError, rolePendingUserID, t],
-  );
+    onError: openActionError,
+  });
 
-  const handleKickMember = useCallback(
-    (member: ChatMemberDto) => {
-      if (!groupID || !canManageGroup || member.userId === currentUserID) {
-        return;
-      }
+  const silenceOptions = SILENCE_DURATION_OPTIONS.map((seconds) => ({
+    label: silenceDurationLabel(seconds),
+    value: seconds,
+  }));
 
-      // 群主可以踢任何人；管理员只能踢普通成员。
-      if (!isOwner && (member.role ?? 'MEMBER') !== 'MEMBER') {
-        return;
-      }
-
-      const memberName = member.nickname || member.userId;
-
-      Alert.alert(t('chat.removeMember'), t('chat.removeMemberConfirm', { name: memberName }), [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('chat.remove'),
-          style: 'destructive',
-          onPress: () => {
-            setKickPendingUserID(member.userId);
-            removeGroupMember(groupID, member.userId)
-              .then(() => {
-                setGroupMembers((members) => members.filter((m) => m.userId !== member.userId));
-                setGroupInfo((current) =>
-                  current && current.memberCount > 0 ? { ...current, memberCount: current.memberCount - 1 } : current,
-                );
-                Alert.alert(t('chat.deleted'), t('chat.memberRemoved', { name: memberName }));
-              })
-              .catch(openActionError)
-              .finally(() => setKickPendingUserID(null));
-          },
-        },
-      ]);
+  const handleSelectSilenceDuration = useCallback(
+    (seconds: number | null) => {
+      const target = silenceTarget;
+      setSilenceTarget(null);
+      if (target) groupAdmin.silence(target, seconds);
     },
-    [canManageGroup, currentUserID, groupID, isOwner, openActionError, t],
+    [groupAdmin, silenceTarget],
   );
 
   const handleMemberActions = useCallback(
     (member: ChatMemberDto) => {
-      const canChangeRole = canChangeGroupMemberRole(currentRole, memberRoleLevel(member));
-      const canKick =
-        canManageGroup &&
-        member.userId !== currentUserID &&
-        (isOwner || (member.role ?? 'MEMBER') === 'MEMBER');
-      if (!canChangeRole && !canKick) return;
-
       const actions: NonNullable<Parameters<typeof Alert.alert>[2]> = [];
-      if (canChangeRole) {
+      if (groupAdmin.canChangeRole(member)) {
         actions.push({
           text:
             member.role === 'ADMIN'
               ? t('chat.revokeGroupAdmin')
               : t('chat.grantGroupAdmin'),
-          onPress: () => handleChangeMemberRole(member),
+          onPress: () =>
+            groupAdmin.changeRole(member, member.role === 'ADMIN' ? 'MEMBER' : 'ADMIN'),
         });
       }
-      if (canKick) {
+      if (groupAdmin.canSilence(member)) {
+        actions.push(
+            isMemberSilencedNow(member, silenceClock)
+            ? {
+                text: t('chat.unsilenceMember', { defaultValue: '解除禁言' }),
+                onPress: () => groupAdmin.unsilence(member),
+              }
+            : {
+                text: t('chat.silenceMember', { defaultValue: '禁言' }),
+                onPress: () => setSilenceTarget(member),
+              },
+        );
+      }
+      if (groupAdmin.canKick(member)) {
         actions.push({
           text: t('chat.removeMember'),
           style: 'destructive',
-          onPress: () => handleKickMember(member),
+          onPress: () => groupAdmin.kick(member),
         });
       }
+      if (actions.length === 0) return;
       actions.push({ text: t('common.cancel'), style: 'cancel' });
       Alert.alert(member.nickname || member.userId, undefined, actions);
     },
-    [canManageGroup, currentRole, currentUserID, handleChangeMemberRole, handleKickMember, isOwner, t],
+    [groupAdmin, silenceClock, t],
   );
 
   const handleOpenGroupReport = useCallback(() => {
@@ -1366,6 +1360,18 @@ export default function ChatInfoScreen() {
     );
   }, [groupTitle, resolvedConversationID, scope]);
 
+  const handleOpenGroupManage = useCallback(() => {
+    const target = resolvedConversationID || conversationID;
+    if (!target) return;
+    router.push(
+      getGroupManageHref(scope, {
+        conversationID: target,
+        groupID,
+        title: groupTitle,
+      }),
+    );
+  }, [conversationID, groupID, groupTitle, resolvedConversationID, scope]);
+
   const d = useMemo(
     () => ({
       container: {
@@ -1384,6 +1390,10 @@ export default function ChatInfoScreen() {
       },
       memberRoleBadge: {
         color: colors.primary,
+        ...Typography.caption,
+      },
+      memberSilencedBadge: {
+        color: colors.error,
         ...Typography.caption,
       },
       addMemberBox: {
@@ -1462,10 +1472,9 @@ export default function ChatInfoScreen() {
                       ? t('chat.groupAdmin')
                       : null;
                 const hasMemberActions =
-                  canChangeGroupMemberRole(currentRole, memberRoleLevel(member)) ||
-                  (canManageGroup &&
-                    member.userId !== currentUserID &&
-                    (isOwner || (member.role ?? 'MEMBER') === 'MEMBER'));
+                  groupAdmin.canChangeRole(member) ||
+                  groupAdmin.canSilence(member) ||
+                  groupAdmin.canKick(member);
 
                 return (
                   <Pressable
@@ -1473,7 +1482,7 @@ export default function ChatInfoScreen() {
                     style={s.groupMemberCell}
                     onPress={() => handleOpenMemberProfile(member)}
                     onLongPress={hasMemberActions ? () => handleMemberActions(member) : undefined}
-                    disabled={kickPendingUserID === member.userId || rolePendingUserID === member.userId}
+                    disabled={groupAdmin.pendingUserID === member.userId}
                   >
                     <Avatar size={56} shape="square" name={memberName} uri={member.avatarUrl ?? undefined} />
                     <Text style={[s.groupMemberName, d.groupMemberName]} numberOfLines={1}>
@@ -1482,6 +1491,11 @@ export default function ChatInfoScreen() {
                     {roleBadge ? (
                       <Text style={d.memberRoleBadge} numberOfLines={1}>
                         {roleBadge}
+                      </Text>
+                    ) : null}
+                    {isMemberSilencedNow(member, silenceClock) ? (
+                      <Text style={d.memberSilencedBadge} numberOfLines={1}>
+                        {t('chat.silenced', { defaultValue: '已禁言' })}
                       </Text>
                     ) : null}
                   </Pressable>
@@ -1548,11 +1562,24 @@ export default function ChatInfoScreen() {
             )}
             <Divider />
             <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
-            <Divider />
-            <GroupInfoRow
-              label={t('chat.groupLog', { defaultValue: '群日志' })}
-              onPress={handleOpenGroupLog}
-            />
+            {canViewMemberDirectory ? (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.groupLog', { defaultValue: '群日志' })}
+                  onPress={handleOpenGroupLog}
+                />
+              </>
+            ) : null}
+            {canManageGroup ? (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.groupManage', { defaultValue: '群管理' })}
+                  onPress={handleOpenGroupManage}
+                />
+              </>
+            ) : null}
           </View>
 
           <View style={[s.groupSection, d.groupSection]}>
@@ -1608,6 +1635,14 @@ export default function ChatInfoScreen() {
             </Pressable>
           </View>
         </ScrollView>
+        <OptionPickerSheet
+          visible={silenceTarget !== null}
+          title={t('chat.silencePickDuration', { defaultValue: '选择禁言时长' })}
+          options={silenceOptions}
+          selectedValue={null}
+          onSelect={handleSelectSilenceDuration}
+          onClose={() => setSilenceTarget(null)}
+        />
         <BurnDurationPicker
           visible={burnPickerVisible}
           options={burnOptions}

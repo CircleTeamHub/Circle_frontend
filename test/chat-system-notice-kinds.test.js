@@ -166,6 +166,7 @@ test('the five locales all define the group-management notice copy', () => {
 // chat-core-protocol-contract.test.js —— 双仓并排检出时真跑，仅前端 CI 时跳过。
 const BACKEND_SOURCES = [
   'src/chat/chat.service.ts',
+  'src/chat/chat-group-admin.service.ts',
   'src/group/group.service.ts',
   'src/circle/circle.service.ts',
 ].map((rel) => path.join(root, '..', 'circle_be', rel));
@@ -187,7 +188,11 @@ test(
     const emitted = new Set();
     for (const file of BACKEND_SOURCES) {
       const source = fs.readFileSync(file, 'utf8');
-      for (const call of source.matchAll(/insertSystemMessage\w*\(/g)) {
+      // 两条写入口都扫:事务内的 insertSystemMessage*,以及尽力而为的
+      // systemMessage.emit(进群/退群/改名/群主转让走的是它)。
+      for (const call of source.matchAll(
+        /insertSystemMessage\w*\(|\.systemMessage\s*\.emit\(/g,
+      )) {
         const window = source.slice(call.index, call.index + 400);
         const kind = window.match(/\bkind:\s*'([a-z][a-z-]*)'/);
         if (kind) emitted.add(kind[1]);

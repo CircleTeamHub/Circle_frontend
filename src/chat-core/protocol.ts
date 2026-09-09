@@ -369,7 +369,55 @@ export interface ChatMemberDto {
   userId: string;
   nickname: string;
   avatarUrl: string | null;
+  /** 群角色:圈子群来自 CircleMember;独立群聊 = ownerId / 座位上的管理员标记。 */
   role: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
+  /** 禁言中(不能发言;与免打扰无关)。可选兼容老后端。 */
+  silenced?: boolean;
+  /** 禁言到期时刻;silenced 且为 null = 直到解除。 */
+  silencedUntil?: string | null;
+}
+
+/** 禁言/解除禁言的响应:目标成员的最新禁言状态。 */
+export interface ChatMemberSilenceDto {
+  userId: string;
+  silenced: boolean;
+  silencedUntil: string | null;
+}
+
+/**
+ * 群事件账本(群日志)的种类 —— 与后端 ChatGroupEventKind 逐项镜像。
+ * 未知种类(后端先发新版本)由 groupEventText 兜底成「群聊活动」,不会渲染空行。
+ */
+export type ChatGroupEventKind =
+  | 'group-created'
+  | 'member-joined'
+  | 'member-left'
+  | 'member-removed'
+  | 'member-role-changed'
+  | 'member-silenced'
+  | 'member-unsilenced'
+  | 'owner-transferred'
+  | 'group-renamed'
+  | 'group-notice-updated'
+  | 'history-cleared';
+
+/** 群日志一条(GET /chat/conversations/:id/events)。 */
+export interface ChatGroupEventDto {
+  id: string;
+  kind: ChatGroupEventKind | (string & {});
+  /** 操作者;null = 系统/圈子对账。已注销账号昵称为空串。 */
+  actor: ChatSenderInfo | null;
+  /** 受影响成员(进群可多人)。 */
+  targets: ChatSenderInfo[];
+  /** {name} / {role} / {durationSec} / {via}。 */
+  payload: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ChatGroupEventsPageDto {
+  events: ChatGroupEventDto[];
+  /** 继续向更早翻页的游标;到头为 null。 */
+  nextCursor: string | null;
 }
 
 export type ChatConversationType = 'DIRECT' | 'GROUP' | 'TEMP' | 'SUPPORT';
@@ -414,6 +462,10 @@ export interface ChatConversationDto {
   unreadCount: number;
   pinned: boolean;
   muted: boolean;
+  /** 本人在该会话被禁言(仅 GROUP 会为 true)。可选兼容老后端。 */
+  silenced?: boolean;
+  /** 本人禁言到期时刻;silenced 且为 null = 直到解除。 */
+  silencedUntil?: string | null;
   /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
   burnDurationSec?: number | null;
   lastMessageAt: string | null;
