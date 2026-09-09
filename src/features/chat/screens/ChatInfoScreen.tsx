@@ -72,7 +72,7 @@ import {
   fetchCircleDetail,
   updateCircle,
 } from '@/services/api/circles';
-import { leaveGroup, removeGroupMember, updateGroupMemberRole } from '@/services/api/groups';
+import { leaveGroup } from '@/services/api/groups';
 import { fetchMyTempChats } from '@/services/api/temp-chat';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { topNotice } from '@/components/app/top-notice-store';
