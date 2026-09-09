@@ -2543,7 +2543,9 @@
       "invalidInviteCode": "El formato del código de invitación no es válido",
       "loginFailed": "Error al iniciar sesión, inténtalo de nuevo",
       "registerFailed": "Error al registrarse, inténtalo de nuevo",
-      "sendCodeFailed": "Error al enviar, inténtalo de nuevo"
+      "sendCodeFailed": "Error al enviar, inténtalo de nuevo",
+      "passwordMismatch": "Las contraseñas no coinciden",
+      "registerSucceededSessionFailed": "Tu cuenta se creó, pero no pudimos iniciar sesión automáticamente. Inicia sesión con este correo."
     },
     "hidePassword": "Ocultar contraseña",
     "showPassword": "Mostrar contraseña",
@@ -3213,7 +3215,8 @@
     "CHAT_GROUP_TARGET_PROTECTED": "No puedes hacer esto al propietario ni a otro administrador",
     "CHAT_GROUP_SELF_TARGET": "No puedes hacer esto contigo mismo",
     "CHAT_MEMBER_SILENCED": "Estás silenciado y no puedes enviar mensajes ahora",
-    "CHAT_SILENCE_DURATION_INVALID": "Duración de silencio no válida"
+    "CHAT_SILENCE_DURATION_INVALID": "Duración de silencio no válida",
+    "AUTH_PASSWORD_MISMATCH": "Las contraseñas no coinciden"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",

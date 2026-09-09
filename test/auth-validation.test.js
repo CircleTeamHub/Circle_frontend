@@ -101,9 +101,9 @@ test("composite validators short-circuit in display order", () => {
   assert.equal(V.validateLoginForm("a@b.com", "123456"), null);
   assert.equal(V.validateLoginForm("user_123", "123456"), null);
 
-  // register：邮箱→验证码→密码→昵称 顺序。
+  // register：邮箱→密码→确认密码→昵称 顺序。
   assert.equal(
-    V.validateRegisterForm("a@b.com", "123456", "12345", "nick"),
+    V.validateRegisterForm("a@b.com", "12345", "12345", "nick"),
     "auth.errors.passwordTooShort",
   );
   assert.equal(
@@ -117,5 +117,9 @@ test("composite validators short-circuit in display order", () => {
   assert.equal(
     V.validateRegisterForm("a@b.com", "123456", "123456", "nick", "abc123"),
     null,
+  );
+  assert.equal(
+    V.validateRegisterForm("a@b.com", "123456", "654321", "nick"),
+    "auth.errors.passwordMismatch",
   );
 });

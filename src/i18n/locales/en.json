@@ -119,7 +119,9 @@
       "invalidInviteCode": "Invalid invite code format",
       "loginFailed": "Login failed, please try again",
       "registerFailed": "Registration failed, please try again",
-      "sendCodeFailed": "Failed to send, please try again"
+      "sendCodeFailed": "Failed to send, please try again",
+      "passwordMismatch": "Passwords do not match",
+      "registerSucceededSessionFailed": "Your account was created, but we could not sign you in automatically. Please log in with this email."
     },
     "hidePassword": "Hide password",
     "showPassword": "Show password",
@@ -3213,7 +3215,8 @@
     "CHAT_GROUP_TARGET_PROTECTED": "You cannot do this to the owner or another admin",
     "CHAT_GROUP_SELF_TARGET": "You cannot do this to yourself",
     "CHAT_MEMBER_SILENCED": "You are muted and cannot send messages right now",
-    "CHAT_SILENCE_DURATION_INVALID": "Invalid mute duration"
+    "CHAT_SILENCE_DURATION_INVALID": "Invalid mute duration",
+    "AUTH_PASSWORD_MISMATCH": "Passwords do not match"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",
