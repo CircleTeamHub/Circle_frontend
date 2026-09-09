@@ -460,6 +460,32 @@
     "youAreSilenced": "Estás silenciado",
     "youAreSilencedUntil": "Estás silenciado hasta {{time}}",
     "youAreSilencedIndefinitely": "Estás silenciado hasta que un administrador lo levante",
+    "groupAvatar": "Avatar del grupo",
+    "groupMembersRow": "Miembros",
+    "memberCountWithLimit": "{{count}}/{{limit}}",
+    "memberCountOnly": "{{count}}",
+    "muteAll": "Silenciar a todos",
+    "muteAllHint": "Al activarlo, solo el propietario y los administradores pueden escribir",
+    "youAreMutedAll": "Todos están silenciados. Solo el propietario y los administradores pueden escribir",
+    "transferOwner": "Transferir propiedad",
+    "transferOwnerConfirm": "¿Transferir la propiedad a {{name}}? Pasarás a ser un miembro normal.",
+    "transferOwnerDone": "Propiedad transferida a {{name}}.",
+    "transferOwnerAction": "Transferir",
+    "raiseMemberLimit": "Ampliar el límite de miembros",
+    "groupAvatarUpdateFailed": "No se pudo actualizar el avatar del grupo",
+    "profilesRestrictedByGroup": "Este grupo no permite ver los perfiles de los miembros",
+    "groupPolicy": {
+      "memberCanInvite": "Invitaciones de miembros",
+      "qrJoinEnabled": "Unirse con código QR",
+      "membersCanViewProfiles": "Los miembros pueden ver perfiles",
+      "membersCanAddFriends": "Los miembros pueden añadir amigos"
+    },
+    "groupPolicyHint": {
+      "memberCanInvite": "Si está desactivado, solo el propietario y los administradores pueden añadir miembros",
+      "qrJoinEnabled": "Si está desactivado, los códigos QR del grupo ya emitidos dejan de funcionar",
+      "membersCanViewProfiles": "Si está desactivado, los miembros normales no pueden abrir perfiles de otros miembros desde el grupo",
+      "membersCanAddFriends": "Si está desactivado, los miembros normales no pueden añadir amigos a través del grupo"
+    },
     "groupManagement": {
       "admins": "Administradores",
       "adminsHint": "Los administradores pueden expulsar miembros, silenciarlos y borrar el chat para todos",
@@ -476,7 +502,12 @@
       "noCandidates": "No hay miembros disponibles",
       "searchPlaceholder": "Buscar miembros",
       "loadFailed": "No se pudo cargar la gestión del grupo",
-      "restricted": "Solo el propietario y los administradores pueden gestionar el grupo"
+      "restricted": "Solo el propietario y los administradores pueden gestionar el grupo",
+      "settings": "Ajustes del grupo",
+      "ownerSection": "Propietario",
+      "joinMethods": "Cómo se une la gente",
+      "memberPermissions": "Permisos de los miembros",
+      "pickNewOwner": "Elegir al nuevo propietario"
     },
     "groupEvent": {
       "system": "Sistema",
@@ -497,7 +528,12 @@
       "ownerTransferred": "La propiedad pasó a {{targets}}",
       "groupRenamed": "{{actor}} cambió el nombre del grupo a «{{name}}»",
       "groupNoticeUpdated": "{{actor}} actualizó el aviso del grupo",
-      "historyCleared": "{{actor}} borró el chat para todos"
+      "historyCleared": "{{actor}} borró el chat para todos",
+      "muteAllEnabled": "{{actor}} silenció a todos",
+      "muteAllDisabled": "{{actor}} quitó el silencio a todos",
+      "groupAvatarUpdated": "{{actor}} actualizó el avatar del grupo",
+      "policyEnabled": "{{actor}} activó «{{policy}}»",
+      "policyDisabled": "{{actor}} desactivó «{{policy}}»"
     },
     "clearHistoryWarning": "Esto eliminará permanentemente todos los mensajes de esta conversación.",
     "clear": "Borrar",
@@ -2542,7 +2578,6 @@
       "loginFailed": "Error al iniciar sesión, inténtalo de nuevo",
       "registerFailed": "Error al registrarse, inténtalo de nuevo",
       "sendCodeFailed": "Error al enviar, inténtalo de nuevo",
-      "passwordMismatch": "Las contraseñas no coinciden",
       "registerSucceededSessionFailed": "Tu cuenta se creó, pero no pudimos iniciar sesión automáticamente. Inicia sesión con este correo."
     },
     "hidePassword": "Ocultar contraseña",
@@ -2818,7 +2853,12 @@
       "memberSilencedIndefinitely": "Un miembro fue silenciado",
       "memberUnsilenced": "Se quitó el silencio a un miembro",
       "ownerTransferred": "{{name}} es ahora el propietario del grupo",
-      "ownerTransferredUnnamed": "La propiedad del grupo fue transferida"
+      "ownerTransferredUnnamed": "La propiedad del grupo fue transferida",
+      "muteAllEnabled": "Todos han sido silenciados",
+      "muteAllDisabled": "Se quitó el silencio a todos",
+      "groupAvatarUpdated": "Se actualizó el avatar del grupo",
+      "policyEnabled": "Se activó «{{policy}}»",
+      "policyDisabled": "Se desactivó «{{policy}}»"
     },
     "silence": {
       "minutes": "{{n}} min",
@@ -3227,7 +3267,10 @@
     "CHAT_GROUP_SELF_TARGET": "No puedes hacer esto contigo mismo",
     "CHAT_MEMBER_SILENCED": "Estás silenciado y no puedes enviar mensajes ahora",
     "CHAT_SILENCE_DURATION_INVALID": "Duración de silencio no válida",
-    "AUTH_PASSWORD_MISMATCH": "Las contraseñas no coinciden"
+    "CHAT_GROUP_INVITE_DISABLED": "Las invitaciones de miembros están desactivadas en este grupo",
+    "CHAT_GROUP_QR_JOIN_DISABLED": "Unirse con código QR está desactivado en este grupo",
+    "CHAT_GROUP_AVATAR_URL_INVALID": "La dirección del avatar del grupo no es válida",
+    "FRIEND_GROUP_ADD_FORBIDDEN": "Este grupo no permite que los miembros se añadan como amigos"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",

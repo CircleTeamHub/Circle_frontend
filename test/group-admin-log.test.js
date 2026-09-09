@@ -24,6 +24,9 @@ const EVENT_KINDS = [
   'owner-transferred',
   'group-renamed',
   'group-notice-updated',
+  'group-avatar-updated',
+  'mute-all-changed',
+  'policy-changed',
   'history-cleared',
 ];
 
@@ -117,7 +120,10 @@ function loadGroupEventText(translate) {
     require(request) {
       if (request === '@/i18n') return { __esModule: true, default: { t: translate } };
       if (request === './message-mappers') {
-        return { formatSilenceDuration: (seconds) => `${seconds}s` };
+        return {
+          formatSilenceDuration: (seconds) => `${seconds}s`,
+          groupPolicyLabel: (policy) => `policy:${policy}`,
+        };
       }
       throw new Error(`unexpected require: ${request}`);
     },
@@ -192,6 +198,8 @@ test('the five locales define copy for every event kind and the management scree
     'memberLeft', 'memberRemoved', 'memberPromoted', 'memberDemoted',
     'memberSilenced', 'memberSilencedIndefinitely', 'memberUnsilenced',
     'ownerTransferred', 'groupRenamed', 'groupNoticeUpdated', 'historyCleared',
+    'muteAllEnabled', 'muteAllDisabled', 'groupAvatarUpdated',
+    'policyEnabled', 'policyDisabled',
   ];
   const manageKeys = [
     'admins', 'adminsHint', 'addAdmin', 'noAdmins', 'removeAdmin',
@@ -264,8 +272,8 @@ test('chat info wires standalone-group roles, the management entry and the long-
 test('chat detail locks the composer while the viewer is silenced', () => {
   const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
   assert.match(detail, /const selfSilenced = useMemo\(/);
-  assert.match(detail, /editable=\{!isPreviewMode && !selfSilenced\}/);
-  assert.match(detail, /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| selfSilenced\}/);
+  assert.match(detail, /editable=\{!isPreviewMode && !composerLocked\}/);
+  assert.match(detail, /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| composerLocked\}/);
   assert.match(detail, /testID="chat-silenced-bar"/);
   assert.match(detail, /chat\.youAreSilencedUntil/);
   assert.match(detail, /const timer = setTimeout\(\(\) => setSilenceClock\(Date\.now\(\)\), remaining \+ 1\)/);

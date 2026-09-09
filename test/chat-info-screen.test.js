@@ -194,7 +194,10 @@ test('chat info screen lets the current user open their own profile from the gro
   // messages/contacts/discover/profile 都有 re-export；写死 'messages' 会把 profile
   // 推进 messages 栈、串栈污染(与 AddFriend 同类 bug)。
   // 契约随自研栈迁移更新(意图不变):id 已是后端 UUID,无需 fromImUserId 转换。
-  assert.match(source, /router\.push\(getUserProfileHref\(scope,\s*member\.userId/);
+  assert.match(source, /router\.push\(\s*getUserProfileHref\(scope,\s*member\.userId/);
+  // 从群里点进资料页要带上 viaConversationID:资料页据此按本群的
+  // 「成员可添加好友」决定要不要放加好友入口(服务端同样按它把关)。
+  assert.match(source, /viaConversationID: resolvedConversationID \|\| conversationID/);
   assert.doesNotMatch(source, /getUserProfileHref\(\s*['"]messages['"]/);
   assert.doesNotMatch(
     source,
@@ -370,7 +373,9 @@ test('group member search keeps authorization live and revalidates before openin
   // review R2 P1：authorized 来自活体 hook（订阅角色变化），撤权即清结果；
   // 点开成员资料前还要 fail-closed 现场重查。
   assert.match(source, /useGroupMemberViewAccess\(\{/);
-  assert.match(source, /canViewMembers: authorized,/);
+  // 圈子群的授权仍来自活体 hook;独立群聊没有圈子角色,目录全员可见(服务端座位校验)。
+  assert.match(source, /canViewMembers: circleAuthorized,/);
+  assert.match(source, /const authorized = isStandaloneGroup \|\| circleAuthorized;/);
   assert.match(source, /if \(!authorized\) \{\s*\n\s*setMembers\(\[\]\);/);
   assert.match(source, /if \(!\(await revalidate\(\)\)\) \{\s*\n\s*return;/);
 });

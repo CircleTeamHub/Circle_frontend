@@ -85,6 +85,7 @@ import {
 // 消息数据面已切到 chat-core;成员目录 / @ 候选 / 在线状态仍走 OpenIM 双轨
 // (OpenIM groupID === circle.id,ID 同值,Phase 3 随成员子系统一起迁)。
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
+import { isGroupManager } from '@/features/chat/group-admin-permissions';
 import {
   ensureCircleConversation,
   ensureDirectConversation,
@@ -721,6 +722,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     const until = new Date(selfSilencedUntil).getTime();
     return Number.isNaN(until) || until > silenceClock;
   }, [selfSilencedFlag, selfSilencedUntil, silenceClock]);
+  // 全员禁言:群主/管理员豁免,其余人和被单独禁言一样锁输入区。
+  // myRole 缺省(老后端)时按普通成员处理 —— 服务端照样会拒,提前锁住不会更糟。
+  const groupMuteAllActive = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    if (!conversation?.muteAll) return false;
+    return !isGroupManager(conversation.myRole ?? null);
+  });
+  // 输入区是否锁住:被单独禁言,或全员禁言且自己不是管理员。
+  const composerLocked = selfSilenced || groupMuteAllActive;
   const selfDestructEnabled = useChatStore((state) => {
     const conversation = state.conversations.find(
       (candidate) => candidate.id === conversationID,
@@ -782,6 +794,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   // 独立群聊同理:目录全员可见,座位校验在服务端。
   const canViewGroupMemberProfiles =
     isTempChat || isStandaloneGroup || canViewCircleMembers;
+  // 「成员可查看他人资料」:群主/管理员不受限;策略缺省(老后端)按开放处理。
+  const canViewMemberProfilesByPolicy = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    if (!conversation?.policies) return true;
+    return (
+      isGroupManager(conversation.myRole ?? null) ||
+      conversation.policies.membersCanViewProfiles
+    );
+  });
   const revalidateMemberViewAccess = useCallback(
     () =>
       isTempChat || isStandaloneGroup
@@ -919,13 +942,36 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           Alert.alert(t('chat.groupMembersRestricted'));
           return;
         }
-        router.push(getUserProfileHref(scope, msg.senderID, msg.senderName));
+        // 「成员可查看他人资料」策略:群主/管理员不受限,看自己永远放行。
+        if (msg.senderID !== currentUserID && !canViewMemberProfilesByPolicy) {
+          Alert.alert(
+            t('chat.profilesRestrictedByGroup', {
+              defaultValue: '该群未开放查看成员资料',
+            }),
+          );
+          return;
+        }
+        router.push(
+          getUserProfileHref(scope, msg.senderID, msg.senderName, {
+            viaConversationID: conversationID,
+          }),
+        );
         return;
       }
       // 单聊：对方即会话 sourceID。
       router.push(getUserProfileHref(scope, sourceID, conversationTitle));
     },
-    [conversationTitle, currentUserID, sourceID, isGroupChat, revalidateMemberViewAccess, scope, t],
+    [
+      canViewMemberProfilesByPolicy,
+      conversationID,
+      conversationTitle,
+      currentUserID,
+      sourceID,
+      isGroupChat,
+      revalidateMemberViewAccess,
+      scope,
+      t,
+    ],
   );
 
   const handleOpenUserCard = useCallback(
@@ -2580,17 +2626,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
 
   // 切换「语音输入模式」：文本框 ↔ 按住说话。退出时若在录音则一并取消。
   const toggleVoiceInputMode = useCallback(() => {
-    if (isPreviewMode || selfSilenced) return;
+    if (isPreviewMode || composerLocked) return;
     Keyboard.dismiss();
     LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
     setAttachmentOpen(false);
     setEmojiOpen(false);
     setVoiceInputMode((prev) => !prev);
-  }, [isPreviewMode, selfSilenced]);
+  }, [composerLocked, isPreviewMode]);
 
   // 按住开始录音。权限/音频模式准备好后 record()，失败时复位状态。
   const startHoldRecording = useCallback(async () => {
-    if (!sourceID || isPreviewMode || selfSilenced || voiceActionBusy) return;
+    if (!sourceID || isPreviewMode || composerLocked || voiceActionBusy) return;
     if (inFlightRef.current || voiceStartInProgressRef.current) return;
     voicePressActiveRef.current = true;
     voiceStartInProgressRef.current = true;
@@ -2651,9 +2697,9 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       if (mountedRef.current) setVoiceActionBusy(false);
     }
   }, [
+    composerLocked,
     isPreviewMode,
     restoreRecordingAudioMode,
-    selfSilenced,
     sourceID,
     t,
     voiceActionBusy,
@@ -4100,18 +4146,23 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           </Pressable>
         </View>
       ) : null}
-      {selfSilenced ? (
+      {composerLocked ? (
         <View style={[s.silencedBar, d.silencedBar]} testID="chat-silenced-bar">
           <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
           <Text style={[s.silencedBarText, d.silencedBarText]} numberOfLines={2}>
-            {selfSilencedUntil
-              ? t('chat.youAreSilencedUntil', {
-                  time: new Date(selfSilencedUntil).toLocaleString(),
-                  defaultValue: '你已被禁言，{{time}} 解除',
+            {/* 被单独禁言优先说自己的状态:那是针对本人的,比「全员禁言」更具体。 */}
+            {!selfSilenced
+              ? t('chat.youAreMutedAll', {
+                  defaultValue: '全员禁言中，仅群主和管理员可以发言',
                 })
-              : t('chat.youAreSilencedIndefinitely', {
-                  defaultValue: '你已被禁言，等待管理员解除',
-                })}
+              : selfSilencedUntil
+                ? t('chat.youAreSilencedUntil', {
+                    time: new Date(selfSilencedUntil).toLocaleString(),
+                    defaultValue: '你已被禁言，{{time}} 解除',
+                  })
+                : t('chat.youAreSilencedIndefinitely', {
+                    defaultValue: '你已被禁言，等待管理员解除',
+                  })}
           </Text>
         </View>
       ) : null}
@@ -4137,7 +4188,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             key="voice-left"
             style={[s.circleBtn, d.circleBtn]}
             onPress={toggleVoiceInputMode}
-            disabled={isPreviewMode || isVoiceRecording || selfSilenced}
+            disabled={isPreviewMode || isVoiceRecording || composerLocked}
             hitSlop={8}
           >
             <Ionicons
@@ -4184,8 +4235,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
               testID={E2E_TEST_IDS.chatInput}
               style={[s.composerInput, d.composerInput]}
               placeholder={
-                selfSilenced
-                  ? t('chat.youAreSilenced', { defaultValue: '你已被禁言' })
+                composerLocked
+                  ? selfSilenced
+                    ? t('chat.youAreSilenced', { defaultValue: '你已被禁言' })
+                    : t('chat.muteAll', { defaultValue: '全员禁言' })
                   : isPreviewMode
                     ? t('chat.detail.previewPlaceholder', {
                         defaultValue: '连接尚未完成',
@@ -4231,7 +4284,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
                 setEmojiOpen(false);
                 setMentionPickerVisible(false);
               }}
-              editable={!isPreviewMode && !selfSilenced}
+              editable={!isPreviewMode && !composerLocked}
             />
             <Pressable onPress={handleEmojiToggle} hitSlop={8} disabled={isPreviewMode}>
               <Ionicons
@@ -4249,7 +4302,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           testID={E2E_TEST_IDS.chatSend}
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
           onPress={draft.trim() || pendingCard ? handleSend : handleAttachmentToggle}
-          disabled={sending || isPreviewMode || isVoiceRecording || selfSilenced}
+          disabled={sending || isPreviewMode || isVoiceRecording || composerLocked}
           accessibilityRole="button"
           accessibilityLabel={
             draft.trim() || pendingCard

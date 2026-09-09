@@ -377,6 +377,18 @@ export interface ChatMemberDto {
   silencedUntil?: string | null;
 }
 
+/** 群策略开关(PATCH /chat/conversations/:id/policies;群主/管理员可改)。 */
+export interface ChatGroupPoliciesDto {
+  /** 普通成员能否拉人进群(圈子群 = Circle.memberCanInvite)。 */
+  memberCanInvite: boolean;
+  /** 群二维码能否入群。 */
+  qrJoinEnabled: boolean;
+  /** 普通成员能否从群里打开其他成员资料。 */
+  membersCanViewProfiles: boolean;
+  /** 普通成员能否通过群加其他成员为好友。 */
+  membersCanAddFriends: boolean;
+}
+
 /** 禁言/解除禁言的响应:目标成员的最新禁言状态。 */
 export interface ChatMemberSilenceDto {
   userId: string;
@@ -399,6 +411,9 @@ export type ChatGroupEventKind =
   | 'owner-transferred'
   | 'group-renamed'
   | 'group-notice-updated'
+  | 'group-avatar-updated'
+  | 'mute-all-changed'
+  | 'policy-changed'
   | 'history-cleared';
 
 /** 群日志一条(GET /chat/conversations/:id/events)。 */
@@ -466,6 +481,18 @@ export interface ChatConversationDto {
   silenced?: boolean;
   /** 本人禁言到期时刻;silenced 且为 null = 直到解除。 */
   silencedUntil?: string | null;
+  /** 全员禁言中(仅 GROUP;群主/管理员不受限)。可选兼容老后端。 */
+  muteAll?: boolean;
+  /** 独立群聊公告;圈子群走圈子详情。 */
+  notice?: string | null;
+  /** 独立群聊头像;圈子群走 circle.avatarUrl。 */
+  avatarUrl?: string | null;
+  /** 独立群聊成员上限;圈子群走圈子详情。 */
+  memberLimit?: number | null;
+  /** 本人在该群的角色(仅 GROUP)。 */
+  myRole?: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
+  /** 群策略开关(仅 GROUP)。 */
+  policies?: ChatGroupPoliciesDto | null;
   /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
   burnDurationSec?: number | null;
   lastMessageAt: string | null;

@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 import type {
   ChatConversationDto,
   ChatGroupEventsPageDto,
+  ChatGroupPoliciesDto,
   ChatHistoryPageDto,
   ChatMemberDto,
   ChatMemberSilenceDto,
@@ -232,6 +233,61 @@ export function unsilenceChatMember(
   return apiClient<ChatMemberSilenceDto>(
     `/chat/conversations/${conversationId}/members/${userId}/silence`,
     { method: 'DELETE' },
+  );
+}
+
+/** 全员禁言开关(两种群;群主/管理员;管理员与群主豁免)。 */
+export function setGroupChatMuteAll(
+  conversationId: string,
+  enabled: boolean,
+): Promise<{ muteAll: boolean }> {
+  return apiClient<{ muteAll: boolean }>(
+    `/chat/conversations/${conversationId}/mute-all`,
+    { method: 'PATCH', body: { enabled } },
+  );
+}
+
+/** 独立群聊:群主转让(新群主的管理员标记与禁言清零,原群主降为普通成员)。 */
+export function transferGroupChatOwner(
+  conversationId: string,
+  userId: string,
+): Promise<void> {
+  return apiClient<void>(`/chat/conversations/${conversationId}/owner`, {
+    method: 'POST',
+    body: { userId },
+  });
+}
+
+/** 独立群聊:群公告(群主/管理员;空串清空)。 */
+export function setGroupChatNotice(
+  conversationId: string,
+  notice: string,
+): Promise<{ notice: string | null }> {
+  return apiClient<{ notice: string | null }>(
+    `/chat/conversations/${conversationId}/notice`,
+    { method: 'PATCH', body: { notice } },
+  );
+}
+
+/** 独立群聊:群头像(群主/管理员;URL 必须来自本应用存储)。 */
+export function setGroupChatAvatar(
+  conversationId: string,
+  avatarUrl: string,
+): Promise<{ avatarUrl: string }> {
+  return apiClient<{ avatarUrl: string }>(
+    `/chat/conversations/${conversationId}/avatar`,
+    { method: 'PATCH', body: { avatarUrl } },
+  );
+}
+
+/** 群策略开关(两种群;群主/管理员)。只传要改的键。 */
+export function updateGroupChatPolicies(
+  conversationId: string,
+  patch: Partial<ChatGroupPoliciesDto>,
+): Promise<ChatGroupPoliciesDto> {
+  return apiClient<ChatGroupPoliciesDto>(
+    `/chat/conversations/${conversationId}/policies`,
+    { method: 'PATCH', body: patch },
   );
 }
 

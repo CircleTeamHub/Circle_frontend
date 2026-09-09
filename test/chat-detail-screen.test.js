@@ -64,11 +64,11 @@ test('chat detail screen supports preview mode without an IM conversation', () =
   assert.match(source, /const isPreviewMode = !conversationID/);
   // 预览态文案已改为「连接尚未完成」（IM 未就绪的准确提示，替代旧的「仅预览」框架）
   assert.match(source, /连接尚未完成/);
-  // 预览态与本人被禁言都锁输入区;禁言由 selfSilenced(会话 dto + 到期兜底)驱动。
-  assert.match(source, /editable=\{!isPreviewMode && !selfSilenced\}/);
+  // 预览态、本人被禁言、全员禁言(非管理员)都锁输入区,统一走 composerLocked。
+  assert.match(source, /editable=\{!isPreviewMode && !composerLocked\}/);
   assert.match(
     source,
-    /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| selfSilenced\}/,
+    /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| composerLocked\}/,
   );
 });
 
@@ -790,8 +790,10 @@ test('chat detail blocks voice mode and recording while the viewer is silenced',
     'utf8',
   );
 
-  assert.match(source, /if \(isPreviewMode \|\| selfSilenced\) return;/);
-  assert.match(source, /if \(!sourceID \|\| isPreviewMode \|\| selfSilenced \|\| voiceActionBusy\) return;/);
+  assert.match(source, /if \(isPreviewMode \|\| composerLocked\) return;/);
+  assert.match(source, /if \(!sourceID \|\| isPreviewMode \|\| composerLocked \|\| voiceActionBusy\) return;/);
+  // composerLocked = 本人被禁言 或 全员禁言且自己不是群主/管理员。
+  assert.match(source, /const composerLocked = selfSilenced \|\| groupMuteAllActive;/);
   assert.match(source, /const \[silenceClock, setSilenceClock\] = useState\(\(\) => Date\.now\(\)\);/);
   assert.match(source, /const timer = setTimeout\(\(\) => setSilenceClock\(Date\.now\(\)\), remaining \+ 1\);/);
 });

@@ -1,5 +1,5 @@
 import i18n from '@/i18n';
-import { formatSilenceDuration } from './message-mappers';
+import { formatSilenceDuration, groupPolicyLabel } from './message-mappers';
 import type { ChatGroupEventDto, ChatSenderInfo } from './protocol';
 
 /**
@@ -58,6 +58,20 @@ export function groupEventText(event: ChatGroupEventDto): string {
       return eventText('groupNoticeUpdated', { actor });
     case 'history-cleared':
       return eventText('historyCleared', { actor });
+    case 'mute-all-changed':
+      return payload['enabled'] === true
+        ? eventText('muteAllEnabled', { actor })
+        : eventText('muteAllDisabled', { actor });
+    case 'group-avatar-updated':
+      return eventText('groupAvatarUpdated', { actor });
+    case 'policy-changed': {
+      const policy = groupPolicyLabel(
+        typeof payload['policy'] === 'string' ? payload['policy'] : '',
+      );
+      return payload['enabled'] === true
+        ? eventText('policyEnabled', { actor, policy })
+        : eventText('policyDisabled', { actor, policy });
+    }
     default:
       return i18n.t('chat.groupActivity', { defaultValue: '群聊活动' });
   }

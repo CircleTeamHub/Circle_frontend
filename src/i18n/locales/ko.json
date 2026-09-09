@@ -459,6 +459,32 @@
     "youAreSilenced": "채팅이 금지되었습니다",
     "youAreSilencedUntil": "{{time}}까지 채팅이 금지되었습니다",
     "youAreSilencedIndefinitely": "관리자가 해제할 때까지 채팅할 수 없습니다",
+    "groupAvatar": "그룹 프로필 사진",
+    "groupMembersRow": "멤버",
+    "memberCountWithLimit": "{{count}}/{{limit}}명",
+    "memberCountOnly": "{{count}}명",
+    "muteAll": "전체 채팅 금지",
+    "muteAllHint": "켜면 그룹장과 관리자만 메시지를 보낼 수 있습니다",
+    "youAreMutedAll": "전체 채팅 금지 중입니다. 그룹장과 관리자만 메시지를 보낼 수 있습니다",
+    "transferOwner": "그룹장 양도",
+    "transferOwnerConfirm": "{{name}} 님에게 그룹장을 양도할까요? 양도 후에는 일반 멤버가 됩니다.",
+    "transferOwnerDone": "{{name}} 님에게 그룹장을 양도했습니다.",
+    "transferOwnerAction": "양도",
+    "raiseMemberLimit": "멤버 상한 올리기",
+    "groupAvatarUpdateFailed": "그룹 프로필 사진을 바꾸지 못했습니다",
+    "profilesRestrictedByGroup": "이 그룹에서는 멤버 프로필을 볼 수 없습니다",
+    "groupPolicy": {
+      "memberCanInvite": "멤버 초대",
+      "qrJoinEnabled": "QR 코드로 참여",
+      "membersCanViewProfiles": "멤버가 프로필을 볼 수 있음",
+      "membersCanAddFriends": "멤버가 친구를 추가할 수 있음"
+    },
+    "groupPolicyHint": {
+      "memberCanInvite": "끄면 그룹장과 관리자만 멤버를 초대할 수 있습니다",
+      "qrJoinEnabled": "끄면 이미 발급된 그룹 QR 코드도 사용할 수 없습니다",
+      "membersCanViewProfiles": "끄면 일반 멤버는 그룹에서 다른 멤버의 프로필을 열 수 없습니다",
+      "membersCanAddFriends": "끄면 일반 멤버는 그룹을 통해 친구를 추가할 수 없습니다"
+    },
     "groupManagement": {
       "admins": "관리자",
       "adminsHint": "관리자는 멤버 내보내기, 채팅 금지, 전체 대화 삭제를 할 수 있습니다",
@@ -475,7 +501,12 @@
       "noCandidates": "선택할 수 있는 멤버가 없습니다",
       "searchPlaceholder": "멤버 검색",
       "loadFailed": "그룹 관리를 불러오지 못했습니다",
-      "restricted": "그룹장과 관리자만 그룹을 관리할 수 있습니다"
+      "restricted": "그룹장과 관리자만 그룹을 관리할 수 있습니다",
+      "settings": "그룹 설정",
+      "ownerSection": "그룹장",
+      "joinMethods": "참여 방법",
+      "memberPermissions": "멤버 권한",
+      "pickNewOwner": "새 그룹장 선택"
     },
     "groupEvent": {
       "system": "시스템",
@@ -496,7 +527,12 @@
       "ownerTransferred": "그룹장이 {{targets}} 님에게 넘어갔습니다",
       "groupRenamed": "{{actor}} 님이 그룹 이름을 “{{name}}”(으)로 바꿨습니다",
       "groupNoticeUpdated": "{{actor}} 님이 그룹 공지를 수정했습니다",
-      "historyCleared": "{{actor}} 님이 전체 대화를 삭제했습니다"
+      "historyCleared": "{{actor}} 님이 전체 대화를 삭제했습니다",
+      "muteAllEnabled": "{{actor}} 님이 전체 채팅 금지를 켰습니다",
+      "muteAllDisabled": "{{actor}} 님이 전체 채팅 금지를 해제했습니다",
+      "groupAvatarUpdated": "{{actor}} 님이 그룹 프로필 사진을 바꿨습니다",
+      "policyEnabled": "{{actor}} 님이 “{{policy}}”을(를) 켰습니다",
+      "policyDisabled": "{{actor}} 님이 “{{policy}}”을(를) 껐습니다"
     },
     "clearHistoryWarning": "이 대화의 모든 메시지가 영구적으로 삭제됩니다.",
     "clear": "지우기",
@@ -2539,7 +2575,6 @@
       "loginFailed": "로그인에 실패했습니다. 다시 시도해 주세요",
       "registerFailed": "가입에 실패했습니다. 다시 시도해 주세요",
       "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요",
-      "passwordMismatch": "비밀번호가 일치하지 않습니다",
       "registerSucceededSessionFailed": "계정은 생성되었지만 자동 로그인에 실패했습니다. 해당 이메일로 로그인해 주세요."
     },
     "hidePassword": "비밀번호 숨기기",
@@ -2815,7 +2850,12 @@
       "memberSilencedIndefinitely": "멤버가 채팅 금지되었습니다",
       "memberUnsilenced": "멤버의 채팅 금지가 해제되었습니다",
       "ownerTransferred": "{{name}} 님이 새 그룹장이 되었습니다",
-      "ownerTransferredUnnamed": "그룹장이 변경되었습니다"
+      "ownerTransferredUnnamed": "그룹장이 변경되었습니다",
+      "muteAllEnabled": "전체 채팅 금지가 켜졌습니다",
+      "muteAllDisabled": "전체 채팅 금지가 해제되었습니다",
+      "groupAvatarUpdated": "그룹 프로필 사진이 바뀌었습니다",
+      "policyEnabled": "“{{policy}}”이(가) 켜졌습니다",
+      "policyDisabled": "“{{policy}}”이(가) 꺼졌습니다"
     },
     "silence": {
       "minutes": "{{n}}분",
@@ -3224,7 +3264,10 @@
     "CHAT_GROUP_SELF_TARGET": "자기 자신에게는 할 수 없습니다",
     "CHAT_MEMBER_SILENCED": "채팅이 금지되어 지금은 메시지를 보낼 수 없습니다",
     "CHAT_SILENCE_DURATION_INVALID": "채팅 금지 기간이 올바르지 않습니다",
-    "AUTH_PASSWORD_MISMATCH": "비밀번호가 일치하지 않습니다"
+    "CHAT_GROUP_INVITE_DISABLED": "이 그룹은 멤버 초대가 꺼져 있습니다",
+    "CHAT_GROUP_QR_JOIN_DISABLED": "이 그룹은 QR 코드 참여가 꺼져 있습니다",
+    "CHAT_GROUP_AVATAR_URL_INVALID": "그룹 프로필 사진 주소가 올바르지 않습니다",
+    "FRIEND_GROUP_ADD_FORBIDDEN": "이 그룹은 멤버끼리 친구 추가를 허용하지 않습니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",

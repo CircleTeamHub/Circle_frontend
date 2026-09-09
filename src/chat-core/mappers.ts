@@ -161,7 +161,8 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
       dto.circle?.name ??
       (dto.name?.trim() ||
         i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' }));
-    avatarRaw = dto.circle?.avatarUrl ?? null;
+    // 独立群聊可以自设头像(会话上的 avatarUrl);没设就交给 GroupChatAvatar 兜底。
+    avatarRaw = dto.circle?.avatarUrl ?? dto.avatarUrl ?? null;
     // 圈子群的 sourceID = 圈子 id(圈子详情/成员目录都按它取);
     // 独立群聊没有圈子,sourceID = 会话 id。
     sourceID = dto.circleId ?? dto.id;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
   Modal,
@@ -18,9 +18,11 @@ import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
+  setGroupChatAvatar,
   clearChatConversationHistory,
   createCircleChatConversation,
   fetchChatMembers,
@@ -41,8 +43,10 @@ import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import {
   type GroupRole,
+  isGroupManager,
   resolveStandaloneSelfRole,
 } from '@/features/chat/group-admin-permissions';
+import { useChangeGroupAvatar } from '@/features/chat/hooks/use-change-group-avatar';
 import { useGroupAdminActions } from '@/features/chat/hooks/use-group-admin-actions';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import {
@@ -73,6 +77,7 @@ import {
 import {
   dissolveCircle,
   fetchCircleDetail,
+  setCircleAvatar,
   updateCircle,
 } from '@/services/api/circles';
 import { leaveGroup } from '@/services/api/groups';
@@ -241,6 +246,8 @@ type GroupInfoRowProps = {
   onToggle?: (nextValue: boolean) => void;
   onPress?: () => void;
   destructive?: boolean;
+  /** 行尾自定义内容(群头像行的缩略图);排在 value 与箭头之间。 */
+  rightElement?: ReactNode;
 };
 
 function GroupInfoRow({
@@ -253,6 +260,7 @@ function GroupInfoRow({
   onToggle,
   onPress,
   destructive,
+  rightElement,
 }: GroupInfoRowProps) {
   const { colors } = useTheme();
   const rowLarge = Boolean(subtitle);
@@ -290,6 +298,7 @@ function GroupInfoRow({
             {value}
           </Text>
         ) : null}
+        {rightElement}
         {hasToggle ? (
           <ThemedSwitch
             value={toggleValue}
@@ -400,7 +409,6 @@ export default function ChatInfoScreen() {
     conversation?.tempChat?.title ||
     friendName ||
     t('chat.groupChat');
-  const groupNotice = groupInfo?.notice?.trim() ?? '';
   const memberCount = groupInfo?.memberCount ?? groupMembers.length;
   const currentUserID = useChatStore((state) => state.currentUserId);
   const [silenceClock, setSilenceClock] = useState(() => Date.now());
@@ -468,6 +476,26 @@ export default function ChatInfoScreen() {
   // 会话 dto:store 优先(偏好更新会 upsert 回写、保持活体),群聊兜底到本页
   // get-or-create 的结果。
   const activeConversation = conversation ?? groupConversation;
+  // 群设置第二批:公告/头像/上限/二维码开关与「成员可查看他人资料」。
+  // 圈子群的公告与头像在圈子上(groupInfo / circle),独立群聊在会话行上。
+  const activeConversationPolicies = activeConversation?.policies ?? null;
+  const groupNotice = isStandaloneGroup
+    ? (activeConversation?.notice?.trim() ?? '')
+    : (groupInfo?.notice?.trim() ?? '');
+  const groupAvatarUrl = isStandaloneGroup
+    ? (activeConversation?.avatarUrl ?? null)
+    : (conversation?.circle?.avatarUrl ?? null);
+  // 头像:圈子群只有圈主能换(服务端 assertOwner),独立群聊群主/管理员都能换。
+  const canChangeGroupAvatar = isStandaloneGroup ? canManageGroup : isOwner;
+  const memberLimit = isStandaloneGroup
+    ? (activeConversation?.memberLimit ?? null)
+    : null;
+  // 二维码入群关掉后连群码入口一起收起来:签发与扫码服务端都会拒,留着只会让人白扫。
+  const qrJoinEnabled = activeConversationPolicies?.qrJoinEnabled ?? true;
+  // 「成员可查看他人资料」:群主/管理员不受限;策略缺省(老后端)按开放处理。
+  const canViewMemberProfiles =
+    isGroupManager(selfGroupRole) ||
+    (activeConversationPolicies?.membersCanViewProfiles ?? true);
   const resolvedConversationID = activeConversation?.id ?? '';
   currentConversationIDRef.current = resolvedConversationID;
   const basePinned = activeConversation?.pinned ?? false;
@@ -885,17 +913,30 @@ export default function ChatInfoScreen() {
   }, [conversation?.tempChat?.id, isTempConversation, resolvedConversationID, t]);
 
   const handleOpenSearchGroupMembers = useCallback(() => {
-    if (!groupID || !canViewMemberDirectory) {
+    if (!canViewMemberDirectory) {
+      return;
+    }
+    // 独立群聊没有圈子 id:成员目录按会话 id 取(服务端座位校验)。
+    const memberConversationID = resolvedConversationID || conversationID;
+    if (!groupID && !memberConversationID) {
       return;
     }
 
     router.push(
       getGroupMemberSearchHref(scope, {
         groupID,
+        ...(groupID ? {} : { conversationID: memberConversationID }),
         groupTitle,
       }),
     );
-  }, [canViewMemberDirectory, groupID, groupTitle, scope]);
+  }, [
+    canViewMemberDirectory,
+    conversationID,
+    groupID,
+    groupTitle,
+    resolvedConversationID,
+    scope,
+  ]);
 
   const promptForText = useCallback(
     (title: string, defaultValue: string, onSubmit: (value: string) => void, options?: { multiline?: boolean }) => {
@@ -970,18 +1011,65 @@ export default function ChatInfoScreen() {
   }, [conversationID, groupTitle, openActionError, renameDraft]);
 
   const handleEditGroupNotice = useCallback(() => {
-    if (!groupID) {
+    // 独立群聊的公告写在会话上(PATCH /chat/conversations/:id/notice)。
+    const noticeConversationID = resolvedConversationID || conversationID;
+    if (!groupID && !noticeConversationID) {
       return;
     }
 
     router.push(
       getEditGroupNoticeHref(scope, {
         groupID,
+        ...(groupID ? {} : { conversationID: noticeConversationID }),
         groupTitle,
         notice: groupNotice,
       }),
     );
-  }, [groupID, groupNotice, groupTitle, scope]);
+  }, [
+    conversationID,
+    groupID,
+    groupNotice,
+    groupTitle,
+    resolvedConversationID,
+    scope,
+  ]);
+
+  // 换群头像:圈子群走 POST /circle/:id/avatar(仅圈主),独立群聊走
+  // PATCH /chat/conversations/:id/avatar(群主/管理员)。上传与裁剪两边同一套。
+  const submitGroupAvatar = useCallback(
+    async (fileUrl: string) => {
+      if (isStandaloneGroup) {
+        const target = resolvedConversationID || conversationID;
+        if (!target) return;
+        await setGroupChatAvatar(target, fileUrl);
+        return;
+      }
+      if (!groupID) return;
+      await setCircleAvatar(groupID, fileUrl);
+    },
+    [conversationID, groupID, isStandaloneGroup, resolvedConversationID],
+  );
+
+  const handleGroupAvatarChanged = useCallback(
+    (avatarUrl: string) => {
+      // 本机先回写,不等服务端广播:退回列表和聊天页立刻是新头像。
+      const store = useChatStore.getState();
+      const target = resolvedConversationID || conversationID;
+      const cached = store.conversations.find((item) => item.id === target);
+      if (!cached) return;
+      store.upsertConversation(
+        isStandaloneGroup
+          ? { ...cached, avatarUrl }
+          : cached.circle
+            ? { ...cached, circle: { ...cached.circle, avatarUrl } }
+            : cached,
+      );
+    },
+    [conversationID, isStandaloneGroup, resolvedConversationID],
+  );
+
+  const { changeAvatar: changeGroupAvatar, changing: groupAvatarChanging } =
+    useChangeGroupAvatar(submitGroupAvatar, handleGroupAvatarChanged);
 
   const handleOpenInviteGroupMembers = useCallback(() => {
     if (isStandaloneGroup) {
@@ -1031,9 +1119,39 @@ export default function ChatInfoScreen() {
         return;
       }
 
-      router.push(getUserProfileHref(scope, member.userId, member.nickname || undefined));
+      // 「成员可查看他人资料」策略:群主/管理员不受限,普通成员按开关;
+      // 看自己的资料永远放行。
+      if (
+        member.userId !== currentUserID &&
+        !canViewMemberProfiles &&
+        !isTempConversation
+      ) {
+        Alert.alert(
+          t('chat.profilesRestrictedByGroup', {
+            defaultValue: '该群未开放查看成员资料',
+          }),
+        );
+        return;
+      }
+
+      router.push(
+        getUserProfileHref(scope, member.userId, member.nickname || undefined, {
+          // 资料页据此按本群的「成员可添加好友」决定要不要放加好友入口。
+          viaConversationID: resolvedConversationID || conversationID,
+        }),
+      );
     },
-    [conversationID, isStandaloneGroup, isTempConversation, resolvedConversationID, revalidateMemberAccess, scope],
+    [
+      canViewMemberProfiles,
+      conversationID,
+      currentUserID,
+      isStandaloneGroup,
+      isTempConversation,
+      resolvedConversationID,
+      revalidateMemberAccess,
+      scope,
+      t,
+    ],
   );
 
   // 群管理动作(设/撤管理员、禁言/解除、移出)收进 hook:两种群共用同一张权限矩阵,
@@ -1632,8 +1750,21 @@ export default function ChatInfoScreen() {
               }
               showArrow={canManageGroup || isStandaloneGroup}
             />
-            {isStandaloneGroup ? null : (
+            {isTempConversation ? null : (
               <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.groupAvatar', { defaultValue: '群头像' })}
+                  onPress={
+                    canChangeGroupAvatar && !groupAvatarChanging
+                      ? () => void changeGroupAvatar()
+                      : undefined
+                  }
+                  showArrow={canChangeGroupAvatar}
+                  rightElement={
+                    <GroupChatAvatar size={32} name={groupTitle} uri={groupAvatarUrl} />
+                  }
+                />
                 <Divider />
                 <GroupInfoRow
                   label={t('chat.groupNotice')}
@@ -1643,6 +1774,27 @@ export default function ChatInfoScreen() {
                 />
               </>
             )}
+            {canViewMemberDirectory ? (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.groupMembersRow', { defaultValue: '群成员' })}
+                  value={
+                    memberLimit
+                      ? t('chat.memberCountWithLimit', {
+                          count: memberCount,
+                          limit: memberLimit,
+                          defaultValue: '{{count}}/{{limit}} 人',
+                        })
+                      : t('chat.memberCountOnly', {
+                          count: memberCount,
+                          defaultValue: '{{count}} 人',
+                        })
+                  }
+                  onPress={handleOpenSearchGroupMembers}
+                />
+              </>
+            ) : null}
             {isTempConversation ? (
               <>
                 <Divider />
@@ -1653,12 +1805,12 @@ export default function ChatInfoScreen() {
                   showArrow={false}
                 />
               </>
-            ) : (
+            ) : qrJoinEnabled ? (
               <>
                 <Divider />
                 <GroupInfoRow label={t('qr.groupEntry')} onPress={handleOpenGroupQr} />
               </>
-            )}
+            ) : null}
             <Divider />
             <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
             {canViewMemberDirectory ? (

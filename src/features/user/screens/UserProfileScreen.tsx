@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useChatStore } from '@/chat-core/store';
+import { isGroupManager } from '@/features/chat/group-admin-permissions';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { useTranslation } from 'react-i18next';
@@ -237,7 +239,24 @@ export default function UserProfileScreen() {
   const segments = useSegments();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ id?: string; name?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    name?: string;
+    viaConversationID?: string;
+  }>();
+  // 从群里点进来的资料页:该群关掉「成员可添加好友」且我不是群主/管理员时,
+  // 不放加好友入口(服务端对带 viaConversationId 的申请同样会拒)。
+  const viaConversationID =
+    typeof params.viaConversationID === 'string' ? params.viaConversationID : '';
+  const viaGroupForbidsFriendRequests = useChatStore((state) => {
+    if (!viaConversationID) return false;
+    const group = state.conversations.find((item) => item.id === viaConversationID);
+    if (!group || !group.policies) return false;
+    return (
+      group.policies.membersCanAddFriends === false &&
+      !isGroupManager(group.myRole ?? null)
+    );
+  });
   const currentUser = useAuthStore((state) => state.user);
   const [remoteProfile, setRemoteProfile] = useState<UserProfileData | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -495,7 +514,7 @@ export default function UserProfileScreen() {
     hasProfileLoadError: fetchError !== null,
     hasFriendStatusLoadError: friendStatusLoadError,
   });
-  const showAddFriendButton = canSendFriendRequest;
+  const showAddFriendButton = canSendFriendRequest && !viaGroupForbidsFriendRequests;
   const likeCount = Math.max(0, profile.likeCount ?? 0);
 
   // 联系方式卡只在看**别人**的资料时出现。
@@ -531,8 +550,12 @@ export default function UserProfileScreen() {
       return;
     }
 
-    router.push(getSendFriendRequestHref(scope, profileId, profile.name));
-  }, [canSendFriendRequest, profile.name, profileId, router, scope]);
+    router.push(
+      getSendFriendRequestHref(scope, profileId, profile.name, {
+        ...(viaConversationID ? { viaConversationID } : {}),
+      }),
+    );
+  }, [canSendFriendRequest, profile.name, profileId, router, scope, viaConversationID]);
 
   const handleEditRemark = useCallback(() => {
     if (friendStatus !== 'ACCEPTED' || profileId === 'unknown') {

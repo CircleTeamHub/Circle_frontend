@@ -666,9 +666,37 @@ export function systemNoticeText(content: Record<string, unknown>): string {
         ? i18n.t('im.notification.ownerTransferred', { name })
         : i18n.t('im.notification.ownerTransferredUnnamed');
     }
+    // 群设置第二批:全员禁言开关、群头像、策略开关。策略名走同一张词表,
+    // 客户端不认识的新键原样显示键名,而不是空白。
+    case 'mute-all-changed':
+      return content['enabled'] === true
+        ? i18n.t('im.notification.muteAllEnabled')
+        : i18n.t('im.notification.muteAllDisabled');
+    case 'group-avatar-updated':
+      return i18n.t('im.notification.groupAvatarUpdated');
+    case 'group-policy-changed': {
+      const policy = groupPolicyLabel(
+        typeof content['policy'] === 'string' ? content['policy'] : '',
+      );
+      return content['enabled'] === true
+        ? i18n.t('im.notification.policyEnabled', { policy })
+        : i18n.t('im.notification.policyDisabled', { policy });
+    }
     default:
       return '';
   }
+}
+
+/** 群策略键 → 本地化名称(群管理页开关、系统提示、群日志共用一张表)。 */
+export function groupPolicyLabel(policy: string): string {
+  const key: Record<string, string> = {
+    memberCanInvite: 'chat.groupPolicy.memberCanInvite',
+    qrJoinEnabled: 'chat.groupPolicy.qrJoinEnabled',
+    membersCanViewProfiles: 'chat.groupPolicy.membersCanViewProfiles',
+    membersCanAddFriends: 'chat.groupPolicy.membersCanAddFriends',
+  };
+  const found = key[policy];
+  return found ? i18n.t(found) : policy;
 }
 /**
  * 禁言时长 → 本地化标签。档位表在 silence-durations.ts;这里按整天/整小时/分钟

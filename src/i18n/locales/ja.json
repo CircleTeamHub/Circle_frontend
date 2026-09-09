@@ -459,6 +459,32 @@
     "youAreSilenced": "発言禁止中です",
     "youAreSilencedUntil": "{{time}} まで発言禁止です",
     "youAreSilencedIndefinitely": "管理者が解除するまで発言できません",
+    "groupAvatar": "グループアイコン",
+    "groupMembersRow": "メンバー",
+    "memberCountWithLimit": "{{count}}/{{limit}}人",
+    "memberCountOnly": "{{count}}人",
+    "muteAll": "全員発言禁止",
+    "muteAllHint": "オンにするとオーナーと管理者のみ発言できます",
+    "youAreMutedAll": "全員発言禁止中です。オーナーと管理者のみ発言できます",
+    "transferOwner": "オーナーを譲渡",
+    "transferOwnerConfirm": "{{name}} にオーナーを譲渡しますか？譲渡後は一般メンバーになります。",
+    "transferOwnerDone": "{{name}} にオーナーを譲渡しました。",
+    "transferOwnerAction": "譲渡",
+    "raiseMemberLimit": "メンバー上限を引き上げ",
+    "groupAvatarUpdateFailed": "グループアイコンを更新できませんでした",
+    "profilesRestrictedByGroup": "このグループではメンバーのプロフィールを見られません",
+    "groupPolicy": {
+      "memberCanInvite": "メンバーによる招待",
+      "qrJoinEnabled": "QRコードで参加",
+      "membersCanViewProfiles": "メンバーがプロフィールを見られる",
+      "membersCanAddFriends": "メンバーが友だち追加できる"
+    },
+    "groupPolicyHint": {
+      "memberCanInvite": "オフにするとオーナーと管理者のみメンバーを追加できます",
+      "qrJoinEnabled": "オフにすると発行済みのグループQRコードも使えなくなります",
+      "membersCanViewProfiles": "オフにすると一般メンバーはグループから他のメンバーのプロフィールを開けません",
+      "membersCanAddFriends": "オフにすると一般メンバーはグループ経由で友だち追加できません"
+    },
     "groupManagement": {
       "admins": "管理者",
       "adminsHint": "管理者はメンバーの削除・発言禁止・全員の履歴削除ができます",
@@ -475,7 +501,12 @@
       "noCandidates": "選択できるメンバーがいません",
       "searchPlaceholder": "メンバーを検索",
       "loadFailed": "グループ管理を読み込めませんでした",
-      "restricted": "オーナーと管理者のみがグループを管理できます"
+      "restricted": "オーナーと管理者のみがグループを管理できます",
+      "settings": "グループ設定",
+      "ownerSection": "オーナー",
+      "joinMethods": "参加方法",
+      "memberPermissions": "メンバー権限",
+      "pickNewOwner": "新しいオーナーを選択"
     },
     "groupEvent": {
       "system": "システム",
@@ -496,7 +527,12 @@
       "ownerTransferred": "オーナーが {{targets}} に移りました",
       "groupRenamed": "{{actor}} がグループ名を「{{name}}」に変更しました",
       "groupNoticeUpdated": "{{actor}} がグループのお知らせを更新しました",
-      "historyCleared": "{{actor}} が全員の履歴を削除しました"
+      "historyCleared": "{{actor}} が全員の履歴を削除しました",
+      "muteAllEnabled": "{{actor}} が全員発言禁止にしました",
+      "muteAllDisabled": "{{actor}} が全員発言禁止を解除しました",
+      "groupAvatarUpdated": "{{actor}} がグループアイコンを更新しました",
+      "policyEnabled": "{{actor}} が「{{policy}}」をオンにしました",
+      "policyDisabled": "{{actor}} が「{{policy}}」をオフにしました"
     },
     "clearHistoryWarning": "この会話のすべてのメッセージが完全に削除されます。",
     "clear": "消去",
@@ -2539,7 +2575,6 @@
       "loginFailed": "ログインに失敗しました。もう一度お試しください",
       "registerFailed": "登録に失敗しました。もう一度お試しください",
       "sendCodeFailed": "送信に失敗しました。もう一度お試しください",
-      "passwordMismatch": "パスワードが一致しません",
       "registerSucceededSessionFailed": "アカウントは作成されましたが、自動ログインに失敗しました。このメールアドレスでログインしてください。"
     },
     "hidePassword": "パスワードを非表示",
@@ -2815,7 +2850,12 @@
       "memberSilencedIndefinitely": "メンバーが発言禁止になりました",
       "memberUnsilenced": "メンバーの発言禁止が解除されました",
       "ownerTransferred": "{{name}} が新しいオーナーになりました",
-      "ownerTransferredUnnamed": "オーナーが変更されました"
+      "ownerTransferredUnnamed": "オーナーが変更されました",
+      "muteAllEnabled": "全員発言禁止になりました",
+      "muteAllDisabled": "全員発言禁止が解除されました",
+      "groupAvatarUpdated": "グループアイコンが更新されました",
+      "policyEnabled": "「{{policy}}」がオンになりました",
+      "policyDisabled": "「{{policy}}」がオフになりました"
     },
     "silence": {
       "minutes": "{{n}}分",
@@ -3224,7 +3264,10 @@
     "CHAT_GROUP_SELF_TARGET": "自分自身には実行できません",
     "CHAT_MEMBER_SILENCED": "発言禁止中のため送信できません",
     "CHAT_SILENCE_DURATION_INVALID": "発言禁止の期間が無効です",
-    "AUTH_PASSWORD_MISMATCH": "パスワードが一致しません"
+    "CHAT_GROUP_INVITE_DISABLED": "このグループではメンバーによる招待がオフです",
+    "CHAT_GROUP_QR_JOIN_DISABLED": "このグループではQRコードでの参加がオフです",
+    "CHAT_GROUP_AVATAR_URL_INVALID": "グループアイコンのURLが無効です",
+    "FRIEND_GROUP_ADD_FORBIDDEN": "このグループではメンバー同士の友だち追加ができません"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",
