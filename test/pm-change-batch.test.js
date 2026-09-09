@@ -82,7 +82,9 @@ test('group chat offers local and two-sided deletion plus management log access'
   );
   assert.match(info, /groupLog/);
   assert.match(messages, /deleteForEveryone/);
-  assert.match(logScreen, /system/);
+  // 群日志读的是独立于聊天记录的事件账本,不再从 system 消息里筛。
+  assert.match(logScreen, /fetchChatGroupEvents/);
+  assert.doesNotMatch(logScreen, /searchChatMessages/);
   assert.match(logRoute, /GroupLogScreen/);
 });
 
