@@ -69,6 +69,7 @@ import { fetchCircleDetail, updateCircle } from '@/services/api/circles';
 import { leaveGroup } from '@/services/api/groups';
 import { fetchMyTempChats } from '@/services/api/temp-chat';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { topNotice } from '@/components/app/top-notice-store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { DisplayIcon } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -854,9 +855,9 @@ export default function ChatInfoScreen() {
 
       const Clipboard = await import('expo-clipboard');
       await Clipboard.setStringAsync(room.shareUrl);
-      Alert.alert(t('tempChats.linkCopied'));
+      topNotice.success(t('tempChats.linkCopied'));
     } catch {
-      Alert.alert(t('tempChats.copyFailed'));
+      topNotice.error(t('tempChats.copyFailed'));
     } finally {
       inviteLinkCopyInFlightRef.current = false;
     }
