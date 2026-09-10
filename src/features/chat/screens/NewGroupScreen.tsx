@@ -151,6 +151,13 @@ export default function NewGroupScreen() {
 
   const handleSubmit = useCallback(async () => {
     if (submittingRef.current) return;
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      Alert.alert(t('messages.newGroupNameRequired'));
+      return;
+    }
+
     if (selectedCount < MIN_MEMBERS) {
       Alert.alert(t('messages.newGroupMinMembers'));
       return;
@@ -159,7 +166,7 @@ export default function NewGroupScreen() {
     setSubmitting(true);
     try {
       const { conversationID } = await createGroupConversation({
-        name: name.trim() || null,
+        name: trimmedName,
         memberIds: Object.keys(selected),
       });
       if (!mountedRef.current) return;
@@ -174,7 +181,7 @@ export default function NewGroupScreen() {
         params: {
           conversationID,
           sourceID: conversationID,
-          title: name.trim() || t('messages.newGroupDefaultName'),
+          title: trimmedName,
           conversationType: 'group',
           conversationKind: 'group',
         },

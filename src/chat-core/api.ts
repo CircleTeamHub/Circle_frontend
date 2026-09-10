@@ -115,15 +115,12 @@ export function createCircleChatConversation(
 
 /** 创建独立群聊(好友多选;不挂圈子)。 */
 export function createGroupChatConversation(input: {
-  name?: string | null;
+  name: string;
   memberIds: string[];
 }): Promise<ChatConversationDto> {
   return apiClient<ChatConversationDto>('/chat/conversations/group', {
     method: 'POST',
-    body: {
-      ...(input.name?.trim() ? { name: input.name.trim() } : {}),
-      memberIds: input.memberIds,
-    },
+    body: { name: input.name.trim(), memberIds: input.memberIds },
   });
 }
 
