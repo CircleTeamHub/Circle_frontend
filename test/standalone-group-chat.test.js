@@ -83,6 +83,32 @@ test('new group screen submits selected friends through chat-core', () => {
   assert.match(screen, /router\.replace\(/);
 });
 
+// 群名必填:空名会建出一个靠成员昵称兜底的无名群,列表里几个群长得一模一样。
+// 端上先拦一道(免得填完成员才被打回),服务端 CHAT_GROUP_NAME_REQUIRED 是真闸门。
+test('new group screen requires a group name before submitting', () => {
+  const screen = read('src/features/chat/screens/NewGroupScreen.tsx');
+  assert.match(screen, /const trimmedName = name\.trim\(\)/);
+  assert.match(screen, /if \(!trimmedName\)/);
+  assert.match(screen, /messages\.newGroupNameRequired/);
+  assert.match(screen, /name: trimmedName/);
+  // 标题不再回落「群聊」兜底名 —— 群名已经必填。
+  assert.doesNotMatch(screen, /newGroupDefaultName/);
+
+  const api = read('src/chat-core/api.ts');
+  // 客户端类型也收紧:name 不再可选,否则调用方可以绕过端上校验发空名。
+  assert.match(api, /name: string;\s*\n\s*memberIds: string\[\];/);
+  assert.match(api, /body: \{ name: input\.name\.trim\(\), memberIds: input\.memberIds \}/);
+
+  assert.match(read('src/services/api/server-error-codes.ts'), /'CHAT_GROUP_NAME_REQUIRED'/);
+  for (const lng of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const locale = JSON.parse(read(`src/i18n/locales/${lng}.json`));
+    assert.equal(typeof locale.messages.newGroupNameRequired, 'string', `${lng} 缺端上提示`);
+    assert.equal(typeof locale.serverErrors.CHAT_GROUP_NAME_REQUIRED, 'string', `${lng} 缺服务端文案`);
+    // 占位符不能再写「可选」——群名已经必填。
+    assert.doesNotMatch(locale.messages.newGroupNamePlaceholder, /可选|optional|任意|선택|opcional/i);
+  }
+});
+
 test('invite screen filters seated members and submits through chat-core', () => {
   const screen = read('src/features/chat/screens/InviteGroupMembersScreen.tsx');
   assert.match(screen, /inviteGroupChatMembers\(/);

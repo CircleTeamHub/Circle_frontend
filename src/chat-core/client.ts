@@ -52,9 +52,9 @@ export async function ensureCircleConversation(
   return { conversationID: dto.id };
 }
 
-/** 创建独立群聊并写入会话缓存(建群页提交入口)。 */
+/** 创建独立群聊并写入会话缓存(建群页提交入口)。群名必填。 */
 export async function createGroupConversation(input: {
-  name?: string | null;
+  name: string;
   memberIds: string[];
 }): Promise<EnsuredConversation> {
   const epoch = useAuthStore.getState().sessionEpoch;
