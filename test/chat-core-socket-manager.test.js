@@ -322,6 +322,20 @@ test('viewer self-destruct uses the cached policy offline and refreshes it after
   assert.equal(mmkvStore.get('chat.viewerSelfDestructSec.u1'), String(2 * 24 * 60 * 60));
 });
 
+test('viewer self-destruct migrates the legacy day cache before an offline start', async () => {
+  const { manager, store, mmkvStore } = loadManager(
+    {},
+    { privacyFetch: () => Promise.reject(new Error('offline')) },
+  );
+  mmkvStore.set('chat.viewerSelfDestructDays.u1', '7');
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.equal(store.viewerSelfDestructSec, 7 * 24 * 60 * 60);
+  assert.equal(mmkvStore.get('chat.viewerSelfDestructSec.u1'), String(7 * 24 * 60 * 60));
+});
+
 test('cold hydration waits for the authoritative self-destruct policy', async () => {
   let resolvePolicy;
   const policy = new Promise((resolve) => {
