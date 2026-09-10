@@ -32,7 +32,7 @@ const s = StyleSheet.create({
     marginHorizontal: Spacing.lg,
     marginTop: Spacing.md,
     paddingHorizontal: Spacing.md,
-    height: 44,
+    height: 60,
     borderRadius: Radius.md,
     justifyContent: 'center',
   },
@@ -89,8 +89,10 @@ export default function NewGroupScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const segments = useSegments();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
+  const pageBackground =
+    resolvedMode === 'light' ? colors.surfaceMuted : colors.background;
 
   const [name, setName] = useState('');
   const [query, setQuery] = useState('');
@@ -228,7 +230,7 @@ export default function NewGroupScreen() {
     <View
       style={[
         s.container,
-        { backgroundColor: colors.background, paddingTop: insets.top },
+        { backgroundColor: pageBackground, paddingTop: insets.top },
       ]}
     >
       <NavHeader title={t('messages.newGroupTitle')} fallbackHref="/(tabs)/messages" />
@@ -297,7 +299,7 @@ export default function NewGroupScreen() {
           {
             borderTopColor: colors.surfaceBorder,
             paddingBottom: Math.max(insets.bottom, Spacing.md),
-            backgroundColor: colors.background,
+            backgroundColor: pageBackground,
           },
         ]}
       >
