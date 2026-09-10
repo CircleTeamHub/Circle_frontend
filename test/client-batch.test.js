@@ -27,7 +27,7 @@ test('忘记密码：登录页入口 → 独立页面 → 后端重置端点 (FE
 
   // 发码 hook 的 reset-password 目的走独立端点
   const hook = read('src/hooks/use-send-email-code.ts');
-  assert.match(hook, /type Purpose = 'reset-password'/);
+  assert.match(hook, /type Purpose = 'register' \| 'reset-password'/);
   assert.match(hook, /requestPasswordReset\(normalized\)/);
 
   // 路由文件存在

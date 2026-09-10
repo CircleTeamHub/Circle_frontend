@@ -51,7 +51,11 @@ function loadUseAuth(fixtures = {}) {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
   };
-  const user = fixtures.user ?? { id: 'u1', email: 'bob@example.com', nickname: 'Bob' };
+  const user = fixtures.user ?? {
+    id: 'u1',
+    email: 'bob@example.com',
+    nickname: 'Bob',
+  };
 
   const modules = {
     react: {
@@ -91,12 +95,18 @@ function loadUseAuth(fixtures = {}) {
       register: fixtures.registerRequest ?? (async () => tokens),
     },
     '@/services/auth/session': {
-      clearLocalSession:
-        fixtures.clearLocalSession ?? (async () => {}),
+      clearLocalSession: fixtures.clearLocalSession ?? (async () => {}),
     },
     '@/services/api/client': {
       isDefinitiveAuthFailure: (error) =>
         Boolean(error) && (error.status === 401 || error.status === 403),
+    },
+    '@/services/api/mutation-outcome': {
+      isAmbiguousMutationFailure: (error) =>
+        !error ||
+        typeof error.status !== 'number' ||
+        error.status === 0 ||
+        error.status >= 500,
     },
     '@/im/client': {
       loginToOpenIM: async () => {},
@@ -162,7 +172,13 @@ test('注册已成功、只是建会话失败时，不报「注册失败」', as
     },
   });
 
-  await useAuth().register('bob@example.com', 'password123', 'password123', 'Bob');
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
 
   const message = lastError(errorWrites);
   assert.notEqual(
@@ -182,7 +198,13 @@ test('注册请求本身失败时，仍然报「注册失败」', async () => {
     },
   });
 
-  await useAuth().register('bob@example.com', 'password123', 'password123', 'Bob');
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
 
   assert.equal(lastError(errorWrites), 'auth.errors.registerFailed');
 });
@@ -198,7 +220,13 @@ test('建会话失败后清掉本地半截会话，避免停在既非登录也�
     },
   });
 
-  await useAuth().register('bob@example.com', 'password123', 'password123', 'Bob');
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
 
   assert.equal(cleared, 1);
 });
@@ -214,7 +242,33 @@ test('注册请求本身失败时不必清会话（压根没建过）', async ()
     },
   });
 
-  await useAuth().register('bob@example.com', 'password123', 'password123', 'Bob');
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
 
   assert.equal(cleared, 0);
+});
+
+test('注册请求遇到断网或 5xx 时提示结果不确定，避免盲目重试', async () => {
+  const { useAuth, errorWrites } = loadUseAuth({
+    registerRequest: async () => {
+      const error = new Error('response body interrupted');
+      error.status = 0;
+      throw error;
+    },
+  });
+
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
+
+  assert.equal(lastError(errorWrites), 'auth.errors.registerOutcomeUnknown');
 });

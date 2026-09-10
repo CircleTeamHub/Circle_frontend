@@ -2538,6 +2538,7 @@
       "invalidInviteCode": "초대 코드 형식이 올바르지 않습니다",
       "loginFailed": "로그인에 실패했습니다. 다시 시도해 주세요",
       "registerFailed": "가입에 실패했습니다. 다시 시도해 주세요",
+      "registerOutcomeUnknown": "가입 결과를 확인할 수 없습니다. 다시 가입하기 전에 로그인 또는 비밀번호 재설정을 시도해 주세요.",
       "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요",
       "passwordMismatch": "비밀번호가 일치하지 않습니다",
       "registerSucceededSessionFailed": "계정은 생성되었지만 자동 로그인에 실패했습니다. 해당 이메일로 로그인해 주세요."

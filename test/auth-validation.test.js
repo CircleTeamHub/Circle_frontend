@@ -61,7 +61,10 @@ test("validatePassword enforces backend bounds (6..64)", () => {
   assert.equal(V.validatePassword("12345"), "auth.errors.passwordTooShort");
   assert.equal(V.validatePassword("123456"), null);
   assert.equal(V.validatePassword("a".repeat(64)), null);
-  assert.equal(V.validatePassword("a".repeat(65)), "auth.errors.passwordTooLong");
+  assert.equal(
+    V.validatePassword("a".repeat(65)),
+    "auth.errors.passwordTooLong",
+  );
 });
 
 test("validateCode requires exactly 6 digits", () => {
@@ -74,7 +77,10 @@ test("validateCode requires exactly 6 digits", () => {
 
 test("validateNickname enforces non-empty and <=50", () => {
   assert.equal(V.validateNickname("   "), "auth.errors.nicknameRequired");
-  assert.equal(V.validateNickname("x".repeat(51)), "auth.errors.nicknameTooLong");
+  assert.equal(
+    V.validateNickname("x".repeat(51)),
+    "auth.errors.nicknameTooLong",
+  );
   assert.equal(V.validateNickname("Circle"), null);
 });
 
@@ -84,7 +90,10 @@ test("validateInviteCode is optional and follows the account-id format", () => {
   assert.equal(V.validateInviteCode("abc123"), null);
   assert.equal(V.validateInviteCode(" AbC-123 "), null);
   assert.equal(V.validateInviteCode("abc"), "auth.errors.invalidInviteCode");
-  assert.equal(V.validateInviteCode("bad code!"), "auth.errors.invalidInviteCode");
+  assert.equal(
+    V.validateInviteCode("bad code!"),
+    "auth.errors.invalidInviteCode",
+  );
 });
 
 test("composite validators short-circuit in display order", () => {
@@ -101,25 +110,43 @@ test("composite validators short-circuit in display order", () => {
   assert.equal(V.validateLoginForm("a@b.com", "123456"), null);
   assert.equal(V.validateLoginForm("user_123", "123456"), null);
 
-  // register：邮箱→密码→确认密码→昵称 顺序。
+  // register：邮箱→验证码→密码→确认密码→昵称 顺序。
   assert.equal(
-    V.validateRegisterForm("a@b.com", "12345", "12345", "nick"),
+    V.validateRegisterForm("a@b.com", "12345", "123456", "123456", "nick"),
+    "auth.errors.invalidCode",
+  );
+  assert.equal(
+    V.validateRegisterForm("a@b.com", "123456", "12345", "12345", "nick"),
     "auth.errors.passwordTooShort",
   );
   assert.equal(
-    V.validateRegisterForm("a@b.com", "123456", "123456", ""),
+    V.validateRegisterForm("a@b.com", "123456", "123456", "123456", ""),
     "auth.errors.nicknameRequired",
   );
   assert.equal(
-    V.validateRegisterForm("a@b.com", "123456", "123456", "nick", "bad code!"),
+    V.validateRegisterForm(
+      "a@b.com",
+      "123456",
+      "123456",
+      "123456",
+      "nick",
+      "bad code!",
+    ),
     "auth.errors.invalidInviteCode",
   );
   assert.equal(
-    V.validateRegisterForm("a@b.com", "123456", "123456", "nick", "abc123"),
+    V.validateRegisterForm(
+      "a@b.com",
+      "123456",
+      "123456",
+      "123456",
+      "nick",
+      "abc123",
+    ),
     null,
   );
   assert.equal(
-    V.validateRegisterForm("a@b.com", "123456", "654321", "nick"),
+    V.validateRegisterForm("a@b.com", "123456", "123456", "654321", "nick"),
     "auth.errors.passwordMismatch",
   );
 });

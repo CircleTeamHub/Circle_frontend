@@ -25,6 +25,7 @@ import {
 } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
+import { isAmbiguousMutationFailure } from '@/services/api/mutation-outcome';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { retry } from '@/utils/retry';
@@ -126,7 +127,9 @@ export function useAuth() {
         await onAuthSuccess(tokens);
       } catch (requestError) {
         await clearLocalSession();
-        safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')));
+        safeSetError(
+          getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')),
+        );
       } finally {
         inFlightRef.current = false;
         safeSetSubmitting(false);
@@ -138,6 +141,7 @@ export function useAuth() {
   const register = useCallback(
     async (
       email: string,
+      code: string,
       password: string,
       confirmPassword: string,
       nickname: string,
@@ -148,6 +152,7 @@ export function useAuth() {
       const normalizedEmail = email.trim();
       const invalid = validateRegisterForm(
         normalizedEmail,
+        code,
         password,
         confirmPassword,
         nickname,
@@ -167,12 +172,11 @@ export function useAuth() {
         const normalizedInviteCode = inviteCode.trim();
         const tokens = await registerRequest({
           email: normalizedEmail,
+          code: code.trim(),
           password,
           confirmPassword,
           nickname: nickname.trim(),
-          ...(normalizedInviteCode
-            ? { inviteCode: normalizedInviteCode }
-            : {}),
+          ...(normalizedInviteCode ? { inviteCode: normalizedInviteCode } : {}),
         });
         accountCreated = true;
         await onAuthSuccess(tokens, {
@@ -184,11 +188,22 @@ export function useAuth() {
           // 这里若报「注册失败」，用户会原样重试并撞上自己刚占掉的邮箱拿 409，
           // 而密码其实早已生效 —— 邮箱就这么废在半路上。必须告诉他去登录。
           await clearLocalSession().catch((cleanupError) => {
-            reportHandledFailure('auth', 'registerSessionCleanup', cleanupError);
+            reportHandledFailure(
+              'auth',
+              'registerSessionCleanup',
+              cleanupError,
+            );
           });
           safeSetError(i18n.t('auth.errors.registerSucceededSessionFailed'));
+        } else if (isAmbiguousMutationFailure(requestError)) {
+          safeSetError(i18n.t('auth.errors.registerOutcomeUnknown'));
         } else {
-          safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.registerFailed')));
+          safeSetError(
+            getApiErrorMessage(
+              requestError,
+              i18n.t('auth.errors.registerFailed'),
+            ),
+          );
         }
       } finally {
         inFlightRef.current = false;
@@ -295,7 +310,9 @@ export function useAuth() {
             pathname: '/(auth)/login',
             // Accounts created without an email still need a usable login
             // identifier after their session expires.
-            params: { identifier: account.user.email ?? account.user.accountId },
+            params: {
+              identifier: account.user.email ?? account.user.accountId,
+            },
           });
         } else {
           // 瞬时失败：目标账号 token 已乐观激活（上面 setSession），与冷启动

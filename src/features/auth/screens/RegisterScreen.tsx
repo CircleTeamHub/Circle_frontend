@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthInput } from '@/components/ui/auth-input';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useAuth } from '@/hooks/use-auth';
+import { useSendEmailCode } from '@/hooks/use-send-email-code';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -25,6 +26,10 @@ const s = StyleSheet.create({
   },
   titleWrap: {
     gap: Spacing.sm,
+  },
+  sendBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   agreementRow: {
     flexDirection: 'row',
@@ -86,6 +91,7 @@ export default function RegisterScreen() {
     inviteCode?: string;
   }>();
   const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nickname, setNickname] = useState('');
@@ -95,6 +101,7 @@ export default function RegisterScreen() {
       : '',
   );
   const [agreed, setAgreed] = useState(false);
+  const sendCode = useSendEmailCode('register');
   const { isOffline } = useNetworkStatus();
 
   const d = useMemo(
@@ -142,6 +149,10 @@ export default function RegisterScreen() {
     [colors, insets.top],
   );
 
+  const onSendCode = useCallback(() => {
+    void sendCode.send(email);
+  }, [sendCode, email]);
+
   return (
     <View style={d.outer}>
       <NavHeader title={t('auth.createAccount')} />
@@ -167,6 +178,41 @@ export default function RegisterScreen() {
           keyboardType="email-address"
           textContentType="emailAddress"
           autoComplete="email"
+        />
+
+        <AuthInput
+          label={t('auth.codePlaceholder')}
+          placeholder={t('auth.codePlaceholder')}
+          value={code}
+          onChangeText={setCode}
+          keyboardType="number-pad"
+          textContentType="oneTimeCode"
+          autoComplete="one-time-code"
+          rightElement={
+            <Pressable
+              onPress={onSendCode}
+              disabled={sendCode.running || sendCode.sending}
+              hitSlop={8}
+            >
+              <Text
+                style={[
+                  s.sendBtnText,
+                  {
+                    color:
+                      sendCode.running || sendCode.sending
+                        ? colors.textSecondary
+                        : colors.primary,
+                  },
+                ]}
+              >
+                {sendCode.running
+                  ? t('auth.resendCodeIn', { seconds: sendCode.seconds })
+                  : sendCode.sending
+                    ? t('auth.sendingCode')
+                    : t('auth.sendCode')}
+              </Text>
+            </Pressable>
+          }
         />
 
         <AuthInput
@@ -221,6 +267,9 @@ export default function RegisterScreen() {
         {isOffline ? (
           <Text style={[s.error, d.error]}>{t('auth.offlineHint')}</Text>
         ) : null}
+        {sendCode.error ? (
+          <Text style={[s.error, d.error]}>{sendCode.error}</Text>
+        ) : null}
         {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
 
         {/* Register button — 必须同时勾选协议且未在提交中才允许触发；
@@ -233,7 +282,14 @@ export default function RegisterScreen() {
           ]}
           onPress={() => {
             if (submitting || !agreed) return;
-            register(email, password, confirmPassword, nickname, inviteCode);
+            register(
+              email,
+              code,
+              password,
+              confirmPassword,
+              nickname,
+              inviteCode,
+            );
           }}
           disabled={submitting || !agreed}
         >

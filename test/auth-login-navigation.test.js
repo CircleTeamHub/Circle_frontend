@@ -18,7 +18,9 @@ function loadUseAuth(fixtures = {}) {
     fileName: filePath,
   }).outputText;
 
-  const router = fixtures.router ?? { replace: (...args) => fixtures.routerCalls.push(args) };
+  const router = fixtures.router ?? {
+    replace: (...args) => fixtures.routerCalls.push(args),
+  };
   const authState = {
     setSession: fixtures.setSession ?? (() => {}),
     isAuthenticated: false,
@@ -62,7 +64,8 @@ function loadUseAuth(fixtures = {}) {
       },
     },
     '@/services/api/auth': {
-      fetchCurrentUser: fixtures.fetchCurrentUser ?? (async () => fixtures.user),
+      fetchCurrentUser:
+        fixtures.fetchCurrentUser ?? (async () => fixtures.user),
       fetchCurrentUserWithToken:
         fixtures.fetchCurrentUserWithToken ?? (async () => fixtures.user),
       login: fixtures.loginRequest ?? (async () => fixtures.tokens),
@@ -77,6 +80,13 @@ function loadUseAuth(fixtures = {}) {
         fixtures.isDefinitiveAuthFailure ??
         ((error) =>
           Boolean(error) && (error.status === 401 || error.status === 403)),
+    },
+    '@/services/api/mutation-outcome': {
+      isAmbiguousMutationFailure: (error) =>
+        !error ||
+        typeof error.status !== 'number' ||
+        error.status === 0 ||
+        error.status >= 500,
     },
     '@/im/client': {
       loginToOpenIM: fixtures.loginToOpenIM ?? (async () => {}),
@@ -133,7 +143,10 @@ function loadUseAuth(fixtures = {}) {
 }
 
 function loadPolicy() {
-  const filePath = path.join(process.cwd(), 'src/components/app/auth-route-policy.ts');
+  const filePath = path.join(
+    process.cwd(),
+    'src/components/app/auth-route-policy.ts',
+  );
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -202,6 +215,7 @@ test('auth success session flags map to the expected global route guard redirect
   await useAuth().login('alice@example.com', 'password123');
   await useAuth().register(
     'bob@example.com',
+    '123456',
     'password123',
     'password123',
     'Bob',
@@ -211,21 +225,29 @@ test('auth success session flags map to the expected global route guard redirect
   const registerOptions = setSessionCalls[1][2];
 
   assert.deepEqual(
-    JSON.parse(JSON.stringify(getAuthRouteDecision({
-      firstSegment: '(auth)',
-      isAuthenticated: true,
-      isLoading: false,
-      onboardingRequired: loginOptions.onboardingRequired,
-    }))),
+    JSON.parse(
+      JSON.stringify(
+        getAuthRouteDecision({
+          firstSegment: '(auth)',
+          isAuthenticated: true,
+          isLoading: false,
+          onboardingRequired: loginOptions.onboardingRequired,
+        }),
+      ),
+    ),
     { type: 'redirect', href: '/(tabs)/messages' },
   );
   assert.deepEqual(
-    JSON.parse(JSON.stringify(getAuthRouteDecision({
-      firstSegment: '(auth)',
-      isAuthenticated: true,
-      isLoading: false,
-      onboardingRequired: registerOptions.onboardingRequired,
-    }))),
+    JSON.parse(
+      JSON.stringify(
+        getAuthRouteDecision({
+          firstSegment: '(auth)',
+          isAuthenticated: true,
+          isLoading: false,
+          onboardingRequired: registerOptions.onboardingRequired,
+        }),
+      ),
+    ),
     { type: 'redirect', href: '/(tabs)/messages' },
   );
 });
@@ -248,6 +270,7 @@ test('register forwards the optional invite code to the API request', async () =
 
   await useAuth().register(
     'bob@example.com',
+    '123456',
     'password123',
     'password123',
     'Bob',
@@ -257,6 +280,7 @@ test('register forwards the optional invite code to the API request', async () =
   assert.deepEqual(JSON.parse(JSON.stringify(requests)), [
     {
       email: 'bob@example.com',
+      code: '123456',
       password: 'password123',
       confirmPassword: 'password123',
       nickname: 'Bob',
