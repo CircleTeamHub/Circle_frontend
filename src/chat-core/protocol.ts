@@ -385,6 +385,8 @@ export interface ChatGroupPoliciesDto {
   memberCanInvite: boolean;
   /** 群二维码能否入群。 */
   qrJoinEnabled: boolean;
+  /** 普通成员能否看到群成员名单本身。 */
+  membersCanViewRoster: boolean;
   /** 普通成员能否从群里打开其他成员资料。 */
   membersCanViewProfiles: boolean;
   /** 普通成员能否通过群加其他成员为好友。 */
@@ -485,6 +487,8 @@ export interface ChatConversationDto {
   silencedUntil?: string | null;
   /** 全员禁言中(仅 GROUP;群主/管理员不受限)。可选兼容老后端。 */
   muteAll?: boolean;
+  /** 我给这个群起的备注,只有我看得见;缺省/null = 用群名。 */
+  myRemark?: string | null;
   /** 独立群聊公告;圈子群走圈子详情。 */
   notice?: string | null;
   /** 独立群聊头像;圈子群走 circle.avatarUrl。 */

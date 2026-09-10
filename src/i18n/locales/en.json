@@ -453,6 +453,8 @@
     "messagesThatNotify": "Messages That Will Still Notify",
     "messagesThatNotifyHint": "@Me, @All, and Group Notice",
     "myAliasInGroup": "My Alias in Group",
+    "groupRemark": "Group Remark",
+    "groupRemarkHint": "Only visible to you",
     "groupMembersCount_one": "{{count}} member",
     "groupMembersCount_other": "{{count}} members",
     "groupOwner": "Owner",
@@ -553,13 +555,15 @@
       "memberCanInvite": "Member invites",
       "qrJoinEnabled": "Join via QR code",
       "membersCanViewProfiles": "Members can view profiles",
-      "membersCanAddFriends": "Members can add friends"
+      "membersCanAddFriends": "Members can add friends",
+      "membersCanViewRoster": "Show member list"
     },
     "groupPolicyHint": {
       "memberCanInvite": "When off, only the owner and admins can add members",
       "qrJoinEnabled": "When off, existing group QR codes stop working",
       "membersCanViewProfiles": "When off, regular members cannot open other members’ profiles from the group",
-      "membersCanAddFriends": "When off, regular members cannot add friends through the group"
+      "membersCanAddFriends": "When off, regular members cannot add friends through the group",
+      "membersCanViewRoster": "When off, regular members cannot see the member list"
     },
     "groupManagement": {
       "admins": "Admins",

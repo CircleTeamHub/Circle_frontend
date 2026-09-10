@@ -378,6 +378,8 @@
     "messagesThatNotify": "계속 알림을 받을 메시지",
     "messagesThatNotifyHint": "@나, @전체, 그룹 공지",
     "myAliasInGroup": "그룹에서 내 별명",
+    "groupRemark": "그룹 메모",
+    "groupRemarkHint": "나만 볼 수 있습니다",
     "groupMembersCount_other": "{{count}}명",
     "groupOwner": "그룹장",
     "groupAdmin": "관리자",
@@ -477,13 +479,15 @@
       "memberCanInvite": "멤버 초대",
       "qrJoinEnabled": "QR 코드로 참여",
       "membersCanViewProfiles": "멤버가 프로필을 볼 수 있음",
-      "membersCanAddFriends": "멤버가 친구를 추가할 수 있음"
+      "membersCanAddFriends": "멤버가 친구를 추가할 수 있음",
+      "membersCanViewRoster": "멤버 목록 표시"
     },
     "groupPolicyHint": {
       "memberCanInvite": "끄면 그룹장과 관리자만 멤버를 초대할 수 있습니다",
       "qrJoinEnabled": "끄면 이미 발급된 그룹 QR 코드도 사용할 수 없습니다",
       "membersCanViewProfiles": "끄면 일반 멤버는 그룹에서 다른 멤버의 프로필을 열 수 없습니다",
-      "membersCanAddFriends": "끄면 일반 멤버는 그룹을 통해 친구를 추가할 수 없습니다"
+      "membersCanAddFriends": "끄면 일반 멤버는 그룹을 통해 친구를 추가할 수 없습니다",
+      "membersCanViewRoster": "끄면 일반 멤버는 멤버 목록을 볼 수 없습니다"
     },
     "groupManagement": {
       "admins": "관리자",

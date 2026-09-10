@@ -155,12 +155,14 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
   let avatarRaw: string | null;
   let sourceID: string;
   if (isCircleGroup) {
-    // 圈子群名走 Circle;独立群聊(无 circleId)用会话自己的 name,
+    // 群备注优先:那是我给这个群起的名字,只有我看得见,和好友备注同一语义。
+    // 没设置才用群名 —— 圈子群走 Circle,独立群聊用会话自己的 name,
     // 空群名兜底通用「群聊」标题(微信语义,建群可以不起名)。
     name =
-      dto.circle?.name ??
-      (dto.name?.trim() ||
-        i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' }));
+      dto.myRemark?.trim() ||
+      dto.circle?.name ||
+      dto.name?.trim() ||
+      i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' });
     // 独立群聊可以自设头像(会话上的 avatarUrl);没设就交给 GroupChatAvatar 兜底。
     avatarRaw = dto.circle?.avatarUrl ?? dto.avatarUrl ?? null;
     // 圈子群的 sourceID = 圈子 id(圈子详情/成员目录都按它取);

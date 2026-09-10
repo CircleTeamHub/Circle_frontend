@@ -10,8 +10,10 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 test('conversation mapper titles standalone groups by their own name', () => {
   const mappers = read('src/chat-core/mappers.ts');
-  // 圈子群优先 circle.name;独立群用会话 name,空名兜底「群聊」。
-  assert.match(mappers, /dto\.circle\?\.name \?\?/);
+  // 群备注(只有我看得见)排最前;没设置才是圈子群的 circle.name、
+  // 独立群的会话 name,空名兜底「群聊」。
+  assert.match(mappers, /dto\.myRemark\?\.trim\(\) \|\|/);
+  assert.match(mappers, /dto\.circle\?\.name \|\|/);
   assert.match(mappers, /dto\.name\?\.trim\(\)/);
   assert.match(mappers, /messages\.newGroupDefaultName/);
   // 独立群的 sourceID 退回会话 id(圈子群仍是圈子 id)。

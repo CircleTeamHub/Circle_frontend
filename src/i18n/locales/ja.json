@@ -378,6 +378,8 @@
     "messagesThatNotify": "通知を受け取るメッセージ",
     "messagesThatNotifyHint": "@自分、@全員、グループのお知らせ",
     "myAliasInGroup": "グループでの自分の表示名",
+    "groupRemark": "グループのメモ",
+    "groupRemarkHint": "自分だけに表示されます",
     "groupMembersCount_other": "{{count}}人",
     "groupOwner": "オーナー",
     "groupAdmin": "管理者",
@@ -477,13 +479,15 @@
       "memberCanInvite": "メンバーによる招待",
       "qrJoinEnabled": "QRコードで参加",
       "membersCanViewProfiles": "メンバーがプロフィールを見られる",
-      "membersCanAddFriends": "メンバーが友だち追加できる"
+      "membersCanAddFriends": "メンバーが友だち追加できる",
+      "membersCanViewRoster": "メンバー一覧を表示"
     },
     "groupPolicyHint": {
       "memberCanInvite": "オフにするとオーナーと管理者のみメンバーを追加できます",
       "qrJoinEnabled": "オフにすると発行済みのグループQRコードも使えなくなります",
       "membersCanViewProfiles": "オフにすると一般メンバーはグループから他のメンバーのプロフィールを開けません",
-      "membersCanAddFriends": "オフにすると一般メンバーはグループ経由で友だち追加できません"
+      "membersCanAddFriends": "オフにすると一般メンバーはグループ経由で友だち追加できません",
+      "membersCanViewRoster": "オフにすると一般メンバーはメンバー一覧を見られません"
     },
     "groupManagement": {
       "admins": "管理者",

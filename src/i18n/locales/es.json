@@ -378,6 +378,8 @@
     "messagesThatNotify": "Mensajes que aún notifican",
     "messagesThatNotifyHint": "@Yo, @Todos y avisos del grupo",
     "myAliasInGroup": "Mi alias en el grupo",
+    "groupRemark": "Nota del grupo",
+    "groupRemarkHint": "Solo tú puedes verla",
     "groupMembersCount_one": "{{count}} miembro",
     "groupMembersCount_other": "{{count}} miembros",
     "groupOwner": "Dueño",
@@ -478,13 +480,15 @@
       "memberCanInvite": "Invitaciones de miembros",
       "qrJoinEnabled": "Unirse con código QR",
       "membersCanViewProfiles": "Los miembros pueden ver perfiles",
-      "membersCanAddFriends": "Los miembros pueden añadir amigos"
+      "membersCanAddFriends": "Los miembros pueden añadir amigos",
+      "membersCanViewRoster": "Mostrar lista de miembros"
     },
     "groupPolicyHint": {
       "memberCanInvite": "Si está desactivado, solo el propietario y los administradores pueden añadir miembros",
       "qrJoinEnabled": "Si está desactivado, los códigos QR del grupo ya emitidos dejan de funcionar",
       "membersCanViewProfiles": "Si está desactivado, los miembros normales no pueden abrir perfiles de otros miembros desde el grupo",
-      "membersCanAddFriends": "Si está desactivado, los miembros normales no pueden añadir amigos a través del grupo"
+      "membersCanAddFriends": "Si está desactivado, los miembros normales no pueden añadir amigos a través del grupo",
+      "membersCanViewRoster": "Si está desactivado, los miembros normales no pueden ver la lista"
     },
     "groupManagement": {
       "admins": "Administradores",

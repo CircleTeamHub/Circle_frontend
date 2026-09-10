@@ -236,7 +236,21 @@ export function unsilenceChatMember(
   );
 }
 
-/** 群昵称(群备注):改自己在本群的显示名。任一在座成员可改;空串清除回落账号昵称。 */
+/**
+ * 群备注:我给这个群起的名字,**只有我看得见**(对应单聊的好友备注)。
+ * 任一在座成员可改自己的;空串清除,回落群名。与群昵称方向相反,互不影响。
+ */
+export function setMyGroupChatRemark(
+  conversationId: string,
+  remark: string,
+): Promise<{ remark: string | null }> {
+  return apiClient<{ remark: string | null }>(
+    `/chat/conversations/${conversationId}/my-remark`,
+    { method: 'PATCH', body: { remark } },
+  );
+}
+
+/** 群昵称:改自己在本群的显示名,全群可见。任一在座成员可改;空串清除回落账号昵称。 */
 export function setMyGroupChatAlias(
   conversationId: string,
   alias: string,

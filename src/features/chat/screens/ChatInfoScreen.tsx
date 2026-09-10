@@ -24,6 +24,7 @@ import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import {
   setGroupChatAvatar,
   setMyGroupChatAlias,
+  setMyGroupChatRemark,
   clearChatConversationHistory,
   createCircleChatConversation,
   fetchChatMembers,
@@ -443,8 +444,24 @@ export default function ChatInfoScreen() {
   // 临时房不是圈子,没有圈子角色可判——目录权限由后端的座位校验兜底
   // (GET /chat/conversations/:id/members),与 ChatDetailScreen 同口径。
   // 不放开的话本页会渲染群布局却永远 0 成员、没有成员目录。
+  // canViewMemberDirectory 要用角色,但它排在 selfGroupRole 之前(成员表的加载
+  // 依赖它),所以这里先按「圈子角色 / 会话 dto 的 ownerId」算一份不依赖成员表
+  // 的角色快照,只用于名单开关这一处判定。
+  const selfGroupRoleForRoster: GroupRole | null = isStandaloneGroup
+    ? conversation?.ownerId && conversation.ownerId === currentUserID
+      ? 'OWNER'
+      : (conversation?.myRole ?? null)
+    : (currentGroupMember?.role ?? null);
+  const rosterVisibleToMembers =
+    conversation?.policies?.membersCanViewRoster ?? true;
+  // 目录权限:临时房与独立群聊由服务端座位校验兜底,圈子群看活体角色。
+  // 「是否显示群成员」再叠一层:关掉后普通成员看不到网格与成员行,
+  // 群主/管理员不受限(判据与服务端 listMembers 一致,免得摆个必然 403 的入口)。
   const canViewMemberDirectory =
-    isTempConversation || isStandaloneGroup || canViewCircleMemberDirectory;
+    (isTempConversation || isStandaloneGroup || canViewCircleMemberDirectory) &&
+    (isTempConversation ||
+      isGroupManager(selfGroupRoleForRoster) ||
+      rosterVisibleToMembers);
   // 独立群聊没有圈子角色(useGroupMemberViewAccess 对它是关的):本人角色从成员目录
   // 取 —— 服务端按 ownerId + 座位上的管理员标记派生;目录还没到位时按会话 dto 的
   // ownerId 兜底认群主。圈子群仍按圈子角色。
@@ -1579,7 +1596,41 @@ export default function ChatInfoScreen() {
     );
   }, [groupTitle, resolvedConversationID, scope]);
 
-  // 我在群里的昵称(群备注):任一在座成员都能改自己的,不需要群主/管理员。
+  // 群备注:我给这个群起的名字,只有我看得见(与好友备注同一语义)。
+  // 设了之后会话列表与聊天标题都显示它,清空则回落群名。
+  const myGroupRemark = activeConversation?.myRemark ?? '';
+
+  const handleEditMyGroupRemark = useCallback(() => {
+    const target = resolvedConversationID || conversationID;
+    if (!target) return;
+
+    promptForText(
+      t('chat.groupRemark', { defaultValue: '群备注' }),
+      myGroupRemark,
+      (value) => {
+        if (value.trim() === myGroupRemark.trim()) return;
+        setMyGroupChatRemark(target, value)
+          .then((result) => {
+            // 标题与会话列表都从会话 dto 读:就地回写,不等下次全量拉取。
+            const store = useChatStore.getState();
+            const cached = store.conversations.find((item) => item.id === target);
+            if (cached) {
+              store.upsertConversation({ ...cached, myRemark: result.remark });
+            }
+          })
+          .catch(openActionError);
+      },
+    );
+  }, [
+    conversationID,
+    myGroupRemark,
+    openActionError,
+    promptForText,
+    resolvedConversationID,
+    t,
+  ]);
+
+  // 我在群里的昵称:任一在座成员都能改自己的,不需要群主/管理员。
   // 空串 = 清除,回落账号昵称。改完就地更新成员表,网格与聊天页的名字立刻跟上。
   const myGroupAlias = useMemo(
     () =>
@@ -1866,6 +1917,12 @@ export default function ChatInfoScreen() {
             ) : null}
             {isTempConversation ? null : (
               <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.groupRemark', { defaultValue: '群备注' })}
+                  value={myGroupRemark || t('chat.notSet')}
+                  onPress={handleEditMyGroupRemark}
+                />
                 <Divider />
                 <GroupInfoRow
                   label={t('chat.myAliasInGroup', { defaultValue: '我在群里的昵称' })}

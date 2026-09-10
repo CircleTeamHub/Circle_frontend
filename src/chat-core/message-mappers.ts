@@ -692,6 +692,7 @@ export function groupPolicyLabel(policy: string): string {
   const key: Record<string, string> = {
     memberCanInvite: 'chat.groupPolicy.memberCanInvite',
     qrJoinEnabled: 'chat.groupPolicy.qrJoinEnabled',
+    membersCanViewRoster: 'chat.groupPolicy.membersCanViewRoster',
     membersCanViewProfiles: 'chat.groupPolicy.membersCanViewProfiles',
     membersCanAddFriends: 'chat.groupPolicy.membersCanAddFriends',
   };

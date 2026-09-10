@@ -14,6 +14,7 @@ const locale = (lng) => JSON.parse(read(`src/i18n/locales/${lng}.json`));
 const POLICY_KEYS = [
   'memberCanInvite',
   'qrJoinEnabled',
+  'membersCanViewRoster',
   'membersCanViewProfiles',
   'membersCanAddFriends',
 ];
@@ -46,7 +47,7 @@ test('the conversation DTO carries the new group fields as optional (old backend
     assert.match(protocol, new RegExp(`${key}: boolean;`), `policies lacks ${key}`);
   }
   // 老后端不下发这些字段:全部可选,缺省按放开处理,不能让会话列表整体失效。
-  for (const field of ['muteAll', 'notice', 'avatarUrl', 'memberLimit', 'myRole', 'policies']) {
+  for (const field of ['muteAll', 'notice', 'avatarUrl', 'memberLimit', 'myRole', 'policies', 'myRemark']) {
     assert.match(protocol, new RegExp(`\\s${field}\\?:`), `ChatConversationDto lacks optional ${field}`);
   }
 });

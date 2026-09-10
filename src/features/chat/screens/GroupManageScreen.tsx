@@ -52,6 +52,7 @@ type PickerMode = 'admin' | 'silence' | 'remove' | 'transfer' | null;
 /** 群策略开关分两段展示:进群允许方式 / 成员权限。 */
 const JOIN_POLICY_KEYS = ['memberCanInvite', 'qrJoinEnabled'] as const;
 const MEMBER_POLICY_KEYS = [
+  'membersCanViewRoster',
   'membersCanViewProfiles',
   'membersCanAddFriends',
 ] as const;

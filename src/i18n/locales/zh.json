@@ -453,6 +453,8 @@
     "messagesThatNotify": "仍会通知的消息",
     "messagesThatNotifyHint": "@我、@所有人和群公告",
     "myAliasInGroup": "我在群里的昵称",
+    "groupRemark": "群备注",
+    "groupRemarkHint": "只有你自己看得见",
     "groupMembersCount_other": "{{count}} 人",
     "groupOwner": "群主",
     "groupAdmin": "管理员",
@@ -552,13 +554,15 @@
       "memberCanInvite": "成员邀请",
       "qrJoinEnabled": "二维码入群",
       "membersCanViewProfiles": "成员可查看他人资料",
-      "membersCanAddFriends": "成员可添加好友"
+      "membersCanAddFriends": "成员可添加好友",
+      "membersCanViewRoster": "显示群成员"
     },
     "groupPolicyHint": {
       "memberCanInvite": "关闭后只有群主和管理员可以拉人进群",
       "qrJoinEnabled": "关闭后已签发的群二维码也无法入群",
       "membersCanViewProfiles": "关闭后普通成员无法从群里打开他人资料",
-      "membersCanAddFriends": "关闭后普通成员无法通过群添加好友"
+      "membersCanAddFriends": "关闭后普通成员无法通过群添加好友",
+      "membersCanViewRoster": "关闭后普通成员看不到群成员名单"
     },
     "groupManagement": {
       "admins": "群管理员",

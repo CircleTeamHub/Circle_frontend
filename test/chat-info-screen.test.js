@@ -140,9 +140,11 @@ test('temporary chat info loads its member directory from the conversation endpo
     'utf8',
   );
 
+  // 临时房与独立群聊由服务端座位校验兜底,圈子群看活体角色;「是否显示群成员」
+  // 再叠一层(群主/管理员不受限),判据与服务端 listMembers 一致。
   assert.match(
     source,
-    /const canViewMemberDirectory =\s*isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory;/,
+    /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory\) &&/,
   );
   assert.match(source, /if \(isTempConversation\) \{[\s\S]{0,700}fetchChatMembers\(tempConversationID\)/);
   // 临时房没有圈子,这两条圈子专属请求绝不能落到 tmp... id 上。
@@ -687,7 +689,8 @@ test('chat info only exposes group logs to members allowed by the backend', () =
     source,
     /canViewMemberDirectory \? \(\s*<>\s*<Divider \/>\s*<GroupInfoRow\s*label=\{t\('chat\.groupLog'/s,
   );
-  assert.match(source, /const canViewMemberDirectory =\s*isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory;/s);
+  assert.match(source, /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory\) &&/s);
+  assert.match(source, /rosterVisibleToMembers/);
   assert.match(source, /const \[silenceClock, setSilenceClock\] = useState\(\(\) => Date\.now\(\)\);/);
   assert.match(source, /const silenceOptions = SILENCE_DURATION_OPTIONS\.map\(\(seconds\) => \(\{/);
 });
