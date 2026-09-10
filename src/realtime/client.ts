@@ -10,7 +10,11 @@ import {
 } from '@/services/api/notifications';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
-import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
+import {
+  circleBadgeAllowed,
+  circleBannerAllowed,
+  useCircleNotificationStore,
+} from '@/features/discover/store/use-circle-notification-store';
 import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments-feed-signal-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
@@ -421,12 +425,10 @@ function handleNotificationCreated(payload: NotificationItem) {
     ]);
   }
 
-  // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」控制：总开关或「通知提醒」关闭时，
-  // 通知照常进铃铛列表 + 红点（上面已处理），但不弹横幅。非圈子通知不受影响。
+  // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」总闸控制：关掉时通知照常进铃铛
+  // 列表（上面已处理，数据不丢），但不弹横幅。非圈子通知不受影响。
   if (payload.type.startsWith('CIRCLE_')) {
-    const { inAppEnabled, bannerEnabled } =
-      useCircleNotificationStore.getState();
-    if (!inAppEnabled || !bannerEnabled) {
+    if (!circleBannerAllowed(useCircleNotificationStore.getState())) {
       return;
     }
   }
@@ -471,7 +473,13 @@ function handleRealtimeEvent(message: RealtimeEvent) {
         badgeStore.setMomentsUnread(message.payload.momentsUnread);
       }
       if (typeof message.payload?.circleUnread === 'number') {
-        badgeStore.setCircleUnread(message.payload.circleUnread);
+        // 总闸关掉时连红点也不显示（产品图：关闭 = 禁用所有通知）。计数只是不展示，
+        // 服务端照常累加，重新打开后下一次快照就会把真实值补回来。
+        badgeStore.setCircleUnread(
+          circleBadgeAllowed(useCircleNotificationStore.getState())
+            ? message.payload.circleUnread
+            : 0,
+        );
       }
       return;
     case 'circle.signup.unread.changed':

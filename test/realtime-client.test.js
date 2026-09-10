@@ -75,11 +75,13 @@ test('realtime notification.created only prepends bell types but banners everyth
 test('realtime gates circle-notification banners on the circle notification settings', () => {
   const client = read('src/realtime/client.ts');
 
-  // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」控制：总开关或「通知提醒」关闭时
-  // 不弹横幅（但铃铛/红点仍在门前处理，通知本身不丢）。
+  // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」总闸控制：关掉时不弹横幅
+  // （但通知仍在门前写进铃铛列表，数据不丢）。
   assert.match(client, /useCircleNotificationStore/);
   assert.match(client, /payload\.type\.startsWith\('CIRCLE_'\)/);
-  assert.match(client, /!inAppEnabled \|\| !bannerEnabled/);
+  assert.match(client, /circleBannerAllowed\(useCircleNotificationStore\.getState\(\)\)/);
+  // 总闸也管红点：关掉时未读计数不展示（服务端照常累加）。
+  assert.match(client, /circleBadgeAllowed\(useCircleNotificationStore\.getState\(\)\)/);
   // 门控发生在铃铛 setInteractive 之后、横幅 enqueueNotification 之前。
   assert.match(
     client,
@@ -87,40 +89,40 @@ test('realtime gates circle-notification banners on the circle notification sett
   );
 });
 
-test('circle notification preferences only promise in-app presentation control', () => {
+test('圈子通知的三档开关都有真实行为，没有一档是摆设', () => {
   const store = read('src/features/discover/store/use-circle-notification-store.ts');
-  const settings = read('src/features/discover/screens/CircleNotificationSettingsScreen.tsx');
-  const profileSettings = read('src/features/profile/screens/NotificationSettingsScreen.tsx');
+  const toggles = read('src/features/discover/components/circle-notification-toggles.tsx');
   const client = read('src/realtime/client.ts');
-  const locales = [
-    { data: JSON.parse(read('src/i18n/locales/en.json')), unsupported: /offline|push|all notifications/i },
-    { data: JSON.parse(read('src/i18n/locales/zh.json')), unsupported: /离线|推送|所有通知/i },
-    { data: JSON.parse(read('src/i18n/locales/es.json')), unsupported: /sin conexión|todas las notificaciones/i },
-    { data: JSON.parse(read('src/i18n/locales/ja.json')), unsupported: /オフライン|すべての通知/i },
-    { data: JSON.parse(read('src/i18n/locales/ko.json')), unsupported: /오프라인|모든 알림/i },
-  ];
+  const snackbar = read(
+    'src/features/notifications/components/NotificationSnackbarHost.tsx',
+  );
 
-  assert.equal(store.includes('offlineEnabled'), false);
-  assert.match(store, /version:\s*1/);
-  assert.match(store, /partialize:[\s\S]*?inAppEnabled:[\s\S]*?bannerEnabled:/);
-  assert.match(store, /migrate:/);
-  assert.equal(settings.includes('notifications.offline'), false);
-  assert.equal(profileSettings.includes('offlineReminder'), false);
-  for (const { data: locale, unsupported } of locales) {
-    const copy = JSON.stringify({
-      discover: locale.discover.notifications,
-      profileGlobal: locale.settingsDetails.notifications.circleGlobalHint,
-      profileBanner: locale.settingsDetails.notifications.circleBannerHint,
-    });
-    assert.doesNotMatch(copy, unsupported);
-  }
-  assert.match(client, /const \{ inAppEnabled, bannerEnabled \}/);
-  assert.match(client, /!inAppEnabled \|\| !bannerEnabled/);
+  // 三档：总闸 / 声音 / 离线。总闸关掉时子档同步置灰。
+  assert.match(store, /globalEnabled:\s*boolean/);
+  assert.match(store, /soundEnabled:\s*boolean/);
+  assert.match(store, /offlineEnabled:\s*boolean/);
+  assert.match(store, /version:\s*3/);
+  assert.match(toggles, /disabled=\{!globalEnabled\}/);
+  assert.equal(toggles.match(/<NotificationItem/g).length, 3);
+
+  // 总闸 → 横幅 + 红点；声音 → 真的静音那一次播放。
+  assert.match(client, /circleBannerAllowed/);
+  assert.match(client, /circleBadgeAllowed/);
+  assert.match(snackbar, /circleSoundAllowed/);
+  assert.match(snackbar, /notify\(\{ silent \}\)/);
+
+  // 离线推送由服务端执行，所以本地改动必须推给后端，否则关了照样收。
+  assert.match(toggles, /updateCircleOfflinePushEnabled/);
+  assert.match(toggles, /fetchCircleOfflinePushEnabled/);
 });
 
-test('app settings search omits the removed circle offline preference', () => {
+test('app settings search lists the three circle notification rows', () => {
   const appSettings = read('src/features/profile/screens/AppSettingsScreen.tsx');
-  assert.equal(appSettings.includes("'offlineReminder'"), false);
+  // 曾经列过一个 circleSound 却没有对应文案（早年删开关时留下的孤儿），
+  // 现在三档都真实存在，搜索行必须与设置页一一对上。
+  for (const key of ['circleGlobal', 'circleSound', 'circleOffline']) {
+    assert.match(appSettings, new RegExp(`'${key}'`));
+  }
 });
 
 test('circle plaza bell badge counts circle + signup unread, never the moments count', () => {

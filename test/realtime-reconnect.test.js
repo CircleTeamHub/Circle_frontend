@@ -132,7 +132,6 @@ function loadRealtimeHarness() {
         case '@/features/discover/store/use-circle-notification-store':
           return {
             useCircleNotificationStore: stubStore({
-              inAppEnabled: true,
               bannerEnabled: true,
             }),
           };

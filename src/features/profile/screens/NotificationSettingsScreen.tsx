@@ -6,13 +6,19 @@ import { useCircleNotificationStore } from '@/features/discover/store/use-circle
 export default function NotificationSettingsScreen() {
   const settings = useAppSettingsStore((s) => s.settings);
   const setSetting = useAppSettingsStore((s) => s.setSetting);
-  const circleInAppEnabled = useCircleNotificationStore((s) => s.inAppEnabled);
-  const circleBannerEnabled = useCircleNotificationStore((s) => s.bannerEnabled);
-  const setCircleInAppEnabled = useCircleNotificationStore(
-    (s) => s.setInAppEnabled,
+  const circleGlobalEnabled = useCircleNotificationStore((s) => s.globalEnabled);
+  const circleSoundEnabled = useCircleNotificationStore((s) => s.soundEnabled);
+  const circleOfflineEnabled = useCircleNotificationStore(
+    (s) => s.offlineEnabled,
   );
-  const setCircleBannerEnabled = useCircleNotificationStore(
-    (s) => s.setBannerEnabled,
+  const setCircleGlobalEnabled = useCircleNotificationStore(
+    (s) => s.setGlobalEnabled,
+  );
+  const setCircleSoundEnabled = useCircleNotificationStore(
+    (s) => s.setSoundEnabled,
+  );
+  const setCircleOfflineEnabled = useCircleNotificationStore(
+    (s) => s.setOfflineEnabled,
   );
   const soundEnabled = useNotificationFeedbackStore((s) => s.soundEnabled);
   const hapticsEnabled = useNotificationFeedbackStore((s) => s.hapticsEnabled);
@@ -119,17 +125,26 @@ export default function NotificationSettingsScreen() {
               labelKey: 'settingsDetails.notifications.circleGlobal',
               subtitleKey: 'settingsDetails.notifications.circleGlobalHint',
               type: 'toggle',
-              value: circleInAppEnabled,
-              onValueChange: setCircleInAppEnabled,
+              value: circleGlobalEnabled,
+              onValueChange: setCircleGlobalEnabled,
             },
             {
-              id: 'circle-banner',
-              labelKey: 'settingsDetails.notifications.circleBanner',
-              subtitleKey: 'settingsDetails.notifications.circleBannerHint',
+              id: 'circle-sound',
+              labelKey: 'settingsDetails.notifications.circleSound',
+              subtitleKey: 'settingsDetails.notifications.circleSoundHint',
               type: 'toggle',
-              value: circleBannerEnabled,
-              onValueChange: setCircleBannerEnabled,
-              disabled: !circleInAppEnabled,
+              value: circleGlobalEnabled && circleSoundEnabled,
+              onValueChange: setCircleSoundEnabled,
+              disabled: !circleGlobalEnabled,
+            },
+            {
+              id: 'circle-offline',
+              labelKey: 'settingsDetails.notifications.circleOffline',
+              subtitleKey: 'settingsDetails.notifications.circleOfflineHint',
+              type: 'toggle',
+              value: circleGlobalEnabled && circleOfflineEnabled,
+              onValueChange: setCircleOfflineEnabled,
+              disabled: !circleGlobalEnabled,
             },
             {
               id: 'circle-ringtone',
