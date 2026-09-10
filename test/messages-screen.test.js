@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { loadTsModule } = require('./helpers/load-ts-module');
 
 test('messages screen renders pinned conversations as compact grouped surfaces without a pin icon', () => {
   const filePath = path.join(
@@ -282,4 +283,82 @@ test('会话行静止时不画滑动操作层——否则红色删除键会从�
   assert.match(source, /<Animated\.View style=\{\[s\.swipeActions, \{ opacity: swipeActionsOpacity \}\]\}>/);
   // 操作层不能再是静态 View，否则 opacity 绑不上动画值。
   assert.doesNotMatch(source, /<View style=\{s\.swipeActions\}>/);
+});
+
+// WCAG 2.x 相对亮度 / 对比度。只认 #RRGGBB —— 调色板里这几项都是六位十六进制，
+// 换成 rgba() 会在这里直接报错而不是悄悄算成 NaN 通过。
+function relativeLuminance(hex) {
+  assert.match(hex, /^#[0-9a-fA-F]{6}$/, `expected #RRGGBB, got ${hex}`);
+  const channel = (offset) => {
+    const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+function contrastRatio(foreground, background) {
+  const [lighter, darker] = [
+    relativeLuminance(foreground),
+    relativeLuminance(background),
+  ].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+test('pinned palette: light mode gets its own surface with AA secondary text, dark mode is untouched', () => {
+  const { lightColors, darkColors } = loadTsModule('src/theme/colors.ts');
+
+  // 浅色：置顶卡片必须和普通会话的 surface 区分开（之前两者同为白色，几乎看不出置顶），
+  // 而普通 textSecondary 在这块灰底上只有约 3.9:1，所以要有单独的 pinnedTextSecondary 过 AA。
+  assert.notEqual(lightColors.pinnedSurface, lightColors.surface);
+  const lightRatio = contrastRatio(
+    lightColors.pinnedTextSecondary,
+    lightColors.pinnedSurface,
+  );
+  assert.ok(lightRatio >= 4.5, `light pinned secondary text contrast ${lightRatio.toFixed(2)}:1 < 4.5:1`);
+
+  // 深色：这次只改浅色。两个新 token 必须等于原 token，避免顺手改了深色观感。
+  assert.equal(darkColors.pinnedSurface, darkColors.surface);
+  assert.equal(darkColors.pinnedTextSecondary, darkColors.textSecondary);
+  const darkRatio = contrastRatio(
+    darkColors.pinnedTextSecondary,
+    darkColors.pinnedSurface,
+  );
+  assert.ok(darkRatio >= 4.5, `dark pinned secondary text contrast ${darkRatio.toFixed(2)}:1 < 4.5:1`);
+});
+
+test('pinned rows recolour time/preview/mute icon via precomputed styles and blend the temp-chat badge into the pinned surface', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+
+  // 置顶专用样式在 d 里预计算（从 time / preview 派生，不重复布局属性），经 props 进入行组件，
+  // 行内按 item.pinned 二选一，不再每次 render 临时拼 { color } 对象。
+  assert.match(
+    source,
+    /pinnedPreview:\s*\{\s*\.\.\.preview,\s*color:\s*colors\.pinnedTextSecondary\s*\}/,
+  );
+  assert.match(
+    source,
+    /pinnedTime:\s*\{\s*\.\.\.time,\s*color:\s*colors\.pinnedTextSecondary\s*\}/,
+  );
+  assert.match(source, /pinnedTimeStyle=\{d\.pinnedTime\}/);
+  assert.match(source, /pinnedPreviewStyle=\{d\.pinnedPreview\}/);
+  assert.match(source, /item\.pinned \? pinnedTimeStyle : timeStyle/);
+  assert.match(source, /item\.pinned \? pinnedPreviewStyle : previewStyle/);
+  assert.match(
+    source,
+    /const mutedIconColor = item\.pinned\s*\?\s*colors\.pinnedTextSecondary\s*:\s*colors\.textSecondary/,
+  );
+  assert.match(source, /color=\{mutedIconColor\}/);
+  assert.doesNotMatch(source, /item\.pinned && \{ color:/);
+
+  // 临时群时钟角标的外圈要融入所在底色：置顶行是 pinnedSurface，普通行才是列表底色。
+  // 传 rowBackgroundColor 会让浅色置顶 + 临时群露出一圈浅色光环。
+  assert.match(
+    source,
+    /const badgeBorderColor = item\.pinned \? colors\.pinnedSurface : rowBackgroundColor/,
+  );
+  assert.match(source, /badgeBorderColor=\{badgeBorderColor\}/);
+  assert.doesNotMatch(source, /badgeBorderColor=\{rowBackgroundColor\}/);
 });
