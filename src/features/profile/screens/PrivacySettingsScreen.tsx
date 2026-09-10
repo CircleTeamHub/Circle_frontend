@@ -496,7 +496,7 @@ function MethodSwitch({
     <View style={s.methodRow}>
       <Text style={[s.methodLabel, { color: colors.text }]}>{label}</Text>
       <ThemedSwitch
-        tint={colors.blue}
+        tint={colors.primary}
         value={value}
         disabled={disabled}
         onValueChange={onValueChange}

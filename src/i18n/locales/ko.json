@@ -94,7 +94,6 @@
       "fontSize": "글자 크기",
       "standard": "표준",
       "globalChatBackground": "전체 채팅 배경",
-      "configured": "설정됨",
       "hideChatAvatar": "채팅 프로필 사진 숨기기",
       "hideChatAvatarHint": "개인 채팅에서 보낸 사람과 받는 사람의 프로필 사진을 표시하지 않음",
       "mergeAvatar": "연속 메시지 프로필 사진 합치기",
@@ -1433,6 +1432,7 @@
   },
   "discover": {
     "title": "모먼트",
+    "circleTitle": "서클 활동",
     "plaza": "광장",
     "management": "서클",
     "moments": "모먼트",

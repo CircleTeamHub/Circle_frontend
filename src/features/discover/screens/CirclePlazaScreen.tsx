@@ -100,7 +100,7 @@ export default function CirclePlazaScreen() {
     <View testID={E2E_TEST_IDS.circlePlazaScreen} style={d.container}>
       <View style={[s.header, { paddingTop: Spacing.md }]}>
         <Text style={d.title} accessibilityRole="header">
-          {t('discover.title')}
+          {t('discover.circleTitle')}
         </Text>
         <View style={s.headerActions}>
           <Pressable
@@ -123,7 +123,7 @@ export default function CirclePlazaScreen() {
             accessibilityLabel={t('notifications.title')}
           >
             <Ionicons
-              name="notifications-outline"
+              name="notifications-off-outline"
               size={22}
               color={colors.textSecondary}
             />

@@ -109,7 +109,6 @@ export default function AppearanceSettingsScreen() {
               {
                 id: 'global-chat-background',
                 labelKey: 'settingsDetails.appearance.globalChatBackground',
-                valueKey: 'settingsDetails.appearance.configured',
                 onPress: () =>
                   router.push({
                     pathname: '/(tabs)/profile/settings-chat-background',

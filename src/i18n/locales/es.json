@@ -94,7 +94,6 @@
       "fontSize": "Tamaño de fuente",
       "standard": "Estándar",
       "globalChatBackground": "Fondo de chat global",
-      "configured": "Configurado",
       "hideChatAvatar": "Ocultar avatares del chat",
       "hideChatAvatarHint": "No mostrar los avatares de emisor y receptor en chats privados",
       "mergeAvatar": "Unir avatares consecutivos",
@@ -1436,6 +1435,7 @@
   },
   "discover": {
     "title": "Momentos",
+    "circleTitle": "Actividad de círculos",
     "plaza": "Plaza",
     "management": "Círculos",
     "moments": "Momentos",

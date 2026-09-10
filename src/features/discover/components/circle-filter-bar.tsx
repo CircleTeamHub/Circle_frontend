@@ -26,6 +26,7 @@ const s = StyleSheet.create({
   },
   list: {
     flex: 1,
+    minWidth: 0,
   },
   listContent: {
     gap: Spacing.sm,
@@ -47,7 +48,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    transform: [{ translateX: Spacing.xs }],
   },
 });
 
