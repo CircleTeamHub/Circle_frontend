@@ -181,14 +181,12 @@ export default function NotificationCenterScreen() {
       unread: notificationsUnread,
     };
     if (!showSignupTab) return [primary];
-    return [
-      primary,
-      {
-        key: 'signups',
-        label: t('notifications.tabSignups'),
-        unread: signupUnread,
-      },
-    ];
+    const signups: NotificationTabItem = {
+      key: 'signups',
+      label: t('notifications.tabSignups'),
+      unread: signupUnread,
+    };
+    return domain === 'circle' ? [signups, primary] : [primary, signups];
   }, [domain, showSignupTab, notificationsUnread, signupUnread, t]);
 
   const rows = useMemo<Row[]>(() => {
