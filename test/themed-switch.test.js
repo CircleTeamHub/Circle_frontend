@@ -56,4 +56,5 @@ test('ThemedSwitch injects the web-only active thumb color', () => {
   assert.match(source, /activeThumbColor/);
   assert.match(source, /Platform\.OS === 'web'/);
   assert.match(source, /thumbColor=\{colors\.white\}/);
+  assert.match(source, /ios_backgroundColor=\{colors\.surfaceBorder\}/);
 });

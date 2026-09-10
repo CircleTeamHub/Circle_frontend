@@ -29,6 +29,8 @@ export function ThemedSwitch({ tint, ...rest }: ThemedSwitchProps) {
   return (
     <Switch
       trackColor={{ false: colors.surfaceBorder, true: activeTrackColor }}
+      // iOS 关闭时会收缩 trackColor；没有这个底色时，白色滑块会融进白色页面。
+      ios_backgroundColor={colors.surfaceBorder}
       thumbColor={colors.white}
       {...webActiveThumb}
       {...rest}
