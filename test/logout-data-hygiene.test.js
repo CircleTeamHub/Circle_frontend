@@ -54,6 +54,12 @@ test('local-unread / chat-preferences / discover-filter 的 resetForLogout 清�
     zustand: require('zustand'),
     'zustand/middleware': require('zustand/middleware'),
     '@/storage': mmkvShim(),
+    // node 测试环境解析不了 `@/` 别名，给纯判断模块一个等价的桩。
+    '@/features/chat/utils/chat-background-uri': {
+      isLocalChatBackgroundImageUri: (uri) =>
+        typeof uri === 'string' &&
+        (uri.startsWith('file://') || uri.startsWith('data:image/jpeg;base64,')),
+    },
   };
   const { useChatPreferencesStore } = loadTsModule(
     'src/features/chat/store/use-chat-preferences-store.ts',

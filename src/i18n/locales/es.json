@@ -548,7 +548,7 @@
       "customImage": "Imagen personalizada",
       "paramMissing": "Faltan parámetros",
       "cannotModify": "No se puede cambiar el fondo del chat.",
-      "statusUploading": "Subiendo...",
+      "statusApplying": "Aplicando...",
       "statusSet": "Definido",
       "restoreDefault": "Restaurar el fondo predeterminado",
       "statusChoose": "Elegir",

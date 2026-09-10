@@ -171,6 +171,7 @@ import {
   resolveChatBackgroundStyle,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
+import { resolveChatBackgroundImageSource } from '@/features/chat/utils/chat-background-image';
 import { createDirectCall, createGroupCall } from '@/services/api/calls';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
@@ -872,17 +873,21 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const globalBackgroundPreference = useChatPreferencesStore(
     (state) => state.globalBackgroundPreference,
   );
-  const backgroundStyle = useMemo(
-    () =>
-      resolveChatBackgroundStyle(
-        resolveEffectiveChatBackgroundPreference(
-          backgroundPreference,
-          globalBackgroundPreference,
-        ),
-        colors.background,
+  const backgroundStyle = useMemo(() => {
+    const style = resolveChatBackgroundStyle(
+      resolveEffectiveChatBackgroundPreference(
+        backgroundPreference,
+        globalBackgroundPreference,
       ),
-    [backgroundPreference, colors.background, globalBackgroundPreference],
-  );
+      colors.background,
+    );
+    // 偏好里存的是文件名（`chat-bg:<name>`），绝对路径只能在这里现拼：应用容器
+    // 路径不保证跨重装/更新稳定，存下来的绝对路径迟早指向不存在的文件。
+    return {
+      ...style,
+      imageUri: resolveChatBackgroundImageSource(style.imageUri) ?? undefined,
+    };
+  }, [backgroundPreference, colors.background, globalBackgroundPreference]);
 
   const handleBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -3916,7 +3921,15 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
               style={s.messageAreaBackground}
               resizeMode="cover"
             >
-              <View style={[s.messageAreaOverlay, { backgroundColor: colors.overlay }]} />
+              {/* 薄蒙版把壁纸往主题底色推一点，让浮在背景上的日期分隔和群昵称
+                  保住对比度。这里曾经用 colors.overlay（模态遮罩，40% 纯黑）——
+                  壁纸加载不出来时，画出来的就是用户看到的那一整片灰。 */}
+              <View
+                style={[
+                  s.messageAreaOverlay,
+                  { backgroundColor: colors.chatBackgroundScrim },
+                ]}
+              />
             </ImageBackground>
           </View>
         ) : null}

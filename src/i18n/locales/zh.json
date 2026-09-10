@@ -623,7 +623,7 @@
       "customImage": "自定义图片",
       "paramMissing": "参数缺失",
       "cannotModify": "无法修改当前会话的聊天背景。",
-      "statusUploading": "上传中...",
+      "statusApplying": "处理中...",
       "statusSet": "已设置",
       "restoreDefault": "恢复默认背景",
       "statusChoose": "请选择",

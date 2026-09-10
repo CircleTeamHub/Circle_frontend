@@ -69,6 +69,9 @@ export interface ThemeColors {
   newUserBadgeRing: string;
   sentTimeText: string;
   overlay: string;
+  /** 自定义聊天背景图上的薄蒙版；只把壁纸往主题底色推一点，保住浮在背景上的日期
+   *  分隔和群昵称的对比度。刻意不复用 overlay（那是模态遮罩，40% 纯黑）。 */
+  chatBackgroundScrim: string;
   statusBarStyle: 'light' | 'dark';
 }
 

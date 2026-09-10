@@ -624,7 +624,7 @@
       "customImage": "Custom Image",
       "paramMissing": "Missing Parameters",
       "cannotModify": "Cannot modify chat background.",
-      "statusUploading": "Uploading...",
+      "statusApplying": "Applying...",
       "statusSet": "Set",
       "restoreDefault": "Restore default background",
       "statusChoose": "Choose",

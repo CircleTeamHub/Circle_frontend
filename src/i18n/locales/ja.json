@@ -547,7 +547,7 @@
       "customImage": "カスタム画像",
       "paramMissing": "パラメータが不足しています",
       "cannotModify": "チャットの背景を変更できません。",
-      "statusUploading": "アップロード中...",
+      "statusApplying": "適用中...",
       "statusSet": "設定済み",
       "restoreDefault": "既定の背景に戻す",
       "statusChoose": "選択",

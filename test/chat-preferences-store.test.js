@@ -60,6 +60,12 @@ test('chat preferences store defaults each conversation to the global background
           removeItem: async () => undefined,
         },
       },
+      // node 测试环境解析不了 `@/` 别名，给纯判断模块一个等价的桩。
+      '@/features/chat/utils/chat-background-uri': {
+        isLocalChatBackgroundImageUri: (uri) =>
+          typeof uri === 'string' &&
+          (uri.startsWith('file://') || uri.startsWith('data:image/jpeg;base64,')),
+      },
       // store import 链需要 @/storage 提供的 MMKV-JSON 适配器；测试里给一个
       // 内存版 stub，避免 native MMKV 在 node 环境下抛错。
       '@/storage': {
@@ -95,6 +101,12 @@ test('chat preferences store keeps per-conversation preset selections and remove
           setItem: async () => undefined,
           removeItem: async () => undefined,
         },
+      },
+      // node 测试环境解析不了 `@/` 别名，给纯判断模块一个等价的桩。
+      '@/features/chat/utils/chat-background-uri': {
+        isLocalChatBackgroundImageUri: (uri) =>
+          typeof uri === 'string' &&
+          (uri.startsWith('file://') || uri.startsWith('data:image/jpeg;base64,')),
       },
       // store import 链需要 @/storage 提供的 MMKV-JSON 适配器；测试里给一个
       // 内存版 stub，避免 native MMKV 在 node 环境下抛错。
