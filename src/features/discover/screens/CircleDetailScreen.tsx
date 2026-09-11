@@ -44,6 +44,7 @@ import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
 import { useChangeAvatar } from '@/hooks/use-change-avatar';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import {
   requestUploadPresign,
