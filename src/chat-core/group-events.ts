@@ -77,9 +77,13 @@ export function groupEventText(event: ChatGroupEventDto): string {
   }
 }
 
+// 群日志里的名字:群昵称 > 账号昵称 > 已注销兜底。群日志讲的是「群里发生了什么」,
+// 用的就该是群里认得的那个名字(与 groupMemberDisplayName 同一优先级)。
 function displayName(info: ChatSenderInfo): string {
+  const alias = info.alias?.trim();
   const nickname = info.nickname?.trim();
   return (
+    alias ||
     nickname ||
     i18n.t('chat.groupEvent.unknownMember', { defaultValue: '已注销用户' })
   );
