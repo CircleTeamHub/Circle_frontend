@@ -136,7 +136,12 @@ export default function NewGroupScreen() {
   }, [friends, query]);
 
   const selectedCount = Object.keys(selected).length;
-  const canSubmit = selectedCount >= MIN_MEMBERS && !submitting;
+  const trimmedName = name.trim();
+  // 群名和成员数都是服务端会拒的硬条件(CHAT_GROUP_NAME_REQUIRED / ArrayMinSize),
+  // 任一不满足就直接禁用按钮,和 MIN_MEMBERS 一个待遇;handleSubmit 里的兜底
+  // 校验保留,防止将来只改了一处。
+  const canSubmit =
+    trimmedName.length > 0 && selectedCount >= MIN_MEMBERS && !submitting;
 
   const toggle = useCallback((friendId: string) => {
     setSelected((prev) => {
@@ -154,7 +159,6 @@ export default function NewGroupScreen() {
 
     // 群名必填:服务端同样会拒空名(CHAT_GROUP_NAME_REQUIRED),这里先在端上拦,
     // 免得用户填完成员才被打回。
-    const trimmedName = name.trim();
     if (!trimmedName) {
       Alert.alert(t('messages.newGroupNameRequired'));
       return;
@@ -202,7 +206,7 @@ export default function NewGroupScreen() {
         );
       }
     }
-  }, [name, router, segments, selected, selectedCount, t]);
+  }, [trimmedName, router, segments, selected, selectedCount, t]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<FriendProfile>) => {
