@@ -2591,6 +2591,7 @@
       "invalidInviteCode": "招待コードの形式が正しくありません",
       "loginFailed": "ログインに失敗しました。もう一度お試しください",
       "registerFailed": "登録に失敗しました。もう一度お試しください",
+      "registerOutcomeUnknown": "登録結果を確認できませんでした。再登録する前にログインまたはパスワード再設定をお試しください。",
       "sendCodeFailed": "送信に失敗しました。もう一度お試しください",
       "registerSucceededSessionFailed": "アカウントは作成されましたが、自動ログインに失敗しました。このメールアドレスでログインしてください。"
     },

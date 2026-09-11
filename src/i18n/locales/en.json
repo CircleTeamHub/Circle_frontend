@@ -120,6 +120,7 @@
       "invalidInviteCode": "Invalid invite code format",
       "loginFailed": "Login failed, please try again",
       "registerFailed": "Registration failed, please try again",
+      "registerOutcomeUnknown": "We could not confirm the registration result. Try signing in or resetting your password before registering again.",
       "sendCodeFailed": "Failed to send, please try again",
       "registerSucceededSessionFailed": "Your account was created, but we could not sign you in automatically. Please log in with this email."
     },

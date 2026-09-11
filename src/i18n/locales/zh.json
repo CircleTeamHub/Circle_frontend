@@ -120,6 +120,7 @@
       "invalidInviteCode": "邀请码格式不正确",
       "loginFailed": "登录失败，请重试",
       "registerFailed": "注册失败，请重试",
+      "registerOutcomeUnknown": "注册结果暂时无法确认。请先尝试登录或找回密码，不要重复注册。",
       "sendCodeFailed": "发送失败，请重试",
       "registerSucceededSessionFailed": "账号已创建成功，但自动登录失败。请直接用该邮箱登录。"
     },

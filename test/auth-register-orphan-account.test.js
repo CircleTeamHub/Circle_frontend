@@ -18,6 +18,16 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { loadTsModule } = require('./helpers/load-ts-module');
+
+// 装真模块，不手抄判别逻辑 —— 否则分类器一改，这里的断言还停在旧语义上。
+const { ApiError } = loadTsModule('src/services/api/api-error.ts');
+const mutationOutcome = loadTsModule('src/services/api/mutation-outcome.ts', {
+  requireShim: (request) =>
+    request === './api-error' ? { ApiError } : require(request),
+});
+
+const apiError = (options) => new ApiError('request failed', options);
 
 function loadUseAuth(fixtures = {}) {
   const filePath = path.join(process.cwd(), 'src/hooks/use-auth.ts');
@@ -51,7 +61,11 @@ function loadUseAuth(fixtures = {}) {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
   };
-  const user = fixtures.user ?? { id: 'u1', email: 'bob@example.com', nickname: 'Bob' };
+  const user = fixtures.user ?? {
+    id: 'u1',
+    email: 'bob@example.com',
+    nickname: 'Bob',
+  };
 
   const modules = {
     react: {
@@ -91,13 +105,13 @@ function loadUseAuth(fixtures = {}) {
       register: fixtures.registerRequest ?? (async () => tokens),
     },
     '@/services/auth/session': {
-      clearLocalSession:
-        fixtures.clearLocalSession ?? (async () => {}),
+      clearLocalSession: fixtures.clearLocalSession ?? (async () => {}),
     },
     '@/services/api/client': {
       isDefinitiveAuthFailure: (error) =>
         Boolean(error) && (error.status === 401 || error.status === 403),
     },
+    '@/services/api/mutation-outcome': mutationOutcome,
     '@/im/client': {
       loginToOpenIM: async () => {},
       logoutFromOpenIM: async () => {},
@@ -162,7 +176,13 @@ test('注册已成功、只是建会话失败时，不报「注册失败」', as
     },
   });
 
-  await useAuth().register('bob@example.com', 'password123', 'password123', 'Bob');
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
 
   const message = lastError(errorWrites);
   assert.notEqual(
@@ -176,13 +196,17 @@ test('注册已成功、只是建会话失败时，不报「注册失败」', as
 test('注册请求本身失败时，仍然报「注册失败」', async () => {
   const { useAuth, errorWrites } = loadUseAuth({
     registerRequest: async () => {
-      const error = new Error('该邮箱已注册');
-      error.status = 409;
-      throw error;
+      throw apiError({ status: 409, errorCode: 'AUTH_EMAIL_TAKEN' });
     },
   });
 
-  await useAuth().register('bob@example.com', 'password123', 'password123', 'Bob');
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
 
   assert.equal(lastError(errorWrites), 'auth.errors.registerFailed');
 });
@@ -198,7 +222,13 @@ test('建会话失败后清掉本地半截会话，避免停在既非登录也�
     },
   });
 
-  await useAuth().register('bob@example.com', 'password123', 'password123', 'Bob');
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
 
   assert.equal(cleared, 1);
 });
@@ -214,7 +244,75 @@ test('注册请求本身失败时不必清会话（压根没建过）', async ()
     },
   });
 
-  await useAuth().register('bob@example.com', 'password123', 'password123', 'Bob');
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
 
   assert.equal(cleared, 0);
+});
+
+/**
+ * 响应没读全 / 5xx：请求确实发出去了，服务端可能已经建好了账号 ——
+ * 报「注册失败」会诱导用户重试并撞上自己刚占掉的邮箱。
+ */
+test('响应读到一半断了时提示结果不确定，避免盲目重试', async () => {
+  const { useAuth, errorWrites } = loadUseAuth({
+    registerRequest: async () => {
+      throw apiError({ status: 0, failureKind: 'body-read' });
+    },
+  });
+
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
+
+  assert.equal(lastError(errorWrites), 'auth.errors.registerOutcomeUnknown');
+});
+
+test('5xx 时提示结果不确定（服务端可能已提交才炸）', async () => {
+  const { useAuth, errorWrites } = loadUseAuth({
+    registerRequest: async () => {
+      throw apiError({ status: 503 });
+    },
+  });
+
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
+
+  assert.equal(lastError(errorWrites), 'auth.errors.registerOutcomeUnknown');
+});
+
+/**
+ * 断网 ≠ 结果不确定：fetch 自己 reject 说明连接压根没建立，账号没建出来。
+ * 报「请先尝试登录或找回密码」会把用户推去登录一个不存在的账号。
+ */
+test('断网时照常报「注册失败」，不能说结果不确定', async () => {
+  const { useAuth, errorWrites } = loadUseAuth({
+    registerRequest: async () => {
+      throw apiError({ status: 0, failureKind: 'network' });
+    },
+  });
+
+  await useAuth().register(
+    'bob@example.com',
+    '123456',
+    'password123',
+    'password123',
+    'Bob',
+  );
+
+  assert.equal(lastError(errorWrites), 'auth.errors.registerFailed');
 });

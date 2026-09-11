@@ -25,6 +25,7 @@ import {
 } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
+import { isAmbiguousMutationFailure } from '@/services/api/mutation-outcome';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useMessageGroupsStore } from '@/features/messages/store/use-message-groups-store';
 import { retry } from '@/utils/retry';
@@ -187,6 +188,11 @@ export function useAuth() {
             reportHandledFailure('auth', 'registerSessionCleanup', cleanupError);
           });
           safeSetError(i18n.t('auth.errors.registerSucceededSessionFailed'));
+        } else if (isAmbiguousMutationFailure(requestError)) {
+          // 超时/读包失败/5xx:请求可能已经落库,不能催用户「重试注册」——
+          // 那会撞上自己刚占掉的邮箱。断网(failureKind==='network')不算,
+          // 那种情况请求根本没出去。
+          safeSetError(i18n.t('auth.errors.registerOutcomeUnknown'));
         } else {
           safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.registerFailed')));
         }
