@@ -23,6 +23,7 @@ import {
   parseNotificationDomain,
   type NotificationDomain,
 } from '@/features/notifications/utils/notification-domain';
+import { orderNotificationTabs } from '@/features/notifications/utils/notification-tabs';
 import {
   mapNotificationToRow,
   type NotificationRowData,
@@ -186,7 +187,7 @@ export default function NotificationCenterScreen() {
       label: t('notifications.tabSignups'),
       unread: signupUnread,
     };
-    return domain === 'circle' ? [signups, primary] : [primary, signups];
+    return orderNotificationTabs(domain, { notifications: primary, signups });
   }, [domain, showSignupTab, notificationsUnread, signupUnread, t]);
 
   const rows = useMemo<Row[]>(() => {
