@@ -123,7 +123,7 @@ export default function CirclePlazaScreen() {
             accessibilityLabel={t('notifications.title')}
           >
             <Ionicons
-              name="notifications-off-outline"
+              name="notifications-outline"
               size={22}
               color={colors.textSecondary}
             />

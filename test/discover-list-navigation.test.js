@@ -101,7 +101,7 @@ test('circle plaza owns the circle notification bell and opens the circle domain
   const source = read('src/features/discover/screens/CirclePlazaScreen.tsx');
 
   assert.match(source, /useTabBadgeStore\(\(state\) => state\.signupUnread\)/);
-  assert.match(source, /name="notifications-off-outline"/);
+  assert.match(source, /name="notifications-outline"/);
   assert.match(source, /<Badge count=\{circleBellUnread\} \/>/);
   assert.match(source, /pathname: '\/\(tabs\)\/discover\/notification-center'/);
   assert.match(source, /params: \{ domain: 'circle' \}/);

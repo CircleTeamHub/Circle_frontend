@@ -62,6 +62,6 @@ test('circle plaza header opens signup notifications inside the discover stack',
   assert.match(src, /["'`]\/\(tabs\)\/discover\/notification-center["'`]/);
   assert.doesNotMatch(src, /["'`]\/\(tabs\)\/messages\/notifications["'`]/);
   assert.match(route, /NotificationCenterScreen/);
-  assert.match(src, /name="notifications-off-outline"/);
+  assert.match(src, /name="notifications-outline"/);
   assert.match(src, /<Badge count=\{circleBellUnread\} \/>/);
 });
