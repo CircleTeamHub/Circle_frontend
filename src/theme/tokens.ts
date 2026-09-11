@@ -40,16 +40,32 @@ export const Gradients = {
 } as const;
 
 /**
- * 把 token 里的 #RRGGBB 派生成半透明版本（用于选中态淡底等）。
+ * 把 `#RRGGBB` / `#RGB` 解析成 0–255 的三通道。
+ * 其它写法（rgba()/命名色/服务端下发的任意字符串）返回 null，
+ * 由调用方决定「原样透传」，避免每个派生函数各写一份 hex 正则。
+ */
+export function parseHexColor(
+  color: string,
+): readonly [number, number, number] | null {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color);
+  if (!match) return null;
+  const hex = match[1];
+  const full =
+    hex.length === 3
+      ? `${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`
+      : hex;
+  const value = parseInt(full, 16);
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+/**
+ * 把 token 里的 #RRGGBB / #RGB 派生成半透明版本（用于选中态淡底等）。
  * 只做透明度派生 —— 色相仍旧来自色板 token，不在组件里手写新颜色。
- * 非 #RRGGBB 输入（已是 rgba/命名色）原样返回，调用方不必分支。
+ * 非 hex 输入（已是 rgba/命名色）原样返回，调用方不必分支。
  */
 export function withAlpha(color: string, alpha: number): string {
-  const hex = /^#([0-9a-f]{6})$/i.exec(color);
-  if (!hex) return color;
-  const value = parseInt(hex[1], 16);
-  const r = (value >> 16) & 255;
-  const g = (value >> 8) & 255;
-  const b = value & 255;
+  const rgb = parseHexColor(color);
+  if (!rgb) return color;
+  const [r, g, b] = rgb;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

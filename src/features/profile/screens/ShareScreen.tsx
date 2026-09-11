@@ -381,6 +381,8 @@ export default function ShareScreen() {
                 !inviteCode && s.disabled,
               ]}
             >
+              {/* 按钮底是 colors.white（两个主题同色）：图标与文字都用深色的
+                  primary，暗色提亮紫在白底上只有 2.6:1。 */}
               <Ionicons name="share-social-outline" size={18} color={colors.primary} />
               <Text style={[Typography.body, { color: colors.primary }]}>
                 {t('referral.share')}

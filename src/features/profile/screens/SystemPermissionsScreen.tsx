@@ -190,16 +190,16 @@ export default function SystemPermissionsScreen() {
             ? 'settingsDetails.permissions.authorized'
             : 'settingsDetails.permissions.unauthorized',
           icon: permissionIcon(id),
-          iconColor: colors.primary,
+          iconColor: colors.iconAccent,
           iconBackgroundColor: colors.primaryLight,
-          statusColor: colors.primary,
+          statusColor: colors.iconAccent,
           onPress: async () => {
             await requestPermission(id);
             await refreshPermissions();
           },
         };
       }),
-    [colors.primary, colors.primaryLight, permissions, refreshPermissions],
+    [colors.iconAccent, colors.primaryLight, permissions, refreshPermissions],
   );
 
   return (

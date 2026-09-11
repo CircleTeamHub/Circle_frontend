@@ -204,10 +204,10 @@ export function AccountSwitcherSheet() {
             {submitting ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Ionicons name="add" size={24} color={colors.primary} />
+              <Ionicons name="add" size={24} color={colors.iconAccent} />
             )}
           </View>
-          <Text style={[s.addLabel, { color: colors.primary }]}>
+          <Text style={[s.addLabel, { color: colors.iconAccent }]}>
             {t('accountSwitcher.addAccount')}
           </Text>
         </Pressable>

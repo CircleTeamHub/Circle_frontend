@@ -4237,7 +4237,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
               <Ionicons
                 name="happy-outline"
                 size={22}
-                color={emojiOpen ? colors.primary : colors.textSecondary}
+                color={emojiOpen ? colors.iconAccent : colors.textSecondary}
               />
             </Pressable>
           </View>
@@ -4322,7 +4322,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
                         size={26}
                         color={
                           item.id === 'voice-call' && callStarting
-                            ? colors.primary
+                            ? colors.iconAccent
                             : colors.text
                         }
                       />

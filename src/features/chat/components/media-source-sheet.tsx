@@ -176,7 +176,7 @@ export function MediaSourceSheet({
               accessibilityLabel={label}
             >
               <View style={[s.iconSurface, d.iconSurface]}>
-                <Ionicons name={action.icon} size={28} color={colors.primary} />
+                <Ionicons name={action.icon} size={28} color={colors.iconAccent} />
               </View>
               <Text style={[s.label, d.label]} numberOfLines={1}>
                 {label}

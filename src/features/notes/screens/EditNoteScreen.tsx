@@ -939,7 +939,7 @@ export default function EditNoteScreen() {
     meta?: ReactNode,
   ) => (
     <View style={s.sectionHeader}>
-      <Ionicons name={icon} size={18} color={colors.primary} />
+      <Ionicons name={icon} size={18} color={colors.iconAccent} />
       <Text style={[s.sectionHeading, d.sectionHeading]}>{sectionTitle}</Text>
       {meta ? (
         <Text style={[s.sectionHeaderMeta, d.sectionHeaderMeta]}>{meta}</Text>
@@ -1007,7 +1007,7 @@ export default function EditNoteScreen() {
                   <Ionicons
                     name={item.type === 'VIDEO' ? 'videocam-outline' : 'image-outline'}
                     size={24}
-                    color={colors.primary}
+                    color={colors.iconAccent}
                   />
                 </View>
               )}
@@ -1036,7 +1036,7 @@ export default function EditNoteScreen() {
       </View>
     );
   }, [
-    colors.primary,
+    colors.iconAccent,
     colors.text,
     colors.textSecondary,
     d.emptyText,
@@ -1332,7 +1332,7 @@ export default function EditNoteScreen() {
               </View>
               <View style={s.locationPreviewInfo}>
                 <View style={s.locationPreviewTitleRow}>
-                  <Ionicons name="location" size={16} color={colors.primary} />
+                  <Ionicons name="location" size={16} color={colors.iconAccent} />
                   <Text style={[s.locationDetailLabel, d.locationDetailLabel]}>
                     {t('notes.edit.locationPlaceNameLabel', { defaultValue: '地点名称' })}
                   </Text>

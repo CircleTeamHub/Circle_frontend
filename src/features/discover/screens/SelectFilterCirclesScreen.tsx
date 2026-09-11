@@ -250,7 +250,7 @@ export default function SelectFilterCirclesScreen() {
             <Ionicons
               name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
               size={22}
-              color={isSelected ? colors.primary : colors.textSecondary}
+              color={isSelected ? colors.iconAccent : colors.textSecondary}
             />
           </Pressable>
           <Divider />
