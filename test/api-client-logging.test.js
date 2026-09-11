@@ -77,6 +77,10 @@ function loadApiClient({
           shouldReportHttpFailure: (s) => s === undefined || s === 0 || s >= 500,
         };
       }
+      if (request === './api-error') {
+        // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块，别在这里手抄。
+        return loadTsModule('src/services/api/api-error.ts');
+      }
       if (request === '@/utils/redact') {
         // 真模块，不是 stub：脱敏就是这几个断言要验的东西，换成假的等于不测。
         return loadTsModule('src/utils/redact.ts');

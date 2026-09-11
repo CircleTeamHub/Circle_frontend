@@ -1158,7 +1158,7 @@ export default function FancyNumberScreen() {
           {leaseStatus === 'ready' && mine?.active ? (
             <View style={[s.card, d.card]}>
               <View style={s.titleRow}>
-                <Ionicons name="ribbon" size={22} color={colors.deepPurple} />
+                <Ionicons name="ribbon" size={22} color={colors.iconAccent} />
                 <Text style={d.title}>
                   {t('profile.fancyNumber.mine', { defaultValue: '我的靓号' })}
                 </Text>

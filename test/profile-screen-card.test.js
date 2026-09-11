@@ -8,7 +8,7 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 test('ProfileScreen shows effective membership label and credit score in the gold member card', async () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
-  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?<Divider \/>/)?.[0] ?? '';
+  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?(?=\n  return \()/)?.[0] ?? '';
   const { getMembershipTierForVipLevel } = await import(
     pathToFileURL(
       path.join(__dirname, '..', 'src/features/profile/membership-plans.ts'),
@@ -34,7 +34,7 @@ test('ProfileScreen shows effective membership label and credit score in the gol
 
 test('ProfileScreen gives VIP and reputation stats independent value-based backgrounds', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
-  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?<Divider \/>/)?.[0] ?? '';
+  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?(?=\n  return \()/)?.[0] ?? '';
   const memberStatsBlock = memberCardBlock.match(
     /<View style=\{s\.memberStatsPanel\}>[\s\S]*?style=\{s\.memberCardHeader\}/,
   )?.[0] ?? '';
@@ -79,7 +79,7 @@ test('ProfileScreen removes the old green badge icon', () => {
 
 test('ProfileScreen shows selected identity badges inside the gold member card', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
-  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?<Divider \/>/)?.[0] ?? '';
+  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?(?=\n  return \()/)?.[0] ?? '';
 
   assert.match(src, /user\?\.displayIcons/);
   assert.match(src, /UserIconRow/);
@@ -93,7 +93,7 @@ test('ProfileScreen shows selected identity badges inside the gold member card',
 
 test('ProfileScreen keeps a visible decorations entry when no icons are selected', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
-  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?<Divider \/>/)?.[0] ?? '';
+  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?(?=\n  return \()/)?.[0] ?? '';
 
   assert.match(memberCardBlock, /displayIcons\.length > 0 \?/);
   assert.match(memberCardBlock, /handleOpenDecorations/);
@@ -105,7 +105,7 @@ test('ProfileScreen keeps a visible decorations entry when no icons are selected
 
 test('ProfileScreen does not show membership or account status beside the moved badge', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
-  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?<Divider \/>/)?.[0] ?? '';
+  const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?(?=\n  return \()/)?.[0] ?? '';
 
   assert.doesNotMatch(memberCardBlock, /membershipTag/);
   assert.doesNotMatch(memberCardBlock, /accountStatusLabel/);

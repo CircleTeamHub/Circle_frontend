@@ -33,7 +33,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 import { useSupportConfigStore } from '@/stores/supportConfigStore';
 import { selectSupportAgents } from '@/stores/support-config-selectors';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { iconForeground, Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 
@@ -285,7 +285,7 @@ export default function MemberCenterScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const visibleBenefits = MEMBERSHIP_BENEFITS.filter(
     (benefit) =>
       FEATURE_FLAGS.fancyNumbers || benefit.id !== 'fancy-number',
@@ -373,6 +373,11 @@ export default function MemberCenterScreen() {
   const selectedPlanName = t(selectedPlan.nameKey, {
     defaultValue: DEFAULT_PLAN_NAMES[selectedPlan.id],
   });
+  // 权益列表整段属于同一档位，色值算一次即可（与该档卡片的 tierAccent 同源）。
+  const selectedTierAccent = iconForeground(
+    TIER_VISUALS[selectedPlan.tier].accent,
+    resolvedMode,
+  );
   const currentMembershipName = currentTier
     ? t(`profile.membership.tiers.${currentTier}.name`, {
         defaultValue: DEFAULT_TIER_NAMES[currentTier],
@@ -703,6 +708,9 @@ export default function MemberCenterScreen() {
             // 月度卡片标成「当前」、每日卡片反而没标。徽章本身就是 currentTierBadge。
             const isCurrentTier = plan.tier === currentTier;
             const visual = TIER_VISUALS[plan.tier];
+            // 卡面上的「前景」强调色只算一次：选中描边与右侧对号共用它 ——
+            // 暗色下别出现「对号提亮、边框没提亮」两种深浅。
+            const tierAccent = iconForeground(visual.accent, resolvedMode);
             const planName = t(plan.nameKey, {
               defaultValue: DEFAULT_PLAN_NAMES[plan.id],
             });
@@ -733,7 +741,7 @@ export default function MemberCenterScreen() {
                 style={[
                   s.tierCard,
                   d.tierCard,
-                  selected && { borderColor: visual.accent, borderWidth: 2 },
+                  selected && { borderColor: tierAccent, borderWidth: 2 },
                 ]}
                 onPress={() => setSelectedPlanId(plan.id)}
               >
@@ -755,6 +763,8 @@ export default function MemberCenterScreen() {
                     </Text>
                     {isCurrentTier ? (
                       <View
+                        // 实心小标 + 白字：底色要深的原色。提亮后白字对比度
+                        // 会从 5.98:1 掉到 2.36:1（silver 档最糟）。
                         style={[s.tierMarker, { backgroundColor: visual.accent }]}
                       >
                         <Text style={d.tierMarkerText}>
@@ -796,7 +806,7 @@ export default function MemberCenterScreen() {
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
-                      color={visual.accent}
+                      color={tierAccent}
                     />
                   ) : null}
                 </View>
@@ -834,7 +844,7 @@ export default function MemberCenterScreen() {
                 <Ionicons
                   name="checkmark-circle"
                   size={20}
-                  color={TIER_VISUALS[selectedPlan.tier].accent}
+                  color={selectedTierAccent}
                 />
                 <View style={s.benefitText}>
                   <Text style={d.benefitLabel}>

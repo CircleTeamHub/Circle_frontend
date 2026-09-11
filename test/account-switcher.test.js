@@ -125,7 +125,10 @@ test("login screen prefills the identifier passed from an expired switch", () =>
   assert.match(login, /useState\(identifierParam \?\? emailParam \?\? ['"]['"]\)/);
 
   const auth = read("src/hooks/use-auth.ts");
-  assert.match(auth, /params: \{ identifier: account\.user\.email \?\? account\.user\.accountId \}/);
+  assert.match(
+    auth,
+    /params:\s*\{\s*identifier: account\.user\.email \?\? account\.user\.accountId,?\s*\}/,
+  );
 });
 
 test("account switcher copy exists in both locales", () => {

@@ -198,7 +198,7 @@ function WardrobeRow({
           <Ionicons
             name={item ? 'image-outline' : 'ban-outline'}
             size={26}
-            color={colors.primary}
+            color={colors.iconAccent}
           />
         )}
       </View>
@@ -218,8 +218,8 @@ function WardrobeRow({
       </View>
       {equipped ? (
         <View style={[s.marker, { backgroundColor: colors.primaryLight }]}>
-          <Ionicons name="checkmark" size={14} color={colors.primary} />
-          <Text style={[s.markerText, { color: colors.primary }]}>
+          <Ionicons name="checkmark" size={14} color={colors.iconAccent} />
+          <Text style={[s.markerText, { color: colors.iconAccent }]}>
             {t('profile.avatarFrames.equipped')}
           </Text>
         </View>

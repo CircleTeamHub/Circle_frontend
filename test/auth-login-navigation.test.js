@@ -5,6 +5,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { loadTsModule } = require('./helpers/load-ts-module');
+
+// 装真模块，不手抄判别逻辑 —— 否则分类器一改，这里的断言还停在旧语义上。
+const { ApiError } = loadTsModule('src/services/api/api-error.ts');
+const mutationOutcome = loadTsModule('src/services/api/mutation-outcome.ts', {
+  requireShim: (request) =>
+    request === './api-error' ? { ApiError } : require(request),
+});
 
 function loadUseAuth(fixtures = {}) {
   const filePath = path.join(process.cwd(), 'src/hooks/use-auth.ts');
@@ -18,7 +26,9 @@ function loadUseAuth(fixtures = {}) {
     fileName: filePath,
   }).outputText;
 
-  const router = fixtures.router ?? { replace: (...args) => fixtures.routerCalls.push(args) };
+  const router = fixtures.router ?? {
+    replace: (...args) => fixtures.routerCalls.push(args),
+  };
   const authState = {
     setSession: fixtures.setSession ?? (() => {}),
     isAuthenticated: false,
@@ -62,7 +72,8 @@ function loadUseAuth(fixtures = {}) {
       },
     },
     '@/services/api/auth': {
-      fetchCurrentUser: fixtures.fetchCurrentUser ?? (async () => fixtures.user),
+      fetchCurrentUser:
+        fixtures.fetchCurrentUser ?? (async () => fixtures.user),
       fetchCurrentUserWithToken:
         fixtures.fetchCurrentUserWithToken ?? (async () => fixtures.user),
       login: fixtures.loginRequest ?? (async () => fixtures.tokens),
@@ -78,6 +89,7 @@ function loadUseAuth(fixtures = {}) {
         ((error) =>
           Boolean(error) && (error.status === 401 || error.status === 403)),
     },
+    '@/services/api/mutation-outcome': mutationOutcome,
     '@/im/client': {
       loginToOpenIM: fixtures.loginToOpenIM ?? (async () => {}),
       logoutFromOpenIM: fixtures.logoutFromOpenIM ?? (async () => {}),
@@ -133,7 +145,10 @@ function loadUseAuth(fixtures = {}) {
 }
 
 function loadPolicy() {
-  const filePath = path.join(process.cwd(), 'src/components/app/auth-route-policy.ts');
+  const filePath = path.join(
+    process.cwd(),
+    'src/components/app/auth-route-policy.ts',
+  );
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -202,6 +217,7 @@ test('auth success session flags map to the expected global route guard redirect
   await useAuth().login('alice@example.com', 'password123');
   await useAuth().register(
     'bob@example.com',
+    '123456',
     'password123',
     'password123',
     'Bob',
@@ -211,21 +227,29 @@ test('auth success session flags map to the expected global route guard redirect
   const registerOptions = setSessionCalls[1][2];
 
   assert.deepEqual(
-    JSON.parse(JSON.stringify(getAuthRouteDecision({
-      firstSegment: '(auth)',
-      isAuthenticated: true,
-      isLoading: false,
-      onboardingRequired: loginOptions.onboardingRequired,
-    }))),
+    JSON.parse(
+      JSON.stringify(
+        getAuthRouteDecision({
+          firstSegment: '(auth)',
+          isAuthenticated: true,
+          isLoading: false,
+          onboardingRequired: loginOptions.onboardingRequired,
+        }),
+      ),
+    ),
     { type: 'redirect', href: '/(tabs)/messages' },
   );
   assert.deepEqual(
-    JSON.parse(JSON.stringify(getAuthRouteDecision({
-      firstSegment: '(auth)',
-      isAuthenticated: true,
-      isLoading: false,
-      onboardingRequired: registerOptions.onboardingRequired,
-    }))),
+    JSON.parse(
+      JSON.stringify(
+        getAuthRouteDecision({
+          firstSegment: '(auth)',
+          isAuthenticated: true,
+          isLoading: false,
+          onboardingRequired: registerOptions.onboardingRequired,
+        }),
+      ),
+    ),
     { type: 'redirect', href: '/(tabs)/messages' },
   );
 });

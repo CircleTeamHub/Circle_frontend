@@ -722,7 +722,7 @@ export default function GroupManagementScreen() {
           <Ionicons
             name={checked ? 'checkbox' : 'square-outline'}
             size={22}
-            color={checked ? colors.primary : colors.textSecondary}
+            color={checked ? colors.iconAccent : colors.textSecondary}
           />
         </Pressable>
       );
@@ -1199,7 +1199,7 @@ export default function GroupManagementScreen() {
                         <Ionicons
                           name={selected ? 'chevron-up' : 'chevron-down'}
                           size={18}
-                          color={selected ? colors.primary : colors.textSecondary}
+                          color={selected ? colors.iconAccent : colors.textSecondary}
                         />
                         <Pressable
                           onPress={() => handleDelete(group.id, group.name)}

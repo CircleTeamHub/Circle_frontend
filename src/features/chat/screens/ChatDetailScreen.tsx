@@ -85,6 +85,9 @@ import {
 // 消息数据面已切到 chat-core;成员目录 / @ 候选 / 在线状态仍走 OpenIM 双轨
 // (OpenIM groupID === circle.id,ID 同值,Phase 3 随成员子系统一起迁)。
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
+import { isGroupManager } from '@/features/chat/group-admin-permissions';
+import { allowsMemberProfiles } from '@/features/chat/utils/group-policy';
+import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import {
   ensureCircleConversation,
   ensureDirectConversation,
@@ -123,6 +126,7 @@ import {
   sendChatReaction,
   sendChatTyping,
 } from '@/chat-core/socket-manager';
+import { isLocalMessageId } from '@/chat-core/local-message-id';
 import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
@@ -171,6 +175,7 @@ import {
   resolveChatBackgroundStyle,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
+import { useChatBackgroundImageSource } from '@/features/chat/hooks/use-chat-background-image-source';
 import { createDirectCall, createGroupCall } from '@/services/api/calls';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
@@ -721,6 +726,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     const until = new Date(selfSilencedUntil).getTime();
     return Number.isNaN(until) || until > silenceClock;
   }, [selfSilencedFlag, selfSilencedUntil, silenceClock]);
+  // 全员禁言:群主/管理员豁免,其余人和被单独禁言一样锁输入区。
+  // myRole 缺省(老后端)时按普通成员处理 —— 服务端照样会拒,提前锁住不会更糟。
+  const groupMuteAllActive = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    if (!conversation?.muteAll) return false;
+    return !isGroupManager(conversation.myRole ?? null);
+  });
+  // 输入区是否锁住:被单独禁言,或全员禁言且自己不是管理员。
+  const composerLocked = selfSilenced || groupMuteAllActive;
   const selfDestructEnabled = useChatStore((state) => {
     const conversation = state.conversations.find(
       (candidate) => candidate.id === conversationID,
@@ -782,6 +798,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   // 独立群聊同理:目录全员可见,座位校验在服务端。
   const canViewGroupMemberProfiles =
     isTempChat || isStandaloneGroup || canViewCircleMembers;
+  // 「成员可查看他人资料」:三张屏共用 allowsMemberProfiles(群主/管理员豁免;
+  // 策略缺省=老后端,按开放处理)。
+  const canViewMemberProfilesByPolicy = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    return allowsMemberProfiles({
+      role: conversation?.myRole,
+      policies: conversation?.policies,
+    });
+  });
   const revalidateMemberViewAccess = useCallback(
     () =>
       isTempChat || isStandaloneGroup
@@ -883,6 +910,9 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       ),
     [backgroundPreference, colors.background, globalBackgroundPreference],
   );
+  // 偏好里存的是文件名（`chat-bg:<name>`），能画的 uri 只能现取：原生要拼绝对
+  // 路径（容器路径不保证跨重装稳定），web 要从 IndexedDB 取回图再建 object URL。
+  const backgroundImageUri = useChatBackgroundImageSource(backgroundStyle.imageUri);
 
   const handleBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -919,13 +949,36 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           Alert.alert(t('chat.groupMembersRestricted'));
           return;
         }
-        router.push(getUserProfileHref(scope, msg.senderID, msg.senderName));
+        // 「成员可查看他人资料」策略:群主/管理员不受限,看自己永远放行。
+        if (msg.senderID !== currentUserID && !canViewMemberProfilesByPolicy) {
+          Alert.alert(
+            t('chat.profilesRestrictedByGroup', {
+              defaultValue: '该群未开放查看成员资料',
+            }),
+          );
+          return;
+        }
+        router.push(
+          getUserProfileHref(scope, msg.senderID, msg.senderName, {
+            viaConversationID: conversationID,
+          }),
+        );
         return;
       }
       // 单聊：对方即会话 sourceID。
       router.push(getUserProfileHref(scope, sourceID, conversationTitle));
     },
-    [conversationTitle, currentUserID, sourceID, isGroupChat, revalidateMemberViewAccess, scope, t],
+    [
+      canViewMemberProfilesByPolicy,
+      conversationID,
+      conversationTitle,
+      currentUserID,
+      sourceID,
+      isGroupChat,
+      revalidateMemberViewAccess,
+      scope,
+      t,
+    ],
   );
 
   const handleOpenUserCard = useCallback(
@@ -1240,6 +1293,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const handleCollectMessage = useCallback(
     async (message: ChatMessage) => {
       if (!conversationID) return;
+      // 还没拿到 ack 的气泡手上只有 local:<d>,服务端那条消息还不存在 ——
+      // 收藏接口会按 COLLECTION_INVALID_MESSAGE_SOURCE 拒掉它。菜单已经不给入口,
+      // 这里是兜底(长按菜单与发送 ack 之间存在竞态)。
+      if (isLocalMessageId(message.id)) return;
 
       // 笔记卡片：不进「收藏」列表，直接快照复制进「我的笔记」，
       // 并带上来源名片（群/用户）+ 消息定位信息，详情页可一键跳回聊天。
@@ -1342,7 +1399,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         reportHandledFailure('chatDetail', 'collectMessage', error);
         Alert.alert(
           t('chat.messageActions.collectFailed'),
-          t('chat.messageActions.collectFailedHint'),
+          getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
         );
       }
     },
@@ -1723,7 +1780,13 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     // 服务端从头到尾没看过这条消息，所以转发那条 CHAT_FORWARD_FORBIDDEN 管不到
     // 它 —— 对端在焚毁会话里发的图，收藏一下就永久留在了本机账号下。同一份承诺，
     // 同一道闸；自己发的照旧可收。
-    if (!isEphemeralPeerMessage(message, conversationBurnEnabled)) {
+    // 收藏把 message.id 交给服务端当引用:还是 local:<d> 的乐观气泡在服务端没有
+    // 对应的行,点下去只会吃一个 400,而提示的是「请重试」—— 重试到 ack 回来之前
+    // 都不会成功。与隔壁转发对未确认媒体的处理同一条理由:不提供入口。
+    if (
+      !isEphemeralPeerMessage(message, conversationBurnEnabled) &&
+      !isLocalMessageId(message.id)
+    ) {
       // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
       // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。
       actions.push(
@@ -2425,7 +2488,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             .slice(0, MENTION_CANDIDATE_LIMIT)
             .map((member) => ({
               userID: member.userId,
-              nickname: member.nickname || member.userId,
+              // @ 出去的名字也用群昵称:群里认得的是这个。
+              nickname: groupMemberDisplayName(member),
             })),
         )
         .then((candidates) => {
@@ -2461,8 +2525,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         if (cancelled) return;
         const map: Record<string, string> = {};
         for (const member of members) {
-          const nickname = member.nickname?.trim();
-          if (nickname) map[member.userId] = nickname;
+          // 群昵称优先:群里所有人看到的就是它。我自己给这位好友起的备注
+          // 优先级更高,但那条在 receivedDisplayName 里另接。
+          const nickname = groupMemberDisplayName(member);
+          if (nickname && nickname !== member.userId) map[member.userId] = nickname;
         }
         setGroupMemberNames(map);
       })
@@ -2580,17 +2646,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
 
   // 切换「语音输入模式」：文本框 ↔ 按住说话。退出时若在录音则一并取消。
   const toggleVoiceInputMode = useCallback(() => {
-    if (isPreviewMode || selfSilenced) return;
+    if (isPreviewMode || composerLocked) return;
     Keyboard.dismiss();
     LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
     setAttachmentOpen(false);
     setEmojiOpen(false);
     setVoiceInputMode((prev) => !prev);
-  }, [isPreviewMode, selfSilenced]);
+  }, [composerLocked, isPreviewMode]);
 
   // 按住开始录音。权限/音频模式准备好后 record()，失败时复位状态。
   const startHoldRecording = useCallback(async () => {
-    if (!sourceID || isPreviewMode || selfSilenced || voiceActionBusy) return;
+    if (!sourceID || isPreviewMode || composerLocked || voiceActionBusy) return;
     if (inFlightRef.current || voiceStartInProgressRef.current) return;
     voicePressActiveRef.current = true;
     voiceStartInProgressRef.current = true;
@@ -2651,9 +2717,9 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       if (mountedRef.current) setVoiceActionBusy(false);
     }
   }, [
+    composerLocked,
     isPreviewMode,
     restoreRecordingAudioMode,
-    selfSilenced,
     sourceID,
     t,
     voiceActionBusy,
@@ -3772,7 +3838,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             conversationId: conversationID,
             text: nextText,
             quotedText: buildQuotePreviewText(quoteTarget, t),
-            replyToId: quoteTarget.id.startsWith('local:')
+            replyToId: isLocalMessageId(quoteTarget.id)
               ? undefined
               : quoteTarget.id,
           });
@@ -3909,14 +3975,22 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       </View>
       <Divider />
       <View style={[s.messageArea, d.messageArea]}>
-        {backgroundStyle.imageUri ? (
+        {backgroundImageUri ? (
           <View pointerEvents="none" style={s.messageAreaBackground}>
             <ImageBackground
-              source={{ uri: backgroundStyle.imageUri }}
+              source={{ uri: backgroundImageUri }}
               style={s.messageAreaBackground}
               resizeMode="cover"
             >
-              <View style={[s.messageAreaOverlay, { backgroundColor: colors.overlay }]} />
+              {/* 薄蒙版把壁纸往主题底色推一点，让浮在背景上的日期分隔和群昵称
+                  保住对比度。这里曾经用 colors.overlay（模态遮罩，40% 纯黑）——
+                  壁纸加载不出来时，画出来的就是用户看到的那一整片灰。 */}
+              <View
+                style={[
+                  s.messageAreaOverlay,
+                  { backgroundColor: colors.chatBackgroundScrim },
+                ]}
+              />
             </ImageBackground>
           </View>
         ) : null}
@@ -4100,18 +4174,23 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           </Pressable>
         </View>
       ) : null}
-      {selfSilenced ? (
+      {composerLocked ? (
         <View style={[s.silencedBar, d.silencedBar]} testID="chat-silenced-bar">
           <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
           <Text style={[s.silencedBarText, d.silencedBarText]} numberOfLines={2}>
-            {selfSilencedUntil
-              ? t('chat.youAreSilencedUntil', {
-                  time: new Date(selfSilencedUntil).toLocaleString(),
-                  defaultValue: '你已被禁言，{{time}} 解除',
+            {/* 被单独禁言优先说自己的状态:那是针对本人的,比「全员禁言」更具体。 */}
+            {!selfSilenced
+              ? t('chat.youAreMutedAll', {
+                  defaultValue: '全员禁言中，仅群主和管理员可以发言',
                 })
-              : t('chat.youAreSilencedIndefinitely', {
-                  defaultValue: '你已被禁言，等待管理员解除',
-                })}
+              : selfSilencedUntil
+                ? t('chat.youAreSilencedUntil', {
+                    time: new Date(selfSilencedUntil).toLocaleString(),
+                    defaultValue: '你已被禁言，{{time}} 解除',
+                  })
+                : t('chat.youAreSilencedIndefinitely', {
+                    defaultValue: '你已被禁言，等待管理员解除',
+                  })}
           </Text>
         </View>
       ) : null}
@@ -4137,7 +4216,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             key="voice-left"
             style={[s.circleBtn, d.circleBtn]}
             onPress={toggleVoiceInputMode}
-            disabled={isPreviewMode || isVoiceRecording || selfSilenced}
+            disabled={isPreviewMode || isVoiceRecording || composerLocked}
             hitSlop={8}
           >
             <Ionicons
@@ -4184,8 +4263,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
               testID={E2E_TEST_IDS.chatInput}
               style={[s.composerInput, d.composerInput]}
               placeholder={
-                selfSilenced
-                  ? t('chat.youAreSilenced', { defaultValue: '你已被禁言' })
+                composerLocked
+                  ? selfSilenced
+                    ? t('chat.youAreSilenced', { defaultValue: '你已被禁言' })
+                    : t('chat.muteAll', { defaultValue: '全员禁言' })
                   : isPreviewMode
                     ? t('chat.detail.previewPlaceholder', {
                         defaultValue: '连接尚未完成',
@@ -4231,13 +4312,13 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
                 setEmojiOpen(false);
                 setMentionPickerVisible(false);
               }}
-              editable={!isPreviewMode && !selfSilenced}
+              editable={!isPreviewMode && !composerLocked}
             />
             <Pressable onPress={handleEmojiToggle} hitSlop={8} disabled={isPreviewMode}>
               <Ionicons
                 name="happy-outline"
                 size={22}
-                color={emojiOpen ? colors.primary : colors.textSecondary}
+                color={emojiOpen ? colors.iconAccent : colors.textSecondary}
               />
             </Pressable>
           </View>
@@ -4249,7 +4330,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           testID={E2E_TEST_IDS.chatSend}
           style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
           onPress={draft.trim() || pendingCard ? handleSend : handleAttachmentToggle}
-          disabled={sending || isPreviewMode || isVoiceRecording || selfSilenced}
+          disabled={sending || isPreviewMode || isVoiceRecording || composerLocked}
           accessibilityRole="button"
           accessibilityLabel={
             draft.trim() || pendingCard
@@ -4322,7 +4403,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
                         size={26}
                         color={
                           item.id === 'voice-call' && callStarting
-                            ? colors.primary
+                            ? colors.iconAccent
                             : colors.text
                         }
                       />

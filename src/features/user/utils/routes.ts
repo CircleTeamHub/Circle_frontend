@@ -8,7 +8,7 @@ type UserProfileHref = {
     | '/(tabs)/contacts/user/[id]'
     | '/(tabs)/profile/user/[id]'
     | '/(tabs)/discover/user/[id]';
-  params: { id: string; name?: string };
+  params: { id: string; name?: string; viaConversationID?: string };
 };
 
 type ChatDetailHref = {
@@ -31,8 +31,18 @@ export function getUserProfileHref(
   scope: UserProfileScope,
   id: string,
   name?: string,
+  opts?: {
+    /** 从哪个群点进来的:资料页据此按该群的「成员可添加好友」策略决定要不要放加好友入口。 */
+    viaConversationID?: string;
+  },
 ): UserProfileHref {
-  const params = name ? { id, name } : { id };
+  const params = {
+    id,
+    ...(name ? { name } : {}),
+    ...(opts?.viaConversationID
+      ? { viaConversationID: opts.viaConversationID }
+      : {}),
+  };
 
   switch (scope) {
     case 'contacts':
@@ -54,12 +64,17 @@ export function getSendFriendRequestHref(
   opts?: {
     /** 扫名片码进来的加好友:透传给申请页,提交时带给服务端换 addMeByQrCode 放行。 */
     qrToken?: string;
+    /** 从群成员资料发起的加好友:提交时带给服务端按该群策略把关。 */
+    viaConversationID?: string;
   },
 ): Href {
   const params = {
     id,
     ...(name ? { name } : {}),
     ...(opts?.qrToken ? { qrToken: opts.qrToken } : {}),
+    ...(opts?.viaConversationID
+      ? { viaConversationID: opts.viaConversationID }
+      : {}),
   };
 
   switch (scope) {
@@ -307,13 +322,17 @@ export function getChatBackgroundHref(
 export function getEditGroupNoticeHref(
   scope: UserProfileScope,
   params: {
+    /** 圈子 id;独立群聊传空串并给 conversationID。 */
     groupID: string;
+    /** 独立群聊的会话 id(公告写在会话上)。 */
+    conversationID?: string;
     groupTitle?: string;
     notice?: string;
   },
 ): Href {
   const routeParams = {
     groupID: params.groupID,
+    ...(params.conversationID ? { conversationID: params.conversationID } : {}),
     ...(params.groupTitle ? { groupTitle: params.groupTitle } : {}),
     ...(params.notice ? { notice: params.notice } : {}),
   };
@@ -408,12 +427,16 @@ export function getGroupManageHref(
 export function getGroupMemberSearchHref(
   scope: UserProfileScope,
   params: {
+    /** 圈子 id;独立群聊传空串并给 conversationID。 */
     groupID: string;
+    /** 独立群聊的会话 id(成员目录直接按会话取)。 */
+    conversationID?: string;
     groupTitle?: string;
   },
 ): Href {
   const routeParams = {
     groupID: params.groupID,
+    ...(params.conversationID ? { conversationID: params.conversationID } : {}),
     ...(params.groupTitle ? { groupTitle: params.groupTitle } : {}),
   };
 

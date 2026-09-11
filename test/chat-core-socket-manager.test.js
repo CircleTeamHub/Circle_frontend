@@ -322,6 +322,67 @@ test('viewer self-destruct uses the cached policy offline and refreshes it after
   assert.equal(mmkvStore.get('chat.viewerSelfDestructSec.u1'), String(2 * 24 * 60 * 60));
 });
 
+test('viewer self-destruct migrates the legacy day cache before an offline start', async () => {
+  const { manager, store, mmkvStore } = loadManager(
+    {},
+    { privacyFetch: () => Promise.reject(new Error('offline')) },
+  );
+  mmkvStore.set('chat.viewerSelfDestructDays.u1', '7');
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.equal(store.viewerSelfDestructSec, 7 * 24 * 60 * 60);
+  assert.equal(mmkvStore.get('chat.viewerSelfDestructSec.u1'), String(7 * 24 * 60 * 60));
+  // 一次性迁移要真的只跑一次：旧键必须删掉，否则每次离线启动都再查一遍。
+  assert.equal(mmkvStore.has('chat.viewerSelfDestructDays.u1'), false);
+});
+
+test('legacy migration retires the old key even when the value is unusable', async () => {
+  const { manager, store, mmkvStore } = loadManager(
+    {},
+    { privacyFetch: () => Promise.reject(new Error('offline')) },
+  );
+  // 旧值不在 {0,1,2,7,30} 白名单里（脏写 / 手改）——换算不出来也要收口，
+  // 否则新键一直不写、旧键一直留着，每次冷启动都走同一条死路。
+  mmkvStore.set('chat.viewerSelfDestructDays.u1', '13');
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.equal(store.viewerSelfDestructSec, 0);
+  assert.equal(mmkvStore.get('chat.viewerSelfDestructSec.u1'), '0');
+  assert.equal(mmkvStore.has('chat.viewerSelfDestructDays.u1'), false);
+});
+
+test('fresh install has no legacy key and stays at the 0 default', async () => {
+  const { manager, store, mmkvStore } = loadManager(
+    {},
+    { privacyFetch: () => Promise.reject(new Error('offline')) },
+  );
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.equal(store.viewerSelfDestructSec, 0);
+  // 新装机没有旧键可查，迁移分支整条不该被走到。
+  assert.equal(mmkvStore.has('chat.viewerSelfDestructDays.u1'), false);
+});
+
+test('the new key wins outright; a stale legacy key is never consulted', async () => {
+  const { manager, store, mmkvStore } = loadManager(
+    {},
+    { privacyFetch: () => Promise.reject(new Error('offline')) },
+  );
+  mmkvStore.set('chat.viewerSelfDestructSec.u1', String(2 * 24 * 60 * 60));
+  mmkvStore.set('chat.viewerSelfDestructDays.u1', '30');
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.equal(store.viewerSelfDestructSec, 2 * 24 * 60 * 60);
+});
+
 test('cold hydration waits for the authoritative self-destruct policy', async () => {
   let resolvePolicy;
   const policy = new Promise((resolve) => {

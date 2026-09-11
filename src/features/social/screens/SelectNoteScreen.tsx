@@ -179,7 +179,7 @@ export default function SelectNoteScreen() {
             {t('plaza.notePicker.none')}
           </Text>
           {!selectedNote ? (
-            <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+            <Ionicons name="checkmark-circle" size={22} color={colors.iconAccent} />
           ) : null}
         </Pressable>
         <Divider />

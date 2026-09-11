@@ -25,7 +25,7 @@ const NOTE_PICKER_KEYS = [
 const BACKGROUND_KEYS = [
   "title",
   "customImage",
-  "statusUploading",
+  "statusApplying",
   "statusSet",
   "statusChoose",
   "paramMissing",

@@ -64,11 +64,11 @@ test('chat detail screen supports preview mode without an IM conversation', () =
   assert.match(source, /const isPreviewMode = !conversationID/);
   // 预览态文案已改为「连接尚未完成」（IM 未就绪的准确提示，替代旧的「仅预览」框架）
   assert.match(source, /连接尚未完成/);
-  // 预览态与本人被禁言都锁输入区;禁言由 selfSilenced(会话 dto + 到期兜底)驱动。
-  assert.match(source, /editable=\{!isPreviewMode && !selfSilenced\}/);
+  // 预览态、本人被禁言、全员禁言(非管理员)都锁输入区,统一走 composerLocked。
+  assert.match(source, /editable=\{!isPreviewMode && !composerLocked\}/);
   assert.match(
     source,
-    /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| selfSilenced\}/,
+    /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| composerLocked\}/,
   );
 });
 
@@ -691,11 +691,88 @@ test('阅后即焚会话里别人发的消息也不提供收藏入口', () => {
   assert.ok(collectAt > 0);
   const before = detail.slice(0, collectAt);
   const gateAt = before.lastIndexOf(
-    'if (!isEphemeralPeerMessage(message, conversationBurnEnabled)) {',
+    '!isEphemeralPeerMessage(message, conversationBurnEnabled)',
   );
   assert.ok(gateAt > 0, '收藏入口必须被焚毁闸包住');
   // 闸和入口之间不能再多一个 actions.push —— 那一个会漏在闸外面。
   assert.equal(before.slice(gateAt).match(/actions\.push\(/g).length, 1);
+});
+
+// 还没拿到 ack 的气泡手上只有 local:<d>，服务端那条消息还不存在：收藏接口会按
+// COLLECTION_INVALID_MESSAGE_SOURCE 拒掉它，而 catch 提示的是「请重试」——
+// 重试到 ack 回来之前都不会成功。与转发对未确认媒体的处理同一条理由：不给入口。
+test('乐观消息（local: 临时 id）不提供收藏入口，处理函数也兜一道', () => {
+  const detail = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const collectAt = detail.indexOf("key: 'collect'");
+  const before = detail.slice(0, collectAt);
+  const gateAt = before.lastIndexOf(
+    '!isEphemeralPeerMessage(message, conversationBurnEnabled)',
+  );
+  // 同一个 if 里还要有本地 id 的判定，不能只靠处理函数里的兜底。
+  assert.match(
+    before.slice(gateAt),
+    /!isLocalMessageId\(message\.id\)/,
+    '收藏入口必须同时排除乐观消息',
+  );
+
+  // 长按菜单与发送 ack 之间存在竞态，处理函数里也要挡一次。
+  const handlerAt = detail.indexOf('const handleCollectMessage = useCallback(');
+  assert.ok(handlerAt > 0);
+  const handlerHead = detail.slice(handlerAt, handlerAt + 600);
+  assert.match(handlerHead, /if \(isLocalMessageId\(message\.id\)\) return;/);
+
+  // 判定只认这一处定义，调用点不再各写一次字符串字面量。
+  assert.match(
+    detail,
+    /import \{ isLocalMessageId \} from '@\/chat-core\/local-message-id';/,
+  );
+  assert.doesNotMatch(detail, /startsWith\('local:'\)/);
+});
+
+// 判定和生成点分在两个文件里（client.ts 跑在一个严格的 require 白名单沙箱里，
+// 不能再多一个 import）。前缀一旦在任一边被改掉，守卫就静默失效 —— 这条断言
+// 把两边钉在一起。
+test('乐观 id 的前缀在生成点与判定处是同一个', () => {
+  const helper = fs.readFileSync(
+    path.join(process.cwd(), 'src/chat-core/local-message-id.ts'),
+    'utf8',
+  );
+  const declared = helper.match(
+    /export const LOCAL_MESSAGE_ID_PREFIX = '([^']+)';/,
+  );
+  assert.ok(declared, 'LOCAL_MESSAGE_ID_PREFIX 必须是一个字符串字面量常量');
+
+  const client = fs.readFileSync(
+    path.join(process.cwd(), 'src/chat-core/client.ts'),
+    'utf8',
+  );
+  const mints = client.match(/id: `([^`$]*)\$\{d\}`/g) ?? [];
+  assert.ok(mints.length > 0, 'client.ts 必须至少有一处乐观 id 生成点');
+  for (const mint of mints) {
+    assert.equal(
+      mint,
+      `id: \`${declared[1]}\${d}\``,
+      '乐观 id 的生成点必须与 LOCAL_MESSAGE_ID_PREFIX 一致',
+    );
+  }
+});
+
+// 服务端新增了 COLLECTION_INVALID_MESSAGE_SOURCE；收藏失败必须把它展示出来，
+// 否则这条错误码在端上是死的，用户只会看到一句固定的「请重试」。
+test('收藏失败走 getApiErrorMessage，服务端错误码才有出口', () => {
+  const detail = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+  const at = detail.indexOf("reportHandledFailure('chatDetail', 'collectMessage'");
+  assert.ok(at > 0);
+  assert.match(
+    detail.slice(at, at + 400),
+    /getApiErrorMessage\(error, t\('chat\.messageActions\.collectFailedHint'\)\)/,
+  );
 });
 
 // 这道闸只认会话上的焚毁设置。本人的全局自动销毁天数是我对自己视图的设置，
@@ -790,8 +867,10 @@ test('chat detail blocks voice mode and recording while the viewer is silenced',
     'utf8',
   );
 
-  assert.match(source, /if \(isPreviewMode \|\| selfSilenced\) return;/);
-  assert.match(source, /if \(!sourceID \|\| isPreviewMode \|\| selfSilenced \|\| voiceActionBusy\) return;/);
+  assert.match(source, /if \(isPreviewMode \|\| composerLocked\) return;/);
+  assert.match(source, /if \(!sourceID \|\| isPreviewMode \|\| composerLocked \|\| voiceActionBusy\) return;/);
+  // composerLocked = 本人被禁言 或 全员禁言且自己不是群主/管理员。
+  assert.match(source, /const composerLocked = selfSilenced \|\| groupMuteAllActive;/);
   assert.match(source, /const \[silenceClock, setSilenceClock\] = useState\(\(\) => Date\.now\(\)\);/);
   assert.match(source, /const timer = setTimeout\(\(\) => setSilenceClock\(Date\.now\(\)\), remaining \+ 1\);/);
 });

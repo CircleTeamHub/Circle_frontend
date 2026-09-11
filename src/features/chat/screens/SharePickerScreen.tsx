@@ -28,7 +28,16 @@ import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { fetchNotes } from '@/services/api/notes';
 import i18n from '@/i18n';
-import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
+import {
+  iconForeground,
+  Radius,
+  Spacing,
+  Typography,
+  useTheme,
+  withAlpha,
+  type ResolvedMode,
+  type ThemeColors,
+} from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -85,6 +94,26 @@ const NOTE_OPTION_CHIPS = [
 /** 「全部」是四项的派生开关，用品牌紫与单项色相区隔。 */
 const NOTE_OPTION_ALL_ACCENT = 'brandPurple' as const;
 
+type NoteOptionAccent =
+  | (typeof NOTE_OPTION_CHIPS)[number]['accent']
+  | typeof NOTE_OPTION_ALL_ACCENT;
+
+/**
+ * 分区色在当前主题下的**唯一**可读色值：底/边/图标/文字/对号全用它。
+ *
+ * 主色不走通用提亮公式 —— 色板里已经钉了它的暗色版本 iconAccent（与
+ * tabBarActive 同值）；再算一次会得到 #A1A3F7，同一屏里就出现两种紫。
+ */
+function noteOptionTone(
+  accent: NoteOptionAccent,
+  colors: ThemeColors,
+  mode: ResolvedMode,
+): string {
+  return accent === 'primary'
+    ? colors.iconAccent
+    : iconForeground(colors[accent], mode);
+}
+
 const QUICK_REPLY_DEFAULTS: readonly string[] = [
   '在的，你说',
   '好的，没问题',
@@ -103,8 +132,8 @@ function getQuickReplyPhrases(): readonly string[] {
 interface NoteOptionChipProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  /** 该项的品牌色（取自色板 token）：选中态的底/边/字/对号都用它 */
-  accent: string;
+  /** 该项已按当前主题解析好的分区色：选中态的底/边/字/图标/对号共用它 */
+  tone: string;
   checked: boolean;
   onToggle: () => void;
 }
@@ -113,7 +142,7 @@ interface NoteOptionChipProps {
 function NoteOptionChip({
   icon,
   label,
-  accent,
+  tone,
   checked,
   onToggle,
 }: NoteOptionChipProps) {
@@ -124,8 +153,8 @@ function NoteOptionChip({
       style={[
         s.optionChip,
         {
-          borderColor: checked ? accent : colors.surfaceBorder,
-          backgroundColor: checked ? withAlpha(accent, 0.12) : colors.background,
+          borderColor: checked ? tone : colors.surfaceBorder,
+          backgroundColor: checked ? withAlpha(tone, 0.12) : colors.background,
         },
       ]}
       onPress={onToggle}
@@ -135,13 +164,13 @@ function NoteOptionChip({
       <Ionicons
         name={icon}
         size={20}
-        color={checked ? accent : colors.textSecondary}
+        color={checked ? tone : colors.textSecondary}
       />
       <Text
         style={[
           s.optionChipLabel,
           checked ? s.optionChipLabelOn : null,
-          { color: checked ? accent : colors.textSecondary },
+          { color: checked ? tone : colors.textSecondary },
         ]}
         numberOfLines={1}
       >
@@ -152,7 +181,7 @@ function NoteOptionChip({
       <Ionicons
         name={checked ? 'checkmark-circle' : 'ellipse-outline'}
         size={15}
-        color={checked ? accent : colors.surfaceBorder}
+        color={checked ? tone : colors.surfaceBorder}
       />
     </Pressable>
   );
@@ -161,7 +190,7 @@ function NoteOptionChip({
 export default function SharePickerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { type } = useLocalSearchParams<{ type?: ShareType }>();
   const shareType: ShareType = (type as ShareType) ?? 'note';
   const setPending = useSharePickerStore((s) => s.setPending);
@@ -537,7 +566,7 @@ export default function SharePickerScreen() {
                 key={chip.key}
                 icon={chip.icon}
                 label={i18n.t(chip.labelKey, { defaultValue: chip.defaultLabel })}
-                accent={colors[chip.accent]}
+                tone={noteOptionTone(chip.accent, colors, resolvedMode)}
                 checked={sendOptions[chip.key]}
                 onToggle={() =>
                   setSendOptions((prev) => ({
@@ -550,7 +579,7 @@ export default function SharePickerScreen() {
             <NoteOptionChip
               icon="checkmark-done-outline"
               label={i18n.t('share.noteBatch.optionAll', { defaultValue: '全部' })}
-              accent={colors[NOTE_OPTION_ALL_ACCENT]}
+              tone={noteOptionTone(NOTE_OPTION_ALL_ACCENT, colors, resolvedMode)}
               checked={isAllNoteSendOptions(sendOptions)}
               onToggle={() =>
                 setSendOptions((prev) =>

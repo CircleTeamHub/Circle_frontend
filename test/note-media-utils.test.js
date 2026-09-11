@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { loadTsModule: loadAliasedTsModule } = require('./helpers/load-ts-module');
 
 function loadTsModule(relativePath) {
   const filePath = path.join(process.cwd(), relativePath);
@@ -19,6 +20,17 @@ function loadTsModule(relativePath) {
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });
   return context.module.exports;
+}
+
+// note-text-stats.ts 里有一条 `@/...` 别名 import，node --test 解析不了，走共享
+// helper 的 requireShim 把它指回同一棵源码树。
+function loadNoteTextStatsModule() {
+  return loadAliasedTsModule('src/features/notes/utils/note-text-stats.ts', {
+    requireShim: (specifier) =>
+      specifier === '@/features/notes/utils/note-blocks'
+        ? loadTsModule('src/features/notes/utils/note-blocks.ts')
+        : require(specifier),
+  });
 }
 
 test('existing note media is indexed by URL so edits preserve object metadata', () => {
@@ -412,4 +424,80 @@ test('normalization merges transitive key and renewed-URL aliases in either orde
       },
     ]);
   }
+});
+
+test('plain text retains pasted links, nested lists, code and table cell text', () => {
+  const { extractPlainText } = loadTsModule('src/features/notes/utils/note-blocks.ts');
+  const text = extractPlainText([
+    {
+      type: 'bulletListItem',
+      content: [{ type: 'text', text: '主项' }, { type: 'link', content: [{ text: '链接文字' }] }],
+      children: [{ type: 'checkListItem', content: [{ text: '子项' }], children: [null] }],
+    },
+    { type: 'codeBlock', content: [{ text: 'const answer = 42;' }] },
+    { type: 'table', content: { type: 'tableContent', rows: [
+      { cells: [[{ text: '旧格式单元格' }], { type: 'tableCell', content: [{ text: '新格式单元格' }] }] },
+    ] } },
+  ]);
+  assert.equal(text, '主项链接文字\n子项\nconst answer = 42;\n旧格式单元格\t新格式单元格');
+});
+
+// 字数统计量的就是这段拼接结果（块间补一个换行），所以它跟后端 @MaxLength 校验的
+// 是同一个字符串；按 code point 数，与 class-validator 的 Length 一致。
+test('note text stats count the joined body the backend validates, by code point', () => {
+  const { getNoteTextStats, getNoteTextLimitKind, MAX_NOTE_TEXT_LENGTH, MAX_NOTE_TEXT_BLOCKS } =
+    loadNoteTextStatsModule();
+
+  const twoBlocks = [
+    { type: 'paragraph', content: [{ text: 'ab' }] },
+    { type: 'paragraph', content: [{ text: 'cd' }] },
+  ];
+  // 4 个字 + 1 个块间换行 = 5，不是 4：文案说的是「正文长度」而不是「已输入字符」。
+  // vm 里造出来的对象换了 realm，deepEqual 会卡在原型比对上，所以展开到本地对象再比。
+  assert.deepEqual({ ...getNoteTextStats(twoBlocks) }, { characters: 5, blocks: 2 });
+  // 代理对（emoji）按一个 code point 算，和后端一样。
+  assert.equal(
+    getNoteTextStats([{ type: 'paragraph', content: [{ text: '👩‍🚀' }] }]).characters,
+    3,
+  );
+
+  assert.equal(getNoteTextLimitKind({ characters: MAX_NOTE_TEXT_LENGTH, blocks: 1 }), null);
+  assert.equal(
+    getNoteTextLimitKind({ characters: MAX_NOTE_TEXT_LENGTH + 1, blocks: 1 }),
+    'textTooLong',
+  );
+  assert.equal(getNoteTextLimitKind({ characters: 1, blocks: MAX_NOTE_TEXT_BLOCKS }), null);
+  assert.equal(
+    getNoteTextLimitKind({ characters: 1, blocks: MAX_NOTE_TEXT_BLOCKS + 1 }),
+    'tooManyParagraphs',
+  );
+});
+
+// useSyncExternalStore 要求数据没变时 getSnapshot 返回同一个引用，否则每次读取都被
+// 当成一次变更 —— 那样「不再整屏重渲染」这件事就白做了。
+test('the note text stats store only notifies when the snapshot really changed', () => {
+  const { createNoteTextStatsStore } = loadNoteTextStatsModule();
+  const store = createNoteTextStatsStore();
+  let notifications = 0;
+  const unsubscribe = store.subscribe(() => {
+    notifications += 1;
+  });
+
+  const first = store.getSnapshot();
+  store.setBlocks([{ type: 'paragraph', content: [{ text: '一二' }] }]);
+  assert.deepEqual({ ...store.getSnapshot() }, { characters: 2, blocks: 1 });
+  assert.equal(notifications, 1);
+
+  const second = store.getSnapshot();
+  store.setBlocks([{ type: 'paragraph', content: [{ text: '三四' }] }]);
+  assert.equal(notifications, 1, '字数和段数都没变就不该通知');
+  assert.equal(store.getSnapshot(), second, '快照没变必须返回同一个引用');
+
+  store.reset();
+  assert.equal(notifications, 2);
+  assert.equal(store.getSnapshot(), first, 'reset 要回到最初那个空快照');
+
+  unsubscribe();
+  store.setBlocks([{ type: 'paragraph', content: [{ text: '退订之后' }] }]);
+  assert.equal(notifications, 2);
 });

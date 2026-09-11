@@ -12,7 +12,7 @@ const LOCALES = ['zh', 'en', 'ja', 'ko', 'es'];
 test('profile member card opens the decorations hub from both wardrobe entry points', () => {
   const source = read('src/features/profile/screens/ProfileScreen.tsx');
   const memberCard =
-    source.match(/\{\/\* Member card \*\/\}[\s\S]*?<Divider \/>/)?.[0] ?? '';
+    source.match(/\{\/\* Member card \*\/\}[\s\S]*?(?=\n  return \()/)?.[0] ?? '';
 
   assert.match(
     source,

@@ -31,7 +31,7 @@ function tintFor(type: TopNoticeType, colors: ThemeColors): string {
     case 'warning':
       return colors.warning;
     default:
-      return colors.primary;
+      return colors.iconAccent;
   }
 }
 

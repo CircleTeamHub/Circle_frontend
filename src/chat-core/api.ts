@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore';
 import type {
   ChatConversationDto,
   ChatGroupEventsPageDto,
+  ChatGroupPoliciesDto,
   ChatHistoryPageDto,
   ChatMemberDto,
   ChatMemberSilenceDto,
@@ -113,7 +114,7 @@ export function createCircleChatConversation(
   });
 }
 
-/** 创建独立群聊(好友多选;不挂圈子)。 */
+/** 创建独立群聊(好友多选;不挂圈子)。群名必填,服务端也会再拒一次空名。 */
 export function createGroupChatConversation(input: {
   name: string;
   memberIds: string[];
@@ -229,6 +230,86 @@ export function unsilenceChatMember(
   return apiClient<ChatMemberSilenceDto>(
     `/chat/conversations/${conversationId}/members/${userId}/silence`,
     { method: 'DELETE' },
+  );
+}
+
+/**
+ * 群备注:我给这个群起的名字,**只有我看得见**(对应单聊的好友备注)。
+ * 任一在座成员可改自己的;空串清除,回落群名。与群昵称方向相反,互不影响。
+ */
+export function setMyGroupChatRemark(
+  conversationId: string,
+  remark: string,
+): Promise<{ remark: string | null }> {
+  return apiClient<{ remark: string | null }>(
+    `/chat/conversations/${conversationId}/my-remark`,
+    { method: 'PATCH', body: { remark } },
+  );
+}
+
+/** 群昵称:改自己在本群的显示名,全群可见。任一在座成员可改;空串清除回落账号昵称。 */
+export function setMyGroupChatAlias(
+  conversationId: string,
+  alias: string,
+): Promise<{ alias: string | null }> {
+  return apiClient<{ alias: string | null }>(
+    `/chat/conversations/${conversationId}/my-alias`,
+    { method: 'PATCH', body: { alias } },
+  );
+}
+
+/** 全员禁言开关(两种群;群主/管理员;管理员与群主豁免)。 */
+export function setGroupChatMuteAll(
+  conversationId: string,
+  enabled: boolean,
+): Promise<{ muteAll: boolean }> {
+  return apiClient<{ muteAll: boolean }>(
+    `/chat/conversations/${conversationId}/mute-all`,
+    { method: 'PATCH', body: { enabled } },
+  );
+}
+
+/** 独立群聊:群主转让(新群主的管理员标记与禁言清零,原群主降为普通成员)。 */
+export function transferGroupChatOwner(
+  conversationId: string,
+  userId: string,
+): Promise<void> {
+  return apiClient<void>(`/chat/conversations/${conversationId}/owner`, {
+    method: 'POST',
+    body: { userId },
+  });
+}
+
+/** 独立群聊:群公告(群主/管理员;空串清空)。 */
+export function setGroupChatNotice(
+  conversationId: string,
+  notice: string,
+): Promise<{ notice: string | null }> {
+  return apiClient<{ notice: string | null }>(
+    `/chat/conversations/${conversationId}/notice`,
+    { method: 'PATCH', body: { notice } },
+  );
+}
+
+/** 独立群聊:群头像(群主/管理员;URL 必须来自本应用存储)。 */
+export function setGroupChatAvatar(
+  conversationId: string,
+  avatarUrl: string,
+): Promise<{ avatarUrl: string }> {
+  return apiClient<{ avatarUrl: string }>(
+    `/chat/conversations/${conversationId}/avatar`,
+    { method: 'PATCH', body: { avatarUrl } },
+  );
+}
+
+/** 群策略开关(两种群;群主/管理员)。只传要改的键。 */
+export function updateGroupChatPolicies(
+  conversationId: string,
+  patch: Partial<ChatGroupPoliciesDto>,
+): Promise<ChatGroupPoliciesDto> {
+  return apiClient<ChatGroupPoliciesDto>(
+    `/chat/conversations/${conversationId}/policies`,
+    { method: 'PATCH', body: patch },
   );
 }
 

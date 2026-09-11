@@ -307,7 +307,7 @@ export default function FriendTagsScreen() {
               defaultValue: '添加标签',
             })}
           >
-            <Ionicons name="add" size={26} color={colors.primary} />
+            <Ionicons name="add" size={26} color={colors.iconAccent} />
           </Pressable>
         }
       />

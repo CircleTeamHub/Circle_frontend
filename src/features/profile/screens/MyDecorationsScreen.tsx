@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { iconForeground, Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
   container: {
@@ -56,7 +56,7 @@ export default function MyDecorationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const styles = useMemo(
     () => ({
       container: { backgroundColor: colors.background },
@@ -119,7 +119,7 @@ export default function MyDecorationsScreen() {
             ]}
           >
             <View style={[s.icon, { backgroundColor: `${row.color}1A` }]}>
-              <Ionicons name={row.icon} size={24} color={row.color} />
+              <Ionicons name={row.icon} size={24} color={iconForeground(row.color, resolvedMode)} />
             </View>
             <View style={s.text}>
               <Text style={[s.title, styles.title]}>{row.title}</Text>

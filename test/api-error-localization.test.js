@@ -67,9 +67,14 @@ function loadUserFacingError() {
 
 const USER_FACING_ERROR = loadUserFacingError();
 
+// CIRCLE_BE_PATH 覆盖是给 git worktree 用的:worktree 旁边那个 circle_be 往往是
+// 别的分支,对着它比错误码表只会给出假红。
 const BACKEND_CODES_PATH =
   process.env.BACKEND_CODES_PATH ||
-  path.join(process.cwd(), '..', 'circle_be', 'src/common/app-error-codes.ts');
+  path.join(
+    process.env.CIRCLE_BE_PATH ?? path.join(process.cwd(), '..', 'circle_be'),
+    'src/common/app-error-codes.ts',
+  );
 const REQUIRE_BACKEND_ERROR_CODES =
   process.env.REQUIRE_BACKEND_ERROR_CODES === '1';
 
@@ -209,6 +214,9 @@ test('client.ts threads errorCode onto ApiError', () => {
       };
     }
     if (spec === '@/i18n') return I18N;
+    // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块。
+    if (spec === './api-error')
+      return loadTsModule('src/services/api/api-error.ts');
     if (spec === '@/utils/redact') return loadTsModule('src/utils/redact.ts');
     return require(spec);
   };
@@ -280,6 +288,9 @@ test('ApiError accepts an options object for optional fields', () => {
       };
     }
     if (spec === '@/i18n') return I18N;
+    // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块。
+    if (spec === './api-error')
+      return loadTsModule('src/services/api/api-error.ts');
     if (spec === '@/utils/redact') return loadTsModule('src/utils/redact.ts');
     return require(spec);
   };

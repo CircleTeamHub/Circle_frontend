@@ -241,10 +241,17 @@ test('后端把 qr-card 列进客户端可发类型，并给了预览标签', ()
     path.join(bePath, 'src/chat/chat.constants.ts'),
     'utf8',
   );
-  const service = fs.readFileSync(
-    path.join(bePath, 'src/chat/chat.service.ts'),
-    'utf8',
-  );
+  // 预览标签表被从 chat.service.ts 抽到了 chat-message-preview.ts(收藏那边要复用),
+  // 契约是「后端给 qr-card 配了预览标签」,不是「它躺在哪个文件里」—— 两处都认,
+  // 这样对着还没搬家的后端分支也成立。
+  const service = [
+    'src/chat/chat.service.ts',
+    'src/chat/chat-message-preview.ts',
+  ]
+    .map((rel) => path.join(bePath, rel))
+    .filter((abs) => fs.existsSync(abs))
+    .map((abs) => fs.readFileSync(abs, 'utf8'))
+    .join('\n');
 
   // 不在 CLIENT_MESSAGE_TYPES 里 = 发送直接 400,整条功能是死的。
   // 按数组字面量取,不用跨文件正则 —— 文档注释里也会出现这两个名字。
