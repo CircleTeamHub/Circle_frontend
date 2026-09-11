@@ -302,6 +302,7 @@ test("login posts the trimmed email-or-user-id identifier and password", async (
   assert.equal(calls[0].options.body.password, "pw");
 });
 
+
 test("login throws when accessToken or refreshToken missing (response shape drift guard)", async () => {
   // missing accessToken
   const { login: loginA } = loadAuthApi(async () => ({
@@ -334,27 +335,7 @@ test("login throws when accessToken or refreshToken missing (response shape drif
   );
 });
 
-test("requestEmailCode posts a normalized registration email", async () => {
-  const calls = [];
-  const { requestEmailCode } = loadAuthApi(async (endpoint, options) => {
-    calls.push({ endpoint, options });
-  });
-
-  await requestEmailCode({ email: "  NEW@Example.com ", purpose: "register" });
-
-  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
-    {
-      endpoint: "/auth/email/request-code",
-      options: {
-        method: "POST",
-        auth: false,
-        body: { email: "new@example.com", purpose: "register" },
-      },
-    },
-  ]);
-});
-
-test("register posts email/code/password/confirmation/nickname", async () => {
+test("register posts email/password/confirmation/nickname", async () => {
   const calls = [];
   const apiClientMock = async (endpoint, options) => {
     calls.push(options.body);
@@ -364,14 +345,13 @@ test("register posts email/code/password/confirmation/nickname", async () => {
 
   await register({
     email: "  NEW@Example.com ",
-    code: " 123456 ",
     password: "pw",
     confirmPassword: "pw",
     nickname: "  Hi  ",
   });
 
   assert.equal(calls[0].email, "new@example.com");
-  assert.equal(calls[0].code, "123456");
+  assert.equal(Object.hasOwn(calls[0], "code"), false);
   assert.equal(calls[0].password, "pw");
   assert.equal(calls[0].confirmPassword, "pw");
   assert.equal(calls[0].nickname, "Hi");
@@ -387,7 +367,6 @@ test("register normalizes and posts a populated invite code", async () => {
 
   await register({
     email: "new@example.com",
-    code: "123456",
     password: "password1",
     confirmPassword: "password1",
     nickname: "New User",
@@ -406,7 +385,6 @@ test("register omits a whitespace-only invite code", async () => {
 
   await register({
     email: "new@example.com",
-    code: "123456",
     password: "password1",
     confirmPassword: "password1",
     nickname: "New User",

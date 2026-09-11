@@ -12,14 +12,15 @@
  * 这里用 inFlightRef + sending 双重把关，确保同一时刻只有一次发码请求在途。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { requestEmailCode, requestPasswordReset } from '@/services/api/auth';
+import { requestPasswordReset } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useCountdown } from '@/hooks/use-countdown';
 import { normalizeEmail } from '@/utils/email';
 import { validateEmail } from '@/features/auth/validation';
 import i18n from '@/i18n';
 
-type Purpose = 'register' | 'reset-password';
+// 注册不再发送邮箱验证码；此 hook 只服务忘记密码流程。
+type Purpose = 'reset-password';
 
 const RESEND_SECONDS = 60;
 
@@ -69,11 +70,7 @@ export function useSendEmailCode(purpose: Purpose): SendEmailCode {
       inFlightRef.current = true;
       setSending(true);
       try {
-        if (purpose === 'reset-password') {
-          await requestPasswordReset(normalized);
-        } else {
-          await requestEmailCode({ email: normalized, purpose });
-        }
+        await requestPasswordReset(normalized);
         if (mountedRef.current) countdown.start(RESEND_SECONDS);
       } catch (e) {
         if (mountedRef.current) {
@@ -84,7 +81,7 @@ export function useSendEmailCode(purpose: Purpose): SendEmailCode {
         if (mountedRef.current) setSending(false);
       }
     },
-    [purpose, countdown],
+    [countdown],
   );
 
   return {

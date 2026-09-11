@@ -88,20 +88,6 @@ function getDeviceName() {
   return Device.modelName ?? `circle-im-${Device.osName ?? "device"}`;
 }
 
-export async function requestEmailCode(payload: {
-  email: string;
-  purpose: "register";
-}) {
-  return apiClient<void>("/auth/email/request-code", {
-    method: "POST",
-    auth: false,
-    body: {
-      email: payload.email.trim().toLowerCase(),
-      purpose: payload.purpose,
-    },
-  });
-}
-
 export async function login(payload: { identifier: string; password: string }) {
   const identifier = payload.identifier.trim();
   const raw = await apiClient<AuthTokens>("/auth/login", {
@@ -121,7 +107,6 @@ export async function login(payload: { identifier: string; password: string }) {
 
 export async function register(payload: {
   email: string;
-  code: string;
   password: string;
   confirmPassword: string;
   nickname: string;
@@ -137,7 +122,6 @@ export async function register(payload: {
     },
     body: {
       email,
-      code: payload.code.trim(),
       password: payload.password,
       confirmPassword: payload.confirmPassword,
       nickname: payload.nickname.trim(),
@@ -147,6 +131,7 @@ export async function register(payload: {
   });
   return ensureAuthTokens(raw);
 }
+
 
 export async function fetchCurrentUser() {
   const user = await apiClient<BackendAuthUser>("/auth/me");

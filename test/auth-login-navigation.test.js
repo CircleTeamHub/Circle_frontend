@@ -272,7 +272,6 @@ test('register forwards the optional invite code to the API request', async () =
 
   await useAuth().register(
     'bob@example.com',
-    '123456',
     'password123',
     'password123',
     'Bob',
@@ -282,7 +281,6 @@ test('register forwards the optional invite code to the API request', async () =
   assert.deepEqual(JSON.parse(JSON.stringify(requests)), [
     {
       email: 'bob@example.com',
-      code: '123456',
       password: 'password123',
       confirmPassword: 'password123',
       nickname: 'Bob',
