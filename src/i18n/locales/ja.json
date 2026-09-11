@@ -1763,7 +1763,7 @@
     "searchPlaceholder": "連絡先を検索...",
     "newFriends": "新しい友だち",
     "seats": "一時グループチャット",
-    "groups": "グループ",
+    "groups": "マイグループ",
     "circles": "サークル",
     "tags": "タグ",
     "accountId": "ID：{{id}}",
@@ -1812,7 +1812,11 @@
         "ACCEPTED": "承認済み",
         "REJECTED": "拒否済み",
         "WITHDRAWN": "取り消し済み"
-      }
+      },
+      "tabFriends": "新しい友だち",
+      "tabGroups": "新しいグループ",
+      "searchPlaceholder": "名前、ID、グループ名で検索",
+      "noMatches": "一致する結果はありません"
     },
     "tagsScreen": {
       "title": "タグ",
@@ -1836,21 +1840,21 @@
       "summary": "このタグの友だちを五十音順に表示します。"
     },
     "groupsScreen": {
-      "title": "グループ",
-      "newGroups": "新しいグループ",
+      "title": "マイグループ",
       "myCreated": "作成したグループ",
       "myJoined": "参加中のグループ",
       "myManaged": "管理中のグループ",
-      "tabNewGroups": "新しいグループ",
       "tabMyJoined": "参加中",
       "tabMyCreated": "作成した",
       "tabMyManaged": "管理中",
       "searchPlaceholder": "グループを検索",
       "noMatches": "一致するグループはありません",
       "memberCount": "{{count}} 人",
-      "empty": "グループはありません",
+      "empty": "グループはまだありません",
       "loading": "グループを読み込み中",
-      "loadFailed": "グループの読み込みに失敗しました。しばらくしてからお試しください"
+      "loadFailed": "グループの読み込みに失敗しました。しばらくしてからお試しください",
+      "tabAll": "すべて",
+      "allGroups": "すべてのグループ"
     },
     "request": {
       "title": "友だち申請を送信",
@@ -1893,6 +1897,13 @@
       "sentMessage": "{{name}} さんに友だち申請を送信しました。",
       "sendFailedTitle": "送信に失敗しました",
       "sendFailed": "友だち申請の送信に失敗しました。もう一度お試しください"
+    },
+    "groupInbox": {
+      "loading": "グループを読み込み中...",
+      "loadFailed": "グループを読み込めませんでした。後ほどお試しください。",
+      "empty": "新しく参加したグループはまだありません",
+      "joinedAt": "{{time}} に参加",
+      "joined": "参加済み"
     }
   },
   "profileFields": {

@@ -1766,7 +1766,7 @@
     "searchPlaceholder": "Buscar contactos...",
     "newFriends": "Nuevos amigos",
     "seats": "Chats grupales temporales",
-    "groups": "Grupos",
+    "groups": "Mis grupos",
     "circles": "Círculos",
     "tags": "Etiquetas",
     "accountId": "ID: {{id}}",
@@ -1815,7 +1815,11 @@
         "ACCEPTED": "Aceptada",
         "REJECTED": "Rechazada",
         "WITHDRAWN": "Retirada"
-      }
+      },
+      "tabFriends": "Nuevos amigos",
+      "tabGroups": "Nuevos grupos",
+      "searchPlaceholder": "Buscar por nombre, ID o grupo",
+      "noMatches": "Sin resultados coincidentes"
     },
     "tagsScreen": {
       "title": "Etiquetas",
@@ -1839,21 +1843,21 @@
       "summary": "Amigos de esta etiqueta agrupados alfabéticamente."
     },
     "groupsScreen": {
-      "title": "Grupos",
-      "newGroups": "Grupos nuevos",
+      "title": "Mis grupos",
       "myCreated": "Grupos que creé",
       "myJoined": "Grupos a los que me uní",
       "myManaged": "Grupos que administro",
-      "tabNewGroups": "Nuevos",
       "tabMyJoined": "Unidos",
       "tabMyCreated": "Creados",
       "tabMyManaged": "Administrados",
       "searchPlaceholder": "Buscar grupos",
       "noMatches": "No hay grupos coincidentes",
       "memberCount": "{{count}} miembros",
-      "empty": "Sin grupos",
+      "empty": "Aún no hay grupos",
       "loading": "Cargando grupos",
-      "loadFailed": "No se pudieron cargar los grupos, inténtalo más tarde"
+      "loadFailed": "No se pudieron cargar los grupos, inténtalo más tarde",
+      "tabAll": "Todos",
+      "allGroups": "Todos los grupos"
     },
     "request": {
       "title": "Enviar solicitud de amistad",
@@ -1896,6 +1900,13 @@
       "sentMessage": "Se envió una solicitud de amistad a {{name}}.",
       "sendFailedTitle": "Error al enviar",
       "sendFailed": "No se pudo enviar la solicitud de amistad, inténtalo de nuevo"
+    },
+    "groupInbox": {
+      "loading": "Cargando grupos...",
+      "loadFailed": "No se pudieron cargar los grupos. Inténtalo más tarde.",
+      "empty": "Aún no te has unido a grupos nuevos",
+      "joinedAt": "Te uniste el {{time}}",
+      "joined": "Te uniste"
     }
   },
   "profileFields": {

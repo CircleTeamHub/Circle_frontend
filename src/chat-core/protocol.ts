@@ -517,6 +517,8 @@ export interface ChatConversationDto {
   avatarUrl?: string | null;
   /** 独立群聊成员上限;圈子群走圈子详情。 */
   memberLimit?: number | null;
+  /** 在座成员数(仅 GROUP);可选兼容还没带这个字段的后端。 */
+  memberCount?: number | null;
   /** 本人在该群的角色(仅 GROUP)。 */
   myRole?: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
   /** 群策略开关(仅 GROUP)。 */
@@ -524,6 +526,11 @@ export interface ChatConversationDto {
   /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
   burnDurationSec?: number | null;
   lastMessageAt: string | null;
+  /**
+   * 本人入群时刻（后端 ChatMember.joinedAt）。「新的群组」按它倒序；
+   * 可选是为了兼容还没带上这个字段的后端，缺失时回落 lastMessageAt 排序。
+   */
+  joinedAt?: string | null;
 }
 
 /**

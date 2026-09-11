@@ -841,7 +841,7 @@
     "searchPlaceholder": "Search contacts...",
     "newFriends": "New Friends",
     "seats": "Temporary Group Chats",
-    "groups": "Groups",
+    "groups": "My Groups",
     "circles": "Circles",
     "tags": "Tags",
     "accountId": "ID: {{id}}",
@@ -890,7 +890,11 @@
         "ACCEPTED": "Accepted",
         "REJECTED": "Rejected",
         "WITHDRAWN": "Withdrawn"
-      }
+      },
+      "tabFriends": "New Friends",
+      "tabGroups": "New Groups",
+      "searchPlaceholder": "Search by name, ID or group",
+      "noMatches": "No matching results"
     },
     "tagsScreen": {
       "title": "Tags",
@@ -914,21 +918,21 @@
       "summary": "Friends in this tag grouped alphabetically."
     },
     "groupsScreen": {
-      "title": "Groups",
-      "newGroups": "New Groups",
+      "title": "My Groups",
       "myCreated": "Groups I Created",
       "myJoined": "Groups I Joined",
       "myManaged": "Groups I Manage",
-      "tabNewGroups": "New Groups",
       "tabMyJoined": "Joined",
       "tabMyCreated": "Created",
       "tabMyManaged": "Managed",
       "searchPlaceholder": "Search groups",
       "noMatches": "No matching groups",
       "memberCount": "{{count}} members",
-      "empty": "No groups",
+      "empty": "No groups yet",
       "loading": "Loading groups",
-      "loadFailed": "Failed to load groups, please try again later"
+      "loadFailed": "Failed to load groups, please try again later",
+      "tabAll": "All",
+      "allGroups": "All Groups"
     },
     "request": {
       "title": "Send Friend Request",
@@ -971,6 +975,13 @@
       "sentMessage": "Sent a friend request to {{name}}.",
       "sendFailedTitle": "Send Failed",
       "sendFailed": "Failed to send friend request, please try again"
+    },
+    "groupInbox": {
+      "loading": "Loading groups...",
+      "loadFailed": "Could not load groups. Please try again later.",
+      "empty": "No newly joined groups yet",
+      "joinedAt": "Joined {{time}}",
+      "joined": "Joined"
     }
   },
   "discover": {

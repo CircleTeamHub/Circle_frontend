@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -17,54 +17,39 @@ import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { FilterTabs } from '@/components/ui/filter-tabs';
+import { loadChatConversations } from '@/chat-core/api';
+import { mapChatConversationToUI } from '@/chat-core/mappers';
+import { useChatStore } from '@/chat-core/store';
+import type { ChatConversationDto } from '@/chat-core/protocol';
+import {
+  filterGroupChatRows,
+  selectGroupConversations,
+} from '@/features/contacts/utils/group-chat-rows';
+import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { fetchMyCircles } from '@/services/api/circles';
-import type { MyCircle } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
-import { useAuthStore } from '@/stores/authStore';
-import { filterGroupsByQuery } from '@/features/contacts/utils/group-list-filter';
-import { createGroupsRequestGuard } from '@/features/contacts/groups-request-guard';
 
-/** 自研栈下「群聊」= 圈子;沿用旧字段名以少动渲染层。 */
-interface GroupItem {
-  groupID: string;
-  groupName: string;
-  faceURL: string | null;
-  memberCount: number;
-  introduction: string | null;
-  ownerUserID: string;
-  myRole: MyCircle['myRole'];
-}
-
-function circleToGroupItem(circle: MyCircle): GroupItem {
-  return {
-    groupID: circle.id,
-    groupName: circle.name,
-    faceURL: circle.avatarUrl,
-    memberCount: circle.memberCount,
-    introduction: circle.description || null,
-    ownerUserID: circle.ownerID,
-    myRole: circle.myRole,
-  };
+/**
+ * 群聊 = 会话（type=GROUP），圈子群和独立群都在内。这里**不是**圈子列表 ——
+ * 圈子（含申请中的）在「圈子管理」那屏。分类按本人在群里的角色分，角色由
+ * 会话 DTO 的 myRole 给出：圈子群读 CircleMember，独立群读群主/座位管理员。
+ */
+interface GroupRow {
+  conversation: ChatConversationDto;
+  name: string;
+  avatarUrl?: string;
+  sourceID: string;
+  /** 行上第二行：独立群的公告；圈子群没有（公告走圈子详情）。 */
+  subtitle: string | null;
+  memberCount: number | null;
 }
 
 interface GroupSection {
   title: string;
-  data: GroupItem[];
+  data: GroupRow[];
 }
 
-type GroupCategory = 'new' | 'joined' | 'created' | 'managed';
-
-const EMPTY_GROUPS_BY_CATEGORY: Record<GroupCategory, GroupItem[]> = {
-  new: [],
-  joined: [],
-  created: [],
-  managed: [],
-};
-
-function dedupeCircles(circles: MyCircle[]) {
-  return [...new Map(circles.map((circle) => [circle.id, circle])).values()];
-}
+type GroupCategory = 'all' | 'joined' | 'created' | 'managed';
 
 const s = StyleSheet.create({
   sectionHeader: {
@@ -123,103 +108,73 @@ const s = StyleSheet.create({
   },
 });
 
+function matchesCategory(
+  conversation: ChatConversationDto,
+  category: GroupCategory,
+) {
+  const role = conversation.myRole ?? 'MEMBER';
+  switch (category) {
+    case 'created':
+      return role === 'OWNER';
+    case 'managed':
+      return role === 'OWNER' || role === 'ADMIN';
+    case 'joined':
+      return role === 'MEMBER';
+    case 'all':
+    default:
+      return true;
+  }
+}
+
 export default function GroupsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const conversations = useChatStore((state) => state.conversations);
 
-  const [activeCategory, setActiveCategory] = useState<GroupCategory>('joined');
-  // 关键词跨分类保留：用户常常只记得群名、不记得它算「我加入的」还是「我管理的」，
-  // 切页签时清空会逼他们重打一遍。
+  const [activeCategory, setActiveCategory] = useState<GroupCategory>('all');
+  // 关键词跨分类保留：用户常常只记得群名、不记得它算「我加入的」还是「我管理的」。
   const [query, setQuery] = useState('');
-  const [groupsState, setGroupsState] = useState(() => ({
-    sessionEpoch,
-    groupsByCategory: EMPTY_GROUPS_BY_CATEGORY,
-  }));
-  const groupsByCategory =
-    groupsState.sessionEpoch === sessionEpoch
-      ? groupsState.groupsByCategory
-      : EMPTY_GROUPS_BY_CATEGORY;
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(conversations.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
-  const requestGuardRef = useRef(createGroupsRequestGuard());
 
+  // 会话列表是全局 store（自己带会话期闸门），这屏不留副本，也就没有脏写的问题。
   const loadGroups = useCallback(
     async (signal?: { cancelled: boolean }) => {
-      const token = requestGuardRef.current.begin(sessionEpoch);
-      const isCancelled = () =>
-        Boolean(signal?.cancelled) ||
-        !mountedRef.current ||
-        !requestGuardRef.current.isActive(
-          token,
-          useAuthStore.getState().sessionEpoch,
-        );
-      setLoading(true);
+      const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
       try {
-        const [applied, joined, created] = await Promise.all([
-          fetchMyCircles('applied'),
-          fetchMyCircles('joined'),
-          fetchMyCircles('created'),
-        ]);
+        await loadChatConversations();
         if (isCancelled()) return;
-        const createdIDs = new Set(created.map((circle) => circle.id));
-        const allActive = dedupeCircles([...created, ...joined]);
-        const managed = allActive.filter(
-          (circle) => circle.myRole === 'OWNER' || circle.myRole === 'ADMIN',
-        );
-        setGroupsState({
-          sessionEpoch: token.sessionEpoch,
-          groupsByCategory: {
-            new: dedupeCircles(applied).map(circleToGroupItem),
-            joined: dedupeCircles(
-              joined.filter((circle) => !createdIDs.has(circle.id)),
-            ).map(circleToGroupItem),
-            created: dedupeCircles(created).map(circleToGroupItem),
-            managed: managed.map(circleToGroupItem),
-          },
-        });
         setError(null);
       } catch (caughtError) {
         if (isCancelled()) return;
         setError(t('contacts.groupsScreen.loadFailed'));
-        reportHandledFailure('contacts', 'fetchMyCircles', caughtError);
+        reportHandledFailure('contacts', 'loadChatConversations', caughtError);
       } finally {
         if (!isCancelled()) {
           setLoading(false);
         }
       }
     },
-    [sessionEpoch, t],
+    [t],
   );
 
-  useEffect(() => {
-    const signal = { cancelled: false };
-    void loadGroups(signal);
-    return () => {
-      signal.cancelled = true;
-    };
-  }, [loadGroups]);
-
-  // Focus refresh: 用户创建/退出群后回到这屏需要立刻看到变化。
+  // Focus refresh：用户建群/退群后回到这屏需要立刻看到变化。
   useFocusEffect(
     useCallback(() => {
-      void loadGroups();
+      mountedRef.current = true;
+      const signal = { cancelled: false };
+      void loadGroups(signal);
+      return () => {
+        signal.cancelled = true;
+        mountedRef.current = false;
+      };
     }, [loadGroups]),
   );
-
-  useEffect(() => {
-    mountedRef.current = true;
-    const requestGuard = requestGuardRef.current;
-    return () => {
-      mountedRef.current = false;
-      requestGuard.invalidate();
-    };
-  }, []);
 
   const handleRefreshGroups = useCallback(async () => {
     if (refreshInFlightRef.current) return;
@@ -233,14 +188,14 @@ export default function GroupsScreen() {
     }
   }, [loadGroups]);
 
-  // tabLabel 是横向页签用的短文案（PM 定的「新的群组 / 我加入的 / 我创建的 / 我管理的」），
-  // 长文案留给分区标题——四个长标题会把最后一个页签挤出屏幕。
+  // tabLabel 是横向页签用的短文案，长文案留给分区标题——四个长标题会把最后一个
+  // 页签挤出屏幕。
   const categories = useMemo(
     () => [
       {
-        id: 'new' as const,
-        tabLabel: t('contacts.groupsScreen.tabNewGroups'),
-        label: t('contacts.groupsScreen.newGroups'),
+        id: 'all' as const,
+        tabLabel: t('contacts.groupsScreen.tabAll'),
+        label: t('contacts.groupsScreen.allGroups'),
       },
       {
         id: 'joined' as const,
@@ -261,14 +216,34 @@ export default function GroupsScreen() {
     [t],
   );
 
+  const rows = useMemo<GroupRow[]>(
+    () =>
+      selectGroupConversations(conversations)
+        .filter((conversation) => matchesCategory(conversation, activeCategory))
+        .map((conversation) => {
+          const ui = mapChatConversationToUI(conversation);
+          return {
+            conversation,
+            name: ui.name,
+            avatarUrl: ui.avatarUrl,
+            sourceID: ui.sourceID,
+            subtitle: conversation.notice?.trim() || null,
+            memberCount: conversation.memberCount ?? null,
+          };
+        }),
+    [activeCategory, conversations],
+  );
+
   const sections = useMemo<GroupSection[]>(() => {
     const active = categories.find((category) => category.id === activeCategory);
-    return [{
-      title: active?.label ?? '',
-      // 只过滤当前分类：页签是主轴，分区标题写的就是它，跨分类搜会让标题说谎。
-      data: filterGroupsByQuery(groupsByCategory[activeCategory], query),
-    }];
-  }, [activeCategory, categories, groupsByCategory, query]);
+    return [
+      {
+        title: active?.label ?? '',
+        // 只过滤当前分类：页签是主轴，分区标题写的就是它，跨分类搜会让标题说谎。
+        data: filterGroupChatRows(rows, query),
+      },
+    ];
+  }, [activeCategory, categories, query, rows]);
 
   const d = useMemo(
     () => ({
@@ -303,20 +278,19 @@ export default function GroupsScreen() {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
       },
+      emptyText: {
+        color: colors.textSecondary,
+        ...Typography.bodyRegular,
+        textAlign: 'center' as const,
+        paddingVertical: 56,
+      },
       retryButton: {
         backgroundColor: colors.primary,
-        borderRadius: Radius.full,
       },
       retryButtonText: {
         color: colors.white,
         ...Typography.bodyRegular,
         fontWeight: '600' as const,
-      },
-      emptyText: {
-        color: colors.textSecondary,
-        ...Typography.bodyRegular,
-        textAlign: 'center' as const,
-        paddingTop: Spacing.xl,
       },
       searchBox: {
         borderColor: colors.surfaceBorder,
@@ -330,49 +304,53 @@ export default function GroupsScreen() {
   );
 
   const handleOpenGroup = useCallback(
-    (group: GroupItem) => {
-      router.push({
-        pathname: '/(tabs)/messages/chat-detail',
-        params: {
-          sourceID: group.groupID,
-          conversationType: 'group',
-          title: group.groupName,
-        },
-      });
+    (row: GroupRow) => {
+      // 留在联系人栈里：跳 messages 栈的话返回键会把用户扔到消息页。
+      router.push(
+        getChatDetailHref(
+          'contacts',
+          row.sourceID,
+          row.name,
+          row.avatarUrl,
+          row.conversation.id,
+          undefined,
+          'group',
+        ),
+      );
     },
     [router],
   );
 
-  const emptyState =
-    loading ? (
-      <View style={s.stateBlock}>
-        <ActivityIndicator color={colors.primary} />
-        <Text style={d.stateText}>
-          {t('contacts.groupsScreen.loading', { defaultValue: '正在加载群聊' })}
-        </Text>
-      </View>
-    ) : error ? (
-      <View style={s.stateBlock}>
-        <Text style={d.stateText}>{error}</Text>
-        <Pressable
-          style={[s.retryButton, d.retryButton]}
-          onPress={() => void loadGroups()}
-        >
-          <Text style={d.retryButtonText}>{t('common.retry')}</Text>
-        </Pressable>
-      </View>
-    ) : query.trim() ? (
-      <Text style={d.emptyText}>{t('contacts.groupsScreen.noMatches')}</Text>
-    ) : (
-      <Text style={d.emptyText}>{t('contacts.groupsScreen.empty')}</Text>
-    );
+  const emptyState = loading ? (
+    <View style={s.stateBlock}>
+      <ActivityIndicator color={colors.primary} />
+      <Text style={d.stateText}>{t('contacts.groupsScreen.loading')}</Text>
+    </View>
+  ) : error ? (
+    <View style={s.stateBlock}>
+      <Text style={d.stateText}>{error}</Text>
+      <Pressable
+        style={[s.retryButton, d.retryButton]}
+        onPress={() => void loadGroups()}
+      >
+        <Text style={d.retryButtonText}>{t('common.retry')}</Text>
+      </Pressable>
+    </View>
+  ) : query.trim() ? (
+    <Text style={d.emptyText}>{t('contacts.groupsScreen.noMatches')}</Text>
+  ) : (
+    <Text style={d.emptyText}>{t('contacts.groupsScreen.empty')}</Text>
+  );
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title={t('contacts.groupsScreen.title')} />
+      <NavHeader
+        title={t('contacts.groupsScreen.title')}
+        fallbackHref="/(tabs)/contacts"
+      />
       <SectionList
         sections={sections}
-        keyExtractor={(item) => item.groupID}
+        keyExtractor={(item) => item.conversation.id}
         contentContainerStyle={d.listContent}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
@@ -398,7 +376,7 @@ export default function GroupsScreen() {
                   onPress={() => setQuery('')}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel={t('common.clear', { defaultValue: '清除' })}
+                  accessibilityLabel={t('common.clear')}
                 >
                   <Ionicons
                     name="close-circle"
@@ -427,7 +405,7 @@ export default function GroupsScreen() {
         renderSectionHeader={({
           section,
         }: {
-          section: SectionListData<GroupItem, GroupSection>;
+          section: SectionListData<GroupRow, GroupSection>;
         }) => (
           <View style={s.sectionHeader}>
             <Text style={d.sectionTitle}>{section.title}</Text>
@@ -436,25 +414,23 @@ export default function GroupsScreen() {
         renderItem={({ item, index, section }) => (
           <View>
             <Pressable style={s.groupRow} onPress={() => handleOpenGroup(item)}>
-              <GroupChatAvatar
-                size={40}
-                name={item.groupName}
-                uri={item.faceURL || undefined}
-              />
+              <GroupChatAvatar size={40} name={item.name} uri={item.avatarUrl} />
               <View style={s.groupBody}>
                 <View style={s.topRow}>
                   <Text style={d.groupName} numberOfLines={1}>
-                    {item.groupName}
+                    {item.name}
                   </Text>
-                  <Text style={d.memberCount}>
-                    {t('contacts.groupsScreen.memberCount', {
-                      count: item.memberCount,
-                    })}
-                  </Text>
+                  {item.memberCount === null ? null : (
+                    <Text style={d.memberCount}>
+                      {t('contacts.groupsScreen.memberCount', {
+                        count: item.memberCount,
+                      })}
+                    </Text>
+                  )}
                 </View>
-                {item.introduction ? (
+                {item.subtitle ? (
                   <Text style={d.description} numberOfLines={1}>
-                    {item.introduction}
+                    {item.subtitle}
                   </Text>
                 ) : null}
               </View>

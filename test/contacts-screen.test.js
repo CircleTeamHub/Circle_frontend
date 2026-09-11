@@ -28,13 +28,14 @@ test('contacts quick actions keep the agreed order and entries', () => {
   const ids = [...block.matchAll(/id: '([\w-]+)'/g)].map((match) => match[1]);
 
   // 顺序是产品定的；朋友圈入口是 #195 从发现页搬过来的，圈子行也在那时改用
-  // discover.management 文案。这里钉住整张列表，避免哪次重排又把它们挤掉。
+  // discover.management 文案，后来产品又把圈子管理挪到朋友圈上面。
+  // 这里钉住整张列表，避免哪次重排又把它们挤掉。
   assert.deepEqual(ids, [
     'new-friends',
     'groups',
     'seats',
-    'moments',
     'circles',
+    'moments',
     'tags',
   ]);
   assert.match(block, /id: 'moments'[^}]*key: 'discover\.moments'/);
@@ -190,18 +191,15 @@ test('friend activity detail screen supports request handling and single-item re
 
 test('groups screen filters the active category with a local search box', () => {
   const source = read('src/features/contacts/screens/GroupsScreen.tsx');
-  const filterSource = read('src/features/contacts/utils/group-list-filter.ts');
+  const filterSource = read('src/features/contacts/utils/group-chat-rows.ts');
 
   assert.match(source, /const \[query, setQuery\] = useState\(''\)/);
   assert.match(source, /<TextInput/);
   assert.match(source, /contacts\.groupsScreen\.searchPlaceholder/);
   assert.match(source, /contacts\.groupsScreen\.noMatches/);
-  assert.match(
-    source,
-    /filterGroupsByQuery\(groupsByCategory\[activeCategory\], query\)/,
-  );
+  assert.match(source, /filterGroupChatRows\(rows, query\)/);
 
-  // 分类是三次服务端查询算出来的；过滤器只做本地文本匹配，不能再自己判断身份，
+  // 分类按角色在屏里算好；过滤器只做本地文本匹配，不能再自己判断身份，
   // 否则同一份数据会有两套互相矛盾的分类规则。
   assert.doesNotMatch(filterSource, /myRole|ownerUserID/);
 
