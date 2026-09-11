@@ -4,10 +4,52 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
 
+const { loadTsModule } = require('./helpers/load-ts-module');
+
 const root = path.join(__dirname, '..');
 
 function read(rel) {
   return fs.readFileSync(path.join(root, rel), 'utf8');
+}
+
+/** 遍历 src 下的 ts/tsx 源码（跳过测试与生成物）。 */
+function* walkSources(rel) {
+  for (const entry of fs.readdirSync(path.join(root, rel), {
+    withFileTypes: true,
+  })) {
+    const child = `${rel}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (entry.name === 'generated' || entry.name === 'node_modules') continue;
+      yield* walkSources(child);
+    } else if (/\.tsx?$/.test(entry.name) && !/\.spec\.tsx?$/.test(entry.name)) {
+      yield child;
+    }
+  }
+}
+
+/** 圈子通知 store 的真身（形状断言要读真实 state，不是源码文本）。 */
+function loadCircleNotificationStore() {
+  const backing = new Map();
+  const shims = {
+    zustand: require('zustand'),
+    'zustand/middleware': require('zustand/middleware'),
+    '@/storage': {
+      mmkvJsonStorage: {
+        getItem: (key) => backing.get(key) ?? null,
+        setItem: (key, value) => backing.set(key, value),
+        removeItem: (key) => backing.delete(key),
+      },
+    },
+  };
+  return loadTsModule(
+    'src/features/discover/store/use-circle-notification-store.ts',
+    {
+      requireShim: (specifier) => {
+        if (shims[specifier]) return shims[specifier];
+        throw new Error(`unexpected import: ${specifier}`);
+      },
+    },
+  );
 }
 
 test('realtime client routes websocket badge events into the unified tab badge store', () => {
@@ -80,8 +122,10 @@ test('realtime gates circle-notification banners on the circle notification sett
   assert.match(client, /useCircleNotificationStore/);
   assert.match(client, /payload\.type\.startsWith\('CIRCLE_'\)/);
   assert.match(client, /circleBannerAllowed\(useCircleNotificationStore\.getState\(\)\)/);
-  // 总闸也管红点：关掉时未读计数不展示（服务端照常累加）。
-  assert.match(client, /circleBadgeAllowed\(useCircleNotificationStore\.getState\(\)\)/);
+  // 总闸也管红点：关掉时未读计数不展示（服务端照常累加）。门控走 store 的
+  // gateCircleUnread —— 每一条写未读的路径都要过它，行为断言见
+  // test/realtime-reconnect.test.js。
+  assert.match(client, /gateCircleUnread\(snapshot, useCircleNotificationStore\.getState\(\)\)/);
   // 门控发生在铃铛 setInteractive 之后、横幅 enqueueNotification 之前。
   assert.match(
     client,
@@ -89,31 +133,153 @@ test('realtime gates circle-notification banners on the circle notification sett
   );
 });
 
-test('圈子通知的三档开关都有真实行为，没有一档是摆设', () => {
-  const store = read('src/features/discover/store/use-circle-notification-store.ts');
-  const toggles = read('src/features/discover/components/circle-notification-toggles.tsx');
+// 前一版这里断言的是「文案只承诺应用内展示」；改三档时它被换成一串纯 source
+// grep —— 于是新旧文案在同一个对象里并存、JSON.parse 取最后一个（= 旧文案）时
+// 谁都没红。所以这一条只看**生效后的** t() 取值（而不是文件里写了什么），
+// 再配合 store 的真实形状。
+test('三档的生效文案承诺的是总闸，不是「只管应用内展示」', () => {
+  const locales = {
+    zh: {
+      global: '全局接收圈子通知',
+      // 关掉必须是「全关」：这个开关同时停掉横幅、声音、红点和离线推送。
+      globalOff: /所有通知/,
+      // 旧文案只承诺隐藏横幅 —— 它回来就等于开关又开始说谎。
+      stale: /隐藏应用内圈子通知横幅|允许控制应用内的通知展示|控制使用应用时圈子通知的展示/,
+      offlinePromise: /离线/,
+    },
+    en: {
+      global: 'Receive Circle Notifications',
+      globalOff: /all notifications disabled/i,
+      stale: /hide in-app Circle notification banners|in-app presentation controls|presentation while using the app/i,
+      offlinePromise: /offline/i,
+    },
+    ja: {
+      global: 'サークル通知を受け取る',
+      globalOff: /すべての通知/,
+      stale: /バナーを非表示|アプリ内の通知表示を設定|表示方法を設定/,
+      offlinePromise: /オフライン/,
+    },
+    ko: {
+      global: '서클 알림 받기',
+      globalOff: /모든 알림/,
+      stale: /배너를 숨깁니다|알림 표시를 설정할 수 있습니다|표시 방식을 설정합니다/,
+      offlinePromise: /오프라인/,
+    },
+    es: {
+      global: 'Recibir notificaciones de círculos',
+      globalOff: /todas las notificaciones/i,
+      stale: /oculta los banners del círculo|controlar su presentación|se muestran las notificaciones de Círculo mientras usas la app/i,
+      offlinePromise: /sin conexión|push/i,
+    },
+  };
+
+  for (const [name, expected] of Object.entries(locales)) {
+    // JSON.parse 与 i18next 看到的是同一份：重复键只剩最后一个，
+    // 所以这里读到的就是屏幕上真正显示的那句。
+    const locale = JSON.parse(read(`src/i18n/locales/${name}.json`));
+    const sheet = locale.discover.notifications;
+    const profile = locale.settingsDetails.notifications;
+
+    assert.equal(sheet.global, expected.global, `${name}: 弹层总闸文案`);
+    // 两处入口共用同一份开关，文案也必须是同一句，否则用户以为是两个功能。
+    assert.equal(profile.circleGlobal, expected.global, `${name}: 设置页总闸文案`);
+
+    assert.match(sheet.globalOffHint, expected.globalOff, `${name}: 关闭态提示`);
+    assert.match(sheet.globalOnHint, expected.offlinePromise, `${name}: 开启态提示`);
+    assert.match(profile.circleGlobalHint, expected.offlinePromise, `${name}: 设置页提示`);
+
+    for (const [key, copy] of Object.entries({
+      globalOnHint: sheet.globalOnHint,
+      globalOffHint: sheet.globalOffHint,
+      circleGlobalHint: profile.circleGlobalHint,
+    })) {
+      assert.doesNotMatch(copy, expected.stale, `${name}.${key} 是旧的「只管展示」文案`);
+    }
+
+    // 三档齐全，每一档都有标题和两行提示。
+    for (const key of [
+      'global',
+      'globalOnHint',
+      'globalOffHint',
+      'sound',
+      'soundOnHint',
+      'soundOffHint',
+      'offline',
+      'offlineOnHint',
+      'offlineOffHint',
+      'syncFailed',
+    ]) {
+      assert.equal(typeof sheet[key], 'string', `${name}: 缺 ${key}`);
+      assert.ok(sheet[key].length > 0, `${name}: ${key} 是空串`);
+    }
+  }
+});
+
+test('三档 store 的形状与每一档的落点', () => {
+  const { useCircleNotificationStore, circleBadgeAllowed, gateCircleUnread } =
+    loadCircleNotificationStore();
   const client = read('src/realtime/client.ts');
   const snackbar = read(
     'src/features/notifications/components/NotificationSnackbarHost.tsx',
   );
+  const toggles = read(
+    'src/features/discover/components/circle-notification-toggles.tsx',
+  );
 
-  // 三档：总闸 / 声音 / 离线。总闸关掉时子档同步置灰。
-  assert.match(store, /globalEnabled:\s*boolean/);
-  assert.match(store, /soundEnabled:\s*boolean/);
-  assert.match(store, /offlineEnabled:\s*boolean/);
-  assert.match(store, /version:\s*3/);
-  assert.match(toggles, /disabled=\{!globalEnabled\}/);
-  assert.equal(toggles.match(/<NotificationItem/g).length, 3);
+  // store 的真实形状（而不是源码里有没有出现这几个字）。
+  const state = useCircleNotificationStore.getState();
+  for (const key of ['globalEnabled', 'soundEnabled', 'offlineEnabled']) {
+    assert.equal(typeof state[key], 'boolean', `store 缺 ${key}`);
+  }
+  assert.equal(typeof state.resetForLogout, 'function');
 
-  // 总闸 → 横幅 + 红点；声音 → 真的静音那一次播放。
+  // 总闸 → 红点：关掉之后计数不进展示层。
+  useCircleNotificationStore.setState({ globalEnabled: false });
+  assert.equal(circleBadgeAllowed(useCircleNotificationStore.getState()), false);
+  assert.equal(
+    gateCircleUnread(
+      { discoverUnread: 5, circleUnread: 2 },
+      useCircleNotificationStore.getState(),
+    ).circleUnread,
+    0,
+  );
+  useCircleNotificationStore.setState({ globalEnabled: true });
+
+  // 三档的落点各自接在真实执行处：横幅/红点在 realtime，声音在 snackbar host，
+  // 离线推送的读写在共用 hook 里（弹层与设置页都用它）。
   assert.match(client, /circleBannerAllowed/);
-  assert.match(client, /circleBadgeAllowed/);
+  assert.match(client, /gateCircleUnread/);
   assert.match(snackbar, /circleSoundAllowed/);
   assert.match(snackbar, /notify\(\{ silent \}\)/);
+  assert.match(toggles, /useCircleNotificationTiers/);
+  const hook = read(
+    'src/features/discover/hooks/use-circle-notification-tiers.ts',
+  );
+  assert.match(hook, /updateCircleOfflinePushEnabled/);
+  assert.match(hook, /fetchCircleOfflinePushEnabled/);
+});
 
-  // 离线推送由服务端执行，所以本地改动必须推给后端，否则关了照样收。
-  assert.match(toggles, /updateCircleOfflinePushEnabled/);
-  assert.match(toggles, /fetchCircleOfflinePushEnabled/);
+// 个人设置页那三行此前直接 set 本地 store：「离线提醒」关了不通知服务端，
+// 推送照来，下次打开弹层还会被 GET 翻回去。两处必须是同一个实现。
+test('弹层与个人设置页用同一个三档 hook，没有第二份实现', () => {
+  const profile = read(
+    'src/features/profile/screens/NotificationSettingsScreen.tsx',
+  );
+  assert.match(profile, /useCircleNotificationTiers/);
+  assert.doesNotMatch(
+    profile,
+    /useCircleNotificationStore/,
+    '设置页不能绕过 hook 直接写 store',
+  );
+
+  // 同步只能有一个调用方；多一个就意味着有人又手写了一遍。
+  const callers = [];
+  for (const file of walkSources('src')) {
+    if (file.endsWith('use-circle-notification-tiers.ts')) continue;
+    if (file.endsWith('src/services/api/notifications.ts')) continue;
+    if (read(file).includes('updateCircleOfflinePushEnabled')) callers.push(file);
+  }
+  assert.deepEqual(callers, [], `updateCircleOfflinePushEnabled 出现在 hook 之外: ${callers}`);
 });
 
 test('app settings search lists the three circle notification rows', () => {

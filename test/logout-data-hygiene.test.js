@@ -106,7 +106,7 @@ test('local-unread / chat-preferences / discover-filter 的 resetForLogout 清�
 // session.ts：显式清理清单接进 performClearLocalSession
 // ---------------------------------------------------------------------------
 
-test('登出清理清单点名四个账号级持久化 store，幸存者留有名单 (#97)', () => {
+test('登出清理清单点名每一个账号级持久化 store，幸存者留有名单 (#97)', () => {
   const session = read('src/services/auth/session.ts');
 
   assert.match(session, /ACCOUNT_SCOPED_STORE_LOADERS/);
@@ -114,10 +114,18 @@ test('登出清理清单点名四个账号级持久化 store，幸存者留有�
   assert.match(session, /use-chat-preferences-store/);
   assert.match(session, /use-discover-filter-store/);
   assert.match(session, /use-circle-shortcut-order-store/);
+  // 圈子通知三档从「设备偏好」改判成账号级：offlineEnabled 镜像的是
+  // User.circleOfflinePushEnabled 这个 per-user 字段，留在设备上会让 B 继承
+  // A 的关闭态，B 第一次拨动就把 A 派生的值 PUT 进自己的账号。
+  assert.match(session, /use-circle-notification-store/);
+  assert.doesNotMatch(
+    session,
+    /circle-im-circle-notification.*—— 只有/,
+    '它不再是幸存者，旧的「无账号数据」理由必须一起删掉',
+  );
   // 幸存者是显式决定，不是遗漏
   assert.match(session, /circle-im-app-settings/);
   assert.match(session, /circle-im-notification-feedback/);
-  assert.match(session, /circle-im-circle-notification/);
   // 清单在 performClearLocalSession 里被消费：先重置内存再删持久化
   assert.match(
     session,
