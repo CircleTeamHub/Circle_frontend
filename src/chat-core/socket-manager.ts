@@ -152,12 +152,19 @@ function readViewerSelfDestructSec(userId: string): number {
 
     // #224 把缓存从天改成秒并换了 key。升级后的第一次离线启动仍要沿用旧策略，
     // 否则新 key 缺省成 0 会让已过期的本地消息重新显示。
-    const legacy = storage.getString(`chat.viewerSelfDestructDays.${userId}`);
+    //
+    // 一次性迁移就要真的只跑一次：无论旧值能不能换算，都落一个新键并删掉旧键。
+    // 否则旧键永远留着、每次离线启动都再查一遍，而且换算不出来的那种（旧值不在
+    // 白名单里）连新键都不写，下次冷启动又走同一条死路。
+    const legacyKey = `chat.viewerSelfDestructDays.${userId}`;
+    const legacy = storage.getString(legacyKey);
     if (legacy === undefined) return 0;
     const days = Number(legacy);
-    if (!LEGACY_SELF_DESTRUCT_DAY_CHOICES.has(days)) return 0;
-    const seconds = days * SECONDS_PER_DAY;
+    const seconds = LEGACY_SELF_DESTRUCT_DAY_CHOICES.has(days)
+      ? days * SECONDS_PER_DAY
+      : 0;
     storage.set(storageKey, String(seconds));
+    storage.remove(legacyKey);
     return seconds;
   } catch {
     return 0;
