@@ -219,7 +219,7 @@ function WardrobeRow({
       {equipped ? (
         <View style={[s.marker, { backgroundColor: colors.primaryLight }]}>
           <Ionicons name="checkmark" size={14} color={colors.iconAccent} />
-          <Text style={[s.markerText, { color: colors.primary }]}>
+          <Text style={[s.markerText, { color: colors.iconAccent }]}>
             {t('profile.avatarFrames.equipped')}
           </Text>
         </View>

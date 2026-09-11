@@ -136,7 +136,7 @@ export default function RecycleBinScreen() {
       backdrop: { backgroundColor: colors.overlay },
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
-      primary: { color: colors.primary },
+      sheetAction: { color: colors.iconAccent },
     }),
     [colors],
   );
@@ -229,7 +229,7 @@ export default function RecycleBinScreen() {
           })}
         >
           <Ionicons name="refresh-outline" size={20} color={colors.iconAccent} />
-          <Text style={[s.sheetLabel, d.primary]}>
+          <Text style={[s.sheetLabel, d.sheetAction]}>
             {t('notes.actions.restore', { defaultValue: '恢复' })}
           </Text>
         </Pressable>
