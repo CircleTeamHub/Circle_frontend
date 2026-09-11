@@ -123,6 +123,7 @@ import {
   sendChatReaction,
   sendChatTyping,
 } from '@/chat-core/socket-manager';
+import { isLocalMessageId } from '@/chat-core/local-message-id';
 import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
@@ -1240,6 +1241,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const handleCollectMessage = useCallback(
     async (message: ChatMessage) => {
       if (!conversationID) return;
+      // 还没拿到 ack 的气泡手上只有 local:<d>,服务端那条消息还不存在 ——
+      // 收藏接口会按 COLLECTION_INVALID_MESSAGE_SOURCE 拒掉它。菜单已经不给入口,
+      // 这里是兜底(长按菜单与发送 ack 之间存在竞态)。
+      if (isLocalMessageId(message.id)) return;
 
       // 笔记卡片：不进「收藏」列表，直接快照复制进「我的笔记」，
       // 并带上来源名片（群/用户）+ 消息定位信息，详情页可一键跳回聊天。
@@ -1342,7 +1347,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         reportHandledFailure('chatDetail', 'collectMessage', error);
         Alert.alert(
           t('chat.messageActions.collectFailed'),
-          t('chat.messageActions.collectFailedHint'),
+          getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
         );
       }
     },
@@ -1723,7 +1728,13 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     // 服务端从头到尾没看过这条消息，所以转发那条 CHAT_FORWARD_FORBIDDEN 管不到
     // 它 —— 对端在焚毁会话里发的图，收藏一下就永久留在了本机账号下。同一份承诺，
     // 同一道闸；自己发的照旧可收。
-    if (!isEphemeralPeerMessage(message, conversationBurnEnabled)) {
+    // 收藏把 message.id 交给服务端当引用:还是 local:<d> 的乐观气泡在服务端没有
+    // 对应的行,点下去只会吃一个 400,而提示的是「请重试」—— 重试到 ack 回来之前
+    // 都不会成功。与隔壁转发对未确认媒体的处理同一条理由:不提供入口。
+    if (
+      !isEphemeralPeerMessage(message, conversationBurnEnabled) &&
+      !isLocalMessageId(message.id)
+    ) {
       // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
       // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。
       actions.push(
@@ -3772,7 +3783,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             conversationId: conversationID,
             text: nextText,
             quotedText: buildQuotePreviewText(quoteTarget, t),
-            replyToId: quoteTarget.id.startsWith('local:')
+            replyToId: isLocalMessageId(quoteTarget.id)
               ? undefined
               : quoteTarget.id,
           });
