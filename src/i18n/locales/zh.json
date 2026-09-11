@@ -122,7 +122,6 @@
       "registerFailed": "注册失败，请重试",
       "registerOutcomeUnknown": "注册结果暂时无法确认。请先尝试登录或找回密码，不要重复注册。",
       "sendCodeFailed": "发送失败，请重试",
-      "passwordMismatch": "两次输入的密码不一致",
       "registerSucceededSessionFailed": "账号已创建成功，但自动登录失败。请直接用该邮箱登录。"
     },
     "hidePassword": "隐藏密码",
@@ -195,7 +194,7 @@
     "deleteChatConfirm": "删除「{{name}}」的聊天和本地消息？",
     "deleteChatConfirmDirect": "删除「{{name}}」的聊天记录？对方的记录也会同时删除，此操作无法撤销。",
     "newGroupTitle": "发起群聊",
-    "newGroupNamePlaceholder": "群聊名称（可选）",
+    "newGroupNamePlaceholder": "群聊名称",
     "newGroupSelectMembers": "选择联系人",
     "newGroupSearchPlaceholder": "搜索好友",
     "newGroupNoFriends": "还没有好友，先去添加吧",
@@ -203,6 +202,7 @@
     "newGroupSelectedCount": "已选 {{count}}",
     "newGroupSubmit": "完成",
     "newGroupMinMembers": "请至少选择 2 位好友",
+    "newGroupNameRequired": "请填写群聊名称",
     "newGroupCreateFailed": "创建群聊失败：{{error}}",
     "newGroupDefaultName": "群聊",
     "inviteGroupMembersTitle": "邀请好友",
@@ -2457,12 +2457,18 @@
         "locationSelected": "已选择",
         "media": "图片/视频",
         "mediaHint": "正文素材，支持图片和视频",
-        "required": "必填",
         "showcase": "展示",
         "showcaseHint": "群卡片展示区素材",
         "text": "文字",
         "textHint": "只编辑文字内容"
       },
+      "validationTitle": "请检查笔记内容",
+      "titleRequired": "请填写标题",
+      "titleHint": "标题必填，最多 {{max}} 字符",
+      "textCount": "正文长度 {{count}} / {{max}}",
+      "textScrollHint": "正文可选，可在框内上下滑动查看全文",
+      "textTooLong": "正文（含段落换行）最多 {{max}} 字符，当前 {{count}} 字符。内容已保留，请缩短后保存。",
+      "tooManyParagraphs": "正文最多 {{max}} 段。内容已保留，请合并部分段落后保存。",
       "titlePlaceholder": "标题",
       "uploading": "上传中...",
       "videoItem": "视频"
@@ -3211,6 +3217,7 @@
     "CHAT_EDIT_FORBIDDEN": "无法编辑该消息",
     "CHAT_FORWARD_FORBIDDEN": "阅后即焚会话中的消息不可转发",
     "CHAT_GROUP_FRIENDS_ONLY": "只能邀请好友进群",
+    "CHAT_GROUP_NAME_REQUIRED": "请填写群聊名称",
     "CHAT_GROUP_MIN_MEMBERS": "请至少选择 2 位好友",
     "CHAT_GROUP_CIRCLE_MANAGED": "该群由圈子管理，无法在此操作",
     "QR_INVALID": "二维码无效或已失效",
@@ -3224,8 +3231,7 @@
     "CHAT_GROUP_TARGET_PROTECTED": "不能对群主或同级管理员执行此操作",
     "CHAT_GROUP_SELF_TARGET": "不能对自己执行此操作",
     "CHAT_MEMBER_SILENCED": "你已被禁言，暂时无法发言",
-    "CHAT_SILENCE_DURATION_INVALID": "禁言时长无效",
-    "AUTH_PASSWORD_MISMATCH": "两次输入的密码不一致"
+    "CHAT_SILENCE_DURATION_INVALID": "禁言时长无效"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",

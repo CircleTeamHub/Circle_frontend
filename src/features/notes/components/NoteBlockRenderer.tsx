@@ -4,6 +4,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { extractInlineText } from '@/features/notes/utils/note-blocks';
 
 type Block = Record<string, unknown>;
 type InlineNode = Record<string, unknown>;
@@ -67,7 +68,10 @@ function VideoBlock({
 function InlineContent({ nodes, textColor }: { nodes: unknown[]; textColor: string }) {
   return (
     <>
-      {(nodes as InlineNode[]).map((node, i) => {
+      {nodes.map((value, i) => {
+        if (typeof value === 'string') return <Text key={i}>{value}</Text>;
+        if (!value || typeof value !== 'object') return null;
+        const node = value as InlineNode;
         const text = typeof node.text === 'string' ? node.text : '';
         const styles = (node.styles ?? {}) as Record<string, unknown>;
         return (
@@ -81,6 +85,9 @@ function InlineContent({ nodes, textColor }: { nodes: unknown[]; textColor: stri
             }}
           >
             {text}
+            {Array.isArray(node.content) ? (
+              <InlineContent nodes={node.content} textColor={textColor} />
+            ) : null}
           </Text>
         );
       })}
@@ -133,9 +140,13 @@ function BlockView({
 
     case 'bulletListItem':
     case 'numberedListItem':
+    case 'checkListItem':
+    case 'toggleListItem':
       return (
         <View style={s.listRow}>
-          <Text style={[s.bullet, { color: d.text }]}>•</Text>
+          <Text style={[s.bullet, { color: d.text }]}>
+            {type === 'checkListItem' ? (props.checked ? '☑' : '☐') : '•'}
+          </Text>
           <Text style={[s.paragraph, { flex: 1, color: d.text }]}>
             <InlineContent nodes={content} textColor={d.text} />
           </Text>
@@ -199,8 +210,11 @@ function BlockView({
       );
     }
 
-    default:
-      return null;
+    default: {
+      // 表格和其他粘贴格式至少保留完整文字，不能因为没有专用布局就整块消失。
+      const text = extractInlineText(block.content);
+      return text ? <Text style={[s.paragraph, { color: d.text }]}>{text}</Text> : null;
+    }
   }
 }
 
@@ -216,19 +230,23 @@ interface Props {
 export function NoteBlockRenderer({ blocks, onMediaError }: Props) {
   return (
     <View style={s.container}>
-      {blocks.map((block, i) => (
-        <BlockView
-          key={typeof block.id === 'string' ? block.id : i}
-          block={block}
-          onMediaError={onMediaError}
-        />
-      ))}
+      {blocks.map((block, i) => block && typeof block === 'object' ? (
+        <View key={typeof block.id === 'string' ? block.id : i}>
+          <BlockView block={block} onMediaError={onMediaError} />
+          {Array.isArray(block.children) && block.children.length > 0 ? (
+            <View style={s.children}>
+              <NoteBlockRenderer blocks={block.children} onMediaError={onMediaError} />
+            </View>
+          ) : null}
+        </View>
+      ) : null)}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   container: { gap: Spacing.sm },
+  children: { paddingLeft: Spacing.md, marginTop: Spacing.sm },
   h1: { ...Typography.h1, marginVertical: Spacing.xs },
   h2: { ...Typography.h2, marginVertical: Spacing.xs },
   h3: { ...Typography.h3, marginVertical: Spacing.xs },
