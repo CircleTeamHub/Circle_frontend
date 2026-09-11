@@ -95,6 +95,38 @@ test('chat bubbles and mentions use the alias while a personal friend remark sti
   );
 });
 
+test('my own group alias comes from the conversation row, not from the member directory', () => {
+  const protocol = read('src/chat-core/protocol.ts');
+  // 老后端不下发:可选。
+  assert.match(protocol, /myAlias\?: string \| null;/);
+  // 气泡上方的名字也不能只靠目录:消息自带发送者的群昵称。
+  assert.match(protocol, /alias\?: string \| null;/);
+
+  const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
+  // 「是否显示群成员」关掉后普通成员拿到的是空目录(圈子群跳过 fetch、独立群 403),
+  // 从目录里捞自己会让这一行永远显示「未设置」。会话行优先,目录只当老后端兜底。
+  assert.match(info, /const seatAlias = activeConversation\?\.myAlias;/);
+  // 字段在(哪怕是 null)就以它为准;缺失才回落成员表。
+  assert.match(info, /if \(seatAlias !== undefined\) return seatAlias \?\? '';/);
+  assert.match(
+    info,
+    /groupMembers\.find\(\(member\) => member\.userId === currentUserID\)\?\.alias \?\? ''/,
+  );
+  // 改完把会话行一起回写,否则改完又会立刻退回「未设置」。
+  assert.match(info, /store\.upsertConversation\(\{ \.\.\.cached, myAlias: result\.alias \}\)/);
+  assert.match(info, /\{ \.\.\.current, myAlias: result\.alias \}/);
+});
+
+test('a sender carrying a group alias is validated and never crashes the render path', () => {
+  const protocol = read('src/chat-core/protocol.ts');
+  // alias 会被显示名 trim():非字符串必须在进 store 之前就被拒,
+  // 否则崩在渲染期(分发器 try/catch 之外)。
+  assert.match(
+    protocol,
+    /value\['alias'\] === null \|\|\s*\n\s*value\['alias'\] === undefined \|\|\s*\n\s*typeof value\['alias'\] === 'string'/,
+  );
+});
+
 test('chat info offers the alias row to every seated member, not just managers', () => {
   const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
   assert.match(info, /chat\.myAliasInGroup/);
@@ -109,7 +141,10 @@ test('chat info offers the alias row to every seated member, not just managers',
 });
 
 // ── 跨仓契约 ──
-const BACKEND_ROOT = path.join(root, '..', 'circle_be');
+// CIRCLE_BE_PATH 覆盖是给 git worktree 用的:worktree 旁边那个 circle_be 往往是
+// 别的分支,比 main 还容易给出假红/假绿。
+const BACKEND_ROOT =
+  process.env.CIRCLE_BE_PATH ?? path.join(root, '..', 'circle_be');
 const hasBackend = fs.existsSync(path.join(BACKEND_ROOT, 'src/chat/chat.controller.ts'));
 
 test(
@@ -127,5 +162,15 @@ test(
     assert.match(block[1], /alias: string \| null;/);
     const schema = fs.readFileSync(path.join(BACKEND_ROOT, 'prisma/schema.prisma'), 'utf8');
     assert.match(schema, /alias\s+String\?/);
+
+    // 气泡/群日志的名字靠发送者自带的群昵称;「我的群昵称」那一行靠会话行。
+    const sender = types.match(/export interface ChatSenderInfo \{([\s\S]*?)\n\}/);
+    assert.ok(sender, 'backend has no ChatSenderInfo');
+    assert.match(sender[1], /alias: string \| null;/);
+    const conversation = types.match(
+      /export interface ChatConversationDto \{([\s\S]*?)\n\}/,
+    );
+    assert.ok(conversation, 'backend has no ChatConversationDto');
+    assert.match(conversation[1], /myAlias: string \| null;/);
   },
 );

@@ -39,6 +39,9 @@ test('chat info offers the remark row and writes it back locally', () => {
   assert.match(info, /store\.upsertConversation\(\{ \.\.\.cached, myRemark: result\.remark \}\)/);
   // 群备注与群昵称是并列的两行,不能只留一行。
   assert.match(info, /chat\.myAliasInGroup/);
+  // 两行挨着放,不写明「只有你自己看得见」会被当成同一件事 ——
+  // 五语言都加了这条提示,别让它成为没人用的死键。
+  assert.match(info, /subtitle=\{t\('chat\.groupRemarkHint'/);
 });
 
 test('the roster switch gates the member grid for ordinary members only', () => {
@@ -66,7 +69,10 @@ test('the roster switch is localized in five languages', () => {
 });
 
 // ── 跨仓契约 ──
-const BACKEND_ROOT = path.join(root, '..', 'circle_be');
+// CIRCLE_BE_PATH 覆盖是给 git worktree 用的:worktree 旁边那个 circle_be 往往是
+// 别的分支,比 main 还容易给出假红/假绿。
+const BACKEND_ROOT =
+  process.env.CIRCLE_BE_PATH ?? path.join(root, '..', 'circle_be');
 const hasBackend = fs.existsSync(path.join(BACKEND_ROOT, 'src/chat/chat.controller.ts'));
 
 test(
@@ -91,7 +97,12 @@ test(
     const conversation = schema.match(/model ChatConversation \{([\s\S]*?)\n\}/);
     assert.ok(conversation, 'backend has no ChatConversation model');
     assert.doesNotMatch(conversation[1], /\n\s+remark\s+String\?/);
-    assert.match(conversation[1], /membersCanViewRoster Boolean @default\(true\)/);
+    // 开关默认开还是默认关是产品取舍(迁移可以整批回填),客户端两种都能跑 ——
+    // 这里只钉「这一列在会话上」,不钉默认值。
+    assert.match(
+      conversation[1],
+      /membersCanViewRoster\s+Boolean\s+@default\((?:true|false)\)/,
+    );
 
     const types = fs.readFileSync(path.join(BACKEND_ROOT, 'src/chat/chat.types.ts'), 'utf8');
     assert.match(types, /myRemark: string \| null;/);

@@ -49,9 +49,13 @@ import {
   resolveStandaloneSelfRole,
 } from '@/features/chat/group-admin-permissions';
 import { groupMemberDisplayName } from '@/features/chat/group-member-display';
-import { useChangeGroupAvatar } from '@/features/chat/hooks/use-change-group-avatar';
+import { useChangeAvatar } from '@/hooks/use-change-avatar';
 import { useGroupAdminActions } from '@/features/chat/hooks/use-group-admin-actions';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
+import {
+  allowsMemberInvites,
+  allowsMemberProfiles,
+} from '@/features/chat/utils/group-policy';
 import {
   SILENCE_DURATION_OPTIONS,
   isMemberSilencedNow,
@@ -511,10 +515,19 @@ export default function ChatInfoScreen() {
     : null;
   // 二维码入群关掉后连群码入口一起收起来:签发与扫码服务端都会拒,留着只会让人白扫。
   const qrJoinEnabled = activeConversationPolicies?.qrJoinEnabled ?? true;
-  // 「成员可查看他人资料」:群主/管理员不受限;策略缺省(老后端)按开放处理。
-  const canViewMemberProfiles =
-    isGroupManager(selfGroupRole) ||
-    (activeConversationPolicies?.membersCanViewProfiles ?? true);
+  // 「成员可查看他人资料」/「成员邀请」:三张屏共用 group-policy 判据
+  // (群主/管理员豁免;策略缺省=老后端,按开放处理)。
+  const groupPolicyActor = {
+    role: selfGroupRole,
+    policies: activeConversationPolicies,
+  };
+  const canViewMemberProfiles = allowsMemberProfiles(groupPolicyActor);
+  // 独立群聊的「+」邀请块:关了「成员邀请」后普通成员按下必得
+  // CHAT_GROUP_INVITE_DISABLED,与二维码入口同一取舍 —— 直接收起;群主/管理员照旧。
+  // 圈子群仍只给管理员(那是担保邀请进圈的流程)。
+  const canInviteGroupMembers =
+    canManageGroup ||
+    (isStandaloneGroup && allowsMemberInvites(groupPolicyActor));
   const resolvedConversationID = activeConversation?.id ?? '';
   currentConversationIDRef.current = resolvedConversationID;
   const basePinned = activeConversation?.pinned ?? false;
@@ -1087,8 +1100,18 @@ export default function ChatInfoScreen() {
     [conversationID, isStandaloneGroup, resolvedConversationID],
   );
 
+  // 圈子群走圈子头像端点(仅圈主),独立群聊走会话头像端点(群主/管理员);
+  // 上传与失败提示与圈子详情页共用同一个 hook。
   const { changeAvatar: changeGroupAvatar, changing: groupAvatarChanging } =
-    useChangeGroupAvatar(submitGroupAvatar, handleGroupAvatarChanged);
+    useChangeAvatar({
+      submit: submitGroupAvatar,
+      onChanged: handleGroupAvatarChanged,
+      failureTitle: t('chat.groupAvatarUpdateFailed', {
+        defaultValue: '群头像更新失败',
+      }),
+      onFailure: (error) =>
+        reportHandledFailure('chatInfo', 'groupAvatarUpdate', error),
+    });
 
   const handleOpenInviteGroupMembers = useCallback(() => {
     if (isStandaloneGroup) {
@@ -1632,11 +1655,20 @@ export default function ChatInfoScreen() {
 
   // 我在群里的昵称:任一在座成员都能改自己的,不需要群主/管理员。
   // 空串 = 清除,回落账号昵称。改完就地更新成员表,网格与聊天页的名字立刻跟上。
-  const myGroupAlias = useMemo(
-    () =>
-      groupMembers.find((member) => member.userId === currentUserID)?.alias ?? '',
-    [currentUserID, groupMembers],
-  );
+  //
+  // 事实源是会话 DTO 上的 myAlias(自己那张座位),不是成员目录:「是否显示群成员」
+  // 关掉后普通成员拿到的是空目录(圈子群跳过 fetch、独立群 403),从目录里捞自己
+  // 会让这一行永远显示「未设置」、prompt 默认值也是空的,同值短路还会拿空串去比。
+  // 成员表只当老后端(不下发 myAlias)的兜底。
+  const myGroupAlias = useMemo(() => {
+    const seatAlias = activeConversation?.myAlias;
+    // 字段在(哪怕是 null=没设)就以它为准:别人在另一台设备上清掉昵称后,
+    // 本地那份还没刷新的成员表不该把旧名字顶回来。字段缺失才是老后端。
+    if (seatAlias !== undefined) return seatAlias ?? '';
+    return (
+      groupMembers.find((member) => member.userId === currentUserID)?.alias ?? ''
+    );
+  }, [activeConversation?.myAlias, currentUserID, groupMembers]);
 
   const handleEditMyGroupAlias = useCallback(() => {
     const target = resolvedConversationID || conversationID;
@@ -1649,6 +1681,19 @@ export default function ChatInfoScreen() {
         if (value.trim() === myGroupAlias.trim()) return;
         setMyGroupChatAlias(target, value)
           .then((result) => {
+            // 会话行是这一行的事实源:不回写的话,目录被关掉的群里改完名字
+            // 又会立刻退回「未设置」。store 没有该会话时(从圈子详情直接进来)
+            // 本页的 get-or-create 结果就是活体,一并跟上。
+            const store = useChatStore.getState();
+            const cached = store.conversations.find((item) => item.id === target);
+            if (cached) {
+              store.upsertConversation({ ...cached, myAlias: result.alias });
+            }
+            setGroupConversation((current) =>
+              current && current.id === target
+                ? { ...current, myAlias: result.alias }
+                : current,
+            );
             setGroupMembers((members) =>
               members.map((member) =>
                 member.userId === currentUserID
@@ -1811,7 +1856,7 @@ export default function ChatInfoScreen() {
                   </Pressable>
                 );
               })}
-              {canManageGroup || isStandaloneGroup ? (
+              {canInviteGroupMembers ? (
                 <Pressable style={s.groupMemberCell} onPress={handleOpenInviteGroupMembers}>
                   <View style={[s.addMemberBox, d.addMemberBox, { width: 56, height: 56 }]}>
                     <Ionicons name="add" size={30} color={colors.textSecondary} />
@@ -1920,6 +1965,10 @@ export default function ChatInfoScreen() {
                 <Divider />
                 <GroupInfoRow
                   label={t('chat.groupRemark', { defaultValue: '群备注' })}
+                  // 群备注与群昵称挨着放,不写明「只有你自己看得见」两行会被当成同一件事。
+                  subtitle={t('chat.groupRemarkHint', {
+                    defaultValue: '只有你自己看得见',
+                  })}
                   value={myGroupRemark || t('chat.notSet')}
                   onPress={handleEditMyGroupRemark}
                 />
