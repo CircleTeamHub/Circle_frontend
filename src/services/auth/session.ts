@@ -83,7 +83,6 @@ type PersistedResettableStore = {
  * 纯设备偏好随设备走，跨账号幸存。当前幸存者及理由：
  * - circle-im-app-settings          —— 语言/主题等设备设置
  * - circle-im-notification-feedback —— 设备级通知反馈
- * - circle-im-circle-notification   —— 只有两个横幅/应用内开关，无账号数据
  * - circle-im-known-accounts        —— 账号切换器本体，语义就是跨会话
  * - circle-im-auth                  —— 由上方 persist.clearStorage 单独处理
  *
@@ -107,6 +106,13 @@ const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] 
   async () =>
     (await import('@/features/discover/store/use-discover-filter-store'))
       .useDiscoverFilterStore,
+  // 圈子通知三档。曾经按「只有两个应用内横幅开关、无账号数据」留作设备偏好，
+  // 但「离线提醒」现在镜像的是 User.circleOfflinePushEnabled 这个 per-user 字段：
+  // 留下来的话 B 登录后继承 A 的关闭态，B 第一次拨动就把 A 派生的值 PUT 进
+  // 自己的账号。清掉之后回到默认全开，下次打开设置由 GET 与服务端校平。
+  async () =>
+    (await import('@/features/discover/store/use-circle-notification-store'))
+      .useCircleNotificationStore,
   async () => {
     const { useCircleShortcutOrderStore } = await import(
       '@/features/discover/store/use-circle-shortcut-order-store'

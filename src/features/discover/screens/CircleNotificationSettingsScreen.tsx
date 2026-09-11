@@ -4,23 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { useRouter, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Spacing, Typography, useTheme } from '@/theme';
-import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
+import { CircleNotificationToggles } from '@/features/discover/components/circle-notification-toggles';
 import {
   getCircleGuideHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
-
-interface NotificationItemProps {
-  title: string;
-  onHint: string;
-  offHint: string;
-  value: boolean;
-  disabled?: boolean;
-  onToggle: (value: boolean) => void;
-}
 
 const s = StyleSheet.create({
   container: {
@@ -33,22 +23,6 @@ const s = StyleSheet.create({
   pageTitle: {
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.lg,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.lg,
-    gap: Spacing.md,
-  },
-  textBlock: {
-    flex: 1,
-    gap: Spacing.xs,
-  },
-  itemTitle: {
-    ...Typography.h3,
-  },
-  hintLine: {
-    ...Typography.caption,
   },
   divider: {
     height: 1,
@@ -71,51 +45,12 @@ const s = StyleSheet.create({
   },
 });
 
-const NotificationItem: React.FC<NotificationItemProps> = ({
-  title,
-  onHint,
-  offHint,
-  value,
-  disabled,
-  onToggle,
-}) => {
-  const { colors } = useTheme();
-
-  return (
-    <View style={[s.itemRow, disabled ? { opacity: 0.4 } : null]}>
-      <View style={s.textBlock}>
-        <Text style={[s.itemTitle, { color: colors.text }]}>{title}</Text>
-        <Text style={[s.hintLine, { color: colors.textSecondary }]}>
-          {onHint}
-        </Text>
-        <Text style={[s.hintLine, { color: colors.textSecondary }]}>
-          {offHint}
-        </Text>
-      </View>
-      <ThemedSwitch
-        value={value}
-        onValueChange={onToggle}
-        disabled={disabled}
-      />
-    </View>
-  );
-};
-
 export default function CircleNotificationSettingsScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
   const segments = useSegments();
-
-  const inAppEnabled = useCircleNotificationStore((st) => st.inAppEnabled);
-  const bannerEnabled = useCircleNotificationStore((st) => st.bannerEnabled);
-  const setInAppEnabled = useCircleNotificationStore(
-    (st) => st.setInAppEnabled,
-  );
-  const setBannerEnabled = useCircleNotificationStore(
-    (st) => st.setBannerEnabled,
-  );
 
   const d = useMemo(
     () => ({
@@ -142,7 +77,8 @@ export default function CircleNotificationSettingsScreen() {
           {t('discover.notifications.title')}
         </Text>
 
-        {/* 圈子玩法说明入口：讲清卡片颜色含义 + 活动怎么玩。 */}
+        {/* 圈子玩法说明入口：讲清卡片颜色含义 + 活动怎么玩。只有整页设置带它，
+            圈子动态头部的快捷弹层不放，那里要的是「两下改完就关」。 */}
         <Pressable
           style={s.guideRow}
           // 这一页现在也从联系人栈打开，写死 discover 路由会把用户甩去另一个
@@ -171,24 +107,7 @@ export default function CircleNotificationSettingsScreen() {
 
         <View style={[s.divider, d.divider]} />
 
-        <NotificationItem
-          title={t('discover.notifications.global')}
-          onHint={t('discover.notifications.globalOnHint')}
-          offHint={t('discover.notifications.globalOffHint')}
-          value={inAppEnabled}
-          onToggle={setInAppEnabled}
-        />
-
-        <View style={[s.divider, d.divider]} />
-
-        <NotificationItem
-          title={t('discover.notifications.banner')}
-          onHint={t('discover.notifications.bannerOnHint')}
-          offHint={t('discover.notifications.bannerOffHint')}
-          value={inAppEnabled && bannerEnabled}
-          disabled={!inAppEnabled}
-          onToggle={setBannerEnabled}
-        />
+        <CircleNotificationToggles />
       </ScrollView>
     </View>
   );

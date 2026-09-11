@@ -5,12 +5,41 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { loadTsModule } = require('./helpers/load-ts-module');
 
 const RECONNECT_MAX_MS = 30_000;
 // scheduleReconnect 里 delay = baseDelay + baseDelay * 0.2 * Math.random()
 const JITTER_CEILING = 1.2;
 
-function loadRealtimeHarness() {
+/**
+ * 圈子通知 store 的**真身**（而不是手抄一份形状）：横幅/红点的门控语义只能有
+ * 一处实现，桩一份的话 store 改了这里照样绿，真机上红点却漏出来。
+ */
+function loadCircleNotificationStore() {
+  const backing = new Map();
+  const shims = {
+    zustand: require('zustand'),
+    'zustand/middleware': require('zustand/middleware'),
+    '@/storage': {
+      mmkvJsonStorage: {
+        getItem: (key) => backing.get(key) ?? null,
+        setItem: (key, value) => backing.set(key, value),
+        removeItem: (key) => backing.delete(key),
+      },
+    },
+  };
+  return loadTsModule(
+    'src/features/discover/store/use-circle-notification-store.ts',
+    {
+      requireShim: (specifier) => {
+        if (shims[specifier]) return shims[specifier];
+        throw new Error(`unexpected import: ${specifier}`);
+      },
+    },
+  );
+}
+
+function loadRealtimeHarness(options = {}) {
   const filePath = path.join(process.cwd(), 'src/realtime/client.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
@@ -58,6 +87,29 @@ function loadRealtimeHarness() {
   const sentryReports = [];
   const stubStore = (state) => ({ getState: () => state });
 
+  const circleNotifications = loadCircleNotificationStore();
+  circleNotifications.useCircleNotificationStore.setState({
+    globalEnabled: true,
+    bannerEnabled: true,
+    soundEnabled: true,
+    offlineEnabled: true,
+    ...options.circleNotifications,
+  });
+
+  // 徽标写入全部记下来，好断言「总闸关着时圈子那一份到底进没进展示层」。
+  const badgeWrites = [];
+  const badgeState = {
+    messagesUnread: 0,
+    discoverUnread: 0,
+    circleUnread: 0,
+    momentsUnread: 0,
+  };
+  const recordBadge = (kind) => (value) => {
+    badgeWrites.push({ kind, value });
+    if (kind === 'snapshot') Object.assign(badgeState, value);
+    else badgeState[kind] = value;
+  };
+
   const context = {
     module: { exports: {} },
     exports: {},
@@ -87,12 +139,14 @@ function loadRealtimeHarness() {
         case '@/services/api/notifications':
           return {
             fetchNotifications: async () => [],
+            // 非零：REST 恢复路径的门控断言全靠这几个数，全 0 的话「门控生效」
+            // 与「什么都没发生」长得一模一样。
             fetchNotificationUnreadSummary: async () => ({
-              discoverUnread: 0,
-              momentsUnread: 0,
-              circleUnread: 0,
+              discoverUnread: 7,
+              momentsUnread: 2,
+              circleUnread: 3,
               profileUnread: 0,
-              totalUnread: 0,
+              totalUnread: 7,
             }),
           };
         case '@/features/notifications/utils/notification-domain':
@@ -130,12 +184,7 @@ function loadRealtimeHarness() {
             useMomentsFeedSignalStore: stubStore({ bump: () => {} }),
           };
         case '@/features/discover/store/use-circle-notification-store':
-          return {
-            useCircleNotificationStore: stubStore({
-              inAppEnabled: true,
-              bannerEnabled: true,
-            }),
-          };
+          return circleNotifications;
         case '@/features/call/store/use-call-store':
           return { useCallStore: stubStore({}) };
         case '@/features/call/realtime-guards':
@@ -157,9 +206,14 @@ function loadRealtimeHarness() {
         case '@/stores/tabBadgeStore':
           return {
             useTabBadgeStore: stubStore({
-              applySnapshot: () => {},
+              get messagesUnread() {
+                return badgeState.messagesUnread;
+              },
+              applySnapshot: recordBadge('snapshot'),
               setContactsUnread: () => {},
-              setDiscoverUnread: () => {},
+              setDiscoverUnread: recordBadge('discoverUnread'),
+              setMomentsUnread: recordBadge('momentsUnread'),
+              setCircleUnread: recordBadge('circleUnread'),
               setSignupUnread: () => {},
               setProfileUnread: () => {},
               setSystemUnread: () => {},
@@ -197,6 +251,9 @@ function loadRealtimeHarness() {
     realtimeConnected,
     clearedSessions,
     sentryReports,
+    badgeWrites,
+    badgeState,
+    circleNotifications,
     latestSocket: () => sockets[sockets.length - 1],
     pendingDelay: () => pendingTimer()?.[1].delay ?? null,
     hasPendingReconnect: () => pendingTimer() !== null,
@@ -507,6 +564,90 @@ test('a socket killed right after the handshake keeps escalating the backoff', (
         'a handshake that never got authenticated must not reset the backoff',
     );
   });
+});
+
+// ---------------------------------------------------------------------------
+// 圈子通知总闸 → 未读红点
+// ---------------------------------------------------------------------------
+
+function deliver(harness, type, payload) {
+  harness.latestSocket().onmessage({ data: JSON.stringify({ type, payload }) });
+}
+
+function connectedHarness(options) {
+  const harness = loadRealtimeHarness(options);
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+  return harness;
+}
+
+test('总闸开着时圈子未读原样进展示层', () => {
+  const harness = connectedHarness();
+
+  deliver(harness, 'badge.snapshot', { discoverUnread: 7, circleUnread: 3 });
+  assert.equal(harness.badgeState.discoverUnread, 7);
+  assert.equal(harness.badgeState.circleUnread, 3);
+
+  deliver(harness, 'interaction.unread.changed', { count: 9, circleUnread: 4 });
+  assert.equal(harness.badgeState.discoverUnread, 9);
+  assert.equal(harness.badgeState.circleUnread, 4);
+});
+
+// 门控此前只挂在 interaction.unread.changed 上：badge.snapshot 帧（认证后网关
+// 立刻回推的第一帧）照写原始数 —— 关掉总闸重启一次，红点就回来了。
+test('总闸关着时 badge.snapshot 帧不把圈子未读写进展示层', () => {
+  const harness = connectedHarness({ circleNotifications: { globalEnabled: false } });
+
+  deliver(harness, 'badge.snapshot', { discoverUnread: 7, circleUnread: 3 });
+
+  assert.equal(harness.badgeState.circleUnread, 0);
+  // 互动总数里含着圈子那一份，只清 circleUnread 的话发现页 tab 照样亮着。
+  assert.equal(harness.badgeState.discoverUnread, 4);
+});
+
+test('总闸关着时 REST 恢复的快照同样不带圈子未读', async () => {
+  const open = connectedHarness();
+  await open.recoverTabBadgeSnapshot({ force: true });
+  // 对照组：门控没生效时这条路径写的是服务端原值。
+  assert.equal(open.badgeState.circleUnread, 3);
+  assert.equal(open.badgeState.discoverUnread, 7);
+
+  const harness = connectedHarness({ circleNotifications: { globalEnabled: false } });
+
+  await harness.recoverTabBadgeSnapshot({ force: true });
+
+  assert.equal(harness.badgeState.circleUnread, 0);
+  assert.equal(harness.badgeState.discoverUnread, 4);
+});
+
+test('总闸关着时 interaction.unread.changed 两个数都摘掉圈子那一份', () => {
+  const harness = connectedHarness({ circleNotifications: { globalEnabled: false } });
+
+  deliver(harness, 'interaction.unread.changed', {
+    count: 9,
+    momentsUnread: 5,
+    circleUnread: 4,
+  });
+
+  assert.equal(harness.badgeState.circleUnread, 0);
+  assert.equal(harness.badgeState.discoverUnread, 5);
+  // 朋友圈那个铃铛与圈子无关，不受牵连。
+  assert.equal(harness.badgeState.momentsUnread, 5);
+});
+
+// 老后端不带 circleUnread：扣不出圈子那一份，总数只能原样放行 —— 把它清零会
+// 顺手抹掉朋友圈和好友申请的红点。
+test('老后端不带 circleUnread 时互动总数原样放行', () => {
+  const harness = connectedHarness({ circleNotifications: { globalEnabled: false } });
+
+  deliver(harness, 'interaction.unread.changed', { count: 6 });
+
+  assert.equal(harness.badgeState.discoverUnread, 6);
+  assert.equal(
+    harness.badgeWrites.some((w) => w.kind === 'circleUnread'),
+    false,
+    '这一帧没带圈子计数，不该被门控写成 0 覆盖既有值',
+  );
 });
 
 test('reconnected sockets re-send the auth frame', () => {
