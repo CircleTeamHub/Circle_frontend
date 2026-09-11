@@ -765,7 +765,7 @@
     "deleteChatConfirm": "¿Eliminar el chat y los mensajes locales de «{{name}}»?",
     "deleteChatConfirmDirect": "¿Eliminar el historial con «{{name}}»? También se eliminará para la otra persona y no se podrá deshacer.",
     "newGroupTitle": "Iniciar chat de grupo",
-    "newGroupNamePlaceholder": "Nombre del grupo (opcional)",
+    "newGroupNamePlaceholder": "Nombre del grupo",
     "newGroupSelectMembers": "Selecciona contactos",
     "newGroupSearchPlaceholder": "Buscar amigos",
     "newGroupNoFriends": "Aún no tienes amigos: añade algunos primero",
@@ -773,6 +773,7 @@
     "newGroupSelectedCount": "{{count}} seleccionados",
     "newGroupSubmit": "Listo",
     "newGroupMinMembers": "Selecciona al menos 2 amigos",
+    "newGroupNameRequired": "Introduce un nombre de grupo",
     "newGroupCreateFailed": "No se pudo crear el grupo: {{error}}",
     "newGroupDefaultName": "Chat de grupo",
     "inviteGroupMembersTitle": "Invitar amigos",
@@ -2542,7 +2543,6 @@
       "loginFailed": "Error al iniciar sesión, inténtalo de nuevo",
       "registerFailed": "Error al registrarse, inténtalo de nuevo",
       "sendCodeFailed": "Error al enviar, inténtalo de nuevo",
-      "passwordMismatch": "Las contraseñas no coinciden",
       "registerSucceededSessionFailed": "Tu cuenta se creó, pero no pudimos iniciar sesión automáticamente. Inicia sesión con este correo."
     },
     "hidePassword": "Ocultar contraseña",
@@ -3213,6 +3213,7 @@
     "CHAT_EDIT_FORBIDDEN": "No se puede editar este mensaje",
     "CHAT_FORWARD_FORBIDDEN": "Los mensajes temporales no se pueden reenviar",
     "CHAT_GROUP_FRIENDS_ONLY": "Solo puedes invitar amigos al grupo",
+    "CHAT_GROUP_NAME_REQUIRED": "Se requiere un nombre de grupo",
     "CHAT_GROUP_MIN_MEMBERS": "Selecciona al menos 2 amigos",
     "CHAT_GROUP_CIRCLE_MANAGED": "Este grupo lo gestiona su círculo",
     "QR_INVALID": "Este código QR no es válido o ya no está activo",
@@ -3226,8 +3227,7 @@
     "CHAT_GROUP_TARGET_PROTECTED": "No puedes hacer esto al propietario ni a otro administrador",
     "CHAT_GROUP_SELF_TARGET": "No puedes hacer esto contigo mismo",
     "CHAT_MEMBER_SILENCED": "Estás silenciado y no puedes enviar mensajes ahora",
-    "CHAT_SILENCE_DURATION_INVALID": "Duración de silencio no válida",
-    "AUTH_PASSWORD_MISMATCH": "Las contraseñas no coinciden"
+    "CHAT_SILENCE_DURATION_INVALID": "Duración de silencio no válida"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",

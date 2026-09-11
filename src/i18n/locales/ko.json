@@ -764,7 +764,7 @@
     "deleteChatConfirm": "'{{name}}'의 채팅과 로컬 메시지를 삭제할까요?",
     "deleteChatConfirmDirect": "'{{name}}'님과의 채팅 기록을 삭제할까요? 상대방의 기록도 함께 삭제되며 되돌릴 수 없습니다.",
     "newGroupTitle": "그룹 채팅 시작",
-    "newGroupNamePlaceholder": "그룹 이름 (선택)",
+    "newGroupNamePlaceholder": "그룹 이름",
     "newGroupSelectMembers": "연락처 선택",
     "newGroupSearchPlaceholder": "친구 검색",
     "newGroupNoFriends": "아직 친구가 없어요. 먼저 추가해 보세요",
@@ -772,6 +772,7 @@
     "newGroupSelectedCount": "{{count}}명 선택됨",
     "newGroupSubmit": "완료",
     "newGroupMinMembers": "친구를 2명 이상 선택해 주세요",
+    "newGroupNameRequired": "그룹 이름을 입력해 주세요",
     "newGroupCreateFailed": "그룹 생성에 실패했습니다: {{error}}",
     "newGroupDefaultName": "그룹 채팅",
     "inviteGroupMembersTitle": "친구 초대",
@@ -2539,7 +2540,6 @@
       "loginFailed": "로그인에 실패했습니다. 다시 시도해 주세요",
       "registerFailed": "가입에 실패했습니다. 다시 시도해 주세요",
       "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요",
-      "passwordMismatch": "비밀번호가 일치하지 않습니다",
       "registerSucceededSessionFailed": "계정은 생성되었지만 자동 로그인에 실패했습니다. 해당 이메일로 로그인해 주세요."
     },
     "hidePassword": "비밀번호 숨기기",
@@ -3210,6 +3210,7 @@
     "CHAT_EDIT_FORBIDDEN": "이 메시지는 수정할 수 없습니다",
     "CHAT_FORWARD_FORBIDDEN": "사라지는 메시지는 전달할 수 없습니다",
     "CHAT_GROUP_FRIENDS_ONLY": "친구만 그룹에 초대할 수 있어요",
+    "CHAT_GROUP_NAME_REQUIRED": "그룹 이름이 필요합니다",
     "CHAT_GROUP_MIN_MEMBERS": "친구를 2명 이상 선택해 주세요",
     "CHAT_GROUP_CIRCLE_MANAGED": "이 그룹은 서클에서 관리해요",
     "QR_INVALID": "유효하지 않거나 만료된 QR 코드입니다",
@@ -3223,8 +3224,7 @@
     "CHAT_GROUP_TARGET_PROTECTED": "그룹장이나 같은 등급의 관리자에게는 할 수 없습니다",
     "CHAT_GROUP_SELF_TARGET": "자기 자신에게는 할 수 없습니다",
     "CHAT_MEMBER_SILENCED": "채팅이 금지되어 지금은 메시지를 보낼 수 없습니다",
-    "CHAT_SILENCE_DURATION_INVALID": "채팅 금지 기간이 올바르지 않습니다",
-    "AUTH_PASSWORD_MISMATCH": "비밀번호가 일치하지 않습니다"
+    "CHAT_SILENCE_DURATION_INVALID": "채팅 금지 기간이 올바르지 않습니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",
