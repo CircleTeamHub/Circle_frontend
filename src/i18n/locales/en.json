@@ -121,7 +121,6 @@
       "loginFailed": "Login failed, please try again",
       "registerFailed": "Registration failed, please try again",
       "sendCodeFailed": "Failed to send, please try again",
-      "passwordMismatch": "Passwords do not match",
       "registerSucceededSessionFailed": "Your account was created, but we could not sign you in automatically. Please log in with this email."
     },
     "hidePassword": "Hide password",
@@ -194,7 +193,7 @@
     "deleteChatConfirm": "Delete the chat and local messages for \"{{name}}\"?",
     "deleteChatConfirmDirect": "Delete the chat history with \"{{name}}\"? It will also be deleted for the other person and cannot be undone.",
     "newGroupTitle": "Start Group Chat",
-    "newGroupNamePlaceholder": "Group name (optional)",
+    "newGroupNamePlaceholder": "Group name",
     "newGroupSelectMembers": "Select contacts",
     "newGroupSearchPlaceholder": "Search friends",
     "newGroupNoFriends": "No friends yet — add some first",
@@ -202,6 +201,7 @@
     "newGroupSelectedCount": "{{count}} selected",
     "newGroupSubmit": "Done",
     "newGroupMinMembers": "Please select at least 2 friends",
+    "newGroupNameRequired": "Please enter a group name",
     "newGroupCreateFailed": "Failed to create group: {{error}}",
     "newGroupDefaultName": "Group Chat",
     "inviteGroupMembersTitle": "Invite Friends",
@@ -2459,12 +2459,18 @@
         "locationSelected": "Selected",
         "media": "Images/Videos",
         "mediaHint": "Main note media, images and videos supported",
-        "required": "Required",
         "showcase": "Showcase",
         "showcaseHint": "Media shown on the shared group card",
         "text": "Text",
         "textHint": "Edit text content only"
       },
+      "validationTitle": "Check your note",
+      "titleRequired": "Please enter a title",
+      "titleHint": "Title required, up to {{max}} characters",
+      "textCount": "Body length {{count}} / {{max}}",
+      "textScrollHint": "Text is optional. Scroll inside the editor to read the full note.",
+      "textTooLong": "The body, including the line breaks between paragraphs, can contain up to {{max}} characters; you have {{count}}. Your text is preserved. Shorten it before saving.",
+      "tooManyParagraphs": "Text can contain up to {{max}} paragraphs. Your text is preserved. Combine some paragraphs before saving.",
       "titlePlaceholder": "Title",
       "uploading": "Uploading...",
       "videoItem": "Video"
@@ -3213,6 +3219,7 @@
     "CHAT_EDIT_FORBIDDEN": "This message cannot be edited",
     "CHAT_FORWARD_FORBIDDEN": "Messages in a disappearing chat cannot be forwarded",
     "CHAT_GROUP_FRIENDS_ONLY": "Only friends can be added to the group",
+    "CHAT_GROUP_NAME_REQUIRED": "A group name is required",
     "CHAT_GROUP_MIN_MEMBERS": "Select at least 2 friends",
     "CHAT_GROUP_CIRCLE_MANAGED": "This group is managed by its circle",
     "QR_INVALID": "This QR code is invalid or no longer active",
@@ -3226,8 +3233,7 @@
     "CHAT_GROUP_TARGET_PROTECTED": "You cannot do this to the owner or another admin",
     "CHAT_GROUP_SELF_TARGET": "You cannot do this to yourself",
     "CHAT_MEMBER_SILENCED": "You are muted and cannot send messages right now",
-    "CHAT_SILENCE_DURATION_INVALID": "Invalid mute duration",
-    "AUTH_PASSWORD_MISMATCH": "Passwords do not match"
+    "CHAT_SILENCE_DURATION_INVALID": "Invalid mute duration"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",

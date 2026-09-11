@@ -2,14 +2,20 @@ import type { CreateNoteMediaInput, NoteMedia } from '@/features/notes/types';
 
 type Block = Record<string, unknown>;
 
-function getBlockText(block: Block): string {
-  const content = block.content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .map((inline: Record<string, unknown>) =>
-      typeof inline.text === 'string' ? inline.text : '',
-    )
-    .join('');
+/** 包括粘贴内容中的链接文字和两种 BlockNote 表格单元格格式。 */
+export function extractInlineText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) return content.map(extractInlineText).join('');
+  if (!content || typeof content !== 'object') return '';
+  const node = content as Block;
+  if (typeof node.text === 'string') return node.text;
+  if (Array.isArray(node.rows)) {
+    return node.rows.map((row) => {
+      const cells = row && typeof row === 'object' ? (row as Block).cells : null;
+      return Array.isArray(cells) ? cells.map(extractInlineText).join('\t') : '';
+    }).join('\n');
+  }
+  return extractInlineText(node.content);
 }
 
 /**
@@ -18,13 +24,12 @@ function getBlockText(block: Block): string {
 export function extractPlainText(blocks: Block[]): string {
   return blocks
     .map((block) => {
-      const type = block.type as string;
-      if (
-        ['paragraph', 'heading', 'bulletListItem', 'numberedListItem', 'quote'].includes(type)
-      ) {
-        return getBlockText(block);
-      }
-      return '';
+      if (!block || typeof block !== 'object') return '';
+      const text = extractInlineText(block.content);
+      const children = Array.isArray(block.children)
+        ? extractPlainText(block.children as Block[])
+        : '';
+      return [text, children].filter(Boolean).join('\n');
     })
     .filter(Boolean)
     .join('\n');

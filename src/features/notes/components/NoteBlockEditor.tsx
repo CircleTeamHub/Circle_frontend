@@ -40,7 +40,10 @@ function getNoteBlockEditorDOM() {
 
 // Stable reference so the Expo DOM bridge doesn't see a new `dom` object on
 // every render and queue an unnecessary injectJavaScript call.
-const DOM_WEBVIEW_PROPS = { useExpoDOMWebView: true } as const;
+const DOM_WEBVIEW_PROPS = {
+  useExpoDOMWebView: true,
+  nestedScrollEnabled: true,
+} as const;
 
 // Videos aren't duration-capped, so they need a far longer upload window than
 // the 60s image default before the timeout fires.

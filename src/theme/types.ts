@@ -4,6 +4,9 @@ export type ResolvedMode = 'light' | 'dark';
 export interface ThemeColors {
   background: string;
   surface: string;
+  /** 置顶会话背景与次要文字，浅色下加强和普通会话的区分。 */
+  pinnedSurface: string;
+  pinnedTextSecondary: string;
   surfaceBorder: string;
   divider: string;
   primary: string;
