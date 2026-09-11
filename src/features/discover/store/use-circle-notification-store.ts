@@ -9,7 +9,8 @@ import { mmkvJsonStorage } from '@/storage';
  *   两个子开关同步置灰。
  * - soundEnabled  声音提醒：只管声音。关掉 = 静音，横幅和未读红点照常。
  * - offlineEnabled 离线提醒：APP 离线时收不收圈子推送。**由服务端执行**，这里存的
- *   是本地镜像，改动要同步给后端（见 circle-offline-push-sync），否则只是个摆设。
+ *   是本地镜像，改动要同步给后端（唯一入口 hooks/use-circle-notification-tiers），
+ *   否则只是个摆设。
  *
  * 另有 bannerEnabled：v1 时代的「应用内横幅」开关。三档 UI 里没有它的行，也没有
  * setter —— 它现在只由 migrate 写一次。留着它是因为：历史用户关过的横幅不能因为
