@@ -4,6 +4,7 @@ export const darkColors: ThemeColors = {
   background: '#1A1B23',
   surface: '#252630',
   surfaceBorder: '#565A6B',
+  switchOffTrack: '#565A6B',
   divider: '#3C3E4B',
   primary: '#6366F1',
   primaryLight: 'rgba(99, 102, 241, 0.25)',
@@ -60,6 +61,9 @@ export const lightColors: ThemeColors = {
   background: '#F8F9FA',
   surface: '#FFFFFF',
   surfaceBorder: '#E5E7EB',
+  // iOS 关闭态会收缩 trackColor，轨道直接显示在白色滑块旁；#6B7280
+  // 与白色滑块的对比度约为 4.83:1，避免浅色页面上再次融掉。
+  switchOffTrack: '#6B7280',
   divider: '#F0F0F0',
   primary: '#6366F1',
   primaryLight: 'rgba(99, 102, 241, 0.15)',

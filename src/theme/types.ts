@@ -5,6 +5,8 @@ export interface ThemeColors {
   background: string;
   surface: string;
   surfaceBorder: string;
+  /** 开关关闭态轨道色；需和白色滑块保持足够的非文本对比度。 */
+  switchOffTrack: string;
   divider: string;
   primary: string;
   primaryLight: string;
