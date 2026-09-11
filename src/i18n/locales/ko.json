@@ -547,7 +547,7 @@
       "customImage": "사용자 지정 이미지",
       "paramMissing": "매개변수 누락",
       "cannotModify": "채팅 배경을 변경할 수 없습니다.",
-      "statusUploading": "업로드 중...",
+      "statusApplying": "적용 중...",
       "statusSet": "설정됨",
       "restoreDefault": "기본 배경으로 되돌리기",
       "statusChoose": "선택",

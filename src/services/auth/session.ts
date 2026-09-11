@@ -69,6 +69,11 @@ type PersistedResettableStore = {
   persist?: {
     clearStorage?: () => Promise<void> | void;
   };
+  /**
+   * 落在设备上、但不在 persist key 里的账号足迹（目前只有聊天背景图文件）。
+   * 与 clearStorage 同一档：清的是**刚登出账号**的足迹，被更新会话抢占也要清。
+   */
+  clearDeviceArtifacts?: () => Promise<void> | void;
 };
 
 /**
@@ -89,9 +94,16 @@ const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] 
   async () =>
     (await import('@/features/messages/store/use-local-unread-store'))
       .useLocalUnreadStore,
-  async () =>
-    (await import('@/features/chat/store/use-chat-preferences-store'))
-      .useChatPreferencesStore,
+  async () => {
+    const { clearUnreferencedChatBackgroundImages, useChatPreferencesStore } =
+      await import('@/features/chat/store/use-chat-preferences-store');
+    // 背景图本体在文件系统 / IndexedDB 里，clearStorage() 只清 MMKV 那半。
+    return {
+      getState: () => useChatPreferencesStore.getState(),
+      persist: useChatPreferencesStore.persist,
+      clearDeviceArtifacts: clearUnreferencedChatBackgroundImages,
+    };
+  },
   async () =>
     (await import('@/features/discover/store/use-discover-filter-store'))
       .useDiscoverFilterStore,
@@ -129,6 +141,9 @@ async function clearAccountScopedPersistedStores(
         store.getState().resetForLogout();
       }
       await Promise.resolve(store.persist?.clearStorage?.());
+      // 设备上的账号足迹与 clearStorage 同批：只清 persist key 而把上一个账号的
+      // 壁纸留在磁盘上，引用先没了就再也没人来删它（隐私残留）。
+      await Promise.resolve(store.clearDeviceArtifacts?.());
     } catch (err) {
       reportHandledFailure('session', 'accountScopedStoreClear', err);
     }

@@ -12,14 +12,10 @@ import { useTranslation } from 'react-i18next';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
+  clearUnreferencedChatBackgroundImages,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
-import {
-  requestUploadPresign,
-  resolveUploadContentType,
-  sanitizeUploadFilename,
-  uploadLocalFileToPresignedUrl,
-} from '@/services/api/upload';
+import { persistChatBackgroundImage } from '@/features/chat/utils/chat-background-image';
 import { Radius, Spacing, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
@@ -45,7 +41,7 @@ export default function ChatBackgroundScreen() {
     scope?: string;
   }>();
 
-  // Guard against setState after the screen unmounts mid-upload.
+  // Guard against setState after the screen unmounts mid-apply.
   const mountedRef = useRef(true);
   useEffect(
     () => () => {
@@ -69,15 +65,15 @@ export default function ChatBackgroundScreen() {
   const setGlobalBackgroundPreference = useChatPreferencesStore(
     (state) => state.setGlobalBackgroundPreference,
   );
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [applyingImage, setApplyingImage] = useState(false);
   const customImageStatusText = useMemo(
     () =>
-      uploadingImage
-        ? t('chat.background.statusUploading')
+      applyingImage
+        ? t('chat.background.statusApplying')
         : backgroundPreference?.mode === 'image'
           ? t('chat.background.statusSet')
           : t('chat.background.statusChoose'),
-    [backgroundPreference?.mode, uploadingImage, t],
+    [backgroundPreference?.mode, applyingImage, t],
   );
 
   // mode 'global' means "defer to the layer above" for a conversation and "no
@@ -87,20 +83,21 @@ export default function ChatBackgroundScreen() {
   );
 
   const handleRestoreDefault = useCallback(() => {
-    if (uploadingImage) return;
+    if (applyingImage) return;
     if (isGlobal) {
       setGlobalBackgroundPreference({ mode: 'global' });
     } else {
       if (!conversationID) return;
       setChatBackgroundPreference(conversationID, { mode: 'global' });
     }
+    void clearUnreferencedChatBackgroundImages();
     router.back();
   }, [
     conversationID,
     isGlobal,
     setChatBackgroundPreference,
     setGlobalBackgroundPreference,
-    uploadingImage,
+    applyingImage,
   ]);
 
   const handlePickCustomImage = useCallback(async () => {
@@ -111,7 +108,7 @@ export default function ChatBackgroundScreen() {
       );
       return;
     }
-    if (uploadingImage) return;
+    if (applyingImage) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -123,40 +120,32 @@ export default function ChatBackgroundScreen() {
     const asset = result.assets[0];
     if (!asset?.uri) return;
 
-    setUploadingImage(true);
+    setApplyingImage(true);
     try {
-      const fileName =
-        asset.fileName ?? asset.uri.split('/').pop() ?? 'chat-background.jpg';
-      const contentType =
-        resolveUploadContentType({
-          mimeType: asset.mimeType,
-          fileName,
-        }) ?? 'image/jpeg';
-      const presign = await requestUploadPresign({
-        filename: sanitizeUploadFilename(fileName),
-        contentType,
-        folder: 'chat',
-        fileUri: asset.uri,
-      });
-
-      await uploadLocalFileToPresignedUrl(
-        presign.uploadUrl,
-        contentType,
-        asset.uri,
-        presign.requiredHeaders,
-      );
+      // The image stays on this device. The preference itself only ever lives
+      // in MMKV and the server never reads it, so there was never a reason to
+      // upload. Uploading to the `chat/` prefix and keeping the direct URL is
+      // exactly what turned the message area grey: that prefix denies anonymous
+      // reads, so the stored URL was a permanent 403.
+      // asset.width is 0 when the system did not report the dimensions; that
+      // case skips resampling entirely (see chat-background-normalize) rather
+      // than upscaling a small photo to a guessed width.
+      const uri = await persistChatBackgroundImage(asset.uri, asset.width);
       if (!mountedRef.current) return;
-      setUploadingImage(false);
-      const preference = { mode: 'image' as const, uri: presign.fileUrl };
+      setApplyingImage(false);
+      const preference = { mode: 'image' as const, uri };
       if (isGlobal) {
         setGlobalBackgroundPreference(preference);
       } else {
         setChatBackgroundPreference(conversationID, preference);
       }
+      // The replaced image has no referrer left; drop it so the store does not
+      // grow with every background change.
+      void clearUnreferencedChatBackgroundImages();
       router.back();
     } catch {
       if (!mountedRef.current) return;
-      setUploadingImage(false);
+      setApplyingImage(false);
       Alert.alert(
         t('chat.background.failedTitle'),
         t('chat.background.failedBody'),
@@ -167,7 +156,7 @@ export default function ChatBackgroundScreen() {
     isGlobal,
     setChatBackgroundPreference,
     setGlobalBackgroundPreference,
-    uploadingImage,
+    applyingImage,
     t,
   ]);
 

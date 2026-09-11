@@ -67,6 +67,7 @@ export const darkColors: ThemeColors = {
   newUserBadgeRing: 'rgba(47, 109, 84, 0.18)',
   sentTimeText: 'rgba(255, 255, 255, 0.8)',
   overlay: 'rgba(0, 0, 0, 0.4)',
+  chatBackgroundScrim: 'rgba(26, 27, 35, 0.35)',
   statusBarStyle: 'light',
 };
 
@@ -124,5 +125,6 @@ export const lightColors: ThemeColors = {
   newUserBadgeRing: 'rgba(47, 109, 84, 0.18)',
   sentTimeText: 'rgba(255, 255, 255, 0.8)',
   overlay: 'rgba(0, 0, 0, 0.4)',
+  chatBackgroundScrim: 'rgba(248, 249, 250, 0.35)',
   statusBarStyle: 'dark',
 };

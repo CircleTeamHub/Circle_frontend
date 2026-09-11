@@ -171,6 +171,7 @@ import {
   resolveChatBackgroundStyle,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
+import { useChatBackgroundImageSource } from '@/features/chat/hooks/use-chat-background-image-source';
 import { createDirectCall, createGroupCall } from '@/services/api/calls';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
@@ -883,6 +884,9 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       ),
     [backgroundPreference, colors.background, globalBackgroundPreference],
   );
+  // 偏好里存的是文件名（`chat-bg:<name>`），能画的 uri 只能现取：原生要拼绝对
+  // 路径（容器路径不保证跨重装稳定），web 要从 IndexedDB 取回图再建 object URL。
+  const backgroundImageUri = useChatBackgroundImageSource(backgroundStyle.imageUri);
 
   const handleBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -3909,14 +3913,22 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       </View>
       <Divider />
       <View style={[s.messageArea, d.messageArea]}>
-        {backgroundStyle.imageUri ? (
+        {backgroundImageUri ? (
           <View pointerEvents="none" style={s.messageAreaBackground}>
             <ImageBackground
-              source={{ uri: backgroundStyle.imageUri }}
+              source={{ uri: backgroundImageUri }}
               style={s.messageAreaBackground}
               resizeMode="cover"
             >
-              <View style={[s.messageAreaOverlay, { backgroundColor: colors.overlay }]} />
+              {/* 薄蒙版把壁纸往主题底色推一点，让浮在背景上的日期分隔和群昵称
+                  保住对比度。这里曾经用 colors.overlay（模态遮罩，40% 纯黑）——
+                  壁纸加载不出来时，画出来的就是用户看到的那一整片灰。 */}
+              <View
+                style={[
+                  s.messageAreaOverlay,
+                  { backgroundColor: colors.chatBackgroundScrim },
+                ]}
+              />
             </ImageBackground>
           </View>
         ) : null}
