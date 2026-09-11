@@ -138,6 +138,10 @@ function loadApiClientHarness() {
           },
         };
       }
+      if (request === './api-error') {
+        // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块，别在这里手抄。
+        return loadTsModule('src/services/api/api-error.ts');
+      }
       if (request === '@/utils/redact') {
         return loadTsModule('src/utils/redact.ts');
       }

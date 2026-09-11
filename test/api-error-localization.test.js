@@ -209,6 +209,9 @@ test('client.ts threads errorCode onto ApiError', () => {
       };
     }
     if (spec === '@/i18n') return I18N;
+    // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块。
+    if (spec === './api-error')
+      return loadTsModule('src/services/api/api-error.ts');
     if (spec === '@/utils/redact') return loadTsModule('src/utils/redact.ts');
     return require(spec);
   };
@@ -280,6 +283,9 @@ test('ApiError accepts an options object for optional fields', () => {
       };
     }
     if (spec === '@/i18n') return I18N;
+    // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块。
+    if (spec === './api-error')
+      return loadTsModule('src/services/api/api-error.ts');
     if (spec === '@/utils/redact') return loadTsModule('src/utils/redact.ts');
     return require(spec);
   };

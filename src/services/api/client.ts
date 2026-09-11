@@ -17,6 +17,10 @@ import {
   redactSensitiveHeaders,
   redactSensitiveUrl,
 } from '@/utils/redact';
+import { ApiError } from './api-error';
+
+// 定义搬去 api-error.ts（零依赖），这里原样 re-export 保住既有导入路径。
+export { ApiError };
 
 type RequestOptions = {
   method?: string;
@@ -121,48 +125,6 @@ function logApiEvent(label: string, data: Record<string, unknown>) {
   }
 
   console.log(`[api] ${label}`, data);
-}
-
-export class ApiError extends Error {
-  status: number;
-  code?: number;
-  data?: unknown;
-  failureKind?: string;
-  reportEndpoint?: string;
-  reportMethod?: string;
-  // 后端稳定错误码(如 AUTH_INVALID_CREDENTIALS);前端据此做 i18n 映射,缺失回落 message。
-  errorCode?: string;
-
-  constructor(
-    message: string,
-    {
-      status,
-      code,
-      data,
-      failureKind,
-      reportEndpoint,
-      reportMethod,
-      errorCode,
-    }: {
-      status: number;
-      code?: number;
-      data?: unknown;
-      failureKind?: string;
-      reportEndpoint?: string;
-      reportMethod?: string;
-      errorCode?: string;
-    }
-  ) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.code = code;
-    this.data = data;
-    this.failureKind = failureKind;
-    this.reportEndpoint = reportEndpoint;
-    this.reportMethod = reportMethod;
-    this.errorCode = errorCode;
-  }
 }
 
 /**
