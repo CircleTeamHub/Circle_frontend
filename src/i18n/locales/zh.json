@@ -3212,6 +3212,7 @@
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会话不存在",
     "CHAT_CONVERSATION_NOT_FOUND": "会话不存在",
     "CHAT_MEMBER_DIRECTORY_FORBIDDEN": "仅圈主和管理员可查看群成员目录",
+    "CHAT_MEMBER_PROFILE_FORBIDDEN": "该群未开放查看成员资料",
     "CHAT_NOT_MEMBER": "你不是该会话成员",
     "CHAT_PEER_NOT_FOUND": "对方不可用",
     "CHAT_SELF_CONVERSATION": "不能和自己发起会话",

@@ -393,7 +393,10 @@ export default function UserProfileScreen() {
         .catch((error) => {
           if (!cancelled) {
             setRemoteProfile(null);
-            setFetchError(t('userProfile.loadFailed'));
+            // 「成员可查看他人资料」关掉的群里打开对方资料,服务端回
+            // CHAT_MEMBER_PROFILE_FORBIDDEN —— 那不是「加载失败」,得说清是群规矩
+            // 挡住的(原始错误文本仍然不透出,走同一个漏斗)。
+            setFetchError(getApiErrorMessage(error, t('userProfile.loadFailed')));
           }
           reportHandledFailure('userProfile', 'fetchProfile', error);
         });

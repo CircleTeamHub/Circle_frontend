@@ -3212,6 +3212,7 @@
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会話が見つかりません",
     "CHAT_CONVERSATION_NOT_FOUND": "会話が見つかりません",
     "CHAT_MEMBER_DIRECTORY_FORBIDDEN": "メンバー一覧はサークルのオーナーと管理者のみ閲覧できます",
+    "CHAT_MEMBER_PROFILE_FORBIDDEN": "このグループではメンバーのプロフィール閲覧が許可されていません",
     "CHAT_NOT_MEMBER": "この会話のメンバーではありません",
     "CHAT_PEER_NOT_FOUND": "この相手は利用できません",
     "CHAT_SELF_CONVERSATION": "自分自身とチャットを開始できません",
