@@ -6,7 +6,7 @@ export { darkColors, lightColors } from './colors';
 export { iconForeground } from './icon-color';
 
 // Design tokens (theme-independent)
-export { Spacing, Typography, Radius, Gradients, withAlpha } from './tokens';
+export { Spacing, Typography, Radius, Gradients, parseHexColor, withAlpha } from './tokens';
 
 // Provider + Hook
 export { ThemeProvider, useTheme } from './provider';
