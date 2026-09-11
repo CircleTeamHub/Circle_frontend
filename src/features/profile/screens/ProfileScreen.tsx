@@ -1,8 +1,6 @@
 import { Avatar } from "@/components/ui/avatar";
-import { Divider } from "@/components/ui/divider";
 import { GradientCover } from "@/components/ui/gradient-cover";
 import { MemberName } from "@/components/ui/member-name";
-import { MenuRow } from "@/components/ui/menu-row";
 import { UserIconRow } from "@/components/ui/user-icon-row";
 import { FEATURE_FLAGS } from "@/constants/feature-flags";
 import {
@@ -19,7 +17,7 @@ import { getAvatarFrameSource } from "@/features/profile/membership-frames";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { fetchCurrentUser } from "@/services/api/auth";
 import { fetchIconOptions } from "@/services/api/icons";
-import { Gradients, Radius, Spacing, Typography, useTheme } from "@/theme";
+import { Gradients, Radius, Spacing, Typography, iconForeground, useTheme, withAlpha } from "@/theme";
 import type { DisplayIcon, MenuItem } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
@@ -42,6 +40,7 @@ const MENU_ID = {
 } as const;
 
 type MenuId = (typeof MENU_ID)[keyof typeof MENU_ID];
+type ProfileMenuItem = MenuItem & { accent: string };
 
 const DEFAULT_MEMBERSHIP_NAMES: Record<MembershipTier, string> = {
   silver: "包月会员",
@@ -63,18 +62,52 @@ const MENU_ITEM_KEYS: {
   id: MenuId;
   icon: string;
   labelKey: string;
+  accent: string;
 }[] = [
-  { id: MENU_ID.SYSTEM_ANNOUNCEMENTS, icon: "megaphone-outline", labelKey: "profile.systemAnnouncements" },
-  { id: MENU_ID.MEMBER_CENTER, icon: "gift-outline", labelKey: "profile.memberCenter" },
-  { id: MENU_ID.WALLET, icon: "wallet-outline", labelKey: "profile.wallet.menuLabel" },
-  { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections.menuLabel" },
-  { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes" },
-  { id: MENU_ID.CUSTOMER_SERVICE, icon: "headset-outline", labelKey: "profile.customerService.menuLabel" },
+  { id: MENU_ID.SYSTEM_ANNOUNCEMENTS, icon: "newspaper-outline", labelKey: "profile.systemAnnouncements", accent: "#D97732" },
+  { id: MENU_ID.MEMBER_CENTER, icon: "gift-outline", labelKey: "profile.memberCenter", accent: "#8B5CF6" },
+  { id: MENU_ID.WALLET, icon: "wallet-outline", labelKey: "profile.wallet.menuLabel", accent: "#387BE5" },
+  { id: MENU_ID.COLLECTIONS, icon: "bookmark-outline", labelKey: "profile.collections.menuLabel", accent: "#D95688" },
+  { id: MENU_ID.NOTES, icon: "document-text-outline", labelKey: "profile.notes", accent: "#6366F1" },
+  { id: MENU_ID.CUSTOMER_SERVICE, icon: "headset-outline", labelKey: "profile.customerService.menuLabel", accent: "#168C91" },
 ];
 
 const s = StyleSheet.create({
   listContent: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
-  listHeader: { gap: Spacing.sm },
+  listHeader: { gap: Spacing.sm, marginBottom: Spacing.lg },
+  menuRow: { gap: 12, marginBottom: 12 },
+  menuTile: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 124,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    borderRadius: Radius.xl,
+    borderCurve: "continuous",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  menuTilePressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
+  menuIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: Radius.lg,
+    borderCurve: "continuous",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuLabel: { ...Typography.bodyRegular, fontWeight: "500", textAlign: "center" },
+  menuUnreadDot: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+  },
   profileRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -170,11 +203,17 @@ export default function ProfileScreen() {
   const refreshInFlightRef = useRef(false);
   const lastRefreshRef = useRef(0);
 
-  const MENU_ITEMS: MenuItem[] = MENU_ITEM_KEYS.map((m) => ({
-    id: m.id,
-    icon: m.icon,
-    label: t(m.labelKey),
-  }));
+  // 只随语言变：不 memo 的话 FlatList 的 data 每帧都是新数组，整格全量重渲。
+  const MENU_ITEMS: ProfileMenuItem[] = useMemo(
+    () =>
+      MENU_ITEM_KEYS.map((m) => ({
+        id: m.id,
+        icon: m.icon,
+        label: t(m.labelKey),
+        accent: m.accent,
+      })),
+    [t],
+  );
 
   const d = useMemo(
     () => ({
@@ -348,20 +387,47 @@ export default function ProfileScreen() {
   );
 
   const renderMenuItem = useCallback(
-    ({ item, index }: { item: MenuItem; index: number }) => (
-      <View>
-        <MenuRow
-          icon={item.icon as keyof typeof Ionicons.glyphMap}
-          label={item.label}
-          showIndicatorDot={
-            item.id === MENU_ID.SYSTEM_ANNOUNCEMENTS && profileUnread > 0
-          }
+    ({ item }: { item: ProfileMenuItem }) => {
+      const tint = iconForeground(item.accent, resolvedMode);
+      const hasUnread = item.id === MENU_ID.SYSTEM_ANNOUNCEMENTS && profileUnread > 0;
+
+      return (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={item.label}
+          accessibilityHint={hasUnread ? t('messages.unread') : undefined}
           onPress={() => handleMenuPress(item)}
-        />
-        {index < MENU_ITEMS.length - 1 ? <Divider /> : null}
-      </View>
-    ),
-    [handleMenuPress, MENU_ITEMS.length, profileUnread],
+          style={({ pressed }) => [
+            s.menuTile,
+            { backgroundColor: colors.surface, borderColor: withAlpha(colors.text, 0.06) },
+            pressed && s.menuTilePressed,
+          ]}
+        >
+          <View style={[s.menuIcon, { backgroundColor: withAlpha(tint, isDark ? 0.16 : 0.1) }]}>
+            <Ionicons
+              name={item.icon as keyof typeof Ionicons.glyphMap}
+              size={28}
+              color={tint}
+            />
+            {hasUnread ? (
+              <View style={[s.menuUnreadDot, { backgroundColor: colors.error, borderColor: colors.surface }]} />
+            ) : null}
+          </View>
+          {/* tile 内宽只有 (屏宽-72)/3-16 ≈ 91pt(393) / 85pt(375)：英文
+              "System Announcements" 与日文「サポートセンター」都放不下一行。
+              两行 + 自动缩字，避免按字符断成 'Announcemen / ts'。 */}
+          <Text
+            style={[s.menuLabel, { color: colors.text }]}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
+            {item.label}
+          </Text>
+        </Pressable>
+      );
+    },
+    [colors, handleMenuPress, isDark, profileUnread, resolvedMode, t],
   );
 
   const keyExtractor = useCallback((item: MenuItem) => item.id, []);
@@ -508,8 +574,6 @@ export default function ProfileScreen() {
           )}
         </Pressable>
       </View>
-
-      <Divider />
     </View>
   );
 
@@ -517,6 +581,8 @@ export default function ProfileScreen() {
     <View testID={E2E_TEST_IDS.profileScreen} style={d.container}>
       <FlatList
         data={MENU_ITEMS}
+        numColumns={3}
+        columnWrapperStyle={s.menuRow}
         renderItem={renderMenuItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={ListHeader}

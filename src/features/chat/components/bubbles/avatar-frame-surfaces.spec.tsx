@@ -74,6 +74,8 @@ jest.mock('@expo/vector-icons', () => ({
 }));
 
 jest.mock('@/theme', () => ({
+  ...jest.requireActual('@/theme/icon-color'),
+  withAlpha: jest.requireActual('@/theme/tokens').withAlpha,
   Gradients: { memberCard: ['#111', '#222'] },
   Radius: { md: 12, lg: 16 },
   Spacing: { xs: 4, sm: 8, md: 16, lg: 24 },

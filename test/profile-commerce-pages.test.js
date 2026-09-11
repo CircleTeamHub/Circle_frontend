@@ -358,7 +358,56 @@ test('ProfileScreen shows a red dot on system announcements when profile notific
   assert.match(src, /useTabBadgeStore/);
   assert.match(src, /profileUnread/);
   assert.match(src, /item\.id === MENU_ID\.SYSTEM_ANNOUNCEMENTS/);
-  assert.match(src, /showIndicatorDot=\{/);
+  assert.match(src, /const hasUnread = item\.id === MENU_ID\.SYSTEM_ANNOUNCEMENTS && profileUnread > 0/);
+  assert.match(src, /\{hasUnread \? \([\s\S]*?s\.menuUnreadDot[\s\S]*?backgroundColor: colors\.error/);
+});
+
+test('ProfileScreen 宫格标签放得下最长的一条，不会按字符断行', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+  const locales = ['zh', 'en', 'ja', 'ko', 'es'];
+
+  // tile 内宽只有 (屏宽 - 2*24 - 2*12) / 3 - 2*8：393pt 上 ≈ 91pt、
+  // 375pt 上 ≈ 85pt。原来的宫格标签既没限行也不缩字，英文
+  // "System Announcements" 会按字符断成 'Announcemen / ts'。
+  const label = src.match(/<Text\s+style=\{\[s\.menuLabel[\s\S]*?<\/Text>/)?.[0] ?? '';
+  assert.ok(label, '宫格标签的 Text 节点应当存在');
+  assert.match(label, /numberOfLines=\{2\}/);
+  assert.match(label, /adjustsFontSizeToFit/);
+  assert.match(label, /minimumFontScale=\{0\.8\}/);
+
+  // 六条菜单文案在五个语言里都要有真翻译 —— 缺一条就会回落成 key，
+  // 那才是真正放不下的字符串。
+  const keys = [
+    ['profile', 'systemAnnouncements'],
+    ['profile', 'memberCenter'],
+    ['profile', 'wallet', 'menuLabel'],
+    ['profile', 'collections', 'menuLabel'],
+    ['profile', 'notes'],
+    ['profile', 'customerService', 'menuLabel'],
+  ];
+  for (const locale of locales) {
+    const bundle = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    for (const keyPath of keys) {
+      const value = keyPath.reduce((node, key) => node?.[key], bundle);
+      assert.equal(
+        typeof value,
+        'string',
+        `${locale} 缺少 ${keyPath.join('.')}`,
+      );
+      assert.ok(value.trim().length > 0, `${locale}.${keyPath.join('.')} 是空串`);
+    }
+  }
+});
+
+test('ProfileScreen 的宫格数据只随语言重建，不是每帧新数组', () => {
+  const src = read('src/features/profile/screens/ProfileScreen.tsx');
+
+  // FlatList 的 data 每帧换身份 = 六格全量重渲。
+  const menuItems =
+    src.match(/const MENU_ITEMS: ProfileMenuItem\[\][\s\S]*?\n  \);/)?.[0] ?? '';
+  assert.ok(menuItems, 'MENU_ITEMS 定义应当存在');
+  assert.match(menuItems, /useMemo\(/);
+  assert.match(menuItems, /\[t\],/);
 });
 
 test('MemberCenterScreen renders the daily offer and four-tier catalog without legacy commerce APIs', () => {
