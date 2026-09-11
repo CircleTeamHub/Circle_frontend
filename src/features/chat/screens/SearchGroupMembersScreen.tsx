@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams, useSegments } from 'expo-router';
-import { isGroupManager } from '@/features/chat/group-admin-permissions';
 import {
   groupMemberDisplayName,
   groupMemberMatchesQuery,
@@ -22,8 +21,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { createCircleChatConversation, fetchChatMembers } from '@/chat-core/api';
-import type { ChatMemberDto } from '@/chat-core/protocol';
+import type { ChatConversationDto, ChatMemberDto } from '@/chat-core/protocol';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
+import { allowsMemberProfiles } from '@/features/chat/utils/group-policy';
 import {
   getUserProfileHref,
   getUserProfileScopeFromSegments,
@@ -86,24 +86,19 @@ export default function SearchGroupMembersScreen() {
     !groupID && typeof params.conversationID === 'string' ? params.conversationID : '';
   const isStandaloneGroup = Boolean(standaloneConversationID);
   const currentUserID = useChatStore((state) => state.currentUserId);
-  // 「成员可查看他人资料」策略:群主/管理员不受限,普通成员按开关。
-  const canOpenMemberProfiles = useChatStore((state) => {
-    if (!isStandaloneGroup) return true;
-    const group = state.conversations.find((item) => item.id === standaloneConversationID);
-    if (!group) return true;
-    return (
-      isGroupManager(group.myRole ?? null) ||
-      (group.policies?.membersCanViewProfiles ?? true)
-    );
-  });
   const [query, setQuery] = useState('');
   const [members, setMembers] = useState<ChatMemberDto[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
+  // 圈子群的会话 DTO(取或建的结果):从圈子详情等入口进来时 store 里可能还没有
+  // 该会话,策略开关与会话 id 都以它兜底 —— 与 ChatInfoScreen.groupConversation 同款。
+  const [circleConversation, setCircleConversation] =
+    useState<ChatConversationDto | null>(null);
 
   // review R2 P1：权限走活体 hook——挂载期间被撤权时订阅立即翻转
   // authorized，下面的目录数据也同步清空，不再是一次性快照。
   const {
     canViewMembers: circleAuthorized,
+    selfMember: circleSelfMember,
     resolved: accessResolved,
     revalidate,
   } = useGroupMemberViewAccess({
@@ -112,6 +107,28 @@ export default function SearchGroupMembersScreen() {
     currentUserID,
   });
   const authorized = isStandaloneGroup || circleAuthorized;
+  // 「成员可查看他人资料」策略:两种群同一判据(群主/管理员豁免,普通成员按开关),
+  // 与 ChatInfoScreen / ChatDetailScreen 共用 allowsMemberProfiles —— 这个策略只在
+  // 客户端拦,本页对圈子群直接放行就等于没有这道闸。圈子群的角色优先用活体
+  // hook(挂载期间被撤职立刻生效),会话 DTO 上的 myRole 兜底。
+  const canOpenMemberProfiles = useChatStore((state) => {
+    const conversation =
+      state.conversations.find((item) =>
+        isStandaloneGroup
+          ? item.id === standaloneConversationID
+          : Boolean(groupID) && item.circleId === groupID,
+      ) ?? circleConversation;
+    return allowsMemberProfiles({
+      role: isStandaloneGroup
+        ? conversation?.myRole
+        : (circleSelfMember?.role ?? conversation?.myRole),
+      policies: conversation?.policies,
+    });
+  });
+  // 打开资料时带给资料页的会话 id(资料页据此按「成员可添加好友」收起入口)。
+  const memberConversationID = isStandaloneGroup
+    ? standaloneConversationID
+    : (circleConversation?.id ?? '');
 
   useEffect(() => {
     let cancelled = false;
@@ -127,9 +144,10 @@ export default function SearchGroupMembersScreen() {
     // groupID = 圈子 id:先解析(取或建)会话,再拉座位成员表;独立群聊直接按会话 id 取。
     (isStandaloneGroup
       ? fetchChatMembers(standaloneConversationID)
-      : createCircleChatConversation(groupID).then((conversation) =>
-          fetchChatMembers(conversation.id),
-        )
+      : createCircleChatConversation(groupID).then((conversation) => {
+          if (!cancelled) setCircleConversation(conversation);
+          return fetchChatMembers(conversation.id);
+        })
     )
       .then((nextMembers) => {
         if (!cancelled) setMembers(nextMembers);
@@ -186,41 +204,45 @@ export default function SearchGroupMembersScreen() {
         return;
       }
 
+      // 「成员可查看他人资料」策略:两种群都拦,看自己的资料永远放行
+      // (与 ChatInfoScreen.handleOpenMemberProfile 同口径)。
+      if (member.userId !== currentUserID && !canOpenMemberProfiles) {
+        Alert.alert(
+          t('chat.profilesRestrictedByGroup', {
+            defaultValue: '该群未开放查看成员资料',
+          }),
+        );
+        return;
+      }
+
       if (isStandaloneGroup) {
-        // 独立群聊:目录全员可见,但打开资料要看「成员可查看他人资料」策略;
-        // 另外现场重查自己还在不在群里(被踢后列表可能还挂在屏上)。
-        if (!canOpenMemberProfiles) {
-          Alert.alert(t('chat.profilesRestrictedByGroup', { defaultValue: '该群未开放查看成员资料' }));
-          return;
-        }
+        // 独立群聊:现场重查自己还在不在群里(被踢后列表可能还挂在屏上)。
         try {
           const seated = await fetchChatMembers(standaloneConversationID);
           if (!seated.some((item) => item.userId === currentUserID)) return;
         } catch {
           return;
         }
-        router.push(
-          getUserProfileHref(scope, member.userId, member.nickname || undefined, {
-            viaConversationID: standaloneConversationID,
-          }),
-        );
-        return;
-      }
-
-      // review R2 P1：打开成员资料前 fail-closed 现场重查——降权后即便
-      // 结果列表还挂在屏上，也不能再跳成员资料（hook 状态翻转会顺带清列表）。
-      if (!(await revalidate())) {
+      } else if (!(await revalidate())) {
+        // review R2 P1：打开成员资料前 fail-closed 现场重查——降权后即便
+        // 结果列表还挂在屏上，也不能再跳成员资料（hook 状态翻转会顺带清列表）。
         return;
       }
 
       router.push(
-        getUserProfileHref(scope, member.userId, member.nickname || undefined),
+        getUserProfileHref(scope, member.userId, member.nickname || undefined, {
+          // 资料页据此按本群的「成员可添加好友」决定要不要放加好友入口。
+          ...(memberConversationID
+            ? { viaConversationID: memberConversationID }
+            : {}),
+        }),
       );
     },
     [
       canOpenMemberProfiles,
       currentUserID,
       isStandaloneGroup,
+      memberConversationID,
       revalidate,
       scope,
       standaloneConversationID,

@@ -86,6 +86,7 @@ import {
 // (OpenIM groupID === circle.id,ID 同值,Phase 3 随成员子系统一起迁)。
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
 import { isGroupManager } from '@/features/chat/group-admin-permissions';
+import { allowsMemberProfiles } from '@/features/chat/utils/group-policy';
 import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import {
   ensureCircleConversation,
@@ -795,16 +796,16 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   // 独立群聊同理:目录全员可见,座位校验在服务端。
   const canViewGroupMemberProfiles =
     isTempChat || isStandaloneGroup || canViewCircleMembers;
-  // 「成员可查看他人资料」:群主/管理员不受限;策略缺省(老后端)按开放处理。
+  // 「成员可查看他人资料」:三张屏共用 allowsMemberProfiles(群主/管理员豁免;
+  // 策略缺省=老后端,按开放处理)。
   const canViewMemberProfilesByPolicy = useChatStore((state) => {
     const conversation = state.conversations.find(
       (candidate) => candidate.id === conversationID,
     );
-    if (!conversation?.policies) return true;
-    return (
-      isGroupManager(conversation.myRole ?? null) ||
-      conversation.policies.membersCanViewProfiles
-    );
+    return allowsMemberProfiles({
+      role: conversation?.myRole,
+      policies: conversation?.policies,
+    });
   });
   const revalidateMemberViewAccess = useCallback(
     () =>

@@ -382,7 +382,15 @@ test('group member search keeps authorization live and revalidates before openin
   assert.match(source, /canViewMembers: circleAuthorized,/);
   assert.match(source, /const authorized = isStandaloneGroup \|\| circleAuthorized;/);
   assert.match(source, /if \(!authorized\) \{\s*\n\s*setMembers\(\[\]\);/);
-  assert.match(source, /if \(!\(await revalidate\(\)\)\) \{\s*\n\s*return;/);
+  // 圈子群走活体重查;独立群聊没有圈子角色,改成现场重查自己还在不在座位上。
+  assert.match(
+    source,
+    /\} else if \(!\(await revalidate\(\)\)\) \{[\s\S]{0,240}?\n\s*return;/,
+  );
+  assert.match(
+    source,
+    /const seated = await fetchChatMembers\(standaloneConversationID\);/,
+  );
 });
 
 // 契约随自研栈迁移更新(意图不变):踢人/退群的事实源就是业务后端本身,
