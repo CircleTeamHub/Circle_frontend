@@ -439,7 +439,8 @@ test('EditNoteScreen presents structured regions with quieter section chrome', (
     /sectionBlock:\s*\{[\s\S]*?borderRadius:\s*Radius\.lg/,
   );
   assert.doesNotMatch(src, /sectionCountPill/);
-  assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: string/);
+  // 正文那一格的 meta 是实时字数，必须是能自己订阅重渲染的节点而不是 string。
+  assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: ReactNode/);
   assert.match(src, /flexDirection:\s*'row'/);
 });
 
@@ -639,6 +640,15 @@ test('ShareNoteSheet sends the note as a card to a chosen friend/group', () => {
   assert.match(sheet, /type: 'note-card'/);
   assert.match(sheet, /BottomSheetModal/);
   assert.match(sheet, /notes\.shareToChat\.title/);
+});
+
+test('ShareNoteSheet search text has a complete vertical line box', () => {
+  const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
+
+  // 明确行高和最小高度，避免 iOS 中文占位文案在 40pt 搜索框中被裁掉。
+  assert.match(sheet, /searchInput:\s*\{[\s\S]*lineHeight:\s*20/);
+  assert.match(sheet, /searchInput:\s*\{[\s\S]*minHeight:\s*24/);
+  assert.match(sheet, /searchInput:\s*\{[\s\S]*textAlignVertical:\s*'center'/);
 });
 
 test('ShareNoteSheet maps send failures to stable user-facing copy', () => {
