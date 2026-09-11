@@ -391,7 +391,7 @@ export default function SelectCityScreen() {
               <Text
                 style={[
                   s.cityText,
-                  { color: isSelected ? colors.primary : colors.textSecondary },
+                  { color: isSelected ? colors.iconAccent : colors.textSecondary },
                 ]}
               >
                 {item}

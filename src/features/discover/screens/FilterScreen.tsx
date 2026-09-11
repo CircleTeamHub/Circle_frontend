@@ -194,6 +194,8 @@ export default function FilterScreen() {
         ...Typography.caption,
         fontWeight: '600' as const,
       },
+      // 白色圆底：里面的叉号要用深色前景 colors.primary，暗色的提亮紫
+      // iconAccent 在白底上只有 2.6:1。
       chipRemove: { backgroundColor: colors.white },
       emptyHint: {
         color: colors.textSecondary,
@@ -259,7 +261,7 @@ export default function FilterScreen() {
                     onPress={() => removeDraftCircle(circle.id)}
                     hitSlop={6}
                   >
-                    <Ionicons name="close" size={13} color={colors.iconAccent} />
+                    <Ionicons name="close" size={13} color={colors.primary} />
                   </Pressable>
                 </View>
               ))}
@@ -298,7 +300,7 @@ export default function FilterScreen() {
                   onPress={() => setDraftNationwide(false)}
                   hitSlop={6}
                 >
-                  <Ionicons name="close" size={13} color={colors.iconAccent} />
+                  <Ionicons name="close" size={13} color={colors.primary} />
                 </Pressable>
               </View>
             </View>
@@ -319,7 +321,7 @@ export default function FilterScreen() {
                     onPress={() => removeDraftCity(city)}
                     hitSlop={6}
                   >
-                    <Ionicons name="close" size={13} color={colors.iconAccent} />
+                    <Ionicons name="close" size={13} color={colors.primary} />
                   </Pressable>
                 </View>
               ))}
@@ -337,7 +339,8 @@ export default function FilterScreen() {
           style={[s.actionBtn, d.clearBtn]}
           onPress={handleClear}
         >
-          <Ionicons name="trash-outline" size={18} color={colors.iconAccent} />
+          {/* primary 实心按钮：图标与 clearText 同为白色，不能走 iconAccent。 */}
+          <Ionicons name="trash-outline" size={18} color={colors.white} />
           <Text style={d.clearText}>{t('discover.filter.clear')}</Text>
         </Pressable>
         <Pressable style={[s.actionBtn, d.saveBtn]} onPress={handleSave}>

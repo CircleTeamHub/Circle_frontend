@@ -131,8 +131,10 @@ test('选中态在暗色下必须读得清，红点描边不能浮在玻璃上',
 
   // brandPurple #7C5CF0 在暗色底 #1A1B23 上只有 3.79:1，9px 文字需要 4.5:1，
   // 而未选中的 textSecondary 是纯白 17:1 —— 选中项反而比未选中更糊。
-  // 暗色单独给一支提亮的品牌紫，两个暗色底都在 5.6:1 以上。
-  assert.match(colorsSrc, /tabBarActive: '#B18AFF'/);
+  // 暗色单独给一支提亮的品牌紫（DARK_ACCENT），两个暗色底都在 5.6:1 以上；
+  // 色值本身在 test/theme-accent-tokens.test.js 里按实际导出值断言。
+  assert.match(colorsSrc, /const DARK_ACCENT = '#B18AFF'/);
+  assert.match(colorsSrc, /tabBarActive: DARK_ACCENT/);
   assert.match(colorsSrc, /tabBarActive: '#7C5CF0'/);
   assert.doesNotMatch(layout, /colors\.brandPurple/);
 

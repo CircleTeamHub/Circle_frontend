@@ -528,7 +528,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
             style={[s.signupBtn, { borderColor: colors.surfaceBorder }]}
           >
             <Ionicons name="people-outline" size={16} color={colors.iconAccent} />
-            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primary }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.iconAccent }}>
               {t('plaza.manageSignups', {
                 count: signupCount,
                 defaultValue: '{{count}} 人报名',

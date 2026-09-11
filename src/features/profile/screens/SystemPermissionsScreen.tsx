@@ -192,14 +192,14 @@ export default function SystemPermissionsScreen() {
           icon: permissionIcon(id),
           iconColor: colors.iconAccent,
           iconBackgroundColor: colors.primaryLight,
-          statusColor: colors.primary,
+          statusColor: colors.iconAccent,
           onPress: async () => {
             await requestPermission(id);
             await refreshPermissions();
           },
         };
       }),
-    [colors.iconAccent, colors.primary, colors.primaryLight, permissions, refreshPermissions],
+    [colors.iconAccent, colors.primaryLight, permissions, refreshPermissions],
   );
 
   return (

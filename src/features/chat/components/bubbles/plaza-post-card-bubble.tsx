@@ -311,7 +311,7 @@ export const PlazaPostCardBubble: React.FC<PlazaPostCardBubbleProps> = ({
             <View style={s.signupInfo}>
               <Ionicons name="flame" size={13} color={colors.iconAccent} />
               <Text
-                style={[s.signupText, { color: colors.primary }]}
+                style={[s.signupText, { color: colors.iconAccent }]}
                 numberOfLines={1}
               >
                 {signupText}

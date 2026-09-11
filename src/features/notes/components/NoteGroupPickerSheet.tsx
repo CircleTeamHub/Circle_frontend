@@ -322,7 +322,7 @@ export function NoteGroupPickerSheet({
           accessibilityRole="button"
         >
           <Ionicons name="add" size={18} color={colors.iconAccent} />
-          <Text style={[s.createBtnText, { color: colors.primary }]}>
+          <Text style={[s.createBtnText, { color: colors.iconAccent }]}>
             {t('notes.manageGroups.createNew', { defaultValue: '新增分组' })}
           </Text>
         </Pressable>

@@ -454,7 +454,7 @@ export default function AvatarFrameDetailScreen() {
                     s.statusText,
                     {
                       color: equipped
-                        ? colors.primary
+                        ? colors.iconAccent
                         : colors.textSecondary,
                     },
                   ]}

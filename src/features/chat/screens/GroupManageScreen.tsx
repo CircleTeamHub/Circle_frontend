@@ -259,7 +259,7 @@ export default function GroupManageScreen() {
       action: { borderColor: colors.surfaceBorder },
       actionText: { color: colors.primary, ...Typography.small },
       actionDestructive: { color: colors.error, ...Typography.small },
-      addText: { color: colors.primary, ...Typography.body },
+      addText: { color: colors.iconAccent, ...Typography.body },
       empty: { color: colors.textSecondary, ...Typography.bodyRegular },
       centerText: { color: colors.textSecondary, ...Typography.bodyRegular, textAlign: 'center' as const },
       retry: { backgroundColor: colors.primary },

@@ -115,7 +115,7 @@ export default function UnlistedNotesScreen() {
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
       separator: { backgroundColor: colors.divider },
-      primary: { color: colors.primary },
+      sheetAction: { color: colors.iconAccent },
     }),
     [colors],
   );
@@ -207,7 +207,7 @@ export default function UnlistedNotesScreen() {
           })}
         >
           <Ionicons name="cloud-upload-outline" size={20} color={colors.iconAccent} />
-          <Text style={[s.sheetLabel, d.primary]}>
+          <Text style={[s.sheetLabel, d.sheetAction]}>
             {t('notes.actions.relist', { defaultValue: '上架' })}
           </Text>
         </Pressable>
