@@ -19,6 +19,7 @@ import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import { ThemedSwitch } from '@/components/ui/themed-switch';
 import {
   fetchChatMembers,
+  loadChatConversations,
   setGroupChatMuteAll,
   transferGroupChatOwner,
   updateGroupChatPolicies,
@@ -276,6 +277,35 @@ export default function GroupManageScreen() {
     [conversationID],
   );
 
+  /**
+   * 单个策略键的就地回写:总是基于**当时**缓存里的那份 policies。
+   *
+   * 回滚不能写回按下开关那一刻捕获的整份快照 —— 请求在途的这段时间里,
+   * 别的管理员改了另一个开关、dispatcher 已经把 group-policy-changed 应用上了,
+   * 整份快照会把那条远端改动一起抹掉。
+   */
+  const patchPolicyKey = useCallback(
+    (key: PolicyKey, value: boolean) => {
+      const store = useChatStore.getState();
+      const cached = store.conversations.find(
+        (candidate) => candidate.id === conversationID,
+      );
+      if (!cached?.policies) return;
+      store.upsertConversation({
+        ...cached,
+        policies: { ...cached.policies, [key]: value },
+      });
+    },
+    [conversationID],
+  );
+
+  /** 乐观更新失败后把服务端的真实状态重新拉一遍(拉不到就维持回滚值)。 */
+  const resyncConversations = useCallback(() => {
+    void loadChatConversations().catch((err: unknown) =>
+      reportHandledFailure('groupManage', 'resyncAfterSettingFailure', err),
+    );
+  }, []);
+
   const handleToggleMuteAll = useCallback(
     (next: boolean) => {
       if (settingPending) return;
@@ -284,27 +314,44 @@ export default function GroupManageScreen() {
       setGroupChatMuteAll(conversationID, next)
         .catch((err: unknown) => {
           patchConversation({ muteAll: !next });
+          resyncConversations();
           openActionError(err);
         })
         .finally(() => setSettingPending(null));
     },
-    [conversationID, openActionError, patchConversation, settingPending],
+    [
+      conversationID,
+      openActionError,
+      patchConversation,
+      resyncConversations,
+      settingPending,
+    ],
   );
 
   const handleTogglePolicy = useCallback(
     (key: PolicyKey, next: boolean) => {
       if (settingPending || !policies) return;
+      const previous = policies[key];
       setSettingPending(key);
-      patchConversation({ policies: { ...policies, [key]: next } });
+      patchPolicyKey(key, next);
       updateGroupChatPolicies(conversationID, { [key]: next })
         .then((updated) => patchConversation({ policies: updated }))
         .catch((err: unknown) => {
-          patchConversation({ policies });
+          patchPolicyKey(key, previous);
+          resyncConversations();
           openActionError(err);
         })
         .finally(() => setSettingPending(null));
     },
-    [conversationID, openActionError, patchConversation, policies, settingPending],
+    [
+      conversationID,
+      openActionError,
+      patchConversation,
+      patchPolicyKey,
+      policies,
+      resyncConversations,
+      settingPending,
+    ],
   );
 
   const handleTransferOwner = useCallback(

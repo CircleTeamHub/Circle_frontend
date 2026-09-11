@@ -24,6 +24,8 @@ const NEW_ERROR_CODES = [
   'CHAT_GROUP_QR_JOIN_DISABLED',
   'CHAT_GROUP_AVATAR_URL_INVALID',
   'FRIEND_GROUP_ADD_FORBIDDEN',
+  // 「成员可查看他人资料」关着的群里打开对方资料页:服务端 403。
+  'CHAT_MEMBER_PROFILE_FORBIDDEN',
 ];
 
 test('chat-core exposes the five group settings endpoints', () => {
@@ -110,7 +112,16 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   // 乐观更新 + 失败回滚:开关按下即翻,请求失败翻回去。
   assert.match(screen, /patchConversation\(\{ muteAll: next \}\)/);
   assert.match(screen, /patchConversation\(\{ muteAll: !next \}\)/);
-  assert.match(screen, /patchConversation\(\{ policies \}\)/);
+  // 策略回滚只翻这一个键,且基于**当时**缓存里的那份 —— 写回按下那一刻捕获的
+  // 整份快照会把期间 dispatcher 应用的远端 group-policy-changed 一起抹掉。
+  assert.match(screen, /const patchPolicyKey = useCallback\(/);
+  assert.match(screen, /policies: \{ \.\.\.cached\.policies, \[key\]: value \}/);
+  assert.match(screen, /const previous = policies\[key\];/);
+  assert.match(screen, /patchPolicyKey\(key, previous\);/);
+  assert.doesNotMatch(screen, /patchConversation\(\{ policies \}\)/);
+  // 回滚之后再重拉一次:服务端上真正的状态说了算。
+  assert.match(screen, /const resyncConversations = useCallback\(/);
+  assert.match(screen, /void loadChatConversations\(\)/);
   // 群主转让只属于独立群聊;提升成员上限只属于圈子群。
   assert.match(screen, /isStandaloneGroup\s*\?\s*renderLinkRow\(/);
   assert.match(screen, /pathname: '\/\(tabs\)\/profile\/group-expansion'/);
@@ -122,7 +133,10 @@ test('the group manage screen switches mute-all, the four policies, transfer and
 test('chat info exposes the avatar row, the member row and hides the QR entry when joining is off', () => {
   const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
   assert.match(info, /chat\.groupAvatar/);
-  assert.match(info, /useChangeGroupAvatar\(submitGroupAvatar, handleGroupAvatarChanged\)/);
+  // 群头像与圈子头像共用同一个 hook(原来是两份逐字复制的 115 行)。
+  assert.match(info, /useChangeAvatar\(\{/);
+  assert.match(info, /submit: submitGroupAvatar,/);
+  assert.match(info, /onChanged: handleGroupAvatarChanged,/);
   // 圈子群走圈子头像端点(仅圈主),独立群聊走会话头像端点(群主/管理员)。
   assert.match(info, /await setGroupChatAvatar\(target, fileUrl\)/);
   assert.match(info, /await setCircleAvatar\(groupID, fileUrl\)/);
@@ -139,8 +153,9 @@ test('chat info exposes the avatar row, the member row and hides the QR entry wh
 
 test('member profiles and friend requests honor the two member-permission switches', () => {
   const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
-  // 「成员可查看他人资料」:群主/管理员不受限,看自己永远放行。
-  assert.match(info, /const canViewMemberProfiles =\s*\n\s*isGroupManager\(selfGroupRole\)/);
+  // 「成员可查看他人资料」:群主/管理员不受限,看自己永远放行。判据只有一份
+  // (features/chat/utils/group-policy),三张屏共用 —— 见 group-policy-gate.test.js。
+  assert.match(info, /const canViewMemberProfiles = allowsMemberProfiles\(groupPolicyActor\);/);
   assert.match(info, /member\.userId !== currentUserID &&\s*\n\s*!canViewMemberProfiles/);
 
   const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
@@ -149,6 +164,8 @@ test('member profiles and friend requests honor the two member-permission switch
 
   const search = read('src/features/chat/screens/SearchGroupMembersScreen.tsx');
   assert.match(search, /const canOpenMemberProfiles = useChatStore/);
+  // 成员搜索页也要带上会话 id:资料页据此按本群的「成员可添加好友」收起入口。
+  assert.match(search, /viaConversationID: memberConversationID/);
 
   // 「成员可添加好友」:资料页按群策略收起入口,申请页把 viaConversationId 交给服务端。
   const profile = read('src/features/user/screens/UserProfileScreen.tsx');
@@ -160,6 +177,37 @@ test('member profiles and friend requests honor the two member-permission switch
   const friendsApi = read('src/services/api/friends.ts');
   assert.match(friendsApi, /viaConversationId\?: string;/);
   assert.match(friendsApi, /input\.viaConversationId\s*\?\s*\{ viaConversationId: input\.viaConversationId \}/);
+});
+
+test('a profile blocked by the group policy explains itself instead of saying load failed', () => {
+  const profile = read('src/features/user/screens/UserProfileScreen.tsx');
+  // 服务端也拦(客户端的开关只管入口),被拦时得说清是群规矩挡的;
+  // 原始错误文本仍然走同一个漏斗,永不直出。
+  assert.match(
+    profile,
+    /setFetchError\(getApiErrorMessage\(error, t\('userProfile\.loadFailed'\)\)\)/,
+  );
+  assert.doesNotMatch(profile, /setFetchError\(t\('userProfile\.loadFailed'\)\)/);
+});
+
+test('the invite screen survives a forbidden member directory', () => {
+  const invite = read('src/features/chat/screens/InviteGroupMembersScreen.tsx');
+  // 目录对普通成员会 403(CHAT_MEMBER_DIRECTORY_FORBIDDEN);Promise.all 会连好友
+  // 列表一起丢掉,邀请页整片空白。两次请求各算各的。
+  assert.match(invite, /await Promise\.allSettled\(\[/);
+  assert.doesNotMatch(invite, /await Promise\.all\(\[/);
+  assert.match(invite, /memberResult\.status === 'fulfilled'/);
+  assert.match(invite, /setMemberIDs\(new Set\(\)\);/);
+  // 好友列表拿不到是用户要知道的事,走同一个本地化漏斗。
+  assert.match(
+    invite,
+    /getApiErrorMessage\(friendResult\.reason, t\('common\.networkError'\)\)/,
+  );
+  // 提交被拒时同样出错误码文案,而不是「网络错误」一刀切。
+  assert.match(
+    invite,
+    /error: getApiErrorMessage\(error, t\('common\.networkError'\)\),/,
+  );
 });
 
 test('chat detail locks the composer under group-wide mute for non-managers', () => {
@@ -175,12 +223,20 @@ test('remote mute-all and policy changes update the cached conversation', () => 
   assert.match(dispatcher, /function applyRemoteGroupSettingChange\(/);
   assert.match(dispatcher, /applyRemoteGroupSettingChange\(store, payload\);/);
   // 系统提示播给整个会话房,客户端据此翻转本地状态,不靠 N 条个人房 updated。
+  // (行为断言在 chat-core-dispatcher.test.js:真的发一条系统消息进去看 store。)
   assert.match(dispatcher, /kind !== 'mute-all-changed' && kind !== 'group-policy-changed'/);
-  assert.match(dispatcher, /if \(!\(policy in conversation\.policies\)\) return;/);
+  // `policy in policies` 会连原型链一起认:policy:'toString' 就能挂上一个自有键。
+  assert.match(
+    dispatcher,
+    /Object\.prototype\.hasOwnProperty\.call\(conversation\.policies, policy\)/,
+  );
 });
 
 // ── 跨仓契约:双仓并排检出时逐项对齐;仅前端 CI 时跳过 ──
-const BACKEND_ROOT = path.join(root, '..', 'circle_be');
+// CIRCLE_BE_PATH 覆盖是给 git worktree 用的:worktree 旁边那个 circle_be 往往是
+// 别的分支,比 main 还容易给出假红/假绿。
+const BACKEND_ROOT =
+  process.env.CIRCLE_BE_PATH ?? path.join(root, '..', 'circle_be');
 const hasBackend = fs.existsSync(path.join(BACKEND_ROOT, 'src/chat/chat.controller.ts'));
 
 test(

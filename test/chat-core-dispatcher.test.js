@@ -92,6 +92,7 @@ function loadDispatcher(storeOverrides = {}) {
     cleared: [],
     clearedUnread: [],
     burnDurations: [],
+    upserts: [],
     sentryReports: [],
     ...storeOverrides,
   };
@@ -149,6 +150,12 @@ function loadDispatcher(storeOverrides = {}) {
     },
     applyBurnDuration: (conversationId, seconds) => {
       state.burnDurations.push({ conversationId, seconds });
+    },
+    upsertConversation: (conversation) => {
+      state.upserts.push(conversation);
+      state.conversations = state.conversations.map((candidate) =>
+        candidate.id === conversation.id ? conversation : candidate,
+      );
     },
     applyIncomingMessage: (message) =>
       state.conversations.some((c) => c.id === message.conversationId),
@@ -816,6 +823,123 @@ test('a remote burn-changed system message updates the conversation setting', ()
   assert.deepEqual(state.burnDurations, [
     { conversationId: 'c1', seconds: 30 },
   ]);
+});
+
+// 群设置的远端联动:系统提示播给整个会话房,客户端收到就地把 muteAll / policies
+// 翻过来 —— 不靠服务端再逐人推 N 条个人房 updated。只渲染成一条提示是不够的:
+// 聊天页的输入区横幅与群管理页的开关会一直停在旧值上。
+test('a remote mute-all-changed system message flips muteAll on the cached conversation', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP', muteAll: false }];
+
+  socket.emit(
+    'chat:msg',
+    dto({
+      conversationId: 'c1',
+      id: 'sys-mute',
+      type: 'system',
+      content: { kind: 'mute-all-changed', enabled: true },
+      sender: null,
+    }),
+  );
+
+  assert.equal(state.upserts.length, 1);
+  assert.equal(state.upserts[0].muteAll, true);
+  assert.equal(state.conversations[0].muteAll, true);
+});
+
+test('an unchanged mute-all broadcast does not churn the conversation', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP', muteAll: true }];
+
+  socket.emit(
+    'chat:msg',
+    dto({
+      conversationId: 'c1',
+      id: 'sys-mute-again',
+      type: 'system',
+      content: { kind: 'mute-all-changed', enabled: true },
+      sender: null,
+    }),
+  );
+
+  assert.deepEqual(state.upserts, []);
+});
+
+test('a remote group-policy-changed message flips exactly that one policy', () => {
+  const { socket, state } = loadDispatcher();
+  const policies = {
+    memberCanInvite: true,
+    qrJoinEnabled: true,
+    membersCanViewRoster: true,
+    membersCanViewProfiles: true,
+    membersCanAddFriends: true,
+  };
+  state.conversations = [{ id: 'c1', type: 'GROUP', policies }];
+
+  socket.emit(
+    'chat:msg',
+    dto({
+      conversationId: 'c1',
+      id: 'sys-policy',
+      type: 'system',
+      content: {
+        kind: 'group-policy-changed',
+        policy: 'membersCanViewProfiles',
+        enabled: false,
+      },
+      sender: null,
+    }),
+  );
+
+  assert.equal(state.upserts.length, 1);
+  // 分发器跑在 vm realm 里,它造的对象原型不是宿主的 —— 摊平再比。
+  assert.deepEqual(
+    { ...state.upserts[0].policies },
+    { ...policies, membersCanViewProfiles: false },
+  );
+  // 原对象不可变:回滚/对比逻辑依赖它没被就地改写。
+  assert.equal(policies.membersCanViewProfiles, true);
+});
+
+test('a policy broadcast naming an unknown or inherited key is ignored', () => {
+  const { socket, state } = loadDispatcher();
+  const policies = { memberCanInvite: true };
+  state.conversations = [{ id: 'c1', type: 'GROUP', policies }];
+
+  for (const policy of ['nopeNotAPolicy', 'toString', '__proto__']) {
+    socket.emit(
+      'chat:msg',
+      dto({
+        conversationId: 'c1',
+        id: `sys-${policy}`,
+        type: 'system',
+        content: { kind: 'group-policy-changed', policy, enabled: true },
+        sender: null,
+      }),
+    );
+  }
+
+  assert.deepEqual(state.upserts, []);
+  assert.deepEqual(state.conversations[0].policies, { memberCanInvite: true });
+});
+
+test('group setting broadcasts for a conversation we do not have are dropped', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [];
+
+  socket.emit(
+    'chat:msg',
+    dto({
+      conversationId: 'gone',
+      id: 'sys-orphan',
+      type: 'system',
+      content: { kind: 'mute-all-changed', enabled: true },
+      sender: null,
+    }),
+  );
+
+  assert.deepEqual(state.upserts, []);
 });
 
 test('chat:conversation for another user or malformed payloads is ignored', () => {

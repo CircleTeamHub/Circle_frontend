@@ -235,7 +235,11 @@ function applyRemoteGroupSettingChange(
   }
   const policy = content['policy'];
   if (typeof policy !== 'string' || !conversation.policies) return;
-  if (!(policy in conversation.policies)) return;
+  // 只认这份 DTO 自己的键:`policy in ...` 会连原型链一起认,一条
+  // policy:'toString' 的畸形广播就能给 policies 挂上一个自有的 toString。
+  if (!Object.prototype.hasOwnProperty.call(conversation.policies, policy)) {
+    return;
+  }
   store.upsertConversation({
     ...conversation,
     policies: { ...conversation.policies, [policy]: enabled },
