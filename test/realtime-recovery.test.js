@@ -5,6 +5,35 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { loadTsModule } = require('./helpers/load-ts-module');
+
+/**
+ * 圈子通知 store 的真身。recoverTabBadgeSnapshot 里的快照要过它的红点门控，
+ * 桩一份形状的话门控语义就有了第二处实现。
+ */
+function loadCircleNotificationStore() {
+  const backing = new Map();
+  const shims = {
+    zustand: require('zustand'),
+    'zustand/middleware': require('zustand/middleware'),
+    '@/storage': {
+      mmkvJsonStorage: {
+        getItem: (key) => backing.get(key) ?? null,
+        setItem: (key, value) => backing.set(key, value),
+        removeItem: (key) => backing.delete(key),
+      },
+    },
+  };
+  return loadTsModule(
+    'src/features/discover/store/use-circle-notification-store.ts',
+    {
+      requireShim: (specifier) => {
+        if (shims[specifier]) return shims[specifier];
+        throw new Error(`unexpected import: ${specifier}`);
+      },
+    },
+  );
+}
 
 function loadRealtimeClient(mocks) {
   const filePath = path.join(process.cwd(), 'src/realtime/client.ts');
@@ -117,6 +146,8 @@ test('realtime recovery backfills missed interactive notifications after reconne
       useWalletRealtimeStore: { getState: () => ({ setRealtimeBalance() {} }) },
     },
     '@/features/call/realtime-guards': {},
+    '@/features/discover/store/use-circle-notification-store':
+      loadCircleNotificationStore(),
   });
 
   await client.recoverTabBadgeSnapshot();

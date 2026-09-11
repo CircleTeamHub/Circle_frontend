@@ -455,6 +455,8 @@
     "messagesThatNotify": "仍会通知的消息",
     "messagesThatNotifyHint": "@我、@所有人和群公告",
     "myAliasInGroup": "我在群里的昵称",
+    "groupRemark": "群备注",
+    "groupRemarkHint": "只有你自己看得见",
     "groupMembersCount_other": "{{count}} 人",
     "groupOwner": "群主",
     "groupAdmin": "管理员",
@@ -536,6 +538,34 @@
     "youAreSilenced": "你已被禁言",
     "youAreSilencedUntil": "你已被禁言，{{time}} 解除",
     "youAreSilencedIndefinitely": "你已被禁言，等待管理员解除",
+    "groupAvatar": "群头像",
+    "groupMembersRow": "群成员",
+    "memberCountWithLimit": "{{count}}/{{limit}} 人",
+    "memberCountOnly": "{{count}} 人",
+    "muteAll": "全员禁言",
+    "muteAllHint": "开启后仅群主和管理员可以发言",
+    "youAreMutedAll": "全员禁言中，仅群主和管理员可以发言",
+    "transferOwner": "转让群主",
+    "transferOwnerConfirm": "确定将群主转让给 {{name}}？转让后你将成为普通成员。",
+    "transferOwnerDone": "已将群主转让给 {{name}}。",
+    "transferOwnerAction": "转让",
+    "raiseMemberLimit": "提升成员上限",
+    "groupAvatarUpdateFailed": "群头像更新失败",
+    "profilesRestrictedByGroup": "该群未开放查看成员资料",
+    "groupPolicy": {
+      "memberCanInvite": "成员邀请",
+      "qrJoinEnabled": "二维码入群",
+      "membersCanViewProfiles": "成员可查看他人资料",
+      "membersCanAddFriends": "成员可添加好友",
+      "membersCanViewRoster": "显示群成员"
+    },
+    "groupPolicyHint": {
+      "memberCanInvite": "关闭后只有群主和管理员可以拉人进群",
+      "qrJoinEnabled": "关闭后已签发的群二维码也无法入群",
+      "membersCanViewProfiles": "关闭后普通成员无法从群里打开他人资料",
+      "membersCanAddFriends": "关闭后普通成员无法通过群添加好友",
+      "membersCanViewRoster": "关闭后普通成员看不到群成员名单"
+    },
     "groupManagement": {
       "admins": "群管理员",
       "adminsHint": "管理员可移出普通成员、禁言成员、删除所有人的聊天记录",
@@ -552,7 +582,12 @@
       "noCandidates": "没有可选择的成员",
       "searchPlaceholder": "搜索成员",
       "loadFailed": "群管理加载失败",
-      "restricted": "仅群主和管理员可以管理群聊"
+      "restricted": "仅群主和管理员可以管理群聊",
+      "settings": "群设置",
+      "ownerSection": "群主",
+      "joinMethods": "进群允许方式",
+      "memberPermissions": "成员权限",
+      "pickNewOwner": "选择新群主"
     },
     "groupEvent": {
       "system": "系统",
@@ -573,7 +608,12 @@
       "ownerTransferred": "群主已转让给 {{targets}}",
       "groupRenamed": "{{actor}} 将群名改为「{{name}}」",
       "groupNoticeUpdated": "{{actor}} 更新了群公告",
-      "historyCleared": "{{actor}} 删除了所有人的聊天记录"
+      "historyCleared": "{{actor}} 删除了所有人的聊天记录",
+      "muteAllEnabled": "{{actor}} 开启了全员禁言",
+      "muteAllDisabled": "{{actor}} 解除了全员禁言",
+      "groupAvatarUpdated": "{{actor}} 更新了群头像",
+      "policyEnabled": "{{actor}} 开启了「{{policy}}」",
+      "policyDisabled": "{{actor}} 关闭了「{{policy}}」"
     },
     "clearHistoryWarning": "清空后将删除当前会话的聊天记录，且无法恢复。",
     "clear": "清空",
@@ -624,7 +664,7 @@
       "customImage": "自定义图片",
       "paramMissing": "参数缺失",
       "cannotModify": "无法修改当前会话的聊天背景。",
-      "statusUploading": "上传中...",
+      "statusApplying": "处理中...",
       "statusSet": "已设置",
       "restoreDefault": "恢复默认背景",
       "statusChoose": "请选择",
@@ -953,12 +993,16 @@
     "addFriendHint": "添加好友后即可看到朋友的动态",
     "notifications": {
       "title": "圈子通知设置",
-      "global": "在应用内显示圈子通知",
-      "globalOnHint": "开启：允许控制应用内的通知展示",
-      "globalOffHint": "关闭：隐藏应用内圈子通知横幅",
-      "banner": "应用内横幅",
-      "bannerOnHint": "开启：使用应用时显示通知横幅",
-      "bannerOffHint": "关闭：隐藏横幅并保留未读提示"
+      "global": "全局接收圈子通知",
+      "globalOnHint": "开启：默认打开离线通知+本地声音+红点",
+      "globalOffHint": "关闭：禁用所有通知（本地开关同步禁用）",
+      "sound": "声音提醒",
+      "soundOnHint": "开启：播放通知声音",
+      "soundOffHint": "关闭：静音（保留未读红点）",
+      "offline": "离线提醒",
+      "offlineOnHint": "开启：APP离线时将收到圈子横幅通知",
+      "offlineOffHint": "关闭：不再接收离线横幅通知",
+      "syncFailed": "设置未能保存，请稍后重试"
     },
     "guide": {
       "title": "圈子玩法说明",
@@ -2087,10 +2131,12 @@
       "groupOffline": "群聊离线推送",
       "groupOfflineHint": "关闭后不再接收群聊离线推送提醒",
       "circleSection": "圈子通知",
-      "circleGlobal": "在应用内显示圈子通知",
-      "circleGlobalHint": "控制使用应用时圈子通知的展示",
-      "circleBanner": "应用内横幅",
-      "circleBannerHint": "显示或隐藏横幅，并保留未读提示",
+      "circleGlobal": "全局接收圈子通知",
+      "circleGlobalHint": "关闭后停用圈子的横幅、声音、红点与离线推送",
+      "circleSound": "声音提醒",
+      "circleSoundHint": "关闭后圈子通知静音，保留未读红点",
+      "circleOffline": "离线提醒",
+      "circleOfflineHint": "APP 离线时是否接收圈子推送",
       "circleRingtone": "圈子通知铃声",
       "circleDefault": "圈子默认"
     },
@@ -2787,7 +2833,12 @@
       "memberSilencedIndefinitely": "有成员被禁言",
       "memberUnsilenced": "有成员被解除禁言",
       "ownerTransferred": "{{name}} 成为新群主",
-      "ownerTransferredUnnamed": "群主已转让"
+      "ownerTransferredUnnamed": "群主已转让",
+      "muteAllEnabled": "全员禁言已开启",
+      "muteAllDisabled": "全员禁言已解除",
+      "groupAvatarUpdated": "群头像已更新",
+      "policyEnabled": "「{{policy}}」已开启",
+      "policyDisabled": "「{{policy}}」已关闭"
     },
     "silence": {
       "minutes": "{{n}}分钟",
@@ -3175,6 +3226,7 @@
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会话不存在",
     "CHAT_CONVERSATION_NOT_FOUND": "会话不存在",
     "CHAT_MEMBER_DIRECTORY_FORBIDDEN": "仅圈主和管理员可查看群成员目录",
+    "CHAT_MEMBER_PROFILE_FORBIDDEN": "该群未开放查看成员资料",
     "CHAT_NOT_MEMBER": "你不是该会话成员",
     "CHAT_PEER_NOT_FOUND": "对方不可用",
     "CHAT_SELF_CONVERSATION": "不能和自己发起会话",
@@ -3231,7 +3283,11 @@
     "CHAT_GROUP_TARGET_PROTECTED": "不能对群主或同级管理员执行此操作",
     "CHAT_GROUP_SELF_TARGET": "不能对自己执行此操作",
     "CHAT_MEMBER_SILENCED": "你已被禁言，暂时无法发言",
-    "CHAT_SILENCE_DURATION_INVALID": "禁言时长无效"
+    "CHAT_SILENCE_DURATION_INVALID": "禁言时长无效",
+    "CHAT_GROUP_INVITE_DISABLED": "该群已关闭成员邀请",
+    "CHAT_GROUP_QR_JOIN_DISABLED": "该群已关闭二维码入群",
+    "CHAT_GROUP_AVATAR_URL_INVALID": "群头像地址无效",
+    "FRIEND_GROUP_ADD_FORBIDDEN": "该群不允许成员互加好友"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",

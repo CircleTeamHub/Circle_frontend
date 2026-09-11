@@ -260,7 +260,7 @@ export default function AddFriendScreen() {
             onPress={handleOpenMyQr}
             accessibilityRole="button"
           >
-            <Ionicons name="qr-code-outline" size={20} color={colors.primary} />
+            <Ionicons name="qr-code-outline" size={20} color={colors.iconAccent} />
             <Text style={d.quickActionText}>
               {t('qr.myQrEntry', { defaultValue: '我的二维码' })}
             </Text>
@@ -270,7 +270,7 @@ export default function AddFriendScreen() {
             onPress={handleOpenScan}
             accessibilityRole="button"
           >
-            <Ionicons name="scan-outline" size={20} color={colors.primary} />
+            <Ionicons name="scan-outline" size={20} color={colors.iconAccent} />
             <Text style={d.quickActionText}>
               {t('messages.scan', { defaultValue: '扫一扫' })}
             </Text>

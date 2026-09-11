@@ -10,6 +10,7 @@ import {
 } from '@/chat-core/api';
 import type { ChatMemberDto } from '@/chat-core/protocol';
 import { isMemberSilencedNow } from '@/chat-core/silence-durations';
+import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import {
   canAssignGroupRole,
   canManageGroupTarget,
@@ -144,7 +145,7 @@ export function useGroupAdminActions(
             await updateGroupMemberRole(groupID, member.userId, nextRole);
           }
           paramsRef.current.onMemberUpdated(member.userId, { role: nextRole });
-          const name = member.nickname || member.userId;
+          const name = groupMemberDisplayName(member);
           Alert.alert(
             t('common.done'),
             nextRole === 'ADMIN'
@@ -159,7 +160,7 @@ export function useGroupAdminActions(
 
   const kick = useCallback(
     (member: ChatMemberDto) => {
-      const name = member.nickname || member.userId;
+      const name = groupMemberDisplayName(member);
       Alert.alert(t('chat.removeMember'), t('chat.removeMemberConfirm', { name }), [
         { text: t('common.cancel'), style: 'cancel' },
         {
@@ -206,7 +207,7 @@ export function useGroupAdminActions(
           Alert.alert(
             t('common.done'),
             t('chat.memberSilenced', {
-              name: member.nickname || member.userId,
+              name: groupMemberDisplayName(member),
               defaultValue: '已禁言 {{name}}。',
             }),
           );
@@ -233,7 +234,7 @@ export function useGroupAdminActions(
           Alert.alert(
             t('common.done'),
             t('chat.memberUnsilenced', {
-              name: member.nickname || member.userId,
+              name: groupMemberDisplayName(member),
               defaultValue: '已解除 {{name}} 的禁言。',
             }),
           );

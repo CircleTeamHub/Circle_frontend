@@ -1,5 +1,18 @@
 import type { ThemeColors } from './types';
 
+/** 两个主题共用的靛蓝主色。浅色下强调图标直接沿用它。 */
+const PRIMARY = '#6366F1';
+
+/**
+ * 暗色下的品牌紫强调色。brandPurple #7C5CF0 在背景 #1A1B23 上只有 3.79:1、
+ * 在 surface #252630 上 3.32:1，都低于 4.5:1；提亮到同色系的 #B18AFF 后分别是
+ * 6.49:1 / 5.68:1。
+ *
+ * tab 选中态（tabBarActive）与强调图标（iconAccent）必须是同一个值 —— 同一个
+ * 「被点亮的紫」在一屏里出现两种深浅，用户只会当成渲染 bug。
+ */
+const DARK_ACCENT = '#B18AFF';
+
 export const darkColors: ThemeColors = {
   background: '#1A1B23',
   surface: '#252630',
@@ -7,15 +20,14 @@ export const darkColors: ThemeColors = {
   pinnedTextSecondary: '#FFFFFF',
   surfaceBorder: '#565A6B',
   divider: '#3C3E4B',
-  primary: '#6366F1',
+  primary: PRIMARY,
+  iconAccent: DARK_ACCENT,
   primaryLight: 'rgba(99, 102, 241, 0.25)',
   primaryDeep: '#4F46E5',
   // 会员卡渐变 ['#5B4BE6','#7C5CF0','#A86BF0'] 的核心色，app 的品牌紫
   brandPurple: '#7C5CF0',
-  // tab 选中态：暗色下 brandPurple 在 #1A1B23 上只有 3.79:1、在 surface
-  // #252630 上 3.32:1，都低于 9px 文字要求的 4.5:1。这里提亮到品牌紫同色系
-  // 的 #B18AFF —— 两个底色上分别是 6.49:1 / 5.68:1。
-  tabBarActive: '#B18AFF',
+  // tab 选中态与 iconAccent 同源（见 DARK_ACCENT）。
+  tabBarActive: DARK_ACCENT,
   link: '#A86BF0',
   text: '#FFFFFF',
   // 暗色下次要文字一律纯白 —— 任何灰阶在 #1A1B23 上都糊。层级靠字号/字重区分,不靠明度。
@@ -55,6 +67,7 @@ export const darkColors: ThemeColors = {
   newUserBadgeRing: 'rgba(47, 109, 84, 0.18)',
   sentTimeText: 'rgba(255, 255, 255, 0.8)',
   overlay: 'rgba(0, 0, 0, 0.4)',
+  chatBackgroundScrim: 'rgba(26, 27, 35, 0.35)',
   statusBarStyle: 'light',
 };
 
@@ -65,7 +78,9 @@ export const lightColors: ThemeColors = {
   pinnedTextSecondary: '#505050',
   surfaceBorder: '#E5E7EB',
   divider: '#F0F0F0',
-  primary: '#6366F1',
+  primary: PRIMARY,
+  // 浅色底对比度本就够，强调图标不另开一支色。
+  iconAccent: PRIMARY,
   primaryLight: 'rgba(99, 102, 241, 0.15)',
   primaryDeep: '#4F46E5',
   // 会员卡渐变 ['#5B4BE6','#7C5CF0','#A86BF0'] 的核心色，app 的品牌紫
@@ -110,5 +125,6 @@ export const lightColors: ThemeColors = {
   newUserBadgeRing: 'rgba(47, 109, 84, 0.18)',
   sentTimeText: 'rgba(255, 255, 255, 0.8)',
   overlay: 'rgba(0, 0, 0, 0.4)',
+  chatBackgroundScrim: 'rgba(248, 249, 250, 0.35)',
   statusBarStyle: 'dark',
 };

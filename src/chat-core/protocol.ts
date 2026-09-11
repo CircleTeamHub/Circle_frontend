@@ -78,6 +78,16 @@ export interface ChatSenderInfo {
   id: string;
   nickname: string;
   avatarUrl: string | null;
+  /**
+   * 发送者在**这个会话**里的群昵称(ChatMember.alias,对全群可见);
+   * null/缺省 = 用账号昵称。只有在会话上下文里解析出来的发送者才带值
+   * (气泡 / 群日志 / 系统提示),单聊对端与跨会话的引用快照一律为 null。
+   *
+   * 气泡上方的名字不能只靠成员表:「是否显示群成员」关掉后普通成员根本拉不到
+   * 目录,名字就会退回账号昵称 —— 群里所有人看到的明明是群昵称。
+   * 可选是为了兼容还没升级的后端。
+   */
+  alias?: string | null;
 }
 
 /** 被引用消息的只读快照（G-09 真引用），服务端读路径批量附带。 */
@@ -197,7 +207,11 @@ function isValidSender(value: unknown): boolean {
     typeof value['nickname'] === 'string' &&
     (value['avatarUrl'] === null ||
       value['avatarUrl'] === undefined ||
-      typeof value['avatarUrl'] === 'string')
+      typeof value['avatarUrl'] === 'string') &&
+    // alias 会被显示名解析 trim(),非字符串的话崩在渲染期(分发器 try/catch 之外)。
+    (value['alias'] === null ||
+      value['alias'] === undefined ||
+      typeof value['alias'] === 'string')
   );
 }
 
@@ -368,6 +382,8 @@ export interface ChatPresenceBroadcast {
 export interface ChatMemberDto {
   userId: string;
   nickname: string;
+  /** 本人在该群设的群昵称(群备注),对全群可见;缺省/null = 用账号昵称。 */
+  alias?: string | null;
   avatarUrl: string | null;
   /** 群角色:圈子群来自 CircleMember;独立群聊 = ownerId / 座位上的管理员标记。 */
   role: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
@@ -375,6 +391,20 @@ export interface ChatMemberDto {
   silenced?: boolean;
   /** 禁言到期时刻;silenced 且为 null = 直到解除。 */
   silencedUntil?: string | null;
+}
+
+/** 群策略开关(PATCH /chat/conversations/:id/policies;群主/管理员可改)。 */
+export interface ChatGroupPoliciesDto {
+  /** 普通成员能否拉人进群(圈子群 = Circle.memberCanInvite)。 */
+  memberCanInvite: boolean;
+  /** 群二维码能否入群。 */
+  qrJoinEnabled: boolean;
+  /** 普通成员能否看到群成员名单本身。 */
+  membersCanViewRoster: boolean;
+  /** 普通成员能否从群里打开其他成员资料。 */
+  membersCanViewProfiles: boolean;
+  /** 普通成员能否通过群加其他成员为好友。 */
+  membersCanAddFriends: boolean;
 }
 
 /** 禁言/解除禁言的响应:目标成员的最新禁言状态。 */
@@ -399,6 +429,9 @@ export type ChatGroupEventKind =
   | 'owner-transferred'
   | 'group-renamed'
   | 'group-notice-updated'
+  | 'group-avatar-updated'
+  | 'mute-all-changed'
+  | 'policy-changed'
   | 'history-cleared';
 
 /** 群日志一条(GET /chat/conversations/:id/events)。 */
@@ -466,6 +499,28 @@ export interface ChatConversationDto {
   silenced?: boolean;
   /** 本人禁言到期时刻;silenced 且为 null = 直到解除。 */
   silencedUntil?: string | null;
+  /** 全员禁言中(仅 GROUP;群主/管理员不受限)。可选兼容老后端。 */
+  muteAll?: boolean;
+  /** 我给这个群起的备注,只有我看得见;缺省/null = 用群名。 */
+  myRemark?: string | null;
+  /**
+   * 我在这个群里的群昵称(自己座位上的 alias,对全群可见);缺省/null = 用账号昵称。
+   *
+   * 必须从会话行读,不能从成员目录里捞自己:「是否显示群成员」关掉后普通成员
+   * 拿到的是空目录(圈子群跳过 fetch、独立群 403),那时「我的群昵称」会永远
+   * 显示未设置、改名 prompt 的默认值也是空的。成员表只当兜底。
+   */
+  myAlias?: string | null;
+  /** 独立群聊公告;圈子群走圈子详情。 */
+  notice?: string | null;
+  /** 独立群聊头像;圈子群走 circle.avatarUrl。 */
+  avatarUrl?: string | null;
+  /** 独立群聊成员上限;圈子群走圈子详情。 */
+  memberLimit?: number | null;
+  /** 本人在该群的角色(仅 GROUP)。 */
+  myRole?: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
+  /** 群策略开关(仅 GROUP)。 */
+  policies?: ChatGroupPoliciesDto | null;
   /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
   burnDurationSec?: number | null;
   lastMessageAt: string | null;

@@ -140,9 +140,11 @@ test('temporary chat info loads its member directory from the conversation endpo
     'utf8',
   );
 
+  // 临时房与独立群聊由服务端座位校验兜底,圈子群看活体角色;「是否显示群成员」
+  // 再叠一层(群主/管理员不受限),判据与服务端 listMembers 一致。
   assert.match(
     source,
-    /const canViewMemberDirectory =\s*isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory;/,
+    /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory\) &&/,
   );
   assert.match(source, /if \(isTempConversation\) \{[\s\S]{0,700}fetchChatMembers\(tempConversationID\)/);
   // 临时房没有圈子,这两条圈子专属请求绝不能落到 tmp... id 上。
@@ -194,7 +196,10 @@ test('chat info screen lets the current user open their own profile from the gro
   // messages/contacts/discover/profile 都有 re-export；写死 'messages' 会把 profile
   // 推进 messages 栈、串栈污染(与 AddFriend 同类 bug)。
   // 契约随自研栈迁移更新(意图不变):id 已是后端 UUID,无需 fromImUserId 转换。
-  assert.match(source, /router\.push\(getUserProfileHref\(scope,\s*member\.userId/);
+  assert.match(source, /router\.push\(\s*getUserProfileHref\(scope,\s*member\.userId/);
+  // 从群里点进资料页要带上 viaConversationID:资料页据此按本群的
+  // 「成员可添加好友」决定要不要放加好友入口(服务端同样按它把关)。
+  assert.match(source, /viaConversationID: resolvedConversationID \|\| conversationID/);
   assert.doesNotMatch(source, /getUserProfileHref\(\s*['"]messages['"]/);
   assert.doesNotMatch(
     source,
@@ -213,10 +218,12 @@ test('chat info screen gives group rows real actions instead of unsupported plac
   assert.match(source, /handleEditGroupNotice/);
   assert.match(source, /getEditGroupNoticeHref/);
   assert.doesNotMatch(source, /updateGroupNotice\(groupID,\s*trimmed\)/);
-  // 「我的群内昵称」在自研栈无后端支持:整块 UI 已删除,不留假开关。
-  assert.doesNotMatch(source, /handleEditMyGroupAlias/);
+  // 「我在群里的昵称」曾因自研栈无后端支持整块删掉;现在 ChatMember.alias 与
+  // PATCH /chat/conversations/:id/my-alias 都有了,入口回来了,且接的是真端点。
+  assert.match(source, /handleEditMyGroupAlias/);
+  assert.match(source, /chat\.myAliasInGroup/);
+  assert.match(source, /setMyGroupChatAlias\(target, value\)/);
   assert.doesNotMatch(source, /updateGroupMemberAlias/);
-  assert.doesNotMatch(source, /chat\.myAliasInGroup/);
   assert.doesNotMatch(source, /handleMinimizeGroupChat/);
   assert.doesNotMatch(source, /hideConversation\(resolvedConversationID\)/);
   assert.doesNotMatch(source, /label=\{t\('chat\.minimizeChat'\)\}/);
@@ -354,8 +361,9 @@ test('group member search screen loads and filters group members', () => {
 
   assert.match(source, /createCircleChatConversation\(groupID\)/);
   assert.match(source, /fetchChatMembers\(conversation\.id\)/);
-  assert.match(source, /member\.nickname\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
-  assert.match(source, /member\.userId\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
+  // 过滤收进共用解析器:群昵称、账号昵称、userId 任一命中即可 —— 只按账号昵称
+  // 搜的话,给自己起了群昵称的人在群里就搜不到。
+  assert.match(source, /groupMemberMatchesQuery\(member, trimmedQuery\)/);
   assert.match(source, /getUserProfileHref\(scope,/);
   assert.match(source, /member\.userId, member\.nickname/);
   assert.doesNotMatch(source, /fromImUserId\(item\.userID\)/);
@@ -370,9 +378,19 @@ test('group member search keeps authorization live and revalidates before openin
   // review R2 P1：authorized 来自活体 hook（订阅角色变化），撤权即清结果；
   // 点开成员资料前还要 fail-closed 现场重查。
   assert.match(source, /useGroupMemberViewAccess\(\{/);
-  assert.match(source, /canViewMembers: authorized,/);
+  // 圈子群的授权仍来自活体 hook;独立群聊没有圈子角色,目录全员可见(服务端座位校验)。
+  assert.match(source, /canViewMembers: circleAuthorized,/);
+  assert.match(source, /const authorized = isStandaloneGroup \|\| circleAuthorized;/);
   assert.match(source, /if \(!authorized\) \{\s*\n\s*setMembers\(\[\]\);/);
-  assert.match(source, /if \(!\(await revalidate\(\)\)\) \{\s*\n\s*return;/);
+  // 圈子群走活体重查;独立群聊没有圈子角色,改成现场重查自己还在不在座位上。
+  assert.match(
+    source,
+    /\} else if \(!\(await revalidate\(\)\)\) \{[\s\S]{0,240}?\n\s*return;/,
+  );
+  assert.match(
+    source,
+    /const seated = await fetchChatMembers\(standaloneConversationID\);/,
+  );
 });
 
 // 契约随自研栈迁移更新(意图不变):踢人/退群的事实源就是业务后端本身,
@@ -679,7 +697,8 @@ test('chat info only exposes group logs to members allowed by the backend', () =
     source,
     /canViewMemberDirectory \? \(\s*<>\s*<Divider \/>\s*<GroupInfoRow\s*label=\{t\('chat\.groupLog'/s,
   );
-  assert.match(source, /const canViewMemberDirectory =\s*isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory;/s);
+  assert.match(source, /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory\) &&/s);
+  assert.match(source, /rosterVisibleToMembers/);
   assert.match(source, /const \[silenceClock, setSilenceClock\] = useState\(\(\) => Date\.now\(\)\);/);
   assert.match(source, /const silenceOptions = SILENCE_DURATION_OPTIONS\.map\(\(seconds\) => \(\{/);
 });

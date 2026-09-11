@@ -55,8 +55,10 @@ function loadChatCoreApi(calls) {
 
 test('conversation mapper titles standalone groups by their own name', () => {
   const mappers = read('src/chat-core/mappers.ts');
-  // 圈子群优先 circle.name;独立群用会话 name,空名兜底「群聊」。
-  assert.match(mappers, /dto\.circle\?\.name \?\?/);
+  // 群备注(只有我看得见)排最前;没设置才是圈子群的 circle.name、
+  // 独立群的会话 name,空名兜底「群聊」。
+  assert.match(mappers, /dto\.myRemark\?\.trim\(\) \|\|/);
+  assert.match(mappers, /dto\.circle\?\.name \|\|/);
   assert.match(mappers, /dto\.name\?\.trim\(\)/);
   assert.match(mappers, /messages\.newGroupDefaultName/);
   // 独立群的 sourceID 退回会话 id(圈子群仍是圈子 id)。
@@ -189,7 +191,10 @@ test('system notice mapper renders the group-renamed kind', () => {
 });
 
 // ── 跨仓契约:双仓并排检出时逐项对齐;仅前端 CI 时跳过 ──
-const BACKEND_ROOT = path.join(__dirname, '..', '..', 'circle_be');
+// CIRCLE_BE_PATH 覆盖是给 git worktree 用的:worktree 旁边那个 circle_be 往往是
+// 别的分支,比 main 还容易给出假红/假绿。
+const BACKEND_ROOT =
+  process.env.CIRCLE_BE_PATH ?? path.join(__dirname, '..', '..', 'circle_be');
 const hasBackend = fs.existsSync(
   path.join(BACKEND_ROOT, 'src/chat/chat.controller.ts'),
 );

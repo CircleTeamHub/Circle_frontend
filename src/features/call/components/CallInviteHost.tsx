@@ -138,7 +138,7 @@ export function CallInviteHost() {
               <Ionicons
                 name={isVideoInvite ? 'videocam' : 'call'}
                 size={24}
-                color={colors.primary}
+                color={colors.iconAccent}
               />
             </View>
             <View style={s.copy}>

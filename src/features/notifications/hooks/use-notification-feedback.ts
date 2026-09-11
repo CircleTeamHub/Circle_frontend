@@ -15,7 +15,9 @@ const MIN_GAP_MS = 1500;
  * dev client that hasn't been rebuilt with the new native modules degrades to
  * a no-op instead of crashing.
  */
-export function useNotificationFeedback(): () => void {
+export function useNotificationFeedback(): (options?: {
+  silent?: boolean;
+}) => void {
   const playerRef = useRef<AudioPlayer | null>(null);
   const audioModuleRef = useRef<typeof import('expo-audio') | null>(null);
   const audioModulePromiseRef = useRef<Promise<typeof import('expo-audio') | null> | null>(null);
@@ -88,7 +90,9 @@ export function useNotificationFeedback(): () => void {
     };
   }, []);
 
-  return useCallback(() => {
+  // silent：调用方已知这条通知不该出声（例如圈子通知的「声音提醒」被关掉）。
+  // 震动不受它影响 —— 产品语义是「静音」，不是「无提醒」。
+  return useCallback((options?: { silent?: boolean }) => {
     const now = Date.now();
     if (now - lastFiredRef.current < MIN_GAP_MS) return;
     lastFiredRef.current = now;
@@ -100,7 +104,7 @@ export function useNotificationFeedback(): () => void {
       void fireNotificationHaptic();
     }
 
-    if (soundEnabled) {
+    if (soundEnabled && !options?.silent) {
       void ensureNotificationPlayer().then((player) => {
         if (!player) return;
 

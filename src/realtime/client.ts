@@ -10,7 +10,11 @@ import {
 } from '@/services/api/notifications';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
-import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
+import {
+  circleBannerAllowed,
+  gateCircleUnread,
+  useCircleNotificationStore,
+} from '@/features/discover/store/use-circle-notification-store';
 import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments-feed-signal-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
@@ -372,12 +376,15 @@ function closeSocket() {
 
 function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
   const badgeStore = useTabBadgeStore.getState();
+  // 总闸关着时圈子那份未读不进展示层。这条快照路径同时承载 badge.snapshot 帧和
+  // recoverTabBadgeSnapshot 的 REST 恢复 —— 漏掉它，红点就会在重启/重连后闪出来。
+  const gated = gateCircleUnread(snapshot, useCircleNotificationStore.getState());
   badgeStore.applySnapshot({
     messagesUnread: badgeStore.messagesUnread,
     contactsUnread: snapshot.contactsUnread,
-    discoverUnread: snapshot.discoverUnread,
+    discoverUnread: gated.discoverUnread,
     momentsUnread: snapshot.momentsUnread,
-    circleUnread: snapshot.circleUnread,
+    circleUnread: gated.circleUnread,
     signupUnread: snapshot.signupUnread,
     profileUnread: snapshot.profileUnread,
   });
@@ -421,12 +428,10 @@ function handleNotificationCreated(payload: NotificationItem) {
     ]);
   }
 
-  // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」控制：总开关或「通知提醒」关闭时，
-  // 通知照常进铃铛列表 + 红点（上面已处理），但不弹横幅。非圈子通知不受影响。
+  // 圈子通知（CIRCLE_*）的横幅受「圈子通知设置」总闸控制：关掉时通知照常进铃铛
+  // 列表（上面已处理，数据不丢），但不弹横幅。非圈子通知不受影响。
   if (payload.type.startsWith('CIRCLE_')) {
-    const { inAppEnabled, bannerEnabled } =
-      useCircleNotificationStore.getState();
-    if (!inAppEnabled || !bannerEnabled) {
+    if (!circleBannerAllowed(useCircleNotificationStore.getState())) {
       return;
     }
   }
@@ -463,17 +468,30 @@ function handleRealtimeEvent(message: RealtimeEvent) {
     case 'friend.activity.unread.changed':
       badgeStore.setContactsUnread(message.payload?.count ?? 0);
       return;
-    case 'interaction.unread.changed':
-      badgeStore.setDiscoverUnread(message.payload?.count ?? 0);
+    case 'interaction.unread.changed': {
+      // 总闸关掉时连红点也不显示（产品图：关闭 = 禁用所有通知）。互动总数里
+      // 也含着圈子那一份，只清 circleUnread 的话 tab 上照样亮着。
+      const gated = gateCircleUnread(
+        {
+          discoverUnread: message.payload?.count ?? 0,
+          circleUnread:
+            typeof message.payload?.circleUnread === 'number'
+              ? message.payload.circleUnread
+              : undefined,
+        },
+        useCircleNotificationStore.getState(),
+      );
+      badgeStore.setDiscoverUnread(gated.discoverUnread ?? 0);
       // 两个铃铛各读一个 per-domain 计数。老后端不带这两个字段：留住既有值，
       // 而不是清零 —— 否则每来一条互动通知，另一个铃铛的红点就被抹掉。
       if (typeof message.payload?.momentsUnread === 'number') {
         badgeStore.setMomentsUnread(message.payload.momentsUnread);
       }
-      if (typeof message.payload?.circleUnread === 'number') {
-        badgeStore.setCircleUnread(message.payload.circleUnread);
+      if (gated.circleUnread !== undefined) {
+        badgeStore.setCircleUnread(gated.circleUnread);
       }
       return;
+    }
     case 'circle.signup.unread.changed':
       badgeStore.setSignupUnread(message.payload?.count ?? 0);
       return;

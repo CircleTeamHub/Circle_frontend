@@ -69,6 +69,11 @@ type PersistedResettableStore = {
   persist?: {
     clearStorage?: () => Promise<void> | void;
   };
+  /**
+   * 落在设备上、但不在 persist key 里的账号足迹（目前只有聊天背景图文件）。
+   * 与 clearStorage 同一档：清的是**刚登出账号**的足迹，被更新会话抢占也要清。
+   */
+  clearDeviceArtifacts?: () => Promise<void> | void;
 };
 
 /**
@@ -78,7 +83,6 @@ type PersistedResettableStore = {
  * 纯设备偏好随设备走，跨账号幸存。当前幸存者及理由：
  * - circle-im-app-settings          —— 语言/主题等设备设置
  * - circle-im-notification-feedback —— 设备级通知反馈
- * - circle-im-circle-notification   —— 只有两个横幅/应用内开关，无账号数据
  * - circle-im-known-accounts        —— 账号切换器本体，语义就是跨会话
  * - circle-im-auth                  —— 由上方 persist.clearStorage 单独处理
  *
@@ -89,12 +93,26 @@ const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] 
   async () =>
     (await import('@/features/messages/store/use-local-unread-store'))
       .useLocalUnreadStore,
-  async () =>
-    (await import('@/features/chat/store/use-chat-preferences-store'))
-      .useChatPreferencesStore,
+  async () => {
+    const { clearUnreferencedChatBackgroundImages, useChatPreferencesStore } =
+      await import('@/features/chat/store/use-chat-preferences-store');
+    // 背景图本体在文件系统 / IndexedDB 里，clearStorage() 只清 MMKV 那半。
+    return {
+      getState: () => useChatPreferencesStore.getState(),
+      persist: useChatPreferencesStore.persist,
+      clearDeviceArtifacts: clearUnreferencedChatBackgroundImages,
+    };
+  },
   async () =>
     (await import('@/features/discover/store/use-discover-filter-store'))
       .useDiscoverFilterStore,
+  // 圈子通知三档。曾经按「只有两个应用内横幅开关、无账号数据」留作设备偏好，
+  // 但「离线提醒」现在镜像的是 User.circleOfflinePushEnabled 这个 per-user 字段：
+  // 留下来的话 B 登录后继承 A 的关闭态，B 第一次拨动就把 A 派生的值 PUT 进
+  // 自己的账号。清掉之后回到默认全开，下次打开设置由 GET 与服务端校平。
+  async () =>
+    (await import('@/features/discover/store/use-circle-notification-store'))
+      .useCircleNotificationStore,
   async () => {
     const { useCircleShortcutOrderStore } = await import(
       '@/features/discover/store/use-circle-shortcut-order-store'
@@ -129,6 +147,9 @@ async function clearAccountScopedPersistedStores(
         store.getState().resetForLogout();
       }
       await Promise.resolve(store.persist?.clearStorage?.());
+      // 设备上的账号足迹与 clearStorage 同批：只清 persist key 而把上一个账号的
+      // 壁纸留在磁盘上，引用先没了就再也没人来删它（隐私残留）。
+      await Promise.resolve(store.clearDeviceArtifacts?.());
     } catch (err) {
       reportHandledFailure('session', 'accountScopedStoreClear', err);
     }

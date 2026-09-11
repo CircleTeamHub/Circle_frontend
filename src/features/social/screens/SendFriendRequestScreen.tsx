@@ -162,7 +162,12 @@ export default function SendFriendRequestScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ id?: string; name?: string; qrToken?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    name?: string;
+    qrToken?: string;
+    viaConversationID?: string;
+  }>();
   const currentUser = useAuthStore((state) => state.user);
   const profileId = typeof params.id === 'string' ? params.id : '';
   const targetName =
@@ -347,6 +352,11 @@ export default function SendFriendRequestScreen() {
           permission,
           // 扫名片码进来的申请:带上服务端签发的令牌,对方 addMeByQrCode 开着即放行。
           qrToken: typeof params.qrToken === 'string' ? params.qrToken : undefined,
+          // 从群成员资料发起的申请:带上群会话 id,服务端按该群「成员可添加好友」把关。
+          viaConversationId:
+            typeof params.viaConversationID === 'string'
+              ? params.viaConversationID
+              : undefined,
         });
         Alert.alert(t('contacts.request.sentTitle'), t('contacts.request.sentMessage', { name: targetName }), [
           { text: t('common.ok'), onPress: () => router.back() },
@@ -551,7 +561,7 @@ export default function SendFriendRequestScreen() {
                       selected ? 'radio-button-on' : 'radio-button-off'
                     }
                     size={20}
-                    color={selected ? colors.primary : colors.textSecondary}
+                    color={selected ? colors.iconAccent : colors.textSecondary}
                   />
                 </Pressable>
               );

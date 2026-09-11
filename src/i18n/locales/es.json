@@ -61,10 +61,12 @@
       "groupOffline": "Notificaciones de grupo sin conexión",
       "groupOfflineHint": "Si se desactiva, no recibirás avisos de grupo sin conexión",
       "circleSection": "Notificaciones de Círculo",
-      "circleGlobal": "Mostrar notificaciones de Círculo en la app",
-      "circleGlobalHint": "Controla cómo se muestran las notificaciones de Círculo mientras usas la app",
-      "circleBanner": "Banner en la app",
-      "circleBannerHint": "Muestra u oculta banners y conserva los indicadores de no leídos",
+      "circleGlobal": "Recibir notificaciones de círculos",
+      "circleGlobalHint": "Al desactivar se detienen banners, sonido, punto de no leídos y push",
+      "circleSound": "Sonido",
+      "circleSoundHint": "Al desactivar, las notificaciones de círculos quedan en silencio",
+      "circleOffline": "Aviso sin conexión",
+      "circleOfflineHint": "Recibir push de círculos con la app sin conexión",
       "circleRingtone": "Tono de notificaciones de Círculo",
       "circleDefault": "Predeterminado de Círculo"
     },
@@ -378,6 +380,8 @@
     "messagesThatNotify": "Mensajes que aún notifican",
     "messagesThatNotifyHint": "@Yo, @Todos y avisos del grupo",
     "myAliasInGroup": "Mi alias en el grupo",
+    "groupRemark": "Nota del grupo",
+    "groupRemarkHint": "Solo tú puedes verla",
     "groupMembersCount_one": "{{count}} miembro",
     "groupMembersCount_other": "{{count}} miembros",
     "groupOwner": "Dueño",
@@ -460,6 +464,34 @@
     "youAreSilenced": "Estás silenciado",
     "youAreSilencedUntil": "Estás silenciado hasta {{time}}",
     "youAreSilencedIndefinitely": "Estás silenciado hasta que un administrador lo levante",
+    "groupAvatar": "Avatar del grupo",
+    "groupMembersRow": "Miembros",
+    "memberCountWithLimit": "{{count}}/{{limit}}",
+    "memberCountOnly": "{{count}}",
+    "muteAll": "Silenciar a todos",
+    "muteAllHint": "Al activarlo, solo el propietario y los administradores pueden escribir",
+    "youAreMutedAll": "Todos están silenciados. Solo el propietario y los administradores pueden escribir",
+    "transferOwner": "Transferir propiedad",
+    "transferOwnerConfirm": "¿Transferir la propiedad a {{name}}? Pasarás a ser un miembro normal.",
+    "transferOwnerDone": "Propiedad transferida a {{name}}.",
+    "transferOwnerAction": "Transferir",
+    "raiseMemberLimit": "Ampliar el límite de miembros",
+    "groupAvatarUpdateFailed": "No se pudo actualizar el avatar del grupo",
+    "profilesRestrictedByGroup": "Este grupo no permite ver los perfiles de los miembros",
+    "groupPolicy": {
+      "memberCanInvite": "Invitaciones de miembros",
+      "qrJoinEnabled": "Unirse con código QR",
+      "membersCanViewProfiles": "Los miembros pueden ver perfiles",
+      "membersCanAddFriends": "Los miembros pueden añadir amigos",
+      "membersCanViewRoster": "Mostrar lista de miembros"
+    },
+    "groupPolicyHint": {
+      "memberCanInvite": "Si está desactivado, solo el propietario y los administradores pueden añadir miembros",
+      "qrJoinEnabled": "Si está desactivado, los códigos QR del grupo ya emitidos dejan de funcionar",
+      "membersCanViewProfiles": "Si está desactivado, los miembros normales no pueden abrir perfiles de otros miembros desde el grupo",
+      "membersCanAddFriends": "Si está desactivado, los miembros normales no pueden añadir amigos a través del grupo",
+      "membersCanViewRoster": "Si está desactivado, los miembros normales no pueden ver la lista"
+    },
     "groupManagement": {
       "admins": "Administradores",
       "adminsHint": "Los administradores pueden expulsar miembros, silenciarlos y borrar el chat para todos",
@@ -476,7 +508,12 @@
       "noCandidates": "No hay miembros disponibles",
       "searchPlaceholder": "Buscar miembros",
       "loadFailed": "No se pudo cargar la gestión del grupo",
-      "restricted": "Solo el propietario y los administradores pueden gestionar el grupo"
+      "restricted": "Solo el propietario y los administradores pueden gestionar el grupo",
+      "settings": "Ajustes del grupo",
+      "ownerSection": "Propietario",
+      "joinMethods": "Cómo se une la gente",
+      "memberPermissions": "Permisos de los miembros",
+      "pickNewOwner": "Elegir al nuevo propietario"
     },
     "groupEvent": {
       "system": "Sistema",
@@ -497,7 +534,12 @@
       "ownerTransferred": "La propiedad pasó a {{targets}}",
       "groupRenamed": "{{actor}} cambió el nombre del grupo a «{{name}}»",
       "groupNoticeUpdated": "{{actor}} actualizó el aviso del grupo",
-      "historyCleared": "{{actor}} borró el chat para todos"
+      "historyCleared": "{{actor}} borró el chat para todos",
+      "muteAllEnabled": "{{actor}} silenció a todos",
+      "muteAllDisabled": "{{actor}} quitó el silencio a todos",
+      "groupAvatarUpdated": "{{actor}} actualizó el avatar del grupo",
+      "policyEnabled": "{{actor}} activó «{{policy}}»",
+      "policyDisabled": "{{actor}} desactivó «{{policy}}»"
     },
     "clearHistoryWarning": "Esto eliminará permanentemente todos los mensajes de esta conversación.",
     "clear": "Borrar",
@@ -548,7 +590,7 @@
       "customImage": "Imagen personalizada",
       "paramMissing": "Faltan parámetros",
       "cannotModify": "No se puede cambiar el fondo del chat.",
-      "statusUploading": "Subiendo...",
+      "statusApplying": "Aplicando...",
       "statusSet": "Definido",
       "restoreDefault": "Restaurar el fondo predeterminado",
       "statusChoose": "Elegir",
@@ -1462,12 +1504,16 @@
     "addFriendHint": "Agrega amigos para ver sus momentos",
     "notifications": {
       "title": "Ajustes de notificaciones del círculo",
-      "global": "Mostrar notificaciones del círculo en la app",
-      "globalOnHint": "Activado: permite controlar su presentación en la app",
-      "globalOffHint": "Desactivado: oculta los banners del círculo en la app",
-      "banner": "Banner en la app",
-      "bannerOnHint": "Activado: muestra un banner mientras usas la app",
-      "bannerOffHint": "Desactivado: oculta banners y conserva los indicadores de no leídos"
+      "global": "Recibir notificaciones de círculos",
+      "globalOnHint": "Activado: push sin conexión, sonido y punto de no leídos",
+      "globalOffHint": "Desactivado: todas las notificaciones off (subopciones incluidas)",
+      "sound": "Sonido",
+      "soundOnHint": "Activado: reproducir sonido de notificación",
+      "soundOffHint": "Desactivado: silencio (se mantiene el punto de no leídos)",
+      "offline": "Aviso sin conexión",
+      "offlineOnHint": "Activado: recibir push de círculos con la app sin conexión",
+      "offlineOffHint": "Desactivado: dejar de recibir push sin conexión",
+      "syncFailed": "No se pudo guardar el ajuste. Inténtalo de nuevo."
     },
     "guide": {
       "title": "Cómo funcionan los círculos",
@@ -2825,7 +2871,12 @@
       "memberSilencedIndefinitely": "Un miembro fue silenciado",
       "memberUnsilenced": "Se quitó el silencio a un miembro",
       "ownerTransferred": "{{name}} es ahora el propietario del grupo",
-      "ownerTransferredUnnamed": "La propiedad del grupo fue transferida"
+      "ownerTransferredUnnamed": "La propiedad del grupo fue transferida",
+      "muteAllEnabled": "Todos han sido silenciados",
+      "muteAllDisabled": "Se quitó el silencio a todos",
+      "groupAvatarUpdated": "Se actualizó el avatar del grupo",
+      "policyEnabled": "Se activó «{{policy}}»",
+      "policyDisabled": "Se desactivó «{{policy}}»"
     },
     "silence": {
       "minutes": "{{n}} min",
@@ -3178,6 +3229,7 @@
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversación no encontrada",
     "CHAT_CONVERSATION_NOT_FOUND": "Conversación no encontrada",
     "CHAT_MEMBER_DIRECTORY_FORBIDDEN": "Solo el propietario del círculo y los administradores pueden ver la lista de miembros",
+    "CHAT_MEMBER_PROFILE_FORBIDDEN": "Este grupo no permite ver los perfiles de otros miembros",
     "CHAT_NOT_MEMBER": "No eres miembro de esta conversación",
     "CHAT_PEER_NOT_FOUND": "Este usuario no está disponible",
     "CHAT_SELF_CONVERSATION": "No puedes iniciar un chat contigo mismo",
@@ -3234,7 +3286,11 @@
     "CHAT_GROUP_TARGET_PROTECTED": "No puedes hacer esto al propietario ni a otro administrador",
     "CHAT_GROUP_SELF_TARGET": "No puedes hacer esto contigo mismo",
     "CHAT_MEMBER_SILENCED": "Estás silenciado y no puedes enviar mensajes ahora",
-    "CHAT_SILENCE_DURATION_INVALID": "Duración de silencio no válida"
+    "CHAT_SILENCE_DURATION_INVALID": "Duración de silencio no válida",
+    "CHAT_GROUP_INVITE_DISABLED": "Las invitaciones de miembros están desactivadas en este grupo",
+    "CHAT_GROUP_QR_JOIN_DISABLED": "Unirse con código QR está desactivado en este grupo",
+    "CHAT_GROUP_AVATAR_URL_INVALID": "La dirección del avatar del grupo no es válida",
+    "FRIEND_GROUP_ADD_FORBIDDEN": "Este grupo no permite que los miembros se añadan como amigos"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",

@@ -102,7 +102,7 @@ export function OptionPickerSheet<T extends string | number | null>({
       handle: { backgroundColor: colors.surfaceBorder },
       title: { color: colors.text },
       optionLabel: { color: colors.text },
-      optionLabelSelected: { color: colors.primary },
+      optionLabelSelected: { color: colors.iconAccent },
       separator: { backgroundColor: colors.surfaceBorder },
     }),
     [colors],
@@ -163,7 +163,7 @@ export function OptionPickerSheet<T extends string | number | null>({
                   <Ionicons
                     name="checkmark"
                     size={20}
-                    color={colors.primary}
+                    color={colors.iconAccent}
                   />
                 ) : null}
               </Pressable>

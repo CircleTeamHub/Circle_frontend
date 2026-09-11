@@ -340,7 +340,7 @@ export default function NoteDetailScreen() {
   ) => (
     <View style={s.sectionHeader}>
       <View style={[s.sectionIconChip, d.sectionIconChip]}>
-        <Ionicons name={icon} size={15} color={colors.primary} />
+        <Ionicons name={icon} size={15} color={colors.iconAccent} />
       </View>
       <Text style={[s.sectionHeading, d.sectionHeading]}>{label}</Text>
     </View>
@@ -477,7 +477,7 @@ export default function NoteDetailScreen() {
                   t('notes.section.location', { defaultValue: '地址' }),
                 )}
                 <View style={s.locationRow}>
-                  <Ionicons name="location-outline" size={20} color={colors.primary} />
+                  <Ionicons name="location-outline" size={20} color={colors.iconAccent} />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.locationTitle, { color: colors.text }]}>
                       {sections.location?.title ||

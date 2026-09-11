@@ -419,12 +419,12 @@ export default function InviteToCircleScreen() {
           <Ionicons
             name={checked ? 'checkmark-circle' : 'ellipse-outline'}
             size={22}
-            color={checked ? colors.primary : colors.textSecondary}
+            color={checked ? colors.iconAccent : colors.textSecondary}
           />
         </Pressable>
       );
     },
-    [colors.primary, colors.textSecondary, d, selected, toggleFriend],
+    [colors.iconAccent, colors.textSecondary, d, selected, toggleFriend],
   );
 
   const submitDisabled = submitting || selectedCount < 1;

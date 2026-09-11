@@ -455,6 +455,8 @@
     "messagesThatNotify": "Messages That Will Still Notify",
     "messagesThatNotifyHint": "@Me, @All, and Group Notice",
     "myAliasInGroup": "My Alias in Group",
+    "groupRemark": "Group Remark",
+    "groupRemarkHint": "Only visible to you",
     "groupMembersCount_one": "{{count}} member",
     "groupMembersCount_other": "{{count}} members",
     "groupOwner": "Owner",
@@ -537,6 +539,34 @@
     "youAreSilenced": "You are muted",
     "youAreSilencedUntil": "You are muted until {{time}}",
     "youAreSilencedIndefinitely": "You are muted until an admin lifts it",
+    "groupAvatar": "Group Avatar",
+    "groupMembersRow": "Members",
+    "memberCountWithLimit": "{{count}}/{{limit}}",
+    "memberCountOnly": "{{count}}",
+    "muteAll": "Mute Everyone",
+    "muteAllHint": "When on, only the owner and admins can send messages",
+    "youAreMutedAll": "Everyone is muted. Only the owner and admins can send messages",
+    "transferOwner": "Transfer Ownership",
+    "transferOwnerConfirm": "Transfer ownership to {{name}}? You will become a regular member.",
+    "transferOwnerDone": "Ownership transferred to {{name}}.",
+    "transferOwnerAction": "Transfer",
+    "raiseMemberLimit": "Raise Member Limit",
+    "groupAvatarUpdateFailed": "Failed to update the group avatar",
+    "profilesRestrictedByGroup": "This group does not allow viewing member profiles",
+    "groupPolicy": {
+      "memberCanInvite": "Member invites",
+      "qrJoinEnabled": "Join via QR code",
+      "membersCanViewProfiles": "Members can view profiles",
+      "membersCanAddFriends": "Members can add friends",
+      "membersCanViewRoster": "Show member list"
+    },
+    "groupPolicyHint": {
+      "memberCanInvite": "When off, only the owner and admins can add members",
+      "qrJoinEnabled": "When off, existing group QR codes stop working",
+      "membersCanViewProfiles": "When off, regular members cannot open other members’ profiles from the group",
+      "membersCanAddFriends": "When off, regular members cannot add friends through the group",
+      "membersCanViewRoster": "When off, regular members cannot see the member list"
+    },
     "groupManagement": {
       "admins": "Admins",
       "adminsHint": "Admins can remove members, mute members and clear the chat for everyone",
@@ -553,7 +583,12 @@
       "noCandidates": "No eligible members",
       "searchPlaceholder": "Search members",
       "loadFailed": "Failed to load group management",
-      "restricted": "Only the owner and admins can manage this group"
+      "restricted": "Only the owner and admins can manage this group",
+      "settings": "Group Settings",
+      "ownerSection": "Owner",
+      "joinMethods": "How people join",
+      "memberPermissions": "Member permissions",
+      "pickNewOwner": "Pick the new owner"
     },
     "groupEvent": {
       "system": "System",
@@ -574,7 +609,12 @@
       "ownerTransferred": "Ownership passed to {{targets}}",
       "groupRenamed": "{{actor}} renamed the group to “{{name}}”",
       "groupNoticeUpdated": "{{actor}} updated the group notice",
-      "historyCleared": "{{actor}} cleared the chat for everyone"
+      "historyCleared": "{{actor}} cleared the chat for everyone",
+      "muteAllEnabled": "{{actor}} muted everyone",
+      "muteAllDisabled": "{{actor}} unmuted everyone",
+      "groupAvatarUpdated": "{{actor}} updated the group avatar",
+      "policyEnabled": "{{actor}} turned on “{{policy}}”",
+      "policyDisabled": "{{actor}} turned off “{{policy}}”"
     },
     "clearHistoryWarning": "This will permanently delete all messages in this conversation.",
     "clear": "Clear",
@@ -625,7 +665,7 @@
       "customImage": "Custom Image",
       "paramMissing": "Missing Parameters",
       "cannotModify": "Cannot modify chat background.",
-      "statusUploading": "Uploading...",
+      "statusApplying": "Applying...",
       "statusSet": "Set",
       "restoreDefault": "Restore default background",
       "statusChoose": "Choose",
@@ -954,12 +994,16 @@
     "addFriendHint": "Add friends to see their moments",
     "notifications": {
       "title": "Circle Notification Settings",
-      "global": "Show Circle Notifications in App",
-      "globalOnHint": "On: allow in-app presentation controls",
-      "globalOffHint": "Off: hide in-app Circle notification banners",
-      "banner": "In-App Banner",
-      "bannerOnHint": "On: show a banner while using the app",
-      "bannerOffHint": "Off: hide banners while keeping unread indicators"
+      "global": "Receive Circle Notifications",
+      "globalOnHint": "On: offline push, sound and unread dot all enabled",
+      "globalOffHint": "Off: all notifications disabled (sub-switches disabled too)",
+      "sound": "Sound",
+      "soundOnHint": "On: play a notification sound",
+      "soundOffHint": "Off: silent (unread dot kept)",
+      "offline": "Offline Push",
+      "offlineOnHint": "On: receive circle push while the app is offline",
+      "offlineOffHint": "Off: stop receiving offline push",
+      "syncFailed": "Could not save the setting. Please try again."
     },
     "guide": {
       "title": "How Circle Activities Work",
@@ -2090,10 +2134,12 @@
       "groupOffline": "Group Offline Push",
       "groupOfflineHint": "When off, offline group push reminders will not be received",
       "circleSection": "Circle Notifications",
-      "circleGlobal": "Show Circle Notifications in App",
-      "circleGlobalHint": "Controls Circle notification presentation while using the app",
-      "circleBanner": "In-App Banner",
-      "circleBannerHint": "Show or hide banners while keeping unread indicators",
+      "circleGlobal": "Receive Circle Notifications",
+      "circleGlobalHint": "Off disables circle banners, sound, unread dot and offline push",
+      "circleSound": "Sound",
+      "circleSoundHint": "Off silences circle notifications and keeps the unread dot",
+      "circleOffline": "Offline Push",
+      "circleOfflineHint": "Receive circle push while the app is offline",
       "circleRingtone": "Circle Notification Ringtone",
       "circleDefault": "Circle Default"
     },
@@ -2790,7 +2836,12 @@
       "memberSilencedIndefinitely": "A member was muted",
       "memberUnsilenced": "A member was unmuted",
       "ownerTransferred": "{{name}} is now the group owner",
-      "ownerTransferredUnnamed": "Group ownership was transferred"
+      "ownerTransferredUnnamed": "Group ownership was transferred",
+      "muteAllEnabled": "Everyone has been muted",
+      "muteAllDisabled": "Everyone has been unmuted",
+      "groupAvatarUpdated": "The group avatar was updated",
+      "policyEnabled": "“{{policy}}” was turned on",
+      "policyDisabled": "“{{policy}}” was turned off"
     },
     "silence": {
       "minutes": "{{n}} min",
@@ -3178,6 +3229,7 @@
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "Conversation not found",
     "CHAT_CONVERSATION_NOT_FOUND": "Conversation not found",
     "CHAT_MEMBER_DIRECTORY_FORBIDDEN": "Only the circle owner and admins can view the member directory",
+    "CHAT_MEMBER_PROFILE_FORBIDDEN": "This group doesn't allow members to view each other's profiles",
     "CHAT_NOT_MEMBER": "You are not a member of this conversation",
     "CHAT_PEER_NOT_FOUND": "This user is unavailable",
     "CHAT_SELF_CONVERSATION": "You cannot start a chat with yourself",
@@ -3234,7 +3286,11 @@
     "CHAT_GROUP_TARGET_PROTECTED": "You cannot do this to the owner or another admin",
     "CHAT_GROUP_SELF_TARGET": "You cannot do this to yourself",
     "CHAT_MEMBER_SILENCED": "You are muted and cannot send messages right now",
-    "CHAT_SILENCE_DURATION_INVALID": "Invalid mute duration"
+    "CHAT_SILENCE_DURATION_INVALID": "Invalid mute duration",
+    "CHAT_GROUP_INVITE_DISABLED": "Member invites are turned off in this group",
+    "CHAT_GROUP_QR_JOIN_DISABLED": "Joining via QR code is turned off in this group",
+    "CHAT_GROUP_AVATAR_URL_INVALID": "Invalid group avatar address",
+    "FRIEND_GROUP_ADD_FORBIDDEN": "This group does not allow members to add each other as friends"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",

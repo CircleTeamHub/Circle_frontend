@@ -10,6 +10,8 @@ export interface ThemeColors {
   surfaceBorder: string;
   divider: string;
   primary: string;
+  /** 强调图标的前景色；暗色提亮，浅色沿用 primary。 */
+  iconAccent: string;
   primaryLight: string;
   /** 比 primary 深一档的靛蓝，用于需要更重的实心按钮/强调面 */
   primaryDeep: string;
@@ -72,6 +74,9 @@ export interface ThemeColors {
   newUserBadgeRing: string;
   sentTimeText: string;
   overlay: string;
+  /** 自定义聊天背景图上的薄蒙版；只把壁纸往主题底色推一点，保住浮在背景上的日期
+   *  分隔和群昵称的对比度。刻意不复用 overlay（那是模态遮罩，40% 纯黑）。 */
+  chatBackgroundScrim: string;
   statusBarStyle: 'light' | 'dark';
 }
 

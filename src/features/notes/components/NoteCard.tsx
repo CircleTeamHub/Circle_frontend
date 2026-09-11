@@ -162,7 +162,7 @@ function NoteCardInner({
       <View style={s.content}>
         <View style={s.titleRow}>
           {note.pinned ? (
-            <Ionicons name="bookmark" size={13} color={colors.primary} />
+            <Ionicons name="bookmark" size={13} color={colors.iconAccent} />
           ) : null}
           <Text style={[s.title, d.title]} numberOfLines={1}>
             {note.title}
@@ -194,7 +194,7 @@ function NoteCardInner({
           <Ionicons
             name={selected ? 'checkmark-circle' : 'ellipse-outline'}
             size={22}
-            color={selected ? colors.primary : colors.textSecondary}
+            color={selected ? colors.iconAccent : colors.textSecondary}
           />
         </View>
       ) : canShowActions ? (

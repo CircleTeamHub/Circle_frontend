@@ -157,6 +157,7 @@ const NOTIFICATION_SEARCH_ROWS: AppSettingsRow[] = [
   'groupOffline',
   'circleGlobal',
   'circleSound',
+  'circleOffline',
   'circleRingtone',
 ].map((key) => ({
   id: `notifications-${key}`,

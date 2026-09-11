@@ -269,7 +269,7 @@ export function NoteGroupPickerSheet({
                         : 'ellipse-outline'
                   }
                   size={22}
-                  color={state === 'none' ? colors.textSecondary : colors.primary}
+                  color={state === 'none' ? colors.textSecondary : colors.iconAccent}
                 />
               </Pressable>
             );
@@ -321,8 +321,8 @@ export function NoteGroupPickerSheet({
           onPress={handleOpenCreate}
           accessibilityRole="button"
         >
-          <Ionicons name="add" size={18} color={colors.primary} />
-          <Text style={[s.createBtnText, { color: colors.primary }]}>
+          <Ionicons name="add" size={18} color={colors.iconAccent} />
+          <Text style={[s.createBtnText, { color: colors.iconAccent }]}>
             {t('notes.manageGroups.createNew', { defaultValue: '新增分组' })}
           </Text>
         </Pressable>

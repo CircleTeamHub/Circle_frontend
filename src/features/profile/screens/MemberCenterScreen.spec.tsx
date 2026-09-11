@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react-native';
 import { Alert, StyleSheet } from 'react-native';
 import MemberCenterScreen from './MemberCenterScreen';
@@ -49,12 +50,18 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@expo/vector-icons', () => {
   const { Text } =
     jest.requireActual<typeof import('react-native')>('react-native');
+  // 图标色是本页要验的东西之一（提亮档位色），桩里必须把 color 透出来。
   return {
-    Ionicons: ({ name }: { name: string }) => <Text>{name}</Text>,
+    Ionicons: ({ name, color }: { name: string; color?: string }) => (
+      <Text style={{ color }}>{name}</Text>
+    ),
   };
 });
 
+const mockTheme: { resolvedMode: 'light' | 'dark' } = { resolvedMode: 'light' };
+
 jest.mock('@/theme', () => ({
+  ...jest.requireActual<typeof import('@/theme/icon-color')>('@/theme/icon-color'),
   Radius: { xs: 4, sm: 8 },
   Spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
   Typography: {
@@ -68,6 +75,7 @@ jest.mock('@/theme', () => ({
     h3: {},
   },
   useTheme: () => ({
+    resolvedMode: mockTheme.resolvedMode,
     colors: {
       background: '#fff',
       surface: '#fff',
@@ -175,6 +183,7 @@ function setAuth(currentUser: AuthUser, sessionEpoch = 1) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockTheme.resolvedMode = 'light';
   // 默认「后端没配客服」——各用例自己按需塞。
   mockSupport.state = { config: null, fetchConfig: jest.fn() };
   mockFocusCallback = null;
@@ -575,4 +584,51 @@ test('rules screen states the exact support-assisted membership contract', () =>
 
   expect(screen.queryByText(/头像框/)).toBeNull();
   expect(screen.queryByText(/创建群.*上限|高级圈子|优先客服/)).toBeNull();
+});
+
+test('暗色下同一张档位卡只用一个强调色：选中描边与对号同值', async () => {
+  // #231 只提亮了对号，选中描边还是原始的档位色 —— 同一张卡出现两种深浅。
+  mockTheme.resolvedMode = 'dark';
+  render(<MemberCenterScreen />);
+  await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
+
+  // 未开通会员时默认选中钻石档（accent #2563EB）。
+  const selectedCard = screen.getByRole('button', { selected: true });
+  const border = StyleSheet.flatten(selectedCard.props.style);
+  expect(border.borderWidth).toBe(2);
+
+  // iconForeground('#2563EB', 'dark')：每个通道向白混 0.4。
+  const tone = '#7ca1f3';
+  expect(border.borderColor).toBe(tone);
+
+  const cardCheckmark = within(selectedCard).getByText('checkmark-circle');
+  expect(StyleSheet.flatten(cardCheckmark.props.style).color).toBe(tone);
+});
+
+test('「当前」实心小标底色不提亮——白字在提亮底上只剩 2.4:1', async () => {
+  mockTheme.resolvedMode = 'dark';
+  setAuth(user(3));
+  mockFetchCurrentUser.mockResolvedValue(user(3));
+  render(<MemberCenterScreen />);
+  await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
+
+  // 小标是 Text 外面那层 View（style 里带 backgroundColor），逐层往上找。
+  let marker = screen.getByText('当前').parent;
+  while (
+    marker &&
+    StyleSheet.flatten(marker.props.style)?.backgroundColor === undefined
+  ) {
+    marker = marker.parent;
+  }
+  expect(StyleSheet.flatten(marker?.props.style).backgroundColor).toBe('#2563EB');
+});
+
+test('浅色下档位色不提亮，描边就是档位原色', async () => {
+  render(<MemberCenterScreen />);
+  await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
+
+  const selectedCard = screen.getByRole('button', { selected: true });
+  expect(StyleSheet.flatten(selectedCard.props.style).borderColor).toBe('#2563EB');
+  const cardCheckmark = within(selectedCard).getByText('checkmark-circle');
+  expect(StyleSheet.flatten(cardCheckmark.props.style).color).toBe('#2563EB');
 });

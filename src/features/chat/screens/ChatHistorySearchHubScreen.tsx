@@ -133,7 +133,7 @@ export default function ChatHistorySearchHubScreen() {
             onSubmitEditing={handleSubmitKeywordSearch}
           />
           <Pressable hitSlop={8} onPress={handleSubmitKeywordSearch}>
-            <Ionicons name="arrow-forward-circle" size={20} color={colors.primary} />
+            <Ionicons name="arrow-forward-circle" size={20} color={colors.iconAccent} />
           </Pressable>
         </View>
 

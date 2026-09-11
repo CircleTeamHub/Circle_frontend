@@ -232,7 +232,7 @@ export function GroupExpansionCirclePickerSheet({
                 <Ionicons
                   name="people-outline"
                   size={22}
-                  color={colors.primary}
+                  color={colors.iconAccent}
                 />
               </View>
               <View style={s.rowText}>
@@ -254,7 +254,7 @@ export function GroupExpansionCirclePickerSheet({
               <Ionicons
                 name={selected ? 'radio-button-on' : 'radio-button-off'}
                 size={22}
-                color={selected ? colors.primary : colors.textSecondary}
+                color={selected ? colors.iconAccent : colors.textSecondary}
               />
             </Pressable>
           );

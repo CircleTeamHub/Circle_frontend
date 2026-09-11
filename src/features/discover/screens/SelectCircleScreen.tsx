@@ -188,7 +188,7 @@ export default function SelectCircleScreen() {
             <Ionicons
               name={isSelected ? 'checkmark-circle' : 'ellipse-outline'}
               size={22}
-              color={isSelected ? colors.primary : colors.surfaceBorder}
+              color={isSelected ? colors.iconAccent : colors.surfaceBorder}
             />
           </Pressable>
           <Divider />

@@ -14,6 +14,10 @@ import { Spacing, useTheme } from '@/theme';
 import { mapNotificationToRow } from '@/features/notifications/utils/notification-summary';
 import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
 import { useNotificationFeedback } from '@/features/notifications/hooks/use-notification-feedback';
+import {
+  circleSoundAllowed,
+  useCircleNotificationStore,
+} from '@/features/discover/store/use-circle-notification-store';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { notificationDomain } from '@/features/notifications/utils/notification-domain';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
@@ -139,7 +143,13 @@ export function NotificationSnackbarHost() {
       duration: ENTER_MS,
       useNativeDriver: true,
     }).start();
-    notify();
+    // 圈子通知的提示音由「圈子通知设置 → 声音提醒」单独控制；关掉只静音，
+    // 横幅和未读红点照常。
+    const silent =
+      shown.kind === 'notification' &&
+      shown.type.startsWith('CIRCLE_') &&
+      !circleSoundAllowed(useCircleNotificationStore.getState());
+    notify({ silent });
 
     timerRef.current = setTimeout(dismissCurrent, AUTO_DISMISS_MS);
     return clearTimer;

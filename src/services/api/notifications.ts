@@ -155,3 +155,41 @@ export async function deleteLegacyPushToken(
     accessToken: options.accessToken,
   });
 }
+
+
+function isCirclePushPreferenceShape(
+  value: unknown,
+): value is { circleOfflinePushEnabled: boolean } {
+  return (
+    isPlainObject(value) &&
+    typeof value.circleOfflinePushEnabled === 'boolean'
+  );
+}
+
+/**
+ * 圈子通知「离线提醒」的服务端那一半。横幅 / 声音 / 红点都是本机展示，留在 MMKV；
+ * 只有离线推送必须服务端知道，否则关掉了照样推。
+ */
+export async function fetchCircleOfflinePushEnabled(): Promise<boolean> {
+  const raw = await apiClient<{ circleOfflinePushEnabled: boolean }>(
+    '/notification/circle-push-preference',
+  );
+  return expectShape(raw, isCirclePushPreferenceShape, '圈子推送设置格式异常')
+    .circleOfflinePushEnabled;
+}
+
+export async function updateCircleOfflinePushEnabled(
+  circleOfflinePushEnabled: boolean,
+): Promise<boolean> {
+  const raw = await apiClient<{ circleOfflinePushEnabled: boolean }>(
+    '/notification/circle-push-preference',
+    // apiClient 自己会序列化 body，这里传对象；再 stringify 一次会双重编码，
+    // 后端拿到的是一个 JSON 字符串而不是对象，直接 400。
+    {
+      method: 'PUT',
+      body: { circleOfflinePushEnabled },
+    },
+  );
+  return expectShape(raw, isCirclePushPreferenceShape, '圈子推送设置格式异常')
+    .circleOfflinePushEnabled;
+}

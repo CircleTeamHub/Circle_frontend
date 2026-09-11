@@ -208,6 +208,44 @@ function applyRemoteBurnChange(
   );
 }
 
+/**
+ * 群主/管理员改了全员禁言或群策略时,把新状态落进会话 DTO。
+ *
+ * 系统提示本身就播给整个会话房,所以不用服务端再逐人推 N 条个人房 updated:
+ * 客户端收到提示时顺手把 muteAll / policies 翻过来,聊天页的输入区横幅与
+ * 群管理页的开关立刻对上;下一次全量拉取会话再兜底校准。
+ */
+function applyRemoteGroupSettingChange(
+  store: ReturnType<typeof useChatStore.getState>,
+  message: ChatMessageDto,
+): void {
+  if (message.type !== 'system') return;
+  const content = message.content;
+  const kind = content['kind'];
+  if (kind !== 'mute-all-changed' && kind !== 'group-policy-changed') return;
+  const conversation = store.conversations.find(
+    (candidate) => candidate.id === message.conversationId,
+  );
+  if (!conversation) return;
+  const enabled = content['enabled'] === true;
+  if (kind === 'mute-all-changed') {
+    if (conversation.muteAll === enabled) return;
+    store.upsertConversation({ ...conversation, muteAll: enabled });
+    return;
+  }
+  const policy = content['policy'];
+  if (typeof policy !== 'string' || !conversation.policies) return;
+  // 只认这份 DTO 自己的键:`policy in ...` 会连原型链一起认,一条
+  // policy:'toString' 的畸形广播就能给 policies 挂上一个自有的 toString。
+  if (!Object.prototype.hasOwnProperty.call(conversation.policies, policy)) {
+    return;
+  }
+  store.upsertConversation({
+    ...conversation,
+    policies: { ...conversation.policies, [policy]: enabled },
+  });
+}
+
 export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
   socket.on(CHAT_EVENTS.message, (payload: ChatMessageDto) => {
     if (!isLive()) return;
@@ -249,6 +287,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       const applied = store.applyIncomingMessage(payload);
       store.ingestMessages(payload.conversationId, [payload]);
       applyRemoteBurnChange(store, payload);
+      applyRemoteGroupSettingChange(store, payload);
       // G-07 送达回执:收到别人的消息即回报水位(节流在 socket-manager)。
       if (
         payload.height > 0 &&

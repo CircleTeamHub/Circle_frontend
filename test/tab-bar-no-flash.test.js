@@ -45,7 +45,7 @@ test('tab bar 通过 Reanimated 动画滑入/滑出，而非瞬间 display 切�
   assert.match(layout, /pointerEvents/);
 });
 
-test('自绘 tab bar：避开系统导航栏，选中态只染色 icon，不渲染椭圆', () => {
+test('自绘 tab bar：避开系统导航栏，选中态用弹性胶囊反馈当前 tab', () => {
   const layout = read('app/(tabs)/_layout.tsx');
 
   // bar 是完整胶囊
@@ -67,10 +67,16 @@ test('自绘 tab bar：避开系统导航栏，选中态只染色 icon，不渲�
   assert.match(layout, /const TAB_PILL_RADIUS = TAB_PILL_HEIGHT \/ 2/);
   assert.match(layout, /height: TAB_PILL_HEIGHT/);
   assert.match(layout, /borderRadius: TAB_PILL_RADIUS/);
-  // 选中态不能渲染任何胶囊或椭圆背景。
+  // 选中态胶囊只覆盖单格内容，并由 Reanimated 弹性出现/消失。
   assert.match(layout, /overflow: 'hidden'/);
-  assert.doesNotMatch(layout, /activePillFill/);
-  assert.doesNotMatch(layout, /focused && styles\.pillActive/);
+  assert.match(layout, /liquidIndicator: \{/);
+  assert.match(layout, /const indicatorX = useSharedValue/);
+  assert.match(layout, /const indicatorStretch = useSharedValue\(1\)/);
+  assert.match(layout, /const indicatorSquash = useSharedValue\(1\)/);
+  assert.match(layout, /indicatorX\.value = withTiming\(targetX/);
+  assert.match(layout, /indicatorStretch\.value = withSequence/);
+  assert.match(layout, /withTiming\(1\.32/);
+  assert.match(layout, /withTiming\(0\.84/);
   assert.doesNotMatch(layout, /pill:\s*\{[\s\S]*?flex:\s*1/);
 });
 
@@ -112,7 +118,6 @@ test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降�
   assert.match(layout, /name=\{focused \? tab\.selectedIcon : tab\.icon\}/);
   assert.match(layout, /focused && styles\.labelActive/);
   assert.match(layout, /labelActive: \{\s*fontWeight: '700'/);
-  assert.doesNotMatch(layout, /activePillFill/);
   assert.match(layout, /onPressIn=\{\(\) => \{/);
   assert.doesNotMatch(layout, /Haptics/);
   assert.match(layout, /pressScale\.value = withSpring\(0\.92/);
@@ -131,8 +136,10 @@ test('选中态在暗色下必须读得清，红点描边不能浮在玻璃上',
 
   // brandPurple #7C5CF0 在暗色底 #1A1B23 上只有 3.79:1，9px 文字需要 4.5:1，
   // 而未选中的 textSecondary 是纯白 17:1 —— 选中项反而比未选中更糊。
-  // 暗色单独给一支提亮的品牌紫，两个暗色底都在 5.6:1 以上。
-  assert.match(colorsSrc, /tabBarActive: '#B18AFF'/);
+  // 暗色单独给一支提亮的品牌紫（DARK_ACCENT），两个暗色底都在 5.6:1 以上；
+  // 色值本身在 test/theme-accent-tokens.test.js 里按实际导出值断言。
+  assert.match(colorsSrc, /const DARK_ACCENT = '#B18AFF'/);
+  assert.match(colorsSrc, /tabBarActive: DARK_ACCENT/);
   assert.match(colorsSrc, /tabBarActive: '#7C5CF0'/);
   assert.doesNotMatch(layout, /colors\.brandPurple/);
 

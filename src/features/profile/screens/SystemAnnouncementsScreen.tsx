@@ -174,7 +174,7 @@ export default function SystemAnnouncementsScreen() {
           <Ionicons
             name="notifications-outline"
             size={20}
-            color={colors.primary}
+            color={colors.iconAccent}
           />
           <Text style={d.title}>{t('notifications.system')}</Text>
         </View>
@@ -182,7 +182,7 @@ export default function SystemAnnouncementsScreen() {
         <Text style={d.body}>{item.content}</Text>
       </View>
     ),
-    [colors.primary, d, t],
+    [colors.iconAccent, d, t],
   );
 
   const ListHeader = (
@@ -206,7 +206,7 @@ export default function SystemAnnouncementsScreen() {
           }
         >
           <View style={s.cardHeader}>
-            <Ionicons name="megaphone-outline" size={20} color={colors.primary} />
+            <Ionicons name="megaphone-outline" size={20} color={colors.iconAccent} />
             <Text style={d.title}>{t(item.titleKey)}</Text>
             <Ionicons
               name="chevron-forward"
