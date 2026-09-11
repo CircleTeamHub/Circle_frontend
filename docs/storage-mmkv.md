@@ -69,7 +69,7 @@ export function migrateFromAsyncStorage(): Promise<void> { /* ... */ }
 | --- | --- | --- | --- |
 | [`use-message-groups-store.ts`](../src/features/messages/store/use-message-groups-store.ts) | `circle-im-conversation-groups` | **1** | groups / lastSyncedAt |
 | [`use-discover-filter-store.ts`](../src/features/discover/store/use-discover-filter-store.ts) | `circle-im-discover-filter` | 0 | appliedCircleIds / appliedCities |
-| [`use-chat-preferences-store.ts`](../src/features/chat/store/use-chat-preferences-store.ts) | `circle-im-chat-preferences` | 0 | backgroundsByConversationID（每个会话的聊天背景） |
+| [`use-chat-preferences-store.ts`](../src/features/chat/store/use-chat-preferences-store.ts) | `circle-im-chat-preferences` | **1** | globalBackgroundPreference / backgroundsByConversationID（聊天背景，只存 `chat-bg:<文件名>`；图片本体在 Documents / IndexedDB 里，不进 MMKV。v0→v1 丢弃历史上存过的对象存储直链） |
 | [`use-circle-notification-store.ts`](../src/features/discover/store/use-circle-notification-store.ts) | `circle-im-circle-notification` | **1** | globalEnabled / soundEnabled / offlineEnabled |
 | [`use-circle-shortcut-order-store.ts`](../src/features/discover/store/use-circle-shortcut-order-store.ts) | `circle-im-circle-shortcut-order` | 0 | 圈子快捷入口排序 |
 | [`use-local-unread-store.ts`](../src/features/messages/store/use-local-unread-store.ts) | `circle-im-local-unread-overrides` | 0 | overrides（本地未读数覆盖） |

@@ -12,13 +12,10 @@ import { useTranslation } from 'react-i18next';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
-  collectChatBackgroundImageUris,
+  clearUnreferencedChatBackgroundImages,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
-import {
-  persistChatBackgroundImage,
-  pruneChatBackgroundImages,
-} from '@/features/chat/utils/chat-background-image';
+import { persistChatBackgroundImage } from '@/features/chat/utils/chat-background-image';
 import { Radius, Spacing, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
@@ -93,7 +90,7 @@ export default function ChatBackgroundScreen() {
       if (!conversationID) return;
       setChatBackgroundPreference(conversationID, { mode: 'global' });
     }
-    pruneChatBackgroundImages(collectChatBackgroundImageUris());
+    void clearUnreferencedChatBackgroundImages();
     router.back();
   }, [
     conversationID,
@@ -130,10 +127,10 @@ export default function ChatBackgroundScreen() {
       // upload. Uploading to the `chat/` prefix and keeping the direct URL is
       // exactly what turned the message area grey: that prefix denies anonymous
       // reads, so the stored URL was a permanent 403.
-      const uri = await persistChatBackgroundImage(
-        asset.uri,
-        asset.width ?? undefined,
-      );
+      // asset.width is 0 when the system did not report the dimensions; that
+      // case skips resampling entirely (see chat-background-normalize) rather
+      // than upscaling a small photo to a guessed width.
+      const uri = await persistChatBackgroundImage(asset.uri, asset.width);
       if (!mountedRef.current) return;
       setApplyingImage(false);
       const preference = { mode: 'image' as const, uri };
@@ -142,9 +139,9 @@ export default function ChatBackgroundScreen() {
       } else {
         setChatBackgroundPreference(conversationID, preference);
       }
-      // The replaced image has no referrer left; drop it so the directory does
-      // not grow with every background change.
-      pruneChatBackgroundImages(collectChatBackgroundImageUris());
+      // The replaced image has no referrer left; drop it so the store does not
+      // grow with every background change.
+      void clearUnreferencedChatBackgroundImages();
       router.back();
     } catch {
       if (!mountedRef.current) return;

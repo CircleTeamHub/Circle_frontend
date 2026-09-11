@@ -171,7 +171,7 @@ import {
   resolveChatBackgroundStyle,
   useChatPreferencesStore,
 } from '@/features/chat/store/use-chat-preferences-store';
-import { resolveChatBackgroundImageSource } from '@/features/chat/utils/chat-background-image';
+import { useChatBackgroundImageSource } from '@/features/chat/hooks/use-chat-background-image-source';
 import { createDirectCall, createGroupCall } from '@/services/api/calls';
 import { resolveDirectCalleeID } from '@/features/call/resolve-direct-callee';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
@@ -873,21 +873,20 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const globalBackgroundPreference = useChatPreferencesStore(
     (state) => state.globalBackgroundPreference,
   );
-  const backgroundStyle = useMemo(() => {
-    const style = resolveChatBackgroundStyle(
-      resolveEffectiveChatBackgroundPreference(
-        backgroundPreference,
-        globalBackgroundPreference,
+  const backgroundStyle = useMemo(
+    () =>
+      resolveChatBackgroundStyle(
+        resolveEffectiveChatBackgroundPreference(
+          backgroundPreference,
+          globalBackgroundPreference,
+        ),
+        colors.background,
       ),
-      colors.background,
-    );
-    // 偏好里存的是文件名（`chat-bg:<name>`），绝对路径只能在这里现拼：应用容器
-    // 路径不保证跨重装/更新稳定，存下来的绝对路径迟早指向不存在的文件。
-    return {
-      ...style,
-      imageUri: resolveChatBackgroundImageSource(style.imageUri) ?? undefined,
-    };
-  }, [backgroundPreference, colors.background, globalBackgroundPreference]);
+    [backgroundPreference, colors.background, globalBackgroundPreference],
+  );
+  // 偏好里存的是文件名（`chat-bg:<name>`），能画的 uri 只能现取：原生要拼绝对
+  // 路径（容器路径不保证跨重装稳定），web 要从 IndexedDB 取回图再建 object URL。
+  const backgroundImageUri = useChatBackgroundImageSource(backgroundStyle.imageUri);
 
   const handleBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -3914,10 +3913,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       </View>
       <Divider />
       <View style={[s.messageArea, d.messageArea]}>
-        {backgroundStyle.imageUri ? (
+        {backgroundImageUri ? (
           <View pointerEvents="none" style={s.messageAreaBackground}>
             <ImageBackground
-              source={{ uri: backgroundStyle.imageUri }}
+              source={{ uri: backgroundImageUri }}
               style={s.messageAreaBackground}
               resizeMode="cover"
             >

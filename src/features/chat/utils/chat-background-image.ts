@@ -1,16 +1,14 @@
-import { Platform } from 'react-native';
 import { Directory, File, Paths } from 'expo-file-system';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { normalizeChatBackgroundImage } from '@/features/chat/utils/chat-background-normalize';
 import {
-  CHAT_BACKGROUND_DATA_URL_PREFIX,
   CHAT_BACKGROUND_DIR_NAME,
   CHAT_BACKGROUND_FILE_SCHEME,
   chatBackgroundFileName,
-  isLocalChatBackgroundImageUri,
+  newChatBackgroundFileName,
 } from '@/features/chat/utils/chat-background-uri';
 
 /**
- * 聊天背景图落在设备本地，不进对象存储。
+ * 聊天背景图落在设备本地，不进对象存储（原生档；web 见 chat-background-image.web.ts）。
  *
  * 背景偏好只活在 MMKV 里（按设备、按会话），服务端从不读它，所以图片没有任何理由
  * 上传。此前这里走 /upload presign 把图 PUT 到 `chat/` 前缀再存直链，而 circle_be 的
@@ -20,15 +18,10 @@ import {
  *
  * 本地化之后没有 403、没有签名过期、不吃上传配额，也不会把用户自己的壁纸变成一个
  * 拿到 URL 就能读的公开对象。
+ *
+ * ⚠️ 导出面必须与 chat-background-image.web.ts 保持一致（Metro 按平台择档，tsc 两份
+ * 都查）：这边加导出那边要同步补，否则 web 构建在 import 处直接失败。
  */
-
-// 背景是全屏铺底，超过这个宽度对观感没有增益，只会白白占磁盘和解码内存。
-const MAX_BACKGROUND_WIDTH = 1440;
-const BACKGROUND_QUALITY = 0.85;
-
-const isWeb = Platform.OS === 'web';
-
-export { isLocalChatBackgroundImageUri };
 
 function backgroundDirectory() {
   const directory = new Directory(Paths.document, CHAT_BACKGROUND_DIR_NAME);
@@ -36,47 +29,26 @@ function backgroundDirectory() {
   return directory;
 }
 
-function backgroundFileName() {
-  return `bg-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
-}
-
 /**
  * 把存下来的偏好换成 ImageBackground 能直接吃的 source uri。原生端在这里才拼绝对
  * 路径 —— 容器路径每次启动都可能不同，所以只能现拼，不能存。
  */
-export function resolveChatBackgroundImageSource(
+export async function resolveChatBackgroundImageSource(
   stored: string | null | undefined,
-): string | null {
-  if (typeof stored !== 'string' || !stored) return null;
-  if (stored.startsWith(CHAT_BACKGROUND_DATA_URL_PREFIX)) return stored;
-
+): Promise<string | null> {
   const name = chatBackgroundFileName(stored);
-  if (!name || isWeb) return null;
+  if (!name) return null;
 
   try {
-    const file = new File(new Directory(Paths.document, CHAT_BACKGROUND_DIR_NAME), name);
+    const file = new File(
+      new Directory(Paths.document, CHAT_BACKGROUND_DIR_NAME),
+      name,
+    );
     // 文件可能已被「清空数据」之类的路径删掉；给不存在的路径会静默画不出东西。
     return file.exists ? file.uri : null;
   } catch {
     return null;
   }
-}
-
-/**
- * 统一转成 JPEG 并按需降采样。只在原图更宽时才 resize —— manipulateAsync 给定
- * width 会等比缩放，对小图等于放大，白白变糊变大。
- */
-async function normalizeBackgroundImage(uri: string, sourceWidth?: number) {
-  const actions =
-    sourceWidth && sourceWidth <= MAX_BACKGROUND_WIDTH
-      ? []
-      : [{ resize: { width: MAX_BACKGROUND_WIDTH } }];
-
-  return manipulateAsync(uri, actions, {
-    compress: BACKGROUND_QUALITY,
-    format: SaveFormat.JPEG,
-    base64: isWeb,
-  });
 }
 
 /**
@@ -89,18 +61,26 @@ export async function persistChatBackgroundImage(
   sourceUri: string,
   sourceWidth?: number,
 ): Promise<string> {
-  const normalized = await normalizeBackgroundImage(sourceUri, sourceWidth);
+  const normalized = await normalizeChatBackgroundImage(sourceUri, sourceWidth);
 
-  if (isWeb) {
-    if (!normalized.base64) {
-      throw new Error('chat background: manipulator returned no base64 on web');
+  const name = newChatBackgroundFileName();
+  const target = new File(backgroundDirectory(), name);
+  const produced = new File(normalized.uri);
+
+  // move 而不是 copy：manipulator 的产物落在 cache 里，copy 完不删就等于每换一次
+  // 背景在缓存里多压一份同样大小的 JPEG，直到系统哪天回收。
+  try {
+    produced.move(target);
+  } catch {
+    // 个别平台/跨卷场景下 move 不可用；退回复制再删源，保持同样的「不留残渣」。
+    produced.copy(target);
+    try {
+      produced.delete();
+    } catch {
+      // 源删不掉最多留一个缓存副本，系统仍会回收；不该让换背景失败。
     }
-    return `${CHAT_BACKGROUND_DATA_URL_PREFIX}${normalized.base64}`;
   }
 
-  const name = backgroundFileName();
-  const target = new File(backgroundDirectory(), name);
-  new File(normalized.uri).copy(target);
   return `${CHAT_BACKGROUND_FILE_SCHEME}${name}`;
 }
 
@@ -108,9 +88,9 @@ export async function persistChatBackgroundImage(
  * 删掉目录里没人再引用的背景图。换背景和登出都会调；失败一律吞掉——清理不成功
  * 最多是留下一个孤儿文件，不该把换背景或登出弄失败。
  */
-export function pruneChatBackgroundImages(referencedUris: string[]) {
-  if (isWeb) return;
-
+export async function pruneChatBackgroundImages(
+  referencedUris: readonly string[],
+): Promise<void> {
   try {
     const keep = new Set(
       referencedUris
