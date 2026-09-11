@@ -38,11 +38,12 @@ import {
   leaveCircle,
   joinCircle,
   fetchMyApplications,
+  setCircleAvatar,
 } from '@/services/api/circles';
 import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
-import { useChangeCircleAvatar } from '@/features/discover/hooks/use-change-circle-avatar';
+import { useChangeAvatar } from '@/hooks/use-change-avatar';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import {
   requestUploadPresign,
@@ -413,15 +414,28 @@ export default function CircleDetailScreen() {
     useCirclesStore.getState().patchCircle(id, { cover: url });
   });
 
-  const { changeAvatar: changeCircleAvatar } = useChangeCircleAvatar(
-    id,
-    (url) => {
+  const submitCircleAvatar = useCallback(
+    async (fileUrl: string) => {
+      await setCircleAvatar(id, fileUrl);
+    },
+    [id],
+  );
+  const handleCircleAvatarChanged = useCallback(
+    (url: string) => {
       setCircle((current) =>
         current ? { ...current, avatarUrl: url } : current,
       );
       useCirclesStore.getState().patchCircle(id, { avatarUrl: url });
     },
+    [id],
   );
+  // 仅圈主可换(服务端 assertOwner);与群头像共用同一个上传/落库流程。
+  const { changeAvatar: changeCircleAvatar } = useChangeAvatar({
+    submit: submitCircleAvatar,
+    onChanged: handleCircleAvatarChanged,
+    failureTitle: t('circle.avatarUpdateFailed', { defaultValue: '头像更新失败' }),
+    onFailure: (error) => reportHandledFailure('circle', 'avatarUpdate', error),
+  });
 
   // Active members who are not the owner can leave. Owners must transfer or
   // dissolve the circle instead, so they never see the leave action.
