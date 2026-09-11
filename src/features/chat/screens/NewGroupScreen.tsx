@@ -157,7 +157,6 @@ export default function NewGroupScreen() {
   const handleSubmit = useCallback(async () => {
     if (submittingRef.current) return;
 
-    const trimmedName = name.trim();
     // 群名必填:服务端同样会拒空名(CHAT_GROUP_NAME_REQUIRED),这里先在端上拦,
     // 免得用户填完成员才被打回。
     if (!trimmedName) {
