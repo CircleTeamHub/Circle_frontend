@@ -7,7 +7,8 @@ import {
 } from 'react-native';
 import { ChatBubbleIcon } from '@/components/app/chat-bubble-icon';
 
-const STARTUP_SPLASH_BACKGROUND = '#FFFFFF';
+// 品牌紫 #7C5CF0 按原色相加深。
+const STARTUP_SPLASH_BACKGROUND = '#634AC0';
 const STARTUP_ICON_SIZE = 165;
 const STARTUP_SPLASH_MAX_WAIT_MS = 5000;
 
