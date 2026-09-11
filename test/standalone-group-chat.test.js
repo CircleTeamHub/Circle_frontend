@@ -119,6 +119,10 @@ test('chat info screen separates standalone-group and circle-group flows', () =>
 test('new group screen submits selected friends through chat-core', () => {
   const screen = read('src/features/chat/screens/NewGroupScreen.tsx');
   assert.match(screen, /createGroupConversation\(\{/);
+  assert.match(screen, /const trimmedName = name\.trim\(\)/);
+  assert.match(screen, /if \(!trimmedName\)/);
+  assert.match(screen, /messages\.newGroupNameRequired/);
+  assert.match(screen, /name: trimmedName/);
   assert.match(screen, /memberIds: Object\.keys\(selected\)/);
   assert.match(screen, /submittingRef = useRef\(false\)/);
   assert.match(screen, /if \(submittingRef\.current\) return/);
