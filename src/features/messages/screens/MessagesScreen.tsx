@@ -342,6 +342,9 @@ type ConversationRowProps = {
   timeStyle: object;
   previewStyle: object;
   pinnedSurfaceStyle: object;
+  /** 置顶行底色更深，时间/预览换用置顶专用次要色（见 d.pinnedTime / d.pinnedPreview）。 */
+  pinnedTimeStyle: object;
+  pinnedPreviewStyle: object;
   onOpenConversation: (conversation: Conversation) => void;
   onOpenUserProfile: (conversation: Conversation) => void;
   onTogglePinned: (conversation: Conversation) => void;
@@ -361,6 +364,8 @@ function ConversationRowImpl({
   timeStyle,
   previewStyle,
   pinnedSurfaceStyle,
+  pinnedTimeStyle,
+  pinnedPreviewStyle,
   onOpenConversation,
   onOpenUserProfile,
   onTogglePinned,
@@ -536,6 +541,15 @@ function ConversationRowImpl({
     </Animated.View>
   );
 
+  // 置顶行铺了更深的 pinnedSurface：次要文字/免打扰图标换成置顶专用色保证对比度；
+  // 临时群时钟角标的外圈也要融入置顶底色，而不是列表底色（浅色下会露一圈光环）。
+  const metaTextStyle = item.pinned ? pinnedTimeStyle : timeStyle;
+  const messageStyle = item.pinned ? pinnedPreviewStyle : previewStyle;
+  const mutedIconColor = item.pinned
+    ? colors.pinnedTextSecondary
+    : colors.textSecondary;
+  const badgeBorderColor = item.pinned ? colors.pinnedSurface : rowBackgroundColor;
+
   return (
     <View ref={rowRef} style={[s.row, getPinnedRowStyle(pinnedGroupPosition)]}>
       {/* 桌面分栏：选中高亮是半透明色，垫在下面的操作层会透出来；
@@ -570,7 +584,7 @@ function ConversationRowImpl({
               name={item.name}
               uri={item.avatarUrl}
               temporary={item.isTempChat}
-              badgeBorderColor={rowBackgroundColor}
+              badgeBorderColor={badgeBorderColor}
             />
           )}
           <Pressable
@@ -594,13 +608,13 @@ function ConversationRowImpl({
                 />
               </View>
               <View style={s.rowMeta}>
-                <Text style={timeStyle}>{item.time}</Text>
+                <Text style={metaTextStyle}>{item.time}</Text>
                 {item.muted ? (
                   <View style={s.mutedIndicator}>
                     <Ionicons
                       name="notifications-off-outline"
                       size={15}
-                      color={colors.textSecondary}
+                      color={mutedIconColor}
                       accessibilityLabel={t("messages.mutedA11y", {
                         defaultValue: "消息免打扰",
                       })}
@@ -610,7 +624,7 @@ function ConversationRowImpl({
               </View>
             </View>
             <View style={s.rowBottom}>
-              <Text style={previewStyle} numberOfLines={1}>
+              <Text style={messageStyle} numberOfLines={1}>
                 {item.message}
               </Text>
               <Badge count={item.unreadCount} />
@@ -715,8 +729,18 @@ export default function MessagesScreen() {
   const setMessagesUnread = useTabBadgeStore((state) => state.setMessagesUnread);
 
   // 依赖主题色的动态样式，colors 变化时重新计算
-  const d = useMemo(
-    () => ({
+  const d = useMemo(() => {
+    const preview = {
+      color: colors.textSecondary,
+      ...Typography.caption,
+      flex: 1,
+      marginRight: Spacing.sm,
+    };
+    const time = {
+      color: colors.textSecondary,
+      ...Typography.small,
+    };
+    return {
       container: {
         flex: 1,
         backgroundColor: colors.background,
@@ -738,16 +762,11 @@ export default function MessagesScreen() {
         flex: 1,
         marginRight: Spacing.sm,
       },
-      preview: {
-        color: colors.textSecondary,
-        ...Typography.caption,
-        flex: 1,
-        marginRight: Spacing.sm,
-      },
-      time: {
-        color: colors.textSecondary,
-        ...Typography.small,
-      },
+      preview,
+      time,
+      // 置顶行铺了更深的 pinnedSurface，次要文字换成置顶专用色保证对比度（深色主题两者相同）。
+      pinnedPreview: { ...preview, color: colors.pinnedTextSecondary },
+      pinnedTime: { ...time, color: colors.pinnedTextSecondary },
       emptyText: {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
@@ -762,13 +781,12 @@ export default function MessagesScreen() {
         color: colors.text,
         ...Typography.body,
       },
-      // 所有置顶行使用同一 surface，避免首尾行或浅色主题出现色差。
+      // 所有置顶行使用同一底色；浅色主题用中性灰底与普通会话区分。
       pinnedSurface: {
-        backgroundColor: colors.surface,
+        backgroundColor: colors.pinnedSurface,
       },
-    }),
-    [colors],
-  );
+    };
+  }, [colors]);
 
   // 筛选标签列表 = 固定标签 + 用户自定义群组（动态追加）
   // 按源 ConversationItem 引用缓存映射结果：未变化的会话保持同一 UI 对象引用。
@@ -1111,6 +1129,8 @@ export default function MessagesScreen() {
         timeStyle={d.time}
         previewStyle={d.preview}
         pinnedSurfaceStyle={d.pinnedSurface}
+        pinnedTimeStyle={d.pinnedTime}
+        pinnedPreviewStyle={d.pinnedPreview}
         onOpenConversation={handleConversationPress}
         onOpenUserProfile={handleOpenUserProfile}
         onTogglePinned={handleToggleConversationPinned}
