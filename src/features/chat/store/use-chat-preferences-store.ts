@@ -83,7 +83,7 @@ export function resolveEffectiveChatBackgroundPreference(
 /**
  * 当前仍被引用的背景图 uri（全局 + 每个会话）。背景图的文件 GC 用它决定谁能删。
  */
-export function collectChatBackgroundImageUris(): string[] {
+function collectChatBackgroundImageUris(): string[] {
   const state = useChatPreferencesStore.getState();
   return [
     state.globalBackgroundPreference,
@@ -91,6 +91,28 @@ export function collectChatBackgroundImageUris(): string[] {
   ]
     .filter((preference) => preference?.mode === 'image')
     .map((preference) => (preference as { uri: string }).uri);
+}
+
+/**
+ * 删掉磁盘（web 是 IndexedDB）上已经没人引用的背景图。
+ *
+ * 偏好清空和图片落盘是两件事：只清偏好，上一个账号的壁纸原封不动留在设备上，
+ * 而引用先没了，谁也不会再来删它。所以**每一条清偏好的路径**都要顺手调这里，
+ * 不只是 resetForLogout —— 登出被更新会话抢占时 session.ts 会跳过 resetForLogout
+ * 但照样 clearStorage()，那一支才是真正会留下隐私残留的分支。
+ *
+ * 按「当前还被引用的」清而不是无脑清空：抢占场景下新账号可能已经设了背景，
+ * 一刀切会把新账号刚选的壁纸删掉，留下一个引用得到却打不开的偏好。
+ */
+export async function clearUnreferencedChatBackgroundImages(): Promise<void> {
+  try {
+    const { pruneChatBackgroundImages } = await import(
+      '@/features/chat/utils/chat-background-image'
+    );
+    await pruneChatBackgroundImages(collectChatBackgroundImageUris());
+  } catch {
+    // 清理是尽力而为：失败最多留下一个孤儿文件，不该把登出或换背景弄失败。
+  }
 }
 
 /**
@@ -160,11 +182,8 @@ export const useChatPreferencesStore = create<ChatPreferencesState>()(
           globalBackgroundPreference: null,
           backgroundsByConversationID: {},
         });
-        // 偏好清了，磁盘上的背景图也不能留给下一个登录的账号。清理是尽力而为，
-        // 失败不该让登出失败。
-        void import('@/features/chat/utils/chat-background-image')
-          .then((module) => module.pruneChatBackgroundImages([]))
-          .catch(() => {});
+        // 偏好清了，磁盘上的背景图也不能留给下一个登录的账号。
+        void clearUnreferencedChatBackgroundImages();
       },
     }),
     {
