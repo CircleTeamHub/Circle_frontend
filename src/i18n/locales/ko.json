@@ -67,8 +67,6 @@
       "circleSoundHint": "끄면 서클 알림이 무음이 되고 읽지 않음 표시는 유지됩니다",
       "circleOffline": "오프라인 알림",
       "circleOfflineHint": "앱이 오프라인일 때 서클 알림을 받습니다",
-      "circleGlobal": "앱에서 서클 알림 표시",
-      "circleGlobalHint": "앱 사용 중 서클 알림 표시 방식을 설정합니다",
       "circleRingtone": "서클 알림음",
       "circleDefault": "서클 기본값"
     },
@@ -1465,10 +1463,7 @@
       "offline": "오프라인 알림",
       "offlineOnHint": "켜기: 앱이 오프라인일 때도 서클 알림 수신",
       "offlineOffHint": "끄기: 오프라인 알림을 받지 않음",
-      "syncFailed": "설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      "global": "앱에서 서클 알림 표시",
-      "globalOnHint": "켜짐: 앱 내 알림 표시를 설정할 수 있습니다",
-      "globalOffHint": "꺼짐: 앱 내 서클 알림 배너를 숨깁니다"
+      "syncFailed": "설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요."
     },
     "guide": {
       "title": "서클 이용 방법",
@@ -2550,7 +2545,6 @@
       "loginFailed": "로그인에 실패했습니다. 다시 시도해 주세요",
       "registerFailed": "가입에 실패했습니다. 다시 시도해 주세요",
       "sendCodeFailed": "발송에 실패했습니다. 다시 시도해 주세요",
-      "passwordMismatch": "비밀번호가 일치하지 않습니다",
       "registerSucceededSessionFailed": "계정은 생성되었지만 자동 로그인에 실패했습니다. 해당 이메일로 로그인해 주세요."
     },
     "hidePassword": "비밀번호 숨기기",
@@ -3234,8 +3228,7 @@
     "CHAT_GROUP_TARGET_PROTECTED": "그룹장이나 같은 등급의 관리자에게는 할 수 없습니다",
     "CHAT_GROUP_SELF_TARGET": "자기 자신에게는 할 수 없습니다",
     "CHAT_MEMBER_SILENCED": "채팅이 금지되어 지금은 메시지를 보낼 수 없습니다",
-    "CHAT_SILENCE_DURATION_INVALID": "채팅 금지 기간이 올바르지 않습니다",
-    "AUTH_PASSWORD_MISMATCH": "비밀번호가 일치하지 않습니다"
+    "CHAT_SILENCE_DURATION_INVALID": "채팅 금지 기간이 올바르지 않습니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",

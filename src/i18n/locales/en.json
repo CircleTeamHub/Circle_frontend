@@ -121,7 +121,6 @@
       "loginFailed": "Login failed, please try again",
       "registerFailed": "Registration failed, please try again",
       "sendCodeFailed": "Failed to send, please try again",
-      "passwordMismatch": "Passwords do not match",
       "registerSucceededSessionFailed": "Your account was created, but we could not sign you in automatically. Please log in with this email."
     },
     "hidePassword": "Hide password",
@@ -962,10 +961,7 @@
       "offline": "Offline Push",
       "offlineOnHint": "On: receive circle push while the app is offline",
       "offlineOffHint": "Off: stop receiving offline push",
-      "syncFailed": "Could not save the setting. Please try again.",
-      "global": "Show Circle Notifications in App",
-      "globalOnHint": "On: allow in-app presentation controls",
-      "globalOffHint": "Off: hide in-app Circle notification banners"
+      "syncFailed": "Could not save the setting. Please try again."
     },
     "guide": {
       "title": "How Circle Activities Work",
@@ -2102,8 +2098,6 @@
       "circleSoundHint": "Off silences circle notifications and keeps the unread dot",
       "circleOffline": "Offline Push",
       "circleOfflineHint": "Receive circle push while the app is offline",
-      "circleGlobal": "Show Circle Notifications in App",
-      "circleGlobalHint": "Controls Circle notification presentation while using the app",
       "circleRingtone": "Circle Notification Ringtone",
       "circleDefault": "Circle Default"
     },
@@ -3237,8 +3231,7 @@
     "CHAT_GROUP_TARGET_PROTECTED": "You cannot do this to the owner or another admin",
     "CHAT_GROUP_SELF_TARGET": "You cannot do this to yourself",
     "CHAT_MEMBER_SILENCED": "You are muted and cannot send messages right now",
-    "CHAT_SILENCE_DURATION_INVALID": "Invalid mute duration",
-    "AUTH_PASSWORD_MISMATCH": "Passwords do not match"
+    "CHAT_SILENCE_DURATION_INVALID": "Invalid mute duration"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",

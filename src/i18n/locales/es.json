@@ -67,8 +67,6 @@
       "circleSoundHint": "Al desactivar, las notificaciones de círculos quedan en silencio",
       "circleOffline": "Aviso sin conexión",
       "circleOfflineHint": "Recibir push de círculos con la app sin conexión",
-      "circleGlobal": "Mostrar notificaciones de Círculo en la app",
-      "circleGlobalHint": "Controla cómo se muestran las notificaciones de Círculo mientras usas la app",
       "circleRingtone": "Tono de notificaciones de Círculo",
       "circleDefault": "Predeterminado de Círculo"
     },
@@ -1468,10 +1466,7 @@
       "offline": "Aviso sin conexión",
       "offlineOnHint": "Activado: recibir push de círculos con la app sin conexión",
       "offlineOffHint": "Desactivado: dejar de recibir push sin conexión",
-      "syncFailed": "No se pudo guardar el ajuste. Inténtalo de nuevo.",
-      "global": "Mostrar notificaciones del círculo en la app",
-      "globalOnHint": "Activado: permite controlar su presentación en la app",
-      "globalOffHint": "Desactivado: oculta los banners del círculo en la app"
+      "syncFailed": "No se pudo guardar el ajuste. Inténtalo de nuevo."
     },
     "guide": {
       "title": "Cómo funcionan los círculos",
@@ -2553,7 +2548,6 @@
       "loginFailed": "Error al iniciar sesión, inténtalo de nuevo",
       "registerFailed": "Error al registrarse, inténtalo de nuevo",
       "sendCodeFailed": "Error al enviar, inténtalo de nuevo",
-      "passwordMismatch": "Las contraseñas no coinciden",
       "registerSucceededSessionFailed": "Tu cuenta se creó, pero no pudimos iniciar sesión automáticamente. Inicia sesión con este correo."
     },
     "hidePassword": "Ocultar contraseña",
@@ -3237,8 +3231,7 @@
     "CHAT_GROUP_TARGET_PROTECTED": "No puedes hacer esto al propietario ni a otro administrador",
     "CHAT_GROUP_SELF_TARGET": "No puedes hacer esto contigo mismo",
     "CHAT_MEMBER_SILENCED": "Estás silenciado y no puedes enviar mensajes ahora",
-    "CHAT_SILENCE_DURATION_INVALID": "Duración de silencio no válida",
-    "AUTH_PASSWORD_MISMATCH": "Las contraseñas no coinciden"
+    "CHAT_SILENCE_DURATION_INVALID": "Duración de silencio no válida"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",

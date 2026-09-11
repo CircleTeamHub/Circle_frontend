@@ -67,8 +67,6 @@
       "circleSoundHint": "オフでサークル通知を消音（未読ドットは残ります）",
       "circleOffline": "オフライン通知",
       "circleOfflineHint": "アプリがオフラインのときにサークル通知を受け取る",
-      "circleGlobal": "アプリ内でサークル通知を表示",
-      "circleGlobalHint": "アプリ使用中のサークル通知の表示方法を設定します",
       "circleRingtone": "サークル通知の着信音",
       "circleDefault": "サークル既定"
     },
@@ -1465,10 +1463,7 @@
       "offline": "オフライン通知",
       "offlineOnHint": "オン：アプリがオフラインでもサークル通知を受信",
       "offlineOffHint": "オフ：オフライン通知を受信しない",
-      "syncFailed": "設定を保存できませんでした。後でもう一度お試しください。",
-      "global": "アプリ内でサークル通知を表示",
-      "globalOnHint": "オン：アプリ内の通知表示を設定できます",
-      "globalOffHint": "オフ：アプリ内のサークル通知バナーを非表示にします"
+      "syncFailed": "設定を保存できませんでした。後でもう一度お試しください。"
     },
     "guide": {
       "title": "サークルの遊び方",
@@ -2550,7 +2545,6 @@
       "loginFailed": "ログインに失敗しました。もう一度お試しください",
       "registerFailed": "登録に失敗しました。もう一度お試しください",
       "sendCodeFailed": "送信に失敗しました。もう一度お試しください",
-      "passwordMismatch": "パスワードが一致しません",
       "registerSucceededSessionFailed": "アカウントは作成されましたが、自動ログインに失敗しました。このメールアドレスでログインしてください。"
     },
     "hidePassword": "パスワードを非表示",
@@ -3234,8 +3228,7 @@
     "CHAT_GROUP_TARGET_PROTECTED": "オーナーや同格の管理者には実行できません",
     "CHAT_GROUP_SELF_TARGET": "自分自身には実行できません",
     "CHAT_MEMBER_SILENCED": "発言禁止中のため送信できません",
-    "CHAT_SILENCE_DURATION_INVALID": "発言禁止の期間が無効です",
-    "AUTH_PASSWORD_MISMATCH": "パスワードが一致しません"
+    "CHAT_SILENCE_DURATION_INVALID": "発言禁止の期間が無効です"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",

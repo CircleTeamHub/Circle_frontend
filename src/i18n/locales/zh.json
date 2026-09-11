@@ -121,7 +121,6 @@
       "loginFailed": "登录失败，请重试",
       "registerFailed": "注册失败，请重试",
       "sendCodeFailed": "发送失败，请重试",
-      "passwordMismatch": "两次输入的密码不一致",
       "registerSucceededSessionFailed": "账号已创建成功，但自动登录失败。请直接用该邮箱登录。"
     },
     "hidePassword": "隐藏密码",
@@ -961,10 +960,7 @@
       "offline": "离线提醒",
       "offlineOnHint": "开启：APP离线时将收到圈子横幅通知",
       "offlineOffHint": "关闭：不再接收离线横幅通知",
-      "syncFailed": "设置未能保存，请稍后重试",
-      "global": "在应用内显示圈子通知",
-      "globalOnHint": "开启：允许控制应用内的通知展示",
-      "globalOffHint": "关闭：隐藏应用内圈子通知横幅"
+      "syncFailed": "设置未能保存，请稍后重试"
     },
     "guide": {
       "title": "圈子玩法说明",
@@ -2099,8 +2095,6 @@
       "circleSoundHint": "关闭后圈子通知静音，保留未读红点",
       "circleOffline": "离线提醒",
       "circleOfflineHint": "APP 离线时是否接收圈子推送",
-      "circleGlobal": "在应用内显示圈子通知",
-      "circleGlobalHint": "控制使用应用时圈子通知的展示",
       "circleRingtone": "圈子通知铃声",
       "circleDefault": "圈子默认"
     },
@@ -3234,8 +3228,7 @@
     "CHAT_GROUP_TARGET_PROTECTED": "不能对群主或同级管理员执行此操作",
     "CHAT_GROUP_SELF_TARGET": "不能对自己执行此操作",
     "CHAT_MEMBER_SILENCED": "你已被禁言，暂时无法发言",
-    "CHAT_SILENCE_DURATION_INVALID": "禁言时长无效",
-    "AUTH_PASSWORD_MISMATCH": "两次输入的密码不一致"
+    "CHAT_SILENCE_DURATION_INVALID": "禁言时长无效"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",
