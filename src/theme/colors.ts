@@ -19,6 +19,7 @@ export const darkColors: ThemeColors = {
   pinnedSurface: '#252630',
   pinnedTextSecondary: '#FFFFFF',
   surfaceBorder: '#565A6B',
+  switchOffTrack: '#565A6B',
   divider: '#3C3E4B',
   primary: PRIMARY,
   iconAccent: DARK_ACCENT,
@@ -77,6 +78,9 @@ export const lightColors: ThemeColors = {
   pinnedSurface: '#E8E8E8',
   pinnedTextSecondary: '#505050',
   surfaceBorder: '#E5E7EB',
+  // iOS 关闭态会收缩 trackColor，轨道直接显示在白色滑块旁；#6B7280
+  // 与白色滑块的对比度约为 4.83:1，避免浅色页面上再次融掉。
+  switchOffTrack: '#6B7280',
   divider: '#F0F0F0',
   primary: PRIMARY,
   // 浅色底对比度本就够，强调图标不另开一支色。

@@ -56,4 +56,29 @@ test('ThemedSwitch injects the web-only active thumb color', () => {
   assert.match(source, /activeThumbColor/);
   assert.match(source, /Platform\.OS === 'web'/);
   assert.match(source, /thumbColor=\{colors\.white\}/);
+  assert.match(source, /trackColor=\{\{ false: colors\.switchOffTrack/);
+  assert.match(source, /ios_backgroundColor=\{colors\.switchOffTrack\}/);
+});
+
+function contrastAgainstWhite(hex) {
+  const channels = [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255);
+  const linear = channels.map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  return 1.05 / (luminance + 0.05);
+}
+
+test('theme switch off-track colors keep sufficient contrast with the white thumb', () => {
+  const colors = fs.readFileSync(path.join(process.cwd(), 'src/theme/colors.ts'), 'utf8');
+
+  for (const palette of ['darkColors', 'lightColors']) {
+    const block = colors.slice(colors.indexOf(`export const ${palette}`));
+    const match = block.match(/switchOffTrack:\s*'(#(?:[0-9A-Fa-f]{6}))'/);
+    assert.ok(match, `${palette} must define switchOffTrack`);
+    assert.ok(
+      contrastAgainstWhite(match[1]) >= 3,
+      `${palette}.switchOffTrack must have at least 3:1 contrast with the white thumb`,
+    );
+  }
 });
