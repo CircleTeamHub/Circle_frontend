@@ -3214,7 +3214,6 @@
     "CHAT_EDIT_FORBIDDEN": "This message cannot be edited",
     "CHAT_FORWARD_FORBIDDEN": "Messages in a disappearing chat cannot be forwarded",
     "CHAT_GROUP_FRIENDS_ONLY": "Only friends can be added to the group",
-    "CHAT_GROUP_NAME_REQUIRED": "A group name is required",
     "CHAT_GROUP_MIN_MEMBERS": "Select at least 2 friends",
     "CHAT_GROUP_CIRCLE_MANAGED": "This group is managed by its circle",
     "QR_INVALID": "This QR code is invalid or no longer active",

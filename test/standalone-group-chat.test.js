@@ -133,7 +133,6 @@ test(
     const feCodes = read('src/services/api/server-error-codes.ts');
     for (const code of [
       'CHAT_GROUP_FRIENDS_ONLY',
-      'CHAT_GROUP_NAME_REQUIRED',
       'CHAT_GROUP_MIN_MEMBERS',
       'CHAT_GROUP_CIRCLE_MANAGED',
       'CHAT_GROUP_OWNER_ONLY',
