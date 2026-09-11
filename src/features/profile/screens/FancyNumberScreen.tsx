@@ -47,7 +47,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
-import { iconForeground, Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
 
 const PAGE_SIZE = 20;
@@ -190,7 +190,7 @@ export default function FancyNumberScreen() {
   const { t } = useTranslation();
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const insets = useSafeAreaInsets();
-  const { colors, resolvedMode } = useTheme();
+  const { colors } = useTheme();
   const { isOffline } = useNetworkStatus();
   const [mine, setMine] = useState<MyFancyNumber | null>(null);
   const [leaseStatus, setLeaseStatus] = useState<LeaseLoadStatus>('loading');
@@ -1158,7 +1158,7 @@ export default function FancyNumberScreen() {
           {leaseStatus === 'ready' && mine?.active ? (
             <View style={[s.card, d.card]}>
               <View style={s.titleRow}>
-                <Ionicons name="ribbon" size={22} color={iconForeground(colors.deepPurple, resolvedMode)} />
+                <Ionicons name="ribbon" size={22} color={colors.iconAccent} />
                 <Text style={d.title}>
                   {t('profile.fancyNumber.mine', { defaultValue: '我的靓号' })}
                 </Text>

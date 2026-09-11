@@ -31,7 +31,14 @@ import {
 } from '@/stores/auth-session-identity';
 import { useAuthStore } from '@/stores/authStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
-import { iconForeground, Radius, Spacing, Typography, useTheme } from '@/theme';
+import {
+  iconForeground,
+  Radius,
+  Spacing,
+  Typography,
+  useTheme,
+  withAlpha,
+} from '@/theme';
 import type { MyCircle } from '@/types';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
 
@@ -703,7 +710,7 @@ export default function GroupExpansionScreen() {
                 </Text>
               </View>
               <View style={s.changeCircle}>
-                <Text style={[Typography.small, { color: colors.primary }]}>
+                <Text style={[Typography.small, { color: colors.iconAccent }]}>
                   {t('profile.groupExpansion.changeCircle', {
                     defaultValue: '更换群',
                   })}
@@ -793,8 +800,12 @@ export default function GroupExpansionScreen() {
             ) : catalog ? (
               <View style={s.productList}>
                 {catalog.products.map((product, index) => {
-                  const productColor =
-                    PRODUCT_COLORS[index % PRODUCT_COLORS.length];
+                  // 一张卡只算一个色：图标、价格、图标底色全从它派生，
+                  // 否则暗色下会出现「图标提亮、价格没提亮」两种深浅。
+                  const productTone = iconForeground(
+                    PRODUCT_COLORS[index % PRODUCT_COLORS.length],
+                    resolvedMode,
+                  );
                   const submitting = submittingProductId === product.id;
                   const disabled =
                     !product.purchasable ||
@@ -807,13 +818,13 @@ export default function GroupExpansionScreen() {
                         <View
                           style={[
                             s.productIcon,
-                            { backgroundColor: `${productColor}22` },
+                            { backgroundColor: withAlpha(productTone, 0.13) },
                           ]}
                         >
                           <Ionicons
                             name="people-circle-outline"
                             size={30}
-                            color={iconForeground(productColor, resolvedMode)}
+                            color={productTone}
                           />
                         </View>
                         <View style={s.productText}>
@@ -831,7 +842,7 @@ export default function GroupExpansionScreen() {
                         </View>
                         <View style={s.priceRow}>
                           <Text
-                            style={[Typography.h2, { color: productColor }]}
+                            style={[Typography.h2, { color: productTone }]}
                           >
                             {product.price}
                           </Text>
