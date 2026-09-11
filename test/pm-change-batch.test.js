@@ -55,7 +55,7 @@ test('chat input remains keyboard-safe and pinned rows use one surface color', (
 
   assert.match(chat, /<KeyboardAvoidingView/);
   assert.match(chat, /keyboardVisible/);
-  assert.match(messages, /pinnedSurface:\s*\{\s*backgroundColor:\s*colors\.surface/);
+  assert.match(messages, /pinnedSurface:\s*\{\s*backgroundColor:\s*colors\.pinnedSurface/);
   assert.doesNotMatch(
     messages,
     /pinnedSurface:\s*\{[\s\S]{0,100}colors\.surfaceBorder/,
