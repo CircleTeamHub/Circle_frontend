@@ -1,25 +1,14 @@
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
 import { useNotificationFeedbackStore } from '@/features/notifications/store/use-notification-feedback-store';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
-import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
+import { useCircleNotificationTiers } from '@/features/discover/hooks/use-circle-notification-tiers';
 
 export default function NotificationSettingsScreen() {
   const settings = useAppSettingsStore((s) => s.settings);
   const setSetting = useAppSettingsStore((s) => s.setSetting);
-  const circleGlobalEnabled = useCircleNotificationStore((s) => s.globalEnabled);
-  const circleSoundEnabled = useCircleNotificationStore((s) => s.soundEnabled);
-  const circleOfflineEnabled = useCircleNotificationStore(
-    (s) => s.offlineEnabled,
-  );
-  const setCircleGlobalEnabled = useCircleNotificationStore(
-    (s) => s.setGlobalEnabled,
-  );
-  const setCircleSoundEnabled = useCircleNotificationStore(
-    (s) => s.setSoundEnabled,
-  );
-  const setCircleOfflineEnabled = useCircleNotificationStore(
-    (s) => s.setOfflineEnabled,
-  );
+  // 三档的读写走与圈子弹层同一个 hook。此前这三行直接 set 本地 store，
+  // 「离线提醒」关了不通知服务端 —— 推送照来，下次打开弹层还会被 GET 翻回去。
+  const circle = useCircleNotificationTiers();
   const soundEnabled = useNotificationFeedbackStore((s) => s.soundEnabled);
   const hapticsEnabled = useNotificationFeedbackStore((s) => s.hapticsEnabled);
   const setSoundEnabled = useNotificationFeedbackStore((s) => s.setSoundEnabled);
@@ -125,26 +114,26 @@ export default function NotificationSettingsScreen() {
               labelKey: 'settingsDetails.notifications.circleGlobal',
               subtitleKey: 'settingsDetails.notifications.circleGlobalHint',
               type: 'toggle',
-              value: circleGlobalEnabled,
-              onValueChange: setCircleGlobalEnabled,
+              value: circle.globalEnabled,
+              onValueChange: circle.setGlobalEnabled,
             },
             {
               id: 'circle-sound',
               labelKey: 'settingsDetails.notifications.circleSound',
               subtitleKey: 'settingsDetails.notifications.circleSoundHint',
               type: 'toggle',
-              value: circleGlobalEnabled && circleSoundEnabled,
-              onValueChange: setCircleSoundEnabled,
-              disabled: !circleGlobalEnabled,
+              value: circle.soundValue,
+              onValueChange: circle.setSoundEnabled,
+              disabled: !circle.globalEnabled,
             },
             {
               id: 'circle-offline',
               labelKey: 'settingsDetails.notifications.circleOffline',
               subtitleKey: 'settingsDetails.notifications.circleOfflineHint',
               type: 'toggle',
-              value: circleGlobalEnabled && circleOfflineEnabled,
-              onValueChange: setCircleOfflineEnabled,
-              disabled: !circleGlobalEnabled,
+              value: circle.offlineValue,
+              onValueChange: circle.setOfflineEnabled,
+              disabled: !circle.globalEnabled,
             },
             {
               id: 'circle-ringtone',

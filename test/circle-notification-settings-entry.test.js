@@ -34,10 +34,12 @@ test('整页设置和弹层用同一份开关组件', () => {
   );
 
   assert.match(toggles, /export function CircleNotificationToggles/);
-  assert.match(toggles, /useCircleNotificationStore/);
+  // 组件只负责承载：状态、服务端同步、回滚全在 hook 里，个人设置页用的是同一个。
+  assert.match(toggles, /useCircleNotificationTiers/);
+  assert.doesNotMatch(toggles, /useCircleNotificationStore/);
   // 三档：全局 / 声音 / 离线。总闸关掉时另外两档同步置灰，这条语义只能有一处实现。
   assert.equal(toggles.match(/<NotificationItem/g).length, 3);
-  assert.equal(toggles.match(/disabled=\{!globalEnabled\}/g).length, 2);
+  assert.equal(toggles.match(/disabled=\{!tiers\.globalEnabled\}/g).length, 2);
 
   assert.match(screen, /CircleNotificationToggles/);
   assert.doesNotMatch(screen, /const NotificationItem/);
@@ -62,14 +64,19 @@ test('「声音提醒」是真开关，不是当年那个不接线的死设置',
 });
 
 test('「离线提醒」由服务端执行，不是只存在本地的假开关', () => {
-  const toggles = read(
-    'src/features/discover/components/circle-notification-toggles.tsx',
+  const hook = read(
+    'src/features/discover/hooks/use-circle-notification-tiers.ts',
   );
   const api = read('src/services/api/notifications.ts');
 
   assert.match(api, /circle-push-preference/);
   assert.match(api, /export async function updateCircleOfflinePushEnabled/);
-  // 写失败要回滚本地开关：留一个说关了其实没关的开关比报错更糟。
-  assert.match(toggles, /revert\(\)/);
-  assert.match(toggles, /discover\.notifications\.syncFailed/);
+  // 写失败要回滚本地开关并提示：留一个说关了其实没关的开关比报错更糟。
+  // 回滚/排序/留痕的行为断言在
+  // src/features/discover/hooks/use-circle-notification-tiers.spec.tsx。
+  assert.match(hook, /updateCircleOfflinePushEnabled/);
+  assert.match(hook, /discover\.notifications\.syncFailed/);
+  // 读写失败都要留痕 —— 曾经是 .catch(() => {})，「关了还在推」查不到断在哪。
+  assert.match(hook, /reportHandledFailure\('circleNotification', 'offlinePushFetch'/);
+  assert.match(hook, /reportHandledFailure\('circleNotification', 'offlinePushSync'/);
 });
