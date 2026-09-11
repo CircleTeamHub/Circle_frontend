@@ -439,7 +439,8 @@ test('EditNoteScreen presents structured regions with quieter section chrome', (
     /sectionBlock:\s*\{[\s\S]*?borderRadius:\s*Radius\.lg/,
   );
   assert.doesNotMatch(src, /sectionCountPill/);
-  assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: string/);
+  // 正文那一格的 meta 是实时字数，必须是能自己订阅重渲染的节点而不是 string。
+  assert.match(src, /const renderSectionHeader = \([\s\S]*meta\?: ReactNode/);
   assert.match(src, /flexDirection:\s*'row'/);
 });
 

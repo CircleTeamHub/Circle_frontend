@@ -25,9 +25,11 @@ let mockEditorProps: {
   initialContent: Record<string, unknown>[] | null;
   onContentChange: (blocks: Record<string, unknown>[]) => void;
 } | undefined;
-const identityTranslate = (key: string) => key;
+let mockEditorRenderCount = 0;
+type MockTranslate = (key: string, options?: Record<string, unknown>) => string;
+const identityTranslate: MockTranslate = (key) => key;
 // 语言切换会换掉 t 的身份 —— 用例要能模拟这一点。
-let mockTranslate: (key: string) => string = identityTranslate;
+let mockTranslate: MockTranslate = identityTranslate;
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -99,13 +101,15 @@ jest.mock('@/theme', () => ({
     colors: {
       background: '#fff', surface: '#fff', surfaceBorder: '#ddd', text: '#111',
       textSecondary: '#666', primary: '#6200ee', brandPurple: '#6200ee', white: '#fff',
-      overlay: 'rgba(0,0,0,.4)', warning: '#f59e0b',
+      overlay: 'rgba(0,0,0,.4)', warning: '#f59e0b', danger: '#ef4444',
     },
   }),
 }));
 
 jest.mock('@/features/notes/components/NoteBlockEditor', () => ({
   NoteBlockEditor: (props: NonNullable<typeof mockEditorProps>) => {
+    // 每次渲染都记一笔：正文每敲一个字就整屏重渲染的话，这个计数会跟着涨。
+    mockEditorRenderCount += 1;
     mockEditorProps = props;
     return null;
   },
@@ -426,6 +430,7 @@ beforeEach(() => {
   mockFocusCallback = undefined;
   mockFocusCleanup = undefined;
   mockEditorProps = undefined;
+  mockEditorRenderCount = 0;
   mockFetchNoteGroups.mockResolvedValue([]);
   mockFetchNoteDetail.mockResolvedValue({
     title: 'Replacement note', contentJson: [], media: [], sections: null, groups: [], pinned: false,
@@ -1205,4 +1210,65 @@ test('editing a legacy plain-text note preserves the complete body when saving',
   await waitFor(() => expect(updateNote).toHaveBeenCalledWith(
     'legacy-text-note', expect.objectContaining({ content: text }),
   ));
+});
+
+// contentJson 里躺着编辑器的默认文档（一个空段落）而正文在旧的 content 字段上，
+// 是历史笔记最常见的形状。按「块数为 0」判断注入就会漏掉它：打开编辑器是空的，
+// 点一下完成就把服务端那份正文清成了 null。
+test('a legacy note whose contentJson is only an empty paragraph keeps its body', async () => {
+  mockRouteId = 'empty-paragraph-note';
+  const text = '第一段旧正文\n第二段旧正文';
+  mockFetchNoteDetail.mockResolvedValue({
+    title: '旧笔记',
+    content: text,
+    contentJson: [{ type: 'paragraph', content: [] }],
+    media: [], sections: null, groups: [], pinned: false,
+  });
+  (updateNote as jest.Mock).mockResolvedValue({});
+  render(<EditNoteScreen />);
+
+  await waitFor(() => expect(mockEditorProps?.initialContent).toEqual([
+    { type: 'paragraph', content: [{ type: 'text', text, styles: {} }] },
+  ]));
+  fireEvent.press(screen.getByText('notes.edit.done'));
+  await waitFor(() => expect(updateNote).toHaveBeenCalledWith(
+    'empty-paragraph-note', expect.objectContaining({ content: text }),
+  ));
+});
+
+// 已经有正文的笔记不能被旧 content 字段盖掉：注入只在「块里一个字都没有」时发生。
+test('a note with real rich text is never overwritten by the legacy content field', async () => {
+  mockRouteId = 'rich-text-note';
+  mockFetchNoteDetail.mockResolvedValue({
+    title: '富文本笔记',
+    content: '过期的纯文本快照',
+    contentJson: [{ type: 'paragraph', content: [{ type: 'text', text: '编辑器里的正文' }] }],
+    media: [], sections: null, groups: [], pinned: false,
+  });
+  render(<EditNoteScreen />);
+
+  await waitFor(() => expect(mockEditorProps?.initialContent).toEqual([
+    { type: 'paragraph', content: [{ type: 'text', text: '编辑器里的正文' }] },
+  ]));
+});
+
+// 正文统计原来是 EditNoteScreen 的 state：每敲一个字整屏（分组 chip、媒体/展示
+// 九宫格、地图预览）重渲染一次。计数要继续实时，但重渲染必须只发生在计数那一格。
+test('typing in the body updates the live counter without re-rendering the screen', async () => {
+  mockTranslate = (key, options) =>
+    key === 'notes.edit.textCount' ? `字数:${options?.count}` : key;
+  render(<EditNoteScreen />);
+  await waitFor(() => expect(mockEditorProps).toBeDefined());
+
+  const editorPropsBeforeTyping = mockEditorProps;
+  const rendersBeforeTyping = mockEditorRenderCount;
+  for (const text of ['一', '一二', '一二三']) {
+    act(() => mockEditorProps?.onContentChange([
+      { type: 'paragraph', content: [{ type: 'text', text }] },
+    ]));
+  }
+
+  expect(screen.getByText('字数:3')).toBeTruthy();
+  expect(mockEditorRenderCount).toBe(rendersBeforeTyping);
+  expect(mockEditorProps).toBe(editorPropsBeforeTyping);
 });
