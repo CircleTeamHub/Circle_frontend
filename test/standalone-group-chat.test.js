@@ -99,7 +99,10 @@ test('system notice mapper renders the group-renamed kind', () => {
 });
 
 // ── 跨仓契约:双仓并排检出时逐项对齐;仅前端 CI 时跳过 ──
-const BACKEND_ROOT = path.join(__dirname, '..', '..', 'circle_be');
+// CIRCLE_BE_PATH 覆盖是给 git worktree 用的:worktree 旁边那个 circle_be 往往是
+// 别的分支,比 main 还容易给出假红/假绿。
+const BACKEND_ROOT =
+  process.env.CIRCLE_BE_PATH ?? path.join(__dirname, '..', '..', 'circle_be');
 const hasBackend = fs.existsSync(
   path.join(BACKEND_ROOT, 'src/chat/chat.controller.ts'),
 );
