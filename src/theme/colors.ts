@@ -3,6 +3,8 @@ import type { ThemeColors } from './types';
 export const darkColors: ThemeColors = {
   background: '#1A1B23',
   surface: '#252630',
+  pinnedSurface: '#252630',
+  pinnedTextSecondary: '#FFFFFF',
   surfaceBorder: '#565A6B',
   divider: '#3C3E4B',
   primary: '#6366F1',
@@ -59,6 +61,8 @@ export const darkColors: ThemeColors = {
 export const lightColors: ThemeColors = {
   background: '#F8F9FA',
   surface: '#FFFFFF',
+  pinnedSurface: '#E8E8E8',
+  pinnedTextSecondary: '#505050',
   surfaceBorder: '#E5E7EB',
   divider: '#F0F0F0',
   primary: '#6366F1',
