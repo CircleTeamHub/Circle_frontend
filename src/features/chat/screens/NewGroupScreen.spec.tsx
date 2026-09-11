@@ -7,7 +7,7 @@ import {
 } from '@testing-library/react-native';
 import NewGroupScreen from './NewGroupScreen';
 import { createGroupConversation } from '@/chat-core/client';
-import { fetchFriends } from '@/services/api/friends';
+import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 
 /**
  * 建群页的提交闸:群名必填、至少 2 位好友。两条都是服务端会拒的硬条件
@@ -64,12 +64,17 @@ jest.mock('@/chat-core/client', () => ({
   createGroupConversation: jest.fn(),
 }));
 
-const friend = (id: string, nickname: string) => ({
+const friend = (id: string, nickname: string): FriendProfile => ({
   id,
-  nickname,
-  remark: null,
-  avatarUrl: null,
   accountId: id,
+  nickname,
+  avatarUrl: null,
+  avatarFrame: null,
+  avatarFrameAppearance: null,
+  gender: 'UNKNOWN',
+  lastOnline: null,
+  friendsSince: '2026-01-01T00:00:00.000Z',
+  remark: null,
 });
 
 const FRIENDS = [friend('f1', '小方'), friend('f2', '小李')];
