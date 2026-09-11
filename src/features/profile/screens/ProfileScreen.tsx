@@ -203,12 +203,17 @@ export default function ProfileScreen() {
   const refreshInFlightRef = useRef(false);
   const lastRefreshRef = useRef(0);
 
-  const MENU_ITEMS: ProfileMenuItem[] = MENU_ITEM_KEYS.map((m) => ({
-    id: m.id,
-    icon: m.icon,
-    label: t(m.labelKey),
-    accent: m.accent,
-  }));
+  // 只随语言变：不 memo 的话 FlatList 的 data 每帧都是新数组，整格全量重渲。
+  const MENU_ITEMS: ProfileMenuItem[] = useMemo(
+    () =>
+      MENU_ITEM_KEYS.map((m) => ({
+        id: m.id,
+        icon: m.icon,
+        label: t(m.labelKey),
+        accent: m.accent,
+      })),
+    [t],
+  );
 
   const d = useMemo(
     () => ({
@@ -408,7 +413,17 @@ export default function ProfileScreen() {
               <View style={[s.menuUnreadDot, { backgroundColor: colors.error, borderColor: colors.surface }]} />
             ) : null}
           </View>
-          <Text style={[s.menuLabel, { color: colors.text }]}>{item.label}</Text>
+          {/* tile 内宽只有 (屏宽-72)/3-16 ≈ 91pt(393) / 85pt(375)：英文
+              "System Announcements" 与日文「サポートセンター」都放不下一行。
+              两行 + 自动缩字，避免按字符断成 'Announcemen / ts'。 */}
+          <Text
+            style={[s.menuLabel, { color: colors.text }]}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
+            {item.label}
+          </Text>
         </Pressable>
       );
     },
