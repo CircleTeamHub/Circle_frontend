@@ -187,6 +187,7 @@ export default function NoteBlockEditor({
 
   return (
     <div
+      className="note-editor"
       style={{
         // Expo DOM mounts this content with no html/body/#root height, so a
         // `height: 100%` here can't resolve and the flex column collapses to
@@ -200,8 +201,22 @@ export default function NoteBlockEditor({
         backgroundColor: bg,
       }}
     >
+      <style>{`
+        .note-editor .bn-editor {
+          padding: 12px;
+        }
+        .note-editor .bn-inline-content {
+          overflow-wrap: anywhere;
+        }
+      `}</style>
       {/* Editor scroll area */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        overscrollBehaviorY: 'contain',
+        WebkitOverflowScrolling: 'touch',
+      }}>
         <BlockNoteViewRaw
           editor={editor}
           editable
