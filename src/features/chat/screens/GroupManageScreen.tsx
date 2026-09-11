@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,8 +16,16 @@ import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
-import { fetchChatMembers } from '@/chat-core/api';
-import type { ChatMemberDto } from '@/chat-core/protocol';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
+import {
+  fetchChatMembers,
+  loadChatConversations,
+  setGroupChatMuteAll,
+  transferGroupChatOwner,
+  updateGroupChatPolicies,
+} from '@/chat-core/api';
+import { groupPolicyLabel } from '@/chat-core/message-mappers';
+import type { ChatGroupPoliciesDto, ChatMemberDto } from '@/chat-core/protocol';
 import {
   SILENCE_DURATION_OPTIONS,
   silenceDurationLabel,
@@ -34,12 +42,22 @@ import {
   isSilencedMember,
   useGroupAdminActions,
 } from '@/features/chat/hooks/use-group-admin-actions';
+import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import { fetchCircleDetail } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
-type PickerMode = 'admin' | 'silence' | 'remove' | null;
+type PickerMode = 'admin' | 'silence' | 'remove' | 'transfer' | null;
+
+/** 群策略开关分两段展示:进群允许方式 / 成员权限。 */
+const JOIN_POLICY_KEYS = ['memberCanInvite', 'qrJoinEnabled'] as const;
+const MEMBER_POLICY_KEYS = [
+  'membersCanViewRoster',
+  'membersCanViewProfiles',
+  'membersCanAddFriends',
+] as const;
+type PolicyKey = keyof ChatGroupPoliciesDto;
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -112,6 +130,8 @@ export default function GroupManageScreen() {
   const [error, setError] = useState(false);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [silenceTarget, setSilenceTarget] = useState<ChatMemberDto | null>(null);
+  // 设置开关的在途键(含 'muteAll'):同一个开关按下后禁用,避免连点打架。
+  const [settingPending, setSettingPending] = useState<string | null>(null);
   const [silenceClock, setSilenceClock] = useState(() => Date.now());
 
   useEffect(() => {
@@ -130,6 +150,17 @@ export default function GroupManageScreen() {
     return () => clearTimeout(timer);
   }, [members, silenceClock]);
 
+  // 全员禁言与策略都在会话 DTO 上(系统提示到达时 dispatcher 会就地更新它)。
+  const muteAll = useChatStore(
+    (state) =>
+      state.conversations.find((candidate) => candidate.id === conversationID)
+        ?.muteAll ?? false,
+  );
+  const policies = useChatStore(
+    (state) =>
+      state.conversations.find((candidate) => candidate.id === conversationID)
+        ?.policies ?? null,
+  );
   const selfRole: GroupRole | null = isStandaloneGroup
     ? resolveStandaloneSelfRole({ members, currentUserID, ownerId })
     : circleRole;
@@ -222,11 +253,147 @@ export default function GroupManageScreen() {
     () => members.filter((member) => groupAdmin.canKick(member)),
     [groupAdmin, members],
   );
+  // 转让群主:任何一位在座的其他成员都能接手(服务端只要求在座)。
+  const transferCandidates = useMemo(
+    () => members.filter((member) => member.userId !== currentUserID),
+    [currentUserID, members],
+  );
 
   const silenceOptions = SILENCE_DURATION_OPTIONS.map((seconds) => ({
     label: silenceDurationLabel(seconds),
     value: seconds,
   }));
+
+  /** 会话 DTO 上的字段就地回写(乐观更新;失败时回滚)。 */
+  const patchConversation = useCallback(
+    (patch: { muteAll?: boolean; policies?: ChatGroupPoliciesDto }) => {
+      const store = useChatStore.getState();
+      const cached = store.conversations.find(
+        (candidate) => candidate.id === conversationID,
+      );
+      if (!cached) return;
+      store.upsertConversation({ ...cached, ...patch });
+    },
+    [conversationID],
+  );
+
+  /**
+   * 单个策略键的就地回写:总是基于**当时**缓存里的那份 policies。
+   *
+   * 回滚不能写回按下开关那一刻捕获的整份快照 —— 请求在途的这段时间里,
+   * 别的管理员改了另一个开关、dispatcher 已经把 group-policy-changed 应用上了,
+   * 整份快照会把那条远端改动一起抹掉。
+   */
+  const patchPolicyKey = useCallback(
+    (key: PolicyKey, value: boolean) => {
+      const store = useChatStore.getState();
+      const cached = store.conversations.find(
+        (candidate) => candidate.id === conversationID,
+      );
+      if (!cached?.policies) return;
+      store.upsertConversation({
+        ...cached,
+        policies: { ...cached.policies, [key]: value },
+      });
+    },
+    [conversationID],
+  );
+
+  /** 乐观更新失败后把服务端的真实状态重新拉一遍(拉不到就维持回滚值)。 */
+  const resyncConversations = useCallback(() => {
+    void loadChatConversations().catch((err: unknown) =>
+      reportHandledFailure('groupManage', 'resyncAfterSettingFailure', err),
+    );
+  }, []);
+
+  const handleToggleMuteAll = useCallback(
+    (next: boolean) => {
+      if (settingPending) return;
+      setSettingPending('muteAll');
+      patchConversation({ muteAll: next });
+      setGroupChatMuteAll(conversationID, next)
+        .catch((err: unknown) => {
+          patchConversation({ muteAll: !next });
+          resyncConversations();
+          openActionError(err);
+        })
+        .finally(() => setSettingPending(null));
+    },
+    [
+      conversationID,
+      openActionError,
+      patchConversation,
+      resyncConversations,
+      settingPending,
+    ],
+  );
+
+  const handleTogglePolicy = useCallback(
+    (key: PolicyKey, next: boolean) => {
+      if (settingPending || !policies) return;
+      const previous = policies[key];
+      setSettingPending(key);
+      patchPolicyKey(key, next);
+      updateGroupChatPolicies(conversationID, { [key]: next })
+        .then((updated) => patchConversation({ policies: updated }))
+        .catch((err: unknown) => {
+          patchPolicyKey(key, previous);
+          resyncConversations();
+          openActionError(err);
+        })
+        .finally(() => setSettingPending(null));
+    },
+    [
+      conversationID,
+      openActionError,
+      patchConversation,
+      patchPolicyKey,
+      policies,
+      resyncConversations,
+      settingPending,
+    ],
+  );
+
+  const handleTransferOwner = useCallback(
+    (member: ChatMemberDto) => {
+      const name = groupMemberDisplayName(member);
+      Alert.alert(
+        t('chat.transferOwner', { defaultValue: '转让群主' }),
+        t('chat.transferOwnerConfirm', { name }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('chat.transferOwnerAction', { defaultValue: '转让' }),
+            style: 'destructive',
+            onPress: () => {
+              if (settingPending) return;
+              setSettingPending('owner');
+              transferGroupChatOwner(conversationID, member.userId)
+                .then(() => {
+                  Alert.alert(
+                    t('common.done'),
+                    t('chat.transferOwnerDone', { name }),
+                  );
+                  // 自己已经不是群主了:重拉成员与角色,页面按新身份收起入口。
+                  void load();
+                })
+                .catch(openActionError)
+                .finally(() => setSettingPending(null));
+            },
+          },
+        ],
+      );
+    },
+    [conversationID, load, openActionError, settingPending, t],
+  );
+
+  const handleOpenGroupExpansion = useCallback(() => {
+    if (!groupID) return;
+    router.push({
+      pathname: '/(tabs)/profile/group-expansion',
+      params: { circleId: groupID },
+    } as never);
+  }, [groupID]);
 
   const handlePick = useCallback(
     (member: ChatMemberDto) => {
@@ -235,8 +402,9 @@ export default function GroupManageScreen() {
       if (mode === 'admin') groupAdmin.changeRole(member, 'ADMIN');
       else if (mode === 'silence') setSilenceTarget(member);
       else if (mode === 'remove') groupAdmin.kick(member);
+      else if (mode === 'transfer') handleTransferOwner(member);
     },
-    [groupAdmin, pickerMode],
+    [groupAdmin, handleTransferOwner, pickerMode],
   );
 
   const handleSelectSilenceDuration = useCallback(
@@ -273,20 +441,24 @@ export default function GroupManageScreen() {
       ? t('chat.groupManagement.addAdmin', { defaultValue: '添加管理员' })
       : pickerMode === 'silence'
         ? t('chat.groupManagement.addSilence', { defaultValue: '添加禁言' })
-        : t('chat.groupManagement.removeMembers', { defaultValue: '移出群成员' });
+        : pickerMode === 'transfer'
+          ? t('chat.groupManagement.pickNewOwner', { defaultValue: '选择新群主' })
+          : t('chat.groupManagement.removeMembers', { defaultValue: '移出群成员' });
   const pickerMembers =
     pickerMode === 'admin'
       ? adminCandidates
       : pickerMode === 'silence'
         ? silenceCandidates
-        : removeCandidates;
+        : pickerMode === 'transfer'
+          ? transferCandidates
+          : removeCandidates;
 
   const renderMemberRow = (
     member: ChatMemberDto,
     action: { label: string; destructive?: boolean; onPress: () => void },
     meta?: string,
   ) => {
-    const name = member.nickname || member.userId;
+    const name = groupMemberDisplayName(member);
     const pending = groupAdmin.pendingUserID === member.userId;
     return (
       <View key={member.userId} style={s.row}>
@@ -327,6 +499,50 @@ export default function GroupManageScreen() {
     </Pressable>
   );
 
+  const renderSwitchRow = (params: {
+    key: string;
+    label: string;
+    hint?: string;
+    value: boolean;
+    onToggle: (next: boolean) => void;
+  }) => (
+    <View key={params.key} style={s.row}>
+      <View style={s.rowText}>
+        <Text style={d.name}>{params.label}</Text>
+        {params.hint ? (
+          <Text style={d.meta}>{params.hint}</Text>
+        ) : null}
+      </View>
+      <ThemedSwitch
+        value={params.value}
+        onValueChange={settingPending ? undefined : params.onToggle}
+      />
+    </View>
+  );
+
+  const renderPolicyRows = (keys: readonly PolicyKey[]) =>
+    keys.map((key, index) => (
+      <View key={key}>
+        {index > 0 ? <Divider /> : null}
+        {renderSwitchRow({
+          key,
+          label: groupPolicyLabel(key),
+          hint: t(`chat.groupPolicyHint.${key}`),
+          value: policies?.[key] ?? true,
+          onToggle: (next) => handleTogglePolicy(key, next),
+        })}
+      </View>
+    ));
+
+  const renderLinkRow = (label: string, onPress: () => void, testID: string) => (
+    <Pressable style={s.row} onPress={onPress} accessibilityRole="button" testID={testID}>
+      <View style={s.rowText}>
+        <Text style={d.name}>{label}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+    </Pressable>
+  );
+
   let body: React.ReactNode;
   if (loading) {
     body = (
@@ -362,6 +578,72 @@ export default function GroupManageScreen() {
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + Spacing.xl }]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={[s.section, d.section]}>
+          <View style={s.sectionHeader}>
+            <Text style={d.title}>
+              {t('chat.groupManagement.settings', { defaultValue: '群设置' })}
+            </Text>
+          </View>
+          {renderSwitchRow({
+            key: 'muteAll',
+            label: t('chat.muteAll', { defaultValue: '全员禁言' }),
+            hint: t('chat.muteAllHint', {
+              defaultValue: '开启后仅群主和管理员可以发言',
+            }),
+            value: muteAll,
+            onToggle: handleToggleMuteAll,
+          })}
+        </View>
+
+        <View style={[s.section, d.section]}>
+          <View style={s.sectionHeader}>
+            <Text style={d.title}>
+              {t('chat.groupManagement.joinMethods', { defaultValue: '进群允许方式' })}
+            </Text>
+          </View>
+          {renderPolicyRows(JOIN_POLICY_KEYS)}
+        </View>
+
+        <View style={[s.section, d.section]}>
+          <View style={s.sectionHeader}>
+            <Text style={d.title}>
+              {t('chat.groupManagement.memberPermissions', {
+                defaultValue: '成员权限',
+              })}
+            </Text>
+          </View>
+          {renderPolicyRows(MEMBER_POLICY_KEYS)}
+        </View>
+
+        {isOwner ? (
+          <View style={[s.section, d.section]}>
+            <View style={s.sectionHeader}>
+              <Text style={d.title}>
+                {t('chat.groupManagement.ownerSection', { defaultValue: '群主' })}
+              </Text>
+            </View>
+            {/* 独立群聊才有群主转让:圈子群的圈主转让牵涉会员配额与容量,不在这里。 */}
+            {isStandaloneGroup
+              ? renderLinkRow(
+                  t('chat.transferOwner', { defaultValue: '转让群主' }),
+                  () => setPickerMode('transfer'),
+                  'group-manage-transfer-owner',
+                )
+              : null}
+            {/* 圈子群的成员上限走扩容商品;独立群聊固定 200,没有入口。 */}
+            {groupID ? (
+              <>
+                {isStandaloneGroup ? <Divider /> : null}
+                {renderLinkRow(
+                  t('chat.raiseMemberLimit', { defaultValue: '提升成员上限' }),
+                  handleOpenGroupExpansion,
+                  'group-manage-raise-limit',
+                )}
+              </>
+            ) : null}
+          </View>
+        ) : null}
+
         {isOwner ? (
           <View style={[s.section, d.section]}>
             <View style={s.sectionHeader}>

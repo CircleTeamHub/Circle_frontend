@@ -167,6 +167,7 @@ test('the five locales all define the group-management notice copy', () => {
 const BACKEND_SOURCES = [
   'src/chat/chat.service.ts',
   'src/chat/chat-group-admin.service.ts',
+  'src/chat/chat-group-settings.service.ts',
   'src/group/group.service.ts',
   'src/circle/circle.service.ts',
 ].map((rel) => path.join(root, '..', 'circle_be', rel));

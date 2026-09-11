@@ -329,7 +329,12 @@ export function mapChatMessageDtoToUI(
     // 加载（推送冷启动时它可能还没到）。老后端不发 → undefined → 调用方回落。
     burnDurationSec: dto.burnDurationSec ?? undefined,
     senderID: isSent ? undefined : (dto.sender?.id ?? undefined),
-    senderName: isSent ? undefined : (dto.sender?.nickname ?? undefined),
+    // 群昵称优先:群里所有人看到的就是它。成员目录被「是否显示群成员」关掉时
+    // 客户端只剩这条线,回落账号昵称就等于当着全群把人改回了另一个名字。
+    // (我给这位好友起的备注优先级更高,那条在 ChatDetailScreen 另接。)
+    senderName: isSent
+      ? undefined
+      : (dto.sender?.alias?.trim() || dto.sender?.nickname || undefined),
     senderAvatarUrl: isSent
       ? undefined
       : (allowPeerMediaUrl(dto.sender?.avatarUrl ?? null) ?? undefined),
@@ -666,9 +671,38 @@ export function systemNoticeText(content: Record<string, unknown>): string {
         ? i18n.t('im.notification.ownerTransferred', { name })
         : i18n.t('im.notification.ownerTransferredUnnamed');
     }
+    // 群设置第二批:全员禁言开关、群头像、策略开关。策略名走同一张词表,
+    // 客户端不认识的新键原样显示键名,而不是空白。
+    case 'mute-all-changed':
+      return content['enabled'] === true
+        ? i18n.t('im.notification.muteAllEnabled')
+        : i18n.t('im.notification.muteAllDisabled');
+    case 'group-avatar-updated':
+      return i18n.t('im.notification.groupAvatarUpdated');
+    case 'group-policy-changed': {
+      const policy = groupPolicyLabel(
+        typeof content['policy'] === 'string' ? content['policy'] : '',
+      );
+      return content['enabled'] === true
+        ? i18n.t('im.notification.policyEnabled', { policy })
+        : i18n.t('im.notification.policyDisabled', { policy });
+    }
     default:
       return '';
   }
+}
+
+/** 群策略键 → 本地化名称(群管理页开关、系统提示、群日志共用一张表)。 */
+export function groupPolicyLabel(policy: string): string {
+  const key: Record<string, string> = {
+    memberCanInvite: 'chat.groupPolicy.memberCanInvite',
+    qrJoinEnabled: 'chat.groupPolicy.qrJoinEnabled',
+    membersCanViewRoster: 'chat.groupPolicy.membersCanViewRoster',
+    membersCanViewProfiles: 'chat.groupPolicy.membersCanViewProfiles',
+    membersCanAddFriends: 'chat.groupPolicy.membersCanAddFriends',
+  };
+  const found = key[policy];
+  return found ? i18n.t(found) : policy;
 }
 /**
  * 禁言时长 → 本地化标签。档位表在 silence-durations.ts;这里按整天/整小时/分钟

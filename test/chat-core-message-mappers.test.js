@@ -152,6 +152,40 @@ test('text messages split sent/received by sender identity', () => {
   assert.equal(sent.sendStatus, 2);
 });
 
+test('the bubble sender name prefers the group alias over the account nickname', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+
+  // 群昵称是「群里所有人看到的那个名字」。气泡不能只认账号昵称:
+  // 「是否显示群成员」关掉后普通成员根本拉不到目录,那时消息自带的 alias
+  // 是客户端唯一的来源。
+  const aliased = mapChatMessageDtoToUI(
+    dto({ sender: { id: 'u2', nickname: '张三', avatarUrl: null, alias: '老张' } }),
+    'u1',
+    0,
+  );
+  assert.equal(aliased.senderName, '老张');
+
+  // 只有空白的群昵称不算设过。
+  const blank = mapChatMessageDtoToUI(
+    dto({ sender: { id: 'u2', nickname: '张三', avatarUrl: null, alias: '   ' } }),
+    'u1',
+    0,
+  );
+  assert.equal(blank.senderName, '张三');
+
+  // 老后端不下发 alias:回落账号昵称,不能变成 undefined。
+  const legacy = mapChatMessageDtoToUI(dto(), 'u1', 0);
+  assert.equal(legacy.senderName, '对方');
+
+  // 自己发的消息不显示发送者名字,别因为 alias 又把它带出来。
+  const sent = mapChatMessageDtoToUI(
+    dto({ sender: { id: 'u1', nickname: '我', avatarUrl: null, alias: '群主本人' } }),
+    'u1',
+    0,
+  );
+  assert.equal(sent.senderName, undefined);
+});
+
 test('video messages preserve their signed source and playback metadata', () => {
   const { mapChatMessageDtoToUI } = loadMappers();
   const video = mapChatMessageDtoToUI(

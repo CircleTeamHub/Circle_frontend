@@ -99,6 +99,8 @@ export type CreateFriendRequestInput = {
   permission?: FriendPermission;
   /** 扫名片码进来的申请带上:服务端验真后按对方 addMeByQrCode 开关放行。 */
   qrToken?: string;
+  /** 从群成员资料发起的申请带上:该群关闭「成员可添加好友」且申请人不是管理员时服务端拒绝。 */
+  viaConversationId?: string;
 };
 
 type CreateFriendRequestBody = {
@@ -227,6 +229,9 @@ function buildCreateFriendRequestBody(
     ...(photos && photos.length > 0 ? { photos } : {}),
     ...(permission ? { permission } : {}),
     ...(input.qrToken ? { qrToken: input.qrToken } : {}),
+    ...(input.viaConversationId
+      ? { viaConversationId: input.viaConversationId }
+      : {}),
   };
 }
 

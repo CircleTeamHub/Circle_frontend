@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -163,6 +164,10 @@ const s = StyleSheet.create({
 
 export default function GroupExpansionScreen() {
   const { t } = useTranslation();
+  // 从某个圈子群的群管理页「提升成员上限」跳进来时预选那个圈子。
+  const params = useLocalSearchParams<{ circleId?: string }>();
+  const preselectedCircleId =
+    typeof params.circleId === 'string' ? params.circleId : '';
   const insets = useSafeAreaInsets();
   const { colors, resolvedMode } = useTheme();
   const { isOffline } = useNetworkStatus();
@@ -250,7 +255,13 @@ export default function GroupExpansionScreen() {
         if (generation !== focusGenerationRef.current) return;
         setCircles(nextCircles);
 
-        const current = selectedCircleIdRef.current;
+        // 从某个圈子群的群管理页跳进来时预选那个圈子(只在还没选过时生效)。
+        const current =
+          selectedCircleIdRef.current ??
+          (preselectedCircleId &&
+          nextCircles.some((circle) => circle.id === preselectedCircleId)
+            ? preselectedCircleId
+            : null);
         const nextSelectedId =
           (current && nextCircles.some((circle) => circle.id === current)
             ? current
@@ -282,7 +293,7 @@ export default function GroupExpansionScreen() {
         }
       }
     },
-    [loadProducts, t],
+    [loadProducts, preselectedCircleId, t],
   );
 
   const loadWallet = useCallback(

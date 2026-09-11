@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
@@ -111,8 +112,10 @@ type TabBarStyles = {
   tabBar: ViewStyle;
   tabBarBlurLayer: ViewStyle;
   tabBarTint: ViewStyle;
+  tabItems: ViewStyle;
   tabItem: ViewStyle;
   pill: ViewStyle;
+  liquidIndicator: ViewStyle;
   iconWrap: ViewStyle;
   badge: ViewStyle;
   label: TextStyle;
@@ -286,7 +289,7 @@ const TabSlot = memo(function TabSlot({
 
 // 浮动 tab bar：Reanimated translateY+opacity 平滑滑入/滑出（取代 display 瞬切，
 // 消除「返回 tab 根页时浮动条闪一下」）。内部整行自绘，每格 flex:1，
-// 选中态只改变 icon/文字，不绘制椭圆背景。
+// 选中态由 CustomTabBar 统一渲染液态指示器；点击时每格仍保留自己的按压缩放。
 function CustomTabBar({
   state,
   navigation,
@@ -304,6 +307,60 @@ function CustomTabBar({
   styles: TabBarStyles;
 }) {
   const { t } = useTranslation();
+  const [tabItemsWidth, setTabItemsWidth] = useState(0);
+  const activeIndex = state.index;
+  const indicatorX = useSharedValue(TAB_PILL_GAP);
+  const indicatorStretch = useSharedValue(1);
+  const indicatorSquash = useSharedValue(1);
+  const previousIndex = useRef(activeIndex);
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: indicatorX.value },
+      { scaleX: indicatorStretch.value },
+      { scaleY: indicatorSquash.value },
+    ],
+  }));
+
+  useEffect(() => {
+    if (tabItemsWidth <= 0) return;
+    const slotWidth = tabItemsWidth / Math.max(state.routes.length, 1);
+    const targetX = activeIndex * slotWidth + TAB_PILL_GAP;
+    const changedTab = previousIndex.current !== activeIndex;
+
+    indicatorX.value = withTiming(targetX, {
+      duration: changedTab ? 260 : 0,
+      easing: Easing.out(Easing.cubic),
+    });
+    if (changedTab) {
+      // 拉长 + 压扁的短暂形变让胶囊看起来像一滴液体跳到下一个 tab，
+      // 再用弹簧恢复成稳定的圆角胶囊。
+      indicatorStretch.value = withSequence(
+        withTiming(1.32, {
+          duration: 90,
+          easing: Easing.out(Easing.cubic),
+        }),
+        withSpring(1, {
+          damping: 12,
+          stiffness: 220,
+          mass: 0.5,
+          reduceMotion: ReduceMotion.System,
+        }),
+      );
+      indicatorSquash.value = withSequence(
+        withTiming(0.84, {
+          duration: 90,
+          easing: Easing.out(Easing.cubic),
+        }),
+        withSpring(1, {
+          damping: 12,
+          stiffness: 220,
+          mass: 0.5,
+          reduceMotion: ReduceMotion.System,
+        }),
+      );
+    }
+    previousIndex.current = activeIndex;
+  }, [activeIndex, indicatorSquash, indicatorStretch, indicatorX, state.routes.length, tabItemsWidth]);
 
   // 把 hidden 这个普通 prop 镜像进 shared value 再驱动动画：worklet 依赖被追踪的
   // shared value，而非闭包捕获的 JS prop——即使将来 CustomTabBar 被 memo 化、
@@ -335,53 +392,71 @@ function CustomTabBar({
         hidden={hidden}
         styles={styles}
       >
-        {state.routes.map((route, index) => {
-          const tab = TAB_BY_NAME[route.name];
-          if (!tab) {
-            devWarn(
-              `[CustomTabBar] route "${route.name}" 未在 TAB_KEYS 中登记，已跳过该 tab。`,
-            );
-            return null;
-          }
-
-          const focused = state.index === index;
-          const label = t(tab.key);
-          const hasBadge = badgeMap[route.name] ?? false;
-          const { options } = descriptors[route.key];
-
-          const onPress = () => {
-            // 先发 tabPress：触发 Tabs.Screen 上的 listener（把该 tab 的内嵌栈
-            // popToTop，实现「点 tab 永远回首页」）。再在未聚焦时切换到该 tab。
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!focused && !event.defaultPrevented) {
-              navigation.dispatch({
-                ...CommonActions.navigate({ name: route.name, merge: true }),
-                target: state.key,
-              });
+        <View
+          style={styles.tabItems}
+          onLayout={(event) => setTabItemsWidth(event.nativeEvent.layout.width)}
+        >
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.liquidIndicator,
+              {
+                width: Math.max(
+                  tabItemsWidth / Math.max(state.routes.length, 1) - TAB_PILL_GAP * 2,
+                  0,
+                ),
+              },
+              indicatorStyle,
+            ]}
+          />
+          {state.routes.map((route, index) => {
+            const tab = TAB_BY_NAME[route.name];
+            if (!tab) {
+              devWarn(
+                `[CustomTabBar] route "${route.name}" 未在 TAB_KEYS 中登记，已跳过该 tab。`,
+              );
+              return null;
             }
-          };
 
-          return (
-            <TabSlot
-              key={route.key}
-              tab={tab}
-              label={label}
-              focused={focused}
-              showBadgeDot={hasBadge}
-              colors={colors}
-              styles={styles}
-              onPress={onPress}
-              accessibilityLabel={
-                options.tabBarAccessibilityLabel ?? label
+            const focused = state.index === index;
+            const label = t(tab.key);
+            const hasBadge = badgeMap[route.name] ?? false;
+            const { options } = descriptors[route.key];
+
+            const onPress = () => {
+              // 先发 tabPress：触发 Tabs.Screen 上的 listener（把该 tab 的内嵌栈
+              // popToTop，实现「点 tab 永远回首页」）。再在未聚焦时切换到该 tab。
+              const event = navigation.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+              });
+              if (!focused && !event.defaultPrevented) {
+                navigation.dispatch({
+                  ...CommonActions.navigate({ name: route.name, merge: true }),
+                  target: state.key,
+                });
               }
-              testID={TAB_TEST_IDS[route.name]}
-            />
-          );
-        })}
+            };
+
+            return (
+              <TabSlot
+                key={route.key}
+                tab={tab}
+                label={label}
+                focused={focused}
+                showBadgeDot={hasBadge}
+                colors={colors}
+                styles={styles}
+                onPress={onPress}
+                accessibilityLabel={
+                  options.tabBarAccessibilityLabel ?? label
+                }
+                testID={TAB_TEST_IDS[route.name]}
+              />
+            );
+          })}
+        </View>
       </TabBarSurface>
     </Animated.View>
   );
@@ -487,10 +562,16 @@ export default function TabLayout() {
       borderRadius: TAB_BAR_RADIUS,
       backgroundColor: withAlpha(colors.surface, TAB_BAR_TINT_ALPHA),
     },
-    // 每格等宽：flex:1 平分整条 bar，点击动效只作用于当前 tab。
+    // 每格等宽：flex:1 平分整条 bar，液态指示器在同一层横向移动。
+    tabItems: {
+      flex: 1,
+      flexDirection: 'row',
+      position: 'relative',
+    },
     tabItem: {
       flex: 1,
       justifyContent: 'center',
+      zIndex: 1,
     },
     pill: {
       height: TAB_PILL_HEIGHT,
@@ -500,7 +581,19 @@ export default function TabLayout() {
       borderRadius: TAB_PILL_RADIUS,
       marginHorizontal: TAB_PILL_GAP,
       overflow: 'hidden',
+      position: 'relative',
       gap: 2,
+    },
+    liquidIndicator: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      height: TAB_PILL_HEIGHT,
+      borderRadius: TAB_PILL_RADIUS,
+      backgroundColor:
+        resolvedMode === 'dark'
+          ? 'rgba(0, 0, 0, 0.24)'
+          : 'rgba(0, 0, 0, 0.08)',
     },
     iconWrap: {
       position: 'relative',

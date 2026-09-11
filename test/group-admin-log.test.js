@@ -24,6 +24,9 @@ const EVENT_KINDS = [
   'owner-transferred',
   'group-renamed',
   'group-notice-updated',
+  'group-avatar-updated',
+  'mute-all-changed',
+  'policy-changed',
   'history-cleared',
 ];
 
@@ -117,7 +120,10 @@ function loadGroupEventText(translate) {
     require(request) {
       if (request === '@/i18n') return { __esModule: true, default: { t: translate } };
       if (request === './message-mappers') {
-        return { formatSilenceDuration: (seconds) => `${seconds}s` };
+        return {
+          formatSilenceDuration: (seconds) => `${seconds}s`,
+          groupPolicyLabel: (policy) => `policy:${policy}`,
+        };
       }
       throw new Error(`unexpected require: ${request}`);
     },
@@ -184,6 +190,33 @@ test('every event kind renders a named sentence; unknown kinds fall back, never 
   );
 });
 
+test('group log names people by their group alias, falling back to the nickname', () => {
+  const calls = [];
+  const groupEventText = loadGroupEventText((key, values) => {
+    calls.push([key, values]);
+    return key;
+  });
+
+  // 群日志讲的是「群里发生了什么」,名字就该是群里认得的那个 —— 与成员目录、
+  // 气泡上方的名字同一条优先级(群昵称 > 账号昵称 > 已注销兜底)。
+  groupEventText({
+    id: 'e-alias',
+    kind: 'member-removed',
+    actor: { id: 'a', nickname: 'Alice', avatarUrl: null, alias: '群主阿丽' },
+    targets: [
+      { id: 'b', nickname: 'Bob', avatarUrl: null, alias: '  ' },
+      { id: 'c', nickname: 'Carol', avatarUrl: null, alias: '小卡' },
+    ],
+    payload: null,
+    createdAt: '',
+  });
+
+  const removed = calls.find(([key]) => key === 'chat.groupEvent.memberRemoved');
+  assert.equal(removed[1].actor, '群主阿丽');
+  // 空白别名不算设过;分隔符本身走 i18n(替身回显 key)。
+  assert.match(removed[1].targets, /^Bob.*小卡$/);
+});
+
 test('the five locales define copy for every event kind and the management screen', () => {
   const eventKeys = [
     'system', 'unknownMember', 'nameSeparator',
@@ -192,6 +225,8 @@ test('the five locales define copy for every event kind and the management scree
     'memberLeft', 'memberRemoved', 'memberPromoted', 'memberDemoted',
     'memberSilenced', 'memberSilencedIndefinitely', 'memberUnsilenced',
     'ownerTransferred', 'groupRenamed', 'groupNoticeUpdated', 'historyCleared',
+    'muteAllEnabled', 'muteAllDisabled', 'groupAvatarUpdated',
+    'policyEnabled', 'policyDisabled',
   ];
   const manageKeys = [
     'admins', 'adminsHint', 'addAdmin', 'noAdmins', 'removeAdmin',
@@ -264,8 +299,8 @@ test('chat info wires standalone-group roles, the management entry and the long-
 test('chat detail locks the composer while the viewer is silenced', () => {
   const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
   assert.match(detail, /const selfSilenced = useMemo\(/);
-  assert.match(detail, /editable=\{!isPreviewMode && !selfSilenced\}/);
-  assert.match(detail, /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| selfSilenced\}/);
+  assert.match(detail, /editable=\{!isPreviewMode && !composerLocked\}/);
+  assert.match(detail, /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| composerLocked\}/);
   assert.match(detail, /testID="chat-silenced-bar"/);
   assert.match(detail, /chat\.youAreSilencedUntil/);
   assert.match(detail, /const timer = setTimeout\(\(\) => setSilenceClock\(Date\.now\(\)\), remaining \+ 1\)/);
@@ -281,7 +316,10 @@ test('silence labels follow language changes and timed silence expiry refreshes 
 });
 
 // ── 跨仓契约:双仓并排检出时逐项对齐;仅前端 CI 时跳过 ──
-const BACKEND_ROOT = path.join(root, '..', 'circle_be');
+// CIRCLE_BE_PATH 覆盖是给 git worktree 用的:worktree 旁边那个 circle_be 往往是
+// 别的分支,比 main 还容易给出假红/假绿。
+const BACKEND_ROOT =
+  process.env.CIRCLE_BE_PATH ?? path.join(root, '..', 'circle_be');
 const hasBackend = fs.existsSync(path.join(BACKEND_ROOT, 'src/chat/chat.controller.ts'));
 
 test(

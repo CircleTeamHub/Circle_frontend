@@ -109,24 +109,36 @@ export default function InviteGroupMembersScreen() {
     if (!conversationID) return;
     let cancelled = false;
     (async () => {
-      try {
-        const [friendList, members] = await Promise.all([
-          fetchFriends(),
-          fetchChatMembers(conversationID),
-        ]);
-        if (cancelled) return;
-        setFriends(friendList);
-        setMemberIDs(new Set(members.map((member) => member.userId)));
-      } catch (error) {
-        reportHandledFailure('group', 'loadInviteCandidates', error);
-      } finally {
-        if (!cancelled) setLoading(false);
+      // 两次请求各算各的:成员目录对普通成员是会 403 的
+      // (CHAT_MEMBER_DIRECTORY_FORBIDDEN,「是否显示群成员」关着时),
+      // Promise.all 会让整个 await 抛出、好友列表永远 set 不上 —— 入口还在,
+      // 点进来却是一片空白。目录只用来把已在群的人从候选里去掉,拿不到就不去重:
+      // 服务端对已在座的邀请本就是幂等 no-op,真被拒时错误照样从提交路径回来。
+      const [friendResult, memberResult] = await Promise.allSettled([
+        fetchFriends(),
+        fetchChatMembers(conversationID),
+      ]);
+      if (cancelled) return;
+      if (friendResult.status === 'fulfilled') {
+        setFriends(friendResult.value);
+      } else {
+        reportHandledFailure('group', 'loadInviteFriends', friendResult.reason);
+        topNotice.error(
+          getApiErrorMessage(friendResult.reason, t('common.networkError')),
+        );
       }
+      if (memberResult.status === 'fulfilled') {
+        setMemberIDs(new Set(memberResult.value.map((member) => member.userId)));
+      } else {
+        setMemberIDs(new Set());
+        reportHandledFailure('group', 'loadInviteMembers', memberResult.reason);
+      }
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [conversationID]);
+  }, [conversationID, t]);
 
   // 已在群里的好友不再出现在候选里(邀请了也是服务端 no-op,徒增困惑)。
   const invitableFriends = useMemo(

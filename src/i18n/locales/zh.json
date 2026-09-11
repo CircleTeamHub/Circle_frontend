@@ -454,6 +454,8 @@
     "messagesThatNotify": "仍会通知的消息",
     "messagesThatNotifyHint": "@我、@所有人和群公告",
     "myAliasInGroup": "我在群里的昵称",
+    "groupRemark": "群备注",
+    "groupRemarkHint": "只有你自己看得见",
     "groupMembersCount_other": "{{count}} 人",
     "groupOwner": "群主",
     "groupAdmin": "管理员",
@@ -535,6 +537,34 @@
     "youAreSilenced": "你已被禁言",
     "youAreSilencedUntil": "你已被禁言，{{time}} 解除",
     "youAreSilencedIndefinitely": "你已被禁言，等待管理员解除",
+    "groupAvatar": "群头像",
+    "groupMembersRow": "群成员",
+    "memberCountWithLimit": "{{count}}/{{limit}} 人",
+    "memberCountOnly": "{{count}} 人",
+    "muteAll": "全员禁言",
+    "muteAllHint": "开启后仅群主和管理员可以发言",
+    "youAreMutedAll": "全员禁言中，仅群主和管理员可以发言",
+    "transferOwner": "转让群主",
+    "transferOwnerConfirm": "确定将群主转让给 {{name}}？转让后你将成为普通成员。",
+    "transferOwnerDone": "已将群主转让给 {{name}}。",
+    "transferOwnerAction": "转让",
+    "raiseMemberLimit": "提升成员上限",
+    "groupAvatarUpdateFailed": "群头像更新失败",
+    "profilesRestrictedByGroup": "该群未开放查看成员资料",
+    "groupPolicy": {
+      "memberCanInvite": "成员邀请",
+      "qrJoinEnabled": "二维码入群",
+      "membersCanViewProfiles": "成员可查看他人资料",
+      "membersCanAddFriends": "成员可添加好友",
+      "membersCanViewRoster": "显示群成员"
+    },
+    "groupPolicyHint": {
+      "memberCanInvite": "关闭后只有群主和管理员可以拉人进群",
+      "qrJoinEnabled": "关闭后已签发的群二维码也无法入群",
+      "membersCanViewProfiles": "关闭后普通成员无法从群里打开他人资料",
+      "membersCanAddFriends": "关闭后普通成员无法通过群添加好友",
+      "membersCanViewRoster": "关闭后普通成员看不到群成员名单"
+    },
     "groupManagement": {
       "admins": "群管理员",
       "adminsHint": "管理员可移出普通成员、禁言成员、删除所有人的聊天记录",
@@ -551,7 +581,12 @@
       "noCandidates": "没有可选择的成员",
       "searchPlaceholder": "搜索成员",
       "loadFailed": "群管理加载失败",
-      "restricted": "仅群主和管理员可以管理群聊"
+      "restricted": "仅群主和管理员可以管理群聊",
+      "settings": "群设置",
+      "ownerSection": "群主",
+      "joinMethods": "进群允许方式",
+      "memberPermissions": "成员权限",
+      "pickNewOwner": "选择新群主"
     },
     "groupEvent": {
       "system": "系统",
@@ -572,7 +607,12 @@
       "ownerTransferred": "群主已转让给 {{targets}}",
       "groupRenamed": "{{actor}} 将群名改为「{{name}}」",
       "groupNoticeUpdated": "{{actor}} 更新了群公告",
-      "historyCleared": "{{actor}} 删除了所有人的聊天记录"
+      "historyCleared": "{{actor}} 删除了所有人的聊天记录",
+      "muteAllEnabled": "{{actor}} 开启了全员禁言",
+      "muteAllDisabled": "{{actor}} 解除了全员禁言",
+      "groupAvatarUpdated": "{{actor}} 更新了群头像",
+      "policyEnabled": "{{actor}} 开启了「{{policy}}」",
+      "policyDisabled": "{{actor}} 关闭了「{{policy}}」"
     },
     "clearHistoryWarning": "清空后将删除当前会话的聊天记录，且无法恢复。",
     "clear": "清空",
@@ -2786,7 +2826,12 @@
       "memberSilencedIndefinitely": "有成员被禁言",
       "memberUnsilenced": "有成员被解除禁言",
       "ownerTransferred": "{{name}} 成为新群主",
-      "ownerTransferredUnnamed": "群主已转让"
+      "ownerTransferredUnnamed": "群主已转让",
+      "muteAllEnabled": "全员禁言已开启",
+      "muteAllDisabled": "全员禁言已解除",
+      "groupAvatarUpdated": "群头像已更新",
+      "policyEnabled": "「{{policy}}」已开启",
+      "policyDisabled": "「{{policy}}」已关闭"
     },
     "silence": {
       "minutes": "{{n}}分钟",
@@ -3174,6 +3219,7 @@
     "CHAT_HISTORY_CONVERSATION_NOT_FOUND": "会话不存在",
     "CHAT_CONVERSATION_NOT_FOUND": "会话不存在",
     "CHAT_MEMBER_DIRECTORY_FORBIDDEN": "仅圈主和管理员可查看群成员目录",
+    "CHAT_MEMBER_PROFILE_FORBIDDEN": "该群未开放查看成员资料",
     "CHAT_NOT_MEMBER": "你不是该会话成员",
     "CHAT_PEER_NOT_FOUND": "对方不可用",
     "CHAT_SELF_CONVERSATION": "不能和自己发起会话",
@@ -3230,7 +3276,11 @@
     "CHAT_GROUP_TARGET_PROTECTED": "不能对群主或同级管理员执行此操作",
     "CHAT_GROUP_SELF_TARGET": "不能对自己执行此操作",
     "CHAT_MEMBER_SILENCED": "你已被禁言，暂时无法发言",
-    "CHAT_SILENCE_DURATION_INVALID": "禁言时长无效"
+    "CHAT_SILENCE_DURATION_INVALID": "禁言时长无效",
+    "CHAT_GROUP_INVITE_DISABLED": "该群已关闭成员邀请",
+    "CHAT_GROUP_QR_JOIN_DISABLED": "该群已关闭二维码入群",
+    "CHAT_GROUP_AVATAR_URL_INVALID": "群头像地址无效",
+    "FRIEND_GROUP_ADD_FORBIDDEN": "该群不允许成员互加好友"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",
