@@ -1127,6 +1127,11 @@ test("appearance settings includes the requested chat display controls", () => {
   }
   assert.match(source, /useAppSettingsStore/);
   assert.match(source, /settings-chat-background/);
+  const globalBackgroundRow = source.match(
+    /id: ['"]global-chat-background['"][\s\S]*?onPress:[\s\S]*?\n\s*},/,
+  );
+  assert.ok(globalBackgroundRow);
+  assert.doesNotMatch(globalBackgroundRow[0], /value(?:Key|Text):/);
 });
 
 test("account security settings reuse real auth actions", () => {

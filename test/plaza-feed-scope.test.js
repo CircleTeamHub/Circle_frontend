@@ -141,7 +141,9 @@ test('plaza feed lets users edit persisted circle shortcut order from the right 
   assert.match(feed, /CircleShortcutOrderSheet/);
   assert.match(bar, /onEditOrder/);
   assert.match(bar, /reorder-three-outline/);
-  assert.match(bar, /translateX:\s*Spacing\.xs/);
+  // The right-side edit action is aligned to the bar edge; no horizontal offset
+  // keeps the control fully visible on narrow screens.
+  assert.doesNotMatch(bar, /translateX:\s*Spacing\.xs/);
   assert.match(sheet, /PanResponder/);
   assert.match(sheet, /getDragResponder/);
   assert.match(sheet, /scrollEnabled=\{!draggingCircleId\}/);

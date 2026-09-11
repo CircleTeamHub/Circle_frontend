@@ -112,7 +112,7 @@ export default function CirclePlazaScreen() {
     <View testID={E2E_TEST_IDS.circlePlazaScreen} style={d.container}>
       <View style={[s.header, { paddingTop: Spacing.md }]}>
         <Text style={d.title} accessibilityRole="header">
-          {t('discover.title')}
+          {t('discover.circleTitle')}
         </Text>
         <View style={s.headerActions}>
           <Pressable

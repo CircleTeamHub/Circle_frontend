@@ -974,6 +974,7 @@
   },
   "discover": {
     "title": "动态",
+    "circleTitle": "圈子动态",
     "plaza": "圈子广场",
     "management": "圈子管理",
     "moments": "朋友圈",
@@ -2166,7 +2167,6 @@
       "fontSize": "字体大小",
       "standard": "标准",
       "globalChatBackground": "全局聊天背景",
-      "configured": "已设置",
       "hideChatAvatar": "隐藏聊天头像",
       "hideChatAvatarHint": "私聊中不显示发送方和接收方头像",
       "mergeAvatar": "连续消息合并头像",

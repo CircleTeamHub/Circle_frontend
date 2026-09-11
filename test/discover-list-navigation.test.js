@@ -37,9 +37,9 @@ test('作为 tab 根屏，广场头部不能再渲染返回箭头', () => {
   assert.doesNotMatch(source, /fallbackHref/);
 
   // 改用本仓库 tab 根屏的既有写法（对齐 ContactsScreen）：大标题 + 右侧动作，
-  // 标题跟 tab 标签一致。
+  // 标题明确标识圈子动态。
   assert.match(source, /Typography\.title/);
-  assert.match(source, /t\('discover\.title'\)/);
+  assert.match(source, /t\('discover\.circleTitle'\)/);
 });
 
 test('广场顶部保留未读口径：圈子通知 + 报名，不掺朋友圈', () => {

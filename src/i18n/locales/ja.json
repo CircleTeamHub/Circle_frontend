@@ -96,7 +96,6 @@
       "fontSize": "文字サイズ",
       "standard": "標準",
       "globalChatBackground": "全体のチャット背景",
-      "configured": "設定済み",
       "hideChatAvatar": "チャットのアイコンを非表示",
       "hideChatAvatarHint": "個人チャットで送信者と受信者のアイコンを表示しない",
       "mergeAvatar": "連続メッセージのアイコンをまとめる",
@@ -1482,6 +1481,7 @@
   },
   "discover": {
     "title": "モーメント",
+    "circleTitle": "サークルの動向",
     "plaza": "広場",
     "management": "サークル",
     "moments": "モーメント",

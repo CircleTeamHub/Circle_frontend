@@ -113,7 +113,7 @@ function SettingsSwitch({
 
   return (
     <ThemedSwitch
-      tint={colors.blue}
+      tint={colors.primary}
       value={isControlled ? value ?? false : localValue}
       onValueChange={isControlled ? onValueChange : setLocalValue}
       disabled={disabled}

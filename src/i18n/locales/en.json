@@ -975,6 +975,7 @@
   },
   "discover": {
     "title": "Discover",
+    "circleTitle": "Circle Activity",
     "plaza": "Plaza",
     "management": "Circles",
     "moments": "Moments",
@@ -2169,7 +2170,6 @@
       "fontSize": "Font Size",
       "standard": "Standard",
       "globalChatBackground": "Global Chat Background",
-      "configured": "Configured",
       "hideChatAvatar": "Hide Chat Avatars",
       "hideChatAvatarHint": "Do not show sender and receiver avatars in private chats",
       "mergeAvatar": "Merge Consecutive Avatars",

@@ -222,7 +222,7 @@ export default function DirectMessageAutoReplyScreen() {
         <View style={[s.row, d.card]}>
           <Text style={d.label}>{t('settingsDetails.autoReply.enabled', { defaultValue: '启用自动回复' })}</Text>
           <ThemedSwitch
-            tint={colors.blue}
+            tint={colors.primary}
             value={preference.enabled}
             onValueChange={(value) => {
               if (!userId) return;
