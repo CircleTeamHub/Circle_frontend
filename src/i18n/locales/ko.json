@@ -1840,8 +1840,6 @@
       "loadFailed": "태그를 불러오지 못했습니다",
       "loading": "태그를 불러오는 중...",
       "empty": "설정된 태그가 없습니다",
-      "categoryTitle": "친구 분류",
-      "categoryDesc": "태그별로 친구를 분류해 특정 그룹을 빠르게 찾을 수 있습니다.",
       "friendCount": "친구 {{count}}명",
       "viewByTag": "태그별로 친구 보기",
       "addTag": "태그 만들기",
@@ -1854,7 +1852,14 @@
       "loadFailed": "태그 친구를 불러오지 못했습니다",
       "loading": "태그 친구를 불러오는 중...",
       "empty": "이 태그에 친구가 없습니다",
-      "summary": "이 태그의 친구를 가나다순으로 표시합니다."
+      "addFriends": "친구 추가",
+      "searchPlaceholder": "친구 이름 또는 계정 검색",
+      "noCandidates": "추가할 수 있는 친구가 없습니다",
+      "noMatch": "일치하는 친구가 없습니다",
+      "candidatesLoadFailed": "친구를 불러오지 못했습니다",
+      "addFailedTitle": "친구를 추가하지 못했습니다",
+      "addFailed": "이 친구를 태그에 추가하지 못했습니다. 다시 시도해 주세요.",
+      "addFriendAction": "{{name}}을(를) 이 태그에 추가"
     },
     "groupsScreen": {
       "title": "내 그룹",

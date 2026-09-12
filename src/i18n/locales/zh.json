@@ -911,8 +911,6 @@
       "loadFailed": "标签加载失败，请稍后重试",
       "loading": "正在加载标签...",
       "empty": "还没有设置好友标签",
-      "categoryTitle": "好友分类",
-      "categoryDesc": "按标签分类查看好友，便于快速找到特定分组。",
       "friendCount": "{{count}} 位好友",
       "viewByTag": "按标签查看好友",
       "addTag": "新建标签",
@@ -925,7 +923,14 @@
       "loadFailed": "标签好友加载失败，请稍后重试",
       "loading": "正在加载标签好友...",
       "empty": "这个标签下还没有好友",
-      "summary": "按联系人字母分组展示当前标签下的好友。"
+      "addFriends": "添加好友",
+      "searchPlaceholder": "搜索好友昵称或账号",
+      "noCandidates": "暂无可添加的好友",
+      "noMatch": "没有匹配的好友",
+      "candidatesLoadFailed": "好友列表加载失败，请稍后重试",
+      "addFailedTitle": "添加失败",
+      "addFailed": "无法将好友添加到此标签，请稍后重试",
+      "addFriendAction": "将 {{name}} 添加到此标签"
     },
     "groupsScreen": {
       "title": "我的群聊",

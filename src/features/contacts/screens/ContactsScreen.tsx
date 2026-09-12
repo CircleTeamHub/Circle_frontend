@@ -41,7 +41,6 @@ const QUICK_ACTION_KEYS: {
   { id: 'new-friends', icon: 'person-add', key: 'contacts.newFriends', iconBg: '#F97316' },
   { id: 'groups', icon: 'chatbubbles', key: 'contacts.groups', iconBg: '#22C55E' },
   { id: 'seats', icon: 'chatbubble', key: 'contacts.seats', iconBg: '#3B82F6' },
-  { id: 'circles', icon: 'people-circle', key: 'discover.management', iconBg: '#14B8A6' },
   { id: 'moments', icon: 'images', key: 'discover.moments', iconBg: '#F97316' },
   { id: 'tags', icon: 'pricetag', key: 'contacts.tags', iconBg: '#A855F7' },
 ];
@@ -257,8 +256,6 @@ export default function ContactsScreen() {
         router.push('/(tabs)/contacts/groups');
       } else if (id === 'moments') {
         router.push('/(tabs)/contacts/moments');
-      } else if (id === 'circles') {
-        router.push('/(tabs)/contacts/circles');
       } else if (id === 'tags') {
         router.push('/(tabs)/contacts/tags');
       }

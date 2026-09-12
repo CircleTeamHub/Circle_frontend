@@ -1840,8 +1840,6 @@
       "loadFailed": "タグの読み込みに失敗しました",
       "loading": "タグを読み込み中...",
       "empty": "タグが設定されていません",
-      "categoryTitle": "友だちの分類",
-      "categoryDesc": "タグで友だちを分類し、特定のグループをすばやく見つけられます。",
       "friendCount": "友だち {{count}} 人",
       "viewByTag": "タグで友だちを表示",
       "addTag": "タグを作成",
@@ -1854,7 +1852,14 @@
       "loadFailed": "タグの友だちの読み込みに失敗しました",
       "loading": "タグの友だちを読み込み中...",
       "empty": "このタグに友だちはいません",
-      "summary": "このタグの友だちを五十音順に表示します。"
+      "addFriends": "友だちを追加",
+      "searchPlaceholder": "友だちの名前またはアカウントを検索",
+      "noCandidates": "追加できる友だちはいません",
+      "noMatch": "一致する友だちはいません",
+      "candidatesLoadFailed": "友だちの読み込みに失敗しました",
+      "addFailedTitle": "追加できませんでした",
+      "addFailed": "この友だちをタグに追加できませんでした。もう一度お試しください。",
+      "addFriendAction": "{{name}} をこのタグに追加"
     },
     "groupsScreen": {
       "title": "マイグループ",

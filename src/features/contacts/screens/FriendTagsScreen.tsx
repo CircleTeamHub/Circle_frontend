@@ -9,7 +9,7 @@ import {
   type FriendTag,
 } from '@/services/api/friends';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -37,11 +37,6 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
     gap: Spacing.lg,
-  },
-  introCard: {
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    gap: 6,
   },
   stateBlock: {
     alignItems: 'center',
@@ -145,13 +140,15 @@ export default function FriendTagsScreen() {
     }
   }, [t]);
 
-  useEffect(() => {
-    const signal = { cancelled: false };
-    loadTags(signal);
-    return () => {
-      signal.cancelled = true;
-    };
-  }, [loadTags]);
+  useFocusEffect(
+    useCallback(() => {
+      const signal = { cancelled: false };
+      void loadTags(signal);
+      return () => {
+        signal.cancelled = true;
+      };
+    }, [loadTags]),
+  );
 
   useEffect(
     () => () => {
@@ -177,18 +174,6 @@ export default function FriendTagsScreen() {
       container: {
         flex: 1,
         backgroundColor: colors.background,
-      },
-      introCard: {
-        backgroundColor: colors.surface,
-      },
-      introTitle: {
-        color: colors.text,
-        ...Typography.body,
-        fontWeight: '600' as const,
-      },
-      introCopy: {
-        color: colors.textSecondary,
-        ...Typography.small,
       },
       listCard: {
         backgroundColor: colors.surface,
@@ -322,10 +307,6 @@ export default function FriendTagsScreen() {
           />
         }
       >
-        <View style={[s.introCard, d.introCard]}>
-          <Text style={d.introTitle}>{t('contacts.tagsScreen.categoryTitle')}</Text>
-          <Text style={d.introCopy}>{t('contacts.tagsScreen.categoryDesc')}</Text>
-        </View>
         {stateBlock}
       </ScrollView>
       <Modal

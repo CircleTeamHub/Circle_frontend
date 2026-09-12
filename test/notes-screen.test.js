@@ -312,56 +312,49 @@ test('EditNoteScreen loads and submits multiple group ids', () => {
   assert.match(src, /groupIds:/);
 });
 
-test('EditNoteScreen does not render selected groups a second time', () => {
+test('EditNoteScreen renders a compact group button with a summary', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.doesNotMatch(src, /selectedGroups/);
-  assert.doesNotMatch(src, /selectedGroupTag/);
-  assert.doesNotMatch(src, /selectedGroupText/);
-  assert.doesNotMatch(src, /notes\.edit\.noGroups/);
+  assert.match(src, /selectedGroupNames/);
+  assert.match(src, /groupSummary/);
+  assert.match(src, /notes\.edit\.noGroups/);
+  assert.match(src, /<BottomSheetModal/);
 });
 
-test('EditNoteScreen lays out note metadata as compact wrapping rows', () => {
+test('EditNoteScreen moves group choices into a bottom sheet', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(src, /groupLabelRow/);
   assert.match(src, /folder-open-outline/);
-  assert.match(src, /groupChipsWrap/);
-  assert.match(src, /flexWrap:\s*'wrap'/);
-  assert.match(src, /paddingVertical:\s*5/);
+  assert.match(src, /groupButton/);
+  assert.match(src, /groupSheet/);
+  assert.match(src, /groupSheetRow/);
+  assert.match(src, /accessibilityRole="checkbox"/);
+  assert.doesNotMatch(src, /groupChipsWrap/);
 });
 
 test('EditNoteScreen leaves breathing room around title date and groups', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(src, /titleInput:\s*\{[\s\S]*paddingBottom:\s*Spacing\.sm/);
-  assert.match(src, /metaRow:\s*\{[\s\S]*paddingBottom:\s*Spacing\.sm/);
-  assert.match(src, /groupSection:\s*\{[\s\S]*paddingTop:\s*Spacing\.sm/);
-  assert.match(src, /groupSection:\s*\{[\s\S]*gap:\s*Spacing\.sm/);
+  assert.match(src, /titleInput:\s*\{[\s\S]*paddingBottom:\s*Spacing\.xs/);
+  assert.match(src, /titleInput:\s*\{\s*color:\s*colors\.textSecondary\s*\}/);
+  assert.match(src, /metaRow:\s*\{[\s\S]*paddingBottom:\s*Spacing\.md/);
+  assert.match(src, /groupSection:\s*\{[\s\S]*paddingBottom:\s*Spacing\.sm/);
 });
 
-test('EditNoteScreen group chips are square (matching the detail tags)', () => {
+test('EditNoteScreen group selector button has a compact bordered shape', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  // 锁定 StyleSheet 里的 groupChip 块（以 borderWidth:1 起头，区别于 d memo 里只有
-  // 颜色的同名键）；[^}] 截到第一个右括号，别串到后面别的样式。
-  const block = src.match(/groupChip:\s*\{\s*borderWidth:\s*1,[^}]*\}/);
-  assert.ok(block, 'groupChip style block not found');
-  // 方形：圆角来自 Radius token（Radius.xs），不用胶囊也不用魔法数。
-  assert.match(block[0], /borderRadius:\s*Radius\.xs/);
+  const block = src.match(/groupButton:\s*\{\s*minHeight:\s*56,[^}]*\}/);
+  assert.ok(block, 'groupButton style block not found');
+  assert.match(block[0], /borderRadius:\s*Radius\.md/);
   assert.doesNotMatch(block[0], /Radius\.full/);
-  assert.doesNotMatch(block[0], /borderRadius:\s*\d/);
 });
 
-test('EditNoteScreen selected group chips use the note brand purple', () => {
+test('EditNoteScreen group rows expose selected state accessibly', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  // 选中态用笔记品牌紫 brandPurple（与详情页分组标签同一支），不再是靛蓝 primary。
-  assert.match(
-    src,
-    /groupChipActive:\s*\{\s*backgroundColor:\s*colors\.brandPurple,\s*borderColor:\s*colors\.brandPurple/,
-  );
-  assert.match(src, /groupChipTextActive:\s*\{\s*color:\s*colors\.white\s*\}/);
+  assert.match(src, /accessibilityState=\{\{ checked: selected \}\}/);
+  assert.match(src, /name=\{selected \? 'checkmark-circle' : 'ellipse-outline'\}/);
 });
 
 test('EditNoteScreen renders four large structured note edit regions', () => {
@@ -436,7 +429,7 @@ test('EditNoteScreen presents structured regions with quieter section chrome', (
   assert.match(src, /sectionHeaderMeta/);
   assert.match(
     src,
-    /sectionBlock:\s*\{[\s\S]*?borderRadius:\s*Radius\.lg/,
+    /sectionBlock:\s*\{[\s\S]*?borderRadius:\s*Radius\.xl/,
   );
   assert.doesNotMatch(src, /sectionCountPill/);
   // 正文那一格的 meta 是实时字数，必须是能自己订阅重渲染的节点而不是 string。

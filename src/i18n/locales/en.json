@@ -915,8 +915,6 @@
       "loadFailed": "Failed to load tags",
       "loading": "Loading tags...",
       "empty": "No tags set",
-      "categoryTitle": "Friend Categories",
-      "categoryDesc": "View friends by tags for quick access to specific groups.",
       "friendCount": "{{count}} friends",
       "viewByTag": "View friends by tag",
       "addTag": "Create tag",
@@ -929,7 +927,14 @@
       "loadFailed": "Failed to load tag friends",
       "loading": "Loading tag friends...",
       "empty": "No friends in this tag",
-      "summary": "Friends in this tag grouped alphabetically."
+      "addFriends": "Add friends",
+      "searchPlaceholder": "Search friends by name or account",
+      "noCandidates": "No friends available to add",
+      "noMatch": "No matching friends",
+      "candidatesLoadFailed": "Failed to load friends",
+      "addFailedTitle": "Could not add friend",
+      "addFailed": "Could not add this friend to the tag. Please try again.",
+      "addFriendAction": "Add {{name}} to this tag"
     },
     "groupsScreen": {
       "title": "My Groups",

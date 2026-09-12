@@ -1130,7 +1130,7 @@ test('transitively aliased legacy media saves as one recovered ordinary item', a
   });
 });
 
-test('empty and whitespace titles explain the missing field and allow correction', async () => {
+test('empty and whitespace titles are rejected without an inline required hint', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   (createNote as jest.Mock).mockResolvedValue({});
   render(<EditNoteScreen />);
@@ -1140,7 +1140,7 @@ test('empty and whitespace titles explain the missing field and allow correction
   expect(alert).toHaveBeenCalledWith(
     'notes.edit.validationTitle', 'notes.edit.titleRequired', expect.any(Array),
   );
-  expect(screen.getByText('notes.edit.titleRequired')).toBeTruthy();
+  expect(screen.queryByText('notes.edit.titleRequired')).toBeNull();
   expect(createNote).not.toHaveBeenCalled();
 
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '   ');
@@ -1152,6 +1152,27 @@ test('empty and whitespace titles explain the missing field and allow correction
   await waitFor(() => expect(createNote).toHaveBeenCalledWith(
     expect.objectContaining({ title: '标题已补全' }),
   ));
+});
+
+test('groups are selected from a bottom sheet instead of rendering every group inline', async () => {
+  mockFetchNoteGroups.mockResolvedValue([
+    { id: 'work', name: '工作', sortOrder: 0, noteCount: 2 },
+    { id: 'travel', name: '旅行', sortOrder: 1, noteCount: 1 },
+  ]);
+  render(<EditNoteScreen />);
+
+  await waitFor(() => expect(mockFetchNoteGroups).toHaveBeenCalled());
+  expect(screen.queryByText('工作')).toBeNull();
+
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.groupsLabel' }));
+  expect(screen.getByText('notes.groupPicker.title')).toBeTruthy();
+  expect(screen.getByRole('checkbox', { name: '工作' })).toBeTruthy();
+
+  fireEvent.press(screen.getByRole('checkbox', { name: '工作' }));
+  expect(screen.getAllByText('工作')).toHaveLength(2);
+
+  fireEvent.press(screen.getByRole('button', { name: 'common.done' }));
+  expect(screen.getAllByText('工作')).toHaveLength(1);
 });
 
 test('oversized pasted text stays editable, explains the limit, and saves in full after correction', async () => {

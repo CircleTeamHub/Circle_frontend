@@ -1,11 +1,21 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import FriendTagsScreen from './FriendTagsScreen';
-import { createFriendTag, fetchFriendTags } from '@/services/api/friends';
+import { createFriendTag, fetchFriendTags, fetchFriendsByTag } from '@/services/api/friends';
 
 const mockTranslate = (key: string) => key;
+let mockFocusCallback: (() => void | (() => void)) | null = null;
 
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('expo-router', () => {
+  const ReactModule = jest.requireActual<typeof import('react')>('react');
+  return {
+    useRouter: () => ({ push: jest.fn() }),
+    useFocusEffect: (callback: () => void | (() => void)) => {
+      mockFocusCallback = callback;
+      ReactModule.useEffect(() => callback(), [callback]);
+    },
+  };
+});
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -52,4 +62,23 @@ test('two immediate create presses send only one non-idempotent request', async 
 
   expect(createFriendTag).toHaveBeenCalledTimes(1);
   expect(createFriendTag).toHaveBeenCalledWith('同事');
+});
+
+test('refreshes tag counts when returning from a tag detail screen', async () => {
+  jest.mocked(fetchFriendTags).mockResolvedValue([
+    { id: 'tag-1', ownerID: 'owner-1', name: '同事', color: null },
+  ]);
+  jest.mocked(fetchFriendsByTag)
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([]);
+
+  render(<FriendTagsScreen />);
+  await waitFor(() => expect(fetchFriendsByTag).toHaveBeenCalledTimes(1));
+
+  await act(async () => {
+    mockFocusCallback?.();
+    await Promise.resolve();
+  });
+
+  await waitFor(() => expect(fetchFriendsByTag).toHaveBeenCalledTimes(2));
 });

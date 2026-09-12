@@ -19,7 +19,7 @@ test('registration enters the app without requiring the optional profile step', 
   );
 });
 
-test('contacts owns moments and circle management while discover only owns plaza', () => {
+test('contacts owns moments while discover owns the plaza and circle management', () => {
   const contacts = read('src/features/contacts/screens/ContactsScreen.tsx');
   // 动态 tab 的根屏就是圈子广场本身（不再有中转的入口列表）。
   const discover = read('src/features/discover/screens/CirclePlazaScreen.tsx');
@@ -27,12 +27,13 @@ test('contacts owns moments and circle management while discover only owns plaza
 
   assert.match(contacts, /id: 'moments'/);
   assert.match(contacts, /key: 'discover\.moments'/);
-  assert.match(contacts, /id: 'circles'[\s\S]*key: 'discover\.management'/);
+  assert.doesNotMatch(contacts, /id: 'circles'/);
   assert.match(contacts, /\/(?:\(tabs\)\/)?contacts\/moments/);
   assert.match(momentsRoute, /MomentsScreen/);
   assert.match(read('app/(tabs)/discover/index.tsx'), /CirclePlazaScreen/);
   assert.doesNotMatch(discover, /\/\(tabs\)\/discover\/moments/);
-  assert.doesNotMatch(discover, /\/\(tabs\)\/discover\/management/);
+  assert.match(discover, /handleOpenCircleManagement/);
+  assert.match(discover, /\/\(tabs\)\/discover\/management/);
 });
 
 // 「我的群聊」列的是群聊会话，不是圈子。分类按本人在群里的角色分，角色来自
