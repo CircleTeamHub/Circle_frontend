@@ -108,6 +108,10 @@ export default function CirclePlazaScreen() {
     });
   }, [router]);
 
+  const handleOpenCircleManagement = useCallback(() => {
+    router.push('/(tabs)/discover/management');
+  }, [router]);
+
   return (
     <View testID={E2E_TEST_IDS.circlePlazaScreen} style={d.container}>
       <View style={[s.header, { paddingTop: Spacing.md }]}>
@@ -115,6 +119,18 @@ export default function CirclePlazaScreen() {
           {t('discover.circleTitle')}
         </Text>
         <View style={s.headerActions}>
+          <Pressable
+            onPress={handleOpenCircleManagement}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('discover.management')}
+          >
+            <Ionicons
+              name="planet-outline"
+              size={22}
+              color={colors.textSecondary}
+            />
+          </Pressable>
           <Pressable
             onPress={handleFilter}
             hitSlop={8}
