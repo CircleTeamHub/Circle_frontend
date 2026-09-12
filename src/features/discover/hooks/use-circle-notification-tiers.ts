@@ -71,6 +71,9 @@ export function useCircleNotificationTiers(): CircleNotificationTiers {
   // 请求序号：只有最新那一发的结果算数，迟到的响应一律丢弃，否则两次快速点击
   // 谁后回来谁说了算，本地会停在与服务端相反的那一格。
   const latestRequestRef = useRef(0);
+  // PATCH 不能并发：忽略旧响应只保护本地 UI，旧请求若最后才在服务端落库，仍会
+  // 覆盖用户的新选择。用一条写队列保证服务端也按点击顺序看到每个状态。
+  const writeTailRef = useRef<Promise<void> | null>(null);
 
   // 打开设置时以服务端为准校一次：离线推送的真值在后端，本地只是镜像，换设备
   // 或异地改过之后本地可能已经不对。失败沿用本地值，不打断用户，但要留痕 ——
@@ -108,8 +111,8 @@ export function useCircleNotificationTiers(): CircleNotificationTiers {
         useCircleNotificationStore.getState(),
       );
 
-      void updateCircleOfflinePushEnabled(next)
-        .then(() => {
+      const write = () =>
+        updateCircleOfflinePushEnabled(next).then(() => {
           if (requestId !== latestRequestRef.current) return;
           // 这一发是最新的且写成了：当前本地取值就是服务端的取值。
           confirmedRef.current = null;
@@ -126,6 +129,14 @@ export function useCircleNotificationTiers(): CircleNotificationTiers {
           store.setOfflineEnabled(confirmed.offlineEnabled);
           topNotice.error(t('discover.notifications.syncFailed'));
         });
+
+      const previous = writeTailRef.current;
+      let tail: Promise<void>;
+      tail = (previous ? previous.then(write, write) : write()).finally(() => {
+        if (writeTailRef.current === tail) writeTailRef.current = null;
+      });
+      writeTailRef.current = tail;
+      void tail;
     },
     [t],
   );

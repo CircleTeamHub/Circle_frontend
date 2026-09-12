@@ -44,3 +44,44 @@ test('malformed pasted blocks keep the rest of the note readable', () => {
   expect(screen.getByText('粘贴来的纯字符串')).toBeTruthy();
   expect(screen.getByText('正文结束')).toBeTruthy();
 });
+
+test('server-provided child blocks stop at the supported nesting depth', () => {
+  const root: Record<string, unknown> = {
+    type: 'paragraph',
+    content: [{ text: '第0层' }],
+  };
+  let parent = root;
+  for (let depth = 1; depth <= 11; depth += 1) {
+    const child = {
+      type: 'paragraph',
+      content: [{ text: `第${depth}层` }],
+    };
+    parent.children = [child];
+    parent = child;
+  }
+
+  render(<NoteBlockRenderer blocks={[root]} />);
+
+  expect(screen.getByText('第10层')).toBeTruthy();
+  expect(screen.queryByText('第11层')).toBeNull();
+});
+
+test('server-provided inline content stops at the supported nesting depth', () => {
+  const root: Record<string, unknown> = { type: 'link', text: '行内第0层' };
+  let parent = root;
+  for (let depth = 1; depth <= 11; depth += 1) {
+    const child = { type: 'link', text: `行内第${depth}层` };
+    parent.content = [child];
+    parent = child;
+  }
+
+  const view = render(
+    <NoteBlockRenderer
+      blocks={[{ type: 'paragraph', content: [root] }]}
+    />,
+  );
+
+  const tree = JSON.stringify(view.toJSON());
+  expect(tree).toContain('行内第10层');
+  expect(tree).not.toContain('行内第11层');
+});
