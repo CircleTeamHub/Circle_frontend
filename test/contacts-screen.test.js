@@ -284,3 +284,22 @@ test('EditFriendTagsScreen guards async create and save state after unmount', ()
   assert.match(source, /await Promise\.all\(\[[\s\S]*removeFriendTag\(profileId, tagId\)[\s\S]*\]\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.back\(\);/);
   assert.match(source, /if \(mountedRef\.current\) setIsSaving\(false\)/);
 });
+
+test('the joined groups tab keeps admins, not just plain members', () => {
+  const source = read('src/features/contacts/screens/GroupsScreen.tsx');
+  const filter = source.slice(
+    source.indexOf('function matchesCategory'),
+    source.indexOf('export default function GroupsScreen'),
+  );
+
+  // 「我加入的」= 我在里面但不是我建的。只认 MEMBER 的话管理员会从这一页整个
+  // 消失 —— 他仍然是成员,而「我管理的」是另一页,不是它的替代。
+  assert.match(filter, /case 'joined':[\s\S]*?return role !== 'OWNER';/);
+  assert.doesNotMatch(filter, /case 'joined':[\s\S]*?return role === 'MEMBER';/);
+  // 另外两页的判据不变。
+  assert.match(filter, /case 'created':[\s\S]*?return role === 'OWNER';/);
+  assert.match(
+    filter,
+    /case 'managed':[\s\S]*?return role === 'OWNER' \|\| role === 'ADMIN';/,
+  );
+});

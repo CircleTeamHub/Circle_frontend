@@ -842,10 +842,12 @@ export function queryChatPresence(userIds: string[]): void {
       { userIds, detail: true },
       (
         err: Error | null,
-        result: Record<string, boolean | ChatPresenceDetail>,
+        result: Record<string, boolean | ChatPresenceDetail | null>,
       ) => {
         if (err || !result) return;
         const store = useChatStore.getState();
+        // 空 ack = 这次没答上来(限流/出错),不是「都不可见」—— 什么都不动。
+        const answered = Object.keys(result).length > 0;
         for (const [userId, value] of Object.entries(result)) {
           if (typeof value === 'boolean') {
             store.applyPresence(userId, value);
@@ -855,7 +857,16 @@ export function queryChatPresence(userIds: string[]): void {
               value.online,
               typeof value.lastSeenAt === 'string' ? value.lastSeenAt : null,
             );
+          } else {
+            // 服务端明确说「这个人不可见」(对方刚关掉显示在线时间等)。不清掉的话
+            // 之前拿到的在线状态会一直挂在聊天头部与资料页上。
+            store.clearPresence(userId);
           }
+        }
+        if (!answered) return;
+        // 旧服务端不认 detail,会把不可见的人直接省略;给它们补上同样的语义。
+        for (const userId of userIds) {
+          if (!(userId in result)) store.clearPresence(userId);
         }
       },
     );

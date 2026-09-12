@@ -140,6 +140,20 @@ function loadManager(localDbOverrides = {}, options = {}) {
           );
         }
       },
+      onlineByUser: {},
+      lastSeenByUser: {},
+      applyPresence(userId, online, lastSeenAt) {
+        state.onlineByUser[userId] = online;
+        state.lastSeenByUser[userId] = online
+          ? null
+          : lastSeenAt === undefined
+            ? (state.lastSeenByUser[userId] ?? null)
+            : lastSeenAt;
+      },
+      clearPresence(userId) {
+        delete state.onlineByUser[userId];
+        delete state.lastSeenByUser[userId];
+      },
       viewerTypingPolicy: { direct: true, group: true },
       setViewerTypingPolicy(policy) {
         state.viewerTypingPolicy = policy;
@@ -1133,6 +1147,47 @@ test('logging out and back in starts a fresh outage window', () => {
   socket.fire('connect_error', new Error('network still down'));
   assert.equal(reports.length, 2, '登出再登录是新的会话,首个失败要重新上报');
   assert.equal(reports[1].context.attempts, 1, '失败计数也要从头数');
+});
+
+// detail 查询里被请求却拿到 null 的人要清掉本地状态 —— 对方刚关掉「显示在线
+// 时间」时服务端就是这么回的。不清就会把旧的在线状态一直挂在界面上。
+// 空 ack 是另一回事(限流/出错),那时什么都不能动。
+test('presence query clears users the server marks invisible', () => {
+  const { manager, socket, store } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  store.applyPresence('peer', true, null);
+  store.applyPresence('gone', true, null);
+
+  socket.ackResponder = (event, _payload, cb) => {
+    if (event === 'chat:presence') {
+      cb(null, {
+        peer: { online: false, lastSeenAt: '2026-09-11T08:00:00.000Z' },
+        gone: null,
+      });
+    }
+  };
+  manager.queryChatPresence(['peer', 'gone', 'omitted']);
+
+  assert.equal(store.onlineByUser.peer, false);
+  assert.equal(store.lastSeenByUser.peer, '2026-09-11T08:00:00.000Z');
+  assert.ok(!('gone' in store.onlineByUser), '服务端说不可见的人要被清掉');
+  assert.ok(!('omitted' in store.onlineByUser), '旧服务端省略的人同样清掉');
+});
+
+test('an empty presence ack leaves known state alone', () => {
+  const { manager, socket, store } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  store.applyPresence('peer', true, null);
+
+  socket.ackResponder = (event, _payload, cb) => {
+    if (event === 'chat:presence') cb(null, {});
+  };
+  manager.queryChatPresence(['peer']);
+
+  // 限流/出错也是空 ack —— 不能把它当成「这个人不可见」。
+  assert.equal(store.onlineByUser.peer, true);
 });
 
 test('typing is throttled locally per conversation', () => {

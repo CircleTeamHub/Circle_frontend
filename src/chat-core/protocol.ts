@@ -405,6 +405,13 @@ export interface ChatPresenceDetail {
   lastSeenAt: string | null;
 }
 
+/**
+ * detail 查询的 ack:被请求的每个 userId 都有条目,值为 null = 不可见
+ * (对方关了「显示在线时间」、互相拉黑、或与本人不同处任何会话)。
+ * 整个 ack 是空对象 = 服务端这次没答上来(限流/出错),不是「都不可见」。
+ */
+export type ChatPresenceDetailAck = Record<string, ChatPresenceDetail | null>;
+
 /** chat:presence 服务端广播。镜像 circle_be chat.types.ts 的 ChatPresenceBroadcast。 */
 export interface ChatPresenceBroadcast {
   userId: string;

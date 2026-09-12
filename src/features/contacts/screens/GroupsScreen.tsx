@@ -119,7 +119,9 @@ function matchesCategory(
     case 'managed':
       return role === 'OWNER' || role === 'ADMIN';
     case 'joined':
-      return role === 'MEMBER';
+      // 「我加入的」= 我在里面但不是我建的。只认 MEMBER 的话管理员会从这一页
+      // 整个消失 —— 他仍然是成员,而「我管理的」是另一页,不是它的替代。
+      return role !== 'OWNER';
     case 'all':
     default:
       return true;
