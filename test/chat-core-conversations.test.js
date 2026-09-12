@@ -397,3 +397,31 @@ test('a disable response clears the start boundary instead of inventing one', ()
   const [updated] = useChatStore.getState().conversations;
   assert.equal(updated.burnStartedAt, null);
 });
+
+test('a legacy privacy GET without a start time still gets a start boundary', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('u1');
+
+  // 旧服务端只回 messageSelfDestructSec。socket-manager 会把缺失的开启时间
+  // 原样传成 undefined;不兜底就是「设置页显示已开启、消息永不焚毁」。
+  store.setViewerSelfDestructSec(300, { remoteRefresh: true }, undefined);
+
+  const next = useChatStore.getState();
+  assert.equal(next.viewerSelfDestructSec, 300);
+  assert.ok(
+    Number.isFinite(Date.parse(next.viewerSelfDestructStartedAt)),
+    '缺失的全局开启时间要兜底成一个可解析的时刻',
+  );
+});
+
+test('turning the global policy off clears the start boundary', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('u1');
+  store.setViewerSelfDestructSec(300, undefined, '2026-08-01T00:00:00.000Z');
+
+  store.setViewerSelfDestructSec(0, { remoteRefresh: true }, undefined);
+
+  assert.equal(useChatStore.getState().viewerSelfDestructStartedAt, null);
+});

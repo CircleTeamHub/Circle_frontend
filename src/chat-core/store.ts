@@ -759,9 +759,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const nextStartedAt =
       startedAt !== undefined
         ? startedAt
-        : viewerSelfDestructSec === normalized
-          ? viewerSelfDestructStartedAt
-          : null;
+        : normalized <= 0
+          ? null
+          : // 旧服务端的 GET 不带 messageSelfDestructStartedAt。开着却没有开启
+            // 时间时过期判定一条都不命中 —— 设置页显示已开启,消息永不焚毁,
+            // 而且不报错。与会话级 applyBurnDuration 同一条兜底:退到此刻。
+            ((viewerSelfDestructSec === normalized
+              ? viewerSelfDestructStartedAt
+              : null) ?? new Date().toISOString());
     // 开启时间也是策略的一部分:它决定哪些缓存消息已到期、下一次清理几点跑。
     // 只比 duration 的话,同档位换开启时间(冷启动只有缓存档位没有缓存开启时间、
     // 或者另一台设备按同档位重置)会保住 epoch 又跳过清理 —— 已过期的消息就
