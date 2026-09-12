@@ -5,12 +5,14 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-test('Contacts adds a circles entry below groups, routing to circle management', () => {
+test('circle management is no longer duplicated in Contacts', () => {
   const src = read('src/features/contacts/screens/ContactsScreen.tsx');
-  // circles entry sits between groups and tags in the quick-action list
-  assert.match(src, /id: 'groups'[\s\S]*id: 'circles'[\s\S]*id: 'tags'/);
-  // and routes to the contacts circles page
-  assert.match(src, /id === 'circles'[\s\S]*\/\(tabs\)\/contacts\/circles/);
+  assert.doesNotMatch(src, /id: 'circles'/);
+  assert.doesNotMatch(src, /contacts\/circles/);
+
+  const plaza = read('src/features/discover/screens/CirclePlazaScreen.tsx');
+  assert.match(plaza, /handleOpenCircleManagement/);
+  assert.match(plaza, /\/\(tabs\)\/discover\/management/);
 });
 
 test('circles route renders MyCirclesScreen wrapping MyCirclesPanel', () => {

@@ -27,18 +27,16 @@ test('contacts quick actions keep the agreed order and entries', () => {
   );
   const ids = [...block.matchAll(/id: '([\w-]+)'/g)].map((match) => match[1]);
 
-  // 顺序是产品定的；朋友圈入口是 #195 从发现页搬过来的，圈子行也在那时改用
-  // discover.management 文案。这里钉住整张列表，避免哪次重排又把它们挤掉。
+  // 顺序是产品定的；朋友圈入口归联系人，圈子管理归动态广场，避免入口重复。
   assert.deepEqual(ids, [
     'new-friends',
     'groups',
     'seats',
     'moments',
-    'circles',
     'tags',
   ]);
   assert.match(block, /id: 'moments'[^}]*key: 'discover\.moments'/);
-  assert.match(block, /id: 'circles'[^}]*key: 'discover\.management'/);
+  assert.doesNotMatch(block, /id: 'circles'/);
 });
 
 test('new friends screen exists as a friend-activity inbox with per-item read flow', () => {
@@ -187,7 +185,7 @@ test('contacts list screens support pull-to-refresh', () => {
     );
     assert.match(
       screen.source,
-      /if \(mountedRef\.current\) setLoading\(false\)|if \(!isCancelled\(\)\) \{\s*setLoading\(false\);?\s*\}/,
+      /if \(mountedRef\.current(?:\s*&&[^)]*)?\) setLoading\(false\)|if \(!isCancelled\(\)\) \{\s*setLoading\(false\);?\s*\}/,
       `${screen.name} should guard load cleanup by mount state`,
     );
     assert.match(

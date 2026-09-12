@@ -9,7 +9,7 @@ import {
   type FriendTag,
 } from '@/services/api/friends';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -140,13 +140,15 @@ export default function FriendTagsScreen() {
     }
   }, [t]);
 
-  useEffect(() => {
-    const signal = { cancelled: false };
-    loadTags(signal);
-    return () => {
-      signal.cancelled = true;
-    };
-  }, [loadTags]);
+  useFocusEffect(
+    useCallback(() => {
+      const signal = { cancelled: false };
+      void loadTags(signal);
+      return () => {
+        signal.cancelled = true;
+      };
+    }, [loadTags]),
+  );
 
   useEffect(
     () => () => {

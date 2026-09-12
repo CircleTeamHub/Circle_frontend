@@ -17,11 +17,12 @@ test('动态 tab 的根屏直接就是圈子广场，中间那层入口列表已
   assert.equal(exists('app/(tabs)/discover/plaza.tsx'), false);
 });
 
-test('动态根屏不夹带朋友圈 / 圈子管理（原 discover home 的约束跟着搬到广场上）', () => {
+test('动态根屏不夹带朋友圈，并提供圈子管理入口', () => {
   const source = read(PLAZA);
 
   assert.doesNotMatch(source, /\/\(tabs\)\/discover\/moments/);
-  assert.doesNotMatch(source, /\/\(tabs\)\/discover\/management/);
+  assert.match(source, /handleOpenCircleManagement/);
+  assert.match(source, /\/\(tabs\)\/discover\/management/);
   assert.doesNotMatch(source, /<FilterTabs/);
   assert.doesNotMatch(source, /<MomentsFeed/);
   assert.doesNotMatch(source, /<MyCirclesPanel/);

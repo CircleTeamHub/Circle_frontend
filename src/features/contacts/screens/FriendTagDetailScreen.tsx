@@ -149,6 +149,8 @@ export default function FriendTagDetailScreen() {
   const [assigningFriendId, setAssigningFriendId] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  const friendsRequestRef = useRef(0);
+  const optimisticFriendsRef = useRef(new Map<string, FriendProfile>());
   const candidateRequestRef = useRef(0);
   const assigningFriendRef = useRef<string | null>(null);
 
@@ -163,18 +165,25 @@ export default function FriendTagDetailScreen() {
       return;
     }
 
+    const request = ++friendsRequestRef.current;
     setLoading(true);
 
     try {
       const nextFriends = await fetchFriendsByTag(tagId);
-      if (!mountedRef.current) return;
-      setFriends(nextFriends);
+      if (!mountedRef.current || request !== friendsRequestRef.current) return;
+      const nextFriendIds = new Set(nextFriends.map((friend) => friend.id));
+      const optimisticFriends = [...optimisticFriendsRef.current.values()]
+        .filter((friend) => !nextFriendIds.has(friend.id));
+      for (const friend of nextFriends) {
+        optimisticFriendsRef.current.delete(friend.id);
+      }
+      setFriends([...nextFriends, ...optimisticFriends]);
       setError(null);
     } catch {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || request !== friendsRequestRef.current) return;
       setError(t('contacts.tagDetail.loadFailed'));
     } finally {
-      if (mountedRef.current) setLoading(false);
+      if (mountedRef.current && request === friendsRequestRef.current) setLoading(false);
     }
   }, [t, tagId]);
 
@@ -233,14 +242,19 @@ export default function FriendTagDetailScreen() {
   const handleAssignFriend = useCallback(
     async (friend: FriendProfile) => {
       if (!tagId || assigningFriendRef.current) return;
+      // Any in-flight list request predates this assignment and must not be able
+      // to replace the optimistic row when it resolves after the POST.
+      friendsRequestRef.current += 1;
       assigningFriendRef.current = friend.id;
       setAssigningFriendId(friend.id);
       try {
         await assignFriendTag(friend.id, tagId);
         if (!mountedRef.current) return;
+        optimisticFriendsRef.current.set(friend.id, friend);
         setFriends((current) =>
           current.some((item) => item.id === friend.id) ? current : [...current, friend],
         );
+        void loadFriends();
       } catch (caughtError) {
         if (!mountedRef.current) return;
         Alert.alert(
@@ -252,7 +266,7 @@ export default function FriendTagDetailScreen() {
         if (mountedRef.current) setAssigningFriendId(null);
       }
     },
-    [t, tagId],
+    [loadFriends, t, tagId],
   );
 
   const sections = useMemo(() => buildContactSections(friends), [friends]);
