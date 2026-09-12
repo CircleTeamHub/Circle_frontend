@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
 import { NoteTextStatsConsumer } from '@/features/notes/components/NoteTextStatsConsumer';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
+import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import {
   BASEMAP_ATTRIBUTION,
   getOpenStreetMapPreviewTiles,
@@ -183,13 +184,13 @@ export default function EditNoteScreen() {
   const [title, setTitle] = useState('');
   const titleInputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const [titleValidationVisible, setTitleValidationVisible] = useState(false);
   // 正文统计走独立的小 store，不进本组件的 state —— 见 note-text-stats.ts 的注释。
   const [textStatsStore] = useState(createNoteTextStatsStore);
   const blocksRef = useRef<Record<string, unknown>[]>([]);
   const [initialBlocks, setInitialBlocks] = useState<Record<string, unknown>[] | null>(null);
   const [availableGroups, setAvailableGroups] = useState<NoteGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [groupSheetVisible, setGroupSheetVisible] = useState(false);
   // 编辑时必须原样回传：后端 PATCH 对缺省 pinned 按 false 处理，
   // 不带的话「编辑一篇置顶笔记」会静默取消置顶。
   const pinnedRef = useRef(false);
@@ -301,7 +302,7 @@ export default function EditNoteScreen() {
       existingSectionsRef.current = null;
       blocksRef.current = [];
       textStatsStore.reset();
-      setTitleValidationVisible(false);
+      setGroupSheetVisible(false);
       setInitialBlocks(null);
       setLoadedNoteId(null);
       pickerPreviewDisposerRef.current.disposeAll();
@@ -321,7 +322,7 @@ export default function EditNoteScreen() {
     setLoadedNoteId(null);
     blocksRef.current = [];
     textStatsStore.reset();
-    setTitleValidationVisible(false);
+    setGroupSheetVisible(false);
     setInitialBlocks(null);
     setTitle('');
     pickerPreviewDisposerRef.current.disposeAll();
@@ -704,8 +705,6 @@ export default function EditNoteScreen() {
         return null;
     }
   }, [t]);
-  const titleError = titleValidationVisible && !title.trim();
-
   const handleSubmit = useCallback(async () => {
     if (
       loading ||
@@ -728,7 +727,6 @@ export default function EditNoteScreen() {
     }
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      setTitleValidationVisible(true);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       Alert.alert(
         t('notes.edit.validationTitle', { defaultValue: '请检查笔记内容' }),
@@ -834,23 +832,36 @@ export default function EditNoteScreen() {
       doneBtn: { backgroundColor: colors.primary },
       doneBtnText: { color: colors.white },
       doneBtnDisabled: { backgroundColor: colors.primary, opacity: 0.5 },
-      titleInput: { color: colors.text },
-      titleHint: { color: colors.textSecondary },
-      // 校验没过的提示行共用这一支红色，别在渲染里现拼 inline {color}。
+      titleInput: { color: colors.textSecondary },
+      // 内容校验提示共用这一支红色，别在渲染里现拼 inline {color}。
       hintError: { color: colors.danger },
       dateText: { color: colors.textSecondary },
-      groupChip: {
+      groupButton: {
+        backgroundColor: colors.surfaceMuted,
+        borderColor: 'transparent',
+      },
+      groupButtonText: { color: colors.text },
+      groupButtonSummary: { color: colors.textSecondary },
+      groupSheetBackdrop: { backgroundColor: colors.overlay },
+      groupSheet: { backgroundColor: colors.surface },
+      groupSheetHandle: { backgroundColor: colors.surfaceBorder },
+      groupSheetTitle: { color: colors.text },
+      groupSheetRow: { backgroundColor: colors.background },
+      groupSheetRowText: { color: colors.text },
+      groupSheetRowMeta: { color: colors.textSecondary },
+      groupSheetDone: { backgroundColor: colors.primary },
+      groupSheetDoneText: { color: colors.white },
+      sectionIcon: { backgroundColor: colors.primaryLight },
+      secondarySection: {
+        backgroundColor: 'transparent',
+        borderColor: colors.divider,
+      },
+      heroCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      // 选中态用笔记品牌紫（与详情页分组标签同一支），不用靛蓝 primary
-      groupChipActive: {
-        backgroundColor: colors.brandPurple,
-        borderColor: colors.brandPurple,
-      },
-      groupChipText: { color: colors.textSecondary },
-      groupChipTextActive: { color: colors.white },
-      sectionTitle: { color: colors.textSecondary },
+      metaIcon: { backgroundColor: colors.primaryLight },
+      heroAccent: { backgroundColor: colors.iconAccent },
       // 分区做成安静的卡片：surface 底 + 细边，取代原来贯穿全宽的分隔线
       sectionShell: {
         backgroundColor: colors.surface,
@@ -872,8 +883,11 @@ export default function EditNoteScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      sectionAction: { borderColor: colors.surfaceBorder },
-      sectionActionText: { color: colors.text },
+      sectionAction: {
+        backgroundColor: colors.primaryLight,
+        borderColor: 'transparent',
+      },
+      sectionActionText: { color: colors.iconAccent },
       legacyMediaWarning: { borderColor: colors.warning },
       legacyMediaWarningText: { color: colors.text },
       locationPreviewCard: {
@@ -905,6 +919,15 @@ export default function EditNoteScreen() {
     uploadingSection !== null ||
     !canSubmitNoteMedia(mediaItems) ||
     !canSubmitNoteMedia(showcaseItems);
+  const selectedGroupNames = useMemo(
+    () => availableGroups
+      .filter((group) => selectedGroupIds.includes(group.id))
+      .map((group) => group.name),
+    [availableGroups, selectedGroupIds],
+  );
+  const groupSummary = selectedGroupNames.length > 0
+    ? selectedGroupNames.join('、')
+    : t('notes.edit.noGroups', { defaultValue: '未加入任何分组' });
   const hasLocationCoordinates = hasValidLocationCoordinates(
     locationDraft.latitude,
     locationDraft.longitude,
@@ -939,10 +962,14 @@ export default function EditNoteScreen() {
     meta?: ReactNode,
   ) => (
     <View style={s.sectionHeader}>
-      <Ionicons name={icon} size={18} color={colors.iconAccent} />
+      <View style={[s.sectionIcon, d.sectionIcon]}>
+        <Ionicons name={icon} size={16} color={colors.iconAccent} />
+      </View>
       <Text style={[s.sectionHeading, d.sectionHeading]}>{sectionTitle}</Text>
       {meta ? (
-        <Text style={[s.sectionHeaderMeta, d.sectionHeaderMeta]}>{meta}</Text>
+        <View style={s.sectionHeaderMeta}>
+          <Text style={[s.sectionHeaderMetaText, d.sectionHeaderMeta]}>{meta}</Text>
+        </View>
       ) : null}
     </View>
   );
@@ -1092,70 +1119,46 @@ export default function EditNoteScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <TextInput
-          ref={titleInputRef}
-          style={[s.titleInput, d.titleInput]}
-          placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
-          placeholderTextColor={colors.textSecondary}
-          value={title}
-          onChangeText={setTitle}
-          maxLength={MAX_NOTE_TITLE_LENGTH}
-          returnKeyType="next"
-        />
-        <Text
-          accessibilityRole={titleError ? 'alert' : undefined}
-          accessibilityLiveRegion="polite"
-          style={[s.titleHint, titleError ? d.hintError : d.titleHint]}
-        >
-          {titleError
-            ? t('notes.edit.titleRequired', { defaultValue: '请填写标题' })
-            : t('notes.edit.titleHint', {
-                defaultValue: '标题必填，最多 {{max}} 字符',
-                max: MAX_NOTE_TITLE_LENGTH,
-              })}
-        </Text>
+        <View style={[s.heroCard, d.heroCard]}>
+          <View style={[s.heroAccent, d.heroAccent]} />
+          <TextInput
+            ref={titleInputRef}
+            style={[s.titleInput, d.titleInput, s.titleInputMuted]}
+            placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
+            placeholderTextColor={colors.textSecondary}
+            value={title}
+            onChangeText={setTitle}
+            maxLength={MAX_NOTE_TITLE_LENGTH}
+            returnKeyType="next"
+          />
 
-        <View style={s.metaRow}>
-          <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-          <Text style={[s.dateText, d.dateText]}>{dateStr}</Text>
-        </View>
-
-        <View style={s.groupSection}>
-          <View style={s.groupLabelRow}>
-            <Ionicons
-              name="folder-open-outline"
-              size={14}
-              color={colors.textSecondary}
-            />
-            <Text style={[s.sectionTitle, d.sectionTitle]}>
-              {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-            </Text>
+          <View style={s.metaRow}>
+            <View style={[s.metaIcon, d.metaIcon]}>
+              <Ionicons name="calendar-outline" size={13} color={colors.iconAccent} />
+            </View>
+            <Text style={[s.dateText, d.dateText]}>{dateStr}</Text>
           </View>
-          <View style={s.groupChipsWrap}>
-            {availableGroups.map((group) => {
-              const selected = selectedGroupIds.includes(group.id);
-              return (
-                <Pressable
-                  key={group.id}
-                  style={[
-                    s.groupChip,
-                    d.groupChip,
-                    selected ? [s.groupChipActive, d.groupChipActive] : null,
-                  ]}
-                  onPress={() => toggleGroup(group.id)}
-                >
-                  <Text
-                    style={[
-                      s.groupChipText,
-                      d.groupChipText,
-                      selected ? d.groupChipTextActive : null,
-                    ]}
-                  >
-                    {group.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
+
+          <View style={s.groupSection}>
+            <Pressable
+              style={[s.groupButton, d.groupButton]}
+              onPress={() => setGroupSheetVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+            >
+              <View style={[s.metaIcon, d.metaIcon]}>
+                <Ionicons name="folder-open-outline" size={15} color={colors.iconAccent} />
+              </View>
+              <View style={s.groupButtonTextWrap}>
+                <Text style={[s.groupButtonText, d.groupButtonText]}>
+                  {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+                </Text>
+                <Text style={[s.groupButtonSummary, d.groupButtonSummary]} numberOfLines={1}>
+                  {groupSummary}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </Pressable>
           </View>
         </View>
 
@@ -1220,7 +1223,7 @@ export default function EditNoteScreen() {
           </View>
         ) : null}
 
-        <View style={[s.sectionBlock, d.sectionShell]}>
+        <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
           {renderSectionHeader(
             'images-outline',
             t('notes.edit.sections.media', { defaultValue: '图片/视频' }),
@@ -1243,7 +1246,7 @@ export default function EditNoteScreen() {
           {renderMediaList(mediaItems, 'media')}
         </View>
 
-        <View style={[s.sectionBlock, d.sectionShell]}>
+        <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
           {renderSectionHeader(
             'albums-outline',
             t('notes.edit.sections.showcase', { defaultValue: '展示' }),
@@ -1260,7 +1263,7 @@ export default function EditNoteScreen() {
           {renderMediaList(showcaseItems, 'showcase')}
         </View>
 
-        <View style={[s.sectionBlock, d.sectionShell]}>
+        <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
           {renderSectionHeader(
             'location-outline',
             t('notes.edit.sections.location', { defaultValue: '位置' }),
@@ -1366,6 +1369,76 @@ export default function EditNoteScreen() {
           ) : null}
         </View>
       </ScrollView>
+      <BottomSheetModal
+        visible={groupSheetVisible}
+        onClose={() => setGroupSheetVisible(false)}
+        backdropStyle={d.groupSheetBackdrop}
+        sheetStyle={s.groupSheetWrap}
+      >
+        <View
+          style={[
+            s.groupSheet,
+            d.groupSheet,
+            { paddingBottom: insets.bottom || Spacing.lg },
+          ]}
+        >
+          <View style={[s.groupSheetHandle, d.groupSheetHandle]} />
+          <Text style={[s.groupSheetTitle, d.groupSheetTitle]}>
+            {t('notes.groupPicker.title', { defaultValue: '选择分组' })}
+          </Text>
+          {availableGroups.length === 0 ? (
+            <Text style={[s.groupSheetEmpty, d.groupSheetRowMeta]}>
+              {t('notes.groupPicker.empty', { defaultValue: '暂无分组，请先创建。' })}
+            </Text>
+          ) : (
+            <ScrollView
+              style={s.groupSheetList}
+              contentContainerStyle={s.groupSheetListContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {availableGroups.map((group) => {
+                const selected = selectedGroupIds.includes(group.id);
+                return (
+                  <Pressable
+                    key={group.id}
+                    style={[s.groupSheetRow, d.groupSheetRow]}
+                    onPress={() => toggleGroup(group.id)}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={group.name}
+                    accessibilityState={{ checked: selected }}
+                  >
+                    <View style={s.groupSheetRowTextWrap}>
+                      <Text style={[s.groupSheetRowText, d.groupSheetRowText]} numberOfLines={1}>
+                        {group.name}
+                      </Text>
+                      <Text style={[s.groupSheetRowMeta, d.groupSheetRowMeta]}>
+                        {t('notes.manageGroups.noteCount', {
+                          count: group.noteCount,
+                          defaultValue: `${group.noteCount} 条笔记`,
+                        })}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={22}
+                      color={selected ? colors.iconAccent : colors.textSecondary}
+                    />
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+          <Pressable
+            style={[s.groupSheetDone, d.groupSheetDone]}
+            onPress={() => setGroupSheetVisible(false)}
+            accessibilityRole="button"
+          >
+            <Text style={[s.groupSheetDoneText, d.groupSheetDoneText]}>
+              {t('common.done', { defaultValue: '完成' })}
+            </Text>
+          </Pressable>
+        </View>
+      </BottomSheetModal>
     </KeyboardAvoidingView>
   );
 }
@@ -1377,14 +1450,14 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    height: 52,
+    height: 60,
     gap: Spacing.sm,
   },
   headerTitle: {
     flex: 1,
-    textAlign: 'center',
+    textAlign: 'left',
     ...Typography.h3,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   doneBtn: {
     paddingHorizontal: Spacing.md,
@@ -1393,63 +1466,135 @@ const s = StyleSheet.create({
   },
   doneBtnText: { ...Typography.body, fontWeight: '600' },
   scroll: { flex: 1 },
-  scrollContent: { paddingTop: Spacing.md },
+  scrollContent: { paddingTop: Spacing.sm, gap: Spacing.xs },
+  heroCard: {
+    marginHorizontal: Spacing.lg,
+    borderWidth: 1,
+    borderRadius: Radius.xxl,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.sm,
+  },
+  heroAccent: {
+    width: 52,
+    height: 5,
+    borderRadius: Radius.full,
+    marginLeft: Spacing.lg,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
   titleInput: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.sm,
-    fontSize: 28,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xs,
+    fontSize: 32,
     fontWeight: '700',
-    lineHeight: 36,
+    lineHeight: 40,
   },
-  titleHint: { ...Typography.small, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xs },
+  titleInputMuted: { opacity: 0.72 },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingTop: 2,
-    paddingBottom: Spacing.sm,
+    paddingBottom: Spacing.md,
     gap: Spacing.xs,
   },
   dateText: { ...Typography.caption },
+  metaIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   groupSection: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
-    paddingBottom: Spacing.md,
-    gap: Spacing.sm,
+    paddingBottom: Spacing.sm,
   },
-  groupLabelRow: {
+  groupButton: {
+    minHeight: 56,
+    borderRadius: Radius.md,
+    borderCurve: 'continuous',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.md,
   },
-  sectionTitle: { ...Typography.small },
-  groupChipsWrap: {
+  groupButtonTextWrap: { flex: 1, gap: 2 },
+  groupButtonText: { ...Typography.body, fontWeight: '600' },
+  groupButtonSummary: { ...Typography.small },
+  groupSheetWrap: { width: '100%', maxHeight: '70%' },
+  groupSheet: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    borderCurve: 'continuous',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    gap: Spacing.md,
+  },
+  groupSheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: Radius.full,
+  },
+  groupSheetTitle: { ...Typography.h3, fontWeight: '700' },
+  groupSheetList: { maxHeight: 360 },
+  groupSheetListContent: { gap: Spacing.xs, paddingBottom: Spacing.xs },
+  groupSheetRow: {
+    minHeight: 52,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-    rowGap: Spacing.xs,
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
-  groupChip: {
-    borderWidth: 1,
-    // 方形（与详情页分组标签一致）
-    borderRadius: Radius.xs,
-    paddingHorizontal: Spacing.sm + 4,
-    paddingVertical: 5,
+  groupSheetRowTextWrap: { flex: 1 },
+  groupSheetRowText: { ...Typography.body, fontWeight: '600' },
+  groupSheetRowMeta: { ...Typography.small, marginTop: 2 },
+  groupSheetEmpty: { ...Typography.small, paddingVertical: Spacing.md },
+  groupSheetDone: {
+    minHeight: 44,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  groupChipActive: { borderWidth: 1 },
-  groupChipText: { ...Typography.small, fontWeight: '600' },
+  groupSheetDoneText: { ...Typography.body, fontWeight: '600' },
   sectionBlock: {
     marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.xl,
+    borderCurve: 'continuous',
+    padding: Spacing.lg,
+    gap: Spacing.lg,
+  },
+  secondarySection: {
+    marginBottom: 0,
+    borderWidth: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderRadius: 0,
+    paddingHorizontal: 0,
+    paddingVertical: Spacing.md,
     gap: Spacing.md,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs + 2,
+    gap: Spacing.sm,
+    minHeight: 30,
+  },
+  sectionIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionHeading: {
     flex: 1,
@@ -1458,12 +1603,17 @@ const s = StyleSheet.create({
     fontWeight: '700',
   },
   sectionSubtitle: { ...Typography.small },
-  sectionHeaderMeta: { ...Typography.small },
+  sectionHeaderMeta: {
+    marginLeft: 'auto',
+    alignItems: 'flex-end',
+  },
+  sectionHeaderMetaText: { ...Typography.small },
   textEditorFrame: {
     height: 320,
     minHeight: 320,
     overflow: 'hidden',
     borderRadius: Radius.md,
+    borderCurve: 'continuous',
     borderWidth: 1,
   },
   legacyMediaWarning: {
@@ -1485,10 +1635,10 @@ const s = StyleSheet.create({
   sectionAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: Radius.full,
+    borderWidth: 0,
+    borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
+    paddingVertical: 9,
     gap: Spacing.xs,
   },
   sectionActionText: { ...Typography.small, fontWeight: '600' },
