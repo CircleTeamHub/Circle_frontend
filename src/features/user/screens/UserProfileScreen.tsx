@@ -144,12 +144,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
-  presenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
   presenceDot: {
     width: 8,
     height: 8,
@@ -976,19 +970,9 @@ export default function UserProfileScreen() {
               style={d.name}
             />
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
-            {/*
-              对方关了「显示在线时间」(或状态还没拿到)时整行不画 —— 画「离线」
-              仍然是在泄露信息,与聊天头部同一条规则。
-            */}
-            {peerPresence.known ? (
-              <View style={s.presenceRow} accessibilityLabel={peerPresence.label}>
-                <View style={[s.presenceDot, presenceStyles.dot]} />
-                <Text style={presenceStyles.text}>{peerPresence.label}</Text>
-              </View>
-            ) : null}
           </View>
 
-          {profileMetaItems.length > 0 ? (
+          {profileMetaItems.length > 0 || peerPresence.known ? (
             <View style={s.metaRow}>
               {profileMetaItems.map((item, index) => (
                 <View key={`${item}-${index}`} style={[s.metaChip, d.metaChip]}>
@@ -1008,6 +992,20 @@ export default function UserProfileScreen() {
                   <Text style={d.metaChipText}>{item}</Text>
                 </View>
               ))}
+              {/*
+                在线状态与性别/地区同排:三者都是「这个人此刻的一句话」。
+                对方关了「显示在线时间」(或状态还没拿到)时这一枚不画 ——
+                画「离线」仍然是在泄露信息,与聊天头部同一条规则。
+              */}
+              {peerPresence.known ? (
+                <View
+                  style={[s.metaChip, d.metaChip]}
+                  accessibilityLabel={peerPresence.label}
+                >
+                  <View style={[s.presenceDot, presenceStyles.dot]} />
+                  <Text style={presenceStyles.text}>{peerPresence.label}</Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
 

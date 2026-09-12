@@ -611,4 +611,11 @@ test('user profile shows the peer online state through the shared presence chann
   assert.match(source, /\{peerPresence\.known \? \(/);
   assert.match(source, /s\.presenceDot/);
   assert.doesNotMatch(source, /statusOffline/);
+  // 在线与性别/地区同排:它也是一枚 metaChip,且整排在只有在线一项时也要出来。
+  assert.match(source, /profileMetaItems\.length > 0 \|\| peerPresence\.known/);
+  assert.equal(
+    (source.match(/\[s\.metaChip, d\.metaChip\]/g) ?? []).length,
+    2,
+    '性别/地区那一枚 + 在线那一枚',
+  );
 });
