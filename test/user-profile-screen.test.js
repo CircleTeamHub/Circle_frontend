@@ -238,6 +238,23 @@ test('user profile screen refreshes profile data when returning to focus', () =>
   );
 });
 
+// 在线状态的展示改由 usePeerPresence 收口(多了最近在线时间,并且对方关了
+// 「显示在线时间」时整行不画),原先那份「只有在线/离线」的断言已经过时 ——
+// 现在的不变式在下面那条 'shows the peer online state through the shared
+// presence channel' 里，这里只留「自己的资料不查也不展示」这一条。
+test('user profile screen never asks for presence of the current user', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/user/screens/UserProfileScreen.tsx'),
+    'utf8',
+  );
+
+  // 自己的在线状态没有意义:传 null 进去,hook 就不会发查询。
+  assert.match(source, /const presenceUserId = isCurrentUser \? null :/);
+  // 查询本身收在 usePeerPresence 里,页面不再各写一遍(各写一遍正是漏掉
+  // 「socket 还没连上」那种情况的原因)。
+  assert.doesNotMatch(source, /queryChatPresence/);
+});
+
 test('user profile route helpers preserve scope for the request form', () => {
   const {
     getChatInfoHref,
@@ -574,4 +591,30 @@ test('contact rows are copy targets, not navigation rows', () => {
   assert.match(source, /showChevron = true/);
   assert.match(source, /\{showChevron \? \(/);
   assert.match(source, /accessibilityRole=\{onPress \? 'button' : undefined\}/);
+});
+
+test('user profile shows the peer online state through the shared presence channel', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/user/screens/UserProfileScreen.tsx'),
+    'utf8',
+  );
+
+  // 与聊天头部同一份数据源:资料接口不带在线状态,统一走 chat-core presence。
+  assert.match(source, /usePeerPresence\(presenceUserId\)/);
+  // 自己的在线状态没有意义;profileId 未加载时也没有可查的对象。
+  assert.match(
+    source,
+    /const presenceUserId = isCurrentUser \? null : \(remoteProfile\?\.id \?\? null\)/,
+  );
+  // 对方关了「显示在线时间」/ 状态未知时整行不画 —— 画「离线」仍是泄露。
+  assert.match(source, /\{peerPresence\.known \? \(/);
+  assert.match(source, /s\.presenceDot/);
+  assert.doesNotMatch(source, /statusOffline/);
+  // 在线与性别/地区同排:它也是一枚 metaChip,且整排在只有在线一项时也要出来。
+  assert.match(source, /profileMetaItems\.length > 0 \|\| peerPresence\.known/);
+  assert.equal(
+    (source.match(/\[s\.metaChip, d\.metaChip\]/g) ?? []).length,
+    2,
+    '性别/地区那一枚 + 在线那一枚',
+  );
 });

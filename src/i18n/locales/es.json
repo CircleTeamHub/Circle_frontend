@@ -48,6 +48,8 @@
       "sound": "Sonido",
       "messageRingtone": "Tono de mensajes",
       "messageDefault": "Predeterminado de mensajes",
+      "autoReply": "Respuesta automática a mensajes directos",
+      "autoReplyHint": "Envía una respuesta predefinida al recibir un mensaje directo",
       "friendSection": "Solicitudes de amigos y grupos",
       "friendRequest": "Avisos de solicitud de amistad",
       "friendRequestHint": "Si se desactiva, no aparecerán banners de solicitud de amistad",
@@ -72,6 +74,8 @@
     },
     "autoReply": {
       "title": "Respuesta automática de mensajes directos",
+      "switchSection": "Respuesta automática",
+      "contentSection": "Contenido de la respuesta",
       "enabled": "Activar respuesta automática",
       "help": "Responde automáticamente, como máximo una vez por conversación cada 30 segundos.",
       "placeholder": "Escribe una respuesta automática",
@@ -106,6 +110,7 @@
       "showOriginalGroupNameHint": "Al activarlo: alias (apodo original del grupo)",
       "pinnedFoldCount": "Chats fijados visibles",
       "pinnedFoldCountHint": "Muestra los primeros N chats fijados y contrae el resto",
+      "collapsePinned": "Contraer chats fijados",
       "showCollapsedPinned": "Mostrar {{count}} chats fijados más",
       "unlimited": "Sin límite",
       "batteryOptimization": "Aviso de optimización de batería",
@@ -158,7 +163,8 @@
         "byAccount": "Por ID de cuenta",
         "byPhone": "Por número de teléfono",
         "byQrCode": "Por código QR",
-        "byGroup": "Por grupo o Círculo"
+        "byGroup": "Por grupo o Círculo",
+        "shareCard": "Compartir mi tarjeta personal"
       }
     },
     "permissions": {
@@ -246,6 +252,16 @@
       "statusOffline": "Desconectado",
       "statusTyping": "Escribiendo…",
       "statusTypingGroup": "Alguien está escribiendo…",
+      "lastSeenJustNow": "Últ. vez hace un momento",
+      "lastSeenMinutes": "Últ. vez hace {{count}} minutos",
+      "lastSeenMinutes_one": "Últ. vez hace {{count}} minuto",
+      "lastSeenMinutes_other": "Últ. vez hace {{count}} minutos",
+      "lastSeenHours": "Últ. vez hace {{count}} horas",
+      "lastSeenHours_one": "Últ. vez hace {{count}} hora",
+      "lastSeenHours_other": "Últ. vez hace {{count}} horas",
+      "lastSeenDays": "Últ. vez hace {{count}} días",
+      "lastSeenDays_one": "Últ. vez hace {{count}} día",
+      "lastSeenDays_other": "Últ. vez hace {{count}} días",
       "previewNotice": "La conexión aún no está lista. Vuelve a intentarlo en un momento.",
       "recordingSeconds": "Grabando {{seconds}} s",
       "voiceReleaseCancel": "Suelta para cancelar",
@@ -253,6 +269,10 @@
       "voiceHoldToTalk": "Mantén para hablar",
       "previewPlaceholder": "La conexión no está lista",
       "inputPlaceholder": "Escribe un mensaje…",
+      "disappearingMessageNotice": "Los mensajes temporales están activados en este chat. Los mensajes nuevos desaparecen después de {{duration}}.",
+      "personalDisappearingMessageNotice": "Has activado los mensajes temporales. Los mensajes nuevos desaparecen después de {{duration}}.",
+      "peerDisappearingMessageNotice": "La otra persona activó los mensajes temporales ({{duration}}).",
+      "bothDisappearingMessageNotice": "Ambos han activado los mensajes temporales. Los mensajes nuevos desaparecen después de {{duration}}.",
       "attachmentPanelLabel": "Abrir panel de adjuntos",
       "sendFailedText": "No se pudo enviar el mensaje, inténtalo de nuevo",
       "sensitiveWordBlocked": "Mensaje bloqueado: contiene palabras prohibidas",
@@ -1766,7 +1786,7 @@
     "searchPlaceholder": "Buscar contactos...",
     "newFriends": "Nuevos amigos",
     "seats": "Chats grupales temporales",
-    "groups": "Grupos",
+    "groups": "Mis grupos",
     "circles": "Círculos",
     "tags": "Etiquetas",
     "accountId": "ID: {{id}}",
@@ -1815,7 +1835,11 @@
         "ACCEPTED": "Aceptada",
         "REJECTED": "Rechazada",
         "WITHDRAWN": "Retirada"
-      }
+      },
+      "tabFriends": "Nuevos amigos",
+      "tabGroups": "Nuevos grupos",
+      "searchPlaceholder": "Buscar por nombre, ID o grupo",
+      "noMatches": "Sin resultados coincidentes"
     },
     "tagsScreen": {
       "title": "Etiquetas",
@@ -1844,21 +1868,21 @@
       "addFriendAction": "Añadir a {{name}} a esta etiqueta"
     },
     "groupsScreen": {
-      "title": "Grupos",
-      "newGroups": "Grupos nuevos",
+      "title": "Mis grupos",
       "myCreated": "Grupos que creé",
       "myJoined": "Grupos a los que me uní",
       "myManaged": "Grupos que administro",
-      "tabNewGroups": "Nuevos",
       "tabMyJoined": "Unidos",
       "tabMyCreated": "Creados",
       "tabMyManaged": "Administrados",
       "searchPlaceholder": "Buscar grupos",
       "noMatches": "No hay grupos coincidentes",
       "memberCount": "{{count}} miembros",
-      "empty": "Sin grupos",
+      "empty": "Aún no hay grupos",
       "loading": "Cargando grupos",
-      "loadFailed": "No se pudieron cargar los grupos, inténtalo más tarde"
+      "loadFailed": "No se pudieron cargar los grupos, inténtalo más tarde",
+      "tabAll": "Todos",
+      "allGroups": "Todos los grupos"
     },
     "request": {
       "title": "Enviar solicitud de amistad",
@@ -1901,6 +1925,13 @@
       "sentMessage": "Se envió una solicitud de amistad a {{name}}.",
       "sendFailedTitle": "Error al enviar",
       "sendFailed": "No se pudo enviar la solicitud de amistad, inténtalo de nuevo"
+    },
+    "groupInbox": {
+      "loading": "Cargando grupos...",
+      "loadFailed": "No se pudieron cargar los grupos. Inténtalo más tarde.",
+      "empty": "Aún no te has unido a grupos nuevos",
+      "joinedAt": "Te uniste el {{time}}",
+      "joined": "Te uniste"
     }
   },
   "profileFields": {
@@ -1935,6 +1966,7 @@
     "phone": "Teléfono",
     "phonePlaceholder": "Escribe tu número de teléfono",
     "email": "Correo",
+    "emailNotSupported": "El correo de registro no se puede cambiar.",
     "qq": "QQ",
     "qqPlaceholder": "Escribe tu número de QQ",
     "notBound": "Sin completar",
@@ -2445,9 +2477,6 @@
       },
       "notifications": {
         "label": "Notificaciones"
-      },
-      "autoReply": {
-        "label": "Respuesta automática de mensajes directos"
       },
       "appearance": {
         "label": "Pantalla"

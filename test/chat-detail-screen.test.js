@@ -21,6 +21,68 @@ test('chat detail screen uses the aligned header and composer structure', () => 
   assert.match(source, /type: 'video'/);
 });
 
+test('chat history waits for the scoped user session before loading', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  // A deep link can mount the screen before chat bootstrap has selected the
+  // account. The focused callback must wait and rerun when currentUserID is set.
+  assert.match(source, /if \(!conversationID \|\| !sourceID \|\| !currentUserID\) return;/);
+  assert.match(source, /loadConversationMessages\(conversationID\)/);
+  assert.match(source, /\}, \[conversationID, currentUserID, sourceID\]\),/);
+});
+
+test('direct chats show a duration-aware disappearing-message notice when enabled', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /state\.viewerSelfDestructSec/);
+  assert.match(source, /conversation\?\.burnDurationSec \?\? 0/);
+  assert.match(
+    source,
+    /conversationType === 'single'[\s\S]*effectiveBurnDurationSec > 0/,
+  );
+  assert.match(
+    source,
+    /Math\.min\(resolvedConversationBurnDurationSec, viewerSelfDestructSec\)/,
+  );
+  assert.match(source, /fetchChatBurnPolicy\(conversationID\)/);
+  assert.match(source, /peerSelfDestructSec/);
+  assert.match(source, /peerDisappearingMessageNotice/);
+  assert.match(source, /formatBurnDuration\(effectiveBurnDurationSec\)/);
+  assert.match(source, /personalDisappearingMessageNotice/);
+  assert.match(source, /testID="chat-disappearing-message-notice"/);
+  assert.match(source, /chat\.detail\.disappearingMessageNotice/);
+});
+
+test('disappearing-message notice stays hidden when both sides are disabled', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  // An empty set of active policies must resolve to 0; Infinity would make the
+  // notice appear after the peer turns their setting off.
+  assert.match(
+    source,
+    /positiveBurnDurations\.length > 0 \? Math\.min\(\.\.\.positiveBurnDurations\) : 0/,
+  );
+});
+
+test('both enabled sides share one duration-aware notice', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /bothGlobalPoliciesEnabled/);
+  assert.match(source, /bothDisappearingMessageNotice/);
+});
+
 test('chat detail screen exposes refined message insets and composer action hierarchy', () => {
   const filePath = path.join(
     process.cwd(),
@@ -821,7 +883,10 @@ test('group member access stays live while the chat screen is mounted', () => {
   assert.match(hook, /fetchCircleDetail\(groupID\)/);
   assert.match(hook, /fail-closed/);
   // revalidate 现场重查 fail-closed：查询失败/查无身份一律无权。
-  assert.match(hook, /return canViewCircleMembers\(member\?\.role \?\? null\);/);
+  assert.match(
+    hook,
+    /canViewCircleMembers\(member\?\.role \?\? null\)[\s\S]{0,160}membersCanViewRoster === true/,
+  );
   assert.match(hook, /catch \{[\s\S]{0,400}return false;/);
   // 换群/卸载后的在途查询结果按代际丢弃。
   assert.match(hook, /const queryGenRef = useRef\(0\)/);

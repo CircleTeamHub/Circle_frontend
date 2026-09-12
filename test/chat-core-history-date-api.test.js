@@ -66,6 +66,7 @@ function loadApi(requests) {
       if (request === '../features/chat/chat-history-date-window') {
         return loadDateWindow();
       }
+      if (request === '@/utils/retry') return { retry: (operation) => operation() };
       throw new Error(`unexpected require: ${request}`);
     },
   };

@@ -48,6 +48,8 @@
       "sound": "サウンド",
       "messageRingtone": "メッセージの着信音",
       "messageDefault": "メッセージ既定",
+      "autoReply": "ダイレクトメッセージの自動返信",
+      "autoReplyHint": "ダイレクトメッセージを受け取ったら定型文を自動送信します",
       "friendSection": "友だち・グループ申請",
       "friendRequest": "友だち申請の通知",
       "friendRequestHint": "オフにすると友だち申請のバナーは表示されません",
@@ -72,6 +74,8 @@
     },
     "autoReply": {
       "title": "DM自動返信",
+      "switchSection": "自動返信",
+      "contentSection": "返信内容",
       "enabled": "自動返信を有効にする",
       "help": "DM受信時、同じ会話には30秒に1回まで自動返信します。",
       "placeholder": "自動返信の内容を入力",
@@ -106,6 +110,7 @@
       "showOriginalGroupNameHint": "オンにすると表示：メモ名（元のグループ名）",
       "pinnedFoldCount": "ピン留めの表示件数",
       "pinnedFoldCountHint": "ピン留めした会話を先頭からN件表示し、残りは折りたたむ",
+      "collapsePinned": "ピン留めを折りたたむ",
       "showCollapsedPinned": "残り{{count}}件のピン留めを表示",
       "unlimited": "無制限",
       "batteryOptimization": "バッテリー最適化の案内",
@@ -158,7 +163,8 @@
         "byAccount": "アカウントIDで",
         "byPhone": "電話番号で",
         "byQrCode": "QRコードで",
-        "byGroup": "グループ・サークルで"
+        "byGroup": "グループ・サークルで",
+        "shareCard": "個人カードを共有"
       }
     },
     "permissions": {
@@ -246,6 +252,13 @@
       "statusOffline": "オフライン",
       "statusTyping": "入力中…",
       "statusTypingGroup": "入力中…",
+      "lastSeenJustNow": "たった今オンライン",
+      "lastSeenMinutes": "{{count}}分前にオンライン",
+      "lastSeenMinutes_other": "{{count}}分前にオンライン",
+      "lastSeenHours": "{{count}}時間前にオンライン",
+      "lastSeenHours_other": "{{count}}時間前にオンライン",
+      "lastSeenDays": "{{count}}日前にオンライン",
+      "lastSeenDays_other": "{{count}}日前にオンライン",
       "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",
@@ -253,6 +266,10 @@
       "voiceHoldToTalk": "押しながら話す",
       "previewPlaceholder": "接続がまだ完了していません",
       "inputPlaceholder": "メッセージを入力…",
+      "disappearingMessageNotice": "このチャットでは消えるメッセージがオンです。新しいメッセージは {{duration}} 後に消えます。",
+      "personalDisappearingMessageNotice": "消えるメッセージをオンにしました。新しいメッセージは {{duration}} 後に消えます。",
+      "peerDisappearingMessageNotice": "相手が消えるメッセージをオンにしました（{{duration}}）。",
+      "bothDisappearingMessageNotice": "双方が消えるメッセージをオンにしました。新しいメッセージは {{duration}} 後に消えます。",
       "attachmentPanelLabel": "添付パネルを開く",
       "sendFailedText": "メッセージを送信できませんでした。もう一度お試しください",
       "sensitiveWordBlocked": "禁止ワードが含まれているため、メッセージはブロックされました",
@@ -1763,7 +1780,7 @@
     "searchPlaceholder": "連絡先を検索...",
     "newFriends": "新しい友だち",
     "seats": "一時グループチャット",
-    "groups": "グループ",
+    "groups": "マイグループ",
     "circles": "サークル",
     "tags": "タグ",
     "accountId": "ID：{{id}}",
@@ -1812,7 +1829,11 @@
         "ACCEPTED": "承認済み",
         "REJECTED": "拒否済み",
         "WITHDRAWN": "取り消し済み"
-      }
+      },
+      "tabFriends": "新しい友だち",
+      "tabGroups": "新しいグループ",
+      "searchPlaceholder": "名前、ID、グループ名で検索",
+      "noMatches": "一致する結果はありません"
     },
     "tagsScreen": {
       "title": "タグ",
@@ -1841,21 +1862,21 @@
       "addFriendAction": "{{name}} をこのタグに追加"
     },
     "groupsScreen": {
-      "title": "グループ",
-      "newGroups": "新しいグループ",
+      "title": "マイグループ",
       "myCreated": "作成したグループ",
       "myJoined": "参加中のグループ",
       "myManaged": "管理中のグループ",
-      "tabNewGroups": "新しいグループ",
       "tabMyJoined": "参加中",
       "tabMyCreated": "作成した",
       "tabMyManaged": "管理中",
       "searchPlaceholder": "グループを検索",
       "noMatches": "一致するグループはありません",
       "memberCount": "{{count}} 人",
-      "empty": "グループはありません",
+      "empty": "グループはまだありません",
       "loading": "グループを読み込み中",
-      "loadFailed": "グループの読み込みに失敗しました。しばらくしてからお試しください"
+      "loadFailed": "グループの読み込みに失敗しました。しばらくしてからお試しください",
+      "tabAll": "すべて",
+      "allGroups": "すべてのグループ"
     },
     "request": {
       "title": "友だち申請を送信",
@@ -1898,6 +1919,13 @@
       "sentMessage": "{{name}} さんに友だち申請を送信しました。",
       "sendFailedTitle": "送信に失敗しました",
       "sendFailed": "友だち申請の送信に失敗しました。もう一度お試しください"
+    },
+    "groupInbox": {
+      "loading": "グループを読み込み中...",
+      "loadFailed": "グループを読み込めませんでした。後ほどお試しください。",
+      "empty": "新しく参加したグループはまだありません",
+      "joinedAt": "{{time}} に参加",
+      "joined": "参加済み"
     }
   },
   "profileFields": {
@@ -1932,6 +1960,7 @@
     "phone": "電話番号",
     "phonePlaceholder": "電話番号を入力",
     "email": "メールアドレス",
+    "emailNotSupported": "登録メールアドレスは変更できません。",
     "qq": "QQ",
     "qqPlaceholder": "QQ番号を入力",
     "notBound": "未入力",
@@ -2442,9 +2471,6 @@
       },
       "notifications": {
         "label": "通知"
-      },
-      "autoReply": {
-        "label": "DM自動返信"
       },
       "appearance": {
         "label": "表示"

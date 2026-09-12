@@ -300,24 +300,24 @@ test('group info sections are separated by dividers at every boundary', () => {
   }
 });
 
-test('only the group owner gets two-way clear and the burn timer', () => {
+test('only the group owner gets two-way clear while managers keep burn settings', () => {
   const screen = read('src/features/chat/screens/ChatInfoScreen.tsx');
 
-  // 能不能全群清空/设置焚毁,前端判据必须和后端一致:圈子群=圈主或管理员,
-  // 独立群=群主。不一致就会给普通成员摆一个必然报错的按钮。
+  // 阅后即焚仍是群管理设置,全群清空则只允许群主。
   assert.match(
     screen,
     /const canWipeGroupForEveryone =\s*\n?\s*canManageGroup \|\| isStandaloneGroupOwner;/,
   );
+  assert.match(screen, /const canClearGroupForEveryone = isOwner;/);
   // 焚毁入口:原来只认 canManageGroup,独立群聊的群主永远看不到它。
   assert.match(screen, /\{canWipeGroupForEveryone \? \(/);
   // 普通成员那条分支:先于双选对话框返回,只留一个「只清我这份」的动作。
   assert.match(
     screen,
-    /if \(!canWipeGroupForEveryone\) \{[\s\S]*?clearHistory\(false\)[\s\S]*?return;\s*\n\s*\}/,
+    /if \(!canClearGroupForEveryone\) \{[\s\S]*?clearHistory\(false\)[\s\S]*?return;\s*\n\s*\}/,
   );
   const memberBranch = screen.slice(
-    screen.indexOf('if (!canWipeGroupForEveryone) {'),
+    screen.indexOf('if (!canClearGroupForEveryone) {'),
   );
   const memberBranchBody = memberBranch.slice(0, memberBranch.indexOf('return;'));
   assert.doesNotMatch(

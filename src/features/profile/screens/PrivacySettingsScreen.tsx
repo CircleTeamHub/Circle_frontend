@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { OptionPickerSheet, type PickerOption } from '@/components/ui/option-picker-sheet';
@@ -21,7 +22,10 @@ import {
   formatBurnDuration,
   type BurnDurationSec,
 } from '@/chat-core/burn-durations';
-import { useChatStore } from '@/chat-core/store';
+import {
+  useChatStore,
+  viewerTypingPolicyFromPrivacy,
+} from '@/chat-core/store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type ActiveSheet =
@@ -86,6 +90,7 @@ const PERMISSION_OPTIONS: readonly PrivacyPermission[] = [
 const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐:0 = 关闭阅后即焚。
   messageSelfDestructSec: BURN_DURATION_OFF,
+  messageSelfDestructStartedAt: null,
   momentsVisibility: 'ALL',
   allowStrangerMessages: true,
   showPhone: false,
@@ -101,6 +106,10 @@ const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   addMeByGroup: true,
   callPermission: 'EVERYONE',
   groupInvitePermission: 'EVERYONE',
+  // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐:在线状态与输入状态默认外露。
+  shareOnlineStatus: true,
+  shareTypingInDirect: true,
+  shareTypingInGroup: true,
 };
 
 export default function PrivacySettingsScreen() {
@@ -143,7 +152,14 @@ export default function PrivacySettingsScreen() {
       setSettings(loaded);
       useChatStore
         .getState()
-        .setViewerSelfDestructSec(loaded.messageSelfDestructSec);
+        .setViewerSelfDestructSec(
+          loaded.messageSelfDestructSec,
+          undefined,
+          loaded.messageSelfDestructStartedAt,
+        );
+      useChatStore
+        .getState()
+        .setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(loaded));
     } catch (requestError) {
       setError(
         getApiErrorMessage(
@@ -179,7 +195,15 @@ export default function PrivacySettingsScreen() {
       setSettings(updated);
       useChatStore
         .getState()
-        .setViewerSelfDestructSec(updated.messageSelfDestructSec);
+        .setViewerSelfDestructSec(
+          updated.messageSelfDestructSec,
+          undefined,
+          updated.messageSelfDestructStartedAt,
+        );
+      // 输入状态开关的门禁在 socket-manager 里读 chat store,这里保存后立刻同步。
+      useChatStore
+        .getState()
+        .setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(updated));
     } catch (requestError) {
       if (
         request !== privacyRequestSequence.current ||
@@ -224,12 +248,11 @@ export default function PrivacySettingsScreen() {
     [t],
   );
 
-  // 只算界面上真的有开关的那几项。byPhone / byQrCode 的开关已撤下（对应功能
-  // 不存在，见下方 sheet 里的说明），但字段仍会随服务端返回，且 addMeByQrCode
-  // 默认为 true —— 算进来的话摘要会显示「已开启 3 项」，点开却只有两个开关，
-  // 多出来的那一项用户既看不到也改不了。放开关时把对应项加回这里。
+  // 只统计界面上真正可配置的开关。名片分享是一个动作入口，不是服务端独立
+  // 的隐私字段，因此不会重复计入已开启数量。
   const addMeCount = [
     currentSettings.addMeByAccount,
+    currentSettings.addMeByQrCode,
     currentSettings.addMeByGroup,
   ].filter(Boolean).length;
 
@@ -274,6 +297,38 @@ export default function PrivacySettingsScreen() {
                 value: currentSettings.allowStrangerMessages,
                 onValueChange: (value) =>
                   void patchSettings({ allowStrangerMessages: value }),
+                disabled: loading || saving,
+              },
+            ],
+          },
+          {
+            rows: [
+              {
+                id: 'online-time',
+                labelKey: 'settingsDetails.privacy.onlineTime',
+                type: 'toggle',
+                // 滚动发布期间旧服务端不返回这三项,缺省按 true(与后端默认一致)。
+                value: currentSettings.shareOnlineStatus ?? true,
+                onValueChange: (value) =>
+                  void patchSettings({ shareOnlineStatus: value }),
+                disabled: loading || saving,
+              },
+              {
+                id: 'single-typing',
+                labelKey: 'settingsDetails.privacy.singleTyping',
+                type: 'toggle',
+                value: currentSettings.shareTypingInDirect ?? true,
+                onValueChange: (value) =>
+                  void patchSettings({ shareTypingInDirect: value }),
+                disabled: loading || saving,
+              },
+              {
+                id: 'group-typing',
+                labelKey: 'settingsDetails.privacy.groupTyping',
+                type: 'toggle',
+                value: currentSettings.shareTypingInGroup ?? true,
+                onValueChange: (value) =>
+                  void patchSettings({ shareTypingInGroup: value }),
                 disabled: loading || saving,
               },
             ],
@@ -397,6 +452,10 @@ export default function PrivacySettingsScreen() {
         disabled={loading || saving}
         onClose={() => setActiveSheet(null)}
         onChange={(payload) => void patchSettings(payload)}
+        onShareCard={() => {
+          setActiveSheet(null);
+          router.push({ pathname: '/qr-code', params: { type: 'user' } });
+        }}
       />
     </>
   );
@@ -426,12 +485,14 @@ function AddMeMethodsSheet({
   disabled,
   onClose,
   onChange,
+  onShareCard,
 }: {
   visible: boolean;
   settings: PrivacySettings;
   disabled: boolean;
   onClose: () => void;
   onChange: (payload: UpdatePrivacySettingsPayload) => void;
+  onShareCard: () => void;
 }) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -463,18 +524,22 @@ function AddMeMethodsSheet({
         disabled={disabled}
         onValueChange={(value) => onChange({ addMeByAccount: value })}
       />
-      {/*
-        byPhone / byQrCode 暂不放出：手机号搜人接口不存在，扫码器
-        (resolveMessageScanResult) 也解析不出用户 —— 这两条发现路径在产品里
-        还没有，开关拨了不通电，后端也无从 enforce。等功能落地时连同各自入口的
-        收口一起放开（账号那条的收口在 UserService.findByExactAccountId）。
-        字段本身保留在 PrivacySettings 里，不改服务端契约。
-      */}
+      <MethodSwitch
+        label={t('settingsDetails.privacy.addMe.byQrCode')}
+        value={settings.addMeByQrCode}
+        disabled={disabled}
+        onValueChange={(value) => onChange({ addMeByQrCode: value })}
+      />
       <MethodSwitch
         label={t('settingsDetails.privacy.addMe.byGroup')}
         value={settings.addMeByGroup}
         disabled={disabled}
         onValueChange={(value) => onChange({ addMeByGroup: value })}
+      />
+      <MethodAction
+        label={t('settingsDetails.privacy.addMe.shareCard')}
+        disabled={disabled}
+        onPress={onShareCard}
       />
     </BottomSheetModal>
   );
@@ -502,5 +567,29 @@ function MethodSwitch({
         onValueChange={onValueChange}
       />
     </View>
+  );
+}
+
+function MethodAction({
+  label,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      style={({ pressed }) => [s.methodRow, pressed && { opacity: 0.7 }]}
+      disabled={disabled}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text style={[s.methodLabel, { color: colors.text }]}>{label}</Text>
+      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+    </Pressable>
   );
 }

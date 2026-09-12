@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -42,6 +42,7 @@ import {
 } from '@/theme';
 import type { MyCircle } from '@/types';
 import { generateIdempotencyKey } from '@/utils/idempotency-key';
+import { getGroupManageHref, type UserProfileScope } from '@/features/user/utils/routes';
 
 const PRODUCT_COLORS = ['#3B82F6', '#8B5CF6', '#F97316', '#EC4899'];
 
@@ -164,10 +165,32 @@ const s = StyleSheet.create({
 
 export default function GroupExpansionScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   // 从某个圈子群的群管理页「提升成员上限」跳进来时预选那个圈子。
-  const params = useLocalSearchParams<{ circleId?: string }>();
+  const params = useLocalSearchParams<{
+    circleId?: string;
+    returnScope?: string;
+    returnConversationID?: string;
+    returnGroupID?: string;
+    returnTitle?: string;
+  }>();
   const preselectedCircleId =
     typeof params.circleId === 'string' ? params.circleId : '';
+  const returnScope: UserProfileScope | null =
+    params.returnScope === 'contacts' ||
+    params.returnScope === 'profile' ||
+    params.returnScope === 'discover' ||
+    params.returnScope === 'messages'
+      ? params.returnScope
+      : null;
+  const returnConversationID =
+    typeof params.returnConversationID === 'string'
+      ? params.returnConversationID
+      : '';
+  const returnGroupID =
+    typeof params.returnGroupID === 'string' ? params.returnGroupID : '';
+  const returnTitle =
+    typeof params.returnTitle === 'string' ? params.returnTitle : '';
   const insets = useSafeAreaInsets();
   const { colors, resolvedMode } = useTheme();
   const { isOffline } = useNetworkStatus();
@@ -570,13 +593,32 @@ export default function GroupExpansionScreen() {
     [colors, insets.bottom, insets.top],
   );
 
+  const backHref = useMemo<Href>(() => {
+    if (returnScope && returnConversationID && returnGroupID) {
+      return getGroupManageHref(returnScope, {
+        conversationID: returnConversationID,
+        groupID: returnGroupID,
+        title: returnTitle || undefined,
+      });
+    }
+    return '/(tabs)/profile/mall' as Href;
+  }, [returnConversationID, returnGroupID, returnScope, returnTitle]);
+  // profile 栈可能已有商城历史；群管理入口必须显式替换回原群设置页。
+  const returnsToGroupManage = Boolean(
+    returnScope && returnConversationID && returnGroupID,
+  );
+  const handleBackPress = () => {
+    router.replace(backHref as never);
+  };
+
   return (
     <View style={d.container}>
       <NavHeader
         title={t('profile.groupExpansion.title', {
           defaultValue: '群扩容卡',
         })}
-        fallbackHref="/(tabs)/profile/mall"
+        fallbackHref={backHref}
+        onBackPress={returnsToGroupManage ? handleBackPress : undefined}
       />
       <ScrollView contentContainerStyle={[s.content, d.content]}>
         <View style={[s.hero, d.hero]}>

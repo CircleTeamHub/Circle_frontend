@@ -40,6 +40,7 @@ const __localDbStub = {
   removeLocalConversation: async () => {},
   persistLocalMessages: async () => {},
   deleteLocalMessage: async () => {},
+  deleteLocalMessages: async () => {},
   purgeExpiredLocalMessages: async () => {},
   clearLocalConversationMessages: async () => {},
   deleteLocalMessagesBelow: async () => {},
@@ -352,6 +353,23 @@ test('applyRead advances per-user watermarks forward only', () => {
   assert.equal(useChatStore.getState().readWatermarks['conv-1']['u2'], 5);
   store.applyRead('conv-1', 'u2', 8);
   assert.equal(useChatStore.getState().readWatermarks['conv-1']['u2'], 8);
+});
+
+test('conversation snapshots seed peer read watermarks without regressing realtime state', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+
+  store.setConversations([
+    conversation({ peerReadHeight: 5 }),
+  ]);
+  assert.equal(useChatStore.getState().readWatermarks['conv-1'].other, 5);
+
+  // A newer realtime event must win over a later, stale REST snapshot.
+  useChatStore.getState().applyRead('conv-1', 'other', 8);
+  useChatStore.getState().setConversations([
+    conversation({ peerReadHeight: 6 }),
+  ]);
+  assert.equal(useChatStore.getState().readWatermarks['conv-1'].other, 8);
 });
 
 test('自己的已读水位推进时不会把会话列表抹成 undefined', () => {
@@ -683,6 +701,22 @@ test('a partial store is not mistaken for a loaded snapshot', () => {
   assert.equal(useChatStore.getState().conversationsSnapshotLoaded, false);
 });
 
+test('cold hydration derives a missing conversation preview from its cached timeline', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+
+  // 会话行先到、最近消息后到是冷启动的正常读取顺序。两次水合之间不能把
+  // lastMessage=null 永久留在列表里，否则用户必须打开会话才能看到预览。
+  store.hydrateLocalSnapshot([conversation()], {});
+  store.hydrateLocalSnapshot([conversation()], {
+    'conv-1': [msg({ id: 'cached-latest', height: 12 })],
+  });
+
+  const hydrated = useChatStore.getState().conversations[0];
+  assert.equal(hydrated.lastMessage?.id, 'cached-latest');
+  assert.equal(hydrated.lastMessageAt, '2026-08-05T12:00:00.000Z');
+});
+
 // ---- Codex review 批:陈旧快照不能盖掉更终局的状态 ----
 
 test('a stale history page cannot un-revoke a message', () => {
@@ -852,6 +886,7 @@ test('burn expiry removes both cached messages and the conversation preview', ()
     conversation({
       id: 'conv-1',
       burnDurationSec: 60,
+      burnStartedAt: new Date(Date.now() - 180_000).toISOString(),
       lastMessage: expired,
       lastMessageAt: expired.createdAt,
     }),
@@ -867,6 +902,75 @@ test('burn expiry removes both cached messages and the conversation preview', ()
   assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
 });
 
+test('purging without a local timeline preserves the server conversation preview', () => {
+  const { useChatStore } = loadChatStore();
+  const preview = msg({
+    id: 'server-preview-without-cache',
+    createdAt: new Date().toISOString(),
+  });
+  const store = useChatStore.getState();
+
+  // Android dev clients may not have the SQLCipher build yet, so no local
+  // timeline exists when the REST snapshot lands. That must not be treated as
+  // proof that the server preview was deleted.
+  store.setConversations([
+    conversation({
+      lastMessage: preview,
+      lastMessageAt: preview.createdAt,
+    }),
+  ]);
+
+  assert.equal(
+    useChatStore.getState().conversations[0].lastMessage?.id,
+    preview.id,
+  );
+});
+
+test('burn policies never retroactively purge messages from before they were enabled', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const beforeEnable = msg({
+    id: 'before-burn-start',
+    createdAt: new Date(Date.now() - 120_000).toISOString(),
+  });
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      burnDurationSec: 60,
+      burnStartedAt: new Date(Date.now() - 30_000).toISOString(),
+      lastMessage: beforeEnable,
+      lastMessageAt: beforeEnable.createdAt,
+    }),
+  ]);
+  store.ingestMessages('conv-1', [beforeEnable]);
+
+  store.purgeExpiredBurnMessages();
+
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].map((m) => m.id).join(','),
+    'before-burn-start',
+  );
+});
+
+test('re-enabling the same burn duration resets the shared start time', () => {
+  const { useChatStore } = loadChatStore();
+  const firstStart = '2026-09-11T20:00:00.000Z';
+  const secondStart = '2026-09-11T20:05:00.000Z';
+  useChatStore.getState().setConversations([
+    conversation({
+      id: 'conv-1',
+      burnDurationSec: 60,
+      burnStartedAt: firstStart,
+    }),
+  ]);
+
+  useChatStore.getState().applyBurnDuration('conv-1', 60, secondStart);
+
+  const updated = useChatStore.getState().conversations[0];
+  assert.equal(updated.burnDurationSec, 60);
+  assert.equal(updated.burnStartedAt, secondStart);
+});
+
 test('burn expiry clears the stale unread badge with its expired preview', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
@@ -878,6 +982,7 @@ test('burn expiry clears the stale unread badge with its expired preview', () =>
     conversation({
       id: 'conv-1',
       burnDurationSec: 60,
+      burnStartedAt: new Date(Date.now() - 180_000).toISOString(),
       lastMessage: expired,
       lastMessageAt: expired.createdAt,
       unreadCount: 3,
@@ -888,6 +993,58 @@ test('burn expiry clears the stale unread badge with its expired preview', () =>
   store.purgeExpiredBurnMessages();
 
   assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+});
+
+test('server burned-message notifications remove the peer copy and roll back preview', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const older = msg({ id: 'older', height: 1 });
+  const burned = msg({ id: 'burned', height: 2 });
+  store.setConversations([
+    conversation({
+      lastMessage: burned,
+      lastMessageAt: burned.createdAt,
+    }),
+  ]);
+  store.ingestMessages('conv-1', [older, burned]);
+  store.applyIncomingMessage(burned);
+
+  store.applyBurnedMessages('conv-1', ['burned']);
+
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].map((m) => m.id).join(','),
+    'older',
+  );
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'older');
+});
+
+test('peer global burn policy purges the shared active-period cache immediately', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const expired = msg({
+    id: 'peer-global-expired',
+    createdAt: new Date(Date.now() - 120_000).toISOString(),
+  });
+  store.setConversations([
+    conversation({
+      lastMessage: expired,
+      lastMessageAt: expired.createdAt,
+    }),
+  ]);
+  store.ingestMessages('conv-1', [expired]);
+
+  store.applyGlobalBurnPolicy(
+    'conv-1',
+    'other',
+    60,
+    new Date(Date.now() - 180_000).toISOString(),
+  );
+
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    0,
+  );
+  assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
 });
 
 test('viewer self-destruct policy purges cached content without conversation burn', () => {
@@ -908,7 +1065,11 @@ test('viewer self-destruct policy purges cached content without conversation bur
   ]);
   store.ingestMessages('conv-1', [expired]);
 
-  store.setViewerSelfDestructSec(24 * 60 * 60);
+  store.setViewerSelfDestructSec(
+    24 * 60 * 60,
+    undefined,
+    new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  );
 
   assert.equal(
     useChatStore.getState().messagesByConversation['conv-1'].length,
@@ -929,6 +1090,27 @@ test('server snapshots advance the self-destruct cache epoch when a conversation
   assert.ok(enabledEpoch > 0);
   assert.ok(disabledEpoch > enabledEpoch);
   assert.ok(useChatStore.getState().selfDestructPolicyEpoch > disabledEpoch);
+});
+
+test('server snapshots advance the cache epoch when a same-duration burn window restarts', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conversation({
+      burnDurationSec: 60,
+      burnStartedAt: '2026-09-11T20:00:00.000Z',
+    }),
+  ]);
+  const beforeRestart = useChatStore.getState().selfDestructPolicyEpoch;
+
+  store.setConversations([
+    conversation({
+      burnDurationSec: 60,
+      burnStartedAt: '2026-09-11T20:05:00.000Z',
+    }),
+  ]);
+
+  assert.ok(useChatStore.getState().selfDestructPolicyEpoch > beforeRestart);
 });
 
 test('invalid viewer self-destruct policy cannot weaken a cached policy', () => {

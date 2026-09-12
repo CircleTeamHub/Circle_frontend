@@ -48,6 +48,8 @@
       "sound": "소리",
       "messageRingtone": "메시지 알림음",
       "messageDefault": "메시지 기본값",
+      "autoReply": "개인 메시지 자동 응답",
+      "autoReplyHint": "개인 메시지를 받으면 미리 설정한 내용을 자동으로 보냅니다",
       "friendSection": "친구 및 그룹 요청",
       "friendRequest": "친구 요청 알림",
       "friendRequestHint": "끄면 친구 요청 배너가 더 이상 표시되지 않습니다",
@@ -72,6 +74,8 @@
     },
     "autoReply": {
       "title": "DM 자동 답장",
+      "switchSection": "자동 응답",
+      "contentSection": "응답 내용",
       "enabled": "자동 답장 사용",
       "help": "DM 수신 시 같은 대화에는 30초에 한 번만 자동 답장합니다.",
       "placeholder": "자동 답장 내용 입력",
@@ -106,6 +110,7 @@
       "showOriginalGroupNameHint": "켜면 표시: 메모 이름(원래 그룹 이름)",
       "pinnedFoldCount": "고정 채팅 표시 개수",
       "pinnedFoldCountHint": "고정한 대화를 앞에서 N개 표시하고 나머지는 접기",
+      "collapsePinned": "고정 대화 접기",
       "showCollapsedPinned": "고정 대화 {{count}}개 더 보기",
       "unlimited": "무제한",
       "batteryOptimization": "배터리 최적화 안내",
@@ -158,7 +163,8 @@
         "byAccount": "계정 ID로",
         "byPhone": "전화번호로",
         "byQrCode": "QR 코드로",
-        "byGroup": "그룹·서클로"
+        "byGroup": "그룹·서클로",
+        "shareCard": "내 개인 카드 공유"
       }
     },
     "permissions": {
@@ -246,6 +252,13 @@
       "statusOffline": "오프라인",
       "statusTyping": "입력 중…",
       "statusTypingGroup": "입력 중…",
+      "lastSeenJustNow": "방금 접속",
+      "lastSeenMinutes": "{{count}}분 전 접속",
+      "lastSeenMinutes_other": "{{count}}분 전 접속",
+      "lastSeenHours": "{{count}}시간 전 접속",
+      "lastSeenHours_other": "{{count}}시간 전 접속",
+      "lastSeenDays": "{{count}}일 전 접속",
+      "lastSeenDays_other": "{{count}}일 전 접속",
       "previewNotice": "연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.",
       "recordingSeconds": "녹음 중 {{seconds}}초",
       "voiceReleaseCancel": "손을 떼면 취소",
@@ -253,6 +266,10 @@
       "voiceHoldToTalk": "눌러서 말하기",
       "previewPlaceholder": "연결이 완료되지 않았습니다",
       "inputPlaceholder": "메시지 입력…",
+      "disappearingMessageNotice": "이 채팅에서 사라지는 메시지가 켜져 있습니다. 새 메시지는 {{duration}} 후 사라집니다.",
+      "personalDisappearingMessageNotice": "사라지는 메시지를 켰습니다. 새 메시지는 {{duration}} 후 사라집니다.",
+      "peerDisappearingMessageNotice": "상대방이 사라지는 메시지를 켰습니다({{duration}}).",
+      "bothDisappearingMessageNotice": "양쪽 모두 사라지는 메시지를 켰습니다. 새 메시지는 {{duration}} 후 사라집니다.",
       "attachmentPanelLabel": "첨부 패널 열기",
       "sendFailedText": "메시지를 보내지 못했습니다. 다시 시도해 주세요",
       "sensitiveWordBlocked": "금지어가 포함되어 있어 메시지가 차단되었습니다",
@@ -1763,7 +1780,7 @@
     "searchPlaceholder": "연락처 검색...",
     "newFriends": "새로운 친구",
     "seats": "임시 그룹 채팅",
-    "groups": "그룹",
+    "groups": "내 그룹",
     "circles": "서클",
     "tags": "태그",
     "accountId": "ID: {{id}}",
@@ -1812,7 +1829,11 @@
         "ACCEPTED": "수락됨",
         "REJECTED": "거절됨",
         "WITHDRAWN": "철회됨"
-      }
+      },
+      "tabFriends": "새로운 친구",
+      "tabGroups": "새로운 그룹",
+      "searchPlaceholder": "이름, 아이디 또는 그룹 검색",
+      "noMatches": "일치하는 결과가 없습니다"
     },
     "tagsScreen": {
       "title": "태그",
@@ -1841,21 +1862,21 @@
       "addFriendAction": "{{name}}을(를) 이 태그에 추가"
     },
     "groupsScreen": {
-      "title": "그룹",
-      "newGroups": "새 그룹",
+      "title": "내 그룹",
       "myCreated": "내가 만든 그룹",
       "myJoined": "내가 참여한 그룹",
       "myManaged": "관리하는 그룹",
-      "tabNewGroups": "새 그룹",
       "tabMyJoined": "참여한",
       "tabMyCreated": "만든",
       "tabMyManaged": "관리하는",
       "searchPlaceholder": "그룹 검색",
       "noMatches": "일치하는 그룹이 없습니다",
       "memberCount": "{{count}}명",
-      "empty": "그룹이 없습니다",
+      "empty": "아직 그룹이 없습니다",
       "loading": "그룹을 불러오는 중",
-      "loadFailed": "그룹을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요"
+      "loadFailed": "그룹을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요",
+      "tabAll": "전체",
+      "allGroups": "전체 그룹"
     },
     "request": {
       "title": "친구 요청 보내기",
@@ -1898,6 +1919,13 @@
       "sentMessage": "{{name}} 님에게 친구 요청을 보냈습니다.",
       "sendFailedTitle": "전송 실패",
       "sendFailed": "친구 요청을 보내지 못했습니다. 다시 시도해 주세요"
+    },
+    "groupInbox": {
+      "loading": "그룹을 불러오는 중...",
+      "loadFailed": "그룹을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "empty": "새로 참여한 그룹이 없습니다",
+      "joinedAt": "{{time}}에 참여",
+      "joined": "참여함"
     }
   },
   "profileFields": {
@@ -1932,6 +1960,7 @@
     "phone": "전화번호",
     "phonePlaceholder": "전화번호를 입력하세요",
     "email": "이메일",
+    "emailNotSupported": "가입 이메일은 변경할 수 없습니다.",
     "qq": "QQ",
     "qqPlaceholder": "QQ 번호를 입력하세요",
     "notBound": "미입력",
@@ -2442,9 +2471,6 @@
       },
       "notifications": {
         "label": "알림"
-      },
-      "autoReply": {
-        "label": "DM 자동 답장"
       },
       "appearance": {
         "label": "화면"

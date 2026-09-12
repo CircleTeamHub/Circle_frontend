@@ -28,6 +28,7 @@ test('contacts quick actions keep the agreed order and entries', () => {
   const ids = [...block.matchAll(/id: '([\w-]+)'/g)].map((match) => match[1]);
 
   // 顺序是产品定的；朋友圈入口归联系人，圈子管理归动态广场，避免入口重复。
+  // 这里钉住整张列表，避免哪次重排又把它们挤掉。
   assert.deepEqual(ids, [
     'new-friends',
     'groups',
@@ -221,18 +222,15 @@ test('friend activity detail screen supports request handling and single-item re
 
 test('groups screen filters the active category with a local search box', () => {
   const source = read('src/features/contacts/screens/GroupsScreen.tsx');
-  const filterSource = read('src/features/contacts/utils/group-list-filter.ts');
+  const filterSource = read('src/features/contacts/utils/group-chat-rows.ts');
 
   assert.match(source, /const \[query, setQuery\] = useState\(''\)/);
   assert.match(source, /<TextInput/);
   assert.match(source, /contacts\.groupsScreen\.searchPlaceholder/);
   assert.match(source, /contacts\.groupsScreen\.noMatches/);
-  assert.match(
-    source,
-    /filterGroupsByQuery\(groupsByCategory\[activeCategory\], query\)/,
-  );
+  assert.match(source, /filterGroupChatRows\(rows, query\)/);
 
-  // 分类是三次服务端查询算出来的；过滤器只做本地文本匹配，不能再自己判断身份，
+  // 分类按角色在屏里算好；过滤器只做本地文本匹配，不能再自己判断身份，
   // 否则同一份数据会有两套互相矛盾的分类规则。
   assert.doesNotMatch(filterSource, /myRole|ownerUserID/);
 
@@ -316,4 +314,23 @@ test('EditFriendTagsScreen guards async create and save state after unmount', ()
   assert.match(source, /if \(mountedRef\.current\) setIsCreatingTag\(false\)/);
   assert.match(source, /await Promise\.all\(\[[\s\S]*removeFriendTag\(profileId, tagId\)[\s\S]*\]\);[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*router\.back\(\);/);
   assert.match(source, /if \(mountedRef\.current\) setIsSaving\(false\)/);
+});
+
+test('the joined groups tab keeps admins, not just plain members', () => {
+  const source = read('src/features/contacts/screens/GroupsScreen.tsx');
+  const filter = source.slice(
+    source.indexOf('function matchesCategory'),
+    source.indexOf('export default function GroupsScreen'),
+  );
+
+  // 「我加入的」= 我在里面但不是我建的。只认 MEMBER 的话管理员会从这一页整个
+  // 消失 —— 他仍然是成员,而「我管理的」是另一页,不是它的替代。
+  assert.match(filter, /case 'joined':[\s\S]*?return role !== 'OWNER';/);
+  assert.doesNotMatch(filter, /case 'joined':[\s\S]*?return role === 'MEMBER';/);
+  // 另外两页的判据不变。
+  assert.match(filter, /case 'created':[\s\S]*?return role === 'OWNER';/);
+  assert.match(
+    filter,
+    /case 'managed':[\s\S]*?return role === 'OWNER' \|\| role === 'ADMIN';/,
+  );
 });

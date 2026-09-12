@@ -140,6 +140,31 @@ function loadManager(localDbOverrides = {}, options = {}) {
           );
         }
       },
+      onlineByUser: {},
+      lastSeenByUser: {},
+      applyPresence(userId, online, lastSeenAt) {
+        state.onlineByUser[userId] = online;
+        state.lastSeenByUser[userId] = online
+          ? null
+          : lastSeenAt === undefined
+            ? (state.lastSeenByUser[userId] ?? null)
+            : lastSeenAt;
+      },
+      clearPresence(userId) {
+        delete state.onlineByUser[userId];
+        delete state.lastSeenByUser[userId];
+      },
+      viewerTypingPolicy: { direct: true, group: true },
+      setViewerTypingPolicy(policy) {
+        state.viewerTypingPolicy = policy;
+        state.calls.push(['setViewerTypingPolicy', policy]);
+        if (state.currentUserId) {
+          mmkvStore.set(
+            `chat.viewerTypingPolicy.${state.currentUserId}`,
+            JSON.stringify(policy),
+          );
+        }
+      },
       setError(v) {
         state.error = v;
       },
@@ -190,6 +215,14 @@ function loadManager(localDbOverrides = {}, options = {}) {
         }),
       viewerSelfDestructSecStorageKey: (userId) =>
         `chat.viewerSelfDestructSec.${userId}`,
+      readViewerTypingPolicy: (userId) => {
+        const raw = mmkvStore.get(`chat.viewerTypingPolicy.${userId}`);
+        return raw ? JSON.parse(raw) : { direct: true, group: true };
+      },
+      viewerTypingPolicyFromPrivacy: (settings) => ({
+        direct: settings.shareTypingInDirect !== false,
+        group: settings.shareTypingInGroup !== false,
+      }),
       state,
     };
   })();
@@ -627,12 +660,12 @@ test('a stale policy refresh cannot overwrite a newer local setting', async () =
   assert.equal(store.viewerSelfDestructSec, 7 * 24 * 60 * 60);
 });
 
-test('reconnect (not first connect) refreshes conversations and backfills the active gap', () => {
+test('first connect refreshes conversations and reconnect backfills the active gap', () => {
   const { manager, socket, store, apiCalls } = loadManager();
   manager.connectChat('jwt', 'u1');
   socket.fire('connect');
-  // 首连不对账:冷启动全量拉取由页面 focus 负责。
-  assert.equal(apiCalls.conversations, 0);
+  // 首连必须拉会话快照:消息页可能在 socket 已连接后才挂载。
+  assert.equal(apiCalls.conversations, 1);
   assert.deepEqual(apiCalls.backfills, []);
 
   socket.fire('disconnect');
@@ -642,7 +675,7 @@ test('reconnect (not first connect) refreshes conversations and backfills the ac
   };
   socket.fire('connect');
   // 重连:列表刷新一次 + 当前会话从本地最高 height(乐观消息的 0 不算)追平。
-  assert.equal(apiCalls.conversations, 1);
+  assert.equal(apiCalls.conversations, 2);
   assert.deepEqual(apiCalls.backfills, [
     { conversationId: 'c1', afterHeight: 9 },
   ]);
@@ -754,7 +787,7 @@ test('token rotation (suspend + reconnect) still counts as a reconnect', () => {
   const { manager, socket, store, apiCalls } = loadManager();
   manager.connectChat('jwt', 'u1');
   socket.fire('connect');
-  assert.equal(apiCalls.conversations, 0);
+  assert.equal(apiCalls.conversations, 1);
 
   // access token 轮换走的是 suspendChat + connectChat:换的是一条**新 socket**。
   // 判据挂在 socket 上的话这条新连接永远算首连,断开窗口里的消息一条都不补。
@@ -764,7 +797,7 @@ test('token rotation (suspend + reconnect) still counts as a reconnect', () => {
   manager.connectChat('jwt-rotated', 'u1');
   socket.fire('connect');
 
-  assert.equal(apiCalls.conversations, 1);
+  assert.equal(apiCalls.conversations, 2);
   assert.deepEqual(apiCalls.backfills, [
     { conversationId: 'c1', afterHeight: 7 },
   ]);
@@ -1116,15 +1149,109 @@ test('logging out and back in starts a fresh outage window', () => {
   assert.equal(reports[1].context.attempts, 1, '失败计数也要从头数');
 });
 
+// detail 查询里被请求却拿到 null 的人要清掉本地状态 —— 对方刚关掉「显示在线
+// 时间」时服务端就是这么回的。不清就会把旧的在线状态一直挂在界面上。
+// 空 ack 是另一回事(限流/出错),那时什么都不能动。
+test('presence query clears users the server marks invisible', () => {
+  const { manager, socket, store } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  store.applyPresence('peer', true, null);
+  store.applyPresence('gone', true, null);
+
+  socket.ackResponder = (event, _payload, cb) => {
+    if (event === 'chat:presence') {
+      cb(null, {
+        peer: { online: false, lastSeenAt: '2026-09-11T08:00:00.000Z' },
+        gone: null,
+      });
+    }
+  };
+  manager.queryChatPresence(['peer', 'gone', 'omitted']);
+
+  assert.equal(store.onlineByUser.peer, false);
+  assert.equal(store.lastSeenByUser.peer, '2026-09-11T08:00:00.000Z');
+  assert.ok(!('gone' in store.onlineByUser), '服务端说不可见的人要被清掉');
+  assert.ok(!('omitted' in store.onlineByUser), '旧服务端省略的人同样清掉');
+});
+
+test('an empty presence ack leaves known state alone', () => {
+  const { manager, socket, store } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  store.applyPresence('peer', true, null);
+
+  socket.ackResponder = (event, _payload, cb) => {
+    if (event === 'chat:presence') cb(null, {});
+  };
+  manager.queryChatPresence(['peer']);
+
+  // 限流/出错也是空 ack —— 不能把它当成「这个人不可见」。
+  assert.equal(store.onlineByUser.peer, true);
+});
+
 test('typing is throttled locally per conversation', () => {
   const { manager, socket } = loadManager();
   manager.connectChat('jwt', 'u1');
   socket.connected = true;
-  manager.sendChatTyping('c1');
-  manager.sendChatTyping('c1');
-  manager.sendChatTyping('c2');
+  manager.sendChatTyping('c1', 'direct');
+  manager.sendChatTyping('c1', 'direct');
+  manager.sendChatTyping('c2', 'group');
   const typingEvents = socket.emitted.filter((e) => e.event === 'chat:typing');
   assert.equal(typingEvents.length, 2);
+});
+
+// 隐私页的「单聊 / 群聊输入状态」:门禁在发送侧这一个出口,按会话类型各管各的。
+test('typing respects the per-kind privacy switches', () => {
+  const { manager, socket, store } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  store.setViewerTypingPolicy({ direct: false, group: true });
+  manager.sendChatTyping('c1', 'direct');
+  manager.sendChatTyping('c2', 'group');
+  const typingEvents = socket.emitted.filter((e) => e.event === 'chat:typing');
+  assert.equal(typingEvents.length, 1);
+  assert.match(JSON.stringify(typingEvents[0]), /c2/);
+
+  store.setViewerTypingPolicy({ direct: true, group: false });
+  manager.sendChatTyping('c3', 'group');
+  assert.equal(
+    socket.emitted.filter((e) => e.event === 'chat:typing').length,
+    1,
+    '群聊开关关掉后不再上报',
+  );
+});
+
+test('connect applies the cached typing policy and the server refresh overrides it', async () => {
+  const { manager, socket, store, mmkvStore } = loadManager(
+    {},
+    {
+      privacyFetch: () =>
+        Promise.resolve({
+          messageSelfDestructSec: 0,
+          shareTypingInDirect: true,
+          shareTypingInGroup: false,
+        }),
+    },
+  );
+  mmkvStore.set(
+    'chat.viewerTypingPolicy.u1',
+    JSON.stringify({ direct: false, group: true }),
+  );
+
+  manager.connectChat('jwt', 'u1');
+  // 冷启动先用按账号缓存的开关门禁,不等网络。
+  assert.deepEqual(store.viewerTypingPolicy, { direct: false, group: true });
+
+  socket.fire('connect');
+  for (let i = 0; i < 4; i += 1) await Promise.resolve();
+
+  assert.deepEqual(store.viewerTypingPolicy, { direct: true, group: false });
+  assert.equal(
+    mmkvStore.get('chat.viewerTypingPolicy.u1'),
+    JSON.stringify({ direct: true, group: false }),
+    '服务端的值要落回按账号缓存,下次冷启动直接可用',
+  );
 });
 
 /** 等 hydrateFromLocalDb 那串 await 跑完(它是 void 出去的,没法直接 await)。 */

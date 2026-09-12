@@ -2,6 +2,9 @@ import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import { InboxTabsHeader } from '@/features/contacts/components/InboxTabsHeader';
+import { NewGroupsInboxList } from '@/features/contacts/components/NewGroupsInboxList';
+import { filterFriendInboxRows } from '@/features/contacts/utils/friend-inbox-filter';
 import {
   buildFriendActivityInboxRows,
   getFriendActivityCopy,
@@ -32,6 +35,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
+  // 页签、搜索框和列表同住一张白面板上，面板上缘圆角。
+  panel: {
+    flex: 1,
+  },
   content: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
@@ -73,6 +80,10 @@ export default function NewFriendsScreen() {
   const { colors } = useTheme();
   const { t, i18n } = useTranslation();
   const [activities, setActivities] = useState<FriendActivity[]>([]);
+  // 页签是主轴：好友动态和入圈申请是两批数据、两套接口，分开收才不会互相淹没。
+  const [activeTab, setActiveTab] = useState<'friends' | 'groups'>('friends');
+  // 关键词跨页签保留：用户常常只记得名字、不记得那是个人还是圈子。
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [navigating, setNavigating] = useState(false);
@@ -171,13 +182,16 @@ export default function NewFriendsScreen() {
         ...Typography.bodyRegular,
         fontWeight: '600' as const,
       },
+      panel: {
+        backgroundColor: colors.surface,
+      },
     }),
     [colors],
   );
 
   const inboxRows = useMemo(
-    () => buildFriendActivityInboxRows(activities),
-    [activities],
+    () => filterFriendInboxRows(buildFriendActivityInboxRows(activities), query),
+    [activities, query],
   );
 
   const renderItem = useCallback(
@@ -266,23 +280,54 @@ export default function NewFriendsScreen() {
     </View>
   ) : (
     <View style={s.stateBlock}>
-      <Text style={d.stateText}>{t('contacts.friendActivity.empty')}</Text>
+      <Text style={d.stateText}>
+        {query.trim()
+          ? t('contacts.friendActivity.noMatches')
+          : t('contacts.friendActivity.empty')}
+      </Text>
     </View>
+  );
+
+  const tabs = useMemo(
+    () => [
+      { id: 'friends' as const, label: t('contacts.friendActivity.tabFriends') },
+      { id: 'groups' as const, label: t('contacts.friendActivity.tabGroups') },
+    ],
+    [t],
   );
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title={t('contacts.friendActivity.title')} />
-      <FlatList
-        data={inboxRows}
-        keyExtractor={(item) => item.activity.counterparty.id}
-        renderItem={renderItem}
-        ListEmptyComponent={emptyState}
-        contentContainerStyle={s.content}
-        showsVerticalScrollIndicator={false}
-        refreshing={refreshing}
-        onRefresh={handleRefreshActivities}
+      <NavHeader
+        title={t('contacts.friendActivity.title')}
+        // 深链/推送直接落到这屏时栈里没有上一级，router.back() 会退到上一个 tab
+        // （用户看到的是「退出后到了消息页」）。给个上级页面兜底。
+        fallbackHref="/(tabs)/contacts"
       />
+      <View style={[s.panel, d.panel]}>
+        <InboxTabsHeader
+          tabs={tabs}
+          activeId={activeTab}
+          onSelect={(id) => setActiveTab(id === 'groups' ? 'groups' : 'friends')}
+          query={query}
+          onQueryChange={setQuery}
+          searchPlaceholder={t('contacts.friendActivity.searchPlaceholder')}
+        />
+        {activeTab === 'groups' ? (
+          <NewGroupsInboxList query={query} />
+        ) : (
+          <FlatList
+            data={inboxRows}
+            keyExtractor={(item) => item.activity.counterparty.id}
+            renderItem={renderItem}
+            ListEmptyComponent={emptyState}
+            contentContainerStyle={s.content}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={handleRefreshActivities}
+          />
+        )}
+      </View>
     </View>
   );
 }
