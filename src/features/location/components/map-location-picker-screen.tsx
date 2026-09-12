@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,12 +11,18 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  AmapNativeSurface,
+  isAmapNativeSupported,
+  type AmapNativeSurfaceRef,
+} from '@/features/location/components/amap-native-surface';
 import { MapSurface } from '@/features/location/components/map-surface';
+import { resolvePlace } from '@/features/location/services/reverse-geocode';
+import { resolvePlaceOnDevice } from '@/features/location/services/native-reverse-geocode';
 import {
   BASEMAP_ATTRIBUTION,
   BASEMAP_MAX_ZOOM,
   gcj02ToWgs84,
-  getAmapScriptConfig,
   getBasemapProvider,
   getBasemapUrlTemplate,
   wgs84ToGcj02,
@@ -30,7 +36,7 @@ import {
 } from './leaflet-1.9.4';
 
 type MapMessage =
-  | ({ type: 'location-changed'; coordsys?: 'wgs84' | 'gcj02' } & PickedLocation)
+  | ({ type: 'location-changed' } & PickedLocation)
   | { type: 'map-error'; message?: string }
   | { type: 'map-runtime-unavailable' };
 
@@ -144,130 +150,21 @@ function normalizeCandidate(
     MAX_LOCATION_ADDRESS_LENGTH,
   );
 
-  // 高德渲染时地图页全程说 GCJ-02，减偏收在这里 —— 存库口径始终是 WGS-84。
-  // 坐标系由地图页自报：高德加载失败回落到 Leaflet 时，它报回来的会是 wgs84。
-  const coordinate =
-    candidate.coordsys === 'gcj02'
-      ? gcj02ToWgs84(candidate.latitude, candidate.longitude)
-      : { latitude: candidate.latitude, longitude: candidate.longitude };
-  if (!coordinate) return null;
-
   return {
     title: title || selectedLabel,
     address,
-    latitude: coordinate.latitude,
-    longitude: coordinate.longitude,
+    latitude: candidate.latitude,
+    longitude: candidate.longitude,
   };
-}
-
-/**
- * 地图运行时的初始化脚本。
- *
- * 两个分支都导出同一个 `createMapAdapter(latitude, longitude, onPick)`，于是下面
- * 那段选点、反查、搜索的逻辑完全共享 —— 换底图只换这一段，不碰业务。
- *
- * 高德分支里的坐标**全程是 GCJ-02**：高德吐出来的就是 GCJ-02，原样用、原样发给
- * 服务端（带 coordsys=gcj02）、原样 post 给 React 侧，由 React 侧统一减偏回
- * WGS-84。这样加偏公式只有服务端和 React 侧两处实现，内联脚本里一行都没有。
- */
-function buildLeafletAdapterScript(scheme: BasemapScheme) {
-  return `
-    function createLeafletAdapter(latitude, longitude, onPick) {
-      if (typeof L === 'undefined') return null;
-      const map = L.map('map', { zoomControl: false }).setView([latitude, longitude], 15);
-      const retinaSuffix = window.devicePixelRatio > 1 ? '@2x' : '';
-      L.tileLayer('${getBasemapUrlTemplate(scheme)}'.replace('{r}', retinaSuffix), {
-        maxZoom: ${BASEMAP_MAX_ZOOM},
-        attribution: '${escapeHtml(BASEMAP_ATTRIBUTION)}'
-      }).addTo(map);
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-      const markerIcon = L.divIcon({
-        className: '',
-        html: '<div class="circleMarker"></div>',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
-      });
-      const marker = L.marker([latitude, longitude], { draggable: true, icon: markerIcon }).addTo(map);
-      map.on('click', (event) => onPick(event.latlng.lat, event.latlng.lng));
-      marker.on('dragend', () => {
-        const position = marker.getLatLng();
-        onPick(position.lat, position.lng);
-      });
-
-      return {
-        coordinateSystem: 'wgs84',
-        setMarker: (lat, lon) => marker.setLatLng([lat, lon]),
-        setCenter: (lat, lon, zoom) => map.setView([lat, lon], zoom)
-      };
-    }`;
-}
-
-function buildAmapAdapterScript() {
-  return `
-    function createAmapAdapter(latitude, longitude, onPick) {
-      // key 无效、配额耗尽或脚本没下下来时，高德返回的那段 JS 不定义 AMap，
-      // 这里返回 null 让调用方回落到 Leaflet，而不是让整页地图作废。
-      if (typeof AMap === 'undefined' || typeof AMap.Map !== 'function') return null;
-      // 高德的坐标一律是 [经度, 纬度]，和这套栈其余地方的 (lat, lon) 顺序相反。
-      const map = new AMap.Map('map', {
-        center: [longitude, latitude],
-        zoom: 15,
-        resizeEnable: true
-      });
-      if (AMap.ToolBar) {
-        map.addControl(new AMap.ToolBar({ position: { right: '12px', bottom: '200px' } }));
-      }
-
-      const marker = new AMap.Marker({
-        position: [longitude, latitude],
-        draggable: true,
-        anchor: 'center',
-        content: '<div class="circleMarker"></div>'
-      });
-      map.add(marker);
-      map.on('click', (event) => onPick(event.lnglat.getLat(), event.lnglat.getLng()));
-      marker.on('dragend', () => {
-        const position = marker.getPosition();
-        onPick(position.getLat(), position.getLng());
-      });
-
-      return {
-        coordinateSystem: 'gcj02',
-        setMarker: (lat, lon) => marker.setPosition([lon, lat]),
-        setCenter: (lat, lon, zoom) => map.setZoomAndCenter(zoom, [lon, lat])
-      };
-    }`;
-}
-
-/**
- * 择一：能用高德就用高德，否则回落 Leaflet。
- *
- * 两套底图的坐标系不同，所以初始中心点由调用方同时给出两份 —— 脚本里不做任何
- * 加偏换算，选中哪套就用哪套，并把实际生效的坐标系报给 React 侧。
- */
-function buildAdapterSelectorScript(hasAmap: boolean) {
-  const amapAttempt = hasAmap
-    ? `createAmapAdapter(INITIAL_GCJ02.latitude, INITIAL_GCJ02.longitude, onPick) || `
-    : '';
-  return `
-    function createMapAdapter(onPick) {
-      const adapter = ${amapAttempt}createLeafletAdapter(INITIAL_WGS84.latitude, INITIAL_WGS84.longitude, onPick);
-      if (!adapter) throw new Error('no map runtime available');
-      return adapter;
-    }`;
 }
 
 function buildMapHtml(
   { latitude, longitude, title, address }: PickedLocation,
-  /** 同一个点的 GCJ-02 版本，只有高德分支会用到。 */
-  shifted: { latitude: number; longitude: number },
   labels: Pick<
     MapLocationPickerLabels,
     'searchPlaceholder' | 'searchButton' | 'selectedLabel'
   >,
   scheme: BasemapScheme,
-  amapScript: { scriptUrl: string; securityCode: string } | null,
 ) {
   const safeTitle = escapeHtml(title);
   const safeAddress = escapeHtml(address);
@@ -282,46 +179,9 @@ function buildMapHtml(
     ? serializeForInlineScript(geocoderBaseUrl)
     : 'null';
   const useParentGeocoderBridge = Platform.OS === 'web';
-  const isAmap = amapScript !== null;
-
-  // 高德那条路随时可能断（key 失效、配额耗尽、脚本没下下来），所以 Leaflet 始终
-  // 内联待命，瓦片域名也一并放行——回落时它要能真的画出地图来。
-  const imageSources = isAmap
-    ? 'https://*.amap.com https://*.autonavi.com https://basemaps.cartocdn.com'
-    : 'https://basemaps.cartocdn.com';
-  const scriptSources = isAmap
-    ? "'nonce-circle-map' https://webapi.amap.com https://*.amap.com"
-    : "'nonce-circle-map'";
-  const connectSources = [
-    ...(isAmap ? ['https://*.amap.com', 'https://*.autonavi.com'] : []),
-    ...(geocoderBaseUrl ? [new URL(geocoderBaseUrl).origin] : []),
-  ].map(escapeHtml);
-  const connectSource = connectSources.length
-    ? `; connect-src ${connectSources.join(' ')}`
+  const geocoderConnectSource = geocoderBaseUrl
+    ? `; connect-src ${escapeHtml(new URL(geocoderBaseUrl).origin)}`
     : '';
-  // 高德 2.0 用 Canvas/WebGL 渲染，会起 blob: worker。
-  const workerSource = isAmap ? '; worker-src blob:' : '';
-
-  // 安全密钥必须在 JS API 脚本**加载之前**写好，否则不生效。
-  const amapTags = isAmap
-    ? `${
-        amapScript.securityCode
-          ? `<script nonce="circle-map">window._AMapSecurityConfig = { securityJsCode: ${serializeForInlineScript(amapScript.securityCode)} };</script>`
-          : ''
-      }
-  <script nonce="circle-map" src="${escapeHtml(amapScript.scriptUrl)}"></script>`
-    : '';
-  const mapLibraryTags = `${amapTags}
-  <script nonce="circle-map">${LEAFLET_1_9_4_JS}</script>`;
-  const mapLibraryStyles = `<style nonce="circle-map">${LEAFLET_1_9_4_CSS}</style>`;
-  const runtimeScript = [
-    buildLeafletAdapterScript(scheme),
-    isAmap ? buildAmapAdapterScript() : '',
-    buildAdapterSelectorScript(isAmap),
-  ]
-    .filter(Boolean)
-    .join('\n');
-
   const searchControls = geocoderBaseUrl
     ? `<div class="search">
       <input id="query" maxlength="120" placeholder="${safeSearchPlaceholder}" value="${safeTitle || safeAddress}">
@@ -332,8 +192,8 @@ function buildMapHtml(
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${scriptSources}; style-src 'nonce-circle-map' 'unsafe-inline'; img-src ${imageSources} data: blob:${connectSource}${workerSource}">
-  ${mapLibraryStyles}
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-circle-map'; style-src 'nonce-circle-map' 'unsafe-inline'; img-src https://basemaps.cartocdn.com data: blob:${geocoderConnectSource}">
+  <style nonce="circle-map">${LEAFLET_1_9_4_CSS}</style>
   <style nonce="circle-map">
     html, body, #map { height: 100%; width: 100%; margin: 0; background: ${scheme === 'dark' ? '#0b0f19' : '#e8e5df'}; }
     .bottomSheet {
@@ -398,14 +258,11 @@ function buildMapHtml(
       <small id="picked-address">${safeAddress}</small>
     </div>
   </div>
-  ${mapLibraryTags}
+  <script nonce="circle-map">${LEAFLET_1_9_4_JS}</script>
   <script nonce="circle-map">
     const SELECTED_LABEL = ${scriptSelectedLabel};
     const GEOCODER_BASE_URL = ${scriptGeocoderBaseUrl};
     const USE_PARENT_GEOCODER_BRIDGE = ${useParentGeocoderBridge};
-    // 同一个点的两套坐标。脚本里不做任何加偏换算，选中哪套底图就用哪套数字。
-    const INITIAL_WGS84 = { latitude: ${latitude}, longitude: ${longitude} };
-    const INITIAL_GCJ02 = { latitude: ${shifted.latitude}, longitude: ${shifted.longitude} };
     const bridge = window.ReactNativeWebView || {
       postMessage: (data) => window.parent.postMessage(data, '*')
     };
@@ -437,27 +294,40 @@ function buildMapHtml(
       });
     }
 
-${runtimeScript}
-
     try {
-      const adapter = createMapAdapter((lat, lon) => reverseGeocode(lat, lon));
-      // 实际生效的坐标系由运行时决定 —— 高德失败回落到 Leaflet 时它会变回 wgs84。
-      const COORDINATE_SYSTEM = adapter.coordinateSystem;
-      const initialPoint = COORDINATE_SYSTEM === 'gcj02' ? INITIAL_GCJ02 : INITIAL_WGS84;
+      if (typeof L === 'undefined') throw new Error('leaflet unavailable');
 
+      const map = L.map('map', { zoomControl: false }).setView([${latitude}, ${longitude}], 15);
+      const retinaSuffix = window.devicePixelRatio > 1 ? '@2x' : '';
+      L.tileLayer('${getBasemapUrlTemplate(scheme)}'.replace('{r}', retinaSuffix), {
+        maxZoom: ${BASEMAP_MAX_ZOOM},
+        attribution: '${escapeHtml(BASEMAP_ATTRIBUTION)}'
+      }).addTo(map);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      const markerIcon = L.divIcon({
+        className: '',
+        html: '<div class="circleMarker"></div>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+      const marker = L.marker([${latitude}, ${longitude}], {
+        draggable: true,
+        icon: markerIcon
+      }).addTo(map);
       let picked = {
         title: ${scriptTitle} || SELECTED_LABEL,
         address: ${scriptAddress},
-        latitude: initialPoint.latitude,
-        longitude: initialPoint.longitude
+        latitude: ${latitude},
+        longitude: ${longitude}
       };
 
       function updatePicked(next) {
         picked = { ...picked, ...next };
         document.getElementById('picked-title').textContent = picked.title || SELECTED_LABEL;
         document.getElementById('picked-address').textContent = picked.address || '';
-        adapter.setMarker(picked.latitude, picked.longitude);
-        post({ type: 'location-changed', coordsys: COORDINATE_SYSTEM, ...picked });
+        marker.setLatLng([picked.latitude, picked.longitude]);
+        post({ type: 'location-changed', ...picked });
       }
 
       let pickGeneration = 0;
@@ -485,7 +355,7 @@ ${runtimeScript}
       }
 
       function fetchReversePlace(lat, lon) {
-        return requestGeocoder('/reverse', { format: 'jsonv2', lat, lon, coordsys: COORDINATE_SYSTEM });
+        return requestGeocoder('/reverse', { format: 'jsonv2', lat, lon });
       }
 
       async function reverseGeocode(lat, lon) {
@@ -512,7 +382,7 @@ ${runtimeScript}
 
       async function refineInitialAddress() {
         if (!GEOCODER_BASE_URL) return;
-        const coordsOnly = /^\s*-?\d{1,3}(\.\d+)?\s*,\s*-?\d{1,3}(\.\d+)?\s*$/;
+        const coordsOnly = /^\\s*-?\\d{1,3}(\\.\\d+)?\\s*,\\s*-?\\d{1,3}(\\.\\d+)?\\s*$/;
         if (picked.address && !coordsOnly.test(picked.address)) return;
         const generation = pickGeneration;
         try {
@@ -534,14 +404,14 @@ ${runtimeScript}
         pickGeneration += 1;
         const generation = pickGeneration;
         try {
-          const rows = await requestGeocoder('/search', { format: 'jsonv2', limit: 1, q: query, coordsys: COORDINATE_SYSTEM });
+          const rows = await requestGeocoder('/search', { format: 'jsonv2', limit: 1, q: query });
           if (generation !== pickGeneration) return;
           if (!rows.length) return;
           const row = rows[0];
           const lat = Number(row.lat);
           const lon = Number(row.lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-          adapter.setCenter(lat, lon, 16);
+          map.setView([lat, lon], 16);
           updatePicked({
             title: row.name || query,
             address: row.display_name || query,
@@ -553,6 +423,11 @@ ${runtimeScript}
         }
       }
 
+      map.on('click', (event) => reverseGeocode(event.latlng.lat, event.latlng.lng));
+      marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        reverseGeocode(pos.lat, pos.lng);
+      });
       const searchButton = document.getElementById('search');
       const searchInput = document.getElementById('query');
       if (searchButton && searchInput) {
@@ -606,35 +481,72 @@ export function MapLocationPickerScreen({
     useState<PickedLocation>(initialLocation);
   useEffect(() => setCandidateLocation(initialLocation), [initialLocation]);
 
-  // 大陆且配了高德 key 才用高德渲染；其余情况（境外、未配 key）保持 Leaflet。
-  const amapScript = useMemo(
-    () =>
-      getBasemapProvider(
-        initialLocation.latitude,
-        initialLocation.longitude,
-      ) === 'amap'
-        ? getAmapScriptConfig()
-        : null,
-    [initialLocation.latitude, initialLocation.longitude],
+  const mapHtml = useMemo(
+    () => buildMapHtml(initialLocation, labels, resolvedMode),
+    [initialLocation, labels, resolvedMode],
   );
-  const mapHtml = useMemo(() => {
-    // 两套坐标一起交给地图页：高德只认 GCJ-02，Leaflet 只认 WGS-84，
-    // 而到底用哪套要等脚本跑起来、看高德有没有加载成功才知道。
-    const shifted = wgs84ToGcj02(
+
+  // 大陆坐标 + 装得上原生模块 + 构建时配了密钥，才走高德原生地图。
+  // 其余情况（网页端、没 prebuild、境外坐标、没配密钥）都留在 Leaflet 上。
+  const useNativeAmap =
+    getBasemapProvider(
       initialLocation.latitude,
       initialLocation.longitude,
-    ) ?? {
-      latitude: initialLocation.latitude,
-      longitude: initialLocation.longitude,
-    };
-    return buildMapHtml(
-      initialLocation,
-      shifted,
-      labels,
-      resolvedMode,
-      amapScript,
-    );
-  }, [amapScript, initialLocation, labels, resolvedMode]);
+      isAmapNativeSupported,
+    ) === 'amap-native';
+
+  const nativeMapRef = useRef<AmapNativeSurfaceRef | null>(null);
+  // 拖动会连着抛出好几次区域变化，只认最后一次的反查结果。
+  const centerGenerationRef = useRef(0);
+
+  const initialNativeCenter = useMemo(
+    () =>
+      wgs84ToGcj02(initialLocation.latitude, initialLocation.longitude) ?? {
+        latitude: initialLocation.latitude,
+        longitude: initialLocation.longitude,
+      },
+    [initialLocation.latitude, initialLocation.longitude],
+  );
+
+  /**
+   * 地图停下来了，中心点就是用户选的点。
+   *
+   * 进来的是 GCJ-02（高德只说这套），减偏后才对外——存库口径始终是 WGS-84。
+   * 地名走的是设备优先那条链路：系统答得上来就不花钱。
+   */
+  const handleNativeCenterChanged = useCallback(
+    (latitude: number, longitude: number) => {
+      const wgs84 = gcj02ToWgs84(latitude, longitude);
+      if (!wgs84) return;
+
+      centerGenerationRef.current += 1;
+      const generation = centerGenerationRef.current;
+
+      // 先把坐标顶上去，地名慢一步补——拖动时下面的文字不至于是空的。
+      setCandidateLocation((current) => ({
+        ...current,
+        title: labels.selectedLabel,
+        address: `${wgs84.latitude.toFixed(5)}, ${wgs84.longitude.toFixed(5)}`,
+        latitude: wgs84.latitude,
+        longitude: wgs84.longitude,
+      }));
+
+      void resolvePlace(
+        wgs84.latitude,
+        wgs84.longitude,
+        undefined,
+        resolvePlaceOnDevice,
+      ).then((place) => {
+        if (!place || generation !== centerGenerationRef.current) return;
+        setCandidateLocation((current) => ({
+          ...current,
+          title: place.title || current.title,
+          address: place.address || current.address,
+        }));
+      });
+    },
+    [labels.selectedLabel],
+  );
 
   const handleRetry = useCallback(() => {
     setMapUnavailable(false);
@@ -699,14 +611,25 @@ export function MapLocationPickerScreen({
             <ActivityIndicator color={colors.primary} />
           </View>
         ) : null}
-        <MapSurface
-          reloadKey={surfaceKey}
-          title={labels.title}
-          html={mapHtml}
-          geocoderBaseUrl={readGeocoderBaseUrl()}
-          onLoadEnd={() => setLoading(false)}
-          onMessage={handleMapMessage}
-        />
+        {useNativeAmap ? (
+          <AmapNativeSurface
+            ref={nativeMapRef}
+            latitude={initialNativeCenter.latitude}
+            longitude={initialNativeCenter.longitude}
+            pinColor={colors.primary}
+            onCenterChanged={handleNativeCenterChanged}
+            onReady={() => setLoading(false)}
+          />
+        ) : (
+          <MapSurface
+            reloadKey={surfaceKey}
+            title={labels.title}
+            html={mapHtml}
+            geocoderBaseUrl={readGeocoderBaseUrl()}
+            onLoadEnd={() => setLoading(false)}
+            onMessage={handleMapMessage}
+          />
+        )}
         <View
           style={[
             s.nativeConfirm,

@@ -332,65 +332,48 @@ export function buildSystemMapUrls(
  * 底图数据从哪来。
  *
  * 绝大多数用户在大陆，而 CARTO 的 OSM 瓦片在境内既没有 CDN 节点、中文标注也稀疏。
- * 境内因此改用高德的地图 JS API，境外继续用 CARTO —— 高德在境外基本没有数据
- * （实测 z15 的圣何塞瓦片只有 179 字节，是一张空白图）。
+ * 境内因此改用高德，但**只用原生 SDK**：高德的计费表里，地图显示只对网页版
+ * JS API 的「图面初始化」按次收费，Android / iOS 原生 SDK 那一栏根本不在计费项里。
+ * 同一块地图，走原生就是零成本，走 JS API 就要计费——所以网页端宁可继续用 OSM。
  *
  * 为什么不是天地图：它在坐标系上本来更合适（CGCS2000 与 WGS-84 在地图尺度上无
  * 差别，不需要任何偏移转换），但实测其瓦片接口、主站与开发者站**对境外一律拒绝
- * 访问**（CloudWAF 418 / 连接超时）。也就是说在境外既申请不到密钥，也无法验收。
- * 高德则全线可达，境外也能开发和自测。
+ * 访问**（CloudWAF 418 / 连接超时），在境外既申请不到密钥也无法验收。
  */
-export type BasemapProvider = 'carto' | 'amap';
+export type BasemapProvider = 'carto' | 'amap-native';
 
-const AMAP_JS_API_ORIGIN = 'https://webapi.amap.com';
 const AMAP_ATTRIBUTION = '© 高德地图';
 
-function readAmapJsKey(): string {
+function readAmapNativeKey(): string {
   // Expo 是按字面量静态替换 process.env.EXPO_PUBLIC_*，这里只能写成完整形式。
-  return (process.env.EXPO_PUBLIC_AMAP_JS_KEY ?? '').trim();
+  return (process.env.EXPO_PUBLIC_AMAP_NATIVE_KEY ?? '').trim();
 }
 
-function readAmapSecurityCode(): string {
-  return (process.env.EXPO_PUBLIC_AMAP_SECURITY_CODE ?? '').trim();
+/** 构建时配了高德原生密钥吗？没配就不会挂那个 config plugin，原生地图也起不来。 */
+export function hasAmapNativeKey(): boolean {
+  return readAmapNativeKey().length > 0;
 }
 
 /**
  * 这个坐标该用哪个底图源。
  *
- * 没配高德 key，或者坐标在境外，都回落到 CARTO —— 回落后的表现与接入前完全一致，
- * 不会退步成白图。
+ * `nativeSupported` 由调用方传入 —— 网页端和没 prebuild 过的包里根本没有原生模块，
+ * 那种情况下必须回落，回落后的表现与接入前完全一致，不会退步成白图。
  */
 export function getBasemapProvider(
   latitude: number,
   longitude: number,
-  amapJsKey = readAmapJsKey(),
+  nativeSupported: boolean,
+  amapNativeKey = readAmapNativeKey(),
 ): BasemapProvider {
-  if (!amapJsKey) return 'carto';
+  if (!nativeSupported || !amapNativeKey) return 'carto';
   if (!hasValidLocationCoordinates(latitude, longitude)) return 'carto';
-  return isOutOfChina(latitude, longitude) ? 'carto' : 'amap';
+  // 高德在境外基本没有数据（实测 z15 的境外瓦片只有 179 字节，是张空白图）。
+  return isOutOfChina(latitude, longitude) ? 'carto' : 'amap-native';
 }
 
 export function getBasemapAttribution(provider: BasemapProvider): string {
-  return provider === 'amap' ? AMAP_ATTRIBUTION : BASEMAP_ATTRIBUTION;
-}
-
-/**
- * 地图页要加载的高德 JS API 地址。未配 key 时返回 null，调用方据此回落到 Leaflet。
- *
- * 2021-12-02 之后申请的 key 必须搭配安全密钥使用，而且那段配置必须在脚本加载**之前**
- * 执行，否则不生效 —— 所以这里把两样一起交给调用方。
- */
-export function getAmapScriptConfig(
-  amapJsKey = readAmapJsKey(),
-  securityCode = readAmapSecurityCode(),
-): { scriptUrl: string; securityCode: string } | null {
-  if (!amapJsKey) return null;
-  return {
-    // plugin 必须在这里声明：JS API 的插件是随主脚本一起同步加载的，
-    // 漏了它 AMap.ToolBar 永远不存在，地图上就没有缩放控件。
-    scriptUrl: `${AMAP_JS_API_ORIGIN}/maps?v=2.0&key=${encodeURIComponent(amapJsKey)}&plugin=AMap.ToolBar`,
-    securityCode,
-  };
+  return provider === 'amap-native' ? AMAP_ATTRIBUTION : BASEMAP_ATTRIBUTION;
 }
 
 /**
