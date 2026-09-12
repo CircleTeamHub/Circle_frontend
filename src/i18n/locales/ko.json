@@ -163,7 +163,8 @@
         "byAccount": "계정 ID로",
         "byPhone": "전화번호로",
         "byQrCode": "QR 코드로",
-        "byGroup": "그룹·서클로"
+        "byGroup": "그룹·서클로",
+        "shareCard": "내 개인 카드 공유"
       }
     },
     "permissions": {

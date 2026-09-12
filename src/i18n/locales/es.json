@@ -163,7 +163,8 @@
         "byAccount": "Por ID de cuenta",
         "byPhone": "Por número de teléfono",
         "byQrCode": "Por código QR",
-        "byGroup": "Por grupo o Círculo"
+        "byGroup": "Por grupo o Círculo",
+        "shareCard": "Compartir mi tarjeta personal"
       }
     },
     "permissions": {

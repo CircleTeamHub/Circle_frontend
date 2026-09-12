@@ -1271,11 +1271,9 @@ test("every locale defines labels for all supported language picker options", ()
   }
 });
 
-// 「加我为好友的方式」摘要里的计数必须只算界面上真的能拨的那几项。
-// byPhone / byQrCode 的开关已撤下（对应功能不存在），但字段仍会随服务端返回，
-// 且 addMeByQrCode 的默认值是 true —— 把它们算进去，用户会看到「已开启 3 项」，
-// 点开却只有两个开关，多出来的那一项既看不到也改不了。
-test("add-me summary counts only the methods whose switches are rendered", () => {
+// 「加我为好友的方式」摘要里的计数必须只算界面上真的能拨的开关。
+// 名片分享是一个动作入口，不是独立的服务端隐私字段，因此不计入开关数量。
+test("add-me summary counts only the rendered server-backed switches", () => {
   const source = fs.readFileSync(
     path.join(
       process.cwd(),
@@ -1292,7 +1290,7 @@ test("add-me summary counts only the methods whose switches are rendered", () =>
   );
   assert.deepEqual(
     counted.sort(),
-    ["addMeByAccount", "addMeByGroup"],
+    ["addMeByAccount", "addMeByGroup", "addMeByQrCode"],
     "addMeCount must exclude methods that have no switch in the sheet",
   );
 
@@ -1305,6 +1303,9 @@ test("add-me summary counts only the methods whose switches are rendered", () =>
     counted.sort(),
     "every rendered add-me switch must be counted, and vice versa",
   );
+
+  assert.match(source, /settingsDetails\.privacy\.addMe\.shareCard/);
+  assert.match(source, /pathname: '\/qr-code'/);
 });
 
 test("privacy self-destruct updates the chat cache policy immediately", () => {

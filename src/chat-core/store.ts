@@ -742,6 +742,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const {
       currentUserId,
       viewerSelfDestructSec,
+      viewerSelfDestructStartedAt,
       viewerSelfDestructPolicyRevision,
       selfDestructPolicyEpoch,
     } = get();
@@ -755,25 +756,32 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         // 缓存策略写失败不应影响隐私设置保存；本次进程仍立即执行清理。
       }
     }
+    const nextStartedAt =
+      startedAt !== undefined
+        ? startedAt
+        : viewerSelfDestructSec === normalized
+          ? viewerSelfDestructStartedAt
+          : null;
+    // 开启时间也是策略的一部分:它决定哪些缓存消息已到期、下一次清理几点跑。
+    // 只比 duration 的话,同档位换开启时间(冷启动只有缓存档位没有缓存开启时间、
+    // 或者另一台设备按同档位重置)会保住 epoch 又跳过清理 —— 已过期的消息就
+    // 一直留在界面上,而且没有任何报错。
+    const policyChanged =
+      viewerSelfDestructSec !== normalized ||
+      viewerSelfDestructStartedAt !== nextStartedAt;
     // 设置页/缓存初始化是本地权威写入；远程刷新只有在 socket manager 确认
     // 期间没有新写入时才带 remoteRefresh 标记落进来。
     set({
       viewerSelfDestructSec: normalized,
-      viewerSelfDestructStartedAt:
-        startedAt !== undefined
-          ? startedAt
-          : viewerSelfDestructSec === normalized
-            ? get().viewerSelfDestructStartedAt
-            : null,
+      viewerSelfDestructStartedAt: nextStartedAt,
       viewerSelfDestructPolicyRevision: options?.remoteRefresh
         ? viewerSelfDestructPolicyRevision
         : viewerSelfDestructPolicyRevision + 1,
-      selfDestructPolicyEpoch:
-        viewerSelfDestructSec === normalized
-          ? selfDestructPolicyEpoch
-          : selfDestructPolicyEpoch + 1,
+      selfDestructPolicyEpoch: policyChanged
+        ? selfDestructPolicyEpoch + 1
+        : selfDestructPolicyEpoch,
     });
-    if (viewerSelfDestructSec !== normalized || !options?.remoteRefresh) {
+    if (policyChanged || !options?.remoteRefresh) {
       void get().purgeExpiredBurnMessages();
     }
   },
@@ -1409,9 +1417,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const nextStartedAt =
       burnStartedAt !== undefined
         ? burnStartedAt
-        : burnDurationSec === null
+        : (burnDurationSec ?? 0) <= 0
           ? null
-          : (current.burnStartedAt ?? null);
+          : // 旧服务端只回 burnDurationSec。首次开启时没有任何已知开启时间,
+            // 而过期判定要求开启时间有限 —— 不兜底就变成「界面显示已开启、
+            // 消息永不焚毁」,而且不会报错。退到客户端此刻,窗口从现在起算。
+            (current.burnStartedAt ?? new Date().toISOString());
     if (
       (current.burnDurationSec ?? null) === burnDurationSec &&
       (current.burnStartedAt ?? null) === nextStartedAt

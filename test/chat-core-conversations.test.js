@@ -90,6 +90,12 @@ function loadStore() {
     module: { exports: {} },
     exports: {},
     Date,
+    // 自毁清理会排下一次到期的定时器。上下文里没有 timers 会在用例结束后炸成
+    // unhandledRejection（断言全绿、文件整体红）；给真 timers 又会把事件循环
+    // 吊住让整个文件跑不完（store 里那个 timer 没 unref）。这组用例不验证排期，
+    // 给一对空实现即可。
+    setTimeout: () => 0,
+    clearTimeout: () => {},
     require: (request) => {
       if (request === 'zustand') return zustandStub();
       if (request === './protocol') return {};
@@ -327,4 +333,67 @@ test('TEMP conversation never falls back to the latest sender on an old backend'
   );
 
   assert.equal(ui.name, '临时群聊');
+});
+
+// —— 自毁策略:开启时间与 duration 同等重要（Codex P1 两条） ——
+
+test('a remote refresh that only moves the start time still counts as a policy change', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('u1');
+  store.setViewerSelfDestructSec(300, undefined, '2026-08-01T00:00:00.000Z');
+  const baseline = useChatStore.getState().selfDestructPolicyEpoch;
+
+  // 同一档位、只有开启时间变了。之前只比 duration,于是 epoch 不动、清理也不跑,
+  // 而新的开启时间恰恰改变了「哪些缓存消息已到期、下一次清理几点跑」。
+  store.setViewerSelfDestructSec(300, { remoteRefresh: true }, '2026-08-09T00:00:00.000Z');
+
+  const next = useChatStore.getState();
+  assert.equal(next.viewerSelfDestructStartedAt, '2026-08-09T00:00:00.000Z');
+  assert.ok(
+    next.selfDestructPolicyEpoch > baseline,
+    '开启时间变化必须推进 selfDestructPolicyEpoch',
+  );
+});
+
+test('a remote refresh with the same duration and same start time stays a no-op', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('u1');
+  store.setViewerSelfDestructSec(300, undefined, '2026-08-01T00:00:00.000Z');
+  const baseline = useChatStore.getState().selfDestructPolicyEpoch;
+
+  store.setViewerSelfDestructSec(300, { remoteRefresh: true }, '2026-08-01T00:00:00.000Z');
+
+  assert.equal(useChatStore.getState().selfDestructPolicyEpoch, baseline);
+});
+
+test('an old backend response without burnStartedAt still gets a start boundary', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setConversations([conv({ id: 'conv-1' })]);
+
+  // 旧服务端只回 burnDurationSec。不兜底的话开启时间是 null,而过期判定要求它
+  // 有限 —— 界面显示「已开启」,消息却永不焚毁,且没有任何报错。
+  store.applyBurnDuration('conv-1', 300, undefined);
+
+  const [updated] = useChatStore.getState().conversations;
+  assert.equal(updated.burnDurationSec, 300);
+  assert.ok(
+    Number.isFinite(Date.parse(updated.burnStartedAt)),
+    '缺失的开启时间要兜底成一个可解析的时刻',
+  );
+});
+
+test('a disable response clears the start boundary instead of inventing one', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conv({ id: 'conv-1', burnDurationSec: 300, burnStartedAt: '2026-08-01T00:00:00.000Z' }),
+  ]);
+
+  store.applyBurnDuration('conv-1', 0, undefined);
+
+  const [updated] = useChatStore.getState().conversations;
+  assert.equal(updated.burnStartedAt, null);
 });

@@ -2260,7 +2260,8 @@
         "byAccount": "By account ID",
         "byPhone": "By phone number",
         "byQrCode": "By QR code",
-        "byGroup": "By group / circle"
+        "byGroup": "By group / circle",
+        "shareCard": "Share my personal card"
       }
     },
     "permissions": {

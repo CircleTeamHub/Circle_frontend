@@ -701,7 +701,8 @@ export async function setChatBurnDuration(
   const sameSession = sessionGate();
   const result = await apiClient<{
     burnDurationSec: number | null;
-    burnStartedAt: string | null;
+    // 滚动发布期间的旧服务端不返回它;store 的 applyBurnDuration 兜底成此刻。
+    burnStartedAt?: string | null;
   }>(
     `/chat/conversations/${conversationId}/burn`,
     { method: 'POST', body: { seconds: seconds ?? 0 } },

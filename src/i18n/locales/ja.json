@@ -163,7 +163,8 @@
         "byAccount": "アカウントIDで",
         "byPhone": "電話番号で",
         "byQrCode": "QRコードで",
-        "byGroup": "グループ・サークルで"
+        "byGroup": "グループ・サークルで",
+        "shareCard": "個人カードを共有"
       }
     },
     "permissions": {
