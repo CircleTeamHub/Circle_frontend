@@ -238,21 +238,19 @@ test('user profile screen refreshes profile data when returning to focus', () =>
   );
 });
 
-test('user profile screen queries and displays the other user presence status', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/user/screens/UserProfileScreen.tsx',
+// 在线状态的展示改由 usePeerPresence 收口(多了最近在线时间,并且对方关了
+// 「显示在线时间」时整行不画),原先那份「只有在线/离线」的断言已经过时 ——
+// 现在的不变式在下面那条 'shows the peer online state through the shared
+// presence channel' 里，这里只留「自己的资料不查也不展示」这一条。
+test('user profile screen never queries presence for the current user', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/user/screens/UserProfileScreen.tsx'),
+    'utf8',
   );
-  const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /queryChatPresence\(\[presenceUserId\]\)/);
-  assert.match(source, /state\.onlineByUser\[presenceUserId\]/);
-  assert.match(source, /presenceUserId = !isCurrentUser \? remoteProfile\?\.id/);
-  assert.match(source, /chat\.detail\.statusOnline/);
-  assert.match(source, /chat\.detail\.statusOffline/);
-  assert.match(source, /presenceDot/);
-  // 自己的资料不应查询或展示对方状态。
-  assert.match(source, /const presenceUserId = !isCurrentUser/);
+  assert.match(source, /const presenceUserId = isCurrentUser \? null :/);
+  assert.match(source, /if \(!presenceUserId\) return;/);
 });
 
 test('user profile route helpers preserve scope for the request form', () => {
