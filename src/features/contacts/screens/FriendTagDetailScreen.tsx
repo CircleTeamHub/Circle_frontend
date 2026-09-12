@@ -242,14 +242,15 @@ export default function FriendTagDetailScreen() {
   const handleAssignFriend = useCallback(
     async (friend: FriendProfile) => {
       if (!tagId || assigningFriendRef.current) return;
-      // Any in-flight list request predates this assignment and must not be able
-      // to replace the optimistic row when it resolves after the POST.
-      friendsRequestRef.current += 1;
       assigningFriendRef.current = friend.id;
       setAssigningFriendId(friend.id);
       try {
         await assignFriendTag(friend.id, tagId);
         if (!mountedRef.current) return;
+        // Only a successful assignment invalidates older list responses. Doing
+        // this before the POST would also invalidate their finally blocks on a
+        // failed POST and could leave the screen permanently loading.
+        friendsRequestRef.current += 1;
         optimisticFriendsRef.current.set(friend.id, friend);
         setFriends((current) =>
           current.some((item) => item.id === friend.id) ? current : [...current, friend],

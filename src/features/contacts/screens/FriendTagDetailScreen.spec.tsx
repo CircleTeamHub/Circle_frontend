@@ -98,6 +98,13 @@ jest.mock('@expo/vector-icons', () => {
   };
 });
 
+beforeEach(() => {
+  jest.mocked(assignFriendTag).mockReset();
+  jest.mocked(fetchFriends).mockReset();
+  jest.mocked(fetchFriendsByTag).mockReset();
+  mockRouter.push.mockReset();
+});
+
 test('a stale tag load cannot remove a friend added while it is in flight', async () => {
   let resolveInitialLoad!: (friends: FriendProfile[]) => void;
   const initialLoad = new Promise<FriendProfile[]>((resolve) => {
@@ -120,4 +127,28 @@ test('a stale tag load cannot remove a friend added while it is in flight', asyn
   });
   await waitFor(() => expect(screen.getByText('Alice')).toBeTruthy());
   expect(screen.getAllByText('Alice')).toHaveLength(1);
+});
+
+test('a failed assignment does not strand an older tag load in loading state', async () => {
+  let resolveInitialLoad!: (friends: FriendProfile[]) => void;
+  const initialLoad = new Promise<FriendProfile[]>((resolve) => {
+    resolveInitialLoad = resolve;
+  });
+  jest.mocked(fetchFriendsByTag).mockReturnValue(initialLoad);
+  jest.mocked(fetchFriends).mockResolvedValue([alice]);
+  jest.mocked(assignFriendTag).mockRejectedValue(new Error('network down'));
+
+  render(<FriendTagDetailScreen />);
+  fireEvent.press(screen.getByLabelText('contacts.tagDetail.addFriends'));
+  await waitFor(() => expect(fetchFriends).toHaveBeenCalledTimes(1));
+
+  fireEvent.press(screen.getByLabelText('contacts.tagDetail.addFriendAction', { exact: false }));
+  await waitFor(() => expect(assignFriendTag).toHaveBeenCalledWith('friend-1', 'tag-1'));
+
+  await act(async () => {
+    resolveInitialLoad([]);
+    await Promise.resolve();
+  });
+
+  await waitFor(() => expect(screen.getByText('contacts.tagDetail.empty')).toBeTruthy());
 });
