@@ -735,7 +735,7 @@ test("account security uses backend-backed device management and single-device l
   assert.doesNotMatch(source, /setSetting\('singleDeviceLogin'/);
 });
 
-test("privacy settings omits removed placeholder and presence rows", () => {
+test("privacy settings omits removed placeholder rows", () => {
   const source = fs.readFileSync(
     path.join(
       process.cwd(),
@@ -744,11 +744,11 @@ test("privacy settings omits removed placeholder and presence rows", () => {
     "utf8",
   );
 
+  // onlineTime / singleTyping / groupTyping 曾经也在这张「撤下」名单里 —— 那时
+  // 它们是只写本地的摆设。现在三项都接了服务端(见 presence-typing-privacy.test.js),
+  // 所以从这里拿掉。
   for (const removed of [
     "selfDestructTip",
-    "onlineTime",
-    "singleTyping",
-    "groupTyping",
     "personalizedRecommendation",
     "youthMode",
   ]) {

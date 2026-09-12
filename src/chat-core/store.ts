@@ -40,6 +40,48 @@ export function viewerSelfDestructSecStorageKey(userId: string): string {
   return `chat.viewerSelfDestructSec.${userId}`;
 }
 
+/** 本人向外上报「正在输入」的开关(服务端 PrivacySettings 的镜像)。 */
+export interface ViewerTypingPolicy {
+  direct: boolean;
+  group: boolean;
+}
+
+export const DEFAULT_VIEWER_TYPING_POLICY: ViewerTypingPolicy = {
+  direct: true,
+  group: true,
+};
+
+/** 按账号缓存:冷启动先用缓存门禁,连上后再对齐服务端(与自毁策略同一套路)。 */
+export function viewerTypingPolicyStorageKey(userId: string): string {
+  return `chat.viewerTypingPolicy.${userId}`;
+}
+
+/** 服务端隐私设置 → 输入状态开关;旧服务端不返回这两项时按默认放行。 */
+export function viewerTypingPolicyFromPrivacy(settings: {
+  shareTypingInDirect?: boolean;
+  shareTypingInGroup?: boolean;
+}): ViewerTypingPolicy {
+  return {
+    direct: settings.shareTypingInDirect !== false,
+    group: settings.shareTypingInGroup !== false,
+  };
+}
+
+export function readViewerTypingPolicy(userId: string): ViewerTypingPolicy {
+  try {
+    const raw = storage.getString(viewerTypingPolicyStorageKey(userId));
+    if (!raw) return DEFAULT_VIEWER_TYPING_POLICY;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return DEFAULT_VIEWER_TYPING_POLICY;
+    }
+    const { direct, group } = parsed as Partial<ViewerTypingPolicy>;
+    return { direct: direct !== false, group: group !== false };
+  } catch {
+    return DEFAULT_VIEWER_TYPING_POLICY;
+  }
+}
+
 function normalizeViewerSelfDestructSec(seconds: number): number | null {
   return isBurnDurationChoice(seconds) ? seconds : null;
 }
@@ -230,6 +272,14 @@ interface ChatStoreState {
   activeConversationId: string | null;
   /** 在线状态表(chat:presence 查询与广播共同维护)。 */
   onlineByUser: Record<string, boolean>;
+  /**
+   * 最近在线时刻(ISO):chat:presence 详细查询与下线广播共同维护。在线或
+   * 不知道时为 null;onlineByUser 里没有这个人 = 从没拿到过他的状态(对方
+   * 关了「显示在线时间」也是这一档),界面什么都不画。
+   */
+  lastSeenByUser: Record<string, string | null>;
+  /** 本人向外上报「正在输入」的开关(隐私页 + 连接时的服务端刷新共同维护)。 */
+  viewerTypingPolicy: ViewerTypingPolicy;
 
   setConnected: (connected: boolean) => void;
   setConnecting: (connecting: boolean) => void;
@@ -307,7 +357,15 @@ interface ChatStoreState {
    */
   dropCachedMessages: () => void;
   setActiveConversationId: (conversationId: string | null) => void;
-  applyPresence: (userId: string, online: boolean) => void;
+  /** lastSeenAt 省略 = 不改动已有的最近在线(旧服务端的 boolean ack);null = 不知道。 */
+  applyPresence: (
+    userId: string,
+    online: boolean,
+    lastSeenAt?: string | null,
+  ) => void;
+  /** 对方关掉了「显示在线时间」:忘掉此人,界面回到「未知」而不是「离线」。 */
+  clearPresence: (userId: string) => void;
+  setViewerTypingPolicy: (policy: ViewerTypingPolicy) => void;
   /**
    * 消息入库（历史页 / 广播 / 本地乐观消息共用）：
    * 按 d 对账替换乐观消息 → 按 id 去重 → height 升序（乐观消息 height=0 按
@@ -668,6 +726,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   clearedBeforeHeightByConversation: {},
   activeConversationId: null,
   onlineByUser: {},
+  lastSeenByUser: {},
+  viewerTypingPolicy: DEFAULT_VIEWER_TYPING_POLICY,
   readWatermarks: {},
   deliveredWatermarks: {},
   typingUntilByConversation: {},
@@ -1143,10 +1203,48 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
   setActiveConversationId: (conversationId) =>
     set({ activeConversationId: conversationId }),
-  applyPresence: (userId, online) => {
-    const { onlineByUser } = get();
-    if (onlineByUser[userId] === online) return;
-    set({ onlineByUser: { ...onlineByUser, [userId]: online } });
+  applyPresence: (userId, online, lastSeenAt) => {
+    const { onlineByUser, lastSeenByUser } = get();
+    const previousLastSeen = lastSeenByUser[userId] ?? null;
+    const nextLastSeen = online
+      ? null
+      : lastSeenAt === undefined
+        ? previousLastSeen
+        : lastSeenAt;
+    if (onlineByUser[userId] === online && previousLastSeen === nextLastSeen) {
+      return;
+    }
+    set({
+      onlineByUser: { ...onlineByUser, [userId]: online },
+      lastSeenByUser: { ...lastSeenByUser, [userId]: nextLastSeen },
+    });
+  },
+  clearPresence: (userId) => {
+    const { onlineByUser, lastSeenByUser } = get();
+    if (!(userId in onlineByUser) && !(userId in lastSeenByUser)) return;
+    const { [userId]: _online, ...restOnline } = onlineByUser;
+    const { [userId]: _lastSeen, ...restLastSeen } = lastSeenByUser;
+    set({ onlineByUser: restOnline, lastSeenByUser: restLastSeen });
+  },
+  setViewerTypingPolicy: (policy) => {
+    const { currentUserId, viewerTypingPolicy } = get();
+    if (currentUserId) {
+      try {
+        storage.set(
+          viewerTypingPolicyStorageKey(currentUserId),
+          JSON.stringify(policy),
+        );
+      } catch {
+        // 缓存写失败不影响本次进程内的门禁;下次连接会再从服务端对齐。
+      }
+    }
+    if (
+      viewerTypingPolicy.direct === policy.direct &&
+      viewerTypingPolicy.group === policy.group
+    ) {
+      return;
+    }
+    set({ viewerTypingPolicy: policy });
   },
 
   ingestMessages: (conversationId, rawIncoming) => {
@@ -1691,6 +1789,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       clearedBeforeHeightByConversation: {},
       activeConversationId: null,
       onlineByUser: {},
+      lastSeenByUser: {},
+      viewerTypingPolicy: DEFAULT_VIEWER_TYPING_POLICY,
       readWatermarks: {},
       deliveredWatermarks: {},
       typingUntilByConversation: {},

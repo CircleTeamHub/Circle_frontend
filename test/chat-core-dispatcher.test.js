@@ -96,6 +96,8 @@ function loadDispatcher(storeOverrides = {}) {
     burnedMessages: [],
     upserts: [],
     sentryReports: [],
+    presenceApplied: [],
+    presenceCleared: [],
     ...storeOverrides,
   };
   // 补拉是 800ms 防抖的。测试里换成可控计时器:每条用例真等 0.8 秒既慢又脆,
@@ -176,7 +178,8 @@ function loadDispatcher(storeOverrides = {}) {
       for (const message of messages) state.ingested.push(message);
     },
     applyRead: () => {},
-    applyPresence: () => {},
+    applyPresence: (...args) => state.presenceApplied.push(args),
+    clearPresence: (userId) => state.presenceCleared.push(userId),
     removeConversation: (conversationId) => {
       state.removed.push(conversationId);
       state.conversations = state.conversations.filter(
@@ -1023,4 +1026,49 @@ test('chat:conversation for another user or malformed payloads is ignored', () =
 
   assert.deepEqual(state.removed, []);
   assert.deepEqual(state.alerts, []);
+});
+
+// —— chat:presence:最近在线时刻与「显示在线时间」翻转 ——
+
+test('presence: an offline broadcast without a timestamp means "went offline just now"', () => {
+  const { socket, state } = loadDispatcher();
+  const before = Date.now();
+  socket.emit('chat:presence', { userId: 'peer', online: false });
+  assert.equal(state.presenceApplied.length, 1);
+  const [userId, online, lastSeenAt] = state.presenceApplied[0];
+  assert.equal(userId, 'peer');
+  assert.equal(online, false);
+  assert.ok(Date.parse(lastSeenAt) >= before, '旧版服务端不带时刻:按此刻算');
+});
+
+test('presence: the server timestamp (null included) passes through; online clears it', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:presence', {
+    userId: 'peer',
+    online: false,
+    lastSeenAt: '2026-09-11T08:00:00.000Z',
+  });
+  socket.emit('chat:presence', { userId: 'peer', online: false, lastSeenAt: null });
+  socket.emit('chat:presence', {
+    userId: 'peer',
+    online: true,
+    lastSeenAt: '2026-09-11T08:00:00.000Z',
+  });
+  assert.deepEqual(state.presenceApplied, [
+    ['peer', false, '2026-09-11T08:00:00.000Z'],
+    ['peer', false, null],
+    ['peer', true, null],
+  ]);
+});
+
+test('presence: hidden means forget the user, not "offline"', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:presence', {
+    userId: 'peer',
+    online: false,
+    lastSeenAt: null,
+    hidden: true,
+  });
+  assert.deepEqual(state.presenceCleared, ['peer']);
+  assert.equal(state.presenceApplied.length, 0, '对方关了「显示在线时间」,连「离线」都不能落');
 });

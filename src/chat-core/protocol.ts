@@ -390,10 +390,29 @@ export interface ChatHistoryPageDto {
   nextAfterHeight?: number | null;
 }
 
-/** chat:presence 服务端广播。 */
+/**
+ * chat:presence 客户端查询载荷。detail=true 时 ack 回 {[userId]: ChatPresenceDetail};
+ * 旧服务端不认 detail,仍回 {[userId]: boolean} —— 两种形状 socket-manager 都收。
+ */
+export interface ChatPresenceQuery {
+  userIds: string[];
+  detail?: boolean;
+}
+
+export interface ChatPresenceDetail {
+  online: boolean;
+  /** 最近在线时刻(ISO);在线为 null,服务端没记录过也为 null。 */
+  lastSeenAt: string | null;
+}
+
+/** chat:presence 服务端广播。镜像 circle_be chat.types.ts 的 ChatPresenceBroadcast。 */
 export interface ChatPresenceBroadcast {
   userId: string;
   online: boolean;
+  /** 下线时刻(ISO)。在线广播与旧版服务端不带这一项。 */
+  lastSeenAt?: string | null;
+  /** 对方刚关掉「显示在线时间」:忘掉此人,界面回到「未知」而不是「离线」。 */
+  hidden?: boolean;
 }
 
 /** 会话成员(GET /chat/conversations/:id/members);role 仅 GROUP 有值。 */

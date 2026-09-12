@@ -21,7 +21,10 @@ import {
   formatBurnDuration,
   type BurnDurationSec,
 } from '@/chat-core/burn-durations';
-import { useChatStore } from '@/chat-core/store';
+import {
+  useChatStore,
+  viewerTypingPolicyFromPrivacy,
+} from '@/chat-core/store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type ActiveSheet =
@@ -102,6 +105,10 @@ const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   addMeByGroup: true,
   callPermission: 'EVERYONE',
   groupInvitePermission: 'EVERYONE',
+  // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐:在线状态与输入状态默认外露。
+  shareOnlineStatus: true,
+  shareTypingInDirect: true,
+  shareTypingInGroup: true,
 };
 
 export default function PrivacySettingsScreen() {
@@ -149,6 +156,9 @@ export default function PrivacySettingsScreen() {
           undefined,
           loaded.messageSelfDestructStartedAt,
         );
+      useChatStore
+        .getState()
+        .setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(loaded));
     } catch (requestError) {
       setError(
         getApiErrorMessage(
@@ -189,6 +199,10 @@ export default function PrivacySettingsScreen() {
           undefined,
           updated.messageSelfDestructStartedAt,
         );
+      // 输入状态开关的门禁在 socket-manager 里读 chat store,这里保存后立刻同步。
+      useChatStore
+        .getState()
+        .setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(updated));
     } catch (requestError) {
       if (
         request !== privacyRequestSequence.current ||
@@ -283,6 +297,41 @@ export default function PrivacySettingsScreen() {
                 value: currentSettings.allowStrangerMessages,
                 onValueChange: (value) =>
                   void patchSettings({ allowStrangerMessages: value }),
+                disabled: loading || saving,
+              },
+            ],
+          },
+          {
+            rows: [
+              {
+                id: 'online-time',
+                labelKey: 'settingsDetails.privacy.onlineTime',
+                subtitleKey: 'settingsDetails.privacy.onlineTimeHint',
+                type: 'toggle',
+                // 滚动发布期间旧服务端不返回这三项,缺省按 true(与后端默认一致)。
+                value: currentSettings.shareOnlineStatus ?? true,
+                onValueChange: (value) =>
+                  void patchSettings({ shareOnlineStatus: value }),
+                disabled: loading || saving,
+              },
+              {
+                id: 'single-typing',
+                labelKey: 'settingsDetails.privacy.singleTyping',
+                subtitleKey: 'settingsDetails.privacy.singleTypingHint',
+                type: 'toggle',
+                value: currentSettings.shareTypingInDirect ?? true,
+                onValueChange: (value) =>
+                  void patchSettings({ shareTypingInDirect: value }),
+                disabled: loading || saving,
+              },
+              {
+                id: 'group-typing',
+                labelKey: 'settingsDetails.privacy.groupTyping',
+                subtitleKey: 'settingsDetails.privacy.groupTypingHint',
+                type: 'toggle',
+                value: currentSettings.shareTypingInGroup ?? true,
+                onValueChange: (value) =>
+                  void patchSettings({ shareTypingInGroup: value }),
                 disabled: loading || saving,
               },
             ],

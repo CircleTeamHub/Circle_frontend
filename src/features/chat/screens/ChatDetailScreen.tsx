@@ -134,6 +134,7 @@ import { isLocalMessageId } from '@/chat-core/local-message-id';
 import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
 import { formatBurnDuration } from '@/chat-core/burn-durations';
+import { usePeerPresence } from '@/chat-core/use-peer-presence';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
@@ -1078,9 +1079,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       conversationType === 'single' && sourceID ? sourceID : null,
     [conversationType, sourceID],
   );
-  // 输入状态开关(设置页早就有这两项,这里真正接上:关掉就不向对方上报)。
-  const typingSingle = useAppSettingsStore((state) => state.settings.singleTyping);
-  const typingGroup = useAppSettingsStore((state) => state.settings.groupTyping);
   const mergeAvatar = useAppSettingsStore((state) => state.settings.mergeAvatar);
   // 名字的缩进必须与真实的头像列一致（MessageAvatar 里同一条规则）。
   const hideChatAvatar = useAppSettingsStore(
@@ -1103,17 +1101,33 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   }, [typingUntil]);
 
   // 只订阅对方这一个用户的在线状态切片(chat-core presence),
-  // 其他用户上下线不触发本页重渲染。
-  const peerOnlineStatus = useChatStore((state) =>
-    peerImId != null ? state.onlineByUser[peerImId] : undefined,
-  );
-  const peerOnline = peerOnlineStatus === true;
+  // 其他用户上下线不触发本页重渲染;离线时带「N 分钟前在线」并每分钟刷新。
+  const peerPresence = usePeerPresence(peerImId);
+  const peerOnline = peerPresence.online;
   const statusColor =
     conversationType !== 'single' || authUser?.accountId === sourceID
       ? colors.online
       : peerOnline
         ? colors.online
         : colors.textSecondary;
+  // 头部副标题:自己 > 正在输入 > 群聊 > 对方在线 / 最近在线。单聊对方关了
+  // 「显示在线时间」(或还没拿到状态)时整行不画 —— 画「离线」仍是在泄露信息。
+  const headerStatusText =
+    authUser?.accountId === sourceID
+      ? t('chat.detail.statusSelf', { defaultValue: '自己' })
+      : // 群聊分支原来直接落「群聊」二字,typingVisible 根本没机会参与判断 ——
+        // 群成员照常上报 typing,却没有任何人看得见。
+        typingVisible
+        ? conversationType !== 'single'
+          ? t('chat.detail.statusTypingGroup', {
+              defaultValue: '有人正在输入…',
+            })
+          : t('chat.detail.statusTyping', { defaultValue: '对方正在输入…' })
+        : conversationType !== 'single'
+          ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
+          : peerPresence.known
+            ? peerPresence.label
+            : '';
   const d = useMemo(() => ({
     container: { flex: 1, backgroundColor: colors.background },
     messageArea: { backgroundColor: backgroundStyle.backgroundColor },
@@ -2700,10 +2714,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const handleDraftChange = useCallback(
     (next: string) => {
       setDraft(next);
-      // 「正在输入」上报:按设置开关门禁,只在有内容时发(清空不算输入);
-      // 节流(2s)在 socket-manager 里做。
-      if (next.length > 0 && (isGroupChat ? typingGroup : typingSingle)) {
-        sendChatTyping(conversationID);
+      // 「正在输入」上报:只在有内容时发(清空不算输入)。隐私页的单聊/群聊
+      // 开关与节流(2s)都收在 socket-manager 的 sendChatTyping 里。
+      if (next.length > 0) {
+        sendChatTyping(conversationID, isGroupChat ? 'group' : 'direct');
       }
       setMentionTargets((current) => getMentionsPresentInText(next, current));
       if (!isGroupChat || !canViewGroupMemberProfiles) {
@@ -2731,8 +2745,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       draft,
       isGroupChat,
       loadMentionCandidates,
-      typingGroup,
-      typingSingle,
     ],
   );
 
@@ -4087,30 +4099,14 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         <View style={s.headerInfo}>
           <View style={s.headerMeta}>
             <Text style={[s.headerName, d.headerName]}>{conversationTitle}</Text>
-            <View style={s.onlineRow}>
-              <View style={[s.onlineDot, d.onlineDot]} />
-              <Text style={[s.headerStatusText, d.headerStatusText]}>
-                {authUser?.accountId === sourceID
-                  ? t('chat.detail.statusSelf', { defaultValue: '自己' })
-                  : // 群聊分支原来直接落「群聊」二字,typingVisible 根本没机会
-                    // 参与判断 —— 群成员照常上报 typing,却没有任何人看得见。
-                    typingVisible
-                    ? conversationType !== 'single'
-                      ? t('chat.detail.statusTypingGroup', {
-                          defaultValue: '有人正在输入…',
-                        })
-                      : t('chat.detail.statusTyping', {
-                          defaultValue: '对方正在输入…',
-                        })
-                    : conversationType !== 'single'
-                      ? t('chat.detail.statusGroup', { defaultValue: '群聊' })
-                      : peerOnline
-                        ? t('chat.detail.statusOnline', { defaultValue: '在线' })
-                        : t('chat.detail.statusOffline', {
-                            defaultValue: '离线',
-                          })}
-              </Text>
-            </View>
+            {headerStatusText ? (
+              <View style={s.onlineRow}>
+                <View style={[s.onlineDot, d.onlineDot]} />
+                <Text style={[s.headerStatusText, d.headerStatusText]}>
+                  {headerStatusText}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <Pressable

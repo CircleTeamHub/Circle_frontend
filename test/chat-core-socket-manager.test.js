@@ -140,6 +140,17 @@ function loadManager(localDbOverrides = {}, options = {}) {
           );
         }
       },
+      viewerTypingPolicy: { direct: true, group: true },
+      setViewerTypingPolicy(policy) {
+        state.viewerTypingPolicy = policy;
+        state.calls.push(['setViewerTypingPolicy', policy]);
+        if (state.currentUserId) {
+          mmkvStore.set(
+            `chat.viewerTypingPolicy.${state.currentUserId}`,
+            JSON.stringify(policy),
+          );
+        }
+      },
       setError(v) {
         state.error = v;
       },
@@ -190,6 +201,14 @@ function loadManager(localDbOverrides = {}, options = {}) {
         }),
       viewerSelfDestructSecStorageKey: (userId) =>
         `chat.viewerSelfDestructSec.${userId}`,
+      readViewerTypingPolicy: (userId) => {
+        const raw = mmkvStore.get(`chat.viewerTypingPolicy.${userId}`);
+        return raw ? JSON.parse(raw) : { direct: true, group: true };
+      },
+      viewerTypingPolicyFromPrivacy: (settings) => ({
+        direct: settings.shareTypingInDirect !== false,
+        group: settings.shareTypingInGroup !== false,
+      }),
       state,
     };
   })();
@@ -1120,11 +1139,64 @@ test('typing is throttled locally per conversation', () => {
   const { manager, socket } = loadManager();
   manager.connectChat('jwt', 'u1');
   socket.connected = true;
-  manager.sendChatTyping('c1');
-  manager.sendChatTyping('c1');
-  manager.sendChatTyping('c2');
+  manager.sendChatTyping('c1', 'direct');
+  manager.sendChatTyping('c1', 'direct');
+  manager.sendChatTyping('c2', 'group');
   const typingEvents = socket.emitted.filter((e) => e.event === 'chat:typing');
   assert.equal(typingEvents.length, 2);
+});
+
+// 隐私页的「单聊 / 群聊输入状态」:门禁在发送侧这一个出口,按会话类型各管各的。
+test('typing respects the per-kind privacy switches', () => {
+  const { manager, socket, store } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  store.setViewerTypingPolicy({ direct: false, group: true });
+  manager.sendChatTyping('c1', 'direct');
+  manager.sendChatTyping('c2', 'group');
+  const typingEvents = socket.emitted.filter((e) => e.event === 'chat:typing');
+  assert.equal(typingEvents.length, 1);
+  assert.match(JSON.stringify(typingEvents[0]), /c2/);
+
+  store.setViewerTypingPolicy({ direct: true, group: false });
+  manager.sendChatTyping('c3', 'group');
+  assert.equal(
+    socket.emitted.filter((e) => e.event === 'chat:typing').length,
+    1,
+    '群聊开关关掉后不再上报',
+  );
+});
+
+test('connect applies the cached typing policy and the server refresh overrides it', async () => {
+  const { manager, socket, store, mmkvStore } = loadManager(
+    {},
+    {
+      privacyFetch: () =>
+        Promise.resolve({
+          messageSelfDestructSec: 0,
+          shareTypingInDirect: true,
+          shareTypingInGroup: false,
+        }),
+    },
+  );
+  mmkvStore.set(
+    'chat.viewerTypingPolicy.u1',
+    JSON.stringify({ direct: false, group: true }),
+  );
+
+  manager.connectChat('jwt', 'u1');
+  // 冷启动先用按账号缓存的开关门禁,不等网络。
+  assert.deepEqual(store.viewerTypingPolicy, { direct: false, group: true });
+
+  socket.fire('connect');
+  for (let i = 0; i < 4; i += 1) await Promise.resolve();
+
+  assert.deepEqual(store.viewerTypingPolicy, { direct: true, group: false });
+  assert.equal(
+    mmkvStore.get('chat.viewerTypingPolicy.u1'),
+    JSON.stringify({ direct: true, group: false }),
+    '服务端的值要落回按账号缓存,下次冷启动直接可用',
+  );
 });
 
 /** 等 hydrateFromLocalDb 那串 await 跑完(它是 void 出去的,没法直接 await)。 */

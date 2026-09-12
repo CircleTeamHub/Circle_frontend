@@ -316,11 +316,13 @@ test('badge sync is wired into the chat connect path', () => {
 
 test('typing flows end to end: throttle-send behind settings, store expiry, header display', () => {
   const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  // 发送侧:草稿变化按设置开关门禁上报(单聊/群聊各自的开关)。
-  assert.match(screen, /isGroupChat \? typingGroup : typingSingle/);
-  assert.match(screen, /sendChatTyping\(conversationID\)/);
-  assert.match(screen, /singleTyping/);
-  assert.match(screen, /groupTyping/);
+  // 发送侧:草稿变化带上会话类型上报;单聊/群聊的隐私开关收在 socket-manager
+  // 的 sendChatTyping 里(见 presence-typing-privacy.test.js)。
+  assert.match(
+    screen,
+    /sendChatTyping\(conversationID, isGroupChat \? 'group' : 'direct'\)/,
+  );
+  assert.match(read('src/chat-core/socket-manager.ts'), /viewerTypingPolicy/);
   // 显示侧:头部状态优先显示「对方正在输入…」,到期回落在线状态。
   assert.match(screen, /chat\.detail\.statusTyping/);
   const store = read('src/chat-core/store.ts');

@@ -30,15 +30,18 @@ import {
   CHAT_WS_PATH,
   SERVER_COMPENSATED_TYPES,
   type ChatConversationDto,
+  type ChatPresenceDetail,
   type ChatReadAck,
   type ChatSendAck,
   type ChatSendAckOk,
   type ChatSendPayload,
 } from './protocol';
 import {
+  readViewerTypingPolicy,
   sanitizeExpiredConversationPreviews,
   useChatStore,
   viewerSelfDestructSecStorageKey,
+  viewerTypingPolicyFromPrivacy,
 } from './store';
 import { devWarn } from '@/utils/dev-log';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -191,6 +194,7 @@ async function refreshViewerSelfDestructSec(userId: string): Promise<void> {
       { remoteRefresh: true },
       settings.messageSelfDestructStartedAt,
     );
+    store.setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(settings));
   } catch {
     // 离线时沿用按账号缓存的最后已知策略，不能让策略刷新阻断聊天连接。
   }
@@ -320,6 +324,7 @@ export function connectChat(token: string, userId: string): void {
   store.setConnecting(true);
   store.setCurrentUserId(userId);
   store.setViewerSelfDestructSec(readViewerSelfDestructSec(userId));
+  store.setViewerTypingPolicy(readViewerTypingPolicy(userId));
   initChatAppBadgeSync();
   // 在线时先解析服务器策略，失败才使用上面的账户缓存，避免冷启动展示已到期内容。
   void hydrateWithResolvedViewerPolicy(userId, gen);
@@ -822,7 +827,11 @@ function emitReadWithAck(
   });
 }
 
-/** 批量查询在线状态并写入 store(ack 一次性;后续变化靠服务端广播)。 */
+/**
+ * 批量查询在线状态并写入 store(ack 一次性;后续变化靠服务端广播)。
+ * detail=true 让新服务端连最近在线时刻一起回;旧服务端只回 boolean,两种都收。
+ * 对方关了「显示在线时间」时服务端根本不回这个人 —— store 里就没有他,界面不画。
+ */
 export function queryChatPresence(userIds: string[]): void {
   const current = socket;
   if (!current?.connected || userIds.length === 0) return;
@@ -830,12 +839,23 @@ export function queryChatPresence(userIds: string[]): void {
     .timeout(READ_ACK_TIMEOUT_MS)
     .emit(
       CHAT_EVENTS.presence,
-      { userIds },
-      (err: Error | null, result: Record<string, boolean>) => {
+      { userIds, detail: true },
+      (
+        err: Error | null,
+        result: Record<string, boolean | ChatPresenceDetail>,
+      ) => {
         if (err || !result) return;
         const store = useChatStore.getState();
-        for (const [userId, online] of Object.entries(result)) {
-          if (typeof online === 'boolean') store.applyPresence(userId, online);
+        for (const [userId, value] of Object.entries(result)) {
+          if (typeof value === 'boolean') {
+            store.applyPresence(userId, value);
+          } else if (value && typeof value.online === 'boolean') {
+            store.applyPresence(
+              userId,
+              value.online,
+              typeof value.lastSeenAt === 'string' ? value.lastSeenAt : null,
+            );
+          }
         }
       },
     );
@@ -1023,8 +1043,17 @@ export function sendChatEditMessage(
   });
 }
 
-/** 正在输入：本地节流,无 ack 尽力而为。 */
-export function sendChatTyping(conversationId: string): void {
+/**
+ * 正在输入:本地节流,无 ack 尽力而为。
+ * 隐私页的「单聊 / 群聊输入状态」开关收在这里而不是各个调用方 —— 少一处漏掉
+ * 就是一处泄露。
+ */
+export function sendChatTyping(
+  conversationId: string,
+  kind: 'direct' | 'group',
+): void {
+  const policy = useChatStore.getState().viewerTypingPolicy;
+  if (kind === 'group' ? !policy.group : !policy.direct) return;
   const current = socket;
   if (!current?.connected) return;
   const now = Date.now();

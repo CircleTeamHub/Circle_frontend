@@ -33,6 +33,12 @@ export type PrivacySettings = {
   // Optional during a rolling backend deployment; new servers always return both.
   directMessageAutoReplyEnabled?: boolean;
   directMessageAutoReplyText?: string;
+  // 同上:滚动发布期间旧服务端不返回这三项,读的一侧一律 `?? true`(与后端默认一致)。
+  /** 对他人显示在线状态与最近在线时间(在线点 / 「N 分钟前在线」)。 */
+  shareOnlineStatus?: boolean;
+  /** 单聊 / 群聊里向对方上报「正在输入」;门禁在 socket-manager 的 sendChatTyping。 */
+  shareTypingInDirect?: boolean;
+  shareTypingInGroup?: boolean;
 };
 
 export type UpdatePrivacySettingsPayload = Partial<

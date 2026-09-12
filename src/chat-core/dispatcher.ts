@@ -469,7 +469,23 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('presence', 'malformedPayload');
         return;
       }
-      useChatStore.getState().applyPresence(payload.userId, payload.online);
+      const store = useChatStore.getState();
+      if (payload.hidden === true) {
+        // 对方刚关掉「显示在线时间」:忘掉此人,界面回到「未知」而不是「离线」。
+        store.clearPresence(payload.userId);
+        return;
+      }
+      store.applyPresence(
+        payload.userId,
+        payload.online,
+        // 下线广播不带时刻(旧版服务端)= 此刻刚下线;带了就按服务端说的,
+        // 包括 null(「显示在线时间」翻回来时服务端可能还没记录过)。
+        payload.online
+          ? null
+          : payload.lastSeenAt === undefined
+            ? new Date().toISOString()
+            : payload.lastSeenAt,
+      );
     } catch (err) {
       devWarn('[chat] presence handler failed', err);
       reportChatEventFailureOnce('presence', 'handlerFailure');
