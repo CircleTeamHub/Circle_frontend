@@ -695,10 +695,13 @@ test('chat info only exposes group logs to members allowed by the backend', () =
     'utf8',
   );
 
+  // 群日志的门禁已从「能看成员名单」收紧成「能管理群」(isOwner || isAdmin):
+  // 日志里是踢人/禁言这类管理动作的留痕,普通成员看得到名单不等于该看到这些。
   assert.match(
     source,
-    /canViewMemberDirectory \? \(\s*<>\s*<Divider \/>\s*<GroupInfoRow\s*label=\{t\('chat\.groupLog'/s,
+    /canManageGroup \? \(\s*<>\s*<Divider \/>\s*<GroupInfoRow\s*label=\{t\('chat\.groupLog'/s,
   );
+  assert.match(source, /const canManageGroup = isOwner \|\| isAdmin;/);
   assert.match(source, /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup \|\| canViewCircleMemberDirectory\) &&/s);
   assert.match(source, /rosterVisibleToMembers/);
   assert.match(source, /const \[silenceClock, setSilenceClock\] = useState\(\(\) => Date\.now\(\)\);/);

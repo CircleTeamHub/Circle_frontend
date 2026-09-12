@@ -339,6 +339,9 @@ test('closeChatLocalDb 同样先把积压写完', async () => {
   assert.equal(db.state.closed, true);
 });
 
+const deleteStatements = (db) =>
+  db.state.statements.filter((statement) => statement.sql.startsWith('DELETE FROM'));
+
 test('burn expiry purge batches message and outbox deletion in one transaction', async () => {
   const db = fakeDatabase();
   const { api } = loadLocalDb(db);
@@ -346,16 +349,46 @@ test('burn expiry purge batches message and outbox deletion in one transaction',
   const transactionsBefore = db.state.transactions;
 
   await api.purgeExpiredLocalMessages([
-    { conversationId: 'conv-1', cutoff: new Date('2026-08-10T00:00:00.000Z') },
-    { conversationId: 'conv-2', cutoff: new Date('2026-08-09T00:00:00.000Z') },
+    {
+      conversationId: 'conv-1',
+      cutoff: new Date('2026-08-10T00:00:00.000Z'),
+      startedAt: new Date('2026-08-01T00:00:00.000Z'),
+    },
+    {
+      conversationId: 'conv-2',
+      cutoff: new Date('2026-08-09T00:00:00.000Z'),
+      startedAt: new Date('2026-08-02T00:00:00.000Z'),
+    },
   ]);
 
   assert.equal(db.state.transactions, transactionsBefore + 1);
-  const deletes = db.state.statements.filter((statement) =>
-    statement.sql.startsWith('DELETE FROM'),
-  );
+  const deletes = deleteStatements(db);
   assert.equal(deletes.filter((statement) => statement.sql.includes('messages')).length, 2);
   assert.equal(deletes.filter((statement) => statement.sql.includes('outbox')).length, 2);
+  // 每条 DELETE 都带 startedAt 下界:阅后即焚是从开启那一刻起生效的。
+  assert.ok(
+    deletes.every((statement) => statement.sql.includes('created_at >= ?')),
+    'purge must be bounded below by startedAt',
+  );
+  assert.ok(
+    deletes.some((statement) => statement.params.includes('2026-08-01T00:00:00.000Z')),
+    'conv-1 startedAt must reach the statement',
+  );
+});
+
+// 没有开启时间就什么都不删 —— 否则一次清理会把用户开启阅后即焚**之前**的
+// 历史一起抹掉,而这既不是用户的意思,也没有任何提示。
+test('burn expiry purge deletes nothing without a startedAt boundary', async () => {
+  const db = fakeDatabase();
+  const { api } = loadLocalDb(db);
+  await api.initChatLocalDb('user-1');
+
+  await api.purgeExpiredLocalMessages(
+    [{ conversationId: 'conv-1', cutoff: new Date('2026-08-10T00:00:00.000Z') }],
+    new Date('2026-08-10T00:00:00.000Z'),
+  );
+
+  assert.equal(deleteStatements(db).length, 0);
 });
 
 test('viewer self-destruct also purges orphaned cached rows globally', async () => {
@@ -363,11 +396,13 @@ test('viewer self-destruct also purges orphaned cached rows globally', async () 
   const { api } = loadLocalDb(db);
   await api.initChatLocalDb('user-1');
 
-  await api.purgeExpiredLocalMessages([], new Date('2026-08-10T00:00:00.000Z'));
-
-  const deletes = db.state.statements.filter((statement) =>
-    statement.sql.startsWith('DELETE FROM'),
+  await api.purgeExpiredLocalMessages(
+    [],
+    new Date('2026-08-10T00:00:00.000Z'),
+    new Date('2026-08-01T00:00:00.000Z'),
   );
+
+  const deletes = deleteStatements(db);
   assert.equal(deletes.length, 2);
   assert.ok(
     deletes.every((statement) => !statement.sql.includes('conversation_id')),
