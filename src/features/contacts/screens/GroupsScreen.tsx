@@ -406,11 +406,13 @@ export default function GroupsScreen() {
           section,
         }: {
           section: SectionListData<GroupRow, GroupSection>;
-        }) => (
-          <View style={s.sectionHeader}>
-            <Text style={d.sectionTitle}>{section.title}</Text>
-          </View>
-        )}
+        }) =>
+          // “全部”页签本身已经表达了范围，不再重复显示“全部群聊”分区标题。
+          activeCategory === 'all' ? null : (
+            <View style={s.sectionHeader}>
+              <Text style={d.sectionTitle}>{section.title}</Text>
+            </View>
+          )}
         renderItem={({ item, index, section }) => (
           <View>
             <Pressable style={s.groupRow} onPress={() => handleOpenGroup(item)}>

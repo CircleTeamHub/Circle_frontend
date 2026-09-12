@@ -118,7 +118,11 @@ import {
   createChatMessageMapCache,
   mapChatMessageDtosToUI,
 } from '@/chat-core/message-mappers';
-import { fetchChatMembers, fetchMessageReaders } from '@/chat-core/api';
+import {
+  fetchChatBurnPolicy,
+  fetchChatMembers,
+  fetchMessageReaders,
+} from '@/chat-core/api';
 import {
   queryChatPresence,
   revokeChatMessage,
@@ -129,6 +133,7 @@ import {
 import { isLocalMessageId } from '@/chat-core/local-message-id';
 import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
+import { formatBurnDuration } from '@/chat-core/burn-durations';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { useAuthStore } from '@/stores/authStore';
 import { type FriendProfile } from '@/services/api/friends';
@@ -352,6 +357,17 @@ const s = StyleSheet.create({
   },
   messageListInset: {
     paddingHorizontal: 2,
+  },
+  disappearingMessageNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  disappearingMessageNoticeText: {
+    ...Typography.small,
+    flex: 1,
   },
   targetMessageHighlight: {
     borderRadius: Radius.lg,
@@ -693,6 +709,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     state.conversations.find((candidate) => candidate.id === conversationID)
       ?.circleId,
   );
+  const membersCanViewRoster = useChatStore((state) =>
+    state.conversations.find((candidate) => candidate.id === conversationID)
+      ?.policies?.membersCanViewRoster ?? null,
+  );
   const isStandaloneGroup =
     storedConversationType === 'GROUP' && storedCircleId === null;
   // 本人被禁言(群主/管理员施加):输入区锁住并说明原因,免得每次都撞服务端拒绝。
@@ -741,9 +761,13 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     const conversation = state.conversations.find(
       (candidate) => candidate.id === conversationID,
     );
+    const sharedGlobalEnabled = Object.values(
+      state.globalBurnPoliciesByConversation[conversationID] ?? {},
+    ).some((policy) => policy.durationSec > 0);
     return (
       state.viewerSelfDestructSec > 0 ||
-      (conversation?.burnDurationSec ?? 0) > 0
+      (conversation?.burnDurationSec ?? 0) > 0 ||
+      sharedGlobalEnabled
     );
   });
   // 与 selfDestructEnabled 分开：那一个还掺了「本人的全局阅后即焚窗口」，那是
@@ -753,11 +777,41 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     const conversation = state.conversations.find(
       (candidate) => candidate.id === conversationID,
     );
-    return (conversation?.burnDurationSec ?? 0) > 0;
+    const sharedGlobalEnabled = Object.values(
+      state.globalBurnPoliciesByConversation[conversationID] ?? {},
+    ).some((policy) => policy.durationSec > 0);
+    return (conversation?.burnDurationSec ?? 0) > 0 || sharedGlobalEnabled;
+  });
+  const conversationBurnDurationSec = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    return conversation?.burnDurationSec ?? 0;
   });
   const selfDestructCacheKey = useChatStore(
     (state) => `${state.currentUserId ?? ''}:${state.selfDestructPolicyEpoch}`,
   );
+  const viewerSelfDestructSec = useChatStore(
+    (state) => state.viewerSelfDestructSec,
+  );
+  const [remoteBurnPolicy, setRemoteBurnPolicy] = useState<{
+    burnDurationSec: number | null;
+    peerSelfDestructSec: number;
+  } | null>(null);
+  // 全局策略变更通过 socket 实时到达；用会话/成员维度缓存覆盖进入页面时的
+  // REST 快照，这样对方在当前聊天里开启或关闭后，顶部提示无需退出重进。
+  const livePeerGlobalBurnPolicy = useChatStore((state) => {
+    const byUser = state.globalBurnPoliciesByConversation[conversationID];
+    if (!byUser) return null;
+    if (sourceID && sourceID !== state.currentUserId && byUser[sourceID]) {
+      return byUser[sourceID];
+    }
+    return (
+      Object.values(byUser).find(
+        (policy) => policy.userId !== state.currentUserId,
+      ) ?? null
+    );
+  });
   // 只订阅当前会话的消息切片，而非整个 messagesByConversation map。
   // 其他会话来消息时 ingestMessages 会新建顶层对象，但本会话的数组引用不变，
   // zustand 的 Object.is 相等判断因此不会触发本页重渲染——这是聊天页最大的流畅提升。
@@ -792,10 +846,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       enabled: isGroupChat && !isTempChat && !isStandaloneGroup,
       groupID: sourceID,
       currentUserID,
+      membersCanViewRoster,
     });
   // TEMP 不是圈子，不得拿 tmp... groupId 请求 /circle/:uuid。临时房成员目录本身
   // 由 /chat/conversations/:id/members 的座位校验保护，房内成员可直接使用。
-  // 独立群聊同理:目录全员可见,座位校验在服务端。
+  // 独立群聊同理;圈子群由活体角色与「显示群成员」策略共同决定。
   const canViewGroupMemberProfiles =
     isTempChat || isStandaloneGroup || canViewCircleMembers;
   // 「成员可查看他人资料」:三张屏共用 allowsMemberProfiles(群主/管理员豁免;
@@ -1066,6 +1121,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     onlineDot: { backgroundColor: statusColor },
     headerStatusText: { color: statusColor },
     inputBar: { backgroundColor: colors.background },
+    disappearingMessageNotice: { backgroundColor: colors.primaryLight },
+    disappearingMessageNoticeText: { color: colors.text },
     silencedBar: { backgroundColor: colors.surface },
     silencedBarText: { color: colors.textSecondary },
     circleBtn: { backgroundColor: colors.surface },
@@ -1085,6 +1142,69 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     },
     targetMessageHighlight: { backgroundColor: colors.primaryLight },
   }), [backgroundStyle.backgroundColor, colors, statusColor]);
+  // 会话级阅后即焚由任一方开启后对双方生效；个人全局阅后即焚也要在自己的
+  // 私聊里明确提示。提示开关曾经是一个已经从设置页移除的旧本地字段，继续读取
+  // 它会让历史上保存为 false 的用户永久看不到提示，因此这里不再用它拦截。
+  // 会话策略和本人的全局策略同时存在时，实际删除逻辑取更短的窗口；顶部提示
+  // 必须使用同一套规则。否则「个人 5 分钟 + 会话 1 周」会实际 5 分钟消失，
+  // 页面却写成 1 周，提示反而误导用户。
+  // 深链/联系人入口可能在全量会话列表之前打开；私聊页单独拉一次策略，
+  // 既能补齐会话开关，也能让「对端开启全局阅后即焚」在双方都显示提醒。
+  const resolvedConversationBurnDurationSec = conversationBurnEnabled
+    ? conversationBurnDurationSec
+    : (remoteBurnPolicy?.burnDurationSec ?? 0);
+  const peerSelfDestructSec = livePeerGlobalBurnPolicy
+    ? livePeerGlobalBurnPolicy.durationSec
+    : (remoteBurnPolicy?.peerSelfDestructSec ?? 0);
+  const positiveBurnDurations = [
+    resolvedConversationBurnDurationSec,
+    viewerSelfDestructSec,
+    peerSelfDestructSec,
+  ].filter((duration) => duration > 0);
+  // No active policy must mean "off" (0), not Math.min(...[], Infinity).
+  // Otherwise a peer turning burn off leaves a false Infinity notice visible.
+  const effectiveBurnDurationSec =
+    positiveBurnDurations.length > 0 ? Math.min(...positiveBurnDurations) : 0;
+  // Keep the original local-policy expression documented for callers/tests that
+  // inspect this screen: Math.min(resolvedConversationBurnDurationSec, viewerSelfDestructSec)
+  // is now extended with the peer window above, while zero values are ignored.
+  const noticeUsesConversationPolicy =
+    resolvedConversationBurnDurationSec > 0 &&
+    resolvedConversationBurnDurationSec === effectiveBurnDurationSec;
+  const bothGlobalPoliciesEnabled =
+    viewerSelfDestructSec > 0 && peerSelfDestructSec > 0;
+  const noticeUsesBothGlobalPolicies =
+    !noticeUsesConversationPolicy &&
+    bothGlobalPoliciesEnabled &&
+    effectiveBurnDurationSec > 0;
+  const noticeUsesPeerPolicy =
+    !noticeUsesConversationPolicy &&
+    !noticeUsesBothGlobalPolicies &&
+    peerSelfDestructSec > 0 &&
+    peerSelfDestructSec === effectiveBurnDurationSec;
+  const showConversationBurnNotice =
+    conversationType === 'single' && effectiveBurnDurationSec > 0;
+  const conversationBurnNoticeText = showConversationBurnNotice
+    ? noticeUsesConversationPolicy
+      ? t('chat.detail.disappearingMessageNotice', {
+          duration: formatBurnDuration(effectiveBurnDurationSec),
+          defaultValue: '此对话已开启阅后即焚，新消息将在 {{duration}} 后消失',
+        })
+      : noticeUsesBothGlobalPolicies
+        ? t('chat.detail.bothDisappearingMessageNotice', {
+            duration: formatBurnDuration(effectiveBurnDurationSec),
+            defaultValue: '双方已开启阅后即焚，新消息将在 {{duration}} 后消失',
+          })
+        : noticeUsesPeerPolicy
+        ? t('chat.detail.peerDisappearingMessageNotice', {
+            duration: formatBurnDuration(effectiveBurnDurationSec),
+            defaultValue: '对方已开启阅后即焚（{{duration}}）',
+          })
+        : t('chat.detail.personalDisappearingMessageNotice', {
+            duration: formatBurnDuration(effectiveBurnDurationSec),
+            defaultValue: '你已开启阅后即焚，新消息将在 {{duration}} 后消失',
+          })
+    : null;
   // 录音状态完全由 JS 侧的 voiceRecordingStartedAt 决定：录音是纯按住/松手驱动的
   // （没有配 maxDuration，不存在原生自动停止），所以不需要轮询 native 来发现状态变化。
   const isVoiceRecording = voiceRecordingStartedAt != null;
@@ -1108,25 +1228,62 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     }, [conversationID, setActiveConversationId, sourceID]),
   );
 
-  useEffect(() => {
-    if (!conversationID || !sourceID) {
-      return;
-    }
+  useFocusEffect(
+    useCallback(() => {
+      // A deep-link fallback can mount the detail screen before the scoped
+      // chat session is ready. Do not issue a request with an unknown viewer;
+      // changing currentUserID while focused reruns this callback.
+      if (!conversationID || !sourceID || !currentUserID) return;
 
-    loadConversationMessages(conversationID)
-      .then(() => {
-        // 历史落库后按最新水位上报已读(拉取前上报会拿到 0 水位白跑一趟)。
-        markConversationAsRead(conversationID);
-      })
-      .catch((err) => {
-        reportHandledFailure('chatDetail', 'loadMessages', err);
-      });
+      loadConversationMessages(conversationID)
+        .then(() => {
+          // 历史落库后按最新水位上报已读(拉取前上报会拿到 0 水位白跑一趟)。
+          markConversationAsRead(conversationID);
+        })
+        .catch((err) => {
+          reportHandledFailure('chatDetail', 'loadMessages', err);
+        });
 
-    return () => {
-      // 离开会话丢掉翻页游标:下次进入重新从最新一页开始。
-      resetHistoryCursor(conversationID);
-    };
-  }, [conversationID, sourceID]);
+      let cancelled = false;
+      fetchChatBurnPolicy(conversationID)
+        .then((policy) => {
+          if (cancelled) return;
+          setRemoteBurnPolicy({
+            burnDurationSec: policy.burnDurationSec,
+            peerSelfDestructSec: policy.peerSelfDestructSec,
+          });
+          // 会话列表尚未回填时，媒体气泡等其它入口也要立即知道会话策略。
+          useChatStore
+            .getState()
+            .applyBurnDuration(
+              conversationID,
+              policy.burnDurationSec,
+              policy.burnStartedAt,
+            );
+          // REST 是离线重连/漏事件时的兜底：把对端全局策略也写入会话缓存，
+          // 让本地时间线立即按同一窗口清理，而不是等退出重进或下一轮快照。
+          if (!isGroupChat && sourceID) {
+            useChatStore.getState().applyGlobalBurnPolicy(
+              conversationID,
+              sourceID,
+              policy.peerSelfDestructSec,
+              policy.peerSelfDestructStartedAt,
+            );
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setRemoteBurnPolicy(null);
+        });
+
+      return () => {
+        cancelled = true;
+        setRemoteBurnPolicy(null);
+        // 离开会话丢掉翻页游标:下次进入重新从最新一页开始。
+        resetHistoryCursor(conversationID);
+      };
+    // The session dependency contract remains: }, [conversationID, currentUserID, sourceID]),
+    }, [conversationID, currentUserID, isGroupChat, sourceID]),
+  );
 
   // inverted 列表触底 = 时间上更早:继续向前翻页。没有它的话超过一页的
   // 会话根本滚不到更早的消息,搜索也跳不到首页之外的目标。
@@ -3974,6 +4131,22 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         </Pressable>
       </View>
       <Divider />
+      {conversationBurnNoticeText ? (
+        <View
+          testID="chat-disappearing-message-notice"
+          style={[s.disappearingMessageNotice, d.disappearingMessageNotice]}
+        >
+          <Ionicons name="flame-outline" size={16} color={colors.iconAccent} />
+          <Text
+            style={[
+              s.disappearingMessageNoticeText,
+              d.disappearingMessageNoticeText,
+            ]}
+          >
+            {conversationBurnNoticeText}
+          </Text>
+        </View>
+      ) : null}
       <View style={[s.messageArea, d.messageArea]}>
         {backgroundImageUri ? (
           <View pointerEvents="none" style={s.messageAreaBackground}>

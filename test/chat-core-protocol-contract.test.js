@@ -31,6 +31,8 @@ const FE_EVENTS = {
   reaction: 'chat:reaction',
   edit: 'chat:edit',
   historyCleared: 'chat:history_cleared',
+  globalBurnPolicy: 'chat:global_burn_policy',
+  burnedMessages: 'chat:burned_messages',
 };
 
 test('frontend protocol declares the canonical event names and path', () => {

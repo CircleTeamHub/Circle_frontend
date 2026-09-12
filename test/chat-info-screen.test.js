@@ -378,10 +378,12 @@ test('group member search keeps authorization live and revalidates before openin
   // review R2 P1：authorized 来自活体 hook（订阅角色变化），撤权即清结果；
   // 点开成员资料前还要 fail-closed 现场重查。
   assert.match(source, /useGroupMemberViewAccess\(\{/);
-  // 圈子群的授权仍来自活体 hook;独立群聊没有圈子角色,目录全员可见(服务端座位校验)。
+  // 圈子群的授权来自活体角色 + 「显示群成员」策略;独立群聊没有圈子角色,
+  // 目录全员可见(服务端座位校验)。
   assert.match(source, /canViewMembers: circleAuthorized,/);
   assert.match(source, /const authorized = isStandaloneGroup \|\| circleAuthorized;/);
-  assert.match(source, /if \(!authorized\) \{\s*\n\s*setMembers\(\[\]\);/);
+  // 即使当前还没权限也要先取到圈子会话 DTO,否则策略打开后没有机会重跑。
+  assert.match(source, /if \(!circleAuthorized && conversation\.policies\?\.membersCanViewRoster !== true\)/);
   // 圈子群走活体重查;独立群聊没有圈子角色,改成现场重查自己还在不在座位上。
   assert.match(
     source,

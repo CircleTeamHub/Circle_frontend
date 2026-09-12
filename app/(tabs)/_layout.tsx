@@ -431,6 +431,22 @@ function CustomTabBar({
                 target: route.key,
                 canPreventDefault: true,
               });
+              // 个人中心是一个独立 Stack。直接点击“我的”必须回到
+              // profile/index，而不是把上次停留的商城/设置页带回来。
+              // 这里直接针对嵌套 Stack 做 reset，避免父级 navigate(merge)
+              // 恢复上次停留的 mall 页面。
+              const nested = route.state as
+                | { key?: string; index?: number }
+                | undefined;
+              if (route.name === 'profile' && nested?.key) {
+                navigation.dispatch({
+                  ...CommonActions.reset({
+                    index: 0,
+                    routes: [{ name: 'index' }],
+                  }),
+                  target: nested.key,
+                });
+              }
               if (!focused && !event.defaultPrevented) {
                 navigation.dispatch({
                   ...CommonActions.navigate({ name: route.name, merge: true }),

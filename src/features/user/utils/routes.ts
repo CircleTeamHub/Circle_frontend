@@ -409,6 +409,7 @@ export function getGroupManageHref(
     conversationID: params.conversationID,
     ...(params.groupID ? { groupID: params.groupID } : {}),
     ...(params.title ? { title: params.title } : {}),
+    originScope: scope,
   };
 
   switch (scope) {

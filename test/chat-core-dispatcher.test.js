@@ -92,6 +92,8 @@ function loadDispatcher(storeOverrides = {}) {
     cleared: [],
     clearedUnread: [],
     burnDurations: [],
+    globalBurnPolicies: [],
+    burnedMessages: [],
     upserts: [],
     sentryReports: [],
     ...storeOverrides,
@@ -148,8 +150,19 @@ function loadDispatcher(storeOverrides = {}) {
     clearConversationLocal: (conversationId, height) => {
       state.cleared.push({ conversationId, height });
     },
-    applyBurnDuration: (conversationId, seconds) => {
-      state.burnDurations.push({ conversationId, seconds });
+    applyBurnDuration: (conversationId, seconds, startedAt) => {
+      state.burnDurations.push({ conversationId, seconds, startedAt });
+    },
+    applyGlobalBurnPolicy: (conversationId, userId, seconds, startedAt) => {
+      state.globalBurnPolicies.push({
+        conversationId,
+        userId,
+        seconds,
+        startedAt,
+      });
+    },
+    applyBurnedMessages: (conversationId, messageIds) => {
+      state.burnedMessages.push({ conversationId, messageIds });
     },
     upsertConversation: (conversation) => {
       state.upserts.push(conversation);
@@ -320,6 +333,31 @@ test('chat:history_cleared removes the direct timeline and local unread override
   });
   assert.deepEqual(state.cleared, [{ conversationId: 'c1', height: 42 }]);
   assert.deepEqual(state.clearedUnread, ['c1']);
+});
+
+test('chat:burned_messages removes expired messages on the peer device', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:burned_messages', {
+    conversationId: 'c1',
+    messageIds: ['m1', 'm2', 'm1'],
+  });
+  assert.equal(state.burnedMessages.length, 1);
+  assert.equal(state.burnedMessages[0].conversationId, 'c1');
+  assert.equal(state.burnedMessages[0].messageIds.join(','), 'm1,m2');
+});
+
+test('malformed chat:burned_messages payloads cannot delete local data', () => {
+  const { socket, state } = loadDispatcher();
+  for (const payload of [
+    null,
+    { conversationId: '', messageIds: ['m1'] },
+    { conversationId: 'c1', messageIds: [] },
+    { conversationId: 'c1', messageIds: [''] },
+    { conversationId: 'c1', messageIds: 'm1' },
+  ]) {
+    socket.emit('chat:burned_messages', payload);
+  }
+  assert.deepEqual(state.burnedMessages, []);
 });
 
 test('malformed chat:history_cleared payloads cannot clear local data', () => {
@@ -816,12 +854,37 @@ test('a remote burn-changed system message updates the conversation setting', ()
       type: 'system',
       content: { kind: 'burn-changed', seconds: 30 },
       sender: null,
+      createdAt: '2026-09-11T20:00:00.000Z',
     }),
   );
 
   // 只渲染成一条提示是不够的:ChatInfoScreen 上的档位会一直显示旧值。
   assert.deepEqual(state.burnDurations, [
-    { conversationId: 'c1', seconds: 30 },
+    {
+      conversationId: 'c1',
+      seconds: 30,
+      startedAt: '2026-09-11T20:00:00.000Z',
+    },
+  ]);
+});
+
+test('a remote global burn policy updates the open chat immediately', () => {
+  const { socket, state } = loadDispatcher();
+
+  socket.emit('chat:global_burn_policy', {
+    conversationId: 'c1',
+    userId: 'peer',
+    seconds: 300,
+    startedAt: '2026-09-11T20:00:00.000Z',
+  });
+
+  assert.deepEqual(state.globalBurnPolicies, [
+    {
+      conversationId: 'c1',
+      userId: 'peer',
+      seconds: 300,
+      startedAt: '2026-09-11T20:00:00.000Z',
+    },
   ]);
 });
 

@@ -40,9 +40,17 @@ export interface GroupAdminActions {
   canKick: (member: ChatMemberDto) => boolean;
   canSilence: (member: ChatMemberDto) => boolean;
   changeRole: (member: ChatMemberDto, nextRole: 'ADMIN' | 'MEMBER') => void;
+  changeRoleBatch: (
+    members: readonly ChatMemberDto[],
+    nextRole: 'ADMIN' | 'MEMBER',
+  ) => Promise<void>;
   /** 带确认弹窗。 */
   kick: (member: ChatMemberDto) => void;
   silence: (member: ChatMemberDto, durationSec: number | null) => void;
+  silenceBatch: (
+    members: readonly ChatMemberDto[],
+    durationSec: number | null,
+  ) => Promise<void>;
   unsilence: (member: ChatMemberDto) => void;
 }
 
@@ -115,6 +123,41 @@ export function useGroupAdminActions(
     [revalidateSelfRole, t],
   );
 
+  const runBatch = useCallback(
+    async (
+      members: readonly ChatMemberDto[],
+      allowed: (freshRole: GroupRole | null) => boolean,
+      action: () => Promise<void>,
+    ) => {
+      if (inFlightRef.current || members.length === 0) return;
+      inFlightRef.current = true;
+      setPendingUserID(members[0]?.userId ?? null);
+      try {
+        let freshRole: GroupRole | null = null;
+        try {
+          freshRole = await revalidateSelfRole();
+        } catch {
+          freshRole = null;
+        }
+        if (!allowed(freshRole)) {
+          Alert.alert(
+            t('chat.ownerOnlyAction', {
+              defaultValue: '仅群主或管理员可执行该操作。',
+            }),
+          );
+          return;
+        }
+        await action();
+      } catch (error) {
+        paramsRef.current.onError(error);
+      } finally {
+        inFlightRef.current = false;
+        setPendingUserID(null);
+      }
+    },
+    [revalidateSelfRole, t],
+  );
+
   const { selfRole, currentUserID } = params;
   const targetRole = (member: ChatMemberDto): GroupRole =>
     member.role ?? 'MEMBER';
@@ -156,6 +199,42 @@ export function useGroupAdminActions(
       );
     },
     [run, t],
+  );
+
+  const changeRoleBatch = useCallback(
+    (members: readonly ChatMemberDto[], nextRole: 'ADMIN' | 'MEMBER') =>
+      runBatch(
+        members,
+        (fresh) => members.every((member) => canAssignGroupRole(fresh, targetRole(member))),
+        async () => {
+          const { conversationID, groupID, isStandaloneGroup } = paramsRef.current;
+          const failures: unknown[] = [];
+          for (const member of members) {
+            try {
+              if (isStandaloneGroup) {
+                await setGroupChatMemberRole(conversationID, member.userId, nextRole);
+              } else {
+                await updateGroupMemberRole(groupID, member.userId, nextRole);
+              }
+              paramsRef.current.onMemberUpdated(member.userId, { role: nextRole });
+            } catch (error) {
+              failures.push(error);
+            }
+          }
+          if (failures.length > 0) throw failures[0];
+          Alert.alert(
+            t('common.done'),
+            nextRole === 'ADMIN'
+              ? t('chat.adminGranted', {
+                  name: members.map(groupMemberDisplayName).join(', '),
+                })
+              : t('chat.adminRevoked', {
+                  name: members.map(groupMemberDisplayName).join(', '),
+                }),
+          );
+        },
+      ),
+    [runBatch, t],
   );
 
   const kick = useCallback(
@@ -217,6 +296,40 @@ export function useGroupAdminActions(
     [run, t],
   );
 
+  const silenceBatch = useCallback(
+    (members: readonly ChatMemberDto[], durationSec: number | null) =>
+      runBatch(
+        members,
+        (fresh) => members.every((member) => canManageGroupTarget(fresh, targetRole(member))),
+        async () => {
+          const failures: unknown[] = [];
+          for (const member of members) {
+            try {
+              const result = await silenceChatMember(
+                paramsRef.current.conversationID,
+                member.userId,
+                durationSec,
+              );
+              paramsRef.current.onMemberUpdated(member.userId, {
+                silenced: result.silenced,
+                silencedUntil: result.silencedUntil,
+              });
+            } catch (error) {
+              failures.push(error);
+            }
+          }
+          if (failures.length > 0) throw failures[0];
+          Alert.alert(
+            t('common.done'),
+            t('chat.memberSilenced', {
+              name: members.map(groupMemberDisplayName).join(', '),
+            }),
+          );
+        },
+      ),
+    [runBatch, t],
+  );
+
   const unsilence = useCallback(
     (member: ChatMemberDto) => {
       void run(
@@ -252,11 +365,23 @@ export function useGroupAdminActions(
       // 禁言与移出是同一张权限矩阵;已在禁言中的成员由调用方改显示「解除禁言」。
       canSilence: canKick,
       changeRole,
+      changeRoleBatch,
       kick,
       silence,
+      silenceBatch,
       unsilence,
     }),
-    [canChangeRole, canKick, changeRole, kick, pendingUserID, silence, unsilence],
+    [
+      canChangeRole,
+      canKick,
+      changeRole,
+      changeRoleBatch,
+      kick,
+      pendingUserID,
+      silence,
+      silenceBatch,
+      unsilence,
+    ],
   );
 }
 

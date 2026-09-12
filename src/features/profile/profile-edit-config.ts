@@ -13,6 +13,7 @@ type EditableFieldId =
 
 type UnsupportedFieldId =
   | 'account-id'
+  | 'email'
   | 'password'
   | 'security-code';
 
@@ -54,6 +55,7 @@ type UnsupportedField = {
   id: UnsupportedFieldId;
   label: string;
   rowType?: 'avatar' | 'text';
+  valueKey?: 'email';
   editable: false;
   emptyValueLabel?: string;
   unsupportedMessage: string;
@@ -173,6 +175,15 @@ function buildProfileEditFields() {
       placeholder: i18n.t('profileFields.qqPlaceholder'),
       emptyValueLabel: i18n.t('profileFields.notBound'),
       autoCapitalize: 'none',
+    },
+    {
+      id: 'email',
+      label: i18n.t('profileFields.email'),
+      rowType: 'text',
+      valueKey: 'email',
+      editable: false,
+      emptyValueLabel: i18n.t('profileFields.notBound'),
+      unsupportedMessage: i18n.t('profileFields.emailNotSupported'),
     },
     {
       id: 'account-id',

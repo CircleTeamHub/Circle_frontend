@@ -10,7 +10,9 @@ import {
   type ChatReadBroadcast,
   type ChatTypingBroadcast,
   type ChatDeliveredBroadcast,
+  type ChatBurnedMessagesBroadcast,
   type ChatEditBroadcast,
+  type ChatGlobalBurnPolicyBroadcast,
   type ChatReactionBroadcast,
   type ChatRevokeBroadcast,
 } from './protocol';
@@ -202,9 +204,70 @@ function applyRemoteBurnChange(
   if (content['kind'] !== 'burn-changed') return;
   const seconds = content['seconds'];
   if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return;
+  // 老版本系统消息只带 seconds，没有单独的 startedAt。系统消息是在设置
+  // 事务提交后立即写入并广播的，因此用它的服务端 createdAt 作为兼容回退，
+  // 让另一端也能从同一时刻开始计算焚毁窗口。
+  const startedAt =
+    typeof content['startedAt'] === 'string'
+      ? content['startedAt']
+      : seconds > 0
+        ? message.createdAt
+        : null;
   store.applyBurnDuration(
     message.conversationId,
     seconds > 0 ? Math.floor(seconds) : null,
+    startedAt,
+  );
+}
+
+function applyGlobalBurnPolicyChange(
+  store: ReturnType<typeof useChatStore.getState>,
+  payload: ChatGlobalBurnPolicyBroadcast,
+): void {
+  if (
+    !payload ||
+    typeof payload.conversationId !== 'string' ||
+    payload.conversationId.length === 0 ||
+    typeof payload.userId !== 'string' ||
+    payload.userId.length === 0 ||
+    typeof payload.seconds !== 'number' ||
+    !Number.isFinite(payload.seconds) ||
+    payload.seconds < 0 ||
+    (payload.startedAt !== null &&
+      (typeof payload.startedAt !== 'string' ||
+        !Number.isFinite(Date.parse(payload.startedAt))))
+  ) {
+    throw new Error('malformed global burn policy payload');
+  }
+  store.applyGlobalBurnPolicy(
+    payload.conversationId,
+    payload.userId,
+    Math.floor(payload.seconds),
+    payload.startedAt,
+  );
+}
+
+function applyBurnedMessagesChange(
+  store: ReturnType<typeof useChatStore.getState>,
+  payload: ChatBurnedMessagesBroadcast,
+): void {
+  if (
+    !payload ||
+    typeof payload.conversationId !== 'string' ||
+    payload.conversationId.length === 0 ||
+    !Array.isArray(payload.messageIds) ||
+    payload.messageIds.length === 0 ||
+    payload.messageIds.length > 500 ||
+    payload.messageIds.some(
+      (messageId) =>
+        typeof messageId !== 'string' || messageId.length === 0,
+    )
+  ) {
+    throw new Error('malformed burned messages payload');
+  }
+  store.applyBurnedMessages(
+    payload.conversationId,
+    [...new Set(payload.messageIds)],
   );
 }
 
@@ -312,6 +375,32 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       reportChatEventFailureOnce('incomingMessage', 'handlerFailure');
     }
   });
+
+  socket.on(
+    CHAT_EVENTS.globalBurnPolicy,
+    (payload: ChatGlobalBurnPolicyBroadcast) => {
+      if (!isLive()) return;
+      try {
+        applyGlobalBurnPolicyChange(useChatStore.getState(), payload);
+      } catch (err) {
+        devWarn('[chat] dropped malformed global burn policy payload', err);
+        reportChatEventFailureOnce('globalBurnPolicy', 'malformedPayload');
+      }
+    },
+  );
+
+  socket.on(
+    CHAT_EVENTS.burnedMessages,
+    (payload: ChatBurnedMessagesBroadcast) => {
+      if (!isLive()) return;
+      try {
+        applyBurnedMessagesChange(useChatStore.getState(), payload);
+      } catch (err) {
+        devWarn('[chat] dropped malformed burned messages payload', err);
+        reportChatEventFailureOnce('burnedMessages', 'malformedPayload');
+      }
+    },
+  );
 
   socket.on(CHAT_EVENTS.read, (payload: ChatReadBroadcast) => {
     if (!isLive()) return;

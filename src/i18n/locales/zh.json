@@ -329,6 +329,10 @@
       "voiceHoldToTalk": "按住 说话",
       "previewPlaceholder": "连接尚未完成",
       "inputPlaceholder": "输入消息...",
+      "disappearingMessageNotice": "此对话已开启阅后即焚，新消息将在 {{duration}} 后消失",
+      "personalDisappearingMessageNotice": "你已开启阅后即焚，新消息将在 {{duration}} 后消失",
+      "peerDisappearingMessageNotice": "对方已开启阅后即焚（{{duration}}）",
+      "bothDisappearingMessageNotice": "双方已开启阅后即焚，新消息将在 {{duration}} 后消失",
       "attachmentPanelLabel": "打开附件面板",
       "sendFailedText": "消息发送失败，请重试",
       "sensitiveWordBlocked": "消息包含敏感词，已被屏蔽",
@@ -1954,6 +1958,7 @@
     "phone": "手机号",
     "phonePlaceholder": "请填写手机号",
     "email": "邮箱",
+    "emailNotSupported": "注册邮箱暂不支持修改。",
     "qq": "QQ号",
     "qqPlaceholder": "请填写QQ号",
     "notBound": "未填写",
@@ -2032,9 +2037,6 @@
       },
       "notifications": {
         "label": "消息通知"
-      },
-      "autoReply": {
-        "label": "私信自动回复"
       },
       "appearance": {
         "label": "界面与显示"
@@ -2130,6 +2132,8 @@
       "sound": "开启提示音",
       "messageRingtone": "消息通知铃声",
       "messageDefault": "消息默认",
+      "autoReply": "私信自动回复",
+      "autoReplyHint": "收到私聊消息时自动回复一条预设内容",
       "friendSection": "好友与入群通知",
       "friendRequest": "好友申请通知",
       "friendRequestHint": "关闭后不再显示好友申请横幅提醒",
@@ -2154,6 +2158,8 @@
     },
     "autoReply": {
       "title": "私信自动回复",
+      "switchSection": "自动回复",
+      "contentSection": "回复内容",
       "enabled": "启用自动回复",
       "help": "收到私聊消息时自动发送；同一会话 30 秒内最多回复一次。",
       "placeholder": "填写自动回复内容",
@@ -2188,6 +2194,7 @@
       "showOriginalGroupNameHint": "开启后显示：备注名(原始群昵称)",
       "pinnedFoldCount": "置顶折叠数量",
       "pinnedFoldCountHint": "显示前N个置顶会话，超出部分自动折叠",
+      "collapsePinned": "收起置顶会话",
       "showCollapsedPinned": "显示其余 {{count}} 个置顶会话",
       "unlimited": "无限制",
       "batteryOptimization": "电池优化提醒",

@@ -1,9 +1,11 @@
+import { useRouter } from 'expo-router';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
 import { useNotificationFeedbackStore } from '@/features/notifications/store/use-notification-feedback-store';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { useCircleNotificationTiers } from '@/features/discover/hooks/use-circle-notification-tiers';
 
 export default function NotificationSettingsScreen() {
+  const router = useRouter();
   const settings = useAppSettingsStore((s) => s.settings);
   const setSetting = useAppSettingsStore((s) => s.setSetting);
   // 三档的读写走与圈子弹层同一个 hook。此前这三行直接 set 本地 store，
@@ -49,6 +51,12 @@ export default function NotificationSettingsScreen() {
               id: 'message-ringtone',
               labelKey: 'settingsDetails.notifications.messageRingtone',
               valueKey: 'settingsDetails.notifications.messageDefault',
+            },
+            {
+              id: 'auto-reply',
+              labelKey: 'settingsDetails.notifications.autoReply',
+              subtitleKey: 'settingsDetails.notifications.autoReplyHint',
+              onPress: () => router.push('/(tabs)/profile/settings-auto-reply'),
             },
           ],
         },

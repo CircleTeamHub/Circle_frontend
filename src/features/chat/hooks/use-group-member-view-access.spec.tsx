@@ -23,12 +23,16 @@ describe('useGroupMemberViewAccess', () => {
     jest.clearAllMocks();
   });
 
-  function renderAccessHook(enabled = true) {
+  function renderAccessHook(
+    enabled = true,
+    membersCanViewRoster: boolean | null = null,
+  ) {
     return renderHook(() =>
       useGroupMemberViewAccess({
         enabled,
         groupID: GROUP_ID,
         currentUserID: USER_ID,
+        membersCanViewRoster,
       }),
     );
   }
@@ -56,6 +60,13 @@ describe('useGroupMemberViewAccess', () => {
     await waitFor(() => expect(second.result.current.resolved).toBe(true));
     expect(second.result.current.canViewMembers).toBe(false);
     expect(second.result.current.selfMember).toBeNull();
+  });
+
+  it('allows ordinary members when the conversation opens the roster', async () => {
+    mockFetchCircleDetail.mockResolvedValue(circleWithRole('MEMBER'));
+    const { result } = renderAccessHook(true, true);
+    await waitFor(() => expect(result.current.resolved).toBe(true));
+    expect(result.current.canViewMembers).toBe(true);
   });
 
   it('fails closed when the role query rejects', async () => {

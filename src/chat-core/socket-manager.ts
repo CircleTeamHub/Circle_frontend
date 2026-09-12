@@ -186,9 +186,11 @@ async function refreshViewerSelfDestructSec(userId: string): Promise<void> {
     ) {
       return;
     }
-    store.setViewerSelfDestructSec(settings.messageSelfDestructSec, {
-      remoteRefresh: true,
-    });
+    store.setViewerSelfDestructSec(
+      settings.messageSelfDestructSec,
+      { remoteRefresh: true },
+      settings.messageSelfDestructStartedAt,
+    );
   } catch {
     // 离线时沿用按账号缓存的最后已知策略，不能让策略刷新阻断聊天连接。
   }
@@ -344,7 +346,9 @@ export function connectChat(token: string, userId: string): void {
       stage: 'ready',
       platform: Platform.OS,
     });
-    // 首连不对账(冷启动全量拉取由页面 focus 负责),重连才补断线窗口。
+    // 首连也必须拉一次完整会话快照。消息页可能在 socket 已连上之后才挂载，
+    // 只依赖页面 focus 会遇到「首屏请求失败 + 已经连上的状态不再变化」的死角，
+    // 结果本地只有头像/名称，预览要等用户进出会话才出现。
     // 判据必须跨 socket 实例:access token 轮换走的是 suspendChat + connectChat,
     // 换的是**一条新 socket**。判据挂在 socket 上的话,这条新连接永远算首连,
     // 断开到重连之间的消息一条都不补 —— 而已经打开的会话不会重拉历史,
@@ -361,7 +365,10 @@ export function connectChat(token: string, userId: string): void {
       resyncAfterReconnect(userId);
       return;
     }
-    // 首连不做全量对账(冷启动拉取由页面 focus 负责),但撤回/编辑增量必须追:
+    void loadChatConversations().catch((err: unknown) =>
+      reportHandledFailure('chatSync', 'initialConversationRefresh', err),
+    );
+    // 首连不做撤回增量对账(没有本地游标时从现在开始),但撤回/编辑增量必须追:
     // 上次运行到这次启动之间发生的撤回,本地缓存里还是原文,而 height 没变,
     // 任何补拉都够不着它。
     void catchUpMutations(userId);
@@ -501,6 +508,7 @@ async function hydrateFromLocalDb(
     const conversations = sanitizeExpiredConversationPreviews(
       persistedConversations,
       useChatStore.getState().viewerSelfDestructSec,
+      useChatStore.getState().viewerSelfDestructStartedAt,
     );
     for (let index = 0; index < conversations.length; index += 1) {
       if (conversations[index] !== persistedConversations[index]) {

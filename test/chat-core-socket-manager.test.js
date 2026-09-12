@@ -627,12 +627,12 @@ test('a stale policy refresh cannot overwrite a newer local setting', async () =
   assert.equal(store.viewerSelfDestructSec, 7 * 24 * 60 * 60);
 });
 
-test('reconnect (not first connect) refreshes conversations and backfills the active gap', () => {
+test('first connect refreshes conversations and reconnect backfills the active gap', () => {
   const { manager, socket, store, apiCalls } = loadManager();
   manager.connectChat('jwt', 'u1');
   socket.fire('connect');
-  // 首连不对账:冷启动全量拉取由页面 focus 负责。
-  assert.equal(apiCalls.conversations, 0);
+  // 首连必须拉会话快照:消息页可能在 socket 已连接后才挂载。
+  assert.equal(apiCalls.conversations, 1);
   assert.deepEqual(apiCalls.backfills, []);
 
   socket.fire('disconnect');
@@ -642,7 +642,7 @@ test('reconnect (not first connect) refreshes conversations and backfills the ac
   };
   socket.fire('connect');
   // 重连:列表刷新一次 + 当前会话从本地最高 height(乐观消息的 0 不算)追平。
-  assert.equal(apiCalls.conversations, 1);
+  assert.equal(apiCalls.conversations, 2);
   assert.deepEqual(apiCalls.backfills, [
     { conversationId: 'c1', afterHeight: 9 },
   ]);
@@ -754,7 +754,7 @@ test('token rotation (suspend + reconnect) still counts as a reconnect', () => {
   const { manager, socket, store, apiCalls } = loadManager();
   manager.connectChat('jwt', 'u1');
   socket.fire('connect');
-  assert.equal(apiCalls.conversations, 0);
+  assert.equal(apiCalls.conversations, 1);
 
   // access token 轮换走的是 suspendChat + connectChat:换的是一条**新 socket**。
   // 判据挂在 socket 上的话这条新连接永远算首连,断开窗口里的消息一条都不补。
@@ -764,7 +764,7 @@ test('token rotation (suspend + reconnect) still counts as a reconnect', () => {
   manager.connectChat('jwt-rotated', 'u1');
   socket.fire('connect');
 
-  assert.equal(apiCalls.conversations, 1);
+  assert.equal(apiCalls.conversations, 2);
   assert.deepEqual(apiCalls.backfills, [
     { conversationId: 'c1', afterHeight: 7 },
   ]);

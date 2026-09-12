@@ -14,6 +14,7 @@ import { MemberName } from '@/components/ui/member-name';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { ensureDirectConversation } from '@/chat-core/client';
+import { queryChatPresence } from '@/chat-core/socket-manager';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { createDirectCall } from '@/services/api/calls';
 import { useCallStore } from '@/features/call/store/use-call-store';
@@ -141,6 +142,16 @@ const s = StyleSheet.create({
   identity: {
     alignItems: 'center',
     gap: 2,
+  },
+  presenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  presenceDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   metaRow: {
     flexDirection: 'row',
@@ -475,6 +486,18 @@ export default function UserProfileScreen() {
       };
     }, [friendStatus, isCurrentUser, profileId]),
   );
+
+  // 资料接口不携带在线状态，统一复用聊天 presence 通道。查询只针对已加载的
+  // 对方用户，后续上下线广播会直接更新 chat store，资料页只订阅这一位用户。
+  const presenceUserId = !isCurrentUser ? remoteProfile?.id ?? null : null;
+  const profileOnlineStatus = useChatStore((state) =>
+    presenceUserId ? state.onlineByUser[presenceUserId] : undefined,
+  );
+  const profileOnline = profileOnlineStatus === true;
+  useEffect(() => {
+    if (!presenceUserId) return;
+    queryChatPresence([presenceUserId]);
+  }, [presenceUserId]);
 
   const rawProfile = remoteProfile ?? fallbackProfile;
   const profile =
@@ -822,6 +845,11 @@ export default function UserProfileScreen() {
         color: colors.textSecondary,
         ...Typography.caption,
       },
+      presenceText: {
+        color: profileOnline ? colors.online : colors.textSecondary,
+        ...Typography.small,
+        fontWeight: '600' as const,
+      },
       metaChip: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -881,7 +909,7 @@ export default function UserProfileScreen() {
         backgroundColor: colors.surfaceBorder,
       },
     }),
-    [colors, insets.bottom],
+    [colors, insets.bottom, profileOnline],
   );
 
   return (
@@ -939,6 +967,36 @@ export default function UserProfileScreen() {
               style={d.name}
             />
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
+            {presenceUserId ? (
+              <View
+                style={s.presenceRow}
+                accessibilityLabel={t(
+                  profileOnline
+                    ? 'chat.detail.statusOnline'
+                    : 'chat.detail.statusOffline',
+                  { defaultValue: profileOnline ? '在线' : '离线' },
+                )}
+              >
+                <View
+                  style={[
+                    s.presenceDot,
+                    {
+                      backgroundColor: profileOnline
+                        ? colors.online
+                        : colors.textSecondary,
+                    },
+                  ]}
+                />
+                <Text style={d.presenceText}>
+                  {t(
+                    profileOnline
+                      ? 'chat.detail.statusOnline'
+                      : 'chat.detail.statusOffline',
+                    { defaultValue: profileOnline ? '在线' : '离线' },
+                  )}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {profileMetaItems.length > 0 ? (

@@ -48,6 +48,8 @@
       "sound": "Sonido",
       "messageRingtone": "Tono de mensajes",
       "messageDefault": "Predeterminado de mensajes",
+      "autoReply": "Respuesta automática a mensajes directos",
+      "autoReplyHint": "Envía una respuesta predefinida al recibir un mensaje directo",
       "friendSection": "Solicitudes de amigos y grupos",
       "friendRequest": "Avisos de solicitud de amistad",
       "friendRequestHint": "Si se desactiva, no aparecerán banners de solicitud de amistad",
@@ -72,6 +74,8 @@
     },
     "autoReply": {
       "title": "Respuesta automática de mensajes directos",
+      "switchSection": "Respuesta automática",
+      "contentSection": "Contenido de la respuesta",
       "enabled": "Activar respuesta automática",
       "help": "Responde automáticamente, como máximo una vez por conversación cada 30 segundos.",
       "placeholder": "Escribe una respuesta automática",
@@ -106,6 +110,7 @@
       "showOriginalGroupNameHint": "Al activarlo: alias (apodo original del grupo)",
       "pinnedFoldCount": "Chats fijados visibles",
       "pinnedFoldCountHint": "Muestra los primeros N chats fijados y contrae el resto",
+      "collapsePinned": "Contraer chats fijados",
       "showCollapsedPinned": "Mostrar {{count}} chats fijados más",
       "unlimited": "Sin límite",
       "batteryOptimization": "Aviso de optimización de batería",
@@ -253,6 +258,10 @@
       "voiceHoldToTalk": "Mantén para hablar",
       "previewPlaceholder": "La conexión no está lista",
       "inputPlaceholder": "Escribe un mensaje…",
+      "disappearingMessageNotice": "Los mensajes temporales están activados en este chat. Los mensajes nuevos desaparecen después de {{duration}}.",
+      "personalDisappearingMessageNotice": "Has activado los mensajes temporales. Los mensajes nuevos desaparecen después de {{duration}}.",
+      "peerDisappearingMessageNotice": "La otra persona activó los mensajes temporales ({{duration}}).",
+      "bothDisappearingMessageNotice": "Ambos han activado los mensajes temporales. Los mensajes nuevos desaparecen después de {{duration}}.",
       "attachmentPanelLabel": "Abrir panel de adjuntos",
       "sendFailedText": "No se pudo enviar el mensaje, inténtalo de nuevo",
       "sensitiveWordBlocked": "Mensaje bloqueado: contiene palabras prohibidas",
@@ -1941,6 +1950,7 @@
     "phone": "Teléfono",
     "phonePlaceholder": "Escribe tu número de teléfono",
     "email": "Correo",
+    "emailNotSupported": "El correo de registro no se puede cambiar.",
     "qq": "QQ",
     "qqPlaceholder": "Escribe tu número de QQ",
     "notBound": "Sin completar",
@@ -2451,9 +2461,6 @@
       },
       "notifications": {
         "label": "Notificaciones"
-      },
-      "autoReply": {
-        "label": "Respuesta automática de mensajes directos"
       },
       "appearance": {
         "label": "Pantalla"

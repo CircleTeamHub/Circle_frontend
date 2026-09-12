@@ -180,12 +180,16 @@ const s = StyleSheet.create({
     lineHeight: 24,
     transform: [{ translateY: -2 }],
   },
-  collapsedPinnedButton: {
-    minHeight: 36,
-    flexDirection: 'row',
+  // 折叠箭头嵌在第 N 个置顶会话的右下角，不再单独占一行。
+  pinnedFoldButton: {
+    width: 24,
+    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.xs,
+  },
+  pinnedFoldIcon: {
+    // 让箭头更贴近卡片底部，按钮的触控范围仍保持原位置和大小。
+    transform: [{ translateY: 6 }],
   },
   // 单条会话行外层：保留普通列表分隔线和行间距
   row: {
@@ -302,6 +306,12 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  rowBottomTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: Spacing.sm,
+  },
   // 弹出菜单的半透明蒙层（点击关闭菜单）
   overlay: {
     flex: 1,
@@ -350,6 +360,10 @@ type ConversationRowProps = {
   onTogglePinned: (conversation: Conversation) => void;
   onToggleMuted: (conversation: Conversation) => void;
   onDelete: (conversation: Conversation) => void;
+  /** 只传给第 N 个置顶会话：箭头嵌在该卡片右下角。 */
+  pinnedFoldExpanded?: boolean;
+  pinnedFoldHiddenCount?: number;
+  onTogglePinnedFold?: () => void;
   /** 桌面分栏下禁用：鼠标点击/框选的横向抖动会误触滑动，把操作条卡在半开。 */
   swipeEnabled: boolean;
 };
@@ -371,6 +385,9 @@ function ConversationRowImpl({
   onTogglePinned,
   onToggleMuted,
   onDelete,
+  pinnedFoldExpanded,
+  pinnedFoldHiddenCount = 0,
+  onTogglePinnedFold,
   swipeEnabled,
 }: ConversationRowProps) {
   const { colors } = useTheme();
@@ -549,6 +566,16 @@ function ConversationRowImpl({
     ? colors.pinnedTextSecondary
     : colors.textSecondary;
   const badgeBorderColor = item.pinned ? colors.pinnedSurface : rowBackgroundColor;
+  const pinnedFoldLabel = onTogglePinnedFold
+    ? pinnedFoldExpanded
+      ? t('settingsDetails.appearance.collapsePinned', {
+          defaultValue: '收起置顶会话',
+        })
+      : t('settingsDetails.appearance.showCollapsedPinned', {
+          defaultValue: '展开另外 {{count}} 个置顶会话',
+          count: pinnedFoldHiddenCount,
+        })
+    : undefined;
 
   return (
     <View ref={rowRef} style={[s.row, getPinnedRowStyle(pinnedGroupPosition)]}>
@@ -627,7 +654,28 @@ function ConversationRowImpl({
               <Text style={messageStyle} numberOfLines={1}>
                 {item.message}
               </Text>
-              <Badge count={item.unreadCount} />
+              <View style={s.rowBottomTrailing}>
+                <Badge count={item.unreadCount} />
+                {onTogglePinnedFold ? (
+                  <Pressable
+                    style={s.pinnedFoldButton}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      onTogglePinnedFold();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={pinnedFoldLabel}
+                    hitSlop={12}
+                  >
+                    <Ionicons
+                      style={s.pinnedFoldIcon}
+                      name={pinnedFoldExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={10}
+                      color={colors.pinnedTextSecondary}
+                    />
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           </Pressable>
         </View>
@@ -672,9 +720,13 @@ export default function MessagesScreen() {
   );
 
   const rawConversations = useChatStore((state) => state.conversations);
+  const currentUserID = useChatStore((state) => state.currentUserId);
   const connectionError = useChatStore((state) => state.error);
   const imConnected = useChatStore((state) => state.connected);
   const imConnecting = useChatStore((state) => state.connecting);
+  const conversationsSnapshotLoaded = useChatStore(
+    (state) => state.conversationsSnapshotLoaded,
+  );
   const conversationGroups = useMessageGroupsStore((state) => state.groups);
   const filterOrder = useMessageGroupsStore((state) => state.filterOrder);
   const localUnreadOverrides = useLocalUnreadStore((state) => state.overrides);
@@ -687,6 +739,7 @@ export default function MessagesScreen() {
   const pinnedFoldCount = useAppSettingsStore((state) => state.pinnedFoldCount);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  const wasConnectedRef = useRef(imConnected);
   const preferenceWriteInFlightRef = useRef(new Set<string>());
 
   useEffect(
@@ -703,13 +756,40 @@ export default function MessagesScreen() {
   // 点进去再返回就会被强行拽回"全部"，丢失上一级筛选（见 messages-screen.test.js 回归）。
   useFocusEffect(
     useCallback(() => {
+      // The unmatched-route fallback can mount this screen while auth/session
+      // bootstrap is still restoring the current user. Wait for the scoped
+      // chat session, then rerun the focus effect when it becomes available.
+      if (!currentUserID) return;
+
       loadChatConversations().catch((err) => {
         // 列表加载失败时保留已有会话,empty state 兜底显示。
         // dev 下额外打印，便于排查"为啥列表是空的"。
         reportHandledFailure("messages", "focusLoadConversations", err);
       });
-    }, []),
+    }, [currentUserID]),
   );
+
+  // 首次进消息页时 REST 可能正好撞上后端重启，且 socket 恢复后页面仍保持焦点，
+  // 原来的 focus effect 不会再跑一次，结果只能等用户点进某个会话才看到内容。
+  // 连接从断开恢复时补拉一次；已有完整快照则跳过，避免冷启动重复请求。
+  useEffect(() => {
+    const wasConnected = wasConnectedRef.current;
+    wasConnectedRef.current = imConnected;
+    if (
+      !currentUserID ||
+      !imConnected ||
+      wasConnected ||
+      conversationsSnapshotLoaded
+    ) {
+      return;
+    }
+
+    loadChatConversations().catch((err) => {
+      // focus effect 已经有一次失败记录；这里仅记录连接恢复后的补拉失败，
+      // 下一次连接恢复仍会重试，不覆盖现有本地快照。
+      reportHandledFailure("messages", "connectionRefreshConversations", err);
+    });
+  }, [currentUserID, imConnected, conversationsSnapshotLoaded]);
 
   const handleRefreshConversations = useCallback(async () => {
     if (refreshInFlightRef.current) return;
@@ -893,24 +973,45 @@ export default function MessagesScreen() {
     return conversations;
   }, [activeFilterId, conversationGroups, conversations]);
 
-  const collapsedPinnedCount = useMemo(() => {
-    if (showAllPinned || pinnedFoldCount === 0) return 0;
-    return Math.max(
-      0,
-      visibleConversations.filter((conversation) => conversation.pinned).length -
-        pinnedFoldCount,
-    );
-  }, [pinnedFoldCount, showAllPinned, visibleConversations]);
+  const visiblePinnedCount = useMemo(
+    () => visibleConversations.filter((conversation) => conversation.pinned).length,
+    [visibleConversations],
+  );
+
+  // 折叠开关只在「置顶数真的超过阈值」时存在，且和展开与否无关 ——
+  // 判据里掺进 showAllPinned 的话，一展开开关就跟着消失，再也收不回去。
+  const pinnedFoldEnabled =
+    pinnedFoldCount > 0 && visiblePinnedCount > pinnedFoldCount;
+
+  const collapsedPinnedCount =
+    pinnedFoldEnabled && !showAllPinned ? visiblePinnedCount - pinnedFoldCount : 0;
 
   const displayedConversations = useMemo(() => {
-    if (collapsedPinnedCount === 0) return visibleConversations;
+    if (!pinnedFoldEnabled || showAllPinned) return visibleConversations;
     let visiblePinned = 0;
     return visibleConversations.filter((conversation) => {
       if (!conversation.pinned) return true;
       visiblePinned += 1;
       return visiblePinned <= pinnedFoldCount;
     });
-  }, [collapsedPinnedCount, pinnedFoldCount, visibleConversations]);
+  }, [pinnedFoldCount, pinnedFoldEnabled, showAllPinned, visibleConversations]);
+
+  // 箭头嵌在第 pinnedFoldCount 条置顶会话的右下角，收起/展开都不挪窝。
+  const pinnedFoldAnchorIndex = useMemo(() => {
+    if (!pinnedFoldEnabled) return -1;
+    let seenPinned = 0;
+    for (let i = 0; i < displayedConversations.length; i += 1) {
+      if (!displayedConversations[i].pinned) continue;
+      seenPinned += 1;
+      if (seenPinned === pinnedFoldCount) return i;
+    }
+    return -1;
+  }, [displayedConversations, pinnedFoldCount, pinnedFoldEnabled]);
+
+  const handleTogglePinnedFold = useCallback(
+    () => setShowAllPinned((previous) => !previous),
+    [],
+  );
 
   useEffect(() => {
     setShowAllPinned(false);
@@ -1007,6 +1108,19 @@ export default function MessagesScreen() {
     [updateConversationPreference],
   );
 
+  const canClearGroupForEveryone = useCallback(
+    (conversation: Conversation) => {
+      // 临时房仍沿用原有清空语义;只有持久 GROUP 会话需要群主授权。
+      if (conversation.conversationType !== 'group' || conversation.isTempChat) {
+        return true;
+      }
+      const raw = rawConversations.find((item) => item.id === conversation.id);
+      // myRole 是服务端按当前用户实时计算的角色;ownerId 兜底兼容旧会话 DTO。
+      return raw?.myRole === 'OWNER' || raw?.ownerId === currentUserID;
+    },
+    [currentUserID, rawConversations],
+  );
+
   const handleConfirmDeleteConversation = useCallback(
     (conversation: Conversation) => {
       const deleteConversation = (deleteForEveryone: boolean) => {
@@ -1050,11 +1164,15 @@ export default function MessagesScreen() {
                 text: t("chat.clearHistoryForMe", { defaultValue: "仅删除我的记录" }),
                 onPress: () => deleteConversation(false),
               },
-              {
-                text: t("chat.clearHistoryForEveryone", { defaultValue: "删除所有人的记录" }),
-                style: "destructive" as const,
-                onPress: () => deleteConversation(true),
-              },
+              ...(canClearGroupForEveryone(conversation)
+                ? [
+                    {
+                      text: t("chat.clearHistoryForEveryone", { defaultValue: "删除所有人的记录" }),
+                      style: "destructive" as const,
+                      onPress: () => deleteConversation(true),
+                    },
+                  ]
+                : []),
             ]
           : [
           { text: t("common.cancel"), style: "cancel" },
@@ -1066,7 +1184,7 @@ export default function MessagesScreen() {
         ],
       );
     },
-    [clearLocalUnread, t],
+    [canClearGroupForEveryone, clearLocalUnread, t],
   );
 
   // 点击搜索图标 → 跳转搜索页
@@ -1136,10 +1254,20 @@ export default function MessagesScreen() {
         onTogglePinned={handleToggleConversationPinned}
         onToggleMuted={handleToggleConversationMuted}
         onDelete={handleConfirmDeleteConversation}
+        pinnedFoldExpanded={
+          index === pinnedFoldAnchorIndex ? showAllPinned : undefined
+        }
+        pinnedFoldHiddenCount={
+          index === pinnedFoldAnchorIndex ? collapsedPinnedCount : undefined
+        }
+        onTogglePinnedFold={
+          index === pinnedFoldAnchorIndex ? handleTogglePinnedFold : undefined
+        }
         swipeEnabled={!isSplitLayout}
       />
     ),
     [
+      collapsedPinnedCount,
       colors.background,
       colors.primaryLight,
       d,
@@ -1149,7 +1277,10 @@ export default function MessagesScreen() {
       handleToggleConversationMuted,
       handleToggleConversationPinned,
       handleOpenUserProfile,
+      handleTogglePinnedFold,
       isSplitLayout,
+      pinnedFoldAnchorIndex,
+      showAllPinned,
       swipeLabels,
       displayedConversations,
     ],
@@ -1234,23 +1365,8 @@ export default function MessagesScreen() {
           </Text>
         </View>
       ) : null}
-      {collapsedPinnedCount > 0 ? (
-        <Pressable
-          style={s.collapsedPinnedButton}
-          onPress={() => setShowAllPinned(true)}
-          accessibilityRole="button"
-        >
-          <Text style={d.preview}>
-            {t('settingsDetails.appearance.showCollapsedPinned', {
-              defaultValue: '展开另外 {{count}} 个置顶会话',
-              count: collapsedPinnedCount,
-            })}
-          </Text>
-          <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
-        </Pressable>
-      ) : null}
     </View>
-  ), [activeTab, collapsedPinnedCount, colors, d, filterItems, handleClearUnread, handleFilterPress, handleOpenFind, handleOpenGroups, imConnected, imConnecting, t]);
+  ), [activeTab, colors, d, filterItems, handleClearUnread, handleFilterPress, handleOpenFind, handleOpenGroups, imConnected, imConnecting, t]);
 
   const listPane = (
     <View

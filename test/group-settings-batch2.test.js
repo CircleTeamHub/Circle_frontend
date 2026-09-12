@@ -108,6 +108,11 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   const screen = read('src/features/chat/screens/GroupManageScreen.tsx');
   assert.match(screen, /setGroupChatMuteAll\(conversationID, next\)/);
   assert.match(screen, /updateGroupChatPolicies\(conversationID, \{ \[key\]: next \}\)/);
+  // 群管理从圈子详情进入时 store 可能还没有会话 DTO;进入页面必须刷新
+  // policies,否则成员权限三个开关没有可写的状态。
+  assert.match(screen, /const conversationsPromise = loadChatConversations\(\)\.catch/);
+  assert.match(screen, /await conversationsPromise;/);
+  assert.match(screen, /disabled: policies === null/);
   assert.match(screen, /transferGroupChatOwner\(conversationID, member\.userId\)/);
   // 乐观更新 + 失败回滚:开关按下即翻,请求失败翻回去。
   assert.match(screen, /patchConversation\(\{ muteAll: next \}\)/);
@@ -126,8 +131,19 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   assert.match(screen, /isStandaloneGroup\s*\?\s*renderLinkRow\(/);
   assert.match(screen, /pathname: '\/\(tabs\)\/profile\/group-expansion'/);
   assert.match(screen, /params: \{ circleId: groupID \}/);
+  assert.match(screen, /returnScope: originScope/);
+  assert.match(screen, /returnConversationID: conversationID/);
+  assert.match(screen, /returnGroupID: groupID/);
+  // 添加管理员与添加禁言共用多选面板,确认后分别走批量角色/禁言动作。
+  assert.match(screen, /multiSelect=\{pickerMode === 'admin' \|\| pickerMode === 'silence'\}/);
+  assert.match(screen, /selectedMemberIDs=\{selectedMemberIDs\}/);
+  assert.match(screen, /changeRoleBatch\(selected, 'ADMIN'\)/);
+  assert.match(screen, /silenceBatch\(targets, seconds\)/);
   const expansion = read('src/features/profile/screens/GroupExpansionScreen.tsx');
   assert.match(expansion, /preselectedCircleId/);
+  assert.match(expansion, /getGroupManageHref\(returnScope/);
+  assert.match(expansion, /router\.replace\(backHref as never\)/);
+  assert.match(expansion, /onBackPress=\{returnsToGroupManage \? handleBackPress : undefined\}/);
 });
 
 test('chat info exposes the avatar row, the member row and hides the QR entry when joining is off', () => {
@@ -143,6 +159,8 @@ test('chat info exposes the avatar row, the member row and hides the QR entry wh
   assert.match(info, /const canChangeGroupAvatar = isStandaloneGroup \? canManageGroup : isOwner;/);
   assert.match(info, /chat\.groupMembersRow/);
   assert.match(info, /chat\.memberCountWithLimit/);
+  // 群成员目录可按群规开放,但群日志只给群主/管理员。
+  assert.match(info, /\{canManageGroup \? \([\s\S]*?chat\.groupLog/);
   // 二维码入群关掉后群码入口一并收起:留着只会让人扫一张必然被拒的码。
   assert.match(info, /\) : qrJoinEnabled \? \(/);
   // 独立群聊的公告读写会话行。

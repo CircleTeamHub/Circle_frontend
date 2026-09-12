@@ -14,7 +14,10 @@ test('messages screen renders pinned conversations as compact grouped surfaces w
   assert.match(source, /pinnedSurface/);
   assert.match(source, /type PinnedGroupPosition = "single" \| "first" \| "middle" \| "last" \| "none"/);
   assert.match(source, /getPinnedGroupPosition/);
-  assert.match(source, /pinnedGroupPosition=\{getPinnedGroupPosition\(displayedConversations, index\)\}/);
+  assert.match(
+    source,
+    /pinnedGroupPosition=\{getPinnedGroupPosition\(displayedConversations, index\)\}/,
+  );
   assert.match(source, /getPinnedRowStyle\(pinnedGroupPosition\)/);
   assert.match(source, /getPinnedSurfaceStyle\(pinnedGroupPosition\)/);
   assert.match(source, /pinnedSurfaceStyle=\{d\.pinnedSurface\}/);
@@ -26,6 +29,40 @@ test('messages screen renders pinned conversations as compact grouped surfaces w
   assert.match(source, /hiddenPinnedSeparatorIDs\.has\(leadingItem\.id\) \? null : <Divider \/>/);
   assert.doesNotMatch(source, /trailingItem/);
   assert.match(source, /ItemSeparatorComponent=\{renderSeparator\}/);
+});
+
+test('pinned fold toggle sits in the threshold conversation card and folds both ways', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+
+  // 折叠开关嵌进第 N 条置顶会话的右下角，不再额外占一行。
+  assert.match(source, /const pinnedFoldAnchorIndex = useMemo/);
+  assert.match(source, /seenPinned === pinnedFoldCount/);
+  assert.match(source, /style=\{s\.pinnedFoldButton\}/);
+  assert.match(source, /style=\{s\.pinnedFoldIcon\}/);
+  assert.match(source, /index === pinnedFoldAnchorIndex \? handleTogglePinnedFold : undefined/);
+  assert.doesNotMatch(source, /function PinnedFoldToggle/);
+  assert.doesNotMatch(source, /pinnedFoldRow:/);
+
+  // 开关的存在判据不能掺 showAllPinned：掺了就是「展开后开关消失，收不回去」。
+  assert.match(
+    source,
+    /const pinnedFoldEnabled =\s*pinnedFoldCount > 0 && visiblePinnedCount > pinnedFoldCount;/,
+  );
+  assert.match(source, /setShowAllPinned\(\(previous\) => !previous\)/);
+  assert.doesNotMatch(source, /setShowAllPinned\(true\)/);
+
+  // 展开/收起两套文案 + 两个方向的箭头。
+  assert.match(source, /settingsDetails\.appearance\.collapsePinned/);
+  assert.match(source, /settingsDetails\.appearance\.showCollapsedPinned/);
+  assert.match(source, /pinnedFoldExpanded \? 'chevron-up' : 'chevron-down'/);
+
+  // 箭头与未读数共享右下角尾部区域，点击箭头不能冒泡进入会话。
+  assert.match(source, /rowBottomTrailing/);
+  assert.match(source, /event\.stopPropagation\(\)/);
+  assert.match(source, /const nextPinned = Boolean\(items\[index \+ 1\]\?\.pinned\)/);
 });
 
 test('messages screen keeps pinned conversation surfaces visually consistent', () => {
@@ -61,7 +98,14 @@ test('messages screen reloads conversations on focus without resetting the activ
 
   // Reload-on-focus stays: groups created from群列表/圈子/临时群 must show up.
   assert.match(source, /useFocusEffect\(\s*useCallback\(\(\)\s*=>\s*\{/);
+  // Route fallbacks can mount this screen before auth bootstrap has restored
+  // the scoped chat user; loading must wait and rerun once it is available.
+  assert.match(source, /if \(!currentUserID\) return;/);
+  assert.match(source, /\}, \[currentUserID\]\),/);
   assert.match(source, /loadChatConversations\(\)\.catch/);
+  assert.match(source, /const conversationsSnapshotLoaded = useChatStore/);
+  assert.match(source, /wasConnectedRef/);
+  assert.match(source, /connectionRefreshConversations/);
   assert.doesNotMatch(source, /hasFetchedRef/);
 
   // Regression（返回丢失筛选）: 点私聊里的会话 → push chat-detail → 返回 refocus 列表，
@@ -120,6 +164,17 @@ test('messages screen exposes left-swipe conversation actions for pin, mute, and
   assert.equal(zh.messages.swipeMute, '静音');
   assert.equal(zh.messages.swipeUnmute, '取消静音');
   assert.equal(zh.messages.swipeDelete, '删除');
+});
+
+test('messages screen only offers group-wide clear to the group owner', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /const currentUserID = useChatStore\(\(state\) => state\.currentUserId\)/);
+  assert.match(source, /raw\?\.myRole === 'OWNER' \|\| raw\?\.ownerId === currentUserID/);
+  assert.match(source, /canClearGroupForEveryone\(conversation\)/);
 });
 
 test('messages screen counts local unread overrides before applying local badges', () => {

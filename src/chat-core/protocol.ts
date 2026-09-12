@@ -29,6 +29,10 @@ export const CHAT_EVENTS = {
   edit: 'chat:edit',
   /** 服务端 → 客户端：私聊任一方清空后，双方设备同步清空到该水位 */
   historyCleared: 'chat:history_cleared',
+  /** 服务端 → 客户端：成员全局阅后即焚策略变更 */
+  globalBurnPolicy: 'chat:global_burn_policy',
+  /** 服务端 → 客户端：阅后即焚到期消息已从会话中删除 */
+  burnedMessages: 'chat:burned_messages',
 } as const;
 
 /** 表情回应白名单（与服务端镜像；越界服务端直接拒）。 */
@@ -317,6 +321,20 @@ export interface ChatHistoryClearedBroadcast {
   clearedBy: string;
 }
 
+/** 全局阅后即焚策略变更（按会话成员个人房定向广播）。 */
+export interface ChatGlobalBurnPolicyBroadcast {
+  conversationId: string;
+  userId: string;
+  seconds: number;
+  startedAt: string | null;
+}
+
+/** 阅后即焚到期消息删除通知，按会话成员个人房定向广播。 */
+export interface ChatBurnedMessagesBroadcast {
+  conversationId: string;
+  messageIds: string[];
+}
+
 /**
  * chat:conversation 的变化种类（镜像 circle_be chat.types.ts）:
  * joined=入座 / left=本人主动退出 / removed=被移出·解散·停用 / updated=预留。
@@ -525,12 +543,24 @@ export interface ChatConversationDto {
   policies?: ChatGroupPoliciesDto | null;
   /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
   burnDurationSec?: number | null;
+  /** 会话级阅后即焚开启时间；开启前的消息不受该策略影响。 */
+  burnStartedAt?: string | null;
+  /** DIRECT 会话对端已读水位；用于冷启动恢复发送状态。 */
+  peerReadHeight?: number | null;
   lastMessageAt: string | null;
   /**
    * 本人入群时刻（后端 ChatMember.joinedAt）。「新的群组」按它倒序；
    * 可选是为了兼容还没带上这个字段的后端，缺失时回落 lastMessageAt 排序。
    */
   joinedAt?: string | null;
+}
+
+/** 私聊页展示阅后即焚提醒所需的会话/对端策略快照。 */
+export interface ChatBurnPolicyDto {
+  burnDurationSec: number | null;
+  burnStartedAt: string | null;
+  peerSelfDestructSec: number;
+  peerSelfDestructStartedAt: string | null;
 }
 
 /**

@@ -68,10 +68,19 @@ test('api pulls forward incrementally with afterHeight and loops the cursor', ()
 
 test('reconnect refreshes conversations and backfills the open conversation gap', () => {
   const manager = read('src/chat-core/socket-manager.ts');
-  // 首连不做(冷启动全量拉取由页面负责),重连才对账
+  // 首连拉完整快照，重连再补断线期间的快照与消息缺口
+  assert.match(manager, /initialConversationRefresh/);
   assert.match(manager, /hadConnected/);
   assert.match(manager, /loadChatConversations/);
   assert.match(manager, /backfillConversationSince/);
+});
+
+test('conversation snapshot loading coalesces startup requests and retries transient failures', () => {
+  const api = read('src/chat-core/api.ts');
+  assert.match(api, /conversationsRequest/);
+  assert.match(api, /conversationsRequestEpoch/);
+  assert.match(api, /tries: 2/);
+  assert.match(api, /backoffMs: 400/);
 });
 
 // ---- G-15:多端已读收敛未读 ----

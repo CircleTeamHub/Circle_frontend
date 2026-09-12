@@ -86,6 +86,7 @@ const PERMISSION_OPTIONS: readonly PrivacyPermission[] = [
 const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐:0 = 关闭阅后即焚。
   messageSelfDestructSec: BURN_DURATION_OFF,
+  messageSelfDestructStartedAt: null,
   momentsVisibility: 'ALL',
   allowStrangerMessages: true,
   showPhone: false,
@@ -143,7 +144,11 @@ export default function PrivacySettingsScreen() {
       setSettings(loaded);
       useChatStore
         .getState()
-        .setViewerSelfDestructSec(loaded.messageSelfDestructSec);
+        .setViewerSelfDestructSec(
+          loaded.messageSelfDestructSec,
+          undefined,
+          loaded.messageSelfDestructStartedAt,
+        );
     } catch (requestError) {
       setError(
         getApiErrorMessage(
@@ -179,7 +184,11 @@ export default function PrivacySettingsScreen() {
       setSettings(updated);
       useChatStore
         .getState()
-        .setViewerSelfDestructSec(updated.messageSelfDestructSec);
+        .setViewerSelfDestructSec(
+          updated.messageSelfDestructSec,
+          undefined,
+          updated.messageSelfDestructStartedAt,
+        );
     } catch (requestError) {
       if (
         request !== privacyRequestSequence.current ||

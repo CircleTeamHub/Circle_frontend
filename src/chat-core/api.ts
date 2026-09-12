@@ -1,6 +1,8 @@
 import { apiClient } from '@/services/api/client';
+import { retry } from '@/utils/retry';
 import { useAuthStore } from '@/stores/authStore';
 import type {
+  ChatBurnPolicyDto,
   ChatConversationDto,
   ChatGroupEventsPageDto,
   ChatGroupPoliciesDto,
@@ -42,6 +44,12 @@ function sessionGate(): () => boolean {
 type PendingHistoryClear = { targetHeight: number | undefined };
 const pendingHistoryClears = new Map<string, PendingHistoryClear>();
 let pendingHistoryClearEpoch: number | null = null;
+
+// 启动时 socket、消息页 focus、回前台恢复可能同时请求会话列表。把同一账号
+// 的并发请求合并成一个，避免慢响应互相覆盖，也避免首屏为了补一次快照把服务端
+// 打出多份完全相同的查询。切号时允许新账号立即发起自己的请求。
+let conversationsRequest: Promise<ChatConversationDto[]> | null = null;
+let conversationsRequestEpoch: number | null = null;
 
 function getPendingHistoryClear(
   conversationId: string,
@@ -85,13 +93,45 @@ function completePendingHistoryClear(
 
 /** 拉全量会话列表并写入 store(消息页 focus / 下拉刷新用)。 */
 export async function loadChatConversations(): Promise<ChatConversationDto[]> {
-  const sameSession = sessionGate();
-  const conversations =
-    await apiClient<ChatConversationDto[]>('/chat/conversations');
-  if (sameSession()) {
-    useChatStore.getState().setConversations(conversations);
+  const requestEpoch = useAuthStore.getState().sessionEpoch;
+  if (conversationsRequest && conversationsRequestEpoch === requestEpoch) {
+    return conversationsRequest;
   }
-  return conversations;
+
+  const sameSession = sessionGate();
+  const request = (async () => {
+    // 启动阶段常见的是一次网络/网关抖动，而不是会话不存在。GET 列表请求
+    // 可安全重试一次；确定性的 4xx 仍由 retry 立即抛出，避免掩盖认证问题。
+    const conversations = await retry(
+      () => apiClient<ChatConversationDto[]>('/chat/conversations'),
+      { tries: 2, backoffMs: 400 },
+    );
+    if (sameSession()) {
+      useChatStore.getState().setConversations(conversations);
+    }
+    return conversations;
+  })();
+  conversationsRequest = request;
+  conversationsRequestEpoch = requestEpoch;
+  const clearRequest = () => {
+    if (conversationsRequest === request) {
+      conversationsRequest = null;
+      conversationsRequestEpoch = null;
+    }
+  };
+  // 用 then(success, failure) 清理，不能把 finally 产生的 rejected Promise
+  // 丢掉，否则一次网络失败会在没有调用方 await 时变成 unhandled rejection。
+  void request.then(clearRequest, clearRequest);
+  return request;
+}
+
+/** 读取当前私聊的会话级策略及对端全局阅后即焚策略。 */
+export function fetchChatBurnPolicy(
+  conversationId: string,
+): Promise<ChatBurnPolicyDto> {
+  return apiClient<ChatBurnPolicyDto>(
+    `/chat/conversations/${conversationId}/burn`,
+  );
 }
 
 /** 取或建单聊会话(个人资料页「发消息」等入口)。 */
@@ -659,14 +699,21 @@ export async function setChatBurnDuration(
   seconds: number | null,
 ): Promise<number | null> {
   const sameSession = sessionGate();
-  const result = await apiClient<{ burnDurationSec: number | null }>(
+  const result = await apiClient<{
+    burnDurationSec: number | null;
+    burnStartedAt: string | null;
+  }>(
     `/chat/conversations/${conversationId}/burn`,
     { method: 'POST', body: { seconds: seconds ?? 0 } },
   );
   if (sameSession()) {
     useChatStore
       .getState()
-      .applyBurnDuration(conversationId, result.burnDurationSec ?? null);
+      .applyBurnDuration(
+        conversationId,
+        result.burnDurationSec ?? null,
+        result.burnStartedAt,
+      );
   }
   return result.burnDurationSec ?? null;
 }

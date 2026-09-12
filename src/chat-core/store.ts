@@ -9,6 +9,7 @@ import type { ChatConversationDto, ChatMessageDto } from './protocol';
 import {
   clearLocalConversationMessages,
   deleteLocalMessage,
+  deleteLocalMessages,
   outboxDelete,
   purgeExpiredLocalMessages,
   persistLocalConversations,
@@ -47,26 +48,42 @@ function normalizeViewerSelfDestructSec(seconds: number): number | null {
 export function sanitizeExpiredConversationPreviews(
   conversations: ChatConversationDto[],
   viewerSelfDestructSec: number,
+  viewerSelfDestructStartedAt: string | null | number = null,
   now = Date.now(),
 ): ChatConversationDto[] {
+  if (typeof viewerSelfDestructStartedAt === 'number') {
+    now = viewerSelfDestructStartedAt;
+    viewerSelfDestructStartedAt = null;
+  }
   const viewerSeconds = viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
+  const viewerStart = viewerSelfDestructStartedAt
+    ? Date.parse(viewerSelfDestructStartedAt)
+    : NaN;
   return conversations.map((conversation) => {
     const conversationSeconds =
       conversation.burnDurationSec && conversation.burnDurationSec > 0
         ? conversation.burnDurationSec
         : null;
-    const seconds =
-      conversationSeconds && viewerSeconds
-        ? Math.min(conversationSeconds, viewerSeconds)
-        : (conversationSeconds ?? viewerSeconds);
     const previewCreatedAt = conversation.lastMessage
       ? Date.parse(conversation.lastMessage.createdAt)
       : NaN;
+    const burnStart = conversation.burnStartedAt
+      ? Date.parse(conversation.burnStartedAt)
+      : NaN;
+    const expiresAt = Number.isFinite(previewCreatedAt)
+      ? Math.min(
+          Number.isFinite(burnStart) && conversationSeconds
+            ? previewCreatedAt + conversationSeconds * 1000
+            : Infinity,
+          Number.isFinite(viewerStart) && viewerSeconds && previewCreatedAt >= viewerStart
+            ? previewCreatedAt + viewerSeconds * 1000
+            : Infinity,
+        )
+      : Infinity;
     if (
-      !seconds ||
       !conversation.lastMessage ||
       !Number.isFinite(previewCreatedAt) ||
-      previewCreatedAt >= now - seconds * 1000
+      expiresAt > now
     ) {
       return conversation;
     }
@@ -87,9 +104,15 @@ function hasBurnPolicyChanged(
     conversation?.burnDurationSec && conversation.burnDurationSec > 0
       ? conversation.burnDurationSec
       : 0;
+  const startedAt = (conversation: ChatConversationDto | undefined): string | null =>
+    conversation?.burnStartedAt ?? null;
   const nextById = new Map(next.map((conversation) => [conversation.id, conversation]));
   for (const conversation of current) {
-    if (duration(conversation) !== duration(nextById.get(conversation.id))) {
+    const incoming = nextById.get(conversation.id);
+    if (
+      duration(conversation) !== duration(incoming) ||
+      startedAt(conversation) !== startedAt(incoming)
+    ) {
       return true;
     }
   }
@@ -98,6 +121,40 @@ function hasBurnPolicyChanged(
     (conversation) =>
       !currentIds.has(conversation.id) && duration(conversation) > 0,
   );
+}
+
+/**
+ * 用会话快照里的对端已读水位初始化本地回执状态。
+ *
+ * 实时 chat:read 只在水位推进时广播；如果对端在本机连接前已经读过，
+ * 本机永远收不到那次事件。因此快照水位只能作为下界合并，不能覆盖之后
+ * 已经收到的更高实时水位。
+ */
+function seedPeerReadWatermarks(
+  readWatermarks: Record<string, Record<string, number>>,
+  conversations: ChatConversationDto[],
+): Record<string, Record<string, number>> {
+  let next = readWatermarks;
+  for (const conversation of conversations) {
+    if (conversation.type !== 'DIRECT') continue;
+    const peerId = conversation.peer?.id;
+    const height = conversation.peerReadHeight;
+    if (
+      !peerId ||
+      !Number.isSafeInteger(height) ||
+      (height as number) < 0
+    ) {
+      continue;
+    }
+    const prior = next[conversation.id]?.[peerId] ?? 0;
+    if ((height as number) <= prior) continue;
+    if (next === readWatermarks) next = { ...readWatermarks };
+    next[conversation.id] = {
+      ...(next[conversation.id] ?? {}),
+      [peerId]: height as number,
+    };
+  }
+  return next;
 }
 
 let burnPurgeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -142,6 +199,13 @@ export type StoredChatMessage = ChatMessageDto & {
   failedAfterHeight?: number;
 };
 
+/** 某成员的全局阅后即焚策略（按会话缓存，收到实时变更后立即覆盖）。 */
+export type GlobalBurnPolicy = {
+  userId: string;
+  durationSec: number;
+  startedAt: string | null;
+};
+
 interface ChatStoreState {
   connected: boolean;
   connecting: boolean;
@@ -150,11 +214,18 @@ interface ChatStoreState {
   currentUserId: string | null;
   /** 当前查看者的全局阅后即焚窗口（秒）；0 表示关闭。 */
   viewerSelfDestructSec: number;
+  /** 全局阅后即焚开启时间；开启前的消息不受策略影响。 */
+  viewerSelfDestructStartedAt: string | null;
   /** 本地权威写入递增，防止较早发出的策略 GET 覆盖设置页刚保存的值。 */
   viewerSelfDestructPolicyRevision: number;
   /** 每次有效自毁策略切换都会前进，用于使媒体磁盘缓存失效。 */
   selfDestructPolicyEpoch: number;
   conversations: ChatConversationDto[];
+  /** 会话成员的全局阅后即焚策略；0 表示该成员已关闭。 */
+  globalBurnPoliciesByConversation: Record<
+    string,
+    Record<string, GlobalBurnPolicy>
+  >;
   messagesByConversation: Record<string, ChatMessageDto[]>;
   activeConversationId: string | null;
   /** 在线状态表(chat:presence 查询与广播共同维护)。 */
@@ -167,6 +238,7 @@ interface ChatStoreState {
   setViewerSelfDestructSec: (
     seconds: number,
     options?: { remoteRefresh?: boolean },
+    startedAt?: string | null,
   ) => void;
   setConversations: (conversations: ChatConversationDto[]) => void;
   /**
@@ -285,6 +357,18 @@ interface ChatStoreState {
   applyBurnDuration: (
     conversationId: string,
     burnDurationSec: number | null,
+    burnStartedAt?: string | null,
+  ) => void;
+  applyGlobalBurnPolicy: (
+    conversationId: string,
+    userId: string,
+    durationSec: number,
+    startedAt: string | null,
+  ) => void;
+  /** 服务端焚毁通知的本地落地（双方设备实时收敛）。 */
+  applyBurnedMessages: (
+    conversationId: string,
+    messageIds: readonly string[],
   ) => void;
   /**
    * G-14:清空聊天记录的本地落地(时间线/预览/未读一次清干净)。
@@ -519,6 +603,39 @@ function reconcileDeletedPreview(
   return { ...conversation, lastMessage: fallback };
 }
 
+/**
+ * 本地冷启动时，会话行和消息时间线是分开读取的。旧版本只把两者分别灌进
+ * store，导致「会话存在但 lastMessage 为空」的行一直空到用户打开会话。
+ * 这里只在还没有服务端全量快照时补缺失预览；一旦快照到手，null 就是服务端
+ * 的权威结果（可能代表清空/焚毁），不能被旧缓存重新带回来。
+ */
+function hydratePreviewFromLocalTimeline(
+  conversation: ChatConversationDto,
+  timeline: ChatMessageDto[] | undefined,
+  clearedFloor: number,
+): ChatConversationDto {
+  if (conversation.lastMessage || !timeline || timeline.length === 0) {
+    return conversation;
+  }
+  let latest: ChatMessageDto | null = null;
+  for (const message of timeline) {
+    if (
+      message.height <= 0 ||
+      message.height <= clearedFloor ||
+      isMessageDeletedLocally(message.id, message.d)
+    ) {
+      continue;
+    }
+    if (!latest || message.height > latest.height) latest = message;
+  }
+  if (!latest) return conversation;
+  return {
+    ...conversation,
+    lastMessage: latest,
+    lastMessageAt: latest.createdAt,
+  };
+}
+
 /** 会话排序不变量:置顶在前 → lastMessageAt 降序 → id 兜底稳定。 */
 export function sortConversations(
   conversations: ChatConversationDto[],
@@ -539,9 +656,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   error: null,
   currentUserId: null,
   viewerSelfDestructSec: 0,
+  viewerSelfDestructStartedAt: null,
   viewerSelfDestructPolicyRevision: 0,
   selfDestructPolicyEpoch: 0,
   conversations: [],
+  globalBurnPoliciesByConversation: {},
   conversationsSnapshotLoaded: false,
   conversationsSnapshotSeq: 0,
   messagesByConversation: {},
@@ -557,7 +676,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   setConnecting: (connecting) => set({ connecting }),
   setError: (error) => set({ error }),
   setCurrentUserId: (userId) => set({ currentUserId: userId }),
-  setViewerSelfDestructSec: (seconds, options) => {
+  setViewerSelfDestructSec: (seconds, options, startedAt) => {
     const normalized = normalizeViewerSelfDestructSec(seconds);
     if (normalized === null) return;
     const {
@@ -580,6 +699,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // 期间没有新写入时才带 remoteRefresh 标记落进来。
     set({
       viewerSelfDestructSec: normalized,
+      viewerSelfDestructStartedAt:
+        startedAt !== undefined
+          ? startedAt
+          : viewerSelfDestructSec === normalized
+            ? get().viewerSelfDestructStartedAt
+            : null,
       viewerSelfDestructPolicyRevision: options?.remoteRefresh
         ? viewerSelfDestructPolicyRevision
         : viewerSelfDestructPolicyRevision + 1,
@@ -592,6 +717,89 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       void get().purgeExpiredBurnMessages();
     }
   },
+  applyGlobalBurnPolicy: (conversationId, userId, durationSec, startedAt) => {
+    const normalized = isBurnDurationChoice(durationSec) ? durationSec : 0;
+    const current = get().globalBurnPoliciesByConversation[conversationId]?.[
+      userId
+    ];
+    if (
+      current?.durationSec === normalized &&
+      current.startedAt === startedAt
+    ) {
+      return;
+    }
+    set({
+      globalBurnPoliciesByConversation: {
+        ...get().globalBurnPoliciesByConversation,
+        [conversationId]: {
+          ...(get().globalBurnPoliciesByConversation[conversationId] ?? {}),
+          [userId]: { userId, durationSec: normalized, startedAt },
+        },
+      },
+      selfDestructPolicyEpoch: get().selfDestructPolicyEpoch + 1,
+    });
+    // 自己在另一台设备上改设置时，同一事件也要更新本设备的全局策略。
+    if (get().currentUserId === userId) {
+      get().setViewerSelfDestructSec(
+        normalized,
+        { remoteRefresh: true },
+        startedAt,
+      );
+    }
+    void get().purgeExpiredBurnMessages();
+  },
+  applyBurnedMessages: (conversationId, messageIds) => {
+    const ids = new Set(
+      messageIds.filter(
+        (messageId): messageId is string =>
+          typeof messageId === 'string' && messageId.length > 0,
+      ),
+    );
+    if (ids.size === 0) return;
+    const { messagesByConversation, conversations } = get();
+    const timeline = messagesByConversation[conversationId] ?? [];
+    const nextTimeline = timeline.filter((message) => !ids.has(message.id));
+    const index = conversations.findIndex((c) => c.id === conversationId);
+    const target = index >= 0 ? conversations[index] : null;
+    const previewBurned = target?.lastMessage
+      ? ids.has(target.lastMessage.id)
+      : false;
+    if (nextTimeline.length === timeline.length && !previewBurned) {
+      // 仍然执行数据库删除：消息可能尚未被当前内存窗口加载。
+      void deleteLocalMessages(conversationId, [...ids]);
+      return;
+    }
+    const replacement = nextTimeline[nextTimeline.length - 1] ?? null;
+    const nextConversation =
+      target && previewBurned
+        ? {
+            ...target,
+            lastMessage: replacement,
+            lastMessageAt: replacement?.createdAt ?? null,
+          }
+        : null;
+    set({
+      ...(nextTimeline.length !== timeline.length
+        ? {
+            messagesByConversation: {
+              ...messagesByConversation,
+              [conversationId]: nextTimeline,
+            },
+          }
+        : {}),
+      ...(nextConversation
+        ? {
+            conversations: sortConversations([
+              ...conversations.slice(0, index),
+              nextConversation,
+              ...conversations.slice(index + 1),
+            ]),
+          }
+        : {}),
+    });
+    void deleteLocalMessages(conversationId, [...ids]);
+    if (nextConversation) void upsertLocalConversation(nextConversation);
+  },
   setConversations: (conversations) => {
     const {
       conversations: currentConversations,
@@ -603,6 +811,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     } = get();
     const burnPolicyChanged = hasBurnPolicyChanged(
       currentConversations,
+      conversations,
+    );
+    const seededReadWatermarks = seedPeerReadWatermarks(
+      readWatermarks,
       conversations,
     );
     set({
@@ -626,6 +838,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       // 只有全量拉取会走到这里(upsertConversation 不置位)。
       conversationsSnapshotLoaded: true,
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
+      readWatermarks: seededReadWatermarks,
       ...(burnPolicyChanged
         ? { selfDestructPolicyEpoch: selfDestructPolicyEpoch + 1 }
         : {}),
@@ -636,13 +849,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     void persistLocalConversations(get().conversations);
   },
   upsertConversation: (conversation) => {
-    const { conversations, messagesByConversation } = get();
+    const { conversations, messagesByConversation, readWatermarks } = get();
     const rest = conversations.filter((c) => c.id !== conversation.id);
     const reconciled = reconcileDeletedPreview(
       conversation,
       messagesByConversation[conversation.id],
     );
-    set({ conversations: sortConversations([...rest, reconciled]) });
+    set({
+      conversations: sortConversations([...rest, reconciled]),
+      readWatermarks: seedPeerReadWatermarks(readWatermarks, [reconciled]),
+    });
     void upsertLocalConversation(reconciled);
   },
   removeConversation: (conversationId) => {
@@ -655,12 +871,43 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   /**
    * G-01 冷启动水合:把本地库快照灌回内存(不置 conversationsSnapshotLoaded ——
    * 它表示「拿到过服务端全量」,本地快照只是残影,搜索归组等仍需真拉取)。
-   * 只在内存还是空的时候生效,避免覆盖已经到手的服务端数据。
+   * 会话元信息不覆盖已经到手的服务端数据；消息时间线随后到达时，只补本地
+   * 快照里缺失的预览。
    */
   hydrateLocalSnapshot: (conversations, messagesByConversation) => {
     const state = get();
-    if (state.conversations.length === 0 && conversations.length > 0) {
-      set({ conversations: sortConversations(conversations) });
+    // 服务端快照一旦成功，null 预览就是权威值，不能被本地旧时间线覆盖。
+    if (!state.conversationsSnapshotLoaded && conversations.length > 0) {
+      const localById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
+      const withLocalPreviews = conversations.map((conversation) =>
+        hydratePreviewFromLocalTimeline(
+          conversation,
+          messagesByConversation[conversation.id],
+          state.clearedBeforeHeightByConversation[conversation.id] ?? 0,
+        ),
+      );
+      if (state.conversations.length === 0) {
+        set({ conversations: sortConversations(withLocalPreviews) });
+      } else {
+        const merged = state.conversations.map((current) => {
+          const local = localById.get(current.id);
+          if (!local) return current;
+          const hydrated = hydratePreviewFromLocalTimeline(
+            local,
+            messagesByConversation[current.id],
+            state.clearedBeforeHeightByConversation[current.id] ?? 0,
+          );
+          if (current.lastMessage || !hydrated.lastMessage) return current;
+          return {
+            ...current,
+            lastMessage: hydrated.lastMessage,
+            lastMessageAt: hydrated.lastMessageAt,
+          };
+        });
+        if (merged.some((conversation, index) => conversation !== state.conversations[index])) {
+          set({ conversations: sortConversations(merged) });
+        }
+      }
     }
     const nextTimelines: Record<string, ChatMessageDto[]> = {
       ...state.messagesByConversation,
@@ -1053,17 +1300,33 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     if (updated) void persistLocalMessages(conversationId, [updated]);
   },
 
-  applyBurnDuration: (conversationId, burnDurationSec) => {
+  applyBurnDuration: (conversationId, burnDurationSec, burnStartedAt) => {
     const { conversations, selfDestructPolicyEpoch } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
     if (index < 0) return;
-    if ((conversations[index].burnDurationSec ?? null) === burnDurationSec) {
+    const current = conversations[index];
+    // 同一档位重新开启时 startedAt 会变，不能因为 duration 没变就短路；
+    // 否则另一端会继续沿用旧的开启时间，误删本次开启前的消息。
+    const nextStartedAt =
+      burnStartedAt !== undefined
+        ? burnStartedAt
+        : burnDurationSec === null
+          ? null
+          : (current.burnStartedAt ?? null);
+    if (
+      (current.burnDurationSec ?? null) === burnDurationSec &&
+      (current.burnStartedAt ?? null) === nextStartedAt
+    ) {
       return;
     }
     set({
       conversations: [
         ...conversations.slice(0, index),
-        { ...conversations[index], burnDurationSec },
+        {
+          ...current,
+          burnDurationSec,
+          burnStartedAt: nextStartedAt,
+        },
         ...conversations.slice(index + 1),
       ],
       selfDestructPolicyEpoch: selfDestructPolicyEpoch + 1,
@@ -1076,38 +1339,98 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversations,
       messagesByConversation,
       viewerSelfDestructSec,
+      viewerSelfDestructStartedAt,
+      globalBurnPoliciesByConversation,
     } = get();
     let nextTimelines: Record<string, ChatMessageDto[]> | null = null;
     let nextConversations: ChatConversationDto[] | null = null;
     const durablePreviewWrites: Promise<void>[] = [];
-    const localPurges: { conversationId: string; cutoff: Date }[] = [];
+    const localPurges: { conversationId: string; cutoff: Date; startedAt: Date }[] = [];
     let nextExpiryAt: number | null = null;
     const viewerSeconds =
       viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
+    const viewerStartMs = viewerSelfDestructStartedAt
+      ? Date.parse(viewerSelfDestructStartedAt)
+      : NaN;
+    const now = Date.now();
     for (const conversation of conversations) {
       const conversationSeconds =
         conversation.burnDurationSec && conversation.burnDurationSec > 0
           ? conversation.burnDurationSec
           : null;
-      const seconds =
-        conversationSeconds && viewerSeconds
-          ? Math.min(conversationSeconds, viewerSeconds)
-          : (conversationSeconds ?? viewerSeconds);
-      if (!seconds) continue;
-      const cutoff = new Date(Date.now() - seconds * 1000);
-      const timeline = messagesByConversation[conversation.id];
-      localPurges.push({ conversationId: conversation.id, cutoff });
-      const kept = (timeline ?? []).filter(
-        (m) => Date.parse(m.createdAt) >= cutoff.getTime(),
+      const burnStartMs = conversation.burnStartedAt
+        ? Date.parse(conversation.burnStartedAt)
+        : NaN;
+      const burnStart = Number.isFinite(burnStartMs)
+        ? new Date(burnStartMs)
+        : null;
+      const burnCutoff = conversationSeconds
+        ? new Date(now - conversationSeconds * 1000)
+        : null;
+      const globalWindows = Object.values(
+        globalBurnPoliciesByConversation[conversation.id] ?? {},
+      ).filter(
+        (policy): policy is GlobalBurnPolicy & { startedAt: string } =>
+          policy.durationSec > 0 && typeof policy.startedAt === 'string',
       );
+      const timeline = messagesByConversation[conversation.id];
+      if (conversationSeconds && burnStart && burnCutoff) {
+        localPurges.push({
+          conversationId: conversation.id,
+          cutoff: burnCutoff,
+          startedAt: burnStart,
+        });
+      }
+      for (const policy of globalWindows) {
+        const startedAtMs = Date.parse(policy.startedAt);
+        if (!Number.isFinite(startedAtMs)) continue;
+        localPurges.push({
+          conversationId: conversation.id,
+          cutoff: new Date(now - policy.durationSec * 1000),
+          startedAt: new Date(startedAtMs),
+        });
+      }
+      const kept = (timeline ?? []).filter((m) => {
+        const createdAt = Date.parse(m.createdAt);
+        if (!Number.isFinite(createdAt)) return true;
+        const expiries: number[] = [];
+        if (conversationSeconds && Number.isFinite(burnStartMs) && createdAt >= burnStartMs) {
+          expiries.push(createdAt + conversationSeconds * 1000);
+        }
+        if (viewerSeconds && Number.isFinite(viewerStartMs) && createdAt >= viewerStartMs) {
+          expiries.push(createdAt + viewerSeconds * 1000);
+        }
+        for (const policy of globalWindows) {
+          const startedAtMs = Date.parse(policy.startedAt);
+          if (Number.isFinite(startedAtMs) && createdAt >= startedAtMs) {
+            expiries.push(createdAt + policy.durationSec * 1000);
+          }
+        }
+        return expiries.length === 0 || Math.min(...expiries) > now;
+      });
       const preview = conversation.lastMessage;
       const schedulableMessages =
         preview && !kept.some((message) => message.id === preview.id)
           ? [...kept, preview]
           : kept;
       for (const message of schedulableMessages) {
-        const expiresAt = Date.parse(message.createdAt) + seconds * 1000;
-        if (expiresAt > Date.now() && (nextExpiryAt === null || expiresAt < nextExpiryAt)) {
+        const createdAt = Date.parse(message.createdAt);
+        if (!Number.isFinite(createdAt)) continue;
+        const expiries: number[] = [];
+        if (conversationSeconds && Number.isFinite(burnStartMs) && createdAt >= burnStartMs) {
+          expiries.push(createdAt + conversationSeconds * 1000);
+        }
+        if (viewerSeconds && Number.isFinite(viewerStartMs) && createdAt >= viewerStartMs) {
+          expiries.push(createdAt + viewerSeconds * 1000);
+        }
+        for (const policy of globalWindows) {
+          const startedAtMs = Date.parse(policy.startedAt);
+          if (Number.isFinite(startedAtMs) && createdAt >= startedAtMs) {
+            expiries.push(createdAt + policy.durationSec * 1000);
+          }
+        }
+        const expiresAt = expiries.length > 0 ? Math.min(...expiries) : null;
+        if (expiresAt !== null && expiresAt > now && (nextExpiryAt === null || expiresAt < nextExpiryAt)) {
           nextExpiryAt = expiresAt;
         }
       }
@@ -1116,7 +1439,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         nextTimelines[conversation.id] = kept;
       }
 
-      if (preview && Date.parse(preview.createdAt) < cutoff.getTime()) {
+      if (preview && !kept.some((message) => message.id === preview.id)) {
         const replacement = kept.length > 0 ? kept[kept.length - 1] : null;
         const sanitized = {
           ...conversation,
@@ -1145,15 +1468,28 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     }
     scheduleNextBurnPurge(
       nextExpiryAt,
-      viewerSeconds !== null ||
-        conversations.some((conversation) => (conversation.burnDurationSec ?? 0) > 0),
+      Number.isFinite(viewerStartMs) ||
+        conversations.some(
+          (conversation) =>
+            (conversation.burnDurationSec ?? 0) > 0 &&
+            Boolean(conversation.burnStartedAt),
+        ) ||
+        Object.values(globalBurnPoliciesByConversation).some((policies) =>
+          Object.values(policies).some(
+            (policy) =>
+              policy.durationSec > 0 &&
+              typeof policy.startedAt === 'string' &&
+              Number.isFinite(Date.parse(policy.startedAt)),
+          ),
+        ),
     );
     await Promise.all([
       purgeExpiredLocalMessages(
         localPurges,
         viewerSeconds === null
           ? undefined
-          : new Date(Date.now() - viewerSeconds * 1000),
+          : new Date(now - viewerSeconds * 1000),
+        Number.isFinite(viewerStartMs) ? new Date(viewerStartMs) : undefined,
       ),
       ...durablePreviewWrites,
     ]);
@@ -1317,6 +1653,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   clearCachedChats: () =>
     set({
       conversations: [],
+      globalBurnPoliciesByConversation: {},
       conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},
@@ -1335,9 +1672,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       error: null,
       currentUserId: null,
       viewerSelfDestructSec: 0,
+      viewerSelfDestructStartedAt: null,
       viewerSelfDestructPolicyRevision: 0,
       selfDestructPolicyEpoch: 0,
       conversations: [],
+      globalBurnPoliciesByConversation: {},
       conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},

@@ -238,6 +238,23 @@ test('user profile screen refreshes profile data when returning to focus', () =>
   );
 });
 
+test('user profile screen queries and displays the other user presence status', () => {
+  const filePath = path.join(
+    process.cwd(),
+    'src/features/user/screens/UserProfileScreen.tsx',
+  );
+  const source = fs.readFileSync(filePath, 'utf8');
+
+  assert.match(source, /queryChatPresence\(\[presenceUserId\]\)/);
+  assert.match(source, /state\.onlineByUser\[presenceUserId\]/);
+  assert.match(source, /presenceUserId = !isCurrentUser \? remoteProfile\?\.id/);
+  assert.match(source, /chat\.detail\.statusOnline/);
+  assert.match(source, /chat\.detail\.statusOffline/);
+  assert.match(source, /presenceDot/);
+  // 自己的资料不应查询或展示对方状态。
+  assert.match(source, /const presenceUserId = !isCurrentUser/);
+});
+
 test('user profile route helpers preserve scope for the request form', () => {
   const {
     getChatInfoHref,

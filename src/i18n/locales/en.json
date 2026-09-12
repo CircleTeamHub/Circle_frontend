@@ -329,6 +329,10 @@
       "voiceHoldToTalk": "Hold to talk",
       "previewPlaceholder": "Connection not ready",
       "inputPlaceholder": "Type a message…",
+      "disappearingMessageNotice": "Disappearing messages are on in this chat. New messages disappear after {{duration}}.",
+      "personalDisappearingMessageNotice": "You have turned on disappearing messages. New messages disappear after {{duration}}.",
+      "peerDisappearingMessageNotice": "The other person has turned on disappearing messages ({{duration}}).",
+      "bothDisappearingMessageNotice": "Both of you have turned on disappearing messages. New messages disappear after {{duration}}.",
       "attachmentPanelLabel": "Open attachment panel",
       "sendFailedText": "Failed to send message, please try again",
       "sensitiveWordBlocked": "Message blocked: it contains prohibited words",
@@ -1957,6 +1961,7 @@
     "phone": "Phone",
     "phonePlaceholder": "Enter phone number",
     "email": "Email",
+    "emailNotSupported": "The registration email cannot be changed.",
     "qq": "QQ",
     "qqPlaceholder": "Enter QQ number",
     "notBound": "Not filled in",
@@ -2035,9 +2040,6 @@
       },
       "notifications": {
         "label": "Notifications"
-      },
-      "autoReply": {
-        "label": "Direct-message auto reply"
       },
       "appearance": {
         "label": "Display"
@@ -2133,6 +2135,8 @@
       "sound": "Sound",
       "messageRingtone": "Message Ringtone",
       "messageDefault": "Message Default",
+      "autoReply": "Direct Message Auto Reply",
+      "autoReplyHint": "Send a preset reply when a direct message arrives",
       "friendSection": "Friends & Group Requests",
       "friendRequest": "Friend Request Notifications",
       "friendRequestHint": "When off, friend request banners will no longer appear",
@@ -2157,6 +2161,8 @@
     },
     "autoReply": {
       "title": "Direct-message auto reply",
+      "switchSection": "Auto Reply",
+      "contentSection": "Reply Content",
       "enabled": "Enable auto reply",
       "help": "Automatically reply to direct messages, at most once per conversation every 30 seconds.",
       "placeholder": "Enter an automatic reply",
@@ -2191,6 +2197,7 @@
       "showOriginalGroupNameHint": "When enabled: remark name (original group nickname)",
       "pinnedFoldCount": "Pinned Fold Count",
       "pinnedFoldCountHint": "Show the first N pinned conversations and fold the rest",
+      "collapsePinned": "Collapse pinned conversations",
       "showCollapsedPinned": "Show {{count}} more pinned conversations",
       "unlimited": "Unlimited",
       "batteryOptimization": "Battery Optimization Reminder",

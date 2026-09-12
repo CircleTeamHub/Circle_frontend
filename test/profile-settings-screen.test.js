@@ -26,8 +26,24 @@ test("settings profile rows place city below birthday", () => {
     "bio",
     "wechat",
     "phone",
+    "email",
     "qq",
   ]);
+});
+
+test("account settings shows the required registration email as read-only", () => {
+  const settings = fs.readFileSync(
+    path.join(process.cwd(), "src/features/profile/screens/SettingsScreen.tsx"),
+    "utf8",
+  );
+  const fields = fs.readFileSync(
+    path.join(process.cwd(), "src/features/profile/profile-edit-config.ts"),
+    "utf8",
+  );
+
+  assert.match(settings, /'email'/);
+  assert.match(fields, /id: 'email',[\s\S]*?valueKey: 'email',[\s\S]*?editable: false/);
+  assert.match(fields, /profileFields\.emailNotSupported/);
 });
 
 test("account settings page no longer owns credential security rows", () => {
@@ -1303,7 +1319,7 @@ test("privacy self-destruct updates the chat cache policy immediately", () => {
   assert.match(source, /useChatStore/);
   assert.match(
     source,
-    /setViewerSelfDestructSec\(updated\.messageSelfDestructSec\)/,
+    /setViewerSelfDestructSec\(\s*updated\.messageSelfDestructSec/,
   );
   // 全局档位与会话级焚毁读同一张表 —— 这个页面自己再列一份 [0,1,2,7,30]
   // 就是「同一个功能两张档位表」那个 bug 的原样复发。
