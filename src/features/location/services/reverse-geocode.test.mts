@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolvePlace } from './reverse-geocode.ts';
+import {
+  resetNativeResolverAvailability,
+  resolvePlace,
+} from './reverse-geocode.ts';
 
 const GEOCODER_BASE_URL = 'https://geocoder.example.test';
 
@@ -152,6 +155,77 @@ test('no provider configured means no public geocoder request', async () => {
   const stub = stubFetch(async () => ok({ name: 'unexpected' }));
   try {
     assert.equal(await resolvePlace(22.5, 114.0, null), null);
+    assert.equal(stub.calls.length, 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('the device answers, so the paid lookup is never called', async () => {
+  const stub = stubFetch(async () => ok({ name: '不该被用到' }));
+  try {
+    const place = await resolvePlace(31.2304, 121.4737, GEOCODER_BASE_URL, async () => ({
+      title: '外滩',
+      address: '上海市 黄浦区 中山东一路',
+    }));
+
+    assert.deepEqual(place, { title: '外滩', address: '上海市 黄浦区 中山东一路' });
+    assert.equal(stub.calls.length, 0, '设备答上来时不该再去烧计费额度');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a device that draws a blank falls through to the server', async () => {
+  const stub = stubFetch(async () =>
+    ok({ name: '陆家嘴', display_name: '陆家嘴, 浦东新区, 上海市' }),
+  );
+  try {
+    const place = await resolvePlace(
+      31.2397,
+      121.4998,
+      GEOCODER_BASE_URL,
+      async () => null,
+    );
+
+    assert.equal(place?.title, '陆家嘴');
+    assert.equal(stub.calls.length, 1);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a device without the capability is only tried once, then skipped', async () => {
+  resetNativeResolverAvailability();
+  const stub = stubFetch(async () => ok({ name: '南京路', display_name: '南京路' }));
+  let deviceAttempts = 0;
+  const unsupported = async () => {
+    deviceAttempts += 1;
+    // web 端与无 Google 移动服务的 Android 机就是这样抛出来的。
+    throw new Error('reverseGeocodeAsync is not available');
+  };
+  try {
+    await resolvePlace(31.2354, 121.4805, GEOCODER_BASE_URL, unsupported);
+    await resolvePlace(31.2355, 121.4806, GEOCODER_BASE_URL, unsupported);
+
+    assert.equal(deviceAttempts, 1, '设备不支持就该记住，别每条消息都抛一次');
+    assert.equal(stub.calls.length, 2, '两个点都要由服务端兜底');
+  } finally {
+    stub.restore();
+    resetNativeResolverAvailability();
+  }
+});
+
+test('the device alone is enough when no server is configured', async () => {
+  resetNativeResolverAvailability();
+  const stub = stubFetch(async () => ok({ name: '不该被用到' }));
+  try {
+    const place = await resolvePlace(31.2222, 121.4444, null, async () => ({
+      title: '静安寺',
+      address: '上海市 静安区',
+    }));
+
+    assert.equal(place?.title, '静安寺');
     assert.equal(stub.calls.length, 0);
   } finally {
     stub.restore();

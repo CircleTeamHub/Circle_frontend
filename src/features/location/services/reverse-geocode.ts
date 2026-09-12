@@ -22,6 +22,41 @@ export type ResolvedPlace = {
   address: string;
 };
 
+/**
+ * 设备自带的地名反查。
+ *
+ * 由调用方注入 —— 这个模块要能在纯 node 下跑测试，不能直接 import expo-location。
+ *
+ * 返回 null 表示这个点查不到（继续问服务端）；抛错表示这台设备根本不支持
+ * （web 端没有这个 API，国内无 GMS 的 Android 机也没有），之后就别再试了。
+ */
+export type NativeResolver = (
+  latitude: number,
+  longitude: number,
+) => Promise<ResolvedPlace | null>;
+
+// 设备不支持时置为 true，后续一律跳过——省掉每条位置消息都要抛一次错的开销。
+let nativeResolverUnavailable = false;
+
+/** 仅供测试复位。 */
+export function resetNativeResolverAvailability(): void {
+  nativeResolverUnavailable = false;
+}
+
+async function tryNativeResolver(
+  resolver: NativeResolver | undefined,
+  latitude: number,
+  longitude: number,
+): Promise<ResolvedPlace | null> {
+  if (!resolver || nativeResolverUnavailable) return null;
+  try {
+    return await resolver(latitude, longitude);
+  } catch {
+    nativeResolverUnavailable = true;
+    return null;
+  }
+}
+
 const resolvedCache = new Map<string, ResolvedPlace | null>();
 const inFlight = new Map<string, Promise<ResolvedPlace | null>>();
 
@@ -106,18 +141,27 @@ export async function resolvePlace(
   latitude: number,
   longitude: number,
   baseUrl = getConfiguredBaseUrl(),
+  nativeResolver?: NativeResolver,
 ): Promise<ResolvedPlace | null> {
-  if (!isUsableCoordinate(latitude, longitude) || !baseUrl) return null;
+  if (!isUsableCoordinate(latitude, longitude)) return null;
+  // 设备自带的反查是免费的，服务端那条路要烧地图服务商的配额——两条都没有才放弃。
+  if (!baseUrl && (!nativeResolver || nativeResolverUnavailable)) return null;
 
-  const key = `${baseUrl}|${cacheKey(latitude, longitude)}`;
+  const key = `${baseUrl ?? 'device'}|${cacheKey(latitude, longitude)}`;
   const cached = resolvedCache.get(key);
   if (cached !== undefined) return cached;
 
   const pending = inFlight.get(key);
   if (pending) return pending;
 
-  const request = enqueue(() => requestPlace(latitude, longitude, baseUrl))
+  const request = resolveFromAnySource(
+    latitude,
+    longitude,
+    baseUrl,
+    nativeResolver,
+  )
     .then((place) => {
+      // 查不到也缓存，省得同一个点每次展开都再走一遍两条链路。
       resolvedCache.set(key, place);
       return place;
     })
@@ -129,4 +173,23 @@ export async function resolvePlace(
 
   inFlight.set(key, request);
   return request;
+}
+
+/**
+ * 先问设备，再问服务端。
+ *
+ * 顺序是有成本含义的：设备自带的反查不花钱也不经过我们的服务器，能答上来就不该
+ * 再去烧地图服务商按次计费的额度。服务端那条路留给设备答不上来的情况——web 端没有
+ * 这个 API，国内无 GMS 的 Android 机也没有，境外坐标设备答得比服务端好。
+ */
+async function resolveFromAnySource(
+  latitude: number,
+  longitude: number,
+  baseUrl: string | null,
+  nativeResolver: NativeResolver | undefined,
+): Promise<ResolvedPlace | null> {
+  const native = await tryNativeResolver(nativeResolver, latitude, longitude);
+  if (native) return native;
+  if (!baseUrl) return null;
+  return enqueue(() => requestPlace(latitude, longitude, baseUrl));
 }

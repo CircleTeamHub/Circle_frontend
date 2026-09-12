@@ -167,7 +167,14 @@ describe('LocationCard address resolution', () => {
         screen.getByText('200 E Santa Clara St, San Jose, CA 95113, USA'),
       ).toBeTruthy();
     });
-    expect(mockResolvePlace).toHaveBeenCalledWith(37.32698, -121.88435);
+    // 第四个参数是设备侧反查：它答得上来就不会去烧服务端按次计费的额度，
+    // 漏传不会让任何断言变红，所以在这里钉住。
+    expect(mockResolvePlace).toHaveBeenCalledWith(
+      37.32698,
+      -121.88435,
+      undefined,
+      expect.any(Function),
+    );
     // 标题是用户自己的表达，反查回来的路名不许盖掉。
     expect(screen.getByText('我的位置')).toBeTruthy();
   });
