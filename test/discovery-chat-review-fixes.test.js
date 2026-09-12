@@ -144,7 +144,12 @@ test('the map picker discards superseded geocoding responses', () => {
 test('the map picker reports a missing map runtime instead of going inert', () => {
   const picker = read('src/features/location/components/map-location-picker-screen.tsx');
 
-  assert.match(picker, /if \(typeof L === 'undefined'\) throw new Error\('leaflet unavailable'\);/);
+  // 两个适配器都拿不出实现时才判定不可用；单个运行时缺失是返回 null 交给择一入口。
+  assert.match(picker, /if \(typeof L === 'undefined'\) return null;/);
+  assert.match(
+    picker,
+    /if \(!adapter\) throw new Error\('no map runtime available'\);/,
+  );
   assert.match(picker, /\} catch \{\s*\n\s*post\(\{ type: 'map-runtime-unavailable' \}\);/);
   assert.match(picker, /\.type === 'map-runtime-unavailable'/);
   assert.match(picker, /setMapUnavailable\(true\)/);

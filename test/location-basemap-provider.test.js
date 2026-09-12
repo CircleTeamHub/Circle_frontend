@@ -138,36 +138,64 @@ test('境外与非法坐标不做减偏', () => {
   assert.equal(gcj02ToWgs84(91, 113), null);
 });
 
-test('选点页为两种底图各准备一套运行时，接口一致', () => {
+test('选点页为两种底图各准备一套适配器，外加一个择一的入口', () => {
   const source = readPicker();
 
-  // 两个分支都必须导出同名工厂，否则共享的选点逻辑会挑不到实现。
-  assert.equal(source.match(/function createMapAdapter\(/g).length, 2);
-  assert.match(source, /buildAmapRuntimeScript/);
-  assert.match(source, /buildLeafletRuntimeScript/);
+  assert.match(source, /function createLeafletAdapter\(/);
+  assert.match(source, /function createAmapAdapter\(/);
+  assert.match(source, /function createMapAdapter\(onPick\)/);
 });
 
-test('高德分支的 CSP 放行高德域名，Leaflet 分支不放行', () => {
+test('高德不可用时返回 null 而不是抛错，好让选点页回落到 Leaflet', () => {
+  const source = readPicker();
+
+  // key 失效、配额耗尽、脚本没下下来，高德返回的那段 JS 都不定义 AMap。
+  assert.match(
+    source,
+    /typeof AMap === 'undefined' \|\| typeof AMap\.Map !== 'function'\) return null;/,
+  );
+  // 择一入口先试高德、失败落 Leaflet，两个都没有才判定地图不可用。
+  assert.match(source, /createAmapAdapter\([^)]*\) \|\| /);
+  assert.match(source, /if \(!adapter\) throw new Error\('no map runtime available'\)/);
+});
+
+test('Leaflet 始终内联待命，高德分支也不例外', () => {
+  const source = readPicker();
+
+  // 回落要能真的画出地图，所以库和瓦片域名都得一直备着。
+  assert.match(source, /const mapLibraryTags = `\$\{amapTags\}/);
+  assert.match(
+    source,
+    /'https:\/\/\*\.amap\.com https:\/\/\*\.autonavi\.com https:\/\/basemaps\.cartocdn\.com'/,
+  );
+});
+
+test('高德分支的 CSP 放行高德域名', () => {
   const source = readPicker();
 
   assert.match(source, /https:\/\/webapi\.amap\.com/);
   assert.match(source, /https:\/\/\*\.autonavi\.com/);
-  // 未走高德时仍然只放行原来的瓦片域名。
-  assert.match(source, /'https:\/\/basemaps\.cartocdn\.com'/);
 });
 
-test('高德分支全程说 GCJ-02，并把坐标系一路带给服务端', () => {
+test('坐标系由地图页自报，不是 React 侧预先猜的', () => {
   const source = readPicker();
 
-  assert.match(source, /isAmap \? 'gcj02' : 'wgs84'/);
-  // 反查与搜索都要带上坐标系，否则服务端会按 WGS-84 再加一次偏。
-  assert.equal(source.match(/coordsys: COORDINATE_SYSTEM/g).length, 2);
+  // 回落发生在脚本里，React 侧事前并不知道最终用的是哪套底图。
+  assert.match(source, /const COORDINATE_SYSTEM = adapter\.coordinateSystem;/);
+  assert.match(source, /coordsys: COORDINATE_SYSTEM, \.\.\.picked/);
+  assert.match(source, /candidate\.coordsys === 'gcj02'\s*\?\s*gcj02ToWgs84\(/);
 });
 
-test('地图页回传的坐标在进入 App 之前被减偏回 WGS-84', () => {
+test('反查与搜索都把坐标系带给服务端，否则会被再加一次偏', () => {
   const source = readPicker();
 
-  assert.match(source, /coordinateSystem === 'gcj02'\s*\?\s*gcj02ToWgs84\(/);
-  // 初始中心点则是反过来：进地图页之前先加偏。
-  assert.match(source, /wgs84ToGcj02\(initialLocation\.latitude/);
+  assert.equal(source.match(/coordsys: COORDINATE_SYSTEM/g).length, 3);
+});
+
+test('两套初始坐标一起交给地图页，脚本里不做换算', () => {
+  const source = readPicker();
+
+  assert.match(source, /const INITIAL_WGS84 = \{ latitude: \$\{latitude\}/);
+  assert.match(source, /const INITIAL_GCJ02 = \{ latitude: \$\{shifted\.latitude\}/);
+  assert.match(source, /wgs84ToGcj02\(\s*initialLocation\.latitude/);
 });
