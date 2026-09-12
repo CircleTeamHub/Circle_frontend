@@ -44,11 +44,21 @@ export async function deleteLocalMessage(
   _messageId: string,
 ): Promise<void> {}
 
+export async function deleteLocalMessages(
+  _conversationId: string,
+  _messageIds: readonly string[],
+): Promise<void> {}
+
 export async function dropAllLocalMessages(): Promise<void> {}
 
 export async function purgeExpiredLocalMessages(
-  _entries: readonly { conversationId: string; cutoff: Date }[],
+  _entries: readonly {
+    conversationId: string;
+    cutoff: Date;
+    startedAt?: Date;
+  }[],
   _viewerCutoff?: Date,
+  _viewerStartedAt?: Date,
 ): Promise<void> {}
 
 export async function clearLocalConversationMessages(

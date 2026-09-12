@@ -322,6 +322,13 @@
       "statusOffline": "离线",
       "statusTyping": "对方正在输入…",
       "statusTypingGroup": "有人正在输入…",
+      "lastSeenJustNow": "刚刚在线",
+      "lastSeenMinutes": "{{count}} 分钟前在线",
+      "lastSeenMinutes_other": "{{count}} 分钟前在线",
+      "lastSeenHours": "{{count}} 小时前在线",
+      "lastSeenHours_other": "{{count}} 小时前在线",
+      "lastSeenDays": "{{count}} 天前在线",
+      "lastSeenDays_other": "{{count}} 天前在线",
       "previewNotice": "连接尚未完成，请稍后重试",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",
@@ -329,6 +336,10 @@
       "voiceHoldToTalk": "按住 说话",
       "previewPlaceholder": "连接尚未完成",
       "inputPlaceholder": "输入消息...",
+      "disappearingMessageNotice": "此对话已开启阅后即焚，新消息将在 {{duration}} 后消失",
+      "personalDisappearingMessageNotice": "你已开启阅后即焚，新消息将在 {{duration}} 后消失",
+      "peerDisappearingMessageNotice": "对方已开启阅后即焚（{{duration}}）",
+      "bothDisappearingMessageNotice": "双方已开启阅后即焚，新消息将在 {{duration}} 后消失",
       "attachmentPanelLabel": "打开附件面板",
       "sendFailedText": "消息发送失败，请重试",
       "sensitiveWordBlocked": "消息包含敏感词，已被屏蔽",
@@ -840,7 +851,7 @@
     "searchPlaceholder": "搜索账号或好友...",
     "newFriends": "新的朋友",
     "seats": "临时群聊",
-    "groups": "群聊",
+    "groups": "我的群聊",
     "circles": "圈子",
     "tags": "标签",
     "accountId": "账号：{{id}}",
@@ -889,7 +900,11 @@
         "ACCEPTED": "已接受",
         "REJECTED": "已拒绝",
         "WITHDRAWN": "已撤回"
-      }
+      },
+      "tabFriends": "新的朋友",
+      "tabGroups": "新的群组",
+      "searchPlaceholder": "搜索昵称、账号或群名",
+      "noMatches": "没有匹配的结果"
     },
     "tagsScreen": {
       "title": "标签",
@@ -918,12 +933,10 @@
       "addFriendAction": "将 {{name}} 添加到此标签"
     },
     "groupsScreen": {
-      "title": "群聊",
-      "newGroups": "新的群组",
+      "title": "我的群聊",
       "myCreated": "我创建的群聊",
       "myJoined": "我加入的群聊",
       "myManaged": "我管理的群聊",
-      "tabNewGroups": "新的群组",
       "tabMyJoined": "我加入的",
       "tabMyCreated": "我创建的",
       "tabMyManaged": "我管理的",
@@ -932,7 +945,9 @@
       "memberCount": "{{count}}人",
       "empty": "暂无群聊",
       "loading": "正在加载群聊",
-      "loadFailed": "群聊加载失败，请稍后重试"
+      "loadFailed": "群聊加载失败，请稍后重试",
+      "tabAll": "全部",
+      "allGroups": "全部群聊"
     },
     "request": {
       "title": "发送好友申请",
@@ -975,6 +990,13 @@
       "sentMessage": "已向 {{name}} 发送好友申请。",
       "sendFailedTitle": "发送失败",
       "sendFailed": "好友申请发送失败，请稍后重试"
+    },
+    "groupInbox": {
+      "loading": "正在加载群聊...",
+      "loadFailed": "群聊加载失败，请稍后重试",
+      "empty": "还没有新加入的群聊",
+      "joinedAt": "{{time}} 加入",
+      "joined": "已加入"
     }
   },
   "discover": {
@@ -1948,6 +1970,7 @@
     "phone": "手机号",
     "phonePlaceholder": "请填写手机号",
     "email": "邮箱",
+    "emailNotSupported": "注册邮箱暂不支持修改。",
     "qq": "QQ号",
     "qqPlaceholder": "请填写QQ号",
     "notBound": "未填写",
@@ -2026,9 +2049,6 @@
       },
       "notifications": {
         "label": "消息通知"
-      },
-      "autoReply": {
-        "label": "私信自动回复"
       },
       "appearance": {
         "label": "界面与显示"
@@ -2124,6 +2144,8 @@
       "sound": "开启提示音",
       "messageRingtone": "消息通知铃声",
       "messageDefault": "消息默认",
+      "autoReply": "私信自动回复",
+      "autoReplyHint": "收到私聊消息时自动回复一条预设内容",
       "friendSection": "好友与入群通知",
       "friendRequest": "好友申请通知",
       "friendRequestHint": "关闭后不再显示好友申请横幅提醒",
@@ -2148,6 +2170,8 @@
     },
     "autoReply": {
       "title": "私信自动回复",
+      "switchSection": "自动回复",
+      "contentSection": "回复内容",
       "enabled": "启用自动回复",
       "help": "收到私聊消息时自动发送；同一会话 30 秒内最多回复一次。",
       "placeholder": "填写自动回复内容",
@@ -2182,6 +2206,7 @@
       "showOriginalGroupNameHint": "开启后显示：备注名(原始群昵称)",
       "pinnedFoldCount": "置顶折叠数量",
       "pinnedFoldCountHint": "显示前N个置顶会话，超出部分自动折叠",
+      "collapsePinned": "收起置顶会话",
       "showCollapsedPinned": "显示其余 {{count}} 个置顶会话",
       "unlimited": "无限制",
       "batteryOptimization": "电池优化提醒",
@@ -2234,7 +2259,8 @@
         "byAccount": "通过账号",
         "byPhone": "通过手机号",
         "byQrCode": "通过二维码",
-        "byGroup": "通过群聊/圈子"
+        "byGroup": "通过群聊/圈子",
+        "shareCard": "分享个人名片"
       }
     },
     "permissions": {

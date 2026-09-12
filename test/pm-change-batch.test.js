@@ -36,18 +36,22 @@ test('contacts owns moments while discover owns the plaza and circle management'
   assert.match(discover, /\/\(tabs\)\/discover\/management/);
 });
 
-test('groups screen exposes new, joined, created, and managed categories', () => {
+// 「我的群聊」列的是群聊会话，不是圈子。分类按本人在群里的角色分，角色来自
+// 会话 DTO 的 myRole（圈子群读 CircleMember，独立群读群主/座位管理员）。
+// 申请中的圈子在「圈子管理」那屏，不在这里。
+test('groups screen lists group conversations by my role, never circles', () => {
   const source = read('src/features/contacts/screens/GroupsScreen.tsx');
 
-  assert.match(source, /fetchMyCircles\('applied'\)/);
-  assert.match(source, /fetchMyCircles\('joined'\)/);
-  assert.match(source, /fetchMyCircles\('created'\)/);
-  assert.match(source, /myRole === 'OWNER' \|\| circle\.myRole === 'ADMIN'/);
-  for (const key of ['newGroups', 'myJoined', 'myCreated', 'myManaged']) {
+  assert.match(source, /loadChatConversations/);
+  assert.match(source, /selectGroupConversations/);
+  assert.doesNotMatch(source, /fetchMyCircles/);
+  assert.match(source, /role === 'OWNER' \|\| role === 'ADMIN'/);
+  for (const key of ['allGroups', 'myJoined', 'myCreated', 'myManaged']) {
     assert.match(source, new RegExp(`contacts\\.groupsScreen\\.${key}`));
   }
-  assert.match(source, /createGroupsRequestGuard/);
-  assert.match(source, /state\.sessionEpoch/);
+  // 点开群聊留在联系人栈，返回回得来。
+  assert.match(source, /getChatDetailHref\(\s*'contacts',/);
+  assert.doesNotMatch(source, /'\/\(tabs\)\/messages\/chat-detail'/);
 });
 
 test('chat input remains keyboard-safe and pinned rows use one surface color', () => {
@@ -208,14 +212,14 @@ test('groups screen tabs use the short PM labels and keep long section titles', 
   const source = read('src/features/contacts/screens/GroupsScreen.tsx');
 
   // 页签是横向滚动的，长文案会把第四个分类挤出屏幕，PM 要求的是短文案。
-  for (const key of ['tabNewGroups', 'tabMyJoined', 'tabMyCreated', 'tabMyManaged']) {
+  for (const key of ['tabAll', 'tabMyJoined', 'tabMyCreated', 'tabMyManaged']) {
     assert.match(source, new RegExp(`contacts\\.groupsScreen\\.${key}`));
   }
   // FilterTabs 只吃短文案，分区标题仍用完整文案。
   assert.match(source, /tabs=\{categories\.map\(\(category\) => category\.tabLabel\)\}/);
 
   const zh = JSON.parse(read('src/i18n/locales/zh.json')).contacts.groupsScreen;
-  assert.equal(zh.tabNewGroups, '新的群组');
+  assert.equal(zh.tabAll, '全部');
   assert.equal(zh.tabMyJoined, '我加入的');
   assert.equal(zh.tabMyCreated, '我创建的');
   assert.equal(zh.tabMyManaged, '我管理的');
@@ -224,7 +228,7 @@ test('groups screen tabs use the short PM labels and keep long section titles', 
     const groupsScreen = JSON.parse(
       read(`src/i18n/locales/${locale}.json`),
     ).contacts.groupsScreen;
-    for (const key of ['tabNewGroups', 'tabMyJoined', 'tabMyCreated', 'tabMyManaged']) {
+    for (const key of ['tabAll', 'tabMyJoined', 'tabMyCreated', 'tabMyManaged']) {
       assert.ok(groupsScreen[key], `${locale} ${key}`);
     }
   }

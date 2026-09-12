@@ -30,15 +30,18 @@ import {
   CHAT_WS_PATH,
   SERVER_COMPENSATED_TYPES,
   type ChatConversationDto,
+  type ChatPresenceDetail,
   type ChatReadAck,
   type ChatSendAck,
   type ChatSendAckOk,
   type ChatSendPayload,
 } from './protocol';
 import {
+  readViewerTypingPolicy,
   sanitizeExpiredConversationPreviews,
   useChatStore,
   viewerSelfDestructSecStorageKey,
+  viewerTypingPolicyFromPrivacy,
 } from './store';
 import { devWarn } from '@/utils/dev-log';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -186,9 +189,12 @@ async function refreshViewerSelfDestructSec(userId: string): Promise<void> {
     ) {
       return;
     }
-    store.setViewerSelfDestructSec(settings.messageSelfDestructSec, {
-      remoteRefresh: true,
-    });
+    store.setViewerSelfDestructSec(
+      settings.messageSelfDestructSec,
+      { remoteRefresh: true },
+      settings.messageSelfDestructStartedAt,
+    );
+    store.setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(settings));
   } catch {
     // 离线时沿用按账号缓存的最后已知策略，不能让策略刷新阻断聊天连接。
   }
@@ -318,6 +324,7 @@ export function connectChat(token: string, userId: string): void {
   store.setConnecting(true);
   store.setCurrentUserId(userId);
   store.setViewerSelfDestructSec(readViewerSelfDestructSec(userId));
+  store.setViewerTypingPolicy(readViewerTypingPolicy(userId));
   initChatAppBadgeSync();
   // 在线时先解析服务器策略，失败才使用上面的账户缓存，避免冷启动展示已到期内容。
   void hydrateWithResolvedViewerPolicy(userId, gen);
@@ -344,7 +351,9 @@ export function connectChat(token: string, userId: string): void {
       stage: 'ready',
       platform: Platform.OS,
     });
-    // 首连不对账(冷启动全量拉取由页面 focus 负责),重连才补断线窗口。
+    // 首连也必须拉一次完整会话快照。消息页可能在 socket 已连上之后才挂载，
+    // 只依赖页面 focus 会遇到「首屏请求失败 + 已经连上的状态不再变化」的死角，
+    // 结果本地只有头像/名称，预览要等用户进出会话才出现。
     // 判据必须跨 socket 实例:access token 轮换走的是 suspendChat + connectChat,
     // 换的是**一条新 socket**。判据挂在 socket 上的话,这条新连接永远算首连,
     // 断开到重连之间的消息一条都不补 —— 而已经打开的会话不会重拉历史,
@@ -361,7 +370,10 @@ export function connectChat(token: string, userId: string): void {
       resyncAfterReconnect(userId);
       return;
     }
-    // 首连不做全量对账(冷启动拉取由页面 focus 负责),但撤回/编辑增量必须追:
+    void loadChatConversations().catch((err: unknown) =>
+      reportHandledFailure('chatSync', 'initialConversationRefresh', err),
+    );
+    // 首连不做撤回增量对账(没有本地游标时从现在开始),但撤回/编辑增量必须追:
     // 上次运行到这次启动之间发生的撤回,本地缓存里还是原文,而 height 没变,
     // 任何补拉都够不着它。
     void catchUpMutations(userId);
@@ -501,6 +513,7 @@ async function hydrateFromLocalDb(
     const conversations = sanitizeExpiredConversationPreviews(
       persistedConversations,
       useChatStore.getState().viewerSelfDestructSec,
+      useChatStore.getState().viewerSelfDestructStartedAt,
     );
     for (let index = 0; index < conversations.length; index += 1) {
       if (conversations[index] !== persistedConversations[index]) {
@@ -814,7 +827,11 @@ function emitReadWithAck(
   });
 }
 
-/** 批量查询在线状态并写入 store(ack 一次性;后续变化靠服务端广播)。 */
+/**
+ * 批量查询在线状态并写入 store(ack 一次性;后续变化靠服务端广播)。
+ * detail=true 让新服务端连最近在线时刻一起回;旧服务端只回 boolean,两种都收。
+ * 对方关了「显示在线时间」时服务端根本不回这个人 —— store 里就没有他,界面不画。
+ */
 export function queryChatPresence(userIds: string[]): void {
   const current = socket;
   if (!current?.connected || userIds.length === 0) return;
@@ -822,12 +839,34 @@ export function queryChatPresence(userIds: string[]): void {
     .timeout(READ_ACK_TIMEOUT_MS)
     .emit(
       CHAT_EVENTS.presence,
-      { userIds },
-      (err: Error | null, result: Record<string, boolean>) => {
+      { userIds, detail: true },
+      (
+        err: Error | null,
+        result: Record<string, boolean | ChatPresenceDetail | null>,
+      ) => {
         if (err || !result) return;
         const store = useChatStore.getState();
-        for (const [userId, online] of Object.entries(result)) {
-          if (typeof online === 'boolean') store.applyPresence(userId, online);
+        // 空 ack = 这次没答上来(限流/出错),不是「都不可见」—— 什么都不动。
+        const answered = Object.keys(result).length > 0;
+        for (const [userId, value] of Object.entries(result)) {
+          if (typeof value === 'boolean') {
+            store.applyPresence(userId, value);
+          } else if (value && typeof value.online === 'boolean') {
+            store.applyPresence(
+              userId,
+              value.online,
+              typeof value.lastSeenAt === 'string' ? value.lastSeenAt : null,
+            );
+          } else {
+            // 服务端明确说「这个人不可见」(对方刚关掉显示在线时间等)。不清掉的话
+            // 之前拿到的在线状态会一直挂在聊天头部与资料页上。
+            store.clearPresence(userId);
+          }
+        }
+        if (!answered) return;
+        // 旧服务端不认 detail,会把不可见的人直接省略;给它们补上同样的语义。
+        for (const userId of userIds) {
+          if (!(userId in result)) store.clearPresence(userId);
         }
       },
     );
@@ -1015,8 +1054,17 @@ export function sendChatEditMessage(
   });
 }
 
-/** 正在输入：本地节流,无 ack 尽力而为。 */
-export function sendChatTyping(conversationId: string): void {
+/**
+ * 正在输入:本地节流,无 ack 尽力而为。
+ * 隐私页的「单聊 / 群聊输入状态」开关收在这里而不是各个调用方 —— 少一处漏掉
+ * 就是一处泄露。
+ */
+export function sendChatTyping(
+  conversationId: string,
+  kind: 'direct' | 'group',
+): void {
+  const policy = useChatStore.getState().viewerTypingPolicy;
+  if (kind === 'group' ? !policy.group : !policy.direct) return;
   const current = socket;
   if (!current?.connected) return;
   const now = Date.now();

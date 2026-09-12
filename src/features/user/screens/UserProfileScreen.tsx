@@ -14,6 +14,7 @@ import { MemberName } from '@/components/ui/member-name';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { ensureDirectConversation } from '@/chat-core/client';
+import { usePeerPresence } from '@/chat-core/use-peer-presence';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { createDirectCall } from '@/services/api/calls';
 import { useCallStore } from '@/features/call/store/use-call-store';
@@ -141,6 +142,11 @@ const s = StyleSheet.create({
   identity: {
     alignItems: 'center',
     gap: 2,
+  },
+  presenceDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   metaRow: {
     flexDirection: 'row',
@@ -503,6 +509,26 @@ export default function UserProfileScreen() {
   const permissionValue = t(
     `userProfile.permissionValues.${friendSettings?.permission ?? 'FULL'}`,
   );
+  // 资料接口不携带在线状态,统一复用聊天 presence 通道(与聊天头部同一份数据)。
+  // 只查已加载出来的对方用户:自己的在线状态没有意义,profileId 还是 'unknown'
+  // 时也没什么可查。后续上下线广播直接更新 chat store,这里只订阅这一位。
+  const presenceUserId = isCurrentUser ? null : (remoteProfile?.id ?? null);
+  const peerPresence = usePeerPresence(presenceUserId);
+  const presenceTint = peerPresence.online
+    ? colors.online
+    : colors.textSecondary;
+  const presenceStyles = useMemo(
+    () => ({
+      dot: { backgroundColor: presenceTint },
+      text: {
+        color: presenceTint,
+        ...Typography.small,
+        fontWeight: '600' as const,
+      },
+    }),
+    [presenceTint],
+  );
+
   const infoRows = isCurrentUser
     ? SELF_INFO_ROW_IDS
     : friendStatus === 'ACCEPTED'
@@ -941,7 +967,7 @@ export default function UserProfileScreen() {
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
           </View>
 
-          {profileMetaItems.length > 0 ? (
+          {profileMetaItems.length > 0 || peerPresence.known ? (
             <View style={s.metaRow}>
               {profileMetaItems.map((item, index) => (
                 <View key={`${item}-${index}`} style={[s.metaChip, d.metaChip]}>
@@ -961,6 +987,20 @@ export default function UserProfileScreen() {
                   <Text style={d.metaChipText}>{item}</Text>
                 </View>
               ))}
+              {/*
+                在线状态与性别/地区同排:三者都是「这个人此刻的一句话」。
+                对方关了「显示在线时间」(或状态还没拿到)时这一枚不画 ——
+                画「离线」仍然是在泄露信息,与聊天头部同一条规则。
+              */}
+              {peerPresence.known ? (
+                <View
+                  style={[s.metaChip, d.metaChip]}
+                  accessibilityLabel={peerPresence.label}
+                >
+                  <View style={[s.presenceDot, presenceStyles.dot]} />
+                  <Text style={presenceStyles.text}>{peerPresence.label}</Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
 

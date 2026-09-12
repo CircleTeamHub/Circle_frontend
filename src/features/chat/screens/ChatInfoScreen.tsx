@@ -434,6 +434,13 @@ export default function ChatInfoScreen() {
     );
     return () => clearTimeout(timer);
   }, [groupMembers, silenceClock]);
+  // 群成员目录的策略在会话 DTO 上。圈子详情直进本页时 DTO 可能暂时只在
+  // groupConversation 这个本地兜底里,两份都认,避免策略还没进 store 就把
+  // 普通成员永久挡在目录外。
+  const membersCanViewRoster =
+    conversation?.policies?.membersCanViewRoster ??
+    groupConversation?.policies?.membersCanViewRoster ??
+    null;
   // review R2 P1：自己的群成员身份走活体 hook——群主在本页存活期间撤掉管理员
   // 时，订阅推送立即收紧目录/搜索/管理入口，不再等重新聚焦。
   const {
@@ -444,6 +451,7 @@ export default function ChatInfoScreen() {
     enabled: Boolean(isGroupConversation && groupID && currentUserID),
     groupID,
     currentUserID,
+    membersCanViewRoster,
   });
   // 临时房不是圈子,没有圈子角色可判——目录权限由后端的座位校验兜底
   // (GET /chat/conversations/:id/members),与 ChatDetailScreen 同口径。
@@ -456,9 +464,9 @@ export default function ChatInfoScreen() {
       ? 'OWNER'
       : (conversation?.myRole ?? null)
     : (currentGroupMember?.role ?? null);
-  const rosterVisibleToMembers =
-    conversation?.policies?.membersCanViewRoster ?? true;
-  // 目录权限:临时房与独立群聊由服务端座位校验兜底,圈子群看活体角色。
+  const rosterVisibleToMembers = membersCanViewRoster ?? true;
+  // 目录权限:临时房与独立群聊由服务端座位校验兜底,圈子群按活体角色和
+  // 「显示群成员」策略共同判定。
   // 「是否显示群成员」再叠一层:关掉后普通成员看不到网格与成员行,
   // 群主/管理员不受限(判据与服务端 listMembers 一致,免得摆个必然 403 的入口)。
   const canViewMemberDirectory =
@@ -486,11 +494,10 @@ export default function ChatInfoScreen() {
   const isCircleOwner = Boolean(groupID) && isOwner;
   const isAdmin = selfGroupRole === 'ADMIN';
   const canManageGroup = isOwner || isAdmin;
-  // 全群清空和阅后即焚都是「替所有人做决定」的破坏性设置,判据必须和服务端
-  // 一致:圈子群=圈主或管理员,独立群聊=群主。前端放宽一点,普通成员就会拿到
-  // 一个必然报 403 的按钮;收紧一点,群主就找不到入口(独立群聊原来就是这样,
-  // canManageGroup 靠圈子角色算,独立群永远是 false)。
+  // 阅后即焚仍由群主/管理员管理;全群清空会推进所有成员的历史水位,
+  // 因此只允许群主。服务端也会再次校验,这里先把普通成员和管理员的全群入口收掉。
   const canWipeGroupForEveryone = canManageGroup || isStandaloneGroupOwner;
+  const canClearGroupForEveryone = isOwner;
   const collapsedGroupMemberLimit = GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
   const visibleGroupMembers = useMemo(
     () => (groupMembersExpanded ? groupMembers : groupMembers.slice(0, collapsedGroupMemberLimit)),
@@ -686,6 +693,9 @@ export default function ChatInfoScreen() {
           const conversationDto = await createCircleChatConversation(groupID);
           if (cancelled) return;
           setGroupConversation(conversationDto);
+          // 圈子详情直进时会话可能原本不在 store;写入后实时的
+          // group-policy-changed 才能更新本页,不必退出重进才能看到权限变化。
+          useChatStore.getState?.().upsertConversation?.(conversationDto);
           if (!canViewMemberDirectory) {
             setGroupMembers([]);
             return;
@@ -995,7 +1005,7 @@ export default function ChatInfoScreen() {
   );
 
   const handleEditGroupName = useCallback(() => {
-    if (!groupID && !isStandaloneGroup) {
+    if (!canManageGroup || (!groupID && !isStandaloneGroup)) {
       return;
     }
 
@@ -1018,7 +1028,7 @@ export default function ChatInfoScreen() {
         })
         .catch(openActionError);
     });
-  }, [groupID, groupTitle, isStandaloneGroup, openActionError, promptForText, t]);
+  }, [canManageGroup, groupID, groupTitle, isStandaloneGroup, openActionError, promptForText, t]);
 
   const handleSubmitStandaloneGroupRename = useCallback(async () => {
     if (renameSubmittingRef.current || !conversationID) return;
@@ -1527,8 +1537,8 @@ export default function ChatInfoScreen() {
     [resolvedConversationID, t],
   );
 
-  // G-14 清空聊天记录:私聊推进双方水位;群聊看身份 —— 群主/管理员可以推进
-  // 全员水位(删所有人的记录),普通成员只能推进自己的。
+  // G-14 清空聊天记录:私聊推进双方水位;群聊只有群主可以推进全员水位,
+  // 管理员和普通成员只能推进自己的记录。
   const handleClearHistory = useCallback(() => {
     if (!resolvedConversationID) return;
 
@@ -1555,8 +1565,8 @@ export default function ChatInfoScreen() {
     };
 
     if (isGroupConversation) {
-      // 普通成员只能清自己那份:摆一个「删除所有人的记录」给他,点了必定 403。
-      if (!canWipeGroupForEveryone) {
+      // 非群主只能清自己那份,不展示会被服务端拒绝的全群操作。
+      if (!canClearGroupForEveryone) {
         Alert.alert(t('chat.clearHistory'), t('chat.clearHistoryConfirm'), [
           { text: t('common.cancel'), style: 'cancel' },
           {
@@ -1603,7 +1613,7 @@ export default function ChatInfoScreen() {
       ],
     );
   }, [
-    canWipeGroupForEveryone,
+    canClearGroupForEveryone,
     isGroupConversation,
     resolvedConversationID,
     t,
@@ -1878,15 +1888,13 @@ export default function ChatInfoScreen() {
           ) : null}
 
           <View style={[s.groupSection, d.groupSection]}>
-            <GroupInfoRow
+              <GroupInfoRow
               label={t('chat.groupName')}
               value={groupTitle}
               onPress={
-                canManageGroup || isStandaloneGroup
-                  ? handleEditGroupName
-                  : undefined
+                canManageGroup ? handleEditGroupName : undefined
               }
-              showArrow={canManageGroup || isStandaloneGroup}
+              showArrow={canManageGroup}
             />
             {isTempConversation ? null : (
               <>
@@ -1951,7 +1959,7 @@ export default function ChatInfoScreen() {
             ) : null}
             <Divider />
             <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
-            {canViewMemberDirectory ? (
+            {canManageGroup ? (
               <>
                 <Divider />
                 <GroupInfoRow

@@ -322,6 +322,16 @@
       "statusOffline": "Offline",
       "statusTyping": "Typing…",
       "statusTypingGroup": "Someone is typing…",
+      "lastSeenJustNow": "Last seen just now",
+      "lastSeenMinutes": "Last seen {{count}} minutes ago",
+      "lastSeenMinutes_one": "Last seen {{count}} minute ago",
+      "lastSeenMinutes_other": "Last seen {{count}} minutes ago",
+      "lastSeenHours": "Last seen {{count}} hours ago",
+      "lastSeenHours_one": "Last seen {{count}} hour ago",
+      "lastSeenHours_other": "Last seen {{count}} hours ago",
+      "lastSeenDays": "Last seen {{count}} days ago",
+      "lastSeenDays_one": "Last seen {{count}} day ago",
+      "lastSeenDays_other": "Last seen {{count}} days ago",
       "previewNotice": "The connection isn't ready yet. Please try again shortly.",
       "recordingSeconds": "Recording {{seconds}}s",
       "voiceReleaseCancel": "Release to cancel",
@@ -329,6 +339,10 @@
       "voiceHoldToTalk": "Hold to talk",
       "previewPlaceholder": "Connection not ready",
       "inputPlaceholder": "Type a message…",
+      "disappearingMessageNotice": "Disappearing messages are on in this chat. New messages disappear after {{duration}}.",
+      "personalDisappearingMessageNotice": "You have turned on disappearing messages. New messages disappear after {{duration}}.",
+      "peerDisappearingMessageNotice": "The other person has turned on disappearing messages ({{duration}}).",
+      "bothDisappearingMessageNotice": "Both of you have turned on disappearing messages. New messages disappear after {{duration}}.",
       "attachmentPanelLabel": "Open attachment panel",
       "sendFailedText": "Failed to send message, please try again",
       "sensitiveWordBlocked": "Message blocked: it contains prohibited words",
@@ -841,7 +855,7 @@
     "searchPlaceholder": "Search contacts...",
     "newFriends": "New Friends",
     "seats": "Temporary Group Chats",
-    "groups": "Groups",
+    "groups": "My Groups",
     "circles": "Circles",
     "tags": "Tags",
     "accountId": "ID: {{id}}",
@@ -890,7 +904,11 @@
         "ACCEPTED": "Accepted",
         "REJECTED": "Rejected",
         "WITHDRAWN": "Withdrawn"
-      }
+      },
+      "tabFriends": "New Friends",
+      "tabGroups": "New Groups",
+      "searchPlaceholder": "Search by name, ID or group",
+      "noMatches": "No matching results"
     },
     "tagsScreen": {
       "title": "Tags",
@@ -919,21 +937,21 @@
       "addFriendAction": "Add {{name}} to this tag"
     },
     "groupsScreen": {
-      "title": "Groups",
-      "newGroups": "New Groups",
+      "title": "My Groups",
       "myCreated": "Groups I Created",
       "myJoined": "Groups I Joined",
       "myManaged": "Groups I Manage",
-      "tabNewGroups": "New Groups",
       "tabMyJoined": "Joined",
       "tabMyCreated": "Created",
       "tabMyManaged": "Managed",
       "searchPlaceholder": "Search groups",
       "noMatches": "No matching groups",
       "memberCount": "{{count}} members",
-      "empty": "No groups",
+      "empty": "No groups yet",
       "loading": "Loading groups",
-      "loadFailed": "Failed to load groups, please try again later"
+      "loadFailed": "Failed to load groups, please try again later",
+      "tabAll": "All",
+      "allGroups": "All Groups"
     },
     "request": {
       "title": "Send Friend Request",
@@ -976,6 +994,13 @@
       "sentMessage": "Sent a friend request to {{name}}.",
       "sendFailedTitle": "Send Failed",
       "sendFailed": "Failed to send friend request, please try again"
+    },
+    "groupInbox": {
+      "loading": "Loading groups...",
+      "loadFailed": "Could not load groups. Please try again later.",
+      "empty": "No newly joined groups yet",
+      "joinedAt": "Joined {{time}}",
+      "joined": "Joined"
     }
   },
   "discover": {
@@ -1951,6 +1976,7 @@
     "phone": "Phone",
     "phonePlaceholder": "Enter phone number",
     "email": "Email",
+    "emailNotSupported": "The registration email cannot be changed.",
     "qq": "QQ",
     "qqPlaceholder": "Enter QQ number",
     "notBound": "Not filled in",
@@ -2029,9 +2055,6 @@
       },
       "notifications": {
         "label": "Notifications"
-      },
-      "autoReply": {
-        "label": "Direct-message auto reply"
       },
       "appearance": {
         "label": "Display"
@@ -2127,6 +2150,8 @@
       "sound": "Sound",
       "messageRingtone": "Message Ringtone",
       "messageDefault": "Message Default",
+      "autoReply": "Direct Message Auto Reply",
+      "autoReplyHint": "Send a preset reply when a direct message arrives",
       "friendSection": "Friends & Group Requests",
       "friendRequest": "Friend Request Notifications",
       "friendRequestHint": "When off, friend request banners will no longer appear",
@@ -2151,6 +2176,8 @@
     },
     "autoReply": {
       "title": "Direct-message auto reply",
+      "switchSection": "Auto Reply",
+      "contentSection": "Reply Content",
       "enabled": "Enable auto reply",
       "help": "Automatically reply to direct messages, at most once per conversation every 30 seconds.",
       "placeholder": "Enter an automatic reply",
@@ -2185,6 +2212,7 @@
       "showOriginalGroupNameHint": "When enabled: remark name (original group nickname)",
       "pinnedFoldCount": "Pinned Fold Count",
       "pinnedFoldCountHint": "Show the first N pinned conversations and fold the rest",
+      "collapsePinned": "Collapse pinned conversations",
       "showCollapsedPinned": "Show {{count}} more pinned conversations",
       "unlimited": "Unlimited",
       "batteryOptimization": "Battery Optimization Reminder",
@@ -2237,7 +2265,8 @@
         "byAccount": "By account ID",
         "byPhone": "By phone number",
         "byQrCode": "By QR code",
-        "byGroup": "By group / circle"
+        "byGroup": "By group / circle",
+        "shareCard": "Share my personal card"
       }
     },
     "permissions": {

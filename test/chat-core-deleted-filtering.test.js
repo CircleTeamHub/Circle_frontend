@@ -86,6 +86,7 @@ function loadDeleted() {
     // 超上限时会报一次(墓碑被淘汰=那条消息会复活,必须可观测)。
     if (request === '@/observability/sentry') return { reportError: () => {} };
     if (request === './local-db') return __localDbStub;
+    if (request === '@/utils/retry') return { retry: (operation) => operation() };
     throw new Error(`unexpected require: ${request}`);
   });
 }
@@ -94,6 +95,7 @@ function loadDateWindow() {
   return runModule(
     'src/features/chat/chat-history-date-window.ts',
     (request) => {
+      if (request === '@/utils/retry') return { retry: (operation) => operation() };
       throw new Error(`unexpected require: ${request}`);
     },
   );
@@ -142,6 +144,7 @@ test('search responses drop locally deleted messages', () => {
     }
     if (request === './protocol') return {};
     if (request === './local-db') return __localDbStub;
+    if (request === '@/utils/retry') return { retry: (operation) => operation() };
     throw new Error(`unexpected require: ${request}`);
   });
 
@@ -206,6 +209,7 @@ function loadApi(deleted, respond) {
     }
     if (request === './protocol') return {};
     if (request === './local-db') return __localDbStub;
+    if (request === '@/utils/retry') return { retry: (operation) => operation() };
     throw new Error(`unexpected require: ${request}`);
   });
 }

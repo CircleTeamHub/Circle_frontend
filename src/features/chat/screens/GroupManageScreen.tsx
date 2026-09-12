@@ -113,6 +113,7 @@ export default function GroupManageScreen() {
     conversationID?: string;
     groupID?: string;
     title?: string;
+    originScope?: string;
   }>();
   const conversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
@@ -129,7 +130,10 @@ export default function GroupManageScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
-  const [silenceTarget, setSilenceTarget] = useState<ChatMemberDto | null>(null);
+  const [selectedMemberIDs, setSelectedMemberIDs] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [silenceTargets, setSilenceTargets] = useState<ChatMemberDto[]>([]);
   // 设置开关的在途键(含 'muteAll'):同一个开关按下后禁用,避免连点打架。
   const [settingPending, setSettingPending] = useState<string | null>(null);
   const [silenceClock, setSilenceClock] = useState(() => Date.now());
@@ -176,6 +180,14 @@ export default function GroupManageScreen() {
     setLoading(true);
     setError(false);
     try {
+      // 群管理页可能是从圈子详情直接进入的,此时会话 DTO 还不一定在
+      // chat store 里。成员权限三个开关读的是会话 DTO 上的 policies;
+      // 只拉成员和圈子详情会让 policies 为空,点击随后被静默忽略。
+      // 会话列表刷新失败不应阻断成员管理,所以把它单独降级为空结果。
+      const conversationsPromise = loadChatConversations().catch((err: unknown) => {
+        reportHandledFailure('groupManage', 'loadPolicies', err);
+        return null;
+      });
       const [directory, detail] = await Promise.all([
         fetchChatMembers(conversationID),
         groupID ? fetchCircleDetail(groupID) : Promise.resolve(null),
@@ -184,6 +196,8 @@ export default function GroupManageScreen() {
       setCircleRole(
         detail && detail.myStatus === 'ACTIVE' ? detail.myRole : null,
       );
+      // 等待这次快照写入 store,避免开关在旧值/空值上渲染后马上被覆盖。
+      await conversationsPromise;
     } catch (err) {
       setError(true);
       reportHandledFailure('groupManage', 'load', err);
@@ -389,31 +403,68 @@ export default function GroupManageScreen() {
 
   const handleOpenGroupExpansion = useCallback(() => {
     if (!groupID) return;
-    router.push({
+    // 跨到 profile tab 后需要记住当前群管理栈，否则扩容页会按商城入口返回。
+    const originScope =
+      params.originScope === 'contacts' ||
+      params.originScope === 'profile' ||
+      params.originScope === 'discover' ||
+      params.originScope === 'messages'
+        ? params.originScope
+        : 'messages';
+    const expansionHref = {
       pathname: '/(tabs)/profile/group-expansion',
       params: { circleId: groupID },
+    };
+    router.push({
+      ...expansionHref,
+      params: {
+        ...expansionHref.params,
+        returnScope: originScope,
+        returnConversationID: conversationID,
+        returnGroupID: groupID,
+        ...(params.title ? { returnTitle: params.title } : {}),
+      },
     } as never);
-  }, [groupID]);
+  }, [conversationID, groupID, params.originScope, params.title]);
+
+  const openPicker = useCallback((mode: Exclude<PickerMode, null>) => {
+    setSelectedMemberIDs(new Set());
+    setPickerMode(mode);
+  }, []);
+
+  const handleClosePicker = useCallback(() => {
+    setSelectedMemberIDs(new Set());
+    setPickerMode(null);
+  }, []);
+
+  const handleToggleMember = useCallback((member: ChatMemberDto) => {
+    setSelectedMemberIDs((current) => {
+      const next = new Set(current);
+      if (next.has(member.userId)) next.delete(member.userId);
+      else next.add(member.userId);
+      return next;
+    });
+  }, []);
 
   const handlePick = useCallback(
     (member: ChatMemberDto) => {
       const mode = pickerMode;
-      setPickerMode(null);
+      handleClosePicker();
       if (mode === 'admin') groupAdmin.changeRole(member, 'ADMIN');
-      else if (mode === 'silence') setSilenceTarget(member);
+      else if (mode === 'silence') setSilenceTargets([member]);
       else if (mode === 'remove') groupAdmin.kick(member);
       else if (mode === 'transfer') handleTransferOwner(member);
     },
-    [groupAdmin, handleTransferOwner, pickerMode],
+    [groupAdmin, handleClosePicker, handleTransferOwner, pickerMode],
   );
 
   const handleSelectSilenceDuration = useCallback(
     (seconds: number | null) => {
-      const target = silenceTarget;
-      setSilenceTarget(null);
-      if (target) groupAdmin.silence(target, seconds);
+      const targets = silenceTargets;
+      setSilenceTargets([]);
+      if (targets.length > 0) void groupAdmin.silenceBatch(targets, seconds);
     },
-    [groupAdmin, silenceTarget],
+    [groupAdmin, silenceTargets],
   );
 
   const d = useMemo(
@@ -452,6 +503,22 @@ export default function GroupManageScreen() {
         : pickerMode === 'transfer'
           ? transferCandidates
           : removeCandidates;
+
+  const handleConfirmPicker = useCallback(() => {
+    const mode = pickerMode;
+    if (!mode || (mode !== 'admin' && mode !== 'silence')) return;
+    const selected = pickerMembers.filter((member) =>
+      selectedMemberIDs.has(member.userId),
+    );
+    if (selected.length === 0) return;
+    setSelectedMemberIDs(new Set());
+    setPickerMode(null);
+    if (mode === 'admin') {
+      void groupAdmin.changeRoleBatch(selected, 'ADMIN');
+    } else {
+      setSilenceTargets(selected);
+    }
+  }, [groupAdmin, pickerMembers, pickerMode, selectedMemberIDs]);
 
   const renderMemberRow = (
     member: ChatMemberDto,
@@ -505,6 +572,7 @@ export default function GroupManageScreen() {
     hint?: string;
     value: boolean;
     onToggle: (next: boolean) => void;
+    disabled?: boolean;
   }) => (
     <View key={params.key} style={s.row}>
       <View style={s.rowText}>
@@ -515,7 +583,10 @@ export default function GroupManageScreen() {
       </View>
       <ThemedSwitch
         value={params.value}
-        onValueChange={settingPending ? undefined : params.onToggle}
+        onValueChange={
+          params.disabled || settingPending ? undefined : params.onToggle
+        }
+        disabled={params.disabled || Boolean(settingPending)}
       />
     </View>
   );
@@ -530,6 +601,7 @@ export default function GroupManageScreen() {
           hint: t(`chat.groupPolicyHint.${key}`),
           value: policies?.[key] ?? true,
           onToggle: (next) => handleTogglePolicy(key, next),
+          disabled: policies === null,
         })}
       </View>
     ));
@@ -626,7 +698,7 @@ export default function GroupManageScreen() {
             {isStandaloneGroup
               ? renderLinkRow(
                   t('chat.transferOwner', { defaultValue: '转让群主' }),
-                  () => setPickerMode('transfer'),
+                  () => openPicker('transfer'),
                   'group-manage-transfer-owner',
                 )
               : null}
@@ -673,7 +745,7 @@ export default function GroupManageScreen() {
             <Divider />
             {renderAddRow(
               t('chat.groupManagement.addAdmin', { defaultValue: '添加管理员' }),
-              () => setPickerMode('admin'),
+              () => openPicker('admin'),
               'group-manage-add-admin',
             )}
           </View>
@@ -706,7 +778,7 @@ export default function GroupManageScreen() {
           <Divider />
           {renderAddRow(
             t('chat.groupManagement.addSilence', { defaultValue: '添加禁言' }),
-            () => setPickerMode('silence'),
+            () => openPicker('silence'),
             'group-manage-add-silence',
           )}
         </View>
@@ -725,7 +797,7 @@ export default function GroupManageScreen() {
           <Divider />
           {renderAddRow(
             t('chat.groupManagement.pickMember', { defaultValue: '选择成员' }),
-            () => setPickerMode('remove'),
+            () => openPicker('remove'),
             'group-manage-remove-member',
           )}
         </View>
@@ -742,15 +814,19 @@ export default function GroupManageScreen() {
         title={pickerTitle}
         members={pickerMembers}
         onSelect={handlePick}
-        onClose={() => setPickerMode(null)}
+        multiSelect={pickerMode === 'admin' || pickerMode === 'silence'}
+        selectedMemberIDs={selectedMemberIDs}
+        onToggle={handleToggleMember}
+        onConfirm={handleConfirmPicker}
+        onClose={handleClosePicker}
       />
       <OptionPickerSheet
-        visible={silenceTarget !== null}
+        visible={silenceTargets.length > 0}
         title={t('chat.silencePickDuration', { defaultValue: '选择禁言时长' })}
         options={silenceOptions}
         selectedValue={null}
         onSelect={handleSelectSilenceDuration}
-        onClose={() => setSilenceTarget(null)}
+        onClose={() => setSilenceTargets([])}
       />
     </View>
   );

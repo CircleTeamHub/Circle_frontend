@@ -68,10 +68,19 @@ test('api pulls forward incrementally with afterHeight and loops the cursor', ()
 
 test('reconnect refreshes conversations and backfills the open conversation gap', () => {
   const manager = read('src/chat-core/socket-manager.ts');
-  // 首连不做(冷启动全量拉取由页面负责),重连才对账
+  // 首连拉完整快照，重连再补断线期间的快照与消息缺口
+  assert.match(manager, /initialConversationRefresh/);
   assert.match(manager, /hadConnected/);
   assert.match(manager, /loadChatConversations/);
   assert.match(manager, /backfillConversationSince/);
+});
+
+test('conversation snapshot loading coalesces startup requests and retries transient failures', () => {
+  const api = read('src/chat-core/api.ts');
+  assert.match(api, /conversationsRequest/);
+  assert.match(api, /conversationsRequestEpoch/);
+  assert.match(api, /tries: 2/);
+  assert.match(api, /backoffMs: 400/);
 });
 
 // ---- G-15:多端已读收敛未读 ----
@@ -307,11 +316,13 @@ test('badge sync is wired into the chat connect path', () => {
 
 test('typing flows end to end: throttle-send behind settings, store expiry, header display', () => {
   const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
-  // 发送侧:草稿变化按设置开关门禁上报(单聊/群聊各自的开关)。
-  assert.match(screen, /isGroupChat \? typingGroup : typingSingle/);
-  assert.match(screen, /sendChatTyping\(conversationID\)/);
-  assert.match(screen, /singleTyping/);
-  assert.match(screen, /groupTyping/);
+  // 发送侧:草稿变化带上会话类型上报;单聊/群聊的隐私开关收在 socket-manager
+  // 的 sendChatTyping 里(见 presence-typing-privacy.test.js)。
+  assert.match(
+    screen,
+    /sendChatTyping\(conversationID, isGroupChat \? 'group' : 'direct'\)/,
+  );
+  assert.match(read('src/chat-core/socket-manager.ts'), /viewerTypingPolicy/);
   // 显示侧:头部状态优先显示「对方正在输入…」,到期回落在线状态。
   assert.match(screen, /chat\.detail\.statusTyping/);
   const store = read('src/chat-core/store.ts');

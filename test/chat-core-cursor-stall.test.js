@@ -82,6 +82,7 @@ function loadApi({ respond, clearTargetHeight = () => undefined }) {
     if (request === '@/services/api/client') {
       return { apiClient: (url, init) => Promise.resolve(respond(url, init)) };
     }
+    if (request === '@/utils/retry') return { retry: (operation) => operation() };
     if (request === '@/stores/authStore') {
       return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
     }

@@ -9,6 +9,8 @@ export type PrivacySettings = {
   // 旧字段是 messageSelfDestructDays,只能选整天,于是同一个功能在两个入口给出
   // 两张不一样的档位表。
   messageSelfDestructSec: BurnDurationSec;
+  /** 开启时间；开启前发送的消息不受阅后即焚影响。 */
+  messageSelfDestructStartedAt?: string | null;
   momentsVisibility: MomentsVisibility;
   allowStrangerMessages: boolean;
   showPhone: boolean;
@@ -31,9 +33,17 @@ export type PrivacySettings = {
   // Optional during a rolling backend deployment; new servers always return both.
   directMessageAutoReplyEnabled?: boolean;
   directMessageAutoReplyText?: string;
+  // 同上:滚动发布期间旧服务端不返回这三项,读的一侧一律 `?? true`(与后端默认一致)。
+  /** 对他人显示在线状态与最近在线时间(在线点 / 「N 分钟前在线」)。 */
+  shareOnlineStatus?: boolean;
+  /** 单聊 / 群聊里向对方上报「正在输入」;门禁在 socket-manager 的 sendChatTyping。 */
+  shareTypingInDirect?: boolean;
+  shareTypingInGroup?: boolean;
 };
 
-export type UpdatePrivacySettingsPayload = Partial<PrivacySettings>;
+export type UpdatePrivacySettingsPayload = Partial<
+  Omit<PrivacySettings, 'messageSelfDestructStartedAt'>
+>;
 
 export async function fetchPrivacySettings() {
   return apiClient<PrivacySettings>('/privacy/settings');

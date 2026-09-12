@@ -62,10 +62,19 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const handleBackPress = useCallback(() => {
     if (onBackPress) {
       onBackPress();
-    } else if (navigation.canGoBack()) {
+      return;
+    }
+    // canGoBack() 把父导航器也算进去：在 tab 栈的第一屏（深链/推送直接落地）
+    // 它返回 true，router.back() 于是切回上一个 tab —— 用户看到的是「退出后
+    // 跑到了消息页」。所以先只问当前这个 stack 能不能 pop，不能就走兜底上级。
+    const state = navigation.getState();
+    const canPopThisStack = state?.type === 'stack' && (state.index ?? 0) > 0;
+    if (canPopThisStack) {
       router.back();
     } else if (fallbackHref) {
       router.replace(fallbackHref);
+    } else if (navigation.canGoBack()) {
+      router.back();
     }
   }, [fallbackHref, navigation, onBackPress, router] as const);
 

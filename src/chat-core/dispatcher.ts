@@ -10,7 +10,9 @@ import {
   type ChatReadBroadcast,
   type ChatTypingBroadcast,
   type ChatDeliveredBroadcast,
+  type ChatBurnedMessagesBroadcast,
   type ChatEditBroadcast,
+  type ChatGlobalBurnPolicyBroadcast,
   type ChatReactionBroadcast,
   type ChatRevokeBroadcast,
 } from './protocol';
@@ -202,9 +204,70 @@ function applyRemoteBurnChange(
   if (content['kind'] !== 'burn-changed') return;
   const seconds = content['seconds'];
   if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return;
+  // 老版本系统消息只带 seconds，没有单独的 startedAt。系统消息是在设置
+  // 事务提交后立即写入并广播的，因此用它的服务端 createdAt 作为兼容回退，
+  // 让另一端也能从同一时刻开始计算焚毁窗口。
+  const startedAt =
+    typeof content['startedAt'] === 'string'
+      ? content['startedAt']
+      : seconds > 0
+        ? message.createdAt
+        : null;
   store.applyBurnDuration(
     message.conversationId,
     seconds > 0 ? Math.floor(seconds) : null,
+    startedAt,
+  );
+}
+
+function applyGlobalBurnPolicyChange(
+  store: ReturnType<typeof useChatStore.getState>,
+  payload: ChatGlobalBurnPolicyBroadcast,
+): void {
+  if (
+    !payload ||
+    typeof payload.conversationId !== 'string' ||
+    payload.conversationId.length === 0 ||
+    typeof payload.userId !== 'string' ||
+    payload.userId.length === 0 ||
+    typeof payload.seconds !== 'number' ||
+    !Number.isFinite(payload.seconds) ||
+    payload.seconds < 0 ||
+    (payload.startedAt !== null &&
+      (typeof payload.startedAt !== 'string' ||
+        !Number.isFinite(Date.parse(payload.startedAt))))
+  ) {
+    throw new Error('malformed global burn policy payload');
+  }
+  store.applyGlobalBurnPolicy(
+    payload.conversationId,
+    payload.userId,
+    Math.floor(payload.seconds),
+    payload.startedAt,
+  );
+}
+
+function applyBurnedMessagesChange(
+  store: ReturnType<typeof useChatStore.getState>,
+  payload: ChatBurnedMessagesBroadcast,
+): void {
+  if (
+    !payload ||
+    typeof payload.conversationId !== 'string' ||
+    payload.conversationId.length === 0 ||
+    !Array.isArray(payload.messageIds) ||
+    payload.messageIds.length === 0 ||
+    payload.messageIds.length > 500 ||
+    payload.messageIds.some(
+      (messageId) =>
+        typeof messageId !== 'string' || messageId.length === 0,
+    )
+  ) {
+    throw new Error('malformed burned messages payload');
+  }
+  store.applyBurnedMessages(
+    payload.conversationId,
+    [...new Set(payload.messageIds)],
   );
 }
 
@@ -313,6 +376,32 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
     }
   });
 
+  socket.on(
+    CHAT_EVENTS.globalBurnPolicy,
+    (payload: ChatGlobalBurnPolicyBroadcast) => {
+      if (!isLive()) return;
+      try {
+        applyGlobalBurnPolicyChange(useChatStore.getState(), payload);
+      } catch (err) {
+        devWarn('[chat] dropped malformed global burn policy payload', err);
+        reportChatEventFailureOnce('globalBurnPolicy', 'malformedPayload');
+      }
+    },
+  );
+
+  socket.on(
+    CHAT_EVENTS.burnedMessages,
+    (payload: ChatBurnedMessagesBroadcast) => {
+      if (!isLive()) return;
+      try {
+        applyBurnedMessagesChange(useChatStore.getState(), payload);
+      } catch (err) {
+        devWarn('[chat] dropped malformed burned messages payload', err);
+        reportChatEventFailureOnce('burnedMessages', 'malformedPayload');
+      }
+    },
+  );
+
   socket.on(CHAT_EVENTS.read, (payload: ChatReadBroadcast) => {
     if (!isLive()) return;
     try {
@@ -380,7 +469,23 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('presence', 'malformedPayload');
         return;
       }
-      useChatStore.getState().applyPresence(payload.userId, payload.online);
+      const store = useChatStore.getState();
+      if (payload.hidden === true) {
+        // 对方刚关掉「显示在线时间」:忘掉此人,界面回到「未知」而不是「离线」。
+        store.clearPresence(payload.userId);
+        return;
+      }
+      store.applyPresence(
+        payload.userId,
+        payload.online,
+        // 下线广播不带时刻(旧版服务端)= 此刻刚下线;带了就按服务端说的,
+        // 包括 null(「显示在线时间」翻回来时服务端可能还没记录过)。
+        payload.online
+          ? null
+          : payload.lastSeenAt === undefined
+            ? new Date().toISOString()
+            : payload.lastSeenAt,
+      );
     } catch (err) {
       devWarn('[chat] presence handler failed', err);
       reportChatEventFailureOnce('presence', 'handlerFailure');

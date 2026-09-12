@@ -26,6 +26,10 @@ interface GroupMemberPickerSheetProps {
   /** 调用方已按权限筛过的候选(不含自己、不含无权操作的角色)。 */
   members: readonly ChatMemberDto[];
   onSelect: (member: ChatMemberDto) => void;
+  multiSelect?: boolean;
+  selectedMemberIDs?: ReadonlySet<string>;
+  onToggle?: (member: ChatMemberDto) => void;
+  onConfirm?: () => void;
   onClose: () => void;
 }
 
@@ -66,6 +70,15 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.md,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  confirmText: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
   rowText: { flex: 1, gap: 2 },
   empty: {
     alignItems: 'center',
@@ -73,12 +86,16 @@ const s = StyleSheet.create({
   },
 });
 
-/** 群管理的选人面板(单选、带搜索)。 */
+/** 群管理的选人面板(支持单选/多选、带搜索)。 */
 export function GroupMemberPickerSheet({
   visible,
   title,
   members,
   onSelect,
+  multiSelect = false,
+  selectedMemberIDs,
+  onToggle,
+  onConfirm,
   onClose,
 }: GroupMemberPickerSheetProps) {
   const { colors } = useTheme();
@@ -99,6 +116,7 @@ export function GroupMemberPickerSheet({
     () => ({
       sheet: { backgroundColor: colors.surface },
       title: { color: colors.text, ...Typography.h3 },
+      confirm: { color: colors.primary },
       search: { backgroundColor: colors.background },
       input: { color: colors.text, ...Typography.bodyRegular },
       name: { color: colors.text, ...Typography.body },
@@ -110,6 +128,7 @@ export function GroupMemberPickerSheet({
 
   const renderItem = ({ item }: ListRenderItemInfo<ChatMemberDto>) => {
     const name = groupMemberDisplayName(item);
+    const checked = selectedMemberIDs?.has(item.userId) ?? false;
     const role =
       item.role === 'OWNER'
         ? t('chat.groupOwner')
@@ -119,8 +138,15 @@ export function GroupMemberPickerSheet({
     return (
       <Pressable
         style={s.row}
-        onPress={() => onSelect(item)}
-        accessibilityRole="button"
+        onPress={() => {
+          if (multiSelect) {
+            onToggle?.(item);
+          } else {
+            onSelect(item);
+          }
+        }}
+        accessibilityRole={multiSelect ? 'checkbox' : 'button'}
+        accessibilityState={multiSelect ? { checked } : undefined}
         accessibilityLabel={name}
       >
         <Avatar size={40} shape="square" name={name} uri={item.avatarUrl ?? undefined} />
@@ -134,7 +160,11 @@ export function GroupMemberPickerSheet({
             </Text>
           ) : null}
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        <Ionicons
+          name={multiSelect ? (checked ? 'checkmark-circle' : 'ellipse-outline') : 'chevron-forward'}
+          size={multiSelect ? 22 : 18}
+          color={checked ? colors.iconAccent : colors.textSecondary}
+        />
       </Pressable>
     );
   };
@@ -143,9 +173,32 @@ export function GroupMemberPickerSheet({
     <BottomSheetModal visible={visible} onClose={onClose} sheetStyle={[s.sheet, d.sheet]}>
       <View style={s.header}>
         <Text style={d.title}>{title}</Text>
-        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button">
-          <Ionicons name="close" size={22} color={colors.textSecondary} />
-        </Pressable>
+        <View style={s.headerActions}>
+          {multiSelect ? (
+            <Pressable
+              onPress={onConfirm}
+              hitSlop={8}
+              disabled={!selectedMemberIDs || selectedMemberIDs.size === 0}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.done')}
+            >
+              <Text
+                style={[
+                  s.confirmText,
+                  d.confirm,
+                  !selectedMemberIDs || selectedMemberIDs.size === 0
+                    ? { opacity: 0.4 }
+                    : null,
+                ]}
+              >
+                {t('common.done')}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button">
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </Pressable>
+        </View>
       </View>
       <View style={[s.searchWrap, d.search]}>
         <Ionicons name="search-outline" size={18} color={colors.textSecondary} />

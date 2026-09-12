@@ -92,8 +92,12 @@ function loadDispatcher(storeOverrides = {}) {
     cleared: [],
     clearedUnread: [],
     burnDurations: [],
+    globalBurnPolicies: [],
+    burnedMessages: [],
     upserts: [],
     sentryReports: [],
+    presenceApplied: [],
+    presenceCleared: [],
     ...storeOverrides,
   };
   // 补拉是 800ms 防抖的。测试里换成可控计时器:每条用例真等 0.8 秒既慢又脆,
@@ -148,8 +152,19 @@ function loadDispatcher(storeOverrides = {}) {
     clearConversationLocal: (conversationId, height) => {
       state.cleared.push({ conversationId, height });
     },
-    applyBurnDuration: (conversationId, seconds) => {
-      state.burnDurations.push({ conversationId, seconds });
+    applyBurnDuration: (conversationId, seconds, startedAt) => {
+      state.burnDurations.push({ conversationId, seconds, startedAt });
+    },
+    applyGlobalBurnPolicy: (conversationId, userId, seconds, startedAt) => {
+      state.globalBurnPolicies.push({
+        conversationId,
+        userId,
+        seconds,
+        startedAt,
+      });
+    },
+    applyBurnedMessages: (conversationId, messageIds) => {
+      state.burnedMessages.push({ conversationId, messageIds });
     },
     upsertConversation: (conversation) => {
       state.upserts.push(conversation);
@@ -163,7 +178,8 @@ function loadDispatcher(storeOverrides = {}) {
       for (const message of messages) state.ingested.push(message);
     },
     applyRead: () => {},
-    applyPresence: () => {},
+    applyPresence: (...args) => state.presenceApplied.push(args),
+    clearPresence: (userId) => state.presenceCleared.push(userId),
     removeConversation: (conversationId) => {
       state.removed.push(conversationId);
       state.conversations = state.conversations.filter(
@@ -320,6 +336,31 @@ test('chat:history_cleared removes the direct timeline and local unread override
   });
   assert.deepEqual(state.cleared, [{ conversationId: 'c1', height: 42 }]);
   assert.deepEqual(state.clearedUnread, ['c1']);
+});
+
+test('chat:burned_messages removes expired messages on the peer device', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:burned_messages', {
+    conversationId: 'c1',
+    messageIds: ['m1', 'm2', 'm1'],
+  });
+  assert.equal(state.burnedMessages.length, 1);
+  assert.equal(state.burnedMessages[0].conversationId, 'c1');
+  assert.equal(state.burnedMessages[0].messageIds.join(','), 'm1,m2');
+});
+
+test('malformed chat:burned_messages payloads cannot delete local data', () => {
+  const { socket, state } = loadDispatcher();
+  for (const payload of [
+    null,
+    { conversationId: '', messageIds: ['m1'] },
+    { conversationId: 'c1', messageIds: [] },
+    { conversationId: 'c1', messageIds: [''] },
+    { conversationId: 'c1', messageIds: 'm1' },
+  ]) {
+    socket.emit('chat:burned_messages', payload);
+  }
+  assert.deepEqual(state.burnedMessages, []);
 });
 
 test('malformed chat:history_cleared payloads cannot clear local data', () => {
@@ -816,12 +857,37 @@ test('a remote burn-changed system message updates the conversation setting', ()
       type: 'system',
       content: { kind: 'burn-changed', seconds: 30 },
       sender: null,
+      createdAt: '2026-09-11T20:00:00.000Z',
     }),
   );
 
   // 只渲染成一条提示是不够的:ChatInfoScreen 上的档位会一直显示旧值。
   assert.deepEqual(state.burnDurations, [
-    { conversationId: 'c1', seconds: 30 },
+    {
+      conversationId: 'c1',
+      seconds: 30,
+      startedAt: '2026-09-11T20:00:00.000Z',
+    },
+  ]);
+});
+
+test('a remote global burn policy updates the open chat immediately', () => {
+  const { socket, state } = loadDispatcher();
+
+  socket.emit('chat:global_burn_policy', {
+    conversationId: 'c1',
+    userId: 'peer',
+    seconds: 300,
+    startedAt: '2026-09-11T20:00:00.000Z',
+  });
+
+  assert.deepEqual(state.globalBurnPolicies, [
+    {
+      conversationId: 'c1',
+      userId: 'peer',
+      seconds: 300,
+      startedAt: '2026-09-11T20:00:00.000Z',
+    },
   ]);
 });
 
@@ -960,4 +1026,49 @@ test('chat:conversation for another user or malformed payloads is ignored', () =
 
   assert.deepEqual(state.removed, []);
   assert.deepEqual(state.alerts, []);
+});
+
+// —— chat:presence:最近在线时刻与「显示在线时间」翻转 ——
+
+test('presence: an offline broadcast without a timestamp means "went offline just now"', () => {
+  const { socket, state } = loadDispatcher();
+  const before = Date.now();
+  socket.emit('chat:presence', { userId: 'peer', online: false });
+  assert.equal(state.presenceApplied.length, 1);
+  const [userId, online, lastSeenAt] = state.presenceApplied[0];
+  assert.equal(userId, 'peer');
+  assert.equal(online, false);
+  assert.ok(Date.parse(lastSeenAt) >= before, '旧版服务端不带时刻:按此刻算');
+});
+
+test('presence: the server timestamp (null included) passes through; online clears it', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:presence', {
+    userId: 'peer',
+    online: false,
+    lastSeenAt: '2026-09-11T08:00:00.000Z',
+  });
+  socket.emit('chat:presence', { userId: 'peer', online: false, lastSeenAt: null });
+  socket.emit('chat:presence', {
+    userId: 'peer',
+    online: true,
+    lastSeenAt: '2026-09-11T08:00:00.000Z',
+  });
+  assert.deepEqual(state.presenceApplied, [
+    ['peer', false, '2026-09-11T08:00:00.000Z'],
+    ['peer', false, null],
+    ['peer', true, null],
+  ]);
+});
+
+test('presence: hidden means forget the user, not "offline"', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:presence', {
+    userId: 'peer',
+    online: false,
+    lastSeenAt: null,
+    hidden: true,
+  });
+  assert.deepEqual(state.presenceCleared, ['peer']);
+  assert.equal(state.presenceApplied.length, 0, '对方关了「显示在线时间」,连「离线」都不能落');
 });

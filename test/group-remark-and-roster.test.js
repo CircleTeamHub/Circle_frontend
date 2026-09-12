@@ -47,7 +47,7 @@ test('chat info offers the remark row and writes it back locally', () => {
 test('the roster switch gates the member grid for ordinary members only', () => {
   const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
   assert.match(info, /const rosterVisibleToMembers =/);
-  assert.match(info, /policies\?\.membersCanViewRoster \?\? true/);
+  assert.match(info, /membersCanViewRoster \?\? true/);
   // 群主/管理员不受限,判据与服务端 listMembers 一致。
   assert.match(
     info,

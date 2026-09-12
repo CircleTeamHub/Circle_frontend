@@ -114,11 +114,6 @@ const ACCOUNT_SEARCH_ROWS = [
 
 const GENERAL_ROWS: AppSettingsRow[] = [
   {
-    id: 'autoReply',
-    labelKey: 'appSettings.rows.autoReply.label',
-    route: '/(tabs)/profile/settings-auto-reply',
-  },
-  {
     id: 'notifications',
     labelKey: 'appSettings.rows.notifications.label',
     route: '/(tabs)/profile/settings-notifications',
@@ -164,6 +159,13 @@ const NOTIFICATION_SEARCH_ROWS: AppSettingsRow[] = [
   labelKey: `settingsDetails.notifications.${key}`,
   route: '/(tabs)/profile/settings-notifications',
 }));
+
+// 私信自动回复归到消息通知下面，但搜索仍然直达它自己那一页。
+NOTIFICATION_SEARCH_ROWS.push({
+  id: 'notifications-auto-reply',
+  labelKey: 'settingsDetails.notifications.autoReply',
+  route: '/(tabs)/profile/settings-auto-reply',
+});
 
 const APPEARANCE_SEARCH_ROWS: AppSettingsRow[] = [
   {
