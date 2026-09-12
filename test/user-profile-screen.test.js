@@ -592,3 +592,23 @@ test('contact rows are copy targets, not navigation rows', () => {
   assert.match(source, /\{showChevron \? \(/);
   assert.match(source, /accessibilityRole=\{onPress \? 'button' : undefined\}/);
 });
+
+test('user profile shows the peer online state through the shared presence channel', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/user/screens/UserProfileScreen.tsx'),
+    'utf8',
+  );
+
+  // 与聊天头部同一份数据源:资料接口不带在线状态,统一走 chat-core presence。
+  assert.match(source, /usePeerPresence\(presenceUserId\)/);
+  assert.match(source, /queryChatPresence\(\[presenceUserId\]\)/);
+  // 自己的在线状态没有意义;profileId 未加载时也没有可查的对象。
+  assert.match(
+    source,
+    /const presenceUserId = isCurrentUser \? null : \(remoteProfile\?\.id \?\? null\)/,
+  );
+  // 对方关了「显示在线时间」/ 状态未知时整行不画 —— 画「离线」仍是泄露。
+  assert.match(source, /\{peerPresence\.known \? \(/);
+  assert.match(source, /s\.presenceDot/);
+  assert.doesNotMatch(source, /statusOffline/);
+});

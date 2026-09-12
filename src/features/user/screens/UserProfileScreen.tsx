@@ -15,6 +15,7 @@ import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { queryChatPresence } from '@/chat-core/socket-manager';
+import { usePeerPresence } from '@/chat-core/use-peer-presence';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { createDirectCall } from '@/services/api/calls';
 import { useCallStore } from '@/features/call/store/use-call-store';
@@ -147,6 +148,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 2,
   },
   presenceDot: {
     width: 8,
@@ -487,18 +489,6 @@ export default function UserProfileScreen() {
     }, [friendStatus, isCurrentUser, profileId]),
   );
 
-  // 资料接口不携带在线状态，统一复用聊天 presence 通道。查询只针对已加载的
-  // 对方用户，后续上下线广播会直接更新 chat store，资料页只订阅这一位用户。
-  const presenceUserId = !isCurrentUser ? remoteProfile?.id ?? null : null;
-  const profileOnlineStatus = useChatStore((state) =>
-    presenceUserId ? state.onlineByUser[presenceUserId] : undefined,
-  );
-  const profileOnline = profileOnlineStatus === true;
-  useEffect(() => {
-    if (!presenceUserId) return;
-    queryChatPresence([presenceUserId]);
-  }, [presenceUserId]);
-
   const rawProfile = remoteProfile ?? fallbackProfile;
   const profile =
     FEATURE_FLAGS.fancyNumbers && rawProfile.fancyNumber && rawProfile.accountId
@@ -526,6 +516,30 @@ export default function UserProfileScreen() {
   const permissionValue = t(
     `userProfile.permissionValues.${friendSettings?.permission ?? 'FULL'}`,
   );
+  // 资料接口不携带在线状态,统一复用聊天 presence 通道(与聊天头部同一份数据)。
+  // 只查已加载出来的对方用户:自己的在线状态没有意义,profileId 还是 'unknown'
+  // 时也没什么可查。后续上下线广播直接更新 chat store,这里只订阅这一位。
+  const presenceUserId = isCurrentUser ? null : (remoteProfile?.id ?? null);
+  const peerPresence = usePeerPresence(presenceUserId);
+  useEffect(() => {
+    if (!presenceUserId) return;
+    queryChatPresence([presenceUserId]);
+  }, [presenceUserId]);
+  const presenceTint = peerPresence.online
+    ? colors.online
+    : colors.textSecondary;
+  const presenceStyles = useMemo(
+    () => ({
+      dot: { backgroundColor: presenceTint },
+      text: {
+        color: presenceTint,
+        ...Typography.small,
+        fontWeight: '600' as const,
+      },
+    }),
+    [presenceTint],
+  );
+
   const infoRows = isCurrentUser
     ? SELF_INFO_ROW_IDS
     : friendStatus === 'ACCEPTED'
@@ -845,11 +859,6 @@ export default function UserProfileScreen() {
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      presenceText: {
-        color: profileOnline ? colors.online : colors.textSecondary,
-        ...Typography.small,
-        fontWeight: '600' as const,
-      },
       metaChip: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -909,7 +918,7 @@ export default function UserProfileScreen() {
         backgroundColor: colors.surfaceBorder,
       },
     }),
-    [colors, insets.bottom, profileOnline],
+    [colors, insets.bottom],
   );
 
   return (
@@ -967,34 +976,14 @@ export default function UserProfileScreen() {
               style={d.name}
             />
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
-            {presenceUserId ? (
-              <View
-                style={s.presenceRow}
-                accessibilityLabel={t(
-                  profileOnline
-                    ? 'chat.detail.statusOnline'
-                    : 'chat.detail.statusOffline',
-                  { defaultValue: profileOnline ? '在线' : '离线' },
-                )}
-              >
-                <View
-                  style={[
-                    s.presenceDot,
-                    {
-                      backgroundColor: profileOnline
-                        ? colors.online
-                        : colors.textSecondary,
-                    },
-                  ]}
-                />
-                <Text style={d.presenceText}>
-                  {t(
-                    profileOnline
-                      ? 'chat.detail.statusOnline'
-                      : 'chat.detail.statusOffline',
-                    { defaultValue: profileOnline ? '在线' : '离线' },
-                  )}
-                </Text>
+            {/*
+              对方关了「显示在线时间」(或状态还没拿到)时整行不画 —— 画「离线」
+              仍然是在泄露信息,与聊天头部同一条规则。
+            */}
+            {peerPresence.known ? (
+              <View style={s.presenceRow} accessibilityLabel={peerPresence.label}>
+                <View style={[s.presenceDot, presenceStyles.dot]} />
+                <Text style={presenceStyles.text}>{peerPresence.label}</Text>
               </View>
             ) : null}
           </View>
