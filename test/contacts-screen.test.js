@@ -92,6 +92,39 @@ test('tags screens load tag data and tagged friends with dedicated routes', () =
   assert.match(tagDetailScreenSource, /buildContactSections/);
 });
 
+test('tag detail can search unassigned friends and add one to the active tag', () => {
+  const tagsScreenSource = read('src/features/contacts/screens/FriendTagsScreen.tsx');
+  const tagDetailScreenSource = read('src/features/contacts/screens/FriendTagDetailScreen.tsx');
+
+  assert.doesNotMatch(tagsScreenSource, /categoryTitle|categoryDesc|introCard/);
+  assert.doesNotMatch(tagDetailScreenSource, /ListHeaderComponent|tagDetail\.summary/);
+  assert.match(tagDetailScreenSource, /fetchFriends\(\)/);
+  assert.match(tagDetailScreenSource, /assignFriendTag\(friend\.id, tagId\)/);
+  assert.match(tagDetailScreenSource, /BottomSheetModal/);
+  assert.match(tagDetailScreenSource, /candidateQuery/);
+  assert.match(tagDetailScreenSource, /person-add-outline/);
+
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const contacts = JSON.parse(read(`src/i18n/locales/${locale}.json`)).contacts;
+    assert.equal(contacts.tagsScreen.categoryTitle, undefined, `${locale} categoryTitle removed`);
+    assert.equal(contacts.tagsScreen.categoryDesc, undefined, `${locale} categoryDesc removed`);
+    const tagDetail = contacts.tagDetail;
+    assert.equal(tagDetail.summary, undefined, `${locale} tagDetail.summary removed`);
+    for (const key of [
+      'addFriends',
+      'searchPlaceholder',
+      'noCandidates',
+      'noMatch',
+      'candidatesLoadFailed',
+      'addFailedTitle',
+      'addFailed',
+      'addFriendAction',
+    ]) {
+      assert.ok(tagDetail[key], `${locale} tagDetail.${key}`);
+    }
+  }
+});
+
 test('contacts list screens support pull-to-refresh', () => {
   const screens = [
     {

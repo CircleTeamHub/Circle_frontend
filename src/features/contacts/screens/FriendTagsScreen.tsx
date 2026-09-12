@@ -38,11 +38,6 @@ const s = StyleSheet.create({
     paddingBottom: Spacing.xl,
     gap: Spacing.lg,
   },
-  introCard: {
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    gap: 6,
-  },
   stateBlock: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -178,18 +173,6 @@ export default function FriendTagsScreen() {
         flex: 1,
         backgroundColor: colors.background,
       },
-      introCard: {
-        backgroundColor: colors.surface,
-      },
-      introTitle: {
-        color: colors.text,
-        ...Typography.body,
-        fontWeight: '600' as const,
-      },
-      introCopy: {
-        color: colors.textSecondary,
-        ...Typography.small,
-      },
       listCard: {
         backgroundColor: colors.surface,
       },
@@ -322,10 +305,6 @@ export default function FriendTagsScreen() {
           />
         }
       >
-        <View style={[s.introCard, d.introCard]}>
-          <Text style={d.introTitle}>{t('contacts.tagsScreen.categoryTitle')}</Text>
-          <Text style={d.introCopy}>{t('contacts.tagsScreen.categoryDesc')}</Text>
-        </View>
         {stateBlock}
       </ScrollView>
       <Modal
