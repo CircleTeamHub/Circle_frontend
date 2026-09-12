@@ -15,7 +15,11 @@ import { MapSurface } from '@/features/location/components/map-surface';
 import {
   BASEMAP_ATTRIBUTION,
   BASEMAP_MAX_ZOOM,
+  gcj02ToWgs84,
+  getAmapScriptConfig,
+  getBasemapProvider,
   getBasemapUrlTemplate,
+  wgs84ToGcj02,
   type BasemapScheme,
 } from '@/features/location/utils/location-map';
 import type { PickedLocation } from '@/features/location/types';
@@ -104,6 +108,7 @@ function serializeForInlineScript(value: string) {
 function normalizeCandidate(
   value: unknown,
   selectedLabel: string,
+  coordinateSystem: 'wgs84' | 'gcj02',
 ): PickedLocation | null {
   if (!value || typeof value !== 'object') return null;
 
@@ -140,12 +145,97 @@ function normalizeCandidate(
     MAX_LOCATION_ADDRESS_LENGTH,
   );
 
+  // 高德渲染时地图页全程说 GCJ-02，减偏收在这里 —— 存库口径始终是 WGS-84。
+  const coordinate =
+    coordinateSystem === 'gcj02'
+      ? gcj02ToWgs84(candidate.latitude, candidate.longitude)
+      : { latitude: candidate.latitude, longitude: candidate.longitude };
+  if (!coordinate) return null;
+
   return {
     title: title || selectedLabel,
     address,
-    latitude: candidate.latitude,
-    longitude: candidate.longitude,
+    latitude: coordinate.latitude,
+    longitude: coordinate.longitude,
   };
+}
+
+type MapRuntime = 'leaflet' | 'amap';
+
+/**
+ * 地图运行时的初始化脚本。
+ *
+ * 两个分支都导出同一个 `createMapAdapter(latitude, longitude, onPick)`，于是下面
+ * 那段选点、反查、搜索的逻辑完全共享 —— 换底图只换这一段，不碰业务。
+ *
+ * 高德分支里的坐标**全程是 GCJ-02**：高德吐出来的就是 GCJ-02，原样用、原样发给
+ * 服务端（带 coordsys=gcj02）、原样 post 给 React 侧，由 React 侧统一减偏回
+ * WGS-84。这样加偏公式只有服务端和 React 侧两处实现，内联脚本里一行都没有。
+ */
+function buildLeafletRuntimeScript(scheme: BasemapScheme) {
+  return `
+    function createMapAdapter(latitude, longitude, onPick) {
+      if (typeof L === 'undefined') throw new Error('leaflet unavailable');
+      const map = L.map('map', { zoomControl: false }).setView([latitude, longitude], 15);
+      const retinaSuffix = window.devicePixelRatio > 1 ? '@2x' : '';
+      L.tileLayer('${getBasemapUrlTemplate(scheme)}'.replace('{r}', retinaSuffix), {
+        maxZoom: ${BASEMAP_MAX_ZOOM},
+        attribution: '${escapeHtml(BASEMAP_ATTRIBUTION)}'
+      }).addTo(map);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      const markerIcon = L.divIcon({
+        className: '',
+        html: '<div class="circleMarker"></div>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+      const marker = L.marker([latitude, longitude], { draggable: true, icon: markerIcon }).addTo(map);
+      map.on('click', (event) => onPick(event.latlng.lat, event.latlng.lng));
+      marker.on('dragend', () => {
+        const position = marker.getLatLng();
+        onPick(position.lat, position.lng);
+      });
+
+      return {
+        setMarker: (lat, lon) => marker.setLatLng([lat, lon]),
+        setCenter: (lat, lon, zoom) => map.setView([lat, lon], zoom)
+      };
+    }`;
+}
+
+function buildAmapRuntimeScript() {
+  return `
+    function createMapAdapter(latitude, longitude, onPick) {
+      if (typeof AMap === 'undefined') throw new Error('amap unavailable');
+      // 高德的坐标一律是 [经度, 纬度]，和这套栈其余地方的 (lat, lon) 顺序相反。
+      const map = new AMap.Map('map', {
+        center: [longitude, latitude],
+        zoom: 15,
+        resizeEnable: true
+      });
+      if (AMap.ToolBar) {
+        map.addControl(new AMap.ToolBar({ position: { right: '12px', bottom: '200px' } }));
+      }
+
+      const marker = new AMap.Marker({
+        position: [longitude, latitude],
+        draggable: true,
+        anchor: 'center',
+        content: '<div class="circleMarker"></div>'
+      });
+      map.add(marker);
+      map.on('click', (event) => onPick(event.lnglat.getLat(), event.lnglat.getLng()));
+      marker.on('dragend', () => {
+        const position = marker.getPosition();
+        onPick(position.getLat(), position.getLng());
+      });
+
+      return {
+        setMarker: (lat, lon) => marker.setPosition([lon, lat]),
+        setCenter: (lat, lon, zoom) => map.setZoomAndCenter(zoom, [lon, lat])
+      };
+    }`;
 }
 
 function buildMapHtml(
@@ -155,6 +245,8 @@ function buildMapHtml(
     'searchPlaceholder' | 'searchButton' | 'selectedLabel'
   >,
   scheme: BasemapScheme,
+  runtime: MapRuntime,
+  amapScript: { scriptUrl: string; securityCode: string } | null,
 ) {
   const safeTitle = escapeHtml(title);
   const safeAddress = escapeHtml(address);
@@ -169,9 +261,45 @@ function buildMapHtml(
     ? serializeForInlineScript(geocoderBaseUrl)
     : 'null';
   const useParentGeocoderBridge = Platform.OS === 'web';
-  const geocoderConnectSource = geocoderBaseUrl
-    ? `; connect-src ${escapeHtml(new URL(geocoderBaseUrl).origin)}`
+  const isAmap = runtime === 'amap' && amapScript !== null;
+
+  // 高德在大陆，坐标系全程 GCJ-02；其余情况仍是 WGS-84。
+  const scriptCoordinateSystem = serializeForInlineScript(
+    isAmap ? 'gcj02' : 'wgs84',
+  );
+
+  const imageSources = isAmap
+    ? 'https://*.amap.com https://*.autonavi.com'
+    : 'https://basemaps.cartocdn.com';
+  const scriptSources = isAmap
+    ? "'nonce-circle-map' https://webapi.amap.com https://*.amap.com"
+    : "'nonce-circle-map'";
+  const connectSources = [
+    ...(isAmap ? ['https://*.amap.com', 'https://*.autonavi.com'] : []),
+    ...(geocoderBaseUrl ? [new URL(geocoderBaseUrl).origin] : []),
+  ].map(escapeHtml);
+  const connectSource = connectSources.length
+    ? `; connect-src ${connectSources.join(' ')}`
     : '';
+  // 高德 2.0 用 Canvas/WebGL 渲染，会起 blob: worker。
+  const workerSource = isAmap ? '; worker-src blob:' : '';
+
+  // 安全密钥必须在 JS API 脚本**加载之前**写好，否则不生效。
+  const mapLibraryTags = isAmap
+    ? `${
+        amapScript.securityCode
+          ? `<script nonce="circle-map">window._AMapSecurityConfig = { securityJsCode: ${serializeForInlineScript(amapScript.securityCode)} };</script>`
+          : ''
+      }
+  <script nonce="circle-map" src="${escapeHtml(amapScript.scriptUrl)}"></script>`
+    : `<script nonce="circle-map">${LEAFLET_1_9_4_JS}</script>`;
+  const mapLibraryStyles = isAmap
+    ? ''
+    : `<style nonce="circle-map">${LEAFLET_1_9_4_CSS}</style>`;
+  const runtimeScript = isAmap
+    ? buildAmapRuntimeScript()
+    : buildLeafletRuntimeScript(scheme);
+
   const searchControls = geocoderBaseUrl
     ? `<div class="search">
       <input id="query" maxlength="120" placeholder="${safeSearchPlaceholder}" value="${safeTitle || safeAddress}">
@@ -182,8 +310,8 @@ function buildMapHtml(
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-circle-map'; style-src 'nonce-circle-map' 'unsafe-inline'; img-src https://basemaps.cartocdn.com data: blob:${geocoderConnectSource}">
-  <style nonce="circle-map">${LEAFLET_1_9_4_CSS}</style>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${scriptSources}; style-src 'nonce-circle-map' 'unsafe-inline'; img-src ${imageSources} data: blob:${connectSource}${workerSource}">
+  ${mapLibraryStyles}
   <style nonce="circle-map">
     html, body, #map { height: 100%; width: 100%; margin: 0; background: ${scheme === 'dark' ? '#0b0f19' : '#e8e5df'}; }
     .bottomSheet {
@@ -248,10 +376,11 @@ function buildMapHtml(
       <small id="picked-address">${safeAddress}</small>
     </div>
   </div>
-  <script nonce="circle-map">${LEAFLET_1_9_4_JS}</script>
+  ${mapLibraryTags}
   <script nonce="circle-map">
     const SELECTED_LABEL = ${scriptSelectedLabel};
     const GEOCODER_BASE_URL = ${scriptGeocoderBaseUrl};
+    const COORDINATE_SYSTEM = ${scriptCoordinateSystem};
     const USE_PARENT_GEOCODER_BRIDGE = ${useParentGeocoderBridge};
     const bridge = window.ReactNativeWebView || {
       postMessage: (data) => window.parent.postMessage(data, '*')
@@ -284,27 +413,9 @@ function buildMapHtml(
       });
     }
 
+${runtimeScript}
+
     try {
-      if (typeof L === 'undefined') throw new Error('leaflet unavailable');
-
-      const map = L.map('map', { zoomControl: false }).setView([${latitude}, ${longitude}], 15);
-      const retinaSuffix = window.devicePixelRatio > 1 ? '@2x' : '';
-      L.tileLayer('${getBasemapUrlTemplate(scheme)}'.replace('{r}', retinaSuffix), {
-        maxZoom: ${BASEMAP_MAX_ZOOM},
-        attribution: '${escapeHtml(BASEMAP_ATTRIBUTION)}'
-      }).addTo(map);
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-      const markerIcon = L.divIcon({
-        className: '',
-        html: '<div class="circleMarker"></div>',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
-      });
-      const marker = L.marker([${latitude}, ${longitude}], {
-        draggable: true,
-        icon: markerIcon
-      }).addTo(map);
       let picked = {
         title: ${scriptTitle} || SELECTED_LABEL,
         address: ${scriptAddress},
@@ -312,11 +423,13 @@ function buildMapHtml(
         longitude: ${longitude}
       };
 
+      const adapter = createMapAdapter(${latitude}, ${longitude}, (lat, lon) => reverseGeocode(lat, lon));
+
       function updatePicked(next) {
         picked = { ...picked, ...next };
         document.getElementById('picked-title').textContent = picked.title || SELECTED_LABEL;
         document.getElementById('picked-address').textContent = picked.address || '';
-        marker.setLatLng([picked.latitude, picked.longitude]);
+        adapter.setMarker(picked.latitude, picked.longitude);
         post({ type: 'location-changed', ...picked });
       }
 
@@ -345,7 +458,7 @@ function buildMapHtml(
       }
 
       function fetchReversePlace(lat, lon) {
-        return requestGeocoder('/reverse', { format: 'jsonv2', lat, lon });
+        return requestGeocoder('/reverse', { format: 'jsonv2', lat, lon, coordsys: COORDINATE_SYSTEM });
       }
 
       async function reverseGeocode(lat, lon) {
@@ -372,7 +485,7 @@ function buildMapHtml(
 
       async function refineInitialAddress() {
         if (!GEOCODER_BASE_URL) return;
-        const coordsOnly = /^\\s*-?\\d{1,3}(\\.\\d+)?\\s*,\\s*-?\\d{1,3}(\\.\\d+)?\\s*$/;
+        const coordsOnly = /^\s*-?\d{1,3}(\.\d+)?\s*,\s*-?\d{1,3}(\.\d+)?\s*$/;
         if (picked.address && !coordsOnly.test(picked.address)) return;
         const generation = pickGeneration;
         try {
@@ -394,14 +507,14 @@ function buildMapHtml(
         pickGeneration += 1;
         const generation = pickGeneration;
         try {
-          const rows = await requestGeocoder('/search', { format: 'jsonv2', limit: 1, q: query });
+          const rows = await requestGeocoder('/search', { format: 'jsonv2', limit: 1, q: query, coordsys: COORDINATE_SYSTEM });
           if (generation !== pickGeneration) return;
           if (!rows.length) return;
           const row = rows[0];
           const lat = Number(row.lat);
           const lon = Number(row.lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-          map.setView([lat, lon], 16);
+          adapter.setCenter(lat, lon, 16);
           updatePicked({
             title: row.name || query,
             address: row.display_name || query,
@@ -413,11 +526,6 @@ function buildMapHtml(
         }
       }
 
-      map.on('click', (event) => reverseGeocode(event.latlng.lat, event.latlng.lng));
-      marker.on('dragend', () => {
-        const pos = marker.getLatLng();
-        reverseGeocode(pos.lat, pos.lng);
-      });
       const searchButton = document.getElementById('search');
       const searchInput = document.getElementById('query');
       if (searchButton && searchInput) {
@@ -471,10 +579,35 @@ export function MapLocationPickerScreen({
     useState<PickedLocation>(initialLocation);
   useEffect(() => setCandidateLocation(initialLocation), [initialLocation]);
 
-  const mapHtml = useMemo(
-    () => buildMapHtml(initialLocation, labels, resolvedMode),
-    [initialLocation, labels, resolvedMode],
+  // 大陆且配了高德 key 才用高德渲染；其余情况（境外、未配 key）保持 Leaflet。
+  const amapScript = useMemo(
+    () =>
+      getBasemapProvider(
+        initialLocation.latitude,
+        initialLocation.longitude,
+      ) === 'amap'
+        ? getAmapScriptConfig()
+        : null,
+    [initialLocation.latitude, initialLocation.longitude],
   );
+  const coordinateSystem: 'wgs84' | 'gcj02' = amapScript ? 'gcj02' : 'wgs84';
+
+  const mapHtml = useMemo(() => {
+    // 高德只认 GCJ-02，初始中心点在进地图页之前就加好偏。
+    const shifted =
+      amapScript &&
+      wgs84ToGcj02(initialLocation.latitude, initialLocation.longitude);
+    const mapLocation = shifted
+      ? { ...initialLocation, ...shifted }
+      : initialLocation;
+    return buildMapHtml(
+      mapLocation,
+      labels,
+      resolvedMode,
+      amapScript ? 'amap' : 'leaflet',
+      amapScript,
+    );
+  }, [amapScript, initialLocation, labels, resolvedMode]);
 
   const handleRetry = useCallback(() => {
     setMapUnavailable(false);
@@ -499,14 +632,23 @@ export function MapLocationPickerScreen({
         return;
       }
 
-      const candidate = normalizeCandidate(payload, labels.selectedLabel);
+      const candidate = normalizeCandidate(
+        payload,
+        labels.selectedLabel,
+        coordinateSystem,
+      );
       if (!candidate) {
         Alert.alert(labels.invalidTitle, labels.invalidMessage);
         return;
       }
       setCandidateLocation(candidate);
     },
-    [labels.invalidMessage, labels.invalidTitle, labels.selectedLabel],
+    [
+      coordinateSystem,
+      labels.invalidMessage,
+      labels.invalidTitle,
+      labels.selectedLabel,
+    ],
   );
 
   const handleConfirm = useCallback(() => {

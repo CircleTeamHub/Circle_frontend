@@ -120,18 +120,35 @@ export function getOpenStreetMapTileUrl(
   return basemapTile(scheme, safeZoom, x, y, retina);
 }
 
-export function getOpenStreetMapPreviewTiles(
+/** 一个格子在预览图里的位置，与具体底图源无关。 */
+type TileCell = {
+  zoom: number;
+  x: number;
+  y: number;
+  left: number;
+  top: number;
+};
+
+type TileGrid = {
+  cells: TileCell[];
+  markerLeft: number;
+  markerTop: number;
+};
+
+/**
+ * 铺满一块 width×height 画布需要哪些瓦片、各自摆在哪。
+ *
+ * 只算几何，不碰 URL —— 于是 CARTO 与天地图能共用同一套摆放逻辑，换底图源只是
+ * 把格子换成另一个服务的地址。
+ */
+function computeTileGrid(
   latitude: number,
   longitude: number,
   width: number,
   height: number,
-  zoom = 15,
-  { scheme = 'light', retina = true }: BasemapOptions = {},
-): {
-  tiles: { url: string; left: number; top: number }[];
-  markerLeft: number;
-  markerTop: number;
-} | null {
+  zoom: number,
+  maxZoom: number,
+): TileGrid | null {
   if (
     !hasValidLocationCoordinates(latitude, longitude) ||
     !Number.isFinite(width) ||
@@ -141,7 +158,7 @@ export function getOpenStreetMapPreviewTiles(
   ) {
     return null;
   }
-  const safeZoom = Math.min(19, Math.max(0, Math.round(zoom)));
+  const safeZoom = Math.min(maxZoom, Math.max(0, Math.round(zoom)));
   const tileCount = 2 ** safeZoom;
   const worldSize = tileCount * 256;
   const mercatorLatitude = Math.min(
@@ -164,23 +181,50 @@ export function getOpenStreetMapPreviewTiles(
   const maxTileX = Math.floor((leftEdge + width - 1) / 256);
   const minTileY = Math.floor(topEdge / 256);
   const maxTileY = Math.floor((topEdge + height - 1) / 256);
-  const tiles: { url: string; left: number; top: number }[] = [];
+  const cells: TileCell[] = [];
 
   for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
     if (tileY < 0 || tileY >= tileCount) continue;
     for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
       const wrappedTileX = ((tileX % tileCount) + tileCount) % tileCount;
-      tiles.push({
-        url: basemapTile(scheme, safeZoom, wrappedTileX, tileY, retina),
+      cells.push({
+        zoom: safeZoom,
+        x: wrappedTileX,
+        y: tileY,
         left: tileX * 256 - leftEdge,
         top: tileY * 256 - topEdge,
       });
     }
   }
   return {
-    tiles,
+    cells,
     markerLeft: width / 2,
     markerTop: height / 2,
+  };
+}
+
+export function getOpenStreetMapPreviewTiles(
+  latitude: number,
+  longitude: number,
+  width: number,
+  height: number,
+  zoom = 15,
+  { scheme = 'light', retina = true }: BasemapOptions = {},
+): {
+  tiles: { url: string; left: number; top: number }[];
+  markerLeft: number;
+  markerTop: number;
+} | null {
+  const grid = computeTileGrid(latitude, longitude, width, height, zoom, 19);
+  if (!grid) return null;
+  return {
+    tiles: grid.cells.map((cell) => ({
+      url: basemapTile(scheme, cell.zoom, cell.x, cell.y, retina),
+      left: cell.left,
+      top: cell.top,
+    })),
+    markerLeft: grid.markerLeft,
+    markerTop: grid.markerTop,
   };
 }
 
@@ -278,4 +322,98 @@ export function buildSystemMapUrls(
     android: `geo:${coordinates}?q=${coordinates}(${encodedLabel})`,
     fallback: `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=16/${latitude}/${longitude}`,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 底图源
+// ---------------------------------------------------------------------------
+
+/**
+ * 底图数据从哪来。
+ *
+ * 绝大多数用户在大陆，而 CARTO 的 OSM 瓦片在境内既没有 CDN 节点、中文标注也稀疏。
+ * 境内因此改用高德的地图 JS API，境外继续用 CARTO —— 高德在境外基本没有数据
+ * （实测 z15 的圣何塞瓦片只有 179 字节，是一张空白图）。
+ *
+ * 为什么不是天地图：它在坐标系上本来更合适（CGCS2000 与 WGS-84 在地图尺度上无
+ * 差别，不需要任何偏移转换），但实测其瓦片接口、主站与开发者站**对境外一律拒绝
+ * 访问**（CloudWAF 418 / 连接超时）。也就是说在境外既申请不到密钥，也无法验收。
+ * 高德则全线可达，境外也能开发和自测。
+ */
+export type BasemapProvider = 'carto' | 'amap';
+
+const AMAP_JS_API_ORIGIN = 'https://webapi.amap.com';
+const AMAP_ATTRIBUTION = '© 高德地图';
+
+function readAmapJsKey(): string {
+  // Expo 是按字面量静态替换 process.env.EXPO_PUBLIC_*，这里只能写成完整形式。
+  return (process.env.EXPO_PUBLIC_AMAP_JS_KEY ?? '').trim();
+}
+
+function readAmapSecurityCode(): string {
+  return (process.env.EXPO_PUBLIC_AMAP_SECURITY_CODE ?? '').trim();
+}
+
+/**
+ * 这个坐标该用哪个底图源。
+ *
+ * 没配高德 key，或者坐标在境外，都回落到 CARTO —— 回落后的表现与接入前完全一致，
+ * 不会退步成白图。
+ */
+export function getBasemapProvider(
+  latitude: number,
+  longitude: number,
+  amapJsKey = readAmapJsKey(),
+): BasemapProvider {
+  if (!amapJsKey) return 'carto';
+  if (!hasValidLocationCoordinates(latitude, longitude)) return 'carto';
+  return isOutOfChina(latitude, longitude) ? 'carto' : 'amap';
+}
+
+export function getBasemapAttribution(provider: BasemapProvider): string {
+  return provider === 'amap' ? AMAP_ATTRIBUTION : BASEMAP_ATTRIBUTION;
+}
+
+/**
+ * 地图页要加载的高德 JS API 地址。未配 key 时返回 null，调用方据此回落到 Leaflet。
+ *
+ * 2021-12-02 之后申请的 key 必须搭配安全密钥使用，而且那段配置必须在脚本加载**之前**
+ * 执行，否则不生效 —— 所以这里把两样一起交给调用方。
+ */
+export function getAmapScriptConfig(
+  amapJsKey = readAmapJsKey(),
+  securityCode = readAmapSecurityCode(),
+): { scriptUrl: string; securityCode: string } | null {
+  if (!amapJsKey) return null;
+  return {
+    // plugin 必须在这里声明：JS API 的插件是随主脚本一起同步加载的，
+    // 漏了它 AMap.ToolBar 永远不存在，地图上就没有缩放控件。
+    scriptUrl: `${AMAP_JS_API_ORIGIN}/maps?v=2.0&key=${encodeURIComponent(amapJsKey)}&plugin=AMap.ToolBar`,
+    securityCode,
+  };
+}
+
+/**
+ * GCJ-02 → WGS-84。境外坐标原样返回，非法坐标返回 null。
+ *
+ * 高德吐出来的每一个坐标（点击、拖拽、定位）都是 GCJ-02，而这套栈的存储口径是
+ * WGS-84，所以进 App 之前必须在这里减偏。加偏公式没有闭式反解，用不动点迭代逼近：
+ * 拿当前猜测正向加偏，把与目标的差额补回猜测里。收敛极快，三轮就到厘米级。
+ */
+export function gcj02ToWgs84(
+  latitude: number,
+  longitude: number,
+): { latitude: number; longitude: number } | null {
+  if (!hasValidLocationCoordinates(latitude, longitude)) return null;
+  if (isOutOfChina(latitude, longitude)) return { latitude, longitude };
+
+  let guessLatitude = latitude;
+  let guessLongitude = longitude;
+  for (let round = 0; round < 5; round += 1) {
+    const shifted = wgs84ToGcj02(guessLatitude, guessLongitude);
+    if (!shifted) return null;
+    guessLatitude += latitude - shifted.latitude;
+    guessLongitude += longitude - shifted.longitude;
+  }
+  return { latitude: guessLatitude, longitude: guessLongitude };
 }
