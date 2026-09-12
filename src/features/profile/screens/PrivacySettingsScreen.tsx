@@ -306,7 +306,6 @@ export default function PrivacySettingsScreen() {
               {
                 id: 'online-time',
                 labelKey: 'settingsDetails.privacy.onlineTime',
-                subtitleKey: 'settingsDetails.privacy.onlineTimeHint',
                 type: 'toggle',
                 // 滚动发布期间旧服务端不返回这三项,缺省按 true(与后端默认一致)。
                 value: currentSettings.shareOnlineStatus ?? true,
@@ -317,7 +316,6 @@ export default function PrivacySettingsScreen() {
               {
                 id: 'single-typing',
                 labelKey: 'settingsDetails.privacy.singleTyping',
-                subtitleKey: 'settingsDetails.privacy.singleTypingHint',
                 type: 'toggle',
                 value: currentSettings.shareTypingInDirect ?? true,
                 onValueChange: (value) =>
@@ -327,7 +325,6 @@ export default function PrivacySettingsScreen() {
               {
                 id: 'group-typing',
                 labelKey: 'settingsDetails.privacy.groupTyping',
-                subtitleKey: 'settingsDetails.privacy.groupTypingHint',
                 type: 'toggle',
                 value: currentSettings.shareTypingInGroup ?? true,
                 onValueChange: (value) =>

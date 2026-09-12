@@ -48,7 +48,6 @@ test('the privacy screen binds each switch to its server field and mirrors the b
     assert.match(screen, new RegExp(`patchSettings\\(\\{ ${field}: value \\}\\)`), field);
     assert.match(defaults, new RegExp(`${field}: true`), field);
     assert.match(screen, new RegExp(`settingsDetails\\.privacy\\.${ROW_LABELS[field]}'`));
-    assert.match(screen, new RegExp(`settingsDetails\\.privacy\\.${ROW_LABELS[field]}Hint'`));
   }
   // 三项都不再走本地 useAppSettingsStore 的摆设开关。
   assert.doesNotMatch(screen, /setSetting\(/);
@@ -107,11 +106,17 @@ test('presence protocol: detail query, last-seen + hidden broadcast, header hide
   assert.match(hook, /setInterval\(\(\) => setNow\(Date\.now\(\)\), LAST_SEEN_TICK_MS\)/);
 });
 
-test('last-seen labels and the three hints exist in all five locales', () => {
+test('last-seen labels exist in all five locales and the switch rows carry no hint', () => {
   for (const lng of LOCALES) {
     const dict = locale(lng);
     assert.ok(dict['chat.detail.lastSeenJustNow'], `${lng}: lastSeenJustNow`);
     for (const unit of ['Minutes', 'Hours', 'Days']) {
+      // 无后缀基键是必须的:i18next 在同一语言内先试带后缀的键,missing 才试基键,
+      // 之后才跨语言回落。只写 _other 的话 zh 被问到 _one 会直接掉进 en ——
+      // 中文界面上出现英文,而且没有任何报错。仓库里每个计数键都是这么写的。
+      const base = dict[`chat.detail.lastSeen${unit}`];
+      assert.ok(base, `${lng}: lastSeen${unit} base key (plural fallback)`);
+      assert.match(base, /\{\{count\}\}/, `${lng}: lastSeen${unit} needs count`);
       const other = dict[`chat.detail.lastSeen${unit}_other`];
       assert.ok(other, `${lng}: lastSeen${unit}_other`);
       assert.match(other, /\{\{count\}\}/, `${lng}: lastSeen${unit}_other needs count`);
@@ -121,8 +126,14 @@ test('last-seen labels and the three hints exist in all five locales', () => {
         assert.match(one, /\{\{count\}\}/);
       }
     }
-    for (const hint of ['onlineTimeHint', 'singleTypingHint', 'groupTypingHint']) {
-      assert.ok(dict[`settingsDetails.privacy.${hint}`]?.trim(), `${lng}: ${hint}`);
+    // 三行开关只留标题,不带说明文字(用户拍板)。
+    for (const label of ['onlineTime', 'singleTyping', 'groupTyping']) {
+      assert.ok(dict[`settingsDetails.privacy.${label}`]?.trim(), `${lng}: ${label}`);
+      assert.equal(
+        dict[`settingsDetails.privacy.${label}Hint`],
+        undefined,
+        `${lng}: ${label}Hint should be gone`,
+      );
     }
   }
 });
