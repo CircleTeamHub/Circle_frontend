@@ -82,6 +82,30 @@ export function readViewerTypingPolicy(userId: string): ViewerTypingPolicy {
   }
 }
 
+/**
+ * 阅后即焚「开启时间」的唯一归一化口。
+ *
+ * 过期判定要求开启时间可解析(见 purgeExpiredBurnMessages),所以每个入库点都必须
+ * 保证:关着 → null;开着 → 一个可解析的时刻。少收一处的表现是「界面显示已开启、
+ * 消息永不焚毁」,而且不会报任何错 —— 前两轮就是逐个补,补漏了第三个入口。
+ *
+ * @param known 该入库点已知的上一个开启时间(没有就传 null)
+ */
+function normalizeBurnStartedAt(
+  durationSec: number,
+  incoming: string | null | undefined,
+  known: string | null,
+): string | null {
+  if (durationSec <= 0) return null;
+  if (typeof incoming === 'string' && Number.isFinite(Date.parse(incoming))) {
+    return incoming;
+  }
+  // incoming 明确是 null(旧服务端/滚动发布)或不可解析:退到已知值,再退到此刻。
+  if (incoming === undefined && known !== null) return known;
+  if (known !== null && Number.isFinite(Date.parse(known))) return known;
+  return new Date().toISOString();
+}
+
 function normalizeViewerSelfDestructSec(seconds: number): number | null {
   return isBurnDurationChoice(seconds) ? seconds : null;
 }
@@ -756,17 +780,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         // 缓存策略写失败不应影响隐私设置保存；本次进程仍立即执行清理。
       }
     }
-    const nextStartedAt =
-      startedAt !== undefined
-        ? startedAt
-        : normalized <= 0
-          ? null
-          : // 旧服务端的 GET 不带 messageSelfDestructStartedAt。开着却没有开启
-            // 时间时过期判定一条都不命中 —— 设置页显示已开启,消息永不焚毁,
-            // 而且不报错。与会话级 applyBurnDuration 同一条兜底:退到此刻。
-            ((viewerSelfDestructSec === normalized
-              ? viewerSelfDestructStartedAt
-              : null) ?? new Date().toISOString());
+    const nextStartedAt = normalizeBurnStartedAt(
+      normalized,
+      startedAt,
+      viewerSelfDestructSec === normalized ? viewerSelfDestructStartedAt : null,
+    );
     // 开启时间也是策略的一部分:它决定哪些缓存消息已到期、下一次清理几点跑。
     // 只比 duration 的话,同档位换开启时间(冷启动只有缓存档位没有缓存开启时间、
     // 或者另一台设备按同档位重置)会保住 epoch 又跳过清理 —— 已过期的消息就
@@ -795,9 +813,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const current = get().globalBurnPoliciesByConversation[conversationId]?.[
       userId
     ];
+    const nextStartedAt = normalizeBurnStartedAt(
+      normalized,
+      startedAt,
+      current?.startedAt ?? null,
+    );
     if (
       current?.durationSec === normalized &&
-      current.startedAt === startedAt
+      current.startedAt === nextStartedAt
     ) {
       return;
     }
@@ -806,7 +829,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         ...get().globalBurnPoliciesByConversation,
         [conversationId]: {
           ...(get().globalBurnPoliciesByConversation[conversationId] ?? {}),
-          [userId]: { userId, durationSec: normalized, startedAt },
+          [userId]: { userId, durationSec: normalized, startedAt: nextStartedAt },
         },
       },
       selfDestructPolicyEpoch: get().selfDestructPolicyEpoch + 1,
@@ -816,7 +839,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       get().setViewerSelfDestructSec(
         normalized,
         { remoteRefresh: true },
-        startedAt,
+        nextStartedAt,
       );
     }
     void get().purgeExpiredBurnMessages();
@@ -1419,15 +1442,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const current = conversations[index];
     // 同一档位重新开启时 startedAt 会变，不能因为 duration 没变就短路；
     // 否则另一端会继续沿用旧的开启时间，误删本次开启前的消息。
-    const nextStartedAt =
-      burnStartedAt !== undefined
-        ? burnStartedAt
-        : (burnDurationSec ?? 0) <= 0
-          ? null
-          : // 旧服务端只回 burnDurationSec。首次开启时没有任何已知开启时间,
-            // 而过期判定要求开启时间有限 —— 不兜底就变成「界面显示已开启、
-            // 消息永不焚毁」,而且不会报错。退到客户端此刻,窗口从现在起算。
-            (current.burnStartedAt ?? new Date().toISOString());
+    const nextStartedAt = normalizeBurnStartedAt(
+      burnDurationSec ?? 0,
+      burnStartedAt,
+      current.burnStartedAt ?? null,
+    );
     if (
       (current.burnDurationSec ?? null) === burnDurationSec &&
       (current.burnStartedAt ?? null) === nextStartedAt

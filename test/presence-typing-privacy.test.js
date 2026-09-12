@@ -104,6 +104,26 @@ test('presence protocol: detail query, last-seen + hidden broadcast, header hide
   const hook = read('src/chat-core/use-peer-presence.ts');
   assert.match(hook, /describeLastSeen\(lastSeenAt, now\)/);
   assert.match(hook, /setInterval\(\(\) => setNow\(Date\.now\(\)\), LAST_SEEN_TICK_MS\)/);
+  // 查询收在 hook 里,并且跟着连接状态重跑:socket 没连上时 queryChatPresence
+  // 是空操作,页面各自在挂载时查一次的话,冷启动/重连期间打开的页面会一直停在
+  // 「未知」。两个消费方(聊天头部、资料页)因此都不再自己发查询。
+  assert.match(hook, /const connected = useChatStore\(\(state\) => state\.connected\)/);
+  assert.match(hook, /if \(!userId \|\| !connected\) return;\s*queryChatPresence\(\[userId\]\);/);
+  assert.match(hook, /\}, \[userId, connected\]\)/);
+  for (const consumer of [
+    'src/features/chat/screens/ChatDetailScreen.tsx',
+    'src/features/user/screens/UserProfileScreen.tsx',
+  ]) {
+    assert.doesNotMatch(read(consumer), /queryChatPresence/, consumer);
+  }
+
+  // 阅后即焚「开启时间」的归一化必须只有一处:三个入库点各写一遍的话,
+  // 补漏一个的表现是「界面显示已开启、消息永不焚毁」且不报错。
+  assert.equal(
+    (store.match(/normalizeBurnStartedAt\(/g) ?? []).length,
+    4,
+    '一处定义 + 三个入库点各调用一次',
+  );
 });
 
 test('last-seen labels exist in all five locales and the switch rows carry no hint', () => {

@@ -124,7 +124,6 @@ import {
   fetchMessageReaders,
 } from '@/chat-core/api';
 import {
-  queryChatPresence,
   revokeChatMessage,
   sendChatEditMessage,
   sendChatReaction,
@@ -1316,12 +1315,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       messageID: searchedMsgID,
     });
   }, [conversationID, searchedMsgID, sourceID]);
-
-  // 进页查询一次初始在线状态;后续变化由服务端上下线广播直接驱动 store。
-  useEffect(() => {
-    if (!peerImId) return;
-    queryChatPresence([peerImId]);
-  }, [peerImId]);
 
   // FlatList 用 inverted 渲染：index 0 = 最新消息，自然停在底部。
   // 因此把按 height 升序的 messages 反转一次，新到旧排列。

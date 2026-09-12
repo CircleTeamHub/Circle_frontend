@@ -14,7 +14,6 @@ import { MemberName } from '@/components/ui/member-name';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { ensureDirectConversation } from '@/chat-core/client';
-import { queryChatPresence } from '@/chat-core/socket-manager';
 import { usePeerPresence } from '@/chat-core/use-peer-presence';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { createDirectCall } from '@/services/api/calls';
@@ -515,10 +514,6 @@ export default function UserProfileScreen() {
   // 时也没什么可查。后续上下线广播直接更新 chat store,这里只订阅这一位。
   const presenceUserId = isCurrentUser ? null : (remoteProfile?.id ?? null);
   const peerPresence = usePeerPresence(presenceUserId);
-  useEffect(() => {
-    if (!presenceUserId) return;
-    queryChatPresence([presenceUserId]);
-  }, [presenceUserId]);
   const presenceTint = peerPresence.online
     ? colors.online
     : colors.textSecondary;

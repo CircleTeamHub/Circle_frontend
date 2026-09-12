@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { describeLastSeen, LAST_SEEN_LABEL_KEYS } from './last-seen';
+import { queryChatPresence } from './socket-manager';
 import { useChatStore } from './store';
 
 /** 「N 分钟前在线」的刷新节拍:文案只显示到分钟,更密没有意义。 */
@@ -18,12 +19,19 @@ export interface PeerPresence {
 }
 
 /**
- * 某个用户的在线状态 + 文案(聊天头部等处共用)。
+ * 某个用户的在线状态 + 文案(聊天头部、资料页共用)。
+ *
  * 只订阅这一位的切片,别人上下线不触发重渲染;离线且有最近在线时刻时每分钟
- * 刷一次文案。查询本身由页面在进页时发(queryChatPresence),这里只消费 store。
+ * 刷一次文案。查询也收在这里:socket 没连上时 queryChatPresence 是个空操作,
+ * 页面各自在挂载时查一次的话,冷启动/重连期间打开的页面会一直停在「未知」。
  */
 export function usePeerPresence(userId: string | null): PeerPresence {
   const { t } = useTranslation();
+  const connected = useChatStore((state) => state.connected);
+  useEffect(() => {
+    if (!userId || !connected) return;
+    queryChatPresence([userId]);
+  }, [userId, connected]);
   const online = useChatStore((state) =>
     userId != null ? state.onlineByUser[userId] : undefined,
   );

@@ -242,15 +242,17 @@ test('user profile screen refreshes profile data when returning to focus', () =>
 // 「显示在线时间」时整行不画),原先那份「只有在线/离线」的断言已经过时 ——
 // 现在的不变式在下面那条 'shows the peer online state through the shared
 // presence channel' 里，这里只留「自己的资料不查也不展示」这一条。
-test('user profile screen never queries presence for the current user', () => {
+test('user profile screen never asks for presence of the current user', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/user/screens/UserProfileScreen.tsx'),
     'utf8',
   );
 
-  assert.match(source, /queryChatPresence\(\[presenceUserId\]\)/);
+  // 自己的在线状态没有意义:传 null 进去,hook 就不会发查询。
   assert.match(source, /const presenceUserId = isCurrentUser \? null :/);
-  assert.match(source, /if \(!presenceUserId\) return;/);
+  // 查询本身收在 usePeerPresence 里,页面不再各写一遍(各写一遍正是漏掉
+  // 「socket 还没连上」那种情况的原因)。
+  assert.doesNotMatch(source, /queryChatPresence/);
 });
 
 test('user profile route helpers preserve scope for the request form', () => {
@@ -599,7 +601,6 @@ test('user profile shows the peer online state through the shared presence chann
 
   // 与聊天头部同一份数据源:资料接口不带在线状态,统一走 chat-core presence。
   assert.match(source, /usePeerPresence\(presenceUserId\)/);
-  assert.match(source, /queryChatPresence\(\[presenceUserId\]\)/);
   // 自己的在线状态没有意义;profileId 未加载时也没有可查的对象。
   assert.match(
     source,
