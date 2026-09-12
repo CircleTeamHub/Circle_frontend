@@ -1822,8 +1822,6 @@
       "loadFailed": "No se pudieron cargar las etiquetas",
       "loading": "Cargando etiquetas...",
       "empty": "No hay etiquetas definidas",
-      "categoryTitle": "Categorías de amigos",
-      "categoryDesc": "Ver amigos por etiquetas para acceder rápido a grupos concretos.",
       "friendCount": "{{count}} amigos",
       "viewByTag": "Ver amigos por etiqueta",
       "addTag": "Crear etiqueta",
@@ -1836,7 +1834,14 @@
       "loadFailed": "No se pudieron cargar los amigos de la etiqueta",
       "loading": "Cargando amigos de la etiqueta...",
       "empty": "No hay amigos en esta etiqueta",
-      "summary": "Amigos de esta etiqueta agrupados alfabéticamente."
+      "addFriends": "Añadir amigos",
+      "searchPlaceholder": "Buscar amigos por nombre o cuenta",
+      "noCandidates": "No hay amigos disponibles para añadir",
+      "noMatch": "No hay amigos coincidentes",
+      "candidatesLoadFailed": "No se pudieron cargar los amigos",
+      "addFailedTitle": "No se pudo añadir al amigo",
+      "addFailed": "No se pudo añadir este amigo a la etiqueta. Inténtalo de nuevo.",
+      "addFriendAction": "Añadir a {{name}} a esta etiqueta"
     },
     "groupsScreen": {
       "title": "Grupos",

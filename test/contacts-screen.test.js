@@ -27,18 +27,16 @@ test('contacts quick actions keep the agreed order and entries', () => {
   );
   const ids = [...block.matchAll(/id: '([\w-]+)'/g)].map((match) => match[1]);
 
-  // 顺序是产品定的；朋友圈入口是 #195 从发现页搬过来的，圈子行也在那时改用
-  // discover.management 文案。这里钉住整张列表，避免哪次重排又把它们挤掉。
+  // 顺序是产品定的；朋友圈入口归联系人，圈子管理归动态广场，避免入口重复。
   assert.deepEqual(ids, [
     'new-friends',
     'groups',
     'seats',
     'moments',
-    'circles',
     'tags',
   ]);
   assert.match(block, /id: 'moments'[^}]*key: 'discover\.moments'/);
-  assert.match(block, /id: 'circles'[^}]*key: 'discover\.management'/);
+  assert.doesNotMatch(block, /id: 'circles'/);
 });
 
 test('new friends screen exists as a friend-activity inbox with per-item read flow', () => {
@@ -90,6 +88,39 @@ test('tags screens load tag data and tagged friends with dedicated routes', () =
   assert.match(tagsScreenSource, /fetchFriendsByTag/);
   assert.match(tagDetailScreenSource, /fetchFriendsByTag/);
   assert.match(tagDetailScreenSource, /buildContactSections/);
+});
+
+test('tag detail can search unassigned friends and add one to the active tag', () => {
+  const tagsScreenSource = read('src/features/contacts/screens/FriendTagsScreen.tsx');
+  const tagDetailScreenSource = read('src/features/contacts/screens/FriendTagDetailScreen.tsx');
+
+  assert.doesNotMatch(tagsScreenSource, /categoryTitle|categoryDesc|introCard/);
+  assert.doesNotMatch(tagDetailScreenSource, /ListHeaderComponent|tagDetail\.summary/);
+  assert.match(tagDetailScreenSource, /fetchFriends\(\)/);
+  assert.match(tagDetailScreenSource, /assignFriendTag\(friend\.id, tagId\)/);
+  assert.match(tagDetailScreenSource, /BottomSheetModal/);
+  assert.match(tagDetailScreenSource, /candidateQuery/);
+  assert.match(tagDetailScreenSource, /person-add-outline/);
+
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const contacts = JSON.parse(read(`src/i18n/locales/${locale}.json`)).contacts;
+    assert.equal(contacts.tagsScreen.categoryTitle, undefined, `${locale} categoryTitle removed`);
+    assert.equal(contacts.tagsScreen.categoryDesc, undefined, `${locale} categoryDesc removed`);
+    const tagDetail = contacts.tagDetail;
+    assert.equal(tagDetail.summary, undefined, `${locale} tagDetail.summary removed`);
+    for (const key of [
+      'addFriends',
+      'searchPlaceholder',
+      'noCandidates',
+      'noMatch',
+      'candidatesLoadFailed',
+      'addFailedTitle',
+      'addFailed',
+      'addFriendAction',
+    ]) {
+      assert.ok(tagDetail[key], `${locale} tagDetail.${key}`);
+    }
+  }
 });
 
 test('contacts list screens support pull-to-refresh', () => {
@@ -154,7 +185,7 @@ test('contacts list screens support pull-to-refresh', () => {
     );
     assert.match(
       screen.source,
-      /if \(mountedRef\.current\) setLoading\(false\)|if \(!isCancelled\(\)\) \{\s*setLoading\(false\);?\s*\}/,
+      /if \(mountedRef\.current(?:\s*&&[^)]*)?\) setLoading\(false\)|if \(!isCancelled\(\)\) \{\s*setLoading\(false\);?\s*\}/,
       `${screen.name} should guard load cleanup by mount state`,
     );
     assert.match(
