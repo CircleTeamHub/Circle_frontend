@@ -902,6 +902,30 @@ test('burn expiry removes both cached messages and the conversation preview', ()
   assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
 });
 
+test('purging without a local timeline preserves the server conversation preview', () => {
+  const { useChatStore } = loadChatStore();
+  const preview = msg({
+    id: 'server-preview-without-cache',
+    createdAt: new Date().toISOString(),
+  });
+  const store = useChatStore.getState();
+
+  // Android dev clients may not have the SQLCipher build yet, so no local
+  // timeline exists when the REST snapshot lands. That must not be treated as
+  // proof that the server preview was deleted.
+  store.setConversations([
+    conversation({
+      lastMessage: preview,
+      lastMessageAt: preview.createdAt,
+    }),
+  ]);
+
+  assert.equal(
+    useChatStore.getState().conversations[0].lastMessage?.id,
+    preview.id,
+  );
+});
+
 test('burn policies never retroactively purge messages from before they were enabled', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
@@ -958,6 +982,7 @@ test('burn expiry clears the stale unread badge with its expired preview', () =>
     conversation({
       id: 'conv-1',
       burnDurationSec: 60,
+      burnStartedAt: new Date(Date.now() - 180_000).toISOString(),
       lastMessage: expired,
       lastMessageAt: expired.createdAt,
       unreadCount: 3,

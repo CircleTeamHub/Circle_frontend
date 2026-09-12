@@ -817,10 +817,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       readWatermarks,
       conversations,
     );
-    set({
-      conversations: sortConversations(
-        conversations
-          .map((c) => reconcileDeletedPreview(c, messagesByConversation[c.id]))
+    const reconciledConversations = sortConversations(
+      conversations
+        .map((c) => reconcileDeletedPreview(c, messagesByConversation[c.id]))
           // 快照是请求发出那一刻的事实。这段时间里本账号可能已经在另一台
           // 设备上读过(chat:read 先到、会话还不在 store 里,applyRead 当时
           // 无从收敛),或者本机刚清空过 —— 直接装进来就是红点/预览回退,
@@ -834,7 +833,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               currentUserId,
             ),
           ),
-      ),
+    );
+    set({
+      conversations: reconciledConversations,
       // 只有全量拉取会走到这里(upsertConversation 不置位)。
       conversationsSnapshotLoaded: true,
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
@@ -1374,6 +1375,32 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           policy.durationSec > 0 && typeof policy.startedAt === 'string',
       );
       const timeline = messagesByConversation[conversation.id];
+      const expiryFor = (message: ChatMessageDto): number | null => {
+        const createdAt = Date.parse(message.createdAt);
+        if (!Number.isFinite(createdAt)) return null;
+        const expiries: number[] = [];
+        if (
+          conversationSeconds &&
+          Number.isFinite(burnStartMs) &&
+          createdAt >= burnStartMs
+        ) {
+          expiries.push(createdAt + conversationSeconds * 1000);
+        }
+        if (
+          viewerSeconds &&
+          Number.isFinite(viewerStartMs) &&
+          createdAt >= viewerStartMs
+        ) {
+          expiries.push(createdAt + viewerSeconds * 1000);
+        }
+        for (const policy of globalWindows) {
+          const startedAtMs = Date.parse(policy.startedAt);
+          if (Number.isFinite(startedAtMs) && createdAt >= startedAtMs) {
+            expiries.push(createdAt + policy.durationSec * 1000);
+          }
+        }
+        return expiries.length > 0 ? Math.min(...expiries) : null;
+      };
       if (conversationSeconds && burnStart && burnCutoff) {
         localPurges.push({
           conversationId: conversation.id,
@@ -1391,22 +1418,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         });
       }
       const kept = (timeline ?? []).filter((m) => {
-        const createdAt = Date.parse(m.createdAt);
-        if (!Number.isFinite(createdAt)) return true;
-        const expiries: number[] = [];
-        if (conversationSeconds && Number.isFinite(burnStartMs) && createdAt >= burnStartMs) {
-          expiries.push(createdAt + conversationSeconds * 1000);
-        }
-        if (viewerSeconds && Number.isFinite(viewerStartMs) && createdAt >= viewerStartMs) {
-          expiries.push(createdAt + viewerSeconds * 1000);
-        }
-        for (const policy of globalWindows) {
-          const startedAtMs = Date.parse(policy.startedAt);
-          if (Number.isFinite(startedAtMs) && createdAt >= startedAtMs) {
-            expiries.push(createdAt + policy.durationSec * 1000);
-          }
-        }
-        return expiries.length === 0 || Math.min(...expiries) > now;
+        const expiresAt = expiryFor(m);
+        return expiresAt === null || expiresAt > now;
       });
       const preview = conversation.lastMessage;
       const schedulableMessages =
@@ -1414,22 +1427,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           ? [...kept, preview]
           : kept;
       for (const message of schedulableMessages) {
-        const createdAt = Date.parse(message.createdAt);
-        if (!Number.isFinite(createdAt)) continue;
-        const expiries: number[] = [];
-        if (conversationSeconds && Number.isFinite(burnStartMs) && createdAt >= burnStartMs) {
-          expiries.push(createdAt + conversationSeconds * 1000);
-        }
-        if (viewerSeconds && Number.isFinite(viewerStartMs) && createdAt >= viewerStartMs) {
-          expiries.push(createdAt + viewerSeconds * 1000);
-        }
-        for (const policy of globalWindows) {
-          const startedAtMs = Date.parse(policy.startedAt);
-          if (Number.isFinite(startedAtMs) && createdAt >= startedAtMs) {
-            expiries.push(createdAt + policy.durationSec * 1000);
-          }
-        }
-        const expiresAt = expiries.length > 0 ? Math.min(...expiries) : null;
+        const expiresAt = expiryFor(message);
         if (expiresAt !== null && expiresAt > now && (nextExpiryAt === null || expiresAt < nextExpiryAt)) {
           nextExpiryAt = expiresAt;
         }
@@ -1439,7 +1437,17 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         nextTimelines[conversation.id] = kept;
       }
 
-      if (preview && !kept.some((message) => message.id === preview.id)) {
+      // A conversation snapshot can arrive before its local timeline. In that
+      // state `kept` is empty by definition, so using membership alone would
+      // erase every server preview on Android builds where SQLite is not yet
+      // available. The preview itself carries enough information to determine
+      // expiry; an unloaded/empty timeline is never proof of deletion.
+      const previewExpiresAt = preview ? expiryFor(preview) : null;
+      if (
+        preview &&
+        previewExpiresAt !== null &&
+        previewExpiresAt <= now
+      ) {
         const replacement = kept.length > 0 ? kept[kept.length - 1] : null;
         const sanitized = {
           ...conversation,
