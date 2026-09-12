@@ -13,6 +13,15 @@ test('tabs keep per-tab stack state (popToTopOnBlur must stay off)', () => {
   assert.doesNotMatch(layout, /popToTopOnBlur/);
 });
 
+test('clicking 我的 resets the profile stack to its index screen', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+  // 个人中心内打开商城等子页后，重新点击 tab 不能把子页状态带回来。
+  assert.match(
+    layout,
+    /route\.name === 'profile' && nested\?\.key[\s\S]*?CommonActions\.reset\(\{[\s\S]*?routes: \[\{ name: 'index' \}\]/,
+  );
+});
+
 test('every tab stack anchors index as initialRouteName (cross-tab push safety)', () => {
   // 跨 tab 压栈（聊天点圈子名片→discover/circle、横幅→messages/chat-detail 等）
   // 若目标栈底没有首页，返回无处可去，tab 永远卡在被压入的页面。

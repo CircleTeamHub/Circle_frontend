@@ -20,7 +20,7 @@ export interface GroupSelfMember {
 const REVALIDATE_INTERVAL_MS = 60_000;
 
 /**
- * 群成员目录访问权（群主/管理员可看）的活体视图 —— chat-core 版。
+ * 群成员目录访问权（群主/管理员豁免,普通成员按群规）的活体视图 —— chat-core 版。
  * 事实源从 OpenIM 群成员换成圈子角色(fetchCircleDetail().myRole)。
  *
  * review P1 的防线在新栈下的形态:
@@ -36,13 +36,19 @@ export function useGroupMemberViewAccess(params: {
   /** 圈子 id(GROUP 会话的 sourceID)。 */
   groupID: string;
   currentUserID: string | null | undefined;
+  /**
+   * 会话上的「显示群成员」策略。圈主/管理员始终放行;普通成员只有在
+   * 策略明确打开时才可以访问目录。未拿到会话 DTO 时保持关闭,避免把
+   * 圈子原本的私有目录在加载竞态里短暂暴露出来。
+   */
+  membersCanViewRoster?: boolean | null;
 }): {
   canViewMembers: boolean;
   selfMember: GroupSelfMember | null;
   resolved: boolean;
   revalidate: () => Promise<boolean>;
 } {
-  const { enabled, groupID, currentUserID } = params;
+  const { enabled, groupID, currentUserID, membersCanViewRoster } = params;
   const [selfMember, setSelfMember] = useState<GroupSelfMember | null>(null);
   const [resolved, setResolved] = useState(false);
   // 换群/卸载后丢弃在途查询结果。
@@ -114,7 +120,10 @@ export function useGroupMemberViewAccess(params: {
         setSelfMember(member);
         setResolved(true);
       }
-      return canViewCircleMembers(member?.role ?? null);
+      return (
+        canViewCircleMembers(member?.role ?? null) ||
+        (member?.role === 'MEMBER' && membersCanViewRoster === true)
+      );
     } catch {
       // fail-closed:查询失败一律按无权处理,绝不放行受保护操作。
       if (queryGenRef.current === gen) {
@@ -123,14 +132,16 @@ export function useGroupMemberViewAccess(params: {
       }
       return false;
     }
-  }, [currentUserID, enabled, fetchSelf, groupID]);
+  }, [currentUserID, enabled, fetchSelf, groupID, membersCanViewRoster]);
 
   // 定时/焦点回调里引用 revalidate 会形成声明顺序上的循环,用 ref 转一手。
   revalidateRef.current = revalidate;
 
   const canViewMembers = useMemo(
-    () => canViewCircleMembers(selfMember?.role ?? null),
-    [selfMember],
+    () =>
+      canViewCircleMembers(selfMember?.role ?? null) ||
+      (selfMember?.role === 'MEMBER' && membersCanViewRoster === true),
+    [membersCanViewRoster, selfMember],
   );
 
   return { canViewMembers, selfMember, resolved, revalidate };

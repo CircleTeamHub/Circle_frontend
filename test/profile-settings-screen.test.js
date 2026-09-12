@@ -26,8 +26,24 @@ test("settings profile rows place city below birthday", () => {
     "bio",
     "wechat",
     "phone",
+    "email",
     "qq",
   ]);
+});
+
+test("account settings shows the required registration email as read-only", () => {
+  const settings = fs.readFileSync(
+    path.join(process.cwd(), "src/features/profile/screens/SettingsScreen.tsx"),
+    "utf8",
+  );
+  const fields = fs.readFileSync(
+    path.join(process.cwd(), "src/features/profile/profile-edit-config.ts"),
+    "utf8",
+  );
+
+  assert.match(settings, /'email'/);
+  assert.match(fields, /id: 'email',[\s\S]*?valueKey: 'email',[\s\S]*?editable: false/);
+  assert.match(fields, /profileFields\.emailNotSupported/);
 });
 
 test("account settings page no longer owns credential security rows", () => {
@@ -719,7 +735,7 @@ test("account security uses backend-backed device management and single-device l
   assert.doesNotMatch(source, /setSetting\('singleDeviceLogin'/);
 });
 
-test("privacy settings omits removed placeholder and presence rows", () => {
+test("privacy settings omits removed placeholder rows", () => {
   const source = fs.readFileSync(
     path.join(
       process.cwd(),
@@ -728,11 +744,11 @@ test("privacy settings omits removed placeholder and presence rows", () => {
     "utf8",
   );
 
+  // onlineTime / singleTyping / groupTyping 曾经也在这张「撤下」名单里 —— 那时
+  // 它们是只写本地的摆设。现在三项都接了服务端(见 presence-typing-privacy.test.js),
+  // 所以从这里拿掉。
   for (const removed of [
     "selfDestructTip",
-    "onlineTime",
-    "singleTyping",
-    "groupTyping",
     "personalizedRecommendation",
     "youthMode",
   ]) {
@@ -1255,11 +1271,9 @@ test("every locale defines labels for all supported language picker options", ()
   }
 });
 
-// 「加我为好友的方式」摘要里的计数必须只算界面上真的能拨的那几项。
-// byPhone / byQrCode 的开关已撤下（对应功能不存在），但字段仍会随服务端返回，
-// 且 addMeByQrCode 的默认值是 true —— 把它们算进去，用户会看到「已开启 3 项」，
-// 点开却只有两个开关，多出来的那一项既看不到也改不了。
-test("add-me summary counts only the methods whose switches are rendered", () => {
+// 「加我为好友的方式」摘要里的计数必须只算界面上真的能拨的开关。
+// 名片分享是一个动作入口，不是独立的服务端隐私字段，因此不计入开关数量。
+test("add-me summary counts only the rendered server-backed switches", () => {
   const source = fs.readFileSync(
     path.join(
       process.cwd(),
@@ -1276,7 +1290,7 @@ test("add-me summary counts only the methods whose switches are rendered", () =>
   );
   assert.deepEqual(
     counted.sort(),
-    ["addMeByAccount", "addMeByGroup"],
+    ["addMeByAccount", "addMeByGroup", "addMeByQrCode"],
     "addMeCount must exclude methods that have no switch in the sheet",
   );
 
@@ -1289,6 +1303,9 @@ test("add-me summary counts only the methods whose switches are rendered", () =>
     counted.sort(),
     "every rendered add-me switch must be counted, and vice versa",
   );
+
+  assert.match(source, /settingsDetails\.privacy\.addMe\.shareCard/);
+  assert.match(source, /pathname: '\/qr-code'/);
 });
 
 test("privacy self-destruct updates the chat cache policy immediately", () => {
@@ -1303,7 +1320,7 @@ test("privacy self-destruct updates the chat cache policy immediately", () => {
   assert.match(source, /useChatStore/);
   assert.match(
     source,
-    /setViewerSelfDestructSec\(updated\.messageSelfDestructSec\)/,
+    /setViewerSelfDestructSec\(\s*updated\.messageSelfDestructSec/,
   );
   // 全局档位与会话级焚毁读同一张表 —— 这个页面自己再列一份 [0,1,2,7,30]
   // 就是「同一个功能两张档位表」那个 bug 的原样复发。

@@ -39,6 +39,7 @@ const PROFILE_ROW_IDS = [
   'bio',
   'wechat',
   'phone',
+  'email',
   'qq',
 ] as const;
 

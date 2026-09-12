@@ -487,6 +487,31 @@ export async function deleteLocalMessage(
   }
 }
 
+/** 删除服务端已确认焚毁的消息，供实时 chat:burned_messages 收敛本地缓存。 */
+export async function deleteLocalMessages(
+  conversationId: string,
+  messageIds: readonly string[],
+): Promise<void> {
+  const current = requireDb();
+  const ids = [...new Set(messageIds)].filter(
+    (messageId): messageId is string =>
+      typeof messageId === 'string' && messageId.length > 0,
+  );
+  if (!current || ids.length === 0) return;
+  try {
+    await writeTransaction(current.db, async () => {
+      const placeholders = ids.map(() => '?').join(', ');
+      await current.db.runAsync(
+        `DELETE FROM messages WHERE conversation_id = ? AND id IN (${placeholders});`,
+        conversationId,
+        ...ids,
+      );
+    });
+  } catch (error) {
+    warn('msg-burn-delete', '[chat-db] delete burned messages failed', error);
+  }
+}
+
 /** 清空会话(G-14 本地半):消息与同步区间一并清,会话行由调用方回写。 */
 export async function clearLocalConversationMessages(
   conversationId: string,
@@ -533,41 +558,49 @@ export async function clearLocalConversationMessages(
 export interface ExpiredLocalMessagePurge {
   conversationId: string;
   cutoff: Date;
+  startedAt?: Date;
 }
 
 export async function purgeExpiredLocalMessages(
   entries: readonly ExpiredLocalMessagePurge[],
   viewerCutoff?: Date,
+  viewerStartedAt?: Date,
 ): Promise<void> {
   const current = requireDb();
   if (!current || (entries.length === 0 && !viewerCutoff)) return;
   try {
     await writeTransaction(current.db, async () => {
-      if (viewerCutoff) {
+      if (viewerCutoff && viewerStartedAt) {
         const cutoffIso = viewerCutoff.toISOString();
+        const startedIso = viewerStartedAt.toISOString();
         // 全局查看者策略必须覆盖没有会话行的残留 rows，避免 FTS 继续检索正文。
         await current.db.runAsync(
-          'DELETE FROM messages WHERE created_at < ?;',
+          'DELETE FROM messages WHERE created_at >= ? AND created_at < ?;',
+          startedIso,
           cutoffIso,
         );
         await current.db.runAsync(
-          'DELETE FROM outbox WHERE created_at < ?;',
+          'DELETE FROM outbox WHERE created_at >= ? AND created_at < ?;',
+          startedIso,
           cutoffIso,
         );
       }
-      for (const { conversationId, cutoff } of entries) {
-        if (viewerCutoff && cutoff <= viewerCutoff) continue;
+      for (const { conversationId, cutoff, startedAt } of entries) {
+        if (!startedAt) continue;
         const cutoffIso = cutoff.toISOString();
+        const startedIso = startedAt.toISOString();
         // 删除 messages 会触发 messages_fts_ad，FTS 影子表随同事务更新。
         await current.db.runAsync(
-          'DELETE FROM messages WHERE conversation_id = ? AND created_at < ?;',
+          'DELETE FROM messages WHERE conversation_id = ? AND created_at >= ? AND created_at < ?;',
           conversationId,
+          startedIso,
           cutoffIso,
         );
         // 失败发送的正文同样是本地聊天内容；不删会在下次水合时重新出现。
         await current.db.runAsync(
-          'DELETE FROM outbox WHERE conversation_id = ? AND created_at < ?;',
+          'DELETE FROM outbox WHERE conversation_id = ? AND created_at >= ? AND created_at < ?;',
           conversationId,
+          startedIso,
           cutoffIso,
         );
       }

@@ -93,6 +93,20 @@ export default function SearchGroupMembersScreen() {
   // 该会话,策略开关与会话 id 都以它兜底 —— 与 ChatInfoScreen.groupConversation 同款。
   const [circleConversation, setCircleConversation] =
     useState<ChatConversationDto | null>(null);
+  // 圈子群从详情页进入时,会话 DTO 可能还没进全量会话列表;本地兜底与
+  // store 两边都读,让「显示群成员」开关能决定普通成员是否可查目录。
+  const membersCanViewRoster = useChatStore((state) => {
+    const conversation = state.conversations.find((item) =>
+      isStandaloneGroup
+        ? item.id === standaloneConversationID
+        : Boolean(groupID) && item.circleId === groupID,
+    );
+    return (
+      conversation?.policies?.membersCanViewRoster ??
+      circleConversation?.policies?.membersCanViewRoster ??
+      null
+    );
+  });
 
   // review R2 P1：权限走活体 hook——挂载期间被撤权时订阅立即翻转
   // authorized，下面的目录数据也同步清空，不再是一次性快照。
@@ -105,6 +119,7 @@ export default function SearchGroupMembersScreen() {
     enabled: Boolean(groupID && currentUserID),
     groupID,
     currentUserID,
+    membersCanViewRoster,
   });
   const authorized = isStandaloneGroup || circleAuthorized;
   // 「成员可查看他人资料」策略:两种群同一判据(群主/管理员豁免,普通成员按开关),
@@ -132,23 +147,24 @@ export default function SearchGroupMembersScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!authorized) {
-      setMembers([]);
-      setMembersLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
     setMembersLoading(true);
-    // groupID = 圈子 id:先解析(取或建)会话,再拉座位成员表;独立群聊直接按会话 id 取。
-    (isStandaloneGroup
+    // 圈子成员角色与「显示群成员」策略是两道闸。即使当前普通成员还
+    // 没权限,也必须先取到会话 DTO,否则策略打开后 effect 永远不会重跑。
+    // 独立群聊直接按会话 id 取成员;圈子群先取/建会话再按策略决定是否拉目录。
+    const loadMembers = isStandaloneGroup
       ? fetchChatMembers(standaloneConversationID)
       : createCircleChatConversation(groupID).then((conversation) => {
-          if (!cancelled) setCircleConversation(conversation);
+          if (!cancelled) {
+            setCircleConversation(conversation);
+            // 让实时 group-policy-changed 能在本页更新这份兜底 DTO。
+            useChatStore.getState?.().upsertConversation?.(conversation);
+          }
+          if (!circleAuthorized && conversation.policies?.membersCanViewRoster !== true) {
+            return [] as ChatMemberDto[];
+          }
           return fetchChatMembers(conversation.id);
-        })
-    )
+        });
+    loadMembers
       .then((nextMembers) => {
         if (!cancelled) setMembers(nextMembers);
       })
@@ -162,7 +178,7 @@ export default function SearchGroupMembersScreen() {
     return () => {
       cancelled = true;
     };
-  }, [authorized, groupID, isStandaloneGroup, standaloneConversationID]);
+  }, [authorized, circleAuthorized, groupID, isStandaloneGroup, standaloneConversationID]);
 
   const loading = !accessResolved || membersLoading;
 

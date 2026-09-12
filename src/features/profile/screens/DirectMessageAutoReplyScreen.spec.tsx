@@ -40,9 +40,9 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/theme', () => ({
-  Radius: { xl: 16 },
-  Spacing: { xs: 4, sm: 8, md: 12, lg: 16 },
-  Typography: { body: {}, bodyRegular: {}, caption: {} },
+  Radius: { lg: 16, xl: 20 },
+  Spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
+  Typography: { body: {}, bodyRegular: {}, caption: {}, small: {} },
   useTheme: () => ({
     colors: {
       background: '#fff',
