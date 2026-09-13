@@ -140,6 +140,7 @@ jobs:
           }
 
           require_file ../circle_be/src/chat/chat.constants.ts
+          require_file ../circle_be/src/chat/chat.types.ts
           require_file ../circle_be/src/common/app-error-codes.ts
           require_file ../circle_be/src/realtime/realtime.service.ts
           require_symbol ../circle_be/src/realtime/realtime.service.ts broadcastMomentsFeedUpdated
