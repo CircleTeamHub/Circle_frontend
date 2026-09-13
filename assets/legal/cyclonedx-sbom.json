@@ -9435,6 +9435,26 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:npm/expo-amap@0.2.4",
+      "name": "expo-amap",
+      "version": "0.2.4",
+      "purl": "pkg:npm/expo-amap@0.2.4",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/chaochaoxiaoshu/expo-amap"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:npm/expo-application@55.0.15",
       "name": "expo-application",
       "version": "55.0.15",

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,11 +11,21 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  AmapNativeSurface,
+  isAmapNativeSupported,
+  type AmapNativeSurfaceRef,
+} from '@/features/location/components/amap-native-surface';
 import { MapSurface } from '@/features/location/components/map-surface';
+import { resolvePlace } from '@/features/location/services/reverse-geocode';
+import { resolvePlaceOnDevice } from '@/features/location/services/native-reverse-geocode';
 import {
   BASEMAP_ATTRIBUTION,
   BASEMAP_MAX_ZOOM,
+  gcj02ToWgs84,
+  getBasemapProvider,
   getBasemapUrlTemplate,
+  wgs84ToGcj02,
   type BasemapScheme,
 } from '@/features/location/utils/location-map';
 import type { PickedLocation } from '@/features/location/types';
@@ -476,6 +486,68 @@ export function MapLocationPickerScreen({
     [initialLocation, labels, resolvedMode],
   );
 
+  // 大陆坐标 + 装得上原生模块 + 构建时配了密钥，才走高德原生地图。
+  // 其余情况（网页端、没 prebuild、境外坐标、没配密钥）都留在 Leaflet 上。
+  const useNativeAmap =
+    getBasemapProvider(
+      initialLocation.latitude,
+      initialLocation.longitude,
+      isAmapNativeSupported,
+    ) === 'amap-native';
+
+  const nativeMapRef = useRef<AmapNativeSurfaceRef | null>(null);
+  // 拖动会连着抛出好几次区域变化，只认最后一次的反查结果。
+  const centerGenerationRef = useRef(0);
+
+  const initialNativeCenter = useMemo(
+    () =>
+      wgs84ToGcj02(initialLocation.latitude, initialLocation.longitude) ?? {
+        latitude: initialLocation.latitude,
+        longitude: initialLocation.longitude,
+      },
+    [initialLocation.latitude, initialLocation.longitude],
+  );
+
+  /**
+   * 地图停下来了，中心点就是用户选的点。
+   *
+   * 进来的是 GCJ-02（高德只说这套），减偏后才对外——存库口径始终是 WGS-84。
+   * 地名走的是设备优先那条链路：系统答得上来就不花钱。
+   */
+  const handleNativeCenterChanged = useCallback(
+    (latitude: number, longitude: number) => {
+      const wgs84 = gcj02ToWgs84(latitude, longitude);
+      if (!wgs84) return;
+
+      centerGenerationRef.current += 1;
+      const generation = centerGenerationRef.current;
+
+      // 先把坐标顶上去，地名慢一步补——拖动时下面的文字不至于是空的。
+      setCandidateLocation((current) => ({
+        ...current,
+        title: labels.selectedLabel,
+        address: `${wgs84.latitude.toFixed(5)}, ${wgs84.longitude.toFixed(5)}`,
+        latitude: wgs84.latitude,
+        longitude: wgs84.longitude,
+      }));
+
+      void resolvePlace(
+        wgs84.latitude,
+        wgs84.longitude,
+        undefined,
+        resolvePlaceOnDevice,
+      ).then((place) => {
+        if (!place || generation !== centerGenerationRef.current) return;
+        setCandidateLocation((current) => ({
+          ...current,
+          title: place.title || current.title,
+          address: place.address || current.address,
+        }));
+      });
+    },
+    [labels.selectedLabel],
+  );
+
   const handleRetry = useCallback(() => {
     setMapUnavailable(false);
     setLoading(true);
@@ -539,14 +611,25 @@ export function MapLocationPickerScreen({
             <ActivityIndicator color={colors.primary} />
           </View>
         ) : null}
-        <MapSurface
-          reloadKey={surfaceKey}
-          title={labels.title}
-          html={mapHtml}
-          geocoderBaseUrl={readGeocoderBaseUrl()}
-          onLoadEnd={() => setLoading(false)}
-          onMessage={handleMapMessage}
-        />
+        {useNativeAmap ? (
+          <AmapNativeSurface
+            ref={nativeMapRef}
+            latitude={initialNativeCenter.latitude}
+            longitude={initialNativeCenter.longitude}
+            pinColor={colors.primary}
+            onCenterChanged={handleNativeCenterChanged}
+            onReady={() => setLoading(false)}
+          />
+        ) : (
+          <MapSurface
+            reloadKey={surfaceKey}
+            title={labels.title}
+            html={mapHtml}
+            geocoderBaseUrl={readGeocoderBaseUrl()}
+            onLoadEnd={() => setLoading(false)}
+            onMessage={handleMapMessage}
+          />
+        )}
         <View
           style={[
             s.nativeConfirm,

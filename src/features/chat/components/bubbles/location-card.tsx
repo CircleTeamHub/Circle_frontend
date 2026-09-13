@@ -24,6 +24,7 @@ import {
   resolvePlace,
   type ResolvedPlace,
 } from '@/features/location/services/reverse-geocode';
+import { resolvePlaceOnDevice } from '@/features/location/services/native-reverse-geocode';
 import {
   CHAT_CARD_PADDING_VERTICAL,
   LOCATION_CARD_WIDTH,
@@ -217,7 +218,13 @@ export const LocationCard: React.FC<LocationCardProps> = ({
   useEffect(() => {
     if (!previewRevealed || !needsResolvedAddress || !coordinates) return;
     let cancelled = false;
-    void resolvePlace(coordinates.latitude, coordinates.longitude).then(
+    // 设备能答上来就不去烧服务端那份按次计费的额度。
+    void resolvePlace(
+      coordinates.latitude,
+      coordinates.longitude,
+      undefined,
+      resolvePlaceOnDevice,
+    ).then(
       (place) => {
         if (!cancelled) setResolvedPlace(place);
       },

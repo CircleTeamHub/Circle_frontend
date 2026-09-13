@@ -1,7 +1,7 @@
 WindNote third-party software notices
 
 This file is generated from the installed production dependency tree.
-Components: 1170
+Components: 1171
 
 ================================================================================
 @babel/code-frame@7.10.4
@@ -14855,6 +14855,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+expo-amap@0.2.4
+License: MIT
+Source: https://github.com/chaochaoxiaoshu/expo-amap
+No license file was included in the installed package; see the declared license metadata above.
 
 ================================================================================
 expo-application@55.0.15
