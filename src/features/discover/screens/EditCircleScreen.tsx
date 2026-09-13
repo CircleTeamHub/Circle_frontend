@@ -29,6 +29,7 @@ import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useCircleForm } from '@/features/discover/hooks/use-circle-form';
 import { CircleFormBody } from '@/features/discover/components/circle-form-body';
 import type { CircleDetail } from '@/types';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -219,7 +220,7 @@ export default function EditCircleScreen() {
   }
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('circle.edit')} />
       <ScrollView
         style={s.scroll}
@@ -260,6 +261,6 @@ export default function EditCircleScreen() {
           )}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

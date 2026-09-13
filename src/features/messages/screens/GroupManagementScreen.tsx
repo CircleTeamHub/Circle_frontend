@@ -25,6 +25,7 @@ import { useChatStore } from '@/chat-core/store';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { Conversation, CustomConversationGroup } from '@/types';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import {
   normalizeMessageFilterOrder,
@@ -1005,7 +1006,7 @@ export default function GroupManagementScreen() {
   );
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('messages.groups.title', { defaultValue: '自定义分组' })} />
       <FlatList
         data={filteredConversations}
@@ -1443,6 +1444,6 @@ export default function GroupManagementScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -40,6 +38,7 @@ import { loadImagePickerModule } from '@/features/profile/image-picker';
 import {
   getAvatarPickerPermissionDeniedMessage,
 } from '@/features/profile/avatar-picker-feedback';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
@@ -479,10 +478,9 @@ export default function EditProfileFieldScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingContainer
       testID={E2E_TEST_IDS.profileEditScreen}
       style={[d.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <NavHeader title={field.title} />
       <ScrollView
@@ -773,6 +771,6 @@ export default function EditProfileFieldScreen() {
           </View>
         </View>
       </BottomSheetModal>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }

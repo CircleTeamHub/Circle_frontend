@@ -1,8 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,6 +16,7 @@ import { changePassword, logoutAll } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { clearLocalSession } from '@/services/auth/session';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -131,9 +130,8 @@ export default function ChangePasswordScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingContainer
       style={[d.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <NavHeader title={t('profile.changePassword')} />
       <ScrollView
@@ -189,6 +187,6 @@ export default function ChangePasswordScreen() {
           </Pressable>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }

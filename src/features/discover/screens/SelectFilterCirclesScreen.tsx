@@ -26,6 +26,7 @@ import {
   toggleCircleFilterSelection,
 } from '@/features/discover/utils/circle-filter-selection';
 import type { Circle } from '@/types';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -263,7 +264,7 @@ export default function SelectFilterCirclesScreen() {
   const keyExtractor = useCallback((item: Circle) => item.id, []);
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('discover.filter.selectCirclesTitle')} />
 
       <View style={s.searchWrap}>
@@ -330,6 +331,6 @@ export default function SelectFilterCirclesScreen() {
           </Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

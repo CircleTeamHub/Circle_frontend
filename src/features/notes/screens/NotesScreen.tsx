@@ -57,6 +57,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import type { NoteCardData } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 type TabId = 'all' | 'ungrouped' | string;
@@ -737,7 +738,12 @@ export default function NotesScreen() {
   });
 
   return (
-    <View style={[s.container, d.container]}>
+    <KeyboardAvoidingContainer
+      // 底部操作栏是 position:absolute; bottom:0，底部 padding 顶不动绝对定位的子元素：
+      // 改成缩容器高度，操作栏跟着容器底边一起抬到键盘上方。
+      behavior="height"
+      style={[s.container, d.container]}
+    >
       <View style={[s.header, d.header, { paddingTop: insets.top + 8 }]}>
         <View style={s.headerRow}>
           <Pressable onPress={() => router.back()} hitSlop={8}>
@@ -960,7 +966,7 @@ export default function NotesScreen() {
         onGroupCreated={handleGroupCreatedInPicker}
       />
       <ShareNoteSheet payloads={shareNotePayloads} onClose={closeShareNote} />
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }
 

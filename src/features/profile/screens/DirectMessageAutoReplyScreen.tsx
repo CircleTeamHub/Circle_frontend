@@ -279,6 +279,7 @@ export default function DirectMessageAutoReplyScreen() {
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <View style={s.section}>
           <Text style={d.sectionTitle}>

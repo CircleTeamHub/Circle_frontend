@@ -36,6 +36,7 @@ import {
   selectablePostFormCircles,
 } from '@/features/discover/utils/post-form-circle-selection';
 import { useTranslation } from 'react-i18next';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -422,7 +423,7 @@ export default function CreatePostScreen() {
   ]);
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.container, { paddingTop: insets.top }]}>
       {/* rightIcon 之前没 onRightPress —— 是哑按钮。先去掉，等"发布须知"页面 wire 上时再加。 */}
       <NavHeader title={t('plaza.create.title', { defaultValue: '发布动态' })} />
       <ScrollView
@@ -673,6 +674,6 @@ export default function CreatePostScreen() {
           )}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

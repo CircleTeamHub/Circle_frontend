@@ -2,8 +2,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -38,6 +36,7 @@ import { useMessageGroupsStore } from '@/features/messages/store/use-message-gro
 import { useAuthStore } from '@/stores/authStore';
 import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -315,9 +314,8 @@ export default function OnboardingProfileScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingContainer
       style={[s.page, d.page, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
         contentContainerStyle={[
@@ -448,6 +446,6 @@ export default function OnboardingProfileScreen() {
         onClose={() => setIsCityPickerVisible(false)}
         onConfirm={handleConfirmCity}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }

@@ -3,7 +3,6 @@ import {
   Alert,
   InteractionManager,
   Keyboard,
-  KeyboardAvoidingView,
   LayoutAnimation,
   PanResponder,
   Platform,
@@ -33,6 +32,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { useElapsedSeconds } from '@/hooks/use-elapsed-seconds';
 import {
   DatePill,
@@ -4058,13 +4058,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   ]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingContainer
       testID={E2E_TEST_IDS.chatScreen}
       style={[d.container, { paddingTop: insets.top }]}
-      // iOS：键盘弹起时给容器底部加 padding，把输入框顶到键盘上方。
-      // Android 走系统 adjustResize，无需 JS 介入（behavior=undefined）。
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
+      // 共享容器统一处理键盘避让，两端都把输入栏顶到键盘上方。
     >
       <View style={s.header}>
         {embedded ? null : (
@@ -4637,6 +4634,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           elapsedSeconds={voiceElapsedSeconds}
         />
       ) : null}
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }

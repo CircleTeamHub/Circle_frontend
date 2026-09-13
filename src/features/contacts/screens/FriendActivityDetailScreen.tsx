@@ -5,6 +5,7 @@ import {
 } from '@/features/user/utils/routes';
 import { MemberName } from '@/components/ui/member-name';
 import { NavHeader } from '@/components/ui/nav-header';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
   canHandleFriendActivity,
   getFriendActivityCopy,
@@ -32,8 +33,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -580,11 +579,7 @@ export default function FriendActivityDetailScreen() {
       {stateBlock ? (
         stateBlock
       ) : activity ? (
-        <KeyboardAvoidingView
-          style={s.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={insets.top + 44}
-        >
+        <KeyboardAvoidingContainer style={s.flex}>
           <FlatList
             style={s.flex}
             data={messages}
@@ -594,6 +589,7 @@ export default function FriendActivityDetailScreen() {
             ListEmptyComponent={listEmpty}
             contentContainerStyle={s.threadContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           />
           {canReply ? (
             <View
@@ -631,7 +627,7 @@ export default function FriendActivityDetailScreen() {
               </Pressable>
             </View>
           ) : null}
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingContainer>
       ) : null}
     </View>
   );

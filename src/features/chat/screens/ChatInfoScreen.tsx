@@ -21,6 +21,11 @@ import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+import {
+  MODAL_INPUT_NATIVE_AUTO_FOCUS,
+  useModalInputAutoFocus,
+} from '@/hooks/use-modal-input-auto-focus';
 import {
   setGroupChatAvatar,
   setMyGroupChatAlias,
@@ -349,6 +354,8 @@ export default function ChatInfoScreen() {
   const [renameDraft, setRenameDraft] = useState('');
   const [renameSubmitting, setRenameSubmitting] = useState(false);
   const renameSubmittingRef = useRef(false);
+  const renameInputRef = useRef<TextInput>(null);
+  useModalInputAutoFocus(renameInputRef, renameDialogVisible);
   // friend-scoped 动作（拉黑 / 删除）不走 runConversationAction（那个绑会话）；
   // 用 ref 做 fast double-tap 单飞行守，跟其他屏的 Pattern D 二道闸保持一致。
   const blacklistInFlightRef = useRef(false);
@@ -2096,7 +2103,7 @@ export default function ChatInfoScreen() {
             if (!renameSubmittingRef.current) setRenameDialogVisible(false);
           }}
         >
-          <View style={[s.renameBackdrop, d.renameBackdrop]}>
+          <KeyboardAvoidingContainer style={[s.renameBackdrop, d.renameBackdrop]}>
             <View style={[s.renameDialog, d.renameDialog]}>
               <Text style={[s.renameTitle, d.renameTitle]}>{t('chat.groupName')}</Text>
               <TextInput
@@ -2104,7 +2111,8 @@ export default function ChatInfoScreen() {
                 value={renameDraft}
                 onChangeText={setRenameDraft}
                 maxLength={64}
-                autoFocus
+                ref={renameInputRef}
+                autoFocus={MODAL_INPUT_NATIVE_AUTO_FOCUS}
                 returnKeyType="done"
                 editable={!renameSubmitting}
                 onSubmitEditing={() => void handleSubmitStandaloneGroupRename()}
@@ -2132,7 +2140,7 @@ export default function ChatInfoScreen() {
                 </Pressable>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingContainer>
         </Modal>
       </View>
     );

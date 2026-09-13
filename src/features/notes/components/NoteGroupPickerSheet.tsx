@@ -2,8 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import {
   GROUP_NAME_MAX_LENGTH,
   MAX_NOTE_GROUPS,
@@ -201,18 +200,15 @@ export function NoteGroupPickerSheet({
       backdropStyle={d.backdrop}
       sheetStyle={s.sheetWrap}
     >
-      {/* 就地新建分组会呼出键盘：整个面板随键盘上移 */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      {/* 就地新建分组会呼出键盘：BottomSheetModal 把整个面板随键盘顶上去 */}
+      <View
+        style={[
+          s.sheet,
+          d.sheet,
+          { paddingBottom: insets.bottom || Spacing.lg },
+        ]}
       >
-        <View
-          style={[
-            s.sheet,
-            d.sheet,
-            { paddingBottom: insets.bottom || Spacing.lg },
-          ]}
-        >
-          <View style={[s.handle, d.handle]} />
+        <View style={[s.handle, d.handle]} />
       <Text style={[s.title, d.title]}>
         {t('notes.groupPicker.title', { defaultValue: '编辑分组' })}
       </Text>
@@ -236,7 +232,11 @@ export function NoteGroupPickerSheet({
           })}
         </Text>
       ) : (
-        <ScrollView style={s.list} contentContainerStyle={s.listContent}>
+        <ScrollView
+          style={s.list}
+          contentContainerStyle={s.listContent}
+          {...keyboardDismissOnDragProps}
+        >
           {groups.map((group) => {
             const state = effectiveState(group.id);
             return (
@@ -341,8 +341,7 @@ export function NoteGroupPickerSheet({
           </Text>
         </Pressable>
       ) : null}
-        </View>
-      </KeyboardAvoidingView>
+      </View>
     </BottomSheetModal>
   );
 }
