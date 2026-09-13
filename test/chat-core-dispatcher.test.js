@@ -86,6 +86,7 @@ function loadDispatcher(storeOverrides = {}) {
     deliveredReports: [],
     typings: [],
     backfills: 0,
+    backfillOptions: [],
     // 全量会话快照序号:防复活标记的自愈判据要拿它区分「移除之后新拉的快照」
     // 和「移除之前就在途、之后才落地的旧快照」。
     conversationsSnapshotSeq: 0,
@@ -204,8 +205,10 @@ function loadDispatcher(storeOverrides = {}) {
     if (request === './store') return { useChatStore: { getState: () => storeState } };
     if (request === './api') {
       return {
-        loadChatConversations: () => {
+        loadChatConversations: (options) => {
           state.backfills += 1;
+          // vm 里建的对象原型不同,deepEqual 前要展开成本侧对象。
+          state.backfillOptions.push({ ...options });
           if (state.deferBackfill) {
             // 手动控制的在途请求:测并发补拉时要能让第一次「还没回来」。
             lastBackfill = new Promise((resolve, reject) => {
@@ -1013,8 +1016,23 @@ test('remote group metadata changes schedule an authoritative conversation refre
 
     await state.runBackfill();
     assert.equal(state.backfills, 1, `${kind} did not refresh conversation metadata`);
+    // 系统消息不带完整新值:补拉要的是落库之后的快照,不能复用在途的旧请求。
+    assert.deepEqual(state.backfillOptions, [{ fresh: true }], kind);
     dispatcher.cancelConversationBackfill();
   }
+});
+
+test('an unknown-conversation backfill also asks for a snapshot issued after the message', async () => {
+  // 陌生会话的第一条消息同理:在途的列表请求若发在对方建会话之前,复用它
+  // 仍认不出这个会话,攒着的横幅会被当成「补拉后仍认不出」直接丢掉。
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  socket.emit('chat:msg', dto({ id: 'first', conversationId: DIRECT_ID }));
+
+  state.conversations = [directConversation()];
+  await state.runBackfill();
+
+  assert.deepEqual(state.backfillOptions, [{ fresh: true }]);
+  assert.equal(state.banners.length, 1);
 });
 
 test('group setting broadcasts for a conversation we do not have are dropped', () => {

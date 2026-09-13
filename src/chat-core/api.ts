@@ -91,15 +91,32 @@ function completePendingHistoryClear(
   }
 }
 
+export interface LoadChatConversationsOptions {
+  /**
+   * 要一份「此刻之后才发出」的快照,不复用在途请求。
+   *
+   * 会话元信息刚变更时(群公告/头像/群主、陌生会话的第一条消息),在途的那次
+   * 请求可能发在服务端落库之前,复用它拿回来的就是旧快照。新请求排在在途请求
+   * 之后再发而不是并行:并行的两发谁后回来谁说了算,旧快照会盖掉新快照。
+   */
+  fresh?: boolean;
+}
+
 /** 拉全量会话列表并写入 store(消息页 focus / 下拉刷新用)。 */
-export async function loadChatConversations(): Promise<ChatConversationDto[]> {
+export async function loadChatConversations(
+  options: LoadChatConversationsOptions = {},
+): Promise<ChatConversationDto[]> {
   const requestEpoch = useAuthStore.getState().sessionEpoch;
-  if (conversationsRequest && conversationsRequestEpoch === requestEpoch) {
-    return conversationsRequest;
-  }
+  const inFlight =
+    conversationsRequest && conversationsRequestEpoch === requestEpoch
+      ? conversationsRequest
+      : null;
+  if (inFlight && !options.fresh) return inFlight;
 
   const sameSession = sessionGate();
   const request = (async () => {
+    // 在途请求的成败与这一发无关,只等它先落地。
+    if (inFlight) await inFlight.then(() => undefined, () => undefined);
     // 启动阶段常见的是一次网络/网关抖动，而不是会话不存在。GET 列表请求
     // 可安全重试一次；确定性的 4xx 仍由 retry 立即抛出，避免掩盖认证问题。
     const conversations = await retry(

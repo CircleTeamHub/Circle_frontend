@@ -128,7 +128,9 @@ function scheduleConversationBackfill(isLive: () => boolean): void {
     }
     const issued = (issuedBackfills += 1);
     claimPendingBanners(issued);
-    void loadChatConversations()
+    // 触发补拉的事件(陌生会话的消息、群元信息变更)在服务端都已落库,但此刻在途
+    // 的列表请求可能发在那之前 —— 复用它等于拿旧快照「刷新」。
+    void loadChatConversations({ fresh: true })
       .then(() => {
         const owned = takePendingBannersFor(issued);
         if (!isLive()) return;

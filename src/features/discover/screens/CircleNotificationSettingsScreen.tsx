@@ -77,8 +77,7 @@ export default function CircleNotificationSettingsScreen() {
           {t('discover.notifications.title')}
         </Text>
 
-        {/* 圈子玩法说明入口：讲清卡片颜色含义 + 活动怎么玩。只有整页设置带它，
-            圈子动态头部的快捷弹层不放，那里要的是「两下改完就关」。 */}
+        {/* 圈子玩法说明入口：讲清卡片颜色含义 + 活动怎么玩。 */}
         <Pressable
           style={s.guideRow}
           // 这一页现在也从联系人栈打开，写死 discover 路由会把用户甩去另一个

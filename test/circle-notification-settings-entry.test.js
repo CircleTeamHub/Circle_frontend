@@ -13,18 +13,17 @@ test('圈子动态头部不再重复显示圈子通知设置入口', () => {
   assert.doesNotMatch(src, /CircleNotificationSettingsSheet/);
 });
 
-test('圈子通知设置弹层复用共享开关，不重写一份 UI', () => {
-  const sheet = read(
+test('动态页入口删掉后，那个快捷弹层也不留成孤儿组件', () => {
+  // 弹层唯一的调用方就是动态页头部的齿轮。只删入口不删组件，
+  // 仓库里会剩一个不上线、却仍有测试替它把关的组件。
+  const sheetPath = path.join(
+    process.cwd(),
     'src/features/discover/components/circle-notification-settings-sheet.tsx',
   );
-
-  assert.match(sheet, /BottomSheetModal/);
-  assert.match(sheet, /CircleNotificationToggles/);
-  // 开关状态是弹层和整页设置页共用的，弹层不该自己再存一份。
-  assert.doesNotMatch(sheet, /useCircleNotificationStore/);
+  assert.equal(fs.existsSync(sheetPath), false);
 });
 
-test('整页设置和弹层用同一份开关组件', () => {
+test('整页设置复用共享的三档开关组件', () => {
   const toggles = read(
     'src/features/discover/components/circle-notification-toggles.tsx',
   );
