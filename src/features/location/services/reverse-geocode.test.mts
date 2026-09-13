@@ -231,3 +231,32 @@ test('the device alone is enough when no server is configured', async () => {
     stub.restore();
   }
 });
+
+test('an injected app-side fetcher can authenticate the configured geocoder', async () => {
+  const direct = stubFetch(async () => ({
+    ok: false,
+    json: async () => ({ message: 'Unauthorized' }),
+  }));
+  const authenticatedCalls: string[] = [];
+  try {
+    const place = await resolvePlace(
+      22.54321,
+      114.01234,
+      GEOCODER_BASE_URL,
+      undefined,
+      async (url) => {
+        authenticatedCalls.push(String(url));
+        return ok({ name: '莲花山公园', display_name: '莲花山公园, 深圳市' });
+      },
+    );
+
+    assert.deepEqual(place, {
+      title: '莲花山公园',
+      address: '莲花山公园, 深圳市',
+    });
+    assert.equal(authenticatedCalls.length, 1);
+    assert.equal(direct.calls.length, 0, '受保护的自家代理不能绕过 App 认证层直连');
+  } finally {
+    direct.restore();
+  }
+});

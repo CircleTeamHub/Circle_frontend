@@ -29,6 +29,8 @@ type RequestOptions = {
   auth?: boolean;
   retryOnAuthError?: boolean;
   accessToken?: string | null;
+  /** 位置、私聊等敏感响应不能进入 Metro / 设备开发日志。 */
+  logResponseBody?: boolean;
 };
 
 type ApiResponse<T> = {
@@ -217,14 +219,15 @@ function bodyReadError(
 
 async function readPayload<T>(
   res: Response,
-  reportContext: { endpoint: string; method: string }
+  reportContext: { endpoint: string; method: string },
+  logResponseBody: boolean,
 ): Promise<ApiResponse<T> | null> {
   let text: string;
   try {
     text = await res.text();
   } catch (error) {
     logApiEvent('body-read-error', {
-      endpoint: reportContext.endpoint,
+      endpoint: redactSensitiveUrl(reportContext.endpoint),
       method: reportContext.method,
       status: res.status,
       error: error instanceof Error ? error.message : String(error),
@@ -235,7 +238,7 @@ async function readPayload<T>(
   logApiEvent('response', {
     status: res.status,
     ok: res.ok,
-    body: safeBodyTextForLog(text),
+    body: logResponseBody ? safeBodyTextForLog(text) : '[REDACTED]',
   });
 
   if (!text) {
@@ -282,6 +285,7 @@ async function executeRequest<T>(
     headers = {},
     auth = true,
     accessToken: explicitAccessToken,
+    logResponseBody = true,
   } = options;
   const accessToken =
     accessTokenOverride ??
@@ -325,7 +329,7 @@ async function executeRequest<T>(
       });
     } catch (error) {
       logApiEvent('network-error', {
-        url,
+        url: redactSensitiveUrl(url),
         method,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -355,7 +359,11 @@ async function executeRequest<T>(
       );
     }
 
-    const payload = await readPayload<T>(res, { endpoint, method });
+    const payload = await readPayload<T>(
+      res,
+      { endpoint, method },
+      logResponseBody,
+    );
 
     return { res, payload };
   } finally {
