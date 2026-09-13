@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/badge';
 import { PlazaFeed } from '@/features/discover/components/plaza-feed';
-import { CircleNotificationSettingsSheet } from '@/features/discover/components/circle-notification-settings-sheet';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
@@ -63,8 +62,6 @@ export default function CirclePlazaScreen() {
   const circleUnread = useTabBadgeStore((state) => state.circleUnread);
   const signupUnread = useTabBadgeStore((state) => state.signupUnread);
   const circleBellUnread = circleUnread + signupUnread;
-  const [notificationSettingsVisible, setNotificationSettingsVisible] =
-    useState(false);
 
   const d = useMemo(
     () => ({
@@ -91,15 +88,6 @@ export default function CirclePlazaScreen() {
   const handleCreatePost = useCallback(() => {
     router.push('/(tabs)/discover/create-post');
   }, [router]);
-
-  const openNotificationSettings = useCallback(
-    () => setNotificationSettingsVisible(true),
-    [],
-  );
-  const closeNotificationSettings = useCallback(
-    () => setNotificationSettingsVisible(false),
-    [],
-  );
 
   const handleOpenNotifications = useCallback(() => {
     router.push({
@@ -159,20 +147,6 @@ export default function CirclePlazaScreen() {
               <Badge count={circleBellUnread} />
             </View>
           </Pressable>
-          {/* 通知设置。图标刻意不用 options-outline —— 左边的筛选已经占了它，
-              右上角两个一样的图标分不出谁是谁。 */}
-          <Pressable
-            onPress={openNotificationSettings}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('discover.notifications.title')}
-          >
-            <Ionicons
-              name="settings-outline"
-              size={22}
-              color={colors.textSecondary}
-            />
-          </Pressable>
         </View>
       </View>
       <View style={s.content}>
@@ -186,10 +160,6 @@ export default function CirclePlazaScreen() {
       >
         <Ionicons name="add" size={24} color={colors.white} />
       </Pressable>
-      <CircleNotificationSettingsSheet
-        visible={notificationSettingsVisible}
-        onClose={closeNotificationSettings}
-      />
     </View>
   );
 }

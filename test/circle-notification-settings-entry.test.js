@@ -5,13 +5,12 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-test('圈子动态头部有一个打开圈子通知设置的入口', () => {
+test('圈子动态头部不再重复显示圈子通知设置入口', () => {
   const src = read('src/features/discover/screens/CirclePlazaScreen.tsx');
 
-  // 设置入口必须和筛选（options-outline）分开，两者都在右上角，图标不能撞。
-  assert.match(src, /name="settings-outline"/);
-  assert.match(src, /CircleNotificationSettingsSheet/);
-  assert.match(src, /discover\.notifications\.title/);
+  // 圈子通知设置由圈子管理页统一提供，动态页只保留筛选和通知中心入口。
+  assert.doesNotMatch(src, /name="settings-outline"/);
+  assert.doesNotMatch(src, /CircleNotificationSettingsSheet/);
 });
 
 test('圈子通知设置弹层复用共享开关，不重写一份 UI', () => {
