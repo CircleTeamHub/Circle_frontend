@@ -5,7 +5,7 @@ import { Spacing, Typography, useTheme } from '@/theme';
 import { useCircleNotificationTiers } from '@/features/discover/hooks/use-circle-notification-tiers';
 
 /**
- * 圈子通知三档开关的弹层/整页承载。行为全在 useCircleNotificationTiers 里 ——
+ * 圈子通知三档开关的整页承载。行为全在 useCircleNotificationTiers 里 ——
  * 个人设置页那三行用的是同一个 hook，两处不可能再各自实现一遍。
  */
 
