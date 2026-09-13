@@ -990,6 +990,33 @@ test('a policy broadcast naming an unknown or inherited key is ignored', () => {
   assert.deepEqual(state.conversations[0].policies, { memberCanInvite: true });
 });
 
+test('remote group metadata changes schedule an authoritative conversation refresh', async () => {
+  for (const kind of [
+    'group-notice-updated',
+    'group-avatar-updated',
+    'owner-transferred',
+  ]) {
+    const { socket, state, dispatcher } = loadDispatcher({
+      conversations: [{ id: 'c1', type: 'GROUP' }],
+    });
+
+    socket.emit(
+      'chat:msg',
+      dto({
+        conversationId: 'c1',
+        id: `sys-${kind}`,
+        type: 'system',
+        content: { kind, actorId: 'admin-1', targetUserId: 'owner-2' },
+        sender: null,
+      }),
+    );
+
+    await state.runBackfill();
+    assert.equal(state.backfills, 1, `${kind} did not refresh conversation metadata`);
+    dispatcher.cancelConversationBackfill();
+  }
+});
+
 test('group setting broadcasts for a conversation we do not have are dropped', () => {
   const { socket, state } = loadDispatcher();
   state.conversations = [];

@@ -139,6 +139,32 @@ describe('useCircleNotificationTiers', () => {
     expect(topNotice.error).not.toHaveBeenCalled();
   });
 
+  // 丢弃旧响应只能保护本地 UI，保护不了服务端：若两发 PATCH 并行，旧请求可能
+  // 最后才落库，把服务端写回旧值。写请求必须按用户操作顺序启动。
+  it('快速连点时串行提交，服务端最终值不会被迟到的旧请求覆盖', async () => {
+    const first = deferred<boolean>();
+    mockUpdate.mockReturnValueOnce(first.promise).mockResolvedValueOnce(true);
+
+    const { result } = renderHook(() => useCircleNotificationTiers());
+
+    act(() => {
+      result.current.setOfflineEnabled(false);
+    });
+    act(() => {
+      result.current.setOfflineEnabled(true);
+    });
+
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).toHaveBeenNthCalledWith(1, false);
+
+    await act(async () => {
+      first.resolve(false);
+      await first.promise;
+    });
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(2));
+    expect(mockUpdate).toHaveBeenNthCalledWith(2, true);
+  });
+
   // 最新那一发失败时，回滚的目标是「服务端最后确认过的那个状态」，
   // 而不是上一次乐观写入的中间态。
   it('连点之后最新那一发失败，回滚到最后一次被确认的状态', async () => {

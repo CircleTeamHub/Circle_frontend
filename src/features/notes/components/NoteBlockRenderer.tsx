@@ -4,7 +4,10 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { extractInlineText } from '@/features/notes/utils/note-blocks';
+import {
+  extractInlineText,
+  MAX_NOTE_BLOCK_DEPTH,
+} from '@/features/notes/utils/note-blocks';
 
 type Block = Record<string, unknown>;
 type InlineNode = Record<string, unknown>;
@@ -65,7 +68,16 @@ function VideoBlock({
   );
 }
 
-function InlineContent({ nodes, textColor }: { nodes: unknown[]; textColor: string }) {
+function InlineContent({
+  nodes,
+  textColor,
+  depth = 0,
+}: {
+  nodes: unknown[];
+  textColor: string;
+  depth?: number;
+}) {
+  if (depth > MAX_NOTE_BLOCK_DEPTH) return null;
   return (
     <>
       {nodes.map((value, i) => {
@@ -86,7 +98,11 @@ function InlineContent({ nodes, textColor }: { nodes: unknown[]; textColor: stri
           >
             {text}
             {Array.isArray(node.content) ? (
-              <InlineContent nodes={node.content} textColor={textColor} />
+              <InlineContent
+                nodes={node.content}
+                textColor={textColor}
+                depth={depth + 1}
+              />
             ) : null}
           </Text>
         );
@@ -225,9 +241,11 @@ interface Props {
    * URL 过期后会 403，图片静默变空白。上层收到后重拉一次笔记即可拿到新签名。
    */
   onMediaError?: () => void;
+  depth?: number;
 }
 
-export function NoteBlockRenderer({ blocks, onMediaError }: Props) {
+export function NoteBlockRenderer({ blocks, onMediaError, depth = 0 }: Props) {
+  if (depth > MAX_NOTE_BLOCK_DEPTH) return null;
   return (
     <View style={s.container}>
       {blocks.map((block, i) => block && typeof block === 'object' ? (
@@ -235,7 +253,11 @@ export function NoteBlockRenderer({ blocks, onMediaError }: Props) {
           <BlockView block={block} onMediaError={onMediaError} />
           {Array.isArray(block.children) && block.children.length > 0 ? (
             <View style={s.children}>
-              <NoteBlockRenderer blocks={block.children} onMediaError={onMediaError} />
+              <NoteBlockRenderer
+                blocks={block.children}
+                onMediaError={onMediaError}
+                depth={depth + 1}
+              />
             </View>
           ) : null}
         </View>

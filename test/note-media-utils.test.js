@@ -442,6 +442,22 @@ test('plain text retains pasted links, nested lists, code and table cell text', 
   assert.equal(text, '主项链接文字\n子项\nconst answer = 42;\n旧格式单元格\t新格式单元格');
 });
 
+test('plain text extraction bounds nested server-provided blocks', () => {
+  const { extractPlainText } = loadTsModule('src/features/notes/utils/note-blocks.ts');
+  const root = { type: 'paragraph', content: [{ text: '第0层' }] };
+  let parent = root;
+  for (let depth = 1; depth <= 11; depth += 1) {
+    const child = { type: 'paragraph', content: [{ text: `第${depth}层` }] };
+    parent.children = [child];
+    parent = child;
+  }
+
+  const text = extractPlainText([root]);
+
+  assert.match(text, /第10层/);
+  assert.doesNotMatch(text, /第11层/);
+});
+
 // 字数统计量的就是这段拼接结果（块间补一个换行），所以它跟后端 @MaxLength 校验的
 // 是同一个字符串；按 code point 数，与 class-validator 的 Length 一致。
 test('note text stats count the joined body the backend validates, by code point', () => {

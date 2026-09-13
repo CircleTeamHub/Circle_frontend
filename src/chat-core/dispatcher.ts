@@ -188,6 +188,19 @@ const CONVERSATION_CHANGE_KINDS: ReadonlySet<string> = new Set([
   'updated',
 ]);
 
+const GROUP_METADATA_CHANGE_KINDS: ReadonlySet<string> = new Set([
+  'group-notice-updated',
+  'group-avatar-updated',
+  'owner-transferred',
+]);
+
+function requiresConversationMetadataRefresh(message: ChatMessageDto): boolean {
+  return (
+    message.type === 'system' &&
+    GROUP_METADATA_CHANGE_KINDS.has(String(message.content['kind'] ?? ''))
+  );
+}
+
 /**
  * 对端(或另一位管理员)改了阅后即焚时长时,把新档位落进会话状态。
  *
@@ -351,6 +364,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       store.ingestMessages(payload.conversationId, [payload]);
       applyRemoteBurnChange(store, payload);
       applyRemoteGroupSettingChange(store, payload);
+      const metadataChanged = requiresConversationMetadataRefresh(payload);
       // G-07 送达回执:收到别人的消息即回报水位(节流在 socket-manager)。
       if (
         payload.height > 0 &&
@@ -364,10 +378,11 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       const needsConversation =
         enqueueForegroundBanner(payload) === 'needs-conversation';
       if (needsConversation) rememberPendingBanner(payload);
-      if (!applied || needsConversation) {
+      if (!applied || needsConversation || metadataChanged) {
         // 会话不在当前快照里(对方刚建的单聊、刚被拉进的群):消息已经进了
         // 时间线,但没有会话行也没有角标 —— 停在消息页的用户要手动刷新才看得到。
-        // 补拉一次会话列表把元信息(对端/群名/头像)带回来。
+        // 群公告、头像和群主变更的系统消息不携带完整新值,也走同一条权威补拉,
+        // 避免在线成员一直保留旧的会话元数据。
         scheduleConversationBackfill(isLive);
       }
     } catch (err) {
