@@ -40,7 +40,7 @@ jobs:
           persist-credentials: false
 
       # `npm run ci` 里的跨仓契约测试按 ../circle_be 读后端源码；工作区旁边没有后端时，
-      # 它们要么静默 skip，要么以 ENOENT 打红整次发版。与 ci.yml 一样先把后端放好。
+      # 它们会静默 skip，契约等于没跑。与 ci.yml 一样先把后端放好，并断言源码在位。
       - name: Checkout backend for cross-repo contracts
         env:
           BACKEND_REF_CANDIDATE: ${{ github.ref_name }}
