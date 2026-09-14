@@ -120,7 +120,11 @@ export async function loadChatConversations(
     // 启动阶段常见的是一次网络/网关抖动，而不是会话不存在。GET 列表请求
     // 可安全重试一次；确定性的 4xx 仍由 retry 立即抛出，避免掩盖认证问题。
     const conversations = await retry(
-      () => apiClient<ChatConversationDto[]>('/chat/conversations'),
+      // Backend defaults this endpoint to 100 rows. The app replaces its whole
+      // conversation snapshot with the response and does not have a cursor to
+      // fetch another page, so use the endpoint's advertised maximum here.
+      () =>
+        apiClient<ChatConversationDto[]>('/chat/conversations?limit=500'),
       { tries: 2, backoffMs: 400 },
     );
     if (sameSession()) {

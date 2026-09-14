@@ -135,6 +135,17 @@ function loadApi() {
 /** 让在途 Promise 链上所有能跑的微任务都跑完。 */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
+test('会话快照请求使用服务端允许的最大窗口，避免默认只取前 100 条', async () => {
+  const { api, calls } = loadApi();
+
+  const request = api.loadChatConversations();
+  await settle();
+
+  assert.equal(calls[0].url, '/chat/conversations?limit=500');
+  calls[0].resolve([]);
+  await request;
+});
+
 test('并发的普通会话列表请求仍然合并成一次', async () => {
   const { api, calls } = loadApi();
 
