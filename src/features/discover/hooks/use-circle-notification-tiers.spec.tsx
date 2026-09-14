@@ -165,8 +165,8 @@ describe('useCircleNotificationTiers', () => {
     expect(mockUpdate).toHaveBeenNthCalledWith(2, true);
   });
 
-  // 最新那一发失败时，回滚的目标是「服务端最后确认过的那个状态」，
-  // 而不是上一次乐观写入的中间态。
+  // 第一发已经写成、第二发才失败时，服务端停在第一发；UI 必须回到这个真正
+  // 被确认的中间态，不能回到队列开始前、服务端已经不再持有的旧值。
   it('连点之后最新那一发失败，回滚到最后一次被确认的状态', async () => {
     const first = deferred<boolean>();
     const second = deferred<boolean>();
@@ -187,7 +187,7 @@ describe('useCircleNotificationTiers', () => {
       await Promise.resolve();
     });
 
-    expect(prefs()).toMatchObject({ globalEnabled: true, offlineEnabled: true });
+    expect(prefs()).toMatchObject({ globalEnabled: true, offlineEnabled: false });
     expect(topNotice.error).toHaveBeenCalled();
   });
 

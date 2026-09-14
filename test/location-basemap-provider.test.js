@@ -174,3 +174,21 @@ test('原生分支的地名反查也是设备优先', () => {
   // 漏传设备解析器不会让任何断言变红，但会把每次拖动都变成一次计费调用。
   assert.match(source, /resolvePlace\(\s*\n\s*wgs84\.latitude[\s\S]*?resolvePlaceOnDevice,/);
 });
+
+test('受保护的自家地名代理只经 App 认证层访问', () => {
+  const picker = readPicker();
+  const nativeSurface = read('src/features/location/components/map-surface.tsx');
+  const webSurface = read('src/features/location/components/map-surface.web.tsx');
+  const locationCard = read(
+    'src/features/chat/components/bubbles/location-card.tsx',
+  );
+
+  // WebView/iframe 里的脚本拿不到安全存储中的 Bearer token，所以两端都必须把
+  // geocoder-request 交回 App 层，再由统一请求助手决定是否附带登录态。
+  assert.match(picker, /const useParentGeocoderBridge = true/);
+  assert.match(nativeSurface, /handleWebGeocoderBridgeRequest/);
+  assert.match(nativeSurface, /geocoderFetch/);
+  assert.match(webSurface, /geocoderFetch/);
+  // 位置气泡不经过地图载体，也必须显式注入同一个认证请求助手。
+  assert.match(locationCard, /resolvePlace[\s\S]*?geocoderFetch/);
+});

@@ -70,6 +70,18 @@ test('二维码 bearer token 在请求 URL 日志中被脱敏 (review)', () => {
   assert.match(redacted, /\/qr\/tokens\/\[REDACTED\]\/join/);
 });
 
+test('网络错误日志也必须先脱敏请求 URL (review)', () => {
+  const client = read('src/services/api/client.ts');
+  assert.match(
+    client,
+    /logApiEvent\('network-error', \{\s*url: redactSensitiveUrl\(url\),/,
+  );
+  assert.match(
+    client,
+    /logApiEvent\('body-read-error', \{\s*endpoint: redactSensitiveUrl\(reportContext\.endpoint\),/,
+  );
+});
+
 test('回收站：列表 + 恢复接线 (FE#92)', () => {
   const api = read('src/services/api/notes.ts');
   assert.match(api, /\/note\/recycle-bin/);

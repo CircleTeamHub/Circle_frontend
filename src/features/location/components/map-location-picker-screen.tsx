@@ -19,6 +19,7 @@ import {
 import { MapSurface } from '@/features/location/components/map-surface';
 import { resolvePlace } from '@/features/location/services/reverse-geocode';
 import { resolvePlaceOnDevice } from '@/features/location/services/native-reverse-geocode';
+import { geocoderFetch } from '@/features/location/services/geocoder-fetch';
 import {
   BASEMAP_ATTRIBUTION,
   BASEMAP_MAX_ZOOM,
@@ -178,7 +179,8 @@ function buildMapHtml(
   const scriptGeocoderBaseUrl = geocoderBaseUrl
     ? serializeForInlineScript(geocoderBaseUrl)
     : 'null';
-  const useParentGeocoderBridge = Platform.OS === 'web';
+  const useParentGeocoderBridge = true;
+  const requireParentMessageSource = Platform.OS === 'web';
   const geocoderConnectSource = geocoderBaseUrl
     ? `; connect-src ${escapeHtml(new URL(geocoderBaseUrl).origin)}`
     : '';
@@ -263,6 +265,8 @@ function buildMapHtml(
     const SELECTED_LABEL = ${scriptSelectedLabel};
     const GEOCODER_BASE_URL = ${scriptGeocoderBaseUrl};
     const USE_PARENT_GEOCODER_BRIDGE = ${useParentGeocoderBridge};
+    const REQUIRE_PARENT_MESSAGE_SOURCE = ${requireParentMessageSource};
+    const GEOCODER_SESSION_ID = String(Date.now()) + ':' + Math.random().toString(36).slice(2);
     const bridge = window.ReactNativeWebView || {
       postMessage: (data) => window.parent.postMessage(data, '*')
     };
@@ -270,10 +274,10 @@ function buildMapHtml(
     const pendingGeocoderRequests = new Map();
     let nextGeocoderRequestId = 1;
     window.addEventListener('message', (event) => {
-      if (!USE_PARENT_GEOCODER_BRIDGE || event.source !== window.parent || typeof event.data !== 'string') return;
+      if (!USE_PARENT_GEOCODER_BRIDGE || (REQUIRE_PARENT_MESSAGE_SOURCE && event.source !== window.parent) || typeof event.data !== 'string') return;
       let payload;
       try { payload = JSON.parse(event.data); } catch { return; }
-      if (payload?.type !== 'geocoder-response' || !Number.isSafeInteger(payload.requestId)) return;
+      if (payload?.type !== 'geocoder-response' || payload.sessionId !== GEOCODER_SESSION_ID || !Number.isSafeInteger(payload.requestId)) return;
       const pending = pendingGeocoderRequests.get(payload.requestId);
       if (!pending) return;
       pendingGeocoderRequests.delete(payload.requestId);
@@ -290,7 +294,7 @@ function buildMapHtml(
           reject(new Error('geocoder request timed out'));
         }, 10000);
         pendingGeocoderRequests.set(requestId, { resolve, reject, timer });
-        post({ type: 'geocoder-request', requestId, path, params });
+        post({ type: 'geocoder-request', sessionId: GEOCODER_SESSION_ID, requestId, path, params });
       });
     }
 
@@ -536,6 +540,7 @@ export function MapLocationPickerScreen({
         wgs84.longitude,
         undefined,
         resolvePlaceOnDevice,
+        geocoderFetch,
       ).then((place) => {
         if (!place || generation !== centerGenerationRef.current) return;
         setCandidateLocation((current) => ({
