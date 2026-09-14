@@ -519,6 +519,10 @@ export async function fetchChatMutationsSince(
   const store = useChatStore.getState();
   const byConversation = new Map<string, ChatMessageDto[]>();
   for (const message of result.messages) {
+    if (message.deleted === true) {
+      store.removeMessage(message.conversationId, message.id);
+      continue;
+    }
     const bucket = byConversation.get(message.conversationId) ?? [];
     bucket.push(message);
     byConversation.set(message.conversationId, bucket);

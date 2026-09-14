@@ -106,6 +106,28 @@ function normalizeBurnStartedAt(
   return new Date().toISOString();
 }
 
+function mergeConversationBurnState(
+  incoming: ChatConversationDto,
+  current: ChatConversationState | undefined,
+): ChatConversationState {
+  const duration = incoming.burnDurationSec ?? 0;
+  // The REST conversation DTO intentionally has no start-time column. Preserve
+  // the local boundary across a refresh/upsert while the window is still active;
+  // an explicit disable still clears it, and applyBurnDuration records a real
+  // restart when the server sends the burn-change event/response.
+  const incomingStart = (incoming as ChatConversationDto & {
+    burnStartedAt?: string | null;
+  }).burnStartedAt;
+  return {
+    ...incoming,
+    burnStartedAt: normalizeBurnStartedAt(
+      duration,
+      incomingStart,
+      current?.burnStartedAt ?? null,
+    ),
+  };
+}
+
 function normalizeViewerSelfDestructSec(seconds: number): number | null {
   return isBurnDurationChoice(seconds) ? seconds : null;
 }
@@ -877,16 +899,22 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       clearedBeforeHeightByConversation,
       selfDestructPolicyEpoch,
     } = get();
+    const currentById = new Map(
+      currentConversations.map((conversation) => [conversation.id, conversation]),
+    );
+    const conversationsWithBurnState = conversations.map((c) =>
+      mergeConversationBurnState(c, currentById.get(c.id)),
+    );
     const burnPolicyChanged = hasBurnPolicyChanged(
       currentConversations,
-      conversations,
+      conversationsWithBurnState,
     );
     const seededReadWatermarks = seedPeerReadWatermarks(
       readWatermarks,
       conversations,
     );
     const reconciledConversations = sortConversations(
-      conversations
+      conversationsWithBurnState
         .map((c) => reconcileDeletedPreview(c, messagesByConversation[c.id]))
           // 快照是请求发出那一刻的事实。这段时间里本账号可能已经在另一台
           // 设备上读过(chat:read 先到、会话还不在 store 里,applyRead 当时
@@ -920,9 +948,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   upsertConversation: (conversation) => {
     const { conversations, messagesByConversation, readWatermarks } = get();
     const rest = conversations.filter((c) => c.id !== conversation.id);
+    const current = conversations.find((c) => c.id === conversation.id);
+    const withBurnState = mergeConversationBurnState(conversation, current);
     const reconciled = reconcileDeletedPreview(
-      conversation,
-      messagesByConversation[conversation.id],
+      withBurnState,
+      messagesByConversation[withBurnState.id],
     );
     set({
       conversations: sortConversations([...rest, reconciled]),

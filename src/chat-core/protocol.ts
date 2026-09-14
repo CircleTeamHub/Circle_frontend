@@ -160,6 +160,8 @@ export interface ChatMessageDto {
   /** 撤回时间（ISO）；未撤回为 null/缺省。撤回消息仍占 height，content 为空对象。 */
   revokedAt?: string | null;
   revokedBy?: string | null;
+  /** Tombstone marker returned by the offline mutations endpoint. */
+  deleted?: boolean;
   /** 编辑时间（ISO）；未编辑缺省。height 不变。 */
   editedAt?: string | null;
   /** 表情回应聚合；无回应缺省。 */
@@ -263,6 +265,9 @@ export function isChatMessageDto(value: unknown): value is ChatMessageDto {
     revokedBy !== undefined &&
     typeof revokedBy !== 'string'
   ) {
+    return false;
+  }
+  if (value['deleted'] !== undefined && typeof value['deleted'] !== 'boolean') {
     return false;
   }
   return true;

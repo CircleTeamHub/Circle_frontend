@@ -971,6 +971,21 @@ test('re-enabling the same burn duration resets the shared start time', () => {
   assert.equal(updated.burnStartedAt, secondStart);
 });
 
+test('conversation refreshes preserve the local burn boundary when the DTO omits it', () => {
+  const { useChatStore } = loadChatStore();
+  const start = '2026-09-11T20:00:00.000Z';
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'conv-1' })]);
+  store.applyBurnDuration('conv-1', 60, start);
+
+  // Both REST snapshot and realtime metadata upsert mirror the server DTO,
+  // which intentionally has no burnStartedAt field.
+  store.setConversations([conversation({ id: 'conv-1', burnDurationSec: 60 })]);
+  assert.equal(useChatStore.getState().conversations[0].burnStartedAt, start);
+  store.upsertConversation(conversation({ id: 'conv-1', burnDurationSec: 60 }));
+  assert.equal(useChatStore.getState().conversations[0].burnStartedAt, start);
+});
+
 test('burn expiry clears the stale unread badge with its expired preview', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
