@@ -1,4 +1,9 @@
 import { Divider } from '@/components/ui/divider';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+import {
+  MODAL_INPUT_NATIVE_AUTO_FOCUS,
+  useModalInputAutoFocus,
+} from '@/hooks/use-modal-input-auto-focus';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
 import { sortFriendTags } from '@/features/contacts/contact-friends';
@@ -113,6 +118,8 @@ export default function FriendTagsScreen() {
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
   const createInFlightRef = useRef(false);
+  const newTagInputRef = useRef<TextInput>(null);
+  useModalInputAutoFocus(newTagInputRef, createTagVisible);
 
   const loadTags = useCallback(async (signal?: { cancelled: boolean }) => {
     const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
@@ -315,10 +322,12 @@ export default function FriendTagsScreen() {
         animationType="fade"
         onRequestClose={() => setCreateTagVisible(false)}
       >
-        <Pressable
-          style={s.modalBackdrop}
-          onPress={() => setCreateTagVisible(false)}
-        >
+        {/* 卡片里的输入框自动聚焦：键盘弹起后卡片在剩余空间里居中，蒙层照样铺满。 */}
+        <KeyboardAvoidingContainer style={s.modalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setCreateTagVisible(false)}
+          />
           <Pressable style={[s.modalCard, d.modalCard]} onPress={() => undefined}>
             <Text style={[s.modalTitle, d.modalTitle]}>
               {t('contacts.tagsScreen.addTag', { defaultValue: '添加标签' })}
@@ -327,7 +336,8 @@ export default function FriendTagsScreen() {
               value={newTagName}
               onChangeText={setNewTagName}
               onSubmitEditing={() => void handleCreateTag()}
-              autoFocus
+              ref={newTagInputRef}
+              autoFocus={MODAL_INPUT_NATIVE_AUTO_FOCUS}
               maxLength={24}
               returnKeyType="done"
               placeholder={t('contacts.tagsScreen.tagNamePlaceholder', {
@@ -359,7 +369,7 @@ export default function FriendTagsScreen() {
               </Pressable>
             </View>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingContainer>
       </Modal>
     </View>
   );

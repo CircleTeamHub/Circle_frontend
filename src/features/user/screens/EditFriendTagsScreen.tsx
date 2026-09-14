@@ -22,6 +22,7 @@ import {
 } from '@/services/api/friends';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -362,7 +363,7 @@ export default function EditFriendTagsScreen() {
   );
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('chat.tags')} />
       <ScrollView
         contentContainerStyle={s.content}
@@ -384,6 +385,6 @@ export default function EditFriendTagsScreen() {
           <Text style={d.saveButtonText}>{isSaving ? t('common.saving') : t('common.save')}</Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

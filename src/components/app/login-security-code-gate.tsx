@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +13,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { AuthInput } from '@/components/ui/auth-input';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
   fetchLoginSecurityCodeStatus,
   verifyLoginSecurityCode,
@@ -96,6 +95,8 @@ export function LoginSecurityCodeGate() {
       container: {
         backgroundColor: colors.background,
         paddingTop: insets.top,
+      },
+      content: {
         paddingBottom: insets.bottom + Spacing.xl,
       },
       title: {
@@ -231,12 +232,9 @@ export function LoginSecurityCodeGate() {
         setError(null);
       }}
     >
-      <KeyboardAvoidingView
-        style={[s.container, d.container]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingContainer style={[s.container, d.container]}>
         <ScrollView
-          contentContainerStyle={s.content}
+          contentContainerStyle={[s.content, d.content]}
           showsVerticalScrollIndicator={false}
           {...keyboardDismissOnDragProps}
         >
@@ -282,7 +280,7 @@ export function LoginSecurityCodeGate() {
             )}
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingContainer>
     </Modal>
   );
 }

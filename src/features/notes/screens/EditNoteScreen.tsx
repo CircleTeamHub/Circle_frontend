@@ -6,10 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   LogBox,
   PixelRatio,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +21,7 @@ import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
 import { NoteTextStatsConsumer } from '@/features/notes/components/NoteTextStatsConsumer';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
   BASEMAP_ATTRIBUTION,
   getOpenStreetMapPreviewTiles,
@@ -1084,10 +1083,8 @@ export default function EditNoteScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingContainer
       style={[s.container, d.container, { paddingTop: insets.top }]}
-      // 底部的位置输入框会被键盘盖住：iOS 用 padding 顶起，Android 交给系统 resize。
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={s.header}>
         <Pressable onPress={navigateBack} hitSlop={8}>
@@ -1117,6 +1114,7 @@ export default function EditNoteScreen() {
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.heroCard, d.heroCard]}>
@@ -1439,7 +1437,7 @@ export default function EditNoteScreen() {
           </Pressable>
         </View>
       </BottomSheetModal>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }
 

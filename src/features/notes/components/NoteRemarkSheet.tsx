@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +10,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import {
+  MODAL_INPUT_NATIVE_AUTO_FOCUS,
+  useModalInputAutoFocus,
+} from '@/hooks/use-modal-input-auto-focus';
 import type { NoteSummary } from '@/features/notes/types';
 import { runNoteBatch } from '@/features/notes/utils/batch-run';
 import { setNoteRemark } from '@/services/api/notes';
@@ -52,6 +54,8 @@ export function NoteRemarkSheet({
   // saving 状态要下一帧才重渲染;键盘 Done 和保存按钮同帧各触发一次 handleSave
   // 时都会读到旧的 saving=false。ref 同步生效,双击/双路只放行一次提交。
   const savingRef = useRef(false);
+  const remarkInputRef = useRef<TextInput>(null);
+  useModalInputAutoFocus(remarkInputRef, targets);
 
   // 打开时起稿：单条用它现有的备注；批量在所有选中项备注一致时预填该值，
   // 否则从空白起（保存会统一覆盖）。关闭（notes→null）时不动草稿。
@@ -125,58 +129,55 @@ export function NoteRemarkSheet({
       backdropStyle={d.backdrop}
       sheetStyle={s.sheetWrap}
     >
-      {/* 输入框贴底，键盘弹起时整个面板上移 */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      {/* 输入框贴底；键盘弹起时 BottomSheetModal 把整个面板顶上去 */}
+      <View
+        style={[
+          s.sheet,
+          d.sheet,
+          { paddingBottom: insets.bottom || Spacing.lg },
+        ]}
       >
-        <View
-          style={[
-            s.sheet,
-            d.sheet,
-            { paddingBottom: insets.bottom || Spacing.lg },
-          ]}
-        >
-          <View style={[s.handle, d.handle]} />
-          <Text style={[s.title, d.title]}>
-            {targets && targets.length > 1
-              ? t('notes.remarkSheet.batchTitle', {
-                  count: targets.length,
-                  defaultValue: `批量备注（${targets.length} 条）`,
-                })
-              : t('notes.remarkSheet.title', { defaultValue: '备注' })}
+        <View style={[s.handle, d.handle]} />
+        <Text style={[s.title, d.title]}>
+          {targets && targets.length > 1
+            ? t('notes.remarkSheet.batchTitle', {
+                count: targets.length,
+                defaultValue: `批量备注（${targets.length} 条）`,
+              })
+            : t('notes.remarkSheet.title', { defaultValue: '备注' })}
+        </Text>
+        {targets?.length === 1 ? (
+          <Text style={[s.caption, d.caption]} numberOfLines={1}>
+            {targets[0].title}
           </Text>
-          {targets?.length === 1 ? (
-            <Text style={[s.caption, d.caption]} numberOfLines={1}>
-              {targets[0].title}
-            </Text>
-          ) : null}
-          <TextInput
-            style={[s.input, d.input]}
-            value={draft}
-            onChangeText={setDraft}
-            placeholder={t('notes.remarkSheet.placeholder', {
-              defaultValue: '输入备注，留空保存即清除',
-            })}
-            placeholderTextColor={colors.textSecondary}
-            maxLength={REMARK_MAX_LENGTH}
-            autoFocus
-            returnKeyType="done"
-            onSubmitEditing={() => void handleSave()}
-          />
-          <Pressable
-            style={[s.saveBtn, d.saveBtn, saving ? s.saveBtnDisabled : null]}
-            onPress={() => void handleSave()}
-            disabled={saving}
-            accessibilityRole="button"
-          >
-            <Text style={[s.saveBtnText, d.saveBtnText]}>
-              {saving
-                ? t('notes.remarkSheet.saving', { defaultValue: '保存中...' })
-                : t('notes.remarkSheet.save', { defaultValue: '保存' })}
-            </Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
+        ) : null}
+        <TextInput
+          style={[s.input, d.input]}
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={t('notes.remarkSheet.placeholder', {
+            defaultValue: '输入备注，留空保存即清除',
+          })}
+          placeholderTextColor={colors.textSecondary}
+          maxLength={REMARK_MAX_LENGTH}
+          ref={remarkInputRef}
+          autoFocus={MODAL_INPUT_NATIVE_AUTO_FOCUS}
+          returnKeyType="done"
+          onSubmitEditing={() => void handleSave()}
+        />
+        <Pressable
+          style={[s.saveBtn, d.saveBtn, saving ? s.saveBtnDisabled : null]}
+          onPress={() => void handleSave()}
+          disabled={saving}
+          accessibilityRole="button"
+        >
+          <Text style={[s.saveBtnText, d.saveBtnText]}>
+            {saving
+              ? t('notes.remarkSheet.saving', { defaultValue: '保存中...' })
+              : t('notes.remarkSheet.save', { defaultValue: '保存' })}
+          </Text>
+        </Pressable>
+      </View>
     </BottomSheetModal>
   );
 }
