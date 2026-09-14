@@ -117,12 +117,12 @@ test('presence protocol: detail query, last-seen + hidden broadcast, header hide
     assert.doesNotMatch(read(consumer), /queryChatPresence/, consumer);
   }
 
-  // 阅后即焚「开启时间」的归一化必须只有一处:两个入库点(会话档位 / 本人全局窗口)各写一遍的话,
+  // 阅后即焚「开启时间」的归一化必须只有一处:三个入库点(会话快照 / 会话档位 / 本人全局窗口)各写一遍的话,
   // 补漏一个的表现是「界面显示已开启、消息永不焚毁」且不报错。
   assert.equal(
     (store.match(/normalizeBurnStartedAt\(/g) ?? []).length,
-    3,
-    '一处定义 + 两个入库点各调用一次',
+    4,
+    '一处定义 + 三个入库点各调用一次',
   );
 });
 
