@@ -308,6 +308,12 @@ export default function VerificationRequestScreen() {
       icon = 'close-circle';
       tone = RED;
       label = t('invitation.settledRejected', { defaultValue: '该申请已被拒绝' });
+    } else if (settled && invitation.status === 'CANCELLED') {
+      // 服务端会把失效的申请收成 CANCELLED：它既不是通过也不是拒绝，落进下面的
+      // 「已通过」分支会给验证人一个假的绿勾。
+      icon = 'remove-circle-outline';
+      tone = colors.textSecondary;
+      label = t('invitation.settledCancelled', { defaultValue: '该申请已取消' });
     } else if (settled) {
       icon = 'checkmark-circle';
       tone = GREEN;

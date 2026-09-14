@@ -1422,6 +1422,7 @@
     "viewerOnly": "You are not a verifier for this request",
     "settledRejected": "This request was rejected",
     "settledApproved": "Approved — joined the circle",
+    "settledCancelled": "This request was cancelled",
     "youApproved": "You verified for them",
     "youRejected": "You rejected this request",
     "noEligibleVerifiers": "No one to pick: a verifier must be your friend and already an active member of this circle",

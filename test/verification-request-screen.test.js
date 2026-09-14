@@ -37,3 +37,16 @@ test('verify screen renders a progress bar', () => {
   assert.match(src, /progressFill/);
   assert.match(src, /Math\.round\(ratio \* 100\)/);
 });
+
+// 服务端会把失效的申请收成 CANCELLED：它不是通过，不能落进「已通过」的绿勾分支。
+test('verify screen renders a cancelled request distinctly from an approved one', () => {
+  const src = read(SRC);
+  const cancelledAt = src.indexOf("invitation.status === 'CANCELLED'");
+  const approvedAt = src.indexOf('invitation.settledApproved');
+  assert.notEqual(cancelledAt, -1);
+  assert.match(src, /invitation\.settledCancelled/);
+  assert.ok(
+    cancelledAt < approvedAt,
+    'CANCELLED must be handled before the approved fallback branch',
+  );
+});

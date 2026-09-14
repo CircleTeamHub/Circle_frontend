@@ -1489,6 +1489,7 @@
     "viewerOnly": "この申請の認証者ではありません",
     "settledRejected": "この申請は拒否されました",
     "settledApproved": "承認され、サークルに参加しました",
+    "settledCancelled": "この申請はキャンセルされました",
     "youApproved": "この人を認証しました",
     "youRejected": "この申請を拒否しました",
     "noEligibleVerifiers": "選べる人がいません：検証者はあなたの友だちで、かつこのサークルのアクティブメンバーである必要があります",

@@ -1416,6 +1416,7 @@
     "viewerOnly": "你不是该申请的验证人",
     "settledRejected": "该申请已被拒绝",
     "settledApproved": "该申请已通过，已加入圈子",
+    "settledCancelled": "该申请已取消",
     "youApproved": "你已帮 TA 验证",
     "youRejected": "你已拒绝该申请",
     "noEligibleVerifiers": "没有可选的验证人：验证人得既是你的好友，又已经在这个圈子里",

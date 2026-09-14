@@ -1489,6 +1489,7 @@
     "viewerOnly": "이 신청의 인증자가 아닙니다",
     "settledRejected": "이 신청은 거절되었습니다",
     "settledApproved": "승인됨 — 서클에 가입했습니다",
+    "settledCancelled": "이 신청은 취소되었습니다",
     "youApproved": "이 사람을 인증했습니다",
     "youRejected": "이 신청을 거절했습니다",
     "noEligibleVerifiers": "선택할 수 있는 사람이 없습니다: 인증인은 내 친구이면서 이 서클의 활성 멤버여야 합니다",

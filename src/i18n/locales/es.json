@@ -1495,6 +1495,7 @@
     "viewerOnly": "No eres verificador de esta solicitud",
     "settledRejected": "Esta solicitud fue rechazada",
     "settledApproved": "Aprobada — se unió al círculo",
+    "settledCancelled": "Esta solicitud fue cancelada",
     "youApproved": "Verificaste por ellos",
     "youRejected": "Rechazaste esta solicitud",
     "noEligibleVerifiers": "No hay nadie para elegir: el verificador debe ser tu amigo y ya un miembro activo de este círculo",
