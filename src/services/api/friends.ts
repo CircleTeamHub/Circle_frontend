@@ -11,10 +11,7 @@ export type FriendProfile = {
   accountId: string;
   nickname: string;
   avatarUrl: string | null;
-  avatarFrame: string | null;
   avatarFrameAppearance: AvatarFrameAppearance | null;
-  gender: string;
-  lastOnline: string | null;
   friendsSince: string;
   // 当前用户给该好友设的备注（可空）。用于按备注搜索/展示。
   remark: string | null;
@@ -144,12 +141,9 @@ function normalizeFriendProfile(friend: unknown): FriendProfile | null {
     accountId,
     nickname,
     avatarUrl: normalizeMediaUrl(normalizeNullableString(friend.avatarUrl)),
-    avatarFrame: normalizeMediaUrl(normalizeNullableString(friend.avatarFrame)),
     avatarFrameAppearance: normalizeAvatarFrameAppearance(
       friend.avatarFrameAppearance,
     ),
-    gender: stringValue(friend.gender) ?? '',
-    lastOnline: normalizeNullableString(friend.lastOnline),
     friendsSince: stringValue(friend.friendsSince) ?? '',
     // 兼容尚未部署新后端的响应：缺 remark 时归一为 null。
     remark: normalizeNullableString(friend.remark),

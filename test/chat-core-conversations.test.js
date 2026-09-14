@@ -368,12 +368,12 @@ test('a remote refresh with the same duration and same start time stays a no-op'
   assert.equal(useChatStore.getState().selfDestructPolicyEpoch, baseline);
 });
 
-test('an old backend response without burnStartedAt still gets a start boundary', () => {
+test('a burn response (the server never sends a start time) still gets a local start boundary', () => {
   const { useChatStore } = loadStore();
   const store = useChatStore.getState();
   store.setConversations([conv({ id: 'conv-1' })]);
 
-  // 旧服务端只回 burnDurationSec。不兜底的话开启时间是 null,而过期判定要求它
+  // 服务端只回 burnDurationSec(没有开启时间列)。不兜底的话开启时间是 null,而过期判定要求它
   // 有限 —— 界面显示「已开启」,消息却永不焚毁,且没有任何报错。
   store.applyBurnDuration('conv-1', 300, undefined);
 

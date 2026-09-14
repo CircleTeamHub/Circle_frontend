@@ -300,6 +300,9 @@ test("login posts the trimmed email-or-user-id identifier and password", async (
   assert.equal(calls[0].endpoint, "/auth/login");
   assert.equal(calls[0].options.body.identifier, "USER_123");
   assert.equal(calls[0].options.body.password, "pw");
+  // 服务端从不读 platform(设备信息走 x-device-name 头);已装机旧版本仍会发,
+  // 后端继续接受,新版本不再发送。
+  assert.equal(Object.hasOwn(calls[0].options.body, "platform"), false);
 });
 
 
@@ -356,6 +359,7 @@ test("register posts email/password/confirmation/nickname", async () => {
   assert.equal(calls[0].confirmPassword, "pw");
   assert.equal(calls[0].nickname, "Hi");
   assert.equal(calls[0].inviteCode, undefined);
+  assert.equal(Object.hasOwn(calls[0], "platform"), false);
 });
 
 test("register normalizes and posts a populated invite code", async () => {

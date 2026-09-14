@@ -28,7 +28,6 @@ export type CallSession = {
   sessionType: 'group' | 'single';
   callType: CallType;
   status: CallStatus;
-  livekitRoomName?: string;
   initiator: CallUserLite;
   startedAt: string | null;
   endedAt: string | null;
@@ -55,7 +54,6 @@ export type CallParticipantPayload = {
   joinedAt?: string;
   leftAt?: string;
   rejectedAt?: string;
-  missedAt?: string;
   changedAt: string;
 };
 

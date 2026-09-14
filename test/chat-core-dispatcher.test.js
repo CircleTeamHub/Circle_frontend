@@ -93,7 +93,6 @@ function loadDispatcher(storeOverrides = {}) {
     cleared: [],
     clearedUnread: [],
     burnDurations: [],
-    globalBurnPolicies: [],
     burnedMessages: [],
     upserts: [],
     sentryReports: [],
@@ -155,14 +154,6 @@ function loadDispatcher(storeOverrides = {}) {
     },
     applyBurnDuration: (conversationId, seconds, startedAt) => {
       state.burnDurations.push({ conversationId, seconds, startedAt });
-    },
-    applyGlobalBurnPolicy: (conversationId, userId, seconds, startedAt) => {
-      state.globalBurnPolicies.push({
-        conversationId,
-        userId,
-        seconds,
-        startedAt,
-      });
     },
     applyBurnedMessages: (conversationId, messageIds) => {
       state.burnedMessages.push({ conversationId, messageIds });
@@ -869,26 +860,6 @@ test('a remote burn-changed system message updates the conversation setting', ()
     {
       conversationId: 'c1',
       seconds: 30,
-      startedAt: '2026-09-11T20:00:00.000Z',
-    },
-  ]);
-});
-
-test('a remote global burn policy updates the open chat immediately', () => {
-  const { socket, state } = loadDispatcher();
-
-  socket.emit('chat:global_burn_policy', {
-    conversationId: 'c1',
-    userId: 'peer',
-    seconds: 300,
-    startedAt: '2026-09-11T20:00:00.000Z',
-  });
-
-  assert.deepEqual(state.globalBurnPolicies, [
-    {
-      conversationId: 'c1',
-      userId: 'peer',
-      seconds: 300,
       startedAt: '2026-09-11T20:00:00.000Z',
     },
   ]);
