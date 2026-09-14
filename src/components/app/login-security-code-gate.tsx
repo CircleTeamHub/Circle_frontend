@@ -95,6 +95,8 @@ export function LoginSecurityCodeGate() {
       container: {
         backgroundColor: colors.background,
         paddingTop: insets.top,
+      },
+      content: {
         paddingBottom: insets.bottom + Spacing.xl,
       },
       title: {
@@ -232,7 +234,7 @@ export function LoginSecurityCodeGate() {
     >
       <KeyboardAvoidingContainer style={[s.container, d.container]}>
         <ScrollView
-          contentContainerStyle={s.content}
+          contentContainerStyle={[s.content, d.content]}
           showsVerticalScrollIndicator={false}
           {...keyboardDismissOnDragProps}
         >

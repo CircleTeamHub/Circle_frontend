@@ -127,6 +127,8 @@ const MODAL_HOSTED_AUTO_FOCUS_INPUTS = [
   'src/features/discover/components/moment-comment-input.tsx',
   'src/features/notes/components/GroupManagerSheet.tsx',
   'src/features/notes/components/NoteRemarkSheet.tsx',
+  'src/features/notes/components/NoteGroupPickerSheet.tsx',
+  'src/features/messages/screens/GroupManagementScreen.tsx',
 ];
 
 test('inputs that open with a modal focus only after the Android dialog window is up', () => {
@@ -140,4 +142,17 @@ test('inputs that open with a modal focus only after the Android dialog window i
     assert.match(src, /autoFocus=\{MODAL_INPUT_NATIVE_AUTO_FOCUS\}/, `${file} should gate native autoFocus`);
     assert.match(src, /useModalInputAutoFocus\(/, `${file} should focus after the modal window is shown`);
   }
+});
+
+test('security gate keeps permanent safe-area spacing outside keyboard padding', () => {
+  const src = read('src/components/app/login-security-code-gate.tsx');
+
+  assert.match(src, /container:\s*\{[^}]*paddingTop:\s*insets\.top/);
+  assert.match(src, /content:\s*\{[^}]*paddingBottom:\s*insets\.bottom \+ Spacing\.xl/);
+  assert.match(src, /contentContainerStyle=\{\[s\.content, d\.content\]\}/);
+  assert.doesNotMatch(
+    src,
+    /container:\s*\{[^}]*paddingBottom:\s*insets\.bottom \+ Spacing\.xl/,
+    'permanent bottom spacing must not be passed to KeyboardAvoidingContainer',
+  );
 });

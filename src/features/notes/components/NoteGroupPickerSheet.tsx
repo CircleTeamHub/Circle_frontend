@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -29,6 +29,10 @@ import { createNoteGroup, updateNoteGroupIds } from '@/services/api/notes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import {
+  MODAL_INPUT_NATIVE_AUTO_FOCUS,
+  useModalInputAutoFocus,
+} from '@/hooks/use-modal-input-auto-focus';
 
 interface NoteGroupPickerSheetProps {
   /** 非空即打开；单条编辑传 [note]，多选批量传所有选中笔记 */
@@ -66,6 +70,8 @@ export function NoteGroupPickerSheet({
   const [creatingOpen, setCreatingOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const newGroupInputRef = useRef<TextInput>(null);
+  useModalInputAutoFocus(newGroupInputRef, creatingOpen);
 
   useEffect(() => {
     if (notes && notes.length > 0) {
@@ -90,6 +96,13 @@ export function NoteGroupPickerSheet({
     }
     setCreatingOpen(true);
   };
+
+  const handleClose = useCallback(() => {
+    setCreatingOpen(false);
+    setNewGroupName('');
+    setCreatingGroup(false);
+    onClose();
+  }, [onClose]);
 
   const handleCreateGroup = async () => {
     const name = newGroupName.trim();
@@ -171,7 +184,7 @@ export function NoteGroupPickerSheet({
     // 只给净变化非零的笔记发请求：没动任何分组 = 直接关掉，零网络开销。
     const ops = applyGroupMembershipChanges(notes, changes);
     if (ops.length === 0) {
-      onClose();
+      handleClose();
       return;
     }
     setSaving(true);
@@ -190,13 +203,13 @@ export function NoteGroupPickerSheet({
       );
     }
     onSaved({ failedCount: failed.length });
-    onClose();
+    handleClose();
   };
 
   return (
     <BottomSheetModal
       visible={notes != null}
-      onClose={onClose}
+      onClose={handleClose}
       backdropStyle={d.backdrop}
       sheetStyle={s.sheetWrap}
     >
@@ -279,6 +292,7 @@ export function NoteGroupPickerSheet({
       {creatingOpen ? (
         <View style={s.createRow}>
           <TextInput
+            ref={newGroupInputRef}
             style={[
               s.createInput,
               {
@@ -294,7 +308,7 @@ export function NoteGroupPickerSheet({
             value={newGroupName}
             onChangeText={setNewGroupName}
             maxLength={GROUP_NAME_MAX_LENGTH}
-            autoFocus
+            autoFocus={MODAL_INPUT_NATIVE_AUTO_FOCUS}
             returnKeyType="done"
             onSubmitEditing={() => void handleCreateGroup()}
           />
