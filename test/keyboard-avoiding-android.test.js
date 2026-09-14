@@ -156,3 +156,9 @@ test('security gate keeps permanent safe-area spacing outside keyboard padding',
     'permanent bottom spacing must not be passed to KeyboardAvoidingContainer',
   );
 });
+
+test('friend activity reply keeps the header offset when avoiding the keyboard', () => {
+  const src = read('src/features/contacts/screens/FriendActivityDetailScreen.tsx');
+
+  assert.match(src, /<KeyboardAvoidingContainer[\s\S]*keyboardVerticalOffset=\{insets\.top \+ 44\}/);
+});

@@ -579,7 +579,12 @@ export default function FriendActivityDetailScreen() {
       {stateBlock ? (
         stateBlock
       ) : activity ? (
-        <KeyboardAvoidingContainer style={s.flex}>
+        <KeyboardAvoidingContainer
+          style={s.flex}
+          // The container sits below the safe-area inset and the 48pt header;
+          // keep the keyboard frame in the same coordinate space as the view.
+          keyboardVerticalOffset={insets.top + 44}
+        >
           <FlatList
             style={s.flex}
             data={messages}
