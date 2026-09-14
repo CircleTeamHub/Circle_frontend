@@ -3041,6 +3041,7 @@
     "TEMP_CHAT_JOIN_FAILED": "Failed to join, please try again",
     "NOTE_RESTORE_DUPLICATE": "Another active copy of this collected note already exists.",
     "NOTE_SHARE_LINK_LIMIT": "Share link limit reached — revoke unused links first",
+    "NOTE_SHARE_LINK_UNAVAILABLE": "Note sharing isn't available yet",
     "UPLOAD_INVALID_CONTENT_TYPE": "This file type is not supported",
     "UPLOAD_PAYLOAD_TOO_LARGE": "File is too large to upload",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "Messages in a disappearing-message chat cannot be collected",

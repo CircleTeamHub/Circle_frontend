@@ -3035,6 +3035,7 @@
     "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
     "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
     "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
+    "NOTE_SHARE_LINK_UNAVAILABLE": "ノートの共有はまだ利用できません",
     "UPLOAD_INVALID_CONTENT_TYPE": "対応していないファイル形式です",
     "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "消えるメッセージのチャット内のメッセージは保存できません",
