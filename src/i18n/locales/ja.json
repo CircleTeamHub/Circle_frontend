@@ -268,8 +268,6 @@
       "inputPlaceholder": "メッセージを入力…",
       "disappearingMessageNotice": "このチャットでは消えるメッセージがオンです。新しいメッセージは {{duration}} 後に消えます。",
       "personalDisappearingMessageNotice": "消えるメッセージをオンにしました。新しいメッセージは {{duration}} 後に消えます。",
-      "peerDisappearingMessageNotice": "相手が消えるメッセージをオンにしました（{{duration}}）。",
-      "bothDisappearingMessageNotice": "双方が消えるメッセージをオンにしました。新しいメッセージは {{duration}} 後に消えます。",
       "attachmentPanelLabel": "添付パネルを開く",
       "sendFailedText": "メッセージを送信できませんでした。もう一度お試しください",
       "sensitiveWordBlocked": "禁止ワードが含まれているため、メッセージはブロックされました",

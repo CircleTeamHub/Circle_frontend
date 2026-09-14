@@ -338,8 +338,6 @@
       "inputPlaceholder": "输入消息...",
       "disappearingMessageNotice": "此对话已开启阅后即焚，新消息将在 {{duration}} 后消失",
       "personalDisappearingMessageNotice": "你已开启阅后即焚，新消息将在 {{duration}} 后消失",
-      "peerDisappearingMessageNotice": "对方已开启阅后即焚（{{duration}}）",
-      "bothDisappearingMessageNotice": "双方已开启阅后即焚，新消息将在 {{duration}} 后消失",
       "attachmentPanelLabel": "打开附件面板",
       "sendFailedText": "消息发送失败，请重试",
       "sensitiveWordBlocked": "消息包含敏感词，已被屏蔽",

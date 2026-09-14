@@ -271,8 +271,6 @@
       "inputPlaceholder": "Escribe un mensaje…",
       "disappearingMessageNotice": "Los mensajes temporales están activados en este chat. Los mensajes nuevos desaparecen después de {{duration}}.",
       "personalDisappearingMessageNotice": "Has activado los mensajes temporales. Los mensajes nuevos desaparecen después de {{duration}}.",
-      "peerDisappearingMessageNotice": "La otra persona activó los mensajes temporales ({{duration}}).",
-      "bothDisappearingMessageNotice": "Ambos han activado los mensajes temporales. Los mensajes nuevos desaparecen después de {{duration}}.",
       "attachmentPanelLabel": "Abrir panel de adjuntos",
       "sendFailedText": "No se pudo enviar el mensaje, inténtalo de nuevo",
       "sensitiveWordBlocked": "Mensaje bloqueado: contiene palabras prohibidas",

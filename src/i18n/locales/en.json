@@ -341,8 +341,6 @@
       "inputPlaceholder": "Type a message…",
       "disappearingMessageNotice": "Disappearing messages are on in this chat. New messages disappear after {{duration}}.",
       "personalDisappearingMessageNotice": "You have turned on disappearing messages. New messages disappear after {{duration}}.",
-      "peerDisappearingMessageNotice": "The other person has turned on disappearing messages ({{duration}}).",
-      "bothDisappearingMessageNotice": "Both of you have turned on disappearing messages. New messages disappear after {{duration}}.",
       "attachmentPanelLabel": "Open attachment panel",
       "sendFailedText": "Failed to send message, please try again",
       "sensitiveWordBlocked": "Message blocked: it contains prohibited words",

@@ -1018,35 +1018,6 @@ test('server burned-message notifications remove the peer copy and roll back pre
   assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'older');
 });
 
-test('peer global burn policy purges the shared active-period cache immediately', () => {
-  const { useChatStore } = loadChatStore();
-  const store = useChatStore.getState();
-  const expired = msg({
-    id: 'peer-global-expired',
-    createdAt: new Date(Date.now() - 120_000).toISOString(),
-  });
-  store.setConversations([
-    conversation({
-      lastMessage: expired,
-      lastMessageAt: expired.createdAt,
-    }),
-  ]);
-  store.ingestMessages('conv-1', [expired]);
-
-  store.applyGlobalBurnPolicy(
-    'conv-1',
-    'other',
-    60,
-    new Date(Date.now() - 180_000).toISOString(),
-  );
-
-  assert.equal(
-    useChatStore.getState().messagesByConversation['conv-1'].length,
-    0,
-  );
-  assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
-});
-
 test('viewer self-destruct policy purges cached content without conversation burn', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();

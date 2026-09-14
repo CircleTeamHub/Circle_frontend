@@ -29,9 +29,7 @@ export const CHAT_EVENTS = {
   edit: 'chat:edit',
   /** 服务端 → 客户端：私聊任一方清空后，双方设备同步清空到该水位 */
   historyCleared: 'chat:history_cleared',
-  /** 服务端 → 客户端：成员全局阅后即焚策略变更 */
-  globalBurnPolicy: 'chat:global_burn_policy',
-  /** 服务端 → 客户端：阅后即焚到期消息已从会话中删除 */
+  /** 服务端 → 客户端（在座成员个人房）：阅后即焚到期消息的墓碑已提交，删本地副本 */
   burnedMessages: 'chat:burned_messages',
 } as const;
 
@@ -321,14 +319,6 @@ export interface ChatHistoryClearedBroadcast {
   clearedBy: string;
 }
 
-/** 全局阅后即焚策略变更（按会话成员个人房定向广播）。 */
-export interface ChatGlobalBurnPolicyBroadcast {
-  conversationId: string;
-  userId: string;
-  seconds: number;
-  startedAt: string | null;
-}
-
 /** 阅后即焚到期消息删除通知，按会话成员个人房定向广播。 */
 export interface ChatBurnedMessagesBroadcast {
   conversationId: string;
@@ -569,9 +559,10 @@ export interface ChatConversationDto {
   policies?: ChatGroupPoliciesDto | null;
   /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
   burnDurationSec?: number | null;
-  /** 会话级阅后即焚开启时间；开启前的消息不受该策略影响。 */
-  burnStartedAt?: string | null;
-  /** DIRECT 会话对端已读水位；用于冷启动恢复发送状态。 */
+  /**
+   * DIRECT 会话对端座位的已读水位；冷启动恢复「已读」用。可选：兼容还没带它的后端。
+   * （会话级焚毁没有开启时间字段：服务端不下发，本机记录见 store 的 ChatConversationState。）
+   */
   peerReadHeight?: number | null;
   lastMessageAt: string | null;
   /**
@@ -581,12 +572,13 @@ export interface ChatConversationDto {
   joinedAt?: string | null;
 }
 
-/** 私聊页展示阅后即焚提醒所需的会话/对端策略快照。 */
+/**
+ * GET / POST /chat/conversations/:id/burn 的回执：会话级焚毁档位。
+ * 服务端不下发开启时间，也不外露对端的全局阅后即焚 —— 那只是对端本人视图上的
+ * 读过滤，不会烧掉会话另一方的消息。
+ */
 export interface ChatBurnPolicyDto {
   burnDurationSec: number | null;
-  burnStartedAt: string | null;
-  peerSelfDestructSec: number;
-  peerSelfDestructStartedAt: string | null;
 }
 
 /**
