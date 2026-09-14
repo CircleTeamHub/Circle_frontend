@@ -162,3 +162,17 @@ test('friend activity reply keeps the header offset when avoiding the keyboard',
 
   assert.match(src, /<KeyboardAvoidingContainer[\s\S]*keyboardVerticalOffset=\{insets\.top \+ 44\}/);
 });
+
+test('absolute bottom bars use height behavior so they move with the keyboard', () => {
+  for (const file of [
+    'src/features/notes/screens/NotesScreen.tsx',
+    'src/features/chat/screens/SharePickerScreen.tsx',
+  ]) {
+    const src = read(file);
+    assert.match(
+      src,
+      /<KeyboardAvoidingContainer[\s\S]{0,260}behavior="height"/,
+      `${file} must shrink its container for an absolute bottom bar`,
+    );
+  }
+});
