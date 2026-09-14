@@ -22,6 +22,8 @@ function loadUploadApi() {
   let platformOS = 'android';
   // 默认 localhost:另有用例专门断言「手机端拒绝 localhost 预签名地址」。
   let presignHost = 'http://localhost:9000';
+  // 逐用例覆盖 presign 响应字段(比如私有目录的 fileUrl 为 null / 缺省)。
+  let presignOverrides = {};
 
   const context = {
     module: { exports: {} },
@@ -43,6 +45,7 @@ function loadUploadApi() {
             },
             mocked: true,
             args,
+            ...presignOverrides,
           }),
         };
       }
@@ -141,6 +144,9 @@ function loadUploadApi() {
   context.module.exports.__getStoppedUploadJobId = () => stoppedUploadJobId;
   context.module.exports.__setPresignHost = (host) => {
     presignHost = host;
+  };
+  context.module.exports.__setPresignOverrides = (value) => {
+    presignOverrides = value;
   };
   context.module.exports.__setPlatformOS = (value) => {
     platformOS = value;
@@ -357,5 +363,39 @@ test('local file upload rejects localhost presigned urls before native upload', 
         },
       ),
     /localhost.*403/,
+  );
+});
+
+// chat/、notes/ 是私有目录：fileUrl 直连读不到，调用方只认 key。后端之后可能对它们
+// 返回 null —— 校验不能因此把聊天/笔记上传整个拒掉。
+test('private folders accept a presign without a directly readable fileUrl', async () => {
+  const api = loadUploadApi();
+  api.__setPresignHost('http://10.0.0.195:9000');
+  for (const fileUrl of [undefined, null]) {
+    api.__setPresignOverrides({ fileUrl, key: 'chat/user-1/voice.m4a' });
+    const response = await api.requestUploadPresign({
+      filename: 'voice.m4a',
+      contentType: 'audio/mp4',
+      folder: 'chat',
+      sizeBytes: 1024,
+    });
+    assert.equal(response.key, 'chat/user-1/voice.m4a');
+    assert.equal(response.fileUrl ?? null, null);
+  }
+});
+
+// 公开目录的调用方直接把 fileUrl 写进资料 / 圈子 / 帖子，缺了照旧拒绝。
+test('public folders still require fileUrl because callers persist it directly', async () => {
+  const api = loadUploadApi();
+  api.__setPresignHost('http://10.0.0.195:9000');
+  api.__setPresignOverrides({ fileUrl: null });
+  await assert.rejects(
+    api.requestUploadPresign({
+      filename: 'avatar.jpg',
+      contentType: 'image/jpeg',
+      folder: 'avatars',
+      sizeBytes: 1024,
+    }),
+    /预签名上传数据格式异常/,
   );
 });
