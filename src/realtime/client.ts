@@ -122,7 +122,7 @@ type RealtimeEvent =
       payload?: CallParticipantPayload;
     }
   | {
-      type: 'call.participant.rejected' | 'call.participant.missed';
+      type: 'call.participant.rejected';
       payload?: CallParticipantPayload;
     }
   | {
@@ -562,13 +562,6 @@ function handleRealtimeEvent(message: RealtimeEvent) {
         return;
       }
       callStore.handleCallParticipantRejected(message.payload);
-      return;
-    case 'call.participant.missed':
-      if (!isCallParticipantPayload(message.payload)) {
-        reportRealtimeFailureOnce('malformedPayload');
-        return;
-      }
-      callStore.handleCallParticipantMissed(message.payload);
       return;
     case 'call.ended':
     case 'call.canceled':
