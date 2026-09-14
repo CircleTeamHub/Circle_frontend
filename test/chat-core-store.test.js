@@ -1119,3 +1119,85 @@ test('a membership teardown clears the cache without leaving a watermark', () =>
     1,
   );
 });
+
+// 服务端目前按窗口焚毁会话里的全部旧消息，不看开启时间；App 承诺「开启焚毁前的消息保留」
+// 只在本机记得开启边界（burnStartedAt）时成立。chat:burned_messages 不能把边界之前的本地
+// 副本一并删掉，否则开启焚毁的那一刻，整段旧历史会从设备上消失。
+test('server burned-message notifications keep messages sent before this device saw burn enabled', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const now = Date.now();
+  const startedAt = new Date(now - 60_000).toISOString();
+  const beforeStart = msg({
+    id: 'before-start',
+    height: 1,
+    createdAt: new Date(now - 120_000).toISOString(),
+  });
+  const afterStart = msg({
+    id: 'after-start',
+    height: 2,
+    createdAt: new Date(now - 30_000).toISOString(),
+  });
+  store.setConversations([
+    conversation({
+      burnDurationSec: 86_400,
+      burnStartedAt: startedAt,
+      lastMessage: afterStart,
+      lastMessageAt: afterStart.createdAt,
+    }),
+  ]);
+  store.ingestMessages('conv-1', [beforeStart, afterStart]);
+  const deletes = [];
+  const original = __localDbStub.deleteLocalMessages;
+  __localDbStub.deleteLocalMessages = async (...args) => {
+    deletes.push(args);
+  };
+  try {
+    store.applyBurnedMessages('conv-1', ['before-start', 'after-start']);
+  } finally {
+    __localDbStub.deleteLocalMessages = original;
+  }
+
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].map((m) => m.id).join(','),
+    'before-start',
+  );
+  assert.equal(
+    useChatStore.getState().conversations[0].lastMessage.id,
+    'before-start',
+  );
+  // 本地库按同一边界删：内存窗口外的行也不能越过边界。
+  assert.equal(deletes.length, 1);
+  assert.equal(deletes[0][0], 'conv-1');
+  assert.deepEqual([...deletes[0][1]], ['before-start', 'after-start']);
+  assert.equal(deletes[0][2]?.createdAtNotBefore, startedAt);
+});
+
+test('server burned-message notifications converge fully when this device never saw burn enabled', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const older = msg({ id: 'older', height: 1 });
+  store.setConversations([
+    conversation({ lastMessage: older, lastMessageAt: older.createdAt }),
+  ]);
+  store.ingestMessages('conv-1', [older]);
+  const deletes = [];
+  const original = __localDbStub.deleteLocalMessages;
+  __localDbStub.deleteLocalMessages = async (...args) => {
+    deletes.push(args);
+  };
+  try {
+    store.applyBurnedMessages('conv-1', ['older']);
+  } finally {
+    __localDbStub.deleteLocalMessages = original;
+  }
+
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    0,
+  );
+  assert.equal(deletes.length, 1);
+  assert.equal(deletes[0][0], 'conv-1');
+  assert.deepEqual([...deletes[0][1]], ['older']);
+  assert.equal(deletes[0][2]?.createdAtNotBefore, undefined);
+});

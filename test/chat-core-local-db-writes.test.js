@@ -409,3 +409,38 @@ test('viewer self-destruct also purges orphaned cached rows globally', async () 
     'global viewer policy must not depend on the hydrated conversation list',
   );
 });
+
+// 服务端 chat:burned_messages 按窗口焚毁会话里全部旧消息，不看开启时间。本机记得开启边界时，
+// 边界之前的本地副本不能跟着删（与 purgeExpiredLocalMessages 的 startedAt 下界同一口径）。
+test('burned-message delete is bounded below by the local burn start when given', async () => {
+  const db = fakeDatabase();
+  const { api } = loadLocalDb(db);
+  await api.initChatLocalDb('user-1');
+
+  await api.deleteLocalMessages('conv-1', ['m1', 'm2'], {
+    createdAtNotBefore: '2026-08-01T00:00:00.000Z',
+  });
+
+  const deletes = deleteStatements(db);
+  assert.equal(deletes.length, 1);
+  assert.match(deletes[0].sql, /created_at >= \?/);
+  assert.deepEqual(deletes[0].params, [
+    'conv-1',
+    'm1',
+    'm2',
+    '2026-08-01T00:00:00.000Z',
+  ]);
+});
+
+test('burned-message delete without a boundary removes exactly the listed ids', async () => {
+  const db = fakeDatabase();
+  const { api } = loadLocalDb(db);
+  await api.initChatLocalDb('user-1');
+
+  await api.deleteLocalMessages('conv-1', ['m1']);
+
+  const deletes = deleteStatements(db);
+  assert.equal(deletes.length, 1);
+  assert.doesNotMatch(deletes[0].sql, /created_at/);
+  assert.deepEqual(deletes[0].params, ['conv-1', 'm1']);
+});

@@ -809,16 +809,32 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     );
     if (ids.size === 0) return;
     const { messagesByConversation, conversations } = get();
-    const timeline = messagesByConversation[conversationId] ?? [];
-    const nextTimeline = timeline.filter((message) => !ids.has(message.id));
     const index = conversations.findIndex((c) => c.id === conversationId);
     const target = index >= 0 ? conversations[index] : null;
+    // 服务端按窗口焚毁会话里的全部旧消息，不看开启时间。本机记得开启边界时，
+    // 边界之前的消息按 App 的承诺保留（与本地到期清理同一口径）；没有边界就
+    // 完全以服务端为准，与其它端收敛。
+    const burnStartMs = target?.burnStartedAt
+      ? Date.parse(target.burnStartedAt)
+      : NaN;
+    const hasBurnStart = Number.isFinite(burnStartMs);
+    const isBurned = (message: { id: string; createdAt: string }): boolean => {
+      if (!ids.has(message.id)) return false;
+      if (!hasBurnStart) return true;
+      const createdAtMs = Date.parse(message.createdAt);
+      return !Number.isFinite(createdAtMs) || createdAtMs >= burnStartMs;
+    };
+    const deleteOptions = hasBurnStart
+      ? { createdAtNotBefore: new Date(burnStartMs).toISOString() }
+      : undefined;
+    const timeline = messagesByConversation[conversationId] ?? [];
+    const nextTimeline = timeline.filter((message) => !isBurned(message));
     const previewBurned = target?.lastMessage
-      ? ids.has(target.lastMessage.id)
+      ? isBurned(target.lastMessage)
       : false;
     if (nextTimeline.length === timeline.length && !previewBurned) {
       // 仍然执行数据库删除：消息可能尚未被当前内存窗口加载。
-      void deleteLocalMessages(conversationId, [...ids]);
+      void deleteLocalMessages(conversationId, [...ids], deleteOptions);
       return;
     }
     const replacement = nextTimeline[nextTimeline.length - 1] ?? null;
@@ -849,7 +865,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           }
         : {}),
     });
-    void deleteLocalMessages(conversationId, [...ids]);
+    void deleteLocalMessages(conversationId, [...ids], deleteOptions);
     if (nextConversation) void upsertLocalConversation(nextConversation);
   },
   setConversations: (conversations) => {
