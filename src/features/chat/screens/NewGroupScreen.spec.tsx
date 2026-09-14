@@ -69,10 +69,7 @@ const friend = (id: string, nickname: string): FriendProfile => ({
   accountId: id,
   nickname,
   avatarUrl: null,
-  avatarFrame: null,
   avatarFrameAppearance: null,
-  gender: 'UNKNOWN',
-  lastOnline: null,
   friendsSince: '2026-01-01T00:00:00.000Z',
   remark: null,
 });

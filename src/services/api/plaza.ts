@@ -197,7 +197,6 @@ function normalizePostSignup(signup: unknown): PostSignupItem {
   const avatarUrl = stringField(s.avatarUrl) || null;
   return {
     userId: stringField(s.userId),
-    imUserId: stringField(s.imUserId),
     nickname: stringField(s.nickname, '用户'),
     avatarUrl: avatarUrl ? (normalizeMediaUrl(avatarUrl) ?? avatarUrl) : null,
     accountId: stringField(s.accountId),

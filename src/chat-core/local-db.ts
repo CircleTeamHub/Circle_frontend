@@ -491,6 +491,10 @@ export async function deleteLocalMessage(
 export async function deleteLocalMessages(
   conversationId: string,
   messageIds: readonly string[],
+  // 本机记下的焚毁开启时刻（ISO）。给了就只删这一刻及之后创建的行：服务端焚毁不看
+  // 开启时间，开启前的历史按 App 的承诺保留（与 purgeExpiredLocalMessages 的
+  // startedAt 下界同一口径）。
+  options?: { createdAtNotBefore?: string | null },
 ): Promise<void> {
   const current = requireDb();
   const ids = [...new Set(messageIds)].filter(
@@ -501,10 +505,13 @@ export async function deleteLocalMessages(
   try {
     await writeTransaction(current.db, async () => {
       const placeholders = ids.map(() => '?').join(', ');
+      const boundary = options?.createdAtNotBefore || null;
+      const boundaryClause = boundary ? ' AND created_at >= ?' : '';
       await current.db.runAsync(
-        `DELETE FROM messages WHERE conversation_id = ? AND id IN (${placeholders});`,
+        `DELETE FROM messages WHERE conversation_id = ? AND id IN (${placeholders})${boundaryClause};`,
         conversationId,
         ...ids,
+        ...(boundary ? [boundary] : []),
       );
     });
   } catch (error) {

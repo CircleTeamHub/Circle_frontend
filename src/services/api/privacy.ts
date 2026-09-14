@@ -9,8 +9,6 @@ export type PrivacySettings = {
   // 旧字段是 messageSelfDestructDays,只能选整天,于是同一个功能在两个入口给出
   // 两张不一样的档位表。
   messageSelfDestructSec: BurnDurationSec;
-  /** 开启时间；开启前发送的消息不受阅后即焚影响。 */
-  messageSelfDestructStartedAt?: string | null;
   momentsVisibility: MomentsVisibility;
   allowStrangerMessages: boolean;
   showPhone: boolean;
@@ -41,9 +39,7 @@ export type PrivacySettings = {
   shareTypingInGroup?: boolean;
 };
 
-export type UpdatePrivacySettingsPayload = Partial<
-  Omit<PrivacySettings, 'messageSelfDestructStartedAt'>
->;
+export type UpdatePrivacySettingsPayload = Partial<PrivacySettings>;
 
 export async function fetchPrivacySettings() {
   return apiClient<PrivacySettings>('/privacy/settings');

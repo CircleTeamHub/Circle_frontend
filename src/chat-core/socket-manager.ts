@@ -189,11 +189,10 @@ async function refreshViewerSelfDestructSec(userId: string): Promise<void> {
     ) {
       return;
     }
-    store.setViewerSelfDestructSec(
-      settings.messageSelfDestructSec,
-      { remoteRefresh: true },
-      settings.messageSelfDestructStartedAt,
-    );
+    // 服务端不下发开启时间（没有这一列）：store 沿用本机已知的开启边界。
+    store.setViewerSelfDestructSec(settings.messageSelfDestructSec, {
+      remoteRefresh: true,
+    });
     store.setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(settings));
   } catch {
     // 离线时沿用按账号缓存的最后已知策略，不能让策略刷新阻断聊天连接。

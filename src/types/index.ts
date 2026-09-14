@@ -328,11 +328,8 @@ export interface Circle {
   description: string;
   avatarUrl: string | null;
   cover: string | null;
-  ownerID: string;
-  currentIconAssetID: string | null;
   currentIconUrl: string | null;
   cities: string[];
-  isPublic: boolean;
   categories: string[];
   rules: string;
   tags: string[];
@@ -389,7 +386,6 @@ export interface CirclePlazaPost {
     creditScore: number | null;
     fancyNumber: boolean;
   };
-  viewCount: number;
   signupCount: number;
   signedByMe: boolean;
   signupRestrictions: {
@@ -445,11 +441,6 @@ export interface MyCircle extends Circle {
 export interface CircleDetail extends Circle {
   myRole: CircleRole | null;
   myStatus: 'ACTIVE' | 'PENDING' | 'REJECTED' | null;
-  availableIconAssets?: {
-    id: string;
-    name: string;
-    imageUrl: string | null;
-  }[];
 }
 
 export interface PaginatedResponse<T> {
@@ -501,7 +492,8 @@ export interface CircleInvitation {
   inviter: CircleInvitationUser;
   requiredCount: number;
   approvedCount: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ADMIN_APPROVED';
+  /** CANCELLED：服务端把失效的申请收成的终态（不是通过，也不是拒绝）。 */
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ADMIN_APPROVED' | 'CANCELLED';
   verifiers: CircleInvitationVerifier[];
   createdAt: string;
 }
@@ -629,7 +621,6 @@ export interface MyCirclePost {
 /** A person who signed up for one of my posts, with identity to open a chat. */
 export interface PostSignupItem {
   userId: string;
-  imUserId: string;
   nickname: string;
   avatarUrl: string | null;
   accountId: string;

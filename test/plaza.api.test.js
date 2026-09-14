@@ -246,7 +246,6 @@ test('fetchMyPostSignups normalizes missing signer fields with safe defaults', a
     items: [
       {
         userId: 'user-1',
-        imUserId: '',
         nickname: '用户',
         avatarUrl: 'http://192.168.1.65:9000/avatars/u.jpg',
         accountId: '',

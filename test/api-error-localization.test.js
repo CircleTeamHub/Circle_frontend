@@ -416,6 +416,26 @@ test('maps the retired joined-circle quota code during rolling deploys', () => {
   );
 });
 
+// 白名单里的每个码都必须五语齐全:少一个语言,getApiErrorMessage 在那个语言下就会
+// 落回泛化 fallback。后端新增错误码时,这一条与下面的跨仓对齐一起逼着补译文。
+test('every whitelisted server error code is localized in every locale', () => {
+  const { SERVER_ERROR_CODES } = loadServerErrorCodes();
+  for (const lng of ['en', 'zh', 'ja', 'ko', 'es']) {
+    const bundle = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), `src/i18n/locales/${lng}.json`),
+        'utf8',
+      ),
+    );
+    const missing = SERVER_ERROR_CODES.filter(
+      (code) =>
+        typeof bundle.serverErrors?.[code] !== 'string' ||
+        bundle.serverErrors[code].trim().length === 0,
+    );
+    assert.deepEqual(missing, [], `${lng}.json serverErrors missing: ${missing.join(', ')}`);
+  }
+});
+
 test('empty moment comments use the backend error contract in every locale', () => {
   const { SERVER_ERROR_CODES } = loadServerErrorCodes();
   assert.ok(SERVER_ERROR_CODES.includes('TRACE_EMPTY_COMMENT'));

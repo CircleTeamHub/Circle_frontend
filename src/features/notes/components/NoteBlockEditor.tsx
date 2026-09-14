@@ -208,6 +208,12 @@ function NoteBlockEditorImpl({
             presign.requiredHeaders,
             kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
           );
+          // notes/ 是私有目录：读取一律按 objectKey 签名，fileUrl 本身读不到。但笔记接口
+          // （CreateNoteMediaDto.url）目前仍要求 url，只能照传；后端对私有目录不再返回
+          // fileUrl 之前，必须先放开那个必填 —— 缺了就让这一项上传失败，不造假地址。
+          if (!presign.fileUrl) {
+            throw new Error('note media presign returned no fileUrl');
+          }
           const durationMs =
             kind === 'video' && typeof asset.duration === 'number'
               ? Math.round(asset.duration)

@@ -51,8 +51,6 @@ test('direct chats show a duration-aware disappearing-message notice when enable
     /Math\.min\(resolvedConversationBurnDurationSec, viewerSelfDestructSec\)/,
   );
   assert.match(source, /fetchChatBurnPolicy\(conversationID\)/);
-  assert.match(source, /peerSelfDestructSec/);
-  assert.match(source, /peerDisappearingMessageNotice/);
   assert.match(source, /formatBurnDuration\(effectiveBurnDurationSec\)/);
   assert.match(source, /personalDisappearingMessageNotice/);
   assert.match(source, /testID="chat-disappearing-message-notice"/);
@@ -73,14 +71,21 @@ test('disappearing-message notice stays hidden when both sides are disabled', ()
   );
 });
 
-test('both enabled sides share one duration-aware notice', () => {
+// 服务端没有「对端全局阅后即焚」这种会话策略：对端的全局设置只过滤他自己的视图，
+// 不会烧掉这边的消息，GET /burn 也不下发它。提示只认会话级焚毁与本人的全局窗口。
+test('disappearing-message notice ignores the peer global self-destruct setting', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
     'utf8',
   );
 
-  assert.match(source, /bothGlobalPoliciesEnabled/);
-  assert.match(source, /bothDisappearingMessageNotice/);
+  assert.doesNotMatch(source, /globalBurnPoliciesByConversation/);
+  assert.doesNotMatch(source, /applyGlobalBurnPolicy/);
+  assert.doesNotMatch(source, /peerSelfDestruct/);
+  assert.doesNotMatch(
+    source,
+    /peerDisappearingMessageNotice|bothDisappearingMessageNotice/,
+  );
 });
 
 test('chat detail screen exposes refined message insets and composer action hierarchy', () => {

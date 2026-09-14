@@ -98,8 +98,6 @@ export function normalizeCall(value: unknown): CallSession {
     sessionType,
     callType: normalizeCallType(value.callType),
     status: normalizeCallStatus(value.status),
-    livekitRoomName:
-      typeof value.livekitRoomName === 'string' ? value.livekitRoomName : undefined,
     initiator: normalizeUser(value.initiator),
     startedAt: nullableString(value.startedAt),
     endedAt: nullableString(value.endedAt),

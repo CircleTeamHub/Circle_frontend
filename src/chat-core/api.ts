@@ -142,7 +142,7 @@ export async function loadChatConversations(
   return request;
 }
 
-/** 读取当前私聊的会话级策略及对端全局阅后即焚策略。 */
+/** 读取会话级阅后即焚档位（深链/联系人入口可能先于会话列表打开聊天页）。 */
 export function fetchChatBurnPolicy(
   conversationId: string,
 ): Promise<ChatBurnPolicyDto> {
@@ -519,6 +519,10 @@ export async function fetchChatMutationsSince(
   const store = useChatStore.getState();
   const byConversation = new Map<string, ChatMessageDto[]>();
   for (const message of result.messages) {
+    if (message.deleted === true) {
+      store.removeMessage(message.conversationId, message.id);
+      continue;
+    }
     const bucket = byConversation.get(message.conversationId) ?? [];
     bucket.push(message);
     byConversation.set(message.conversationId, bucket);
@@ -716,22 +720,15 @@ export async function setChatBurnDuration(
   seconds: number | null,
 ): Promise<number | null> {
   const sameSession = sessionGate();
-  const result = await apiClient<{
-    burnDurationSec: number | null;
-    // 滚动发布期间的旧服务端不返回它;store 的 applyBurnDuration 兜底成此刻。
-    burnStartedAt?: string | null;
-  }>(
+  const result = await apiClient<ChatBurnPolicyDto>(
     `/chat/conversations/${conversationId}/burn`,
     { method: 'POST', body: { seconds: seconds ?? 0 } },
   );
   if (sameSession()) {
+    // 服务端不下发开启时间：store 在档位变化时把本机观察到的时刻记为本地开启边界。
     useChatStore
       .getState()
-      .applyBurnDuration(
-        conversationId,
-        result.burnDurationSec ?? null,
-        result.burnStartedAt,
-      );
+      .applyBurnDuration(conversationId, result.burnDurationSec ?? null);
   }
   return result.burnDurationSec ?? null;
 }
