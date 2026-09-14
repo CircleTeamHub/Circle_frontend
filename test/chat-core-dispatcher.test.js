@@ -849,7 +849,11 @@ test('a remote burn-changed system message updates the conversation setting', ()
       conversationId: 'c1',
       id: 'sys-1',
       type: 'system',
-      content: { kind: 'burn-changed', seconds: 30 },
+      content: {
+        kind: 'burn-changed',
+        seconds: 30,
+        burnStartedAt: '2026-09-11T19:30:00.000Z',
+      },
       sender: null,
       createdAt: '2026-09-11T20:00:00.000Z',
     }),
@@ -860,7 +864,7 @@ test('a remote burn-changed system message updates the conversation setting', ()
     {
       conversationId: 'c1',
       seconds: 30,
-      startedAt: '2026-09-11T20:00:00.000Z',
+      startedAt: '2026-09-11T19:30:00.000Z',
     },
   ]);
 });

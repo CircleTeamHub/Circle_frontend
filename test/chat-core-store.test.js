@@ -952,7 +952,7 @@ test('burn policies never retroactively purge messages from before they were ena
   );
 });
 
-test('re-enabling the same burn duration resets the shared start time', () => {
+test('an authoritative burn event can replace a provisional local start time', () => {
   const { useChatStore } = loadChatStore();
   const firstStart = '2026-09-11T20:00:00.000Z';
   const secondStart = '2026-09-11T20:05:00.000Z';
@@ -978,8 +978,7 @@ test('conversation refreshes preserve the local burn boundary when the DTO omits
   store.setConversations([conversation({ id: 'conv-1' })]);
   store.applyBurnDuration('conv-1', 60, start);
 
-  // Both REST snapshot and realtime metadata upsert mirror the server DTO,
-  // which intentionally has no burnStartedAt field.
+  // 滚动升级期间，老服务端的快照/实时元数据可能暂时不带 burnStartedAt。
   store.setConversations([conversation({ id: 'conv-1', burnDurationSec: 60 })]);
   assert.equal(useChatStore.getState().conversations[0].burnStartedAt, start);
   store.upsertConversation(conversation({ id: 'conv-1', burnDurationSec: 60 }));
@@ -1135,9 +1134,8 @@ test('a membership teardown clears the cache without leaving a watermark', () =>
   );
 });
 
-// 服务端目前按窗口焚毁会话里的全部旧消息，不看开启时间；App 承诺「开启焚毁前的消息保留」
-// 只在本机记得开启边界（burnStartedAt）时成立。chat:burned_messages 不能把边界之前的本地
-// 副本一并删掉，否则开启焚毁的那一刻，整段旧历史会从设备上消失。
+// 服务端与 App 都按持久化的 burnStartedAt 保留开启前的消息。chat:burned_messages
+// 不能把边界之前的本地副本一并删掉，否则实时通知会短暂破坏这条跨端契约。
 test('server burned-message notifications keep messages sent before this device saw burn enabled', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();

@@ -789,6 +789,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   );
   const [remoteBurnPolicy, setRemoteBurnPolicy] = useState<{
     burnDurationSec: number | null;
+    burnStartedAt: string | null;
   } | null>(null);
   // 只订阅当前会话的消息切片，而非整个 messagesByConversation map。
   // 其他会话来消息时 ingestMessages 会新建顶层对象，但本会话的数组引用不变，
@@ -1211,11 +1212,18 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       fetchChatBurnPolicy(conversationID)
         .then((policy) => {
           if (cancelled) return;
-          setRemoteBurnPolicy({ burnDurationSec: policy.burnDurationSec });
+          setRemoteBurnPolicy({
+            burnDurationSec: policy.burnDurationSec,
+            burnStartedAt: policy.burnStartedAt,
+          });
           // 会话列表尚未回填时，媒体气泡等其它入口也要立即知道会话策略。
           useChatStore
             .getState()
-            .applyBurnDuration(conversationID, policy.burnDurationSec);
+            .applyBurnDuration(
+              conversationID,
+              policy.burnDurationSec,
+              policy.burnStartedAt,
+            );
         })
         .catch(() => {
           if (!cancelled) setRemoteBurnPolicy(null);

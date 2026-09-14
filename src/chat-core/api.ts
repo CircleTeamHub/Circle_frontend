@@ -729,10 +729,13 @@ export async function setChatBurnDuration(
     { method: 'POST', body: { seconds: seconds ?? 0 } },
   );
   if (sameSession()) {
-    // 服务端不下发开启时间：store 在档位变化时把本机观察到的时刻记为本地开启边界。
     useChatStore
       .getState()
-      .applyBurnDuration(conversationId, result.burnDurationSec ?? null);
+      .applyBurnDuration(
+        conversationId,
+        result.burnDurationSec ?? null,
+        result.burnStartedAt,
+      );
   }
   return result.burnDurationSec ?? null;
 }

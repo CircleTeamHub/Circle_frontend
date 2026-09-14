@@ -111,13 +111,9 @@ function mergeConversationBurnState(
   current: ChatConversationState | undefined,
 ): ChatConversationState {
   const duration = incoming.burnDurationSec ?? 0;
-  // The REST conversation DTO intentionally has no start-time column. Preserve
-  // the local boundary across a refresh/upsert while the window is still active;
-  // an explicit disable still clears it, and applyBurnDuration records a real
-  // restart when the server sends the burn-change event/response.
-  const incomingStart = (incoming as ChatConversationDto & {
-    burnStartedAt?: string | null;
-  }).burnStartedAt;
+  // 新服务端下发持久化边界；老版本响应缺字段时保留本机已知值，避免滚动升级期间
+  // 把开启前的消息误判为可焚毁。
+  const incomingStart = incoming.burnStartedAt;
   return {
     ...incoming,
     burnStartedAt: normalizeBurnStartedAt(
@@ -133,15 +129,10 @@ function normalizeViewerSelfDestructSec(seconds: number): number | null {
 }
 
 /**
- * store 里的会话行 = 服务端 DTO + 本机记录的焚毁开启边界。
- *
- * 服务端没有会话级焚毁的开启时间列、也不下发它：本机在观察到档位变化时（POST 回执 /
- * burn-changed 系统消息）把那一刻记成 burnStartedAt，只用于本地缓存的到期判定，
- * 不是跨端契约。服务端真删之后由 chat:burned_messages 让各端收敛。
+ * 新服务端把焚毁开启边界作为跨端契约下发；本机只在兼容老服务端或先收到
+ * burn-changed 系统消息时临时补一个观察时间，后续快照/回执会以持久化值校准。
  */
-export type ChatConversationState = ChatConversationDto & {
-  burnStartedAt?: string | null;
-};
+export type ChatConversationState = ChatConversationDto;
 
 /** Removes expired local previews before a cold-start snapshot reaches the UI. */
 export function sanitizeExpiredConversationPreviews(
@@ -833,9 +824,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const { messagesByConversation, conversations } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
     const target = index >= 0 ? conversations[index] : null;
-    // 服务端按窗口焚毁会话里的全部旧消息，不看开启时间。本机记得开启边界时，
-    // 边界之前的消息按 App 的承诺保留（与本地到期清理同一口径）；没有边界就
-    // 完全以服务端为准，与其它端收敛。
+    // 边界之前的消息按产品承诺保留；老服务端没提供边界时只能以焚毁通知为准，
+    // 与其它端收敛。
     const burnStartMs = target?.burnStartedAt
       ? Date.parse(target.burnStartedAt)
       : NaN;
