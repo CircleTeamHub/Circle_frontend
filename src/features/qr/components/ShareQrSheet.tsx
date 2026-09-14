@@ -292,6 +292,7 @@ export function ShareQrSheet({ card, onClose }: ShareQrSheetProps) {
               style={s.list}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
             />
           )}
         </>

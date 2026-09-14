@@ -4,10 +4,8 @@ import {
   Alert,
   Animated,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
   PanResponder,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,11 +25,16 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteGroup, NoteSummary } from '@/features/notes/types';
 import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
 import { NOTES_TAB_ALL, mergeTabOrder } from '@/features/notes/utils/tab-order';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import {
+  MODAL_INPUT_NATIVE_AUTO_FOCUS,
+  useModalInputAutoFocus,
+} from '@/hooks/use-modal-input-auto-focus';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 // 抽自 NotesScreen 的"管理分组"Modal —— 把 group CRUD、拖拽排序、成员选择器一并搬过来。
@@ -104,6 +107,7 @@ export function GroupManagerSheet({
   const rowsRef = useRef<ManagerRow[]>([]);
   const dragPreviewRowsRef = useRef<ManagerRow[] | null>(null);
   const groupNameInputRef = useRef<TextInput>(null);
+  useModalInputAutoFocus(groupNameInputRef, groupEditorOpen);
   const dragRespondersRef = useRef(
     new Map<string, ReturnType<typeof PanResponder.create>>(),
   );
@@ -578,10 +582,7 @@ export function GroupManagerSheet({
           },
         ]}
       >
-        <KeyboardAvoidingView
-          style={s.flexFill}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoidingContainer style={s.flexFill}>
           {editingMembershipGroup ? (
             <>
               <View style={s.membershipHeader}>
@@ -811,7 +812,7 @@ export function GroupManagerSheet({
               </Pressable>
             </>
           )}
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingContainer>
       </View>
 
       {/* 新增/改名共用的弹出编辑 sheet：常驻输入框已移除，弹起即聚焦。 */}
@@ -821,10 +822,8 @@ export function GroupManagerSheet({
         backdropStyle={{ backgroundColor: colors.overlay }}
         sheetStyle={s.editorSheetWrap}
       >
-        <KeyboardAvoidingView
-          style={s.editorKav}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        {/* 键盘避让交给 BottomSheetModal，这里不再套一层。 */}
+        <View style={s.editorBody}>
           <View
             style={[
               s.editorSheet,
@@ -872,7 +871,7 @@ export function GroupManagerSheet({
                 value={draftGroupName}
                 onChangeText={setDraftGroupName}
                 maxLength={GROUP_NAME_MAX_LENGTH}
-                autoFocus
+                autoFocus={MODAL_INPUT_NATIVE_AUTO_FOCUS}
                 returnKeyType="done"
                 onSubmitEditing={handleSubmitGroupPress}
               />
@@ -916,7 +915,7 @@ export function GroupManagerSheet({
               </Text>
             </Pressable>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </BottomSheetModal>
     </Modal>
   );
@@ -1009,7 +1008,7 @@ const s = StyleSheet.create({
   },
   // 编辑 sheet 占约半屏，弹出感更足；内容自顶向下排布。
   editorSheetWrap: { width: '100%', minHeight: '50%' },
-  editorKav: { flex: 1 },
+  editorBody: { flex: 1 },
   editorSheet: {
     flex: 1,
     borderTopLeftRadius: Radius.xl,

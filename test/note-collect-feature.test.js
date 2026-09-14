@@ -114,8 +114,10 @@ test('EditNoteScreen preserves pinned and status when saving edits', () => {
 test('EditNoteScreen keeps keyboard from covering the bottom inputs', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(src, /KeyboardAvoidingView/);
-  assert.match(src, /behavior=\{Platform\.OS === 'ios' \? 'padding' : undefined\}/);
+  // Android edge-to-edge 下 adjustResize 不缩窗口：两端都走共享避让容器，
+  // 不能再给 Android 传 behavior=undefined（那样键盘会直接盖住编辑区）。
+  assert.match(src, /<KeyboardAvoidingContainer\b/);
+  assert.doesNotMatch(src, /behavior=\{Platform\.OS === 'ios' \? 'padding' : undefined\}/);
 });
 
 // ── DOM 编辑器：序列化失败不能把正文覆盖成空文档 ──────────────────────────────

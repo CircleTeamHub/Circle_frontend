@@ -1,4 +1,5 @@
 import { AuthInput } from '@/components/ui/auth-input';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { LoginPrimaryButton } from '@/features/auth/components/LoginPrimaryButton';
 import { LoginSky } from '@/features/auth/components/LoginSky';
@@ -16,7 +17,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -103,9 +103,8 @@ export default function LoginScreen() {
   }, [statusMessage]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingContainer
       style={[s.flex, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
         testID={E2E_TEST_IDS.authLoginScreen}
@@ -193,6 +192,6 @@ export default function LoginScreen() {
           </View>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }

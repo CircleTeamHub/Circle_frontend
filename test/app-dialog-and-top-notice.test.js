@@ -77,7 +77,7 @@ test('dialog host wires the store queue, dismissal policy and the reduce-motion 
   assert.match(host, /useAppDialogStore\(\(state\) => state\.queue\[0\]/);
   assert.match(host, /resolveDialogDismissal\(shown\)/);
   assert.match(host, /useReduceMotion\(\)/);
-  assert.match(host, /KeyboardAvoidingView/);
+  assert.match(host, /<KeyboardAvoidingContainer/);
 });
 
 test('dialog buttons use the contrast-checked danger tokens, never raw error red on a fill', () => {

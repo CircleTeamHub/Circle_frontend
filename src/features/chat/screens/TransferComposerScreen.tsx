@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,6 +26,7 @@ import {
 } from '@/services/api/credit-policy';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 export default function TransferComposerScreen() {
@@ -182,10 +181,7 @@ export default function TransferComposerScreen() {
     value > balance;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingContainer style={{ flex: 1 }}>
       <ScrollView
         style={[s.scroll, { backgroundColor: colors.background }]}
         contentContainerStyle={[s.container, { paddingTop: insets.top }]}
@@ -305,7 +301,7 @@ export default function TransferComposerScreen() {
           </Text>
         </Pressable>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }
 

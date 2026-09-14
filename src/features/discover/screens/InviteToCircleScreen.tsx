@@ -35,6 +35,7 @@ import {
   logClientDiagnostic,
 } from '@/utils/client-diagnostics';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -430,7 +431,7 @@ export default function InviteToCircleScreen() {
   const submitDisabled = submitting || selectedCount < 1;
 
   return (
-    <View style={[s.container, d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('circle.invite.title', { defaultValue: '邀请好友入圈' })} />
 
       <View style={[s.searchWrap, d.surface]}>
@@ -534,6 +535,6 @@ export default function InviteToCircleScreen() {
         </Pressable>
         </View>
       ) : null}
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

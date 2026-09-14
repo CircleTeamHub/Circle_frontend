@@ -21,6 +21,7 @@ import {
   validateEmail,
   validatePassword,
 } from '@/features/auth/validation';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -160,7 +161,7 @@ export function ForgotPasswordScreen() {
   );
 
   return (
-    <View style={[d.page, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.page, { paddingTop: insets.top }]}>
       {/* round 3 review：深链直达时无导航历史，返回键要有登录页兜底 */}
       <NavHeader
         title={t('auth.forgotPassword', { defaultValue: '忘记密码' })}
@@ -244,6 +245,6 @@ export function ForgotPasswordScreen() {
           </Text>
         </Pressable>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

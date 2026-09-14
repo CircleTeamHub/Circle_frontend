@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { DIALOG_SCRIM_ALPHA } from '@/components/ui/glass-surface';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { Spacing, useTheme, withAlpha } from '@/theme';
 import { AppDialogCard } from './app-dialog-card';
 import { resolveDialogButtonLayout, type DialogButtonSlot } from './app-dialog-buttons';
@@ -150,10 +149,7 @@ export function AppDialogHost() {
   return (
     <DialogOverlay visible={shown !== null} onRequestClose={handleDismissRequest}>
       {shown && layout ? (
-        <KeyboardAvoidingView
-          style={s.fill}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <KeyboardAvoidingContainer style={s.fill}>
           {DIALOG_SCRIM_ALPHA > 0 ? (
             <Animated.View
               pointerEvents="none"
@@ -189,7 +185,7 @@ export function AppDialogHost() {
               />
             </Animated.View>
           </Pressable>
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingContainer>
       ) : null}
     </DialogOverlay>
   );

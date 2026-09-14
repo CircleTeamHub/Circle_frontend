@@ -20,6 +20,7 @@ import {
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -325,6 +326,7 @@ export default function NewFriendsScreen() {
             showsVerticalScrollIndicator={false}
             refreshing={refreshing}
             onRefresh={handleRefreshActivities}
+            {...keyboardDismissOnDragProps}
           />
         )}
       </View>

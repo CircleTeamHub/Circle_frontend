@@ -17,6 +17,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { UserIconRow } from '@/components/ui/user-icon-row';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { Spacing, useTheme } from '@/theme';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import {
@@ -303,6 +304,7 @@ export default function PostSignupsScreen() {
       </View>
 
       <FlatList
+        {...keyboardDismissOnDragProps}
         data={filteredSignups}
         keyExtractor={(item) => item.userId}
         ListHeaderComponent={
