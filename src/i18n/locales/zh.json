@@ -146,7 +146,8 @@
     "messages": "消息",
     "contacts": "联系人",
     "discover": "动态",
-    "profile": "我的"
+    "profile": "我的",
+    "unreadCount": "{{count}} 条未读"
   },
   "messages": {
     "title": "消息",

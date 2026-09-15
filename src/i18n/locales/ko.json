@@ -2565,7 +2565,8 @@
     "messages": "메시지",
     "contacts": "연락처",
     "discover": "발견",
-    "profile": "나"
+    "profile": "나",
+    "unreadCount": "읽지 않음 {{count}}개"
   },
   "onboarding": {
     "profileTitle": "프로필 완성하기",

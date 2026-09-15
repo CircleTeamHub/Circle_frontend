@@ -146,7 +146,8 @@
     "messages": "Messages",
     "contacts": "Contacts",
     "discover": "Discover",
-    "profile": "Me"
+    "profile": "Me",
+    "unreadCount": "{{count}} unread"
   },
   "messages": {
     "title": "Messages",
