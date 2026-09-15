@@ -624,7 +624,7 @@ export default function TabLayout() {
     badge: {
       position: 'absolute',
       top: -3,
-      left: 12,
+      right: -14,
       minWidth: 18,
       height: 18,
       paddingHorizontal: 3,
