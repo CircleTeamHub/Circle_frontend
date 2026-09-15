@@ -2565,7 +2565,8 @@
     "messages": "メッセージ",
     "contacts": "連絡先",
     "discover": "発見",
-    "profile": "マイページ"
+    "profile": "マイページ",
+    "unreadCount": "未読 {{count}} 件"
   },
   "onboarding": {
     "profileTitle": "プロフィールを完成させる",

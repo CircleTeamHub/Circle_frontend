@@ -2571,7 +2571,8 @@
     "messages": "Mensajes",
     "contacts": "Contactos",
     "discover": "Descubrir",
-    "profile": "Yo"
+    "profile": "Yo",
+    "unreadCount": "{{count}} sin leer"
   },
   "onboarding": {
     "profileTitle": "Completa tu perfil",
