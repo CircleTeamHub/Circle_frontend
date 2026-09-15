@@ -88,6 +88,18 @@ test('disappearing-message notice ignores the peer global self-destruct setting'
   );
 });
 
+test('chat detail applies the durable burn activation boundary returned by the server', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(
+    source,
+    /applyBurnDuration\(\s*conversationID,\s*policy\.burnDurationSec,\s*policy\.burnStartedAt,?\s*\)/,
+  );
+});
+
 test('chat detail screen exposes refined message insets and composer action hierarchy', () => {
   const filePath = path.join(
     process.cwd(),

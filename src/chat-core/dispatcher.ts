@@ -218,9 +218,16 @@ function applyRemoteBurnChange(
   if (content['kind'] !== 'burn-changed') return;
   const seconds = content['seconds'];
   if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return;
-  // burn-changed 系统消息只带 seconds（服务端没有开启时间列）。它与设置同事务写入、
-  // 提交后立即广播，用它的服务端 createdAt 作为双方共同的本地开启边界。
-  const startedAt = seconds > 0 ? message.createdAt : null;
+  // 新服务端随系统消息带持久化边界，保证改档位不会把旧窗口重置；滚动升级期间
+  // 老服务端没带字段时仍以系统消息的服务端时间作为近似边界。
+  const persistedStart = content['burnStartedAt'];
+  const startedAt =
+    seconds <= 0
+      ? null
+      : typeof persistedStart === 'string' &&
+          Number.isFinite(Date.parse(persistedStart))
+        ? persistedStart
+        : message.createdAt;
   store.applyBurnDuration(
     message.conversationId,
     seconds > 0 ? Math.floor(seconds) : null,

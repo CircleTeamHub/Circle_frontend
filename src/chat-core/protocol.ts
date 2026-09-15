@@ -564,9 +564,10 @@ export interface ChatConversationDto {
   policies?: ChatGroupPoliciesDto | null;
   /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
   burnDurationSec?: number | null;
+  /** 会话级阅后即焚首次启用时刻；启用期间改档位不会重置。 */
+  burnStartedAt?: string | null;
   /**
    * DIRECT 会话对端座位的已读水位；冷启动恢复「已读」用。可选：兼容还没带它的后端。
-   * （会话级焚毁没有开启时间字段：服务端不下发，本机记录见 store 的 ChatConversationState。）
    */
   peerReadHeight?: number | null;
   lastMessageAt: string | null;
@@ -579,11 +580,12 @@ export interface ChatConversationDto {
 
 /**
  * GET / POST /chat/conversations/:id/burn 的回执：会话级焚毁档位。
- * 服务端不下发开启时间，也不外露对端的全局阅后即焚 —— 那只是对端本人视图上的
- * 读过滤，不会烧掉会话另一方的消息。
+ * 不外露对端的全局阅后即焚 —— 那只是对端本人视图上的读过滤，不会烧掉会话
+ * 另一方的消息。
  */
 export interface ChatBurnPolicyDto {
   burnDurationSec: number | null;
+  burnStartedAt: string | null;
 }
 
 /**
