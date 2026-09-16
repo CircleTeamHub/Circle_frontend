@@ -1,5 +1,3 @@
-import type { CreateNoteMediaInput, NoteMedia } from '@/features/notes/types';
-
 type Block = Record<string, unknown>;
 
 // 与服务端的结构化笔记遍历上限一致；服务端 JSON 属于不可信输入，不能让任意深度
@@ -55,76 +53,4 @@ function extractPlainTextAtDepth(blocks: Block[], depth: number): string {
 
 export function extractPlainText(blocks: Block[]): string {
   return extractPlainTextAtDepth(blocks, 0);
-}
-
-/**
- * Extract image/video blocks from the document and return them as CreateNoteMediaInput[].
- * sortOrder is assigned by position in the block array. The block props only carry
- * `url` reliably — full metadata (objectKey, durationMs, ...) is merged back in by the
- * caller from the upload map keyed by url.
- */
-export function extractMediaFromBlocks(blocks: Block[]): CreateNoteMediaInput[] {
-  const media: CreateNoteMediaInput[] = [];
-  let sortOrder = 0;
-  for (const block of blocks) {
-    const type = block.type as string;
-    if (type !== 'image' && type !== 'video') continue;
-    const props = (block.props ?? {}) as Record<string, unknown>;
-    if (typeof props.url !== 'string' || !props.url) continue;
-    media.push({
-      type: type === 'video' ? 'VIDEO' : 'IMAGE',
-      objectKey: typeof props.objectKey === 'string' ? props.objectKey : '',
-      url: props.url,
-      width: typeof props.width === 'number' ? props.width : undefined,
-      height: typeof props.height === 'number' ? props.height : undefined,
-      mimeType: typeof props.mimeType === 'string' ? props.mimeType : undefined,
-      size: typeof props.size === 'number' ? props.size : undefined,
-      durationMs: typeof props.durationMs === 'number' ? props.durationMs : undefined,
-      posterUrl: typeof props.posterUrl === 'string' ? props.posterUrl : undefined,
-      sortOrder: sortOrder++,
-    });
-  }
-  return media;
-}
-
-export function buildNoteMediaMap(
-  media: (NoteMedia | CreateNoteMediaInput)[],
-): Record<string, CreateNoteMediaInput> {
-  // 这张表按 url 索引正文块里的媒体：只有 objectKey 的条目（私有目录的新上传）
-  // 没有可索引的键，直接跳过 —— 它们不是从块 props 反查回来的。
-  return Object.fromEntries(
-    media.flatMap((item) => {
-      const url = item.url;
-      if (!url) return [];
-      const input: CreateNoteMediaInput = {
-        type: item.type,
-        objectKey: item.objectKey,
-        url,
-        sortOrder: item.sortOrder,
-      };
-      if (item.mimeType != null) input.mimeType = item.mimeType;
-      if (item.size != null) input.size = item.size;
-      if (item.width != null) input.width = item.width;
-      if (item.height != null) input.height = item.height;
-      if (item.durationMs != null) input.durationMs = item.durationMs;
-      if (item.posterUrl != null) input.posterUrl = item.posterUrl;
-      return [[url, input] as const];
-    }),
-  );
-}
-
-export function mergeExtractedMediaWithMediaMap(
-  extracted: CreateNoteMediaInput[],
-  mediaMap: Record<string, CreateNoteMediaInput>,
-): CreateNoteMediaInput[] {
-  return extracted.flatMap((item) => {
-    const uploaded = item.url ? mediaMap[item.url] : undefined;
-    if (uploaded) {
-      return [{ ...uploaded, sortOrder: item.sortOrder }];
-    }
-    if (item.objectKey) {
-      return [item];
-    }
-    return [];
-  });
 }
