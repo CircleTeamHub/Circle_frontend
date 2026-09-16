@@ -180,6 +180,9 @@ async function beginDeferredImageUpload() {
   return upload;
 }
 
+// 本文件里第一条执行的用例：首次渲染才加载的那批模块（媒体选择器、缩略图、视频
+// 预览）都算在它头上，冷缓存下会超过默认的 5 秒，热缓存下只要 0.3 秒。给它单独的
+// 超时额度，而不是抬高全局 testTimeout —— 那会把别处真正的卡死一并藏掉。
 test('keeps a selected video preview visible before and after its upload settles', async () => {
   const upload = createDeferred<void>();
   mockRequestPermission.mockResolvedValue({ granted: true });
@@ -204,7 +207,7 @@ test('keeps a selected video preview visible before and after its upload settles
   upload.resolve();
   await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
   expect(screen.getByTestId('note-media-preview-video')).toBeTruthy();
-});
+}, 20_000);
 
 test('releases an in-use native thumbnail when its video tile unmounts', async () => {
   const rendered = render(<VideoDraftPreview uri="file:///release-after-display.mp4" />);
