@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 // remediation 批0/0.5 的源码断言(风格同 chat-core-protocol-contract.test.js):
 // G-11/S-02 chat:conversation 消费、G-13 重连对账、G-15 多端未读、G-18 图标角标。
@@ -254,7 +255,7 @@ test('failed sends survive restarts via the outbox and expose a resend action', 
   const client = read('src/chat-core/client.ts');
   assert.match(client, /outboxUpsert/);
   assert.match(client, /retryFailedChatMessage/);
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /retryFailedChatMessage/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
@@ -317,7 +318,7 @@ test('badge sync is wired into the chat connect path', () => {
 // ---- §9 清理批:typing 接线 / 静音横幅 / file 与未知类型渲染 / 失败预览 ----
 
 test('typing flows end to end: throttle-send behind settings, store expiry, header display', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   // 发送侧:草稿变化带上会话类型上报;单聊/群聊的隐私开关收在 socket-manager
   // 的 sendChatTyping 里(见 presence-typing-privacy.test.js)。
   assert.match(
@@ -370,7 +371,7 @@ test('the legacy system-notice dedupe layer is fully gone', () => {
   );
   const types = read('src/types/index.ts');
   assert.ok(!types.includes('systemNoticeKind'), 'dead field systemNoticeKind');
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.ok(!screen.includes('collapseDuplicateFriendAddedNotices'));
 });
 
@@ -448,7 +449,7 @@ test('revoke/edit rejections are localized instead of shown raw', () => {
   ]) {
     assert.match(sendErrors, new RegExp(`'${code}'`), `missing ${code}`);
   }
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   // 撤回失败抛的是 ChatSendError(ack 通道),getApiErrorMessage 认不出它。
   assert.ok(
     !/revokeFailed[\s\S]{0,120}getApiErrorMessage/.test(screen),
@@ -457,7 +458,7 @@ test('revoke/edit rejections are localized instead of shown raw', () => {
 });
 
 test('multi-option pickers do not rely on Alert (Android caps at 3 buttons)', () => {
-  const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const detail = readChatDetailSource();
   const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
   assert.match(detail, /OptionPickerSheet/);
   assert.match(info, /OptionPickerSheet/);
@@ -481,7 +482,7 @@ test('swipe delete sequences hide-after-clear and surfaces failures', () => {
 });
 
 test('reader receipts disclose the 200-reader cap', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /readersMore/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
@@ -532,7 +533,7 @@ test('local search hits reach the screen before the server round-trip', () => {
 });
 
 test('group typing is actually rendered, not just broadcast', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /statusTypingGroup/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));

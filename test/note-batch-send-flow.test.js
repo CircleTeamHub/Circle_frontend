@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) =>
   fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
@@ -18,7 +19,7 @@ test('share picker store carries note batches, not single notes', () => {
 });
 
 test('chat detail consumes note batches through the pure task planner', () => {
-  const src = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const src = readChatDetailSource();
 
   assert.match(src, /case 'note-batch':/);
   assert.match(src, /handlePickNoteBatch\(item\.notes, item\.options\)/);
@@ -56,7 +57,7 @@ test('chat detail consumes note batches through the pure task planner', () => {
 test('note chat-media import API posts the section list', () => {
   const src = read('src/services/api/notes.ts');
   const types = read('src/features/notes/types.ts');
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
 
   assert.match(src, /\/note\/\$\{noteId\}\/chat-media/);
   assert.match(src, /body: \{ sections \}/);

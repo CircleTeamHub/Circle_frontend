@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 // 契约随自研栈迁移更新(意图不变):会话事实源从 OpenIM imStore 换成 chat-core
 // store(ChatConversationDto),置顶/免打扰走 updateChatConversationPreferences;
@@ -112,9 +113,8 @@ test('chat info screen renders a dedicated group info layout for group conversat
 
 test('temporary chat info copies its invite link without treating the room as a circle', () => {
   const infoPath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
-  const detailPath = path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx');
   const infoSource = fs.readFileSync(infoPath, 'utf8');
-  const detailSource = fs.readFileSync(detailPath, 'utf8');
+  const detailSource = readChatDetailSource();
 
   assert.match(detailSource, /isTempChat \? \{ conversationKind: 'temp' \} : \{\}/);
   assert.match(

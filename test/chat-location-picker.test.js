@@ -2,13 +2,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 function read(relPath) {
   return fs.readFileSync(path.join(process.cwd(), relPath), 'utf8');
 }
 
 test('chat location entry opens a real map picker and sends the confirmed place', () => {
-  const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const source = readChatDetailSource();
 
   assert.match(source, /\(chat\)\/location-picker/);
   assert.match(source, /useChatLocationPickerStore/);
@@ -64,7 +65,7 @@ test('location bubbles show a real map tile and open the system map', () => {
 });
 
 test('picking a location never hands Android off to Play Services settings', () => {
-  const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const source = readChatDetailSource();
 
   // expo-location 的 mayShowUserSettingsDialog 默认为 true：定位不可用时它会拉起
   // Google Play Services 的定位设置弹窗，国内无 GMS 的机器上那是条死路。这里是

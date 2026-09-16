@@ -2,11 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
-const source = fs.readFileSync(
-  path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-  'utf8',
-);
+const source = readChatDetailSource();
 const mediaSheetSource = fs.readFileSync(
   path.join(
     process.cwd(),

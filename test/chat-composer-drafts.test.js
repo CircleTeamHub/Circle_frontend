@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 /**
  * 聊天输入框草稿(squady 同款):按账号 + 会话落 MMKV,会话列表显示「[草稿]」。
@@ -129,7 +130,7 @@ test('the conversation list shows a localized draft prefix, but not for the conv
 });
 
 test('the chat screen restores and saves drafts, but never while editing a sent message', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /useComposerDraftPersistence\(\{/);
   // 编辑态输入框里是那条已发消息的原文,不是草稿。
   assert.match(screen, /paused: editingMessageId !== null/);

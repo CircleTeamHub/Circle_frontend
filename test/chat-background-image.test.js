@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const { loadTsModule } = require('./helpers/load-ts-module');
 const { createFakeIndexedDb } = require('./helpers/fake-indexed-db');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
@@ -130,7 +131,7 @@ test('the pure uri module stays free of native imports and is not re-exported', 
 test('the stored preference holds a file name, never an absolute container path', () => {
   const uriSrc = read('src/features/chat/utils/chat-background-uri.ts');
   const imageSrc = read('src/features/chat/utils/chat-background-image.ts');
-  const chatSrc = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chatSrc = readChatDetailSource();
 
   // iOS 的 Data 容器 UUID 重装/更新后会变，存绝对路径 = 下次重装壁纸静默消失。
   assert.match(uriSrc, /CHAT_BACKGROUND_FILE_SCHEME = 'chat-bg:'/);

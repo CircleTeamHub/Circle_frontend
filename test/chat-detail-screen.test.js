@@ -2,13 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 test('chat detail screen uses the aligned header and composer structure', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /headerMeta/);
   assert.match(source, /headerStatusText/);
@@ -22,23 +19,19 @@ test('chat detail screen uses the aligned header and composer structure', () => 
 });
 
 test('chat history waits for the scoped user session before loading', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   // A deep link can mount the screen before chat bootstrap has selected the
   // account. The focused callback must wait and rerun when currentUserID is set.
   assert.match(source, /if \(!conversationID \|\| !sourceID \|\| !currentUserID\) return;/);
   assert.match(source, /loadConversationMessages\(conversationID\)/);
-  assert.match(source, /\}, \[conversationID, currentUserID, sourceID\]\),/);
+  // setRemoteBurnPolicy 是父组件传进来的 useState setter(身份稳定),拆分后
+  // exhaustive-deps 看不出来,所以列在依赖末尾;它不会触发重跑。
+  assert.match(source, /\}, \[conversationID, currentUserID, sourceID, setRemoteBurnPolicy\]\),/);
 });
 
 test('direct chats show a duration-aware disappearing-message notice when enabled', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   assert.match(source, /state\.viewerSelfDestructSec/);
   assert.match(source, /conversation\?\.burnDurationSec \?\? 0/);
@@ -58,10 +51,7 @@ test('direct chats show a duration-aware disappearing-message notice when enable
 });
 
 test('disappearing-message notice stays hidden when both sides are disabled', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   // An empty set of active policies must resolve to 0; Infinity would make the
   // notice appear after the peer turns their setting off.
@@ -74,10 +64,7 @@ test('disappearing-message notice stays hidden when both sides are disabled', ()
 // 服务端没有「对端全局阅后即焚」这种会话策略：对端的全局设置只过滤他自己的视图，
 // 不会烧掉这边的消息，GET /burn 也不下发它。提示只认会话级焚毁与本人的全局窗口。
 test('disappearing-message notice ignores the peer global self-destruct setting', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   assert.doesNotMatch(source, /globalBurnPoliciesByConversation/);
   assert.doesNotMatch(source, /applyGlobalBurnPolicy/);
@@ -89,10 +76,7 @@ test('disappearing-message notice ignores the peer global self-destruct setting'
 });
 
 test('chat detail applies the durable burn activation boundary returned by the server', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   assert.match(
     source,
@@ -101,11 +85,7 @@ test('chat detail applies the durable burn activation boundary returned by the s
 });
 
 test('chat detail screen exposes refined message insets and composer action hierarchy', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /messageListInset/);
   assert.match(source, /composerActionBtn/);
@@ -113,10 +93,7 @@ test('chat detail screen exposes refined message insets and composer action hier
 });
 
 test('new messages follow the latest position without hijacking history reading', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   // 自己从笔记选择页返回后发出的卡片必须滚到底；对端消息只在用户本来就在
   // 底部附近时跟随，不能把正在翻历史的人强拉回最新消息。
@@ -134,11 +111,7 @@ test('new messages follow the latest position without hijacking history reading'
 });
 
 test('chat detail screen supports preview mode without an IM conversation', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /const isPreviewMode = !conversationID/);
   // 预览态文案已改为「连接尚未完成」（IM 未就绪的准确提示，替代旧的「仅预览」框架）
@@ -152,11 +125,7 @@ test('chat detail screen supports preview mode without an IM conversation', () =
 });
 
 test('chat detail screen wires a tappable emoji picker into the composer', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /EmojiPicker/);
   assert.match(source, /emojiOpen/);
@@ -168,11 +137,7 @@ test('chat detail screen wires a tappable emoji picker into the composer', () =>
 });
 
 test('re-sending a collected favorite rebuilds by original type via resolveCollectionSendPlan', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   // 按 plan 分发：文本走草稿、语音/笔记/名片按原类型重建。
   assert.match(source, /resolveCollectionSendPlan\(item\)/);
@@ -186,11 +151,7 @@ test('re-sending a collected favorite rebuilds by original type via resolveColle
 });
 
 test('chat detail screen reads the local chat background preference for the active conversation', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /useChatPreferencesStore/);
   assert.match(source, /resolveChatBackgroundStyle/);
@@ -200,11 +161,7 @@ test('chat detail screen reads the local chat background preference for the acti
 });
 
 test('chat detail screen scopes custom background images to the message area', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /messageArea/);
   assert.match(source, /messageAreaBackground/);
@@ -222,11 +179,7 @@ test('chat detail screen scopes custom background images to the message area', (
 });
 
 test('chat detail screen logs text send failures without logging message bodies', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   // All send paths route failures through one shared helper: a local breadcrumb
   // plus a dev-only line. The production signal lives in chat-core/client
@@ -259,21 +212,13 @@ test('chat detail screen logs text send failures without logging message bodies'
 });
 
 test('chat detail treats the complete thumbnail upload path as best effort', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /uploadChatImageThumbnail\(/);
 });
 
 test('chat detail quote action preserves the current draft text', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
   const handlerMatch = source.match(
     /const handleQuoteMessage = useCallback\(\(message: ChatMessage\) => \{[\s\S]*?\}, \[\]\);/,
   );
@@ -284,11 +229,7 @@ test('chat detail quote action preserves the current draft text', () => {
 });
 
 test('chat detail virtualizes and caps group mention candidates', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /const MENTION_CANDIDATE_LIMIT = 200/);
   assert.match(source, /fetchChatMembers\(conversationID\)/);
@@ -298,10 +239,7 @@ test('chat detail virtualizes and caps group mention candidates', () => {
 });
 
 test('chat detail exposes @all as the first group mention candidate', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   assert.match(source, /AT_ALL_USER_ID/);
   assert.match(source, /allMentionTarget/);
@@ -310,10 +248,7 @@ test('chat detail exposes @all as the first group mention candidate', () => {
 });
 
 test('chat detail caches group mention candidates and de-dupes in-flight loads', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
   const loaderBlock =
     source.match(/const loadMentionCandidates = useCallback\(async \(\) => \{[\s\S]*?\}, \[[^\]]*\]\);/)?.[0] ??
     '';
@@ -326,10 +261,7 @@ test('chat detail caches group mention candidates and de-dupes in-flight loads',
 });
 
 test('chat detail sends friend cards without fetching profile during send', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
   const handlerBlock =
     source.match(/const handlePickFriend = useCallback\([\s\S]*?\n  \);/)?.[0] ??
     '';
@@ -340,10 +272,7 @@ test('chat detail sends friend cards without fetching profile during send', () =
 });
 
 test('chat detail guards async send UI state after unmount', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   assert.match(source, /const mountedRef = useRef\(true\)/);
   assert.match(source, /mountedRef\.current = false/);
@@ -380,11 +309,7 @@ test('chat detail guards async send UI state after unmount', () => {
 });
 
 test('chat detail loads history then reports the read watermark', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   // 自研栈:历史落库后才上报已读(先报会拿 0 水位白跑);进出页面维护活跃会话标记。
   assert.match(
@@ -396,11 +321,7 @@ test('chat detail loads history then reports the read watermark', () => {
 });
 
 test('the active-conversation marker and read acks follow focus, not mount', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   // 推开聊天信息 / 聊天记录 / 选择器时 React Navigation 把本屏留在栈里继续挂载,
   // 用 useEffect cleanup 撤标记的话它根本不会撤 —— 人在别的页面,新到的消息
@@ -431,11 +352,7 @@ test('the active-conversation marker and read acks follow focus, not mount', () 
 test('chat detail voice cleanup reads a JS snapshot, never the native recorder on unmount', () => {
   // 卸载时 recorder 的 native shared object 可能已释放，调 getStatus() 会抛
   // NativeSharedObjectNotFoundException。cleanup 必须用 ref 快照，且 stop() 兜底。
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   // 崩溃根因表达式必须消失：cleanup 不能在 native 对象上链式取 isRecording。
   assert.doesNotMatch(source, /voiceRecorder\.getStatus\(\)\.isRecording/);
@@ -452,11 +369,7 @@ test('chat detail voice cleanup reads a JS snapshot, never the native recorder o
 });
 
 test('chat detail only restores recording audio mode after enabling it', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /recordingAudioModeEnabledRef/);
   assert.match(
@@ -472,11 +385,7 @@ test('chat detail only restores recording audio mode after enabling it', () => {
 });
 
 test('chat detail snapshots voice file uri before stopping the native recorder', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.doesNotMatch(source, /statusAfterStop/);
   assert.match(
@@ -486,11 +395,7 @@ test('chat detail snapshots voice file uri before stopping the native recorder',
 });
 
 test('chat detail cancels a pending async voice start when the user releases early', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /voicePressActiveRef/);
   assert.match(source, /voiceRecordSessionRef/);
@@ -500,10 +405,7 @@ test('chat detail cancels a pending async voice start when the user releases ear
 });
 
 test('chat detail serializes async voice starts so stale sessions cannot tear down a newer recording', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   assert.match(source, /voiceStartInProgressRef/);
   assert.match(source, /voiceStartInProgressRef\.current = true/);
@@ -524,11 +426,7 @@ test('chat detail serializes async voice starts so stale sessions cannot tear do
 });
 
 test('chat detail opens sent note cards from group chats', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/chat/screens/ChatDetailScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
+  const source = readChatDetailSource();
 
   assert.match(source, /case 'note-card':/);
   assert.match(source, /<NoteCardBubble[\s\S]*onPress=\{\(note\) =>/);
@@ -537,10 +435,7 @@ test('chat detail opens sent note cards from group chats', () => {
 });
 
 test('chat detail forwards long-pressed messages through a conversation picker', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   assert.match(source, /useMessageForwardStore/);
   assert.match(source, /setPendingForward/);
@@ -551,10 +446,7 @@ test('chat detail forwards long-pressed messages through a conversation picker',
 });
 
 test('chat detail protects group call creation from fast repeated taps', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   assert.match(source, /callStartingRef/);
   assert.match(source, /if \(callStartingRef\.current\) return/);
@@ -717,10 +609,7 @@ test('message forward picker only offers media forwarding for confirmed sources'
     true,
   );
 
-  const detail = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const detail = readChatDetailSource();
   assert.match(
     detail,
     /canForwardMessage\(message,\s*dto,\s*conversationBurnEnabled\)/,
@@ -773,10 +662,7 @@ test('自己在焚毁会话里发的消息仍然可以转发', () => {
 // 「收藏」走的是另一扇门：它把客户端拼出来的快照写进用户自己的收藏列表，服务端
 // 从头到尾没看过这条消息，所以转发那条规则根本管不到它。
 test('阅后即焚会话里别人发的消息也不提供收藏入口', () => {
-  const detail = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const detail = readChatDetailSource();
   const collectAt = detail.indexOf("key: 'collect'");
   assert.ok(collectAt > 0);
   const before = detail.slice(0, collectAt);
@@ -792,10 +678,7 @@ test('阅后即焚会话里别人发的消息也不提供收藏入口', () => {
 // COLLECTION_INVALID_MESSAGE_SOURCE 拒掉它，而 catch 提示的是「请重试」——
 // 重试到 ack 回来之前都不会成功。与转发对未确认媒体的处理同一条理由：不给入口。
 test('乐观消息（local: 临时 id）不提供收藏入口，处理函数也兜一道', () => {
-  const detail = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const detail = readChatDetailSource();
   const collectAt = detail.indexOf("key: 'collect'");
   const before = detail.slice(0, collectAt);
   const gateAt = before.lastIndexOf(
@@ -853,10 +736,7 @@ test('乐观 id 的前缀在生成点与判定处是同一个', () => {
 // 服务端新增了 COLLECTION_INVALID_MESSAGE_SOURCE；收藏失败必须把它展示出来，
 // 否则这条错误码在端上是死的，用户只会看到一句固定的「请重试」。
 test('收藏失败走 getApiErrorMessage，服务端错误码才有出口', () => {
-  const detail = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const detail = readChatDetailSource();
   const at = detail.indexOf("reportHandledFailure('chatDetail', 'collectMessage'");
   assert.ok(at > 0);
   assert.match(
@@ -868,10 +748,7 @@ test('收藏失败走 getApiErrorMessage，服务端错误码才有出口', () =
 // 这道闸只认会话上的焚毁设置。本人的全局自动销毁天数是我对自己视图的设置，
 // 不是发送者对我的承诺，不该连带禁掉转发和收藏。
 test('焚毁闸只看会话开关，不掺本人的全局阅后即焚窗口', () => {
-  const detail = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const detail = readChatDetailSource();
   const start = detail.indexOf('const conversationBurnEnabled = useChatStore(');
   assert.ok(start > 0);
   const body = detail.slice(start, detail.indexOf('});', start));
@@ -894,10 +771,7 @@ test('note detail routes exist in every tab stack so back returns to the source 
 });
 
 test('group member access stays live while the chat screen is mounted', () => {
-  const screen = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const screen = readChatDetailSource();
   const hook = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/hooks/use-group-member-view-access.ts'),
     'utf8',
@@ -922,10 +796,7 @@ test('group member access stays live while the chat screen is mounted', () => {
 });
 
 test('protected member actions revalidate fail-closed at tap time', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   // 打开消息发送者资料 / 发起群呼前都现场重查角色，不吃旧快照。
   const revalidations = source.match(/await revalidateMemberViewAccess\(\)/g) ?? [];
@@ -940,10 +811,7 @@ test('protected member actions revalidate fail-closed at tap time', () => {
 });
 
 test('shared friend cards of non-members stay openable for ordinary members', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   // 名片只放行"确认不在本群"的目标；review R2：身份查不清（查询失败）一律
   // fail-closed 拦截，断网不能成为绕过成员目录限制的口子。
@@ -955,10 +823,7 @@ test('shared friend cards of non-members stay openable for ordinary members', ()
 });
 
 test('chat detail blocks voice mode and recording while the viewer is silenced', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   assert.match(source, /if \(isPreviewMode \|\| composerLocked\) return;/);
   assert.match(source, /if \(!sourceID \|\| isPreviewMode \|\| composerLocked \|\| voiceActionBusy\) return;/);
@@ -969,10 +834,7 @@ test('chat detail blocks voice mode and recording while the viewer is silenced',
 });
 
 test('losing member access clears stale mention state before the next send', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   // review R2：降权瞬间清空已选 @ 目标/候选/缓存——handleSend 不再把滞留的
   // mention（含 @所有人）发出去。
@@ -1004,10 +866,7 @@ test('合并头像留等宽占位，隐藏头像才真的去掉那一列', () =>
 });
 
 test('群聊发送者名字的缩进跟着真实的头像列走', () => {
-  const detail = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const detail = readChatDetailSource();
 
   assert.match(detail, /senderLabelWithoutAvatarColumn: \{ marginLeft: 0 \}/);
   assert.match(detail, /hideChatAvatar && s\.senderLabelWithoutAvatarColumn/);
@@ -1017,10 +876,7 @@ test('群聊发送者名字的缩进跟着真实的头像列走', () => {
 // 行。displayMessages 每次 spread 一个新对象，等于把那份身份在「同一个人连着发的
 // 消息」上全部作废 —— 群聊里那恰恰是多数行。
 test('合并头像的变体按源对象缓存，不作废上游的身份缓存', () => {
-  const detail = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const detail = readChatDetailSource();
   const start = detail.indexOf('const displayMessages = useMemo(');
   assert.ok(start > 0);
   const body = detail.slice(start, detail.indexOf('}, [mergeAvatar, messages]);', start));
