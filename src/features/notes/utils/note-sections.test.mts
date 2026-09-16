@@ -173,3 +173,22 @@ test('transitive aliases keep a URL-only showcase video out of derived media', (
   assert.equal(sections.showcase.items.length, 1);
   assert.equal(sections.showcase.items[0].objectKey, 'notes/showcase.mp4');
 });
+
+// 私有目录的条目只有 objectKey，地址由服务端读接口现签。若某个 objectKey 在 note.media
+// 里没有对应项（另一端写入的分歧数据），它永远拿不到 url：详情页照样画出「图片 · 视频」
+// 标题和分隔线，底下却什么都没有。渲染不出来的条目不算有内容。
+test('media section is not addressable when nothing in it can render', () => {
+  const sections = buildNoteSections({
+    sections: {
+      text: { content: '', contentJson: [] },
+      media: {
+        items: [{ id: 'm1', type: 'IMAGE', objectKey: 'notes/u1/orphan.jpg' }],
+      },
+      showcase: { items: [] },
+    },
+    media: [],
+  });
+
+  assert.equal(getNoteSectionAvailability(sections).hasMedia, false);
+  assert.equal(getInitialNoteSection('media', sections), null);
+});

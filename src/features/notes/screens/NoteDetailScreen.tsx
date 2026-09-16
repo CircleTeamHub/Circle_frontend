@@ -130,6 +130,12 @@ export default function NoteDetailScreen() {
     () => (sections ? getNoteSectionAvailability(sections) : null),
     [sections],
   );
+  // 拿不到地址的条目渲染出来是空的（服务端读接口没能为这个 objectKey 现签地址），
+  // 不进列表；整块是否显示由 getNoteSectionAvailability 按同一判据决定。
+  const renderableMediaItems = useMemo(
+    () => (sections?.media.items ?? []).filter((item) => Boolean(item.url)),
+    [sections],
+  );
   const targetSection = useMemo(
     () => (sections ? getInitialNoteSection(section, sections) : null),
     [section, sections],
@@ -430,9 +436,11 @@ export default function NoteDetailScreen() {
                   'image-outline',
                   t('notes.section.media', { defaultValue: '图片 · 视频' }),
                 )}
+                {/* 拿不到地址的条目渲染出来是空的，直接不进列表：否则它只贡献一个空位
+                    和一个 undefined 的 key。整块是否显示见 getNoteSectionAvailability。 */}
                 <NoteBlockRenderer
                   onMediaError={handleMediaError}
-                  blocks={sections.media.items.map((item) => ({
+                  blocks={renderableMediaItems.map((item) => ({
                     id: item.id ?? item.url,
                     type: item.type === 'VIDEO' ? 'video' : 'image',
                     props: {

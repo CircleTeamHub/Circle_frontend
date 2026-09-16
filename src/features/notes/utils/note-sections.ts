@@ -280,7 +280,9 @@ export function getNoteSectionAvailability(sections: NoteSections) {
     Boolean(sections.text.contentJson && sections.text.contentJson.length > 0);
   return {
     hasText,
-    hasMedia: sections.media.items.length > 0,
+    // 只有渲染得出来的条目才算「有内容」：私有目录的条目要靠服务端读接口现签地址，
+    // 拿不到 url 的（另一端写入的分歧数据）渲染为空，不该让详情页画出一个空区块。
+    hasMedia: sections.media.items.some((item) => Boolean(item.url)),
     hasShowcase: sections.showcase.items.length > 0,
     hasLocation: Boolean(
       sections.location &&

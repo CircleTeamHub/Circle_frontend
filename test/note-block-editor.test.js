@@ -25,6 +25,21 @@ function loadNoteMediaUpload() {
   return context.module.exports;
 }
 
+function loadNoteBlocks() {
+  const filePath = path.join(process.cwd(), 'src/features/notes/utils/note-blocks.ts');
+  const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+    fileName: filePath,
+  }).outputText;
+  const context = { module: { exports: {} }, exports: {} };
+  context.exports = context.module.exports;
+  vm.runInNewContext(transpiled, context, { filename: filePath });
+  return context.module.exports;
+}
+
 test("NoteBlockEditor.dom.tsx has 'use dom' directive", () => {
   const src = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
   assert.match(src, /'use dom'/);
@@ -209,4 +224,27 @@ test('插入用的是解析出来的锚点，而不是「没光标就返回」',
   // 永远不再触发，等于换一种方式卡死。
   const effect = src.slice(src.indexOf('if (pendingInserts.length === 0'));
   assert.match(effect.slice(0, 600), /onInsertHandled\(\);/);
+});
+
+// 插进正文的媒体块必须带上 objectKey：私有目录的预览地址是本机资源路径，抽取时
+// 按 url 根本认不出这条媒体，objectKey 丢了就等于保存时把它整条丢掉。
+test('inserted media blocks carry the object key through extraction', () => {
+  const { buildPendingEditorBlocks } = loadNoteMediaUpload();
+  const { extractMediaFromBlocks } = loadNoteBlocks();
+  const blocks = buildPendingEditorBlocks([
+    {
+      type: 'image',
+      url: 'file:///picked.jpg',
+      objectKey: 'notes/u1/picked.jpg',
+      width: 100,
+      height: 80,
+    },
+  ]);
+
+  assert.equal(blocks[0].props.objectKey, 'notes/u1/picked.jpg');
+  // vm 里加载的模块返回的是另一个 realm 的数组，展开成本地数组再比。
+  assert.deepEqual(
+    [...extractMediaFromBlocks(blocks).map((item) => item.objectKey)],
+    ['notes/u1/picked.jpg'],
+  );
 });
