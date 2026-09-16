@@ -21,7 +21,8 @@ export type EditorNoteMediaDraft = {
   clientId: string;
   type: 'IMAGE' | 'VIDEO';
   objectKey: string;
-  url: string;
+  /** 私有目录没有可直读的地址：刚上传的草稿只有 objectKey，预览走 previewUri。 */
+  url?: string;
   previewUri?: string;
   width?: number;
   height?: number;
@@ -55,7 +56,6 @@ export function createPendingNoteMediaDrafts(
       clientId,
       type,
       objectKey: `pending:${clientId}`,
-      url: '',
       previewUri: asset.uri,
       width: asset.width ?? undefined,
       height: asset.height ?? undefined,
@@ -195,12 +195,39 @@ export function resolveMediaInsertAnchor<TBlock>(
   return cursorBlock ?? documentBlocks[documentBlocks.length - 1] ?? null;
 }
 
+export type PendingEditorInsert = {
+  type: 'image' | 'video';
+  url: string;
+  objectKey?: string;
+  width?: number;
+  height?: number;
+  mimeType?: string;
+  size?: number;
+  durationMs?: number;
+};
+
+/**
+ * 块 props 必须带上 objectKey 与已知的元数据：私有目录的预览地址是本机资源路径，
+ * 抽取正文媒体时按 url 根本认不出这条上传，key 丢了等于保存时把它整条丢掉。
+ */
 export function buildPendingEditorBlocks(
-  pendingInserts: readonly { type: 'image' | 'video'; url: string }[],
+  pendingInserts: readonly PendingEditorInsert[],
 ) {
   return pendingInserts.map((pendingInsert) => ({
     type: pendingInsert.type,
-    props: { url: pendingInsert.url, previewWidth: 300, caption: '' },
+    props: {
+      url: pendingInsert.url,
+      previewWidth: 300,
+      caption: '',
+      ...(pendingInsert.objectKey ? { objectKey: pendingInsert.objectKey } : {}),
+      ...(typeof pendingInsert.width === 'number' ? { width: pendingInsert.width } : {}),
+      ...(typeof pendingInsert.height === 'number' ? { height: pendingInsert.height } : {}),
+      ...(pendingInsert.mimeType ? { mimeType: pendingInsert.mimeType } : {}),
+      ...(typeof pendingInsert.size === 'number' ? { size: pendingInsert.size } : {}),
+      ...(typeof pendingInsert.durationMs === 'number'
+        ? { durationMs: pendingInsert.durationMs }
+        : {}),
+    },
   }));
 }
 

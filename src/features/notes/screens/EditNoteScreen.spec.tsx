@@ -152,6 +152,12 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+/** 保存请求里 media 分区的条目（断言上送了哪些字段）。 */
+function createdNoteMediaItems() {
+  const [input] = jest.mocked(createNote).mock.calls[0];
+  return input.sections?.media?.items ?? [];
+}
+
 function locationAction() {
   let node = screen.getByText('notes.edit.pickLocation');
   while (node.parent && typeof node.props.onPress !== 'function') {
@@ -494,17 +500,61 @@ test('失焦期间传完的媒体，回到页面后仍然保存得出去', async
       expect.objectContaining({
         sections: expect.objectContaining({
           media: {
-            items: [
-              expect.objectContaining({
-                objectKey: 'notes/slow.jpg',
-                url: 'https://cdn.example/slow.jpg',
-              }),
-            ],
+            items: [expect.objectContaining({ objectKey: 'notes/slow.jpg' })],
           },
         }),
       }),
     );
   });
+  // notes/ 是私有目录：直连地址读不到，媒体只按 objectKey 上送。
+  expect(createdNoteMediaItems()[0]).not.toHaveProperty('url');
+});
+
+test('presign 不返回 fileUrl 时，笔记媒体照常上传、预览并按 objectKey 保存', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  jest.mocked(createNote).mockResolvedValue({} as Awaited<ReturnType<typeof createNote>>);
+  mockRequestPermission.mockResolvedValue({ granted: true });
+  mockLaunchPicker.mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'file:///keyed.jpg', width: 100, height: 80 }],
+  });
+  // 后端对私有目录不再返回可直读的地址。
+  mockRequestPresign.mockResolvedValue({
+    uploadUrl: 'https://upload.example/keyed.jpg',
+    fileUrl: null,
+    key: 'notes/keyed.jpg',
+    requiredHeaders: {},
+  });
+  mockUploadFile.mockResolvedValue(undefined);
+
+  render(<EditNoteScreen />);
+  fireEvent.press(screen.getByText('notes.edit.addImage'));
+  await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
+
+  // 传完之后仍然看得见：远端没有能读的地址，缩略图继续用本地资源。
+  await waitFor(() =>
+    expect(
+      screen
+        .getAllByTestId('note-media-preview-image')
+        .some((node) => node.props.source?.uri === 'file:///keyed.jpg'),
+    ).toBe(true),
+  );
+  expect(alert).not.toHaveBeenCalled();
+  expect(mockReportHandledFailure).not.toHaveBeenCalled();
+
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '标题');
+  fireEvent.press(screen.getByText('notes.edit.done'));
+
+  await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+  const [input] = jest.mocked(createNote).mock.calls[0];
+  const items = createdNoteMediaItems();
+  expect(items).toHaveLength(1);
+  expect(items[0]).toEqual(expect.objectContaining({ type: 'IMAGE', objectKey: 'notes/keyed.jpg' }));
+  // 没有地址就不要编一个出来：url 整个字段都不上送。
+  expect(items[0]).not.toHaveProperty('url');
+  expect(input.media).toHaveLength(1);
+  expect(input.media[0]).toEqual(expect.objectContaining({ objectKey: 'notes/keyed.jpg' }));
+  expect(input.media[0]).not.toHaveProperty('url');
 });
 
 test('a route id change abandons the previous upload without keeping controls locked', async () => {
