@@ -123,7 +123,12 @@ export interface NoteDetail extends NoteSummary {
 export interface CreateNoteMediaInput {
   type: NoteMediaType;
   objectKey: string;
-  url: string;
+  /**
+   * 可选：notes/ 是私有目录，直连地址一律 403，读取靠服务端按 objectKey 现签。
+   * 新上传的媒体只上送 objectKey，落库地址由服务端派生；这里的 url 只在编辑既有
+   * 笔记时出现 —— 那是服务端读接口回给我们的短时签名地址，原样带回即可。
+   */
+  url?: string;
   mimeType?: string;
   size?: number;
   width?: number;

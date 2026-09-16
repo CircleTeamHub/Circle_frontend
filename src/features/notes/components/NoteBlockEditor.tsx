@@ -137,6 +137,8 @@ function NoteBlockEditorImpl({
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       let acceptedAssets: ImagePicker.ImagePickerAsset[] = [];
+      // 传成功、已经插进文档的那几条用的就是本地地址，不能在这一轮里释放。
+      let insertedPreviewUris: ReadonlySet<string> = new Set<string>();
       try {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) return;
@@ -208,20 +210,16 @@ function NoteBlockEditorImpl({
             presign.requiredHeaders,
             kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
           );
-          // notes/ 是私有目录：读取一律按 objectKey 签名，fileUrl 本身读不到。但笔记接口
-          // （CreateNoteMediaDto.url）目前仍要求 url，只能照传；后端对私有目录不再返回
-          // fileUrl 之前，必须先放开那个必填 —— 缺了就让这一项上传失败，不造假地址。
-          if (!presign.fileUrl) {
-            throw new Error('note media presign returned no fileUrl');
-          }
           const durationMs =
             kind === 'video' && typeof asset.duration === 'number'
               ? Math.round(asset.duration)
               : undefined;
           return {
+            // 文档里这一块的预览用本地资源地址：notes/ 是私有目录，presign 的直连
+            // 地址一律 403，插进去只会是一张裂图。保存后由服务端的短时签名地址接手。
             pending: {
               type: kind,
-              url: presign.fileUrl,
+              url: asset.uri,
               objectKey: presign.key,
               width: asset.width ?? undefined,
               height: asset.height ?? undefined,
@@ -229,10 +227,10 @@ function NoteBlockEditorImpl({
               size: asset.fileSize ?? undefined,
               durationMs,
             },
+            // 上送只给 objectKey：落库地址由服务端派生，客户端不造地址。
             media: {
               type: kind === 'video' ? 'VIDEO' : 'IMAGE',
               objectKey: presign.key,
-              url: presign.fileUrl,
               width: asset.width ?? undefined,
               height: asset.height ?? undefined,
               mimeType: contentType,
@@ -242,6 +240,7 @@ function NoteBlockEditorImpl({
             } satisfies CreateNoteMediaInput,
           };
         });
+        insertedPreviewUris = new Set(batch.items.map((item) => item.pending.url));
         if (!isMounted.current) return;
         if (batch.items.length) {
           setPendingInserts((current) => [
@@ -278,9 +277,13 @@ function NoteBlockEditorImpl({
         }
         reportHandledFailure('noteEditor', 'upload', error, { reason: kind });
       } finally {
-        // Standalone editor inserts only remote URLs, so picker object URLs are no
-        // longer needed after this upload attempt settles (including failures).
-        pickerPreviewDisposerRef.current.disposeAssets(acceptedAssets);
+        // 没能插进文档的（上传失败 / 整批抛错）在这里释放；插进去的那几条是块的
+        // 预览来源，提前 revoke 会把它们变成裂图，留给卸载时统一释放。
+        acceptedAssets.forEach((asset) => {
+          if (!insertedPreviewUris.has(asset.uri)) {
+            pickerPreviewDisposerRef.current.dispose(asset.uri);
+          }
+        });
         inFlightRef.current = false;
       }
     },

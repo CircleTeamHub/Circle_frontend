@@ -136,21 +136,21 @@ function normalizeSectionMedia(
       Boolean(
         item &&
           typeof item.objectKey === 'string' &&
-          typeof item.url === 'string' &&
           (item.type === 'IMAGE' || item.type === 'VIDEO'),
       ),
     )
     .map((item, index): EditorNoteMediaDraft => ({
       type: item.type,
       objectKey: item.objectKey,
-      url: item.url,
+      // 私有目录的新上传没有 url：留空而不是补一个读不到的地址。
+      ...(typeof item.url === 'string' ? { url: item.url } : {}),
       ...(typeof item.mimeType === 'string' ? { mimeType: item.mimeType } : {}),
       ...(typeof item.size === 'number' ? { size: item.size } : {}),
       ...(typeof item.width === 'number' ? { width: item.width } : {}),
       ...(typeof item.height === 'number' ? { height: item.height } : {}),
       ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}),
       ...(typeof item.posterUrl === 'string' ? { posterUrl: item.posterUrl } : {}),
-      clientId: `stored:${item.objectKey}:${item.url}`,
+      clientId: `stored:${item.objectKey}:${item.url ?? ''}`,
       sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
       uploadStatus: 'UPLOADED',
     }));
@@ -164,8 +164,8 @@ function countUnrecoverableSectionMedia(items: readonly StructuredNoteMediaItem[
 
 function mergeMedia<T extends CreateNoteMediaInput>(items: T[]) {
   return items.reduce<T[]>((merged, item) => {
-    const key = `${item.objectKey}:${item.url}`;
-    if (merged.some((existing) => `${existing.objectKey}:${existing.url}` === key)) {
+    const key = `${item.objectKey}:${item.url ?? ''}`;
+    if (merged.some((existing) => `${existing.objectKey}:${existing.url ?? ''}` === key)) {
       return merged;
     }
     return [...merged, { ...item, sortOrder: merged.length }];
@@ -550,17 +550,12 @@ export default function EditNoteScreen() {
             presign.requiredHeaders,
             kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
           );
-          // notes/ 是私有目录：读取一律按 objectKey 签名，fileUrl 本身读不到。但笔记接口
-          // （CreateNoteMediaDto.url）目前仍要求 url，只能照传；后端对私有目录不再返回
-          // fileUrl 之前，必须先放开那个必填 —— 缺了就让这一项上传失败，不造假地址。
-          if (!presign.fileUrl) {
-            throw new Error('note media presign returned no fileUrl');
-          }
+          // notes/ 是私有目录：直连地址一律 403，读取由服务端按 objectKey 现签。
+          // 所以这里只上送 key，落库地址交给服务端派生 —— 不传 url，也不造假地址。
           return {
             clientId,
             type: kind === 'video' ? 'VIDEO' : 'IMAGE',
             objectKey: presign.key,
-            url: presign.fileUrl,
             width: asset.width ?? undefined,
             height: asset.height ?? undefined,
             mimeType: contentType,

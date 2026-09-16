@@ -90,24 +90,26 @@ export function extractMediaFromBlocks(blocks: Block[]): CreateNoteMediaInput[] 
 export function buildNoteMediaMap(
   media: (NoteMedia | CreateNoteMediaInput)[],
 ): Record<string, CreateNoteMediaInput> {
+  // 这张表按 url 索引正文块里的媒体：只有 objectKey 的条目（私有目录的新上传）
+  // 没有可索引的键，直接跳过 —— 它们不是从块 props 反查回来的。
   return Object.fromEntries(
-    media
-      .filter((item) => item.url)
-      .map((item) => {
-        const input: CreateNoteMediaInput = {
-          type: item.type,
-          objectKey: item.objectKey,
-          url: item.url,
-          sortOrder: item.sortOrder,
-        };
-        if (item.mimeType != null) input.mimeType = item.mimeType;
-        if (item.size != null) input.size = item.size;
-        if (item.width != null) input.width = item.width;
-        if (item.height != null) input.height = item.height;
-        if (item.durationMs != null) input.durationMs = item.durationMs;
-        if (item.posterUrl != null) input.posterUrl = item.posterUrl;
-        return [item.url, input];
-      }),
+    media.flatMap((item) => {
+      const url = item.url;
+      if (!url) return [];
+      const input: CreateNoteMediaInput = {
+        type: item.type,
+        objectKey: item.objectKey,
+        url,
+        sortOrder: item.sortOrder,
+      };
+      if (item.mimeType != null) input.mimeType = item.mimeType;
+      if (item.size != null) input.size = item.size;
+      if (item.width != null) input.width = item.width;
+      if (item.height != null) input.height = item.height;
+      if (item.durationMs != null) input.durationMs = item.durationMs;
+      if (item.posterUrl != null) input.posterUrl = item.posterUrl;
+      return [[url, input] as const];
+    }),
   );
 }
 
@@ -116,7 +118,7 @@ export function mergeExtractedMediaWithMediaMap(
   mediaMap: Record<string, CreateNoteMediaInput>,
 ): CreateNoteMediaInput[] {
   return extracted.flatMap((item) => {
-    const uploaded = mediaMap[item.url];
+    const uploaded = item.url ? mediaMap[item.url] : undefined;
     if (uploaded) {
       return [{ ...uploaded, sortOrder: item.sortOrder }];
     }

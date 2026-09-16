@@ -384,7 +384,20 @@ test('private folders accept a presign without a directly readable fileUrl', asy
   }
 });
 
-// 公开目录的调用方直接把 fileUrl 写进资料 / 圈子 / 帖子，缺了照旧拒绝。
+// 公开目录的调用方直接把 fileUrl 写进资料 / 圈子 / 帖子：既要拿得到，缺了也照旧拒绝。
+test('public folders forward fileUrl verbatim to the caller', async () => {
+  const api = loadUploadApi();
+  api.__setPresignHost('http://10.0.0.195:9000');
+  api.__setPresignOverrides({ fileUrl: 'http://10.0.0.195:9000/circle/avatars/test.jpeg' });
+  const response = await api.requestUploadPresign({
+    filename: 'avatar.jpg',
+    contentType: 'image/jpeg',
+    folder: 'avatars',
+    sizeBytes: 1024,
+  });
+  assert.equal(response.fileUrl, 'http://10.0.0.195:9000/circle/avatars/test.jpeg');
+});
+
 test('public folders still require fileUrl because callers persist it directly', async () => {
   const api = loadUploadApi();
   api.__setPresignHost('http://10.0.0.195:9000');

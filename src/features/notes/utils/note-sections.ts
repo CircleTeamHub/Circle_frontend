@@ -5,7 +5,11 @@ export type NoteSectionKind = 'text' | 'media' | 'showcase' | 'location';
 export type StructuredNoteMediaItem = Partial<NoteMedia> & {
   id?: string;
   type: 'IMAGE' | 'VIDEO';
-  url: string;
+  /**
+   * 可选：私有目录（notes/）刚上传的条目只有 objectKey，地址由服务端按 key 现签，
+   * 所以只有服务端读接口回来的条目才带 url。
+   */
+  url?: string;
 };
 
 export type NoteTextSection = {
@@ -63,10 +67,9 @@ function getTextBlocks(blocks: Record<string, unknown>[] | null | undefined) {
 
 function getLegacyShowcaseItems(note: StructuredNoteInput): StructuredNoteMediaItem[] {
   const blocks = note.contentJson ?? [];
-  const byUrl = new Map(
-    (note.media ?? [])
-      .filter((item) => item.url)
-      .map((item) => [item.url, item as StructuredNoteMediaItem]),
+  const legacyMedia: StructuredNoteMediaItem[] = note.media ?? [];
+  const byUrl = new Map<string, StructuredNoteMediaItem>(
+    legacyMedia.flatMap((item) => (item.url ? [[item.url, item] as const] : [])),
   );
 
   return blocks.flatMap((block, index) => {
@@ -89,7 +92,12 @@ function normalizeItems(items: unknown): StructuredNoteMediaItem[] {
   return items.flatMap((item) => {
     if (!item || typeof item !== 'object') return [];
     const candidate = item as Partial<StructuredNoteMediaItem>;
-    if ((candidate.type !== 'IMAGE' && candidate.type !== 'VIDEO') || !candidate.url) {
+    // 身份可以来自 url 或 objectKey：私有目录新上传的条目只有 key，按 url 一刀切
+    // 会把刚传完的图静默丢掉。
+    const hasIdentity =
+      Boolean(candidate.url) ||
+      (typeof candidate.objectKey === 'string' && candidate.objectKey.trim() !== '');
+    if ((candidate.type !== 'IMAGE' && candidate.type !== 'VIDEO') || !hasIdentity) {
       return [];
     }
     return [candidate as StructuredNoteMediaItem];
@@ -105,7 +113,7 @@ function getMediaAliases(item: StructuredNoteMediaItem) {
   const aliases = new Set<string>();
   const objectKey = typeof item.objectKey === 'string' ? item.objectKey.trim() : '';
   if (objectKey) aliases.add(`${item.type}:key:${objectKey}`);
-  const url = item.url.trim();
+  const url = typeof item.url === 'string' ? item.url.trim() : '';
   if (url) aliases.add(`${item.type}:url:${url}`);
   return aliases;
 }

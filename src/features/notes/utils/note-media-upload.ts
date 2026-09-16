@@ -21,7 +21,8 @@ export type EditorNoteMediaDraft = {
   clientId: string;
   type: 'IMAGE' | 'VIDEO';
   objectKey: string;
-  url: string;
+  /** 私有目录没有可直读的地址：刚上传的草稿只有 objectKey，预览走 previewUri。 */
+  url?: string;
   previewUri?: string;
   width?: number;
   height?: number;
@@ -55,7 +56,6 @@ export function createPendingNoteMediaDrafts(
       clientId,
       type,
       objectKey: `pending:${clientId}`,
-      url: '',
       previewUri: asset.uri,
       width: asset.width ?? undefined,
       height: asset.height ?? undefined,
