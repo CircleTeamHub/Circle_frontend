@@ -411,9 +411,20 @@ test('the active-conversation marker and read acks follow focus, not mount', () 
   );
   // 已读上报同样要按焦点门控:store 订阅在失焦时照常触发。
   assert.match(source, /const isFocused = useIsFocused\(\)/);
+  // 也按前后台门控:停在聊天页锁屏,后台里连接还活着、消息照收,不挡的话
+  // 这段时间的消息全被标成已读、推送也不发。翻着历史时新到的也不算读过。
   assert.match(
     source,
-    /if \(!isFocused \|\| !conversationID \|\| !conversationMessages\?\.length\) return;\s*markConversationAsRead\(conversationID\)/,
+    /if \(\s*!isFocused \|\|\s*!appForeground \|\|\s*!conversationID \|\|\s*!conversationMessages\?\.length\s*\) \{\s*return;\s*\}\s*if \(!isNearLatestMessageRef\.current\) return;\s*markConversationAsRead\(conversationID\)/,
+  );
+  // 翻完历史滚回最新时补报;离开会话时按「看过了」结算。
+  assert.match(
+    source,
+    /nearLatest &&\s*!wasNearLatest &&\s*conversationID &&\s*useChatStore\.getState\(\)\.appForeground/,
+  );
+  assert.match(
+    source,
+    /setActiveConversationId\(null\);[\s\S]{0,400}store\.appForeground &&\s*store\.conversations\.some\(\(c\) => c\.id === conversationID\)[\s\S]{0,40}markConversationAsRead\(conversationID\)/,
   );
 });
 

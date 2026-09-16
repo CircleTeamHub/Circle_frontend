@@ -100,6 +100,7 @@ import {
   markConversationAsRead,
   retryFailedChatMessage,
   startMediaSend,
+  type PendingMediaUpload,
   sendCardMessage,
   sendImageMessage,
   sendVideoMessage,
@@ -130,6 +131,7 @@ import {
   sendChatTyping,
 } from '@/chat-core/socket-manager';
 import { isLocalMessageId } from '@/chat-core/local-message-id';
+import { useComposerDraftPersistence } from '@/features/chat/hooks/use-composer-draft';
 import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
 import { formatBurnDuration } from '@/chat-core/burn-durations';
@@ -271,6 +273,19 @@ const MAX_SCROLL_TO_INDEX_RETRIES = 4;
 // 收到新消息可以自然跟随；超出后视为正在翻历史，不抢走阅读位置。
 const LATEST_MESSAGE_SCROLL_THRESHOLD = 80;
 const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * 上传管线用得到的媒体字段。首发传 ImagePicker 的 asset;App 重启后重发传持久副本
+ * (见 reuploadPendingMedia),那时只剩 outbox 里记下的这几项。
+ */
+interface ChatMediaFile {
+  uri: string;
+  width?: number | null;
+  height?: number | null;
+  /** 毫秒(与 ImagePicker 一致)。 */
+  duration?: number | null;
+  fileSize?: number | null;
+}
 const ATTACHMENT_PAGES: (typeof ATTACHMENT_ITEMS)[number][][] = Array.from(
   { length: Math.ceil(ATTACHMENT_ITEMS.length / ATTACHMENT_PAGE_SIZE) },
   (_, page) =>
@@ -653,6 +668,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   // 视频可能接近 100MB。上传成功但 socket ack 失败时，重发只应复用已上传的 key，
   // 不能再传一遍并制造孤儿对象；成功发送或卸载后释放这份内存索引。
   const uploadedVideoKeysRef = useRef(new Map<string, string>());
+  // 消息长按菜单在上传管线之前声明,拿不到后面才定义的 reuploadPendingMedia;
+  // 点「重发」时从这里取最新的那个。
+  const reuploadPendingMediaRef = useRef<
+    ((upload: PendingMediaUpload) => Promise<void>) | null
+  >(null);
   // 录音状态的纯 JS 快照：卸载 cleanup 里不能调 recorder 的 native getStatus()，
   // 此时 expo-audio 可能已释放其 native shared object（会抛 NativeSharedObjectNotFoundException）。
   const isRecordingRef = useRef(false);
@@ -1188,6 +1208,16 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       setActiveConversationId(conversationID);
       return () => {
         setActiveConversationId(null);
+        // 离开会话按「看过了」结算(微信语义):停在上面翻历史时新到的那些没当场
+        // 报已读,不在这里补上的话,出了会话列表先显示 0、下一次快照又冒出红点。
+        // 被移出的会话已经不在列表里,不替它报(服务端只会拒)。
+        const store = useChatStore.getState();
+        if (
+          store.appForeground &&
+          store.conversations.some((c) => c.id === conversationID)
+        ) {
+          markConversationAsRead(conversationID);
+        }
       };
     }, [conversationID, setActiveConversationId, sourceID]),
   );
@@ -1202,7 +1232,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       loadConversationMessages(conversationID)
         .then(() => {
           // 历史落库后按最新水位上报已读(拉取前上报会拿到 0 水位白跑一趟)。
-          markConversationAsRead(conversationID);
+          // 拉取期间锁了屏的话不报:人没看到。
+          if (useChatStore.getState().appForeground) {
+            markConversationAsRead(conversationID);
+          }
         })
         .catch((err) => {
           reportHandledFailure('chatDetail', 'loadMessages', err);
@@ -1302,11 +1335,23 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   // 在此会话页时来新消息 → 即时推进已读水位(socket pending 队列自带去重合并)。
   // 必须带 isFocused:本屏被压在聊天信息/记录页下面时仍然挂载着、store 订阅
   // 照常触发,不挡的话「人没在看」的消息会被直接标成已读。
+  // 也必须带 appForeground:停在聊天页锁屏,后台里连接还活着、消息照收,
+  // 不挡的话这段时间的消息全被标成已读、红点不涨、推送也不发。
+  // 还要停在最新消息附近:往上翻着看历史时新到的消息不算读过,滚回来再报。
   const isFocused = useIsFocused();
+  const appForeground = useChatStore((state) => state.appForeground);
   useEffect(() => {
-    if (!isFocused || !conversationID || !conversationMessages?.length) return;
+    if (
+      !isFocused ||
+      !appForeground ||
+      !conversationID ||
+      !conversationMessages?.length
+    ) {
+      return;
+    }
+    if (!isNearLatestMessageRef.current) return;
     markConversationAsRead(conversationID);
-  }, [conversationID, conversationMessages, isFocused]);
+  }, [appForeground, conversationID, conversationMessages, isFocused]);
 
   // 异步分页回来时闭包里的 messages 已经过期,滚动要按最新那份算 index。
   const messagesRef = useRef(messages);
@@ -1314,10 +1359,21 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
 
   const handleMessageListScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      isNearLatestMessageRef.current =
+      const nearLatest =
         event.nativeEvent.contentOffset.y <= LATEST_MESSAGE_SCROLL_THRESHOLD;
+      const wasNearLatest = isNearLatestMessageRef.current;
+      isNearLatestMessageRef.current = nearLatest;
+      // 翻完历史滚回最新:刚才没报的已读现在补上。
+      if (
+        nearLatest &&
+        !wasNearLatest &&
+        conversationID &&
+        useChatStore.getState().appForeground
+      ) {
+        markConversationAsRead(conversationID);
+      }
     },
-    [],
+    [conversationID],
   );
 
   // FlatList 不会保证插入 index 0 后仍回到 offset 0，尤其是从笔记选择页返回时，
@@ -1528,6 +1584,18 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const [quoteTarget, setQuoteTarget] = useState<ChatMessage | null>(null);
   // G-07 编辑态:非空时发送按钮改走 chat:edit,输入框上方出现编辑横条。
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const { clearPersistedDraft } = useComposerDraftPersistence({
+    userId: currentUserID,
+    conversationId: conversationID,
+    draft,
+    setDraft,
+    mentionTargets,
+    setMentionTargets,
+    quoteTarget,
+    setQuoteTarget,
+    messages,
+    paused: editingMessageId !== null,
+  });
   const [highlightedMessageID, setHighlightedMessageID] = useState<string | null>(
     null,
   );
@@ -1807,6 +1875,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           void retryFailedChatMessage(
             conversationID,
             message.deliveryId as string,
+            { reuploadMedia: reuploadPendingMediaRef.current ?? undefined },
           ).catch((error: unknown) => {
             setSendError(
               getChatSendErrorMessage(
@@ -2911,11 +2980,19 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
 
         // 先上屏(sendStatus=1)、再后台上传:上传最长 60s,期间既不能让屏幕上
         // 什么都没有,也不能把输入栏锁死 —— 那就是「录完就消失、再按没反应」。
+        const voiceFilename = soundPath.split('/').pop() || 'voice.m4a';
         const deliveryId = startMediaSend({
           conversationId: conversationID,
           type: 'voice',
           localContent: { duration, localUri: soundPath },
           retry: (id) => uploadAndSendVoice(soundPath, duration, id),
+          source: {
+            uri: soundPath,
+            uploadName: voiceFilename,
+            contentType:
+              resolveUploadContentType({ fileName: voiceFilename }) ??
+              'audio/mp4',
+          },
         });
         void uploadAndSendVoice(soundPath, duration, deliveryId);
       } catch (error) {
@@ -3145,7 +3222,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
    */
   const uploadAndSendImage = useCallback(
     async (
-      asset: ImagePicker.ImagePickerAsset,
+      asset: ChatMediaFile,
       filename: string,
       contentType: string,
       deliveryId: string,
@@ -3264,6 +3341,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           ...(asset.height ? { height: asset.height } : {}),
         },
         retry: (id) => uploadAndSendImage(asset, filename, contentType, id),
+        source: { uri: asset.uri, uploadName: filename, contentType },
       });
       void uploadAndSendImage(asset, filename, contentType, deliveryId);
       return true;
@@ -3273,7 +3351,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
 
   const uploadAndSendVideo = useCallback(
     async (
-      asset: ImagePicker.ImagePickerAsset,
+      asset: ChatMediaFile,
       filename: string,
       contentType: string,
       deliveryId: string,
@@ -3398,11 +3476,54 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           ...(asset.fileSize ? { size: asset.fileSize } : {}),
         },
         retry: (id) => uploadAndSendVideo(asset, filename, contentType, id),
+        source: { uri: asset.uri, uploadName: filename, contentType },
       });
       void uploadAndSendVideo(asset, filename, contentType, deliveryId);
     },
     [conversationID, t, uploadAndSendVideo],
   );
+
+  /**
+   * App 被杀之后重发一条还没传完的媒体:内存里的重试闭包已经没了,从 outbox 记下的
+   * 持久副本重跑同一条「上传 + 发送」(失败照样标红、可再重发)。
+   */
+  const reuploadPendingMedia = useCallback(
+    async ({ deliveryId, record, uri }: PendingMediaUpload) => {
+      switch (record.type) {
+        case 'voice':
+          await uploadAndSendVoice(uri, record.duration ?? 1, deliveryId);
+          return;
+        case 'image':
+          await uploadAndSendImage(
+            { uri, width: record.width, height: record.height },
+            record.uploadName,
+            record.contentType,
+            deliveryId,
+          );
+          return;
+        case 'video':
+          await uploadAndSendVideo(
+            {
+              uri,
+              width: record.width,
+              height: record.height,
+              // 记录里存的是秒,上传管线吃 ImagePicker 的毫秒。
+              duration:
+                record.duration === undefined ? undefined : record.duration * 1000,
+              fileSize: record.size,
+            },
+            record.uploadName,
+            record.contentType,
+            deliveryId,
+          );
+          return;
+      }
+    },
+    [uploadAndSendImage, uploadAndSendVideo, uploadAndSendVoice],
+  );
+  useEffect(() => {
+    reuploadPendingMediaRef.current = reuploadPendingMedia;
+  }, [reuploadPendingMedia]);
 
   const handlePickLibraryMedia = useCallback(
     async (kind: 'photo' | 'video') => {
@@ -3957,6 +4078,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           await sendTextMessage({ conversationId: conversationID, text: nextText });
         }
       }
+      clearPersistedDraft();
       if (mountedRef.current) setDraft('');
       if (mountedRef.current) setQuoteTarget(null);
       if (mountedRef.current) setMentionTargets([]);
@@ -3983,6 +4105,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       if (mountedRef.current) setSending(false);
     }
   }, [
+    clearPersistedDraft,
     conversationID,
     conversationType,
     draft,

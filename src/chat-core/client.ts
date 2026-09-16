@@ -16,7 +16,18 @@ import {
 } from './socket-manager';
 import { useChatStore, type StoredChatMessage } from './store';
 import { type ChatMessageDto } from './protocol';
-import { outboxDelete, outboxList, outboxUpsert } from './local-db';
+import {
+  outboxDelete,
+  outboxList,
+  outboxUpsert,
+  type PendingMediaRecord,
+} from './local-db';
+import {
+  deletePendingMedia,
+  persistPendingMediaFile,
+  resolvePendingMediaUri,
+} from './pending-media';
+import { setConversationCacheResetHandler } from './sync';
 
 /**
  * 聊天页面向的高层 API(对齐旧 src/im/client 的调用形态,屏幕换 import 即用)。
@@ -124,6 +135,15 @@ export function resetHistoryCursor(conversationId?: string): void {
   historyCursors.delete(conversationId);
   inFlightPages.delete(conversationId);
 }
+
+// 增量同步把一个会话的缓存整体作废(落后太多跳到最新 / 服务端要求重建)时:
+// 向前翻页的游标还停在作废之前,往上翻会从旧位置接着翻,中间凭空少一大段。
+// 复位游标;正开着的会话按最新一页重拉并重新记下游标。
+setConversationCacheResetHandler((conversationId) => {
+  resetHistoryCursor(conversationId);
+  if (useChatStore.getState().activeConversationId !== conversationId) return;
+  void loadConversationMessages(conversationId).catch(() => undefined);
+});
 
 /** 已读:以本地已知的最大 height 上报水位 + 本地未读归零。 */
 export function markConversationAsRead(conversationId: string): void {
@@ -256,6 +276,9 @@ export async function sendWithOptimism(
   // 这里不再需要 SERVER_COMPENSATED_TYPES 的排除分支:回执类卡片已经完全不走
   // 客户端发送路径,能到这里的类型没有一个是服务端补发的。该常量仍在
   // socket-manager 的 outbox 回放里用于清理**旧版本客户端**留下的脏条目。
+  //
+  // 媒体消息:先等持久副本那一行落盘(见 trackPendingMedia),这一行必须写在它后面。
+  const pendingMedia = await pendingMediaRecordFor(d);
   await outboxUpsert({
     d,
     conversationId: options.conversationId,
@@ -271,6 +294,7 @@ export async function sendWithOptimism(
       ...(options.outboxPreviewContent
         ? { localPreviewContent: options.outboxPreviewContent }
         : {}),
+      ...(pendingMedia ? { pendingMedia } : {}),
     },
     createdAt: optimistic.createdAt,
     ...anchorFields,
@@ -285,6 +309,7 @@ export async function sendWithOptimism(
       forwardFromMessageId: options.forwardFromMessageId,
     });
     void outboxDelete(d);
+    releasePendingMedia(d);
     const next = useChatStore.getState();
     // 服务端的 chat:msg 回声可能跑在 ack 前面。那条广播是权威版本(服务端
     // 规范化过的 content、服务端时间戳);下面这个 confirmed 只是拿本地乐观
@@ -532,11 +557,118 @@ export function sendCardMessage(options: {
  * 本机直接渲染),上传在后台跑;失败就把这个气泡标红,长按「重发」重跑整条
  * 「上传 + 发送」。
  *
- * 重试闭包只活在本次会话内存里:上传还没成功就意味着服务端没有这条消息,
- * outbox 那套(payload 里只有 object key)接不住它。App 重启后红气泡随内存
- * 一起消失 —— 比重启后留一个永远重发失败的按钮诚实。
+ * 重试闭包只活在本次会话内存里。App 被杀之后靠的是持久副本:点发送时把源文件
+ * 拷进持久目录、outbox 记下文件名(chat-core/pending-media),重启后失败气泡照常
+ * 还原,长按重发由聊天页从副本重新上传(retryFailedChatMessage 的 reuploadMedia)。
+ * 拷不了副本的(web、content:// 地址)仍然只活在内存里。
  */
 const mediaRetries = new Map<string, () => Promise<void>>();
+
+/**
+ * 待发媒体的持久化进度。ready 解析为写进 outbox 的那条记录(拷贝失败为 null)。
+ *
+ * sendWithOptimism 的 outbox 写必须排在它后面:否则晚到的「没有 key 的记录」会
+ * 盖掉「有 key 的记录」,甚至在发送成功出队之后又把这一行写回去 —— 下次冷启动
+ * 冒出一条早就发出去了的失败气泡。
+ */
+interface PendingMediaJob {
+  userId: string;
+  ready: Promise<PendingMediaRecord | null>;
+}
+const pendingMediaJobs = new Map<string, PendingMediaJob>();
+
+async function pendingMediaRecordFor(d: string): Promise<PendingMediaRecord | null> {
+  const job = pendingMediaJobs.get(d);
+  return job ? job.ready : null;
+}
+
+/** 发出去了:副本没用了。等拷贝那一步结束再删,不然删在拷贝前面就留下一个孤儿。 */
+function releasePendingMedia(d: string): void {
+  const job = pendingMediaJobs.get(d);
+  if (!job) return;
+  pendingMediaJobs.delete(d);
+  void job.ready.then(() => deletePendingMedia(job.userId, d));
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function trackPendingMedia(input: {
+  d: string;
+  conversationId: string;
+  type: PendingMediaRecord['type'];
+  source: PendingMediaSource;
+  localContent: Record<string, unknown>;
+  createdAt: string;
+  failedAfterHeight: number | undefined;
+}): void {
+  const userId = useChatStore.getState().currentUserId;
+  if (!userId) return;
+  const { d, conversationId } = input;
+  const ready = persistPendingMediaFile(
+    userId,
+    d,
+    input.source.uri,
+    input.source.uploadName,
+  )
+    .then(async (fileName): Promise<PendingMediaRecord | null> => {
+      if (!fileName) return null;
+      // 拷贝期间气泡已经没了(长按删掉了失败消息、切了号):不再写回 outbox。
+      const store = useChatStore.getState();
+      const stillPending =
+        store.currentUserId === userId &&
+        (store.messagesByConversation[conversationId] ?? []).some(
+          (message) => message.d === d && message.height === 0,
+        );
+      if (!stillPending) {
+        await deletePendingMedia(userId, d);
+        return null;
+      }
+      const width = positiveNumber(input.localContent.width);
+      const height = positiveNumber(input.localContent.height);
+      const duration = positiveNumber(input.localContent.duration);
+      const size = positiveNumber(input.localContent.size);
+      const record: PendingMediaRecord = {
+        type: input.type,
+        fileName,
+        uploadName: input.source.uploadName,
+        contentType: input.source.contentType,
+        ...(width === undefined ? {} : { width }),
+        ...(height === undefined ? {} : { height }),
+        ...(duration === undefined ? {} : { duration }),
+        ...(size === undefined ? {} : { size }),
+      };
+      await outboxUpsert({
+        d,
+        conversationId,
+        payload: {
+          conversationId,
+          type: input.type,
+          content: {},
+          d,
+          pendingMedia: record,
+        },
+        createdAt: input.createdAt,
+        ...(input.failedAfterHeight === undefined
+          ? {}
+          : { failedAfterHeight: input.failedAfterHeight }),
+      });
+      return record;
+    })
+    .catch(() => null);
+  pendingMediaJobs.set(d, { userId, ready });
+}
+
+/** 要上传的源文件。用来在持久目录留一份副本,App 被杀后还能从副本重发。 */
+export interface PendingMediaSource {
+  uri: string;
+  /** 上传用的原始文件名(presign 要用;副本只保留它的扩展名)。 */
+  uploadName: string;
+  contentType: string;
+}
 
 export function startMediaSend(options: {
   conversationId: string;
@@ -545,6 +677,7 @@ export function startMediaSend(options: {
   localContent: Record<string, unknown>;
   /** 重跑整条上传+发送(拿到同一个 d,失败气泡才会被替换而不是又多一条)。 */
   retry: (deliveryId: string) => Promise<void>;
+  source?: PendingMediaSource;
 }): string {
   const d = createDeliveryId();
   const store = useChatStore.getState();
@@ -564,6 +697,17 @@ export function startMediaSend(options: {
   store.ingestMessages(options.conversationId, [optimistic]);
   store.applyIncomingMessage(optimistic);
   mediaRetries.set(d, () => options.retry(d));
+  if (options.source) {
+    trackPendingMedia({
+      d,
+      conversationId: options.conversationId,
+      type: options.type,
+      source: options.source,
+      localContent: options.localContent,
+      createdAt: optimistic.createdAt,
+      failedAfterHeight,
+    });
+  }
   return d;
 }
 
@@ -574,9 +718,32 @@ export function failMediaSend(conversationId: string, d: string): void {
   store.revertConversationPreview(conversationId);
 }
 
-/** 发送成功:重试闭包连同它captured 的本地文件引用一起丢掉。 */
+/** 发送成功:重试闭包连同它captured 的本地文件引用一起丢掉,持久副本删掉。 */
 export function finishMediaSend(d: string): void {
   mediaRetries.delete(d);
+  releasePendingMedia(d);
+}
+
+/** App 被杀后重发一条还没传完的媒体:outbox 里的记录 + 持久副本的地址。 */
+export interface PendingMediaUpload {
+  conversationId: string;
+  deliveryId: string;
+  record: PendingMediaRecord;
+  /** 持久副本的 file:// 地址,直接拿去上传。 */
+  uri: string;
+}
+
+export interface RetryFailedChatMessageOptions {
+  /**
+   * 从持久副本重跑「上传 + 发送」。上传管线在聊天页里(presign、缩略图、临时会话
+   * 检查),chat-core 不反向依赖它;不传时这类消息重发会报错。
+   * 与内存里的重试闭包同一约定:自己 catch 后调 failMediaSend,不往外抛。
+   */
+  reuploadMedia?: (upload: PendingMediaUpload) => Promise<void>;
+}
+
+function hasUploadedObjectKey(content: Record<string, unknown>): boolean {
+  return typeof content.key === 'string' && content.key.length > 0;
 }
 
 /**
@@ -596,6 +763,7 @@ const retriesInFlight = new Set<string>();
 export async function retryFailedChatMessage(
   conversationId: string,
   d: string,
+  options: RetryFailedChatMessageOptions = {},
 ): Promise<void> {
   if (retriesInFlight.has(d)) return;
   retriesInFlight.add(d);
@@ -603,7 +771,7 @@ export async function retryFailedChatMessage(
   // sendStatus===3 时出现,连点的入口本身就消失了,用户也看得出这一下生效了。
   useChatStore.getState().markMessageRetrying(conversationId, d);
   try {
-    await runRetry(conversationId, d);
+    await runRetry(conversationId, d, options);
   } catch (error) {
     // 上面把失败态清掉了,这里必须补回来 —— 否则重发再失败,气泡会一直停在
     // 「发送中」,既没有红色提示也再没有重发入口。
@@ -614,7 +782,11 @@ export async function retryFailedChatMessage(
   }
 }
 
-async function runRetry(conversationId: string, d: string): Promise<void> {
+async function runRetry(
+  conversationId: string,
+  d: string,
+  options: RetryFailedChatMessageOptions,
+): Promise<void> {
   // 媒体消息优先:它压根没进过 outbox(那时候还没有 object key),
   // 重发要从上传重跑,不是把同一份 payload 再 emit 一次。
   // (媒体那条链路自己 catch 后调 failMediaSend,不抛到这里。)
@@ -628,6 +800,30 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
     (item) => item.d === d && item.conversationId === conversationId,
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
+  const { localPreviewContent, pendingMedia, ...wirePayload } = entry.payload;
+  if (pendingMedia) {
+    const userId = useChatStore.getState().currentUserId;
+    if (userId) {
+      // 发送成功后(sendWithOptimism / 下面的出队)照常删副本,重发的 outbox 写也带上它。
+      pendingMediaJobs.set(d, { userId, ready: Promise.resolve(pendingMedia) });
+    }
+    if (!hasUploadedObjectKey(entry.payload.content)) {
+      // 上次没传完:服务端没有这个对象,只能从副本重新上传。
+      const uri = userId
+        ? await resolvePendingMediaUri(userId, d, pendingMedia.fileName)
+        : null;
+      if (!uri || !options.reuploadMedia) {
+        throw new ChatSendError('CHAT_MEDIA_SOURCE_MISSING', '待发媒体的本地副本不存在');
+      }
+      await options.reuploadMedia({
+        conversationId,
+        deliveryId: d,
+        record: pendingMedia,
+        uri,
+      });
+      return;
+    }
+  }
   const retrying = (
     useChatStore.getState().messagesByConversation[conversationId] ?? []
   ).find((message) => message.d === d) as StoredChatMessage | undefined;
@@ -637,9 +833,9 @@ async function runRetry(conversationId: string, d: string): Promise<void> {
     ...entry,
     ...(Number.isFinite(retryAnchor) ? { failedAfterHeight: retryAnchor } : {}),
   });
-  const { localPreviewContent, ...wirePayload } = entry.payload;
   const ack = await sendChatMessage(wirePayload);
   void outboxDelete(d);
+  releasePendingMedia(d);
   // 原来只出队就完事了。可首次发送其实**已经在服务端落库**、只是 ack 和回声
   // 都丢了的情况下,重发命中幂等分支:服务端返回成功但刻意不再广播 chat:msg。
   // 没有回声就没有东西替换那个失败气泡 —— 消息明明发出去了,本地却永远红着。

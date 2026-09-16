@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withChatCoreStubs } = require('./helpers/chat-core-stubs');
 
 const __localDbStub = {
   persistLocalConversations: async () => {},
@@ -82,7 +83,7 @@ function loadClient({ blocked, sendFails = false, retryOutbox = [] }) {
     Math,
     module: { exports: {} },
     exports: {},
-    require: (request) => {
+    require: withChatCoreStubs((request) => {
       if (request === '@/services/api/credit-policy') {
         return {
           assertLocalCanSendMessage: () => {
@@ -164,7 +165,7 @@ function loadClient({ blocked, sendFails = false, retryOutbox = [] }) {
         };
       }
     throw new Error(`unexpected require: ${request}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context);

@@ -39,6 +39,52 @@ export async function persistLocalMessages(
   _incoming: ChatMessageDto[],
 ): Promise<void> {}
 
+export interface LocalSyncState {
+  revision: number;
+  hasMessages: boolean;
+}
+
+export async function readLocalSyncStates(): Promise<Map<
+  string,
+  LocalSyncState
+> | null> {
+  return null;
+}
+
+export async function writeLocalSyncRevision(
+  _conversationId: string,
+  _revision: number,
+): Promise<boolean> {
+  return false;
+}
+
+export interface LocalSyncPage {
+  upserts: ChatMessageDto[];
+  deletedIds: string[];
+  clearedBeforeHeight: number;
+  revision: number;
+}
+
+export async function applyLocalSyncPage(
+  _conversationId: string,
+  _page: LocalSyncPage,
+): Promise<boolean> {
+  return false;
+}
+
+export async function resetLocalConversationCache(
+  _conversationId: string,
+  _revision: number,
+): Promise<boolean> {
+  return false;
+}
+
+export async function redactLocalQuotesOf(
+  _conversationId: string,
+  _targetIds: readonly string[],
+  _mode: 'revoked' | 'gone',
+): Promise<void> {}
+
 export async function deleteLocalMessage(
   _conversationId: string,
   _messageId: string,
@@ -48,8 +94,6 @@ export async function deleteLocalMessages(
   _conversationId: string,
   _messageIds: readonly string[],
 ): Promise<void> {}
-
-export async function dropAllLocalMessages(): Promise<void> {}
 
 export async function purgeExpiredLocalMessages(
   _entries: readonly {
@@ -90,6 +134,17 @@ export async function searchLocalChatMessages(
   return [];
 }
 
+export interface PendingMediaRecord {
+  type: 'image' | 'video' | 'voice';
+  fileName: string;
+  uploadName: string;
+  contentType: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  size?: number;
+}
+
 export interface OutboxEntry {
   d: string;
   conversationId: string;
@@ -100,6 +155,8 @@ export interface OutboxEntry {
     d: string;
     replyToId?: string;
     forwardFromMessageId?: string;
+    localPreviewContent?: Record<string, unknown>;
+    pendingMedia?: PendingMediaRecord;
   };
   createdAt: string;
   failedAfterHeight?: number;
@@ -111,6 +168,10 @@ export async function outboxDelete(_d: string): Promise<void> {}
 
 export async function outboxList(): Promise<OutboxEntry[]> {
   return [];
+}
+
+export async function readOutboxEntries(): Promise<OutboxEntry[] | null> {
+  return null;
 }
 
 export async function pendingReadUpsert(

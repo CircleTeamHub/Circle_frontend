@@ -276,6 +276,7 @@
       "sensitiveWordBlocked": "Mensaje bloqueado: contiene palabras prohibidas",
       "recordStartFailed": "No se pudo iniciar la grabación, inténtalo de nuevo",
       "voiceSendFailed": "No se pudo enviar el mensaje de voz, inténtalo de nuevo",
+      "mediaSourceMissing": "El archivo original ya no está en este dispositivo, así que no se puede reenviar",
       "locationSendFailed": "No se pudo enviar la ubicación, inténtalo de nuevo",
       "imageSendFailed": "No se pudo enviar la imagen, inténtalo de nuevo",
       "videoSendFailed": "No se pudo enviar el video, inténtalo de nuevo",
@@ -2934,7 +2935,8 @@
       "verification": "[Verificar] {{name}} te pidió que avales",
       "default": "[Mensaje]",
       "plazaPost": "[Evento] {{title}}",
-      "sendFailedPrefix": "[Error de envío]"
+      "sendFailedPrefix": "[Error de envío]",
+      "draftPrefix": "[Borrador]"
     },
     "message": {
       "revokedBySelf": "Retiraste un mensaje",
@@ -3328,6 +3330,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "Las invitaciones de miembros están desactivadas en este grupo",
     "CHAT_GROUP_QR_JOIN_DISABLED": "Unirse con código QR está desactivado en este grupo",
     "CHAT_GROUP_AVATAR_URL_INVALID": "La dirección del avatar del grupo no es válida",
+    "CHAT_DELIVERY_ID_CONFLICT": "No se pudo enviar el mensaje. Vuelve a escribirlo e inténtalo de nuevo",
     "FRIEND_GROUP_ADD_FORBIDDEN": "Este grupo no permite que los miembros se añadan como amigos"
   },
   "qr": {

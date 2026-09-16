@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withChatCoreStubs } = require('./helpers/chat-core-stubs');
 
 // 焚毁档位表(burn-durations.ts)只依赖 i18n —— 这里加载**真实实现**而不是桩:
 // 档位白名单是 setViewerSelfDestructSec 的唯一闸门,用假的等于没测。
@@ -55,6 +56,9 @@ const __localDbStub = {
   pendingReadsList: async () => [],
   initChatLocalDb: async () => false,
   wipeChatLocalDb: async () => {},
+  redactLocalQuotesOf: async () => {},
+  applyLocalSyncPage: async () => false,
+  resetLocalConversationCache: async () => {},
 };
 
 
@@ -107,7 +111,7 @@ function runModule(rel, requireImpl) {
     clearTimeout: () => {},
     module: { exports: {} },
     exports: {},
-    require: requireImpl,
+    require: withChatCoreStubs(requireImpl),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpile(rel), context);
@@ -1213,4 +1217,216 @@ test('server burned-message notifications converge fully when this device never 
   assert.equal(deletes[0][0], 'conv-1');
   assert.deepEqual([...deletes[0][1]], ['older']);
   assert.equal(deletes[0][2]?.createdAtNotBefore, undefined);
+});
+
+// ---- 会话变更序号流(2026-09):序号合并、同步页落地、前后台未读 ----
+
+test('a higher revision wins outright; an older snapshot cannot roll a message back', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [
+    msg({
+      id: 'm1',
+      height: 5,
+      revision: 9,
+      content: { text: '改过之后' },
+      reactions: [],
+    }),
+  ]);
+  // 更早发出、更晚落地的历史页:序号小,带着回应还在的旧状态。
+  useChatStore.getState().ingestMessages('conv-1', [
+    msg({
+      id: 'm1',
+      height: 5,
+      revision: 6,
+      content: { text: '原文' },
+      reactions: [{ emoji: '👍', userIds: ['other'] }],
+    }),
+  ]);
+  let merged = useChatStore.getState().messagesByConversation['conv-1'][0];
+  assert.equal(merged.content.text, '改过之后');
+  assert.equal(merged.revision, 9);
+  assert.equal(merged.reactions.length, 0);
+
+  // 更新的版本照常覆盖(回应被清空这类「字段变少」的变化也跟得上)。
+  useChatStore.getState().ingestMessages('conv-1', [
+    msg({ id: 'm1', height: 5, revision: 12, content: { text: '再改' } }),
+  ]);
+  merged = useChatStore.getState().messagesByConversation['conv-1'][0];
+  assert.equal(merged.content.text, '再改');
+});
+
+test('a sync page updates cached messages and appends newer ones, but never splices in old uncached ones', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation({ id: 'conv-1' })]);
+  store.ingestMessages('conv-1', [
+    msg({ id: 'm90', height: 90, revision: 90 }),
+    msg({ id: 'm91', height: 91, revision: 91, content: { text: '原文' } }),
+  ]);
+
+  useChatStore.getState().applySyncPage('conv-1', {
+    messages: [
+      // 很早以前那条被撤回了:不在内存窗口里。
+      msg({ id: 'm3', height: 3, revision: 100, content: {}, revokedAt: '2026-09-16T00:00:00.000Z' }),
+      msg({ id: 'm91', height: 91, revision: 101, content: { text: '改过' }, editedAt: '2026-09-16T00:00:01.000Z' }),
+      msg({ id: 'm92', height: 92, revision: 102 }),
+    ],
+    nextRevision: 102,
+    throughRevision: 102,
+    hasMore: false,
+    resetRequired: false,
+    readHeight: 0,
+    clearedBeforeHeight: 0,
+  });
+
+  const timeline = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.deepEqual(Array.from(timeline, (m) => m.id), ['m90', 'm91', 'm92']);
+  assert.equal(timeline[1].content.text, '改过');
+});
+
+test('a sync page for a conversation that was never opened leaves memory alone', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'conv-1' })]);
+
+  useChatStore.getState().applySyncPage('conv-1', {
+    messages: [msg({ id: 'm3', height: 3, revision: 7 })],
+    nextRevision: 7,
+    throughRevision: 7,
+    hasMore: false,
+    resetRequired: false,
+    readHeight: 0,
+    clearedBeforeHeight: 0,
+  });
+
+  // 打开时从本地库/REST 读;这里塞一条进去就成了只有一条消息的「时间线」。
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'], undefined);
+});
+
+test('a sync page applies tombstones, the clear floor and this user read position', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation({ id: 'conv-1', unreadCount: 2 })]);
+  store.ingestMessages('conv-1', [
+    msg({ id: 'm1', height: 1, revision: 1, sender: { id: 'other', nickname: 'o', avatarUrl: null } }),
+    msg({ id: 'm2', height: 2, revision: 2, sender: { id: 'other', nickname: 'o', avatarUrl: null } }),
+    msg({ id: 'm3', height: 3, revision: 3, sender: { id: 'other', nickname: 'o', avatarUrl: null } }),
+    msg({
+      id: 'm4',
+      height: 4,
+      revision: 4,
+      type: 'quote',
+      content: { text: '回复' },
+      replyTo: { id: 'm3', type: 'text', text: '被焚毁的原文', senderId: 'other' },
+      sender: { id: 'other', nickname: 'o', avatarUrl: null },
+    }),
+  ]);
+
+  useChatStore.getState().applySyncPage('conv-1', {
+    messages: [msg({ id: 'm3', height: 3, revision: 9, deleted: true, content: {} })],
+    nextRevision: 9,
+    throughRevision: 9,
+    hasMore: false,
+    resetRequired: false,
+    // 另一台设备读到了 4、清空到了 1。
+    readHeight: 4,
+    clearedBeforeHeight: 1,
+  });
+
+  const state = useChatStore.getState();
+  const timeline = state.messagesByConversation['conv-1'];
+  assert.deepEqual(Array.from(timeline, (m) => m.id), ['m2', 'm4']);
+  // 引用了被焚毁消息的气泡不能还留着原文快照。
+  assert.notEqual(timeline[1].replyTo?.text, '被焚毁的原文');
+  assert.equal(state.clearedBeforeHeightByConversation['conv-1'], 1);
+  assert.equal(state.readWatermarks['conv-1'].me, 4);
+  assert.equal(state.conversations[0].unreadCount, 0);
+});
+
+test('the open conversation still counts unread while the app is in the background', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation({ id: 'conv-1' })]);
+  store.setActiveConversationId('conv-1');
+
+  // 停在聊天页锁屏:连接还活着、消息照收,但人没看到。
+  store.setAppForeground(false);
+  useChatStore.getState().applyIncomingMessage(
+    msg({ id: 'm1', height: 1, sender: { id: 'other', nickname: 'o', avatarUrl: null } }),
+  );
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+
+  useChatStore.getState().setAppForeground(true);
+  useChatStore.getState().applyIncomingMessage(
+    msg({ id: 'm2', height: 2, sender: { id: 'other', nickname: 'o', avatarUrl: null } }),
+  );
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+});
+
+test('recalling a message that was counted as unread takes it back off the badge', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation({ id: 'conv-1', unreadCount: 2 })]);
+
+  // 会话没打开过:位置与作者取自撤回广播。
+  store.applyRevoke('conv-1', 'm7', 'other', {
+    height: 7,
+    senderId: 'other',
+    revision: 11,
+  });
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+
+  // 同一条撤回再来一次(广播 + 同步页)不能再扣。
+  useChatStore.getState().ingestMessages('conv-1', [
+    msg({ id: 'm7', height: 7, revision: 11, content: {}, revokedAt: '2026-09-16T00:00:00.000Z' }),
+  ]);
+  useChatStore.getState().applyRevoke('conv-1', 'm7', 'other', {
+    height: 7,
+    senderId: 'other',
+    revision: 11,
+  });
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+
+  // 自己撤回自己的消息从来没算过未读。
+  useChatStore.getState().applyRevoke('conv-1', 'm8', 'me', {
+    height: 8,
+    senderId: 'me',
+  });
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+});
+
+test('conversation snapshots carry this user read position and clear floor to offline devices', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.ingestMessages('conv-1', [
+    msg({ id: 'm1', height: 1 }),
+    msg({ id: 'm2', height: 2 }),
+    msg({ id: 'm3', height: 3 }),
+  ]);
+
+  // 离线期间在另一台设备上清空到 2、读到 3。
+  store.setConversations([
+    conversation({ id: 'conv-1', readHeight: 3, clearedBeforeHeight: 2 }),
+  ]);
+
+  const state = useChatStore.getState();
+  assert.deepEqual(
+    Array.from(state.messagesByConversation['conv-1'], (m) => m.id),
+    ['m3'],
+  );
+  assert.equal(state.clearedBeforeHeightByConversation['conv-1'], 2);
+  assert.equal(state.readWatermarks['conv-1'].me, 3);
+
+  // 水位只前进:更旧的快照不能把它拉回去。
+  useChatStore.getState().setConversations([
+    conversation({ id: 'conv-1', readHeight: 1, clearedBeforeHeight: 0 }),
+  ]);
+  assert.equal(useChatStore.getState().readWatermarks['conv-1'].me, 3);
+  assert.equal(useChatStore.getState().clearedBeforeHeightByConversation['conv-1'], 2);
 });

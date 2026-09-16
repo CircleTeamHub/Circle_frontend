@@ -273,6 +273,7 @@
       "sensitiveWordBlocked": "禁止ワードが含まれているため、メッセージはブロックされました",
       "recordStartFailed": "録音を開始できませんでした。もう一度お試しください",
       "voiceSendFailed": "音声メッセージを送信できませんでした。もう一度お試しください",
+      "mediaSourceMissing": "元のファイルがこの端末にないため、再送信できません",
       "locationSendFailed": "位置情報を送信できませんでした。もう一度お試しください",
       "imageSendFailed": "画像を送信できませんでした。もう一度お試しください",
       "videoSendFailed": "動画を送信できませんでした。もう一度お試しください",
@@ -2928,7 +2929,8 @@
       "verification": "[認証] {{name}} から保証の依頼があります",
       "default": "[メッセージ]",
       "plazaPost": "[イベント] {{title}}",
-      "sendFailedPrefix": "[送信失敗]"
+      "sendFailedPrefix": "[送信失敗]",
+      "draftPrefix": "[下書き]"
     },
     "message": {
       "revokedBySelf": "メッセージを取り消しました",
@@ -3322,6 +3324,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "このグループではメンバーによる招待がオフです",
     "CHAT_GROUP_QR_JOIN_DISABLED": "このグループではQRコードでの参加がオフです",
     "CHAT_GROUP_AVATAR_URL_INVALID": "グループアイコンのURLが無効です",
+    "CHAT_DELIVERY_ID_CONFLICT": "メッセージを送信できませんでした。もう一度入力して送信してください",
     "FRIEND_GROUP_ADD_FORBIDDEN": "このグループではメンバー同士の友だち追加ができません"
   },
   "qr": {

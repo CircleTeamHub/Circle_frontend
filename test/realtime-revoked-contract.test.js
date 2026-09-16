@@ -29,3 +29,24 @@ test('realtime 撤销关闭帧的 reason 字面量与后端逐字节一致 (#102
   // 注释必须留下指向对端文件的路标
   assert.match(client, /circle_be\/src\/realtime\/realtime\.service\.ts/);
 });
+
+/**
+ * 同一网关的另一个 1008:access token 到期(circle_be/src/realtime/realtime.gateway.ts
+ * 的 `socket.close(1008, 'Token expired')`)。它不是终态,客户端要先刷新 token;
+ * 词面一旦漂移,到期断开就退化成「拿过期 token 反复重连」。
+ */
+test('realtime token-expiry close reason matches the backend gateway literal', () => {
+  const client = fs.readFileSync(
+    path.join(process.cwd(), 'src/realtime/client.ts'),
+    'utf8',
+  );
+  assert.match(client, /const TOKEN_EXPIRED_CLOSE_REASON = 'Token expired';/);
+  assert.match(client, /isTokenExpiredClose\(event\)[\s\S]{0,200}refreshSessionAccessToken\(\)/);
+
+  const backendRoot =
+    process.env.CIRCLE_BE_PATH ?? path.join(process.cwd(), '..', 'circle_be');
+  const gatewayPath = path.join(backendRoot, 'src/realtime/realtime.gateway.ts');
+  if (!fs.existsSync(gatewayPath)) return;
+  const gateway = fs.readFileSync(gatewayPath, 'utf8');
+  assert.match(gateway, /socket\.close\(1008, 'Token expired'\)/);
+});

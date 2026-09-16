@@ -106,6 +106,19 @@ const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] 
   async () =>
     (await import('@/features/discover/store/use-discover-filter-store'))
       .useDiscoverFilterStore,
+  // 聊天输入框草稿:没发出去的消息原文,不能留给下一个在这台设备上登录的人。
+  async () =>
+    (await import('@/chat-core/composer-drafts')).useComposerDraftStore,
+  // 待发聊天媒体的持久副本(还没发出去的照片/录音/视频):不在任何 persist key 里,
+  // 只有磁盘足迹。outbox 行在加密的本地库里随账号留着,副本删掉后那几条在下次
+  // 登录时按「副本没了」处理(见 socket-manager restorePendingMediaPreview)。
+  async () => {
+    const { clearPendingMediaFiles } = await import('@/chat-core/pending-media');
+    return {
+      getState: () => ({ resetForLogout: () => undefined }),
+      clearDeviceArtifacts: clearPendingMediaFiles,
+    };
+  },
   // 圈子通知三档。曾经按「只有两个应用内横幅开关、无账号数据」留作设备偏好，
   // 但「离线提醒」现在镜像的是 User.circleOfflinePushEnabled 这个 per-user 字段：
   // 留下来的话 B 登录后继承 A 的关闭态，B 第一次拨动就把 A 派生的值 PUT 进

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withChatCoreStubs } = require('./helpers/chat-core-stubs');
 
 const localDbStub = {
   persistLocalConversations: async () => {},
@@ -51,7 +52,7 @@ function runModule(rel, requireFn, extraGlobals = {}) {
     console: { warn: () => {} },
     module: { exports: {} },
     exports: {},
-    require: requireFn,
+    require: withChatCoreStubs(requireFn),
     ...extraGlobals,
   };
   context.exports = context.module.exports;

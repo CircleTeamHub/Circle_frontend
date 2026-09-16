@@ -101,6 +101,15 @@ test('permanent/actionable rejections get their own localized reason', () => {
   );
 });
 
+test('a media resend whose local copy is gone explains why instead of inviting another retry', () => {
+  const { api, ChatSendError } = loadSendErrors({ dev: true });
+  // App 被杀后重发一条没传完的媒体,持久副本却已经被清掉了:重试多少次都不会好。
+  assert.equal(
+    api.getChatSendErrorMessage(new ChatSendError('CHAT_MEDIA_SOURCE_MISSING'), 'RETRY'),
+    '原文件已不在这台设备上，无法重发',
+  );
+});
+
 test('transient and unknown failures keep the generic retry copy', () => {
   const { api, ChatSendError } = loadSendErrors();
   for (const code of [

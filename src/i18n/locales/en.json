@@ -347,6 +347,7 @@
       "sensitiveWordBlocked": "Message blocked: it contains prohibited words",
       "recordStartFailed": "Failed to start recording, please try again",
       "voiceSendFailed": "Failed to send voice message, please try again",
+      "mediaSourceMissing": "The original file is no longer on this device, so it can’t be resent",
       "locationSendFailed": "Failed to send location, please try again",
       "imageSendFailed": "Failed to send image, please try again",
       "videoSendFailed": "Failed to send video, please try again",
@@ -2899,7 +2900,8 @@
       "verification": "[Verify] {{name}} asked you to vouch",
       "default": "[Message]",
       "plazaPost": "[Event] {{title}}",
-      "sendFailedPrefix": "[Failed]"
+      "sendFailedPrefix": "[Failed]",
+      "draftPrefix": "[Draft]"
     },
     "message": {
       "revokedBySelf": "You revoked a message",
@@ -3328,6 +3330,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "Member invites are turned off in this group",
     "CHAT_GROUP_QR_JOIN_DISABLED": "Joining via QR code is turned off in this group",
     "CHAT_GROUP_AVATAR_URL_INVALID": "Invalid group avatar address",
+    "CHAT_DELIVERY_ID_CONFLICT": "Message failed to send. Please re-enter it and try again",
     "FRIEND_GROUP_ADD_FORBIDDEN": "This group does not allow members to add each other as friends"
   },
   "qr": {

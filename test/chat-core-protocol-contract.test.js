@@ -33,6 +33,10 @@ const FE_EVENTS = {
   edit: 'chat:edit',
   historyCleared: 'chat:history_cleared',
   burnedMessages: 'chat:burned_messages',
+  // 前后台上报(决定这台设备算不算「收得到」、要不要发推送)与 token 到期通知。
+  background: 'chat:background',
+  foreground: 'chat:foreground',
+  sessionExpired: 'chat:session_expired',
 };
 
 test('frontend protocol declares the canonical event names and path', () => {
@@ -47,7 +51,11 @@ test('frontend protocol declares the canonical event names and path', () => {
 
 test('socket manager authenticates via handshake auth frame, not the URL', () => {
   const manager = read('src/chat-core/socket-manager.ts');
-  assert.match(manager, /auth:\s*\{\s*token,\s*traceId:\s*connectionTraceId\s*\}/);
+  // appState:后台里建立的连接(安卓后台重连)一开始就按后台登记。
+  assert.match(
+    manager,
+    /auth:\s*\{\s*token,\s*traceId:\s*connectionTraceId,\s*appState\s*\}/,
+  );
   assert.match(
     manager,
     /extraHeaders:\s*\{\s*'x-connection-trace-id':\s*connectionTraceId\s*\}/,
