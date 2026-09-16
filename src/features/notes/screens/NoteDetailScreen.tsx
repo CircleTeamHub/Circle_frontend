@@ -35,6 +35,7 @@ import {
   buildNoteSections,
   getInitialNoteSection,
   getNoteSectionAvailability,
+  isRenderableMediaItem,
   type NoteSectionKind,
 } from '@/features/notes/utils/note-sections';
 import { createNoteExport, fetchNoteDetail } from '@/services/api/notes';
@@ -133,7 +134,11 @@ export default function NoteDetailScreen() {
   // 拿不到地址的条目渲染出来是空的（服务端读接口没能为这个 objectKey 现签地址），
   // 不进列表；整块是否显示由 getNoteSectionAvailability 按同一判据决定。
   const renderableMediaItems = useMemo(
-    () => (sections?.media.items ?? []).filter((item) => Boolean(item.url)),
+    () => (sections?.media.items ?? []).filter(isRenderableMediaItem),
+    [sections],
+  );
+  const renderableShowcaseItems = useMemo(
+    () => (sections?.showcase.items ?? []).filter(isRenderableMediaItem),
     [sections],
   );
   const targetSection = useMemo(
@@ -463,7 +468,7 @@ export default function NoteDetailScreen() {
                 )}
                 <NoteBlockRenderer
                   onMediaError={handleMediaError}
-                  blocks={sections.showcase.items.map((item) => ({
+                  blocks={renderableShowcaseItems.map((item) => ({
                     id: item.id ?? item.url,
                     type: item.type === 'VIDEO' ? 'video' : 'image',
                     props: {

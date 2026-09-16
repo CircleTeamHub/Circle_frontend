@@ -192,3 +192,21 @@ test('media section is not addressable when nothing in it can render', () => {
   assert.equal(getNoteSectionAvailability(sections).hasMedia, false);
   assert.equal(getInitialNoteSection('media', sections), null);
 });
+
+// 展示区块与媒体区块同一个毛病：条目只有 objectKey、服务端没能为它现签地址时，
+// 详情页照样画出「展示」标题和分隔线，底下什么都没有。展示只保留视频，所以用视频建夹具。
+test('showcase section is not addressable when nothing in it can render', () => {
+  const sections = buildNoteSections({
+    sections: {
+      text: { content: '', contentJson: [] },
+      media: { items: [] },
+      showcase: {
+        items: [{ id: 's1', type: 'VIDEO', objectKey: 'notes/u1/orphan.mp4' }],
+      },
+    },
+    media: [],
+  });
+
+  assert.equal(getNoteSectionAvailability(sections).hasShowcase, false);
+  assert.equal(getInitialNoteSection('showcase', sections), null);
+});
