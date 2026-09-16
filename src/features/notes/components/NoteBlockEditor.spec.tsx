@@ -129,6 +129,55 @@ test('releases standalone overflow blobs at once and inserted previews at unmoun
   }
 });
 
+// 上传还在飞的时候离开编辑器：卸载清理把仍被持有的预览地址一次性 revoke；上传随后
+// 落地的续作只会走到幂等的释放（地址已不在持有集合里），既不会重复 revoke，也不会因为
+// 「这批算插进去了」而把它们留到会话结束 —— 它们从来没进过任何文档。
+test('revokes in-flight picker blobs when the editor unmounts mid-upload', async () => {
+  const previousWindow = global.window;
+  const previousURL = global.URL;
+  const revokeObjectURL = jest.fn();
+  Object.defineProperty(global, 'window', { configurable: true, value: {} });
+  Object.defineProperty(global, 'URL', { configurable: true, value: { revokeObjectURL } });
+  let resolveUpload!: () => void;
+  const upload = new Promise<void>((resolve) => {
+    resolveUpload = resolve;
+  });
+  mockUploadFile.mockReturnValue(upload);
+  mockLaunchPicker.mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'blob:in-flight', width: 100, height: 80 }],
+  });
+  try {
+    const rendered = render(
+      <NoteBlockEditor initialContent={null} onContentChange={jest.fn()} />,
+    );
+    fireEvent.press(screen.getByTestId('request-image'));
+    await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+
+    rendered.unmount();
+    expect(
+      revokeObjectURL.mock.calls.filter(([uri]) => uri === 'blob:in-flight'),
+    ).toHaveLength(1);
+
+    resolveUpload();
+    await upload;
+    await Promise.resolve();
+    expect(
+      revokeObjectURL.mock.calls.filter(([uri]) => uri === 'blob:in-flight'),
+    ).toHaveLength(1);
+  } finally {
+    Object.defineProperty(global, 'window', {
+      configurable: true,
+      value: previousWindow,
+    });
+    Object.defineProperty(global, 'URL', {
+      configurable: true,
+      value: previousURL,
+    });
+  }
+});
+
 test('releases a standalone blob picker URL after a failed upload', async () => {
   const previousWindow = global.window;
   const previousURL = global.URL;
