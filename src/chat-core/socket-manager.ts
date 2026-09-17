@@ -69,6 +69,13 @@ const READ_ACK_TIMEOUT_MS = 8_000;
 const TYPING_THROTTLE_MS = 2_000;
 /** token 刷新失败(断网/超时/5xx)后的重试退避;服务端明确否认会话时不再重试。 */
 const TOKEN_REFRESH_RETRY_MS = [5_000, 15_000, 30_000, 60_000] as const;
+/**
+ * 握手被服务端拒绝、或连接被服务端断开之后的补连退避。这两种情况 socket.io 不会
+ * 自己重连(传输层失败才会),不补的话聊天一直断着,直到回前台或 token 轮换。
+ */
+const SERVER_REJECTED_RETRY_MS = [2_000, 5_000, 15_000, 30_000, 60_000] as const;
+/** 连上后撑过这么久再断,才算恢复过:退避从头数。连上就被踢的不算。 */
+const STABLE_CONNECTION_MS = 30_000;
 const LEGACY_SELF_DESTRUCT_DAY_CHOICES = new Set([0, 1, 2, 7, 30]);
 const SECONDS_PER_DAY = 24 * 60 * 60;
 
@@ -261,6 +268,10 @@ let readFlushRequested = false;
 const typingSentAt = new Map<string, number>();
 let consecutiveConnectErrors = 0;
 let reportedCurrentConnectOutage = false;
+let serverReconnectAttempt = 0;
+let serverReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+/** 本次故障里是否已经因为「token 没过期却被拒」刷新过一次。连上过才清。 */
+let handshakeRefreshRequested = false;
 
 /** ack {ok:false} 的类型化错误：code = circle_be ChatErrorCode 字符串码。 */
 export class ChatSendError extends Error {
@@ -301,6 +312,8 @@ export function connectChat(token: string, userId: string): void {
     hadConnectedForUser = null;
     // 换账号是真正的会话边界:新账号的第一次连不上,值得单独报一次。
     reportedCurrentConnectOutage = false;
+    serverReconnectAttempt = 0;
+    handshakeRefreshRequested = false;
   }
   teardownSocket();
   sessionGen += 1;
@@ -342,6 +355,7 @@ export function connectChat(token: string, userId: string): void {
   // 的话自动重连原样重发建连那一刻的前后台状态 —— 后台建立的连接在前台断线重连,
   // 服务端就把正在用 App 的人当成后台,照发推送。
   let handshakeAppState: ChatAppState = appState;
+  let connectedAt: number | null = null;
   const next = io(CHAT_WS_URL, {
     path: CHAT_WS_PATH,
     transports: ['websocket'],
@@ -366,6 +380,8 @@ export function connectChat(token: string, userId: string): void {
     if (gen !== sessionGen) return;
     consecutiveConnectErrors = 0;
     reportedCurrentConnectOutage = false;
+    handshakeRefreshRequested = false;
+    connectedAt = Date.now();
     logClientDiagnostic('chat.ws.connected', {
       stage: 'ready',
       platform: Platform.OS,
@@ -409,15 +425,24 @@ export function connectChat(token: string, userId: string): void {
       platform: Platform.OS,
     });
     useChatStore.getState().setConnected(false);
-    // 服务端主动断开的连接 socket.io 不会自己重连。token 到期断开的(服务端先发了
-    // chat:session_expired,或本地一看就过期了)去刷新 token,新 token 会带着重连;
-    // 其它服务端断开(会话被吊销等)不在这里处理 —— 刷新也只会被拒。
     if (
-      reason === 'io server disconnect' &&
-      (sessionExpiredNotified || isJwtExpired(token))
+      connectedAt !== null &&
+      Date.now() - connectedAt >= STABLE_CONNECTION_MS
     ) {
-      requestTokenRefresh();
+      serverReconnectAttempt = 0;
     }
+    connectedAt = null;
+    // 其余断开(网络切换、心跳超时)socket.io 自己会重连。
+    if (reason !== 'io server disconnect') return;
+    // 服务端主动断开的连接 socket.io 不会自己重连。token 到期断开的(服务端先发了
+    // chat:session_expired,或本地一看就过期了)去刷新 token,新 token 会带着重连。
+    if (sessionExpiredNotified || isJwtExpired(token)) {
+      requestTokenRefresh();
+      return;
+    }
+    // 没说原因的(进房失败、连接数超限、会话被吊销):按退避补连。被吊销的话
+    // 补连时握手会被拒,在 connect_error 那里去刷新,由刷新结果决定登出。
+    scheduleServerRejectedReconnect(next, gen);
   });
   next.on('connect_error', (err) => {
     if (gen !== sessionGen) return;
@@ -453,7 +478,20 @@ export function connectChat(token: string, userId: string): void {
     // 握手被拒 socket.io 不会自动重连;token 过期导致的去刷新,新 token 会重连进来。
     if (reason === 'unauthorized' && isJwtExpired(token)) {
       requestTokenRefresh();
+      return;
     }
+    // 服务器暂时不可达之类的传输层失败,socket 仍是 active,socket.io 自己按退避重连。
+    // 服务端回了 connect_error(未授权、会话暂时无法校验)时 socket 已被销毁,要手动补。
+    if (next.active) return;
+    if (reason === 'unauthorized' && !handshakeRefreshRequested) {
+      // 本机看 token 没过期、服务端却说未授权:两边时钟差着(服务端看已过期),或者
+      // 会话已被吊销。都去刷新一次 —— 前者换到新 token 就连上;后者刷新被明确拒绝,
+      // 由 API 层清会话。只刷一次:服务端内部出错也回 unauthorized,那种就只退避
+      // 补连,不能刷新 → 重连 → 再刷新地打转。补连照排,刷新没换出新 token 也不停住。
+      handshakeRefreshRequested = true;
+      requestTokenRefresh();
+    }
+    scheduleServerRejectedReconnect(next, gen);
   });
 
   bindChatEvents(next, () => gen === sessionGen);
@@ -476,6 +514,8 @@ export function disconnectChat(): void {
   // 断网中登出再登回同一账号,新会话的第一条 connect_error 就永远报不出去。
   consecutiveConnectErrors = 0;
   reportedCurrentConnectOutage = false;
+  serverReconnectAttempt = 0;
+  handshakeRefreshRequested = false;
   useChatStore.getState().reset();
 }
 
@@ -511,6 +551,35 @@ function clearTokenRefreshTimer(): void {
   if (!tokenRefreshTimer) return;
   clearTimeout(tokenRefreshTimer);
   tokenRefreshTimer = null;
+}
+
+function clearServerReconnectTimer(): void {
+  if (!serverReconnectTimer) return;
+  clearTimeout(serverReconnectTimer);
+  serverReconnectTimer = null;
+}
+
+/**
+ * 服务端拒绝握手 / 主动断开之后手动补连(socket.io 在这两种情况下不会自己连)。
+ * 退避跨 socket 实例累计,连接稳定过一阵才从头数;换 socket、挂起、登出都会取消。
+ */
+function scheduleServerRejectedReconnect(target: Socket, generation: number): void {
+  if (serverReconnectTimer) return;
+  const step =
+    SERVER_REJECTED_RETRY_MS[
+      Math.min(serverReconnectAttempt, SERVER_REJECTED_RETRY_MS.length - 1)
+    ];
+  serverReconnectAttempt += 1;
+  // ±20% 抖动:服务端一次故障会让在线的客户端同时被拒,整齐划一地补连就是下一波洪峰。
+  const delay = Math.round(step * (0.8 + Math.random() * 0.4));
+  serverReconnectTimer = setTimeout(() => {
+    serverReconnectTimer = null;
+    if (generation !== sessionGen || socket !== target || target.connected) {
+      return;
+    }
+    useChatStore.getState().setConnecting(true);
+    target.connect();
+  }, delay);
 }
 
 /**
@@ -560,6 +629,7 @@ export function setChatAppState(next: ChatAppState): void {
 }
 
 function teardownSocket(): void {
+  clearServerReconnectTimer();
   if (!socket) return;
   socket.removeAllListeners();
   socket.disconnect();

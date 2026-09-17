@@ -41,7 +41,7 @@ function transpile(rel) {
   }).outputText;
 }
 
-function runModule(rel, stubs) {
+function runModule(rel, stubs, globals = {}) {
   const context = {
     console: { warn: () => {}, error: () => {} },
     setTimeout,
@@ -50,6 +50,7 @@ function runModule(rel, stubs) {
     Math,
     JSON,
     Promise,
+    ...globals,
     module: { exports: {} },
     exports: {},
     require: withObservabilityStubs(
@@ -70,6 +71,10 @@ function fakeSocketFactory() {
   const captured = { url: null, opts: null };
   const socket = {
     connected: false,
+    // socket.io:传输层失败时 active 仍为 true(自己会重连);握手被服务端拒、
+    // 或被服务端断开之后是 false,只有再调一次 connect() 才会重连。
+    active: true,
+    connectCalls: 0,
     handlers: new Map(),
     emitted: [],
     ackResponder: null,
@@ -94,6 +99,11 @@ function fakeSocketFactory() {
     disconnect() {
       this.connected = false;
     },
+    connect() {
+      this.connectCalls += 1;
+      this.active = true;
+      return this;
+    },
     fire(event, ...args) {
       const handler = this.handlers.get(event);
       if (handler) handler(...args);
@@ -105,6 +115,31 @@ function fakeSocketFactory() {
     return socket;
   };
   return { io, socket, captured };
+}
+
+// 手动推进的定时器:按延迟挑着跑,测退避节奏不用真等。
+function createFakeTimers() {
+  let nextId = 1;
+  const pending = new Map();
+  return {
+    setTimeout: (fn, ms) => {
+      const id = nextId;
+      nextId += 1;
+      pending.set(id, { fn, ms });
+      return id;
+    },
+    clearTimeout: (id) => {
+      pending.delete(id);
+    },
+    delays: () => [...pending.values()].map((timer) => timer.ms),
+    run(ms) {
+      for (const [id, timer] of [...pending.entries()]) {
+        if (timer.ms !== ms) continue;
+        pending.delete(id);
+        timer.fn();
+      }
+    },
+  };
 }
 
 // socket.io 每次握手(包括自动重连)都会取一次 auth:回调形式现取,对象形式原样重发。
@@ -262,6 +297,24 @@ function loadManager(localDbOverrides = {}, options = {}) {
     remove: (key) => mmkvStore.delete(key),
   };
   const protocol = runModule('src/chat-core/protocol.ts', {});
+  const clock = { now: Date.now() };
+  class FakeDate extends Date {
+    static now() {
+      return clock.now;
+    }
+  }
+  const globals = {
+    ...(options.timers
+      ? {
+          setTimeout: options.timers.setTimeout,
+          clearTimeout: options.timers.clearTimeout,
+        }
+      : {}),
+    ...(options.fakeClock ? { Date: FakeDate } : {}),
+    ...(options.random
+      ? { Math: Object.assign(Object.create(Math), { random: options.random }) }
+      : {}),
+  };
   const manager = runModule('src/chat-core/socket-manager.ts', {
     'socket.io-client': { io },
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
@@ -370,11 +423,12 @@ function loadManager(localDbOverrides = {}, options = {}) {
     '@/observability/sentry': {
       reportError: (error, context) => reports.push({ error, context }),
     },
-  });
+  }, globals);
   return {
     manager,
     socket,
     captured,
+    clock,
     store: storeModule.state,
     bound,
     apiCalls,
@@ -804,18 +858,161 @@ test('an access token that has already expired is refreshed instead of handshaki
 });
 
 test('a server-announced token expiry refreshes the token after the disconnect', () => {
-  const { manager, socket, apiCalls } = loadManager();
+  const timers = createFakeTimers();
+  const { manager, socket, apiCalls } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+  });
   manager.connectChat('jwt', 'u1');
   socket.fire('connect');
 
-  // 会话被吊销之类的服务端断开:刷新只会被拒,不在这里处理。
+  // 没说原因的服务端断开(进房失败、连接数超限、会话被吊销):不刷新 token,
+  // 按退避重连 —— 被吊销的话,重连时的握手会被拒,那里再去刷新。
   socket.fire('disconnect', 'io server disconnect');
   assert.equal(apiCalls.tokenRefreshes, 0);
+  assert.deepEqual(timers.delays(), [2_000]);
+  timers.run(2_000);
+  assert.equal(socket.connectCalls, 1);
 
   socket.fire('connect');
   socket.fire('chat:session_expired', { reason: 'token_expired' });
   socket.fire('disconnect', 'io server disconnect');
   assert.equal(apiCalls.tokenRefreshes, 1);
+  // token 到期:等刷新带着新 token 重连,不拿旧 token 空转。
+  assert.deepEqual(timers.delays(), []);
+});
+
+test('a handshake the server rejects is retried with jittered backoff; transport errors are left to socket.io', () => {
+  const timers = createFakeTimers();
+  const { manager, socket, store } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+  });
+  manager.connectChat('jwt', 'u1');
+
+  // 服务器暂时不可达:socket.io 自己按退避重连(active 仍为 true),这里不插手。
+  socket.fire('connect_error', new Error('websocket error'));
+  assert.deepEqual(timers.delays(), []);
+
+  // 会话暂时无法校验(Redis/库抖动):服务端回 503,socket 被销毁、不会再自己连。
+  const unavailable = () =>
+    Object.assign(new Error('service_unavailable'), { data: { status: 503 } });
+  socket.active = false;
+  socket.fire('connect_error', unavailable());
+  assert.deepEqual(timers.delays(), [2_000]);
+  timers.run(2_000);
+  assert.equal(socket.connectCalls, 1);
+  assert.equal(store.connecting, true, '补连期间显示连接中');
+
+  for (const expected of [5_000, 15_000, 30_000, 60_000, 60_000]) {
+    socket.active = false;
+    socket.fire('connect_error', unavailable());
+    assert.deepEqual(timers.delays(), [expected]);
+    timers.run(expected);
+  }
+  assert.equal(socket.connectCalls, 6);
+});
+
+test('backoff jitter spreads reconnects around the ladder step', () => {
+  const low = createFakeTimers();
+  const lowManager = loadManager({}, { timers: low, random: () => 0 });
+  lowManager.manager.connectChat('jwt', 'u1');
+  lowManager.socket.active = false;
+  lowManager.socket.fire('connect_error', new Error('service_unavailable'));
+  assert.deepEqual(low.delays(), [1_600]);
+
+  const high = createFakeTimers();
+  const highManager = loadManager({}, { timers: high, random: () => 0.999999 });
+  highManager.manager.connectChat('jwt', 'u1');
+  highManager.socket.active = false;
+  highManager.socket.fire('connect_error', new Error('service_unavailable'));
+  assert.deepEqual(high.delays(), [2_400]);
+});
+
+test('the reconnect ladder only starts over after a connection that stayed up', () => {
+  const timers = createFakeTimers();
+  const { manager, socket, clock } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+    fakeClock: true,
+  });
+  manager.connectChat('jwt', 'u1');
+
+  // 连上就被踢(连接数超限、进房失败):每次 connect 都不算恢复,退避照样往上走,
+  // 否则就是每 2 秒连一次、踢一次的死循环。
+  for (const expected of [2_000, 5_000, 15_000]) {
+    socket.fire('connect');
+    clock.now += 1_000;
+    socket.fire('disconnect', 'io server disconnect');
+    assert.deepEqual(timers.delays(), [expected]);
+    timers.run(expected);
+  }
+
+  // 稳定连了一阵之后再被断开,是一次新的故障:从头开始。
+  socket.fire('connect');
+  clock.now += 60_000;
+  socket.fire('disconnect', 'io server disconnect');
+  assert.deepEqual(timers.delays(), [2_000]);
+});
+
+test('an unauthorized handshake with a still-valid token refreshes once, then keeps retrying', async () => {
+  const timers = createFakeTimers();
+  const { manager, socket, apiCalls } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+  });
+  manager.connectChat('jwt', 'u1');
+
+  // 本机看 token 没过期、服务端却说未授权:时钟差(服务端看已过期)或会话被吊销,
+  // 都该刷新一次。同时照排一次重连,刷新没换出新 token 也不会就此停住。
+  socket.active = false;
+  socket.fire('connect_error', new Error('unauthorized'));
+  assert.equal(apiCalls.tokenRefreshes, 1);
+  assert.deepEqual(timers.delays(), [2_000]);
+  await flush();
+
+  // 服务端内部出错也回 unauthorized:刷新过一次还被拒,就只退避重连,
+  // 不能刷新 → 重连 → 再刷新地打转。
+  timers.run(2_000);
+  socket.active = false;
+  socket.fire('connect_error', new Error('unauthorized'));
+  assert.equal(apiCalls.tokenRefreshes, 1);
+  assert.deepEqual(timers.delays(), [5_000]);
+  timers.run(5_000);
+
+  // 连上过就是新的故障窗口,下次再被拒可以再刷新一次。
+  socket.fire('connect');
+  socket.fire('disconnect', 'transport close');
+  socket.active = false;
+  socket.fire('connect_error', new Error('unauthorized'));
+  assert.equal(apiCalls.tokenRefreshes, 2);
+});
+
+test('logging out or replacing the socket cancels a pending reconnect', () => {
+  const timers = createFakeTimers();
+  const { manager, socket } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+  });
+  manager.connectChat('jwt', 'u1');
+  socket.active = false;
+  socket.fire('connect_error', new Error('service_unavailable'));
+  assert.deepEqual(timers.delays(), [2_000]);
+
+  manager.disconnectChat();
+  assert.deepEqual(timers.delays(), []);
+
+  // 登出后重新登录:退避从头数。
+  manager.connectChat('jwt', 'u1');
+  socket.active = false;
+  socket.fire('connect_error', new Error('service_unavailable'));
+  assert.deepEqual(timers.delays(), [2_000]);
+
+  // token 轮换换了一条新 socket:旧的补连不能再去碰它。
+  const connectsBefore = socket.connectCalls;
+  manager.suspendChat();
+  assert.deepEqual(timers.delays(), []);
+  assert.equal(socket.connectCalls, connectsBefore);
 });
 
 test('token refresh is single-flight and gives up on a definitive auth failure', async () => {
