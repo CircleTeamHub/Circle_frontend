@@ -742,7 +742,7 @@ test('chat history search screens exist with dedicated titles and empty states',
   );
 
   assert.match(hubSource, /NavHeader[\s\S]*title=\{t\('chat\.history\.findTitle'\)\}/);
-  assert.match(hubSource, /fallbackHref={getChatDetailHref\('messages', sourceID, title, undefined, conversationID\)}/);
+  assert.match(hubSource, /fallbackHref={getChatDetailHref\('messages', sourceID, title, undefined, conversationID, undefined, conversationType\)}/);
   assert.match(hubSource, /t\('chat\.history\.textTitle'\)/);
   assert.match(hubSource, /t\('chat\.history\.mediaTitle'\)/);
   assert.match(hubSource, /t\('chat\.history\.files'\)/);
