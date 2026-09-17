@@ -1761,7 +1761,9 @@
       "recognitionSuccessTitle": "認可を送信しました",
       "recognitionSuccessMessage": "{{count}}人の協力者を認可しました。",
       "recognitionFailedTitle": "送信に失敗しました"
-    }
+    },
+    "chatChannelName": "チャットメッセージ",
+    "chatChannelDescription": "友だちやグループからの新着メッセージ"
   },
   "search": {
     "loadFriendsFailed": "友だちリストの読み込みに失敗しました。再試行してください",

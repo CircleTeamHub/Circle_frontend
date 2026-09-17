@@ -1767,7 +1767,9 @@
       "recognitionSuccessTitle": "Reconocimiento enviado",
       "recognitionSuccessMessage": "{{count}} colaborador(es) reconocido(s).",
       "recognitionFailedTitle": "Error al enviar"
-    }
+    },
+    "chatChannelName": "Mensajes de chat",
+    "chatChannelDescription": "Mensajes nuevos de amigos y grupos"
   },
   "search": {
     "loadFriendsFailed": "No se pudieron cargar los amigos, inténtalo de nuevo",

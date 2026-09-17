@@ -312,7 +312,9 @@
       "recognitionSuccessTitle": "已提交合作认可",
       "recognitionSuccessMessage": "已认可 {{count}} 位报名者。",
       "recognitionFailedTitle": "提交失败"
-    }
+    },
+    "chatChannelName": "聊天消息",
+    "chatChannelDescription": "好友和群聊的新消息"
   },
   "chat": {
     "detail": {

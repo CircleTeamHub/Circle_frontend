@@ -312,7 +312,9 @@
       "recognitionSuccessTitle": "Recognition submitted",
       "recognitionSuccessMessage": "{{count}} collaborator(s) recognized.",
       "recognitionFailedTitle": "Submit failed"
-    }
+    },
+    "chatChannelName": "Chat messages",
+    "chatChannelDescription": "New messages from friends and groups"
   },
   "chat": {
     "detail": {

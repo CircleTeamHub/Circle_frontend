@@ -29,6 +29,7 @@ import {
   type OutboxEntry,
 } from './local-db';
 import { initChatAppBadgeSync } from './app-badge';
+import { dismissChatNotifications } from './chat-notifications';
 import { prunePendingMedia, resolvePendingMediaUri } from './pending-media';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import {
@@ -957,6 +958,8 @@ export function markConversationRead(
 ): void {
   markChatRead(conversationId, height);
   useChatStore.getState().markConversationReadLocal(conversationId);
+  // 看过了,通知栏里这个会话的通知一并收起。
+  dismissChatNotifications(conversationId);
 }
 
 /** G-02 撤回:带 ack;权限与广播由服务端收口,失败抛 ChatSendError(code)。 */

@@ -121,6 +121,7 @@ function handshakeAuth(captured) {
 
 function loadManager(localDbOverrides = {}, options = {}) {
   const { io, socket, captured } = fakeSocketFactory();
+  const dismissedNotifications = [];
   const reports = [];
   const diagnostics = [];
   const storeModule = (() => {
@@ -348,6 +349,10 @@ function loadManager(localDbOverrides = {}, options = {}) {
       ...localDbOverrides,
     },
     './app-badge': { initChatAppBadgeSync: () => {} },
+    './chat-notifications': {
+      dismissChatNotifications: (conversationId, messageIds) =>
+        dismissedNotifications.push({ conversationId, messageIds }),
+    },
     // 视角自毁/输入状态策略按账号缓存在 MMKV;测试里用一个内存替身。
     '@/storage': { storage: mmkv },
     './dispatcher': {
@@ -370,8 +375,19 @@ function loadManager(localDbOverrides = {}, options = {}) {
     reports,
     diagnostics,
     mmkvStore,
+    dismissedNotifications,
   };
 }
+
+test('reading a conversation on this device clears its notifications', () => {
+  const { manager, store, dismissedNotifications } = loadManager();
+  store.markConversationReadLocal = () => {};
+  manager.markConversationRead('c1', 7);
+  assert.deepEqual(
+    dismissedNotifications.map((entry) => ({ ...entry })),
+    [{ conversationId: 'c1', messageIds: undefined }],
+  );
+});
 
 test('viewer self-destruct uses the cached policy offline and refreshes it after connect', async () => {
   const { manager, socket, store, apiCalls, mmkvStore } = loadManager();

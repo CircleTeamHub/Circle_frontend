@@ -100,6 +100,7 @@ function loadDispatcher(storeOverrides = {}) {
     presenceApplied: [],
     presenceCleared: [],
     liveRevisions: [],
+    dismissedNotifications: [],
     ...storeOverrides,
   };
   // 补拉是 800ms 防抖的。测试里换成可控计时器:每条用例真等 0.8 秒既慢又脆,
@@ -201,6 +202,14 @@ function loadDispatcher(storeOverrides = {}) {
       });
     }
     if (request === './store') return { useChatStore: { getState: () => storeState } };
+    if (request === './chat-notifications') {
+      return {
+        dismissChatNotifications: (conversationId, messageIds) =>
+          state.dismissedNotifications.push(
+            messageIds ? { conversationId, messageIds: [...messageIds] } : { conversationId },
+          ),
+      };
+    }
     if (request === './api') {
       return {
         loadChatConversations: (options) => {
@@ -602,6 +611,37 @@ test('delivered receipts are reported for direct chats but never for groups', ()
     [
       { cid: DIRECT_ID, h: 3 },
       { cid: 'c-unknown', h: 5 },
+    ],
+  );
+});
+
+test('notifications are cleared when my other device reads, on clear, recall and burn', () => {
+  const { socket, state } = loadDispatcher();
+  // 对端读到哪不影响我的通知栏;本人另一台设备读过才收起。
+  socket.emit('chat:read', { conversationId: 'c1', userId: 'peer', height: 3 });
+  assert.deepEqual(state.dismissedNotifications, []);
+  socket.emit('chat:read', { conversationId: 'c1', userId: 'me', height: 3 });
+  socket.emit('chat:history_cleared', {
+    conversationId: 'c2',
+    clearedBeforeHeight: 9,
+    clearedBy: 'peer',
+  });
+  socket.emit('chat:revoke', {
+    conversationId: 'c3',
+    messageId: 'm-recalled',
+    revokedBy: 'peer',
+  });
+  socket.emit('chat:burned_messages', {
+    conversationId: 'c4',
+    messageIds: ['m-b1', 'm-b2'],
+  });
+  assert.deepEqual(
+    state.dismissedNotifications.map((entry) => ({ ...entry })),
+    [
+      { conversationId: 'c1' },
+      { conversationId: 'c2' },
+      { conversationId: 'c3', messageIds: ['m-recalled'] },
+      { conversationId: 'c4', messageIds: ['m-b1', 'm-b2'] },
     ],
   );
 });

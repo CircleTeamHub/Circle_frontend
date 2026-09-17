@@ -1761,7 +1761,9 @@
       "recognitionSuccessTitle": "인정을 제출했어요",
       "recognitionSuccessMessage": "협업자 {{count}}명을 인정했어요.",
       "recognitionFailedTitle": "제출하지 못했어요"
-    }
+    },
+    "chatChannelName": "채팅 메시지",
+    "chatChannelDescription": "친구와 그룹의 새 메시지"
   },
   "search": {
     "loadFriendsFailed": "친구 목록을 불러오지 못했어요. 다시 시도하세요",

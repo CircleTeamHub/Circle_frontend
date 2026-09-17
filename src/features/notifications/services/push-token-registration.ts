@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { ensureChatNotificationChannel } from '@/chat-core/chat-notifications';
 
 type NotificationsModule = typeof import('expo-notifications');
 type NotificationPermissionResult = Awaited<
@@ -58,6 +59,11 @@ type PushTokenRegistrationOrchestratorDependencies = {
   removeLegacyCleanup?: (value: LegacyPushCleanup) => void;
   generateRevocationSecret: () => string;
   loadNotificationsModule: () => Promise<NotificationsModule | null>;
+  /**
+   * 请求权限之前准备通知渠道(聊天渠道)。安卓 13 起应用一个渠道都没有时系统不弹
+   * 权限框;失败只记诊断,不挡注册 —— 推送会回落到默认渠道。
+   */
+  prepareNotifications?: (notifications: NotificationsModule) => Promise<void>;
   registerPushToken: typeof registerPushToken;
   revokePushToken: typeof revokePushToken;
   deleteLegacyPushToken?: typeof deleteLegacyPushToken;
@@ -559,6 +565,17 @@ export function createPushTokenRegistrationOrchestrator(
       const notifications = await dependencies.loadNotificationsModule();
       if (!notifications || isStale()) return;
 
+      if (dependencies.prepareNotifications) {
+        try {
+          await dependencies.prepareNotifications(notifications);
+        } catch {
+          dependencies.reportDiagnostic('push_notification_channels_failed', {
+            platform: dependencies.platform,
+          });
+        }
+        if (isStale()) return;
+      }
+
       let permissions = await notifications.getPermissionsAsync();
       if (isStale()) return;
       if (!isNotificationGranted(permissions, notifications)) {
@@ -715,6 +732,7 @@ function createDefaultPushTokenRegistrationOrchestrator() {
     removeLegacyCleanup,
     generateRevocationSecret,
     loadNotificationsModule,
+    prepareNotifications: ensureChatNotificationChannel,
     registerPushToken,
     revokePushToken,
     deleteLegacyPushToken,

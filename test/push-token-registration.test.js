@@ -208,6 +208,9 @@ function makeHarness(options = {}) {
     },
     reportFailure: (...args) => failures.push(args),
     reportDiagnostic: (...args) => diagnostics.push(args),
+    ...(options.prepareNotifications
+      ? { prepareNotifications: options.prepareNotifications }
+      : {}),
   });
   return {
     orchestrator,
@@ -411,6 +414,41 @@ test('first native run requests permission and registers a persisted pending sec
   assert.equal(harness.registerCalls[0].revocationSecret, SECRET_A);
   assert.equal(harness.getSecretCalls(), 1);
   assert.equal(harness.getStored().status, 'registered');
+});
+
+test('notification channels are prepared before the permission prompt, and a failure does not block registration', async () => {
+  const order = [];
+  const notifications = {
+    IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+    getPermissionsAsync: async () => {
+      order.push('getPermissions');
+      return { granted: false, canAskAgain: true };
+    },
+    requestPermissionsAsync: async () => {
+      order.push('requestPermissions');
+      return { granted: true };
+    },
+    getExpoPushTokenAsync: async () => ({ data: 'ExponentPushToken[channel]' }),
+  };
+  // 安卓 13 起应用一个通知渠道都没有时,系统不弹权限框:渠道必须先建。
+  const harness = makeHarness({
+    notifications,
+    platform: 'android',
+    prepareNotifications: async (module) => {
+      assert.equal(module, notifications);
+      order.push('prepare');
+      throw new Error('channel api unavailable');
+    },
+  });
+
+  await harness.orchestrator.sync(enabled());
+
+  assert.deepEqual(order, ['prepare', 'getPermissions', 'requestPermissions']);
+  assert.equal(harness.registerCalls.length, 1);
+  assert.deepEqual(
+    harness.diagnostics.map(([event]) => event),
+    ['push_notification_channels_failed'],
+  );
 });
 
 test('permanently denied permission is not requested or registered', async () => {

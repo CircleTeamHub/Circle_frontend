@@ -20,6 +20,7 @@ import { reportError } from '@/observability/sentry';
 import { allowPeerMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
 import { loadChatConversations } from './api';
+import { dismissChatNotifications } from './chat-notifications';
 import { isMessageDeletedLocally } from './deleted-messages';
 import { reportChatDelivered } from './socket-manager';
 import { getChatMessagePreview } from './mappers';
@@ -261,10 +262,10 @@ function applyBurnedMessagesChange(
   ) {
     throw new Error('malformed burned messages payload');
   }
-  store.applyBurnedMessages(
-    payload.conversationId,
-    [...new Set(payload.messageIds)],
-  );
+  const burnedIds = [...new Set(payload.messageIds)];
+  store.applyBurnedMessages(payload.conversationId, burnedIds);
+  // 消息烧掉了,通知栏里的正文不能还留着。
+  dismissChatNotifications(payload.conversationId, burnedIds);
   // revisions 与 messageIds 一一对应;长度对不上就整组不认(游标宁可靠补拉推进)。
   const revisions = payload.revisions;
   if (
@@ -422,9 +423,12 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('readReceipt', 'malformedPayload');
         return;
       }
-      useChatStore
-        .getState()
-        .applyRead(payload.conversationId, payload.userId, payload.height);
+      const store = useChatStore.getState();
+      store.applyRead(payload.conversationId, payload.userId, payload.height);
+      // 本人在别的设备上读过了,这台的通知栏也收起来(对端读到哪与我无关)。
+      if (payload.userId === store.currentUserId) {
+        dismissChatNotifications(payload.conversationId);
+      }
     } catch (err) {
       devWarn('[chat] read handler failed', err);
       reportChatEventFailureOnce('readReceipt', 'handlerFailure');
@@ -455,6 +459,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
             payload.clearedBeforeHeight,
           );
         useLocalUnreadStore.getState().clearUnread(payload.conversationId);
+        dismissChatNotifications(payload.conversationId);
       } catch (err) {
         devWarn('[chat] history-cleared handler failed', err);
         reportChatEventFailureOnce('historyCleared', 'handlerFailure');
@@ -627,6 +632,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           ...(revision !== undefined ? { revision } : {}),
         });
       noteLiveRevision(payload.conversationId, revision);
+      // 撤回之后通知栏里的原文不能还留着。
+      dismissChatNotifications(payload.conversationId, [payload.messageId]);
     } catch (err) {
       devWarn('[chat] revoke handler failed', err);
       reportChatEventFailureOnce('revoke', 'handlerFailure');
