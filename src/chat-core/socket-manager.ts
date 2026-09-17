@@ -367,6 +367,8 @@ export function connectChat(token: string, userId: string): void {
   // 会带着新 token 重新调进来。本地水合照常进行,离线时列表与历史仍然可看。
   if (isJwtExpired(token)) {
     store.setConnecting(false);
+    // 回前台/重连时立刻试一次,不等上一轮排着的退避重试。
+    clearTokenRefreshTimer();
     requestTokenRefresh();
     return;
   }
@@ -618,7 +620,10 @@ function scheduleServerRejectedReconnect(target: Socket, generation: number): vo
  */
 function requestTokenRefresh(attempt = 0): void {
   if (tokenRefreshInFlight || tokenRefreshTimer) return;
-  const gen = sessionGen;
+  // 重试跟着账号走,不跟会话代数走:回前台、token 轮换都会换一条 socket(代数 +1),
+  // 按代数判的话,那之前排下的重试到点就直接退出,而新一轮的刷新请求又被这条还排着
+  // 的定时器挡掉 —— 重试链断掉,网回来了也一直连不上。登出、换账号才停。
+  const userId = useChatStore.getState().currentUserId;
   tokenRefreshInFlight = true;
   void refreshSessionAccessToken().then(
     () => {
@@ -628,13 +633,18 @@ function requestTokenRefresh(attempt = 0): void {
       tokenRefreshInFlight = false;
       if (isDefinitiveAuthFailure(error)) return;
       reportHandledFailure('chatSync', 'tokenRefresh', error);
+      if (userId === null || useChatStore.getState().currentUserId !== userId) {
+        return;
+      }
       const delay =
         TOKEN_REFRESH_RETRY_MS[
           Math.min(attempt, TOKEN_REFRESH_RETRY_MS.length - 1)
         ];
       tokenRefreshTimer = setTimeout(() => {
         tokenRefreshTimer = null;
-        if (gen !== sessionGen || socket?.connected) return;
+        if (useChatStore.getState().currentUserId !== userId || socket?.connected) {
+          return;
+        }
         requestTokenRefresh(attempt + 1);
       }, delay);
     },

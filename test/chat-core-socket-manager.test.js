@@ -1036,6 +1036,72 @@ test('token refresh is single-flight and gives up on a definitive auth failure',
   assert.equal(apiCalls.tokenRefreshes, 2);
 });
 
+test('a pending token refresh retry does not swallow the next foreground attempt', async () => {
+  // 离线、token 已过期:刷新失败排了 5 秒后重试。这期间回前台又走一次 connectChat
+  // (会话代数 +1)。原来那个排着的定时器挡住了这次刷新,自己到点又因为代数对不上
+  // 直接退出 —— 重试链就此断掉,网回来了也一直连不上,直到再切一次前后台。
+  const timers = createFakeTimers();
+  let refreshOutcome = () => Promise.reject(new Error('offline'));
+  const { manager, apiCalls } = loadManager({}, {
+    timers,
+    refreshToken: () => refreshOutcome(),
+  });
+  manager.connectChat('expired-jwt', 'u1');
+  await flush();
+  assert.equal(apiCalls.tokenRefreshes, 1);
+  assert.deepEqual(timers.delays(), [5_000]);
+
+  // 回前台:立刻再试一次,不被上一轮排着的重试挡住。
+  manager.connectChat('expired-jwt', 'u1');
+  assert.equal(apiCalls.tokenRefreshes, 2);
+  await flush();
+  assert.deepEqual(timers.delays(), [5_000], '只留一条重试,不叠');
+
+  // 还是没网:重试照常接着跑。
+  timers.run(5_000);
+  assert.equal(apiCalls.tokenRefreshes, 3);
+  refreshOutcome = () => Promise.resolve('fresh-token');
+  await flush();
+  timers.run(15_000);
+  assert.equal(apiCalls.tokenRefreshes, 4);
+});
+
+test('a token refresh that fails while the app comes back to the foreground keeps retrying', async () => {
+  const timers = createFakeTimers();
+  let rejectRefresh;
+  const { manager, apiCalls } = loadManager({}, {
+    timers,
+    refreshToken: () =>
+      new Promise((_, reject) => {
+        rejectRefresh = reject;
+      }),
+  });
+  manager.connectChat('expired-jwt', 'u1');
+  // 刷新还在路上时回前台:单飞,不发第二个。
+  manager.connectChat('expired-jwt', 'u1');
+  assert.equal(apiCalls.tokenRefreshes, 1);
+
+  rejectRefresh(new Error('offline'));
+  await flush();
+  // 原来这条重试带着旧的会话代数,到点就退出了。
+  timers.run(5_000);
+  assert.equal(apiCalls.tokenRefreshes, 2);
+});
+
+test('logging out stops token refresh retries for that account', async () => {
+  const timers = createFakeTimers();
+  const { manager, apiCalls } = loadManager({}, {
+    timers,
+    refreshToken: () => Promise.reject(new Error('offline')),
+  });
+  manager.connectChat('expired-jwt', 'u1');
+  await flush();
+  assert.deepEqual(timers.delays(), [5_000]);
+  manager.disconnectChat();
+  assert.deepEqual(timers.delays(), []);
+  assert.equal(apiCalls.tokenRefreshes, 1);
+});
+
 test('app background/foreground is reported in the handshake and on the live socket', () => {
   const { manager, socket, captured, store } = loadManager();
   manager.setChatAppState('background');
