@@ -33,6 +33,9 @@ function makeChatCoreStubs() {
       isDefinitiveAuthFailure: () => false,
       refreshSessionAccessToken: async () => 'refreshed-token',
     },
+    '@/features/notifications/services/push-token-registration': {
+      getRegisteredPushToken: () => null,
+    },
     '@/utils/jwt-expiry': {
       readJwtExpiryMs: () => null,
       isJwtExpired: () => false,

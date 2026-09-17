@@ -353,6 +353,12 @@ function loadManager(localDbOverrides = {}, options = {}) {
       dismissChatNotifications: (conversationId, messageIds) =>
         dismissedNotifications.push({ conversationId, messageIds }),
     },
+    '@/features/notifications/services/push-token-registration': {
+      getRegisteredPushToken: (userId) =>
+        typeof options.pushToken === 'function'
+          ? options.pushToken(userId)
+          : (options.pushToken ?? null),
+    },
     // 视角自毁/输入状态策略按账号缓存在 MMKV;测试里用一个内存替身。
     '@/storage': { storage: mmkv },
     './dispatcher': {
@@ -914,6 +920,28 @@ test('an app state switch while the handshake is in flight is reported once conn
       .map((e) => e.event),
     ['chat:background'],
   );
+});
+
+test('the handshake names this device push token so only this device skips pushes', () => {
+  const tokens = [];
+  let registered = null;
+  const { manager, captured } = loadManager(
+    {},
+    {
+      pushToken: (userId) => {
+        tokens.push(userId);
+        return registered;
+      },
+    },
+  );
+  manager.connectChat('jwt', 'u1');
+  // 推送还没登记确认:不带,服务端不按设备排除任何推送。
+  assert.equal('pushToken' in handshakeAuth(captured), false);
+
+  // 登记完成后,下一次握手(包括自动重连)现取。
+  registered = 'ExponentPushToken[phone]';
+  assert.equal(handshakeAuth(captured).pushToken, 'ExponentPushToken[phone]');
+  assert.deepEqual(tokens, ['u1', 'u1']);
 });
 
 test('connects with token in the handshake auth frame, never in the URL', () => {

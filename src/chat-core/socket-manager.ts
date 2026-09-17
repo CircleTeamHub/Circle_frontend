@@ -10,6 +10,7 @@ import {
 } from '@/services/api/client';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { isJwtExpired } from '@/utils/jwt-expiry';
+import { getRegisteredPushToken } from '@/features/notifications/services/push-token-registration';
 import { loadChatConversations, loadChatHistory } from './api';
 import {
   resetChatSync,
@@ -346,7 +347,15 @@ export function connectChat(token: string, userId: string): void {
     transports: ['websocket'],
     auth: (sendAuth) => {
       handshakeAppState = appState;
-      sendAuth({ token, traceId: connectionTraceId, appState: handshakeAppState });
+      // 本机登记确认过的推送 token:这台设备正开着 App 时,服务端只跳过它的推送,
+      // 电脑上开着网页版不会让手机也收不到。每次握手现取,登记晚于建连也能跟上。
+      const pushToken = getRegisteredPushToken(userId);
+      sendAuth({
+        token,
+        traceId: connectionTraceId,
+        appState: handshakeAppState,
+        ...(pushToken ? { pushToken } : {}),
+      });
     },
     // React Native WebSocket 会把该头带到 HTTP upgrade，供 Caddy 与网关日志
     // 串联；auth 里的副本覆盖不支持自定义头的 web 运行时。

@@ -270,6 +270,38 @@ function memoryStorage(initial = {}) {
   };
 }
 
+test('the chat handshake only reads a token confirmed for the same account', () => {
+  const state = (active) =>
+    memoryStorage({
+      'circle-im-push-registration': JSON.stringify({
+        version: 2,
+        active,
+        tombstones: [],
+      }),
+    });
+  const registered = {
+    token: 'ExponentPushToken[registered]',
+    userId: 'user-1',
+    revocationSecret: SECRET_A,
+    status: 'registered',
+  };
+  // 聊天连接握手带上它,服务端才能只跳过「正开着 App 的这台设备」。
+  let module = loadRegistrar(state(registered).storage);
+  assert.equal(module.getRegisteredPushToken('user-1'), 'ExponentPushToken[registered]');
+  // 别的账号登记的 token 不是这个账号的设备。
+  assert.equal(module.getRegisteredPushToken('user-2'), null);
+  // 还没确认登记成功:服务端未必有这个 token。
+  module = loadRegistrar(state({ ...registered, status: 'pending' }).storage);
+  assert.equal(module.getRegisteredPushToken('user-1'), null);
+  // 老版本留下的登记(没有状态字段)是登记成功过的。
+  module = loadRegistrar(
+    state({ token: 'ExponentPushToken[legacy]', userId: 'user-1' }).storage,
+  );
+  assert.equal(module.getRegisteredPushToken('user-1'), 'ExponentPushToken[legacy]');
+  module = loadRegistrar(memoryStorage().storage);
+  assert.equal(module.getRegisteredPushToken('user-1'), null);
+});
+
 test('v2 retirement atomically writes active null plus tombstone once', () => {
   const active = {
     token: 'atomic-token',

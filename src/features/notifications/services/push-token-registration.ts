@@ -196,6 +196,24 @@ export function readPushState(): PushStateV2 {
   return migrated;
 }
 
+/**
+ * 本机已登记给这个账号、且服务端确认收下了的推送 token。聊天连接握手时带上:这台
+ * 设备正开着 App 时,服务端只跳过它的推送(电脑上开着网页版不影响手机)。没有登记、
+ * 登记还没确认、或登记的是别的账号时返回 null。
+ */
+export function getRegisteredPushToken(userId: string): string | null {
+  try {
+    const active = readPushState().active;
+    if (!active || active.userId !== userId) return null;
+    if (isModernRegistration(active) && active.status !== 'registered') {
+      return null;
+    }
+    return active.token;
+  } catch {
+    return null;
+  }
+}
+
 function getStoredRegistration() {
   const active = readPushState().active;
   return isModernRegistration(active) ? active : null;
