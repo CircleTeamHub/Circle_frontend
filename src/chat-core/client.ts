@@ -664,6 +664,8 @@ function trackPendingMedia(input: {
     d,
     input.source.uri,
     input.source.uploadName,
+    // 登出清理按它区分「被登出会话自己的副本」和「登出被抢占时新会话刚点的发送」。
+    useAuthStore.getState().sessionEpoch,
   )
     .then(async (fileName): Promise<PendingMediaRecord | null> => {
       if (!fileName) return null;

@@ -16,6 +16,7 @@ export async function persistPendingMediaFile(
   _d: string,
   _sourceUri: string,
   _uploadName: string,
+  _sessionEpoch: number,
 ): Promise<string | null> {
   return null;
 }
@@ -35,4 +36,6 @@ export async function prunePendingMedia(
   _referencedDeliveries: ReadonlySet<string>,
 ): Promise<void> {}
 
-export async function clearPendingMediaFiles(): Promise<void> {}
+export async function clearPendingMediaFiles(
+  _clearedSessionEpoch: number,
+): Promise<void> {}

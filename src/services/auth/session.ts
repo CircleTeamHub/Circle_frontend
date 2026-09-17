@@ -73,7 +73,7 @@ type PersistedResettableStore = {
    * 落在设备上、但不在 persist key 里的账号足迹（目前只有聊天背景图文件）。
    * 与 clearStorage 同一档：清的是**刚登出账号**的足迹，被更新会话抢占也要清。
    */
-  clearDeviceArtifacts?: () => Promise<void> | void;
+  clearDeviceArtifacts?: (clearedSessionEpoch: number) => Promise<void> | void;
 };
 
 /**
@@ -162,7 +162,7 @@ async function clearAccountScopedPersistedStores(
       await Promise.resolve(store.persist?.clearStorage?.());
       // 设备上的账号足迹与 clearStorage 同批：只清 persist key 而把上一个账号的
       // 壁纸留在磁盘上，引用先没了就再也没人来删它（隐私残留）。
-      await Promise.resolve(store.clearDeviceArtifacts?.());
+      await Promise.resolve(store.clearDeviceArtifacts?.(clearedSessionEpoch));
     } catch (err) {
       reportHandledFailure('session', 'accountScopedStoreClear', err);
     }

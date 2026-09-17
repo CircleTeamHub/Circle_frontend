@@ -34,8 +34,12 @@ function loadNativeFS(): typeof NativeFS {
   return loaded.default ?? loaded;
 }
 
-/** 本进程里正在拷贝/发送的 d。清孤儿时跳过它们,哪怕目录已经过了宽限期。 */
-const activeDeliveries = new Set<string>();
+/**
+ * 本进程里正在拷贝/发送的 d → 发起它的登录会话(authStore.sessionEpoch)。
+ * 清孤儿时一律跳过,哪怕目录已经过了宽限期;登出清理只跳过比被清会话更新的
+ * 会话发起的(见 clearPendingMediaFiles)。
+ */
+const activeDeliveries = new Map<string, number>();
 
 function rootPath(RNFS: typeof NativeFS): string {
   return `${RNFS.DocumentDirectoryPath}/${ROOT_DIR_NAME}`;
@@ -75,10 +79,11 @@ export async function persistPendingMediaFile(
   d: string,
   sourceUri: string,
   uploadName: string,
+  sessionEpoch: number,
 ): Promise<string | null> {
   const sourcePath = toFilePath(sourceUri);
   if (!sourcePath || !isSafeSegment(userId) || !isSafeSegment(d)) return null;
-  activeDeliveries.add(d);
+  activeDeliveries.set(d, sessionEpoch);
   try {
     const RNFS = loadNativeFS();
     const root = rootPath(RNFS);
@@ -161,10 +166,19 @@ export async function prunePendingMedia(
 }
 
 /**
- * 登出:刚登出账号还没发出去的照片/录音不留在设备上。本进程里正在发送的
- * (登出被新会话抢占时新账号刚点的发送)跳过。
+ * 登出:刚登出账号还没发出去的照片/录音不留在设备上。
+ *
+ * clearedSessionEpoch 是 clearSession 之后的会话编号。只跳过比它更新的会话发起的
+ * 发送(登出被抢占、清理跑到一半时新会话刚点的发送);被登出的会话自己的一律删,
+ * 包括上传失败、红气泡还留着的 —— 原来凡是「进行中」的都跳过,那种照片就留在了
+ * 设备上。
+ *
+ * 不只清刚登出的账号:换账号一律先走完整的登出清理,按设计此刻不该有别的账号的
+ * 待发副本,真留下的(那次清理删失败)也是本该删掉的残留。
  */
-export async function clearPendingMediaFiles(): Promise<void> {
+export async function clearPendingMediaFiles(
+  clearedSessionEpoch: number,
+): Promise<void> {
   try {
     const RNFS = loadNativeFS();
     const root = rootPath(RNFS);
@@ -175,7 +189,9 @@ export async function clearPendingMediaFiles(): Promise<void> {
         continue;
       }
       for (const delivery of await RNFS.readDir(account.path)) {
-        if (activeDeliveries.has(delivery.name)) continue;
+        const startedIn = activeDeliveries.get(delivery.name);
+        if (startedIn !== undefined && startedIn > clearedSessionEpoch) continue;
+        activeDeliveries.delete(delivery.name);
         await RNFS.unlink(delivery.path).catch(() => undefined);
       }
     }

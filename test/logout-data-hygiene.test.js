@@ -235,7 +235,8 @@ test('磁盘足迹与 clearStorage 同档，不受 sessionEpoch 守卫影响 (#2
   assert.match(guarded[1], /resetForLogout\(\)/);
   // 磁盘上的壁纸是**刚登出账号**的足迹：跳过它 = 引用先没了、文件永远留着。
   assert.doesNotMatch(guarded[1], /clearDeviceArtifacts/);
-  assert.match(loop, /clearDeviceArtifacts\?\.\(\)/);
+  // 带上被清会话的编号:待发媒体按它区分「被登出会话自己的副本」和抢占它的新会话刚点的发送。
+  assert.match(loop, /clearDeviceArtifacts\?\.\(clearedSessionEpoch\)/);
   assert.match(session, /clearDeviceArtifacts: clearUnreferencedChatBackgroundImages/);
 });
 
