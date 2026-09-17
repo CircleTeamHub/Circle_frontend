@@ -362,9 +362,32 @@ test('list mapper renders newest-first and caches confirmed rows by reference', 
   // 同引用输入 → 同引用输出(FlatList 行级跳渲染的依据)。
   assert.equal(first[0], second[0]);
   assert.equal(first[1], second[1]);
-  // 对端水位变化 → 整体失效重建(isRead 依赖水位)。
-  const third = mapChatMessageDtosToUI([a, b], 'u1', 2, box);
-  assert.notEqual(third[0], second[0]);
+  // 对端水位变化只换掉「已读/已送达」真的翻转了的那几条:对方的消息和状态没变的
+  // 自己的消息保持引用,列表不用为一次已读回执整片重渲染。
+  const mine = (id, height) =>
+    dto({ id, height, sender: { id: 'u1', nickname: '我', avatarUrl: null } });
+  const own1 = mine('own-1', 3);
+  const own2 = mine('own-2', 4);
+  const before = mapChatMessageDtosToUI([a, b, own1, own2], 'u1', 0, box);
+  const readUpTo3 = mapChatMessageDtosToUI([a, b, own1, own2], 'u1', 3, box);
+  const byId = (list) => new Map(list.map((m) => [m.id, m]));
+  const was = byId(before);
+  const now = byId(readUpTo3);
+  assert.equal(now.get('a'), was.get('a'), '对方的消息不受已读水位影响');
+  assert.equal(now.get('b'), was.get('b'));
+  assert.notEqual(now.get('own-1'), was.get('own-1'));
+  assert.equal(now.get('own-1').isRead, true);
+  assert.equal(now.get('own-2'), was.get('own-2'), '还没读到的那条保持引用');
+  assert.equal(now.get('own-2').isRead, false);
+
+  const delivered = mapChatMessageDtosToUI([a, b, own1, own2], 'u1', 3, box, 4);
+  assert.notEqual(byId(delivered).get('own-2'), now.get('own-2'));
+  assert.equal(byId(delivered).get('own-2').isDelivered, true);
+  assert.equal(byId(delivered).get('own-2').isRead, false);
+
+  // 换了账号:收发方向全变,整体重建。
+  const otherUser = mapChatMessageDtosToUI([a, b], 'u2', 3, box);
+  assert.notEqual(otherUser[0], second[0]);
 });
 
 test('system messages render as localized system notices', () => {

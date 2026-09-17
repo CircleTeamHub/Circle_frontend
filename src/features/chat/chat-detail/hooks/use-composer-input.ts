@@ -155,7 +155,11 @@ export function useComposerInput({
   // 单聊不需要（气泡不显示发送者名字）。
   useEffect(() => {
     if (!isGroupChat || !sourceID || !canViewGroupMemberProfiles) {
-      setGroupMemberNames({});
+      // 已经是空表就沿用原对象:每次换一个新的 {} 会让依赖它的行渲染函数跟着换,
+      // 列表里所有气泡重渲染一遍(单聊每次重跑这个 effect 都会走到这里)。
+      setGroupMemberNames((current) =>
+        Object.keys(current).length === 0 ? current : {},
+      );
       return;
     }
     let cancelled = false;

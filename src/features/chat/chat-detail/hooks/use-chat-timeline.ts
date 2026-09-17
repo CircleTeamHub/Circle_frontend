@@ -448,7 +448,11 @@ export function useChatTimeline({
   const handleQuotePress = useCallback(
     (item: ChatMessage) => {
       if (!item.quoteMessageId) return;
-      const index = messages.findIndex((m) => m.id === item.quoteMessageId);
+      // 读 ref 而不是依赖 messages:依赖的话每来一条消息这个回调就换一次,
+      // 行渲染函数跟着换,列表里所有气泡都要重渲染。
+      const index = messagesRef.current.findIndex(
+        (m) => m.id === item.quoteMessageId,
+      );
       if (index >= 0) {
         flatListRef.current?.scrollToIndex({
           index,
@@ -462,7 +466,7 @@ export function useChatTimeline({
       // 往回翻,翻到目标进窗口为止(有界),然后再滚过去。
       void loadUntilQuoteVisible(item);
     },
-    [loadUntilQuoteVisible, messages],
+    [loadUntilQuoteVisible],
   );
 
   return {

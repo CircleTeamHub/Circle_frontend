@@ -206,14 +206,22 @@ jest.mock('expo-image-picker', () => mockStubModule());
 jest.mock('expo-location', () => mockStubModule());
 
 // ── 纯展示的叶子组件 ─────────────────────────────────────────────────────────
+// 气泡按消息 id 记渲染次数:打字、已读回执这类与消息内容无关的变化不该让它们重渲染。
+const mockBubbleRenders = new Map<string, number>();
+function mockCountBubbleRender(id: string | undefined) {
+  const key = id ?? '';
+  mockBubbleRenders.set(key, (mockBubbleRenders.get(key) ?? 0) + 1);
+}
 jest.mock('@/features/chat/components/chat-bubble', () =>
   mockNullComponents({
-    SentBubble: ({ message }: { message: { text?: string } }) => (
-      <MockText>{`sent:${message.text ?? ''}`}</MockText>
-    ),
-    ReceivedBubble: ({ message }: { message: { text?: string } }) => (
-      <MockText>{`received:${message.text ?? ''}`}</MockText>
-    ),
+    SentBubble: ({ message }: { message: { id?: string; text?: string } }) => {
+      mockCountBubbleRender(message.id);
+      return <MockText>{`sent:${message.text ?? ''}`}</MockText>;
+    },
+    ReceivedBubble: ({ message }: { message: { id?: string; text?: string } }) => {
+      mockCountBubbleRender(message.id);
+      return <MockText>{`received:${message.text ?? ''}`}</MockText>;
+    },
   }),
 );
 jest.mock('@/features/chat/components/emoji-picker', () => ({
@@ -385,6 +393,58 @@ test('leaving a deeply scrolled conversation hands its memory back', async () =>
   expect(kept).toHaveLength(200);
   expect(kept[0].height).toBe(251);
   expect(state.historyFloorByConversation[CONVERSATION]).toBe(251);
+});
+
+test('typing in the composer does not re-render the message bubbles', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByText('received:在吗', {}, SETTLE);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  mockBubbleRenders.clear();
+
+  for (const text of ['晚', '晚上', '晚上见']) {
+    fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), text);
+  }
+
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('晚上见');
+  // 原来每敲一个字,列表里挂着的每个气泡都重渲染一遍。
+  expect(Object.fromEntries(mockBubbleRenders)).toEqual({});
+});
+
+test('a read receipt re-renders only the message whose status changed', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByText('sent:晚上吃什么', {}, SETTLE);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  mockBubbleRenders.clear();
+
+  await act(async () => {
+    useChatStore.getState().applyRead(CONVERSATION, PEER, 2);
+  });
+
+  // 对方读到了第 2 条(我发的):只有它的「已读」变了。原来水位一变整份映射缓存作废,
+  // 所有气泡(包括对方发的那条)都换成新对象重渲染。
+  expect(mockBubbleRenders.get('msg-2') ?? 0).toBeGreaterThan(0);
+  expect(mockBubbleRenders.get('msg-1') ?? 0).toBe(0);
+});
+
+test('a new incoming message renders only its own bubble', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByText('sent:晚上吃什么', {}, SETTLE);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  mockBubbleRenders.clear();
+
+  await act(async () => {
+    useChatStore.getState().ingestMessages(CONVERSATION, [message(3, PEER, '七点吧')]);
+  });
+
+  expect(await screen.findByText('received:七点吧', {}, SETTLE)).toBeTruthy();
+  expect(mockBubbleRenders.get('msg-1') ?? 0).toBe(0);
+  expect(mockBubbleRenders.get('msg-2') ?? 0).toBe(0);
 });
 
 test('typing then pressing send posts the trimmed text and clears the composer', async () => {

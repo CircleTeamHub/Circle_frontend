@@ -565,7 +565,10 @@ function parseCallRecord(
  * 列表映射(inverted FlatList:index 0 = 最新):升序输入反向遍历。
  * 按 DTO 引用做 WeakMap 缓存;乐观消息(height=0)不缓存 —— 其对象在
  * 确认/失败时会被替换,但"发送中"期间内容不变、引用不变,缓存会卡住状态。
- * currentUserId 或对端已读水位变化时整体失效(isRead 依赖后者)。
+ *
+ * currentUserId 变化时整体失效(收发方向全变了)。对端已读/送达水位变化只影响
+ * 自己发的、状态正好翻转的那几条:原来水位一动整份缓存作废,对方每读一次,
+ * 列表里所有气泡都换成新对象重渲染。现在只把翻转的那几条换成新对象,其余保持引用。
  */
 export function mapChatMessageDtosToUI(
   source: readonly StoredChatMessage[],
@@ -574,21 +577,25 @@ export function mapChatMessageDtosToUI(
   box: ChatMessageMapCache,
   peerDeliveredHeight = 0,
 ): ChatMessage[] {
-  if (
-    box.userID !== currentUserId ||
-    box.peerReadHeight !== peerReadHeight ||
-    box.peerDeliveredHeight !== peerDeliveredHeight
-  ) {
+  if (box.userID !== currentUserId) {
     box.userID = currentUserId;
-    box.peerReadHeight = peerReadHeight;
-    box.peerDeliveredHeight = peerDeliveredHeight;
     box.cache = new WeakMap();
   }
+  box.peerReadHeight = peerReadHeight;
+  box.peerDeliveredHeight = peerDeliveredHeight;
   const result: ChatMessage[] = [];
   for (let i = source.length - 1; i >= 0; i -= 1) {
     const raw = source[i];
     const cacheable = raw.height > 0;
     let mapped = cacheable ? box.cache.get(raw) : undefined;
+    if (mapped?.outgoing) {
+      const isRead = raw.height <= peerReadHeight;
+      const isDelivered = raw.height <= peerDeliveredHeight;
+      if (mapped.isRead !== isRead || mapped.isDelivered !== isDelivered) {
+        mapped = { ...mapped, isRead, isDelivered };
+        box.cache.set(raw, mapped);
+      }
+    }
     if (!mapped) {
       mapped = mapChatMessageDtoToUI(
         raw,

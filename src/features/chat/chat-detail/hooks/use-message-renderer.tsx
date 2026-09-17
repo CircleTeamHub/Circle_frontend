@@ -1,5 +1,5 @@
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
-import { type ReactElement, useCallback } from 'react';
+import { memo, type ReactElement, useCallback } from 'react';
 import { type ChatMessage } from '@/types';
 import { type GestureResponderEvent, Pressable, View } from 'react-native';
 import { MemberName } from '@/components/ui/member-name';
@@ -35,6 +35,22 @@ import { type ThemeColors } from '@/theme';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
+
+interface MessageRowProps {
+  item: ChatMessage;
+  renderMessage: (item: ChatMessage) => ReactElement | null;
+}
+
+/**
+ * 一行消息。按 item 与渲染函数记忆:新消息插到最前面时后面每个单元格的 index 都变,
+ * FlatList 的单元格会整体重渲染;挡在这一层,气泡只在自己的消息对象换了时才渲染。
+ */
+const MessageRow = memo(function MessageRow({
+  item,
+  renderMessage,
+}: MessageRowProps) {
+  return renderMessage(item);
+});
 
 export interface MessageRendererParams {
   colors: ThemeColors;
@@ -155,7 +171,7 @@ export function useMessageRenderer({
     ],
   );
 
-  const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
+  const renderMessage = useCallback((item: ChatMessage) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
       case 'system-notice': return <SystemNoticePill text={item.text ?? ''} />;
@@ -418,6 +434,13 @@ export function useMessageRenderer({
     withMessageActions,
     handleStartCall,
   ]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: ChatMessage }) => (
+      <MessageRow item={item} renderMessage={renderMessage} />
+    ),
+    [renderMessage],
+  );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
