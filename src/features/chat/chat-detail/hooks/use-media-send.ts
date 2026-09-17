@@ -37,6 +37,7 @@ import {
 } from '@/features/chat/utils/chat-media-policy';
 import { Alert, Platform } from 'react-native';
 import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { VIDEO_UPLOAD_TIMEOUT_MS } from '@/features/chat/chat-detail/constants';
 import { type MediaSourceAction } from '@/features/chat/components/media-source-sheet';
 import { type TFunction } from 'i18next';
@@ -449,6 +450,22 @@ export function useMediaSend({
             ? { videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720 }
             : {}),
         });
+      } catch (error) {
+        // 读不出所选文件、iOS 转码不支持这个视频编码或转码失败。调用方是 void 调用,
+        // 不接住的话用户选完什么都没发生,也没有任何提示。
+        reportHandledFailure('chatDetail', 'pickLibraryMedia', error);
+        if (mountedRef.current) {
+          setSendError(
+            kind === 'video'
+              ? t('chat.detail.videoSendFailed', {
+                  defaultValue: '视频发送失败，请重试',
+                })
+              : t('chat.detail.imageSendFailed', {
+                  defaultValue: '图片发送失败，请重试',
+                }),
+          );
+        }
+        return;
       } finally {
         if (preparingNotice !== null) hideTopNotice(preparingNotice);
       }
@@ -460,7 +477,15 @@ export function useMediaSend({
       }
       await uploadAndSendVideoAsset(pickedAsset);
     },
-    [isPreviewMode, sourceID, t, uploadAndSendVideoAsset, inFlightRef],
+    [
+      isPreviewMode,
+      sourceID,
+      t,
+      uploadAndSendVideoAsset,
+      inFlightRef,
+      mountedRef,
+      setSendError,
+    ],
   );
 
   const handleTakePhoto = useCallback(async () => {

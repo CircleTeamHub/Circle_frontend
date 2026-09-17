@@ -37,4 +37,6 @@ test('iOS exports picked videos at 720p and says so while it works', () => {
   assert.match(src, /chat\.detail\.videoPreparing/);
   // 提示必须在 finally 里收掉:用户取消选择、选择器报错时也不能挂在顶上。
   assert.match(src, /\} finally \{\s*if \(preparingNotice !== null\) hideTopNotice\(preparingNotice\);/);
+  // 转码不支持/失败时选择器直接 reject:要接住并提示,不能静默什么都不发生。
+  assert.match(src, /reportHandledFailure\('chatDetail', 'pickLibraryMedia', error\)/);
 });
