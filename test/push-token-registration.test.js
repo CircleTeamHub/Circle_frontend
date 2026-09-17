@@ -113,6 +113,7 @@ function makeHarness(options = {}) {
   let legacyCleanups = [...(options.legacyCleanups ?? [])];
   const registerCalls = [];
   const revokeCalls = [];
+  const registeredEvents = [];
   const diagnostics = [];
   const failures = [];
   const legacyDeleteCalls = [];
@@ -208,12 +209,14 @@ function makeHarness(options = {}) {
     },
     reportFailure: (...args) => failures.push(args),
     reportDiagnostic: (...args) => diagnostics.push(args),
+    onRegistered: (registration) => registeredEvents.push(registration),
     ...(options.prepareNotifications
       ? { prepareNotifications: options.prepareNotifications }
       : {}),
   });
   return {
     orchestrator,
+    registeredEvents,
     registerCalls,
     revokeCalls,
     diagnostics,
@@ -300,6 +303,39 @@ test('the chat handshake only reads a token confirmed for the same account', () 
   assert.equal(module.getRegisteredPushToken('user-1'), 'ExponentPushToken[legacy]');
   module = loadRegistrar(memoryStorage().storage);
   assert.equal(module.getRegisteredPushToken('user-1'), null);
+});
+
+// 聊天连接握手时要带上本机推送 token。首次安装、新账号、token 轮换时,连接往往在登记
+// 确认之前就建好了:登记确认的那一刻要通知出去,让那条连接重新握手带上它。
+test('confirming a registration announces the account and token', async () => {
+  const harness = makeHarness({ token: 'ExponentPushToken[fresh]' });
+  await harness.orchestrator.sync(enabled('user-7'));
+  assert.equal(harness.getStored().status, 'registered');
+  assert.deepEqual(
+    harness.registeredEvents.map((event) => ({ ...event })),
+    [{ userId: 'user-7', token: 'ExponentPushToken[fresh]' }],
+  );
+});
+
+test('a registration the server has not confirmed announces nothing', async () => {
+  const timeout = new Error('timeout');
+  const harness = makeHarness({
+    registerPushToken: async () => {
+      throw timeout;
+    },
+  });
+  await assert.rejects(harness.orchestrator.sync(enabled()), timeout);
+  assert.equal(harness.getStored().status, 'pending');
+  assert.deepEqual(harness.registeredEvents, []);
+});
+
+test('the app-wide registrar announces confirmations to chat subscribers', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/notifications/services/push-token-registration.ts'),
+    'utf8',
+  );
+  assert.match(source, /onRegistered: notifyRegisteredPushToken/);
+  assert.match(source, /export function subscribeRegisteredPushToken\(/);
 });
 
 test('v2 retirement atomically writes active null plus tombstone once', () => {

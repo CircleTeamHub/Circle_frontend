@@ -277,6 +277,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     };
   })();
   const bound = [];
+  const registeredTokenListeners = [];
   // 重连对账(G-13)的观测点:列表刷新次数、交给同步协调器的快照、token 刷新。
   const apiCalls = {
     conversations: 0,
@@ -411,6 +412,10 @@ function loadManager(localDbOverrides = {}, options = {}) {
         typeof options.pushToken === 'function'
           ? options.pushToken(userId)
           : (options.pushToken ?? null),
+      subscribeRegisteredPushToken: (listener) => {
+        registeredTokenListeners.push(listener);
+        return () => {};
+      },
     },
     // 视角自毁/输入状态策略按账号缓存在 MMKV;测试里用一个内存替身。
     '@/storage': { storage: mmkv },
@@ -431,6 +436,9 @@ function loadManager(localDbOverrides = {}, options = {}) {
     socket,
     captured,
     clock,
+    announceRegisteredPushToken: (registration) => {
+      for (const listener of registeredTokenListeners) listener(registration);
+    },
     store: storeModule.state,
     bound,
     apiCalls,
@@ -1100,6 +1108,56 @@ test('logging out stops token refresh retries for that account', async () => {
   manager.disconnectChat();
   assert.deepEqual(timers.delays(), []);
   assert.equal(apiCalls.tokenRefreshes, 1);
+});
+
+test('a push token confirmed after the handshake makes the live connection handshake again with it', () => {
+  // 首次安装/新账号:聊天连接先连上,推送 token 的登记稍后才确认。握手时没带 token,
+  // 服务端就认不出这台设备,开着 App 也照样给它发推送 —— 直到某次无关的重连。
+  let registered = null;
+  const { manager, socket, captured, announceRegisteredPushToken } = loadManager({}, {
+    pushToken: (userId) => (userId === 'u1' ? registered : null),
+  });
+  manager.connectChat('jwt', 'u1');
+  assert.equal(handshakeAuth(captured).pushToken, undefined);
+  socket.connected = true;
+  socket.fire('connect');
+  let disconnects = 0;
+  const disconnect = socket.disconnect;
+  socket.disconnect = function countedDisconnect() {
+    disconnects += 1;
+    return disconnect.call(this);
+  };
+
+  registered = 'ExponentPushToken[fresh]';
+  announceRegisteredPushToken({ userId: 'u1', token: 'ExponentPushToken[fresh]' });
+
+  assert.equal(disconnects, 1);
+  assert.equal(socket.connectCalls, 1, '断开后立刻重新握手');
+  assert.equal(handshakeAuth(captured).pushToken, 'ExponentPushToken[fresh]');
+});
+
+test('a push token confirmation leaves the connection alone when it is not needed', () => {
+  let registered = 'ExponentPushToken[same]';
+  const { manager, socket, captured, announceRegisteredPushToken } = loadManager({}, {
+    pushToken: () => registered,
+  });
+  manager.connectChat('jwt', 'u1');
+  // 握手时已经带上了同一个 token:不用重连。
+  assert.equal(handshakeAuth(captured).pushToken, 'ExponentPushToken[same]');
+  socket.connected = true;
+  socket.fire('connect');
+  announceRegisteredPushToken({ userId: 'u1', token: 'ExponentPushToken[same]' });
+  assert.equal(socket.connectCalls, 0);
+
+  // 登记的是别的账号:不是这条连接的设备。
+  registered = 'ExponentPushToken[other]';
+  announceRegisteredPushToken({ userId: 'u2', token: 'ExponentPushToken[other]' });
+  assert.equal(socket.connectCalls, 0);
+
+  // 还没连上:下一次握手自己会带上,不必动它。
+  socket.connected = false;
+  announceRegisteredPushToken({ userId: 'u1', token: 'ExponentPushToken[other]' });
+  assert.equal(socket.connectCalls, 0);
 });
 
 test('app background/foreground is reported in the handshake and on the live socket', () => {

@@ -35,6 +35,7 @@ function makeChatCoreStubs() {
     },
     '@/features/notifications/services/push-token-registration': {
       getRegisteredPushToken: () => null,
+      subscribeRegisteredPushToken: () => () => {},
     },
     '@/utils/jwt-expiry': {
       readJwtExpiryMs: () => null,

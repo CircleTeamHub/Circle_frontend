@@ -68,6 +68,8 @@ type PushTokenRegistrationOrchestratorDependencies = {
   revokePushToken: typeof revokePushToken;
   deleteLegacyPushToken?: typeof deleteLegacyPushToken;
   getAccessToken?: () => string | null;
+  /** 服务端确认收下了这个账号的 token(登记从 pending 变成 registered)。 */
+  onRegistered?: (registration: RegisteredPushToken) => void;
   scheduleRetry?: (callback: () => void, delayMs: number) => unknown;
   cancelRetry?: (handle: unknown) => void;
   now: () => number;
@@ -194,6 +196,36 @@ export function readPushState(): PushStateV2 {
   writePushState(migrated);
   storage.remove(LEGACY_PUSH_REVOCATIONS_KEY);
   return migrated;
+}
+
+export type RegisteredPushToken = { userId: string; token: string };
+
+const registeredPushTokenListeners = new Set<
+  (registration: RegisteredPushToken) => void
+>();
+
+/**
+ * 订阅「推送 token 登记确认」。聊天连接握手时要带上本机 token,而首次安装、新账号、
+ * token 轮换时,连接常常在登记确认之前就建好了 —— 那条连接要靠这个通知重新握手,
+ * 否则服务端一直认不出它是哪台设备。返回取消订阅函数。
+ */
+export function subscribeRegisteredPushToken(
+  listener: (registration: RegisteredPushToken) => void,
+): () => void {
+  registeredPushTokenListeners.add(listener);
+  return () => {
+    registeredPushTokenListeners.delete(listener);
+  };
+}
+
+function notifyRegisteredPushToken(registration: RegisteredPushToken): void {
+  for (const listener of [...registeredPushTokenListeners]) {
+    try {
+      listener(registration);
+    } catch (error) {
+      reportHandledFailure('notifications', 'registeredTokenListener', error);
+    }
+  }
 }
 
 /**
@@ -707,6 +739,10 @@ export function createPushTokenRegistrationOrchestrator(
             ...registrationCandidate,
             status: 'registered',
           });
+          dependencies.onRegistered?.({
+            userId: registrationCandidate.userId,
+            token: registrationCandidate.token,
+          });
         }
       });
     },
@@ -755,6 +791,7 @@ function createDefaultPushTokenRegistrationOrchestrator() {
     revokePushToken,
     deleteLegacyPushToken,
     getAccessToken: () => useAuthStore.getState().accessToken,
+    onRegistered: notifyRegisteredPushToken,
     scheduleRetry: (callback, delayMs) => setTimeout(callback, delayMs),
     cancelRetry: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
     now: Date.now,

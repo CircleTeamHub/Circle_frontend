@@ -10,7 +10,10 @@ import {
 } from '@/services/api/client';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { isJwtExpired } from '@/utils/jwt-expiry';
-import { getRegisteredPushToken } from '@/features/notifications/services/push-token-registration';
+import {
+  getRegisteredPushToken,
+  subscribeRegisteredPushToken,
+} from '@/features/notifications/services/push-token-registration';
 import { loadChatConversations, loadChatHistory } from './api';
 import {
   resetChatSync,
@@ -273,6 +276,8 @@ let readFlushRequested = false;
 const typingSentAt = new Map<string, number>();
 let consecutiveConnectErrors = 0;
 let reportedCurrentConnectOutage = false;
+/** 当前连接最近一次握手带上的推送 token(没带为 null)。 */
+let handshakePushToken: string | null = null;
 let serverReconnectAttempt = 0;
 let serverReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 /** 本次故障里是否已经因为「token 没过期却被拒」刷新过一次。连上过才清。 */
@@ -391,6 +396,7 @@ export function connectChat(token: string, userId: string): void {
       // 本机登记确认过的推送 token:这台设备正开着 App 时,服务端只跳过它的推送,
       // 电脑上开着网页版不会让手机也收不到。每次握手现取,登记晚于建连也能跟上。
       const pushToken = getRegisteredPushToken(userId);
+      handshakePushToken = pushToken;
       sendAuth({
         token,
         traceId: connectionTraceId,
@@ -951,6 +957,20 @@ function emitChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> {
       });
   });
 }
+
+/**
+ * 推送 token 在握手之后才登记确认(首次安装、新账号、token 轮换时常见):这条连接握手时
+ * 没带它,服务端认不出是哪台设备,开着 App 也照样给它发推送,直到某次无关的重连。
+ * 登记确认后重连一次,新握手带上 token。没连上的不用管,下一次握手自己会带上。
+ */
+subscribeRegisteredPushToken(({ userId, token }) => {
+  const current = socket;
+  if (!current?.connected) return;
+  if (useChatStore.getState().currentUserId !== userId) return;
+  if (handshakePushToken === token) return;
+  current.disconnect();
+  current.connect();
+});
 
 const sendQueue = createChatSendQueue<ChatSendPayload, ChatSendAckOk>({
   isConnected: () => socket?.connected === true,
