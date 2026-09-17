@@ -336,6 +336,7 @@
       "lastSeenDays_one": "Last seen {{count}} day ago",
       "lastSeenDays_other": "Last seen {{count}} days ago",
       "previewNotice": "The connection isn't ready yet. Please try again shortly.",
+      "historyWindowFull": "To see older messages, search the chat history.",
       "recordingSeconds": "Recording {{seconds}}s",
       "voiceReleaseCancel": "Release to cancel",
       "voiceReleaseSend": "Release to send {{seconds}}\"",

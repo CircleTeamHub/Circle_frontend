@@ -229,6 +229,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     scrollRetryTimerRef,
     messagesLengthRef,
     handleLoadOlder,
+    historyWindowFull,
     messages,
     displayMessages,
     handleMessageListScroll,
@@ -582,6 +583,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         scrollRetryTimerRef={scrollRetryTimerRef}
         messagesLengthRef={messagesLengthRef}
         handleLoadOlder={handleLoadOlder}
+        historyWindowFull={historyWindowFull}
         messages={messages}
         displayMessages={displayMessages}
         handleMessageListScroll={handleMessageListScroll}

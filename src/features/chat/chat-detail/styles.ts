@@ -69,6 +69,11 @@ export const chatDetailStyles = StyleSheet.create({
     textAlign: 'center',
   },
   sendError: { textAlign: 'center', paddingVertical: 4 },
+  historyWindowFullNotice: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    textAlign: 'center',
+  },
   quoteComposerBar: {
     marginHorizontal: Spacing.md,
     marginTop: Spacing.sm,

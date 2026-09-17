@@ -31,8 +31,15 @@ import { deletePendingMedia } from './pending-media';
  * 丢掉;而翻页游标照常前进,于是「越滚越请求、永远看不到第 201 条以前」。
  */
 export const MESSAGES_CAP = 200;
-/** 窗口扩张的硬上限,防止一路翻到底把整个会话读进内存。 */
-export const MESSAGES_WINDOW_MAX = 2000;
+/**
+ * 窗口扩张的硬上限,防止一路翻到底把整个会话读进内存。
+ *
+ * 原来是 2000:忙碌的群一两天就过了这个数,翻到顶以后刚拉回来的更早一页被当场
+ * 裁掉、游标照样前进,表现就是「越翻越请求、再也翻不上去」。一条消息连同界面映射
+ * 大约 1~2KB,一万条在 20MB 以内;只有正在深翻的那个会话会涨到这么大,离开会话就
+ * 收回 MESSAGES_CAP(shrinkConversationWindow)。到顶以后停止翻页、提示去搜索。
+ */
+export const MESSAGES_WINDOW_MAX = 10_000;
 /** 对端 typing 显示时长:超过它没有新 typing 事件就回落在线状态。 */
 export const TYPING_DISPLAY_MS = 4_000;
 /** Keep self-destruct purges below the browser timer clamp and cover cached rows. */
@@ -488,6 +495,21 @@ interface ChatStoreState {
   evictConversationCache: (conversationId: string) => void;
   /** 每会话当前的内存窗口大小(翻页时扩张)。 */
   messageWindowByConversation: Record<string, number>;
+  /**
+   * 往上翻页的起点(conversationId → height)。窗口为了装下新消息把更早的已确认
+   * 消息挤出了内存时,记下留在窗口里最旧的那条:翻页游标还指着被挤掉那段之前,
+   * 照游标翻会把这段整个跳过。下一页从这里接着翻,翻回来以后清掉。
+   */
+  historyFloorByConversation: Record<string, number>;
+  /** 窗口已涨到 MESSAGES_WINDOW_MAX,更早的页装不下了:停止往上翻(界面提示去搜索)。 */
+  historyWindowFullByConversation: Record<string, true>;
+  /** 从起点翻回来一页之后清掉它;期间又被挤出、起点变了的不清。 */
+  clearHistoryFloor: (conversationId: string, floor: number) => void;
+  /**
+   * 离开会话:窗口收回最新 MESSAGES_CAP 条已确认消息(发送中/失败的气泡原样保留),
+   * 下次进来往上翻从留下的最旧一条接着翻。深翻过的会话不会一直占着内存。
+   */
+  shrinkConversationWindow: (conversationId: string) => void;
   /** 成员已读推进（服务端广播）；对端已读用于单聊「已读」标记。 */
   applyRead: (conversationId: string, userId: string, height: number) => void;
   /**
@@ -580,6 +602,25 @@ function sortKey(message: ChatMessageDto): number {
   }
   // 仍在发送中的本地乐观消息临时置底，内部按发送时间稳定排序。
   return Number.MAX_SAFE_INTEGER / 2 + Date.parse(message.createdAt);
+}
+
+/** 丢掉一个会话的翻页起点与到顶标记(缓存作废、清空聊天记录时一起失效)。 */
+function withoutHistoryPaging(
+  state: Pick<
+    ChatStoreState,
+    'historyFloorByConversation' | 'historyWindowFullByConversation'
+  >,
+  conversationId: string,
+): Pick<
+  ChatStoreState,
+  'historyFloorByConversation' | 'historyWindowFullByConversation'
+> {
+  const { [conversationId]: _floor, ...floors } = state.historyFloorByConversation;
+  const { [conversationId]: _full, ...full } = state.historyWindowFullByConversation;
+  return {
+    historyFloorByConversation: floors,
+    historyWindowFullByConversation: full,
+  };
 }
 
 function latestConfirmedHeight(messages: ChatMessageDto[]): number {
@@ -881,6 +922,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   conversationsSnapshotSeq: 0,
   messagesByConversation: {},
   messageWindowByConversation: {},
+  historyFloorByConversation: {},
+  historyWindowFullByConversation: {},
   clearedBeforeHeightByConversation: {},
   activeConversationId: null,
   onlineByUser: {},
@@ -1457,7 +1500,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         !(clearedFloor > 0 && m.height > 0 && m.height <= clearedFloor),
     );
     if (incoming.length === 0) return;
-    const { messagesByConversation, messageWindowByConversation } = get();
+    const {
+      messagesByConversation,
+      messageWindowByConversation,
+      historyFloorByConversation,
+      historyWindowFullByConversation,
+    } = get();
     const existing = messagesByConversation[conversationId] ?? [];
     const currentCap = messageWindowByConversation[conversationId] ?? MESSAGES_CAP;
     // 这批是不是「更早的一页」:全部低于当前窗口里最旧的那条 height。
@@ -1471,6 +1519,19 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       ? Math.min(currentCap + incoming.length, MESSAGES_WINDOW_MAX)
       : currentCap;
     const merged = mergeMessages(existing, incoming, nextCap);
+    const oldestKept = merged.find((m) => m.height > 0)?.height ?? 0;
+    // 更早的一页没能全部装下:窗口到顶了,翻页停手。
+    const windowFilled =
+      isOlderPage &&
+      historyWindowFullByConversation[conversationId] !== true &&
+      incoming.some((m) => m.height < oldestKept);
+    // 新消息把更早的已确认消息挤出了内存(已在窗口里的,或这批里装不下的):
+    // 记下往上翻的起点。
+    const pushedOutOlder =
+      !isOlderPage &&
+      oldestKept > 0 &&
+      (existing.some((m) => m.height > 0 && m.height < oldestKept) ||
+        incoming.some((m) => m.height > 0 && m.height < oldestKept));
     set({
       // 只替换本会话的键：其它会话数组引用保持不变（引用稳定契约）。
       messagesByConversation: {
@@ -1482,6 +1543,22 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             messageWindowByConversation: {
               ...messageWindowByConversation,
               [conversationId]: nextCap,
+            },
+          }
+        : {}),
+      ...(windowFilled
+        ? {
+            historyWindowFullByConversation: {
+              ...historyWindowFullByConversation,
+              [conversationId]: true as const,
+            },
+          }
+        : {}),
+      ...(pushedOutOlder
+        ? {
+            historyFloorByConversation: {
+              ...historyFloorByConversation,
+              [conversationId]: oldestKept,
             },
           }
         : {}),
@@ -1624,6 +1701,52 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         [conversationId]: kept,
       },
       messageWindowByConversation: restWindows,
+      ...withoutHistoryPaging(get(), conversationId),
+    });
+  },
+
+  clearHistoryFloor: (conversationId, floor) => {
+    const { historyFloorByConversation } = get();
+    if (historyFloorByConversation[conversationId] !== floor) return;
+    const { [conversationId]: _floor, ...rest } = historyFloorByConversation;
+    set({ historyFloorByConversation: rest });
+  },
+
+  shrinkConversationWindow: (conversationId) => {
+    const state = get();
+    const timeline = state.messagesByConversation[conversationId];
+    if (!timeline) return;
+    const confirmed = timeline.filter((m) => m.height > 0);
+    const excess = confirmed.length - MESSAGES_CAP;
+    const hasPagingState =
+      state.messageWindowByConversation[conversationId] !== undefined ||
+      state.historyWindowFullByConversation[conversationId] !== undefined;
+    if (excess <= 0 && !hasPagingState) return;
+    const { [conversationId]: _window, ...restWindows } =
+      state.messageWindowByConversation;
+    const { [conversationId]: _full, ...restFull } =
+      state.historyWindowFullByConversation;
+    if (excess <= 0) {
+      set({
+        messageWindowByConversation: restWindows,
+        historyWindowFullByConversation: restFull,
+      });
+      return;
+    }
+    const oldestKept = confirmed[excess].height;
+    set({
+      messagesByConversation: {
+        ...state.messagesByConversation,
+        [conversationId]: timeline.filter(
+          (m) => m.height === 0 || m.height >= oldestKept,
+        ),
+      },
+      messageWindowByConversation: restWindows,
+      historyWindowFullByConversation: restFull,
+      historyFloorByConversation: {
+        ...state.historyFloorByConversation,
+        [conversationId]: oldestKept,
+      },
     });
   },
 
@@ -1954,6 +2077,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         ...messagesByConversation,
         [conversationId]: [],
       },
+      ...withoutHistoryPaging(get(), conversationId),
       clearedBeforeHeightByConversation: {
         ...clearedBeforeHeightByConversation,
         [conversationId]: floor,
@@ -2129,6 +2253,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},
+      historyFloorByConversation: {},
+      historyWindowFullByConversation: {},
       clearedBeforeHeightByConversation: {},
       activeConversationId: null,
       readWatermarks: {},
@@ -2151,6 +2277,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},
+      historyFloorByConversation: {},
+      historyWindowFullByConversation: {},
       clearedBeforeHeightByConversation: {},
       activeConversationId: null,
       onlineByUser: {},

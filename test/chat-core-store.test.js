@@ -612,19 +612,129 @@ test('older history pages survive the message cap (pagination actually works)', 
   assert.equal(merged[0].id, 'old-0');
 });
 
-test('the window stops growing at the hard ceiling', () => {
+test('the window stops growing at the hard ceiling and says so instead of dropping pages', () => {
   const { useChatStore, MESSAGES_WINDOW_MAX } = loadChatStore();
   const store = useChatStore.getState();
   store.ingestMessages('conv-1', [msg({ id: 'anchor', height: 999999 })]);
+  const pageSize = 200;
+  const pagesToFill = Math.ceil(MESSAGES_WINDOW_MAX / pageSize) + 5;
   // 一路往前翻,窗口不能无限长大到把整个会话读进内存。
-  for (let page = 0; page < 30; page += 1) {
-    const older = Array.from({ length: 200 }, (_, i) =>
-      msg({ id: `p${page}-${i}`, height: 500000 - page * 1000 + i }),
+  for (let page = 0; page < pagesToFill; page += 1) {
+    const older = Array.from({ length: pageSize }, (_, i) =>
+      msg({ id: `p${page}-${i}`, height: 900000 - page * 1000 + i }),
     );
     store.ingestMessages('conv-1', older);
   }
-  const merged = useChatStore.getState().messagesByConversation['conv-1'];
+  const state = useChatStore.getState();
+  const merged = state.messagesByConversation['conv-1'];
   assert.ok(merged.length <= MESSAGES_WINDOW_MAX, `window ${merged.length}`);
+  // 原来到顶以后,刚拉回来的更早一页被当场裁掉、翻页游标照样往前走:
+  // 一直请求、一条更早的也看不到。现在到顶就标记出来,翻页据此停手。
+  assert.equal(state.historyWindowFullByConversation['conv-1'], true);
+  // 最新那条始终还在:到顶时裁掉的只能是装不下的旧页,不是最新消息。
+  assert.equal(merged[merged.length - 1].id, 'anchor');
+});
+
+test('a window well under the ceiling is not marked full', () => {
+  const { useChatStore, MESSAGES_WINDOW_MAX } = loadChatStore();
+  assert.ok(MESSAGES_WINDOW_MAX >= 10000, '上限要够翻看一个忙碌群聊几天的消息');
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [msg({ id: 'anchor', height: 999999 })]);
+  for (let page = 0; page < 20; page += 1) {
+    store.ingestMessages(
+      'conv-1',
+      Array.from({ length: 200 }, (_, i) =>
+        msg({ id: `p${page}-${i}`, height: 900000 - page * 1000 + i }),
+      ),
+    );
+  }
+  const state = useChatStore.getState();
+  assert.equal(state.messagesByConversation['conv-1'].length, 4001);
+  assert.equal(state.historyWindowFullByConversation['conv-1'], undefined);
+});
+
+test('live messages that push older ones out leave a floor for the next older page', () => {
+  const { useChatStore, MESSAGES_CAP } = loadChatStore();
+  const store = useChatStore.getState();
+  // 打开会话拉到最新一页(951~1000),翻页游标指向 951 之前。
+  store.ingestMessages(
+    'conv-1',
+    Array.from({ length: 50 }, (_, i) => msg({ id: `page-${i}`, height: 951 + i })),
+  );
+  assert.equal(useChatStore.getState().historyFloorByConversation['conv-1'], undefined);
+
+  // 忙碌群聊里开着会话又来了 MESSAGES_CAP 条:窗口不变,951~1000 被挤出内存。
+  // 游标还指着 951 之前,往上翻会直接跳过这 50 条 —— 必须记下从哪里接着翻。
+  for (let i = 0; i < MESSAGES_CAP; i += 1) {
+    store.ingestMessages('conv-1', [msg({ id: `live-${i}`, height: 1001 + i })]);
+  }
+  const state = useChatStore.getState();
+  assert.equal(state.messagesByConversation['conv-1'][0].height, 1001);
+  assert.equal(state.historyFloorByConversation['conv-1'], 1001);
+
+  // 接着翻的那一页补上了缺口:清掉起点(只清同一个值,中途又挤出的不算)。
+  state.clearHistoryFloor('conv-1', 999);
+  assert.equal(useChatStore.getState().historyFloorByConversation['conv-1'], 1001);
+  state.clearHistoryFloor('conv-1', 1001);
+  assert.equal(useChatStore.getState().historyFloorByConversation['conv-1'], undefined);
+});
+
+test('leaving a deeply scrolled conversation shrinks it back to the newest cap', () => {
+  const { useChatStore, MESSAGES_CAP } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages(
+    'conv-1',
+    Array.from({ length: MESSAGES_CAP }, (_, i) => msg({ id: `new-${i}`, height: 5000 + i })),
+  );
+  for (let page = 0; page < 5; page += 1) {
+    store.ingestMessages(
+      'conv-1',
+      Array.from({ length: 200 }, (_, i) =>
+        msg({ id: `old-${page}-${i}`, height: 4000 - page * 200 + i }),
+      ),
+    );
+  }
+  store.ingestMessages('conv-1', [
+    msg({ id: 'local:pending', d: 'd-pending', height: 0, createdAt: '2026-08-05T12:01:00.000Z' }),
+  ]);
+  assert.ok(useChatStore.getState().messagesByConversation['conv-1'].length > MESSAGES_CAP + 1);
+
+  useChatStore.getState().shrinkConversationWindow('conv-1');
+
+  const state = useChatStore.getState();
+  const timeline = state.messagesByConversation['conv-1'];
+  const confirmed = timeline.filter((m) => m.height > 0);
+  assert.equal(confirmed.length, MESSAGES_CAP);
+  assert.equal(confirmed[0].height, 5000);
+  // 还没发出去的气泡不能跟着收掉。
+  assert.ok(timeline.some((m) => m.id === 'local:pending'));
+  assert.equal(state.messageWindowByConversation['conv-1'], undefined);
+  // 下次进来往上翻,从留下的最旧一条接着翻。
+  assert.equal(state.historyFloorByConversation['conv-1'], 5000);
+});
+
+test('dropping or clearing a conversation cache forgets its paging floor and ceiling', () => {
+  const { useChatStore, MESSAGES_CAP } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages(
+    'conv-1',
+    Array.from({ length: MESSAGES_CAP + 10 }, (_, i) => msg({ id: `m-${i}`, height: 100 + i })),
+  );
+  useChatStore.setState({ historyWindowFullByConversation: { 'conv-1': true } });
+  assert.equal(useChatStore.getState().historyFloorByConversation['conv-1'], 110);
+
+  useChatStore.getState().evictConversationCache('conv-1');
+  assert.equal(useChatStore.getState().historyFloorByConversation['conv-1'], undefined);
+  assert.equal(useChatStore.getState().historyWindowFullByConversation['conv-1'], undefined);
+
+  store.ingestMessages(
+    'conv-1',
+    Array.from({ length: MESSAGES_CAP + 10 }, (_, i) => msg({ id: `n-${i}`, height: 1000 + i })),
+  );
+  useChatStore.setState({ historyWindowFullByConversation: { 'conv-1': true } });
+  useChatStore.getState().clearConversationLocal('conv-1', 2000);
+  assert.equal(useChatStore.getState().historyFloorByConversation['conv-1'], undefined);
+  assert.equal(useChatStore.getState().historyWindowFullByConversation['conv-1'], undefined);
 });
 
 test('realtime messages do not grow the window', () => {

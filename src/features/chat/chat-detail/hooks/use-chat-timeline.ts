@@ -191,6 +191,20 @@ export function useChatTimeline({
     });
   }, [conversationID]);
 
+  // 深翻到内存窗口上限:更早的页装不下了,列表顶上改为提示去聊天记录里搜。
+  const historyWindowFull = useChatStore(
+    (state) => state.historyWindowFullByConversation[conversationID] === true,
+  );
+
+  // 离开会话(卸载、或切到另一个会话)把深翻涨大的窗口收回去。压在别的页面下面
+  // (失焦)不收:从聊天信息页回来还要停在原来翻到的位置。
+  useEffect(() => {
+    if (!conversationID) return;
+    return () => {
+      useChatStore.getState().shrinkConversationWindow(conversationID);
+    };
+  }, [conversationID]);
+
   useEffect(() => {
     if (!conversationID && !sourceID) return;
     void markMatchingTargetNotificationsRead({
@@ -457,6 +471,7 @@ export function useChatTimeline({
     scrollRetryTimerRef,
     messagesLengthRef,
     handleLoadOlder,
+    historyWindowFull,
     messages,
     displayMessages,
     handleMessageListScroll,

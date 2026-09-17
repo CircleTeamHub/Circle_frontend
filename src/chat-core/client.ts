@@ -96,7 +96,13 @@ export async function loadConversationMessages(
 
 /** 是否还有更早的消息可翻(UI 据此决定是否显示加载指示)。 */
 export function hasMoreHistory(conversationId: string): boolean {
-  return historyCursors.get(conversationId) != null;
+  const state = useChatStore.getState();
+  // 内存窗口到顶了:再翻回来的页也装不下(界面改为提示去搜索)。
+  if (state.historyWindowFullByConversation[conversationId] === true) return false;
+  return (
+    historyCursors.get(conversationId) != null ||
+    state.historyFloorByConversation[conversationId] !== undefined
+  );
 }
 
 /**
@@ -106,12 +112,22 @@ export function hasMoreHistory(conversationId: string): boolean {
 export function loadOlderConversationMessages(
   conversationId: string,
 ): Promise<void> {
-  const cursor = historyCursors.get(conversationId);
+  const state = useChatStore.getState();
+  if (state.historyWindowFullByConversation[conversationId] === true) {
+    return Promise.resolve();
+  }
+  // 窗口为装新消息挤掉过更早的消息(或离开会话时收回过):从留下的最旧一条接着翻。
+  // 游标指着被挤掉那段之前,照游标翻会整段跳过。
+  const floor = state.historyFloorByConversation[conversationId];
+  const cursor = floor ?? historyCursors.get(conversationId);
   if (cursor == null) return Promise.resolve();
   const inFlight = inFlightPages.get(conversationId);
   if (inFlight) return inFlight;
   const request = loadChatHistory(conversationId, { beforeHeight: cursor })
     .then((page) => {
+      if (floor !== undefined) {
+        useChatStore.getState().clearHistoryFloor(conversationId, floor);
+      }
       const next = page.nextBeforeHeight;
       // 游标必须严格向更早推进。服务端返回一个不前进的游标时（整页都被过滤掉、
       // 或者分页本身有 bug），照原样存回去就等于把「还有更多」永远钉住:用户每次

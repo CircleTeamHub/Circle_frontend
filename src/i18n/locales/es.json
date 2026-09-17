@@ -263,6 +263,7 @@
       "lastSeenDays_one": "Últ. vez hace {{count}} día",
       "lastSeenDays_other": "Últ. vez hace {{count}} días",
       "previewNotice": "La conexión aún no está lista. Vuelve a intentarlo en un momento.",
+      "historyWindowFull": "Para ver mensajes anteriores, busca en el historial del chat.",
       "recordingSeconds": "Grabando {{seconds}} s",
       "voiceReleaseCancel": "Suelta para cancelar",
       "voiceReleaseSend": "Suelta para enviar {{seconds}}\"",

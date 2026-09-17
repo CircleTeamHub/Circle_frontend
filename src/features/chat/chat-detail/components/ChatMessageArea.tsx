@@ -31,6 +31,8 @@ export interface ChatMessageAreaProps {
   scrollRetryTimerRef: RefObject<ReturnType<typeof setTimeout> | null>;
   messagesLengthRef: RefObject<number>;
   handleLoadOlder: () => void;
+  /** 深翻到内存窗口上限,不再往上翻:列表顶上提示去聊天记录里搜。 */
+  historyWindowFull: boolean;
   messages: ChatMessage[];
   displayMessages: ChatMessage[];
   handleMessageListScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
@@ -58,6 +60,7 @@ export function ChatMessageArea({
   scrollRetryTimerRef,
   messagesLengthRef,
   handleLoadOlder,
+  historyWindowFull,
   messages,
   displayMessages,
   handleMessageListScroll,
@@ -104,6 +107,22 @@ export function ChatMessageArea({
         // inverted:列表"末端"是最旧的一头,触底即向前翻页。
         onEndReached={handleLoadOlder}
         onEndReachedThreshold={0.4}
+        // inverted:页脚显示在列表最上面(最旧的一头)。
+        ListFooterComponent={
+          historyWindowFull ? (
+            <Text
+              style={[
+                s.historyWindowFullNotice,
+                Typography.small,
+                { color: colors.textSecondary },
+              ]}
+            >
+              {t('chat.detail.historyWindowFull', {
+                defaultValue: '更早的消息请在聊天记录里搜索查看',
+              })}
+            </Text>
+          ) : null
+        }
         windowSize={11}
         removeClippedSubviews={Platform.OS === 'android'}
         contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}

@@ -260,6 +260,7 @@
       "lastSeenDays": "{{count}}日前にオンライン",
       "lastSeenDays_other": "{{count}}日前にオンライン",
       "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
+      "historyWindowFull": "これより前のメッセージは、チャット履歴で検索してください。",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",
       "voiceReleaseSend": "指を離して送信 {{seconds}}\"",

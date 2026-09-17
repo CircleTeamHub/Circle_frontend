@@ -338,6 +338,9 @@ beforeEach(() => {
       [CONVERSATION]: [message(2, ME, '晚上吃什么'), message(1, PEER, '在吗')],
       [GROUP]: [],
     },
+    messageWindowByConversation: {},
+    historyFloorByConversation: {},
+    historyWindowFullByConversation: {},
   });
 });
 
@@ -352,6 +355,36 @@ test('mounts a direct chat, shows the cached history and loads the focused conve
     SETTLE,
   );
   await waitFor(() => expect(markConversationAsRead).toHaveBeenCalled(), SETTLE);
+});
+
+test('a conversation scrolled up to the memory ceiling points to history search', async () => {
+  useChatStore.setState({
+    historyWindowFullByConversation: { [CONVERSATION]: true },
+  });
+  render(<ChatDetailScreen />);
+  expect(
+    await screen.findByText('chat.detail.historyWindowFull', {}, SETTLE),
+  ).toBeTruthy();
+});
+
+test('leaving a deeply scrolled conversation hands its memory back', async () => {
+  const deep = Array.from({ length: 450 }, (_, index) =>
+    message(index + 1, index % 2 === 0 ? PEER : ME, `第${index + 1}条`),
+  );
+  useChatStore.setState({
+    messagesByConversation: { [CONVERSATION]: deep, [GROUP]: [] },
+    messageWindowByConversation: { [CONVERSATION]: 450 },
+  });
+  const view = render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatMessageList, {}, SETTLE);
+
+  view.unmount();
+
+  const state = useChatStore.getState();
+  const kept = state.messagesByConversation[CONVERSATION];
+  expect(kept).toHaveLength(200);
+  expect(kept[0].height).toBe(251);
+  expect(state.historyFloorByConversation[CONVERSATION]).toBe(251);
 });
 
 test('typing then pressing send posts the trimmed text and clears the composer', async () => {
