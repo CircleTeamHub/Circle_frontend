@@ -713,6 +713,48 @@ test('leaving a deeply scrolled conversation shrinks it back to the newest cap',
   assert.equal(state.historyFloorByConversation['conv-1'], 5000);
 });
 
+test('evicting the stale block below a fresh page forgets the paging floor that pointed into it', () => {
+  const { useChatStore, MESSAGES_CAP } = loadChatStore();
+  const store = useChatStore.getState();
+  // 本地缓存着一段旧消息(8801~9000),窗口是满的。
+  store.ingestMessages(
+    'conv-1',
+    Array.from({ length: MESSAGES_CAP }, (_, i) => msg({ id: `old-${i}`, height: 8801 + i })),
+  );
+  // 过了很久再打开:最新一页(19951~20000)和旧块之间缺口太大。拉回这一页时,
+  // 窗口先把旧块挤掉一截、记下起点;调用方随即把整块旧消息驱逐掉。
+  store.ingestMessages(
+    'conv-1',
+    Array.from({ length: 50 }, (_, i) => msg({ id: `new-${i}`, height: 19951 + i })),
+  );
+  assert.equal(useChatStore.getState().historyFloorByConversation['conv-1'], 8851);
+  useChatStore.setState({
+    historyWindowFullByConversation: { 'conv-1': true },
+    messageWindowByConversation: { 'conv-1': 4000 },
+  });
+
+  useChatStore.getState().evictMessagesBelow('conv-1', 19951);
+
+  const state = useChatStore.getState();
+  assert.equal(state.messagesByConversation['conv-1'][0].height, 19951);
+  // 起点指着被扔掉的旧块:留着的话往上翻会从 8851 之前接着翻,把 8851~19950 整段跳过。
+  assert.equal(state.historyFloorByConversation['conv-1'], undefined);
+  assert.equal(state.historyWindowFullByConversation['conv-1'], undefined);
+  assert.equal(state.messageWindowByConversation['conv-1'], undefined);
+});
+
+test('evicting below a height keeps a paging floor that is still inside the kept range', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages(
+    'conv-1',
+    Array.from({ length: 50 }, (_, i) => msg({ id: `m-${i}`, height: 500 + i })),
+  );
+  useChatStore.setState({ historyFloorByConversation: { 'conv-1': 520 } });
+  useChatStore.getState().evictMessagesBelow('conv-1', 510);
+  assert.equal(useChatStore.getState().historyFloorByConversation['conv-1'], 520);
+});
+
 test('dropping or clearing a conversation cache forgets its paging floor and ceiling', () => {
   const { useChatStore, MESSAGES_CAP } = loadChatStore();
   const store = useChatStore.getState();

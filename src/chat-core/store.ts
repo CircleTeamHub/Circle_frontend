@@ -1416,16 +1416,38 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   evictMessagesBelow: (conversationId, height) => {
-    const { messagesByConversation } = get();
-    const existing = messagesByConversation[conversationId];
-    if (!existing) return;
-    const kept = existing.filter((m) => !(m.height > 0 && m.height < height));
-    if (kept.length === existing.length) return;
+    const state = get();
+    const existing = state.messagesByConversation[conversationId];
+    const kept = existing?.filter((m) => !(m.height > 0 && m.height < height));
+    const evicted =
+      existing !== undefined &&
+      kept !== undefined &&
+      kept.length !== existing.length;
+    // 往上翻的起点落在被驱逐的这段里就作废了。调用方会按刚拉到的那一页重设翻页游标;
+    // 留着旧起点的话,下一页会从被扔掉的旧块接着翻,把中间整段跳过 —— 拉回最新一页
+    // 那次 ingest 往往正好把旧块挤掉一截、刚记下这样一个起点。
+    const floor = state.historyFloorByConversation[conversationId];
+    const staleFloor = floor !== undefined && floor < height;
+    if (!evicted && !staleFloor) return;
+    const { [conversationId]: _window, ...restWindows } =
+      state.messageWindowByConversation;
+    const { [conversationId]: _full, ...restFull } =
+      state.historyWindowFullByConversation;
+    const { [conversationId]: _floor, ...restFloors } =
+      state.historyFloorByConversation;
     set({
-      messagesByConversation: {
-        ...messagesByConversation,
-        [conversationId]: kept,
-      },
+      ...(evicted && kept
+        ? {
+            messagesByConversation: {
+              ...state.messagesByConversation,
+              [conversationId]: kept,
+            },
+            // 窗口只剩新拉的那一页:不再是涨大、到顶的窗口。
+            messageWindowByConversation: restWindows,
+            historyWindowFullByConversation: restFull,
+          }
+        : {}),
+      ...(staleFloor ? { historyFloorByConversation: restFloors } : {}),
     });
   },
 
