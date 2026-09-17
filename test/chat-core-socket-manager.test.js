@@ -107,6 +107,18 @@ function fakeSocketFactory() {
   return { io, socket, captured };
 }
 
+// socket.io 每次握手(包括自动重连)都会取一次 auth:回调形式现取,对象形式原样重发。
+// 这里按客户端的做法取出「这一次握手」实际带上的内容。
+function handshakeAuth(captured) {
+  const { auth } = captured.opts;
+  if (typeof auth !== 'function') return auth;
+  let payload = null;
+  auth((data) => {
+    payload = data;
+  });
+  return payload;
+}
+
 function loadManager(localDbOverrides = {}, options = {}) {
   const { io, socket, captured } = fakeSocketFactory();
   const reports = [];
@@ -809,17 +821,18 @@ test('app background/foreground is reported in the handshake and on the live soc
   assert.equal(store.appForeground, false);
   manager.connectChat('jwt', 'u1');
   // 后台建立的连接(安卓后台重连)一开始就按后台登记,不会先被当成「收得到」。
-  assert.equal(captured.opts.auth.appState, 'background');
+  assert.equal(handshakeAuth(captured).appState, 'background');
   socket.connected = true;
   socket.fire('connect');
 
   manager.setChatAppState('foreground');
   assert.equal(store.appForeground, true);
+  // 握手已经带了后台,连上时不再重复报一次;之后的切换在活连接上报。
   assert.deepEqual(
     socket.emitted
       .filter((e) => e.event === 'chat:background' || e.event === 'chat:foreground')
       .map((e) => e.event),
-    ['chat:background', 'chat:foreground'],
+    ['chat:foreground'],
   );
   // 状态没变不重复上报。
   manager.setChatAppState('foreground');
@@ -829,17 +842,76 @@ test('app background/foreground is reported in the handshake and on the live soc
   );
 });
 
+test('auto-reconnect handshakes with the current app state, not the one from socket creation', () => {
+  const { manager, socket, captured } = loadManager();
+  manager.setChatAppState('background');
+  manager.connectChat('jwt', 'u1');
+  assert.equal(handshakeAuth(captured).appState, 'background');
+  socket.connected = true;
+  socket.fire('connect');
+  manager.setChatAppState('foreground');
+
+  // 断线后的自动重连不经过 connectChat:同一个 socket 拿同一份 auth 配置再握手。
+  // 带着建连时的「后台」重连上去,服务端就把正在用 App 的人当成后台,照发推送。
+  socket.connected = false;
+  socket.fire('disconnect', 'transport close');
+  assert.equal(handshakeAuth(captured).appState, 'foreground');
+  socket.emitted.length = 0;
+  socket.connected = true;
+  socket.fire('connect');
+  assert.deepEqual(
+    socket.emitted.filter(
+      (e) => e.event === 'chat:background' || e.event === 'chat:foreground',
+    ),
+    [],
+  );
+});
+
+test('an app state switch while the handshake is in flight is reported once connected', () => {
+  const { manager, socket, captured } = loadManager();
+  manager.setChatAppState('background');
+  manager.connectChat('jwt', 'u1');
+  assert.equal(handshakeAuth(captured).appState, 'background');
+  // 握手还没回来:切换只记下,没有活连接可报。
+  manager.setChatAppState('foreground');
+  assert.deepEqual(socket.emitted, []);
+
+  socket.connected = true;
+  socket.fire('connect');
+  assert.deepEqual(
+    socket.emitted
+      .filter((e) => e.event === 'chat:background' || e.event === 'chat:foreground')
+      .map((e) => e.event),
+    ['chat:foreground'],
+  );
+
+  // 反方向同理:前台发起的握手途中退到后台。
+  const second = loadManager();
+  second.manager.connectChat('jwt', 'u1');
+  assert.equal(handshakeAuth(second.captured).appState, 'foreground');
+  second.manager.setChatAppState('background');
+  second.socket.connected = true;
+  second.socket.fire('connect');
+  assert.deepEqual(
+    second.socket.emitted
+      .filter((e) => e.event === 'chat:background' || e.event === 'chat:foreground')
+      .map((e) => e.event),
+    ['chat:background'],
+  );
+});
+
 test('connects with token in the handshake auth frame, never in the URL', () => {
   const { manager, socket, captured, diagnostics } = loadManager();
   manager.connectChat('jwt-token', 'u1');
   assert.equal(captured.url, 'http://api.test');
   assert.equal(captured.opts.path, '/chat-ws');
-  assert.equal(captured.opts.auth.token, 'jwt-token');
-  assert.equal(captured.opts.auth.appState, 'foreground');
-  assert.match(captured.opts.auth.traceId, /^ws-[a-z0-9-]+$/);
+  const auth = handshakeAuth(captured);
+  assert.equal(auth.token, 'jwt-token');
+  assert.equal(auth.appState, 'foreground');
+  assert.match(auth.traceId, /^ws-[a-z0-9-]+$/);
   assert.equal(
     captured.opts.extraHeaders['x-connection-trace-id'],
-    captured.opts.auth.traceId,
+    auth.traceId,
   );
   assert.deepEqual(Array.from(captured.opts.transports), ['websocket']);
   assert.doesNotMatch(captured.url, /token=/);
@@ -1094,7 +1166,7 @@ test('reports the first chat connection failure with bounded correlation context
   assert.equal(reports[0].context.source, 'websocket');
   assert.equal(reports[0].context.endpointPath, '/chat-ws');
   assert.equal(reports[0].context.platform, 'android');
-  assert.equal(reports[0].context.traceId, captured.opts.auth.traceId);
+  assert.equal(reports[0].context.traceId, handshakeAuth(captured).traceId);
   assert.doesNotMatch(JSON.stringify(reports), /jwt-secret/);
   assert.equal(diagnostics.at(-1).event, 'chat.ws.connect_error');
   assert.equal(diagnostics.at(-1).details.stage, 'handshake');

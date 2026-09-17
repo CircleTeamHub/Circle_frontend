@@ -336,10 +336,17 @@ export function connectChat(token: string, userId: string): void {
     stage: 'handshake',
     platform: Platform.OS,
   });
+  // auth 写成回调:socket.io 每次握手(包括断线后的自动重连)都会现取一次。写成对象
+  // 的话自动重连原样重发建连那一刻的前后台状态 —— 后台建立的连接在前台断线重连,
+  // 服务端就把正在用 App 的人当成后台,照发推送。
+  let handshakeAppState: ChatAppState = appState;
   const next = io(CHAT_WS_URL, {
     path: CHAT_WS_PATH,
     transports: ['websocket'],
-    auth: { token, traceId: connectionTraceId, appState },
+    auth: (sendAuth) => {
+      handshakeAppState = appState;
+      sendAuth({ token, traceId: connectionTraceId, appState: handshakeAppState });
+    },
     // React Native WebSocket 会把该头带到 HTTP upgrade，供 Caddy 与网关日志
     // 串联；auth 里的副本覆盖不支持自定义头的 web 运行时。
     extraHeaders: { 'x-connection-trace-id': connectionTraceId },
@@ -368,9 +375,13 @@ export function connectChat(token: string, userId: string): void {
     state.setConnecting(false);
     state.setConnected(true);
     state.setError(null);
-    // 握手时带的前后台状态是建连那一刻的;握手期间切过的话这里补报一次。
-    if (appState === 'background') {
-      next.emit(CHAT_EVENTS.background, {});
+    // 握手带的是发起握手那一刻的前后台状态;握手途中切过(那时没有活连接可报,
+    // setChatAppState 只记下了)的话,这里补报当前值。
+    if (appState !== handshakeAppState) {
+      next.emit(
+        appState === 'background' ? CHAT_EVENTS.background : CHAT_EVENTS.foreground,
+        {},
+      );
     }
     if (isReconnect) void refreshViewerSelfDestructSec(userId);
     void flushPendingReads();

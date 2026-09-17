@@ -51,10 +51,11 @@ test('frontend protocol declares the canonical event names and path', () => {
 
 test('socket manager authenticates via handshake auth frame, not the URL', () => {
   const manager = read('src/chat-core/socket-manager.ts');
-  // appState:后台里建立的连接(安卓后台重连)一开始就按后台登记。
+  // appState:后台里建立的连接(安卓后台重连)一开始就按后台登记。auth 必须是回调:
+  // socket.io 自动重连会原样重发对象形式的 auth,带上的就是建连那一刻的前后台状态。
   assert.match(
     manager,
-    /auth:\s*\{\s*token,\s*traceId:\s*connectionTraceId,\s*appState\s*\}/,
+    /auth:\s*\(sendAuth\)\s*=>\s*\{[\s\S]*?sendAuth\(\{\s*token,\s*traceId:\s*connectionTraceId,\s*appState:\s*handshakeAppState\s*\}\)/,
   );
   assert.match(
     manager,
