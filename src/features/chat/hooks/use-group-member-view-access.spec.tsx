@@ -101,4 +101,71 @@ describe('useGroupMemberViewAccess', () => {
     expect(mockFetchCircleDetail).not.toHaveBeenCalled();
     expect(result.current.canViewMembers).toBe(false);
   });
+
+  describe('when it re-checks', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    function renderWith(props: { active?: boolean; roleHint?: string | null }) {
+      return renderHook(
+        (current: { active?: boolean; roleHint?: string | null }) =>
+          useGroupMemberViewAccess({
+            enabled: true,
+            groupID: GROUP_ID,
+            currentUserID: USER_ID,
+            membersCanViewRoster: null,
+            ...current,
+          }),
+        { initialProps: props },
+      );
+    }
+
+    // 原来每 60 秒查一次圈子详情,页面被别的页面盖住也在查:开着一个群就是每小时
+    // 60 次请求。现在只在页面在前台时兜底轮询,而且放慢到 5 分钟。
+    it('does not poll while the screen is covered, and re-checks once it is back', async () => {
+      jest.useFakeTimers();
+      mockFetchCircleDetail.mockResolvedValue(circleWithRole('ADMIN'));
+      const { result, rerender } = renderWith({ active: false });
+      await waitFor(() => expect(result.current.resolved).toBe(true));
+      expect(mockFetchCircleDetail).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        jest.advanceTimersByTime(30 * 60_000);
+      });
+      expect(mockFetchCircleDetail).toHaveBeenCalledTimes(1);
+
+      rerender({ active: true });
+      await waitFor(() => expect(mockFetchCircleDetail).toHaveBeenCalledTimes(2));
+    });
+
+    it('falls back to a slow interval while active', async () => {
+      jest.useFakeTimers();
+      mockFetchCircleDetail.mockResolvedValue(circleWithRole('ADMIN'));
+      const { result } = renderWith({ active: true });
+      await waitFor(() => expect(result.current.resolved).toBe(true));
+
+      await act(async () => {
+        jest.advanceTimersByTime(60_000);
+      });
+      expect(mockFetchCircleDetail).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        jest.advanceTimersByTime(4 * 60_000);
+      });
+      expect(mockFetchCircleDetail).toHaveBeenCalledTimes(2);
+    });
+
+    // 撤职/任命会刷新会话缓存里的角色:不用等下一次轮询。
+    it('re-checks as soon as the cached conversation role changes', async () => {
+      mockFetchCircleDetail.mockResolvedValue(circleWithRole('ADMIN'));
+      const { result, rerender } = renderWith({ active: true, roleHint: 'ADMIN' });
+      await waitFor(() => expect(result.current.canViewMembers).toBe(true));
+
+      mockFetchCircleDetail.mockResolvedValue(circleWithRole('MEMBER'));
+      rerender({ active: true, roleHint: 'MEMBER' });
+      await waitFor(() => expect(result.current.canViewMembers).toBe(false));
+      expect(mockFetchCircleDetail).toHaveBeenCalledTimes(2);
+    });
+  });
 });

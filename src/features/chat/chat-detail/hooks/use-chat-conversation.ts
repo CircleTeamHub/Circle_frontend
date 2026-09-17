@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
 import { useChatStore } from '@/chat-core/store';
 import { isGroupManager } from '@/features/chat/group-admin-permissions';
@@ -179,6 +180,13 @@ export function useChatConversation({
     params.conversationType === 'group' ? 'group' : 'single';
   const isGroupChat = conversationType === 'group';
 
+  // 权限重查只在页面在前台时兜底轮询,角色变了立刻重查(见 useGroupMemberViewAccess)。
+  const isFocused = useIsFocused();
+  const cachedRole = useChatStore(
+    (state) =>
+      state.conversations.find((candidate) => candidate.id === conversationID)
+        ?.myRole ?? null,
+  );
   const {
     canViewMembers: canViewCircleMembers,
     revalidate: revalidateCircleMemberAccess,
@@ -188,6 +196,8 @@ export function useChatConversation({
       groupID: sourceID,
       currentUserID,
       membersCanViewRoster,
+      active: isFocused,
+      roleHint: cachedRole,
     });
   // TEMP 不是圈子，不得拿 tmp... groupId 请求 /circle/:uuid。临时房成员目录本身
   // 由 /chat/conversations/:id/members 的座位校验保护，房内成员可直接使用。
