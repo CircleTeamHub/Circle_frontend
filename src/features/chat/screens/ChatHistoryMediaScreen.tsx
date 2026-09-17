@@ -16,6 +16,7 @@ import i18n from '@/i18n';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   formatChatHistoryMonth,
+  getChatMediaThumbnailCacheKey,
   getChatMediaThumbnailUris,
   resolveChatHistoryRouteParams,
 } from '@/features/chat/chat-history';
@@ -141,6 +142,9 @@ function MediaTile({
   const thumbnailUris = useMemo(() => getChatMediaThumbnailUris(item), [item]);
   const [failedCount, setFailedCount] = useState(0);
   const thumbnailUri = thumbnailUris[failedCount] ?? null;
+  const thumbnailCacheKey = thumbnailUri
+    ? getChatMediaThumbnailCacheKey(item, thumbnailUri)
+    : undefined;
   const isVideo = item.type === 'video';
 
   const handleImageError = useCallback(() => {
@@ -159,7 +163,11 @@ function MediaTile({
     >
       {thumbnailUri ? (
         <Image
-          source={{ uri: thumbnailUri }}
+          source={
+            thumbnailCacheKey
+              ? { uri: thumbnailUri, cacheKey: thumbnailCacheKey }
+              : { uri: thumbnailUri }
+          }
           style={s.thumbnail}
           contentFit="cover"
           onError={handleImageError}

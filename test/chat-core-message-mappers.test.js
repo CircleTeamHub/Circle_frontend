@@ -299,6 +299,34 @@ test('image prefers server url and falls back to localUri while pending', () => 
   assert.equal(confirmed.imageWidth, 100);
 });
 
+test('image messages keep their object keys as stable cache keys', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const image = mapChatMessageDtoToUI(
+    dto({
+      type: 'image',
+      content: {
+        key: 'chat/u2/photo.jpg',
+        thumbKey: 'chat/u2/photo.thumb.jpg',
+        url: 'https://signed/photo.jpg?X-Amz-Date=20260916T100000Z',
+        thumbUrl: 'https://signed/photo.thumb.jpg?X-Amz-Date=20260916T100000Z',
+      },
+    }),
+    'u1',
+    0,
+  );
+  // 签名地址每小时换一次:拿它当缓存键,同一张图过了窗口就整张重新下载。
+  assert.equal(image.imageKey, 'chat/u2/photo.jpg');
+  assert.equal(image.imageThumbKey, 'chat/u2/photo.thumb.jpg');
+
+  const hostile = mapChatMessageDtoToUI(
+    dto({ type: 'image', content: { key: 42, thumbKey: { nested: true } } }),
+    'u1',
+    0,
+  );
+  assert.equal(hostile.imageKey, undefined);
+  assert.equal(hostile.imageThumbKey, undefined);
+});
+
 test('sent bubbles report isRead from the peer watermark', () => {
   const { mapChatMessageDtoToUI } = loadMappers();
   const me = { id: 'u1', nickname: '我', avatarUrl: null };

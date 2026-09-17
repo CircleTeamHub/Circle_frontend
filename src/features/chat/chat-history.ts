@@ -112,6 +112,24 @@ export function getChatMediaThumbnailUris(message: ChatMessageDto): string[] {
 
 
 
+/**
+ * 媒体宫格里某个候选地址对应的存储 key,拿来当图片缓存键:签名地址每小时轮换,
+ * 按地址缓存的话每次打开聊天记录都要整页重新下载。本机文件地址不挂 key。
+ */
+export function getChatMediaThumbnailCacheKey(
+  message: ChatMessageDto,
+  uri: string,
+): string | undefined {
+  const content = message.content ?? {};
+  if (uri === allowPeerMediaUrl(nonEmptyString(content['thumbUrl']))) {
+    return nonEmptyString(content['thumbKey']) ?? undefined;
+  }
+  if (uri === allowPeerMediaUrl(nonEmptyString(content['url']))) {
+    return nonEmptyString(content['key']) ?? undefined;
+  }
+  return undefined;
+}
+
 export function isValidDateInput(value: string) {
   const trimmed = value.trim();
 

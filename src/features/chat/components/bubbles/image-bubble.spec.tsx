@@ -7,14 +7,22 @@ import type { ChatMessage } from '@/types';
 // 这条 spec 只关心「这张图片会不会被当成阅后即焚渲染」，所以把主题 / 头像 /
 // 观测层全部顶掉，只留下能观察到判定结果的两个出口：缩略图的 cachePolicy 与
 // 查看器的 privacyMode。与 location-card.spec 同款做法。
-const imageProps: { cachePolicy?: unknown }[] = [];
+const imageProps: {
+  cachePolicy?: unknown;
+  source?: { uri?: string; cacheKey?: string };
+}[] = [];
 jest.mock('expo-image', () => {
   const { View } =
     jest.requireActual<typeof import('react-native')>('react-native');
   return {
     Image: Object.assign(
       (props: object) => {
-        imageProps.push(props as { cachePolicy?: unknown });
+        imageProps.push(
+          props as {
+            cachePolicy?: unknown;
+            source?: { uri?: string; cacheKey?: string };
+          },
+        );
         return <View />;
       },
       {
@@ -26,12 +34,14 @@ jest.mock('expo-image', () => {
 });
 
 const viewerModes: unknown[] = [];
+const viewerCacheKeys: unknown[] = [];
 jest.mock('@/components/ui/image-viewer', () => {
   const { View } =
     jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    ImageViewer: (props: { privacyMode?: unknown }) => {
+    ImageViewer: (props: { privacyMode?: unknown; cacheKeys?: unknown }) => {
       viewerModes.push(props.privacyMode);
+      viewerCacheKeys.push(props.cacheKeys);
       return <View />;
     },
   };
@@ -218,5 +228,54 @@ describe('ImageBubble disk cache clearing for disappearing images', () => {
     );
     await Promise.resolve();
     expect(clearDiskCache).not.toHaveBeenCalled();
+  });
+});
+
+describe('ImageBubble cache keys', () => {
+  // 签名地址每小时轮换:按 URL 缓存的话同一张图过了窗口就重新下载。
+  it('caches the thumbnail and the full image by their object keys', () => {
+    render(
+      <ImageBubble
+        message={
+          {
+            ...imageMessage,
+            imageKey: 'chat/u2/photo.jpg',
+            imageThumbKey: 'chat/u2/photo.thumb.jpg',
+          } as unknown as ChatMessage
+        }
+        outgoing={false}
+      />,
+    );
+    expect(imageProps.at(-1)?.source).toEqual({
+      uri: 'https://media.example.com/thumb.jpg',
+      cacheKey: 'chat/u2/photo.thumb.jpg',
+    });
+    expect(viewerCacheKeys.at(-1)).toEqual(['chat/u2/photo.jpg']);
+  });
+
+  it('falls back to the full image key when there is no thumbnail', () => {
+    render(
+      <ImageBubble
+        message={
+          {
+            ...imageMessage,
+            imageThumbUrl: undefined,
+            imageKey: 'chat/u2/photo.jpg',
+          } as unknown as ChatMessage
+        }
+        outgoing={false}
+      />,
+    );
+    expect(imageProps.at(-1)?.source).toEqual({
+      uri: 'https://media.example.com/full.jpg',
+      cacheKey: 'chat/u2/photo.jpg',
+    });
+  });
+
+  it('lets a local preview use its own uri as the cache key', () => {
+    render(<ImageBubble message={imageMessage} outgoing />);
+    expect(imageProps.at(-1)?.source).toEqual({
+      uri: 'https://media.example.com/thumb.jpg',
+    });
   });
 });

@@ -30,6 +30,20 @@ interface ImageBubbleProps {
  * 结果每次打开 App、第一次看到阅后即焚图片就把所有图片的磁盘缓存清空重下。
  */
 const CLEARED_POLICIES_STORAGE_KEY = 'chat.imageDiskCacheClearedPolicies';
+
+/** 本机文件等本地地址:不挂存储 key 当缓存键,免得把本地原片记在远端那张的名下。 */
+const LOCAL_URI = /^(?:file|content|ph|assets-library|data|blob):/i;
+
+/**
+ * 远端图片的缓存键用存储 object key:签名地址每小时轮换,按地址缓存的话同一张图
+ * 过了窗口就整张重新下载。
+ */
+function remoteCacheKey(
+  uri: string | undefined,
+  key: string | undefined,
+): string | undefined {
+  return uri && key && !LOCAL_URI.test(uri) ? key : undefined;
+}
 const CLEARED_POLICIES_MAX = 50;
 /** 同一个策略的清理正在进行:一屏多张阅后即焚图片同时挂载时只清一次。 */
 const clearingPolicies = new Set<string>();
@@ -166,6 +180,14 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   // 列表气泡优先渲染缩略图；缺失时回退到原图。原图查看留给点击放大流程。
   const displayUri = message.imageThumbUrl ?? message.imageUrl;
   const previewUri = message.imageUrl ?? displayUri;
+  const displayCacheKey = remoteCacheKey(
+    displayUri,
+    message.imageThumbUrl ? message.imageThumbKey : message.imageKey,
+  );
+  const previewCacheKey = remoteCacheKey(
+    previewUri,
+    message.imageUrl ? message.imageKey : message.imageThumbKey,
+  );
   const handleOpenPreview = useCallback(() => {
     if (previewUri) setPreviewVisible(true);
   }, [previewUri]);
@@ -179,7 +201,11 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
       >
         {displayUri ? (
           <Image
-            source={{ uri: displayUri }}
+            source={
+              displayCacheKey
+                ? { uri: displayUri, cacheKey: displayCacheKey }
+                : { uri: displayUri }
+            }
             style={[sImage.image, dimensions]}
             contentFit="cover"
             transition={150}
@@ -225,6 +251,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
         </View>
         <ImageViewer
           images={previewUri ? [previewUri] : []}
+          cacheKeys={previewUri ? [previewCacheKey] : undefined}
           visible={previewVisible}
           privacyMode={ephemeral ? 'ephemeral' : 'standard'}
           onClose={() => setPreviewVisible(false)}
@@ -247,6 +274,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
       </View>
       <ImageViewer
         images={previewUri ? [previewUri] : []}
+        cacheKeys={previewUri ? [previewCacheKey] : undefined}
         visible={previewVisible}
         privacyMode={ephemeral ? 'ephemeral' : 'standard'}
         onClose={() => setPreviewVisible(false)}

@@ -184,6 +184,12 @@ export interface ChatMessage {
   imageUrl?: string;
   // 列表气泡优先用缩略图渲染，避免直接拉原图；点开原图查看时才用 imageUrl。
   imageThumbUrl?: string;
+  /**
+   * 原图 / 缩略图的存储 object key,只拿来当图片缓存键:签名地址每小时轮换,按地址缓存
+   * 的话同一张图过了窗口就要整张重新下载。
+   */
+  imageKey?: string;
+  imageThumbKey?: string;
   imageWidth?: number;
   imageHeight?: number;
   // For video messages: local/remote source plus intrinsic metadata.

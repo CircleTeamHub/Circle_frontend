@@ -388,6 +388,8 @@ export function mapChatMessageDtoToUI(
         imageThumbUrl: str(content['thumbUrl'])
           ? (allowPeerMediaUrl(str(content['thumbUrl']) ?? null) ?? undefined)
           : undefined,
+        imageKey: str(content['key']),
+        imageThumbKey: str(content['thumbKey']),
         imageWidth: num(content['width']),
         imageHeight: num(content['height']),
       };
