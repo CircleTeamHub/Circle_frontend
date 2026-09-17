@@ -364,10 +364,14 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       applyRemoteGroupSettingChange(store, payload);
       const metadataChanged = requiresConversationMetadataRefresh(payload);
       // G-07 送达回执:收到别人的消息即回报水位(节流在 socket-manager)。
+      // 「已送达」只在单聊里渲染,群聊不报 —— 服务端对群也不再记录。会话还没进
+      // 快照(类型未知)时照报,服务端按类型丢弃。
       if (
         payload.height > 0 &&
         payload.sender !== null &&
-        payload.sender.id !== store.currentUserId
+        payload.sender.id !== store.currentUserId &&
+        store.conversations.find((c) => c.id === payload.conversationId)
+          ?.type !== 'GROUP'
       ) {
         reportChatDelivered(payload.conversationId, payload.height);
       }

@@ -584,6 +584,28 @@ test('banner avatars go through the media allowlist', () => {
   assert.equal(state.banners[0].avatarUrl, null);
 });
 
+test('delivered receipts are reported for direct chats but never for groups', () => {
+  // 「已送达」只在单聊里渲染;群里每收一条就回报一次,服务端也不再记录。
+  // 会话还没进快照(类型未知)时照常回报,服务端按类型丢弃。
+  const GROUP_ID = '8c4d2e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f';
+  const { socket, state } = loadDispatcher({
+    conversations: [
+      directConversation(),
+      directConversation({ id: GROUP_ID, type: 'GROUP', peer: null, name: '群' }),
+    ],
+  });
+  socket.emit('chat:msg', dto({ id: 'm-dm', conversationId: DIRECT_ID, height: 3 }));
+  socket.emit('chat:msg', dto({ id: 'm-group', conversationId: GROUP_ID, height: 4 }));
+  socket.emit('chat:msg', dto({ id: 'm-new', conversationId: 'c-unknown', height: 5 }));
+  assert.deepEqual(
+    state.deliveredReports.map((report) => ({ ...report })),
+    [
+      { cid: DIRECT_ID, h: 3 },
+      { cid: 'c-unknown', h: 5 },
+    ],
+  );
+});
+
 test('self messages and the open conversation never raise a banner', () => {
   const { socket, state } = loadDispatcher({
     conversations: [directConversation()],
