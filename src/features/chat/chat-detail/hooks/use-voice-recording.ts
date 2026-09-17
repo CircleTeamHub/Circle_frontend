@@ -1,9 +1,9 @@
 import {
-  RecordingPresets,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioRecorder,
 } from 'expo-audio';
+import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
 import {
   type Dispatch,
   type RefObject,
@@ -72,7 +72,7 @@ export function useVoiceRecording({
   isGroupChat,
   isPreviewMode,
 }: VoiceRecordingParams) {
-  const voiceRecorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
+  const voiceRecorder = useAudioRecorder(VOICE_RECORDING_OPTIONS);
   const [voiceRecordingStartedAt, setVoiceRecordingStartedAt] = useState<number | null>(null);
   const [voiceActionBusy, setVoiceActionBusy] = useState(false);
   // 语音输入模式：点话筒后输入框变「按住说话」；按住时滑到左侧取消、松手发送。

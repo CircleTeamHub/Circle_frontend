@@ -195,6 +195,8 @@ jest.mock('@/features/chat/hooks/use-chat-background-image-source', () => ({
   useChatBackgroundImageSource: () => null,
 }));
 jest.mock('expo-audio', () => ({
+  AudioQuality: { MEDIUM: 64 },
+  IOSOutputFormat: { MPEG4AAC: 'aac ' },
   RecordingPresets: { HIGH_QUALITY: {} },
   requestRecordingPermissionsAsync: jest.fn(() => Promise.resolve({ granted: false })),
   setAudioModeAsync: jest.fn(() => Promise.resolve()),
