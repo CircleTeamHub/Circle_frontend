@@ -17,6 +17,9 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
+import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { uploadChatVideoPoster } from '@/features/chat/utils/chat-video-poster';
+import { hideTopNotice, showTopNotice } from '@/components/app/top-notice-store';
 import {
   failMediaSend,
   finishMediaSend,
@@ -32,7 +35,7 @@ import {
   isChatVideoTooLarge,
   isChatVideoTooLong,
 } from '@/features/chat/utils/chat-media-policy';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { assertLocalCanSendMessage } from '@/services/api/credit-policy';
 import { VIDEO_UPLOAD_TIMEOUT_MS } from '@/features/chat/chat-detail/constants';
 import { type MediaSourceAction } from '@/features/chat/components/media-source-sheet';
@@ -75,8 +78,10 @@ export function useMediaSend({
   const [photoEditorAsset, setPhotoEditorAsset] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   // 视频可能接近 100MB。上传成功但 socket ack 失败时，重发只应复用已上传的 key，
-  // 不能再传一遍并制造孤儿对象；成功发送或卸载后释放这份内存索引。
-  const uploadedVideoKeysRef = useRef(new Map<string, string>());
+  // 不能再传一遍并制造孤儿对象；成功发送或卸载后释放这份内存索引。封面同理。
+  const uploadedVideoKeysRef = useRef(
+    new Map<string, { key: string; thumbKey?: string }>(),
+  );
   useEffect(() => {
     const uploadedVideoKeys = uploadedVideoKeysRef.current;
     return () => {
@@ -99,35 +104,44 @@ export function useMediaSend({
         if (isTempChat) {
           await assertMyTempChatConversationOpen(conversationID);
         }
+        // 长边压到 2048、重新编码成 JPEG(顺带去掉 EXIF 里的拍摄地点);GIF 原样发。
+        // 失败时发原图。重启后从持久副本重发会再压一次,副本本身是原图。
+        const prepared = await prepareChatImageForUpload({
+          uri: asset.uri,
+          width: asset.width ?? undefined,
+          height: asset.height ?? undefined,
+          contentType,
+          filename,
+        });
         // 不日志 presign 返回的 fileUrl / uploadUrl —— 这是带签名的临时写凭证，
         // 任何能捕获 console 输出的渠道（adb logcat、屏幕录制、第三方 SDK 的
         // breadcrumb）拿到 uploadUrl 就能在过期前向同一对象写入任意内容。
         const presign = await requestUploadPresign({
-          filename: sanitizeUploadFilename(filename),
-          contentType,
+          filename: sanitizeUploadFilename(prepared.filename),
+          contentType: prepared.contentType,
           folder: 'chat',
-          fileUri: asset.uri,
+          fileUri: prepared.uri,
         });
         await uploadLocalFileToPresignedUrl(
           presign.uploadUrl,
-          contentType,
-          asset.uri,
+          prepared.contentType,
+          prepared.uri,
           presign.requiredHeaders,
         );
 
         // 生成并上传一张缩略图供列表气泡显示；失败 / 原图已够小时退化为原图（thumb* 留空）。
         const thumbnail = await uploadChatImageThumbnail(
-          asset.uri,
-          asset.width ?? undefined,
-          filename,
+          prepared.uri,
+          prepared.width,
+          prepared.filename,
         );
 
         await sendImageMessage({
           conversationId: conversationID,
           key: presign.key,
           localUri: asset.uri,
-          width: asset.width ?? undefined,
-          height: asset.height ?? undefined,
+          width: prepared.width,
+          height: prepared.height,
           thumbKey: thumbnail?.key,
           deliveryId,
         });
@@ -228,8 +242,12 @@ export function useMediaSend({
         if (isTempChat) {
           await assertMyTempChatConversationOpen(conversationID);
         }
-        let key = uploadedVideoKeysRef.current.get(deliveryId);
-        if (!key) {
+        const durationSeconds =
+          typeof asset.duration === 'number'
+            ? Math.max(1, Math.ceil(asset.duration / 1000))
+            : undefined;
+        let uploaded = uploadedVideoKeysRef.current.get(deliveryId);
+        if (!uploaded) {
           const presign = await requestUploadPresign({
             filename: sanitizeUploadFilename(filename),
             contentType,
@@ -243,19 +261,23 @@ export function useMediaSend({
             presign.requiredHeaders,
             VIDEO_UPLOAD_TIMEOUT_MS,
           );
-          key = presign.key;
-          uploadedVideoKeysRef.current.set(deliveryId, key);
+          // 截一帧当封面:没有它,气泡在点播放之前是一块黑框。截不到就不带。
+          const poster = await uploadChatVideoPoster(
+            asset.uri,
+            durationSeconds,
+            filename,
+          );
+          uploaded = { key: presign.key, thumbKey: poster?.key };
+          uploadedVideoKeysRef.current.set(deliveryId, uploaded);
         }
         await sendVideoMessage({
           conversationId: conversationID,
-          key,
+          key: uploaded.key,
+          thumbKey: uploaded.thumbKey,
           localUri: asset.uri,
           width: asset.width ?? undefined,
           height: asset.height ?? undefined,
-          duration:
-            typeof asset.duration === 'number'
-              ? Math.max(1, Math.ceil(asset.duration / 1000))
-              : undefined,
+          duration: durationSeconds,
           size: asset.fileSize ?? undefined,
           deliveryId,
         });
@@ -402,13 +424,34 @@ export function useMediaSend({
         Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
         return;
       }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: kind === 'photo' ? ['images'] : ['videos'],
-        preferredAssetRepresentationMode:
-          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-        quality: 0.85,
-        allowsMultipleSelection: false,
-      });
+      // iOS 选视频时让系统导出成 720p H.264:手机拍的 4K 视频一分钟几百 MB,
+      // 原样上传既慢又常常超过 100MB 上限发不出去。导出发生在选择器关掉之后、
+      // 结果回来之前,长视频要十几秒,期间在顶部提示一下。安卓的选择器不转码。
+      const transcodeOnPick = kind === 'video' && Platform.OS === 'ios';
+      const preparingNotice = transcodeOnPick
+        ? showTopNotice({
+            type: 'info',
+            title: t('chat.detail.videoPreparing', {
+              defaultValue: '正在处理视频…',
+            }),
+            durationMs: 10 * 60 * 1000,
+          })
+        : null;
+      let result: ImagePicker.ImagePickerResult;
+      try {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: kind === 'photo' ? ['images'] : ['videos'],
+          preferredAssetRepresentationMode:
+            ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+          quality: 0.85,
+          allowsMultipleSelection: false,
+          ...(transcodeOnPick
+            ? { videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720 }
+            : {}),
+        });
+      } finally {
+        if (preparingNotice !== null) hideTopNotice(preparingNotice);
+      }
       if (result.canceled || result.assets.length === 0) return;
       const pickedAsset = result.assets[0];
       if (kind === 'photo') {

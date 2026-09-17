@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -24,6 +25,8 @@ interface VideoBubbleProps {
   onAvatarPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
+  /** 本人开了阅后即焚:封面和图片一样只进内存缓存,不落盘。 */
+  selfDestructEnabled?: boolean;
 }
 
 const s = StyleSheet.create({
@@ -48,6 +51,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
+  // 有封面帧时只压一层薄暗,让画面透出来、播放键仍看得清。
+  posterOverImage: { backgroundColor: 'rgba(0,0,0,0.2)' },
   playBadge: {
     width: 48,
     height: 48,
@@ -99,6 +104,7 @@ export function VideoBubble({
   onAvatarPress,
   onLongPress,
   hideStatus,
+  selfDestructEnabled = false,
 }: VideoBubbleProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -126,6 +132,8 @@ export function VideoBubble({
     return Math.min(16 / 9, Math.max(3 / 4, width / height));
   }, [message.videoHeight, message.videoWidth]);
   const durationLabel = formatDuration(message.videoDuration);
+  const posterUrl = message.videoThumbUrl;
+  const ephemeral = (message.burnDurationSec ?? 0) > 0 || selfDestructEnabled;
 
   const videoUrl = message.videoUrl;
   const handlePlay = useCallback(() => {
@@ -185,8 +193,25 @@ export function VideoBubble({
               contentFit="contain"
               surfaceType="textureView"
             />
+            {activated || !posterUrl ? null : (
+              <Image
+                testID="chat-video-poster"
+                source={
+                  message.videoThumbKey
+                    ? { uri: posterUrl, cacheKey: message.videoThumbKey }
+                    : { uri: posterUrl }
+                }
+                style={StyleSheet.absoluteFillObject}
+                contentFit="cover"
+                cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
+                pointerEvents="none"
+              />
+            )}
             {activated ? null : (
-              <View style={s.poster} pointerEvents="none">
+              <View
+                style={[s.poster, posterUrl ? s.posterOverImage : null]}
+                pointerEvents="none"
+              >
                 <View style={s.playBadge}>
                   {loading ? (
                     <ActivityIndicator color="#FFFFFF" />

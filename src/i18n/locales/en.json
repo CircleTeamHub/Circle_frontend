@@ -359,6 +359,7 @@
       "videoTooLong": "Choose a video under 10 minutes",
       "videoUnsupported": "Only MP4, MOV, and M4V videos are supported",
       "videoUnavailable": "Video unavailable",
+      "videoPreparing": "Preparing video…",
       "playVideo": "Play video",
       "noteBatchPartialFailed": "{{count}} items failed to send",
       "cardSendFailed": "Failed to send contact card, please try again",

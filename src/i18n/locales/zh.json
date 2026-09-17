@@ -356,6 +356,7 @@
       "videoTooLong": "请选择 10 分钟以内的视频",
       "videoUnsupported": "仅支持 MP4、MOV、M4V 视频",
       "videoUnavailable": "视频不可用",
+      "videoPreparing": "正在处理视频…",
       "playVideo": "播放视频",
       "noteBatchPartialFailed": "{{count}} 条内容发送失败",
       "cardSendFailed": "名片发送失败，请重试",

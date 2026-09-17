@@ -464,6 +464,8 @@ export function sendVideoMessage(options: {
   height?: number;
   duration?: number;
   size?: number;
+  /** 封面帧的 object key(服务端读时签成 thumbUrl)。 */
+  thumbKey?: string;
   deliveryId?: string;
   onCreate?: (message: ChatMessageDto) => void;
 }): Promise<ChatMessageDto> {
@@ -473,6 +475,7 @@ export function sendVideoMessage(options: {
     type: 'video',
     content: {
       key: options.key,
+      ...(options.thumbKey ? { thumbKey: options.thumbKey } : {}),
       ...(options.width ? { width: options.width } : {}),
       ...(options.height ? { height: options.height } : {}),
       ...(options.duration ? { duration: options.duration } : {}),

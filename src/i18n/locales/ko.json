@@ -283,6 +283,7 @@
       "videoTooLong": "10분 이하의 동영상을 선택하세요",
       "videoUnsupported": "MP4, MOV, M4V 동영상만 지원됩니다",
       "videoUnavailable": "동영상을 사용할 수 없습니다",
+      "videoPreparing": "동영상을 처리하는 중…",
       "playVideo": "동영상 재생",
       "noteBatchPartialFailed": "{{count}}개 항목을 보내지 못했습니다",
       "cardSendFailed": "프로필 카드를 보내지 못했습니다. 다시 시도해 주세요",

@@ -398,6 +398,9 @@ export function mapChatMessageDtoToUI(
         ...base,
         type: 'video',
         videoUrl: mediaUrl(content, 'url'),
+        // 封面只认服务端签的远端地址:视频的 localUri 是视频文件本身,不能当图片加载。
+        videoThumbUrl: allowPeerMediaUrl(str(content['thumbUrl']) ?? null) ?? undefined,
+        videoThumbKey: str(content['thumbKey']),
         videoWidth: num(content['width']),
         videoHeight: num(content['height']),
         videoDuration: num(content['duration']),

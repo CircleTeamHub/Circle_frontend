@@ -209,6 +209,47 @@ test('video messages preserve their signed source and playback metadata', () => 
   assert.equal(video.videoHeight, 1080);
   assert.equal(video.videoDuration, 12);
   assert.equal(video.videoSize, 2048);
+  // 老消息没有封面帧:气泡退回黑底。
+  assert.equal(video.videoThumbUrl, undefined);
+  assert.equal(video.videoThumbKey, undefined);
+});
+
+test('video posters come only from the signed thumbnail, never from the video file itself', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const withPoster = mapChatMessageDtoToUI(
+    dto({
+      type: 'video',
+      content: {
+        key: 'chat/u2/clip.mp4',
+        url: 'https://cdn.trusted/clip.mp4',
+        thumbKey: 'chat/u2/poster-clip.jpg',
+        thumbUrl: 'https://signed/poster-clip.jpg?X-Amz-Date=20260916T100000Z',
+      },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(
+    withPoster.videoThumbUrl,
+    'https://signed/poster-clip.jpg?X-Amz-Date=20260916T100000Z',
+  );
+  assert.equal(withPoster.videoThumbKey, 'chat/u2/poster-clip.jpg');
+
+  // 对端塞进来的外部地址会被每个滑过这条消息的人静默请求(追踪信标),照样挡掉。
+  const beacon = mapChatMessageDtoToUI(
+    dto({
+      type: 'video',
+      content: {
+        key: 'chat/u2/clip.mp4',
+        url: 'https://cdn.trusted/clip.mp4',
+        thumbUrl: 'https://attacker.example/1x1.gif',
+        localUri: 'file:///var/mobile/clip.mov',
+      },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(beacon.videoThumbUrl, undefined);
 });
 
 test('location messages preserve separate place details and valid coordinates', () => {

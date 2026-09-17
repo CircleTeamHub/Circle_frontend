@@ -283,6 +283,7 @@
       "videoTooLong": "10分以内の動画を選択してください",
       "videoUnsupported": "MP4、MOV、M4V動画のみ対応しています",
       "videoUnavailable": "動画を再生できません",
+      "videoPreparing": "動画を処理しています…",
       "playVideo": "動画を再生",
       "noteBatchPartialFailed": "{{count}} 件の送信に失敗しました",
       "cardSendFailed": "プロフィールカードを送信できませんでした。もう一度お試しください",

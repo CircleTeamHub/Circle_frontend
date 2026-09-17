@@ -286,6 +286,7 @@
       "videoTooLong": "Elige un video de menos de 10 minutos",
       "videoUnsupported": "Solo se admiten videos MP4, MOV y M4V",
       "videoUnavailable": "Vídeo no disponible",
+      "videoPreparing": "Preparando el vídeo…",
       "playVideo": "Reproducir vídeo",
       "noteBatchPartialFailed": "No se pudieron enviar {{count}} elementos",
       "cardSendFailed": "No se pudo enviar la tarjeta de perfil, inténtalo de nuevo",

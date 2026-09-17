@@ -188,6 +188,8 @@ jest.mock('@/observability/report-failure', () => ({
 }));
 jest.mock('@/features/notifications/utils/seen-target', () => mockStubModule());
 jest.mock('@/features/chat/utils/image-thumbnail', () => mockStubModule());
+jest.mock('@/features/chat/utils/chat-image-compress', () => mockStubModule());
+jest.mock('@/features/chat/utils/chat-video-poster', () => mockStubModule());
 jest.mock('@/features/chat/screens/ForwardPickerScreen', () => ({
   canForwardMessage: () => true,
 }));

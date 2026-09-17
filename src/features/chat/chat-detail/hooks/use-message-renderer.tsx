@@ -246,6 +246,7 @@ export function useMessageRenderer({
             onAvatarPress={item.outgoing ? undefined : () => handleOpenMessageSender(item)}
             onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
+            selfDestructEnabled={selfDestructEnabled}
           />
         ));
       case 'voice':

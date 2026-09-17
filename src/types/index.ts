@@ -194,6 +194,10 @@ export interface ChatMessage {
   imageHeight?: number;
   // For video messages: local/remote source plus intrinsic metadata.
   videoUrl?: string;
+  /** 封面帧(服务端读时签发);没有封面的老消息为空,气泡退回黑底。 */
+  videoThumbUrl?: string;
+  /** 封面帧的 object key,只当图片缓存键用(签名地址每小时轮换)。 */
+  videoThumbKey?: string;
   videoWidth?: number;
   videoHeight?: number;
   videoDuration?: number;
