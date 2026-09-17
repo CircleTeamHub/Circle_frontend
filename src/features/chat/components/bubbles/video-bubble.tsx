@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
+import { useEphemeralImageDiskCacheSweep } from './ephemeral-image-cache';
 import { BubbleStatusText, MessageAvatar } from './shared';
 
 interface VideoBubbleProps {
@@ -27,6 +28,8 @@ interface VideoBubbleProps {
   hideStatus?: boolean;
   /** 本人开了阅后即焚:封面和图片一样只进内存缓存,不落盘。 */
   selfDestructEnabled?: boolean;
+  /** 焚毁策略指纹:换了策略要清一次开启前落过盘的封面(见 ephemeral-image-cache)。 */
+  selfDestructCacheKey?: string;
 }
 
 const s = StyleSheet.create({
@@ -105,6 +108,7 @@ export function VideoBubble({
   onLongPress,
   hideStatus,
   selfDestructEnabled = false,
+  selfDestructCacheKey = '',
 }: VideoBubbleProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -134,6 +138,7 @@ export function VideoBubble({
   const durationLabel = formatDuration(message.videoDuration);
   const posterUrl = message.videoThumbUrl;
   const ephemeral = (message.burnDurationSec ?? 0) > 0 || selfDestructEnabled;
+  useEphemeralImageDiskCacheSweep(ephemeral, selfDestructCacheKey);
 
   const videoUrl = message.videoUrl;
   const handlePlay = useCallback(() => {

@@ -247,6 +247,7 @@ export function useMessageRenderer({
             onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
             selfDestructEnabled={selfDestructEnabled}
+            selfDestructCacheKey={selfDestructCacheKey}
           />
         ));
       case 'voice':
