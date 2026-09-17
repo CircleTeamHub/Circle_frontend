@@ -7,6 +7,7 @@ import {
 import { Alert, LayoutAnimation } from 'react-native';
 import { type FriendProfile } from '@/services/api/friends';
 import { sendCardMessage, sendVoiceMessage } from '@/chat-core/client';
+import { startChatSend } from '@/chat-core/send-handle';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { type UserCollection } from '@/services/api/collections';
 import { resolveCollectionSendPlan } from '@/features/chat/utils/message-collection';
@@ -127,17 +128,7 @@ export function useAttachmentActions({
       if (!conversationID) return;
       if (inFlightRef.current) return;
       inFlightRef.current = true;
-      try {
-        await sendCardMessage({
-          conversationId: conversationID,
-          type: 'friend-card',
-          payload: {
-            userID: friend.id,
-            nickname: friend.nickname,
-            faceURL: friend.avatarUrl ?? '',
-          },
-        });
-      } catch (error) {
+      const reportSendFailure = (error: unknown) => {
         if (mountedRef.current) {
           setSendError(
             getChatSendErrorMessage(
@@ -148,6 +139,28 @@ export function useAttachmentActions({
             ),
           );
         }
+      };
+      // 进了发送队列就放开输入栏,不等送达(断线时会等到重连)。
+      try {
+        const handle = startChatSend((onCreate) =>
+          sendCardMessage({
+            conversationId: conversationID,
+            type: 'friend-card',
+            payload: {
+              userID: friend.id,
+              nickname: friend.nickname,
+              faceURL: friend.avatarUrl ?? '',
+            },
+            onCreate,
+          }),
+        );
+        if (handle.queued) {
+          void handle.delivered.catch(reportSendFailure);
+        } else {
+          await handle.delivered;
+        }
+      } catch (error) {
+        reportSendFailure(error);
       } finally {
         inFlightRef.current = false;
       }
@@ -186,39 +199,7 @@ export function useAttachmentActions({
 
       if (inFlightRef.current) return;
       inFlightRef.current = true;
-      try {
-        switch (plan.kind) {
-          case 'voice':
-            // 收藏时存下的 object key 直接重发,不重新上传音频。
-            await sendVoiceMessage({
-              conversationId: conversationID,
-              key: plan.key,
-              duration: plan.duration,
-              ...(plan.dataSize ? { size: plan.dataSize } : {}),
-            });
-            break;
-          case 'note':
-            await sendCardMessage({
-              conversationId: conversationID,
-              type: 'note-card',
-              payload: plan.noteCard,
-            });
-            break;
-          case 'friend':
-            await sendCardMessage({
-              conversationId: conversationID,
-              type: 'friend-card',
-              payload: {
-                userID: plan.friendCard.userID,
-                nickname: plan.friendCard.nickname,
-                faceURL: plan.friendCard.faceURL,
-                persona: plan.friendCard.persona,
-                displayIcons: plan.friendCard.displayIcons,
-              },
-            });
-            break;
-        }
-      } catch (error) {
+      const reportSendFailure = (error: unknown) => {
         logChatSendFailure(error, {
           kind: 'collectedItem',
           sessionType: conversationType,
@@ -234,6 +215,49 @@ export function useAttachmentActions({
             ),
           );
         }
+      };
+      // 进了发送队列就放开输入栏,不等送达(断线时会等到重连)。
+      try {
+        const handle = startChatSend((onCreate) => {
+          switch (plan.kind) {
+            case 'voice':
+              // 收藏时存下的 object key 直接重发,不重新上传音频。
+              return sendVoiceMessage({
+                conversationId: conversationID,
+                key: plan.key,
+                duration: plan.duration,
+                ...(plan.dataSize ? { size: plan.dataSize } : {}),
+                onCreate,
+              });
+            case 'note':
+              return sendCardMessage({
+                conversationId: conversationID,
+                type: 'note-card',
+                payload: plan.noteCard,
+                onCreate,
+              });
+            case 'friend':
+              return sendCardMessage({
+                conversationId: conversationID,
+                type: 'friend-card',
+                payload: {
+                  userID: plan.friendCard.userID,
+                  nickname: plan.friendCard.nickname,
+                  faceURL: plan.friendCard.faceURL,
+                  persona: plan.friendCard.persona,
+                  displayIcons: plan.friendCard.displayIcons,
+                },
+                onCreate,
+              });
+          }
+        });
+        if (handle.queued) {
+          void handle.delivered.catch(reportSendFailure);
+        } else {
+          await handle.delivered;
+        }
+      } catch (error) {
+        reportSendFailure(error);
       } finally {
         inFlightRef.current = false;
       }

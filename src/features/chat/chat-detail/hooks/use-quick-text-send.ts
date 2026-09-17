@@ -1,5 +1,6 @@
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from 'react';
 import { sendTextMessage } from '@/chat-core/client';
+import { startChatSend } from '@/chat-core/send-handle';
 import { logChatSendFailure } from '@/features/chat/chat-detail/helpers';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { type TFunction } from 'i18next';
@@ -38,11 +39,7 @@ export function useQuickTextSend({
       }
       if (inFlightRef.current) return;
       inFlightRef.current = true;
-      // 乐观发送在 chat-core 内完成:创建即上屏(height=0 发送中态),
-      // ack 后同 d 替换,失败自动标失败态 —— 屏幕只负责错误展示。
-      try {
-        await sendTextMessage({ conversationId: conversationID, text });
-      } catch (error) {
+      const reportSendFailure = (error: unknown) => {
         logChatSendFailure(error, {
           kind: 'text',
           sessionType: conversationType,
@@ -58,6 +55,21 @@ export function useQuickTextSend({
             ),
           );
         }
+      };
+      // 乐观发送在 chat-core 内完成:创建即上屏(height=0 发送中态),
+      // ack 后同 d 替换,失败自动标失败态 —— 屏幕只负责错误展示。
+      // 进了发送队列就放开输入栏,不等送达(断线时会等到重连)。
+      try {
+        const handle = startChatSend((onCreate) =>
+          sendTextMessage({ conversationId: conversationID, text, onCreate }),
+        );
+        if (handle.queued) {
+          void handle.delivered.catch(reportSendFailure);
+        } else {
+          await handle.delivered;
+        }
+      } catch (error) {
+        reportSendFailure(error);
       } finally {
         inFlightRef.current = false;
       }

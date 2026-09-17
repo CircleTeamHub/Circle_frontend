@@ -423,6 +423,8 @@ function loadManager(localDbOverrides = {}, options = {}) {
     '@/observability/sentry': {
       reportError: (error, context) => reports.push({ error, context }),
     },
+    // 队列逻辑零依赖,跑真的;定时器跟着用例注入的走。
+    './send-queue': runModule('src/chat-core/send-queue.ts', {}, globals),
   }, globals);
   return {
     manager,
@@ -1172,16 +1174,139 @@ test('connects with token in the handshake auth frame, never in the URL', () => 
   assert.doesNotMatch(JSON.stringify(diagnostics), /jwt-token/);
 });
 
-test('sendChatMessage rejects when not connected', async () => {
-  const { manager } = loadManager();
-  await assert.rejects(
-    manager.sendChatMessage({
+test('a send that never gets a connection fails after a minute, not at once', async () => {
+  const timers = createFakeTimers();
+  const { manager } = loadManager({}, { timers });
+  let outcome = null;
+  manager
+    .sendChatMessage({
       conversationId: 'c1',
       type: 'text',
       content: { text: 'hi' },
       d: 'd1',
-    }),
-    (err) => err.code === 'CHAT_NOT_CONNECTED',
+    })
+    .catch((err) => {
+      outcome = err.code;
+    });
+  await flush();
+  assert.equal(outcome, null, '没连上先排队,不立刻标红');
+
+  timers.run(60_000);
+  await flush();
+  assert.equal(outcome, 'CHAT_NOT_CONNECTED');
+});
+
+test('a message sent while disconnected goes out with the same d once reconnected', async () => {
+  const timers = createFakeTimers();
+  const { manager, socket } = loadManager({}, { timers });
+  manager.connectChat('jwt', 'u1');
+  const payload = {
+    conversationId: 'c1',
+    type: 'text',
+    content: { text: 'hi' },
+    d: 'd-offline',
+  };
+  const sent = manager.sendChatMessage(payload);
+  const sendsOnWire = () =>
+    socket.emitted.filter((entry) => entry.event === 'chat:send');
+  assert.equal(sendsOnWire().length, 0);
+
+  socket.ackResponder = (event, wire, cb) =>
+    cb(null, { ok: true, messageId: 'm1', height: 7, d: wire.d });
+  socket.connected = true;
+  socket.fire('connect');
+  assert.deepEqual(
+    sendsOnWire().map((entry) => entry.payload.d),
+    ['d-offline'],
+  );
+  assert.deepEqual(await sent, { ok: true, messageId: 'm1', height: 7, d: 'd-offline' });
+});
+
+test('an ack lost to a disconnect is resent with the same d after the reconnect', async () => {
+  const timers = createFakeTimers();
+  const { manager, socket } = loadManager({}, { timers });
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+  let ackCallback = null;
+  socket.ackResponder = (event, wire, cb) => {
+    ackCallback = cb;
+  };
+  const sent = manager.sendChatMessage({
+    conversationId: 'c1',
+    type: 'text',
+    content: { text: 'hi' },
+    d: 'd-lost',
+  });
+
+  // 断线:socket.io 把没回的 ack 以错误结束。
+  socket.connected = false;
+  socket.fire('disconnect', 'transport close');
+  ackCallback(new Error('socket has been disconnected'));
+  await flush();
+
+  socket.ackResponder = (event, wire, cb) =>
+    cb(null, { ok: true, messageId: 'm1', height: 3, d: wire.d });
+  socket.connected = true;
+  socket.fire('connect');
+  const ack = await sent;
+  assert.equal(ack.messageId, 'm1');
+  assert.deepEqual(
+    socket.emitted
+      .filter((entry) => entry.event === 'chat:send')
+      .map((entry) => entry.payload.d),
+    ['d-lost', 'd-lost'],
+  );
+});
+
+test('a token rotation keeps queued messages; logging out or switching accounts drops them', async () => {
+  const timers = createFakeTimers();
+  const { manager, socket } = loadManager({}, { timers });
+  const outcomes = {};
+  const send = (d) =>
+    manager
+      .sendChatMessage({ conversationId: 'c1', type: 'text', content: { text: d }, d })
+      .then(
+        () => {
+          outcomes[d] = 'sent';
+        },
+        (err) => {
+          outcomes[d] = err.code;
+        },
+      );
+
+  manager.connectChat('jwt', 'u1');
+  send('kept');
+  // token 轮换:挂起再用新 token 连同一个人。
+  manager.suspendChat();
+  manager.connectChat('jwt-2', 'u1');
+  await flush();
+  assert.equal(outcomes.kept, undefined);
+  socket.ackResponder = (event, wire, cb) =>
+    cb(null, { ok: true, messageId: `m-${wire.d}`, height: 1, d: wire.d });
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+  assert.equal(outcomes.kept, 'sent');
+
+  socket.ackResponder = null;
+  socket.connected = false;
+  send('logged-out');
+  manager.disconnectChat();
+  await flush();
+  assert.equal(outcomes['logged-out'], 'CHAT_NOT_CONNECTED');
+
+  manager.connectChat('jwt', 'u1');
+  send('other-account');
+  manager.connectChat('jwt-b', 'u2');
+  await flush();
+  assert.equal(outcomes['other-account'], 'CHAT_NOT_CONNECTED');
+  socket.connected = true;
+  socket.fire('connect');
+  assert.equal(
+    socket.emitted.filter((entry) => entry.event === 'chat:send' && entry.payload.d !== 'kept').length,
+    0,
+    '换了账号的连接不能替上一个账号发消息',
   );
 });
 

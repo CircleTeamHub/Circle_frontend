@@ -226,6 +226,30 @@ function captureSendAnchor(conversationId: string): number | undefined {
 }
 
 /**
+ * 每个会话一条「写 outbox → 进发送队列」的链。
+ *
+ * 发送队列按进队顺序逐条发,进队顺序就得等于点发送的顺序。各自等自己的 outbox
+ * 写完再进队的话,先点的那条写得慢一点(比如还在等媒体副本),就会排到后点的后面 ——
+ * 断线期间连发的几条,重连后乱序落库。
+ */
+const sendPersistTails = new Map<string, Promise<void>>();
+
+function persistInSendOrder(
+  conversationId: string,
+  persist: () => Promise<void>,
+): Promise<void> {
+  const previous = sendPersistTails.get(conversationId) ?? Promise.resolve();
+  const current = previous.then(persist).catch(() => undefined);
+  sendPersistTails.set(conversationId, current);
+  void current.then(() => {
+    if (sendPersistTails.get(conversationId) === current) {
+      sendPersistTails.delete(conversationId);
+    }
+  });
+  return current;
+}
+
+/**
  * 发送核心:乐观 DTO(height=0, id=local:{d})立即入库并联动会话列表;
  * ack 返回后以真 id/height 替换(store 按 d 对账);失败置失败态并抛出。
  * 断线重发语义:失败后重试应复用同一 d —— 服务端幂等约束保证不重复。
@@ -278,27 +302,31 @@ export async function sendWithOptimism(
   // socket-manager 的 outbox 回放里用于清理**旧版本客户端**留下的脏条目。
   //
   // 媒体消息:先等持久副本那一行落盘(见 trackPendingMedia),这一行必须写在它后面。
-  const pendingMedia = await pendingMediaRecordFor(d);
-  await outboxUpsert({
-    d,
-    conversationId: options.conversationId,
-    payload: {
-      conversationId: options.conversationId,
-      type: options.type,
-      content: options.content,
+  //
+  // 落盘排在同会话上一条发送的后面(persistInSendOrder),进发送队列的顺序才是点击顺序。
+  await persistInSendOrder(options.conversationId, async () => {
+    const pendingMedia = await pendingMediaRecordFor(d);
+    await outboxUpsert({
       d,
-      ...(options.replyToId ? { replyToId: options.replyToId } : {}),
-      ...(options.forwardFromMessageId
-        ? { forwardFromMessageId: options.forwardFromMessageId }
-        : {}),
-      ...(options.outboxPreviewContent
-        ? { localPreviewContent: options.outboxPreviewContent }
-        : {}),
-      ...(pendingMedia ? { pendingMedia } : {}),
-    },
-    createdAt: optimistic.createdAt,
-    ...anchorFields,
-  }).catch(() => undefined);
+      conversationId: options.conversationId,
+      payload: {
+        conversationId: options.conversationId,
+        type: options.type,
+        content: options.content,
+        d,
+        ...(options.replyToId ? { replyToId: options.replyToId } : {}),
+        ...(options.forwardFromMessageId
+          ? { forwardFromMessageId: options.forwardFromMessageId }
+          : {}),
+        ...(options.outboxPreviewContent
+          ? { localPreviewContent: options.outboxPreviewContent }
+          : {}),
+        ...(pendingMedia ? { pendingMedia } : {}),
+      },
+      createdAt: optimistic.createdAt,
+      ...anchorFields,
+    });
+  });
   try {
     const ack = await sendChatMessage({
       conversationId: options.conversationId,
@@ -468,6 +496,7 @@ export function sendForwardedMediaMessage(options: {
   sourceMessageId: string;
   type: 'image' | 'video' | 'voice';
   previewContent: Record<string, unknown>;
+  onCreate?: (message: ChatMessageDto) => void;
 }): Promise<ChatMessageDto> {
   // 乐观气泡只借源消息的**展示**字段(已签好的 url/尺寸/时长)。object key 必须
   // 剥掉:服务端复制出来的是转发者命名空间下的新 key,而 ack 跑在 chat:msg 回声
@@ -483,6 +512,7 @@ export function sendForwardedMediaMessage(options: {
     localContent: preview,
     outboxPreviewContent: preview,
     forwardFromMessageId: options.sourceMessageId,
+    onCreate: options.onCreate,
   });
 }
 
@@ -494,6 +524,7 @@ export function sendLocationMessage(options: {
   address?: string;
   /** 旧客户端位置消息只有 description；保留入参以兼容转发历史消息。 */
   description?: string;
+  onCreate?: (message: ChatMessageDto) => void;
 }): Promise<ChatMessageDto> {
   const description = options.address || options.description || options.title || '';
   return sendWithOptimism({
@@ -506,6 +537,7 @@ export function sendLocationMessage(options: {
       ...(options.address ? { address: options.address } : {}),
       description,
     },
+    onCreate: options.onCreate,
   });
 }
 

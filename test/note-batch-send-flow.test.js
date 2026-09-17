@@ -38,7 +38,11 @@ test('chat detail consumes note batches through the pure task planner', () => {
   assert.match(src, /fetchNoteDetail\(note\.id\)/);
   // 失败提示保留首个错误的语义映射 + 非预期失败上报。
   assert.match(src, /getChatSendErrorMessage\(firstError, countMessage\)/);
-  assert.match(src, /reportChatSendFailure\(task\.kind, error\)/);
+  assert.match(src, /reportChatSendFailure\(kind, error\)/);
+  assert.match(src, /recordFailure\(task\.kind, error\)/);
+  // 进了发送队列就排下一条,不逐条等送达(断线时一条要等一分钟);
+  // 汇总提示要等全部有了结果。
+  assert.match(src, /await Promise\.all\(deliveries\)/);
   // 四种任务各走对应的发送通道。
   assert.match(src, /buildNoteSendTasks\(note, options, imported, location\)/);
   assert.match(src, /sendImageMessage\(\{\s*conversationId: conversationID,\s*key: task\.key/);

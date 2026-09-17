@@ -316,6 +316,8 @@ function standaloneGroup(): ChatConversationDto {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // clearAllMocks 不清 mockImplementation:发送桩的行为不能从上一条用例漏过来。
+  jest.mocked(sendTextMessage).mockReset();
   jest.mocked(fetchChatMembers).mockResolvedValue([]);
   mockMemory().clear();
   // 草稿是按用户持久化的:上一条用例没发出去的输入不能漏进下一条。
@@ -368,6 +370,7 @@ test('typing then pressing send posts the trimmed text and clears the composer',
       expect(sendTextMessage).toHaveBeenCalledWith({
         conversationId: CONVERSATION,
         text: '你好呀',
+        onCreate: expect.any(Function),
       }),
     SETTLE,
   );
@@ -375,6 +378,48 @@ test('typing then pressing send posts the trimmed text and clears the composer',
     () => expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe(''),
     SETTLE,
   );
+});
+
+test('a message still waiting for the server does not hold the composer', async () => {
+  // 断线时消息在发送队列里等重连:上屏(onCreate)之后输入框就该清空、能接着发下一条。
+  jest.mocked(sendTextMessage).mockImplementation(({ onCreate }) => {
+    onCreate?.({} as ChatMessageDto);
+    return new Promise<ChatMessageDto>(() => {});
+  });
+  render(<ChatDetailScreen />);
+  const input = await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+
+  fireEvent.changeText(input, '第一条');
+  await act(async () => {
+    fireEvent.press(screen.getByTestId(E2E_TEST_IDS.chatSend));
+  });
+  await waitFor(
+    () => expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe(''),
+    SETTLE,
+  );
+
+  fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), '第二条');
+  await act(async () => {
+    fireEvent.press(screen.getByTestId(E2E_TEST_IDS.chatSend));
+  });
+  await waitFor(() => expect(sendTextMessage).toHaveBeenCalledTimes(2), SETTLE);
+  expect(jest.mocked(sendTextMessage).mock.calls[1][0].text).toBe('第二条');
+});
+
+test('a send refused before it reaches the screen keeps the draft', async () => {
+  // 本地门禁拦下:什么都没上屏,草稿不能丢。
+  jest
+    .mocked(sendTextMessage)
+    .mockImplementation(() => Promise.reject(new Error('LOW_CREDIT_SCORE')));
+  render(<ChatDetailScreen />);
+  const input = await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+
+  fireEvent.changeText(input, '留着我');
+  await act(async () => {
+    fireEvent.press(screen.getByTestId(E2E_TEST_IDS.chatSend));
+  });
+  await waitFor(() => expect(sendTextMessage).toHaveBeenCalledTimes(1), SETTLE);
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('留着我');
 });
 
 test('the empty-composer action opens the attachment panel, and the emoji panel inserts into the draft', async () => {
@@ -446,6 +491,7 @@ test('in a group, typing @ lists members, picking one inserts the mention and th
         text: '@小方 周六几点出发',
         mentions: [{ userId: PEER, nickname: '小方' }],
         atAll: false,
+        onCreate: expect.any(Function),
       }),
     SETTLE,
   );

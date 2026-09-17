@@ -4,6 +4,7 @@ import {
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from 'react';
 import { waitForSendSlot } from '@/features/chat/utils/send-slot';
 import { sendLocationMessage } from '@/chat-core/client';
+import { startChatSend } from '@/chat-core/send-handle';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import {
   getCreditPolicyMessage,
@@ -70,15 +71,7 @@ export function useLocationSend({
     }
     if (inFlightRef.current) return;
     inFlightRef.current = true;
-    try {
-      await sendLocationMessage({
-        conversationId: conversationID,
-        longitude: picked.longitude,
-        latitude: picked.latitude,
-        title: picked.title,
-        address: picked.address,
-      });
-    } catch (error) {
+    const reportSendFailure = (error: unknown) => {
       if (mountedRef.current) {
         setSendError(
           getChatSendErrorMessage(
@@ -89,6 +82,26 @@ export function useLocationSend({
           ),
         );
       }
+    };
+    // 进了发送队列就放开输入栏,不等送达(断线时会等到重连)。
+    try {
+      const handle = startChatSend((onCreate) =>
+        sendLocationMessage({
+          conversationId: conversationID,
+          longitude: picked.longitude,
+          latitude: picked.latitude,
+          title: picked.title,
+          address: picked.address,
+          onCreate,
+        }),
+      );
+      if (handle.queued) {
+        void handle.delivered.catch(reportSendFailure);
+      } else {
+        await handle.delivered;
+      }
+    } catch (error) {
+      reportSendFailure(error);
     } finally {
       inFlightRef.current = false;
     }

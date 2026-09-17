@@ -20,6 +20,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { isEphemeralPeerMessage } from '@/features/chat/utils/ephemeral-message';
 import { loadChatConversations } from '@/chat-core/api';
+import { startChatSend } from '@/chat-core/send-handle';
 import {
   sendCardMessage,
   sendForwardedMediaMessage,
@@ -165,7 +166,11 @@ function getForwardFallbackText(message: ChatMessage) {
  * 媒体转发只提交源消息 ID，由服务端校验源会话可见性并复制对象；其他可转发
  * 类型继续按已有载荷重发。拿不到 DTO 时退化成文本转发。
  */
-async function sendForwardedMessage(pending: PendingForward, conversationId: string) {
+async function sendForwardedMessage(
+  pending: PendingForward,
+  conversationId: string,
+  onCreate: () => void,
+) {
   const { dto, message } = pending;
   const content = dto?.content ?? {};
 
@@ -179,6 +184,7 @@ async function sendForwardedMessage(pending: PendingForward, conversationId: str
         sourceMessageId: dto.id,
         type: dto.type,
         previewContent: content,
+        onCreate,
       });
     }
     if (dto.type === 'location') {
@@ -192,6 +198,7 @@ async function sendForwardedMessage(pending: PendingForward, conversationId: str
           title: str(content['title']),
           address: str(content['address']),
           description: str(content['description']) ?? '',
+          onCreate,
         });
       }
     }
@@ -200,19 +207,20 @@ async function sendForwardedMessage(pending: PendingForward, conversationId: str
         conversationId,
         type: dto.type as ChatCardType,
         payload: content,
+        onCreate,
       });
     }
     if (dto.type === 'text' || dto.type === 'quote') {
       const text = str(content['text'])?.trim();
       if (text) {
-        return sendTextMessage({ conversationId, text });
+        return sendTextMessage({ conversationId, text, onCreate });
       }
     }
   }
 
   const text = getForwardFallbackText(message);
   if (text) {
-    return sendTextMessage({ conversationId, text });
+    return sendTextMessage({ conversationId, text, onCreate });
   }
 
   throw new Error(
@@ -259,7 +267,18 @@ export default function ForwardPickerScreen() {
     setSendingID(conversation.id);
     try {
       // sendWithOptimism 已把发出的消息写进 chat-core store,无需手动 append。
-      await sendForwardedMessage(pending, conversation.id);
+      // 进了发送队列就算转发成功,不等送达:断线时队列会等到重连,之后仍发不出去的
+      // 在目标会话里标红、可以长按重发。没进队(类型不支持、本地门禁)才报失败。
+      const handle = startChatSend((onCreate) =>
+        sendForwardedMessage(pending, conversation.id, onCreate),
+      );
+      if (handle.queued) {
+        void handle.delivered.catch((error: unknown) => {
+          reportHandledFailure('forward', 'forwardMessage', error);
+        });
+      } else {
+        await handle.delivered;
+      }
       clearPending();
       if (!mountedRef.current) return;
       Alert.alert(t('chat.forward.done'), undefined, [

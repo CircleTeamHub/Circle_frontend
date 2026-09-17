@@ -33,6 +33,7 @@ import { initChatAppBadgeSync } from './app-badge';
 import { dismissChatNotifications } from './chat-notifications';
 import { prunePendingMedia, resolvePendingMediaUri } from './pending-media';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
+import { createChatSendQueue } from './send-queue';
 import {
   CHAT_EVENTS,
   CHAT_WS_PATH,
@@ -65,6 +66,10 @@ import { reportHandledFailure } from '@/observability/report-failure';
  */
 
 const SEND_ACK_TIMEOUT_MS = 10_000;
+/** 还连着时 ack 超时,隔这么久同 d 再发一次(断开的等重连)。 */
+const SEND_RETRY_DELAY_MS = 2_000;
+/** 被服务端限流(20 条/10 秒)后隔这么久再发。 */
+const SEND_RATE_LIMITED_RETRY_MS = 3_000;
 const READ_ACK_TIMEOUT_MS = 8_000;
 const TYPING_THROTTLE_MS = 2_000;
 /** token 刷新失败(断网/超时/5xx)后的重试退避;服务端明确否认会话时不再重试。 */
@@ -284,6 +289,24 @@ export class ChatSendError extends Error {
   }
 }
 
+/**
+ * 发送失败后隔多久可以同 d 再发;null = 服务端明确拒收,重发也没用。
+ * 断线和 ack 超时:对面可能根本没收到,也可能收到了但回执丢了 —— 同 d 重发两种都对。
+ * 限流:过一会儿就放行。
+ */
+function sendRetryDelayMs(error: unknown): number | null {
+  if (!(error instanceof ChatSendError)) return null;
+  switch (error.code) {
+    case 'CHAT_NOT_CONNECTED':
+    case 'CHAT_ACK_TIMEOUT':
+      return SEND_RETRY_DELAY_MS;
+    case 'CHAT_RATE_LIMITED':
+      return SEND_RATE_LIMITED_RETRY_MS;
+    default:
+      return null;
+  }
+}
+
 /** 客户端幂等键：每条消息一个，重发复用同一个。 */
 export function createDeliveryId(): string {
   const random = Math.random().toString(36).slice(2, 10);
@@ -305,6 +328,8 @@ export function connectChat(token: string, userId: string): void {
   // 路径天然安全:同一账号轮换 token 时列表/消息/pending 已读原样保留,
   // 而切到另一个账号时上一个账号的数据一定先被清掉(跨账号不串数据)。
   if (store.currentUserId !== null && store.currentUserId !== userId) {
+    // 上一个账号还没发出去的消息不能拿新账号的连接发。
+    sendQueue.abortAll(endedSessionSendError());
     store.reset();
     pendingReads.clear();
     flushingReads = false;
@@ -411,6 +436,8 @@ export function connectChat(token: string, userId: string): void {
     }
     if (isReconnect) void refreshViewerSelfDestructSec(userId);
     void flushPendingReads();
+    // 断线期间排着的消息按原顺序、同一个 d 接着发。
+    sendQueue.resume();
     resyncConversations(userId, isReconnect);
   });
   next.on(CHAT_EVENTS.sessionExpired, () => {
@@ -504,6 +531,8 @@ export function connectChat(token: string, userId: string): void {
  */
 export function disconnectChat(): void {
   suspendChat();
+  // 挂起(token 轮换)不动发送队列,重连后接着发;登出才是这些消息发不出去了。
+  sendQueue.abortAll(endedSessionSendError());
   // 只有真登出/换账号才丢待发已读:那些水位属于上一个会话身份。
   pendingReads.clear();
   hadConnectedForUser = null;
@@ -877,11 +906,16 @@ export function isChatConnected(): boolean {
   return socket?.connected === true;
 }
 
+/** 会话身份结束(登出、换账号)时,还没发出去的消息拿到的错误。 */
+function endedSessionSendError(): ChatSendError {
+  return new ChatSendError('CHAT_NOT_CONNECTED', '会话已结束');
+}
+
 /**
- * 发消息：ack 返回即已持久化。超时/失败时调用方保留同一 d 重试，
+ * 发一次消息：ack 返回即已持久化。超时/失败由发送队列用同一 d 重试，
  * 服务端 (conversationId, sender, d) 唯一约束保证不重复入库。
  */
-export function sendChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> {
+function emitChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> {
   const current = socket;
   if (!current?.connected) {
     return Promise.reject(new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'));
@@ -906,6 +940,24 @@ export function sendChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> 
         resolve(ack);
       });
   });
+}
+
+const sendQueue = createChatSendQueue<ChatSendPayload, ChatSendAckOk>({
+  isConnected: () => socket?.connected === true,
+  emit: emitChatMessage,
+  retryDelayMs: sendRetryDelayMs,
+  waitTimeoutError: (stillConnected) =>
+    stillConnected
+      ? new ChatSendError('CHAT_ACK_TIMEOUT', '发送超时')
+      : new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'),
+});
+
+/**
+ * 发一条消息并等服务端确认。没连上、连接中途断开、ack 超时、被限流都不立刻判失败:
+ * 进发送队列,连上后用同一个 d 接着发,最多等一分钟(见 send-queue)。
+ */
+export function sendChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> {
+  return sendQueue.enqueue(input);
 }
 
 /** 已读上报：本地水位合并（只增不减），连接可用时逐条 flush 带 ack。 */

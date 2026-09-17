@@ -15,6 +15,7 @@ import { sendChatEditMessage } from '@/chat-core/socket-manager';
 import { useChatStore } from '@/chat-core/store';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { sendCardMessage, sendQuoteMessage, sendTextMessage } from '@/chat-core/client';
+import { type ChatSendHandle, startChatSend } from '@/chat-core/send-handle';
 import {
   buildQuotePreviewText,
   getMentionsPresentInText,
@@ -171,49 +172,7 @@ export function useComposerSend({
     inFlightRef.current = true;
     setSending(true);
 
-    try {
-      setSendError(null);
-      // 1) 先发帖子卡片（报名→聊天带上下文）。成功后清空待发卡片。
-      if (pendingCard) {
-        await sendCardMessage({
-          conversationId: conversationID,
-          type: 'plaza-post-card',
-          payload: pendingCard as unknown as Record<string, unknown>,
-        });
-        if (mountedRef.current) setPendingCard(null);
-      }
-      // 2) 再发文字（非空才发）。引用 > @提及 > 普通文本。
-      if (nextText) {
-        const activeMentionTargets = getMentionsPresentInText(nextText, mentionTargets);
-        if (quoteTarget) {
-          await sendQuoteMessage({
-            conversationId: conversationID,
-            text: nextText,
-            quotedText: buildQuotePreviewText(quoteTarget, t),
-            replyToId: isLocalMessageId(quoteTarget.id)
-              ? undefined
-              : quoteTarget.id,
-          });
-        } else if (isGroupChat && activeMentionTargets.length > 0) {
-          await sendTextMessage({
-            conversationId: conversationID,
-            text: nextText,
-            mentions: activeMentionTargets
-              .filter((m) => !m.isAll)
-              .map((m) => ({ userId: m.userID, nickname: m.nickname })),
-            atAll: activeMentionTargets.some((m) => m.isAll),
-          });
-        } else {
-          await sendTextMessage({ conversationId: conversationID, text: nextText });
-        }
-      }
-      clearPersistedDraft();
-      if (mountedRef.current) setDraft('');
-      if (mountedRef.current) setQuoteTarget(null);
-      if (mountedRef.current) setMentionTargets([]);
-      if (mountedRef.current) setMentionQuery(null);
-      if (mountedRef.current) setMentionPickerVisible(false);
-    } catch (error) {
+    const reportSendFailure = (error: unknown) => {
       logChatSendFailure(error, {
         kind: 'text',
         sessionType: conversationType,
@@ -229,6 +188,79 @@ export function useComposerSend({
             ),
           );
       }
+    };
+    // 上屏、进了发送队列就算发出:清输入框、放开输入栏,不等服务端确认 —— 断线时队列
+    // 会等重连(最长一分钟),等确认的话输入框就被锁那么久。之后真发不出去,气泡自己
+    // 标红,这里只补一句提示。本地门禁拦下(没上屏)的才留着草稿、立刻报错。
+    //
+    // 进队这条路径上不能有 await:清草稿要和点击在同一个事件里提交,连点第二下时
+    // 拿到的才是清空后的草稿,不会把同一段话再发一遍。
+    const track = (handle: ChatSendHandle<unknown>) => {
+      if (handle.queued) void handle.delivered.catch(reportSendFailure);
+      return handle;
+    };
+
+    try {
+      setSendError(null);
+      // 1) 先发帖子卡片（报名→聊天带上下文）。发送队列按点击顺序发,文字一定排在它后面。
+      if (pendingCard) {
+        const card = track(
+          startChatSend((onCreate) =>
+            sendCardMessage({
+              conversationId: conversationID,
+              type: 'plaza-post-card',
+              payload: pendingCard as unknown as Record<string, unknown>,
+              onCreate,
+            }),
+          ),
+        );
+        if (!card.queued) await card.delivered;
+        if (mountedRef.current) setPendingCard(null);
+      }
+      // 2) 再发文字（非空才发）。引用 > @提及 > 普通文本。
+      if (nextText) {
+        const activeMentionTargets = getMentionsPresentInText(nextText, mentionTargets);
+        const message = track(
+          startChatSend((onCreate) => {
+            if (quoteTarget) {
+              return sendQuoteMessage({
+                conversationId: conversationID,
+                text: nextText,
+                quotedText: buildQuotePreviewText(quoteTarget, t),
+                replyToId: isLocalMessageId(quoteTarget.id)
+                  ? undefined
+                  : quoteTarget.id,
+                onCreate,
+              });
+            }
+            if (isGroupChat && activeMentionTargets.length > 0) {
+              return sendTextMessage({
+                conversationId: conversationID,
+                text: nextText,
+                mentions: activeMentionTargets
+                  .filter((m) => !m.isAll)
+                  .map((m) => ({ userId: m.userID, nickname: m.nickname })),
+                atAll: activeMentionTargets.some((m) => m.isAll),
+                onCreate,
+              });
+            }
+            return sendTextMessage({
+              conversationId: conversationID,
+              text: nextText,
+              onCreate,
+            });
+          }),
+        );
+        if (!message.queued) await message.delivered;
+      }
+      clearPersistedDraft();
+      if (mountedRef.current) setDraft('');
+      if (mountedRef.current) setQuoteTarget(null);
+      if (mountedRef.current) setMentionTargets([]);
+      if (mountedRef.current) setMentionQuery(null);
+      if (mountedRef.current) setMentionPickerVisible(false);
+    } catch (error) {
+      reportSendFailure(error);
     } finally {
       inFlightRef.current = false;
       if (mountedRef.current) setSending(false);

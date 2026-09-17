@@ -25,6 +25,7 @@ import {
   sendVideoMessage,
 } from '@/chat-core/client';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
+import { startChatSend } from '@/chat-core/send-handle';
 import { getChatSendErrorMessage, reportChatSendFailure } from '@/chat-core/send-errors';
 import { devWarn } from '@/utils/dev-log';
 import { type TFunction } from 'i18next';
@@ -116,6 +117,16 @@ export function useNoteBatchSend({
       }
 
       const tasks = perNote.flat();
+      // 进了发送队列就接着排下一条,不逐条等送达:断线时队列会等重连(最长一分钟),
+      // 逐条等的话一批几十条要一分钟一分钟地挨个超时。节奏照旧按进队时刻控制,
+      // 失败等全部有了结果再汇总。
+      const deliveries: Promise<void>[] = [];
+      const recordFailure = (kind: NoteSendTask['kind'], error: unknown) => {
+        failures += 1;
+        firstError ??= error;
+        reportChatSendFailure(kind, error);
+        devWarn('[ChatDetail] note batch send failed', error);
+      };
       for (let i = 0; i < tasks.length; i += 1) {
         if (!mountedRef.current) return;
         while (mountedRef.current) {
@@ -132,10 +143,10 @@ export function useNoteBatchSend({
         }
         if (!mountedRef.current) return;
         const task = tasks[i];
-        try {
+        const handle = startChatSend((onCreate) => {
           switch (task.kind) {
             case 'note-card':
-              await sendCardMessage({
+              return sendCardMessage({
                 conversationId: conversationID,
                 type: 'note-card',
                 payload: {
@@ -145,43 +156,53 @@ export function useNoteBatchSend({
                   ),
                   ownerId: authUser?.id ?? null,
                 },
+                onCreate,
               });
-              break;
             case 'image':
-              await sendImageMessage({
+              return sendImageMessage({
                 conversationId: conversationID,
                 key: task.key,
                 width: task.width,
                 height: task.height,
+                onCreate,
               });
-              break;
             case 'video':
-              await sendVideoMessage({
+              return sendVideoMessage({
                 conversationId: conversationID,
                 key: task.key,
                 width: task.width,
                 height: task.height,
                 duration: task.duration,
                 size: task.size,
+                onCreate,
               });
-              break;
             case 'location':
-              await sendLocationMessage({
+              return sendLocationMessage({
                 conversationId: conversationID,
                 latitude: task.latitude,
                 longitude: task.longitude,
                 title: task.title,
                 address: task.address,
+                onCreate,
               });
-              break;
           }
-        } catch (error) {
-          failures += 1;
-          firstError ??= error;
-          reportChatSendFailure(task.kind, error);
-          devWarn('[ChatDetail] note batch send failed', error);
+        });
+        if (handle.queued) {
+          deliveries.push(
+            handle.delivered.then(
+              () => undefined,
+              (error: unknown) => recordFailure(task.kind, error),
+            ),
+          );
+        } else {
+          try {
+            await handle.delivered;
+          } catch (error) {
+            recordFailure(task.kind, error);
+          }
         }
       }
+      await Promise.all(deliveries);
 
       if (failures > 0 && mountedRef.current) {
         const countMessage = t('chat.detail.noteBatchPartialFailed', {

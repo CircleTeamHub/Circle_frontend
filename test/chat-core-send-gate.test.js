@@ -32,7 +32,13 @@ const __localDbStub = {
 // 信用分门禁必须挂在 chat-core 的共享发送路径上。拆栈前它在 reportSend 包装器里,
 // 迁移后只剩发图路径单独调了一次 —— 低于阈值的用户仍能发文本/引用/语音/位置/卡片。
 // 后端刻意不做这道校验(策略在端上),所以端上漏了就是真的漏了。
-function loadClient({ blocked, sendFails = false, retryOutbox = [] }) {
+function loadClient({
+  blocked,
+  sendFails = false,
+  retryOutbox = [],
+  deliveryIds = null,
+  outboxDelays = {},
+}) {
   const filePath = path.join(process.cwd(), 'src/chat-core/client.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
@@ -115,7 +121,7 @@ function loadClient({ blocked, sendFails = false, retryOutbox = [] }) {
       if (request === './socket-manager') {
         return {
           ChatSendError: class extends Error {},
-          createDeliveryId: () => 'd-test',
+          createDeliveryId: () => (deliveryIds ? deliveryIds.shift() : 'd-test'),
           markConversationRead: () => {},
           sendChatMessage: async (payload) => {
             calls.sent += 1;
@@ -161,6 +167,7 @@ function loadClient({ blocked, sendFails = false, retryOutbox = [] }) {
           outboxUpsert: async (entry) => {
             calls.outboxUpserts.push(entry.payload.type);
             calls.outboxEntries.push(entry);
+            if (outboxDelays[entry.d]) await outboxDelays[entry.d];
           },
           outboxList: async () => retryOutbox,
         };
@@ -205,6 +212,85 @@ test('every public send API is gated on credit score', async () => {
   assert.equal(calls.ingest, 0);
   assert.equal(calls.applied, 0);
   assert.equal(calls.sent, 0);
+});
+
+function loadSendHandle() {
+  const filePath = path.join(process.cwd(), 'src/chat-core/send-handle.ts');
+  const context = {
+    Promise,
+    module: { exports: {} },
+    exports: {},
+    require: (request) => {
+      throw new Error(`unexpected require: ${request}`);
+    },
+  };
+  context.exports = context.module.exports;
+  vm.runInNewContext(
+    ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2020,
+      },
+      fileName: filePath,
+    }).outputText,
+    context,
+  );
+  return context.module.exports;
+}
+
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test('sends in one conversation reach the send queue in the order they were made', async () => {
+  let releaseCardWrite;
+  const cardWrite = new Promise((resolve) => {
+    releaseCardWrite = resolve;
+  });
+  const { api, calls } = loadClient({
+    blocked: false,
+    deliveryIds: ['d-card', 'd-text', 'd-other'],
+    outboxDelays: { 'd-card': cardWrite },
+  });
+  const card = api.sendCardMessage({ conversationId: 'c1', type: 'note-card', payload: {} });
+  const text = api.sendTextMessage({ conversationId: 'c1', text: 'hi' });
+  const other = api.sendTextMessage({ conversationId: 'c2', text: 'elsewhere' });
+  await flush();
+  // 卡片的 outbox 还没写完:同会话后点的文本不能抢先进发送队列;别的会话不受影响。
+  assert.deepEqual(
+    calls.sentPayloads.map((payload) => payload.d),
+    ['d-other'],
+  );
+
+  releaseCardWrite();
+  await Promise.all([card, text, other]);
+  assert.deepEqual(
+    calls.sentPayloads.map((payload) => payload.d),
+    ['d-other', 'd-card', 'd-text'],
+  );
+});
+
+test('a send handle is queued once the bubble is up, and not when the gate blocks it', async () => {
+  const { startChatSend } = loadSendHandle();
+  const allowed = loadClient({ blocked: false });
+  const handle = startChatSend((onCreate) =>
+    allowed.api.sendTextMessage({ conversationId: 'c1', text: 'hi', onCreate }),
+  );
+  // 上屏是同步的:调用一返回就知道进没进队,不用等 outbox 和服务端。
+  assert.equal(handle.queued, true);
+  await handle.delivered;
+
+  const blocked = loadClient({ blocked: true });
+  const refused = startChatSend((onCreate) =>
+    blocked.api.sendTextMessage({ conversationId: 'c1', text: 'hi', onCreate }),
+  );
+  assert.equal(refused.queued, false);
+  await assert.rejects(refused.delivered);
+  assert.equal(blocked.calls.ingest, 0);
+
+  const thrown = startChatSend(() => {
+    throw new Error('sync failure');
+  });
+  assert.equal(thrown.queued, false);
+  await assert.rejects(thrown.delivered, /sync failure/);
 });
 
 test('a normal user still sends through the same path', async () => {
