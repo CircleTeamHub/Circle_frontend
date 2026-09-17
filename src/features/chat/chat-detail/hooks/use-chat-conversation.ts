@@ -129,9 +129,23 @@ export function useChatConversation({
     );
     return conversation?.burnDurationSec ?? 0;
   });
-  const selfDestructCacheKey = useChatStore(
-    (state) => `${state.currentUserId ?? ''}:${state.selfDestructPolicyEpoch}`,
-  );
+  // 「这张图片能不能落盘」的策略指纹:账号、查看者全局阅后即焚(何时开的)、本会话
+  // 焚毁(何时开的)。跨冷启动稳定,只在策略真的变了时才变 —— 图片气泡按它记
+  // 「这个策略下清过磁盘缓存」,不能拿每次启动都从 0 重数的 selfDestructPolicyEpoch。
+  const selfDestructCacheKey = useChatStore((state) => {
+    const conversation = state.conversations.find(
+      (candidate) => candidate.id === conversationID,
+    );
+    const viewer =
+      state.viewerSelfDestructSec > 0
+        ? `on@${state.viewerSelfDestructStartedAt ?? ''}`
+        : 'off';
+    const burn =
+      (conversation?.burnDurationSec ?? 0) > 0
+        ? `on@${conversation?.burnStartedAt ?? ''}`
+        : 'off';
+    return `${state.currentUserId ?? ''}|viewer:${viewer}|burn:${conversationID}@${burn}`;
+  });
   const viewerSelfDestructSec = useChatStore(
     (state) => state.viewerSelfDestructSec,
   );

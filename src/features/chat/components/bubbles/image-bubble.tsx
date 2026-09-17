@@ -6,6 +6,7 @@ import type { ChatMessage } from '@/types';
 import { BubbleStatusText, MessageAvatar } from './shared';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { ImageViewer } from '@/components/ui/image-viewer';
+import { storage } from '@/storage';
 
 interface ImageBubbleProps {
   message: ChatMessage;
@@ -21,7 +22,41 @@ interface ImageBubbleProps {
   selfDestructCacheKey?: string;
 }
 
-let diskCacheClearedForSelfDestructKey: string | null = null;
+/**
+ * 「在这个焚毁策略下已经清过一次磁盘缓存」的记录(最近几个策略指纹)。
+ *
+ * 必须落盘、且记的是跨冷启动稳定的策略指纹(见 useChatConversation 的
+ * selfDestructCacheKey):原来记在内存里、用的是每次冷启动都从 0 重新数的策略编号,
+ * 结果每次打开 App、第一次看到阅后即焚图片就把所有图片的磁盘缓存清空重下。
+ */
+const CLEARED_POLICIES_STORAGE_KEY = 'chat.imageDiskCacheClearedPolicies';
+const CLEARED_POLICIES_MAX = 50;
+/** 同一个策略的清理正在进行:一屏多张阅后即焚图片同时挂载时只清一次。 */
+const clearingPolicies = new Set<string>();
+
+function readClearedPolicies(): string[] {
+  try {
+    const raw = storage.getString(CLEARED_POLICIES_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberClearedPolicy(policy: string): void {
+  try {
+    const next = [
+      policy,
+      ...readClearedPolicies().filter((item) => item !== policy),
+    ].slice(0, CLEARED_POLICIES_MAX);
+    storage.set(CLEARED_POLICIES_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // 记不下来只会让下次再清一遍,不影响正确性。
+  }
+}
 
 const sImage = StyleSheet.create({
   row: {
@@ -101,16 +136,22 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   }, [message.imageHeight, message.imageWidth]);
 
   useEffect(() => {
+    if (!ephemeral || !selfDestructCacheKey) return;
+    const policy = selfDestructCacheKey;
     if (
-      !ephemeral ||
-      diskCacheClearedForSelfDestructKey === selfDestructCacheKey
+      clearingPolicies.has(policy) ||
+      readClearedPolicies().includes(policy)
     ) {
       return;
     }
-    diskCacheClearedForSelfDestructKey = selfDestructCacheKey;
+    clearingPolicies.add(policy);
     // expo-image 不能按 URI 移除已落盘内容；首次启用阅后即焚时清一次磁盘缓存，
-    // 确保此前的聊天图片不会绕过后续的内存缓存策略。
-    void Image.clearDiskCache().catch(() => undefined);
+    // 确保此前的聊天图片不会绕过后续的内存缓存策略。清完才记下:清到一半被杀掉
+    // 的话下次还会再清。
+    void Image.clearDiskCache()
+      .then(() => rememberClearedPolicy(policy))
+      .catch(() => undefined)
+      .finally(() => clearingPolicies.delete(policy));
     void Image.clearMemoryCache().catch(() => undefined);
   }, [ephemeral, selfDestructCacheKey]);
 

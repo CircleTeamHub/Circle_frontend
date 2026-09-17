@@ -1,5 +1,6 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { render, waitFor } from '@testing-library/react-native';
+import { Image } from 'expo-image';
 import { ImageBubble } from './image-bubble';
 import type { ChatMessage } from '@/types';
 
@@ -43,6 +44,19 @@ jest.mock('./shared', () => ({
 
 jest.mock('@/observability/report-failure', () => ({
   reportHandledFailure: jest.fn(),
+}));
+
+// 「这个策略下清过磁盘缓存」的标记落在 MMKV:冷启动之后还认得。
+function mockStorageValues(): Map<string, string> {
+  const holder = globalThis as { __imageBubbleStorage?: Map<string, string> };
+  holder.__imageBubbleStorage ??= new Map();
+  return holder.__imageBubbleStorage;
+}
+jest.mock('@/storage', () => ({
+  storage: {
+    getString: (key: string) => mockStorageValues().get(key),
+    set: (key: string, value: string) => mockStorageValues().set(key, value),
+  },
 }));
 
 jest.mock('@/theme', () => ({
@@ -133,5 +147,76 @@ describe('ImageBubble ephemeral rendering', () => {
 
     expect(cachePolicies()).toContain('memory-disk');
     expect(viewerModes).toContain('standard');
+  });
+});
+
+describe('ImageBubble disk cache clearing for disappearing images', () => {
+  const clearDiskCache = Image.clearDiskCache as jest.Mock;
+  const ephemeral = {
+    ...imageMessage,
+    burnDurationSec: 30,
+  } as unknown as ChatMessage;
+
+  beforeEach(() => {
+    clearDiskCache.mockClear();
+    mockStorageValues().clear();
+  });
+
+  // 原来标记只在内存里,而且拿的是每次冷启动都从 0 重新数的策略编号:每次打开 App、
+  // 第一次看到阅后即焚图片就把所有图片的磁盘缓存清空,全部重新下载。
+  it('clears once per policy and remembers it across app restarts', async () => {
+    const first = render(
+      <ImageBubble message={ephemeral} outgoing={false} selfDestructCacheKey="u1|viewer:off|burn:c1@t1" />,
+    );
+    await waitFor(() => expect(clearDiskCache).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(mockStorageValues().get('chat.imageDiskCacheClearedPolicies')).toContain(
+        'u1|viewer:off|burn:c1@t1',
+      ),
+    );
+    first.unmount();
+
+    // 再次进入同一个会话(或冷启动后):标记在存储里,不再清。
+    render(
+      <ImageBubble message={ephemeral} outgoing={false} selfDestructCacheKey="u1|viewer:off|burn:c1@t1" />,
+    );
+    await Promise.resolve();
+    expect(clearDiskCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('honours a marker written before this launch', async () => {
+    mockStorageValues().set(
+      'chat.imageDiskCacheClearedPolicies',
+      JSON.stringify(['u1|viewer:on@2026-09-01|burn:c9@off']),
+    );
+    render(
+      <ImageBubble
+        message={ephemeral}
+        outgoing={false}
+        selfDestructCacheKey="u1|viewer:on@2026-09-01|burn:c9@off"
+      />,
+    );
+    await Promise.resolve();
+    expect(clearDiskCache).not.toHaveBeenCalled();
+  });
+
+  it('clears again when the policy really changes', async () => {
+    const view = render(
+      <ImageBubble message={ephemeral} outgoing={false} selfDestructCacheKey="u1|viewer:off|burn:c1@t1" />,
+    );
+    await waitFor(() => expect(clearDiskCache).toHaveBeenCalledTimes(1));
+    // 会话重新开启了焚毁(开启时间变了):此前按普通图片落盘的缓存要清掉。
+    view.rerender(
+      <ImageBubble message={ephemeral} outgoing={false} selfDestructCacheKey="u1|viewer:off|burn:c1@t2" />,
+    );
+    await waitFor(() => expect(clearDiskCache).toHaveBeenCalledTimes(2));
+  });
+
+  it('never clears for ordinary images', async () => {
+    render(
+      <ImageBubble message={imageMessage} outgoing={false} selfDestructCacheKey="u1|viewer:off|burn:c1@off" />,
+    );
+    await Promise.resolve();
+    expect(clearDiskCache).not.toHaveBeenCalled();
   });
 });
