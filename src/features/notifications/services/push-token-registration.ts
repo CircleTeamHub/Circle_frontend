@@ -5,6 +5,7 @@ import {
   registerPushToken,
   revokePushToken,
   type PushTokenPlatform,
+  type PushTokenProvider,
 } from '@/services/api/notifications';
 import { storage } from '@/storage';
 import { useAuthStore } from '@/stores/authStore';
@@ -16,7 +17,6 @@ import {
   initializeJPush,
   requestJPushPermission,
 } from '@/features/notifications/services/jpush';
-import type { PushTokenProvider } from '@/services/api/notifications';
 
 type NotificationsModule = typeof import('expo-notifications');
 type NotificationPermissionResult = Awaited<
