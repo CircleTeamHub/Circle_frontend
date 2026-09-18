@@ -11,6 +11,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
+import {
+  getJPushRegistrationId,
+  initializeJPush,
+  requestJPushPermission,
+} from '@/features/notifications/services/jpush';
+import type { PushTokenProvider } from '@/services/api/notifications';
 
 type NotificationsModule = typeof import('expo-notifications');
 type NotificationPermissionResult = Awaited<
@@ -44,6 +50,7 @@ type ExpoCryptoModule = { randomUUID?: () => string };
 
 type PushTokenRegistrationOrchestratorDependencies = {
   platform: PushTokenPlatform;
+  provider?: PushTokenProvider;
   appVersion: string | null;
   getProjectId: () => string | null;
   getStoredRegistration: () => StoredPushRegistration | null;
@@ -556,12 +563,20 @@ export function createPushTokenRegistrationOrchestrator(
         !isCurrentOwner() ||
         Boolean(input.isCancelled?.());
 
-      const notifications = await dependencies.loadNotificationsModule();
-      if (!notifications || isStale()) return;
+      const provider = dependencies.provider ?? 'expo';
+      const notifications =
+        provider === 'expo' ? await dependencies.loadNotificationsModule() : null;
+      if (provider === 'expo' && (!notifications || isStale())) return;
 
-      let permissions = await notifications.getPermissionsAsync();
+      let permissions = notifications
+        ? await notifications.getPermissionsAsync()
+        : null;
       if (isStale()) return;
-      if (!isNotificationGranted(permissions, notifications)) {
+      if (
+        notifications &&
+        permissions &&
+        !isNotificationGranted(permissions, notifications)
+      ) {
         if (
           permissions.canAskAgain === false ||
           permissionAttemptedUserIds.has(input.userId)
@@ -590,7 +605,7 @@ export function createPushTokenRegistrationOrchestrator(
       }
 
       const projectId = dependencies.getProjectId();
-      if (!projectId) {
+      if (provider === 'expo' && !projectId) {
         dependencies.reportDiagnostic('push_token_project_id_missing', {
           platform: dependencies.platform,
         });
@@ -598,8 +613,16 @@ export function createPushTokenRegistrationOrchestrator(
       }
 
       const legacy = dependencies.getLegacyRegistration?.() ?? null;
-      const result = await notifications.getExpoPushTokenAsync({ projectId });
-      const token = result.data;
+      let token = '';
+      if (provider === 'jpush') {
+        initializeJPush();
+        requestJPushPermission();
+        token = await getJPushRegistrationId();
+      } else {
+        if (!notifications) return;
+        const result = await notifications.getExpoPushTokenAsync({ projectId: projectId! });
+        token = result.data;
+      }
       if (!token || isStale()) return;
 
       if (
@@ -653,9 +676,9 @@ export function createPushTokenRegistrationOrchestrator(
         await dependencies.registerPushToken({
           token,
           platform: dependencies.platform,
-          provider: 'expo',
+          provider,
           revocationSecret: registrationCandidate.revocationSecret,
-          projectId,
+          projectId: provider === 'expo' ? projectId : null,
           appVersion: dependencies.appVersion,
         });
 
@@ -699,8 +722,12 @@ async function loadNotificationsModule() {
 }
 
 function createDefaultPushTokenRegistrationOrchestrator() {
+  const configuredProvider =
+    (Constants.expoConfig?.extra as { pushProvider?: unknown } | undefined)
+      ?.pushProvider;
   return createPushTokenRegistrationOrchestrator({
     platform: Platform.OS as PushTokenPlatform,
+    provider: configuredProvider === 'jpush' ? 'jpush' : 'expo',
     appVersion: Constants.expoConfig?.version ?? null,
     getProjectId,
     getStoredRegistration,

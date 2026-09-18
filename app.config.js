@@ -4,6 +4,7 @@ module.exports = () => {
   const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim();
   const googleServicesFile = process.env.GOOGLE_SERVICES_FILE?.trim();
   const isPreproduction = process.env.APP_VARIANT?.trim() === 'preprod';
+  const jpushAppKey = process.env.EXPO_PUBLIC_JPUSH_APP_KEY?.trim();
   // 高德原生 SDK 的密钥。它在构建期写进 Info.plist / AndroidManifest，不配就不挂
   // 这个插件——地图会退回 Leaflet + OpenStreetMap，和接入前一致。
   // 带 EXPO_PUBLIC_ 前缀是因为运行时也要读它来判断该走哪套地图；密钥本来就会打进
@@ -22,6 +23,18 @@ module.exports = () => {
             ],
           ]
         : []),
+      ...(jpushAppKey
+        ? [
+            [
+              './plugins/with-jpush',
+              {
+                appKey: jpushAppKey,
+                channel: 'windnote',
+                production: !isPreproduction,
+              },
+            ],
+          ]
+        : []),
     ],
     ...(isPreproduction
       ? {
@@ -32,6 +45,10 @@ module.exports = () => {
     extra: {
       ...(baseConfig.extra ?? {}),
       appVariant: isPreproduction ? 'preprod' : 'production',
+      pushProvider:
+        process.env.EXPO_PUBLIC_PUSH_PROVIDER?.trim() ||
+        (jpushAppKey ? 'jpush' : 'expo'),
+      ...(jpushAppKey ? { jpushAppKey } : {}),
       ...(easProjectId
         ? {
             eas: {
@@ -43,6 +60,12 @@ module.exports = () => {
     },
     android: {
       ...baseConfig.android,
+      permissions: Array.from(
+        new Set([
+          ...(baseConfig.android?.permissions ?? []),
+          ...(jpushAppKey ? ['android.permission.POST_NOTIFICATIONS'] : []),
+        ]),
+      ),
       ...(isPreproduction
         ? { package: `${baseConfig.android.package}.preprod` }
         : {}),
