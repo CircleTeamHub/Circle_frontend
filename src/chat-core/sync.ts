@@ -45,12 +45,22 @@ interface ConversationCursor {
   pendingAbove: Set<number>;
   /** 本地库里有这个会话的消息(需要对账)。 */
   hasMessages: boolean;
+  /**
+   * 内存游标走到的位置在本地库里也是成立的。
+   *
+   * 某一页没能落盘之后就是 false:此后不能再把内存游标写进本地库 —— 写下去的话
+   * 重启时读到的是越过那一页的位置,那一段变更(编辑、撤回、焚毁墓碑)永远追不回来。
+   * 下一次成功落盘(整页提交或缓存作废)时恢复。
+   */
+  durable: boolean;
 }
 
 let generation = 0;
 let sessionUserId: string | null = null;
 let cursorsLoading: Promise<void> | null = null;
 let cursorsReady = false;
+/** 本机有可用的本地库(Web、以及没有 SQLCipher 的构建没有):只有它才有「落盘」可言。 */
+let localDbInUse = false;
 const cursors = new Map<string, ConversationCursor>();
 const flights = new Map<string, Promise<void>>();
 let runningSyncs = 0;
@@ -83,6 +93,7 @@ export function resetChatSync(): void {
   sessionUserId = null;
   cursorsLoading = null;
   cursorsReady = false;
+  localDbInUse = false;
   cursors.clear();
   flights.clear();
   for (const timer of gapTimers.values()) clearTimeout(timer);
@@ -112,6 +123,7 @@ function cursorFor(conversationId: string): ConversationCursor {
     revision: 0,
     pendingAbove: new Set(),
     hasMessages: false,
+    durable: true,
   };
   cursors.set(conversationId, created);
   return created;
@@ -124,9 +136,10 @@ async function ensureCursorsLoaded(gen: number): Promise<void> {
   cursorsLoading ??= (async () => {
     // 必须等本地库打开:游标读早了会以为「本地没有缓存」,于是跳过对账直接采纳
     // 服务端位置 —— 缓存里那些离线期间被撤回的原文就永远留着了。
-    await initChatLocalDb(userId);
+    const opened = await initChatLocalDb(userId);
     const states = await readLocalSyncStates();
     if (gen !== generation) return;
+    localDbInUse = opened;
     for (const [conversationId, state] of states ?? []) {
       const cursor = cursorFor(conversationId);
       if (state.revision > cursor.revision) cursor.revision = state.revision;
@@ -162,7 +175,8 @@ function schedulePersist(conversationId: string, gen: number): void {
     persistTimers.delete(conversationId);
     if (!isCurrent(gen)) return;
     const cursor = cursors.get(conversationId);
-    if (cursor) void writeLocalSyncRevision(conversationId, cursor.revision);
+    // 有一页还没落盘时不能写:磁盘上的游标只能停在那一页之前。
+    if (cursor?.durable) void writeLocalSyncRevision(conversationId, cursor.revision);
   }, CURSOR_PERSIST_DELAY_MS);
   persistTimers.set(conversationId, timer);
 }
@@ -187,12 +201,15 @@ async function resetConversationCache(
   gen: number,
 ): Promise<void> {
   useChatStore.getState().evictConversationCache(conversationId);
-  await resetLocalConversationCache(conversationId, revision);
+  const reset = await resetLocalConversationCache(conversationId, revision);
   if (!isCurrent(gen)) return;
   cursors.set(conversationId, {
     revision,
     pendingAbove: new Set(),
     hasMessages: false,
+    // 作废没落盘:内存这一跳照常(缓存已经清掉、按最新一页重拉),但磁盘上的
+    // 游标要留在原地,不然重启后本地库里还留着作废前那批消息而游标已经越过去了。
+    durable: reset || !localDbInUse,
   });
   if (conversationResetHandler) {
     // 聊天页那一层接管:复位向前翻页的游标,正开着的会话按最新一页重拉。
@@ -205,6 +222,16 @@ async function resetConversationCache(
       reportHandledFailure('chatSync', 'resetReload', error),
     );
   }
+}
+
+/** 没有要脱敏的就不必打扰本地库;返回「本地已经没有引用原文了」。 */
+async function redactQuotesOf(
+  conversationId: string,
+  ids: readonly string[],
+  mode: 'revoked' | 'gone',
+): Promise<boolean> {
+  if (ids.length === 0) return true;
+  return redactLocalQuotesOf(conversationId, ids, mode);
 }
 
 async function pullUntil(
@@ -227,22 +254,31 @@ async function pullUntil(
       .filter((m) => m.deleted === true)
       .map((m) => m.id);
     const live = result.messages.filter((m) => m.deleted !== true);
-    // 游标跟它覆盖的变更一起提交;失败(或本地库不可用)时只推进内存游标,
-    // 持久化游标留在原地,下次冷启动重新追这一段(应用是幂等的)。
-    await applyLocalSyncPage(conversationId, {
-      upserts: live,
-      deletedIds: tombstoneIds,
-      clearedBeforeHeight: result.clearedBeforeHeight,
-      revision: result.nextRevision,
-    });
     const revokedIds = live.filter((m) => m.revokedAt).map((m) => m.id);
-    if (tombstoneIds.length > 0) {
-      void redactLocalQuotesOf(conversationId, tombstoneIds, 'gone');
-    }
-    if (revokedIds.length > 0) {
-      void redactLocalQuotesOf(conversationId, revokedIds, 'revoked');
-    }
+    // 引用脱敏排在游标之前:被焚毁/撤回那条的引用快照(预览文字、兜底 quotedText)
+    // 还在本地缓存和本地搜索里,而游标一提交这一段就不会再追。原来是 fire-and-forget,
+    // App 在两者之间被杀、或者那条语句失败,那段私信正文就永远留在了设备上。
+    const scrubbed =
+      (await redactQuotesOf(conversationId, tombstoneIds, 'gone')) &&
+      (await redactQuotesOf(conversationId, revokedIds, 'revoked'));
+    // 游标跟它覆盖的变更在同一个事务里提交。
+    const persisted =
+      scrubbed &&
+      (await applyLocalSyncPage(conversationId, {
+        upserts: live,
+        deletedIds: tombstoneIds,
+        clearedBeforeHeight: result.clearedBeforeHeight,
+        revision: result.nextRevision,
+      }));
     if (!isCurrent(gen)) return;
+    if (!persisted && localDbInUse) {
+      // 这一页没落盘:就停在这里。继续翻下一页的话,下一页自己的事务会把游标写到
+      // 更高处,这一段变更此后永远追不回来 —— 缓存里留着本该改掉/烧掉的正文。
+      // 内存游标也不前进:下一次快照对账或缺口补拉从原地重来(整页应用是幂等的)。
+      cursorFor(conversationId).durable = false;
+      return;
+    }
+    cursorFor(conversationId).durable = true;
     advanceCursorTo(conversationId, result.nextRevision);
     cursorFor(conversationId).hasMessages = true;
     if (!result.hasMore) return;

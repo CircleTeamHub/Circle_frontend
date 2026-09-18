@@ -76,6 +76,8 @@ function loadSync(options = {}) {
     storePages: [],
     evictions: [],
     histories: [],
+    /** 本地库写入的先后顺序(脱敏必须排在提交那一页之前)。 */
+    order: [],
     stateReads: 0,
   };
   const pages = options.pages ?? {};
@@ -117,14 +119,17 @@ function loadSync(options = {}) {
             },
             applyLocalSyncPage: async (conversationId, localPage) => {
               calls.localPages.push({ conversationId, ...localPage });
-              return true;
+              calls.order.push('apply');
+              return options.applyPage?.(conversationId, localPage) ?? true;
             },
             redactLocalQuotesOf: async (conversationId, ids, mode) => {
               calls.redactions.push({ conversationId, ids: [...ids], mode });
+              calls.order.push(`redact:${mode}`);
+              return options.redact?.(mode) ?? true;
             },
             resetLocalConversationCache: async (conversationId, revision) => {
               calls.resets.push([conversationId, revision]);
-              return true;
+              return options.resetCache?.() ?? true;
             },
             writeLocalSyncRevision: async (conversationId, revision) => {
               calls.cursorWrites.push([conversationId, revision]);
@@ -398,4 +403,111 @@ test('a sync still in flight when the account changes never lands', async () => 
 
   assert.deepEqual(calls.storePages, []);
   assert.deepEqual(calls.localPages, []);
+});
+
+test('a page that did not land in the local database stops the run and leaves the stored cursor behind it', async () => {
+  const { sync, calls, runTimers } = loadSync({
+    localStates: { c1: { revision: 10, hasMessages: true } },
+    // 本地库写失败(磁盘满、事务被别的写打断)。
+    applyPage: () => false,
+    pages: {
+      c1: [
+        page({
+          messages: [msg('m11', 11, 11, { deleted: true, content: {} })],
+          nextRevision: 210,
+          throughRevision: 450,
+          hasMore: true,
+        }),
+        page({ nextRevision: 450, throughRevision: 450 }),
+      ],
+    },
+  });
+  sync.startChatSync('u1');
+
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 450 }]);
+
+  // 后面那一页不能接着翻:它自己的事务会把游标写到 450,把没落盘的这一段
+  // (这里是一条焚毁墓碑)永远跳过 —— 重启后本地缓存里还留着本该烧掉的正文。
+  assert.deepEqual(calls.fetches, [['c1', 10]]);
+
+  // 下一次对账从原地重追(应用是幂等的)。
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 450 }]);
+  assert.deepEqual(calls.fetches, [
+    ['c1', 10],
+    ['c1', 10],
+  ]);
+
+  // 之后来的实时消息也不能替它把游标写下去。
+  sync.noteLiveRevision('c1', 11);
+  runTimers();
+  await flush();
+  assert.deepEqual(calls.cursorWrites, []);
+});
+
+test('quotes of burned or recalled messages are scrubbed before the cursor covering them is committed', async () => {
+  const { sync, calls } = loadSync({
+    localStates: { c1: { revision: 1, hasMessages: true } },
+    pages: {
+      c1: [
+        page({
+          messages: [
+            msg('m2', 2, 2, { deleted: true, content: {} }),
+            msg('m3', 3, 3, { revokedAt: '2026-09-16T00:00:00.000Z', content: {} }),
+          ],
+          nextRevision: 3,
+          throughRevision: 3,
+        }),
+      ],
+    },
+  });
+  sync.startChatSync('u1');
+
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 3 }]);
+
+  // 游标一提交,这一段就再也不会重追:脱敏必须排在它前面,否则 App 在两者之间
+  // 被杀,被撤回/焚毁那条的引用原文就永远留在本地缓存和本地搜索里。
+  assert.deepEqual(calls.order, ['redact:gone', 'redact:revoked', 'apply']);
+});
+
+test('a quote that could not be scrubbed leaves the page and its cursor uncommitted', async () => {
+  const { sync, calls, runTimers } = loadSync({
+    localStates: { c1: { revision: 1, hasMessages: true } },
+    redact: () => false,
+    pages: {
+      c1: [
+        page({
+          messages: [msg('m2', 2, 2, { deleted: true, content: {} })],
+          nextRevision: 2,
+          throughRevision: 2,
+        }),
+      ],
+    },
+  });
+  sync.startChatSync('u1');
+
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 2 }]);
+
+  assert.deepEqual(calls.localPages, []);
+  sync.noteLiveRevision('c1', 2);
+  runTimers();
+  await flush();
+  assert.deepEqual(calls.cursorWrites, []);
+});
+
+test('a cache reset that did not land locally keeps the stored cursor where it was', async () => {
+  const { sync, calls, runTimers } = loadSync({
+    localStates: { c1: { revision: 10, hasMessages: true } },
+    resetCache: () => false,
+  });
+  sync.startChatSync('u1');
+
+  // 落后太多:缓存整块作废、游标直接跳到最新 —— 但这一跳没能落盘。
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 5000 }]);
+  assert.deepEqual(calls.resets, [['c1', 5000]]);
+
+  sync.noteLiveRevision('c1', 5001);
+  runTimers();
+  await flush();
+  // 写下去的话,重启后本地库里还留着作废前那批消息,而游标已经在 5001。
+  assert.deepEqual(calls.cursorWrites, []);
 });

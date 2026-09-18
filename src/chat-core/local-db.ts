@@ -725,17 +725,20 @@ export async function resetLocalConversationCache(
  * - revoked:与服务端历史页同形 —— replyTo.revoked=true、preview 清空;
  * - gone(焚毁):服务端不再给快照 —— 整个 replyTo 去掉。
  *
- * 尽力而为、不进同步事务:依赖 JSON1,个别老构建没有的话这一步失败不能把整页
- * 同步连同游标一起回滚。
+ * 返回「本地已经没有引用原文了」:调用方(增量同步)据此决定要不要提交游标 ——
+ * 游标一旦越过这一段就不会再追,脱敏没做成就等于永远留着。
+ *
+ * 脱敏语句依赖 JSON1(个别老构建没有);那时退而删掉整行,见 dropQuotingRows。
  */
 export async function redactLocalQuotesOf(
   conversationId: string,
   targetIds: readonly string[],
   mode: 'revoked' | 'gone',
-): Promise<void> {
+): Promise<boolean> {
   const current = requireDb();
   const ids = [...new Set(targetIds)].filter((id) => id.length > 0);
-  if (!current || ids.length === 0) return;
+  // 本地库没开(Web / 没有 SQLCipher)时本机根本没有副本,没东西要脱敏。
+  if (!current || ids.length === 0) return true;
   const placeholders = ids.map(() => '?').join(', ');
   const nextPayload =
     mode === 'revoked'
@@ -757,8 +760,41 @@ export async function redactLocalQuotesOf(
         ...ids,
       ),
     );
+    return true;
   } catch (error) {
     warn('quote-redact', '[chat-db] redact quoting messages failed', error);
+    return dropQuotingRows(current, conversationId, ids);
+  }
+}
+
+/** LIKE 的通配符(% _)和转义符本身要转义,否则 id 里的下划线会误伤别的行。 */
+function escapeLikePattern(value: string): string {
+  return `%${value.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+}
+
+/**
+ * 脱敏语句跑不了(没有 JSON1)时的兜底:把引用了这些消息的行整行删掉。
+ * 本地缓存少一行只是下次翻到时重新从服务端拉(拿回来的已经是脱敏后的),
+ * 而引用里的原文一定不会留在设备上。
+ */
+async function dropQuotingRows(
+  current: DbHandle,
+  conversationId: string,
+  ids: readonly string[],
+): Promise<boolean> {
+  const conditions = ids.map(() => "payload LIKE ? ESCAPE '\\'").join(' OR ');
+  try {
+    await writeStatement(() =>
+      current.db.runAsync(
+        `DELETE FROM messages WHERE conversation_id = ? AND (${conditions});`,
+        conversationId,
+        ...ids.map(escapeLikePattern),
+      ),
+    );
+    return true;
+  } catch (error) {
+    warn('quote-redact', '[chat-db] drop quoting rows failed', error);
+    return false;
   }
 }
 

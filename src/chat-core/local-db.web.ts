@@ -83,7 +83,10 @@ export async function redactLocalQuotesOf(
   _conversationId: string,
   _targetIds: readonly string[],
   _mode: 'revoked' | 'gone',
-): Promise<void> {}
+): Promise<boolean> {
+  // Web 端本机没有消息副本,没有引用原文要脱敏 —— 对调用方而言这一步是完成的。
+  return true;
+}
 
 export async function deleteLocalMessage(
   _conversationId: string,
