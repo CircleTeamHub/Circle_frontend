@@ -20,12 +20,17 @@ type JPushModule = {
   deleteAlias: (params: { sequence: number }) => void;
   addTagAliasListener?: (callback: (result: { sequence?: number; code?: number }) => void) => void;
   removeListener?: (callback: Function) => void;
-  requestPermission?: () => void;
+  requestPermission?: (options: {
+    alert: boolean;
+    badge: boolean;
+    sound: boolean;
+  }) => void;
   resumePush?: () => void;
   setBackgroundEnable?: (enabled: boolean) => void;
 };
 
-const REGISTRATION_ID_WAIT_MS = 5_000;
+const REGISTRATION_ID_RETRY_INTERVAL_MS = 5_000;
+const REGISTRATION_ID_MAX_WAIT_MS = 60_000;
 
 declare const require: ((specifier: string) => unknown) | undefined;
 
@@ -93,7 +98,7 @@ export function subscribeJPush(listener: (event: JPushNotification) => void) {
 
 export function requestJPushPermission() {
   initializeJPush();
-  getModule()?.requestPermission?.();
+  getModule()?.requestPermission?.({ alert: true, badge: true, sound: true });
 }
 
 export function getJPushRegistrationId(): Promise<string> {
@@ -102,19 +107,31 @@ export function getJPushRegistrationId(): Promise<string> {
   if (!jpush) return Promise.resolve('');
   return new Promise((resolve) => {
     let settled = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let retryHandle: ReturnType<typeof setTimeout> | undefined;
+    const deadline = Date.now() + REGISTRATION_ID_MAX_WAIT_MS;
     const finish = (registrationId: string) => {
       if (settled) return;
       settled = true;
-      if (timeout) clearTimeout(timeout);
+      if (retryHandle) clearTimeout(retryHandle);
       if (jpush.removeListener) jpush.removeListener(onConnect);
       resolve(registrationId);
+    };
+    const scheduleRetry = () => {
+      if (settled || retryHandle) return;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return finish('');
+      retryHandle = setTimeout(() => {
+        retryHandle = undefined;
+        readRegistrationId();
+      }, Math.min(REGISTRATION_ID_RETRY_INTERVAL_MS, remaining));
     };
     const readRegistrationId = () => {
       jpush.getRegistrationID((result) => {
         const registrationId = result.registerID?.trim() ?? '';
         if (registrationId || !jpush.addConnectEventListener) {
           finish(registrationId);
+        } else {
+          scheduleRetry();
         }
       });
     };
@@ -123,7 +140,6 @@ export function getJPushRegistrationId(): Promise<string> {
     };
     if (jpush.addConnectEventListener) {
       jpush.addConnectEventListener(onConnect);
-      timeout = setTimeout(() => finish(''), REGISTRATION_ID_WAIT_MS);
     }
     readRegistrationId();
   });

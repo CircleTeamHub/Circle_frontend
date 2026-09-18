@@ -1,5 +1,5 @@
 const {
-  withAndroidManifest,
+  withAppBuildGradle,
   withEntitlementsPlist,
   withInfoPlist,
 } = require('expo/config-plugins');
@@ -9,18 +9,13 @@ function withJPush(config, options = {}) {
   const channel = String(options.channel || 'windnote').trim();
   const production = options.production !== false;
 
-  config = withAndroidManifest(config, (modConfig) => {
-    const application = modConfig.modResults.manifest.application?.[0];
-    if (!application) throw new Error('JPush requires an Android application manifest node.');
-    application['meta-data'] = application['meta-data'] || [];
-    const metadata = application['meta-data'];
-    for (const [name, value] of [
-      ['JPUSH_APPKEY', appKey],
-      ['JPUSH_CHANNEL', channel],
-    ]) {
-      const existing = metadata.find((item) => item.$?.['android:name'] === name);
-      if (existing) existing.$['android:value'] = value;
-      else metadata.push({ $: { 'android:name': name, 'android:value': value } });
+  config = withAppBuildGradle(config, (modConfig) => {
+    const placeholders = `\n        manifestPlaceholders.JPUSH_APPKEY = ${JSON.stringify(appKey)}\n        manifestPlaceholders.APP_CHANNEL = ${JSON.stringify(channel)}\n`;
+    if (!modConfig.modResults.contents.includes('manifestPlaceholders.JPUSH_APPKEY')) {
+      modConfig.modResults.contents = modConfig.modResults.contents.replace(
+        /defaultConfig\s*\{/,
+        (match) => `${match}${placeholders}`,
+      );
     }
     return modConfig;
   });

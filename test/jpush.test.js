@@ -50,12 +50,18 @@ test('uses the build-configured APNs environment at runtime', () => {
       getRegistrationID(callback) {
         callback({ registerID: 'registration-id' });
       },
+      requestPermission(options) {
+        assert.equal(options.alert, true);
+        assert.equal(options.badge, true);
+        assert.equal(options.sound, true);
+      },
     },
     { jpushAppKey: 'key', jpushProduction: false },
   );
 
   assert.equal(api.initializeJPush(), true);
   assert.equal(initOptions.production, false);
+  api.requestJPushPermission();
 });
 
 test('waits for a delayed JPush connection before returning a registration ID', async () => {
