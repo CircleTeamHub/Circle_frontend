@@ -118,7 +118,7 @@ function runModule(rel, requireImpl) {
   return context.module.exports;
 }
 
-function loadChatStore() {
+function loadChatStore(overrides = {}) {
   // 墓碑模块跑真实实现（同一个 vm 实例内共享），删除行为才是真被断言的。
   const deletedMessages = runModule('src/chat-core/deleted-messages.ts', (request) => {
     if (request === 'zustand') return zustandStub();
@@ -133,6 +133,9 @@ function loadChatStore() {
   const store = runModule('src/chat-core/store.ts', (request) => {
     if (request === 'zustand') return zustandStub();
     if (request === './deleted-messages') return deletedMessages;
+    if (request === './pending-media' && overrides.pendingMedia) {
+      return overrides.pendingMedia;
+    }
     if (request === './protocol') {
       // protocol.ts 零依赖,直接同环境执行。
       return runModule('src/chat-core/protocol.ts', () => {
@@ -1581,4 +1584,50 @@ test('conversation snapshots carry this user read position and clear floor to of
   ]);
   assert.equal(useChatStore.getState().readWatermarks['conv-1'].me, 3);
   assert.equal(useChatStore.getState().clearedBeforeHeightByConversation['conv-1'], 2);
+});
+
+test('an unsent photo is deleted from the device when its message burns', async () => {
+  const deleted = [];
+  const { useChatStore } = loadChatStore({
+    pendingMedia: {
+      pendingMediaFileName: () => 'media.jpg',
+      persistPendingMediaFile: async () => null,
+      resolvePendingMediaUri: async () => null,
+      deletePendingMedia: async (userId, d) => {
+        deleted.push([userId, d]);
+      },
+      prunePendingMedia: async () => {},
+      clearPendingMediaFiles: async () => {},
+    },
+  });
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      burnDurationSec: 60,
+      burnStartedAt: new Date(Date.now() - 180_000).toISOString(),
+    }),
+  ]);
+  // 上传失败的红气泡:服务端没有这条消息,正文和那张照片只存在于本机
+  // (outbox 行 + Documents 里的源文件副本)。
+  store.ingestMessages('conv-1', [
+    msg({
+      id: 'local:d-photo',
+      height: 0,
+      d: 'd-photo',
+      type: 'image',
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+    }),
+  ]);
+
+  await useChatStore.getState().purgeExpiredBurnMessages();
+
+  assert.equal(
+    useChatStore.getState().messagesByConversation['conv-1'].length,
+    0,
+  );
+  // 气泡和 outbox 行都烧掉了,副本不跟着删的话,这张没发出去的私人照片要等到
+  // 下次冷启动清孤儿(还得过宽限期)或者登出才会从设备上消失。
+  assert.deepEqual(deleted, [['me', 'd-photo']]);
 });

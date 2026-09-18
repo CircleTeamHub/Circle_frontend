@@ -1935,6 +1935,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     let nextConversations: ChatConversationState[] | null = null;
     const durablePreviewWrites: Promise<void>[] = [];
     const localPurges: { conversationId: string; cutoff: Date; startedAt: Date }[] = [];
+    /** 烧掉的失败气泡:它们在 Documents 里还各有一份没发出去的源文件副本。 */
+    const burnedPendingMedia: string[] = [];
     let nextExpiryAt: number | null = null;
     const viewerSeconds =
       viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
@@ -1986,7 +1988,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       }
       const kept = (timeline ?? []).filter((m) => {
         const expiresAt = expiryFor(m);
-        return expiresAt === null || expiresAt > now;
+        if (expiresAt === null || expiresAt > now) return true;
+        // 没发出去的失败气泡(height=0)在持久目录里还留着源文件:那张照片/那段
+        // 录音本身。正文随 outbox 行一起烧掉(purgeExpiredLocalMessages),副本
+        // 没人删的话要等下次冷启动清孤儿、甚至登出才消失。
+        if (m.height === 0 && m.d) burnedPendingMedia.push(m.d);
+        return false;
       });
       const preview = conversation.lastMessage;
       const schedulableMessages =
@@ -2050,6 +2057,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             Boolean(conversation.burnStartedAt),
         ),
     );
+    const userId = get().currentUserId;
     await Promise.all([
       purgeExpiredLocalMessages(
         localPurges,
@@ -2059,6 +2067,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         Number.isFinite(viewerStartMs) ? new Date(viewerStartMs) : undefined,
       ),
       ...durablePreviewWrites,
+      ...(userId
+        ? burnedPendingMedia.map((d) => deletePendingMedia(userId, d))
+        : []),
     ]);
   },
 
