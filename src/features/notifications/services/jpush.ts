@@ -25,6 +25,8 @@ type JPushModule = {
   setBackgroundEnable?: (enabled: boolean) => void;
 };
 
+const REGISTRATION_ID_WAIT_MS = 5_000;
+
 declare const require: ((specifier: string) => unknown) | undefined;
 
 const listeners = new Set<(event: JPushNotification) => void>();
@@ -53,6 +55,13 @@ function getAppKey() {
   );
 }
 
+function getProductionEnvironment() {
+  const configured = (Constants.expoConfig?.extra as
+    | { jpushProduction?: unknown }
+    | undefined)?.jpushProduction;
+  return typeof configured === 'boolean' ? configured : !__DEV__;
+}
+
 export function isJPushConfigured() {
   return Platform.OS !== 'web' && Boolean(getAppKey()) && Boolean(getModule());
 }
@@ -66,7 +75,7 @@ export function initializeJPush() {
   jpush.init({
     appKey,
     channel: 'windnote',
-    production: !__DEV__,
+    production: getProductionEnvironment(),
   });
   jpush.setBackgroundEnable?.(true);
   jpush.addNotificationListener((event) => {
@@ -92,7 +101,31 @@ export function getJPushRegistrationId(): Promise<string> {
   const jpush = getModule();
   if (!jpush) return Promise.resolve('');
   return new Promise((resolve) => {
-    jpush.getRegistrationID((result) => resolve(result.registerID?.trim() ?? ''));
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const finish = (registrationId: string) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      if (jpush.removeListener) jpush.removeListener(onConnect);
+      resolve(registrationId);
+    };
+    const readRegistrationId = () => {
+      jpush.getRegistrationID((result) => {
+        const registrationId = result.registerID?.trim() ?? '';
+        if (registrationId || !jpush.addConnectEventListener) {
+          finish(registrationId);
+        }
+      });
+    };
+    const onConnect = (event: { connectEnable?: boolean }) => {
+      if (event.connectEnable) readRegistrationId();
+    };
+    if (jpush.addConnectEventListener) {
+      jpush.addConnectEventListener(onConnect);
+      timeout = setTimeout(() => finish(''), REGISTRATION_ID_WAIT_MS);
+    }
+    readRegistrationId();
   });
 }
 

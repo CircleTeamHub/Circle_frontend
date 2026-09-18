@@ -10,6 +10,8 @@ function loadConfig(env = {}) {
     APP_VARIANT: process.env.APP_VARIANT,
     EXPO_PUBLIC_EAS_PROJECT_ID: process.env.EXPO_PUBLIC_EAS_PROJECT_ID,
     GOOGLE_SERVICES_FILE: process.env.GOOGLE_SERVICES_FILE,
+    EXPO_PUBLIC_PUSH_PROVIDER: process.env.EXPO_PUBLIC_PUSH_PROVIDER,
+    EXPO_PUBLIC_JPUSH_APP_KEY: process.env.EXPO_PUBLIC_JPUSH_APP_KEY,
   };
 
   for (const key of Object.keys(previous)) {
@@ -65,6 +67,31 @@ test('preproduction is a separately installable Android app', () => {
   assert.deepEqual(config.scheme, ['windnoteai-preprod', 'circleim-preprod']);
   assert.equal(config.extra.appVariant, 'preprod');
   assert.notEqual(config.android.package, appJson.expo.android.package);
+});
+
+test('preproduction JPush builds share the development APNs environment with runtime config', () => {
+  const config = loadConfig({
+    APP_VARIANT: 'preprod',
+    EXPO_PUBLIC_PUSH_PROVIDER: 'jpush',
+    EXPO_PUBLIC_JPUSH_APP_KEY: 'jpush-test-key',
+  });
+
+  assert.equal(config.extra.pushProvider, 'jpush');
+  assert.equal(config.extra.jpushProduction, false);
+  assert.deepEqual(config.plugins.at(-1), [
+    './plugins/with-jpush',
+    { appKey: 'jpush-test-key', channel: 'windnote', production: false },
+  ]);
+});
+
+test('JPush provider builds fail closed without an app key', () => {
+  assert.throws(
+    () =>
+      loadConfig({
+        EXPO_PUBLIC_PUSH_PROVIDER: 'jpush',
+      }),
+    /EXPO_PUBLIC_PUSH_PROVIDER=jpush requires EXPO_PUBLIC_JPUSH_APP_KEY/,
+  );
 });
 
 test('production keeps the canonical identity and runtime update channel', () => {

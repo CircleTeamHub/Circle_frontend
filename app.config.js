@@ -5,6 +5,14 @@ module.exports = () => {
   const googleServicesFile = process.env.GOOGLE_SERVICES_FILE?.trim();
   const isPreproduction = process.env.APP_VARIANT?.trim() === 'preprod';
   const jpushAppKey = process.env.EXPO_PUBLIC_JPUSH_APP_KEY?.trim();
+  const configuredPushProvider = process.env.EXPO_PUBLIC_PUSH_PROVIDER?.trim();
+  if (configuredPushProvider === 'jpush' && !jpushAppKey) {
+    throw new Error(
+      'EXPO_PUBLIC_PUSH_PROVIDER=jpush requires EXPO_PUBLIC_JPUSH_APP_KEY',
+    );
+  }
+  const pushProvider = configuredPushProvider || (jpushAppKey ? 'jpush' : 'expo');
+  const jpushProduction = !isPreproduction;
   // 高德原生 SDK 的密钥。它在构建期写进 Info.plist / AndroidManifest，不配就不挂
   // 这个插件——地图会退回 Leaflet + OpenStreetMap，和接入前一致。
   // 带 EXPO_PUBLIC_ 前缀是因为运行时也要读它来判断该走哪套地图；密钥本来就会打进
@@ -45,9 +53,8 @@ module.exports = () => {
     extra: {
       ...(baseConfig.extra ?? {}),
       appVariant: isPreproduction ? 'preprod' : 'production',
-      pushProvider:
-        process.env.EXPO_PUBLIC_PUSH_PROVIDER?.trim() ||
-        (jpushAppKey ? 'jpush' : 'expo'),
+      pushProvider,
+      jpushProduction,
       ...(jpushAppKey ? { jpushAppKey } : {}),
       ...(easProjectId
         ? {
