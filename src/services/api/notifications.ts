@@ -19,7 +19,7 @@ export type NotificationUnreadSummary = {
 
 export type PushTokenPlatform = 'ios' | 'android' | 'web';
 
-export type PushTokenProvider = 'expo';
+export type PushTokenProvider = 'expo' | 'jpush';
 
 export type RegisterPushTokenInput = {
   token: string;

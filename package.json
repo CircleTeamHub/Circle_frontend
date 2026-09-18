@@ -78,6 +78,8 @@
     "expo-video": "~55.0.15",
     "expo-web-browser": "~55.0.10",
     "i18next": "^26.0.6",
+    "jcore-react-native": "^2.3.7",
+    "jpush-react-native": "^3.2.8",
     "livekit-client": "^2.19.2",
     "lucide-react-native": "^0.577.0",
     "react": "19.2.0",
