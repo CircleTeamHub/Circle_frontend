@@ -20,6 +20,8 @@ function withJPush(config, options = {}) {
     return modConfig;
   });
 
+  if (!appKey) return config;
+
   config = withInfoPlist(config, (modConfig) => {
     modConfig.modResults.UIBackgroundModes = Array.from(
       new Set([...(modConfig.modResults.UIBackgroundModes || []), 'remote-notification']),
