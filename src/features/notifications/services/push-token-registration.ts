@@ -5,6 +5,7 @@ import {
   registerPushToken,
   revokePushToken,
   type PushTokenPlatform,
+  type PushTokenProvider,
 } from '@/services/api/notifications';
 import { storage } from '@/storage';
 import { useAuthStore } from '@/stores/authStore';
@@ -12,6 +13,11 @@ import { reportNotificationFailure } from '@/features/notifications/utils/report
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { ensureChatNotificationChannel } from '@/chat-core/chat-notifications';
+import {
+  getJPushRegistrationId,
+  initializeJPush,
+  requestJPushPermission,
+} from '@/features/notifications/services/jpush';
 
 type NotificationsModule = typeof import('expo-notifications');
 type NotificationPermissionResult = Awaited<
@@ -45,6 +51,7 @@ type ExpoCryptoModule = { randomUUID?: () => string };
 
 type PushTokenRegistrationOrchestratorDependencies = {
   platform: PushTokenPlatform;
+  provider?: PushTokenProvider;
   appVersion: string | null;
   getProjectId: () => string | null;
   getStoredRegistration: () => StoredPushRegistration | null;
@@ -612,6 +619,10 @@ export function createPushTokenRegistrationOrchestrator(
         !isCurrentOwner() ||
         Boolean(input.isCancelled?.());
 
+      const provider = dependencies.provider ?? 'expo';
+      // 两种 provider 都要过系统通知权限:JPush 自己的 requestPermission 只是 iOS
+      // 的 APNs 注册,Android 13+ 的 POST_NOTIFICATIONS 运行时权限得由这里申请 ——
+      // 否则 JPush ID 照样登记成功,系统却把每一条通知都拦掉。
       const notifications = await dependencies.loadNotificationsModule();
       if (!notifications || isStale()) return;
 
@@ -638,6 +649,7 @@ export function createPushTokenRegistrationOrchestrator(
         permissionAttemptedUserIds.add(input.userId);
         try {
           permissions = await notifications.requestPermissionsAsync({
+            android: {},
             ios: {
               allowAlert: true,
               allowBadge: true,
@@ -657,7 +669,7 @@ export function createPushTokenRegistrationOrchestrator(
       }
 
       const projectId = dependencies.getProjectId();
-      if (!projectId) {
+      if (provider === 'expo' && !projectId) {
         dependencies.reportDiagnostic('push_token_project_id_missing', {
           platform: dependencies.platform,
         });
@@ -665,8 +677,15 @@ export function createPushTokenRegistrationOrchestrator(
       }
 
       const legacy = dependencies.getLegacyRegistration?.() ?? null;
-      const result = await notifications.getExpoPushTokenAsync({ projectId });
-      const token = result.data;
+      let token = '';
+      if (provider === 'jpush') {
+        initializeJPush();
+        if (dependencies.platform === 'ios') requestJPushPermission();
+        token = await getJPushRegistrationId();
+      } else {
+        const result = await notifications.getExpoPushTokenAsync({ projectId: projectId! });
+        token = result.data;
+      }
       if (!token || isStale()) return;
 
       if (
@@ -720,9 +739,9 @@ export function createPushTokenRegistrationOrchestrator(
         await dependencies.registerPushToken({
           token,
           platform: dependencies.platform,
-          provider: 'expo',
+          provider,
           revocationSecret: registrationCandidate.revocationSecret,
-          projectId,
+          projectId: provider === 'expo' ? projectId : null,
           appVersion: dependencies.appVersion,
         });
 
@@ -770,8 +789,12 @@ async function loadNotificationsModule() {
 }
 
 function createDefaultPushTokenRegistrationOrchestrator() {
+  const configuredProvider =
+    (Constants.expoConfig?.extra as { pushProvider?: unknown } | undefined)
+      ?.pushProvider;
   return createPushTokenRegistrationOrchestrator({
     platform: Platform.OS as PushTokenPlatform,
+    provider: configuredProvider === 'jpush' ? 'jpush' : 'expo',
     appVersion: Constants.expoConfig?.version ?? null,
     getProjectId,
     getStoredRegistration,
