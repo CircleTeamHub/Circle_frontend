@@ -94,6 +94,13 @@ test('JPush provider builds fail closed without an app key', () => {
   );
 });
 
+test('dynamic app config rejects unknown push providers', () => {
+  assert.throws(
+    () => loadConfig({ EXPO_PUBLIC_PUSH_PROVIDER: 'jpus' }),
+    /EXPO_PUBLIC_PUSH_PROVIDER must be expo or jpush/,
+  );
+});
+
 test('production keeps the canonical identity and runtime update channel', () => {
   const config = loadConfig();
 

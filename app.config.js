@@ -5,8 +5,16 @@ module.exports = () => {
   const googleServicesFile = process.env.GOOGLE_SERVICES_FILE?.trim();
   const isPreproduction = process.env.APP_VARIANT?.trim() === 'preprod';
   const jpushAppKey = process.env.EXPO_PUBLIC_JPUSH_APP_KEY?.trim();
-  const configuredPushProvider = process.env.EXPO_PUBLIC_PUSH_PROVIDER?.trim();
-  if (configuredPushProvider === 'jpush' && !jpushAppKey) {
+const configuredPushProvider = process.env.EXPO_PUBLIC_PUSH_PROVIDER?.trim();
+if (
+  configuredPushProvider &&
+  !new Set(['expo', 'jpush']).has(configuredPushProvider)
+) {
+  throw new Error(
+    `EXPO_PUBLIC_PUSH_PROVIDER must be expo or jpush, received ${configuredPushProvider}`,
+  );
+}
+if (configuredPushProvider === 'jpush' && !jpushAppKey) {
     throw new Error(
       'EXPO_PUBLIC_PUSH_PROVIDER=jpush requires EXPO_PUBLIC_JPUSH_APP_KEY',
     );

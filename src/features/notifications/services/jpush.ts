@@ -35,6 +35,7 @@ const REGISTRATION_ID_MAX_WAIT_MS = 60_000;
 declare const require: ((specifier: string) => unknown) | undefined;
 
 const listeners = new Set<(event: JPushNotification) => void>();
+const connectionListeners = new Set<() => void>();
 let moduleInstance: JPushModule | null | undefined;
 let initialized = false;
 let sequence = 0;
@@ -86,8 +87,21 @@ export function initializeJPush() {
   jpush.addNotificationListener((event) => {
     for (const listener of listeners) listener(event);
   });
+  jpush.addConnectEventListener?.((event) => {
+    if (!event.connectEnable) return;
+    for (const listener of connectionListeners) listener();
+  });
   initialized = true;
   return true;
+}
+
+/** Re-run token registration when JPush reconnects after the initial wait. */
+export function subscribeJPushConnection(listener: () => void) {
+  connectionListeners.add(listener);
+  initializeJPush();
+  return () => {
+    connectionListeners.delete(listener);
+  };
 }
 
 export function subscribeJPush(listener: (event: JPushNotification) => void) {

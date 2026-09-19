@@ -92,3 +92,28 @@ test('waits for a delayed JPush connection before returning a registration ID', 
   });
   assert.equal(reads, 2);
 });
+
+test('notifies token registration when JPush reconnects after initial sync', () => {
+  const connectListeners = [];
+  let notified = 0;
+  const api = loadJPush(
+    {
+      init() {},
+      addNotificationListener() {},
+      addConnectEventListener(listener) {
+        connectListeners.push(listener);
+      },
+      getRegistrationID(callback) {
+        callback({ registerID: 'registration-id' });
+      },
+    },
+    { jpushAppKey: 'key', jpushProduction: true },
+  );
+
+  api.subscribeJPushConnection(() => {
+    notified += 1;
+  });
+  connectListeners.forEach((listener) => listener({ connectEnable: true }));
+
+  assert.equal(notified, 1);
+});
