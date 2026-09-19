@@ -15,9 +15,11 @@ Configure metadata and signing for the private build without putting secret valu
 The current preproduction candidate is Android `v1.0.1` (`versionCode` `1000001`). Its test deployment contract is:
 
 - API and chat fallback: `https://api-43-133-201-42.sslip.io`
-- media origin: `https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com`
+- media origins, in this order (`EXPO_PUBLIC_MEDIA_ORIGINS`):
+  - `https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com` — the COS bucket; presigned URLs for private media still point here
+  - `https://media-43-133-201-42.sslip.io` — the rate-limited delivery domain the backend's `OBJECT_STORAGE_DELIVERY_URL` uses for permanent public-folder URLs (avatars, covers, posts)
 
-These values identify the Tokyo test stack, not production. A preproduction workflow must verify both expected hostnames are embedded and that obsolete tunnel/OpenIM hostnames are absent before retaining its private artifact.
+These values identify the Tokyo test stack, not production. A preproduction workflow must verify every expected hostname is embedded and that obsolete tunnel/OpenIM hostnames are absent before retaining its private artifact.
 
 ## Preproduction APK
 

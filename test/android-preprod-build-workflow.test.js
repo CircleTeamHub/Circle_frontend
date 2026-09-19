@@ -802,7 +802,7 @@ test('preproduction verifier fails closed for metadata and APK endpoint drift', 
   const env = {
     EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
-    EXPO_PUBLIC_MEDIA_ORIGINS: EXPECTED.mediaOrigin,
+    EXPO_PUBLIC_MEDIA_ORIGINS: EXPECTED.mediaOrigins.join(','),
   };
 
   assert.deepEqual(validateMetadata({ app, env }), []);
@@ -841,7 +841,7 @@ test('preproduction verifier fails closed for metadata and APK endpoint drift', 
     /EXPO_PUBLIC_API_URL/,
   );
 
-  const valid = Buffer.from(`${EXPECTED.apiHost}\n${EXPECTED.mediaHost}`);
+  const valid = Buffer.from([EXPECTED.apiHost, ...EXPECTED.mediaHosts].join('\n'));
   assert.deepEqual(validateApkContents(valid), []);
   assert.match(validateApkContents(Buffer.from(EXPECTED.apiHost)).join('\n'), /media/i);
   for (const forbidden of EXPECTED.forbiddenStrings) {
@@ -925,4 +925,55 @@ test('preproduction distribution validator fails closed', () => {
   ]) {
     assert.equal(runValidator('preprod-distribution', invalidEnv).status, 1);
   }
+});
+
+test('preproduction media origins pin the COS bucket and the rate-limited delivery domain together', () => {
+  const {
+    EXPECTED,
+    validateApkContents,
+    validateMetadata,
+  } = require('../.github/scripts/verify-android-preprod');
+  const cos = 'https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com';
+  const delivery = 'https://media-43-133-201-42.sslip.io';
+  // 测试服后端配了 OBJECT_STORAGE_DELIVERY_URL:公开目录(头像、封面……)的永久地址
+  // 走限流的投递域名,私有媒体的预签名地址仍直连 COS。App 的媒体白名单缺哪一个,
+  // 那一类图片、语音、封面就会被客户端整片丢掉。
+  assert.deepEqual(EXPECTED.mediaOrigins, [cos, delivery]);
+
+  const app = {
+    name: EXPECTED.appName,
+    version: EXPECTED.version,
+    extra: { appVariant: EXPECTED.appVariant },
+    android: { versionCode: EXPECTED.versionCode, package: EXPECTED.packageName },
+  };
+  const env = {
+    EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
+    EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
+    EXPO_PUBLIC_MEDIA_ORIGINS: `${cos},${delivery}`,
+  };
+  assert.deepEqual(validateMetadata({ app, env }), []);
+  for (const mediaOrigins of [
+    cos,
+    delivery,
+    `${cos},${delivery},`,
+    `${cos},http://media-43-133-201-42.sslip.io`,
+    `${cos},${delivery}/`,
+  ]) {
+    assert.match(
+      validateMetadata({ app, env: { ...env, EXPO_PUBLIC_MEDIA_ORIGINS: mediaOrigins } }).join('\n'),
+      /EXPO_PUBLIC_MEDIA_ORIGINS/,
+      mediaOrigins,
+    );
+  }
+
+  const bothHosts = Buffer.from(
+    ['api-43-133-201-42.sslip.io', ...EXPECTED.mediaHosts].join('\n'),
+  );
+  assert.deepEqual(validateApkContents(bothHosts), []);
+  assert.match(
+    validateApkContents(
+      Buffer.from(`${EXPECTED.apiHost}\nwindnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com`),
+    ).join('\n'),
+    /media-43-133-201-42\.sslip\.io/,
+  );
 });
