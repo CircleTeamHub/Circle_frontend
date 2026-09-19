@@ -10,7 +10,16 @@ function withJPush(config, options = {}) {
   const production = options.production !== false;
 
   config = withAppBuildGradle(config, (modConfig) => {
-    const placeholders = `\n        manifestPlaceholders.JPUSH_APPKEY = ${JSON.stringify(appKey)}\n        manifestPlaceholders.APP_CHANNEL = ${JSON.stringify(channel)}\n`;
+    // 原生 SDK(cn.jiguang.sdk:jcore / jpush)的清单要 JPUSH_APPKEY 与 JPUSH_CHANNEL;
+    // APP_CHANNEL 是 jpush-react-native 示例工程的写法,一并设上。
+    const placeholders = [
+      `manifestPlaceholders.JPUSH_APPKEY = ${JSON.stringify(appKey)}`,
+      `manifestPlaceholders.JPUSH_CHANNEL = ${JSON.stringify(channel)}`,
+      `manifestPlaceholders.APP_CHANNEL = ${JSON.stringify(channel)}`,
+    ]
+      .map((line) => `\n        ${line}`)
+      .join('')
+      .concat('\n');
     if (!modConfig.modResults.contents.includes('manifestPlaceholders.JPUSH_APPKEY')) {
       modConfig.modResults.contents = modConfig.modResults.contents.replace(
         /defaultConfig\s*\{/,
