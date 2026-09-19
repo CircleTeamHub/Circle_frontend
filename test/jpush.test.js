@@ -41,6 +41,7 @@ function loadJPush(nativeModule, extra = {}, dev = false) {
 
 test('uses the build-configured APNs environment at runtime', () => {
   let initOptions;
+  let permissionOptions;
   const api = loadJPush(
     {
       init: (options) => {
@@ -51,9 +52,7 @@ test('uses the build-configured APNs environment at runtime', () => {
         callback({ registerID: 'registration-id' });
       },
       requestPermission(options) {
-        assert.equal(options.alert, true);
-        assert.equal(options.badge, true);
-        assert.equal(options.sound, true);
+        permissionOptions = options;
       },
     },
     { jpushAppKey: 'key', jpushProduction: false },
@@ -62,6 +61,8 @@ test('uses the build-configured APNs environment at runtime', () => {
   assert.equal(api.initializeJPush(), true);
   assert.equal(initOptions.production, false);
   api.requestJPushPermission();
+  // iOS 的桥接要带权限选项,不带参数调用会过不了原生参数校验。
+  assert.deepEqual({ ...permissionOptions }, { alert: true, badge: true, sound: true });
 });
 
 test('waits for a delayed JPush connection before returning a registration ID', async () => {
