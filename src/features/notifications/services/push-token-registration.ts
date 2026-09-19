@@ -620,11 +620,13 @@ export function createPushTokenRegistrationOrchestrator(
         Boolean(input.isCancelled?.());
 
       const provider = dependencies.provider ?? 'expo';
-      const notifications =
-        provider === 'expo' ? await dependencies.loadNotificationsModule() : null;
-      if (provider === 'expo' && (!notifications || isStale())) return;
+      // 两种 provider 都要过系统通知权限:JPush 自己的 requestPermission 只是 iOS
+      // 的 APNs 注册,Android 13+ 的 POST_NOTIFICATIONS 运行时权限得由这里申请 ——
+      // 否则 JPush ID 照样登记成功,系统却把每一条通知都拦掉。
+      const notifications = await dependencies.loadNotificationsModule();
+      if (!notifications || isStale()) return;
 
-      if (notifications && dependencies.prepareNotifications) {
+      if (dependencies.prepareNotifications) {
         try {
           await dependencies.prepareNotifications(notifications);
         } catch {
@@ -635,15 +637,9 @@ export function createPushTokenRegistrationOrchestrator(
         if (isStale()) return;
       }
 
-      let permissions = notifications
-        ? await notifications.getPermissionsAsync()
-        : null;
+      let permissions = await notifications.getPermissionsAsync();
       if (isStale()) return;
-      if (
-        notifications &&
-        permissions &&
-        !isNotificationGranted(permissions, notifications)
-      ) {
+      if (!isNotificationGranted(permissions, notifications)) {
         if (
           permissions.canAskAgain === false ||
           permissionAttemptedUserIds.has(input.userId)
@@ -653,6 +649,7 @@ export function createPushTokenRegistrationOrchestrator(
         permissionAttemptedUserIds.add(input.userId);
         try {
           permissions = await notifications.requestPermissionsAsync({
+            android: {},
             ios: {
               allowAlert: true,
               allowBadge: true,
@@ -683,10 +680,9 @@ export function createPushTokenRegistrationOrchestrator(
       let token = '';
       if (provider === 'jpush') {
         initializeJPush();
-        requestJPushPermission();
+        if (dependencies.platform === 'ios') requestJPushPermission();
         token = await getJPushRegistrationId();
       } else {
-        if (!notifications) return;
         const result = await notifications.getExpoPushTokenAsync({ projectId: projectId! });
         token = result.data;
       }

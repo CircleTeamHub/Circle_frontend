@@ -96,6 +96,12 @@ function loadRegistrar(storageOverride, sharedGlobal, options = {}) {
       if (specifier === '@/features/notifications/utils/report-failure') {
         return { reportNotificationFailure() {} };
       }
+      if (
+        specifier === '@/features/notifications/services/jpush' &&
+        options.jpush
+      ) {
+        return options.jpush;
+      }
       if (specifier.startsWith('@/')) return {};
       return require(specifier);
     }),
@@ -106,7 +112,11 @@ function loadRegistrar(storageOverride, sharedGlobal, options = {}) {
 }
 
 function makeHarness(options = {}) {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
+  const { createPushTokenRegistrationOrchestrator } = loadRegistrar(
+    undefined,
+    undefined,
+    { jpush: options.jpush },
+  );
   let stored = options.stored ?? null;
   let revocations = [...(options.revocations ?? [])];
   let legacy = options.legacy ?? null;
@@ -130,6 +140,7 @@ function makeHarness(options = {}) {
   };
   const orchestrator = createPushTokenRegistrationOrchestrator({
     platform: options.platform ?? 'ios',
+    ...(options.provider ? { provider: options.provider } : {}),
     appVersion: '1.0.0',
     getProjectId: () =>
       Object.prototype.hasOwnProperty.call(options, 'projectId')
@@ -1050,4 +1061,92 @@ test('logout starts captured-token legacy cleanup even while public revoke is hu
   );
   publicRevoke.resolve();
   legacyDelete.resolve();
+});
+
+function jpushStub(registrationId = 'jpush-registration-1') {
+  const calls = [];
+  return {
+    calls,
+    module: {
+      initializeJPush: () => {
+        calls.push('init');
+        return true;
+      },
+      requestJPushPermission: () => calls.push('jpush-permission'),
+      getJPushRegistrationId: async () => registrationId,
+    },
+  };
+}
+
+function notificationsAsking(answer) {
+  const requests = [];
+  return {
+    requests,
+    module: {
+      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+      getPermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
+      requestPermissionsAsync: async (request) => {
+        requests.push(request);
+        return answer;
+      },
+    },
+  };
+}
+
+test('JPush on Android asks for the system notification permission before registering', async () => {
+  // Android 13+ 的 POST_NOTIFICATIONS 是运行时权限,清单里声明不等于授予。JPush 自己
+  // 的 requestPermission 是 iOS 的 APNs 注册:原来 JPush 分支整个跳过了系统权限,
+  // JPush ID 照样登记成功,系统却把每一条通知都拦掉。
+  const jpush = jpushStub();
+  const notifications = notificationsAsking({ granted: true });
+  const harness = makeHarness({
+    provider: 'jpush',
+    platform: 'android',
+    jpush: jpush.module,
+    notifications: notifications.module,
+  });
+
+  await harness.orchestrator.sync(enabled());
+
+  assert.equal(notifications.requests.length, 1);
+  assert.deepEqual(
+    harness.registerCalls.map((call) => [call.token, call.provider]),
+    [['jpush-registration-1', 'jpush']],
+  );
+  assert.equal(jpush.calls.includes('jpush-permission'), false);
+});
+
+test('JPush on Android does not register a device whose user denied notifications', async () => {
+  const jpush = jpushStub();
+  const notifications = notificationsAsking({ granted: false, canAskAgain: false });
+  const harness = makeHarness({
+    provider: 'jpush',
+    platform: 'android',
+    jpush: jpush.module,
+    notifications: notifications.module,
+  });
+
+  await harness.orchestrator.sync(enabled());
+
+  assert.equal(notifications.requests.length, 1);
+  assert.deepEqual(harness.registerCalls, []);
+});
+
+test('JPush on iOS still registers with APNs through JPush after the system prompt', async () => {
+  const jpush = jpushStub();
+  const notifications = notificationsAsking({ granted: true });
+  const harness = makeHarness({
+    provider: 'jpush',
+    platform: 'ios',
+    jpush: jpush.module,
+    notifications: notifications.module,
+  });
+
+  await harness.orchestrator.sync(enabled());
+
+  assert.equal(jpush.calls.includes('jpush-permission'), true);
+  assert.deepEqual(
+    harness.registerCalls.map((call) => call.token),
+    ['jpush-registration-1'],
+  );
 });

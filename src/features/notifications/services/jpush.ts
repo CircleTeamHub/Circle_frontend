@@ -111,6 +111,7 @@ export function subscribeJPush(listener: (event: JPushNotification) => void) {
 }
 
 export function requestJPushPermission() {
+  if (Platform.OS !== 'ios') return;
   initializeJPush();
   getModule()?.requestPermission?.({ alert: true, badge: true, sound: true });
 }
