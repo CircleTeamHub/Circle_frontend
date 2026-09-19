@@ -104,6 +104,35 @@ test('local-unread / chat-preferences / discover-filter 的 resetForLogout 清�
   useDiscoverFilterStore.getState().resetForLogout();
   assert.equal(useDiscoverFilterStore.getState().appliedCircleIds.length, 0);
   assert.equal(useDiscoverFilterStore.getState().draftCircleIds.length, 0);
+
+  const draftShims = {
+    zustand: require('zustand'),
+    'zustand/middleware': require('zustand/middleware'),
+    '@/storage': mmkvShim(),
+  };
+  const { useComposerDraftStore } = loadTsModule(
+    'src/chat-core/composer-drafts.ts',
+    {
+      requireShim: (specifier) => {
+        if (draftShims[specifier]) return draftShims[specifier];
+        if (specifier === './composer-draft-model') {
+          return loadTsModule('src/chat-core/composer-draft-model.ts');
+        }
+        throw new Error(`unexpected import: ${specifier}`);
+      },
+    },
+  );
+  useComposerDraftStore.getState().saveDraft('user-a', 'conv-a', {
+    text: '还没发出去的话',
+    quoteMessageId: null,
+    mentions: [],
+  });
+  assert.ok(useComposerDraftStore.getState().draftsByUser['user-a']['conv-a']);
+  useComposerDraftStore.getState().resetForLogout();
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(useComposerDraftStore.getState().draftsByUser)),
+    {},
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -164,6 +193,10 @@ test('登出清理清单点名每一个账号级持久化 store，幸存者留�
   assert.match(session, /use-chat-preferences-store/);
   assert.match(session, /use-discover-filter-store/);
   assert.match(session, /use-circle-shortcut-order-store/);
+  // 输入框草稿是消息原文。
+  assert.match(session, /@\/chat-core\/composer-drafts/);
+  // 待发媒体副本是磁盘足迹,与聊天背景图同档。
+  assert.match(session, /clearDeviceArtifacts: clearPendingMediaFiles/);
   // 圈子通知三档从「设备偏好」改判成账号级：offlineEnabled 镜像的是
   // User.circleOfflinePushEnabled 这个 per-user 字段，留在设备上会让 B 继承
   // A 的关闭态，B 第一次拨动就把 A 派生的值 PUT 进自己的账号。
@@ -202,7 +235,8 @@ test('磁盘足迹与 clearStorage 同档，不受 sessionEpoch 守卫影响 (#2
   assert.match(guarded[1], /resetForLogout\(\)/);
   // 磁盘上的壁纸是**刚登出账号**的足迹：跳过它 = 引用先没了、文件永远留着。
   assert.doesNotMatch(guarded[1], /clearDeviceArtifacts/);
-  assert.match(loop, /clearDeviceArtifacts\?\.\(\)/);
+  // 带上被清会话的编号:待发媒体按它区分「被登出会话自己的副本」和抢占它的新会话刚点的发送。
+  assert.match(loop, /clearDeviceArtifacts\?\.\(clearedSessionEpoch\)/);
   assert.match(session, /clearDeviceArtifacts: clearUnreferencedChatBackgroundImages/);
 });
 

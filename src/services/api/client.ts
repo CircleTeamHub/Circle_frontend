@@ -496,6 +496,18 @@ async function refreshAccessToken(sessionEpoch: number) {
   return activeRefreshPromise;
 }
 
+/**
+ * 主动刷新 access token(REST 401 之外的入口)。
+ *
+ * 实时通道(聊天 socket、realtime ws)在 token 到期时会被服务端断开,而服务端主动
+ * 断开的连接不会自己重连 —— 只靠「下一次 REST 请求碰巧 401」来刷新的话,停在一个
+ * 不发 REST 的页面上就会一直收不到消息。与 401 路径共用单飞与会话世代闸;
+ * 刷新失败时的会话清理语义不变(服务端明确否认 refresh token 才清 session)。
+ */
+export function refreshSessionAccessToken(): Promise<string> {
+  return refreshAccessToken(useAuthStore.getState().sessionEpoch);
+}
+
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
     return true;

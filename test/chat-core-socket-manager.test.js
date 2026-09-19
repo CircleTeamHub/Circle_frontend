@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { withChatCoreStubs } = require('./helpers/chat-core-stubs');
 
 const __localDbStub = {
   persistLocalConversations: async () => {},
@@ -40,7 +41,7 @@ function transpile(rel) {
   }).outputText;
 }
 
-function runModule(rel, stubs) {
+function runModule(rel, stubs, globals = {}) {
   const context = {
     console: { warn: () => {}, error: () => {} },
     setTimeout,
@@ -49,13 +50,16 @@ function runModule(rel, stubs) {
     Math,
     JSON,
     Promise,
+    ...globals,
     module: { exports: {} },
     exports: {},
-    require: withObservabilityStubs((request) => {
-      if (request in stubs) return stubs[request];
-      if (request === './local-db') return __localDbStub;
-      throw new Error(`unexpected require: ${request}`);
-    }),
+    require: withObservabilityStubs(
+      withChatCoreStubs((request) => {
+        if (request in stubs) return stubs[request];
+        if (request === './local-db') return __localDbStub;
+        throw new Error(`unexpected require: ${request}`);
+      }),
+    ),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpile(rel), context);
@@ -67,6 +71,10 @@ function fakeSocketFactory() {
   const captured = { url: null, opts: null };
   const socket = {
     connected: false,
+    // socket.io:传输层失败时 active 仍为 true(自己会重连);握手被服务端拒、
+    // 或被服务端断开之后是 false,只有再调一次 connect() 才会重连。
+    active: true,
+    connectCalls: 0,
     handlers: new Map(),
     emitted: [],
     ackResponder: null,
@@ -91,6 +99,11 @@ function fakeSocketFactory() {
     disconnect() {
       this.connected = false;
     },
+    connect() {
+      this.connectCalls += 1;
+      this.active = true;
+      return this;
+    },
     fire(event, ...args) {
       const handler = this.handlers.get(event);
       if (handler) handler(...args);
@@ -104,8 +117,46 @@ function fakeSocketFactory() {
   return { io, socket, captured };
 }
 
+// 手动推进的定时器:按延迟挑着跑,测退避节奏不用真等。
+function createFakeTimers() {
+  let nextId = 1;
+  const pending = new Map();
+  return {
+    setTimeout: (fn, ms) => {
+      const id = nextId;
+      nextId += 1;
+      pending.set(id, { fn, ms });
+      return id;
+    },
+    clearTimeout: (id) => {
+      pending.delete(id);
+    },
+    delays: () => [...pending.values()].map((timer) => timer.ms),
+    run(ms) {
+      for (const [id, timer] of [...pending.entries()]) {
+        if (timer.ms !== ms) continue;
+        pending.delete(id);
+        timer.fn();
+      }
+    },
+  };
+}
+
+// socket.io 每次握手(包括自动重连)都会取一次 auth:回调形式现取,对象形式原样重发。
+// 这里按客户端的做法取出「这一次握手」实际带上的内容。
+function handshakeAuth(captured) {
+  const { auth } = captured.opts;
+  if (typeof auth !== 'function') return auth;
+  let payload = null;
+  auth((data) => {
+    payload = data;
+  });
+  return payload;
+}
+
 function loadManager(localDbOverrides = {}, options = {}) {
   const { io, socket, captured } = fakeSocketFactory();
+  const dismissedNotifications = [];
   const reports = [];
   const diagnostics = [];
   const storeModule = (() => {
@@ -169,6 +220,10 @@ function loadManager(localDbOverrides = {}, options = {}) {
         state.error = v;
       },
       purgeExpiredBurnMessages: async () => {},
+      appForeground: true,
+      setAppForeground(v) {
+        state.appForeground = v;
+      },
       reset() {
         state.calls.push(['reset']);
         state.connected = false;
@@ -197,11 +252,6 @@ function loadManager(localDbOverrides = {}, options = {}) {
       markMessageFailed(conversationId, d) {
         state.failedMarks.push({ conversationId, d });
       },
-      droppedCachedMessages: 0,
-      dropCachedMessages() {
-        state.droppedCachedMessages += 1;
-        state.messagesByConversation = {};
-      },
     };
     return {
       useChatStore: { getState: () => state },
@@ -227,15 +277,16 @@ function loadManager(localDbOverrides = {}, options = {}) {
     };
   })();
   const bound = [];
-  // 重连对账(G-13)的观测点:列表刷新次数与缺口补拉参数。
+  const registeredTokenListeners = [];
+  // 重连对账(G-13)的观测点:列表刷新次数、交给同步协调器的快照、token 刷新。
   const apiCalls = {
     conversations: 0,
-    backfills: [],
-    mutationSyncs: [],
-    /** 依次弹出的 fetchChatMutationsSince 响应(测分页追平用)。 */
-    mutationPages: [],
-    mutationCursorIds: [],
-    droppedLocalMessages: 0,
+    conversationSnapshot: [],
+    snapshotSyncs: [],
+    syncStarts: [],
+    syncResets: 0,
+    tokenRefreshes: 0,
+    pendingMediaPrunes: [],
     initialHistory: [],
     privacyFetches: 0,
     privacyResponse: { messageSelfDestructSec: 2 * 24 * 60 * 60 },
@@ -247,10 +298,65 @@ function loadManager(localDbOverrides = {}, options = {}) {
     remove: (key) => mmkvStore.delete(key),
   };
   const protocol = runModule('src/chat-core/protocol.ts', {});
+  const clock = { now: Date.now() };
+  class FakeDate extends Date {
+    static now() {
+      return clock.now;
+    }
+  }
+  const globals = {
+    ...(options.timers
+      ? {
+          setTimeout: options.timers.setTimeout,
+          clearTimeout: options.timers.clearTimeout,
+        }
+      : {}),
+    ...(options.fakeClock ? { Date: FakeDate } : {}),
+    ...(options.random
+      ? { Math: Object.assign(Object.create(Math), { random: options.random }) }
+      : {}),
+  };
   const manager = runModule('src/chat-core/socket-manager.ts', {
     'socket.io-client': { io },
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
-    'react-native': { Platform: { OS: 'android' } },
+    'react-native': {
+      Platform: { OS: 'android' },
+      AppState: { currentState: options.appState ?? 'active' },
+    },
+    './sync': {
+      setConversationCacheResetHandler: () => {},
+      startChatSync: (userId) => apiCalls.syncStarts.push(userId),
+      resetChatSync: () => {
+        apiCalls.syncResets += 1;
+      },
+      syncConversationsFromSnapshot: async (conversations, syncOptions) => {
+        apiCalls.snapshotSyncs.push({
+          conversations: [...conversations],
+          prioritize: syncOptions?.prioritize ?? null,
+        });
+      },
+      noteLiveRevision: () => {},
+    },
+    '@/services/api/client': {
+      isDefinitiveAuthFailure: (error) => error?.definitive === true,
+      refreshSessionAccessToken: () => {
+        apiCalls.tokenRefreshes += 1;
+        return options.refreshToken
+          ? options.refreshToken()
+          : Promise.resolve('fresh-token');
+      },
+    },
+    // 真的 JWT 解析另有单测(jwt-expiry.test);这里只需要一个能指名「已过期」的 token。
+    '@/utils/jwt-expiry': {
+      isJwtExpired: (token) => token === 'expired-jwt',
+    },
+    './pending-media': {
+      resolvePendingMediaUri: async (userId, d, fileName) =>
+        options.pendingMediaUris?.[d] ?? null,
+      prunePendingMedia: async (userId, referenced) => {
+        apiCalls.pendingMediaPrunes.push([...referenced]);
+      },
+    },
     '@/utils/client-diagnostics': {
       logClientDiagnostic: (event, details) =>
         diagnostics.push({ event, details }),
@@ -266,26 +372,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     './api': {
       loadChatConversations: () => {
         apiCalls.conversations += 1;
-        return Promise.resolve([]);
-      },
-      backfillConversationSince: (conversationId, afterHeight) => {
-        apiCalls.backfills.push({ conversationId, afterHeight });
-        return Promise.resolve();
-      },
-      fetchChatMutationsSince: (since, sinceId) => {
-        apiCalls.mutationSyncs.push(since);
-        apiCalls.mutationCursorIds.push(sinceId ?? '');
-        const next = apiCalls.mutationPages.shift();
-        return Promise.resolve(
-          next ?? {
-            messages: [],
-            serverTime: new Date().toISOString(),
-            nextSince: new Date().toISOString(),
-            nextSinceId: '',
-            hasMore: false,
-            resetRequired: false,
-          },
-        );
+        return Promise.resolve(apiCalls.conversationSnapshot);
       },
       loadChatHistory: (conversationId) => {
         apiCalls.initialHistory.push(conversationId);
@@ -305,17 +392,32 @@ function loadManager(localDbOverrides = {}, options = {}) {
       outboxUpsert: async () => {},
       outboxDelete: async () => {},
       outboxList: async () => [],
+      // 水合读的是这一个(读失败返回 null,不清待发媒体副本);用例大多只覆盖
+      // outboxList,这里跟着它走。
+      readOutboxEntries: async () =>
+        localDbOverrides.outboxList ? localDbOverrides.outboxList() : [],
       pendingReadUpsert: async () => {},
       pendingReadDelete: async () => {},
       pendingReadsList: async () => [],
       initChatLocalDb: async () => false,
-      dropAllLocalMessages: async () => {
-        apiCalls.droppedLocalMessages += 1;
-      },
       ...localDbOverrides,
     },
     './app-badge': { initChatAppBadgeSync: () => {} },
-    // 离线撤回增量的游标落 MMKV,按 userId 分键;测试里用一个内存替身。
+    './chat-notifications': {
+      dismissChatNotifications: (conversationId, messageIds) =>
+        dismissedNotifications.push({ conversationId, messageIds }),
+    },
+    '@/features/notifications/services/push-token-registration': {
+      getRegisteredPushToken: (userId) =>
+        typeof options.pushToken === 'function'
+          ? options.pushToken(userId)
+          : (options.pushToken ?? null),
+      subscribeRegisteredPushToken: (listener) => {
+        registeredTokenListeners.push(listener);
+        return () => {};
+      },
+    },
+    // 视角自毁/输入状态策略按账号缓存在 MMKV;测试里用一个内存替身。
     '@/storage': { storage: mmkv },
     './dispatcher': {
       bindChatEvents: (sock, isLive) => bound.push({ sock, isLive }),
@@ -326,19 +428,36 @@ function loadManager(localDbOverrides = {}, options = {}) {
     '@/observability/sentry': {
       reportError: (error, context) => reports.push({ error, context }),
     },
-  });
+    // 队列逻辑零依赖,跑真的;定时器跟着用例注入的走。
+    './send-queue': runModule('src/chat-core/send-queue.ts', {}, globals),
+  }, globals);
   return {
     manager,
     socket,
     captured,
+    clock,
+    announceRegisteredPushToken: (registration) => {
+      for (const listener of registeredTokenListeners) listener(registration);
+    },
     store: storeModule.state,
     bound,
     apiCalls,
     reports,
     diagnostics,
     mmkvStore,
+    dismissedNotifications,
   };
 }
+
+test('reading a conversation on this device clears its notifications', () => {
+  const { manager, store, dismissedNotifications } = loadManager();
+  store.markConversationReadLocal = () => {};
+  manager.markConversationRead('c1', 7);
+  assert.deepEqual(
+    dismissedNotifications.map((entry) => ({ ...entry })),
+    [{ conversationId: 'c1', messageIds: undefined }],
+  );
+});
 
 test('viewer self-destruct uses the cached policy offline and refreshes it after connect', async () => {
   const { manager, socket, store, apiCalls, mmkvStore } = loadManager();
@@ -660,162 +779,492 @@ test('a stale policy refresh cannot overwrite a newer local setting', async () =
   assert.equal(store.viewerSelfDestructSec, 7 * 24 * 60 * 60);
 });
 
-test('first connect refreshes conversations and reconnect backfills the active gap', () => {
+test('first connect and every reconnect resync conversations through the revision stream', async () => {
   const { manager, socket, store, apiCalls } = loadManager();
+  apiCalls.conversationSnapshot = [{ id: 'c1', syncRevision: 12 }];
   manager.connectChat('jwt', 'u1');
+  assert.deepEqual(apiCalls.syncStarts, ['u1']);
   socket.fire('connect');
-  // 首连必须拉会话快照:消息页可能在 socket 已连接后才挂载。
+  await flush();
+  // 首连也要对账:上次退出到这次启动之间的新消息、撤回、回应本地一条都没有。
+  // 消息页可能在 socket 已连接后才挂载,也靠这一次把列表拉到。
   assert.equal(apiCalls.conversations, 1);
-  assert.deepEqual(apiCalls.backfills, []);
+  assert.equal(apiCalls.snapshotSyncs.length, 1);
+  assert.deepEqual(
+    apiCalls.snapshotSyncs[0].conversations.map((c) => c.id),
+    ['c1'],
+  );
+  assert.equal(apiCalls.snapshotSyncs[0].prioritize, null);
 
   socket.fire('disconnect');
   store.activeConversationId = 'c1';
-  store.messagesByConversation = {
-    c1: [{ height: 4 }, { height: 9 }, { height: 0 }],
-  };
+  store.messagesByConversation = { c1: [{ height: 4 }, { height: 9 }] };
   socket.fire('connect');
-  // 重连:列表刷新一次 + 当前会话从本地最高 height(乐观消息的 0 不算)追平。
+  await flush();
+  // 重连:同一趟同步追平新消息与撤回/编辑/回应(不再有按 height 的补拉和
+  // 按时间戳的撤回通道),正开着的会话排最前。
   assert.equal(apiCalls.conversations, 2);
-  assert.deepEqual(apiCalls.backfills, [
-    { conversationId: 'c1', afterHeight: 9 },
-  ]);
-  // 撤回不改 height —— afterHeight 补拉结构上够不着,必须另追一趟。
-  // 首连已经把游标种下,这一次追的是那个游标,不是「此刻」。
-  assert.equal(apiCalls.mutationSyncs.length, 1);
+  assert.equal(apiCalls.snapshotSyncs[1].prioritize, 'c1');
+  // 时间线里有确认过的消息:不必重拉首屏。
+  assert.deepEqual(apiCalls.initialHistory, []);
 });
 
-test('the very first outage is covered by a cursor seeded at first connect', async () => {
-  const { manager, socket, apiCalls } = loadManager();
+test('logging out resets the sync coordinator; a new login starts it again', () => {
+  const { manager, apiCalls } = loadManager();
   manager.connectChat('jwt', 'u1');
-  socket.fire('connect');
-  await Promise.resolve();
-  // 首连不拉增量(没有本地历史可言),但必须把游标种下。
-  assert.deepEqual(apiCalls.mutationSyncs, []);
-
-  socket.fire('disconnect');
-  socket.fire('connect');
-  await Promise.resolve();
-
-  // 原来这里 lastMutationSyncAt 还是 null,于是「以现在为起点」问一遍 ——
-  // 断线窗口里发生的撤回被整段跳过,而 height 没变,任何补拉都够不着它。
-  assert.equal(apiCalls.mutationSyncs.length, 1);
-  const asked = Date.parse(apiCalls.mutationSyncs[0]);
-  assert.ok(Number.isFinite(asked));
-  assert.ok(asked <= Date.now(), 'cursor must predate this reconnect');
+  manager.disconnectChat();
+  assert.equal(apiCalls.syncResets, 1);
+  manager.connectChat('jwt', 'u2');
+  assert.deepEqual(apiCalls.syncStarts, ['u1', 'u2']);
 });
 
-test('a cold start catches up from the persisted cursor', async () => {
-  const first = loadManager();
-  first.manager.connectChat('jwt', 'u1');
-  first.socket.fire('connect');
-  await Promise.resolve();
-  const seeded = first.mmkvStore.get('chat.mutationCursor.u1');
-  assert.ok(seeded, 'first connect must persist a cursor');
-  first.manager.disconnectChat();
-
-  // 新进程(内存清零),MMKV 还在:上次退出到这次启动之间的撤回必须追。
-  const next = loadManager();
-  next.mmkvStore.set('chat.mutationCursor.u1', seeded);
-  next.manager.connectChat('jwt', 'u1');
-  next.socket.fire('connect');
-  await Promise.resolve();
-
-  assert.deepEqual(next.apiCalls.mutationSyncs, [seeded]);
-});
-
-test('catch-up keeps paging while the server reports hasMore', async () => {
-  const { manager, socket, apiCalls, mmkvStore } = loadManager();
-  mmkvStore.set('chat.mutationCursor.u1', '2026-08-10T00:00:00.000Z');
-  apiCalls.mutationPages.push(
-    {
-      messages: [],
-      serverTime: '2026-08-10T05:00:00.000Z',
-      nextSince: '2026-08-10T01:00:00.000Z',
-      nextSinceId: 'm-42',
-      hasMore: true,
-      resetRequired: false,
-    },
-    {
-      messages: [],
-      serverTime: '2026-08-10T05:00:00.000Z',
-      nextSince: '2026-08-10T05:00:00.000Z',
-      nextSinceId: '',
-      hasMore: false,
-      resetRequired: false,
-    },
-  );
-
-  manager.connectChat('jwt', 'u1');
-  socket.fire('connect');
-  for (let i = 0; i < 8; i += 1) await Promise.resolve();
-
-  // 单页有上限:只拉一页的话,被截断的那些撤回会被游标永久跳过。
-  assert.deepEqual(apiCalls.mutationSyncs, [
-    '2026-08-10T00:00:00.000Z',
-    '2026-08-10T01:00:00.000Z',
-  ]);
-  assert.equal(mmkvStore.get('chat.mutationCursor.u1'), '2026-08-10T05:00:00.000Z');
-  // 复合游标:第二页必须带上第一页最后一条的 id,否则同毫秒的其余变更被跳过。
-  assert.deepEqual(apiCalls.mutationCursorIds, ['', 'm-42']);
-});
-
-test('resetRequired drops the cached messages instead of pretending to be caught up', async () => {
-  const { manager, socket, store, apiCalls, mmkvStore } = loadManager();
-  mmkvStore.set('chat.mutationCursor.u1', '2026-06-01T00:00:00.000Z');
-  store.messagesByConversation = { c1: [{ height: 3 }] };
-  apiCalls.mutationPages.push({
-    messages: [],
-    serverTime: '2026-08-10T05:00:00.000Z',
-    nextSince: '2026-08-10T05:00:00.000Z',
-    nextSinceId: '',
-    hasMore: false,
-    resetRequired: true,
-  });
-
-  manager.connectChat('jwt', 'u1');
-  socket.fire('connect');
-  for (let i = 0; i < 8; i += 1) await Promise.resolve();
-
-  // 游标比服务端保留窗口还老:那段区间的撤回已经查不到了,缓存里的消息会
-  // 永远显示原文 —— 只能整体作废重新拉,不能装作追平了。
-  assert.equal(apiCalls.droppedLocalMessages, 1);
-  assert.equal(store.droppedCachedMessages, 1);
-  assert.equal(mmkvStore.get('chat.mutationCursor.u1'), '2026-08-10T05:00:00.000Z');
-});
-
-test('token rotation (suspend + reconnect) still counts as a reconnect', () => {
+test('token rotation (suspend + reconnect) still counts as a reconnect', async () => {
   const { manager, socket, store, apiCalls } = loadManager();
   manager.connectChat('jwt', 'u1');
   socket.fire('connect');
+  await flush();
   assert.equal(apiCalls.conversations, 1);
 
   // access token 轮换走的是 suspendChat + connectChat:换的是一条**新 socket**。
   // 判据挂在 socket 上的话这条新连接永远算首连,断开窗口里的消息一条都不补。
   manager.suspendChat();
   store.activeConversationId = 'c1';
-  store.messagesByConversation = { c1: [{ height: 7 }] };
+  store.messagesByConversation = { c1: [] };
   manager.connectChat('jwt-rotated', 'u1');
   socket.fire('connect');
+  await flush();
 
   assert.equal(apiCalls.conversations, 2);
-  assert.deepEqual(apiCalls.backfills, [
-    { conversationId: 'c1', afterHeight: 7 },
-  ]);
+  assert.equal(apiCalls.snapshotSyncs[1].prioritize, 'c1');
+  // 只有重连才会给空时间线补首屏:这一条证明轮换被认成了重连。
+  assert.deepEqual(apiCalls.initialHistory, ['c1']);
 });
 
-test('reconnect with an empty active timeline loads the first history page', () => {
+test('reconnect with an empty active timeline loads the first history page', async () => {
   const { manager, socket, store, apiCalls } = loadManager();
   manager.connectChat('jwt', 'u1');
   socket.fire('connect');
   socket.fire('disconnect');
   // 打开会话时正好断网、首屏 REST 也失败 —— 一条确认消息都没有。
+  // 同步协调器眼里这是「没有本地缓存」的会话,只采纳位置、不拉内容。
   store.activeConversationId = 'c1';
-  store.messagesByConversation = { c1: [] };
+  store.messagesByConversation = { c1: [{ height: 0 }] };
+  socket.fire('connect');
+  await flush();
+
+  assert.deepEqual(apiCalls.initialHistory, ['c1']);
+});
+
+test('an access token that has already expired is refreshed instead of handshaking', () => {
+  const { manager, captured, store, apiCalls } = loadManager();
+  manager.connectChat('expired-jwt', 'u1');
+
+  // 拿过期 token 握手只会被拒,而被拒的握手 socket.io 不会自己重连。
+  assert.equal(captured.url, null);
+  assert.equal(apiCalls.tokenRefreshes, 1);
+  assert.equal(store.connecting, false);
+  // 本地水合与账号身份照常建立:离线时列表和历史仍然能看。
+  assert.equal(store.currentUserId, 'u1');
+});
+
+test('a server-announced token expiry refreshes the token after the disconnect', () => {
+  const timers = createFakeTimers();
+  const { manager, socket, apiCalls } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+  });
+  manager.connectChat('jwt', 'u1');
   socket.fire('connect');
 
-  // 直接 return 的话这条唯一的恢复路径也放弃了,会话一直空着。
-  assert.deepEqual(apiCalls.backfills, []);
-  assert.deepEqual(apiCalls.initialHistory, ['c1']);
+  // 没说原因的服务端断开(进房失败、连接数超限、会话被吊销):不刷新 token,
+  // 按退避重连 —— 被吊销的话,重连时的握手会被拒,那里再去刷新。
+  socket.fire('disconnect', 'io server disconnect');
+  assert.equal(apiCalls.tokenRefreshes, 0);
+  assert.deepEqual(timers.delays(), [2_000]);
+  timers.run(2_000);
+  assert.equal(socket.connectCalls, 1);
+
+  socket.fire('connect');
+  socket.fire('chat:session_expired', { reason: 'token_expired' });
+  socket.fire('disconnect', 'io server disconnect');
+  assert.equal(apiCalls.tokenRefreshes, 1);
+  // token 到期:等刷新带着新 token 重连,不拿旧 token 空转。
+  assert.deepEqual(timers.delays(), []);
+});
+
+test('a handshake the server rejects is retried with jittered backoff; transport errors are left to socket.io', () => {
+  const timers = createFakeTimers();
+  const { manager, socket, store } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+  });
+  manager.connectChat('jwt', 'u1');
+
+  // 服务器暂时不可达:socket.io 自己按退避重连(active 仍为 true),这里不插手。
+  socket.fire('connect_error', new Error('websocket error'));
+  assert.deepEqual(timers.delays(), []);
+
+  // 会话暂时无法校验(Redis/库抖动):服务端回 503,socket 被销毁、不会再自己连。
+  const unavailable = () =>
+    Object.assign(new Error('service_unavailable'), { data: { status: 503 } });
+  socket.active = false;
+  socket.fire('connect_error', unavailable());
+  assert.deepEqual(timers.delays(), [2_000]);
+  timers.run(2_000);
+  assert.equal(socket.connectCalls, 1);
+  assert.equal(store.connecting, true, '补连期间显示连接中');
+
+  for (const expected of [5_000, 15_000, 30_000, 60_000, 60_000]) {
+    socket.active = false;
+    socket.fire('connect_error', unavailable());
+    assert.deepEqual(timers.delays(), [expected]);
+    timers.run(expected);
+  }
+  assert.equal(socket.connectCalls, 6);
+});
+
+test('backoff jitter spreads reconnects around the ladder step', () => {
+  const low = createFakeTimers();
+  const lowManager = loadManager({}, { timers: low, random: () => 0 });
+  lowManager.manager.connectChat('jwt', 'u1');
+  lowManager.socket.active = false;
+  lowManager.socket.fire('connect_error', new Error('service_unavailable'));
+  assert.deepEqual(low.delays(), [1_600]);
+
+  const high = createFakeTimers();
+  const highManager = loadManager({}, { timers: high, random: () => 0.999999 });
+  highManager.manager.connectChat('jwt', 'u1');
+  highManager.socket.active = false;
+  highManager.socket.fire('connect_error', new Error('service_unavailable'));
+  assert.deepEqual(high.delays(), [2_400]);
+});
+
+test('the reconnect ladder only starts over after a connection that stayed up', () => {
+  const timers = createFakeTimers();
+  const { manager, socket, clock } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+    fakeClock: true,
+  });
+  manager.connectChat('jwt', 'u1');
+
+  // 连上就被踢(连接数超限、进房失败):每次 connect 都不算恢复,退避照样往上走,
+  // 否则就是每 2 秒连一次、踢一次的死循环。
+  for (const expected of [2_000, 5_000, 15_000]) {
+    socket.fire('connect');
+    clock.now += 1_000;
+    socket.fire('disconnect', 'io server disconnect');
+    assert.deepEqual(timers.delays(), [expected]);
+    timers.run(expected);
+  }
+
+  // 稳定连了一阵之后再被断开,是一次新的故障:从头开始。
+  socket.fire('connect');
+  clock.now += 60_000;
+  socket.fire('disconnect', 'io server disconnect');
+  assert.deepEqual(timers.delays(), [2_000]);
+});
+
+test('an unauthorized handshake with a still-valid token refreshes once, then keeps retrying', async () => {
+  const timers = createFakeTimers();
+  const { manager, socket, apiCalls } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+  });
+  manager.connectChat('jwt', 'u1');
+
+  // 本机看 token 没过期、服务端却说未授权:时钟差(服务端看已过期)或会话被吊销,
+  // 都该刷新一次。同时照排一次重连,刷新没换出新 token 也不会就此停住。
+  socket.active = false;
+  socket.fire('connect_error', new Error('unauthorized'));
+  assert.equal(apiCalls.tokenRefreshes, 1);
+  assert.deepEqual(timers.delays(), [2_000]);
+  await flush();
+
+  // 服务端内部出错也回 unauthorized:刷新过一次还被拒,就只退避重连,
+  // 不能刷新 → 重连 → 再刷新地打转。
+  timers.run(2_000);
+  socket.active = false;
+  socket.fire('connect_error', new Error('unauthorized'));
+  assert.equal(apiCalls.tokenRefreshes, 1);
+  assert.deepEqual(timers.delays(), [5_000]);
+  timers.run(5_000);
+
+  // 连上过就是新的故障窗口,下次再被拒可以再刷新一次。
+  socket.fire('connect');
+  socket.fire('disconnect', 'transport close');
+  socket.active = false;
+  socket.fire('connect_error', new Error('unauthorized'));
+  assert.equal(apiCalls.tokenRefreshes, 2);
+});
+
+test('logging out or replacing the socket cancels a pending reconnect', () => {
+  const timers = createFakeTimers();
+  const { manager, socket } = loadManager({}, {
+    timers,
+    random: () => 0.5,
+  });
+  manager.connectChat('jwt', 'u1');
+  socket.active = false;
+  socket.fire('connect_error', new Error('service_unavailable'));
+  assert.deepEqual(timers.delays(), [2_000]);
+
+  manager.disconnectChat();
+  assert.deepEqual(timers.delays(), []);
+
+  // 登出后重新登录:退避从头数。
+  manager.connectChat('jwt', 'u1');
+  socket.active = false;
+  socket.fire('connect_error', new Error('service_unavailable'));
+  assert.deepEqual(timers.delays(), [2_000]);
+
+  // token 轮换换了一条新 socket:旧的补连不能再去碰它。
+  const connectsBefore = socket.connectCalls;
+  manager.suspendChat();
+  assert.deepEqual(timers.delays(), []);
+  assert.equal(socket.connectCalls, connectsBefore);
+});
+
+test('token refresh is single-flight and gives up on a definitive auth failure', async () => {
+  let rejectRefresh;
+  const { manager, apiCalls } = loadManager({}, {
+    refreshToken: () =>
+      new Promise((_, reject) => {
+        rejectRefresh = reject;
+      }),
+  });
+  manager.connectChat('expired-jwt', 'u1');
+  manager.connectChat('expired-jwt', 'u1');
+  assert.equal(apiCalls.tokenRefreshes, 1, '在途刷新期间不能再发第二个');
+
+  rejectRefresh(Object.assign(new Error('revoked'), { definitive: true }));
+  await flush();
+  // 服务端明确否认会话:由 API 层清会话,这里不再排重试。
+  manager.connectChat('expired-jwt', 'u1');
+  assert.equal(apiCalls.tokenRefreshes, 2);
+});
+
+test('a pending token refresh retry does not swallow the next foreground attempt', async () => {
+  // 离线、token 已过期:刷新失败排了 5 秒后重试。这期间回前台又走一次 connectChat
+  // (会话代数 +1)。原来那个排着的定时器挡住了这次刷新,自己到点又因为代数对不上
+  // 直接退出 —— 重试链就此断掉,网回来了也一直连不上,直到再切一次前后台。
+  const timers = createFakeTimers();
+  let refreshOutcome = () => Promise.reject(new Error('offline'));
+  const { manager, apiCalls } = loadManager({}, {
+    timers,
+    refreshToken: () => refreshOutcome(),
+  });
+  manager.connectChat('expired-jwt', 'u1');
+  await flush();
+  assert.equal(apiCalls.tokenRefreshes, 1);
+  assert.deepEqual(timers.delays(), [5_000]);
+
+  // 回前台:立刻再试一次,不被上一轮排着的重试挡住。
+  manager.connectChat('expired-jwt', 'u1');
+  assert.equal(apiCalls.tokenRefreshes, 2);
+  await flush();
+  assert.deepEqual(timers.delays(), [5_000], '只留一条重试,不叠');
+
+  // 还是没网:重试照常接着跑。
+  timers.run(5_000);
+  assert.equal(apiCalls.tokenRefreshes, 3);
+  refreshOutcome = () => Promise.resolve('fresh-token');
+  await flush();
+  timers.run(15_000);
+  assert.equal(apiCalls.tokenRefreshes, 4);
+});
+
+test('a token refresh that fails while the app comes back to the foreground keeps retrying', async () => {
+  const timers = createFakeTimers();
+  let rejectRefresh;
+  const { manager, apiCalls } = loadManager({}, {
+    timers,
+    refreshToken: () =>
+      new Promise((_, reject) => {
+        rejectRefresh = reject;
+      }),
+  });
+  manager.connectChat('expired-jwt', 'u1');
+  // 刷新还在路上时回前台:单飞,不发第二个。
+  manager.connectChat('expired-jwt', 'u1');
+  assert.equal(apiCalls.tokenRefreshes, 1);
+
+  rejectRefresh(new Error('offline'));
+  await flush();
+  // 原来这条重试带着旧的会话代数,到点就退出了。
+  timers.run(5_000);
+  assert.equal(apiCalls.tokenRefreshes, 2);
+});
+
+test('logging out stops token refresh retries for that account', async () => {
+  const timers = createFakeTimers();
+  const { manager, apiCalls } = loadManager({}, {
+    timers,
+    refreshToken: () => Promise.reject(new Error('offline')),
+  });
+  manager.connectChat('expired-jwt', 'u1');
+  await flush();
+  assert.deepEqual(timers.delays(), [5_000]);
+  manager.disconnectChat();
+  assert.deepEqual(timers.delays(), []);
+  assert.equal(apiCalls.tokenRefreshes, 1);
+});
+
+test('a push token confirmed after the handshake makes the live connection handshake again with it', () => {
+  // 首次安装/新账号:聊天连接先连上,推送 token 的登记稍后才确认。握手时没带 token,
+  // 服务端就认不出这台设备,开着 App 也照样给它发推送 —— 直到某次无关的重连。
+  let registered = null;
+  const { manager, socket, captured, announceRegisteredPushToken } = loadManager({}, {
+    pushToken: (userId) => (userId === 'u1' ? registered : null),
+  });
+  manager.connectChat('jwt', 'u1');
+  assert.equal(handshakeAuth(captured).pushToken, undefined);
+  socket.connected = true;
+  socket.fire('connect');
+  let disconnects = 0;
+  const disconnect = socket.disconnect;
+  socket.disconnect = function countedDisconnect() {
+    disconnects += 1;
+    return disconnect.call(this);
+  };
+
+  registered = 'ExponentPushToken[fresh]';
+  announceRegisteredPushToken({ userId: 'u1', token: 'ExponentPushToken[fresh]' });
+
+  assert.equal(disconnects, 1);
+  assert.equal(socket.connectCalls, 1, '断开后立刻重新握手');
+  assert.equal(handshakeAuth(captured).pushToken, 'ExponentPushToken[fresh]');
+});
+
+test('a push token confirmation leaves the connection alone when it is not needed', () => {
+  let registered = 'ExponentPushToken[same]';
+  const { manager, socket, captured, announceRegisteredPushToken } = loadManager({}, {
+    pushToken: () => registered,
+  });
+  manager.connectChat('jwt', 'u1');
+  // 握手时已经带上了同一个 token:不用重连。
+  assert.equal(handshakeAuth(captured).pushToken, 'ExponentPushToken[same]');
+  socket.connected = true;
+  socket.fire('connect');
+  announceRegisteredPushToken({ userId: 'u1', token: 'ExponentPushToken[same]' });
+  assert.equal(socket.connectCalls, 0);
+
+  // 登记的是别的账号:不是这条连接的设备。
+  registered = 'ExponentPushToken[other]';
+  announceRegisteredPushToken({ userId: 'u2', token: 'ExponentPushToken[other]' });
+  assert.equal(socket.connectCalls, 0);
+
+  // 还没连上:下一次握手自己会带上,不必动它。
+  socket.connected = false;
+  announceRegisteredPushToken({ userId: 'u1', token: 'ExponentPushToken[other]' });
+  assert.equal(socket.connectCalls, 0);
+});
+
+test('app background/foreground is reported in the handshake and on the live socket', () => {
+  const { manager, socket, captured, store } = loadManager();
+  manager.setChatAppState('background');
+  assert.equal(store.appForeground, false);
+  manager.connectChat('jwt', 'u1');
+  // 后台建立的连接(安卓后台重连)一开始就按后台登记,不会先被当成「收得到」。
+  assert.equal(handshakeAuth(captured).appState, 'background');
+  socket.connected = true;
+  socket.fire('connect');
+
+  manager.setChatAppState('foreground');
+  assert.equal(store.appForeground, true);
+  // 握手已经带了后台,连上时不再重复报一次;之后的切换在活连接上报。
+  assert.deepEqual(
+    socket.emitted
+      .filter((e) => e.event === 'chat:background' || e.event === 'chat:foreground')
+      .map((e) => e.event),
+    ['chat:foreground'],
+  );
+  // 状态没变不重复上报。
+  manager.setChatAppState('foreground');
+  assert.equal(
+    socket.emitted.filter((e) => e.event === 'chat:foreground').length,
+    1,
+  );
+});
+
+test('auto-reconnect handshakes with the current app state, not the one from socket creation', () => {
+  const { manager, socket, captured } = loadManager();
+  manager.setChatAppState('background');
+  manager.connectChat('jwt', 'u1');
+  assert.equal(handshakeAuth(captured).appState, 'background');
+  socket.connected = true;
+  socket.fire('connect');
+  manager.setChatAppState('foreground');
+
+  // 断线后的自动重连不经过 connectChat:同一个 socket 拿同一份 auth 配置再握手。
+  // 带着建连时的「后台」重连上去,服务端就把正在用 App 的人当成后台,照发推送。
+  socket.connected = false;
+  socket.fire('disconnect', 'transport close');
+  assert.equal(handshakeAuth(captured).appState, 'foreground');
+  socket.emitted.length = 0;
+  socket.connected = true;
+  socket.fire('connect');
+  assert.deepEqual(
+    socket.emitted.filter(
+      (e) => e.event === 'chat:background' || e.event === 'chat:foreground',
+    ),
+    [],
+  );
+});
+
+test('an app state switch while the handshake is in flight is reported once connected', () => {
+  const { manager, socket, captured } = loadManager();
+  manager.setChatAppState('background');
+  manager.connectChat('jwt', 'u1');
+  assert.equal(handshakeAuth(captured).appState, 'background');
+  // 握手还没回来:切换只记下,没有活连接可报。
+  manager.setChatAppState('foreground');
+  assert.deepEqual(socket.emitted, []);
+
+  socket.connected = true;
+  socket.fire('connect');
+  assert.deepEqual(
+    socket.emitted
+      .filter((e) => e.event === 'chat:background' || e.event === 'chat:foreground')
+      .map((e) => e.event),
+    ['chat:foreground'],
+  );
+
+  // 反方向同理:前台发起的握手途中退到后台。
+  const second = loadManager();
+  second.manager.connectChat('jwt', 'u1');
+  assert.equal(handshakeAuth(second.captured).appState, 'foreground');
+  second.manager.setChatAppState('background');
+  second.socket.connected = true;
+  second.socket.fire('connect');
+  assert.deepEqual(
+    second.socket.emitted
+      .filter((e) => e.event === 'chat:background' || e.event === 'chat:foreground')
+      .map((e) => e.event),
+    ['chat:background'],
+  );
+});
+
+test('the handshake names this device push token so only this device skips pushes', () => {
+  const tokens = [];
+  let registered = null;
+  const { manager, captured } = loadManager(
+    {},
+    {
+      pushToken: (userId) => {
+        tokens.push(userId);
+        return registered;
+      },
+    },
+  );
+  manager.connectChat('jwt', 'u1');
+  // 推送还没登记确认:不带,服务端不按设备排除任何推送。
+  assert.equal('pushToken' in handshakeAuth(captured), false);
+
+  // 登记完成后,下一次握手(包括自动重连)现取。
+  registered = 'ExponentPushToken[phone]';
+  assert.equal(handshakeAuth(captured).pushToken, 'ExponentPushToken[phone]');
+  assert.deepEqual(tokens, ['u1', 'u1']);
 });
 
 test('connects with token in the handshake auth frame, never in the URL', () => {
@@ -823,11 +1272,13 @@ test('connects with token in the handshake auth frame, never in the URL', () => 
   manager.connectChat('jwt-token', 'u1');
   assert.equal(captured.url, 'http://api.test');
   assert.equal(captured.opts.path, '/chat-ws');
-  assert.equal(captured.opts.auth.token, 'jwt-token');
-  assert.match(captured.opts.auth.traceId, /^ws-[a-z0-9-]+$/);
+  const auth = handshakeAuth(captured);
+  assert.equal(auth.token, 'jwt-token');
+  assert.equal(auth.appState, 'foreground');
+  assert.match(auth.traceId, /^ws-[a-z0-9-]+$/);
   assert.equal(
     captured.opts.extraHeaders['x-connection-trace-id'],
-    captured.opts.auth.traceId,
+    auth.traceId,
   );
   assert.deepEqual(Array.from(captured.opts.transports), ['websocket']);
   assert.doesNotMatch(captured.url, /token=/);
@@ -847,16 +1298,139 @@ test('connects with token in the handshake auth frame, never in the URL', () => 
   assert.doesNotMatch(JSON.stringify(diagnostics), /jwt-token/);
 });
 
-test('sendChatMessage rejects when not connected', async () => {
-  const { manager } = loadManager();
-  await assert.rejects(
-    manager.sendChatMessage({
+test('a send that never gets a connection fails after a minute, not at once', async () => {
+  const timers = createFakeTimers();
+  const { manager } = loadManager({}, { timers });
+  let outcome = null;
+  manager
+    .sendChatMessage({
       conversationId: 'c1',
       type: 'text',
       content: { text: 'hi' },
       d: 'd1',
-    }),
-    (err) => err.code === 'CHAT_NOT_CONNECTED',
+    })
+    .catch((err) => {
+      outcome = err.code;
+    });
+  await flush();
+  assert.equal(outcome, null, '没连上先排队,不立刻标红');
+
+  timers.run(60_000);
+  await flush();
+  assert.equal(outcome, 'CHAT_NOT_CONNECTED');
+});
+
+test('a message sent while disconnected goes out with the same d once reconnected', async () => {
+  const timers = createFakeTimers();
+  const { manager, socket } = loadManager({}, { timers });
+  manager.connectChat('jwt', 'u1');
+  const payload = {
+    conversationId: 'c1',
+    type: 'text',
+    content: { text: 'hi' },
+    d: 'd-offline',
+  };
+  const sent = manager.sendChatMessage(payload);
+  const sendsOnWire = () =>
+    socket.emitted.filter((entry) => entry.event === 'chat:send');
+  assert.equal(sendsOnWire().length, 0);
+
+  socket.ackResponder = (event, wire, cb) =>
+    cb(null, { ok: true, messageId: 'm1', height: 7, d: wire.d });
+  socket.connected = true;
+  socket.fire('connect');
+  assert.deepEqual(
+    sendsOnWire().map((entry) => entry.payload.d),
+    ['d-offline'],
+  );
+  assert.deepEqual(await sent, { ok: true, messageId: 'm1', height: 7, d: 'd-offline' });
+});
+
+test('an ack lost to a disconnect is resent with the same d after the reconnect', async () => {
+  const timers = createFakeTimers();
+  const { manager, socket } = loadManager({}, { timers });
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+  let ackCallback = null;
+  socket.ackResponder = (event, wire, cb) => {
+    ackCallback = cb;
+  };
+  const sent = manager.sendChatMessage({
+    conversationId: 'c1',
+    type: 'text',
+    content: { text: 'hi' },
+    d: 'd-lost',
+  });
+
+  // 断线:socket.io 把没回的 ack 以错误结束。
+  socket.connected = false;
+  socket.fire('disconnect', 'transport close');
+  ackCallback(new Error('socket has been disconnected'));
+  await flush();
+
+  socket.ackResponder = (event, wire, cb) =>
+    cb(null, { ok: true, messageId: 'm1', height: 3, d: wire.d });
+  socket.connected = true;
+  socket.fire('connect');
+  const ack = await sent;
+  assert.equal(ack.messageId, 'm1');
+  assert.deepEqual(
+    socket.emitted
+      .filter((entry) => entry.event === 'chat:send')
+      .map((entry) => entry.payload.d),
+    ['d-lost', 'd-lost'],
+  );
+});
+
+test('a token rotation keeps queued messages; logging out or switching accounts drops them', async () => {
+  const timers = createFakeTimers();
+  const { manager, socket } = loadManager({}, { timers });
+  const outcomes = {};
+  const send = (d) =>
+    manager
+      .sendChatMessage({ conversationId: 'c1', type: 'text', content: { text: d }, d })
+      .then(
+        () => {
+          outcomes[d] = 'sent';
+        },
+        (err) => {
+          outcomes[d] = err.code;
+        },
+      );
+
+  manager.connectChat('jwt', 'u1');
+  send('kept');
+  // token 轮换:挂起再用新 token 连同一个人。
+  manager.suspendChat();
+  manager.connectChat('jwt-2', 'u1');
+  await flush();
+  assert.equal(outcomes.kept, undefined);
+  socket.ackResponder = (event, wire, cb) =>
+    cb(null, { ok: true, messageId: `m-${wire.d}`, height: 1, d: wire.d });
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+  assert.equal(outcomes.kept, 'sent');
+
+  socket.ackResponder = null;
+  socket.connected = false;
+  send('logged-out');
+  manager.disconnectChat();
+  await flush();
+  assert.equal(outcomes['logged-out'], 'CHAT_NOT_CONNECTED');
+
+  manager.connectChat('jwt', 'u1');
+  send('other-account');
+  manager.connectChat('jwt-b', 'u2');
+  await flush();
+  assert.equal(outcomes['other-account'], 'CHAT_NOT_CONNECTED');
+  socket.connected = true;
+  socket.fire('connect');
+  assert.equal(
+    socket.emitted.filter((entry) => entry.event === 'chat:send' && entry.payload.d !== 'kept').length,
+    0,
+    '换了账号的连接不能替上一个账号发消息',
   );
 });
 
@@ -1082,7 +1656,7 @@ test('reports the first chat connection failure with bounded correlation context
   assert.equal(reports[0].context.source, 'websocket');
   assert.equal(reports[0].context.endpointPath, '/chat-ws');
   assert.equal(reports[0].context.platform, 'android');
-  assert.equal(reports[0].context.traceId, captured.opts.auth.traceId);
+  assert.equal(reports[0].context.traceId, handshakeAuth(captured).traceId);
   assert.doesNotMatch(JSON.stringify(reports), /jwt-secret/);
   assert.equal(diagnostics.at(-1).event, 'chat.ws.connect_error');
   assert.equal(diagnostics.at(-1).details.stage, 'handshake');
@@ -1452,4 +2026,96 @@ test('冷启动水合:验证卡片的 outbox 脏数据同样清掉', async () =>
   assert.deepEqual(store.failedMarks, []);
   assert.deepEqual(deleted, ['d-verify']);
   assert.deepEqual(store.messagesByConversation.c1 ?? [], []);
+});
+
+test('冷启动水合:没传完的媒体从持久副本还原成带本地预览的失败气泡', async () => {
+  const deleted = [];
+  const { manager, store, apiCalls } = loadManager(
+    {
+      initChatLocalDb: async () => true,
+      readLocalConversations: async () => [{ id: 'c1' }],
+      readRecentLocalMessages: async () => [],
+      outboxList: async () => [
+        {
+          d: 'd-photo',
+          conversationId: 'c1',
+          // 上传还没完成:content 里没有 object key。
+          payload: {
+            conversationId: 'c1',
+            type: 'image',
+            content: {},
+            d: 'd-photo',
+            pendingMedia: {
+              type: 'image',
+              fileName: 'media.jpg',
+              uploadName: 'IMG_0001.jpg',
+              contentType: 'image/jpeg',
+              width: 1200,
+              height: 900,
+            },
+          },
+          createdAt: new Date(Date.now() - 60_000).toISOString(),
+        },
+        {
+          d: 'd-gone',
+          conversationId: 'c1',
+          payload: {
+            conversationId: 'c1',
+            type: 'voice',
+            content: {},
+            d: 'd-gone',
+            pendingMedia: {
+              type: 'voice',
+              fileName: 'media.m4a',
+              uploadName: 'rec.m4a',
+              contentType: 'audio/mp4',
+              duration: 4,
+            },
+          },
+          createdAt: new Date(Date.now() - 60_000).toISOString(),
+        },
+      ],
+      outboxDelete: async (d) => {
+        deleted.push(d);
+      },
+    },
+    {
+      // 容器路径每次启动都会变:地址必须现拼,不能是 outbox 里存的。
+      pendingMediaUris: { 'd-photo': 'file:///run-2/chat-outbox/u1/d-photo/media.jpg' },
+    },
+  );
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  const restored = store.messagesByConversation.c1;
+  assert.deepEqual(
+    restored.map((m) => m.d),
+    ['d-photo'],
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(restored[0].content)), {
+    localUri: 'file:///run-2/chat-outbox/u1/d-photo/media.jpg',
+    width: 1200,
+    height: 900,
+  });
+  assert.deepEqual(store.failedMarks, [{ conversationId: 'c1', d: 'd-photo' }]);
+  // 副本没了、服务端也没有这条:无从重发,出队而不是留一个永远发不出去的红气泡。
+  assert.deepEqual(deleted, ['d-gone']);
+  // 清孤儿时只留还被引用、副本还在的那条。
+  assert.deepEqual(apiCalls.pendingMediaPrunes, [['d-photo']]);
+});
+
+test('冷启动水合:outbox 读不出来时不清理待发媒体副本', async () => {
+  const { manager, apiCalls } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [{ id: 'c1' }],
+    readRecentLocalMessages: async () => [],
+    // 读失败返回 null:当成「没有待发」会删光所有没发出去的照片和录音。
+    readOutboxEntries: async () => null,
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.deepEqual(apiCalls.pendingMediaPrunes, []);
 });

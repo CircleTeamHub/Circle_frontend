@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 const readJson = (rel) => JSON.parse(read(rel));
@@ -274,7 +275,7 @@ test('lifecycle copy: unlisted never auto-deletes, recycle bin purges after 30 d
 });
 
 test('collecting a note offers 查看 that locates it in the notes list', () => {
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chat = readChatDetailSource();
   const screen = read('src/features/notes/screens/NotesScreen.tsx');
   const card = read('src/features/notes/components/NoteCard.tsx');
 

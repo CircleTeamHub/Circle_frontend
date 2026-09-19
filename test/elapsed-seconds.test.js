@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 function loadHook() {
   const filePath = path.join(process.cwd(), 'src/hooks/use-elapsed-seconds.ts');
@@ -48,10 +49,7 @@ test('elapsedSecondsSince rounds to whole seconds', () => {
 });
 
 test('chat screen no longer polls native recorder state on every render tick', () => {
-  const source = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const source = readChatDetailSource();
 
   // useAudioRecorderState(recorder, 250) 每 250ms 同步调 native getStatus() 并 setState
   // 一个新对象，让整个聊天页从挂载到卸载常驻 4Hz 重渲染（不止录音时）。改回去等于

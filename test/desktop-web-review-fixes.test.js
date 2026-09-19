@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 // 桌面网页版 review 批的回归守卫。这里每一条都对应一个"看不出来但确实坏了"
 // 的缺陷：尺寸算错、入口消失、边界用错基准、旧值复活。
@@ -109,7 +110,7 @@ test('the cross-origin save fallback can tell an opened tab from a blocked one',
   assert.match(source, /opened\.opener = null;/);
 });
 test('Enter-to-send does not fire while an IME candidate is being confirmed', () => {
-  const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const source = readChatDetailSource();
 
   // 中日韩输入法用回车确认候选词，浏览器同样发一个 key='Enter' 的 keydown。
   // 不挡住的话，中文用户每选一次词就把半截草稿发出去 —— 这是这个 app 的

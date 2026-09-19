@@ -229,6 +229,8 @@ function loadRealtimeHarness(options = {}) {
             reportError: (error, reportContext) =>
               sentryReports.push({ error, context: reportContext }),
           };
+        case '@/services/api/client':
+          return { refreshSessionAccessToken: async () => 'fresh-token' };
         default:
           return require(request);
       }

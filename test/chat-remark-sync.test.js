@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 function read(relPath) {
   return fs.readFileSync(path.join(process.cwd(), relPath), 'utf8');
@@ -30,7 +31,7 @@ test('EditFriendRemarkScreen broadcasts the new remark after a successful save',
 });
 
 test('ChatDetailScreen derives the single-chat title reactively from the remark override', () => {
-  const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const source = readChatDetailSource();
 
   // 标题不再直接等于 params.title；群聊不吃备注，单聊覆盖优先、参数作 fallback。
   assert.match(source, /useFriendRemarkStore\(\(state\) =>/);

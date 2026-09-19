@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 const exists = (rel) => fs.existsSync(path.join(__dirname, '..', rel));
@@ -46,7 +47,7 @@ test('circle detail and its sub-flow are mirrored under the messages stack', () 
 });
 
 test('chat cards open circle/verification within the current tab', () => {
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chat = readChatDetailSource();
 
   assert.match(chat, /getCircleDetailHref\(/);
   assert.match(chat, /getVerificationDetailHref\(/);

@@ -26,7 +26,7 @@ const KEYCHAIN_ACCESS = {
 
 /** 每会话本地保留的消息上限(超出删最旧;更早历史回落 REST 翻页)。 */
 const RETENTION_PER_CONVERSATION = 500;
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 interface DbHandle {
   db: SQLite.SQLiteDatabase;
@@ -114,6 +114,24 @@ async function applySchema(db: SQLite.SQLiteDatabase): Promise<boolean> {
   if (!outboxColumns.some((column) => column.name === 'failed_after_height')) {
     await db.execAsync(
       'ALTER TABLE outbox ADD COLUMN failed_after_height INTEGER;',
+    );
+  }
+  // v3 会话变更序号流:消息行记它的 revision(旧快照不能盖掉新状态),
+  // sync_state 记每个会话已经追平到的 revision(增量同步游标)。
+  const messageColumns = await db.getAllAsync<{ name: string }>(
+    'PRAGMA table_info(messages);',
+  );
+  if (!messageColumns.some((column) => column.name === 'revision')) {
+    await db.execAsync(
+      'ALTER TABLE messages ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;',
+    );
+  }
+  const syncColumns = await db.getAllAsync<{ name: string }>(
+    'PRAGMA table_info(sync_state);',
+  );
+  if (!syncColumns.some((column) => column.name === 'revision')) {
+    await db.execAsync(
+      'ALTER TABLE sync_state ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;',
     );
   }
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
@@ -394,6 +412,86 @@ function searchableTextOf(message: ChatMessageDto): string | null {
 }
 
 /**
+ * 单条消息 upsert(调用方负责事务)。
+ *
+ * ON CONFLICT DO UPDATE 而不是 INSERT OR REPLACE。后者在 SQLite 里是「先 DELETE
+ * 再 INSERT」,而默认 recursive_triggers=off 时那次隐式 DELETE **不触发**
+ * messages_fts_ad —— 每次重新落同一条消息(翻历史、回应、编辑)都会在外置内容的
+ * FTS 影子表里留下一行孤儿,而 500 条的保留上限管不到它们。
+ *
+ * WHERE excluded.revision >= messages.revision:一页较早发出的历史/补拉比实时事件
+ * 晚落地时,它带的是旧版本,不能把撤回/编辑/回应盖回去。没有 revision 的(老后端、
+ * 本地合成的确认)按 0 处理,只能覆盖同样没有 revision 的行。
+ */
+async function upsertMessageRow(
+  db: SQLite.SQLiteDatabase,
+  conversationId: string,
+  message: ChatMessageDto,
+): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO messages
+       (id, conversation_id, height, created_at, type, text, payload, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       conversation_id = excluded.conversation_id,
+       height = excluded.height,
+       created_at = excluded.created_at,
+       type = excluded.type,
+       text = excluded.text,
+       payload = excluded.payload,
+       revision = excluded.revision
+     WHERE excluded.revision >= messages.revision;`,
+    message.id,
+    conversationId,
+    message.height,
+    message.createdAt,
+    message.type,
+    searchableTextOf(message),
+    JSON.stringify(message),
+    typeof message.revision === 'number' ? message.revision : 0,
+  );
+}
+
+/** 只更新本地已经缓存着的那一行(revision 不后退);不存在就什么都不做。 */
+async function updateCachedMessageRow(
+  db: SQLite.SQLiteDatabase,
+  conversationId: string,
+  message: ChatMessageDto,
+): Promise<void> {
+  const revision = typeof message.revision === 'number' ? message.revision : 0;
+  await db.runAsync(
+    `UPDATE messages SET
+       height = ?, created_at = ?, type = ?, text = ?, payload = ?, revision = ?
+     WHERE id = ? AND conversation_id = ? AND revision <= ?;`,
+    message.height,
+    message.createdAt,
+    message.type,
+    searchableTextOf(message),
+    JSON.stringify(message),
+    revision,
+    message.id,
+    conversationId,
+    revision,
+  );
+}
+
+/** 每会话保留上限:删最旧的多余行(REST 翻页仍可回看更早历史)。 */
+async function trimConversationRetention(
+  db: SQLite.SQLiteDatabase,
+  conversationId: string,
+): Promise<void> {
+  await db.runAsync(
+    `DELETE FROM messages WHERE conversation_id = ? AND id IN (
+       SELECT id FROM messages WHERE conversation_id = ?
+       ORDER BY height DESC LIMIT -1 OFFSET ?
+     );`,
+    conversationId,
+    conversationId,
+    RETENTION_PER_CONVERSATION,
+  );
+}
+
+/**
  * 消息落盘(广播/ack 回执/历史页/补拉共用的唯一入口;height=0 的乐观消息不进库,
  * 它们由 outbox 负责)。同事务内维护 sync_state 区间并做每会话保留上限修剪。
  */
@@ -408,30 +506,7 @@ export async function persistLocalMessages(
   try {
     await writeTransaction(current.db, async () => {
       for (const message of rows) {
-        // ON CONFLICT DO UPDATE 而不是 INSERT OR REPLACE。后者在 SQLite 里是
-        // 「先 DELETE 再 INSERT」,而默认 recursive_triggers=off 时那次隐式
-        // DELETE **不触发** messages_fts_ad —— 每次重新落同一条消息(翻历史、
-        // 回应、编辑)都会在外置内容的 FTS 影子表里留下一行孤儿,而 500 条的
-        // 保留上限管不到它们。
-        await current.db.runAsync(
-          `INSERT INTO messages
-             (id, conversation_id, height, created_at, type, text, payload)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET
-             conversation_id = excluded.conversation_id,
-             height = excluded.height,
-             created_at = excluded.created_at,
-             type = excluded.type,
-             text = excluded.text,
-             payload = excluded.payload;`,
-          message.id,
-          conversationId,
-          message.height,
-          message.createdAt,
-          message.type,
-          searchableTextOf(message),
-          JSON.stringify(message),
-        );
+        await upsertMessageRow(current.db, conversationId, message);
       }
       const bounds = await current.db.getFirstAsync<{
         lo: number | null;
@@ -452,19 +527,274 @@ export async function persistLocalMessages(
           bounds.hi,
         );
       }
-      // 保留上限:删最旧的多余行(REST 翻页仍可回看更早历史)。
-      await current.db.runAsync(
-        `DELETE FROM messages WHERE conversation_id = ? AND id IN (
-           SELECT id FROM messages WHERE conversation_id = ?
-           ORDER BY height DESC LIMIT -1 OFFSET ?
-         );`,
-        conversationId,
-        conversationId,
-        RETENTION_PER_CONVERSATION,
-      );
+      await trimConversationRetention(current.db, conversationId);
     });
   } catch (error) {
     warn('msg-write', '[chat-db] persist messages failed', error);
+  }
+}
+
+// ---- 会话变更序号流(增量同步游标) ----
+
+export interface LocalSyncState {
+  /** 已经追平(连同对应消息一起落了盘)的 revision。 */
+  revision: number;
+  /** 本地库里有没有这个会话的消息(没有就不必对账,直接采纳服务端位置)。 */
+  hasMessages: boolean;
+}
+
+/**
+ * 全部会话的同步游标。null = 本地库不可用(调用方退回纯内存游标)。
+ * 一次查询读完:重连时要对几十个会话逐个判断,逐个查就是几十次原生往返。
+ */
+export async function readLocalSyncStates(): Promise<Map<
+  string,
+  LocalSyncState
+> | null> {
+  const current = requireDb();
+  if (!current) return null;
+  try {
+    const rows = await current.db.getAllAsync<{
+      conversation_id: string;
+      revision: number | null;
+      has_messages: number;
+    }>(
+      `SELECT s.conversation_id AS conversation_id,
+              s.revision AS revision,
+              EXISTS (
+                SELECT 1 FROM messages m WHERE m.conversation_id = s.conversation_id
+              ) AS has_messages
+         FROM sync_state s;`,
+    );
+    return new Map(
+      rows.map((row) => [
+        row.conversation_id,
+        {
+          revision: Number.isSafeInteger(row.revision) ? (row.revision as number) : 0,
+          hasMessages: Boolean(row.has_messages),
+        },
+      ]),
+    );
+  } catch (error) {
+    warn('sync-read', '[chat-db] read sync states failed', error);
+    return null;
+  }
+}
+
+async function upsertSyncRevision(
+  db: SQLite.SQLiteDatabase,
+  conversationId: string,
+  revision: number,
+  force: boolean,
+): Promise<void> {
+  await db.runAsync(
+    force
+      ? `INSERT INTO sync_state (conversation_id, min_height, max_height, revision)
+           VALUES (?, 0, 0, ?)
+         ON CONFLICT(conversation_id) DO UPDATE SET revision = excluded.revision;`
+      : `INSERT INTO sync_state (conversation_id, min_height, max_height, revision)
+           VALUES (?, 0, 0, ?)
+         ON CONFLICT(conversation_id) DO UPDATE SET
+           revision = MAX(revision, excluded.revision);`,
+    conversationId,
+    revision,
+  );
+}
+
+/**
+ * 实时事件推进的游标落盘(只前进)。消息本身已经由 ingest 入库;这里只记位置。
+ * 返回是否写成功(本地库不可用时为 false)。
+ */
+export async function writeLocalSyncRevision(
+  conversationId: string,
+  revision: number,
+): Promise<boolean> {
+  const current = requireDb();
+  if (!current) return false;
+  try {
+    await writeStatement(() =>
+      upsertSyncRevision(current.db, conversationId, revision, false),
+    );
+    return true;
+  } catch (error) {
+    warn('sync-write', '[chat-db] write sync revision failed', error);
+    return false;
+  }
+}
+
+export interface LocalSyncPage {
+  /** 当前状态的消息(含已撤回);按 revision 守卫 upsert。 */
+  upserts: ChatMessageDto[];
+  /** 焚毁墓碑:本地副本直接删。 */
+  deletedIds: string[];
+  /** 本人视角的清空水位:水位之下的本地行删掉。 */
+  clearedBeforeHeight: number;
+  /** 这一页之后的游标。 */
+  revision: number;
+}
+
+/**
+ * 一页增量同步原子落盘:消息、墓碑、清空水位、游标在同一个事务里。
+ *
+ * 游标必须和它覆盖的那些变更一起提交 —— 分开写的话,消息写失败而游标写成功,
+ * 那段变更此后再也不会被同步到(游标已经越过去了)。返回 false = 本地库不可用
+ * 或事务失败,调用方不能把这一页当成已经持久化。
+ */
+export async function applyLocalSyncPage(
+  conversationId: string,
+  page: LocalSyncPage,
+): Promise<boolean> {
+  const current = requireDb();
+  if (!current) return false;
+  try {
+    await writeTransaction(current.db, async () => {
+      // 本地缓存是每个会话「最新一段连续历史」:缓存里已有的行按 revision 守卫更新,
+      // 比缓存最高 height 还新的追加;缓存之外的老消息(很早以前那条被撤回/编辑了)
+      // 不插,插进来就是一块断层,冷启动水合会把它和最新那段拼在一起。
+      const head = await current.db.getFirstAsync<{ hi: number | null }>(
+        'SELECT MAX(height) AS hi FROM messages WHERE conversation_id = ?;',
+        conversationId,
+      );
+      const cachedHead = head?.hi ?? 0;
+      for (const message of page.upserts) {
+        if (message.height <= 0) continue;
+        if (cachedHead > 0 && message.height > cachedHead) {
+          await upsertMessageRow(current.db, conversationId, message);
+        } else {
+          await updateCachedMessageRow(current.db, conversationId, message);
+        }
+      }
+      if (page.deletedIds.length > 0) {
+        const placeholders = page.deletedIds.map(() => '?').join(', ');
+        await current.db.runAsync(
+          `DELETE FROM messages WHERE conversation_id = ? AND id IN (${placeholders});`,
+          conversationId,
+          ...page.deletedIds,
+        );
+      }
+      if (page.clearedBeforeHeight > 0) {
+        await current.db.runAsync(
+          'DELETE FROM messages WHERE conversation_id = ? AND height <= ?;',
+          conversationId,
+          page.clearedBeforeHeight,
+        );
+      }
+      await trimConversationRetention(current.db, conversationId);
+      await upsertSyncRevision(current.db, conversationId, page.revision, false);
+    });
+    return true;
+  } catch (error) {
+    warn('sync-apply', '[chat-db] apply sync page failed', error);
+    return false;
+  }
+}
+
+/**
+ * 丢掉一个会话的消息缓存,并把游标直接设到 revision(落后太多跳到最新、或服务端
+ * 要求 reset 时)。outbox 不动:没发出去的消息不属于服务端缓存。
+ */
+export async function resetLocalConversationCache(
+  conversationId: string,
+  revision: number,
+): Promise<boolean> {
+  const current = requireDb();
+  if (!current) return false;
+  try {
+    await writeTransaction(current.db, async () => {
+      await current.db.runAsync(
+        'DELETE FROM messages WHERE conversation_id = ?;',
+        conversationId,
+      );
+      await current.db.runAsync(
+        'UPDATE sync_state SET min_height = 0, max_height = 0 WHERE conversation_id = ?;',
+        conversationId,
+      );
+      await upsertSyncRevision(current.db, conversationId, revision, true);
+    });
+    return true;
+  } catch (error) {
+    warn('sync-reset', '[chat-db] reset conversation cache failed', error);
+    return false;
+  }
+}
+
+/**
+ * 被引用的原消息撤回/焚毁之后,本地缓存里引用它的那些消息也要脱敏:引用快照
+ * (预览文字)与兜底的 quotedText 都带着原文,不改的话会话里、本地搜索里都还能看到。
+ *
+ * - revoked:与服务端历史页同形 —— replyTo.revoked=true、preview 清空;
+ * - gone(焚毁):服务端不再给快照 —— 整个 replyTo 去掉。
+ *
+ * 返回「本地已经没有引用原文了」:调用方(增量同步)据此决定要不要提交游标 ——
+ * 游标一旦越过这一段就不会再追,脱敏没做成就等于永远留着。
+ *
+ * 脱敏语句依赖 JSON1(个别老构建没有);那时退而删掉整行,见 dropQuotingRows。
+ */
+export async function redactLocalQuotesOf(
+  conversationId: string,
+  targetIds: readonly string[],
+  mode: 'revoked' | 'gone',
+): Promise<boolean> {
+  const current = requireDb();
+  const ids = [...new Set(targetIds)].filter((id) => id.length > 0);
+  // 本地库没开(Web / 没有 SQLCipher)时本机根本没有副本,没东西要脱敏。
+  if (!current || ids.length === 0) return true;
+  const placeholders = ids.map(() => '?').join(', ');
+  const nextPayload =
+    mode === 'revoked'
+      ? `json_set(payload, '$.replyTo.revoked', json('true'), '$.replyTo.preview', '', '$.content.quotedText', '')`
+      : `json_set(json_remove(payload, '$.replyTo'), '$.content.quotedText', '')`;
+  try {
+    await writeStatement(() =>
+      current.db.runAsync(
+        `UPDATE messages
+            SET payload = ${nextPayload},
+                text = CASE WHEN type IN ('text', 'quote')
+                  THEN NULLIF(COALESCE(json_extract(payload, '$.content.text'), ''), '')
+                  ELSE text END
+          WHERE conversation_id = ?
+            AND (json_extract(payload, '$.replyTo.id') IN (${placeholders})
+                 OR json_extract(payload, '$.replyToId') IN (${placeholders}));`,
+        conversationId,
+        ...ids,
+        ...ids,
+      ),
+    );
+    return true;
+  } catch (error) {
+    warn('quote-redact', '[chat-db] redact quoting messages failed', error);
+    return dropQuotingRows(current, conversationId, ids);
+  }
+}
+
+/** LIKE 的通配符(% _)和转义符本身要转义,否则 id 里的下划线会误伤别的行。 */
+function escapeLikePattern(value: string): string {
+  return `%${value.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+}
+
+/**
+ * 脱敏语句跑不了(没有 JSON1)时的兜底:把引用了这些消息的行整行删掉。
+ * 本地缓存少一行只是下次翻到时重新从服务端拉(拿回来的已经是脱敏后的),
+ * 而引用里的原文一定不会留在设备上。
+ */
+async function dropQuotingRows(
+  current: DbHandle,
+  conversationId: string,
+  ids: readonly string[],
+): Promise<boolean> {
+  const conditions = ids.map(() => "payload LIKE ? ESCAPE '\\'").join(' OR ');
+  try {
+    await writeStatement(() =>
+      current.db.runAsync(
+        `DELETE FROM messages WHERE conversation_id = ? AND (${conditions});`,
+        conversationId,
+        ...ids.map(escapeLikePattern),
+      ),
+    );
+    return true;
+  } catch (error) {
+    warn('quote-redact', '[chat-db] drop quoting rows failed', error);
+    return false;
   }
 }
 
@@ -617,26 +947,6 @@ export async function purgeExpiredLocalMessages(
   }
 }
 
-/**
- * 丢掉全部缓存消息,保留会话行与 outbox。
- *
- * 服务端说增量游标已超出保留窗口(resetRequired)时用:那段区间里发生的撤回
- * 服务端已经查不到了,而撤回不改 height —— 本地缓存里那些消息会永远显示原文。
- * 唯一安全的做法是让它们重新从服务端拉一遍(会话行留着,列表不至于空掉)。
- */
-export async function dropAllLocalMessages(): Promise<void> {
-  const current = requireDb();
-  if (!current) return;
-  try {
-    await writeTransaction(current.db, async () => {
-      await current.db.runAsync('DELETE FROM messages;');
-      await current.db.runAsync('DELETE FROM sync_state;');
-    });
-  } catch (error) {
-    warn('msg-drop', '[chat-db] drop all messages failed', error);
-  }
-}
-
 /** 中洞修剪(冷启动本地块与最新 REST 页之间隔了 >N 条时,放弃旧块保连续性)。 */
 export async function deleteLocalMessagesBelow(
   conversationId: string,
@@ -757,6 +1067,21 @@ export async function searchLocalChatMessages(
 
 // ---- outbox(发送失败/待发消息,App 被杀不丢) ----
 
+/** outbox 里还没上传完的媒体(见 chat-core/pending-media)。 */
+export interface PendingMediaRecord {
+  type: 'image' | 'video' | 'voice';
+  /** 持久目录里的文件名(不存绝对路径:容器路径每次启动都可能变)。 */
+  fileName: string;
+  /** 上传时用的原始文件名与类型(presign 需要)。 */
+  uploadName: string;
+  contentType: string;
+  width?: number;
+  height?: number;
+  /** 秒。 */
+  duration?: number;
+  size?: number;
+}
+
 export interface OutboxEntry {
   d: string;
   conversationId: string;
@@ -769,6 +1094,12 @@ export interface OutboxEntry {
     forwardFromMessageId?: string;
     /** 仅供本地失败气泡恢复；重发前必须从 websocket 载荷剥离。 */
     localPreviewContent?: Record<string, unknown>;
+    /**
+     * 还没发出去的媒体:源文件已经拷进持久目录(chat-core/pending-media)。
+     * content 里还没有 object key 时,重启后长按重发要从副本重新上传;有 key 之后
+     * 仍保留,冷启动还原失败气泡时靠它找回本地预览。只在本地用,不上行。
+     */
+    pendingMedia?: PendingMediaRecord;
   };
   createdAt: string;
   /** 点击发送时的服务端消息水位，用于失败气泡重启后的稳定定位。 */
@@ -807,8 +1138,17 @@ export async function outboxDelete(d: string): Promise<void> {
 }
 
 export async function outboxList(): Promise<OutboxEntry[]> {
+  return (await readOutboxEntries()) ?? [];
+}
+
+/**
+ * 同 outboxList,但读不到(库没开、查询失败)时返回 null 而不是空数组。
+ * 拿结果去删东西的调用方(冷启动清待发媒体副本)必须分清「outbox 是空的」和
+ * 「outbox 读不出来」—— 后者当成前者会把所有还没发出去的照片/录音一起删掉。
+ */
+export async function readOutboxEntries(): Promise<OutboxEntry[] | null> {
   const current = requireDb();
-  if (!current) return [];
+  if (!current) return null;
   try {
     const rows = await current.db.getAllAsync<{
       d: string;
@@ -838,7 +1178,7 @@ export async function outboxList(): Promise<OutboxEntry[]> {
     return parsed;
   } catch (error) {
     warn('outbox-read', '[chat-db] outbox read failed', error);
-    return [];
+    return null;
   }
 }
 

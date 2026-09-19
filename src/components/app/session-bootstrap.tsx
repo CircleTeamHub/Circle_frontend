@@ -5,6 +5,7 @@ import { isDefinitiveAuthFailure } from '@/services/api/client';
 import {
   connectChat,
   disconnectChat,
+  setChatAppState,
   suspendChat,
 } from '@/chat-core/socket-manager';
 import {
@@ -94,6 +95,10 @@ export function SessionBootstrap() {
     }
 
     const subscription = AppState.addEventListener('change', (nextState) => {
+      // 前后台都要告诉聊天连接:退到后台时服务端推送照发、本机不再把开着的
+      // 会话当成「正在看」(否则锁屏期间的消息被悄悄标成已读)。inactive
+      // (控制中心下拉、来电横幅)界面仍可见,不算后台。
+      setChatAppState(nextState === 'background' ? 'background' : 'foreground');
       if (nextState !== 'active') {
         return;
       }

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
@@ -71,7 +72,7 @@ test('credit policy is local-only: no abandoned server-check surface', () => {
 
 test('chat detail surfaces low-credit policy errors as the send error text', () => {
   // 映射本身住在 chat-core/send-errors.ts(屏幕只负责调用并显示)。
-  const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const source = readChatDetailSource();
   const mapper = read('src/chat-core/send-errors.ts');
 
   assert.match(source, /getChatSendErrorMessage/);
@@ -80,7 +81,7 @@ test('chat detail surfaces low-credit policy errors as the send error text', () 
 });
 
 test('chat detail checks only local credit state before uploading image messages', () => {
-  const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const source = readChatDetailSource();
   // 上传拆成了两段:入口(体积/信用分门禁 + 先上屏)与后台的「上传+发送」。
   // 门禁必须留在入口、且在把上传踢出去之前 —— presign 会发一个带签名的临时
   // 写凭证,拦不住的话等于先把凭证给出去再说。

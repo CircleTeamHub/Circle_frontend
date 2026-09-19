@@ -1,30 +1,42 @@
 import { io, type Socket } from 'socket.io-client';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { CHAT_WS_URL } from '@/constants/config';
 import { storage } from '@/storage';
 import { reportError } from '@/observability/sentry';
 import { fetchPrivacySettings } from '@/services/api/privacy';
+import {
+  isDefinitiveAuthFailure,
+  refreshSessionAccessToken,
+} from '@/services/api/client';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { isJwtExpired } from '@/utils/jwt-expiry';
 import {
-  backfillConversationSince,
-  fetchChatMutationsSince,
-  loadChatConversations,
-  loadChatHistory,
-} from './api';
+  getRegisteredPushToken,
+  subscribeRegisteredPushToken,
+} from '@/features/notifications/services/push-token-registration';
+import { loadChatConversations, loadChatHistory } from './api';
 import {
-  dropAllLocalMessages,
+  resetChatSync,
+  startChatSync,
+  syncConversationsFromSnapshot,
+} from './sync';
+import {
   initChatLocalDb,
   outboxDelete,
-  outboxList,
   pendingReadDelete,
-  pendingReadUpsert,
   pendingReadsList,
+  pendingReadUpsert,
   readLocalConversations,
+  readOutboxEntries,
   readRecentLocalMessages,
   upsertLocalConversation,
+  type OutboxEntry,
 } from './local-db';
 import { initChatAppBadgeSync } from './app-badge';
+import { dismissChatNotifications } from './chat-notifications';
+import { prunePendingMedia, resolvePendingMediaUri } from './pending-media';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
+import { createChatSendQueue } from './send-queue';
 import {
   CHAT_EVENTS,
   CHAT_WS_PATH,
@@ -57,10 +69,21 @@ import { reportHandledFailure } from '@/observability/report-failure';
  */
 
 const SEND_ACK_TIMEOUT_MS = 10_000;
+/** 还连着时 ack 超时,隔这么久同 d 再发一次(断开的等重连)。 */
+const SEND_RETRY_DELAY_MS = 2_000;
+/** 被服务端限流(20 条/10 秒)后隔这么久再发。 */
+const SEND_RATE_LIMITED_RETRY_MS = 3_000;
 const READ_ACK_TIMEOUT_MS = 8_000;
 const TYPING_THROTTLE_MS = 2_000;
-/** 一次追平最多翻几页离线变更;翻不完留给下一次连接(游标已持久化)。 */
-const MUTATION_CATCH_UP_PAGES_MAX = 20;
+/** token 刷新失败(断网/超时/5xx)后的重试退避;服务端明确否认会话时不再重试。 */
+const TOKEN_REFRESH_RETRY_MS = [5_000, 15_000, 30_000, 60_000] as const;
+/**
+ * 握手被服务端拒绝、或连接被服务端断开之后的补连退避。这两种情况 socket.io 不会
+ * 自己重连(传输层失败才会),不补的话聊天一直断着,直到回前台或 token 轮换。
+ */
+const SERVER_REJECTED_RETRY_MS = [2_000, 5_000, 15_000, 30_000, 60_000] as const;
+/** 连上后撑过这么久再断,才算恢复过:退避从头数。连上就被踢的不算。 */
+const STABLE_CONNECTION_MS = 30_000;
 const LEGACY_SELF_DESTRUCT_DAY_CHOICES = new Set([0, 1, 2, 7, 30]);
 const SECONDS_PER_DAY = 24 * 60 * 60;
 
@@ -232,41 +255,33 @@ let sessionGen = 0;
  */
 let hadConnectedForUser: string | null = null;
 /**
- * 上一次成功追平「离线撤回/编辑」增量的服务端时刻(ISO)。
- *
- * 落 MMKV 而不是只放内存:App 被杀之后本地库里那些消息还在,而这期间发生的
- * 撤回同样够不着(撤回不改 height)。持久化之后,下次冷启动第一次连上就能
- * 从上次的游标追平。
+ * App 前后台状态(上报给服务端,决定这台设备算不算「收得到」)。
+ * inactive(控制中心下拉、来电横幅、多任务切换中)按前台算:那时界面仍可见。
  */
-const MUTATION_CURSOR_KEY = 'chat.mutationCursor';
-let lastMutationSyncAt: string | null = null;
+type ChatAppState = 'foreground' | 'background';
 
-function mutationCursorKey(userId: string): string {
-  return `${MUTATION_CURSOR_KEY}.${userId}`;
+function currentAppState(): ChatAppState {
+  return AppState.currentState === 'background' ? 'background' : 'foreground';
 }
 
-function readMutationCursor(userId: string): string | null {
-  try {
-    return storage.getString(mutationCursorKey(userId)) ?? null;
-  } catch {
-    return null;
-  }
-}
+let appState: ChatAppState = currentAppState();
+/** 服务端刚说过「token 到期」:紧跟着的那次断开要去刷新 token,而不是干等。 */
+let sessionExpiredNotified = false;
+let tokenRefreshInFlight = false;
+let tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-function writeMutationCursor(userId: string, iso: string): void {
-  lastMutationSyncAt = iso;
-  try {
-    storage.set(mutationCursorKey(userId), iso);
-  } catch {
-    // MMKV 还没就绪:内存里那份仍然有效,只是重启后从头再来。
-  }
-}
 const pendingReads = new Map<string, number>();
 let flushingReads = false;
 let readFlushRequested = false;
 const typingSentAt = new Map<string, number>();
 let consecutiveConnectErrors = 0;
 let reportedCurrentConnectOutage = false;
+/** 当前连接最近一次握手带上的推送 token(没带为 null)。 */
+let handshakePushToken: string | null = null;
+let serverReconnectAttempt = 0;
+let serverReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+/** 本次故障里是否已经因为「token 没过期却被拒」刷新过一次。连上过才清。 */
+let handshakeRefreshRequested = false;
 
 /** ack {ok:false} 的类型化错误：code = circle_be ChatErrorCode 字符串码。 */
 export class ChatSendError extends Error {
@@ -276,6 +291,24 @@ export class ChatSendError extends Error {
     super(message ?? code);
     this.name = 'ChatSendError';
     this.code = code;
+  }
+}
+
+/**
+ * 发送失败后隔多久可以同 d 再发;null = 服务端明确拒收,重发也没用。
+ * 断线和 ack 超时:对面可能根本没收到,也可能收到了但回执丢了 —— 同 d 重发两种都对。
+ * 限流:过一会儿就放行。
+ */
+function sendRetryDelayMs(error: unknown): number | null {
+  if (!(error instanceof ChatSendError)) return null;
+  switch (error.code) {
+    case 'CHAT_NOT_CONNECTED':
+    case 'CHAT_ACK_TIMEOUT':
+      return SEND_RETRY_DELAY_MS;
+    case 'CHAT_RATE_LIMITED':
+      return SEND_RATE_LIMITED_RETRY_MS;
+    default:
+      return null;
   }
 }
 
@@ -300,18 +333,23 @@ export function connectChat(token: string, userId: string): void {
   // 路径天然安全:同一账号轮换 token 时列表/消息/pending 已读原样保留,
   // 而切到另一个账号时上一个账号的数据一定先被清掉(跨账号不串数据)。
   if (store.currentUserId !== null && store.currentUserId !== userId) {
+    // 上一个账号还没发出去的消息不能拿新账号的连接发。
+    sendQueue.abortAll(endedSessionSendError());
     store.reset();
     pendingReads.clear();
     flushingReads = false;
     readFlushRequested = false;
     hadConnectedForUser = null;
-    lastMutationSyncAt = null;
     // 换账号是真正的会话边界:新账号的第一次连不上,值得单独报一次。
     reportedCurrentConnectOutage = false;
+    serverReconnectAttempt = 0;
+    handshakeRefreshRequested = false;
   }
   teardownSocket();
   sessionGen += 1;
   const gen = sessionGen;
+  startChatSync(userId);
+  sessionExpiredNotified = false;
   consecutiveConnectErrors = 0;
   // 这里**不能**重置 reportedCurrentConnectOutage。设备一直离线时,回前台恢复
   // (SessionBootstrap 每次 active 都会 connectChat)和 token 轮换都会走到这里替换
@@ -325,18 +363,47 @@ export function connectChat(token: string, userId: string): void {
   store.setViewerSelfDestructSec(readViewerSelfDestructSec(userId));
   store.setViewerTypingPolicy(readViewerTypingPolicy(userId));
   initChatAppBadgeSync();
+  store.setAppForeground(appState === 'foreground');
   // 在线时先解析服务器策略，失败才使用上面的账户缓存，避免冷启动展示已到期内容。
   void hydrateWithResolvedViewerPolicy(userId, gen);
+
+  // 拿着已经过期的 token 握手只会被拒;服务端拒绝的握手 socket.io 不会自己重连,
+  // 于是一直断着直到某次 REST 请求碰巧刷新。先刷新,token 一变 session-bootstrap
+  // 会带着新 token 重新调进来。本地水合照常进行,离线时列表与历史仍然可看。
+  if (isJwtExpired(token)) {
+    store.setConnecting(false);
+    // 回前台/重连时立刻试一次,不等上一轮排着的退避重试。
+    clearTokenRefreshTimer();
+    requestTokenRefresh();
+    return;
+  }
 
   // token 走握手 auth 帧，绝不进 URL query（与 realtime 网关同一条安全线）。
   logClientDiagnostic('chat.ws.connecting', {
     stage: 'handshake',
     platform: Platform.OS,
   });
+  // auth 写成回调:socket.io 每次握手(包括断线后的自动重连)都会现取一次。写成对象
+  // 的话自动重连原样重发建连那一刻的前后台状态 —— 后台建立的连接在前台断线重连,
+  // 服务端就把正在用 App 的人当成后台,照发推送。
+  let handshakeAppState: ChatAppState = appState;
+  let connectedAt: number | null = null;
   const next = io(CHAT_WS_URL, {
     path: CHAT_WS_PATH,
     transports: ['websocket'],
-    auth: { token, traceId: connectionTraceId },
+    auth: (sendAuth) => {
+      handshakeAppState = appState;
+      // 本机登记确认过的推送 token:这台设备正开着 App 时,服务端只跳过它的推送,
+      // 电脑上开着网页版不会让手机也收不到。每次握手现取,登记晚于建连也能跟上。
+      const pushToken = getRegisteredPushToken(userId);
+      handshakePushToken = pushToken;
+      sendAuth({
+        token,
+        traceId: connectionTraceId,
+        appState: handshakeAppState,
+        ...(pushToken ? { pushToken } : {}),
+      });
+    },
     // React Native WebSocket 会把该头带到 HTTP upgrade，供 Caddy 与网关日志
     // 串联；auth 里的副本覆盖不支持自定义头的 web 运行时。
     extraHeaders: { 'x-connection-trace-id': connectionTraceId },
@@ -346,6 +413,8 @@ export function connectChat(token: string, userId: string): void {
     if (gen !== sessionGen) return;
     consecutiveConnectErrors = 0;
     reportedCurrentConnectOutage = false;
+    handshakeRefreshRequested = false;
+    connectedAt = Date.now();
     logClientDiagnostic('chat.ws.connected', {
       stage: 'ready',
       platform: Platform.OS,
@@ -359,23 +428,29 @@ export function connectChat(token: string, userId: string): void {
     // 于是那段消息在屏幕上凭空缺失,未读也停在轮换前。
     const isReconnect = hadConnectedForUser === userId;
     hadConnectedForUser = userId;
+    sessionExpiredNotified = false;
+    clearTokenRefreshTimer();
     const state = useChatStore.getState();
     state.setConnecting(false);
     state.setConnected(true);
     state.setError(null);
+    // 握手带的是发起握手那一刻的前后台状态;握手途中切过(那时没有活连接可报,
+    // setChatAppState 只记下了)的话,这里补报当前值。
+    if (appState !== handshakeAppState) {
+      next.emit(
+        appState === 'background' ? CHAT_EVENTS.background : CHAT_EVENTS.foreground,
+        {},
+      );
+    }
     if (isReconnect) void refreshViewerSelfDestructSec(userId);
     void flushPendingReads();
-    if (isReconnect) {
-      resyncAfterReconnect(userId);
-      return;
-    }
-    void loadChatConversations().catch((err: unknown) =>
-      reportHandledFailure('chatSync', 'initialConversationRefresh', err),
-    );
-    // 首连不做撤回增量对账(没有本地游标时从现在开始),但撤回/编辑增量必须追:
-    // 上次运行到这次启动之间发生的撤回,本地缓存里还是原文,而 height 没变,
-    // 任何补拉都够不着它。
-    void catchUpMutations(userId);
+    // 断线期间排着的消息按原顺序、同一个 d 接着发。
+    sendQueue.resume();
+    resyncConversations(userId, isReconnect);
+  });
+  next.on(CHAT_EVENTS.sessionExpired, () => {
+    if (gen !== sessionGen) return;
+    sessionExpiredNotified = true;
   });
   next.on('disconnect', (reason) => {
     if (gen !== sessionGen) return;
@@ -385,6 +460,24 @@ export function connectChat(token: string, userId: string): void {
       platform: Platform.OS,
     });
     useChatStore.getState().setConnected(false);
+    if (
+      connectedAt !== null &&
+      Date.now() - connectedAt >= STABLE_CONNECTION_MS
+    ) {
+      serverReconnectAttempt = 0;
+    }
+    connectedAt = null;
+    // 其余断开(网络切换、心跳超时)socket.io 自己会重连。
+    if (reason !== 'io server disconnect') return;
+    // 服务端主动断开的连接 socket.io 不会自己重连。token 到期断开的(服务端先发了
+    // chat:session_expired,或本地一看就过期了)去刷新 token,新 token 会带着重连。
+    if (sessionExpiredNotified || isJwtExpired(token)) {
+      requestTokenRefresh();
+      return;
+    }
+    // 没说原因的(进房失败、连接数超限、会话被吊销):按退避补连。被吊销的话
+    // 补连时握手会被拒,在 connect_error 那里去刷新,由刷新结果决定登出。
+    scheduleServerRejectedReconnect(next, gen);
   });
   next.on('connect_error', (err) => {
     if (gen !== sessionGen) return;
@@ -417,6 +510,23 @@ export function connectChat(token: string, userId: string): void {
     // ("websocket error"/"timeout"),会被 UI 原样展示给用户。原始原因
     // 上面的本地诊断与一次/故障窗口的 Sentry 事件已经留档。
     state.setError('connect_error');
+    // 握手被拒 socket.io 不会自动重连;token 过期导致的去刷新,新 token 会重连进来。
+    if (reason === 'unauthorized' && isJwtExpired(token)) {
+      requestTokenRefresh();
+      return;
+    }
+    // 服务器暂时不可达之类的传输层失败,socket 仍是 active,socket.io 自己按退避重连。
+    // 服务端回了 connect_error(未授权、会话暂时无法校验)时 socket 已被销毁,要手动补。
+    if (next.active) return;
+    if (reason === 'unauthorized' && !handshakeRefreshRequested) {
+      // 本机看 token 没过期、服务端却说未授权:两边时钟差着(服务端看已过期),或者
+      // 会话已被吊销。都去刷新一次 —— 前者换到新 token 就连上;后者刷新被明确拒绝,
+      // 由 API 层清会话。只刷一次:服务端内部出错也回 unauthorized,那种就只退避
+      // 补连,不能刷新 → 重连 → 再刷新地打转。补连照排,刷新没换出新 token 也不停住。
+      handshakeRefreshRequested = true;
+      requestTokenRefresh();
+    }
+    scheduleServerRejectedReconnect(next, gen);
   });
 
   bindChatEvents(next, () => gen === sessionGen);
@@ -429,17 +539,20 @@ export function connectChat(token: string, userId: string): void {
  */
 export function disconnectChat(): void {
   suspendChat();
+  // 挂起(token 轮换)不动发送队列,重连后接着发;登出才是这些消息发不出去了。
+  sendQueue.abortAll(endedSessionSendError());
   // 只有真登出/换账号才丢待发已读:那些水位属于上一个会话身份。
   pendingReads.clear();
   hadConnectedForUser = null;
-  // 游标只清内存那份:MMKV 里按 userId 存,下次同一账号登录还要用它追平
-  // 「上次退出之后发生的撤回」。
-  lastMutationSyncAt = null;
+  // 同步游标只清内存那份:本地库里按账号分库记着,同一账号再登录接着用。
+  resetChatSync();
   // 登出是真正的会话边界:store.reset() 之后 currentUserId 归 null,下次
   // connectChat 走不到「换账号」分支,若不在这里清掉「本次断网已上报」的标志,
   // 断网中登出再登回同一账号,新会话的第一条 connect_error 就永远报不出去。
   consecutiveConnectErrors = 0;
   reportedCurrentConnectOutage = false;
+  serverReconnectAttempt = 0;
+  handshakeRefreshRequested = false;
   useChatStore.getState().reset();
 }
 
@@ -465,12 +578,103 @@ export function suspendChat(): void {
   deliveredTimers.clear();
   flushingReads = false;
   readFlushRequested = false;
+  clearTokenRefreshTimer();
   teardownSocket();
   useChatStore.getState().setConnected(false);
   useChatStore.getState().setConnecting(false);
 }
 
+function clearTokenRefreshTimer(): void {
+  if (!tokenRefreshTimer) return;
+  clearTimeout(tokenRefreshTimer);
+  tokenRefreshTimer = null;
+}
+
+function clearServerReconnectTimer(): void {
+  if (!serverReconnectTimer) return;
+  clearTimeout(serverReconnectTimer);
+  serverReconnectTimer = null;
+}
+
+/**
+ * 服务端拒绝握手 / 主动断开之后手动补连(socket.io 在这两种情况下不会自己连)。
+ * 退避跨 socket 实例累计,连接稳定过一阵才从头数;换 socket、挂起、登出都会取消。
+ */
+function scheduleServerRejectedReconnect(target: Socket, generation: number): void {
+  if (serverReconnectTimer) return;
+  const step =
+    SERVER_REJECTED_RETRY_MS[
+      Math.min(serverReconnectAttempt, SERVER_REJECTED_RETRY_MS.length - 1)
+    ];
+  serverReconnectAttempt += 1;
+  // ±20% 抖动:服务端一次故障会让在线的客户端同时被拒,整齐划一地补连就是下一波洪峰。
+  const delay = Math.round(step * (0.8 + Math.random() * 0.4));
+  serverReconnectTimer = setTimeout(() => {
+    serverReconnectTimer = null;
+    if (generation !== sessionGen || socket !== target || target.connected) {
+      return;
+    }
+    useChatStore.getState().setConnecting(true);
+    target.connect();
+  }, delay);
+}
+
+/**
+ * 刷新 access token(单飞)。成功后 session-bootstrap 看到新 token 会重新建连。
+ * 断网/超时/5xx 按退避重试,直到连上或会话换人;服务端明确否认 refresh token 时
+ * 由 API 层清掉会话,这里停手。
+ */
+function requestTokenRefresh(attempt = 0): void {
+  if (tokenRefreshInFlight || tokenRefreshTimer) return;
+  // 重试跟着账号走,不跟会话代数走:回前台、token 轮换都会换一条 socket(代数 +1),
+  // 按代数判的话,那之前排下的重试到点就直接退出,而新一轮的刷新请求又被这条还排着
+  // 的定时器挡掉 —— 重试链断掉,网回来了也一直连不上。登出、换账号才停。
+  const userId = useChatStore.getState().currentUserId;
+  tokenRefreshInFlight = true;
+  void refreshSessionAccessToken().then(
+    () => {
+      tokenRefreshInFlight = false;
+    },
+    (error: unknown) => {
+      tokenRefreshInFlight = false;
+      if (isDefinitiveAuthFailure(error)) return;
+      reportHandledFailure('chatSync', 'tokenRefresh', error);
+      if (userId === null || useChatStore.getState().currentUserId !== userId) {
+        return;
+      }
+      const delay =
+        TOKEN_REFRESH_RETRY_MS[
+          Math.min(attempt, TOKEN_REFRESH_RETRY_MS.length - 1)
+        ];
+      tokenRefreshTimer = setTimeout(() => {
+        tokenRefreshTimer = null;
+        if (useChatStore.getState().currentUserId !== userId || socket?.connected) {
+          return;
+        }
+        requestTokenRefresh(attempt + 1);
+      }, delay);
+    },
+  );
+}
+
+/**
+ * App 进入后台 / 回到前台。连接不断,但告诉服务端这台设备此刻收不收得到:后台时
+ * 推送照发、本机不再把「正开着的会话」当成正在看。没连上时只记下来,握手会带上。
+ */
+export function setChatAppState(next: ChatAppState): void {
+  useChatStore.getState().setAppForeground(next === 'foreground');
+  if (appState === next) return;
+  appState = next;
+  const current = socket;
+  if (!current?.connected) return;
+  current.emit(
+    next === 'background' ? CHAT_EVENTS.background : CHAT_EVENTS.foreground,
+    {},
+  );
+}
+
 function teardownSocket(): void {
+  clearServerReconnectTimer();
   if (!socket) return;
   socket.removeAllListeners();
   socket.disconnect();
@@ -494,6 +698,35 @@ function effectiveSelfDestructSeconds(
   return conversationSeconds && viewerSeconds
     ? Math.min(conversationSeconds, viewerSeconds)
     : (conversationSeconds ?? viewerSeconds);
+}
+
+const DROP_OUTBOX_ENTRY = Symbol('dropOutboxEntry');
+
+/**
+ * 待发媒体(outbox 带 pendingMedia)冷启动还原时要叠到气泡上的本地字段。
+ *
+ * 副本还在:给出 localUri(容器路径每次启动都可能变,只能现拼)和尺寸/时长,
+ * 气泡照常渲染,长按重发从副本重新上传。副本没了而 content 里也还没有 object key:
+ * 服务端没有、本地也没有,这条已经无从重发 —— 删掉,不留一个永远发不出去的红气泡。
+ */
+async function restorePendingMediaPreview(
+  userId: string,
+  entry: OutboxEntry,
+): Promise<Record<string, unknown> | null | typeof DROP_OUTBOX_ENTRY> {
+  const media = entry.payload.pendingMedia;
+  if (!media) return null;
+  const uri = await resolvePendingMediaUri(userId, entry.d, media.fileName);
+  const key = entry.payload.content.key;
+  if (!uri && !(typeof key === 'string' && key.length > 0)) {
+    return DROP_OUTBOX_ENTRY;
+  }
+  return {
+    ...(uri ? { localUri: uri } : {}),
+    ...(media.width ? { width: media.width } : {}),
+    ...(media.height ? { height: media.height } : {}),
+    ...(media.duration ? { duration: media.duration } : {}),
+    ...(media.size ? { size: media.size } : {}),
+  };
 }
 
 async function hydrateFromLocalDb(
@@ -539,8 +772,12 @@ async function hydrateFromLocalDb(
     await useChatStore.getState().purgeExpiredBurnMessages();
     if (!isCurrentSession()) return;
     // outbox:上次没发出去的消息还原成「发送失败」气泡,可长按重发。
-    const pending = await outboxList();
+    const outboxEntries = await readOutboxEntries();
     if (!isCurrentSession()) return;
+    const pending = outboxEntries ?? [];
+    // 还被 outbox 引用着、副本也还在的待发媒体(d)。读不出 outbox 时为 null:
+    // 不清理 —— 把「读失败」当成「没有待发」会删光所有没发出去的照片和录音。
+    const referencedMedia = outboxEntries ? new Set<string>() : null;
     // purge 或 outbox 读取期间服务端快照/设置页都可能收紧策略；兜底必须使用
     // 异步读取完成后的当前策略，不能回退到刚从 SQLite 读出的旧会话策略。
     const policyState = useChatStore.getState();
@@ -585,17 +822,27 @@ async function hydrateFromLocalDb(
         void outboxDelete(entry.d);
         continue;
       }
+      const mediaPreview = await restorePendingMediaPreview(userId, entry);
+      if (!isCurrentSession()) return;
+      if (mediaPreview === DROP_OUTBOX_ENTRY) {
+        void outboxDelete(entry.d);
+        continue;
+      }
+      if (mediaPreview?.localUri) referencedMedia?.add(entry.d);
+      const restoredContent = entry.payload.localPreviewContent
+        ? {
+            ...entry.payload.content,
+            ...entry.payload.localPreviewContent,
+          }
+        : entry.payload.content;
       const optimistic = {
         id: `outbox-${entry.d}`,
         conversationId: entry.conversationId,
         height: 0,
         type: entry.payload.type,
-        content: entry.payload.localPreviewContent
-          ? {
-              ...entry.payload.content,
-              ...entry.payload.localPreviewContent,
-            }
-          : entry.payload.content,
+        content: mediaPreview
+          ? { ...restoredContent, ...mediaPreview }
+          : restoredContent,
         // sender 必须是本人。留 null 的话 mapChatMessageDtoToUI 判成「收到的」,
         // 气泡渲染到左边、也拿不到失败态 —— 长按重发那条依赖 sendStatus=3 的
         // 菜单项因此不出现,这条消息就再也发不出去了。
@@ -612,6 +859,7 @@ async function hydrateFromLocalDb(
         .ingestMessages(entry.conversationId, [optimistic]);
       useChatStore.getState().markMessageFailed(entry.conversationId, entry.d);
     }
+    if (referencedMedia) void prunePendingMedia(userId, referencedMedia);
     // 已读水位:App 被杀前没 ack 的上报补回队列,连上即 flush。
     let restored = false;
     const persistedReads = await pendingReadsList();
@@ -633,96 +881,57 @@ async function hydrateFromLocalDb(
 }
 
 /**
- * 撤回/编辑不改 height,afterHeight 补拉结构上永远够不着:断线(或被杀)期间
- * 被撤回的消息在本地会一直显示原文。按时间轴单独追一遍,一直追到服务端说
- * 没有更多为止 —— 单页有上限,只拉一页会把剩下的永久跳过。
+ * 连上/重连之后的对账:重拉会话列表(未读/预览/新会话一次到位,服务端为准),
+ * 再按列表里的 syncRevision 对每个本地游标落后的会话做增量同步 —— 新消息、
+ * 撤回、编辑、回应、焚毁、清空都在这一趟里追平,当前打开的会话排最前。
  *
- * 没有游标 = 这台设备上还没有任何本地历史可言(首次登录),没什么要追的,
- * 只把游标种在「现在」。有游标就必须追,哪怕这是本次进程的第一次连接:
- * 上一次运行结束到现在之间发生的撤回,只有这条路径看得见。
+ * 首连也要做:上次运行结束到这次启动之间发生的变更,本地缓存里一条都还没有。
  */
-async function catchUpMutations(userId: string): Promise<void> {
-  const stored = lastMutationSyncAt ?? readMutationCursor(userId);
-  if (!stored) {
-    writeMutationCursor(userId, new Date().toISOString());
-    return;
-  }
-  let since = stored;
-  let sinceId = '';
-  try {
-    for (let page = 0; page < MUTATION_CATCH_UP_PAGES_MAX; page += 1) {
-      const result = await fetchChatMutationsSince(since, sinceId);
-      if (!result) return; // 会话已换人/已登出
-      if (result.resetRequired) {
-        // 游标比服务端的保留窗口还老:那段区间的撤回它已经查不到了。
-        // 本地缓存里那些消息会永远显示原文(撤回不改 height,补拉够不着),
-        // 唯一安全的做法是整体作废、重新从服务端拉。
-        await resetLocalMessageCache();
-        writeMutationCursor(userId, result.serverTime);
-        return;
+function resyncConversations(userId: string, isReconnect: boolean): void {
+  const prioritize = useChatStore.getState().activeConversationId;
+  void loadChatConversations()
+    .then((conversations) => {
+      if (useChatStore.getState().currentUserId !== userId) return;
+      return syncConversationsFromSnapshot(conversations, { prioritize });
+    })
+    .catch((err: unknown) => {
+      if (isReconnect) {
+        reportHandledFailure('chatSync', 'reconnectConversationRefresh', err);
+      } else {
+        reportHandledFailure('chatSync', 'initialConversationRefresh', err);
       }
-      writeMutationCursor(userId, result.nextSince);
-      if (!result.hasMore) return;
-      // 游标不前进就是原地打转,继续追只会死循环。
-      if (result.nextSince === since && result.nextSinceId === sinceId) return;
-      since = result.nextSince;
-      sinceId = result.nextSinceId;
-    }
-  } catch (err) {
-    reportHandledFailure('chatSync', 'mutationCatchUp', err);
-  }
-}
-
-/** 丢掉全部缓存消息(会话行留着,列表不至于空掉),下次进屏幕重新拉。 */
-async function resetLocalMessageCache(): Promise<void> {
-  logClientDiagnostic('chatSync.mutationCursorExpired');
-  devWarn('[chat] mutation cursor expired; dropping cached messages');
-  useChatStore.getState().dropCachedMessages();
-  await dropAllLocalMessages().catch(() => undefined);
-}
-
-/**
- * G-13 断线重连对账:断开期间的 chat:msg 不会重投,必须主动补,否则那段
- * 消息在已打开的会话里永远不出现、列表未读也停在断线前。
- * ① 重拉会话列表(未读/预览/新会话一次到位,服务端为准);
- * ② 当前打开的会话按本地最高 height 升序追平(与广播同一 ingest 入口,幂等)。
- * 其余会话不逐个补:进入时的历史加载与列表快照已覆盖。
- */
-function resyncAfterReconnect(userId: string): void {
-  void loadChatConversations().catch((err: unknown) =>
-    reportHandledFailure('chatSync', 'reconnectConversationRefresh', err),
-  );
-  void catchUpMutations(userId);
+    });
+  if (!isReconnect) return;
   const state = useChatStore.getState();
   const active = state.activeConversationId;
   if (!active) return;
-  let maxHeight = 0;
-  for (const message of state.messagesByConversation[active] ?? []) {
-    if (message.height > maxHeight) maxHeight = message.height;
-  }
-  if (maxHeight <= 0) {
-    // 打开会话时正好断网、首屏 REST 也失败 → 时间线一条确认消息都没有。
-    // 直接 return 的话这条唯一的恢复路径也放弃了,而屏幕上的历史加载 effect
-    // 不随连通性重跑:会话就这么一直空着,直到用户退出重进。
+  const hasConfirmed = (state.messagesByConversation[active] ?? []).some(
+    (message) => message.height > 0,
+  );
+  // 打开会话时正好断网、首屏 REST 也失败 → 时间线一条确认消息都没有。这个会话
+  // 在同步眼里「没有本地缓存」,只会采纳位置、不会拉内容,而屏幕上的历史加载
+  // effect 不随连通性重跑:得在这里补拉最新一页,否则会话一直空着。
+  if (!hasConfirmed) {
     void loadChatHistory(active).catch((err: unknown) =>
       reportHandledFailure('chatSync', 'reconnectInitialHistory', err),
     );
-    return;
   }
-  void backfillConversationSince(active, maxHeight).catch((err: unknown) =>
-    reportHandledFailure('chatSync', 'reconnectGapBackfill', err),
-  );
 }
 
 export function isChatConnected(): boolean {
   return socket?.connected === true;
 }
 
+/** 会话身份结束(登出、换账号)时,还没发出去的消息拿到的错误。 */
+function endedSessionSendError(): ChatSendError {
+  return new ChatSendError('CHAT_NOT_CONNECTED', '会话已结束');
+}
+
 /**
- * 发消息：ack 返回即已持久化。超时/失败时调用方保留同一 d 重试，
+ * 发一次消息：ack 返回即已持久化。超时/失败由发送队列用同一 d 重试，
  * 服务端 (conversationId, sender, d) 唯一约束保证不重复入库。
  */
-export function sendChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> {
+function emitChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> {
   const current = socket;
   if (!current?.connected) {
     return Promise.reject(new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'));
@@ -747,6 +956,38 @@ export function sendChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> 
         resolve(ack);
       });
   });
+}
+
+/**
+ * 推送 token 在握手之后才登记确认(首次安装、新账号、token 轮换时常见):这条连接握手时
+ * 没带它,服务端认不出是哪台设备,开着 App 也照样给它发推送,直到某次无关的重连。
+ * 登记确认后重连一次,新握手带上 token。没连上的不用管,下一次握手自己会带上。
+ */
+subscribeRegisteredPushToken(({ userId, token }) => {
+  const current = socket;
+  if (!current?.connected) return;
+  if (useChatStore.getState().currentUserId !== userId) return;
+  if (handshakePushToken === token) return;
+  current.disconnect();
+  current.connect();
+});
+
+const sendQueue = createChatSendQueue<ChatSendPayload, ChatSendAckOk>({
+  isConnected: () => socket?.connected === true,
+  emit: emitChatMessage,
+  retryDelayMs: sendRetryDelayMs,
+  waitTimeoutError: (stillConnected) =>
+    stillConnected
+      ? new ChatSendError('CHAT_ACK_TIMEOUT', '发送超时')
+      : new ChatSendError('CHAT_NOT_CONNECTED', 'socket 未连接'),
+});
+
+/**
+ * 发一条消息并等服务端确认。没连上、连接中途断开、ack 超时、被限流都不立刻判失败:
+ * 进发送队列,连上后用同一个 d 接着发,最多等一分钟(见 send-queue)。
+ */
+export function sendChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> {
+  return sendQueue.enqueue(input);
 }
 
 /** 已读上报：本地水位合并（只增不减），连接可用时逐条 flush 带 ack。 */
@@ -878,6 +1119,8 @@ export function markConversationRead(
 ): void {
   markChatRead(conversationId, height);
   useChatStore.getState().markConversationReadLocal(conversationId);
+  // 看过了,通知栏里这个会话的通知一并收起。
+  dismissChatNotifications(conversationId);
 }
 
 /** G-02 撤回:带 ack;权限与广播由服务端收口,失败抛 ChatSendError(code)。 */

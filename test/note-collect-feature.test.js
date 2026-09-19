@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8');
 
@@ -26,7 +27,7 @@ test('note types carry the collectedFrom source snapshot', () => {
 });
 
 test('chat collect action routes note cards to collectNote instead of collections', () => {
-  const src = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const src = readChatDetailSource();
 
   assert.match(src, /message\.type === 'note-card'/);
   assert.match(src, /buildNoteCollectSource\(message, \{/);

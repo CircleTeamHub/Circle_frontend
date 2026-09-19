@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) =>
   fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
@@ -18,7 +19,7 @@ test('share picker store carries note batches, not single notes', () => {
 });
 
 test('chat detail consumes note batches through the pure task planner', () => {
-  const src = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const src = readChatDetailSource();
 
   assert.match(src, /case 'note-batch':/);
   assert.match(src, /handlePickNoteBatch\(item\.notes, item\.options\)/);
@@ -37,7 +38,11 @@ test('chat detail consumes note batches through the pure task planner', () => {
   assert.match(src, /fetchNoteDetail\(note\.id\)/);
   // 失败提示保留首个错误的语义映射 + 非预期失败上报。
   assert.match(src, /getChatSendErrorMessage\(firstError, countMessage\)/);
-  assert.match(src, /reportChatSendFailure\(task\.kind, error\)/);
+  assert.match(src, /reportChatSendFailure\(kind, error\)/);
+  assert.match(src, /recordFailure\(task\.kind, error\)/);
+  // 进了发送队列就排下一条,不逐条等送达(断线时一条要等一分钟);
+  // 汇总提示要等全部有了结果。
+  assert.match(src, /await Promise\.all\(deliveries\)/);
   // 四种任务各走对应的发送通道。
   assert.match(src, /buildNoteSendTasks\(note, options, imported, location\)/);
   assert.match(src, /sendImageMessage\(\{\s*conversationId: conversationID,\s*key: task\.key/);
@@ -56,7 +61,7 @@ test('chat detail consumes note batches through the pure task planner', () => {
 test('note chat-media import API posts the section list', () => {
   const src = read('src/services/api/notes.ts');
   const types = read('src/features/notes/types.ts');
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
 
   assert.match(src, /\/note\/\$\{noteId\}\/chat-media/);
   assert.match(src, /body: \{ sections \}/);

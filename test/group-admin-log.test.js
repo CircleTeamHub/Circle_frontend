@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 // 群管理(设管理员/移出/逐人禁言)+ 群日志(独立于聊天记录的事件账本)。
 // 这组断言钉住三件事:客户端接线完整(端点/路由四栈/管理入口)、每种事件与
@@ -297,7 +298,7 @@ test('chat info wires standalone-group roles, the management entry and the long-
 });
 
 test('chat detail locks the composer while the viewer is silenced', () => {
-  const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const detail = readChatDetailSource();
   assert.match(detail, /const selfSilenced = useMemo\(/);
   assert.match(detail, /editable=\{!isPreviewMode && !composerLocked\}/);
   assert.match(detail, /disabled=\{sending \|\| isPreviewMode \|\| isVoiceRecording \|\| composerLocked\}/);

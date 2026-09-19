@@ -260,6 +260,7 @@
       "lastSeenDays": "{{count}}일 전 접속",
       "lastSeenDays_other": "{{count}}일 전 접속",
       "previewNotice": "연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+      "historyWindowFull": "이전 메시지는 채팅 기록에서 검색해 확인하세요.",
       "recordingSeconds": "녹음 중 {{seconds}}초",
       "voiceReleaseCancel": "손을 떼면 취소",
       "voiceReleaseSend": "손을 떼면 전송 {{seconds}}\"",
@@ -273,6 +274,7 @@
       "sensitiveWordBlocked": "금지어가 포함되어 있어 메시지가 차단되었습니다",
       "recordStartFailed": "녹음을 시작하지 못했습니다. 다시 시도해 주세요",
       "voiceSendFailed": "음성 메시지를 보내지 못했습니다. 다시 시도해 주세요",
+      "mediaSourceMissing": "원본 파일이 이 기기에 없어 다시 보낼 수 없습니다",
       "locationSendFailed": "위치를 보내지 못했습니다. 다시 시도해 주세요",
       "imageSendFailed": "이미지를 보내지 못했습니다. 다시 시도해 주세요",
       "videoSendFailed": "동영상을 보내지 못했습니다. 다시 시도해 주세요",
@@ -281,6 +283,7 @@
       "videoTooLong": "10분 이하의 동영상을 선택하세요",
       "videoUnsupported": "MP4, MOV, M4V 동영상만 지원됩니다",
       "videoUnavailable": "동영상을 사용할 수 없습니다",
+      "videoPreparing": "동영상을 처리하는 중…",
       "playVideo": "동영상 재생",
       "noteBatchPartialFailed": "{{count}}개 항목을 보내지 못했습니다",
       "cardSendFailed": "프로필 카드를 보내지 못했습니다. 다시 시도해 주세요",
@@ -1760,7 +1763,9 @@
       "recognitionSuccessTitle": "인정을 제출했어요",
       "recognitionSuccessMessage": "협업자 {{count}}명을 인정했어요.",
       "recognitionFailedTitle": "제출하지 못했어요"
-    }
+    },
+    "chatChannelName": "채팅 메시지",
+    "chatChannelDescription": "친구와 그룹의 새 메시지"
   },
   "search": {
     "loadFriendsFailed": "친구 목록을 불러오지 못했어요. 다시 시도하세요",
@@ -2928,7 +2933,8 @@
       "verification": "[인증] {{name}}님이 보증을 요청했습니다",
       "default": "[메시지]",
       "plazaPost": "[활동] {{title}}",
-      "sendFailedPrefix": "[전송 실패]"
+      "sendFailedPrefix": "[전송 실패]",
+      "draftPrefix": "[임시 저장]"
     },
     "message": {
       "revokedBySelf": "메시지를 회수했습니다",
@@ -3322,6 +3328,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "이 그룹은 멤버 초대가 꺼져 있습니다",
     "CHAT_GROUP_QR_JOIN_DISABLED": "이 그룹은 QR 코드 참여가 꺼져 있습니다",
     "CHAT_GROUP_AVATAR_URL_INVALID": "그룹 프로필 사진 주소가 올바르지 않습니다",
+    "CHAT_DELIVERY_ID_CONFLICT": "메시지를 보내지 못했습니다. 다시 입력한 후 보내 주세요",
     "FRIEND_GROUP_ADD_FORBIDDEN": "이 그룹은 멤버끼리 친구 추가를 허용하지 않습니다"
   },
   "qr": {

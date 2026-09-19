@@ -2,8 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readSourceFile } = require('./helpers/chat-detail-source');
 
-const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
+const read = (rel) => readSourceFile(rel);
 
 test('GroupChatAvatar uses a scalable branded group illustration and optional clock badge', () => {
   const component = read('src/components/ui/group-chat-avatar.tsx');

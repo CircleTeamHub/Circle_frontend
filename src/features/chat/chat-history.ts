@@ -93,8 +93,8 @@ function nonEmptyString(value: unknown): string | null {
 export function getChatMediaThumbnailUris(message: ChatMessageDto): string[] {
   const content = message.content ?? {};
   // 视频的 url/localUri 指向媒体文件本身，不能交给 <Image> 当缩略图加载。
-  // 服务端目前没有生成视频封面，所以仅在协议明确提供 thumbUrl 时展示，
-  // 否则媒体宫格使用带播放标记的占位卡片。
+  // 封面帧由发送端截取上传(thumbKey,服务端读时签成 thumbUrl);老消息没有封面，
+  // 媒体宫格使用带播放标记的占位卡片。
   if (message.type === 'video') {
     const thumbnail = allowPeerMediaUrl(nonEmptyString(content['thumbUrl']));
     return thumbnail ? [thumbnail] : [];
@@ -111,6 +111,24 @@ export function getChatMediaThumbnailUris(message: ChatMessageDto): string[] {
 }
 
 
+
+/**
+ * 媒体宫格里某个候选地址对应的存储 key,拿来当图片缓存键:签名地址每小时轮换,
+ * 按地址缓存的话每次打开聊天记录都要整页重新下载。本机文件地址不挂 key。
+ */
+export function getChatMediaThumbnailCacheKey(
+  message: ChatMessageDto,
+  uri: string,
+): string | undefined {
+  const content = message.content ?? {};
+  if (uri === allowPeerMediaUrl(nonEmptyString(content['thumbUrl']))) {
+    return nonEmptyString(content['thumbKey']) ?? undefined;
+  }
+  if (uri === allowPeerMediaUrl(nonEmptyString(content['url']))) {
+    return nonEmptyString(content['key']) ?? undefined;
+  }
+  return undefined;
+}
 
 export function isValidDateInput(value: string) {
   const trimmed = value.trim();

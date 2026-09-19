@@ -124,6 +124,31 @@ function videoMessage(content) {
   return { ...mediaMessage(content), type: 'video' };
 }
 
+test('media grid tiles cache signed thumbnails by their object keys', () => {
+  const { getChatMediaThumbnailCacheKey } = loadChatHistory();
+  const message = mediaMessage({
+    key: 'chat/u2/photo.jpg',
+    thumbKey: 'chat/u2/photo.thumb.jpg',
+    thumbUrl: 'https://cdn.trusted/photo.thumb.jpg?sig=1',
+    url: 'https://cdn.trusted/photo.jpg?sig=1',
+    localUri: 'file:///tmp/photo.jpg',
+  });
+  // 签名地址每小时轮换,按地址缓存的话每次打开聊天记录都整页重下。
+  assert.equal(
+    getChatMediaThumbnailCacheKey(message, 'https://cdn.trusted/photo.thumb.jpg?sig=1'),
+    'chat/u2/photo.thumb.jpg',
+  );
+  assert.equal(
+    getChatMediaThumbnailCacheKey(message, 'https://cdn.trusted/photo.jpg?sig=1'),
+    'chat/u2/photo.jpg',
+  );
+  assert.equal(getChatMediaThumbnailCacheKey(message, 'file:///tmp/photo.jpg'), undefined);
+  assert.equal(
+    getChatMediaThumbnailCacheKey(mediaMessage({ url: 'https://cdn.trusted/x.jpg' }), 'https://cdn.trusted/x.jpg'),
+    undefined,
+  );
+});
+
 test('untrusted thumbnail origins never reach the media grid', () => {
   const { getChatMediaThumbnailUris } = loadChatHistory();
   for (const content of [
