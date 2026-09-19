@@ -58,7 +58,7 @@ test('preproduction metadata CLI loads the dynamic app variant', () => {
     APP_VARIANT: 'preprod',
     EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
-    EXPO_PUBLIC_MEDIA_ORIGINS: EXPECTED.mediaOrigin,
+    EXPO_PUBLIC_MEDIA_ORIGINS: EXPECTED.mediaOrigins.join(','),
   };
   const run = (env) =>
     spawnSync(
