@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 function read(rel) {
   return fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
@@ -42,7 +43,7 @@ test('moment detail scrolls to and highlights a target comment', () => {
 });
 
 test('chat detail highlights a searched notification message after scrolling', () => {
-  const source = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const source = readChatDetailSource();
 
   assert.match(source, /highlightedMessageID/);
   assert.match(source, /setHighlightedMessageID\(searchedMsgID\)/);
@@ -279,7 +280,7 @@ test('seen target matcher supports moment, chat, invitation, signup, and friend 
 
 test('target screens mark matching notifications read when opened directly', () => {
   const moment = read('src/features/discover/screens/MomentDetailScreen.tsx');
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chat = readChatDetailSource();
   const verification = read('src/features/discover/screens/VerificationRequestScreen.tsx');
   const invitation = read('src/features/discover/screens/InvitationVerificationScreen.tsx');
   const signups = read('src/features/notifications/screens/PostSignupsScreen.tsx');

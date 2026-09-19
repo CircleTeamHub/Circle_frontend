@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -450,6 +451,8 @@ export default function ChatInfoScreen() {
     null;
   // review R2 P1：自己的群成员身份走活体 hook——群主在本页存活期间撤掉管理员
   // 时，订阅推送立即收紧目录/搜索/管理入口，不再等重新聚焦。
+  // 权限只在本页在前台时兜底轮询,角色变了立刻重查(见 useGroupMemberViewAccess)。
+  const isFocused = useIsFocused();
   const {
     selfMember: currentGroupMember,
     canViewMembers: canViewCircleMemberDirectory,
@@ -459,6 +462,8 @@ export default function ChatInfoScreen() {
     groupID,
     currentUserID,
     membersCanViewRoster,
+    active: isFocused,
+    roleHint: conversation?.myRole ?? null,
   });
   // 临时房不是圈子,没有圈子角色可判——目录权限由后端的座位校验兜底
   // (GET /chat/conversations/:id/members),与 ChatDetailScreen 同口径。

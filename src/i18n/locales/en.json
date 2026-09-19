@@ -312,7 +312,9 @@
       "recognitionSuccessTitle": "Recognition submitted",
       "recognitionSuccessMessage": "{{count}} collaborator(s) recognized.",
       "recognitionFailedTitle": "Submit failed"
-    }
+    },
+    "chatChannelName": "Chat messages",
+    "chatChannelDescription": "New messages from friends and groups"
   },
   "chat": {
     "detail": {
@@ -334,6 +336,7 @@
       "lastSeenDays_one": "Last seen {{count}} day ago",
       "lastSeenDays_other": "Last seen {{count}} days ago",
       "previewNotice": "The connection isn't ready yet. Please try again shortly.",
+      "historyWindowFull": "To see older messages, search the chat history.",
       "recordingSeconds": "Recording {{seconds}}s",
       "voiceReleaseCancel": "Release to cancel",
       "voiceReleaseSend": "Release to send {{seconds}}\"",
@@ -347,6 +350,7 @@
       "sensitiveWordBlocked": "Message blocked: it contains prohibited words",
       "recordStartFailed": "Failed to start recording, please try again",
       "voiceSendFailed": "Failed to send voice message, please try again",
+      "mediaSourceMissing": "The original file is no longer on this device, so it can’t be resent",
       "locationSendFailed": "Failed to send location, please try again",
       "imageSendFailed": "Failed to send image, please try again",
       "videoSendFailed": "Failed to send video, please try again",
@@ -355,6 +359,7 @@
       "videoTooLong": "Choose a video under 10 minutes",
       "videoUnsupported": "Only MP4, MOV, and M4V videos are supported",
       "videoUnavailable": "Video unavailable",
+      "videoPreparing": "Preparing video…",
       "playVideo": "Play video",
       "noteBatchPartialFailed": "{{count}} items failed to send",
       "cardSendFailed": "Failed to send contact card, please try again",
@@ -2899,7 +2904,8 @@
       "verification": "[Verify] {{name}} asked you to vouch",
       "default": "[Message]",
       "plazaPost": "[Event] {{title}}",
-      "sendFailedPrefix": "[Failed]"
+      "sendFailedPrefix": "[Failed]",
+      "draftPrefix": "[Draft]"
     },
     "message": {
       "revokedBySelf": "You revoked a message",
@@ -3328,6 +3334,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "Member invites are turned off in this group",
     "CHAT_GROUP_QR_JOIN_DISABLED": "Joining via QR code is turned off in this group",
     "CHAT_GROUP_AVATAR_URL_INVALID": "Invalid group avatar address",
+    "CHAT_DELIVERY_ID_CONFLICT": "Message failed to send. Please re-enter it and try again",
     "FRIEND_GROUP_ADD_FORBIDDEN": "This group does not allow members to add each other as friends"
   },
   "qr": {

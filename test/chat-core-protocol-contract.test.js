@@ -33,6 +33,10 @@ const FE_EVENTS = {
   edit: 'chat:edit',
   historyCleared: 'chat:history_cleared',
   burnedMessages: 'chat:burned_messages',
+  // 前后台上报(决定这台设备算不算「收得到」、要不要发推送)与 token 到期通知。
+  background: 'chat:background',
+  foreground: 'chat:foreground',
+  sessionExpired: 'chat:session_expired',
 };
 
 test('frontend protocol declares the canonical event names and path', () => {
@@ -47,7 +51,12 @@ test('frontend protocol declares the canonical event names and path', () => {
 
 test('socket manager authenticates via handshake auth frame, not the URL', () => {
   const manager = read('src/chat-core/socket-manager.ts');
-  assert.match(manager, /auth:\s*\{\s*token,\s*traceId:\s*connectionTraceId\s*\}/);
+  // appState:后台里建立的连接(安卓后台重连)一开始就按后台登记。auth 必须是回调:
+  // socket.io 自动重连会原样重发对象形式的 auth,带上的就是建连那一刻的前后台状态。
+  assert.match(
+    manager,
+    /auth:\s*\(sendAuth\)\s*=>\s*\{[\s\S]*?sendAuth\(\{\s*token,\s*traceId:\s*connectionTraceId,\s*appState:\s*handshakeAppState,\s*\.\.\.\(pushToken \? \{ pushToken \} : \{\}\),?\s*\}\)/,
+  );
   assert.match(
     manager,
     /extraHeaders:\s*\{\s*'x-connection-trace-id':\s*connectionTraceId\s*\}/,
@@ -57,6 +66,29 @@ test('socket manager authenticates via handshake auth frame, not the URL', () =>
   // 只走 websocket 传输,禁用 polling(移动端弱网下 polling 只会放大延迟)。
   assert.match(manager, /transports:\s*\['websocket'\]/);
 });
+
+test(
+  'the handshake auth fields match the backend ChatHandshakeAuth',
+  { skip: !hasBackend && 'circle_be not checked out beside circle-im' },
+  () => {
+    const types = fs.readFileSync(
+      path.join(BACKEND_ROOT, 'src/chat/chat.types.ts'),
+      'utf8',
+    );
+    const body = /export interface ChatHandshakeAuth \{([\s\S]*?)\n\}/.exec(types)?.[1];
+    assert.ok(body, 'backend ChatHandshakeAuth not found');
+    const backendFields = [...body.matchAll(/^\s+(\w+)\??:/gm)].map((m) => m[1]).sort();
+    const manager = read('src/chat-core/socket-manager.ts');
+    const sendAuth = /sendAuth\(\{([\s\S]*?)\}\);/.exec(manager)?.[1] ?? '';
+    const frontendFields = [
+      ...sendAuth.matchAll(/(?:^|[\s,{])(?:\.\.\.\(\w+ \? \{ )?(\w+)(?=[,:\s}])/g),
+    ]
+      .map((m) => m[1])
+      .filter((name) => !['connectionTraceId', 'handshakeAppState'].includes(name));
+    // 字段名是协议:改了一边,另一边读到的永远是 undefined,测试却都是绿的。
+    assert.deepEqual([...new Set(frontendFields)].sort(), backendFields);
+  },
+);
 
 test('send path keeps the idempotent delivery id contract', () => {
   const manager = read('src/chat-core/socket-manager.ts');

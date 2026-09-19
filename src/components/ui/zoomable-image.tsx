@@ -31,6 +31,8 @@ const MOVE_TOLERANCE = 8;
 
 interface ZoomableImageProps {
   uri: string;
+  /** 图片缓存键;签名地址会轮换的远端图片传稳定的存储 key。 */
+  cacheKey?: string;
   /** Ephemeral media can opt out of the shared disk/memory cache. */
   cachePolicy?: 'none' | 'disk' | 'memory' | 'memory-disk';
   width: number;
@@ -50,6 +52,7 @@ function distance(touches: { pageX: number; pageY: number }[]): number {
 
 export function ZoomableImage({
   uri,
+  cacheKey,
   cachePolicy = 'memory-disk',
   width,
   height,
@@ -303,7 +306,7 @@ export function ZoomableImage({
         ]}
       >
         <Image
-          source={{ uri }}
+          source={cacheKey ? { uri, cacheKey } : { uri }}
           cachePolicy={cachePolicy}
           style={s.fill}
           contentFit="contain"

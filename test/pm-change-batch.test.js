@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
@@ -55,7 +56,7 @@ test('groups screen lists group conversations by my role, never circles', () => 
 });
 
 test('chat input remains keyboard-safe and pinned rows use one surface color', () => {
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chat = readChatDetailSource();
   const messages = read('src/features/messages/screens/MessagesScreen.tsx');
 
   assert.match(chat, /<KeyboardAvoidingContainer/);
@@ -191,7 +192,7 @@ test('appearance settings wire all four requested chat display controls', () => 
   const chatPrefs = read(
     'src/features/chat/store/use-chat-preferences-store.ts',
   );
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chat = readChatDetailSource();
   const messages = read('src/features/messages/screens/MessagesScreen.tsx');
 
   for (const key of [

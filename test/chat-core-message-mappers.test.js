@@ -209,6 +209,47 @@ test('video messages preserve their signed source and playback metadata', () => 
   assert.equal(video.videoHeight, 1080);
   assert.equal(video.videoDuration, 12);
   assert.equal(video.videoSize, 2048);
+  // 老消息没有封面帧:气泡退回黑底。
+  assert.equal(video.videoThumbUrl, undefined);
+  assert.equal(video.videoThumbKey, undefined);
+});
+
+test('video posters come only from the signed thumbnail, never from the video file itself', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const withPoster = mapChatMessageDtoToUI(
+    dto({
+      type: 'video',
+      content: {
+        key: 'chat/u2/clip.mp4',
+        url: 'https://cdn.trusted/clip.mp4',
+        thumbKey: 'chat/u2/poster-clip.jpg',
+        thumbUrl: 'https://signed/poster-clip.jpg?X-Amz-Date=20260916T100000Z',
+      },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(
+    withPoster.videoThumbUrl,
+    'https://signed/poster-clip.jpg?X-Amz-Date=20260916T100000Z',
+  );
+  assert.equal(withPoster.videoThumbKey, 'chat/u2/poster-clip.jpg');
+
+  // 对端塞进来的外部地址会被每个滑过这条消息的人静默请求(追踪信标),照样挡掉。
+  const beacon = mapChatMessageDtoToUI(
+    dto({
+      type: 'video',
+      content: {
+        key: 'chat/u2/clip.mp4',
+        url: 'https://cdn.trusted/clip.mp4',
+        thumbUrl: 'https://attacker.example/1x1.gif',
+        localUri: 'file:///var/mobile/clip.mov',
+      },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(beacon.videoThumbUrl, undefined);
 });
 
 test('location messages preserve separate place details and valid coordinates', () => {
@@ -299,6 +340,34 @@ test('image prefers server url and falls back to localUri while pending', () => 
   assert.equal(confirmed.imageWidth, 100);
 });
 
+test('image messages keep their object keys as stable cache keys', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const image = mapChatMessageDtoToUI(
+    dto({
+      type: 'image',
+      content: {
+        key: 'chat/u2/photo.jpg',
+        thumbKey: 'chat/u2/photo.thumb.jpg',
+        url: 'https://signed/photo.jpg?X-Amz-Date=20260916T100000Z',
+        thumbUrl: 'https://signed/photo.thumb.jpg?X-Amz-Date=20260916T100000Z',
+      },
+    }),
+    'u1',
+    0,
+  );
+  // 签名地址每小时换一次:拿它当缓存键,同一张图过了窗口就整张重新下载。
+  assert.equal(image.imageKey, 'chat/u2/photo.jpg');
+  assert.equal(image.imageThumbKey, 'chat/u2/photo.thumb.jpg');
+
+  const hostile = mapChatMessageDtoToUI(
+    dto({ type: 'image', content: { key: 42, thumbKey: { nested: true } } }),
+    'u1',
+    0,
+  );
+  assert.equal(hostile.imageKey, undefined);
+  assert.equal(hostile.imageThumbKey, undefined);
+});
+
 test('sent bubbles report isRead from the peer watermark', () => {
   const { mapChatMessageDtoToUI } = loadMappers();
   const me = { id: 'u1', nickname: '我', avatarUrl: null };
@@ -334,9 +403,32 @@ test('list mapper renders newest-first and caches confirmed rows by reference', 
   // 同引用输入 → 同引用输出(FlatList 行级跳渲染的依据)。
   assert.equal(first[0], second[0]);
   assert.equal(first[1], second[1]);
-  // 对端水位变化 → 整体失效重建(isRead 依赖水位)。
-  const third = mapChatMessageDtosToUI([a, b], 'u1', 2, box);
-  assert.notEqual(third[0], second[0]);
+  // 对端水位变化只换掉「已读/已送达」真的翻转了的那几条:对方的消息和状态没变的
+  // 自己的消息保持引用,列表不用为一次已读回执整片重渲染。
+  const mine = (id, height) =>
+    dto({ id, height, sender: { id: 'u1', nickname: '我', avatarUrl: null } });
+  const own1 = mine('own-1', 3);
+  const own2 = mine('own-2', 4);
+  const before = mapChatMessageDtosToUI([a, b, own1, own2], 'u1', 0, box);
+  const readUpTo3 = mapChatMessageDtosToUI([a, b, own1, own2], 'u1', 3, box);
+  const byId = (list) => new Map(list.map((m) => [m.id, m]));
+  const was = byId(before);
+  const now = byId(readUpTo3);
+  assert.equal(now.get('a'), was.get('a'), '对方的消息不受已读水位影响');
+  assert.equal(now.get('b'), was.get('b'));
+  assert.notEqual(now.get('own-1'), was.get('own-1'));
+  assert.equal(now.get('own-1').isRead, true);
+  assert.equal(now.get('own-2'), was.get('own-2'), '还没读到的那条保持引用');
+  assert.equal(now.get('own-2').isRead, false);
+
+  const delivered = mapChatMessageDtosToUI([a, b, own1, own2], 'u1', 3, box, 4);
+  assert.notEqual(byId(delivered).get('own-2'), now.get('own-2'));
+  assert.equal(byId(delivered).get('own-2').isDelivered, true);
+  assert.equal(byId(delivered).get('own-2').isRead, false);
+
+  // 换了账号:收发方向全变,整体重建。
+  const otherUser = mapChatMessageDtosToUI([a, b], 'u2', 3, box);
+  assert.notEqual(otherUser[0], second[0]);
 });
 
 test('system messages render as localized system notices', () => {

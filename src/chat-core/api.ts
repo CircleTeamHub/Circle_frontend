@@ -10,7 +10,7 @@ import type {
   ChatMemberDto,
   ChatMemberSilenceDto,
   ChatMessageDto,
-  ChatMutationsPageDto,
+  ChatSyncPageDto,
 } from './protocol';
 import { resolveLocalDaySearchWindow } from '../features/chat/chat-history-date-window';
 import { withoutLocallyDeleted } from './deleted-messages';
@@ -499,42 +499,28 @@ export async function backfillConversationSince(
   await backfillConversationSince(conversationId, cursor);
 }
 
+/** 增量同步单页条数(与服务端 SYNC_PAGE_MAX 对齐)。 */
+export const SYNC_PAGE_LIMIT = 200;
+
 /**
- * 离线期间的撤回/编辑增量。撤回不改 height,重连的 afterHeight 补拉结构上
- * 永远看不到它 —— 不追这一趟,断线时被撤回的消息在本地会一直显示原文。
+ * 会话变更序号流的一页(GET /chat/conversations/:id/sync)。
  *
- * 返回服务端给的下一次游标与「还有没有」。**必须用 nextSince 而不是
- * serverTime**:单页有上限,被截断时服务端会把游标停在本页最后一次变更上,
- * 拿 serverTime 前进的话没返回的那些变更就被永久跳过了。
- * 会话已换人/已登出时返回 null(调用方据此停手)。
+ * 只负责取数:落库、游标推进与内存应用由 sync.ts 在一处收口(游标必须和它覆盖的
+ * 变更一起提交)。会话已换人/已登出时返回 null,调用方据此停手。
  */
-export async function fetchChatMutationsSince(
-  since: string,
-  sinceId = '',
-): Promise<ChatMutationsPageDto | null> {
+export async function fetchChatSyncPage(
+  conversationId: string,
+  afterRevision: number,
+): Promise<ChatSyncPageDto | null> {
   const sameSession = sessionGate();
-  const params = new URLSearchParams({ since });
-  // 复合游标:同毫秒的多条变更跨在页边界上时,只带时间戳会漏掉其余那些。
-  if (sinceId) params.set('sinceId', sinceId);
-  const result = await apiClient<ChatMutationsPageDto>(
-    `/chat/messages/mutations?${params.toString()}`,
+  const params = new URLSearchParams({
+    afterRevision: String(afterRevision),
+    limit: String(SYNC_PAGE_LIMIT),
+  });
+  const page = await apiClient<ChatSyncPageDto>(
+    `/chat/conversations/${conversationId}/sync?${params.toString()}`,
   );
-  if (!sameSession()) return null;
-  const store = useChatStore.getState();
-  const byConversation = new Map<string, ChatMessageDto[]>();
-  for (const message of result.messages) {
-    if (message.deleted === true) {
-      store.removeMessage(message.conversationId, message.id);
-      continue;
-    }
-    const bucket = byConversation.get(message.conversationId) ?? [];
-    bucket.push(message);
-    byConversation.set(message.conversationId, bucket);
-  }
-  for (const [conversationId, messages] of byConversation) {
-    store.ingestMessages(conversationId, messages);
-  }
-  return result;
+  return sameSession() ? page : null;
 }
 
 /**

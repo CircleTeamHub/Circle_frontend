@@ -3,12 +3,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { readSourceFile } = require('./helpers/chat-detail-source');
 
 // 「成员可查看他人资料」/「成员可邀请」这两个开关**只在客户端拦**(资料接口没有
 // 群上下文)。所以判据必须只有一份:哪一处漏用,那一处就是绕过 —— 成员搜索页
 // 曾对圈子群直接 `return true`,于是「群信息 → 群成员 → 点人」整条路绕开了开关。
 const root = process.cwd();
-const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+const read = (rel) => readSourceFile(rel, root);
 
 function loadGate() {
   const permissions = loadTsModule('src/features/chat/group-admin-permissions.ts');

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams, useSegments } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import {
   groupMemberDisplayName,
   groupMemberMatchesQuery,
@@ -110,6 +111,18 @@ export default function SearchGroupMembersScreen() {
 
   // review R2 P1：权限走活体 hook——挂载期间被撤权时订阅立即翻转
   // authorized，下面的目录数据也同步清空，不再是一次性快照。
+  // 权限只在本页在前台时兜底轮询,缓存里的角色变了立刻重查(见 useGroupMemberViewAccess)。
+  const isFocused = useIsFocused();
+  const cachedRole = useChatStore(
+    (state) =>
+      state.conversations.find((item) =>
+        isStandaloneGroup
+          ? item.id === standaloneConversationID
+          : Boolean(groupID) && item.circleId === groupID,
+      )?.myRole ??
+      circleConversation?.myRole ??
+      null,
+  );
   const {
     canViewMembers: circleAuthorized,
     selfMember: circleSelfMember,
@@ -120,6 +133,8 @@ export default function SearchGroupMembersScreen() {
     groupID,
     currentUserID,
     membersCanViewRoster,
+    active: isFocused,
+    roleHint: cachedRole,
   });
   const authorized = isStandaloneGroup || circleAuthorized;
   // 「成员可查看他人资料」策略:两种群同一判据(群主/管理员豁免,普通成员按开关),

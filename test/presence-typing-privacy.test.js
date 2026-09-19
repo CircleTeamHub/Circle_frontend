@@ -2,13 +2,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource, readSourceFile } = require('./helpers/chat-detail-source');
 
 // 隐私页补的三项:显示在线时间 / 单聊输入状态 / 群聊输入状态。
 // 这组断言钉住三件事:客户端接线完整(开关真的 PATCH 服务端、门禁真的在发送侧、
 // 对方隐藏时界面真的不画)、五语种词条齐全、以及与后端的跨仓契约(字段名、
 // 列默认值、迁移、presence 协议的 detail / lastSeenAt / hidden)。
 const root = process.cwd();
-const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+const read = (rel) => readSourceFile(rel, root);
 const LOCALES = ['zh', 'en', 'ja', 'ko', 'es'];
 const flatten = (obj, prefix = '') =>
   Object.entries(obj).reduce((out, [key, value]) => {
@@ -63,7 +64,7 @@ test('the typing gate lives in socket-manager; the screen only passes the chat k
   assert.match(gate, /useChatStore\.getState\(\)\.viewerTypingPolicy/);
   assert.match(gate, /kind === 'group' \? !policy\.group : !policy\.direct/);
 
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /sendChatTyping\(conversationID, isGroupChat \? 'group' : 'direct'\)/);
   assert.doesNotMatch(screen, /settings\.singleTyping|settings\.groupTyping/);
 
@@ -95,7 +96,7 @@ test('presence protocol: detail query, last-seen + hidden broadcast, header hide
   assert.match(protocol, /lastSeenAt\?: string \| null;/);
   assert.match(protocol, /hidden\?: boolean;/);
 
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /usePeerPresence\(peerImId\)/);
   // 对方隐藏 / 未知时整行不画 —— 画「离线」仍是在泄露信息。
   assert.match(screen, /: peerPresence\.known\s*\? peerPresence\.label\s*: ''/);

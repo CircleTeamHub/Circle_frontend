@@ -16,6 +16,8 @@ export interface Conversation {
   isTempChat?: boolean;
   pinned: boolean;
   muted: boolean;
+  /** 输入框里还有没发出去的内容:列表预览换成「[草稿] …」。 */
+  draftPreview?: string;
 }
 
 /**
@@ -182,10 +184,20 @@ export interface ChatMessage {
   imageUrl?: string;
   // 列表气泡优先用缩略图渲染，避免直接拉原图；点开原图查看时才用 imageUrl。
   imageThumbUrl?: string;
+  /**
+   * 原图 / 缩略图的存储 object key,只拿来当图片缓存键:签名地址每小时轮换,按地址缓存
+   * 的话同一张图过了窗口就要整张重新下载。
+   */
+  imageKey?: string;
+  imageThumbKey?: string;
   imageWidth?: number;
   imageHeight?: number;
   // For video messages: local/remote source plus intrinsic metadata.
   videoUrl?: string;
+  /** 封面帧(服务端读时签发);没有封面的老消息为空,气泡退回黑底。 */
+  videoThumbUrl?: string;
+  /** 封面帧的 object key,只当图片缓存键用(签名地址每小时轮换)。 */
+  videoThumbKey?: string;
   videoWidth?: number;
   videoHeight?: number;
   videoDuration?: number;
