@@ -1,0 +1,14 @@
+diff --git a/node_modules/expo-amap/android/src/main/java/expo/modules/amap/ExpoAmapView.kt b/node_modules/expo-amap/android/src/main/java/expo/modules/amap/ExpoAmapView.kt
+--- a/node_modules/expo-amap/android/src/main/java/expo/modules/amap/ExpoAmapView.kt
++++ b/node_modules/expo-amap/android/src/main/java/expo/modules/amap/ExpoAmapView.kt
+@@ -76,7 +76,9 @@ class ExpoAmapView(context: Context, appContext: AppContext) : ExpoView(context
+                 override fun onCameraChange(p0: CameraPosition?) {}
+                 override fun onCameraChangeFinish(p0: CameraPosition?) {
+                     onZoom(mapOf("zoomLevel" to (p0?.zoom ?: 0)))
+-                    //  onRegionChanged(Utils.mapCameraPositionToRegion(p0))
++                    onRegionChanged(
++                        Utils.mapCameraPositionToRegion(p0, mapView.width, mapView.height)
++                    )
+                     p0?.zoom?.let { markerManager.switchMarkersVisibility(it) }
+                 }
+             }

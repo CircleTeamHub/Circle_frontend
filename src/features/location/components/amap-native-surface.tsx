@@ -28,7 +28,11 @@ function loadAmapModule(): AmapModule | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const loaded = require('expo-amap') as AmapModule;
-    return typeof loaded?.MapView === 'function' ? loaded : null;
+    const mapViewType = typeof loaded?.MapView;
+    return loaded.MapView !== null &&
+      (mapViewType === 'function' || mapViewType === 'object')
+      ? loaded
+      : null;
   } catch {
     return null;
   }

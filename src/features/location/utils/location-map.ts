@@ -344,14 +344,20 @@ export type BasemapProvider = 'carto' | 'amap-native';
 
 const AMAP_ATTRIBUTION = '© 高德地图';
 
-function readAmapNativeKey(): string {
+export function getAmapNativeKey(platform: string): string {
   // Expo 是按字面量静态替换 process.env.EXPO_PUBLIC_*，这里只能写成完整形式。
-  return (process.env.EXPO_PUBLIC_AMAP_NATIVE_KEY ?? '').trim();
+  if (platform === 'ios') {
+    return (process.env.EXPO_PUBLIC_AMAP_IOS_KEY ?? '').trim();
+  }
+  if (platform === 'android') {
+    return (process.env.EXPO_PUBLIC_AMAP_ANDROID_KEY ?? '').trim();
+  }
+  return '';
 }
 
 /** 构建时配了高德原生密钥吗？没配就不会挂那个 config plugin，原生地图也起不来。 */
-export function hasAmapNativeKey(): boolean {
-  return readAmapNativeKey().length > 0;
+export function hasAmapNativeKey(platform: string): boolean {
+  return getAmapNativeKey(platform).length > 0;
 }
 
 /**
@@ -364,7 +370,7 @@ export function getBasemapProvider(
   latitude: number,
   longitude: number,
   nativeSupported: boolean,
-  amapNativeKey = readAmapNativeKey(),
+  amapNativeKey = '',
 ): BasemapProvider {
   if (!nativeSupported || !amapNativeKey) return 'carto';
   if (!hasValidLocationCoordinates(latitude, longitude)) return 'carto';

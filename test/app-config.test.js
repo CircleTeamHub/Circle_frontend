@@ -12,6 +12,9 @@ function loadConfig(env = {}) {
     GOOGLE_SERVICES_FILE: process.env.GOOGLE_SERVICES_FILE,
     EXPO_PUBLIC_PUSH_PROVIDER: process.env.EXPO_PUBLIC_PUSH_PROVIDER,
     EXPO_PUBLIC_JPUSH_APP_KEY: process.env.EXPO_PUBLIC_JPUSH_APP_KEY,
+    EXPO_PUBLIC_AMAP_IOS_KEY: process.env.EXPO_PUBLIC_AMAP_IOS_KEY,
+    EXPO_PUBLIC_AMAP_ANDROID_KEY: process.env.EXPO_PUBLIC_AMAP_ANDROID_KEY,
+    EXPO_PUBLIC_AMAP_NATIVE_KEY: process.env.EXPO_PUBLIC_AMAP_NATIVE_KEY,
   };
 
   for (const key of Object.keys(previous)) {
@@ -108,6 +111,30 @@ test('dynamic app config rejects unknown push providers', () => {
   assert.throws(
     () => loadConfig({ EXPO_PUBLIC_PUSH_PROVIDER: 'jpus' }),
     /EXPO_PUBLIC_PUSH_PROVIDER must be expo or jpush/,
+  );
+});
+
+test('高德原生插件使用平台独立密钥，避免把 Android key 写进 iOS', () => {
+  const config = loadConfig({
+    EXPO_PUBLIC_AMAP_IOS_KEY: 'ios-amap-key',
+    EXPO_PUBLIC_AMAP_ANDROID_KEY: 'android-amap-key',
+  });
+
+  assert.deepEqual(
+    config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-amap'),
+    [
+      'expo-amap',
+      { apiKey: { ios: 'ios-amap-key', android: 'android-amap-key' } },
+    ],
+  );
+});
+
+test('旧的单密钥变量不再悄悄配置两个平台', () => {
+  const config = loadConfig({ EXPO_PUBLIC_AMAP_NATIVE_KEY: 'legacy-shared-key' });
+
+  assert.equal(
+    config.plugins.some((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-amap'),
+    false,
   );
 });
 

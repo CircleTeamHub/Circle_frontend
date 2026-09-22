@@ -8,11 +8,12 @@ const ts = require('typescript');
 const SHENZHEN = { latitude: 22.545, longitude: 114.0575 };
 const BEIJING = { latitude: 39.9087, longitude: 116.3975 };
 const SAN_JOSE = { latitude: 37.32698, longitude: -121.88435 };
-const NATIVE_KEY = 'test-amap-native-key';
+const IOS_KEY = 'test-amap-ios-key';
+const ANDROID_KEY = 'test-amap-android-key';
 
 /**
- * 载入 location-map.ts。底图源要读 EXPO_PUBLIC_AMAP_NATIVE_KEY，而 Expo 是按字面量
- * 静态替换 process.env.EXPO_PUBLIC_* 的，源码里只能写成完整形式——所以这里必须把
+ * 载入 location-map.ts。底图源要读平台独立的 EXPO_PUBLIC_AMAP_*_KEY，而 Expo
+ * 是按字面量静态替换 process.env.EXPO_PUBLIC_* 的，源码里只能写成完整形式——所以这里必须把
  * process 喂进沙箱。
  */
 function loadUtils(env = {}) {
@@ -33,7 +34,11 @@ function loadUtils(env = {}) {
   return context.module.exports;
 }
 
-const withKey = () => loadUtils({ EXPO_PUBLIC_AMAP_NATIVE_KEY: NATIVE_KEY });
+const withKeys = () =>
+  loadUtils({
+    EXPO_PUBLIC_AMAP_IOS_KEY: IOS_KEY,
+    EXPO_PUBLIC_AMAP_ANDROID_KEY: ANDROID_KEY,
+  });
 
 const read = (relative) =>
   fs.readFileSync(path.join(process.cwd(), relative), 'utf8');
@@ -52,19 +57,43 @@ function metersApart(a, b) {
 }
 
 test('大陆坐标在原生模块可用且配了密钥时走高德', () => {
-  const { getBasemapProvider } = withKey();
+  const { getAmapNativeKey, getBasemapProvider } = withKeys();
 
   assert.equal(
-    getBasemapProvider(SHENZHEN.latitude, SHENZHEN.longitude, true),
+    getBasemapProvider(
+      SHENZHEN.latitude,
+      SHENZHEN.longitude,
+      true,
+      getAmapNativeKey('android'),
+    ),
     'amap-native',
   );
 });
 
+test('运行时只读取当前平台对应的高德密钥', () => {
+  const { getAmapNativeKey, hasAmapNativeKey } = withKeys();
+
+  assert.equal(getAmapNativeKey('ios'), IOS_KEY);
+  assert.equal(getAmapNativeKey('android'), ANDROID_KEY);
+  assert.equal(getAmapNativeKey('web'), '');
+  assert.equal(hasAmapNativeKey('ios'), true);
+  assert.equal(hasAmapNativeKey('web'), false);
+});
+
+test('旧的共享密钥不再被运行时接受', () => {
+  const { getAmapNativeKey } = loadUtils({
+    EXPO_PUBLIC_AMAP_NATIVE_KEY: 'legacy-shared-key',
+  });
+
+  assert.equal(getAmapNativeKey('ios'), '');
+  assert.equal(getAmapNativeKey('android'), '');
+});
+
 test('拿不到原生模块时回落 —— 网页端和没 prebuild 的包都是这种', () => {
-  const { getBasemapProvider } = withKey();
+  const { getBasemapProvider } = withKeys();
 
   assert.equal(
-    getBasemapProvider(SHENZHEN.latitude, SHENZHEN.longitude, false),
+    getBasemapProvider(SHENZHEN.latitude, SHENZHEN.longitude, false, ANDROID_KEY),
     'carto',
   );
 });
@@ -72,7 +101,7 @@ test('拿不到原生模块时回落 —— 网页端和没 prebuild 的包都�
 test('没配密钥时回落，不至于变白图', () => {
   const { getBasemapProvider, hasAmapNativeKey } = loadUtils({});
 
-  assert.equal(hasAmapNativeKey(), false);
+  assert.equal(hasAmapNativeKey('android'), false);
   assert.equal(
     getBasemapProvider(SHENZHEN.latitude, SHENZHEN.longitude, true),
     'carto',
@@ -80,19 +109,19 @@ test('没配密钥时回落，不至于变白图', () => {
 });
 
 test('境外坐标始终回落 —— 高德在境外基本没有数据', () => {
-  const { getBasemapProvider } = withKey();
+  const { getBasemapProvider } = withKeys();
 
   assert.equal(
-    getBasemapProvider(SAN_JOSE.latitude, SAN_JOSE.longitude, true),
+    getBasemapProvider(SAN_JOSE.latitude, SAN_JOSE.longitude, true, IOS_KEY),
     'carto',
   );
 });
 
 test('非法坐标不触发原生分支', () => {
-  const { getBasemapProvider } = withKey();
+  const { getBasemapProvider } = withKeys();
 
-  assert.equal(getBasemapProvider(91, 113, true), 'carto');
-  assert.equal(getBasemapProvider(22, Number.NaN, true), 'carto');
+  assert.equal(getBasemapProvider(91, 113, true, IOS_KEY), 'carto');
+  assert.equal(getBasemapProvider(22, Number.NaN, true, IOS_KEY), 'carto');
 });
 
 test('署名随底图源走', () => {
@@ -133,6 +162,18 @@ test('原生地图包只能延迟 require，不能顶层 import', () => {
   assert.doesNotMatch(source, /^import .*from 'expo-amap'/m);
   assert.match(source, /require\('expo-amap'\)/);
   assert.match(source, /catch \{\s*\n\s*return null;/);
+  // React.forwardRef 的组件是对象，不是函数；不能因此把可用模块误判为缺失。
+  assert.match(source, /mapViewType === 'function' \|\| mapViewType === 'object'/);
+});
+
+test('Android 原生地图在相机停止时补发区域变化事件', () => {
+  const patch = read('patches/expo-amap+0.2.4.patch');
+
+  assert.match(patch, /onCameraChangeFinish/);
+  assert.match(
+    patch,
+    /onRegionChanged\([\s\S]*?Utils\.mapCameraPositionToRegion\(p0, mapView\.width, mapView\.height\)/,
+  );
 });
 
 test('网页端有一份桩，永远不去碰原生包', () => {
