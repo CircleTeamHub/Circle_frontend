@@ -168,6 +168,10 @@ async function waitForDevTools(userDataDir, child, readStderr) {
       const [port] = fs.readFileSync(activePort, 'utf8').trim().split('\n');
       return Number(port);
     }
+    // Some hosted runners announce the ready endpoint but never materialize
+    // DevToolsActivePort. The stderr URL is Chrome's other authoritative signal.
+    const announced = readStderr().match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
+    if (announced) return Number(announced[1]);
     // 启动失败时 Chrome 会立刻退出；继续空轮询只会把真错误拖成一句超时。
     if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error(
