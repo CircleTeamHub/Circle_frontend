@@ -24,6 +24,7 @@ import {
   BASEMAP_ATTRIBUTION,
   BASEMAP_MAX_ZOOM,
   gcj02ToWgs84,
+  getAmapNativeKey,
   getBasemapProvider,
   getBasemapUrlTemplate,
   wgs84ToGcj02,
@@ -497,6 +498,7 @@ export function MapLocationPickerScreen({
       initialLocation.latitude,
       initialLocation.longitude,
       isAmapNativeSupported,
+      getAmapNativeKey(Platform.OS),
     ) === 'amap-native';
 
   const nativeMapRef = useRef<AmapNativeSurfaceRef | null>(null);
