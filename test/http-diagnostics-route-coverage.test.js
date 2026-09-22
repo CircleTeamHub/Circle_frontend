@@ -36,8 +36,10 @@ function staticEndpoints(node) {
 
 test('every static apiClient call maps to a reviewed diagnostic route', () => {
   const { safeHttpEndpoint } = loadTsModule('src/observability/http-diagnostics.ts');
+  const apiClientModule = path.resolve(process.cwd(), 'src/services/api/client');
   const uncovered = [];
   const dynamic = [];
+  const relativeImports = new Set();
   let callCount = 0;
 
   for (const filePath of sourceFiles(path.join(process.cwd(), 'src'))) {
@@ -54,8 +56,10 @@ test('every static apiClient call maps to a reviewed diagnostic route', () => {
       if (
         ts.isImportDeclaration(statement) &&
         ts.isStringLiteral(statement.moduleSpecifier) &&
-        statement.moduleSpecifier.text === '@/services/api/client'
+        (statement.moduleSpecifier.text === '@/services/api/client' ||
+          path.resolve(path.dirname(filePath), statement.moduleSpecifier.text) === apiClientModule)
       ) {
+        if (statement.moduleSpecifier.text.startsWith('.')) relativeImports.add(path.relative(process.cwd(), filePath));
         for (const element of statement.importClause?.namedBindings?.elements ?? []) {
           if ((element.propertyName ?? element.name).text === 'apiClient') {
             aliases.add(element.name.text);
@@ -86,6 +90,7 @@ test('every static apiClient call maps to a reviewed diagnostic route', () => {
   }
 
   assert.ok(callCount >= 160, `expected broad apiClient coverage, saw ${callCount}`);
+  assert.deepEqual([...relativeImports].sort(), ['src/services/api/calls.ts', 'src/services/api/groups.ts', 'src/services/api/notes.ts', 'src/services/api/qr.ts']);
   assert.deepEqual(uncovered, []);
   assert.deepEqual(dynamic, [
     'src/features/location/services/geocoder-fetch.ts:33',

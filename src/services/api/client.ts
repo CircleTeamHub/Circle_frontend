@@ -46,7 +46,7 @@ const FAILURE_REPORT_WINDOW_MS = 60_000;
 const MAX_FAILURE_REPORT_KEYS = 100;
 
 function shouldCaptureFailure(key: string): boolean {
-  const now = Date.now();
+  const now = diagnosticNow();
   for (const [entry, timestamp] of lastFailureReports) {
     if (now - timestamp >= FAILURE_REPORT_WINDOW_MS) lastFailureReports.delete(entry);
   }
