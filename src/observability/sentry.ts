@@ -46,11 +46,15 @@ function readTrimmed(value: unknown): string | undefined {
  * set so Sentry stays disabled.
  */
 export function resolveSentryDsn(sources: SentryConfigSources = {}): string | undefined {
-  const env = sources.env ?? process.env;
+  // Keep the default access syntactically direct so Expo can replace this at
+  // build time. Tests and callers may still inject an isolated env object.
+  const envDsn = sources.env
+    ? sources.env.EXPO_PUBLIC_SENTRY_DSN
+    : process.env.EXPO_PUBLIC_SENTRY_DSN;
   const extra =
     sources.extra ?? (Constants.expoConfig?.extra as Record<string, unknown> | undefined) ?? {};
 
-  return readTrimmed(env.EXPO_PUBLIC_SENTRY_DSN) ?? readTrimmed(extra?.sentryDsn);
+  return readTrimmed(envDsn) ?? readTrimmed(extra?.sentryDsn);
 }
 
 export interface InitSentryOptions {
@@ -72,6 +76,24 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
   if (!dsn) return false;
 
   const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+  const extra =
+    (Constants.expoConfig?.extra as Record<string, unknown> | undefined) ?? {};
+  const defaultEnvironment =
+    extra.appVariant === 'preprod'
+      ? 'preproduction'
+      : isDev
+        ? 'development'
+        : 'production';
+  const configuredSampleRate = options.tracesSampleRate;
+  const tracesSampleRate =
+    typeof configuredSampleRate === 'number' &&
+    Number.isFinite(configuredSampleRate) &&
+    configuredSampleRate >= 0 &&
+    configuredSampleRate <= 1
+      ? configuredSampleRate
+      : isDev
+        ? 1.0
+        : 0.05;
   const release =
     readTrimmed(options.release) ??
     readTrimmed(process.env.EXPO_PUBLIC_SENTRY_RELEASE);
@@ -80,7 +102,7 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
   try {
     client.init({
       dsn,
-      environment: options.environment ?? (isDev ? 'development' : 'production'),
+      environment: readTrimmed(options.environment) ?? defaultEnvironment,
       ...(release ? { release } : {}),
       ...(dist ? { dist } : {}),
       // Native crashes + unhandled JS errors are captured by default.
@@ -89,9 +111,16 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // 服务端视角的接口延迟，看不到弱网、TLS、客户端渲染和本地 SQLite 写入 ——
       // 对 IM 产品，「消息发送慢」到底慢在哪一段就无法回答。5% 足够看趋势，
       // 又把 Sentry 配额消耗控制在可预期范围内。
-      tracesSampleRate: options.tracesSampleRate ?? (isDev ? 1.0 : 0.05),
+      tracesSampleRate,
       // Never attach PII (IP, cookies, request bodies) by default.
       sendDefaultPii: false,
+      attachScreenshot: false,
+      attachViewHierarchy: false,
+      enableCaptureFailedRequests: false,
+      replaysSessionSampleRate: 0,
+      replaysOnErrorSampleRate: 0,
+      // Native crash capture remains enabled by the SDK default. These JS
+      // hooks cannot scrub payload fields emitted only by native crash code.
       // Manual reportError calls already sanitize their payloads, but native /
       // unhandled SDK events and automatic breadcrumbs bypass that helper.
       beforeSend: sanitizeAutomaticEvent,
@@ -136,7 +165,12 @@ export interface WrapWithSentryOptions {
 export function wrapWithSentry<P>(component: P, options: WrapWithSentryOptions = {}): P {
   const client = options.client ?? defaultClient;
   const enabled = options.enabled ?? Boolean(resolveSentryDsn());
-  return enabled ? client.wrap(component) : component;
+  if (!enabled) return component;
+  try {
+    return client.wrap(component);
+  } catch {
+    return component;
+  }
 }
 
 /**
@@ -214,6 +248,8 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'stage',
   'reason',
   'traceId',
+  'requestId',
+  'durationMs',
   'page',
 ]);
 const SAFE_EVENT_TAG_KEYS = new Set([
@@ -227,6 +263,7 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'operation',
   'kind',
   'traceId',
+  'requestId',
 ]);
 const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'circleId',
@@ -247,6 +284,12 @@ const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'fetched',
   'inserted',
   'page',
+  'endpointPath',
+  'method',
+  'status',
+  'durationMs',
+  'requestId',
+  'failureKind',
 ]);
 
 const REDACTED_TRANSACTION = '[REDACTED_TRANSACTION]';
@@ -254,6 +297,7 @@ const REDACTED_TRANSACTION = '[REDACTED_TRANSACTION]';
 const ROUTE_PARAM_SEGMENT = /^\[\.{0,3}[A-Za-z][A-Za-z0-9_]*\]$/;
 const MAX_ROUTE_SEGMENTS = 8;
 const SAFE_WS_TRACE_ID = /^ws-[a-z0-9-]{8,96}$/i;
+const SAFE_REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * 把 transaction 名收敛成「路由形状」。
@@ -340,6 +384,12 @@ function sanitizeReportContext(
       key === 'traceId' &&
       (typeof value !== 'string' || !SAFE_WS_TRACE_ID.test(value))
     ) {
+      continue;
+    }
+    if (key === 'requestId' && (typeof value !== 'string' || !SAFE_REQUEST_ID.test(value))) {
+      continue;
+    }
+    if (key === 'durationMs' && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
       continue;
     }
     if (
@@ -449,6 +499,9 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
     ) {
       continue;
     }
+    if (key === 'requestId' && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
+      continue;
+    }
     if (typeof child === 'string' || typeof child === 'number') {
       safe[key] = sanitizeContextForSentry(child);
     }
@@ -473,6 +526,7 @@ function sanitizeClientDiagnostics(value: unknown): unknown[] | undefined {
     if (source.details && typeof source.details === 'object') {
       for (const key of SAFE_DIAGNOSTIC_DETAIL_KEYS) {
         const child = (source.details as Record<string, unknown>)[key];
+        if (!isSafeDiagnosticDetail(key, child)) continue;
         if (
           child == null ||
           typeof child === 'string' ||
@@ -486,6 +540,16 @@ function sanitizeClientDiagnostics(value: unknown): unknown[] | undefined {
     return [{ event: source.event, details }];
   });
   return safe.length > 0 ? safe : undefined;
+}
+
+function isSafeDiagnosticDetail(key: string, value: unknown): boolean {
+  if (key === 'requestId') return typeof value === 'string' && SAFE_REQUEST_ID.test(value);
+  if (key === 'durationMs') return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  if (key === 'status') return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 599;
+  if (key === 'method') return typeof value === 'string' && /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(value);
+  if (key === 'endpointPath') return typeof value === 'string' && value.length <= 160 && /^\/[A-Za-z0-9_:/().-]*$/.test(value);
+  if (key === 'failureKind') return typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(value);
+  return true;
 }
 
 function sanitizeEventExtra(value: unknown): Record<string, unknown> | undefined {
@@ -529,6 +593,12 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
   if (tags) safe.tags = tags;
   const extra = sanitizeEventExtra(source.extra);
   if (extra) safe.extra = extra;
+  const trace = sanitizeTraceContext(
+    source.contexts && typeof source.contexts === 'object'
+      ? (source.contexts as Record<string, unknown>).trace
+      : undefined,
+  );
+  if (trace) safe.contexts = { trace };
   if (Array.isArray(source.fingerprint)) {
     safe.fingerprint = source.fingerprint.map((part) =>
       sanitizeStringForSentry(String(part)),
@@ -599,29 +669,72 @@ function sanitizeAutomaticSpan(span: SpanJSON): SpanJSON {
   };
 }
 
+function hasValidSpanIds(span: SpanJSON): boolean {
+  return (
+    isValidHexId(span.trace_id, 32) &&
+    isValidHexId(span.span_id, 16) &&
+    (span.parent_span_id === undefined || isValidHexId(span.parent_span_id, 16))
+  );
+}
+
 function sanitizeTraceContext(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const source = value as Record<string, unknown>;
-  if (typeof source.trace_id !== 'string' || typeof source.span_id !== 'string') {
+  if (!isValidHexId(source.trace_id, 32) || !isValidHexId(source.span_id, 16)) {
     return undefined;
   }
   return {
     trace_id: source.trace_id,
     span_id: source.span_id,
     data: {},
-    ...(typeof source.parent_span_id === 'string'
+    ...(isValidHexId(source.parent_span_id, 16)
       ? { parent_span_id: source.parent_span_id }
       : {}),
-    ...(typeof source.op === 'string'
-      ? { op: sanitizeStringForSentry(source.op) }
+    ...(readSafeTraceField(source.op)
+      ? { op: source.op }
       : {}),
-    ...(typeof source.origin === 'string'
-      ? { origin: sanitizeStringForSentry(source.origin) }
+    ...(readSafeTraceField(source.origin)
+      ? { origin: source.origin }
       : {}),
-    ...(typeof source.status === 'string'
-      ? { status: sanitizeStringForSentry(source.status) }
+    ...(readSafeTraceField(source.status)
+      ? { status: source.status }
       : {}),
   };
+}
+
+function readSafeTraceField(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(value);
+}
+
+function isValidHexId(value: unknown, length: number): value is string {
+  return (
+    typeof value === 'string' &&
+    new RegExp(`^[0-9a-f]{${length}}$`, 'i').test(value) &&
+    !/^0+$/.test(value)
+  );
+}
+
+const SAFE_MEASUREMENTS: Record<string, string> = {
+  app_start_cold: 'millisecond',
+  app_start_warm: 'millisecond',
+  frames_total: 'none',
+  frames_slow: 'none',
+  frames_frozen: 'none',
+};
+
+function sanitizeMeasurements(value: unknown): TransactionEvent['measurements'] | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const safe: Record<string, { value: number; unit: string }> = {};
+  for (const [name, unit] of Object.entries(SAFE_MEASUREMENTS)) {
+    const measurement = (value as Record<string, unknown>)[name];
+    if (!measurement || typeof measurement !== 'object') continue;
+    const numericValue = (measurement as Record<string, unknown>).value;
+    if (typeof numericValue !== 'number' || !Number.isFinite(numericValue) || numericValue < 0) continue;
+    safe[name] = { value: numericValue, unit };
+  }
+  return Object.keys(safe).length > 0
+    ? (safe as TransactionEvent['measurements'])
+    : undefined;
 }
 
 function sanitizeAutomaticTransaction(
@@ -632,11 +745,15 @@ function sanitizeAutomaticTransaction(
     type: 'transaction',
   };
   safe.transaction = sanitizeTransactionName(event.transaction);
-  safe.spans = (event.spans ?? []).map(sanitizeAutomaticSpan);
+  safe.spans = (event.spans ?? [])
+    .filter(hasValidSpanIds)
+    .map(sanitizeAutomaticSpan);
   const trace = sanitizeTraceContext(event.contexts?.trace);
   if (trace) {
     safe.contexts = { trace } as TransactionEvent['contexts'];
   }
+  const measurements = sanitizeMeasurements(event.measurements);
+  if (measurements) safe.measurements = measurements;
   if (event.transaction_info?.source) {
     safe.transaction_info = { source: event.transaction_info.source };
   }
@@ -708,6 +825,7 @@ function buildCaptureContext(
     'operation',
     'kind',
     'traceId',
+    'requestId',
   ];
   const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
     const value = safeContext ? readTagValue(safeContext, key) : undefined;
