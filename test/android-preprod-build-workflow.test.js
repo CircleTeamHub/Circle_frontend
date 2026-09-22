@@ -7,6 +7,53 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const WORKFLOW_PATH = '.github/workflows/android-preprod-build.yml';
+const FAKE_PREPROD_PUBLISH_CLI = path.join(
+  process.cwd(),
+  'test/helpers/fake-preprod-publish-cli.js',
+);
+
+function releaseScriptShell() {
+  if (process.platform !== 'win32') return 'bash';
+
+  const gitBash = path.join(
+    process.env.ProgramFiles ?? 'C:\\Program Files',
+    'Git',
+    'bin',
+    'bash.exe',
+  );
+  assert.ok(
+    fs.existsSync(gitBash),
+    'Git Bash is required on Windows to test the release shell scripts',
+  );
+  return gitBash;
+}
+
+function shellPath(filePath) {
+  if (process.platform !== 'win32') return filePath;
+  return filePath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`);
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\\"'\\\"'")}'`;
+}
+
+function runReleaseScript(script, args, env, cwd) {
+  const fakeCli = shellQuote(shellPath(FAKE_PREPROD_PUBLISH_CLI));
+  const scriptPath = shellQuote(shellPath(script));
+  const scriptArgs = args.map(shellQuote).join(' ');
+  const command = [
+    `fake_cli=${fakeCli}`,
+    'aws() { FAKE_PREPROD_COMMAND=aws node "$fake_cli" "$@"; }',
+    'curl() { FAKE_PREPROD_COMMAND=curl node "$fake_cli" "$@"; }',
+    'gh() { FAKE_PREPROD_COMMAND=gh node "$fake_cli" "$@"; }',
+    `source ${scriptPath}${scriptArgs ? ` ${scriptArgs}` : ''}`,
+  ].join('\n');
+  return spawnSync(releaseScriptShell(), ['-c', command], {
+    cwd,
+    encoding: 'utf8',
+    env,
+  });
+}
 
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
@@ -60,16 +107,7 @@ const fakeObjectKeys = (stateDir) =>
 function createR2Harness({ hasLatest = true, prefix = 'preprod-r2-' } = {}) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   const stateDir = path.join(tempDir, 'r2');
-  const binDir = path.join(tempDir, 'bin');
   fs.mkdirSync(stateDir);
-  fs.mkdirSync(binDir);
-  const fakeCli = path.join(
-    process.cwd(),
-    'test/helpers/fake-preprod-publish-cli.js',
-  );
-  for (const name of ['aws', 'curl', 'gh']) {
-    fs.symlinkSync(fakeCli, path.join(binDir, name));
-  }
 
   const candidate = Buffer.from('verified-preproduction-apk');
   const candidateSha = crypto.createHash('sha256').update(candidate).digest('hex');
@@ -94,7 +132,6 @@ function createR2Harness({ hasLatest = true, prefix = 'preprod-r2-' } = {}) {
   const sha = 'a'.repeat(40);
   const env = {
     ...process.env,
-    PATH: `${binDir}:${process.env.PATH}`,
     AWS_ACCESS_KEY_ID: 'fake',
     AWS_SECRET_ACCESS_KEY: 'fake',
     R2_ACCOUNT_ID: 'fake-account',
@@ -136,17 +173,14 @@ function runPublisher(options = {}) {
       },
     );
   }
-  const result = spawnSync(
-    'bash',
-    [path.join(process.cwd(), '.github/scripts/publish-android-preprod.sh')],
+  const result = runReleaseScript(
+    path.join(process.cwd(), '.github/scripts/publish-android-preprod.sh'),
+    [],
     {
-      cwd: harness.tempDir,
-      encoding: 'utf8',
-      env: {
-        ...harness.env,
-        ...(options.extraEnv ?? {}),
-      },
+      ...harness.env,
+      ...(options.extraEnv ?? {}),
     },
+    harness.tempDir,
   );
   return { ...harness, result };
 }
@@ -170,21 +204,15 @@ function runRollback(options = {}) {
       },
     );
   }
-  const result = spawnSync(
-    'bash',
-    [
-      path.join(process.cwd(), '.github/scripts/rollback-android-preprod.sh'),
-      rollbackSha,
-    ],
+  const result = runReleaseScript(
+    path.join(process.cwd(), '.github/scripts/rollback-android-preprod.sh'),
+    [rollbackSha],
     {
-      cwd: harness.tempDir,
-      encoding: 'utf8',
-      env: {
-        ...harness.env,
-        FAKE_EXPECTED_COMPARE_SHA: rollbackSha,
-        ...(options.extraEnv ?? {}),
-      },
+      ...harness.env,
+      FAKE_EXPECTED_COMPARE_SHA: rollbackSha,
+      ...(options.extraEnv ?? {}),
     },
+    harness.tempDir,
   );
   return { ...harness, result, rollbackSha };
 }
