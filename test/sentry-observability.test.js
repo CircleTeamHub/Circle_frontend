@@ -509,7 +509,7 @@ test("reportError preserves a bounded websocket trace id for cross-service corre
       operation: "chatConnect",
       kind: "unauthorized",
       failureKind: "connect_error",
-      traceId: "ws-matching-trace-123",
+      traceId: "ws-123e4567-e89b-42d3-a456-426614174000",
       endpointPath: "/chat-ws",
       token: "must-not-leave-device",
     },
@@ -517,8 +517,8 @@ test("reportError preserves a bounded websocket trace id for cross-service corre
   );
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0][1].extra.traceId, "ws-matching-trace-123");
-  assert.equal(calls[0][1].tags.traceId, "ws-matching-trace-123");
+  assert.equal(calls[0][1].extra.traceId, "ws-123e4567-e89b-42d3-a456-426614174000");
+  assert.equal(calls[0][1].tags.traceId, "ws-123e4567-e89b-42d3-a456-426614174000");
   assert.equal(calls[0][1].extra.endpointPath, "/chat-ws");
   assert.equal(calls[0][1].extra.token, undefined);
 });
@@ -538,6 +538,21 @@ test("reportError drops caller-controlled values that are not websocket trace id
 
   assert.equal(calls[0][1].extra.traceId, undefined);
   assert.equal(calls[0][1].tags.traceId, undefined);
+});
+
+test("reportError drops websocket-shaped account and phone identifiers", () => {
+  const { reportError } = loadSentry();
+
+  for (const traceId of ["ws-john-smith-account", "ws-15551234567"]) {
+    const calls = [];
+    reportError(
+      new Error("failed"),
+      { operation: "chatConnect", traceId },
+      { captureException: (...args) => calls.push(args) },
+    );
+    assert.equal(calls[0][1].extra.traceId, undefined);
+    assert.equal(calls[0][1].tags.traceId, undefined);
+  }
 });
 
 test("reportError promotes API context to tags and fingerprint", () => {

@@ -1,4 +1,5 @@
 import { io, type Socket } from 'socket.io-client';
+import { randomUUID } from 'expo-crypto';
 import { AppState, Platform } from 'react-native';
 import { CHAT_WS_URL } from '@/constants/config';
 import { storage } from '@/storage';
@@ -106,10 +107,7 @@ type ChatDisconnectReason =
   | 'unknown';
 
 function createConnectionTraceId(): string {
-  const random = `${Math.random().toString(36).slice(2, 10)}${Math.random()
-    .toString(36)
-    .slice(2, 10)}`;
-  return `ws-${Date.now().toString(36)}-${random}`;
+  return `ws-${randomUUID()}`;
 }
 
 function readConnectErrorStatus(error: unknown): number | undefined {
