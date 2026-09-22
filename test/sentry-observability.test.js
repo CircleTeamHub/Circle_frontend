@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
+const babel = require("@babel/core");
 
 // Loads a TS module under test, stubbing native deps so it runs in plain node.
 function load(rel, stubs = {}) {
@@ -72,6 +73,71 @@ test("resolveSentryDsn returns undefined when blank or unset", () => {
     undefined,
   );
   assert.equal(resolveSentryDsn({ env: {}, extra: {} }), undefined);
+});
+
+test("production Expo transform inlines the public DSN before runtime", () => {
+  const previous = process.env.EXPO_PUBLIC_SENTRY_DSN;
+  process.env.EXPO_PUBLIC_SENTRY_DSN = "https://synthetic@example.invalid/42";
+  let transformed;
+  try {
+    transformed = babel.transformFileSync(
+      path.join(process.cwd(), "src/observability/sentry.ts"),
+      {
+        envName: "production", babelrc: false,
+        configFile: path.join(process.cwd(), "babel.config.js"),
+        caller: { name: "metro", bundler: "metro", platform: "ios", isDev: false, isServer: false },
+      },
+    ).code;
+  } finally {
+    if (previous === undefined) delete process.env.EXPO_PUBLIC_SENTRY_DSN;
+    else process.env.EXPO_PUBLIC_SENTRY_DSN = previous;
+  }
+  assert.match(transformed, /https:\/\/synthetic@example\.invalid\/42/);
+  assert.doesNotMatch(transformed, /process\.env\.EXPO_PUBLIC_SENTRY_DSN/);
+
+  const calls = [];
+  const context = {
+    module: { exports: {} }, exports: {}, __DEV__: false, console,
+    process: { env: {} },
+    require: (name) => {
+      if (name === "@sentry/react-native") return { init: (o) => calls.push(o), wrap: (c) => c };
+      if (name === "expo-constants") return { default: { expoConfig: { extra: {} } } };
+      if (name === "@/utils/client-diagnostics") return { readDiagnosticBreadcrumbs: () => [] };
+      if (name === "./route-segments") return { STATIC_ROUTE_SEGMENTS: new Set() };
+      return require(name);
+    },
+  };
+  context.exports = context.module.exports;
+  vm.runInNewContext(transformed, context);
+  assert.equal(context.module.exports.initSentry(), true);
+  assert.equal(calls[0].dsn, "https://synthetic@example.invalid/42");
+});
+
+test("environment and sampling inputs use validated deployment defaults", () => {
+  const preprod = loadSentry({ appVariant: "preprod" });
+  const calls = [];
+  const client = { init: (o) => calls.push(o), wrap: (c) => c };
+  preprod.initSentry({ client, dsn: "https://a@o/1", tracesSampleRate: Number.NaN });
+  assert.equal(calls[0].environment, "preproduction");
+  assert.equal(calls[0].tracesSampleRate, 0.05);
+
+  const { initSentry } = loadSentry();
+  initSentry({ client, dsn: "https://a@o/1", environment: "canary", tracesSampleRate: 0 });
+  assert.equal(calls[1].environment, "canary");
+  assert.equal(calls[1].tracesSampleRate, 0);
+  initSentry({ client, dsn: "https://a@o/1", tracesSampleRate: 2 });
+  assert.equal(calls[2].tracesSampleRate, 0.05);
+});
+
+test("initSentry locks privacy-sensitive integrations and replay defaults off", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  assert.equal(calls[0].attachScreenshot, false);
+  assert.equal(calls[0].attachViewHierarchy, false);
+  assert.equal(calls[0].enableCaptureFailedRequests, false);
+  assert.equal(calls[0].replaysSessionSampleRate, 0);
+  assert.equal(calls[0].replaysOnErrorSampleRate, 0);
 });
 
 test("initSentry is a no-op without a dsn", () => {
@@ -172,6 +238,22 @@ test("global privacy filters redact automatic exception and breadcrumb secrets",
   assert.equal(event.threads.values[0].stacktrace.frames[0].context_line, undefined);
 });
 
+test("error event sanitizer retains only valid distributed trace context", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const event = calls[0].beforeSend({
+    contexts: { trace: { trace_id: "a".repeat(32), span_id: "b".repeat(16), parent_span_id: "c".repeat(16), op: "http.client", description: "private" }, device: { name: "private" } },
+  });
+  assert.equal(event.contexts.trace.trace_id, "a".repeat(32));
+  assert.equal(event.contexts.trace.span_id, "b".repeat(16));
+  assert.equal(event.contexts.trace.parent_span_id, "c".repeat(16));
+  assert.equal(event.contexts.trace.description, undefined);
+  assert.equal(event.contexts.device, undefined);
+  const invalid = calls[0].beforeSend({ contexts: { trace: { trace_id: "0".repeat(32), span_id: "b".repeat(16) } } });
+  assert.equal(invalid.contexts, undefined);
+});
+
 test("transaction and span filters sanitize nested request data", () => {
   const { initSentry } = loadSentry();
   const calls = [];
@@ -231,6 +313,63 @@ test("transaction and span filters sanitize nested request data", () => {
   assert.deepEqual({ ...transaction.spans[0].data }, { "sentry.op": "http.client" });
   assert.equal(span.span_id, "d".repeat(16));
   assert.deepEqual({ ...span.data }, {});
+});
+
+test("transaction sanitizer validates trace ids and preserves known measurements", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const sanitize = calls[0].beforeSendTransaction;
+  const event = sanitize({
+    type: "transaction", transaction: "/settings", start_timestamp: 1, timestamp: 2,
+    contexts: { trace: { trace_id: "a".repeat(32), span_id: "b".repeat(16), parent_span_id: "c".repeat(16), op: "navigation", origin: "manual.ui", status: "ok", description: "private" } },
+    measurements: {
+      app_start_cold: { value: 123, unit: "millisecond" }, frames_total: { value: 60, unit: "none" },
+      frames_slow: { value: -1, unit: "none" }, arbitrary: { value: 4, unit: "byte" },
+    },
+  });
+  assert.equal(event.contexts.trace.parent_span_id, "c".repeat(16));
+  assert.equal(event.contexts.trace.description, undefined);
+  assert.equal(event.contexts.trace.origin, "manual.ui");
+  assert.deepEqual(JSON.parse(JSON.stringify(event.measurements)), {
+    app_start_cold: { value: 123, unit: "millisecond" }, frames_total: { value: 60, unit: "none" },
+  });
+  const malformed = sanitize({ type: "transaction", transaction: "/settings", contexts: { trace: { trace_id: "0".repeat(32), span_id: "x".repeat(16) } } });
+  assert.equal(malformed.contexts, undefined);
+  const unbounded = sanitize({ type: "transaction", transaction: "/settings", contexts: { trace: {
+    trace_id: "a".repeat(32), span_id: "b".repeat(16), op: "private".repeat(20), origin: "bad value",
+  } } });
+  assert.equal(unbounded.contexts.trace.op, undefined);
+  assert.equal(unbounded.contexts.trace.origin, undefined);
+  const malformedSpan = sanitize({
+    type: "transaction", transaction: "/settings",
+    spans: [{ trace_id: "a".repeat(32), span_id: "0".repeat(16), start_timestamp: 1, description: "private" }],
+  });
+  assert.deepEqual(malformedSpan.spans, []);
+});
+
+test("final diagnostics sanitizer validates bounded HTTP metadata", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const event = calls[0].beforeSend({ extra: { clientDiagnostics: [{
+    event: "api.request.failed", details: {
+      endpointPath: "/notes/:id", method: "GET", status: 503, durationMs: 8,
+      requestId: "123e4567-e89b-42d3-a456-426614174000", failureKind: "http",
+      token: "secret",
+    },
+  }, {
+    event: "api.request.failed", details: {
+      endpointPath: "https://evil.test/private?token=x", method: "TRACE", status: 999,
+      durationMs: Infinity, requestId: "bad", failureKind: "bad value!",
+    },
+  }] } });
+  assert.deepEqual(JSON.parse(JSON.stringify(event.extra.clientDiagnostics[0].details)), {
+    endpointPath: "/notes/:id", method: "GET", status: 503, durationMs: 8,
+    requestId: "123e4567-e89b-42d3-a456-426614174000", failureKind: "http",
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(event.extra.clientDiagnostics[1].details)), {});
+  assert.doesNotMatch(JSON.stringify(event), /evil|secret|TRACE|999/);
 });
 
 test("initSentry attaches explicit release and distribution identifiers", () => {
@@ -304,6 +443,20 @@ test("wrapWithSentry wraps only when enabled", () => {
   const Comp = () => null;
   assert.equal(wrapWithSentry(Comp, { client, enabled: true }), wrapped);
   assert.equal(wrapWithSentry(Comp, { client, enabled: false }), Comp);
+});
+
+test("wrapWithSentry returns the original component when the SDK throws", () => {
+  const { wrapWithSentry } = loadSentry();
+  const Comp = () => null;
+  const client = {
+    init() {},
+    wrap: () => {
+      throw new Error("Sentry wrap unavailable");
+    },
+  };
+
+  assert.doesNotThrow(() => wrapWithSentry(Comp, { client, enabled: true }));
+  assert.equal(wrapWithSentry(Comp, { client, enabled: true }), Comp);
 });
 
 test("root layout initializes and wraps with Sentry", () => {
@@ -420,6 +573,34 @@ test("reportError promotes API context to tags and fingerprint", () => {
   assert.equal(calls[0][1].extra.queryKeys, undefined);
   assert.equal(calls[0][1].extra.caption, undefined);
   assert.doesNotMatch(JSON.stringify(calls), /blue pineapple|ownerId/);
+});
+
+test("reportError preserves bounded request metadata without changing grouping", () => {
+  const { initSentry, reportError } = loadSentry();
+  const initCalls = [];
+  initSentry({ client: { init: (o) => initCalls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const captures = [];
+  reportError(new Error("failed"), {
+    endpointPath: "/notes/:id", method: "GET", status: 503,
+    requestId: "123e4567-e89b-42d3-a456-426614174000", durationMs: 12.5,
+  }, { captureException: (error, context) => captures.push(context) });
+  assert.equal(captures[0].extra.requestId, "123e4567-e89b-42d3-a456-426614174000");
+  assert.equal(captures[0].extra.durationMs, 12.5);
+  assert.equal(captures[0].tags.requestId, "123e4567-e89b-42d3-a456-426614174000");
+  assert.doesNotMatch(captures[0].fingerprint.join("|"), /123e4567|12\.5/);
+
+  const finalEvent = initCalls[0].beforeSend({ tags: captures[0].tags, extra: captures[0].extra });
+  assert.equal(finalEvent.tags.requestId, "123e4567-e89b-42d3-a456-426614174000");
+  assert.equal(finalEvent.extra.durationMs, 12.5);
+});
+
+test("request metadata rejects malformed UUIDs and invalid durations", () => {
+  const { reportError } = loadSentry();
+  const captures = [];
+  reportError(new Error("failed"), { requestId: "not-a-uuid", durationMs: -1 }, {
+    captureException: (_error, context) => captures.push(context),
+  });
+  assert.equal(captures[0], undefined);
 });
 
 test("reportError is a no-op by default when Sentry was not initialized", () => {

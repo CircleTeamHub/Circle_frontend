@@ -3322,6 +3322,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "该群已关闭成员邀请",
     "CHAT_GROUP_QR_JOIN_DISABLED": "该群已关闭二维码入群",
     "CHAT_GROUP_AVATAR_URL_INVALID": "群头像地址无效",
+    "CHAT_DELIVERY_ID_CONFLICT": "本次消息与之前的发送记录冲突，请重新发送",
     "FRIEND_GROUP_ADD_FORBIDDEN": "该群不允许成员互加好友"
   },
   "qr": {

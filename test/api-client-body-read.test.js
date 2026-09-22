@@ -32,6 +32,7 @@ function loadApiClient({
   ok = true,
   responseText = '',
   onReport = () => {},
+  diagnostics,
   timers,
   hangBody = false,
   onBodyRead,
@@ -51,6 +52,7 @@ function loadApiClient({
       fetch: async (url, options) => ({
         ok,
         status,
+        headers: { get: () => '4e7c2d62-8f53-4393-b209-42d92ec899bc' },
         text: async () => {
           onBodyRead?.();
           if (hangBody) {
@@ -72,6 +74,9 @@ function loadApiClient({
       console: { log: () => {} },
     },
     requireShim: (request) => {
+      if (request === '@/observability/http-diagnostics') {
+        return loadTsModule('src/observability/http-diagnostics.ts');
+      }
       if (request === '@/constants/config') {
         return { API_URL: 'http://192.168.1.65:3000/api/v1' };
       }
@@ -98,6 +103,9 @@ function loadApiClient({
           reportError: onReport,
           shouldReportHttpFailure: (s) => s === undefined || s === 0 || s >= 500,
         };
+      }
+      if (request === '@/utils/client-diagnostics') {
+        return diagnostics ?? { logClientDiagnostic: () => {} };
       }
       if (request === './api-error') {
         // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块，别在这里手抄。
@@ -155,8 +163,26 @@ test('apiClient reports a dropped response body to Sentry once, as an ApiError',
   assert.equal(reports[0].failureKind, 'body-read');
   assert.equal(reports[0].endpointPath, '/notification/:id/read');
   assert.equal(reports[0].method, 'POST');
+  assert.equal(reports[0].requestId, '4e7c2d62-8f53-4393-b209-42d92ec899bc');
+  assert.equal(reported[0].requestId, reports[0].requestId);
+  assert.ok(Number.isFinite(reports[0].durationMs) && reports[0].durationMs >= 0);
   // 抛出的是 ApiError,上层 `error instanceof ApiError` 的过滤器才不会二次上报。
   assert.equal(reported[0].name, 'ApiError');
+});
+
+test('body-read diagnostics use the failed request status, not the response headers', async () => {
+  const breadcrumbs = [];
+  const { apiClient } = loadApiClient({
+    textError: new TypeError('Network request failed'),
+    diagnostics: { logClientDiagnostic: (event, details) => breadcrumbs.push({ event, details }) },
+  });
+
+  await assert.rejects(() => apiClient('/circle'));
+
+  assert.equal(breadcrumbs.length, 1);
+  assert.equal(breadcrumbs[0].event, 'api.request.failed');
+  assert.equal(breadcrumbs[0].details.status, 0);
+  assert.equal(breadcrumbs[0].details.failureKind, 'body-read');
 });
 
 test('apiClient maps an aborted response body read to the timeout failure kind', async () => {
@@ -170,6 +196,8 @@ test('apiClient maps an aborted response body read to the timeout failure kind',
       err.name === 'ApiError' &&
       err.status === 0 &&
       err.failureKind === 'timeout' &&
+      err.requestId === '4e7c2d62-8f53-4393-b209-42d92ec899bc' &&
+      Number.isFinite(err.durationMs) && err.durationMs >= 0 &&
       err.message === '请求超时，请检查网络连接后重试',
   );
 });

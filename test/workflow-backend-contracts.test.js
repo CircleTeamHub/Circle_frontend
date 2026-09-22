@@ -17,6 +17,18 @@ const read = (relativePath) =>
 
 const TEST_STEP = /^\s+run:\s*npm (?:run ci|test)\s*$/m;
 
+function releaseScriptShell() {
+  if (process.platform !== 'win32') return 'bash';
+  const gitBash = path.join(
+    process.env.ProgramFiles ?? 'C:\\Program Files',
+    'Git',
+    'bin',
+    'bash.exe',
+  );
+  assert.ok(fs.existsSync(gitBash), 'Git Bash is required on Windows');
+  return gitBash;
+}
+
 function jobs(workflow) {
   const body = workflow.slice(workflow.indexOf('\njobs:'));
   const headers = [...body.matchAll(/^  ([a-z][a-z0-9_-]*):\s*$/gm)];
@@ -125,7 +137,7 @@ function fakeBackend(files) {
 }
 
 const runGate = (backendDir) =>
-  spawnSync('bash', [SCRIPT], {
+  spawnSync(releaseScriptShell(), [SCRIPT], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: { ...process.env, BACKEND_CONTRACTS_DIR: backendDir, BACKEND_REF_CANDIDATE: '' },

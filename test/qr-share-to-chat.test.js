@@ -235,12 +235,10 @@ test('mapper 把不合法令牌净化成空串，而不是原样透传', () => {
 
 test('后端把 qr-card 列进客户端可发类型，并给了预览标签', () => {
   const bePath = process.env.CIRCLE_BE_PATH ?? path.join(root, '..', 'circle_be');
-  if (!fs.existsSync(bePath)) return; // CI 里没检出后端仓就跳过
+  const constantsPath = path.join(bePath, 'src/chat/chat.constants.ts');
+  if (!fs.existsSync(constantsPath)) return; // CI 里没检出完整后端仓就跳过
 
-  const constants = fs.readFileSync(
-    path.join(bePath, 'src/chat/chat.constants.ts'),
-    'utf8',
-  );
+  const constants = fs.readFileSync(constantsPath, 'utf8');
   // 预览标签表被从 chat.service.ts 抽到了 chat-message-preview.ts(收藏那边要复用),
   // 契约是「后端给 qr-card 配了预览标签」,不是「它躺在哪个文件里」—— 两处都认,
   // 这样对着还没搬家的后端分支也成立。

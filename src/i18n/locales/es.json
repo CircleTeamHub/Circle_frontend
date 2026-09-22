@@ -3328,6 +3328,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "Las invitaciones de miembros están desactivadas en este grupo",
     "CHAT_GROUP_QR_JOIN_DISABLED": "Unirse con código QR está desactivado en este grupo",
     "CHAT_GROUP_AVATAR_URL_INVALID": "La dirección del avatar del grupo no es válida",
+    "CHAT_DELIVERY_ID_CONFLICT": "Este mensaje entra en conflicto con un envío anterior. Inténtalo de nuevo",
     "FRIEND_GROUP_ADD_FORBIDDEN": "Este grupo no permite que los miembros se añadan como amigos"
   },
   "qr": {

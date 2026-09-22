@@ -3322,6 +3322,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "이 그룹은 멤버 초대가 꺼져 있습니다",
     "CHAT_GROUP_QR_JOIN_DISABLED": "이 그룹은 QR 코드 참여가 꺼져 있습니다",
     "CHAT_GROUP_AVATAR_URL_INVALID": "그룹 프로필 사진 주소가 올바르지 않습니다",
+    "CHAT_DELIVERY_ID_CONFLICT": "이 메시지가 이전 전송 내용과 충돌합니다. 다시 전송해 주세요",
     "FRIEND_GROUP_ADD_FORBIDDEN": "이 그룹은 멤버끼리 친구 추가를 허용하지 않습니다"
   },
   "qr": {
