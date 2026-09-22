@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { releaseScriptShell, shellQuote } = require('./helpers/release-script-shell');
 
 const WORKFLOW_PATH = '.github/workflows/android-preprod-build.yml';
 const FAKE_PREPROD_PUBLISH_CLI = path.join(
@@ -12,29 +13,9 @@ const FAKE_PREPROD_PUBLISH_CLI = path.join(
   'test/helpers/fake-preprod-publish-cli.js',
 );
 
-function releaseScriptShell() {
-  if (process.platform !== 'win32') return 'bash';
-
-  const gitBash = path.join(
-    process.env.ProgramFiles ?? 'C:\\Program Files',
-    'Git',
-    'bin',
-    'bash.exe',
-  );
-  assert.ok(
-    fs.existsSync(gitBash),
-    'Git Bash is required on Windows to test the release shell scripts',
-  );
-  return gitBash;
-}
-
 function shellPath(filePath) {
   if (process.platform !== 'win32') return filePath;
   return filePath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`);
-}
-
-function shellQuote(value) {
-  return `'${String(value).replace(/'/g, "'\\\"'\\\"'")}'`;
 }
 
 function runReleaseScript(script, args, env, cwd) {
@@ -54,6 +35,20 @@ function runReleaseScript(script, args, env, cwd) {
     env,
   });
 }
+
+test('release harness round-trips apostrophes through Bash', () => {
+  const value = "C:/Users/O'Brien/release.sh";
+  const result = spawnSync(releaseScriptShell(), ['-c', `printf %s ${shellQuote(value)}`], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, value);
+});
+
+test('release harness discovers configurable or PATH-provided Git Bash', () => {
+  const missingInstall = { platform: 'win32', env: { ProgramFiles: 'C:\\missing' }, existsSync: () => false };
+  assert.equal(releaseScriptShell({ ...missingInstall, canRun: (command) => command === 'bash' }), 'bash');
+  const configured = 'D:\\Portable Git\\bin\\bash.exe';
+  assert.equal(releaseScriptShell({ platform: 'win32', env: { GIT_BASH_PATH: configured }, existsSync: (file) => file === configured, canRun: () => false }), configured);
+});
 
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
