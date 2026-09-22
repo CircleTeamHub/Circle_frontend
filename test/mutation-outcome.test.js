@@ -1,9 +1,8 @@
 /**
  * 「这次写操作到底有没有落到服务端」的判别。
  *
- * 只有真的不知道结果才算不确定。断网（failureKind 'network'）不算 —— 连接压根
- * 没建立，请求没离开设备；把它算成不确定，会让断网注册提示「请先尝试登录或找回
- * 密码」，而账号根本没建出来，用户被推去登录一个不存在的账号。
+ * 只有真的不知道结果才算不确定。fetch 的 network rejection 没有权威响应，既可能
+ * 是请求发出前断网，也可能是服务端提交后响应链路断开，所以必须按不确定处理。
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -36,10 +35,10 @@ test('5xx → 结果不确定（服务端可能已提交才炸）', () => {
   assert.equal(isAmbiguousMutationFailure(apiError({ status: 503 })), true);
 });
 
-test('断网 → 确定没发生，不能报「结果不确定」', () => {
+test('fetch network rejection → 结果不确定（可能已提交但响应丢失）', () => {
   assert.equal(
     isAmbiguousMutationFailure(apiError({ status: 0, failureKind: 'network' })),
-    false,
+    true,
   );
 });
 
