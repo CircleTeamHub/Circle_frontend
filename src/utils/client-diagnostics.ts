@@ -41,6 +41,13 @@ const SENTRY_BREADCRUMB_ALLOWLIST: ReadonlySet<string> = new Set([
   'fetched',
   'inserted',
   'page',
+  // HTTP metadata only; URLs, headers and request/response bodies never enter.
+  'endpointPath',
+  'method',
+  'status',
+  'requestId',
+  'durationMs',
+  'failureKind',
 ]);
 
 /** 只保留最近 N 条：面包屑是给「错误发生前发生了什么」提供线索，不是日志留存。 */
