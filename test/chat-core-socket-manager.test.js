@@ -318,6 +318,9 @@ function loadManager(localDbOverrides = {}, options = {}) {
   };
   const manager = runModule('src/chat-core/socket-manager.ts', {
     'socket.io-client': { io },
+    'expo-crypto': {
+      randomUUID: () => '123e4567-e89b-42d3-a456-426614174000',
+    },
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
     'react-native': {
       Platform: { OS: 'android' },
@@ -1275,7 +1278,7 @@ test('connects with token in the handshake auth frame, never in the URL', () => 
   const auth = handshakeAuth(captured);
   assert.equal(auth.token, 'jwt-token');
   assert.equal(auth.appState, 'foreground');
-  assert.match(auth.traceId, /^ws-[a-z0-9-]+$/);
+  assert.equal(auth.traceId, 'ws-123e4567-e89b-42d3-a456-426614174000');
   assert.equal(
     captured.opts.extraHeaders['x-connection-trace-id'],
     auth.traceId,

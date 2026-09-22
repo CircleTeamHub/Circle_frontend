@@ -296,7 +296,8 @@ const REDACTED_TRANSACTION = '[REDACTED_TRANSACTION]';
 /** Expo Router 的动态段字面量，如 `[conversationId]`；本身不含用户数据。 */
 const ROUTE_PARAM_SEGMENT = /^\[\.{0,3}[A-Za-z][A-Za-z0-9_]*\]$/;
 const MAX_ROUTE_SEGMENTS = 8;
-const SAFE_WS_TRACE_ID = /^ws-[a-z0-9-]{8,96}$/i;
+const SAFE_WS_TRACE_ID =
+  /^ws-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
