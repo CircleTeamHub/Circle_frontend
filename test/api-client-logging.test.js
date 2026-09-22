@@ -17,6 +17,7 @@ function loadApiClient({
   onFetch,
   diagnostics,
   now = () => Date.now(),
+  wallNow = now,
   sessionState = {},
 }) {
   const filePath = path.join(process.cwd(), 'src/services/api/client.ts');
@@ -43,7 +44,7 @@ function loadApiClient({
     URLSearchParams,
     setTimeout,
     clearTimeout,
-    Date: class extends Date { static now() { return now(); } },
+    Date: class extends Date { static now() { return wallNow(); } },
     fetch: async (url, options) => {
       fetchCalls.push([url, options]);
       if (onFetch) return onFetch(url, options);
@@ -91,9 +92,10 @@ function loadApiClient({
         return loadTsModule('src/services/api/api-error.ts');
       }
       if (request === '@/observability/http-diagnostics') {
-        return loadTsModule('src/observability/http-diagnostics.ts', {
+        const module = loadTsModule('src/observability/http-diagnostics.ts', {
           requireShim: (name) => name === 'expo-crypto' ? require('node:crypto') : require(name),
         });
+        return { ...module, diagnosticNow: now };
       }
       if (request === '@/utils/client-diagnostics') {
         return diagnostics ?? { logClientDiagnostic: () => {} };
@@ -414,12 +416,13 @@ test('network diagnostics omit arbitrary native exception messages', async () =>
   assert.doesNotMatch(JSON.stringify(logs), /private-chat-body/);
 });
 
-test('repeated API incidents retain breadcrumbs but bound Sentry volume per minute', async () => {
+test('report throttling uses monotonic time when the wall clock moves backward', async () => {
   const reports = [];
   const breadcrumbs = [];
   let now = 1_000;
+  let wallNow = 10_000;
   const { apiClient } = loadApiClient({
-    dev: false, status: 503, ok: false, responseText: '{}', now: () => now,
+    dev: false, status: 503, ok: false, responseText: '{}', now: () => now, wallNow: () => wallNow,
     onReport: (_error, ctx) => reports.push(ctx),
     diagnostics: { logClientDiagnostic: (event, details) => breadcrumbs.push({ event, details }) },
   });
@@ -427,6 +430,7 @@ test('repeated API incidents retain breadcrumbs but bound Sentry volume per minu
   await assert.rejects(() => apiClient('/circle/second-private-id'));
   assert.equal(reports.length, 1);
   assert.equal(breadcrumbs.length, 2);
+  wallNow -= 3_600_000;
   now += 60_000;
   await assert.rejects(() => apiClient('/circle/third-private-id'));
   assert.equal(reports.length, 2);
