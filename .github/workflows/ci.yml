@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+      # Stacked review PRs target another Codex branch until their parent lands.
+      - 'codex/**'
     # Docs-only changes can't break the build — skip the whole matrix.
     paths-ignore:
       - '**/*.md'
