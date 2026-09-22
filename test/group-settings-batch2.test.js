@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 // 群设置第二批:全员禁言开关、群主转让、独立群公告/头像、群成员行、进群允许方式、
 // 成员权限(可查看资料 / 可加好友)。这组断言钉住三件事:客户端接线完整、
@@ -176,7 +177,7 @@ test('member profiles and friend requests honor the two member-permission switch
   assert.match(info, /const canViewMemberProfiles = allowsMemberProfiles\(groupPolicyActor\);/);
   assert.match(info, /member\.userId !== currentUserID &&\s*\n\s*!canViewMemberProfiles/);
 
-  const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const detail = readChatDetailSource();
   assert.match(detail, /const canViewMemberProfilesByPolicy = useChatStore/);
   assert.match(detail, /viaConversationID: conversationID/);
 
@@ -229,7 +230,7 @@ test('the invite screen survives a forbidden member directory', () => {
 });
 
 test('chat detail locks the composer under group-wide mute for non-managers', () => {
-  const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const detail = readChatDetailSource();
   assert.match(detail, /const groupMuteAllActive = useChatStore/);
   assert.match(detail, /return !isGroupManager\(conversation\.myRole \?\? null\);/);
   assert.match(detail, /const composerLocked = selfSilenced \|\| groupMuteAllActive;/);

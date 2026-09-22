@@ -91,6 +91,13 @@ export function getChatSendErrorMessage(
         defaultValue: '消息包含敏感词，已被屏蔽',
       });
     }
+    // 本地码:App 被杀后重发一条没传完的媒体,持久副本却已经不在了
+    // (见 chat-core/pending-media)。重试多少次都不会好,不能劝人重试。
+    if (error.code === 'CHAT_MEDIA_SOURCE_MISSING') {
+      return i18n.t('chat.detail.mediaSourceMissing', {
+        defaultValue: '原文件已不在这台设备上，无法重发',
+      });
+    }
     if (
       EXPECTED_CHAT_SEND_ERROR_CODES.has(error.code) &&
       isKnownServerErrorCode(error.code)

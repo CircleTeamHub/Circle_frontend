@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { withChatCoreStubs } = require('./helpers/chat-core-stubs');
 
 const __localDbStub = {
   persistLocalConversations: async () => {},
@@ -54,7 +55,7 @@ function runModule(rel, requireImpl, extraContext = {}) {
     console: { warn: () => {} },
     module: { exports: {} },
     exports: {},
-    require: withObservabilityStubs(requireImpl),
+    require: withObservabilityStubs(withChatCoreStubs(requireImpl)),
     ...extraContext,
   };
   context.exports = context.module.exports;
@@ -98,6 +99,8 @@ function loadDispatcher(storeOverrides = {}) {
     sentryReports: [],
     presenceApplied: [],
     presenceCleared: [],
+    liveRevisions: [],
+    dismissedNotifications: [],
     ...storeOverrides,
   };
   // 补拉是 800ms 防抖的。测试里换成可控计时器:每条用例真等 0.8 秒既慢又脆,
@@ -178,8 +181,13 @@ function loadDispatcher(storeOverrides = {}) {
         (c) => c.id !== conversationId,
       );
     },
-    applyRevoke: (conversationId, messageId, revokedBy) => {
-      state.revokes.push({ conversationId, messageId, revokedBy });
+    applyRevoke: (conversationId, messageId, revokedBy, meta) => {
+      state.revokes.push({
+        conversationId,
+        messageId,
+        revokedBy,
+        ...(meta && Object.keys(meta).length > 0 ? { meta: { ...meta } } : {}),
+      });
     },
     applyDelivered: () => {},
     applyTyping: (conversationId) => state.typings.push(conversationId),
@@ -194,6 +202,14 @@ function loadDispatcher(storeOverrides = {}) {
       });
     }
     if (request === './store') return { useChatStore: { getState: () => storeState } };
+    if (request === './chat-notifications') {
+      return {
+        dismissChatNotifications: (conversationId, messageIds) =>
+          state.dismissedNotifications.push(
+            messageIds ? { conversationId, messageIds: [...messageIds] } : { conversationId },
+          ),
+      };
+    }
     if (request === './api') {
       return {
         loadChatConversations: (options) => {
@@ -276,6 +292,12 @@ function loadDispatcher(storeOverrides = {}) {
     }
     if (request === './socket-manager') {
       return { reportChatDelivered: (cid, h) => state.deliveredReports.push({ cid, h }) };
+    }
+    if (request === './sync') {
+      return {
+        noteLiveRevision: (conversationId, revision) =>
+          state.liveRevisions.push([conversationId, revision]),
+      };
     }
     if (request === 'react-native') {
       return { Alert: { alert: (text) => state.alerts.push(text) } };
@@ -571,6 +593,59 @@ test('banner avatars go through the media allowlist', () => {
   assert.equal(state.banners[0].avatarUrl, null);
 });
 
+test('delivered receipts are reported for direct chats but never for groups', () => {
+  // 「已送达」只在单聊里渲染;群里每收一条就回报一次,服务端也不再记录。
+  // 会话还没进快照(类型未知)时照常回报,服务端按类型丢弃。
+  const GROUP_ID = '8c4d2e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f';
+  const { socket, state } = loadDispatcher({
+    conversations: [
+      directConversation(),
+      directConversation({ id: GROUP_ID, type: 'GROUP', peer: null, name: '群' }),
+    ],
+  });
+  socket.emit('chat:msg', dto({ id: 'm-dm', conversationId: DIRECT_ID, height: 3 }));
+  socket.emit('chat:msg', dto({ id: 'm-group', conversationId: GROUP_ID, height: 4 }));
+  socket.emit('chat:msg', dto({ id: 'm-new', conversationId: 'c-unknown', height: 5 }));
+  assert.deepEqual(
+    state.deliveredReports.map((report) => ({ ...report })),
+    [
+      { cid: DIRECT_ID, h: 3 },
+      { cid: 'c-unknown', h: 5 },
+    ],
+  );
+});
+
+test('notifications are cleared when my other device reads, on clear, recall and burn', () => {
+  const { socket, state } = loadDispatcher();
+  // 对端读到哪不影响我的通知栏;本人另一台设备读过才收起。
+  socket.emit('chat:read', { conversationId: 'c1', userId: 'peer', height: 3 });
+  assert.deepEqual(state.dismissedNotifications, []);
+  socket.emit('chat:read', { conversationId: 'c1', userId: 'me', height: 3 });
+  socket.emit('chat:history_cleared', {
+    conversationId: 'c2',
+    clearedBeforeHeight: 9,
+    clearedBy: 'peer',
+  });
+  socket.emit('chat:revoke', {
+    conversationId: 'c3',
+    messageId: 'm-recalled',
+    revokedBy: 'peer',
+  });
+  socket.emit('chat:burned_messages', {
+    conversationId: 'c4',
+    messageIds: ['m-b1', 'm-b2'],
+  });
+  assert.deepEqual(
+    state.dismissedNotifications.map((entry) => ({ ...entry })),
+    [
+      { conversationId: 'c1' },
+      { conversationId: 'c2' },
+      { conversationId: 'c3', messageIds: ['m-recalled'] },
+      { conversationId: 'c4', messageIds: ['m-b1', 'm-b2'] },
+    ],
+  );
+});
+
 test('self messages and the open conversation never raise a banner', () => {
   const { socket, state } = loadDispatcher({
     conversations: [directConversation()],
@@ -752,6 +827,93 @@ test('chat:revoke routes to applyRevoke and drops malformed payloads', () => {
   assert.equal(state.revokes.length, 1);
 });
 
+test('chat:revoke carries position, author and revision so an unopened conversation can fix its badge', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:revoke', {
+    conversationId: 'c1',
+    messageId: 'm7',
+    revokedBy: 'peer',
+    height: 7,
+    senderId: 'peer',
+    revision: 31,
+  });
+  assert.deepEqual(state.revokes, [
+    {
+      conversationId: 'c1',
+      messageId: 'm7',
+      revokedBy: 'peer',
+      meta: { height: 7, senderId: 'peer', revision: 31 },
+    },
+  ]);
+  assert.deepEqual(state.liveRevisions, [['c1', 31]]);
+
+  // 老后端不带这些字段、或者字段畸形:照常撤回,只是不做额外推断。
+  socket.emit('chat:revoke', {
+    conversationId: 'c1',
+    messageId: 'm8',
+    revokedBy: 'peer',
+    height: -1,
+    revision: 'x',
+  });
+  assert.deepEqual(state.revokes[1], {
+    conversationId: 'c1',
+    messageId: 'm8',
+    revokedBy: 'peer',
+  });
+  assert.deepEqual(state.liveRevisions[1], ['c1', undefined]);
+});
+
+// ---- 会话变更序号流:实时事件推进同步游标 ----
+
+test('live messages, reactions, edits and burns report their revisions to the sync cursor', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'DIRECT' }];
+
+  socket.emit('chat:msg', dto({ id: 'm9', height: 9, revision: 40 }));
+  socket.emit('chat:reaction', {
+    conversationId: 'c1',
+    messageId: 'm9',
+    emoji: '👍',
+    userId: 'peer',
+    op: 'add',
+    revision: 41,
+  });
+  socket.emit('chat:edit', {
+    conversationId: 'c1',
+    messageId: 'm9',
+    content: { text: 'edited' },
+    editedAt: '2026-09-16T00:00:00.000Z',
+    revision: 42,
+  });
+  socket.emit('chat:burned_messages', {
+    conversationId: 'c1',
+    messageIds: ['m1', 'm2'],
+    revisions: [43, 44],
+  });
+
+  assert.deepEqual(state.liveRevisions, [
+    ['c1', 40],
+    ['c1', 41],
+    ['c1', 42],
+    ['c1', 43],
+    ['c1', 44],
+  ]);
+});
+
+test('a redelivered message this device deleted still counts as received for the sync cursor', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'DIRECT' }];
+  deletedIds.add('m-deleted');
+  try {
+    socket.emit('chat:msg', dto({ id: 'm-deleted', height: 5, revision: 12 }));
+  } finally {
+    deletedIds.delete('m-deleted');
+  }
+  assert.equal(state.ingested.length, 0);
+  // 不记的话游标停在它前面,等一会儿白补拉一趟。
+  assert.deepEqual(state.liveRevisions, [['c1', 12]]);
+});
+
 // ---- chat:conversation(G-11/S-02):本人会话成员关系变化 ----
 
 test('chat:conversation removed collapses the conversation and alerts only when active', () => {
@@ -849,7 +1011,11 @@ test('a remote burn-changed system message updates the conversation setting', ()
       conversationId: 'c1',
       id: 'sys-1',
       type: 'system',
-      content: { kind: 'burn-changed', seconds: 30 },
+      content: {
+        kind: 'burn-changed',
+        seconds: 30,
+        burnStartedAt: '2026-09-11T19:30:00.000Z',
+      },
       sender: null,
       createdAt: '2026-09-11T20:00:00.000Z',
     }),
@@ -860,7 +1026,7 @@ test('a remote burn-changed system message updates the conversation setting', ()
     {
       conversationId: 'c1',
       seconds: 30,
-      startedAt: '2026-09-11T20:00:00.000Z',
+      startedAt: '2026-09-11T19:30:00.000Z',
     },
   ]);
 });

@@ -16,8 +16,12 @@ export interface GroupSelfMember {
   nickname?: string;
 }
 
-/** 停留在受保护屏幕上时的兜底重校验周期。 */
-const REVALIDATE_INTERVAL_MS = 60_000;
+/**
+ * 停留在受保护屏幕上时的兜底重校验周期。只在页面处于前台时才跑:撤职/任命多数会
+ * 刷新会话缓存里的角色(roleHint)、回前台也会重查,这里只兜「什么都没发生」的情况。
+ * 原来是 60 秒且页面被盖住也在跑 —— 开着一个群就是每小时 60 次圈子详情请求。
+ */
+const REVALIDATE_INTERVAL_MS = 5 * 60_000;
 
 /**
  * 群成员目录访问权（群主/管理员豁免,普通成员按群规）的活体视图 —— chat-core 版。
@@ -42,13 +46,24 @@ export function useGroupMemberViewAccess(params: {
    * 圈子原本的私有目录在加载竞态里短暂暴露出来。
    */
   membersCanViewRoster?: boolean | null;
+  /** 页面此刻是否在前台(调用方传 useIsFocused())。不在前台时不轮询,回来时重查一次。 */
+  active?: boolean;
+  /** 会话缓存里本人的角色:变了(撤职/任命)立刻重查,不等轮询。 */
+  roleHint?: string | null;
 }): {
   canViewMembers: boolean;
   selfMember: GroupSelfMember | null;
   resolved: boolean;
   revalidate: () => Promise<boolean>;
 } {
-  const { enabled, groupID, currentUserID, membersCanViewRoster } = params;
+  const {
+    enabled,
+    groupID,
+    currentUserID,
+    membersCanViewRoster,
+    active = true,
+    roleHint = null,
+  } = params;
   const [selfMember, setSelfMember] = useState<GroupSelfMember | null>(null);
   const [resolved, setResolved] = useState(false);
   // 换群/卸载后丢弃在途查询结果。
@@ -94,11 +109,11 @@ export function useGroupMemberViewAccess(params: {
     };
   }, [currentUserID, enabled, fetchSelf, groupID]);
 
-  // 回前台 + 定时重校验:用户一直停在本屏不做任何操作时,撤职也要能生效。
-  // 刻意不用 useFocusEffect —— 那会把这个 hook 绑死在 navigator 上,
-  // 而它需要能在任何宿主(含单元测试)里独立工作。
+  // 回前台 + 页面在前台时的兜底重校验:用户一直停在本屏不做任何操作时,撤职也要能
+  // 生效。页面是否在前台由调用方传入(active)—— 刻意不用 useFocusEffect,那会把这个
+  // hook 绑死在 navigator 上,而它需要能在任何宿主(含单元测试)里独立工作。
   useEffect(() => {
-    if (!enabled || !groupID || !currentUserID) return;
+    if (!enabled || !groupID || !currentUserID || !active) return;
     const subscription = AppState.addEventListener('change', (next) => {
       if (next === 'active') void revalidateRef.current?.();
     });
@@ -109,7 +124,21 @@ export function useGroupMemberViewAccess(params: {
       subscription.remove();
       clearInterval(timer);
     };
-  }, [currentUserID, enabled, groupID]);
+  }, [active, currentUserID, enabled, groupID]);
+
+  // 从被盖住回到前台、或者缓存里的角色变了:立刻重查一次(首次挂载由上面的查询负责)。
+  const lastActiveRef = useRef(active);
+  const lastRoleHintRef = useRef(roleHint);
+  useEffect(() => {
+    const becameActive = active && !lastActiveRef.current;
+    const roleChanged = roleHint !== lastRoleHintRef.current;
+    lastActiveRef.current = active;
+    lastRoleHintRef.current = roleHint;
+    if (!enabled || !groupID || !currentUserID) return;
+    if (becameActive || (active && roleChanged)) {
+      void revalidateRef.current?.();
+    }
+  }, [active, currentUserID, enabled, groupID, roleHint]);
 
   const revalidate = useCallback(async () => {
     if (!enabled || !groupID || !currentUserID) return false;

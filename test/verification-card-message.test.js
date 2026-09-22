@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
@@ -72,7 +73,7 @@ test('verification card: bubble renders and taps through to the verify screen', 
   assert.match(bubble, /export const VerificationCardBubble/);
   assert.match(bubble, /message\.verificationCard/);
 
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chat = readChatDetailSource();
   assert.match(chat, /case 'verification-card':/);
   assert.match(chat, /<VerificationCardBubble/);
   assert.match(chat, /getVerificationDetailHref\([\s\S]*card\.invitationId/);

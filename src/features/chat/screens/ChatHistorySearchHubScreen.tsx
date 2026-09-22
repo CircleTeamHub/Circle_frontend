@@ -21,6 +21,7 @@ import {
   getChatHistoryMediaHref,
   getChatHistoryTextHref,
 } from '@/features/user/utils/routes';
+import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -60,6 +61,7 @@ export default function ChatHistorySearchHubScreen() {
     title?: string;
   }>();
   const { conversationID, sourceID, title } = resolveChatHistoryRouteParams(params);
+  const conversationType = useChatHistoryConversationType(conversationID);
   const [keyword, setKeyword] = useState('');
 
   const d = useMemo(
@@ -110,7 +112,7 @@ export default function ChatHistorySearchHubScreen() {
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={t('chat.history.findTitle')}
-        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID)}
+        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID, undefined, conversationType)}
       />
       <ScrollView
         style={s.scroll}

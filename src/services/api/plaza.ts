@@ -211,7 +211,10 @@ export async function fetchMyPostSignups(
   postId: string,
 ): Promise<PostSignupsResult> {
   const res = asRecord(
-    await apiClient<unknown>(`/circle-plaza/me/posts/${postId}/signups`),
+    // The backend defaults to 200 and currently exposes no cursor for this list.
+    await apiClient<unknown>(
+      `/circle-plaza/me/posts/${postId}/signups?limit=500`,
+    ),
   );
   const items = Array.isArray(res.items) ? res.items : [];
   return {

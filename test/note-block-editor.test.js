@@ -163,13 +163,6 @@ test('DOM formatting actions ignore a missing cursor block', () => {
   assert.match(src, /function applyType[\s\S]*?if \(!pos\?\.block\) return/);
 });
 
-test('extractMediaFromBlocks extracts video blocks as VIDEO media', () => {
-  const src = read('src/features/notes/utils/note-blocks.ts');
-  assert.match(src, /type !== 'image' && type !== 'video'/);
-  assert.match(src, /type === 'video' \? 'VIDEO' : 'IMAGE'/);
-  assert.match(src, /durationMs/);
-});
-
 test('upload helper accepts a configurable timeout', () => {
   const src = read('src/services/api/upload.ts');
   assert.match(src, /timeoutMs: number = UPLOAD_TIMEOUT_MS/);
@@ -209,4 +202,26 @@ test('插入用的是解析出来的锚点，而不是「没光标就返回」',
   // 永远不再触发，等于换一种方式卡死。
   const effect = src.slice(src.indexOf('if (pendingInserts.length === 0'));
   assert.match(effect.slice(0, 600), /onInsertHandled\(\);/);
+});
+
+// 插进正文的媒体块必须带上 objectKey 与已知元数据：服务端保存时会从 contentJson 的
+// 块 props 反推媒体（circle_be 的 deriveMediaFromBlocks 读的就是 props.objectKey），
+// 而私有目录的预览地址是本机资源路径，认不出是哪条上传。key 一丢就等于整条媒体没了。
+test('inserted media blocks carry the object key and known metadata', () => {
+  const { buildPendingEditorBlocks } = loadNoteMediaUpload();
+  const blocks = buildPendingEditorBlocks([
+    {
+      type: 'image',
+      url: 'file:///picked.jpg',
+      objectKey: 'notes/u1/picked.jpg',
+      width: 100,
+      height: 80,
+      mimeType: 'image/jpeg',
+    },
+  ]);
+
+  assert.equal(blocks[0].props.objectKey, 'notes/u1/picked.jpg');
+  assert.equal(blocks[0].props.width, 100);
+  assert.equal(blocks[0].props.height, 80);
+  assert.equal(blocks[0].props.mimeType, 'image/jpeg');
 });

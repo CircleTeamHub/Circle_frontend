@@ -20,10 +20,12 @@ import { reportError } from '@/observability/sentry';
 import { allowPeerMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
 import { loadChatConversations } from './api';
+import { dismissChatNotifications } from './chat-notifications';
 import { isMessageDeletedLocally } from './deleted-messages';
 import { reportChatDelivered } from './socket-manager';
 import { getChatMessagePreview } from './mappers';
 import { useChatStore } from './store';
+import { noteLiveRevision } from './sync';
 import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { devWarn } from '@/utils/dev-log';
@@ -218,14 +220,28 @@ function applyRemoteBurnChange(
   if (content['kind'] !== 'burn-changed') return;
   const seconds = content['seconds'];
   if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return;
-  // burn-changed 系统消息只带 seconds（服务端没有开启时间列）。它与设置同事务写入、
-  // 提交后立即广播，用它的服务端 createdAt 作为双方共同的本地开启边界。
-  const startedAt = seconds > 0 ? message.createdAt : null;
+  // 新服务端随系统消息带持久化边界，保证改档位不会把旧窗口重置；滚动升级期间
+  // 老服务端没带字段时仍以系统消息的服务端时间作为近似边界。
+  const persistedStart = content['burnStartedAt'];
+  const startedAt =
+    seconds <= 0
+      ? null
+      : typeof persistedStart === 'string' &&
+          Number.isFinite(Date.parse(persistedStart))
+        ? persistedStart
+        : message.createdAt;
   store.applyBurnDuration(
     message.conversationId,
     seconds > 0 ? Math.floor(seconds) : null,
     startedAt,
   );
+}
+
+/** 广播里可选的 revision:只认非负安全整数,其余一律当作没给(老后端/畸形载荷)。 */
+function optionalRevision(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
 }
 
 function applyBurnedMessagesChange(
@@ -246,10 +262,20 @@ function applyBurnedMessagesChange(
   ) {
     throw new Error('malformed burned messages payload');
   }
-  store.applyBurnedMessages(
-    payload.conversationId,
-    [...new Set(payload.messageIds)],
-  );
+  const burnedIds = [...new Set(payload.messageIds)];
+  store.applyBurnedMessages(payload.conversationId, burnedIds);
+  // 消息烧掉了,通知栏里的正文不能还留着。
+  dismissChatNotifications(payload.conversationId, burnedIds);
+  // revisions 与 messageIds 一一对应;长度对不上就整组不认(游标宁可靠补拉推进)。
+  const revisions = payload.revisions;
+  if (
+    Array.isArray(revisions) &&
+    revisions.length === payload.messageIds.length
+  ) {
+    for (const revision of revisions) {
+      noteLiveRevision(payload.conversationId, optionalRevision(revision));
+    }
+  }
 }
 
 /**
@@ -307,7 +333,11 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // 只靠 store 里的过滤是不够的:applyIncomingMessage 对墓碑消息返回
       // 「已处理」,而下面的横幅与补拉是无条件跑的 —— 用户离开会话后,
       // 一条自己刚删掉的消息会以前台通知的形式重新弹出来。
-      if (isMessageDeletedLocally(payload.id, payload.d)) return;
+      if (isMessageDeletedLocally(payload.id, payload.d)) {
+        // 刻意丢掉的也算收到了:不记的话游标停在它前面,1.5 秒后白补拉一趟。
+        noteLiveRevision(payload.conversationId, payload.revision);
+        return;
+      }
 
       const store = useChatStore.getState();
       // 被移出的会话:迟到的广播不入库也不补拉,否则刚收走的会话立刻复活。
@@ -330,14 +360,19 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       // 看到自己、未读永远加不上。
       const applied = store.applyIncomingMessage(payload);
       store.ingestMessages(payload.conversationId, [payload]);
+      noteLiveRevision(payload.conversationId, payload.revision);
       applyRemoteBurnChange(store, payload);
       applyRemoteGroupSettingChange(store, payload);
       const metadataChanged = requiresConversationMetadataRefresh(payload);
       // G-07 送达回执:收到别人的消息即回报水位(节流在 socket-manager)。
+      // 「已送达」只在单聊里渲染,群聊不报 —— 服务端对群也不再记录。会话还没进
+      // 快照(类型未知)时照报,服务端按类型丢弃。
       if (
         payload.height > 0 &&
         payload.sender !== null &&
-        payload.sender.id !== store.currentUserId
+        payload.sender.id !== store.currentUserId &&
+        store.conversations.find((c) => c.id === payload.conversationId)
+          ?.type !== 'GROUP'
       ) {
         reportChatDelivered(payload.conversationId, payload.height);
       }
@@ -388,9 +423,12 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('readReceipt', 'malformedPayload');
         return;
       }
-      useChatStore
-        .getState()
-        .applyRead(payload.conversationId, payload.userId, payload.height);
+      const store = useChatStore.getState();
+      store.applyRead(payload.conversationId, payload.userId, payload.height);
+      // 本人在别的设备上读过了,这台的通知栏也收起来(对端读到哪与我无关)。
+      if (payload.userId === store.currentUserId) {
+        dismissChatNotifications(payload.conversationId);
+      }
     } catch (err) {
       devWarn('[chat] read handler failed', err);
       reportChatEventFailureOnce('readReceipt', 'handlerFailure');
@@ -421,6 +459,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
             payload.clearedBeforeHeight,
           );
         useLocalUnreadStore.getState().clearUnread(payload.conversationId);
+        dismissChatNotifications(payload.conversationId);
       } catch (err) {
         devWarn('[chat] history-cleared handler failed', err);
         reportChatEventFailureOnce('historyCleared', 'handlerFailure');
@@ -518,6 +557,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('reaction', 'malformedPayload');
         return;
       }
+      const revision = optionalRevision(payload.revision);
       useChatStore
         .getState()
         .applyReaction(
@@ -526,7 +566,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           payload.emoji,
           payload.userId,
           payload.op,
+          revision,
         );
+      noteLiveRevision(payload.conversationId, revision);
     } catch (err) {
       devWarn('[chat] reaction handler failed', err);
       reportChatEventFailureOnce('reaction', 'handlerFailure');
@@ -548,6 +590,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('edit', 'malformedPayload');
         return;
       }
+      const revision = optionalRevision(payload.revision);
       useChatStore
         .getState()
         .applyEdit(
@@ -555,7 +598,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           payload.messageId,
           payload.content as Record<string, unknown>,
           payload.editedAt,
+          revision,
         );
+      noteLiveRevision(payload.conversationId, revision);
     } catch (err) {
       devWarn('[chat] edit handler failed', err);
       reportChatEventFailureOnce('edit', 'handlerFailure');
@@ -575,9 +620,20 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('revoke', 'malformedPayload');
         return;
       }
+      const revision = optionalRevision(payload.revision);
+      const height = optionalRevision(payload.height);
       useChatStore
         .getState()
-        .applyRevoke(payload.conversationId, payload.messageId, payload.revokedBy);
+        .applyRevoke(payload.conversationId, payload.messageId, payload.revokedBy, {
+          ...(height !== undefined ? { height } : {}),
+          ...(payload.senderId === null || typeof payload.senderId === 'string'
+            ? { senderId: payload.senderId }
+            : {}),
+          ...(revision !== undefined ? { revision } : {}),
+        });
+      noteLiveRevision(payload.conversationId, revision);
+      // 撤回之后通知栏里的原文不能还留着。
+      dismissChatNotifications(payload.conversationId, [payload.messageId]);
     } catch (err) {
       devWarn('[chat] revoke handler failed', err);
       reportChatEventFailureOnce('revoke', 'handlerFailure');

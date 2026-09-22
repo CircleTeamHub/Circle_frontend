@@ -3,6 +3,7 @@ import { reportError } from '@/observability/sentry';
 import { fetchMySignupsUnreadCount } from '@/services/api/plaza';
 import { fetchUnreadFriendActivityCount } from '@/services/api/friends';
 import { fetchCurrentUser } from '@/services/api/auth';
+import { refreshSessionAccessToken } from '@/services/api/client';
 import { fetchWallet } from '@/services/api/coin';
 import {
   fetchNotifications,
@@ -162,6 +163,21 @@ function isRevokedClose(event: unknown): boolean {
 
   const { code, reason } = event as { code?: unknown; reason?: unknown };
   return code === REVOKED_CLOSE_CODE && reason === REVOKED_CLOSE_REASON;
+}
+
+// 网关在 access token 到期时同样用 1008 关闭,reason 是 'Token expired'
+// (circle_be/src/realtime/realtime.gateway.ts 的 expiryTimers)。与「撤销」不同,
+// 这不是终态:刷新 token 之后 session-bootstrap 会带着新 token 重新连。只拿旧 token
+// 按退避重连的话,每一次都会在认证后被同样拒掉,直到某个 REST 请求碰巧触发刷新。
+const TOKEN_EXPIRED_CLOSE_REASON = 'Token expired';
+
+function isTokenExpiredClose(event: unknown): boolean {
+  if (typeof event !== 'object' || event === null) {
+    return false;
+  }
+
+  const { code, reason } = event as { code?: unknown; reason?: unknown };
+  return code === REVOKED_CLOSE_CODE && reason === TOKEN_EXPIRED_CLOSE_REASON;
 }
 
 let socket: WebSocket | null = null;
@@ -702,6 +718,14 @@ function openRealtimeSocket(normalizedToken: string) {
       currentToken = null;
       void clearLocalSession();
       return;
+    }
+
+    if (isTokenExpiredClose(event)) {
+      // 刷新成功后 token 变化会驱动 connectRealtime(新 token);刷新失败(断网等)
+      // 仍走下面的退避重连兜底,服务端明确否认会话时 API 层会清掉登录态。
+      void refreshSessionAccessToken().catch((error: unknown) =>
+        reportHandledFailure('realtime', 'tokenRefreshOnExpiry', error),
+      );
     }
 
     scheduleReconnect();

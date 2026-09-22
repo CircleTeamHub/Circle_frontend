@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withChatCoreStubs } = require('./helpers/chat-core-stubs');
 
 // 焚毁档位表(burn-durations.ts)只依赖 i18n —— 这里加载**真实实现**而不是桩:
 // 档位白名单是 setViewerSelfDestructSec 的唯一闸门,用假的等于没测。
@@ -79,7 +80,7 @@ function runModule(rel, requireImpl, extraGlobals = {}) {
     Number,
     module: { exports: {} },
     exports: {},
-    require: requireImpl,
+    require: withChatCoreStubs(requireImpl),
     ...extraGlobals,
   };
   context.exports = context.module.exports;

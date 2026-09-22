@@ -33,25 +33,28 @@ jest.mock('@/observability/report-failure', () => ({
   reportHandledFailure: (...args: unknown[]) => mockReportHandledFailure(...args),
 }));
 
+type MockDOMEditorProps = {
+  pendingInserts: Record<string, unknown>[];
+  onImageRequest: () => void;
+  onVideoRequest: () => void;
+};
+let mockDomProps: MockDOMEditorProps | undefined;
+
 jest.mock('@/features/notes/dom/NoteBlockEditor.dom', () => ({
   __esModule: true,
-  default: ({
-    onImageRequest,
-    onVideoRequest,
-  }: {
-    onImageRequest: () => void;
-    onVideoRequest: () => void;
-  }) => {
+  default: (props: MockDOMEditorProps) => {
+    mockDomProps = props;
     const { Pressable: MockPressable } = jest.requireActual<typeof import('react-native')>('react-native');
     return <>
-      <MockPressable testID="request-image" onPress={onImageRequest} />
-      <MockPressable testID="request-video" onPress={onVideoRequest} />
+      <MockPressable testID="request-image" onPress={props.onImageRequest} />
+      <MockPressable testID="request-video" onPress={props.onVideoRequest} />
     </>;
   },
 }));
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockDomProps = undefined;
   mockRequestPermission.mockResolvedValue({ granted: true });
   mockLaunchPicker.mockResolvedValue({
     canceled: false,
@@ -88,7 +91,7 @@ test('caps standalone editor web-overflow uploads in picker order and reports om
   );
 });
 
-test('releases standalone blob picker URLs at overflow disposal and upload settlement', async () => {
+test('releases standalone overflow blobs at once and inserted previews at unmount', async () => {
   const previousWindow = global.window;
   const previousURL = global.URL;
   const revokeObjectURL = jest.fn();
@@ -112,14 +115,66 @@ test('releases standalone blob picker URLs at overflow disposal and upload settl
 
     resolveUpload();
     await upload;
-    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:standalone-active'));
-    expect(revokeObjectURL.mock.calls.filter(([uri]) => uri === 'blob:standalone-active')).toHaveLength(1);
+    await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(10));
+    // 私有目录没有可直读的远端地址，插进文档的块用的就是这些本地地址：
+    // 上传一落地就 revoke 等于把刚插进去的图变成裂图。
+    expect(revokeObjectURL).not.toHaveBeenCalledWith('blob:standalone-active');
+
     rendered.unmount();
     await Promise.resolve();
     expect(revokeObjectURL.mock.calls.filter(([uri]) => uri === 'blob:standalone-active')).toHaveLength(1);
   } finally {
     Object.defineProperty(global, 'window', { configurable: true, value: previousWindow });
     Object.defineProperty(global, 'URL', { configurable: true, value: previousURL });
+  }
+});
+
+// 上传还在飞的时候离开编辑器：卸载清理把仍被持有的预览地址一次性 revoke；上传随后
+// 落地的续作只会走到幂等的释放（地址已不在持有集合里），既不会重复 revoke，也不会因为
+// 「这批算插进去了」而把它们留到会话结束 —— 它们从来没进过任何文档。
+test('revokes in-flight picker blobs when the editor unmounts mid-upload', async () => {
+  const previousWindow = global.window;
+  const previousURL = global.URL;
+  const revokeObjectURL = jest.fn();
+  Object.defineProperty(global, 'window', { configurable: true, value: {} });
+  Object.defineProperty(global, 'URL', { configurable: true, value: { revokeObjectURL } });
+  let resolveUpload!: () => void;
+  const upload = new Promise<void>((resolve) => {
+    resolveUpload = resolve;
+  });
+  mockUploadFile.mockReturnValue(upload);
+  mockLaunchPicker.mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'blob:in-flight', width: 100, height: 80 }],
+  });
+  try {
+    const rendered = render(
+      <NoteBlockEditor initialContent={null} onContentChange={jest.fn()} />,
+    );
+    fireEvent.press(screen.getByTestId('request-image'));
+    await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+
+    rendered.unmount();
+    expect(
+      revokeObjectURL.mock.calls.filter(([uri]) => uri === 'blob:in-flight'),
+    ).toHaveLength(1);
+
+    resolveUpload();
+    await upload;
+    await Promise.resolve();
+    expect(
+      revokeObjectURL.mock.calls.filter(([uri]) => uri === 'blob:in-flight'),
+    ).toHaveLength(1);
+  } finally {
+    Object.defineProperty(global, 'window', {
+      configurable: true,
+      value: previousWindow,
+    });
+    Object.defineProperty(global, 'URL', {
+      configurable: true,
+      value: previousURL,
+    });
   }
 });
 
@@ -163,4 +218,49 @@ test('reports a redacted aggregate when standalone media upload fails', async ()
     expect.objectContaining({ message: 'note media batch upload failed' }),
     { failed: 1, total: 1, reason: 'image' },
   );
+});
+
+test('presign 不返回 fileUrl 时，独立编辑器插入本地预览并只上报 objectKey', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockLaunchPicker.mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'file:///keyed.jpg', width: 100, height: 80 }],
+  });
+  // notes/ 是私有目录：后端不再返回可直读的地址。
+  mockRequestPresign.mockResolvedValue({
+    uploadUrl: 'https://upload.example/keyed.jpg',
+    fileUrl: null,
+    key: 'notes/keyed.jpg',
+    requiredHeaders: {},
+  });
+  const onMediaUploaded = jest.fn();
+
+  render(
+    <NoteBlockEditor
+      initialContent={null}
+      onContentChange={jest.fn()}
+      onMediaUploaded={onMediaUploaded}
+    />,
+  );
+  fireEvent.press(screen.getByTestId('request-image'));
+
+  await waitFor(() => expect(onMediaUploaded).toHaveBeenCalledTimes(1));
+  const [media] = onMediaUploaded.mock.calls[0];
+  expect(media).toEqual(
+    expect.objectContaining({ type: 'IMAGE', objectKey: 'notes/keyed.jpg' }),
+  );
+  // 没有可直读的地址就不上送 url，交给服务端按 objectKey 派生。
+  expect(media).not.toHaveProperty('url');
+  // 文档里的那一块仍然要看得见：用本地资源地址当预览。
+  await waitFor(() =>
+    expect(mockDomProps?.pendingInserts).toEqual([
+      expect.objectContaining({
+        type: 'image',
+        url: 'file:///keyed.jpg',
+        objectKey: 'notes/keyed.jpg',
+      }),
+    ]),
+  );
+  expect(alert).not.toHaveBeenCalled();
+  expect(mockReportHandledFailure).not.toHaveBeenCalled();
 });

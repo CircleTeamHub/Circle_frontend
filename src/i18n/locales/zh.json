@@ -312,7 +312,9 @@
       "recognitionSuccessTitle": "已提交合作认可",
       "recognitionSuccessMessage": "已认可 {{count}} 位报名者。",
       "recognitionFailedTitle": "提交失败"
-    }
+    },
+    "chatChannelName": "聊天消息",
+    "chatChannelDescription": "好友和群聊的新消息"
   },
   "chat": {
     "detail": {
@@ -331,6 +333,7 @@
       "lastSeenDays": "{{count}} 天前在线",
       "lastSeenDays_other": "{{count}} 天前在线",
       "previewNotice": "连接尚未完成，请稍后重试",
+      "historyWindowFull": "更早的消息请在聊天记录里搜索查看",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",
       "voiceReleaseSend": "松开发送 {{seconds}}\"",
@@ -344,6 +347,7 @@
       "sensitiveWordBlocked": "消息包含敏感词，已被屏蔽",
       "recordStartFailed": "录音启动失败，请重试",
       "voiceSendFailed": "语音发送失败，请重试",
+      "mediaSourceMissing": "原文件已不在这台设备上，无法重发",
       "locationSendFailed": "位置发送失败，请重试",
       "imageSendFailed": "图片发送失败，请重试",
       "videoSendFailed": "视频发送失败，请重试",
@@ -352,6 +356,7 @@
       "videoTooLong": "请选择 10 分钟以内的视频",
       "videoUnsupported": "仅支持 MP4、MOV、M4V 视频",
       "videoUnavailable": "视频不可用",
+      "videoPreparing": "正在处理视频…",
       "playVideo": "播放视频",
       "noteBatchPartialFailed": "{{count}} 条内容发送失败",
       "cardSendFailed": "名片发送失败，请重试",
@@ -2893,7 +2898,8 @@
       "verification": "[验证] {{name}} 邀请你担保",
       "default": "[消息]",
       "plazaPost": "[活动] {{title}}",
-      "sendFailedPrefix": "[发送失败]"
+      "sendFailedPrefix": "[发送失败]",
+      "draftPrefix": "[草稿]"
     },
     "message": {
       "revokedBySelf": "你撤回了一条消息",
@@ -3322,7 +3328,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "该群已关闭成员邀请",
     "CHAT_GROUP_QR_JOIN_DISABLED": "该群已关闭二维码入群",
     "CHAT_GROUP_AVATAR_URL_INVALID": "群头像地址无效",
-    "CHAT_DELIVERY_ID_CONFLICT": "本次消息与之前的发送记录冲突，请重新发送",
+    "CHAT_DELIVERY_ID_CONFLICT": "消息发送失败，请重新输入后再发",
     "FRIEND_GROUP_ADD_FORBIDDEN": "该群不允许成员互加好友"
   },
   "qr": {

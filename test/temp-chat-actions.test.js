@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
@@ -62,7 +63,7 @@ test('temp chat list screen opens the copy-link modal after create and from the 
 test('temp chat routes preserve TEMP identity and preflight media before upload', () => {
   const tempChats = read('src/features/messages/screens/TempChatsScreen.tsx');
   const messages = read('src/features/messages/screens/MessagesScreen.tsx');
-  const chatDetail = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chatDetail = readChatDetailSource();
 
   assert.match(tempChats, /conversationKind: 'temp'/);
   assert.match(messages, /conversationKind: dto\?\.type\.toLowerCase\(\)/);

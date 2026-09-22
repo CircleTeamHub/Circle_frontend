@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const root = process.cwd();
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -138,7 +139,7 @@ test('二维码卡片把「是谁的码、扫了会怎样」写在卡面上', ()
 });
 
 test('点卡片走扫码同一条落地页，路径写死在本端', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /<QrCardBubble/);
   // 目的地由本端的 helper 决定,对端只能提供令牌 —— 这是「路径写死在本端」的实质。
   assert.match(
@@ -148,7 +149,7 @@ test('点卡片走扫码同一条落地页，路径写死在本端', () => {
 });
 
 test('二维码落地页跟随来源栈：进哪一栈由 scope 决定，且只能 push', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   const landing = read('src/features/qr/screens/QrLandingScreen.tsx');
   const routes = read('src/features/user/utils/routes.ts');
 

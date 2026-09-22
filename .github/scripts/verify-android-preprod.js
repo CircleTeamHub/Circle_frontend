@@ -10,9 +10,17 @@ const EXPECTED = Object.freeze({
   appVariant: 'preprod',
   apiUrl: 'https://api-43-133-201-42.sslip.io',
   apiHost: 'api-43-133-201-42.sslip.io',
-  mediaOrigin:
+  // 顺序即 EXPO_PUBLIC_MEDIA_ORIGINS 的逗号顺序。COS 直连域名给私有媒体的预签名
+  // 地址用;限流的投递域名是后端 OBJECT_STORAGE_DELIVERY_URL,公开目录(头像、
+  // 封面……)的永久地址由它拼出。少了哪个,App 都会把那一类媒体整片丢掉。
+  mediaOrigins: Object.freeze([
     'https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com',
-  mediaHost: 'windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com',
+    'https://media-43-133-201-42.sslip.io',
+  ]),
+  mediaHosts: Object.freeze([
+    'windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com',
+    'media-43-133-201-42.sslip.io',
+  ]),
   forbiddenStrings: [
     'application-diary-papua-dining.trycloudflare.com',
     'EXPO_PUBLIC_OPENIM_API_URL',
@@ -61,8 +69,16 @@ function validateMetadata({ app, env }) {
   if (!isExactHttpsUrl(env.EXPO_PUBLIC_CHAT_WS_URL, EXPECTED.apiUrl)) {
     errors.push(`EXPO_PUBLIC_CHAT_WS_URL must be ${EXPECTED.apiUrl}.`);
   }
-  if (!isExactHttpsUrl(env.EXPO_PUBLIC_MEDIA_ORIGINS, EXPECTED.mediaOrigin)) {
-    errors.push(`EXPO_PUBLIC_MEDIA_ORIGINS must be ${EXPECTED.mediaOrigin}.`);
+  const mediaOrigins = String(env.EXPO_PUBLIC_MEDIA_ORIGINS ?? '').split(',');
+  const mediaOriginsExact =
+    mediaOrigins.length === EXPECTED.mediaOrigins.length &&
+    EXPECTED.mediaOrigins.every((expected, index) =>
+      isExactHttpsUrl(mediaOrigins[index], expected),
+    );
+  if (!mediaOriginsExact) {
+    errors.push(
+      `EXPO_PUBLIC_MEDIA_ORIGINS must be ${EXPECTED.mediaOrigins.join(',')}.`,
+    );
   }
   return errors;
 }
@@ -72,7 +88,7 @@ function validateApkContents(contents) {
   const errors = [];
   for (const [label, expected] of [
     ['API host', EXPECTED.apiHost],
-    ['media host', EXPECTED.mediaHost],
+    ...EXPECTED.mediaHosts.map((host) => ['media host', host]),
   ]) {
     if (!haystack.includes(expected.toLowerCase())) {
       errors.push(`APK is missing expected ${label}: ${expected}`);

@@ -5,18 +5,25 @@ import {
   isMessageDeletedLocally,
   markMessageDeletedLocally,
 } from './deleted-messages';
-import type { ChatConversationDto, ChatMessageDto } from './protocol';
+import type {
+  ChatConversationDto,
+  ChatMessageDto,
+  ChatSyncPageDto,
+} from './protocol';
 import {
   clearLocalConversationMessages,
   deleteLocalMessage,
   deleteLocalMessages,
+  deleteLocalMessagesBelow,
   outboxDelete,
   purgeExpiredLocalMessages,
   persistLocalConversations,
   persistLocalMessages,
+  redactLocalQuotesOf,
   removeLocalConversation,
   upsertLocalConversation,
 } from './local-db';
+import { deletePendingMedia } from './pending-media';
 
 /**
  * 每会话的初始内存窗口。翻页会把窗口按页扩大 —— 固定 200 的话,已经有 200 条
@@ -24,8 +31,15 @@ import {
  * 丢掉;而翻页游标照常前进,于是「越滚越请求、永远看不到第 201 条以前」。
  */
 export const MESSAGES_CAP = 200;
-/** 窗口扩张的硬上限,防止一路翻到底把整个会话读进内存。 */
-export const MESSAGES_WINDOW_MAX = 2000;
+/**
+ * 窗口扩张的硬上限,防止一路翻到底把整个会话读进内存。
+ *
+ * 原来是 2000:忙碌的群一两天就过了这个数,翻到顶以后刚拉回来的更早一页被当场
+ * 裁掉、游标照样前进,表现就是「越翻越请求、再也翻不上去」。一条消息连同界面映射
+ * 大约 1~2KB,一万条在 20MB 以内;只有正在深翻的那个会话会涨到这么大,离开会话就
+ * 收回 MESSAGES_CAP(shrinkConversationWindow)。到顶以后停止翻页、提示去搜索。
+ */
+export const MESSAGES_WINDOW_MAX = 10_000;
 /** 对端 typing 显示时长:超过它没有新 typing 事件就回落在线状态。 */
 export const TYPING_DISPLAY_MS = 4_000;
 /** Keep self-destruct purges below the browser timer clamp and cover cached rows. */
@@ -111,13 +125,9 @@ function mergeConversationBurnState(
   current: ChatConversationState | undefined,
 ): ChatConversationState {
   const duration = incoming.burnDurationSec ?? 0;
-  // The REST conversation DTO intentionally has no start-time column. Preserve
-  // the local boundary across a refresh/upsert while the window is still active;
-  // an explicit disable still clears it, and applyBurnDuration records a real
-  // restart when the server sends the burn-change event/response.
-  const incomingStart = (incoming as ChatConversationDto & {
-    burnStartedAt?: string | null;
-  }).burnStartedAt;
+  // 新服务端下发持久化边界；老版本响应缺字段时保留本机已知值，避免滚动升级期间
+  // 把开启前的消息误判为可焚毁。
+  const incomingStart = incoming.burnStartedAt;
   return {
     ...incoming,
     burnStartedAt: normalizeBurnStartedAt(
@@ -133,15 +143,10 @@ function normalizeViewerSelfDestructSec(seconds: number): number | null {
 }
 
 /**
- * store 里的会话行 = 服务端 DTO + 本机记录的焚毁开启边界。
- *
- * 服务端没有会话级焚毁的开启时间列、也不下发它：本机在观察到档位变化时（POST 回执 /
- * burn-changed 系统消息）把那一刻记成 burnStartedAt，只用于本地缓存的到期判定，
- * 不是跨端契约。服务端真删之后由 chat:burned_messages 让各端收敛。
+ * 新服务端把焚毁开启边界作为跨端契约下发；本机只在兼容老服务端或先收到
+ * burn-changed 系统消息时临时补一个观察时间，后续快照/回执会以持久化值校准。
  */
-export type ChatConversationState = ChatConversationDto & {
-  burnStartedAt?: string | null;
-};
+export type ChatConversationState = ChatConversationDto;
 
 /** Removes expired local previews before a cold-start snapshot reaches the UI. */
 export function sanitizeExpiredConversationPreviews(
@@ -256,6 +261,65 @@ function seedPeerReadWatermarks(
   return next;
 }
 
+/**
+ * 用会话快照里的**本人**已读水位合并本机水位(只前进)。
+ *
+ * 另一台设备读过、而本机当时离线,chat:read 永远不会再来;不合并的话,本机的
+ * 红点收敛、撤回扣未读这些判断都拿着一个过期的已读位在算。
+ */
+function seedSelfReadWatermarks(
+  readWatermarks: Record<string, Record<string, number>>,
+  conversations: ChatConversationDto[],
+  currentUserId: string | null,
+): Record<string, Record<string, number>> {
+  if (!currentUserId) return readWatermarks;
+  let next = readWatermarks;
+  for (const conversation of conversations) {
+    const height = conversation.readHeight;
+    if (!Number.isSafeInteger(height) || (height as number) <= 0) continue;
+    const prior = next[conversation.id]?.[currentUserId] ?? 0;
+    if ((height as number) <= prior) continue;
+    if (next === readWatermarks) next = { ...readWatermarks };
+    next[conversation.id] = {
+      ...(next[conversation.id] ?? {}),
+      [currentUserId]: height as number,
+    };
+  }
+  return next;
+}
+
+/** 快照里比本机更高的清空水位(另一台设备清过 / 清空时本机离线)。 */
+function collectRaisedClearFloors(
+  conversations: ChatConversationDto[],
+  localFloors: Record<string, number>,
+): Map<string, number> {
+  const raised = new Map<string, number>();
+  for (const conversation of conversations) {
+    const floor = conversation.clearedBeforeHeight;
+    if (!Number.isSafeInteger(floor) || (floor as number) <= 0) continue;
+    if ((floor as number) <= (localFloors[conversation.id] ?? 0)) continue;
+    raised.set(conversation.id, floor as number);
+  }
+  return raised;
+}
+
+/** 水位之下的已确认消息移出内存时间线(乐观/失败气泡不在服务端,留着)。 */
+function dropTimelineThrough(
+  timelines: Record<string, ChatMessageDto[]>,
+  floors: ReadonlyMap<string, number>,
+): Record<string, ChatMessageDto[]> {
+  let next = timelines;
+  for (const [conversationId, floor] of floors) {
+    const timeline = timelines[conversationId];
+    if (!timeline) continue;
+    const kept = timeline.filter((m) => !(m.height > 0 && m.height <= floor));
+    if (kept.length === timeline.length) continue;
+    if (next === timelines) next = { ...timelines };
+    next[conversationId] = kept;
+  }
+  return next;
+}
+
 let burnPurgeTimer: ReturnType<typeof setTimeout> | null = null;
 
 function clearBurnPurgeTimer(): void {
@@ -325,6 +389,12 @@ interface ChatStoreState {
   lastSeenByUser: Record<string, string | null>;
   /** 本人向外上报「正在输入」的开关(隐私页 + 连接时的服务端刷新共同维护)。 */
   viewerTypingPolicy: ViewerTypingPolicy;
+  /**
+   * App 是否在前台。退到后台时,「正在打开的会话」不再算「正在看」:新消息照常
+   * 计未读、屏幕不上报已读 —— 否则停在聊天页锁屏,这段时间的消息全被悄悄标成已读。
+   */
+  appForeground: boolean;
+  setAppForeground: (foreground: boolean) => void;
 
   setConnected: (connected: boolean) => void;
   setConnecting: (connecting: boolean) => void;
@@ -395,12 +465,6 @@ interface ChatStoreState {
    * 本地这一侧等于没生效。拿到会话快照与档位变更时各清一次。
    */
   purgeExpiredBurnMessages: () => Promise<void>;
-  /**
-   * 丢掉全部缓存消息(会话行保留)。
-   * 服务端说增量游标超出保留窗口时用 —— 那段区间的撤回已经查不到了,
-   * 缓存里的消息会永远显示原文,只能整体作废重新拉。
-   */
-  dropCachedMessages: () => void;
   setActiveConversationId: (conversationId: string | null) => void;
   /** lastSeenAt 省略 = 不改动已有的最近在线(旧服务端的 boolean ack);null = 不知道。 */
   applyPresence: (
@@ -417,9 +481,35 @@ interface ChatStoreState {
    * createdAt 排尾）→ 截断到 MESSAGES_CAP（保最新）。
    * 未涉及的会话保持原数组引用（聊天页依赖引用稳定避免全量重渲染）。
    */
-  ingestMessages: (conversationId: string, incoming: ChatMessageDto[]) => void;
+  ingestMessages: (
+    conversationId: string,
+    incoming: ChatMessageDto[],
+    options?: { persist?: boolean },
+  ) => void;
+  /**
+   * 一页增量同步落到内存(不落盘:本地库那半由同步协调器在一个事务里写,
+   * 与游标一起提交)。清空水位、本人已读、墓碑、撤回引用脱敏都在这里收敛。
+   */
+  applySyncPage: (conversationId: string, page: ChatSyncPageDto) => void;
+  /** 丢掉一个会话的已确认消息缓存(同步落后太多跳到最新 / 服务端要求重建时)。 */
+  evictConversationCache: (conversationId: string) => void;
   /** 每会话当前的内存窗口大小(翻页时扩张)。 */
   messageWindowByConversation: Record<string, number>;
+  /**
+   * 往上翻页的起点(conversationId → height)。窗口为了装下新消息把更早的已确认
+   * 消息挤出了内存时,记下留在窗口里最旧的那条:翻页游标还指着被挤掉那段之前,
+   * 照游标翻会把这段整个跳过。下一页从这里接着翻,翻回来以后清掉。
+   */
+  historyFloorByConversation: Record<string, number>;
+  /** 窗口已涨到 MESSAGES_WINDOW_MAX,更早的页装不下了:停止往上翻(界面提示去搜索)。 */
+  historyWindowFullByConversation: Record<string, true>;
+  /** 从起点翻回来一页之后清掉它;期间又被挤出、起点变了的不清。 */
+  clearHistoryFloor: (conversationId: string, floor: number) => void;
+  /**
+   * 离开会话:窗口收回最新 MESSAGES_CAP 条已确认消息(发送中/失败的气泡原样保留),
+   * 下次进来往上翻从留下的最旧一条接着翻。深翻过的会话不会一直占着内存。
+   */
+  shrinkConversationWindow: (conversationId: string) => void;
   /** 成员已读推进（服务端广播）；对端已读用于单聊「已读」标记。 */
   applyRead: (conversationId: string, userId: string, height: number) => void;
   /**
@@ -430,6 +520,7 @@ interface ChatStoreState {
     conversationId: string,
     messageId: string,
     revokedBy: string,
+    meta?: { height?: number; senderId?: string | null; revision?: number },
   ) => void;
   /** 对端「正在输入」有效期(conversationId → epoch ms;过期即不显示)。 */
   typingUntilByConversation: Record<string, number>;
@@ -448,6 +539,7 @@ interface ChatStoreState {
     emoji: string,
     userId: string,
     op: 'add' | 'remove',
+    revision?: number,
   ) => void;
   /** G-07 消息编辑落地(content 替换 + editedAt;height 不变)。 */
   applyEdit: (
@@ -455,6 +547,7 @@ interface ChatStoreState {
     messageId: string,
     content: Record<string, unknown>,
     editedAt: string,
+    revision?: number,
   ) => void;
   /** S-01:会话级焚毁档位变更(REST 回执/系统消息驱动)。 */
   applyBurnDuration: (
@@ -511,6 +604,25 @@ function sortKey(message: ChatMessageDto): number {
   return Number.MAX_SAFE_INTEGER / 2 + Date.parse(message.createdAt);
 }
 
+/** 丢掉一个会话的翻页起点与到顶标记(缓存作废、清空聊天记录时一起失效)。 */
+function withoutHistoryPaging(
+  state: Pick<
+    ChatStoreState,
+    'historyFloorByConversation' | 'historyWindowFullByConversation'
+  >,
+  conversationId: string,
+): Pick<
+  ChatStoreState,
+  'historyFloorByConversation' | 'historyWindowFullByConversation'
+> {
+  const { [conversationId]: _floor, ...floors } = state.historyFloorByConversation;
+  const { [conversationId]: _full, ...full } = state.historyWindowFullByConversation;
+  return {
+    historyFloorByConversation: floors,
+    historyWindowFullByConversation: full,
+  };
+}
+
 function latestConfirmedHeight(messages: ChatMessageDto[]): number {
   let latest = 0;
   for (const message of messages) {
@@ -549,6 +661,14 @@ function mergeMessageState(
   prior: ChatMessageDto,
   next: ChatMessageDto,
 ): ChatMessageDto {
+  // 两边都带会话序号时,序号就是版本号:大的那份是更新的状态,整份采用
+  // (回应被清空、编辑、撤回都体现在里面,不用逐字段猜)。序号相同或有一方缺
+  // (本地合成的确认、老后端)才退回下面这组保守规则。
+  const priorRevision = prior.revision ?? 0;
+  const nextRevision = next.revision ?? 0;
+  if (priorRevision > 0 && nextRevision > 0 && priorRevision !== nextRevision) {
+    return priorRevision > nextRevision ? prior : next;
+  }
   // 撤回是终局:任何不带撤回状态的旧快照都不能把它盖回去。
   if (prior.revokedAt && !next.revokedAt) {
     return {
@@ -569,11 +689,11 @@ function mergeMessageState(
 /**
  * 自己的已读水位推进后,本机未读的收敛值。
  *
- * `latestHeight - readHeight` 会把**自己发的**消息也算成未读:未读 1 条对端
- * 消息(height=1)之后自己又发了两条(2、3),另一台设备读到 1 时这里算出
- * 3-1=2,取 min 之后红点停在 1 而不是清零。服务端口径从来不含自己发的,
- * 所以有本地时间线时就按时间线数「水位之上、非本人发」的条数;时间线不在
- * 内存里(会话没打开过)才回落到上界估算。
+ * 有本地时间线时按时间线数「水位之上、非本人发、没撤回」的条数(与服务端口径一致)。
+ * 时间线不在内存里(会话没打开过)时**不再用 `latestHeight - readHeight` 估算**:
+ * 高度差把自己发的、系统提示、撤回的消息都算了进去,估出来的数比真实未读大,而
+ * min 收敛只会停在一个错的正数上。此时只认「读到了末条」这一种确定情况 —— 清零;
+ * 读到一半的留给下一次会话快照(服务端逐条计数)。
  */
 function convergeUnread(
   conversations: ChatConversationDto[],
@@ -590,9 +710,13 @@ function convergeUnread(
   const remaining = coversTimeline
     ? timeline.filter(
         (m) =>
-          m.height > readHeight && (m.sender?.id ?? null) !== currentUserId,
+          m.height > readHeight &&
+          (m.sender?.id ?? null) !== currentUserId &&
+          !m.revokedAt,
       ).length
-    : Math.max(0, latestHeight - readHeight);
+    : readHeight >= latestHeight
+      ? 0
+      : target.unreadCount;
   const converged = Math.min(target.unreadCount, remaining);
   if (converged === target.unreadCount) return undefined;
   return [
@@ -631,6 +755,43 @@ function reconcileWithLocalWatermarks(
     if (converged) next = converged[0];
   }
   return next;
+}
+
+/**
+ * 内存时间线里引用了这些消息的气泡脱敏(被引用的原消息撤回/焚毁之后)。
+ * 与 local-db 的 redactLocalQuotesOf 同一语义;返回 undefined 表示没有变化。
+ */
+function redactQuotesInTimeline(
+  timeline: ChatMessageDto[],
+  targetIds: ReadonlySet<string>,
+  mode: 'revoked' | 'gone',
+): ChatMessageDto[] | undefined {
+  let changed = false;
+  const next = timeline.map((message) => {
+    const target = message.replyTo?.id ?? message.replyToId ?? null;
+    if (!target || !targetIds.has(target)) return message;
+    const quotedText = message.content['quotedText'];
+    const content =
+      typeof quotedText === 'string' && quotedText.length > 0
+        ? { ...message.content, quotedText: '' }
+        : message.content;
+    if (mode === 'revoked') {
+      if (message.replyTo?.revoked && content === message.content) return message;
+      changed = true;
+      return {
+        ...message,
+        content,
+        ...(message.replyTo
+          ? { replyTo: { ...message.replyTo, revoked: true, preview: '' } }
+          : {}),
+      };
+    }
+    if (!message.replyTo && content === message.content) return message;
+    changed = true;
+    const { replyTo: _removed, ...rest } = message;
+    return { ...rest, content };
+  });
+  return changed ? next : undefined;
 }
 
 export function mergeMessages(
@@ -761,15 +922,22 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   conversationsSnapshotSeq: 0,
   messagesByConversation: {},
   messageWindowByConversation: {},
+  historyFloorByConversation: {},
+  historyWindowFullByConversation: {},
   clearedBeforeHeightByConversation: {},
   activeConversationId: null,
   onlineByUser: {},
   lastSeenByUser: {},
   viewerTypingPolicy: DEFAULT_VIEWER_TYPING_POLICY,
+  appForeground: true,
   readWatermarks: {},
   deliveredWatermarks: {},
   typingUntilByConversation: {},
 
+  setAppForeground: (foreground) => {
+    if (get().appForeground === foreground) return;
+    set({ appForeground: foreground });
+  },
   setConnected: (connected) => set({ connected }),
   setConnecting: (connecting) => set({ connecting }),
   setError: (error) => set({ error }),
@@ -833,9 +1001,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const { messagesByConversation, conversations } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
     const target = index >= 0 ? conversations[index] : null;
-    // 服务端按窗口焚毁会话里的全部旧消息，不看开启时间。本机记得开启边界时，
-    // 边界之前的消息按 App 的承诺保留（与本地到期清理同一口径）；没有边界就
-    // 完全以服务端为准，与其它端收敛。
+    // 边界之前的消息按产品承诺保留；老服务端没提供边界时只能以焚毁通知为准，
+    // 与其它端收敛。
     const burnStartMs = target?.burnStartedAt
       ? Date.parse(target.burnStartedAt)
       : NaN;
@@ -849,12 +1016,19 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const deleteOptions = hasBurnStart
       ? { createdAtNotBefore: new Date(burnStartMs).toISOString() }
       : undefined;
-    const timeline = messagesByConversation[conversationId] ?? [];
+    // 引用了被焚消息的气泡:快照与 quotedText 都带着原文,一并脱敏(本地库那半尽力而为)。
+    void redactLocalQuotesOf(conversationId, [...ids], 'gone');
+    const rawTimeline = messagesByConversation[conversationId] ?? [];
+    const timeline = redactQuotesInTimeline(rawTimeline, ids, 'gone') ?? rawTimeline;
     const nextTimeline = timeline.filter((message) => !isBurned(message));
     const previewBurned = target?.lastMessage
       ? isBurned(target.lastMessage)
       : false;
-    if (nextTimeline.length === timeline.length && !previewBurned) {
+    if (
+      nextTimeline.length === timeline.length &&
+      !previewBurned &&
+      timeline === rawTimeline
+    ) {
       // 仍然执行数据库删除：消息可能尚未被当前内存窗口加载。
       void deleteLocalMessages(conversationId, [...ids], deleteOptions);
       return;
@@ -869,7 +1043,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           }
         : null;
     set({
-      ...(nextTimeline.length !== timeline.length
+      ...(nextTimeline !== rawTimeline
         ? {
             messagesByConversation: {
               ...messagesByConversation,
@@ -909,10 +1083,28 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       currentConversations,
       conversationsWithBurnState,
     );
-    const seededReadWatermarks = seedPeerReadWatermarks(
-      readWatermarks,
+    const seededReadWatermarks = seedSelfReadWatermarks(
+      seedPeerReadWatermarks(readWatermarks, conversations),
       conversations,
+      currentUserId,
     );
+    // 另一台设备清空过、或清空时本机离线:快照里的水位比本机高,本地缓存里水位
+    // 之下的记录要删掉,入库口也要按新水位挡。
+    const raisedFloors = collectRaisedClearFloors(
+      conversations,
+      clearedBeforeHeightByConversation,
+    );
+    const floors =
+      raisedFloors.size === 0
+        ? clearedBeforeHeightByConversation
+        : {
+            ...clearedBeforeHeightByConversation,
+            ...Object.fromEntries(raisedFloors),
+          };
+    const timelines = dropTimelineThrough(messagesByConversation, raisedFloors);
+    for (const [conversationId, floor] of raisedFloors) {
+      void deleteLocalMessagesBelow(conversationId, floor + 1);
+    }
     const reconciledConversations = sortConversations(
       conversationsWithBurnState
         .map((c) => reconcileDeletedPreview(c, messagesByConversation[c.id]))
@@ -924,8 +1116,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             reconcileWithLocalWatermarks(
               c,
               readWatermarks[c.id]?.[currentUserId ?? ''] ?? 0,
-              clearedBeforeHeightByConversation[c.id] ?? 0,
-              messagesByConversation[c.id] ?? [],
+              floors[c.id] ?? 0,
+              timelines[c.id] ?? [],
               currentUserId,
             ),
           ),
@@ -936,6 +1128,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversationsSnapshotLoaded: true,
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
       readWatermarks: seededReadWatermarks,
+      ...(raisedFloors.size > 0
+        ? {
+            clearedBeforeHeightByConversation: floors,
+            messagesByConversation: timelines,
+          }
+        : {}),
       ...(burnPolicyChanged
         ? { selfDestructPolicyEpoch: selfDestructPolicyEpoch + 1 }
         : {}),
@@ -956,7 +1154,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     );
     set({
       conversations: sortConversations([...rest, reconciled]),
-      readWatermarks: seedPeerReadWatermarks(readWatermarks, [reconciled]),
+      readWatermarks: seedSelfReadWatermarks(
+        seedPeerReadWatermarks(readWatermarks, [reconciled]),
+        [reconciled],
+        get().currentUserId,
+      ),
     });
     void upsertLocalConversation(reconciled);
   },
@@ -1029,6 +1231,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversations,
       currentUserId,
       activeConversationId,
+      appForeground,
       messagesByConversation,
     } = get();
     const index = conversations.findIndex((c) => c.id === message.conversationId);
@@ -1046,10 +1249,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       messagesByConversation[message.conversationId] ?? []
     ).some((m) => m.id === message.id);
     // 正在看的会话不累计未读(进入会话即视为已读,读水位由屏幕上报)。
+    // App 在后台时聊天页还挂着、却没人在看:照常计未读。
     const countsUnread =
       !alreadyIngested &&
       !fromSelf &&
-      activeConversationId !== message.conversationId;
+      !(appForeground && activeConversationId === message.conversationId);
     // 单调:预览只随更高的 height 前进。迟到的旧消息不该把会话拉回去、
     // 把预览和时间显示成过期的那一条。乐观消息 height=0,恒可覆盖。
     const isNewerPreview =
@@ -1180,7 +1384,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const failedTarget = (get().messagesByConversation[conversationId] ?? []).find(
       (m) => m.id === messageId && m.height === 0 && m.d,
     );
-    if (failedTarget?.d) void outboxDelete(failedTarget.d);
+    if (failedTarget?.d) {
+      void outboxDelete(failedTarget.d);
+      // 没传完的媒体在持久目录里还有一份副本(chat-core/pending-media),一起删。
+      const userId = get().currentUserId;
+      if (userId) void deletePendingMedia(userId, failedTarget.d);
+    }
     // 墓碑先落盘,再动内存:只改数组的话下次拉历史就把它接回来了。
     // 连 d 一起记:删的若是还没拿到 ack 的气泡,手上只有 local:<d> 这个临时 id,
     // 而确认/回声回来时带的是全新的服务端 id —— 只按 id 记的话,
@@ -1207,24 +1416,40 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   evictMessagesBelow: (conversationId, height) => {
-    const { messagesByConversation } = get();
-    const existing = messagesByConversation[conversationId];
-    if (!existing) return;
-    const kept = existing.filter((m) => !(m.height > 0 && m.height < height));
-    if (kept.length === existing.length) return;
+    const state = get();
+    const existing = state.messagesByConversation[conversationId];
+    const kept = existing?.filter((m) => !(m.height > 0 && m.height < height));
+    const evicted =
+      existing !== undefined &&
+      kept !== undefined &&
+      kept.length !== existing.length;
+    // 往上翻的起点落在被驱逐的这段里就作废了。调用方会按刚拉到的那一页重设翻页游标;
+    // 留着旧起点的话,下一页会从被扔掉的旧块接着翻,把中间整段跳过 —— 拉回最新一页
+    // 那次 ingest 往往正好把旧块挤掉一截、刚记下这样一个起点。
+    const floor = state.historyFloorByConversation[conversationId];
+    const staleFloor = floor !== undefined && floor < height;
+    if (!evicted && !staleFloor) return;
+    const { [conversationId]: _window, ...restWindows } =
+      state.messageWindowByConversation;
+    const { [conversationId]: _full, ...restFull } =
+      state.historyWindowFullByConversation;
+    const { [conversationId]: _floor, ...restFloors } =
+      state.historyFloorByConversation;
     set({
-      messagesByConversation: {
-        ...messagesByConversation,
-        [conversationId]: kept,
-      },
+      ...(evicted && kept
+        ? {
+            messagesByConversation: {
+              ...state.messagesByConversation,
+              [conversationId]: kept,
+            },
+            // 窗口只剩新拉的那一页:不再是涨大、到顶的窗口。
+            messageWindowByConversation: restWindows,
+            historyWindowFullByConversation: restFull,
+          }
+        : {}),
+      ...(staleFloor ? { historyFloorByConversation: restFloors } : {}),
     });
   },
-
-  dropCachedMessages: () =>
-    set({
-      messagesByConversation: {},
-      messageWindowByConversation: {},
-    }),
 
   markConversationReadLocal: (conversationId) => {
     const { conversations } = get();
@@ -1285,7 +1510,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     set({ viewerTypingPolicy: policy });
   },
 
-  ingestMessages: (conversationId, rawIncoming) => {
+  ingestMessages: (conversationId, rawIncoming, options) => {
     // 本地删过的消息在这里一次性挡掉:历史页、翻页、广播、补拉都走这条路,
     // 少挡一条「删除」就会在下一次拉取时复活。清空水位同理 —— 在途的历史
     // 请求会在清空之后落地,不挡就把刚清掉的时间线又填回来。
@@ -1297,7 +1522,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         !(clearedFloor > 0 && m.height > 0 && m.height <= clearedFloor),
     );
     if (incoming.length === 0) return;
-    const { messagesByConversation, messageWindowByConversation } = get();
+    const {
+      messagesByConversation,
+      messageWindowByConversation,
+      historyFloorByConversation,
+      historyWindowFullByConversation,
+    } = get();
     const existing = messagesByConversation[conversationId] ?? [];
     const currentCap = messageWindowByConversation[conversationId] ?? MESSAGES_CAP;
     // 这批是不是「更早的一页」:全部低于当前窗口里最旧的那条 height。
@@ -1311,6 +1541,19 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       ? Math.min(currentCap + incoming.length, MESSAGES_WINDOW_MAX)
       : currentCap;
     const merged = mergeMessages(existing, incoming, nextCap);
+    const oldestKept = merged.find((m) => m.height > 0)?.height ?? 0;
+    // 更早的一页没能全部装下:窗口到顶了,翻页停手。
+    const windowFilled =
+      isOlderPage &&
+      historyWindowFullByConversation[conversationId] !== true &&
+      incoming.some((m) => m.height < oldestKept);
+    // 新消息把更早的已确认消息挤出了内存(已在窗口里的,或这批里装不下的):
+    // 记下往上翻的起点。
+    const pushedOutOlder =
+      !isOlderPage &&
+      oldestKept > 0 &&
+      (existing.some((m) => m.height > 0 && m.height < oldestKept) ||
+        incoming.some((m) => m.height > 0 && m.height < oldestKept));
     set({
       // 只替换本会话的键：其它会话数组引用保持不变（引用稳定契约）。
       messagesByConversation: {
@@ -1325,9 +1568,208 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             },
           }
         : {}),
+      ...(windowFilled
+        ? {
+            historyWindowFullByConversation: {
+              ...historyWindowFullByConversation,
+              [conversationId]: true as const,
+            },
+          }
+        : {}),
+      ...(pushedOutOlder
+        ? {
+            historyFloorByConversation: {
+              ...historyFloorByConversation,
+              [conversationId]: oldestKept,
+            },
+          }
+        : {}),
     });
     // G-01:唯一写入口顺手落盘(广播/回执/历史/补拉都汇到这里)。
-    void persistLocalMessages(conversationId, incoming);
+    // 增量同步例外:它的本地库那半与游标在一个事务里写(见 sync.ts)。
+    if (options?.persist !== false) {
+      void persistLocalMessages(conversationId, incoming);
+    }
+  },
+
+  applySyncPage: (conversationId, page) => {
+    const state = get();
+    const currentUserId = state.currentUserId;
+
+    const localFloor =
+      state.clearedBeforeHeightByConversation[conversationId] ?? 0;
+    if (page.clearedBeforeHeight > localFloor) {
+      const floors = new Map([[conversationId, page.clearedBeforeHeight]]);
+      const index = state.conversations.findIndex((c) => c.id === conversationId);
+      const target = index >= 0 ? state.conversations[index] : null;
+      const previewCleared =
+        target?.lastMessage &&
+        target.lastMessage.height > 0 &&
+        target.lastMessage.height <= page.clearedBeforeHeight;
+      set({
+        clearedBeforeHeightByConversation: {
+          ...state.clearedBeforeHeightByConversation,
+          [conversationId]: page.clearedBeforeHeight,
+        },
+        messagesByConversation: dropTimelineThrough(
+          state.messagesByConversation,
+          floors,
+        ),
+        ...(target && previewCleared
+          ? {
+              conversations: [
+                ...state.conversations.slice(0, index),
+                { ...target, lastMessage: null, unreadCount: 0 },
+                ...state.conversations.slice(index + 1),
+              ],
+            }
+          : {}),
+      });
+    }
+
+    if (currentUserId && page.readHeight > 0) {
+      get().applyRead(conversationId, currentUserId, page.readHeight);
+    }
+
+    const tombstoneIds = new Set(
+      page.messages.filter((m) => m.deleted === true).map((m) => m.id),
+    );
+    const live = page.messages.filter((m) => m.deleted !== true);
+    const revokedIds = new Set(
+      live.filter((m) => Boolean(m.revokedAt)).map((m) => m.id),
+    );
+
+    if (tombstoneIds.size > 0 || revokedIds.size > 0) {
+      const { messagesByConversation, conversations } = get();
+      const original = messagesByConversation[conversationId] ?? [];
+      let timeline = original.filter((m) => !tombstoneIds.has(m.id));
+      timeline =
+        redactQuotesInTimeline(timeline, tombstoneIds, 'gone') ?? timeline;
+      timeline =
+        redactQuotesInTimeline(timeline, revokedIds, 'revoked') ?? timeline;
+      const index = conversations.findIndex((c) => c.id === conversationId);
+      const target = index >= 0 ? conversations[index] : null;
+      const previewGone =
+        target?.lastMessage != null && tombstoneIds.has(target.lastMessage.id);
+      set({
+        ...(timeline !== original
+          ? {
+              messagesByConversation: {
+                ...messagesByConversation,
+                [conversationId]: timeline,
+              },
+            }
+          : {}),
+      });
+      if (previewGone) get().revertConversationPreview(conversationId);
+    }
+
+    // 内存时间线是「最新一段连续历史」:已经在里面的就地换成新状态,比它最新那条
+    // 还新的接在后面;缓存之外的老消息(很早以前那条被撤回/编辑了)不插 —— 插进来
+    // 就是一条孤零零的老消息紧挨着最新那段,往上翻页之前一直显示在错误的位置。
+    // 往上翻到它时 REST 会带回它的当前状态。时间线是空的(会话没打开过)就整页
+    // 跳过,打开时从本地库/REST 读。
+    const timeline = get().messagesByConversation[conversationId] ?? [];
+    let timelineHead = 0;
+    const cachedIds = new Set<string>();
+    for (const message of timeline) {
+      if (message.height > timelineHead) timelineHead = message.height;
+      cachedIds.add(message.id);
+    }
+    const ingestible =
+      timelineHead > 0
+        ? live.filter(
+            (message) =>
+              cachedIds.has(message.id) || message.height > timelineHead,
+          )
+        : [];
+    if (ingestible.length > 0) {
+      get().ingestMessages(conversationId, ingestible, { persist: false });
+    }
+    if (live.length > 0) {
+      // 预览正是被改过的那条(撤回/编辑/回应):跟上它的新状态。
+      const { conversations } = get();
+      const index = conversations.findIndex((c) => c.id === conversationId);
+      const target = index >= 0 ? conversations[index] : null;
+      const updatedPreview = target?.lastMessage
+        ? live.find((m) => m.id === target.lastMessage?.id)
+        : undefined;
+      if (target && updatedPreview) {
+        set({
+          conversations: [
+            ...conversations.slice(0, index),
+            {
+              ...target,
+              lastMessage: mergeMessageState(target.lastMessage!, updatedPreview),
+            },
+            ...conversations.slice(index + 1),
+          ],
+        });
+      }
+    }
+  },
+
+  evictConversationCache: (conversationId) => {
+    const { messagesByConversation, messageWindowByConversation } = get();
+    const timeline = messagesByConversation[conversationId];
+    if (!timeline) return;
+    // 只留没到服务端的乐观/失败气泡;已确认的等打开会话时按最新一页重拉。
+    const kept = timeline.filter((m) => m.height === 0);
+    const { [conversationId]: _window, ...restWindows } =
+      messageWindowByConversation;
+    set({
+      messagesByConversation: {
+        ...messagesByConversation,
+        [conversationId]: kept,
+      },
+      messageWindowByConversation: restWindows,
+      ...withoutHistoryPaging(get(), conversationId),
+    });
+  },
+
+  clearHistoryFloor: (conversationId, floor) => {
+    const { historyFloorByConversation } = get();
+    if (historyFloorByConversation[conversationId] !== floor) return;
+    const { [conversationId]: _floor, ...rest } = historyFloorByConversation;
+    set({ historyFloorByConversation: rest });
+  },
+
+  shrinkConversationWindow: (conversationId) => {
+    const state = get();
+    const timeline = state.messagesByConversation[conversationId];
+    if (!timeline) return;
+    const confirmed = timeline.filter((m) => m.height > 0);
+    const excess = confirmed.length - MESSAGES_CAP;
+    const hasPagingState =
+      state.messageWindowByConversation[conversationId] !== undefined ||
+      state.historyWindowFullByConversation[conversationId] !== undefined;
+    if (excess <= 0 && !hasPagingState) return;
+    const { [conversationId]: _window, ...restWindows } =
+      state.messageWindowByConversation;
+    const { [conversationId]: _full, ...restFull } =
+      state.historyWindowFullByConversation;
+    if (excess <= 0) {
+      set({
+        messageWindowByConversation: restWindows,
+        historyWindowFullByConversation: restFull,
+      });
+      return;
+    }
+    const oldestKept = confirmed[excess].height;
+    set({
+      messagesByConversation: {
+        ...state.messagesByConversation,
+        [conversationId]: timeline.filter(
+          (m) => m.height === 0 || m.height >= oldestKept,
+        ),
+      },
+      messageWindowByConversation: restWindows,
+      historyWindowFullByConversation: restFull,
+      historyFloorByConversation: {
+        ...state.historyFloorByConversation,
+        [conversationId]: oldestKept,
+      },
+    });
   },
 
   applyTyping: (conversationId) => {
@@ -1353,11 +1795,15 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
   },
 
-  applyReaction: (conversationId, messageId, emoji, userId, op) => {
+  applyReaction: (conversationId, messageId, emoji, userId, op, revision) => {
     const { messagesByConversation } = get();
     const timeline = messagesByConversation[conversationId];
     if (!timeline) return;
     let changed = false;
+    const withRevision = (message: ChatMessageDto): ChatMessageDto =>
+      typeof revision === 'number' && revision > (message.revision ?? 0)
+        ? { ...message, revision }
+        : message;
     const next = timeline.map((message) => {
       if (message.id !== messageId) return message;
       const reactions = message.reactions ?? [];
@@ -1366,7 +1812,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         if (entry?.userIds.includes(userId)) return message;
         changed = true;
         return {
-          ...message,
+          ...withRevision(message),
           reactions: entry
             ? reactions.map((r) =>
                 r.emoji === emoji
@@ -1380,7 +1826,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       changed = true;
       const shrunk = entry.userIds.filter((id) => id !== userId);
       return {
-        ...message,
+        ...withRevision(message),
         reactions:
           shrunk.length > 0
             ? reactions.map((r) =>
@@ -1400,12 +1846,20 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     if (updated) void persistLocalMessages(conversationId, [updated]);
   },
 
-  applyEdit: (conversationId, messageId, content, editedAt) => {
+  applyEdit: (conversationId, messageId, content, editedAt, revision) => {
     const { messagesByConversation, conversations } = get();
     const timeline = messagesByConversation[conversationId];
     const next = (timeline ?? []).map((message) =>
       message.id === messageId && !message.revokedAt
-        ? { ...message, content, editedAt }
+        ? {
+            ...message,
+            content,
+            editedAt,
+            ...(typeof revision === 'number' &&
+            revision > (message.revision ?? 0)
+              ? { revision }
+              : {}),
+          }
         : message,
     );
     const index = conversations.findIndex((c) => c.id === conversationId);
@@ -1481,6 +1935,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     let nextConversations: ChatConversationState[] | null = null;
     const durablePreviewWrites: Promise<void>[] = [];
     const localPurges: { conversationId: string; cutoff: Date; startedAt: Date }[] = [];
+    /** 烧掉的失败气泡:它们在 Documents 里还各有一份没发出去的源文件副本。 */
+    const burnedPendingMedia: string[] = [];
     let nextExpiryAt: number | null = null;
     const viewerSeconds =
       viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
@@ -1532,7 +1988,12 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       }
       const kept = (timeline ?? []).filter((m) => {
         const expiresAt = expiryFor(m);
-        return expiresAt === null || expiresAt > now;
+        if (expiresAt === null || expiresAt > now) return true;
+        // 没发出去的失败气泡(height=0)在持久目录里还留着源文件:那张照片/那段
+        // 录音本身。正文随 outbox 行一起烧掉(purgeExpiredLocalMessages),副本
+        // 没人删的话要等下次冷启动清孤儿、甚至登出才消失。
+        if (m.height === 0 && m.d) burnedPendingMedia.push(m.d);
+        return false;
       });
       const preview = conversation.lastMessage;
       const schedulableMessages =
@@ -1596,6 +2057,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             Boolean(conversation.burnStartedAt),
         ),
     );
+    const userId = get().currentUserId;
     await Promise.all([
       purgeExpiredLocalMessages(
         localPurges,
@@ -1605,6 +2067,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         Number.isFinite(viewerStartMs) ? new Date(viewerStartMs) : undefined,
       ),
       ...durablePreviewWrites,
+      ...(userId
+        ? burnedPendingMedia.map((d) => deletePendingMedia(userId, d))
+        : []),
     ]);
   },
 
@@ -1645,6 +2110,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         ...messagesByConversation,
         [conversationId]: [],
       },
+      ...withoutHistoryPaging(get(), conversationId),
       clearedBeforeHeightByConversation: {
         ...clearedBeforeHeightByConversation,
         [conversationId]: floor,
@@ -1664,60 +2130,111 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     if (nextConversation) void upsertLocalConversation(nextConversation);
   },
 
-  applyRevoke: (conversationId, messageId, revokedBy) => {
-    const { messagesByConversation, conversations } = get();
+  applyRevoke: (conversationId, messageId, revokedBy, meta) => {
+    const {
+      messagesByConversation,
+      conversations,
+      currentUserId,
+      activeConversationId,
+      appForeground,
+      readWatermarks,
+    } = get();
     const timeline = messagesByConversation[conversationId];
     const revokedAt = new Date().toISOString();
+    const existing = (timeline ?? []).find((m) => m.id === messageId);
+    const index = conversations.findIndex((c) => c.id === conversationId);
+    const target = index >= 0 ? conversations[index] : null;
+    const alreadyRevoked =
+      Boolean(existing?.revokedAt) ||
+      (target?.lastMessage?.id === messageId &&
+        Boolean(target.lastMessage.revokedAt));
+    const revisionPatch =
+      typeof meta?.revision === 'number' ? { revision: meta.revision } : {};
     let timelineChanged = false;
     const nextTimeline = (timeline ?? []).map((message) => {
       if (message.id === messageId) {
         if (message.revokedAt) return message; // 幂等:广播+本端乐观各来一次
         timelineChanged = true;
-        return { ...message, content: {}, revokedAt, revokedBy };
-      }
-      if (message.replyTo?.id === messageId && !message.replyTo.revoked) {
-        timelineChanged = true;
-        return {
-          ...message,
-          replyTo: { ...message.replyTo, revoked: true, preview: '' },
-        };
+        return { ...message, content: {}, revokedAt, revokedBy, ...revisionPatch };
       }
       return message;
     });
-    const index = conversations.findIndex((c) => c.id === conversationId);
-    const target = index >= 0 ? conversations[index] : null;
+    const redacted =
+      redactQuotesInTimeline(nextTimeline, new Set([messageId]), 'revoked') ??
+      nextTimeline;
+    if (redacted !== nextTimeline) timelineChanged = true;
+    // 本地库里还有不在内存窗口的引用气泡:尽力而为地一并脱敏。
+    void redactLocalQuotesOf(conversationId, [messageId], 'revoked');
+
+    // 撤回的消息服务端不计未读。本机这条要是算过未读(别人发的、在已读位之上、
+    // 当时没在看),红点跟着扣一条 —— 否则会一直挂着一条看不到内容的「新消息」,
+    // 直到下一次会话快照。没加载过这个会话时位置与作者取自广播。
+    const senderId =
+      meta?.senderId !== undefined ? meta.senderId : existing?.sender?.id;
+    const height = meta?.height ?? existing?.height;
+    const selfRead =
+      currentUserId !== null
+        ? (readWatermarks[conversationId]?.[currentUserId] ?? 0)
+        : 0;
+    const viewing = appForeground && activeConversationId === conversationId;
+    const countedAsUnread =
+      !alreadyRevoked &&
+      !viewing &&
+      currentUserId !== null &&
+      typeof senderId === 'string' &&
+      senderId !== currentUserId &&
+      typeof height === 'number' &&
+      height > selfRead;
+
     const previewNeedsUpdate =
       target?.lastMessage?.id === messageId && !target.lastMessage.revokedAt;
-    if (!timelineChanged && !previewNeedsUpdate) return;
+    const unreadNeedsUpdate =
+      countedAsUnread && target !== null && target.unreadCount > 0;
+    if (!timelineChanged && !previewNeedsUpdate && !unreadNeedsUpdate) return;
+    const nextConversation =
+      target && (previewNeedsUpdate || unreadNeedsUpdate)
+        ? {
+            ...target,
+            ...(previewNeedsUpdate
+              ? {
+                  lastMessage: {
+                    ...target.lastMessage!,
+                    content: {},
+                    revokedAt,
+                    revokedBy,
+                    ...revisionPatch,
+                  },
+                }
+              : {}),
+            ...(unreadNeedsUpdate
+              ? { unreadCount: target.unreadCount - 1 }
+              : {}),
+          }
+        : null;
     set({
       ...(timelineChanged
         ? {
             messagesByConversation: {
               ...messagesByConversation,
-              [conversationId]: nextTimeline,
+              [conversationId]: redacted,
             },
           }
         : {}),
-      ...(previewNeedsUpdate && target
+      ...(nextConversation
         ? {
             conversations: [
               ...conversations.slice(0, index),
-              {
-                ...target,
-                lastMessage: {
-                  ...target.lastMessage!,
-                  content: {},
-                  revokedAt,
-                  revokedBy,
-                },
-              },
+              nextConversation,
               ...conversations.slice(index + 1),
             ],
           }
         : {}),
     });
-    const persisted = nextTimeline.filter(
-      (m) => m.id === messageId || m.replyTo?.id === messageId,
+    const persisted = redacted.filter(
+      (m) =>
+        m.id === messageId ||
+        m.replyTo?.id === messageId ||
+        m.replyToId === messageId,
     );
     if (persisted.length > 0) {
       void persistLocalMessages(conversationId, persisted);
@@ -1769,6 +2286,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},
+      historyFloorByConversation: {},
+      historyWindowFullByConversation: {},
       clearedBeforeHeightByConversation: {},
       activeConversationId: null,
       readWatermarks: {},
@@ -1791,6 +2310,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversationsSnapshotLoaded: false,
       messagesByConversation: {},
       messageWindowByConversation: {},
+      historyFloorByConversation: {},
+      historyWindowFullByConversation: {},
       clearedBeforeHeightByConversation: {},
       activeConversationId: null,
       onlineByUser: {},
