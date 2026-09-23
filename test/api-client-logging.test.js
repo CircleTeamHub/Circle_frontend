@@ -446,6 +446,52 @@ test('diagnostic sink failures do not replace the original API error', async () 
   await assert.rejects(() => apiClient('/circle'), (error) => error.name === 'ApiError' && error.status === 503);
 });
 
+test('real API diagnostics reach the final Sentry privacy boundary with matching correlation', async () => {
+  const diagnostics = loadTsModule('src/utils/client-diagnostics.ts', {
+    context: { __DEV__: false },
+    requireShim: (name) => name === '@/utils/redact' ? loadTsModule('src/utils/redact.ts') : require(name),
+  });
+  let options;
+  const events = [];
+  const sdk = {
+    init: (value) => { options = value; },
+    captureException: (_error, context) => { events.push(options.beforeSend({ ...context })); },
+  };
+  const sentry = loadTsModule('src/observability/sentry.ts', {
+    context: { __DEV__: false, process: { env: {} } },
+    requireShim: (name) => {
+      if (name === '@sentry/react-native') return sdk;
+      if (name === 'expo-constants') return { __esModule: true, default: { expoConfig: { extra: {} } } };
+      if (name === '@/utils/client-diagnostics') return diagnostics;
+      if (name === './route-segments') return loadTsModule('src/observability/route-segments.ts');
+      return require(name);
+    },
+  });
+  sentry.initSentry({ dsn: 'https://public@example.invalid/1' });
+  const requestId = 'ee9b3107-d247-4a32-8554-3c9ce1372d6d';
+  const { apiClient } = loadApiClient({
+    dev: false, diagnostics,
+    responses: [
+      { ok: true, status: 200, responseText: '{"data":"private-success"}' },
+      { ok: false, status: 503, responseText: '{"message":"private-error"}', headers: { 'x-request-id': requestId } },
+    ],
+    onReport: sentry.reportError,
+  });
+  await apiClient('/circle/private-first');
+  assert.equal(events.length, 0);
+  await assert.rejects(() => apiClient('/circle/private-second'));
+  assert.equal(events.length, 1);
+  assert.equal(events[0].tags.requestId, requestId);
+  assert.equal(events[0].extra.clientDiagnostics.length, 2);
+  const last = events[0].extra.clientDiagnostics[1];
+  assert.equal(last.event, 'api.request.failed');
+  assert.equal(last.details.requestId, requestId);
+  assert.equal(last.details.endpointPath, '/circle/:id');
+  assert.equal(last.details.status, 503);
+  assert.doesNotMatch(JSON.stringify(events), /private-(first|second|success|error)/);
+  assert.ok(!events[0].fingerprint.includes(requestId));
+});
+
 test('HTTP route shapes fail closed for unrecognized endpoints and token paths', () => {
   const { safeHttpEndpoint, safeHttpRequestId } = loadTsModule('src/observability/http-diagnostics.ts');
   assert.equal(safeHttpEndpoint('/qr/tokens/private-bearer?secret=true'), '/qr/tokens/:id');

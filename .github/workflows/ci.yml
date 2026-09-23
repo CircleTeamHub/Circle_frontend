@@ -344,6 +344,33 @@ jobs:
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  node-tests-windows:
+    name: Portable Node tests (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run portable Node tests
+        run: >-
+          node --test
+          test/android-preprod-build-workflow.test.js
+          test/android-preprod-publisher-extraction.test.js
+          test/keyboard-avoiding-android.test.js
+          test/qr-share-to-chat.test.js
+          test/workflow-backend-contracts.test.js
+
   notify:
     name: Notify Discord
     runs-on: ubuntu-latest
@@ -351,6 +378,7 @@ jobs:
       - workflow-lint
       - secret-scan
       - verify
+      - node-tests-windows
     if: ${{ always() && (contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')) }}
     timeout-minutes: 5
     env:
