@@ -14857,12 +14857,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================================
-expo-amap@0.2.4
-License: MIT
-Source: https://github.com/chaochaoxiaoshu/expo-amap
-No license file was included in the installed package; see the declared license metadata above.
-
-================================================================================
 expo-application@55.0.15
 License: MIT
 Source: https://github.com/expo/expo.git
@@ -14956,6 +14950,12 @@ No license file was included in the installed package; see the declared license 
 expo-font@55.0.4
 License: MIT
 Source: https://github.com/expo/expo.git
+No license file was included in the installed package; see the declared license metadata above.
+
+================================================================================
+expo-gaode-map@2.3.1
+License: MIT
+Source: https://github.com/TomWq/expo-gaode-map
 No license file was included in the installed package; see the declared license metadata above.
 
 ================================================================================

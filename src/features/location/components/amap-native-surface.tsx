@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -16,8 +16,42 @@ import { Ionicons } from '@expo/vector-icons';
  * 坐标全程是 GCJ-02：高德认的就是这套，减偏交给调用方，这里一行换算都没有。
  */
 
+type NativeMapRef = {
+  setCenter?: (
+    center: { latitude: number; longitude: number },
+    animated?: boolean,
+  ) => Promise<void>;
+};
+
+type NativeMapProps = {
+  style: object;
+  initialCameraPosition: {
+    target: { latitude: number; longitude: number };
+    zoom: number;
+  };
+  compassEnabled: boolean;
+  onLoad: () => void;
+  onCameraIdle: (event: {
+    nativeEvent: {
+      cameraPosition: {
+        target?: { latitude: number; longitude: number };
+      };
+    };
+  }) => void;
+};
+
 type AmapModule = {
-  MapView: React.ComponentType<Record<string, unknown>>;
+  MapView: React.ForwardRefExoticComponent<
+    NativeMapProps & React.RefAttributes<NativeMapRef>
+  >;
+  ExpoGaodeMapModule: {
+    setPrivacyConfig: (config: {
+      hasShow: boolean;
+      hasContainsPrivacy: boolean;
+      hasAgree: boolean;
+      privacyVersion: string;
+    }) => void;
+  };
 };
 
 /**
@@ -27,8 +61,11 @@ type AmapModule = {
 function loadAmapModule(): AmapModule | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const loaded = require('expo-amap') as AmapModule;
-    return typeof loaded?.MapView === 'function' ? loaded : null;
+    const loaded = require('expo-gaode-map') as AmapModule;
+    if (!loaded?.MapView || !loaded.ExpoGaodeMapModule?.setPrivacyConfig) {
+      return null;
+    }
+    return loaded;
   } catch {
     return null;
   }
@@ -63,16 +100,27 @@ export const AmapNativeSurface = forwardRef<
   { latitude, longitude, pinColor, onCenterChanged, onReady },
   ref,
 ) {
-  const mapRef = useRef<{
-    setCenter?: (center: { latitude: number; longitude: number }) => unknown;
-  } | null>(null);
+  const mapRef = useRef<NativeMapRef | null>(null);
+
+  useEffect(() => {
+    // Keep the SDK privacy handshake out of module evaluation. The map route is
+    // already behind the app's authenticated policy gate; configuring only when
+    // the native surface is mounted prevents a background import from asserting
+    // consent before the user reaches an actual map.
+    amapModule?.ExpoGaodeMapModule.setPrivacyConfig({
+      hasShow: true,
+      hasContainsPrivacy: true,
+      hasAgree: true,
+      privacyVersion: '2026-09',
+    });
+  }, []);
 
   useImperativeHandle(ref, () => ({
     setCenter: (nextLatitude, nextLongitude) => {
-      mapRef.current?.setCenter?.({
-        latitude: nextLatitude,
-        longitude: nextLongitude,
-      });
+      void mapRef.current?.setCenter?.(
+        { latitude: nextLatitude, longitude: nextLongitude },
+        true,
+      );
     },
   }));
 
@@ -85,17 +133,21 @@ export const AmapNativeSurface = forwardRef<
         ref={mapRef}
         style={s.map}
         // 非受控属性：挂载后再改不会让地图跳回去，正好符合「用户拖到哪算哪」。
-        initialRegion={{
-          center: { latitude, longitude },
-          span: { latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        initialCameraPosition={{
+          target: { latitude, longitude },
+          zoom: 15,
         }}
-        showCompass={false}
+        compassEnabled={false}
         onLoad={onReady}
-        onRegionChanged={(event: {
-          nativeEvent: { center: { latitude: number; longitude: number } };
+        onCameraIdle={(event: {
+          nativeEvent: {
+            cameraPosition: {
+              target?: { latitude: number; longitude: number };
+            };
+          };
         }) => {
-          const { center } = event.nativeEvent;
-          onCenterChanged(center.latitude, center.longitude);
+          const target = event.nativeEvent.cameraPosition.target;
+          if (target) onCenterChanged(target.latitude, target.longitude);
         }}
       />
       {/* 图钉钉死在正中：它标的就是地图中心，所以不接受任何触摸。 */}

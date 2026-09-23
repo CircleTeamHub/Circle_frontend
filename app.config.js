@@ -21,21 +21,29 @@ module.exports = () => {
   }
   const pushProvider = configuredPushProvider || (jpushAppKey ? 'jpush' : 'expo');
   const jpushProduction = !isPreproduction;
-  // 高德原生 SDK 的密钥。它在构建期写进 Info.plist / AndroidManifest，不配就不挂
-  // 这个插件——地图会退回 Leaflet + OpenStreetMap，和接入前一致。
-  // 带 EXPO_PUBLIC_ 前缀是因为运行时也要读它来判断该走哪套地图；密钥本来就会打进
-  // 安装包，而且高德的移动端密钥绑定包名与签名，暴露在客户端是设计如此。
-  const amapNativeKey = process.env.EXPO_PUBLIC_AMAP_NATIVE_KEY?.trim();
+  // 高德移动端密钥分别绑定 Android 包名+签名与 iOS Bundle ID，不能跨平台复用。
+  // 不配对应平台的 key 时，该平台运行时会回落到 Leaflet + OpenStreetMap。
+  const amapAndroidKey = process.env.EXPO_PUBLIC_AMAP_ANDROID_KEY?.trim();
+  const amapIosKey = process.env.EXPO_PUBLIC_AMAP_IOS_KEY?.trim();
+  const legacyAmapKey = process.env.EXPO_PUBLIC_AMAP_NATIVE_KEY?.trim();
+  if (legacyAmapKey && !amapAndroidKey && !amapIosKey) {
+    throw new Error(
+      'EXPO_PUBLIC_AMAP_NATIVE_KEY is no longer supported; configure EXPO_PUBLIC_AMAP_ANDROID_KEY and/or EXPO_PUBLIC_AMAP_IOS_KEY',
+    );
+  }
 
   return {
     ...baseConfig,
     plugins: [
       ...(baseConfig.plugins ?? []),
-      ...(amapNativeKey
+      ...(amapAndroidKey || amapIosKey
         ? [
             [
-              'expo-amap',
-              { apiKey: { ios: amapNativeKey, android: amapNativeKey } },
+              'expo-gaode-map',
+              {
+                ...(amapAndroidKey ? { androidKey: amapAndroidKey } : {}),
+                ...(amapIosKey ? { iosKey: amapIosKey } : {}),
+              },
             ],
           ]
         : []),

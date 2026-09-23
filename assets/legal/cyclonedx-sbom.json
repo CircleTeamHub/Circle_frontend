@@ -9435,26 +9435,6 @@
     },
     {
       "type": "library",
-      "bom-ref": "pkg:npm/expo-amap@0.2.4",
-      "name": "expo-amap",
-      "version": "0.2.4",
-      "purl": "pkg:npm/expo-amap@0.2.4",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/chaochaoxiaoshu/expo-amap"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "bom-ref": "pkg:npm/expo-application@55.0.15",
       "name": "expo-application",
       "version": "55.0.15",
@@ -9770,6 +9750,26 @@
         {
           "type": "vcs",
           "url": "https://github.com/expo/expo.git"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/expo-gaode-map@2.3.1",
+      "name": "expo-gaode-map",
+      "version": "2.3.1",
+      "purl": "pkg:npm/expo-gaode-map@2.3.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/TomWq/expo-gaode-map"
         }
       ]
     },
