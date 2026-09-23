@@ -17,6 +17,16 @@ const read = (relativePath) =>
 
 const TEST_STEP = /^\s+run:\s*npm (?:run ci|test)\s*$/m;
 
+test('frontend CI runs for both main and stacked Codex PR bases', () => {
+  const ci = read('.github/workflows/ci.yml');
+  const pullRequestTrigger = ci.slice(
+    ci.indexOf('  pull_request:'),
+    ci.indexOf('  push:'),
+  );
+  assert.match(pullRequestTrigger, /^\s+- main\s*$/m);
+  assert.match(pullRequestTrigger, /^\s+- ['"]codex\/\*\*['"]\s*$/m);
+});
+
 function jobs(workflow) {
   const body = workflow.slice(workflow.indexOf('\njobs:'));
   const headers = [...body.matchAll(/^  ([a-z][a-z0-9_-]*):\s*$/gm)];

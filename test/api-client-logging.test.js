@@ -13,6 +13,12 @@ function loadApiClient({
   status = 201,
   ok = true,
   onReport = () => {},
+  dev = true,
+  onFetch,
+  diagnostics,
+  now = () => Date.now(),
+  wallNow = now,
+  sessionState = {},
 }) {
   const filePath = path.join(process.cwd(), 'src/services/api/client.ts');
   const source = fs.readFileSync(filePath, 'utf8');
@@ -29,7 +35,7 @@ function loadApiClient({
   const context = {
     module: { exports: {} },
     exports: {},
-    __DEV__: true,
+    __DEV__: dev,
     AbortController,
     ArrayBuffer,
     Blob,
@@ -38,12 +44,15 @@ function loadApiClient({
     URLSearchParams,
     setTimeout,
     clearTimeout,
+    Date: class extends Date { static now() { return wallNow(); } },
     fetch: async (url, options) => {
       fetchCalls.push([url, options]);
+      if (onFetch) return onFetch(url, options);
       const next = responseQueue?.shift() ?? { ok, status, responseText };
       return {
         ok: next.ok,
         status: next.status,
+        headers: new Headers(next.headers),
         text: async () => next.responseText,
       };
     },
@@ -67,6 +76,7 @@ function loadApiClient({
               accessToken: 'access-token',
               refreshToken: 'refresh-token',
               setTokens: () => {},
+              ...sessionState,
             }),
           },
         };
@@ -80,6 +90,15 @@ function loadApiClient({
       if (request === './api-error') {
         // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块，别在这里手抄。
         return loadTsModule('src/services/api/api-error.ts');
+      }
+      if (request === '@/observability/http-diagnostics') {
+        const module = loadTsModule('src/observability/http-diagnostics.ts', {
+          requireShim: (name) => name === 'expo-crypto' ? require('node:crypto') : require(name),
+        });
+        return { ...module, diagnosticNow: now };
+      }
+      if (request === '@/utils/client-diagnostics') {
+        return diagnostics ?? { logClientDiagnostic: () => {} };
       }
       if (request === '@/utils/redact') {
         // 真模块，不是 stub：脱敏就是这几个断言要验的东西，换成假的等于不测。
@@ -156,7 +175,7 @@ test('api dev logs redact push revocation secrets in register and revoke bodies'
   });
   const serializedLogs = JSON.stringify(logs);
   assert.doesNotMatch(serializedLogs, new RegExp(secret));
-  assert.match(serializedLogs, /revocationSecret/);
+  assert.doesNotMatch(serializedLogs, /revocationSecret/);
   assert.match(serializedLogs, /\[REDACTED\]/);
 });
 
@@ -198,7 +217,7 @@ test('apiClient reports sanitized endpoint context to Sentry', async () => {
 
   assert.equal(reports.length, 1);
   assert.equal(reports[0].endpointPath, '/user/search/account');
-  assert.equal(JSON.stringify(reports[0].queryKeys), JSON.stringify(['accountId']));
+  assert.equal(reports[0].queryKeys, undefined);
   assert.equal(reports[0].endpoint, undefined);
   assert.doesNotMatch(JSON.stringify(reports[0]), /private@example\.com/);
 });
@@ -302,4 +321,161 @@ test('apiClient reports malformed successful backend responses as contract failu
   assert.equal(reports[0].endpointPath, '/circle');
   assert.equal(reports[0].failureKind, 'invalid-json');
   assert.equal(reports[0].status, 200);
+});
+
+test('API diagnostics omit private body, headers, query keys and alphabetic route identifiers', async () => {
+  const logs = [];
+  const reports = [];
+  const { apiClient } = loadApiClient({
+    logs,
+    status: 500,
+    ok: false,
+    responseText: JSON.stringify({ code: 1, message: 'private-response', data: { title: 'private-title' } }),
+    onReport: (_error, ctx) => reports.push(ctx),
+  });
+  await assert.rejects(() => apiClient('/circle/privatecircle?privatequery=value', {
+    method: 'POST', body: { text: 'private-chat' }, headers: { 'X-Custom': 'private-header' },
+    logResponseBody: true,
+  }));
+  assert.doesNotMatch(JSON.stringify({ logs, reports }), /private(circle|query|response|title|chat|header)/);
+  assert.equal(reports[0].endpointPath, '/circle/:id');
+});
+
+test('HTTP failures carry the server UUID and duration without changing API results', async () => {
+  const reports = [];
+  const requestId = '48edcc74-c0ac-4761-a576-12059e796869';
+  const { apiClient, fetchCalls } = loadApiClient({
+    responses: [{ status: 500, ok: false, headers: { 'X-Request-Id': requestId }, responseText: '{}' }],
+    onReport: (_error, ctx) => reports.push(ctx),
+  });
+  await assert.rejects(() => apiClient('/circle'), (error) => error.requestId === requestId);
+  assert.equal(reports[0].requestId, requestId);
+  assert.equal(reports[0].failureKind, 'http');
+  assert.ok(Number.isFinite(reports[0].durationMs) && reports[0].durationMs >= 0);
+  assert.match(fetchCalls[0][1].headers['X-Request-Id'], /^[0-9a-f-]{36}$/i);
+});
+
+test('refresh failures use their own per-attempt correlation, never the original request ID', async () => {
+  const reports = [];
+  const refreshId = 'df632010-728d-4ac7-b30e-a1521ba55d04';
+  const { apiClient, fetchCalls } = loadApiClient({
+    responses: [
+      { status: 401, ok: false, responseText: '{}' },
+      { status: 503, ok: false, responseText: '{}', headers: { 'x-request-id': refreshId } },
+    ],
+    onReport: (_error, ctx) => reports.push(ctx),
+  });
+  await assert.rejects(() => apiClient('/circle'));
+  assert.equal(reports[0].requestId, refreshId);
+  assert.notEqual(fetchCalls[0][1].headers['X-Request-Id'], fetchCalls[1][1].headers['X-Request-Id']);
+});
+
+test('untrusted response correlation is discarded and production console stays quiet', async () => {
+  const logs = [];
+  const reports = [];
+  const { apiClient, fetchCalls } = loadApiClient({
+    dev: false, logs,
+    responses: [{ status: 500, ok: false, responseText: '{}', headers: { 'x-request-id': 'private@example.com' } }],
+    onReport: (_error, ctx) => reports.push(ctx),
+  });
+  await assert.rejects(() => apiClient('/circle', { headers: { 'x-request-id': 'caller-private-value' } }));
+  assert.equal(logs.length, 0);
+  assert.equal(reports[0].requestId, fetchCalls[0][1].headers['X-Request-Id']);
+  assert.equal(fetchCalls[0][1].headers['x-request-id'], undefined);
+  assert.doesNotMatch(JSON.stringify(reports), /private/);
+});
+
+test('a retried request failure reports the retry attempt rather than refresh identity', async () => {
+  const reports = [];
+  const retryId = '18c6a657-cf01-4aa0-b044-af5bdf20c79a';
+  const { apiClient, fetchCalls } = loadApiClient({
+    responses: [
+      { status: 401, ok: false, responseText: '{}' },
+      { status: 200, ok: true, responseText: JSON.stringify({
+        code: 0, message: 'ok', data: { accessToken: 'next-access', refreshToken: 'next-refresh' },
+      }) },
+      { status: 503, ok: false, responseText: '{}', headers: { 'x-request-id': retryId } },
+    ],
+    onReport: (_error, context) => reports.push(context),
+  });
+  await assert.rejects(() => apiClient('/circle'), (error) => error.requestId === retryId);
+  assert.equal(new Set(fetchCalls.map(([, options]) => options.headers['X-Request-Id'])).size, 3);
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].requestId, retryId);
+  assert.equal(reports[0].endpointPath, '/circle');
+  assert.equal(reports[0].failureKind, 'http');
+});
+
+test('network diagnostics omit arbitrary native exception messages', async () => {
+  const logs = [];
+  const { apiClient } = loadApiClient({
+    logs,
+    onFetch: async () => { throw new Error('private-chat-body'); },
+  });
+  await assert.rejects(() => apiClient('/circle'));
+  assert.doesNotMatch(JSON.stringify(logs), /private-chat-body/);
+});
+
+test('report throttling uses monotonic time when the wall clock moves backward', async () => {
+  const reports = [];
+  const breadcrumbs = [];
+  let now = 1_000;
+  let wallNow = 10_000;
+  const { apiClient } = loadApiClient({
+    dev: false, status: 503, ok: false, responseText: '{}', now: () => now, wallNow: () => wallNow,
+    onReport: (_error, ctx) => reports.push(ctx),
+    diagnostics: { logClientDiagnostic: (event, details) => breadcrumbs.push({ event, details }) },
+  });
+  await assert.rejects(() => apiClient('/circle/first-private-id'));
+  await assert.rejects(() => apiClient('/circle/second-private-id'));
+  assert.equal(reports.length, 1);
+  assert.equal(breadcrumbs.length, 2);
+  wallNow -= 3_600_000;
+  now += 60_000;
+  await assert.rejects(() => apiClient('/circle/third-private-id'));
+  assert.equal(reports.length, 2);
+  assert.equal(breadcrumbs.length, 3);
+});
+
+test('diagnostic sink failures do not replace the original API error', async () => {
+  const { apiClient } = loadApiClient({
+    status: 503, ok: false, responseText: '{}',
+    onReport: () => { throw new Error('sentry sink broken'); },
+    diagnostics: { logClientDiagnostic: () => { throw new Error('breadcrumb sink broken'); } },
+  });
+  await assert.rejects(() => apiClient('/circle'), (error) => error.name === 'ApiError' && error.status === 503);
+});
+
+test('HTTP route shapes fail closed for unrecognized endpoints and token paths', () => {
+  const { safeHttpEndpoint, safeHttpRequestId } = loadTsModule('src/observability/http-diagnostics.ts');
+  assert.equal(safeHttpEndpoint('/qr/tokens/private-bearer?secret=true'), '/qr/tokens/:id');
+  assert.equal(safeHttpEndpoint('/friend/blocked'), '/friend/blocked');
+  assert.equal(safeHttpEndpoint('/friend/blocked/tags/private-tag'), '/friend/:id/tags/:id');
+  assert.equal(safeHttpEndpoint('/friend/activities/unread-count'), '/friend/activities/unread-count');
+  assert.equal(safeHttpEndpoint('/chat/conversations/private/events'), '/chat/conversations/:id/events');
+  assert.equal(safeHttpEndpoint('/chat/conversations/private/sync?after=1'), '/chat/conversations/:id/sync');
+  assert.equal(safeHttpEndpoint('/mall/fancy-numbers?page=1'), '/mall/fancy-numbers');
+  assert.equal(safeHttpEndpoint('/geo/reverse?lat=1&lon=2'), '/geo/reverse');
+  assert.equal(safeHttpEndpoint('/referrals/me'), '/referrals/me');
+  assert.equal(safeHttpEndpoint('/unknown/private-path'), '/__other__');
+  assert.equal(safeHttpEndpoint('https://example.com/circle/private'), '/__other__');
+  assert.equal(safeHttpRequestId('eyJsecret.token.signature'), undefined);
+  assert.equal(safeHttpRequestId('00000000-0000-0000-0000-000000000000'), undefined);
+});
+
+test('late requests from an old session cannot repopulate the next session diagnostics', async () => {
+  const reports = [];
+  const breadcrumbs = [];
+  const sessionState = { sessionEpoch: 1 };
+  const { apiClient } = loadApiClient({
+    sessionState, onReport: (error) => reports.push(error),
+    diagnostics: { logClientDiagnostic: (...args) => breadcrumbs.push(args) },
+    onFetch: async () => {
+      sessionState.sessionEpoch = 2;
+      return { status: 503, ok: false, text: async () => '{}' };
+    },
+  });
+  await assert.rejects(() => apiClient('/circle'), (error) => error.status === 503);
+  assert.equal(reports.length, 0);
+  assert.equal(breadcrumbs.length, 0);
 });
