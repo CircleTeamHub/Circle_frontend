@@ -14,6 +14,7 @@ function loadConfig(env = {}) {
     EXPO_PUBLIC_JPUSH_APP_KEY: process.env.EXPO_PUBLIC_JPUSH_APP_KEY,
     EXPO_PUBLIC_AMAP_ANDROID_KEY: process.env.EXPO_PUBLIC_AMAP_ANDROID_KEY,
     EXPO_PUBLIC_AMAP_IOS_KEY: process.env.EXPO_PUBLIC_AMAP_IOS_KEY,
+    EXPO_PUBLIC_AMAP_NATIVE_KEY: process.env.EXPO_PUBLIC_AMAP_NATIVE_KEY,
   };
 
   for (const key of Object.keys(previous)) {
@@ -131,6 +132,13 @@ test('只配置一个平台的高德密钥也不会误用到另一个平台', ()
   assert.deepEqual(
     config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-gaode-map'),
     ['expo-gaode-map', { androidKey: 'android-key' }],
+  );
+});
+
+test('旧的单密钥配置明确失败，避免静默回落到错误底图', () => {
+  assert.throws(
+    () => loadConfig({ EXPO_PUBLIC_AMAP_NATIVE_KEY: 'legacy-key' }),
+    /EXPO_PUBLIC_AMAP_NATIVE_KEY is no longer supported/,
   );
 });
 

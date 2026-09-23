@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -65,14 +65,6 @@ function loadAmapModule(): AmapModule | null {
     if (!loaded?.MapView || !loaded.ExpoGaodeMapModule?.setPrivacyConfig) {
       return null;
     }
-    // 注册/使用服务前用户已确认本应用隐私政策；在首次触碰原生 SDK 前把同一状态
-    // 同步给高德。版本变化会让 SDK 自己使旧同意失效，避免无意沿用过期授权。
-    loaded.ExpoGaodeMapModule.setPrivacyConfig({
-      hasShow: true,
-      hasContainsPrivacy: true,
-      hasAgree: true,
-      privacyVersion: '2026-09',
-    });
     return loaded;
   } catch {
     return null;
@@ -109,6 +101,19 @@ export const AmapNativeSurface = forwardRef<
   ref,
 ) {
   const mapRef = useRef<NativeMapRef | null>(null);
+
+  useEffect(() => {
+    // Keep the SDK privacy handshake out of module evaluation. The map route is
+    // already behind the app's authenticated policy gate; configuring only when
+    // the native surface is mounted prevents a background import from asserting
+    // consent before the user reaches an actual map.
+    amapModule?.ExpoGaodeMapModule.setPrivacyConfig({
+      hasShow: true,
+      hasContainsPrivacy: true,
+      hasAgree: true,
+      privacyVersion: '2026-09',
+    });
+  }, []);
 
   useImperativeHandle(ref, () => ({
     setCenter: (nextLatitude, nextLongitude) => {

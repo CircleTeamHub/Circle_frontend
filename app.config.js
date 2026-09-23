@@ -25,6 +25,12 @@ module.exports = () => {
   // 不配对应平台的 key 时，该平台运行时会回落到 Leaflet + OpenStreetMap。
   const amapAndroidKey = process.env.EXPO_PUBLIC_AMAP_ANDROID_KEY?.trim();
   const amapIosKey = process.env.EXPO_PUBLIC_AMAP_IOS_KEY?.trim();
+  const legacyAmapKey = process.env.EXPO_PUBLIC_AMAP_NATIVE_KEY?.trim();
+  if (legacyAmapKey && !amapAndroidKey && !amapIosKey) {
+    throw new Error(
+      'EXPO_PUBLIC_AMAP_NATIVE_KEY is no longer supported; configure EXPO_PUBLIC_AMAP_ANDROID_KEY and/or EXPO_PUBLIC_AMAP_IOS_KEY',
+    );
+  }
 
   return {
     ...baseConfig,
