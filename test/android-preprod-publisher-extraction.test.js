@@ -7,6 +7,18 @@ const { spawnSync } = require('node:child_process');
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
+function releaseScriptShell() {
+  if (process.platform !== 'win32') return 'bash';
+  const gitBash = path.join(
+    process.env.ProgramFiles ?? 'C:\\Program Files',
+    'Git',
+    'bin',
+    'bash.exe',
+  );
+  assert.ok(fs.existsSync(gitBash), 'Git Bash is required on Windows');
+  return gitBash;
+}
+
 test('preproduction workflow keeps the publisher in a checked shell script', () => {
   const workflow = read('.github/workflows/android-preprod-build.yml');
 
@@ -17,7 +29,7 @@ test('preproduction workflow keeps the publisher in a checked shell script', () 
   assert.doesNotMatch(workflow, /aws s3api (?:put|copy|get|head|delete)-object/);
 
   const syntax = spawnSync(
-    'bash',
+    releaseScriptShell(),
     [
       '-n',
       '.github/scripts/publish-android-preprod.sh',

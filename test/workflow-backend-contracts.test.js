@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { releaseScriptShell } = require('./helpers/release-script-shell');
 
 // test/ 下的跨仓契约测试按 `<前端根>/../circle_be` 读后端源码。任何跑这套测试的
 // 工作流都必须先把后端放到同级目录，并断言源码在位，否则契约会静默 skip。#246 之后
@@ -135,7 +136,7 @@ function fakeBackend(files) {
 }
 
 const runGate = (backendDir) =>
-  spawnSync('bash', [SCRIPT], {
+  spawnSync(releaseScriptShell(), [SCRIPT], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: { ...process.env, BACKEND_CONTRACTS_DIR: backendDir, BACKEND_REF_CANDIDATE: '' },
