@@ -13,6 +13,10 @@ export default function AboutPrivacyPolicyScreen() {
           titleKey: 'settingsDetails.about.privacyTitle',
           bodyKey: 'settingsDetails.about.privacyBody',
         },
+        {
+          titleKey: 'location.amapPrivacyPolicyTitle',
+          bodyKey: 'location.amapPrivacyPolicyBody',
+        },
       ]}
     />
   );

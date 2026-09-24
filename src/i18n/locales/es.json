@@ -2971,7 +2971,13 @@
     }
   },
   "location": {
-    "mapUnavailable": "No se pudo cargar el mapa. Revisa tu conexión e inténtalo de nuevo."
+    "mapUnavailable": "No se pudo cargar el mapa. Revisa tu conexión e inténtalo de nuevo.",
+    "amapPrivacyTitle": "Usar AMap para mapas y ubicación",
+    "amapPrivacyPrompt": "Para mostrar el mapa nativo en China continental, AMap (Beijing Gaode Tuqiang Technology Co., Ltd.) tratará identificadores del dispositivo, información de red e IP, datos de Wi-Fi y sensores, y tu ubicación para ofrecer el mapa, el posicionamiento y la seguridad. Consulta la política de privacidad de AMap en https://lbs.amap.com/pages/privacy/. Elige Aceptar para dar tu consentimiento por separado o usa el mapa web.",
+    "amapPrivacyDecline": "Usar mapa web",
+    "amapPrivacyAgree": "Aceptar",
+    "amapPrivacyPolicyTitle": "AMap Maps SDK",
+    "amapPrivacyPolicyBody": "Al elegir el mapa nativo en China continental, AMap (Beijing Gaode Tuqiang Technology Co., Ltd.) puede tratar identificadores del dispositivo, información de red e IP, datos de Wi-Fi y sensores, y datos de ubicación para ofrecer el mapa, el posicionamiento y la seguridad. Solicitamos tu consentimiento por separado antes de cargar el SDK y guardamos la versión consentida en este dispositivo. Si lo rechazas, la aplicación usa el mapa web. Política de privacidad de AMap: https://lbs.amap.com/pages/privacy/."
   },
   "permissions": {
     "insufficientTitle": "Permiso necesario",

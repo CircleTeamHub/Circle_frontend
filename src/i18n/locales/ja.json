@@ -2965,7 +2965,13 @@
     }
   },
   "location": {
-    "mapUnavailable": "地図を読み込めませんでした。通信環境を確認して再試行してください。"
+    "mapUnavailable": "地図を読み込めませんでした。通信環境を確認して再試行してください。",
+    "amapPrivacyTitle": "AMap（高徳地図）の地図・位置情報サービスを使用",
+    "amapPrivacyPrompt": "中国本土でネイティブ地図を表示するため、AMap（北京高德图强科技有限公司）は、地図表示、測位、セキュリティ保護を目的として、端末識別子、ネットワークおよび IP 情報、Wi-Fi・センサー情報、位置情報を取り扱います。AMap のプライバシーポリシー（https://lbs.amap.com/pages/privacy/）をご確認ください。「同意」を選ぶと個別に同意し、同意しない場合はウェブ地図を使用できます。",
+    "amapPrivacyDecline": "ウェブ地図を使用",
+    "amapPrivacyAgree": "同意する",
+    "amapPrivacyPolicyTitle": "AMap（高徳地図）Maps SDK",
+    "amapPrivacyPolicyBody": "中国本土でネイティブ地図を選択すると、AMap（北京高德图强科技有限公司）は、地図表示、測位、セキュリティ保護を提供するため、端末識別子、ネットワークおよび IP 情報、Wi-Fi・センサー情報、位置情報を取り扱う場合があります。当社は SDK を読み込む前に個別の同意を求め、そのポリシーバージョンをこの端末に保存します。同意しない場合、アプリはウェブ地図を使用します。AMap プライバシーポリシー：https://lbs.amap.com/pages/privacy/。"
   },
   "permissions": {
     "insufficientTitle": "権限が必要です",
