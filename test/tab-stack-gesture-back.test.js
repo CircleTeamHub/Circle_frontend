@@ -65,6 +65,11 @@ test('other backable stacks keep swipe-back gestures enabled', () => {
       /gestureDirection:\s*['"]horizontal['"]/,
       `${layoutPath} should keep right-swipe back gestures horizontal`,
     );
+    assert.match(
+      src,
+      /animation:\s*['"]slide_from_right['"]/,
+      `${layoutPath} should keep a horizontal push animation paired with swipe back`,
+    );
   }
 });
 
