@@ -11,8 +11,10 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   AmapNativeSurface,
+  configureAmapPrivacy,
   isAmapNativeSupported,
   type AmapNativeSurfaceRef,
 } from '@/features/location/components/amap-native-surface';
@@ -20,6 +22,10 @@ import { MapSurface } from '@/features/location/components/map-surface';
 import { resolvePlace } from '@/features/location/services/reverse-geocode';
 import { resolvePlaceOnDevice } from '@/features/location/services/native-reverse-geocode';
 import { geocoderFetch } from '@/features/location/services/geocoder-fetch';
+import {
+  grantAmapPrivacyConsent,
+  hasAmapPrivacyConsent,
+} from '@/features/location/services/amap-privacy-consent';
 import {
   BASEMAP_ATTRIBUTION,
   BASEMAP_MAX_ZOOM,
@@ -455,6 +461,7 @@ export function MapLocationPickerScreen({
   onBack,
   onConfirm,
 }: MapLocationPickerScreenProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors, resolvedMode } = useTheme();
   const params = useLocalSearchParams<{
@@ -466,6 +473,10 @@ export function MapLocationPickerScreen({
   const [loading, setLoading] = useState(true);
   const [mapUnavailable, setMapUnavailable] = useState(false);
   const [surfaceKey, setSurfaceKey] = useState(0);
+  const [nativeAmapConsent, setNativeAmapConsent] = useState<
+    'pending' | 'granted' | 'declined'
+  >('pending');
+  const consentPromptShownRef = useRef(false);
 
   const initialLocation = useMemo<PickedLocation>(
     () => ({
@@ -493,13 +504,48 @@ export function MapLocationPickerScreen({
 
   // 大陆坐标 + 装得上原生模块 + 构建时配了密钥，才走高德原生地图。
   // 其余情况（网页端、没 prebuild、境外坐标、没配密钥）都留在 Leaflet 上。
-  const useNativeAmap =
+  const nativeAmapCandidate =
     getBasemapProvider(
       initialLocation.latitude,
       initialLocation.longitude,
       isAmapNativeSupported,
       getAmapNativeKey(Platform.OS),
     ) === 'amap-native';
+  const useNativeAmap =
+    nativeAmapCandidate && nativeAmapConsent === 'granted';
+
+  useEffect(() => {
+    if (!nativeAmapCandidate || nativeAmapConsent !== 'pending') return;
+
+    if (hasAmapPrivacyConsent()) {
+      setNativeAmapConsent(configureAmapPrivacy() ? 'granted' : 'declined');
+      return;
+    }
+    if (consentPromptShownRef.current) return;
+    consentPromptShownRef.current = true;
+
+    Alert.alert(
+      t('location.amapPrivacyTitle'),
+      t('location.amapPrivacyPrompt'),
+      [
+        {
+          text: t('location.amapPrivacyDecline'),
+          style: 'cancel',
+          onPress: () => setNativeAmapConsent('declined'),
+        },
+        {
+          text: t('location.amapPrivacyAgree'),
+          onPress: () => {
+            grantAmapPrivacyConsent();
+            setNativeAmapConsent(
+              configureAmapPrivacy() ? 'granted' : 'declined',
+            );
+          },
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [nativeAmapCandidate, nativeAmapConsent, t]);
 
   const nativeMapRef = useRef<AmapNativeSurfaceRef | null>(null);
   // 拖动会连着抛出好几次区域变化，只认最后一次的反查结果。
@@ -618,7 +664,7 @@ export function MapLocationPickerScreen({
             <ActivityIndicator color={colors.primary} />
           </View>
         ) : null}
-        {useNativeAmap ? (
+        {nativeAmapCandidate && nativeAmapConsent === 'pending' ? null : useNativeAmap ? (
           <AmapNativeSurface
             ref={nativeMapRef}
             latitude={initialNativeCenter.latitude}

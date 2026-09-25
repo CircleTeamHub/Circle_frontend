@@ -1,6 +1,7 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AMAP_PRIVACY_CONSENT_VERSION } from '@/features/location/services/amap-privacy-consent';
 
 /**
  * 高德原生地图载体。
@@ -51,6 +52,7 @@ type AmapModule = {
       hasAgree: boolean;
       privacyVersion: string;
     }) => void;
+    getPrivacyStatus: () => { isReady: boolean };
   };
 };
 
@@ -62,7 +64,11 @@ function loadAmapModule(): AmapModule | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const loaded = require('expo-gaode-map') as AmapModule;
-    if (!loaded?.MapView || !loaded.ExpoGaodeMapModule?.setPrivacyConfig) {
+    if (
+      !loaded?.MapView ||
+      !loaded.ExpoGaodeMapModule?.setPrivacyConfig ||
+      !loaded.ExpoGaodeMapModule?.getPrivacyStatus
+    ) {
       return null;
     }
     return loaded;
@@ -75,6 +81,27 @@ const amapModule = loadAmapModule();
 
 /** 这台设备上到底能不能用原生高德地图。 */
 export const isAmapNativeSupported = amapModule !== null;
+
+/**
+ * 在 React 挂载 MapView 之前同步完成 SDK 的隐私握手。
+ *
+ * expo-gaode-map 会在 MapView render 阶段读取 isReady 并在未就绪时抛错，
+ * 因此这个函数必须由用户同意按钮或已存同意的恢复流程先调用。
+ */
+export function configureAmapPrivacy(): boolean {
+  if (!amapModule) return false;
+  try {
+    amapModule.ExpoGaodeMapModule.setPrivacyConfig({
+      hasShow: true,
+      hasContainsPrivacy: true,
+      hasAgree: true,
+      privacyVersion: AMAP_PRIVACY_CONSENT_VERSION,
+    });
+    return amapModule.ExpoGaodeMapModule.getPrivacyStatus().isReady;
+  } catch {
+    return false;
+  }
+}
 
 export type AmapNativeSurfaceRef = {
   /** 把地图中心移到指定坐标（GCJ-02）。 */
@@ -102,19 +129,6 @@ export const AmapNativeSurface = forwardRef<
 ) {
   const mapRef = useRef<NativeMapRef | null>(null);
 
-  useEffect(() => {
-    // Keep the SDK privacy handshake out of module evaluation. The map route is
-    // already behind the app's authenticated policy gate; configuring only when
-    // the native surface is mounted prevents a background import from asserting
-    // consent before the user reaches an actual map.
-    amapModule?.ExpoGaodeMapModule.setPrivacyConfig({
-      hasShow: true,
-      hasContainsPrivacy: true,
-      hasAgree: true,
-      privacyVersion: '2026-09',
-    });
-  }, []);
-
   useImperativeHandle(ref, () => ({
     setCenter: (nextLatitude, nextLongitude) => {
       void mapRef.current?.setCenter?.(
@@ -124,7 +138,9 @@ export const AmapNativeSurface = forwardRef<
     },
   }));
 
-  if (!amapModule) return null;
+  if (!amapModule || !amapModule.ExpoGaodeMapModule.getPrivacyStatus().isReady) {
+    return null;
+  }
   const { MapView } = amapModule;
 
   return (

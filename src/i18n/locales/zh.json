@@ -2930,7 +2930,13 @@
     }
   },
   "location": {
-    "mapUnavailable": "地图加载失败，请检查网络后重试"
+    "mapUnavailable": "地图加载失败，请检查网络后重试",
+    "amapPrivacyTitle": "使用高德地图与定位服务",
+    "amapPrivacyPrompt": "为了在中国大陆显示原生地图，高德地图（北京高德图强科技有限公司）将处理设备标识、网络与 IP 信息、Wi-Fi 与传感器信息及位置信息，用于地图展示、定位和安全保障。请阅读高德隐私政策：https://lbs.amap.com/pages/privacy/。选择“同意”即单独授权；你也可以改用网页地图。",
+    "amapPrivacyDecline": "使用网页地图",
+    "amapPrivacyAgree": "同意",
+    "amapPrivacyPolicyTitle": "高德地图 SDK",
+    "amapPrivacyPolicyBody": "当你选择在中国大陆使用原生地图时，高德地图（北京高德图强科技有限公司）可能处理设备标识、网络与 IP 信息、Wi-Fi 与传感器信息及位置信息，用于地图展示、定位和安全保障。我们会在加载 SDK 前取得你的单独同意，并在本设备保存对应政策版本；如不同意，应用将改用网页地图。高德隐私政策：https://lbs.amap.com/pages/privacy/。"
   },
   "permissions": {
     "insufficientTitle": "权限不足",

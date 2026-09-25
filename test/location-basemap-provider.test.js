@@ -167,6 +167,38 @@ test('图钉钉在正中且不吃触摸 —— 它标的就是地图中心', () 
   assert.doesNotMatch(source, /onTapMarker|draggable/);
 });
 
+test('原生高德只在版本化同意完成并同步配置隐私状态后挂载', () => {
+  const picker = readPicker();
+  const surface = readNativeSurface();
+  const consent = read(
+    'src/features/location/services/amap-privacy-consent.ts',
+  );
+
+  assert.match(consent, /AMAP_PRIVACY_CONSENT_VERSION/);
+  assert.match(consent, /hasAmapPrivacyConsent/);
+  assert.match(consent, /grantAmapPrivacyConsent/);
+  assert.match(picker, /nativeAmapConsent === 'granted'/);
+  assert.match(picker, /configureAmapPrivacy\(\)/);
+  assert.match(picker, /location\.amapPrivacyPrompt/);
+  assert.doesNotMatch(surface, /useEffect[\s\S]*setPrivacyConfig/);
+  assert.match(surface, /getPrivacyStatus\(\)\.isReady/);
+});
+
+test('隐私政策披露高德提供方、数据类别、处理目的和官方链接', () => {
+  const policyScreen = read(
+    'src/features/profile/screens/AboutPrivacyPolicyScreen.tsx',
+  );
+  assert.match(policyScreen, /location\.amapPrivacyPolicyBody/);
+
+  for (const locale of ['en', 'zh', 'ja', 'ko', 'es']) {
+    const messages = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    const disclosure = messages.location.amapPrivacyPolicyBody;
+    assert.equal(typeof disclosure, 'string', `${locale} disclosure missing`);
+    assert.match(disclosure, /AMap|高德/);
+    assert.match(disclosure, /https:\/\/lbs\.amap\.com\/pages\/privacy\//);
+  }
+});
+
 test('选点页按可用性分流，两条路都在', () => {
   const source = readPicker();
 

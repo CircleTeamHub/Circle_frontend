@@ -2965,7 +2965,13 @@
     }
   },
   "location": {
-    "mapUnavailable": "지도를 불러오지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요."
+    "mapUnavailable": "지도를 불러오지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.",
+    "amapPrivacyTitle": "AMap(高德) 지도 및 위치 서비스 사용",
+    "amapPrivacyPrompt": "중국 본토에서 네이티브 지도를 표시하기 위해 AMap(北京高德图强科技有限公司)은 지도 표시, 위치 확인 및 보안 제공 목적으로 기기 식별자, 네트워크 및 IP 정보, Wi-Fi·센서 정보와 위치 정보를 처리합니다. AMap 개인정보 처리방침(https://lbs.amap.com/pages/privacy/)을 확인해 주세요. ‘동의’를 선택하면 별도로 동의하며, 동의하지 않으면 웹 지도를 사용할 수 있습니다.",
+    "amapPrivacyDecline": "웹 지도 사용",
+    "amapPrivacyAgree": "동의",
+    "amapPrivacyPolicyTitle": "AMap(高德) Maps SDK",
+    "amapPrivacyPolicyBody": "중국 본토에서 네이티브 지도를 선택하면 AMap(北京高德图强科技有限公司)은 지도 표시, 위치 확인 및 보안 서비스를 제공하기 위해 기기 식별자, 네트워크 및 IP 정보, Wi-Fi·센서 정보와 위치 정보를 처리할 수 있습니다. 앱은 SDK를 로드하기 전에 별도 동의를 받고 해당 정책 버전을 이 기기에 저장합니다. 동의하지 않으면 웹 지도를 사용합니다. AMap 개인정보 처리방침: https://lbs.amap.com/pages/privacy/."
   },
   "permissions": {
     "insufficientTitle": "권한이 필요합니다",
