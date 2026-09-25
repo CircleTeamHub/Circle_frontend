@@ -165,15 +165,17 @@ function RootStack() {
       {/* 根据主题动态切换状态栏文字颜色（light = 白字 / dark = 黑字） */}
       <StatusBar style={colors.statusBarStyle === 'light' ? 'light' : 'dark'} />
 
-      {/* Stack 导航：所有页面以"从右滑入"的动画叠加展示，全局隐藏 header */}
+      {/* Stack 导航：所有页面以"从右滑入"的动画叠加展示，全局隐藏 header。
+          开启横向返回手势，让带有自定义返回按钮的页面也支持从左侧滑回。 */}
       <Stack
         screenOptions={{
           headerShown: false,                          // 所有页面不显示系统 header
           animation: 'slide_from_right',               // 页面切换动画：从右侧滑入
           contentStyle: { backgroundColor: colors.background },
-          fullScreenGestureEnabled: false,             // 关闭全屏手势返回
+          fullScreenGestureEnabled: true,
           fullScreenGestureShadowEnabled: false,
-          gestureEnabled: false,                       // 关闭滑动返回手势
+          gestureEnabled: true,
+          gestureDirection: 'horizontal',
         }}
       >
         {/* 四个顶层路由组，对应 app/(tabs)、(auth)、(chat)、(social) 目录 */}
