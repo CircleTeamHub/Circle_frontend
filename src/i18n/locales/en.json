@@ -2362,7 +2362,18 @@
     "checkFailedMessage": "The latest version is unavailable right now. Check your connection and try again.",
     "installFailedTitle": "Update Failed",
     "installFailedMessage": "The installer could not be downloaded or opened. Check your connection and install permissions, then try again.",
-    "androidOnlyMessage": "Automatic APK updates are available only on Android."
+    "androidOnlyMessage": "Automatic APK updates are available only on Android.",
+    "checkCodeUpdates": "Check app content updates",
+    "checkingCodeUpdates": "Checking app content…",
+    "codeUpdateAvailableTitle": "App content updated",
+    "codeUpdateAvailableMessage": "The update is downloaded. Restart the app to apply it.",
+    "reloadNow": "Restart now",
+    "codeLatestTitle": "App content is up to date",
+    "codeLatestMessage": "You already have the latest app content.",
+    "codeUpdateDisabledTitle": "Check unavailable",
+    "codeUpdateDisabledMessage": "Online app content updates are unavailable in development builds. Use a release build to verify them.",
+    "codeUpdateFailedTitle": "App content update failed",
+    "codeUpdateFailedMessage": "The app content update could not be downloaded. Check your connection and try again."
   },
   "shareScreen": {
     "inviteCode": "Invite Code",

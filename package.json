@@ -75,6 +75,7 @@
     "expo-sqlite": "~55.0.18",
     "expo-status-bar": "~55.0.4",
     "expo-symbols": "~55.0.5",
+    "expo-updates": "~55.0.13",
     "expo-video": "~55.0.15",
     "expo-web-browser": "~55.0.10",
     "i18next": "^26.0.6",

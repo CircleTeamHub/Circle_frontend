@@ -16,6 +16,10 @@ import {
   checkForAndroidUpdate,
   downloadAndInstallAndroidUpdate,
 } from '@/features/app-update/app-update-service';
+import {
+  downloadOtaUpdate,
+  reloadOtaUpdate,
+} from '@/features/app-update/ota-update-service';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const styles = StyleSheet.create({
@@ -45,6 +49,7 @@ export default function AboutVersionScreen() {
   const mountedRef = useRef(true);
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [checkingOta, setCheckingOta] = useState(false);
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
   const versionLabel = t('settingsDetails.about.versionValue', {
     version: appVersion,
@@ -129,6 +134,56 @@ export default function AboutVersionScreen() {
 
   const busy = checking || installing;
 
+  const checkOtaNow = async () => {
+    if (checkingOta || busy) return;
+    setCheckingOta(true);
+    try {
+      const result = await downloadOtaUpdate();
+      if (!mountedRef.current) return;
+      if (result === 'downloaded') {
+        Alert.alert(
+          t('appUpdate.codeUpdateAvailableTitle'),
+          t('appUpdate.codeUpdateAvailableMessage'),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            {
+              text: t('appUpdate.reloadNow'),
+              onPress: () => {
+                void reloadOtaUpdate().catch(() => {
+                  if (mountedRef.current) {
+                    Alert.alert(
+                      t('appUpdate.codeUpdateFailedTitle'),
+                      t('appUpdate.codeUpdateFailedMessage'),
+                    );
+                  }
+                });
+              },
+            },
+          ],
+        );
+      } else if (result === 'disabled') {
+        Alert.alert(
+          t('appUpdate.codeUpdateDisabledTitle'),
+          t('appUpdate.codeUpdateDisabledMessage'),
+        );
+      } else {
+        Alert.alert(
+          t('appUpdate.codeLatestTitle'),
+          t('appUpdate.codeLatestMessage'),
+        );
+      }
+    } catch {
+      if (mountedRef.current) {
+        Alert.alert(
+          t('appUpdate.codeUpdateFailedTitle'),
+          t('appUpdate.codeUpdateFailedMessage'),
+        );
+      }
+    } finally {
+      if (mountedRef.current) setCheckingOta(false);
+    }
+  };
+
   return (
     <AboutArticleScreen
       titleKey="settingsDetails.about.updateTitle"
@@ -166,6 +221,30 @@ export default function AboutVersionScreen() {
                 : installing
                   ? t('appUpdate.updateNow')
                   : t('appUpdate.checkNow')}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('appUpdate.checkCodeUpdates')}
+            disabled={busy || checkingOta}
+            onPress={() => {
+              void checkOtaNow();
+            }}
+            style={({ pressed }) => [
+              styles.button,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.primary,
+                borderWidth: StyleSheet.hairlineWidth,
+                opacity: pressed || busy || checkingOta ? 0.65 : 1,
+              },
+            ]}
+          >
+            {checkingOta ? <ActivityIndicator color={colors.primary} /> : null}
+            <Text style={[styles.buttonText, { color: colors.primary }]}>
+              {checkingOta
+                ? t('appUpdate.checkingCodeUpdates')
+                : t('appUpdate.checkCodeUpdates')}
             </Text>
           </Pressable>
           <Pressable

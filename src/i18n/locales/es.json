@@ -2523,7 +2523,18 @@
     "checkFailedMessage": "No se puede obtener la última versión. Comprueba la conexión e inténtalo de nuevo.",
     "installFailedTitle": "Error de actualización",
     "installFailedMessage": "No se pudo descargar o abrir el instalador. Comprueba la conexión y los permisos de instalación.",
-    "androidOnlyMessage": "Las actualizaciones automáticas por APK solo están disponibles en Android."
+    "androidOnlyMessage": "Las actualizaciones automáticas por APK solo están disponibles en Android.",
+    "checkCodeUpdates": "Buscar actualizaciones del contenido",
+    "checkingCodeUpdates": "Comprobando el contenido…",
+    "codeUpdateAvailableTitle": "Contenido actualizado",
+    "codeUpdateAvailableMessage": "La actualización se descargó. Reinicia la aplicación para aplicarla.",
+    "reloadNow": "Reiniciar ahora",
+    "codeLatestTitle": "El contenido está actualizado",
+    "codeLatestMessage": "Ya tienes el contenido más reciente.",
+    "codeUpdateDisabledTitle": "Comprobación no disponible",
+    "codeUpdateDisabledMessage": "Las actualizaciones en línea no están disponibles en versiones de desarrollo. Usa una compilación de producción para verificarlas.",
+    "codeUpdateFailedTitle": "Error al actualizar el contenido",
+    "codeUpdateFailedMessage": "No se pudo descargar la actualización del contenido. Comprueba la conexión e inténtalo de nuevo."
   },
   "shareScreen": {
     "inviteUnavailable": "Código de invitación no disponible",

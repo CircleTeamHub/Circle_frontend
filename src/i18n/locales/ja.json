@@ -2517,7 +2517,18 @@
     "checkFailedMessage": "最新バージョンを取得できません。通信状況を確認して、もう一度お試しください。",
     "installFailedTitle": "アップデートに失敗しました",
     "installFailedMessage": "インストーラーをダウンロードまたは開けません。通信状況とインストール権限を確認してください。",
-    "androidOnlyMessage": "APK の自動更新は Android 版でのみ利用できます。"
+    "androidOnlyMessage": "APK の自動更新は Android 版でのみ利用できます。",
+    "checkCodeUpdates": "アプリ内容の更新を確認",
+    "checkingCodeUpdates": "アプリ内容を確認中…",
+    "codeUpdateAvailableTitle": "アプリ内容を更新しました",
+    "codeUpdateAvailableMessage": "更新をダウンロードしました。再起動すると適用されます。",
+    "reloadNow": "今すぐ再起動",
+    "codeLatestTitle": "アプリ内容は最新です",
+    "codeLatestMessage": "最新のアプリ内容が適用されています。",
+    "codeUpdateDisabledTitle": "確認できません",
+    "codeUpdateDisabledMessage": "開発版ではオンライン更新を確認できません。リリースビルドで確認してください。",
+    "codeUpdateFailedTitle": "アプリ内容の更新に失敗しました",
+    "codeUpdateFailedMessage": "アプリ内容をダウンロードできません。通信状況を確認して、もう一度お試しください。"
   },
   "shareScreen": {
     "inviteUnavailable": "招待コードを利用できません",

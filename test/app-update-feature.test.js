@@ -34,6 +34,28 @@ test('update service uses a bounded no-store check and the Android package insta
   assert.match(source, /application\/vnd\.android\.package-archive/);
 });
 
+test('OTA updates are configured with runtime compatibility and environment channels', () => {
+  const config = read('app.config.js');
+
+  assert.match(config, /runtimeVersion:\s*\{\s*policy:\s*'appVersion'/s);
+  assert.match(config, /https:\/\/u\.expo\.dev\/\$\{easProjectId\}/);
+  assert.match(config, /'expo-channel-name':\s*updateChannel/);
+  assert.match(config, /checkAutomatically:\s*'ON_LOAD'/);
+  assert.match(config, /fallbackToCacheTimeout:\s*0/);
+});
+
+test('version screen exposes separate OTA content update feedback', () => {
+  const screen = read('src/features/profile/screens/AboutVersionScreen.tsx');
+  const service = read('src/features/app-update/ota-update-service.ts');
+
+  assert.match(screen, /downloadOtaUpdate/);
+  assert.match(screen, /reloadOtaUpdate/);
+  assert.match(screen, /appUpdate\.checkCodeUpdates/);
+  assert.match(service, /Updates\.checkForUpdateAsync/);
+  assert.match(service, /Updates\.fetchUpdateAsync/);
+  assert.match(service, /Updates\.reloadAsync/);
+});
+
 test('version screen performs a guarded manual update check', () => {
   const screen = read('src/features/profile/screens/AboutVersionScreen.tsx');
   const article = read(
