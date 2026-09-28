@@ -36,7 +36,10 @@ test('onboarding route and screen save profile then enter the app', () => {
 
   assert.match(route, /OnboardingProfileScreen/);
   assert.match(layout, /Stack/);
-  assert.match(rootLayout, /<Stack\.Screen name="\(onboarding\)" \/>/);
+  assert.match(
+    rootLayout,
+    /<Stack\.Screen\s+name="\(onboarding\)"\s+options=\{\{\s*gestureEnabled:\s*false,\s*fullScreenGestureEnabled:\s*false,\s*\}\}\s*\/>/s,
+  );
   assert.match(screen, /updateUserProfile/);
   assert.match(screen, /requestUploadPresign/);
   assert.match(screen, /uploadLocalFileToPresignedUrl/);
