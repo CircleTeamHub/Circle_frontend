@@ -44,6 +44,21 @@ test('OTA updates are configured with runtime compatibility and environment chan
   assert.match(config, /fallbackToCacheTimeout:\s*0/);
 });
 
+test('release workflows pass the EAS project id into native builds', () => {
+  for (const workflow of [
+    '.github/workflows/android-release.yml',
+    '.github/workflows/android-preprod-build.yml',
+    '.github/workflows/daily-android-build.yml',
+  ]) {
+    const source = read(workflow);
+    assert.match(
+      source,
+      /EXPO_PUBLIC_EAS_PROJECT_ID:\s*\$\{\{\s*vars\.EXPO_PUBLIC_EAS_PROJECT_ID\s*\}\}/,
+      `${workflow} must pass the EAS project id to Expo config`,
+    );
+  }
+});
+
 test('version screen exposes separate OTA content update feedback', () => {
   const screen = read('src/features/profile/screens/AboutVersionScreen.tsx');
   const service = read('src/features/app-update/ota-update-service.ts');

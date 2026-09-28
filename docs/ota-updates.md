@@ -15,8 +15,10 @@ npx expo install expo-updates
 npx eas-cli@latest init
 ```
 
-Set `EXPO_PUBLIC_EAS_PROJECT_ID` in the production and preview build
-environments. The app config maps production builds to the `production` channel
+Create or link the EAS project, then set its public project ID as the
+`EXPO_PUBLIC_EAS_PROJECT_ID` repository variable in GitHub Actions. The Android
+release, preproduction, and daily release-like workflows pass that variable to
+Expo config. The app config maps production builds to the `production` channel
 and preproduction builds to `preview`. The first binary built with this config
 must be distributed to users before OTA updates can be received.
 

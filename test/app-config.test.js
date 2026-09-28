@@ -12,6 +12,9 @@ function loadConfig(env = {}) {
     GOOGLE_SERVICES_FILE: process.env.GOOGLE_SERVICES_FILE,
     EXPO_PUBLIC_PUSH_PROVIDER: process.env.EXPO_PUBLIC_PUSH_PROVIDER,
     EXPO_PUBLIC_JPUSH_APP_KEY: process.env.EXPO_PUBLIC_JPUSH_APP_KEY,
+    EXPO_PUBLIC_AMAP_ANDROID_KEY: process.env.EXPO_PUBLIC_AMAP_ANDROID_KEY,
+    EXPO_PUBLIC_AMAP_IOS_KEY: process.env.EXPO_PUBLIC_AMAP_IOS_KEY,
+    EXPO_PUBLIC_AMAP_NATIVE_KEY: process.env.EXPO_PUBLIC_AMAP_NATIVE_KEY,
   };
 
   for (const key of Object.keys(previous)) {
@@ -49,6 +52,26 @@ test('dynamic app config maps optional push build environment values', () => {
   assert.equal(
     config.android.googleServicesFile,
     './secrets/google-services.json',
+  );
+});
+
+test('OTA config binds production and preview builds to their channels', () => {
+  const production = loadConfig({
+    EXPO_PUBLIC_EAS_PROJECT_ID: 'eas-project-id',
+  });
+  const preview = loadConfig({
+    APP_VARIANT: 'preprod',
+    EXPO_PUBLIC_EAS_PROJECT_ID: 'eas-project-id',
+  });
+
+  assert.equal(production.updates.url, 'https://u.expo.dev/eas-project-id');
+  assert.equal(
+    production.updates.requestHeaders['expo-channel-name'],
+    'production',
+  );
+  assert.equal(
+    preview.updates.requestHeaders['expo-channel-name'],
+    'preview',
   );
 });
 
@@ -108,6 +131,34 @@ test('dynamic app config rejects unknown push providers', () => {
   assert.throws(
     () => loadConfig({ EXPO_PUBLIC_PUSH_PROVIDER: 'jpus' }),
     /EXPO_PUBLIC_PUSH_PROVIDER must be expo or jpush/,
+  );
+});
+
+test('高德 config plugin 使用平台专属密钥', () => {
+  const config = loadConfig({
+    EXPO_PUBLIC_AMAP_ANDROID_KEY: 'android-key',
+    EXPO_PUBLIC_AMAP_IOS_KEY: 'ios-key',
+  });
+
+  assert.deepEqual(
+    config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-gaode-map'),
+    ['expo-gaode-map', { androidKey: 'android-key', iosKey: 'ios-key' }],
+  );
+});
+
+test('只配置一个平台的高德密钥也不会误用到另一个平台', () => {
+  const config = loadConfig({ EXPO_PUBLIC_AMAP_ANDROID_KEY: 'android-key' });
+
+  assert.deepEqual(
+    config.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-gaode-map'),
+    ['expo-gaode-map', { androidKey: 'android-key' }],
+  );
+});
+
+test('旧的单密钥配置明确失败，避免静默回落到错误底图', () => {
+  assert.throws(
+    () => loadConfig({ EXPO_PUBLIC_AMAP_NATIVE_KEY: 'legacy-key' }),
+    /EXPO_PUBLIC_AMAP_NATIVE_KEY is no longer supported/,
   );
 });
 

@@ -13,6 +13,8 @@ export class ApiError extends Error {
   failureKind?: string;
   reportEndpoint?: string;
   reportMethod?: string;
+  requestId?: string;
+  durationMs?: number;
   // 后端稳定错误码(如 AUTH_INVALID_CREDENTIALS);前端据此做 i18n 映射,缺失回落 message。
   errorCode?: string;
 
@@ -26,6 +28,8 @@ export class ApiError extends Error {
       reportEndpoint,
       reportMethod,
       errorCode,
+      requestId,
+      durationMs,
     }: {
       status: number;
       code?: number;
@@ -34,6 +38,8 @@ export class ApiError extends Error {
       reportEndpoint?: string;
       reportMethod?: string;
       errorCode?: string;
+      requestId?: string;
+      durationMs?: number;
     }
   ) {
     super(message);
@@ -45,5 +51,7 @@ export class ApiError extends Error {
     this.reportEndpoint = reportEndpoint;
     this.reportMethod = reportMethod;
     this.errorCode = errorCode;
+    this.requestId = requestId;
+    this.durationMs = durationMs;
   }
 }

@@ -5,8 +5,50 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { releaseScriptShell, shellQuote } = require('./helpers/release-script-shell');
 
 const WORKFLOW_PATH = '.github/workflows/android-preprod-build.yml';
+const FAKE_PREPROD_PUBLISH_CLI = path.join(
+  process.cwd(),
+  'test/helpers/fake-preprod-publish-cli.js',
+);
+
+function shellPath(filePath) {
+  if (process.platform !== 'win32') return filePath;
+  return filePath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`);
+}
+
+function runReleaseScript(script, args, env, cwd) {
+  const fakeCli = shellQuote(shellPath(FAKE_PREPROD_PUBLISH_CLI));
+  const scriptPath = shellQuote(shellPath(script));
+  const scriptArgs = args.map(shellQuote).join(' ');
+  const command = [
+    `fake_cli=${fakeCli}`,
+    'aws() { FAKE_PREPROD_COMMAND=aws node "$fake_cli" "$@"; }',
+    'curl() { FAKE_PREPROD_COMMAND=curl node "$fake_cli" "$@"; }',
+    'gh() { FAKE_PREPROD_COMMAND=gh node "$fake_cli" "$@"; }',
+    `source ${scriptPath}${scriptArgs ? ` ${scriptArgs}` : ''}`,
+  ].join('\n');
+  return spawnSync(releaseScriptShell(), ['-c', command], {
+    cwd,
+    encoding: 'utf8',
+    env,
+  });
+}
+
+test('release harness round-trips apostrophes through Bash', () => {
+  const value = "C:/Users/O'Brien/release.sh";
+  const result = spawnSync(releaseScriptShell(), ['-c', `printf %s ${shellQuote(value)}`], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, value);
+});
+
+test('release harness discovers configurable or PATH-provided Git Bash', () => {
+  const missingInstall = { platform: 'win32', env: { ProgramFiles: 'C:\\missing' }, existsSync: () => false };
+  assert.equal(releaseScriptShell({ ...missingInstall, canRun: (command) => command === 'bash' }), 'bash');
+  const configured = 'D:\\Portable Git\\bin\\bash.exe';
+  assert.equal(releaseScriptShell({ platform: 'win32', env: { GIT_BASH_PATH: configured }, existsSync: (file) => file === configured, canRun: () => false }), configured);
+});
 
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
@@ -60,16 +102,7 @@ const fakeObjectKeys = (stateDir) =>
 function createR2Harness({ hasLatest = true, prefix = 'preprod-r2-' } = {}) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   const stateDir = path.join(tempDir, 'r2');
-  const binDir = path.join(tempDir, 'bin');
   fs.mkdirSync(stateDir);
-  fs.mkdirSync(binDir);
-  const fakeCli = path.join(
-    process.cwd(),
-    'test/helpers/fake-preprod-publish-cli.js',
-  );
-  for (const name of ['aws', 'curl', 'gh']) {
-    fs.symlinkSync(fakeCli, path.join(binDir, name));
-  }
 
   const candidate = Buffer.from('verified-preproduction-apk');
   const candidateSha = crypto.createHash('sha256').update(candidate).digest('hex');
@@ -94,7 +127,6 @@ function createR2Harness({ hasLatest = true, prefix = 'preprod-r2-' } = {}) {
   const sha = 'a'.repeat(40);
   const env = {
     ...process.env,
-    PATH: `${binDir}:${process.env.PATH}`,
     AWS_ACCESS_KEY_ID: 'fake',
     AWS_SECRET_ACCESS_KEY: 'fake',
     R2_ACCOUNT_ID: 'fake-account',
@@ -136,17 +168,14 @@ function runPublisher(options = {}) {
       },
     );
   }
-  const result = spawnSync(
-    'bash',
-    [path.join(process.cwd(), '.github/scripts/publish-android-preprod.sh')],
+  const result = runReleaseScript(
+    path.join(process.cwd(), '.github/scripts/publish-android-preprod.sh'),
+    [],
     {
-      cwd: harness.tempDir,
-      encoding: 'utf8',
-      env: {
-        ...harness.env,
-        ...(options.extraEnv ?? {}),
-      },
+      ...harness.env,
+      ...(options.extraEnv ?? {}),
     },
+    harness.tempDir,
   );
   return { ...harness, result };
 }
@@ -170,21 +199,15 @@ function runRollback(options = {}) {
       },
     );
   }
-  const result = spawnSync(
-    'bash',
-    [
-      path.join(process.cwd(), '.github/scripts/rollback-android-preprod.sh'),
-      rollbackSha,
-    ],
+  const result = runReleaseScript(
+    path.join(process.cwd(), '.github/scripts/rollback-android-preprod.sh'),
+    [rollbackSha],
     {
-      cwd: harness.tempDir,
-      encoding: 'utf8',
-      env: {
-        ...harness.env,
-        FAKE_EXPECTED_COMPARE_SHA: rollbackSha,
-        ...(options.extraEnv ?? {}),
-      },
+      ...harness.env,
+      FAKE_EXPECTED_COMPARE_SHA: rollbackSha,
+      ...(options.extraEnv ?? {}),
     },
+    harness.tempDir,
   );
   return { ...harness, result, rollbackSha };
 }
@@ -802,7 +825,7 @@ test('preproduction verifier fails closed for metadata and APK endpoint drift', 
   const env = {
     EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
-    EXPO_PUBLIC_MEDIA_ORIGINS: EXPECTED.mediaOrigin,
+    EXPO_PUBLIC_MEDIA_ORIGINS: EXPECTED.mediaOrigins.join(','),
   };
 
   assert.deepEqual(validateMetadata({ app, env }), []);
@@ -841,7 +864,7 @@ test('preproduction verifier fails closed for metadata and APK endpoint drift', 
     /EXPO_PUBLIC_API_URL/,
   );
 
-  const valid = Buffer.from(`${EXPECTED.apiHost}\n${EXPECTED.mediaHost}`);
+  const valid = Buffer.from([EXPECTED.apiHost, ...EXPECTED.mediaHosts].join('\n'));
   assert.deepEqual(validateApkContents(valid), []);
   assert.match(validateApkContents(Buffer.from(EXPECTED.apiHost)).join('\n'), /media/i);
   for (const forbidden of EXPECTED.forbiddenStrings) {
@@ -925,4 +948,55 @@ test('preproduction distribution validator fails closed', () => {
   ]) {
     assert.equal(runValidator('preprod-distribution', invalidEnv).status, 1);
   }
+});
+
+test('preproduction media origins pin the COS bucket and the rate-limited delivery domain together', () => {
+  const {
+    EXPECTED,
+    validateApkContents,
+    validateMetadata,
+  } = require('../.github/scripts/verify-android-preprod');
+  const cos = 'https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com';
+  const delivery = 'https://media-43-133-201-42.sslip.io';
+  // 测试服后端配了 OBJECT_STORAGE_DELIVERY_URL:公开目录(头像、封面……)的永久地址
+  // 走限流的投递域名,私有媒体的预签名地址仍直连 COS。App 的媒体白名单缺哪一个,
+  // 那一类图片、语音、封面就会被客户端整片丢掉。
+  assert.deepEqual(EXPECTED.mediaOrigins, [cos, delivery]);
+
+  const app = {
+    name: EXPECTED.appName,
+    version: EXPECTED.version,
+    extra: { appVariant: EXPECTED.appVariant },
+    android: { versionCode: EXPECTED.versionCode, package: EXPECTED.packageName },
+  };
+  const env = {
+    EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
+    EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
+    EXPO_PUBLIC_MEDIA_ORIGINS: `${cos},${delivery}`,
+  };
+  assert.deepEqual(validateMetadata({ app, env }), []);
+  for (const mediaOrigins of [
+    cos,
+    delivery,
+    `${cos},${delivery},`,
+    `${cos},http://media-43-133-201-42.sslip.io`,
+    `${cos},${delivery}/`,
+  ]) {
+    assert.match(
+      validateMetadata({ app, env: { ...env, EXPO_PUBLIC_MEDIA_ORIGINS: mediaOrigins } }).join('\n'),
+      /EXPO_PUBLIC_MEDIA_ORIGINS/,
+      mediaOrigins,
+    );
+  }
+
+  const bothHosts = Buffer.from(
+    ['api-43-133-201-42.sslip.io', ...EXPECTED.mediaHosts].join('\n'),
+  );
+  assert.deepEqual(validateApkContents(bothHosts), []);
+  assert.match(
+    validateApkContents(
+      Buffer.from(`${EXPECTED.apiHost}\nwindnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com`),
+    ).join('\n'),
+    /media-43-133-201-42\.sslip\.io/,
+  );
 });

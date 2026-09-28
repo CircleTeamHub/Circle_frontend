@@ -104,6 +104,12 @@ function loadApiClientHarness() {
         : response(false, 401, { code: 1, message: 'expired', data: null });
     },
     require: (request) => {
+      if (request === '@/observability/http-diagnostics') {
+        return loadTsModule('src/observability/http-diagnostics.ts');
+      }
+      if (request === '@/utils/client-diagnostics') {
+        return { logClientDiagnostic() {} };
+      }
       if (request === '@/constants/config') {
         return { API_URL: 'https://api.example.test/api/v1' };
       }
@@ -212,6 +218,9 @@ test('same-session request refreshes once and retries with the rotated access to
   assert.equal(result.sent, true);
   assert.equal(harness.authState.sessionEpoch, epochBefore);
   assert.equal(harness.fetchCalls.length, 3);
+  const attemptIds = harness.fetchCalls.map(([, options]) => options.headers['X-Request-Id']);
+  assert.equal(new Set(attemptIds).size, 3);
+  for (const id of attemptIds) assert.match(id, /^[0-9a-f-]{36}$/i);
   assert.equal(
     harness.fetchCalls[2][1].headers.Authorization,
     'Bearer access-a-next',
@@ -455,7 +464,14 @@ test('refresh returning a malformed token pair clears the session', async () => 
     ),
   });
 
-  await assert.rejects(harness.apiClient('/profile/me'));
+  await assert.rejects(harness.apiClient('/profile/me'), (error) => {
+    assert.equal(error.status, 401);
+    assert.equal(error.reportEndpoint, '/auth/refresh');
+    assert.equal(error.reportMethod, 'POST');
+    assert.equal(error.requestId, harness.fetchCalls[1][1].headers['X-Request-Id']);
+    assert.ok(Number.isFinite(error.durationMs) && error.durationMs >= 0);
+    return true;
+  });
   assert.equal(harness.getClearCalls(), 1);
   assert.equal(harness.authState.accessToken, null);
 });

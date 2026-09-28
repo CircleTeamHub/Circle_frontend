@@ -217,7 +217,8 @@ test('client.ts threads errorCode onto ApiError', () => {
     // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块。
     if (spec === './api-error')
       return loadTsModule('src/services/api/api-error.ts');
-    if (spec === '@/utils/redact') return loadTsModule('src/utils/redact.ts');
+    if (spec === '@/observability/http-diagnostics') return loadTsModule('src/observability/http-diagnostics.ts');
+    if (spec === '@/utils/client-diagnostics') return { logClientDiagnostic() {} };
     return require(spec);
   };
   const fn = new Function(
@@ -291,7 +292,8 @@ test('ApiError accepts an options object for optional fields', () => {
     // ApiError 的定义搬去了零依赖的 api-error.ts；装真模块。
     if (spec === './api-error')
       return loadTsModule('src/services/api/api-error.ts');
-    if (spec === '@/utils/redact') return loadTsModule('src/utils/redact.ts');
+    if (spec === '@/observability/http-diagnostics') return loadTsModule('src/observability/http-diagnostics.ts');
+    if (spec === '@/utils/client-diagnostics') return { logClientDiagnostic() {} };
     return require(spec);
   };
   const fn = new Function(

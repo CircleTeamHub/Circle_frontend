@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AMAP_PRIVACY_CONSENT_VERSION } from '@/features/location/services/amap-privacy-consent';
 
 /**
  * 高德原生地图载体。
@@ -16,8 +17,43 @@ import { Ionicons } from '@expo/vector-icons';
  * 坐标全程是 GCJ-02：高德认的就是这套，减偏交给调用方，这里一行换算都没有。
  */
 
+type NativeMapRef = {
+  setCenter?: (
+    center: { latitude: number; longitude: number },
+    animated?: boolean,
+  ) => Promise<void>;
+};
+
+type NativeMapProps = {
+  style: object;
+  initialCameraPosition: {
+    target: { latitude: number; longitude: number };
+    zoom: number;
+  };
+  compassEnabled: boolean;
+  onLoad: () => void;
+  onCameraIdle: (event: {
+    nativeEvent: {
+      cameraPosition: {
+        target?: { latitude: number; longitude: number };
+      };
+    };
+  }) => void;
+};
+
 type AmapModule = {
-  MapView: React.ComponentType<Record<string, unknown>>;
+  MapView: React.ForwardRefExoticComponent<
+    NativeMapProps & React.RefAttributes<NativeMapRef>
+  >;
+  ExpoGaodeMapModule: {
+    setPrivacyConfig: (config: {
+      hasShow: boolean;
+      hasContainsPrivacy: boolean;
+      hasAgree: boolean;
+      privacyVersion: string;
+    }) => void;
+    getPrivacyStatus: () => { isReady: boolean };
+  };
 };
 
 /**
@@ -27,8 +63,15 @@ type AmapModule = {
 function loadAmapModule(): AmapModule | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const loaded = require('expo-amap') as AmapModule;
-    return typeof loaded?.MapView === 'function' ? loaded : null;
+    const loaded = require('expo-gaode-map') as AmapModule;
+    if (
+      !loaded?.MapView ||
+      !loaded.ExpoGaodeMapModule?.setPrivacyConfig ||
+      !loaded.ExpoGaodeMapModule?.getPrivacyStatus
+    ) {
+      return null;
+    }
+    return loaded;
   } catch {
     return null;
   }
@@ -38,6 +81,27 @@ const amapModule = loadAmapModule();
 
 /** 这台设备上到底能不能用原生高德地图。 */
 export const isAmapNativeSupported = amapModule !== null;
+
+/**
+ * 在 React 挂载 MapView 之前同步完成 SDK 的隐私握手。
+ *
+ * expo-gaode-map 会在 MapView render 阶段读取 isReady 并在未就绪时抛错，
+ * 因此这个函数必须由用户同意按钮或已存同意的恢复流程先调用。
+ */
+export function configureAmapPrivacy(): boolean {
+  if (!amapModule) return false;
+  try {
+    amapModule.ExpoGaodeMapModule.setPrivacyConfig({
+      hasShow: true,
+      hasContainsPrivacy: true,
+      hasAgree: true,
+      privacyVersion: AMAP_PRIVACY_CONSENT_VERSION,
+    });
+    return amapModule.ExpoGaodeMapModule.getPrivacyStatus().isReady;
+  } catch {
+    return false;
+  }
+}
 
 export type AmapNativeSurfaceRef = {
   /** 把地图中心移到指定坐标（GCJ-02）。 */
@@ -63,20 +127,20 @@ export const AmapNativeSurface = forwardRef<
   { latitude, longitude, pinColor, onCenterChanged, onReady },
   ref,
 ) {
-  const mapRef = useRef<{
-    setCenter?: (center: { latitude: number; longitude: number }) => unknown;
-  } | null>(null);
+  const mapRef = useRef<NativeMapRef | null>(null);
 
   useImperativeHandle(ref, () => ({
     setCenter: (nextLatitude, nextLongitude) => {
-      mapRef.current?.setCenter?.({
-        latitude: nextLatitude,
-        longitude: nextLongitude,
-      });
+      void mapRef.current?.setCenter?.(
+        { latitude: nextLatitude, longitude: nextLongitude },
+        true,
+      );
     },
   }));
 
-  if (!amapModule) return null;
+  if (!amapModule || !amapModule.ExpoGaodeMapModule.getPrivacyStatus().isReady) {
+    return null;
+  }
   const { MapView } = amapModule;
 
   return (
@@ -85,17 +149,21 @@ export const AmapNativeSurface = forwardRef<
         ref={mapRef}
         style={s.map}
         // 非受控属性：挂载后再改不会让地图跳回去，正好符合「用户拖到哪算哪」。
-        initialRegion={{
-          center: { latitude, longitude },
-          span: { latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        initialCameraPosition={{
+          target: { latitude, longitude },
+          zoom: 15,
         }}
-        showCompass={false}
+        compassEnabled={false}
         onLoad={onReady}
-        onRegionChanged={(event: {
-          nativeEvent: { center: { latitude: number; longitude: number } };
+        onCameraIdle={(event: {
+          nativeEvent: {
+            cameraPosition: {
+              target?: { latitude: number; longitude: number };
+            };
+          };
         }) => {
-          const { center } = event.nativeEvent;
-          onCenterChanged(center.latitude, center.longitude);
+          const target = event.nativeEvent.cameraPosition.target;
+          if (target) onCenterChanged(target.latitude, target.longitude);
         }}
       />
       {/* 图钉钉死在正中：它标的就是地图中心，所以不接受任何触摸。 */}

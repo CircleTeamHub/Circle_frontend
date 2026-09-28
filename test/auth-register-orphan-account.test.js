@@ -296,10 +296,10 @@ test('5xx 时提示结果不确定（服务端可能已提交才炸）', async (
 });
 
 /**
- * 断网 ≠ 结果不确定：fetch 自己 reject 说明连接压根没建立，账号没建出来。
- * 报「请先尝试登录或找回密码」会把用户推去登录一个不存在的账号。
+ * fetch 的 network rejection 可能发生在请求已经上传、服务端已经提交之后。
+ * 客户端拿不到 HTTP 响应时不能诱导用户盲目重试注册。
  */
-test('断网时照常报「注册失败」，不能说结果不确定', async () => {
+test('network rejection 时提示结果不确定，避免重复创建账号', async () => {
   const { useAuth, errorWrites } = loadUseAuth({
     registerRequest: async () => {
       throw apiError({ status: 0, failureKind: 'network' });
@@ -314,5 +314,5 @@ test('断网时照常报「注册失败」，不能说结果不确定', async ()
     'Bob',
   );
 
-  assert.equal(lastError(errorWrites), 'auth.errors.registerFailed');
+  assert.equal(lastError(errorWrites), 'auth.errors.registerOutcomeUnknown');
 });

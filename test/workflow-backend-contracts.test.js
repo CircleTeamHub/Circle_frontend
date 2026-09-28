@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { releaseScriptShell } = require('./helpers/release-script-shell');
 
 // test/ 下的跨仓契约测试按 `<前端根>/../circle_be` 读后端源码。任何跑这套测试的
 // 工作流都必须先把后端放到同级目录，并断言源码在位，否则契约会静默 skip。#246 之后
@@ -16,6 +17,16 @@ const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
 const TEST_STEP = /^\s+run:\s*npm (?:run ci|test)\s*$/m;
+
+test('frontend CI runs for both main and stacked Codex PR bases', () => {
+  const ci = read('.github/workflows/ci.yml');
+  const pullRequestTrigger = ci.slice(
+    ci.indexOf('  pull_request:'),
+    ci.indexOf('  push:'),
+  );
+  assert.match(pullRequestTrigger, /^\s+- main\s*$/m);
+  assert.match(pullRequestTrigger, /^\s+- ['"]codex\/\*\*['"]\s*$/m);
+});
 
 function jobs(workflow) {
   const body = workflow.slice(workflow.indexOf('\njobs:'));
@@ -125,7 +136,7 @@ function fakeBackend(files) {
 }
 
 const runGate = (backendDir) =>
-  spawnSync('bash', [SCRIPT], {
+  spawnSync(releaseScriptShell(), [SCRIPT], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: { ...process.env, BACKEND_CONTRACTS_DIR: backendDir, BACKEND_REF_CANDIDATE: '' },

@@ -20,7 +20,12 @@ function listSources(dir) {
   return files;
 }
 
-const CONTAINER = 'src/components/ui/keyboard-avoiding-container.tsx';
+const CONTAINER = path.join(
+  'src',
+  'components',
+  'ui',
+  'keyboard-avoiding-container.tsx',
+);
 
 // Android 开了 edge-to-edge（android/gradle.properties edgeToEdgeEnabled=true，Expo SDK 54+
 // 强制）之后，windowSoftInputMode=adjustResize 不再缩窗口。RN 的 KeyboardAvoidingView 在
