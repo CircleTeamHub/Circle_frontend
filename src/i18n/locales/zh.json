@@ -2356,7 +2356,18 @@
     "checkFailedMessage": "暂时无法获取最新版本，请检查网络后重试。",
     "installFailedTitle": "更新失败",
     "installFailedMessage": "无法下载安装包，请检查网络和安装权限后重试。",
-    "androidOnlyMessage": "APK 自动更新仅适用于 Android 版本。"
+    "androidOnlyMessage": "APK 自动更新仅适用于 Android 版本。",
+    "checkCodeUpdates": "检查应用内容更新",
+    "checkingCodeUpdates": "正在检查应用内容…",
+    "codeUpdateAvailableTitle": "应用内容已更新",
+    "codeUpdateAvailableMessage": "更新已下载，立即重启应用即可生效。",
+    "reloadNow": "立即重启",
+    "codeLatestTitle": "应用内容已是最新",
+    "codeLatestMessage": "当前已是最新的应用内容。",
+    "codeUpdateDisabledTitle": "暂不可检查",
+    "codeUpdateDisabledMessage": "开发版不支持在线应用内容更新，请使用正式构建验证。",
+    "codeUpdateFailedTitle": "应用内容更新失败",
+    "codeUpdateFailedMessage": "无法下载应用内容更新，请检查网络后重试。"
   },
   "shareScreen": {
     "inviteCode": "邀请码",

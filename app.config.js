@@ -1,7 +1,12 @@
 const { expo: baseConfig } = require('./app.json');
 
 module.exports = () => {
-  const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim();
+  const configuredEasProjectId = baseConfig.extra?.eas?.projectId;
+  const easProjectId =
+    process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim() ||
+    (typeof configuredEasProjectId === 'string'
+      ? configuredEasProjectId.trim()
+      : undefined);
   const googleServicesFile = process.env.GOOGLE_SERVICES_FILE?.trim();
   const isPreproduction = process.env.APP_VARIANT?.trim() === 'preprod';
   const jpushAppKey = process.env.EXPO_PUBLIC_JPUSH_APP_KEY?.trim();
@@ -21,6 +26,7 @@ module.exports = () => {
   }
   const pushProvider = configuredPushProvider || (jpushAppKey ? 'jpush' : 'expo');
   const jpushProduction = !isPreproduction;
+  const updateChannel = isPreproduction ? 'preview' : 'production';
   // 高德移动端密钥分别绑定 Android 包名+签名与 iOS Bundle ID，不能跨平台复用。
   // 不配对应平台的 key 时，该平台运行时会回落到 Leaflet + OpenStreetMap。
   const amapAndroidKey = process.env.EXPO_PUBLIC_AMAP_ANDROID_KEY?.trim();
@@ -34,6 +40,23 @@ module.exports = () => {
 
   return {
     ...baseConfig,
+    // OTA updates only replace the JavaScript/assets bundle. Native changes
+    // still require a new APK/IPA and use the existing binary updater.
+    runtimeVersion: {
+      policy: 'appVersion',
+    },
+    ...(easProjectId
+      ? {
+          updates: {
+            url: `https://u.expo.dev/${easProjectId}`,
+            requestHeaders: {
+              'expo-channel-name': updateChannel,
+            },
+            checkAutomatically: 'ON_LOAD',
+            fallbackToCacheTimeout: 0,
+          },
+        }
+      : {}),
     plugins: [
       ...(baseConfig.plugins ?? []),
       ...(amapAndroidKey || amapIosKey

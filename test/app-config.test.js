@@ -55,6 +55,26 @@ test('dynamic app config maps optional push build environment values', () => {
   );
 });
 
+test('OTA config binds production and preview builds to their channels', () => {
+  const production = loadConfig({
+    EXPO_PUBLIC_EAS_PROJECT_ID: 'eas-project-id',
+  });
+  const preview = loadConfig({
+    APP_VARIANT: 'preprod',
+    EXPO_PUBLIC_EAS_PROJECT_ID: 'eas-project-id',
+  });
+
+  assert.equal(production.updates.url, 'https://u.expo.dev/eas-project-id');
+  assert.equal(
+    production.updates.requestHeaders['expo-channel-name'],
+    'production',
+  );
+  assert.equal(
+    preview.updates.requestHeaders['expo-channel-name'],
+    'preview',
+  );
+});
+
 test('dynamic app config omits unset optional push build values', () => {
   const config = loadConfig();
 
