@@ -9795,10 +9795,10 @@
     },
     {
       "type": "library",
-      "bom-ref": "pkg:npm/expo-gaode-map@2.3.1",
+      "bom-ref": "pkg:npm/expo-gaode-map@2.2.44",
       "name": "expo-gaode-map",
-      "version": "2.3.1",
-      "purl": "pkg:npm/expo-gaode-map@2.3.1",
+      "version": "2.2.44",
+      "purl": "pkg:npm/expo-gaode-map@2.2.44",
       "licenses": [
         {
           "license": {
