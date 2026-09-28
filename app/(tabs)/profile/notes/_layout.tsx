@@ -12,7 +12,7 @@ export default function NotesLayout() {
         gestureEnabled: true,
         fullScreenGestureEnabled: true,
         gestureDirection: 'horizontal',
-      }}
+      }}>
       <Stack.Screen
         name="location-picker"
         options={{ fullScreenGestureEnabled: false }}

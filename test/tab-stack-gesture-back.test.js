@@ -104,3 +104,13 @@ test('map picker routes keep full-screen swipe-back disabled', () => {
     );
   }
 });
+
+test('active group calls keep full-screen swipe-back disabled', () => {
+  const src = read('app/(chat)/_layout.tsx');
+
+  assert.match(
+    src,
+    /<Stack\.Screen\s+name="group-call"\s+options=\{\{\s*fullScreenGestureEnabled:\s*false\s*\}\}/s,
+    'group calls must not be dismissed by horizontal participant-grid drags',
+  );
+});

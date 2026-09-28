@@ -13,9 +13,13 @@ export default function ChatLayout() {
         gestureEnabled: true,
         fullScreenGestureEnabled: true,
         gestureDirection: 'horizontal',
-      }}
+      }}>
       <Stack.Screen
         name="location-picker"
+        options={{ fullScreenGestureEnabled: false }}
+      />
+      <Stack.Screen
+        name="group-call"
         options={{ fullScreenGestureEnabled: false }}
       />
     </Stack>
