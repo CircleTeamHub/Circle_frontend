@@ -14953,7 +14953,7 @@ Source: https://github.com/expo/expo.git
 No license file was included in the installed package; see the declared license metadata above.
 
 ================================================================================
-expo-gaode-map@2.3.1
+expo-gaode-map@2.2.44
 License: MIT
 Source: https://github.com/TomWq/expo-gaode-map
 No license file was included in the installed package; see the declared license metadata above.
