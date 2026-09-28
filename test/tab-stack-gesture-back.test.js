@@ -80,3 +80,27 @@ test('root stack enables horizontal swipe-back gestures for nested routes', () =
   assert.match(src, /fullScreenGestureEnabled:\s*true/);
   assert.match(src, /gestureDirection:\s*['"]horizontal['"]/);
 });
+
+test('root onboarding route stays non-dismissible', () => {
+  const src = read('app/_layout.tsx');
+
+  assert.match(
+    src,
+    /<Stack\.Screen\s+name="\(onboarding\)"\s+options=\{\{\s*gestureEnabled:\s*false,\s*fullScreenGestureEnabled:\s*false,\s*\}\}/s,
+  );
+});
+
+test('map picker routes keep full-screen swipe-back disabled', () => {
+  for (const layoutPath of [
+    'app/(chat)/_layout.tsx',
+    'app/(tabs)/profile/notes/_layout.tsx',
+  ]) {
+    const src = read(layoutPath);
+
+    assert.match(
+      src,
+      /<Stack\.Screen\s+name="location-picker"\s+options=\{\{\s*fullScreenGestureEnabled:\s*false\s*\}\}/s,
+      `${layoutPath} should keep map panning from dismissing the picker`,
+    );
+  }
+});

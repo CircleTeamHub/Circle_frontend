@@ -181,7 +181,13 @@ function RootStack() {
         {/* 四个顶层路由组，对应 app/(tabs)、(auth)、(chat)、(social) 目录 */}
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(onboarding)" />
+        <Stack.Screen
+          name="(onboarding)"
+          options={{
+            gestureEnabled: false,
+            fullScreenGestureEnabled: false,
+          }}
+        />
         <Stack.Screen name="(chat)" />
         <Stack.Screen name="(social)" />
       </Stack>

@@ -14,6 +14,10 @@ export default function ChatLayout() {
         fullScreenGestureEnabled: true,
         gestureDirection: 'horizontal',
       }}
-    />
+      <Stack.Screen
+        name="location-picker"
+        options={{ fullScreenGestureEnabled: false }}
+      />
+    </Stack>
   );
 }
