@@ -810,6 +810,8 @@
     "desktopEmptyDetail": "会話を選択してチャットを始めましょう",
     "imNotConnected": "IM に接続されていません。再度ログインしてください。",
     "imConnecting": "IM に接続中…",
+    "imNetworkError": "ネットワークが不安定です。より安定したネットワークに切り替えて、もう一度お試しください。",
+    "imServerError": "サーバーで問題が発生しています。しばらくしてからもう一度お試しください。",
     "swipeMarkRead": "既読にする",
     "swipeMarkUnread": "未読にする",
     "swipeHide": "チャットを非表示",
@@ -2002,6 +2004,14 @@
     "openingChat": "チャットを開いています...",
     "avCall": "音声・ビデオ通話",
     "addFriendRequest": "友だち申請を送る",
+    "relationshipStatus": {
+      "notAdded": "友だちではありません",
+      "requestSent": "友だち申請を送信済み",
+      "requestReceived": "友だち申請を受信・確認待ち",
+      "accepted": "友だちです",
+      "blocked": "友だちに追加できません",
+      "unavailable": "関係ステータスを取得できません"
+    },
     "openChatFailedTitle": "チャットを開けません",
     "friendAction": {
       "pendingSent": "申請済み",

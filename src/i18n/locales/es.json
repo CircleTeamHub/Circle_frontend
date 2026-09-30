@@ -814,6 +814,8 @@
     "desktopEmptyDetail": "Selecciona una conversación para empezar a chatear",
     "imNotConnected": "IM no está conectado. Vuelve a iniciar sesión.",
     "imConnecting": "Conectando con IM…",
+    "imNetworkError": "La conexión de red es inestable. Cambia a una red mejor e inténtalo de nuevo.",
+    "imServerError": "Hay un problema con el servidor. Inténtalo de nuevo más tarde.",
     "swipeMarkRead": "Marcar leído",
     "swipeMarkUnread": "Marcar no leído",
     "swipeHide": "Ocultar chat",
@@ -2008,6 +2010,14 @@
     "openingChat": "Abriendo chat...",
     "avCall": "Llamada de voz o video",
     "addFriendRequest": "Enviar solicitud de amistad",
+    "relationshipStatus": {
+      "notAdded": "No sois amigos",
+      "requestSent": "Solicitud de amistad enviada",
+      "requestReceived": "Solicitud de amistad recibida · pendiente de revisar",
+      "accepted": "Sois amigos",
+      "blocked": "No se puede agregar como amigo",
+      "unavailable": "Estado de la relación no disponible"
+    },
     "openChatFailedTitle": "No se puede abrir el chat",
     "friendAction": {
       "pendingSent": "Solicitud enviada",

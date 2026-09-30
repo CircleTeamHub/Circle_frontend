@@ -365,7 +365,7 @@ export type StoredChatMessage = ChatMessageDto & {
 interface ChatStoreState {
   connected: boolean;
   connecting: boolean;
-  /** 最近一次连接失败的原因文案(消息页空态提示用)。 */
+  /** 最近一次连接失败的归一化原因代码(如 network_error / server_error)。 */
   error: string | null;
   currentUserId: string | null;
   /** 当前查看者的全局阅后即焚窗口（秒）；0 表示关闭。 */

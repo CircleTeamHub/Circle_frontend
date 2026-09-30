@@ -182,6 +182,8 @@
     "desktopEmptyDetail": "选择一个会话开始聊天",
     "imNotConnected": "IM 未连接，请重新登录后重试",
     "imConnecting": "正在连接 IM…",
+    "imNetworkError": "网络连接不稳定，请切换更好的网络后重试",
+    "imServerError": "服务器异常，请稍后再试",
     "swipeMarkRead": "标记已读",
     "swipeMarkUnread": "标记未读",
     "swipeHide": "隐藏聊天",
@@ -1910,6 +1912,14 @@
     "openingChat": "正在打开聊天...",
     "avCall": "音视频通话",
     "addFriendRequest": "发好友申请",
+    "relationshipStatus": {
+      "notAdded": "未添加好友",
+      "requestSent": "好友申请已发送",
+      "requestReceived": "收到好友申请，待处理",
+      "accepted": "已添加好友",
+      "blocked": "无法添加好友",
+      "unavailable": "关系状态暂时无法获取"
+    },
     "openChatFailedTitle": "暂时无法打开聊天",
     "friendAction": {
       "pendingSent": "已发送申请",
