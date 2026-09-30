@@ -189,7 +189,7 @@ export default function AddFriendScreen() {
       return;
     }
 
-    router.push(
+    router.navigate(
       getUserProfileHref(scope, result.id, getDisplayName(result)),
     );
   }, [result, router, scope]);

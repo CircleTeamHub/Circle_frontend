@@ -361,7 +361,7 @@ export default function FriendTagDetailScreen() {
         <Pressable
           style={s.row}
           onPress={() =>
-            router.push(
+            router.navigate(
               getUserProfileHref(
                 'contacts',
                 item.id,

@@ -278,7 +278,7 @@ export default function PostSignupsScreen() {
 
   const openSignerProfile = useCallback(
     (signer: PostSignupItem) => {
-      router.push(getUserProfileHref(scope, signer.userId, signer.nickname));
+      router.navigate(getUserProfileHref(scope, signer.userId, signer.nickname));
     },
     [router, scope],
   );

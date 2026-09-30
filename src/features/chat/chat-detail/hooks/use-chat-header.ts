@@ -96,7 +96,7 @@ export function useChatHeader({
           );
           return;
         }
-        router.push(
+        router.navigate(
           getUserProfileHref(scope, msg.senderID, msg.senderName, {
             viaConversationID: conversationID,
           }),
@@ -104,7 +104,7 @@ export function useChatHeader({
         return;
       }
       // 单聊：对方即会话 sourceID。
-      router.push(getUserProfileHref(scope, sourceID, conversationTitle));
+      router.navigate(getUserProfileHref(scope, sourceID, conversationTitle));
     },
     [
       canViewMemberProfilesByPolicy,
@@ -140,7 +140,7 @@ export function useChatHeader({
           }
         }
       }
-      router.push(getUserProfileHref(scope, userID, nickname));
+      router.navigate(getUserProfileHref(scope, userID, nickname));
     },
     [conversationID, currentUserID, isGroupChat, revalidateMemberViewAccess, scope, t],
   );
@@ -151,7 +151,7 @@ export function useChatHeader({
       openGroupInfo();
       return;
     }
-    router.push(getUserProfileHref(scope, sourceID, conversationTitle));
+    router.navigate(getUserProfileHref(scope, sourceID, conversationTitle));
   }, [isGroupChat, openGroupInfo, scope, sourceID, conversationTitle]);
 
   // 单聊场景下订阅对方在线状态。订阅 Promise 立刻返回当前快照，

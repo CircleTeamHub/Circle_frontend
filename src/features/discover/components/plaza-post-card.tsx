@@ -381,7 +381,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
       );
       return;
     }
-    router.push(getUserProfileHref('discover', post.author.id));
+    router.navigate(getUserProfileHref('discover', post.author.id));
   }, [post.canInteract, post.restrictions, post.author.id, router, t]);
 
   const timeLabel = useMemo(

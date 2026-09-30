@@ -235,7 +235,7 @@ export default function ContactsScreen() {
 
   const handleOpenFriend = useCallback(
     (friend: FriendProfile) => {
-      router.push(
+      router.navigate(
         getUserProfileHref(
           'contacts',
           friend.id,

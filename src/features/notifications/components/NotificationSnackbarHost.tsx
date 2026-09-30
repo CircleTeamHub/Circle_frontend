@@ -204,7 +204,7 @@ export function NotificationSnackbarHost() {
       notificationId: shown.id,
     });
 
-    router.push(
+    router.navigate(
       getSnackbarRoute(shown, {
         untitledPost: t('notifications.signupMgmt.untitledPost'),
         scope: notificationScope,

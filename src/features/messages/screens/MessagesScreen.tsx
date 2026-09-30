@@ -1098,7 +1098,7 @@ export default function MessagesScreen() {
 
   const handleOpenUserProfile = useCallback(
     (conversation: Conversation) => {
-      router.push(
+      router.navigate(
         getUserProfileHref("messages", conversation.sourceID, conversation.name),
       );
     },

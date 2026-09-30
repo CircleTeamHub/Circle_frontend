@@ -8,7 +8,7 @@ import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member
 jest.setTimeout(30_000);
 const SETTLE = { timeout: 10_000 };
 
-const mockPush = jest.fn();
+const mockNavigate = jest.fn();
 const mockParams: { groupID?: string; conversationID?: string } = {};
 const mockChatState: {
   currentUserId: string;
@@ -16,7 +16,7 @@ const mockChatState: {
 } = { currentUserId: 'me', conversations: [] };
 
 jest.mock('expo-router', () => ({
-  router: { push: (...args: unknown[]) => mockPush(...args) },
+  router: { navigate: (...args: unknown[]) => mockNavigate(...args) },
   useLocalSearchParams: () => mockParams,
   useSegments: () => ['(tabs)', 'messages'],
 }));
@@ -109,7 +109,7 @@ test('a standalone group blocks an ordinary member from opening another profile'
   fireEvent.press(await screen.findByText('张三', {}, SETTLE));
 
   expect(Alert.alert).toHaveBeenCalledWith('chat.profilesRestrictedByGroup');
-  expect(mockPush).not.toHaveBeenCalled();
+  expect(mockNavigate).not.toHaveBeenCalled();
 });
 
 test('a circle group gets the same gate — this screen was the last way around it', async () => {
@@ -127,7 +127,7 @@ test('a circle group gets the same gate — this screen was the last way around 
   fireEvent.press(await screen.findByText('张三', {}, SETTLE));
 
   expect(Alert.alert).toHaveBeenCalledWith('chat.profilesRestrictedByGroup');
-  expect(mockPush).not.toHaveBeenCalled();
+  expect(mockNavigate).not.toHaveBeenCalled();
 });
 
 test('managers are exempt and the profile carries the group context', async () => {
@@ -141,7 +141,7 @@ test('managers are exempt and the profile carries the group context', async () =
 
   await waitFor(
     () =>
-      expect(mockPush).toHaveBeenCalledWith(
+      expect(mockNavigate).toHaveBeenCalledWith(
         expect.objectContaining({
           pathname: '/messages/user/u2',
           // 资料页据此按本群的「成员可添加好友」决定要不要放加好友入口。
@@ -162,6 +162,6 @@ test('looking at my own profile is always allowed', async () => {
   render(<SearchGroupMembersScreen />);
   fireEvent.press(await screen.findByText('我', {}, SETTLE));
 
-  await waitFor(() => expect(mockPush).toHaveBeenCalled(), SETTLE);
+  await waitFor(() => expect(mockNavigate).toHaveBeenCalled(), SETTLE);
   expect(Alert.alert).not.toHaveBeenCalled();
 });

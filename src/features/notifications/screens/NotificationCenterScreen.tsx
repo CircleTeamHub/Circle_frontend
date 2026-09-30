@@ -280,7 +280,7 @@ export default function NotificationCenterScreen() {
             scope: notificationScope,
           },
         );
-        router.push(route);
+        router.navigate(route);
         return;
       }
       // 报名管理: open the post's signer list. Opening it marks signups read

@@ -19,7 +19,7 @@ test("notification snackbar host renders a tappable notification banner", () => 
   assert.match(host, /useNotificationSnackbarStore/);
   assert.match(host, /mapNotificationToRow/);
   assert.match(host, /markNotificationRead/);
-  assert.match(host, /router\.push/);
+  assert.match(host, /router\.navigate/);
 });
 
 test("notification snackbar host delegates routing to the pure resolver", () => {
@@ -28,7 +28,7 @@ test("notification snackbar host delegates routing to the pure resolver", () => 
   );
   // Routing decisions live in (and are tested by) snackbar-route.ts.
   assert.match(host, /getSnackbarRoute/);
-  assert.match(host, /router\.push\(\s*getSnackbarRoute/);
+  assert.match(host, /router\.navigate\(\s*getSnackbarRoute/);
 });
 
 test("notification snackbar host passes current stack scope to the route resolver", () => {

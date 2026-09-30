@@ -13,7 +13,7 @@ import MemberRulesScreen from './MemberRulesScreen';
 import { fetchCurrentUser } from '@/services/api/auth';
 import type { AuthUser } from '@/stores/authStore';
 
-const mockRouter = { push: jest.fn(), back: jest.fn() };
+const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn() };
 const mockAuth = { state: {} as Record<string, unknown> };
 const mockProgram = { state: {} as Record<string, unknown> };
 const mockSupport = { state: {} as Record<string, unknown> };
@@ -291,7 +291,7 @@ test('configured support opens its in-app profile and missing support shows Aler
   await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
 
   fireEvent.press(screen.getByText('联系客服开通 年费会员'));
-  expect(mockRouter.push).toHaveBeenCalledWith({
+  expect(mockRouter.navigate).toHaveBeenCalledWith({
     pathname: '/(tabs)/profile/user/[id]',
     params: { id: 'official-support', name: '官方客服' },
   });
@@ -323,7 +323,7 @@ test('configured support opens its in-app profile and missing support shows Aler
     ),
   );
   // 弹窗本身不跳转;但不留死胡同 —— 第二个按钮直达客服中心。
-  expect(mockRouter.push).not.toHaveBeenCalled();
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
   const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as {
     text: string;
     onPress?: () => void;
@@ -352,7 +352,7 @@ test('a failed config fetch reports a network problem instead of claiming suppor
       'common.networkError',
     ),
   );
-  expect(mockRouter.push).not.toHaveBeenCalled();
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
 });
 
 // 首屏 config 还没到时这次点击要等网络,期间用户完全可以再点一次。store 的
@@ -393,7 +393,7 @@ test('pressing contact twice before the config resolves navigates exactly once',
     await Promise.resolve();
   });
 
-  await waitFor(() => expect(mockRouter.push).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(mockRouter.navigate).toHaveBeenCalledTimes(1));
   expect(mockSupport.state.fetchConfig).toHaveBeenCalledTimes(2);
 });
 
@@ -415,7 +415,7 @@ test('tapping contact during the first load waits for the response instead of cl
   fireEvent.press(screen.getByText('联系客服开通 年费会员'));
   // 请求还没回来:此时既不该跳转,更不该说「暂未配置」。
   expect(Alert.alert).not.toHaveBeenCalled();
-  expect(mockRouter.push).not.toHaveBeenCalled();
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
 
   resolveConfig({
     recharge: [],
@@ -433,7 +433,7 @@ test('tapping contact during the first load waits for the response instead of cl
   });
 
   await waitFor(() =>
-    expect(mockRouter.push).toHaveBeenCalledWith({
+    expect(mockRouter.navigate).toHaveBeenCalledWith({
       pathname: '/(tabs)/profile/user/[id]',
       params: { id: 'late-support', name: '迟到的客服' },
     }),

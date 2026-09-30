@@ -359,7 +359,7 @@ export default function CollectionsScreen() {
 
   const openSenderProfile = useCallback((source: CollectionSource) => {
     if (!source.senderID) return;
-    router.push(getUserProfileHref('profile', source.senderID, source.senderName));
+    router.navigate(getUserProfileHref('profile', source.senderID, source.senderName));
   }, []);
 
   const renderSource = useCallback(
