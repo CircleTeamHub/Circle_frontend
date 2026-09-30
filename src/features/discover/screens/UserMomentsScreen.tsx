@@ -104,7 +104,7 @@ export default function UserMomentsScreen() {
         setAvatarUrl(profile.avatarUrl);
         if (profile.nickname) setNickname(profile.nickname);
         setSignature(
-          getProfileSignature(profile.persona, profile.helloWords, t),
+          getProfileSignature(profile.persona, profile.helloWords),
         );
       } catch (err) {
         if (!active) return;

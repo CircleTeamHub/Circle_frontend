@@ -36,5 +36,6 @@ test('persona takes precedence over helloWords in profile signature display', ()
 
   assert.equal(getProfileSignature('新的简介', '旧的招呼语'), '新的简介');
   assert.equal(getProfileSignature('', '旧的招呼语'), '旧的招呼语');
-  assert.match(getProfileSignature('', ''), /完善资料后会在这里展示你的介绍/);
+  assert.equal(getProfileSignature('', ''), '');
+  assert.equal(getProfileSignature('   ', '   '), '');
 });

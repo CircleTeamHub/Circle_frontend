@@ -343,7 +343,6 @@ export default function UserProfileScreen() {
           signature: getProfileSignature(
             currentUser.persona,
             currentUser.helloWords,
-            t,
           ),
           displayIcons: currentUser.displayIcons ?? [],
           likeCount: currentUser.likeCount ?? 0,
@@ -384,7 +383,7 @@ export default function UserProfileScreen() {
             recognitionCount: profile.recognitionCount ?? 0,
             gender: profile.gender,
             city: profile.city,
-            signature: getProfileSignature(profile.persona, profile.helloWords, t),
+            signature: getProfileSignature(profile.persona, profile.helloWords),
             // 后端已按对方的 showPhone / showEmail / showWechat / showQQ 把关掉的
             // 字段置成 null，这里原样收下即可，不要在客户端再判一次可见性。
             contact: {
