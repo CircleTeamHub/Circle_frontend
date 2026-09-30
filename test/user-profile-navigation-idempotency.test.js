@@ -43,7 +43,10 @@ test('notification routes that resolve to profiles also navigate idempotently', 
     'utf8',
   );
 
-  assert.match(snackbarHost, /router\.navigate\(\s*getSnackbarRoute/);
-  assert.doesNotMatch(snackbarHost, /router\.push\(\s*getSnackbarRoute/);
-  assert.match(notificationCenter, /const route = getSnackbarRoute[\s\S]*?router\.navigate\(route\)/);
+  for (const source of [snackbarHost, notificationCenter]) {
+    assert.match(source, /const route = getSnackbarRoute/);
+    assert.match(source, /if \(isUserProfileSnackbarRoute\(route\)\)/);
+    assert.match(source, /router\.navigate\(route\)/);
+    assert.match(source, /router\.push\(route\)/);
+  }
 });
