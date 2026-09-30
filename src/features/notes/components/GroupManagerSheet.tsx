@@ -527,12 +527,12 @@ export function GroupManagerSheet({
     () => ({
       screen: { backgroundColor: colors.background },
       modalTitle: { color: colors.text },
-      modalCopy: { color: colors.textSecondary },
-      limitText: { color: colors.textSecondary },
+      modalCopy: { color: colors.text },
+      limitText: { color: colors.text },
       // 全屏页底是 background，行卡片翻成 surface 才立得出来。
       groupRow: { backgroundColor: colors.surface },
       groupName: { color: colors.text },
-      groupCount: { color: colors.textSecondary },
+      groupCount: { color: colors.text },
       // 之前 borderColor 用了 surface（与面板同色 = 隐形）。改成可见边框 +
       // background 凹槽底，让输入框在面板上明显立出来。
       modalInput: {
@@ -540,13 +540,13 @@ export function GroupManagerSheet({
         borderColor: colors.surfaceBorder,
         backgroundColor: colors.surface,
       },
-      modalActionText: { color: colors.textSecondary },
+      modalActionText: { color: colors.text },
       saveBtn: { backgroundColor: colors.primary },
       saveBtnText: { color: colors.white },
       searchWrap: { backgroundColor: colors.surface },
       searchInput: { color: colors.text },
       searchPlaceholder: colors.textSecondary,
-      statsText: { color: colors.textSecondary },
+      statsText: { color: colors.text },
     }),
     [colors],
   );

@@ -132,7 +132,7 @@ export default function RecycleBinScreen() {
     () => ({
       container: { backgroundColor: colors.background },
       title: { color: colors.text },
-      hint: { color: colors.textSecondary },
+      hint: { color: colors.text },
       backdrop: { backgroundColor: colors.overlay },
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },

@@ -50,7 +50,7 @@ export function NoteShareQrSheet({
       handle: { backgroundColor: colors.surfaceBorder },
       heading: { color: colors.text, ...Typography.h3 },
       hint: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.caption,
         textAlign: 'center' as const,
       },
@@ -64,7 +64,7 @@ export function NoteShareQrSheet({
         textAlign: 'center' as const,
       },
       linkBox: { backgroundColor: colors.surface },
-      linkText: { color: colors.textSecondary, ...Typography.small },
+      linkText: { color: colors.text, ...Typography.small },
       primaryButton: { backgroundColor: colors.primary },
       primaryText: {
         color: colors.white,

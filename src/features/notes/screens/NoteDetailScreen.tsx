@@ -279,7 +279,7 @@ export default function NoteDetailScreen() {
     () => ({
       container: { backgroundColor: colors.background },
       title: { color: colors.text },
-      meta: { color: colors.textSecondary },
+      meta: { color: colors.text },
       // 分组标签：方形品牌紫实心块 + 白字（brandPurple = 会员卡渐变核心色）
       groupTag: { backgroundColor: colors.brandPurple },
       groupTagText: { color: colors.white },

@@ -76,7 +76,7 @@ export function NoteRemarkSheet({
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
       title: { color: colors.text },
-      caption: { color: colors.textSecondary },
+      caption: { color: colors.text },
       input: {
         color: colors.text,
         borderColor: colors.surfaceBorder,

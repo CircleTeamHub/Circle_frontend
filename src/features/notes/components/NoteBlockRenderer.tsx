@@ -122,7 +122,7 @@ function BlockView({
   const d = useMemo(
     () => ({
       text: colors.text,
-      secondary: colors.textSecondary,
+      secondary: colors.text,
       primary: colors.primary,
       codeBlock: {
         backgroundColor: colors.surface,
