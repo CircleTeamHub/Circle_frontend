@@ -177,7 +177,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
           <Text
             style={{
               ...Typography.tinyRegular,
-              color: colors.textSecondary,
+              color: colors.text,
             }}
           >
             {message.time}

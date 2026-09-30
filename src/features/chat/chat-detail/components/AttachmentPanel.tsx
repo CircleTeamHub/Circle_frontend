@@ -105,7 +105,7 @@ export function AttachmentPanel({
                   />
                 </View>
                 <Text
-                  style={[s.attachmentLabel, { color: colors.textSecondary }]}
+                  style={[s.attachmentLabel, { color: colors.text }]}
                 >
                   {item.id === 'voice-call' && callStarting
                     ? t('chat.call.calling', { defaultValue: '呼叫中' })

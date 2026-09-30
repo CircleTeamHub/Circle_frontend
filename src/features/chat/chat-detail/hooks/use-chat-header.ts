@@ -186,7 +186,7 @@ export function useChatHeader({
       ? colors.online
       : peerOnline
         ? colors.online
-        : colors.textSecondary;
+        : colors.text;
   // 头部副标题:自己 > 正在输入 > 群聊 > 对方在线 / 最近在线。单聊对方关了
   // 「显示在线时间」(或还没拿到状态)时整行不画 —— 画「离线」仍是在泄露信息。
   const headerStatusText =

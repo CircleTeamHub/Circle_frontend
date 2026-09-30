@@ -69,7 +69,7 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
         lineHeight: 20,
       },
       timeText: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.tinyRegular,
         marginTop: Spacing.xs,
       },
@@ -77,7 +77,7 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
         backgroundColor: colors.surface,
       },
       quoteText: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.tinyRegular,
       },
       // G-07 回应 pill：走主题色淡底，不再用中性灰（暗色下灰底/灰边几乎看不见）。

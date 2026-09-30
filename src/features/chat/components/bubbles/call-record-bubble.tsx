@@ -146,7 +146,7 @@ export function CallRecordBubble({
       ) : null}
       <View style={[sCallRecord.body, outgoing && sCallRecord.bodyOutgoing]}>
         {!outgoing && senderName ? (
-          <Text style={[sCallRecord.senderName, { color: colors.textSecondary }]}>
+          <Text style={[sCallRecord.senderName, { color: colors.text }]}>
             {senderName}
           </Text>
         ) : null}

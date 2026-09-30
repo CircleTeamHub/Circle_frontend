@@ -287,18 +287,18 @@ export const PlazaPostCardBubble: React.FC<PlazaPostCardBubbleProps> = ({
                   color={colors.textSecondary}
                 />
                 <Text
-                  style={[s.metaText, { color: colors.textSecondary }]}
+                  style={[s.metaText, { color: colors.text }]}
                   numberOfLines={1}
                 >
                   {card.city}
                 </Text>
-                <Text style={[s.metaText, { color: colors.textSecondary }]}>
+                <Text style={[s.metaText, { color: colors.text }]}>
                   ·
                 </Text>
               </>
             ) : null}
             <Text
-              style={[s.metaText, { color: colors.textSecondary }]}
+              style={[s.metaText, { color: colors.text }]}
               numberOfLines={1}
             >
               {authorLine}

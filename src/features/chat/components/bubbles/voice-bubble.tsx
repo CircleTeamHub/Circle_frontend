@@ -235,7 +235,7 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
           <Text
             style={{
               ...Typography.tinyRegular,
-              color: colors.textSecondary,
+              color: colors.text,
             }}
           >
             {message.time}

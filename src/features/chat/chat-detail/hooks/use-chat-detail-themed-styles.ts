@@ -25,7 +25,7 @@ export function useChatDetailThemedStyles({
     disappearingMessageNotice: { backgroundColor: colors.primaryLight },
     disappearingMessageNoticeText: { color: colors.text },
     silencedBar: { backgroundColor: colors.surface },
-    silencedBarText: { color: colors.textSecondary },
+    silencedBarText: { color: colors.text },
     circleBtn: { backgroundColor: colors.surface },
     composerActionBtn: { backgroundColor: colors.surfaceBorder },
     composerShell: { backgroundColor: colors.inputBg, borderColor: colors.surfaceBorder },

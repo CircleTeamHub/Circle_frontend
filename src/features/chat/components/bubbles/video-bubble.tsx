@@ -233,7 +233,7 @@ export function VideoBubble({
         ) : (
           <View style={s.unavailable}>
             <Ionicons name="videocam-off-outline" size={30} color={colors.textSecondary} />
-            <Text style={[s.unavailableText, { color: colors.textSecondary }]}>
+            <Text style={[s.unavailableText, { color: colors.text }]}>
               {t('chat.detail.videoUnavailable', { defaultValue: '视频不可用' })}
             </Text>
           </View>
@@ -241,7 +241,7 @@ export function VideoBubble({
       </Pressable>
       {message.time ? (
         <View style={s.timeRow}>
-          <Text style={{ ...Typography.tinyRegular, color: colors.textSecondary }}>
+          <Text style={{ ...Typography.tinyRegular, color: colors.text }}>
             {message.time}
           </Text>
           {outgoing && !hideStatus ? <BubbleStatusText message={message} /> : null}
