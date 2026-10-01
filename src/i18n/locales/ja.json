@@ -1506,6 +1506,9 @@
     "loadVerifiersFailed": "候補の読み込みに失敗しました。後でもう一度お試しください"
   },
   "discover": {
+    "adLabel": "広告",
+    "adOpen": "広告を開く：{{title}}",
+    "adLinkFailed": "リンクを開けませんでした。もう一度お試しください。",
     "title": "モーメント",
     "circleTitle": "サークルの動向",
     "plaza": "広場",

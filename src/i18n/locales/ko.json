@@ -1506,6 +1506,9 @@
     "loadVerifiersFailed": "후보를 불러오지 못했습니다, 다시 시도하세요"
   },
   "discover": {
+    "adLabel": "광고",
+    "adOpen": "광고 열기: {{title}}",
+    "adLinkFailed": "링크를 열 수 없습니다. 다시 시도해 주세요.",
     "title": "모먼트",
     "circleTitle": "서클 활동",
     "plaza": "광장",

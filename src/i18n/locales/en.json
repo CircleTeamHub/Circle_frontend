@@ -1010,6 +1010,9 @@
     }
   },
   "discover": {
+    "adLabel": "Advertisement",
+    "adOpen": "Open advertisement: {{title}}",
+    "adLinkFailed": "Unable to open this link. Please try again.",
     "title": "Discover",
     "circleTitle": "Circle Activity",
     "plaza": "Plaza",
