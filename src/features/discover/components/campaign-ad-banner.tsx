@@ -26,7 +26,8 @@ export function CampaignAdBanner() {
         const ads = await fetchAdvertisements();
         if (isCurrent()) setResult({ epoch: sessionEpoch, ads });
       } catch {
-        if (isCurrent()) setResult(null);
+        // Keep the last successful ads on transient failures; the expiry timer
+        // and focus/session cleanup still remove stale results.
       } finally {
         pending = false;
       }
