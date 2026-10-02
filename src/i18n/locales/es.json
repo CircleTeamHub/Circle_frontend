@@ -1512,6 +1512,9 @@
     "loadVerifiersFailed": "Error al cargar candidatos, inténtalo de nuevo"
   },
   "discover": {
+    "adLabel": "Publicidad",
+    "adOpen": "Abrir anuncio: {{title}}",
+    "adLinkFailed": "No se pudo abrir este enlace. Inténtalo de nuevo.",
     "title": "Momentos",
     "circleTitle": "Actividad de círculos",
     "plaza": "Plaza",

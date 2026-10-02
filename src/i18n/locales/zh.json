@@ -1006,6 +1006,9 @@
     }
   },
   "discover": {
+    "adLabel": "广告",
+    "adOpen": "打开广告：{{title}}",
+    "adLinkFailed": "无法打开此链接，请重试。",
     "title": "动态",
     "circleTitle": "圈子动态",
     "plaza": "圈子广场",
