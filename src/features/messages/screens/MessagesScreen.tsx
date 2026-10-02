@@ -165,15 +165,17 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   filterRow: {
-    position: "relative",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  filterTabsSlot: {
+    flex: 1,
+    minWidth: 0,
   },
   addGroupButton: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    zIndex: 1,
     width: 32,
     height: 32,
+    flexShrink: 0,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -290,15 +292,10 @@ const s = StyleSheet.create({
   },
   rowMeta: {
     alignItems: "flex-end",
-    gap: 3,
-    position: "relative",
   },
   mutedIndicator: {
-    position: "absolute",
-    top: 20,
-    right: 0,
-    minWidth: 18,
-    minHeight: 18,
+    width: 18,
+    height: 20,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -641,18 +638,6 @@ function ConversationRowImpl({
               </View>
               <View style={s.rowMeta}>
                 <Text style={metaTextStyle}>{item.time}</Text>
-                {item.muted ? (
-                  <View style={s.mutedIndicator}>
-                    <Ionicons
-                      name="notifications-off-outline"
-                      size={15}
-                      color={mutedIconColor}
-                      accessibilityLabel={t("messages.mutedA11y", {
-                        defaultValue: "消息免打扰",
-                      })}
-                    />
-                  </View>
-                ) : null}
               </View>
             </View>
             <View style={s.rowBottom}>
@@ -668,6 +653,18 @@ function ConversationRowImpl({
               </Text>
               <View style={s.rowBottomTrailing}>
                 <Badge count={item.unreadCount} />
+                {item.muted ? (
+                  <View style={s.mutedIndicator}>
+                    <Ionicons
+                      name="notifications-off-outline"
+                      size={15}
+                      color={mutedIconColor}
+                      accessibilityLabel={t("messages.mutedA11y", {
+                        defaultValue: "消息免打扰",
+                      })}
+                    />
+                  </View>
+                ) : null}
                 {onTogglePinnedFold ? (
                   <Pressable
                     style={s.pinnedFoldButton}
@@ -1101,7 +1098,7 @@ export default function MessagesScreen() {
 
   const handleOpenUserProfile = useCallback(
     (conversation: Conversation) => {
-      router.push(
+      router.navigate(
         getUserProfileHref("messages", conversation.sourceID, conversation.name),
       );
     },
@@ -1373,13 +1370,15 @@ export default function MessagesScreen() {
         </View>
       </View>
       <View style={s.filterRow}>
-        <FilterTabs
-          tabs={filterItems.map((item) => item.label)}
-          activeIndex={activeTab}
-          onTabPress={handleFilterPress}
-          scrollable
-          compact
-        />
+        <View style={s.filterTabsSlot}>
+          <FilterTabs
+            tabs={filterItems.map((item) => item.label)}
+            activeIndex={activeTab}
+            onTabPress={handleFilterPress}
+            scrollable
+            compact
+          />
+        </View>
         <Pressable
           style={[s.addGroupButton, { backgroundColor: colors.background }]}
           onPress={handleOpenGroups}

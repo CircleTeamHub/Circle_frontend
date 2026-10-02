@@ -96,7 +96,7 @@ export function useChatHeader({
           );
           return;
         }
-        router.push(
+        router.navigate(
           getUserProfileHref(scope, msg.senderID, msg.senderName, {
             viaConversationID: conversationID,
           }),
@@ -104,7 +104,7 @@ export function useChatHeader({
         return;
       }
       // 单聊：对方即会话 sourceID。
-      router.push(getUserProfileHref(scope, sourceID, conversationTitle));
+      router.navigate(getUserProfileHref(scope, sourceID, conversationTitle));
     },
     [
       canViewMemberProfilesByPolicy,
@@ -140,7 +140,7 @@ export function useChatHeader({
           }
         }
       }
-      router.push(getUserProfileHref(scope, userID, nickname));
+      router.navigate(getUserProfileHref(scope, userID, nickname));
     },
     [conversationID, currentUserID, isGroupChat, revalidateMemberViewAccess, scope, t],
   );
@@ -151,7 +151,7 @@ export function useChatHeader({
       openGroupInfo();
       return;
     }
-    router.push(getUserProfileHref(scope, sourceID, conversationTitle));
+    router.navigate(getUserProfileHref(scope, sourceID, conversationTitle));
   }, [isGroupChat, openGroupInfo, scope, sourceID, conversationTitle]);
 
   // 单聊场景下订阅对方在线状态。订阅 Promise 立刻返回当前快照，
@@ -186,7 +186,7 @@ export function useChatHeader({
       ? colors.online
       : peerOnline
         ? colors.online
-        : colors.textSecondary;
+        : colors.text;
   // 头部副标题:自己 > 正在输入 > 群聊 > 对方在线 / 最近在线。单聊对方关了
   // 「显示在线时间」(或还没拿到状态)时整行不画 —— 画「离线」仍是在泄露信息。
   const headerStatusText =

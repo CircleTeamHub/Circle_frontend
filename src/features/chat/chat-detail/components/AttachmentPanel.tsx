@@ -1,4 +1,5 @@
 import {
+  ActivityIndicator,
   type PanResponderInstance,
   Pressable,
   ScrollView,
@@ -94,22 +95,16 @@ export function AttachmentPanel({
                 disabled={item.id === 'voice-call' && callStarting}
               >
                 <View style={[s.attachmentIcon, d.attachmentIcon]}>
-                  <Ionicons
-                    name={item.icon}
-                    size={26}
-                    color={
-                      item.id === 'voice-call' && callStarting
-                        ? colors.iconAccent
-                        : colors.text
-                    }
-                  />
+                  {item.id === 'voice-call' && callStarting ? (
+                    <ActivityIndicator color={colors.iconAccent} />
+                  ) : (
+                    <Ionicons name={item.icon} size={26} color={colors.text} />
+                  )}
                 </View>
                 <Text
-                  style={[s.attachmentLabel, { color: colors.textSecondary }]}
+                  style={[s.attachmentLabel, { color: colors.text }]}
                 >
-                  {item.id === 'voice-call' && callStarting
-                    ? t('chat.call.calling', { defaultValue: '呼叫中' })
-                    : t(item.labelKey, { defaultValue: item.label })}
+                  {t(item.labelKey, { defaultValue: item.label })}
                 </Text>
               </Pressable>
             ))}

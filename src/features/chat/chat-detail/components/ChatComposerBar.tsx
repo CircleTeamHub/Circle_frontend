@@ -93,11 +93,12 @@ export function ChatComposerBar({
         d.inputBar,
         {
           // 键盘弹起 / 面板展开时无需安全区 padding（键盘或面板已占住底部），紧贴即可；
-          // 仅在底部裸露时留 insets.bottom 让输入栏避开 home indicator。
+          // 仅在底部裸露时使用系统实际报告的安全区；不能在 0 时硬补高度，
+          // Android 三键导航栏已由系统占位，再补会在输入栏下方形成白带。
           paddingBottom:
             attachmentOpen || emojiOpen || keyboardVisible
               ? Spacing.sm
-              : insets.bottom || 28,
+              : insets.bottom,
         },
       ]}
     >

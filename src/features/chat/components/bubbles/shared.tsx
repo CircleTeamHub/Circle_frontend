@@ -82,7 +82,7 @@ export const BubbleStatusText: React.FC<BubbleStatusTextProps> = ({ message }) =
   const { t } = useTranslation();
   const { sendStatus, isRead, isDelivered } = message;
   let text: string;
-  let color = colors.textSecondary;
+  let color = colors.text;
   if (sendStatus === 1) {
     text = t('chat.message.sending', { defaultValue: '发送中' });
   } else if (sendStatus === 3) {
@@ -247,7 +247,7 @@ export const CardBubbleFrame: React.FC<CardBubbleFrameProps> = ({
       {message.time ? (
         <View style={sCardFrame.timeRow}>
           <Text
-            style={{ ...Typography.tinyRegular, color: colors.textSecondary }}
+            style={{ ...Typography.tinyRegular, color: colors.text }}
           >
             {message.time}
           </Text>
@@ -324,7 +324,7 @@ export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
   const onCardColor = outgoing ? colors.white : colors.text;
   const onCardSecondary = outgoing
     ? 'rgba(255,255,255,0.78)'
-    : colors.textSecondary;
+    : colors.text;
   const dividerColor = outgoing ? 'rgba(255,255,255,0.25)' : colors.divider;
 
   return (

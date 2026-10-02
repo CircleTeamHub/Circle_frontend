@@ -425,7 +425,7 @@ export default function MemberCenterScreen() {
         supportConfig ?? (await fetchSupportConfigState({ force: true }));
       const [agent] = selectSupportAgents(config, 'membership');
       if (agent) {
-        router.push(
+        router.navigate(
           getUserProfileHref(
             'profile',
             agent.userID,

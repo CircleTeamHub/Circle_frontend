@@ -31,7 +31,7 @@ function load(rel) {
   return context.module.exports;
 }
 
-const { getSnackbarRoute } = load(
+const { getSnackbarRoute, isUserProfileSnackbarRoute } = load(
   "src/features/notifications/utils/snackbar-route.ts",
 );
 const OPTS = { untitledPost: "(untitled post)" };
@@ -81,6 +81,7 @@ test("getSnackbarRoute routes chat items to the conversation, with optional avat
   assert.equal(route.params.avatarUrl, "https://cdn/a.png");
   // The triggering message id is forwarded so chat detail scrolls to it.
   assert.equal(route.params.searchedMsgID, "client-msg-1");
+  assert.equal(isUserProfileSnackbarRoute(route), false);
 });
 
 test("getSnackbarRoute omits searchedMsgID when the chat item has no id", () => {
@@ -217,11 +218,13 @@ test("getSnackbarRoute routes profile likes to the liker's profile per scope", (
 
   const messagesRoute = getSnackbarRoute(item, OPTS);
   assert.equal(messagesRoute.pathname, "/(tabs)/messages/user/[id]");
+  assert.equal(isUserProfileSnackbarRoute(messagesRoute), true);
   assert.equal(messagesRoute.params.id, "user-9");
   assert.equal(messagesRoute.params.name, "小赞");
 
   const discoverRoute = getSnackbarRoute(item, DISCOVER_OPTS);
   assert.equal(discoverRoute.pathname, "/(tabs)/discover/user/[id]");
+  assert.equal(isUserProfileSnackbarRoute(discoverRoute), true);
   assert.equal(discoverRoute.params.id, "user-9");
   assert.equal(discoverRoute.params.name, "小赞");
 });

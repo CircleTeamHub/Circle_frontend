@@ -439,7 +439,7 @@ export default function ProfileScreen() {
         <View style={s.profileLeft}>
           <Pressable
             onPress={() =>
-              router.push(
+              router.navigate(
                 getUserProfileHref("profile", user?.id ?? "me", displayName),
               )
             }

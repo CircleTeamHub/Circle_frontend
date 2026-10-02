@@ -53,7 +53,7 @@ export function MentionPickerPanel({
         )}
         ListEmptyComponent={
           <View style={s.mentionRow}>
-            <Text style={[s.mentionName, { color: colors.textSecondary }]}>
+            <Text style={[s.mentionName, { color: colors.text }]}>
               {t('chat.mentions.empty', { defaultValue: '暂无可 @ 的成员' })}
             </Text>
           </View>

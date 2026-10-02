@@ -49,7 +49,7 @@ export function ComposerBanners({
       {editingMessageId ? (
         <View style={[s.quoteComposerBar, d.composerShell]}>
           <Text
-            style={[s.quoteComposerText, { color: colors.textSecondary }]}
+            style={[s.quoteComposerText, { color: colors.text }]}
             numberOfLines={1}
           >
             {t('chat.messageActions.editing', { defaultValue: '编辑消息' })}
@@ -68,7 +68,7 @@ export function ComposerBanners({
       {quoteTarget ? (
         <View style={[s.quoteComposerBar, d.composerShell]}>
           <Text
-            style={[s.quoteComposerText, { color: colors.textSecondary }]}
+            style={[s.quoteComposerText, { color: colors.text }]}
             numberOfLines={1}
           >
             {buildQuotePreviewText(quoteTarget, t)}
@@ -81,7 +81,7 @@ export function ComposerBanners({
       {pendingCard ? (
         <View style={[s.quoteComposerBar, d.composerShell]}>
           <Text
-            style={[s.quoteComposerText, { color: colors.textSecondary }]}
+            style={[s.quoteComposerText, { color: colors.text }]}
             numberOfLines={1}
           >
             {t('chat.plazaPostCard.pendingPreview', {

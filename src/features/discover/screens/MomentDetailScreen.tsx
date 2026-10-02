@@ -599,7 +599,7 @@ export default function MomentDetailScreen() {
       <View style={s.postSection}>
         <Pressable
           style={s.authorRow}
-          onPress={() => router.push(getUserProfileHref('discover', post.author.id))}
+          onPress={() => router.navigate(getUserProfileHref('discover', post.author.id))}
         >
           <Avatar
             size={44}

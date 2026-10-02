@@ -196,7 +196,7 @@ test('chat info screen lets the current user open their own profile from the gro
   // messages/contacts/discover/profile 都有 re-export；写死 'messages' 会把 profile
   // 推进 messages 栈、串栈污染(与 AddFriend 同类 bug)。
   // 契约随自研栈迁移更新(意图不变):id 已是后端 UUID,无需 fromImUserId 转换。
-  assert.match(source, /router\.push\(\s*getUserProfileHref\(scope,\s*member\.userId/);
+  assert.match(source, /router\.navigate\(\s*getUserProfileHref\(scope,\s*member\.userId/);
   // 从群里点进资料页要带上 viaConversationID:资料页据此按本群的
   // 「成员可添加好友」决定要不要放加好友入口(服务端同样按它把关)。
   assert.match(source, /viaConversationID: resolvedConversationID \|\| conversationID/);
