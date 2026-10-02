@@ -116,7 +116,8 @@
       "@sentry/react-native",
       "./plugins/with-local-sentry-auto-upload-disabled",
       "./plugins/with-android-allow-backup-disabled",
-      "./plugins/with-android-release-signing"
+      "./plugins/with-android-release-signing",
+      "./plugins/with-android-gradle-memory"
     ],
     "experiments": {
       "typedRoutes": true
