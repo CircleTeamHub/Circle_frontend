@@ -79,7 +79,7 @@ test('post signups screen opens signer profile from the avatar in the current st
 
   assert.match(source, /getUserProfileHref/);
   assert.match(source, /const openSignerProfile = useCallback/);
-  assert.match(source, /router\.push\(getUserProfileHref\(scope, signer\.userId, signer\.nickname\)\)/);
+  assert.match(source, /router\.navigate\(getUserProfileHref\(scope, signer\.userId, signer\.nickname\)\)/);
   assert.match(source, /onPress=\{\(\) => openSignerProfile\(item\)\}[\s\S]*?<Avatar/);
 });
 

@@ -65,6 +65,29 @@ test('pinned fold toggle sits in the threshold conversation card and folds both 
   assert.match(source, /const nextPinned = Boolean\(items\[index \+ 1\]\?\.pinned\)/);
 });
 
+test('conversation row keeps mute, unread, and pinned-fold indicators in one non-overlapping trailing lane', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+
+  const mutedStyle = source.match(/mutedIndicator:\s*\{([\s\S]*?)\n  \},/);
+  assert.ok(mutedStyle, 'mutedIndicator style should exist');
+  assert.doesNotMatch(mutedStyle[1], /position:\s*["']absolute["']/);
+  assert.doesNotMatch(mutedStyle[1], /\b(?:top|right):/);
+
+  assert.match(
+    source,
+    /<View style=\{s\.rowBottomTrailing\}>[\s\S]*?<Badge count=\{item\.unreadCount\} \/>[\s\S]*?item\.muted/,
+  );
+
+  const rowTop = source.slice(
+    source.indexOf('<View style={s.rowTop}>'),
+    source.indexOf('<View style={s.rowBottom}>'),
+  );
+  assert.doesNotMatch(rowTop, /item\.muted/);
+});
+
 test('messages screen keeps pinned conversation surfaces visually consistent', () => {
   const filePath = path.join(
     process.cwd(),
@@ -220,7 +243,7 @@ test('messages screen plus menu no longer exposes group management', () => {
   assert.doesNotMatch(source, /messages\.groupManagement/);
 });
 
-test('messages screen compacts only the tab gap and pins a standalone plus to the right', () => {
+test('messages screen compacts the tab gap and reserves a separate trailing slot for the plus button', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/messages/screens/MessagesScreen.tsx',
@@ -232,12 +255,22 @@ test('messages screen compacts only the tab gap and pins a standalone plus to th
     /return orderMessageFilters\(\[\.\.\.BASE_FILTERS, \.\.\.customTabs\], filterOrder\);/,
   );
   assert.doesNotMatch(source, /filter\.id === "addGroup"/);
-  assert.match(source, /filterRow: \{\s*position: "relative"/);
-  assert.doesNotMatch(source, /filterTabs: \{/);
-  assert.doesNotMatch(source, /filterTabsContent:/);
   assert.match(
     source,
-    /addGroupButton: \{\s*position: "absolute",\s*top: 0,\s*right: 0,\s*zIndex: 1,\s*width: 32,/,
+    /filterRow: \{\s*flexDirection: "row",\s*alignItems: "center"/,
+  );
+  assert.match(source, /filterTabsSlot: \{\s*flex: 1,\s*minWidth: 0/);
+  assert.doesNotMatch(source, /filterTabsContent:/);
+  const addGroupButtonStyle = source.match(
+    /addGroupButton:\s*\{([\s\S]*?)\n  \},/,
+  );
+  assert.ok(addGroupButtonStyle, 'addGroupButton style should exist');
+  assert.doesNotMatch(addGroupButtonStyle[1], /position:\s*["']absolute["']/);
+  assert.doesNotMatch(addGroupButtonStyle[1], /\b(?:top|right):/);
+  assert.match(addGroupButtonStyle[1], /width:\s*32/);
+  assert.match(
+    source,
+    /<View style=\{s\.filterTabsSlot\}>\s*<FilterTabs[\s\S]*?<\/View>\s*<Pressable/s,
   );
   assert.match(source, /style=\{\[s\.addGroupButton, \{ backgroundColor: colors\.background \}\]\}/);
   assert.match(source, /addGroupIcon: \{\s*fontSize: 22,\s*lineHeight: 24,/);

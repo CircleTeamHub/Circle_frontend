@@ -162,3 +162,13 @@ export function getSnackbarRoute(
 
   return getNotificationCenterFallback(options.scope, item.type);
 }
+
+export function isUserProfileSnackbarRoute(route: Href): boolean {
+  if (typeof route !== 'object' || route === null || !('pathname' in route)) {
+    return false;
+  }
+  return (
+    typeof route.pathname === 'string' &&
+    route.pathname.endsWith('/user/[id]')
+  );
+}

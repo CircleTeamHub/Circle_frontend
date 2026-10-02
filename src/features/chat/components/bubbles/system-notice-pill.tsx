@@ -26,7 +26,7 @@ export const SystemNoticePill: React.FC<SystemNoticePillProps> = ({ text }) => {
   const d = useMemo(
     () => ({
       noticeText: {
-        color: colors.textSecondary,
+        color: colors.text,
         textAlign: 'center' as const,
         ...Typography.small,
       },

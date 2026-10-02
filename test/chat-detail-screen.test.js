@@ -455,6 +455,17 @@ test('chat detail protects group call creation from fast repeated taps', () => {
   assert.match(source, /disabled=\{item\.id === 'voice-call' && callStarting\}/);
 });
 
+test('call attachment keeps its user-facing label while the call starts', () => {
+  const source = readChatDetailSource();
+
+  assert.match(
+    source,
+    /item\.id === 'voice-call' && callStarting\s*\?\s*\(\s*<ActivityIndicator/,
+  );
+  assert.match(source, /\{t\(item\.labelKey, \{ defaultValue: item\.label \}\)\}/);
+  assert.doesNotMatch(source, /t\('chat\.call\.calling'/);
+});
+
 test('group call screen offers retry after a LiveKit connection error', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/call/screens/GroupCallScreen.tsx'),

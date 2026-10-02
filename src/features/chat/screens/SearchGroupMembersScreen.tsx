@@ -260,7 +260,7 @@ export default function SearchGroupMembersScreen() {
         return;
       }
 
-      router.push(
+      router.navigate(
         getUserProfileHref(scope, member.userId, member.nickname || undefined, {
           // 资料页据此按本群的「成员可添加好友」决定要不要放加好友入口。
           ...(memberConversationID

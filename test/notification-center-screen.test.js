@@ -42,7 +42,7 @@ test('interactive notification taps delegate to the shared notification route re
   assert.match(source, /notificationScope/);
   assert.match(source, /getSnackbarRoute/);
   assert.match(source, /scope: notificationScope/);
-  assert.match(source, /router\.push\(route\)/);
+  assert.match(source, /router\.navigate\(route\)/);
   assert.doesNotMatch(source, /其余互动通知仅标记已读/);
 });
 

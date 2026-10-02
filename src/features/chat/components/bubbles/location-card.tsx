@@ -155,14 +155,14 @@ export const LocationCard: React.FC<LocationCardProps> = ({
         backgroundColor: colors.overlay,
       },
       revealButtonText: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.small,
       },
       locationMarkerDot: {
         backgroundColor: colors.primary,
       },
       attribution: {
-        color: colors.textSecondary,
+        color: colors.white,
         backgroundColor: colors.overlay,
       },
       locationTitle: {
@@ -171,12 +171,12 @@ export const LocationCard: React.FC<LocationCardProps> = ({
         fontWeight: '600' as const,
       },
       locationAddress: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.small,
         marginTop: 2,
       },
       timeText: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.tinyRegular,
         marginTop: Spacing.xs,
       },

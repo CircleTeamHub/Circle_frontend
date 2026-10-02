@@ -139,14 +139,14 @@ export function useMessageRenderer({
             style={[
               s.senderLabel,
               hideChatAvatar && s.senderLabelWithoutAvatarColumn,
-              { color: colors.textSecondary },
+              { color: colors.text },
             ]}
           />
           {node}
         </View>
       );
     },
-    [isGroupChat, receivedDisplayName, colors.textSecondary, hideChatAvatar],
+    [isGroupChat, receivedDisplayName, colors.text, hideChatAvatar],
   );
 
   const withMessageActions = useCallback(

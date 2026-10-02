@@ -485,7 +485,7 @@ export default function FriendActivityDetailScreen() {
       <View style={s.profileRow}>
         <Pressable
           onPress={() =>
-            router.push(
+            router.navigate(
               getUserProfileHref(
                 profileScope,
                 activity.counterparty.id,

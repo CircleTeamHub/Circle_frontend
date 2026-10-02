@@ -114,7 +114,7 @@ export function ChatMessageArea({
               style={[
                 s.historyWindowFullNotice,
                 Typography.small,
-                { color: colors.textSecondary },
+                { color: colors.text },
               ]}
             >
               {t('chat.detail.historyWindowFull', {
@@ -185,7 +185,7 @@ export function ChatMessageArea({
         }}
       />
       {isPreviewMode ? (
-        <Text style={[s.previewNotice, Typography.small, { color: colors.textSecondary }]}>
+        <Text style={[s.previewNotice, Typography.small, { color: colors.text }]}>
           {t('chat.detail.previewNotice', {
             defaultValue: '连接尚未完成，请稍后重试',
           })}
