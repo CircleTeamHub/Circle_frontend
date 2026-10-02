@@ -16,7 +16,7 @@ test('socket connect errors never put the raw transport message into the store',
   const src = read('src/chat-core/socket-manager.ts');
 
   assert.doesNotMatch(src, /setError\(err/);
-  assert.match(src, /setError\('connect_error'\)/);
+  assert.match(src, /const reason = classifyConnectFailure\(err\);[\s\S]*state\.setError\(reason\)/);
 });
 
 test('the conversations screen shows a friendly load-failed line, not the raw error', () => {

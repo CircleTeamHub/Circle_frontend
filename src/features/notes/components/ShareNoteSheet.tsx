@@ -19,6 +19,10 @@ import { loadChatConversations } from '@/chat-core/api';
 import { sendCardMessage } from '@/chat-core/client';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
+import {
+  noteSendWindowDelayMs,
+  recordNoteSendAttempt,
+} from '@/features/chat/utils/note-batch-send';
 import type { Conversation, NoteCardData } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -28,14 +32,13 @@ interface ShareNoteSheetProps {
   onClose: () => void;
 }
 
-function getShareNoteSendErrorMessage(t: ReturnType<typeof useTranslation>['t']) {
-  return t('notes.shareToChat.failedMessage', {
-    defaultValue: 'Unable to send this note right now. Please try again.',
-  });
+interface NoteCardSendTask {
+  conversationId: string;
+  payload: NoteCardData;
 }
 
 /**
- * 分享笔记到聊天：选一个会话（好友或群聊），把笔记以卡片消息发过去，
+ * 分享笔记到聊天：选择一个或多个会话（好友或群聊），把笔记以卡片消息发过去，
  * 对方点卡片即可打开这条笔记。取代旧的系统分享面板 / 网页分享链接。
  */
 export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
@@ -48,22 +51,29 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
   const rawConversations = useChatStore((state) => state.conversations);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [sendingId, setSendingId] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [retryTasks, setRetryTasks] = useState<NoteCardSendTask[]>([]);
+  const [sending, setSending] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState('');
   const mountedRef = useRef(true);
   const inFlightRef = useRef(false);
+  const sendTimestampsRef = useRef<number[]>([]);
 
-  useEffect(
-    () => () => {
-      mountedRef.current = false;
-    },
-    [],
-  );
-
-  // 关掉就清搜索词：否则下次打开还停在上次的过滤结果上，看着像「会话丢了」。
   useEffect(() => {
-    if (!visible) setQuery('');
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // 关闭时重置搜索和选择，避免下次分享沿用上次收件人。
+  useEffect(() => {
+    if (!visible) {
+      setQuery('');
+      setSelectedIds(new Set());
+      setRetryTasks([]);
+    }
   }, [visible]);
 
   // 打开时若没有缓存会话，拉一次列表。
@@ -110,7 +120,7 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
       handle: { backgroundColor: colors.surfaceBorder },
       title: { color: colors.text },
       name: { color: colors.text },
-      hint: { color: colors.textSecondary },
+      hint: { color: colors.text },
       separator: { backgroundColor: colors.divider },
       // sheet 底已经是 surface，搜索框再用 surface 就糊在一起了 —— 用 background
       // 拉出一档对比（深色下更暗、浅色下更浅，两个主题都成立）。
@@ -119,91 +129,111 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
     [colors],
   );
 
-  const send = useCallback(
-    (conversation: Conversation) => {
-      if (!targets || inFlightRef.current) return;
-      const confirmMessage =
-        targets.length === 1
-          ? t('notes.shareToChat.confirmMessage', {
-              title: targets[0].title,
-              name: conversation.name,
-              defaultValue: `把「${targets[0].title}」发送给 ${conversation.name}？`,
-            })
-          : t('notes.shareToChat.confirmBatchMessage', {
-              count: targets.length,
-              name: conversation.name,
-              defaultValue: `把 ${targets.length} 条笔记发送给 ${conversation.name}？`,
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const sendSelected = useCallback(() => {
+    const isRetry = retryTasks.length > 0;
+    if (!targets || (!isRetry && selectedIds.size === 0) || inFlightRef.current) return;
+    const selectedConversations = conversations.filter((item) => selectedIds.has(item.id));
+    if (!isRetry && selectedConversations.length === 0) return;
+    const tasks = isRetry
+      ? retryTasks
+      : selectedConversations.flatMap((conversation) =>
+          targets.map((payload) => ({ conversationId: conversation.id, payload })),
+        );
+    const recipientCount = new Set(tasks.map((task) => task.conversationId)).size;
+    const confirmMessage = isRetry
+      ? t('notes.shareToChat.confirmRetryMessage', {
+          count: tasks.length,
+          recipientCount,
+          defaultValue: `仅重试之前发送失败的 ${tasks.length} 条内容（涉及 ${recipientCount} 个聊天对象）？已成功的内容不会重复发送。`,
+        })
+      : t('notes.shareToChat.confirmRecipientsMessage', {
+          noteCount: targets.length,
+          recipientCount,
+          defaultValue: `把 ${targets.length} 条笔记发送给选中的 ${recipientCount} 个聊天对象？`,
+        });
+    Alert.alert(
+      t('notes.shareToChat.confirmTitle', { defaultValue: '发送笔记' }),
+      confirmMessage,
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('common.send', { defaultValue: '发送' }),
+          onPress: () => {
+            if (inFlightRef.current) return;
+            inFlightRef.current = true;
+            setSending(true);
+            void (async () => {
+              // 顺序发送并遵守聊天发送的 20 条/10s 限流。
+              const failures: NoteCardSendTask[] = [];
+              for (const task of tasks) {
+                const delay = noteSendWindowDelayMs(sendTimestampsRef.current, Date.now());
+                if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+                sendTimestampsRef.current = recordNoteSendAttempt(
+                  sendTimestampsRef.current,
+                  Date.now(),
+                );
+                try {
+                  await sendCardMessage({
+                    conversationId: task.conversationId,
+                    type: 'note-card',
+                    payload: task.payload,
+                  });
+                } catch {
+                  failures.push(task);
+                }
+              }
+              if (!mountedRef.current) return;
+              if (failures.length === 0) {
+                setRetryTasks([]);
+                onClose();
+                Alert.alert(
+                  t('notes.shareToChat.sentTitle', { defaultValue: '已发送' }),
+                  t('notes.shareToChat.sentRecipientsMessage', {
+                    recipientCount,
+                    defaultValue: `笔记已发送到 ${recipientCount} 个聊天对象。`,
+                  }),
+                );
+              } else {
+                setRetryTasks(failures);
+                Alert.alert(
+                  t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
+                  t('notes.shareToChat.partialFailed', {
+                    count: failures.length,
+                    defaultValue: `有 ${failures.length} 条内容发送失败。重试时只会发送失败项。`,
+                  }),
+                );
+              }
+            })().finally(() => {
+              inFlightRef.current = false;
+              if (mountedRef.current) setSending(false);
             });
-      Alert.alert(
-        t('notes.shareToChat.confirmTitle', { defaultValue: '发送笔记' }),
-        confirmMessage,
-        [
-          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-          {
-            text: t('common.send', { defaultValue: '发送' }),
-            onPress: () => {
-              if (inFlightRef.current) return;
-              inFlightRef.current = true;
-              setSendingId(conversation.id);
-              void (async () => {
-                // 逐条顺序发卡：保持选择顺序，也天然压在服务端 send 限流之下
-                // （批量上限 9 条卡片，远低于 20 条/10s）。单条失败不中断后续。
-                let failures = 0;
-                for (const payload of targets) {
-                  try {
-                    await sendCardMessage({
-                      conversationId: conversation.id,
-                      type: 'note-card',
-                      payload,
-                    });
-                  } catch {
-                    failures += 1;
-                  }
-                }
-                if (!mountedRef.current) return;
-                if (failures === 0) {
-                  onClose();
-                  Alert.alert(
-                    t('notes.shareToChat.sentTitle', { defaultValue: '已发送' }),
-                    t('notes.shareToChat.sentMessage', {
-                      defaultValue: '笔记已发送到聊天。',
-                    }),
-                  );
-                } else if (failures === targets.length) {
-                  Alert.alert(
-                    t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
-                    getShareNoteSendErrorMessage(t),
-                  );
-                } else {
-                  onClose();
-                  Alert.alert(
-                    t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
-                    t('notes.shareToChat.partialFailed', {
-                      count: failures,
-                      defaultValue: `有 ${failures} 条笔记发送失败，请重试。`,
-                    }),
-                  );
-                }
-              })().finally(() => {
-                inFlightRef.current = false;
-                if (mountedRef.current) setSendingId('');
-              });
-            },
           },
-        ],
-        { cancelable: true },
-      );
-    },
-    [onClose, targets, t],
-  );
+        },
+      ],
+      { cancelable: true },
+    );
+  }, [conversations, onClose, retryTasks, selectedIds, targets, t]);
 
   const renderItem = useCallback(
     ({ item }: { item: Conversation }) => (
       <Pressable
         style={s.row}
-        onPress={() => send(item)}
-        disabled={Boolean(sendingId)}
-        accessibilityRole="button"
+        onPress={() => toggleSelected(item.id)}
+        disabled={sending || retryTasks.length > 0}
+        accessibilityRole="checkbox"
+        accessibilityState={{
+          checked: selectedIds.has(item.id),
+          disabled: sending || retryTasks.length > 0,
+        }}
         accessibilityLabel={item.name}
       >
         {item.conversationType === 'group' ? (
@@ -222,16 +252,32 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
             {item.name}
           </Text>
           <Text style={[s.hint, d.hint]} numberOfLines={1}>
-            {sendingId === item.id
+            {sending
               ? t('notes.shareToChat.sending', { defaultValue: '发送中...' })
               : item.conversationType === 'group'
                 ? t('notes.shareToChat.groupHint', { defaultValue: '群聊' })
                 : t('notes.shareToChat.friendHint', { defaultValue: '好友' })}
           </Text>
         </View>
+        <Ionicons
+          name={selectedIds.has(item.id) ? 'checkmark-circle' : 'ellipse-outline'}
+          size={23}
+          color={selectedIds.has(item.id) ? colors.primary : colors.textSecondary}
+        />
       </Pressable>
     ),
-    [colors.background, d.hint, d.name, send, sendingId, t],
+    [
+      colors.background,
+      colors.primary,
+      colors.textSecondary,
+      d.hint,
+      d.name,
+      retryTasks.length,
+      selectedIds,
+      sending,
+      t,
+      toggleSelected,
+    ],
   );
 
   return (
@@ -319,6 +365,29 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
               keyboardShouldPersistTaps="handled"
             />
           )}
+          <Pressable
+            style={[
+              s.sendButton,
+              { backgroundColor: selectedIds.size ? colors.primary : colors.surfaceBorder },
+            ]}
+            onPress={sendSelected}
+            disabled={selectedIds.size === 0 || sending}
+            accessibilityRole="button"
+          >
+            <Text style={[Typography.body, { color: colors.white }]}>
+              {sending
+                ? t('notes.shareToChat.sending', { defaultValue: '发送中...' })
+                : retryTasks.length > 0
+                  ? t('notes.shareToChat.retryFailed', {
+                      count: retryTasks.length,
+                      defaultValue: `重试 ${retryTasks.length} 条失败内容`,
+                    })
+                  : t('notes.shareToChat.sendSelected', {
+                      count: selectedIds.size,
+                      defaultValue: `发送给 ${selectedIds.size} 个聊天对象`,
+                    })}
+            </Text>
+          </Pressable>
         </>
       )}
     </BottomSheetModal>
@@ -370,6 +439,14 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.sm + 2,
   },
   rowText: { flex: 1, gap: 2 },
+  sendButton: {
+    minHeight: 48,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   name: { ...Typography.body, fontWeight: '600' },
   hint: { ...Typography.caption, fontWeight: '400' },
   separator: {

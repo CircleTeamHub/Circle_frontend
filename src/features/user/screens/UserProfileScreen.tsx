@@ -283,9 +283,15 @@ export default function UserProfileScreen() {
     typeof params.id === 'string' ? params.id : 'unknown';
   const scope = getUserProfileScopeFromSegments(segments);
   const isCurrentUser = isCurrentUserProfile(profileId, currentUser);
+  const canonicalProfileUserId = resolveCanonicalProfileUserId(
+    profileId,
+    remoteProfile,
+  );
 
   const remarkOverride = useFriendRemarkStore((state) =>
-    isCurrentUser ? undefined : state.remarks[profileId],
+    isCurrentUser
+      ? undefined
+      : state.remarks[canonicalProfileUserId ?? profileId],
   );
   // 之前的 fallback 经过 USER_PROFILES 字典（生产 bundle 里塞了 8 个写死的模拟用户：
   // "陈思琪" / "张明远" 等 + 假手机号 + Unsplash 头像）。删掉了字典；改用一个最小化的
@@ -416,7 +422,7 @@ export default function UserProfileScreen() {
     useCallback(() => {
       let cancelled = false;
 
-      if (profileId === 'unknown' || isCurrentUser) {
+      if (!canonicalProfileUserId || isCurrentUser) {
         setFriendStatusLoadError(false);
         setFriendStatus(null);
         return () => {
@@ -425,8 +431,10 @@ export default function UserProfileScreen() {
       }
 
       setFriendStatusLoadError(false);
+      setFriendStatus(null);
+      setFriendSettings(null);
 
-      fetchFriendStatus(profileId)
+      fetchFriendStatus(canonicalProfileUserId)
         .then((status) => {
           if (!cancelled) {
             setFriendStatusLoadError(false);
@@ -444,7 +452,7 @@ export default function UserProfileScreen() {
       return () => {
         cancelled = true;
       };
-    }, [isCurrentUser, profileId]),
+    }, [canonicalProfileUserId, isCurrentUser]),
   );
 
   useFocusEffect(
@@ -452,7 +460,7 @@ export default function UserProfileScreen() {
       let cancelled = false;
 
       if (
-        profileId === 'unknown' ||
+        !canonicalProfileUserId ||
         isCurrentUser ||
         friendStatus !== 'ACCEPTED'
       ) {
@@ -462,7 +470,7 @@ export default function UserProfileScreen() {
         };
       }
 
-      fetchFriendSettings(profileId)
+      fetchFriendSettings(canonicalProfileUserId)
         .then((settings) => {
           if (!cancelled) {
             setFriendSettings(settings);
@@ -478,7 +486,7 @@ export default function UserProfileScreen() {
       return () => {
         cancelled = true;
       };
-    }, [friendStatus, isCurrentUser, profileId]),
+    }, [canonicalProfileUserId, friendStatus, isCurrentUser]),
   );
 
   const rawProfile = remoteProfile ?? fallbackProfile;
@@ -488,10 +496,6 @@ export default function UserProfileScreen() {
       : rawProfile;
   const profileMetaItems = getProfileMetaItems(profile);
   const profileVipLevel = profile.vipLevel ?? 0;
-  const canonicalProfileUserId = resolveCanonicalProfileUserId(
-    profileId,
-    remoteProfile,
-  );
   const displayName =
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || profile.remarkHint || profile.name
@@ -535,6 +539,19 @@ export default function UserProfileScreen() {
         INFO_ROW_IDS.filter((id) => id !== 'description' || descriptionValue)
       : NON_FRIEND_INFO_ROW_IDS;
   const showProfileActions = !isCurrentUser;
+  const friendStatusLabelKey = friendStatusLoadError
+    ? 'userProfile.relationshipStatus.unavailable'
+    : friendStatus === 'NONE'
+      ? 'userProfile.relationshipStatus.notAdded'
+      : friendStatus === 'PENDING_SENT'
+        ? 'userProfile.relationshipStatus.requestSent'
+        : friendStatus === 'PENDING_RECEIVED'
+          ? 'userProfile.relationshipStatus.requestReceived'
+          : friendStatus === 'ACCEPTED'
+            ? 'userProfile.relationshipStatus.accepted'
+            : friendStatus === 'BLOCKED'
+              ? 'userProfile.relationshipStatus.blocked'
+              : null;
   const canSendFriendRequest = canOpenSendFriendRequest({
     isCurrentUser,
     profileId,
@@ -574,32 +591,55 @@ export default function UserProfileScreen() {
   );
 
   const handleAddFriend = useCallback(() => {
-    if (!canSendFriendRequest || profileId === 'unknown') {
+    if (!canSendFriendRequest || !canonicalProfileUserId) {
       return;
     }
 
     router.push(
-      getSendFriendRequestHref(scope, profileId, profile.name, {
+      getSendFriendRequestHref(scope, canonicalProfileUserId, profile.name, {
         ...(viaConversationID ? { viaConversationID } : {}),
       }),
     );
-  }, [canSendFriendRequest, profile.name, profileId, router, scope, viaConversationID]);
+  }, [
+    canSendFriendRequest,
+    canonicalProfileUserId,
+    profile.name,
+    router,
+    scope,
+    viaConversationID,
+  ]);
 
   const handleEditRemark = useCallback(() => {
-    if (friendStatus !== 'ACCEPTED' || profileId === 'unknown') {
+    if (friendStatus !== 'ACCEPTED' || !canonicalProfileUserId) {
       return;
     }
 
-    router.push(getEditFriendRemarkHref(scope, profileId, displayName, profile.name));
-  }, [displayName, friendStatus, profile.name, profileId, router, scope]);
+    router.push(
+      getEditFriendRemarkHref(
+        scope,
+        canonicalProfileUserId,
+        displayName,
+        profile.name,
+      ),
+    );
+  }, [
+    canonicalProfileUserId,
+    displayName,
+    friendStatus,
+    profile.name,
+    router,
+    scope,
+  ]);
 
   const handleEditTags = useCallback(() => {
-    if (friendStatus !== 'ACCEPTED' || profileId === 'unknown') {
+    if (friendStatus !== 'ACCEPTED' || !canonicalProfileUserId) {
       return;
     }
 
-    router.push(getEditFriendTagsHref(scope, profileId, profile.name));
-  }, [friendStatus, profile.name, profileId, router, scope]);
+    router.push(
+      getEditFriendTagsHref(scope, canonicalProfileUserId, profile.name),
+    );
+  }, [canonicalProfileUserId, friendStatus, profile.name, router, scope]);
 
   const handleOpenMoments = useCallback(() => {
     if (profileId === 'unknown') {
@@ -856,6 +896,15 @@ export default function UserProfileScreen() {
         ...Typography.small,
         fontWeight: '600' as const,
       },
+      friendStatusChip: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
+      friendStatusText: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+        fontWeight: '600' as const,
+      },
       signature: {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
@@ -964,6 +1013,16 @@ export default function UserProfileScreen() {
               style={d.name}
             />
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
+            {!isCurrentUser && friendStatusLabelKey ? (
+              <View
+                style={[s.metaChip, d.friendStatusChip]}
+                accessibilityRole="text"
+              >
+                <Text style={[d.metaChipText, d.friendStatusText]}>
+                  {t(friendStatusLabelKey)}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {profileMetaItems.length > 0 || peerPresence.known ? (
@@ -1056,6 +1115,7 @@ export default function UserProfileScreen() {
                       label={item.label}
                       value={item.value}
                       onPress={item.onPress}
+                      showChevron={Boolean(item.onPress)}
                     />
                     {index < group.length - 1 ? (
                       <View style={[s.rowDivider, d.rowDivider]} />

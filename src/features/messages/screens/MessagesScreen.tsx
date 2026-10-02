@@ -1389,24 +1389,40 @@ export default function MessagesScreen() {
           <Text style={[s.addGroupIcon, { color: colors.textSecondary }]}>＋</Text>
         </Pressable>
       </View>
-      {/* IM 未连接横幅：WS 没连上就显示（缓存的会话列表能看、但发消息会失败），
-          一眼区分"没连上"和"消息丢了"。connecting 时给出"连接中"过渡文案。 */}
-      {!imConnected ? (
+      {/* 连接恢复期间保持安静；只有握手失败后才显示横幅。 */}
+      {!imConnected && !imConnecting && connectionError ? (
         <View style={[s.imBanner, d.imBanner]}>
           <Ionicons
-            name={imConnecting ? "sync-outline" : "cloud-offline-outline"}
+            name="cloud-offline-outline"
             size={15}
             color={d.imBannerText.color}
           />
           <Text style={[s.imBannerText, d.imBannerText]}>
-            {imConnecting
-              ? t("messages.imConnecting")
-              : t("messages.imNotConnected")}
+            {t(
+              connectionError === "network_error" ||
+                connectionError === "timeout" ||
+                connectionError === "transport_error"
+                ? "messages.imNetworkError"
+                : "messages.imServerError",
+            )}
           </Text>
         </View>
       ) : null}
     </View>
-  ), [activeTab, colors, d, filterItems, handleClearUnread, handleFilterPress, handleOpenFind, handleOpenGroups, imConnected, imConnecting, t]);
+  ), [
+    activeTab,
+    colors,
+    connectionError,
+    d,
+    filterItems,
+    handleClearUnread,
+    handleFilterPress,
+    handleOpenFind,
+    handleOpenGroups,
+    imConnected,
+    imConnecting,
+    t,
+  ]);
 
   const listPane = (
     <View

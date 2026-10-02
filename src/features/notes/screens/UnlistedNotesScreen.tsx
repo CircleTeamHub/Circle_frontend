@@ -109,7 +109,7 @@ export default function UnlistedNotesScreen() {
     () => ({
       container: { backgroundColor: colors.background },
       title: { color: colors.text },
-      hint: { color: colors.textSecondary },
+      hint: { color: colors.text },
       actionText: { color: colors.text },
       backdrop: { backgroundColor: colors.overlay },
       sheet: { backgroundColor: colors.surface },

@@ -832,23 +832,23 @@ export default function EditNoteScreen() {
       doneBtn: { backgroundColor: colors.primary },
       doneBtnText: { color: colors.white },
       doneBtnDisabled: { backgroundColor: colors.primary, opacity: 0.5 },
-      titleInput: { color: colors.textSecondary },
+      titleInput: { color: colors.text },
       // 内容校验提示共用这一支红色，别在渲染里现拼 inline {color}。
       hintError: { color: colors.danger },
-      dateText: { color: colors.textSecondary },
+      dateText: { color: colors.text },
       groupButton: {
         backgroundColor: colors.surfaceMuted,
         borderColor: 'transparent',
       },
       groupButtonText: { color: colors.text },
-      groupButtonSummary: { color: colors.textSecondary },
+      groupButtonSummary: { color: colors.text },
       groupSheetBackdrop: { backgroundColor: colors.overlay },
       groupSheet: { backgroundColor: colors.surface },
       groupSheetHandle: { backgroundColor: colors.surfaceBorder },
       groupSheetTitle: { color: colors.text },
       groupSheetRow: { backgroundColor: colors.background },
       groupSheetRowText: { color: colors.text },
-      groupSheetRowMeta: { color: colors.textSecondary },
+      groupSheetRowMeta: { color: colors.text },
       groupSheetDone: { backgroundColor: colors.primary },
       groupSheetDoneText: { color: colors.white },
       sectionIcon: { backgroundColor: colors.primaryLight },
@@ -869,16 +869,16 @@ export default function EditNoteScreen() {
       },
       editorFrame: { borderColor: colors.surfaceBorder },
       sectionHeading: { color: colors.text },
-      sectionSubtitle: { color: colors.textSecondary },
-      sectionHeaderMeta: { color: colors.textSecondary },
+      sectionSubtitle: { color: colors.text },
+      sectionHeaderMeta: { color: colors.text },
       mediaPreviewTile: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
       mediaBadge: { backgroundColor: colors.background },
       mediaTitle: { color: colors.text },
-      mediaMeta: { color: colors.textSecondary },
-      emptyText: { color: colors.textSecondary },
+      mediaMeta: { color: colors.text },
+      emptyText: { color: colors.text },
       emptyTray: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -894,18 +894,18 @@ export default function EditNoteScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      locationDetailLabel: { color: colors.textSecondary },
+      locationDetailLabel: { color: colors.text },
       locationClearAction: { borderColor: colors.surfaceBorder },
-      locationClearText: { color: colors.textSecondary },
+      locationClearText: { color: colors.text },
       locationMapFallback: { backgroundColor: colors.surface },
       locationMapRevealButton: { backgroundColor: colors.overlay },
       locationMapRevealText: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.small,
       },
       locationMapMarkerDot: { backgroundColor: colors.primary },
       locationMapAttribution: {
-        color: colors.textSecondary,
+        color: colors.text,
         backgroundColor: colors.overlay,
       },
     }),
@@ -1122,7 +1122,7 @@ export default function EditNoteScreen() {
           <View style={[s.heroAccent, d.heroAccent]} />
           <TextInput
             ref={titleInputRef}
-            style={[s.titleInput, d.titleInput, s.titleInputMuted]}
+            style={[s.titleInput, d.titleInput]}
             placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
             placeholderTextColor={colors.textSecondary}
             value={title}
@@ -1491,7 +1491,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 40,
   },
-  titleInputMuted: { opacity: 0.72 },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',

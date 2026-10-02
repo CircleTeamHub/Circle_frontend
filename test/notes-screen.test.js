@@ -336,7 +336,7 @@ test('EditNoteScreen leaves breathing room around title date and groups', () => 
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
   assert.match(src, /titleInput:\s*\{[\s\S]*paddingBottom:\s*Spacing\.xs/);
-  assert.match(src, /titleInput:\s*\{\s*color:\s*colors\.textSecondary\s*\}/);
+  assert.match(src, /titleInput:\s*\{\s*color:\s*colors\.text\s*\}/);
   assert.match(src, /metaRow:\s*\{[\s\S]*paddingBottom:\s*Spacing\.md/);
   assert.match(src, /groupSection:\s*\{[\s\S]*paddingBottom:\s*Spacing\.sm/);
 });
@@ -646,7 +646,7 @@ test('ShareNoteSheet search text has a complete vertical line box', () => {
 
 test('ShareNoteSheet maps send failures to stable user-facing copy', () => {
   const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
-  assert.match(sheet, /getShareNoteSendErrorMessage/);
-  assert.match(sheet, /notes\.shareToChat\.failedMessage/);
+  assert.match(sheet, /setRetryTasks\(failures\)/);
+  assert.match(sheet, /t\('notes\.shareToChat\.partialFailed', \{\s*count: failures\.length/);
   assert.doesNotMatch(sheet, /error instanceof Error\s*\?\s*error\.message/);
 });
