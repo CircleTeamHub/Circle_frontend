@@ -59,7 +59,7 @@ test('every static apiClient call maps to a reviewed diagnostic route', () => {
         (statement.moduleSpecifier.text === '@/services/api/client' ||
           path.resolve(path.dirname(filePath), statement.moduleSpecifier.text) === apiClientModule)
       ) {
-        if (statement.moduleSpecifier.text.startsWith('.')) relativeImports.add(path.relative(process.cwd(), filePath));
+        if (statement.moduleSpecifier.text.startsWith('.')) relativeImports.add(path.relative(process.cwd(), filePath).split(path.sep).join('/'));
         for (const element of statement.importClause?.namedBindings?.elements ?? []) {
           if ((element.propertyName ?? element.name).text === 'apiClient') {
             aliases.add(element.name.text);
@@ -78,7 +78,7 @@ test('every static apiClient call maps to a reviewed diagnostic route', () => {
         callCount += 1;
         const endpoints = node.arguments[0] && staticEndpoints(node.arguments[0]);
         const line = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
-        const location = `${path.relative(process.cwd(), filePath)}:${line}`;
+        const location = `${path.relative(process.cwd(), filePath).split(path.sep).join('/')}:${line}`;
         if (endpoints === undefined) dynamic.push(location);
         else if (!endpoints.some((endpoint) => safeHttpEndpoint(endpoint) !== '/__other__')) {
           uncovered.push(`${location} -> ${endpoints.join(' | ')}`);

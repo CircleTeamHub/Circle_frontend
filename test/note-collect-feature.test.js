@@ -209,7 +209,7 @@ test('分享 sheet 支持就地搜索会话', () => {
   assert.match(src, /item\.name\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
   assert.match(src, /data=\{visibleConversations\}/);
   // 关闭时清搜索词，否则下次打开停在旧过滤结果上，看着像会话丢了。
-  assert.match(src, /if \(!visible\) setQuery\(''\)/);
+  assert.match(src, /if \(!visible\) \{\s*setQuery\(''\)/);
   // 搜不到 ≠ 一个会话都没有，两种空态文案分开。
   assert.match(src, /notes\.shareToChat\.noMatch/);
   assert.match(src, /notes\.shareToChat\.empty/);

@@ -46,7 +46,7 @@ test('UserProfileScreen derives friend display fields from the reactive remark o
   const source = read('src/features/user/screens/UserProfileScreen.tsx');
 
   assert.match(source, /useFriendRemarkStore\(\(state\) =>/);
-  assert.match(source, /state\.remarks\[profileId\]/);
+  assert.match(source, /isCurrentUser\s*\?\s*undefined\s*:\s*state\.remarks\[canonicalProfileUserId \?\? profileId\]/);
   assert.match(source, /remarkOverride === undefined/);
   assert.match(
     source,
