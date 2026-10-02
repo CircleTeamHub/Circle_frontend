@@ -272,6 +272,7 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
       colors.textSecondary,
       d.hint,
       d.name,
+      retryTasks.length,
       selectedIds,
       sending,
       t,
