@@ -1,6 +1,7 @@
 // Reviewed API route shapes only. New/unrecognized routes become /__other__.
 // Parameters are position-based, never guessed from the spelling of an identifier.
 const ROUTE_TEMPLATES = [
+  "/advertisements",
   "/circle-plaza/me/posts/:id/signups/read",
   "/friend/activities/unread-count",
   "/chat/conversations/:id/members/:id/role",
