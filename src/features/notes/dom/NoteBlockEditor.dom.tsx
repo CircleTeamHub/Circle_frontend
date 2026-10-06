@@ -105,6 +105,26 @@ export default function NoteBlockEditor({
   const editor = useCreateBlockNote({
     initialContent: parsedInitial,
     dictionary: language === 'zh' ? zh : en,
+    // Native clipboard bridges often expose a truncated/invalid HTML payload.
+    // The plain-text payload is the source of truth for notes: it keeps long
+    // pasted paragraphs intact and still lets BlockNote split lines into blocks.
+    pasteHandler: ({ event, editor: activeEditor, defaultPasteHandler }) => {
+      const plainText = event.clipboardData?.getData('text/plain');
+      if (event.clipboardData?.types.includes('blocknote/html')) {
+        return defaultPasteHandler({
+          prioritizeMarkdownOverHTML: false,
+          plainTextAsMarkdown: false,
+        });
+      }
+      if (typeof plainText === 'string' && plainText.length > 0) {
+        activeEditor.pasteText(plainText);
+        return true;
+      }
+      return defaultPasteHandler({
+        prioritizeMarkdownOverHTML: false,
+        plainTextAsMarkdown: false,
+      });
+    },
   });
 
   const [activeType, setActiveType] = useState<ActiveType>('paragraph');

@@ -4,6 +4,7 @@ import {
   Alert,
   AppState,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -319,6 +320,11 @@ export const MomentsFeed: React.FC = () => {
         }
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.3}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={40}
+        windowSize={9}
+        removeClippedSubviews={Platform.OS === 'android'}
         showsVerticalScrollIndicator={false}
       />
 

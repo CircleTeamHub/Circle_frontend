@@ -4,6 +4,7 @@ import {
   normalizeUserAvatarFrameAppearance,
   normalizeMediaUrl,
 } from '@/services/api/utils';
+import { normalizeImageMedia } from './image-media';
 import type {
   CreateMomentInput,
   MomentComment,
@@ -19,9 +20,16 @@ type BackendMomentPost = Omit<MomentPost, 'author'> & {
 };
 
 export function normalizeMomentComment(comment: MomentComment): MomentComment {
+  const normalizedMedia = normalizeImageMedia(
+    comment.images,
+    (comment as unknown as { media?: unknown }).media,
+  );
   return {
     ...comment,
-    images: comment.images?.map((url) => normalizeMediaUrl(url) ?? url),
+    images: normalizedMedia.images,
+    ...(normalizedMedia.media.length > 0
+      ? { media: normalizedMedia.media }
+      : {}),
     ignoredMentionCount:
       Number.isInteger(comment.ignoredMentionCount) &&
       comment.ignoredMentionCount >= 0
@@ -30,12 +38,19 @@ export function normalizeMomentComment(comment: MomentComment): MomentComment {
   };
 }
 
-function normalizeMoment(post: BackendMomentPost): MomentPost {
+export function normalizeMoment(post: BackendMomentPost): MomentPost {
+  const normalizedMedia = normalizeImageMedia(
+    (post as unknown as { images?: unknown }).images,
+    (post as unknown as { media?: unknown }).media,
+  );
   return {
     ...post,
     // normalizeMediaUrl 返回 `string | null | undefined`；之前 `as string ?? url` 是骗类型系统，
     // null 也能命中 ?? 的 fallback，但 cast 谎报实际类型。直接用 ?? 即可，运行时行为不变。
-    images: post.images.map((url) => normalizeMediaUrl(url) ?? url),
+    images: normalizedMedia.images,
+    ...(normalizedMedia.media.length > 0
+      ? { media: normalizedMedia.media }
+      : {}),
     author: {
       ...post.author,
       avatarUrl: post.author.avatarUrl

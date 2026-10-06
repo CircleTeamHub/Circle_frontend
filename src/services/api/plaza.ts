@@ -4,6 +4,7 @@ import {
   normalizeUserAvatarFrameAppearance,
   normalizeMediaUrl,
 } from '@/services/api/utils';
+import { normalizeImageMedia } from './image-media';
 import type {
   CirclePlazaPost,
   CreatePlazaPostInput,
@@ -38,11 +39,20 @@ function normalizeDisplayIcons(icons: unknown): DisplayIcon[] {
   });
 }
 
-function normalizePlazaPost(post: BackendCirclePlazaPost): CirclePlazaPost {
+export function normalizePlazaPost(
+  post: BackendCirclePlazaPost,
+): CirclePlazaPost {
+  const normalizedMedia = normalizeImageMedia(
+    (post as unknown as { images?: unknown }).images,
+    (post as unknown as { media?: unknown }).media,
+  );
   return {
     ...post,
     // 同 moments.ts 注释：normalizeMediaUrl 是 nullable，?? 接住 fallback；as string 是骗 TS。
-    images: post.images.map((url) => normalizeMediaUrl(url) ?? url),
+    images: normalizedMedia.images,
+    ...(normalizedMedia.media.length > 0
+      ? { media: normalizedMedia.media }
+      : {}),
     // 后端若漏发 expiresAt，类型声明为 string 会骗过 TS，运行时拿到 undefined → new Date() 变 Invalid Date。
     // 与 normalizeMyPost 对齐，统一兜成 ''，由展示层判空。
     expiresAt: typeof post.expiresAt === 'string' ? post.expiresAt : '',

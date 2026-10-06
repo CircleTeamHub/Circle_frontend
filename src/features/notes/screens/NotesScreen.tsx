@@ -43,6 +43,7 @@ import {
   mergeTabOrder,
 } from '@/features/notes/utils/tab-order';
 import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
+import { createNoteDraftId } from '@/features/notes/utils/note-editor-drafts';
 import {
   getChatDetailHref,
   getUserProfileScopeFromSegments,
@@ -731,12 +732,6 @@ export default function NotesScreen() {
     ],
   );
 
-  const statsText = t('notes.stats', {
-    groupCount: groups.length,
-    noteCount: notes.length,
-    defaultValue: `共 ${groups.length} 个分组，合计 ${notes.length} 条笔记`,
-  });
-
   return (
     <KeyboardAvoidingContainer
       // 底部操作栏是 position:absolute; bottom:0，底部 padding 顶不动绝对定位的子元素：
@@ -781,6 +776,7 @@ export default function NotesScreen() {
                     router.push('/(tabs)/profile/notes/recycle-bin' as never)
                   }
                 >
+                  <Ionicons name="trash-outline" size={15} color={colors.textSecondary} />
                   <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
                     {t('notes.recycleBin', { defaultValue: '回收站' })}
                   </Text>
@@ -791,8 +787,20 @@ export default function NotesScreen() {
                     router.push('/(tabs)/profile/notes/unlisted' as never)
                   }
                 >
+                  <Ionicons name="archive-outline" size={15} color={colors.textSecondary} />
                   <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
                     {t('notes.unlisted', { defaultValue: '已下架' })}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[s.unlistedBtn, d.unlistedBtn]}
+                  onPress={() => router.push('/(tabs)/profile/notes/drafts' as never)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('notes.drafts.title', { defaultValue: '草稿箱' })}
+                >
+                  <Ionicons name="document-text-outline" size={15} color={colors.textSecondary} />
+                  <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
+                    {t('notes.drafts.title', { defaultValue: '草稿箱' })}
                   </Text>
                 </Pressable>
               </>
@@ -800,18 +808,18 @@ export default function NotesScreen() {
           </View>
         </View>
 
-        {/* 大标题 + 统计副标题：列表页的"刊头"，其余元素都退到次级 */}
+        {/* 页面标题；选择模式下才显示当前选择数量。 */}
         <Text style={[s.pageTitle, d.headerTitle]}>
           {t('notes.title', { defaultValue: '我的笔记' })}
         </Text>
-        <Text style={[s.statsText, d.statsText]}>
-          {selectionMode
-            ? t('notes.selection.selectedCount', {
-                count: selectedIds.length,
-                defaultValue: `已选 ${selectedIds.length} 项`,
-              })
-            : statsText}
-        </Text>
+        {selectionMode ? (
+          <Text style={[s.statsText, d.statsText]}>
+            {t('notes.selection.selectedCount', {
+              count: selectedIds.length,
+              defaultValue: `已选 ${selectedIds.length} 项`,
+            })}
+          </Text>
+        ) : null}
 
         <View style={s.tabsRow}>
           <ScrollView
@@ -915,7 +923,12 @@ export default function NotesScreen() {
         ) : (
           <Pressable
             style={[s.bottomBtn, d.newBtn]}
-            onPress={() => router.push('/(tabs)/profile/notes/edit' as never)}
+            onPress={() =>
+              router.push({
+                pathname: '/(tabs)/profile/notes/edit',
+                params: { draftId: createNoteDraftId() },
+              } as never)
+            }
           >
             <Ionicons name="add" size={18} color={colors.white} />
             <Text style={[s.bottomBtnText, d.newBtnText]}>
@@ -986,6 +999,9 @@ const s = StyleSheet.create({
   },
   pageTitle: { ...Typography.h1, marginTop: Spacing.xs },
   unlistedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
     paddingHorizontal: Spacing.sm + 4,
     paddingVertical: 4,
     borderRadius: Radius.pill,

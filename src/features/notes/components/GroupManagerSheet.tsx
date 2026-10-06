@@ -36,6 +36,12 @@ import {
   useModalInputAutoFocus,
 } from '@/hooks/use-modal-input-auto-focus';
 import { reportHandledFailure } from '@/observability/report-failure';
+import {
+  GROUP_NAME_MAX_LENGTH,
+  MAX_NOTE_GROUPS,
+} from '@/features/notes/constants';
+
+export { GROUP_NAME_MAX_LENGTH, MAX_NOTE_GROUPS } from '@/features/notes/constants';
 
 // 抽自 NotesScreen 的"管理分组"Modal —— 把 group CRUD、拖拽排序、成员选择器一并搬过来。
 // state 全部内聚到这个组件，父组件只关心：何时显示、关掉时回调、需要刷新外层 notes 时回调。
@@ -52,9 +58,7 @@ interface Props {
 }
 
 const GROUP_ROW_HEIGHT = 64;
-export const MAX_NOTE_GROUPS = 10;
-/** 与后端 CreateNoteGroupDto 的 @MaxLength(30) 对齐 */
-export const GROUP_NAME_MAX_LENGTH = 30;
+const GROUP_ROW_STRIDE = GROUP_ROW_HEIGHT + Spacing.sm;
 const MEMBERSHIP_SAVE_CONCURRENCY = 5;
 
 /** 排序列表里的一行：固定 tab（全部/未分组，group=null）或用户分组。 */
@@ -245,10 +249,6 @@ export function GroupManagerSheet({
     setGroupEditorOpen(false);
     resetGroupDraft();
   }, [resetGroupDraft]);
-
-  const editingGroupName = editingGroupId
-    ? (groups.find((group) => group.id === editingGroupId)?.name ?? '')
-    : '';
 
   const handleSubmitGroupPress = useCallback(() => {
     if (!draftGroupName.trim()) {
@@ -465,6 +465,7 @@ export function GroupManagerSheet({
 
       const responder = PanResponder.create({
         onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
         onMoveShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponderCapture: () => true,
         onPanResponderGrant: () => {
@@ -491,8 +492,8 @@ export function GroupManagerSheet({
             Math.min(
               source.length - 1,
               Math.round(
-                (meta.startIndex * GROUP_ROW_HEIGHT + gestureState.dy) /
-                  GROUP_ROW_HEIGHT,
+                (meta.startIndex * GROUP_ROW_STRIDE + gestureState.dy) /
+                  GROUP_ROW_STRIDE,
               ),
             ),
           );
@@ -508,7 +509,7 @@ export function GroupManagerSheet({
 
           dragY.setValue(
             gestureState.dy -
-              (meta.activeIndex - meta.startIndex) * GROUP_ROW_HEIGHT,
+              (meta.activeIndex - meta.startIndex) * GROUP_ROW_STRIDE,
           );
         },
         onPanResponderRelease: finishDrag,
@@ -528,7 +529,6 @@ export function GroupManagerSheet({
       screen: { backgroundColor: colors.background },
       modalTitle: { color: colors.text },
       modalCopy: { color: colors.text },
-      limitText: { color: colors.text },
       // 全屏页底是 background，行卡片翻成 surface 才立得出来。
       groupRow: { backgroundColor: colors.surface },
       groupName: { color: colors.text },
@@ -595,12 +595,6 @@ export function GroupManagerSheet({
                   })}
                 </Text>
               </View>
-              <Text style={[s.modalCopy, d.modalCopy]}>
-                {t('notes.membership.copy', {
-                  name: editingMembershipGroup.name,
-                  defaultValue: `为"${editingMembershipGroup.name}"选择要加入的笔记。`,
-                })}
-              </Text>
               <View style={[s.membershipSearchWrap, d.searchWrap]}>
                 <Ionicons
                   name="search-outline"
@@ -686,19 +680,6 @@ export function GroupManagerSheet({
                   <Ionicons name="close" size={24} color={colors.text} />
                 </Pressable>
               </View>
-              <Text style={[s.modalCopy, d.modalCopy]}>
-                {t('notes.manageGroups.copy', {
-                  defaultValue:
-                    '全部和未分组也可拖动排序，但不能改名或删除。',
-                })}
-              </Text>
-              <Text style={[s.limitText, d.limitText]}>
-                {t('notes.manageGroups.limitHint', {
-                  count: groups.length,
-                  max: MAX_NOTE_GROUPS,
-                  defaultValue: `已创建 ${groups.length}/${MAX_NOTE_GROUPS} 个分组`,
-                })}
-              </Text>
               <ScrollView
                 style={s.modalList}
                 contentContainerStyle={s.modalListContent}
@@ -846,16 +827,6 @@ export function GroupManagerSheet({
                       defaultValue: '新增分组',
                     })}
               </Text>
-              <Text style={[s.editorHint, d.modalCopy]}>
-                {editingGroupId
-                  ? t('notes.manageGroups.renameHint', {
-                      name: editingGroupName,
-                      defaultValue: `正在重命名「${editingGroupName}」`,
-                    })
-                  : t('notes.manageGroups.createHint', {
-                      defaultValue: '分组帮你归类笔记。',
-                    })}
-              </Text>
             </View>
             <View style={s.editorField}>
               <Text style={[s.editorFieldLabel, d.modalCopy]}>
@@ -939,7 +910,6 @@ const s = StyleSheet.create({
   },
   modalTitle: { ...Typography.h3, fontWeight: '700' },
   modalCopy: { ...Typography.small },
-  limitText: { ...Typography.small, marginTop: -Spacing.xs },
   modalList: { flex: 1 },
   modalListContent: { gap: Spacing.sm, paddingBottom: Spacing.md },
   // NoteCard 自带左右 Spacing.lg 内边距：负 margin 抵掉全屏页的水平留白，卡片全宽。
@@ -990,6 +960,8 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
   },
   dragHandleWrap: {
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1025,7 +997,6 @@ const s = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   editorTitleBlock: { gap: Spacing.xs, marginTop: Spacing.xs },
-  editorHint: { ...Typography.small },
   editorField: { gap: Spacing.xs, marginTop: Spacing.sm },
   editorFieldLabel: { ...Typography.small, fontWeight: '600' },
   editorCharCount: { ...Typography.small, alignSelf: 'flex-end' },

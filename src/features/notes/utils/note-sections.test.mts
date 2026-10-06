@@ -83,6 +83,26 @@ test('buildNoteSections removes media blocks from the text region', () => {
   );
 });
 
+test('explicit text media blocks remain addressable after text filtering', () => {
+  const sections = buildNoteSections({
+    sections: {
+      text: {
+        content: 'structured',
+        contentJson: [
+          { type: 'paragraph', content: [{ text: 'hello' }] },
+          { type: 'image', props: { url: 'https://cdn.test/inline.jpg', width: 640, height: 480 } },
+        ],
+      },
+      media: { items: [] },
+      showcase: { items: [] },
+      location: null,
+    },
+  });
+
+  assert.equal(sections.text.contentJson?.length, 1);
+  assert.equal(sections.media.items[0]?.url, 'https://cdn.test/inline.jpg');
+});
+
 test('getNoteSectionAvailability reports addressable sections', () => {
   const availability = getNoteSectionAvailability(buildNoteSections(legacyNote));
 
@@ -90,8 +110,30 @@ test('getNoteSectionAvailability reports addressable sections', () => {
     hasText: true,
     hasMedia: true,
     hasShowcase: false,
+    hasAudio: false,
+    hasContacts: false,
+    hasGroups: false,
     hasLocation: false,
   });
+});
+
+test('buildNoteSections keeps audio and resolved peer cards as separate sections', () => {
+  const sections = buildNoteSections({
+    media: [{ type: 'AUDIO', objectKey: 'notes/voice.m4a', url: 'https://cdn.test/voice.m4a' }],
+    sections: {
+      audio: {
+        items: [{ type: 'AUDIO', objectKey: 'notes/voice.m4a', url: 'https://cdn.test/voice.m4a' }],
+      },
+      contacts: { items: [{ id: 'u1', name: 'Alice', faceURL: 'https://cdn.test/alice.jpg' }] },
+      groups: { items: [{ id: 'g1', name: 'Team' }] },
+    },
+  });
+
+  assert.equal(sections.audio.items[0]?.type, 'AUDIO');
+  assert.equal(sections.media.items.length, 0);
+  assert.equal(sections.contacts.items[0]?.name, 'Alice');
+  assert.equal(sections.groups.items[0]?.name, 'Team');
+  assert.equal(getNoteSectionAvailability(sections).hasAudio, true);
 });
 
 test('getInitialNoteSection redirects stale legacy showcase card requests to migrated media', () => {

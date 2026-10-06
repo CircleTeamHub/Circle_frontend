@@ -1,3 +1,5 @@
+import type { NoteMediaType } from '@/features/notes/types';
+
 /** Keep picker and upload work bounded so a large selection cannot saturate the device. */
 export const MAX_NOTE_MEDIA_SELECTION = 10;
 export const NOTE_MEDIA_UPLOAD_CONCURRENCY = 3;
@@ -19,7 +21,7 @@ export type PendingNoteMediaAsset = {
 
 export type EditorNoteMediaDraft = {
   clientId: string;
-  type: 'IMAGE' | 'VIDEO';
+  type: NoteMediaType;
   objectKey: string;
   /** 私有目录没有可直读的地址：刚上传的草稿只有 objectKey，预览走 previewUri。 */
   url?: string;
@@ -48,7 +50,7 @@ function createDraftClientId() {
 
 export function createPendingNoteMediaDrafts(
   assets: readonly PendingNoteMediaAsset[],
-  type: 'IMAGE' | 'VIDEO',
+  type: NoteMediaType,
 ): EditorNoteMediaDraft[] {
   return assets.map((asset, index) => {
     const clientId = createDraftClientId();

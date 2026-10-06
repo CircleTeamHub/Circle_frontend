@@ -21,6 +21,7 @@ import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-comp
 import { uploadChatVideoPoster } from '@/features/chat/utils/chat-video-poster';
 import { hideTopNotice, showTopNotice } from '@/components/app/top-notice-store';
 import {
+  assertMediaSendSessionCurrent,
   failMediaSend,
   finishMediaSend,
   type PendingMediaUpload,
@@ -41,6 +42,11 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { VIDEO_UPLOAD_TIMEOUT_MS } from '@/features/chat/chat-detail/constants';
 import { type MediaSourceAction } from '@/features/chat/components/media-source-sheet';
 import { type TFunction } from 'i18next';
+import {
+  chatMediaUploadScheduler,
+  MAX_CHAT_IMAGE_SELECTION,
+  type MediaUploadScheduler,
+} from '@/features/chat/utils/media-upload-scheduler';
 
 export interface MediaSendParams {
   t: TFunction<"translation", undefined>;
@@ -83,6 +89,11 @@ export function useMediaSend({
   const uploadedVideoKeysRef = useRef(
     new Map<string, { key: string; thumbKey?: string }>(),
   );
+  // A picker can return dozens of assets at once. Keep expensive compression,
+  // presign, and upload work bounded without putting queue state in React. The
+  // pool is app-wide so navigating away from a chat cannot create a second
+  // burst of uploads in a new screen instance.
+  const mediaUploadScheduler: MediaUploadScheduler = chatMediaUploadScheduler;
   useEffect(() => {
     const uploadedVideoKeys = uploadedVideoKeysRef.current;
     return () => {
@@ -102,6 +113,7 @@ export function useMediaSend({
       deliveryId: string,
     ) => {
       try {
+        assertMediaSendSessionCurrent(deliveryId);
         if (isTempChat) {
           await assertMyTempChatConversationOpen(conversationID);
         }
@@ -169,6 +181,18 @@ export function useMediaSend({
     },
     [conversationID, conversationType, isGroupChat, isTempChat, t, mountedRef, setSendError],
   );
+  const enqueueImageUpload = useCallback(
+    (
+      asset: ChatMediaFile,
+      filename: string,
+      contentType: string,
+      deliveryId: string,
+    ) =>
+      mediaUploadScheduler.enqueue(() =>
+        uploadAndSendImage(asset, filename, contentType, deliveryId),
+      ),
+    [mediaUploadScheduler, uploadAndSendImage],
+  );
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
   const uploadAndSendImageAsset = useCallback(
     async (asset: ImagePicker.ImagePickerAsset) => {
@@ -223,13 +247,13 @@ export function useMediaSend({
           ...(asset.width ? { width: asset.width } : {}),
           ...(asset.height ? { height: asset.height } : {}),
         },
-        retry: (id) => uploadAndSendImage(asset, filename, contentType, id),
+        retry: (id) => enqueueImageUpload(asset, filename, contentType, id),
         source: { uri: asset.uri, uploadName: filename, contentType },
       });
-      void uploadAndSendImage(asset, filename, contentType, deliveryId);
+      void enqueueImageUpload(asset, filename, contentType, deliveryId);
       return true;
     },
-    [conversationID, t, uploadAndSendImage, mountedRef, setSendError],
+    [conversationID, t, enqueueImageUpload, mountedRef, setSendError],
   );
 
   const uploadAndSendVideo = useCallback(
@@ -240,6 +264,7 @@ export function useMediaSend({
       deliveryId: string,
     ) => {
       try {
+        assertMediaSendSessionCurrent(deliveryId);
         if (isTempChat) {
           await assertMyTempChatConversationOpen(conversationID);
         }
@@ -305,6 +330,18 @@ export function useMediaSend({
     },
     [conversationID, conversationType, isGroupChat, isTempChat, t, mountedRef, setSendError],
   );
+  const enqueueVideoUpload = useCallback(
+    (
+      asset: ChatMediaFile,
+      filename: string,
+      contentType: string,
+      deliveryId: string,
+    ) =>
+      mediaUploadScheduler.enqueue(() =>
+        uploadAndSendVideo(asset, filename, contentType, deliveryId),
+      ),
+    [mediaUploadScheduler, uploadAndSendVideo],
+  );
 
   const uploadAndSendVideoAsset = useCallback(
     async (asset: ImagePicker.ImagePickerAsset) => {
@@ -366,12 +403,12 @@ export function useMediaSend({
             : {}),
           ...(asset.fileSize ? { size: asset.fileSize } : {}),
         },
-        retry: (id) => uploadAndSendVideo(asset, filename, contentType, id),
+        retry: (id) => enqueueVideoUpload(asset, filename, contentType, id),
         source: { uri: asset.uri, uploadName: filename, contentType },
       });
-      void uploadAndSendVideo(asset, filename, contentType, deliveryId);
+      void enqueueVideoUpload(asset, filename, contentType, deliveryId);
     },
-    [conversationID, t, uploadAndSendVideo, mountedRef, setSendError],
+    [conversationID, t, enqueueVideoUpload, mountedRef, setSendError],
   );
 
   /**
@@ -385,7 +422,7 @@ export function useMediaSend({
           await uploadAndSendVoice(uri, record.duration ?? 1, deliveryId);
           return;
         case 'image':
-          await uploadAndSendImage(
+          await enqueueImageUpload(
             { uri, width: record.width, height: record.height },
             record.uploadName,
             record.contentType,
@@ -393,7 +430,7 @@ export function useMediaSend({
           );
           return;
         case 'video':
-          await uploadAndSendVideo(
+          await enqueueVideoUpload(
             {
               uri,
               width: record.width,
@@ -410,7 +447,7 @@ export function useMediaSend({
           return;
       }
     },
-    [uploadAndSendImage, uploadAndSendVideo, uploadAndSendVoice],
+    [enqueueImageUpload, enqueueVideoUpload, uploadAndSendVoice],
   );
   useEffect(() => {
     reuploadPendingMediaRef.current = reuploadPendingMedia;
@@ -445,7 +482,8 @@ export function useMediaSend({
           preferredAssetRepresentationMode:
             ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
           quality: 0.85,
-          allowsMultipleSelection: false,
+          allowsMultipleSelection: kind === 'photo',
+          selectionLimit: kind === 'photo' ? MAX_CHAT_IMAGE_SELECTION : 1,
           ...(transcodeOnPick
             ? { videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720 }
             : {}),
@@ -472,7 +510,28 @@ export function useMediaSend({
       if (result.canceled || result.assets.length === 0) return;
       const pickedAsset = result.assets[0];
       if (kind === 'photo') {
-        setPhotoEditorAsset(pickedAsset);
+        if (result.assets.length === 1) {
+          // Keep the existing single-photo editor flow intact.
+          setPhotoEditorAsset(pickedAsset);
+          return;
+        }
+        // Every selected photo gets its own optimistic bubble and enters the
+        // bounded scheduler immediately; one failed upload cannot hide others.
+        const oversizedCount = result.assets.reduce(
+          (count, asset) => count + (isChatImageTooLarge(asset.fileSize) ? 1 : 0),
+          0,
+        );
+        if (oversizedCount > 0) {
+          Alert.alert(
+            t('validation.imageTooLarge'),
+            t('validation.imageSizeLimit'),
+          );
+        }
+        await Promise.all(
+          result.assets
+            .filter((asset) => !isChatImageTooLarge(asset.fileSize))
+            .map(uploadAndSendImageAsset),
+        );
         return;
       }
       await uploadAndSendVideoAsset(pickedAsset);
@@ -482,6 +541,7 @@ export function useMediaSend({
       sourceID,
       t,
       uploadAndSendVideoAsset,
+      uploadAndSendImageAsset,
       inFlightRef,
       mountedRef,
       setSendError,

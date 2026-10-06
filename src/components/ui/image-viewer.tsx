@@ -118,7 +118,10 @@ export function ImageViewer({
     [images.length, width],
   );
 
-  if (images.length === 0) return null;
+  // A viewer is embedded in feed/message cells. Do not keep a hidden native
+  // Modal + FlatList tree alive for every cell; only the actively opened image
+  // needs native view and image resources.
+  if (!visible || images.length === 0) return null;
 
   const showArrows = Platform.OS === 'web' && images.length > 1;
 
@@ -147,18 +150,22 @@ export function ImageViewer({
           })}
           onMomentumScrollEnd={handleMomentumEnd}
           renderItem={({ item, index: itemIndex }) => (
-            <ZoomableImage
-              uri={item}
-              cacheKey={cacheKeys?.[itemIndex]}
-              cachePolicy={privacyMode === 'ephemeral' ? 'none' : 'memory-disk'}
-              width={width}
-              height={height}
-              active={itemIndex === index}
-              onZoomedChange={setZoomed}
-              // 单击关闭：全屏查看器里最顺手的退出方式（双击留给放大）。
-              onTap={onClose}
-              onLongPress={privacyMode === 'ephemeral' ? undefined : handleLongPress}
-            />
+            Math.abs(itemIndex - index) <= 1 ? (
+              <ZoomableImage
+                uri={item}
+                cacheKey={cacheKeys?.[itemIndex]}
+                cachePolicy={privacyMode === 'ephemeral' ? 'none' : 'memory-disk'}
+                width={width}
+                height={height}
+                active={itemIndex === index}
+                onZoomedChange={setZoomed}
+                // 单击关闭：全屏查看器里最顺手的退出方式（双击留给放大）。
+                onTap={onClose}
+                onLongPress={privacyMode === 'ephemeral' ? undefined : handleLongPress}
+              />
+            ) : (
+              <View style={{ width, height }} />
+            )
           )}
         />
 

@@ -91,7 +91,9 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
   },
 
   prependMoment: (moment) =>
-    set((s) => ({ moments: [moment, ...s.moments] })),
+    set((s) => ({
+      moments: [moment, ...s.moments.filter((item) => item.id !== moment.id)],
+    })),
 
   removeMoment: (id) =>
     set((s) => ({ moments: s.moments.filter((m) => m.id !== id) })),

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Image } from 'expo-image';
 import { ImageBubble } from './image-bubble';
 import type { ChatMessage } from '@/types';
@@ -42,7 +42,7 @@ jest.mock('@/components/ui/image-viewer', () => {
     ImageViewer: (props: { privacyMode?: unknown; cacheKeys?: unknown }) => {
       viewerModes.push(props.privacyMode);
       viewerCacheKeys.push(props.cacheKeys);
-      return <View />;
+      return <View testID="image-viewer" />;
     },
   };
 });
@@ -88,6 +88,10 @@ const imageMessage = {
 
 const cachePolicies = () => imageProps.map((props) => props.cachePolicy);
 
+function openPreview() {
+  fireEvent.press(screen.getByTestId('chat-image-preview'));
+}
+
 beforeEach(() => {
   imageProps.length = 0;
   viewerModes.length = 0;
@@ -109,6 +113,7 @@ describe('ImageBubble ephemeral rendering', () => {
 
     expect(cachePolicies()).not.toContain('memory-disk');
     expect(viewerModes).not.toContain('standard');
+    openPreview();
     expect(viewerModes).toContain('ephemeral');
   });
 
@@ -122,6 +127,8 @@ describe('ImageBubble ephemeral rendering', () => {
     );
 
     expect(cachePolicies()).toContain('memory-disk');
+    expect(viewerModes).toHaveLength(0);
+    openPreview();
     expect(viewerModes).toContain('standard');
   });
 
@@ -137,6 +144,7 @@ describe('ImageBubble ephemeral rendering', () => {
     );
 
     expect(cachePolicies()).not.toContain('memory-disk');
+    openPreview();
     expect(viewerModes).toContain('ephemeral');
   });
 
@@ -156,6 +164,7 @@ describe('ImageBubble ephemeral rendering', () => {
     );
 
     expect(cachePolicies()).toContain('memory-disk');
+    openPreview();
     expect(viewerModes).toContain('standard');
   });
 });
@@ -246,6 +255,7 @@ describe('ImageBubble cache keys', () => {
         outgoing={false}
       />,
     );
+    openPreview();
     expect(imageProps.at(-1)?.source).toEqual({
       uri: 'https://media.example.com/thumb.jpg',
       cacheKey: 'chat/u2/photo.thumb.jpg',

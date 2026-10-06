@@ -37,7 +37,9 @@ export async function readLocalConversations(): Promise<ChatConversationDto[]> {
 export async function persistLocalMessages(
   _conversationId: string,
   _incoming: ChatMessageDto[],
-): Promise<void> {}
+): Promise<boolean> {
+  return true;
+}
 
 export interface LocalSyncState {
   revision: number;

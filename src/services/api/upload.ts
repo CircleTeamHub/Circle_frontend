@@ -83,6 +83,13 @@ const ALLOWED_CONTENT_TYPES = new Set([
   'video/mp4',
   'video/quicktime',
   'video/x-m4v',
+  'audio/mp4',
+  'audio/m4a',
+  'audio/aac',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/webm',
+  'audio/wav',
 ]);
 
 const CONTENT_TYPE_BY_EXTENSION = {
@@ -96,6 +103,12 @@ const CONTENT_TYPE_BY_EXTENSION = {
   mp4: 'video/mp4',
   mov: 'video/quicktime',
   m4v: 'video/x-m4v',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  mp3: 'audio/mpeg',
+  ogg: 'audio/ogg',
+  webm: 'audio/webm',
+  wav: 'audio/wav',
 } as const;
 
 /**
@@ -114,6 +127,7 @@ const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'video/quicktime': 'mov',
   'video/x-m4v': 'm4v',
   'audio/mp4': 'm4a',
+  'audio/mpeg': 'mp3',
 };
 
 /** 文件名已带认识的扩展名则原样通过，否则按 contentType 补一个。 */

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -220,6 +221,11 @@ export default function UserMomentsScreen() {
         }
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.3}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={40}
+        windowSize={9}
+        removeClippedSubviews={Platform.OS === 'android'}
         showsVerticalScrollIndicator={false}
       />
     </View>

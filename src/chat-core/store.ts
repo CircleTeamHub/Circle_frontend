@@ -40,6 +40,13 @@ export const MESSAGES_CAP = 200;
  * 收回 MESSAGES_CAP(shrinkConversationWindow)。到顶以后停止翻页、提示去搜索。
  */
 export const MESSAGES_WINDOW_MAX = 10_000;
+/**
+ * Failed bubbles remain actionable for retry, but they cannot be an unlimited
+ * exception to the per-conversation window. A device that stays offline while
+ * repeatedly sending media would otherwise retain every failed payload and
+ * keep the corresponding retry closures alive forever.
+ */
+export const FAILED_MESSAGES_CAP = 100;
 /** 对端 typing 显示时长:超过它没有新 typing 事件就回落在线状态。 */
 export const TYPING_DISPLAY_MS = 4_000;
 /** Keep self-destruct purges below the browser timer clamp and cover cached rows. */
@@ -253,6 +260,38 @@ function seedPeerReadWatermarks(
     const prior = next[conversation.id]?.[peerId] ?? 0;
     if ((height as number) <= prior) continue;
     if (next === readWatermarks) next = { ...readWatermarks };
+    next[conversation.id] = {
+      ...(next[conversation.id] ?? {}),
+      [peerId]: height as number,
+    };
+  }
+  return next;
+}
+
+/**
+ * The peer's delivered watermark is only broadcast when it advances. A
+ * snapshot is therefore the only way to recover progress made while this
+ * device was offline; merge it as a monotonic lower bound just like peer read.
+ */
+function seedPeerDeliveredWatermarks(
+  deliveredWatermarks: Record<string, Record<string, number>>,
+  conversations: ChatConversationDto[],
+): Record<string, Record<string, number>> {
+  let next = deliveredWatermarks;
+  for (const conversation of conversations) {
+    if (conversation.type !== 'DIRECT') continue;
+    const peerId = conversation.peer?.id;
+    const height = conversation.peerDeliveredHeight;
+    if (
+      !peerId ||
+      !Number.isSafeInteger(height) ||
+      (height as number) < 0
+    ) {
+      continue;
+    }
+    const prior = next[conversation.id]?.[peerId] ?? 0;
+    if ((height as number) <= prior) continue;
+    if (next === deliveredWatermarks) next = { ...deliveredWatermarks };
     next[conversation.id] = {
       ...(next[conversation.id] ?? {}),
       [peerId]: height as number,
@@ -485,7 +524,7 @@ interface ChatStoreState {
     conversationId: string,
     incoming: ChatMessageDto[],
     options?: { persist?: boolean },
-  ) => void;
+  ) => Promise<boolean>;
   /**
    * 一页增量同步落到内存(不落盘:本地库那半由同步协调器在一个事务里写,
    * 与游标一起提交)。清空水位、本人已读、墓碑、撤回引用脱敏都在这里收敛。
@@ -521,7 +560,7 @@ interface ChatStoreState {
     messageId: string,
     revokedBy: string,
     meta?: { height?: number; senderId?: string | null; revision?: number },
-  ) => void;
+  ) => Promise<boolean>;
   /** 对端「正在输入」有效期(conversationId → epoch ms;过期即不显示)。 */
   typingUntilByConversation: Record<string, number>;
   applyTyping: (conversationId: string) => void;
@@ -540,7 +579,7 @@ interface ChatStoreState {
     userId: string,
     op: 'add' | 'remove',
     revision?: number,
-  ) => void;
+  ) => Promise<boolean>;
   /** G-07 消息编辑落地(content 替换 + editedAt;height 不变)。 */
   applyEdit: (
     conversationId: string,
@@ -548,7 +587,7 @@ interface ChatStoreState {
     content: Record<string, unknown>,
     editedAt: string,
     revision?: number,
-  ) => void;
+  ) => Promise<boolean>;
   /** S-01:会话级焚毁档位变更(REST 回执/系统消息驱动)。 */
   applyBurnDuration: (
     conversationId: string,
@@ -686,6 +725,17 @@ function mergeMessageState(
   return next;
 }
 
+function hasStaleLiveRevision(
+  message: ChatMessageDto,
+  revision: number | undefined,
+): boolean {
+  return (
+    Number.isSafeInteger(revision) &&
+    (revision as number) >= 0 &&
+    (revision as number) <= (message.revision ?? 0)
+  );
+}
+
 /**
  * 自己的已读水位推进后,本机未读的收敛值。
  *
@@ -820,21 +870,31 @@ export function mergeMessages(
   const merged = resolveUnknownFailureAnchors([...byId.values()]).sort(
     (a, b) => sortKey(a) - sortKey(b),
   );
-  if (merged.length <= cap) return merged;
   // 截断只淘汰已确认消息,失败气泡不占名额也不被挤掉。它锚在点击发送时的
   // 旧水位上,之后每来一条新消息就往窗口顶部退一格;而 height=0 的行从不落
   // messages 表 —— 一旦被截掉,气泡连同会话列表的「发送失败」前缀就一起
   // 消失,要到冷启动从 outbox 回放才重新出现。
   const isFailed = (message: ChatMessageDto): boolean =>
     (message as StoredChatMessage).failed === true;
+  const failedCount = merged.reduce(
+    (count, message) => count + (isFailed(message) ? 1 : 0),
+    0,
+  );
+  if (merged.length <= cap && failedCount <= FAILED_MESSAGES_CAP) return merged;
   let confirmedCount = 0;
   for (const message of merged) {
     if (!isFailed(message)) confirmedCount += 1;
   }
   let toDrop = confirmedCount - cap;
-  if (toDrop <= 0) return merged;
+  const failedIds = new Set(
+    merged
+      .filter(isFailed)
+      .slice(-FAILED_MESSAGES_CAP)
+      .map((message) => message.id),
+  );
   return merged.filter((message) => {
-    if (toDrop <= 0 || isFailed(message)) return true;
+    if (isFailed(message)) return failedIds.has(message.id);
+    if (toDrop <= 0) return true;
     toDrop -= 1;
     return false;
   });
@@ -859,6 +919,49 @@ function reconcileDeletedPreview(
     }
   }
   return { ...conversation, lastMessage: fallback };
+}
+
+/**
+ * 会话快照可能早于本机刚完成的发送请求生成。不要让这份旧快照把较新的
+ * 本地预览回滚；服务端 height 是跨设备可比较的消息顺序号。
+ *
+ * height=0 只对仍在发送中的乐观消息保留。失败气泡要回到快照/时间线里的
+ * 已确认消息，由 hasFailedLatestMessage 单独负责显示失败提示。
+ */
+function preserveNewerLivePreview(
+  conversation: ChatConversationDto,
+  current: ChatConversationDto | undefined,
+  timeline: ChatMessageDto[] | undefined,
+): ChatConversationDto {
+  const local = current?.lastMessage;
+  if (!local || isMessageDeletedLocally(local.id, local.d)) return conversation;
+
+  const localHeight = Number.isFinite(local.height) ? local.height : 0;
+  const snapshotHeight = conversation.lastMessage?.height ?? 0;
+  const localTimelineMessage = (timeline ?? []).find(
+    (message) =>
+      message.id === local.id ||
+      (message.d !== null && local.d !== null && message.d === local.d),
+  ) as StoredChatMessage | undefined;
+  const localSendInFlight =
+    localHeight === 0 &&
+    (local as StoredChatMessage).failed !== true &&
+    localTimelineMessage?.failed !== true;
+
+  // 空预览是服务端清空/焚毁的权威结果；只有仍在发送中的本地气泡可以暂时
+  // 留住它，已失败或已确认的旧消息都不能借快照刷新重新出现。
+  if (
+    (!conversation.lastMessage || localHeight <= snapshotHeight) &&
+    !localSendInFlight
+  ) {
+    return conversation;
+  }
+
+  return {
+    ...conversation,
+    lastMessage: local,
+    lastMessageAt: current?.lastMessageAt ?? local.createdAt,
+  };
 }
 
 /**
@@ -1069,6 +1172,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversations: currentConversations,
       messagesByConversation,
       readWatermarks,
+      deliveredWatermarks,
       currentUserId,
       clearedBeforeHeightByConversation,
       selfDestructPolicyEpoch,
@@ -1087,6 +1191,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       seedPeerReadWatermarks(readWatermarks, conversations),
       conversations,
       currentUserId,
+    );
+    const seededDeliveredWatermarks = seedPeerDeliveredWatermarks(
+      deliveredWatermarks,
+      conversations,
     );
     // 另一台设备清空过、或清空时本机离线:快照里的水位比本机高,本地缓存里水位
     // 之下的记录要删掉,入库口也要按新水位挡。
@@ -1108,6 +1216,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const reconciledConversations = sortConversations(
       conversationsWithBurnState
         .map((c) => reconcileDeletedPreview(c, messagesByConversation[c.id]))
+        .map((c) =>
+          preserveNewerLivePreview(
+            c,
+            currentById.get(c.id),
+            messagesByConversation[c.id],
+          ),
+        )
           // 快照是请求发出那一刻的事实。这段时间里本账号可能已经在另一台
           // 设备上读过(chat:read 先到、会话还不在 store 里,applyRead 当时
           // 无从收敛),或者本机刚清空过 —— 直接装进来就是红点/预览回退,
@@ -1128,6 +1243,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       conversationsSnapshotLoaded: true,
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
       readWatermarks: seededReadWatermarks,
+      deliveredWatermarks: seededDeliveredWatermarks,
       ...(raisedFloors.size > 0
         ? {
             clearedBeforeHeightByConversation: floors,
@@ -1163,8 +1279,44 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     void upsertLocalConversation(reconciled);
   },
   removeConversation: (conversationId) => {
+    const state = get();
+    const { [conversationId]: _messages, ...messagesByConversation } =
+      state.messagesByConversation;
+    const { [conversationId]: _window, ...messageWindowByConversation } =
+      state.messageWindowByConversation;
+    const { [conversationId]: _floor, ...historyFloorByConversation } =
+      state.historyFloorByConversation;
+    const {
+      [conversationId]: _full,
+      ...historyWindowFullByConversation
+    } = state.historyWindowFullByConversation;
+    const {
+      [conversationId]: _clearedFloor,
+      ...clearedBeforeHeightByConversation
+    } = state.clearedBeforeHeightByConversation;
+    const { [conversationId]: _read, ...readWatermarks } =
+      state.readWatermarks;
+    const { [conversationId]: _delivered, ...deliveredWatermarks } =
+      state.deliveredWatermarks;
+    const { [conversationId]: _typing, ...typingUntilByConversation } =
+      state.typingUntilByConversation;
     set({
-      conversations: get().conversations.filter((c) => c.id !== conversationId),
+      conversations: state.conversations.filter((c) => c.id !== conversationId),
+      // A removed/left conversation is no longer reachable from the UI. Drop
+      // its timeline and all per-conversation bookkeeping together; retaining
+      // a 10k-message history here made every removed group a permanent heap
+      // leak until logout.
+      messagesByConversation,
+      messageWindowByConversation,
+      historyFloorByConversation,
+      historyWindowFullByConversation,
+      clearedBeforeHeightByConversation,
+      readWatermarks,
+      deliveredWatermarks,
+      typingUntilByConversation,
+      ...(state.activeConversationId === conversationId
+        ? { activeConversationId: null }
+        : {}),
     });
     void removeLocalConversation(conversationId);
   },
@@ -1521,7 +1673,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         !isMessageDeletedLocally(m.id, m.d) &&
         !(clearedFloor > 0 && m.height > 0 && m.height <= clearedFloor),
     );
-    if (incoming.length === 0) return;
+    if (incoming.length === 0) return Promise.resolve(true);
     const {
       messagesByConversation,
       messageWindowByConversation,
@@ -1588,8 +1740,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // G-01:唯一写入口顺手落盘(广播/回执/历史/补拉都汇到这里)。
     // 增量同步例外:它的本地库那半与游标在一个事务里写(见 sync.ts)。
     if (options?.persist !== false) {
-      void persistLocalMessages(conversationId, incoming);
+      return persistLocalMessages(conversationId, incoming);
     }
+    return Promise.resolve(true);
   },
 
   applySyncPage: (conversationId, page) => {
@@ -1783,6 +1936,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   applyDelivered: (conversationId, userId, height) => {
+    if (!Number.isSafeInteger(height) || height < 0) return;
     const { deliveredWatermarks } = get();
     const conversation = deliveredWatermarks[conversationId] ?? {};
     const prior = conversation[userId] ?? 0;
@@ -1795,47 +1949,68 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
   },
 
-  applyReaction: (conversationId, messageId, emoji, userId, op, revision) => {
+  applyReaction: async (
+    conversationId,
+    messageId,
+    emoji,
+    userId,
+    op,
+    revision,
+  ) => {
     const { messagesByConversation } = get();
     const timeline = messagesByConversation[conversationId];
-    if (!timeline) return;
+    if (!timeline) return false;
+    const current = timeline.find((message) => message.id === messageId);
+    if (!current) return false;
+    // The revision belongs to the complete visible message state. Once a newer
+    // state is present, an older reaction must not resurrect or remove anything.
+    if (hasStaleLiveRevision(current, revision)) return true;
+
     let changed = false;
-    const withRevision = (message: ChatMessageDto): ChatMessageDto =>
-      typeof revision === 'number' && revision > (message.revision ?? 0)
-        ? { ...message, revision }
-        : message;
+    let revisionChanged = false;
+    const withRevision = (message: ChatMessageDto): ChatMessageDto => {
+      if (
+        Number.isSafeInteger(revision) &&
+        (revision as number) > (message.revision ?? 0)
+      ) {
+        revisionChanged = true;
+        return { ...message, revision };
+      }
+      return message;
+    };
     const next = timeline.map((message) => {
       if (message.id !== messageId) return message;
+      const current = withRevision(message);
       const reactions = message.reactions ?? [];
       const entry = reactions.find((r) => r.emoji === emoji);
       if (op === 'add') {
-        if (entry?.userIds.includes(userId)) return message;
+        if (entry?.userIds.includes(userId)) return current;
         changed = true;
         return {
-          ...withRevision(message),
+          ...current,
           reactions: entry
             ? reactions.map((r) =>
                 r.emoji === emoji
                   ? { ...r, userIds: [...r.userIds, userId] }
                   : r,
               )
-            : [...reactions, { emoji, userIds: [userId] }],
+              : [...reactions, { emoji, userIds: [userId] }],
         };
       }
-      if (!entry?.userIds.includes(userId)) return message;
+      if (!entry?.userIds.includes(userId)) return current;
       changed = true;
       const shrunk = entry.userIds.filter((id) => id !== userId);
       return {
-        ...withRevision(message),
+        ...current,
         reactions:
           shrunk.length > 0
             ? reactions.map((r) =>
                 r.emoji === emoji ? { ...r, userIds: shrunk } : r,
               )
-            : reactions.filter((r) => r.emoji !== emoji),
+          : reactions.filter((r) => r.emoji !== emoji),
       };
     });
-    if (!changed) return;
+    if (!changed && !revisionChanged) return true;
     set({
       messagesByConversation: {
         ...messagesByConversation,
@@ -1843,28 +2018,40 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       },
     });
     const updated = next.find((m) => m.id === messageId);
-    if (updated) void persistLocalMessages(conversationId, [updated]);
+    return updated
+      ? persistLocalMessages(conversationId, [updated])
+      : true;
   },
 
-  applyEdit: (conversationId, messageId, content, editedAt, revision) => {
+  applyEdit: async (conversationId, messageId, content, editedAt, revision) => {
     const { messagesByConversation, conversations } = get();
     const timeline = messagesByConversation[conversationId];
-    const next = (timeline ?? []).map((message) =>
-      message.id === messageId && !message.revokedAt
-        ? {
-            ...message,
-            content,
-            editedAt,
-            ...(typeof revision === 'number' &&
-            revision > (message.revision ?? 0)
-              ? { revision }
-              : {}),
-          }
-        : message,
-    );
+    const current = timeline?.find((message) => message.id === messageId);
+    const next = (timeline ?? []).map((message) => {
+      if (message.id !== messageId || hasStaleLiveRevision(message, revision)) {
+        return message;
+      }
+      const revisionPatch =
+        Number.isSafeInteger(revision) && (revision as number) >= 0
+          ? { revision }
+          : {};
+      // A revoked message stays redacted, but the newer revision still needs
+      // to be retained so a later stale history page cannot resurrect it.
+      if (message.revokedAt) return { ...message, ...revisionPatch };
+      return { ...message, content, editedAt, ...revisionPatch };
+    });
     const index = conversations.findIndex((c) => c.id === conversationId);
     const target = index >= 0 ? conversations[index] : null;
-    const previewNeedsUpdate = target?.lastMessage?.id === messageId;
+    const preview =
+      target?.lastMessage?.id === messageId ? target.lastMessage : undefined;
+    const shouldUpdatePreview =
+      Boolean(preview) &&
+      !preview?.revokedAt &&
+      !hasStaleLiveRevision(preview!, revision);
+    const shouldBumpRevokedPreview =
+      Boolean(preview?.revokedAt) &&
+      Number.isSafeInteger(revision) &&
+      (revision as number) > (preview?.revision ?? 0);
     set({
       ...(timeline
         ? {
@@ -1874,21 +2061,27 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             },
           }
         : {}),
-      ...(previewNeedsUpdate && target
+      ...((shouldUpdatePreview || shouldBumpRevokedPreview) && target
         ? {
             conversations: [
               ...conversations.slice(0, index),
               {
                 ...target,
-                lastMessage: { ...target.lastMessage!, content, editedAt },
+                lastMessage: {
+                  ...target.lastMessage!,
+                  ...(shouldUpdatePreview ? { content, editedAt } : {}),
+                  ...(shouldBumpRevokedPreview ? { revision } : {}),
+                },
               },
               ...conversations.slice(index + 1),
             ],
           }
         : {}),
     });
+    if (!current) return false;
     const updated = next.find((m) => m.id === messageId);
-    if (updated) void persistLocalMessages(conversationId, [updated]);
+    if (!updated || updated === current) return true;
+    return persistLocalMessages(conversationId, [updated]);
   },
 
   applyBurnDuration: (conversationId, burnDurationSec, burnStartedAt) => {
@@ -2130,7 +2323,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     if (nextConversation) void upsertLocalConversation(nextConversation);
   },
 
-  applyRevoke: (conversationId, messageId, revokedBy, meta) => {
+  applyRevoke: async (conversationId, messageId, revokedBy, meta) => {
     const {
       messagesByConversation,
       conversations,
@@ -2144,16 +2337,38 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const existing = (timeline ?? []).find((m) => m.id === messageId);
     const index = conversations.findIndex((c) => c.id === conversationId);
     const target = index >= 0 ? conversations[index] : null;
+    const revision =
+      Number.isSafeInteger(meta?.revision) && (meta?.revision as number) >= 0
+        ? (meta?.revision as number)
+        : undefined;
+    if (
+      existing &&
+      hasStaleLiveRevision(existing, revision)
+    ) {
+      return true;
+    }
+    if (
+      !existing &&
+      target?.lastMessage?.id === messageId &&
+      hasStaleLiveRevision(target.lastMessage, revision)
+    ) {
+      return false;
+    }
     const alreadyRevoked =
       Boolean(existing?.revokedAt) ||
       (target?.lastMessage?.id === messageId &&
         Boolean(target.lastMessage.revokedAt));
-    const revisionPatch =
-      typeof meta?.revision === 'number' ? { revision: meta.revision } : {};
+    const revisionPatch = revision === undefined ? {} : { revision };
     let timelineChanged = false;
     const nextTimeline = (timeline ?? []).map((message) => {
       if (message.id === messageId) {
-        if (message.revokedAt) return message; // 幂等:广播+本端乐观各来一次
+        if (message.revokedAt) {
+          if (revision !== undefined && revision > (message.revision ?? 0)) {
+            timelineChanged = true;
+            return { ...message, ...revisionPatch };
+          }
+          return message; // 幂等:广播+本端乐观各来一次
+        }
         timelineChanged = true;
         return { ...message, content: {}, revokedAt, revokedBy, ...revisionPatch };
       }
@@ -2164,7 +2379,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       nextTimeline;
     if (redacted !== nextTimeline) timelineChanged = true;
     // 本地库里还有不在内存窗口的引用气泡:尽力而为地一并脱敏。
-    void redactLocalQuotesOf(conversationId, [messageId], 'revoked');
+    const quoteRedaction = redactLocalQuotesOf(
+      conversationId,
+      [messageId],
+      'revoked',
+    );
 
     // 撤回的消息服务端不计未读。本机这条要是算过未读(别人发的、在已读位之上、
     // 当时没在看),红点跟着扣一条 —— 否则会一直挂着一条看不到内容的「新消息」,
@@ -2186,13 +2405,29 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       typeof height === 'number' &&
       height > selfRead;
 
-    const previewNeedsUpdate =
-      target?.lastMessage?.id === messageId && !target.lastMessage.revokedAt;
+    const preview =
+      target?.lastMessage?.id === messageId ? target.lastMessage : undefined;
+    const previewNeedsUpdate = Boolean(preview && !preview.revokedAt);
+    const previewRevisionNeedsUpdate = Boolean(
+      preview?.revokedAt &&
+        revision !== undefined &&
+        revision > (preview.revision ?? 0),
+    );
     const unreadNeedsUpdate =
       countedAsUnread && target !== null && target.unreadCount > 0;
-    if (!timelineChanged && !previewNeedsUpdate && !unreadNeedsUpdate) return;
+    if (
+      !timelineChanged &&
+      !previewNeedsUpdate &&
+      !previewRevisionNeedsUpdate &&
+      !unreadNeedsUpdate
+    ) {
+      return existing
+        ? quoteRedaction.then((scrubbed) => scrubbed)
+        : false;
+    }
     const nextConversation =
-      target && (previewNeedsUpdate || unreadNeedsUpdate)
+      target &&
+      (previewNeedsUpdate || previewRevisionNeedsUpdate || unreadNeedsUpdate)
         ? {
             ...target,
             ...(previewNeedsUpdate
@@ -2202,6 +2437,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
                     content: {},
                     revokedAt,
                     revokedBy,
+                    ...revisionPatch,
+                  },
+                }
+              : {}),
+            ...(previewRevisionNeedsUpdate
+              ? {
+                  lastMessage: {
+                    ...target.lastMessage!,
                     ...revisionPatch,
                   },
                 }
@@ -2236,9 +2479,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         m.replyTo?.id === messageId ||
         m.replyToId === messageId,
     );
-    if (persisted.length > 0) {
-      void persistLocalMessages(conversationId, persisted);
-    }
+    const messagePersistence =
+      persisted.length > 0
+        ? persistLocalMessages(conversationId, persisted)
+        : Promise.resolve(true);
+    return Promise.all([messagePersistence, quoteRedaction]).then(
+      ([messagesPersisted, quotesScrubbed]) =>
+        Boolean(messagesPersisted && quotesScrubbed && existing),
+    );
   },
 
   applyRead: (conversationId, userId, height) => {

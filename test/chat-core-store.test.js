@@ -261,6 +261,30 @@ test('caps per-conversation messages at 200 keeping the newest', () => {
   assert.equal(messages[messages.length - 1].height, 250);
 });
 
+test('failed bubbles are bounded separately from the confirmed window', () => {
+  const { useChatStore, FAILED_MESSAGES_CAP } = loadChatStore();
+  const store = useChatStore.getState();
+  const failed = Array.from({ length: FAILED_MESSAGES_CAP + 25 }, (_, index) =>
+    msg({
+      id: `failed-${index}`,
+      d: `delivery-${index}`,
+      height: 0,
+      failed: true,
+      createdAt: new Date(Date.UTC(2026, 7, 5, 12, 0, index)).toISOString(),
+    }),
+  );
+
+  store.ingestMessages('conv-1', failed);
+
+  const messages = useChatStore.getState().messagesByConversation['conv-1'];
+  assert.equal(messages.length, FAILED_MESSAGES_CAP);
+  assert.equal(messages.some((message) => message.id === 'failed-0'), false);
+  assert.equal(
+    messages.at(-1)?.id,
+    `failed-${FAILED_MESSAGES_CAP + 24}`,
+  );
+});
+
 test('failed messages survive the cap trim and keep their anchored position', () => {
   const { useChatStore, MESSAGES_CAP } = loadChatStore();
   const store = useChatStore.getState();
@@ -379,6 +403,37 @@ test('conversation snapshots seed peer read watermarks without regressing realti
   assert.equal(useChatStore.getState().readWatermarks['conv-1'].other, 8);
 });
 
+test('conversation snapshots seed peer delivered watermarks without regressing realtime state', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+
+  store.setConversations([conversation({ peerDeliveredHeight: 5 })]);
+  assert.equal(useChatStore.getState().deliveredWatermarks['conv-1'].other, 5);
+
+  useChatStore.getState().applyDelivered('conv-1', 'other', 8);
+  useChatStore.getState().setConversations([
+    conversation({ peerDeliveredHeight: 6 }),
+  ]);
+  assert.equal(useChatStore.getState().deliveredWatermarks['conv-1'].other, 8);
+});
+
+test('delivered watermarks reject fractional and non-finite heights', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+
+  store.applyDelivered('conv-1', 'other', 1.5);
+  store.applyDelivered('conv-1', 'other', Number.NaN);
+  store.applyDelivered('conv-1', 'other', Number.POSITIVE_INFINITY);
+  assert.equal(
+    Object.keys(useChatStore.getState().deliveredWatermarks).length,
+    0,
+  );
+
+  store.applyDelivered('conv-1', 'other', 3);
+  store.applyDelivered('conv-1', 'other', 2);
+  assert.equal(useChatStore.getState().deliveredWatermarks['conv-1'].other, 3);
+});
+
 test('自己的已读水位推进时不会把会话列表抹成 undefined', () => {
   const { useChatStore, selectTotalUnread } = loadChatStore();
   const store = useChatStore.getState();
@@ -491,6 +546,32 @@ test('clearCachedChats keeps the session identity that reset would destroy', () 
   assert.equal(state.connected, true);
 });
 
+test('removeConversation releases its timeline and per-conversation indexes', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation(), conversation({ id: 'conv-2' })]);
+  store.ingestMessages('conv-1', [msg({ id: 'a' })]);
+  store.ingestMessages('conv-2', [msg({ id: 'b', conversationId: 'conv-2' })]);
+  store.applyRead('conv-1', 'other', 4);
+  store.applyDelivered('conv-1', 'other', 4);
+  store.applyTyping('conv-1');
+  store.setActiveConversationId('conv-1');
+
+  store.removeConversation('conv-1');
+
+  const state = useChatStore.getState();
+  // The store is evaluated in a vm context; compare the stable scalar value
+  // instead of crossing realms with deepStrictEqual.
+  assert.equal(state.conversations.map((item) => item.id).join(','), 'conv-2');
+  assert.equal(Object.hasOwn(state.messagesByConversation, 'conv-1'), false);
+  assert.equal(Object.hasOwn(state.readWatermarks, 'conv-1'), false);
+  assert.equal(Object.hasOwn(state.deliveredWatermarks, 'conv-1'), false);
+  assert.equal(Object.hasOwn(state.typingUntilByConversation, 'conv-1'), false);
+  assert.equal(state.activeConversationId, null);
+  assert.ok(state.messagesByConversation['conv-2']);
+});
+
 test('a locally deleted message stays hidden when history is reloaded', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
@@ -557,6 +638,71 @@ test('a REST snapshot cannot resurrect a deleted message as the preview', () => 
     useChatStore.getState().conversations[0].lastMessageAt,
     deleted.createdAt,
   );
+});
+
+test('a stale conversation snapshot cannot roll back a newer local send preview', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+
+  const previous = msg({
+    id: 'previous',
+    height: 7,
+    sender: { id: 'me', nickname: 'me', avatarUrl: null },
+  });
+  store.setConversations(
+    [conversation({ lastMessage: previous, lastMessageAt: previous.createdAt })],
+  );
+
+  // A failed preview restored from a local conversation row can arrive before
+  // its timeline. An older REST snapshot must still be allowed to replace it.
+  const persistedFailure = msg({
+    id: 'local:persisted-failure',
+    height: 0,
+    d: 'persisted-failure',
+    failed: true,
+  });
+  store.setConversations([
+    conversation({
+      lastMessage: persistedFailure,
+      lastMessageAt: persistedFailure.createdAt,
+    }),
+  ]);
+  store.setConversations([
+    conversation({ lastMessage: previous, lastMessageAt: previous.createdAt }),
+  ]);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'previous');
+
+  store.ingestMessages('conv-1', [previous]);
+
+  // 先有一条失败发送；失败处理应把会话预览退回到上一条已确认消息。
+  const failed = msg({
+    id: 'local:failed',
+    height: 0,
+    d: 'failed',
+    sender: { id: 'me', nickname: 'me', avatarUrl: null },
+  });
+  store.ingestMessages('conv-1', [failed]);
+  store.applyIncomingMessage(failed);
+  store.markMessageFailed('conv-1', 'failed');
+  store.revertConversationPreview('conv-1');
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'previous');
+
+  // 网络恢复后新消息已拿到服务端 height=8。
+  const sent = msg({
+    id: 'sent',
+    height: 8,
+    sender: { id: 'me', nickname: 'me', avatarUrl: null },
+  });
+  store.ingestMessages('conv-1', [sent]);
+  store.applyIncomingMessage(sent);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'sent');
+
+  // 重连快照仍停在 height=7，不能把列表预览改回旧消息。
+  store.setConversations([
+    conversation({ lastMessage: previous, lastMessageAt: previous.createdAt }),
+  ]);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'sent');
 });
 
 test('a redelivered deleted message neither returns nor inflates unread', () => {
@@ -914,6 +1060,84 @@ test('a stale history page cannot revert an edit', () => {
 
   const merged = useChatStore.getState().messagesByConversation['conv-1'][0];
   assert.equal(merged.content.text, '新文本');
+});
+
+test('out-of-order live edits and reactions cannot roll a message back', async () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [
+    msg({
+      id: 'm-live',
+      height: 5,
+      revision: 10,
+      content: { text: '原文' },
+      reactions: [],
+    }),
+  ]);
+
+  await store.applyEdit(
+    'conv-1',
+    'm-live',
+    { text: '新文本' },
+    '2026-09-16T10:00:00.000Z',
+    12,
+  );
+  await store.applyEdit(
+    'conv-1',
+    'm-live',
+    { text: '旧文本' },
+    '2026-09-16T09:00:00.000Z',
+    11,
+  );
+  let current = useChatStore.getState().messagesByConversation['conv-1'][0];
+  assert.equal(current.content.text, '新文本');
+  assert.equal(current.revision, 12);
+
+  await store.applyReaction('conv-1', 'm-live', '👍', 'other', 'add', 13);
+  await store.applyReaction('conv-1', 'm-live', '👍', 'other', 'remove', 14);
+  await store.applyReaction('conv-1', 'm-live', '👍', 'other', 'add', 13);
+  current = useChatStore.getState().messagesByConversation['conv-1'][0];
+  assert.equal(current.reactions.length, 0);
+  assert.equal(current.revision, 14);
+});
+
+test('no-op live mutations still retain their newer revision', async () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.ingestMessages('conv-1', [
+    msg({
+      id: 'm-noop',
+      height: 5,
+      revision: 10,
+      content: { text: '原文' },
+      reactions: [],
+    }),
+  ]);
+
+  // Removing a reaction that is already absent changes no visible field, but
+  // revision 12 must still fence off a late revision-11 add.
+  await store.applyReaction('conv-1', 'm-noop', '👍', 'other', 'remove', 12);
+  await store.applyReaction('conv-1', 'm-noop', '👍', 'other', 'add', 11);
+  let current = useChatStore.getState().messagesByConversation['conv-1'][0];
+  assert.equal(current.reactions.length, 0);
+  assert.equal(current.revision, 12);
+
+  // The same rule applies to an idempotent revoke: an older history snapshot
+  // must not replace the redacted state after the newer revoke was observed.
+  await store.applyRevoke('conv-1', 'm-noop', 'other', { revision: 14 });
+  await store.applyRevoke('conv-1', 'm-noop', 'other', { revision: 16 });
+  store.ingestMessages('conv-1', [
+    msg({
+      id: 'm-noop',
+      height: 5,
+      revision: 15,
+      content: { text: '旧文本' },
+    }),
+  ]);
+  current = useChatStore.getState().messagesByConversation['conv-1'][0];
+  assert.equal(current.revision, 16);
+  assert.equal(Boolean(current.revokedAt), true);
+  assert.equal(JSON.stringify(current.content), '{}');
 });
 
 test('clearing history blocks in-flight pages from refilling the timeline', () => {

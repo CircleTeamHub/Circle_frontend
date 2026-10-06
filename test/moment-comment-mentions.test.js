@@ -23,6 +23,16 @@ function loadMomentsApi(apiClient) {
       if (specifier === '@/services/api/utils') {
         return { buildQuery: () => '', normalizeMediaUrl: (value) => value };
       }
+      if (specifier === './image-media') {
+        return {
+          normalizeImageMedia: (imagesValue) => ({
+            images: Array.isArray(imagesValue)
+              ? imagesValue.filter((value) => typeof value === 'string')
+              : [],
+            media: [],
+          }),
+        };
+      }
       throw new Error(`Unexpected import: ${specifier}`);
     },
   };

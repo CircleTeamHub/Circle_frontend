@@ -54,6 +54,22 @@ function loadPlazaApi(apiResponses) {
           normalizeUserAvatarFrameAppearance: (value) => value ?? null,
         };
       }
+      if (specifier === './image-media') {
+        return {
+          normalizeImageMedia: (imagesValue) => ({
+            images: Array.isArray(imagesValue)
+              ? imagesValue
+                  .map((value) =>
+                    typeof value === 'string'
+                      ? value.replace('http://localhost', 'http://192.168.1.65')
+                      : '',
+                  )
+                  .filter(Boolean)
+              : [],
+            media: [],
+          }),
+        };
+      }
       return require(specifier);
     },
   };

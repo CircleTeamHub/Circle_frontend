@@ -260,8 +260,10 @@ test('GroupManagerSheet keeps the add group button pressable and focuses the inp
 
 test('GroupManagerSheet limits custom note groups to ten', () => {
   const src = read('src/features/notes/components/GroupManagerSheet.tsx');
+  const constants = read('src/features/notes/constants.ts');
 
-  assert.match(src, /MAX_NOTE_GROUPS\s*=\s*10/);
+  assert.match(constants, /MAX_NOTE_GROUPS\s*=\s*10/);
+  assert.match(src, /MAX_NOTE_GROUPS/);
   assert.match(src, /isCreatingGroupAtLimit/);
   assert.match(src, /groups\.length\s*>=\s*MAX_NOTE_GROUPS/);
   assert.match(src, /notes\.alerts\.groupLimitTitle/);
@@ -377,8 +379,6 @@ test('EditNoteScreen keeps location selection map-only with a read-only selected
   assert.match(src, /mediaItems/);
   assert.match(src, /showcaseItems/);
   assert.match(src, /handleAddSectionMedia/);
-  assert.match(src, /renderAddButton\(\s*'media'/);
-  assert.match(src, /renderAddButton\(\s*'showcase'/);
   assert.match(src, /renderMediaList/);
   assert.match(src, /mediaToolbarEnabled=\{false\}/);
   assert.match(src, /locationDraft/);
@@ -454,7 +454,6 @@ test('EditNoteScreen reports upload state in the affected media section without 
   assert.match(src, /const mediaSectionStatus =/);
   assert.match(src, /const showcaseSectionStatus =/);
   assert.match(src, /notes\.edit\.mediaUploading/);
-  assert.match(src, /const renderAddButton = useCallback/);
   assert.match(src, /const renderMediaList = useCallback/);
 });
 
@@ -559,16 +558,17 @@ test('ProfileScreen does not include the assistant menu item', () => {
 
 test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
-  const renderer = read('src/features/notes/components/NoteBlockRenderer.tsx');
+  const renderer = read('src/features/notes/components/NoteDocumentBody.tsx');
+  const blockRenderer = read('src/features/notes/components/NoteBlockRenderer.tsx');
 
   // 设计稿：小节之间用 1pt 分隔线（发丝线真机太淡）+ 主色浅底图标章头分段；
   // 正文是主角，不加章头直接展开。
-  assert.match(detail, /divider:\s*\{\s*height:\s*1,/);
-  assert.match(detail, /sectionIconChip/);
-  assert.match(detail, /renderSectionHeader\(\s*'image-outline'/);
+  assert.match(renderer, /divider:\s*\{\s*height:\s*1,/);
+  assert.match(renderer, /sectionIconChip/);
+  assert.match(renderer, /renderSectionHeader\(\s*'image-outline'/);
   // 文字区也有自己的 heading（text-outline）—— 所有区域结构一致。
-  assert.match(detail, /renderSectionHeader\(\s*'text-outline'/);
-  assert.doesNotMatch(detail, /sectionCard:/);
+  assert.match(renderer, /renderSectionHeader\(\s*'text-outline'/);
+  assert.doesNotMatch(renderer, /sectionCard:/);
 
   // 来源卡片整块从正文移除：来源与下载都收进右下角悬浮列，
   // 原来的浅底卡片与 primaryDeep CTA 胶囊一并删除。
@@ -578,24 +578,24 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   assert.match(detail, /floatingBtn: \{\s*backgroundColor: colors\.surface/);
 
   // 分组标签：方形品牌紫实心块 + 白字（brandPurple = 会员卡渐变核心 #7C5CF0）。
-  assert.match(detail, /groupTag: \{ backgroundColor: colors\.brandPurple \}/);
-  assert.match(detail, /groupTagText: \{ color: colors\.white \}/);
-  assert.match(detail, /groupTag:\s*\{[\s\S]*?borderRadius:\s*Radius\.xs/);
+  assert.match(renderer, /backgroundColor: colors\.brandPurple/);
+  assert.match(renderer, /color: colors\.white/);
+  assert.match(renderer, /groupTag:\s*\{[\s\S]*?borderRadius:\s*Radius\.xs/);
   const colorsSrc = read('src/theme/colors.ts');
   assert.match(colorsSrc, /brandPurple: '#7C5CF0'/);
 
   // 媒体满宽圆角，按真实宽高比渲染（比例夹在 3:4 与 16:9 之间），
   // 无尺寸信息回退方图。
-  assert.match(renderer, /resolveMediaAspectRatio/);
-  assert.match(renderer, /Math\.min\(16 \/ 9, Math\.max\(3 \/ 4, width \/ height\)\)/);
-  assert.match(renderer, /mediaFrame:\s*\{\s*borderRadius:\s*Radius\.lg,\s*overflow:\s*'hidden'/);
+  assert.match(blockRenderer, /resolveMediaAspectRatio/);
+  assert.match(blockRenderer, /Math\.min\(16 \/ 9, Math\.max\(3 \/ 4, width \/ height\)\)/);
+  assert.match(blockRenderer, /mediaFrame:\s*\{\s*borderRadius:\s*Radius\.lg,\s*overflow:\s*'hidden'/);
 
   // 文字区始终展示（heading + 分割线与各区域一致）；hasTextBody 只决定
   // 展示正文还是「暂无文字」占位。不再用 extractPlainText 二次嗅探
   // （它不递归嵌套 children，会把缩进列表等真实正文误判为空而整段藏掉）。
-  assert.match(detail, /const hasTextBody = Boolean\(availability\?\.hasText\)/);
-  assert.match(detail, /notes\.section\.emptyText/);
-  assert.doesNotMatch(detail, /textSectionHasContent/);
+  assert.match(renderer, /availability\.hasText/);
+  assert.match(renderer, /notes\.section\.emptyText/);
+  assert.doesNotMatch(renderer, /textSectionHasContent/);
   assert.doesNotMatch(detail, /extractPlainText\(/);
   assert.doesNotMatch(detail, /import \{ extractPlainText \}/);
 });

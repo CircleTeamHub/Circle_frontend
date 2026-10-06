@@ -27,6 +27,7 @@ import {
   useModalInputAutoFocus,
 } from '@/hooks/use-modal-input-auto-focus';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
+import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import {
@@ -304,16 +305,21 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
           const fileName = imageUri.split('/').pop() ?? 'photo.jpg';
           const contentType =
             resolveUploadContentType({ fileName }) ?? 'image/jpeg';
-          const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(fileName),
+          const prepared = await prepareChatImageForUpload({
+            uri: imageUri,
             contentType,
+            filename: fileName,
+          });
+          const presign = await requestUploadPresign({
+            filename: sanitizeUploadFilename(prepared.filename),
+            contentType: prepared.contentType,
             folder: 'posts',
-            fileUri: imageUri,
+            fileUri: prepared.uri,
           });
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,
-            contentType,
-            imageUri,
+            prepared.contentType,
+            prepared.uri,
             presign.requiredHeaders,
           );
           images = [presign.fileUrl];

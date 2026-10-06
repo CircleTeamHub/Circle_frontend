@@ -384,10 +384,33 @@ export interface MediaItem {
 // Circle Plaza Types
 // ---------------------------------------------------------------------------
 
+/**
+ * 图片的可选多尺寸表示。
+ *
+ * `images` 仍然保留为 string[] 以兼容旧接口和离线数据；新接口可以在
+ * `media` 中返回 thumb/preview/original 以及稳定的 object key。URL 是
+ * 可轮换的签名地址，key 只用于图片缓存键。
+ */
+export interface ImageMediaVariant {
+  thumb?: string | null;
+  preview?: string | null;
+  original?: string | null;
+  thumbUrl?: string | null;
+  previewUrl?: string | null;
+  originalUrl?: string | null;
+  key?: string | null;
+  thumbKey?: string | null;
+  previewKey?: string | null;
+  originalKey?: string | null;
+  width?: number | null;
+  height?: number | null;
+}
+
 export interface CirclePlazaPost {
   id: string;
   content: string;
   images: string[];
+  media?: ImageMediaVariant[];
   tags: string[];
   city: string | null;
   cities: string[];
@@ -525,6 +548,7 @@ export interface MomentPost {
   id: string;
   content: string;
   images: string[];
+  media?: ImageMediaVariant[];
   visibility: 'PUBLIC' | 'FRIENDS_ONLY' | 'PRIVATE';
   author: {
     id: string;
@@ -546,6 +570,7 @@ export interface MomentComment {
   content: string;
   /** 评论附图（后端 TraceComment.images，当前最多 1 张）。 */
   images?: string[];
+  media?: ImageMediaVariant[];
   user: { id: string; nickname: string };
   replyTo: { id: string; nickname: string } | null;
   createdAt: string;

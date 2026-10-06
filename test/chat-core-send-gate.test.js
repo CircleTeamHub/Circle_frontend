@@ -61,6 +61,10 @@ function loadClient({
     retryMarks: [],
     removed: [],
   };
+  const authState = {
+    user: { id: 'me', nickname: '我', avatarUrl: null },
+    sessionEpoch: 1,
+  };
   class CreditPolicyError extends Error {}
   const storeState = {
     ingestMessages: () => {
@@ -102,10 +106,7 @@ function loadClient({
       if (request === '@/stores/authStore') {
         return {
           useAuthStore: {
-            getState: () => ({
-              user: { id: 'me', nickname: '我', avatarUrl: null },
-              sessionEpoch: 1,
-            }),
+            getState: () => authState,
           },
         };
       }
@@ -177,7 +178,7 @@ function loadClient({
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context);
-  return { api: context.module.exports, calls, CreditPolicyError };
+  return { api: context.module.exports, calls, CreditPolicyError, authState };
 }
 
 test('every public send API is gated on credit score', async () => {
@@ -266,6 +267,90 @@ test('sends in one conversation reach the send queue in the order they were made
     calls.sentPayloads.map((payload) => payload.d),
     ['d-other', 'd-card', 'd-text'],
   );
+});
+
+test('a session switch while outbox persistence is pending cannot send the old payload', async () => {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const loaded = loadClient({
+    blocked: false,
+    outboxDelays: { 'd-test': gate },
+  });
+  const send = loaded.api.sendTextMessage({ conversationId: 'c1', text: '私信 A' });
+  await flush();
+
+  loaded.authState.user = { id: 'user-b', nickname: 'B', avatarUrl: null };
+  loaded.authState.sessionEpoch = 2;
+  release();
+
+  await assert.rejects(send, /会话已结束/);
+  assert.equal(loaded.calls.sent, 0);
+  assert.deepEqual(loaded.calls.failedMarks, []);
+});
+
+test('a session switch while retry persistence is pending cannot resend the old outbox row', async () => {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const loaded = loadClient({
+    blocked: false,
+    retryOutbox: [
+      {
+        d: 'd-retry',
+        conversationId: 'c1',
+        payload: {
+          conversationId: 'c1',
+          type: 'text',
+          content: { text: '私信 A' },
+          d: 'd-retry',
+        },
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    outboxDelays: { 'd-retry': gate },
+  });
+  const retry = loaded.api.retryFailedChatMessage('c1', 'd-retry');
+  await flush();
+
+  loaded.authState.user = { id: 'user-b', nickname: 'B', avatarUrl: null };
+  loaded.authState.sessionEpoch = 2;
+  release();
+
+  await assert.rejects(retry, /会话已结束/);
+  assert.equal(loaded.calls.sent, 0);
+  assert.deepEqual(loaded.calls.failedMarks, []);
+});
+
+test('a media delivery remains bound to the session that created its bubble', async () => {
+  const loaded = loadClient({ blocked: false });
+  const deliveryId = loaded.api.startMediaSend({
+    conversationId: 'c1',
+    type: 'image',
+    localContent: { localUri: 'file:///old-account.jpg' },
+    retry: async (d) => {
+      await loaded.api.sendImageMessage({
+        conversationId: 'c1',
+        key: 'old-account-key',
+        deliveryId: d,
+      });
+    },
+  });
+
+  loaded.authState.user = { id: 'user-b', nickname: 'B', avatarUrl: null };
+  loaded.authState.sessionEpoch = 2;
+
+  await assert.rejects(
+    loaded.api.sendImageMessage({
+      conversationId: 'c1',
+      key: 'old-account-key',
+      deliveryId,
+    }),
+    /会话已结束/,
+  );
+  assert.equal(loaded.calls.sent, 0);
 });
 
 test('a send handle is queued once the bubble is up, and not when the gate blocks it', async () => {

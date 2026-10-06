@@ -201,6 +201,57 @@ interface SendOptions {
   onCreate?: (message: ChatMessageDto) => void;
 }
 
+/**
+ * A send can wait on SQLite, media preparation, or the per-conversation
+ * ordering chain. The auth epoch changes when a session starts or ends, but
+ * remains stable during token rotation, which is the boundary needed here.
+ */
+interface ChatSessionFence {
+  epoch: number;
+  userId: string | null;
+}
+
+class ChatSessionChangedError extends Error {
+  constructor() {
+    super('会话已结束');
+    this.name = 'ChatSessionChangedError';
+  }
+}
+
+function captureChatSessionFence(): ChatSessionFence {
+  const auth = useAuthStore.getState();
+  return {
+    epoch: typeof auth.sessionEpoch === 'number' ? auth.sessionEpoch : 0,
+    userId: auth.user?.id ?? null,
+  };
+}
+
+function isChatSessionFenceCurrent(fence: ChatSessionFence): boolean {
+  const auth = useAuthStore.getState();
+  if (
+    (typeof auth.sessionEpoch === 'number' ? auth.sessionEpoch : 0) !==
+      fence.epoch ||
+    (auth.user?.id ?? null) !== fence.userId
+  ) {
+    return false;
+  }
+  const storeUserId = useChatStore.getState().currentUserId;
+  return storeUserId === null || storeUserId === undefined || storeUserId === fence.userId;
+}
+
+function assertChatSessionFence(fence: ChatSessionFence): void {
+  if (!isChatSessionFenceCurrent(fence)) {
+    throw new ChatSessionChangedError();
+  }
+}
+
+function isChatSessionChangedError(error: unknown): boolean {
+  return (
+    error instanceof ChatSessionChangedError ||
+    (error instanceof Error && error.name === 'ChatSessionChangedError')
+  );
+}
+
 function selfSenderInfo() {
   const user = useAuthStore.getState().user;
   return user
@@ -248,20 +299,51 @@ function captureSendAnchor(conversationId: string): number | undefined {
  * 写完再进队的话,先点的那条写得慢一点(比如还在等媒体副本),就会排到后点的后面 ——
  * 断线期间连发的几条,重连后乱序落库。
  */
-const sendPersistTails = new Map<string, Promise<void>>();
+const sendPersistTails = new Map<
+  string,
+  { fence: ChatSessionFence; promise: Promise<void> }
+>();
 
 function persistInSendOrder(
   conversationId: string,
+  fence: ChatSessionFence,
   persist: () => Promise<void>,
 ): Promise<void> {
-  const previous = sendPersistTails.get(conversationId) ?? Promise.resolve();
-  const current = previous.then(persist).catch(() => undefined);
-  sendPersistTails.set(conversationId, current);
-  void current.then(() => {
-    if (sendPersistTails.get(conversationId) === current) {
-      sendPersistTails.delete(conversationId);
-    }
-  });
+  const prior = sendPersistTails.get(conversationId);
+  // A new account must not wait behind the previous account's slow SQLite or
+  // media write. The fence inside the callback protects a write already in
+  // progress when the account changes.
+  const previous =
+    prior &&
+    prior.fence.epoch === fence.epoch &&
+    prior.fence.userId === fence.userId
+      ? prior.promise
+      : Promise.resolve();
+  const current = previous
+    .then(async () => {
+      assertChatSessionFence(fence);
+      await persist();
+      assertChatSessionFence(fence);
+    })
+    .catch((error) => {
+      // Outbox failures are a best-effort cache failure and must not block the
+      // network send. A session change is different: swallowing it would let
+      // the continuation enqueue the old payload on the new socket.
+      if (isChatSessionChangedError(error)) throw error;
+    });
+  sendPersistTails.set(conversationId, { fence, promise: current });
+  void current.then(
+    () => {
+      if (sendPersistTails.get(conversationId)?.promise === current) {
+        sendPersistTails.delete(conversationId);
+      }
+    },
+    () => {
+      if (sendPersistTails.get(conversationId)?.promise === current) {
+        sendPersistTails.delete(conversationId);
+      }
+    },
+  );
   return current;
 }
 
@@ -282,6 +364,11 @@ export async function sendWithOptimism(
   // 这里没有豁免口子。转账卡片曾经有一个(「钱已经动了、拦也白拦」),
   // 但那张卡现在由服务端结算后自己签发,客户端根本不经过这条路径。
   assertLocalCanSendMessage();
+  const fence =
+    (options.deliveryId
+      ? mediaSessionFences.get(options.deliveryId)
+      : undefined) ?? captureChatSessionFence();
+  assertChatSessionFence(fence);
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
   const failedAfterHeight = captureSendAnchor(options.conversationId);
@@ -320,7 +407,7 @@ export async function sendWithOptimism(
   // 媒体消息:先等持久副本那一行落盘(见 trackPendingMedia),这一行必须写在它后面。
   //
   // 落盘排在同会话上一条发送的后面(persistInSendOrder),进发送队列的顺序才是点击顺序。
-  await persistInSendOrder(options.conversationId, async () => {
+  await persistInSendOrder(options.conversationId, fence, async () => {
     const pendingMedia = await pendingMediaRecordFor(d);
     await outboxUpsert({
       d,
@@ -343,6 +430,7 @@ export async function sendWithOptimism(
       ...anchorFields,
     });
   });
+  assertChatSessionFence(fence);
   try {
     const ack = await sendChatMessage({
       conversationId: options.conversationId,
@@ -352,6 +440,7 @@ export async function sendWithOptimism(
       replyToId: options.replyToId,
       forwardFromMessageId: options.forwardFromMessageId,
     });
+    assertChatSessionFence(fence);
     void outboxDelete(d);
     releasePendingMedia(d);
     const next = useChatStore.getState();
@@ -379,6 +468,9 @@ export async function sendWithOptimism(
     }
     return confirmed;
   } catch (error) {
+    if (!isChatSessionFenceCurrent(fence)) {
+      throw error;
+    }
     const failed = useChatStore.getState();
     failed.markMessageFailed(options.conversationId, d);
     // 乐观写入已经把会话预览换成了这条消息;发送失败后只标时间线是不够的,
@@ -614,6 +706,38 @@ export function sendCardMessage(options: {
  * 拷不了副本的(web、content:// 地址)仍然只活在内存里。
  */
 const mediaRetries = new Map<string, () => Promise<void>>();
+/** Delivery IDs created by startMediaSend stay bound to their originating session. */
+const mediaSessionFences = new Map<string, ChatSessionFence>();
+/** Uploads are bounded by the picker/scheduler, but failed retry closures can
+ * otherwise live for the whole process. Keep a finite retry registry and never
+ * evict work that is still uploading or being retried. */
+const activeMediaSends = new Set<string>();
+const MAX_MEDIA_RETRY_ENTRIES = 256;
+
+/**
+ * Upload workers may sit in a queue while the user signs out or switches
+ * accounts. Check the delivery fence before spending another presign/upload
+ * request on a stale local file; sendWithOptimism checks it again before emit.
+ */
+export function assertMediaSendSessionCurrent(deliveryId: string): void {
+  const fence = mediaSessionFences.get(deliveryId);
+  if (fence) assertChatSessionFence(fence);
+}
+
+function pruneMediaRetryRegistry(): void {
+  if (mediaRetries.size <= MAX_MEDIA_RETRY_ENTRIES) return;
+  for (const deliveryId of mediaRetries.keys()) {
+    if (mediaRetries.size <= MAX_MEDIA_RETRY_ENTRIES) break;
+    if (activeMediaSends.has(deliveryId) || retriesInFlight.has(deliveryId)) {
+      continue;
+    }
+    // The durable outbox/pending-media record remains the restart fallback;
+    // only the in-process closure is released here.
+    mediaRetries.delete(deliveryId);
+    mediaSessionFences.delete(deliveryId);
+    pendingMediaJobs.delete(deliveryId);
+  }
+}
 
 /**
  * 待发媒体的持久化进度。ready 解析为写进 outbox 的那条记录(拷贝失败为 null)。
@@ -655,8 +779,10 @@ function trackPendingMedia(input: {
   localContent: Record<string, unknown>;
   createdAt: string;
   failedAfterHeight: number | undefined;
+  fence: ChatSessionFence;
 }): void {
-  const userId = useChatStore.getState().currentUserId;
+  const userId =
+    input.fence.userId ?? useChatStore.getState().currentUserId;
   if (!userId) return;
   const { d, conversationId } = input;
   const ready = persistPendingMediaFile(
@@ -665,10 +791,14 @@ function trackPendingMedia(input: {
     input.source.uri,
     input.source.uploadName,
     // 登出清理按它区分「被登出会话自己的副本」和「登出被抢占时新会话刚点的发送」。
-    useAuthStore.getState().sessionEpoch,
+    input.fence.epoch,
   )
     .then(async (fileName): Promise<PendingMediaRecord | null> => {
       if (!fileName) return null;
+      if (!isChatSessionFenceCurrent(input.fence)) {
+        await deletePendingMedia(userId, d);
+        return null;
+      }
       // 拷贝期间气泡已经没了(长按删掉了失败消息、切了号):不再写回 outbox。
       const store = useChatStore.getState();
       const stillPending =
@@ -709,6 +839,11 @@ function trackPendingMedia(input: {
           ? {}
           : { failedAfterHeight: input.failedAfterHeight }),
       });
+      if (!isChatSessionFenceCurrent(input.fence)) {
+        await outboxDelete(d);
+        await deletePendingMedia(userId, d);
+        return null;
+      }
       return record;
     })
     .catch(() => null);
@@ -732,6 +867,8 @@ export function startMediaSend(options: {
   retry: (deliveryId: string) => Promise<void>;
   source?: PendingMediaSource;
 }): string {
+  const fence = captureChatSessionFence();
+  assertChatSessionFence(fence);
   const d = createDeliveryId();
   const store = useChatStore.getState();
   const failedAfterHeight = captureSendAnchor(options.conversationId);
@@ -749,7 +886,14 @@ export function startMediaSend(options: {
   };
   store.ingestMessages(options.conversationId, [optimistic]);
   store.applyIncomingMessage(optimistic);
-  mediaRetries.set(d, () => options.retry(d));
+  mediaSessionFences.set(d, fence);
+  activeMediaSends.add(d);
+  mediaRetries.set(d, async () => {
+    assertChatSessionFence(fence);
+    await options.retry(d);
+    assertChatSessionFence(fence);
+  });
+  pruneMediaRetryRegistry();
   if (options.source) {
     trackPendingMedia({
       d,
@@ -759,6 +903,7 @@ export function startMediaSend(options: {
       localContent: options.localContent,
       createdAt: optimistic.createdAt,
       failedAfterHeight,
+      fence,
     });
   }
   return d;
@@ -766,6 +911,19 @@ export function startMediaSend(options: {
 
 /** 上传或发送失败:气泡标红(长按可重发),会话预览退回上一条权威消息。 */
 export function failMediaSend(conversationId: string, d: string): void {
+  activeMediaSends.delete(d);
+  const fence = mediaSessionFences.get(d);
+  if (fence && !isChatSessionFenceCurrent(fence)) {
+    // The old screen can finish an upload after logout/account switch. Do not
+    // touch the new account's store, but release the old retry closure and its
+    // pending local copy so a stale failure cannot retain private media. Keep
+    // the fence tombstone until the delivery is explicitly finished: an old
+    // callback must not fall through to a fresh session just because its map
+    // entry was cleaned early.
+    mediaRetries.delete(d);
+    releasePendingMedia(d);
+    return;
+  }
   const store = useChatStore.getState();
   store.markMessageFailed(conversationId, d);
   store.revertConversationPreview(conversationId);
@@ -773,7 +931,9 @@ export function failMediaSend(conversationId: string, d: string): void {
 
 /** 发送成功:重试闭包连同它captured 的本地文件引用一起丢掉,持久副本删掉。 */
 export function finishMediaSend(d: string): void {
+  activeMediaSends.delete(d);
   mediaRetries.delete(d);
+  mediaSessionFences.delete(d);
   releasePendingMedia(d);
 }
 
@@ -819,16 +979,20 @@ export async function retryFailedChatMessage(
   options: RetryFailedChatMessageOptions = {},
 ): Promise<void> {
   if (retriesInFlight.has(d)) return;
+  const fence = captureChatSessionFence();
+  assertChatSessionFence(fence);
   retriesInFlight.add(d);
   // 气泡从红转回「发送中」(sendStatus 3→1):长按菜单里的「重发」只在
   // sendStatus===3 时出现,连点的入口本身就消失了,用户也看得出这一下生效了。
   useChatStore.getState().markMessageRetrying(conversationId, d);
   try {
-    await runRetry(conversationId, d, options);
+    await runRetry(conversationId, d, options, fence);
   } catch (error) {
     // 上面把失败态清掉了,这里必须补回来 —— 否则重发再失败,气泡会一直停在
     // 「发送中」,既没有红色提示也再没有重发入口。
-    useChatStore.getState().markMessageFailed(conversationId, d);
+    if (isChatSessionFenceCurrent(fence)) {
+      useChatStore.getState().markMessageFailed(conversationId, d);
+    }
     throw error;
   } finally {
     retriesInFlight.delete(d);
@@ -839,16 +1003,20 @@ async function runRetry(
   conversationId: string,
   d: string,
   options: RetryFailedChatMessageOptions,
+  fence: ChatSessionFence,
 ): Promise<void> {
+  assertChatSessionFence(fence);
   // 媒体消息优先:它压根没进过 outbox(那时候还没有 object key),
   // 重发要从上传重跑,不是把同一份 payload 再 emit 一次。
   // (媒体那条链路自己 catch 后调 failMediaSend,不抛到这里。)
   const media = mediaRetries.get(d);
   if (media) {
     await media();
+    assertChatSessionFence(fence);
     return;
   }
   const entries = await outboxList();
+  assertChatSessionFence(fence);
   const entry = entries.find(
     (item) => item.d === d && item.conversationId === conversationId,
   );
@@ -874,6 +1042,7 @@ async function runRetry(
         record: pendingMedia,
         uri,
       });
+      assertChatSessionFence(fence);
       return;
     }
   }
@@ -882,11 +1051,14 @@ async function runRetry(
   ).find((message) => message.d === d) as StoredChatMessage | undefined;
   const retryAnchor = retrying?.failedAfterHeight;
   // 重启恢复时也必须保留这次重发的位置；否则再次失败后会重新跑到最底部。
+  assertChatSessionFence(fence);
   await outboxUpsert({
     ...entry,
     ...(Number.isFinite(retryAnchor) ? { failedAfterHeight: retryAnchor } : {}),
   });
+  assertChatSessionFence(fence);
   const ack = await sendChatMessage(wirePayload);
+  assertChatSessionFence(fence);
   void outboxDelete(d);
   releasePendingMedia(d);
   // 原来只出队就完事了。可首次发送其实**已经在服务端落库**、只是 ack 和回声

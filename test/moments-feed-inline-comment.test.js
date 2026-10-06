@@ -60,8 +60,9 @@ test('comment images render in detail rows and tag the feed preview', () => {
   const api = read('src/services/api/moments.ts');
   const types = read('src/types/index.ts');
 
-  assert.match(detail, /item\.comment\.images\?\.length/);
-  assert.match(detail, /commentImage/);
+  assert.match(detail, /const commentImageUri =/);
+  assert.match(detail, /item\.comment\.images\?\.\[0\]/);
+  assert.match(detail, /recyclingKey=\{commentImageCacheKey\}/);
   assert.match(card, /moment\.imageTag/);
   assert.match(api, /images\?: string\[\]/);
   assert.match(types, /interface MomentComment \{[\s\S]*?images\?: string\[\]/);

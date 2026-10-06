@@ -194,7 +194,7 @@ test('group picker adds/removes membership per note instead of replacing wholesa
   assert.match(picker, /ops\.length === 0/);
   assert.match(picker, /updateNoteGroupIds/);
   assert.match(picker, /runNoteBatch/);
-  assert.match(picker, /notes\.groupPicker\.batchHint/);
+  assert.match(picker, /notes\.groupPicker\.title/);
   assert.match(picker, /notes\.alerts\.saveMembershipsPartialFailed/);
   // 弹层内可就地新建分组：上限拦截、成功并进父层 groups、新分组默认标记「加入」。
   assert.match(picker, /createNoteGroup/);

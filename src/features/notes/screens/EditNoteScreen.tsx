@@ -1,4 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import {
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from 'expo-audio';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -6,7 +11,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  AppState,
+  InteractionManager,
   LogBox,
+  Modal,
+  PanResponder,
   PixelRatio,
   Pressable,
   ScrollView,
@@ -17,10 +27,23 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  useNavigation,
+  usePreventRemove,
+} from '@react-navigation/native';
+import type { NavigationAction } from '@react-navigation/core';
+import type { FriendProfile } from '@/services/api/friends';
+import { useAuthStore } from '@/stores/authStore';
 import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
+import { NoteDocumentBody } from '@/features/notes/components/NoteDocumentBody';
 import { NoteTextStatsConsumer } from '@/features/notes/components/NoteTextStatsConsumer';
+import {
+  GROUP_NAME_MAX_LENGTH,
+  MAX_NOTE_GROUPS,
+} from '@/features/notes/constants';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { ImageViewer } from '@/components/ui/image-viewer';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
   BASEMAP_ATTRIBUTION,
@@ -32,6 +55,7 @@ import type {
   CreateNoteMediaInput,
   EditorNoteMediaDraft,
   NoteGroup,
+  NoteDraftDetail,
   NoteSections,
 } from '@/features/notes/types';
 import {
@@ -55,8 +79,30 @@ import {
 import {
   buildNoteSections,
   normalizeNoteMediaSections,
+  type NoteSectionKind,
   type StructuredNoteMediaItem,
 } from '@/features/notes/utils/note-sections';
+import {
+  getCachedNotePickerCircles,
+  getCachedNotePickerFriends,
+  isNotePickerCirclesFresh,
+  isNotePickerFriendsFresh,
+  loadNotePickerCircles,
+  loadNotePickerFriends,
+  prefetchNoteCardPickerData,
+  type NoteCardPickerCircle,
+} from '@/features/notes/utils/note-card-picker-cache';
+import {
+  buildNoteComposerBlocksMetadata,
+  normalizeNoteComposerBlocks,
+  readNoteComposerBlocks,
+  readNoteComposerMediaBlocks,
+  readNoteComposerTextBlocks,
+  stripNoteComposerMetadata,
+  isNoteComposerSingletonKind,
+  type NoteComposerBlock,
+  type NoteComposerBlockKind,
+} from '@/features/notes/utils/note-composer';
 import {
   canSubmitNoteMedia,
   createNoteMediaUploadOperationGuard,
@@ -70,10 +116,22 @@ import {
 } from '@/features/notes/utils/note-media-upload';
 import {
   createNote,
+  createNoteGroup,
+  fetchNoteDraft,
   fetchNoteDetail,
   fetchNoteGroups,
+  saveNoteDraft,
+  deleteNoteDraft,
   updateNote,
 } from '@/services/api/notes';
+import {
+  createNoteDraftId,
+  loadLocalNoteDraft,
+  localDraftSummaryToServerInput,
+  removeLocalNoteDraft,
+  saveLocalNoteDraft,
+  type NoteEditorDraftRecord,
+} from '@/features/notes/utils/note-editor-drafts';
 import { getApiErrorMessage } from '@/services/api/errors';
 import {
   requestUploadPresign,
@@ -83,6 +141,7 @@ import {
 } from '@/services/api/upload';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
 
 LogBox.ignoreLogs([
   "Calling the 'injectJavaScript' function has failed",
@@ -97,9 +156,52 @@ type LocationDraft = {
   longitude: number | null;
 };
 
+type NoteCardDraft = {
+  id: string;
+  name: string;
+  faceURL: string | null;
+  avatarUrl?: string | null;
+};
+type ContactPickerItem = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  subtitle: string | null;
+  searchText: string;
+};
+type CardPickerKind = 'contact' | 'group';
+type NotePreviewData = {
+  sections: ReturnType<typeof buildNoteSections>;
+  imageItems: { uri: string; objectKey?: string }[];
+  sectionOrder: NoteSectionKind[];
+};
+
+function getNoteCardAvatar(card: NoteCardDraft) {
+  return card.faceURL || card.avatarUrl || null;
+}
+
 type SectionMediaTarget = 'media' | 'showcase';
-type SectionUploadKind = 'image' | 'video';
-type UploadingSection = `${SectionMediaTarget}:${SectionUploadKind}` | null;
+type SectionUploadKind = 'media' | 'image' | 'video';
+type UploadingSection = `${SectionMediaTarget}:${SectionUploadKind}` | 'audio' | null;
+
+const COMPOSER_ACTIONS: readonly {
+  kind: NoteComposerBlockKind;
+  icon: keyof typeof Ionicons.glyphMap;
+  translationKey: string;
+  defaultLabel: string;
+}[] = [
+  { kind: 'text', icon: 'text', translationKey: 'text', defaultLabel: '文字' },
+  { kind: 'image', icon: 'images-outline', translationKey: 'media', defaultLabel: '多媒体' },
+  { kind: 'audio', icon: 'mic-outline', translationKey: 'audio', defaultLabel: '录音' },
+  { kind: 'showcase', icon: 'play-circle-outline', translationKey: 'showcase', defaultLabel: '展示' },
+  { kind: 'location', icon: 'location-outline', translationKey: 'location', defaultLabel: '位置' },
+  { kind: 'contact', icon: 'person-outline', translationKey: 'contact', defaultLabel: '名片' },
+  { kind: 'group', icon: 'people-outline', translationKey: 'group', defaultLabel: '群名片' },
+];
+
+const FIXED_TITLE_BLOCK: NoteComposerBlock = { id: 'title-fixed', kind: 'title' };
+
+const COMPOSER_SORT_ROW_HEIGHT = 58;
 
 const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
@@ -124,7 +226,13 @@ function hasLocationDraftValue(location: LocationDraft) {
 const LOCATION_MAP_HEIGHT = 126;
 
 function getTextOnlyBlocks(blocks: Record<string, unknown>[]) {
-  return blocks.filter((block) => block.type !== 'image' && block.type !== 'video');
+  return blocks.filter(
+    (block) =>
+      Boolean(block && typeof block === 'object') &&
+      block.type !== 'image' &&
+      block.type !== 'video' &&
+      block.type !== 'noteLayout',
+  );
 }
 
 function normalizeSectionMedia(
@@ -136,7 +244,7 @@ function normalizeSectionMedia(
       Boolean(
         item &&
           typeof item.objectKey === 'string' &&
-          (item.type === 'IMAGE' || item.type === 'VIDEO'),
+          (item.type === 'IMAGE' || item.type === 'VIDEO' || item.type === 'AUDIO'),
       ),
     )
     .map((item, index): EditorNoteMediaDraft => ({
@@ -172,30 +280,182 @@ function mergeMedia<T extends CreateNoteMediaInput>(items: T[]) {
   }, []);
 }
 
+function draftFingerprint(record: NoteEditorDraftRecord): string {
+  return JSON.stringify({
+    title: record.title,
+    content: record.content,
+    contentJson: record.contentJson,
+    sections: record.sections,
+    groupIds: record.groupIds,
+    composerBlocks: record.composerBlocks,
+    textBlocksById: record.textBlocksById,
+    mediaItems: record.mediaItems,
+    showcaseItems: record.showcaseItems,
+    audioItems: record.audioItems,
+    mediaOwnerByClientId: record.mediaOwnerByClientId,
+    contactItems: record.contactItems,
+    groupCardItems: record.groupCardItems,
+    location: record.location,
+  });
+}
+
+function draftRecordFromServer(
+  draft: NoteDraftDetail,
+  draftId: string,
+): NoteEditorDraftRecord {
+  const sections: Partial<NoteSections> = draft.sections ?? {};
+  const rawBlocks = sections.text?.contentJson ?? draft.contentJson ?? [];
+  const normalizedComposerBlocks = (
+    readNoteComposerBlocks(rawBlocks) ??
+    normalizeNoteComposerBlocks(null, sections as Partial<NoteSections>, true)
+  ).filter((block) => block.kind !== 'title');
+  const normalizedMedia = normalizeSectionMedia(
+    (sections.media?.items ?? []) as StructuredNoteMediaItem[],
+  );
+  const normalizedShowcase = normalizeSectionMedia(
+    (sections.showcase?.items ?? []) as StructuredNoteMediaItem[],
+  );
+  const normalizedAudio = normalizeSectionMedia(
+    (sections.audio?.items ?? []) as StructuredNoteMediaItem[],
+  );
+  const loaded = stripNoteComposerMetadata(sections.text?.contentJson ?? draft.contentJson ?? []);
+  const loadedTextBlocks = getTextOnlyBlocks(loaded);
+  const textContent = sections.text?.content ?? draft.content ?? '';
+  const fallbackText =
+    textContent && extractPlainText(loadedTextBlocks).trim() === ''
+      ? [{ type: 'paragraph', content: [{ type: 'text', text: textContent, styles: {} }] }]
+      : loadedTextBlocks;
+  const savedTextBlocks = readNoteComposerTextBlocks(rawBlocks);
+  const textBlocksById = Object.fromEntries(
+    normalizedComposerBlocks
+      .filter((block) => block.kind === 'text')
+      .map((block, index) => [
+        block.id,
+        savedTextBlocks?.find((item) => item.id === block.id)?.content ??
+          (index === 0 ? fallbackText : []),
+      ]),
+  ) as Record<string, Record<string, unknown>[]>;
+  const firstMediaBlockId = normalizedComposerBlocks.find(
+    (block) => block.kind === 'image' || block.kind === 'video',
+  )?.id;
+  const firstShowcaseBlockId = normalizedComposerBlocks.find(
+    (block) => block.kind === 'showcase',
+  )?.id;
+  const mediaOwnerByClientId: Record<string, string> = {};
+  if (firstMediaBlockId) {
+    normalizedMedia.forEach((item) => {
+      mediaOwnerByClientId[item.clientId] = firstMediaBlockId;
+    });
+  }
+  if (firstShowcaseBlockId) {
+    normalizedShowcase.forEach((item) => {
+      mediaOwnerByClientId[item.clientId] = firstShowcaseBlockId;
+    });
+  }
+  return {
+    version: 1,
+    id: draftId,
+    noteId: draft.sourceNoteId ?? null,
+    title: draft.title ?? '',
+    content: textContent,
+    contentJson: (draft.contentJson ?? []) as Record<string, unknown>[],
+    sections,
+    groupIds: draft.groupIds ?? [],
+    mediaKeys: draft.mediaKeys ?? [],
+    composerBlocks: normalizedComposerBlocks,
+    textBlocksById,
+    mediaItems: normalizedMedia,
+    showcaseItems: normalizedShowcase,
+    audioItems: normalizedAudio,
+    mediaOwnerByClientId,
+    contactItems: ((sections.contacts?.items ?? []) as NoteCardDraft[]),
+    groupCardItems: ((sections.groups?.items ?? []) as NoteCardDraft[]),
+    location: buildLocationDraft(sections.location),
+    createdAt: Date.parse(draft.createdAt) || Date.now(),
+    updatedAt: Date.parse(draft.updatedAt) || Date.now(),
+  };
+}
+
+function emptyDraftRecord(id: string, noteId: string | null): NoteEditorDraftRecord {
+  return {
+    version: 1,
+    id,
+    noteId,
+    title: '',
+    content: '',
+    contentJson: [],
+    sections: {
+      text: { content: '', contentJson: [] },
+      media: { items: [] },
+      showcase: { items: [] },
+      audio: { items: [] },
+      contacts: { items: [] },
+      groups: { items: [] },
+      location: null,
+    },
+    groupIds: [],
+    mediaKeys: [],
+    composerBlocks: [],
+    textBlocksById: {},
+    mediaItems: [],
+    showcaseItems: [],
+    audioItems: [],
+    mediaOwnerByClientId: {},
+    contactItems: [],
+    groupCardItems: [],
+    location: { title: '', address: '', latitude: null, longitude: null },
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
 export default function EditNoteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const currentUser = useAuthStore((state) => state.user);
+  const { id, draftId: routeDraftId } = useLocalSearchParams<{
+    id?: string;
+    draftId?: string;
+  }>();
   const isEdit = Boolean(id);
+  const navigation = useNavigation();
+  const [generatedDraftId] = useState(createNoteDraftId);
+  const editorDraftId =
+    (typeof routeDraftId === 'string' && routeDraftId.trim()) ||
+    (id ? `note:${id}` : generatedDraftId);
+  const draftRouteKey = `${id ?? 'new'}:${editorDraftId}`;
 
   const [title, setTitle] = useState('');
   const titleInputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
   // 正文统计走独立的小 store，不进本组件的 state —— 见 note-text-stats.ts 的注释。
   const [textStatsStore] = useState(createNoteTextStatsStore);
-  const blocksRef = useRef<Record<string, unknown>[]>([]);
-  const [initialBlocks, setInitialBlocks] = useState<Record<string, unknown>[] | null>(null);
+  const textBlocksByIdRef = useRef<Record<string, Record<string, unknown>[]>>({});
+  const [textBlocksById, setTextBlocksById] = useState<Record<string, Record<string, unknown>[]>>({});
   const [availableGroups, setAvailableGroups] = useState<NoteGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [groupSheetVisible, setGroupSheetVisible] = useState(false);
+  const [groupCreateOpen, setGroupCreateOpen] = useState(false);
+  const [groupCreateName, setGroupCreateName] = useState('');
+  const [groupCreating, setGroupCreating] = useState(false);
+  const groupCreateInputRef = useRef<TextInput>(null);
   // 编辑时必须原样回传：后端 PATCH 对缺省 pinned 按 false 处理，
   // 不带的话「编辑一篇置顶笔记」会静默取消置顶。
   const pinnedRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
+  const [settledRouteKey, setSettledRouteKey] = useState<string | null>(null);
+  const [draftHydratedKey, setDraftHydratedKey] = useState<string | null>(null);
+  const draftHydratedRef = useRef(false);
+  const baselineFingerprintRef = useRef<string | null>(null);
+  const draftPersistedFingerprintRef = useRef<string | null>(null);
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftTextSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftSavePromiseRef = useRef<Promise<void>>(Promise.resolve());
+  const navigationRequestedRef = useRef(false);
   // 存时间戳而不是格式化后的字符串：日期文案随语言变，笔记的创建时刻不变。
   // 存字符串就得在加载 effect 里用 t 格式化，t 于是成了 effect 的依赖 —— 切一次
   // 语言就重新拉一遍这篇笔记，把没保存的编辑整个冲掉（见下面的加载 effect）。
@@ -221,6 +481,49 @@ export default function EditNoteScreen() {
   const [navigating, setNavigating] = useState(false);
   const [mediaItems, setMediaItems] = useState<EditorNoteMediaDraft[]>([]);
   const [showcaseItems, setShowcaseItems] = useState<EditorNoteMediaDraft[]>([]);
+  const [audioItems, setAudioItems] = useState<EditorNoteMediaDraft[]>([]);
+  const mediaOwnerByClientIdRef = useRef<Record<string, string>>({});
+  const [mediaOwnerByClientId, setMediaOwnerByClientId] = useState<Record<string, string>>({});
+  const [contactItems, setContactItems] = useState<NoteCardDraft[]>([]);
+  const [groupCardItems, setGroupCardItems] = useState<NoteCardDraft[]>([]);
+  const [cardPickerKind, setCardPickerKind] = useState<CardPickerKind | null>(null);
+  const [friends, setFriends] = useState<FriendProfile[]>([]);
+  const [circles, setCircles] = useState<NoteCardPickerCircle[]>([]);
+  const [cardPickerLoading, setCardPickerLoading] = useState(false);
+  const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
+  const [cardPickerSearch, setCardPickerSearch] = useState('');
+  const cardPickerRequestRef = useRef(0);
+  const noteRecorder = useAudioRecorder(VOICE_RECORDING_OPTIONS);
+  const [recordingAudioStartedAt, setRecordingAudioStartedAt] = useState<number | null>(null);
+  const recordingAudioRef = useRef(false);
+  const recordingAudioBlockIdRef = useRef<string | null>(null);
+  // A new note starts as a clean canvas. Blocks are mounted only after the
+  // author chooses them from the compact toolbar below.
+  const [composerBlocks, setComposerBlocks] = useState<NoteComposerBlock[]>([]);
+  const composerIdRef = useRef(0);
+  const [sortMode, setSortMode] = useState(false);
+  const composerBlocksRef = useRef<NoteComposerBlock[]>([]);
+  const [draggingComposerBlockId, setDraggingComposerBlockId] = useState<string | null>(null);
+  const [composerDragStartIndex, setComposerDragStartIndex] = useState<number | null>(null);
+  const [composerDragActiveIndex, setComposerDragActiveIndex] = useState<number | null>(null);
+  const composerDragY = useRef(new Animated.Value(0)).current;
+  const composerDragMetaRef = useRef<{
+    blockId: string;
+    startIndex: number;
+    activeIndex: number;
+  } | null>(null);
+  const composerDragRespondersRef = useRef(
+    new Map<string, ReturnType<typeof PanResponder.create>>(),
+  );
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewContentReady, setPreviewContentReady] = useState(false);
+  const previewDataSnapshotRef = useRef<NotePreviewData | null>(null);
+  const [previewDataVersion, setPreviewDataVersion] = useState(0);
+  const previewVisibleRef = useRef(previewVisible);
+  previewVisibleRef.current = previewVisible;
+  const previewReadyTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
+  const [previewImageViewerVisible, setPreviewImageViewerVisible] = useState(false);
+  const [previewImageViewerIndex, setPreviewImageViewerIndex] = useState(0);
   const [unrecoverableMediaCount, setUnrecoverableMediaCount] = useState(0);
   const [uploadingSection, setUploadingSection] = useState<UploadingSection>(null);
   const [locationDraft, setLocationDraft] = useState<LocationDraft>({
@@ -244,6 +547,155 @@ export default function EditNoteScreen() {
   );
   const isRouteDataReady = !isEdit || loadedNoteId === id;
 
+  useEffect(() => {
+    if (!isRouteDataReady || !currentUser?.id) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void prefetchNoteCardPickerData(currentUser.id);
+    });
+    return () => task.cancel();
+  }, [currentUser?.id, isRouteDataReady]);
+
+  const contactPickerItems = useMemo<ContactPickerItem[]>(() => {
+    const selfLabel = t('chat.self', { defaultValue: '自己' });
+    const byId = new Map<string, ContactPickerItem>();
+
+    if (currentUser) {
+      const name = currentUser.nickname?.trim() || selfLabel;
+      byId.set(currentUser.id, {
+        id: currentUser.id,
+        name,
+        avatarUrl: currentUser.avatarUrl,
+        subtitle: selfLabel,
+        searchText: `${name} ${currentUser.accountId} ${selfLabel}`.toLocaleLowerCase(),
+      });
+    }
+
+    for (const friend of friends) {
+      if (byId.has(friend.id)) continue;
+      const name = friend.remark?.trim() || friend.nickname?.trim() || friend.accountId;
+      const subtitle = friend.remark?.trim() && friend.remark.trim() !== friend.nickname.trim()
+        ? friend.nickname
+        : friend.accountId;
+      byId.set(friend.id, {
+        id: friend.id,
+        name,
+        avatarUrl: friend.avatarUrl,
+        subtitle: subtitle || null,
+        searchText: `${name} ${friend.nickname} ${friend.accountId}`.toLocaleLowerCase(),
+      });
+    }
+
+    return [...byId.values()];
+  }, [currentUser, friends, t]);
+
+  const cardPickerSearchTerm = cardPickerSearch.trim().toLocaleLowerCase();
+  const filteredContactPickerItems = useMemo(
+    () => contactPickerItems.filter((item) => !cardPickerSearchTerm || item.searchText.includes(cardPickerSearchTerm)),
+    [cardPickerSearchTerm, contactPickerItems],
+  );
+  const filteredCircleItems = useMemo(
+    () => circles.filter((circle) => !cardPickerSearchTerm || circle.name.toLocaleLowerCase().includes(cardPickerSearchTerm)),
+    [cardPickerSearchTerm, circles],
+  );
+
+  useEffect(() => {
+    composerBlocksRef.current = composerBlocks;
+  }, [composerBlocks]);
+
+  const finishComposerDrag = useCallback(() => {
+    const meta = composerDragMetaRef.current;
+    if (meta) {
+      const currentBlocks = composerBlocksRef.current;
+      const currentIndex = currentBlocks.findIndex((block) => block.id === meta.blockId);
+      if (currentIndex >= 0 && meta.activeIndex !== currentIndex) {
+        const nextBlocks = [...currentBlocks];
+        const [movedBlock] = nextBlocks.splice(currentIndex, 1);
+        const targetIndex = Math.max(0, Math.min(nextBlocks.length, meta.activeIndex));
+        nextBlocks.splice(targetIndex, 0, movedBlock);
+        composerBlocksRef.current = nextBlocks;
+        setComposerBlocks(nextBlocks);
+      }
+    }
+
+    composerDragMetaRef.current = null;
+    composerDragY.stopAnimation();
+    composerDragY.setValue(0);
+    setDraggingComposerBlockId(null);
+    setComposerDragStartIndex(null);
+    setComposerDragActiveIndex(null);
+  }, [composerDragY]);
+
+  const getComposerDragResponder = useCallback(
+    (blockId: string) => {
+      const cached = composerDragRespondersRef.current.get(blockId);
+      if (cached) return cached;
+
+      const responder = PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderGrant: () => {
+          const currentBlocks = composerBlocksRef.current;
+          const startIndex = currentBlocks.findIndex((block) => block.id === blockId);
+          if (startIndex < 0) return;
+
+          composerDragMetaRef.current = {
+            blockId,
+            startIndex,
+            activeIndex: startIndex,
+          };
+          setDraggingComposerBlockId(blockId);
+          setComposerDragStartIndex(startIndex);
+          setComposerDragActiveIndex(startIndex);
+          composerDragY.setValue(0);
+        },
+        onPanResponderMove: (_event, gestureState) => {
+          const meta = composerDragMetaRef.current;
+          if (!meta) return;
+
+          const currentBlocks = composerBlocksRef.current;
+          const nextIndex = Math.max(
+            0,
+            Math.min(
+              currentBlocks.length - 1,
+              Math.round(
+                (meta.startIndex * COMPOSER_SORT_ROW_HEIGHT + gestureState.dy) /
+                  COMPOSER_SORT_ROW_HEIGHT,
+              ),
+            ),
+          );
+
+          if (nextIndex !== meta.activeIndex) {
+            meta.activeIndex = nextIndex;
+            setComposerDragActiveIndex(nextIndex);
+          }
+
+          const minDy = -meta.startIndex * COMPOSER_SORT_ROW_HEIGHT;
+          const maxDy =
+            (currentBlocks.length - 1 - meta.startIndex) * COMPOSER_SORT_ROW_HEIGHT;
+          const visualDy = Math.max(minDy, Math.min(maxDy, gestureState.dy));
+          composerDragY.setValue(visualDy);
+        },
+        onPanResponderRelease: finishComposerDrag,
+        onPanResponderTerminate: finishComposerDrag,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
+      });
+
+      composerDragRespondersRef.current.set(blockId, responder);
+      return responder;
+    },
+    [composerDragY, finishComposerDrag],
+  );
+
+  useEffect(() => {
+    if (!sortMode) {
+      finishComposerDrag();
+      composerDragRespondersRef.current.clear();
+    }
+  }, [finishComposerDrag, sortMode]);
+
   useEffect(() => () => pickerPreviewDisposerRef.current.disposeAll(), []);
 
   const invalidateUploadOwnership = useCallback(() => {
@@ -262,6 +714,125 @@ export default function EditNoteScreen() {
     setUploadingSection(null);
   }, [invalidateUploadOwnership]);
 
+  const buildCurrentDraftRecord = useCallback((): NoteEditorDraftRecord => {
+    const currentComposerBlocks = composerBlocksRef.current;
+    const currentTextBlocks = currentComposerBlocks
+      .filter((block) => block.kind === 'text')
+      .map((block) => ({
+        id: block.id,
+        content: getTextOnlyBlocks(textBlocksByIdRef.current[block.id] ?? []),
+      }));
+    const currentBlocks = currentTextBlocks.flatMap((block) => block.content);
+    const firstMediaBlockId = currentComposerBlocks.find(
+      (block) => block.kind === 'image' || block.kind === 'video',
+    )?.id;
+    const firstShowcaseBlockId = currentComposerBlocks.find(
+      (block) => block.kind === 'showcase',
+    )?.id;
+    const mediaBlocks = currentComposerBlocks.flatMap((block) => {
+      const target: 'media' | 'showcase' | null = block.kind === 'showcase'
+        ? 'showcase'
+        : block.kind === 'image' || block.kind === 'video'
+          ? 'media'
+          : null;
+      if (!target) return [];
+      const items = target === 'showcase' ? showcaseItems : mediaItems;
+      const fallbackId = target === 'showcase' ? firstShowcaseBlockId : firstMediaBlockId;
+      return [{
+        id: block.id,
+        target,
+        objectKeys: items
+          .filter((item) => (mediaOwnerByClientIdRef.current[item.clientId] ?? fallbackId) === block.id)
+          .map((item) => item.objectKey)
+          .filter((key): key is string => Boolean(key)),
+      }];
+    });
+    const contentJson = [
+      ...currentBlocks,
+      buildNoteComposerBlocksMetadata(
+        [FIXED_TITLE_BLOCK, ...currentComposerBlocks],
+        currentTextBlocks,
+        mediaBlocks,
+      ),
+    ];
+    const sectionMedia = stripEditorMediaDrafts(mergeMedia(mediaItems));
+    const sectionShowcase = stripEditorMediaDrafts(mergeMedia(showcaseItems));
+    const sectionAudio = stripEditorMediaDrafts(mergeMedia(audioItems));
+    const normalizedMediaSections = normalizeNoteMediaSections({
+      media: sectionMedia,
+      showcase: sectionShowcase,
+    });
+    const normalizedMedia = normalizeSectionMedia(normalizedMediaSections.media);
+    const normalizedShowcase = normalizeSectionMedia(normalizedMediaSections.showcase);
+    const normalizedAudio = normalizeSectionMedia(sectionAudio);
+    const location = hasLocationDraftValue(locationDraft)
+      ? {
+          title: locationDraft.title.trim() || null,
+          address: locationDraft.address.trim() || null,
+          latitude: locationDraft.latitude,
+          longitude: locationDraft.longitude,
+        }
+      : null;
+    const sections: Partial<NoteSections> = {
+      text: { content: extractPlainText(currentBlocks), contentJson },
+      media: { items: normalizedMedia },
+      showcase: { items: normalizedShowcase },
+      audio: { items: normalizedAudio },
+      contacts: { items: contactItems },
+      groups: { items: groupCardItems },
+      location,
+    };
+    const uploadedMediaItems = [
+      ...mediaItems.filter((item) => item.uploadStatus === 'UPLOADED'),
+      ...showcaseItems.filter((item) => item.uploadStatus === 'UPLOADED'),
+      ...audioItems.filter((item) => item.uploadStatus === 'UPLOADED'),
+    ];
+    const uploadedClientIds = new Set(uploadedMediaItems.map((item) => item.clientId));
+    return {
+      version: 1,
+      id: editorDraftId,
+      noteId: id ?? null,
+      title,
+      content: extractPlainText(currentBlocks),
+      contentJson,
+      sections,
+      groupIds: selectedGroupIds,
+      mediaKeys: uploadedMediaItems
+        .map((item) => item.objectKey)
+        .filter((key): key is string => Boolean(key)),
+      composerBlocks: currentComposerBlocks,
+      textBlocksById: { ...textBlocksByIdRef.current },
+      mediaItems: uploadedMediaItems.filter((item) => mediaItems.includes(item)),
+      showcaseItems: uploadedMediaItems.filter((item) => showcaseItems.includes(item)),
+      audioItems: uploadedMediaItems.filter((item) => audioItems.includes(item)),
+      mediaOwnerByClientId: Object.fromEntries(
+        Object.entries(mediaOwnerByClientIdRef.current).filter(([clientId]) => uploadedClientIds.has(clientId)),
+      ),
+      contactItems,
+      groupCardItems,
+      location: {
+        title: locationDraft.title,
+        address: locationDraft.address,
+        latitude: locationDraft.latitude,
+        longitude: locationDraft.longitude,
+      },
+      createdAt: Date.parse(createdAtIso) || Date.now(),
+      updatedAt: Date.now(),
+    };
+  }, [
+    audioItems,
+    contactItems,
+    createdAtIso,
+    editorDraftId,
+    groupCardItems,
+    id,
+    locationDraft,
+    mediaItems,
+    selectedGroupIds,
+    showcaseItems,
+    title,
+  ]);
+
   useEffect(() => {
     if (!navigating) return;
     const timer = setTimeout(() => router.back(), 200);
@@ -277,6 +848,8 @@ export default function EditNoteScreen() {
   useEffect(() => {
     const routeGeneration = ++saveGenerationRef.current;
     saveInFlightRef.current = false;
+    navigationRequestedRef.current = false;
+    draftHydratedRef.current = false;
     setIsSubmitting(false);
     setNavigating(false);
     return () => {
@@ -298,35 +871,69 @@ export default function EditNoteScreen() {
       });
 
     if (!isEdit || !id) {
+      draftHydratedRef.current = false;
+      setDraftHydratedKey(null);
+      const emptyFingerprint = draftFingerprint(emptyDraftRecord(editorDraftId, null));
+      baselineFingerprintRef.current = emptyFingerprint;
+      draftPersistedFingerprintRef.current = emptyFingerprint;
+      setSettledRouteKey(null);
       existingSectionsRef.current = null;
-      blocksRef.current = [];
+      textBlocksByIdRef.current = {};
       textStatsStore.reset();
       setGroupSheetVisible(false);
-      setInitialBlocks(null);
       setLoadedNoteId(null);
       pickerPreviewDisposerRef.current.disposeAll();
       setMediaItems([]);
       setShowcaseItems([]);
+      setAudioItems([]);
+      mediaOwnerByClientIdRef.current = {};
+      setMediaOwnerByClientId({});
+      setContactItems([]);
+      setGroupCardItems([]);
+      setRecordingAudioStartedAt(null);
+      recordingAudioRef.current = false;
+      recordingAudioBlockIdRef.current = null;
+      setComposerBlocks([]);
+      composerIdRef.current = 0;
+      setTextBlocksById({});
+      setSortMode(false);
       setUnrecoverableMediaCount(0);
       setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
       setMapRevealed(false);
       setEditorMounted(true);
       setLoading(false);
+      setSettledRouteKey(draftRouteKey);
       return () => {
         cancelled = true;
       };
     }
 
     setLoading(true);
+    draftHydratedRef.current = false;
+    setDraftHydratedKey(null);
+    baselineFingerprintRef.current = null;
+    draftPersistedFingerprintRef.current = null;
+    setSettledRouteKey(null);
     setLoadedNoteId(null);
-    blocksRef.current = [];
     textStatsStore.reset();
     setGroupSheetVisible(false);
-    setInitialBlocks(null);
     setTitle('');
     pickerPreviewDisposerRef.current.disposeAll();
     setMediaItems([]);
     setShowcaseItems([]);
+    setAudioItems([]);
+    mediaOwnerByClientIdRef.current = {};
+    setMediaOwnerByClientId({});
+    setContactItems([]);
+    setGroupCardItems([]);
+    setRecordingAudioStartedAt(null);
+    recordingAudioRef.current = false;
+    recordingAudioBlockIdRef.current = null;
+    setComposerBlocks([]);
+    composerIdRef.current = 0;
+    textBlocksByIdRef.current = {};
+    setTextBlocksById({});
+    setSortMode(false);
     setUnrecoverableMediaCount(0);
     setSelectedGroupIds([]);
     setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
@@ -342,7 +949,19 @@ export default function EditNoteScreen() {
         existingSectionsRef.current = note.sections ?? null;
 
         const normalizedSections = buildNoteSections(note);
-        const loaded = normalizedSections.text.contentJson ?? [];
+        const rawBlocks = note.sections?.text?.contentJson ?? note.contentJson ?? [];
+        const savedComposerBlocks = readNoteComposerBlocks(rawBlocks);
+        // Once instance metadata exists it is the author's source of truth,
+        // including intentional removals. Only legacy notes without a marker
+        // should infer blocks from their section fields.
+        const normalizedComposerBlocks = (savedComposerBlocks ?? normalizeNoteComposerBlocks(
+          null,
+          normalizedSections as unknown as Partial<NoteSections>,
+          true,
+        )).filter((block) => block.kind !== 'title');
+        setComposerBlocks(normalizedComposerBlocks);
+        composerIdRef.current = normalizedComposerBlocks.length;
+        const loaded = stripNoteComposerMetadata(normalizedSections.text.contentJson ?? []);
         const loadedTextBlocks = getTextOnlyBlocks(loaded);
         const legacyText = normalizedSections.text.content;
         // 旧笔记可能只有纯文本，进入编辑时也必须带上，避免保存后清空正文。判据是
@@ -359,11 +978,49 @@ export default function EditNoteScreen() {
               ]
             : loadedTextBlocks;
 
-        blocksRef.current = textBlocks;
-        textStatsStore.setBlocks(textBlocks);
-        setInitialBlocks(textBlocks.length > 0 ? textBlocks : null);
-        setMediaItems(normalizeSectionMedia(normalizedSections.media.items));
-        setShowcaseItems(normalizeSectionMedia(normalizedSections.showcase.items));
+        const savedTextBlocks = readNoteComposerTextBlocks(rawBlocks);
+        const textBlockIds = normalizedComposerBlocks
+          .filter((block) => block.kind === 'text')
+          .map((block) => block.id);
+        const nextTextBlocks = Object.fromEntries(
+          textBlockIds.map((blockId, index) => [
+            blockId,
+            savedTextBlocks.find((item) => item.id === blockId)?.content ??
+              (index === 0 ? textBlocks : []),
+          ]),
+        ) as Record<string, Record<string, unknown>[]>;
+        textBlocksByIdRef.current = nextTextBlocks;
+        setTextBlocksById(nextTextBlocks);
+        textStatsStore.setBlocks(Object.values(nextTextBlocks).flat());
+        const storedMediaItems = normalizeSectionMedia(normalizedSections.media.items);
+        const storedShowcaseItems = normalizeSectionMedia(normalizedSections.showcase.items);
+        setMediaItems(storedMediaItems);
+        setShowcaseItems(storedShowcaseItems);
+        setAudioItems(normalizeSectionMedia((normalizedSections as any).audio?.items));
+        const firstMediaBlockId = normalizedComposerBlocks.find(
+          (block) => block.kind === 'image' || block.kind === 'video',
+        )?.id;
+        const firstShowcaseBlockId = normalizedComposerBlocks.find((block) => block.kind === 'showcase')?.id;
+        const savedMediaBlocks = readNoteComposerMediaBlocks(rawBlocks);
+        const storedOwnerMap = Object.fromEntries([
+          ...(firstMediaBlockId
+            ? storedMediaItems.map((item) => [item.clientId, firstMediaBlockId] as const)
+            : []),
+          ...(firstShowcaseBlockId
+            ? storedShowcaseItems.map((item) => [item.clientId, firstShowcaseBlockId] as const)
+            : []),
+        ]);
+        savedMediaBlocks.forEach((mediaBlock) => {
+          const items = mediaBlock.target === 'showcase' ? storedShowcaseItems : storedMediaItems;
+          const keys = new Set(mediaBlock.objectKeys);
+          items.forEach((item) => {
+            if (keys.has(item.objectKey)) storedOwnerMap[item.clientId] = mediaBlock.id;
+          });
+        });
+        mediaOwnerByClientIdRef.current = storedOwnerMap;
+        setMediaOwnerByClientId(storedOwnerMap);
+        setContactItems(((normalizedSections as any).contacts?.items ?? []) as NoteCardDraft[]);
+        setGroupCardItems(((normalizedSections as any).groups?.items ?? []) as NoteCardDraft[]);
         setUnrecoverableMediaCount(
           countUnrecoverableSectionMedia([
             ...normalizedSections.media.items,
@@ -375,8 +1032,49 @@ export default function EditNoteScreen() {
         pinnedRef.current = note.pinned;
         setCreatedAtIso(note.createdAt);
         setLoadedNoteId(id);
+        baselineFingerprintRef.current = draftFingerprint({
+          version: 1,
+          id: editorDraftId,
+          noteId: id,
+          title: note.title,
+          content: note.content ?? extractPlainText(Object.values(nextTextBlocks).flat()),
+          contentJson: (rawBlocks ?? []) as Record<string, unknown>[],
+          sections: {
+            text: {
+              content: note.content ?? '',
+              contentJson: (rawBlocks ?? []) as Record<string, unknown>[],
+            },
+            media: { items: storedMediaItems },
+            showcase: { items: storedShowcaseItems },
+            audio: { items: normalizeSectionMedia((normalizedSections as any).audio?.items) },
+            contacts: { items: ((normalizedSections as any).contacts?.items ?? []) as NoteCardDraft[] },
+            groups: { items: ((normalizedSections as any).groups?.items ?? []) as NoteCardDraft[] },
+            location: buildLocationDraft(note.sections?.location),
+          },
+          groupIds: note.groups.map((group) => group.id),
+          mediaKeys: [
+            ...storedMediaItems,
+            ...storedShowcaseItems,
+            ...normalizeSectionMedia((normalizedSections as any).audio?.items),
+          ]
+            .map((item) => item.objectKey)
+            .filter((key): key is string => Boolean(key)),
+          composerBlocks: normalizedComposerBlocks,
+          textBlocksById: nextTextBlocks,
+          mediaItems: storedMediaItems,
+          showcaseItems: storedShowcaseItems,
+          audioItems: normalizeSectionMedia((normalizedSections as any).audio?.items),
+          mediaOwnerByClientId: storedOwnerMap,
+          contactItems: ((normalizedSections as any).contacts?.items ?? []) as NoteCardDraft[],
+          groupCardItems: ((normalizedSections as any).groups?.items ?? []) as NoteCardDraft[],
+          location: buildLocationDraft(note.sections?.location),
+          createdAt: Date.parse(note.createdAt) || Date.now(),
+          updatedAt: Date.parse(note.updatedAt) || Date.now(),
+        });
+        draftPersistedFingerprintRef.current = baselineFingerprintRef.current;
         setLoading(false);
         setEditorMounted(true);
+        setSettledRouteKey(draftRouteKey);
       })
       .catch((error) => {
         if (!cancelled) {
@@ -384,11 +1082,22 @@ export default function EditNoteScreen() {
           pickerPreviewDisposerRef.current.disposeAll();
           setMediaItems([]);
           setShowcaseItems([]);
+          setAudioItems([]);
+          mediaOwnerByClientIdRef.current = {};
+          setMediaOwnerByClientId({});
+          setContactItems([]);
+          setGroupCardItems([]);
+          setComposerBlocks([]);
+          setTextBlocksById({});
+          textBlocksByIdRef.current = {};
           setUnrecoverableMediaCount(0);
           setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
           setLoadedNoteId(null);
+          baselineFingerprintRef.current = draftFingerprint(emptyDraftRecord(editorDraftId, id));
+          draftPersistedFingerprintRef.current = baselineFingerprintRef.current;
           setLoading(false);
           setEditorMounted(true);
+          setSettledRouteKey(draftRouteKey);
           // loadedNoteId 留在 null 上是有意的：正文没加载出来就允许保存，等于用空
           // 内容覆盖服务端的笔记。但失败必须说出来——否则用户面对的是一个空编辑器
           // 加一个永远点不动的「完成」，既没有报错也没有重试入口，线上也无声。
@@ -408,7 +1117,208 @@ export default function EditNoteScreen() {
     // t 刻意不在依赖里：切一次语言就会让这个 effect 重跑，setTitle('')、
     // setMediaItems([]) 再重新拉服务端版本 —— 作者没保存的编辑当场消失。effect
     // 里用到 t 的只有一条失败弹窗文案，走 tRef 取最新的即可。
-  }, [id, isEdit, textStatsStore]);
+  }, [draftRouteKey, editorDraftId, id, isEdit, textStatsStore]);
+
+  useEffect(() => {
+    if (!editorMounted || settledRouteKey !== draftRouteKey || draftHydratedKey === draftRouteKey) {
+      return;
+    }
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    const hydrate = async () => {
+      let record = loadLocalNoteDraft(currentUser?.id, editorDraftId);
+      if (!record) {
+        try {
+          const remote = await fetchNoteDraft(editorDraftId);
+          record = draftRecordFromServer(remote, editorDraftId);
+        } catch {
+          // A draft may exist only on this device, or the device may be offline.
+        }
+      }
+      if (cancelled) return;
+      if (record) {
+        draftPersistedFingerprintRef.current = draftFingerprint(record);
+        setTitle(record.title);
+        composerBlocksRef.current = record.composerBlocks;
+        setComposerBlocks(record.composerBlocks);
+        composerIdRef.current = record.composerBlocks.length;
+        textBlocksByIdRef.current = record.textBlocksById;
+        setTextBlocksById(record.textBlocksById);
+        textStatsStore.setBlocks(Object.values(record.textBlocksById).flat());
+        setMediaItems(record.mediaItems);
+        setShowcaseItems(record.showcaseItems);
+        setAudioItems(record.audioItems);
+        mediaOwnerByClientIdRef.current = record.mediaOwnerByClientId;
+        setMediaOwnerByClientId(record.mediaOwnerByClientId);
+        setContactItems(record.contactItems as NoteCardDraft[]);
+        setGroupCardItems(record.groupCardItems as NoteCardDraft[]);
+        setSelectedGroupIds(record.groupIds);
+        setLocationDraft(record.location);
+        setUnrecoverableMediaCount(0);
+      }
+      if (!record && draftPersistedFingerprintRef.current == null) {
+        draftPersistedFingerprintRef.current = baselineFingerprintRef.current;
+      }
+      draftHydratedRef.current = true;
+      setDraftHydratedKey(draftRouteKey);
+    };
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentUser?.id,
+    draftHydratedKey,
+    draftRouteKey,
+    editorDraftId,
+    editorMounted,
+    settledRouteKey,
+    textStatsStore,
+  ]);
+
+  const currentDraftFingerprint = useMemo(
+    () => draftFingerprint(buildCurrentDraftRecord()),
+    [buildCurrentDraftRecord],
+  );
+  const isDraftDirty = Boolean(
+    draftHydratedKey === draftRouteKey &&
+      baselineFingerprintRef.current != null &&
+      baselineFingerprintRef.current !== currentDraftFingerprint &&
+      draftPersistedFingerprintRef.current !== currentDraftFingerprint,
+  );
+
+  const persistDraft = useCallback(async () => {
+    if (!currentUser?.id || !draftHydratedRef.current || navigationRequestedRef.current) return;
+    const record = buildCurrentDraftRecord();
+    const recordFingerprint = draftFingerprint(record);
+    if (
+      baselineFingerprintRef.current != null &&
+      baselineFingerprintRef.current === recordFingerprint
+    ) {
+      return;
+    }
+    try {
+      saveLocalNoteDraft(currentUser?.id, record);
+    } catch {
+      // A storage failure must not interrupt the editor or prevent the server
+      // snapshot from being queued when the device still has connectivity.
+    }
+    draftPersistedFingerprintRef.current = recordFingerprint;
+    // Chain server writes so a slower request cannot be overwritten by an older
+    // request completing after a newer snapshot.
+    draftSavePromiseRef.current = draftSavePromiseRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          await saveNoteDraft(editorDraftId, localDraftSummaryToServerInput(record));
+        } catch {
+          // The encrypted local copy is the crash/offline source of truth. The
+          // next focus retries the server sync without interrupting editing.
+        }
+      });
+    await draftSavePromiseRef.current;
+  }, [buildCurrentDraftRecord, currentUser?.id, editorDraftId]);
+  const persistDraftRef = useRef(persistDraft);
+  persistDraftRef.current = persistDraft;
+
+  useEffect(() => {
+    if (!draftHydratedRef.current || draftHydratedKey !== draftRouteKey || !isDraftDirty) return;
+    if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    draftSaveTimerRef.current = setTimeout(() => {
+      draftSaveTimerRef.current = null;
+      void persistDraft();
+    }, 650);
+    return () => {
+      if (draftSaveTimerRef.current) {
+        clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = null;
+      }
+    };
+  }, [draftHydratedKey, draftRouteKey, isDraftDirty, persistDraft]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        void persistDraftRef.current();
+      }
+    });
+    return () => {
+      subscription.remove();
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+      if (draftTextSaveTimerRef.current) clearTimeout(draftTextSaveTimerRef.current);
+      void persistDraftRef.current();
+    };
+  }, []);
+
+  const completeNavigation = useCallback(
+    (action?: NavigationAction, force = false) => {
+      if (navigationRequestedRef.current && !force) return;
+      navigationRequestedRef.current = true;
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+      invalidateUploadOwnership();
+      setEditorMounted(false);
+      if (action) {
+        setTimeout(() => navigation.dispatch(action), 0);
+      } else {
+        setNavigating(true);
+      }
+    },
+    [invalidateUploadOwnership, navigation],
+  );
+
+  const promptDraftExit = useCallback(
+    (action?: NavigationAction) => {
+      const currentFingerprint = draftFingerprint(buildCurrentDraftRecord());
+      const dirtyNow =
+        draftHydratedRef.current &&
+        baselineFingerprintRef.current != null &&
+        baselineFingerprintRef.current !== currentFingerprint &&
+        draftPersistedFingerprintRef.current !== currentFingerprint;
+      if (!dirtyNow) {
+        completeNavigation(action);
+        return;
+      }
+      Alert.alert(
+        t('notes.drafts.unsavedTitle', { defaultValue: '保存未完成的笔记？' }),
+        t('notes.drafts.unsavedMessage', {
+          defaultValue: '未保存的内容会放入草稿箱，之后可以继续编辑。',
+        }),
+        [
+          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+          {
+            text: t('notes.drafts.discard', { defaultValue: '直接退出' }),
+            style: 'destructive',
+            onPress: () => {
+              removeLocalNoteDraft(currentUser?.id, editorDraftId);
+              void deleteNoteDraft(editorDraftId).catch(() => undefined);
+              completeNavigation(action);
+            },
+          },
+          {
+            text: t('notes.drafts.save', { defaultValue: '保存到草稿箱' }),
+            onPress: () => {
+              void persistDraft().finally(() => completeNavigation(action));
+            },
+          },
+        ],
+      );
+    },
+    [
+      completeNavigation,
+      currentUser?.id,
+      buildCurrentDraftRecord,
+      editorDraftId,
+      persistDraft,
+      t,
+    ],
+  );
+
+  // Keep the guard enabled for the lifetime of the editor. Text blocks live in
+  // refs to avoid re-rendering the whole note while typing, so the callback
+  // computes the latest fingerprint when navigation is actually attempted.
+  usePreventRemove(editorMounted && !navigationRequestedRef.current, ({ data }) => {
+    promptDraftExit(data.action);
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -430,18 +1340,29 @@ export default function EditNoteScreen() {
     }, [consumePickedLocation, invalidateUploadOwnership, resetUploadOwnership]),
   );
 
-  const handleContentChange = useCallback((newBlocks: Record<string, unknown>[]) => {
-    blocksRef.current = getTextOnlyBlocks(newBlocks);
-    textStatsStore.setBlocks(blocksRef.current);
+  const handleContentChange = useCallback((blockId: string, newBlocks: Record<string, unknown>[]) => {
+    const nextBlocks = getTextOnlyBlocks(newBlocks);
+    textBlocksByIdRef.current = {
+      ...textBlocksByIdRef.current,
+      [blockId]: nextBlocks,
+    };
+    textStatsStore.setBlocks(Object.values(textBlocksByIdRef.current).flat());
+    if (draftTextSaveTimerRef.current) clearTimeout(draftTextSaveTimerRef.current);
+    draftTextSaveTimerRef.current = setTimeout(() => {
+      draftTextSaveTimerRef.current = null;
+      void persistDraftRef.current();
+    }, 180);
   }, [textStatsStore]);
 
   const handleAddSectionMedia = useCallback(
     async ({
       target,
       kind,
+      blockId,
     }: {
       target: SectionMediaTarget;
       kind: SectionUploadKind;
+      blockId?: string;
     }) => {
       if (!isRouteDataReady || uploadInFlightRef.current) return;
       uploadInFlightRef.current = true;
@@ -450,6 +1371,8 @@ export default function EditNoteScreen() {
       const batchNoteKey = editedNoteKeyRef.current;
       let batchDraftIds: Set<string> = new Set();
       const stillEditingSameNote = () => editedNoteKeyRef.current === batchNoteKey;
+      const blockIsMounted = () =>
+        !blockId || composerBlocksRef.current.some((block) => block.id === blockId);
       const uploadKey: UploadingSection = `${target}:${kind}`;
       try {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -457,7 +1380,11 @@ export default function EditNoteScreen() {
         if (!permission.granted) return;
 
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: kind === 'video' ? ['videos'] : ['images'],
+          mediaTypes: kind === 'media'
+            ? ['images', 'videos']
+            : kind === 'video'
+              ? ['videos']
+              : ['images'],
           quality: 0.85,
           allowsMultipleSelection: true,
           selectionLimit: MAX_NOTE_MEDIA_SELECTION,
@@ -484,16 +1411,13 @@ export default function EditNoteScreen() {
             }),
           );
         }
-        const acceptedAssets =
-          kind === 'video'
-            ? selectedAssets.filter(
-                (asset) =>
-                  !getNoteVideoUploadPolicyViolation({
-                    fileSize: asset.fileSize,
-                    duration: asset.duration,
-                  }),
-              )
-            : selectedAssets;
+        const acceptedAssets = selectedAssets.filter((asset) => {
+          const isVideo = kind === 'video' || (kind === 'media' && asset.type === 'video');
+          return !isVideo || !getNoteVideoUploadPolicyViolation({
+            fileSize: asset.fileSize,
+            duration: asset.duration,
+          });
+        });
         const rejectedAssets = selectedAssets.filter((asset) => !acceptedAssets.includes(asset));
         const rejectedCount = rejectedAssets.length;
         pickerPreviewDisposerRef.current.disposeAssets(rejectedAssets);
@@ -507,15 +1431,35 @@ export default function EditNoteScreen() {
           );
         }
 
+        // A picker can stay open while the author removes its section. Do not
+        // upload or reintroduce files for a block that no longer exists.
+        if (!blockIsMounted()) {
+          pickerPreviewDisposerRef.current.disposeAssets(acceptedAssets);
+          return;
+        }
+
         // 「上传中…」直到这里才亮。此前是进函数就亮，而系统相册可以开着好几分钟：
         // 网页端对话框背后的页面仍然可见，作者一个文件都还没选，两个按钮就已经
         // 变成上传中并且全部禁用了。重入由 uploadInFlightRef 挡住，与这个标签无关。
         setUploadingSection(uploadKey);
-        const pendingDrafts = createPendingNoteMediaDrafts(
+        const pendingDrafts: EditorNoteMediaDraft[] = createPendingNoteMediaDrafts(
           acceptedAssets,
-          kind === 'video' ? 'VIDEO' : 'IMAGE',
-        );
+          'IMAGE',
+        ).map((draft, index): EditorNoteMediaDraft => ({
+          ...draft,
+          type: kind === 'video' || (kind === 'media' && acceptedAssets[index]?.type === 'video')
+            ? 'VIDEO' as const
+            : 'IMAGE' as const,
+        }));
         batchDraftIds = new Set(pendingDrafts.map((item) => item.clientId));
+        if (blockId && pendingDrafts.length) {
+          const nextOwners = { ...mediaOwnerByClientIdRef.current };
+          pendingDrafts.forEach((item) => {
+            nextOwners[item.clientId] = blockId;
+          });
+          mediaOwnerByClientIdRef.current = nextOwners;
+          setMediaOwnerByClientId(nextOwners);
+        }
         if (pendingDrafts.length) {
           const appendPending = (current: EditorNoteMediaDraft[]) => [
             ...current,
@@ -531,8 +1475,9 @@ export default function EditNoteScreen() {
         const batch = await uploadNoteMediaBatch(
           acceptedAssets.map((asset, index) => ({ asset, clientId: pendingDrafts[index].clientId })),
           async ({ asset, clientId }) => {
-          const fallbackName = kind === 'video' ? 'video.mp4' : 'image.jpg';
-          const fallbackType = kind === 'video' ? 'video/mp4' : 'image/jpeg';
+          const isVideo = kind === 'video' || (kind === 'media' && asset.type === 'video');
+          const fallbackName = isVideo ? 'video.mp4' : 'image.jpg';
+          const fallbackType = isVideo ? 'video/mp4' : 'image/jpeg';
           const filename = asset.uri.split('/').pop() ?? fallbackName;
           const contentType =
             resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
@@ -548,20 +1493,20 @@ export default function EditNoteScreen() {
             contentType,
             asset.uri,
             presign.requiredHeaders,
-            kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
+            isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
           );
           // notes/ 是私有目录：直连地址一律 403，读取由服务端按 objectKey 现签。
           // 所以这里只上送 key，落库地址交给服务端派生 —— 不传 url，也不造假地址。
           return {
             clientId,
-            type: kind === 'video' ? 'VIDEO' : 'IMAGE',
+            type: isVideo ? 'VIDEO' : 'IMAGE',
             objectKey: presign.key,
             width: asset.width ?? undefined,
             height: asset.height ?? undefined,
             mimeType: contentType,
             size: asset.fileSize ?? undefined,
             durationMs:
-              kind === 'video' && typeof asset.duration === 'number'
+              isVideo && typeof asset.duration === 'number'
                 ? Math.round(asset.duration)
                 : undefined,
             sortOrder: 0,
@@ -571,7 +1516,7 @@ export default function EditNoteScreen() {
         // 结果先落库，再谈 UI。此前这里先查「本次操作是否仍持有所有权」，失焦就
         // 直接 return —— 于是**已经传完**的对象被整批丢掉：字节已经躺在对象存储里，
         // 丢掉的是用户刚等完的那几十秒和一份已经付过的流量。所有权只管弹窗和按钮态。
-        if (stillEditingSameNote()) {
+        if (stillEditingSameNote() && blockIsMounted()) {
           batch.failedIndexes.forEach((index) =>
             pickerPreviewDisposerRef.current.dispose(acceptedAssets[index]?.uri),
           );
@@ -646,7 +1591,366 @@ export default function EditNoteScreen() {
     } else {
       setShowcaseItems((current) => removeByClientId(current));
     }
+    if (mediaOwnerByClientIdRef.current[clientId]) {
+      const nextOwners = { ...mediaOwnerByClientIdRef.current };
+      delete nextOwners[clientId];
+      mediaOwnerByClientIdRef.current = nextOwners;
+      setMediaOwnerByClientId(nextOwners);
+    }
   }, []);
+
+  const handleAddAudioFile = useCallback(async (blockId?: string) => {
+    if (!isRouteDataReady || uploadInFlightRef.current || recordingAudioRef.current) return;
+    uploadInFlightRef.current = true;
+    const operationToken = uploadOperationGuardRef.current.begin();
+    const batchNoteKey = editedNoteKeyRef.current;
+    let batchDraftIds: Set<string> = new Set();
+    const blockIsMounted = () =>
+      !blockId || composerBlocksRef.current.some((block) => block.id === blockId);
+    const stillEditingSameNote = () => editedNoteKeyRef.current === batchNoteKey;
+
+    try {
+      // DocumentPicker is a native module. Load it only when the user asks to
+      // upload audio so an older dev client without the module can still open
+      // the notes screen and show a normal product message.
+      const result = await (async () => {
+        try {
+          const documentPicker = await import('expo-document-picker');
+          return await documentPicker.getDocumentAsync({
+            type: 'audio/*',
+            multiple: true,
+            copyToCacheDirectory: true,
+          });
+        } catch (error) {
+          reportHandledFailure('noteEditor', 'audioPickerUnavailable', error);
+          if (uploadOperationGuardRef.current.isActive(operationToken)) {
+            Alert.alert(
+              t('notes.edit.audioPickerUnavailableTitle', {
+                defaultValue: '暂时无法选择音频',
+              }),
+              t('notes.edit.audioPickerUnavailableMessage', {
+                defaultValue: '当前版本暂不支持选择音频，请更新应用后重试。',
+              }),
+            );
+          }
+          return null;
+        }
+      })();
+      if (!result) return;
+      if (!uploadOperationGuardRef.current.isActive(operationToken)) {
+        if (!result.canceled && result.assets) {
+          pickerPreviewDisposerRef.current.retainAssets(result.assets);
+          pickerPreviewDisposerRef.current.disposeAssets(result.assets);
+        }
+        return;
+      }
+      if (result.canceled || !result.assets?.length) return;
+
+      pickerPreviewDisposerRef.current.retainAssets(result.assets);
+      const { selectedAssets, overflowAssets } = splitPickerAssets(result.assets);
+      if (overflowAssets.length) {
+        pickerPreviewDisposerRef.current.disposeAssets(overflowAssets);
+        Alert.alert(
+          t('notes.editor.selectionLimitExceededTitle', { defaultValue: '选择数量已达上限' }),
+          t('notes.editor.selectionLimitExceededMessage', {
+            defaultValue: '最多可选择 {{count}} 个文件，已忽略其余 {{overflow}} 个。',
+            count: MAX_NOTE_MEDIA_SELECTION,
+            overflow: overflowAssets.length,
+          }),
+        );
+      }
+      if (!blockIsMounted()) {
+        pickerPreviewDisposerRef.current.disposeAssets(selectedAssets);
+        return;
+      }
+
+      setUploadingSection('audio');
+      const pendingDrafts = createPendingNoteMediaDrafts(
+        selectedAssets.map((asset) => ({
+          uri: asset.uri,
+          fileSize: asset.size,
+        })),
+        'AUDIO',
+      );
+      batchDraftIds = new Set(pendingDrafts.map((item) => item.clientId));
+      if (pendingDrafts.length) {
+        setAudioItems((current) => [
+          ...current,
+          ...pendingDrafts.map((item, index) => ({
+            ...item,
+            sortOrder: current.length + index,
+          })),
+        ]);
+      }
+
+      const batch = await uploadNoteMediaBatch(
+        selectedAssets.map((asset, index) => ({ asset, clientId: pendingDrafts[index].clientId })),
+        async ({ asset, clientId }) => {
+          const filename = asset.name || asset.uri.split('/').pop() || 'note-audio.m4a';
+          const contentType =
+            resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
+            'audio/mp4';
+          const presign = await requestUploadPresign({
+            filename: sanitizeUploadFilename(filename),
+            contentType,
+            folder: 'notes',
+            fileUri: asset.uri,
+          });
+          await uploadLocalFileToPresignedUrl(
+            presign.uploadUrl,
+            contentType,
+            asset.uri,
+            presign.requiredHeaders,
+          );
+          return {
+            clientId,
+            type: 'AUDIO' as CreateNoteMediaInput['type'],
+            objectKey: presign.key,
+            mimeType: contentType,
+            size: asset.size ?? undefined,
+            sortOrder: 0,
+          };
+        },
+      );
+
+      if (stillEditingSameNote() && blockIsMounted()) {
+        batch.failedIndexes.forEach((index) =>
+          pickerPreviewDisposerRef.current.dispose(selectedAssets[index]?.uri),
+        );
+        setAudioItems((current) => reconcileNoteMediaDrafts(current, batch.items, batchDraftIds));
+      }
+      if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
+      if (batch.failedCount) {
+        const { error, errorNames } = summarizeNoteMediaBatchFailure(batch.errors);
+        reportHandledFailure('noteEditor', 'audioFileUploadBatch', error, {
+          failed: batch.failedCount,
+          total: selectedAssets.length,
+          reason: 'audio.file',
+          errorNames,
+        });
+        Alert.alert(
+          t('notes.editor.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
+          t('notes.editor.mediaUploadsFailedMessage', {
+            defaultValue: '{{count}} 个文件上传失败，请稍后重试',
+            count: batch.failedCount,
+          }),
+        );
+      }
+    } catch (error) {
+      if (stillEditingSameNote()) {
+        setAudioItems((current) => {
+          const { kept, discarded } = partitionUnsettledDrafts(current, batchDraftIds);
+          discarded.forEach((item) => pickerPreviewDisposerRef.current.dispose(item.previewUri));
+          return kept.map((item, index) => ({ ...item, sortOrder: index }));
+        });
+      }
+      reportHandledFailure('noteEditor', 'audioFileUpload', error);
+      if (uploadOperationGuardRef.current.isActive(operationToken)) {
+        Alert.alert(
+          t('notes.editor.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
+          t('notes.editor.mediaUploadFailedMessage', { defaultValue: '请稍后重试' }),
+        );
+      }
+    } finally {
+      if (uploadOperationGuardRef.current.complete(operationToken)) {
+        uploadInFlightRef.current = false;
+        setUploadingSection(null);
+      }
+    }
+  }, [isRouteDataReady, t]);
+
+  const stopNoteRecording = useCallback(async () => {
+    if (!recordingAudioRef.current) return;
+    const batchNoteKey = editedNoteKeyRef.current;
+    const recordingBlockId = recordingAudioBlockIdRef.current;
+    recordingAudioRef.current = false;
+    recordingAudioBlockIdRef.current = null;
+    setRecordingAudioStartedAt(null);
+    setUploadingSection('audio');
+    try {
+      const status = noteRecorder.getStatus();
+      const elapsedMs = status.durationMillis || (
+        recordingAudioStartedAt ? Date.now() - recordingAudioStartedAt : 0
+      );
+      await noteRecorder.stop();
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      // expo-audio only guarantees the recording URI after stop() resolves on
+      // native platforms. Reading it before stop made every recording fail at
+      // the upload step with a misleading "file generation" error.
+      const localUri = noteRecorder.uri ?? noteRecorder.getStatus().url ?? status.url;
+      if (!localUri) throw new Error('录音文件生成失败');
+      const durationMs = Math.max(1, Math.round(elapsedMs));
+      const filename = localUri.split('/').pop() || 'note-audio.m4a';
+      const contentType = resolveUploadContentType({ fileName: filename }) ?? 'audio/mp4';
+      const presign = await requestUploadPresign({
+        filename: sanitizeUploadFilename(filename),
+        contentType,
+        folder: 'notes',
+        fileUri: localUri,
+      });
+      await uploadLocalFileToPresignedUrl(
+        presign.uploadUrl,
+        contentType,
+        localUri,
+        presign.requiredHeaders,
+      );
+      if (
+        editedNoteKeyRef.current === batchNoteKey &&
+        (!recordingBlockId || composerBlocksRef.current.some((block) => block.id === recordingBlockId))
+      ) {
+        setAudioItems((current) => [
+          ...current,
+          {
+            type: 'AUDIO' as CreateNoteMediaInput['type'],
+            objectKey: presign.key,
+            mimeType: contentType,
+            durationMs,
+            previewUri: localUri,
+            clientId: `audio:${presign.key}`,
+            uploadStatus: 'UPLOADED',
+            sortOrder: current.length,
+          },
+        ]);
+      }
+    } catch (error) {
+      reportHandledFailure('noteEditor', 'audioUpload', error);
+      Alert.alert(
+        t('notes.edit.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
+        t('notes.edit.mediaUploadFailedMessage', { defaultValue: '录音上传失败，请稍后重试' }),
+      );
+    } finally {
+      setUploadingSection(null);
+    }
+  }, [noteRecorder, recordingAudioStartedAt, t]);
+
+  const toggleNoteRecording = useCallback(async (blockId?: string) => {
+    if (!isRouteDataReady || uploadingSection !== null) return;
+    if (recordingAudioRef.current) {
+      await stopNoteRecording();
+      return;
+    }
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          t('permissions.insufficientTitle'),
+          t('permissions.microphone'),
+        );
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      const status = noteRecorder.getStatus();
+      if (!status.canRecord) await noteRecorder.prepareToRecordAsync();
+      noteRecorder.record();
+      recordingAudioRef.current = true;
+      recordingAudioBlockIdRef.current = blockId ?? composerBlocksRef.current.find((block) => block.kind === 'audio')?.id ?? null;
+      setRecordingAudioStartedAt(Date.now());
+    } catch (error) {
+      reportHandledFailure('noteEditor', 'audioRecordStart', error);
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
+      Alert.alert(
+        t('notes.edit.mediaUploadFailedTitle', { defaultValue: '录音失败' }),
+        t('notes.edit.mediaUploadFailedMessage', { defaultValue: '无法开始录音，请稍后重试' }),
+      );
+    }
+  }, [isRouteDataReady, noteRecorder, stopNoteRecording, t, uploadingSection]);
+
+  useEffect(() => () => {
+    if (recordingAudioRef.current) {
+      try {
+        void noteRecorder.stop().catch(() => undefined);
+      } catch {
+        // Native recorder may already be released during unmount.
+      }
+      void setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
+    }
+  }, [noteRecorder]);
+
+  const openCardPicker = useCallback(async (kind: CardPickerKind) => {
+    if (!isRouteDataReady || recordingAudioRef.current) return;
+    const requestId = ++cardPickerRequestRef.current;
+    const isCurrentRequest = () => cardPickerRequestRef.current === requestId;
+    setCardPickerKind(kind);
+    setCardPickerSearch('');
+    const current = kind === 'contact' ? contactItems : groupCardItems;
+    setSelectedCardIds(current.map((item) => item.id));
+    const accountId = currentUser?.id ?? null;
+    const cachedFriends = kind === 'contact'
+      ? getCachedNotePickerFriends(accountId)
+      : null;
+    const cachedCircles = kind === 'group'
+      ? getCachedNotePickerCircles(accountId)
+      : null;
+    const hasCached = kind === 'contact'
+      ? cachedFriends !== null
+      : cachedCircles !== null;
+    if (cachedFriends) setFriends(cachedFriends);
+    if (cachedCircles) setCircles(cachedCircles);
+
+    const isFresh = kind === 'contact'
+      ? isNotePickerFriendsFresh(accountId)
+      : isNotePickerCirclesFresh(accountId);
+    // Cached data is usable immediately. A stale cache refreshes in the
+    // background without blocking the picker or showing a spinner.
+    setCardPickerLoading(!hasCached);
+    if (hasCached && isFresh) return;
+
+    try {
+      if (kind === 'contact') {
+        const nextFriends = await loadNotePickerFriends(accountId);
+        if (isCurrentRequest()) setFriends(nextFriends);
+      } else {
+        const nextCircles = await loadNotePickerCircles(accountId);
+        if (isCurrentRequest()) setCircles(nextCircles);
+      }
+    } catch (error) {
+      reportHandledFailure('noteEditor', 'cardPickerLoad', error);
+      if (!hasCached && isCurrentRequest()) {
+        Alert.alert(
+          t('notes.edit.cardPickerLoadFailedTitle', { defaultValue: '加载失败' }),
+          t('notes.edit.cardPickerLoadFailedMessage', { defaultValue: '名片列表加载失败，请稍后重试' }),
+        );
+        setCardPickerKind(null);
+        setCardPickerSearch('');
+      }
+    } finally {
+      if (isCurrentRequest()) setCardPickerLoading(false);
+    }
+  }, [
+    contactItems,
+    currentUser?.id,
+    groupCardItems,
+    isRouteDataReady,
+    t,
+  ]);
+
+  const closeCardPicker = useCallback(() => {
+    cardPickerRequestRef.current += 1;
+    setCardPickerKind(null);
+    setCardPickerSearch('');
+  }, []);
+
+  const confirmCardPicker = useCallback(() => {
+    if (!cardPickerKind) return;
+    if (cardPickerKind === 'contact') {
+      setContactItems(
+        contactPickerItems.filter((item) => selectedCardIds.includes(item.id)).map((item) => ({
+          id: item.id,
+          name: item.name,
+          faceURL: item.avatarUrl,
+        })),
+      );
+    } else {
+      setGroupCardItems(
+        circles.filter((circle) => selectedCardIds.includes(circle.id)).map((circle) => ({
+          id: circle.id,
+          name: circle.name,
+          faceURL: circle.avatarUrl,
+        })),
+      );
+    }
+    closeCardPicker();
+  }, [cardPickerKind, circles, contactPickerItems, closeCardPicker, selectedCardIds]);
 
   const handleOpenLocationPicker = useCallback(() => {
     if (!isRouteDataReady || uploadInFlightRef.current) return;
@@ -671,21 +1975,172 @@ export default function EditNoteScreen() {
     setMapRevealed(false);
   }, []);
 
+  const handleRemoveComposerBlock = useCallback((block: NoteComposerBlock) => {
+    const currentBlocks = composerBlocksRef.current;
+    const remainingBlocks = currentBlocks.filter((item) => item.id !== block.id);
+    composerBlocksRef.current = remainingBlocks;
+    setComposerBlocks(remainingBlocks);
+
+    if (block.kind === 'title') {
+      setTitle('');
+    } else if (block.kind === 'text') {
+      delete textBlocksByIdRef.current[block.id];
+      const nextTextBlocks = { ...textBlocksByIdRef.current };
+      textBlocksByIdRef.current = nextTextBlocks;
+      setTextBlocksById(nextTextBlocks);
+      textStatsStore.setBlocks(Object.values(nextTextBlocks).flat());
+    } else if (block.kind === 'image' || block.kind === 'video') {
+      const fallbackBlockId = currentBlocks.find(
+        (item) => item.kind === 'image' || item.kind === 'video',
+      )?.id;
+      const removedClientIds = new Set(
+        mediaItems
+          .filter((item) => (mediaOwnerByClientIdRef.current[item.clientId] ?? fallbackBlockId) === block.id)
+          .map((item) => item.clientId),
+      );
+      setMediaItems((current) => current
+        .filter((item) => {
+          if (!removedClientIds.has(item.clientId)) return true;
+          pickerPreviewDisposerRef.current.dispose(item.previewUri);
+          return false;
+        })
+        .map((item, index) => ({ ...item, sortOrder: index })));
+      const nextOwners = { ...mediaOwnerByClientIdRef.current };
+      removedClientIds.forEach((clientId) => delete nextOwners[clientId]);
+      mediaOwnerByClientIdRef.current = nextOwners;
+      setMediaOwnerByClientId(nextOwners);
+      if (fallbackBlockId === block.id) setUnrecoverableMediaCount(0);
+    } else if (block.kind === 'showcase') {
+      const fallbackBlockId = currentBlocks.find((item) => item.kind === 'showcase')?.id;
+      const removedClientIds = new Set(
+        showcaseItems
+          .filter((item) => (mediaOwnerByClientIdRef.current[item.clientId] ?? fallbackBlockId) === block.id)
+          .map((item) => item.clientId),
+      );
+      setShowcaseItems((current) => current
+        .filter((item) => {
+          if (!removedClientIds.has(item.clientId)) return true;
+          pickerPreviewDisposerRef.current.dispose(item.previewUri);
+          return false;
+        })
+        .map((item, index) => ({ ...item, sortOrder: index })));
+      const nextOwners = { ...mediaOwnerByClientIdRef.current };
+      removedClientIds.forEach((clientId) => delete nextOwners[clientId]);
+      mediaOwnerByClientIdRef.current = nextOwners;
+      setMediaOwnerByClientId(nextOwners);
+      if (fallbackBlockId === block.id) setUnrecoverableMediaCount(0);
+    } else if (block.kind === 'audio') {
+      if (recordingAudioRef.current) {
+        recordingAudioRef.current = false;
+        recordingAudioBlockIdRef.current = null;
+        setRecordingAudioStartedAt(null);
+        void noteRecorder.stop().catch(() => undefined);
+        void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
+      }
+      setAudioItems((current) => current.filter((item) => {
+        pickerPreviewDisposerRef.current.dispose(item.previewUri);
+        return false;
+      }));
+    } else if (block.kind === 'location') {
+      handleClearLocation();
+    } else if (block.kind === 'contact') {
+      setContactItems([]);
+    } else if (block.kind === 'group') {
+      setGroupCardItems([]);
+    }
+  }, [handleClearLocation, mediaItems, noteRecorder, showcaseItems, textStatsStore]);
+
   const revealMap = useCallback(() => {
     setMapRevealed(true);
   }, []);
 
+  const addComposerBlock = useCallback((kind: NoteComposerBlockKind) => {
+    // 标题、位置、名片和群名片在笔记模型里各只有一个值；文字、媒体等
+    // 其余类型则是可重复的独立区块。工具栏只负责插入区块，区块内的
+    // 操作按钮才负责打开选择器、上传或开始录音，避免点击工具栏就跳出面板。
+    if (isNoteComposerSingletonKind(kind) && composerBlocks.some((block) => block.kind === kind)) {
+      return;
+    }
+    const blockId = `${kind}-${++composerIdRef.current}`;
+    setComposerBlocks((current) => {
+      const next = [...current, { id: blockId, kind }];
+      composerBlocksRef.current = next;
+      return next;
+    });
+    if (kind === 'text') {
+      textBlocksByIdRef.current = { ...textBlocksByIdRef.current, [blockId]: [] };
+      setTextBlocksById(textBlocksByIdRef.current);
+    }
+    if (kind === 'text') {
+      scrollRef.current?.scrollTo({ y: 120, animated: true });
+    } else if (kind === 'image' || kind === 'video' || kind === 'showcase') {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }
+  }, [composerBlocks]);
+
   const navigateBack = useCallback(() => {
-    invalidateUploadOwnership();
-    setEditorMounted(false);
-    setNavigating(true);
-  }, [invalidateUploadOwnership]);
+    promptDraftExit();
+  }, [promptDraftExit]);
 
   const toggleGroup = useCallback((groupId: string) => {
     setSelectedGroupIds((prev) =>
       prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId],
     );
   }, []);
+
+  const openGroupCreate = useCallback(() => {
+    if (availableGroups.length >= MAX_NOTE_GROUPS) {
+      Alert.alert(
+        t('notes.alerts.groupLimitTitle', { defaultValue: '分组已达上限' }),
+        t('notes.alerts.groupLimitMessage', {
+          max: MAX_NOTE_GROUPS,
+          defaultValue: `最多只能创建 ${MAX_NOTE_GROUPS} 个分组。`,
+        }),
+      );
+      return;
+    }
+    setGroupCreateOpen(true);
+    requestAnimationFrame(() => groupCreateInputRef.current?.focus());
+  }, [availableGroups.length, t]);
+
+  const closeGroupSheet = useCallback(() => {
+    setGroupSheetVisible(false);
+    setGroupCreateOpen(false);
+    setGroupCreateName('');
+    setGroupCreating(false);
+  }, []);
+
+  const handleCreateGroup = useCallback(async () => {
+    const name = groupCreateName.trim();
+    if (!name || groupCreating) return;
+    setGroupCreating(true);
+    try {
+      const created = await createNoteGroup(name);
+      setAvailableGroups((current) => (
+        current.some((group) => group.id === created.id)
+          ? current
+          : [...current, created]
+      ));
+      setSelectedGroupIds((current) => (
+        current.includes(created.id) ? current : [...current, created.id]
+      ));
+      setGroupCreateName('');
+      setGroupCreateOpen(false);
+    } catch (error) {
+      Alert.alert(
+        t('notes.alerts.saveFailedTitle', { defaultValue: '保存失败' }),
+        getApiErrorMessage(
+          error,
+          t('notes.alerts.saveGroupFailed', {
+            defaultValue: '分组保存失败，请稍后再试。',
+          }),
+        ),
+      );
+      reportHandledFailure('noteGroups', 'createFromNoteEditor', error);
+    } finally {
+      setGroupCreating(false);
+    }
+  }, [groupCreateName, groupCreating, t]);
 
   const getTextError = useCallback((stats: NoteTextStats) => {
     switch (getNoteTextLimitKind(stats)) {
@@ -713,7 +2168,8 @@ export default function EditNoteScreen() {
       saveInFlightRef.current ||
       uploadingSection !== null ||
       !canSubmitNoteMedia(mediaItems) ||
-      !canSubmitNoteMedia(showcaseItems)
+      !canSubmitNoteMedia(showcaseItems) ||
+      !canSubmitNoteMedia(audioItems)
     )
       return;
     if (unrecoverableMediaCount) {
@@ -735,7 +2191,13 @@ export default function EditNoteScreen() {
       );
       return;
     }
-    const currentBlocks = getTextOnlyBlocks(blocksRef.current);
+    const currentTextBlocks = composerBlocks
+      .filter((block) => block.kind === 'text')
+      .map((block) => ({
+        id: block.id,
+        content: getTextOnlyBlocks(textBlocksByIdRef.current[block.id] ?? []),
+      }));
+    const currentBlocks = currentTextBlocks.flatMap((block) => block.content);
     const currentTextError = getTextError(getNoteTextStats(currentBlocks));
     if (currentTextError) {
       Alert.alert(
@@ -749,8 +2211,39 @@ export default function EditNoteScreen() {
     setIsSubmitting(true);
     try {
       const plainText = extractPlainText(currentBlocks);
+      const firstMediaBlockId = composerBlocks.find(
+        (block) => block.kind === 'image' || block.kind === 'video',
+      )?.id;
+      const firstShowcaseBlockId = composerBlocks.find((block) => block.kind === 'showcase')?.id;
+      const mediaBlocks = composerBlocks.flatMap((block) => {
+        const target: 'media' | 'showcase' | null = block.kind === 'showcase'
+          ? 'showcase'
+          : block.kind === 'image' || block.kind === 'video'
+            ? 'media'
+            : null;
+        if (!target) return [];
+        const items = target === 'showcase' ? showcaseItems : mediaItems;
+        const fallbackId = target === 'showcase' ? firstShowcaseBlockId : firstMediaBlockId;
+        return [{
+          id: block.id,
+          target,
+          objectKeys: items
+            .filter((item) => (mediaOwnerByClientIdRef.current[item.clientId] ?? fallbackId) === block.id)
+            .map((item) => item.objectKey)
+            .filter((key): key is string => typeof key === 'string' && key.length > 0),
+        }];
+      });
+      const persistedContentJson = [
+        ...currentBlocks,
+        buildNoteComposerBlocksMetadata(
+          [FIXED_TITLE_BLOCK, ...composerBlocks],
+          currentTextBlocks,
+          mediaBlocks,
+        ),
+      ];
       const rawSectionMedia = stripEditorMediaDrafts(mergeMedia(mediaItems));
       const rawSectionShowcase = stripEditorMediaDrafts(mergeMedia(showcaseItems));
+      const rawSectionAudio = stripEditorMediaDrafts(mergeMedia(audioItems));
       const normalizedMediaSections = normalizeNoteMediaSections({
         media: rawSectionMedia,
         showcase: rawSectionShowcase,
@@ -761,7 +2254,8 @@ export default function EditNoteScreen() {
       const sectionShowcase = stripEditorMediaDrafts(
         normalizeSectionMedia(normalizedMediaSections.showcase),
       );
-      const legacyMedia = mergeMedia([...sectionMedia, ...sectionShowcase]);
+      const sectionAudio = normalizeSectionMedia(rawSectionAudio);
+      const legacyMedia = mergeMedia([...sectionMedia, ...sectionShowcase, ...sectionAudio]);
       const nextLocation =
         hasLocationDraftValue(locationDraft)
           ? {
@@ -774,15 +2268,19 @@ export default function EditNoteScreen() {
       const input = {
         title: trimmedTitle,
         content: plainText,
-        contentJson: currentBlocks,
+        contentJson: persistedContentJson,
         sections: {
-          text: { content: plainText, contentJson: currentBlocks },
+          text: { content: plainText, contentJson: persistedContentJson },
           media: { items: sectionMedia },
           showcase: { items: sectionShowcase },
+          audio: { items: sectionAudio },
+          contacts: { items: contactItems },
+          groups: { items: groupCardItems },
           location: nextLocation,
         },
         groupIds: selectedGroupIds,
         media: legacyMedia,
+        clientDraftID: editorDraftId,
       };
       if (isEdit && id) {
         // 不带 status —— 后端按现状保留，避免把「已下架」笔记编辑一次就重新上架；
@@ -792,10 +2290,15 @@ export default function EditNoteScreen() {
         await createNote({ ...input, status: 'ACTIVE' });
       }
       if (saveGenerationRef.current !== saveGeneration) return;
-      navigateBack();
+      navigationRequestedRef.current = true;
+      await draftSavePromiseRef.current.catch(() => undefined);
+      removeLocalNoteDraft(currentUser?.id, editorDraftId);
+      await deleteNoteDraft(editorDraftId).catch(() => undefined);
+      completeNavigation(undefined, true);
     } catch (error) {
       if (saveGenerationRef.current !== saveGeneration) return;
       saveInFlightRef.current = false;
+      navigationRequestedRef.current = false;
       setIsSubmitting(false);
       const fallback = t('notes.edit.saveFailedMessage', {
         defaultValue: '保存失败，请稍后重试',
@@ -815,7 +2318,12 @@ export default function EditNoteScreen() {
     isSubmitting,
     locationDraft,
     mediaItems,
-    navigateBack,
+    audioItems,
+    contactItems,
+    groupCardItems,
+    completeNavigation,
+    currentUser?.id,
+    editorDraftId,
     selectedGroupIds,
     showcaseItems,
     t,
@@ -823,6 +2331,7 @@ export default function EditNoteScreen() {
     uploadingSection,
     unrecoverableMediaCount,
     loading,
+    composerBlocks,
   ]);
 
   const d = useMemo(
@@ -835,33 +2344,32 @@ export default function EditNoteScreen() {
       titleInput: { color: colors.text },
       // 内容校验提示共用这一支红色，别在渲染里现拼 inline {color}。
       hintError: { color: colors.danger },
-      dateText: { color: colors.text },
+      dateText: { color: colors.textSecondary },
       groupButton: {
         backgroundColor: colors.surfaceMuted,
         borderColor: 'transparent',
       },
       groupButtonText: { color: colors.text },
-      groupButtonSummary: { color: colors.text },
+      groupButtonSummary: { color: colors.textSecondary },
       groupSheetBackdrop: { backgroundColor: colors.overlay },
       groupSheet: { backgroundColor: colors.surface },
       groupSheetHandle: { backgroundColor: colors.surfaceBorder },
       groupSheetTitle: { color: colors.text },
       groupSheetRow: { backgroundColor: colors.background },
       groupSheetRowText: { color: colors.text },
-      groupSheetRowMeta: { color: colors.text },
+      groupSheetRowMeta: { color: colors.textSecondary },
       groupSheetDone: { backgroundColor: colors.primary },
       groupSheetDoneText: { color: colors.white },
       sectionIcon: { backgroundColor: colors.primaryLight },
       secondarySection: {
-        backgroundColor: 'transparent',
-        borderColor: colors.divider,
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
       },
       heroCard: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
       metaIcon: { backgroundColor: colors.primaryLight },
-      heroAccent: { backgroundColor: colors.iconAccent },
       // 分区做成安静的卡片：surface 底 + 细边，取代原来贯穿全宽的分隔线
       sectionShell: {
         backgroundColor: colors.surface,
@@ -869,16 +2377,16 @@ export default function EditNoteScreen() {
       },
       editorFrame: { borderColor: colors.surfaceBorder },
       sectionHeading: { color: colors.text },
-      sectionSubtitle: { color: colors.text },
-      sectionHeaderMeta: { color: colors.text },
+      sectionSubtitle: { color: colors.textSecondary },
+      sectionHeaderMeta: { color: colors.textSecondary },
       mediaPreviewTile: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
       mediaBadge: { backgroundColor: colors.background },
       mediaTitle: { color: colors.text },
-      mediaMeta: { color: colors.text },
-      emptyText: { color: colors.text },
+      mediaMeta: { color: colors.textSecondary },
+      emptyText: { color: colors.textSecondary },
       emptyTray: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -894,13 +2402,13 @@ export default function EditNoteScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      locationDetailLabel: { color: colors.text },
+      locationDetailLabel: { color: colors.textSecondary },
       locationClearAction: { borderColor: colors.surfaceBorder },
-      locationClearText: { color: colors.text },
+      locationClearText: { color: colors.textSecondary },
       locationMapFallback: { backgroundColor: colors.surface },
       locationMapRevealButton: { backgroundColor: colors.overlay },
       locationMapRevealText: {
-        color: colors.text,
+        color: colors.textSecondary,
         ...Typography.small,
       },
       locationMapMarkerDot: { backgroundColor: colors.primary },
@@ -908,6 +2416,19 @@ export default function EditNoteScreen() {
         color: colors.text,
         backgroundColor: colors.overlay,
       },
+      composerFooter: {
+        backgroundColor: colors.surface,
+        borderTopColor: colors.surfaceBorder,
+      },
+      composerToolActive: {
+        backgroundColor: colors.primaryLight,
+      },
+      composerSortChip: {
+        backgroundColor: colors.surfaceMuted,
+        borderColor: colors.surfaceBorder,
+      },
+      composerSortButton: { backgroundColor: colors.primary },
+      composerPreviewButton: { backgroundColor: colors.textSecondary },
     }),
     [colors],
   );
@@ -918,7 +2439,8 @@ export default function EditNoteScreen() {
     isSubmitting ||
     uploadingSection !== null ||
     !canSubmitNoteMedia(mediaItems) ||
-    !canSubmitNoteMedia(showcaseItems);
+    !canSubmitNoteMedia(showcaseItems) ||
+    !canSubmitNoteMedia(audioItems);
   const selectedGroupNames = useMemo(
     () => availableGroups
       .filter((group) => selectedGroupIds.includes(group.id))
@@ -952,6 +2474,11 @@ export default function EditNoteScreen() {
     uploadingSection?.startsWith('showcase:')
       ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
       : `${showcaseItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
+  const audioSectionStatus = uploadingSection === 'audio'
+    ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
+    : recordingAudioStartedAt !== null
+      ? t('notes.edit.audioRecording', { defaultValue: '录音中，点击停止' })
+      : `${audioItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
 
   // 眉标式小节头：图标 + 标签 + 右侧计数，去掉解释性副标题让内容当主角。
   // meta 收 ReactNode 而不是 string：正文那一格要放实时字数，它必须是一个能自己
@@ -960,6 +2487,7 @@ export default function EditNoteScreen() {
     icon: keyof typeof Ionicons.glyphMap,
     sectionTitle: string,
     meta?: ReactNode,
+    onRemove?: () => void,
   ) => (
     <View style={s.sectionHeader}>
       <View style={[s.sectionIcon, d.sectionIcon]}>
@@ -971,40 +2499,63 @@ export default function EditNoteScreen() {
           <Text style={[s.sectionHeaderMetaText, d.sectionHeaderMeta]}>{meta}</Text>
         </View>
       ) : null}
+      {onRemove ? (
+        <Pressable
+          style={s.sectionRemoveButton}
+          onPress={onRemove}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`${t('notes.actions.delete', { defaultValue: '删除' })}${sectionTitle}`}
+        >
+          <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
     </View>
   );
 
-  const renderAddButton = useCallback((
+  const getMediaItemsForBlock = useCallback((
+    items: EditorNoteMediaDraft[],
     target: SectionMediaTarget,
-    kind: SectionUploadKind,
-    label: string,
-    icon: keyof typeof Ionicons.glyphMap,
+    blockId: string,
   ) => {
-    const uploadKey: UploadingSection = `${target}:${kind}`;
-    const loadingLabel = t('notes.edit.uploading', { defaultValue: '上传中...' });
-    return (
+    const fallbackBlockId = composerBlocks.find((block) =>
+      target === 'showcase' ? block.kind === 'showcase' : block.kind === 'image' || block.kind === 'video',
+    )?.id;
+    return items.filter((item) => (mediaOwnerByClientId[item.clientId] ?? fallbackBlockId) === blockId);
+  }, [composerBlocks, mediaOwnerByClientId]);
+
+  const renderMediaList = useCallback((
+    items: EditorNoteMediaDraft[],
+    target: SectionMediaTarget,
+    onAdd: () => void,
+    addLabel: string,
+  ) => {
+    const addTile = (
       <Pressable
-        style={[s.sectionAction, d.sectionAction]}
-        onPress={() => void handleAddSectionMedia({ target, kind })}
+        style={[s.mediaPreviewTile, s.mediaAddTile, d.mediaPreviewTile]}
+        onPress={onAdd}
         disabled={!isRouteDataReady || uploadingSection !== null}
+        accessibilityRole="button"
+        accessibilityLabel={addLabel}
       >
-        <Ionicons name={icon} size={17} color={colors.text} />
-        <Text style={[s.sectionActionText, d.sectionActionText]}>
-          {uploadingSection === uploadKey ? loadingLabel : label}
-        </Text>
+        <Ionicons name="add" size={28} color={colors.iconAccent} />
+        <Text style={[s.mediaAddLabel, d.emptyText]}>{addLabel}</Text>
       </Pressable>
     );
-  }, [colors.text, d.sectionAction, d.sectionActionText, handleAddSectionMedia, isRouteDataReady, t, uploadingSection]);
-
-  const renderMediaList = useCallback((items: EditorNoteMediaDraft[], target: SectionMediaTarget) => {
     if (items.length === 0) {
       return (
-        <View style={[s.emptyTray, d.emptyTray]}>
-          <Ionicons name="add-circle-outline" size={18} color={colors.textSecondary} />
+        <Pressable
+          style={[s.emptyTray, d.emptyTray]}
+          onPress={onAdd}
+          disabled={!isRouteDataReady || uploadingSection !== null}
+          accessibilityRole="button"
+          accessibilityLabel={addLabel}
+        >
+          <Ionicons name="add-circle-outline" size={22} color={colors.iconAccent} />
           <Text style={[s.emptySectionText, d.emptyText]}>
-            {t('notes.edit.emptySection', { defaultValue: '暂无内容' })}
+            {addLabel}
           </Text>
-        </View>
+        </Pressable>
       );
     }
     return (
@@ -1060,107 +2611,80 @@ export default function EditNoteScreen() {
             </View>
           );
         })}
+        {addTile}
       </View>
     );
   }, [
     colors.iconAccent,
     colors.text,
-    colors.textSecondary,
     d.emptyText,
     d.emptyTray,
     d.mediaBadge,
     d.mediaMeta,
     d.mediaPreviewTile,
     handleRemoveSectionMedia,
+    isRouteDataReady,
+    uploadingSection,
     t,
   ]);
 
-  if (loading) {
-    return (
-      <View style={[s.container, d.container, s.center, { paddingTop: insets.top }]}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
-  }
+  function renderComposerSection(block: NoteComposerBlock, blockIndex: number): ReactNode {
+    const { kind } = block;
+    const previousBlocks = composerBlocks.slice(0, blockIndex);
+    const isFirstAudioBlock = !previousBlocks.some((item) => item.kind === 'audio');
+    switch (kind) {
+      case 'title':
+        return (
+          <View style={[s.heroCard, d.heroCard]}>
+            <TextInput
+              ref={titleInputRef}
+              style={[s.titleInput, d.titleInput]}
+              placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
+              placeholderTextColor={colors.textSecondary}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={MAX_NOTE_TITLE_LENGTH}
+              returnKeyType="next"
+            />
 
-  return (
-    <KeyboardAvoidingContainer
-      style={[s.container, d.container, { paddingTop: insets.top }]}
-    >
-      <View style={s.header}>
-        <Pressable onPress={navigateBack} hitSlop={8}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={[s.headerTitle, d.headerTitle]}>
-          {isEdit
-            ? t('notes.edit.editTitle', { defaultValue: '编辑笔记' })
-            : t('notes.edit.newTitle', { defaultValue: '新建笔记' })}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          style={[s.doneBtn, d.doneBtn, isDoneDisabled && d.doneBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={isDoneDisabled}
-        >
-          <Text style={[s.doneBtnText, d.doneBtnText]}>
-            {isSubmitting
-              ? t('notes.edit.saving', { defaultValue: '保存中...' })
-              : t('notes.edit.done', { defaultValue: '完成' })}
-          </Text>
-        </Pressable>
-      </View>
-
-      <ScrollView
-        ref={scrollRef}
-        style={s.scroll}
-        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 24 }]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={[s.heroCard, d.heroCard]}>
-          <View style={[s.heroAccent, d.heroAccent]} />
-          <TextInput
-            ref={titleInputRef}
-            style={[s.titleInput, d.titleInput]}
-            placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
-            placeholderTextColor={colors.textSecondary}
-            value={title}
-            onChangeText={setTitle}
-            maxLength={MAX_NOTE_TITLE_LENGTH}
-            returnKeyType="next"
-          />
-
-          <View style={s.metaRow}>
-            <View style={[s.metaIcon, d.metaIcon]}>
-              <Ionicons name="calendar-outline" size={13} color={colors.iconAccent} />
-            </View>
-            <Text style={[s.dateText, d.dateText]}>{dateStr}</Text>
-          </View>
-
-          <View style={s.groupSection}>
-            <Pressable
-              style={[s.groupButton, d.groupButton]}
-              onPress={() => setGroupSheetVisible(true)}
-              accessibilityRole="button"
-              accessibilityLabel={t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-            >
+            <View style={s.metaRow}>
               <View style={[s.metaIcon, d.metaIcon]}>
-                <Ionicons name="folder-open-outline" size={15} color={colors.iconAccent} />
+                <Ionicons name="calendar-outline" size={13} color={colors.iconAccent} />
               </View>
-              <View style={s.groupButtonTextWrap}>
-                <Text style={[s.groupButtonText, d.groupButtonText]}>
-                  {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
-                </Text>
-                <Text style={[s.groupButtonSummary, d.groupButtonSummary]} numberOfLines={1}>
-                  {groupSummary}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-        </View>
+              <Text style={[s.dateText, d.dateText]}>{dateStr}</Text>
+            </View>
 
+            <View style={s.groupSection}>
+              <Pressable
+                style={[s.groupButton, d.groupButton]}
+                onPress={() => {
+                  setGroupCreateOpen(false);
+                  setGroupCreateName('');
+                  setGroupCreating(false);
+                  setGroupSheetVisible(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+              >
+                <View style={[s.metaIcon, d.metaIcon]}>
+                  <Ionicons name="folder-open-outline" size={15} color={colors.iconAccent} />
+                </View>
+                <View style={s.groupButtonTextWrap}>
+                  <Text style={[s.groupButtonText, d.groupButtonText]}>
+                    {t('notes.edit.groupsLabel', { defaultValue: '分组' })}
+                  </Text>
+                  <Text style={[s.groupButtonSummary, d.groupButtonSummary]} numberOfLines={1}>
+                    {groupSummary}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+          </View>
+        );
+      case 'text':
+        return (
+          <>
         <View style={[s.sectionBlock, d.sectionShell]}>
           {renderSectionHeader(
             'text-outline',
@@ -1174,12 +2698,13 @@ export default function EditNoteScreen() {
                 })
               }
             </NoteTextStatsConsumer>,
+            () => handleRemoveComposerBlock(block),
           )}
           <View style={[s.textEditorFrame, d.editorFrame]}>
             {editorMounted ? (
               <NoteBlockEditor
-                initialContent={initialBlocks}
-                onContentChange={handleContentChange}
+                initialContent={textBlocksById[block.id] ?? null}
+                onContentChange={(newBlocks) => handleContentChange(block.id, newBlocks)}
                 mediaToolbarEnabled={false}
               />
             ) : null}
@@ -1187,21 +2712,24 @@ export default function EditNoteScreen() {
           <NoteTextStatsConsumer store={textStatsStore}>
             {(stats) => {
               const textError = getTextError(stats);
-              return (
+              return textError ? (
                 <Text
-                  accessibilityRole={textError ? 'alert' : undefined}
+                  accessibilityRole="alert"
                   accessibilityLiveRegion="polite"
-                  style={[s.sectionSubtitle, textError ? d.hintError : d.sectionSubtitle]}
+                  style={[s.sectionSubtitle, d.hintError]}
                 >
-                  {textError ?? t('notes.edit.textScrollHint', {
-                    defaultValue: '正文可选，可在框内上下滑动查看全文',
-                  })}
+                  {textError}
                 </Text>
-              );
+              ) : null;
             }}
           </NoteTextStatsConsumer>
         </View>
 
+          </>
+        );
+      case 'image':
+        return (
+          <>
         {unrecoverableMediaCount > 0 ? (
           // 这些旧媒体在 sections 里只剩一个 url，附件表里也找不到对应的 objectKey，
           // 恢复不出来，因此既渲染不出来也删不掉。保存会把它们丢掉，所以「完成」被
@@ -1225,43 +2753,161 @@ export default function EditNoteScreen() {
         <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
           {renderSectionHeader(
             'images-outline',
-            t('notes.edit.sections.media', { defaultValue: '图片/视频' }),
+            t('notes.edit.sections.media', { defaultValue: '多媒体' }),
             mediaSectionStatus,
+            () => handleRemoveComposerBlock(block),
           )}
-          <View style={s.sectionActions}>
-            {renderAddButton(
-              'media',
-              'image',
-              t('notes.edit.addImage', { defaultValue: '添加图片' }),
-              'image-outline',
-            )}
-            {renderAddButton(
-              'media',
-              'video',
-              t('notes.edit.addVideo', { defaultValue: '添加视频' }),
-              'videocam-outline',
-            )}
-          </View>
-          {renderMediaList(mediaItems, 'media')}
+          {renderMediaList(
+            getMediaItemsForBlock(mediaItems, 'media', block.id),
+            'media',
+            () => void handleAddSectionMedia({ target: 'media', kind: 'media', blockId: block.id }),
+            t('notes.edit.addMedia', { defaultValue: '添加多媒体' }),
+          )}
         </View>
 
+          </>
+        );
+      case 'video':
+        return (
+          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
+            {renderSectionHeader(
+              'videocam-outline',
+              t('notes.edit.composer.video', { defaultValue: '视频' }),
+              mediaSectionStatus,
+              () => handleRemoveComposerBlock(block),
+            )}
+            {renderMediaList(
+              getMediaItemsForBlock(mediaItems, 'media', block.id),
+              'media',
+              () => void handleAddSectionMedia({ target: 'media', kind: 'video', blockId: block.id }),
+              t('notes.edit.addVideo', { defaultValue: '添加视频' }),
+            )}
+          </View>
+        );
+      case 'showcase':
+        return (
+          <>
         <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
           {renderSectionHeader(
             'albums-outline',
             t('notes.edit.sections.showcase', { defaultValue: '展示' }),
             showcaseSectionStatus,
+            () => handleRemoveComposerBlock(block),
           )}
-          <View style={s.sectionActions}>
-            {renderAddButton(
-              'showcase',
-              'video',
-              t('notes.edit.addShowcaseVideo', { defaultValue: '添加展示视频' }),
-              'videocam-outline',
-            )}
-          </View>
-          {renderMediaList(showcaseItems, 'showcase')}
+          {renderMediaList(
+            getMediaItemsForBlock(showcaseItems, 'showcase', block.id),
+            'showcase',
+            () => void handleAddSectionMedia({ target: 'showcase', kind: 'video', blockId: block.id }),
+            t('notes.edit.addShowcaseVideo', { defaultValue: '添加展示视频' }),
+          )}
         </View>
 
+          </>
+        );
+      case 'audio':
+        return (
+          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
+            {renderSectionHeader('mic-outline', t('notes.edit.composer.audio', { defaultValue: '录音' }), audioSectionStatus, () => handleRemoveComposerBlock(block))}
+            <View style={s.sectionActions}>
+              <Pressable
+                style={[s.sectionAction, d.sectionAction]}
+                onPress={() => void handleAddAudioFile(block.id)}
+                disabled={!isRouteDataReady || uploadingSection !== null || recordingAudioStartedAt !== null}
+              >
+                <Ionicons name="cloud-upload-outline" size={17} color={colors.text} />
+                <Text style={[s.sectionActionText, d.sectionActionText]}>
+                  {t('notes.edit.uploadAudio', { defaultValue: '上传音频' })}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[s.sectionAction, d.sectionAction]}
+                onPress={() => void toggleNoteRecording(block.id)}
+                disabled={!isRouteDataReady || uploadingSection !== null}
+              >
+                <Ionicons name={recordingAudioStartedAt !== null ? 'stop-circle-outline' : 'mic-outline'} size={17} color={colors.text} />
+                <Text style={[s.sectionActionText, d.sectionActionText]}>
+                  {recordingAudioStartedAt !== null
+                    ? t('notes.edit.stopRecording', { defaultValue: '停止录音' })
+                    : t('notes.edit.startRecording', { defaultValue: '开始录音' })}
+                </Text>
+              </Pressable>
+            </View>
+            {isFirstAudioBlock && audioItems.length > 0 ? (
+              <View style={s.audioList}>
+                {audioItems.map((item) => (
+                  <View key={item.clientId} style={[s.audioRow, d.locationPreviewCard]}>
+                    <Ionicons name="mic" size={18} color={colors.iconAccent} />
+                    <Text style={[s.mediaMeta, d.mediaMeta, { flex: 1 }]}>
+                      {typeof item.durationMs === 'number' && item.durationMs > 0
+                        ? `${Math.max(1, Math.round(item.durationMs / 1000))}&quot;`
+                        : t('notes.edit.audioItem', { defaultValue: '音频' })}
+                    </Text>
+                    <Pressable onPress={() => setAudioItems((current) => current.filter((audio) => audio.clientId !== item.clientId))} hitSlop={8}>
+                      <Ionicons name="close-circle-outline" size={18} color={colors.textSecondary} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        );
+      case 'contact':
+        return (
+          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
+            {renderSectionHeader('person-outline', t('notes.edit.composer.contact', { defaultValue: '名片' }), `${contactItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`, () => handleRemoveComposerBlock(block))}
+            <View style={s.sectionActions}>
+              <Pressable style={[s.sectionAction, d.sectionAction]} onPress={() => void openCardPicker('contact')} disabled={!isRouteDataReady}>
+                <Ionicons name="person-add-outline" size={17} color={colors.text} />
+                <Text style={[s.sectionActionText, d.sectionActionText]}>{t('notes.edit.addContact', { defaultValue: '选择联系人' })}</Text>
+              </Pressable>
+            </View>
+            {contactItems.map((item) => {
+              const avatar = getNoteCardAvatar(item);
+              return (
+                <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
+                  {avatar ? (
+                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" />
+                  ) : (
+                    <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+                      <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
+                    </View>
+                  )}
+                  <Text style={[s.mediaTitle, d.mediaTitle, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
+                </View>
+              );
+            })}
+          </View>
+        );
+      case 'group':
+        return (
+          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
+            {renderSectionHeader('people-outline', t('notes.edit.composer.group', { defaultValue: '群名片' }), `${groupCardItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`, () => handleRemoveComposerBlock(block))}
+            <View style={s.sectionActions}>
+              <Pressable style={[s.sectionAction, d.sectionAction]} onPress={() => void openCardPicker('group')} disabled={!isRouteDataReady}>
+                <Ionicons name="people-outline" size={17} color={colors.text} />
+                <Text style={[s.sectionActionText, d.sectionActionText]}>{t('notes.edit.addGroup', { defaultValue: '选择群组' })}</Text>
+              </Pressable>
+            </View>
+            {groupCardItems.map((item) => {
+              const avatar = getNoteCardAvatar(item);
+              return (
+                <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
+                  {avatar ? (
+                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" />
+                  ) : (
+                    <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+                      <Ionicons name="people-outline" size={19} color={colors.iconAccent} />
+                    </View>
+                  )}
+                  <Text style={[s.mediaTitle, d.mediaTitle, { flex: 1 }]} numberOfLines={1}>{item.name}</Text>
+                </View>
+              );
+            })}
+          </View>
+        );
+      case 'location':
+        return (
+          <>
         <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
           {renderSectionHeader(
             'location-outline',
@@ -1269,6 +2915,7 @@ export default function EditNoteScreen() {
             hasLocation
               ? t('notes.edit.sections.locationSelected', { defaultValue: '已选择' })
               : t('notes.edit.sections.locationEmpty', { defaultValue: '可选' }),
+            () => handleRemoveComposerBlock(block),
           )}
           <View style={s.sectionActions}>
             <Pressable
@@ -1367,10 +3014,595 @@ export default function EditNoteScreen() {
             </View>
           ) : null}
         </View>
+          </>
+        );
+      default:
+        return null;
+    }
+  }
+
+  const editableComposerBlocks = useMemo(
+    () => composerBlocks.filter((block) => block.kind !== 'title'),
+    [composerBlocks],
+  );
+  const previewGroups = useMemo(
+    () => selectedGroupNames.map((name, index) => ({ id: `${name}-${index}`, name })),
+    [selectedGroupNames],
+  );
+  const buildPreviewData = useCallback((): NotePreviewData => {
+    const toPreviewMedia = (item: EditorNoteMediaDraft) => {
+      const url = item.previewUri ?? item.url;
+      return url ? { ...item, url } : null;
+    };
+    const previewMediaItems = mediaItems.flatMap((item) => toPreviewMedia(item) ?? []);
+    const previewShowcaseItems = showcaseItems.flatMap((item) => toPreviewMedia(item) ?? []);
+    const previewAudioItems = audioItems.flatMap((item) => toPreviewMedia(item) ?? []);
+    const previewTextBlocks = composerBlocks
+      .filter((block) => block.kind === 'text')
+      .flatMap((block) => textBlocksById[block.id] ?? []);
+    const previewTextContent = extractPlainText(previewTextBlocks);
+    // Use the same canonical section builder as the recipient detail page so the
+    // editor preview cannot drift from what gets rendered after saving.
+    const sections = buildNoteSections({
+      content: previewTextContent,
+      contentJson: previewTextBlocks,
+      media: [...previewMediaItems, ...previewShowcaseItems, ...previewAudioItems],
+      sections: {
+        text: { content: previewTextContent, contentJson: previewTextBlocks },
+        media: { items: previewMediaItems },
+        showcase: { items: previewShowcaseItems },
+        audio: { items: previewAudioItems },
+        contacts: { items: contactItems },
+        groups: { items: groupCardItems },
+        location: hasLocation
+          ? {
+              title: locationDraft.title || null,
+              address: locationDraft.address || null,
+              latitude: locationDraft.latitude,
+              longitude: locationDraft.longitude,
+            }
+          : null,
+      },
+    });
+
+    const imageItems: { uri: string; objectKey?: string }[] = [
+      ...sections.media.items,
+      ...sections.showcase.items,
+    ].flatMap((item) => (
+      item.type === 'IMAGE' && item.url
+        ? [{ uri: item.url, objectKey: item.objectKey }]
+        : []
+    ));
+    for (const block of previewTextBlocks) {
+      if (block.type !== 'image' || !block.props || typeof block.props !== 'object') continue;
+      const props = block.props as Record<string, unknown>;
+      const uri = typeof props.url === 'string' ? props.url : '';
+      const objectKey = typeof props.objectKey === 'string' ? props.objectKey : undefined;
+      if (!uri || imageItems.some((item) => item.uri === uri || (
+        objectKey != null && item.objectKey === objectKey
+      ))) {
+        continue;
+      }
+      imageItems.push({ uri, objectKey });
+    }
+
+    const sectionOrder: NoteSectionKind[] = [];
+    for (const block of editableComposerBlocks) {
+      if (block.kind === 'title') continue;
+      const kind: NoteSectionKind =
+        block.kind === 'image' || block.kind === 'video' ? 'media' : block.kind;
+      if (!sectionOrder.includes(kind)) sectionOrder.push(kind);
+    }
+    // The recipient view always keeps a text section in the document structure,
+    // including an empty note. Append it when the author has not added text yet.
+    if (!sectionOrder.includes('text')) sectionOrder.push('text');
+
+    return { sections, imageItems, sectionOrder };
+  }, [
+    audioItems,
+    contactItems,
+    composerBlocks,
+    editableComposerBlocks,
+    groupCardItems,
+    hasLocation,
+    locationDraft,
+    mediaItems,
+    showcaseItems,
+    textBlocksById,
+  ]);
+  useEffect(() => {
+    previewDataSnapshotRef.current = null;
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
+      previewDataSnapshotRef.current = buildPreviewData();
+      if (previewVisibleRef.current) setPreviewDataVersion((version) => version + 1);
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+    };
+  }, [buildPreviewData]);
+  const previewData = useMemo(() => {
+    if (!previewVisible || !previewContentReady) return null;
+    // The version state only invalidates this memo while the preview is open;
+    // editing can refresh the ref without rerendering the editor itself.
+    void previewDataVersion;
+    return previewDataSnapshotRef.current;
+  }, [previewContentReady, previewDataVersion, previewVisible]);
+  const openPreview = useCallback(() => {
+    setPreviewImageViewerVisible(false);
+    setPreviewContentReady(false);
+    setPreviewVisible(true);
+  }, []);
+  const closePreview = useCallback(() => {
+    previewReadyTaskRef.current?.cancel();
+    previewReadyTaskRef.current = null;
+    setPreviewImageViewerVisible(false);
+    setPreviewContentReady(false);
+    setPreviewVisible(false);
+  }, []);
+  const handlePreviewShown = useCallback(() => {
+    previewReadyTaskRef.current?.cancel();
+    previewReadyTaskRef.current = InteractionManager.runAfterInteractions(() => {
+      previewReadyTaskRef.current = null;
+      setPreviewContentReady(true);
+    });
+  }, []);
+  useEffect(() => () => {
+    previewReadyTaskRef.current?.cancel();
+  }, []);
+  const handlePreviewImagePress = useCallback((uri: string, objectKey?: string) => {
+    const imageItems = previewData?.imageItems ?? [];
+    const index = imageItems.findIndex((item) =>
+      objectKey
+        ? item.objectKey === objectKey || (!item.objectKey && item.uri === uri)
+        : item.uri === uri,
+    );
+    if (index < 0) return;
+    setPreviewImageViewerIndex(index);
+    setPreviewImageViewerVisible(true);
+  }, [previewData]);
+
+  if (loading) {
+    return (
+      <View style={[s.container, d.container, s.center, { paddingTop: insets.top }]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingContainer
+      style={[s.container, d.container, { paddingTop: insets.top }]}
+    >
+      <View style={s.header}>
+        <Pressable onPress={navigateBack} hitSlop={8}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+        </Pressable>
+        <Text style={[s.headerTitle, d.headerTitle]}>
+          {isEdit
+            ? t('notes.edit.editTitle', { defaultValue: '编辑笔记' })
+            : t('notes.edit.newTitle', { defaultValue: '新建笔记' })}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          style={[s.doneBtn, d.doneBtn, isDoneDisabled && d.doneBtnDisabled]}
+          onPress={handleSubmit}
+          disabled={isDoneDisabled}
+        >
+          <Text style={[s.doneBtnText, d.doneBtnText]}>
+            {isSubmitting
+              ? t('notes.edit.saving', { defaultValue: '保存中...' })
+              : t('notes.edit.done', { defaultValue: '完成' })}
+          </Text>
+        </Pressable>
+      </View>
+
+      <ScrollView
+        ref={scrollRef}
+        style={s.scroll}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 124 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      >
+        <View key={FIXED_TITLE_BLOCK.id}>
+          {renderComposerSection(FIXED_TITLE_BLOCK, 0)}
+        </View>
+        {editableComposerBlocks.map((block, index) => (
+          <View key={block.id}>{renderComposerSection(block, index)}</View>
+        ))}
       </ScrollView>
+      <View
+        style={[
+          s.composerFooter,
+          d.composerFooter,
+          { paddingBottom: Math.max(insets.bottom, Spacing.xs) },
+        ]}
+      >
+        <View style={s.composerToolbar}>
+          {COMPOSER_ACTIONS.map((action) => {
+            const label = t(`notes.edit.composer.${action.translationKey}`, {
+              defaultValue: action.defaultLabel,
+            });
+            return (
+              <Pressable
+                key={action.kind}
+                style={s.composerTool}
+                onPress={() => addComposerBlock(action.kind)}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+              >
+                <View style={s.composerToolIcon}>
+                  <Ionicons
+                    name={action.icon}
+                    size={21}
+                    color={colors.textSecondary}
+                  />
+                </View>
+                <Text
+                  style={[s.composerToolLabel, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={s.composerFooterActions}>
+          <Pressable
+            style={[s.composerFooterButton, d.composerSortButton]}
+            onPress={() => setSortMode(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t('notes.edit.composer.sort', { defaultValue: '排序' })}
+          >
+            <Ionicons name="swap-vertical" size={18} color={colors.white} />
+            <Text style={[s.composerFooterButtonText, { color: colors.white }]}>
+              {t('notes.edit.composer.sort', { defaultValue: '排序' })}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[s.composerFooterButton, d.composerPreviewButton]}
+            onPress={openPreview}
+            accessibilityRole="button"
+            accessibilityLabel={t('notes.edit.composer.preview', { defaultValue: '预览' })}
+          >
+            <Ionicons name="eye-outline" size={18} color={colors.white} />
+            <Text style={[s.composerFooterButtonText, { color: colors.white }]}>
+              {t('notes.edit.composer.preview', { defaultValue: '预览' })}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+      <BottomSheetModal
+        visible={sortMode}
+        onClose={() => setSortMode(false)}
+        backdropStyle={d.groupSheetBackdrop}
+        sheetStyle={[
+          s.composerSortSheet,
+          {
+            backgroundColor: colors.surface,
+            paddingBottom: Math.max(insets.bottom, Spacing.lg),
+          },
+        ]}
+      >
+        <View style={[s.composerSortHandle, { backgroundColor: colors.surfaceBorder }]} />
+        <View style={s.composerSortHeader}>
+          <Text style={[s.composerSortTitle, { color: colors.text }]}>
+            {t('notes.edit.composer.sort', { defaultValue: '排序' })}
+          </Text>
+          <Pressable
+            onPress={() => setSortMode(false)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close', { defaultValue: '关闭' })}
+          >
+            <Ionicons name="close" size={24} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+        <ScrollView
+          style={s.composerSortList}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={draggingComposerBlockId === null}
+        >
+          {editableComposerBlocks.length === 0 ? (
+            <Text style={[s.composerSortEmpty, { color: colors.textSecondary }]}>
+              {t('notes.edit.composer.sortEmpty', { defaultValue: '还没有可排序的内容' })}
+            </Text>
+          ) : (
+            editableComposerBlocks.map((block, index) => {
+              const action = COMPOSER_ACTIONS.find((item) => item.kind === block.kind);
+              if (!action) return null;
+              const baseLabel = t(`notes.edit.composer.${action.translationKey}`, {
+                defaultValue: action.defaultLabel,
+              });
+              const ordinal = editableComposerBlocks
+                .slice(0, index + 1)
+                .filter((item) => item.kind === block.kind).length;
+              const hasDuplicate = editableComposerBlocks.some(
+                (item) => item.kind === block.kind && editableComposerBlocks.indexOf(item) > index,
+              );
+              const label = hasDuplicate || ordinal > 1
+                ? `${baseLabel} ${ordinal}`
+                : baseLabel;
+              const isDragging = draggingComposerBlockId === block.id;
+              let rowShift = 0;
+              if (
+                !isDragging &&
+                composerDragStartIndex !== null &&
+                composerDragActiveIndex !== null
+              ) {
+                if (
+                  composerDragActiveIndex > composerDragStartIndex &&
+                  index > composerDragStartIndex &&
+                  index <= composerDragActiveIndex
+                ) {
+                  rowShift = -COMPOSER_SORT_ROW_HEIGHT;
+                } else if (
+                  composerDragActiveIndex < composerDragStartIndex &&
+                  index >= composerDragActiveIndex &&
+                  index < composerDragStartIndex
+                ) {
+                  rowShift = COMPOSER_SORT_ROW_HEIGHT;
+                }
+              }
+              return (
+                <Animated.View
+                  key={block.id}
+                  style={[
+                    s.composerSortListRow,
+                    {
+                      borderBottomColor: colors.divider,
+                      backgroundColor: colors.surface,
+                    },
+                    isDragging
+                      ? {
+                          backgroundColor: colors.surfaceMuted,
+                          borderRadius: Radius.md,
+                          transform: [{ translateY: composerDragY }],
+                          zIndex: 2,
+                        }
+                      : rowShift
+                        ? {
+                            transform: [{ translateY: rowShift }],
+                          }
+                        : null,
+                  ]}
+                >
+                  <Text style={[s.composerSortIndex, { color: colors.textSecondary }]}>
+                    {index + 1}
+                  </Text>
+                  <Text style={[s.composerSortRowLabel, { color: colors.text }]} numberOfLines={1}>
+                    {label}
+                  </Text>
+                  <View
+                    style={[s.composerSortDragHandle, { backgroundColor: colors.background }]}
+                    accessible
+                    accessibilityRole="adjustable"
+                    accessibilityLabel={t('notes.edit.composer.reorderA11y', {
+                      defaultValue: '调整{{label}}的位置',
+                      label,
+                    })}
+                    accessibilityValue={{ text: `${index + 1} / ${editableComposerBlocks.length}` }}
+                    {...getComposerDragResponder(block.id).panHandlers}
+                  >
+                    <Ionicons
+                      name="reorder-three-outline"
+                      size={24}
+                      color={colors.textSecondary}
+                    />
+                  </View>
+                </Animated.View>
+              );
+            })
+          )}
+        </ScrollView>
+      </BottomSheetModal>
+      {previewVisible ? (
+        <Modal
+          visible
+          animationType="slide"
+          onShow={handlePreviewShown}
+          onRequestClose={() => {
+            closePreview();
+          }}
+        >
+          <View style={[s.previewRoot, d.container, { paddingTop: insets.top }]}>
+            <View style={s.previewHeader}>
+              <Pressable
+                onPress={closePreview}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </Pressable>
+            </View>
+            {previewContentReady && previewData ? (
+              <NoteDocumentBody
+                title={title}
+                createdAt={createdAtIso}
+                groups={previewGroups}
+                sections={previewData.sections}
+                order={previewData.sectionOrder}
+                lazyMedia
+                virtualized
+                contentPaddingBottom={insets.bottom + Spacing.xl}
+                onImagePress={handlePreviewImagePress}
+              />
+            ) : (
+              <View style={s.previewLoading}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            )}
+          </View>
+        </Modal>
+      ) : null}
+      {previewVisible && previewImageViewerVisible && previewData ? (
+        <ImageViewer
+          images={previewData.imageItems.map((item) => item.uri)}
+          cacheKeys={previewData.imageItems.map((item) => item.objectKey)}
+          visible
+          initialIndex={previewImageViewerIndex}
+          onClose={() => setPreviewImageViewerVisible(false)}
+        />
+      ) : null}
+      <Modal
+        visible={cardPickerKind !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={closeCardPicker}
+      >
+        <View style={s.cardPickerBackdrop}>
+          <View
+            style={[
+              s.cardPickerSheet,
+              d.groupSheet,
+              { paddingBottom: Math.max(insets.bottom, Spacing.lg) },
+            ]}
+          >
+            <View style={[s.groupSheetHandle, d.groupSheetHandle]} />
+            <Text style={[s.groupSheetTitle, d.groupSheetTitle]}>
+              {cardPickerKind === 'contact'
+                ? t('notes.edit.contactPickerTitle', { defaultValue: '选择联系人' })
+                : t('notes.edit.groupPickerTitle', { defaultValue: '选择群组' })}
+            </Text>
+            <View
+              style={[
+                s.cardPickerSearchWrap,
+                { backgroundColor: colors.background, borderColor: colors.surfaceBorder },
+              ]}
+            >
+              <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
+              <TextInput
+                style={[s.cardPickerSearch, { color: colors.text }]}
+                value={cardPickerSearch}
+                onChangeText={setCardPickerSearch}
+                placeholder={cardPickerKind === 'contact'
+                  ? t('notes.edit.contactSearchPlaceholder', { defaultValue: '搜索联系人' })
+                  : t('notes.edit.groupSearchPlaceholder', { defaultValue: '搜索群组' })}
+                placeholderTextColor={colors.textSecondary}
+                returnKeyType="search"
+                autoCorrect={false}
+              />
+              {cardPickerSearch ? (
+                <Pressable
+                  onPress={() => setCardPickerSearch('')}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.clear', { defaultValue: '清除' })}
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </Pressable>
+              ) : null}
+            </View>
+            {cardPickerLoading ? (
+              <ActivityIndicator
+                style={s.cardPickerLoading}
+                color={colors.primary}
+              />
+            ) : (
+              <ScrollView
+                style={s.cardPickerList}
+                contentContainerStyle={s.cardPickerListContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {cardPickerKind === 'contact' ? (
+                  filteredContactPickerItems.length > 0 ? filteredContactPickerItems.map((item) => {
+                    const selected = selectedCardIds.includes(item.id);
+                    return (
+                      <Pressable
+                        key={item.id}
+                        style={[s.cardPickerRow, d.groupSheetRow]}
+                        onPress={() => setSelectedCardIds((current) => selected ? current.filter((id) => id !== item.id) : [...current, item.id])}
+                        accessibilityRole="checkbox"
+                        accessibilityLabel={item.name}
+                        accessibilityState={{ checked: selected }}
+                      >
+                        {item.avatarUrl ? (
+                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" />
+                        ) : (
+                          <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+                            <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
+                          </View>
+                        )}
+                        <View style={s.groupSheetRowTextWrap}>
+                          <Text style={[s.groupSheetRowText, d.groupSheetRowText]} numberOfLines={1}>{item.name}</Text>
+                          {item.subtitle ? (
+                            <Text style={[s.groupSheetRowMeta, d.groupSheetRowMeta]} numberOfLines={1}>{item.subtitle}</Text>
+                          ) : null}
+                        </View>
+                        <View style={s.cardPickerCheck}>
+                          <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? colors.primary : colors.textSecondary} />
+                        </View>
+                      </Pressable>
+                    );
+                  }) : (
+                    <Text style={[s.cardPickerEmpty, d.groupSheetRowMeta]}>
+                      {t('notes.edit.cardPickerNoResults', { defaultValue: '没有匹配结果' })}
+                    </Text>
+                  )
+                ) : (
+                  filteredCircleItems.length > 0 ? filteredCircleItems.map((item) => {
+                    const selected = selectedCardIds.includes(item.id);
+                    return (
+                      <Pressable
+                        key={item.id}
+                        style={[s.cardPickerRow, d.groupSheetRow]}
+                        onPress={() => setSelectedCardIds((current) => selected ? current.filter((id) => id !== item.id) : [...current, item.id])}
+                        accessibilityRole="checkbox"
+                        accessibilityLabel={item.name}
+                        accessibilityState={{ checked: selected }}
+                      >
+                        {item.avatarUrl ? (
+                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" />
+                        ) : (
+                          <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+                            <Ionicons name="people-outline" size={19} color={colors.iconAccent} />
+                          </View>
+                        )}
+                        <View style={s.groupSheetRowTextWrap}>
+                          <Text style={[s.groupSheetRowText, d.groupSheetRowText]} numberOfLines={1}>{item.name}</Text>
+                        </View>
+                        <View style={s.cardPickerCheck}>
+                          <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? colors.primary : colors.textSecondary} />
+                        </View>
+                      </Pressable>
+                    );
+                  }) : (
+                    <Text style={[s.cardPickerEmpty, d.groupSheetRowMeta]}>
+                      {t('notes.edit.cardPickerNoResults', { defaultValue: '没有匹配结果' })}
+                    </Text>
+                  )
+                )}
+              </ScrollView>
+            )}
+            <View style={s.cardPickerActions}>
+              <Pressable style={[s.composerFooterButton, s.cardPickerActionButton, d.composerPreviewButton]} onPress={closeCardPicker}>
+                <Text style={[s.composerFooterButtonText, { color: colors.white }]}>{t('common.cancel', { defaultValue: '取消' })}</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  s.composerFooterButton,
+                  s.cardPickerActionButton,
+                  d.composerSortButton,
+                  cardPickerLoading && s.cardPickerActionDisabled,
+                ]}
+                onPress={confirmCardPicker}
+                disabled={cardPickerLoading}
+              >
+                <Text style={[s.composerFooterButtonText, { color: colors.white }]}>{t('common.done', { defaultValue: '完成' })}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <BottomSheetModal
         visible={groupSheetVisible}
-        onClose={() => setGroupSheetVisible(false)}
+        onClose={closeGroupSheet}
         backdropStyle={d.groupSheetBackdrop}
         sheetStyle={s.groupSheetWrap}
       >
@@ -1387,7 +3619,7 @@ export default function EditNoteScreen() {
           </Text>
           {availableGroups.length === 0 ? (
             <Text style={[s.groupSheetEmpty, d.groupSheetRowMeta]}>
-              {t('notes.groupPicker.empty', { defaultValue: '暂无分组，请先创建。' })}
+              {t('notes.groupPicker.empty', { defaultValue: '暂无分组' })}
             </Text>
           ) : (
             <ScrollView
@@ -1427,9 +3659,61 @@ export default function EditNoteScreen() {
               })}
             </ScrollView>
           )}
+          {groupCreateOpen ? (
+            <View style={s.groupCreateRow}>
+              <TextInput
+                ref={groupCreateInputRef}
+                style={[
+                  s.groupCreateInput,
+                  {
+                    color: colors.text,
+                    borderColor: colors.surfaceBorder,
+                    backgroundColor: colors.background,
+                  },
+                ]}
+                placeholder={t('notes.manageGroups.namePlaceholder', {
+                  defaultValue: '输入分组名添加新的分组',
+                })}
+                placeholderTextColor={colors.textSecondary}
+                value={groupCreateName}
+                onChangeText={setGroupCreateName}
+                maxLength={GROUP_NAME_MAX_LENGTH}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={() => void handleCreateGroup()}
+              />
+              <Pressable
+                style={[
+                  s.groupCreateConfirm,
+                  d.groupSheetDone,
+                  groupCreating ? s.groupCreateDisabled : null,
+                ]}
+                onPress={() => void handleCreateGroup()}
+                disabled={groupCreating}
+                accessibilityRole="button"
+              >
+                <Text style={[s.groupSheetDoneText, d.groupSheetDoneText]}>
+                  {groupCreating
+                    ? t('notes.groupPicker.saving', { defaultValue: '保存中...' })
+                    : t('common.confirm', { defaultValue: '确认' })}
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              style={[s.groupCreateButton, { borderColor: colors.surfaceBorder }]}
+              onPress={openGroupCreate}
+              accessibilityRole="button"
+            >
+              <Ionicons name="add" size={18} color={colors.iconAccent} />
+              <Text style={[s.groupCreateButtonText, { color: colors.iconAccent }]}>
+                {t('notes.manageGroups.createNew', { defaultValue: '新增分组' })}
+              </Text>
+            </Pressable>
+          )}
           <Pressable
             style={[s.groupSheetDone, d.groupSheetDone]}
-            onPress={() => setGroupSheetVisible(false)}
+            onPress={closeGroupSheet}
             accessibilityRole="button"
           >
             <Text style={[s.groupSheetDoneText, d.groupSheetDoneText]}>
@@ -1474,14 +3758,6 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     paddingTop: Spacing.xs,
     paddingBottom: Spacing.sm,
-  },
-  heroAccent: {
-    width: 52,
-    height: 5,
-    borderRadius: Radius.full,
-    marginLeft: Spacing.lg,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
   },
   titleInput: {
     paddingHorizontal: Spacing.lg,
@@ -1552,10 +3828,121 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  groupSheetRowTextWrap: { flex: 1 },
+  groupSheetRowTextWrap: { flex: 1, minWidth: 0 },
   groupSheetRowText: { ...Typography.body, fontWeight: '600' },
   groupSheetRowMeta: { ...Typography.small, marginTop: 2 },
   groupSheetEmpty: { ...Typography.small, paddingVertical: Spacing.md },
+  groupCreateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  groupCreateInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    ...Typography.bodyRegular,
+  },
+  groupCreateConfirm: {
+    minHeight: 44,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupCreateDisabled: { opacity: 0.55 },
+  groupCreateButton: {
+    minHeight: 48,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  groupCreateButtonText: { ...Typography.bodyRegular, fontWeight: '600' },
+  cardPickerBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  cardPickerSheet: {
+    flexShrink: 1,
+    maxHeight: '84%',
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    gap: Spacing.md,
+  },
+  cardPickerSearchWrap: {
+    height: 50,
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  cardPickerSearch: {
+    flex: 1,
+    minWidth: 0,
+    height: 48,
+    paddingVertical: 0,
+    textAlignVertical: 'center',
+    ...Typography.bodyRegular,
+  },
+  cardPickerList: {
+    maxHeight: 420,
+    minHeight: 0,
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  cardPickerListContent: {
+    gap: Spacing.sm,
+    paddingBottom: Spacing.xs,
+  },
+  cardPickerLoading: {
+    alignSelf: 'center',
+    marginVertical: Spacing.xl,
+  },
+  cardPickerEmpty: {
+    ...Typography.small,
+    textAlign: 'center',
+    paddingVertical: Spacing.xl,
+  },
+  cardPickerRow: {
+    minHeight: 72,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  cardPickerCheck: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardPickerActions: {
+    flexDirection: 'row',
+    width: '100%',
+    alignItems: 'stretch',
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  cardPickerActionButton: {
+    width: 0,
+    flexBasis: 0,
+    maxWidth: '100%',
+    minHeight: 48,
+    borderRadius: Radius.lg,
+  },
+  cardPickerActionDisabled: { opacity: 0.5 },
   groupSheetDone: {
     minHeight: 44,
     borderRadius: Radius.pill,
@@ -1573,11 +3960,11 @@ const s = StyleSheet.create({
     gap: Spacing.lg,
   },
   secondarySection: {
-    marginBottom: 0,
-    borderWidth: 0,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderRadius: 0,
-    paddingHorizontal: 0,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     gap: Spacing.md,
   },
@@ -1606,9 +3993,17 @@ const s = StyleSheet.create({
     alignItems: 'flex-end',
   },
   sectionHeaderMetaText: { ...Typography.small },
+  sectionRemoveButton: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: Spacing.xs,
+  },
   textEditorFrame: {
-    height: 320,
-    minHeight: 320,
+    height: 280,
+    minHeight: 280,
     overflow: 'hidden',
     borderRadius: Radius.md,
     borderCurve: 'continuous',
@@ -1652,6 +4047,16 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.md,
     overflow: 'hidden',
+  },
+  mediaAddTile: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    borderStyle: 'dashed',
+  },
+  mediaAddLabel: {
+    ...Typography.tiny,
+    textAlign: 'center',
   },
   mediaThumb: {
     width: '100%',
@@ -1697,6 +4102,42 @@ const s = StyleSheet.create({
   mediaTitle: { ...Typography.caption, fontWeight: '700' },
   mediaMeta: { ...Typography.small },
   emptySectionText: { ...Typography.small },
+  audioList: { gap: Spacing.xs, marginTop: Spacing.sm },
+  audioRow: {
+    minHeight: 44,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  cardRow: {
+    minHeight: 44,
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  cardRowAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+  },
+  cardRowAvatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardPickerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+  },
+  cardPickerAvatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   locationPreviewCard: {
     borderWidth: 1,
     borderRadius: Radius.md,
@@ -1763,4 +4204,142 @@ const s = StyleSheet.create({
     minHeight: 44,
   },
   locationClearText: { ...Typography.small, fontWeight: '600' },
+  composerFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 6,
+    paddingBottom: 6,
+    gap: Spacing.xs,
+  },
+  composerToolbar: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingHorizontal: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  composerTool: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    minHeight: 56,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: 2,
+    paddingVertical: Spacing.xs,
+  },
+  composerToolIcon: {
+    width: 28,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerToolLabel: {
+    ...Typography.tinyRegular,
+    lineHeight: 14,
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
+  composerSortRow: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    gap: Spacing.xs,
+  },
+  composerSortSheet: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    maxHeight: '78%',
+  },
+  composerSortHandle: {
+    alignSelf: 'center',
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: Spacing.md,
+  },
+  composerSortHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
+  composerSortTitle: { ...Typography.h3 },
+  composerSortList: {
+    maxHeight: 420,
+  },
+  composerSortListRow: {
+    minHeight: COMPOSER_SORT_ROW_HEIGHT,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  composerSortIndex: {
+    width: 24,
+    ...Typography.small,
+    textAlign: 'center',
+  },
+  composerSortRowLabel: {
+    flex: 1,
+    ...Typography.body,
+    fontWeight: '600',
+  },
+  composerSortDragHandle: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  composerSortEmpty: {
+    ...Typography.body,
+    textAlign: 'center',
+    paddingVertical: Spacing.xl,
+  },
+  composerSortChip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.pill,
+    minHeight: 32,
+    paddingLeft: Spacing.sm,
+    paddingRight: Spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  composerSortLabel: { ...Typography.tinyRegular },
+  composerFooterActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    justifyContent: 'center',
+  },
+  composerFooterButton: {
+    flex: 1,
+    maxWidth: 164,
+    minHeight: 40,
+    borderRadius: Radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+  },
+  composerFooterButtonText: { ...Typography.body, fontWeight: '700' },
+  previewRoot: { flex: 1 },
+  previewLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewHeader: {
+    minHeight: 56,
+    paddingHorizontal: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
 });

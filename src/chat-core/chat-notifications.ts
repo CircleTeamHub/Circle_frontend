@@ -38,7 +38,10 @@ export async function ensureChatNotificationChannel(
     name: i18n.t('notifications.chatChannelName'),
     description: i18n.t('notifications.chatChannelDescription'),
     importance: notifications.AndroidImportance.HIGH,
-    sound: 'default',
+    // Leave sound unset so Expo resolves Android's system default URI. Passing
+    // the literal "default" here is treated as a custom resource filename by
+    // recent expo-notifications versions and produces a user-visible LogBox
+    // error when the dev client does not bundle a file with that name.
     vibrationPattern: [0, 250, 250, 250],
     // 锁屏上只显示「有新消息」,正文要解锁才看得到。
     lockscreenVisibility: notifications.AndroidNotificationVisibility.PRIVATE,

@@ -31,6 +31,8 @@ import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-con
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { LIMITS } from '@/constants/config';
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -110,7 +112,7 @@ export default function CreateMomentScreen() {
   const prependMoment = useMomentsStore((s) => s.prependMoment);
 
   const [content, setContent] = useState('');
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [visibility, setVisibility] = useState<'FRIENDS_ONLY' | 'PRIVATE'>('FRIENDS_ONLY');
   const [submitting, setSubmitting] = useState(false);
 
@@ -146,7 +148,7 @@ export default function CreateMomentScreen() {
       if (result.canceled) return;
       setImages((prev) => [
         ...prev,
-        ...result.assets.map((a) => a.uri).slice(0, 9 - prev.length),
+        ...result.assets.slice(0, 9 - prev.length),
       ]);
     } catch {
       Alert.alert(
@@ -166,20 +168,41 @@ export default function CreateMomentScreen() {
     try {
       // 并发上传，cap=3（#108）：串行九图最坏 ~18s；全量并发又会同时打满
       // presign + S3 PUT。per-item 失败就地吞掉记 null，序号与所选图片一一对应。
-      const outcomes = await mapWithConcurrency(images, 3, async (uri) => {
+      const outcomes = await mapWithConcurrency(images, 3, async (asset) => {
         try {
-          const fileName = uri.split('/').pop() ?? 'photo.jpg';
-          const contentType = resolveUploadContentType({ fileName }) ?? 'image/jpeg';
-          const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(fileName),
+          if (
+            typeof asset.fileSize === 'number' &&
+            asset.fileSize > LIMITS.IMAGE_MAX_SIZE_MB * 1024 * 1024
+          ) {
+            throw new Error(
+              t('validation.imageSizeLimit', {
+                defaultValue: `图片不能超过 ${LIMITS.IMAGE_MAX_SIZE_MB}MB`,
+              }),
+            );
+          }
+          const fileName = asset.uri.split('/').pop() || 'photo.jpg';
+          const contentType =
+            resolveUploadContentType({
+              mimeType: asset.mimeType,
+              fileName,
+            }) ?? 'image/jpeg';
+          const prepared = await prepareChatImageForUpload({
+            uri: asset.uri,
+            width: asset.width,
+            height: asset.height,
             contentType,
+            filename: fileName,
+          });
+          const presign = await requestUploadPresign({
+            filename: sanitizeUploadFilename(prepared.filename),
+            contentType: prepared.contentType,
             folder: 'posts',
-            fileUri: uri,
+            fileUri: prepared.uri,
           });
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,
-            contentType,
-            uri,
+            prepared.contentType,
+            prepared.uri,
             presign.requiredHeaders,
           );
           return presign.fileUrl;
@@ -241,9 +264,9 @@ export default function CreateMomentScreen() {
           />
 
           <View style={s.photoRow}>
-            {images.map((uri, i) => (
-              <View key={uri}>
-                <Image source={{ uri }} style={s.photoThumb} contentFit="cover" />
+            {images.map((asset, i) => (
+              <View key={`${asset.uri}-${i}`}>
+                <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />
                 <Pressable
                   style={[s.removeBtn, { backgroundColor: colors.error }]}
                   onPress={() => handleRemoveImage(i)}

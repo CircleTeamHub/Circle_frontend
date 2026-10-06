@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -21,11 +22,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { NoteBlockRenderer } from '@/features/notes/components/NoteBlockRenderer';
+import { NoteDocumentBody } from '@/features/notes/components/NoteDocumentBody';
+import { ImageViewer } from '@/components/ui/image-viewer';
 import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
-import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import {
   getChatDetailHref,
   getUserProfileScopeFromSegments,
@@ -38,6 +39,10 @@ import {
   isRenderableMediaItem,
   type NoteSectionKind,
 } from '@/features/notes/utils/note-sections';
+import {
+  normalizeNoteComposerOrder,
+  readNoteComposerOrder,
+} from '@/features/notes/utils/note-composer';
 import { createNoteExport, fetchNoteDetail } from '@/services/api/notes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
@@ -65,6 +70,8 @@ export default function NoteDetailScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<NoteExportFormat | null>(null);
   const [downloadMenuVisible, setDownloadMenuVisible] = useState(false);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [imageViewerIndex, setImageViewerIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const sectionYRef = useRef<Partial<Record<NoteSectionKind, number>>>({});
   const scrolledSectionRef = useRef<string | null>(null);
@@ -131,6 +138,36 @@ export default function NoteDetailScreen() {
     () => (sections ? getNoteSectionAvailability(sections) : null),
     [sections],
   );
+  const detailOrder = useMemo<NoteSectionKind[]>(() => {
+    if (!sections || !availability) return [];
+    const saved = readNoteComposerOrder(
+      note?.sections?.text?.contentJson ?? note?.contentJson ?? [],
+    );
+    const normalized = normalizeNoteComposerOrder(
+      saved,
+      sections as unknown as Parameters<typeof normalizeNoteComposerOrder>[1],
+      false,
+    );
+    const mapped = normalized.flatMap((kind): NoteSectionKind[] => {
+      if (kind === 'text') return ['text'];
+      if (kind === 'image') return ['media'];
+      if (kind === 'video') return ['showcase'];
+      if (kind === 'showcase') return ['showcase'];
+      if (kind === 'audio') return ['audio'];
+      if (kind === 'contact') return ['contact'];
+      if (kind === 'group') return ['group'];
+      if (kind === 'location') return ['location'];
+      return [];
+    });
+    const available = new Set<NoteSectionKind>(['text']);
+    if (availability.hasMedia) available.add('media');
+    if (availability.hasShowcase) available.add('showcase');
+    if (availability.hasAudio) available.add('audio');
+    if (availability.hasContacts) available.add('contact');
+    if (availability.hasGroups) available.add('group');
+    if (availability.hasLocation) available.add('location');
+    return [...new Set([...mapped, ...available])].filter((kind) => available.has(kind));
+  }, [availability, note?.contentJson, note?.sections?.text?.contentJson, sections]);
   // 拿不到地址的条目渲染出来是空的（服务端读接口没能为这个 objectKey 现签地址），
   // 不进列表；整块是否显示由 getNoteSectionAvailability 按同一判据决定。
   const renderableMediaItems = useMemo(
@@ -140,6 +177,34 @@ export default function NoteDetailScreen() {
   const renderableShowcaseItems = useMemo(
     () => (sections?.showcase.items ?? []).filter(isRenderableMediaItem),
     [sections],
+  );
+  const viewerImages = useMemo(
+    () => [...renderableMediaItems, ...renderableShowcaseItems].filter(
+      (item): item is typeof item & { url: string } =>
+        item.type === 'IMAGE' && typeof item.url === 'string',
+    ),
+    [renderableMediaItems, renderableShowcaseItems],
+  );
+  useEffect(() => {
+    if (viewerImages.length === 0) {
+      setImageViewerVisible(false);
+      setImageViewerIndex(0);
+      return;
+    }
+    setImageViewerIndex((current) => Math.min(current, viewerImages.length - 1));
+  }, [viewerImages.length]);
+  const handleImagePress = useCallback(
+    (uri: string, objectKey?: string) => {
+      const index = viewerImages.findIndex((item) =>
+        objectKey
+          ? item.objectKey === objectKey || (!item.objectKey && item.url === uri)
+          : item.url === uri,
+      );
+      if (index < 0) return;
+      setImageViewerIndex(index);
+      setImageViewerVisible(true);
+    },
+    [viewerImages],
   );
   const targetSection = useMemo(
     () => (sections ? getInitialNoteSection(section, sections) : null),
@@ -278,12 +343,7 @@ export default function NoteDetailScreen() {
   const d = useMemo(
     () => ({
       container: { backgroundColor: colors.background },
-      title: { color: colors.text },
       meta: { color: colors.text },
-      // 分组标签：方形品牌紫实心块 + 白字（brandPurple = 会员卡渐变核心色）
-      groupTag: { backgroundColor: colors.brandPurple },
-      groupTagText: { color: colors.white },
-      content: { color: colors.text },
       iconBtn: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -295,9 +355,6 @@ export default function NoteDetailScreen() {
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: colors.surfaceBorder,
       },
-      sectionIconChip: { backgroundColor: colors.primaryLight },
-      sectionHeading: { color: colors.text },
-      divider: { backgroundColor: colors.surfaceBorder },
       downloadSheet: { backgroundColor: colors.surface, borderColor: colors.surfaceBorder },
     }),
     [colors],
@@ -338,25 +395,6 @@ export default function NoteDetailScreen() {
     );
   }
 
-  // 文字区始终展示（heading + 分割线保持各区域结构一致）；hasTextBody 只决定
-  // 展示正文还是「暂无文字」占位。hasText 直接信 util（content 有字或有文字 block）。
-  const hasTextBody = Boolean(availability?.hasText);
-  const showMediaSection = Boolean(availability?.hasMedia);
-  const showShowcaseSection = Boolean(availability?.hasShowcase);
-
-  // 小节章头：主色浅底图标章 + 加粗标签。每个区域（含文字）都用它，保持结构一致。
-  const renderSectionHeader = (
-    icon: keyof typeof Ionicons.glyphMap,
-    label: string,
-  ) => (
-    <View style={s.sectionHeader}>
-      <View style={[s.sectionIconChip, d.sectionIconChip]}>
-        <Ionicons name={icon} size={15} color={colors.iconAccent} />
-      </View>
-      <Text style={[s.sectionHeading, d.sectionHeading]}>{label}</Text>
-    </View>
-  );
-
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       {/* Header：右侧动作是圆形描边按钮（设计稿） */}
@@ -387,123 +425,20 @@ export default function NoteDetailScreen() {
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={Platform.OS === 'android'}
         onContentSizeChange={scrollToRequestedSection}
       >
-        {/* Title */}
-        <Text style={[s.title, d.title]}>{note.title}</Text>
-
-        {/* Date + groups */}
-        <View style={s.metaRow}>
-          <Text style={[s.meta, d.meta]}>{formatNoteFullDate(note.createdAt, t)}</Text>
-          {note.groups.length > 0 ? (
-            <Text style={[s.meta, d.meta]}>·</Text>
-          ) : null}
-          {note.groups.map((group) => (
-            <View key={group.id} style={[s.groupTag, d.groupTag]}>
-              <Text style={[s.groupTagText, d.groupTagText]}>{group.name}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* 来源不再占正文：分享者/群都收进右下角悬浮列，点头像即跳。 */}
-
         {sections ? (
-          <>
-            {/* 文字区始终展示（heading + 分割线与各区域结构一致），无正文给占位 */}
-            <View onLayout={trackSectionLayout('text')} style={s.section}>
-              {renderSectionHeader(
-                'text-outline',
-                t('notes.section.text', { defaultValue: '文字' }),
-              )}
-              {hasTextBody ? (
-                sections.text.contentJson &&
-                sections.text.contentJson.length > 0 ? (
-                  <NoteBlockRenderer
-                    blocks={sections.text.contentJson}
-                    onMediaError={handleMediaError}
-                  />
-                ) : (
-                  <Text style={[s.bodyText, d.content]}>
-                    {sections.text.content || note.content}
-                  </Text>
-                )
-              ) : (
-                <Text style={[s.emptyHint, d.meta]}>
-                  {t('notes.section.emptyText', { defaultValue: '暂无文字内容' })}
-                </Text>
-              )}
-            </View>
-
-            {showMediaSection ? (
-              <View onLayout={trackSectionLayout('media')} style={s.section}>
-                <View style={[s.divider, d.divider]} />
-                {renderSectionHeader(
-                  'image-outline',
-                  t('notes.section.media', { defaultValue: '图片 · 视频' }),
-                )}
-                {/* 拿不到地址的条目渲染出来是空的，直接不进列表：否则它只贡献一个空位
-                    和一个 undefined 的 key。整块是否显示见 getNoteSectionAvailability。 */}
-                <NoteBlockRenderer
-                  onMediaError={handleMediaError}
-                  blocks={renderableMediaItems.map((item) => ({
-                    id: item.id ?? item.url,
-                    type: item.type === 'VIDEO' ? 'video' : 'image',
-                    props: {
-                      url: item.url,
-                      caption: '',
-                      width: item.width ?? undefined,
-                      height: item.height ?? undefined,
-                    },
-                  }))}
-                />
-              </View>
-            ) : null}
-
-            {showShowcaseSection ? (
-              <View onLayout={trackSectionLayout('showcase')} style={s.section}>
-                <View style={[s.divider, d.divider]} />
-                {renderSectionHeader(
-                  'albums-outline',
-                  t('notes.section.showcase', { defaultValue: '展示' }),
-                )}
-                <NoteBlockRenderer
-                  onMediaError={handleMediaError}
-                  blocks={renderableShowcaseItems.map((item) => ({
-                    id: item.id ?? item.url,
-                    type: item.type === 'VIDEO' ? 'video' : 'image',
-                    props: {
-                      url: item.url,
-                      caption: '',
-                      width: item.width ?? undefined,
-                      height: item.height ?? undefined,
-                    },
-                  }))}
-                />
-              </View>
-            ) : null}
-
-            {availability?.hasLocation ? (
-              <View onLayout={trackSectionLayout('location')} style={s.section}>
-                <View style={[s.divider, d.divider]} />
-                {renderSectionHeader(
-                  'location-outline',
-                  t('notes.section.location', { defaultValue: '地址' }),
-                )}
-                <View style={s.locationRow}>
-                  <Ionicons name="location-outline" size={20} color={colors.iconAccent} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.locationTitle, { color: colors.text }]}>
-                      {sections.location?.title ||
-                        t('notes.detail.locationFallback', { defaultValue: '位置' })}
-                    </Text>
-                    {sections.location?.address ? (
-                      <Text style={[s.meta, d.meta]}>{sections.location.address}</Text>
-                    ) : null}
-                  </View>
-                </View>
-              </View>
-            ) : null}
-          </>
+          <NoteDocumentBody
+            title={note.title}
+            createdAt={note.createdAt}
+            groups={note.groups}
+            sections={sections}
+            order={detailOrder}
+            onMediaError={handleMediaError}
+            onImagePress={handleImagePress}
+            onSectionLayout={trackSectionLayout}
+          />
         ) : null}
       </ScrollView>
 
@@ -634,6 +569,13 @@ export default function NoteDetailScreen() {
         payloads={sharePayloads}
         onClose={() => setShareOpen(false)}
       />
+      <ImageViewer
+        images={viewerImages.map((item) => item.url)}
+        cacheKeys={viewerImages.map((item) => item.objectKey)}
+        visible={imageViewerVisible}
+        initialIndex={imageViewerIndex}
+        onClose={() => setImageViewerVisible(false)}
+      />
     </View>
   );
 }
@@ -667,24 +609,7 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },
-  // 详情页的"刊头"：标题是唯一的重型元素，其余信息全部退为次级。
-  title: { ...Typography.title, lineHeight: 40, marginBottom: Spacing.sm },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
   meta: { ...Typography.caption, fontWeight: '400' },
-  groupTag: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.xs,
-  },
-  groupTagText: { ...Typography.small, fontWeight: '600' },
-  bodyText: { ...Typography.bodyRegular, fontSize: 15, lineHeight: 26 },
-  emptyHint: { ...Typography.caption, fontWeight: '400' },
   // 右下角悬浮列：竖排圆钮，绝对定位不占正文流。
   floatingDock: {
     position: 'absolute',
@@ -713,29 +638,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // 小节之间用分隔线 + 图标章头分段，正文不设头直接展开（设计稿）。
-  // 1pt 实线：发丝线在真机上太淡，分段感立不住。
-  section: { gap: Spacing.md - 4, marginBottom: Spacing.lg },
-  divider: { height: 1, marginBottom: Spacing.md - 4 },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm + 2,
-  },
-  sectionIconChip: {
-    width: 30,
-    height: 30,
-    borderRadius: Radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionHeading: { ...Typography.h3, fontWeight: '700' },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  locationTitle: { ...Typography.body, fontWeight: '600' },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',

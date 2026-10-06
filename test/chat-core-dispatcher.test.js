@@ -80,11 +80,13 @@ function loadDispatcher(storeOverrides = {}) {
     activeConversationId: null,
     conversations: [],
     ingested: [],
+    ingestBatches: [],
     banners: [],
     removed: [],
     alerts: [],
     revokes: [],
     deliveredReports: [],
+    deliveredApplied: [],
     typings: [],
     backfills: 0,
     backfillOptions: [],
@@ -106,6 +108,7 @@ function loadDispatcher(storeOverrides = {}) {
   // 补拉是 800ms 防抖的。测试里换成可控计时器:每条用例真等 0.8 秒既慢又脆,
   // 而这里要断言的恰恰是「补拉回来之后」发生了什么。
   let pendingBackfill = null;
+  let pendingIncomingBatch = null;
   let lastBackfill = Promise.resolve();
   state.deferBackfill = false;
   state.settleBackfill = null;
@@ -113,7 +116,7 @@ function loadDispatcher(storeOverrides = {}) {
   state.fireBackfill = () => {
     const fire = pendingBackfill;
     pendingBackfill = null;
-    if (fire) fire();
+    if (fire) fire.fn();
   };
   /** 让在途的那次补拉以给定结果结束,并让微任务跑完。 */
   state.settle = async (outcome, value) => {
@@ -126,10 +129,13 @@ function loadDispatcher(storeOverrides = {}) {
     await Promise.resolve();
   };
   state.runBackfill = async () => {
+    // 消息分发器的 24ms trailing 窗口在生产由 timer 驱动；测试在触发补拉
+    // 前显式 flush，既保持断言同步，又不把两个独立 timer 混成一个。
+    dispatcher.flushIncomingMessageBatch();
     const fire = pendingBackfill;
     pendingBackfill = null;
     if (!fire) return;
-    fire();
+    fire.fn();
     await lastBackfill;
     // flushPendingBanners 挂在 loadChatConversations().then() 上,再让一拍微任务。
     await Promise.resolve();
@@ -170,6 +176,7 @@ function loadDispatcher(storeOverrides = {}) {
     applyIncomingMessage: (message) =>
       state.conversations.some((c) => c.id === message.conversationId),
     ingestMessages: (conversationId, messages) => {
+      state.ingestBatches.push({ conversationId, count: messages.length });
       for (const message of messages) state.ingested.push(message);
     },
     applyRead: () => {},
@@ -189,7 +196,7 @@ function loadDispatcher(storeOverrides = {}) {
         ...(meta && Object.keys(meta).length > 0 ? { meta: { ...meta } } : {}),
       });
     },
-    applyDelivered: () => {},
+    applyDelivered: (...args) => state.deliveredApplied.push(args),
     applyTyping: (conversationId) => state.typings.push(conversationId),
     applyReaction: () => {},
     applyEdit: () => {},
@@ -308,12 +315,15 @@ function loadDispatcher(storeOverrides = {}) {
     if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   }, {
-    setTimeout: (fn) => {
-      pendingBackfill = fn;
-      return 1;
+    setTimeout: (fn, delay) => {
+      const token = { fn, delay };
+      if (delay === 800) pendingBackfill = token;
+      else pendingIncomingBatch = token;
+      return token;
     },
-    clearTimeout: () => {
-      pendingBackfill = null;
+    clearTimeout: (token) => {
+      if (pendingBackfill === token) pendingBackfill = null;
+      if (pendingIncomingBatch === token) pendingIncomingBatch = null;
     },
   });
 
@@ -341,6 +351,24 @@ test('a well-formed chat:msg reaches the store', () => {
   const { socket, state } = loadDispatcher();
   socket.emit('chat:msg', dto());
   assert.equal(state.ingested.length, 1);
+});
+
+test('a synchronous message burst is ingested once per conversation after the leading message', () => {
+  const { socket, state, dispatcher } = loadDispatcher({
+    conversations: [directConversation({ id: 'c1' })],
+  });
+  socket.emit('chat:msg', dto({ id: 'burst-1', conversationId: 'c1' }));
+  socket.emit('chat:msg', dto({ id: 'burst-2', conversationId: 'c1', height: 4 }));
+  socket.emit('chat:msg', dto({ id: 'burst-3', conversationId: 'c1', height: 5 }));
+
+  // Leading message remains synchronous; the trailing two share one ingest call.
+  assert.deepEqual(state.ingestBatches, [{ conversationId: 'c1', count: 1 }]);
+  dispatcher.flushIncomingMessageBatch();
+  assert.deepEqual(state.ingestBatches, [
+    { conversationId: 'c1', count: 1 },
+    { conversationId: 'c1', count: 2 },
+  ]);
+  assert.equal(state.ingested.length, 3);
 });
 
 test('chat:history_cleared removes the direct timeline and local unread override', () => {
@@ -613,6 +641,24 @@ test('delivered receipts are reported for direct chats but never for groups', ()
       { cid: 'c-unknown', h: 5 },
     ],
   );
+});
+
+test('malformed delivered watermarks never reach the store', () => {
+  const { socket, state } = loadDispatcher();
+  for (const height of [1.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    socket.emit('chat:delivered', {
+      conversationId: 'c1',
+      userId: 'peer',
+      height,
+    });
+  }
+  socket.emit('chat:delivered', {
+    conversationId: 'c1',
+    userId: 'peer',
+    height: 4,
+  });
+
+  assert.deepEqual(state.deliveredApplied, [['c1', 'peer', 4]]);
 });
 
 test('notifications are cleared when my other device reads, on clear, recall and burn', () => {

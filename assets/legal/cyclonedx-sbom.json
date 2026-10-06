@@ -9735,6 +9735,26 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:npm/expo-document-picker@55.0.17",
+      "name": "expo-document-picker",
+      "version": "55.0.17",
+      "purl": "pkg:npm/expo-document-picker@55.0.17",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/expo/expo.git"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:npm/expo-eas-client@55.0.5",
       "name": "expo-eas-client",
       "version": "55.0.5",

@@ -162,7 +162,7 @@ test('uploadFileToPresignedUrl reports a sanitized error when native errors incl
   assert.doesNotMatch(JSON.stringify(reports), /X-Amz-Signature|store\/obj/);
 });
 
-test('uploadFileToPresignedUrl exposes only the safe storage error code', async () => {
+test('uploadFileToPresignedUrl hides storage details from the user-facing error', async () => {
   const { StorageUploadError, uploadFileToPresignedUrl } = loadUpload({
     ok: false,
     status: 400,
@@ -180,7 +180,8 @@ test('uploadFileToPresignedUrl exposes only the safe storage error code', async 
     (error) => {
       assert.ok(error instanceof StorageUploadError);
       assert.equal(error.name, 'StorageUploadError');
-      assert.match(error.message, /400: MissingContentLength/);
+      assert.equal(error.message, '上传失败，请稍后重试');
+      assert.doesNotMatch(error.message, /MissingContentLength/);
       assert.doesNotMatch(error.message, /private|photo\.jpg/);
       return true;
     },

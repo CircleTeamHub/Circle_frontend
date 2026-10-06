@@ -404,7 +404,7 @@ export default function MyIconsScreen() {
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={t('myIcons.title', { defaultValue: '我的徽章' })}
-        onBackPress={handleSave}
+        fallbackHref="/(tabs)/profile/decorations"
       />
       <ScrollView
         style={s.scroll}

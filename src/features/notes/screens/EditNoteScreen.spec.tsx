@@ -5,6 +5,36 @@ import EditNoteScreen from './EditNoteScreen';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
 import { createNote, updateNote } from '@/services/api/notes';
 
+// EditNoteScreen reads the current account for local/server draft persistence.
+// The real auth store hydrates through native encrypted storage, which is not
+// available in the Jest host; the editor behavior tests do not need a session.
+jest.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector: (state: { user: null }) => unknown) =>
+    selector({ user: null }),
+}));
+
+jest.mock('@/storage', () => ({
+  storage: {
+    getString: jest.fn(),
+    set: jest.fn(),
+    remove: jest.fn(),
+    getBoolean: jest.fn(),
+    contains: jest.fn(),
+    clearAll: jest.fn(),
+  },
+  mmkvJsonStorage: {
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+  },
+}));
+
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useNavigation: () => ({ dispatch: jest.fn() }),
+  usePreventRemove: jest.fn(),
+}));
+
 const mockRouter = { back: jest.fn(), push: jest.fn() };
 const mockRequestPermission = jest.fn();
 const mockLaunchPicker = jest.fn();
@@ -53,6 +83,20 @@ jest.mock('expo-router', () => {
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: (...args: unknown[]) => mockRequestPermission(...args),
   launchImageLibraryAsync: (...args: unknown[]) => mockLaunchPicker(...args),
+}));
+
+jest.mock('expo-audio', () => ({
+  AudioQuality: { MEDIUM: 'medium' },
+  IOSOutputFormat: { MPEG4AAC: 'aac' },
+  requestRecordingPermissionsAsync: jest.fn(() => Promise.resolve({ granted: false })),
+  setAudioModeAsync: jest.fn(() => Promise.resolve()),
+  useAudioRecorder: () => ({
+    getStatus: () => ({ canRecord: false, durationMillis: 0, url: null }),
+    prepareToRecordAsync: jest.fn(() => Promise.resolve()),
+    record: jest.fn(),
+    stop: jest.fn(() => Promise.resolve()),
+    uri: null,
+  }),
 }));
 
 // 记录每一个 <Image> 的 source：位置预览那组断言关心的就是「渲染时有没有把
@@ -166,6 +210,62 @@ function locationAction() {
   return node;
 }
 
+function pressComposer(kind: 'title' | 'text' | 'image' | 'video' | 'location') {
+  // Title is a fixed field at the top of the editor, and image/video now share
+  // the single multi-media action. Keep the older helper call sites readable
+  // while targeting the current editor affordances. Every other action first
+  // adds its block; the second tap exercises the block's own control.
+  if (kind === 'title') return;
+  const action = kind === 'video' || kind === 'image' ? 'media' : kind;
+  fireEvent.press(screen.getByRole('button', { name: `notes.edit.composer.${action}` }));
+  if (kind === 'image' || kind === 'video') {
+    const addButtons = screen.getAllByRole('button', { name: 'notes.edit.addMedia' });
+    fireEvent.press(addButtons[addButtons.length - 1]);
+  } else if (kind === 'location') {
+    fireEvent.press(locationAction());
+  }
+}
+
+test('allows repeated text blocks and reorders each instance independently', async () => {
+  render(<EditNoteScreen />);
+
+  pressComposer('text');
+  pressComposer('text');
+  await waitFor(() => expect(mockEditorRenderCount).toBeGreaterThanOrEqual(2));
+
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.sort' }));
+  expect(screen.getByText('notes.edit.composer.text 1')).toBeTruthy();
+  expect(screen.getByText('notes.edit.composer.text 2')).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'common.close' }));
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '可重复区块');
+  fireEvent.press(screen.getByText('notes.edit.done'));
+  await waitFor(() => expect(createNote).toHaveBeenCalled());
+  const [input] = jest.mocked(createNote).mock.calls[0];
+  const marker = input.contentJson?.find((block) => block.type === 'noteLayout') as
+    | { props?: { blocks?: unknown } }
+    | undefined;
+  expect(marker?.props?.blocks).toEqual([
+    { id: 'title-fixed', kind: 'title' },
+    { id: 'text-1', kind: 'text' },
+    { id: 'text-2', kind: 'text' },
+  ]);
+});
+
+test('only adds singleton composer blocks once', async () => {
+  render(<EditNoteScreen />);
+
+  pressComposer('title');
+  pressComposer('title');
+  expect(screen.getAllByPlaceholderText('notes.edit.titlePlaceholder')).toHaveLength(1);
+
+  pressComposer('location');
+  await waitFor(() => expect(mockRouter.push).toHaveBeenCalledTimes(1));
+  pressComposer('location');
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.sort' }));
+  // The toolbar label and the single sheet row are the only two occurrences.
+  expect(screen.getAllByText('notes.edit.composer.location')).toHaveLength(2);
+});
+
 async function beginDeferredImageUpload() {
   const upload = createDeferred<void>();
   mockRequestPermission.mockResolvedValue({ granted: true });
@@ -181,7 +281,7 @@ async function beginDeferredImageUpload() {
   });
   mockUploadFile.mockReturnValue(upload.promise);
 
-  fireEvent.press(screen.getByText('notes.edit.addImage'));
+  pressComposer('image');
   await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
   return upload;
 }
@@ -194,7 +294,7 @@ test('keeps a selected video preview visible before and after its upload settles
   mockRequestPermission.mockResolvedValue({ granted: true });
   mockLaunchPicker.mockResolvedValue({
     canceled: false,
-    assets: [{ uri: 'file:///picked-video.mp4', duration: 1_000, width: 100, height: 80 }],
+    assets: [{ type: 'video', uri: 'file:///picked-video.mp4', duration: 1_000, width: 100, height: 80 }],
   });
   mockRequestPresign.mockResolvedValue({
     uploadUrl: 'https://upload.example/picked-video.mp4',
@@ -205,7 +305,7 @@ test('keeps a selected video preview visible before and after its upload settles
   mockUploadFile.mockReturnValue(upload.promise);
 
   render(<EditNoteScreen />);
-  fireEvent.press(screen.getByText('notes.edit.addVideo'));
+  pressComposer('video');
   await screen.findByTestId('note-media-preview-video');
   expect(screen.getByTestId('note-media-preview-video').props.source).toBe(mockGeneratedVideoThumbnail);
   expect(mockVideoPlayerRelease).toHaveBeenCalledTimes(1);
@@ -277,7 +377,7 @@ test('caps section media web-overflow uploads in picker order and reports omitte
   mockUploadFile.mockResolvedValue(undefined);
 
   render(<EditNoteScreen />);
-  fireEvent.press(screen.getByText('notes.edit.addImage'));
+  pressComposer('image');
 
   await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(10));
   expect(mockRequestPresign.mock.calls.map(([request]) => request.filename)).toEqual(
@@ -310,7 +410,7 @@ test('keeps an active web picker preview until the editor unmounts, then revokes
 
   try {
     const rendered = render(<EditNoteScreen />);
-    fireEvent.press(screen.getByText('notes.edit.addImage'));
+    pressComposer('image');
     await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
     expect(revokeObjectURL).not.toHaveBeenCalled();
 
@@ -349,7 +449,7 @@ test('releases overflow and removed main-editor blob previews without revoking a
   mockUploadFile.mockReturnValue(upload);
   try {
     const rendered = render(<EditNoteScreen />);
-    fireEvent.press(screen.getByText('notes.edit.addImage'));
+    pressComposer('image');
     await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:main-overflow'));
     expect(revokeObjectURL).not.toHaveBeenCalledWith('blob:main-active');
 
@@ -378,17 +478,17 @@ test('releases rejected and failed main-editor blob picker URLs exactly once', a
   try {
     mockLaunchPicker.mockResolvedValue({
       canceled: false,
-      assets: [{ uri: 'blob:main-rejected', fileSize: 201 * 1024 * 1024 }],
+      assets: [{ type: 'video', uri: 'blob:main-rejected', fileSize: 201 * 1024 * 1024 }],
     });
     const rejected = render(<EditNoteScreen />);
-    fireEvent.press(screen.getByText('notes.edit.addVideo'));
+    pressComposer('video');
     await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:main-rejected'));
     rejected.unmount();
 
     mockLaunchPicker.mockResolvedValue({ canceled: false, assets: [{ uri: 'blob:main-failed' }] });
     mockRequestPresign.mockRejectedValueOnce(new Error('presign failed'));
     const failed = render(<EditNoteScreen />);
-    fireEvent.press(screen.getByText('notes.edit.addImage'));
+    pressComposer('image');
     await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:main-failed'));
     failed.unmount();
 
@@ -416,7 +516,7 @@ test('releases an in-flight main-editor blob preview when its route is replaced'
   mockUploadFile.mockReturnValue(upload.promise);
   try {
     const rendered = render(<EditNoteScreen />);
-    fireEvent.press(screen.getByText('notes.edit.addImage'));
+    pressComposer('image');
     await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
 
     mockRouteId = 'replacement-note';
@@ -455,6 +555,7 @@ test('blurred uploads cannot alert over another route and focus restores usable 
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   render(<EditNoteScreen />);
   const upload = await beginDeferredImageUpload();
+  pressComposer('location');
 
   expect(locationAction().props.disabled).toBe(true);
   fireEvent.press(locationAction());
@@ -492,6 +593,7 @@ test('失焦期间传完的媒体，回到页面后仍然保存得出去', async
     mockFocusCleanup = typeof cleanup === 'function' ? cleanup : undefined;
   });
 
+  pressComposer('title');
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '标题');
   fireEvent.press(screen.getByText('notes.edit.done'));
 
@@ -528,7 +630,7 @@ test('presign 不返回 fileUrl 时，笔记媒体照常上传、预览并按 ob
   mockUploadFile.mockResolvedValue(undefined);
 
   render(<EditNoteScreen />);
-  fireEvent.press(screen.getByText('notes.edit.addImage'));
+  pressComposer('image');
   await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
 
   // 传完之后仍然看得见：远端没有能读的地址，缩略图继续用本地资源。
@@ -542,6 +644,7 @@ test('presign 不返回 fileUrl 时，笔记媒体照常上传、预览并按 ob
   expect(alert).not.toHaveBeenCalled();
   expect(mockReportHandledFailure).not.toHaveBeenCalled();
 
+  pressComposer('title');
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '标题');
   fireEvent.press(screen.getByText('notes.edit.done'));
 
@@ -819,6 +922,7 @@ describe('note location map preview', () => {
     });
 
     render(<EditNoteScreen />);
+    pressComposer('location');
     await screen.findByText('Harbor Cafe');
     layoutMap();
 
@@ -836,6 +940,7 @@ describe('note location map preview', () => {
     });
 
     render(<EditNoteScreen />);
+    pressComposer('location');
     await screen.findByText('Harbor Cafe');
     layoutMap();
     expect(remoteImageRequests().length).toBeGreaterThan(0);
@@ -1000,7 +1105,7 @@ test('reports a redacted aggregate when a section upload batch partially fails',
   mockUploadFile.mockRejectedValueOnce(uploadError).mockResolvedValueOnce(undefined);
 
   render(<EditNoteScreen />);
-  fireEvent.press(screen.getByText('notes.edit.addImage'));
+  pressComposer('image');
 
   await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(2));
   // 签名里带上失败种类，让网络断 / 预签名 403 / 超时在聚合里分得开；
@@ -1011,7 +1116,7 @@ test('reports a redacted aggregate when a section upload batch partially fails',
     expect.objectContaining({
       message: 'note media batch upload failed [Error]',
     }),
-    { failed: 1, total: 2, reason: 'media.image', errorNames: 'Error' },
+      { failed: 1, total: 2, reason: 'media.media', errorNames: 'Error' },
   );
   const reported = mockReportHandledFailure.mock.calls.find(
     (call: unknown[]) => call[1] === 'sectionMediaUploadBatch',
@@ -1102,6 +1207,7 @@ test('切换语言不会重新拉取笔记、冲掉未保存的编辑', async ()
 
   const rendered = render(<EditNoteScreen />);
   await screen.findByDisplayValue('Language note');
+  pressComposer('title');
   fireEvent.changeText(
     screen.getByPlaceholderText('notes.edit.titlePlaceholder'),
     '改了一半的标题',
@@ -1196,6 +1302,7 @@ test('empty and whitespace titles are rejected without an inline required hint',
   expect(screen.queryByText('notes.edit.titleRequired')).toBeNull();
   expect(createNote).not.toHaveBeenCalled();
 
+  pressComposer('title');
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '   ');
   fireEvent.press(done);
   expect(createNote).not.toHaveBeenCalled();
@@ -1217,6 +1324,7 @@ test('groups are selected from a bottom sheet instead of rendering every group i
   await waitFor(() => expect(mockFetchNoteGroups).toHaveBeenCalled());
   expect(screen.queryByText('工作')).toBeNull();
 
+  pressComposer('title');
   fireEvent.press(screen.getByRole('button', { name: 'notes.edit.groupsLabel' }));
   expect(screen.getByText('notes.groupPicker.title')).toBeTruthy();
   expect(screen.getByRole('checkbox', { name: '工作' })).toBeTruthy();
@@ -1232,6 +1340,8 @@ test('oversized pasted text stays editable, explains the limit, and saves in ful
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   (createNote as jest.Mock).mockResolvedValue({});
   render(<EditNoteScreen />);
+  pressComposer('title');
+  pressComposer('text');
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '长文');
   const text = '文'.repeat(20_000) + '末';
   act(() => mockEditorProps?.onContentChange([
@@ -1259,6 +1369,8 @@ test('too many pasted paragraphs are explained before sending a save request', a
   mockFetchNoteGroups.mockReturnValue(groups.promise);
   render(<EditNoteScreen />);
   await act(async () => { groups.resolve([]); });
+  pressComposer('title');
+  pressComposer('text');
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '段落测试');
   act(() => mockEditorProps?.onContentChange(Array.from({ length: 501 }, () => ({
     type: 'paragraph', content: [{ type: 'text', text: '短段落' }],
@@ -1332,6 +1444,7 @@ test('typing in the body updates the live counter without re-rendering the scree
   mockTranslate = (key, options) =>
     key === 'notes.edit.textCount' ? `字数:${options?.count}` : key;
   render(<EditNoteScreen />);
+  pressComposer('text');
   await waitFor(() => expect(mockEditorProps).toBeDefined());
 
   const editorPropsBeforeTyping = mockEditorProps;

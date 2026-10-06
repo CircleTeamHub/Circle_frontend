@@ -1,9 +1,18 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { useVideoPlayer } from 'expo-video';
 import { NoteBlockRenderer } from './NoteBlockRenderer';
 
 jest.mock('expo', () => ({ useEventListener: jest.fn() }));
 jest.mock('expo-image', () => ({ Image: () => null }));
+jest.mock('expo-audio', () => ({
+  useAudioPlayer: () => ({
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    play: jest.fn(),
+    pause: jest.fn(),
+    seekTo: jest.fn(() => Promise.resolve()),
+  }),
+}));
 jest.mock('expo-video', () => ({ useVideoPlayer: jest.fn(), VideoView: () => null }));
 jest.mock('@/theme', () => ({
   Spacing: { xs: 4, sm: 8, md: 16 },
@@ -84,4 +93,24 @@ test('server-provided inline content stops at the supported nesting depth', () =
   const tree = JSON.stringify(view.toJSON());
   expect(tree).toContain('行内第10层');
   expect(tree).not.toContain('行内第11层');
+});
+
+test('lazy preview media creates a video player only after activation', () => {
+  const mockUseVideoPlayer = jest.mocked(useVideoPlayer);
+  mockUseVideoPlayer.mockClear();
+
+  render(
+    <NoteBlockRenderer
+      lazyMedia
+      blocks={[{ type: 'video', props: { url: 'https://cdn.example/preview.mp4' } }]}
+    />,
+  );
+
+  expect(mockUseVideoPlayer).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByRole('button', { name: '播放视频' }));
+  expect(mockUseVideoPlayer).toHaveBeenCalledTimes(1);
+  expect(mockUseVideoPlayer).toHaveBeenCalledWith(
+    'https://cdn.example/preview.mp4',
+    expect.any(Function),
+  );
 });
