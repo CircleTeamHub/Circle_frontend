@@ -440,12 +440,13 @@ export default function NotificationCenterScreen() {
             style={{ padding: Spacing.lg, alignItems: 'center' }}>
             <Text style={{ color: colors.textSecondary }}>{loadError}</Text>
           </Pressable> : null}
-          {pageFailed ? <Pressable
+          {tab === 'notifications' && pageFailed ? <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('common.retry')}
           onPress={() => { failedCursorRef.current = null; setPageFailed(false); void loadMore(); }}
           style={{ padding: Spacing.lg, alignItems: 'center' }}
-        ><Text style={{ color: colors.primary }}>{t('common.retry')}</Text></Pressable> : loadingMore ? <ActivityIndicator color={colors.primary} /> : null}</View>}
+        ><Text style={{ color: colors.primary }}>{t('common.retry')}</Text></Pressable> : null}
+          {tab === 'notifications' && !pageFailed && loadingMore ? <ActivityIndicator color={colors.primary} /> : null}</View>}
         ListEmptyComponent={
           <NotificationEmptyState
             title={

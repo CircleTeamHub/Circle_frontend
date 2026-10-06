@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { ActivityIndicator } from 'react-native';
 import NotificationCenterScreen from './NotificationCenterScreen';
 import { fetchNotificationsPage, markAllNotificationsRead } from '@/services/api/notifications';
 import { fetchAllMyCirclePosts, markMyPostSignupsRead } from '@/services/api/plaza';
@@ -47,8 +48,11 @@ jest.mock('@/theme', () => ({
 }));
 jest.mock('@/components/ui/divider', () => ({ Divider: () => null }));
 jest.mock('@/features/notifications/components/NotificationTabBar', () => ({ NotificationTabBar: ({ onSelect }: { onSelect: (tab: string) => void }) => {
-  const { Pressable } = jest.requireActual('react-native');
-  return <Pressable testID="signup-tab" onPress={() => onSelect('signups')} />;
+  const { Pressable, View } = jest.requireActual('react-native');
+  return <View>
+    <Pressable testID="signup-tab" onPress={() => onSelect('signups')} />
+    <Pressable testID="notifications-tab" onPress={() => onSelect('notifications')} />
+  </View>;
 } }));
 jest.mock('@/features/notifications/components/ReadFilterBar', () => ({ ReadFilterBar: ({ onMarkAll }: { onMarkAll: () => void }) => {
   const { Pressable } = jest.requireActual('react-native');
@@ -92,6 +96,83 @@ test('a failed cursor page stops automatic requests until an explicit retry', as
   await waitFor(() => expect(mockAppendPage).toHaveBeenCalledTimes(1));
 });
 
+test('a failed notification page shows its retry only on the notifications tab', async () => {
+  mockDomain = 'circle';
+  jest.mocked(fetchNotificationsPage)
+    .mockResolvedValueOnce({ items: [], nextCursor: 'cursor-1' })
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValueOnce({ items: [], nextCursor: null });
+  render(<NotificationCenterScreen />);
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.press(screen.getByTestId('list-end'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeTruthy());
+  fireEvent.press(screen.getByTestId('signup-tab'));
+  expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  fireEvent.press(screen.getByTestId('list-end'));
+  expect(fetchNotificationsPage).toHaveBeenCalledTimes(2);
+  fireEvent.press(screen.getByTestId('notifications-tab'));
+  fireEvent.press(screen.getByRole('button', { name: 'common.retry' }));
+  await waitFor(() => expect(fetchNotificationsPage).toHaveBeenCalledTimes(3));
+  expect(fetchNotificationsPage).toHaveBeenLastCalledWith('cursor-1', 'circle');
+});
+
+test.each(['success', 'failure'] as const)('a pending notification page and its late %s do not put pagination controls in signup', async (outcome) => {
+  mockDomain = 'circle';
+  const page = deferred<Awaited<ReturnType<typeof fetchNotificationsPage>>>();
+  jest.mocked(fetchNotificationsPage)
+    .mockResolvedValueOnce({ items: [], nextCursor: 'cursor-1' })
+    .mockReturnValueOnce(page.promise);
+  render(<NotificationCenterScreen />);
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.press(screen.getByTestId('list-end'));
+  expect(screen.UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
+  fireEvent.press(screen.getByTestId('signup-tab'));
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
+  await act(async () => {
+    if (outcome === 'success') page.resolve({ items: [notification('background-page', 'CIRCLE_POST_PUBLISHED')], nextCursor: null });
+    else page.reject(new Error('offline'));
+  });
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
+  expect(screen.queryByText('background-page')).toBeNull();
+  fireEvent.press(screen.getByTestId('list-end'));
+  expect(fetchNotificationsPage).toHaveBeenCalledTimes(2);
+  fireEvent.press(screen.getByTestId('notifications-tab'));
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  if (outcome === 'success') expect(screen.getByText('background-page')).toBeTruthy();
+  else expect(screen.getByRole('button', { name: 'common.retry' })).toBeTruthy();
+});
+
+test('an old notification page finally cannot clear a new page spinner after signup refresh', async () => {
+  mockDomain = 'circle';
+  const old = deferred<Awaited<ReturnType<typeof fetchNotificationsPage>>>();
+  const current = deferred<Awaited<ReturnType<typeof fetchNotificationsPage>>>();
+  jest.mocked(fetchNotificationsPage)
+    .mockResolvedValueOnce({ items: [], nextCursor: 'old-cursor' })
+    .mockReturnValueOnce(old.promise)
+    .mockResolvedValueOnce({ items: [], nextCursor: 'fresh-cursor' })
+    .mockReturnValueOnce(current.promise);
+  render(<NotificationCenterScreen />);
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.press(screen.getByTestId('list-end'));
+  fireEvent.press(screen.getByTestId('signup-tab'));
+  fireEvent.press(screen.getByTestId('list-refresh'));
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.press(screen.getByTestId('notifications-tab'));
+  fireEvent.press(screen.getByTestId('list-end'));
+  expect(fetchNotificationsPage).toHaveBeenLastCalledWith('fresh-cursor', 'circle');
+  expect(screen.UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
+  await act(async () => { old.resolve({ items: [notification('stale-page', 'CIRCLE_POST_PUBLISHED')], nextCursor: null }); });
+  expect(screen.UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
+  expect(mockAppendPage).not.toHaveBeenCalled();
+  await act(async () => { current.resolve({ items: [notification('current-page', 'CIRCLE_POST_PUBLISHED')], nextCursor: null }); });
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  expect(screen.getByText('current-page')).toBeTruthy();
+  expect(screen.queryByText('stale-page')).toBeNull();
+});
+
 test('refresh invalidates an older pending page instead of appending it to fresh data', async () => {
   let resolve!: (value: Awaited<ReturnType<typeof fetchNotificationsPage>>) => void;
   jest.mocked(fetchNotificationsPage).mockResolvedValueOnce({ items: [], nextCursor: 'old' })
@@ -121,8 +202,8 @@ test('failed refresh keeps the cached cursor usable for the next page', async ()
   expect(fetchNotificationsPage).toHaveBeenLastCalledWith('cached-cursor', 'moments');
 });
 
-function notification(id: string): NotificationItem {
-  return { id, type: 'TRACE_LIKE', content: id, read: false, createdAt: '2026-10-06T10:00:00Z', fromUser: null, fromTrace: null, fromReply: null, fromCircle: null, fromCirclePost: null, fromInvitation: null };
+function notification(id: string, type: NotificationItem['type'] = 'TRACE_LIKE'): NotificationItem {
+  return { id, type, content: id, read: false, createdAt: '2026-10-06T10:00:00Z', fromUser: null, fromTrace: null, fromReply: null, fromCircle: null, fromCirclePost: null, fromInvitation: null };
 }
 
 function post(id: string): MyCirclePost {
