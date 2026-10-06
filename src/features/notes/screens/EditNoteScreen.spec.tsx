@@ -226,6 +226,8 @@ function pressComposer(kind: 'title' | 'text' | 'image' | 'video' | 'location') 
   }
 }
 
+// The first editor interaction pays the cold-cache cost of loading the rich
+// editor and composer modules; keep that cost out of Jest's default 5s budget.
 test('allows repeated text blocks and reorders each instance independently', async () => {
   render(<EditNoteScreen />);
 
@@ -249,7 +251,7 @@ test('allows repeated text blocks and reorders each instance independently', asy
     { id: 'text-1', kind: 'text' },
     { id: 'text-2', kind: 'text' },
   ]);
-});
+}, 20_000);
 
 test('only adds singleton composer blocks once', async () => {
   render(<EditNoteScreen />);
