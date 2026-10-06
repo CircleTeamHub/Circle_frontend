@@ -2466,6 +2466,11 @@
     "title": "添加好友"
   },
   "notes": {
+    "accessibility": {
+      "playRecording": "播放录音",
+      "pauseRecording": "暂停录音",
+      "viewImage": "查看图片"
+    },
     "actions": {
       "new": "新建",
       "qrCode": "二维码",
@@ -2592,6 +2597,11 @@
       "audioRecording": "录音中，点击停止",
       "waitForMediaTitle": "请先完成当前操作",
       "waitForMediaMessage": "请先结束录音或等待上传、保存完成，再返回。",
+      "pendingSubmitMessage": "保存结果尚未确认，编辑已暂停。请点击「重试」确认原提交；返回会保留内容，之后可从草稿箱继续重试。",
+      "pendingSubmitStorageFailed": "无法在本机保留提交内容，尚未发送。请检查设备存储空间后重试。",
+      "pendingSubmitConflict": "服务器已有不同的笔记内容，本机内容仍保留在草稿箱。请查看已保存笔记，再决定如何合并；本次不会删除草稿。",
+      "openCommittedNote": "查看已保存笔记",
+      "audioDuration": "{{seconds}} 秒",
       "audioPickerUnavailableTitle": "暂时无法选择音频",
       "audioPickerUnavailableMessage": "当前版本暂不支持选择音频，请更新应用后重试。",
       "sections": {

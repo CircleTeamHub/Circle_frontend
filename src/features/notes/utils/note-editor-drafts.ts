@@ -5,6 +5,7 @@ import type {
 } from '@/features/notes/types';
 import type { NoteComposerBlock } from '@/features/notes/utils/note-composer';
 import { isNoteRecordingId, removeNoteRecording, restoreNoteRecording } from '@/features/notes/utils/note-recording-storage';
+import type { PendingNoteSubmission } from '@/features/notes/utils/note-submission';
 
 const INDEX_VERSION = 1;
 const INDEX_PREFIX = 'circle-im-note-draft-index:v1:';
@@ -44,6 +45,7 @@ export type NoteEditorDraftRecord = {
   };
   createdAt: number;
   updatedAt: number;
+  pendingSubmission?: PendingNoteSubmission;
 };
 
 export type NoteLocalDraftSummary = {
@@ -279,6 +281,25 @@ export async function restoreLocalNoteDraftRecordings(
   })) };
 }
 
+/** Keep local edits/region ownership while refreshing private media previews. */
+export function refreshLocalNoteDraftMedia(
+  local: NoteEditorDraftRecord,
+  remote: NoteEditorDraftRecord,
+): NoteEditorDraftRecord {
+  const refresh = (items: EditorNoteMediaDraft[], remoteItems: EditorNoteMediaDraft[]) =>
+    items.map((item) => {
+      if (item.uploadStatus !== 'UPLOADED') return item;
+      const fresh = remoteItems.find((candidate) => candidate.objectKey === item.objectKey);
+      return fresh ? { ...item, url: fresh.url, posterUrl: fresh.posterUrl, previewUri: undefined } : item;
+    });
+  return {
+    ...local,
+    mediaItems: refresh(local.mediaItems, remote.mediaItems),
+    showcaseItems: refresh(local.showcaseItems, remote.showcaseItems),
+    audioItems: refresh(local.audioItems, remote.audioItems),
+  };
+}
+
 function recordingIds(record: NoteEditorDraftRecord | null): string[] {
   return record?.audioItems?.flatMap((item) => isNoteRecordingId(item.localRecordingId) ? [item.localRecordingId] : []) ?? [];
 }
@@ -312,7 +333,11 @@ export function saveLocalNoteDraft(
     throw new Error('Recording has not been stored');
   }
   const previous = loadLocalNoteDraft(userId, record.id);
-  const durableRecord = { ...record, audioItems: record.audioItems.map((item) =>
+  const durableRecord = { ...record,
+    // Picker Blob URLs belong to the mounted editor and are revoked on exit.
+    mediaItems: record.mediaItems.map((item) => ({ ...item, previewUri: item.previewUri?.startsWith('blob:') ? undefined : item.previewUri })),
+    showcaseItems: record.showcaseItems.map((item) => ({ ...item, previewUri: item.previewUri?.startsWith('blob:') ? undefined : item.previewUri })),
+    audioItems: record.audioItems.map((item) =>
     item.localRecordingId || item.clientId.startsWith('recording:')
       ? { ...item, previewUri: undefined,
         // Canonical uploaded URLs remain usable without local storage. Private

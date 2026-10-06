@@ -38,8 +38,10 @@ export async function ensureChatNotificationChannel(
     name: i18n.t('notifications.chatChannelName'),
     description: i18n.t('notifications.chatChannelDescription'),
     importance: notifications.AndroidImportance.HIGH,
-    // Leave sound unset so Expo resolves Android's system default URI. Passing
-    // the literal "default" here is treated as a custom resource filename by
+    // Android's new NotificationChannel already has the system default sound.
+    // Omission also preserves the user's settings on an existing channel;
+    // Android ignores sound changes and restores deleted channel settings.
+    // The literal "default" here is treated as a custom resource filename by
     // recent expo-notifications versions and produces a user-visible LogBox
     // error when the dev client does not bundle a file with that name.
     vibrationPattern: [0, 250, 250, 250],

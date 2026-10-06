@@ -4,6 +4,7 @@ import { useAudioPlayer, type AudioStatus } from 'expo-audio';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { toPlayableUri } from '@/features/chat/utils/media-uri';
 import {
@@ -35,6 +36,7 @@ function ActiveVideoBlock({
   aspectRatio,
   backgroundColor,
   onMediaError,
+  autoPlay = false,
 }: {
   url: string;
   caption: string;
@@ -42,12 +44,18 @@ function ActiveVideoBlock({
   aspectRatio: number;
   backgroundColor: string;
   onMediaError?: () => void;
+  autoPlay?: boolean;
 }) {
   // useVideoPlayer is called unconditionally — the empty-url guard lives in the
   // caller (BlockView), so this component always receives a valid source.
   const player = useVideoPlayer(url, (p) => {
     p.loop = false;
   });
+  useEffect(() => {
+    // Run after VideoView attaches: the web player cannot play before it has
+    // a mounted video element. Native players retain play intent while loading.
+    if (autoPlay) player.play();
+  }, [autoPlay, player]);
   useEventListener(player, 'statusChange', ({ status }) => {
     if (status === 'error') {
       onMediaError?.();
@@ -79,6 +87,7 @@ function VideoBlock(props: {
   onMediaError?: () => void;
   lazy?: boolean;
 }) {
+  const { t } = useTranslation();
   const {
     url,
     caption,
@@ -95,7 +104,7 @@ function VideoBlock(props: {
       <View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="播放视频"
+          accessibilityLabel={t('chat.detail.playVideo')}
           onPress={() => setActivated(true)}
           style={[s.mediaFrame, { backgroundColor }]}
         >
@@ -114,6 +123,7 @@ function VideoBlock(props: {
 
   return (
     <ActiveVideoBlock
+      autoPlay={lazy}
       url={url}
       caption={caption}
       captionColor={captionColor}
@@ -139,6 +149,7 @@ function ActiveAudioBlock({
   onMediaError?: () => void;
   autoPlay?: boolean;
 }) {
+  const { t } = useTranslation();
   const source = useMemo(() => ({ uri: toPlayableUri(url) }), [url]);
   const player = useAudioPlayer(source);
   const [playing, setPlaying] = useState(false);
@@ -205,7 +216,7 @@ function ActiveAudioBlock({
       style={[s.audioCard, { backgroundColor }]}
       onPress={handlePress}
       accessibilityRole="button"
-      accessibilityLabel={playing ? '暂停录音' : '播放录音'}
+      accessibilityLabel={t(playing ? 'notes.accessibility.pauseRecording' : 'notes.accessibility.playRecording')}
     >
       <View style={[s.audioIcon, { backgroundColor: foregroundColor }]}>
         <Text style={[s.audioIconText, { color: backgroundColor }]}>
@@ -232,6 +243,7 @@ function AudioBlock(props: {
   onMediaError?: () => void;
   lazy?: boolean;
 }) {
+  const { t } = useTranslation();
   const {
     url,
     durationMs,
@@ -252,7 +264,7 @@ function AudioBlock(props: {
         style={[s.audioCard, { backgroundColor }]}
         onPress={() => setActivated(true)}
         accessibilityRole="button"
-        accessibilityLabel="播放录音"
+        accessibilityLabel={t('notes.accessibility.playRecording')}
       >
         <View style={[s.audioIcon, { backgroundColor: foregroundColor }]}>
           <Text style={[s.audioIconText, { color: backgroundColor }]}>▶</Text>
@@ -388,6 +400,7 @@ const BlockView = memo(function BlockView({
   lazyMedia?: boolean;
 }) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const d = useMemo(
     () => ({
       text: colors.text,
@@ -467,7 +480,7 @@ const BlockView = memo(function BlockView({
         <View>
           <Pressable
             accessibilityRole="imagebutton"
-            accessibilityLabel={caption || '查看图片'}
+            accessibilityLabel={caption || t('notes.accessibility.viewImage')}
             onPress={() => onImagePress?.(url, objectKey)}
             disabled={!onImagePress}
             style={s.mediaFrame}

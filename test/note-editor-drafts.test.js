@@ -72,6 +72,31 @@ test('server draft payload strips local editor metadata from nested sections', (
   });
 });
 
+test('pending write metadata survives exit/restart locally and never enters the draft API DTO', () => {
+  const utils = loadDraftUtils({}, memoryStorage());
+  const pendingSubmission = { noteId: 'note', input: { title: 'Frozen', media: [], clientDraftID: 'd' } };
+  utils.saveLocalNoteDraft('owner', { ...draft('d'), pendingSubmission });
+  const restored = utils.loadLocalNoteDraft('owner', 'd');
+  assert.deepEqual(JSON.parse(JSON.stringify(restored.pendingSubmission)), pendingSubmission);
+  assert.equal(utils.loadLocalNoteDraft('other', 'd'), null);
+  assert.ok(!JSON.stringify(utils.localDraftSummaryToServerInput(restored)).includes('pendingSubmission'));
+});
+
+test('refreshing local media preserves local layout/ownership and pending recording while replacing dead previews', () => {
+  const utils = loadDraftUtils({}, memoryStorage());
+  const image = { type: 'IMAGE', objectKey: 'notes/photo', clientId: 'local-image', uploadStatus: 'UPLOADED', previewUri: 'blob:revoked', sortOrder: 0 };
+  const pending = audio('pending');
+  const local = { ...draft('d', [pending]), title: 'Local', mediaItems: [image], showcaseItems: [{ ...image, clientId: 'local-showcase' }], composerBlocks: [{ id: 'image-region', kind: 'image' }], mediaOwnerByClientId: { 'local-image': 'image-region' } };
+  const remote = { ...draft('d'), title: 'Remote', mediaItems: [{ ...image, url: 'https://fresh/image' }], showcaseItems: [{ ...image, url: 'https://fresh/showcase' }] };
+  const refreshed = utils.refreshLocalNoteDraftMedia(local, remote);
+  assert.equal(refreshed.title, 'Local'); assert.equal(refreshed.mediaItems[0].clientId, 'local-image');
+  assert.equal(refreshed.mediaItems[0].previewUri, undefined); assert.equal(refreshed.mediaItems[0].url, 'https://fresh/image');
+  assert.equal(refreshed.showcaseItems[0].url, 'https://fresh/showcase');
+  assert.equal(refreshed.audioItems[0], pending); assert.equal(refreshed.composerBlocks, local.composerBlocks); assert.equal(refreshed.mediaOwnerByClientId, local.mediaOwnerByClientId);
+  utils.saveLocalNoteDraft('owner', local);
+  assert.ok(!JSON.stringify(utils.loadLocalNoteDraft('owner', 'd')).includes('blob:revoked'));
+});
+
 function draft(id, audioItems = [], updatedAt = 0) {
   return { version: 1, id, noteId: null, title: '', content: '', contentJson: [], sections: {}, groupIds: [], mediaKeys: [],
     composerBlocks: [], textBlocksById: {}, mediaItems: [], showcaseItems: [], audioItems, mediaOwnerByClientId: {}, contactItems: [], groupCardItems: [],

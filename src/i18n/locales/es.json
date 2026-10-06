@@ -892,6 +892,11 @@
     "mutedA11y": "Silenciado"
   },
   "notes": {
+    "accessibility": {
+      "playRecording": "Reproducir grabación",
+      "pauseRecording": "Pausar grabación",
+      "viewImage": "Ver imagen"
+    },
     "actions": {
       "new": "Nueva",
       "qrCode": "Código QR",
@@ -1020,6 +1025,11 @@
       "audioRecording": "Grabando, toca para detener",
       "waitForMediaTitle": "Termina la acción actual primero",
       "waitForMediaMessage": "Detén la grabación o espera a que termine la carga o el guardado antes de volver.",
+      "pendingSubmitMessage": "El resultado del guardado no está confirmado. La edición está pausada. Reintenta el guardado original o vuelve atrás para conservarlo en Borradores y reintentar después.",
+      "pendingSubmitStorageFailed": "No se pudo conservar el contenido en este dispositivo y no se ha enviado. Comprueba el espacio disponible y reintenta.",
+      "pendingSubmitConflict": "El servidor tiene un contenido diferente. Tu contenido local sigue en Borradores. Consulta la nota guardada antes de decidir cómo combinarlos; este borrador se conservará.",
+      "openCommittedNote": "Ver nota guardada",
+      "audioDuration": "{{seconds}} s",
       "audioPickerUnavailableTitle": "Selección de audio no disponible",
       "audioPickerUnavailableMessage": "La selección de audio no está disponible en esta versión. Actualiza la aplicación e inténtalo de nuevo.",
       "sections": {

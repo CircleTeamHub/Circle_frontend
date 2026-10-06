@@ -136,10 +136,13 @@ import {
   removeUnreferencedLocalNoteRecordings,
   saveLocalNoteDraft,
   restoreLocalNoteDraftRecordings,
+  refreshLocalNoteDraftMedia,
   type NoteEditorDraftRecord,
 } from '@/features/notes/utils/note-editor-drafts';
 import { persistNoteRecording } from '@/features/notes/utils/note-recording-storage';
 import { stopNoteRecorder } from '@/features/notes/utils/note-recorder-lifecycle';
+import { createPendingNoteSubmission, isDefinitiveNoteSubmissionFailure, noteSubmissionMatchesResult, type PendingNoteSubmission } from '@/features/notes/utils/note-submission';
+import { createNoteDraftSaveQueue } from '@/features/notes/utils/note-draft-save-queue';
 import { getApiErrorMessage } from '@/services/api/errors';
 import {
   requestUploadPresign,
@@ -458,6 +461,10 @@ export default function EditNoteScreen() {
   const draftRouteKey = `${currentUser?.id ?? 'anonymous'}:${sessionEpoch}:${id ?? 'new'}:${editorDraftId}`;
   const draftRouteKeyRef = useRef(draftRouteKey);
   draftRouteKeyRef.current = draftRouteKey;
+  // A queue belongs to one account/route lifecycle, including its debounce.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const draftRemoteQueue = useMemo(() => createNoteDraftSaveQueue(), [draftRouteKey]);
+  useEffect(() => () => draftRemoteQueue.cancel(), [draftRemoteQueue]);
 
   const [title, setTitle] = useState('');
   const titleInputRef = useRef<TextInput>(null);
@@ -472,11 +479,15 @@ export default function EditNoteScreen() {
   const [groupCreateOpen, setGroupCreateOpen] = useState(false);
   const [groupCreateName, setGroupCreateName] = useState('');
   const [groupCreating, setGroupCreating] = useState(false);
+  const groupCreateRequestRef = useRef(0);
   const groupCreateInputRef = useRef<TextInput>(null);
   // 编辑时必须原样回传：后端 PATCH 对缺省 pinned 按 false 处理，
   // 不带的话「编辑一篇置顶笔记」会静默取消置顶。
   const pinnedRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingSubmission, setPendingSubmission] = useState<PendingNoteSubmission | null>(null);
+  const pendingSubmissionRef = useRef<PendingNoteSubmission | null>(null);
+  const isEditingLocked = isSubmitting || pendingSubmission !== null;
   const [loading, setLoading] = useState(isEdit);
   const [loadedNoteId, setLoadedNoteId] = useState<string | null>(null);
   const [settledRouteKey, setSettledRouteKey] = useState<string | null>(null);
@@ -600,7 +611,7 @@ export default function EditNoteScreen() {
     (state) => state.consumePickedLocation,
   );
   const isDraftLoading = Boolean(currentUser?.id && draftHydratedKey !== draftRouteKey);
-  const isRouteDataReady = (!isEdit || loadedNoteId === id) && !isDraftLoading;
+  const isRouteDataReady = (!isEdit || loadedNoteId === id || pendingSubmission?.noteId === id) && !isDraftLoading;
 
   useEffect(() => {
     if (!isRouteDataReady || !currentUser?.id) return;
@@ -659,7 +670,7 @@ export default function EditNoteScreen() {
 
   const finishComposerDrag = useCallback(() => {
     const meta = composerDragMetaRef.current;
-    if (meta) {
+    if (meta && !pendingSubmissionRef.current && !saveInFlightRef.current) {
       const currentBlocks = composerBlocksRef.current;
       const currentIndex = currentBlocks.findIndex((block) => block.id === meta.blockId);
       if (currentIndex >= 0 && meta.activeIndex !== currentIndex) {
@@ -691,6 +702,7 @@ export default function EditNoteScreen() {
         onMoveShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponderCapture: () => true,
         onPanResponderGrant: () => {
+          if (pendingSubmissionRef.current || saveInFlightRef.current) return;
           const currentBlocks = composerBlocksRef.current;
           const startIndex = currentBlocks.findIndex((block) => block.id === blockId);
           if (startIndex < 0) return;
@@ -873,6 +885,7 @@ export default function EditNoteScreen() {
       },
       createdAt: Date.parse(createdAtIso) || Date.now(),
       updatedAt: Date.now(),
+      pendingSubmission: pendingSubmissionRef.current ?? undefined,
     };
   }, [
     audioItems,
@@ -903,11 +916,18 @@ export default function EditNoteScreen() {
   useEffect(() => {
     const routeGeneration = ++saveGenerationRef.current;
     saveInFlightRef.current = false;
+    groupCreateRequestRef.current += 1;
+    setGroupCreating(false);
+    setGroupCreateOpen(false);
+    setGroupCreateName('');
     navigationRequestedRef.current = false;
     draftHydratedRef.current = false;
     setIsSubmitting(false);
+    pendingSubmissionRef.current = null;
+    setPendingSubmission(null);
     setNavigating(false);
     return () => {
+      groupCreateRequestRef.current += 1;
       if (saveGenerationRef.current === routeGeneration) {
         saveGenerationRef.current += 1;
       }
@@ -937,10 +957,11 @@ export default function EditNoteScreen() {
         if (!cancelled) setAvailableGroups([]);
       });
 
-    if (!isEdit || !id) {
+    const resumePending = currentUser?.id && loadLocalNoteDraft(currentUser.id, editorDraftId)?.pendingSubmission;
+    if (!isEdit || !id || resumePending) {
       draftHydratedRef.current = false;
       setDraftHydratedKey(null);
-      const emptyFingerprint = draftFingerprint(emptyDraftRecord(editorDraftId, null));
+      const emptyFingerprint = draftFingerprint(emptyDraftRecord(editorDraftId, id ?? null));
       baselineFingerprintRef.current = emptyFingerprint;
       draftPersistedFingerprintRef.current = emptyFingerprint;
       setSettledRouteKey(null);
@@ -948,7 +969,7 @@ export default function EditNoteScreen() {
       textBlocksByIdRef.current = {};
       textStatsStore.reset();
       setGroupSheetVisible(false);
-      setLoadedNoteId(null);
+      setLoadedNoteId(resumePending ? id ?? null : null);
       setTitle('');
       setSelectedGroupIds([]);
       pickerPreviewDisposerRef.current.disposeAll();
@@ -1186,7 +1207,7 @@ export default function EditNoteScreen() {
     // t 刻意不在依赖里：切一次语言就会让这个 effect 重跑，setTitle('')、
     // setMediaItems([]) 再重新拉服务端版本 —— 作者没保存的编辑当场消失。effect
     // 里用到 t 的只有一条失败弹窗文案，走 tRef 取最新的即可。
-  }, [draftRouteKey, editorDraftId, id, isEdit, textStatsStore]);
+  }, [currentUser?.id, draftRouteKey, editorDraftId, id, isEdit, textStatsStore]);
 
   useEffect(() => {
     if (!editorMounted || settledRouteKey !== draftRouteKey || draftHydratedKey === draftRouteKey) {
@@ -1198,19 +1219,13 @@ export default function EditNoteScreen() {
       let record = loadLocalNoteDraft(currentUser.id, editorDraftId);
       try {
         // Generated IDs start a new edit; only an explicit resume can exist remotely.
-        if (typeof routeDraftId === 'string' && routeDraftId.trim()) {
+        if (!record?.pendingSubmission && typeof routeDraftId === 'string' && routeDraftId.trim()) {
           const remote = await fetchNoteDraft(editorDraftId);
           const remoteRecord = draftRecordFromServer(remote, editorDraftId);
-          if (!record || (remoteRecord.updatedAt > record.updatedAt && !record.audioItems.some((item) => item.uploadStatus !== 'UPLOADED'))) {
+          if (!record || (!record.pendingSubmission && remoteRecord.updatedAt > record.updatedAt && !record.audioItems.some((item) => item.uploadStatus !== 'UPLOADED'))) {
             record = remoteRecord;
           } else {
-            // Uploaded recordings survive without a local copy. Refresh their
-            // private preview URL without replacing newer local content.
-            record = { ...record, audioItems: record.audioItems.map((item) => {
-              const remoteAudio = remoteRecord.audioItems.find((audio) => audio.objectKey === item.objectKey);
-              return item.uploadStatus === 'UPLOADED' && item.clientId.startsWith('recording:') && remoteAudio
-                ? { ...item, url: remoteAudio.url } : item;
-            }) };
+            record = refreshLocalNoteDraftMedia(record, remoteRecord);
           }
         }
       } catch {
@@ -1226,6 +1241,8 @@ export default function EditNoteScreen() {
         return;
       }
       if (record) {
+        pendingSubmissionRef.current = record.pendingSubmission ?? null;
+        setPendingSubmission(record.pendingSubmission ?? null);
         if (record.composerBlocks.length) {
           record = { ...record, composerBlocks: normalizeNoteComposerBlocks(record.composerBlocks, null, false) };
         }
@@ -1287,11 +1304,16 @@ export default function EditNoteScreen() {
     removeUnreferencedLocalNoteRecordings(currentUser?.id, audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []), editorDraftId);
   }, [audioItems, currentUser?.id, editorDraftId]);
 
-  const persistDraft = useCallback(async (): Promise<boolean> => {
+  const persistDraft = useCallback(async (flush = false): Promise<boolean> => {
     const auth = useAuthStore.getState();
     if (!currentUser?.id || auth.user?.id !== currentUser.id || auth.sessionEpoch !== sessionEpoch ||
       !draftHydratedRef.current || navigationRequestedRef.current || draftRouteKeyRef.current !== draftRouteKey) return false;
     let record = buildCurrentDraftRecord();
+    if (record.pendingSubmission) {
+      // The server may already have consumed this draft. Keep the recovery
+      // snapshot locally; never overwrite it with a subsequent draft PUT.
+      try { saveLocalNoteDraft(currentUser.id, record); return true; } catch { return false; }
+    }
     const initialFingerprint = draftFingerprint(record);
     if (!hasUndurableRecording && baselineFingerprintRef.current === initialFingerprint && draftPersistedFingerprintRef.current === initialFingerprint) return true;
     const writeVersion = ++draftWriteVersionRef.current;
@@ -1338,24 +1360,26 @@ export default function EditNoteScreen() {
         return true;
       } catch { return false; }
     };
-    // Local snapshots must not wait for a slow server request. Only the remote
-    // writes are serialized; deferred copies are fenced by account and route.
-    const localSave = prepareAndSaveLocal();
-    const pending = draftSavePromiseRef.current.catch(() => false).then(async () => {
-      const localSaved = await localSave;
-      if (!isCurrentSession() || navigationRequestedRef.current) return localSaved;
+    // Local snapshots remain fast; remote writes keep only the latest queued
+    // snapshot. Deferred copies are fenced by account and route.
+    const localSaved = await prepareAndSaveLocal();
+    if (!isCurrentSession() || navigationRequestedRef.current || record.pendingSubmission) return localSaved;
+    const pending = draftRemoteQueue.schedule(async () => {
+      if (!isCurrentSession() || navigationRequestedRef.current || pendingSubmissionRef.current) return false;
       const hasLocalRecording = record.audioItems.some((item) => item.uploadStatus !== 'UPLOADED');
       try {
         await saveNoteDraft(editorDraftId, localDraftSummaryToServerInput(record));
         if (!hasLocalRecording) markPersisted(draftFingerprint(record));
-        return localSaved || !hasLocalRecording;
+        return !hasLocalRecording;
       } catch {
-        return localSaved;
+        return false;
       }
     });
-    draftSavePromiseRef.current = pending;
-    return pending;
-  }, [buildCurrentDraftRecord, currentUser?.id, sessionEpoch, editorDraftId, draftRouteKey, hasUndurableRecording]);
+    const outcome = pending.then((remoteSaved) => localSaved || remoteSaved);
+    draftSavePromiseRef.current = outcome;
+    if (flush) await draftRemoteQueue.flush();
+    return outcome;
+  }, [buildCurrentDraftRecord, currentUser?.id, sessionEpoch, editorDraftId, draftRouteKey, draftRemoteQueue, hasUndurableRecording]);
   const persistDraftRef = useRef(persistDraft);
   persistDraftRef.current = persistDraft;
 
@@ -1378,14 +1402,14 @@ export default function EditNoteScreen() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background' || nextState === 'inactive') {
-        void persistDraftRef.current();
+        void persistDraftRef.current(true);
       }
     });
     return () => {
       subscription.remove();
       if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
       if (draftTextSaveTimerRef.current) clearTimeout(draftTextSaveTimerRef.current);
-      void persistDraftRef.current();
+      void persistDraftRef.current(true);
     };
   }, []);
 
@@ -1418,14 +1442,32 @@ export default function EditNoteScreen() {
         );
         return;
       }
+      const saveAndExit = () => {
+        saveInFlightRef.current = true;
+        setIsSubmitting(true);
+        setTextBlocksById({ ...textBlocksByIdRef.current });
+        void persistDraft(true).then((saved) => {
+          if (!isCurrentEditor()) return;
+          if (saved) completeNavigation(action);
+          else {
+            saveInFlightRef.current = false;
+            setIsSubmitting(false);
+            Alert.alert(t('common.errorOccurred'), t('notes.drafts.saveFailed'));
+          }
+        });
+      };
+      if (pendingSubmissionRef.current) {
+        saveAndExit();
+        return;
+      }
       const currentFingerprint = draftFingerprint(buildCurrentDraftRecord());
       const dirtyNow = hasUndurableRecording || (
         draftHydratedRef.current &&
         baselineFingerprintRef.current != null &&
-        baselineFingerprintRef.current !== currentFingerprint &&
         draftPersistedFingerprintRef.current !== currentFingerprint);
       if (!dirtyNow) {
-        completeNavigation(action);
+        if (currentUser?.id) saveAndExit();
+        else completeNavigation(action);
         return;
       }
       Alert.alert(
@@ -1453,11 +1495,7 @@ export default function EditNoteScreen() {
             text: t('notes.drafts.save', { defaultValue: '保存到草稿箱' }),
             onPress: () => {
               if (!isCurrentEditor()) return;
-              void persistDraft().then((saved) => {
-                if (!isCurrentEditor()) return;
-                if (saved) completeNavigation(action);
-                else Alert.alert(t('common.errorOccurred'), t('notes.drafts.saveFailed'));
-              });
+              saveAndExit();
             },
           },
         ],
@@ -1488,7 +1526,7 @@ export default function EditNoteScreen() {
     useCallback(() => {
       resetUploadOwnership();
       const picked = consumePickedLocation();
-      if (picked) {
+      if (picked && !pendingSubmissionRef.current && !saveInFlightRef.current) {
         setLocationDraft({
           title: picked.title,
           address: picked.address,
@@ -1505,6 +1543,7 @@ export default function EditNoteScreen() {
   );
 
   const handleContentChange = useCallback((blockId: string, newBlocks: Record<string, unknown>[]) => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
     const nextBlocks = getTextOnlyBlocks(newBlocks);
     textBlocksByIdRef.current = {
       ...textBlocksByIdRef.current,
@@ -1528,7 +1567,7 @@ export default function EditNoteScreen() {
       kind: SectionUploadKind;
       blockId?: string;
     }) => {
-      if (!isRouteDataReady || uploadInFlightRef.current) return;
+      if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current) return;
       uploadInFlightRef.current = true;
       const operationToken = uploadOperationGuardRef.current.begin();
       // 结果能否落库只认这一条：批次开始时编辑的是哪一篇笔记。
@@ -1744,6 +1783,7 @@ export default function EditNoteScreen() {
   );
 
   const handleRemoveSectionMedia = useCallback((target: SectionMediaTarget, clientId: string) => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
     const removeByClientId = (items: EditorNoteMediaDraft[]) =>
       items.filter((item) => {
         if (item.clientId === clientId) pickerPreviewDisposerRef.current.dispose(item.previewUri);
@@ -1764,7 +1804,7 @@ export default function EditNoteScreen() {
   }, []);
 
   const handleAddAudioFile = useCallback(async (blockId?: string) => {
-    if (!isRouteDataReady || uploadInFlightRef.current || recordingAudioRef.current) return;
+    if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current || recordingAudioRef.current) return;
     uploadInFlightRef.current = true;
     const operationToken = uploadOperationGuardRef.current.begin();
     const batchNoteKey = editedNoteKeyRef.current;
@@ -1955,7 +1995,7 @@ export default function EditNoteScreen() {
   }, [t]);
 
   const retryRecordedAudio = useCallback(async (item: EditorNoteMediaDraft) => {
-    if (!isRouteDataReady || uploadInFlightRef.current || recordingAudioRef.current) return;
+    if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current || recordingAudioRef.current) return;
     uploadInFlightRef.current = true;
     const token = uploadOperationGuardRef.current.begin();
     setUploadingSection('audio');
@@ -2034,7 +2074,7 @@ export default function EditNoteScreen() {
   }, [currentUser?.id, discardRecordingOutput, noteRecorder, recordingAudioStartedAt, t, uploadRecordedAudio]);
 
   const toggleNoteRecording = useCallback(async (blockId?: string) => {
-    if (!isRouteDataReady || uploadingSection !== null || uploadInFlightRef.current) return;
+    if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadingSection !== null || uploadInFlightRef.current) return;
     if (recordingAudioRef.current) {
       await stopNoteRecording();
       return;
@@ -2102,7 +2142,7 @@ export default function EditNoteScreen() {
 
 
   const openCardPicker = useCallback(async (kind: CardPickerKind) => {
-    if (!isRouteDataReady || recordingAudioRef.current) return;
+    if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || recordingAudioRef.current) return;
     const requestId = ++cardPickerRequestRef.current;
     const accountId = currentUser?.id ?? null;
     cardPickerSessionRef.current = { userId: accountId, epoch: sessionEpoch };
@@ -2171,6 +2211,7 @@ export default function EditNoteScreen() {
   }, []);
 
   const confirmCardPicker = useCallback(() => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
     const auth = useAuthStore.getState();
     const pickerSession = cardPickerSessionRef.current;
     if (!cardPickerKind || !pickerSession || auth.user?.id !== pickerSession.userId || auth.sessionEpoch !== pickerSession.epoch) return;
@@ -2197,7 +2238,7 @@ export default function EditNoteScreen() {
   }, [cardPickerKind, circles, contactPickerItems, contactItems, groupCardItems, closeCardPicker, selectedCardIds]);
 
   const handleOpenLocationPicker = useCallback(() => {
-    if (!isRouteDataReady || uploadInFlightRef.current) return;
+    if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current) return;
     router.push({
       pathname: '/(tabs)/profile/notes/location-picker',
       params: {
@@ -2214,12 +2255,14 @@ export default function EditNoteScreen() {
   ]);
 
   const handleClearLocation = useCallback(() => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
     setLocationDraft({ title: '', address: '', latitude: null, longitude: null });
     // 清掉位置也把地图收回去：下一个位置要重新征得同意。
     setMapRevealed(false);
   }, []);
 
   const handleRemoveComposerBlock = useCallback((block: NoteComposerBlock) => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
     const currentBlocks = composerBlocksRef.current;
     const remainingBlocks = currentBlocks.filter((item) => item.id !== block.id);
     composerBlocksRef.current = remainingBlocks;
@@ -2298,6 +2341,7 @@ export default function EditNoteScreen() {
   }, [audioItems, currentUser?.id, discardRecordingOutput, editorDraftId, handleClearLocation, mediaItems, noteRecorder, showcaseItems, textStatsStore]);
 
   const removeRecordedAudio = useCallback((item: EditorNoteMediaDraft) => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
     pickerPreviewDisposerRef.current.dispose(item.previewUri);
     if (item.localRecordingId) removeUnreferencedLocalNoteRecordings(currentUser?.id, [item.localRecordingId], editorDraftId);
     setAudioItems((current) => current.filter((audio) => audio.clientId !== item.clientId));
@@ -2308,6 +2352,7 @@ export default function EditNoteScreen() {
   }, []);
 
   const addComposerBlock = useCallback((kind: NoteComposerBlockKind) => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
     // 标题、位置、名片和群名片在笔记模型里各只有一个值；文字、媒体等
     // 其余类型则是可重复的独立区块。工具栏只负责插入区块，区块内的
     // 操作按钮才负责打开选择器、上传或开始录音，避免点击工具栏就跳出面板。
@@ -2337,6 +2382,7 @@ export default function EditNoteScreen() {
   }, [promptDraftExit]);
 
   const toggleGroup = useCallback((groupId: string) => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
     setSelectedGroupIds((prev) =>
       prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId],
     );
@@ -2365,11 +2411,20 @@ export default function EditNoteScreen() {
   }, []);
 
   const handleCreateGroup = useCallback(async () => {
+    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
     const name = groupCreateName.trim();
     if (!name || groupCreating) return;
     setGroupCreating(true);
+    const request = ++groupCreateRequestRef.current;
+    const ownerId = currentUser?.id;
+    const isCurrentRequest = () => {
+      const auth = useAuthStore.getState();
+      return request === groupCreateRequestRef.current && auth.user?.id === ownerId &&
+        auth.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey;
+    };
     try {
       const created = await createNoteGroup(name);
+      if (!isCurrentRequest() || pendingSubmissionRef.current || saveInFlightRef.current) return;
       setAvailableGroups((current) => (
         current.some((group) => group.id === created.id)
           ? current
@@ -2381,6 +2436,7 @@ export default function EditNoteScreen() {
       setGroupCreateName('');
       setGroupCreateOpen(false);
     } catch (error) {
+      if (!isCurrentRequest()) return;
       Alert.alert(
         t('notes.alerts.saveFailedTitle', { defaultValue: '保存失败' }),
         getApiErrorMessage(
@@ -2392,9 +2448,9 @@ export default function EditNoteScreen() {
       );
       reportHandledFailure('noteGroups', 'createFromNoteEditor', error);
     } finally {
-      setGroupCreating(false);
+      if (isCurrentRequest()) setGroupCreating(false);
     }
-  }, [groupCreateName, groupCreating, t]);
+  }, [currentUser?.id, draftRouteKey, groupCreateName, groupCreating, sessionEpoch, t]);
 
   const getTextError = useCallback((stats: NoteTextStats) => {
     switch (getNoteTextLimitKind(stats)) {
@@ -2419,6 +2475,7 @@ export default function EditNoteScreen() {
       loading ||
       !isRouteDataReady ||
       isSubmitting ||
+      groupCreating ||
       saveInFlightRef.current ||
       recordingAudioRef.current ||
       uploadInFlightRef.current ||
@@ -2465,6 +2522,8 @@ export default function EditNoteScreen() {
     saveInFlightRef.current = true;
     const saveGeneration = saveGenerationRef.current;
     setIsSubmitting(true);
+    let requestStarted = false;
+    const retryingPending = pendingSubmissionRef.current !== null;
     try {
       const plainText = extractPlainText(currentBlocks);
       const firstMediaBlockId = composerBlocks.find(
@@ -2538,29 +2597,62 @@ export default function EditNoteScreen() {
         media: legacyMedia,
         clientDraftID: editorDraftId,
       };
-      if (isEdit && id) {
-        // 不带 status —— 后端按现状保留，避免把「已下架」笔记编辑一次就重新上架；
-        // pinned 原样回传，防止编辑动作静默取消置顶。
-        await updateNote(id, { ...input, pinned: pinnedRef.current });
-      } else {
-        await createNote({ ...input, status: 'ACTIVE' });
-      }
+      const submission = pendingSubmissionRef.current ?? createPendingNoteSubmission(
+        isEdit && id ? { ...input, pinned: pinnedRef.current } : { ...input, status: 'ACTIVE' },
+        isEdit && id ? id : null,
+      );
+      // Persist before sending: an interrupted process must recover exactly
+      // this write, never a newer payload under the consumed idempotency key.
+      saveLocalNoteDraft(currentUser?.id, { ...buildCurrentDraftRecord(), pendingSubmission: submission });
+      draftRemoteQueue.cancel();
+      pendingSubmissionRef.current = submission;
+      setPendingSubmission(submission);
+      setTextBlocksById({ ...textBlocksByIdRef.current });
+      titleInputRef.current?.blur();
+      setGroupSheetVisible(false);
+      setSortMode(false);
+      setCardPickerKind(null);
+      cardPickerRequestRef.current += 1;
+      requestStarted = true;
+      const result = submission.noteId
+        ? await updateNote(submission.noteId, submission.input)
+        : await createNote(submission.input);
       if (saveGenerationRef.current !== saveGeneration) return;
+      if (!noteSubmissionMatchesResult(submission, result)) {
+        if (result && typeof result.id === 'string') {
+          const conflict = { ...submission, conflictingNoteId: result.id };
+          pendingSubmissionRef.current = conflict;
+          setPendingSubmission(conflict);
+          saveLocalNoteDraft(currentUser?.id, { ...buildCurrentDraftRecord(), pendingSubmission: conflict });
+        }
+        throw new Error('Note submission outcome differs from the saved snapshot');
+      }
       navigationRequestedRef.current = true;
       await draftSavePromiseRef.current.catch(() => undefined);
+      if (saveGenerationRef.current !== saveGeneration) return;
       removeLocalNoteDraft(currentUser?.id, editorDraftId);
       cleanupRecordingCopies();
       await deleteNoteDraft(editorDraftId).catch(() => undefined);
+      if (saveGenerationRef.current !== saveGeneration) return;
       completeNavigation(undefined, true);
     } catch (error) {
       if (saveGenerationRef.current !== saveGeneration) return;
+      if (requestStarted && !retryingPending && isDefinitiveNoteSubmissionFailure(error)) {
+        try {
+          saveLocalNoteDraft(currentUser?.id, { ...buildCurrentDraftRecord(), pendingSubmission: undefined });
+          pendingSubmissionRef.current = null;
+          setPendingSubmission(null);
+        } catch { /* Retain the recovery marker until it can be cleared durably. */ }
+      }
       saveInFlightRef.current = false;
       navigationRequestedRef.current = false;
       setIsSubmitting(false);
-      const fallback = t('notes.edit.saveFailedMessage', {
-        defaultValue: '保存失败，请稍后重试',
-      });
-      const message = getApiErrorMessage(error, fallback);
+      const fallback = requestStarted
+        ? t('notes.edit.saveFailedMessage', { defaultValue: '保存失败，请稍后重试' })
+        : t('notes.edit.pendingSubmitStorageFailed', { defaultValue: '无法在本机保留提交内容，尚未发送。请检查设备存储空间后重试。' });
+      const message = pendingSubmissionRef.current?.conflictingNoteId
+        ? t('notes.edit.pendingSubmitConflict', { defaultValue: '服务器已有不同的笔记内容，本机内容仍保留在草稿箱。请查看已保存笔记，再决定如何合并；本次不会删除草稿。' })
+        : requestStarted ? getApiErrorMessage(error, fallback) : fallback;
       Alert.alert(
         t('notes.edit.saveFailedTitle', { defaultValue: '保存失败' }),
         message,
@@ -2569,6 +2661,8 @@ export default function EditNoteScreen() {
     }
   }, [
     getTextError,
+    buildCurrentDraftRecord,
+    draftRemoteQueue,
     id,
     isEdit,
     isRouteDataReady,
@@ -2578,6 +2672,7 @@ export default function EditNoteScreen() {
     audioItems,
     contactItems,
     groupCardItems,
+    groupCreating,
     completeNavigation,
     cleanupRecordingCopies,
     currentUser?.id,
@@ -2695,6 +2790,7 @@ export default function EditNoteScreen() {
     loading ||
     !isRouteDataReady ||
     isSubmitting ||
+    groupCreating ||
     recordingAudioStartedAt !== null ||
     uploadingSection !== null ||
     !canSubmitNoteMedia(mediaItems) ||
@@ -2901,7 +2997,8 @@ export default function EditNoteScreen() {
               placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
               placeholderTextColor={colors.textSecondary}
               value={title}
-              onChangeText={setTitle}
+              editable={!isEditingLocked}
+              onChangeText={(value) => { if (!pendingSubmissionRef.current && !saveInFlightRef.current) setTitle(value); }}
               maxLength={MAX_NOTE_TITLE_LENGTH}
               returnKeyType="next"
             />
@@ -2916,6 +3013,7 @@ export default function EditNoteScreen() {
             <View style={s.groupSection}>
               <Pressable
                 style={[s.groupButton, d.groupButton]}
+                disabled={isEditingLocked}
                 onPress={() => {
                   setGroupCreateOpen(false);
                   setGroupCreateName('');
@@ -2962,9 +3060,11 @@ export default function EditNoteScreen() {
           <View style={[s.textEditorFrame, d.editorFrame]}>
             {editorMounted ? (
               <NoteBlockEditor
+                key={isEditingLocked ? 'locked' : 'editing'}
                 initialContent={textBlocksById[block.id] ?? null}
                 onContentChange={(newBlocks) => handleContentChange(block.id, newBlocks)}
                 mediaToolbarEnabled={false}
+                editable={!isEditingLocked}
               />
             ) : null}
           </View>
@@ -3098,7 +3198,7 @@ export default function EditNoteScreen() {
                     <Ionicons name="mic" size={18} color={colors.iconAccent} />
                     <Text style={[s.mediaMeta, d.mediaMeta, { flex: 1 }]}>
                       {typeof item.durationMs === 'number' && item.durationMs > 0
-                        ? `${Math.max(1, Math.round(item.durationMs / 1000))}&quot;`
+                        ? t('notes.edit.audioDuration', { defaultValue: '{{seconds}} 秒', seconds: Math.max(1, Math.round(item.durationMs / 1000)) })
                         : t('notes.edit.audioItem', { defaultValue: '音频' })}
                     </Text>
                     {item.uploadStatus !== 'UPLOADED' && item.previewUri ? (
@@ -3420,6 +3520,18 @@ export default function EditNoteScreen() {
     setPreviewImageViewerIndex(index);
     setPreviewImageViewerVisible(true);
   }, [previewData]);
+  const openCommittedNote = useCallback(async () => {
+    const noteId = pendingSubmissionRef.current?.conflictingNoteId;
+    if (!noteId || saveInFlightRef.current) return;
+    if (!await persistDraft()) {
+      Alert.alert(t('common.errorOccurred'), t('notes.drafts.saveFailed'));
+      return;
+    }
+    const auth = useAuthStore.getState();
+    if (draftRouteKeyRef.current === draftRouteKey && auth.user?.id === currentUser?.id && auth.sessionEpoch === sessionEpoch) {
+      router.push({ pathname: '/(tabs)/profile/notes/[id]', params: { id: noteId } } as never);
+    }
+  }, [currentUser?.id, draftRouteKey, persistDraft, router, sessionEpoch, t]);
 
   if (loading || isDraftLoading) {
     return (
@@ -3451,11 +3563,19 @@ export default function EditNoteScreen() {
           <Text style={[s.doneBtnText, d.doneBtnText]}>
             {isSubmitting
               ? t('notes.edit.saving', { defaultValue: '保存中...' })
-              : t('notes.edit.done', { defaultValue: '完成' })}
+              : pendingSubmission ? t('common.retry', { defaultValue: '重试' }) : t('notes.edit.done', { defaultValue: '完成' })}
           </Text>
         </Pressable>
       </View>
 
+      {pendingSubmission ? <Text accessibilityRole="alert" style={[s.sectionSubtitle, d.hintError]}>
+        {pendingSubmission.conflictingNoteId
+          ? t('notes.edit.pendingSubmitConflict', { defaultValue: '服务器已有不同的笔记内容，本机内容仍保留在草稿箱。请查看已保存笔记，再决定如何合并；本次不会删除草稿。' })
+          : t('notes.edit.pendingSubmitMessage', { defaultValue: '保存结果尚未确认，编辑已暂停。请点击「重试」确认原提交；返回会保留内容，之后可从草稿箱继续重试。' })}
+      </Text> : null}
+      {pendingSubmission?.conflictingNoteId ? <Pressable accessibilityRole="button" onPress={() => void openCommittedNote()} disabled={isSubmitting}>
+        <Text style={[s.sectionSubtitle, d.groupButtonText]}>{t('notes.edit.openCommittedNote', { defaultValue: '查看已保存笔记' })}</Text>
+      </Pressable> : null}
       <ScrollView
         ref={scrollRef}
         style={s.scroll}
@@ -3464,12 +3584,14 @@ export default function EditNoteScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-        <View key={FIXED_TITLE_BLOCK.id}>
-          {renderComposerSection(FIXED_TITLE_BLOCK, 0)}
+        <View pointerEvents={isEditingLocked ? 'none' : 'auto'}>
+          <View key={FIXED_TITLE_BLOCK.id}>
+            {renderComposerSection(FIXED_TITLE_BLOCK, 0)}
+          </View>
+          {editableComposerBlocks.map((block, index) => (
+            <View key={block.id}>{renderComposerSection(block, index)}</View>
+          ))}
         </View>
-        {editableComposerBlocks.map((block, index) => (
-          <View key={block.id}>{renderComposerSection(block, index)}</View>
-        ))}
       </ScrollView>
       <View
         style={[
@@ -3487,6 +3609,7 @@ export default function EditNoteScreen() {
               <Pressable
                 key={action.kind}
                 style={s.composerTool}
+                disabled={isEditingLocked}
                 onPress={() => addComposerBlock(action.kind)}
                 accessibilityRole="button"
                 accessibilityLabel={label}
@@ -3513,6 +3636,7 @@ export default function EditNoteScreen() {
         <View style={s.composerFooterActions}>
           <Pressable
             style={[s.composerFooterButton, d.composerSortButton]}
+            disabled={isEditingLocked}
             onPress={() => setSortMode(true)}
             accessibilityRole="button"
             accessibilityLabel={t('notes.edit.composer.sort', { defaultValue: '排序' })}

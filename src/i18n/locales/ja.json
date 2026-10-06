@@ -888,6 +888,11 @@
     "mutedA11y": "通知オフ"
   },
   "notes": {
+    "accessibility": {
+      "playRecording": "録音を再生",
+      "pauseRecording": "録音を一時停止",
+      "viewImage": "画像を見る"
+    },
     "actions": {
       "new": "新規",
       "qrCode": "QRコード",
@@ -1014,6 +1019,11 @@
       "audioRecording": "録音中、タップして停止",
       "waitForMediaTitle": "現在の操作を完了してください",
       "waitForMediaMessage": "録音を停止するか、アップロードまたは保存が完了してから戻ってください。",
+      "pendingSubmitMessage": "保存結果を確認できていないため、編集を一時停止しています。「再試行」で元の保存を確認するか、戻って下書きに残し、後で再試行してください。",
+      "pendingSubmitStorageFailed": "送信内容を端末に保存できなかったため、まだ送信していません。空き容量を確認して再試行してください。",
+      "pendingSubmitConflict": "サーバーのノート内容が異なります。端末の内容は下書きに残っています。保存済みノートを確認してから統合方法を決めてください。この下書きは削除しません。",
+      "openCommittedNote": "保存済みノートを見る",
+      "audioDuration": "{{seconds}} 秒",
       "audioPickerUnavailableTitle": "音声を選択できません",
       "audioPickerUnavailableMessage": "このアプリのバージョンでは音声選択を利用できません。アプリを更新してもう一度お試しください。",
       "sections": {

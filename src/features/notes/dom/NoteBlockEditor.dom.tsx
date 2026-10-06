@@ -50,6 +50,7 @@ interface Props {
   language?: 'zh' | 'en';
   toolbarLabels: NoteEditorToolbarLabels;
   mediaToolbarEnabled?: boolean;
+  editable?: boolean;
 }
 
 type ActiveType = 'paragraph' | 'heading' | 'bulletListItem';
@@ -81,6 +82,7 @@ export default function NoteBlockEditor({
   language = 'zh',
   toolbarLabels,
   mediaToolbarEnabled = true,
+  editable = true,
 }: Props) {
   const parsedInitial: PartialBlock[] | undefined = (() => {
     if (!initialContent) return undefined;
@@ -186,6 +188,7 @@ export default function NoteBlockEditor({
   }, [pendingInserts, editor, onInsertHandled]);
 
   function applyType(type: ActiveType) {
+    if (!editable) return;
     const pos = editor.getTextCursorPosition();
     if (!pos?.block) return;
 
@@ -248,7 +251,7 @@ export default function NoteBlockEditor({
       }}>
         <BlockNoteViewRaw
           editor={editor}
-          editable
+          editable={editable}
           // The DOM editor supplies its own toolbar. BlockNoteViewRaw from
           // @blocknote/react does not provide a theme package's
           // ComponentsContext, so every built-in controller must stay off;
@@ -269,6 +272,7 @@ export default function NoteBlockEditor({
       {/* Custom bottom toolbar */}
       <div
         style={{
+          pointerEvents: editable ? 'auto' : 'none',
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
@@ -283,6 +287,7 @@ export default function NoteBlockEditor({
           const isActive = activeType === item.type;
           return (
             <button
+              disabled={!editable}
               key={item.type}
               onClick={() => applyType(item.type)}
               title={item.title}
@@ -311,6 +316,7 @@ export default function NoteBlockEditor({
                 fallback (a '图' label showed as tofu on some devices). */}
             <button
               onClick={onImageRequest}
+              disabled={!editable}
               title={toolbarLabels.imageTitle}
               aria-label={toolbarLabels.imageTitle}
               style={{
@@ -345,6 +351,7 @@ export default function NoteBlockEditor({
             {/* Video — triggers native picker, mirrors the image flow. */}
             <button
               onClick={onVideoRequest}
+              disabled={!editable}
               title={toolbarLabels.videoTitle}
               aria-label={toolbarLabels.videoTitle}
               style={{
@@ -379,7 +386,9 @@ export default function NoteBlockEditor({
 
         {/* Code */}
         <button
+          disabled={!editable}
           onClick={() => {
+            if (!editable) return;
             const pos = editor.getTextCursorPosition();
             if (pos?.block) {
               editor.updateBlock(pos.block, { type: 'codeBlock' } as PartialBlock);

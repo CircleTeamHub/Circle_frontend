@@ -2472,6 +2472,11 @@
     "title": "Add friend"
   },
   "notes": {
+    "accessibility": {
+      "playRecording": "Play recording",
+      "pauseRecording": "Pause recording",
+      "viewImage": "View image"
+    },
     "actions": {
       "new": "New",
       "qrCode": "QR code",
@@ -2600,6 +2605,11 @@
       "audioRecording": "Recording, tap to stop",
       "waitForMediaTitle": "Finish the current action first",
       "waitForMediaMessage": "Stop recording or wait for the upload or save to finish before leaving.",
+      "pendingSubmitMessage": "The save result is not confirmed. Editing is paused. Retry the original save, or go back to keep it in Drafts and retry later.",
+      "pendingSubmitStorageFailed": "The submission could not be kept on this device and has not been sent. Check available storage and retry.",
+      "pendingSubmitConflict": "The server has different note content. Your local content is still in Drafts. View the saved note before deciding how to combine them; this draft will be kept.",
+      "openCommittedNote": "View saved note",
+      "audioDuration": "{{seconds}} s",
       "audioPickerUnavailableTitle": "Audio selection unavailable",
       "audioPickerUnavailableMessage": "Audio selection is not available in this app version. Update the app and try again.",
       "sections": {

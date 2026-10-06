@@ -264,3 +264,17 @@ test('presign 不返回 fileUrl 时，独立编辑器插入本地预览并只上
   expect(alert).not.toHaveBeenCalled();
   expect(mockReportHandledFailure).not.toHaveBeenCalled();
 });
+
+test('readonly mode reaches the DOM editor and ignores delayed bridge content callbacks', async () => {
+  const onChange = jest.fn();
+  const rendered = render(<NoteBlockEditor initialContent={null} onContentChange={onChange} />);
+  const writable = mockDomProps as unknown as { editable: boolean; onContentChange: (json: string) => void };
+  rendered.rerender(<NoteBlockEditor initialContent={null} onContentChange={onChange} editable={false} />);
+  expect((mockDomProps as unknown as { editable: boolean }).editable).toBe(false);
+  writable.onContentChange(JSON.stringify([{ type: 'paragraph', content: [] }]));
+  expect(onChange).not.toHaveBeenCalled();
+  rendered.rerender(<NoteBlockEditor initialContent={null} onContentChange={onChange} editable />);
+  (mockDomProps as unknown as { onContentChange: (json: string) => void }).onContentChange(JSON.stringify([{ type: 'paragraph', content: [] }]));
+  expect(onChange).toHaveBeenCalledTimes(1);
+  rendered.unmount();
+});
