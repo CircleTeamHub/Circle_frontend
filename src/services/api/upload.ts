@@ -28,12 +28,6 @@ function sanitizeUploadErrorForReport(error: unknown): Error {
   return safe;
 }
 
-/** 只提取对象存储 XML 的短错误码，不把对象 key、request id 或签名 URL带进日志。 */
-function storageErrorCode(body: unknown): string | null {
-  if (typeof body !== 'string') return null;
-  return body.match(/<Code>([A-Za-z0-9._-]{1,64})<\/Code>/)?.[1] ?? null;
-}
-
 export class StorageUploadError extends Error {
   constructor(message: string) {
     super(message);
@@ -41,12 +35,10 @@ export class StorageUploadError extends Error {
   }
 }
 
-function uploadStatusError(status: number, body?: unknown): Error {
-  const code = storageErrorCode(body);
+function uploadStatusError(_status: number, _body?: unknown): Error {
   return new StorageUploadError(
-    i18n.t('common.errors.uploadFailedWithStatus', {
-      status: code ? `${status}: ${code}` : status,
-      defaultValue: '上传失败 ({{status}})',
+    i18n.t('common.errors.uploadFailed', {
+      defaultValue: '上传失败，请稍后重试',
     }),
   );
 }

@@ -68,6 +68,7 @@
       "refreshResponseInvalid": "Couldn't refresh your session. Please sign in again.",
       "sessionChangedDuringRefresh": "Your account changed while refreshing the session. Please try again.",
       "uploadTimeout": "Upload timed out. Check your connection and try again.",
+      "uploadFailed": "Upload failed. Please try again later.",
       "uploadFailedWithStatus": "Upload failed ({{status}})"
     }
   },

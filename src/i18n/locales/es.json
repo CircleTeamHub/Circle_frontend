@@ -2794,6 +2794,7 @@
       "refreshResponseInvalid": "Respuesta de actualización no válida. Inicia sesión de nuevo.",
       "sessionChangedDuringRefresh": "La cuenta cambió mientras se actualizaba la sesión. Inténtalo de nuevo.",
       "uploadTimeout": "Se agotó el tiempo de la subida. Comprueba tu conexión e inténtalo de nuevo.",
+      "uploadFailed": "La subida falló. Inténtalo de nuevo más tarde.",
       "uploadFailedWithStatus": "La subida falló ({{status}})"
     }
   },
