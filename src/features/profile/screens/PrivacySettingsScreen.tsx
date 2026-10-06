@@ -90,7 +90,6 @@ const PERMISSION_OPTIONS: readonly PrivacyPermission[] = [
 const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐:0 = 关闭阅后即焚。
   messageSelfDestructSec: BURN_DURATION_OFF,
-  messageSelfDestructStartedAt: null,
   momentsVisibility: 'ALL',
   allowStrangerMessages: true,
   showPhone: false,
@@ -150,13 +149,10 @@ export default function PrivacySettingsScreen() {
         return;
       }
       setSettings(loaded);
+      // 服务端不下发全局阅后即焚的开启时间：store 在档位变化时记本机观察到的时刻。
       useChatStore
         .getState()
-        .setViewerSelfDestructSec(
-          loaded.messageSelfDestructSec,
-          undefined,
-          loaded.messageSelfDestructStartedAt,
-        );
+        .setViewerSelfDestructSec(loaded.messageSelfDestructSec);
       useChatStore
         .getState()
         .setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(loaded));
@@ -193,13 +189,10 @@ export default function PrivacySettingsScreen() {
         return;
       }
       setSettings(updated);
+      // 服务端不下发全局阅后即焚的开启时间：store 在档位变化时记本机观察到的时刻。
       useChatStore
         .getState()
-        .setViewerSelfDestructSec(
-          updated.messageSelfDestructSec,
-          undefined,
-          updated.messageSelfDestructStartedAt,
-        );
+        .setViewerSelfDestructSec(updated.messageSelfDestructSec);
       // 输入状态开关的门禁在 socket-manager 里读 chat store,这里保存后立刻同步。
       useChatStore
         .getState()

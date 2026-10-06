@@ -3,8 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +19,7 @@ import {
 import { reportGroup } from '@/services/api/groups';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const CATEGORY_OPTIONS: readonly {
@@ -161,10 +160,7 @@ export default function ReportFriendScreen() {
     submitting || !category || !description.trim();
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingContainer style={{ flex: 1 }}>
       <View
         style={[
           s.container,
@@ -284,7 +280,7 @@ export default function ReportFriendScreen() {
           </Pressable>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }
 

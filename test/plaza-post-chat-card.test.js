@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 const exists = (rel) => fs.existsSync(path.join(__dirname, '..', rel));
@@ -50,7 +51,7 @@ test('bubble exists and is rendered + taps to post detail', () => {
   );
   const barrel = read('src/features/chat/components/chat-bubble.tsx');
   assert.match(barrel, /PlazaPostCardBubble/);
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /case 'plaza-post-card':/);
   assert.match(screen, /getPlazaPostDetailHref\(/);
 });
@@ -64,7 +65,7 @@ test('pending-card store + chat consume + send card-then-text', () => {
   assert.match(store, /consumeFor/);
   assert.match(store, /conversationKey/);
 
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   // 获焦按会话 key consume，并预填草稿（不覆盖非空）。
   assert.match(screen, /consumePendingChatCard\(sourceID\)/);
   assert.match(screen, /setDraft\(\(prev\) => prev \|\| cardPending\.draftText\)/);

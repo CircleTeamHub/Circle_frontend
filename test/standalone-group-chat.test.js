@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 // 独立群聊(微信群):不挂圈子的 GROUP 会话。这组测试钉住「群 ≠ 圈子」的
 // 判别边界 —— 漏一处,独立群就会拿会话 id 去请求 /circle/:id(全体 404),
@@ -70,7 +71,7 @@ test('conversation mapper titles standalone groups by their own name', () => {
 });
 
 test('chat detail treats standalone groups as member-visible, not circle-gated', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /const isStandaloneGroup =/);
   // 独立群不请求圈子角色(sourceID 不是圈子 id)。
   assert.match(screen, /enabled: isGroupChat && !isTempChat && !isStandaloneGroup/);

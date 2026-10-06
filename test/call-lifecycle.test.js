@@ -254,3 +254,29 @@ test('GroupCallScreen fallback exits notify the backend before navigating back',
     'both fallback back buttons must use the backend-aware exit',
   );
 });
+
+// 结束原因由服务端状态机推导(NORMAL / ALL_LEFT / NO_ANSWER …),客户端自报的 reason
+// 服务端从不读取:请求体不再携带它(后端为已装机旧版本继续接受)。
+test('leaveCall posts without a client-supplied reason', () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), 'src/services/api/calls.ts'),
+    'utf8',
+  );
+  const leave = src.match(/export async function leaveCall[\s\S]*?\n}\n/);
+  assert.ok(leave, 'leaveCall not found');
+  assert.doesNotMatch(leave[0], /reason/);
+  assert.doesNotMatch(leave[0], /body:/);
+});
+
+// 服务端从来没有产生过 call.participant.missed(未接走 call.ended),livekitRoomName
+// 也已从通话 DTO 删除 —— 客户端不再声明、映射或处理它们。
+test('call contract no longer carries livekitRoomName or call.participant.missed', () => {
+  const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
+  assert.doesNotMatch(read('src/services/api/call-mappers.ts'), /livekitRoomName/);
+  assert.doesNotMatch(read('src/features/call/types.ts'), /livekitRoomName/);
+  assert.doesNotMatch(read('src/realtime/client.ts'), /call\.participant\.missed/);
+  assert.doesNotMatch(
+    read('src/features/call/store/use-call-store.ts'),
+    /handleCallParticipantMissed/,
+  );
+});

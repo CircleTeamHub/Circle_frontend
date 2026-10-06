@@ -31,6 +31,8 @@ import { Spacing, Typography } from '@/theme';
  */
 interface ImageViewerProps {
   images: string[];
+  /** 与 images 一一对应的缓存键(可缺省);签名地址会轮换的远端图片传存储 key。 */
+  cacheKeys?: (string | undefined)[];
   visible: boolean;
   initialIndex?: number;
   privacyMode?: 'standard' | 'ephemeral';
@@ -39,6 +41,7 @@ interface ImageViewerProps {
 
 export function ImageViewer({
   images,
+  cacheKeys,
   visible,
   initialIndex = 0,
   privacyMode = 'standard',
@@ -146,6 +149,7 @@ export function ImageViewer({
           renderItem={({ item, index: itemIndex }) => (
             <ZoomableImage
               uri={item}
+              cacheKey={cacheKeys?.[itemIndex]}
               cachePolicy={privacyMode === 'ephemeral' ? 'none' : 'memory-disk'}
               width={width}
               height={height}

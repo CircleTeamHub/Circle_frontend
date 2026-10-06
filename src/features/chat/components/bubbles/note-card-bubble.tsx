@@ -169,7 +169,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
   const onCardColor = outgoing ? colors.white : colors.text;
   const onCardSecondary = outgoing
     ? 'rgba(255,255,255,0.78)'
-    : colors.textSecondary;
+    : colors.text;
 
   const cardNode = (
     <View style={[sNote.body, outgoing ? sNote.bodyOutgoing : null]}>
@@ -253,7 +253,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
       {message.time ? (
         <View style={sNote.timeRow}>
           <Text
-            style={{ ...Typography.tinyRegular, color: colors.textSecondary }}
+            style={{ ...Typography.tinyRegular, color: colors.text }}
           >
             {message.time}
           </Text>

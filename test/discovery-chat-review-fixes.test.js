@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 function read(relPath) {
   return fs.readFileSync(path.join(process.cwd(), relPath), 'utf8');
@@ -48,7 +49,7 @@ test('signup blocking keeps an explanation when no visible requirement is left',
 // 从选点页回来时位置已经被 focus effect 消费掉了。发送位被占着就直接 return，
 // 用户选的点既不发也不报错，彻底丢失。
 test('a picked location survives an in-flight send instead of vanishing', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
 
   assert.match(screen, /const slotFree = await waitForSendSlot\(\{/);
   assert.match(screen, /isBusy: \(\) => inFlightRef\.current/);
@@ -97,7 +98,7 @@ test('my-circles surfaces and can clear an active plaza filter', () => {
 // 选点页本身支持搜索和手动拖动，定位权限只用来预置地图中心。拒权/取点失败都
 // 不该把「分享公共地点」整件事堵死。
 test('the location picker opens even without device location', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
 
   assert.match(screen, /const openPickerAt = \(params\?: Record<string, string>\) =>/);
   assert.match(
@@ -174,7 +175,7 @@ test('the membership badge marks the current tier, not one duration of it', () =
 // 就会发给非预期的收件人。
 test('picked locations are scoped to the conversation that opened the picker', () => {
   const store = read('src/features/chat/store/use-chat-location-picker-store.ts');
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chat = readChatDetailSource();
   const picker = read('src/features/chat/screens/ChatLocationPickerScreen.tsx');
 
   assert.match(store, /consumePickedLocation: \(conversationID\) =>/);

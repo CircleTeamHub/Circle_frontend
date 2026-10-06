@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 // 契约随自研栈迁移更新(意图不变):会话事实源从 OpenIM imStore 换成 chat-core
 // store(ChatConversationDto),置顶/免打扰走 updateChatConversationPreferences;
@@ -112,9 +113,8 @@ test('chat info screen renders a dedicated group info layout for group conversat
 
 test('temporary chat info copies its invite link without treating the room as a circle', () => {
   const infoPath = path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx');
-  const detailPath = path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx');
   const infoSource = fs.readFileSync(infoPath, 'utf8');
-  const detailSource = fs.readFileSync(detailPath, 'utf8');
+  const detailSource = readChatDetailSource();
 
   assert.match(detailSource, /isTempChat \? \{ conversationKind: 'temp' \} : \{\}/);
   assert.match(
@@ -196,7 +196,7 @@ test('chat info screen lets the current user open their own profile from the gro
   // messages/contacts/discover/profile 都有 re-export；写死 'messages' 会把 profile
   // 推进 messages 栈、串栈污染(与 AddFriend 同类 bug)。
   // 契约随自研栈迁移更新(意图不变):id 已是后端 UUID,无需 fromImUserId 转换。
-  assert.match(source, /router\.push\(\s*getUserProfileHref\(scope,\s*member\.userId/);
+  assert.match(source, /router\.navigate\(\s*getUserProfileHref\(scope,\s*member\.userId/);
   // 从群里点进资料页要带上 viaConversationID:资料页据此按本群的
   // 「成员可添加好友」决定要不要放加好友入口(服务端同样按它把关)。
   assert.match(source, /viaConversationID: resolvedConversationID \|\| conversationID/);
@@ -742,7 +742,7 @@ test('chat history search screens exist with dedicated titles and empty states',
   );
 
   assert.match(hubSource, /NavHeader[\s\S]*title=\{t\('chat\.history\.findTitle'\)\}/);
-  assert.match(hubSource, /fallbackHref={getChatDetailHref\('messages', sourceID, title, undefined, conversationID\)}/);
+  assert.match(hubSource, /fallbackHref={getChatDetailHref\('messages', sourceID, title, undefined, conversationID, undefined, conversationType\)}/);
   assert.match(hubSource, /t\('chat\.history\.textTitle'\)/);
   assert.match(hubSource, /t\('chat\.history\.mediaTitle'\)/);
   assert.match(hubSource, /t\('chat\.history\.files'\)/);

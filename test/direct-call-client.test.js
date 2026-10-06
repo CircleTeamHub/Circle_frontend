@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
@@ -96,7 +97,7 @@ test('fetchCurrentCall：无通话返回 null，有通话归一化且不要求 L
 // ---------------------------------------------------------------------------
 
 test('1:1 聊天页与用户主页都接上了 direct call（FE#90 不再「即将上线」）', () => {
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chat = readChatDetailSource();
   // 1:1 分支走 direct，群聊保持原群呼路径
   assert.match(chat, /resolveDirectCalleeID\(sourceID, authUser\.id\)/);
   assert.match(chat, /createDirectCall\(\{\s*calleeID,/);

@@ -29,7 +29,10 @@ import {
   type NotificationRowData,
 } from '@/features/notifications/utils/notification-summary';
 import { mapMyPostToRow } from '@/features/notifications/utils/my-post-summary';
-import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
+import {
+  getSnackbarRoute,
+  isUserProfileSnackbarRoute,
+} from '@/features/notifications/utils/snackbar-route';
 import {
   NotificationTabBar,
   type NotificationTabItem,
@@ -280,7 +283,11 @@ export default function NotificationCenterScreen() {
             scope: notificationScope,
           },
         );
-        router.push(route);
+        if (isUserProfileSnackbarRoute(route)) {
+          router.navigate(route);
+        } else {
+          router.push(route);
+        }
         return;
       }
       // 报名管理: open the post's signer list. Opening it marks signups read

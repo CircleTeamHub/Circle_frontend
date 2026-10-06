@@ -12,11 +12,8 @@ import { clearLocalSession, registerLogoutHandler } from '@/services/auth/sessio
 import { useAuthStore } from '@/stores/authStore';
 import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
-import {
-  redactSensitiveFields,
-  redactSensitiveHeaders,
-  redactSensitiveUrl,
-} from '@/utils/redact';
+import { createHttpRequestId, diagnosticNow, safeHttpEndpoint, safeHttpRequestId } from '@/observability/http-diagnostics';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { ApiError } from './api-error';
 
 // 定义搬去 api-error.ts（零依赖），这里原样 re-export 保住既有导入路径。
@@ -29,6 +26,8 @@ type RequestOptions = {
   auth?: boolean;
   retryOnAuthError?: boolean;
   accessToken?: string | null;
+  /** @deprecated Bodies are never logged; retained for caller compatibility. */
+  logResponseBody?: boolean;
 };
 
 type ApiResponse<T> = {
@@ -40,54 +39,23 @@ type ApiResponse<T> = {
 };
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+// Keep outage bursts from exhausting error quotas. Every attempt still leaves
+// a local breadcrumb; a different failure shape has a separate budget.
+const lastFailureReports = new Map<string, number>();
+const FAILURE_REPORT_WINDOW_MS = 60_000;
+const MAX_FAILURE_REPORT_KEYS = 100;
 
-function formatLogData(value: unknown) {
-  if (value == null) {
-    return value;
+function shouldCaptureFailure(key: string): boolean {
+  const now = diagnosticNow();
+  for (const [entry, timestamp] of lastFailureReports) {
+    if (now - timestamp >= FAILURE_REPORT_WINDOW_MS) lastFailureReports.delete(entry);
   }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(redactSensitiveFields(value));
-  } catch {
-    return '[unserializable]';
-  }
-}
-
-// 把响应文本解析为对象再脱敏；解析失败时不直接打印原文（可能是 HTML 错误页或带 token 的字符串）。
-function safeBodyTextForLog(text: string): unknown {
-  if (!text) return text;
-  try {
-    return redactSensitiveFields(JSON.parse(text));
-  } catch {
-    return '[non-json body]';
-  }
-}
-
-function sanitizeEndpointSegment(segment: string): string {
-  if (/^\d+$/.test(segment)) return ':id';
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segment)) {
-    return ':id';
-  }
-  if (segment.length >= 16 && /[0-9]/.test(segment)) return ':id';
-  return segment;
-}
-
-function sanitizeEndpointForReport(endpoint: string) {
-  try {
-    const url = new URL(endpoint, 'https://circle.local');
-    const endpointPath = url.pathname
-      .split('/')
-      .map((segment) => sanitizeEndpointSegment(segment))
-      .join('/');
-    const queryKeys = Array.from(new Set(url.searchParams.keys())).sort();
-    return queryKeys.length > 0 ? { endpointPath, queryKeys } : { endpointPath };
-  } catch {
-    return { endpointPath: '[invalid-endpoint]' };
-  }
+  const boundedKey = lastFailureReports.has(key) || lastFailureReports.size < MAX_FAILURE_REPORT_KEYS - 1
+    ? key : '__other__';
+  const previous = lastFailureReports.get(boundedKey);
+  if (previous !== undefined && now - previous < FAILURE_REPORT_WINDOW_MS) return false;
+  lastFailureReports.set(boundedKey, now);
+  return true;
 }
 
 // 把请求体序列化为 fetch 可接受的形式。
@@ -124,7 +92,11 @@ function logApiEvent(label: string, data: Record<string, unknown>) {
     return;
   }
 
-  console.log(`[api] ${label}`, data);
+  try {
+    console.log(`[api] ${label}`, data);
+  } catch {
+    // A debug sink must not affect requests or authentication.
+  }
 }
 
 /**
@@ -154,6 +126,7 @@ let refreshPromiseSessionEpoch: number | null = null;
 function resetRefreshPromise() {
   refreshPromise = null;
   refreshPromiseSessionEpoch = null;
+  lastFailureReports.clear();
 }
 
 registerLogoutHandler(resetRefreshPromise);
@@ -217,17 +190,17 @@ function bodyReadError(
 
 async function readPayload<T>(
   res: Response,
-  reportContext: { endpoint: string; method: string }
+  reportContext: { endpoint: string; method: string },
 ): Promise<ApiResponse<T> | null> {
   let text: string;
   try {
     text = await res.text();
   } catch (error) {
     logApiEvent('body-read-error', {
-      endpoint: reportContext.endpoint,
-      method: reportContext.method,
+      endpointPath: safeHttpEndpoint(reportContext.endpoint),
+      method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(reportContext.method) ? reportContext.method.toUpperCase() : 'OTHER',
       status: res.status,
-      error: error instanceof Error ? error.message : String(error),
+      failureKind: isAbortError(error) ? 'timeout' : 'body-read',
     });
     throw bodyReadError(error, reportContext);
   }
@@ -235,7 +208,7 @@ async function readPayload<T>(
   logApiEvent('response', {
     status: res.status,
     ok: res.ok,
-    body: safeBodyTextForLog(text),
+    body: '[REDACTED]',
   });
 
   if (!text) {
@@ -288,23 +261,31 @@ async function executeRequest<T>(
     explicitAccessToken ??
     (auth ? useAuthStore.getState().accessToken : null);
   const url = `${API_URL}${endpoint}`;
+  const diagnosticSessionEpoch = useAuthStore.getState().sessionEpoch;
+  let requestId = createHttpRequestId();
+  const startedAt = diagnosticNow();
+  let status = 0;
+  let failureKind: string | undefined;
+  let failure: ApiError | undefined;
+  const endpointPath = safeHttpEndpoint(endpoint);
+  const diagnosticMethod = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(method) ? method.toUpperCase() : 'OTHER';
 
   logApiEvent('request', {
-    url: redactSensitiveUrl(url),
-    method,
+    endpointPath,
+    method: diagnosticMethod,
+    requestId,
     auth,
     hasAccessToken: Boolean(accessToken),
-    headers: redactSensitiveHeaders(headers),
-    body: formatLogData(body),
+    headers: '[REDACTED]',
+    body: '[REDACTED]',
   });
 
+  const serializedBody = body == null ? undefined : serializeRequestBody(body);
   const controller = new AbortController();
   // 15s 是整个请求的预算:headers + body。定时器必须活到 body 读完为止——
   // 流式 fetch(web)下 fetch 只等到 headers 就 resolve,body 还在传;
   // 若在那时就 clearTimeout,body 读将没有任何上限,卡住的流会永久挂起。
   const timer = setTimeout(() => controller.abort(), 15_000);
-
-  const serializedBody = body == null ? undefined : serializeRequestBody(body);
 
   try {
     let res: Response;
@@ -318,16 +299,17 @@ async function executeRequest<T>(
             ? { 'Content-Type': serializedBody.contentType }
             : {}),
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          ...headers,
+          ...Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== 'x-request-id')),
+          'X-Request-Id': requestId,
         },
         ...(serializedBody ? { body: serializedBody.body } : {}),
         signal: controller.signal,
       });
     } catch (error) {
       logApiEvent('network-error', {
-        url,
-        method,
-        error: error instanceof Error ? error.message : String(error),
+        endpointPath,
+        method: diagnosticMethod,
+        failureKind: isAbortError(error) ? 'timeout' : 'network',
       });
       if (isAbortError(error)) {
         throw new ApiError(
@@ -355,18 +337,52 @@ async function executeRequest<T>(
       );
     }
 
-    const payload = await readPayload<T>(res, { endpoint, method });
+    status = res.status;
+    try {
+      requestId = safeHttpRequestId(res.headers?.get('X-Request-Id')) ?? requestId;
+    } catch {
+      // Keep locally generated correlation if a response/header shim misbehaves.
+    }
 
-    return { res, payload };
+    const payload = await readPayload<T>(
+      res,
+      { endpoint, method },
+    );
+    if (!res.ok) failureKind = 'http';
+    else if (isWrappedResponse(payload) && payload.code !== 0) failureKind = 'api-code';
+    return { res, payload, requestId, durationMs: Math.max(0, Math.round(diagnosticNow() - startedAt)) };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      failure = error;
+      failureKind = error.failureKind;
+      status = error.status;
+    } else {
+      failureKind = 'unexpected';
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
+    const durationMs = Math.max(0, Math.round(diagnosticNow() - startedAt));
+    if (failure) {
+      failure.requestId = requestId;
+      failure.durationMs = durationMs;
+    }
+    const details = { endpointPath, method: diagnosticMethod, status, requestId, durationMs, failureKind };
+    logApiEvent('complete', details);
+    try {
+      if (useAuthStore.getState().sessionEpoch === diagnosticSessionEpoch) {
+        logClientDiagnostic(failureKind ? 'api.request.failed' : durationMs >= 2000 ? 'api.request.slow' : 'api.request.completed', details);
+      }
+    } catch {
+      // Breadcrumb storage is optional and must never change the outcome.
+    }
   }
 }
 
 function unwrapResponse<T>(
   res: Response,
   payload: ApiResponse<T> | null,
-  reportContext?: { endpoint: string; method: string }
+  reportContext?: { endpoint: string; method: string; requestId?: string; durationMs?: number }
 ): T {
   if (!res.ok) {
     throw new ApiError(
@@ -379,8 +395,11 @@ function unwrapResponse<T>(
         status: res.status,
         code: isWrappedResponse(payload) ? payload.code : undefined,
         data: isWrappedResponse(payload) ? payload.data : payload,
+        failureKind: 'http',
         reportEndpoint: reportContext?.endpoint,
         reportMethod: reportContext?.method,
+        requestId: reportContext?.requestId,
+        durationMs: reportContext?.durationMs,
         errorCode: (payload as { errorCode?: string } | null)?.errorCode,
       }
     );
@@ -398,6 +417,8 @@ function unwrapResponse<T>(
           failureKind: 'api-code',
           reportEndpoint: reportContext?.endpoint,
           reportMethod: reportContext?.method,
+          requestId: reportContext?.requestId,
+          durationMs: reportContext?.durationMs,
           errorCode: payload.errorCode,
         }
       );
@@ -432,7 +453,7 @@ async function refreshAccessToken(sessionEpoch: number) {
       );
     }
 
-    const { res, payload } = await executeRequest<{
+    const { res, payload, requestId, durationMs } = await executeRequest<{
       accessToken: string;
       refreshToken: string;
     }>(
@@ -446,6 +467,8 @@ async function refreshAccessToken(sessionEpoch: number) {
     const tokens = unwrapResponse(res, payload, {
       endpoint: '/auth/refresh',
       method: 'POST',
+      requestId,
+      durationMs,
     });
 
     if (!isTokenPair(tokens)) {
@@ -454,7 +477,13 @@ async function refreshAccessToken(sessionEpoch: number) {
         i18n.t('common.errors.refreshResponseInvalid', {
           defaultValue: '刷新返回数据格式异常，请重新登录',
         }),
-        { status: 401 }
+        {
+          status: 401,
+          reportEndpoint: '/auth/refresh',
+          reportMethod: 'POST',
+          requestId,
+          durationMs,
+        }
       );
     }
 
@@ -488,6 +517,18 @@ async function refreshAccessToken(sessionEpoch: number) {
   return activeRefreshPromise;
 }
 
+/**
+ * 主动刷新 access token(REST 401 之外的入口)。
+ *
+ * 实时通道(聊天 socket、realtime ws)在 token 到期时会被服务端断开,而服务端主动
+ * 断开的连接不会自己重连 —— 只靠「下一次 REST 请求碰巧 401」来刷新的话,停在一个
+ * 不发 REST 的页面上就会一直收不到消息。与 401 路径共用单飞与会话世代闸;
+ * 刷新失败时的会话清理语义不变(服务端明确否认 refresh token 才清 session)。
+ */
+export function refreshSessionAccessToken(): Promise<string> {
+  return refreshAccessToken(useAuthStore.getState().sessionEpoch);
+}
+
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
     return true;
@@ -501,6 +542,7 @@ export async function apiClient<T>(
   options: RequestOptions = {}
 ): Promise<T> {
   const { auth = true, retryOnAuthError = true } = options;
+  const diagnosticSessionEpoch = useAuthStore.getState().sessionEpoch;
   const requestSessionEpoch =
     auth && retryOnAuthError ? useAuthStore.getState().sessionEpoch : null;
   try {
@@ -547,39 +589,50 @@ export async function apiClient<T>(
       return unwrapResponse(retryRequest.res, retryRequest.payload, {
         endpoint,
         method: options.method ?? 'GET',
+        requestId: retryRequest.requestId,
+        durationMs: retryRequest.durationMs,
       });
     }
 
     return unwrapResponse(initialRequest.res, initialRequest.payload, {
       endpoint,
       method: options.method ?? 'GET',
+      requestId: initialRequest.requestId,
+      durationMs: initialRequest.durationMs,
     });
   } catch (error) {
     // Report unexpected backend failures (network + 5xx) to Sentry; expected
     // 4xx (validation/auth/not-found) are left to normal handling. Behavior is
     // otherwise unchanged — the error is still re-thrown exactly as before.
     const status = error instanceof ApiError ? error.status : undefined;
-    if (shouldReportApiFailure(error, status)) {
+    if (useAuthStore.getState().sessionEpoch === diagnosticSessionEpoch && shouldReportApiFailure(error, status)) {
       const reportEndpoint =
         error instanceof ApiError ? error.reportEndpoint ?? endpoint : endpoint;
       const reportMethod =
         error instanceof ApiError
           ? error.reportMethod ?? options.method ?? 'GET'
           : options.method ?? 'GET';
-      reportError(error, {
-        ...sanitizeEndpointForReport(reportEndpoint),
-        method: reportMethod,
+      const captureContext = {
+        endpointPath: safeHttpEndpoint(reportEndpoint),
+        method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(reportMethod) ? reportMethod.toUpperCase() : 'OTHER',
         status,
-        ...(error instanceof ApiError && error.code !== undefined
+        ...(error instanceof ApiError ? { requestId: error.requestId, durationMs: error.durationMs } : {}),
+        ...(error instanceof ApiError && typeof error.code === 'number' && Number.isSafeInteger(error.code)
           ? { apiCode: error.code }
           : {}),
         ...(error instanceof ApiError && error.failureKind
           ? { failureKind: error.failureKind }
           : {}),
-        ...(error instanceof ApiError && error.errorCode
+        ...(error instanceof ApiError && typeof error.errorCode === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.errorCode)
           ? { errorCode: error.errorCode }
           : {}),
-      });
+      };
+      const signature = [captureContext.endpointPath, captureContext.method, status, captureContext.apiCode, captureContext.failureKind].join(':');
+      try {
+        if (shouldCaptureFailure(signature)) reportError(error, captureContext);
+      } catch {
+        // A reporting SDK must not replace the original business error.
+      }
     }
     throw error;
   }

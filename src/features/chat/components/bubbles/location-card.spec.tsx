@@ -73,6 +73,12 @@ jest.mock('@/features/location/services/reverse-geocode', () => ({
   resolvePlace: jest.fn(),
 }));
 
+// LocationCard 只需要把这个函数传给已被 mock 的 resolvePlace；不要让渲染测试
+// 顺着真实 apiClient 初始化 i18n、认证 store 和网络诊断依赖。
+jest.mock('@/features/location/services/geocoder-fetch', () => ({
+  geocoderFetch: jest.fn(),
+}));
+
 const mockResolvePlace = resolvePlace as jest.MockedFunction<
   typeof resolvePlace
 >;
@@ -173,6 +179,7 @@ describe('LocationCard address resolution', () => {
       37.32698,
       -121.88435,
       undefined,
+      expect.any(Function),
       expect.any(Function),
     );
     // 标题是用户自己的表达，反查回来的路名不许盖掉。

@@ -39,10 +39,11 @@ export async function rejectCall(callId: string) {
   });
 }
 
+// 不带挂断原因:结束原因由服务端状态机推导(NORMAL / ALL_LEFT / NO_ANSWER …),
+// 客户端自报的 reason 服务端从不读取(为已装机旧版本继续接受)。
 export async function leaveCall(callId: string) {
   return apiClient<void>(`/calls/${callId}/leave`, {
     method: 'POST',
-    body: { reason: 'NORMAL' },
   });
 }
 

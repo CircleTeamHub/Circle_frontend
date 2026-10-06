@@ -33,6 +33,7 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const PERMISSION_OPTIONS: readonly FriendPermission[] = ['FULL', 'CHAT_ONLY'];
@@ -373,7 +374,7 @@ export default function SendFriendRequestScreen() {
   };
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('contacts.request.title')} />
       <ScrollView
         contentContainerStyle={s.content}
@@ -587,6 +588,6 @@ export default function SendFriendRequestScreen() {
           </Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

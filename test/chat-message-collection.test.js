@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 function loadTsModule(relativePath) {
   const filePath = path.join(process.cwd(), relativePath);
@@ -391,10 +392,7 @@ test('the favorites picker disables rows that can never be re-sent', () => {
   assert.match(picker, /disabled=\{!resendable\}/);
   assert.match(picker, /share\.favoriteLegacyVoiceUnsupported/);
 
-  const chat = fs.readFileSync(
-    path.join(process.cwd(), 'src/features/chat/screens/ChatDetailScreen.tsx'),
-    'utf8',
-  );
+  const chat = readChatDetailSource();
   // 屏幕侧双保险:unsupported 在进入 try/catch 之前就被拦下,
   // 不会被 getChatSendErrorMessage 包成一句「请重试」。
   assert.match(chat, /if \(plan\.kind === 'unsupported'\)/);

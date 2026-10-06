@@ -26,7 +26,7 @@ export const DatePill: React.FC<DatePillProps> = ({ text }) => {
         backgroundColor: colors.surface,
       },
       datePillText: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.small,
       },
     }),

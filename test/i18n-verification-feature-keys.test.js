@@ -22,6 +22,7 @@ const FEATURE_KEYS = [
   'invitation.viewerOnly',
   'invitation.settledRejected',
   'invitation.settledApproved',
+  'invitation.settledCancelled',
   'invitation.youApproved',
   'invitation.youRejected',
   'invitation.loadFailed',

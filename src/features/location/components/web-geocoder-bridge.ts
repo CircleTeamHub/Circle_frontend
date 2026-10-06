@@ -33,6 +33,7 @@ export function handleWebGeocoderBridgeRequest(options: {
   }
 
   const payload = request as {
+    sessionId?: unknown;
     requestId?: unknown;
     path?: unknown;
     params?: unknown;
@@ -46,6 +47,7 @@ export function handleWebGeocoderBridgeRequest(options: {
     options.requestSource.postMessage(
       JSON.stringify({
         type: 'geocoder-response',
+        sessionId: payload.sessionId,
         requestId: payload.requestId,
         ok,
         data,
@@ -55,6 +57,9 @@ export function handleWebGeocoderBridgeRequest(options: {
   };
   if (
     !options.geocoderBaseUrl ||
+    typeof payload.sessionId !== 'string' ||
+    payload.sessionId.length === 0 ||
+    payload.sessionId.length > 128 ||
     typeof payload.requestId !== 'number' ||
     !Number.isSafeInteger(payload.requestId) ||
     (payload.path !== '/search' && payload.path !== '/reverse') ||

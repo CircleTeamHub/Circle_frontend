@@ -88,7 +88,7 @@ test('day results screen searches the picked date and opens the message in chat'
   assert.match(screen, /formatChatHistoryDateTitle\(date\)/);
   assert.match(
     screen,
-    /getChatDetailHref\('messages', sourceID, title, undefined, conversationID, clientMsgID\)/,
+    /getChatDetailHref\('messages', sourceID, title, undefined, conversationID, clientMsgID, conversationType\)/,
   );
   assert.match(screen, /chat\.history\.noRecordsForDate/);
   assert.match(screen, /onEndReached=\{handleLoadMore\}/);

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withChatCoreStubs } = require('./helpers/chat-core-stubs');
 
 // 焚毁档位表(burn-durations.ts)只依赖 i18n —— 这里加载**真实实现**而不是桩:
 // 档位白名单是 setViewerSelfDestructSec 的唯一闸门,用假的等于没测。
@@ -96,7 +97,7 @@ function loadStore() {
     // 给一对空实现即可。
     setTimeout: () => 0,
     clearTimeout: () => {},
-    require: (request) => {
+    require: withChatCoreStubs((request) => {
       if (request === 'zustand') return zustandStub();
       if (request === './protocol') return {};
       // 本地删除墓碑在这组用例里始终为空(删除行为由 chat-core-store 覆盖)。
@@ -135,7 +136,7 @@ function loadStore() {
       if (request === './local-db') return __localDbStub;
     if (request === './burn-durations') return loadBurnDurations();
       throw new Error(`unexpected require: ${request}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpile('src/chat-core/store.ts'), context);
@@ -368,12 +369,12 @@ test('a remote refresh with the same duration and same start time stays a no-op'
   assert.equal(useChatStore.getState().selfDestructPolicyEpoch, baseline);
 });
 
-test('an old backend response without burnStartedAt still gets a start boundary', () => {
+test('a burn response (the server never sends a start time) still gets a local start boundary', () => {
   const { useChatStore } = loadStore();
   const store = useChatStore.getState();
   store.setConversations([conv({ id: 'conv-1' })]);
 
-  // 旧服务端只回 burnDurationSec。不兜底的话开启时间是 null,而过期判定要求它
+  // 服务端只回 burnDurationSec(没有开启时间列)。不兜底的话开启时间是 null,而过期判定要求它
   // 有限 —— 界面显示「已开启」,消息却永不焚毁,且没有任何报错。
   store.applyBurnDuration('conv-1', 300, undefined);
 

@@ -73,7 +73,7 @@ export function NoteActionsSheet({
       backdrop: { backgroundColor: colors.overlay },
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
-      title: { color: colors.textSecondary },
+      title: { color: colors.text },
       label: { color: colors.text },
       destructive: { color: colors.error },
       separator: { backgroundColor: colors.divider },

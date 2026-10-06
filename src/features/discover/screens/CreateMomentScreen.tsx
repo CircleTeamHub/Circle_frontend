@@ -27,6 +27,7 @@ import {
 } from '@/services/api/upload';
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
 import { mapWithConcurrency } from '@/utils/concurrency';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -217,7 +218,7 @@ export default function CreateMomentScreen() {
   }, [canSubmit, submitting, content, images, visibility, prependMoment, router, t]);
 
   return (
-    <View
+    <KeyboardAvoidingContainer
       testID={E2E_TEST_IDS.momentCreateScreen}
       style={[d.container, { paddingTop: insets.top }]}
     >
@@ -309,6 +310,6 @@ export default function CreateMomentScreen() {
           )}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

@@ -5,12 +5,19 @@ import {
   registerPushToken,
   revokePushToken,
   type PushTokenPlatform,
+  type PushTokenProvider,
 } from '@/services/api/notifications';
 import { storage } from '@/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { ensureChatNotificationChannel } from '@/chat-core/chat-notifications';
+import {
+  getJPushRegistrationId,
+  initializeJPush,
+  requestJPushPermission,
+} from '@/features/notifications/services/jpush';
 
 type NotificationsModule = typeof import('expo-notifications');
 type NotificationPermissionResult = Awaited<
@@ -44,6 +51,7 @@ type ExpoCryptoModule = { randomUUID?: () => string };
 
 type PushTokenRegistrationOrchestratorDependencies = {
   platform: PushTokenPlatform;
+  provider?: PushTokenProvider;
   appVersion: string | null;
   getProjectId: () => string | null;
   getStoredRegistration: () => StoredPushRegistration | null;
@@ -58,10 +66,17 @@ type PushTokenRegistrationOrchestratorDependencies = {
   removeLegacyCleanup?: (value: LegacyPushCleanup) => void;
   generateRevocationSecret: () => string;
   loadNotificationsModule: () => Promise<NotificationsModule | null>;
+  /**
+   * 请求权限之前准备通知渠道(聊天渠道)。安卓 13 起应用一个渠道都没有时系统不弹
+   * 权限框;失败只记诊断,不挡注册 —— 推送会回落到默认渠道。
+   */
+  prepareNotifications?: (notifications: NotificationsModule) => Promise<void>;
   registerPushToken: typeof registerPushToken;
   revokePushToken: typeof revokePushToken;
   deleteLegacyPushToken?: typeof deleteLegacyPushToken;
   getAccessToken?: () => string | null;
+  /** 服务端确认收下了这个账号的 token(登记从 pending 变成 registered)。 */
+  onRegistered?: (registration: RegisteredPushToken) => void;
   scheduleRetry?: (callback: () => void, delayMs: number) => unknown;
   cancelRetry?: (handle: unknown) => void;
   now: () => number;
@@ -188,6 +203,54 @@ export function readPushState(): PushStateV2 {
   writePushState(migrated);
   storage.remove(LEGACY_PUSH_REVOCATIONS_KEY);
   return migrated;
+}
+
+export type RegisteredPushToken = { userId: string; token: string };
+
+const registeredPushTokenListeners = new Set<
+  (registration: RegisteredPushToken) => void
+>();
+
+/**
+ * 订阅「推送 token 登记确认」。聊天连接握手时要带上本机 token,而首次安装、新账号、
+ * token 轮换时,连接常常在登记确认之前就建好了 —— 那条连接要靠这个通知重新握手,
+ * 否则服务端一直认不出它是哪台设备。返回取消订阅函数。
+ */
+export function subscribeRegisteredPushToken(
+  listener: (registration: RegisteredPushToken) => void,
+): () => void {
+  registeredPushTokenListeners.add(listener);
+  return () => {
+    registeredPushTokenListeners.delete(listener);
+  };
+}
+
+function notifyRegisteredPushToken(registration: RegisteredPushToken): void {
+  for (const listener of [...registeredPushTokenListeners]) {
+    try {
+      listener(registration);
+    } catch (error) {
+      reportHandledFailure('notifications', 'registeredTokenListener', error);
+    }
+  }
+}
+
+/**
+ * 本机已登记给这个账号、且服务端确认收下了的推送 token。聊天连接握手时带上:这台
+ * 设备正开着 App 时,服务端只跳过它的推送(电脑上开着网页版不影响手机)。没有登记、
+ * 登记还没确认、或登记的是别的账号时返回 null。
+ */
+export function getRegisteredPushToken(userId: string): string | null {
+  try {
+    const active = readPushState().active;
+    if (!active || active.userId !== userId) return null;
+    if (isModernRegistration(active) && active.status !== 'registered') {
+      return null;
+    }
+    return active.token;
+  } catch {
+    return null;
+  }
 }
 
 function getStoredRegistration() {
@@ -556,8 +619,23 @@ export function createPushTokenRegistrationOrchestrator(
         !isCurrentOwner() ||
         Boolean(input.isCancelled?.());
 
+      const provider = dependencies.provider ?? 'expo';
+      // 两种 provider 都要过系统通知权限:JPush 自己的 requestPermission 只是 iOS
+      // 的 APNs 注册,Android 13+ 的 POST_NOTIFICATIONS 运行时权限得由这里申请 ——
+      // 否则 JPush ID 照样登记成功,系统却把每一条通知都拦掉。
       const notifications = await dependencies.loadNotificationsModule();
       if (!notifications || isStale()) return;
+
+      if (dependencies.prepareNotifications) {
+        try {
+          await dependencies.prepareNotifications(notifications);
+        } catch {
+          dependencies.reportDiagnostic('push_notification_channels_failed', {
+            platform: dependencies.platform,
+          });
+        }
+        if (isStale()) return;
+      }
 
       let permissions = await notifications.getPermissionsAsync();
       if (isStale()) return;
@@ -571,6 +649,7 @@ export function createPushTokenRegistrationOrchestrator(
         permissionAttemptedUserIds.add(input.userId);
         try {
           permissions = await notifications.requestPermissionsAsync({
+            android: {},
             ios: {
               allowAlert: true,
               allowBadge: true,
@@ -590,7 +669,7 @@ export function createPushTokenRegistrationOrchestrator(
       }
 
       const projectId = dependencies.getProjectId();
-      if (!projectId) {
+      if (provider === 'expo' && !projectId) {
         dependencies.reportDiagnostic('push_token_project_id_missing', {
           platform: dependencies.platform,
         });
@@ -598,8 +677,15 @@ export function createPushTokenRegistrationOrchestrator(
       }
 
       const legacy = dependencies.getLegacyRegistration?.() ?? null;
-      const result = await notifications.getExpoPushTokenAsync({ projectId });
-      const token = result.data;
+      let token = '';
+      if (provider === 'jpush') {
+        initializeJPush();
+        if (dependencies.platform === 'ios') requestJPushPermission();
+        token = await getJPushRegistrationId();
+      } else {
+        const result = await notifications.getExpoPushTokenAsync({ projectId: projectId! });
+        token = result.data;
+      }
       if (!token || isStale()) return;
 
       if (
@@ -653,9 +739,9 @@ export function createPushTokenRegistrationOrchestrator(
         await dependencies.registerPushToken({
           token,
           platform: dependencies.platform,
-          provider: 'expo',
+          provider,
           revocationSecret: registrationCandidate.revocationSecret,
-          projectId,
+          projectId: provider === 'expo' ? projectId : null,
           appVersion: dependencies.appVersion,
         });
 
@@ -671,6 +757,10 @@ export function createPushTokenRegistrationOrchestrator(
           dependencies.setStoredRegistration({
             ...registrationCandidate,
             status: 'registered',
+          });
+          dependencies.onRegistered?.({
+            userId: registrationCandidate.userId,
+            token: registrationCandidate.token,
           });
         }
       });
@@ -699,8 +789,12 @@ async function loadNotificationsModule() {
 }
 
 function createDefaultPushTokenRegistrationOrchestrator() {
+  const configuredProvider =
+    (Constants.expoConfig?.extra as { pushProvider?: unknown } | undefined)
+      ?.pushProvider;
   return createPushTokenRegistrationOrchestrator({
     platform: Platform.OS as PushTokenPlatform,
+    provider: configuredProvider === 'jpush' ? 'jpush' : 'expo',
     appVersion: Constants.expoConfig?.version ?? null,
     getProjectId,
     getStoredRegistration,
@@ -715,10 +809,12 @@ function createDefaultPushTokenRegistrationOrchestrator() {
     removeLegacyCleanup,
     generateRevocationSecret,
     loadNotificationsModule,
+    prepareNotifications: ensureChatNotificationChannel,
     registerPushToken,
     revokePushToken,
     deleteLegacyPushToken,
     getAccessToken: () => useAuthStore.getState().accessToken,
+    onRegistered: notifyRegisteredPushToken,
     scheduleRetry: (callback, delayMs) => setTimeout(callback, delayMs),
     cancelRetry: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
     now: Date.now,

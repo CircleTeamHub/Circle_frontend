@@ -4,7 +4,6 @@ import {
   Alert,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -22,6 +21,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { Avatar } from '@/components/ui/avatar';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+import {
+  MODAL_INPUT_NATIVE_AUTO_FOCUS,
+  useModalInputAutoFocus,
+} from '@/hooks/use-modal-input-auto-focus';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
@@ -166,6 +170,8 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   // 键盘之间会出现一段 34px 的空白。键盘收起才恢复安全区高度。
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  // 浮层随组件挂载一起打开：挂载即聚焦（Android 要等 Modal 窗口起来再聚焦）。
+  useModalInputAutoFocus(inputRef, true);
   const selectionRef = useRef<MomentTextSelection>({ start: 0, end: 0 });
   const submitInFlightRef = useRef(false);
 
@@ -361,9 +367,9 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
   );
 
   return (
-    // 透明 Modal 让浮层挂到窗口层：KeyboardAvoidingView 的 padding 是按相对
-    // 父容器的坐标算的，宿主若不是全屏（如信息流页上方还有标题/tab），输入条
-    // 会被顶进键盘底下。Modal 内坐标恒等于全屏，详情页/信息流共用同一行为。
+    // 透明 Modal 让浮层挂到窗口层：避让容器的 padding 是按相对父容器的坐标算的，
+    // 宿主若不是全屏（如信息流页上方还有标题/tab），输入条会被顶进键盘底下。
+    // Modal 内坐标恒等于全屏，详情页/信息流共用同一行为。
     <Modal
       transparent
       visible
@@ -371,10 +377,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
       statusBarTranslucent
       onRequestClose={onDismiss}
     >
-      <KeyboardAvoidingView
-        style={s.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingContainer style={s.overlay}>
         {/* Tap backdrop to dismiss */}
         <Pressable style={s.backdrop} onPress={onDismiss} />
 
@@ -428,7 +431,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
                   })
             }
             placeholderTextColor={colors.textSecondary}
-            autoFocus
+            autoFocus={MODAL_INPUT_NATIVE_AUTO_FOCUS}
             onSubmitEditing={handleSend}
             returnKeyType="send"
             style={[
@@ -547,7 +550,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
             height: bottomInsetPad,
           }}
         />
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingContainer>
     </Modal>
   );
 };

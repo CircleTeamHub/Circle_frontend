@@ -36,6 +36,7 @@ import {
   getCityFilterLimit,
   resolveMembershipEntitlementLevel,
 } from '@/features/profile/membership-plans';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 
@@ -299,7 +300,7 @@ export default function SelectCityScreen() {
   ]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+    <KeyboardAvoidingContainer style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
       <NavHeader title={t('city.title')} />
 
       {/* Search */}
@@ -426,6 +427,6 @@ export default function SelectCityScreen() {
           </Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

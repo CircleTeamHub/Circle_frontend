@@ -246,7 +246,6 @@ test('fetchMyPostSignups normalizes missing signer fields with safe defaults', a
     items: [
       {
         userId: 'user-1',
-        imUserId: '',
         nickname: '用户',
         avatarUrl: 'http://192.168.1.65:9000/avatars/u.jpg',
         accountId: '',
@@ -284,6 +283,17 @@ test('fetchMyPostSignups carries recognized flags and recognitionOpen from backe
 
   assert.equal(result.recognitionOpen, true);
   assert.equal(result.items[0].recognized, true);
+});
+
+test('fetchMyPostSignups requests the largest server window so signers after 200 stay visible', async () => {
+  const { api, calls } = loadPlazaApi([{ items: [] }]);
+
+  await api.fetchMyPostSignups('post-1');
+
+  assert.equal(
+    calls[0][0],
+    '/circle-plaza/me/posts/post-1/signups?limit=500',
+  );
 });
 
 test('fetchMyPostSignups keeps signer display badges and normalizes badge media URLs', async () => {

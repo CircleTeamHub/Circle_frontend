@@ -19,10 +19,7 @@ const alice: FriendProfile = {
   accountId: 'alice',
   nickname: 'Alice',
   avatarUrl: null,
-  avatarFrame: null,
   avatarFrameAppearance: null,
-  gender: 'UNKNOWN',
-  lastOnline: null,
   friendsSince: '2026-01-01T00:00:00.000Z',
   remark: null,
 };

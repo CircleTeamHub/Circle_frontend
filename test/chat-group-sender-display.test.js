@@ -2,11 +2,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 test('group chat bubbles show sender name (remark first) above received messages', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
 
   // 名字标签：仅群聊 + 接收消息（senderID 只在接收消息上存在）。
   assert.match(screen, /withGroupSenderLabel/);
@@ -22,7 +23,7 @@ test('group chat bubbles show sender name (remark first) above received messages
 });
 
 test('group chat resolves sender name from the group member list, not just the message', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
 
   // 群聊打开时拉一次成员表，建 senderID(UUID 形式)→昵称映射。
   assert.match(screen, /groupMemberNames/);

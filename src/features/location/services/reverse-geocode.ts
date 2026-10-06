@@ -35,6 +35,11 @@ export type NativeResolver = (
   longitude: number,
 ) => Promise<ResolvedPlace | null>;
 
+export type GeocoderFetch = (
+  input: string | URL,
+  init?: RequestInit,
+) => Promise<Pick<Response, 'ok' | 'json'> & { status?: number }>;
+
 // 设备不支持时置为 true，后续一律跳过——省掉每条位置消息都要抛一次错的开销。
 let nativeResolverUnavailable = false;
 
@@ -122,12 +127,13 @@ async function requestPlace(
   latitude: number,
   longitude: number,
   baseUrl: string,
+  fetchImpl: GeocoderFetch,
 ): Promise<ResolvedPlace | null> {
   const url = new URL(`${baseUrl}/reverse`);
   url.searchParams.set('format', 'jsonv2');
   url.searchParams.set('lat', String(latitude));
   url.searchParams.set('lon', String(longitude));
-  const response = await fetch(url.toString(), {
+  const response = await fetchImpl(url, {
     headers: { Accept: 'application/json' },
   });
   if (!response.ok) throw new Error(`reverse geocode failed: ${response.status}`);
@@ -142,6 +148,7 @@ export async function resolvePlace(
   longitude: number,
   baseUrl = getConfiguredBaseUrl(),
   nativeResolver?: NativeResolver,
+  fetchImpl: GeocoderFetch = fetch,
 ): Promise<ResolvedPlace | null> {
   if (!isUsableCoordinate(latitude, longitude)) return null;
   // 设备自带的反查是免费的，服务端那条路要烧地图服务商的配额——两条都没有才放弃。
@@ -159,6 +166,7 @@ export async function resolvePlace(
     longitude,
     baseUrl,
     nativeResolver,
+    fetchImpl,
   )
     .then((place) => {
       // 查不到也缓存，省得同一个点每次展开都再走一遍两条链路。
@@ -187,9 +195,10 @@ async function resolveFromAnySource(
   longitude: number,
   baseUrl: string | null,
   nativeResolver: NativeResolver | undefined,
+  fetchImpl: GeocoderFetch,
 ): Promise<ResolvedPlace | null> {
   const native = await tryNativeResolver(nativeResolver, latitude, longitude);
   if (native) return native;
   if (!baseUrl) return null;
-  return enqueue(() => requestPlace(latitude, longitude, baseUrl));
+  return enqueue(() => requestPlace(latitude, longitude, baseUrl, fetchImpl));
 }

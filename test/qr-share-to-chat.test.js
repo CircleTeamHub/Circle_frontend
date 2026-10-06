@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const root = process.cwd();
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -138,7 +139,7 @@ test('二维码卡片把「是谁的码、扫了会怎样」写在卡面上', ()
 });
 
 test('点卡片走扫码同一条落地页，路径写死在本端', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /<QrCardBubble/);
   // 目的地由本端的 helper 决定,对端只能提供令牌 —— 这是「路径写死在本端」的实质。
   assert.match(
@@ -148,7 +149,7 @@ test('点卡片走扫码同一条落地页，路径写死在本端', () => {
 });
 
 test('二维码落地页跟随来源栈：进哪一栈由 scope 决定，且只能 push', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   const landing = read('src/features/qr/screens/QrLandingScreen.tsx');
   const routes = read('src/features/user/utils/routes.ts');
 
@@ -235,12 +236,10 @@ test('mapper 把不合法令牌净化成空串，而不是原样透传', () => {
 
 test('后端把 qr-card 列进客户端可发类型，并给了预览标签', () => {
   const bePath = process.env.CIRCLE_BE_PATH ?? path.join(root, '..', 'circle_be');
-  if (!fs.existsSync(bePath)) return; // CI 里没检出后端仓就跳过
+  const constantsPath = path.join(bePath, 'src/chat/chat.constants.ts');
+  if (!fs.existsSync(constantsPath)) return; // CI 里没检出完整后端仓就跳过
 
-  const constants = fs.readFileSync(
-    path.join(bePath, 'src/chat/chat.constants.ts'),
-    'utf8',
-  );
+  const constants = fs.readFileSync(constantsPath, 'utf8');
   // 预览标签表被从 chat.service.ts 抽到了 chat-message-preview.ts(收藏那边要复用),
   // 契约是「后端给 qr-card 配了预览标签」,不是「它躺在哪个文件里」—— 两处都认,
   // 这样对着还没搬家的后端分支也成立。

@@ -4,13 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource, readSourceFile } = require('./helpers/chat-detail-source');
 
 // 群昵称(群备注):本人在某个群里的显示名,对全群可见。
 // 与好友备注区分 —— 好友备注是「我给对方起的名字、只有我看得见」,优先级更高;
 // 群昵称是「我给自己起的名字、群里所有人看见」。这组断言钉住解析优先级、
 // 展示链路是否处处走同一个解析器,以及跨仓的字段与端点契约。
 const root = process.cwd();
-const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+const read = (rel) => readSourceFile(rel, root);
 
 function loadDisplayHelpers() {
   const filePath = path.join(root, 'src/features/chat/group-member-display.ts');
@@ -83,7 +84,7 @@ test('every place that shows a member name goes through the shared resolver', ()
 });
 
 test('chat bubbles and mentions use the alias while a personal friend remark still wins', () => {
-  const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const detail = readChatDetailSource();
   // 成员表映射用群昵称。
   assert.match(detail, /const nickname = groupMemberDisplayName\(member\);/);
   // @ 候选同样用群昵称。

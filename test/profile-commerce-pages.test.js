@@ -484,7 +484,7 @@ test('MemberCenterScreen routes configured support and otherwise shows a clear f
     src,
     /getUserProfileHref\([\s\S]*'profile',[\s\S]*agent\.userID/,
   );
-  assert.match(src, /router\.push/);
+  assert.match(src, /router\.navigate\(\s*getUserProfileHref/);
   // 没配仍是优雅降级的 Alert,不回退到任何默认账号。
   assert.match(src, /Alert\.alert/);
   assert.match(src, /defaultValue: '客服账号暂未配置'/);

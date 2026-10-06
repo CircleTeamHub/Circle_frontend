@@ -13,7 +13,15 @@ import Animated, {
   useSharedValue,
   type AnimatedProps,
 } from 'react-native-reanimated';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  useLocalSearchParams,
+  useRouter,
+  useSegments,
+  type Href,
+} from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NavHeader } from '@/components/ui/nav-header';
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { fetchUserProfile } from '@/services/api/profile';
@@ -52,6 +60,10 @@ export default function UserMomentsScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const segments = useSegments();
+  const scope = getUserProfileScopeFromSegments(segments);
+  const fallbackHref = { pathname: `/(tabs)/${scope}` } as Href;
   const params = useLocalSearchParams<{ id: string; name?: string }>();
   const routeUserId = typeof params.id === 'string' ? params.id : '';
   const [canonicalUserId, setCanonicalUserId] = useState(() =>
@@ -104,7 +116,7 @@ export default function UserMomentsScreen() {
         setAvatarUrl(profile.avatarUrl);
         if (profile.nickname) setNickname(profile.nickname);
         setSignature(
-          getProfileSignature(profile.persona, profile.helloWords, t),
+          getProfileSignature(profile.persona, profile.helloWords),
         );
       } catch (err) {
         if (!active) return;
@@ -186,9 +198,9 @@ export default function UserMomentsScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
-      <Stack.Screen
-        options={{ title, headerTransparent: true, headerTitle: '' }}
-      />
+      <View style={{ paddingTop: insets.top }}>
+        <NavHeader title={title} fallbackHref={fallbackHref} />
+      </View>
       <AnimatedFlatList
         data={moments}
         renderItem={renderItem}

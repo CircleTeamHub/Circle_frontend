@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 // remediation 批0/0.5 的源码断言(风格同 chat-core-protocol-contract.test.js):
 // G-11/S-02 chat:conversation 消费、G-13 重连对账、G-15 多端未读、G-18 图标角标。
@@ -66,13 +67,15 @@ test('api pulls forward incrementally with afterHeight and loops the cursor', ()
   assert.match(api, /ingestMessages\(conversationId/);
 });
 
-test('reconnect refreshes conversations and backfills the open conversation gap', () => {
+test('connect and reconnect refresh conversations and resync them through the revision stream', () => {
   const manager = read('src/chat-core/socket-manager.ts');
-  // 首连拉完整快照，重连再补断线期间的快照与消息缺口
+  // 首连拉完整快照,重连再对账;新消息与撤回/编辑/回应/焚毁在同一趟增量同步里追平。
   assert.match(manager, /initialConversationRefresh/);
   assert.match(manager, /hadConnected/);
   assert.match(manager, /loadChatConversations/);
-  assert.match(manager, /backfillConversationSince/);
+  assert.match(manager, /syncConversationsFromSnapshot\(conversations, \{ prioritize \}\)/);
+  // 按 height 补拉当前会话缺口的那条路径被序号流取代了。
+  assert.doesNotMatch(manager, /backfillConversationSince/);
 });
 
 test('conversation snapshot loading coalesces startup requests and retries transient failures', () => {
@@ -229,7 +232,7 @@ test('the single ingest entry persists to the local db', () => {
 test('cold start hydrates conversations, outbox and pending reads before the network', () => {
   const manager = read('src/chat-core/socket-manager.ts');
   assert.match(manager, /hydrateFromLocalDb/);
-  assert.match(manager, /outboxList/);
+  assert.match(manager, /readOutboxEntries/);
   assert.match(manager, /pendingReadsList/);
   assert.match(manager, /pendingReadUpsert/);
 });
@@ -252,7 +255,7 @@ test('failed sends survive restarts via the outbox and expose a resend action', 
   const client = read('src/chat-core/client.ts');
   assert.match(client, /outboxUpsert/);
   assert.match(client, /retryFailedChatMessage/);
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /retryFailedChatMessage/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
@@ -315,7 +318,7 @@ test('badge sync is wired into the chat connect path', () => {
 // ---- §9 清理批:typing 接线 / 静音横幅 / file 与未知类型渲染 / 失败预览 ----
 
 test('typing flows end to end: throttle-send behind settings, store expiry, header display', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   // 发送侧:草稿变化带上会话类型上报;单聊/群聊的隐私开关收在 socket-manager
   // 的 sendChatTyping 里(见 presence-typing-privacy.test.js)。
   assert.match(
@@ -368,7 +371,7 @@ test('the legacy system-notice dedupe layer is fully gone', () => {
   );
   const types = read('src/types/index.ts');
   assert.ok(!types.includes('systemNoticeKind'), 'dead field systemNoticeKind');
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.ok(!screen.includes('collapseDuplicateFriendAddedNotices'));
 });
 
@@ -405,12 +408,17 @@ test('the reconnect judgement survives a token-rotation socket swap', () => {
   assert.match(manager, /hadConnectedForUser = null/);
 });
 
-test('offline revocations get their own catch-up channel', () => {
-  // 撤回不改 height —— afterHeight 补拉结构上永远看不到它。
+test('offline revocations, edits, reactions and tombstones ride the revision stream', () => {
+  // 撤回/编辑/回应/焚毁都不改 height —— afterHeight 补拉结构上看不到它们;
+  // 按时间戳扫的旧通道又有「早时间戳晚提交」的漏洞。现在它们都换号进序号流。
   const api = read('src/chat-core/api.ts');
-  assert.match(api, /\/chat\/messages\/mutations/);
-  const manager = read('src/chat-core/socket-manager.ts');
-  assert.match(manager, /fetchChatMutationsSince/);
+  assert.match(api, /\/chat\/conversations\/\$\{conversationId\}\/sync/);
+  assert.doesNotMatch(api, /\/chat\/messages\/mutations/);
+  const sync = read('src/chat-core/sync.ts');
+  assert.match(sync, /fetchChatSyncPage/);
+  // 内存与本地库同一页一起落:只落内存的话,冷启动又把旧版本读回来。
+  assert.match(sync, /applySyncPage\(conversationId, result\)/);
+  assert.match(sync, /applyLocalSyncPage\(conversationId/);
 });
 
 test('the local cache is disabled when SQLCipher is unavailable', () => {
@@ -441,7 +449,7 @@ test('revoke/edit rejections are localized instead of shown raw', () => {
   ]) {
     assert.match(sendErrors, new RegExp(`'${code}'`), `missing ${code}`);
   }
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   // 撤回失败抛的是 ChatSendError(ack 通道),getApiErrorMessage 认不出它。
   assert.ok(
     !/revokeFailed[\s\S]{0,120}getApiErrorMessage/.test(screen),
@@ -450,7 +458,7 @@ test('revoke/edit rejections are localized instead of shown raw', () => {
 });
 
 test('multi-option pickers do not rely on Alert (Android caps at 3 buttons)', () => {
-  const detail = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const detail = readChatDetailSource();
   const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
   assert.match(detail, /OptionPickerSheet/);
   assert.match(info, /OptionPickerSheet/);
@@ -474,7 +482,7 @@ test('swipe delete sequences hide-after-clear and surfaces failures', () => {
 });
 
 test('reader receipts disclose the 200-reader cap', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /readersMore/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
@@ -495,25 +503,20 @@ test('local-first search merges the server results instead of suppressing them',
 
 // ---- Codex review 第二轮(PR #150) ----
 
-test('the mutation cursor is persisted and seeded before the first outage', () => {
-  // 首次重连时游标若还是 null,代码会「以现在为起点」问一遍 —— 那次断线里
-  // 发生的撤回被整段跳过,而 height 没变,任何补拉都够不着它。
+test('sync cursors are per conversation and persisted in the local database', () => {
+  // 游标跟着缓存走:缓存丢了游标也得丢,放 MMKV 的话两者会各自漂。
+  const sync = read('src/chat-core/sync.ts');
+  assert.match(sync, /readLocalSyncStates/);
+  assert.match(sync, /writeLocalSyncRevision/);
   const manager = read('src/chat-core/socket-manager.ts');
-  assert.match(manager, /MUTATION_CURSOR_KEY/);
-  assert.match(manager, /readMutationCursor/);
-  assert.match(manager, /writeMutationCursor/);
+  assert.doesNotMatch(manager, /MUTATION_CURSOR_KEY/);
 });
 
-test('mutation catch-up follows hasMore instead of stopping at one page', () => {
-  const manager = read('src/chat-core/socket-manager.ts');
-  assert.match(manager, /result\.hasMore/);
-  assert.match(manager, /result\.nextSince/);
-  const api = read('src/chat-core/api.ts');
-  // 用 serverTime 前进会跳过被截断的那些变更。
-  assert.ok(
-    !/return result\.serverTime;/.test(api),
-    'the cursor must come from nextSince, not serverTime',
-  );
+test('revision catch-up keeps paging while the server reports hasMore', () => {
+  const sync = read('src/chat-core/sync.ts');
+  assert.match(sync, /if \(!result\.hasMore\) return;/);
+  // 单次对账有页数上限,落后太多的会话由计划阶段直接跳到最新一页。
+  assert.match(sync, /SYNC_PAGES_MAX/);
 });
 
 test('an already-hydrated timeline still reconciles the height gap', () => {
@@ -530,7 +533,7 @@ test('local search hits reach the screen before the server round-trip', () => {
 });
 
 test('group typing is actually rendered, not just broadcast', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.match(screen, /statusTypingGroup/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
@@ -538,24 +541,23 @@ test('group typing is actually rendered, not just broadcast', () => {
   }
 });
 
-test('the mutation cursor is a composite (time, id) keyset', () => {
-  // DateTime 只有毫秒精度:一批同毫秒的变更跨在页边界上时,只带时间戳的游标
-  // 配 `> from` 会把剩下那些同刻的行永久跳过。
+test('the sync cursor is a single per-conversation revision, not a timestamp keyset', () => {
+  // 序号在会话行锁下分配、随行同事务提交:不存在同毫秒并列,也不存在早号晚提交。
   const protocol = read('src/chat-core/protocol.ts');
-  assert.match(protocol, /nextSinceId/);
-  const manager = read('src/chat-core/socket-manager.ts');
-  assert.match(manager, /result\.nextSinceId/);
+  assert.match(protocol, /nextRevision: number/);
+  assert.match(protocol, /throughRevision: number/);
+  assert.doesNotMatch(protocol, /nextSinceId/);
 });
 
-test('an expired mutation cursor drops the cache instead of faking a catch-up', () => {
-  const manager = read('src/chat-core/socket-manager.ts');
-  assert.match(manager, /resetRequired/);
-  assert.match(manager, /dropAllLocalMessages/);
+test('a cursor the server cannot honor resets that conversation cache instead of faking a catch-up', () => {
+  const sync = read('src/chat-core/sync.ts');
+  assert.match(sync, /result\.resetRequired/);
+  assert.match(sync, /resetLocalConversationCache/);
   const db = read('src/chat-core/local-db.ts');
-  assert.match(db, /export async function dropAllLocalMessages/);
+  assert.match(db, /export async function resetLocalConversationCache/);
   // web 平台桩要同步导出面,否则 expo export --platform web 会红。
   const web = read('src/chat-core/local-db.web.ts');
-  assert.match(web, /dropAllLocalMessages/);
+  assert.match(web, /export async function resetLocalConversationCache/);
 });
 
 // ---- Codex review 第四轮(PR #153):只修 P1(§12.5 收口规则) ----

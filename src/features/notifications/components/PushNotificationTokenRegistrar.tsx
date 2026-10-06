@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { pushTokenRegistrationOrchestrator } from '@/features/notifications/services/push-token-registration';
+import { subscribeJPushConnection } from '@/features/notifications/services/jpush';
 
 export function PushNotificationTokenRegistrar() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -28,6 +29,10 @@ export function PushNotificationTokenRegistrar() {
     });
     return () => subscription.remove();
   }, []);
+
+  useEffect(() => subscribeJPushConnection(() => {
+    setPermissionRefreshKey((value) => value + 1);
+  }), []);
 
   useEffect(() => {
     let cancelled = false;

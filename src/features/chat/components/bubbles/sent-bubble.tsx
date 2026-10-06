@@ -77,7 +77,7 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
         lineHeight: 20,
       },
       timeText: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.tinyRegular,
         marginTop: Spacing.xs,
       },

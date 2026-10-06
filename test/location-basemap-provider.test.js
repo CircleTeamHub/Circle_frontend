@@ -11,7 +11,7 @@ const SAN_JOSE = { latitude: 37.32698, longitude: -121.88435 };
 const NATIVE_KEY = 'test-amap-native-key';
 
 /**
- * 载入 location-map.ts。底图源要读 EXPO_PUBLIC_AMAP_NATIVE_KEY，而 Expo 是按字面量
+ * 载入 location-map.ts。底图源要读平台专属的 EXPO_PUBLIC_AMAP_*_KEY，而 Expo 是按字面量
  * 静态替换 process.env.EXPO_PUBLIC_* 的，源码里只能写成完整形式——所以这里必须把
  * process 喂进沙箱。
  */
@@ -33,7 +33,8 @@ function loadUtils(env = {}) {
   return context.module.exports;
 }
 
-const withKey = () => loadUtils({ EXPO_PUBLIC_AMAP_NATIVE_KEY: NATIVE_KEY });
+const withKey = () =>
+  loadUtils({ EXPO_PUBLIC_AMAP_ANDROID_KEY: NATIVE_KEY });
 
 const read = (relative) =>
   fs.readFileSync(path.join(process.cwd(), relative), 'utf8');
@@ -70,13 +71,24 @@ test('拿不到原生模块时回落 —— 网页端和没 prebuild 的包都�
 });
 
 test('没配密钥时回落，不至于变白图', () => {
-  const { getBasemapProvider, hasAmapNativeKey } = loadUtils({});
+  const { getAmapNativeKey, getBasemapProvider } = loadUtils({});
 
-  assert.equal(hasAmapNativeKey(), false);
+  assert.equal(getAmapNativeKey('android'), '');
   assert.equal(
     getBasemapProvider(SHENZHEN.latitude, SHENZHEN.longitude, true),
     'carto',
   );
+});
+
+test('iOS 与 Android 使用各自绑定的高德密钥', () => {
+  const { getAmapNativeKey } = loadUtils({
+    EXPO_PUBLIC_AMAP_ANDROID_KEY: 'android-key',
+    EXPO_PUBLIC_AMAP_IOS_KEY: 'ios-key',
+  });
+
+  assert.equal(getAmapNativeKey('android'), 'android-key');
+  assert.equal(getAmapNativeKey('ios'), 'ios-key');
+  assert.equal(getAmapNativeKey('web'), '');
 });
 
 test('境外坐标始终回落 —— 高德在境外基本没有数据', () => {
@@ -130,8 +142,8 @@ test('原生地图包只能延迟 require，不能顶层 import', () => {
 
   // Expo Go 里、或者装了依赖还没 prebuild 时没有对应原生模块，顶层 import 会把
   // 整个选点页拖崩。
-  assert.doesNotMatch(source, /^import .*from 'expo-amap'/m);
-  assert.match(source, /require\('expo-amap'\)/);
+  assert.doesNotMatch(source, /^import .*from 'expo-gaode-map'/m);
+  assert.match(source, /require\('expo-gaode-map'\)/);
   assert.match(source, /catch \{\s*\n\s*return null;/);
 });
 
@@ -141,16 +153,50 @@ test('网页端有一份桩，永远不去碰原生包', () => {
   );
 
   assert.match(stub, /isAmapNativeSupported = false/);
-  assert.doesNotMatch(stub, /expo-amap/);
+  assert.doesNotMatch(stub, /expo-gaode-map/);
 });
 
 test('图钉钉在正中且不吃触摸 —— 它标的就是地图中心', () => {
   const source = readNativeSurface();
 
-  assert.match(source, /onRegionChanged/);
+  assert.match(source, /onCameraIdle/);
+  assert.match(source, /initialCameraPosition/);
+  assert.match(source, /setPrivacyConfig/);
   assert.match(source, /pointerEvents="none"/);
   // 这个库没有地图点击和图钉拖拽事件，所以别去找那两个回调。
   assert.doesNotMatch(source, /onTapMarker|draggable/);
+});
+
+test('原生高德只在版本化同意完成并同步配置隐私状态后挂载', () => {
+  const picker = readPicker();
+  const surface = readNativeSurface();
+  const consent = read(
+    'src/features/location/services/amap-privacy-consent.ts',
+  );
+
+  assert.match(consent, /AMAP_PRIVACY_CONSENT_VERSION/);
+  assert.match(consent, /hasAmapPrivacyConsent/);
+  assert.match(consent, /grantAmapPrivacyConsent/);
+  assert.match(picker, /nativeAmapConsent === 'granted'/);
+  assert.match(picker, /configureAmapPrivacy\(\)/);
+  assert.match(picker, /location\.amapPrivacyPrompt/);
+  assert.doesNotMatch(surface, /useEffect[\s\S]*setPrivacyConfig/);
+  assert.match(surface, /getPrivacyStatus\(\)\.isReady/);
+});
+
+test('隐私政策披露高德提供方、数据类别、处理目的和官方链接', () => {
+  const policyScreen = read(
+    'src/features/profile/screens/AboutPrivacyPolicyScreen.tsx',
+  );
+  assert.match(policyScreen, /location\.amapPrivacyPolicyBody/);
+
+  for (const locale of ['en', 'zh', 'ja', 'ko', 'es']) {
+    const messages = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    const disclosure = messages.location.amapPrivacyPolicyBody;
+    assert.equal(typeof disclosure, 'string', `${locale} disclosure missing`);
+    assert.match(disclosure, /AMap|高德/);
+    assert.match(disclosure, /https:\/\/lbs\.amap\.com\/pages\/privacy\//);
+  }
 });
 
 test('选点页按可用性分流，两条路都在', () => {
@@ -173,4 +219,22 @@ test('原生分支的地名反查也是设备优先', () => {
 
   // 漏传设备解析器不会让任何断言变红，但会把每次拖动都变成一次计费调用。
   assert.match(source, /resolvePlace\(\s*\n\s*wgs84\.latitude[\s\S]*?resolvePlaceOnDevice,/);
+});
+
+test('受保护的自家地名代理只经 App 认证层访问', () => {
+  const picker = readPicker();
+  const nativeSurface = read('src/features/location/components/map-surface.tsx');
+  const webSurface = read('src/features/location/components/map-surface.web.tsx');
+  const locationCard = read(
+    'src/features/chat/components/bubbles/location-card.tsx',
+  );
+
+  // WebView/iframe 里的脚本拿不到安全存储中的 Bearer token，所以两端都必须把
+  // geocoder-request 交回 App 层，再由统一请求助手决定是否附带登录态。
+  assert.match(picker, /const useParentGeocoderBridge = true/);
+  assert.match(nativeSurface, /handleWebGeocoderBridgeRequest/);
+  assert.match(nativeSurface, /geocoderFetch/);
+  assert.match(webSurface, /geocoderFetch/);
+  // 位置气泡不经过地图载体，也必须显式注入同一个认证请求助手。
+  assert.match(locationCard, /resolvePlace[\s\S]*?geocoderFetch/);
 });

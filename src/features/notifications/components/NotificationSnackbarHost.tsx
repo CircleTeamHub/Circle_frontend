@@ -12,7 +12,10 @@ import {
 import { markNotificationRead } from '@/services/api/notifications';
 import { Spacing, useTheme } from '@/theme';
 import { mapNotificationToRow } from '@/features/notifications/utils/notification-summary';
-import { getSnackbarRoute } from '@/features/notifications/utils/snackbar-route';
+import {
+  getSnackbarRoute,
+  isUserProfileSnackbarRoute,
+} from '@/features/notifications/utils/snackbar-route';
 import { useNotificationFeedback } from '@/features/notifications/hooks/use-notification-feedback';
 import {
   circleSoundAllowed,
@@ -204,12 +207,15 @@ export function NotificationSnackbarHost() {
       notificationId: shown.id,
     });
 
-    router.push(
-      getSnackbarRoute(shown, {
-        untitledPost: t('notifications.signupMgmt.untitledPost'),
-        scope: notificationScope,
-      }),
-    );
+    const route = getSnackbarRoute(shown, {
+      untitledPost: t('notifications.signupMgmt.untitledPost'),
+      scope: notificationScope,
+    });
+    if (isUserProfileSnackbarRoute(route)) {
+      router.navigate(route);
+    } else {
+      router.push(route);
+    }
   }, [shown, clearTimer, dismissCurrent, notificationScope, router, t]);
 
   if (!shown || !row || (shown.kind === 'chat' && onMessagesList)) {

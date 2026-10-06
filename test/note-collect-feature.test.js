@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8');
 
@@ -26,7 +27,7 @@ test('note types carry the collectedFrom source snapshot', () => {
 });
 
 test('chat collect action routes note cards to collectNote instead of collections', () => {
-  const src = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const src = readChatDetailSource();
 
   assert.match(src, /message\.type === 'note-card'/);
   assert.match(src, /buildNoteCollectSource\(message, \{/);
@@ -114,8 +115,10 @@ test('EditNoteScreen preserves pinned and status when saving edits', () => {
 test('EditNoteScreen keeps keyboard from covering the bottom inputs', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(src, /KeyboardAvoidingView/);
-  assert.match(src, /behavior=\{Platform\.OS === 'ios' \? 'padding' : undefined\}/);
+  // Android edge-to-edge 下 adjustResize 不缩窗口：两端都走共享避让容器，
+  // 不能再给 Android 传 behavior=undefined（那样键盘会直接盖住编辑区）。
+  assert.match(src, /<KeyboardAvoidingContainer\b/);
+  assert.doesNotMatch(src, /behavior=\{Platform\.OS === 'ios' \? 'padding' : undefined\}/);
 });
 
 // ── DOM 编辑器：序列化失败不能把正文覆盖成空文档 ──────────────────────────────
@@ -206,7 +209,7 @@ test('分享 sheet 支持就地搜索会话', () => {
   assert.match(src, /item\.name\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
   assert.match(src, /data=\{visibleConversations\}/);
   // 关闭时清搜索词，否则下次打开停在旧过滤结果上，看着像会话丢了。
-  assert.match(src, /if \(!visible\) setQuery\(''\)/);
+  assert.match(src, /if \(!visible\) \{\s*setQuery\(''\)/);
   // 搜不到 ≠ 一个会话都没有，两种空态文案分开。
   assert.match(src, /notes\.shareToChat\.noMatch/);
   assert.match(src, /notes\.shareToChat\.empty/);

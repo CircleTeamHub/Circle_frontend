@@ -21,7 +21,6 @@ function makePost(id: string): CirclePlazaPost {
       creditScore: null,
       fancyNumber: false,
     },
-    viewCount: 0,
     author: {
       id: `author-${id}`,
       nickname: `author-${id}`,

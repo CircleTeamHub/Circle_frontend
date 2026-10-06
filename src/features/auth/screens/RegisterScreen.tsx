@@ -16,6 +16,7 @@ import { AuthInput } from '@/components/ui/auth-input';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useAuth } from '@/hooks/use-auth';
 import { useNetworkStatus } from '@/hooks/use-network-status';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const s = StyleSheet.create({
@@ -143,7 +144,7 @@ export default function RegisterScreen() {
   );
 
   return (
-    <View style={d.outer}>
+    <KeyboardAvoidingContainer style={d.outer}>
       <NavHeader title={t('auth.createAccount')} />
       <ScrollView
         contentContainerStyle={[
@@ -257,6 +258,6 @@ export default function RegisterScreen() {
           </Pressable>
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

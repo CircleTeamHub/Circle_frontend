@@ -27,6 +27,7 @@ import {
 } from '@/features/contacts/utils/group-chat-rows';
 import { getChatDetailHref } from '@/features/user/utils/routes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
@@ -351,6 +352,7 @@ export default function GroupsScreen() {
         fallbackHref="/(tabs)/contacts"
       />
       <SectionList
+        {...keyboardDismissOnDragProps}
         sections={sections}
         keyExtractor={(item) => item.conversation.id}
         contentContainerStyle={d.listContent}

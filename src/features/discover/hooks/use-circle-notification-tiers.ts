@@ -107,15 +107,21 @@ export function useCircleNotificationTiers(): CircleNotificationTiers {
 
       const requestId = latestRequestRef.current + 1;
       latestRequestRef.current = requestId;
+      const intended = syncedSnapshot(useCircleNotificationStore.getState());
       const next = circleOfflinePushAllowed(
         useCircleNotificationStore.getState(),
       );
 
       const write = () =>
         updateCircleOfflinePushEnabled(next).then(() => {
-          if (requestId !== latestRequestRef.current) return;
-          // 这一发是最新的且写成了：当前本地取值就是服务端的取值。
-          confirmedRef.current = null;
+          if (requestId === latestRequestRef.current) {
+            // 这一发是最新的且写成了：当前本地取值就是服务端的取值。
+            confirmedRef.current = null;
+            return;
+          }
+          // 后面还有排队写时，这一发已成为服务端当前真值。若后续失败，必须
+          // 回到这里，而不是回到整条队列开始前、服务端早已不再持有的旧状态。
+          confirmedRef.current = intended;
         })
         .catch((err) => {
           reportHandledFailure('circleNotification', 'offlinePushSync', err);

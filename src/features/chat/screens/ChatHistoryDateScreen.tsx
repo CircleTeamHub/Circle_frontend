@@ -13,6 +13,7 @@ import {
   getChatDetailHref,
   getChatHistoryDateResultsHref,
 } from '@/features/user/utils/routes';
+import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -161,6 +162,7 @@ export default function ChatHistoryDateScreen() {
     title?: string;
   }>();
   const { conversationID, sourceID, title } = resolveChatHistoryRouteParams(params);
+  const conversationType = useChatHistoryConversationType(conversationID);
   const [visibleMonth, setVisibleMonth] = useState(() => getMonthStart(new Date()));
   // 当前可见月份里「有聊天记录」的日期集合（'YYYY-MM-DD'），用于给这些天上色。
   const [recordDays, setRecordDays] = useState<Set<string>>(() => new Set());
@@ -253,7 +255,7 @@ export default function ChatHistoryDateScreen() {
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={t('chat.history.dateTitle')}
-        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID)}
+        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID, undefined, conversationType)}
       />
       <View style={s.content}>
         <View style={[s.calendarCard, d.calendarCard]}>

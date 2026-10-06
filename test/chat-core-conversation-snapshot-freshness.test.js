@@ -85,6 +85,7 @@ function loadDateWindow() {
 function loadApi() {
   const calls = [];
   const snapshots = [];
+  const burnUpdates = [];
   const api = runModule('src/chat-core/api.ts', (request) => {
     if (request === '@/services/api/client') {
       return {
@@ -115,6 +116,7 @@ function loadApi() {
         useChatStore: {
           getState: () => ({
             setConversations: (conversations) => snapshots.push(conversations),
+            applyBurnDuration: (...args) => burnUpdates.push(args),
             ingestMessages: () => {},
             upsertConversation: () => {},
             removeConversation: () => {},
@@ -129,11 +131,34 @@ function loadApi() {
     if (request === './local-db') return localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
-  return { api, calls, snapshots };
+  return { api, calls, snapshots, burnUpdates };
 }
 
 /** 让在途 Promise 链上所有能跑的微任务都跑完。 */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('会话快照请求使用服务端允许的最大窗口，避免默认只取前 100 条', async () => {
+  const { api, calls } = loadApi();
+
+  const request = api.loadChatConversations();
+  await settle();
+
+  assert.equal(calls[0].url, '/chat/conversations?limit=500');
+  calls[0].resolve([]);
+  await request;
+});
+
+test('阅后即焚回执把服务端持久化的开启边界写入 store', async () => {
+  const { api, calls, burnUpdates } = loadApi();
+  const startedAt = '2026-09-14T20:00:00.000Z';
+
+  const request = api.setChatBurnDuration('c1', 60);
+  await settle();
+  calls[0].resolve({ burnDurationSec: 60, burnStartedAt: startedAt });
+
+  assert.equal(await request, 60);
+  assert.deepEqual(burnUpdates, [['c1', 60, startedAt]]);
+});
 
 test('并发的普通会话列表请求仍然合并成一次', async () => {
   const { api, calls } = loadApi();

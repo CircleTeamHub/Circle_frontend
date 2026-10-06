@@ -4,11 +4,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { releaseScriptShell } = require('./helpers/release-script-shell');
 
 // test/ 下的跨仓契约测试按 `<前端根>/../circle_be` 读后端源码。任何跑这套测试的
-// 工作流都必须先把后端放到同级目录，并断言源码在位，否则契约要么静默 skip，要么
-// 写死读取的那条以 ENOENT 打红整次构建。#246 之后 main 上每次安卓预生产构建都红在
-// 这里，而 ci.yml 自己检出了后端，所以 PR 上一直是绿的。
+// 工作流都必须先把后端放到同级目录，并断言源码在位，否则契约会静默 skip。#246 之后
+// 曾有一条写死读取路径的契约以 ENOENT 把 main 上每次安卓预生产构建打红，而 ci.yml
+// 自己检出了后端，所以 PR 上一直是绿的。
 
 const SCRIPT = '.github/scripts/prepare-backend-contracts.sh';
 
@@ -16,6 +17,16 @@ const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
 const TEST_STEP = /^\s+run:\s*npm (?:run ci|test)\s*$/m;
+
+test('frontend CI runs for both main and stacked Codex PR bases', () => {
+  const ci = read('.github/workflows/ci.yml');
+  const pullRequestTrigger = ci.slice(
+    ci.indexOf('  pull_request:'),
+    ci.indexOf('  push:'),
+  );
+  assert.match(pullRequestTrigger, /^\s+- main\s*$/m);
+  assert.match(pullRequestTrigger, /^\s+- ['"]codex\/\*\*['"]\s*$/m);
+});
 
 function jobs(workflow) {
   const body = workflow.slice(workflow.indexOf('\njobs:'));
@@ -74,7 +85,7 @@ test('the Android workflows pass the backend branch through the environment', ()
   }
 });
 
-test('the shared gate requires every backend source ci.yml requires, plus the DTO the inbox test reads', () => {
+test('the shared gate requires every backend source ci.yml requires, including the DTO the inbox test reads', () => {
   const ci = read('.github/workflows/ci.yml');
   const script = read(SCRIPT);
   const ciFiles = [...ci.matchAll(/require_file \.\.\/circle_be\/(\S+)/g)].map(
@@ -99,8 +110,12 @@ test('the shared gate requires every backend source ci.yml requires, plus the DT
   for (const symbol of ciSymbols) {
     assert.ok(scriptSymbols.has(symbol), `${SCRIPT} does not require ${symbol}`);
   }
-  // new-friends-inbox-tabs.test.js 写死读取它：缺了不是 skip 而是 ENOENT。
-  assert.ok(scriptFiles.has('src/chat/chat.types.ts'));
+  // new-friends-inbox-tabs.test.js 找不到这份 DTO 就 skip：ci.yml 必须断言它在位，
+  // 否则后端一挪文件，这条契约会在 PR 上悄悄消失。上面的超集检查再把它带到安卓工作流。
+  assert.ok(
+    ciFiles.includes('src/chat/chat.types.ts'),
+    'ci.yml does not require src/chat/chat.types.ts',
+  );
 });
 
 const COMPLETE_BACKEND = {
@@ -121,7 +136,7 @@ function fakeBackend(files) {
 }
 
 const runGate = (backendDir) =>
-  spawnSync('bash', [SCRIPT], {
+  spawnSync(releaseScriptShell(), [SCRIPT], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: { ...process.env, BACKEND_CONTRACTS_DIR: backendDir, BACKEND_REF_CANDIDATE: '' },

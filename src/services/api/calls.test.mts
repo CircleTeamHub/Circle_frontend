@@ -8,7 +8,6 @@ const call = {
   sessionType: 'group',
   callType: 'AUDIO',
   status: 'ACTIVE',
-  livekitRoomName: 'circle_call_1',
   initiator: { id: 'user-1', nickname: 'Alice', avatarUrl: null },
   startedAt: '2026-06-11T03:00:00.000Z',
   endedAt: null,

@@ -72,8 +72,8 @@ test('login screen follows the night-flight layout: sky hero, no slogan, reserve
   // 「忘记密码」那行不能写死高度：系统字号调大或译文更长时会溢出压到提示槽上。
   assert.match(source, /forgotRow:\s*\{[^}]*minHeight:\s*18/);
   assert.doesNotMatch(source, /forgotRow:\s*\{[^}]*[^n]height:\s*18/);
-  // 键盘：iOS 用 padding 避让，安卓靠 adjustResize；拖动列表收起键盘。
-  assert.match(source, /KeyboardAvoidingView/);
+  // 键盘：两端都用共享避让容器（安卓 edge-to-edge 下 adjustResize 不再缩窗口）；拖动列表收起键盘。
+  assert.match(source, /<KeyboardAvoidingContainer/);
   assert.match(source, /\{\.\.\.keyboardDismissOnDragProps\}/);
   // 链接用 link token（暗色 #6366F1 在 #1A1B23 上不够对比度），不再直接用 primary。
   assert.match(source, /colors\.link/);

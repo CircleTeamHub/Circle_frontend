@@ -20,6 +20,7 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -221,7 +222,7 @@ export default function EditFriendRemarkScreen() {
   );
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('profile.setRemark')} />
       <ScrollView
         contentContainerStyle={s.content}
@@ -243,6 +244,6 @@ export default function EditFriendRemarkScreen() {
           <Text style={d.buttonText}>{isSaving ? t('common.saving') : t('common.save')}</Text>
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

@@ -5,7 +5,11 @@ export type NoteSectionKind = 'text' | 'media' | 'showcase' | 'location';
 export type StructuredNoteMediaItem = Partial<NoteMedia> & {
   id?: string;
   type: 'IMAGE' | 'VIDEO';
-  url: string;
+  /**
+   * 可选：私有目录（notes/）刚上传的条目只有 objectKey，地址由服务端按 key 现签，
+   * 所以只有服务端读接口回来的条目才带 url。
+   */
+  url?: string;
 };
 
 export type NoteTextSection = {
@@ -63,10 +67,9 @@ function getTextBlocks(blocks: Record<string, unknown>[] | null | undefined) {
 
 function getLegacyShowcaseItems(note: StructuredNoteInput): StructuredNoteMediaItem[] {
   const blocks = note.contentJson ?? [];
-  const byUrl = new Map(
-    (note.media ?? [])
-      .filter((item) => item.url)
-      .map((item) => [item.url, item as StructuredNoteMediaItem]),
+  const legacyMedia: StructuredNoteMediaItem[] = note.media ?? [];
+  const byUrl = new Map<string, StructuredNoteMediaItem>(
+    legacyMedia.flatMap((item) => (item.url ? [[item.url, item] as const] : [])),
   );
 
   return blocks.flatMap((block, index) => {
@@ -89,7 +92,12 @@ function normalizeItems(items: unknown): StructuredNoteMediaItem[] {
   return items.flatMap((item) => {
     if (!item || typeof item !== 'object') return [];
     const candidate = item as Partial<StructuredNoteMediaItem>;
-    if ((candidate.type !== 'IMAGE' && candidate.type !== 'VIDEO') || !candidate.url) {
+    // 身份可以来自 url 或 objectKey：私有目录新上传的条目只有 key，按 url 一刀切
+    // 会把刚传完的图静默丢掉。
+    const hasIdentity =
+      Boolean(candidate.url) ||
+      (typeof candidate.objectKey === 'string' && candidate.objectKey.trim() !== '');
+    if ((candidate.type !== 'IMAGE' && candidate.type !== 'VIDEO') || !hasIdentity) {
       return [];
     }
     return [candidate as StructuredNoteMediaItem];
@@ -105,7 +113,7 @@ function getMediaAliases(item: StructuredNoteMediaItem) {
   const aliases = new Set<string>();
   const objectKey = typeof item.objectKey === 'string' ? item.objectKey.trim() : '';
   if (objectKey) aliases.add(`${item.type}:key:${objectKey}`);
-  const url = item.url.trim();
+  const url = typeof item.url === 'string' ? item.url.trim() : '';
   if (url) aliases.add(`${item.type}:url:${url}`);
   return aliases;
 }
@@ -266,14 +274,22 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
   };
 }
 
+/** 渲染得出来 = 有地址。私有目录的条目靠服务端读接口现签，拿不到就只能是空的。 */
+export function isRenderableMediaItem(item: StructuredNoteMediaItem): boolean {
+  return Boolean(item.url);
+}
+
 export function getNoteSectionAvailability(sections: NoteSections) {
   const hasText =
     Boolean(sections.text.content?.trim()) ||
     Boolean(sections.text.contentJson && sections.text.contentJson.length > 0);
   return {
     hasText,
-    hasMedia: sections.media.items.length > 0,
-    hasShowcase: sections.showcase.items.length > 0,
+    // 只有渲染得出来的条目才算「有内容」：私有目录的条目要靠服务端读接口现签地址，
+    // 拿不到 url 的（另一端写入的分歧数据）渲染为空，不该让详情页画出一个空区块。
+    // 媒体与展示同一条判据，详情页两处列表也按它过滤（见 isRenderableMediaItem）。
+    hasMedia: sections.media.items.some(isRenderableMediaItem),
+    hasShowcase: sections.showcase.items.some(isRenderableMediaItem),
     hasLocation: Boolean(
       sections.location &&
         ((sections.location.title && sections.location.title.trim()) ||

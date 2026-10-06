@@ -12,6 +12,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Divider } from '@/components/ui/divider';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { loadChatConversations } from '@/chat-core/api';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
@@ -245,6 +246,7 @@ export const NewGroupsInboxList: React.FC<NewGroupsInboxListProps> = ({ query })
       showsVerticalScrollIndicator={false}
       refreshing={refreshing}
       onRefresh={handleRefreshGroups}
+      {...keyboardDismissOnDragProps}
     />
   );
 };

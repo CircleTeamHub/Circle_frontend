@@ -154,7 +154,7 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
       {message.time ? (
         <View style={sTransfer.timeRow}>
           <Text
-            style={{ ...Typography.tinyRegular, color: colors.textSecondary }}
+            style={{ ...Typography.tinyRegular, color: colors.text }}
           >
             {message.time}
           </Text>

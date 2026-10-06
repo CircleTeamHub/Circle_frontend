@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
@@ -54,7 +55,7 @@ test('circle card: bubble renders and taps through to the circle detail', () => 
   assert.match(bubble, /displayName/);
   assert.match(bubble, /displayAvatar/);
 
-  const chat = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const chat = readChatDetailSource();
   assert.match(chat, /case 'circle-card':/);
   assert.match(chat, /<CircleCardBubble/);
   // tapping opens the circle detail (where the join button lives)

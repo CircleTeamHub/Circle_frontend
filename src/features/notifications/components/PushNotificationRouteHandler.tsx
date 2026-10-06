@@ -22,6 +22,10 @@ import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { useAuthStore } from '@/stores/authStore';
 import { devWarn } from '@/utils/dev-log';
 import { reportHandledFailure } from '@/observability/report-failure';
+import {
+  initializeJPush,
+  subscribeJPush,
+} from '@/features/notifications/services/jpush';
 
 export function PushNotificationRouteHandler() {
   const router = useRouter();
@@ -144,6 +148,30 @@ export function PushNotificationRouteHandler() {
     if (Platform.OS === 'web') return;
     let mounted = true;
     let subscription: { remove: () => void } | null = null;
+    initializeJPush();
+    const unsubscribeJPush = subscribeJPush((event) => {
+      if (event.notificationEventType !== 'notificationOpened') return;
+      let data: Record<string, unknown> =
+        event.extras && typeof event.extras === 'object' ? event.extras : {};
+      if (typeof event.extras === 'string') {
+        try {
+          const parsed = JSON.parse(event.extras) as unknown;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            data = parsed as Record<string, unknown>;
+          }
+        } catch {
+          data = {};
+        }
+      }
+      controller.handleResponse({
+        notification: {
+          request: {
+            identifier: event.messageID || `jpush:${Date.now()}`,
+            content: { data },
+          },
+        },
+      });
+    });
     controller.activate();
 
     void import('expo-notifications')
@@ -172,6 +200,7 @@ export function PushNotificationRouteHandler() {
     return () => {
       mounted = false;
       subscription?.remove();
+      unsubscribeJPush();
       controller.dispose();
     };
   }, [controller]);

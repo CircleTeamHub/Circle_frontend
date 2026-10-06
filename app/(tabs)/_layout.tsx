@@ -118,6 +118,7 @@ type TabBarStyles = {
   liquidIndicator: ViewStyle;
   iconWrap: ViewStyle;
   badge: ViewStyle;
+  badgeText: TextStyle;
   label: TextStyle;
   labelActive: TextStyle;
 };
@@ -201,7 +202,7 @@ interface TabSlotProps {
   tab: TabKey;
   label: string;
   focused: boolean;
-  showBadgeDot: boolean;
+  badgeCount: number;
   colors: ThemeColors;
   styles: TabBarStyles;
   onPress: () => void;
@@ -213,7 +214,7 @@ const TabSlot = memo(function TabSlot({
   tab,
   label,
   focused,
-  showBadgeDot,
+  badgeCount,
   colors,
   styles,
   onPress,
@@ -267,8 +268,12 @@ const TabSlot = memo(function TabSlot({
               size={focused ? TAB_ICON_SIZE + 1 : TAB_ICON_SIZE}
               color={iconTint}
             />
-            {showBadgeDot ? (
-              <View style={styles.badge} />
+            {badgeCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText} numberOfLines={1} maxFontSizeMultiplier={1}>
+                  {badgeCount > 99 ? '99+' : badgeCount}
+                </Text>
+              </View>
             ) : null}
           </View>
           <Text
@@ -303,7 +308,7 @@ function CustomTabBar({
   hidden: boolean;
   colorScheme: 'light' | 'dark';
   colors: ThemeColors;
-  badgeMap: Record<string, boolean>;
+  badgeMap: Record<string, number>;
   styles: TabBarStyles;
 }) {
   const { t } = useTranslation();
@@ -420,7 +425,7 @@ function CustomTabBar({
 
             const focused = state.index === index;
             const label = t(tab.key);
-            const hasBadge = badgeMap[route.name] ?? false;
+            const badgeCount = badgeMap[route.name] ?? 0;
             const { options } = descriptors[route.key];
 
             const onPress = () => {
@@ -461,7 +466,7 @@ function CustomTabBar({
                 tab={tab}
                 label={label}
                 focused={focused}
-                showBadgeDot={hasBadge}
+                badgeCount={badgeCount}
                 colors={colors}
                 styles={styles}
                 onPress={onPress}
@@ -619,15 +624,25 @@ export default function TabLayout() {
     badge: {
       position: 'absolute',
       top: -3,
-      right: -7,
-      width: 11,
-      height: 11,
+      right: -14,
+      minWidth: 18,
+      height: 18,
+      paddingHorizontal: 3,
+      alignItems: 'center',
+      justifyContent: 'center',
       borderRadius: 999,
       backgroundColor: colors.error,
       // 这圈描边原本是为了融进 colors.surface 的 bar 底色；iOS 改成玻璃后
       // 底下没有固定色可融，留着只会变成浮在材质上的一圈实心光晕。
       borderWidth: Platform.OS === 'ios' ? 0 : 2,
       borderColor: colors.surface,
+    },
+    badgeText: {
+      color: colors.white,
+      fontSize: 10,
+      lineHeight: 12,
+      fontWeight: '600',
+      includeFontPadding: false,
     },
     label: {
       fontSize: 9,
@@ -639,15 +654,15 @@ export default function TabLayout() {
     },
   }), [colors, insets.bottom, isSplitLayout, listPaneWidth, pinTabBarLeft, resolvedMode]);
 
-  // 动态 tab 只统计它自己辖下的三样：朋友圈铃铛 + 圈子铃铛 + 报名管理。
+  // 各 tab 汇总自己辖下的未读：联系人含朋友圈，动态含圈子和报名管理。
   // 曾经读的 discoverUnread 是「好友申请 + 朋友圈 + 圈子」的并集（互动消息
   // 列表页的全集口径），于是一条未读好友申请会同时点亮联系人和动态两个
   // tab —— 而好友申请的规范 UI 是「新的朋友」，归联系人。
-  const badgeMap: Record<string, boolean> = useMemo(() => ({
-    messages: messagesUnread > 0,
-    contacts: contactsUnread > 0 || momentsUnread > 0,
-    discover: circleUnread > 0 || signupUnread > 0,
-    profile: profileUnread > 0,
+  const badgeMap: Record<string, number> = useMemo(() => ({
+    messages: messagesUnread,
+    contacts: contactsUnread + momentsUnread,
+    discover: circleUnread + signupUnread,
+    profile: profileUnread,
   }), [
     messagesUnread,
     contactsUnread,
@@ -675,7 +690,7 @@ export default function TabLayout() {
     >
       {TAB_KEYS.map((tab) => {
         const label = t(tab.key);
-        const hasBadge = badgeMap[tab.name] ?? false;
+        const badgeCount = badgeMap[tab.name] ?? 0;
         return (
           <Tabs.Screen
             key={tab.name}
@@ -701,8 +716,8 @@ export default function TabLayout() {
             })}
             options={{
               // 视觉文字由自绘 tab bar 渲染；这里只补屏幕阅读器标签（含未读提示）。
-              tabBarAccessibilityLabel: hasBadge
-                ? `${label} ${t('tabs.unreadHint', { defaultValue: '有未读' })}`
+              tabBarAccessibilityLabel: badgeCount > 0
+                ? `${label} ${t('tabs.unreadCount', { count: badgeCount })}`
                 : label,
             }}
           />

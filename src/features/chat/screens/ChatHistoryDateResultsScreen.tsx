@@ -16,6 +16,7 @@ import {
   getChatDetailHref,
   getChatHistoryDateHref,
 } from '@/features/user/utils/routes';
+import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -52,6 +53,7 @@ export default function ChatHistoryDateResultsScreen() {
     date?: string;
   }>();
   const { conversationID, sourceID, title } = resolveChatHistoryRouteParams(params);
+  const conversationType = useChatHistoryConversationType(conversationID);
   const date = typeof params.date === 'string' ? params.date : '';
 
   const [loading, setLoading] = useState(true);
@@ -164,10 +166,10 @@ export default function ChatHistoryDateResultsScreen() {
         return;
       }
       router.push(
-        getChatDetailHref('messages', sourceID, title, undefined, conversationID, clientMsgID),
+        getChatDetailHref('messages', sourceID, title, undefined, conversationID, clientMsgID, conversationType),
       );
     },
-    [conversationID, sourceID, title],
+    [conversationID, conversationType, sourceID, title],
   );
 
   return (

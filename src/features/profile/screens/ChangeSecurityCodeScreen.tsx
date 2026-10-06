@@ -2,8 +2,6 @@ import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +19,7 @@ import {
 } from '@/services/api/auth';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
 const SECURITY_CODE_PATTERN = /^\d{4,6}$/;
@@ -209,9 +208,8 @@ export default function ChangeSecurityCodeScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingContainer
       style={[d.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <NavHeader title={title} />
       <ScrollView
@@ -271,6 +269,6 @@ export default function ChangeSecurityCodeScreen() {
           {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }

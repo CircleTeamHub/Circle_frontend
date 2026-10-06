@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
@@ -26,7 +27,7 @@ test('MessageActionMenu keeps message actions in a compact grid instead of a tal
 });
 
 test('ChatDetailScreen long-press opens the anchored menu instead of an Alert', () => {
-  const src = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const src = readChatDetailSource();
   // long-press captures the touch point and opens the floating menu
   assert.match(src, /setActionMenu\(\{ message, x: pageX, y: pageY \}\)/);
   assert.match(src, /<MessageActionMenu/);
@@ -40,7 +41,7 @@ test('ChatDetailScreen long-press opens the anchored menu instead of an Alert', 
 });
 
 test('ChatDetailScreen wires long-press handlers into non-text message bubbles', () => {
-  const src = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const src = readChatDetailSource();
   assert.match(src, /getMessageLongPressHandler/);
   for (const component of [
     'LocationCard',

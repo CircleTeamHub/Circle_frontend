@@ -260,6 +260,7 @@
       "lastSeenDays": "{{count}}日前にオンライン",
       "lastSeenDays_other": "{{count}}日前にオンライン",
       "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
+      "historyWindowFull": "これより前のメッセージは、チャット履歴で検索してください。",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",
       "voiceReleaseSend": "指を離して送信 {{seconds}}\"",
@@ -268,13 +269,12 @@
       "inputPlaceholder": "メッセージを入力…",
       "disappearingMessageNotice": "このチャットでは消えるメッセージがオンです。新しいメッセージは {{duration}} 後に消えます。",
       "personalDisappearingMessageNotice": "消えるメッセージをオンにしました。新しいメッセージは {{duration}} 後に消えます。",
-      "peerDisappearingMessageNotice": "相手が消えるメッセージをオンにしました（{{duration}}）。",
-      "bothDisappearingMessageNotice": "双方が消えるメッセージをオンにしました。新しいメッセージは {{duration}} 後に消えます。",
       "attachmentPanelLabel": "添付パネルを開く",
       "sendFailedText": "メッセージを送信できませんでした。もう一度お試しください",
       "sensitiveWordBlocked": "禁止ワードが含まれているため、メッセージはブロックされました",
       "recordStartFailed": "録音を開始できませんでした。もう一度お試しください",
       "voiceSendFailed": "音声メッセージを送信できませんでした。もう一度お試しください",
+      "mediaSourceMissing": "元のファイルがこの端末にないため、再送信できません",
       "locationSendFailed": "位置情報を送信できませんでした。もう一度お試しください",
       "imageSendFailed": "画像を送信できませんでした。もう一度お試しください",
       "videoSendFailed": "動画を送信できませんでした。もう一度お試しください",
@@ -283,6 +283,7 @@
       "videoTooLong": "10分以内の動画を選択してください",
       "videoUnsupported": "MP4、MOV、M4V動画のみ対応しています",
       "videoUnavailable": "動画を再生できません",
+      "videoPreparing": "動画を処理しています…",
       "playVideo": "動画を再生",
       "noteBatchPartialFailed": "{{count}} 件の送信に失敗しました",
       "cardSendFailed": "プロフィールカードを送信できませんでした。もう一度お試しください",
@@ -809,6 +810,8 @@
     "desktopEmptyDetail": "会話を選択してチャットを始めましょう",
     "imNotConnected": "IM に接続されていません。再度ログインしてください。",
     "imConnecting": "IM に接続中…",
+    "imNetworkError": "ネットワークが不安定です。より安定したネットワークに切り替えて、もう一度お試しください。",
+    "imServerError": "サーバーで問題が発生しています。しばらくしてからもう一度お試しください。",
     "swipeMarkRead": "既読にする",
     "swipeMarkUnread": "未読にする",
     "swipeHide": "チャットを非表示",
@@ -1138,13 +1141,18 @@
       "confirmTitle": "ノートを送信",
       "confirmMessage": "「{{title}}」を {{name}} に送信しますか？",
       "confirmBatchMessage": "{{count}} 件のノートを {{name}} に送信しますか？",
-      "partialFailed": "{{count}} 件のノートを送信できませんでした。もう一度お試しください。",
+      "confirmRecipientsMessage": "{{noteCount}} 件のノートを選択した {{recipientCount}} 件のチャットに送信しますか？",
+      "confirmRetryMessage": "送信に失敗した {{count}} 件のみ再送しますか？成功したノートは再送されません。対象は {{recipientCount}} 件のチャットです。",
+      "partialFailed": "{{count}} 件を送信できませんでした。失敗した項目のみ再送できます。",
       "limitExceeded": "一度に共有できるノートは {{count}} 件までです。他の一括操作には影響しません。",
       "sentTitle": "送信しました",
       "sentMessage": "ノートをチャットに送信しました。",
+      "sentRecipientsMessage": "ノートを {{recipientCount}} 件のチャットに送信しました。",
       "failedTitle": "送信に失敗しました",
       "failedMessage": "現在このノートを送信できません。もう一度お試しください。",
       "sending": "送信中...",
+      "sendSelected": "{{count}} 件のチャットに送信",
+      "retryFailed": "失敗した {{count}} 件を再送",
       "loadFailed": "チャットを読み込めませんでした。もう一度お試しください",
       "empty": "送信できるチャットがありません",
       "groupHint": "グループ",
@@ -1491,12 +1499,16 @@
     "viewerOnly": "この申請の認証者ではありません",
     "settledRejected": "この申請は拒否されました",
     "settledApproved": "承認され、サークルに参加しました",
+    "settledCancelled": "この申請はキャンセルされました",
     "youApproved": "この人を認証しました",
     "youRejected": "この申請を拒否しました",
     "noEligibleVerifiers": "選べる人がいません：検証者はあなたの友だちで、かつこのサークルのアクティブメンバーである必要があります",
     "loadVerifiersFailed": "候補の読み込みに失敗しました。後でもう一度お試しください"
   },
   "discover": {
+    "adLabel": "広告",
+    "adOpen": "広告を開く：{{title}}",
+    "adLinkFailed": "リンクを開けませんでした。もう一度お試しください。",
     "title": "モーメント",
     "circleTitle": "サークルの動向",
     "plaza": "広場",
@@ -1761,7 +1773,9 @@
       "recognitionSuccessTitle": "認可を送信しました",
       "recognitionSuccessMessage": "{{count}}人の協力者を認可しました。",
       "recognitionFailedTitle": "送信に失敗しました"
-    }
+    },
+    "chatChannelName": "チャットメッセージ",
+    "chatChannelDescription": "友だちやグループからの新着メッセージ"
   },
   "search": {
     "loadFriendsFailed": "友だちリストの読み込みに失敗しました。再試行してください",
@@ -1998,6 +2012,14 @@
     "openingChat": "チャットを開いています...",
     "avCall": "音声・ビデオ通話",
     "addFriendRequest": "友だち申請を送る",
+    "relationshipStatus": {
+      "notAdded": "友だちではありません",
+      "requestSent": "友だち申請を送信済み",
+      "requestReceived": "友だち申請を受信・確認待ち",
+      "accepted": "友だちです",
+      "blocked": "友だちに追加できません",
+      "unavailable": "関係ステータスを取得できません"
+    },
     "openChatFailedTitle": "チャットを開けません",
     "friendAction": {
       "pendingSent": "申請済み",
@@ -2513,7 +2535,18 @@
     "checkFailedMessage": "最新バージョンを取得できません。通信状況を確認して、もう一度お試しください。",
     "installFailedTitle": "アップデートに失敗しました",
     "installFailedMessage": "インストーラーをダウンロードまたは開けません。通信状況とインストール権限を確認してください。",
-    "androidOnlyMessage": "APK の自動更新は Android 版でのみ利用できます。"
+    "androidOnlyMessage": "APK の自動更新は Android 版でのみ利用できます。",
+    "checkCodeUpdates": "アプリ内容の更新を確認",
+    "checkingCodeUpdates": "アプリ内容を確認中…",
+    "codeUpdateAvailableTitle": "アプリ内容を更新しました",
+    "codeUpdateAvailableMessage": "更新をダウンロードしました。再起動すると適用されます。",
+    "reloadNow": "今すぐ再起動",
+    "codeLatestTitle": "アプリ内容は最新です",
+    "codeLatestMessage": "最新のアプリ内容が適用されています。",
+    "codeUpdateDisabledTitle": "確認できません",
+    "codeUpdateDisabledMessage": "開発版ではオンライン更新を確認できません。リリースビルドで確認してください。",
+    "codeUpdateFailedTitle": "アプリ内容の更新に失敗しました",
+    "codeUpdateFailedMessage": "アプリ内容をダウンロードできません。通信状況を確認して、もう一度お試しください。"
   },
   "shareScreen": {
     "inviteUnavailable": "招待コードを利用できません",
@@ -2566,7 +2599,8 @@
     "messages": "メッセージ",
     "contacts": "連絡先",
     "discover": "発見",
-    "profile": "マイページ"
+    "profile": "マイページ",
+    "unreadCount": "未読 {{count}} 件"
   },
   "onboarding": {
     "profileTitle": "プロフィールを完成させる",
@@ -2929,7 +2963,8 @@
       "verification": "[認証] {{name}} から保証の依頼があります",
       "default": "[メッセージ]",
       "plazaPost": "[イベント] {{title}}",
-      "sendFailedPrefix": "[送信失敗]"
+      "sendFailedPrefix": "[送信失敗]",
+      "draftPrefix": "[下書き]"
     },
     "message": {
       "revokedBySelf": "メッセージを取り消しました",
@@ -2960,7 +2995,13 @@
     }
   },
   "location": {
-    "mapUnavailable": "地図を読み込めませんでした。通信環境を確認して再試行してください。"
+    "mapUnavailable": "地図を読み込めませんでした。通信環境を確認して再試行してください。",
+    "amapPrivacyTitle": "AMap（高徳地図）の地図・位置情報サービスを使用",
+    "amapPrivacyPrompt": "中国本土でネイティブ地図を表示するため、AMap（北京高德图强科技有限公司）は、地図表示、測位、セキュリティ保護を目的として、端末識別子、ネットワークおよび IP 情報、Wi-Fi・センサー情報、位置情報を取り扱います。AMap のプライバシーポリシー（https://lbs.amap.com/pages/privacy/）をご確認ください。「同意」を選ぶと個別に同意し、同意しない場合はウェブ地図を使用できます。",
+    "amapPrivacyDecline": "ウェブ地図を使用",
+    "amapPrivacyAgree": "同意する",
+    "amapPrivacyPolicyTitle": "AMap（高徳地図）Maps SDK",
+    "amapPrivacyPolicyBody": "中国本土でネイティブ地図を選択すると、AMap（北京高德图强科技有限公司）は、地図表示、測位、セキュリティ保護を提供するため、端末識別子、ネットワークおよび IP 情報、Wi-Fi・センサー情報、位置情報を取り扱う場合があります。当社は SDK を読み込む前に個別の同意を求め、そのポリシーバージョンをこの端末に保存します。同意しない場合、アプリはウェブ地図を使用します。AMap プライバシーポリシー：https://lbs.amap.com/pages/privacy/。"
   },
   "permissions": {
     "insufficientTitle": "権限が必要です",
@@ -3037,6 +3078,7 @@
     "TEMP_CHAT_JOIN_FAILED": "参加に失敗しました。もう一度お試しください",
     "NOTE_RESTORE_DUPLICATE": "このノートの別の収蔵コピーが既に存在します。",
     "NOTE_SHARE_LINK_LIMIT": "共有リンクの上限に達しました。不要なリンクを取り消してください",
+    "NOTE_SHARE_LINK_UNAVAILABLE": "ノートの共有はまだ利用できません",
     "UPLOAD_INVALID_CONTENT_TYPE": "対応していないファイル形式です",
     "UPLOAD_PAYLOAD_TOO_LARGE": "ファイルが大きすぎてアップロードできません",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "消えるメッセージのチャット内のメッセージは保存できません",
@@ -3074,6 +3116,7 @@
     "COIN_NOT_FRIEND": "友だちにのみ送金できます",
     "COIN_INSUFFICIENT": "ポイントが不足しています",
     "COIN_AMOUNT_INVALID": "金額は0より大きくしてください",
+    "COIN_IDEMPOTENCY_CONFLICT": "この送金は以前のリクエストと競合しています。更新して再試行してください",
     "MEMBERSHIP_INVALID_LEVEL": "会員レベルが無効です",
     "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "この会員操作は以前のリクエストと競合しています。更新してもう一度お試しください。",
     "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "このリクエスト識別子は別の会員操作で使用済みです。更新して再試行してください。",
@@ -3301,6 +3344,7 @@
     "CHAT_EDIT_WINDOW_EXPIRED": "編集できる時間を過ぎました",
     "CHAT_EDIT_FORBIDDEN": "このメッセージは編集できません",
     "CHAT_FORWARD_FORBIDDEN": "消えるメッセージは転送できません",
+    "CHAT_READERS_FORBIDDEN": "既読メンバーは自分のメッセージでのみ確認できます",
     "CHAT_GROUP_FRIENDS_ONLY": "友達のみグループに招待できます",
     "CHAT_GROUP_NAME_REQUIRED": "グループ名を入力してください",
     "CHAT_GROUP_MIN_MEMBERS": "友達を2人以上選択してください",
@@ -3320,6 +3364,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "このグループではメンバーによる招待がオフです",
     "CHAT_GROUP_QR_JOIN_DISABLED": "このグループではQRコードでの参加がオフです",
     "CHAT_GROUP_AVATAR_URL_INVALID": "グループアイコンのURLが無効です",
+    "CHAT_DELIVERY_ID_CONFLICT": "メッセージを送信できませんでした。もう一度入力して送信してください",
     "FRIEND_GROUP_ADD_FORBIDDEN": "このグループではメンバー同士の友だち追加ができません"
   },
   "qr": {

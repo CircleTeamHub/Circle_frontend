@@ -8,19 +8,10 @@
  * - logout：使 refreshToken 失效
  */
 import * as Device from "expo-device";
-import { Platform } from "react-native";
 import { apiClient } from "@/services/api/client";
 import { normalizeUser } from "@/services/api/utils";
 import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
 import { UserFacingError } from "@/utils/user-facing-error";
-
-// 客户端平台码(沿用旧 IM 的数字契约:1=iOS, 2=Android, 5=Web)。后端把它记进
-// 登录会话(单设备登录/会话管理用),数值不能改。
-function getClientPlatformID(): 1 | 2 | 5 {
-  if (Platform.OS === "ios") return 1;
-  if (Platform.OS === "android") return 2;
-  return 5;
-}
 
 export type AuthTokens = {
   accessToken: string;
@@ -99,7 +90,8 @@ export async function login(payload: { identifier: string; password: string }) {
     body: {
       identifier,
       password: payload.password,
-      platform: getClientPlatformID(),
+      // 不再上报 platform:它是旧 IM 时代的平台码,服务端从未写进登录会话(设备名走
+      // x-device-name 头)。已装机旧版本仍会发,后端继续接受。
     },
   });
   return ensureAuthTokens(raw);
@@ -126,7 +118,6 @@ export async function register(payload: {
       confirmPassword: payload.confirmPassword,
       nickname: payload.nickname.trim(),
       ...(inviteCode ? { inviteCode } : {}),
-      platform: getClientPlatformID(),
     },
   });
   return ensureAuthTokens(raw);

@@ -414,8 +414,8 @@ function loadRealApiClient({ sentry, fetchImpl }) {
           // ApiError 的定义搬去了零依赖的 api-error.ts；这一条正是要用真类
           // 跑真链路，桩验证不了 instanceof。
           return loadTsModule('src/services/api/api-error.ts');
-        case '@/utils/redact':
-          return loadTsModule('src/utils/redact.ts');
+        case '@/observability/http-diagnostics':
+          return loadTsModule('src/observability/http-diagnostics.ts');
         case '@/i18n':
           return {
             __esModule: true,

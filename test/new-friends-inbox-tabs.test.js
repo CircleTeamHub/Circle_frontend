@@ -67,18 +67,32 @@ test('the groups tab lists group chats, never circle invitations', () => {
 });
 
 // 两屏群聊列表共用会话 DTO 上这两个字段：入群时刻决定排序，在座人数上行。
-test('the conversation DTO carries the join time and member count both screens need', () => {
+test('the client protocol carries the join time and member count both screens need', () => {
   const protocol = read('src/chat-core/protocol.ts');
-  const backendTypes = fs.readFileSync(
-    path.join(process.cwd(), '..', 'circle_be', 'src', 'chat', 'chat.types.ts'),
-    'utf8',
-  );
 
   assert.match(protocol, /joinedAt\?: string \| null;/);
   assert.match(protocol, /memberCount\?: number \| null;/);
-  assert.match(backendTypes, /joinedAt: string \| null;/);
-  assert.match(backendTypes, /memberCount: number \| null;/);
 });
+
+// ── 跨仓契约 ──
+// CIRCLE_BE_PATH 覆盖是给 git worktree 用的：worktree 旁边的 `../circle_be` 往往不存在，
+// 或者是别的分支。本地找不到后端就跳过；CI 在跑测试之前会断言这份源码在位
+// （ci.yml 与 prepare-backend-contracts.sh），所以不会在那里悄悄消失。
+const BACKEND_ROOT =
+  process.env.CIRCLE_BE_PATH ?? path.join(process.cwd(), '..', 'circle_be');
+const BACKEND_CHAT_TYPES = path.join(BACKEND_ROOT, 'src/chat/chat.types.ts');
+const hasBackend = fs.existsSync(BACKEND_CHAT_TYPES);
+
+test(
+  'the backend conversation DTO carries the same join time and member count',
+  { skip: !hasBackend && 'circle_be not checked out beside circle-im' },
+  () => {
+    const backendTypes = fs.readFileSync(BACKEND_CHAT_TYPES, 'utf8');
+
+    assert.match(backendTypes, /joinedAt: string \| null;/);
+    assert.match(backendTypes, /memberCount: number \| null;/);
+  },
+);
 
 test('the groups tab keeps the same load and refresh guards as the friends tab', () => {
   const list = read('src/features/contacts/components/NewGroupsInboxList.tsx');

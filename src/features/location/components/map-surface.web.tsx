@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { MapSurfaceProps } from './map-surface';
 import { handleWebGeocoderBridgeRequest } from './web-geocoder-bridge';
+import { geocoderFetch } from '@/features/location/services/geocoder-fetch';
 
 const FRAME_STYLE = {
   flex: 1,
@@ -51,6 +52,7 @@ export function MapSurface({
           data: event.data,
           requestSource,
           geocoderBaseUrl,
+          fetchImpl: geocoderFetch,
         })
       ) return;
       onMessage(event.data);

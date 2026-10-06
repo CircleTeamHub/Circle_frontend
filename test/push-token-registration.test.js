@@ -96,6 +96,12 @@ function loadRegistrar(storageOverride, sharedGlobal, options = {}) {
       if (specifier === '@/features/notifications/utils/report-failure') {
         return { reportNotificationFailure() {} };
       }
+      if (
+        specifier === '@/features/notifications/services/jpush' &&
+        options.jpush
+      ) {
+        return options.jpush;
+      }
       if (specifier.startsWith('@/')) return {};
       return require(specifier);
     }),
@@ -106,13 +112,18 @@ function loadRegistrar(storageOverride, sharedGlobal, options = {}) {
 }
 
 function makeHarness(options = {}) {
-  const { createPushTokenRegistrationOrchestrator } = loadRegistrar();
+  const { createPushTokenRegistrationOrchestrator } = loadRegistrar(
+    undefined,
+    undefined,
+    { jpush: options.jpush },
+  );
   let stored = options.stored ?? null;
   let revocations = [...(options.revocations ?? [])];
   let legacy = options.legacy ?? null;
   let legacyCleanups = [...(options.legacyCleanups ?? [])];
   const registerCalls = [];
   const revokeCalls = [];
+  const registeredEvents = [];
   const diagnostics = [];
   const failures = [];
   const legacyDeleteCalls = [];
@@ -129,6 +140,7 @@ function makeHarness(options = {}) {
   };
   const orchestrator = createPushTokenRegistrationOrchestrator({
     platform: options.platform ?? 'ios',
+    ...(options.provider ? { provider: options.provider } : {}),
     appVersion: '1.0.0',
     getProjectId: () =>
       Object.prototype.hasOwnProperty.call(options, 'projectId')
@@ -208,9 +220,14 @@ function makeHarness(options = {}) {
     },
     reportFailure: (...args) => failures.push(args),
     reportDiagnostic: (...args) => diagnostics.push(args),
+    onRegistered: (registration) => registeredEvents.push(registration),
+    ...(options.prepareNotifications
+      ? { prepareNotifications: options.prepareNotifications }
+      : {}),
   });
   return {
     orchestrator,
+    registeredEvents,
     registerCalls,
     revokeCalls,
     diagnostics,
@@ -266,6 +283,71 @@ function memoryStorage(initial = {}) {
     read: (key) => values.get(key),
   };
 }
+
+test('the chat handshake only reads a token confirmed for the same account', () => {
+  const state = (active) =>
+    memoryStorage({
+      'circle-im-push-registration': JSON.stringify({
+        version: 2,
+        active,
+        tombstones: [],
+      }),
+    });
+  const registered = {
+    token: 'ExponentPushToken[registered]',
+    userId: 'user-1',
+    revocationSecret: SECRET_A,
+    status: 'registered',
+  };
+  // 聊天连接握手带上它,服务端才能只跳过「正开着 App 的这台设备」。
+  let module = loadRegistrar(state(registered).storage);
+  assert.equal(module.getRegisteredPushToken('user-1'), 'ExponentPushToken[registered]');
+  // 别的账号登记的 token 不是这个账号的设备。
+  assert.equal(module.getRegisteredPushToken('user-2'), null);
+  // 还没确认登记成功:服务端未必有这个 token。
+  module = loadRegistrar(state({ ...registered, status: 'pending' }).storage);
+  assert.equal(module.getRegisteredPushToken('user-1'), null);
+  // 老版本留下的登记(没有状态字段)是登记成功过的。
+  module = loadRegistrar(
+    state({ token: 'ExponentPushToken[legacy]', userId: 'user-1' }).storage,
+  );
+  assert.equal(module.getRegisteredPushToken('user-1'), 'ExponentPushToken[legacy]');
+  module = loadRegistrar(memoryStorage().storage);
+  assert.equal(module.getRegisteredPushToken('user-1'), null);
+});
+
+// 聊天连接握手时要带上本机推送 token。首次安装、新账号、token 轮换时,连接往往在登记
+// 确认之前就建好了:登记确认的那一刻要通知出去,让那条连接重新握手带上它。
+test('confirming a registration announces the account and token', async () => {
+  const harness = makeHarness({ token: 'ExponentPushToken[fresh]' });
+  await harness.orchestrator.sync(enabled('user-7'));
+  assert.equal(harness.getStored().status, 'registered');
+  assert.deepEqual(
+    harness.registeredEvents.map((event) => ({ ...event })),
+    [{ userId: 'user-7', token: 'ExponentPushToken[fresh]' }],
+  );
+});
+
+test('a registration the server has not confirmed announces nothing', async () => {
+  const timeout = new Error('timeout');
+  const harness = makeHarness({
+    registerPushToken: async () => {
+      throw timeout;
+    },
+  });
+  await assert.rejects(harness.orchestrator.sync(enabled()), timeout);
+  assert.equal(harness.getStored().status, 'pending');
+  assert.deepEqual(harness.registeredEvents, []);
+});
+
+test('the app-wide registrar announces confirmations to chat subscribers', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/notifications/services/push-token-registration.ts'),
+    'utf8',
+  );
+  assert.match(source, /onRegistered: notifyRegisteredPushToken/);
+  assert.match(source, /export function subscribeRegisteredPushToken\(/);
+});
 
 test('v2 retirement atomically writes active null plus tombstone once', () => {
   const active = {
@@ -411,6 +493,41 @@ test('first native run requests permission and registers a persisted pending sec
   assert.equal(harness.registerCalls[0].revocationSecret, SECRET_A);
   assert.equal(harness.getSecretCalls(), 1);
   assert.equal(harness.getStored().status, 'registered');
+});
+
+test('notification channels are prepared before the permission prompt, and a failure does not block registration', async () => {
+  const order = [];
+  const notifications = {
+    IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+    getPermissionsAsync: async () => {
+      order.push('getPermissions');
+      return { granted: false, canAskAgain: true };
+    },
+    requestPermissionsAsync: async () => {
+      order.push('requestPermissions');
+      return { granted: true };
+    },
+    getExpoPushTokenAsync: async () => ({ data: 'ExponentPushToken[channel]' }),
+  };
+  // 安卓 13 起应用一个通知渠道都没有时,系统不弹权限框:渠道必须先建。
+  const harness = makeHarness({
+    notifications,
+    platform: 'android',
+    prepareNotifications: async (module) => {
+      assert.equal(module, notifications);
+      order.push('prepare');
+      throw new Error('channel api unavailable');
+    },
+  });
+
+  await harness.orchestrator.sync(enabled());
+
+  assert.deepEqual(order, ['prepare', 'getPermissions', 'requestPermissions']);
+  assert.equal(harness.registerCalls.length, 1);
+  assert.deepEqual(
+    harness.diagnostics.map(([event]) => event),
+    ['push_notification_channels_failed'],
+  );
 });
 
 test('permanently denied permission is not requested or registered', async () => {
@@ -944,4 +1061,92 @@ test('logout starts captured-token legacy cleanup even while public revoke is hu
   );
   publicRevoke.resolve();
   legacyDelete.resolve();
+});
+
+function jpushStub(registrationId = 'jpush-registration-1') {
+  const calls = [];
+  return {
+    calls,
+    module: {
+      initializeJPush: () => {
+        calls.push('init');
+        return true;
+      },
+      requestJPushPermission: () => calls.push('jpush-permission'),
+      getJPushRegistrationId: async () => registrationId,
+    },
+  };
+}
+
+function notificationsAsking(answer) {
+  const requests = [];
+  return {
+    requests,
+    module: {
+      IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
+      getPermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
+      requestPermissionsAsync: async (request) => {
+        requests.push(request);
+        return answer;
+      },
+    },
+  };
+}
+
+test('JPush on Android asks for the system notification permission before registering', async () => {
+  // Android 13+ 的 POST_NOTIFICATIONS 是运行时权限,清单里声明不等于授予。JPush 自己
+  // 的 requestPermission 是 iOS 的 APNs 注册:原来 JPush 分支整个跳过了系统权限,
+  // JPush ID 照样登记成功,系统却把每一条通知都拦掉。
+  const jpush = jpushStub();
+  const notifications = notificationsAsking({ granted: true });
+  const harness = makeHarness({
+    provider: 'jpush',
+    platform: 'android',
+    jpush: jpush.module,
+    notifications: notifications.module,
+  });
+
+  await harness.orchestrator.sync(enabled());
+
+  assert.equal(notifications.requests.length, 1);
+  assert.deepEqual(
+    harness.registerCalls.map((call) => [call.token, call.provider]),
+    [['jpush-registration-1', 'jpush']],
+  );
+  assert.equal(jpush.calls.includes('jpush-permission'), false);
+});
+
+test('JPush on Android does not register a device whose user denied notifications', async () => {
+  const jpush = jpushStub();
+  const notifications = notificationsAsking({ granted: false, canAskAgain: false });
+  const harness = makeHarness({
+    provider: 'jpush',
+    platform: 'android',
+    jpush: jpush.module,
+    notifications: notifications.module,
+  });
+
+  await harness.orchestrator.sync(enabled());
+
+  assert.equal(notifications.requests.length, 1);
+  assert.deepEqual(harness.registerCalls, []);
+});
+
+test('JPush on iOS still registers with APNs through JPush after the system prompt', async () => {
+  const jpush = jpushStub();
+  const notifications = notificationsAsking({ granted: true });
+  const harness = makeHarness({
+    provider: 'jpush',
+    platform: 'ios',
+    jpush: jpush.module,
+    notifications: notifications.module,
+  });
+
+  await harness.orchestrator.sync(enabled());
+
+  assert.equal(jpush.calls.includes('jpush-permission'), true);
+  assert.deepEqual(
+    harness.registerCalls.map((call) => call.token),
+    ['jpush-registration-1'],
+  );
 });

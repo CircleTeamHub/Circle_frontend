@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const command = path.basename(process.argv[1]);
+const command = process.env.FAKE_PREPROD_COMMAND ?? path.basename(process.argv[1]);
 const args = process.argv.slice(2);
 const stateDir = process.env.FAKE_R2_DIR;
 const bucket = process.env.R2_BUCKET;

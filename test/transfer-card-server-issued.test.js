@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { readChatDetailSource } = require('./helpers/chat-detail-source');
 
 /**
  * 转账卡片是**服务端签发**的回执,客户端只渲染、不发送。
@@ -77,7 +78,7 @@ test('the client cannot send a transfer card at all', () => {
 });
 
 test('the chat screen has no transfer-card send path left', () => {
-  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  const screen = readChatDetailSource();
   assert.doesNotMatch(screen, /handleSendTransferCard/);
   assert.doesNotMatch(screen, /'transfer-card'[\s\S]{0,200}bypassCreditGate/);
   // 卡片回执的挂账队列随发送路径一起出清。

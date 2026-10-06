@@ -68,6 +68,7 @@ jobs:
       # 「缺配置就不能发版」的门禁仍在，只是留在它真正该在的地方：tag 时的 metadata scope。
       - name: Validate build environment
         env:
+          EXPO_PUBLIC_EAS_PROJECT_ID: ${{ vars.EXPO_PUBLIC_EAS_PROJECT_ID }}
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
           EXPO_PUBLIC_CHAT_WS_URL: ${{ vars.EXPO_PUBLIC_CHAT_WS_URL }}
           EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
@@ -87,6 +88,8 @@ jobs:
         run: npm ci
 
       - name: Generate Android project
+        env:
+          EXPO_PUBLIC_EAS_PROJECT_ID: ${{ vars.EXPO_PUBLIC_EAS_PROJECT_ID }}
         run: npx expo prebuild --platform android --clean --no-install
 
       # 一次性签名密钥：生成在 runner 上、随 runner 一起消失，只为满足
@@ -120,6 +123,7 @@ jobs:
       - name: Build release-like APK
         working-directory: android
         env:
+          EXPO_PUBLIC_EAS_PROJECT_ID: ${{ vars.EXPO_PUBLIC_EAS_PROJECT_ID }}
           ANDROID_KEYSTORE_PASSWORD: ${{ steps.signing.outputs.keystore_password }}
           ANDROID_KEY_ALIAS: daily-validation
           ANDROID_KEY_PASSWORD: ${{ steps.signing.outputs.keystore_password }}

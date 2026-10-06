@@ -14,6 +14,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
 import { RetryIntentKeyStore } from '@/features/profile/retry-intent-key';
 import {
@@ -1067,7 +1069,7 @@ export default function FancyNumberScreen() {
   );
 
   return (
-    <View style={d.container}>
+    <KeyboardAvoidingContainer style={d.container}>
       <NavHeader
         title={
           mode === 'renew' && !mine?.permanent
@@ -1099,6 +1101,7 @@ export default function FancyNumberScreen() {
         <ScrollView
           contentContainerStyle={[s.content, d.content]}
           showsVerticalScrollIndicator={false}
+          {...keyboardDismissOnDragProps}
         >
           {isOffline ? (
             <Text style={d.error}>
@@ -1485,6 +1488,6 @@ export default function FancyNumberScreen() {
           ) : null}
         </ScrollView>
       )}
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

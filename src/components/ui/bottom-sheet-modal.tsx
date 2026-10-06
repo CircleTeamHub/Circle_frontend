@@ -9,6 +9,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+
 interface BottomSheetModalProps {
   visible: boolean;
   onClose: () => void;
@@ -24,8 +26,14 @@ const s = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
+  keyboardArea: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
   content: {
     width: '100%',
+    // 键盘占掉下半屏时，定高/百分比高度的面板要能缩进剩下的空间，而不是顶出屏幕上沿。
+    flexShrink: 1,
   },
 });
 
@@ -68,18 +76,22 @@ export function BottomSheetModal({
         style={[s.backdrop, backdropStyle]}
         onPress={closeOnBackdropPress ? onClose : undefined}
       >
-        <Animated.View
-          onStartShouldSetResponder={() => true}
-          style={[
-            s.content,
-            sheetStyle,
-            {
-              transform: [{ translateY }],
-            },
-          ]}
-        >
-          {children}
-        </Animated.View>
+        {/* 面板里有输入框时，键盘弹起把整个面板顶上去；蒙层仍铺满全屏。
+            各个 sheet 不要再自己套避让容器，嵌套会按父容器坐标重复算。 */}
+        <KeyboardAvoidingContainer style={s.keyboardArea}>
+          <Animated.View
+            onStartShouldSetResponder={() => true}
+            style={[
+              s.content,
+              sheetStyle,
+              {
+                transform: [{ translateY }],
+              },
+            ]}
+          >
+            {children}
+          </Animated.View>
+        </KeyboardAvoidingContainer>
       </Pressable>
     </Modal>
   );

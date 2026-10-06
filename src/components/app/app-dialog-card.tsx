@@ -1,5 +1,10 @@
+import { useRef } from 'react';
 import { Animated, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GlassSurface } from '@/components/ui/glass-surface';
+import {
+  MODAL_INPUT_NATIVE_AUTO_FOCUS,
+  useModalInputAutoFocus,
+} from '@/hooks/use-modal-input-auto-focus';
 import { Radius, Spacing, useTheme } from '@/theme';
 import { AppDialogButton } from './app-dialog-button';
 import type { DialogButtonLayout, DialogButtonSlot } from './app-dialog-buttons';
@@ -77,6 +82,9 @@ export function AppDialogCard({
   onButtonPress,
 }: AppDialogCardProps) {
   const { colors } = useTheme();
+  const promptInputRef = useRef<TextInput>(null);
+  // 换一条 prompt 弹窗（队列里连着两条）也要重新聚焦，所以按弹窗本身做 key。
+  useModalInputAutoFocus(promptInputRef, dialog.prompt ? dialog : null);
   // 菜单式调用（长按图片 / 会话行操作）标题正文都空：按钮直接顶到卡片内边距。
   const hasHeader = Boolean(dialog.title || dialog.message || dialog.prompt);
   const isColumn = layout.direction === 'column';
@@ -95,7 +103,8 @@ export function AppDialogCard({
           ) : null}
           {dialog.prompt ? (
             <TextInput
-              autoFocus
+              ref={promptInputRef}
+              autoFocus={MODAL_INPUT_NATIVE_AUTO_FOCUS}
               value={promptValue}
               onChangeText={onPromptChange}
               onSubmitEditing={onPromptSubmit}

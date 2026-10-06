@@ -263,6 +263,7 @@
       "lastSeenDays_one": "Últ. vez hace {{count}} día",
       "lastSeenDays_other": "Últ. vez hace {{count}} días",
       "previewNotice": "La conexión aún no está lista. Vuelve a intentarlo en un momento.",
+      "historyWindowFull": "Para ver mensajes anteriores, busca en el historial del chat.",
       "recordingSeconds": "Grabando {{seconds}} s",
       "voiceReleaseCancel": "Suelta para cancelar",
       "voiceReleaseSend": "Suelta para enviar {{seconds}}\"",
@@ -271,13 +272,12 @@
       "inputPlaceholder": "Escribe un mensaje…",
       "disappearingMessageNotice": "Los mensajes temporales están activados en este chat. Los mensajes nuevos desaparecen después de {{duration}}.",
       "personalDisappearingMessageNotice": "Has activado los mensajes temporales. Los mensajes nuevos desaparecen después de {{duration}}.",
-      "peerDisappearingMessageNotice": "La otra persona activó los mensajes temporales ({{duration}}).",
-      "bothDisappearingMessageNotice": "Ambos han activado los mensajes temporales. Los mensajes nuevos desaparecen después de {{duration}}.",
       "attachmentPanelLabel": "Abrir panel de adjuntos",
       "sendFailedText": "No se pudo enviar el mensaje, inténtalo de nuevo",
       "sensitiveWordBlocked": "Mensaje bloqueado: contiene palabras prohibidas",
       "recordStartFailed": "No se pudo iniciar la grabación, inténtalo de nuevo",
       "voiceSendFailed": "No se pudo enviar el mensaje de voz, inténtalo de nuevo",
+      "mediaSourceMissing": "El archivo original ya no está en este dispositivo, así que no se puede reenviar",
       "locationSendFailed": "No se pudo enviar la ubicación, inténtalo de nuevo",
       "imageSendFailed": "No se pudo enviar la imagen, inténtalo de nuevo",
       "videoSendFailed": "No se pudo enviar el video, inténtalo de nuevo",
@@ -286,6 +286,7 @@
       "videoTooLong": "Elige un video de menos de 10 minutos",
       "videoUnsupported": "Solo se admiten videos MP4, MOV y M4V",
       "videoUnavailable": "Vídeo no disponible",
+      "videoPreparing": "Preparando el vídeo…",
       "playVideo": "Reproducir vídeo",
       "noteBatchPartialFailed": "No se pudieron enviar {{count}} elementos",
       "cardSendFailed": "No se pudo enviar la tarjeta de perfil, inténtalo de nuevo",
@@ -813,6 +814,8 @@
     "desktopEmptyDetail": "Selecciona una conversación para empezar a chatear",
     "imNotConnected": "IM no está conectado. Vuelve a iniciar sesión.",
     "imConnecting": "Conectando con IM…",
+    "imNetworkError": "La conexión de red es inestable. Cambia a una red mejor e inténtalo de nuevo.",
+    "imServerError": "Hay un problema con el servidor. Inténtalo de nuevo más tarde.",
     "swipeMarkRead": "Marcar leído",
     "swipeMarkUnread": "Marcar no leído",
     "swipeHide": "Ocultar chat",
@@ -1122,13 +1125,18 @@
       "confirmTitle": "Enviar nota",
       "confirmMessage": "¿Enviar «{{title}}» a {{name}}?",
       "confirmBatchMessage": "¿Enviar {{count}} notas a {{name}}?",
-      "partialFailed": "No se pudieron enviar {{count}} notas; inténtalo de nuevo.",
+      "confirmRecipientsMessage": "¿Enviar {{noteCount}} notas a los {{recipientCount}} chats seleccionados?",
+      "confirmRetryMessage": "¿Reintentar solo los {{count}} envíos fallidos en {{recipientCount}} chats? Las notas enviadas correctamente no se repetirán.",
+      "partialFailed": "Fallaron {{count}} envíos. Puedes reintentar solo los elementos fallidos.",
       "limitExceeded": "Puedes compartir hasta {{count}} notas a la vez. Las demás acciones por lotes no están limitadas.",
       "sentTitle": "Enviada",
       "sentMessage": "Nota enviada al chat.",
+      "sentRecipientsMessage": "Notas enviadas a {{recipientCount}} chats.",
       "failedTitle": "Error al enviar",
       "failedMessage": "No se puede enviar esta nota ahora. Inténtalo de nuevo.",
       "sending": "Enviando…",
+      "sendSelected": "Enviar a {{count}} chats",
+      "retryFailed": "Reintentar {{count}} envíos fallidos",
       "loadFailed": "No se pudieron cargar los chats. Inténtalo de nuevo",
       "empty": "No hay chats para enviar",
       "groupHint": "Grupo",
@@ -1497,12 +1505,16 @@
     "viewerOnly": "No eres verificador de esta solicitud",
     "settledRejected": "Esta solicitud fue rechazada",
     "settledApproved": "Aprobada — se unió al círculo",
+    "settledCancelled": "Esta solicitud fue cancelada",
     "youApproved": "Verificaste por ellos",
     "youRejected": "Rechazaste esta solicitud",
     "noEligibleVerifiers": "No hay nadie para elegir: el verificador debe ser tu amigo y ya un miembro activo de este círculo",
     "loadVerifiersFailed": "Error al cargar candidatos, inténtalo de nuevo"
   },
   "discover": {
+    "adLabel": "Publicidad",
+    "adOpen": "Abrir anuncio: {{title}}",
+    "adLinkFailed": "No se pudo abrir este enlace. Inténtalo de nuevo.",
     "title": "Momentos",
     "circleTitle": "Actividad de círculos",
     "plaza": "Plaza",
@@ -1767,7 +1779,9 @@
       "recognitionSuccessTitle": "Reconocimiento enviado",
       "recognitionSuccessMessage": "{{count}} colaborador(es) reconocido(s).",
       "recognitionFailedTitle": "Error al enviar"
-    }
+    },
+    "chatChannelName": "Mensajes de chat",
+    "chatChannelDescription": "Mensajes nuevos de amigos y grupos"
   },
   "search": {
     "loadFriendsFailed": "No se pudieron cargar los amigos, inténtalo de nuevo",
@@ -2004,6 +2018,14 @@
     "openingChat": "Abriendo chat...",
     "avCall": "Llamada de voz o video",
     "addFriendRequest": "Enviar solicitud de amistad",
+    "relationshipStatus": {
+      "notAdded": "No sois amigos",
+      "requestSent": "Solicitud de amistad enviada",
+      "requestReceived": "Solicitud de amistad recibida · pendiente de revisar",
+      "accepted": "Sois amigos",
+      "blocked": "No se puede agregar como amigo",
+      "unavailable": "Estado de la relación no disponible"
+    },
     "openChatFailedTitle": "No se puede abrir el chat",
     "friendAction": {
       "pendingSent": "Solicitud enviada",
@@ -2519,7 +2541,18 @@
     "checkFailedMessage": "No se puede obtener la última versión. Comprueba la conexión e inténtalo de nuevo.",
     "installFailedTitle": "Error de actualización",
     "installFailedMessage": "No se pudo descargar o abrir el instalador. Comprueba la conexión y los permisos de instalación.",
-    "androidOnlyMessage": "Las actualizaciones automáticas por APK solo están disponibles en Android."
+    "androidOnlyMessage": "Las actualizaciones automáticas por APK solo están disponibles en Android.",
+    "checkCodeUpdates": "Buscar actualizaciones del contenido",
+    "checkingCodeUpdates": "Comprobando el contenido…",
+    "codeUpdateAvailableTitle": "Contenido actualizado",
+    "codeUpdateAvailableMessage": "La actualización se descargó. Reinicia la aplicación para aplicarla.",
+    "reloadNow": "Reiniciar ahora",
+    "codeLatestTitle": "El contenido está actualizado",
+    "codeLatestMessage": "Ya tienes el contenido más reciente.",
+    "codeUpdateDisabledTitle": "Comprobación no disponible",
+    "codeUpdateDisabledMessage": "Las actualizaciones en línea no están disponibles en versiones de desarrollo. Usa una compilación de producción para verificarlas.",
+    "codeUpdateFailedTitle": "Error al actualizar el contenido",
+    "codeUpdateFailedMessage": "No se pudo descargar la actualización del contenido. Comprueba la conexión e inténtalo de nuevo."
   },
   "shareScreen": {
     "inviteUnavailable": "Código de invitación no disponible",
@@ -2572,7 +2605,8 @@
     "messages": "Mensajes",
     "contacts": "Contactos",
     "discover": "Descubrir",
-    "profile": "Yo"
+    "profile": "Yo",
+    "unreadCount": "{{count}} sin leer"
   },
   "onboarding": {
     "profileTitle": "Completa tu perfil",
@@ -2935,7 +2969,8 @@
       "verification": "[Verificar] {{name}} te pidió que avales",
       "default": "[Mensaje]",
       "plazaPost": "[Evento] {{title}}",
-      "sendFailedPrefix": "[Error de envío]"
+      "sendFailedPrefix": "[Error de envío]",
+      "draftPrefix": "[Borrador]"
     },
     "message": {
       "revokedBySelf": "Retiraste un mensaje",
@@ -2966,7 +3001,13 @@
     }
   },
   "location": {
-    "mapUnavailable": "No se pudo cargar el mapa. Revisa tu conexión e inténtalo de nuevo."
+    "mapUnavailable": "No se pudo cargar el mapa. Revisa tu conexión e inténtalo de nuevo.",
+    "amapPrivacyTitle": "Usar AMap para mapas y ubicación",
+    "amapPrivacyPrompt": "Para mostrar el mapa nativo en China continental, AMap (Beijing Gaode Tuqiang Technology Co., Ltd.) tratará identificadores del dispositivo, información de red e IP, datos de Wi-Fi y sensores, y tu ubicación para ofrecer el mapa, el posicionamiento y la seguridad. Consulta la política de privacidad de AMap en https://lbs.amap.com/pages/privacy/. Elige Aceptar para dar tu consentimiento por separado o usa el mapa web.",
+    "amapPrivacyDecline": "Usar mapa web",
+    "amapPrivacyAgree": "Aceptar",
+    "amapPrivacyPolicyTitle": "AMap Maps SDK",
+    "amapPrivacyPolicyBody": "Al elegir el mapa nativo en China continental, AMap (Beijing Gaode Tuqiang Technology Co., Ltd.) puede tratar identificadores del dispositivo, información de red e IP, datos de Wi-Fi y sensores, y datos de ubicación para ofrecer el mapa, el posicionamiento y la seguridad. Solicitamos tu consentimiento por separado antes de cargar el SDK y guardamos la versión consentida en este dispositivo. Si lo rechazas, la aplicación usa el mapa web. Política de privacidad de AMap: https://lbs.amap.com/pages/privacy/."
   },
   "permissions": {
     "insufficientTitle": "Permiso necesario",
@@ -3043,6 +3084,7 @@
     "TEMP_CHAT_JOIN_FAILED": "No se pudo unir, inténtalo de nuevo",
     "NOTE_RESTORE_DUPLICATE": "Ya existe otra copia activa de esta nota guardada.",
     "NOTE_SHARE_LINK_LIMIT": "Límite de enlaces compartidos alcanzado; revoca los que no uses",
+    "NOTE_SHARE_LINK_UNAVAILABLE": "Compartir notas aún no está disponible",
     "UPLOAD_INVALID_CONTENT_TYPE": "Este tipo de archivo no es compatible",
     "UPLOAD_PAYLOAD_TOO_LARGE": "El archivo es demasiado grande para subirlo",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "Los mensajes de un chat de mensajes temporales no se pueden guardar",
@@ -3080,6 +3122,7 @@
     "COIN_NOT_FRIEND": "Solo puedes enviar monedas a amigos",
     "COIN_INSUFFICIENT": "Monedas insuficientes",
     "COIN_AMOUNT_INVALID": "El importe debe ser mayor que cero",
+    "COIN_IDEMPOTENCY_CONFLICT": "Esta transferencia entra en conflicto con una solicitud anterior. Actualiza e inténtalo de nuevo",
     "MEMBERSHIP_INVALID_LEVEL": "Nivel de membresía no válido",
     "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "Esta solicitud de membresía entra en conflicto con una anterior. Actualiza e inténtalo de nuevo.",
     "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "Este identificador de solicitud ya se usó para otra operación de membresía. Actualiza y vuelve a intentarlo.",
@@ -3307,6 +3350,7 @@
     "CHAT_EDIT_WINDOW_EXPIRED": "Ya no se puede editar",
     "CHAT_EDIT_FORBIDDEN": "No se puede editar este mensaje",
     "CHAT_FORWARD_FORBIDDEN": "Los mensajes temporales no se pueden reenviar",
+    "CHAT_READERS_FORBIDDEN": "Solo puedes ver quién leyó tus propios mensajes",
     "CHAT_GROUP_FRIENDS_ONLY": "Solo puedes invitar amigos al grupo",
     "CHAT_GROUP_NAME_REQUIRED": "Se requiere un nombre de grupo",
     "CHAT_GROUP_MIN_MEMBERS": "Selecciona al menos 2 amigos",
@@ -3326,6 +3370,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "Las invitaciones de miembros están desactivadas en este grupo",
     "CHAT_GROUP_QR_JOIN_DISABLED": "Unirse con código QR está desactivado en este grupo",
     "CHAT_GROUP_AVATAR_URL_INVALID": "La dirección del avatar del grupo no es válida",
+    "CHAT_DELIVERY_ID_CONFLICT": "No se pudo enviar el mensaje. Vuelve a escribirlo e inténtalo de nuevo",
     "FRIEND_GROUP_ADD_FORBIDDEN": "Este grupo no permite que los miembros se añadan como amigos"
   },
   "qr": {

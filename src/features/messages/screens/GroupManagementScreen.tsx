@@ -25,7 +25,12 @@ import { useChatStore } from '@/chat-core/store';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { Conversation, CustomConversationGroup } from '@/types';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import {
+  MODAL_INPUT_NATIVE_AUTO_FOCUS,
+  useModalInputAutoFocus,
+} from '@/hooks/use-modal-input-auto-focus';
 import {
   normalizeMessageFilterOrder,
   orderMessageFilters,
@@ -180,6 +185,9 @@ const s = StyleSheet.create({
     padding: Spacing.xl,
     backgroundColor: 'rgba(0, 0, 0, 0.46)',
   },
+  modalKeyboardArea: {
+    flex: 1,
+  },
   renameDialog: {
     borderRadius: Radius.lg,
     padding: Spacing.lg,
@@ -217,6 +225,8 @@ export default function GroupManagementScreen() {
   const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [renameSubmitting, setRenameSubmitting] = useState(false);
+  const renameInputRef = useRef<TextInput>(null);
+  useModalInputAutoFocus(renameInputRef, renameTarget);
   const [memberQuery, setMemberQuery] = useState('');
   const [memberFilter, setMemberFilter] = useState<ConversationMemberFilter>('all');
   const [memberSubmitting, setMemberSubmitting] = useState(false);
@@ -1005,7 +1015,7 @@ export default function GroupManagementScreen() {
   );
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('messages.groups.title', { defaultValue: '自定义分组' })} />
       <FlatList
         data={filteredConversations}
@@ -1397,52 +1407,55 @@ export default function GroupManagementScreen() {
         animationType="fade"
         onRequestClose={closeRenameModal}
       >
-        <View style={s.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeRenameModal} />
-          <View style={[s.renameDialog, { backgroundColor: colors.surface }]}>
-            <Text style={d.renameTitle}>
-              {t('messages.groups.renameTitle', { defaultValue: '重命名分组' })}
-            </Text>
-            <TextInput
-              style={d.input}
-              value={renameDraft}
-              onChangeText={setRenameDraft}
-              placeholderTextColor={colors.textSecondary}
-              maxLength={32}
-              autoCorrect={false}
-              autoFocus
-              editable={!renameSubmitting}
-              selectTextOnFocus
-              returnKeyType="done"
-              onSubmitEditing={handleSubmitRename}
-            />
-            <View style={s.renameActions}>
-              <Pressable
-                style={s.renameButton}
-                onPress={closeRenameModal}
-                disabled={renameSubmitting}
-              >
-                <Text style={d.renameCancelText}>
-                  {t('common.cancel', { defaultValue: '取消' })}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  s.renameButton,
-                  d.renameSaveButton,
-                  renameSubmitting ? { opacity: 0.6 } : null,
-                ]}
-                onPress={handleSubmitRename}
-                disabled={renameSubmitting}
-              >
-                <Text style={d.renameSaveText}>
-                  {t('common.save', { defaultValue: '保存' })}
-                </Text>
-              </Pressable>
+        <KeyboardAvoidingContainer style={s.modalKeyboardArea}>
+          <View style={s.modalBackdrop}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeRenameModal} />
+            <View style={[s.renameDialog, { backgroundColor: colors.surface }]}>
+              <Text style={d.renameTitle}>
+                {t('messages.groups.renameTitle', { defaultValue: '重命名分组' })}
+              </Text>
+              <TextInput
+                ref={renameInputRef}
+                style={d.input}
+                value={renameDraft}
+                onChangeText={setRenameDraft}
+                placeholderTextColor={colors.textSecondary}
+                maxLength={32}
+                autoCorrect={false}
+                autoFocus={MODAL_INPUT_NATIVE_AUTO_FOCUS}
+                editable={!renameSubmitting}
+                selectTextOnFocus
+                returnKeyType="done"
+                onSubmitEditing={handleSubmitRename}
+              />
+              <View style={s.renameActions}>
+                <Pressable
+                  style={s.renameButton}
+                  onPress={closeRenameModal}
+                  disabled={renameSubmitting}
+                >
+                  <Text style={d.renameCancelText}>
+                    {t('common.cancel', { defaultValue: '取消' })}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    s.renameButton,
+                    d.renameSaveButton,
+                    renameSubmitting ? { opacity: 0.6 } : null,
+                  ]}
+                  onPress={handleSubmitRename}
+                  disabled={renameSubmitting}
+                >
+                  <Text style={d.renameSaveText}>
+                    {t('common.save', { defaultValue: '保存' })}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingContainer>
       </Modal>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

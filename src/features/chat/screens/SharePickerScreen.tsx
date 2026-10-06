@@ -38,6 +38,7 @@ import {
   type ResolvedMode,
   type ThemeColors,
 } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -429,7 +430,10 @@ export default function SharePickerScreen() {
   );
 
   return (
-    <View
+    <KeyboardAvoidingContainer
+      // 笔记发送栏是 position:absolute; bottom:0，底部 padding 顶不动绝对定位的子元素：
+      // 改成缩容器高度，发送栏跟着容器底边一起抬到键盘上方。
+      behavior="height"
       style={[
         s.container,
         { backgroundColor: colors.background, paddingTop: insets.top },
@@ -631,7 +635,7 @@ export default function SharePickerScreen() {
           </Pressable>
         </View>
       ) : null}
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 把后端 circle_be 放到前端仓库的同级目录，并断言跨仓契约测试依赖的后端源码都在。
 #
-# test/ 下的跨仓契约测试按 `<前端根>/../circle_be` 读后端源码：找不到时大多静默
-# skip，写死读取的则直接 ENOENT。ci.yml 用 actions/checkout 把两个仓库并排放进
+# test/ 下的跨仓契约测试按 `<前端根>/../circle_be` 读后端源码：找不到时静默 skip，
+# 契约等于没跑。ci.yml 用 actions/checkout 把两个仓库并排放进
 # 工作区；安卓工作流的前端就在工作区根目录，而 actions/checkout 不能检出到工作区
 # 之外，所以这里浅克隆（circle_be 是公开仓库，不需要凭证）。
 #
@@ -36,7 +36,7 @@ missing=0
 
 require_file() {
   if [ ! -f "$backend_dir/$1" ]; then
-    echo "::error::circle_be/$1 not found — the contract test pinning it would silently skip or fail with ENOENT"
+    echo "::error::circle_be/$1 not found — the contract test pinning it would silently skip"
     missing=1
   fi
 }

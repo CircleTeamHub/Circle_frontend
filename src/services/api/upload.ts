@@ -132,20 +132,49 @@ export function ensureFilenameExtension(
   return mapped ? `${trimmed || 'upload'}.${mapped}` : trimmed;
 }
 
-export type UploadFolder =
-  | 'avatars'
-  | 'covers'
-  | 'posts'
-  | 'notes'
-  | 'chat'
-  | 'friends';
+/**
+ * 公开目录：对象匿名可读，fileUrl 可以直接写进资料 / 圈子 / 帖子。
+ * 与后端桶策略 PUBLIC_READ_UPLOAD_FOLDERS 同一张表（后端另有服务端内部用的 uploads）。
+ */
+export type PublicUploadFolder = 'avatars' | 'covers' | 'posts' | 'friends';
+/** 私有目录：直连 403，只认 key（聊天 / 笔记读路径按 key 签发短时 URL）。 */
+export type PrivateUploadFolder = 'notes' | 'chat';
+export type UploadFolder = PublicUploadFolder | PrivateUploadFolder;
 
-export type UploadPresignResponse = {
+const PUBLIC_UPLOAD_FOLDERS: ReadonlySet<string> = new Set<PublicUploadFolder>([
+  'avatars',
+  'covers',
+  'posts',
+  'friends',
+]);
+
+type UploadPresignBase = {
   uploadUrl: string;
-  fileUrl: string;
   key: string;
   requiredHeaders: UploadRequiredHeaders;
 };
+
+/** 公开目录的 presign：调用方直接把 fileUrl 落进业务数据，必须有。 */
+export type PublicUploadPresignResponse = UploadPresignBase & {
+  fileUrl: string;
+};
+
+/**
+ * 私有目录的 presign：fileUrl 读不到、调用方不该依赖它。后端为兼容旧版本暂时仍返回，
+ * 之后可能是 null 或缺省。
+ */
+export type PrivateUploadPresignResponse = UploadPresignBase & {
+  fileUrl?: string | null;
+};
+
+export type UploadPresignResponse =
+  | PublicUploadPresignResponse
+  | PrivateUploadPresignResponse;
+
+export type UploadPresignResponseFor<F extends UploadFolder> =
+  F extends PublicUploadFolder
+    ? PublicUploadPresignResponse
+    : PrivateUploadPresignResponse;
 
 export type UploadRequiredHeaders = {
   'Content-Type': string;
@@ -163,13 +192,22 @@ function isUploadRequiredHeaders(value: unknown): value is UploadRequiredHeaders
   );
 }
 
-// presign 返回的两个 URL 即将被当作信任凭证使用（PUT 上传时直接拼到 fetch）。
+// presign 返回的 URL 即将被当作信任凭证使用（PUT 上传时直接拼到 fetch）。
 // 字段缺失或类型漂移会让 `new URL(...)` 抛 / fetch 直接挂；运行时守一道。
-function isUploadPresignShape(value: unknown): value is UploadPresignResponse {
+// fileUrl 按目录区分：公开目录的调用方直接落库它，必须有；私有目录（chat / notes）
+// 的对象直连读不到，只认 key —— 后端之后可能对它们返回 null，这里不能因此拒掉上传。
+function isUploadPresignShape(
+  value: unknown,
+  folder: UploadFolder,
+): value is UploadPresignResponse {
   if (!isPlainObject(value)) return false;
+  const fileUrl = value.fileUrl;
+  const fileUrlAcceptable = PUBLIC_UPLOAD_FOLDERS.has(folder)
+    ? isNonEmptyString(fileUrl)
+    : fileUrl === undefined || fileUrl === null || isNonEmptyString(fileUrl);
   return (
     isNonEmptyString(value.uploadUrl) &&
-    isNonEmptyString(value.fileUrl) &&
+    fileUrlAcceptable &&
     isNonEmptyString(value.key) &&
     isUploadRequiredHeaders(value.requiredHeaders)
   );
@@ -249,11 +287,16 @@ function assertPresignedUploadUrlReachableOnCurrentPlatform(value: string) {
   }
 }
 
-function assertUploadUrlReachableOnCurrentPlatform(payload: UploadPresignResponse) {
-  const rewritten = {
-    ...payload,
-    fileUrl: rewriteLocalhostFileUrlForNativeDev(payload.fileUrl),
-  };
+function assertUploadUrlReachableOnCurrentPlatform(
+  payload: UploadPresignResponse,
+): UploadPresignResponse {
+  const rewritten: UploadPresignResponse =
+    typeof payload.fileUrl === 'string'
+      ? {
+          ...payload,
+          fileUrl: rewriteLocalhostFileUrlForNativeDev(payload.fileUrl),
+        }
+      : payload;
 
   assertPresignedUploadUrlReachableOnCurrentPlatform(rewritten.uploadUrl);
 
@@ -334,13 +377,13 @@ export type UploadSizeSource =
   | { fileUri: string; sizeBytes?: never }
   | { sizeBytes: number; fileUri?: never };
 
-export async function requestUploadPresign(
+export async function requestUploadPresign<F extends UploadFolder>(
   payload: {
     filename: string;
     contentType: string;
-    folder: UploadFolder;
+    folder: F;
   } & UploadSizeSource,
-) {
+): Promise<UploadPresignResponseFor<F>> {
   const sizeBytes = assertUploadSize(
     typeof payload.sizeBytes === 'number'
       ? payload.sizeBytes
@@ -358,13 +401,17 @@ export async function requestUploadPresign(
   });
   const response = expectShape(
     raw,
-    isUploadPresignShape,
+    (value: unknown): value is UploadPresignResponse =>
+      isUploadPresignShape(value, payload.folder),
     i18n.t('upload.errors.presignDataInvalid', {
       defaultValue: '预签名上传数据格式异常',
     }),
   );
 
-  return assertUploadUrlReachableOnCurrentPlatform(response);
+  // 形状已按目录校验：公开目录必带 fileUrl，私有目录不要求 —— 与返回类型一一对应。
+  return assertUploadUrlReachableOnCurrentPlatform(
+    response,
+  ) as UploadPresignResponseFor<F>;
 }
 
 const UPLOAD_TIMEOUT_MS = 60_000;

@@ -152,7 +152,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
     likedFriendsPreview.separator === '、' ? '' : likedFriendsPreview.separator;
 
   const handleAvatarPress = useCallback(() => {
-    router.push(getUserProfileHref('discover', post.author.id));
+    router.navigate(getUserProfileHref('discover', post.author.id));
   }, [router, post.author.id]);
 
   return (

@@ -118,6 +118,10 @@ beforeEach(() => {
   });
 });
 
+// 本文件里最重的一条：21 个候选要逐个走完 UI（开面板 → 渲染 21 行 → 选中），
+// 冷缓存下约 4 秒，而它又是文件里第一条执行的，首次渲染才加载的模块也算在它头上。
+// 全量套件并行跑时会超过默认的 5 秒，于是随机判红。给这一条单独的超时额度，
+// 而不是抬高全局 testTimeout —— 那会把别处真正的卡死一并藏掉。
 test('the 21st unique mention is not appended and shows the localized limit message', async () => {
   const friends = Array.from({ length: 21 }, (_, index) => ({
     ...alice,
@@ -144,7 +148,7 @@ test('the 21st unique mention is not appended and shows the localized limit mess
   expect(input.props.value).toContain('@User19');
   expect(input.props.value).not.toContain('@User20');
   expect(Alert.alert).toHaveBeenCalledWith(expect.stringContaining('20'));
-});
+}, 20_000);
 
 test('two synchronous submits run onSubmit once and the lock releases after success', async () => {
   let resolveSubmit: () => void = () => {};

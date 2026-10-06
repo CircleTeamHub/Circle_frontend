@@ -20,6 +20,7 @@ import { createGroupConversation } from '@/chat-core/client';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -240,7 +241,7 @@ export default function NewGroupScreen() {
   );
 
   return (
-    <View
+    <KeyboardAvoidingContainer
       style={[
         s.container,
         { backgroundColor: pageBackground, paddingTop: insets.top },
@@ -339,6 +340,6 @@ export default function NewGroupScreen() {
           )}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

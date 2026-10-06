@@ -1,5 +1,8 @@
+import { useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { geocoderFetch } from '@/features/location/services/geocoder-fetch';
+import { handleWebGeocoderBridgeRequest } from './web-geocoder-bridge';
 
 export type MapSurfaceProps = {
   /** 完整的地图页 HTML（由 buildMapHtml 生成）。 */
@@ -26,9 +29,13 @@ export function MapSurface({
   reloadKey,
   onLoadEnd,
   onMessage,
+  geocoderBaseUrl,
 }: MapSurfaceProps) {
+  const webViewRef = useRef<WebView>(null);
+
   return (
     <WebView
+      ref={webViewRef}
       key={reloadKey}
       originWhitelist={['https://appassets.invalid/*']}
       source={{ html, baseUrl: 'https://appassets.invalid/' }}
@@ -40,7 +47,23 @@ export function MapSurface({
         request.url.startsWith('https://appassets.invalid/')
       }
       onLoadEnd={onLoadEnd}
-      onMessage={(event) => onMessage(event.nativeEvent.data)}
+      onMessage={(event) => {
+        const data = event.nativeEvent.data;
+        const handled = handleWebGeocoderBridgeRequest({
+          data,
+          geocoderBaseUrl,
+          fetchImpl: geocoderFetch,
+          requestSource: {
+            postMessage(message) {
+              const serialized = JSON.stringify(message);
+              webViewRef.current?.injectJavaScript(
+                `window.dispatchEvent(new MessageEvent('message', { data: ${serialized} })); true;`,
+              );
+            },
+          },
+        });
+        if (!handled) onMessage(data);
+      }}
       style={s.webView}
     />
   );

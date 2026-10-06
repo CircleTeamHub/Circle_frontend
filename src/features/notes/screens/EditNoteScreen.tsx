@@ -6,10 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   LogBox,
   PixelRatio,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +21,7 @@ import { NoteBlockEditor } from '@/features/notes/components/NoteBlockEditor';
 import { NoteTextStatsConsumer } from '@/features/notes/components/NoteTextStatsConsumer';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
   BASEMAP_ATTRIBUTION,
   getOpenStreetMapPreviewTiles,
@@ -137,21 +136,21 @@ function normalizeSectionMedia(
       Boolean(
         item &&
           typeof item.objectKey === 'string' &&
-          typeof item.url === 'string' &&
           (item.type === 'IMAGE' || item.type === 'VIDEO'),
       ),
     )
     .map((item, index): EditorNoteMediaDraft => ({
       type: item.type,
       objectKey: item.objectKey,
-      url: item.url,
+      // 私有目录的新上传没有 url：留空而不是补一个读不到的地址。
+      ...(typeof item.url === 'string' ? { url: item.url } : {}),
       ...(typeof item.mimeType === 'string' ? { mimeType: item.mimeType } : {}),
       ...(typeof item.size === 'number' ? { size: item.size } : {}),
       ...(typeof item.width === 'number' ? { width: item.width } : {}),
       ...(typeof item.height === 'number' ? { height: item.height } : {}),
       ...(typeof item.durationMs === 'number' ? { durationMs: item.durationMs } : {}),
       ...(typeof item.posterUrl === 'string' ? { posterUrl: item.posterUrl } : {}),
-      clientId: `stored:${item.objectKey}:${item.url}`,
+      clientId: `stored:${item.objectKey}:${item.url ?? ''}`,
       sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
       uploadStatus: 'UPLOADED',
     }));
@@ -165,8 +164,8 @@ function countUnrecoverableSectionMedia(items: readonly StructuredNoteMediaItem[
 
 function mergeMedia<T extends CreateNoteMediaInput>(items: T[]) {
   return items.reduce<T[]>((merged, item) => {
-    const key = `${item.objectKey}:${item.url}`;
-    if (merged.some((existing) => `${existing.objectKey}:${existing.url}` === key)) {
+    const key = `${item.objectKey}:${item.url ?? ''}`;
+    if (merged.some((existing) => `${existing.objectKey}:${existing.url ?? ''}` === key)) {
       return merged;
     }
     return [...merged, { ...item, sortOrder: merged.length }];
@@ -551,11 +550,12 @@ export default function EditNoteScreen() {
             presign.requiredHeaders,
             kind === 'video' ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
           );
+          // notes/ 是私有目录：直连地址一律 403，读取由服务端按 objectKey 现签。
+          // 所以这里只上送 key，落库地址交给服务端派生 —— 不传 url，也不造假地址。
           return {
             clientId,
             type: kind === 'video' ? 'VIDEO' : 'IMAGE',
             objectKey: presign.key,
-            url: presign.fileUrl,
             width: asset.width ?? undefined,
             height: asset.height ?? undefined,
             mimeType: contentType,
@@ -832,23 +832,23 @@ export default function EditNoteScreen() {
       doneBtn: { backgroundColor: colors.primary },
       doneBtnText: { color: colors.white },
       doneBtnDisabled: { backgroundColor: colors.primary, opacity: 0.5 },
-      titleInput: { color: colors.textSecondary },
+      titleInput: { color: colors.text },
       // 内容校验提示共用这一支红色，别在渲染里现拼 inline {color}。
       hintError: { color: colors.danger },
-      dateText: { color: colors.textSecondary },
+      dateText: { color: colors.text },
       groupButton: {
         backgroundColor: colors.surfaceMuted,
         borderColor: 'transparent',
       },
       groupButtonText: { color: colors.text },
-      groupButtonSummary: { color: colors.textSecondary },
+      groupButtonSummary: { color: colors.text },
       groupSheetBackdrop: { backgroundColor: colors.overlay },
       groupSheet: { backgroundColor: colors.surface },
       groupSheetHandle: { backgroundColor: colors.surfaceBorder },
       groupSheetTitle: { color: colors.text },
       groupSheetRow: { backgroundColor: colors.background },
       groupSheetRowText: { color: colors.text },
-      groupSheetRowMeta: { color: colors.textSecondary },
+      groupSheetRowMeta: { color: colors.text },
       groupSheetDone: { backgroundColor: colors.primary },
       groupSheetDoneText: { color: colors.white },
       sectionIcon: { backgroundColor: colors.primaryLight },
@@ -869,16 +869,16 @@ export default function EditNoteScreen() {
       },
       editorFrame: { borderColor: colors.surfaceBorder },
       sectionHeading: { color: colors.text },
-      sectionSubtitle: { color: colors.textSecondary },
-      sectionHeaderMeta: { color: colors.textSecondary },
+      sectionSubtitle: { color: colors.text },
+      sectionHeaderMeta: { color: colors.text },
       mediaPreviewTile: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
       mediaBadge: { backgroundColor: colors.background },
       mediaTitle: { color: colors.text },
-      mediaMeta: { color: colors.textSecondary },
-      emptyText: { color: colors.textSecondary },
+      mediaMeta: { color: colors.text },
+      emptyText: { color: colors.text },
       emptyTray: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
@@ -894,18 +894,18 @@ export default function EditNoteScreen() {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
       },
-      locationDetailLabel: { color: colors.textSecondary },
+      locationDetailLabel: { color: colors.text },
       locationClearAction: { borderColor: colors.surfaceBorder },
-      locationClearText: { color: colors.textSecondary },
+      locationClearText: { color: colors.text },
       locationMapFallback: { backgroundColor: colors.surface },
       locationMapRevealButton: { backgroundColor: colors.overlay },
       locationMapRevealText: {
-        color: colors.textSecondary,
+        color: colors.text,
         ...Typography.small,
       },
       locationMapMarkerDot: { backgroundColor: colors.primary },
       locationMapAttribution: {
-        color: colors.textSecondary,
+        color: colors.text,
         backgroundColor: colors.overlay,
       },
     }),
@@ -1084,10 +1084,8 @@ export default function EditNoteScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingContainer
       style={[s.container, d.container, { paddingTop: insets.top }]}
-      // 底部的位置输入框会被键盘盖住：iOS 用 padding 顶起，Android 交给系统 resize。
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={s.header}>
         <Pressable onPress={navigateBack} hitSlop={8}>
@@ -1117,13 +1115,14 @@ export default function EditNoteScreen() {
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.heroCard, d.heroCard]}>
           <View style={[s.heroAccent, d.heroAccent]} />
           <TextInput
             ref={titleInputRef}
-            style={[s.titleInput, d.titleInput, s.titleInputMuted]}
+            style={[s.titleInput, d.titleInput]}
             placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
             placeholderTextColor={colors.textSecondary}
             value={title}
@@ -1439,7 +1438,7 @@ export default function EditNoteScreen() {
           </Pressable>
         </View>
       </BottomSheetModal>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }
 
@@ -1492,7 +1491,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 40,
   },
-  titleInputMuted: { opacity: 0.72 },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withChatCoreStubs } = require('./helpers/chat-core-stubs');
 
 const localDbStub = {
   persistLocalConversations: async () => {},
@@ -51,7 +52,7 @@ function runModule(rel, requireFn, extraGlobals = {}) {
     console: { warn: () => {} },
     module: { exports: {} },
     exports: {},
-    require: requireFn,
+    require: withChatCoreStubs(requireFn),
     ...extraGlobals,
   };
   context.exports = context.module.exports;
@@ -222,9 +223,30 @@ test('同一次点击的并发清空仍然只算一个水位', async () => {
   );
 });
 
-function loadClient({ pages }) {
+function loadClient({ pages, storeState = {} }) {
   let index = 0;
   const requested = [];
+  const clearedFloors = [];
+  const state = {
+    ingestMessages: () => {},
+    applyIncomingMessage: () => true,
+    markMessageFailed: () => {},
+    markMessageRetrying: () => {},
+    removeMessage: () => {},
+    revertConversationPreview: () => {},
+    upsertConversation: () => {},
+    messagesByConversation: {},
+    conversations: [],
+    historyFloorByConversation: {},
+    historyWindowFullByConversation: {},
+    clearHistoryFloor: (conversationId, floor) => {
+      clearedFloors.push([conversationId, floor]);
+      if (state.historyFloorByConversation[conversationId] === floor) {
+        delete state.historyFloorByConversation[conversationId];
+      }
+    },
+    ...storeState,
+  };
   const api = runModule('src/chat-core/client.ts', (request) => {
     if (request === '@/services/api/credit-policy') {
       return { assertLocalCanSendMessage: () => {} };
@@ -261,21 +283,7 @@ function loadClient({ pages }) {
       };
     }
     if (request === './store') {
-      return {
-        useChatStore: {
-          getState: () => ({
-            ingestMessages: () => {},
-            applyIncomingMessage: () => true,
-            markMessageFailed: () => {},
-            markMessageRetrying: () => {},
-            removeMessage: () => {},
-            revertConversationPreview: () => {},
-            upsertConversation: () => {},
-            messagesByConversation: {},
-            conversations: [],
-          }),
-        },
-      };
+      return { useChatStore: { getState: () => state } };
     }
     if (request === './send-errors') return { reportChatSendFailure: () => {} };
     if (request === './protocol') {
@@ -286,7 +294,7 @@ function loadClient({ pages }) {
     if (request === './local-db') return localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
-  return { api, requested };
+  return { api, requested, state, clearedFloors };
 }
 
 // 会话时间线自己的游标也一样。停住的游标照原样存回去，hasMoreHistory 就永远为真：
@@ -326,4 +334,54 @@ test('会话时间线正常前进时继续可翻', async () => {
   await api.loadOlderConversationMessages('c1');
   assert.equal(api.hasMoreHistory('c1'), false);
   assert.deepEqual(requested, [null, 900, 800]);
+});
+
+// 忙碌群聊里开着会话,新消息把最新一页挤出了内存窗口:游标还指着那页之前,
+// 照游标翻就把被挤掉的那段整个跳过。有起点就先从起点接着翻。
+test('翻页先从窗口被挤出的起点接着翻,翻回来就清掉起点', async () => {
+  const { api, requested, state, clearedFloors } = loadClient({
+    pages: [
+      { messages: [], nextBeforeHeight: 951 },
+      { messages: [], nextBeforeHeight: 951 },
+      { messages: [], nextBeforeHeight: 901 },
+    ],
+  });
+  await api.loadConversationMessages('c1');
+  state.historyFloorByConversation.c1 = 1001;
+
+  await api.loadOlderConversationMessages('c1');
+  assert.deepEqual(requested, [null, 1001]);
+  assert.deepEqual(clearedFloors, [['c1', 1001]]);
+  assert.equal(api.hasMoreHistory('c1'), true);
+
+  await api.loadOlderConversationMessages('c1');
+  assert.deepEqual(requested, [null, 1001, 951]);
+});
+
+test('游标已经到头但窗口有起点时仍然可以往上翻', async () => {
+  const { api, requested, state } = loadClient({
+    pages: [
+      { messages: [], nextBeforeHeight: null },
+      { messages: [], nextBeforeHeight: 4800 },
+    ],
+  });
+  await api.loadConversationMessages('c1');
+  assert.equal(api.hasMoreHistory('c1'), false);
+  // 离开会话时窗口收回了最新 200 条,下次进来从留下的最旧一条接着翻。
+  state.historyFloorByConversation.c1 = 5000;
+  assert.equal(api.hasMoreHistory('c1'), true);
+  await api.loadOlderConversationMessages('c1');
+  assert.deepEqual(requested, [null, 5000]);
+});
+
+test('窗口到顶以后不再往上翻,也不再报还有更多', async () => {
+  const { api, requested, state } = loadClient({
+    pages: [{ messages: [], nextBeforeHeight: 900 }],
+  });
+  await api.loadConversationMessages('c1');
+  assert.equal(api.hasMoreHistory('c1'), true);
+  state.historyWindowFullByConversation.c1 = true;
+  assert.equal(api.hasMoreHistory('c1'), false);
+  await api.loadOlderConversationMessages('c1');
+  assert.deepEqual(requested, [null], '到顶了还请求,拿回来也只会被裁掉');
 });

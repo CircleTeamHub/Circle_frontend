@@ -260,6 +260,7 @@
       "lastSeenDays": "{{count}}일 전 접속",
       "lastSeenDays_other": "{{count}}일 전 접속",
       "previewNotice": "연결이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+      "historyWindowFull": "이전 메시지는 채팅 기록에서 검색해 확인하세요.",
       "recordingSeconds": "녹음 중 {{seconds}}초",
       "voiceReleaseCancel": "손을 떼면 취소",
       "voiceReleaseSend": "손을 떼면 전송 {{seconds}}\"",
@@ -268,13 +269,12 @@
       "inputPlaceholder": "메시지 입력…",
       "disappearingMessageNotice": "이 채팅에서 사라지는 메시지가 켜져 있습니다. 새 메시지는 {{duration}} 후 사라집니다.",
       "personalDisappearingMessageNotice": "사라지는 메시지를 켰습니다. 새 메시지는 {{duration}} 후 사라집니다.",
-      "peerDisappearingMessageNotice": "상대방이 사라지는 메시지를 켰습니다({{duration}}).",
-      "bothDisappearingMessageNotice": "양쪽 모두 사라지는 메시지를 켰습니다. 새 메시지는 {{duration}} 후 사라집니다.",
       "attachmentPanelLabel": "첨부 패널 열기",
       "sendFailedText": "메시지를 보내지 못했습니다. 다시 시도해 주세요",
       "sensitiveWordBlocked": "금지어가 포함되어 있어 메시지가 차단되었습니다",
       "recordStartFailed": "녹음을 시작하지 못했습니다. 다시 시도해 주세요",
       "voiceSendFailed": "음성 메시지를 보내지 못했습니다. 다시 시도해 주세요",
+      "mediaSourceMissing": "원본 파일이 이 기기에 없어 다시 보낼 수 없습니다",
       "locationSendFailed": "위치를 보내지 못했습니다. 다시 시도해 주세요",
       "imageSendFailed": "이미지를 보내지 못했습니다. 다시 시도해 주세요",
       "videoSendFailed": "동영상을 보내지 못했습니다. 다시 시도해 주세요",
@@ -283,6 +283,7 @@
       "videoTooLong": "10분 이하의 동영상을 선택하세요",
       "videoUnsupported": "MP4, MOV, M4V 동영상만 지원됩니다",
       "videoUnavailable": "동영상을 사용할 수 없습니다",
+      "videoPreparing": "동영상을 처리하는 중…",
       "playVideo": "동영상 재생",
       "noteBatchPartialFailed": "{{count}}개 항목을 보내지 못했습니다",
       "cardSendFailed": "프로필 카드를 보내지 못했습니다. 다시 시도해 주세요",
@@ -809,6 +810,8 @@
     "desktopEmptyDetail": "대화를 선택해 채팅을 시작하세요",
     "imNotConnected": "IM에 연결되어 있지 않습니다. 다시 로그인해 주세요.",
     "imConnecting": "IM에 연결 중…",
+    "imNetworkError": "네트워크 연결이 불안정합니다. 더 안정적인 네트워크로 전환한 후 다시 시도해 주세요.",
+    "imServerError": "서버에 문제가 있습니다. 잠시 후 다시 시도해 주세요.",
     "swipeMarkRead": "읽음 표시",
     "swipeMarkUnread": "안 읽음 표시",
     "swipeHide": "채팅 숨기기",
@@ -1138,13 +1141,18 @@
       "confirmTitle": "노트 보내기",
       "confirmMessage": "“{{title}}”을(를) {{name}}에게 보낼까요？",
       "confirmBatchMessage": "노트 {{count}}개를 {{name}}에게 보낼까요?",
-      "partialFailed": "노트 {{count}}개를 보내지 못했습니다. 다시 시도해 주세요.",
+      "confirmRecipientsMessage": "노트 {{noteCount}}개를 선택한 채팅 {{recipientCount}}곳에 보낼까요?",
+      "confirmRetryMessage": "실패한 {{count}}건만 다시 보낼까요? 성공한 노트는 중복 전송되지 않습니다. 채팅 {{recipientCount}}곳에 해당합니다.",
+      "partialFailed": "{{count}}건을 보내지 못했습니다. 실패한 항목만 다시 보낼 수 있어요.",
       "limitExceeded": "한 번에 최대 {{count}}개의 노트를 공유할 수 있습니다. 다른 일괄 작업에는 제한이 없습니다.",
       "sentTitle": "보냈어요",
       "sentMessage": "노트를 채팅으로 보냈어요.",
+      "sentRecipientsMessage": "노트를 채팅 {{recipientCount}}곳에 보냈어요.",
       "failedTitle": "전송 실패",
       "failedMessage": "지금은 이 노트를 보낼 수 없습니다. 다시 시도해 주세요.",
       "sending": "보내는 중...",
+      "sendSelected": "채팅 {{count}}곳에 보내기",
+      "retryFailed": "실패한 {{count}}건 다시 보내기",
       "loadFailed": "채팅을 불러오지 못했어요. 다시 시도해 주세요",
       "empty": "보낼 수 있는 채팅이 없어요",
       "groupHint": "그룹",
@@ -1491,12 +1499,16 @@
     "viewerOnly": "이 신청의 인증자가 아닙니다",
     "settledRejected": "이 신청은 거절되었습니다",
     "settledApproved": "승인됨 — 서클에 가입했습니다",
+    "settledCancelled": "이 신청은 취소되었습니다",
     "youApproved": "이 사람을 인증했습니다",
     "youRejected": "이 신청을 거절했습니다",
     "noEligibleVerifiers": "선택할 수 있는 사람이 없습니다: 인증인은 내 친구이면서 이 서클의 활성 멤버여야 합니다",
     "loadVerifiersFailed": "후보를 불러오지 못했습니다, 다시 시도하세요"
   },
   "discover": {
+    "adLabel": "광고",
+    "adOpen": "광고 열기: {{title}}",
+    "adLinkFailed": "링크를 열 수 없습니다. 다시 시도해 주세요.",
     "title": "모먼트",
     "circleTitle": "서클 활동",
     "plaza": "광장",
@@ -1761,7 +1773,9 @@
       "recognitionSuccessTitle": "인정을 제출했어요",
       "recognitionSuccessMessage": "협업자 {{count}}명을 인정했어요.",
       "recognitionFailedTitle": "제출하지 못했어요"
-    }
+    },
+    "chatChannelName": "채팅 메시지",
+    "chatChannelDescription": "친구와 그룹의 새 메시지"
   },
   "search": {
     "loadFriendsFailed": "친구 목록을 불러오지 못했어요. 다시 시도하세요",
@@ -1998,6 +2012,14 @@
     "openingChat": "채팅을 여는 중...",
     "avCall": "음성・영상 통화",
     "addFriendRequest": "친구 요청 보내기",
+    "relationshipStatus": {
+      "notAdded": "아직 친구가 아닙니다",
+      "requestSent": "친구 요청을 보냈습니다",
+      "requestReceived": "받은 친구 요청 검토 대기 중",
+      "accepted": "친구입니다",
+      "blocked": "친구로 추가할 수 없습니다",
+      "unavailable": "관계 상태를 가져올 수 없습니다"
+    },
     "openChatFailedTitle": "채팅을 열 수 없습니다",
     "friendAction": {
       "pendingSent": "요청 보냄",
@@ -2513,7 +2535,18 @@
     "checkFailedMessage": "최신 버전을 가져올 수 없습니다. 네트워크를 확인한 후 다시 시도하세요.",
     "installFailedTitle": "업데이트 실패",
     "installFailedMessage": "설치 파일을 다운로드하거나 열 수 없습니다. 네트워크와 설치 권한을 확인하세요.",
-    "androidOnlyMessage": "APK 자동 업데이트는 Android 버전에서만 사용할 수 있습니다."
+    "androidOnlyMessage": "APK 자동 업데이트는 Android 버전에서만 사용할 수 있습니다.",
+    "checkCodeUpdates": "앱 콘텐츠 업데이트 확인",
+    "checkingCodeUpdates": "앱 콘텐츠 확인 중…",
+    "codeUpdateAvailableTitle": "앱 콘텐츠가 업데이트되었습니다",
+    "codeUpdateAvailableMessage": "업데이트가 다운로드되었습니다. 앱을 다시 시작하면 적용됩니다.",
+    "reloadNow": "지금 다시 시작",
+    "codeLatestTitle": "앱 콘텐츠가 최신입니다",
+    "codeLatestMessage": "최신 앱 콘텐츠를 사용하고 있습니다.",
+    "codeUpdateDisabledTitle": "확인할 수 없습니다",
+    "codeUpdateDisabledMessage": "개발 빌드에서는 온라인 앱 콘텐츠 업데이트를 확인할 수 없습니다. 릴리스 빌드에서 확인하세요.",
+    "codeUpdateFailedTitle": "앱 콘텐츠 업데이트 실패",
+    "codeUpdateFailedMessage": "앱 콘텐츠 업데이트를 다운로드할 수 없습니다. 네트워크를 확인한 후 다시 시도하세요."
   },
   "shareScreen": {
     "inviteUnavailable": "초대 코드를 사용할 수 없습니다",
@@ -2566,7 +2599,8 @@
     "messages": "메시지",
     "contacts": "연락처",
     "discover": "발견",
-    "profile": "나"
+    "profile": "나",
+    "unreadCount": "읽지 않음 {{count}}개"
   },
   "onboarding": {
     "profileTitle": "프로필 완성하기",
@@ -2929,7 +2963,8 @@
       "verification": "[인증] {{name}}님이 보증을 요청했습니다",
       "default": "[메시지]",
       "plazaPost": "[활동] {{title}}",
-      "sendFailedPrefix": "[전송 실패]"
+      "sendFailedPrefix": "[전송 실패]",
+      "draftPrefix": "[임시 저장]"
     },
     "message": {
       "revokedBySelf": "메시지를 회수했습니다",
@@ -2960,7 +2995,13 @@
     }
   },
   "location": {
-    "mapUnavailable": "지도를 불러오지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요."
+    "mapUnavailable": "지도를 불러오지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.",
+    "amapPrivacyTitle": "AMap(高德) 지도 및 위치 서비스 사용",
+    "amapPrivacyPrompt": "중국 본토에서 네이티브 지도를 표시하기 위해 AMap(北京高德图强科技有限公司)은 지도 표시, 위치 확인 및 보안 제공 목적으로 기기 식별자, 네트워크 및 IP 정보, Wi-Fi·센서 정보와 위치 정보를 처리합니다. AMap 개인정보 처리방침(https://lbs.amap.com/pages/privacy/)을 확인해 주세요. ‘동의’를 선택하면 별도로 동의하며, 동의하지 않으면 웹 지도를 사용할 수 있습니다.",
+    "amapPrivacyDecline": "웹 지도 사용",
+    "amapPrivacyAgree": "동의",
+    "amapPrivacyPolicyTitle": "AMap(高德) Maps SDK",
+    "amapPrivacyPolicyBody": "중국 본토에서 네이티브 지도를 선택하면 AMap(北京高德图强科技有限公司)은 지도 표시, 위치 확인 및 보안 서비스를 제공하기 위해 기기 식별자, 네트워크 및 IP 정보, Wi-Fi·센서 정보와 위치 정보를 처리할 수 있습니다. 앱은 SDK를 로드하기 전에 별도 동의를 받고 해당 정책 버전을 이 기기에 저장합니다. 동의하지 않으면 웹 지도를 사용합니다. AMap 개인정보 처리방침: https://lbs.amap.com/pages/privacy/."
   },
   "permissions": {
     "insufficientTitle": "권한이 필요합니다",
@@ -3037,6 +3078,7 @@
     "TEMP_CHAT_JOIN_FAILED": "참여하지 못했습니다. 다시 시도해 주세요",
     "NOTE_RESTORE_DUPLICATE": "이 노트의 다른 소장 사본이 이미 존재합니다.",
     "NOTE_SHARE_LINK_LIMIT": "공유 링크 한도에 도달했습니다. 사용하지 않는 링크를 먼저 취소해 주세요",
+    "NOTE_SHARE_LINK_UNAVAILABLE": "노트 공유는 아직 사용할 수 없습니다",
     "UPLOAD_INVALID_CONTENT_TYPE": "지원하지 않는 파일 형식입니다",
     "UPLOAD_PAYLOAD_TOO_LARGE": "파일이 너무 커서 업로드할 수 없습니다",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "사라지는 메시지 대화의 메시지는 수집할 수 없습니다",
@@ -3074,6 +3116,7 @@
     "COIN_NOT_FRIEND": "친구에게만 보낼 수 있습니다",
     "COIN_INSUFFICIENT": "포인트가 부족합니다",
     "COIN_AMOUNT_INVALID": "금액은 0보다 커야 합니다",
+    "COIN_IDEMPOTENCY_CONFLICT": "이 송금이 이전 요청과 충돌합니다. 새로고침 후 다시 시도해 주세요",
     "MEMBERSHIP_INVALID_LEVEL": "잘못된 회원 등급입니다",
     "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "이 회원 요청이 이전 요청과 충돌합니다. 새로고침 후 다시 시도하세요.",
     "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "이 요청 식별자는 다른 회원 작업에 이미 사용되었습니다. 새로고침 후 다시 시도해 주세요.",
@@ -3301,6 +3344,7 @@
     "CHAT_EDIT_WINDOW_EXPIRED": "수정 가능 시간이 지났습니다",
     "CHAT_EDIT_FORBIDDEN": "이 메시지는 수정할 수 없습니다",
     "CHAT_FORWARD_FORBIDDEN": "사라지는 메시지는 전달할 수 없습니다",
+    "CHAT_READERS_FORBIDDEN": "내가 보낸 메시지의 읽은 멤버만 볼 수 있습니다",
     "CHAT_GROUP_FRIENDS_ONLY": "친구만 그룹에 초대할 수 있어요",
     "CHAT_GROUP_NAME_REQUIRED": "그룹 이름이 필요합니다",
     "CHAT_GROUP_MIN_MEMBERS": "친구를 2명 이상 선택해 주세요",
@@ -3320,6 +3364,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "이 그룹은 멤버 초대가 꺼져 있습니다",
     "CHAT_GROUP_QR_JOIN_DISABLED": "이 그룹은 QR 코드 참여가 꺼져 있습니다",
     "CHAT_GROUP_AVATAR_URL_INVALID": "그룹 프로필 사진 주소가 올바르지 않습니다",
+    "CHAT_DELIVERY_ID_CONFLICT": "메시지를 보내지 못했습니다. 다시 입력한 후 보내 주세요",
     "FRIEND_GROUP_ADD_FORBIDDEN": "이 그룹은 멤버끼리 친구 추가를 허용하지 않습니다"
   },
   "qr": {

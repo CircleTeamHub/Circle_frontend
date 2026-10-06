@@ -197,7 +197,6 @@ function normalizePostSignup(signup: unknown): PostSignupItem {
   const avatarUrl = stringField(s.avatarUrl) || null;
   return {
     userId: stringField(s.userId),
-    imUserId: stringField(s.imUserId),
     nickname: stringField(s.nickname, '用户'),
     avatarUrl: avatarUrl ? (normalizeMediaUrl(avatarUrl) ?? avatarUrl) : null,
     accountId: stringField(s.accountId),
@@ -212,7 +211,10 @@ export async function fetchMyPostSignups(
   postId: string,
 ): Promise<PostSignupsResult> {
   const res = asRecord(
-    await apiClient<unknown>(`/circle-plaza/me/posts/${postId}/signups`),
+    // The backend defaults to 200 and currently exposes no cursor for this list.
+    await apiClient<unknown>(
+      `/circle-plaza/me/posts/${postId}/signups?limit=500`,
+    ),
   );
   const items = Array.isArray(res.items) ? res.items : [];
   return {

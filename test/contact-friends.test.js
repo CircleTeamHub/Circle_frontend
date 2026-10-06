@@ -183,16 +183,14 @@ test('fetchFriends drops malformed rows before contacts render them', async () =
 
   const friends = await fetchFriends();
 
+  // 后端多带的 avatarFrame / gender / lastOnline 不再进 FriendProfile(没有页面读它们)。
   assert.deepEqual(JSON.parse(JSON.stringify(friends)), [
     {
       id: 'friend-1',
       accountId: 'alice_001',
       nickname: 'alice_001',
       avatarUrl: null,
-      avatarFrame: null,
       avatarFrameAppearance: null,
-      gender: '',
-      lastOnline: null,
       friendsSince: '',
       remark: null,
     },
@@ -237,16 +235,14 @@ test('fetchFriends deduplicates repeated friend ids before SectionList sees them
 
   const friends = await fetchFriends();
 
+  // 后端多带的 avatarFrame / gender / lastOnline 不再进 FriendProfile(没有页面读它们)。
   assert.deepEqual(JSON.parse(JSON.stringify(friends)), [
     {
       id: 'friend-1',
       accountId: 'alice_001',
       nickname: 'Alice',
       avatarUrl: null,
-      avatarFrame: null,
       avatarFrameAppearance: null,
-      gender: 'unset',
-      lastOnline: null,
       friendsSince: '2026-07-24T07:59:51.066Z',
       remark: 'new remark',
     },

@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
 import { setGroupChatNotice } from '@/chat-core/api';
@@ -123,9 +123,8 @@ export default function EditGroupNoticeScreen() {
   }, [canSave, conversationID, draft, groupID, initialNotice, submitting, t]);
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAvoidingContainer
       style={[s.container, d.container, { paddingTop: insets.top }]}
-      behavior="padding"
     >
       <NavHeader title={t('chat.groupNotice')} />
       <ScrollView
@@ -153,6 +152,6 @@ export default function EditGroupNoticeScreen() {
           <Text style={d.saveText}>{t('common.save')}</Text>
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingContainer>
   );
 }

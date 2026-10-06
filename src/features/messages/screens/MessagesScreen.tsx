@@ -16,6 +16,8 @@ import ChatDetailScreen, {
   type EmbeddedChatParams,
 } from "@/features/chat/screens/ChatDetailScreen";
 import { hasFailedLatestMessage } from "@/features/messages/utils/failed-preview";
+import { useComposerDraftStore } from "@/chat-core/composer-drafts";
+import { draftPreviewText } from "@/chat-core/composer-draft-model";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { orderMessageFilters } from "@/features/messages/utils/message-filter-order";
 import { useLocalUnreadStore } from "@/features/messages/store/use-local-unread-store";
@@ -163,15 +165,17 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   filterRow: {
-    position: "relative",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  filterTabsSlot: {
+    flex: 1,
+    minWidth: 0,
   },
   addGroupButton: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    zIndex: 1,
     width: 32,
     height: 32,
+    flexShrink: 0,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -288,15 +292,10 @@ const s = StyleSheet.create({
   },
   rowMeta: {
     alignItems: "flex-end",
-    gap: 3,
-    position: "relative",
   },
   mutedIndicator: {
-    position: "absolute",
-    top: 20,
-    right: 0,
-    minWidth: 18,
-    minHeight: 18,
+    width: 18,
+    height: 20,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -335,6 +334,7 @@ const s = StyleSheet.create({
 });
 
 type ConversationRowLabels = {
+  draftPrefix: string;
   pin: string;
   unpin: string;
   mute: string;
@@ -355,6 +355,7 @@ type ConversationRowProps = {
   /** 置顶行底色更深，时间/预览换用置顶专用次要色（见 d.pinnedTime / d.pinnedPreview）。 */
   pinnedTimeStyle: object;
   pinnedPreviewStyle: object;
+  draftPrefixStyle: object;
   onOpenConversation: (conversation: Conversation) => void;
   onOpenUserProfile: (conversation: Conversation) => void;
   onTogglePinned: (conversation: Conversation) => void;
@@ -380,6 +381,7 @@ function ConversationRowImpl({
   pinnedSurfaceStyle,
   pinnedTimeStyle,
   pinnedPreviewStyle,
+  draftPrefixStyle,
   onOpenConversation,
   onOpenUserProfile,
   onTogglePinned,
@@ -636,6 +638,21 @@ function ConversationRowImpl({
               </View>
               <View style={s.rowMeta}>
                 <Text style={metaTextStyle}>{item.time}</Text>
+              </View>
+            </View>
+            <View style={s.rowBottom}>
+              <Text style={messageStyle} numberOfLines={1}>
+                {item.draftPreview !== undefined ? (
+                  <>
+                    <Text style={draftPrefixStyle}>{labels.draftPrefix}</Text>
+                    {item.draftPreview ? ` ${item.draftPreview}` : null}
+                  </>
+                ) : (
+                  item.message
+                )}
+              </Text>
+              <View style={s.rowBottomTrailing}>
+                <Badge count={item.unreadCount} />
                 {item.muted ? (
                   <View style={s.mutedIndicator}>
                     <Ionicons
@@ -648,14 +665,6 @@ function ConversationRowImpl({
                     />
                   </View>
                 ) : null}
-              </View>
-            </View>
-            <View style={s.rowBottom}>
-              <Text style={messageStyle} numberOfLines={1}>
-                {item.message}
-              </Text>
-              <View style={s.rowBottomTrailing}>
-                <Badge count={item.unreadCount} />
                 {onTogglePinnedFold ? (
                   <Pressable
                     style={s.pinnedFoldButton}
@@ -710,6 +719,7 @@ export default function MessagesScreen() {
   );
   const swipeLabels = useMemo(
     () => ({
+      draftPrefix: t("im.preview.draftPrefix", { defaultValue: "[草稿]" }),
       pin: t("messages.swipePin", { defaultValue: "置顶" }),
       unpin: t("messages.swipeUnpin", { defaultValue: "取消置顶" }),
       mute: t("messages.swipeMute", { defaultValue: "静音" }),
@@ -847,6 +857,7 @@ export default function MessagesScreen() {
       // 置顶行铺了更深的 pinnedSurface，次要文字换成置顶专用色保证对比度（深色主题两者相同）。
       pinnedPreview: { ...preview, color: colors.pinnedTextSecondary },
       pinnedTime: { ...time, color: colors.pinnedTextSecondary },
+      draftPrefix: { color: colors.error },
       emptyText: {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
@@ -902,21 +913,47 @@ export default function MessagesScreen() {
     return ids.sort().join('\n');
   });
 
+  // 输入框草稿(按账号持久化,见 chat-core/composer-drafts)。正开着的那个会话不显示:
+  // 桌面分栏下人正在右边打字,左边跟着闪「[草稿]」没有意义。
+  const composerDrafts = useComposerDraftStore((state) =>
+    currentUserID ? state.draftsByUser[currentUserID] : undefined,
+  );
+  const activeConversationId = useChatStore(
+    (state) => state.activeConversationId,
+  );
+
   // 会话预览的失败标记:最新那条没发出去时前缀提示,不然列表页只看得到文案,
   // 用户不知道刚发的那条其实没出去。判据见 hasFailedLatestMessage ——
   // 「会话里存在失败消息」是不行的,前缀会贴到一条明明发成功的消息上。
+  // 草稿优先于失败标记(微信同款):人回到列表最该看到的是自己还有话没发完。
   const conversations = useMemo(() => {
-    if (!failedConversationKey) return baseConversations;
-    const failedIds = new Set(failedConversationKey.split('\n'));
+    const hasDrafts = composerDrafts && Object.keys(composerDrafts).length > 0;
+    if (!failedConversationKey && !hasDrafts) return baseConversations;
+    const failedIds = new Set(
+      failedConversationKey ? failedConversationKey.split('\n') : [],
+    );
     const prefix = t('im.preview.sendFailedPrefix', {
       defaultValue: '[发送失败]',
     });
-    return baseConversations.map((conversation) =>
-      failedIds.has(conversation.id)
+    return baseConversations.map((conversation) => {
+      const draft =
+        conversation.id === activeConversationId
+          ? undefined
+          : composerDrafts?.[conversation.id];
+      if (draft) {
+        return { ...conversation, draftPreview: draftPreviewText(draft) };
+      }
+      return failedIds.has(conversation.id)
         ? { ...conversation, message: `${prefix} ${conversation.message}` }
-        : conversation,
-    );
-  }, [baseConversations, failedConversationKey, t]);
+        : conversation;
+    });
+  }, [
+    activeConversationId,
+    baseConversations,
+    composerDrafts,
+    failedConversationKey,
+    t,
+  ]);
 
   useEffect(() => {
     setMessagesUnread(
@@ -1061,7 +1098,7 @@ export default function MessagesScreen() {
 
   const handleOpenUserProfile = useCallback(
     (conversation: Conversation) => {
-      router.push(
+      router.navigate(
         getUserProfileHref("messages", conversation.sourceID, conversation.name),
       );
     },
@@ -1249,6 +1286,7 @@ export default function MessagesScreen() {
         pinnedSurfaceStyle={d.pinnedSurface}
         pinnedTimeStyle={d.pinnedTime}
         pinnedPreviewStyle={d.pinnedPreview}
+        draftPrefixStyle={d.draftPrefix}
         onOpenConversation={handleConversationPress}
         onOpenUserProfile={handleOpenUserProfile}
         onTogglePinned={handleToggleConversationPinned}
@@ -1332,13 +1370,15 @@ export default function MessagesScreen() {
         </View>
       </View>
       <View style={s.filterRow}>
-        <FilterTabs
-          tabs={filterItems.map((item) => item.label)}
-          activeIndex={activeTab}
-          onTabPress={handleFilterPress}
-          scrollable
-          compact
-        />
+        <View style={s.filterTabsSlot}>
+          <FilterTabs
+            tabs={filterItems.map((item) => item.label)}
+            activeIndex={activeTab}
+            onTabPress={handleFilterPress}
+            scrollable
+            compact
+          />
+        </View>
         <Pressable
           style={[s.addGroupButton, { backgroundColor: colors.background }]}
           onPress={handleOpenGroups}
@@ -1349,24 +1389,40 @@ export default function MessagesScreen() {
           <Text style={[s.addGroupIcon, { color: colors.textSecondary }]}>＋</Text>
         </Pressable>
       </View>
-      {/* IM 未连接横幅：WS 没连上就显示（缓存的会话列表能看、但发消息会失败），
-          一眼区分"没连上"和"消息丢了"。connecting 时给出"连接中"过渡文案。 */}
-      {!imConnected ? (
+      {/* 连接恢复期间保持安静；只有握手失败后才显示横幅。 */}
+      {!imConnected && !imConnecting && connectionError ? (
         <View style={[s.imBanner, d.imBanner]}>
           <Ionicons
-            name={imConnecting ? "sync-outline" : "cloud-offline-outline"}
+            name="cloud-offline-outline"
             size={15}
             color={d.imBannerText.color}
           />
           <Text style={[s.imBannerText, d.imBannerText]}>
-            {imConnecting
-              ? t("messages.imConnecting")
-              : t("messages.imNotConnected")}
+            {t(
+              connectionError === "network_error" ||
+                connectionError === "timeout" ||
+                connectionError === "transport_error"
+                ? "messages.imNetworkError"
+                : "messages.imServerError",
+            )}
           </Text>
         </View>
       ) : null}
     </View>
-  ), [activeTab, colors, d, filterItems, handleClearUnread, handleFilterPress, handleOpenFind, handleOpenGroups, imConnected, imConnecting, t]);
+  ), [
+    activeTab,
+    colors,
+    connectionError,
+    d,
+    filterItems,
+    handleClearUnread,
+    handleFilterPress,
+    handleOpenFind,
+    handleOpenGroups,
+    imConnected,
+    imConnecting,
+    t,
+  ]);
 
   const listPane = (
     <View

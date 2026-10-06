@@ -16,6 +16,8 @@ export interface Conversation {
   isTempChat?: boolean;
   pinned: boolean;
   muted: boolean;
+  /** 输入框里还有没发出去的内容:列表预览换成「[草稿] …」。 */
+  draftPreview?: string;
 }
 
 /**
@@ -182,10 +184,20 @@ export interface ChatMessage {
   imageUrl?: string;
   // 列表气泡优先用缩略图渲染，避免直接拉原图；点开原图查看时才用 imageUrl。
   imageThumbUrl?: string;
+  /**
+   * 原图 / 缩略图的存储 object key,只拿来当图片缓存键:签名地址每小时轮换,按地址缓存
+   * 的话同一张图过了窗口就要整张重新下载。
+   */
+  imageKey?: string;
+  imageThumbKey?: string;
   imageWidth?: number;
   imageHeight?: number;
   // For video messages: local/remote source plus intrinsic metadata.
   videoUrl?: string;
+  /** 封面帧(服务端读时签发);没有封面的老消息为空,气泡退回黑底。 */
+  videoThumbUrl?: string;
+  /** 封面帧的 object key,只当图片缓存键用(签名地址每小时轮换)。 */
+  videoThumbKey?: string;
   videoWidth?: number;
   videoHeight?: number;
   videoDuration?: number;
@@ -328,11 +340,8 @@ export interface Circle {
   description: string;
   avatarUrl: string | null;
   cover: string | null;
-  ownerID: string;
-  currentIconAssetID: string | null;
   currentIconUrl: string | null;
   cities: string[];
-  isPublic: boolean;
   categories: string[];
   rules: string;
   tags: string[];
@@ -389,7 +398,6 @@ export interface CirclePlazaPost {
     creditScore: number | null;
     fancyNumber: boolean;
   };
-  viewCount: number;
   signupCount: number;
   signedByMe: boolean;
   signupRestrictions: {
@@ -445,11 +453,6 @@ export interface MyCircle extends Circle {
 export interface CircleDetail extends Circle {
   myRole: CircleRole | null;
   myStatus: 'ACTIVE' | 'PENDING' | 'REJECTED' | null;
-  availableIconAssets?: {
-    id: string;
-    name: string;
-    imageUrl: string | null;
-  }[];
 }
 
 export interface PaginatedResponse<T> {
@@ -501,7 +504,8 @@ export interface CircleInvitation {
   inviter: CircleInvitationUser;
   requiredCount: number;
   approvedCount: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ADMIN_APPROVED';
+  /** CANCELLED：服务端把失效的申请收成的终态（不是通过，也不是拒绝）。 */
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ADMIN_APPROVED' | 'CANCELLED';
   verifiers: CircleInvitationVerifier[];
   createdAt: string;
 }
@@ -629,7 +633,6 @@ export interface MyCirclePost {
 /** A person who signed up for one of my posts, with identity to open a chat. */
 export interface PostSignupItem {
   userId: string;
-  imUserId: string;
   nickname: string;
   avatarUrl: string | null;
   accountId: string;

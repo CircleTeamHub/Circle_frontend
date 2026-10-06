@@ -19,6 +19,7 @@ import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 import { useCircleShortcutOrderStore } from '@/features/discover/store/use-circle-shortcut-order-store';
 import { orderCircleShortcuts } from '@/features/discover/utils/circle-shortcut-order';
+import { CampaignAdBanner } from './campaign-ad-banner';
 import { PlazaPostCard } from './plaza-post-card';
 import { CircleFilterBar } from './circle-filter-bar';
 import { CircleShortcutOrderSheet } from './circle-shortcut-order-sheet';
@@ -235,9 +236,9 @@ export const PlazaFeed: React.FC = () => {
 
   const keyExtractor = useCallback((item: CirclePlazaPost) => item.id, []);
 
-  const ListHeader =
-    visibleCircles.length > 0 || myCirclesError ? (
+  const ListHeader = (
       <View style={s.headerSection}>
+        <CampaignAdBanner />
         {visibleCircles.length > 0 ? (
           <CircleFilterBar
             circles={visibleCircles}
@@ -264,7 +265,7 @@ export const PlazaFeed: React.FC = () => {
           </View>
         ) : null}
       </View>
-    ) : null;
+    );
 
   const ListEmpty = !plazaLoading ? (
     <View style={s.emptyContainer}>

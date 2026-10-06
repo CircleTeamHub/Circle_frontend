@@ -51,11 +51,6 @@ export async function fetchCircleDetail(id: string): Promise<CircleDetail> {
     ...normalizeCircle(detail),
     myRole: detail.myRole,
     myStatus: detail.myStatus,
-    availableIconAssets:
-      detail.availableIconAssets?.map((asset) => ({
-        ...asset,
-        imageUrl: asset.imageUrl ? normalizeMediaUrl(asset.imageUrl) : null,
-      })) ?? [],
   };
 }
 

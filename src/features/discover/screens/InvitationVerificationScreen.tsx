@@ -340,6 +340,15 @@ export default function InvitationVerificationScreen() {
             </Text>
           </View>
         ) : null}
+
+        {invitation.status === 'CANCELLED' ? (
+          <View style={[s.progressRow, { marginTop: Spacing.xl }]}>
+            <Ionicons name="remove-circle-outline" size={24} color={colors.textSecondary} />
+            <Text style={{ color: colors.textSecondary, ...Typography.body, fontWeight: '600' }}>
+              {t('invitation.settledCancelled', { defaultValue: '该申请已取消' })}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );

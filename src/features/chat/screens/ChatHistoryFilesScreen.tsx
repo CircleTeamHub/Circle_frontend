@@ -19,6 +19,7 @@ import { searchChatMessages } from '@/chat-core/api';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { ChatMessageDto } from '@/chat-core/protocol';
 import { getChatDetailHref } from '@/features/user/utils/routes';
+import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -55,6 +56,7 @@ export default function ChatHistoryFilesScreen() {
     title?: string;
   }>();
   const { conversationID, sourceID, title } = resolveChatHistoryRouteParams(params);
+  const conversationType = useChatHistoryConversationType(conversationID);
   const [results, setResults] = useState<ChatMessageDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -190,14 +192,14 @@ export default function ChatHistoryFilesScreen() {
       return;
     }
 
-    router.push(getChatDetailHref('messages', sourceID, title, undefined, conversationID, clientMsgID));
-  }, [conversationID, sourceID, title]);
+    router.push(getChatDetailHref('messages', sourceID, title, undefined, conversationID, clientMsgID, conversationType));
+  }, [conversationID, conversationType, sourceID, title]);
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={t('chat.history.files', { defaultValue: '文件' })}
-        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID)}
+        fallbackHref={getChatDetailHref('messages', sourceID, title, undefined, conversationID, undefined, conversationType)}
       />
       <View style={s.content}>
         <FlatList

@@ -52,8 +52,8 @@ function NoteCardInner({
   const d = useMemo(
     () => ({
       title: { color: colors.text },
-      preview: { color: colors.textSecondary },
-      meta: { color: colors.textSecondary },
+      preview: { color: colors.text },
+      meta: { color: colors.text },
       placeholder: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,

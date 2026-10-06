@@ -72,12 +72,12 @@ test('comment composer overlays at window level so nested hosts stay visible', (
     'src/features/discover/components/moment-comment-input.tsx',
   );
 
-  // KeyboardAvoidingView 的 padding 按相对父容器坐标计算；宿主非全屏时输入条
+  // 避让容器的 padding 按相对父容器坐标计算；宿主非全屏时输入条
   // 会藏进键盘底下。必须用透明 Modal 挂到窗口层。
   assert.match(input, /<Modal\s/);
   assert.match(input, /transparent/);
   assert.match(input, /onRequestClose=\{onDismiss\}/);
-  assert.match(input, /<KeyboardAvoidingView/);
+  assert.match(input, /<KeyboardAvoidingContainer/);
 });
 
 test('moments feed hosts the inline comment composer (no detail hop)', () => {

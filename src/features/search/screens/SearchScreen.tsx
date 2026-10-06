@@ -299,7 +299,7 @@ export default function SearchScreen() {
   };
 
   const handlePressFriend = (friend: FriendProfile) => {
-    router.push(
+    router.navigate(
       getUserProfileHref(
         currentScope,
         friend.id,

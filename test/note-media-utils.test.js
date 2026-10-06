@@ -33,38 +33,6 @@ function loadNoteTextStatsModule() {
   });
 }
 
-test('existing note media is indexed by URL so edits preserve object metadata', () => {
-  const { buildNoteMediaMap } = loadTsModule('src/features/notes/utils/note-blocks.ts');
-
-  const mediaMap = buildNoteMediaMap([
-    {
-      id: 'media-1',
-      type: 'VIDEO',
-      objectKey: 'notes/video.mp4',
-      url: 'https://cdn.example.test/video.mp4',
-      mimeType: 'video/mp4',
-      size: 42,
-      width: 1920,
-      height: 1080,
-      durationMs: 120000,
-      posterUrl: null,
-      sortOrder: 3,
-    },
-  ]);
-
-  assert.deepEqual(JSON.parse(JSON.stringify(mediaMap['https://cdn.example.test/video.mp4'])), {
-    type: 'VIDEO',
-    objectKey: 'notes/video.mp4',
-    url: 'https://cdn.example.test/video.mp4',
-    mimeType: 'video/mp4',
-    size: 42,
-    width: 1920,
-    height: 1080,
-    durationMs: 120000,
-    sortOrder: 3,
-  });
-});
-
 test('note video upload policy rejects videos that are too large or too long', () => {
   const {
     MAX_NOTE_VIDEO_BYTES,
@@ -115,48 +83,6 @@ test('note video size cap never exceeds the upload pipeline cap', () => {
     MAX_NOTE_VIDEO_BYTES <= maxUploadBytes,
     `MAX_NOTE_VIDEO_BYTES (${MAX_NOTE_VIDEO_BYTES}) exceeds MAX_UPLOAD_BYTES (${maxUploadBytes})`,
   );
-});
-
-test('media payload merge preserves known media and drops unmatched blocks without object keys', () => {
-  const { mergeExtractedMediaWithMediaMap } = loadTsModule(
-    'src/features/notes/utils/note-blocks.ts',
-  );
-
-  const merged = mergeExtractedMediaWithMediaMap(
-    [
-      {
-        type: 'VIDEO',
-        objectKey: '',
-        url: 'https://cdn.example.test/video.mp4',
-        sortOrder: 0,
-      },
-      {
-        type: 'IMAGE',
-        objectKey: '',
-        url: 'https://external.example.test/image.jpg',
-        sortOrder: 1,
-      },
-    ],
-    {
-      'https://cdn.example.test/video.mp4': {
-        type: 'VIDEO',
-        objectKey: 'notes/video.mp4',
-        url: 'https://cdn.example.test/video.mp4',
-        mimeType: 'video/mp4',
-        sortOrder: 99,
-      },
-    },
-  );
-
-  assert.deepEqual(JSON.parse(JSON.stringify(merged)), [
-    {
-      type: 'VIDEO',
-      objectKey: 'notes/video.mp4',
-      url: 'https://cdn.example.test/video.mp4',
-      mimeType: 'video/mp4',
-      sortOrder: 0,
-    },
-  ]);
 });
 
 test('showcase images migrate to ordinary media while showcase keeps only videos', () => {

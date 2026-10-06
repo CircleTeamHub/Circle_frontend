@@ -27,6 +27,7 @@ import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useAuthStore } from '@/stores/authStore';
 import { useCircleForm } from '@/features/discover/hooks/use-circle-form';
 import { CircleFormBody } from '@/features/discover/components/circle-form-body';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { resolveMembershipEntitlementLevel } from '@/features/profile/membership-plans';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
@@ -181,7 +182,7 @@ export default function CreateCircleScreen() {
   }
 
   return (
-    <View style={[d.container, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingContainer style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('circle.create.title')} />
       <ScrollView
         style={s.scroll}
@@ -224,6 +225,6 @@ export default function CreateCircleScreen() {
           )}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingContainer>
   );
 }

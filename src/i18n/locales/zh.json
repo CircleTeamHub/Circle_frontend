@@ -147,7 +147,8 @@
     "messages": "消息",
     "contacts": "联系人",
     "discover": "动态",
-    "profile": "我的"
+    "profile": "我的",
+    "unreadCount": "{{count}} 条未读"
   },
   "messages": {
     "title": "消息",
@@ -182,6 +183,8 @@
     "desktopEmptyDetail": "选择一个会话开始聊天",
     "imNotConnected": "IM 未连接，请重新登录后重试",
     "imConnecting": "正在连接 IM…",
+    "imNetworkError": "网络连接不稳定，请切换更好的网络后重试",
+    "imServerError": "服务器异常，请稍后再试",
     "swipeMarkRead": "标记已读",
     "swipeMarkUnread": "标记未读",
     "swipeHide": "隐藏聊天",
@@ -312,7 +315,9 @@
       "recognitionSuccessTitle": "已提交合作认可",
       "recognitionSuccessMessage": "已认可 {{count}} 位报名者。",
       "recognitionFailedTitle": "提交失败"
-    }
+    },
+    "chatChannelName": "聊天消息",
+    "chatChannelDescription": "好友和群聊的新消息"
   },
   "chat": {
     "detail": {
@@ -331,6 +336,7 @@
       "lastSeenDays": "{{count}} 天前在线",
       "lastSeenDays_other": "{{count}} 天前在线",
       "previewNotice": "连接尚未完成，请稍后重试",
+      "historyWindowFull": "更早的消息请在聊天记录里搜索查看",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",
       "voiceReleaseSend": "松开发送 {{seconds}}\"",
@@ -339,13 +345,12 @@
       "inputPlaceholder": "输入消息...",
       "disappearingMessageNotice": "此对话已开启阅后即焚，新消息将在 {{duration}} 后消失",
       "personalDisappearingMessageNotice": "你已开启阅后即焚，新消息将在 {{duration}} 后消失",
-      "peerDisappearingMessageNotice": "对方已开启阅后即焚（{{duration}}）",
-      "bothDisappearingMessageNotice": "双方已开启阅后即焚，新消息将在 {{duration}} 后消失",
       "attachmentPanelLabel": "打开附件面板",
       "sendFailedText": "消息发送失败，请重试",
       "sensitiveWordBlocked": "消息包含敏感词，已被屏蔽",
       "recordStartFailed": "录音启动失败，请重试",
       "voiceSendFailed": "语音发送失败，请重试",
+      "mediaSourceMissing": "原文件已不在这台设备上，无法重发",
       "locationSendFailed": "位置发送失败，请重试",
       "imageSendFailed": "图片发送失败，请重试",
       "videoSendFailed": "视频发送失败，请重试",
@@ -354,6 +359,7 @@
       "videoTooLong": "请选择 10 分钟以内的视频",
       "videoUnsupported": "仅支持 MP4、MOV、M4V 视频",
       "videoUnavailable": "视频不可用",
+      "videoPreparing": "正在处理视频…",
       "playVideo": "播放视频",
       "noteBatchPartialFailed": "{{count}} 条内容发送失败",
       "cardSendFailed": "名片发送失败，请重试",
@@ -1001,6 +1007,9 @@
     }
   },
   "discover": {
+    "adLabel": "广告",
+    "adOpen": "打开广告：{{title}}",
+    "adLinkFailed": "无法打开此链接，请重试。",
     "title": "动态",
     "circleTitle": "圈子动态",
     "plaza": "圈子广场",
@@ -1419,6 +1428,7 @@
     "viewerOnly": "你不是该申请的验证人",
     "settledRejected": "该申请已被拒绝",
     "settledApproved": "该申请已通过，已加入圈子",
+    "settledCancelled": "该申请已取消",
     "youApproved": "你已帮 TA 验证",
     "youRejected": "你已拒绝该申请",
     "noEligibleVerifiers": "没有可选的验证人：验证人得既是你的好友，又已经在这个圈子里",
@@ -1906,6 +1916,14 @@
     "openingChat": "正在打开聊天...",
     "avCall": "音视频通话",
     "addFriendRequest": "发好友申请",
+    "relationshipStatus": {
+      "notAdded": "未添加好友",
+      "requestSent": "好友申请已发送",
+      "requestReceived": "收到好友申请，待处理",
+      "accepted": "已添加好友",
+      "blocked": "无法添加好友",
+      "unavailable": "关系状态暂时无法获取"
+    },
     "openChatFailedTitle": "暂时无法打开聊天",
     "friendAction": {
       "pendingSent": "已发送申请",
@@ -2352,7 +2370,18 @@
     "checkFailedMessage": "暂时无法获取最新版本，请检查网络后重试。",
     "installFailedTitle": "更新失败",
     "installFailedMessage": "无法下载安装包，请检查网络和安装权限后重试。",
-    "androidOnlyMessage": "APK 自动更新仅适用于 Android 版本。"
+    "androidOnlyMessage": "APK 自动更新仅适用于 Android 版本。",
+    "checkCodeUpdates": "检查应用内容更新",
+    "checkingCodeUpdates": "正在检查应用内容…",
+    "codeUpdateAvailableTitle": "应用内容已更新",
+    "codeUpdateAvailableMessage": "更新已下载，立即重启应用即可生效。",
+    "reloadNow": "立即重启",
+    "codeLatestTitle": "应用内容已是最新",
+    "codeLatestMessage": "当前已是最新的应用内容。",
+    "codeUpdateDisabledTitle": "暂不可检查",
+    "codeUpdateDisabledMessage": "开发版不支持在线应用内容更新，请使用正式构建验证。",
+    "codeUpdateFailedTitle": "应用内容更新失败",
+    "codeUpdateFailedMessage": "无法下载应用内容更新，请检查网络后重试。"
   },
   "shareScreen": {
     "inviteCode": "邀请码",
@@ -2690,13 +2719,18 @@
       "confirmTitle": "发送笔记",
       "confirmMessage": "把「{{title}}」发送给 {{name}}？",
       "confirmBatchMessage": "把 {{count}} 条笔记发送给 {{name}}？",
-      "partialFailed": "有 {{count}} 条笔记发送失败，请重试。",
+      "confirmRecipientsMessage": "把 {{noteCount}} 条笔记发送给选中的 {{recipientCount}} 个聊天对象？",
+      "confirmRetryMessage": "仅重试之前发送失败的 {{count}} 条内容（涉及 {{recipientCount}} 个聊天对象）？已成功的内容不会重复发送。",
+      "partialFailed": "有 {{count}} 条内容发送失败。重试时只会发送失败项。",
       "limitExceeded": "一次最多分享 {{count}} 条笔记。其他批量操作不受此限制。",
       "sentTitle": "已发送",
       "sentMessage": "笔记已发送到聊天。",
+      "sentRecipientsMessage": "笔记已发送到 {{recipientCount}} 个聊天对象。",
       "failedTitle": "发送失败",
       "failedMessage": "暂时无法发送这条笔记，请稍后重试。",
       "sending": "发送中...",
+      "sendSelected": "发送给 {{count}} 个聊天对象",
+      "retryFailed": "重试 {{count}} 条失败内容",
       "loadFailed": "无法加载聊天对象，请稍后重试",
       "empty": "暂无可发送的聊天对象",
       "groupHint": "群聊",
@@ -2894,7 +2928,8 @@
       "verification": "[验证] {{name}} 邀请你担保",
       "default": "[消息]",
       "plazaPost": "[活动] {{title}}",
-      "sendFailedPrefix": "[发送失败]"
+      "sendFailedPrefix": "[发送失败]",
+      "draftPrefix": "[草稿]"
     },
     "message": {
       "revokedBySelf": "你撤回了一条消息",
@@ -2925,7 +2960,13 @@
     }
   },
   "location": {
-    "mapUnavailable": "地图加载失败，请检查网络后重试"
+    "mapUnavailable": "地图加载失败，请检查网络后重试",
+    "amapPrivacyTitle": "使用高德地图与定位服务",
+    "amapPrivacyPrompt": "为了在中国大陆显示原生地图，高德地图（北京高德图强科技有限公司）将处理设备标识、网络与 IP 信息、Wi-Fi 与传感器信息及位置信息，用于地图展示、定位和安全保障。请阅读高德隐私政策：https://lbs.amap.com/pages/privacy/。选择“同意”即单独授权；你也可以改用网页地图。",
+    "amapPrivacyDecline": "使用网页地图",
+    "amapPrivacyAgree": "同意",
+    "amapPrivacyPolicyTitle": "高德地图 SDK",
+    "amapPrivacyPolicyBody": "当你选择在中国大陆使用原生地图时，高德地图（北京高德图强科技有限公司）可能处理设备标识、网络与 IP 信息、Wi-Fi 与传感器信息及位置信息，用于地图展示、定位和安全保障。我们会在加载 SDK 前取得你的单独同意，并在本设备保存对应政策版本；如不同意，应用将改用网页地图。高德隐私政策：https://lbs.amap.com/pages/privacy/。"
   },
   "permissions": {
     "insufficientTitle": "权限不足",
@@ -3037,6 +3078,7 @@
     "TEMP_CHAT_JOIN_FAILED": "加入失败，请重试",
     "NOTE_RESTORE_DUPLICATE": "该笔记的另一份收藏副本已存在，无需恢复",
     "NOTE_SHARE_LINK_LIMIT": "分享链接数量已达上限，请先撤销不再使用的链接",
+    "NOTE_SHARE_LINK_UNAVAILABLE": "笔记分享暂未开放",
     "UPLOAD_INVALID_CONTENT_TYPE": "不支持的文件类型",
     "UPLOAD_PAYLOAD_TOO_LARGE": "文件太大，超出上传上限",
     "COLLECTION_EPHEMERAL_FORBIDDEN": "阅后即焚会话中的消息不能收藏",
@@ -3074,6 +3116,7 @@
     "COIN_NOT_FRIEND": "只能给好友转账",
     "COIN_INSUFFICIENT": "积分余额不足",
     "COIN_AMOUNT_INVALID": "转账数量必须大于 0",
+    "COIN_IDEMPOTENCY_CONFLICT": "本次转账与已有请求冲突，请刷新后重试",
     "MEMBERSHIP_INVALID_LEVEL": "会员等级无效",
     "MEMBERSHIP_IDEMPOTENCY_CONFLICT": "本次会员操作与已有请求冲突，请刷新后重试",
     "MEMBERSHIP_IDEMPOTENCY_KEY_REUSED": "该请求标识已用于其他会员操作，请刷新后重试",
@@ -3301,6 +3344,7 @@
     "CHAT_EDIT_WINDOW_EXPIRED": "超出可编辑时间",
     "CHAT_EDIT_FORBIDDEN": "无法编辑该消息",
     "CHAT_FORWARD_FORBIDDEN": "阅后即焚会话中的消息不可转发",
+    "CHAT_READERS_FORBIDDEN": "只能查看自己消息的已读成员",
     "CHAT_GROUP_FRIENDS_ONLY": "只能邀请好友进群",
     "CHAT_GROUP_NAME_REQUIRED": "请填写群聊名称",
     "CHAT_GROUP_MIN_MEMBERS": "请至少选择 2 位好友",
@@ -3320,6 +3364,7 @@
     "CHAT_GROUP_INVITE_DISABLED": "该群已关闭成员邀请",
     "CHAT_GROUP_QR_JOIN_DISABLED": "该群已关闭二维码入群",
     "CHAT_GROUP_AVATAR_URL_INVALID": "群头像地址无效",
+    "CHAT_DELIVERY_ID_CONFLICT": "消息发送失败，请重新输入后再发",
     "FRIEND_GROUP_ADD_FORBIDDEN": "该群不允许成员互加好友"
   },
   "qr": {
