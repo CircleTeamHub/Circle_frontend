@@ -82,6 +82,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
   },
+  desktopHero: { position: 'relative' },
   desktopBrandGlow: {
     position: 'absolute',
     width: 520,
@@ -292,7 +293,9 @@ export default function LoginScreen() {
                   { backgroundColor: withAlpha(colors.brandPurple, 0.08) },
                 ]}
               />
-              <LoginSky width={desktopHeroWidth} reduceMotion={reduceMotion} />
+              <View style={[s.desktopHero, { width: desktopHeroWidth, height: getSkyLayout(desktopHeroWidth).height }]}>
+                <LoginSky width={desktopHeroWidth} reduceMotion={reduceMotion} />
+              </View>
             </View>
             <View
               style={[s.desktopFormPane, { backgroundColor: colors.background }]}
