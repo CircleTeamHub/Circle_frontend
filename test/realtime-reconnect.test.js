@@ -100,6 +100,7 @@ function loadRealtimeHarness(options = {}) {
   const badgeWrites = [];
   const badgeState = {
     messagesUnread: 0,
+    contactsUnread: 0,
     discoverUnread: 0,
     circleUnread: 0,
     momentsUnread: 0,
@@ -218,6 +219,12 @@ function loadRealtimeHarness(options = {}) {
               setProfileUnread: () => {},
               setSystemUnread: () => {},
               setRealtimeConnected: (value) => realtimeConnected.push(value),
+            }),
+          };
+        case '@/stores/friendActivityUnreadStore':
+          return {
+            useFriendActivityUnreadStore: stubStore({
+              setRealtimeCount: recordBadge('contactsUnread'),
             }),
           };
         case '@/stores/walletRealtimeStore':

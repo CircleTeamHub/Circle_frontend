@@ -20,6 +20,7 @@ import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
+import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import type { NotificationItem } from '@/types';
@@ -395,6 +396,9 @@ function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
   // 总闸关着时圈子那份未读不进展示层。这条快照路径同时承载 badge.snapshot 帧和
   // recoverTabBadgeSnapshot 的 REST 恢复 —— 漏掉它，红点就会在重启/重连后闪出来。
   const gated = gateCircleUnread(snapshot, useCircleNotificationStore.getState());
+  if (typeof snapshot.contactsUnread === 'number') {
+    useFriendActivityUnreadStore.getState().setRealtimeCount(snapshot.contactsUnread);
+  }
   badgeStore.applySnapshot({
     messagesUnread: badgeStore.messagesUnread,
     contactsUnread: snapshot.contactsUnread,
@@ -482,7 +486,9 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       handleNotificationCreated(message.payload);
       return;
     case 'friend.activity.unread.changed':
-      badgeStore.setContactsUnread(message.payload?.count ?? 0);
+      useFriendActivityUnreadStore
+        .getState()
+        .setRealtimeCount(message.payload?.count ?? 0);
       return;
     case 'interaction.unread.changed': {
       // 总闸关掉时连红点也不显示（产品图：关闭 = 禁用所有通知）。互动总数里

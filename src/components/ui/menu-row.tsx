@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { IconCircle } from './icon-circle';
+import { UnreadCountBadge } from './unread-count-badge';
+import { useTranslation } from 'react-i18next';
 
 interface MenuRowProps {
   testID?: string;
@@ -12,6 +14,12 @@ interface MenuRowProps {
   label: string;
   subtitle?: string;
   rightText?: string;
+  /** Numeric unread count shown in the trailing badge. Values over 99 render as 99+. */
+  badgeCount?: number;
+  /**
+   * @deprecated Use badgeCount. Kept for callers that still provide a boolean
+   * indicator; it now renders as a numeric 1 so unread state stays consistent.
+   */
   showIndicatorDot?: boolean;
   showArrow?: boolean;
   hasToggle?: boolean;
@@ -46,11 +54,6 @@ const s = StyleSheet.create({
     flexShrink: 0,
     marginLeft: Spacing.sm,
   },
-  indicatorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-  },
 });
 
 export const MenuRow: React.FC<MenuRowProps> = ({
@@ -60,6 +63,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
   label,
   subtitle,
   rightText,
+  badgeCount,
   showIndicatorDot,
   showArrow = true,
   hasToggle,
@@ -69,6 +73,8 @@ export const MenuRow: React.FC<MenuRowProps> = ({
   onPress,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  const unreadCount = badgeCount ?? (showIndicatorDot ? 1 : 0);
 
   const d = useMemo(
     () => ({
@@ -88,9 +94,6 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      indicatorDot: {
-        backgroundColor: colors.error,
-      },
     }),
     [colors],
   );
@@ -104,7 +107,11 @@ export const MenuRow: React.FC<MenuRowProps> = ({
       style={s.row}
       onPress={onPress}
       accessibilityRole={hasToggle ? 'switch' : 'button'}
-      accessibilityLabel={label}
+      accessibilityLabel={
+        unreadCount > 0
+          ? `${label}, ${t('common.unreadCount', { count: unreadCount })}`
+          : label
+      }
       accessibilityHint={a11yHint}
       accessibilityState={hasToggle ? { checked: !!toggleValue } : undefined}
     >
@@ -129,9 +136,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         </View>
       </View>
       <View style={s.right}>
-        {showIndicatorDot ? (
-          <View style={[s.indicatorDot, d.indicatorDot]} />
-        ) : null}
+        <UnreadCountBadge count={unreadCount} />
         {rightText ? <Text style={d.rightText}>{rightText}</Text> : null}
         {hasToggle ? (
           <ThemedSwitch
