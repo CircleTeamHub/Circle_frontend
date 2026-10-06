@@ -91,8 +91,8 @@ jobs:
         with:
           path: Circle_frontend
 
-      # 对于成对 PR，两个仓库使用相同的 feature 分支名。若后端存在同名分支，
-      # 用它验证尚未合入的跨仓契约；普通前端 PR 或后端分支不存在时回退到 main。
+      # 成对 PR 优先使用后端同名分支；拆分后的笔记及其依赖 PR 显式配对。
+      # 仅 pull_request 事件使用配对分支，main 和普通 PR 仍验证后端 main。
       # 这样不会把 qr-card 等尚未合入 main 的配套契约误判为前端回归，
       # 也不会让普通 PR 因后端没有同名分支而无法运行。
       - name: Resolve backend contract ref
@@ -103,10 +103,16 @@ jobs:
         run: |
           set -euo pipefail
           ref=main
+          backend_ref="$HEAD_REF"
+          case "$HEAD_REF" in
+            codex/pr-notes-editor-media|codex/pr-reliability-notifications)
+              backend_ref=codex/pr-notes-audio-drafts
+              ;;
+          esac
           if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$HEAD_REF" ] \
             && git ls-remote --exit-code --heads \
-              https://github.com/CircleTeamHub/circle_be.git "$HEAD_REF" >/dev/null 2>&1; then
-            ref="$HEAD_REF"
+              https://github.com/CircleTeamHub/circle_be.git "$backend_ref" >/dev/null 2>&1; then
+            ref="$backend_ref"
           fi
           printf 'ref=%s\n' "$ref" >> "$GITHUB_OUTPUT"
 
