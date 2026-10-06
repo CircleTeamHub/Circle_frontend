@@ -25,7 +25,6 @@ test('moments feed locks failed pagination until explicit refresh', () => {
 
   assert.match(store, /fetchError: boolean/);
   assert.match(store, /if \(!reset && state\.fetchError\) return/);
-  assert.match(store, /fetchError: true/);
   assert.match(store, /fetchError: false/);
   assert.match(feed, /!fetchError/);
   assert.match(feed, /fetchMoments\(false\)\.catch/);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -65,6 +65,9 @@ export default function NotificationCenterScreen() {
   const { t } = useTranslation();
   const mountedRef = useRef(true);
   const paginationEpochRef = useRef(0);
+  const failedCursorRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
+  const [pageFailed, setPageFailed] = useState(false);
 
   // 铃铛的域由入口决定：朋友圈页 -> moments，广场页 -> circle。
   // 缺省（推送兜底页 /messages/notifications）保持不限域的老行为。
@@ -100,13 +103,15 @@ export default function NotificationCenterScreen() {
     : 'messages';
 
   useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; paginationEpochRef.current += 1; };
   }, []);
 
   const load = useCallback(async () => {
     const epoch = ++paginationEpochRef.current;
+    failedCursorRef.current = null;
+    loadingMoreRef.current = false;
+    setPageFailed(false);
     setRefreshing(true);
     setLoadingMore(false);
     setNextCursor(null);
@@ -166,12 +171,15 @@ export default function NotificationCenterScreen() {
       tab !== 'notifications' ||
       loadingMore ||
       refreshing ||
-      !nextCursor
+      !nextCursor ||
+      loadingMoreRef.current ||
+      failedCursorRef.current === nextCursor
     ) {
       return;
     }
 
     const epoch = paginationEpochRef.current;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const page = await fetchNotificationsPage(nextCursor, domain);
@@ -179,12 +187,16 @@ export default function NotificationCenterScreen() {
       store().appendInteractivePage(page.items);
       setNextCursor(page.nextCursor);
     } catch (error) {
+      if (!mountedRef.current || epoch !== paginationEpochRef.current) return;
+      failedCursorRef.current = nextCursor;
+      setPageFailed(true);
       reportHandledFailure('notificationCenter', 'loadMoreNotifications', error);
     } finally {
       if (
         mountedRef.current &&
         epoch === paginationEpochRef.current
       ) {
+        loadingMoreRef.current = false;
         setLoadingMore(false);
       }
     }
@@ -395,6 +407,12 @@ export default function NotificationCenterScreen() {
           paddingHorizontal: Spacing.md,
           paddingBottom: 40,
         }}
+        ListFooterComponent={pageFailed ? <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('common.retry')}
+          onPress={() => { failedCursorRef.current = null; setPageFailed(false); void loadMore(); }}
+          style={{ padding: Spacing.lg, alignItems: 'center' }}
+        ><Text style={{ color: colors.primary }}>{t('common.retry')}</Text></Pressable> : loadingMore ? <ActivityIndicator color={colors.primary} /> : null}
         ListEmptyComponent={
           <NotificationEmptyState
             title={

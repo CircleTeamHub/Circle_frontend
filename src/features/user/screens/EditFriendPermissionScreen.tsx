@@ -78,14 +78,13 @@ export default function EditFriendPermissionScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
   const mountedRef = useRef(true);
 
-  useEffect(
-    () => () => {
-      mountedRef.current = false;
-    },
-    [],
-  );
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +112,7 @@ export default function EditFriendPermissionScreen() {
     return () => {
       cancelled = true;
     };
-  }, [profileId, t]);
+  }, [profileId, t, retryVersion]);
 
   const d = useMemo(
     () => ({
@@ -159,6 +158,9 @@ export default function EditFriendPermissionScreen() {
   ) : error ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
+      {profileId ? <Pressable onPress={() => setRetryVersion((version) => version + 1)} accessibilityRole="button" style={[s.saveButton, d.saveButton, { paddingHorizontal: Spacing.lg }]}>
+        <Text style={d.saveButtonText}>{t('common.retry')}</Text>
+      </Pressable> : null}
     </View>
   ) : (
     <View style={[s.card, d.card]}>

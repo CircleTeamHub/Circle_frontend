@@ -293,7 +293,7 @@ function assertPresignedUploadUrlReachableOnCurrentPlatform(value: string) {
       LOCALHOST_HOSTNAMES.has(uploadUrl.hostname) &&
       !LOCALHOST_HOSTNAMES.has(apiUrl.hostname)
     ) {
-      throw new StorageUploadError(
+      throw new Error(
         i18n.t('upload.errors.presignDataInvalid', {
           defaultValue: '暂时无法上传，请稍后重试',
         }),

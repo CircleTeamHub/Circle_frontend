@@ -46,3 +46,15 @@ test('a failed page is not retried until an explicit refresh', async () => {
   expect(mockFetch).toHaveBeenCalledTimes(3);
   expect(useMomentsStore.getState().fetchError).toBe(false);
 });
+
+
+test('a failed refresh retains the cached cursor and permits pagination', async () => {
+  mockFetch.mockResolvedValueOnce(page(['cached'], true)).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(page(['older'], false));
+  await useMomentsStore.getState().fetchMoments(true);
+  await expect(useMomentsStore.getState().fetchMoments(true)).rejects.toThrow('offline');
+  expect(useMomentsStore.getState().fetchError).toBe(false);
+  expect(useMomentsStore.getState().cursor).toBe('next');
+  await useMomentsStore.getState().fetchMoments(false);
+  expect(mockFetch).toHaveBeenLastCalledWith({ cursor: 'next', limit: 20 });
+  expect(useMomentsStore.getState().moments.map((item) => item.id)).toEqual(['cached', 'older']);
+});

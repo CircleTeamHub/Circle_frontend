@@ -100,7 +100,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
         }
         return {
           ...(reset ? { refreshing: false } : { loading: false }),
-          fetchError: true,
+          fetchError: !reset,
         };
       });
       reportHandledFailure('moments', 'fetch', error);
