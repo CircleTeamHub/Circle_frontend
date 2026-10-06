@@ -5,13 +5,14 @@ import { LoginPrimaryButton } from '@/features/auth/components/LoginPrimaryButto
 import { LoginSky } from '@/features/auth/components/LoginSky';
 import {
   SKY_MAX_WIDTH,
+  SKY_MIN_WIDTH,
   getSkyLayout,
 } from '@/features/auth/components/login-sky-geometry';
 import { useAuth } from '@/hooks/use-auth';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
-import { Spacing, Typography, useTheme } from '@/theme';
+import { Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,9 +28,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+/** 宽屏网页使用双栏登录；窄窗口仍保留移动端单栏，避免表单被挤压。 */
+export const DESKTOP_LOGIN_MIN_WIDTH = 960;
+
 const s = StyleSheet.create({
   flex: { flex: 1 },
-  // 表单列：手机上撑满，平板 / 网页上和 hero 一样最宽 480 并居中。
+  // 表单列：手机上撑满，窄网页上和 hero 一样最宽 480 并居中。
   column: {
     alignSelf: 'center',
     width: '100%',
@@ -64,11 +68,59 @@ const s = StyleSheet.create({
   },
   registerHint: { ...Typography.bodyRegular },
   registerLink: { fontSize: 14, fontWeight: '600' },
+  desktopShell: {
+    flex: 1,
+    width: '100%',
+    flexDirection: 'row',
+  },
+  desktopBrand: {
+    flex: 1,
+    minWidth: 360,
+    position: 'relative',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
+  desktopBrandGlow: {
+    position: 'absolute',
+    width: 520,
+    height: 520,
+    borderRadius: 260,
+    top: -240,
+    right: -180,
+  },
+  desktopBrandGlowSecondary: {
+    position: 'absolute',
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    bottom: -190,
+    left: -150,
+  },
+  desktopFormPane: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.xl,
+  },
+  desktopCard: {
+    maxWidth: 440,
+    paddingHorizontal: 40,
+    paddingVertical: 40,
+    borderRadius: 24,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 18 },
+    shadowRadius: 34,
+    shadowOpacity: 0.1,
+    elevation: 8,
+  },
 });
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { colors } = useTheme();
   const reduceMotion = useReduceMotion();
   const { login, submitting, error } = useAuth();
@@ -81,6 +133,11 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const { isOffline } = useNetworkStatus();
   const sky = getSkyLayout(width);
+  const isDesktopWeb = Platform.OS === 'web' && width >= DESKTOP_LOGIN_MIN_WIDTH;
+  const desktopHeroWidth = Math.min(
+    SKY_MAX_WIDTH,
+    Math.max(SKY_MIN_WIDTH, width * 0.44),
+  );
 
   const onForgotPassword = useCallback(() => {
     // FE#92：真实重置流程（circle_be PR #120 起后端可用），不再是占位提示。
@@ -102,6 +159,98 @@ export default function LoginScreen() {
     AccessibilityInfo.announceForAccessibility(statusMessage);
   }, [statusMessage]);
 
+  const form = (
+    <View
+      style={
+        isDesktopWeb
+          ? [
+              s.column,
+              s.desktopCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.surfaceBorder,
+                shadowColor: colors.primary,
+              },
+            ]
+          : s.column
+      }
+    >
+      <Text style={[s.heading, { color: colors.text }]} accessibilityRole="header">
+        {t('auth.welcomeBack')}
+      </Text>
+      <Text style={[s.subtitle, { color: colors.textSecondary }]}>
+        {t('auth.loginSubtitle')}
+      </Text>
+
+      <View style={s.form}>
+        <AuthInput
+          testID={E2E_TEST_IDS.authEmailInput}
+          placeholder={t('auth.loginIdentifierPlaceholder')}
+          value={identifier}
+          onChangeText={setIdentifier}
+          textContentType="username"
+          autoComplete="username"
+        />
+
+        <AuthInput
+          testID={E2E_TEST_IDS.authPasswordInput}
+          placeholder={t('auth.passwordPlaceholder')}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          textContentType="password"
+          autoComplete="current-password"
+        />
+        <View style={s.forgotRow}>
+          <Pressable onPress={onForgotPassword} hitSlop={8} accessibilityRole="link">
+            <Text style={[s.forgotLink, { color: colors.link }]}>
+              {t('auth.forgotPassword')}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* 离线 / 登录错误共用一个保留高度的提示槽 */}
+      <View style={s.messageSlot} accessibilityLiveRegion="polite">
+        {statusMessage ? (
+          <Text
+            style={[
+              s.message,
+              { color: statusIsError ? colors.error : colors.textSecondary },
+            ]}
+            // 长错误文案要有上界,否则换行照样把登录键顶下去。
+            numberOfLines={2}
+          >
+            {statusMessage}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={s.buttonWrap}>
+        <LoginPrimaryButton
+          testID={E2E_TEST_IDS.authSubmit}
+          label={t('auth.login')}
+          onPress={onSubmit}
+          disabled={submitting}
+          loading={submitting}
+        />
+      </View>
+
+      <View style={s.registerRow}>
+        <Text style={[s.registerHint, { color: colors.textSecondary }]}>
+          {t('auth.noAccount')}
+        </Text>
+        <Link href="/(auth)/register" asChild>
+          <Pressable hitSlop={8} accessibilityRole="link">
+            <Text style={[s.registerLink, { color: colors.link }]}>
+              {t('auth.registerNow')}
+            </Text>
+          </Pressable>
+        </Link>
+      </View>
+    </View>
+  );
+
   return (
     <KeyboardAvoidingContainer
       style={[s.flex, { backgroundColor: colors.background }]}
@@ -109,88 +258,55 @@ export default function LoginScreen() {
       <ScrollView
         testID={E2E_TEST_IDS.authLoginScreen}
         style={s.flex}
-        contentContainerStyle={{ paddingTop: sky.contentTop, paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={
+          isDesktopWeb
+            ? {
+                flexGrow: 1,
+                minHeight: Math.max(height, 720),
+                paddingBottom: insets.bottom + 24,
+              }
+            : { paddingTop: sky.contentTop, paddingBottom: insets.bottom + 24 }
+        }
         showsVerticalScrollIndicator={false}
         {...keyboardDismissOnDragProps}
       >
-        {/* 夜空 hero：绝对定位在滚动内容顶部，随内容一起滚走 */}
-        <LoginSky width={width} reduceMotion={reduceMotion} />
-
-        <View style={s.column}>
-          <Text style={[s.heading, { color: colors.text }]} accessibilityRole="header">
-            {t('auth.welcomeBack')}
-          </Text>
-          <Text style={[s.subtitle, { color: colors.textSecondary }]}>
-            {t('auth.loginSubtitle')}
-          </Text>
-
-          <View style={s.form}>
-            <AuthInput
-              testID={E2E_TEST_IDS.authEmailInput}
-              placeholder={t('auth.loginIdentifierPlaceholder')}
-              value={identifier}
-              onChangeText={setIdentifier}
-              textContentType="username"
-              autoComplete="username"
-            />
-
-            <AuthInput
-              testID={E2E_TEST_IDS.authPasswordInput}
-              placeholder={t('auth.passwordPlaceholder')}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              textContentType="password"
-              autoComplete="current-password"
-            />
-            <View style={s.forgotRow}>
-              <Pressable onPress={onForgotPassword} hitSlop={8} accessibilityRole="link">
-                <Text style={[s.forgotLink, { color: colors.link }]}>
-                  {t('auth.forgotPassword')}
-                </Text>
-              </Pressable>
+        {isDesktopWeb ? (
+          <View style={s.desktopShell}>
+            <View
+              style={[
+                s.desktopBrand,
+                { backgroundColor: colors.surfaceMuted },
+              ]}
+            >
+              <View
+                pointerEvents="none"
+                style={[
+                  s.desktopBrandGlow,
+                  { backgroundColor: withAlpha(colors.primary, 0.12) },
+                ]}
+              />
+              <View
+                pointerEvents="none"
+                style={[
+                  s.desktopBrandGlowSecondary,
+                  { backgroundColor: withAlpha(colors.brandPurple, 0.08) },
+                ]}
+              />
+              <LoginSky width={desktopHeroWidth} reduceMotion={reduceMotion} />
+            </View>
+            <View
+              style={[s.desktopFormPane, { backgroundColor: colors.background }]}
+            >
+              {form}
             </View>
           </View>
-
-          {/* 离线 / 登录错误共用一个保留高度的提示槽 */}
-          <View style={s.messageSlot} accessibilityLiveRegion="polite">
-            {statusMessage ? (
-              <Text
-                style={[
-                  s.message,
-                  { color: statusIsError ? colors.error : colors.textSecondary },
-                ]}
-                // 长错误文案要有上界,否则换行照样把登录键顶下去。
-                numberOfLines={2}
-              >
-                {statusMessage}
-              </Text>
-            ) : null}
-          </View>
-
-          <View style={s.buttonWrap}>
-            <LoginPrimaryButton
-              testID={E2E_TEST_IDS.authSubmit}
-              label={t('auth.login')}
-              onPress={onSubmit}
-              disabled={submitting}
-              loading={submitting}
-            />
-          </View>
-
-          <View style={s.registerRow}>
-            <Text style={[s.registerHint, { color: colors.textSecondary }]}>
-              {t('auth.noAccount')}
-            </Text>
-            <Link href="/(auth)/register" asChild>
-              <Pressable hitSlop={8} accessibilityRole="link">
-                <Text style={[s.registerLink, { color: colors.link }]}>
-                  {t('auth.registerNow')}
-                </Text>
-              </Pressable>
-            </Link>
-          </View>
-        </View>
+        ) : (
+          <>
+            {/* 夜空 hero：绝对定位在滚动内容顶部，随内容一起滚走 */}
+            <LoginSky width={width} reduceMotion={reduceMotion} />
+            {form}
+          </>
+        )}
       </ScrollView>
     </KeyboardAvoidingContainer>
   );

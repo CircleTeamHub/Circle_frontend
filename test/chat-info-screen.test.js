@@ -461,12 +461,12 @@ test('i18n avoids synchronous storage reads during web server rendering', () => 
 
   assert.match(source, /function canUseSynchronousStorage\(\)/);
   assert.match(source, /typeof window !== 'undefined'/);
-  assert.match(source, /if \(!canUseSynchronousStorage\(\)\) \{\s*return getDeviceLanguage\(\);\s*\}/s);
+  assert.match(source, /if \(!canUseSynchronousStorage\(\)\) \{\s*return DEFAULT_APP_LANGUAGE;\s*\}/s);
   assert.match(source, /if \(canUseSynchronousStorage\(\)\) \{\s*storage\.set\(LANGUAGE_KEY, lang\);/s);
   assert.match(source, /if \(!canUseSynchronousStorage\(\)\) \{\s*return;\s*\}/s);
 });
 
-test('i18n defaults to following the system language when no preference is saved', () => {
+test('i18n defaults to Chinese while preserving an explicit system preference', () => {
   const filePath = path.join(process.cwd(), 'src/i18n/index.ts');
   const source = fs.readFileSync(filePath, 'utf8');
 
@@ -477,8 +477,11 @@ test('i18n defaults to following the system language when no preference is saved
   }
   assert.match(source, /export type AppLanguagePreference = 'system' \| AppLanguage/);
   assert.match(source, /function getSavedLanguagePreference\(\): AppLanguagePreference/);
+  assert.match(source, /if \(!canUseSynchronousStorage\(\)\) \{\s*return DEFAULT_APP_LANGUAGE;\s*\}/s);
   assert.match(source, /if \(isAppLanguage\(saved\)\) return saved;/);
-  assert.match(source, /return 'system';/);
+  assert.match(source, /const DEFAULT_APP_LANGUAGE: AppLanguage = 'zh';/);
+  assert.match(source, /if \(storage\.getString\(LANGUAGE_SYSTEM_KEY\) === '1'\) return 'system';/);
+  assert.match(source, /return DEFAULT_APP_LANGUAGE;/);
   assert.match(source, /export function getCurrentLanguagePreference\(\): AppLanguagePreference/);
   assert.match(source, /export function setLanguage\(lang: AppLanguagePreference\)/);
   assert.match(source, /if \(lang === 'system'\) \{[\s\S]*storage\.remove\(LANGUAGE_KEY\);[\s\S]*i18n\.changeLanguage\(getDeviceLanguage\(\)\);[\s\S]*return;/);

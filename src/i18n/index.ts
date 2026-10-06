@@ -11,6 +11,13 @@ import ko from './locales/ko.json';
 import es from './locales/es.json';
 
 const LANGUAGE_KEY = '@circle_im_language';
+/**
+ * Keep an explicit "system" choice separate from an unset preference. The
+ * app defaults to Chinese, while users who choose system language continue to
+ * follow the device on the next launch.
+ */
+const LANGUAGE_SYSTEM_KEY = '@circle_im_language_system';
+const DEFAULT_APP_LANGUAGE: AppLanguage = 'zh';
 
 export const APP_LANGUAGE_OPTIONS = [
   { labelKey: 'appSettings.languageSheet.zh', value: 'zh' },
@@ -53,17 +60,18 @@ function canUseSynchronousStorage() {
 
 function getSavedLanguagePreference(): AppLanguagePreference {
   if (!canUseSynchronousStorage()) {
-    return 'system';
+    return DEFAULT_APP_LANGUAGE;
   }
 
   const saved = storage.getString(LANGUAGE_KEY);
   if (isAppLanguage(saved)) return saved;
-  return 'system';
+  if (storage.getString(LANGUAGE_SYSTEM_KEY) === '1') return 'system';
+  return DEFAULT_APP_LANGUAGE;
 }
 
 function getInitialLanguage(): AppLanguage {
   if (!canUseSynchronousStorage()) {
-    return getDeviceLanguage();
+    return DEFAULT_APP_LANGUAGE;
   }
 
   const saved = getSavedLanguagePreference();
@@ -92,6 +100,7 @@ export function setLanguage(lang: AppLanguagePreference) {
   if (lang === 'system') {
     if (canUseSynchronousStorage()) {
       storage.remove(LANGUAGE_KEY);
+      storage.set(LANGUAGE_SYSTEM_KEY, '1');
     }
     void i18n.changeLanguage(getDeviceLanguage());
     return;
@@ -100,6 +109,7 @@ export function setLanguage(lang: AppLanguagePreference) {
   void i18n.changeLanguage(lang);
   if (canUseSynchronousStorage()) {
     storage.set(LANGUAGE_KEY, lang);
+    storage.remove(LANGUAGE_SYSTEM_KEY);
   }
 }
 

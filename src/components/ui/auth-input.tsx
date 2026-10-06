@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
+  Platform,
   View,
   TextInput,
   Text,
@@ -49,6 +50,12 @@ const s = StyleSheet.create({
   input: {
     flex: 1,
     padding: 0,
+    // RN Web otherwise lets the browser draw a bright blue focus outline
+    // inside the rounded field. The container already supplies the field
+    // boundary, so the native outline only adds visual noise on web.
+    ...(Platform.OS === 'web'
+      ? { outlineStyle: 'solid' as const, outlineWidth: 0, outlineColor: 'transparent' }
+      : null),
   },
 });
 

@@ -489,13 +489,9 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   const hideTabBar = segments.length > 2;
-  // 桌面网页版分栏：浮动条钉进左栏（会话列表）宽度内，变成列表的底部导航，
-  // 不再横贯整窗、压住右栏聊天输入框。
+  // 桌面网页版分栏：所有 tab 共用同一个视口居中位置，避免消息页的导航
+  // 因为左侧列表栏而和联系人、动态、我的页面错位。
   const isSplitLayout = useDesktopSplitLayout();
-  // 分栏时浮动条的落点跟着当前 tab 走：消息 tab 钉进左栏（它就是列表栏的
-  // 底部导航）；其余 tab 的内容在 640 居中窄栏里，浮动条也居中同轴。
-  const pinTabBarLeft =
-    isSplitLayout && (segments[1] ?? 'messages') === 'messages';
   // 左栏宽度用户可拖：浮动条与列表读同一个值，拖动时同帧一起变。
   const listPaneWidth = useSplitPaneStore((state) => state.listPaneWidth);
 
@@ -531,18 +527,13 @@ export default function TabLayout() {
       left: 0,
       right: 0,
       bottom: 0,
-      ...(isSplitLayout
-        ? pinTabBarLeft
-          ? { right: undefined, width: listPaneWidth }
-          : { alignItems: 'center' }
-        : null),
+      ...(isSplitLayout ? { alignItems: 'center' } : null),
     },
     tabBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      // 居中模式下 wrapper 不再限宽，tab 内容给固定宽（与左栏模式同宽，只
-      // 平移不变形）。
-      ...(isSplitLayout && !pinTabBarLeft
+      // 分栏时保持和左栏导航相同的宽度，只做水平居中，不随视口拉伸变形。
+      ...(isSplitLayout
         ? { width: listPaneWidth - TAB_BAR_MARGIN_H * 2 }
         : null),
       height: TAB_BAR_HEIGHT,
@@ -652,7 +643,7 @@ export default function TabLayout() {
     labelActive: {
       fontWeight: '700',
     },
-  }), [colors, insets.bottom, isSplitLayout, listPaneWidth, pinTabBarLeft, resolvedMode]);
+  }), [colors, insets.bottom, isSplitLayout, listPaneWidth, resolvedMode]);
 
   // 各 tab 汇总自己辖下的未读：联系人含朋友圈，动态含圈子和报名管理。
   // 曾经读的 discoverUnread 是「好友申请 + 朋友圈 + 圈子」的并集（互动消息
