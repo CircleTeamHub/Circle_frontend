@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useRef, useId, useMemo, useState } from 'react';
 import { View, StyleSheet, type ImageSourcePropType } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -91,13 +91,9 @@ export const Avatar: React.FC<AvatarProps> = ({
   const defaultAvatarGradientId = `default-avatar-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const hasFrame =
     FEATURE_FLAGS.avatarFrames && Boolean(frameSource) && shape === 'circle';
-  const [imageFailed, setImageFailed] = useState(false);
-  useEffect(() => {
-    // A recycled Avatar can receive another user's URL. Clear the previous
-    // failure before attempting the new source so one bad URL cannot poison
-    // the next row that reuses this component instance.
-    setImageFailed(false);
-  }, [uri]);
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const currentUriRef = useRef(uri);
+  currentUriRef.current = uri;
   // frameSize = 整体占位(框铺满它);photoSize = 里面的照片(填内孔)。紧凑模式框=size×1.2、照片=size×0.75;
   // 默认外扩框=size×1.6、照片=size。非会员无框时 photoSize=size。
   const frameSize =
@@ -116,7 +112,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   );
 
   // 空字符串的 uri 也走 fallback —— `<Image source={{ uri: '' }} />` 直接渲染空白。
-  const hasImage = Boolean(uri && uri.length > 0) && !imageFailed;
+  const hasImage = Boolean(uri && uri.length > 0) && failedUri !== uri;
   const core =
     hasImage ? (
       <Image
@@ -130,7 +126,7 @@ export const Avatar: React.FC<AvatarProps> = ({
             borderRadius,
           },
         ]}
-        onError={() => setImageFailed(true)}
+        onError={() => { if (currentUriRef.current === uri) setFailedUri(uri ?? null); }}
       />
     ) : (
       <View

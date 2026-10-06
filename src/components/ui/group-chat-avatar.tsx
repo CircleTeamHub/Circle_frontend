@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useRef, useId, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -36,12 +36,11 @@ export function GroupChatAvatar({
   badgeBorderColor = FALLBACK_BADGE_BORDER,
 }: GroupChatAvatarProps) {
   const gradientId = `group-chat-avatar-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
-  const [imageFailed, setImageFailed] = useState(false);
-  useEffect(() => {
-    setImageFailed(false);
-  }, [uri]);
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const currentUriRef = useRef(uri);
+  currentUriRef.current = uri;
   const imageUri = uri ?? undefined;
-  const hasImage = Boolean(imageUri && imageUri.length > 0) && !imageFailed;
+  const hasImage = Boolean(imageUri && imageUri.length > 0) && failedUri !== uri;
   const badgeSize = Math.max(14, Math.round(size * 0.38));
   const badgeBorderWidth = Math.max(2, Math.round(size * 0.045));
 
@@ -67,7 +66,7 @@ export function GroupChatAvatar({
             recyclingKey={imageUri}
             contentFit="cover"
             style={StyleSheet.absoluteFill}
-            onError={() => setImageFailed(true)}
+            onError={() => { if (currentUriRef.current === uri) setFailedUri(uri ?? null); }}
           />
         ) : (
           <Svg

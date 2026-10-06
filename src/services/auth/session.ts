@@ -59,6 +59,18 @@ async function loadDiscoverStore() {
   return useDiscoverStore;
 }
 
+async function loadMomentsStore() {
+  const { useMomentsStore } = await import('@/features/discover/store/use-moments-store');
+  return useMomentsStore;
+}
+
+async function loadNotificationCenterStore() {
+  const { useNotificationCenterStore } = await import(
+    '@/features/notifications/store/use-notification-center-store'
+  );
+  return useNotificationCenterStore;
+}
+
 async function loadVipLevelsInvalidator() {
   const { invalidateVipLevels } = await import('@/stores/userVipStore');
   return invalidateVipLevels;
@@ -215,6 +227,8 @@ async function performClearLocalSession(
   const useMessageGroupsStore = await loadMessageGroupsStore();
   const useCirclesStore = await loadCirclesStore();
   const useDiscoverStore = await loadDiscoverStore();
+  const useMomentsStore = await loadMomentsStore();
+  const useNotificationCenterStore = await loadNotificationCenterStore();
   const invalidateVipLevels = await loadVipLevelsInvalidator();
 
   // 先清 auth，让订阅 useAuthStore 的组件立刻看到"未登录"，
@@ -236,6 +250,8 @@ async function performClearLocalSession(
   // 发现页 feed 含 plazaMembershipRequired 升级墙标记：不随登出重置的话，切到会员账号
   // 后仍可能停在上一个非会员账号的升级墙，直到手动刷新或重启 app。
   useDiscoverStore.getState().reset();
+  useMomentsStore.getState().reset();
+  useNotificationCenterStore.getState().reset();
   // 清 userId→vipLevel 缓存：否则切到 B 账号后，通讯录/会话里 A 账号见过的用户仍带
   // A 会话缓存的会员档位（虽同源，但语义上应随会话重建）。
   invalidateVipLevels();

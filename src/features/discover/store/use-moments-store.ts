@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useAuthStore } from '@/stores/authStore';
 import { fetchMomentsFeed } from '@/services/api/moments';
 import type { MomentComment, MomentPost } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -63,6 +64,11 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
     // page's nextCursor.
     const cursor = reset ? undefined : (state.cursor ?? undefined);
     const requestId = state.latestRequestId + 1;
+    const { user, sessionEpoch } = useAuthStore.getState();
+    const isCurrentSession = () => {
+      const auth = useAuthStore.getState();
+      return auth.user?.id === user?.id && auth.sessionEpoch === sessionEpoch;
+    };
     set({
       latestRequestId: requestId,
       fetchError: false,
@@ -76,7 +82,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
       set((current) => {
         // reset 抢占后，旧 paginate 响应会落在这里，要丢弃避免把 cursor 推到错误值或
         // 把过期数据塞回去（map dedup 能避免重复 key，但 cursor / hasMore 还是会污染）。
-        if (current.latestRequestId !== requestId) {
+        if (!isCurrentSession() || current.latestRequestId !== requestId) {
           return {};
         }
         return {
@@ -94,8 +100,9 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
         };
       });
     } catch (error) {
+      if (!isCurrentSession() || get().latestRequestId !== requestId) return;
       set((current) => {
-        if (current.latestRequestId !== requestId) {
+        if (!isCurrentSession() || current.latestRequestId !== requestId) {
           return {};
         }
         return {
@@ -150,14 +157,14 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
     })),
 
   reset: () =>
-    set({
+    set((current) => ({
       moments: [],
       cursor: null,
       hasMore: true,
       loading: false,
       refreshing: false,
       fetchError: false,
-      latestRequestId: 0,
+      latestRequestId: current.latestRequestId + 1,
       lastRefreshTime: null,
-    }),
+    })),
 }));

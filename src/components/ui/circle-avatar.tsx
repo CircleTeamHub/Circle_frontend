@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,12 +28,11 @@ export function CircleAvatar({
   style,
 }: CircleAvatarProps) {
   const radius = borderRadius ?? size / 2;
-  const [imageFailed, setImageFailed] = useState(false);
-  useEffect(() => {
-    setImageFailed(false);
-  }, [uri]);
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const currentUriRef = useRef(uri);
+  currentUriRef.current = uri;
   const imageUri = uri ?? undefined;
-  const hasImage = Boolean(imageUri && imageUri.length > 0) && !imageFailed;
+  const hasImage = Boolean(imageUri && imageUri.length > 0) && failedUri !== uri;
   // overflow:hidden 把方形图片 / 渐变裁成圆角形状。
   const container = {
     width: size,
@@ -50,7 +49,7 @@ export function CircleAvatar({
           recyclingKey={imageUri}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          onError={() => setImageFailed(true)}
+          onError={() => { if (currentUriRef.current === uri) setFailedUri(uri ?? null); }}
         />
       </View>
     );

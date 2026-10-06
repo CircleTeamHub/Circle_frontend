@@ -10,6 +10,7 @@ interface NotificationCenterState {
   interactive: NotificationItem[];
   /** 报名管理 tab: posts the current user authored. */
   signupPosts: MyCirclePost[];
+  reset: () => void;
   setInteractive: (items: NotificationItem[]) => void;
   /**
    * 用某个域的最新一页替换该域的旧数据，别的域原样保留 —— 朋友圈铃铛的刷新
@@ -39,6 +40,7 @@ export const useNotificationCenterStore = create<NotificationCenterState>(
   (set) => ({
     interactive: [],
     signupPosts: [],
+    reset: () => set({ interactive: [], signupPosts: [] }),
     setInteractive: (items) => set({ interactive: items }),
     setInteractiveForDomain: (domain, items) =>
       set((s) => {

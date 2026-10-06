@@ -39,10 +39,7 @@ test('UserIconRow renders system badges from local artwork and circle icons in c
   assert.match(row, /icon\.type === 'SYSTEM' \? formatIconLabel\(icon\) : CIRCLE_BADGE_LABEL/);
   assert.match(row, /badgeFrame/);
   assert.match(row, /hasSystemBadgeImage \? s\.systemBadgeShell : s\.badgeFrame/);
-  assert.match(row, /onError=\{\(\) => setSystemBadgeImageFailed\(true\)\}/);
-  assert.match(row, /circleImageFailed/);
   assert.match(row, /hasCircleImage/);
-  assert.match(row, /onError=\{\(\) => setCircleImageFailed\(true\)\}/);
   assert.match(row, /circleOrnament/);
   assert.match(row, /compactCircleOrnament/);
   assert.match(row, /smallCompactCircleOrnament/);

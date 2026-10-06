@@ -5,19 +5,7 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-test('shared avatar images reset and fall back after a failed remote load', () => {
-  for (const rel of [
-    'src/components/ui/avatar.tsx',
-    'src/components/ui/circle-avatar.tsx',
-    'src/components/ui/group-chat-avatar.tsx',
-  ]) {
-    const source = read(rel);
-    assert.match(source, /useState\(false\)/, rel);
-    assert.match(source, /useEffect\(/, rel);
-    assert.match(source, /onError=\{\(\) => setImageFailed\(true\)\}/, rel);
-    assert.match(source, /!imageFailed/, rel);
-  }
-});
+// Avatar recycling and late failures are covered by avatar.spec.tsx behavior tests.
 
 test('moments feed locks failed pagination until explicit refresh', () => {
   const store = read('src/features/discover/store/use-moments-store.ts');
