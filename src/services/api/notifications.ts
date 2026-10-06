@@ -115,6 +115,20 @@ export async function fetchNotifications(
   return apiClient<NotificationItem[]>(`/notification/list${query}`);
 }
 
+function readNotificationCursorPage(
+  raw: unknown,
+  requestedCursor: string | null | undefined,
+  message: string,
+): NotificationCursorPage {
+  const page = expectShape(raw, isNotificationCursorPageShape, message);
+  if (requestedCursor && page.nextCursor === requestedCursor) {
+    // Treat a repeated cursor as a page failure. Both consumers already offer
+    // explicit retry and stop automatic onEndReached requests after failure.
+    throw new Error(message);
+  }
+  return page;
+}
+
 /**
  * Keyset page for the interactive notification center. The legacy array API
  * above remains available for realtime recovery and older clients.
@@ -130,11 +144,7 @@ export async function fetchNotificationsPage(
       domain,
     })}`,
   );
-  return expectShape(
-    raw,
-    isNotificationCursorPageShape,
-    '通知分页数据格式异常',
-  );
+  return readNotificationCursorPage(raw, cursor, '通知分页数据格式异常');
 }
 
 export async function fetchProfileNotifications(
@@ -152,11 +162,7 @@ export async function fetchProfileNotificationsPage(
   const raw = await apiClient<NotificationCursorPage>(
     `/notification/profile/list${buildQuery({ cursorMode: 'true', cursor })}`,
   );
-  return expectShape(
-    raw,
-    isNotificationCursorPageShape,
-    '系统通知分页数据格式异常',
-  );
+  return readNotificationCursorPage(raw, cursor, '系统通知分页数据格式异常');
 }
 
 export async function markNotificationRead(id: string): Promise<void> {

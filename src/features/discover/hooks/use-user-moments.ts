@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchUserMoments } from '@/services/api/moments';
 import type { MomentPost } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
 
 const PAGE_SIZE = 20;
 
@@ -19,6 +20,12 @@ interface UseUserMomentsResult {
 /** 拉取某个用户的朋友圈相册（分页、下拉刷新、去重）。 */
 export function useUserMoments(userId: string): UseUserMomentsResult {
   const { t } = useTranslation();
+  const ownerId = useAuthStore((state) => state.isAuthenticated ? state.user?.id : undefined);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const scopeKey = `${ownerId ?? ''}:${sessionEpoch}:${userId}`;
+  const [dataScope, setDataScope] = useState(scopeKey);
+  const currentTargetRef = useRef(userId);
+  currentTargetRef.current = userId;
   // react-i18next 在语言切换或资源加载时可能返回新的 t 引用。把最新翻译放进
   // ref，避免它成为 load 的依赖，进而让初次加载 effect 因为函数身份变化重复发请求。
   const translateRef = useRef(t);
@@ -36,6 +43,9 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   // Guards loadMore against overlapping calls (FlatList can fire onEndReached
   // twice before `loading` state commits).
   const inFlightRef = useRef(false);
+  const refreshInFlightRef = useRef(false);
+  const pageFailedRef = useRef(false);
+  const cursorRef = useRef<string | null>(null);
   const requestSeqRef = useRef(0);
   useEffect(() => {
     mountedRef.current = true;
@@ -46,16 +56,25 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
 
   const load = useCallback(
     async (cursorArg: string | undefined, replace: boolean) => {
-      if (!userId) return;
+      if (!userId || !ownerId) return;
+      const auth = useAuthStore.getState();
+      if (!auth.isAuthenticated || auth.user?.id !== ownerId || auth.sessionEpoch !== sessionEpoch ||
+        currentTargetRef.current !== userId) return;
       const requestSeq = ++requestSeqRef.current;
       const requestUserId = userId;
+      const isCurrent = () => {
+        const auth = useAuthStore.getState();
+        return mountedRef.current && requestSeq === requestSeqRef.current &&
+          currentTargetRef.current === requestUserId && auth.isAuthenticated &&
+          auth.user?.id === ownerId && auth.sessionEpoch === sessionEpoch;
+      };
       try {
-        if (mountedRef.current) setError(null);
+        if (isCurrent()) setError(null);
         const result = await fetchUserMoments(requestUserId, {
           cursor: cursorArg,
           limit: PAGE_SIZE,
         });
-        if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
+        if (!isCurrent()) return;
         setMoments((prev) => {
           const base = replace ? [] : prev;
           const seen = new Set(base.map((m) => m.id));
@@ -68,24 +87,41 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
           }
           return merged;
         });
+        pageFailedRef.current = false;
         setHasMore(result.hasMore);
-        setCursor(result.nextCursor ?? null);
+        cursorRef.current = result.nextCursor ?? null;
+        setCursor(cursorRef.current);
       } catch (err) {
-        if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
+        if (!isCurrent()) return;
+        // A failed refresh keeps the last successful page usable. Only failed
+        // pagination or an initial load without a cursor stops automatic loads.
+        if (!replace || !cursorRef.current) pageFailedRef.current = true;
         setError(
           getApiErrorMessage(err, translateRef.current('common.networkError')),
         );
+      } finally {
+        if (isCurrent()) {
+          inFlightRef.current = false;
+          refreshInFlightRef.current = false;
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
-    [userId],
+    [ownerId, sessionEpoch, userId],
   );
 
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !ownerId) {
       // 使旧用户的慢请求失效；否则路由切换到空 id 的这一帧里，旧响应仍可能
       // 通过原 requestSeq 写回列表，造成用户短暂看到上一位用户的朋友圈。
       requestSeqRef.current += 1;
       inFlightRef.current = false;
+      refreshInFlightRef.current = false;
+      pageFailedRef.current = false;
+      cursorRef.current = null;
+      setDataScope(scopeKey);
+      setRefreshing(false);
       setMoments([]);
       setCursor(null);
       setHasMore(false);
@@ -94,20 +130,25 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
       return;
     }
 
+    setDataScope(scopeKey);
+    setMoments([]);
+    setCursor(null);
+    cursorRef.current = null;
+    setHasMore(true);
+    pageFailedRef.current = false;
+    inFlightRef.current = false;
+    refreshInFlightRef.current = false;
+    setRefreshing(false);
     setLoading(true);
-    void load(undefined, true).finally(() => {
-      if (mountedRef.current) setLoading(false);
-    });
-  }, [load, userId]);
+    void load(undefined, true);
+  }, [load, ownerId, scopeKey, userId]);
 
   const refresh = useCallback(async () => {
+    if (!ownerId || !userId || dataScope !== scopeKey || refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
     setRefreshing(true);
-    try {
-      await load(undefined, true);
-    } finally {
-      if (mountedRef.current) setRefreshing(false);
-    }
-  }, [load]);
+    await load(undefined, true);
+  }, [dataScope, load, ownerId, scopeKey, userId]);
 
   const loadMore = useCallback(async () => {
     // `loading` is set inside this async tick, so a fast double `onEndReached`
@@ -117,17 +158,21 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
     // again because the album is still shorter than the viewport. Keep the
     // failed state retryable via pull-to-refresh, but stop automatic retries
     // until the user explicitly asks for a refresh.
-    if (inFlightRef.current || loading || refreshing || !hasMore || error)
+    if (inFlightRef.current || loading || refreshing || !hasMore ||
+      pageFailedRef.current || !cursor || dataScope !== scopeKey)
       return;
     inFlightRef.current = true;
     setLoading(true);
-    try {
-      await load(cursor ?? undefined, false);
-    } finally {
-      inFlightRef.current = false;
-      if (mountedRef.current) setLoading(false);
-    }
-  }, [error, loading, refreshing, hasMore, cursor, load]);
+    await load(cursor, false);
+  }, [cursor, dataScope, hasMore, load, loading, refreshing, scopeKey]);
 
-  return { moments, loading, refreshing, hasMore, error, refresh, loadMore };
+  const isCurrentData = dataScope === scopeKey && Boolean(ownerId);
+  return {
+    moments: isCurrentData ? moments : [],
+    loading: Boolean(ownerId && userId) && (!isCurrentData || loading),
+    refreshing: isCurrentData && refreshing,
+    hasMore: isCurrentData && hasMore,
+    error: isCurrentData ? error : null,
+    refresh, loadMore,
+  };
 }

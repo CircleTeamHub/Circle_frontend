@@ -21,6 +21,7 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
 
 const PERMISSION_OPTIONS: readonly FriendPermission[] = ['FULL', 'CHAT_ONLY'];
 
@@ -72,14 +73,22 @@ export default function EditFriendPermissionScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const profileId = typeof params.id === 'string' ? params.id : '';
+  const ownerId = useAuthStore((state) => state.isAuthenticated ? state.user?.id : undefined);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const scopeKey = `${ownerId ?? ''}:${sessionEpoch}:${profileId}`;
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
+  const originOwner = useRef(ownerId);
   const targetName =
-    typeof params.name === 'string' ? params.name : t('chat.friend');
-  const [permission, setPermission] = useState<FriendPermission>('FULL');
+    originOwner.current === ownerId && typeof params.name === 'string' ? params.name : t('chat.friend');
+  const [permission, setPermission] = useState<FriendPermission | null>(null);
+  const [loadedScope, setLoadedScope] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryVersion, setRetryVersion] = useState(0);
   const mountedRef = useRef(true);
+  const saveRef = useRef<symbol | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -88,9 +97,18 @@ export default function EditFriendPermissionScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    const isCurrent = () => {
+      const auth = useAuthStore.getState();
+      return !cancelled && mountedRef.current && scopeRef.current === scopeKey &&
+        auth.isAuthenticated && auth.user?.id === ownerId && auth.sessionEpoch === sessionEpoch;
+    };
+    saveRef.current = null;
+    setIsSaving(false);
+    setLoadedScope('');
+    setPermission(null);
 
-    if (!profileId) {
-      setError(t('userProfile.editPermission.missingFriend'));
+    if (!profileId || !ownerId) {
+      setError(t(!profileId ? 'userProfile.editPermission.missingFriend' : 'userProfile.editPermission.loadFailed'));
       setIsLoading(false);
       return;
     }
@@ -99,20 +117,26 @@ export default function EditFriendPermissionScreen() {
     setError(null);
     fetchFriendSettings(profileId)
       .then((settings) => {
-        if (!cancelled) setPermission(settings.permission);
+        if (!isCurrent()) return;
+        if (settings?.permission !== 'FULL' && settings?.permission !== 'CHAT_ONLY') {
+          throw new Error('Unsupported friend permission response');
+        }
+        setPermission(settings.permission);
+        setLoadedScope(scopeKey);
       })
       .catch((nextError) => {
-        if (!cancelled) setError(t('userProfile.editPermission.loadFailed'));
+        if (!isCurrent()) return;
+        setError(t('userProfile.editPermission.loadFailed'));
         reportHandledFailure('friendPermission', 'loadSettings', nextError);
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (isCurrent()) setIsLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [profileId, t, retryVersion]);
+  }, [ownerId, profileId, retryVersion, scopeKey, sessionEpoch, t]);
 
   const d = useMemo(
     () => ({
@@ -133,24 +157,39 @@ export default function EditFriendPermissionScreen() {
   );
 
   const handleSave = async () => {
-    if (!profileId || isSaving || isLoading || Boolean(error)) return;
+    const auth = useAuthStore.getState();
+    if (!profileId || !ownerId || permission === null || saveRef.current || isSaving ||
+      isLoading || error || loadedScope !== scopeKey || !auth.isAuthenticated ||
+      auth.user?.id !== ownerId || auth.sessionEpoch !== sessionEpoch) return;
+    const operation = Symbol('saveFriendPermission');
+    saveRef.current = operation;
+    const isCurrent = () => {
+      const currentAuth = useAuthStore.getState();
+      return mountedRef.current && saveRef.current === operation && scopeRef.current === scopeKey &&
+        currentAuth.isAuthenticated && currentAuth.user?.id === ownerId && currentAuth.sessionEpoch === sessionEpoch;
+    };
 
     try {
       setIsSaving(true);
       await setFriendPermission(profileId, permission);
-      if (mountedRef.current) router.back();
+      if (isCurrent()) router.back();
     } catch (nextError) {
-      if (!mountedRef.current) return;
+      if (!isCurrent()) return;
       Alert.alert(
         t('validation.saveFailed'),
         getApiErrorMessage(nextError, t('userProfile.editPermission.saveFailed')),
       );
     } finally {
-      if (mountedRef.current) setIsSaving(false);
+      if (isCurrent()) {
+        saveRef.current = null;
+        setIsSaving(false);
+      }
     }
   };
 
-  const stateBlock = isLoading ? (
+  const waitingForScope = Boolean(ownerId && profileId) && !error && loadedScope !== scopeKey;
+  const saveDisabled = isLoading || waitingForScope || Boolean(error) || isSaving || permission === null;
+  const stateBlock = isLoading || waitingForScope ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
       <Text style={d.stateText}>{t('userProfile.editPermission.loading')}</Text>
@@ -158,7 +197,7 @@ export default function EditFriendPermissionScreen() {
   ) : error ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
-      {profileId ? <Pressable onPress={() => setRetryVersion((version) => version + 1)} accessibilityRole="button" style={[s.saveButton, d.saveButton, { paddingHorizontal: Spacing.lg }]}>
+      {profileId && ownerId ? <Pressable onPress={() => setRetryVersion((version) => version + 1)} accessibilityRole="button" style={[s.saveButton, d.saveButton, { paddingHorizontal: Spacing.lg }]}>
         <Text style={d.saveButtonText}>{t('common.retry')}</Text>
       </Pressable> : null}
     </View>
@@ -203,8 +242,10 @@ export default function EditFriendPermissionScreen() {
       </ScrollView>
       <View style={[s.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
         <Pressable
-          style={[s.saveButton, d.saveButton, isLoading || Boolean(error) || isSaving ? d.saveButtonDisabled : null]}
-          disabled={isLoading || Boolean(error) || isSaving}
+          style={[s.saveButton, d.saveButton, saveDisabled ? d.saveButtonDisabled : null]}
+          disabled={saveDisabled}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saveDisabled }}
           onPress={handleSave}
         >
           <Text style={d.saveButtonText}>

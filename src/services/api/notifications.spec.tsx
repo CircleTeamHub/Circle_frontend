@@ -42,3 +42,14 @@ test('passes the profile cursor and rejects malformed cursor pages', async () =>
     '系统通知分页数据格式异常',
   );
 });
+
+
+test.each([
+  ['interactive', fetchNotificationsPage],
+  ['profile', fetchProfileNotificationsPage],
+] as const)('rejects a non-advancing %s cursor instead of repeating the same page', async (_name, fetchPage) => {
+  mockedApiClient.mockResolvedValue({ items: [notification], nextCursor: 'same-cursor' });
+  await expect(fetchPage('same-cursor')).rejects.toThrow();
+  mockedApiClient.mockResolvedValue({ items: [notification], nextCursor: 'next-cursor' });
+  await expect(fetchPage('same-cursor')).resolves.toEqual({ items: [notification], nextCursor: 'next-cursor' });
+});
