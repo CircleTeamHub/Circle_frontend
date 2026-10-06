@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
+  Platform,
   View,
   TextInput,
   Text,
@@ -49,6 +50,12 @@ const s = StyleSheet.create({
   input: {
     flex: 1,
     padding: 0,
+    // RN Web otherwise lets the browser draw a bright blue focus outline
+    // inside the rounded field. The container already supplies the field
+    // boundary, so the native outline only adds visual noise on web.
+    ...(Platform.OS === 'web'
+      ? { outlineStyle: 'solid' as const, outlineWidth: 0, outlineColor: 'transparent' }
+      : null),
   },
 });
 
@@ -65,6 +72,7 @@ export const AuthInput: React.FC<AuthInputProps> = ({
   textContentType,
   autoComplete,
 }) => {
+  const [focused, setFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const togglePassword = useCallback(() => setShowPassword((v) => !v), []);
   const { colors } = useTheme();
@@ -99,7 +107,7 @@ export const AuthInput: React.FC<AuthInputProps> = ({
   return (
     <View style={s.wrapper}>
       {label ? <Text style={d.label}>{label}</Text> : null}
-      <View style={[s.container, d.container]}>
+      <View testID={testID ? `${testID}-field` : undefined} style={[s.container, d.container, Platform.OS === 'web' && focused && { borderColor: colors.primary, borderWidth: 2 }]}>
         {prefix ? (
           <>
             <Text style={d.prefix}>{prefix}</Text>
@@ -115,6 +123,8 @@ export const AuthInput: React.FC<AuthInputProps> = ({
           onChangeText={onChangeText}
           secureTextEntry={secureTextEntry && !showPassword}
           keyboardType={keyboardType}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           autoCapitalize="none"
           // 关掉 autoCorrect/spellCheck：账号、密码、昵称都不应被 iOS 修正。
           // 之前漏掉这两项导致输入"alice123"被改成"slice 123"等典型回归。
