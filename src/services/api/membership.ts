@@ -70,7 +70,7 @@ export async function fetchMembershipPlans(): Promise<MembershipPlan[]> {
     raw,
     isMembershipPlanArray,
     i18n.t('common.errors.invalidServerResponse', {
-      defaultValue: '服务返回了无效数据',
+      defaultValue: '暂时无法完成操作，请稍后重试',
     }),
   );
 }
@@ -81,7 +81,7 @@ export async function fetchMembershipProgramStatus(): Promise<MembershipProgramS
     raw,
     isMembershipProgramStatus,
     i18n.t('common.errors.invalidServerResponse', {
-      defaultValue: '服务返回了无效数据',
+      defaultValue: '暂时无法完成操作，请稍后重试',
     }),
   );
 }

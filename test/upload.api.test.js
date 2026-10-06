@@ -20,7 +20,7 @@ function loadUploadApi() {
   let stoppedUploadJobId = null;
   let rnfsShouldHang = false;
   let platformOS = 'android';
-  // 默认 localhost:另有用例专门断言「手机端拒绝 localhost 预签名地址」。
+  // 默认 localhost:另有用例专门断言移动端拒绝不可访问的上传地址。
   let presignHost = 'http://localhost:9000';
   // 逐用例覆盖 presign 响应字段(比如私有目录的 fileUrl 为 null / 缺省)。
   let presignOverrides = {};
@@ -192,7 +192,7 @@ test('android rejects localhost presigned upload urls instead of rewriting the s
         folder: 'avatars',
         sizeBytes: 1024,
       }),
-    /localhost.*403/,
+    /暂时无法上传，请稍后重试/,
   );
 });
 
@@ -362,7 +362,7 @@ test('local file upload rejects localhost presigned urls before native upload', 
           'If-None-Match': '*',
         },
       ),
-    /localhost.*403/,
+    /暂时无法上传，请稍后重试/,
   );
 });
 
@@ -409,6 +409,6 @@ test('public folders still require fileUrl because callers persist it directly',
       folder: 'avatars',
       sizeBytes: 1024,
     }),
-    /预签名上传数据格式异常/,
+    /暂时无法上传，请稍后重试/,
   );
 });

@@ -33,7 +33,7 @@ test('UserMomentsScreen resolves non-UUID route ids before fetching author momen
   assert.match(src, /setCover\(null\)/);
   assert.match(src, /setAvatarUrl\(null\)/);
   assert.match(src, /setSignature\(''\)/);
-  assert.match(src, /setProfileError\(getApiErrorMessage\(err/);
+  assert.match(src, /setProfileError\(\s*getApiErrorMessage\(\s*err/);
   assert.match(src, /!loading && !profileResolving/);
   assert.match(src, /profileError \?\? error \?\? t\('discover\.noMoments'\)/);
   assert.match(hook, /if \(!userId\) \{/);

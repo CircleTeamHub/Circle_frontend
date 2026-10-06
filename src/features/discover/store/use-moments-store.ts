@@ -12,6 +12,9 @@ interface MomentsState {
   hasMore: boolean;
   loading: boolean;
   refreshing: boolean;
+  // 最近一次 feed 请求失败。分页失败后 FlatList 可能持续触发 onEndReached；
+  // 由显式下拉刷新清除这个闸门，避免网络抖动变成请求风暴。
+  fetchError: boolean;
   latestRequestId: number;
   lastRefreshTime: string | null;
 
@@ -42,6 +45,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
   hasMore: true,
   loading: false,
   refreshing: false,
+  fetchError: false,
   latestRequestId: 0,
   lastRefreshTime: null,
 
@@ -51,7 +55,9 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
     // 同模式并发请求才早退。
     if (reset && state.refreshing) return;
     if (!reset && state.loading) return;
+    if (!reset && state.refreshing) return;
     if (!reset && !state.hasMore) return;
+    if (!reset && state.fetchError) return;
 
     // reset starts from the newest (no cursor); paginate follows the last
     // page's nextCursor.
@@ -59,7 +65,10 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
     const requestId = state.latestRequestId + 1;
     set({
       latestRequestId: requestId,
-      ...(reset ? { refreshing: true } : { loading: true }),
+      fetchError: false,
+      ...(reset
+        ? { refreshing: true, loading: false }
+        : { loading: true }),
     });
 
     try {
@@ -68,7 +77,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
         // reset 抢占后，旧 paginate 响应会落在这里，要丢弃避免把 cursor 推到错误值或
         // 把过期数据塞回去（map dedup 能避免重复 key，但 cursor / hasMore 还是会污染）。
         if (current.latestRequestId !== requestId) {
-          return reset ? { refreshing: false } : { loading: false };
+          return {};
         }
         return {
           moments: reset
@@ -76,6 +85,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
             : mergeMoments(current.moments, result.items),
           cursor: result.nextCursor ?? null,
           hasMore: result.hasMore,
+          fetchError: false,
           lastRefreshTime: reset
             ? new Date().toISOString()
             : current.lastRefreshTime,
@@ -84,7 +94,15 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
         };
       });
     } catch (error) {
-      set(reset ? { refreshing: false } : { loading: false });
+      set((current) => {
+        if (current.latestRequestId !== requestId) {
+          return {};
+        }
+        return {
+          ...(reset ? { refreshing: false } : { loading: false }),
+          fetchError: true,
+        };
+      });
       reportHandledFailure('moments', 'fetch', error);
       throw error;
     }
@@ -138,6 +156,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
       hasMore: true,
       loading: false,
       refreshing: false,
+      fetchError: false,
       latestRequestId: 0,
       lastRefreshTime: null,
     }),

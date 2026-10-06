@@ -8,8 +8,11 @@ import {
 } from '@testing-library/react-native';
 import SystemAnnouncementsScreen from './SystemAnnouncementsScreen';
 import {
-  fetchProfileNotifications,
+  fetchProfileNotificationsPage,
   markProfileNotificationsRead,
+} from '@/services/api/notifications';
+import type {
+  NotificationCursorPage,
 } from '@/services/api/notifications';
 import type { NotificationItem } from '@/types';
 
@@ -42,14 +45,16 @@ jest.mock('react-native', () => {
   const actual =
     jest.requireActual<typeof import('react-native')>('react-native');
   const FlatList = ({
-      data = [],
-      renderItem,
-      ListHeaderComponent,
-    }: {
-      data?: NotificationItem[];
-      renderItem: (info: { item: NotificationItem }) => React.ReactNode;
-      ListHeaderComponent?: React.ReactNode;
-    }) =>
+    data = [],
+    renderItem,
+    ListHeaderComponent,
+    onEndReached,
+  }: {
+    data?: NotificationItem[];
+    renderItem: (info: { item: NotificationItem }) => React.ReactNode;
+    ListHeaderComponent?: React.ReactNode;
+    onEndReached?: () => void;
+  }) =>
     ReactModule.createElement(
       actual.View,
       null,
@@ -61,6 +66,13 @@ jest.mock('react-native', () => {
           renderItem({ item }),
         ),
       ),
+      onEndReached
+        ? ReactModule.createElement(
+            actual.Pressable,
+            { testID: 'mock-flatlist-end', onPress: onEndReached },
+            ReactModule.createElement(actual.Text, null, 'load-more'),
+          )
+        : null,
     );
   return new Proxy(actual, {
     get(target, property, receiver) {
@@ -118,7 +130,7 @@ jest.mock('@/theme', () => ({
 }));
 
 jest.mock('@/services/api/notifications', () => ({
-  fetchProfileNotifications: jest.fn(),
+  fetchProfileNotificationsPage: jest.fn(),
   markProfileNotificationsRead: jest.fn(),
 }));
 
@@ -131,9 +143,9 @@ jest.mock('@/features/notifications/utils/report-failure', () => ({
   reportNotificationFailure: jest.fn(),
 }));
 
-const mockFetchProfileNotifications =
-  fetchProfileNotifications as jest.MockedFunction<
-    typeof fetchProfileNotifications
+const mockFetchProfileNotificationsPage =
+  fetchProfileNotificationsPage as jest.MockedFunction<
+    typeof fetchProfileNotificationsPage
   >;
 const mockMarkProfileNotificationsRead =
   markProfileNotificationsRead as jest.MockedFunction<
@@ -150,20 +162,25 @@ function deferred<T>() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockFetchProfileNotifications.mockResolvedValue([]);
+  mockFetchProfileNotificationsPage.mockResolvedValue({
+    items: [],
+    nextCursor: null,
+  });
   mockMarkProfileNotificationsRead.mockResolvedValue({ count: 0 });
 });
 
 test('opens a static announcement detail and hides the empty account-notification section', async () => {
-  const request = deferred<NotificationItem[]>();
-  mockFetchProfileNotifications.mockReturnValue(request.promise);
+  const request = deferred<NotificationCursorPage>();
+  mockFetchProfileNotificationsPage.mockReturnValue(request.promise);
   render(<SystemAnnouncementsScreen />);
 
   await act(async () => {
-    request.resolve([]);
+    request.resolve({ items: [], nextCursor: null });
   });
 
-  await waitFor(() => expect(mockFetchProfileNotifications).toHaveBeenCalled());
+  await waitFor(() =>
+    expect(mockFetchProfileNotificationsPage).toHaveBeenCalledWith(),
+  );
   fireEvent.press(screen.getByLabelText('查看最新 App 信息详情'));
 
   expect(mockRouter.push).toHaveBeenCalledWith({
@@ -188,14 +205,49 @@ test('labels backend-delivered profile messages as account notifications', async
     fromCirclePost: null,
     fromInvitation: null,
   };
-  const request = deferred<NotificationItem[]>();
-  mockFetchProfileNotifications.mockReturnValue(request.promise);
+  const request = deferred<NotificationCursorPage>();
+  mockFetchProfileNotificationsPage.mockReturnValue(request.promise);
   render(<SystemAnnouncementsScreen />);
 
   await act(async () => {
-    request.resolve([notification]);
+    request.resolve({ items: [notification], nextCursor: null });
   });
 
   expect(await screen.findByText('账号通知')).toBeTruthy();
   expect(screen.getByText('你的账号安全设置已更新')).toBeTruthy();
+});
+
+test('follows the profile notification cursor when the list reaches the end', async () => {
+  const first: NotificationItem = {
+    id: 'notice-1',
+    type: 'PROFILE_LIKE',
+    content: '第一页',
+    read: false,
+    createdAt: '2026-08-14T12:00:00.000Z',
+    fromUser: null,
+    fromTrace: null,
+    fromReply: null,
+    fromCircle: null,
+    fromCirclePost: null,
+    fromInvitation: null,
+  };
+  const second = { ...first, id: 'notice-2', content: '第二页' };
+  mockFetchProfileNotificationsPage
+    .mockResolvedValueOnce({ items: [first], nextCursor: 'cursor-1' })
+    .mockResolvedValueOnce({ items: [second], nextCursor: null });
+
+  render(<SystemAnnouncementsScreen />);
+  expect(await screen.findByText('第一页')).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(screen.getByTestId('mock-flatlist-end'));
+  });
+
+  await waitFor(() =>
+    expect(mockFetchProfileNotificationsPage).toHaveBeenNthCalledWith(
+      2,
+      'cursor-1',
+    ),
+  );
+  expect(await screen.findByText('第二页')).toBeTruthy();
 });

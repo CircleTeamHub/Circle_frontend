@@ -10,10 +10,10 @@ jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 jest.mock('react-i18next', () => {
-  // Stable t reference, like the real hook — a fresh function each render would
-  // bust the useCallback memo and re-fire the load effect endlessly.
-  const t = (key: string) => key;
-  return { useTranslation: () => ({ t }) };
+  // Deliberately return a fresh t function on every render. The hook must keep
+  // that presentation detail out of the request effect dependencies, otherwise
+  // an error state update would start the same feed request again indefinitely.
+  return { useTranslation: () => ({ t: (key: string) => key }) };
 });
 
 const mockFetch = fetchUserMoments as jest.MockedFunction<typeof fetchUserMoments>;
@@ -74,6 +74,26 @@ test('loadMore issues a single request when triggered twice rapidly', async () =
   expect(result.current.moments.map((m) => m.id)).toEqual(['a', 'b']);
 });
 
+test('a failed request does not allow automatic loadMore retries', async () => {
+  mockFetch.mockRejectedValueOnce(new Error('offline'));
+
+  const { result } = renderHook(() => useUserMoments('user-1'));
+
+  await waitFor(() => {
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBe('common.networkError');
+  });
+
+  // FlatList can emit onEndReached repeatedly while an empty album is shorter
+  // than the viewport. Once the initial request fails, loadMore must wait for
+  // the user's explicit pull-to-refresh instead of issuing another request.
+  await act(async () => {
+    await result.current.loadMore();
+  });
+
+  expect(mockFetch).toHaveBeenCalledTimes(1);
+});
+
 test('a fetch that resolves after unmount does not update state or error', async () => {
   const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   let resolveLate: (value: MomentPage) => void = () => {};
@@ -127,4 +147,28 @@ test('a stale user fetch cannot overwrite moments after userId changes', async (
   });
 
   expect(result.current.moments.map((m) => m.id)).toEqual(['b']);
+});
+
+test('a late response cannot restore a previous user after the id is cleared', async () => {
+  let resolveLate: (value: MomentPage) => void = () => {};
+  mockFetch.mockImplementationOnce(
+    () => new Promise((resolve) => (resolveLate = resolve)),
+  );
+
+  const { result, rerender } = renderHook<
+    ReturnType<typeof useUserMoments>,
+    { userId: string }
+  >(
+    ({ userId }) => useUserMoments(userId),
+    { initialProps: { userId: 'user-1' } },
+  );
+
+  rerender({ userId: '' });
+  await act(async () => {
+    resolveLate(pageOf(['stale'], false));
+  });
+
+  expect(result.current.moments).toEqual([]);
+  expect(result.current.hasMore).toBe(false);
+  expect(result.current.error).toBeNull();
 });

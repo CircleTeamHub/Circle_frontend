@@ -19,6 +19,10 @@ interface UseUserMomentsResult {
 /** 拉取某个用户的朋友圈相册（分页、下拉刷新、去重）。 */
 export function useUserMoments(userId: string): UseUserMomentsResult {
   const { t } = useTranslation();
+  // react-i18next 在语言切换或资源加载时可能返回新的 t 引用。把最新翻译放进
+  // ref，避免它成为 load 的依赖，进而让初次加载 effect 因为函数身份变化重复发请求。
+  const translateRef = useRef(t);
+  translateRef.current = t;
   const [moments, setMoments] = useState<MomentPost[]>([]);
   // Keyset cursor for the next page (null = start from newest).
   const [cursor, setCursor] = useState<string | null>(null);
@@ -68,14 +72,20 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
         setCursor(result.nextCursor ?? null);
       } catch (err) {
         if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
-        setError(getApiErrorMessage(err, t('common.networkError')));
+        setError(
+          getApiErrorMessage(err, translateRef.current('common.networkError')),
+        );
       }
     },
-    [userId, t],
+    [userId],
   );
 
   useEffect(() => {
     if (!userId) {
+      // 使旧用户的慢请求失效；否则路由切换到空 id 的这一帧里，旧响应仍可能
+      // 通过原 requestSeq 写回列表，造成用户短暂看到上一位用户的朋友圈。
+      requestSeqRef.current += 1;
+      inFlightRef.current = false;
       setMoments([]);
       setCursor(null);
       setHasMore(false);
@@ -92,21 +102,32 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    await load(undefined, true);
-    if (mountedRef.current) setRefreshing(false);
+    try {
+      await load(undefined, true);
+    } finally {
+      if (mountedRef.current) setRefreshing(false);
+    }
   }, [load]);
 
   const loadMore = useCallback(async () => {
     // `loading` is set inside this async tick, so a fast double `onEndReached`
     // can slip past the state check before it commits. An in-flight ref closes
     // that window synchronously, preventing a duplicate same-page request.
-    if (inFlightRef.current || loading || refreshing || !hasMore) return;
+    // When a page request fails, FlatList can immediately fire onEndReached
+    // again because the album is still shorter than the viewport. Keep the
+    // failed state retryable via pull-to-refresh, but stop automatic retries
+    // until the user explicitly asks for a refresh.
+    if (inFlightRef.current || loading || refreshing || !hasMore || error)
+      return;
     inFlightRef.current = true;
     setLoading(true);
-    await load(cursor ?? undefined, false);
-    inFlightRef.current = false;
-    if (mountedRef.current) setLoading(false);
-  }, [loading, refreshing, hasMore, cursor, load]);
+    try {
+      await load(cursor ?? undefined, false);
+    } finally {
+      inFlightRef.current = false;
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [error, loading, refreshing, hasMore, cursor, load]);
 
   return { moments, loading, refreshing, hasMore, error, refresh, loadMore };
 }

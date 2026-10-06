@@ -60,16 +60,16 @@
     "privacyPolicy": "《隐私政策》",
     "errors": {
       "requestTimeout": "请求超时，请检查网络连接后重试",
-      "networkUnavailable": "网络异常，请确认后端服务已启动",
-      "invalidServerResponse": "服务返回了无效数据",
-      "requestFailedWithStatus": "请求失败 ({{status}})",
-      "requestFailed": "请求失败",
+      "networkUnavailable": "暂时无法连接，请检查网络后重试",
+      "invalidServerResponse": "暂时无法完成操作，请稍后重试",
+      "requestFailedWithStatus": "请求未完成，请稍后重试",
+      "requestFailed": "操作未完成，请稍后重试",
       "sessionExpired": "登录已过期，请重新登录",
       "refreshResponseInvalid": "刷新返回数据格式异常，请重新登录",
       "sessionChangedDuringRefresh": "账号已切换，请重新操作",
       "uploadTimeout": "上传超时，请检查网络后重试",
       "uploadFailed": "上传失败，请稍后重试",
-      "uploadFailedWithStatus": "上传失败 ({{status}})"
+      "uploadFailedWithStatus": "上传失败，请稍后重试"
     }
   },
   "auth": {
@@ -1886,13 +1886,13 @@
       "link": "会员规则",
       "title": "规则和权限说明",
       "heading": "会员规则",
-      "description": "会员由客服人工核实并开通，页面展示权益目录，实际权限以后端为准。",
+      "description": "会员由客服人工核实并开通，页面展示权益目录，具体可用权益以当前会员状态为准。",
       "rules": {
         "catalog": "每日会员 ¥19.9 / 1 天；包月会员 ¥298 / 1 个月；半年会员 ¥1288 / 6 个月；年费会员 ¥1998 / 1 年；永久会员 ¥3998 / 永久。",
         "supportActivation": "会员不在 App 内使用积分兑换或直接购买。联系客服后，由客服人工核实并开通会员。",
         "upgrade": "已开通会员可联系客服补差价升级；升级后立即生效，原会员剩余价值由客服核算抵扣。",
         "expiry": "会员到期后仅停止会员权益，不删除账号、聊天、笔记或其他用户内容。",
-        "fairUse": "会员规则仅适用于会员中心列出的权益；其中展示的“不限”仍受后端较高的合理使用与防滥用上限约束，实际权限以后端为准。",
+        "fairUse": "会员规则仅适用于会员中心列出的权益；其中展示的“不限”仍受合理使用与防滥用上限约束，具体可用权益以当前会员状态为准。",
         "voiceToText": "语音转文字是所有用户可用的免费基础功能，不受会员等级限制。",
         "excludedVisualBenefits": "当前会员权益不包含头像框或动态头像承诺。"
       }
@@ -1910,6 +1910,14 @@
     "permissionValues": {
       "FULL": "聊天、朋友圈",
       "CHAT_ONLY": "仅聊天"
+    },
+    "editPermission": {
+      "label": "设置对 {{name}} 的朋友圈权限",
+      "helper": "仅控制对方是否可以查看你的朋友圈。聊天权限不受影响。",
+      "loading": "正在加载权限...",
+      "missingFriend": "缺少好友信息",
+      "loadFailed": "权限加载失败，请稍后重试",
+      "saveFailed": "权限保存失败，请稍后重试"
     },
     "loadFailed": "加载用户资料失败，显示缓存数据",
     "startChat": "发起聊天",
@@ -2627,7 +2635,7 @@
       "videoItem": "视频",
       "previewTitle": "预览",
       "composerComingSoonTitle": "功能准备中",
-      "composerComingSoonMessage": "该内容类型需要服务端笔记协议支持，已保留在排序列表中。",
+      "composerComingSoonMessage": "该内容类型暂时不可用，已保留在排序列表中。",
       "composer": {
         "title": "标题",
         "text": "文字",
@@ -3099,7 +3107,7 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "预签名上传数据格式异常",
+      "presignDataInvalid": "暂时无法上传，请稍后重试",
       "fileUnreadable": "找不到要上传的文件",
       "fileTooLarge": "文件超过 {{maxMb}}MB 上限"
     }

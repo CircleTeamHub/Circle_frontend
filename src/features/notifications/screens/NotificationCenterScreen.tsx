@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, useTheme } from '@/theme';
 import { Divider } from '@/components/ui/divider';
 import {
-  fetchNotifications,
+  fetchNotificationsPage,
   markAllNotificationsRead,
   markNotificationRead,
 } from '@/services/api/notifications';
@@ -64,6 +64,7 @@ export default function NotificationCenterScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const mountedRef = useRef(true);
+  const paginationEpochRef = useRef(0);
 
   // 铃铛的域由入口决定：朋友圈页 -> moments，广场页 -> circle。
   // 缺省（推送兜底页 /messages/notifications）保持不限域的老行为。
@@ -91,6 +92,8 @@ export default function NotificationCenterScreen() {
   const [tab, setTab] = useState<NotificationTabKey>('notifications');
   const [filter, setFilter] = useState<ReadFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const notificationScope = (segments as readonly string[]).includes('discover')
     ? 'discover'
@@ -103,17 +106,24 @@ export default function NotificationCenterScreen() {
   }, []);
 
   const load = useCallback(async () => {
+    const epoch = ++paginationEpochRef.current;
     setRefreshing(true);
+    setLoadingMore(false);
+    setNextCursor(null);
     try {
       const [notificationsResult, postsResult] = await Promise.allSettled([
-        fetchNotifications(1, domain),
+        fetchNotificationsPage(undefined, domain),
         showSignupTab ? fetchAllMyCirclePosts() : Promise.resolve(null),
       ]);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || epoch !== paginationEpochRef.current) return;
 
       let failed = false;
       if (notificationsResult.status === 'fulfilled') {
-        store().setInteractiveForDomain(domain, notificationsResult.value);
+        store().setInteractiveForDomain(
+          domain,
+          notificationsResult.value.items,
+        );
+        setNextCursor(notificationsResult.value.nextCursor);
       } else {
         failed = true;
         reportHandledFailure(
@@ -142,9 +152,43 @@ export default function NotificationCenterScreen() {
           : null,
       );
     } finally {
-      if (mountedRef.current) setRefreshing(false);
+      if (
+        mountedRef.current &&
+        epoch === paginationEpochRef.current
+      ) {
+        setRefreshing(false);
+      }
     }
   }, [domain, showSignupTab, store, t]);
+
+  const loadMore = useCallback(async () => {
+    if (
+      tab !== 'notifications' ||
+      loadingMore ||
+      refreshing ||
+      !nextCursor
+    ) {
+      return;
+    }
+
+    const epoch = paginationEpochRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchNotificationsPage(nextCursor, domain);
+      if (!mountedRef.current || epoch !== paginationEpochRef.current) return;
+      store().appendInteractivePage(page.items);
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      reportHandledFailure('notificationCenter', 'loadMoreNotifications', error);
+    } finally {
+      if (
+        mountedRef.current &&
+        epoch === paginationEpochRef.current
+      ) {
+        setLoadingMore(false);
+      }
+    }
+  }, [domain, loadingMore, nextCursor, refreshing, store, tab]);
 
   useEffect(() => {
     void load();
@@ -345,6 +389,8 @@ export default function NotificationCenterScreen() {
         ItemSeparatorComponent={Divider}
         refreshing={refreshing}
         onRefresh={load}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
         contentContainerStyle={{
           paddingHorizontal: Spacing.md,
           paddingBottom: 40,

@@ -41,7 +41,7 @@ function loadFriendsApi(deps) {
   return context.module.exports;
 }
 
-test('friend api exposes helpers for remark, settings, and tag editing', async () => {
+test('friend api exposes helpers for remark, permission, settings, and tag editing', async () => {
   const calls = [];
   const api = loadFriendsApi({
     apiClient: async (endpoint, options) => {
@@ -53,6 +53,7 @@ test('friend api exposes helpers for remark, settings, and tag editing', async (
 
   await api.fetchFriendSettings('friend-1');
   await api.setFriendRemark('friend-1', '  老同事  ');
+  await api.setFriendPermission('friend-1', 'CHAT_ONLY');
   await api.assignFriendTag('friend-1', 'tag-1');
   await api.removeFriendTag('friend-1', 'tag-2');
   await api.createFriendTag('  高中同学  ');
@@ -62,6 +63,10 @@ test('friend api exposes helpers for remark, settings, and tag editing', async (
     {
       endpoint: '/friend/friend-1/remark',
       options: { method: 'PATCH', body: { remark: '老同事' } },
+    },
+    {
+      endpoint: '/friend/friend-1/permission',
+      options: { method: 'PATCH', body: { permission: 'CHAT_ONLY' } },
     },
     {
       endpoint: '/friend/friend-1/tags',
@@ -81,8 +86,10 @@ test('friend api exposes helpers for remark, settings, and tag editing', async (
 test('friend remark and tag editor screens load settings and save through real APIs', () => {
   const remarkSource = read('src/features/user/screens/EditFriendRemarkScreen.tsx');
   const tagSource = read('src/features/user/screens/EditFriendTagsScreen.tsx');
+  const permissionSource = read('src/features/user/screens/EditFriendPermissionScreen.tsx');
   const contactsRemarkRoute = read('app/(tabs)/contacts/user/[id]/remark.tsx');
   const contactsTagsRoute = read('app/(tabs)/contacts/user/[id]/tags.tsx');
+  const contactsPermissionRoute = read('app/(tabs)/contacts/user/[id]/permission.tsx');
 
   assert.match(remarkSource, /fetchFriendSettings/);
   assert.match(remarkSource, /setFriendRemark/);
@@ -97,4 +104,9 @@ test('friend remark and tag editor screens load settings and save through real A
 
   assert.match(contactsRemarkRoute, /EditFriendRemarkScreen/);
   assert.match(contactsTagsRoute, /EditFriendTagsScreen/);
+  assert.match(permissionSource, /fetchFriendSettings/);
+  assert.match(permissionSource, /setFriendPermission/);
+  assert.match(permissionSource, /permissionOptions/);
+  assert.match(permissionSource, /router\.back\(\)/);
+  assert.match(contactsPermissionRoute, /EditFriendPermissionScreen/);
 });

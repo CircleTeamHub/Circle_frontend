@@ -293,8 +293,10 @@ function assertPresignedUploadUrlReachableOnCurrentPlatform(value: string) {
       LOCALHOST_HOSTNAMES.has(uploadUrl.hostname) &&
       !LOCALHOST_HOSTNAMES.has(apiUrl.hostname)
     ) {
-      throw new Error(
-        '后端返回了 localhost 的预签名上传地址。手机端无法访问宿主 localhost，且预签名 URL 的 host 参与签名，客户端改写 host 会导致 403。请把对象存储对外访问地址配置成宿主机 IP 或正式域名后再试。',
+      throw new StorageUploadError(
+        i18n.t('upload.errors.presignDataInvalid', {
+          defaultValue: '暂时无法上传，请稍后重试',
+        }),
       );
     }
   } catch (error) {
@@ -421,7 +423,7 @@ export async function requestUploadPresign<F extends UploadFolder>(
     (value: unknown): value is UploadPresignResponse =>
       isUploadPresignShape(value, payload.folder),
     i18n.t('upload.errors.presignDataInvalid', {
-      defaultValue: '预签名上传数据格式异常',
+      defaultValue: '暂时无法上传，请稍后重试',
     }),
   );
 

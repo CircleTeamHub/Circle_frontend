@@ -7,14 +7,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import {
-  fetchProfileNotifications,
+  fetchProfileNotificationsPage,
   markProfileNotificationsRead,
 } from '@/services/api/notifications';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { SYSTEM_ANNOUNCEMENTS } from '@/features/profile/system-announcements';
 import type { NotificationItem } from '@/types';
-const PAGE_SIZE = 20;
 
 const s = StyleSheet.create({
   card: {
@@ -37,9 +36,9 @@ export default function SystemAnnouncementsScreen() {
   const { t } = useTranslation();
   const setProfileUnread = useTabBadgeStore((state) => state.setProfileUnread);
   const mountedRef = useRef(true);
+  const paginationEpochRef = useRef(0);
   const [items, setItems] = useState<NotificationItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -98,17 +97,19 @@ export default function SystemAnnouncementsScreen() {
   );
 
   const load = useCallback(async () => {
+    const epoch = ++paginationEpochRef.current;
     setRefreshing(true);
+    setLoadingMore(false);
+    setNextCursor(null);
     try {
-      const rows = await fetchProfileNotifications(1);
-      if (!mountedRef.current) return;
-      setItems(rows);
-      setPage(1);
-      setHasMore(rows.length >= PAGE_SIZE);
+      const result = await fetchProfileNotificationsPage();
+      if (!mountedRef.current || epoch !== paginationEpochRef.current) return;
+      setItems(result.items);
+      setNextCursor(result.nextCursor);
       setLoadError(null);
     } catch (error) {
       reportNotificationFailure('notification_load_more_failed', error, {
-        page: 1,
+        cursor: null,
       });
       if (mountedRef.current) {
         setLoadError(
@@ -118,7 +119,12 @@ export default function SystemAnnouncementsScreen() {
         );
       }
     } finally {
-      if (mountedRef.current) setRefreshing(false);
+      if (
+        mountedRef.current &&
+        epoch === paginationEpochRef.current
+      ) {
+        setRefreshing(false);
+      }
     }
   }, [t]);
 
@@ -146,26 +152,33 @@ export default function SystemAnnouncementsScreen() {
   );
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || refreshing || !hasMore) return;
-    const nextPage = page + 1;
+    if (loadingMore || refreshing || !nextCursor) return;
+    const epoch = paginationEpochRef.current;
     setLoadingMore(true);
     try {
-      const rows = await fetchProfileNotifications(nextPage);
-      if (!mountedRef.current) return;
+      const result = await fetchProfileNotificationsPage(nextCursor);
+      if (!mountedRef.current || epoch !== paginationEpochRef.current) return;
       setItems((current) => {
         const seen = new Set(current.map((item) => item.id));
-        return [...current, ...rows.filter((item) => !seen.has(item.id))];
+        return [
+          ...current,
+          ...result.items.filter((item) => !seen.has(item.id)),
+        ];
       });
-      setPage(nextPage);
-      setHasMore(rows.length >= PAGE_SIZE);
+      setNextCursor(result.nextCursor);
     } catch (error) {
       reportNotificationFailure('notification_load_more_failed', error, {
-        page: nextPage,
+        cursor: nextCursor,
       });
     } finally {
-      if (mountedRef.current) setLoadingMore(false);
+      if (
+        mountedRef.current &&
+        epoch === paginationEpochRef.current
+      ) {
+        setLoadingMore(false);
+      }
     }
-  }, [hasMore, loadingMore, page, refreshing]);
+  }, [loadingMore, nextCursor, refreshing]);
 
   const renderSystemNotification = useCallback(
     ({ item }: { item: NotificationItem }) => (

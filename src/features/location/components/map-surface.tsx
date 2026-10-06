@@ -12,6 +12,8 @@ export type MapSurfaceProps = {
   /** 无障碍标题，web 上的 <iframe> 必须有；原生忽略。 */
   title: string;
   onLoadEnd: () => void;
+  /** 地图 HTML/资源加载失败时显示可重试状态，而不是留下空白地图。 */
+  onLoadError: () => void;
   /** 地图页 postMessage 过来的原始字符串，解析交给调用方。 */
   onMessage: (data: string) => void;
   /** web 父页代 opaque-origin iframe 发起地理编码请求；原生 WebView 不使用。 */
@@ -28,6 +30,7 @@ export function MapSurface({
   html,
   reloadKey,
   onLoadEnd,
+  onLoadError,
   onMessage,
   geocoderBaseUrl,
 }: MapSurfaceProps) {
@@ -47,6 +50,7 @@ export function MapSurface({
         request.url.startsWith('https://appassets.invalid/')
       }
       onLoadEnd={onLoadEnd}
+      onError={onLoadError}
       onMessage={(event) => {
         const data = event.nativeEvent.data;
         const handled = handleWebGeocoderBridgeRequest({

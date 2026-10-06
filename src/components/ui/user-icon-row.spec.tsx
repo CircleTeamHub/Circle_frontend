@@ -1,12 +1,18 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { UserIconRow } from './user-icon-row';
 import type { DisplayIcon } from '@/types';
 
 jest.mock('expo-image', () => {
-  const { View } =
+  const { Pressable, View } =
     jest.requireActual<typeof import('react-native')>('react-native');
-  return { Image: () => <View testID="badge-image" /> };
+  return {
+    Image: ({ onError }: { onError?: () => void }) => (
+      <Pressable testID="badge-image" onPress={onError}>
+        <View />
+      </Pressable>
+    ),
+  };
 });
 
 jest.mock('@expo/vector-icons', () => {
@@ -37,7 +43,10 @@ jest.mock('@/theme', () => ({
 }));
 
 jest.mock('./user-badge-assets', () => ({
-  getSystemBadgeAsset: () => ({ uri: 'badge' }),
+  getSystemBadgeAsset: (() => {
+    const asset = { uri: 'badge' };
+    return () => asset;
+  })(),
   getSystemBadgeVisualScale: () => 1,
   getSystemBadgeVisualTranslateY: () => 0,
 }));
@@ -61,4 +70,12 @@ test('renders one badge when historical VIP selections resolve to the same ident
   );
 
   expect(screen.getAllByText('钻石会员')).toHaveLength(1);
+});
+
+test('falls back to a visible vector badge when local artwork fails to load', () => {
+  render(<UserIconRow icons={[vipIcon('VIP2', 0)]} />);
+
+  fireEvent.press(screen.getByTestId('badge-image'));
+
+  expect(screen.getByText('sparkles-outline')).toBeTruthy();
 });
