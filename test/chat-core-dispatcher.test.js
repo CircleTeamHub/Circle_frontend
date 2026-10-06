@@ -74,7 +74,7 @@ function fakeSocket() {
 
 const deletedIds = new Set();
 
-function loadDispatcher(storeOverrides = {}) {
+function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
   const state = {
     currentUserId: 'me',
     activeConversationId: null,
@@ -200,6 +200,7 @@ function loadDispatcher(storeOverrides = {}) {
     applyTyping: (conversationId) => state.typings.push(conversationId),
     applyReaction: () => {},
     applyEdit: () => {},
+    ...actionOverrides,
   };
 
   const dispatcher = runModule('src/chat-core/dispatcher.ts', (request) => {
@@ -1299,4 +1300,30 @@ test('presence: hidden means forget the user, not "offline"', () => {
   });
   assert.deepEqual(state.presenceCleared, ['peer']);
   assert.equal(state.presenceApplied.length, 0, '对方关了「显示在线时间」,连「离线」都不能落');
+});
+
+
+test('queued messages reach the store before revoke and cannot overwrite it later', () => {
+  const order = [];
+  const { socket, dispatcher } = loadDispatcher({ conversations: [directConversation({ id: 'c1' })] }, {
+    ingestMessages: (_id, messages) => order.push(...messages.map((message) => message.id)),
+    applyRevoke: (_id, messageId) => order.push('revoke:' + messageId),
+  });
+  socket.emit('chat:msg', dto({ id: 'first' }));
+  socket.emit('chat:msg', dto({ id: 'second', height: 4 }));
+  socket.emit('chat:revoke', { conversationId: 'c1', messageId: 'second', revokedBy: 'peer' });
+  dispatcher.flushIncomingMessageBatch();
+  assert.deepEqual(order, ['first', 'second', 'revoke:second']);
+});
+
+test('an old durable mutation never advances the cursor after session rebinding', async () => {
+  let resolve;
+  const pending = new Promise((done) => { resolve = done; });
+  const { socket, state, dispatcher } = loadDispatcher({}, { applyEdit: () => pending });
+  socket.emit('chat:edit', { conversationId: 'c1', messageId: 'old', content: { text: 'old' }, editedAt: '2026-10-06T00:00:00Z', revision: 9 });
+  dispatcher.bindChatEvents(fakeSocket(), () => true);
+  resolve(true);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(state.liveRevisions, []);
 });

@@ -50,6 +50,7 @@ let backfillTimer: ReturnType<typeof setTimeout> | null = null;
 let incomingMessageBatchTimer: ReturnType<typeof setTimeout> | null = null;
 let incomingMessageBatch: ChatMessageDto[] = [];
 let incomingMessageIsLive: (() => boolean) | null = null;
+let chatEventBindingEpoch = 0;
 /** 会话元信息在事件到达时缺失；flush 时即使补拉先把它带回也仍只弹最新一条。 */
 const incomingMissingConversationIds = new Set<string>();
 const reportedChatEventFailures = new Set<string>();
@@ -187,6 +188,7 @@ export function cancelConversationBackfill(): void {
 
 /** 测试、登出与切账号用：丢掉尚未 flush 的消息洪峰。 */
 function cancelIncomingMessageBatch(): void {
+  chatEventBindingEpoch += 1;
   incomingMessageBatch = [];
   incomingMessageIsLive = null;
   incomingMissingConversationIds.clear();
@@ -301,15 +303,18 @@ function noteLiveMutationRevision(
   revision: number | undefined,
   applied: boolean | Promise<boolean> | undefined,
 ): void {
+  const epoch = chatEventBindingEpoch;
+  const isLive = incomingMessageIsLive;
+  const commit = (durable: boolean) => {
+    if (epoch !== chatEventBindingEpoch || !isLive?.()) return;
+    noteLiveRevision(conversationId, revision, durable);
+  };
   const pending = applied as Promise<boolean> | undefined;
   if (pending && typeof pending.then === 'function') {
-    void pending.then(
-      (durable) => noteLiveRevision(conversationId, revision, durable),
-      () => noteLiveRevision(conversationId, revision, false),
-    );
+    void pending.then(commit, () => commit(false));
     return;
   }
-  noteLiveRevision(conversationId, revision, applied !== false);
+  commit(applied !== false);
 }
 
 function applyBurnedMessagesChange(
@@ -547,6 +552,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
     (payload: ChatBurnedMessagesBroadcast) => {
       if (!isLive()) return;
       try {
+        flushIncomingMessageBatch();
         applyBurnedMessagesChange(useChatStore.getState(), payload);
       } catch (err) {
         devWarn('[chat] dropped malformed burned messages payload', err);
@@ -571,6 +577,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('readReceipt', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const store = useChatStore.getState();
       store.applyRead(payload.conversationId, payload.userId, payload.height);
       // 本人在别的设备上读过了,这台的通知栏也收起来(对端读到哪与我无关)。
@@ -600,6 +607,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           reportChatEventFailureOnce('historyCleared', 'malformedPayload');
           return;
         }
+        flushIncomingMessageBatch();
         useChatStore
           .getState()
           .clearConversationLocal(
@@ -684,6 +692,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('delivered', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       useChatStore
         .getState()
         .applyDelivered(payload.conversationId, payload.userId, payload.height);
@@ -708,6 +717,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('reaction', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const revision = optionalRevision(payload.revision);
       const applied = useChatStore
         .getState()
@@ -741,6 +751,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('edit', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const revision = optionalRevision(payload.revision);
       const applied = useChatStore
         .getState()
@@ -771,6 +782,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('revoke', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const revision = optionalRevision(payload.revision);
       const height = optionalRevision(payload.height);
       const applied = useChatStore
@@ -805,6 +817,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('conversation', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const store = useChatStore.getState();
       // 个人房定向事件只该是本人的;万一串了宁可丢弃,不替别人操作本机列表。
       if (

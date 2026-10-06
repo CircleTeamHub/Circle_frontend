@@ -2537,7 +2537,13 @@
       "unsavedTitle": "保存未完成的笔记？",
       "unsavedMessage": "未保存的内容会放入草稿箱，之后可以继续编辑。",
       "discard": "直接退出",
-      "save": "保存到草稿箱"
+      "save": "保存到草稿箱",
+      "untitled": "未命名笔记",
+      "noContent": "尚未添加内容",
+      "mediaCount": "{{count}} 个媒体",
+      "deleteLabel": "删除草稿",
+      "deleteFailed": "草稿删除失败，请重试",
+      "saveFailed": "草稿保存失败，请重试"
     },
     "edit": {
       "addImage": "添加图片",
@@ -2627,7 +2633,8 @@
         "reorderA11y": "调整「{{label}}」的位置",
         "moveUp": "{{label}}上移",
         "moveDown": "{{label}}下移"
-      }
+      },
+      "unsupportedAudio": "不支持此音频格式，请选择 M4A、MP3、AAC、WAV、OGG 或 WebM 文件"
     },
     "editor": {
       "mediaUploadFailedMessage": "请稍后重试",

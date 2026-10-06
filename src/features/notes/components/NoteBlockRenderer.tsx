@@ -2,7 +2,7 @@ import { useEventListener } from 'expo';
 import { Image } from 'expo-image';
 import { useAudioPlayer, type AudioStatus } from 'expo-audio';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { toPlayableUri } from '@/features/chat/utils/media-uri';
@@ -130,12 +130,14 @@ function ActiveAudioBlock({
   backgroundColor,
   foregroundColor,
   onMediaError,
+  autoPlay = false,
 }: {
   url: string;
   durationMs?: number;
   backgroundColor: string;
   foregroundColor: string;
   onMediaError?: () => void;
+  autoPlay?: boolean;
 }) {
   const source = useMemo(() => ({ uri: toPlayableUri(url) }), [url]);
   const player = useAudioPlayer(source);
@@ -166,6 +168,19 @@ function ActiveAudioBlock({
     );
     return () => subscription.remove();
   }, [onMediaError, player, url]);
+
+  const playIntentRef = useRef(autoPlay);
+  useEffect(() => {
+    if (!playIntentRef.current) return;
+    const playIfReady = () => {
+      if (!playIntentRef.current || !player.isLoaded) return;
+      playIntentRef.current = false;
+      player.play();
+    };
+    const subscription = player.addListener('playbackStatusUpdate', playIfReady);
+    playIfReady();
+    return () => subscription.remove();
+  }, [player]);
 
   const totalSeconds = Math.max(
     1,
@@ -252,6 +267,7 @@ function AudioBlock(props: {
 
   return (
     <ActiveAudioBlock
+      autoPlay={lazy}
       url={url}
       durationMs={durationMs}
       backgroundColor={backgroundColor}
@@ -264,12 +280,14 @@ function AudioBlock(props: {
 function ContactCard({
   card,
   group,
+  onPress,
 }: {
+  onPress?: (id: string, name?: string) => void;
   card: Record<string, unknown>;
   group: boolean;
 }) {
   const { colors } = useTheme();
-  const id = typeof card.id === 'string' ? card.id : '';
+  const id = group && typeof card.circleId === 'string' ? card.circleId : typeof card.id === 'string' ? card.id : '';
   const name = typeof card.name === 'string' ? card.name : '';
   const avatar =
     (typeof card.faceURL === 'string' && card.faceURL) ||
@@ -282,7 +300,13 @@ function ContactCard({
         ? card.username
         : '';
   return (
-    <View style={[s.peerCard, { backgroundColor: colors.surface, borderColor: colors.surfaceBorder }]}>
+    <Pressable
+      style={[s.peerCard, { backgroundColor: colors.surface, borderColor: colors.surfaceBorder }]}
+      onPress={onPress && id ? () => onPress(id, name) : undefined}
+      disabled={!onPress || !id}
+      accessibilityRole={onPress && id ? 'button' : undefined}
+      accessibilityLabel={name || id}
+    >
       {avatar ? (
         <Image source={{ uri: avatar }} style={s.peerAvatar} contentFit="cover" />
       ) : (
@@ -300,8 +324,8 @@ function ContactCard({
           </Text>
         ) : null}
       </View>
-      <Text style={[s.peerChevron, { color: colors.textSecondary }]}>›</Text>
-    </View>
+      {onPress && id ? <Text style={[s.peerChevron, { color: colors.textSecondary }]}>›</Text> : null}
+    </Pressable>
   );
 }
 
@@ -352,11 +376,15 @@ const BlockView = memo(function BlockView({
   block,
   onMediaError,
   onImagePress,
+  onContactPress,
+  onGroupPress,
   lazyMedia = false,
 }: {
   block: Block;
   onMediaError?: () => void;
   onImagePress?: (uri: string, objectKey?: string) => void;
+  onContactPress?: (id: string, name?: string) => void;
+  onGroupPress?: (id: string, name?: string) => void;
   lazyMedia?: boolean;
 }) {
   const { colors } = useTheme();
@@ -497,10 +525,10 @@ const BlockView = memo(function BlockView({
     }
 
     case 'contact':
-      return <ContactCard card={props} group={false} />;
+      return <ContactCard card={props} group={false} onPress={onContactPress} />;
 
     case 'group':
-      return <ContactCard card={props} group />;
+      return <ContactCard card={props} group onPress={onGroupPress} />;
 
     default: {
       // 表格和其他粘贴格式至少保留完整文字，不能因为没有专用布局就整块消失。
@@ -518,6 +546,8 @@ interface Props {
    */
   onMediaError?: () => void;
   onImagePress?: (uri: string, objectKey?: string) => void;
+  onContactPress?: (id: string, name?: string) => void;
+  onGroupPress?: (id: string, name?: string) => void;
   lazyMedia?: boolean;
   depth?: number;
 }
@@ -526,6 +556,8 @@ export const NoteBlockRenderer = memo(function NoteBlockRenderer({
   blocks,
   onMediaError,
   onImagePress,
+  onContactPress,
+  onGroupPress,
   lazyMedia = false,
   depth = 0,
 }: Props) {
@@ -538,6 +570,7 @@ export const NoteBlockRenderer = memo(function NoteBlockRenderer({
             block={block}
             onMediaError={onMediaError}
             onImagePress={onImagePress}
+            onContactPress={onContactPress} onGroupPress={onGroupPress}
             lazyMedia={lazyMedia}
           />
           {Array.isArray(block.children) && block.children.length > 0 ? (
@@ -546,6 +579,7 @@ export const NoteBlockRenderer = memo(function NoteBlockRenderer({
                 blocks={block.children}
                 onMediaError={onMediaError}
                 onImagePress={onImagePress}
+                onContactPress={onContactPress} onGroupPress={onGroupPress}
                 lazyMedia={lazyMedia}
                 depth={depth + 1}
               />

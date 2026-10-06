@@ -261,10 +261,11 @@ test('caps per-conversation messages at 200 keeping the newest', () => {
   assert.equal(messages[messages.length - 1].height, 250);
 });
 
-test('failed bubbles are bounded separately from the confirmed window', () => {
-  const { useChatStore, FAILED_MESSAGES_CAP } = loadChatStore();
+test('unresolved failed sends retain their retry entry beyond the confirmed window', () => {
+  const { useChatStore } = loadChatStore();
+  const FAILED_COUNT = 325;
   const store = useChatStore.getState();
-  const failed = Array.from({ length: FAILED_MESSAGES_CAP + 25 }, (_, index) =>
+  const failed = Array.from({ length: FAILED_COUNT }, (_, index) =>
     msg({
       id: `failed-${index}`,
       d: `delivery-${index}`,
@@ -277,11 +278,11 @@ test('failed bubbles are bounded separately from the confirmed window', () => {
   store.ingestMessages('conv-1', failed);
 
   const messages = useChatStore.getState().messagesByConversation['conv-1'];
-  assert.equal(messages.length, FAILED_MESSAGES_CAP);
-  assert.equal(messages.some((message) => message.id === 'failed-0'), false);
+  assert.equal(messages.length, FAILED_COUNT);
+  assert.equal(messages.some((message) => message.id === 'failed-0'), true);
   assert.equal(
     messages.at(-1)?.id,
-    `failed-${FAILED_MESSAGES_CAP + 24}`,
+    `failed-${FAILED_COUNT - 1}`,
   );
 });
 

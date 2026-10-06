@@ -91,12 +91,12 @@ export function normalizeImageMedia(
     // for an otherwise metadata-only item.
     const original =
       variant?.originalUrl ?? variant?.original ?? legacyUrl ?? variant?.previewUrl ?? variant?.preview ?? variant?.thumbUrl ?? variant?.thumb;
-    if (!original && !variant) continue;
-    images.push(original ?? '');
+    if (!original) continue;
+    images.push(original);
     // Preserve positional alignment whenever the response used the new media
     // field (an empty object is a safe legacy fallback for a missing entry).
     if (rawMedia.length > 0) media.push(variant ?? {});
   }
 
-  return { images: images.filter(Boolean), media };
+  return { images, media };
 }

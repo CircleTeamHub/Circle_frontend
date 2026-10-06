@@ -2543,7 +2543,15 @@
       "unsavedTitle": "Save the unfinished note?",
       "unsavedMessage": "Unsaved content will be placed in Drafts so you can continue editing later.",
       "discard": "Leave without saving",
-      "save": "Save to Drafts"
+      "save": "Save to Drafts",
+      "untitled": "Untitled note",
+      "noContent": "No content yet",
+      "mediaCount": "{{count}} media files",
+      "deleteLabel": "Delete draft",
+      "deleteFailed": "Could not delete the draft. Please try again.",
+      "saveFailed": "Could not save the draft. Please try again.",
+      "mediaCount_one": "{{count}} media file",
+      "mediaCount_other": "{{count}} media files"
     },
     "edit": {
       "addImage": "Add image",
@@ -2633,7 +2641,8 @@
         "reorderA11y": "Adjust the position of {{label}}",
         "moveUp": "Move {{label}} up",
         "moveDown": "Move {{label}} down"
-      }
+      },
+      "unsupportedAudio": "Unsupported audio format. Choose an M4A, MP3, AAC, WAV, OGG or WebM file."
     },
     "editor": {
       "mediaUploadFailedMessage": "Please try again",

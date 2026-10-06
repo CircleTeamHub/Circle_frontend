@@ -11,10 +11,10 @@ import {
 import { NoteBlockRenderer } from '@/features/notes/components/NoteBlockRenderer';
 import {
   getNoteSectionAvailability,
-  isRenderableMediaItem,
   type NoteSectionKind,
   type NoteSections,
 } from '@/features/notes/utils/note-sections';
+import { getNoteDocumentInstances, noteMediaBlocks, type NoteDocumentInstance } from '@/features/notes/utils/note-document-layout';
 import { formatNoteFullDate } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -29,6 +29,9 @@ type NoteDocumentBodyProps = {
   groups: readonly NoteDocumentGroup[];
   sections: NoteSections;
   order: readonly NoteSectionKind[];
+  layout?: unknown;
+  onContactPress?: (id: string, name?: string) => void;
+  onGroupPress?: (id: string, name?: string) => void;
   onMediaError?: () => void;
   onImagePress?: (uri: string, objectKey?: string) => void;
   lazyMedia?: boolean;
@@ -38,7 +41,7 @@ type NoteDocumentBodyProps = {
 };
 
 type VirtualizedNoteRow =
-  | { type: 'section'; id: string; kind: NoteSectionKind; divider: boolean }
+  | { type: 'section'; id: string; kind: NoteSectionKind; divider: boolean; trackLayout: boolean }
   | { type: 'block'; id: string; block: Record<string, unknown> }
   | { type: 'text'; id: string; content: string | null; empty: boolean }
   | { type: 'location'; id: string; title: string | null; address: string | null }
@@ -50,6 +53,9 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
   groups,
   sections,
   order,
+  layout,
+  onContactPress,
+  onGroupPress,
   onMediaError,
   onImagePress,
   lazyMedia = false,
@@ -59,59 +65,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
 }: NoteDocumentBodyProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const availability = useMemo(() => getNoteSectionAvailability(sections), [sections]);
-  const renderableMediaItems = useMemo(
-    () => sections.media.items.filter(isRenderableMediaItem),
-    [sections.media.items],
-  );
-  const renderableShowcaseItems = useMemo(
-    () => sections.showcase.items.filter(isRenderableMediaItem),
-    [sections.showcase.items],
-  );
-  const renderableAudioItems = useMemo(
-    () => sections.audio.items.filter(isRenderableMediaItem),
-    [sections.audio.items],
-  );
-  const mediaBlocks = useMemo(
-    () => renderableMediaItems.map((item) => ({
-      id: item.id ?? item.url,
-      type: item.type === 'VIDEO' ? 'video' : 'image',
-      props: {
-        url: item.url,
-        objectKey: item.objectKey,
-        caption: '',
-        width: item.width ?? undefined,
-        height: item.height ?? undefined,
-      },
-    })),
-    [renderableMediaItems],
-  );
-  const showcaseBlocks = useMemo(
-    () => renderableShowcaseItems.map((item) => ({
-      id: item.id ?? item.url,
-      type: item.type === 'VIDEO' ? 'video' : 'image',
-      props: {
-        url: item.url,
-        objectKey: item.objectKey,
-        caption: '',
-        width: item.width ?? undefined,
-        height: item.height ?? undefined,
-      },
-    })),
-    [renderableShowcaseItems],
-  );
-  const audioBlocks = useMemo(
-    () => renderableAudioItems.map((item) => ({
-      id: item.id ?? item.url,
-      type: 'audio',
-      props: {
-        url: item.url,
-        objectKey: item.objectKey,
-        durationMs: item.durationMs ?? undefined,
-      },
-    })),
-    [renderableAudioItems],
-  );
+  const documentInstances = useMemo(() => getNoteDocumentInstances(sections, order, layout), [sections, order, layout]);
   const contactBlocks = useMemo(
     () => sections.contacts.items.map((card, index) => ({
       id: card.id || `contact-${index}`,
@@ -133,64 +87,71 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
     const rows: VirtualizedNoteRow[] = [];
     const appendSection = (
       kind: NoteSectionKind,
+      instanceId: string,
       blocks: Record<string, unknown>[] = [],
     ) => {
       rows.push({
         type: 'section',
-        id: `section-${kind}`,
+        id: `section-${instanceId}`,
+        trackLayout: documentInstances.find((entry) => entry.kind === kind)?.id === instanceId,
         kind,
         divider: kind !== 'text',
       });
       blocks.forEach((block, index) => {
         const blockId = typeof block.id === 'string' ? block.id : String(index);
-        rows.push({ type: 'block', id: `block-${kind}-${blockId}-${index}`, block });
+        rows.push({ type: 'block', id: `block-${instanceId}-${blockId}-${index}`, block });
       });
-      rows.push({ type: 'spacer', id: `spacer-${kind}` });
+      rows.push({ type: 'spacer', id: `spacer-${instanceId}` });
     };
 
-    for (const kind of order) {
+    for (const entry of documentInstances) {
+      const { kind, sections } = entry;
+      const availability = getNoteSectionAvailability(sections);
+      const mediaBlocks = noteMediaBlocks(sections.media.items);
+      const showcaseBlocks = noteMediaBlocks(sections.showcase.items);
+      const audioBlocks = noteMediaBlocks(sections.audio.items);
       switch (kind) {
         case 'text':
-          appendSection(kind);
+          appendSection(kind, entry.id);
           if (availability.hasText && sections.text.contentJson?.length) {
             sections.text.contentJson.forEach((block, index) => {
               const blockId = typeof block.id === 'string' ? block.id : String(index);
               rows.splice(rows.length - 1, 0, {
                 type: 'block',
-                id: `block-${kind}-${blockId}-${index}`,
+                id: `block-${entry.id}-${blockId}-${index}`,
                 block,
               });
             });
           } else {
             rows.splice(rows.length - 1, 0, {
               type: 'text',
-              id: 'text-content',
+              id: `text-${entry.id}`,
               content: availability.hasText ? sections.text.content : null,
               empty: !availability.hasText,
             });
           }
           break;
         case 'media':
-          if (availability.hasMedia) appendSection(kind, mediaBlocks);
+          if (availability.hasMedia) appendSection(kind, entry.id, mediaBlocks);
           break;
         case 'showcase':
-          if (availability.hasShowcase) appendSection(kind, showcaseBlocks);
+          if (availability.hasShowcase) appendSection(kind, entry.id, showcaseBlocks);
           break;
         case 'audio':
-          if (availability.hasAudio) appendSection(kind, audioBlocks);
+          if (availability.hasAudio) appendSection(kind, entry.id, audioBlocks);
           break;
         case 'contact':
-          if (availability.hasContacts) appendSection(kind, contactBlocks);
+          if (availability.hasContacts) appendSection(kind, entry.id, contactBlocks);
           break;
         case 'group':
-          if (availability.hasGroups) appendSection(kind, groupBlocks);
+          if (availability.hasGroups) appendSection(kind, entry.id, groupBlocks);
           break;
         case 'location':
           if (availability.hasLocation) {
-            appendSection(kind);
+            appendSection(kind, entry.id);
             rows.splice(rows.length - 1, 0, {
               type: 'location',
-              id: 'location-content',
+              id: `location-${entry.id}`,
               title: sections.location?.title ?? null,
               address: sections.location?.address ?? null,
             });
@@ -201,19 +162,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
       }
     }
     return rows;
-  }, [
-    audioBlocks,
-    availability,
-    contactBlocks,
-    groupBlocks,
-    mediaBlocks,
-    order,
-    sections.text.content,
-    sections.text.contentJson,
-    sections.location?.address,
-    sections.location?.title,
-    showcaseBlocks,
-  ]);
+  }, [contactBlocks, groupBlocks, documentInstances]);
 
   const renderSectionHeader = (
     icon: keyof typeof Ionicons.glyphMap,
@@ -227,8 +176,12 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
     </View>
   );
 
-  const renderSection = (kind: NoteSectionKind) => {
-    const onLayout = onSectionLayout?.(kind);
+  const renderSection = ({ id, kind, sections }: NoteDocumentInstance) => {
+    const onLayout = documentInstances.find((entry) => entry.kind === kind)?.id === id ? onSectionLayout?.(kind) : undefined;
+    const availability = getNoteSectionAvailability(sections);
+    const mediaBlocks = noteMediaBlocks(sections.media.items);
+    const showcaseBlocks = noteMediaBlocks(sections.showcase.items);
+    const audioBlocks = noteMediaBlocks(sections.audio.items);
     switch (kind) {
       case 'text':
         return (
@@ -240,6 +193,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
             {availability.hasText ? (
               sections.text.contentJson && sections.text.contentJson.length > 0 ? (
                 <NoteBlockRenderer
+                  onContactPress={onContactPress} onGroupPress={onGroupPress}
                   blocks={sections.text.contentJson}
                   onMediaError={onMediaError}
                   onImagePress={onImagePress}
@@ -308,7 +262,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
               'person-outline',
               t('notes.section.contact', { defaultValue: '名片' }),
             )}
-            <NoteBlockRenderer blocks={contactBlocks} />
+            <NoteBlockRenderer blocks={contactBlocks} onContactPress={onContactPress} />
           </View>
         ) : null;
       case 'group':
@@ -319,7 +273,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
               'people-outline',
               t('notes.section.group', { defaultValue: '群名片' }),
             )}
-            <NoteBlockRenderer blocks={groupBlocks} />
+            <NoteBlockRenderer blocks={groupBlocks} onGroupPress={onGroupPress} />
           </View>
         ) : null;
       case 'location':
@@ -395,7 +349,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
         const meta = getSectionMeta(item.kind);
         return (
           <View
-            onLayout={onSectionLayout?.(item.kind)}
+            onLayout={item.trackLayout ? onSectionLayout?.(item.kind) : undefined}
             style={[s.virtualSectionStart, item.divider && s.virtualSectionDivider]}
           >
             {item.divider ? <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} /> : null}
@@ -408,6 +362,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
           <View style={s.virtualBlock}>
             <NoteBlockRenderer
               blocks={[item.block]}
+              onContactPress={onContactPress} onGroupPress={onGroupPress}
               onMediaError={onMediaError}
               onImagePress={onImagePress}
               lazyMedia={lazyMedia}
@@ -474,8 +429,8 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
     ) : (
       <>
         {documentHeader}
-        {order.map((kind) => (
-          <View key={kind}>{renderSection(kind)}</View>
+        {documentInstances.map((entry) => (
+          <View key={entry.id}>{renderSection(entry)}</View>
         ))}
       </>
     )

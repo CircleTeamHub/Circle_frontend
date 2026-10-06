@@ -963,7 +963,15 @@
       "unsavedTitle": "¿Guardar la nota sin terminar?",
       "unsavedMessage": "El contenido sin guardar se guardará en Borradores para que puedas continuar más tarde.",
       "discard": "Salir sin guardar",
-      "save": "Guardar en Borradores"
+      "save": "Guardar en Borradores",
+      "untitled": "Nota sin título",
+      "noContent": "Aún no hay contenido",
+      "mediaCount": "{{count}} archivos multimedia",
+      "deleteLabel": "Eliminar borrador",
+      "deleteFailed": "No se pudo eliminar el borrador. Inténtalo de nuevo.",
+      "saveFailed": "No se pudo guardar el borrador. Inténtalo de nuevo.",
+      "mediaCount_one": "{{count}} archivo multimedia",
+      "mediaCount_other": "{{count}} archivos multimedia"
     },
     "edit": {
       "addImage": "Añadir imagen",
@@ -1053,7 +1061,8 @@
         "reorderA11y": "Ajustar la posición de {{label}}",
         "moveUp": "Subir {{label}}",
         "moveDown": "Bajar {{label}}"
-      }
+      },
+      "unsupportedAudio": "Formato de audio no compatible. Elige un archivo M4A, MP3, AAC, WAV, OGG o WebM."
     },
     "editor": {
       "mediaUploadFailedMessage": "Inténtalo de nuevo",

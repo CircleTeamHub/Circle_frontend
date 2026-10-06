@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  buildNoteSections,
-  getNoteSectionAvailability,
-  getInitialNoteSection,
-  type StructuredNoteInput,
-} from './note-sections.ts';
+import type { StructuredNoteInput } from './note-sections.ts';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { loadTsModule } = require('../../../../test/helpers/load-ts-module.js');
+const loaded = loadTsModule('src/features/notes/utils/note-sections.ts', {
+  requireShim: (request: string) => request === '@/features/notes/utils/note-blocks' ? loadTsModule('src/features/notes/utils/note-blocks.ts') : require(request),
+});
+// VM values have different prototypes; compare the data in the test realm.
+const buildNoteSections: typeof import('./note-sections.ts').buildNoteSections = (input) => structuredClone(loaded.buildNoteSections(input));
+const getNoteSectionAvailability: typeof import('./note-sections.ts').getNoteSectionAvailability = (sections) => structuredClone(loaded.getNoteSectionAvailability(sections));
+const getInitialNoteSection: typeof import('./note-sections.ts').getInitialNoteSection = (...args) => loaded.getInitialNoteSection(...args);
 
 const legacyNote: StructuredNoteInput = {
   content: 'plain fallback',

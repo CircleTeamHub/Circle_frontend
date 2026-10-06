@@ -29,17 +29,27 @@ function sanitizeUploadErrorForReport(error: unknown): Error {
 }
 
 export class StorageUploadError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly status: number, readonly storageCode?: string) {
     super(message);
     this.name = 'StorageUploadError';
   }
 }
 
-function uploadStatusError(_status: number, _body?: unknown): Error {
+// These provider error codes are diagnostic facts, not arbitrary response text.
+// Never include the XML body, object key, request ID or signed URL in reports.
+const SAFE_STORAGE_ERROR_CODES = new Set([
+  'AccessDenied', 'SignatureDoesNotMatch', 'ExpiredToken', 'RequestTimeTooSkewed',
+  'InvalidAccessKeyId', 'InvalidToken', 'NoSuchKey', 'NoSuchBucket', 'EntityTooLarge',
+  'EntityTooSmall', 'InvalidRequest', 'InvalidArgument', 'InternalError', 'SlowDown',
+  'ServiceUnavailable', 'BadDigest', 'RequestTimeout', 'AuthorizationHeaderMalformed',
+]);
+
+function uploadStatusError(status: number, body?: unknown): Error {
+  const code = typeof body === 'string' ? /<Code>\s*([A-Za-z]+)\s*<\/Code>/.exec(body)?.[1] : undefined;
   return new StorageUploadError(
-    i18n.t('common.errors.uploadFailed', {
-      defaultValue: '上传失败，请稍后重试',
-    }),
+    i18n.t('common.errors.uploadFailed', { defaultValue: '上传失败，请稍后重试' }),
+    status,
+    code && SAFE_STORAGE_ERROR_CODES.has(code) ? code : undefined,
   );
 }
 
@@ -60,6 +70,7 @@ async function runStorageUpload<T>(
       operation: 'upload',
       platform: Platform.OS,
       ...context,
+      ...(error instanceof StorageUploadError ? { status: error.status, ...(error.storageCode ? { storageCode: error.storageCode } : {}) } : {}),
     });
     throw error;
   }

@@ -48,6 +48,8 @@ import {
   type MediaUploadScheduler,
 } from '@/features/chat/utils/media-upload-scheduler';
 
+type ImageSendTurn = { wait: Promise<void>; release: () => void };
+
 export interface MediaSendParams {
   t: TFunction<"translation", undefined>;
   inFlightRef: RefObject<boolean>;
@@ -111,6 +113,7 @@ export function useMediaSend({
       filename: string,
       contentType: string,
       deliveryId: string,
+      turn?: ImageSendTurn,
     ) => {
       try {
         assertMediaSendSessionCurrent(deliveryId);
@@ -149,6 +152,8 @@ export function useMediaSend({
           prepared.filename,
         );
 
+        await turn?.wait;
+        assertMediaSendSessionCurrent(deliveryId);
         await sendImageMessage({
           conversationId: conversationID,
           key: presign.key,
@@ -187,20 +192,22 @@ export function useMediaSend({
       filename: string,
       contentType: string,
       deliveryId: string,
+      turn?: ImageSendTurn,
     ) =>
       mediaUploadScheduler.enqueue(() =>
-        uploadAndSendImage(asset, filename, contentType, deliveryId),
-      ),
+        uploadAndSendImage(asset, filename, contentType, deliveryId, turn),
+      ).finally(() => turn?.release()),
     [mediaUploadScheduler, uploadAndSendImage],
   );
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
   const uploadAndSendImageAsset = useCallback(
-    async (asset: ImagePicker.ImagePickerAsset) => {
+    async (asset: ImagePicker.ImagePickerAsset, turn?: ImageSendTurn) => {
       // 体积 gate 与下面的 assertLocalCanSendMessage 同理：在 presign+上传之前拦掉。
       // 否则一张几十 MB 的原图会整份传完、用户干等之后才发现发不出去。上限与头像 /
       // 圈子封面 / 好友照片一致（10MB），此前只有聊天发图这条路径漏了 gate。
       if (isChatImageTooLarge(asset.fileSize)) {
         Alert.alert(t('validation.imageTooLarge'), t('validation.imageSizeLimit'));
+        turn?.release();
         return false;
       }
 
@@ -234,6 +241,7 @@ export function useMediaSend({
             message,
           );
         }
+        turn?.release();
         return false;
       }
 
@@ -250,7 +258,7 @@ export function useMediaSend({
         retry: (id) => enqueueImageUpload(asset, filename, contentType, id),
         source: { uri: asset.uri, uploadName: filename, contentType },
       });
-      void enqueueImageUpload(asset, filename, contentType, deliveryId);
+      void enqueueImageUpload(asset, filename, contentType, deliveryId, turn);
       return true;
     },
     [conversationID, t, enqueueImageUpload, mountedRef, setSendError],
@@ -527,10 +535,16 @@ export function useMediaSend({
             t('validation.imageSizeLimit'),
           );
         }
+        let previousSend = Promise.resolve();
         await Promise.all(
           result.assets
             .filter((asset) => !isChatImageTooLarge(asset.fileSize))
-            .map(uploadAndSendImageAsset),
+            .map((asset) => {
+              const wait = previousSend;
+              let release!: () => void;
+              previousSend = new Promise<void>((resolve) => { release = resolve; });
+              return uploadAndSendImageAsset(asset, { wait, release });
+            }),
         );
         return;
       }

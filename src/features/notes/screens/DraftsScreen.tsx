@@ -56,21 +56,35 @@ export default function DraftsScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const userId = useAuthStore((state) => state.user?.id);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const sessionKey = `${userId ?? 'anonymous'}:${sessionEpoch}`;
+  const loadedSessionRef = useRef('');
+  const loadGenerationRef = useRef(0);
+  const deletingRef = useRef(new Set<string>());
+  const isCurrentSession = useCallback(() => {
+    const auth = useAuthStore.getState();
+    return auth.user?.id === userId && auth.sessionEpoch === sessionEpoch;
+  }, [userId, sessionEpoch]);
   const [items, setItems] = useState<DraftListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
 
   const load = useCallback(async () => {
-    const local = loadLocalNoteDraftSummaries(userId);
+    const generation = ++loadGenerationRef.current;
+    loadedSessionRef.current = sessionKey;
+    const local = userId ? loadLocalNoteDraftSummaries(userId) : [];
     setItems(mergeDrafts(local, []));
     setLoading(false);
+    if (!userId || !isCurrentSession()) return;
     try {
       const remote = await fetchNoteDrafts();
-      if (mountedRef.current) setItems(mergeDrafts(loadLocalNoteDraftSummaries(userId), remote));
+      if (mountedRef.current && generation === loadGenerationRef.current && isCurrentSession()) {
+        setItems(mergeDrafts(loadLocalNoteDraftSummaries(userId), remote));
+      }
     } catch {
       // Local drafts remain available while offline; the next focus retries sync.
     }
-  }, [userId]);
+  }, [userId, sessionKey, isCurrentSession]);
 
   useFocusEffect(
     useCallback(() => {
@@ -78,12 +92,14 @@ export default function DraftsScreen() {
       void load();
       return () => {
         mountedRef.current = false;
+        loadGenerationRef.current += 1;
       };
     }, [load]),
   );
 
   const openDraft = useCallback(
     (item: DraftListItem) => {
+      if (!isCurrentSession() || loadedSessionRef.current !== sessionKey) return;
       router.push({
         pathname: '/(tabs)/profile/notes/edit',
         params: {
@@ -92,7 +108,7 @@ export default function DraftsScreen() {
         },
       } as never);
     },
-    [router],
+    [router, isCurrentSession, sessionKey],
   );
 
   const removeDraft = useCallback(
@@ -106,15 +122,25 @@ export default function DraftsScreen() {
             text: t('common.delete', { defaultValue: '删除' }),
             style: 'destructive',
             onPress: () => {
-              removeLocalNoteDraft(userId, item.id);
-              setItems((current) => current.filter((draft) => draft.id !== item.id));
-              void deleteNoteDraft(item.id).catch(() => undefined);
+              if (!isCurrentSession() || !userId || deletingRef.current.has(item.id)) return;
+              deletingRef.current.add(item.id);
+              loadGenerationRef.current += 1;
+              void (async () => {
+                try {
+                  await deleteNoteDraft(item.id);
+                  if (!mountedRef.current || !isCurrentSession()) return;
+                  removeLocalNoteDraft(userId, item.id);
+                  setItems((current) => current.filter((draft) => draft.id !== item.id));
+                } catch {
+                  if (mountedRef.current && isCurrentSession()) Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed'));
+                } finally { deletingRef.current.delete(item.id); }
+              })();
             },
           },
         ],
       );
     },
-    [t, userId],
+    [t, userId, isCurrentSession],
   );
 
   const empty = useMemo(
@@ -144,7 +170,7 @@ export default function DraftsScreen() {
         <ActivityIndicator style={s.loading} color={colors.primary} />
       ) : (
         <FlatList
-          data={items}
+          data={loadedSessionRef.current === sessionKey ? items : []}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[s.list, items.length === 0 && s.emptyList, { paddingBottom: insets.bottom + Spacing.xl }]}
           showsVerticalScrollIndicator={false}
@@ -157,21 +183,21 @@ export default function DraftsScreen() {
             >
               <View style={s.cardBody}>
                 <Text style={[s.cardTitle, { color: colors.text }]} numberOfLines={1}>
-                  {item.title.trim() || '未命名笔记'}
+                  {item.title.trim() || t('notes.drafts.untitled')}
                 </Text>
                 <Text style={[s.preview, { color: colors.textSecondary }]} numberOfLines={2}>
-                  {item.contentPreview || '尚未添加内容'}
+                  {item.contentPreview || t('notes.drafts.noContent')}
                 </Text>
                 <Text style={[s.meta, { color: colors.textSecondary }]}> 
                   {formatNoteDate(new Date(item.updatedAt).toISOString())}
-                  {item.mediaCount > 0 ? ` · ${item.mediaCount} 个媒体` : ''}
+                  {item.mediaCount > 0 ? ` · ${t('notes.drafts.mediaCount', { count: item.mediaCount })}` : ''}
                 </Text>
               </View>
               <Pressable
                 onPress={() => removeDraft(item)}
                 hitSlop={10}
                 accessibilityRole="button"
-                accessibilityLabel="删除草稿"
+                accessibilityLabel={t('notes.drafts.deleteLabel')}
               >
                 <Ionicons name="trash-outline" size={21} color={colors.textSecondary} />
               </Pressable>

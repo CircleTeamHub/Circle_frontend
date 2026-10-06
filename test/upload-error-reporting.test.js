@@ -187,3 +187,17 @@ test('uploadFileToPresignedUrl hides storage details from the user-facing error'
     },
   );
 });
+
+
+test('storage failures retain status and an allowed code while discarding provider PII', async () => {
+  const reports = [];
+  const { uploadFileToPresignedUrl } = loadUpload({
+    status: 403,
+    responseBody: '<Error><Code>AccessDenied</Code><Key>private-user-object</Key><RequestId>private-request</RequestId><Message>private-details</Message></Error>',
+    onReport: (error, context) => reports.push({ message: error.message, context }),
+  });
+  await assert.rejects(() => uploadFileToPresignedUrl('https://store/x?secret=token', 'audio/webm', {}, {}));
+  assert.equal(reports[0].context.status, 403);
+  assert.equal(reports[0].context.storageCode, 'AccessDenied');
+  assert.doesNotMatch(JSON.stringify(reports), /private-|secret=token/);
+});

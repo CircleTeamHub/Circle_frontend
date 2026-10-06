@@ -5,13 +5,13 @@ import { NoteBlockRenderer } from './NoteBlockRenderer';
 
 jest.mock('expo', () => ({ useEventListener: jest.fn() }));
 jest.mock('expo-image', () => ({ Image: () => null }));
+const mockAudioPlayer = {
+  isLoaded: true,
+  addListener: jest.fn(() => ({ remove: jest.fn() })),
+  play: jest.fn(), pause: jest.fn(), seekTo: jest.fn(() => Promise.resolve()),
+};
 jest.mock('expo-audio', () => ({
-  useAudioPlayer: () => ({
-    addListener: jest.fn(() => ({ remove: jest.fn() })),
-    play: jest.fn(),
-    pause: jest.fn(),
-    seekTo: jest.fn(() => Promise.resolve()),
-  }),
+  useAudioPlayer: () => mockAudioPlayer,
 }));
 jest.mock('expo-video', () => ({ useVideoPlayer: jest.fn(), VideoView: () => null }));
 jest.mock('@/theme', () => ({
@@ -113,4 +113,25 @@ test('lazy preview media creates a video player only after activation', () => {
     'https://cdn.example/preview.mp4',
     expect.any(Function),
   );
+});
+
+
+test('one press starts a lazy audio player', () => {
+  mockAudioPlayer.play.mockClear();
+  render(<NoteBlockRenderer lazyMedia blocks={[{ type: 'audio', props: { url: 'https://cdn.example/audio.webm' } }]} />);
+  expect(mockAudioPlayer.play).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByRole('button', { name: '播放录音' }));
+  expect(mockAudioPlayer.play).toHaveBeenCalledTimes(1);
+});
+
+test('attached contact and group cards activate their destinations', () => {
+  const contact = jest.fn(); const group = jest.fn();
+  render(<NoteBlockRenderer onContactPress={contact} onGroupPress={group} blocks={[
+    { type: 'contact', props: { id: 'friend-id', name: 'Friend' } },
+    { type: 'group', props: { id: 'legacy-id', circleId: 'circle-id', name: 'Group' } },
+  ]} />);
+  fireEvent.press(screen.getByRole('button', { name: 'Friend' }));
+  fireEvent.press(screen.getByRole('button', { name: 'Group' }));
+  expect(contact).toHaveBeenCalledWith('friend-id', 'Friend');
+  expect(group).toHaveBeenCalledWith('circle-id', 'Group');
 });

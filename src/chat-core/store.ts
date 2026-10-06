@@ -40,13 +40,9 @@ export const MESSAGES_CAP = 200;
  * 收回 MESSAGES_CAP(shrinkConversationWindow)。到顶以后停止翻页、提示去搜索。
  */
 export const MESSAGES_WINDOW_MAX = 10_000;
-/**
- * Failed bubbles remain actionable for retry, but they cannot be an unlimited
- * exception to the per-conversation window. A device that stays offline while
- * repeatedly sending media would otherwise retain every failed payload and
- * keep the corresponding retry closures alive forever.
- */
-export const FAILED_MESSAGES_CAP = 100;
+/** Unresolved failed sends remain visible until the user retries or deletes them.
+ * Trimming only memory would orphan their durable outbox/source files. Retry
+ * closures have their own bounded registry; confirmed history stays bounded. */
 /** 对端 typing 显示时长:超过它没有新 typing 事件就回落在线状态。 */
 export const TYPING_DISPLAY_MS = 4_000;
 /** Keep self-destruct purges below the browser timer clamp and cover cached rows. */
@@ -876,24 +872,14 @@ export function mergeMessages(
   // 消失,要到冷启动从 outbox 回放才重新出现。
   const isFailed = (message: ChatMessageDto): boolean =>
     (message as StoredChatMessage).failed === true;
-  const failedCount = merged.reduce(
-    (count, message) => count + (isFailed(message) ? 1 : 0),
-    0,
-  );
-  if (merged.length <= cap && failedCount <= FAILED_MESSAGES_CAP) return merged;
+  if (merged.length <= cap) return merged;
   let confirmedCount = 0;
   for (const message of merged) {
     if (!isFailed(message)) confirmedCount += 1;
   }
   let toDrop = confirmedCount - cap;
-  const failedIds = new Set(
-    merged
-      .filter(isFailed)
-      .slice(-FAILED_MESSAGES_CAP)
-      .map((message) => message.id),
-  );
   return merged.filter((message) => {
-    if (isFailed(message)) return failedIds.has(message.id);
+    if (isFailed(message)) return true;
     if (toDrop <= 0) return true;
     toDrop -= 1;
     return false;

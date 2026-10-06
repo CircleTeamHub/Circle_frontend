@@ -1,16 +1,19 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
-import EditNoteScreen from './EditNoteScreen';
+import EditNoteScreen, { draftRecordFromServer, draftFingerprint } from './EditNoteScreen';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
 import { createNote, updateNote } from '@/services/api/notes';
+import { storage } from '@/storage';
+import { usePreventRemove } from '@react-navigation/native';
+import type { NoteDraftDetail } from '@/features/notes/types';
 
 // EditNoteScreen reads the current account for local/server draft persistence.
 // The real auth store hydrates through native encrypted storage, which is not
 // available in the Jest host; the editor behavior tests do not need a session.
+const mockDraftAuth: { user: null | { id: string; nickname: string }; sessionEpoch: number } = { user: null, sessionEpoch: 0 };
 jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { user: null }) => unknown) =>
-    selector({ user: null }),
+  useAuthStore: Object.assign((selector: (state: typeof mockDraftAuth) => unknown) => selector(mockDraftAuth), { getState: () => mockDraftAuth }),
 }));
 
 jest.mock('@/storage', () => ({
@@ -49,6 +52,10 @@ const mockVideoPlayerRelease = jest.fn();
 const mockGenerateThumbnails = jest.fn();
 const mockReportHandledFailure = jest.fn();
 let mockRouteId: string | undefined;
+let mockRouteDraftId: string | undefined;
+const mockFetchDraft = jest.fn();
+const mockSaveDraft = jest.fn();
+const mockDeleteDraft = jest.fn();
 let mockFocusCallback: (() => void | (() => void)) | undefined;
 let mockFocusCleanup: (() => void) | undefined;
 let mockEditorProps: {
@@ -65,7 +72,7 @@ jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   return {
     useRouter: () => mockRouter,
-    useLocalSearchParams: () => ({ id: mockRouteId }),
+    useLocalSearchParams: () => ({ id: mockRouteId, draftId: mockRouteDraftId }),
     useFocusEffect: (callback: () => void | (() => void)) => {
       ReactModule.useEffect(() => {
         mockFocusCallback = callback;
@@ -166,6 +173,9 @@ jest.mock('@/features/notes/store/use-note-location-picker-store', () => ({
 
 jest.mock('@/services/api/notes', () => ({
   createNote: jest.fn(),
+  fetchNoteDraft: (...args: unknown[]) => mockFetchDraft(...args),
+  saveNoteDraft: (...args: unknown[]) => mockSaveDraft(...args),
+  deleteNoteDraft: (...args: unknown[]) => mockDeleteDraft(...args),
   fetchNoteDetail: (...args: unknown[]) => mockFetchNoteDetail(...args),
   fetchNoteGroups: (...args: unknown[]) => mockFetchNoteGroups(...args),
   updateNote: jest.fn(),
@@ -534,7 +544,11 @@ test('releases an in-flight main-editor blob preview when its route is replaced'
 });
 
 beforeEach(() => {
+  mockDraftAuth.user = null; mockDraftAuth.sessionEpoch = 0; mockRouteDraftId = undefined;
+  mockFetchDraft.mockReset().mockRejectedValue(new Error('missing')); mockSaveDraft.mockReset().mockResolvedValue({}); mockDeleteDraft.mockReset().mockResolvedValue(undefined);
   jest.clearAllMocks();
+  jest.mocked(storage.getString).mockReset();
+  jest.mocked(storage.set).mockReset();
   imageSources.length = 0;
   mockTranslate = identityTranslate;
   mockRouteId = undefined;
@@ -1460,4 +1474,113 @@ test('typing in the body updates the live counter without re-rendering the scree
   expect(screen.getByText('字数:3')).toBeTruthy();
   expect(mockEditorRenderCount).toBe(rendersBeforeTyping);
   expect(mockEditorProps).toBe(editorPropsBeforeTyping);
+});
+
+
+function reviewDraft(overrides: Partial<NoteDraftDetail> = {}): NoteDraftDetail {
+  return {
+    id: 'review-draft', title: 'remote', content: null, contentJson: [], sections: null,
+    contentPreview: null, mediaCount: 0, groupIds: [], mediaKeys: [],
+    createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-06T00:00:00Z', ...overrides,
+  };
+}
+
+function signedInDraft() {
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' };
+  mockRouteDraftId = 'review-draft';
+}
+
+test('server draft hydration restores each media region rather than combining them', () => {
+  const record = draftRecordFromServer(reviewDraft({ sections: {
+    text: { content: '', contentJson: [{ type: 'noteLayout', props: {
+      blocks: [{ id: 'i1', kind: 'image' }, { id: 'i2', kind: 'image' }],
+      mediaBlocks: [{ id: 'i1', target: 'media', objectKeys: ['one'] }, { id: 'i2', target: 'media', objectKeys: ['two'] }],
+    } }] },
+    media: { items: [{ type: 'IMAGE', objectKey: 'one', url: 'https://cdn/one', sortOrder: 0 }, { type: 'IMAGE', objectKey: 'two', url: 'https://cdn/two', sortOrder: 1 }] },
+  } }), 'review-draft');
+  expect(record.mediaOwnerByClientId[record.mediaItems[0].clientId]).toBe('i1');
+  expect(record.mediaOwnerByClientId[record.mediaItems[1].clientId]).toBe('i2');
+  const refreshed = { ...record, mediaItems: record.mediaItems.map((item) => ({ ...item, url: item.url + '?new-signature', clientId: 'new-' + item.clientId })),
+    mediaOwnerByClientId: Object.fromEntries(Object.entries(record.mediaOwnerByClientId).map(([key, owner]) => ['new-' + key, owner])) };
+  expect(draftFingerprint(refreshed)).toBe(draftFingerprint(record));
+  expect(draftFingerprint({ ...refreshed, title: 'changed' })).not.toBe(draftFingerprint(record));
+  const pending = { ...record, mediaItems: [{ ...record.mediaItems[0], objectKey: '', previewUri: 'file:///first.jpg' }] };
+  expect(draftFingerprint({ ...pending, mediaItems: [{ ...pending.mediaItems[0], previewUri: 'file:///replacement.jpg' }] })).not.toBe(draftFingerprint(pending));
+});
+
+test.each([true, false])('draft hydration chooses the newest saved snapshot (remote newer: %s)', async (remoteNewer) => {
+  signedInDraft();
+  const local = draftRecordFromServer(reviewDraft({ title: 'local', updatedAt: remoteNewer ? '2026-10-05T00:00:00Z' : '2026-10-07T00:00:00Z' }), 'review-draft');
+  jest.mocked(storage.getString).mockImplementation((key) => key.startsWith('circle-im-note-draft:v1:') ? JSON.stringify(local) : undefined);
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  render(<EditNoteScreen />);
+  await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe(remoteNewer ? 'remote' : 'local'));
+  expect(mockFetchDraft).toHaveBeenCalledWith('review-draft');
+});
+
+test('adding a region after restoring gapped IDs creates a distinct composer ID', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft({ contentJson: [{ type: 'noteLayout', props: {
+    blocks: [{ id: 'text-1', kind: 'text' }, { id: 'text-3', kind: 'text' }],
+    textBlocks: [{ id: 'text-1', content: [] }, { id: 'text-3', content: [] }],
+  } }] }));
+  render(<EditNoteScreen />);
+  await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+  pressComposer('text');
+  await waitFor(() => expect(mockSaveDraft).toHaveBeenCalled(), { timeout: 2500 });
+  const input = mockSaveDraft.mock.calls.at(-1)?.[1];
+  const ids = input.contentJson.find((block: { type: string }) => block.type === 'noteLayout').props.blocks.map((block: { id: string }) => block.id);
+  expect(ids).toContain('text-4');
+  expect(new Set(ids).size).toBe(ids.length);
+});
+
+test('save and exit stays in the editor when both local and server persistence fail', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockSaveDraft.mockRejectedValue(new Error('offline'));
+  jest.mocked(storage.set).mockImplementation(() => { throw new Error('full'); });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'unsaved');
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+    act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    const save = alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.save');
+    expect(save).toBeDefined();
+    await act(async () => { save?.onPress?.(); await Promise.resolve(); });
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.saveFailed'));
+    expect(mockRouter.back).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('unsaved');
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
+test('queued autosave does not send old-account content after switching accounts', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const pending = createDeferred<unknown>();
+  mockSaveDraft.mockReturnValueOnce(pending.promise);
+  const rendered = render(<EditNoteScreen />);
+  await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'first-account-write');
+  await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1), { timeout: 2500 });
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'queued-old-content');
+  await waitFor(() => expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('queued-old-content'))).toBe(true), { timeout: 2500 });
+  mockDraftAuth.user = { id: 'owner-b', nickname: 'B' }; mockDraftAuth.sessionEpoch += 1;
+  rendered.rerender(<EditNoteScreen />);
+  await act(async () => { pending.resolve({}); await pending.promise; });
+  expect(mockSaveDraft.mock.calls.some(([, input]) => input.title === 'queued-old-content')).toBe(false);
+  rendered.unmount();
+});
+
+
+test('reverting an autosaved edit writes the baseline back to the draft', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  render(<EditNoteScreen />);
+  await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'temporary');
+  await waitFor(() => expect(mockSaveDraft.mock.calls.some(([, input]) => input.title === 'temporary')).toBe(true), { timeout: 2500 });
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'remote');
+  await waitFor(() => expect(mockSaveDraft.mock.calls.at(-1)?.[1].title).toBe('remote'), { timeout: 2500 });
 });

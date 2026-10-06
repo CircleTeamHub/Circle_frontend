@@ -29,14 +29,16 @@ import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import {
   getChatDetailHref,
+  getUserProfileHref,
+  getCircleDetailHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import {
   buildNoteSections,
+  getNoteViewerImages,
   getInitialNoteSection,
   getNoteSectionAvailability,
-  isRenderableMediaItem,
   type NoteSectionKind,
 } from '@/features/notes/utils/note-sections';
 import {
@@ -151,7 +153,7 @@ export default function NoteDetailScreen() {
     const mapped = normalized.flatMap((kind): NoteSectionKind[] => {
       if (kind === 'text') return ['text'];
       if (kind === 'image') return ['media'];
-      if (kind === 'video') return ['showcase'];
+      if (kind === 'video') return ['media'];
       if (kind === 'showcase') return ['showcase'];
       if (kind === 'audio') return ['audio'];
       if (kind === 'contact') return ['contact'];
@@ -170,21 +172,7 @@ export default function NoteDetailScreen() {
   }, [availability, note?.contentJson, note?.sections?.text?.contentJson, sections]);
   // 拿不到地址的条目渲染出来是空的（服务端读接口没能为这个 objectKey 现签地址），
   // 不进列表；整块是否显示由 getNoteSectionAvailability 按同一判据决定。
-  const renderableMediaItems = useMemo(
-    () => (sections?.media.items ?? []).filter(isRenderableMediaItem),
-    [sections],
-  );
-  const renderableShowcaseItems = useMemo(
-    () => (sections?.showcase.items ?? []).filter(isRenderableMediaItem),
-    [sections],
-  );
-  const viewerImages = useMemo(
-    () => [...renderableMediaItems, ...renderableShowcaseItems].filter(
-      (item): item is typeof item & { url: string } =>
-        item.type === 'IMAGE' && typeof item.url === 'string',
-    ),
-    [renderableMediaItems, renderableShowcaseItems],
-  );
+  const viewerImages = useMemo(() => sections ? getNoteViewerImages(sections) : [], [sections]);
   useEffect(() => {
     if (viewerImages.length === 0) {
       setImageViewerVisible(false);
@@ -435,6 +423,9 @@ export default function NoteDetailScreen() {
             groups={note.groups}
             sections={sections}
             order={detailOrder}
+            layout={note.sections?.text?.contentJson ?? note.contentJson}
+            onContactPress={(id, name) => router.navigate(getUserProfileHref(scope, id, name))}
+            onGroupPress={(id) => router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', id))}
             onMediaError={handleMediaError}
             onImagePress={handleImagePress}
             onSectionLayout={trackSectionLayout}

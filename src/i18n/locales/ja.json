@@ -959,7 +959,13 @@
       "unsavedTitle": "未完成のノートを保存しますか？",
       "unsavedMessage": "保存していない内容を下書きに保存し、後で編集を続けられます。",
       "discard": "保存せずに退出",
-      "save": "下書きに保存"
+      "save": "下書きに保存",
+      "untitled": "無題のノート",
+      "noContent": "まだ内容がありません",
+      "mediaCount": "メディア {{count}} 件",
+      "deleteLabel": "下書きを削除",
+      "deleteFailed": "下書きを削除できませんでした。もう一度お試しください。",
+      "saveFailed": "下書きを保存できませんでした。もう一度お試しください。"
     },
     "edit": {
       "addImage": "画像を追加",
@@ -1049,7 +1055,8 @@
         "reorderA11y": "{{label}}の位置を調整",
         "moveUp": "{{label}}を上へ",
         "moveDown": "{{label}}を下へ"
-      }
+      },
+      "unsupportedAudio": "この音声形式には対応していません。M4A、MP3、AAC、WAV、OGG、WebM を選択してください。"
     },
     "editor": {
       "mediaUploadFailedMessage": "もう一度お試しください",

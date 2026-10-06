@@ -1,3 +1,4 @@
+import { MAX_NOTE_BLOCK_DEPTH } from '@/features/notes/utils/note-blocks';
 import type { NoteMedia } from '@/features/notes/types';
 
 export type NoteSectionKind =
@@ -147,6 +148,29 @@ function getInlineMediaItems(
       ...(typeof props.durationMs === 'number' ? { durationMs: props.durationMs } : {}),
     }];
   });
+}
+
+/** Collect nested inline media for the viewer without duplicating document sections. */
+export function getNoteInlineMediaItems(blocks: unknown, depth = 0): StructuredNoteMediaItem[] {
+  if (!Array.isArray(blocks) || depth > MAX_NOTE_BLOCK_DEPTH) return [];
+  const valid = blocks.filter((block): block is Record<string, unknown> => Boolean(block && typeof block === 'object'));
+  return valid.flatMap((block) => [
+    ...getInlineMediaItems([block]),
+    ...getNoteInlineMediaItems(block.children, depth + 1),
+  ]);
+}
+
+export function getNoteViewerImages(sections: NoteSections) {
+  const seen = new Set<string>();
+  return [...sections.media.items, ...sections.showcase.items, ...getNoteInlineMediaItems(sections.text.contentJson)].filter(
+    (item): item is StructuredNoteMediaItem & { url: string } => {
+      if (item.type !== 'IMAGE' || !item.url) return false;
+      const key = item.objectKey || item.url;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    },
+  );
 }
 
 function normalizeItems(items: unknown): StructuredNoteMediaItem[] {

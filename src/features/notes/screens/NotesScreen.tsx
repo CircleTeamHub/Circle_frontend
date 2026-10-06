@@ -17,6 +17,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -72,6 +73,8 @@ const ItemSeparator = memo(function ItemSeparator() {
 });
 
 export default function NotesScreen() {
+  const { width, fontScale } = useWindowDimensions();
+  const compactActions = width < 520 || fontScale > 1.2;
   const router = useRouter();
   // 笔记页在哪个 tab 栈打开（profile/messages/...），决定子页面往哪个栈推。
   const segments = useSegments();
@@ -771,37 +774,41 @@ export default function NotesScreen() {
             ) : (
               <>
                 <Pressable
-                  style={[s.unlistedBtn, d.unlistedBtn]}
+                  style={[s.unlistedBtn, d.unlistedBtn, compactActions && { minWidth: 44, minHeight: 44, justifyContent: 'center' }]}
                   onPress={() =>
                     router.push('/(tabs)/profile/notes/recycle-bin' as never)
                   }
+                  accessibilityRole="button"
+                  accessibilityLabel={t('notes.recycleBin')}
                 >
                   <Ionicons name="trash-outline" size={15} color={colors.textSecondary} />
-                  <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
+                  {!compactActions ? <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
                     {t('notes.recycleBin', { defaultValue: '回收站' })}
-                  </Text>
+                  </Text> : null}
                 </Pressable>
                 <Pressable
-                  style={[s.unlistedBtn, d.unlistedBtn]}
+                  style={[s.unlistedBtn, d.unlistedBtn, compactActions && { minWidth: 44, minHeight: 44, justifyContent: 'center' }]}
                   onPress={() =>
                     router.push('/(tabs)/profile/notes/unlisted' as never)
                   }
+                  accessibilityRole="button"
+                  accessibilityLabel={t('notes.unlisted')}
                 >
                   <Ionicons name="archive-outline" size={15} color={colors.textSecondary} />
-                  <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
+                  {!compactActions ? <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
                     {t('notes.unlisted', { defaultValue: '已下架' })}
-                  </Text>
+                  </Text> : null}
                 </Pressable>
                 <Pressable
-                  style={[s.unlistedBtn, d.unlistedBtn]}
+                  style={[s.unlistedBtn, d.unlistedBtn, compactActions && { minWidth: 44, minHeight: 44, justifyContent: 'center' }]}
                   onPress={() => router.push('/(tabs)/profile/notes/drafts' as never)}
                   accessibilityRole="button"
                   accessibilityLabel={t('notes.drafts.title', { defaultValue: '草稿箱' })}
                 >
                   <Ionicons name="document-text-outline" size={15} color={colors.textSecondary} />
-                  <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
+                  {!compactActions ? <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
                     {t('notes.drafts.title', { defaultValue: '草稿箱' })}
-                  </Text>
+                  </Text> : null}
                 </Pressable>
               </>
             )}

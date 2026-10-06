@@ -53,6 +53,7 @@ export const NOTE_COMPOSER_BLOCK_KINDS: readonly NoteComposerBlockKind[] = [
  */
 export const NOTE_COMPOSER_SINGLETON_KINDS: readonly NoteComposerBlockKind[] = [
   'title',
+  'audio',
   'location',
   'contact',
   'group',

@@ -16,7 +16,7 @@ function loadTsModule(relativePath) {
     },
     fileName: filePath,
   }).outputText;
-  const context = { module: { exports: {} }, exports: {}, require };
+  const context = { module: { exports: {} }, exports: {}, require: (request) => request === '@/features/notes/utils/note-blocks' ? loadTsModule('src/features/notes/utils/note-blocks.ts') : require(request) };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });
   return context.module.exports;

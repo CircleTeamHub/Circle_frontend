@@ -101,7 +101,7 @@ function contentPreview(record: NoteEditorDraftRecord): string {
   if (content) return content.slice(0, 180);
   const title = record.title.trim();
   if (title) return title;
-  return '未命名笔记';
+  return '';
 }
 
 function toSummary(record: NoteEditorDraftRecord): NoteLocalDraftSummary {
@@ -153,6 +153,9 @@ export function saveLocalNoteDraft(
     version: INDEX_VERSION,
     items: items.slice(0, 100),
   });
+  for (const evicted of items.slice(100)) {
+    storage.remove(draftKey(userId, evicted.id));
+  }
 }
 
 export function removeLocalNoteDraft(
