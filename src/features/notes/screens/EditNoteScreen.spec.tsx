@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
+import { setAudioModeAsync } from 'expo-audio';
 import EditNoteScreen, { draftRecordFromServer, draftFingerprint } from './EditNoteScreen';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
 import { createNote, updateNote } from '@/services/api/notes';
@@ -43,6 +44,33 @@ const mockRequestPermission = jest.fn();
 const mockLaunchPicker = jest.fn();
 const mockRequestPresign = jest.fn();
 const mockUploadFile = jest.fn();
+const mockRecordingPermission = jest.fn();
+const mockPersistRecording = jest.fn();
+const mockRestoreRecording = jest.fn();
+const mockRemoveRecording = jest.fn();
+jest.mock('@/features/notes/utils/note-recording-storage', () => ({
+  persistNoteRecording: (...args: unknown[]) => mockPersistRecording(...args),
+  restoreNoteRecording: (...args: unknown[]) => mockRestoreRecording(...args),
+  removeNoteRecording: (...args: unknown[]) => mockRemoveRecording(...args),
+  isNoteRecordingId: (id: unknown) => typeof id === 'string' && /^recording-[a-z0-9-]{1,80}\.(m4a|webm)$/.test(id),
+}));
+const mockRecorder = {
+  getStatus: jest.fn(() => ({ canRecord: true, durationMillis: 2400, url: 'file:///recording.m4a' })),
+  prepareToRecordAsync: jest.fn(() => Promise.resolve()), record: jest.fn(),
+  stop: jest.fn(() => Promise.resolve()), uri: 'file:///recording.m4a',
+};
+const mockPickerFriends = jest.fn();
+const mockPickerCircles = jest.fn();
+const mockCachedFriends = jest.fn();
+const mockCachedCircles = jest.fn();
+jest.mock('@/features/notes/utils/note-card-picker-cache', () => ({
+  getCachedNotePickerFriends: (...args: unknown[]) => mockCachedFriends(...args),
+  getCachedNotePickerCircles: (...args: unknown[]) => mockCachedCircles(...args),
+  isNotePickerFriendsFresh: () => false, isNotePickerCirclesFresh: () => false,
+  loadNotePickerFriends: (...args: unknown[]) => mockPickerFriends(...args),
+  loadNotePickerCircles: (...args: unknown[]) => mockPickerCircles(...args),
+  prefetchNoteCardPickerData: () => Promise.resolve(),
+}));
 const mockFetchNoteGroups = jest.fn();
 const mockFetchNoteDetail = jest.fn();
 const mockConsumePickedLocation = jest.fn();
@@ -95,15 +123,9 @@ jest.mock('expo-image-picker', () => ({
 jest.mock('expo-audio', () => ({
   AudioQuality: { MEDIUM: 'medium' },
   IOSOutputFormat: { MPEG4AAC: 'aac' },
-  requestRecordingPermissionsAsync: jest.fn(() => Promise.resolve({ granted: false })),
+  requestRecordingPermissionsAsync: (...args: unknown[]) => mockRecordingPermission(...args),
   setAudioModeAsync: jest.fn(() => Promise.resolve()),
-  useAudioRecorder: () => ({
-    getStatus: () => ({ canRecord: false, durationMillis: 0, url: null }),
-    prepareToRecordAsync: jest.fn(() => Promise.resolve()),
-    record: jest.fn(),
-    stop: jest.fn(() => Promise.resolve()),
-    uri: null,
-  }),
+  useAudioRecorder: () => mockRecorder,
 }));
 
 // 记录每一个 <Image> 的 source：位置预览那组断言关心的就是「渲染时有没有把
@@ -547,6 +569,20 @@ beforeEach(() => {
   mockDraftAuth.user = null; mockDraftAuth.sessionEpoch = 0; mockRouteDraftId = undefined;
   mockFetchDraft.mockReset().mockRejectedValue(new Error('missing')); mockSaveDraft.mockReset().mockResolvedValue({}); mockDeleteDraft.mockReset().mockResolvedValue(undefined);
   jest.clearAllMocks();
+  mockRecordingPermission.mockReset().mockResolvedValue({ granted: true });
+  mockPersistRecording.mockReset().mockResolvedValue({ localRecordingId: 'recording-test.m4a', uri: 'file:///documents/recording-test.m4a' });
+  mockRestoreRecording.mockReset().mockResolvedValue('file:///documents/recording-test.m4a');
+  mockRemoveRecording.mockReset().mockResolvedValue(undefined);
+  mockRecorder.prepareToRecordAsync.mockReset().mockResolvedValue(undefined);
+  mockRecorder.record.mockReset();
+  mockRecorder.stop.mockReset().mockResolvedValue(undefined);
+  mockRecorder.uri = 'file:///recording.m4a';
+  mockRecorder.getStatus.mockReset().mockImplementation(() => ({ canRecord: true, durationMillis: 2400, url: mockRecorder.uri }));
+  jest.mocked(setAudioModeAsync).mockReset().mockResolvedValue(undefined);
+  mockPickerFriends.mockReset().mockResolvedValue([]);
+  mockPickerCircles.mockReset().mockResolvedValue([]);
+  mockCachedFriends.mockReset().mockReturnValue(null);
+  mockCachedCircles.mockReset().mockReturnValue(null);
   jest.mocked(storage.getString).mockReset();
   jest.mocked(storage.set).mockReset();
   imageSources.length = 0;
@@ -1583,4 +1619,745 @@ test('reverting an autosaved edit writes the baseline back to the draft', async 
   await waitFor(() => expect(mockSaveDraft.mock.calls.some(([, input]) => input.title === 'temporary')).toBe(true), { timeout: 2500 });
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'remote');
   await waitFor(() => expect(mockSaveDraft.mock.calls.at(-1)?.[1].title).toBe('remote'), { timeout: 2500 });
+});
+
+
+test('keeps a stopped recording after presign failure and retries the same local file', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockRequestPresign.mockReset().mockRejectedValueOnce(new Error('offline')).mockResolvedValue({
+    uploadUrl: 'https://storage.test/upload', key: 'notes/owner-a/recording.m4a', requiredHeaders: {},
+  });
+  mockUploadFile.mockReset().mockResolvedValue(undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
+    expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeDisabled();
+    await waitFor(() => expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('recording-test.m4a'))).toBe(true), { timeout: 2500 });
+    expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('file:///recording.m4a'))).toBe(false);
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    expect(mockRecorder.record).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByRole('button', { name: 'common.retry' }));
+    await waitFor(() => expect(mockRequestPresign).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull());
+    expect(mockUploadFile.mock.calls.at(-1)?.[2]).toBe('file:///documents/recording-test.m4a');
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(jest.mocked(createNote).mock.calls.at(-1)?.[0].sections?.audio?.items[0].objectKey).toBe('notes/owner-a/recording.m4a');
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
+test('does not publish while audio recording is active', async () => {
+  const rendered = render(<EditNoteScreen />);
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Recording');
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
+  fireEvent.press(screen.getByText('notes.edit.startRecording'));
+  await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+  const done = screen.getByRole('button', { name: 'notes.edit.done' });
+  expect(done).toBeDisabled();
+  fireEvent.press(done);
+  expect(createNote).not.toHaveBeenCalled();
+  expect(mockRouter.back).not.toHaveBeenCalled();
+  rendered.unmount();
+});
+
+test.each(['contact', 'group'] as const)('clears %s picker rows and ignores the old response after switching accounts', async (kind) => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const pending = createDeferred<unknown[]>();
+  const load = kind === 'contact' ? mockPickerFriends : mockPickerCircles;
+  load.mockReturnValueOnce(pending.promise).mockResolvedValue([]);
+  const cached = kind === 'contact' ? mockCachedFriends : mockCachedCircles;
+  cached.mockImplementation((id) => id === 'owner-a' ? [kind === 'contact'
+    ? { id: 'friend-a', nickname: 'Private A', remark: '', accountId: 'a' }
+    : { id: 'circle-a', name: 'Private A' }] : null);
+  const rendered = render(<EditNoteScreen />);
+  const open = () => {
+    fireEvent.press(screen.getByRole('button', { name: `notes.edit.composer.${kind}` }));
+    fireEvent.press(screen.getByText(kind === 'contact' ? 'notes.edit.addContact' : 'notes.edit.addGroup'));
+  };
+  await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+  open();
+  await waitFor(() => expect(load).toHaveBeenCalledWith('owner-a'));
+  mockDraftAuth.user = { id: 'owner-b', nickname: 'B' }; mockDraftAuth.sessionEpoch += 1;
+  rendered.rerender(<EditNoteScreen />);
+  await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+  open();
+  await waitFor(() => expect(load).toHaveBeenCalledWith('owner-b'));
+  await act(async () => { pending.resolve(kind === 'contact'
+    ? [{ id: 'late-a', nickname: 'Late Private A', remark: '', accountId: 'a' }]
+    : [{ id: 'late-a', name: 'Late Private A' }]); await pending.promise; });
+  expect(screen.queryByText('Private A')).toBeNull();
+  expect(screen.queryByText('Late Private A')).toBeNull();
+  rendered.unmount();
+});
+
+
+test('a later edit of the same note uses a fresh draft lifecycle ID', async () => {
+  mockRouteId = 'same-note';
+  const submit = async () => {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('Replacement note'));
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Changed');
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
+    return jest.mocked(updateNote).mock.calls.at(-1)?.[1].clientDraftID;
+  };
+  const first = render(<EditNoteScreen />);
+  const oldId = await submit(); first.unmount();
+  jest.mocked(updateNote).mockClear();
+  const second = render(<EditNoteScreen />);
+  const newId = await submit(); second.unmount();
+  expect(oldId).toBeTruthy(); expect(newId).toBeTruthy(); expect(newId).not.toBe(oldId);
+});
+
+test('a fresh editor hydrates without requesting an unknown generated draft ID', async () => {
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' };
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder')).toBeTruthy());
+    expect(mockFetchDraft).not.toHaveBeenCalled();
+  } finally { rendered.unmount(); }
+});
+
+test('a resumed draft gates editing and submission until its remote contents arrive', async () => {
+  signedInDraft();
+  const pending = createDeferred<NoteDraftDetail>();
+  mockFetchDraft.mockReturnValueOnce(pending.promise);
+  jest.mocked(createNote).mockReset().mockResolvedValue({} as never);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(mockFetchDraft).toHaveBeenCalledWith('review-draft'));
+    expect(screen.queryByPlaceholderText('notes.edit.titlePlaceholder')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'notes.edit.done' })).toBeNull();
+    expect(createNote).not.toHaveBeenCalled();
+    const body = [{ type: 'paragraph', content: [{ type: 'text', text: 'Saved body' }] }];
+    await act(async () => {
+      pending.resolve(reviewDraft({ sections: {
+        text: { content: 'Saved body', contentJson: body },
+        media: { items: [{ type: 'IMAGE', objectKey: 'notes/owner-a/saved.jpg', sortOrder: 0 }] },
+      } }));
+      await pending.promise;
+    });
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    expect(mockEditorProps?.initialContent).toEqual(body);
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Edited after hydration');
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    const input = jest.mocked(createNote).mock.calls.at(-1)?.[0];
+    expect(input).toEqual(expect.objectContaining({ title: 'Edited after hydration', content: 'Saved body' }));
+    expect(input?.sections?.media?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ objectKey: 'notes/owner-a/saved.jpg' }),
+    ]));
+  } finally { rendered.unmount(); }
+});
+
+test.each(['contentJson', 'sectionText'] as const)(
+  'key-only media in a %s draft survives hydration and publication',
+  async (source) => {
+    signedInDraft();
+    const blocks = [
+      { type: 'paragraph', content: [{ type: 'text', text: 'Draft body' }] },
+      { type: 'image', props: { objectKey: 'notes/owner-a/photo.jpg', width: 800, height: 600 } },
+      { type: 'video', props: { objectKey: 'notes/owner-a/video.mp4', durationMs: 2400 } },
+    ];
+    const draft = reviewDraft({
+      mediaKeys: ['notes/owner-a/photo.jpg', 'notes/owner-a/video.mp4'],
+      ...(source === 'contentJson' ? { contentJson: blocks } : {
+        sections: { text: { content: 'Draft body', contentJson: blocks } },
+      }),
+    });
+    const record = draftRecordFromServer(draft, 'review-draft');
+    expect(record.mediaItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'IMAGE', objectKey: 'notes/owner-a/photo.jpg', width: 800, height: 600 }),
+      expect.objectContaining({ type: 'VIDEO', objectKey: 'notes/owner-a/video.mp4', durationMs: 2400 }),
+    ]));
+    expect(Object.values(record.textBlocksById).flat()).toEqual([blocks[0]]);
+    mockFetchDraft.mockResolvedValue(draft);
+    jest.mocked(createNote).mockReset().mockResolvedValue({} as never);
+    const rendered = render(<EditNoteScreen />);
+    try {
+      await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+      fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+      await waitFor(() => expect(createNote).toHaveBeenCalled());
+      const input = jest.mocked(createNote).mock.calls.at(-1)?.[0];
+      expect(input?.sections?.media?.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ objectKey: 'notes/owner-a/photo.jpg' }),
+        expect.objectContaining({ objectKey: 'notes/owner-a/video.mp4' }),
+      ]));
+      expect(input?.content).toBe('Draft body');
+    } finally { rendered.unmount(); }
+  },
+);
+
+test.each(['contentJson', 'sectionText'] as const)(
+  'draft hydration preserves nested children in %s text blocks',
+  (source) => {
+    const nested = { type: 'paragraph', content: [{ type: 'text', text: 'Parent' }], children: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'Child' }], children: [
+        { type: 'image', props: { objectKey: 'notes/owner-a/nested.jpg', url: 'https://signed.test/nested.jpg' } },
+      ] },
+    ] };
+    const record = draftRecordFromServer(reviewDraft(source === 'contentJson'
+      ? { contentJson: [nested] }
+      : { sections: { text: { content: 'Parent\nChild', contentJson: [nested] } } }), 'review-draft');
+    expect(Object.values(record.textBlocksById).flat()).toEqual([nested]);
+  },
+);
+
+test('Back keeps an active recording available until it is explicitly stopped', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockRequestPresign.mockReset().mockResolvedValue({
+    uploadUrl: 'https://storage.test/upload', key: 'notes/owner-a/recording.m4a', requiredHeaders: {},
+  });
+  mockUploadFile.mockReset().mockResolvedValue(undefined);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Recording draft');
+    // Once the region and title are autosaved, their fingerprint cannot warn about the recording.
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalled(), { timeout: 2500 });
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+    act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    expect(alert).toHaveBeenCalledWith('notes.edit.waitForMediaTitle', 'notes.edit.waitForMediaMessage');
+    expect(mockRouter.back).not.toHaveBeenCalled();
+    expect(mockRecorder.stop).not.toHaveBeenCalled();
+    expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy();
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(mockUploadFile).toHaveBeenCalled());
+    expect(mockUploadFile.mock.calls.at(-1)?.[2]).toBe('file:///documents/recording-test.m4a');
+    await waitFor(() => expect(jest.mocked(storage.set).mock.calls.some(([, value]) =>
+      String(value).includes('notes/owner-a/recording.m4a'))).toBe(true), { timeout: 2500 });
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
+test.each(['account', 'sessionEpoch', 'route'] as const)(
+  'a %s change stops the recorder before clearing its visible recording state',
+  async (change) => {
+    signedInDraft();
+    mockFetchDraft.mockResolvedValue(reviewDraft());
+    const rendered = render(<EditNoteScreen />);
+    try {
+      await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+      fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
+      fireEvent.press(screen.getByText('notes.edit.startRecording'));
+      await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+      if (change === 'route') {
+        mockRouteId = 'replacement-note';
+        mockRouteDraftId = undefined;
+      } else {
+        if (change === 'account') mockDraftAuth.user = { id: 'owner-b', nickname: 'B' };
+        mockDraftAuth.sessionEpoch += 1;
+      }
+      rendered.rerender(<EditNoteScreen />);
+      await waitFor(() => expect(mockRecorder.stop).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByText('notes.edit.stopRecording')).toBeNull());
+      expect(mockRecorder.record).toHaveBeenCalledTimes(1);
+      expect(mockRequestPresign).not.toHaveBeenCalled();
+    } finally { rendered.unmount(); }
+    expect(mockRecorder.stop).toHaveBeenCalledTimes(1);
+  },
+);
+
+test('deleting an audio region cancels a recording start whose native preparation is pending', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const pending = createDeferred<void>();
+  mockRecorder.prepareToRecordAsync.mockReturnValueOnce(pending.promise);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalled());
+    fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.composer.audio' }));
+    await act(async () => { pending.resolve(); await pending.promise; });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeEnabled());
+    expect(mockRecorder.record).not.toHaveBeenCalled();
+    expect(screen.queryByText('notes.edit.stopRecording')).toBeNull();
+  } finally {
+    await act(async () => { pending.resolve(); await pending.promise; rendered.unmount(); });
+  }
+});
+
+test.each(['prepare', 'stop'] as const)(
+  'a new account waits for the previous recorder %s and stale cleanup cannot disable its recording',
+  async (operation) => {
+    signedInDraft();
+    mockFetchDraft.mockResolvedValue(reviewDraft());
+    const pending = createDeferred<void>();
+    if (operation === 'prepare') mockRecorder.prepareToRecordAsync.mockReturnValueOnce(pending.promise);
+    else mockRecorder.stop.mockReturnValueOnce(pending.promise);
+    const rendered = render(<EditNoteScreen />);
+    try {
+      await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+      fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
+      fireEvent.press(screen.getByText('notes.edit.startRecording'));
+      if (operation === 'prepare') {
+        await waitFor(() => expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledTimes(1));
+      } else {
+        await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+        fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+        await waitFor(() => expect(mockRecorder.stop).toHaveBeenCalledTimes(1));
+      }
+      mockDraftAuth.user = { id: 'owner-b', nickname: 'B' };
+      mockDraftAuth.sessionEpoch += 1;
+      rendered.rerender(<EditNoteScreen />);
+      await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+      fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
+      fireEvent.press(screen.getByText('notes.edit.startRecording'));
+      await act(async () => { await Promise.resolve(); });
+      expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledTimes(1);
+      expect(mockRecorder.record).toHaveBeenCalledTimes(operation === 'prepare' ? 0 : 1);
+      await act(async () => { pending.resolve(); await pending.promise; });
+      const recordedCount = operation === 'prepare' ? 1 : 2;
+      await waitFor(() => expect(mockRecorder.record).toHaveBeenCalledTimes(recordedCount));
+      expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy();
+      const newRecordingOrder = mockRecorder.record.mock.invocationCallOrder[recordedCount - 1];
+      jest.mocked(setAudioModeAsync).mock.calls.forEach(([mode], index) => {
+        if (mode.allowsRecording === false) {
+          expect(jest.mocked(setAudioModeAsync).mock.invocationCallOrder[index]).toBeLessThan(newRecordingOrder);
+        }
+      });
+      expect(mockRequestPresign).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => { pending.resolve(); await pending.promise; rendered.unmount(); });
+    }
+  },
+);
+
+test('a replacement audio region waits for the deleted region recorder to stop', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const pending = createDeferred<void>();
+  mockRecorder.stop.mockReturnValueOnce(pending.promise);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.composer.audio' }));
+    await waitFor(() => expect(mockRecorder.stop).toHaveBeenCalledTimes(1));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await act(async () => { await Promise.resolve(); });
+    expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledTimes(1);
+    expect(mockRecorder.record).toHaveBeenCalledTimes(1);
+    await act(async () => { pending.resolve(); await pending.promise; });
+    await waitFor(() => expect(mockRecorder.record).toHaveBeenCalledTimes(2));
+    const newRecordingOrder = mockRecorder.record.mock.invocationCallOrder[1];
+    jest.mocked(setAudioModeAsync).mock.calls.forEach(([mode], index) => {
+      if (mode.allowsRecording === false) {
+        expect(jest.mocked(setAudioModeAsync).mock.invocationCallOrder[index]).toBeLessThan(newRecordingOrder);
+      }
+    });
+    expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy();
+  } finally {
+    await act(async () => { pending.resolve(); await pending.promise; rendered.unmount(); });
+  }
+});
+
+test('a pending recording restores its current durable URI and retries after reopening the draft', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const values = new Map<string, string>();
+  jest.mocked(storage.set).mockImplementation((key, value) => { values.set(key, String(value)); });
+  jest.mocked(storage.getString).mockImplementation((key) => values.get(key));
+  mockRequestPresign.mockReset().mockRejectedValue(new Error('offline'));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const first = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
+    await waitFor(() => expect([...values.values()].some((value) => value.includes('recording-test.m4a'))).toBe(true), { timeout: 2500 });
+    expect([...values.values()].some((value) => value.includes('file:///'))).toBe(false);
+  } finally { first.unmount(); }
+  mockRestoreRecording.mockResolvedValue('file:///new-container/documents/recording-test.m4a');
+  mockRequestPresign.mockReset().mockResolvedValue({ uploadUrl: 'https://storage.test/upload', key: 'notes/owner-a/resumed.m4a', requiredHeaders: {} });
+  mockUploadFile.mockReset().mockResolvedValue(undefined);
+  const second = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
+    expect(mockRestoreRecording).toHaveBeenCalledWith('owner-a', 'recording-test.m4a');
+    fireEvent.press(screen.getByRole('button', { name: 'common.retry' }));
+    await waitFor(() => expect(mockUploadFile).toHaveBeenCalled());
+    expect(mockUploadFile.mock.calls.at(-1)?.[2]).toBe('file:///new-container/documents/recording-test.m4a');
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull());
+  } finally { second.unmount(); alert.mockRestore(); }
+});
+
+test('failed recording storage and upload keep the playable item but cannot claim Save and Exit succeeded', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockPersistRecording.mockRejectedValue(new Error('full'));
+  mockRequestPresign.mockReset().mockRejectedValue(new Error('offline'));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalled(), { timeout: 2500 });
+    expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('recording:'))).toBe(false);
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+    act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    const choices = alert.mock.calls.at(-1)?.[2];
+    act(() => choices?.find((button) => button.text === 'notes.drafts.save')?.onPress?.());
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.saveFailed'));
+    expect(mockRouter.back).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeDisabled();
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
+test.each(['account', 'route'] as const)('a stale durable recording copy after a %s change cannot enter the replacement editor', async (change) => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const pending = createDeferred<{ localRecordingId: string; uri: string }>();
+  mockPersistRecording.mockReturnValueOnce(pending.promise);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(mockPersistRecording).toHaveBeenCalledWith('owner-a', 'file:///recording.m4a'));
+    if (change === 'account') { mockDraftAuth.user = { id: 'owner-b', nickname: 'B' }; mockDraftAuth.sessionEpoch += 1; }
+    else { mockRouteId = 'replacement-note'; mockRouteDraftId = undefined; }
+    rendered.rerender(<EditNoteScreen />);
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder')).toBeTruthy());
+    await act(async () => { pending.resolve({ localRecordingId: 'recording-stale.m4a', uri: 'file:///documents/recording-stale.m4a' }); await pending.promise; });
+    await waitFor(() => expect(mockRemoveRecording).toHaveBeenCalledWith('owner-a', 'recording-stale.m4a'));
+    expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
+    expect(mockRequestPresign).not.toHaveBeenCalled();
+  } finally { await act(async () => { pending.resolve({ localRecordingId: 'recording-stale.m4a', uri: 'file:///documents/recording-stale.m4a' }); await pending.promise; rendered.unmount(); }); }
+});
+
+test('removing a recorded audio item cleans only its owned durable copy', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockRequestPresign.mockReset().mockRejectedValue(new Error('offline'));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
+    fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.audioItem' }));
+    expect(mockRemoveRecording).toHaveBeenCalledWith('owner-a', 'recording-test.m4a');
+    expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
+test.each(['account', 'route'] as const)('a deferred Save copy cannot persist the replacement editor after a %s change', async (change) => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const pending = createDeferred<{ localRecordingId: string; uri: string }>();
+  mockPersistRecording.mockRejectedValueOnce(new Error('full')).mockReturnValueOnce(pending.promise);
+  mockRequestPresign.mockReset().mockRejectedValue(new Error('offline'));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(mockPersistRecording).toHaveBeenCalledTimes(2), { timeout: 2500 });
+    if (change === 'account') { mockDraftAuth.user = { id: 'owner-b', nickname: 'B' }; mockDraftAuth.sessionEpoch += 1; }
+    else { mockRouteId = 'replacement-note'; mockRouteDraftId = undefined; }
+    rendered.rerender(<EditNoteScreen />);
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder')).toBeTruthy());
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Replacement private content');
+    await act(async () => { pending.resolve({ localRecordingId: 'recording-stale.m4a', uri: 'file:///documents/stale.m4a' }); await pending.promise; });
+    await waitFor(() => expect(mockRemoveRecording).toHaveBeenCalledWith('owner-a', 'recording-stale.m4a'));
+    expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('Replacement private content');
+    expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
+    expect(jest.mocked(storage.set).mock.calls.some(([key, value]) => key.includes('owner-a') && key.includes('review-draft') && String(value).includes('Replacement private content'))).toBe(false);
+  } finally { await act(async () => { pending.resolve({ localRecordingId: 'recording-stale.m4a', uri: 'file:///documents/stale.m4a' }); await pending.promise; rendered.unmount(); }); alert.mockRestore(); }
+});
+
+test('successful upload remains publishable when the durable recording copy fails', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockPersistRecording.mockRejectedValue(new Error('full'));
+  mockRequestPresign.mockReset().mockResolvedValue({ uploadUrl: 'https://storage.test/upload', key: 'notes/owner-a/uploaded.m4a', requiredHeaders: {} });
+  mockUploadFile.mockReset().mockResolvedValue(undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(mockUploadFile).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeEnabled());
+    await waitFor(() => expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('notes/owner-a/uploaded.m4a'))).toBe(true), { timeout: 2500 });
+    expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('file:///recording.m4a'))).toBe(false);
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(jest.mocked(createNote).mock.calls.at(-1)?.[0].sections?.audio?.items[0].objectKey).toBe('notes/owner-a/uploaded.m4a');
+  } finally { rendered.unmount(); }
+});
+
+test.each(['unmount', 'account', 'route', 'remove'] as const)('a restored recording Blob URL stays active until %s and is then revoked once', async (change) => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const record = { ...draftRecordFromServer(reviewDraft(), 'review-draft'), audioItems: [{
+    type: 'AUDIO', objectKey: '', clientId: 'recording:restored', localRecordingId: 'recording-restored.webm', uploadStatus: 'PENDING', sortOrder: 0,
+  }] };
+  jest.mocked(storage.getString).mockImplementation((key) => key.includes('owner-a') && key.includes('review-draft') ? JSON.stringify(record) : undefined);
+  mockRestoreRecording.mockResolvedValue('blob:restored-recording');
+  const previousWindow = global.window;
+  const previousURL = global.URL;
+  const revokeObjectURL = jest.fn();
+  Object.defineProperty(global, 'window', { configurable: true, value: {} });
+  Object.defineProperty(global, 'URL', { configurable: true, value: { revokeObjectURL } });
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    if (change === 'account') { mockDraftAuth.user = { id: 'owner-b', nickname: 'B' }; mockDraftAuth.sessionEpoch += 1; rendered.rerender(<EditNoteScreen />); }
+    else if (change === 'route') { mockRouteId = 'replacement-note'; mockRouteDraftId = undefined; rendered.rerender(<EditNoteScreen />); }
+    else if (change === 'remove') fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.audioItem' }));
+    else rendered.unmount();
+    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:restored-recording'));
+    rendered.unmount();
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+  } finally { rendered.unmount(); Object.defineProperty(global, 'window', { configurable: true, value: previousWindow }); Object.defineProperty(global, 'URL', { configurable: true, value: previousURL }); }
+});
+
+test('a restored Blob from stale hydration is revoked without entering the new account', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const record = { ...draftRecordFromServer(reviewDraft(), 'review-draft'), audioItems: [{
+    type: 'AUDIO', objectKey: '', clientId: 'recording:restored', localRecordingId: 'recording-restored.webm', uploadStatus: 'PENDING', sortOrder: 0,
+  }] };
+  jest.mocked(storage.getString).mockImplementation((key) => key.includes('owner-a') && key.includes('review-draft') ? JSON.stringify(record) : undefined);
+  const pending = createDeferred<string>();
+  mockRestoreRecording.mockReturnValueOnce(pending.promise);
+  const previousWindow = global.window;
+  const previousURL = global.URL;
+  const revokeObjectURL = jest.fn();
+  Object.defineProperty(global, 'window', { configurable: true, value: {} });
+  Object.defineProperty(global, 'URL', { configurable: true, value: { revokeObjectURL } });
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(mockRestoreRecording).toHaveBeenCalled());
+    mockDraftAuth.user = { id: 'owner-b', nickname: 'B' }; mockDraftAuth.sessionEpoch += 1;
+    rendered.rerender(<EditNoteScreen />);
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder')).toBeTruthy());
+    await act(async () => { pending.resolve('blob:stale-hydration'); await pending.promise; });
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:stale-hydration');
+    expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
+  } finally { await act(async () => { pending.resolve('blob:stale-hydration'); await pending.promise; rendered.unmount(); }); Object.defineProperty(global, 'window', { configurable: true, value: previousWindow }); Object.defineProperty(global, 'URL', { configurable: true, value: previousURL }); }
+});
+
+test.each(['discard', 'publish'] as const)('%s cleans a durable recording that has not reached local draft autosave', async (action) => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockRequestPresign.mockReset();
+  if (action === 'discard') mockRequestPresign.mockRejectedValue(new Error('offline'));
+  else mockRequestPresign.mockResolvedValue({ uploadUrl: 'https://storage.test/upload', key: 'notes/owner-a/uploaded.m4a', requiredHeaders: {} });
+  mockUploadFile.mockReset().mockResolvedValue(undefined);
+  jest.mocked(createNote).mockReset().mockResolvedValue({} as never);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    if (action === 'discard') {
+      await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
+      expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('recording-test.m4a'))).toBe(false);
+      const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+      act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+      act(() => alert.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'notes.drafts.discard')?.onPress?.());
+    } else {
+      await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeEnabled());
+      expect(jest.mocked(storage.set).mock.calls.some(([, value]) => String(value).includes('recording-test.m4a'))).toBe(false);
+      fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+      await waitFor(() => expect(createNote).toHaveBeenCalled());
+    }
+    await waitFor(() => expect(mockRemoveRecording).toHaveBeenCalledWith('owner-a', 'recording-test.m4a'));
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
+function installStatefulWebRecorder(prepareGate?: ReturnType<typeof createDeferred<void>>, stopGate?: ReturnType<typeof createDeferred<void>>) {
+  const platformDescriptor = Object.getOwnPropertyDescriptor(Platform, 'OS');
+  const previousWindow = global.window;
+  const previousURL = global.URL;
+  const revokeObjectURL = jest.fn();
+  const outputs: string[] = [];
+  const resources: { trackStopped: boolean; listenerRemoved: boolean }[] = [];
+  let state: 'empty' | 'inactive' | 'recording' = 'empty';
+  let preparedCount = 0;
+  let inactiveStopFailures = 0;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+  Object.defineProperty(global, 'window', { configurable: true, value: {} });
+  Object.defineProperty(global, 'URL', { configurable: true, value: { revokeObjectURL } });
+  mockRecorder.getStatus.mockImplementation(() => ({ canRecord: state !== 'empty', isRecording: state === 'recording', durationMillis: 2400, url: mockRecorder.uri }));
+  mockRecorder.prepareToRecordAsync.mockImplementation(async () => {
+    if (++preparedCount === 1 && prepareGate) await prepareGate.promise;
+    // A new stream may only be acquired after the previous stop event released
+    // its stream and devicechange listener, not merely after dataavailable.
+    expect(resources.every((resource) => resource.trackStopped && resource.listenerRemoved)).toBe(true);
+    resources.push({ trackStopped: false, listenerRemoved: false });
+    state = 'inactive';
+  });
+  mockRecorder.record.mockImplementation(() => {
+    if (state !== 'inactive') throw new Error('InvalidStateError');
+    state = 'recording';
+  });
+  mockRecorder.stop.mockImplementation(async () => {
+    if (state === 'inactive') { inactiveStopFailures += 1; throw new Error('InvalidStateError'); }
+    if (state !== 'recording') throw new Error('No MediaRecorder');
+    const resource = resources.at(-1)!;
+    state = 'empty';
+    if (stopGate) await stopGate.promise;
+    mockRecorder.uri = `blob:stopped-recording-${outputs.length}`;
+    outputs.push(mockRecorder.uri);
+    // Installed Expo creates its URL at dataavailable; tracks and devicechange
+    // listener are released by MediaRecorder's following stop event.
+    setTimeout(() => { resource.trackStopped = true; resource.listenerRemoved = true; }, 0);
+  });
+  mockPersistRecording.mockImplementation(async (_owner: string, uri: string) => ({ localRecordingId: 'recording-web.webm', uri }));
+  return { outputs, resources, revokeObjectURL, inactiveStopFailures: () => inactiveStopFailures,
+    restore: () => {
+      if (platformDescriptor) Object.defineProperty(Platform, 'OS', platformDescriptor);
+      Object.defineProperty(global, 'window', { configurable: true, value: previousWindow });
+      Object.defineProperty(global, 'URL', { configurable: true, value: previousURL });
+    },
+  };
+}
+
+function changeRecordingContext(change: 'account' | 'route' | 'unmount' | 'remove', rendered: ReturnType<typeof render>) {
+  if (change === 'account') { mockDraftAuth.user = { id: 'owner-b', nickname: 'B' }; mockDraftAuth.sessionEpoch += 1; rendered.rerender(<EditNoteScreen />); }
+  else if (change === 'route') { mockRouteId = 'replacement-note'; mockRouteDraftId = undefined; rendered.rerender(<EditNoteScreen />); }
+  else if (change === 'unmount') rendered.unmount();
+  else fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.composer.audio' }));
+}
+
+test.each(['account', 'route', 'unmount', 'remove'] as const)('cancelled web preparation after %s releases microphone and listener and discards its output before the next start', async (change) => {
+  signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft());
+  const prepare = createDeferred<void>();
+  const web = installStatefulWebRecorder(prepare);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledTimes(1));
+    changeRecordingContext(change, rendered);
+    if (change === 'account') {
+      await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder')).toBeTruthy());
+      fireEvent.press(screen.getByText('notes.edit.startRecording'));
+      expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledTimes(1);
+    }
+    await act(async () => { prepare.resolve(); await prepare.promise; });
+    await waitFor(() => expect(web.resources[0]?.trackStopped).toBe(true));
+    await waitFor(() => expect(web.revokeObjectURL.mock.calls.filter(([uri]) => uri === web.outputs[0])).toHaveLength(1));
+    expect(web.resources[0].listenerRemoved).toBe(true);
+    expect(web.inactiveStopFailures()).toBe(0);
+    expect(web.outputs).toHaveLength(1);
+    expect(web.revokeObjectURL.mock.calls.filter(([uri]) => uri === web.outputs[0])).toHaveLength(1);
+    expect(mockPersistRecording).not.toHaveBeenCalled();
+    if (change === 'account') {
+      await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+      expect(web.resources[1].trackStopped).toBe(false);
+      expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledTimes(2);
+    }
+  } finally {
+    await act(async () => { prepare.resolve(); await prepare.promise; rendered.unmount(); });
+    await waitFor(() => expect(web.resources.every((resource) => resource.trackStopped && resource.listenerRemoved)).toBe(true));
+    web.restore();
+  }
+});
+
+test.each(['account', 'route', 'unmount', 'remove'] as const)('a deferred explicit web stop discarded after %s revokes its output once', async (change) => {
+  signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft());
+  const stop = createDeferred<void>();
+  const web = installStatefulWebRecorder(undefined, stop);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(mockRecorder.stop).toHaveBeenCalledTimes(1));
+    changeRecordingContext(change, rendered);
+    expect(web.revokeObjectURL).not.toHaveBeenCalled();
+    await act(async () => { stop.resolve(); await stop.promise; });
+    await waitFor(() => expect(web.revokeObjectURL).toHaveBeenCalledWith('blob:stopped-recording-0'));
+    expect(web.resources[0].trackStopped).toBe(true);
+    expect(web.resources[0].listenerRemoved).toBe(true);
+    expect(web.outputs).toHaveLength(1);
+    expect(web.revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(mockPersistRecording).not.toHaveBeenCalled();
+    expect(mockRequestPresign).not.toHaveBeenCalled();
+  } finally { await act(async () => { stop.resolve(); await stop.promise; rendered.unmount(); }); web.restore(); }
+});
+
+test.each(['account', 'route', 'unmount', 'remove'] as const)('active web recording cleanup after %s waits for stop, releases capture and revokes its discarded output', async (change) => {
+  signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft());
+  const stop = createDeferred<void>();
+  const web = installStatefulWebRecorder(undefined, stop);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    changeRecordingContext(change, rendered);
+    await waitFor(() => expect(mockRecorder.stop).toHaveBeenCalledTimes(1));
+    expect(web.revokeObjectURL).not.toHaveBeenCalled();
+    await act(async () => { stop.resolve(); await stop.promise; });
+    await waitFor(() => expect(web.revokeObjectURL).toHaveBeenCalledWith('blob:stopped-recording-0'));
+    expect(web.resources[0].trackStopped).toBe(true);
+    expect(web.resources[0].listenerRemoved).toBe(true);
+    expect(web.revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(mockPersistRecording).not.toHaveBeenCalled();
+  } finally { await act(async () => { stop.resolve(); await stop.promise; rendered.unmount(); }); web.restore(); }
+});
+
+test('accepted web stop output remains available for durable save and upload retry until the item is removed', async () => {
+  signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft());
+  const web = installStatefulWebRecorder();
+  mockRequestPresign.mockReset().mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ uploadUrl: 'https://storage.test/upload', key: 'notes/owner-a/web.webm', requiredHeaders: {} });
+  mockUploadFile.mockReset().mockResolvedValue(undefined);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByText('notes.edit.startRecording'));
+    await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
+    fireEvent.press(screen.getByText('notes.edit.stopRecording'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
+    expect(web.resources[0].trackStopped).toBe(true);
+    expect(web.resources[0].listenerRemoved).toBe(true);
+    expect(web.revokeObjectURL).not.toHaveBeenCalled();
+    expect(mockPersistRecording).toHaveBeenCalledWith('owner-a', 'blob:stopped-recording-0');
+    fireEvent.press(screen.getByRole('button', { name: 'common.retry' }));
+    await waitFor(() => expect(mockUploadFile).toHaveBeenCalled());
+    expect(mockUploadFile.mock.calls.at(-1)?.[2]).toBe('blob:stopped-recording-0');
+    expect(web.revokeObjectURL).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.audioItem' }));
+    expect(web.revokeObjectURL).toHaveBeenCalledWith('blob:stopped-recording-0');
+    expect(web.revokeObjectURL).toHaveBeenCalledTimes(1);
+  } finally { rendered.unmount(); alert.mockRestore(); web.restore(); }
 });

@@ -2598,6 +2598,8 @@
       "startRecording": "Start recording",
       "stopRecording": "Stop recording",
       "audioRecording": "Recording, tap to stop",
+      "waitForMediaTitle": "Finish the current action first",
+      "waitForMediaMessage": "Stop recording or wait for the upload or save to finish before leaving.",
       "audioPickerUnavailableTitle": "Audio selection unavailable",
       "audioPickerUnavailableMessage": "Audio selection is not available in this app version. Update the app and try again.",
       "sections": {

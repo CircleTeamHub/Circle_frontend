@@ -2590,6 +2590,8 @@
       "startRecording": "开始录音",
       "stopRecording": "停止录音",
       "audioRecording": "录音中，点击停止",
+      "waitForMediaTitle": "请先完成当前操作",
+      "waitForMediaMessage": "请先结束录音或等待上传、保存完成，再返回。",
       "audioPickerUnavailableTitle": "暂时无法选择音频",
       "audioPickerUnavailableMessage": "当前版本暂不支持选择音频，请更新应用后重试。",
       "sections": {

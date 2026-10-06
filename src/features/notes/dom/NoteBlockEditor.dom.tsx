@@ -85,7 +85,12 @@ export default function NoteBlockEditor({
   const parsedInitial: PartialBlock[] | undefined = (() => {
     if (!initialContent) return undefined;
     try {
-      const blocks = JSON.parse(initialContent) as PartialBlock[];
+      const parsed = JSON.parse(initialContent) as unknown;
+      if (!Array.isArray(parsed)) {
+        console.warn('[NoteBlockEditor.dom] initialContent JSON is not a block array');
+        return undefined;
+      }
+      const blocks = parsed as PartialBlock[];
       return blocks.length > 0 ? blocks : undefined;
     } catch (error) {
       // 一旦保存的笔记 content JSON 变畸形（比如后端 schema 改动 / 旧版本残留），
@@ -222,8 +227,12 @@ export default function NoteBlockEditor({
       }}
     >
       <style>{`
+        .note-editor .bn-container {
+          background-color: ${bg};
+        }
         .note-editor .bn-editor {
           padding: 12px;
+          background-color: ${bg};
         }
         .note-editor .bn-inline-content {
           overflow-wrap: anywhere;
@@ -240,8 +249,19 @@ export default function NoteBlockEditor({
         <BlockNoteViewRaw
           editor={editor}
           editable
+          // The DOM editor supplies its own toolbar. BlockNoteViewRaw from
+          // @blocknote/react does not provide a theme package's
+          // ComponentsContext, so every built-in controller must stay off;
+          // otherwise the slash/emoji menus dereference
+          // Components.SuggestionMenu during the first render.
           formattingToolbar={false}
+          linkToolbar={false}
+          slashMenu={false}
+          emojiPicker={false}
           sideMenu={false}
+          filePanel={false}
+          tableHandles={false}
+          comments={false}
           theme={theme}
         />
       </div>

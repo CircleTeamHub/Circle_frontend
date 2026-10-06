@@ -211,6 +211,8 @@ export interface EditorNoteMediaDraft extends CreateNoteMediaInput {
   clientId: string;
   uploadStatus: 'PENDING' | 'UPLOADED';
   previewUri?: string;
+  /** Relative ID in this account's durable recording store; never sent to the API. */
+  localRecordingId?: string;
 }
 
 export interface CreateNoteInput {

@@ -1018,6 +1018,8 @@
       "startRecording": "Empezar a grabar",
       "stopRecording": "Detener grabación",
       "audioRecording": "Grabando, toca para detener",
+      "waitForMediaTitle": "Termina la acción actual primero",
+      "waitForMediaMessage": "Detén la grabación o espera a que termine la carga o el guardado antes de volver.",
       "audioPickerUnavailableTitle": "Selección de audio no disponible",
       "audioPickerUnavailableMessage": "La selección de audio no está disponible en esta versión. Actualiza la aplicación e inténtalo de nuevo.",
       "sections": {

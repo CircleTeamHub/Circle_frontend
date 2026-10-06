@@ -26,6 +26,7 @@ export type EditorNoteMediaDraft = {
   /** 私有目录没有可直读的地址：刚上传的草稿只有 objectKey，预览走 previewUri。 */
   url?: string;
   previewUri?: string;
+  localRecordingId?: string;
   width?: number;
   height?: number;
   size?: number;
@@ -155,7 +156,7 @@ export function stripEditorMediaDrafts(
 ) {
   return items
     .filter((item) => item.uploadStatus === 'UPLOADED')
-    .map(({ clientId: _clientId, previewUri: _previewUri, uploadStatus: _uploadStatus, ...item }, sortOrder) => ({
+    .map(({ clientId: _clientId, previewUri: _previewUri, localRecordingId: _localRecordingId, uploadStatus: _uploadStatus, ...item }, sortOrder) => ({
       ...item,
       sortOrder,
     }));

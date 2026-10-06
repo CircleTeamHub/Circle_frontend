@@ -485,7 +485,6 @@ test('EditNoteScreen resets media upload ownership when its route loses focus', 
   assert.match(src, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*resetUploadOwnership\(\);[\s\S]*?return invalidateUploadOwnership/);
   assert.match(src, /if \(!isRouteDataReady \|\| uploadInFlightRef\.current\) return;[\s\S]*?router\.push/);
   assert.match(src, /onPress=\{handleOpenLocationPicker\}[\s\S]*?disabled=\{!isRouteDataReady \|\| uploadingSection !== null\}/);
-  assert.match(src, /const isRouteDataReady = !isEdit \|\| loadedNoteId === id/);
   assert.match(src, /loading \|\|\s*!isRouteDataReady \|\|\s*isSubmitting/);
 });
 

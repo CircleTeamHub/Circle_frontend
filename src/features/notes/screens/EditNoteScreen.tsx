@@ -79,6 +79,7 @@ import {
 } from '@/features/notes/utils/note-picker-assets';
 import {
   buildNoteSections,
+  getNoteInlineMediaItems,
   getNoteViewerImages,
   normalizeNoteMediaSections,
   type NoteSectionKind,
@@ -130,10 +131,15 @@ import {
   createNoteDraftId,
   loadLocalNoteDraft,
   localDraftSummaryToServerInput,
+  sanitizeNoteSectionsForServer,
   removeLocalNoteDraft,
+  removeUnreferencedLocalNoteRecordings,
   saveLocalNoteDraft,
+  restoreLocalNoteDraftRecordings,
   type NoteEditorDraftRecord,
 } from '@/features/notes/utils/note-editor-drafts';
+import { persistNoteRecording } from '@/features/notes/utils/note-recording-storage';
+import { stopNoteRecorder } from '@/features/notes/utils/note-recorder-lifecycle';
 import { getApiErrorMessage } from '@/services/api/errors';
 import {
   requestUploadPresign,
@@ -289,7 +295,7 @@ export function draftFingerprint(record: NoteEditorDraftRecord): string {
     width: item.width, height: item.height, durationMs: item.durationMs,
     posterUrl: item.posterUrl?.split('?')[0], sortOrder: item.sortOrder,
     owner: record.mediaOwnerByClientId[item.clientId],
-    pendingSource: item.objectKey ? undefined : item.previewUri ?? item.url,
+    pendingSource: item.objectKey ? undefined : item.localRecordingId ?? item.previewUri ?? item.url,
   }));
   // Derived sections, signed URLs and transient client IDs do not represent edits.
   return JSON.stringify({
@@ -305,8 +311,9 @@ export function draftRecordFromServer(
   draft: NoteDraftDetail,
   draftId: string,
 ): NoteEditorDraftRecord {
-  const sections: Partial<NoteSections> = draft.sections ?? {};
-  const rawBlocks = sections.text?.contentJson ?? draft.contentJson ?? [];
+  const rawBlocks = draft.sections?.text?.contentJson ?? draft.contentJson ?? [];
+  const topLevelMedia = getNoteInlineMediaItems(rawBlocks.map((block) => ({ ...block, children: [] })));
+  const sections = buildNoteSections({ ...draft, media: topLevelMedia });
   const normalizedComposerBlocks = (
     readNoteComposerBlocks(rawBlocks) ??
     normalizeNoteComposerBlocks(null, sections as Partial<NoteSections>, true)
@@ -370,7 +377,7 @@ export function draftRecordFromServer(
     title: draft.title ?? '',
     content: textContent,
     contentJson: (draft.contentJson ?? []) as Record<string, unknown>[],
-    sections,
+    sections: { ...sections, media: { items: normalizedMedia }, showcase: { items: normalizedShowcase }, audio: { items: normalizedAudio } },
     groupIds: draft.groupIds ?? [],
     mediaKeys: draft.mediaKeys ?? [],
     composerBlocks: normalizedComposerBlocks,
@@ -420,6 +427,13 @@ function emptyDraftRecord(id: string, noteId: string | null): NoteEditorDraftRec
   };
 }
 
+let noteRecorderWork: Promise<unknown> = Promise.resolve();
+function runNoteRecorderWork<T>(work: () => Promise<T>): Promise<T> {
+  const pending = noteRecorderWork.catch(() => undefined).then(work);
+  noteRecorderWork = pending.catch(() => undefined);
+  return pending;
+}
+
 export default function EditNoteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -433,10 +447,14 @@ export default function EditNoteScreen() {
   }>();
   const isEdit = Boolean(id);
   const navigation = useNavigation();
-  const [generatedDraftId] = useState(createNoteDraftId);
-  const editorDraftId =
-    (typeof routeDraftId === 'string' && routeDraftId.trim()) ||
-    (id ? `note:${id}` : generatedDraftId);
+  const editorContext = `${currentUser?.id ?? 'anonymous'}:${sessionEpoch}:${id ?? 'new'}`;
+  const generatedDraftRef = useRef<{ context: string; id: string } | null>(null);
+  if (generatedDraftRef.current?.context !== editorContext) {
+    // A fresh edit cannot reuse an ID that a previous save/discard consumed.
+    // DraftsScreen supplies an explicit routeDraftId when resuming a draft.
+    generatedDraftRef.current = { context: editorContext, id: createNoteDraftId() };
+  }
+  const editorDraftId = (typeof routeDraftId === 'string' && routeDraftId.trim()) || generatedDraftRef.current.id;
   const draftRouteKey = `${currentUser?.id ?? 'anonymous'}:${sessionEpoch}:${id ?? 'new'}:${editorDraftId}`;
   const draftRouteKeyRef = useRef(draftRouteKey);
   draftRouteKeyRef.current = draftRouteKey;
@@ -492,6 +510,10 @@ export default function EditNoteScreen() {
   const tRef = useRef(t);
   tRef.current = t;
   const pickerPreviewDisposerRef = useRef(createPickerPreviewDisposer());
+  const discardRecordingOutput = useCallback((uri: string | undefined) => {
+    pickerPreviewDisposerRef.current.retain(uri);
+    pickerPreviewDisposerRef.current.dispose(uri);
+  }, []);
   const saveGenerationRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const [editorMounted, setEditorMounted] = useState(false);
@@ -510,9 +532,24 @@ export default function EditNoteScreen() {
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [cardPickerSearch, setCardPickerSearch] = useState('');
   const cardPickerRequestRef = useRef(0);
+  const cardPickerSessionRef = useRef<{ userId: string | null; epoch: number } | null>(null);
+  useEffect(() => {
+    cardPickerRequestRef.current += 1;
+    cardPickerSessionRef.current = null;
+    setFriends([]);
+    setCircles([]);
+    setSelectedCardIds([]);
+    setCardPickerKind(null);
+    setCardPickerLoading(false);
+    return () => {
+      cardPickerRequestRef.current += 1;
+      cardPickerSessionRef.current = null;
+    };
+  }, [currentUser?.id, sessionEpoch]);
   const noteRecorder = useAudioRecorder(VOICE_RECORDING_OPTIONS);
   const [recordingAudioStartedAt, setRecordingAudioStartedAt] = useState<number | null>(null);
   const recordingAudioRef = useRef(false);
+  const preparingAudioRef = useRef(false);
   const recordingAudioBlockIdRef = useRef<string | null>(null);
   // A new note starts as a clean canvas. Blocks are mounted only after the
   // author chooses them from the compact toolbar below.
@@ -562,7 +599,8 @@ export default function EditNoteScreen() {
   const consumePickedLocation = useNoteLocationPickerStore(
     (state) => state.consumePickedLocation,
   );
-  const isRouteDataReady = !isEdit || loadedNoteId === id;
+  const isDraftLoading = Boolean(currentUser?.id && draftHydratedKey !== draftRouteKey);
+  const isRouteDataReady = (!isEdit || loadedNoteId === id) && !isDraftLoading;
 
   useEffect(() => {
     if (!isRouteDataReady || !currentUser?.id) return;
@@ -821,7 +859,7 @@ export default function EditNoteScreen() {
       textBlocksById: { ...textBlocksByIdRef.current },
       mediaItems: uploadedMediaItems.filter((item) => mediaItems.includes(item)),
       showcaseItems: uploadedMediaItems.filter((item) => showcaseItems.includes(item)),
-      audioItems: uploadedMediaItems.filter((item) => audioItems.includes(item)),
+      audioItems: [...audioItems],
       mediaOwnerByClientId: Object.fromEntries(
         Object.entries(mediaOwnerByClientIdRef.current).filter(([clientId]) => uploadedClientIds.has(clientId)),
       ),
@@ -875,6 +913,18 @@ export default function EditNoteScreen() {
       }
     };
   }, [draftRouteKey]);
+
+  useEffect(() => () => {
+    if (recordingAudioRef.current || preparingAudioRef.current) {
+      recordingAudioRef.current = false;
+      preparingAudioRef.current = false;
+      recordingAudioBlockIdRef.current = null;
+      void runNoteRecorderWork(async () => {
+        try { discardRecordingOutput(await stopNoteRecorder(noteRecorder, true)); } catch { /* Native hook may already be released. */ }
+        await setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
+      });
+    }
+  }, [discardRecordingOutput, draftRouteKey, noteRecorder]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1147,14 +1197,34 @@ export default function EditNoteScreen() {
     const hydrate = async () => {
       let record = loadLocalNoteDraft(currentUser.id, editorDraftId);
       try {
-        const remote = await fetchNoteDraft(editorDraftId);
-        const remoteRecord = draftRecordFromServer(remote, editorDraftId);
-        if (!record || remoteRecord.updatedAt > record.updatedAt) record = remoteRecord;
+        // Generated IDs start a new edit; only an explicit resume can exist remotely.
+        if (typeof routeDraftId === 'string' && routeDraftId.trim()) {
+          const remote = await fetchNoteDraft(editorDraftId);
+          const remoteRecord = draftRecordFromServer(remote, editorDraftId);
+          if (!record || (remoteRecord.updatedAt > record.updatedAt && !record.audioItems.some((item) => item.uploadStatus !== 'UPLOADED'))) {
+            record = remoteRecord;
+          } else {
+            // Uploaded recordings survive without a local copy. Refresh their
+            // private preview URL without replacing newer local content.
+            record = { ...record, audioItems: record.audioItems.map((item) => {
+              const remoteAudio = remoteRecord.audioItems.find((audio) => audio.objectKey === item.objectKey);
+              return item.uploadStatus === 'UPLOADED' && item.clientId.startsWith('recording:') && remoteAudio
+                ? { ...item, url: remoteAudio.url } : item;
+            }) };
+          }
+        }
       } catch {
         // Keep the local snapshot available while offline.
       }
+      if (record) record = await restoreLocalNoteDraftRecordings(currentUser.id, record);
       const auth = useAuthStore.getState();
-      if (cancelled || auth.user?.id !== currentUser.id || auth.sessionEpoch !== sessionEpoch) return;
+      if (cancelled || auth.user?.id !== currentUser.id || auth.sessionEpoch !== sessionEpoch) {
+        record?.audioItems.forEach((item) => {
+          pickerPreviewDisposerRef.current.retain(item.previewUri);
+          pickerPreviewDisposerRef.current.dispose(item.previewUri);
+        });
+        return;
+      }
       if (record) {
         if (record.composerBlocks.length) {
           record = { ...record, composerBlocks: normalizeNoteComposerBlocks(record.composerBlocks, null, false) };
@@ -1170,6 +1240,7 @@ export default function EditNoteScreen() {
         setMediaItems(record.mediaItems);
         setShowcaseItems(record.showcaseItems);
         setAudioItems(record.audioItems);
+        record.audioItems.forEach((item) => pickerPreviewDisposerRef.current.retain(item.previewUri));
         mediaOwnerByClientIdRef.current = record.mediaOwnerByClientId;
         setMediaOwnerByClientId(record.mediaOwnerByClientId);
         setContactItems(record.contactItems as NoteCardDraft[]);
@@ -1195,60 +1266,96 @@ export default function EditNoteScreen() {
     draftRouteKey,
     editorDraftId,
     editorMounted,
+    routeDraftId,
     settledRouteKey,
     textStatsStore,
   ]);
 
   // Composer/text refs change without changing the builder's identity.
   const currentDraftFingerprint = draftFingerprint(buildCurrentDraftRecord());
+  const hasUndurableRecording = audioItems.some((item) => item.uploadStatus !== 'UPLOADED' && item.clientId.startsWith('recording:') && (!item.localRecordingId || !item.previewUri));
   const isDraftDirty = Boolean(
     draftHydratedKey === draftRouteKey &&
-      baselineFingerprintRef.current != null &&
+      (hasUndurableRecording || (baselineFingerprintRef.current != null &&
       baselineFingerprintRef.current !== currentDraftFingerprint &&
-      draftPersistedFingerprintRef.current !== currentDraftFingerprint,
+      draftPersistedFingerprintRef.current !== currentDraftFingerprint)),
   );
+
+  const buildCurrentDraftRecordRef = useRef(buildCurrentDraftRecord);
+  buildCurrentDraftRecordRef.current = buildCurrentDraftRecord;
+  const cleanupRecordingCopies = useCallback(() => {
+    removeUnreferencedLocalNoteRecordings(currentUser?.id, audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []), editorDraftId);
+  }, [audioItems, currentUser?.id, editorDraftId]);
 
   const persistDraft = useCallback(async (): Promise<boolean> => {
     const auth = useAuthStore.getState();
     if (!currentUser?.id || auth.user?.id !== currentUser.id || auth.sessionEpoch !== sessionEpoch ||
       !draftHydratedRef.current || navigationRequestedRef.current || draftRouteKeyRef.current !== draftRouteKey) return false;
-    const record = buildCurrentDraftRecord();
-    const recordFingerprint = draftFingerprint(record);
-    if (baselineFingerprintRef.current === recordFingerprint && draftPersistedFingerprintRef.current === recordFingerprint) return true;
+    let record = buildCurrentDraftRecord();
+    const initialFingerprint = draftFingerprint(record);
+    if (!hasUndurableRecording && baselineFingerprintRef.current === initialFingerprint && draftPersistedFingerprintRef.current === initialFingerprint) return true;
     const writeVersion = ++draftWriteVersionRef.current;
     const isCurrentSession = () => {
       const state = useAuthStore.getState();
       return state.user?.id === currentUser.id && state.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey;
     };
-    const markPersisted = () => {
+    const markPersisted = (recordFingerprint: string) => {
       if (isCurrentSession() && writeVersion >= successfulDraftWriteVersionRef.current) {
         successfulDraftWriteVersionRef.current = writeVersion;
         draftPersistedFingerprintRef.current = recordFingerprint;
         setDraftPersistenceVersion((version) => version + 1);
       }
     };
-    let localSaved = false;
-    try {
-      saveLocalNoteDraft(currentUser.id, record);
-      localSaved = true;
-      markPersisted();
-    } catch {
-      // The server can still preserve the snapshot if encrypted storage is full.
-    }
+    const prepareAndSaveLocal = async () => {
+      if (!isCurrentSession() || navigationRequestedRef.current) return false;
+      const restored = new Map<string, EditorNoteMediaDraft>();
+      for (const item of record.audioItems) {
+        if (item.uploadStatus === 'UPLOADED' || !item.clientId.startsWith('recording:') || item.localRecordingId || !item.previewUri) continue;
+        try {
+          const stored = await persistNoteRecording(currentUser.id, item.previewUri);
+          restored.set(item.clientId, { ...item, localRecordingId: stored.localRecordingId, previewUri: stored.uri });
+        } catch { /* A failed upload can only be saved after its recording is durable. */ }
+      }
+      const latest = buildCurrentDraftRecordRef.current();
+      const retained = new Set(latest.audioItems.map((item) => item.clientId));
+      for (const [clientId, item] of restored) {
+        if (!isCurrentSession() || navigationRequestedRef.current || !retained.has(clientId)) {
+          removeUnreferencedLocalNoteRecordings(currentUser.id, [item.localRecordingId!]);
+          restored.delete(clientId);
+        }
+      }
+      if (!isCurrentSession() || navigationRequestedRef.current) return false;
+      record = { ...latest, audioItems: latest.audioItems.map((item) => {
+        const stored = restored.get(item.clientId);
+        return stored ? { ...item, localRecordingId: stored.localRecordingId, previewUri: stored.previewUri } : item;
+      }) };
+      if (restored.size) setAudioItems(record.audioItems);
+      const recordFingerprint = draftFingerprint(record);
+      if (writeVersion < successfulDraftWriteVersionRef.current) return draftPersistedFingerprintRef.current === recordFingerprint;
+      try {
+        saveLocalNoteDraft(currentUser.id, record);
+        markPersisted(recordFingerprint);
+        return true;
+      } catch { return false; }
+    };
+    // Local snapshots must not wait for a slow server request. Only the remote
+    // writes are serialized; deferred copies are fenced by account and route.
+    const localSave = prepareAndSaveLocal();
     const pending = draftSavePromiseRef.current.catch(() => false).then(async () => {
-      // Queued content belongs to the captured account, even if auth has since changed.
+      const localSaved = await localSave;
       if (!isCurrentSession() || navigationRequestedRef.current) return localSaved;
+      const hasLocalRecording = record.audioItems.some((item) => item.uploadStatus !== 'UPLOADED');
       try {
         await saveNoteDraft(editorDraftId, localDraftSummaryToServerInput(record));
-        markPersisted();
-        return true;
+        if (!hasLocalRecording) markPersisted(draftFingerprint(record));
+        return localSaved || !hasLocalRecording;
       } catch {
         return localSaved;
       }
     });
     draftSavePromiseRef.current = pending;
     return pending;
-  }, [buildCurrentDraftRecord, currentUser?.id, sessionEpoch, editorDraftId, draftRouteKey]);
+  }, [buildCurrentDraftRecord, currentUser?.id, sessionEpoch, editorDraftId, draftRouteKey, hasUndurableRecording]);
   const persistDraftRef = useRef(persistDraft);
   persistDraftRef.current = persistDraft;
 
@@ -1304,12 +1411,19 @@ export default function EditNoteScreen() {
         const auth = useAuthStore.getState();
         return auth.user?.id === currentUser?.id && auth.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey;
       };
+      if (recordingAudioRef.current || uploadInFlightRef.current || saveInFlightRef.current) {
+        Alert.alert(
+          t('notes.edit.waitForMediaTitle', { defaultValue: '请先完成当前操作' }),
+          t('notes.edit.waitForMediaMessage', { defaultValue: '请先结束录音或等待上传、保存完成，再返回。' }),
+        );
+        return;
+      }
       const currentFingerprint = draftFingerprint(buildCurrentDraftRecord());
-      const dirtyNow =
+      const dirtyNow = hasUndurableRecording || (
         draftHydratedRef.current &&
         baselineFingerprintRef.current != null &&
         baselineFingerprintRef.current !== currentFingerprint &&
-        draftPersistedFingerprintRef.current !== currentFingerprint;
+        draftPersistedFingerprintRef.current !== currentFingerprint);
       if (!dirtyNow) {
         completeNavigation(action);
         return;
@@ -1327,6 +1441,7 @@ export default function EditNoteScreen() {
             onPress: () => {
               if (!isCurrentEditor()) return;
               removeLocalNoteDraft(currentUser?.id, editorDraftId);
+              cleanupRecordingCopies();
               completeNavigation(action);
               // Delete after in-flight saves, so their late response cannot revive a discarded draft.
               void draftSavePromiseRef.current.catch(() => false).then(async () => {
@@ -1350,12 +1465,14 @@ export default function EditNoteScreen() {
     },
     [
       completeNavigation,
+      cleanupRecordingCopies,
       currentUser?.id,
       sessionEpoch,
       draftRouteKey,
       buildCurrentDraftRecord,
       editorDraftId,
       persistDraft,
+      hasUndurableRecording,
       t,
     ],
   );
@@ -1811,122 +1928,192 @@ export default function EditNoteScreen() {
     }
   }, [isRouteDataReady, t]);
 
+  const uploadRecordedAudio = useCallback(async (item: EditorNoteMediaDraft, noteKey: string) => {
+    const localUri = item.previewUri;
+    if (!localUri) return;
+    try {
+      const filename = Platform.OS === 'web' ? 'note-audio.webm' : localUri.split('/').pop() || 'note-audio.m4a';
+      const contentType = item.mimeType ?? (Platform.OS === 'web' ? 'audio/webm' : 'audio/mp4');
+      const presign = await requestUploadPresign({
+        filename: sanitizeUploadFilename(filename), contentType, folder: 'notes', fileUri: localUri,
+      });
+      await uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, localUri, presign.requiredHeaders);
+      if (editedNoteKeyRef.current === noteKey) {
+        setAudioItems((current) => current.map((audio) => audio.clientId === item.clientId
+          ? { ...audio, objectKey: presign.key, mimeType: contentType, uploadStatus: 'UPLOADED' }
+          : audio));
+      }
+    } catch (error) {
+      // The local PENDING item stays playable in Preview and can be retried.
+      // Do not allow another recording to replace the recorder's cached file.
+      reportHandledFailure('noteEditor', 'audioUpload', error);
+      if (editedNoteKeyRef.current === noteKey) {
+        Alert.alert(t('notes.edit.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
+          t('notes.edit.mediaUploadFailedMessage', { defaultValue: '录音上传失败，请稍后重试' }));
+      }
+    }
+  }, [t]);
+
+  const retryRecordedAudio = useCallback(async (item: EditorNoteMediaDraft) => {
+    if (!isRouteDataReady || uploadInFlightRef.current || recordingAudioRef.current) return;
+    uploadInFlightRef.current = true;
+    const token = uploadOperationGuardRef.current.begin();
+    setUploadingSection('audio');
+    try {
+      await uploadRecordedAudio(item, editedNoteKeyRef.current);
+    } finally {
+      if (uploadOperationGuardRef.current.complete(token)) {
+        uploadInFlightRef.current = false;
+        setUploadingSection(null);
+      }
+    }
+  }, [isRouteDataReady, uploadRecordedAudio]);
+
   const stopNoteRecording = useCallback(async () => {
-    if (!recordingAudioRef.current) return;
-    const batchNoteKey = editedNoteKeyRef.current;
-    const recordingBlockId = recordingAudioBlockIdRef.current;
+    if (!recordingAudioRef.current || uploadInFlightRef.current) return;
+    const noteKey = editedNoteKeyRef.current;
+    const blockId = recordingAudioBlockIdRef.current;
+    uploadInFlightRef.current = true;
+    const token = uploadOperationGuardRef.current.begin();
+    const ownerId = currentUser?.id;
+    const isCurrentStop = () => uploadOperationGuardRef.current.isActive(token) && editedNoteKeyRef.current === noteKey &&
+      (!blockId || composerBlocksRef.current.some((block) => block.id === blockId));
     recordingAudioRef.current = false;
     recordingAudioBlockIdRef.current = null;
     setRecordingAudioStartedAt(null);
     setUploadingSection('audio');
     try {
-      const status = noteRecorder.getStatus();
-      const elapsedMs = status.durationMillis || (
-        recordingAudioStartedAt ? Date.now() - recordingAudioStartedAt : 0
-      );
-      await noteRecorder.stop();
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      // expo-audio only guarantees the recording URI after stop() resolves on
-      // native platforms. Reading it before stop made every recording fail at
-      // the upload step with a misleading "file generation" error.
-      const localUri = noteRecorder.uri ?? noteRecorder.getStatus().url ?? status.url;
-      if (!localUri) throw new Error('录音文件生成失败');
-      const durationMs = Math.max(1, Math.round(elapsedMs));
-      const filename = Platform.OS === 'web' ? 'note-audio.webm' : localUri.split('/').pop() || 'note-audio.m4a';
-      const contentType = Platform.OS === 'web' ? 'audio/webm' : resolveUploadContentType({ fileName: filename }) ?? 'audio/mp4';
-      const presign = await requestUploadPresign({
-        filename: sanitizeUploadFilename(filename),
-        contentType,
-        folder: 'notes',
-        fileUri: localUri,
+      const { elapsedMs, localUri } = await runNoteRecorderWork(async () => {
+        const status = noteRecorder.getStatus();
+        const elapsedMs = status.durationMillis || (recordingAudioStartedAt ? Date.now() - recordingAudioStartedAt : 0);
+        try {
+          return { elapsedMs, localUri: await stopNoteRecorder(noteRecorder) };
+        } finally {
+          await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
+        }
       });
-      await uploadLocalFileToPresignedUrl(
-        presign.uploadUrl,
-        contentType,
-        localUri,
-        presign.requiredHeaders,
-      );
-      if (
-        editedNoteKeyRef.current === batchNoteKey &&
-        (!recordingBlockId || composerBlocksRef.current.some((block) => block.id === recordingBlockId))
-      ) {
-        setAudioItems((current) => [
-          ...current,
-          {
-            type: 'AUDIO' as CreateNoteMediaInput['type'],
-            objectKey: presign.key,
-            mimeType: contentType,
-            durationMs,
-            previewUri: localUri,
-            clientId: `audio:${presign.key}`,
-            uploadStatus: 'UPLOADED',
-            sortOrder: current.length,
-          },
-        ]);
+      if (!isCurrentStop()) { discardRecordingOutput(localUri); return; }
+      if (!localUri) throw new Error('录音文件生成失败');
+      const filename = Platform.OS === 'web' ? 'note-audio.webm' : localUri.split('/').pop() || 'note-audio.m4a';
+      let item: EditorNoteMediaDraft = {
+        type: 'AUDIO', objectKey: '', previewUri: localUri,
+        clientId: `recording:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+        mimeType: Platform.OS === 'web' ? 'audio/webm' : resolveUploadContentType({ fileName: filename }) ?? 'audio/mp4',
+        durationMs: Math.max(1, Math.round(elapsedMs)), uploadStatus: 'PENDING', sortOrder: 0,
+      };
+      pickerPreviewDisposerRef.current.retain(localUri);
+      if (ownerId) {
+        try {
+          const stored = await persistNoteRecording(ownerId, localUri);
+          item = { ...item, localRecordingId: stored.localRecordingId, previewUri: stored.uri };
+        } catch {
+          // Keep the cache recording playable. Saving cannot succeed until a
+          // later durable copy or the upload succeeds.
+          reportHandledFailure('noteEditor', 'audioLocalStorage', new Error('Recording storage failed'));
+        }
       }
+      if (!isCurrentStop()) {
+        if (ownerId && item.localRecordingId) removeUnreferencedLocalNoteRecordings(ownerId, [item.localRecordingId]);
+        pickerPreviewDisposerRef.current.dispose(localUri);
+        return;
+      }
+      setAudioItems((current) => [...current, { ...item, sortOrder: current.length }]);
+      await uploadRecordedAudio(item, noteKey);
     } catch (error) {
-      reportHandledFailure('noteEditor', 'audioUpload', error);
-      Alert.alert(
-        t('notes.edit.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
-        t('notes.edit.mediaUploadFailedMessage', { defaultValue: '录音上传失败，请稍后重试' }),
-      );
+      reportHandledFailure('noteEditor', 'audioRecordStop', error);
+      if (editedNoteKeyRef.current === noteKey) {
+        Alert.alert(t('notes.edit.mediaUploadFailedTitle', { defaultValue: '上传失败' }),
+          t('notes.edit.mediaUploadFailedMessage', { defaultValue: '录音保存失败，请稍后重试' }));
+      }
     } finally {
-      setUploadingSection(null);
+      if (uploadOperationGuardRef.current.complete(token)) {
+        uploadInFlightRef.current = false;
+        setUploadingSection(null);
+      }
     }
-  }, [noteRecorder, recordingAudioStartedAt, t]);
+  }, [currentUser?.id, discardRecordingOutput, noteRecorder, recordingAudioStartedAt, t, uploadRecordedAudio]);
 
   const toggleNoteRecording = useCallback(async (blockId?: string) => {
-    if (!isRouteDataReady || uploadingSection !== null) return;
+    if (!isRouteDataReady || uploadingSection !== null || uploadInFlightRef.current) return;
     if (recordingAudioRef.current) {
       await stopNoteRecording();
       return;
     }
+    if (audioItems.some((item) => item.uploadStatus !== 'UPLOADED')) return;
+    uploadInFlightRef.current = true;
+    const operationToken = uploadOperationGuardRef.current.begin();
+    const noteKey = editedNoteKeyRef.current;
+    const isCurrentRecording = () => {
+      const auth = useAuthStore.getState();
+      return uploadOperationGuardRef.current.isActive(operationToken) && editedNoteKeyRef.current === noteKey &&
+        (!blockId || composerBlocksRef.current.some((block) => block.id === blockId)) &&
+        (auth.user?.id ?? null) === (currentUser?.id ?? null) && auth.sessionEpoch === sessionEpoch;
+    };
+    setUploadingSection('audio');
+    preparingAudioRef.current = true;
     try {
       const permission = await requestRecordingPermissionsAsync();
+      if (!isCurrentRecording()) return;
       if (!permission.granted) {
-        Alert.alert(
-          t('permissions.insufficientTitle'),
-          t('permissions.microphone'),
-        );
+        Alert.alert(t('permissions.insufficientTitle'), t('permissions.microphone'));
         return;
       }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      const status = noteRecorder.getStatus();
-      if (!status.canRecord) await noteRecorder.prepareToRecordAsync();
-      noteRecorder.record();
-      recordingAudioRef.current = true;
-      recordingAudioBlockIdRef.current = blockId ?? composerBlocksRef.current.find((block) => block.kind === 'audio')?.id ?? null;
-      setRecordingAudioStartedAt(Date.now());
+      await runNoteRecorderWork(async () => {
+        if (!isCurrentRecording()) return;
+        let prepared = false;
+        let started = false;
+        try {
+          await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+          if (!isCurrentRecording()) return;
+          // Every attempt gets a fresh output file; previous local previews stay intact.
+          await noteRecorder.prepareToRecordAsync(VOICE_RECORDING_OPTIONS);
+          prepared = true;
+          if (!isCurrentRecording()) return;
+          noteRecorder.record();
+          started = true;
+          recordingAudioRef.current = true;
+          recordingAudioBlockIdRef.current = blockId ?? composerBlocksRef.current.find((block) => block.kind === 'audio')?.id ?? null;
+          setRecordingAudioStartedAt(Date.now());
+        } finally {
+          // Run before any later queued start, so stale A cannot stop B.
+          if (!started) {
+            if (prepared && Platform.OS === 'web') {
+              try { discardRecordingOutput(await stopNoteRecorder(noteRecorder, true)); } catch { /* Recorder may already be released. */ }
+            }
+            await setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
+          }
+        }
+      });
     } catch (error) {
       reportHandledFailure('noteEditor', 'audioRecordStart', error);
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
+      if (!isCurrentRecording()) return;
       Alert.alert(
         t('notes.edit.mediaUploadFailedTitle', { defaultValue: '录音失败' }),
         t('notes.edit.mediaUploadFailedMessage', { defaultValue: '无法开始录音，请稍后重试' }),
       );
-    }
-  }, [isRouteDataReady, noteRecorder, stopNoteRecording, t, uploadingSection]);
-
-  useEffect(() => () => {
-    if (recordingAudioRef.current) {
-      try {
-        void noteRecorder.stop().catch(() => undefined);
-      } catch {
-        // Native recorder may already be released during unmount.
+    } finally {
+      if (uploadOperationGuardRef.current.complete(operationToken)) {
+        preparingAudioRef.current = false;
+        uploadInFlightRef.current = false;
+        setUploadingSection(null);
       }
-      void setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
     }
-  }, [noteRecorder]);
+  }, [currentUser?.id, sessionEpoch, audioItems, discardRecordingOutput, isRouteDataReady, noteRecorder, stopNoteRecording, t, uploadingSection]);
+
 
   const openCardPicker = useCallback(async (kind: CardPickerKind) => {
     if (!isRouteDataReady || recordingAudioRef.current) return;
     const requestId = ++cardPickerRequestRef.current;
-    const isCurrentRequest = () => cardPickerRequestRef.current === requestId;
+    const accountId = currentUser?.id ?? null;
+    cardPickerSessionRef.current = { userId: accountId, epoch: sessionEpoch };
+    const isCurrentRequest = () => {
+      const auth = useAuthStore.getState();
+      return cardPickerRequestRef.current === requestId && auth.user?.id === accountId && auth.sessionEpoch === sessionEpoch;
+    };
     setCardPickerKind(kind);
     setCardPickerSearch('');
     const current = kind === 'contact' ? contactItems : groupCardItems;
     setSelectedCardIds(current.map((item) => item.id));
-    const accountId = currentUser?.id ?? null;
     const cachedFriends = kind === 'contact'
       ? getCachedNotePickerFriends(accountId)
       : null;
@@ -1936,8 +2123,8 @@ export default function EditNoteScreen() {
     const hasCached = kind === 'contact'
       ? cachedFriends !== null
       : cachedCircles !== null;
-    if (cachedFriends) setFriends(cachedFriends);
-    if (cachedCircles) setCircles(cachedCircles);
+    setFriends(cachedFriends ?? []);
+    setCircles(cachedCircles ?? []);
 
     const isFresh = kind === 'contact'
       ? isNotePickerFriendsFresh(accountId)
@@ -1971,6 +2158,7 @@ export default function EditNoteScreen() {
   }, [
     contactItems,
     currentUser?.id,
+    sessionEpoch,
     groupCardItems,
     isRouteDataReady,
     t,
@@ -1983,7 +2171,9 @@ export default function EditNoteScreen() {
   }, []);
 
   const confirmCardPicker = useCallback(() => {
-    if (!cardPickerKind) return;
+    const auth = useAuthStore.getState();
+    const pickerSession = cardPickerSessionRef.current;
+    if (!cardPickerKind || !pickerSession || auth.user?.id !== pickerSession.userId || auth.sessionEpoch !== pickerSession.epoch) return;
     if (cardPickerKind === 'contact') {
       setContactItems([
         ...contactItems.filter((item) => selectedCardIds.includes(item.id) && !contactPickerItems.some((option) => option.id === item.id)),
@@ -2088,13 +2278,16 @@ export default function EditNoteScreen() {
         recordingAudioRef.current = false;
         recordingAudioBlockIdRef.current = null;
         setRecordingAudioStartedAt(null);
-        void noteRecorder.stop().catch(() => undefined);
-        void setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
+        void runNoteRecorderWork(async () => {
+          try { discardRecordingOutput(await stopNoteRecorder(noteRecorder)); } catch { /* The block is being removed. */ }
+          await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => undefined);
+        });
       }
-      setAudioItems((current) => current.filter((item) => {
+      audioItems.forEach((item) => {
         pickerPreviewDisposerRef.current.dispose(item.previewUri);
-        return false;
-      }));
+        if (item.localRecordingId) removeUnreferencedLocalNoteRecordings(currentUser?.id, [item.localRecordingId], editorDraftId);
+      });
+      setAudioItems([]);
     } else if (block.kind === 'location') {
       handleClearLocation();
     } else if (block.kind === 'contact') {
@@ -2102,7 +2295,13 @@ export default function EditNoteScreen() {
     } else if (block.kind === 'group') {
       setGroupCardItems([]);
     }
-  }, [handleClearLocation, mediaItems, noteRecorder, showcaseItems, textStatsStore]);
+  }, [audioItems, currentUser?.id, discardRecordingOutput, editorDraftId, handleClearLocation, mediaItems, noteRecorder, showcaseItems, textStatsStore]);
+
+  const removeRecordedAudio = useCallback((item: EditorNoteMediaDraft) => {
+    pickerPreviewDisposerRef.current.dispose(item.previewUri);
+    if (item.localRecordingId) removeUnreferencedLocalNoteRecordings(currentUser?.id, [item.localRecordingId], editorDraftId);
+    setAudioItems((current) => current.filter((audio) => audio.clientId !== item.clientId));
+  }, [currentUser?.id, editorDraftId]);
 
   const revealMap = useCallback(() => {
     setMapRevealed(true);
@@ -2221,6 +2420,8 @@ export default function EditNoteScreen() {
       !isRouteDataReady ||
       isSubmitting ||
       saveInFlightRef.current ||
+      recordingAudioRef.current ||
+      uploadInFlightRef.current ||
       uploadingSection !== null ||
       !canSubmitNoteMedia(mediaItems) ||
       !canSubmitNoteMedia(showcaseItems) ||
@@ -2324,7 +2525,7 @@ export default function EditNoteScreen() {
         title: trimmedTitle,
         content: plainText,
         contentJson: persistedContentJson,
-        sections: {
+        sections: sanitizeNoteSectionsForServer({
           text: { content: plainText, contentJson: persistedContentJson },
           media: { items: sectionMedia },
           showcase: { items: sectionShowcase },
@@ -2332,7 +2533,7 @@ export default function EditNoteScreen() {
           contacts: { items: contactItems },
           groups: { items: groupCardItems },
           location: nextLocation,
-        },
+        }),
         groupIds: selectedGroupIds,
         media: legacyMedia,
         clientDraftID: editorDraftId,
@@ -2348,6 +2549,7 @@ export default function EditNoteScreen() {
       navigationRequestedRef.current = true;
       await draftSavePromiseRef.current.catch(() => undefined);
       removeLocalNoteDraft(currentUser?.id, editorDraftId);
+      cleanupRecordingCopies();
       await deleteNoteDraft(editorDraftId).catch(() => undefined);
       completeNavigation(undefined, true);
     } catch (error) {
@@ -2377,6 +2579,7 @@ export default function EditNoteScreen() {
     contactItems,
     groupCardItems,
     completeNavigation,
+    cleanupRecordingCopies,
     currentUser?.id,
     editorDraftId,
     selectedGroupIds,
@@ -2492,6 +2695,7 @@ export default function EditNoteScreen() {
     loading ||
     !isRouteDataReady ||
     isSubmitting ||
+    recordingAudioStartedAt !== null ||
     uploadingSection !== null ||
     !canSubmitNoteMedia(mediaItems) ||
     !canSubmitNoteMedia(showcaseItems) ||
@@ -2877,7 +3081,7 @@ export default function EditNoteScreen() {
               <Pressable
                 style={[s.sectionAction, d.sectionAction]}
                 onPress={() => void toggleNoteRecording(block.id)}
-                disabled={!isRouteDataReady || uploadingSection !== null}
+                disabled={!isRouteDataReady || uploadingSection !== null || (recordingAudioStartedAt === null && audioItems.some((item) => item.uploadStatus !== 'UPLOADED'))}
               >
                 <Ionicons name={recordingAudioStartedAt !== null ? 'stop-circle-outline' : 'mic-outline'} size={17} color={colors.text} />
                 <Text style={[s.sectionActionText, d.sectionActionText]}>
@@ -2897,7 +3101,13 @@ export default function EditNoteScreen() {
                         ? `${Math.max(1, Math.round(item.durationMs / 1000))}&quot;`
                         : t('notes.edit.audioItem', { defaultValue: '音频' })}
                     </Text>
-                    <Pressable onPress={() => setAudioItems((current) => current.filter((audio) => audio.clientId !== item.clientId))} hitSlop={8}>
+                    {item.uploadStatus !== 'UPLOADED' && item.previewUri ? (
+                      <Pressable accessibilityRole="button" accessibilityLabel={t('common.retry')}
+                        onPress={() => void retryRecordedAudio(item)} disabled={uploadingSection !== null || recordingAudioStartedAt !== null}>
+                        <Text style={{ color: colors.primary }}>{t('common.retry')}</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable accessibilityRole="button" accessibilityLabel={t('notes.actions.delete') + t('notes.edit.audioItem')} onPress={() => removeRecordedAudio(item)} hitSlop={8}>
                       <Ionicons name="close-circle-outline" size={18} color={colors.textSecondary} />
                     </Pressable>
                   </View>
@@ -3211,7 +3421,7 @@ export default function EditNoteScreen() {
     setPreviewImageViewerVisible(true);
   }, [previewData]);
 
-  if (loading) {
+  if (loading || isDraftLoading) {
     return (
       <View style={[s.container, d.container, s.center, { paddingTop: insets.top }]}>
         <ActivityIndicator color={colors.primary} />
@@ -3498,7 +3708,7 @@ export default function EditNoteScreen() {
         />
       ) : null}
       <Modal
-        visible={cardPickerKind !== null}
+        visible={cardPickerKind !== null && cardPickerSessionRef.current?.userId === (currentUser?.id ?? null) && cardPickerSessionRef.current?.epoch === sessionEpoch}
         transparent
         animationType="slide"
         onRequestClose={closeCardPicker}

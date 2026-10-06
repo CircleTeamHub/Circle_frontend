@@ -8,6 +8,7 @@ function noteModules(storage) {
     if (!cache.has(file)) cache.set(file, loadTsModule(file, {
       requireShim: (name) => {
         if (name === '@/storage') return { storage };
+        if (name === 'react-native') return { Platform: { OS: 'web' } };
         if (name === '@/services/api/utils') return { normalizeMediaUrl: (url) => url };
         if (name.startsWith('@/')) return load('src/' + name.slice(2) + '.ts');
         return require(name);
