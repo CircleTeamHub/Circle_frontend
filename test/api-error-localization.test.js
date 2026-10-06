@@ -121,6 +121,23 @@ test('maps a known errorCode to its localized serverErrors string', () => {
   );
 });
 
+test('note publication capacity has an actionable localized error in every language', () => {
+  const original = I18N.default.t;
+  try {
+    for (const language of ['zh', 'en', 'es', 'ja', 'ko']) {
+      const bundle = JSON.parse(readLocale(language));
+      const message = bundle.serverErrors.NOTE_PUBLICATION_QUOTA_REACHED;
+      assert.ok(typeof message === 'string' && message.trim().length > 0);
+      I18N.default.t = (key, options) => bundle.serverErrors[key.slice('serverErrors.'.length)] ?? options.defaultValue;
+      assert.equal(getApiErrorMessage(new FakeApiError('internal quota details', 'NOTE_PUBLICATION_QUOTA_REACHED'), 'fallback'), message);
+    }
+  } finally { I18N.default.t = original; }
+});
+
+function readLocale(language) {
+  return fs.readFileSync(path.join(process.cwd(), `src/i18n/locales/${language}.json`), 'utf8');
+}
+
 test('maps the empty-comment backend code to localized copy', () => {
   const err = new FakeApiError('评论内容不能为空', 'TRACE_EMPTY_COMMENT');
   assert.equal(getApiErrorMessage(err, 'fallback'), 'Comment cannot be empty');

@@ -3338,6 +3338,7 @@
     "FRIEND_LIMIT_REACHED": "好友数量已达上限，升级会员可提升",
     "NOTE_GROUP_EXISTS": "同名分组已存在",
     "NOTE_STORAGE_QUOTA_REACHED": "已达到当前会员等级的笔记存储上限",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "此笔记的保存次数已达上限，请保留草稿，将新增内容保存为新笔记",
     "NOTE_GROUP_LIMIT": "笔记分组数量已达上限",
     "NOTE_EXPORT_NO_MEDIA": "没有可导出的媒体文件",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "媒体文件过大，无法导出",

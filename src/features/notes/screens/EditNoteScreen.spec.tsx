@@ -2508,6 +2508,26 @@ test('a complete HTTP 400 rejection clears pending durably and permits correctio
   } finally { rendered.unmount(); alert.mockRestore(); }
 });
 
+test('an initial publication quota rejection preserves the PATCH draft and keeps it editable', async () => {
+  signedInDraft(); mockRouteId = 'existing-note';
+  mockFetchDraft.mockResolvedValue(reviewDraft({ sourceNoteId: 'existing-note' }));
+  const values = durableDraftStorage();
+  jest.mocked(updateNote).mockRejectedValueOnce(new ApiError('Quota reached', { status: 403, errorCode: 'NOTE_PUBLICATION_QUOTA_REACHED', failureKind: 'http' }));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Preserve this edit');
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(alert).toHaveBeenCalled());
+    expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.editable).toBe(true);
+    expect(storedReviewDraft(values)?.title).toBe('Preserve this edit');
+    expect(storedReviewDraft(values)?.pendingSubmission).toBeUndefined();
+    expect(mockDeleteDraft).not.toHaveBeenCalled();
+    expect(storage.remove).not.toHaveBeenCalled();
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
 test.each(['conflict', 'different-replay'] as const)('%s keeps the pending draft and exposes a safe path to the saved note', async (failure) => {
   signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft()); const values = durableDraftStorage();
   if (failure === 'conflict') jest.mocked(createNote).mockRejectedValueOnce(new ApiError('Consumed', { status: 409, failureKind: 'http' }));

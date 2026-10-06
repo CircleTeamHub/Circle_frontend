@@ -3346,6 +3346,7 @@
     "FRIEND_LIMIT_REACHED": "Has alcanzado tu límite de amigos; mejora tu membresía para ampliarlo",
     "NOTE_GROUP_EXISTS": "Ya existe un grupo con ese nombre",
     "NOTE_STORAGE_QUOTA_REACHED": "Alcanzaste el límite de notas de tu nivel",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "Esta nota ha alcanzado su límite de guardados. Conserva el borrador y guarda el contenido añadido como una nota nueva.",
     "NOTE_GROUP_LIMIT": "Has alcanzado el límite de grupos de notas",
     "NOTE_EXPORT_NO_MEDIA": "No se encontraron medios exportables",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "Un archivo multimedia es demasiado grande para exportar",

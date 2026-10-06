@@ -3346,6 +3346,7 @@
     "FRIEND_LIMIT_REACHED": "You've reached your friend limit — upgrade for more",
     "NOTE_GROUP_EXISTS": "A group with that name already exists",
     "NOTE_STORAGE_QUOTA_REACHED": "You've reached your membership tier's note storage limit",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "This note has reached its save limit. Keep your draft and save the added content as a new note.",
     "NOTE_GROUP_LIMIT": "You've reached the note group limit",
     "NOTE_EXPORT_NO_MEDIA": "No exportable media found",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "A media file is too large to export",

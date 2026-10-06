@@ -3338,6 +3338,7 @@
     "FRIEND_LIMIT_REACHED": "友だちの数が上限に達しました。会員登録で上限を増やせます",
     "NOTE_GROUP_EXISTS": "同じ名前のグループが既に存在します",
     "NOTE_STORAGE_QUOTA_REACHED": "現在の会員レベルのノート保存上限に達しました",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "このノートの保存回数が上限に達しました。下書きを保持し、追加した内容を新しいノートとして保存してください。",
     "NOTE_GROUP_LIMIT": "ノートグループの数が上限に達しました",
     "NOTE_EXPORT_NO_MEDIA": "エクスポートできるメディアがありません",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "メディアファイルが大きすぎてエクスポートできません",
