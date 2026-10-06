@@ -315,26 +315,31 @@ export default function ContactsScreen() {
       </View>
       <SearchBar placeholder={t('contacts.searchPlaceholder')} onPress={handleOpenSearch} />
       <View style={s.quickActions}>
-        {QUICK_ACTIONS.map((action, index) => (
-          <View key={action.label}>
-            <MenuRow
-              testID={
-                action.id === 'moments'
-                  ? E2E_TEST_IDS.discoverMomentsEntry
-                  : undefined
-              }
-              icon={action.icon}
-              iconBgColor={action.iconBg}
-              label={action.label}
-              showIndicatorDot={
-                (action.id === 'new-friends' && unreadFriendActivityCount > 0) ||
-                (action.id === 'moments' && momentsUnread > 0)
-              }
-              onPress={() => handleQuickActionPress(action.id)}
-            />
-            {index < QUICK_ACTIONS.length - 1 ? <Divider /> : null}
-          </View>
-        ))}
+        {QUICK_ACTIONS.map((action, index) => {
+          const badgeCount =
+            action.id === 'new-friends'
+              ? unreadFriendActivityCount
+              : action.id === 'moments'
+                ? momentsUnread
+                : 0;
+          return (
+            <View key={action.label}>
+              <MenuRow
+                testID={
+                  action.id === 'moments'
+                    ? E2E_TEST_IDS.discoverMomentsEntry
+                    : undefined
+                }
+                icon={action.icon}
+                iconBgColor={action.iconBg}
+                label={action.label}
+                badgeCount={badgeCount}
+                onPress={() => handleQuickActionPress(action.id)}
+              />
+              {index < QUICK_ACTIONS.length - 1 ? <Divider /> : null}
+            </View>
+          );
+        })}
       </View>
     </View>
   );

@@ -12,6 +12,12 @@ interface MenuRowProps {
   label: string;
   subtitle?: string;
   rightText?: string;
+  /** Numeric unread count shown in the trailing badge. Values over 99 render as 99+. */
+  badgeCount?: number;
+  /**
+   * @deprecated Use badgeCount. Kept for callers that still provide a boolean
+   * indicator; it now renders as a numeric 1 so unread state stays consistent.
+   */
   showIndicatorDot?: boolean;
   showArrow?: boolean;
   hasToggle?: boolean;
@@ -46,10 +52,21 @@ const s = StyleSheet.create({
     flexShrink: 0,
     marginLeft: Spacing.sm,
   },
-  indicatorDot: {
-    width: 8,
-    height: 8,
+  indicatorBadge: {
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 999,
+  },
+  indicatorBadgeText: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 });
 
@@ -60,6 +77,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
   label,
   subtitle,
   rightText,
+  badgeCount,
   showIndicatorDot,
   showArrow = true,
   hasToggle,
@@ -69,6 +87,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
   onPress,
 }) => {
   const { colors } = useTheme();
+  const unreadCount = badgeCount ?? (showIndicatorDot ? 1 : 0);
 
   const d = useMemo(
     () => ({
@@ -88,8 +107,11 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      indicatorDot: {
+      indicatorBadge: {
         backgroundColor: colors.error,
+      },
+      indicatorBadgeText: {
+        color: colors.white,
       },
     }),
     [colors],
@@ -129,8 +151,16 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         </View>
       </View>
       <View style={s.right}>
-        {showIndicatorDot ? (
-          <View style={[s.indicatorDot, d.indicatorDot]} />
+        {unreadCount > 0 ? (
+          <View style={[s.indicatorBadge, d.indicatorBadge]}>
+            <Text
+              style={[s.indicatorBadgeText, d.indicatorBadgeText]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1}
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </Text>
+          </View>
         ) : null}
         {rightText ? <Text style={d.rightText}>{rightText}</Text> : null}
         {hasToggle ? (

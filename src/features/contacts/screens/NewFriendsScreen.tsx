@@ -53,10 +53,21 @@ const s = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
+  unreadBadge: {
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 999,
+  },
+  unreadBadgeText: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   stateBlock: {
     alignItems: 'center',
@@ -167,8 +178,11 @@ export default function NewFriendsScreen() {
         color: colors.textSecondary,
         ...Typography.tiny,
       },
-      unreadDot: {
+      unreadBadge: {
         backgroundColor: colors.error,
+      },
+      unreadBadgeText: {
+        color: colors.white,
       },
       stateText: {
         color: colors.textSecondary,
@@ -252,7 +266,17 @@ export default function NewFriendsScreen() {
             </Text>
           </View>
           {item.unreadActivityIds.length > 0 ? (
-            <View style={[s.unreadDot, d.unreadDot]} />
+            <View style={[s.unreadBadge, d.unreadBadge]}>
+              <Text
+                style={[s.unreadBadgeText, d.unreadBadgeText]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1}
+              >
+                {item.unreadActivityIds.length > 99
+                  ? '99+'
+                  : item.unreadActivityIds.length}
+              </Text>
+            </View>
           ) : null}
         </Pressable>
         {index < inboxRows.length - 1 ? <Divider /> : null}

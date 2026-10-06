@@ -65,11 +65,22 @@ test('contacts unread indicators use the shared unread store', () => {
   const tabsLayoutSource = read('app/(tabs)/_layout.tsx');
   const contactsSource = read('src/features/contacts/screens/ContactsScreen.tsx');
   const menuRowSource = read('src/components/ui/menu-row.tsx');
+  const newFriendsSource = read('src/features/contacts/screens/NewFriendsScreen.tsx');
 
   assert.match(tabsLayoutSource, /useTabBadgeStore/);
   assert.match(contactsSource, /useFriendActivityUnreadStore/);
-  assert.match(contactsSource, /showIndicatorDot/);
-  assert.match(menuRowSource, /showIndicatorDot/);
+  assert.match(contactsSource, /badgeCount=\{badgeCount\}/);
+  assert.match(menuRowSource, /badgeCount\?: number/);
+  assert.match(menuRowSource, /unreadCount > 99 \? '99\+' : unreadCount/);
+  assert.match(menuRowSource, /minWidth: 16[\s\S]{0,80}height: 16/);
+  assert.match(menuRowSource, /fontSize: 12[\s\S]{0,80}lineHeight: 14/);
+  assert.match(menuRowSource, /style=\{\[s\.indicatorBadgeText, d\.indicatorBadgeText\]\}/);
+  assert.match(newFriendsSource, /item\.unreadActivityIds\.length/);
+  assert.match(newFriendsSource, /item\.unreadActivityIds\.length > 99/);
+  assert.match(newFriendsSource, /minWidth: 16[\s\S]{0,80}height: 16/);
+  assert.match(newFriendsSource, /fontSize: 12[\s\S]{0,80}lineHeight: 14/);
+  assert.match(newFriendsSource, /style=\{\[s\.unreadBadgeText, d\.unreadBadgeText\]\}/);
+  assert.doesNotMatch(contactsSource, /showIndicatorDot/);
   assert.doesNotMatch(contactsSource, /fetchUnreadFriendActivityCount/);
   assert.doesNotMatch(
     tabsLayoutSource,
