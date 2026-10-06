@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemedSwitch } from '@/components/ui/themed-switch';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { IconCircle } from './icon-circle';
+import { UnreadCountBadge } from './unread-count-badge';
+import { useTranslation } from 'react-i18next';
 
 interface MenuRowProps {
   testID?: string;
@@ -52,22 +54,6 @@ const s = StyleSheet.create({
     flexShrink: 0,
     marginLeft: Spacing.sm,
   },
-  indicatorBadge: {
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-  },
-  indicatorBadgeText: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    includeFontPadding: false,
-  },
 });
 
 export const MenuRow: React.FC<MenuRowProps> = ({
@@ -87,6 +73,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
   onPress,
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const unreadCount = badgeCount ?? (showIndicatorDot ? 1 : 0);
 
   const d = useMemo(
@@ -107,12 +94,6 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      indicatorBadge: {
-        backgroundColor: colors.error,
-      },
-      indicatorBadgeText: {
-        color: colors.white,
-      },
     }),
     [colors],
   );
@@ -126,7 +107,11 @@ export const MenuRow: React.FC<MenuRowProps> = ({
       style={s.row}
       onPress={onPress}
       accessibilityRole={hasToggle ? 'switch' : 'button'}
-      accessibilityLabel={label}
+      accessibilityLabel={
+        unreadCount > 0
+          ? `${label}, ${t('common.unreadCount', { count: unreadCount })}`
+          : label
+      }
       accessibilityHint={a11yHint}
       accessibilityState={hasToggle ? { checked: !!toggleValue } : undefined}
     >
@@ -151,17 +136,7 @@ export const MenuRow: React.FC<MenuRowProps> = ({
         </View>
       </View>
       <View style={s.right}>
-        {unreadCount > 0 ? (
-          <View style={[s.indicatorBadge, d.indicatorBadge]}>
-            <Text
-              style={[s.indicatorBadgeText, d.indicatorBadgeText]}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1}
-            >
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </Text>
-          </View>
-        ) : null}
+        <UnreadCountBadge count={unreadCount} />
         {rightText ? <Text style={d.rightText}>{rightText}</Text> : null}
         {hasToggle ? (
           <ThemedSwitch

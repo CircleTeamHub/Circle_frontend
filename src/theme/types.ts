@@ -44,6 +44,8 @@ export interface ThemeColors {
   danger: string;
   /** 危险操作的实心按钮底色（配白字，4.7:1），两个主题同值。 */
   dangerFill: string;
+  /** 未读数字徽章底色（配白字，达到小字号文本对比度要求）。 */
+  badgeUnread: string;
   /** 比 surface 再低一级的柔和底：弹窗次要按钮、弹窗输入框底。 */
   surfaceMuted: string;
   /** 玻璃面（弹窗 / 顶部横幅）的边缘高光描边。 */

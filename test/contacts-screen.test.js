@@ -47,12 +47,11 @@ test('new friends screen exists as a friend-activity inbox with per-item read fl
   assert.match(routeSource, /NewFriendsScreen/);
   assert.match(screenSource, /fetchFriendActivities/);
   assert.match(screenSource, /buildFriendActivityInboxRows/);
-  assert.match(screenSource, /markFriendActivityRead/);
+  assert.match(screenSource, /markFriendActivitiesRead/);
   assert.match(screenSource, /useFriendActivityUnreadStore/);
-  assert.match(screenSource, /markRead/);
   assert.match(screenSource, /useFocusEffect/);
   assert.match(screenSource, /getFriendActivityCopy/);
-  assert.match(screenSource, /Promise\.all/);
+  assert.match(screenSource, /readIds\.includes\(activity\.id\)/);
   assert.match(screenSource, /getFriendActivityDetailHref\(item\.activity\.id\)/);
   assert.doesNotMatch(screenSource, /ListHeaderComponent/);
   assert.doesNotMatch(
@@ -65,21 +64,21 @@ test('contacts unread indicators use the shared unread store', () => {
   const tabsLayoutSource = read('app/(tabs)/_layout.tsx');
   const contactsSource = read('src/features/contacts/screens/ContactsScreen.tsx');
   const menuRowSource = read('src/components/ui/menu-row.tsx');
+  const badgeSource = read('src/components/ui/unread-count-badge.tsx');
   const newFriendsSource = read('src/features/contacts/screens/NewFriendsScreen.tsx');
 
   assert.match(tabsLayoutSource, /useTabBadgeStore/);
   assert.match(contactsSource, /useFriendActivityUnreadStore/);
   assert.match(contactsSource, /badgeCount=\{badgeCount\}/);
+  assert.match(contactsSource, /state\) => state\.countKnown/);
   assert.match(menuRowSource, /badgeCount\?: number/);
-  assert.match(menuRowSource, /unreadCount > 99 \? '99\+' : unreadCount/);
-  assert.match(menuRowSource, /minWidth: 16[\s\S]{0,80}height: 16/);
-  assert.match(menuRowSource, /fontSize: 12[\s\S]{0,80}lineHeight: 14/);
-  assert.match(menuRowSource, /style=\{\[s\.indicatorBadgeText, d\.indicatorBadgeText\]\}/);
+  assert.match(menuRowSource, /<UnreadCountBadge count=\{unreadCount\}/);
+  assert.match(menuRowSource, /accessibilityLabel=\{[\s\S]{0,120}common\.unreadCount/);
   assert.match(newFriendsSource, /item\.unreadActivityIds\.length/);
-  assert.match(newFriendsSource, /item\.unreadActivityIds\.length > 99/);
-  assert.match(newFriendsSource, /minWidth: 16[\s\S]{0,80}height: 16/);
-  assert.match(newFriendsSource, /fontSize: 12[\s\S]{0,80}lineHeight: 14/);
-  assert.match(newFriendsSource, /style=\{\[s\.unreadBadgeText, d\.unreadBadgeText\]\}/);
+  assert.match(newFriendsSource, /<UnreadCountBadge count=\{unreadCount\}/);
+  assert.match(newFriendsSource, /accessibilityValue=\{[\s\S]{0,120}common\.unreadCount/);
+  assert.match(badgeSource, /count > 99 \? '99\+' : String\(count\)/);
+  assert.match(badgeSource, /fontSize: 12[\s\S]{0,80}lineHeight: 14/);
   assert.doesNotMatch(contactsSource, /showIndicatorDot/);
   assert.doesNotMatch(contactsSource, /fetchUnreadFriendActivityCount/);
   assert.doesNotMatch(

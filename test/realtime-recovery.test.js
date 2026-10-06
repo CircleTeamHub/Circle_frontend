@@ -142,6 +142,15 @@ test('realtime recovery backfills missed interactive notifications after reconne
       useAuthStore: { getState: () => ({ setUser() {} }) },
     },
     '@/stores/tabBadgeStore': { useTabBadgeStore: { getState: () => badgeStore } },
+    '@/stores/friendActivityUnreadStore': {
+      useFriendActivityUnreadStore: {
+        getState: () => ({
+          setRealtimeCount(count) {
+            badgeStore.contactsUnread = count;
+          },
+        }),
+      },
+    },
     '@/stores/walletRealtimeStore': {
       useWalletRealtimeStore: { getState: () => ({ setRealtimeBalance() {} }) },
     },

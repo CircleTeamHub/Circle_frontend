@@ -31,6 +31,29 @@ test('浅色下强调图标沿用 primary，不另开一支色', () => {
   assert.equal(lightColors.iconAccent, '#6366F1');
 });
 
+function luminance(hex) {
+  const channels = [...tokens.parseHexColor(hex)].map((channel) => {
+    const srgb = channel / 255;
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+test('unread badge text keeps at least 4.5:1 contrast in both themes', () => {
+  for (const colors of [darkColors, lightColors]) {
+    const foreground = luminance(colors.white);
+    const background = luminance(colors.badgeUnread);
+    const contrast = (Math.max(foreground, background) + 0.05) /
+      (Math.min(foreground, background) + 0.05);
+    assert.ok(contrast >= 4.5, `unread badge contrast was ${contrast.toFixed(2)}:1`);
+  }
+
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const messages = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    assert.match(messages.common.unreadCount, /\{\{count\}\}/);
+  }
+});
+
 test('parseHexColor 认 #RRGGBB 与 #RGB，其余返回 null', () => {
   // loadTsModule 在独立 realm 里跑，返回值的原型不同源 —— 先摊平再断言。
   assert.deepEqual([...tokens.parseHexColor('#6366F1')], [99, 102, 241]);

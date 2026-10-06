@@ -127,6 +127,9 @@ export default function ContactsScreen() {
   const unreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.count,
   );
+  const friendActivityCountKnown = useFriendActivityUnreadStore(
+    (state) => state.countKnown,
+  );
   const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
   const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.refresh,
@@ -318,7 +321,9 @@ export default function ContactsScreen() {
         {QUICK_ACTIONS.map((action, index) => {
           const badgeCount =
             action.id === 'new-friends'
-              ? unreadFriendActivityCount
+              ? friendActivityCountKnown
+                ? unreadFriendActivityCount
+                : 0
               : action.id === 'moments'
                 ? momentsUnread
                 : 0;

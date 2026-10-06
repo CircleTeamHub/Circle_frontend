@@ -15,6 +15,7 @@
     "saveFailedMessage": "请稍后重试。"
   },
   "common": {
+    "unreadCount": "{{count}} 条未读",
     "save": "保存",
     "saving": "保存中...",
     "clear": "清除",
