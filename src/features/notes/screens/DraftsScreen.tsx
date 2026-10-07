@@ -236,7 +236,10 @@ export default function DraftsScreen() {
                 </Text>
               </View>
               <Pressable
-                onPress={() => removeDraft(item)}
+                onPress={(event) => {
+                  event?.stopPropagation();
+                  removeDraft(item);
+                }}
                 hitSlop={10}
                 accessibilityRole="button"
                 accessibilityLabel={t('notes.drafts.deleteLabel')}

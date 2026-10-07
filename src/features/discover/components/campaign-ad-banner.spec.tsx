@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { CampaignAdBanner } from './campaign-ad-banner';
 
 let mockFocused = true;
+let appStateListener: ((state: string) => void) | null = null;
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -54,7 +55,11 @@ beforeEach(() => {
   mockApiClient.mockReset();
   mockFocused = true;
   AppState.currentState = 'active';
-  jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
+  appStateListener = null;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+    appStateListener = listener as (state: string) => void;
+    return { remove: jest.fn() };
+  });
   useAuthStore.setState({ sessionEpoch: 1, isAuthenticated: true });
 });
 
@@ -86,6 +91,18 @@ test('a successful empty refresh removes the previous ads', async () => {
 
   await act(async () => { jest.advanceTimersByTime(60_000); });
   expect(screen.queryByText(advertisement.title)).toBeNull();
+});
+
+test('returning to the foreground keeps active ads when refresh fails', async () => {
+  mockApiClient.mockResolvedValueOnce([advertisement]).mockRejectedValueOnce(new Error('offline'));
+  render(<CampaignAdBanner />);
+  await act(async () => {});
+  expect(screen.getByText(advertisement.title)).toBeTruthy();
+
+  await act(async () => { appStateListener?.('active'); });
+
+  expect(mockApiClient).toHaveBeenCalledTimes(2);
+  expect(screen.getByText(advertisement.title)).toBeTruthy();
 });
 
 test('a session change clears cached ads even if the new session fetch fails', async () => {

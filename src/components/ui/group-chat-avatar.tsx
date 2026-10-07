@@ -1,4 +1,4 @@
-import { useRef, useId, useState } from 'react';
+import { useEffect, useRef, useId, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -39,6 +39,9 @@ export function GroupChatAvatar({
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const currentUriRef = useRef(uri);
   currentUriRef.current = uri;
+  useEffect(() => {
+    setFailedUri(null);
+  }, [uri]);
   const imageUri = uri ?? undefined;
   const hasImage = Boolean(imageUri && imageUri.length > 0) && failedUri !== uri;
   const badgeSize = Math.max(14, Math.round(size * 0.38));
