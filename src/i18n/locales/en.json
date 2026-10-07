@@ -15,6 +15,7 @@
     "saveFailedMessage": "Please try again later."
   },
   "common": {
+    "unreadCount": "{{count}} unread",
     "save": "Save",
     "saving": "Saving...",
     "clear": "Clear",

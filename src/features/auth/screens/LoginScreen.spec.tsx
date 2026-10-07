@@ -1,5 +1,5 @@
 import React from 'react';
-import { AccessibilityInfo, Platform } from 'react-native';
+import { AccessibilityInfo, Platform, StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import LoginScreen from './LoginScreen';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
@@ -174,5 +174,24 @@ test('android relies on the live region instead of announcing twice', () => {
       configurable: true,
     });
     announce.mockRestore();
+  }
+});
+
+
+test('web keyboard focus marks the whole auth field and clears on blur', () => {
+  const original = Platform.OS;
+  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+  try {
+    render(<LoginScreen />);
+    const input = screen.getByTestId(E2E_TEST_IDS.authEmailInput);
+    const field = () => StyleSheet.flatten(screen.getByTestId(`${E2E_TEST_IDS.authEmailInput}-field`).props.style);
+    const unfocused = field().borderColor;
+    fireEvent(input, 'focus');
+    expect(field().borderColor).not.toBe(unfocused);
+    expect(field().borderWidth).toBe(2);
+    fireEvent(input, 'blur');
+    expect(field().borderColor).toBe(unfocused);
+  } finally {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: original });
   }
 });

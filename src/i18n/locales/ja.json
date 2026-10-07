@@ -2756,6 +2756,7 @@
     "saveFailedMessage": "しばらくしてからもう一度お試しください。"
   },
   "common": {
+    "unreadCount": "未読 {{count}} 件",
     "previous": "前へ",
     "next": "次へ",
     "save": "保存",

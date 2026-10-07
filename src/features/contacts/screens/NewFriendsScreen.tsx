@@ -1,10 +1,12 @@
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
+import { UnreadCountBadge } from '@/components/ui/unread-count-badge';
 import { NavHeader } from '@/components/ui/nav-header';
 import { InboxTabsHeader } from '@/features/contacts/components/InboxTabsHeader';
 import { NewGroupsInboxList } from '@/features/contacts/components/NewGroupsInboxList';
 import { filterFriendInboxRows } from '@/features/contacts/utils/friend-inbox-filter';
+import { markFriendActivitiesRead } from '@/features/contacts/utils/mark-friend-activities-read';
 import {
   buildFriendActivityInboxRows,
   getFriendActivityCopy,
@@ -14,7 +16,6 @@ import { getFriendActivityDetailHref } from '@/features/user/utils/routes';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import {
   fetchFriendActivities,
-  markFriendActivityRead,
   type FriendActivity,
 } from '@/services/api/friends';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
@@ -33,7 +34,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   // 页签、搜索框和列表同住一张白面板上，面板上缘圆角。
@@ -53,11 +53,6 @@ const s = StyleSheet.create({
   rowMeta: {
     flex: 1,
     gap: 4,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
   },
   stateBlock: {
     alignItems: 'center',
@@ -91,7 +86,6 @@ export default function NewFriendsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
-  const markRead = useFriendActivityUnreadStore((state) => state.markRead);
   const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.refresh,
   );
@@ -168,9 +162,6 @@ export default function NewFriendsScreen() {
         color: colors.textSecondary,
         ...Typography.tiny,
       },
-      unreadDot: {
-        backgroundColor: colors.error,
-      },
       stateText: {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
@@ -202,64 +193,65 @@ export default function NewFriendsScreen() {
     }: {
       item: ReturnType<typeof buildFriendActivityInboxRows>[number];
       index: number;
-    }) => (
-      <View>
-        <Pressable
-          style={s.row}
-          disabled={navigating}
-          onPress={async () => {
-            if (navigating) return;
-            setNavigating(true);
-            try {
-              if (item.unreadActivityIds.length > 0) {
-                await Promise.all(
-                  item.unreadActivityIds.map((activityId) =>
-                    markFriendActivityRead(activityId).catch((error) => {
-                      reportHandledFailure('friendActivity', 'markRead', error);
-                    }),
-                  ),
-                );
-                markRead(item.unreadActivityIds);
-                setActivities((current) =>
-                  current.map((activity) =>
-                    item.unreadActivityIds.includes(activity.id)
-                      ? { ...activity, readAt: new Date().toISOString() }
-                      : activity,
-                  ),
-                );
-              }
-              router.push(getFriendActivityDetailHref(item.activity.id));
-            } finally {
-              setNavigating(false);
+    }) => {
+      const unreadCount = item.unreadActivityIds.length;
+
+      return (
+        <View>
+          <Pressable
+            style={s.row}
+            disabled={navigating}
+            accessibilityRole="button"
+            accessibilityValue={
+              unreadCount > 0
+                ? { text: t('common.unreadCount', { count: unreadCount }) }
+                : undefined
             }
-          }}
-        >
-          <Avatar
-            size={44}
-            name={getFriendActivityDisplayName(item.activity)}
-            uri={item.activity.counterparty.avatarUrl ?? undefined}
-          />
-          <View style={s.rowMeta}>
-            <MemberName
+            onPress={async () => {
+              if (navigating) return;
+              setNavigating(true);
+              try {
+                if (unreadCount > 0) {
+                  const readIds = await markFriendActivitiesRead(item.unreadActivityIds);
+                  setActivities((current) =>
+                    current.map((activity) =>
+                      readIds.includes(activity.id)
+                        ? { ...activity, readAt: new Date().toISOString() }
+                        : activity,
+                    ),
+                  );
+                }
+                router.push(getFriendActivityDetailHref(item.activity.id));
+              } finally {
+                setNavigating(false);
+              }
+            }}
+          >
+            <Avatar
+              size={44}
               name={getFriendActivityDisplayName(item.activity)}
-              userId={item.activity.counterparty.id}
-              style={d.title}
+              uri={item.activity.counterparty.avatarUrl ?? undefined}
             />
-            <Text style={d.subtitle}>{getFriendActivityCopy(item.activity)}</Text>
-            <Text style={d.time}>
-              {new Date(item.activity.createdAt).toLocaleString(
-                getLocalizedDateTimeLocale(i18n.language),
-              )}
-            </Text>
-          </View>
-          {item.unreadActivityIds.length > 0 ? (
-            <View style={[s.unreadDot, d.unreadDot]} />
-          ) : null}
-        </Pressable>
-        {index < inboxRows.length - 1 ? <Divider /> : null}
-      </View>
-    ),
-    [d, i18n.language, inboxRows.length, markRead, navigating, router],
+            <View style={s.rowMeta}>
+              <MemberName
+                name={getFriendActivityDisplayName(item.activity)}
+                userId={item.activity.counterparty.id}
+                style={d.title}
+              />
+              <Text style={d.subtitle}>{getFriendActivityCopy(item.activity)}</Text>
+              <Text style={d.time}>
+                {new Date(item.activity.createdAt).toLocaleString(
+                  getLocalizedDateTimeLocale(i18n.language),
+                )}
+              </Text>
+            </View>
+            <UnreadCountBadge count={unreadCount} />
+          </Pressable>
+          {index < inboxRows.length - 1 ? <Divider /> : null}
+        </View>
+      );
+    },
+    [d, i18n.language, inboxRows.length, navigating, router, t],
   );
 
   const emptyState = loading ? (

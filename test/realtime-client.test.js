@@ -62,7 +62,8 @@ test('realtime client routes websocket badge events into the unified tab badge s
   assert.match(client, /circle\.signup\.unread\.changed/);
   assert.match(client, /notification\.created/);
   assert.match(client, /applySnapshot/);
-  assert.match(client, /setContactsUnread/);
+  assert.match(client, /useFriendActivityUnreadStore/);
+  assert.match(client, /setRealtimeCount/);
   assert.match(client, /setDiscoverUnread/);
   assert.match(client, /setSignupUnread/);
   assert.match(client, /enqueueNotification/);

@@ -2764,6 +2764,7 @@
     "saveFailedMessage": "Inténtalo de nuevo más tarde."
   },
   "common": {
+    "unreadCount": "{{count}} sin leer",
     "previous": "Anterior",
     "next": "Siguiente",
     "save": "Guardar",

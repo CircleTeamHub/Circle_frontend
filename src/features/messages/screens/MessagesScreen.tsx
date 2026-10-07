@@ -59,6 +59,9 @@ import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-s
 const SWIPE_ACTION_WIDTH = 76;
 const SWIPE_ACTIONS_WIDTH = SWIPE_ACTION_WIDTH * 3;
 const SWIPE_OPEN_THRESHOLD = SWIPE_ACTION_WIDTH;
+// 桌面分栏时 tabbar 统一居中到整个视口底部；右侧聊天区要留出这段空间，
+// 否则 tabbar 会盖住 ChatComposerBar 的输入框。
+const DESKTOP_TAB_BAR_RESERVED_HEIGHT = 64;
 
 const BASE_FILTER_KEYS = [
   { id: "all", key: "messages.all" },
@@ -114,6 +117,7 @@ const s = StyleSheet.create({
   },
   splitDetailPane: {
     flex: 1,
+    paddingBottom: DESKTOP_TAB_BAR_RESERVED_HEIGHT,
   },
   splitEmptyPane: {
     flex: 1,
