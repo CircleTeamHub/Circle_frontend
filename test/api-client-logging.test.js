@@ -504,6 +504,9 @@ test('HTTP route shapes fail closed for unrecognized endpoints and token paths',
   assert.equal(safeHttpEndpoint('/geo/reverse?lat=1&lon=2'), '/geo/reverse');
   assert.equal(safeHttpEndpoint('/referrals/me'), '/referrals/me');
   assert.equal(safeHttpEndpoint('/advertisements?placement=CIRCLE_HOME'), '/advertisements');
+  assert.equal(safeHttpEndpoint('/note/drafts'), '/note/drafts');
+  assert.equal(safeHttpEndpoint('/note/drafts/private-draft'), '/note/drafts/:id');
+  assert.equal(safeHttpEndpoint('/note/drafts/private-draft?source=editor'), '/note/drafts/:id');
   assert.equal(safeHttpEndpoint('/advertisements/private-id'), '/__other__');
   assert.equal(safeHttpEndpoint('/unknown/private-path'), '/__other__');
   assert.equal(safeHttpEndpoint('https://example.com/circle/private'), '/__other__');

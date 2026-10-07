@@ -1051,7 +1051,7 @@
       "videoItem": "동영상",
       "previewTitle": "미리보기",
       "composerComingSoonTitle": "준비 중",
-      "composerComingSoonMessage": "이 콘텐츠 유형은 서버 노트 프로토콜 지원이 필요하며 정렬 목록에 보존되었습니다.",
+      "composerComingSoonMessage": "이 콘텐츠 유형은 현재 사용할 수 없어 정렬 목록에 보존되었습니다.",
       "composer": {
         "title": "제목",
         "text": "텍스트",
@@ -2080,6 +2080,14 @@
       "FULL": "채팅 및 모먼트",
       "CHAT_ONLY": "채팅만"
     },
+    "editPermission": {
+      "label": "{{name}}의 모먼트 공개 범위 설정",
+      "helper": "이 설정은 이 사람이 내 모먼트를 볼 수 있는지만 제어합니다. 채팅 권한은 변경되지 않습니다.",
+      "loading": "권한을 불러오는 중...",
+      "missingFriend": "친구 정보가 없습니다",
+      "loadFailed": "권한을 불러오지 못했습니다. 다시 시도해 주세요.",
+      "saveFailed": "권한을 저장하지 못했습니다. 다시 시도해 주세요."
+    },
     "loadFailed": "프로필을 불러오지 못해 캐시된 데이터를 표시합니다",
     "startChat": "채팅 시작",
     "openingChat": "채팅을 여는 중...",
@@ -2513,13 +2521,13 @@
       "link": "회원 규칙",
       "title": "규칙 및 권한 안내",
       "heading": "회원 규칙",
-      "description": "고객센터가 회원 자격을 수동으로 확인하고 부여합니다. 이 화면은 혜택 목록을 표시하며 실제 권한은 백엔드를 기준으로 합니다.",
+      "description": "고객센터가 회원 자격을 수동으로 확인하고 부여합니다. 이 화면은 혜택 목록을 표시하며 이용 가능한 혜택은 현재 회원 상태를 따릅니다.",
       "rules": {
         "catalog": "일일 회원 CNY 19.9 / 1일, 월간 회원 CNY 298 / 1개월, 반년 회원 CNY 1,288 / 6개월, 연간 회원 CNY 1,998 / 1년, 평생 회원 CNY 3,998 / 평생.",
         "supportActivation": "회원 자격은 앱에서 포인트로 교환하거나 직접 구매할 수 없습니다. 문의 후 고객센터가 수동으로 확인하고 부여합니다.",
         "upgrade": "기존 회원은 고객센터에 문의해 차액을 지불하고 업그레이드할 수 있습니다. 즉시 적용되며 남은 회원 가치는 고객센터가 반영합니다.",
         "expiry": "회원 기간이 만료되면 회원 혜택만 중지됩니다. 계정, 채팅, 노트 및 기타 사용자 콘텐츠는 삭제되지 않습니다.",
-        "fairUse": "회원 규칙은 회원 센터에 표시된 혜택에만 적용됩니다. 그중 무제한으로 표시된 혜택에도 백엔드의 높은 수준의 공정 사용 및 남용 방지 한도가 적용됩니다. 실제 권한은 백엔드를 기준으로 합니다.",
+        "fairUse": "회원 규칙은 회원 센터에 표시된 혜택에만 적용됩니다. 무제한으로 표시된 혜택에도 합리적 사용 및 남용 방지 한도가 적용됩니다. 이용 가능한 혜택은 현재 회원 상태를 따릅니다.",
         "voiceToText": "음성 텍스트 변환은 모든 사용자를 위한 무료 기본 기능이며 회원 등급의 제한을 받지 않습니다.",
         "excludedVisualBenefits": "현재 회원 혜택에는 아바타 프레임이나 움직이는 아바타 제공 약속이 포함되지 않습니다."
       }
@@ -2802,16 +2810,16 @@
     "privacyPolicy": "개인정보 처리방침",
     "errors": {
       "requestTimeout": "요청 시간이 초과되었습니다. 연결을 확인한 후 다시 시도해 주세요.",
-      "networkUnavailable": "네트워크 오류입니다. 서버가 실행 중인지 확인해 주세요.",
-      "invalidServerResponse": "서버에서 잘못된 데이터를 반환했습니다",
-      "requestFailedWithStatus": "요청에 실패했습니다 ({{status}})",
-      "requestFailed": "요청에 실패했습니다",
+      "networkUnavailable": "연결할 수 없습니다. 네트워크를 확인한 후 다시 시도해 주세요.",
+      "invalidServerResponse": "작업을 완료할 수 없습니다. 다시 시도해 주세요.",
+      "requestFailedWithStatus": "요청을 완료할 수 없습니다. 다시 시도해 주세요.",
+      "requestFailed": "작업을 완료할 수 없습니다. 다시 시도해 주세요.",
       "sessionExpired": "세션이 만료되었습니다. 다시 로그인해 주세요.",
       "refreshResponseInvalid": "갱신 응답이 잘못되었습니다. 다시 로그인해 주세요.",
       "sessionChangedDuringRefresh": "세션을 갱신하는 동안 계정이 변경되었습니다. 다시 시도해 주세요.",
       "uploadTimeout": "업로드 시간이 초과되었습니다. 연결을 확인한 후 다시 시도해 주세요.",
       "uploadFailed": "업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.",
-      "uploadFailedWithStatus": "업로드에 실패했습니다 ({{status}})"
+      "uploadFailedWithStatus": "업로드에 실패했습니다. 다시 시도해 주세요."
     }
   },
   "credit": {
@@ -3102,7 +3110,7 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "사전 서명된 업로드 데이터 형식 오류",
+      "presignDataInvalid": "업로드를 시작할 수 없습니다. 다시 시도해 주세요.",
       "fileUnreadable": "업로드할 파일을 찾을 수 없습니다",
       "fileTooLarge": "파일이 {{maxMb}}MB 제한을 초과했습니다"
     }

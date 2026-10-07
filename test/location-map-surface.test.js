@@ -31,6 +31,7 @@ test('web map surface renders a real iframe and clears the loading state', () =>
   assert.match(web, /<iframe/);
   assert.match(web, /srcDoc=\{html\}/);
   assert.match(web, /onLoad=\{onLoadEnd\}/);
+  assert.match(web, /onError=\{onLoadError\}/);
   assert.doesNotMatch(web, /from 'react-native-webview'/);
 });
 
@@ -67,6 +68,7 @@ test('native map surface keeps the WebView bridge', () => {
   assert.match(native, /event\.nativeEvent\.data/);
   assert.match(native, /baseUrl: 'https:\/\/appassets\.invalid\/'/);
   assert.match(native, /onShouldStartLoadWithRequest/);
+  assert.match(native, /onError=\{onLoadError\}/);
   assert.doesNotMatch(native, /originWhitelist=\{\['\*'\]\}/);
 });
 

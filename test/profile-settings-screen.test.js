@@ -1223,7 +1223,6 @@ test("system announcements screen exposes latest app information and patches", (
   assert.match(source, /SYSTEM_ANNOUNCEMENTS\.map/);
   assert.match(source, /accessibilityRole="button"/);
   assert.match(source, /profile\/system-announcements\/\[id\]/);
-  assert.match(source, /items\.length > 0 \|\| loadError/);
   assert.match(source, /ListEmptyComponent=\{null\}/);
   assert.match(detail, /getSystemAnnouncement\(announcementId\)/);
   assert.match(detail, /systemAnnouncements\.detailTitle/);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, StyleSheet } from 'react-native';
 import { setAudioModeAsync } from 'expo-audio';
 import EditNoteScreen, { draftRecordFromServer, draftFingerprint } from './EditNoteScreen';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
@@ -101,6 +101,19 @@ type MockTranslate = (key: string, options?: Record<string, unknown>) => string;
 const identityTranslate: MockTranslate = (key) => key;
 // 语言切换会换掉 t 的身份 —— 用例要能模拟这一点。
 let mockTranslate: MockTranslate = identityTranslate;
+const mockLightThemeColors = {
+  background: '#fff', surface: '#fff', surfaceBorder: '#ddd', text: '#111',
+  textSecondary: '#666', primary: '#6200ee', brandPurple: '#6200ee', white: '#fff',
+  surfaceMuted: '#f1f2f5',
+  overlay: 'rgba(0,0,0,.4)', warning: '#f59e0b', danger: '#ef4444',
+};
+const mockDarkThemeColors = {
+  ...mockLightThemeColors,
+  background: '#1A1B23', surface: '#252630', text: '#FFFFFF',
+  textSecondary: '#FFFFFF', white: '#FFFFFF', surfaceMuted: '#30323E',
+};
+let mockThemeMode: 'light' | 'dark' = 'light';
+let mockThemeColors = mockLightThemeColors;
 
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
@@ -176,12 +189,8 @@ jest.mock('@/theme', () => ({
   Spacing: { xs: 4, sm: 8, md: 12, lg: 16 },
   Typography: { small: {}, caption: {}, body: {}, h: {} },
   useTheme: () => ({
-    resolvedMode: 'light',
-    colors: {
-      background: '#fff', surface: '#fff', surfaceBorder: '#ddd', text: '#111',
-      textSecondary: '#666', primary: '#6200ee', brandPurple: '#6200ee', white: '#fff',
-      overlay: 'rgba(0,0,0,.4)', warning: '#f59e0b', danger: '#ef4444',
-    },
+    resolvedMode: mockThemeMode,
+    colors: mockThemeColors,
   }),
 }));
 
@@ -601,6 +610,8 @@ beforeEach(() => {
   jest.mocked(storage.remove).mockImplementation((key) => localValues.delete(key));
   imageSources.length = 0;
   mockTranslate = identityTranslate;
+  mockThemeMode = 'light';
+  mockThemeColors = mockLightThemeColors;
   mockRouteId = undefined;
   mockFocusCallback = undefined;
   mockFocusCleanup = undefined;
@@ -616,6 +627,23 @@ beforeEach(() => {
   mockVideoPlayerRelease.mockClear();
   mockVideoThumbnailRelease.mockClear();
   mockGenerateThumbnails.mockResolvedValue([mockGeneratedVideoThumbnail]);
+});
+
+test('keeps the preview label readable in dark theme', async () => {
+  mockThemeMode = 'dark';
+  mockThemeColors = mockDarkThemeColors;
+
+  render(<EditNoteScreen />);
+
+  const previewButton = await screen.findByRole('button', {
+    name: 'notes.edit.composer.preview',
+  });
+  const buttonStyle = StyleSheet.flatten(previewButton.props.style);
+  const previewLabel = screen.getByText('notes.edit.composer.preview');
+  const labelStyle = StyleSheet.flatten(previewLabel.props.style);
+
+  expect(buttonStyle.backgroundColor).toBe(mockDarkThemeColors.surfaceMuted);
+  expect(labelStyle.color).toBe(mockDarkThemeColors.text);
 });
 
 test('blurred uploads cannot alert over another route and focus restores usable media controls', async () => {

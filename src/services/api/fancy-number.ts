@@ -151,7 +151,7 @@ function isFancyNumberAvailability(value: unknown): value is FancyNumberAvailabi
 
 function invalidResponseMessage() {
   return i18n.t('common.errors.invalidServerResponse', {
-    defaultValue: '服务返回了无效数据',
+    defaultValue: '暂时无法完成操作，请稍后重试',
   });
 }
 

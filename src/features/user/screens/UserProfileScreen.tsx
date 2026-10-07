@@ -45,6 +45,7 @@ import {
   getChatInfoHref,
   getChatDetailHref,
   getEditFriendRemarkHref,
+  getEditFriendPermissionHref,
   getEditFriendTagsHref,
   getSendFriendRequestHref,
   getUserMomentsHref,
@@ -270,6 +271,8 @@ export default function UserProfileScreen() {
   const [friendStatusLoadError, setFriendStatusLoadError] = useState(false);
   const [friendSettings, setFriendSettings] = useState<FriendSettings | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
+  const [recognitionIconImageFailed, setRecognitionIconImageFailed] =
+    useState(false);
   const mountedRef = useRef(true);
 
   useEffect(
@@ -641,6 +644,16 @@ export default function UserProfileScreen() {
     );
   }, [canonicalProfileUserId, friendStatus, profile.name, router, scope]);
 
+  const handleEditPermission = useCallback(() => {
+    if (friendStatus !== 'ACCEPTED' || !canonicalProfileUserId) {
+      return;
+    }
+
+    router.push(
+      getEditFriendPermissionHref(scope, canonicalProfileUserId, profile.name),
+    );
+  }, [canonicalProfileUserId, friendStatus, profile.name, router, scope]);
+
   const handleOpenMoments = useCallback(() => {
     if (profileId === 'unknown') {
       return;
@@ -825,7 +838,11 @@ export default function UserProfileScreen() {
         }
 
         if (id === 'permission') {
-          return { ...base, value: permissionValue };
+          return {
+            ...base,
+            value: permissionValue,
+            onPress: handleEditPermission,
+          };
         }
 
         if (id === 'moments') {
@@ -843,6 +860,7 @@ export default function UserProfileScreen() {
       colors,
       descriptionValue,
       handleEditRemark,
+      handleEditPermission,
       handleEditTags,
       handleOpenChatInfo,
       handleOpenMoments,
@@ -973,12 +991,21 @@ export default function UserProfileScreen() {
               defaultValue: `获赞 ${likeCount}`,
             })}
           >
-            <Image
-              source={RECOGNITION_COUNT_ICON_SOURCE}
-              style={s.recognitionIconImage}
-              contentFit="contain"
-              tintColor={colors.primary}
-            />
+            {recognitionIconImageFailed ? (
+              <Ionicons
+                name="thumbs-up-outline"
+                size={18}
+                color={colors.primary}
+              />
+            ) : (
+              <Image
+                source={RECOGNITION_COUNT_ICON_SOURCE}
+                style={s.recognitionIconImage}
+                contentFit="contain"
+                tintColor={colors.primary}
+                onError={() => setRecognitionIconImageFailed(true)}
+              />
+            )}
             <Text style={d.recognitionText}>{likeCount}</Text>
           </View>
         }

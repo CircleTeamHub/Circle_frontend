@@ -10,7 +10,8 @@ test('GroupChatAvatar uses a scalable branded group illustration and optional cl
   const component = read('src/components/ui/group-chat-avatar.tsx');
 
   assert.match(component, /export function GroupChatAvatar/);
-  assert.match(component, /uri && uri\.length > 0/);
+  assert.match(component, /const hasImage = Boolean\(imageUri && imageUri\.length > 0\)/);
+  assert.match(component, /\{hasImage \? \(/);
   assert.match(component, /temporary \? \(/);
   assert.match(component, /LinearGradient/);
   assert.match(component, /name="time-outline"/);

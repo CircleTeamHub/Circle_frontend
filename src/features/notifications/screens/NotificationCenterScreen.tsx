@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, useTheme } from '@/theme';
 import { Divider } from '@/components/ui/divider';
 import {
-  fetchNotifications,
+  fetchNotificationsPage,
   markAllNotificationsRead,
   markNotificationRead,
 } from '@/services/api/notifications';
@@ -16,6 +16,7 @@ import {
   markMyPostSignupsRead,
 } from '@/services/api/plaza';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { useAuthStore } from '@/stores/authStore';
 import type { MyCirclePost, NotificationItem } from '@/types';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import {
@@ -63,7 +64,15 @@ export default function NotificationCenterScreen() {
   const { domain: domainParam } = useLocalSearchParams<{ domain?: string }>();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const ownerId = useAuthStore((state) =>
+    state.isAuthenticated ? (state.user?.id ?? null) : null,
+  );
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   const mountedRef = useRef(true);
+  const paginationEpochRef = useRef(0);
+  const failedCursorRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
+  const [pageFailed, setPageFailed] = useState(false);
 
   // 铃铛的域由入口决定：朋友圈页 -> moments，广场页 -> circle。
   // 缺省（推送兜底页 /messages/notifications）保持不限域的老行为。
@@ -91,29 +100,56 @@ export default function NotificationCenterScreen() {
   const [tab, setTab] = useState<NotificationTabKey>('notifications');
   const [filter, setFilter] = useState<ReadFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const cursorScopeRef = useRef({ domain, ownerId, sessionEpoch });
   const [loadError, setLoadError] = useState<string | null>(null);
   const notificationScope = (segments as readonly string[]).includes('discover')
     ? 'discover'
     : 'messages';
 
   useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-    };
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; paginationEpochRef.current += 1; };
   }, []);
 
+  const isCurrentSession = useCallback(() => {
+    const auth = useAuthStore.getState();
+    return mountedRef.current && Boolean(ownerId) && auth.isAuthenticated &&
+      auth.user?.id === ownerId && auth.sessionEpoch === sessionEpoch;
+  }, [ownerId, sessionEpoch]);
+
   const load = useCallback(async () => {
+    if (!isCurrentSession()) return;
+    const epoch = ++paginationEpochRef.current;
+    failedCursorRef.current = null;
+    loadingMoreRef.current = false;
+    setPageFailed(false);
+    setLoadingMore(false);
+    // Cached rows keep their matching cursor until their replacement succeeds.
+    // A domain change must not reuse a cursor belonging to another feed.
+    const scope = cursorScopeRef.current;
+    if (scope.domain !== domain || scope.ownerId !== ownerId ||
+        scope.sessionEpoch !== sessionEpoch) {
+      cursorScopeRef.current = { domain, ownerId, sessionEpoch };
+      setNextCursor(null);
+      setLoadError(null);
+    }
     setRefreshing(true);
     try {
       const [notificationsResult, postsResult] = await Promise.allSettled([
-        fetchNotifications(1, domain),
+        fetchNotificationsPage(undefined, domain),
         showSignupTab ? fetchAllMyCirclePosts() : Promise.resolve(null),
       ]);
-      if (!mountedRef.current) return;
+      if (!isCurrentSession() || epoch !== paginationEpochRef.current) return;
 
       let failed = false;
       if (notificationsResult.status === 'fulfilled') {
-        store().setInteractiveForDomain(domain, notificationsResult.value);
+        store().setInteractiveForDomain(
+          domain,
+          notificationsResult.value.items,
+        );
+        setNextCursor(notificationsResult.value.nextCursor);
       } else {
         failed = true;
         reportHandledFailure(
@@ -142,9 +178,51 @@ export default function NotificationCenterScreen() {
           : null,
       );
     } finally {
-      if (mountedRef.current) setRefreshing(false);
+      if (
+        isCurrentSession() &&
+        epoch === paginationEpochRef.current
+      ) {
+        setRefreshing(false);
+      }
     }
-  }, [domain, showSignupTab, store, t]);
+  }, [domain, isCurrentSession, ownerId, sessionEpoch, showSignupTab, store, t]);
+
+  const loadMore = useCallback(async () => {
+    if (
+      !isCurrentSession() ||
+      tab !== 'notifications' ||
+      loadingMore ||
+      refreshing ||
+      !nextCursor ||
+      loadingMoreRef.current ||
+      failedCursorRef.current === nextCursor
+    ) {
+      return;
+    }
+
+    const epoch = paginationEpochRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await fetchNotificationsPage(nextCursor, domain);
+      if (!isCurrentSession() || epoch !== paginationEpochRef.current) return;
+      store().appendInteractivePage(page.items);
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      if (!isCurrentSession() || epoch !== paginationEpochRef.current) return;
+      failedCursorRef.current = nextCursor;
+      setPageFailed(true);
+      reportHandledFailure('notificationCenter', 'loadMoreNotifications', error);
+    } finally {
+      if (
+        isCurrentSession() &&
+        epoch === paginationEpochRef.current
+      ) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [domain, isCurrentSession, loadingMore, nextCursor, refreshing, store, tab]);
 
   useEffect(() => {
     void load();
@@ -214,6 +292,7 @@ export default function NotificationCenterScreen() {
   }, []);
 
   const handleMarkAll = useCallback(async () => {
+    if (!isCurrentSession()) return;
     if (tab === 'notifications') {
       const previousInteractive = store().interactive;
       const badgeStore = useTabBadgeStore.getState();
@@ -238,6 +317,7 @@ export default function NotificationCenterScreen() {
       try {
         await markAllNotificationsRead(domain);
       } catch (error) {
+        if (!isCurrentSession()) return;
         reportHandledFailure('notificationCenter', 'markAllRead', error);
         store().setInteractive(previousInteractive);
         const rollback = useTabBadgeStore.getState();
@@ -261,21 +341,24 @@ export default function NotificationCenterScreen() {
     try {
       await Promise.all(unreadPostIds.map((id) => markMyPostSignupsRead(id)));
     } catch (error) {
+      if (!isCurrentSession()) return;
       reportHandledFailure('notificationCenter', 'markAllSignupsRead', error);
       store().setSignupPosts(previousSignupPosts);
       useTabBadgeStore.getState().setSignupUnread(previousSignupUnread);
       await load();
     }
-  }, [domain, load, tab, store]);
+  }, [domain, isCurrentSession, load, tab, store]);
 
   const handleRowPress = useCallback(
     (raw: NotificationItem | MyCirclePost, view: NotificationRowData) => {
+      if (!isCurrentSession()) return;
       if ('type' in raw) {
         store().markInteractiveReadLocal(raw.id);
         if (!raw.read) decrementUnreadBadges(raw.type);
-        void markNotificationRead(raw.id).catch((e) =>
-          reportHandledFailure('notificationCenter', 'markRead', e),
-        );
+        void markNotificationRead(raw.id).catch((e) => {
+          if (isCurrentSession())
+            reportHandledFailure('notificationCenter', 'markRead', e);
+        });
         const route = getSnackbarRoute(
           { ...raw, kind: 'notification' },
           {
@@ -301,7 +384,7 @@ export default function NotificationCenterScreen() {
         params: { postId: raw.id, title: view.title },
       });
     },
-    [store, router, t, notificationScope, decrementUnreadBadges],
+    [store, router, t, notificationScope, decrementUnreadBadges, isCurrentSession],
   );
 
   return (
@@ -345,10 +428,24 @@ export default function NotificationCenterScreen() {
         ItemSeparatorComponent={Divider}
         refreshing={refreshing}
         onRefresh={load}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
         contentContainerStyle={{
           paddingHorizontal: Spacing.md,
           paddingBottom: 40,
         }}
+        ListFooterComponent={<View>
+          {loadError && rows.length > 0 ? <Pressable accessibilityRole="button"
+            accessibilityLabel={t('common.retry')} onPress={() => void load()}
+            style={{ padding: Spacing.lg, alignItems: 'center' }}>
+            <Text style={{ color: colors.textSecondary }}>{loadError}</Text>
+          </Pressable> : null}
+          {pageFailed ? <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('common.retry')}
+          onPress={() => { failedCursorRef.current = null; setPageFailed(false); void loadMore(); }}
+          style={{ padding: Spacing.lg, alignItems: 'center' }}
+        ><Text style={{ color: colors.primary }}>{t('common.retry')}</Text></Pressable> : loadingMore ? <ActivityIndicator color={colors.primary} /> : null}</View>}
         ListEmptyComponent={
           <NotificationEmptyState
             title={

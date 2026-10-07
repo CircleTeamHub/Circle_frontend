@@ -4,16 +4,22 @@ import { fetchUserMoments } from '@/services/api/moments';
 import type { MomentPost, PaginatedResponse } from '@/types';
 
 jest.mock('@/services/api/moments', () => ({ fetchUserMoments: jest.fn() }));
+const mockAuth = { isAuthenticated: true, user: { id: 'owner-a' }, sessionEpoch: 1 };
+jest.mock('@/stores/authStore', () => ({
+  useAuthStore: Object.assign((selector: (state: typeof mockAuth) => unknown) => selector(mockAuth), {
+    getState: () => mockAuth,
+  }),
+}));
 // errors.ts 会经由 api/client 拖进 authStore/AsyncStorage 原生模块；spec 只关心
 // 「失败时展示的是包装后的文案」，与 AvatarFrameScreens.spec 同款打桩。
 jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 jest.mock('react-i18next', () => {
-  // Stable t reference, like the real hook — a fresh function each render would
-  // bust the useCallback memo and re-fire the load effect endlessly.
-  const t = (key: string) => key;
-  return { useTranslation: () => ({ t }) };
+  // Deliberately return a fresh t function on every render. The hook must keep
+  // that presentation detail out of the request effect dependencies, otherwise
+  // an error state update would start the same feed request again indefinitely.
+  return { useTranslation: () => ({ t: (key: string) => key }) };
 });
 
 const mockFetch = fetchUserMoments as jest.MockedFunction<typeof fetchUserMoments>;
@@ -38,6 +44,7 @@ const pageOf = (
 
 beforeEach(() => {
   mockFetch.mockReset();
+  Object.assign(mockAuth, { isAuthenticated: true, user: { id: 'owner-a' }, sessionEpoch: 1 });
 });
 
 test('loadMore issues a single request when triggered twice rapidly', async () => {
@@ -72,6 +79,26 @@ test('loadMore issues a single request when triggered twice rapidly', async () =
   });
 
   expect(result.current.moments.map((m) => m.id)).toEqual(['a', 'b']);
+});
+
+test('a failed request does not allow automatic loadMore retries', async () => {
+  mockFetch.mockRejectedValueOnce(new Error('offline'));
+
+  const { result } = renderHook(() => useUserMoments('user-1'));
+
+  await waitFor(() => {
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBe('common.networkError');
+  });
+
+  // FlatList can emit onEndReached repeatedly while an empty album is shorter
+  // than the viewport. Once the initial request fails, loadMore must wait for
+  // the user's explicit pull-to-refresh instead of issuing another request.
+  await act(async () => {
+    await result.current.loadMore();
+  });
+
+  expect(mockFetch).toHaveBeenCalledTimes(1);
 });
 
 test('a fetch that resolves after unmount does not update state or error', async () => {
@@ -127,4 +154,110 @@ test('a stale user fetch cannot overwrite moments after userId changes', async (
   });
 
   expect(result.current.moments.map((m) => m.id)).toEqual(['b']);
+});
+
+test('a late response cannot restore a previous user after the id is cleared', async () => {
+  let resolveLate: (value: MomentPage) => void = () => {};
+  mockFetch.mockImplementationOnce(
+    () => new Promise((resolve) => (resolveLate = resolve)),
+  );
+
+  const { result, rerender } = renderHook<
+    ReturnType<typeof useUserMoments>,
+    { userId: string }
+  >(
+    ({ userId }) => useUserMoments(userId),
+    { initialProps: { userId: 'user-1' } },
+  );
+
+  rerender({ userId: '' });
+  await act(async () => {
+    resolveLate(pageOf(['stale'], false));
+  });
+
+  expect(result.current.moments).toEqual([]);
+  expect(result.current.hasMore).toBe(false);
+  expect(result.current.error).toBeNull();
+});
+
+test('failed refresh preserves the loaded album and allows its next cursor page', async () => {
+  mockFetch.mockResolvedValueOnce(pageOf(['cached'], true, 'cached-cursor'))
+    .mockRejectedValueOnce(new Error('temporary refresh failure'))
+    .mockResolvedValueOnce(pageOf(['next-page'], false));
+  const { result } = renderHook(() => useUserMoments('user-1'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async () => { await result.current.refresh(); });
+  expect(result.current.moments.map((m) => m.id)).toEqual(['cached']);
+  expect(result.current.error).toBe('common.networkError');
+  await act(async () => { await result.current.loadMore(); });
+  expect(mockFetch).toHaveBeenLastCalledWith('user-1', { cursor: 'cached-cursor', limit: 20 });
+  expect(result.current.moments.map((m) => m.id)).toEqual(['cached', 'next-page']);
+});
+
+test('failed pagination stays blocked through a failed refresh until an explicit refresh succeeds', async () => {
+  mockFetch.mockResolvedValueOnce(pageOf(['cached'], true, 'page-2'))
+    .mockRejectedValueOnce(new Error('page failure'))
+    .mockRejectedValueOnce(new Error('refresh failure'))
+    .mockResolvedValueOnce(pageOf(['refreshed'], true, 'new-page-2'))
+    .mockResolvedValueOnce(pageOf(['more'], false));
+  const { result } = renderHook(() => useUserMoments('user-1'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async () => { await result.current.loadMore(); await result.current.loadMore(); });
+  expect(mockFetch).toHaveBeenCalledTimes(2);
+  await act(async () => { await result.current.refresh(); });
+  await act(async () => { await result.current.loadMore(); });
+  expect(mockFetch).toHaveBeenCalledTimes(3);
+  await act(async () => { await result.current.refresh(); });
+  await act(async () => { await result.current.loadMore(); });
+  expect(mockFetch).toHaveBeenLastCalledWith('user-1', { cursor: 'new-page-2', limit: 20 });
+  expect(result.current.moments.map((m) => m.id)).toEqual(['refreshed', 'more']);
+});
+
+test('a page claiming hasMore without a cursor cannot restart from the first page automatically', async () => {
+  mockFetch.mockResolvedValueOnce(pageOf(['cached'], true, null));
+  const { result } = renderHook(() => useUserMoments('user-1'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async () => { await result.current.loadMore(); });
+  expect(mockFetch).toHaveBeenCalledTimes(1);
+});
+
+test.each(['account', 'epoch'] as const)('cached private moments disappear when the %s changes, and stale requests cannot finish the new load', async (change) => {
+  let resolveOld: (value: MomentPage) => void = () => {};
+  let resolveNew: (value: MomentPage) => void = () => {};
+  mockFetch.mockResolvedValueOnce(pageOf(['private-a'], true))
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }))
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveNew = resolve; }));
+  const { result, rerender } = renderHook(() => useUserMoments('user-1'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  act(() => { void result.current.loadMore(); });
+  if (change === 'account') mockAuth.user = { id: 'owner-b' };
+  mockAuth.sessionEpoch += 1;
+  rerender(undefined);
+  expect(result.current.moments).toEqual([]);
+  expect(result.current.loading).toBe(true);
+  await act(async () => { resolveOld(pageOf(['private-late-a'], false)); });
+  expect(result.current.moments).toEqual([]);
+  expect(result.current.loading).toBe(true);
+  await act(async () => { resolveNew(pageOf(['new-session'], false)); });
+  expect(result.current.moments.map((m) => m.id)).toEqual(['new-session']);
+  expect(result.current.loading).toBe(false);
+});
+
+test('logout hides cached moments and invalidates an in-flight refresh', async () => {
+  let resolveRefresh: (value: MomentPage) => void = () => {};
+  mockFetch.mockResolvedValueOnce(pageOf(['private'], true))
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve; }));
+  const { result, rerender } = renderHook(() => useUserMoments('user-1'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  act(() => { void result.current.refresh(); });
+  mockAuth.isAuthenticated = false;
+  mockAuth.sessionEpoch += 1;
+  rerender(undefined);
+  expect(result.current.moments).toEqual([]);
+  await act(async () => { resolveRefresh(pageOf(['private-late'], true)); });
+  expect(result.current.moments).toEqual([]);
+  expect(result.current.loading).toBe(false);
+  expect(result.current.refreshing).toBe(false);
+  await act(async () => { await result.current.refresh(); await result.current.loadMore(); });
+  expect(mockFetch).toHaveBeenCalledTimes(2);
 });

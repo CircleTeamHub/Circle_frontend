@@ -139,7 +139,7 @@ test('apiClient converts a dropped response body into a localized ApiError', asy
       err.name === 'ApiError' &&
       err.status === 0 &&
       err.failureKind === 'body-read' &&
-      err.message === '网络异常，请确认后端服务已启动',
+      err.message === '暂时无法连接，请检查网络后重试',
   );
 });
 

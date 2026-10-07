@@ -61,16 +61,16 @@
     "privacyPolicy": "Privacy Policy",
     "errors": {
       "requestTimeout": "Request timed out. Check your connection and try again.",
-      "networkUnavailable": "Network error. Make sure the backend service is running.",
-      "invalidServerResponse": "The server returned invalid data.",
-      "requestFailedWithStatus": "Request failed ({{status}})",
-      "requestFailed": "Request failed",
+      "networkUnavailable": "Unable to connect right now. Check your connection and try again.",
+      "invalidServerResponse": "Something went wrong. Please try again.",
+      "requestFailedWithStatus": "The request could not be completed. Please try again.",
+      "requestFailed": "The operation could not be completed. Please try again.",
       "sessionExpired": "Your session has expired. Please sign in again.",
       "refreshResponseInvalid": "Couldn't refresh your session. Please sign in again.",
       "sessionChangedDuringRefresh": "Your account changed while refreshing the session. Please try again.",
       "uploadTimeout": "Upload timed out. Check your connection and try again.",
       "uploadFailed": "Upload failed. Please try again later.",
-      "uploadFailedWithStatus": "Upload failed ({{status}})"
+      "uploadFailedWithStatus": "Upload failed. Please try again."
     }
   },
   "auth": {
@@ -1893,13 +1893,13 @@
       "link": "Membership Rules",
       "title": "Rules & Permissions",
       "heading": "Membership Rules",
-      "description": "Customer service manually verifies and grants membership. This page shows the benefit catalog; backend permissions remain authoritative.",
+      "description": "Customer service manually verifies and grants membership. This page shows the benefit catalog; your available benefits follow your current membership status.",
       "rules": {
         "catalog": "Daily membership: CNY 19.9 / 1 day; Monthly membership: CNY 298 / 1 month; Six-month membership: CNY 1,288 / 6 months; Annual membership: CNY 1,998 / 1 year; Lifetime membership: CNY 3,998 / lifetime.",
         "supportActivation": "Membership cannot be redeemed with points or purchased in the app. After contact, customer service manually verifies and grants membership.",
         "upgrade": "Current members may contact customer service to pay the difference for an upgrade. It takes effect immediately, with remaining membership value applied by customer service.",
         "expiry": "When membership expires, only membership benefits stop. Accounts, chats, notes, and other user content are not deleted.",
-        "fairUse": "Membership rules apply only to benefits listed in the Membership Center. Any listed unlimited benefit remains subject to high backend fair-use and abuse-prevention limits. Actual permissions are determined by the backend.",
+        "fairUse": "Membership rules apply only to benefits listed in the Membership Center. Any listed unlimited benefit remains subject to reasonable-use and abuse-prevention limits. Your available benefits follow your current membership status.",
         "voiceToText": "Voice-to-text is a free basic feature for every user and is not restricted by membership tier.",
         "excludedVisualBenefits": "Current membership benefits do not promise avatar frames or animated avatars."
       }
@@ -1917,6 +1917,14 @@
     "permissionValues": {
       "FULL": "Chat & Moments",
       "CHAT_ONLY": "Chat only"
+    },
+    "editPermission": {
+      "label": "Set Moments access for {{name}}",
+      "helper": "This only controls whether this person can view your Moments. Chat access is unchanged.",
+      "loading": "Loading permissions...",
+      "missingFriend": "Friend information is missing",
+      "loadFailed": "Failed to load permissions. Please try again.",
+      "saveFailed": "Failed to save permissions. Please try again."
     },
     "loadFailed": "Failed to load profile, showing cached data",
     "startChat": "Start Chat",
@@ -2638,7 +2646,7 @@
       "videoItem": "Video",
       "previewTitle": "Preview",
       "composerComingSoonTitle": "Coming soon",
-      "composerComingSoonMessage": "This content type needs server note protocol support and was kept in the ordering list.",
+      "composerComingSoonMessage": "This content type is temporarily unavailable and was kept in the ordering list.",
       "composer": {
         "title": "Title",
         "text": "Text",
@@ -3110,7 +3118,7 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "Invalid presigned upload data.",
+      "presignDataInvalid": "Unable to start the upload. Please try again.",
       "fileUnreadable": "The file to upload could not be found.",
       "fileTooLarge": "File exceeds the {{maxMb}}MB limit."
     }

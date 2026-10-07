@@ -152,7 +152,7 @@ test('group-expansion purchase rejects a response that differs from the displaye
       price: 600,
       seats: 100,
     }),
-    /服务返回了无效数据/,
+    /暂时无法完成操作，请稍后重试/,
   );
 });
 
@@ -164,7 +164,7 @@ test('group-expansion API rejects malformed server payloads', async () => {
 
   await assert.rejects(
     api.fetchGroupExpansionProducts(productResponse.circleId),
-    /服务返回了无效数据/,
+    /暂时无法完成操作，请稍后重试/,
   );
 });
 
@@ -185,7 +185,7 @@ test('group-expansion catalog rejects duplicate product ids', async () => {
 
   await assert.rejects(
     api.fetchGroupExpansionProducts(productResponse.circleId),
-    /服务返回了无效数据/,
+    /暂时无法完成操作，请稍后重试/,
   );
 });
 
@@ -239,7 +239,7 @@ test('group-expansion catalog rejects contradictory product availability', async
       }));
       await assert.rejects(
         api.fetchGroupExpansionProducts(productResponse.circleId),
-        /服务返回了无效数据/,
+        /暂时无法完成操作，请稍后重试/,
       );
     });
   }
@@ -265,7 +265,7 @@ test('group-expansion catalog rejects another circle and invalid capacity arithm
       const api = loadGroupExpansionModule(async () => response);
       await assert.rejects(
         api.fetchGroupExpansionProducts(productResponse.circleId),
-        /服务返回了无效数据/,
+        /暂时无法完成操作，请稍后重试/,
       );
     });
   }
@@ -296,7 +296,7 @@ test('group-expansion purchase rejects identifiers from another request', async 
           price: 600,
           seats: 100,
         }),
-        /服务返回了无效数据/,
+        /暂时无法完成操作，请稍后重试/,
       );
     });
   }

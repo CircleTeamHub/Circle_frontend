@@ -4,6 +4,7 @@ import {
   isFiniteNonNegativeNumber,
   isPlainObject,
 } from '@/utils/validate';
+import { buildQuery } from '@/services/api/utils';
 import type { NotificationItem } from '@/types';
 import type { NotificationDomain } from '@/features/notifications/utils/notification-domain';
 
@@ -20,6 +21,11 @@ export type NotificationUnreadSummary = {
 export type PushTokenPlatform = 'ios' | 'android' | 'web';
 
 export type PushTokenProvider = 'expo' | 'jpush';
+
+export type NotificationCursorPage = {
+  items: NotificationItem[];
+  nextCursor: string | null;
+};
 
 export type RegisterPushTokenInput = {
   token: string;
@@ -54,6 +60,29 @@ function isNotificationOpenOwnershipShape(
   return isPlainObject(value) && typeof value.owned === 'boolean';
 }
 
+function isNotificationItemShape(value: unknown): value is NotificationItem {
+  return (
+    isPlainObject(value) &&
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    typeof value.type === 'string' &&
+    typeof value.content === 'string' &&
+    typeof value.read === 'boolean' &&
+    typeof value.createdAt === 'string'
+  );
+}
+
+function isNotificationCursorPageShape(
+  value: unknown,
+): value is NotificationCursorPage {
+  return (
+    isPlainObject(value) &&
+    Array.isArray(value.items) &&
+    value.items.every(isNotificationItemShape) &&
+    (value.nextCursor === null || typeof value.nextCursor === 'string')
+  );
+}
+
 export async function fetchNotificationUnreadSummary(): Promise<NotificationUnreadSummary> {
   const raw = await apiClient<NotificationUnreadSummary>(
     '/notification/unread-summary',
@@ -86,12 +115,54 @@ export async function fetchNotifications(
   return apiClient<NotificationItem[]>(`/notification/list${query}`);
 }
 
+function readNotificationCursorPage(
+  raw: unknown,
+  requestedCursor: string | null | undefined,
+  message: string,
+): NotificationCursorPage {
+  const page = expectShape(raw, isNotificationCursorPageShape, message);
+  if (requestedCursor && page.nextCursor === requestedCursor) {
+    // Treat a repeated cursor as a page failure. Both consumers already offer
+    // explicit retry and stop automatic onEndReached requests after failure.
+    throw new Error(message);
+  }
+  return page;
+}
+
+/**
+ * Keyset page for the interactive notification center. The legacy array API
+ * above remains available for realtime recovery and older clients.
+ */
+export async function fetchNotificationsPage(
+  cursor?: string | null,
+  domain?: NotificationDomain | null,
+): Promise<NotificationCursorPage> {
+  const raw = await apiClient<NotificationCursorPage>(
+    `/notification/list${buildQuery({
+      cursorMode: 'true',
+      cursor,
+      domain,
+    })}`,
+  );
+  return readNotificationCursorPage(raw, cursor, '通知分页数据格式异常');
+}
+
 export async function fetchProfileNotifications(
   page = 1,
 ): Promise<NotificationItem[]> {
   return apiClient<NotificationItem[]>(
     `/notification/profile/list?page=${page}`,
   );
+}
+
+/** Keyset page for the profile/system-notification list. */
+export async function fetchProfileNotificationsPage(
+  cursor?: string | null,
+): Promise<NotificationCursorPage> {
+  const raw = await apiClient<NotificationCursorPage>(
+    `/notification/profile/list${buildQuery({ cursorMode: 'true', cursor })}`,
+  );
+  return readNotificationCursorPage(raw, cursor, '系统通知分页数据格式异常');
 }
 
 export async function markNotificationRead(id: string): Promise<void> {

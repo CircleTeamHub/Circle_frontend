@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState, type ComponentType } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -59,6 +65,10 @@ function isUuid(value: string | undefined): value is string {
 
 export default function UserMomentsScreen() {
   const { t } = useTranslation();
+  // 不把翻译函数身份放进资料请求 effect：资源初始化/切换语言时 t 可能变化，
+  // 但同一个 route 不应因此再次请求资料和朋友圈。
+  const translateRef = useRef(t);
+  translateRef.current = t;
   const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -102,7 +112,7 @@ export default function UserMomentsScreen() {
 
     if (!routeUserId) {
       setProfileResolving(false);
-      setProfileError(t('common.networkError'));
+      setProfileError(translateRef.current('common.networkError'));
       return () => {
         active = false;
       };
@@ -121,7 +131,12 @@ export default function UserMomentsScreen() {
         );
       } catch (err) {
         if (!active) return;
-        setProfileError(getApiErrorMessage(err, t('common.networkError')));
+        setProfileError(
+          getApiErrorMessage(
+            err,
+            translateRef.current('common.networkError'),
+          ),
+        );
         reportHandledFailure('userProfile', 'fetchProfile', err);
       } finally {
         if (active) setProfileResolving(false);
@@ -130,7 +145,7 @@ export default function UserMomentsScreen() {
     return () => {
       active = false;
     };
-  }, [params.name, t, routeUserId]);
+  }, [params.name, routeUserId]);
 
   const title = nickname
     ? t('moment.albumTitle', { name: nickname })
@@ -192,10 +207,13 @@ export default function UserMomentsScreen() {
     ) : null;
 
   const handleEndReached = useCallback(() => {
-    if (!loading && hasMore) {
+    // A failed request leaves the list shorter than the viewport, so
+    // FlatList may emit onEndReached on every render. Wait for an explicit
+    // pull-to-refresh before trying the failed page again.
+    if (!loading && hasMore && !error) {
       void loadMore();
     }
-  }, [loading, hasMore, loadMore]);
+  }, [error, loading, hasMore, loadMore]);
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>

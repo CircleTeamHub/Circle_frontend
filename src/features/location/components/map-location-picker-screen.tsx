@@ -607,6 +607,11 @@ export function MapLocationPickerScreen({
     setSurfaceKey((key) => key + 1);
   }, []);
 
+  const handleMapLoadError = useCallback(() => {
+    setLoading(false);
+    setMapUnavailable(true);
+  }, []);
+
   const handleMapMessage = useCallback(
     (data: string) => {
       let payload: unknown;
@@ -680,6 +685,7 @@ export function MapLocationPickerScreen({
             html={mapHtml}
             geocoderBaseUrl={readGeocoderBaseUrl()}
             onLoadEnd={() => setLoading(false)}
+            onLoadError={handleMapLoadError}
             onMessage={handleMapMessage}
           />
         )}
