@@ -55,6 +55,7 @@
     "expo-crypto": "~55.0.16",
     "expo-dev-client": "~55.0.18",
     "expo-device": "^55.0.12",
+    "expo-document-picker": "~55.0.10",
     "expo-file-system": "~55.0.24",
     "expo-font": "~55.0.4",
     "expo-gaode-map": "2.2.44",

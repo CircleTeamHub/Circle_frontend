@@ -58,3 +58,15 @@ test('standard previews keep disk caching and the save gesture', () => {
   expect(image.props.cachePolicy).toBe('memory-disk');
   expect(image.props.onLongPress).toEqual(expect.any(Function));
 });
+
+test('hidden viewers do not mount zoomable image resources', () => {
+  const { queryByTestId } = render(
+    <ImageViewer
+      images={['https://example.test/hidden.jpg']}
+      visible={false}
+      onClose={jest.fn()}
+    />,
+  );
+
+  expect(queryByTestId('zoomable-image')).toBeNull();
+});

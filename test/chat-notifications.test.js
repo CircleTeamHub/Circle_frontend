@@ -81,6 +81,29 @@ test('android gets a high-importance chat channel whose content stays private on
   assert.equal(calls.channels[0].channel.importance, 4);
   assert.equal(calls.channels[0].channel.lockscreenVisibility, 0);
   assert.equal(calls.channels[0].channel.name, 'notifications.chatChannelName');
+  // Expo treats nonempty channel sound strings as custom raw-resource names.
+  // Omitting sound keeps Android's constructor default without that warning.
+  assert.equal(Object.hasOwn(calls.channels[0].channel, 'sound'), false);
+});
+
+test('reinitializing the chat channel does not reset an existing user mute', async () => {
+  const notifications = fakeNotifications();
+  const existing = { id: 'chat', sound: null, importance: 4, name: 'Old language' };
+  let deletions = 0;
+  notifications.module.deleteNotificationChannelAsync = async () => { deletions += 1; };
+  notifications.module.setNotificationChannelAsync = async (id, channel) => {
+    notifications.calls.channels.push({ id, channel });
+    // Android permits renaming; sound on an existing channel is user-owned.
+    existing.name = channel.name;
+    return existing;
+  };
+  const { api } = load({ notifications });
+  await api.ensureChatNotificationChannel(notifications.module);
+  await api.ensureChatNotificationChannel(notifications.module);
+  assert.equal(existing.sound, null);
+  assert.equal(existing.name, 'notifications.chatChannelName');
+  assert.equal(deletions, 0);
+  assert.ok(notifications.calls.channels.every(({ channel }) => !Object.hasOwn(channel, 'sound')));
 });
 
 test('ios has no channels to create', async () => {

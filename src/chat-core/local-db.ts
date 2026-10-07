@@ -498,11 +498,13 @@ async function trimConversationRetention(
 export async function persistLocalMessages(
   conversationId: string,
   incoming: ChatMessageDto[],
-): Promise<void> {
+): Promise<boolean> {
   const current = requireDb();
-  if (!current) return;
+  // Web has no local message cache; the in-memory state is the durable state
+  // available to that platform for this process.
+  if (!current) return true;
   const rows = incoming.filter((m) => m.height > 0);
-  if (rows.length === 0) return;
+  if (rows.length === 0) return true;
   try {
     await writeTransaction(current.db, async () => {
       for (const message of rows) {
@@ -529,8 +531,10 @@ export async function persistLocalMessages(
       }
       await trimConversationRetention(current.db, conversationId);
     });
+    return true;
   } catch (error) {
     warn('msg-write', '[chat-db] persist messages failed', error);
+    return false;
   }
 }
 

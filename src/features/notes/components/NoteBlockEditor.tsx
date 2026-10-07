@@ -85,6 +85,7 @@ interface Props {
   onContentChange: (blocks: Record<string, unknown>[]) => void;
   onMediaUploaded?: (media: CreateNoteMediaInput) => void;
   mediaToolbarEnabled?: boolean;
+  editable?: boolean;
 }
 
 function NoteBlockEditorImpl({
@@ -92,7 +93,10 @@ function NoteBlockEditorImpl({
   onContentChange,
   onMediaUploaded,
   mediaToolbarEnabled = true,
+  editable = true,
 }: Props) {
+  const editableRef = useRef(editable);
+  editableRef.current = editable;
   const { resolvedMode } = useTheme();
   const { t, i18n } = useTranslation();
   // BlockNote runs in the DOM bridge realm where i18n can't reach, so resolve
@@ -311,7 +315,7 @@ function NoteBlockEditorImpl({
 
   const handleContentChangeJson = useCallback(
     (blocksJson: string) => {
-      if (!isMounted.current) return;
+      if (!isMounted.current || !editableRef.current) return;
       try {
         const blocks = JSON.parse(blocksJson) as Record<string, unknown>[];
         onContentChange(blocks);
@@ -345,6 +349,7 @@ function NoteBlockEditorImpl({
           language={language}
           toolbarLabels={toolbarLabels}
           mediaToolbarEnabled={mediaToolbarEnabled}
+          editable={editable}
         />
       </View>
     </DOMBridgeErrorBoundary>

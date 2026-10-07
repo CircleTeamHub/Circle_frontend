@@ -1,7 +1,7 @@
 WindNote third-party software notices
 
 This file is generated from the installed production dependency tree.
-Components: 1177
+Components: 1178
 
 ================================================================================
 @babel/code-frame@7.10.4
@@ -14963,6 +14963,12 @@ No license file was included in the installed package; see the declared license 
 
 ================================================================================
 expo-device@55.0.12
+License: MIT
+Source: https://github.com/expo/expo.git
+No license file was included in the installed package; see the declared license metadata above.
+
+================================================================================
+expo-document-picker@55.0.17
 License: MIT
 Source: https://github.com/expo/expo.git
 No license file was included in the installed package; see the declared license metadata above.

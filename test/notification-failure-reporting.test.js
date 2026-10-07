@@ -479,7 +479,7 @@ test('a dropped response body on a notification call yields exactly one Sentry i
   // 修好前:TypeError、status undefined、未本地化文案、两条 issue。
   assert.equal(caught.name, 'ApiError');
   assert.equal(caught.status, 0);
-  assert.equal(caught.message, '网络异常，请确认后端服务已启动');
+  assert.equal(caught.message, '暂时无法连接，请检查网络后重试');
   assert.equal(reports.length, 1);
   assert.equal(reports[0].context.failureKind, 'body-read');
   assert.equal(reports[0].context.endpointPath, '/notification/:id/read');

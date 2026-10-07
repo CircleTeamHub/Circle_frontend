@@ -888,6 +888,11 @@
     "mutedA11y": "通知オフ"
   },
   "notes": {
+    "accessibility": {
+      "playRecording": "録音を再生",
+      "pauseRecording": "録音を一時停止",
+      "viewImage": "画像を見る"
+    },
     "actions": {
       "new": "新規",
       "qrCode": "QRコード",
@@ -951,8 +956,27 @@
       "chatWithSender": "{{name}} とチャット",
       "openGroupSource": "グループ「{{name}}」で元のメッセージを見る"
     },
+    "drafts": {
+      "title": "下書き",
+      "empty": "下書きはありません",
+      "deleteTitle": "下書きを削除しますか？",
+      "deleteMessage": "削除した下書きは復元できません。",
+      "unsavedTitle": "未完成のノートを保存しますか？",
+      "unsavedMessage": "保存していない内容を下書きに保存し、後で編集を続けられます。",
+      "discard": "保存せずに退出",
+      "save": "下書きに保存",
+      "untitled": "無題のノート",
+      "noContent": "まだ内容がありません",
+      "mediaCount": "メディア {{count}} 件",
+      "deleteLabel": "下書きを削除",
+      "deleteFailed": "下書きを削除できませんでした。もう一度お試しください。",
+      "pendingSubmitDeleteBlocked": "この下書きの保存結果はまだ確認できていません。下書きを開いて元の保存を再試行してから、削除するか決めてください。",
+      "deletePending": "端末のデータ整理またはサーバーの削除が未完了です。内容は非表示になっています。再試行して削除を完了してください。",
+      "saveFailed": "下書きを保存できませんでした。もう一度お試しください。"
+    },
     "edit": {
       "addImage": "画像を追加",
+      "addMedia": "メディアを追加",
       "addShowcaseImage": "紹介画像を追加",
       "addShowcaseVideo": "紹介動画を追加",
       "addVideo": "動画を追加",
@@ -961,6 +985,7 @@
       "emptySection": "まだ内容がありません",
       "groupsLabel": "グループ",
       "imageItem": "画像",
+      "audioItem": "音声",
       "itemsCount": "項目",
       "legacyMediaUnavailableInline": "このノートには復元できない古いメディアが {{count}} 件あります。保存すると失われるため、保存せずに戻ってください。",
       "legacyMediaUnavailableMessage": "このノートには復元できない古いメディアが含まれています。内容を失わないよう、保存せずに戻ってください。",
@@ -979,13 +1004,37 @@
       "saveFailedMessage": "保存に失敗しました。もう一度お試しください",
       "saveFailedTitle": "保存に失敗しました",
       "saving": "保存中...",
+      "contactPickerTitle": "連絡先を選択",
+      "groupPickerTitle": "グループを選択",
+      "contactSearchPlaceholder": "連絡先を検索",
+      "groupSearchPlaceholder": "グループを検索",
+      "cardPickerNoResults": "一致する項目がありません",
+      "cardPickerLoadFailedTitle": "読み込めませんでした",
+      "cardPickerLoadFailedMessage": "名刺一覧を読み込めませんでした。もう一度お試しください。",
+      "addContact": "連絡先を選択",
+      "addGroup": "グループを選択",
+      "mediaUploadFailedTitle": "アップロードに失敗しました",
+      "mediaUploadFailedMessage": "もう一度お試しください",
+      "uploadAudio": "音声をアップロード",
+      "startRecording": "録音を開始",
+      "stopRecording": "録音を停止",
+      "audioRecording": "録音中、タップして停止",
+      "waitForMediaTitle": "現在の操作を完了してください",
+      "waitForMediaMessage": "録音を停止するか、アップロードまたは保存が完了してから戻ってください。",
+      "pendingSubmitMessage": "保存結果を確認できていないため、編集を一時停止しています。「再試行」で元の保存を確認するか、戻って下書きに残し、後で再試行してください。",
+      "pendingSubmitStorageFailed": "送信内容を端末に保存できなかったため、まだ送信していません。空き容量を確認して再試行してください。",
+      "pendingSubmitConflict": "サーバーのノート内容が異なります。端末の内容は下書きに残っています。保存済みノートを確認してから統合方法を決めてください。この下書きは削除しません。",
+      "openCommittedNote": "保存済みノートを見る",
+      "audioDuration": "{{seconds}} 秒",
+      "audioPickerUnavailableTitle": "音声を選択できません",
+      "audioPickerUnavailableMessage": "このアプリのバージョンでは音声選択を利用できません。アプリを更新してもう一度お試しください。",
       "sections": {
         "location": "場所",
         "locationEmpty": "任意",
         "locationHint": "地図上で場所を選択",
         "locationSelected": "選択済み",
-        "media": "画像/動画",
-        "mediaHint": "本文の素材、画像と動画に対応",
+        "media": "メディア",
+        "mediaHint": "本文の画像と動画素材",
         "showcase": "紹介",
         "showcaseHint": "共有グループカードに表示される素材",
         "text": "テキスト",
@@ -995,12 +1044,33 @@
       "titleRequired": "タイトルを入力してください",
       "titleHint": "タイトルは必須です（最大{{max}}文字）",
       "textCount": "本文の長さ {{count}} / {{max}}",
-      "textScrollHint": "本文は任意です。入力欄内をスクロールすると全文を確認できます。",
       "textTooLong": "本文は段落間の改行を含めて最大{{max}}文字です（現在{{count}}文字）。入力内容は保持されています。短くしてから保存してください。",
       "tooManyParagraphs": "本文は最大{{max}}段落です。入力内容は保持されています。一部の段落をまとめてから保存してください。",
       "titlePlaceholder": "タイトル",
       "uploading": "アップロード中...",
-      "videoItem": "動画"
+      "videoItem": "動画",
+      "previewTitle": "プレビュー",
+      "composerComingSoonTitle": "準備中",
+      "composerComingSoonMessage": "この種類のコンテンツは現在利用できないため、並び順には保持されます。",
+      "composer": {
+        "title": "タイトル",
+        "text": "本文",
+        "image": "画像",
+        "media": "メディア",
+        "audio": "録音",
+        "video": "動画",
+        "showcase": "表示",
+        "location": "位置情報",
+        "contact": "名刺",
+        "group": "グループ名刺",
+        "sort": "並べ替え",
+        "preview": "プレビュー",
+        "sortEmpty": "並べ替えるコンテンツがありません",
+        "reorderA11y": "{{label}}の位置を調整",
+        "moveUp": "{{label}}を上へ",
+        "moveDown": "{{label}}を下へ"
+      },
+      "unsupportedAudio": "この音声形式には対応していません。M4A、MP3、AAC、WAV、OGG、WebM を選択してください。"
     },
     "editor": {
       "mediaUploadFailedMessage": "もう一度お試しください",
@@ -1097,6 +1167,9 @@
       "text": "テキスト",
       "media": "画像 · 動画",
       "showcase": "ショーケース",
+      "audio": "録音",
+      "contact": "名刺",
+      "group": "グループ名刺",
       "location": "住所",
       "emptyText": "テキストはありません"
     },
@@ -1118,7 +1191,7 @@
     "groupPicker": {
       "title": "グループを編集",
       "batchHint": "チェックで選択中の {{count}} 件のノートをグループに追加、解除で除外します。変更していないグループはそのままです。",
-      "empty": "グループがありません。先に「グループを管理」で作成してください。",
+      "empty": "グループがありません。",
       "saving": "保存中...",
       "save": "保存"
     },
@@ -2007,6 +2080,14 @@
       "FULL": "チャット・モーメンツ",
       "CHAT_ONLY": "チャットのみ"
     },
+    "editPermission": {
+      "label": "{{name}} のモーメンツ公開範囲を設定",
+      "helper": "この設定は相手があなたのモーメンツを見られるかだけを制御します。チャット権限は変わりません。",
+      "loading": "権限を読み込んでいます...",
+      "missingFriend": "友だち情報がありません",
+      "loadFailed": "権限を読み込めませんでした。もう一度お試しください。",
+      "saveFailed": "権限を保存できませんでした。もう一度お試しください。"
+    },
     "loadFailed": "プロフィールの読み込みに失敗しました。キャッシュデータを表示しています",
     "startChat": "チャットを開始",
     "openingChat": "チャットを開いています...",
@@ -2440,13 +2521,13 @@
       "link": "会員ルール",
       "title": "ルールと権限の説明",
       "heading": "会員ルール",
-      "description": "会員資格はカスタマーサービスが手動で確認して付与します。このページは特典カタログを表示し、実際の権限はバックエンドを正とします。",
+      "description": "会員資格はカスタマーサービスが手動で確認して付与します。このページは特典カタログを表示し、利用できる特典は現在の会員状態に従います。",
       "rules": {
         "catalog": "デイリー会員 CNY 19.9 / 1日、月額会員 CNY 298 / 1か月、半年会員 CNY 1,288 / 6か月、年額会員 CNY 1,998 / 1年、永久会員 CNY 3,998 / 永久。",
         "supportActivation": "会員資格はアプリ内でポイント交換または直接購入できません。連絡後、カスタマーサービスが手動で確認して付与します。",
         "upgrade": "開通済みの会員は、カスタマーサービスに連絡して差額を支払うことでアップグレードできます。すぐに有効になり、残存価値はカスタマーサービスが充当します。",
         "expiry": "会員期限が切れた場合、会員特典のみ停止します。アカウント、チャット、ノートなどのユーザーコンテンツは削除されません。",
-        "fairUse": "会員ルールは会員センターに記載された特典にのみ適用されます。そのうち「無制限」と表示される特典にも、バックエンドの高い水準の公正利用・不正利用防止上限が適用されます。実際の権限はバックエンドを正とします。",
+        "fairUse": "会員ルールは会員センターに記載された特典にのみ適用されます。「無制限」と表示される特典にも、適正利用・不正利用防止の上限が適用されます。利用できる特典は現在の会員状態に従います。",
         "voiceToText": "音声テキスト変換は全ユーザー向けの無料基本機能で、会員ランクによる制限はありません。",
         "excludedVisualBenefits": "現在の会員特典には、アバターフレームや動くアバターの提供保証は含まれません。"
       }
@@ -2729,15 +2810,16 @@
     "privacyPolicy": "プライバシーポリシー",
     "errors": {
       "requestTimeout": "リクエストがタイムアウトしました。接続を確認して再試行してください。",
-      "networkUnavailable": "ネットワークエラーです。サーバーが起動しているか確認してください。",
-      "invalidServerResponse": "サーバーから無効なデータが返されました",
-      "requestFailedWithStatus": "リクエストに失敗しました（{{status}}）",
-      "requestFailed": "リクエストに失敗しました",
+      "networkUnavailable": "接続できません。通信状態を確認して、もう一度お試しください。",
+      "invalidServerResponse": "操作を完了できませんでした。もう一度お試しください。",
+      "requestFailedWithStatus": "リクエストを完了できませんでした。もう一度お試しください。",
+      "requestFailed": "操作を完了できませんでした。もう一度お試しください。",
       "sessionExpired": "セッションの有効期限が切れました。もう一度サインインしてください。",
       "refreshResponseInvalid": "更新レスポンスが無効です。もう一度サインインしてください。",
       "sessionChangedDuringRefresh": "セッション更新中にアカウントが切り替わりました。もう一度お試しください。",
       "uploadTimeout": "アップロードがタイムアウトしました。接続を確認して再試行してください。",
-      "uploadFailedWithStatus": "アップロードに失敗しました（{{status}}）"
+      "uploadFailed": "アップロードに失敗しました。しばらくしてから再試行してください。",
+      "uploadFailedWithStatus": "アップロードに失敗しました。もう一度お試しください。"
     }
   },
   "credit": {
@@ -3028,7 +3110,7 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "署名付きアップロードデータの形式エラー",
+      "presignDataInvalid": "アップロードを開始できません。もう一度お試しください。",
       "fileUnreadable": "アップロードするファイルが見つかりません",
       "fileTooLarge": "ファイルが {{maxMb}}MB の上限を超えています"
     }
@@ -3267,6 +3349,7 @@
     "FRIEND_LIMIT_REACHED": "友だちの数が上限に達しました。会員登録で上限を増やせます",
     "NOTE_GROUP_EXISTS": "同じ名前のグループが既に存在します",
     "NOTE_STORAGE_QUOTA_REACHED": "現在の会員レベルのノート保存上限に達しました",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "このノートの保存回数が上限に達しました。下書きを保持し、追加した内容を新しいノートとして保存してください。",
     "NOTE_GROUP_LIMIT": "ノートグループの数が上限に達しました",
     "NOTE_EXPORT_NO_MEDIA": "エクスポートできるメディアがありません",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "メディアファイルが大きすぎてエクスポートできません",

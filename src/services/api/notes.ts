@@ -8,10 +8,13 @@ import type {
   NoteChatMediaImportResult,
   NoteChatMediaSection,
   NoteDetail,
+  NoteDraftDetail,
+  NoteDraftSummary,
   NoteExportResult,
   NoteGroup,
   NoteShareLink,
   NoteSummary,
+  SaveNoteDraftInput,
 } from '@/features/notes/types';
 
 export async function fetchNotes(params?: ListNotesParams): Promise<NoteSummary[]> {
@@ -25,6 +28,30 @@ export async function fetchNotes(params?: ListNotesParams): Promise<NoteSummary[
 
 export async function fetchNoteDetail(id: string): Promise<NoteDetail> {
   return apiClient<NoteDetail>(`/note/${id}`);
+}
+
+export async function fetchNoteDrafts(): Promise<NoteDraftSummary[]> {
+  return apiClient<NoteDraftSummary[]>('/note/drafts');
+}
+
+export async function fetchNoteDraft(id: string): Promise<NoteDraftDetail> {
+  return apiClient<NoteDraftDetail>(`/note/drafts/${encodeURIComponent(id)}`);
+}
+
+export async function saveNoteDraft(
+  id: string,
+  input: SaveNoteDraftInput,
+): Promise<NoteDraftDetail> {
+  return apiClient<NoteDraftDetail>(`/note/drafts/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: input,
+  });
+}
+
+export async function deleteNoteDraft(id: string): Promise<void> {
+  await apiClient<void>(`/note/drafts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 /**

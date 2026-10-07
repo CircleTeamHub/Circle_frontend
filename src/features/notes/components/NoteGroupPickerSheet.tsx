@@ -230,18 +230,10 @@ export function NoteGroupPickerSheet({
           {notes[0].title}
         </Text>
       ) : null}
-      {notes && notes.length > 1 ? (
-        <Text style={[s.caption, d.caption]}>
-          {t('notes.groupPicker.batchHint', {
-            count: notes.length,
-            defaultValue: `勾选把所选 ${notes.length} 条笔记加入分组，取消勾选则移出；没动过的分组保持各自原样。`,
-          })}
-        </Text>
-      ) : null}
       {groups.length === 0 ? (
         <Text style={[s.empty, d.caption]}>
           {t('notes.groupPicker.empty', {
-            defaultValue: '暂无分组，请先在「管理分组」中创建。',
+            defaultValue: '暂无分组',
           })}
         </Text>
       ) : (
@@ -421,7 +413,7 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.sm,
   },
-  rowText: { flex: 1 },
+  rowText: { flex: 1, minWidth: 0 },
   rowName: { ...Typography.bodyRegular, fontWeight: '600' },
   rowCount: { ...Typography.small, marginTop: 2 },
   empty: {

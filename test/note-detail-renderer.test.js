@@ -36,13 +36,15 @@ test('NoteBlockRenderer handles video blocks with expo-video', () => {
 
 test('NoteDetailScreen prefers contentJson over plain content', () => {
   const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
-  assert.match(src, /contentJson/);
-  assert.match(src, /NoteBlockRenderer/);
+  const body = read('src/features/notes/components/NoteDocumentBody.tsx');
+  assert.match(src, /NoteDocumentBody/);
+  assert.match(body, /contentJson/);
+  assert.match(body, /NoteBlockRenderer/);
 });
 
 test('NoteDetailScreen falls back to plain content string', () => {
-  const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
-  assert.match(src, /note\.content/);
+  const body = read('src/features/notes/components/NoteDocumentBody.tsx');
+  assert.match(body, /sections\.text\.content/);
 });
 
 test('NoteDetailScreen has edit navigation', () => {
@@ -81,12 +83,14 @@ test('EditNoteScreen preserves structured note sections it cannot edit', () => {
   assert.match(src, /setLocationDraft\(buildLocationDraft\(note\.sections\?\.location\)\)/);
   assert.match(src, /const nextLocation =/);
   assert.match(src, /location: nextLocation/);
-  assert.match(src, /setMediaItems\(normalizeSectionMedia\(normalizedSections\.media\.items\)\)/);
-  assert.match(src, /setShowcaseItems\(normalizeSectionMedia\(normalizedSections\.showcase\.items\)\)/);
+  assert.match(src, /const storedMediaItems = normalizeSectionMedia\(normalizedSections\.media\.items\)/);
+  assert.match(src, /const storedShowcaseItems = normalizeSectionMedia\(normalizedSections\.showcase\.items\)/);
+  assert.match(src, /setMediaItems\(storedMediaItems\)/);
+  assert.match(src, /setShowcaseItems\(storedShowcaseItems\)/);
   assert.match(src, /const normalizedMediaSections = normalizeNoteMediaSections/);
   assert.match(src, /const sectionMedia = stripEditorMediaDrafts/);
   assert.match(src, /const sectionShowcase = stripEditorMediaDrafts/);
-  assert.match(src, /const legacyMedia = mergeMedia\(\[\.\.\.sectionMedia, \.\.\.sectionShowcase\]\)/);
+  assert.match(src, /const legacyMedia = mergeMedia\(\[\.\.\.sectionMedia, \.\.\.sectionShowcase, \.\.\.sectionAudio\]\)/);
   assert.match(src, /media: \{ items: sectionMedia \}/);
   assert.match(src, /showcase: \{ items: sectionShowcase \}/);
   assert.match(src, /media: legacyMedia/);

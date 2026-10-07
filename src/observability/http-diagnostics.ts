@@ -109,6 +109,7 @@ const ROUTE_TEMPLATES = [
   "/coin/wallet",
   "/conversation-groups/:id/members",
   "/friend/:id/remark",
+  "/friend/:id/permission",
   "/friend/:id/report",
   "/friend/:id/settings",
   "/friend/:id/tags",
@@ -132,6 +133,8 @@ const ROUTE_TEMPLATES = [
   "/mall/sections",
   "/membership/plans",
   "/membership/program",
+  "/note/drafts",
+  "/note/drafts/:id",
   "/note/:id/chat-media",
   "/note/:id/exports",
   "/note/:id/groups",
@@ -185,7 +188,16 @@ const ROUTE_TEMPLATES = [
   "/trace/:id",
   "/user/:id",
 ];
-const routes = ROUTE_TEMPLATES.map((template) => ({ template, segments: template.split('/') }));
+// Prefer a route with more literal segments when templates have the same
+// length. For example, `/note/drafts` must not be swallowed by the generic
+// `/note/:id` fallback when a new endpoint is added later.
+const routes = ROUTE_TEMPLATES
+  .map((template) => ({ template, segments: template.split('/') }))
+  .sort((left, right) => {
+    const leftDynamic = left.segments.filter((segment) => segment === ':id').length;
+    const rightDynamic = right.segments.filter((segment) => segment === ':id').length;
+    return leftDynamic - rightDynamic;
+  });
 
 export function safeHttpEndpoint(endpoint: string): string {
   if (!endpoint.startsWith('/') || endpoint.startsWith('//') || endpoint.length > 2048) return '/__other__';

@@ -61,15 +61,16 @@
     "privacyPolicy": "Privacy Policy",
     "errors": {
       "requestTimeout": "Request timed out. Check your connection and try again.",
-      "networkUnavailable": "Network error. Make sure the backend service is running.",
-      "invalidServerResponse": "The server returned invalid data.",
-      "requestFailedWithStatus": "Request failed ({{status}})",
-      "requestFailed": "Request failed",
+      "networkUnavailable": "Unable to connect right now. Check your connection and try again.",
+      "invalidServerResponse": "Something went wrong. Please try again.",
+      "requestFailedWithStatus": "The request could not be completed. Please try again.",
+      "requestFailed": "The operation could not be completed. Please try again.",
       "sessionExpired": "Your session has expired. Please sign in again.",
       "refreshResponseInvalid": "Couldn't refresh your session. Please sign in again.",
       "sessionChangedDuringRefresh": "Your account changed while refreshing the session. Please try again.",
       "uploadTimeout": "Upload timed out. Check your connection and try again.",
-      "uploadFailedWithStatus": "Upload failed ({{status}})"
+      "uploadFailed": "Upload failed. Please try again later.",
+      "uploadFailedWithStatus": "Upload failed. Please try again."
     }
   },
   "auth": {
@@ -1892,13 +1893,13 @@
       "link": "Membership Rules",
       "title": "Rules & Permissions",
       "heading": "Membership Rules",
-      "description": "Customer service manually verifies and grants membership. This page shows the benefit catalog; backend permissions remain authoritative.",
+      "description": "Customer service manually verifies and grants membership. This page shows the benefit catalog; your available benefits follow your current membership status.",
       "rules": {
         "catalog": "Daily membership: CNY 19.9 / 1 day; Monthly membership: CNY 298 / 1 month; Six-month membership: CNY 1,288 / 6 months; Annual membership: CNY 1,998 / 1 year; Lifetime membership: CNY 3,998 / lifetime.",
         "supportActivation": "Membership cannot be redeemed with points or purchased in the app. After contact, customer service manually verifies and grants membership.",
         "upgrade": "Current members may contact customer service to pay the difference for an upgrade. It takes effect immediately, with remaining membership value applied by customer service.",
         "expiry": "When membership expires, only membership benefits stop. Accounts, chats, notes, and other user content are not deleted.",
-        "fairUse": "Membership rules apply only to benefits listed in the Membership Center. Any listed unlimited benefit remains subject to high backend fair-use and abuse-prevention limits. Actual permissions are determined by the backend.",
+        "fairUse": "Membership rules apply only to benefits listed in the Membership Center. Any listed unlimited benefit remains subject to reasonable-use and abuse-prevention limits. Your available benefits follow your current membership status.",
         "voiceToText": "Voice-to-text is a free basic feature for every user and is not restricted by membership tier.",
         "excludedVisualBenefits": "Current membership benefits do not promise avatar frames or animated avatars."
       }
@@ -1916,6 +1917,14 @@
     "permissionValues": {
       "FULL": "Chat & Moments",
       "CHAT_ONLY": "Chat only"
+    },
+    "editPermission": {
+      "label": "Set Moments access for {{name}}",
+      "helper": "This only controls whether this person can view your Moments. Chat access is unchanged.",
+      "loading": "Loading permissions...",
+      "missingFriend": "Friend information is missing",
+      "loadFailed": "Failed to load permissions. Please try again.",
+      "saveFailed": "Failed to save permissions. Please try again."
     },
     "loadFailed": "Failed to load profile, showing cached data",
     "startChat": "Start Chat",
@@ -2472,6 +2481,11 @@
     "title": "Add friend"
   },
   "notes": {
+    "accessibility": {
+      "playRecording": "Play recording",
+      "pauseRecording": "Pause recording",
+      "viewImage": "View image"
+    },
     "actions": {
       "new": "New",
       "qrCode": "QR code",
@@ -2535,8 +2549,29 @@
       "chatWithSender": "Chat with {{name}}",
       "openGroupSource": "View the original message in \"{{name}}\""
     },
+    "drafts": {
+      "title": "Drafts",
+      "empty": "Your drafts are empty",
+      "deleteTitle": "Delete draft?",
+      "deleteMessage": "This draft cannot be recovered after deletion.",
+      "unsavedTitle": "Save the unfinished note?",
+      "unsavedMessage": "Unsaved content will be placed in Drafts so you can continue editing later.",
+      "discard": "Leave without saving",
+      "save": "Save to Drafts",
+      "untitled": "Untitled note",
+      "noContent": "No content yet",
+      "mediaCount": "{{count}} media files",
+      "deleteLabel": "Delete draft",
+      "deleteFailed": "Could not delete the draft. Please try again.",
+      "pendingSubmitDeleteBlocked": "The save result for this draft is still unconfirmed. Open it and retry the original save before deciding whether to delete it.",
+      "deletePending": "Local cleanup or server deletion is still pending. The content is hidden; retry to finish deleting it.",
+      "saveFailed": "Could not save the draft. Please try again.",
+      "mediaCount_one": "{{count}} media file",
+      "mediaCount_other": "{{count}} media files"
+    },
     "edit": {
       "addImage": "Add image",
+      "addMedia": "Add media",
       "addShowcaseImage": "Add showcase image",
       "addShowcaseVideo": "Add showcase video",
       "addVideo": "Add video",
@@ -2545,6 +2580,7 @@
       "emptySection": "No content yet",
       "groupsLabel": "Groups",
       "imageItem": "Image",
+      "audioItem": "Audio",
       "itemsCount": "items",
       "legacyMediaUnavailableInline": "This note has {{count}} legacy media item(s) that cannot be recovered. Saving would lose them, so go back without saving.",
       "legacyMediaUnavailableMessage": "This note contains legacy media that cannot be recovered. Go back without saving to avoid losing content.",
@@ -2563,13 +2599,37 @@
       "saveFailedMessage": "Failed to save, please try again",
       "saveFailedTitle": "Failed to save",
       "saving": "Saving...",
+      "contactPickerTitle": "Choose contact",
+      "groupPickerTitle": "Choose group",
+      "contactSearchPlaceholder": "Search contacts",
+      "groupSearchPlaceholder": "Search groups",
+      "cardPickerNoResults": "No matches",
+      "cardPickerLoadFailedTitle": "Couldn't load",
+      "cardPickerLoadFailedMessage": "The card list couldn't be loaded. Please try again.",
+      "addContact": "Choose contact",
+      "addGroup": "Choose group",
+      "mediaUploadFailedTitle": "Upload failed",
+      "mediaUploadFailedMessage": "Please try again",
+      "uploadAudio": "Upload audio",
+      "startRecording": "Start recording",
+      "stopRecording": "Stop recording",
+      "audioRecording": "Recording, tap to stop",
+      "waitForMediaTitle": "Finish the current action first",
+      "waitForMediaMessage": "Stop recording or wait for the upload or save to finish before leaving.",
+      "pendingSubmitMessage": "The save result is not confirmed. Editing is paused. Retry the original save, or go back to keep it in Drafts and retry later.",
+      "pendingSubmitStorageFailed": "The submission could not be kept on this device and has not been sent. Check available storage and retry.",
+      "pendingSubmitConflict": "The server has different note content. Your local content is still in Drafts. View the saved note before deciding how to combine them; this draft will be kept.",
+      "openCommittedNote": "View saved note",
+      "audioDuration": "{{seconds}} s",
+      "audioPickerUnavailableTitle": "Audio selection unavailable",
+      "audioPickerUnavailableMessage": "Audio selection is not available in this app version. Update the app and try again.",
       "sections": {
         "location": "Location",
         "locationEmpty": "Optional",
         "locationHint": "Choose a place on the map",
         "locationSelected": "Selected",
-        "media": "Images/Videos",
-        "mediaHint": "Main note media, images and videos supported",
+        "media": "Media",
+        "mediaHint": "Main note images and videos",
         "showcase": "Showcase",
         "showcaseHint": "Media shown on the shared group card",
         "text": "Text",
@@ -2579,12 +2639,33 @@
       "titleRequired": "Please enter a title",
       "titleHint": "Title required, up to {{max}} characters",
       "textCount": "Body length {{count}} / {{max}}",
-      "textScrollHint": "Text is optional. Scroll inside the editor to read the full note.",
       "textTooLong": "The body, including the line breaks between paragraphs, can contain up to {{max}} characters; you have {{count}}. Your text is preserved. Shorten it before saving.",
       "tooManyParagraphs": "Text can contain up to {{max}} paragraphs. Your text is preserved. Combine some paragraphs before saving.",
       "titlePlaceholder": "Title",
       "uploading": "Uploading...",
-      "videoItem": "Video"
+      "videoItem": "Video",
+      "previewTitle": "Preview",
+      "composerComingSoonTitle": "Coming soon",
+      "composerComingSoonMessage": "This content type is temporarily unavailable and was kept in the ordering list.",
+      "composer": {
+        "title": "Title",
+        "text": "Text",
+        "image": "Image",
+        "media": "Media",
+        "audio": "Audio",
+        "video": "Video",
+        "showcase": "Showcase",
+        "location": "Location",
+        "contact": "Contact",
+        "group": "Group card",
+        "sort": "Order",
+        "preview": "Preview",
+        "sortEmpty": "There is nothing to reorder yet",
+        "reorderA11y": "Adjust the position of {{label}}",
+        "moveUp": "Move {{label}} up",
+        "moveDown": "Move {{label}} down"
+      },
+      "unsupportedAudio": "Unsupported audio format. Choose an M4A, MP3, AAC, WAV, OGG or WebM file."
     },
     "editor": {
       "mediaUploadFailedMessage": "Please try again",
@@ -2681,6 +2762,9 @@
       "text": "Text",
       "media": "Photos · Videos",
       "showcase": "Showcase",
+      "audio": "Audio",
+      "contact": "Contact",
+      "group": "Group card",
       "location": "Location",
       "emptyText": "No text yet"
     },
@@ -2702,7 +2786,7 @@
     "groupPicker": {
       "title": "Edit groups",
       "batchHint": "Checking adds the {{count}} selected notes to a group; unchecking removes them. Untouched groups stay as they are.",
-      "empty": "No groups yet. Create one in Manage groups first.",
+      "empty": "No groups yet.",
       "saving": "Saving...",
       "save": "Save"
     },
@@ -3034,7 +3118,7 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "Invalid presigned upload data.",
+      "presignDataInvalid": "Unable to start the upload. Please try again.",
       "fileUnreadable": "The file to upload could not be found.",
       "fileTooLarge": "File exceeds the {{maxMb}}MB limit."
     }
@@ -3273,6 +3357,7 @@
     "FRIEND_LIMIT_REACHED": "You've reached your friend limit — upgrade for more",
     "NOTE_GROUP_EXISTS": "A group with that name already exists",
     "NOTE_STORAGE_QUOTA_REACHED": "You've reached your membership tier's note storage limit",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "This note has reached its save limit. Keep your draft and save the added content as a new note.",
     "NOTE_GROUP_LIMIT": "You've reached the note group limit",
     "NOTE_EXPORT_NO_MEDIA": "No exportable media found",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "A media file is too large to export",

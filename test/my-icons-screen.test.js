@@ -186,8 +186,14 @@ test('MyIconsScreen preserves saved icon selections when refreshed user data is 
   assert.doesNotMatch(saveBlock, /displayIcons:\s*refreshedUser\?\.displayIcons\s*\?\?\s*nextDisplayIcons/);
 });
 
-test('MyIconsScreen saves the current selection when leaving with the back button', () => {
+test('MyIconsScreen leaves without saving when the back button is pressed', () => {
   const src = read('src/features/profile/screens/MyIconsScreen.tsx');
 
-  assert.match(src, /<NavHeader[\s\S]*onBackPress=\{handleSave\}/);
+  const header = src.match(/<NavHeader[\s\S]*?\/>/)?.[0] ?? '';
+  assert.match(header, /fallbackHref="\/\(tabs\)\/profile\/decorations"/);
+  assert.doesNotMatch(header, /onBackPress=/);
+  assert.match(
+    src,
+    /<Pressable\s+style=\{\[s\.footerButton, d\.saveButton\]\}[\s\S]*?onPress=\{handleSave\}/,
+  );
 });

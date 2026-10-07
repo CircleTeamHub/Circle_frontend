@@ -557,7 +557,7 @@ export default function FancyNumberScreen() {
       ) {
         throw new Error(
           t('common.errors.invalidServerResponse', {
-            defaultValue: '服务返回了无效数据',
+            defaultValue: '暂时无法完成操作，请稍后重试',
           }),
         );
       }
@@ -686,7 +686,7 @@ export default function FancyNumberScreen() {
       if (result.accountId !== mine.accountId) {
         throw new Error(
           t('common.errors.invalidServerResponse', {
-            defaultValue: '服务返回了无效数据',
+            defaultValue: '暂时无法完成操作，请稍后重试',
           }),
         );
       }
@@ -809,7 +809,7 @@ export default function FancyNumberScreen() {
       ) {
         throw new Error(
           t('common.errors.invalidServerResponse', {
-            defaultValue: '服务返回了无效数据',
+            defaultValue: '暂时无法完成操作，请稍后重试',
           }),
         );
       }

@@ -1,10 +1,18 @@
+import { MAX_NOTE_BLOCK_DEPTH } from '@/features/notes/utils/note-blocks';
 import type { NoteMedia } from '@/features/notes/types';
 
-export type NoteSectionKind = 'text' | 'media' | 'showcase' | 'location';
+export type NoteSectionKind =
+  | 'text'
+  | 'media'
+  | 'showcase'
+  | 'audio'
+  | 'contact'
+  | 'group'
+  | 'location';
 
 export type StructuredNoteMediaItem = Partial<NoteMedia> & {
   id?: string;
-  type: 'IMAGE' | 'VIDEO';
+  type: 'IMAGE' | 'VIDEO' | 'AUDIO';
   /**
    * 可选：私有目录（notes/）刚上传的条目只有 objectKey，地址由服务端按 key 现签，
    * 所以只有服务端读接口回来的条目才带 url。
@@ -25,6 +33,33 @@ export type NoteShowcaseSection = {
   items: StructuredNoteMediaItem[];
 };
 
+export type NoteAudioSection = {
+  items: StructuredNoteMediaItem[];
+};
+
+export type NoteContactCard = {
+  id: string;
+  name: string;
+  faceURL?: string | null;
+  avatarUrl?: string | null;
+  userId?: string | null;
+  username?: string | null;
+  subtitle?: string | null;
+};
+
+export type NoteGroupCard = {
+  id: string;
+  name: string;
+  faceURL?: string | null;
+  avatarUrl?: string | null;
+  groupId?: string | null;
+  subtitle?: string | null;
+  memberCount?: number | null;
+};
+
+export type NoteContactSection = { items: NoteContactCard[] };
+export type NoteGroupCardSection = { items: NoteGroupCard[] };
+
 export type NoteLocationSection = {
   title?: string | null;
   address?: string | null;
@@ -36,6 +71,9 @@ export type NoteSections = {
   text: NoteTextSection;
   media: NoteMediaSection;
   showcase: NoteShowcaseSection;
+  audio: NoteAudioSection;
+  contacts: NoteContactSection;
+  groups: NoteGroupCardSection;
   location: NoteLocationSection;
 };
 
@@ -62,7 +100,9 @@ function isMediaBlock(block: Record<string, unknown>) {
 
 function getTextBlocks(blocks: Record<string, unknown>[] | null | undefined) {
   if (!Array.isArray(blocks)) return null;
-  return blocks.filter((block) => !isMediaBlock(block));
+  return blocks.filter(
+    (block) => !isMediaBlock(block) && getBlockType(block) !== 'noteLayout',
+  );
 }
 
 function getLegacyShowcaseItems(note: StructuredNoteInput): StructuredNoteMediaItem[] {
@@ -87,6 +127,52 @@ function getLegacyShowcaseItems(note: StructuredNoteInput): StructuredNoteMediaI
   });
 }
 
+function getInlineMediaItems(
+  blocks: Record<string, unknown>[] | null | undefined,
+): StructuredNoteMediaItem[] {
+  if (!Array.isArray(blocks)) return [];
+  return blocks.flatMap((block, index) => {
+    const type = getBlockType(block);
+    if (type !== 'image' && type !== 'video') return [];
+    const props = (block.props ?? {}) as Record<string, unknown>;
+    const url = typeof props.url === 'string' ? props.url : undefined;
+    const objectKey = typeof props.objectKey === 'string' ? props.objectKey : undefined;
+    if (!url && !objectKey) return [];
+    return [{
+      id: typeof block.id === 'string' ? block.id : `inline-${type}-${index}`,
+      type: type === 'video' ? 'VIDEO' : 'IMAGE',
+      ...(url ? { url } : {}),
+      ...(objectKey ? { objectKey } : {}),
+      ...(typeof props.width === 'number' ? { width: props.width } : {}),
+      ...(typeof props.height === 'number' ? { height: props.height } : {}),
+      ...(typeof props.durationMs === 'number' ? { durationMs: props.durationMs } : {}),
+    }];
+  });
+}
+
+/** Collect nested inline media for the viewer without duplicating document sections. */
+export function getNoteInlineMediaItems(blocks: unknown, depth = 0): StructuredNoteMediaItem[] {
+  if (!Array.isArray(blocks) || depth > MAX_NOTE_BLOCK_DEPTH) return [];
+  const valid = blocks.filter((block): block is Record<string, unknown> => Boolean(block && typeof block === 'object'));
+  return valid.flatMap((block) => [
+    ...getInlineMediaItems([block]),
+    ...getNoteInlineMediaItems(block.children, depth + 1),
+  ]);
+}
+
+export function getNoteViewerImages(sections: NoteSections) {
+  const seen = new Set<string>();
+  return [...sections.media.items, ...sections.showcase.items, ...getNoteInlineMediaItems(sections.text.contentJson)].filter(
+    (item): item is StructuredNoteMediaItem & { url: string } => {
+      if (item.type !== 'IMAGE' || !item.url) return false;
+      const key = item.objectKey || item.url;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    },
+  );
+}
+
 function normalizeItems(items: unknown): StructuredNoteMediaItem[] {
   if (!Array.isArray(items)) return [];
   return items.flatMap((item) => {
@@ -97,11 +183,36 @@ function normalizeItems(items: unknown): StructuredNoteMediaItem[] {
     const hasIdentity =
       Boolean(candidate.url) ||
       (typeof candidate.objectKey === 'string' && candidate.objectKey.trim() !== '');
-    if ((candidate.type !== 'IMAGE' && candidate.type !== 'VIDEO') || !hasIdentity) {
+    if (
+      (candidate.type !== 'IMAGE' && candidate.type !== 'VIDEO' && candidate.type !== 'AUDIO') ||
+      !hasIdentity
+    ) {
       return [];
     }
     return [candidate as StructuredNoteMediaItem];
   });
+}
+
+function normalizeCardItems<T extends NoteContactCard | NoteGroupCard>(items: unknown): T[] {
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const candidate = item as Partial<T>;
+    const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+    const name = typeof candidate.name === 'string' ? candidate.name.trim() : '';
+    if (!id || !name) return [];
+    return [{
+      ...candidate,
+      id,
+      name,
+    } as T];
+  });
+}
+
+function readSectionItems(section: unknown): unknown {
+  if (Array.isArray(section)) return section;
+  if (!section || typeof section !== 'object') return [];
+  return (section as Record<string, unknown>).items;
 }
 
 type MediaAliasGroup = {
@@ -200,7 +311,10 @@ export function normalizeNoteMediaSections({
   mediaReferences?: unknown;
 }) {
   const references = normalizeItems(mediaReferences);
-  const ordinaryMedia = enrichMediaItems(normalizeItems(media), references);
+  const ordinaryMedia = enrichMediaItems(
+    normalizeItems(media).filter((item) => item.type !== 'AUDIO'),
+    references,
+  );
   const showcaseItems = enrichMediaItems(normalizeItems(showcase), references);
   const migratedShowcaseImages = showcaseItems.filter((item) => item.type === 'IMAGE');
 
@@ -210,6 +324,15 @@ export function normalizeNoteMediaSections({
       showcaseItems.filter((item) => item.type === 'VIDEO'),
     ),
   };
+}
+
+function normalizeAudioItems(items: unknown, references: StructuredNoteMediaItem[]) {
+  return dedupeAndNormalizeMedia(
+    enrichMediaItems(
+      normalizeItems(items).filter((item) => item.type === 'AUDIO'),
+      references,
+    ),
+  );
 }
 
 function hasExplicitItems(items: unknown) {
@@ -238,6 +361,10 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
   const hasExplicitShowcase = hasExplicitItems(explicit?.showcase?.items);
   const explicitMedia = normalizeItems(explicit?.media?.items);
   const explicitShowcase = normalizeItems(explicit?.showcase?.items);
+  // Legacy note.contentJson images are already represented by
+  // getLegacyShowcaseItems. Only inspect an explicit structured text section
+  // here, where the media blocks would otherwise be filtered out and lost.
+  const inlineMedia = getInlineMediaItems(explicit?.text?.contentJson);
   const legacyShowcaseImages = legacyShowcase.filter((item) => item.type === 'IMAGE');
   const derivedLegacyMedia =
     !hasExplicitMedia && hasExplicitShowcase
@@ -249,8 +376,8 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
 
   const mediaSections = normalizeNoteMediaSections({
     media: hasExplicitMedia
-      ? explicitMedia
-      : [...derivedLegacyMedia, ...legacyShowcaseImages],
+      ? [...explicitMedia, ...inlineMedia]
+      : [...derivedLegacyMedia, ...inlineMedia, ...legacyShowcaseImages],
     showcase: hasExplicitShowcase
       ? explicitShowcase
       : hasExplicitMedia
@@ -258,6 +385,16 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
         : legacyShowcase,
     mediaReferences: legacyMedia,
   });
+
+  const explicitAudio = normalizeAudioItems(
+    readSectionItems(explicit?.audio),
+    legacyMedia,
+  );
+  const legacyAudio = normalizeAudioItems(legacyMedia, legacyMedia);
+  const contacts = normalizeCardItems<NoteContactCard>(
+    readSectionItems(explicit?.contacts),
+  );
+  const groups = normalizeCardItems<NoteGroupCard>(readSectionItems(explicit?.groups));
 
   return {
     text: {
@@ -270,6 +407,13 @@ export function buildNoteSections(note: StructuredNoteInput): NoteSections {
     showcase: {
       items: mediaSections.showcase,
     },
+    audio: {
+      items: explicit?.audio
+        ? explicitAudio
+        : legacyAudio,
+    },
+    contacts: { items: contacts },
+    groups: { items: groups },
     location: explicit?.location ?? null,
   };
 }
@@ -290,6 +434,9 @@ export function getNoteSectionAvailability(sections: NoteSections) {
     // 媒体与展示同一条判据，详情页两处列表也按它过滤（见 isRenderableMediaItem）。
     hasMedia: sections.media.items.some(isRenderableMediaItem),
     hasShowcase: sections.showcase.items.some(isRenderableMediaItem),
+    hasAudio: sections.audio.items.some(isRenderableMediaItem),
+    hasContacts: sections.contacts.items.length > 0,
+    hasGroups: sections.groups.items.length > 0,
     hasLocation: Boolean(
       sections.location &&
         ((sections.location.title && sections.location.title.trim()) ||
@@ -315,6 +462,9 @@ export function getInitialNoteSection(
     requested !== 'text' &&
     requested !== 'media' &&
     requested !== 'showcase' &&
+    requested !== 'audio' &&
+    requested !== 'contact' &&
+    requested !== 'group' &&
     requested !== 'location'
   ) {
     return null;
@@ -323,7 +473,13 @@ export function getInitialNoteSection(
   if (requested === 'showcase' && !availability.hasShowcase && availability.hasMedia) {
     return 'media';
   }
-  const key = `has${requested[0].toUpperCase()}${requested.slice(1)}` as keyof typeof availability;
+  const key = (
+    requested === 'contact'
+      ? 'hasContacts'
+      : requested === 'group'
+        ? 'hasGroups'
+        : `has${requested[0].toUpperCase()}${requested.slice(1)}`
+  ) as keyof typeof availability;
   // 请求的区块没内容（笔记被编辑过）：不滚，停顶部比滚到空处强。
   return availability[key] ? requested : null;
 }

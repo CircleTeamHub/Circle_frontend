@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  buildNoteSections,
-  getNoteSectionAvailability,
-  getInitialNoteSection,
-  type StructuredNoteInput,
-} from './note-sections.ts';
+import type { StructuredNoteInput } from './note-sections.ts';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { loadTsModule } = require('../../../../test/helpers/load-ts-module.js');
+const loaded = loadTsModule('src/features/notes/utils/note-sections.ts', {
+  requireShim: (request: string) => request === '@/features/notes/utils/note-blocks' ? loadTsModule('src/features/notes/utils/note-blocks.ts') : require(request),
+});
+// VM values have different prototypes; compare the data in the test realm.
+const buildNoteSections: typeof import('./note-sections.ts').buildNoteSections = (input) => structuredClone(loaded.buildNoteSections(input));
+const getNoteSectionAvailability: typeof import('./note-sections.ts').getNoteSectionAvailability = (sections) => structuredClone(loaded.getNoteSectionAvailability(sections));
+const getInitialNoteSection: typeof import('./note-sections.ts').getInitialNoteSection = (...args) => loaded.getInitialNoteSection(...args);
 
 const legacyNote: StructuredNoteInput = {
   content: 'plain fallback',
@@ -83,6 +88,26 @@ test('buildNoteSections removes media blocks from the text region', () => {
   );
 });
 
+test('explicit text media blocks remain addressable after text filtering', () => {
+  const sections = buildNoteSections({
+    sections: {
+      text: {
+        content: 'structured',
+        contentJson: [
+          { type: 'paragraph', content: [{ text: 'hello' }] },
+          { type: 'image', props: { url: 'https://cdn.test/inline.jpg', width: 640, height: 480 } },
+        ],
+      },
+      media: { items: [] },
+      showcase: { items: [] },
+      location: null,
+    },
+  });
+
+  assert.equal(sections.text.contentJson?.length, 1);
+  assert.equal(sections.media.items[0]?.url, 'https://cdn.test/inline.jpg');
+});
+
 test('getNoteSectionAvailability reports addressable sections', () => {
   const availability = getNoteSectionAvailability(buildNoteSections(legacyNote));
 
@@ -90,8 +115,30 @@ test('getNoteSectionAvailability reports addressable sections', () => {
     hasText: true,
     hasMedia: true,
     hasShowcase: false,
+    hasAudio: false,
+    hasContacts: false,
+    hasGroups: false,
     hasLocation: false,
   });
+});
+
+test('buildNoteSections keeps audio and resolved peer cards as separate sections', () => {
+  const sections = buildNoteSections({
+    media: [{ type: 'AUDIO', objectKey: 'notes/voice.m4a', url: 'https://cdn.test/voice.m4a' }],
+    sections: {
+      audio: {
+        items: [{ type: 'AUDIO', objectKey: 'notes/voice.m4a', url: 'https://cdn.test/voice.m4a' }],
+      },
+      contacts: { items: [{ id: 'u1', name: 'Alice', faceURL: 'https://cdn.test/alice.jpg' }] },
+      groups: { items: [{ id: 'g1', name: 'Team' }] },
+    },
+  });
+
+  assert.equal(sections.audio.items[0]?.type, 'AUDIO');
+  assert.equal(sections.media.items.length, 0);
+  assert.equal(sections.contacts.items[0]?.name, 'Alice');
+  assert.equal(sections.groups.items[0]?.name, 'Team');
+  assert.equal(getNoteSectionAvailability(sections).hasAudio, true);
 });
 
 test('getInitialNoteSection redirects stale legacy showcase card requests to migrated media', () => {

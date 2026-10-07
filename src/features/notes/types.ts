@@ -1,5 +1,5 @@
 export type NoteStatus = 'ACTIVE' | 'UNLISTED' | 'DELETED';
-export type NoteMediaType = 'IMAGE' | 'VIDEO';
+export type NoteMediaType = 'IMAGE' | 'VIDEO' | 'AUDIO';
 
 export interface NoteMediaSummary {
   id: string;
@@ -34,6 +34,41 @@ export interface NoteShowcaseSection {
   items: (NoteMedia | CreateNoteMediaInput)[];
 }
 
+/** Audio recordings use the same private object-key/signing flow as images and videos. */
+export interface NoteAudioSection {
+  items: (NoteMedia | CreateNoteMediaInput)[];
+}
+
+/** A resolved user card attached to a note. The API intentionally returns a small snapshot. */
+export interface NoteContactCard {
+  id: string;
+  name: string;
+  faceURL?: string | null;
+  avatarUrl?: string | null;
+  userId?: string | null;
+  username?: string | null;
+  subtitle?: string | null;
+}
+
+/** A resolved group card attached to a note. The API intentionally returns a small snapshot. */
+export interface NoteGroupCard {
+  id: string;
+  name: string;
+  faceURL?: string | null;
+  avatarUrl?: string | null;
+  groupId?: string | null;
+  subtitle?: string | null;
+  memberCount?: number | null;
+}
+
+export interface NoteContactSection {
+  items: NoteContactCard[];
+}
+
+export interface NoteGroupCardSection {
+  items: NoteGroupCard[];
+}
+
 export interface NoteLocationSection {
   title?: string | null;
   address?: string | null;
@@ -45,6 +80,9 @@ export interface NoteSections {
   text: NoteTextSection;
   media: NoteMediaSection;
   showcase: NoteShowcaseSection;
+  audio: NoteAudioSection;
+  contacts: NoteContactSection;
+  groups: NoteGroupCardSection;
   location: NoteLocationSection | null;
 }
 
@@ -100,6 +138,7 @@ export interface NoteSummary {
   cover: NoteMediaSummary | null;
   imageCount: number;
   videoCount: number;
+  audioCount?: number;
   mediaCount: number;
   hasText?: boolean;
   showcaseCount?: number;
@@ -118,6 +157,35 @@ export interface NoteDetail extends NoteSummary {
   contentJson: Record<string, unknown>[] | null;
   media: NoteMedia[];
   sections?: Partial<NoteSections> | null;
+}
+
+/** A lightweight server representation used by the editor draft box. */
+export interface NoteDraftSummary {
+  id: string;
+  sourceNoteId?: string | null;
+  title: string;
+  contentPreview: string | null;
+  mediaCount: number;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface NoteDraftDetail extends NoteDraftSummary {
+  content: string | null;
+  contentJson: Record<string, unknown>[] | null;
+  sections: Partial<NoteSections> | null;
+  groupIds: string[];
+  mediaKeys: string[];
+}
+
+export interface SaveNoteDraftInput {
+  title?: string;
+  content?: string;
+  contentJson?: Record<string, unknown>[];
+  sections?: Partial<NoteSections>;
+  groupIds?: string[];
+  sourceNoteId?: string | null;
+  mediaKeys?: string[];
 }
 
 export interface CreateNoteMediaInput {
@@ -143,6 +211,8 @@ export interface EditorNoteMediaDraft extends CreateNoteMediaInput {
   clientId: string;
   uploadStatus: 'PENDING' | 'UPLOADED';
   previewUri?: string;
+  /** Relative ID in this account's durable recording store; never sent to the API. */
+  localRecordingId?: string;
 }
 
 export interface CreateNoteInput {
@@ -154,6 +224,8 @@ export interface CreateNoteInput {
   status?: 'ACTIVE' | 'UNLISTED';
   pinned?: boolean;
   media: CreateNoteMediaInput[];
+  /** Stable local draft id; the server removes it atomically after formal save. */
+  clientDraftID?: string;
 }
 
 export interface ListNotesParams {

@@ -217,6 +217,9 @@ test('user profile screen shows received like count in the header', () => {
   assert.match(source, /like-outline\.png/);
   assert.match(source, /recognitionIconImage/);
   assert.match(source, /source=\{RECOGNITION_COUNT_ICON_SOURCE\}/);
+  assert.match(source, /recognitionIconImageFailed/);
+  assert.match(source, /onError=\{\(\) => setRecognitionIconImageFailed\(true\)\}/);
+  assert.match(source, /name="thumbs-up-outline"/);
   assert.doesNotMatch(source, /name="thumbs-up"/);
   assert.doesNotMatch(source, /name="heart"/);
   assert.match(source, /profile\.likeCount \?\? 0/);
@@ -266,6 +269,7 @@ test('user profile route helpers preserve scope for the request form', () => {
     getChatDetailHref,
     getNoteDetailHref,
     getEditFriendRemarkHref,
+    getEditFriendPermissionHref,
     getEditFriendTagsHref,
     getSendFriendRequestHref,
     getUserProfileScopeFromSegments,
@@ -428,6 +432,17 @@ test('user profile route helpers preserve scope for the request form', () => {
       params: { id: 'user-1' },
     },
   );
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(
+        getEditFriendPermissionHref('discover', 'user-1', '小李'),
+      ),
+    ),
+    {
+      pathname: '/(tabs)/discover/user/[id]/permission',
+      params: { id: 'user-1', name: '小李' },
+    },
+  );
 
   assert.equal(
     getUserProfileScopeFromSegments(['(tabs)', 'messages', 'user', '[id]']),
@@ -481,6 +496,8 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.doesNotMatch(source, /secondaryActionText:/);
   assert.match(source, /value: remarkValue/);
   assert.match(source, /value: tagValue/);
+  assert.match(source, /value: permissionValue/);
+  assert.match(source, /onPress: handleEditPermission/);
   assert.match(source, /location-outline/);
   assert.match(source, /badgeIconRow/);
   assert.match(source, /showProfileActions \? \(/);
@@ -497,6 +514,7 @@ test('user profile screen uses account label, meta chips, badge row, and conditi
   assert.match(source, /getChatDetailHref/);
   assert.match(source, /getSendFriendRequestHref/);
   assert.match(source, /getEditFriendRemarkHref/);
+  assert.match(source, /getEditFriendPermissionHref/);
   assert.match(source, /getEditFriendTagsHref/);
   assert.match(source, /canOpenSendFriendRequest/);
   assert.doesNotMatch(source, /getFriendActionLabel/);

@@ -128,7 +128,9 @@ export const useDiscoverStore = create<DiscoverState>((set, get) => ({
   },
 
   prependPlazaPost: (post) =>
-    set((s) => ({ plazaPosts: [post, ...s.plazaPosts] })),
+    set((s) => ({
+      plazaPosts: [post, ...s.plazaPosts.filter((item) => item.id !== post.id)],
+    })),
 
   removePlazaPost: (id) =>
     set((s) => ({ plazaPosts: s.plazaPosts.filter((p) => p.id !== id) })),

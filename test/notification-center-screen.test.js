@@ -20,6 +20,8 @@ test('notification center does not replace failed fetches with empty notificatio
   assert.doesNotMatch(source, /catch\(\(\) => \[\] as MyCirclePost\[\]\)/);
   assert.match(source, /Promise\.allSettled/);
   assert.match(source, /fetchAllMyCirclePosts\(\)/);
+  assert.match(source, /fetchNotificationsPage\(nextCursor, domain\)/);
+  assert.match(source, /onEndReached=\{loadMore\}/);
   assert.doesNotMatch(source, /fetchMyCirclePosts\(1\)/);
   assert.match(source, /setLoadError\(/);
   assert.match(source, /notifications\.loadFailed/);

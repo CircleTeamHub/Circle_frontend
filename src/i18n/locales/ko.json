@@ -888,6 +888,11 @@
     "mutedA11y": "알림 끔"
   },
   "notes": {
+    "accessibility": {
+      "playRecording": "녹음 재생",
+      "pauseRecording": "녹음 일시 정지",
+      "viewImage": "이미지 보기"
+    },
     "actions": {
       "new": "새로 만들기",
       "qrCode": "QR 코드",
@@ -951,8 +956,27 @@
       "chatWithSender": "{{name}}님과 대화",
       "openGroupSource": "그룹 \"{{name}}\"에서 원본 메시지 보기"
     },
+    "drafts": {
+      "title": "임시 저장",
+      "empty": "저장된 초안이 없습니다",
+      "deleteTitle": "초안을 삭제할까요?",
+      "deleteMessage": "삭제한 초안은 복구할 수 없습니다.",
+      "unsavedTitle": "작성 중인 노트를 저장할까요?",
+      "unsavedMessage": "저장하지 않은 내용은 초안에 저장되어 나중에 계속 편집할 수 있습니다.",
+      "discard": "저장하지 않고 나가기",
+      "save": "초안에 저장",
+      "untitled": "제목 없는 노트",
+      "noContent": "아직 내용이 없습니다",
+      "mediaCount": "미디어 {{count}}개",
+      "deleteLabel": "초안 삭제",
+      "deleteFailed": "초안을 삭제하지 못했습니다. 다시 시도해 주세요.",
+      "pendingSubmitDeleteBlocked": "이 초안의 저장 결과가 아직 확인되지 않았습니다. 초안을 열고 원래 저장을 다시 시도한 후 삭제 여부를 결정해 주세요.",
+      "deletePending": "기기 정리 또는 서버 삭제가 아직 완료되지 않았습니다. 내용은 숨겨졌으며, 다시 시도하여 삭제를 완료할 수 있습니다.",
+      "saveFailed": "초안을 저장하지 못했습니다. 다시 시도해 주세요."
+    },
     "edit": {
       "addImage": "이미지 추가",
+      "addMedia": "미디어 추가",
       "addShowcaseImage": "대표 이미지 추가",
       "addShowcaseVideo": "대표 동영상 추가",
       "addVideo": "동영상 추가",
@@ -961,6 +985,7 @@
       "emptySection": "아직 내용이 없습니다",
       "groupsLabel": "그룹",
       "imageItem": "이미지",
+      "audioItem": "오디오",
       "itemsCount": "개",
       "legacyMediaUnavailableInline": "이 노트에는 복구할 수 없는 이전 미디어가 {{count}}개 있습니다. 저장하면 사라지므로 저장하지 말고 돌아가세요.",
       "legacyMediaUnavailableMessage": "이 노트에는 복구할 수 없는 이전 미디어가 포함되어 있습니다. 콘텐츠 손실을 막으려면 저장하지 말고 돌아가세요.",
@@ -979,13 +1004,37 @@
       "saveFailedMessage": "저장에 실패했습니다. 다시 시도해 주세요",
       "saveFailedTitle": "저장 실패",
       "saving": "저장 중...",
+      "contactPickerTitle": "연락처 선택",
+      "groupPickerTitle": "그룹 선택",
+      "contactSearchPlaceholder": "연락처 검색",
+      "groupSearchPlaceholder": "그룹 검색",
+      "cardPickerNoResults": "일치하는 항목이 없습니다",
+      "cardPickerLoadFailedTitle": "불러오지 못했습니다",
+      "cardPickerLoadFailedMessage": "명함 목록을 불러오지 못했습니다. 다시 시도해 주세요.",
+      "addContact": "연락처 선택",
+      "addGroup": "그룹 선택",
+      "mediaUploadFailedTitle": "업로드 실패",
+      "mediaUploadFailedMessage": "다시 시도해 주세요",
+      "uploadAudio": "오디오 업로드",
+      "startRecording": "녹음 시작",
+      "stopRecording": "녹음 중지",
+      "audioRecording": "녹음 중, 눌러서 중지",
+      "waitForMediaTitle": "현재 작업을 먼저 완료해 주세요",
+      "waitForMediaMessage": "녹음을 중지하거나 업로드 또는 저장이 끝난 후 돌아가세요.",
+      "pendingSubmitMessage": "저장 결과를 확인할 수 없어 편집이 일시 중지되었습니다. 원래 저장을 다시 시도하거나 뒤로 가서 초안에 보관하고 나중에 재시도하세요.",
+      "pendingSubmitStorageFailed": "이 기기에 제출 내용을 보관할 수 없어 아직 전송하지 않았습니다. 저장 공간을 확인하고 다시 시도하세요.",
+      "pendingSubmitConflict": "서버의 노트 내용이 다릅니다. 기기의 내용은 초안에 보관되어 있습니다. 저장된 노트를 확인한 후 합치는 방법을 결정하세요. 이 초안은 삭제되지 않습니다.",
+      "openCommittedNote": "저장된 노트 보기",
+      "audioDuration": "{{seconds}}초",
+      "audioPickerUnavailableTitle": "오디오를 선택할 수 없습니다",
+      "audioPickerUnavailableMessage": "현재 앱 버전에서는 오디오 선택을 사용할 수 없습니다. 앱을 업데이트한 후 다시 시도하세요.",
       "sections": {
         "location": "위치",
         "locationEmpty": "선택 사항",
         "locationHint": "지도에서 위치를 선택하세요",
         "locationSelected": "선택됨",
-        "media": "이미지/동영상",
-        "mediaHint": "본문 콘텐츠, 이미지와 동영상 지원",
+        "media": "미디어",
+        "mediaHint": "본문 이미지 및 동영상 콘텐츠",
         "showcase": "대표",
         "showcaseHint": "공유 그룹 카드에 표시되는 콘텐츠",
         "text": "텍스트",
@@ -995,12 +1044,33 @@
       "titleRequired": "제목을 입력해 주세요",
       "titleHint": "제목 필수, 최대 {{max}}자",
       "textCount": "본문 길이 {{count}} / {{max}}",
-      "textScrollHint": "본문은 선택 사항입니다. 입력창 안에서 스크롤하여 전체 내용을 확인하세요.",
       "textTooLong": "본문은 단락 사이의 줄바꿈을 포함해 최대 {{max}}자이며 현재 {{count}}자입니다. 입력 내용은 유지됩니다. 내용을 줄인 후 저장해 주세요.",
       "tooManyParagraphs": "본문은 최대 {{max}}개 단락입니다. 입력 내용은 유지됩니다. 일부 단락을 합친 후 저장해 주세요.",
       "titlePlaceholder": "제목",
       "uploading": "업로드 중...",
-      "videoItem": "동영상"
+      "videoItem": "동영상",
+      "previewTitle": "미리보기",
+      "composerComingSoonTitle": "준비 중",
+      "composerComingSoonMessage": "이 콘텐츠 유형은 현재 사용할 수 없어 정렬 목록에 보존되었습니다.",
+      "composer": {
+        "title": "제목",
+        "text": "텍스트",
+        "image": "이미지",
+        "media": "미디어",
+        "audio": "녹음",
+        "video": "동영상",
+        "showcase": "표시",
+        "location": "위치",
+        "contact": "명함",
+        "group": "그룹 명함",
+        "sort": "정렬",
+        "preview": "미리보기",
+        "sortEmpty": "아직 정렬할 콘텐츠가 없습니다",
+        "reorderA11y": "{{label}} 위치 조정",
+        "moveUp": "{{label}} 위로",
+        "moveDown": "{{label}} 아래로"
+      },
+      "unsupportedAudio": "지원하지 않는 오디오 형식입니다. M4A, MP3, AAC, WAV, OGG 또는 WebM 파일을 선택해 주세요."
     },
     "editor": {
       "mediaUploadFailedMessage": "다시 시도해 주세요",
@@ -1097,6 +1167,9 @@
       "text": "텍스트",
       "media": "사진 · 동영상",
       "showcase": "쇼케이스",
+      "audio": "녹음",
+      "contact": "명함",
+      "group": "그룹 명함",
       "location": "주소",
       "emptyText": "텍스트 없음"
     },
@@ -1118,7 +1191,7 @@
     "groupPicker": {
       "title": "그룹 편집",
       "batchHint": "체크하면 선택한 노트 {{count}}개를 그룹에 추가하고, 해제하면 뺍니다. 건드리지 않은 그룹은 그대로 유지됩니다.",
-      "empty": "그룹이 없습니다. 먼저 '그룹 관리'에서 만들어 주세요.",
+      "empty": "그룹이 없습니다.",
       "saving": "저장 중...",
       "save": "저장"
     },
@@ -2007,6 +2080,14 @@
       "FULL": "채팅 및 모먼트",
       "CHAT_ONLY": "채팅만"
     },
+    "editPermission": {
+      "label": "{{name}}의 모먼트 공개 범위 설정",
+      "helper": "이 설정은 이 사람이 내 모먼트를 볼 수 있는지만 제어합니다. 채팅 권한은 변경되지 않습니다.",
+      "loading": "권한을 불러오는 중...",
+      "missingFriend": "친구 정보가 없습니다",
+      "loadFailed": "권한을 불러오지 못했습니다. 다시 시도해 주세요.",
+      "saveFailed": "권한을 저장하지 못했습니다. 다시 시도해 주세요."
+    },
     "loadFailed": "프로필을 불러오지 못해 캐시된 데이터를 표시합니다",
     "startChat": "채팅 시작",
     "openingChat": "채팅을 여는 중...",
@@ -2440,13 +2521,13 @@
       "link": "회원 규칙",
       "title": "규칙 및 권한 안내",
       "heading": "회원 규칙",
-      "description": "고객센터가 회원 자격을 수동으로 확인하고 부여합니다. 이 화면은 혜택 목록을 표시하며 실제 권한은 백엔드를 기준으로 합니다.",
+      "description": "고객센터가 회원 자격을 수동으로 확인하고 부여합니다. 이 화면은 혜택 목록을 표시하며 이용 가능한 혜택은 현재 회원 상태를 따릅니다.",
       "rules": {
         "catalog": "일일 회원 CNY 19.9 / 1일, 월간 회원 CNY 298 / 1개월, 반년 회원 CNY 1,288 / 6개월, 연간 회원 CNY 1,998 / 1년, 평생 회원 CNY 3,998 / 평생.",
         "supportActivation": "회원 자격은 앱에서 포인트로 교환하거나 직접 구매할 수 없습니다. 문의 후 고객센터가 수동으로 확인하고 부여합니다.",
         "upgrade": "기존 회원은 고객센터에 문의해 차액을 지불하고 업그레이드할 수 있습니다. 즉시 적용되며 남은 회원 가치는 고객센터가 반영합니다.",
         "expiry": "회원 기간이 만료되면 회원 혜택만 중지됩니다. 계정, 채팅, 노트 및 기타 사용자 콘텐츠는 삭제되지 않습니다.",
-        "fairUse": "회원 규칙은 회원 센터에 표시된 혜택에만 적용됩니다. 그중 무제한으로 표시된 혜택에도 백엔드의 높은 수준의 공정 사용 및 남용 방지 한도가 적용됩니다. 실제 권한은 백엔드를 기준으로 합니다.",
+        "fairUse": "회원 규칙은 회원 센터에 표시된 혜택에만 적용됩니다. 무제한으로 표시된 혜택에도 합리적 사용 및 남용 방지 한도가 적용됩니다. 이용 가능한 혜택은 현재 회원 상태를 따릅니다.",
         "voiceToText": "음성 텍스트 변환은 모든 사용자를 위한 무료 기본 기능이며 회원 등급의 제한을 받지 않습니다.",
         "excludedVisualBenefits": "현재 회원 혜택에는 아바타 프레임이나 움직이는 아바타 제공 약속이 포함되지 않습니다."
       }
@@ -2729,15 +2810,16 @@
     "privacyPolicy": "개인정보 처리방침",
     "errors": {
       "requestTimeout": "요청 시간이 초과되었습니다. 연결을 확인한 후 다시 시도해 주세요.",
-      "networkUnavailable": "네트워크 오류입니다. 서버가 실행 중인지 확인해 주세요.",
-      "invalidServerResponse": "서버에서 잘못된 데이터를 반환했습니다",
-      "requestFailedWithStatus": "요청에 실패했습니다 ({{status}})",
-      "requestFailed": "요청에 실패했습니다",
+      "networkUnavailable": "연결할 수 없습니다. 네트워크를 확인한 후 다시 시도해 주세요.",
+      "invalidServerResponse": "작업을 완료할 수 없습니다. 다시 시도해 주세요.",
+      "requestFailedWithStatus": "요청을 완료할 수 없습니다. 다시 시도해 주세요.",
+      "requestFailed": "작업을 완료할 수 없습니다. 다시 시도해 주세요.",
       "sessionExpired": "세션이 만료되었습니다. 다시 로그인해 주세요.",
       "refreshResponseInvalid": "갱신 응답이 잘못되었습니다. 다시 로그인해 주세요.",
       "sessionChangedDuringRefresh": "세션을 갱신하는 동안 계정이 변경되었습니다. 다시 시도해 주세요.",
       "uploadTimeout": "업로드 시간이 초과되었습니다. 연결을 확인한 후 다시 시도해 주세요.",
-      "uploadFailedWithStatus": "업로드에 실패했습니다 ({{status}})"
+      "uploadFailed": "업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      "uploadFailedWithStatus": "업로드에 실패했습니다. 다시 시도해 주세요."
     }
   },
   "credit": {
@@ -3028,7 +3110,7 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "사전 서명된 업로드 데이터 형식 오류",
+      "presignDataInvalid": "업로드를 시작할 수 없습니다. 다시 시도해 주세요.",
       "fileUnreadable": "업로드할 파일을 찾을 수 없습니다",
       "fileTooLarge": "파일이 {{maxMb}}MB 제한을 초과했습니다"
     }
@@ -3267,6 +3349,7 @@
     "FRIEND_LIMIT_REACHED": "친구 수가 한도에 도달했습니다. 멤버십을 업그레이드하면 늘릴 수 있습니다",
     "NOTE_GROUP_EXISTS": "같은 이름의 그룹이 이미 있습니다",
     "NOTE_STORAGE_QUOTA_REACHED": "현재 회원 등급의 노트 저장 한도에 도달했습니다",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "이 노트의 저장 횟수가 한도에 도달했습니다. 초안을 보관하고 추가한 내용을 새 노트로 저장해 주세요.",
     "NOTE_GROUP_LIMIT": "노트 그룹 개수가 한도에 도달했습니다",
     "NOTE_EXPORT_NO_MEDIA": "내보낼 수 있는 미디어가 없습니다",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "미디어 파일이 너무 커서 내보낼 수 없습니다",

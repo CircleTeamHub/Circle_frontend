@@ -1,16 +1,65 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { useVideoPlayer } from 'expo-video';
 import { NoteBlockRenderer } from './NoteBlockRenderer';
 
 jest.mock('expo', () => ({ useEventListener: jest.fn() }));
 jest.mock('expo-image', () => ({ Image: () => null }));
-jest.mock('expo-video', () => ({ useVideoPlayer: jest.fn(), VideoView: () => null }));
+const mockAudioPlayer = {
+  isLoaded: true,
+  addListener: jest.fn((_event: string, _listener: (status: any) => void) => ({ remove: jest.fn() })),
+  play: jest.fn(), pause: jest.fn(), seekTo: jest.fn(() => Promise.resolve()),
+};
+jest.mock('expo-audio', () => ({
+  useAudioPlayer: () => mockAudioPlayer,
+}));
+const mockVideoPlayer = {
+  loop: true,
+  mounted: false,
+  play: jest.fn(() => {
+    if (!mockVideoPlayer.mounted) throw new Error('No video view is attached');
+  }),
+};
+jest.mock('expo-video', () => ({
+  useVideoPlayer: jest.fn((url, setup) => jest.requireActual<typeof import('react')>('react').useMemo(() => {
+    setup?.(mockVideoPlayer);
+    return mockVideoPlayer;
+  }, [url])),
+  VideoView: ({ player }: { player: typeof mockVideoPlayer }) => {
+    jest.requireActual<typeof import('react')>('react').useEffect(() => {
+      player.mounted = true;
+      return () => { player.mounted = false; };
+    }, [player]);
+    return null;
+  },
+}));
+let mockLanguage = 'en';
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const locale = mockLanguage === 'zh'
+        ? require('@/i18n/locales/zh.json')
+        : require('@/i18n/locales/en.json');
+      return key.split('.').reduce((value: any, part) => value?.[part], locale) ?? key;
+    },
+  }),
+}));
 jest.mock('@/theme', () => ({
   Spacing: { xs: 4, sm: 8, md: 16 },
   Radius: { md: 8, lg: 12 },
   Typography: { h1: {}, h2: {}, h3: {}, bodyRegular: {}, small: {} },
   useTheme: () => ({ colors: { text: '#fff', textSecondary: '#fff', primary: '#6366F1' } }),
 }));
+
+beforeEach(() => {
+  mockLanguage = 'en';
+  mockVideoPlayer.play.mockClear();
+  mockVideoPlayer.mounted = false;
+  mockAudioPlayer.play.mockClear();
+  mockAudioPlayer.pause.mockClear();
+  mockAudioPlayer.addListener.mockClear();
+  jest.mocked(useVideoPlayer).mockClear();
+});
 
 test('pasted rich text displays link labels, nested lists, checklists and tables', () => {
   render(<NoteBlockRenderer blocks={[
@@ -84,4 +133,74 @@ test('server-provided inline content stops at the supported nesting depth', () =
   const tree = JSON.stringify(view.toJSON());
   expect(tree).toContain('行内第10层');
   expect(tree).not.toContain('行内第11层');
+});
+
+test('one lazy video press creates and starts the player after its view attaches', () => {
+  const mockUseVideoPlayer = jest.mocked(useVideoPlayer);
+  mockUseVideoPlayer.mockClear();
+
+  const view = render(
+    <NoteBlockRenderer
+      lazyMedia
+      blocks={[{ type: 'video', props: { url: 'https://cdn.example/preview.mp4' } }]}
+    />,
+  );
+
+  expect(mockUseVideoPlayer).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByRole('button', { name: 'Play video' }));
+  expect(mockUseVideoPlayer).toHaveBeenCalledTimes(1);
+  expect(mockUseVideoPlayer).toHaveBeenCalledWith(
+    'https://cdn.example/preview.mp4',
+    expect.any(Function),
+  );
+  expect(mockVideoPlayer.play).toHaveBeenCalledTimes(1);
+  view.rerender(<NoteBlockRenderer lazyMedia blocks={[{ type: 'video', props: { url: 'https://cdn.example/preview.mp4' } }]} />);
+  expect(mockVideoPlayer.play).toHaveBeenCalledTimes(1);
+});
+
+test('normal video details attach controls without automatically playing', () => {
+  render(<NoteBlockRenderer blocks={[{ type: 'video', props: { url: 'https://cdn.example/detail.mp4' } }]} />);
+  expect(mockVideoPlayer.mounted).toBe(true);
+  expect(mockVideoPlayer.play).not.toHaveBeenCalled();
+});
+
+test('one press starts a lazy audio player', () => {
+  mockAudioPlayer.play.mockClear();
+  render(<NoteBlockRenderer lazyMedia blocks={[{ type: 'audio', props: { url: 'https://cdn.example/audio.webm' } }]} />);
+  expect(mockAudioPlayer.play).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByRole('button', { name: 'Play recording' }));
+  expect(mockAudioPlayer.play).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  ['en', 'Play video', 'Play recording', 'Pause recording', 'View image'],
+  ['zh', '播放视频', '播放录音', '暂停录音', '查看图片'],
+])('media accessibility labels follow %s, including active recording pause', (language, video, play, pause, image) => {
+  mockLanguage = language;
+  render(<NoteBlockRenderer lazyMedia onImagePress={jest.fn()} blocks={[
+    { type: 'video', props: { url: 'https://cdn.example/video.mp4' } },
+    { type: 'audio', props: { url: 'https://cdn.example/audio.webm' } },
+    { type: 'image', props: { url: 'https://cdn.example/image.jpg' } },
+    { type: 'image', props: { url: 'https://cdn.example/captioned.jpg', caption: 'My caption' } },
+  ]} />);
+  expect(screen.getByRole('button', { name: video })).toBeTruthy();
+  expect(screen.getByRole('imagebutton', { name: image })).toBeTruthy();
+  expect(screen.getByRole('imagebutton', { name: 'My caption' })).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: play }));
+  const listener = mockAudioPlayer.addListener.mock.calls[0][1];
+  act(() => listener({ playing: true, isLoaded: true, currentTime: 2, duration: 10 }));
+  fireEvent.press(screen.getByRole('button', { name: pause }));
+  expect(mockAudioPlayer.pause).toHaveBeenCalledTimes(1);
+});
+
+test('attached contact and group cards activate their destinations', () => {
+  const contact = jest.fn(); const group = jest.fn();
+  render(<NoteBlockRenderer onContactPress={contact} onGroupPress={group} blocks={[
+    { type: 'contact', props: { id: 'friend-id', name: 'Friend' } },
+    { type: 'group', props: { id: 'legacy-id', circleId: 'circle-id', name: 'Group' } },
+  ]} />);
+  fireEvent.press(screen.getByRole('button', { name: 'Friend' }));
+  fireEvent.press(screen.getByRole('button', { name: 'Group' }));
+  expect(contact).toHaveBeenCalledWith('friend-id', 'Friend');
+  expect(group).toHaveBeenCalledWith('circle-id', 'Group');
 });

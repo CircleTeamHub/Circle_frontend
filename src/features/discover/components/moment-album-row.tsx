@@ -131,7 +131,11 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
         ) : null}
 
         {post.images.length > 0 ? (
-          <ImageGrid images={post.images} containerWidth={contentWidth} />
+          <ImageGrid
+            images={post.images}
+            media={post.media}
+            containerWidth={contentWidth}
+          />
         ) : null}
 
         {/* 时间戳兼作详情入口。纯图片、没有评论的帖子（相册里很常见）此前

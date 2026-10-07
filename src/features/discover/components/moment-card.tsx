@@ -187,7 +187,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
 
         {/* Images：点图看大图（ImageGrid 内置查看器）；进详情留给文字区，
             否则外层 Pressable 会把点击抢走。 */}
-        <ImageGrid images={post.images} />
+        <ImageGrid images={post.images} media={post.media} />
 
         {/* Time + Actions */}
         <View style={s.headerRow}>

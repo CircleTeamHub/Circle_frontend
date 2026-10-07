@@ -40,6 +40,9 @@ import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-con
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { LIMITS } from '@/constants/config';
+import { mapWithConcurrency } from '@/utils/concurrency';
 
 // VIP 档位对齐 app 实际会员体系（VIP1–VIP5，见 MemberCenterScreen）。
 // 仅存 value，label 在组件内按当前语言生成（见 useMemo）。
@@ -154,7 +157,7 @@ export default function CreatePostScreen() {
   const resetForm = usePostFormStore((s) => s.reset);
 
   const [content, setContent] = useState('');
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [hornEnabled, setHornEnabled] = useState(false);
   const [postTags, setPostTags] = useState<string[]>([]);
   const [postTagInput, setPostTagInput] = useState('');
@@ -205,7 +208,7 @@ export default function CreatePostScreen() {
     if (result.canceled) return;
     setImages((prev) => [
       ...prev,
-      ...result.assets.map((a) => a.uri).slice(0, 9 - prev.length),
+      ...result.assets.slice(0, 9 - prev.length),
     ]);
   }, [images.length]);
 
@@ -327,32 +330,53 @@ export default function CreatePostScreen() {
         }
       }
 
-      const uploadedUrls: string[] = [];
-      let failedUploads = 0;
-
-      for (const uri of images) {
+      const outcomes = await mapWithConcurrency(images, 3, async (asset) => {
         try {
-          const fileName = uri.split('/').pop() ?? 'photo.jpg';
+          if (
+            typeof asset.fileSize === 'number' &&
+            asset.fileSize > LIMITS.IMAGE_MAX_SIZE_MB * 1024 * 1024
+          ) {
+            throw new Error(
+              t('validation.imageSizeLimit', {
+                defaultValue: `图片不能超过 ${LIMITS.IMAGE_MAX_SIZE_MB}MB`,
+              }),
+            );
+          }
+          const fileName = asset.uri.split('/').pop() || 'photo.jpg';
           const contentType =
-            resolveUploadContentType({ fileName }) ?? 'image/jpeg';
-          const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(fileName),
+            resolveUploadContentType({
+              mimeType: asset.mimeType,
+              fileName,
+            }) ?? 'image/jpeg';
+          const prepared = await prepareChatImageForUpload({
+            uri: asset.uri,
+            width: asset.width,
+            height: asset.height,
             contentType,
+            filename: fileName,
+          });
+          const presign = await requestUploadPresign({
+            filename: sanitizeUploadFilename(prepared.filename),
+            contentType: prepared.contentType,
             folder: 'posts',
-            fileUri: uri,
+            fileUri: prepared.uri,
           });
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,
-            contentType,
-            uri,
+            prepared.contentType,
+            prepared.uri,
             presign.requiredHeaders,
           );
-          uploadedUrls.push(presign.fileUrl);
+          return presign.fileUrl;
         } catch (uploadError) {
-          failedUploads += 1;
           reportHandledFailure('createPost', 'imageUpload', uploadError);
+          return null;
         }
-      }
+      });
+      const uploadedUrls = outcomes.filter(
+        (url): url is string => typeof url === 'string',
+      );
+      const failedUploads = images.length - uploadedUrls.length;
 
       if (failedUploads > 0) {
         const reason =
@@ -447,9 +471,9 @@ export default function CreatePostScreen() {
 
           {/* Image picker */}
           <View style={s.photoRow}>
-            {images.map((uri, i) => (
-              <View key={uri}>
-                <Image source={{ uri }} style={s.photoThumb} contentFit="cover" />
+            {images.map((asset, i) => (
+              <View key={`${asset.uri}-${i}`}>
+                <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />
                 <Pressable
                   style={[s.removeBtn, { backgroundColor: colors.error }]}
                   onPress={() => handleRemoveImage(i)}

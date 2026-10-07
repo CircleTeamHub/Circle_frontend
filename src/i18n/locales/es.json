@@ -892,6 +892,11 @@
     "mutedA11y": "Silenciado"
   },
   "notes": {
+    "accessibility": {
+      "playRecording": "Reproducir grabación",
+      "pauseRecording": "Pausar grabación",
+      "viewImage": "Ver imagen"
+    },
     "actions": {
       "new": "Nueva",
       "qrCode": "Código QR",
@@ -955,8 +960,29 @@
       "chatWithSender": "Chatear con {{name}}",
       "openGroupSource": "Ver el mensaje original en \"{{name}}\""
     },
+    "drafts": {
+      "title": "Borradores",
+      "empty": "No tienes borradores",
+      "deleteTitle": "¿Eliminar borrador?",
+      "deleteMessage": "Este borrador no se puede recuperar después de eliminarlo.",
+      "unsavedTitle": "¿Guardar la nota sin terminar?",
+      "unsavedMessage": "El contenido sin guardar se guardará en Borradores para que puedas continuar más tarde.",
+      "discard": "Salir sin guardar",
+      "save": "Guardar en Borradores",
+      "untitled": "Nota sin título",
+      "noContent": "Aún no hay contenido",
+      "mediaCount": "{{count}} archivos multimedia",
+      "deleteLabel": "Eliminar borrador",
+      "deleteFailed": "No se pudo eliminar el borrador. Inténtalo de nuevo.",
+      "pendingSubmitDeleteBlocked": "Aún no se ha confirmado el guardado de este borrador. Ábrelo y reintenta el guardado original antes de decidir si eliminarlo.",
+      "deletePending": "La limpieza local o la eliminación en el servidor sigue pendiente. El contenido está oculto; reintenta para completar la eliminación.",
+      "saveFailed": "No se pudo guardar el borrador. Inténtalo de nuevo.",
+      "mediaCount_one": "{{count}} archivo multimedia",
+      "mediaCount_other": "{{count}} archivos multimedia"
+    },
     "edit": {
       "addImage": "Añadir imagen",
+      "addMedia": "Añadir multimedia",
       "addShowcaseImage": "Añadir imagen destacada",
       "addShowcaseVideo": "Añadir video destacado",
       "addVideo": "Añadir video",
@@ -965,6 +991,7 @@
       "emptySection": "Aún sin contenido",
       "groupsLabel": "Grupos",
       "imageItem": "Imagen",
+      "audioItem": "Audio",
       "itemsCount": "elementos",
       "legacyMediaUnavailableInline": "Esta nota tiene {{count}} archivo(s) multimedia antiguo(s) que no se pueden recuperar. Guardar los perdería, así que vuelve sin guardar.",
       "legacyMediaUnavailableMessage": "Esta nota contiene archivos multimedia antiguos que no se pueden recuperar. Vuelve sin guardar para evitar perder contenido.",
@@ -983,13 +1010,37 @@
       "saveFailedMessage": "Error al guardar, inténtalo de nuevo",
       "saveFailedTitle": "Error al guardar",
       "saving": "Guardando...",
+      "contactPickerTitle": "Elegir contacto",
+      "groupPickerTitle": "Elegir grupo",
+      "contactSearchPlaceholder": "Buscar contactos",
+      "groupSearchPlaceholder": "Buscar grupos",
+      "cardPickerNoResults": "No hay coincidencias",
+      "cardPickerLoadFailedTitle": "No se pudo cargar",
+      "cardPickerLoadFailedMessage": "No se pudo cargar la lista. Inténtalo de nuevo.",
+      "addContact": "Elegir contacto",
+      "addGroup": "Elegir grupo",
+      "mediaUploadFailedTitle": "Error al subir",
+      "mediaUploadFailedMessage": "Inténtalo de nuevo",
+      "uploadAudio": "Subir audio",
+      "startRecording": "Empezar a grabar",
+      "stopRecording": "Detener grabación",
+      "audioRecording": "Grabando, toca para detener",
+      "waitForMediaTitle": "Termina la acción actual primero",
+      "waitForMediaMessage": "Detén la grabación o espera a que termine la carga o el guardado antes de volver.",
+      "pendingSubmitMessage": "El resultado del guardado no está confirmado. La edición está pausada. Reintenta el guardado original o vuelve atrás para conservarlo en Borradores y reintentar después.",
+      "pendingSubmitStorageFailed": "No se pudo conservar el contenido en este dispositivo y no se ha enviado. Comprueba el espacio disponible y reintenta.",
+      "pendingSubmitConflict": "El servidor tiene un contenido diferente. Tu contenido local sigue en Borradores. Consulta la nota guardada antes de decidir cómo combinarlos; este borrador se conservará.",
+      "openCommittedNote": "Ver nota guardada",
+      "audioDuration": "{{seconds}} s",
+      "audioPickerUnavailableTitle": "Selección de audio no disponible",
+      "audioPickerUnavailableMessage": "La selección de audio no está disponible en esta versión. Actualiza la aplicación e inténtalo de nuevo.",
       "sections": {
         "location": "Ubicación",
         "locationEmpty": "Opcional",
         "locationHint": "Elige una ubicación en el mapa",
         "locationSelected": "Seleccionada",
-        "media": "Imágenes/Videos",
-        "mediaHint": "Contenido principal de la nota, admite imágenes y videos",
+        "media": "Multimedia",
+        "mediaHint": "Imágenes y videos principales de la nota",
         "showcase": "Destacado",
         "showcaseHint": "Contenido mostrado en la tarjeta del grupo",
         "text": "Texto",
@@ -999,12 +1050,33 @@
       "titleRequired": "Introduce un título",
       "titleHint": "Título obligatorio, hasta {{max}} caracteres",
       "textCount": "Longitud del texto {{count}} / {{max}}",
-      "textScrollHint": "El texto es opcional. Desliza dentro del editor para leer la nota completa.",
       "textTooLong": "El texto, incluidos los saltos de línea entre párrafos, admite hasta {{max}} caracteres; tienes {{count}}. Se ha conservado el texto. Acórtalo antes de guardar.",
       "tooManyParagraphs": "El texto admite hasta {{max}} párrafos. Se ha conservado el texto. Combina algunos párrafos antes de guardar.",
       "titlePlaceholder": "Título",
       "uploading": "Subiendo...",
-      "videoItem": "Video"
+      "videoItem": "Video",
+      "previewTitle": "Vista previa",
+      "composerComingSoonTitle": "Próximamente",
+      "composerComingSoonMessage": "Este tipo de contenido no está disponible temporalmente y se conservó en la lista de orden.",
+      "composer": {
+        "title": "Título",
+        "text": "Texto",
+        "image": "Imagen",
+        "media": "Multimedia",
+        "audio": "Audio",
+        "video": "Video",
+        "showcase": "Mostrar",
+        "location": "Ubicación",
+        "contact": "Contacto",
+        "group": "Tarjeta de grupo",
+        "sort": "Ordenar",
+        "preview": "Vista previa",
+        "sortEmpty": "Aún no hay contenido para ordenar",
+        "reorderA11y": "Ajustar la posición de {{label}}",
+        "moveUp": "Subir {{label}}",
+        "moveDown": "Bajar {{label}}"
+      },
+      "unsupportedAudio": "Formato de audio no compatible. Elige un archivo M4A, MP3, AAC, WAV, OGG o WebM."
     },
     "editor": {
       "mediaUploadFailedMessage": "Inténtalo de nuevo",
@@ -1101,6 +1173,9 @@
       "text": "Texto",
       "media": "Imágenes · Videos",
       "showcase": "Exhibición",
+      "audio": "Audio",
+      "contact": "Contacto",
+      "group": "Tarjeta de grupo",
       "location": "Ubicación",
       "emptyText": "Sin texto todavía"
     },
@@ -1163,7 +1238,7 @@
     "groupPicker": {
       "title": "Editar grupos",
       "batchHint": "Marcar añade las {{count}} notas seleccionadas al grupo; desmarcar las quita. Los grupos sin tocar se mantienen igual.",
-      "empty": "Aún no hay grupos. Créalos primero en «Gestionar grupos».",
+      "empty": "Aún no hay grupos.",
       "save": "Guardar",
       "saving": "Guardando..."
     }
@@ -2013,6 +2088,14 @@
       "FULL": "Chat y Momentos",
       "CHAT_ONLY": "Solo chat"
     },
+    "editPermission": {
+      "label": "Configurar el acceso a Momentos para {{name}}",
+      "helper": "Esto solo controla si esta persona puede ver tus Momentos. El acceso al chat no cambia.",
+      "loading": "Cargando permisos...",
+      "missingFriend": "Falta la información del amigo",
+      "loadFailed": "No se pudieron cargar los permisos. Inténtalo de nuevo.",
+      "saveFailed": "No se pudieron guardar los permisos. Inténtalo de nuevo."
+    },
     "loadFailed": "No se pudo cargar el perfil, mostrando datos en caché",
     "startChat": "Iniciar chat",
     "openingChat": "Abriendo chat...",
@@ -2446,13 +2529,13 @@
       "link": "Reglas de membresía",
       "title": "Reglas y permisos",
       "heading": "Reglas de membresía",
-      "description": "Atención al cliente verifica y concede manualmente la membresía. Esta pantalla muestra el catálogo de beneficios; los permisos del backend son la fuente de autoridad.",
+      "description": "Atención al cliente verifica y concede manualmente la membresía. Esta pantalla muestra el catálogo de beneficios; tus beneficios disponibles dependen del estado actual de tu membresía.",
       "rules": {
         "catalog": "Membresía diaria: CNY 19.9 / 1 día; Membresía mensual: CNY 298 / 1 mes; Membresía semestral: CNY 1.288 / 6 meses; Membresía anual: CNY 1.998 / 1 año; Membresía de por vida: CNY 3.998 / de por vida.",
         "supportActivation": "La membresía no se puede canjear con puntos ni comprar en la aplicación. Tras el contacto, atención al cliente la verifica y concede manualmente.",
         "upgrade": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y se aplica el valor restante de la membresía.",
         "expiry": "Cuando vence la membresía, solo se detienen sus beneficios. No se eliminan cuentas, chats, notas ni otro contenido del usuario.",
-        "fairUse": "Las reglas de membresía solo se aplican a los beneficios indicados en el Centro de membresía. Los beneficios indicados como ilimitados siguen sujetos a límites elevados de uso razonable y prevención de abusos del backend. Los permisos reales los determina el backend.",
+        "fairUse": "Las reglas de membresía solo se aplican a los beneficios indicados en el Centro de membresía. Los beneficios indicados como ilimitados siguen sujetos a límites razonables de uso y prevención de abusos. Tus beneficios disponibles dependen del estado actual de tu membresía.",
         "voiceToText": "La conversión de voz a texto es una función básica gratuita para todos y no está limitada por el nivel de membresía.",
         "excludedVisualBenefits": "Los beneficios actuales no prometen marcos de avatar ni avatares animados."
       }
@@ -2735,15 +2818,16 @@
     "privacyPolicy": "Política de privacidad",
     "errors": {
       "requestTimeout": "Se agotó el tiempo de la solicitud. Comprueba tu conexión e inténtalo de nuevo.",
-      "networkUnavailable": "Error de red. Asegúrate de que el servidor esté en funcionamiento.",
-      "invalidServerResponse": "El servidor devolvió datos no válidos",
-      "requestFailedWithStatus": "La solicitud falló ({{status}})",
-      "requestFailed": "La solicitud falló",
+      "networkUnavailable": "No se puede conectar ahora. Comprueba tu conexión e inténtalo de nuevo.",
+      "invalidServerResponse": "No se pudo completar la operación. Inténtalo de nuevo.",
+      "requestFailedWithStatus": "No se pudo completar la solicitud. Inténtalo de nuevo.",
+      "requestFailed": "No se pudo completar la operación. Inténtalo de nuevo.",
       "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo.",
       "refreshResponseInvalid": "Respuesta de actualización no válida. Inicia sesión de nuevo.",
       "sessionChangedDuringRefresh": "La cuenta cambió mientras se actualizaba la sesión. Inténtalo de nuevo.",
       "uploadTimeout": "Se agotó el tiempo de la subida. Comprueba tu conexión e inténtalo de nuevo.",
-      "uploadFailedWithStatus": "La subida falló ({{status}})"
+      "uploadFailed": "La subida falló. Inténtalo de nuevo más tarde.",
+      "uploadFailedWithStatus": "La subida falló. Inténtalo de nuevo."
     }
   },
   "credit": {
@@ -3034,7 +3118,7 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "Error en el formato de los datos de subida prefirmados",
+      "presignDataInvalid": "No se pudo iniciar la subida. Inténtalo de nuevo.",
       "fileUnreadable": "No se encontró el archivo que se va a subir.",
       "fileTooLarge": "El archivo supera el límite de {{maxMb}}MB."
     }
@@ -3273,6 +3357,7 @@
     "FRIEND_LIMIT_REACHED": "Has alcanzado tu límite de amigos; mejora tu membresía para ampliarlo",
     "NOTE_GROUP_EXISTS": "Ya existe un grupo con ese nombre",
     "NOTE_STORAGE_QUOTA_REACHED": "Alcanzaste el límite de notas de tu nivel",
+    "NOTE_PUBLICATION_QUOTA_REACHED": "Esta nota ha alcanzado su límite de guardados. Conserva el borrador y guarda el contenido añadido como una nota nueva.",
     "NOTE_GROUP_LIMIT": "Has alcanzado el límite de grupos de notas",
     "NOTE_EXPORT_NO_MEDIA": "No se encontraron medios exportables",
     "NOTE_EXPORT_MEDIA_TOO_LARGE": "Un archivo multimedia es demasiado grande para exportar",

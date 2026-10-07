@@ -24,12 +24,12 @@ test('note detail self-heals a 403 image by refetching, throttled against loops'
   // 节流：图片本身坏掉时重拉救不了，不能让 onError → refetch → onError 打转。
   assert.match(src, /lastMediaRetryRef/);
   assert.match(src, /30_000/);
-  // 正文 / 媒体 / 展示三个区块都要接上，否则各自留下空图。
-  const wirings = src.match(/onMediaError=\{handleMediaError\}/g) ?? [];
-  assert.ok(
-    wirings.length >= 3,
-    `expected all 3 NoteBlockRenderer usages wired, got ${wirings.length}`,
-  );
+  // NoteDocumentBody owns the repeated section renderers; the screen passes
+  // one callback into it and the shared body forwards it to each renderer.
+  assert.match(src, /<NoteDocumentBody[\s\S]*onMediaError=\{handleMediaError\}/);
+  const body = read('src/features/notes/components/NoteDocumentBody.tsx');
+  const wirings = body.match(/onMediaError=\{onMediaError\}/g) ?? [];
+  assert.ok(wirings.length >= 3, `expected shared body to wire all media sections, got ${wirings.length}`);
 });
 
 test('note block renderer forwards image load failures to its caller', () => {

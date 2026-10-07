@@ -44,6 +44,17 @@ function apiUtilsShim() {
   };
 }
 
+function imageMediaShim() {
+  return {
+    normalizeImageMedia: (imagesValue) => ({
+      images: Array.isArray(imagesValue)
+        ? imagesValue.filter((value) => typeof value === 'string')
+        : [],
+      media: [],
+    }),
+  };
+}
+
 test('public user API preserves normalized avatarFrameAppearance and nulls missing legacy avatarFrame', async () => {
   const users = loadTsModule('src/services/api/users.ts', {
     requireShim: (request) => {
@@ -59,6 +70,7 @@ test('public user API preserves normalized avatarFrameAppearance and nulls missi
         };
       }
       if (request === '@/services/api/utils') return apiUtilsShim();
+      if (request === './image-media') return imageMediaShim();
       throw new Error(`Unexpected import: ${request}`);
     },
   });
@@ -90,6 +102,7 @@ test('friend API preserves normalized avatarFrameAppearance', async () => {
         };
       }
       if (request === '@/services/api/utils') return apiUtilsShim();
+      if (request === './image-media') return imageMediaShim();
       throw new Error(`Unexpected import: ${request}`);
     },
   });
@@ -122,6 +135,7 @@ test('moment feed author preserves normalized avatarFrameAppearance', async () =
         };
       }
       if (request === '@/services/api/utils') return apiUtilsShim();
+      if (request === './image-media') return imageMediaShim();
       throw new Error(`Unexpected import: ${request}`);
     },
   });
@@ -155,6 +169,7 @@ test('plaza feed author preserves normalized avatarFrameAppearance', async () =>
         };
       }
       if (request === '@/services/api/utils') return apiUtilsShim();
+      if (request === './image-media') return imageMediaShim();
       throw new Error(`Unexpected import: ${request}`);
     },
   });
@@ -207,6 +222,7 @@ test('legacy author payloads fall back to membership frames but explicit null st
         };
       }
       if (request === '@/services/api/utils') return apiUtilsShim();
+      if (request === './image-media') return imageMediaShim();
       throw new Error(`Unexpected import: ${request}`);
     },
   });

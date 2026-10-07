@@ -4,6 +4,7 @@ import {
   Alert,
   AppState,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -66,6 +67,7 @@ export const MomentsFeed: React.FC = () => {
     moments,
     loading,
     hasMore,
+    fetchError,
     lastRefreshTime,
     fetchMoments,
     toggleLike: storeToggleLike,
@@ -75,6 +77,7 @@ export const MomentsFeed: React.FC = () => {
       moments: s.moments,
       loading: s.loading,
       hasMore: s.hasMore,
+      fetchError: s.fetchError,
       lastRefreshTime: s.lastRefreshTime,
       fetchMoments: s.fetchMoments,
       toggleLike: s.toggleLike,
@@ -100,7 +103,9 @@ export const MomentsFeed: React.FC = () => {
       const now = Date.now();
       if (now - lastFocusFetchRef.current < 30_000) return;
       lastFocusFetchRef.current = now;
-      fetchMoments(true);
+      void fetchMoments(true).catch(() => {
+        // store 已记录失败状态；焦点回调不能留下 unhandled rejection。
+      });
     }, [fetchMoments]),
   );
 
@@ -161,15 +166,22 @@ export const MomentsFeed: React.FC = () => {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     setNewCount(0);
-    await fetchMoments(true);
-    setRefreshing(false);
+    try {
+      await fetchMoments(true);
+    } catch {
+      // store 已将失败状态锁存并负责上报；刷新手势本身不能产生 unhandled rejection。
+    } finally {
+      setRefreshing(false);
+    }
   }, [fetchMoments]);
 
   const handleEndReached = useCallback(() => {
-    if (!loading && hasMore) {
-      fetchMoments(false);
+    if (!loading && hasMore && !fetchError) {
+      void fetchMoments(false).catch(() => {
+        // store 已将失败锁存到 fetchError，等待用户下拉刷新。
+      });
     }
-  }, [loading, hasMore, fetchMoments]);
+  }, [fetchError, loading, hasMore, fetchMoments]);
 
   const handleLike = useCallback(
     async (postId: string) => {
@@ -285,11 +297,13 @@ export const MomentsFeed: React.FC = () => {
   const ListEmpty = !loading ? (
     <View style={s.emptyContainer}>
       <Text style={{ color: colors.textSecondary, ...Typography.body }}>
-        {t('discover.noMoments')}
+        {fetchError ? t('common.networkError') : t('discover.noMoments')}
       </Text>
-      <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
-        {t('discover.addFriendHint')}
-      </Text>
+      {!fetchError ? (
+        <Text style={{ color: colors.textSecondary, ...Typography.caption }}>
+          {t('discover.addFriendHint')}
+        </Text>
+      ) : null}
     </View>
   ) : null;
 
@@ -319,6 +333,11 @@ export const MomentsFeed: React.FC = () => {
         }
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.3}
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={40}
+        windowSize={9}
+        removeClippedSubviews={Platform.OS === 'android'}
         showsVerticalScrollIndicator={false}
       />
 

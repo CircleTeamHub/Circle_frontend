@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, unstable_batchedUpdates } from 'react-native';
 import type { Socket } from 'socket.io-client';
 import {
   CHAT_EVENTS,
@@ -40,8 +40,32 @@ import { devWarn } from '@/utils/dev-log';
  */
 /** 会话补拉的合并窗口:消息洪泛时不要每条都打一次全量列表。 */
 const CONVERSATION_BACKFILL_DEBOUNCE_MS = 800;
+/**
+ * 同一 JS 事件循环里的消息洪峰只留一个 trailing flush。
+ * 24ms 约等于两帧之间的窗口，能把 Socket.IO 连续投递的消息合成一次
+ * store 更新，同时不会让单条消息在前台出现可感知的等待。
+ */
+const INCOMING_MESSAGE_BATCH_WINDOW_MS = 24;
 let backfillTimer: ReturnType<typeof setTimeout> | null = null;
+let incomingMessageBatchTimer: ReturnType<typeof setTimeout> | null = null;
+let incomingMessageBatch: ChatMessageDto[] = [];
+let incomingMessageIsLive: (() => boolean) | null = null;
+let chatEventBindingEpoch = 0;
+/** 会话元信息在事件到达时缺失；flush 时即使补拉先把它带回也仍只弹最新一条。 */
+const incomingMissingConversationIds = new Set<string>();
 const reportedChatEventFailures = new Set<string>();
+
+/**
+ * A burst of image messages otherwise notifies every chat subscriber twice per
+ * message (preview then timeline). Older test/web runtimes do not expose the
+ * native helper, so keep a synchronous fallback.
+ */
+function batchStoreUpdates<T>(work: () => T): T {
+  if (typeof unstable_batchedUpdates === 'function') {
+    return unstable_batchedUpdates(work);
+  }
+  return work();
+}
 
 function reportChatEventFailureOnce(operation: string, kind: string): void {
   const signature = `${operation}:${kind}`;
@@ -155,9 +179,34 @@ export function cancelConversationBackfill(): void {
   pendingBanners.clear();
   removedConversations.clear();
   reportedChatEventFailures.clear();
-  if (backfillTimer === null) return;
-  clearTimeout(backfillTimer);
-  backfillTimer = null;
+  if (backfillTimer !== null) {
+    clearTimeout(backfillTimer);
+    backfillTimer = null;
+  }
+  cancelIncomingMessageBatch();
+}
+
+/** 测试、登出与切账号用：丢掉尚未 flush 的消息洪峰。 */
+function cancelIncomingMessageBatch(): void {
+  chatEventBindingEpoch += 1;
+  incomingMessageBatch = [];
+  incomingMessageIsLive = null;
+  incomingMissingConversationIds.clear();
+  if (incomingMessageBatchTimer === null) return;
+  clearTimeout(incomingMessageBatchTimer);
+  incomingMessageBatchTimer = null;
+}
+
+/** 测试用显式 flush；生产由 24ms timer 调用。 */
+export function flushIncomingMessageBatch(): void {
+  if (incomingMessageBatchTimer !== null) {
+    clearTimeout(incomingMessageBatchTimer);
+    incomingMessageBatchTimer = null;
+  }
+  const pending = incomingMessageBatch;
+  incomingMessageBatch = [];
+  if (pending.length === 0) return;
+  processIncomingMessageBatch(pending);
 }
 
 /**
@@ -244,6 +293,30 @@ function optionalRevision(value: unknown): number | undefined {
     : undefined;
 }
 
+/**
+ * Live mutation handlers update memory synchronously but may need an async DB
+ * write. The sync cursor must advance only after that write succeeds. Older
+ * test/compatibility stores return void, which preserves the previous behavior.
+ */
+function noteLiveMutationRevision(
+  conversationId: string,
+  revision: number | undefined,
+  applied: boolean | Promise<boolean> | undefined,
+): void {
+  const epoch = chatEventBindingEpoch;
+  const isLive = incomingMessageIsLive;
+  const commit = (durable: boolean) => {
+    if (epoch !== chatEventBindingEpoch || !isLive?.()) return;
+    noteLiveRevision(conversationId, revision, durable);
+  };
+  const pending = applied as Promise<boolean> | undefined;
+  if (pending && typeof pending.then === 'function') {
+    void pending.then(commit, () => commit(false));
+    return;
+  }
+  commit(applied !== false);
+}
+
 function applyBurnedMessagesChange(
   store: ReturnType<typeof useChatStore.getState>,
   payload: ChatBurnedMessagesBroadcast,
@@ -316,7 +389,106 @@ function applyRemoteGroupSettingChange(
   });
 }
 
+function reportDeliveredForIncomingMessage(
+  store: ReturnType<typeof useChatStore.getState>,
+  payload: ChatMessageDto,
+): void {
+  // G-07 送达回执:收到别人的消息即回报水位(节流在 socket-manager)。
+  // 「已送达」只在单聊里渲染,群聊不报；未知会话照报,服务端按类型丢弃。
+  if (
+    payload.height > 0 &&
+    payload.sender !== null &&
+    payload.sender.id !== store.currentUserId &&
+    store.conversations.find((c) => c.id === payload.conversationId)?.type !==
+      'GROUP'
+  ) {
+    reportChatDelivered(payload.conversationId, payload.height);
+  }
+}
+
+/**
+ * 将一个消息窗口作为一次 store 更新处理。
+ * applyIncomingMessage 仍先于 ingestMessages，避免重复广播被当成新未读；
+ * ingest 则按会话合并成一次，底层 persistLocalMessages 因而只起一个批量写。
+ */
+function processIncomingMessageBatch(messages: ChatMessageDto[]): void {
+  if (messages.length === 0 || (incomingMessageIsLive && !incomingMessageIsLive())) {
+    return;
+  }
+
+  const unique: ChatMessageDto[] = [];
+  const seen = new Set<string>();
+  for (const message of messages) {
+    const key = `${message.conversationId}:${message.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(message);
+  }
+  if (unique.length === 0) return;
+
+  const store = useChatStore.getState();
+  const appliedById = new Map<string, boolean>();
+  const persistedByConversation = new Map<
+    string,
+    boolean | Promise<boolean> | undefined
+  >();
+  const grouped = new Map<string, ChatMessageDto[]>();
+  for (const message of unique) {
+    const group = grouped.get(message.conversationId);
+    if (group) group.push(message);
+    else grouped.set(message.conversationId, [message]);
+  }
+
+  batchStoreUpdates(() => {
+    for (const message of unique) {
+      // 顺序要紧：先联动会话列表再入时间线。applyIncomingMessage 靠「消息
+      // 是否已在时间线里」判重复投递，先 ingest 会让未读重复累加。
+      appliedById.set(
+        `${message.conversationId}:${message.id}`,
+        store.applyIncomingMessage(message),
+      );
+    }
+    for (const [conversationId, batch] of grouped) {
+      persistedByConversation.set(
+        conversationId,
+        store.ingestMessages(conversationId, batch),
+      );
+    }
+  });
+
+  for (const message of unique) {
+    const key = `${message.conversationId}:${message.id}`;
+    noteLiveMutationRevision(
+      message.conversationId,
+      message.revision,
+      persistedByConversation.get(message.conversationId),
+    );
+    applyRemoteBurnChange(store, message);
+    applyRemoteGroupSettingChange(store, message);
+    const metadataChanged = requiresConversationMetadataRefresh(message);
+    // 事件到达时没有会话元信息就必须延迟横幅。即使 24ms 窗口内补拉先把
+    // 元信息带回，也不能把同一洪峰拆成多条横幅；只保留每会话最新一条。
+    const deferredForMissingConversation = incomingMissingConversationIds.has(
+      message.conversationId,
+    );
+    const needsConversation = deferredForMissingConversation
+      ? true
+      : enqueueForegroundBanner(message) === 'needs-conversation';
+    if (deferredForMissingConversation) rememberPendingBanner(message);
+    if (needsConversation) rememberPendingBanner(message);
+    if (!appliedById.get(key) || needsConversation || metadataChanged) {
+      scheduleConversationBackfill(incomingMessageIsLive ?? (() => true));
+    }
+  }
+  for (const conversationId of grouped.keys()) {
+    incomingMissingConversationIds.delete(conversationId);
+  }
+}
+
 export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
+  // 当前 socket 生命周期唯一；新绑定时丢掉上一账号尚未落库的窗口。
+  cancelIncomingMessageBatch();
+  incomingMessageIsLive = isLive;
   socket.on(CHAT_EVENTS.message, (payload: ChatMessageDto) => {
     if (!isLive()) return;
     try {
@@ -338,15 +510,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         noteLiveRevision(payload.conversationId, payload.revision);
         return;
       }
-
       const store = useChatStore.getState();
       // 被移出的会话:迟到的广播不入库也不补拉,否则刚收走的会话立刻复活。
-      // 防复活标记的解除有两条路:权威的 joined 事件,或者**移除之后新拉回来的**
-      // 会话快照里仍然有它(离线期间被重新拉回群、joined 事件丢了)。
-      //
-      // 只看「会话在不在列表里」是不牢的:一个在移除事件之前发出、在
-      // removeConversation 之后才落地的旧快照会把刚收走的会话原样装回来,
-      // 那不是重新入群。所以比快照序号 —— 必须是移除之后又拉过至少一次。
+      // 防复活判定必须在排队前完成，避免 24ms 窗口里会话状态变化后误收旧消息。
       const removedAtSeq = removedConversations.get(payload.conversationId);
       if (removedAtSeq !== undefined) {
         const restored =
@@ -355,38 +521,25 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         if (!restored) return;
         removedConversations.delete(payload.conversationId);
       }
-      // 顺序要紧:先联动会话列表再入时间线。applyIncomingMessage 靠
-      // 「这条消息是否已在时间线里」判重复投递,先 ingest 的话它每次都会
-      // 看到自己、未读永远加不上。
-      const applied = store.applyIncomingMessage(payload);
-      store.ingestMessages(payload.conversationId, [payload]);
-      noteLiveRevision(payload.conversationId, payload.revision);
-      applyRemoteBurnChange(store, payload);
-      applyRemoteGroupSettingChange(store, payload);
-      const metadataChanged = requiresConversationMetadataRefresh(payload);
-      // G-07 送达回执:收到别人的消息即回报水位(节流在 socket-manager)。
-      // 「已送达」只在单聊里渲染,群聊不报 —— 服务端对群也不再记录。会话还没进
-      // 快照(类型未知)时照报,服务端按类型丢弃。
       if (
-        payload.height > 0 &&
-        payload.sender !== null &&
-        payload.sender.id !== store.currentUserId &&
-        store.conversations.find((c) => c.id === payload.conversationId)
-          ?.type !== 'GROUP'
+        !store.conversations.some((c) => c.id === payload.conversationId)
       ) {
-        reportChatDelivered(payload.conversationId, payload.height);
+        incomingMissingConversationIds.add(payload.conversationId);
       }
-      // 攒下的候选必须有一次补拉去认领它,否则它永远等不到元信息。
-      // 这两个条件目前同源(会话不在快照里),但依赖这种巧合太脆,写明。
-      const needsConversation =
-        enqueueForegroundBanner(payload) === 'needs-conversation';
-      if (needsConversation) rememberPendingBanner(payload);
-      if (!applied || needsConversation || metadataChanged) {
-        // 会话不在当前快照里(对方刚建的单聊、刚被拉进的群):消息已经进了
-        // 时间线,但没有会话行也没有角标 —— 停在消息页的用户要手动刷新才看得到。
-        // 群公告、头像和群主变更的系统消息不携带完整新值,也走同一条权威补拉,
-        // 避免在线成员一直保留旧的会话元数据。
-        scheduleConversationBackfill(isLive);
+
+      // 送达回执不等入库窗口：收到事件即推进，避免批处理窗口阻塞单聊的已送达状态。
+      reportDeliveredForIncomingMessage(store, payload);
+
+      // 第一条保持同步，兼容正在打开的聊天页与旧测试运行时；后续连续事件进入
+      // 24ms 窗口，按会话合并一次 apply/ingest，显著减少消息风暴下的 React 与 SQLite 压力。
+      if (incomingMessageBatchTimer === null && incomingMessageBatch.length === 0) {
+        processIncomingMessageBatch([payload]);
+        incomingMessageBatchTimer = setTimeout(() => {
+          incomingMessageBatchTimer = null;
+          flushIncomingMessageBatch();
+        }, INCOMING_MESSAGE_BATCH_WINDOW_MS);
+      } else {
+        incomingMessageBatch.push(payload);
       }
     } catch (err) {
       devWarn('[chat] message handler failed', err);
@@ -399,6 +552,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
     (payload: ChatBurnedMessagesBroadcast) => {
       if (!isLive()) return;
       try {
+        flushIncomingMessageBatch();
         applyBurnedMessagesChange(useChatStore.getState(), payload);
       } catch (err) {
         devWarn('[chat] dropped malformed burned messages payload', err);
@@ -423,6 +577,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('readReceipt', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const store = useChatStore.getState();
       store.applyRead(payload.conversationId, payload.userId, payload.height);
       // 本人在别的设备上读过了,这台的通知栏也收起来(对端读到哪与我无关)。
@@ -452,6 +607,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           reportChatEventFailureOnce('historyCleared', 'malformedPayload');
           return;
         }
+        flushIncomingMessageBatch();
         useChatStore
           .getState()
           .clearConversationLocal(
@@ -529,10 +685,14 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         !payload ||
         typeof payload.conversationId !== 'string' ||
         typeof payload.userId !== 'string' ||
-        typeof payload.height !== 'number'
+        !Number.isSafeInteger(payload.height) ||
+        payload.height < 0
       ) {
+        devWarn('[chat] dropped malformed delivered payload');
+        reportChatEventFailureOnce('delivered', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       useChatStore
         .getState()
         .applyDelivered(payload.conversationId, payload.userId, payload.height);
@@ -557,8 +717,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('reaction', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const revision = optionalRevision(payload.revision);
-      useChatStore
+      const applied = useChatStore
         .getState()
         .applyReaction(
           payload.conversationId,
@@ -568,7 +729,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           payload.op,
           revision,
         );
-      noteLiveRevision(payload.conversationId, revision);
+      noteLiveMutationRevision(payload.conversationId, revision, applied);
     } catch (err) {
       devWarn('[chat] reaction handler failed', err);
       reportChatEventFailureOnce('reaction', 'handlerFailure');
@@ -590,8 +751,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('edit', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const revision = optionalRevision(payload.revision);
-      useChatStore
+      const applied = useChatStore
         .getState()
         .applyEdit(
           payload.conversationId,
@@ -600,7 +762,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           payload.editedAt,
           revision,
         );
-      noteLiveRevision(payload.conversationId, revision);
+      noteLiveMutationRevision(payload.conversationId, revision, applied);
     } catch (err) {
       devWarn('[chat] edit handler failed', err);
       reportChatEventFailureOnce('edit', 'handlerFailure');
@@ -620,9 +782,10 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('revoke', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const revision = optionalRevision(payload.revision);
       const height = optionalRevision(payload.height);
-      useChatStore
+      const applied = useChatStore
         .getState()
         .applyRevoke(payload.conversationId, payload.messageId, payload.revokedBy, {
           ...(height !== undefined ? { height } : {}),
@@ -631,7 +794,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
             : {}),
           ...(revision !== undefined ? { revision } : {}),
         });
-      noteLiveRevision(payload.conversationId, revision);
+      noteLiveMutationRevision(payload.conversationId, revision, applied);
       // 撤回之后通知栏里的原文不能还留着。
       dismissChatNotifications(payload.conversationId, [payload.messageId]);
     } catch (err) {
@@ -654,6 +817,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         reportChatEventFailureOnce('conversation', 'malformedPayload');
         return;
       }
+      flushIncomingMessageBatch();
       const store = useChatStore.getState();
       // 个人房定向事件只该是本人的;万一串了宁可丢弃,不替别人操作本机列表。
       if (

@@ -360,6 +360,40 @@ test('contiguous live revisions advance the cursor; a gap is pulled after a shor
   assert.deepEqual(calls.cursorWrites.at(-1), ['c1', 14]);
 });
 
+test('a live mutation that was not applied locally keeps the cursor behind until sync commits it', async () => {
+  const { sync, calls, runTimers } = loadSync({
+    localStates: { c1: { revision: 10, hasMessages: true } },
+    pages: {
+      c1: [
+        page({
+          messages: [msg('edited-old', 4, 11, { content: { text: 'edited' } })],
+          nextRevision: 11,
+          throughRevision: 11,
+        }),
+      ],
+    },
+  });
+  sync.startChatSync('u1');
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 10 }]);
+
+  // The live target was outside the memory window, so the dispatcher tells
+  // sync not to advance the cursor optimistically.
+  sync.noteLiveRevision('c1', 11, false);
+  runTimers();
+  await flush();
+
+  assert.deepEqual(calls.fetches, [['c1', 10]]);
+  assert.equal(calls.localPages.length, 1);
+  assert.equal(calls.localPages[0].upserts[0].id, 'edited-old');
+
+  runTimers();
+  await flush();
+  // The pull commits the page and its revision in one local-db transaction;
+  // the standalone delayed cursor writer is not involved in this path.
+  assert.deepEqual(calls.cursorWrites, []);
+  assert.equal(calls.localPages[0].revision, 11);
+});
+
 test('token rotation keeps the loaded cursors; a different account starts from its own', async () => {
   const { sync, calls } = loadSync({
     localStates: { c1: { revision: 5, hasMessages: true } },

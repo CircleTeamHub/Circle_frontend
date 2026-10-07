@@ -135,6 +135,26 @@ export function getEditFriendTagsHref(
   }
 }
 
+export function getEditFriendPermissionHref(
+  scope: UserProfileScope,
+  id: string,
+  name?: string,
+): Href {
+  const params = name ? { id, name } : { id };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/user/[id]/permission', params };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/user/[id]/permission', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/user/[id]/permission', params };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/user/[id]/permission', params };
+  }
+}
+
 export function getUserMomentsHref(
   scope: UserProfileScope,
   id: string,

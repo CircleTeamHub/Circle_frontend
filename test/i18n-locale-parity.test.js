@@ -66,9 +66,9 @@ for (const lng of ['en', ...OTHER_LOCALES]) {
   });
 }
 
-// Interpolation placeholder parity. A locale that translates `请求失败 ({{status}})`
-// but drops `{{status}}` silently loses the status code — invisible to key-parity and
-// empty-value checks. Every shared key must carry the SAME set of {{placeholders}} as en.
+// Interpolation placeholder parity. A locale that adds or drops a placeholder can
+// silently render the wrong message — invisible to key-parity and empty-value
+// checks. Every shared key must carry the SAME set of {{placeholders}} as en.
 const loadFlat = (lng) =>
   flatten(JSON.parse(fs.readFileSync(path.join(LOCALES_DIR, `${lng}.json`), 'utf8')));
 

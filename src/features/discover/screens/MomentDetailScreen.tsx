@@ -535,7 +535,14 @@ export default function MomentDetailScreen() {
     );
   }
 
-  const renderCommentRow = ({ item }: { item: MomentCommentRow }) => (
+  const renderCommentRow = ({ item }: { item: MomentCommentRow }) => {
+    const image = item.comment.media?.[0];
+    const commentImageUri =
+      image?.thumb ?? image?.preview ?? item.comment.images?.[0] ?? null;
+    const commentImageCacheKey =
+      image?.thumbKey ?? image?.key ?? commentImageUri ?? undefined;
+
+    return (
     <View>
       <Pressable
         style={[
@@ -573,11 +580,14 @@ export default function MomentDetailScreen() {
           {item.comment.content ? (
             <Text style={[s.commentText, d.commentText]}>{item.comment.content}</Text>
           ) : null}
-          {item.comment.images?.length ? (
+          {commentImageUri ? (
             <Image
-              source={{ uri: item.comment.images[0] }}
+              source={{ uri: commentImageUri }}
               style={[s.commentImage, { backgroundColor: colors.surface }]}
               contentFit="cover"
+              cachePolicy="memory"
+              recyclingKey={commentImageCacheKey}
+              enforceEarlyResizing
             />
           ) : null}
           <Text style={[s.commentTime, d.commentTime]}>
@@ -587,7 +597,8 @@ export default function MomentDetailScreen() {
       </Pressable>
       <Divider />
     </View>
-  );
+    );
+  };
 
   const commentCountLabel = post.commentCount > 0
     ? t('moment.commentsCount', { count: post.commentCount })
@@ -610,7 +621,7 @@ export default function MomentDetailScreen() {
         </Pressable>
 
         <Text style={[s.postContent, d.postContent]}>{post.content}</Text>
-        <ImageGrid images={post.images} />
+        <ImageGrid images={post.images} media={post.media} />
 
         <View style={s.metaRow}>
           <Text style={[s.timeText, d.timeText]}>{timeLabel}</Text>

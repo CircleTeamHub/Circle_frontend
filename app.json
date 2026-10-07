@@ -75,6 +75,7 @@
       ],
       "expo-router",
       "expo-image",
+      "expo-document-picker",
       "expo-notifications",
       "expo-web-browser",
       "expo-localization",

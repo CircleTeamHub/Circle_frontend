@@ -384,12 +384,23 @@ function scheduleGapSync(conversationId: string, target: number, gen: number): v
 export function noteLiveRevision(
   conversationId: string,
   revision: number | undefined,
+  applied = true,
 ): void {
   if (!sessionUserId || !cursorsReady) return;
   if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision <= 0) {
     return;
   }
   const gen = generation;
+  if (!applied) {
+    // The event was received but its target was outside the in-memory window
+    // (or the local mutation did not reach SQLite). Keep the durable cursor
+    // behind it and fetch the authoritative sync page instead. Advancing here
+    // would make a restart skip the cached edit/reaction/revoke forever.
+    if (cursorFor(conversationId).revision < revision) {
+      scheduleGapSync(conversationId, revision, gen);
+    }
+    return;
+  }
   const cursor = cursorFor(conversationId);
   const step = advanceRevisionCursor(cursor.revision, cursor.pendingAbove, revision);
   cursor.pendingAbove = step.pendingAbove;

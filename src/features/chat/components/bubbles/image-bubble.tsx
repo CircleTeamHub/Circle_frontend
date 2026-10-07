@@ -141,6 +141,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
     <View style={[sImage.body, outgoing ? sImage.bodyOutgoing : null]}>
       <Pressable
         style={sImage.imageWrap}
+        testID="chat-image-preview"
         onPress={handleOpenPreview}
         onLongPress={onLongPress}
         delayLongPress={350}
@@ -187,6 +188,19 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
       ) : null}
     </View>
   );
+  // The viewer contains a native Modal and a FlatList. Keeping one hidden
+  // viewer mounted for every virtualized image row makes a burst of images
+  // allocate dozens of native modal/list trees even though only one can be
+  // open. Mount it only for the image the user is actively previewing.
+  const imageViewer = previewVisible ? (
+    <ImageViewer
+      images={previewUri ? [previewUri] : []}
+      cacheKeys={previewUri ? [previewCacheKey] : undefined}
+      visible
+      privacyMode={ephemeral ? 'ephemeral' : 'standard'}
+      onClose={() => setPreviewVisible(false)}
+    />
+  ) : null;
 
   if (outgoing) {
     return (
@@ -195,13 +209,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
           {imageNode}
           <View style={sImage.avatarSlot}>{avatarNode}</View>
         </View>
-        <ImageViewer
-          images={previewUri ? [previewUri] : []}
-          cacheKeys={previewUri ? [previewCacheKey] : undefined}
-          visible={previewVisible}
-          privacyMode={ephemeral ? 'ephemeral' : 'standard'}
-          onClose={() => setPreviewVisible(false)}
-        />
+        {imageViewer}
       </>
     );
   }
@@ -218,13 +226,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
         )}
         {imageNode}
       </View>
-      <ImageViewer
-        images={previewUri ? [previewUri] : []}
-        cacheKeys={previewUri ? [previewCacheKey] : undefined}
-        visible={previewVisible}
-        privacyMode={ephemeral ? 'ephemeral' : 'standard'}
-        onClose={() => setPreviewVisible(false)}
-      />
+      {imageViewer}
     </>
   );
 };

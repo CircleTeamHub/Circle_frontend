@@ -240,7 +240,7 @@ test('chat detail locks the composer under group-wide mute for non-managers', ()
 test('remote mute-all and policy changes update the cached conversation', () => {
   const dispatcher = read('src/chat-core/dispatcher.ts');
   assert.match(dispatcher, /function applyRemoteGroupSettingChange\(/);
-  assert.match(dispatcher, /applyRemoteGroupSettingChange\(store, payload\);/);
+  assert.match(dispatcher, /applyRemoteGroupSettingChange\(store, message\);/);
   // 系统提示播给整个会话房,客户端据此翻转本地状态,不靠 N 条个人房 updated。
   // (行为断言在 chat-core-dispatcher.test.js:真的发一条系统消息进去看 store。)
   assert.match(dispatcher, /kind !== 'mute-all-changed' && kind !== 'group-policy-changed'/);

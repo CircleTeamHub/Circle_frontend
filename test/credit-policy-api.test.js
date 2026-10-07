@@ -98,7 +98,7 @@ test('chat detail checks only local credit state before uploading image messages
   assert.match(uploadBlock, /requestUploadPresign/);
   assert.ok(
     entryBlock.indexOf('assertLocalCanSendMessage') <
-      entryBlock.indexOf('uploadAndSendImage('),
+      entryBlock.indexOf('enqueueImageUpload('),
     'local credit state must be checked before any upload work is kicked off',
   );
 });
@@ -141,4 +141,3 @@ test('credit gate telemetry reports each event at most once per session', () => 
   assert.throws(() => creditPolicy.assertLocalCanSendMessage(), /CreditPolicyError/);
   assert.equal(reported.length, 2);
 });
-

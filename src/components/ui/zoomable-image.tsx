@@ -77,6 +77,7 @@ export function ZoomableImage({
     lastTapAt: 0,
   });
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<View>(null);
   /** 图片固有尺寸（onLoad 后才知道），用来推算 contain 后的渲染框。 */
   const natural = useRef<{ w: number; h: number } | null>(null);
@@ -85,6 +86,13 @@ export function ZoomableImage({
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
+    }
+  }, []);
+
+  const clearTapTimer = useCallback(() => {
+    if (tapTimer.current) {
+      clearTimeout(tapTimer.current);
+      tapTimer.current = null;
     }
   }, []);
 
@@ -168,7 +176,13 @@ export function ZoomableImage({
     if (!active && view.current.scale !== 1) setScale(1);
   }, [active, setScale]);
 
-  useEffect(() => clearLongPress, [clearLongPress]);
+  useEffect(
+    () => () => {
+      clearLongPress();
+      clearTapTimer();
+    },
+    [clearLongPress, clearTapTimer],
+  );
 
   const handleTap = useCallback(
     (event: GestureResponderEvent) => {
@@ -189,11 +203,13 @@ export function ZoomableImage({
       }
       gesture.current.lastTapAt = now;
       // 等一个双击窗口再判定为单击，否则双击的第一下会把查看器关掉。
-      setTimeout(() => {
+      clearTapTimer();
+      tapTimer.current = setTimeout(() => {
+        tapTimer.current = null;
         if (gesture.current.lastTapAt === now) onTap?.();
       }, DOUBLE_TAP_WINDOW_MS);
     },
-    [height, onTap, setScale, width],
+    [clearTapTimer, height, onTap, setScale, width],
   );
 
   const panResponder = useMemo(

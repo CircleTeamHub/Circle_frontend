@@ -28,26 +28,28 @@ function sanitizeUploadErrorForReport(error: unknown): Error {
   return safe;
 }
 
-/** 只提取对象存储 XML 的短错误码，不把对象 key、request id 或签名 URL带进日志。 */
-function storageErrorCode(body: unknown): string | null {
-  if (typeof body !== 'string') return null;
-  return body.match(/<Code>([A-Za-z0-9._-]{1,64})<\/Code>/)?.[1] ?? null;
-}
-
 export class StorageUploadError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly status: number, readonly storageCode?: string) {
     super(message);
     this.name = 'StorageUploadError';
   }
 }
 
+// These provider error codes are diagnostic facts, not arbitrary response text.
+// Never include the XML body, object key, request ID or signed URL in reports.
+const SAFE_STORAGE_ERROR_CODES = new Set([
+  'AccessDenied', 'SignatureDoesNotMatch', 'ExpiredToken', 'RequestTimeTooSkewed',
+  'InvalidAccessKeyId', 'InvalidToken', 'NoSuchKey', 'NoSuchBucket', 'EntityTooLarge',
+  'EntityTooSmall', 'InvalidRequest', 'InvalidArgument', 'InternalError', 'SlowDown',
+  'ServiceUnavailable', 'BadDigest', 'RequestTimeout', 'AuthorizationHeaderMalformed',
+]);
+
 function uploadStatusError(status: number, body?: unknown): Error {
-  const code = storageErrorCode(body);
+  const code = typeof body === 'string' ? /<Code>\s*([A-Za-z]+)\s*<\/Code>/.exec(body)?.[1] : undefined;
   return new StorageUploadError(
-    i18n.t('common.errors.uploadFailedWithStatus', {
-      status: code ? `${status}: ${code}` : status,
-      defaultValue: '上传失败 ({{status}})',
-    }),
+    i18n.t('common.errors.uploadFailed', { defaultValue: '上传失败，请稍后重试' }),
+    status,
+    code && SAFE_STORAGE_ERROR_CODES.has(code) ? code : undefined,
   );
 }
 
@@ -68,6 +70,7 @@ async function runStorageUpload<T>(
       operation: 'upload',
       platform: Platform.OS,
       ...context,
+      ...(error instanceof StorageUploadError ? { status: error.status, ...(error.storageCode ? { storageCode: error.storageCode } : {}) } : {}),
     });
     throw error;
   }
@@ -83,6 +86,13 @@ const ALLOWED_CONTENT_TYPES = new Set([
   'video/mp4',
   'video/quicktime',
   'video/x-m4v',
+  'audio/mp4',
+  'audio/m4a',
+  'audio/aac',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/webm',
+  'audio/wav',
 ]);
 
 const CONTENT_TYPE_BY_EXTENSION = {
@@ -96,6 +106,12 @@ const CONTENT_TYPE_BY_EXTENSION = {
   mp4: 'video/mp4',
   mov: 'video/quicktime',
   m4v: 'video/x-m4v',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  mp3: 'audio/mpeg',
+  ogg: 'audio/ogg',
+  webm: 'audio/webm',
+  wav: 'audio/wav',
 } as const;
 
 /**
@@ -114,6 +130,7 @@ const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   'video/quicktime': 'mov',
   'video/x-m4v': 'm4v',
   'audio/mp4': 'm4a',
+  'audio/mpeg': 'mp3',
 };
 
 /** 文件名已带认识的扩展名则原样通过，否则按 contentType 补一个。 */
@@ -277,7 +294,9 @@ function assertPresignedUploadUrlReachableOnCurrentPlatform(value: string) {
       !LOCALHOST_HOSTNAMES.has(apiUrl.hostname)
     ) {
       throw new Error(
-        '后端返回了 localhost 的预签名上传地址。手机端无法访问宿主 localhost，且预签名 URL 的 host 参与签名，客户端改写 host 会导致 403。请把对象存储对外访问地址配置成宿主机 IP 或正式域名后再试。',
+        i18n.t('upload.errors.presignDataInvalid', {
+          defaultValue: '暂时无法上传，请稍后重试',
+        }),
       );
     }
   } catch (error) {
@@ -404,7 +423,7 @@ export async function requestUploadPresign<F extends UploadFolder>(
     (value: unknown): value is UploadPresignResponse =>
       isUploadPresignShape(value, payload.folder),
     i18n.t('upload.errors.presignDataInvalid', {
-      defaultValue: '预签名上传数据格式异常',
+      defaultValue: '暂时无法上传，请稍后重试',
     }),
   );
 

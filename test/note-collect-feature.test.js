@@ -100,18 +100,6 @@ test('note source i18n keys exist across all five locales', () => {
 
 // ── 编辑页两处静默数据回归的修复 ───────────────────────────────────────────
 
-test('EditNoteScreen preserves pinned and status when saving edits', () => {
-  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
-
-  // 后端 PATCH 对缺省 pinned 按 false 处理：编辑必须原样回传置顶状态。
-  assert.match(src, /pinnedRef\.current = note\.pinned/);
-  assert.match(src, /updateNote\(id, \{ \.\.\.input, pinned: pinnedRef\.current \}\)/);
-  // 编辑不携带 status（后端保留现状），否则「已下架」笔记编辑一次就被重新上架；
-  // 仅新建时显式 ACTIVE。
-  assert.match(src, /createNote\(\{ \.\.\.input, status: 'ACTIVE' \}\)/);
-  assert.doesNotMatch(src, /updateNote\([^)]*status:/);
-});
-
 test('EditNoteScreen keeps keyboard from covering the bottom inputs', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 

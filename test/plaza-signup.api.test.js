@@ -31,6 +31,15 @@ function load(apiResponse) {
         };
       if (s === "@/services/api/utils")
         return { buildQuery: () => "", normalizeMediaUrl: (u) => u };
+      if (s === "./image-media")
+        return {
+          normalizeImageMedia: (imagesValue) => ({
+            images: Array.isArray(imagesValue)
+              ? imagesValue.filter((value) => typeof value === 'string')
+              : [],
+            media: [],
+          }),
+        };
       if (s.startsWith("@/")) return {};
       return require(s);
     },

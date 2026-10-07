@@ -108,7 +108,8 @@ test('chat image bubble opens the full-screen viewer on tap', () => {
 
   assert.match(source, /ImageViewer/);
   assert.match(source, /onPress=\{handleOpenPreview\}/);
-  assert.match(source, /visible=\{previewVisible\}/);
+  assert.match(source, /previewVisible \? \(/);
+  assert.match(source, /visible/);
   assert.match(source, /privacyMode=\{ephemeral \? 'ephemeral' : 'standard'\}/);
 });
 

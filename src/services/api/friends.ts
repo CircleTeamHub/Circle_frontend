@@ -310,6 +310,16 @@ export async function setFriendRemark(
   });
 }
 
+export async function setFriendPermission(
+  friendUserId: string,
+  permission: FriendPermission,
+) {
+  return apiClient<void>(`/friend/${friendUserId}/permission`, {
+    method: 'PATCH',
+    body: { permission },
+  });
+}
+
 export async function assignFriendTag(friendUserId: string, tagId: string) {
   return apiClient<void>(`/friend/${friendUserId}/tags`, {
     method: 'POST',

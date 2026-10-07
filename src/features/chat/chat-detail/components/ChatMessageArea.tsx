@@ -104,6 +104,7 @@ export function ChatMessageArea({
         // removeClippedSubviews 仅在 Android 开启（iOS 上 inverted 列表可能出现空白格）。
         initialNumToRender={15}
         maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={40}
         // inverted:列表"末端"是最旧的一头,触底即向前翻页。
         onEndReached={handleLoadOlder}
         onEndReachedThreshold={0.4}

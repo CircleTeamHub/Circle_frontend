@@ -499,7 +499,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
       ) : null}
 
       {/* Images */}
-      <ImageGrid images={post.images} />
+      <ImageGrid images={post.images} media={post.media} />
 
       {/* 报名条件: 始终显示；绑定 signup-restriction 集（后端 403 实际校验的那套），
           无门槛时显示"不限制"，让作者/浏览者都能一眼看到报名门槛。 */}
