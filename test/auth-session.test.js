@@ -121,6 +121,16 @@ function makeBaseMocks() {
         getState: () => ({ reset: () => calls.push('resetDiscover') }),
       },
     },
+    '@/features/discover/store/use-moments-store': {
+      useMomentsStore: {
+        getState: () => ({ reset: () => calls.push('resetMoments') }),
+      },
+    },
+    '@/features/notifications/store/use-notification-center-store': {
+      useNotificationCenterStore: {
+        getState: () => ({ reset: () => calls.push('resetNotifications') }),
+      },
+    },
     '@/stores/userVipStore': {
       invalidateVipLevels: () => calls.push('invalidateVip'),
     },
@@ -168,6 +178,8 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetTabBadge',
     'resetWalletRealtime',
     'resetDiscover',
+    'resetMoments',
+    'resetNotifications',
     'invalidateVip',
     'resetDiagnosticBreadcrumbs',
     'clearStorage',
@@ -254,6 +266,8 @@ test('clearLocalSession still clears local state when a teardown handler throws'
     'resetTabBadge',
     'resetWalletRealtime',
     'resetDiscover',
+    'resetMoments',
+    'resetNotifications',
     'invalidateVip',
     'resetDiagnosticBreadcrumbs',
     'clearStorage',

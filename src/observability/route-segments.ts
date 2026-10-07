@@ -82,6 +82,7 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'notification-center',
   'notifications',
   'plaza-post-detail',
+  'permission',
   'post-signups',
   'profile',
   'qr',

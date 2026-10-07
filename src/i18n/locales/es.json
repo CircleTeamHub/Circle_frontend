@@ -1055,7 +1055,7 @@
       "videoItem": "Video",
       "previewTitle": "Vista previa",
       "composerComingSoonTitle": "Próximamente",
-      "composerComingSoonMessage": "Este tipo de contenido necesita compatibilidad con el protocolo de notas del servidor y se conservó en la lista de orden.",
+      "composerComingSoonMessage": "Este tipo de contenido no está disponible temporalmente y se conservó en la lista de orden.",
       "composer": {
         "title": "Título",
         "text": "Texto",
@@ -2086,6 +2086,14 @@
       "FULL": "Chat y Momentos",
       "CHAT_ONLY": "Solo chat"
     },
+    "editPermission": {
+      "label": "Configurar el acceso a Momentos para {{name}}",
+      "helper": "Esto solo controla si esta persona puede ver tus Momentos. El acceso al chat no cambia.",
+      "loading": "Cargando permisos...",
+      "missingFriend": "Falta la información del amigo",
+      "loadFailed": "No se pudieron cargar los permisos. Inténtalo de nuevo.",
+      "saveFailed": "No se pudieron guardar los permisos. Inténtalo de nuevo."
+    },
     "loadFailed": "No se pudo cargar el perfil, mostrando datos en caché",
     "startChat": "Iniciar chat",
     "openingChat": "Abriendo chat...",
@@ -2519,13 +2527,13 @@
       "link": "Reglas de membresía",
       "title": "Reglas y permisos",
       "heading": "Reglas de membresía",
-      "description": "Atención al cliente verifica y concede manualmente la membresía. Esta pantalla muestra el catálogo de beneficios; los permisos del backend son la fuente de autoridad.",
+      "description": "Atención al cliente verifica y concede manualmente la membresía. Esta pantalla muestra el catálogo de beneficios; tus beneficios disponibles dependen del estado actual de tu membresía.",
       "rules": {
         "catalog": "Membresía diaria: CNY 19.9 / 1 día; Membresía mensual: CNY 298 / 1 mes; Membresía semestral: CNY 1.288 / 6 meses; Membresía anual: CNY 1.998 / 1 año; Membresía de por vida: CNY 3.998 / de por vida.",
         "supportActivation": "La membresía no se puede canjear con puntos ni comprar en la aplicación. Tras el contacto, atención al cliente la verifica y concede manualmente.",
         "upgrade": "Los miembros actuales pueden contactar con atención al cliente para pagar la diferencia de una mejora. Se activa de inmediato y se aplica el valor restante de la membresía.",
         "expiry": "Cuando vence la membresía, solo se detienen sus beneficios. No se eliminan cuentas, chats, notas ni otro contenido del usuario.",
-        "fairUse": "Las reglas de membresía solo se aplican a los beneficios indicados en el Centro de membresía. Los beneficios indicados como ilimitados siguen sujetos a límites elevados de uso razonable y prevención de abusos del backend. Los permisos reales los determina el backend.",
+        "fairUse": "Las reglas de membresía solo se aplican a los beneficios indicados en el Centro de membresía. Los beneficios indicados como ilimitados siguen sujetos a límites razonables de uso y prevención de abusos. Tus beneficios disponibles dependen del estado actual de tu membresía.",
         "voiceToText": "La conversión de voz a texto es una función básica gratuita para todos y no está limitada por el nivel de membresía.",
         "excludedVisualBenefits": "Los beneficios actuales no prometen marcos de avatar ni avatares animados."
       }
@@ -2807,16 +2815,16 @@
     "privacyPolicy": "Política de privacidad",
     "errors": {
       "requestTimeout": "Se agotó el tiempo de la solicitud. Comprueba tu conexión e inténtalo de nuevo.",
-      "networkUnavailable": "Error de red. Asegúrate de que el servidor esté en funcionamiento.",
-      "invalidServerResponse": "El servidor devolvió datos no válidos",
-      "requestFailedWithStatus": "La solicitud falló ({{status}})",
-      "requestFailed": "La solicitud falló",
+      "networkUnavailable": "No se puede conectar ahora. Comprueba tu conexión e inténtalo de nuevo.",
+      "invalidServerResponse": "No se pudo completar la operación. Inténtalo de nuevo.",
+      "requestFailedWithStatus": "No se pudo completar la solicitud. Inténtalo de nuevo.",
+      "requestFailed": "No se pudo completar la operación. Inténtalo de nuevo.",
       "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo.",
       "refreshResponseInvalid": "Respuesta de actualización no válida. Inicia sesión de nuevo.",
       "sessionChangedDuringRefresh": "La cuenta cambió mientras se actualizaba la sesión. Inténtalo de nuevo.",
       "uploadTimeout": "Se agotó el tiempo de la subida. Comprueba tu conexión e inténtalo de nuevo.",
       "uploadFailed": "La subida falló. Inténtalo de nuevo más tarde.",
-      "uploadFailedWithStatus": "La subida falló ({{status}})"
+      "uploadFailedWithStatus": "La subida falló. Inténtalo de nuevo."
     }
   },
   "credit": {
@@ -3107,7 +3115,7 @@
   },
   "upload": {
     "errors": {
-      "presignDataInvalid": "Error en el formato de los datos de subida prefirmados",
+      "presignDataInvalid": "No se pudo iniciar la subida. Inténtalo de nuevo.",
       "fileUnreadable": "No se encontró el archivo que se va a subir.",
       "fileTooLarge": "El archivo supera el límite de {{maxMb}}MB."
     }

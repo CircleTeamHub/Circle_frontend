@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -301,6 +301,27 @@ export function UserIconBadge({
   const { colors } = useTheme();
   const systemBadgeAsset =
     icon.type === 'SYSTEM' ? getSystemBadgeAsset(icon) : null;
+  // 本地系统徽章在 OTA/旧原生包或 Web 静态资源路径失效时，expo-image 会保留
+  // 52px 的占位盒但不绘制任何像素。记录单个徽章的加载失败，让下面的通用
+  // 圆形/矢量 fallback 接管，避免资料页出现“只有标题、图标全空”的死状态。
+  const [failedSystemBadge, setFailedSystemBadge] = useState<{ identity: string | null; asset: unknown } | null>(null);
+  const [failedCircleIdentity, setFailedCircleIdentity] = useState<string | null>(null);
+  const systemBadgeIdentity =
+    icon.type === 'SYSTEM'
+      ? `${icon.id}:${icon.systemKey ?? ''}:${icon.systemVariant ?? ''}`
+      : null;
+  const circleImageIdentity =
+    icon.imageUrl
+      ? `${icon.type}:${icon.id}:${icon.circleId ?? ''}:${icon.imageUrl}`
+      : null;
+  const circleImageUri = icon.imageUrl ?? undefined;
+  const currentSystemBadge = useRef({ identity: systemBadgeIdentity, asset: systemBadgeAsset });
+  const currentCircleIdentity = useRef(circleImageIdentity);
+  currentSystemBadge.current = { identity: systemBadgeIdentity, asset: systemBadgeAsset };
+  currentCircleIdentity.current = circleImageIdentity;
+  const hasSystemBadgeImage = Boolean(systemBadgeAsset) &&
+    !(failedSystemBadge?.identity === systemBadgeIdentity && failedSystemBadge?.asset === systemBadgeAsset);
+  const hasCircleImage = Boolean(circleImageUri) && failedCircleIdentity !== circleImageIdentity;
   const systemBadgeScale =
     icon.type === 'SYSTEM' ? getSystemBadgeVisualScale(icon) : 1;
   const systemBadgeTranslateY =
@@ -355,11 +376,11 @@ export function UserIconBadge({
     <View style={[s.item, dense ? s.denseItem : null]}>
       <View
         style={[
-          systemBadgeAsset ? s.systemBadgeShell : s.badgeFrame,
+          hasSystemBadgeImage ? s.systemBadgeShell : s.badgeFrame,
           shellSizeStyle,
         ]}
       >
-        {systemBadgeAsset ? (
+        {hasSystemBadgeImage ? (
           <Image
             source={systemBadgeAsset}
             style={[
@@ -369,6 +390,10 @@ export function UserIconBadge({
                 : null,
             ]}
             contentFit="contain"
+            onError={() => {
+              if (currentSystemBadge.current.identity === systemBadgeIdentity && currentSystemBadge.current.asset === systemBadgeAsset)
+                setFailedSystemBadge({ identity: systemBadgeIdentity, asset: systemBadgeAsset });
+            }}
           />
         ) : (
           <View style={[s.circleSlot, !compact && !hasExplicitSize ? s.circleSlotRaised : null]}>
@@ -395,12 +420,15 @@ export function UserIconBadge({
                 ]}
               >
                 <View style={s.imageWrap}>
-                  {icon.imageUrl ? (
+                  {hasCircleImage ? (
                     <Image
-                      source={{ uri: icon.imageUrl }}
-                      recyclingKey={icon.imageUrl}
+                      source={{ uri: circleImageUri }}
+                      recyclingKey={circleImageUri}
                       style={s.image}
                       contentFit="cover"
+                      onError={() => {
+                        if (currentCircleIdentity.current === circleImageIdentity) setFailedCircleIdentity(circleImageIdentity);
+                      }}
                     />
                   ) : (
                     <Ionicons

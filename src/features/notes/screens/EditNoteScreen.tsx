@@ -2781,7 +2781,8 @@ export default function EditNoteScreen() {
         borderColor: colors.surfaceBorder,
       },
       composerSortButton: { backgroundColor: colors.primary },
-      composerPreviewButton: { backgroundColor: colors.textSecondary },
+      composerPreviewButton: { backgroundColor: colors.surfaceMuted },
+      composerPreviewButtonContent: { color: colors.text },
     }),
     [colors],
   );
@@ -3652,8 +3653,8 @@ export default function EditNoteScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('notes.edit.composer.preview', { defaultValue: '预览' })}
           >
-            <Ionicons name="eye-outline" size={18} color={colors.white} />
-            <Text style={[s.composerFooterButtonText, { color: colors.white }]}>
+            <Ionicons name="eye-outline" size={18} color={colors.text} />
+            <Text style={[s.composerFooterButtonText, d.composerPreviewButtonContent]}>
               {t('notes.edit.composer.preview', { defaultValue: '预览' })}
             </Text>
           </Pressable>
@@ -3964,7 +3965,7 @@ export default function EditNoteScreen() {
             )}
             <View style={s.cardPickerActions}>
               <Pressable style={[s.composerFooterButton, s.cardPickerActionButton, d.composerPreviewButton]} onPress={closeCardPicker}>
-                <Text style={[s.composerFooterButtonText, { color: colors.white }]}>{t('common.cancel', { defaultValue: '取消' })}</Text>
+                <Text style={[s.composerFooterButtonText, d.composerPreviewButtonContent]}>{t('common.cancel', { defaultValue: '取消' })}</Text>
               </Pressable>
               <Pressable
                 style={[

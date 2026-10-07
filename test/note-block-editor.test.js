@@ -72,10 +72,40 @@ test('NoteBlockEditor.dom.tsx pins root to the WebView viewport (no collapsed he
   assert.doesNotMatch(src, /height:\s*'100%'/);
 });
 
+test('DOM editor keeps BlockNote surfaces on the note theme background', () => {
+  const src = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
+  assert.match(src, /\.note-editor \.bn-container[\s\S]*?background-color:\s*\$\{bg\}/);
+  assert.match(src, /\.note-editor \.bn-editor[\s\S]*?background-color:\s*\$\{bg\}/);
+});
+
 test('NoteBlockEditor.dom.tsx localizes the editor via BlockNote dictionary', () => {
   const src = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
   assert.match(src, /from '@blocknote\/core\/locales'/);
   assert.match(src, /dictionary:\s*language === 'zh' \? zh : en/);
+});
+
+test('DOM editor rejects non-array initial content before BlockNote parses it', () => {
+  const src = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
+  assert.match(src, /const parsed = JSON\.parse\(initialContent\) as unknown/);
+  assert.match(src, /if \(!Array\.isArray\(parsed\)\)/);
+});
+
+test('DOM editor disables BlockNote default UI without a ComponentsContext provider', () => {
+  const src = read('src/features/notes/dom/NoteBlockEditor.dom.tsx');
+  const view = src.slice(src.indexOf('<BlockNoteViewRaw'), src.indexOf('/>', src.indexOf('<BlockNoteViewRaw')));
+
+  for (const prop of [
+    'formattingToolbar',
+    'linkToolbar',
+    'slashMenu',
+    'emojiPicker',
+    'sideMenu',
+    'filePanel',
+    'tableHandles',
+    'comments',
+  ]) {
+    assert.match(view, new RegExp(`${prop}={false}`));
+  }
 });
 
 test('NoteBlockEditor.dom.tsx image button uses an SVG icon, not a CJK glyph', () => {

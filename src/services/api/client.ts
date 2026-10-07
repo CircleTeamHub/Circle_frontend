@@ -177,7 +177,7 @@ function bodyReadError(
           defaultValue: '请求超时，请检查网络连接后重试',
         })
       : i18n.t('common.errors.networkUnavailable', {
-          defaultValue: '网络异常，请确认后端服务已启动',
+          defaultValue: '暂时无法连接，请检查网络后重试',
         }),
     {
       status: 0,
@@ -220,7 +220,7 @@ async function readPayload<T>(
   } catch {
     throw new ApiError(
       i18n.t('common.errors.invalidServerResponse', {
-        defaultValue: '服务返回了无效数据',
+        defaultValue: '暂时无法完成操作，请稍后重试',
       }),
       {
         status: res.status,
@@ -326,7 +326,7 @@ async function executeRequest<T>(
       }
       throw new ApiError(
         i18n.t('common.errors.networkUnavailable', {
-          defaultValue: '网络异常，请确认后端服务已启动',
+          defaultValue: '暂时无法连接，请检查网络后重试',
         }),
         {
           status: 0,
@@ -389,7 +389,7 @@ function unwrapResponse<T>(
       (payload as { message?: string } | null)?.message ??
         i18n.t('common.errors.requestFailedWithStatus', {
           status: res.status,
-          defaultValue: '请求失败 ({{status}})',
+          defaultValue: '请求未完成，请稍后重试',
         }),
       {
         status: res.status,

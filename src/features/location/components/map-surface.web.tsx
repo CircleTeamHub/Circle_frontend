@@ -33,6 +33,7 @@ export function MapSurface({
   reloadKey,
   title,
   onLoadEnd,
+  onLoadError,
   onMessage,
   geocoderBaseUrl,
 }: MapSurfaceProps) {
@@ -68,6 +69,7 @@ export function MapSurface({
       title={title}
       srcDoc={html}
       onLoad={onLoadEnd}
+      onError={onLoadError}
       sandbox="allow-scripts"
       style={FRAME_STYLE}
     />

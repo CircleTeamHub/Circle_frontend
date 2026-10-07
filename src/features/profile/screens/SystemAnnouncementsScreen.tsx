@@ -7,14 +7,14 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import {
-  fetchProfileNotifications,
+  fetchProfileNotificationsPage,
   markProfileNotificationsRead,
 } from '@/services/api/notifications';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
+import { useAuthStore } from '@/stores/authStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { SYSTEM_ANNOUNCEMENTS } from '@/features/profile/system-announcements';
 import type { NotificationItem } from '@/types';
-const PAGE_SIZE = 20;
 
 const s = StyleSheet.create({
   card: {
@@ -36,13 +36,25 @@ export default function SystemAnnouncementsScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const setProfileUnread = useTabBadgeStore((state) => state.setProfileUnread);
+  const ownerId = useAuthStore((state) => state.user?.id);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const sessionKey = `${ownerId ?? ''}:${sessionEpoch}`;
   const mountedRef = useRef(true);
+  const paginationEpochRef = useRef(0);
+  const pageInFlightRef = useRef(false);
+  const cachedSessionRef = useRef(sessionKey);
+  const [cachedSessionKey, setCachedSessionKey] = useState(sessionKey);
+  const [pageError, setPageError] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const visibleItems = cachedSessionKey === sessionKey ? items : [];
+  const isCurrentSession = useCallback(() => {
+    const auth = useAuthStore.getState();
+    return mountedRef.current && auth.user?.id === ownerId && auth.sessionEpoch === sessionEpoch;
+  }, [ownerId, sessionEpoch]);
 
   const d = useMemo(
     () => ({
@@ -90,27 +102,40 @@ export default function SystemAnnouncementsScreen() {
     [colors, insets.bottom],
   );
 
-  useEffect(
-    () => () => {
-      mountedRef.current = false;
-    },
-    [],
-  );
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const load = useCallback(async () => {
+    const epoch = ++paginationEpochRef.current;
     setRefreshing(true);
+    setLoadingMore(false);
+    pageInFlightRef.current = false;
+    setPageError(false);
+    if (cachedSessionRef.current !== sessionKey) {
+      cachedSessionRef.current = sessionKey;
+      setCachedSessionKey(sessionKey);
+      setItems([]);
+      setNextCursor(null);
+      setLoadError(null);
+    }
+    if (!ownerId) {
+      setRefreshing(false);
+      return;
+    }
     try {
-      const rows = await fetchProfileNotifications(1);
-      if (!mountedRef.current) return;
-      setItems(rows);
-      setPage(1);
-      setHasMore(rows.length >= PAGE_SIZE);
+      const result = await fetchProfileNotificationsPage();
+      if (!isCurrentSession() || epoch !== paginationEpochRef.current) return;
+      setItems(result.items);
+      setNextCursor(result.nextCursor);
       setLoadError(null);
     } catch (error) {
+      if (!isCurrentSession() || epoch !== paginationEpochRef.current) return;
       reportNotificationFailure('notification_load_more_failed', error, {
-        page: 1,
+        cursor: null,
       });
-      if (mountedRef.current) {
+      if (isCurrentSession() && epoch === paginationEpochRef.current) {
         setLoadError(
           t('systemAnnouncements.loadFailed', {
             defaultValue: '系统通知加载失败，请下拉重试',
@@ -118,9 +143,14 @@ export default function SystemAnnouncementsScreen() {
         );
       }
     } finally {
-      if (mountedRef.current) setRefreshing(false);
+      if (
+        isCurrentSession() &&
+        epoch === paginationEpochRef.current
+      ) {
+        setRefreshing(false);
+      }
     }
-  }, [t]);
+  }, [isCurrentSession, ownerId, sessionKey, t]);
 
   useEffect(() => {
     void load();
@@ -129,11 +159,13 @@ export default function SystemAnnouncementsScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      if (!ownerId) return;
       void markProfileNotificationsRead()
         .then(() => {
-          if (active) setProfileUnread(0);
+          if (active && isCurrentSession()) setProfileUnread(0);
         })
         .catch((error) => {
+          if (!active || !isCurrentSession()) return;
           reportNotificationFailure(
             'notification_mark_all_read_failed',
             error,
@@ -142,30 +174,42 @@ export default function SystemAnnouncementsScreen() {
       return () => {
         active = false;
       };
-    }, [setProfileUnread]),
+    }, [isCurrentSession, ownerId, setProfileUnread]),
   );
 
-  const loadMore = useCallback(async () => {
-    if (loadingMore || refreshing || !hasMore) return;
-    const nextPage = page + 1;
+  const loadMore = useCallback(async (retry = false) => {
+    if (!ownerId || !isCurrentSession() || cachedSessionKey !== sessionKey || pageInFlightRef.current || loadingMore || refreshing || !nextCursor || (pageError && !retry)) return;
+    pageInFlightRef.current = true;
+    setPageError(false);
+    const epoch = paginationEpochRef.current;
     setLoadingMore(true);
     try {
-      const rows = await fetchProfileNotifications(nextPage);
-      if (!mountedRef.current) return;
+      const result = await fetchProfileNotificationsPage(nextCursor);
+      if (!isCurrentSession() || epoch !== paginationEpochRef.current) return;
       setItems((current) => {
         const seen = new Set(current.map((item) => item.id));
-        return [...current, ...rows.filter((item) => !seen.has(item.id))];
+        return [
+          ...current,
+          ...result.items.filter((item) => !seen.has(item.id)),
+        ];
       });
-      setPage(nextPage);
-      setHasMore(rows.length >= PAGE_SIZE);
+      setNextCursor(result.nextCursor);
     } catch (error) {
+      if (!isCurrentSession() || epoch !== paginationEpochRef.current) return;
+      setPageError(true);
       reportNotificationFailure('notification_load_more_failed', error, {
-        page: nextPage,
+        cursor: nextCursor,
       });
     } finally {
-      if (mountedRef.current) setLoadingMore(false);
+      if (
+        isCurrentSession() &&
+        epoch === paginationEpochRef.current
+      ) {
+        pageInFlightRef.current = false;
+        setLoadingMore(false);
+      }
     }
-  }, [hasMore, loadingMore, page, refreshing]);
+  }, [cachedSessionKey, isCurrentSession, loadingMore, nextCursor, ownerId, pageError, refreshing, sessionKey]);
 
   const renderSystemNotification = useCallback(
     ({ item }: { item: NotificationItem }) => (
@@ -221,7 +265,7 @@ export default function SystemAnnouncementsScreen() {
         </Pressable>
       ))}
 
-      {items.length > 0 || loadError ? (
+      {visibleItems.length > 0 || (cachedSessionKey === sessionKey && loadError) ? (
         <>
           <Text style={d.sectionTitle}>
             {t('systemAnnouncements.systemNotifications')}
@@ -236,16 +280,21 @@ export default function SystemAnnouncementsScreen() {
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('systemAnnouncements.title')} />
       <FlatList
-        data={items}
+        data={visibleItems}
         keyExtractor={(item) => item.id}
         renderItem={renderSystemNotification}
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={null}
+        ListFooterComponent={cachedSessionKey === sessionKey && pageError ? (
+          <Pressable accessibilityRole="button" onPress={() => { void loadMore(true); }}>
+            <Text style={d.emptyText}>{t('common.retry', { defaultValue: '重试' })}</Text>
+          </Pressable>
+        ) : null}
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
         refreshing={refreshing}
         onRefresh={load}
-        onEndReached={loadMore}
+        onEndReached={() => { void loadMore(); }}
         onEndReachedThreshold={0.4}
       />
     </View>

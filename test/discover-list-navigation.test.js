@@ -124,7 +124,7 @@ test('notification center scopes its list to the requested bell domain', () => {
   assert.match(source, /parseNotificationDomain\(domainParam\)/);
   // 列表、拉取、全部已读三处都必须带域，少一处就会串台。
   assert.match(source, /notificationDomain\(n\.type\) === domain/);
-  assert.match(source, /fetchNotifications\(1, domain\)/);
+  assert.match(source, /fetchNotificationsPage\(undefined, domain\)/);
   assert.match(source, /markAllNotificationsRead\(domain\)/);
   // 报名管理是圈子域独有的 tab，朋友圈铃铛不显示也不为它请求数据。
   assert.match(source, /domain !== 'moments'/);
