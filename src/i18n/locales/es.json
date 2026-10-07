@@ -974,6 +974,8 @@
       "mediaCount": "{{count}} archivos multimedia",
       "deleteLabel": "Eliminar borrador",
       "deleteFailed": "No se pudo eliminar el borrador. Inténtalo de nuevo.",
+      "pendingSubmitDeleteBlocked": "Aún no se ha confirmado el guardado de este borrador. Ábrelo y reintenta el guardado original antes de decidir si eliminarlo.",
+      "deletePending": "La limpieza local o la eliminación en el servidor sigue pendiente. El contenido está oculto; reintenta para completar la eliminación.",
       "saveFailed": "No se pudo guardar el borrador. Inténtalo de nuevo.",
       "mediaCount_one": "{{count}} archivo multimedia",
       "mediaCount_other": "{{count}} archivos multimedia"

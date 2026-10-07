@@ -126,7 +126,8 @@ function loadChatStore(overrides = {}) {
     if (request === '@/storage') return { mmkvJsonStorage: {} };
     // 墓碑超上限时会报一次(淘汰=消息复活,必须可观测)。
     if (request === '@/observability/sentry') return { reportError: () => {} };
-    if (request === './local-db') return __localDbStub;
+    if (request === './local-db') return overrides.localDb
+      ? { ...__localDbStub, ...overrides.localDb } : __localDbStub;
     if (request === './burn-durations') return loadBurnDurations();
       throw new Error(`unexpected require: ${request}`);
   });
@@ -142,7 +143,8 @@ function loadChatStore(overrides = {}) {
         throw new Error('protocol should have no runtime deps');
       });
     }
-    if (request === './local-db') return __localDbStub;
+    if (request === './local-db') return overrides.localDb
+      ? { ...__localDbStub, ...overrides.localDb } : __localDbStub;
     if (request === '@/storage') {
       return { storage: { set: () => {}, getString: () => undefined } };
     }
@@ -150,6 +152,27 @@ function loadChatStore(overrides = {}) {
       throw new Error(`unexpected require: ${request}`);
   });
   return { ...store, ...deletedMessages };
+}
+
+function loadConversationSnapshotApi(useChatStore) {
+  const authState = { sessionEpoch: 1 };
+  const calls = [];
+  const api = runModule('src/chat-core/api.ts', (request) => {
+    if (request === '@/services/api/client') return {
+      apiClient: () => new Promise((resolve) => calls.push({ resolve })),
+    };
+    if (request === '@/utils/retry') return { retry: (operation) => operation() };
+    if (request === '@/stores/authStore') return {
+      useAuthStore: { getState: () => authState },
+    };
+    if (request === './store') return { useChatStore };
+    if (request === './deleted-messages') return { withoutLocallyDeleted: (messages) => messages };
+    if (request === './clear-history-target') return { getKnownClearTargetHeight: () => undefined };
+    if (request === '../features/chat/chat-history-date-window') return {};
+    if (request === './local-db') return __localDbStub;
+    throw new Error(`unexpected require: ${request}`);
+  });
+  return { api, authState, calls };
 }
 
 function msg(overrides = {}) {
@@ -536,12 +559,17 @@ test('clearCachedChats keeps the session identity that reset would destroy', () 
   store.setCurrentUserId('me');
   store.setConnected(true);
   store.setConversations([conversation()]);
-  store.ingestMessages('conv-1', [msg({ id: 'a', height: 1 })]);
+  const preview = msg({ id: 'a', height: 1 });
+  store.ingestMessages('conv-1', [preview]);
+  store.applyIncomingMessage(preview);
+  const beforeClearRevision = useChatStore.getState().conversationPreviewRevision;
 
   store.clearCachedChats();
   const state = useChatStore.getState();
   assert.equal(state.conversations.length, 0);
   assert.equal(Object.keys(state.messagesByConversation).length, 0);
+  assert.equal(Object.keys(state.livePreviewByConversation).length, 0);
+  assert.equal(state.conversationPreviewRevision, beforeClearRevision);
   // socket 还连着:清掉 currentUserId 的话之后的消息判不出收发方向。
   assert.equal(state.currentUserId, 'me');
   assert.equal(state.connected, true);
@@ -554,6 +582,8 @@ test('removeConversation releases its timeline and per-conversation indexes', ()
   store.setConversations([conversation(), conversation({ id: 'conv-2' })]);
   store.ingestMessages('conv-1', [msg({ id: 'a' })]);
   store.ingestMessages('conv-2', [msg({ id: 'b', conversationId: 'conv-2' })]);
+  store.applyIncomingMessage(msg({ id: 'a' }));
+  store.applyIncomingMessage(msg({ id: 'b', conversationId: 'conv-2' }));
   store.applyRead('conv-1', 'other', 4);
   store.applyDelivered('conv-1', 'other', 4);
   store.applyTyping('conv-1');
@@ -569,6 +599,8 @@ test('removeConversation releases its timeline and per-conversation indexes', ()
   assert.equal(Object.hasOwn(state.readWatermarks, 'conv-1'), false);
   assert.equal(Object.hasOwn(state.deliveredWatermarks, 'conv-1'), false);
   assert.equal(Object.hasOwn(state.typingUntilByConversation, 'conv-1'), false);
+  assert.equal(Object.hasOwn(state.livePreviewByConversation, 'conv-1'), false);
+  assert.ok(state.livePreviewByConversation['conv-2']);
   assert.equal(state.activeConversationId, null);
   assert.ok(state.messagesByConversation['conv-2']);
 });
@@ -689,6 +721,7 @@ test('a stale conversation snapshot cannot roll back a newer local send preview'
   store.revertConversationPreview('conv-1');
   assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'previous');
 
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
   // 网络恢复后新消息已拿到服务端 height=8。
   const sent = msg({
     id: 'sent',
@@ -702,8 +735,130 @@ test('a stale conversation snapshot cannot roll back a newer local send preview'
   // 重连快照仍停在 height=7，不能把列表预览改回旧消息。
   store.setConversations([
     conversation({ lastMessage: previous, lastMessageAt: previous.createdAt }),
-  ]);
+  ], requestPreviewRevision);
   assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'sent');
+});
+
+test('an authoritative lower preview replaces an offline cached message and is persisted', () => {
+  const persisted = [];
+  const { useChatStore } = loadChatStore({
+    localDb: {
+      persistLocalConversations: async (conversations) => persisted.push(conversations),
+    },
+  });
+  const store = useChatStore.getState();
+  const burned = msg({ id: 'burned-on-another-device', height: 10 });
+  const surviving = msg({ id: 'surviving', height: 9 });
+  store.hydrateLocalSnapshot([
+    conversation({ lastMessage: burned, lastMessageAt: burned.createdAt }),
+  ], { 'conv-1': [surviving, burned] });
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+
+  store.setConversations([
+    conversation({ lastMessage: surviving, lastMessageAt: surviving.createdAt }),
+  ], requestPreviewRevision);
+
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, surviving.id);
+  assert.equal(persisted.at(-1)[0].lastMessage.id, surviving.id);
+});
+
+test('only a live preview that advances during a snapshot request survives a lower preview', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const previous = msg({ id: 'previous', height: 9 });
+  const beforeRequest = msg({ id: 'before-request', height: 10 });
+  const duringRequest = msg({ id: 'during-request', height: 11 });
+  store.setConversations([
+    conversation({ lastMessage: previous, lastMessageAt: previous.createdAt }),
+  ]);
+  store.applyIncomingMessage(beforeRequest);
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  // A duplicate delivery does not prove this cached preview is newer than the request.
+  store.applyIncomingMessage(beforeRequest);
+  store.setConversations([
+    conversation({ lastMessage: previous, lastMessageAt: previous.createdAt }),
+  ], requestPreviewRevision);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, previous.id);
+
+  const nextRequestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  store.applyIncomingMessage(duringRequest);
+  store.setConversations([
+    conversation({ lastMessage: previous, lastMessageAt: previous.createdAt }),
+  ], nextRequestPreviewRevision);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, duringRequest.id);
+});
+
+test('an empty snapshot clears confirmed previews but preserves only pending local sends', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation()]);
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  store.applyIncomingMessage(msg({ id: 'confirmed', height: 11 }));
+  store.setConversations([conversation({ lastMessage: null })], requestPreviewRevision);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
+
+  const pending = msg({ id: 'local:pending', d: 'pending', height: 0 });
+  store.ingestMessages('conv-1', [pending]);
+  store.applyIncomingMessage(pending);
+  const pendingRequestRevision = useChatStore.getState().conversationPreviewRevision;
+  store.setConversations([conversation({ lastMessage: null })], pendingRequestRevision);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, pending.id);
+
+  store.markMessageFailed('conv-1', pending.d);
+  store.setConversations([conversation({ lastMessage: null })], pendingRequestRevision);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
+});
+
+test('REST snapshots replace burned cached previews and preserve in-flight incoming messages', async () => {
+  const { useChatStore } = loadChatStore();
+  const { api, calls } = loadConversationSnapshotApi(useChatStore);
+  const store = useChatStore.getState();
+  const burned = msg({ id: 'burned', height: 10 });
+  const surviving = msg({ id: 'surviving', height: 9 });
+  const live = msg({ id: 'live', height: 11 });
+  const first = api.loadChatConversations();
+  // Cold-start hydration may also finish while the server snapshot is in flight.
+  store.hydrateLocalSnapshot([
+    conversation({ lastMessage: burned, lastMessageAt: burned.createdAt }),
+  ], { 'conv-1': [surviving, burned] });
+  const authoritative = [conversation({
+    lastMessage: surviving, lastMessageAt: surviving.createdAt,
+  })];
+
+  calls[0].resolve(authoritative);
+  await first;
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, surviving.id);
+
+  const second = api.loadChatConversations();
+  store.applyIncomingMessage(live);
+  calls[1].resolve(authoritative);
+  await second;
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, live.id);
+});
+
+test('a snapshot from the previous account cannot overwrite the new account preview', async () => {
+  const { useChatStore } = loadChatStore();
+  const { api, authState, calls } = loadConversationSnapshotApi(useChatStore);
+  const store = useChatStore.getState();
+  store.setCurrentUserId('account-a');
+  store.setConversations([conversation()]);
+  store.applyIncomingMessage(msg({ id: 'account-a-message', height: 10 }));
+  const oldRequest = api.loadChatConversations();
+
+  authState.sessionEpoch += 1;
+  store.reset();
+  store.setCurrentUserId('account-b');
+  const accountBPreview = msg({ id: 'account-b-message', height: 9 });
+  store.hydrateLocalSnapshot([conversation({ lastMessage: accountBPreview })], {});
+  assert.equal(Object.keys(useChatStore.getState().livePreviewByConversation).length, 0);
+  const newRequest = api.loadChatConversations();
+  calls[1].resolve([conversation({ lastMessage: accountBPreview })]);
+  await newRequest;
+
+  calls[0].resolve([conversation({ lastMessage: msg({ id: 'account-a-private', height: 11 }) })]);
+  await oldRequest;
+  assert.equal(useChatStore.getState().currentUserId, 'account-b');
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, accountBPreview.id);
 });
 
 test('a redelivered deleted message neither returns nor inflates unread', () => {

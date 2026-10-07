@@ -117,18 +117,22 @@ export async function loadChatConversations(
   const request = (async () => {
     // 在途请求的成败与这一发无关,只等它先落地。
     if (inFlight) await inFlight.then(() => undefined, () => undefined);
+    let requestPreviewRevision: number | undefined;
     // 启动阶段常见的是一次网络/网关抖动，而不是会话不存在。GET 列表请求
     // 可安全重试一次；确定性的 4xx 仍由 retry 立即抛出，避免掩盖认证问题。
     const conversations = await retry(
       // Backend defaults this endpoint to 100 rows. The app replaces its whole
       // conversation snapshot with the response and does not have a cursor to
       // fetch another page, so use the endpoint's advertised maximum here.
-      () =>
-        apiClient<ChatConversationDto[]>('/chat/conversations?limit=500'),
+      () => {
+        // Capture each actual attempt after any queued request/retry wait.
+        requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+        return apiClient<ChatConversationDto[]>('/chat/conversations?limit=500');
+      },
       { tries: 2, backoffMs: 400 },
     );
     if (sameSession()) {
-      useChatStore.getState().setConversations(conversations);
+      useChatStore.getState().setConversations(conversations, requestPreviewRevision);
     }
     return conversations;
   })();

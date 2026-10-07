@@ -137,6 +137,11 @@ import {
   saveLocalNoteDraft,
   restoreLocalNoteDraftRecordings,
   refreshLocalNoteDraftMedia,
+  isLocalNoteDraftDeleted,
+  stageLocalNoteDraftDeletion,
+  finishLocalNoteDraftDeletion,
+  confirmNoteDraftDeletion,
+  retainDeletedNoteDraftRecording,
   type NoteEditorDraftRecord,
 } from '@/features/notes/utils/note-editor-drafts';
 import { persistNoteRecording } from '@/features/notes/utils/note-recording-storage';
@@ -444,9 +449,10 @@ export default function EditNoteScreen() {
   const { t } = useTranslation();
   const currentUser = useAuthStore((state) => state.user);
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
-  const { id, draftId: routeDraftId } = useLocalSearchParams<{
+  const { id, draftId: routeDraftId, draftMode } = useLocalSearchParams<{
     id?: string;
     draftId?: string;
+    draftMode?: string;
   }>();
   const isEdit = Boolean(id);
   const navigation = useNavigation();
@@ -1219,7 +1225,7 @@ export default function EditNoteScreen() {
       let record = loadLocalNoteDraft(currentUser.id, editorDraftId);
       try {
         // Generated IDs start a new edit; only an explicit resume can exist remotely.
-        if (!record?.pendingSubmission && typeof routeDraftId === 'string' && routeDraftId.trim()) {
+        if (!record?.pendingSubmission && draftMode !== 'new' && !isLocalNoteDraftDeleted(currentUser.id, editorDraftId) && typeof routeDraftId === 'string' && routeDraftId.trim()) {
           const remote = await fetchNoteDraft(editorDraftId);
           const remoteRecord = draftRecordFromServer(remote, editorDraftId);
           if (!record || (!record.pendingSubmission && remoteRecord.updatedAt > record.updatedAt && !record.audioItems.some((item) => item.uploadStatus !== 'UPLOADED'))) {
@@ -1231,9 +1237,10 @@ export default function EditNoteScreen() {
       } catch {
         // Keep the local snapshot available while offline.
       }
+      if (isLocalNoteDraftDeleted(currentUser.id, editorDraftId)) record = null;
       if (record) record = await restoreLocalNoteDraftRecordings(currentUser.id, record);
       const auth = useAuthStore.getState();
-      if (cancelled || auth.user?.id !== currentUser.id || auth.sessionEpoch !== sessionEpoch) {
+      if (cancelled || auth.user?.id !== currentUser.id || auth.sessionEpoch !== sessionEpoch || isLocalNoteDraftDeleted(currentUser.id, editorDraftId)) {
         record?.audioItems.forEach((item) => {
           pickerPreviewDisposerRef.current.retain(item.previewUri);
           pickerPreviewDisposerRef.current.dispose(item.previewUri);
@@ -1284,6 +1291,7 @@ export default function EditNoteScreen() {
     editorDraftId,
     editorMounted,
     routeDraftId,
+    draftMode,
     settledRouteKey,
     textStatsStore,
   ]);
@@ -1307,7 +1315,7 @@ export default function EditNoteScreen() {
   const persistDraft = useCallback(async (flush = false): Promise<boolean> => {
     const auth = useAuthStore.getState();
     if (!currentUser?.id || auth.user?.id !== currentUser.id || auth.sessionEpoch !== sessionEpoch ||
-      !draftHydratedRef.current || navigationRequestedRef.current || draftRouteKeyRef.current !== draftRouteKey) return false;
+      !draftHydratedRef.current || navigationRequestedRef.current || draftRouteKeyRef.current !== draftRouteKey || isLocalNoteDraftDeleted(currentUser.id, editorDraftId)) { draftRemoteQueue.cancel(); return false; }
     let record = buildCurrentDraftRecord();
     if (record.pendingSubmission) {
       // The server may already have consumed this draft. Keep the recovery
@@ -1319,7 +1327,7 @@ export default function EditNoteScreen() {
     const writeVersion = ++draftWriteVersionRef.current;
     const isCurrentSession = () => {
       const state = useAuthStore.getState();
-      return state.user?.id === currentUser.id && state.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey;
+      return state.user?.id === currentUser.id && state.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey && !isLocalNoteDraftDeleted(currentUser.id, editorDraftId);
     };
     const markPersisted = (recordFingerprint: string) => {
       if (isCurrentSession() && writeVersion >= successfulDraftWriteVersionRef.current) {
@@ -1342,6 +1350,10 @@ export default function EditNoteScreen() {
       const retained = new Set(latest.audioItems.map((item) => item.clientId));
       for (const [clientId, item] of restored) {
         if (!isCurrentSession() || navigationRequestedRef.current || !retained.has(clientId)) {
+          if (isLocalNoteDraftDeleted(currentUser.id, editorDraftId)) {
+            try { retainDeletedNoteDraftRecording(currentUser.id, editorDraftId, item.localRecordingId!); }
+            catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
+          }
           removeUnreferencedLocalNoteRecordings(currentUser.id, [item.localRecordingId!]);
           restored.delete(clientId);
         }
@@ -1369,6 +1381,7 @@ export default function EditNoteScreen() {
       const hasLocalRecording = record.audioItems.some((item) => item.uploadStatus !== 'UPLOADED');
       try {
         await saveNoteDraft(editorDraftId, localDraftSummaryToServerInput(record));
+        if (!isCurrentSession()) return false;
         if (!hasLocalRecording) markPersisted(draftFingerprint(record));
         return !hasLocalRecording;
       } catch {
@@ -1435,6 +1448,7 @@ export default function EditNoteScreen() {
         const auth = useAuthStore.getState();
         return auth.user?.id === currentUser?.id && auth.sessionEpoch === sessionEpoch && draftRouteKeyRef.current === draftRouteKey;
       };
+      if (isLocalNoteDraftDeleted(currentUser?.id, editorDraftId)) { draftRemoteQueue.cancel(); completeNavigation(action); return; }
       if (recordingAudioRef.current || uploadInFlightRef.current || saveInFlightRef.current) {
         Alert.alert(
           t('notes.edit.waitForMediaTitle', { defaultValue: '请先完成当前操作' }),
@@ -1482,12 +1496,21 @@ export default function EditNoteScreen() {
             style: 'destructive',
             onPress: () => {
               if (!isCurrentEditor()) return;
-              removeLocalNoteDraft(currentUser?.id, editorDraftId);
-              cleanupRecordingCopies();
+              if (currentUser?.id) {
+                try { if (!stageLocalNoteDraftDeletion(currentUser.id, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
+                catch { Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
+              } else removeLocalNoteDraft(currentUser?.id, editorDraftId);
+              draftRemoteQueue.cancel();
               completeNavigation(action);
               // Delete after in-flight saves, so their late response cannot revive a discarded draft.
               void draftSavePromiseRef.current.catch(() => false).then(async () => {
-                if (isCurrentEditor()) await deleteNoteDraft(editorDraftId).catch(() => undefined);
+                if (!isCurrentEditor() || !currentUser?.id) return;
+                try {
+                  const cleanedRecordings = await finishLocalNoteDraftDeletion(currentUser.id, editorDraftId);
+                  if (!isCurrentEditor()) return;
+                  await deleteNoteDraft(editorDraftId);
+                  if (isCurrentEditor()) confirmNoteDraftDeletion(currentUser.id, editorDraftId, cleanedRecordings);
+                } catch { /* DraftsScreen retains and retries both cleanup and server deletion. */ }
               });
             },
           },
@@ -1503,12 +1526,12 @@ export default function EditNoteScreen() {
     },
     [
       completeNavigation,
-      cleanupRecordingCopies,
       currentUser?.id,
       sessionEpoch,
       draftRouteKey,
       buildCurrentDraftRecord,
       editorDraftId,
+      draftRemoteQueue,
       persistDraft,
       hasUndurableRecording,
       t,
@@ -1525,6 +1548,11 @@ export default function EditNoteScreen() {
   useFocusEffect(
     useCallback(() => {
       resetUploadOwnership();
+      if (isLocalNoteDraftDeleted(currentUser?.id, editorDraftId)) {
+        draftRemoteQueue.cancel();
+        completeNavigation(undefined, true);
+        return invalidateUploadOwnership;
+      }
       const picked = consumePickedLocation();
       if (picked && !pendingSubmissionRef.current && !saveInFlightRef.current) {
         setLocationDraft({
@@ -1539,7 +1567,7 @@ export default function EditNoteScreen() {
         setMapRevealed(true);
       }
       return invalidateUploadOwnership;
-    }, [consumePickedLocation, invalidateUploadOwnership, resetUploadOwnership]),
+    }, [completeNavigation, currentUser?.id, draftRemoteQueue, editorDraftId, consumePickedLocation, invalidateUploadOwnership, resetUploadOwnership]),
   );
 
   const handleContentChange = useCallback((blockId: string, newBlocks: Record<string, unknown>[]) => {

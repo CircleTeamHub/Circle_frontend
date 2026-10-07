@@ -2554,6 +2554,8 @@
       "mediaCount": "{{count}} media files",
       "deleteLabel": "Delete draft",
       "deleteFailed": "Could not delete the draft. Please try again.",
+      "pendingSubmitDeleteBlocked": "The save result for this draft is still unconfirmed. Open it and retry the original save before deciding whether to delete it.",
+      "deletePending": "Local cleanup or server deletion is still pending. The content is hidden; retry to finish deleting it.",
       "saveFailed": "Could not save the draft. Please try again.",
       "mediaCount_one": "{{count}} media file",
       "mediaCount_other": "{{count}} media files"

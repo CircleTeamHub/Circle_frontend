@@ -17,7 +17,11 @@ import { fetchNoteDrafts, deleteNoteDraft } from '@/services/api/notes';
 import type { NoteDraftSummary } from '@/features/notes/types';
 import {
   loadLocalNoteDraftSummaries,
-  removeLocalNoteDraft,
+  stageLocalNoteDraftDeletion,
+  finishLocalNoteDraftDeletion,
+  confirmNoteDraftDeletion,
+  isLocalNoteDraftDeleted,
+  loadPendingNoteDraftDeletions,
   type NoteLocalDraftSummary,
 } from '@/features/notes/utils/note-editor-drafts';
 import { formatNoteDate } from '@/features/notes/utils/note-format';
@@ -60,31 +64,58 @@ export default function DraftsScreen() {
   const sessionKey = `${userId ?? 'anonymous'}:${sessionEpoch}`;
   const loadedSessionRef = useRef('');
   const loadGenerationRef = useRef(0);
-  const deletingRef = useRef(new Set<string>());
+  const deletionRunRef = useRef(new Set<string>());
   const isCurrentSession = useCallback(() => {
     const auth = useAuthStore.getState();
     return auth.user?.id === userId && auth.sessionEpoch === sessionEpoch;
   }, [userId, sessionEpoch]);
   const [items, setItems] = useState<DraftListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
   const mountedRef = useRef(true);
+
+  const retryDeletions = useCallback(async () => {
+    if (!userId || !isCurrentSession() || deletionRunRef.current.has(sessionKey)) return;
+    deletionRunRef.current.add(sessionKey);
+    const attempted = new Set<string>();
+    // Deliberately serial: a failed/offline request must not create a burst of DELETEs.
+    try { while (true) {
+      if (!isCurrentSession()) return;
+      const id = loadPendingNoteDraftDeletions(userId).find((candidate) => !attempted.has(candidate));
+      if (!id) return;
+      attempted.add(id);
+      try {
+        const cleanedRecordings = await finishLocalNoteDraftDeletion(userId, id);
+        if (!isCurrentSession()) return;
+        await deleteNoteDraft(id);
+        if (!isCurrentSession()) return;
+        confirmNoteDraftDeletion(userId, id, cleanedRecordings);
+      } catch {
+        // Content is already hidden; the durable queue retains cleanup and DELETE for retry.
+      } finally {
+        if (mountedRef.current && isCurrentSession()) setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
+      }
+    } } finally { deletionRunRef.current.delete(sessionKey); }
+  }, [userId, isCurrentSession, sessionKey]);
 
   const load = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
     loadedSessionRef.current = sessionKey;
     const local = userId ? loadLocalNoteDraftSummaries(userId) : [];
     setItems(mergeDrafts(local, []));
+    setPendingDeleteCount(userId ? loadPendingNoteDraftDeletions(userId).length : 0);
     setLoading(false);
     if (!userId || !isCurrentSession()) return;
+    void retryDeletions();
     try {
       const remote = await fetchNoteDrafts();
       if (mountedRef.current && generation === loadGenerationRef.current && isCurrentSession()) {
-        setItems(mergeDrafts(loadLocalNoteDraftSummaries(userId), remote));
+        setItems(mergeDrafts(loadLocalNoteDraftSummaries(userId), remote.filter((item) => !isLocalNoteDraftDeleted(userId, item.id))));
       }
     } catch {
       // Local drafts remain available while offline; the next focus retries sync.
     }
-  }, [userId, sessionKey, isCurrentSession]);
+  }, [userId, sessionKey, isCurrentSession, retryDeletions]);
 
   useFocusEffect(
     useCallback(() => {
@@ -99,7 +130,7 @@ export default function DraftsScreen() {
 
   const openDraft = useCallback(
     (item: DraftListItem) => {
-      if (!isCurrentSession() || loadedSessionRef.current !== sessionKey) return;
+      if (!isCurrentSession() || loadedSessionRef.current !== sessionKey || isLocalNoteDraftDeleted(userId, item.id)) return;
       router.push({
         pathname: '/(tabs)/profile/notes/edit',
         params: {
@@ -108,7 +139,7 @@ export default function DraftsScreen() {
         },
       } as never);
     },
-    [router, isCurrentSession, sessionKey],
+    [router, isCurrentSession, sessionKey, userId],
   );
 
   const removeDraft = useCallback(
@@ -122,25 +153,28 @@ export default function DraftsScreen() {
             text: t('common.delete', { defaultValue: '删除' }),
             style: 'destructive',
             onPress: () => {
-              if (!isCurrentSession() || !userId || deletingRef.current.has(item.id)) return;
-              deletingRef.current.add(item.id);
+              if (!isCurrentSession() || !userId || loadedSessionRef.current !== sessionKey) return;
               loadGenerationRef.current += 1;
-              void (async () => {
-                try {
-                  await deleteNoteDraft(item.id);
-                  if (!mountedRef.current || !isCurrentSession()) return;
-                  removeLocalNoteDraft(userId, item.id);
-                  setItems((current) => current.filter((draft) => draft.id !== item.id));
-                } catch {
-                  if (mountedRef.current && isCurrentSession()) Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed'));
-                } finally { deletingRef.current.delete(item.id); }
-              })();
+              try {
+                // Check the latest durable record, not the possibly stale list summary.
+                if (!stageLocalNoteDraftDeletion(userId, item.id)) {
+                  Alert.alert(t('common.errorOccurred'), t('notes.drafts.pendingSubmitDeleteBlocked', { defaultValue: '这份草稿的保存结果尚未确认。请先打开草稿并重试确认保存，再决定是否删除。' }));
+                  return;
+                }
+                setItems((current) => current.filter((draft) => draft.id !== item.id));
+                setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
+                void retryDeletions();
+              } catch {
+                if (isLocalNoteDraftDeleted(userId, item.id)) setItems((current) => current.filter((draft) => draft.id !== item.id));
+                setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
+                Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed'));
+              }
             },
           },
         ],
       );
     },
-    [t, userId, isCurrentSession],
+    [t, userId, isCurrentSession, sessionKey, retryDeletions],
   );
 
   const empty = useMemo(
@@ -166,6 +200,14 @@ export default function DraftsScreen() {
         </Text>
         <View style={s.headerSpacer} />
       </View>
+      {loadedSessionRef.current === sessionKey && pendingDeleteCount > 0 ? (
+        <View style={s.deletePending}>
+          <Text style={[s.preview, { color: colors.textSecondary }]}>{t('notes.drafts.deletePending', { defaultValue: '删除清理或服务器同步尚未完成。内容已隐藏，请重试完成删除。' })}</Text>
+          <Pressable onPress={() => void retryDeletions()} accessibilityRole="button" accessibilityLabel={t('common.retry')}>
+            <Text style={{ color: colors.primary }}>{t('common.retry')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {loading && items.length === 0 ? (
         <ActivityIndicator style={s.loading} color={colors.primary} />
       ) : (
@@ -220,6 +262,7 @@ const s = StyleSheet.create({
   },
   title: { ...Typography.h2, fontWeight: '700' },
   headerSpacer: { width: 25 },
+  deletePending: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md, gap: Spacing.sm },
   list: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   emptyList: { flexGrow: 1 },
   loading: { marginTop: Spacing.xl },

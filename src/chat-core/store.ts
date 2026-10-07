@@ -397,6 +397,11 @@ export type StoredChatMessage = ChatMessageDto & {
   failedAfterHeight?: number;
 };
 
+interface LiveConversationPreview {
+  revision: number;
+  messageId: string;
+}
+
 interface ChatStoreState {
   connected: boolean;
   connecting: boolean;
@@ -440,7 +445,13 @@ interface ChatStoreState {
     options?: { remoteRefresh?: boolean },
     startedAt?: string | null,
   ) => void;
-  setConversations: (conversations: ChatConversationDto[]) => void;
+  /** Live/local preview clock; stays monotonic across reset and cache clears. */
+  conversationPreviewRevision: number;
+  livePreviewByConversation: Record<string, LiveConversationPreview>;
+  setConversations: (
+    conversations: ChatConversationDto[],
+    requestPreviewRevision?: number,
+  ) => void;
   /**
    * 是否已经拿到过**完整**会话快照(loadChatConversations 成功过一次)。
    *
@@ -908,8 +919,8 @@ function reconcileDeletedPreview(
 }
 
 /**
- * 会话快照可能早于本机刚完成的发送请求生成。不要让这份旧快照把较新的
- * 本地预览回滚；服务端 height 是跨设备可比较的消息顺序号。
+ * 只保护请求期间推进的实时/本地预览。单凭更高的 height 无法区分新消息和
+ * 另一台设备已焚毁的离线缓存；权威快照允许把后者回退到仍存在的消息。
  *
  * height=0 只对仍在发送中的乐观消息保留。失败气泡要回到快照/时间线里的
  * 已确认消息，由 hasFailedLatestMessage 单独负责显示失败提示。
@@ -918,6 +929,8 @@ function preserveNewerLivePreview(
   conversation: ChatConversationDto,
   current: ChatConversationDto | undefined,
   timeline: ChatMessageDto[] | undefined,
+  livePreview: LiveConversationPreview | undefined,
+  requestPreviewRevision: number | undefined,
 ): ChatConversationDto {
   const local = current?.lastMessage;
   if (!local || isMessageDeletedLocally(local.id, local.d)) return conversation;
@@ -933,11 +946,18 @@ function preserveNewerLivePreview(
     localHeight === 0 &&
     (local as StoredChatMessage).failed !== true &&
     localTimelineMessage?.failed !== true;
+  const arrivedDuringRequest =
+    requestPreviewRevision !== undefined &&
+    livePreview !== undefined &&
+    livePreview.revision > requestPreviewRevision &&
+    livePreview.messageId === local.id;
 
   // 空预览是服务端清空/焚毁的权威结果；只有仍在发送中的本地气泡可以暂时
   // 留住它，已失败或已确认的旧消息都不能借快照刷新重新出现。
   if (
-    (!conversation.lastMessage || localHeight <= snapshotHeight) &&
+    (!conversation.lastMessage ||
+      localHeight <= snapshotHeight ||
+      !arrivedDuringRequest) &&
     !localSendInFlight
   ) {
     return conversation;
@@ -1009,6 +1029,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   conversations: [],
   conversationsSnapshotLoaded: false,
   conversationsSnapshotSeq: 0,
+  conversationPreviewRevision: 0,
+  livePreviewByConversation: {},
   messagesByConversation: {},
   messageWindowByConversation: {},
   historyFloorByConversation: {},
@@ -1153,7 +1175,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     void deleteLocalMessages(conversationId, [...ids], deleteOptions);
     if (nextConversation) void upsertLocalConversation(nextConversation);
   },
-  setConversations: (conversations) => {
+  setConversations: (conversations, requestPreviewRevision) => {
     const {
       conversations: currentConversations,
       messagesByConversation,
@@ -1162,6 +1184,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       currentUserId,
       clearedBeforeHeightByConversation,
       selfDestructPolicyEpoch,
+      livePreviewByConversation,
     } = get();
     const currentById = new Map(
       currentConversations.map((conversation) => [conversation.id, conversation]),
@@ -1207,6 +1230,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             c,
             currentById.get(c.id),
             messagesByConversation[c.id],
+            livePreviewByConversation[c.id],
+            requestPreviewRevision,
           ),
         )
           // 快照是请求发出那一刻的事实。这段时间里本账号可能已经在另一台
@@ -1228,6 +1253,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       // 只有全量拉取会走到这里(upsertConversation 不置位)。
       conversationsSnapshotLoaded: true,
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
+      livePreviewByConversation: Object.fromEntries(
+        reconciledConversations
+          .filter((conversation) => livePreviewByConversation[conversation.id])
+          .map((conversation) => [conversation.id, livePreviewByConversation[conversation.id]]),
+      ),
       readWatermarks: seededReadWatermarks,
       deliveredWatermarks: seededDeliveredWatermarks,
       ...(raisedFloors.size > 0
@@ -1286,6 +1316,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       state.deliveredWatermarks;
     const { [conversationId]: _typing, ...typingUntilByConversation } =
       state.typingUntilByConversation;
+    const { [conversationId]: _livePreview, ...livePreviewByConversation } =
+      state.livePreviewByConversation;
     set({
       conversations: state.conversations.filter((c) => c.id !== conversationId),
       // A removed/left conversation is no longer reachable from the UI. Drop
@@ -1300,6 +1332,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       readWatermarks,
       deliveredWatermarks,
       typingUntilByConversation,
+      livePreviewByConversation,
       ...(state.activeConversationId === conversationId
         ? { activeConversationId: null }
         : {}),
@@ -1371,6 +1404,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       activeConversationId,
       appForeground,
       messagesByConversation,
+      conversationPreviewRevision,
+      livePreviewByConversation,
     } = get();
     const index = conversations.findIndex((c) => c.id === message.conversationId);
     // 列表里没有这个会话(例如对方刚建的单聊):调用方据此去补拉元信息,
@@ -1398,6 +1433,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       message.height === 0 ||
       target.lastMessage == null ||
       message.height >= target.lastMessage.height;
+    // A duplicate delivery is not a new preview, even if it arrives during GET.
+    const advancesPreview =
+      isNewerPreview && message.id !== target.lastMessage?.id;
     const next: ChatConversationDto = {
       ...target,
       lastMessage: isNewerPreview ? message : target.lastMessage,
@@ -1410,6 +1448,18 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         next,
         ...conversations.slice(index + 1),
       ]),
+      ...(advancesPreview
+        ? {
+            conversationPreviewRevision: conversationPreviewRevision + 1,
+            livePreviewByConversation: {
+              ...livePreviewByConversation,
+              [message.conversationId]: {
+                revision: conversationPreviewRevision + 1,
+                messageId: message.id,
+              },
+            },
+          }
+        : {}),
     });
     return true;
   },
@@ -2518,6 +2568,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     set({
       conversations: [],
       conversationsSnapshotLoaded: false,
+      livePreviewByConversation: {},
       messagesByConversation: {},
       messageWindowByConversation: {},
       historyFloorByConversation: {},
@@ -2542,6 +2593,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       selfDestructPolicyEpoch: 0,
       conversations: [],
       conversationsSnapshotLoaded: false,
+      livePreviewByConversation: {},
       messagesByConversation: {},
       messageWindowByConversation: {},
       historyFloorByConversation: {},

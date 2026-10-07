@@ -82,10 +82,12 @@ function loadDateWindow() {
  * 每次真正发出的 GET 都挂一个手动控制的 deferred:测试决定它何时、以什么结果
  * 回来。snapshots 按落地顺序记下写进 store 的快照。
  */
-function loadApi() {
+function loadApi(options = {}) {
   const calls = [];
   const snapshots = [];
+  const snapshotRevisions = [];
   const burnUpdates = [];
+  const state = { conversationPreviewRevision: 0 };
   const api = runModule('src/chat-core/api.ts', (request) => {
     if (request === '@/services/api/client') {
       return {
@@ -96,7 +98,7 @@ function loadApi() {
         },
       };
     }
-    if (request === '@/utils/retry') return { retry: (operation) => operation() };
+    if (request === '@/utils/retry') return { retry: options.retry ?? ((operation) => operation()) };
     if (request === '@/stores/authStore') {
       return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
     }
@@ -115,7 +117,11 @@ function loadApi() {
       return {
         useChatStore: {
           getState: () => ({
-            setConversations: (conversations) => snapshots.push(conversations),
+            conversationPreviewRevision: state.conversationPreviewRevision,
+            setConversations: (conversations, revision) => {
+              snapshots.push(conversations);
+              snapshotRevisions.push(revision);
+            },
             applyBurnDuration: (...args) => burnUpdates.push(args),
             ingestMessages: () => {},
             upsertConversation: () => {},
@@ -131,7 +137,7 @@ function loadApi() {
     if (request === './local-db') return localDbStub;
     throw new Error(`unexpected require: ${request}`);
   });
-  return { api, calls, snapshots, burnUpdates };
+  return { api, calls, snapshots, snapshotRevisions, burnUpdates, state };
 }
 
 /** 让在途 Promise 链上所有能跑的微任务都跑完。 */
@@ -246,4 +252,39 @@ test('新快照请求挂起期间的普通请求合并到它上面', async () =>
   assert.equal(await fresh, latest);
   assert.equal(await joiner, latest);
   assert.equal(calls.length, 2);
+});
+
+test('preview revisions are captured when a queued fresh request actually starts', async () => {
+  const { api, calls, state, snapshotRevisions } = loadApi();
+  state.conversationPreviewRevision = 3;
+  const stale = api.loadChatConversations();
+  const fresh = api.loadChatConversations({ fresh: true });
+  state.conversationPreviewRevision = 4;
+
+  calls[0].resolve([]);
+  await stale;
+  await settle();
+  state.conversationPreviewRevision = 5;
+  calls[1].resolve([]);
+  await fresh;
+
+  assert.deepEqual(snapshotRevisions, [3, 4]);
+});
+
+test('each snapshot retry captures a new preview revision before its GET', async () => {
+  const { api, calls, state, snapshotRevisions } = loadApi({
+    retry: async (operation) => {
+      try { return await operation(); } catch { return operation(); }
+    },
+  });
+  state.conversationPreviewRevision = 1;
+  const request = api.loadChatConversations();
+  state.conversationPreviewRevision = 2;
+  calls[0].reject(new Error('network down'));
+  await settle();
+  state.conversationPreviewRevision = 3;
+  calls[1].resolve([]);
+  await request;
+
+  assert.deepEqual(snapshotRevisions, [2]);
 });

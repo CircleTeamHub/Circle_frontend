@@ -2548,6 +2548,8 @@
       "mediaCount": "{{count}} 个媒体",
       "deleteLabel": "删除草稿",
       "deleteFailed": "草稿删除失败，请重试",
+      "pendingSubmitDeleteBlocked": "这份草稿的保存结果尚未确认。请先打开草稿并重试确认保存，再决定是否删除。",
+      "deletePending": "删除清理或服务器同步尚未完成。内容已隐藏，请重试完成删除。",
       "saveFailed": "草稿保存失败，请重试"
     },
     "edit": {

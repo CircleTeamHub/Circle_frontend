@@ -9,6 +9,7 @@ import { storage } from '@/storage';
 import { usePreventRemove } from '@react-navigation/native';
 import type { CreateNoteInput, NoteDetail, NoteDraftDetail } from '@/features/notes/types';
 import { ApiError } from '@/services/api/api-error';
+import { stageLocalNoteDraftDeletion, loadLocalNoteDraft, loadPendingNoteDraftDeletions } from '@/features/notes/utils/note-editor-drafts';
 
 // EditNoteScreen reads the current account for local/server draft persistence.
 // The real auth store hydrates through native encrypted storage, which is not
@@ -34,9 +35,10 @@ jest.mock('@/storage', () => ({
   },
 }));
 
+const mockNavigation = { dispatch: jest.fn() };
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({ dispatch: jest.fn() }),
+  useNavigation: () => mockNavigation,
   usePreventRemove: jest.fn(),
 }));
 
@@ -83,6 +85,7 @@ const mockGenerateThumbnails = jest.fn();
 const mockReportHandledFailure = jest.fn();
 let mockRouteId: string | undefined;
 let mockRouteDraftId: string | undefined;
+let mockDraftMode: string | undefined;
 const mockFetchDraft = jest.fn();
 const mockSaveDraft = jest.fn();
 const mockDeleteDraft = jest.fn();
@@ -103,7 +106,7 @@ jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   return {
     useRouter: () => mockRouter,
-    useLocalSearchParams: () => ({ id: mockRouteId, draftId: mockRouteDraftId }),
+    useLocalSearchParams: () => ({ id: mockRouteId, draftId: mockRouteDraftId, draftMode: mockDraftMode }),
     useFocusEffect: (callback: () => void | (() => void)) => {
       ReactModule.useEffect(() => {
         mockFocusCallback = callback;
@@ -572,7 +575,7 @@ test('releases an in-flight main-editor blob preview when its route is replaced'
 beforeEach(() => {
   jest.mocked(createNote).mockReset().mockImplementation(async (input) => noteResult(input));
   jest.mocked(updateNote).mockReset().mockImplementation(async (id, input) => noteResult(input, id));
-  mockDraftAuth.user = null; mockDraftAuth.sessionEpoch = 0; mockRouteDraftId = undefined;
+  mockDraftAuth.user = null; mockDraftAuth.sessionEpoch = 0; mockRouteDraftId = undefined; mockDraftMode = undefined;
   mockFetchDraft.mockReset().mockRejectedValue(new Error('missing')); mockSaveDraft.mockReset().mockResolvedValue({}); mockDeleteDraft.mockReset().mockResolvedValue(undefined);
   jest.clearAllMocks();
   mockRecordingPermission.mockReset().mockResolvedValue({ granted: true });
@@ -592,6 +595,10 @@ beforeEach(() => {
   jest.mocked(storage.getString).mockReset();
   jest.mocked(storage.set).mockReset();
   jest.mocked(storage.remove).mockReset();
+  const localValues = new Map<string, string>();
+  jest.mocked(storage.getString).mockImplementation((key) => localValues.get(key));
+  jest.mocked(storage.set).mockImplementation((key, value) => { localValues.set(key, String(value)); });
+  jest.mocked(storage.remove).mockImplementation((key) => localValues.delete(key));
   imageSources.length = 0;
   mockTranslate = identityTranslate;
   mockRouteId = undefined;
@@ -2211,6 +2218,7 @@ test('a restored Blob from stale hydration is revoked without entering the new a
 
 test.each(['discard', 'publish'] as const)('%s cleans a durable recording that has not reached local draft autosave', async (action) => {
   signedInDraft();
+  if (action === 'discard') mockRouteDraftId = 'unsaved-recording-discard';
   mockFetchDraft.mockResolvedValue(reviewDraft());
   mockRequestPresign.mockReset();
   if (action === 'discard') mockRequestPresign.mockRejectedValue(new Error('offline'));
@@ -2731,4 +2739,70 @@ test('Back flushes a locally autosaved latest snapshot before cancelling its rem
     expect(mockSaveDraft.mock.calls[0][1].content).toBe('Latest before Back');
     await waitFor(() => expect(jest.mocked(usePreventRemove).mock.calls.at(-1)?.[0]).toBe(false));
   } finally { rendered.unmount(); jest.useRealTimers(); }
+});
+
+
+test('New with an explicit unique route ID is immediately editable offline without a draft GET', async () => {
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' }; mockRouteDraftId = 'offline-new-route'; mockDraftMode = 'new';
+  mockFetchDraft.mockReturnValue(new Promise(() => {}));
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.editable).toBe(true));
+    expect(mockFetchDraft).not.toHaveBeenCalled();
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'New offline draft');
+    rendered.rerender(<EditNoteScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(jest.mocked(createNote).mock.calls[0][0].clientDraftID).toBe('offline-new-route');
+  } finally { rendered.unmount(); }
+});
+
+test('deleting a locally saved snapshot cancels a queued remote PUT and exit persistence', async () => {
+  jest.useFakeTimers(); signedInDraft(); mockRouteDraftId = 'delete-queued-put'; mockFetchDraft.mockResolvedValue(reviewDraft());
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(mockEditorProps).toBeTruthy());
+    await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Private queued text' }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
+    expect(loadLocalNoteDraft('owner-a', 'delete-queued-put')?.content).toBe('Private queued text');
+    act(() => { expect(stageLocalNoteDraftDeletion('owner-a', 'delete-queued-put')).toBe(true); });
+    await act(async () => { jest.advanceTimersByTime(2000); await Promise.resolve(); });
+    expect(mockSaveDraft).not.toHaveBeenCalled(); expect(loadLocalNoteDraft('owner-a', 'delete-queued-put')).toBeNull();
+    rendered.unmount(); await act(async () => { jest.runOnlyPendingTimers(); await Promise.resolve(); });
+    expect(mockSaveDraft).not.toHaveBeenCalled();
+  } finally { rendered.unmount(); jest.useRealTimers(); }
+});
+
+test('an already sent PUT cannot restore a deleted draft or allow publish and Save/Exit to revive it', async () => {
+  jest.useFakeTimers(); signedInDraft(); mockRouteDraftId = 'delete-active-put'; mockFetchDraft.mockResolvedValue(reviewDraft());
+  const save = createDeferred<unknown>(); mockSaveDraft.mockReturnValueOnce(save.promise);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(mockEditorProps).toBeTruthy());
+    await act(async () => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Private in-flight text' }] }]); jest.advanceTimersByTime(180); await Promise.resolve(); });
+    await act(async () => { jest.advanceTimersByTime(650); await Promise.resolve(); });
+    expect(mockSaveDraft).toHaveBeenCalledTimes(1);
+    act(() => { stageLocalNoteDraftDeletion('owner-a', 'delete-active-put'); });
+    act(() => { mockEditorProps!.onContentChange([{ type: 'paragraph', content: [{ type: 'text', text: 'Must not resurrect' }] }]); });
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await act(async () => { save.resolve({}); await save.promise; jest.advanceTimersByTime(2000); await Promise.resolve(); });
+    expect(createNote).not.toHaveBeenCalled(); expect(mockSaveDraft).toHaveBeenCalledTimes(1);
+    expect(loadLocalNoteDraft('owner-a', 'delete-active-put')).toBeNull();
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    await waitFor(() => expect(jest.mocked(usePreventRemove).mock.calls.at(-1)?.[0]).toBe(false));
+    expect(loadPendingNoteDraftDeletions('owner-a')).toContain('delete-active-put');
+  } finally { save.resolve({}); rendered.unmount(); alert.mockRestore(); jest.useRealTimers(); }
+});
+
+test('a late resume GET cannot hydrate private content after deletion', async () => {
+  signedInDraft(); mockRouteDraftId = 'delete-loading-get'; const get = createDeferred<NoteDraftDetail>(); mockFetchDraft.mockReturnValueOnce(get.promise);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(mockFetchDraft).toHaveBeenCalledWith('delete-loading-get'));
+    act(() => { stageLocalNoteDraftDeletion('owner-a', 'delete-loading-get'); });
+    await act(async () => { get.resolve(reviewDraft({ title: 'Deleted private title' })); await get.promise; });
+    expect(screen.queryByDisplayValue('Deleted private title')).toBeNull(); expect(mockSaveDraft).not.toHaveBeenCalled();
+    expect(loadLocalNoteDraft('owner-a', 'delete-loading-get')).toBeNull();
+    const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1]; act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
+    await waitFor(() => expect(jest.mocked(usePreventRemove).mock.calls.at(-1)?.[0]).toBe(false));
+  } finally { get.resolve(reviewDraft()); rendered.unmount(); }
 });

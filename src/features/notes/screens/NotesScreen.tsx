@@ -933,7 +933,7 @@ export default function NotesScreen() {
             onPress={() =>
               router.push({
                 pathname: '/(tabs)/profile/notes/edit',
-                params: { draftId: createNoteDraftId() },
+                params: { draftId: createNoteDraftId(), draftMode: 'new' },
               } as never)
             }
           >

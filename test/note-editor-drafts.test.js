@@ -160,3 +160,69 @@ test('missing durable files clear stale preview URIs while keeping the pending i
   assert.equal(restored.audioItems[0].previewUri, undefined);
   assert.equal(restored.audioItems[0].uploadStatus, 'PENDING');
 });
+
+
+test('offline deletion removes private content immediately and persists a restart-safe autosave fence', async () => {
+  const store = memoryStorage(); const removed = [];
+  const utils = loadDraftUtils({ removeNoteRecording: async (...args) => removed.push(args) }, store);
+  utils.saveLocalNoteDraft('owner', { ...draft('deleted', [audio('one')]), title: 'Private title', content: 'Private body' });
+  utils.saveLocalNoteDraft('other', draft('deleted', [audio('one')]));
+  assert.equal(utils.stageLocalNoteDraftDeletion('owner', 'deleted'), true);
+  assert.equal(utils.loadLocalNoteDraft('owner', 'deleted'), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(utils.loadLocalNoteDraftSummaries('owner'))), []);
+  assert.ok(![...store.values.values()].join('').includes('Private'));
+  assert.throws(() => utils.saveLocalNoteDraft('owner', draft('deleted')), /deleted/);
+  assert.ok(utils.loadLocalNoteDraft('other', 'deleted'));
+  const restarted = loadDraftUtils({ removeNoteRecording: async (...args) => removed.push(args) }, store);
+  assert.equal(restarted.isLocalNoteDraftDeleted('owner', 'deleted'), true);
+  assert.throws(() => restarted.saveLocalNoteDraft('owner', draft('deleted')), /deleted/);
+  const cleanedRecordings = await restarted.finishLocalNoteDraftDeletion('owner', 'deleted');
+  assert.deepEqual(removed, [['owner', 'recording-one.m4a']]);
+  restarted.confirmNoteDraftDeletion('owner', 'deleted', cleanedRecordings);
+  assert.deepEqual(JSON.parse(JSON.stringify(restarted.loadPendingNoteDraftDeletions('owner'))), []);
+  assert.throws(() => restarted.saveLocalNoteDraft('owner', draft('deleted')), /deleted/);
+});
+
+test('a latest publication recovery marker blocks deletion despite an older summary', () => {
+  const store = memoryStorage(); const utils = loadDraftUtils({}, store);
+  utils.saveLocalNoteDraft('owner', draft('pending'));
+  utils.loadLocalNoteDraftSummaries('owner');
+  const pendingSubmission = { noteId: null, input: { title: 'Original write', media: [], clientDraftID: 'pending' } };
+  utils.saveLocalNoteDraft('owner', { ...draft('pending'), pendingSubmission });
+  assert.equal(utils.stageLocalNoteDraftDeletion('owner', 'pending'), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(utils.loadLocalNoteDraft('owner', 'pending').pendingSubmission)), pendingSubmission);
+  assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), []);
+});
+
+test('partial content or recording deletion stays retryable and never cleans a retained recording', async () => {
+  const store = memoryStorage(); let failFiles = true; const removed = [];
+  const utils = loadDraftUtils({ removeNoteRecording: async (...args) => { if (failFiles) throw new Error('disk unavailable'); removed.push(args); } }, store);
+  utils.saveLocalNoteDraft('owner', draft('d', [audio('private'), audio('shared')]));
+  utils.saveLocalNoteDraft('owner', draft('retained', [audio('shared')]));
+  const remove = store.remove; store.remove = () => {};
+  assert.throws(() => utils.stageLocalNoteDraftDeletion('owner', 'd'), /not removed/);
+  assert.equal(utils.loadLocalNoteDraft('owner', 'd'), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), ['d']);
+  store.remove = remove;
+  await assert.rejects(utils.finishLocalNoteDraftDeletion('owner', 'd'), /disk unavailable/);
+  assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), ['d']);
+  failFiles = false;
+  const earlyCleanup = await utils.finishLocalNoteDraftDeletion('owner', 'd');
+  utils.retainDeletedNoteDraftRecording('owner', 'd', 'recording-late-copy.m4a');
+  assert.equal(utils.confirmNoteDraftDeletion('owner', 'd', earlyCleanup), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), ['d']);
+  const finalCleanup = await utils.finishLocalNoteDraftDeletion('owner', 'd');
+  assert.ok(removed.some(([, id]) => id === 'recording-late-copy.m4a'));
+  assert.ok(!removed.some(([, id]) => id === 'recording-shared.m4a'));
+  utils.confirmNoteDraftDeletion('owner', 'd', finalCleanup);
+  assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), []);
+});
+
+test('failure to persist the delete intent leaves the original local content intact', () => {
+  const store = memoryStorage(); const utils = loadDraftUtils({}, store);
+  utils.saveLocalNoteDraft('owner', { ...draft('d'), title: 'Keep private draft' });
+  const set = store.set; store.set = () => {};
+  assert.throws(() => utils.stageLocalNoteDraftDeletion('owner', 'd'), /not stored/);
+  store.set = set;
+  assert.equal(utils.loadLocalNoteDraft('owner', 'd').title, 'Keep private draft');
+});

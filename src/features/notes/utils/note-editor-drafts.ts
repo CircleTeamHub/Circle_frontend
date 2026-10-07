@@ -10,6 +10,11 @@ import type { PendingNoteSubmission } from '@/features/notes/utils/note-submissi
 const INDEX_VERSION = 1;
 const INDEX_PREFIX = 'circle-im-note-draft-index:v1:';
 const DRAFT_PREFIX = 'circle-im-note-draft:v1:';
+const DELETION_PREFIX = 'circle-im-note-draft-deletions:v1:';
+// Completed deletes still fence callbacks in this process. Across restarts
+// only unfinished work needs retaining; completed server tombstones are final.
+const deletedDrafts = new Set<string>();
+type DraftDeletion = { id: string; recordingIds: string[] };
 
 export type NoteDraftCardSnapshot = {
   id: string;
@@ -201,6 +206,28 @@ function draftKey(userId: string | null | undefined, draftId: string): string {
   return `${DRAFT_PREFIX}${userKey(userId)}:${encodeURIComponent(draftId)}`;
 }
 
+function readDeletions(userId: string | null | undefined): DraftDeletion[] {
+  const value = parseJson<unknown>(storage.getString(`${DELETION_PREFIX}${userKey(userId)}`));
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => item && typeof item.id === 'string' && Array.isArray(item.recordingIds)
+    ? [{ id: item.id, recordingIds: item.recordingIds.filter(isNoteRecordingId) }] : []);
+}
+
+function writeDeletions(userId: string | null | undefined, items: DraftDeletion[]): void {
+  const key = `${DELETION_PREFIX}${userKey(userId)}`;
+  const value = JSON.stringify(items);
+  storage.set(key, value);
+  if (storage.getString(key) !== value) throw new Error('Draft deletion was not stored');
+}
+
+export function isLocalNoteDraftDeleted(userId: string | null | undefined, draftId: string): boolean {
+  return deletedDrafts.has(draftKey(userId, draftId)) || readDeletions(userId).some((item) => item.id === draftId);
+}
+
+export function loadPendingNoteDraftDeletions(userId: string | null | undefined): string[] {
+  return readDeletions(userId).map((item) => item.id);
+}
+
 function parseJson<T>(value: string | undefined): T | null {
   if (!value) return null;
   try {
@@ -256,13 +283,18 @@ export function createNoteDraftId(): string {
 export function loadLocalNoteDraftSummaries(
   userId: string | null | undefined,
 ): NoteLocalDraftSummary[] {
-  return readIndex(userId).items.sort((a, b) => b.updatedAt - a.updatedAt);
+  return readIndex(userId).items.filter((item) => !isLocalNoteDraftDeleted(userId, item.id)).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export function loadLocalNoteDraft(
   userId: string | null | undefined,
   draftId: string,
 ): NoteEditorDraftRecord | null {
+  if (isLocalNoteDraftDeleted(userId, draftId)) return null;
+  return readLocalNoteDraft(userId, draftId);
+}
+
+function readLocalNoteDraft(userId: string | null | undefined, draftId: string): NoteEditorDraftRecord | null {
   const value = parseJson<NoteEditorDraftRecord>(
     storage.getString(draftKey(userId, draftId)),
   );
@@ -326,6 +358,7 @@ export function saveLocalNoteDraft(
   userId: string | null | undefined,
   record: NoteEditorDraftRecord,
 ): void {
+  if (isLocalNoteDraftDeleted(userId, record.id)) throw new Error('Draft has been deleted');
   const summary = toSummary(record);
   // A cache URI/blob URL cannot restore a failed recording upload after restart.
   // Never acknowledge saving that recording unless the durable copy exists.
@@ -363,7 +396,7 @@ export function removeLocalNoteDraft(
   userId: string | null | undefined,
   draftId: string,
 ): void {
-  const record = loadLocalNoteDraft(userId, draftId);
+  const record = readLocalNoteDraft(userId, draftId);
   storage.remove(draftKey(userId, draftId));
   const index = readIndex(userId);
   writeIndex(userId, {
@@ -371,6 +404,63 @@ export function removeLocalNoteDraft(
     items: index.items.filter((item) => item.id !== draftId),
   });
   cleanRecordings(userId, record);
+}
+
+/** Stage deletion before removing content; never discard a publication recovery marker. */
+export function stageLocalNoteDraftDeletion(userId: string, draftId: string, additionalRecordingIds: readonly string[] = []): boolean {
+  const record = readLocalNoteDraft(userId, draftId);
+  if (record?.pendingSubmission) return false;
+  const pending = readDeletions(userId);
+  const existing = pending.find((item) => item.id === draftId);
+  writeDeletions(userId, [
+    ...pending.filter((item) => item.id !== draftId),
+    { id: draftId, recordingIds: [...new Set([...(existing?.recordingIds ?? []), ...recordingIds(record), ...additionalRecordingIds.filter(isNoteRecordingId)])] },
+  ]);
+  deletedDrafts.add(draftKey(userId, draftId));
+  // These removals are synchronous. File/Blob cleanup remains retryable using
+  // only safe relative recording IDs, even once the private JSON is gone.
+  removeDeletedDraftContent(userId, draftId);
+  return true;
+}
+
+function removeDeletedDraftContent(userId: string, draftId: string): void {
+  storage.remove(draftKey(userId, draftId));
+  if (storage.getString(draftKey(userId, draftId)) !== undefined) throw new Error('Draft content was not removed');
+  const index: DraftIndex = { version: INDEX_VERSION, items: readIndex(userId).items.filter((item) => item.id !== draftId) };
+  writeIndex(userId, index);
+  if (storage.getString(indexKey(userId)) !== JSON.stringify(index)) throw new Error('Draft summary was not removed');
+}
+
+/** A durable copy finishing after deletion must be cleaned with the same retry intent. */
+export function retainDeletedNoteDraftRecording(userId: string, draftId: string, recordingId: string): void {
+  if (!isNoteRecordingId(recordingId) || !isLocalNoteDraftDeleted(userId, draftId)) return;
+  const pending = readDeletions(userId);
+  const previous = pending.find((item) => item.id === draftId);
+  writeDeletions(userId, [...pending.filter((item) => item.id !== draftId), {
+    id: draftId, recordingIds: [...new Set([...(previous?.recordingIds ?? []), recordingId])],
+  }]);
+}
+
+export async function finishLocalNoteDraftDeletion(userId: string, draftId: string): Promise<string> {
+  const pending = readDeletions(userId).find((item) => item.id === draftId);
+  if (!pending) return '[]';
+  // Retry partial storage cleanup before acknowledging either local or remote deletion.
+  removeDeletedDraftContent(userId, draftId);
+  const retained = new Set(readIndex(userId).items.flatMap((item) => recordingIds(loadLocalNoteDraft(userId, item.id))));
+  for (const id of pending.recordingIds) if (!retained.has(id)) await removeNoteRecording(userId, id);
+  return JSON.stringify(pending.recordingIds);
+}
+
+/** Call only after local cleanup and the server's idempotent DELETE succeed. */
+export function confirmNoteDraftDeletion(userId: string, draftId: string, cleanedRecordings: string): boolean {
+  const current = readDeletions(userId);
+  const pending = current.find((item) => item.id === draftId);
+  // A late native/IDB copy can finish during server DELETE. Keep newly queued
+  // files for another cleanup pass instead of acknowledging work never done.
+  if (pending && JSON.stringify(pending.recordingIds) !== cleanedRecordings) return false;
+  deletedDrafts.add(draftKey(userId, draftId));
+  writeDeletions(userId, current.filter((item) => item.id !== draftId));
+  return true;
 }
 
 export function removeAllLocalNoteDrafts(
