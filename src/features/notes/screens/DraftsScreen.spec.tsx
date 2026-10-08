@@ -192,3 +192,17 @@ test('an old confirmation cannot delete the next account or epoch draft', async 
     expect(deleteNoteDraft).not.toHaveBeenCalled(); expect(loadPendingNoteDraftDeletions('b')).toEqual([]);
   } finally { view.unmount(); alert.mockRestore(); }
 });
+
+test('pressing delete stops the nested card press before opening confirmation', async () => {
+  jest.mocked(fetchNoteDrafts).mockResolvedValue([draft('nested-delete')]);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const stopPropagation = jest.fn();
+  const view = render(<DraftsScreen />);
+  try {
+    await screen.findByText('nested-delete');
+    fireEvent.press(screen.getByLabelText('notes.drafts.deleteLabel'), { stopPropagation });
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(mockRouter.push).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalled();
+  } finally { view.unmount(); alert.mockRestore(); }
+});

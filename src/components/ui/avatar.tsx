@@ -1,4 +1,4 @@
-import { useRef, useId, useMemo, useState } from 'react';
+import { useEffect, useRef, useId, useMemo, useState } from 'react';
 import { View, StyleSheet, type ImageSourcePropType } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -94,6 +94,9 @@ export const Avatar: React.FC<AvatarProps> = ({
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const currentUriRef = useRef(uri);
   currentUriRef.current = uri;
+  useEffect(() => {
+    setFailedUri(null);
+  }, [uri]);
   // frameSize = 整体占位(框铺满它);photoSize = 里面的照片(填内孔)。紧凑模式框=size×1.2、照片=size×0.75;
   // 默认外扩框=size×1.6、照片=size。非会员无框时 photoSize=size。
   const frameSize =

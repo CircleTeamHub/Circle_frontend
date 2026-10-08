@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +31,9 @@ export function CircleAvatar({
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const currentUriRef = useRef(uri);
   currentUriRef.current = uri;
+  useEffect(() => {
+    setFailedUri(null);
+  }, [uri]);
   const imageUri = uri ?? undefined;
   const hasImage = Boolean(imageUri && imageUri.length > 0) && failedUri !== uri;
   // overflow:hidden 把方形图片 / 渐变裁成圆角形状。

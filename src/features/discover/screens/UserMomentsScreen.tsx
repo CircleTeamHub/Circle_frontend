@@ -207,13 +207,12 @@ export default function UserMomentsScreen() {
     ) : null;
 
   const handleEndReached = useCallback(() => {
-    // A failed request leaves the list shorter than the viewport, so
-    // FlatList may emit onEndReached on every render. Wait for an explicit
-    // pull-to-refresh before trying the failed page again.
-    if (!loading && hasMore && !error) {
+    // loadMore tracks pagination failures separately, so a refresh error must
+    // not block a still-valid next cursor from the last successful page.
+    if (!loading && hasMore) {
       void loadMore();
     }
-  }, [error, loading, hasMore, loadMore]);
+  }, [loading, hasMore, loadMore]);
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>

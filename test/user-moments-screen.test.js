@@ -18,6 +18,8 @@ test('UserMomentsScreen wires header + album list + pagination', () => {
   assert.match(src, /signature=\{signature\}/);
   assert.match(src, /moment\/\[id\]/); // 跳详情复用现有路由
   assert.match(src, /discover\.noMoments/); // 空态复用现有文案
+  const endReached = /const handleEndReached[\s\S]*?\n  }, \[[^\]]*\]\);/.exec(src)?.[0] ?? '';
+  assert.doesNotMatch(endReached, /!error/, 'a failed refresh must not block the still-valid next cursor');
 });
 
 test('UserMomentsScreen resolves non-UUID route ids before fetching author moments', () => {

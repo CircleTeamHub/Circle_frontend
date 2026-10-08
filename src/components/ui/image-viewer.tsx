@@ -110,10 +110,11 @@ export function ImageViewer({
     ]);
   }, [handleSave, t]);
 
-  const handleMomentumEnd = useCallback(
+  const updateVisibleIndex = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const next = Math.round(event.nativeEvent.contentOffset.x / width);
-      setIndex(Math.max(0, Math.min(images.length - 1, next)));
+      const clamped = Math.max(0, Math.min(images.length - 1, next));
+      setIndex((current) => current === clamped ? current : clamped);
     },
     [images.length, width],
   );
@@ -148,7 +149,9 @@ export function ImageViewer({
             offset: width * i,
             index: i,
           })}
-          onMomentumScrollEnd={handleMomentumEnd}
+          onScroll={updateVisibleIndex}
+          scrollEventThrottle={16}
+          onMomentumScrollEnd={updateVisibleIndex}
           renderItem={({ item, index: itemIndex }) => (
             Math.abs(itemIndex - index) <= 1 ? (
               <ZoomableImage

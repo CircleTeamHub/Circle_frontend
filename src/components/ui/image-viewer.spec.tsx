@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { FlatList } from 'react-native';
 import { ImageViewer } from './image-viewer';
 
 jest.mock('@/components/ui/zoomable-image', () => {
@@ -69,4 +70,21 @@ test('hidden viewers do not mount zoomable image resources', () => {
   );
 
   expect(queryByTestId('zoomable-image')).toBeNull();
+});
+
+test('starts rendering a nonadjacent destination while a fling is still in progress', () => {
+  const view = render(
+    <ImageViewer
+      images={['https://example.test/0.jpg', 'https://example.test/1.jpg', 'https://example.test/2.jpg']}
+      visible
+      onClose={jest.fn()}
+    />,
+  );
+  const list = view.UNSAFE_getByType(FlatList);
+
+  fireEvent.scroll(list, {
+    nativeEvent: { contentOffset: { x: 1500, y: 0 } },
+  });
+
+  expect(screen.getAllByTestId('zoomable-image').some((image) => image.props.uri === 'https://example.test/2.jpg')).toBe(true);
 });

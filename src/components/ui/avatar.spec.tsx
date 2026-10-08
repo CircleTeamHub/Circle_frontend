@@ -27,3 +27,15 @@ test.each([Avatar, CircleAvatar, GroupChatAvatar])('ignores an old avatar reques
   view.rerender(<Component uri="https://image.test/c" size={40} />);
   expect(screen.getByTestId('avatar-image').props.source.uri).toBe('https://image.test/c');
 });
+
+test.each([Avatar, CircleAvatar, GroupChatAvatar])('retries a previously failed URI after another source was active', (Component) => {
+  const view = render(<Component uri="https://image.test/a" size={40} />);
+  act(() => screen.getByTestId('avatar-image').props.onError());
+  expect(screen.queryByTestId('avatar-image')).toBeNull();
+
+  view.rerender(<Component uri="https://image.test/b" size={40} />);
+  expect(screen.getByTestId('avatar-image').props.source.uri).toBe('https://image.test/b');
+  view.rerender(<Component uri="https://image.test/a" size={40} />);
+
+  expect(screen.getByTestId('avatar-image').props.source.uri).toBe('https://image.test/a');
+});

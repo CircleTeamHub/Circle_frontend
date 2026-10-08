@@ -43,7 +43,6 @@ export function CampaignAdBanner() {
     }, 1_000);
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        if (isCurrent()) setResult(null);
         void refresh();
       }
     });
