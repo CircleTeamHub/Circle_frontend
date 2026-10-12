@@ -542,19 +542,10 @@ export default function UserProfileScreen() {
         INFO_ROW_IDS.filter((id) => id !== 'description' || descriptionValue)
       : NON_FRIEND_INFO_ROW_IDS;
   const showProfileActions = !isCurrentUser;
-  const friendStatusLabelKey = friendStatusLoadError
-    ? 'userProfile.relationshipStatus.unavailable'
-    : friendStatus === 'NONE'
-      ? 'userProfile.relationshipStatus.notAdded'
-      : friendStatus === 'PENDING_SENT'
-        ? 'userProfile.relationshipStatus.requestSent'
-        : friendStatus === 'PENDING_RECEIVED'
-          ? 'userProfile.relationshipStatus.requestReceived'
-          : friendStatus === 'ACCEPTED'
-            ? 'userProfile.relationshipStatus.accepted'
-            : friendStatus === 'BLOCKED'
-              ? 'userProfile.relationshipStatus.blocked'
-              : null;
+  // 已是好友时不再展示「已添加好友」标签；只有服务端明确返回 NONE，
+  // 才提示对方尚未添加，并用感叹号保留清晰的关系提醒。
+  const showNotAddedFriendNotice =
+    !isCurrentUser && !friendStatusLoadError && friendStatus === 'NONE';
   const canSendFriendRequest = canOpenSendFriendRequest({
     isCurrentUser,
     profileId,
@@ -916,10 +907,10 @@ export default function UserProfileScreen() {
       },
       friendStatusChip: {
         backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
+        borderColor: colors.warning,
       },
       friendStatusText: {
-        color: colors.textSecondary,
+        color: colors.warning,
         ...Typography.caption,
         fontWeight: '600' as const,
       },
@@ -1040,13 +1031,18 @@ export default function UserProfileScreen() {
               style={d.name}
             />
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
-            {!isCurrentUser && friendStatusLabelKey ? (
+            {showNotAddedFriendNotice ? (
               <View
                 style={[s.metaChip, d.friendStatusChip]}
                 accessibilityRole="text"
               >
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={14}
+                  color={colors.warning}
+                />
                 <Text style={[d.metaChipText, d.friendStatusText]}>
-                  {t(friendStatusLabelKey)}
+                  {t('userProfile.relationshipStatus.notAdded')}
                 </Text>
               </View>
             ) : null}

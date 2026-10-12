@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -36,7 +36,11 @@ const s = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 100,
-    gap: Spacing.lg,
+  },
+  itemSeparator: {
+    height: 1,
+    marginLeft: 50,
+    marginVertical: Spacing.md,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -57,6 +61,11 @@ const s = StyleSheet.create({
     ...Typography.caption,
     fontWeight: '600',
   },
+});
+
+const ItemSeparator = memo(function ItemSeparator() {
+  const { colors } = useTheme();
+  return <View style={[s.itemSeparator, { backgroundColor: colors.divider }]} />;
 });
 
 export const MomentsFeed: React.FC = () => {
@@ -323,6 +332,7 @@ export const MomentsFeed: React.FC = () => {
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={ListEmpty}
         ListFooterComponent={ListFooter}
+        ItemSeparatorComponent={ItemSeparator}
         contentContainerStyle={s.listContent}
         refreshControl={
           <RefreshControl

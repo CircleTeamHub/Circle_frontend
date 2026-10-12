@@ -76,13 +76,15 @@ export const darkColors: ThemeColors = {
 export const lightColors: ThemeColors = {
   background: '#F8F9FA',
   surface: '#FFFFFF',
-  pinnedSurface: '#E8E8E8',
+  // 微信风格的浅灰置顶底色：保留层次，但不做明显的彩色偏移。
+  pinnedSurface: '#F0F0F0',
   pinnedTextSecondary: '#505050',
-  surfaceBorder: '#E5E7EB',
+  // 浅色列表与白色卡片之间需要明确层级，避免分割线在浅灰背景上融掉。
+  surfaceBorder: '#D9DEE7',
   // iOS 关闭态会收缩 trackColor，轨道直接显示在白色滑块旁；#6B7280
   // 与白色滑块的对比度约为 4.83:1，避免浅色页面上再次融掉。
   switchOffTrack: '#6B7280',
-  divider: '#F0F0F0',
+  divider: '#D2D8E2',
   primary: PRIMARY,
   // 浅色底对比度本就够，强调图标不另开一支色。
   iconAccent: PRIMARY,

@@ -13,12 +13,18 @@ test('tabs keep per-tab stack state (popToTopOnBlur must stay off)', () => {
   assert.doesNotMatch(layout, /popToTopOnBlur/);
 });
 
-test('clicking 我的 resets the profile stack to its index screen', () => {
+test('clicking 我的 pops the profile stack without an invalid nested reset', () => {
   const layout = read('app/(tabs)/_layout.tsx');
-  // 个人中心内打开商城等子页后，重新点击 tab 不能把子页状态带回来。
+  // 个人中心内打开商城等子页后，重新点击 tab 不能把子页状态带回来；
+  // tabPress listener 已经针对真实的嵌套栈执行 popToTop，不能再向未知的
+  // `index` 路由发 CommonActions.reset，否则 React Navigation 会报未处理 action。
   assert.match(
     layout,
-    /route\.name === 'profile' && nested\?\.key[\s\S]*?CommonActions\.reset\(\{[\s\S]*?routes: \[\{ name: 'index' \}\]/,
+    /nested\?\.key && \(nested\.index \?\? 0\) > 0[\s\S]*?StackActions\.popToTop\(\)[\s\S]*?target: nested\.key/,
+  );
+  assert.doesNotMatch(
+    layout,
+    /CommonActions\.reset\(\{[\s\S]*?routes: \[\{ name: 'index' \}\]/,
   );
 });
 

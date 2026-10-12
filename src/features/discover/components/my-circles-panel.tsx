@@ -50,10 +50,16 @@ const s = StyleSheet.create({
   listContent: {
     marginTop: Spacing.sm,
   },
+  listSurface: {
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
   },
   body: {
@@ -193,6 +199,10 @@ export const MyCirclesPanel: React.FC = () => {
         ...Typography.caption,
         fontWeight: "600" as const,
       },
+      listSurface: {
+        backgroundColor: colors.surface,
+        borderColor: colors.surfaceBorder,
+      },
     }),
     [colors],
   );
@@ -252,7 +262,7 @@ export const MyCirclesPanel: React.FC = () => {
           <Text style={d.emptyText}>{t('discover.noCircles')}</Text>
         </View>
       ) : (
-        <View style={s.listContent}>
+        <View style={[s.listContent, s.listSurface, d.listSurface]}>
           {myCirclesError ? (
             <View style={s.emptyContainer}>
               <Text style={d.emptyText}>{myCirclesError}</Text>
