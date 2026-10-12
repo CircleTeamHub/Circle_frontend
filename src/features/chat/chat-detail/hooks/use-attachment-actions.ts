@@ -13,6 +13,8 @@ import { type UserCollection } from '@/services/api/collections';
 import { resolveCollectionSendPlan } from '@/features/chat/utils/message-collection';
 import { logChatSendFailure } from '@/features/chat/chat-detail/helpers';
 import { type TFunction } from 'i18next';
+import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
+import { withFreshNoteSourceStatus } from '@/features/chat/utils/note-card-fresh-status';
 
 export interface AttachmentActionsParams {
   t: TFunction<"translation", undefined>;
@@ -169,7 +171,7 @@ export function useAttachmentActions({
   );
 
   const handlePickFavorite = useCallback(
-    async (item: UserCollection) => {
+    async (item: UserCollection, skipStatusWarning = false) => {
       if (!sourceID || isPreviewMode) return;
 
       // 收藏的是啥就原样发啥：能按原类型还原的（文本/语音/笔记/名片）忠实重建，
@@ -194,6 +196,29 @@ export function useAttachmentActions({
             }),
           );
         }
+        return;
+      }
+
+      // 收藏里的笔记卡片是收藏时的状态快照，提醒前按来源实时状态重取。
+      const freshNoteCard =
+        plan.kind === 'note' && !skipStatusWarning
+          ? ((await withFreshNoteSourceStatus([plan.noteCard]))[0] ?? plan.noteCard)
+          : null;
+      if (!mountedRef.current) return;
+      if (freshNoteCard && shouldWarnNoteWorkStatus(freshNoteCard)) {
+        Alert.alert(
+          t('chat.forward.workStatusWarningTitle', { defaultValue: '订单状态可能变化' }),
+          t('chat.forward.workStatusWarning', {
+            defaultValue: '这条笔记标记为打烊或已下架，确认后仍会继续发送。',
+          }),
+          [
+            { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+            {
+              text: t('common.send', { defaultValue: '继续发送' }),
+              onPress: () => void handlePickFavorite(item, true),
+            },
+          ],
+        );
         return;
       }
 

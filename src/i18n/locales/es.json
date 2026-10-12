@@ -315,6 +315,7 @@
       "saveFailedHint": "Inténtalo de nuevo más tarde",
       "noteCollected": "Añadida a mis notas",
       "noteAlreadyCollected": "Ya está en mis notas",
+      "noteOwnCannotCollect": "No puedes guardar una nota que tú creaste",
       "noteCollectedHint": "Puedes verla en Mis notas",
       "revoke": "Retirar",
       "revokeFailed": "No se pudo retirar",
@@ -339,7 +340,9 @@
       "failed": "No se pudo reenviar",
       "failedRetry": "Inténtalo de nuevo más tarde",
       "locationWithDetail": "[Ubicación] {{detail}}",
-      "unsupported": "Este tipo de mensaje aún no se puede reenviar"
+      "unsupported": "Este tipo de mensaje aún no se puede reenviar",
+      "workStatusWarningTitle": "El estado del pedido puede haber cambiado",
+      "workStatusWarning": "Esta nota está cerrada o retirada. Aun así puedes continuar enviándola."
     },
     "snackbarNewMessage": "Mensaje nuevo",
     "snackbarPreviewFallback": "[Mensaje]",
@@ -533,7 +536,24 @@
       "ownerSection": "Propietario",
       "joinMethods": "Cómo se une la gente",
       "memberPermissions": "Permisos de los miembros",
-      "pickNewOwner": "Elegir al nuevo propietario"
+      "pickNewOwner": "Elegir al nuevo propietario",
+      "noteManagement": "Gestión de notas",
+      "noteManagementHint": "Solo se muestran las notas de lugares publicadas; el estado orienta al coordinador y puedes retirarlas aquí.",
+      "noteRestricted": "Solo el propietario del grupo puede gestionar las notas",
+      "bindNote": "Asociar mi nota",
+      "bindNoteHint": "Toca una tarjeta para asociarla a este grupo",
+      "noteStatusLabel": "Estado del lugar",
+      "noSourceNotes": "No hay notas sin asociar",
+      "noteWorking": "En servicio",
+      "noteClosed": "Cerrado",
+      "noteUnset": "Sin definir",
+      "noteClearStatus": "Quitar estado",
+      "noteStatusAction": "Cambiar estado de la nota",
+      "noteUnlist": "Retirar",
+      "noteRelist": "Volver a publicar",
+      "noteUnbindTitle": "¿Quitar la asociación con el grupo de origen?",
+      "noteUnbindHint": "La nota dejará de aparecer en la gestión de notas de este grupo.",
+      "noteUnbind": "Quitar asociación"
     },
     "groupEvent": {
       "system": "Sistema",
@@ -749,7 +769,12 @@
       },
       "imageCount": "{{count}} imágenes",
       "videoCount": "{{count}} vídeos",
-      "includes": "Incluye: {{segments}}"
+      "includes": "Incluye: {{segments}}",
+      "workStatus": {
+        "working": "En servicio",
+        "closed": "Cerrado",
+        "unlisted": "Retirado; el estado puede haber cambiado"
+      }
     },
     "voice": {
       "cancelTip": "Suelta para cancelar",
@@ -1019,6 +1044,7 @@
       "cardPickerLoadFailedMessage": "No se pudo cargar la lista. Inténtalo de nuevo.",
       "addContact": "Elegir contacto",
       "addGroup": "Elegir grupo",
+      "sourceGroupCardLocked": "La tarjeta del grupo de origen es fija",
       "mediaUploadFailedTitle": "Error al subir",
       "mediaUploadFailedMessage": "Inténtalo de nuevo",
       "uploadAudio": "Subir audio",
@@ -1027,9 +1053,9 @@
       "audioRecording": "Grabando, toca para detener",
       "waitForMediaTitle": "Termina la acción actual primero",
       "waitForMediaMessage": "Detén la grabación o espera a que termine la carga o el guardado antes de volver.",
-      "pendingSubmitMessage": "El resultado del guardado no está confirmado. La edición está pausada. Reintenta el guardado original o vuelve atrás para conservarlo en Borradores y reintentar después.",
+      "pendingSubmitMessage": "Estamos confirmando el resultado del guardado. La edición está pausada; el contenido se guardó en un borrador local. Reintenta para confirmar el guardado original.",
       "pendingSubmitStorageFailed": "No se pudo conservar el contenido en este dispositivo y no se ha enviado. Comprueba el espacio disponible y reintenta.",
-      "pendingSubmitConflict": "El servidor tiene un contenido diferente. Tu contenido local sigue en Borradores. Consulta la nota guardada antes de decidir cómo combinarlos; este borrador se conservará.",
+      "pendingSubmitConflict": "Estamos confirmando el resultado del guardado. La edición está pausada; el contenido se guardó en un borrador local. Reintenta para confirmar el guardado original.",
       "openCommittedNote": "Ver nota guardada",
       "audioDuration": "{{seconds}} s",
       "audioPickerUnavailableTitle": "Selección de audio no disponible",
@@ -1050,6 +1076,7 @@
       "titleRequired": "Introduce un título",
       "titleHint": "Título obligatorio, hasta {{max}} caracteres",
       "textCount": "Longitud del texto {{count}} / {{max}}",
+      "resizeTextBlock": "Ajustar altura del bloque de texto",
       "textTooLong": "El texto, incluidos los saltos de línea entre párrafos, admite hasta {{max}} caracteres; tienes {{count}}. Se ha conservado el texto. Acórtalo antes de guardar.",
       "tooManyParagraphs": "El texto admite hasta {{max}} párrafos. Se ha conservado el texto. Combina algunos párrafos antes de guardar.",
       "titlePlaceholder": "Título",
@@ -1190,12 +1217,24 @@
     },
     "list": {
       "fromSource": "De {{name}}",
+      "statusWorking": "En servicio",
+      "statusClosed": "Cerrado",
+      "statusUnlisted": "Retirado; el estado puede haber cambiado",
       "remark": "Comentario: {{text}}",
       "openSenderChat": "Chatear con {{name}}",
       "openGroupChat": "Abrir el chat del grupo {{name}}"
     },
     "loadFailed": "No se pudieron cargar las notas. Revisa tu conexión e inténtalo de nuevo",
+    "collect": {
+      "chooseGroup": "¿A qué grupo de notas añadirla?",
+      "editTitle": "Editar título guardado",
+      "groupHint": "Elige un grupo primero; después podrás editar el título.",
+      "ungrouped": "Sin grupo",
+      "titleHint": "Puedes editar el título predeterminado antes de guardar tu copia.",
+      "titleLabel": "Título guardado"
+    },
     "shareToChat": {
+      "workStatusWarning": "El pedido puede estar cerrado o retirado. Aun así puedes continuar enviándolo.",
       "title": "Compartir con un amigo o grupo",
       "confirmTitle": "Enviar nota",
       "confirmMessage": "¿Enviar «{{title}}» a {{name}}?",
@@ -2784,6 +2823,7 @@
     "close": "Cerrar",
     "confirm": "Confirmar",
     "delete": "Eliminar",
+    "remove": "Quitar",
     "retry": "Reintentar",
     "send": "Enviar",
     "sending": "Enviando…",

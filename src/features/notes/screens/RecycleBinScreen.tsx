@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -19,11 +19,6 @@ import { fetchDeletedNotes, restoreNote } from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const keyExtractor = (item: NoteSummary) => item.id;
-
-const ItemSeparator = memo(function ItemSeparator() {
-  const { colors } = useTheme();
-  return <View style={[s.divider, { backgroundColor: colors.divider }]} />;
-});
 
 /**
  * 回收站（FE#92）：已软删笔记列表 + 恢复。与 UnlistedNotesScreen 同構——
@@ -170,10 +165,10 @@ export default function RecycleBinScreen() {
         data={notes}
         keyExtractor={keyExtractor}
         renderItem={renderNote}
-        ItemSeparatorComponent={ItemSeparator}
         contentContainerStyle={{
           paddingTop: Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
+          gap: Spacing.sm,
         }}
         showsVerticalScrollIndicator={false}
         {...keyboardDismissOnDragProps}
@@ -247,7 +242,6 @@ const s = StyleSheet.create({
   },
   pageTitle: { ...Typography.h1, marginTop: Spacing.xs },
   hint: { ...Typography.small, marginTop: Spacing.xs },
-  divider: { height: StyleSheet.hairlineWidth },
   emptyWrap: { alignItems: 'center', gap: Spacing.md },
   emptyText: {
     textAlign: 'center',

@@ -3,8 +3,10 @@ import type { ReactNode } from 'react';
 import {
   Animated,
   Modal,
+  PanResponder,
   Pressable,
   StyleSheet,
+  View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -19,7 +21,15 @@ interface BottomSheetModalProps {
   sheetStyle?: StyleProp<ViewStyle>;
   closeOnBackdropPress?: boolean;
   statusBarTranslucent?: boolean;
+  avoidKeyboard?: boolean;
 }
+
+const DISMISS_DISTANCE = 84;
+const DISMISS_VELOCITY = 1.1;
+const DISMISS_DURATION = 160;
+// 下滑关闭只认从面板顶部（拖拽条 + 标题行）开始的手势。面板正文里常有
+// ScrollView / 长列表，从正文开始的下拉必须留给它们滚动，不能把整个面板关掉。
+const DISMISS_HANDLE_ZONE = 56;
 
 const s = StyleSheet.create({
   backdrop: {
@@ -45,10 +55,71 @@ export function BottomSheetModal({
   sheetStyle,
   closeOnBackdropPress = true,
   statusBarTranslucent = true,
+  avoidKeyboard = true,
 }: BottomSheetModalProps) {
   const progress = useRef(new Animated.Value(1)).current;
+  const dragY = useRef(new Animated.Value(0)).current;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  // 面板上沿在 Modal 根坐标系里的位置；Modal 铺满窗口，与手势的 y0 同一坐标系。
+  const sheetTopRef = useRef<number | null>(null);
+  // 本次手势是否从顶部区域开始。面板根节点为了挡住蒙层点击会在按下时就成为
+  // 响应者，所以移动/松手阶段也必须按起点判断，不能只靠「移动时是否接管」。
+  const dragAllowedRef = useRef(false);
+  const startsInHandleZone = (y0: number) => {
+    const sheetTop = sheetTopRef.current;
+    return sheetTop !== null && y0 - sheetTop <= DISMISS_HANDLE_ZONE;
+  };
+
+  const pan = useRef(
+    PanResponder.create({
+      // The sheet already owns the initial responder to keep the backdrop from
+      // closing when a child is pressed. Only a clearly downward vertical move
+      // that starts in the header zone is treated as a dismiss gesture.
+      onMoveShouldSetPanResponder: (_event, gesture) =>
+        startsInHandleZone(gesture.y0) &&
+        gesture.dy > 6 &&
+        Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderGrant: (_event, gesture) => {
+        dragAllowedRef.current = startsInHandleZone(gesture.y0);
+      },
+      onPanResponderMove: (_event, gesture) => {
+        if (!dragAllowedRef.current) return;
+        dragY.setValue(Math.max(0, gesture.dy));
+      },
+      onPanResponderRelease: (_event, gesture) => {
+        if (!dragAllowedRef.current) return;
+        dragAllowedRef.current = false;
+        const shouldDismiss =
+          gesture.dy > DISMISS_DISTANCE || gesture.vy > DISMISS_VELOCITY;
+        if (shouldDismiss) {
+          Animated.timing(dragY, {
+            toValue: 260,
+            duration: DISMISS_DURATION,
+            useNativeDriver: true,
+          }).start(() => {
+            dragY.setValue(0);
+            onCloseRef.current();
+          });
+          return;
+        }
+        Animated.spring(dragY, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        dragAllowedRef.current = false;
+        Animated.spring(dragY, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    }),
+  ).current;
 
   useEffect(() => {
+    dragY.setValue(0);
     if (!visible) return;
 
     progress.setValue(1);
@@ -57,12 +128,33 @@ export function BottomSheetModal({
       duration: 180,
       useNativeDriver: true,
     }).start();
-  }, [progress, visible]);
+  }, [dragY, progress, visible]);
 
   const translateY = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 36],
   });
+  const totalTranslateY = Animated.add(translateY, dragY);
+
+  const sheetContent = (
+    <Animated.View
+      {...pan.panHandlers}
+      testID="bottom-sheet-content"
+      onLayout={(event) => {
+        sheetTopRef.current = event.nativeEvent.layout.y;
+      }}
+      onStartShouldSetResponder={() => true}
+      style={[
+        s.content,
+        sheetStyle,
+        {
+          transform: [{ translateY: totalTranslateY }],
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
 
   return (
     <Modal
@@ -78,20 +170,13 @@ export function BottomSheetModal({
       >
         {/* 面板里有输入框时，键盘弹起把整个面板顶上去；蒙层仍铺满全屏。
             各个 sheet 不要再自己套避让容器，嵌套会按父容器坐标重复算。 */}
-        <KeyboardAvoidingContainer style={s.keyboardArea}>
-          <Animated.View
-            onStartShouldSetResponder={() => true}
-            style={[
-              s.content,
-              sheetStyle,
-              {
-                transform: [{ translateY }],
-              },
-            ]}
-          >
-            {children}
-          </Animated.View>
-        </KeyboardAvoidingContainer>
+        {avoidKeyboard ? (
+          <KeyboardAvoidingContainer style={s.keyboardArea}>
+            {sheetContent}
+          </KeyboardAvoidingContainer>
+        ) : (
+          <View style={s.keyboardArea}>{sheetContent}</View>
+        )}
       </Pressable>
     </Modal>
   );

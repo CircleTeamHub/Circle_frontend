@@ -184,6 +184,14 @@ function loadRealtimeHarness(options = {}) {
           return {
             useMomentsFeedSignalStore: stubStore({ bump: () => {} }),
           };
+        case '@/features/notes/store/use-note-status-signal-store':
+          return {
+            useNoteStatusSignalStore: stubStore({ bump: () => {} }),
+          };
+        case '@/chat-core/store':
+          return {
+            useChatStore: stubStore({ applyNoteSourceStatus: () => {} }),
+          };
         case '@/features/discover/store/use-circle-notification-store':
           return circleNotifications;
         case '@/features/call/store/use-call-store':

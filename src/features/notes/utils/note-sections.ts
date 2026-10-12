@@ -173,6 +173,28 @@ export function getNoteViewerImages(sections: NoteSections) {
   );
 }
 
+/**
+ * Return deduplicated, signed video URLs for direct media-library export.
+ * Inline (including nested) video blocks count too, same as the image viewer,
+ * otherwise a note whose only video lives in the body exports nothing.
+ */
+export function getNoteVideoItems(sections: NoteSections) {
+  const seen = new Set<string>();
+  return [
+    ...sections.media.items,
+    ...sections.showcase.items,
+    ...getNoteInlineMediaItems(sections.text.contentJson),
+  ].filter(
+    (item): item is StructuredNoteMediaItem & { url: string } => {
+      if (item.type !== 'VIDEO' || !item.url) return false;
+      const key = item.objectKey || item.url;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    },
+  );
+}
+
 function normalizeItems(items: unknown): StructuredNoteMediaItem[] {
   if (!Array.isArray(items)) return [];
   return items.flatMap((item) => {

@@ -34,6 +34,8 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
+import { withFreshNoteSourceStatus } from '@/features/chat/utils/note-card-fresh-status';
 
 type PendingForward = {
   message: ChatMessage;
@@ -239,6 +241,8 @@ export default function ForwardPickerScreen() {
   const [query, setQuery] = useState('');
   const [sendingID, setSendingID] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  // 转发前的来源状态重取进行中；防止连点弹出多个确认框。
+  const statusCheckRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -261,6 +265,44 @@ export default function ForwardPickerScreen() {
       conversationDisplayName(conversation).toLowerCase().includes(keyword),
     );
   }, [conversations, query]);
+
+  /**
+   * 卡片上的开工/打烊/下架是消息发出时的快照；转发前按来源实时状态重取，
+   * 提醒才对得上老板当前的设置。取不到时退回快照，不阻断转发。
+   */
+  async function confirmForward(conversation: ChatConversationDto) {
+    const noteCard = pending?.message.noteCard;
+    if (pending?.message.type !== 'note-card' || !noteCard) {
+      void handleForward(conversation);
+      return;
+    }
+    if (statusCheckRef.current) return;
+    statusCheckRef.current = true;
+    let freshCard = noteCard;
+    try {
+      [freshCard = noteCard] = await withFreshNoteSourceStatus([noteCard]);
+    } finally {
+      statusCheckRef.current = false;
+    }
+    if (!mountedRef.current) return;
+    if (!shouldWarnNoteWorkStatus(freshCard)) {
+      void handleForward(conversation);
+      return;
+    }
+    Alert.alert(
+      t('chat.forward.workStatusWarningTitle', { defaultValue: '订单状态可能变化' }),
+      t('chat.forward.workStatusWarning', {
+        defaultValue: '这条笔记标记为打烊或已下架，确认后仍会继续转发。',
+      }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('common.send', { defaultValue: '继续转发' }),
+          onPress: () => void handleForward(conversation),
+        },
+      ],
+    );
+  }
 
   async function handleForward(conversation: ChatConversationDto) {
     if (!pending || sendingID) return;
@@ -359,9 +401,7 @@ export default function ForwardPickerScreen() {
             <Pressable
               style={[s.row, d.row]}
               disabled={Boolean(sendingID)}
-              onPress={() => {
-                void handleForward(item);
-              }}
+              onPress={() => void confirmForward(item)}
             >
               {item.type === 'GROUP' || item.type === 'TEMP' ? (
                 <GroupChatAvatar

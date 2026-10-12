@@ -160,7 +160,9 @@ test('ShareNoteSheet sends every selected note card to each selected conversatio
   assert.match(sheet, /payloads: NoteCardData\[\] \| null/);
   assert.match(sheet, /const tasks = isRetry\s*\? retryTasks\s*:\s*selectedConversations\.flatMap/);
   assert.match(sheet, /targets\.map\(\(payload\) => \(\{ conversationId: conversation\.id, payload \}\)\)/);
-  assert.match(sheet, /for \(const task of tasks\)/);
+  // 发送的是确认前按来源实时状态重取过的任务列表。
+  assert.match(sheet, /for \(const task of freshTasks\)/);
+  assert.match(sheet, /withFreshNoteSourceStatus\(\s*tasks\.map\(\(task\) => task\.payload\)/);
   assert.match(sheet, /conversationId: task\.conversationId/);
   assert.match(sheet, /payload: task\.payload/);
   assert.match(sheet, /failures\.push\(task\)/);

@@ -250,6 +250,59 @@ test('buildNoteCollectSource uses the conversation peer as the card for private 
   });
 });
 
+test('buildNoteCollectSource prefers the note card snapshots on every forwarding hop', () => {
+  const { buildNoteCollectSource } = loadTsModule(
+    'src/features/chat/utils/message-collection.ts',
+  );
+
+  const source = buildNoteCollectSource(
+    {
+      id: 'msg-note-12',
+      type: 'note-card',
+      outgoing: false,
+      senderID: 'relay-current',
+      senderName: 'Current relay',
+      noteCard: {
+        noteId: 'copy-12',
+        title: 'T',
+        personalCardSnapshot: {
+          id: 'relay-previous',
+          name: 'Previous relay',
+          faceURL: 'https://cdn.example.com/previous.png',
+        },
+        sourceGroupCardSnapshot: {
+          id: 'boss-group',
+          name: 'Boss group',
+          faceURL: 'https://cdn.example.com/boss.png',
+        },
+      },
+    },
+    {
+      conversationID: 'sg-new-group',
+      conversationTitle: 'New relay group',
+      sourceID: 'new-group',
+      conversationType: 'group',
+      conversationAvatarUrl: 'https://cdn.example.com/new.png',
+    },
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(source)), {
+    conversationType: 'group',
+    conversationID: 'sg-new-group',
+    clientMsgID: 'msg-note-12',
+    sender: {
+      id: 'relay-previous',
+      name: 'Previous relay',
+      faceURL: 'https://cdn.example.com/previous.png',
+    },
+    group: {
+      id: 'boss-group',
+      name: 'Boss group',
+      faceURL: 'https://cdn.example.com/boss.png',
+    },
+  });
+});
+
 test('buildNoteCollectSource falls back to the current user for own group messages and drops non-http faceURL', () => {
   const { buildNoteCollectSource } = loadTsModule(
     'src/features/chat/utils/message-collection.ts',

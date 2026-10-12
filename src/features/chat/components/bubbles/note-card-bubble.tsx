@@ -65,6 +65,11 @@ const sNote = StyleSheet.create({
   },
   title: { ...Typography.body, fontWeight: '600' },
   preview: { ...Typography.small, lineHeight: 17 },
+  workStatus: {
+    ...Typography.tiny,
+    fontWeight: '700',
+    marginTop: 5,
+  },
   meta: {
     ...Typography.tinyRegular,
     marginTop: 6,
@@ -203,6 +208,28 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
                 numberOfLines={2}
               >
                 {note.contentPreview}
+              </Text>
+            ) : null}
+            {note.publicationStatus === 'UNLISTED' ||
+            note.publicationStatus === 'DELETED' ? (
+              <Text style={[sNote.workStatus, { color: colors.warning }]}>
+                {t('chat.noteCard.workStatus.unlisted', { defaultValue: '已下架，状态可能变化' })}
+              </Text>
+            ) : note.workStatus === 'WORKING' || note.workStatus === 'CLOSED' ? (
+              <Text
+                style={[
+                  sNote.workStatus,
+                  {
+                    color:
+                      note.workStatus === 'WORKING'
+                        ? NOTE_CARD_ACTIVE_GREEN
+                        : colors.warning,
+                  },
+                ]}
+              >
+                {note.workStatus === 'WORKING'
+                  ? t('chat.noteCard.workStatus.working', { defaultValue: '开工' })
+                  : t('chat.noteCard.workStatus.closed', { defaultValue: '打烊' })}
               </Text>
             ) : null}
           </View>

@@ -30,6 +30,8 @@ import { getChatSendErrorMessage, reportChatSendFailure } from '@/chat-core/send
 import { devWarn } from '@/utils/dev-log';
 import { type TFunction } from 'i18next';
 import { type AuthUser } from '@/stores/authStore';
+import { Alert } from 'react-native';
+import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
 
 export interface NoteBatchSendParams {
   t: TFunction<"translation", undefined>;
@@ -226,15 +228,36 @@ export function useNoteBatchSend({
       if (!sourceID || isPreviewMode || notes.length === 0) {
         return Promise.resolve();
       }
-      const previous = noteBatchQueueRef.current;
-      const run = previous
-        .catch(() => undefined)
-        .then(() => runNoteBatchSend(notes, options));
-      // 队列尾永不 reject,后续批次才接得上。
-      noteBatchQueueRef.current = run.catch(() => undefined);
-      return run;
+      const enqueue = () => {
+        const previous = noteBatchQueueRef.current;
+        const run = previous
+          .catch(() => undefined)
+          .then(() => runNoteBatchSend(notes, options));
+        // 队列尾永不 reject,后续批次才接得上。
+        noteBatchQueueRef.current = run.catch(() => undefined);
+        return run;
+      };
+      if (notes.some((note) => shouldWarnNoteWorkStatus(note))) {
+        Alert.alert(
+          t('chat.forward.workStatusWarningTitle', {
+            defaultValue: '订单状态可能变化',
+          }),
+          t('chat.forward.workStatusWarning', {
+            defaultValue: '这批笔记中有订单标记为打烊或已下架，确认后仍会继续发送。',
+          }),
+          [
+            { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+            {
+              text: t('common.send', { defaultValue: '继续发送' }),
+              onPress: () => void enqueue(),
+            },
+          ],
+        );
+        return Promise.resolve();
+      }
+      return enqueue();
     },
-    [isPreviewMode, runNoteBatchSend, sourceID],
+    [isPreviewMode, runNoteBatchSend, sourceID, t],
   );
 
   return {

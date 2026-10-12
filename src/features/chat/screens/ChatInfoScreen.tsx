@@ -78,6 +78,7 @@ import {
   getGroupLogHref,
   getGroupManageHref,
   getGroupMemberSearchHref,
+  getNoteManagementHref,
   getRecommendFriendHref,
   getUserProfileHref,
 } from '@/features/user/utils/routes';
@@ -364,6 +365,9 @@ export default function ChatInfoScreen() {
   const inviteLinkCopyInFlightRef = useRef(false);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
+  // 子页面返回时保留当前群资料，后台刷新完成后再替换，避免 focus effect
+  // 先清空成员/群资料导致整页闪白和滚动位置抖动。
+  const groupDataKeyRef = useRef<string | null>(null);
   const actionRequestTokenRef = useRef({
     pin: 0,
     mute: 0,
@@ -549,6 +553,15 @@ export default function ChatInfoScreen() {
     (isStandaloneGroup && allowsMemberInvites(groupPolicyActor));
   const resolvedConversationID = activeConversation?.id ?? '';
   currentConversationIDRef.current = resolvedConversationID;
+  // 只用路由中的稳定身份做缓存键。圈子会话 DTO 首次补齐时不应被当成
+  // 新页面，否则返回子页面时会再次清空整块群信息。
+  const groupDataKey = isTempConversation
+    ? `temp:${conversationID || resolvedConversationID}`
+    : isStandaloneGroup
+      ? `standalone:${conversationID}`
+      : isGroupConversation
+        ? `circle:${groupID}`
+        : `direct:${friendId}`;
   const basePinned = activeConversation?.pinned ?? false;
   const baseMuted = activeConversation?.muted ?? false;
   const displayIcons = useMemo(() => [] as DisplayIcon[], []);
@@ -626,17 +639,23 @@ export default function ChatInfoScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      const isNewGroupTarget = groupDataKeyRef.current !== groupDataKey;
+      if (isNewGroupTarget) {
+        groupDataKeyRef.current = groupDataKey;
+        // 首次进入或切换到另一条会话时才清空；从头像、公告等子页面返回时
+        // 保留已有内容，让下面的请求在后台完成，不让页面先闪成空状态。
+        setGroupInfo(null);
+        setGroupMembers([]);
+        setGroupConversation(null);
+      }
 
       // 临时房走会话自己的成员端点:没有圈子详情可查(没有 name/description/
       // memberCount),会话 id 也已经在手上,不需要 get-or-create。
       if (isTempConversation) {
-        setGroupInfo(null);
-        setGroupConversation(null);
         // store 还没灌进会话时(从临时聊天列表直接进来)只有路由参数,
         // 与本页其它读路径同口径回落。
         const tempConversationID = resolvedConversationID || conversationID;
         if (!tempConversationID) {
-          setGroupMembers([]);
           return () => {
             cancelled = true;
           };
@@ -646,7 +665,7 @@ export default function ChatInfoScreen() {
             if (!cancelled) setGroupMembers(members);
           })
           .catch(() => {
-            if (!cancelled) setGroupMembers([]);
+            // 返回子页面时保留已显示的成员列表，下一次聚焦继续重试。
           });
         return () => {
           cancelled = true;
@@ -656,13 +675,12 @@ export default function ChatInfoScreen() {
       if (isStandaloneGroup && conversationID) {
         // 独立群聊:没有圈子详情可拉,群名在会话 DTO 上;成员目录直接按会话 id 取
         // (服务端座位校验,全员可见)。
-        setGroupInfo(null);
         fetchChatMembers(conversationID)
           .then((members) => {
             if (!cancelled) setGroupMembers(members);
           })
           .catch(() => {
-            if (!cancelled) setGroupMembers([]);
+            // 保留已有内容，避免网络抖动造成群信息页闪动。
           });
         return () => {
           cancelled = true;
@@ -670,15 +688,10 @@ export default function ChatInfoScreen() {
       }
 
       if (!isGroupConversation || !groupID) {
-        setGroupInfo(null);
-        setGroupMembers([]);
-        setGroupConversation(null);
         return () => {
           cancelled = true;
         };
       }
-
-      setGroupMembers([]);
 
       // 群信息=圈子详情:群名=name,群公告=圈子简介 description,人数=memberCount。
       fetchCircleDetail(groupID)
@@ -692,9 +705,7 @@ export default function ChatInfoScreen() {
           }
         })
         .catch(() => {
-          if (!cancelled) {
-            setGroupInfo(null);
-          }
+          // 已有群资料时不要用一次请求失败覆盖屏幕，下一次聚焦会重试。
         });
 
       // 先解析(取或建)圈子群会话——置顶/免打扰作用于该会话 id;成员目录只有
@@ -719,9 +730,7 @@ export default function ChatInfoScreen() {
             setGroupMembers(members);
           }
         } catch {
-          if (!cancelled) {
-            setGroupMembers([]);
-          }
+          // 成员请求失败时保留已渲染的名单，不让短暂网络错误造成整页抖动。
         }
       };
       void loadMemberDirectory();
@@ -733,6 +742,7 @@ export default function ChatInfoScreen() {
       canViewMemberDirectory,
       conversationID,
       groupID,
+      groupDataKey,
       isGroupConversation,
       isStandaloneGroup,
       isTempConversation,
@@ -1749,6 +1759,18 @@ export default function ChatInfoScreen() {
     );
   }, [conversationID, groupID, groupTitle, resolvedConversationID, scope]);
 
+  const handleOpenNoteManagement = useCallback(() => {
+    const target = resolvedConversationID || conversationID;
+    if (!target) return;
+    router.push(
+      getNoteManagementHref(scope, {
+        conversationID: target,
+        groupID,
+        title: groupTitle,
+      }),
+    );
+  }, [conversationID, groupID, groupTitle, resolvedConversationID, scope]);
+
   const d = useMemo(
     () => ({
       container: {
@@ -2000,6 +2022,17 @@ export default function ChatInfoScreen() {
                 />
               </>
             )}
+            {isOwner ? (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.groupManagement.noteManagement', {
+                    defaultValue: '笔记管理',
+                  })}
+                  onPress={handleOpenNoteManagement}
+                />
+              </>
+            ) : null}
             {canManageGroup ? (
               <>
                 <Divider />

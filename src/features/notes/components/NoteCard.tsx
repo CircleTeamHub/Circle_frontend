@@ -7,7 +7,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import type { NoteSummary } from '@/features/notes/types';
 import { buildNoteMeta } from '@/features/notes/utils/note-format';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
 /** 来源 chip 的点击目标：发送者 → 私聊，来源群 → 群聊 */
@@ -61,6 +61,10 @@ function NoteCardInner({
       sourceChip: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
+      },
+      container: {
+        backgroundColor: colors.surface,
+        borderColor: withAlpha(colors.surfaceBorder, 0.72),
       },
     }),
     [colors],
@@ -125,6 +129,7 @@ function NoteCardInner({
     <Pressable
       style={[
         s.container,
+        d.container,
         highlighted ? { backgroundColor: colors.primaryLight } : null,
       ]}
       onPress={handlePress}
@@ -183,6 +188,55 @@ function NoteCardInner({
           <Text style={[s.preview, d.preview]} numberOfLines={2}>
             {note.contentPreview}
           </Text>
+        ) : null}
+        {note.status === 'UNLISTED' ? (
+          <View
+            style={[
+              s.statusBadge,
+              {
+                backgroundColor: withAlpha(colors.warning, 0.14),
+                borderColor: withAlpha(colors.warning, 0.34),
+              },
+            ]}
+          >
+            <Ionicons name="eye-off-outline" size={13} color={colors.warning} />
+            <Text style={[s.status, { color: colors.warning }]} numberOfLines={1}>
+              {t('notes.list.statusUnlisted', { defaultValue: '已下架，状态可能变化' })}
+            </Text>
+          </View>
+        ) : note.workStatus === 'WORKING' || note.workStatus === 'CLOSED' ? (
+          <View
+            style={[
+              s.statusBadge,
+              {
+                backgroundColor: withAlpha(
+                  note.workStatus === 'WORKING' ? colors.success : colors.warning,
+                  0.14,
+                ),
+                borderColor: withAlpha(
+                  note.workStatus === 'WORKING' ? colors.success : colors.warning,
+                  0.34,
+                ),
+              },
+            ]}
+          >
+            <Ionicons
+              name={note.workStatus === 'WORKING' ? 'checkmark-circle-outline' : 'moon-outline'}
+              size={13}
+              color={note.workStatus === 'WORKING' ? colors.success : colors.warning}
+            />
+            <Text
+              style={[
+                s.status,
+                { color: note.workStatus === 'WORKING' ? colors.success : colors.warning },
+              ]}
+              numberOfLines={1}
+            >
+              {note.workStatus === 'WORKING'
+                ? t('notes.list.statusWorking', { defaultValue: '开工' })
+                : t('notes.list.statusClosed', { defaultValue: '打烊' })}
+            </Text>
+          </View>
         ) : null}
         <Text style={[s.meta, d.meta]} numberOfLines={1}>
           {meta}
@@ -284,9 +338,13 @@ export const NoteCard = memo(NoteCardInner);
 
 const s = StyleSheet.create({
   container: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     gap: Spacing.sm,
+    borderRadius: Radius.xl,
+    borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
   topRow: {
     flexDirection: 'row',
@@ -322,6 +380,22 @@ const s = StyleSheet.create({
     ...Typography.caption,
     fontWeight: '400',
     lineHeight: 18,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  status: {
+    flexShrink: 1,
+    ...Typography.small,
+    fontWeight: '700',
   },
   remark: {
     ...Typography.small,

@@ -445,6 +445,30 @@ export function getGroupManageHref(
   }
 }
 
+/** 群主专用的笔记管理页,与群成员/群策略管理保持独立路由。 */
+export function getNoteManagementHref(
+  scope: UserProfileScope,
+  params: { conversationID: string; groupID?: string; title?: string },
+): Href {
+  const routeParams = {
+    conversationID: params.conversationID,
+    ...(params.groupID ? { groupID: params.groupID } : {}),
+    ...(params.title ? { title: params.title } : {}),
+  };
+
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/note-management', params: routeParams } as unknown as Href;
+    case 'profile':
+      return { pathname: '/(tabs)/profile/note-management', params: routeParams } as unknown as Href;
+    case 'discover':
+      return { pathname: '/(tabs)/discover/note-management', params: routeParams } as unknown as Href;
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/note-management', params: routeParams } as unknown as Href;
+  }
+}
+
 export function getGroupMemberSearchHref(
   scope: UserProfileScope,
   params: {

@@ -27,6 +27,7 @@
     "next": "Next",
     "confirm": "Confirm",
     "delete": "Delete",
+    "remove": "Remove",
     "retry": "Retry",
     "send": "Send",
     "sending": "Sending…",
@@ -392,6 +393,7 @@
       "saveFailedHint": "Please try again later",
       "noteCollected": "Added to My Notes",
       "noteAlreadyCollected": "Already in My Notes",
+      "noteOwnCannotCollect": "You can't save your own note",
       "noteCollectedHint": "You can view it in My Notes",
       "revoke": "Revoke",
       "revokeFailed": "Revoke failed",
@@ -416,7 +418,9 @@
       "failed": "Forward failed",
       "failedRetry": "Please try again later",
       "locationWithDetail": "[Location] {{detail}}",
-      "unsupported": "This message type cannot be forwarded yet"
+      "unsupported": "This message type cannot be forwarded yet",
+      "workStatusWarningTitle": "Order status may have changed",
+      "workStatusWarning": "This note is closed or unlisted. You can still continue sending it."
     },
     "snackbarNewMessage": "New message",
     "snackbarPreviewFallback": "[Message]",
@@ -610,7 +614,24 @@
       "ownerSection": "Owner",
       "joinMethods": "How people join",
       "memberPermissions": "Member permissions",
-      "pickNewOwner": "Pick the new owner"
+      "pickNewOwner": "Pick the new owner",
+      "noteManagement": "Note management",
+      "noteManagementHint": "Only listed venue notes are shown; status guides coordinators, and you can unlist notes here.",
+      "noteRestricted": "Only the group owner can manage this group's notes",
+      "bindNote": "Associate my note",
+      "bindNoteHint": "Tap a note card to associate it with this group",
+      "noteStatusLabel": "Venue status",
+      "noSourceNotes": "No unassociated notes",
+      "noteWorking": "Working",
+      "noteClosed": "Closed",
+      "noteUnset": "Not set",
+      "noteClearStatus": "Clear status",
+      "noteStatusAction": "Change note status",
+      "noteUnlist": "Unlist",
+      "noteRelist": "Relist",
+      "noteUnbindTitle": "Remove source group association?",
+      "noteUnbindHint": "This note will no longer appear in this group's note management.",
+      "noteUnbind": "Remove association"
     },
     "groupEvent": {
       "system": "System",
@@ -826,7 +847,12 @@
       },
       "imageCount": "{{count}} images",
       "videoCount": "{{count}} videos",
-      "includes": "Includes: {{segments}}"
+      "includes": "Includes: {{segments}}",
+      "workStatus": {
+        "working": "Working",
+        "closed": "Closed",
+        "unlisted": "Unlisted; status may have changed"
+      }
     },
     "voice": {
       "cancelTip": "Release to cancel",
@@ -2608,6 +2634,7 @@
       "cardPickerLoadFailedMessage": "The card list couldn't be loaded. Please try again.",
       "addContact": "Choose contact",
       "addGroup": "Choose group",
+      "sourceGroupCardLocked": "Source group card is fixed",
       "mediaUploadFailedTitle": "Upload failed",
       "mediaUploadFailedMessage": "Please try again",
       "uploadAudio": "Upload audio",
@@ -2616,9 +2643,9 @@
       "audioRecording": "Recording, tap to stop",
       "waitForMediaTitle": "Finish the current action first",
       "waitForMediaMessage": "Stop recording or wait for the upload or save to finish before leaving.",
-      "pendingSubmitMessage": "The save result is not confirmed. Editing is paused. Retry the original save, or go back to keep it in Drafts and retry later.",
+      "pendingSubmitMessage": "Confirming the save result. Editing is paused; your content is saved in a local draft. Retry to confirm the original save.",
       "pendingSubmitStorageFailed": "The submission could not be kept on this device and has not been sent. Check available storage and retry.",
-      "pendingSubmitConflict": "The server has different note content. Your local content is still in Drafts. View the saved note before deciding how to combine them; this draft will be kept.",
+      "pendingSubmitConflict": "Confirming the save result. Editing is paused; your content is saved in a local draft. Retry to confirm the original save.",
       "openCommittedNote": "View saved note",
       "audioDuration": "{{seconds}} s",
       "audioPickerUnavailableTitle": "Audio selection unavailable",
@@ -2639,6 +2666,7 @@
       "titleRequired": "Please enter a title",
       "titleHint": "Title required, up to {{max}} characters",
       "textCount": "Body length {{count}} / {{max}}",
+      "resizeTextBlock": "Adjust text block height",
       "textTooLong": "The body, including the line breaks between paragraphs, can contain up to {{max}} characters; you have {{count}}. Your text is preserved. Shorten it before saving.",
       "tooManyParagraphs": "Text can contain up to {{max}} paragraphs. Your text is preserved. Combine some paragraphs before saving.",
       "titlePlaceholder": "Title",
@@ -2779,6 +2807,9 @@
     },
     "list": {
       "fromSource": "From {{name}}",
+      "statusWorking": "Working",
+      "statusClosed": "Closed",
+      "statusUnlisted": "Unlisted; status may have changed",
       "remark": "Remark: {{text}}",
       "openSenderChat": "Chat with {{name}}",
       "openGroupChat": "Open group chat {{name}}"
@@ -2804,7 +2835,16 @@
       "next": "Next"
     },
     "loadFailed": "Couldn't load notes. Check your connection and try again",
+    "collect": {
+      "chooseGroup": "Add to which note group?",
+      "editTitle": "Edit saved title",
+      "groupHint": "Choose a group first; you can edit the title next.",
+      "ungrouped": "Ungrouped",
+      "titleHint": "You can edit the default title before saving your note copy.",
+      "titleLabel": "Saved note title"
+    },
     "shareToChat": {
+      "workStatusWarning": "The order may be closed or unlisted. You can still continue sending it.",
       "title": "Share to a friend or group",
       "confirmTitle": "Send note",
       "confirmMessage": "Send “{{title}}” to {{name}}?",

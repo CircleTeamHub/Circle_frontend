@@ -541,6 +541,12 @@ test('NoteCard exposes a single more-actions button (not per-action buttons)', (
   assert.match(sheet, /notes\.actions\.delete/);
   assert.match(sheet, /trash-outline/);
   assert.match(sheet, /onDelete/);
+  assert.match(screen, /onSetWorkStatus=\{handleSetWorkStatus\}/);
+  assert.match(screen, /currentUserId=\{currentUserId\}/);
+  assert.match(sheet, /chat\.groupManagement\.noteClosed/);
+  assert.match(sheet, /chat\.groupManagement\.noteWorking/);
+  assert.match(sheet, /!note\.collectedFrom/);
+  assert.match(sheet, /note\.ownerId === currentUserId/);
   assert.doesNotMatch(sheet, /common\.delete/);
 });
 
@@ -611,6 +617,19 @@ test('NoteDetailScreen header adds a share button left of download', () => {
   const downloadIdx = src.indexOf("name=\"download-outline\"");
   assert.ok(shareIdx > 0 && downloadIdx > 0, 'both header icons exist');
   assert.ok(shareIdx < downloadIdx, 'share sits before download');
+});
+
+test('long-image export is handled as media instead of share text', () => {
+  const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
+
+  assert.match(src, /const saveLongImageExport = useCallback/);
+  assert.match(src, /saveMediaToLibrary\(result\.url, \{\s*mimeType: result\.mimeType/);
+  assert.match(src, /if \(format === 'IMAGE'\) \{\s*await saveLongImageExport\(result\);/);
+  // The URL is kept out of Share.message for the long-image branch, which is
+  // what prevents iOS/Android from presenting the generated artifact as text.
+  const imageBranch = src.match(/if \(format === 'IMAGE'\) \{([\s\S]*?)\n\s*\} else \{/);
+  assert.ok(imageBranch, 'long-image branch exists');
+  assert.doesNotMatch(imageBranch[1], /message:\s*result\.url/);
 });
 
 test('GroupManagerSheet name input is a visible shadowed pill', () => {

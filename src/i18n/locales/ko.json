@@ -312,6 +312,7 @@
       "saveFailedHint": "나중에 다시 시도해 주세요",
       "noteCollected": "내 노트에 추가했어요",
       "noteAlreadyCollected": "이미 내 노트에 있어요",
+      "noteOwnCannotCollect": "직접 만든 노트는 저장할 수 없습니다",
       "noteCollectedHint": "'내 노트'에서 확인할 수 있어요",
       "revoke": "회수",
       "revokeFailed": "회수하지 못했습니다",
@@ -336,7 +337,9 @@
       "failed": "전달 실패",
       "failedRetry": "나중에 다시 시도해 주세요",
       "locationWithDetail": "[위치] {{detail}}",
-      "unsupported": "이 메시지 유형은 아직 전달할 수 없습니다"
+      "unsupported": "이 메시지 유형은 아직 전달할 수 없습니다",
+      "workStatusWarningTitle": "주문 상태가 변경되었을 수 있습니다",
+      "workStatusWarning": "이 노트는 영업 종료 또는 게시 중지 상태입니다. 확인 후에도 보낼 수 있습니다."
     },
     "snackbarNewMessage": "새 메시지",
     "snackbarPreviewFallback": "[메시지]",
@@ -529,7 +532,24 @@
       "ownerSection": "그룹장",
       "joinMethods": "참여 방법",
       "memberPermissions": "멤버 권한",
-      "pickNewOwner": "새 그룹장 선택"
+      "pickNewOwner": "새 그룹장 선택",
+      "noteManagement": "노트 관리",
+      "noteManagementHint": "게시 중인 장소 노트만 표시합니다. 상태는 담당자에게 안내하며 여기서 게시를 중지할 수 있습니다.",
+      "noteRestricted": "그룹 소유자만 이 그룹의 노트를 관리할 수 있습니다",
+      "bindNote": "내 노트 연결",
+      "bindNoteHint": "노트 카드를 눌러 이 그룹에 연결하세요",
+      "noteStatusLabel": "장소 상태",
+      "noSourceNotes": "연결할 노트가 없습니다",
+      "noteWorking": "영업 중",
+      "noteClosed": "영업 종료",
+      "noteUnset": "미설정",
+      "noteClearStatus": "상태 지우기",
+      "noteStatusAction": "노트 상태 변경",
+      "noteUnlist": "게시 중지",
+      "noteRelist": "다시 게시",
+      "noteUnbindTitle": "원본 그룹 연결을 해제할까요?",
+      "noteUnbindHint": "이 노트는 이 그룹의 노트 관리에서 더 이상 표시되지 않습니다.",
+      "noteUnbind": "연결 해제"
     },
     "groupEvent": {
       "system": "시스템",
@@ -745,7 +765,12 @@
       },
       "imageCount": "이미지 {{count}}장",
       "videoCount": "동영상 {{count}}개",
-      "includes": "포함: {{segments}}"
+      "includes": "포함: {{segments}}",
+      "workStatus": {
+        "working": "영업 중",
+        "closed": "영업 종료",
+        "unlisted": "게시 중지, 상태가 바뀌었을 수 있음"
+      }
     },
     "voice": {
       "cancelTip": "손을 떼면 전송 취소",
@@ -1013,6 +1038,7 @@
       "cardPickerLoadFailedMessage": "명함 목록을 불러오지 못했습니다. 다시 시도해 주세요.",
       "addContact": "연락처 선택",
       "addGroup": "그룹 선택",
+      "sourceGroupCardLocked": "원본 그룹 카드는 고정됩니다",
       "mediaUploadFailedTitle": "업로드 실패",
       "mediaUploadFailedMessage": "다시 시도해 주세요",
       "uploadAudio": "오디오 업로드",
@@ -1021,9 +1047,9 @@
       "audioRecording": "녹음 중, 눌러서 중지",
       "waitForMediaTitle": "현재 작업을 먼저 완료해 주세요",
       "waitForMediaMessage": "녹음을 중지하거나 업로드 또는 저장이 끝난 후 돌아가세요.",
-      "pendingSubmitMessage": "저장 결과를 확인할 수 없어 편집이 일시 중지되었습니다. 원래 저장을 다시 시도하거나 뒤로 가서 초안에 보관하고 나중에 재시도하세요.",
+      "pendingSubmitMessage": "저장 결과를 확인하는 중입니다. 편집을 일시 중지했으며 내용은 로컬 초안에 저장되었습니다. 다시 시도하여 원래 저장을 확인하세요.",
       "pendingSubmitStorageFailed": "이 기기에 제출 내용을 보관할 수 없어 아직 전송하지 않았습니다. 저장 공간을 확인하고 다시 시도하세요.",
-      "pendingSubmitConflict": "서버의 노트 내용이 다릅니다. 기기의 내용은 초안에 보관되어 있습니다. 저장된 노트를 확인한 후 합치는 방법을 결정하세요. 이 초안은 삭제되지 않습니다.",
+      "pendingSubmitConflict": "저장 결과를 확인하는 중입니다. 편집을 일시 중지했으며 내용은 로컬 초안에 저장되었습니다. 다시 시도하여 원래 저장을 확인하세요.",
       "openCommittedNote": "저장된 노트 보기",
       "audioDuration": "{{seconds}}초",
       "audioPickerUnavailableTitle": "오디오를 선택할 수 없습니다",
@@ -1044,6 +1070,7 @@
       "titleRequired": "제목을 입력해 주세요",
       "titleHint": "제목 필수, 최대 {{max}}자",
       "textCount": "본문 길이 {{count}} / {{max}}",
+      "resizeTextBlock": "텍스트 블록 높이 조절",
       "textTooLong": "본문은 단락 사이의 줄바꿈을 포함해 최대 {{max}}자이며 현재 {{count}}자입니다. 입력 내용은 유지됩니다. 내용을 줄인 후 저장해 주세요.",
       "tooManyParagraphs": "본문은 최대 {{max}}개 단락입니다. 입력 내용은 유지됩니다. 일부 단락을 합친 후 저장해 주세요.",
       "titlePlaceholder": "제목",
@@ -1184,6 +1211,9 @@
     },
     "list": {
       "fromSource": "{{name}}에서",
+      "statusWorking": "영업 중",
+      "statusClosed": "영업 종료",
+      "statusUnlisted": "게시 중지, 상태가 바뀌었을 수 있음",
       "remark": "메모: {{text}}",
       "openSenderChat": "{{name}}님과 채팅",
       "openGroupChat": "그룹 채팅 {{name}} 열기"
@@ -1209,7 +1239,16 @@
       "next": "다음"
     },
     "loadFailed": "노트를 불러오지 못했어요. 네트워크 확인 후 다시 시도해 주세요",
+    "collect": {
+      "chooseGroup": "어떤 노트 그룹에 추가할까요?",
+      "editTitle": "저장 제목 편집",
+      "groupHint": "먼저 그룹을 선택한 뒤 제목을 수정할 수 있습니다.",
+      "ungrouped": "미분류",
+      "titleHint": "저장하기 전에 기본 제목을 수정할 수 있습니다.",
+      "titleLabel": "저장 제목"
+    },
     "shareToChat": {
+      "workStatusWarning": "주문이 영업 종료 또는 게시 중지일 수 있습니다. 확인 후에도 보낼 수 있습니다.",
       "title": "친구나 그룹에 공유",
       "confirmTitle": "노트 보내기",
       "confirmMessage": "“{{title}}”을(를) {{name}}에게 보낼까요？",
@@ -2776,6 +2815,7 @@
     "close": "닫기",
     "confirm": "확인",
     "delete": "삭제",
+    "remove": "제거",
     "retry": "다시 시도",
     "send": "보내기",
     "sending": "보내는 중…",

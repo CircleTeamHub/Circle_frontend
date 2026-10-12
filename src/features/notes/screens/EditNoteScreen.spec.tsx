@@ -220,7 +220,10 @@ jest.mock('@/services/api/notes', () => ({
 }));
 
 jest.mock('@/services/api/errors', () => ({
-  getApiErrorMessage: () => 'upload failed',
+  getApiErrorMessage: (error: unknown) => {
+    if (error instanceof Error && (error as Error & { status?: number }).status === 0) return error.message;
+    return 'upload failed';
+  },
 }));
 
 jest.mock('@/services/api/upload', () => ({
@@ -1588,6 +1591,35 @@ test('saving a pinned unlisted note preserves pinned and leaves status to the se
   } finally { rendered.unmount(); }
 });
 
+test('accepts a successful PATCH when the server canonicalizes the edited note', async () => {
+  mockDraftAuth.user = { id: 'owner-a', nickname: 'A' };
+  mockRouteId = 'existing-note';
+  const note = noteResult({ title: 'Original note', content: '', contentJson: [], media: [], groupIds: [] }, 'existing-note');
+  mockFetchNoteDetail.mockResolvedValue(note);
+  jest.mocked(updateNote).mockImplementation(async (id, input) => ({
+    ...noteResult(input, id),
+    title: input.title.trim().toUpperCase(),
+    contentJson: null,
+    sections: null,
+    media: [],
+    groups: [],
+    mediaCount: 0,
+  }));
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('Original note'));
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Edited title');
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(updateNote).toHaveBeenCalledWith(
+      'existing-note',
+      expect.objectContaining({ title: 'Edited title' }),
+    ));
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalled());
+    expect(screen.queryByText('notes.edit.pendingSubmitConflict')).toBeNull();
+    expect(createNote).not.toHaveBeenCalled();
+  } finally { rendered.unmount(); }
+});
+
 function reviewDraft(overrides: Partial<NoteDraftDetail> = {}): NoteDraftDetail {
   return {
     id: 'review-draft', title: 'remote', content: null, contentJson: [], sections: null,
@@ -2514,6 +2546,44 @@ test.each(['POST', 'PATCH'] as const)('a pending %s survives safe exit/restart a
   } finally { second.unmount(); alert.mockRestore(); }
 });
 
+test('a network timeout keeps the local pending draft and shows the timeout message', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const values = durableDraftStorage();
+  const timeout = new ApiError('请求超时，请检查网络连接后重试', { status: 0, failureKind: 'timeout' });
+  jest.mocked(createNote).mockRejectedValueOnce(timeout);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Offline draft');
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('notes.edit.saveFailedTitle', timeout.message));
+    expect(screen.getByText('notes.edit.pendingSubmitMessage')).toBeTruthy();
+    expect(storedReviewDraft(values)?.pendingSubmission?.input.title).toBe('Offline draft');
+    expect(mockDeleteDraft).not.toHaveBeenCalled();
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
+test('a normal save does not show the pending-result prompt while the request is in flight', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const save = createDeferred<NoteDetail>();
+  jest.mocked(createNote).mockReturnValueOnce(save.promise);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(screen.queryByText('notes.edit.pendingSubmitMessage')).toBeNull();
+    await act(async () => {
+      save.resolve(noteResult(jest.mocked(createNote).mock.calls[0][0]));
+      await save.promise;
+    });
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith('review-draft'));
+  } finally { save.resolve(noteResult({ title: 'remote', content: '', contentJson: [], media: [], clientDraftID: 'review-draft' })); rendered.unmount(); }
+});
+
 test('a submission is never sent when the durable pending snapshot cannot be stored', async () => {
   signedInDraft(); mockFetchDraft.mockResolvedValue(reviewDraft()); const values = durableDraftStorage();
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const rendered = render(<EditNoteScreen />);
@@ -2574,8 +2644,9 @@ test.each(['conflict', 'different-replay'] as const)('%s keeps the pending draft
     fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled());
     expect(storedReviewDraft(values)?.pendingSubmission).toBeTruthy(); expect(mockDeleteDraft).not.toHaveBeenCalled(); expect(storage.remove).not.toHaveBeenCalled();
+    expect(screen.queryByText('notes.edit.pendingSubmitConflict')).toBeNull();
+    expect(alert).toHaveBeenCalledWith('notes.edit.saveFailedTitle', 'notes.edit.pendingSubmitMessage');
     if (failure === 'different-replay') {
-      expect(screen.getByText('notes.edit.pendingSubmitConflict')).toBeTruthy();
       fireEvent.press(screen.getByRole('button', { name: 'notes.edit.openCommittedNote' }));
       await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/profile/notes/[id]', params: { id: 'saved-note' } }));
       expect(storedReviewDraft(values)?.pendingSubmission).toBeTruthy();
@@ -2734,7 +2805,7 @@ test.each(['layout-order', 'media-ownership', 'media-metadata'] as const)('an ot
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
     fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
-    await screen.findByText('notes.edit.pendingSubmitConflict');
+    await screen.findByText('notes.edit.pendingSubmitMessage');
     expect(storedReviewDraft(values)?.pendingSubmission?.input.sections?.media?.items[0].width).toBe(320);
     expect(mockDeleteDraft).not.toHaveBeenCalled(); expect(storage.remove).not.toHaveBeenCalled();
   } finally { rendered.unmount(); alert.mockRestore(); }

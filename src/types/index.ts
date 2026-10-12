@@ -50,6 +50,11 @@ export interface ContactSection {
 
 export interface NoteCardData {
   noteId: string;
+  /** 根来源笔记 id，用于实时状态事件定位收录副本；不展示在卡片 UI。 */
+  sourceNoteId?: string;
+  /** 来源个人/群名片快照，只供收藏与再次转发使用，不进入卡片渲染。 */
+  personalCardSnapshot?: NoteCardPeerSnapshot;
+  sourceGroupCardSnapshot?: NoteCardPeerSnapshot;
   ownerId?: string | null;
   title: string;
   contentPreview: string | null;
@@ -57,9 +62,19 @@ export interface NoteCardData {
   imageCount: number;
   videoCount: number;
   groupNames: string[];
+  /** 仅展示订单状态，不包含个人名片或群名片。 */
+  workStatus?: 'WORKING' | 'CLOSED' | 'UNSET' | null;
+  /** 发布生命周期；下架只触发发送提醒，删除由服务端拒绝。 */
+  publicationStatus?: 'ACTIVE' | 'UNLISTED' | 'DELETED' | null;
   hasText?: boolean;
   showcaseCount?: number;
   hasLocation?: boolean;
+}
+
+export interface NoteCardPeerSnapshot {
+  id: string;
+  name: string;
+  faceURL?: string | null;
 }
 
 export interface FriendCardData {
