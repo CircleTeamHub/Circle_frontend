@@ -40,7 +40,8 @@ jest.mock('@/theme', () => ({
 test('offline New generates distinct route IDs and explicitly requests a fresh editor', async () => {
   mockRouter.push.mockClear(); render(<NotesScreen />);
   await screen.findByText('notes.loadFailed');
-  fireEvent.press(screen.getByText('notes.actions.new')); fireEvent.press(screen.getByText('notes.actions.new'));
+  fireEvent.press(screen.getByRole('button', { name: 'notes.actions.new' }));
+  fireEvent.press(screen.getByRole('button', { name: 'notes.actions.new' }));
   const routes = mockRouter.push.mock.calls.map(([route]) => route as { pathname: string; params: { draftId: string; draftMode: string } });
   expect(routes).toHaveLength(2);
   expect(routes[0].pathname).toBe('/(tabs)/profile/notes/edit'); expect(routes[0].params.draftMode).toBe('new');

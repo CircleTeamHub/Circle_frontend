@@ -99,7 +99,17 @@ test('system notices and group log cover mute-all, avatar and policy changes', (
     for (const key of ['muteAll', 'muteAllHint', 'youAreMutedAll', 'transferOwner', 'transferOwnerConfirm', 'transferOwnerDone', 'transferOwnerAction', 'raiseMemberLimit', 'groupAvatar', 'groupMembersRow', 'memberCountWithLimit', 'memberCountOnly', 'profilesRestrictedByGroup']) {
       assert.equal(typeof data.chat[key], 'string', `${lng}.json lacks chat.${key}`);
     }
-    for (const key of ['settings', 'ownerSection', 'joinMethods', 'memberPermissions', 'pickNewOwner']) {
+    for (const key of [
+      'settings',
+      'ownerSection',
+      'joinMethods',
+      'memberPermissions',
+      'pickNewOwner',
+      'noteManagement',
+      'noteManagementHint',
+      'bindNoteHint',
+      'noteStatusLabel',
+    ]) {
       assert.equal(typeof data.chat.groupManagement[key], 'string', `${lng}.json lacks chat.groupManagement.${key}`);
     }
   }
@@ -160,6 +170,10 @@ test('chat info exposes the avatar row, the member row and hides the QR entry wh
   assert.match(info, /const canChangeGroupAvatar = isStandaloneGroup \? canManageGroup : isOwner;/);
   assert.match(info, /chat\.groupMembersRow/);
   assert.match(info, /chat\.memberCountWithLimit/);
+  // 群主从群资料页可以直接进入笔记管理,不必先进入群管理再翻到页面底部。
+  assert.match(info, /chat\.groupManagement\.noteManagement/);
+  assert.match(info, /handleOpenNoteManagement/);
+  assert.match(info, /getNoteManagementHref\(/);
   // 群成员目录可按群规开放,但群日志只给群主/管理员。
   assert.match(info, /\{canManageGroup \? \([\s\S]*?chat\.groupLog/);
   // 二维码入群关掉后群码入口一并收起:留着只会让人扫一张必然被拒的码。
@@ -168,6 +182,35 @@ test('chat info exposes the avatar row, the member row and hides the QR entry wh
   assert.match(info, /activeConversation\?\.notice\?\.trim\(\)/);
   const noticeScreen = read('src/features/chat/screens/EditGroupNoticeScreen.tsx');
   assert.match(noticeScreen, /await setGroupChatNotice\(conversationID, nextNotice\)/);
+});
+
+test('note management is a separate page from group management', () => {
+  const groupManage = read('src/features/chat/screens/GroupManageScreen.tsx');
+  const noteManage = read('src/features/notes/screens/NoteManagementScreen.tsx');
+  const routes = read('src/features/user/utils/routes.ts');
+  assert.doesNotMatch(groupManage, /fetchNotes\(/);
+  assert.doesNotMatch(groupManage, /noteManagement/);
+  assert.match(noteManage, /export default function NoteManagementScreen\(/);
+  assert.match(noteManage, /fetchNotes\(/);
+  // 管理页和关联 sheet 都复用「我的笔记」同款完整卡片，避免关联时只看到标题。
+  assert.match(noteManage, /<NoteCard/);
+  assert.match(noteManage, /renderUnboundNote/);
+  assert.match(noteManage, /<BottomSheetModal/);
+  assert.doesNotMatch(noteManage, /OptionPickerSheet/);
+  assert.match(noteManage, /note\.status === 'ACTIVE'/);
+  assert.match(noteManage, /function isOwnedSourceNote\(\n\s*note: NoteSummary,\n\s*currentUserID\?: string \| null,/);
+  assert.match(noteManage, /note\.canEdit === true \|\|/);
+  assert.match(noteManage, /note\.ownerId === currentUserID/);
+  assert.match(noteManage, /withDefaultWorkingStatus/);
+  assert.match(noteManage, /const nextWorkStatus: NoteWorkStatus = isWorking \? 'CLOSED' : 'WORKING'/);
+  assert.doesNotMatch(noteManage, /handleUnlistNote|noteUnlist|unlistNote/);
+  assert.doesNotMatch(noteManage, /relistNote/);
+  assert.match(routes, /export function getNoteManagementHref\(/);
+  for (const tab of ['messages', 'contacts', 'discover', 'profile']) {
+    const route = read(`app/(tabs)/${tab}/note-management.tsx`);
+    assert.match(route, /NoteManagementScreen/);
+    assert.match(routes, new RegExp(`'/\\(tabs\\)/${tab}/note-management'`));
+  }
 });
 
 test('member profiles and friend requests honor the two member-permission switches', () => {

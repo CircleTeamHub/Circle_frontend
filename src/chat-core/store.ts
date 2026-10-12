@@ -595,6 +595,15 @@ interface ChatStoreState {
     editedAt: string,
     revision?: number,
   ) => Promise<boolean>;
+  /**
+   * 来源笔记状态实时覆盖：更新内存里的聊天卡片与会话末条预览。
+   * 收录副本发送的新卡片带 sourceNoteId；旧卡片则按 noteId 兼容匹配。
+   */
+  applyNoteSourceStatus: (
+    sourceNoteId: string,
+    workStatus: 'WORKING' | 'CLOSED' | null,
+    publicationStatus: 'ACTIVE' | 'UNLISTED' | 'DELETED',
+  ) => void;
   /** S-01:会话级焚毁档位变更(REST 回执/系统消息驱动)。 */
   applyBurnDuration: (
     conversationId: string,
@@ -1015,6 +1024,37 @@ export function sortConversations(
     if (a.id === b.id) return 0;
     return a.id < b.id ? -1 : 1;
   });
+}
+
+function patchNoteSourceStatus(
+  message: ChatMessageDto,
+  sourceNoteId: string,
+  workStatus: 'WORKING' | 'CLOSED' | null,
+  publicationStatus: 'ACTIVE' | 'UNLISTED' | 'DELETED',
+): ChatMessageDto {
+  if (message.type !== 'note-card') return message;
+  const content = message.content ?? {};
+  const cardSourceId =
+    typeof content['sourceNoteId'] === 'string'
+      ? content['sourceNoteId']
+      : typeof content['noteId'] === 'string'
+        ? content['noteId']
+        : '';
+  if (cardSourceId !== sourceNoteId) return message;
+  if (
+    content['workStatus'] === (workStatus ?? 'UNSET') &&
+    content['publicationStatus'] === publicationStatus
+  ) {
+    return message;
+  }
+  return {
+    ...message,
+    content: {
+      ...content,
+      workStatus: workStatus ?? 'UNSET',
+      publicationStatus,
+    },
+  };
 }
 
 export const useChatStore = create<ChatStoreState>((set, get) => ({
@@ -2118,6 +2158,50 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const updated = next.find((m) => m.id === messageId);
     if (!updated || updated === current) return true;
     return persistLocalMessages(conversationId, [updated]);
+  },
+
+  applyNoteSourceStatus: (sourceNoteId, workStatus, publicationStatus) => {
+    if (!sourceNoteId) return;
+    const { conversations, messagesByConversation } = get();
+    let changed = false;
+    const nextTimelines: Record<string, ChatMessageDto[]> = {
+      ...messagesByConversation,
+    };
+    for (const [conversationId, timeline] of Object.entries(
+      messagesByConversation,
+    )) {
+      const next = timeline.map((message) =>
+        patchNoteSourceStatus(
+          message,
+          sourceNoteId,
+          workStatus,
+          publicationStatus,
+        ),
+      );
+      if (next.some((message, index) => message !== timeline[index])) {
+        nextTimelines[conversationId] = next;
+        changed = true;
+      }
+    }
+
+    const nextConversations = conversations.map((conversation) => {
+      const lastMessage = conversation.lastMessage;
+      if (!lastMessage) return conversation;
+      const next = patchNoteSourceStatus(
+        lastMessage,
+        sourceNoteId,
+        workStatus,
+        publicationStatus,
+      );
+      if (next === lastMessage) return conversation;
+      changed = true;
+      return { ...conversation, lastMessage: next };
+    });
+    if (!changed) return;
+    set({
+      messagesByConversation: nextTimelines,
+      conversations: sortConversations(nextConversations),
+    });
   },
 
   applyBurnDuration: (conversationId, burnDurationSec, burnStartedAt) => {

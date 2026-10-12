@@ -1,18 +1,56 @@
-import { useCallback } from 'react';
+import { createElement, useCallback, useState } from 'react';
+import type { ReactNode } from 'react';
 import { type ChatMessage } from '@/types';
 import { isLocalMessageId } from '@/chat-core/local-message-id';
 import {
   buildCollectionInputFromMessage,
   buildNoteCollectSource,
 } from '@/features/chat/utils/message-collection';
-import { collectNote } from '@/services/api/notes';
-import { Alert } from 'react-native';
+import { collectNote, fetchNoteGroups } from '@/services/api/notes';
+import type { CollectNoteSource, NoteGroup } from '@/features/notes/types';
+import {
+  AddNoteToNotesSheet,
+  type AddNoteToNotesSelection,
+} from '@/features/notes/components/AddNoteToNotesSheet';
+import { Alert, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChatStore } from '@/chat-core/store';
 import { createCollection } from '@/services/api/collections';
 import { type TFunction } from 'i18next';
+import { useNoteListSignalStore } from '@/features/notes/store/use-note-list-signal-store';
+
+/**
+ * React Native Modal measures its iOS host window when it is presented. If the
+ * chat composer still has an active IME inset at that exact moment, the new
+ * window can keep the shortened height even after Keyboard.dismiss() finishes.
+ * Wait for the hide notification before mounting the modal so its first layout
+ * is the real full-screen height.
+ */
+function waitForKeyboardToHide(): Promise<void> {
+  if (!Keyboard.isVisible()) {
+    return new Promise((resolve) => setTimeout(resolve, 32));
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let willHide: { remove: () => void } | undefined;
+    let didHide: { remove: () => void } | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      willHide?.remove();
+      didHide?.remove();
+      if (timeout) clearTimeout(timeout);
+      resolve();
+    };
+    willHide = Keyboard.addListener('keyboardWillHide', finish);
+    didHide = Keyboard.addListener('keyboardDidHide', finish);
+    timeout = setTimeout(finish, 450);
+  });
+}
 
 export interface CollectMessageParams {
   t: TFunction<"translation", undefined>;
@@ -24,6 +62,7 @@ export interface CollectMessageParams {
   avatarUrl: string | undefined;
   selfAvatarUri: string | undefined;
   selfName: string | undefined;
+  selfUsername?: string;
 }
 
 /**
@@ -40,7 +79,34 @@ export function useCollectMessage({
   avatarUrl,
   selfAvatarUri,
   selfName,
+  selfUsername,
 }: CollectMessageParams) {
+  const [noteGroups, setNoteGroups] = useState<NoteGroup[]>([]);
+  const [noteGroupsLoading, setNoteGroupsLoading] = useState(false);
+  const [noteGroupsError, setNoteGroupsError] = useState<string | null>(null);
+  const [noteCollectTarget, setNoteCollectTarget] = useState<{
+    noteId: string;
+    noteTitle: string;
+    source: CollectNoteSource;
+  } | null>(null);
+  const [noteCollectOpening, setNoteCollectOpening] = useState(false);
+  const [noteCollectSaving, setNoteCollectSaving] = useState(false);
+
+  const loadNoteGroups = useCallback(async () => {
+    setNoteGroupsLoading(true);
+    setNoteGroupsError(null);
+    try {
+      setNoteGroups(await fetchNoteGroups());
+    } catch (error) {
+      reportHandledFailure('noteGroups', 'fetchForCollection', error);
+      setNoteGroupsError(
+        getApiErrorMessage(error, '笔记分组加载失败，请重试。'),
+      );
+    } finally {
+      setNoteGroupsLoading(false);
+    }
+  }, []);
+
   const handleCollectMessage = useCallback(
     async (message: ChatMessage) => {
       if (!conversationID) return;
@@ -52,6 +118,20 @@ export function useCollectMessage({
       // 笔记卡片：不进「收藏」列表，直接快照复制进「我的笔记」，
       // 并带上来源名片（群/用户）+ 消息定位信息，详情页可一键跳回聊天。
       if (message.type === 'note-card') {
+        if (!message.noteCard) return;
+
+        // 笔记的 owner 是原笔记行的归属人。自己的笔记已经在「我的笔记」
+        // 里，后端也会按这个规则原样返回它并忽略收藏标题/分组；这里提前拦截，
+        // 避免给用户打开一个实际上不会保存的「编辑收藏标题」流程。
+        if (currentUserID && message.noteCard.ownerId === currentUserID) {
+          Alert.alert(
+            t('chat.messageActions.noteOwnCannotCollect', {
+              defaultValue: '不能收藏自己创建的笔记',
+            }),
+          );
+          return;
+        }
+
         const source = buildNoteCollectSource(message, {
           conversationID,
           conversationTitle,
@@ -64,46 +144,22 @@ export function useCollectMessage({
             faceURL: selfAvatarUri,
           },
         });
-        if (!source || !message.noteCard) return;
+        if (!source) return;
 
-        try {
-          const result = await collectNote(message.noteCard.noteId, source);
-          // 复制出来的是「我的」那条笔记（id 与原笔记不同），「查看」跳它。
-          const copiedNoteId = result.note?.id;
-          Alert.alert(
-            result.alreadyCollected
-              ? t('chat.messageActions.noteAlreadyCollected', {
-                  defaultValue: '已在我的笔记中',
-                })
-              : t('chat.messageActions.noteCollected', {
-                  defaultValue: '已添加到我的笔记',
-                }),
-            t('chat.messageActions.noteCollectedHint', {
-              defaultValue: '可在「我的笔记」中查看',
-            }),
-            copiedNoteId
-              ? [
-                  {
-                    text: t('common.view', { defaultValue: '查看' }),
-                    // 跳「我的笔记」列表并定位到刚添加的这条（不是直接开详情）：
-                    // 用户要看的是它在自己列表里的位置。
-                    onPress: () =>
-                      router.push({
-                        pathname: '/(tabs)/profile/notes',
-                        params: { highlightNoteId: copiedNoteId },
-                      } as never),
-                  },
-                  { text: t('common.confirm', { defaultValue: '确认' }) },
-                ]
-              : undefined,
-          );
-        } catch (error) {
-          reportHandledFailure('chatDetail', 'collectNote', error);
-          Alert.alert(
-            t('chat.messageActions.collectFailed'),
-            getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
-          );
-        }
+        // Close the chat composer keyboard before mounting the separate Modal.
+        // Otherwise iOS can size the new window from the keyboard-adjusted
+        // presenting view, leaving the sheet anchored above a dimmed gap.
+        // Disable the page KAV first, then wait for the host window to settle.
+        setNoteCollectOpening(true);
+        Keyboard.dismiss();
+        await waitForKeyboardToHide();
+        setNoteCollectTarget({
+          noteId: message.noteCard.noteId,
+          noteTitle: message.noteCard.title,
+          source,
+        });
+        setNoteCollectOpening(false);
+        await loadNoteGroups();
         return;
       }
 
@@ -164,10 +220,83 @@ export function useCollectMessage({
       selfName,
       sourceID,
       t,
+      loadNoteGroups,
     ],
   );
 
+  const handleConfirmNoteCollect = useCallback(
+    async ({ targetNoteGroupId, title }: AddNoteToNotesSelection) => {
+      const target = noteCollectTarget;
+      if (!target || noteCollectSaving) return;
+      setNoteCollectSaving(true);
+      try {
+        const result = await collectNote(target.noteId, target.source, {
+          targetNoteGroupId,
+          title,
+        });
+        // The notes screen may already be mounted in another tab stack. Mark
+        // it stale after the server confirms the write so returning to the
+        // list fetches the saved (possibly edited) title immediately.
+        useNoteListSignalStore.getState().bump();
+        setNoteCollectTarget(null);
+        const copiedNoteId = result.note?.id;
+        Alert.alert(
+          result.alreadyCollected
+            ? t('chat.messageActions.noteAlreadyCollected', {
+                defaultValue: '已在我的笔记中',
+              })
+            : t('chat.messageActions.noteCollected', {
+                defaultValue: '已添加到我的笔记',
+              }),
+          t('chat.messageActions.noteCollectedHint', {
+            defaultValue: '可在「我的笔记」中查看',
+          }),
+          copiedNoteId
+            ? [
+                {
+                  text: t('common.view', { defaultValue: '查看' }),
+                  onPress: () =>
+                    router.push({
+                      pathname: '/(tabs)/profile/notes',
+                      params: { highlightNoteId: copiedNoteId },
+                    } as never),
+                },
+                { text: t('common.confirm', { defaultValue: '确认' }) },
+              ]
+            : undefined,
+        );
+      } catch (error) {
+        reportHandledFailure('chatDetail', 'collectNote', error);
+        Alert.alert(
+          t('chat.messageActions.collectFailed'),
+          getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
+        );
+      } finally {
+        setNoteCollectSaving(false);
+      }
+    },
+    [noteCollectSaving, noteCollectTarget, t],
+  );
+
+  const noteCollectSheet: ReactNode = createElement(AddNoteToNotesSheet, {
+    visible: noteCollectTarget !== null,
+    noteTitle: noteCollectTarget?.noteTitle ?? '',
+    username: selfUsername ?? selfName,
+    groups: noteGroups,
+    loading: noteGroupsLoading,
+    saving: noteCollectSaving,
+    error: noteGroupsError,
+    onClose: () => {
+      setNoteCollectOpening(false);
+      setNoteCollectTarget(null);
+    },
+    onRetryGroups: loadNoteGroups,
+    onConfirm: handleConfirmNoteCollect,
+  });
+
   return {
     handleCollectMessage,
+    noteCollectSheet,
+    noteCollectVisible: noteCollectTarget !== null || noteCollectOpening,
   };
 }

@@ -31,7 +31,7 @@ import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import { MAX_NOTE_BATCH_SELECTION } from '@/features/chat/utils/note-batch-send';
-import type { NoteGroup, NoteSummary } from '@/features/notes/types';
+import type { NoteGroup, NoteSummary, NoteWorkStatus } from '@/features/notes/types';
 import { runNoteBatch } from '@/features/notes/utils/batch-run';
 import {
   pruneSelection,
@@ -44,7 +44,13 @@ import {
   mergeTabOrder,
 } from '@/features/notes/utils/tab-order';
 import { useNotesTabOrderStore } from '@/features/notes/store/use-notes-tab-order-store';
+import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
+import { useNoteListSignalStore } from '@/features/notes/store/use-note-list-signal-store';
 import { createNoteDraftId } from '@/features/notes/utils/note-editor-drafts';
+import {
+  applyNoteSourceStatusToSummaries,
+  withNoteSyncRetry,
+} from '@/features/notes/utils/note-sync';
 import {
   getChatDetailHref,
   getUserProfileScopeFromSegments,
@@ -53,6 +59,7 @@ import {
   deleteNote,
   fetchNoteGroups,
   fetchNotes,
+  setNoteWorkStatus,
   togglePinNote,
   unlistNote,
 } from '@/services/api/notes';
@@ -66,10 +73,9 @@ type TabId = 'all' | 'ungrouped' | string;
 
 const keyExtractor = (item: NoteSummary) => item.id;
 
-// 提到组件外并 memo：内联箭头组件每次渲染都是新类型，FlatList 无法复用分隔线。
+// 这里保留 FlatList 的分隔组件入口，但它只负责留白，不再绘制横线。
 const ItemSeparator = memo(function ItemSeparator() {
-  const { colors } = useTheme();
-  return <View style={[s.divider, { backgroundColor: colors.divider }]} />;
+  return <View style={{ height: Spacing.sm }} />;
 });
 
 export default function NotesScreen() {
@@ -103,8 +109,11 @@ export default function NotesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  const loadSequenceRef = useRef(0);
   const [managerVisible, setManagerVisible] = useState(false);
   const tabOrderIds = useNotesTabOrderStore((state) => state.orderIds);
+  const noteStatusChange = useNoteStatusSignalStore((state) => state.lastChange);
+  const noteListVersion = useNoteListSignalStore((state) => state.version);
   // 从别处「查看」跳进来时要定位的笔记：滚到它并短暂高亮。
   const { highlightNoteId } = useLocalSearchParams<{ highlightNoteId?: string }>();
   const listRef = useRef<FlatList<NoteSummary>>(null);
@@ -127,27 +136,46 @@ export default function NotesScreen() {
     [],
   );
 
-  const load = useCallback(async () => {
-    const [notesData, groupsData] = await Promise.all([
-      fetchNotes({ status: 'ACTIVE' }),
-      fetchNoteGroups(),
-    ]);
-    if (!mountedRef.current) return;
-    setNotes(notesData);
-    setGroups(groupsData);
-    // 刷新后清掉已不在列表里的选中项 —— 被删/下架的笔记退出批量目标
-    setSelectedIds((prev) =>
-      pruneSelection(
-        prev,
-        notesData.map((note) => note.id),
-      ),
+  useEffect(() => {
+    if (!noteStatusChange) return;
+    setNotes((current) =>
+      applyNoteSourceStatusToSummaries(current, noteStatusChange),
     );
-    setLoadError(false);
-    setLoading(false);
+  }, [noteStatusChange]);
+
+  const load = useCallback(async () => {
+    const sequence = ++loadSequenceRef.current;
+    try {
+      const [notesData, groupsData] = await withNoteSyncRetry(() =>
+        Promise.all([fetchNotes({ status: 'ACTIVE' }), fetchNoteGroups()]),
+      );
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
+      setNotes(notesData);
+      setGroups(groupsData);
+      // 刷新后清掉已不在列表里的选中项 —— 被删/下架的笔记退出批量目标
+      setSelectedIds((prev) =>
+        pruneSelection(
+          prev,
+          notesData.map((note) => note.id),
+        ),
+      );
+      setLoadError(false);
+      setLoading(false);
+    } catch (error) {
+      // A newer focus/realtime refresh owns the result and error state.
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
+      throw error;
+    }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
+      // Source-status signals are patched into the existing rows above. They
+      // must not reload the list, because the API's updatedAt ordering would
+      // move the just-updated note to a different position. A collection can
+      // finish in chat while this screen stays mounted in another stack, so
+      // collection invalidation still reloads the authoritative list.
+      void noteListVersion;
       setLoading(true);
       void load().catch(() => {
         // 加载失败不能静默吞掉 —— 空列表和网络错误要区分开，给用户重试入口。
@@ -156,7 +184,7 @@ export default function NotesScreen() {
           setLoading(false);
         }
       });
-    }, [load]),
+    }, [load, noteListVersion]),
   );
 
   const handleRefreshNotes = useCallback(async () => {
@@ -352,6 +380,33 @@ export default function NotesScreen() {
       setNotes((prev) =>
         prev.map((item) => (item.id === note.id ? { ...item, pinned: !item.pinned } : item)),
       );
+    },
+    [t],
+  );
+
+  const handleSetWorkStatus = useCallback(
+    async (
+      note: NoteSummary,
+      workStatus: Extract<NoteWorkStatus, 'WORKING' | 'CLOSED'>,
+    ) => {
+      try {
+        const result = await setNoteWorkStatus(note.id, workStatus);
+        if (!mountedRef.current) return;
+        setNotes((prev) =>
+          prev.map((item) =>
+            item.id === note.id
+              ? { ...item, workStatus: result.workStatus }
+              : item,
+          ),
+        );
+      } catch {
+        if (mountedRef.current) {
+          Alert.alert(
+            t('notes.alerts.pinFailedTitle', { defaultValue: '操作失败' }),
+            t('common.retryLater', { defaultValue: '请稍后重试' }),
+          );
+        }
+      }
     },
     [t],
   );
@@ -700,7 +755,6 @@ export default function NotesScreen() {
       searchWrap: { backgroundColor: colors.surface },
       searchInput: { color: colors.text },
       searchPlaceholder: colors.textSecondary,
-      divider: { backgroundColor: colors.divider },
       bottomBar: {
         backgroundColor: colors.background,
         borderTopColor: colors.surfaceBorder,
@@ -875,7 +929,11 @@ export default function NotesScreen() {
         // 卡片高度不定（有无封面/备注/来源按钮），定位滚动用 onScrollToIndexFailed
         // 兜底重试，而不是硬算 getItemLayout。
         onScrollToIndexFailed={handleScrollToIndexFailed}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+        contentContainerStyle={{
+          paddingHorizontal: Spacing.md,
+          paddingTop: Spacing.sm,
+          paddingBottom: insets.bottom + (selectionMode ? 80 : 96),
+        }}
         showsVerticalScrollIndicator={false}
         initialNumToRender={12}
         maxToRenderPerBatch={12}
@@ -911,8 +969,8 @@ export default function NotesScreen() {
         }
       />
 
-      <View style={[s.bottomBar, d.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
-        {selectionMode ? (
+      {selectionMode ? (
+        <View style={[s.bottomBar, d.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
           <Pressable
             style={[
               s.bottomBtn,
@@ -927,23 +985,22 @@ export default function NotesScreen() {
               {t('notes.selection.next', { defaultValue: '下一步' })}
             </Text>
           </Pressable>
-        ) : (
-          <Pressable
-            style={[s.bottomBtn, d.newBtn]}
-            onPress={() =>
-              router.push({
-                pathname: '/(tabs)/profile/notes/edit',
-                params: { draftId: createNoteDraftId(), draftMode: 'new' },
-              } as never)
-            }
-          >
-            <Ionicons name="add" size={18} color={colors.white} />
-            <Text style={[s.bottomBtnText, d.newBtnText]}>
-              {t('notes.actions.new', { defaultValue: '新建' })}
-            </Text>
-          </Pressable>
-        )}
-      </View>
+        </View>
+      ) : (
+        <Pressable
+          style={[s.floatingNewButton, d.newBtn, { bottom: insets.bottom + Spacing.lg }]}
+          onPress={() =>
+            router.push({
+              pathname: '/(tabs)/profile/notes/edit',
+              params: { draftId: createNoteDraftId(), draftMode: 'new' },
+            } as never)
+          }
+          accessibilityRole="button"
+          accessibilityLabel={t('notes.actions.new', { defaultValue: '新建' })}
+        >
+          <Ionicons name="add" size={26} color={colors.white} />
+        </Pressable>
+      )}
 
       <GroupManagerSheet
         visible={managerVisible}
@@ -956,6 +1013,7 @@ export default function NotesScreen() {
       />
       <NoteActionsSheet
         note={menuNote}
+        currentUserId={currentUserId}
         batchNotes={batchSheetNotes}
         onClose={closeMenu}
         onPin={handlePin}
@@ -966,6 +1024,7 @@ export default function NotesScreen() {
         onShare={handleShareNote}
         onDelete={handleDeleteNote}
         onUnlist={handleUnlistNote}
+        onSetWorkStatus={handleSetWorkStatus}
         onBatchPin={handleBatchPin}
         onBatchRemark={handleBatchRemark}
         onBatchEditGroups={handleBatchEditGroups}
@@ -1045,7 +1104,6 @@ const s = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   searchInput: { flex: 1, ...Typography.bodyRegular },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: Spacing.lg },
   emptyWrap: { alignItems: 'center', gap: Spacing.md },
   emptyText: {
     textAlign: 'center',
@@ -1081,4 +1139,18 @@ const s = StyleSheet.create({
   },
   bottomBtnText: { ...Typography.body, fontWeight: '600' },
   btnDisabled: { opacity: 0.5 },
+  floatingNewButton: {
+    position: 'absolute',
+    right: Spacing.lg,
+    width: 56,
+    height: 56,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
 });

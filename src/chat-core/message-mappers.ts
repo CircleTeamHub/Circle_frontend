@@ -187,22 +187,6 @@ function countField(content: Record<string, unknown>, key: string): number {
   return Math.floor(value);
 }
 
-function stringArrayField(
-  content: Record<string, unknown>,
-  key: string,
-  cap = 20,
-): string[] {
-  const raw = content[key];
-  if (!Array.isArray(raw)) return [];
-  const out: string[] = [];
-  for (const entry of raw) {
-    if (out.length >= cap) break;
-    const value = str(entry);
-    if (value) out.push(value.length > 40 ? value.slice(0, 40) : value);
-  }
-  return out;
-}
-
 /** 图片字段单独走来源白名单(对端可控地址 = 静默追踪信标)。 */
 function mediaField(
   content: Record<string, unknown>,
@@ -211,16 +195,53 @@ function mediaField(
   return allowPeerMediaUrl(str(content[key]));
 }
 
+function notePeerSnapshot(
+  value: unknown,
+): NoteCardData['personalCardSnapshot'] | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const id = str(raw['id']);
+  const name = str(raw['name']);
+  if (!id || !name) return undefined;
+  return {
+    id: id.slice(0, 64),
+    name: clampText(name, 80),
+    faceURL: allowPeerMediaUrl(str(raw['faceURL'])),
+  };
+}
+
 function sanitizeNoteCard(content: Record<string, unknown>): NoteCardData {
+  const workStatus =
+    content['workStatus'] === 'WORKING' ||
+    content['workStatus'] === 'CLOSED' ||
+    content['workStatus'] === 'UNSET'
+      ? content['workStatus']
+      : 'UNSET';
+  const publicationStatus =
+    content['publicationStatus'] === 'ACTIVE' ||
+    content['publicationStatus'] === 'UNLISTED' ||
+    content['publicationStatus'] === 'DELETED'
+      ? content['publicationStatus']
+      : 'ACTIVE';
+  const personalCardSnapshot = notePeerSnapshot(content['personalCardSnapshot']);
+  const sourceGroupCardSnapshot = notePeerSnapshot(content['sourceGroupCardSnapshot']);
   return {
     noteId: textField(content, 'noteId', 64),
+    ...(typeof content['sourceNoteId'] === 'string' && content['sourceNoteId'].length > 0
+      ? { sourceNoteId: textField(content, 'sourceNoteId', 64) }
+      : {}),
+    ...(personalCardSnapshot ? { personalCardSnapshot } : {}),
+    ...(sourceGroupCardSnapshot ? { sourceGroupCardSnapshot } : {}),
     ownerId: optionalTextField(content, 'ownerId', 64),
     title: textField(content, 'title', 80),
     contentPreview: optionalTextField(content, 'contentPreview', 200),
     coverUrl: mediaField(content, 'coverUrl'),
     imageCount: countField(content, 'imageCount'),
     videoCount: countField(content, 'videoCount'),
-    groupNames: stringArrayField(content, 'groupNames'),
+    // 对端不应把自己的私有笔记分组带进聊天；兼容旧消息但丢弃该字段。
+    groupNames: [],
+    workStatus,
+    publicationStatus,
     hasText: content['hasText'] === true,
     showcaseCount: countField(content, 'showcaseCount'),
     hasLocation: content['hasLocation'] === true,

@@ -24,6 +24,7 @@ import {
   recordNoteSendAttempt,
 } from '@/features/chat/utils/note-batch-send';
 import type { Conversation, NoteCardData } from '@/types';
+import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface ShareNoteSheetProps {
@@ -155,14 +156,22 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
           recipientCount,
           defaultValue: `仅重试之前发送失败的 ${tasks.length} 条内容（涉及 ${recipientCount} 个聊天对象）？已成功的内容不会重复发送。`,
         })
-      : t('notes.shareToChat.confirmRecipientsMessage', {
+        : t('notes.shareToChat.confirmRecipientsMessage', {
           noteCount: targets.length,
           recipientCount,
           defaultValue: `把 ${targets.length} 条笔记发送给选中的 ${recipientCount} 个聊天对象？`,
-        });
+          });
+    const hasUncertainWorkStatus = tasks.some(({ payload }) =>
+      shouldWarnNoteWorkStatus(payload),
+    );
+    const statusWarning = hasUncertainWorkStatus
+      ? `\n\n${t('notes.shareToChat.workStatusWarning', {
+          defaultValue: '订单状态可能已经变化（打烊或已下架），确认后仍会继续发送。',
+        })}`
+      : '';
     Alert.alert(
       t('notes.shareToChat.confirmTitle', { defaultValue: '发送笔记' }),
-      confirmMessage,
+      `${confirmMessage}${statusWarning}`,
       [
         { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
         {

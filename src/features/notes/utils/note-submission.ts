@@ -40,7 +40,12 @@ function canonicalBlocks(value: unknown): unknown {
   }));
 }
 
-/** A replay from an older client/device must not acknowledge a different write. */
+/**
+ * A replay from an older client/device must not acknowledge a different write.
+ * This full snapshot check is used for create/replay outcomes; an existing-note
+ * PATCH has a separate target-ID check in the editor because the server may
+ * canonicalize the returned detail.
+ */
 export function noteSubmissionMatchesResult(pending: PendingNoteSubmission, result: NoteDetail): boolean {
   const input = pending.input;
   const title = Array.from(input.title.trim()).slice(0, MAX_NOTE_TITLE_LENGTH).join('');
@@ -82,4 +87,9 @@ export function noteSubmissionMatchesResult(pending: PendingNoteSubmission, resu
   return same(location(input.sections), location(result.sections ?? undefined)) &&
     same([...new Set(input.groupIds ?? [])].sort(), [...new Set((result.groups ?? []).map((group) => group.id))].sort()) &&
     (input.pinned === undefined || input.pinned === result.pinned);
+}
+
+/** A successful PATCH response only needs to identify the note it targeted. */
+export function noteUpdateResultMatchesTarget(pending: PendingNoteSubmission, result: NoteDetail): boolean {
+  return pending.noteId !== null && Boolean(result) && result.id === pending.noteId;
 }

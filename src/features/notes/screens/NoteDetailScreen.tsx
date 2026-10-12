@@ -21,14 +21,12 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
 import { NoteDocumentBody } from '@/features/notes/components/NoteDocumentBody';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import {
-  getChatDetailHref,
   getUserProfileHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
@@ -36,6 +34,7 @@ import {
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import {
   buildNoteSections,
+  getNoteVideoItems,
   getNoteViewerImages,
   getInitialNoteSection,
   getNoteSectionAvailability,
@@ -45,12 +44,30 @@ import {
   normalizeNoteComposerOrder,
   readNoteComposerOrder,
 } from '@/features/notes/utils/note-composer';
+import { shouldUseDirectVideoExportFallback } from '@/features/notes/utils/note-export';
 import { createNoteExport, fetchNoteDetail } from '@/services/api/notes';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
+import { downloadMediaToCache, saveMediaToLibrary } from '@/utils/save-image';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
+import { withNoteSyncRetry } from '@/features/notes/utils/note-sync';
+
+function stripNoteCardBlocks(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripNoteCardBlocks(item))
+      .filter((item) => item !== null);
+  }
+  if (!value || typeof value !== 'object') return value;
+  const record = value as Record<string, unknown>;
+  if (record.type === 'contact' || record.type === 'group') return null;
+  return Object.fromEntries(
+    Object.entries(record).map(([key, item]) => [key, stripNoteCardBlocks(item)]),
+  );
+}
 
 export default function NoteDetailScreen() {
   const router = useRouter();
@@ -66,6 +83,7 @@ export default function NoteDetailScreen() {
     section?: string;
   }>();
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const noteStatusVersion = useNoteStatusSignalStore((state) => state.version);
 
   const [note, setNote] = useState<NoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +97,8 @@ export default function NoteDetailScreen() {
   const scrolledSectionRef = useRef<string | null>(null);
 
   const loadNote = useCallback(() => {
+    // Re-run the focus loader when a realtime source-status signal advances.
+    void noteStatusVersion;
     if (!id) {
       setLoading(false);
       return () => undefined;
@@ -86,7 +106,7 @@ export default function NoteDetailScreen() {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    fetchNoteDetail(id)
+    withNoteSyncRetry(() => fetchNoteDetail(id))
       .then((data) => {
         if (cancelled) return;
         setNote(data);
@@ -111,7 +131,7 @@ export default function NoteDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [id, t]);
+  }, [id, noteStatusVersion, t]);
 
   // useFocusEffect 而不是 useEffect：笔记媒体现在走 presign-on-read，URL 是有 TTL 的短时
   // 签名。只在 mount 拉一次的话，从编辑页/别的 tab 回来时手里还是旧签名，过期就整屏空图。
@@ -136,6 +156,22 @@ export default function NoteDetailScreen() {
   }, [router, note]);
 
   const sections = useMemo(() => (note ? buildNoteSections(note) : null), [note]);
+  const readOnlySections = useMemo(() => {
+    if (!sections) return null;
+    return {
+      ...sections,
+      text: {
+        ...sections.text,
+        contentJson: stripNoteCardBlocks(sections.text.contentJson) as typeof sections.text.contentJson,
+      },
+      contacts: { items: [] },
+      groups: { items: [] },
+    };
+  }, [sections]);
+  const readOnlyLayout = useMemo(
+    () => stripNoteCardBlocks(note?.sections?.text?.contentJson ?? note?.contentJson ?? []),
+    [note?.contentJson, note?.sections?.text?.contentJson],
+  );
   const availability = useMemo(
     () => (sections ? getNoteSectionAvailability(sections) : null),
     [sections],
@@ -168,11 +204,15 @@ export default function NoteDetailScreen() {
     if (availability.hasContacts) available.add('contact');
     if (availability.hasGroups) available.add('group');
     if (availability.hasLocation) available.add('location');
-    return [...new Set([...mapped, ...available])].filter((kind) => available.has(kind));
+    // 个人名片和群名片只在笔记编辑/config 区使用；聊天或只读详情永远不展示。
+    return [...new Set([...mapped, ...available])].filter(
+      (kind) => available.has(kind) && kind !== 'contact' && kind !== 'group',
+    );
   }, [availability, note?.contentJson, note?.sections?.text?.contentJson, sections]);
   // 拿不到地址的条目渲染出来是空的（服务端读接口没能为这个 objectKey 现签地址），
   // 不进列表；整块是否显示由 getNoteSectionAvailability 按同一判据决定。
   const viewerImages = useMemo(() => sections ? getNoteViewerImages(sections) : [], [sections]);
+  const videoItems = useMemo(() => (sections ? getNoteVideoItems(sections) : []), [sections]);
   useEffect(() => {
     if (viewerImages.length === 0) {
       setImageViewerVisible(false);
@@ -197,6 +237,71 @@ export default function NoteDetailScreen() {
   const targetSection = useMemo(
     () => (sections ? getInitialNoteSection(section, sections) : null),
     [section, sections],
+  );
+
+  const saveVideosDirectly = useCallback(async () => {
+    if (videoItems.length === 0) {
+      Alert.alert(
+        t('notes.detail.exportFailedTitle', { defaultValue: '导出失败' }),
+        t('serverErrors.NOTE_EXPORT_NO_MEDIA', {
+          defaultValue: '没有可导出的媒体文件',
+        }),
+      );
+      return false;
+    }
+
+    for (const item of videoItems) {
+      const outcome = await saveMediaToLibrary(item.url, {
+        mimeType: item.mimeType ?? undefined,
+      });
+      if (outcome === 'denied') {
+        Alert.alert(t('media.saveDeniedTitle'), t('media.saveDeniedMessage'));
+        return false;
+      }
+      if (outcome === 'failed') {
+        Alert.alert(
+          t('notes.detail.exportFailedTitle', { defaultValue: '导出失败' }),
+          t('notes.detail.exportFailedMessage', {
+            defaultValue: '视频下载失败，请稍后重试',
+          }),
+        );
+        return false;
+      }
+    }
+    setDownloadMenuVisible(false);
+    return true;
+  }, [t, videoItems]);
+
+  const saveLongImageExport = useCallback(
+    async (result: { url: string; filename: string; mimeType: string }) => {
+      // 长图是一个媒体文件：交给相册/浏览器下载，不能把预签名地址塞进
+      // Share.message，否则系统会把整次操作识别成“分享文本”。
+      const outcome = await saveMediaToLibrary(result.url, {
+        mimeType: result.mimeType,
+      });
+      if (outcome === 'saved') return true;
+      if (outcome === 'denied') {
+        Alert.alert(t('media.saveDeniedTitle'), t('media.saveDeniedMessage'));
+        return false;
+      }
+
+      // 某些原生系统不接受 SVG 写入相册，仍给用户一个文件分享兜底；
+      // 这里刻意只传 url，不传 message，避免退化成一段文本。
+      const cached = await downloadMediaToCache(result.url, {
+        mimeType: result.mimeType,
+      });
+      if (cached) {
+        try {
+          await Share.share({ url: cached.uri, title: result.filename });
+        } finally {
+          await cached.cleanup();
+        }
+      } else {
+        await Share.share({ url: result.url, title: result.filename });
+      }
+      return true;
+    },
+    [t],
   );
 
   const scrollToRequestedSection = useCallback(() => {
@@ -228,16 +333,29 @@ export default function NoteDetailScreen() {
       if (!note || exporting) return;
       setExporting(format);
       try {
-        const result = await createNoteExport(note.id, {
-          format,
-          scope: 'ALL',
-        });
-        await Share.share({
-          url: result.url,
-          message: result.url,
-          title: result.filename,
-        });
-        setDownloadMenuVisible(false);
+        try {
+          const result = await createNoteExport(note.id, {
+            format,
+            scope: 'ALL',
+          });
+          if (format === 'IMAGE') {
+            await saveLongImageExport(result);
+          } else {
+            await Share.share({
+              url: result.url,
+              message: result.url,
+              title: result.filename,
+            });
+          }
+          setDownloadMenuVisible(false);
+        } catch (error) {
+          // 大视频无法被服务端打成导出包时，改为使用详情接口已经签发的
+          // 原始视频地址逐个保存，避免再次经过导出包的单文件/总量上限。
+          if (format !== 'VIDEOS' || !shouldUseDirectVideoExportFallback(error)) {
+            throw error;
+          }
+          await saveVideosDirectly();
+        }
       } catch (error) {
         Alert.alert(
           t('notes.detail.exportFailedTitle', { defaultValue: '导出失败' }),
@@ -252,7 +370,7 @@ export default function NoteDetailScreen() {
         setExporting(null);
       }
     },
-    [exporting, note, t],
+    [exporting, note, saveLongImageExport, saveVideosDirectly, t],
   );
 
   // 分享单条笔记：打开会话选择器，把笔记以卡片消息发给好友/群聊。
@@ -272,61 +390,6 @@ export default function NoteDetailScreen() {
     const resolvedOwnerId = note.ownerId ?? ownerId;
     return Boolean(resolvedOwnerId && currentUserId === resolvedOwnerId);
   }, [currentUserId, note, ownerId]);
-
-  // 收藏来的笔记 → 来源入口（右下角悬浮列的头像钮）。来源是收藏者的私人定位
-  // 标记：转发出去的笔记不带它，别人打开也不渲染（后端只对笔记主人返回
-  // collectedFrom，这里再按归属兜一层）。
-  // 后端快照缺关键字段（历史坏数据）时整组不渲染，避免点了跳不动。
-  const collectedSource = useMemo(() => {
-    if (!canEditNote) return null;
-    const from = note?.collectedFrom;
-    if (!from?.conversationID || !from.clientMsgID) return null;
-    const isGroup = from.conversationType === 'group';
-    // sender / group 分开暴露：悬浮按钮组要「私聊分享者」和「回群定位」两个
-    // 独立动作。任一方可能缺（历史快照只记了群），各按钮自行判空。
-    const sender = from.sender?.id && from.sender.name ? from.sender : null;
-    const group = isGroup && from.group?.id && from.group.name ? from.group : null;
-    if (!sender && !group) return null;
-    return { isGroup, sender, group, from };
-  }, [canEditNote, note?.collectedFrom]);
-
-  // 聊天页一律入**当前所在** tab 栈（笔记多挂在 profile 下），返回时回到这张
-  // 笔记而不是 IM 首页。
-
-  /** 悬浮按钮①：和分享者私聊。私聊来源带 searchedMsgID 定位到原消息；
-   *  群聊来源是「新开一段私聊」，原消息在群里，不带定位参数。 */
-  const handleChatWithSender = useCallback(() => {
-    if (!collectedSource?.sender) return;
-    const { sender, from, isGroup } = collectedSource;
-    router.push(
-      getChatDetailHref(
-        scope,
-        sender.id,
-        sender.name,
-        sender.faceURL ?? undefined,
-        isGroup ? undefined : from.conversationID,
-        isGroup ? undefined : from.clientMsgID,
-        'private',
-      ),
-    );
-  }, [collectedSource, router, scope]);
-
-  /** 悬浮按钮②：进群聊并定位到分享这条笔记的原消息。 */
-  const handleOpenGroupSource = useCallback(() => {
-    if (!collectedSource?.group) return;
-    const { group, from } = collectedSource;
-    router.push(
-      getChatDetailHref(
-        scope,
-        group.id,
-        group.name,
-        group.faceURL ?? undefined,
-        from.conversationID,
-        from.clientMsgID,
-        'group',
-      ),
-    );
-  }, [collectedSource, router, scope]);
 
   const d = useMemo(
     () => ({
@@ -416,14 +479,14 @@ export default function NoteDetailScreen() {
         removeClippedSubviews={Platform.OS === 'android'}
         onContentSizeChange={scrollToRequestedSection}
       >
-        {sections ? (
+        {readOnlySections ? (
           <NoteDocumentBody
             title={note.title}
             createdAt={note.createdAt}
             groups={note.groups}
-            sections={sections}
+            sections={readOnlySections}
             order={detailOrder}
-            layout={note.sections?.text?.contentJson ?? note.contentJson}
+            layout={readOnlyLayout}
             onContactPress={(id, name) => router.navigate(getUserProfileHref(scope, id, name))}
             onGroupPress={(id) => router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', id))}
             onMediaError={handleMediaError}
@@ -433,58 +496,9 @@ export default function NoteDetailScreen() {
         ) : null}
       </ScrollView>
 
-      {/* 右下角悬浮列：分享者私聊 / 回群定位 / 存 PDF。都是「这条笔记从哪来、
-          怎么带走」的动作，收在拇指区，不跟正文抢位置。 */}
-      {collectedSource || note ? (
+      {/* 只读详情保留下载动作；来源个人名片和群名片仅在编辑/config 区可见。 */}
+      {note ? (
         <View style={[s.floatingDock, { bottom: insets.bottom + Spacing.xl }]}>
-          {collectedSource?.sender ? (
-            <Pressable
-              style={[s.floatingBtn, d.floatingBtn]}
-              onPress={handleChatWithSender}
-              accessibilityRole="button"
-              accessibilityLabel={t('notes.detail.chatWithSender', {
-                defaultValue: '和 {{name}} 私聊',
-                name: collectedSource.sender.name,
-              })}
-            >
-              {collectedSource.sender.faceURL ? (
-                <Image
-                  source={{ uri: collectedSource.sender.faceURL }}
-                  style={s.floatingAvatar}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={[s.floatingAvatar, { backgroundColor: colors.primary }]}>
-                  <Ionicons name="person" size={18} color={colors.white} />
-                </View>
-              )}
-            </Pressable>
-          ) : null}
-
-          {collectedSource?.group ? (
-            <Pressable
-              style={[s.floatingBtn, d.floatingBtn]}
-              onPress={handleOpenGroupSource}
-              accessibilityRole="button"
-              accessibilityLabel={t('notes.detail.openGroupSource', {
-                defaultValue: '在群聊「{{name}}」中查看原消息',
-                name: collectedSource.group.name,
-              })}
-            >
-              {collectedSource.group.faceURL ? (
-                <Image
-                  source={{ uri: collectedSource.group.faceURL }}
-                  style={s.floatingAvatar}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={[s.floatingAvatar, { backgroundColor: colors.primary }]}>
-                  <Ionicons name="people" size={18} color={colors.white} />
-                </View>
-              )}
-            </Pressable>
-          ) : null}
-
           {/* 下载入口从顶栏移到这里：菜单内四种导出（图片/视频/长图/PDF）原样复用。 */}
           <Pressable
             style={[s.floatingBtn, d.floatingBtn, exporting !== null && s.floatingBtnBusy]}

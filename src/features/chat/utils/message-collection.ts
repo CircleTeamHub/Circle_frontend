@@ -147,15 +147,26 @@ export function buildNoteCollectSource(
   if (!context.conversationID || !context.sourceID) return null;
 
   if (context.conversationType === 'group') {
-    const group = buildPeer(
-      context.sourceID,
-      context.conversationTitle,
-      context.conversationAvatarUrl,
-    );
+    const group =
+      buildPeer(
+        message.noteCard.sourceGroupCardSnapshot?.id,
+        message.noteCard.sourceGroupCardSnapshot?.name,
+        message.noteCard.sourceGroupCardSnapshot?.faceURL ?? undefined,
+      ) ??
+      buildPeer(
+        context.sourceID,
+        context.conversationTitle,
+        context.conversationAvatarUrl,
+      );
     // 群消息：接收方向带 senderID；自己发的消息回落到当前用户。
     // senderAvatarUrl 必须一起带上 —— 漏传会让群来源的分享人永远存成无头像快照，
     // 而私聊来源有头像，同一个人在笔记列表里两种样子。
     const sender =
+      buildPeer(
+        message.noteCard.personalCardSnapshot?.id,
+        message.noteCard.personalCardSnapshot?.name,
+        message.noteCard.personalCardSnapshot?.faceURL ?? undefined,
+      ) ??
       buildPeer(message.senderID, message.senderName, message.senderAvatarUrl) ??
       buildPeer(
         context.currentUser?.id,
@@ -174,11 +185,17 @@ export function buildNoteCollectSource(
 
   // 私聊：名片主体固定是会话对方（“谁发给我的/在哪个会话”），
   // 即使这条笔记消息是自己转发的，跳转定位仍然落在这个会话。
-  const sender = buildPeer(
-    context.sourceID,
-    context.conversationTitle,
-    context.conversationAvatarUrl,
-  );
+  const sender =
+    buildPeer(
+      message.noteCard.personalCardSnapshot?.id,
+      message.noteCard.personalCardSnapshot?.name,
+      message.noteCard.personalCardSnapshot?.faceURL ?? undefined,
+    ) ??
+    buildPeer(
+      context.sourceID,
+      context.conversationTitle,
+      context.conversationAvatarUrl,
+    );
   if (!sender) return null;
   return {
     conversationType: 'private',

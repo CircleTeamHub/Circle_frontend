@@ -173,6 +173,20 @@ export function getNoteViewerImages(sections: NoteSections) {
   );
 }
 
+/** Return deduplicated, signed video URLs for direct media-library export. */
+export function getNoteVideoItems(sections: NoteSections) {
+  const seen = new Set<string>();
+  return [...sections.media.items, ...sections.showcase.items].filter(
+    (item): item is StructuredNoteMediaItem & { url: string } => {
+      if (item.type !== 'VIDEO' || !item.url) return false;
+      const key = item.objectKey || item.url;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    },
+  );
+}
+
 function normalizeItems(items: unknown): StructuredNoteMediaItem[] {
   if (!Array.isArray(items)) return [];
   return items.flatMap((item) => {

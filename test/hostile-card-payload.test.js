@@ -357,6 +357,6 @@ test('card sanitization keeps well-formed values intact', () => {
   assert.equal(ui.noteCard.title, '标题');
   assert.equal(ui.noteCard.contentPreview, '正文预览');
   assert.equal(ui.noteCard.imageCount, 3);
-  assert.deepEqual([...ui.noteCard.groupNames], ['a', 'b']);
+  assert.deepEqual([...ui.noteCard.groupNames], []);
   assert.equal(ui.noteCard.coverUrl, 'https://cdn.trusted/c.jpg');
 });

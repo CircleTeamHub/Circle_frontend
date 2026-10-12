@@ -34,6 +34,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
 
 type PendingForward = {
   message: ChatMessage;
@@ -360,6 +361,23 @@ export default function ForwardPickerScreen() {
               style={[s.row, d.row]}
               disabled={Boolean(sendingID)}
               onPress={() => {
+                const noteCard = pending.message.noteCard;
+                if (pending.message.type === 'note-card' && noteCard && shouldWarnNoteWorkStatus(noteCard)) {
+                  Alert.alert(
+                    t('chat.forward.workStatusWarningTitle', { defaultValue: '订单状态可能变化' }),
+                    t('chat.forward.workStatusWarning', {
+                      defaultValue: '这条笔记标记为打烊或已下架，确认后仍会继续转发。',
+                    }),
+                    [
+                      { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+                      {
+                        text: t('common.send', { defaultValue: '继续转发' }),
+                        onPress: () => void handleForward(item),
+                      },
+                    ],
+                  );
+                  return;
+                }
                 void handleForward(item);
               }}
             >

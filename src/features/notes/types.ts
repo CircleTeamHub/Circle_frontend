@@ -1,4 +1,6 @@
 export type NoteStatus = 'ACTIVE' | 'UNLISTED' | 'DELETED';
+/** 老板给场地设置的订单状态；未设置不会阻止发布或转发。 */
+export type NoteWorkStatus = 'WORKING' | 'CLOSED' | 'UNSET';
 export type NoteMediaType = 'IMAGE' | 'VIDEO' | 'AUDIO';
 
 export interface NoteMediaSummary {
@@ -131,6 +133,9 @@ export interface NoteSummary {
   contentPreview: string | null;
   status: NoteStatus;
   available: boolean;
+  /** 来源笔记的开工/打烊提示；旧接口缺省时按 UNSET 兼容。 */
+  workStatus?: NoteWorkStatus | null;
+  sourceConversationID?: string | null;
   pinned: boolean;
   /** 仅笔记主人可见的私人备注；他人视角后端恒回 null */
   remark?: string | null;

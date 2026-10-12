@@ -35,6 +35,11 @@ test("bottom sheets avoid native slide modal animation that lifts the dark backd
   assert.match(sharedSheet, /animationType=["']fade["']/);
   assert.match(sharedSheet, /Animated\.View/);
   assert.match(sharedSheet, /translateY/);
+  assert.match(sharedSheet, /PanResponder\.create/);
+  assert.match(sharedSheet, /onMoveShouldSetPanResponder/);
+  assert.match(sharedSheet, /onPanResponderMove/);
+  assert.match(sharedSheet, /onPanResponderRelease/);
+  assert.match(sharedSheet, /DISMISS_DISTANCE/);
 });
 
 test("bottom sheet keeps children as direct sheet content for auto-height layout", () => {

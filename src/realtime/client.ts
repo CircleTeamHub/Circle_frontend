@@ -17,7 +17,12 @@ import {
   useCircleNotificationStore,
 } from '@/features/discover/store/use-circle-notification-store';
 import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments-feed-signal-store';
+import {
+  useNoteStatusSignalStore,
+  type NoteSourceStatusChange,
+} from '@/features/notes/store/use-note-status-signal-store';
 import { useCallStore } from '@/features/call/store/use-call-store';
+import { useChatStore } from '@/chat-core/store';
 import { clearLocalSession, registerLogoutHandler } from '@/services/auth/session';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
@@ -110,6 +115,10 @@ type RealtimeEvent =
   | {
       type: 'moments.feed.updated';
       payload?: { authorId?: string; changedAt?: string };
+    }
+  | {
+      type: 'note.source.status.changed';
+      payload?: Partial<NoteSourceStatusChange>;
     }
   | {
       type: 'call.invite';
@@ -314,6 +323,9 @@ function runPostAuthenticationRecovery(): void {
   // 重连成功后 bump 一次信号，让 feed 组件自查新帖数（app 全程前台、
   // 无 AppState 变化的场景就靠这条兜住）。
   useMomentsFeedSignalStore.getState().bump();
+  // 笔记状态事件同样可能落在断线空窗里。列表和详情页收到信号后会重新拉取，
+  // 服务端返回的来源状态覆盖会把所有收录副本一起校准。
+  useNoteStatusSignalStore.getState().bump();
   // 断线空窗里结算的奖励/充值,那一帧是彻底丢掉的 —— badge 和朋友圈都在这里补,
   // 钱包不补的话,一个全程挂着的钱包页会一直显示断线前的余额。走同一个单飞入口,
   // 与并发的事件驱动刷新自然合并。
@@ -430,6 +442,26 @@ function isNotificationItem(value: unknown): value is NotificationItem {
     typeof item.content === 'string' &&
     typeof item.read === 'boolean' &&
     typeof item.createdAt === 'string'
+  );
+}
+
+function isNoteSourceStatusChange(
+  value: unknown,
+): value is NoteSourceStatusChange {
+  if (!value || typeof value !== 'object') return false;
+  const payload = value as Partial<NoteSourceStatusChange>;
+  return (
+    typeof payload.sourceNoteId === 'string' &&
+    payload.sourceNoteId.length > 0 &&
+    (payload.workStatus === null ||
+      payload.workStatus === 'WORKING' ||
+      payload.workStatus === 'CLOSED') &&
+    (payload.status === 'ACTIVE' ||
+      payload.status === 'UNLISTED' ||
+      payload.status === 'DELETED') &&
+    typeof payload.available === 'boolean' &&
+    typeof payload.changedAt === 'string' &&
+    payload.changedAt.length > 0
   );
 }
 
@@ -556,6 +588,18 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       // 轻量 poke（#89）：不带内容，只表示「你的朋友圈 feed 变了」。bump 后由
       // feed 组件自行决定拉不拉（权限判定始终在 GET /trace/feed 服务端）。
       useMomentsFeedSignalStore.getState().bump();
+      return;
+    case 'note.source.status.changed':
+      if (!isNoteSourceStatusChange(message.payload)) {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
+      }
+      useNoteStatusSignalStore.getState().bump(message.payload);
+      useChatStore.getState().applyNoteSourceStatus(
+        message.payload.sourceNoteId,
+        message.payload.workStatus,
+        message.payload.status,
+      );
       return;
     case 'call.invite':
       if (!isCallInvitePayload(message.payload)) {

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -15,15 +15,15 @@ import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
+import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
+import {
+  applyNoteSourceStatusToSummaries,
+  withNoteSyncRetry,
+} from '@/features/notes/utils/note-sync';
 import { fetchNotes, relistNote } from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const keyExtractor = (item: NoteSummary) => item.id;
-
-const ItemSeparator = memo(function ItemSeparator() {
-  const { colors } = useTheme();
-  return <View style={[s.divider, { backgroundColor: colors.divider }]} />;
-});
 
 export default function UnlistedNotesScreen() {
   const router = useRouter();
@@ -37,6 +37,9 @@ export default function UnlistedNotesScreen() {
   const [menuNote, setMenuNote] = useState<NoteSummary | null>(null);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  const loadSequenceRef = useRef(0);
+  const noteStatusVersion = useNoteStatusSignalStore((state) => state.version);
+  const noteStatusChange = useNoteStatusSignalStore((state) => state.lastChange);
 
   useEffect(
     () => () => {
@@ -45,16 +48,33 @@ export default function UnlistedNotesScreen() {
     [],
   );
 
+  useEffect(() => {
+    if (!noteStatusChange) return;
+    setNotes((current) =>
+      applyNoteSourceStatusToSummaries(current, noteStatusChange),
+    );
+  }, [noteStatusChange]);
+
   const load = useCallback(async () => {
-    const notesData = await fetchNotes({ status: 'UNLISTED' });
-    if (!mountedRef.current) return;
-    setNotes(notesData);
-    setLoadError(false);
-    setLoading(false);
+    const sequence = ++loadSequenceRef.current;
+    try {
+      const notesData = await withNoteSyncRetry(() =>
+        fetchNotes({ status: 'UNLISTED' }),
+      );
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
+      setNotes(notesData);
+      setLoadError(false);
+      setLoading(false);
+    } catch (error) {
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
+      throw error;
+    }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
+      // Re-run the focus loader when a realtime source-status signal advances.
+      void noteStatusVersion;
       setLoading(true);
       void load().catch(() => {
         if (mountedRef.current) {
@@ -62,7 +82,7 @@ export default function UnlistedNotesScreen() {
           setLoading(false);
         }
       });
-    }, [load]),
+    }, [load, noteStatusVersion]),
   );
 
   const handleRefreshNotes = useCallback(async () => {
@@ -114,7 +134,6 @@ export default function UnlistedNotesScreen() {
       backdrop: { backgroundColor: colors.overlay },
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
-      separator: { backgroundColor: colors.divider },
       sheetAction: { color: colors.iconAccent },
     }),
     [colors],
@@ -148,10 +167,10 @@ export default function UnlistedNotesScreen() {
         data={notes}
         keyExtractor={keyExtractor}
         renderItem={renderNote}
-        ItemSeparatorComponent={ItemSeparator}
         contentContainerStyle={{
           paddingTop: Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
+          gap: Spacing.sm,
         }}
         showsVerticalScrollIndicator={false}
         {...keyboardDismissOnDragProps}
@@ -225,7 +244,6 @@ const s = StyleSheet.create({
   },
   pageTitle: { ...Typography.h1, marginTop: Spacing.xs },
   hint: { ...Typography.small, marginTop: Spacing.xs },
-  divider: { height: StyleSheet.hairlineWidth },
   emptyWrap: { alignItems: 'center', gap: Spacing.md },
   emptyText: {
     textAlign: 'center',

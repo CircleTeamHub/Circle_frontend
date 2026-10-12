@@ -15,6 +15,7 @@ import {
   AppState,
   Platform,
   InteractionManager,
+  Keyboard,
   LogBox,
   Modal,
   PanResponder,
@@ -146,9 +147,10 @@ import {
 } from '@/features/notes/utils/note-editor-drafts';
 import { persistNoteRecording } from '@/features/notes/utils/note-recording-storage';
 import { stopNoteRecorder } from '@/features/notes/utils/note-recorder-lifecycle';
-import { createPendingNoteSubmission, isDefinitiveNoteSubmissionFailure, noteSubmissionMatchesResult, type PendingNoteSubmission } from '@/features/notes/utils/note-submission';
+import { createPendingNoteSubmission, isDefinitiveNoteSubmissionFailure, noteSubmissionMatchesResult, noteUpdateResultMatchesTarget, type PendingNoteSubmission } from '@/features/notes/utils/note-submission';
 import { createNoteDraftSaveQueue } from '@/features/notes/utils/note-draft-save-queue';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { ApiError } from '@/services/api/api-error';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -219,6 +221,10 @@ const COMPOSER_ACTIONS: readonly {
 const FIXED_TITLE_BLOCK: NoteComposerBlock = { id: 'title-fixed', kind: 'title' };
 
 const COMPOSER_SORT_ROW_HEIGHT = 58;
+const DEFAULT_TEXT_EDITOR_HEIGHT = 200;
+const MIN_TEXT_EDITOR_HEIGHT = 200;
+const MAX_TEXT_EDITOR_HEIGHT = 640;
+const TEXT_EDITOR_RESIZE_HANDLE_HEIGHT = 26;
 
 const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
@@ -442,9 +448,28 @@ function runNoteRecorderWork<T>(work: () => Promise<T>): Promise<T> {
   return pending;
 }
 
+function useKeyboardVisible() {
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  return keyboardVisible;
+}
+
 export default function EditNoteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboardVisible = useKeyboardVisible();
   const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
   const currentUser = useAuthStore((state) => state.user);
@@ -542,6 +567,8 @@ export default function EditNoteScreen() {
   const [mediaOwnerByClientId, setMediaOwnerByClientId] = useState<Record<string, string>>({});
   const [contactItems, setContactItems] = useState<NoteCardDraft[]>([]);
   const [groupCardItems, setGroupCardItems] = useState<NoteCardDraft[]>([]);
+  // 收藏副本的来源群名片属于老板的固定来源标识，中间人只能查看，不能替换或删除。
+  const [sourceGroupCardLocked, setSourceGroupCardLocked] = useState(false);
   const [cardPickerKind, setCardPickerKind] = useState<CardPickerKind | null>(null);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [circles, setCircles] = useState<NoteCardPickerCircle[]>([]);
@@ -571,6 +598,17 @@ export default function EditNoteScreen() {
   // A new note starts as a clean canvas. Blocks are mounted only after the
   // author chooses them from the compact toolbar below.
   const [composerBlocks, setComposerBlocks] = useState<NoteComposerBlock[]>([]);
+  const [textEditorHeights, setTextEditorHeights] = useState<Record<string, number>>({});
+  const textEditorHeightsRef = useRef<Record<string, number>>({});
+  const textEditorHeightValuesRef = useRef(new Map<string, Animated.Value>());
+  const textEditorResizeMetaRef = useRef<{
+    blockId: string;
+    startHeight: number;
+    currentHeight: number;
+  } | null>(null);
+  const textEditorResizeRespondersRef = useRef(
+    new Map<string, ReturnType<typeof PanResponder.create>>(),
+  );
   const composerIdRef = useRef(0);
   const [sortMode, setSortMode] = useState(false);
   const composerBlocksRef = useRef<NoteComposerBlock[]>([]);
@@ -673,6 +711,85 @@ export default function EditNoteScreen() {
   useEffect(() => {
     composerBlocksRef.current = composerBlocks;
   }, [composerBlocks]);
+
+  const setTextEditorHeight = useCallback((blockId: string, height: number) => {
+    const nextHeight = Math.round(height);
+    if (textEditorHeightsRef.current[blockId] === nextHeight) return;
+    textEditorHeightsRef.current = {
+      ...textEditorHeightsRef.current,
+      [blockId]: nextHeight,
+    };
+    setTextEditorHeights((current) => (
+      current[blockId] === nextHeight
+        ? current
+        : { ...current, [blockId]: nextHeight }
+    ));
+  }, []);
+
+  const getTextEditorHeightValue = useCallback((blockId: string, height: number) => {
+    const cached = textEditorHeightValuesRef.current.get(blockId);
+    if (cached) return cached;
+    const value = new Animated.Value(height);
+    textEditorHeightValuesRef.current.set(blockId, value);
+    return value;
+  }, []);
+
+  const finishTextEditorResize = useCallback(() => {
+    const meta = textEditorResizeMetaRef.current;
+    if (meta) {
+      textEditorHeightValuesRef.current.get(meta.blockId)?.stopAnimation();
+      setTextEditorHeight(meta.blockId, meta.currentHeight);
+    }
+    textEditorResizeMetaRef.current = null;
+  }, [setTextEditorHeight]);
+
+  const getTextEditorResizeResponder = useCallback(
+    (blockId: string) => {
+      const cached = textEditorResizeRespondersRef.current.get(blockId);
+      if (cached) return cached;
+
+      const responder = PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderGrant: () => {
+          if (pendingSubmissionRef.current || saveInFlightRef.current) return;
+          const startHeight =
+            textEditorHeightsRef.current[blockId] ?? DEFAULT_TEXT_EDITOR_HEIGHT;
+          textEditorResizeMetaRef.current = {
+            blockId,
+            startHeight,
+            currentHeight: startHeight,
+          };
+        },
+        onPanResponderMove: (_event, gestureState) => {
+          const meta = textEditorResizeMetaRef.current;
+          if (!meta) return;
+          const nextHeight = Math.max(
+            MIN_TEXT_EDITOR_HEIGHT,
+            Math.min(MAX_TEXT_EDITOR_HEIGHT, meta.startHeight + gestureState.dy),
+          );
+          meta.currentHeight = nextHeight;
+          textEditorHeightValuesRef.current.get(meta.blockId)?.setValue(nextHeight);
+        },
+        onPanResponderRelease: finishTextEditorResize,
+        onPanResponderTerminate: finishTextEditorResize,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
+      });
+
+      textEditorResizeRespondersRef.current.set(blockId, responder);
+      return responder;
+    },
+    [finishTextEditorResize],
+  );
+
+  useEffect(() => () => {
+    finishTextEditorResize();
+    textEditorHeightValuesRef.current.clear();
+    textEditorResizeRespondersRef.current.clear();
+  }, [finishTextEditorResize]);
 
   const finishComposerDrag = useCallback(() => {
     const meta = composerDragMetaRef.current;
@@ -932,6 +1049,11 @@ export default function EditNoteScreen() {
     pendingSubmissionRef.current = null;
     setPendingSubmission(null);
     setNavigating(false);
+    textEditorResizeMetaRef.current = null;
+    textEditorHeightsRef.current = {};
+    textEditorHeightValuesRef.current.clear();
+    textEditorResizeRespondersRef.current.clear();
+    setTextEditorHeights({});
     return () => {
       groupCreateRequestRef.current += 1;
       if (saveGenerationRef.current === routeGeneration) {
@@ -986,6 +1108,7 @@ export default function EditNoteScreen() {
       setMediaOwnerByClientId({});
       setContactItems([]);
       setGroupCardItems([]);
+      setSourceGroupCardLocked(false);
       setRecordingAudioStartedAt(null);
       recordingAudioRef.current = false;
       recordingAudioBlockIdRef.current = null;
@@ -1022,6 +1145,7 @@ export default function EditNoteScreen() {
     setMediaOwnerByClientId({});
     setContactItems([]);
     setGroupCardItems([]);
+    setSourceGroupCardLocked(false);
     setRecordingAudioStartedAt(null);
     recordingAudioRef.current = false;
     recordingAudioBlockIdRef.current = null;
@@ -1117,6 +1241,7 @@ export default function EditNoteScreen() {
         setMediaOwnerByClientId(storedOwnerMap);
         setContactItems(((normalizedSections as any).contacts?.items ?? []) as NoteCardDraft[]);
         setGroupCardItems(((normalizedSections as any).groups?.items ?? []) as NoteCardDraft[]);
+        setSourceGroupCardLocked(Boolean(note.sourceConversationID || note.collectedFrom?.group));
         setUnrecoverableMediaCount(
           countUnrecoverableSectionMedia([
             ...normalizedSections.media.items,
@@ -1183,6 +1308,7 @@ export default function EditNoteScreen() {
           setMediaOwnerByClientId({});
           setContactItems([]);
           setGroupCardItems([]);
+          setSourceGroupCardLocked(false);
           setComposerBlocks([]);
           setTextBlocksById({});
           textBlocksByIdRef.current = {};
@@ -2170,7 +2296,13 @@ export default function EditNoteScreen() {
 
 
   const openCardPicker = useCallback(async (kind: CardPickerKind) => {
-    if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || recordingAudioRef.current) return;
+    if (
+      pendingSubmissionRef.current ||
+      saveInFlightRef.current ||
+      !isRouteDataReady ||
+      recordingAudioRef.current ||
+      (kind === 'group' && sourceGroupCardLocked)
+    ) return;
     const requestId = ++cardPickerRequestRef.current;
     const accountId = currentUser?.id ?? null;
     cardPickerSessionRef.current = { userId: accountId, epoch: sessionEpoch };
@@ -2228,6 +2360,7 @@ export default function EditNoteScreen() {
     currentUser?.id,
     sessionEpoch,
     groupCardItems,
+    sourceGroupCardLocked,
     isRouteDataReady,
     t,
   ]);
@@ -2243,6 +2376,10 @@ export default function EditNoteScreen() {
     const auth = useAuthStore.getState();
     const pickerSession = cardPickerSessionRef.current;
     if (!cardPickerKind || !pickerSession || auth.user?.id !== pickerSession.userId || auth.sessionEpoch !== pickerSession.epoch) return;
+    if (cardPickerKind === 'group' && sourceGroupCardLocked) {
+      closeCardPicker();
+      return;
+    }
     if (cardPickerKind === 'contact') {
       setContactItems([
         ...contactItems.filter((item) => selectedCardIds.includes(item.id) && !contactPickerItems.some((option) => option.id === item.id)),
@@ -2263,7 +2400,7 @@ export default function EditNoteScreen() {
       ]);
     }
     closeCardPicker();
-  }, [cardPickerKind, circles, contactPickerItems, contactItems, groupCardItems, closeCardPicker, selectedCardIds]);
+  }, [cardPickerKind, circles, contactPickerItems, contactItems, groupCardItems, closeCardPicker, selectedCardIds, sourceGroupCardLocked]);
 
   const handleOpenLocationPicker = useCallback(() => {
     if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current) return;
@@ -2290,7 +2427,7 @@ export default function EditNoteScreen() {
   }, []);
 
   const handleRemoveComposerBlock = useCallback((block: NoteComposerBlock) => {
-    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
+    if (pendingSubmissionRef.current || saveInFlightRef.current || (block.kind === 'group' && sourceGroupCardLocked)) return;
     const currentBlocks = composerBlocksRef.current;
     const remainingBlocks = currentBlocks.filter((item) => item.id !== block.id);
     composerBlocksRef.current = remainingBlocks;
@@ -2366,7 +2503,7 @@ export default function EditNoteScreen() {
     } else if (block.kind === 'group') {
       setGroupCardItems([]);
     }
-  }, [audioItems, currentUser?.id, discardRecordingOutput, editorDraftId, handleClearLocation, mediaItems, noteRecorder, showcaseItems, textStatsStore]);
+  }, [audioItems, currentUser?.id, discardRecordingOutput, editorDraftId, handleClearLocation, mediaItems, noteRecorder, showcaseItems, sourceGroupCardLocked, textStatsStore]);
 
   const removeRecordedAudio = useCallback((item: EditorNoteMediaDraft) => {
     if (pendingSubmissionRef.current || saveInFlightRef.current) return;
@@ -2380,7 +2517,7 @@ export default function EditNoteScreen() {
   }, []);
 
   const addComposerBlock = useCallback((kind: NoteComposerBlockKind) => {
-    if (pendingSubmissionRef.current || saveInFlightRef.current) return;
+    if (pendingSubmissionRef.current || saveInFlightRef.current || (kind === 'group' && sourceGroupCardLocked)) return;
     // 标题、位置、名片和群名片在笔记模型里各只有一个值；文字、媒体等
     // 其余类型则是可重复的独立区块。工具栏只负责插入区块，区块内的
     // 操作按钮才负责打开选择器、上传或开始录音，避免点击工具栏就跳出面板。
@@ -2403,7 +2540,7 @@ export default function EditNoteScreen() {
     } else if (kind === 'image' || kind === 'video' || kind === 'showcase') {
       scrollRef.current?.scrollToEnd({ animated: true });
     }
-  }, [composerBlocks]);
+  }, [composerBlocks, sourceGroupCardLocked]);
 
   const navigateBack = useCallback(() => {
     promptDraftExit();
@@ -2646,7 +2783,10 @@ export default function EditNoteScreen() {
         ? await updateNote(submission.noteId, submission.input)
         : await createNote(submission.input);
       if (saveGenerationRef.current !== saveGeneration) return;
-      if (!noteSubmissionMatchesResult(submission, result)) {
+      const resultMatchesSubmission = submission.noteId !== null
+        ? noteUpdateResultMatchesTarget(submission, result)
+        : noteSubmissionMatchesResult(submission, result);
+      if (!resultMatchesSubmission) {
         if (result && typeof result.id === 'string') {
           const conflict = { ...submission, conflictingNoteId: result.id };
           pendingSubmissionRef.current = conflict;
@@ -2678,9 +2818,17 @@ export default function EditNoteScreen() {
       const fallback = requestStarted
         ? t('notes.edit.saveFailedMessage', { defaultValue: '保存失败，请稍后重试' })
         : t('notes.edit.pendingSubmitStorageFailed', { defaultValue: '无法在本机保留提交内容，尚未发送。请检查设备存储空间后重试。' });
-      const message = pendingSubmissionRef.current?.conflictingNoteId
-        ? t('notes.edit.pendingSubmitConflict', { defaultValue: '服务器已有不同的笔记内容，本机内容仍保留在草稿箱。请查看已保存笔记，再决定如何合并；本次不会删除草稿。' })
-        : requestStarted ? getApiErrorMessage(error, fallback) : fallback;
+      const apiMessage = requestStarted ? getApiErrorMessage(error, fallback) : fallback;
+      // A transport failure has a concrete, actionable message (for example
+      // "请求超时"). Keep that message visible while retaining the pending
+      // snapshot locally for retry; other uncertain outcomes use the same
+      // neutral confirmation state instead of implying a server conflict.
+      const isTransportFailure = error instanceof ApiError && error.status === 0;
+      const message = isTransportFailure
+        ? apiMessage
+        : pendingSubmissionRef.current
+          ? t('notes.edit.pendingSubmitMessage', { defaultValue: '正在确认保存结果。编辑已暂停；内容已保存到本地草稿，点击「重试」确认原提交。' })
+          : apiMessage;
       Alert.alert(
         t('notes.edit.saveFailedTitle', { defaultValue: '保存失败' }),
         message,
@@ -2757,6 +2905,7 @@ export default function EditNoteScreen() {
         borderColor: colors.surfaceBorder,
       },
       editorFrame: { borderColor: colors.surfaceBorder },
+      editorResizeGrip: { backgroundColor: colors.textSecondary },
       sectionHeading: { color: colors.text },
       sectionSubtitle: { color: colors.textSecondary },
       sectionHeaderMeta: { color: colors.textSecondary },
@@ -3026,6 +3175,9 @@ export default function EditNoteScreen() {
               placeholder={t('notes.edit.titlePlaceholder', { defaultValue: '标题' })}
               placeholderTextColor={colors.textSecondary}
               value={title}
+              multiline
+              numberOfLines={2}
+              textAlignVertical="top"
               editable={!isEditingLocked}
               onChangeText={(value) => { if (!pendingSubmissionRef.current && !saveInFlightRef.current) setTitle(value); }}
               maxLength={MAX_NOTE_TITLE_LENGTH}
@@ -3068,7 +3220,10 @@ export default function EditNoteScreen() {
             </View>
           </View>
         );
-      case 'text':
+      case 'text': {
+        const textEditorHeight = textEditorHeights[block.id] ?? DEFAULT_TEXT_EDITOR_HEIGHT;
+        const textEditorHeightValue = getTextEditorHeightValue(block.id, textEditorHeight);
+        const textEditorResizeResponder = getTextEditorResizeResponder(block.id);
         return (
           <>
         <View style={[s.sectionBlock, d.sectionShell]}>
@@ -3086,15 +3241,41 @@ export default function EditNoteScreen() {
             </NoteTextStatsConsumer>,
             () => handleRemoveComposerBlock(block),
           )}
-          <View style={[s.textEditorFrame, d.editorFrame]}>
-            {editorMounted ? (
-              <NoteBlockEditor
-                key={isEditingLocked ? 'locked' : 'editing'}
-                initialContent={textBlocksById[block.id] ?? null}
-                onContentChange={(newBlocks) => handleContentChange(block.id, newBlocks)}
-                mediaToolbarEnabled={false}
-                editable={!isEditingLocked}
-              />
+          <View>
+            <Animated.View
+              style={[
+                s.textEditorFrame,
+                { height: textEditorHeightValue, minHeight: MIN_TEXT_EDITOR_HEIGHT },
+                d.editorFrame,
+              ]}
+            >
+              {editorMounted ? (
+                <NoteBlockEditor
+                  key={isEditingLocked ? 'locked' : 'editing'}
+                  initialContent={textBlocksById[block.id] ?? null}
+                  onContentChange={(newBlocks) => handleContentChange(block.id, newBlocks)}
+                  mediaToolbarEnabled={false}
+                  editable={!isEditingLocked}
+                />
+              ) : null}
+            </Animated.View>
+            {!isEditingLocked ? (
+              <View
+                {...textEditorResizeResponder.panHandlers}
+                style={s.textEditorResizeHandle}
+                accessible
+                accessibilityRole="adjustable"
+                accessibilityLabel={t('notes.edit.resizeTextBlock', {
+                  defaultValue: '调整文字块高度',
+                })}
+                accessibilityValue={{
+                  min: MIN_TEXT_EDITOR_HEIGHT,
+                  max: MAX_TEXT_EDITOR_HEIGHT,
+                  now: textEditorHeight,
+                }}
+              >
+                <View style={[s.textEditorResizeGrip, d.editorResizeGrip]} />
+              </View>
             ) : null}
           </View>
           <NoteTextStatsConsumer store={textStatsStore}>
@@ -3115,6 +3296,7 @@ export default function EditNoteScreen() {
 
           </>
         );
+      }
       case 'image':
         return (
           <>
@@ -3275,11 +3457,27 @@ export default function EditNoteScreen() {
       case 'group':
         return (
           <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
-            {renderSectionHeader('people-outline', t('notes.edit.composer.group', { defaultValue: '群名片' }), `${groupCardItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`, () => handleRemoveComposerBlock(block))}
+            {renderSectionHeader(
+              'people-outline',
+              t('notes.edit.composer.group', { defaultValue: '群名片' }),
+              sourceGroupCardLocked
+                ? t('notes.edit.sourceGroupCardLocked', { defaultValue: '来源群名片固定' })
+                : `${groupCardItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`,
+              sourceGroupCardLocked ? undefined : () => handleRemoveComposerBlock(block),
+            )}
             <View style={s.sectionActions}>
-              <Pressable style={[s.sectionAction, d.sectionAction]} onPress={() => void openCardPicker('group')} disabled={!isRouteDataReady}>
+              <Pressable
+                style={[s.sectionAction, d.sectionAction]}
+                onPress={() => void openCardPicker('group')}
+                disabled={!isRouteDataReady || sourceGroupCardLocked}
+                accessibilityState={{ disabled: !isRouteDataReady || sourceGroupCardLocked }}
+              >
                 <Ionicons name="people-outline" size={17} color={colors.text} />
-                <Text style={[s.sectionActionText, d.sectionActionText]}>{t('notes.edit.addGroup', { defaultValue: '选择群组' })}</Text>
+                <Text style={[s.sectionActionText, d.sectionActionText]}>
+                  {sourceGroupCardLocked
+                    ? t('notes.edit.sourceGroupCardLocked', { defaultValue: '来源群名片固定' })
+                    : t('notes.edit.addGroup', { defaultValue: '选择群组' })}
+                </Text>
               </Pressable>
             </View>
             {groupCardItems.map((item) => {
@@ -3597,28 +3795,29 @@ export default function EditNoteScreen() {
         </Pressable>
       </View>
 
-      {pendingSubmission ? <Text accessibilityRole="alert" style={[s.sectionSubtitle, d.hintError]}>
-        {pendingSubmission.conflictingNoteId
-          ? t('notes.edit.pendingSubmitConflict', { defaultValue: '服务器已有不同的笔记内容，本机内容仍保留在草稿箱。请查看已保存笔记，再决定如何合并；本次不会删除草稿。' })
-          : t('notes.edit.pendingSubmitMessage', { defaultValue: '保存结果尚未确认，编辑已暂停。请点击「重试」确认原提交；返回会保留内容，之后可从草稿箱继续重试。' })}
+      {pendingSubmission && !isSubmitting ? <Text accessibilityRole="alert" style={[s.sectionSubtitle, d.hintError]}>
+        {t('notes.edit.pendingSubmitMessage', { defaultValue: '正在确认保存结果。编辑已暂停；内容已保存到本地草稿，点击「重试」确认原提交。' })}
       </Text> : null}
-      {pendingSubmission?.conflictingNoteId ? <Pressable accessibilityRole="button" onPress={() => void openCommittedNote()} disabled={isSubmitting}>
+      {pendingSubmission?.conflictingNoteId && !isSubmitting ? <Pressable accessibilityRole="button" onPress={() => void openCommittedNote()}>
         <Text style={[s.sectionSubtitle, d.groupButtonText]}>{t('notes.edit.openCommittedNote', { defaultValue: '查看已保存笔记' })}</Text>
       </Pressable> : null}
       <ScrollView
         ref={scrollRef}
         style={s.scroll}
-        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 124 }]}
+        contentContainerStyle={[
+          s.scrollContent,
+          { paddingBottom: keyboardVisible ? insets.bottom + Spacing.lg : insets.bottom + 124 },
+        ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <View pointerEvents={isEditingLocked ? 'none' : 'auto'}>
-          <View key={FIXED_TITLE_BLOCK.id}>
+          <View key={FIXED_TITLE_BLOCK.id} style={s.composerBlock}>
             {renderComposerSection(FIXED_TITLE_BLOCK, 0)}
           </View>
           {editableComposerBlocks.map((block, index) => (
-            <View key={block.id}>{renderComposerSection(block, index)}</View>
+            <View key={block.id} style={s.composerBlock}>{renderComposerSection(block, index)}</View>
           ))}
         </View>
       </ScrollView>
@@ -3626,6 +3825,7 @@ export default function EditNoteScreen() {
         style={[
           s.composerFooter,
           d.composerFooter,
+          keyboardVisible && s.composerFooterHidden,
           { paddingBottom: Math.max(insets.bottom, Spacing.xs) },
         ]}
       >
@@ -4160,9 +4360,13 @@ const s = StyleSheet.create({
   },
   doneBtnText: { ...Typography.body, fontWeight: '600' },
   scroll: { flex: 1 },
-  scrollContent: { paddingTop: Spacing.sm, gap: Spacing.xs },
+  scrollContent: { paddingTop: Spacing.sm },
+  // Keep spacing on the native wrapper instead of ScrollView gap, which is not
+  // applied consistently to contentContainerStyle across supported platforms.
+  composerBlock: { marginBottom: Spacing.md },
   heroCard: {
     marginHorizontal: Spacing.lg,
+    marginBottom: 0,
     borderWidth: 1,
     borderRadius: Radius.xxl,
     borderCurve: 'continuous',
@@ -4172,11 +4376,13 @@ const s = StyleSheet.create({
   },
   titleInput: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.xs,
-    fontSize: 32,
+    minHeight: 60,
+    maxHeight: 84,
+    fontSize: 24,
     fontWeight: '700',
-    lineHeight: 40,
+    lineHeight: 30,
   },
   metaRow: {
     flexDirection: 'row',
@@ -4363,16 +4569,16 @@ const s = StyleSheet.create({
   groupSheetDoneText: { ...Typography.body, fontWeight: '600' },
   sectionBlock: {
     marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
+    marginBottom: 0,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.xl,
     borderCurve: 'continuous',
-    padding: Spacing.lg,
-    gap: Spacing.lg,
+    padding: Spacing.md,
+    gap: Spacing.md,
   },
   secondarySection: {
     marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
+    marginBottom: 0,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.xl,
     paddingHorizontal: Spacing.md,
@@ -4413,12 +4619,23 @@ const s = StyleSheet.create({
     marginLeft: Spacing.xs,
   },
   textEditorFrame: {
-    height: 280,
-    minHeight: 280,
+    height: DEFAULT_TEXT_EDITOR_HEIGHT,
+    minHeight: MIN_TEXT_EDITOR_HEIGHT,
     overflow: 'hidden',
     borderRadius: Radius.md,
     borderCurve: 'continuous',
     borderWidth: 1,
+  },
+  textEditorResizeHandle: {
+    height: TEXT_EDITOR_RESIZE_HANDLE_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textEditorResizeGrip: {
+    width: 40,
+    height: 4,
+    borderRadius: Radius.full,
+    opacity: 0.45,
   },
   legacyMediaWarning: {
     flexDirection: 'row',
@@ -4621,6 +4838,7 @@ const s = StyleSheet.create({
     paddingBottom: 6,
     gap: Spacing.xs,
   },
+  composerFooterHidden: { display: 'none' },
   composerToolbar: {
     width: '100%',
     flexDirection: 'row',

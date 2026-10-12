@@ -112,6 +112,22 @@ export default function NoteBlockEditor({
   const editor = useCreateBlockNote({
     initialContent: parsedInitial,
     dictionary: language === 'zh' ? zh : en,
+    // The slash menu is intentionally disabled below because the DOM bridge
+    // does not provide BlockNote's ComponentsContext. Keep every editor
+    // placeholder empty so the text area stays visually quiet; formatting
+    // uses the native H/T/list controls.
+    placeholders: {
+      default: '',
+      emptyDocument: '',
+      heading: '',
+      toggleListItem: '',
+      bulletListItem: '',
+      numberedListItem: '',
+      checkListItem: '',
+      new_comment: '',
+      edit_comment: '',
+      comment_reply: '',
+    },
     // Native clipboard bridges often expose a truncated/invalid HTML payload.
     // The plain-text payload is the source of truth for notes: it keeps long
     // pasted paragraphs intact and still lets BlockNote split lines into blocks.

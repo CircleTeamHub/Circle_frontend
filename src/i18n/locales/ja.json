@@ -312,6 +312,7 @@
       "saveFailedHint": "後でもう一度お試しください",
       "noteCollected": "マイノートに追加しました",
       "noteAlreadyCollected": "すでにマイノートにあります",
+      "noteOwnCannotCollect": "自分で作成したノートは保存できません",
       "noteCollectedHint": "「マイノート」で確認できます",
       "revoke": "取り消し",
       "revokeFailed": "取り消しに失敗しました",
@@ -336,7 +337,9 @@
       "failed": "転送に失敗しました",
       "failedRetry": "後でもう一度お試しください",
       "locationWithDetail": "[位置情報] {{detail}}",
-      "unsupported": "このメッセージはまだ転送できません"
+      "unsupported": "このメッセージはまだ転送できません",
+      "workStatusWarningTitle": "注文状態が変わっている可能性があります",
+      "workStatusWarning": "このノートは終了または非公開です。確認後も送信できます。"
     },
     "snackbarNewMessage": "新着メッセージ",
     "snackbarPreviewFallback": "[メッセージ]",
@@ -529,7 +532,23 @@
       "ownerSection": "オーナー",
       "joinMethods": "参加方法",
       "memberPermissions": "メンバー権限",
-      "pickNewOwner": "新しいオーナーを選択"
+      "pickNewOwner": "新しいオーナーを選択",
+      "noteManagement": "ノート管理",
+      "noteManagementHint": "掲載中の会場ノートのみ表示します。状態は担当者への案内で、ここから掲載停止できます。",
+      "noteRestricted": "グループオーナーのみノートを管理できます",
+      "bindNote": "自分のノートを関連付ける",
+      "bindNoteHint": "ノートカードをタップしてこのグループに関連付けます",
+      "noteStatusLabel": "会場の状態",
+      "noSourceNotes": "関連付けられるノートはありません",
+      "noteWorking": "営業中",
+      "noteClosed": "閉店",
+      "noteUnset": "未設定",
+      "noteStatusAction": "ノートの状態を変更",
+      "noteUnlist": "掲載停止",
+      "noteRelist": "再掲載",
+      "noteUnbindTitle": "元グループとの関連付けを解除しますか？",
+      "noteUnbindHint": "このノートはグループのノート管理に表示されなくなります。",
+      "noteUnbind": "関連付けを解除"
     },
     "groupEvent": {
       "system": "システム",
@@ -745,7 +764,12 @@
       },
       "imageCount": "画像{{count}}枚",
       "videoCount": "動画{{count}}本",
-      "includes": "含む: {{segments}}"
+      "includes": "含む: {{segments}}",
+      "workStatus": {
+        "working": "稼働中",
+        "closed": "終了",
+        "unlisted": "非公開・状態が変わっている可能性があります"
+      }
     },
     "voice": {
       "cancelTip": "指を離すと送信をキャンセル",
@@ -1013,6 +1037,7 @@
       "cardPickerLoadFailedMessage": "名刺一覧を読み込めませんでした。もう一度お試しください。",
       "addContact": "連絡先を選択",
       "addGroup": "グループを選択",
+      "sourceGroupCardLocked": "元グループカードは固定です",
       "mediaUploadFailedTitle": "アップロードに失敗しました",
       "mediaUploadFailedMessage": "もう一度お試しください",
       "uploadAudio": "音声をアップロード",
@@ -1021,9 +1046,9 @@
       "audioRecording": "録音中、タップして停止",
       "waitForMediaTitle": "現在の操作を完了してください",
       "waitForMediaMessage": "録音を停止するか、アップロードまたは保存が完了してから戻ってください。",
-      "pendingSubmitMessage": "保存結果を確認できていないため、編集を一時停止しています。「再試行」で元の保存を確認するか、戻って下書きに残し、後で再試行してください。",
+      "pendingSubmitMessage": "保存結果を確認しています。編集を一時停止し、内容は端末の下書きに保存しました。「再試行」で元の保存を確認してください。",
       "pendingSubmitStorageFailed": "送信内容を端末に保存できなかったため、まだ送信していません。空き容量を確認して再試行してください。",
-      "pendingSubmitConflict": "サーバーのノート内容が異なります。端末の内容は下書きに残っています。保存済みノートを確認してから統合方法を決めてください。この下書きは削除しません。",
+      "pendingSubmitConflict": "保存結果を確認しています。編集を一時停止し、内容は端末の下書きに保存しました。「再試行」で元の保存を確認してください。",
       "openCommittedNote": "保存済みノートを見る",
       "audioDuration": "{{seconds}} 秒",
       "audioPickerUnavailableTitle": "音声を選択できません",
@@ -1044,6 +1069,7 @@
       "titleRequired": "タイトルを入力してください",
       "titleHint": "タイトルは必須です（最大{{max}}文字）",
       "textCount": "本文の長さ {{count}} / {{max}}",
+      "resizeTextBlock": "テキストブロックの高さを調整",
       "textTooLong": "本文は段落間の改行を含めて最大{{max}}文字です（現在{{count}}文字）。入力内容は保持されています。短くしてから保存してください。",
       "tooManyParagraphs": "本文は最大{{max}}段落です。入力内容は保持されています。一部の段落をまとめてから保存してください。",
       "titlePlaceholder": "タイトル",
@@ -1184,6 +1210,9 @@
     },
     "list": {
       "fromSource": "{{name}}から",
+      "statusWorking": "稼働中",
+      "statusClosed": "終了",
+      "statusUnlisted": "非公開・状態が変わっている可能性があります",
       "remark": "メモ：{{text}}",
       "openSenderChat": "{{name}}とチャット",
       "openGroupChat": "グループチャット{{name}}を開く"
@@ -1209,7 +1238,16 @@
       "next": "次へ"
     },
     "loadFailed": "ノートを読み込めませんでした。ネットワークを確認して再試行してください",
+    "collect": {
+      "chooseGroup": "どのノートグループに追加しますか？",
+      "editTitle": "保存タイトルを編集",
+      "groupHint": "先にグループを選び、次にタイトルを編集できます。",
+      "ungrouped": "未分類",
+      "titleHint": "保存前に初期タイトルを編集できます。",
+      "titleLabel": "保存タイトル"
+    },
     "shareToChat": {
+      "workStatusWarning": "注文は終了または非公開の可能性があります。確認後も送信できます。",
       "title": "友だちやグループに共有",
       "confirmTitle": "ノートを送信",
       "confirmMessage": "「{{title}}」を {{name}} に送信しますか？",
@@ -2776,6 +2814,7 @@
     "close": "閉じる",
     "confirm": "確認",
     "delete": "削除",
+    "remove": "削除",
     "retry": "再試行",
     "send": "送信",
     "sending": "送信中…",
