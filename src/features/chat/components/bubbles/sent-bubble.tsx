@@ -11,6 +11,7 @@ interface SentBubbleProps {
   message: ChatMessage;
   selfName?: string;
   selfAvatarUri?: string;
+  onAvatarPress?: () => void;
   hideStatus?: boolean;
   /** 真引用(G-09):点击引用块定位到原消息;原消息不可达时不传。 */
   onQuotePress?: () => void;
@@ -61,6 +62,7 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
   message,
   selfName,
   selfAvatarUri,
+  onAvatarPress,
   hideStatus,
   onQuotePress,
   onReactionPress,
@@ -152,6 +154,7 @@ export const SentBubble: React.FC<SentBubbleProps> = ({
           outgoing
           selfName={selfName}
           selfAvatarUri={selfAvatarUri}
+          onPress={onAvatarPress}
         />
       </View>
     </View>

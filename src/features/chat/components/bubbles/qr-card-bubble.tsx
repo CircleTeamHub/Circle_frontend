@@ -87,6 +87,7 @@ export const QrCardBubble: React.FC<QrCardBubbleProps> = ({
       selfAvatarUri={selfAvatarUri}
       senderName={senderName}
       senderAvatarUri={senderAvatarUri}
+      onPress={outgoing ? onAvatarPress : undefined}
     />
   );
 

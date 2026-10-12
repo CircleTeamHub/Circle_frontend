@@ -47,6 +47,7 @@ export const VerificationCardBubble: React.FC<VerificationCardBubbleProps> = ({
       selfAvatarUri={selfAvatarUri}
       senderName={senderName}
       senderAvatarUri={senderAvatarUri}
+      onPress={outgoing ? onAvatarPress : undefined}
     />
   );
 

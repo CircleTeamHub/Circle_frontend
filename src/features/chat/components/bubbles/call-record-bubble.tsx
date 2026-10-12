@@ -170,6 +170,7 @@ export function CallRecordBubble({
           outgoing
           selfName={selfName}
           selfAvatarUri={selfAvatarUri}
+          onPress={onAvatarPress}
         />
       ) : null}
     </View>

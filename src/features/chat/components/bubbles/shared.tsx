@@ -30,6 +30,7 @@ interface MessageAvatarProps {
   selfAvatarUri?: string;
   senderName?: string;
   senderAvatarUri?: string;
+  onPress?: () => void;
 }
 
 /**
@@ -44,6 +45,7 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({
   selfAvatarUri,
   senderName,
   senderAvatarUri,
+  onPress,
 }) => {
   const hideChatAvatar = useAppSettingsStore(
     (state) => state.settings.hideChatAvatar,
@@ -60,12 +62,20 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({
   if (message.suppressAvatar) {
     return <View style={sAvatar.mergedPlaceholder} />;
   }
-  return (
+  const avatar = (
     <Avatar
       size={AVATAR_SIZE}
       name={outgoing ? selfName : senderName}
       uri={outgoing ? selfAvatarUri : senderAvatarUri}
     />
+  );
+
+  return onPress ? (
+    <Pressable accessibilityRole="button" onPress={onPress}>
+      {avatar}
+    </Pressable>
+  ) : (
+    avatar
   );
 };
 

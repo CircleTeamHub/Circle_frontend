@@ -118,6 +118,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
       selfAvatarUri={selfAvatarUri}
       senderName={senderName}
       senderAvatarUri={senderAvatarUri}
+      onPress={outgoing ? onAvatarPress : undefined}
     />
   );
 

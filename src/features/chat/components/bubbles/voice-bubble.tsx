@@ -180,6 +180,7 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
       selfAvatarUri={selfAvatarUri}
       senderName={senderName}
       senderAvatarUri={senderAvatarUri}
+      onPress={outgoing ? onAvatarPress : undefined}
     />
   );
 

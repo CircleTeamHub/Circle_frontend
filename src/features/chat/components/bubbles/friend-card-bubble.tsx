@@ -48,6 +48,7 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
       selfAvatarUri={selfAvatarUri}
       senderName={senderName}
       senderAvatarUri={senderAvatarUri}
+      onPress={outgoing ? onAvatarPress : undefined}
     />
   );
 
