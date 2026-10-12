@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { AVATAR_SIZE } from '@/features/chat/components/bubbles/shared';
+import { AVATAR_COLUMN_SIZE } from '@/features/chat/components/bubbles/shared';
 import { Radius, Spacing, Typography } from '@/theme';
 
 /** 聊天详情页的静态样式(随主题变化的那部分在 useChatDetailThemedStyles)。 */
@@ -8,7 +8,7 @@ export const chatDetailStyles = StyleSheet.create({
   // marginBottom 给名字与气泡之间留一点呼吸空间，避免名字贴着气泡显得拥挤。
   senderLabel: {
     ...Typography.small,
-    marginLeft: AVATAR_SIZE + Spacing.sm,
+    marginLeft: AVATAR_COLUMN_SIZE + Spacing.sm,
     marginBottom: Spacing.xs + 2,
   },
   // 「隐藏聊天头像」把整列去掉，气泡贴边；名字要跟着回到 0，否则名字缩进、

@@ -63,6 +63,14 @@ export type NoteSendTask =
 /** 一次最多勾选的笔记数（对齐常见 IM 转发上限，也约束批量消息总量）。 */
 export const MAX_NOTE_BATCH_SELECTION = 9;
 
+/** 在调用时立刻预留串行位置，避免异步预检逆序完成后打乱批次发送顺序。 */
+export function appendNoteBatchRun(
+  previous: Promise<void>,
+  task: () => Promise<void>,
+): Promise<void> {
+  return previous.catch(() => undefined).then(task);
+}
+
 /**
  * 服务端 send 桶是 20 条/10s（按用户，手动消息与批量共用）。批量最多占 17
  * 个槽位，始终给用户自己发送保留 3 个；时间戳由屏幕级 ref 跨批保存。

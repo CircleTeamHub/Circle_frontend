@@ -873,14 +873,19 @@ test('合并头像留等宽占位，隐藏头像才真的去掉那一列', () =>
   assert.match(body, /mergedPlaceholder/);
   // 两种情况不能再共用一个 return null。
   assert.doesNotMatch(body, /hideChatAvatar \|\| message\.suppressAvatar/);
-  assert.match(shared, /mergedPlaceholder: \{ width: AVATAR_SIZE \}/);
+  assert.match(shared, /mergedPlaceholder: \{ width: AVATAR_COLUMN_SIZE \}/);
 });
 
 test('群聊发送者名字的缩进跟着真实的头像列走', () => {
   const detail = readChatDetailSource();
+  const styles = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/chat-detail/styles.ts'),
+    'utf8',
+  );
 
   assert.match(detail, /senderLabelWithoutAvatarColumn: \{ marginLeft: 0 \}/);
   assert.match(detail, /hideChatAvatar && s\.senderLabelWithoutAvatarColumn/);
+  assert.match(styles, /marginLeft: AVATAR_COLUMN_SIZE \+ Spacing\.sm/);
 });
 
 // mapChatMessageDtosToUI 用 WeakMap 保住每条消息的对象身份，好让列表跳过没变的

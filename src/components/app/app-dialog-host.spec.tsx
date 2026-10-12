@@ -1,7 +1,7 @@
 import { Alert, Modal, Platform } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { AppDialogHost } from './app-dialog-host';
-import { showDialog, useAppDialogStore } from './app-dialog-store';
+import { dismissDialog, showDialog, useAppDialogStore } from './app-dialog-store';
 import { installAlertBridge } from '@/utils/alert-bridge';
 
 // 玻璃材质的两个原生模块 jest 里没有：退化成普通 View，只验证结构与行为。
@@ -53,6 +53,20 @@ beforeEach(() => {
 });
 
 describe('AppDialogHost', () => {
+  it('hides a dialog removed programmatically', () => {
+    render(<AppDialogHost />);
+    let id = 0;
+    act(() => {
+      id = showDialog({ title: '离开页面后应关闭' });
+    });
+    expect(screen.getByText('离开页面后应关闭')).toBeTruthy();
+
+    act(() => {
+      dismissDialog(id);
+    });
+    expect(screen.queryByText('离开页面后应关闭')).toBeNull();
+  });
+
   it('renders the queued dialog and runs the pressed button, then shows the next one', () => {
     const leave = jest.fn();
     render(<AppDialogHost />);

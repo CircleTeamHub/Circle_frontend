@@ -151,86 +151,94 @@ export function ImageViewer({
         statusBarTranslucent
       >
         <View style={s.root}>
-          <FlatList
-            ref={listRef}
-            data={images}
-            keyExtractor={(uri, i) => `${uri}-${i}`}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            scrollEnabled={!zoomed}
-            initialScrollIndex={initialIndex}
-            getItemLayout={(_, i) => ({
-              length: width,
-              offset: width * i,
-              index: i,
-            })}
-            onScroll={updateVisibleIndex}
-            scrollEventThrottle={16}
-            onMomentumScrollEnd={updateVisibleIndex}
-            renderItem={({ item, index: itemIndex }) =>
-              Math.abs(itemIndex - index) <= 1 ? (
-                <ZoomableImage
-                  uri={item}
-                  cacheKey={cacheKeys?.[itemIndex]}
-                  cachePolicy={privacyMode === 'ephemeral' ? 'none' : 'memory-disk'}
-                  width={width}
-                  height={height}
-                  active={itemIndex === index}
-                  onZoomedChange={setZoomed}
-                  onSwipeDown={handleSwipeDown}
-                  // 单击关闭：全屏查看器里最顺手的退出方式（双击留给放大）。
-                  onTap={onClose}
-                  onLongPress={privacyMode === 'ephemeral' ? undefined : handleLongPress}
-                />
-              ) : (
-                <View style={{ width, height }} />
-              )
+          <View
+            testID="image-viewer-content"
+            style={s.viewerContent}
+            importantForAccessibility={
+              actionSheetVisible ? 'no-hide-descendants' : 'auto'
             }
-          />
-
-          <Pressable
-            style={[s.closeButton, { top: insets.top + Spacing.md }]}
-            onPress={onClose}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.close')}
           >
-            <Ionicons name="close" size={26} color="#FFFFFF" />
-          </Pressable>
+            <FlatList
+              ref={listRef}
+              data={images}
+              keyExtractor={(uri, i) => `${uri}-${i}`}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEnabled={!zoomed}
+              initialScrollIndex={initialIndex}
+              getItemLayout={(_, i) => ({
+                length: width,
+                offset: width * i,
+                index: i,
+              })}
+              onScroll={updateVisibleIndex}
+              scrollEventThrottle={16}
+              onMomentumScrollEnd={updateVisibleIndex}
+              renderItem={({ item, index: itemIndex }) =>
+                Math.abs(itemIndex - index) <= 1 ? (
+                  <ZoomableImage
+                    uri={item}
+                    cacheKey={cacheKeys?.[itemIndex]}
+                    cachePolicy={privacyMode === 'ephemeral' ? 'none' : 'memory-disk'}
+                    width={width}
+                    height={height}
+                    active={itemIndex === index}
+                    onZoomedChange={setZoomed}
+                    onSwipeDown={handleSwipeDown}
+                    // 单击关闭：全屏查看器里最顺手的退出方式（双击留给放大）。
+                    onTap={onClose}
+                    onLongPress={privacyMode === 'ephemeral' ? undefined : handleLongPress}
+                  />
+                ) : (
+                  <View style={{ width, height }} />
+                )
+              }
+            />
 
-          {images.length > 1 ? (
-            <View style={[s.counter, { top: insets.top + Spacing.md }]}>
-              <Text style={s.counterText}>{`${index + 1} / ${images.length}`}</Text>
-            </View>
-          ) : null}
+            <Pressable
+              style={[s.closeButton, { top: insets.top + Spacing.md }]}
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close')}
+            >
+              <Ionicons name="close" size={26} color="#FFFFFF" />
+            </Pressable>
 
-          {showArrows ? (
-            <>
-              <Pressable
-                style={[s.arrow, s.arrowLeft, index === 0 && s.arrowDisabled]}
-                onPress={() => goTo(index - 1)}
-                disabled={index === 0}
-                accessibilityRole="button"
-                accessibilityLabel={t('common.previous', { defaultValue: '上一张' })}
-              >
-                <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
-              </Pressable>
-              <Pressable
-                style={[
-                  s.arrow,
-                  s.arrowRight,
-                  index === images.length - 1 && s.arrowDisabled,
-                ]}
-                onPress={() => goTo(index + 1)}
-                disabled={index === images.length - 1}
-                accessibilityRole="button"
-                accessibilityLabel={t('common.next', { defaultValue: '下一张' })}
-              >
-                <Ionicons name="chevron-forward" size={28} color="#FFFFFF" />
-              </Pressable>
-            </>
-          ) : null}
+            {images.length > 1 ? (
+              <View style={[s.counter, { top: insets.top + Spacing.md }]}>
+                <Text style={s.counterText}>{`${index + 1} / ${images.length}`}</Text>
+              </View>
+            ) : null}
+
+            {showArrows ? (
+              <>
+                <Pressable
+                  style={[s.arrow, s.arrowLeft, index === 0 && s.arrowDisabled]}
+                  onPress={() => goTo(index - 1)}
+                  disabled={index === 0}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.previous', { defaultValue: '上一张' })}
+                >
+                  <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
+                </Pressable>
+                <Pressable
+                  style={[
+                    s.arrow,
+                    s.arrowRight,
+                    index === images.length - 1 && s.arrowDisabled,
+                  ]}
+                  onPress={() => goTo(index + 1)}
+                  disabled={index === images.length - 1}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.next', { defaultValue: '下一张' })}
+                >
+                  <Ionicons name="chevron-forward" size={28} color="#FFFFFF" />
+                </Pressable>
+              </>
+            ) : null}
+          </View>
 
           {/* 保存菜单画在查看器自己的 Modal 里：iOS 上从一个原生 Modal 旁边再弹
               另一个 Modal 不可靠（可能弹不出来或把输入卡死）。 */}
@@ -304,6 +312,9 @@ const s = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  viewerContent: {
+    flex: 1,
   },
   closeButton: {
     position: 'absolute',

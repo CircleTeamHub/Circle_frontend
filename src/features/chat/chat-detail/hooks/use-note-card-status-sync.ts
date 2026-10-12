@@ -42,10 +42,25 @@ export function useNoteCardStatusSync(
   const recoveryVersion = useNoteStatusSignalStore(
     (state) => state.recoveryVersion,
   );
-  const idsKey = useMemo(
-    () => collectNoteCardIds(messages).join(','),
-    [messages],
-  );
+  const targetsKey = useMemo(() => {
+    const ids = collectNoteCardIds(messages);
+    const sourceIdByNoteId = new Map<string, string>();
+    for (const message of messages ?? []) {
+      if (message.type !== 'note-card') continue;
+      const noteId = message.content?.['noteId'];
+      if (typeof noteId !== 'string' || !ids.includes(noteId)) continue;
+      const sourceNoteId = message.content?.['sourceNoteId'];
+      sourceIdByNoteId.set(
+        noteId,
+        typeof sourceNoteId === 'string' && sourceNoteId.length > 0
+          ? sourceNoteId
+          : noteId,
+      );
+    }
+    return JSON.stringify(
+      ids.map((noteId) => [noteId, sourceIdByNoteId.get(noteId) ?? noteId]),
+    );
+  }, [messages]);
   // 本会话、本恢复周期内已对账成功的 id；新加载出的卡片只补拉增量。
   const syncedRef = useRef<{ key: string; ids: Set<string> }>({
     key: '',
@@ -53,20 +68,43 @@ export function useNoteCardStatusSync(
   });
 
   useEffect(() => {
-    if (!conversationId || !idsKey) return;
+    const targets = JSON.parse(targetsKey) as [string, string][];
+    if (!conversationId || targets.length === 0) {
+      // 切到空会话也要换代，令上一会话仍在途的响应失效。
+      syncedRef.current = { key: '', ids: new Set() };
+      return;
+    }
     const epoch = `${conversationId}:${recoveryVersion}`;
     if (syncedRef.current.key !== epoch) {
       syncedRef.current = { key: epoch, ids: new Set() };
     }
     const synced = syncedRef.current;
-    const pending = idsKey.split(',').filter((id) => !synced.ids.has(id));
+    const pending = targets
+      .map(([noteId]) => noteId)
+      .filter((id) => !synced.ids.has(id));
     if (pending.length === 0) return;
     pending.forEach((id) => synced.ids.add(id));
+    const sourceIdByNoteId = new Map(targets);
+    const sourceVersionsAtRequest = useNoteStatusSignalStore.getState().sourceVersions;
+    let active = true;
+    let finished = false;
 
     void fetchNoteSourceStates(pending)
       .then((states) => {
+        // 会话或恢复周期已经切换：旧请求不得覆盖新周期的权威对账结果。
+        if (!active || syncedRef.current !== synced) return;
+        finished = true;
         const apply = useChatStore.getState().applyNoteSourceStatus;
+        const currentSourceVersions =
+          useNoteStatusSignalStore.getState().sourceVersions;
         for (const state of states) {
+          const sourceNoteId = sourceIdByNoteId.get(state.noteId) ?? state.noteId;
+          if (
+            (currentSourceVersions[sourceNoteId] ?? 0) !==
+            (sourceVersionsAtRequest[sourceNoteId] ?? 0)
+          ) {
+            continue;
+          }
           apply(
             state.noteId,
             state.workStatus === 'UNSET' ? null : state.workStatus,
@@ -75,6 +113,8 @@ export function useNoteCardStatusSync(
         }
       })
       .catch((error: unknown) => {
+        if (!active) return;
+        finished = true;
         // 失败的 id 退出已对账集合，下次消息变化或重连时再试。
         if (syncedRef.current === synced) {
           pending.forEach((id) => synced.ids.delete(id));
@@ -83,5 +123,12 @@ export function useNoteCardStatusSync(
           count: pending.length,
         });
       });
-  }, [conversationId, idsKey, recoveryVersion]);
+    return () => {
+      active = false;
+      // 同一周期因 messages 变化而重跑时，让新 effect 重新认领这些 id。
+      if (!finished && syncedRef.current === synced) {
+        pending.forEach((id) => synced.ids.delete(id));
+      }
+    };
+  }, [conversationId, recoveryVersion, targetsKey]);
 }
