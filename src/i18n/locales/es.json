@@ -341,6 +341,10 @@
       "locationWithDetail": "[Ubicación] {{detail}}",
       "unsupported": "Este tipo de mensaje aún no se puede reenviar"
     },
+    "avatarA11y": {
+      "self": "Ver mi perfil",
+      "user": "Ver el perfil de {{name}}"
+    },
     "snackbarNewMessage": "Mensaje nuevo",
     "snackbarPreviewFallback": "[Mensaje]",
     "history": {

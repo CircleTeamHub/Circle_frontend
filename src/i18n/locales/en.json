@@ -418,6 +418,10 @@
       "locationWithDetail": "[Location] {{detail}}",
       "unsupported": "This message type cannot be forwarded yet"
     },
+    "avatarA11y": {
+      "self": "View my profile",
+      "user": "View {{name}}'s profile"
+    },
     "snackbarNewMessage": "New message",
     "snackbarPreviewFallback": "[Message]",
     "history": {

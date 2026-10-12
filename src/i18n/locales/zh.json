@@ -415,6 +415,10 @@
       "locationWithDetail": "[位置] {{detail}}",
       "unsupported": "该消息类型暂不支持转发"
     },
+    "avatarA11y": {
+      "self": "查看我的资料",
+      "user": "查看{{name}}的资料"
+    },
     "snackbarNewMessage": "新消息",
     "snackbarPreviewFallback": "[消息]",
     "history": {

@@ -47,6 +47,7 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({
   senderAvatarUri,
   onPress,
 }) => {
+  const { t } = useTranslation();
   const hideChatAvatar = useAppSettingsStore(
     (state) => state.settings.hideChatAvatar,
   );
@@ -70,8 +71,20 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({
     />
   );
 
+  // 头像按钮要有可读的名字，读屏才知道点了会打开谁的资料。
+  const accessibilityLabel = outgoing
+    ? t('chat.avatarA11y.self', { defaultValue: '查看我的资料' })
+    : t('chat.avatarA11y.user', {
+        name: senderName ?? '',
+        defaultValue: '查看{{name}}的资料',
+      });
+
   return onPress ? (
-    <Pressable accessibilityRole="button" onPress={onPress}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+    >
       {avatar}
     </Pressable>
   ) : (

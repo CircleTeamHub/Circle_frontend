@@ -249,7 +249,7 @@ test('sent bubble does not render the auth-backed circular frame', () => {
 test('sent avatar invokes the profile handler when pressed', () => {
   const onAvatarPress = jest.fn();
 
-  const { getByRole } = render(
+  const { getByLabelText } = render(
     <SentBubble
       message={sentMessage}
       selfName="Self"
@@ -257,7 +257,8 @@ test('sent avatar invokes the profile handler when pressed', () => {
     />,
   );
 
-  fireEvent.press(getByRole('button'));
+  // Located by its accessible name, so screen readers announce the action.
+  fireEvent.press(getByLabelText('chat.avatarA11y.self'));
   expect(onAvatarPress).toHaveBeenCalledTimes(1);
 });
 

@@ -338,6 +338,10 @@
       "locationWithDetail": "[位置情報] {{detail}}",
       "unsupported": "このメッセージはまだ転送できません"
     },
+    "avatarA11y": {
+      "self": "自分のプロフィールを見る",
+      "user": "{{name}}さんのプロフィールを見る"
+    },
     "snackbarNewMessage": "新着メッセージ",
     "snackbarPreviewFallback": "[メッセージ]",
     "history": {
