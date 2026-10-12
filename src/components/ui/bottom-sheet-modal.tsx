@@ -27,6 +27,9 @@ interface BottomSheetModalProps {
 const DISMISS_DISTANCE = 84;
 const DISMISS_VELOCITY = 1.1;
 const DISMISS_DURATION = 160;
+// 下滑关闭只认从面板顶部（拖拽条 + 标题行）开始的手势。面板正文里常有
+// ScrollView / 长列表，从正文开始的下拉必须留给它们滚动，不能把整个面板关掉。
+const DISMISS_HANDLE_ZONE = 56;
 
 const s = StyleSheet.create({
   backdrop: {
@@ -58,14 +61,24 @@ export function BottomSheetModal({
   const dragY = useRef(new Animated.Value(0)).current;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // 面板上沿在 Modal 根坐标系里的位置；Modal 铺满窗口，与手势的 y0 同一坐标系。
+  const sheetTopRef = useRef<number | null>(null);
 
   const pan = useRef(
     PanResponder.create({
       // The sheet already owns the initial responder to keep the backdrop from
       // closing when a child is pressed. Only a clearly downward vertical move
-      // is treated as a dismiss gesture.
-      onMoveShouldSetPanResponder: (_event, gesture) =>
-        gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      // that starts in the header zone is treated as a dismiss gesture.
+      onMoveShouldSetPanResponder: (_event, gesture) => {
+        const sheetTop = sheetTopRef.current;
+        if (sheetTop === null) return false;
+        const startsInHandleZone = gesture.y0 - sheetTop <= DISMISS_HANDLE_ZONE;
+        return (
+          startsInHandleZone &&
+          gesture.dy > 6 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx)
+        );
+      },
       onPanResponderMove: (_event, gesture) => {
         dragY.setValue(Math.max(0, gesture.dy));
       },
@@ -118,6 +131,10 @@ export function BottomSheetModal({
   const sheetContent = (
     <Animated.View
       {...pan.panHandlers}
+      testID="bottom-sheet-content"
+      onLayout={(event) => {
+        sheetTopRef.current = event.nativeEvent.layout.y;
+      }}
       onStartShouldSetResponder={() => true}
       style={[
         s.content,

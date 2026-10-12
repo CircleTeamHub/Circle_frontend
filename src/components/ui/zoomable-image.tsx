@@ -79,6 +79,8 @@ export function ZoomableImage({
     panStartTx: 0,
     panStartTy: 0,
     moved: false,
+    /** 本次手势出现过双指：松手时即使回到 1x 也不能当成下滑关闭。 */
+    multiTouch: false,
     longPressFired: false,
     lastTapAt: 0,
   });
@@ -232,6 +234,7 @@ export function ZoomableImage({
         onPanResponderTerminationRequest: () => view.current.scale <= 1.01,
         onPanResponderGrant: () => {
           gesture.current.moved = false;
+          gesture.current.multiTouch = false;
           gesture.current.longPressFired = false;
           gesture.current.panStartTx = view.current.tx;
           gesture.current.panStartTy = view.current.ty;
@@ -257,6 +260,7 @@ export function ZoomableImage({
 
           if (touches.length === 2) {
             gesture.current.moved = true;
+            gesture.current.multiTouch = true;
             clearLongPress();
             const current = distance(touches);
             if (gesture.current.pinchStartDistance === 0) {
@@ -270,7 +274,9 @@ export function ZoomableImage({
           }
 
           // 1x 时竖直向下拖动用于关闭查看器；横向拖动仍交给外层分页列表。
+          // 双指过的手势不跟手，避免捏合回到 1x 时画面被带着往下走。
           if (view.current.scale <= 1.01) {
+            if (gesture.current.multiTouch) return;
             const dragY = Math.max(0, gestureState.dy);
             translateY.setValue(dragY);
             return;
@@ -291,7 +297,17 @@ export function ZoomableImage({
           clearLongPress();
           gesture.current.pinchStartDistance = 0;
 
-          if (view.current.scale <= 1.01 && gestureState.dy > 0) {
+          // 只有越过移动阈值的单指下拉才算关闭手势；几像素的手指抖动仍是点击，
+          // 位移归零后落到下面的点击判定。
+          const isSwipeDown =
+            view.current.scale <= 1.01 &&
+            gesture.current.moved &&
+            !gesture.current.multiTouch &&
+            gestureState.dy > 0;
+          if (!isSwipeDown && view.current.scale <= 1.01) {
+            translateY.setValue(0);
+          }
+          if (isSwipeDown) {
             const shouldDismiss =
               gestureState.dy >= SWIPE_DISMISS_DISTANCE ||
               gestureState.vy >= SWIPE_DISMISS_VELOCITY;
