@@ -15,7 +15,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { ZoomableImage } from '@/components/ui/zoomable-image';
 import { saveImageToLibrary } from '@/utils/save-image';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -111,6 +110,10 @@ export function ImageViewer({
     setActionSheetVisible(true);
   }, []);
 
+  const closeActionSheet = useCallback(() => {
+    setActionSheetVisible(false);
+  }, []);
+
   const handleSaveFromSheet = useCallback(() => {
     setActionSheetVisible(false);
     void handleSave();
@@ -143,7 +146,8 @@ export function ImageViewer({
         visible={visible}
         transparent={false}
         animationType="fade"
-        onRequestClose={onClose}
+        // 安卓返回键先收起保存菜单，再关查看器。
+        onRequestClose={actionSheetVisible ? closeActionSheet : onClose}
         statusBarTranslucent
       >
         <View style={s.root}>
@@ -227,49 +231,71 @@ export function ImageViewer({
               </Pressable>
             </>
           ) : null}
+
+          {/* 保存菜单画在查看器自己的 Modal 里：iOS 上从一个原生 Modal 旁边再弹
+              另一个 Modal 不可靠（可能弹不出来或把输入卡死）。 */}
+          {actionSheetVisible ? (
+            <View style={StyleSheet.absoluteFill} testID="image-action-sheet">
+              <Pressable
+                style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
+                onPress={closeActionSheet}
+                accessible={false}
+                importantForAccessibility="no"
+              />
+              <View
+                style={[
+                  s.actionSheet,
+                  {
+                    backgroundColor: colors.surface,
+                    paddingBottom: insets.bottom || Spacing.lg,
+                  },
+                ]}
+                accessibilityViewIsModal
+              >
+                <View
+                  style={[s.sheetHandle, { backgroundColor: colors.surfaceBorder }]}
+                />
+                <Pressable
+                  style={s.sheetAction}
+                  onPress={handleSaveFromSheet}
+                  disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('media.saveImage')}
+                >
+                  <Ionicons
+                    name="download-outline"
+                    size={22}
+                    color={colors.iconAccent}
+                  />
+                  <Text style={[s.sheetActionText, { color: colors.text }]}>
+                    {saving
+                      ? t('common.processing', { defaultValue: '处理中...' })
+                      : t('media.saveImage')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={s.sheetAction}
+                  onPress={closeActionSheet}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.cancel')}
+                >
+                  <Ionicons
+                    name="close-outline"
+                    size={22}
+                    color={colors.textSecondary}
+                  />
+                  <Text
+                    style={[s.sheetActionText, { color: colors.textSecondary }]}
+                  >
+                    {t('common.cancel')}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
         </View>
       </Modal>
 
-      <BottomSheetModal
-        visible={actionSheetVisible}
-        onClose={() => setActionSheetVisible(false)}
-        backdropStyle={{ backgroundColor: colors.overlay }}
-        sheetStyle={[
-          s.actionSheet,
-          {
-            backgroundColor: colors.surface,
-            paddingBottom: insets.bottom || Spacing.lg,
-          },
-        ]}
-        avoidKeyboard={false}
-      >
-        <View style={[s.sheetHandle, { backgroundColor: colors.surfaceBorder }]} />
-        <Pressable
-          style={s.sheetAction}
-          onPress={handleSaveFromSheet}
-          disabled={saving}
-          accessibilityRole="button"
-          accessibilityLabel={t('media.saveImage')}
-        >
-          <Ionicons name="download-outline" size={22} color={colors.iconAccent} />
-          <Text style={[s.sheetActionText, { color: colors.text }]}>
-            {saving
-              ? t('common.processing', { defaultValue: '处理中...' })
-              : t('media.saveImage')}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={s.sheetAction}
-          onPress={() => setActionSheetVisible(false)}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.cancel')}
-        >
-          <Ionicons name="close-outline" size={22} color={colors.textSecondary} />
-          <Text style={[s.sheetActionText, { color: colors.textSecondary }]}>
-            {t('common.cancel')}
-          </Text>
-        </Pressable>
-      </BottomSheetModal>
     </>
   );
 }
@@ -318,6 +344,10 @@ const s = StyleSheet.create({
   arrowRight: { right: Spacing.lg },
   arrowDisabled: { opacity: 0.25 },
   actionSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingTop: Spacing.sm,

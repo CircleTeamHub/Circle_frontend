@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { FlatList } from 'react-native';
+import { FlatList, Modal } from 'react-native';
 import { ImageViewer } from './image-viewer';
 
 jest.mock('@/components/ui/zoomable-image', () => {
@@ -9,19 +9,6 @@ jest.mock('@/components/ui/zoomable-image', () => {
     ZoomableImage: (props: Record<string, unknown>) => (
       <View testID="zoomable-image" {...props} />
     ),
-  };
-});
-
-jest.mock('@/components/ui/bottom-sheet-modal', () => {
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return {
-    BottomSheetModal: ({
-      visible,
-      children,
-    }: {
-      visible: boolean;
-      children: React.ReactNode;
-    }) => (visible ? <View testID="image-action-sheet">{children}</View> : null),
   };
 });
 
@@ -84,24 +71,53 @@ test('standard previews keep disk caching and the save gesture', () => {
   expect(image.props.onLongPress).toEqual(expect.any(Function));
 });
 
-test('long press opens the save bottom sheet and cancel closes it', () => {
+test('long press opens the save menu inside the viewer modal and cancel closes it', () => {
+  const onClose = jest.fn();
   render(
     <ImageViewer
       images={['https://example.test/ordinary.jpg']}
       visible
-      onClose={jest.fn()}
+      onClose={onClose}
     />,
   );
 
   act(() => {
     fireEvent(screen.getByTestId('zoomable-image'), 'longPress');
   });
-  expect(screen.getByTestId('image-action-sheet')).toBeTruthy();
+  // The menu is an overlay inside the viewer's own Modal, not a sibling Modal.
+  const sheet = screen.getByTestId('image-action-sheet');
+  expect(screen.UNSAFE_getAllByType(Modal)).toHaveLength(1);
+  expect(sheet).toBeTruthy();
   expect(screen.getByText('media.saveImage')).toBeTruthy();
-  expect(screen.getByText('common.cancel')).toBeTruthy();
 
   fireEvent.press(screen.getByLabelText('common.cancel'));
   expect(screen.queryByTestId('image-action-sheet')).toBeNull();
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+test('Android back closes the save menu first, then the viewer', () => {
+  const onClose = jest.fn();
+  render(
+    <ImageViewer
+      images={['https://example.test/ordinary.jpg']}
+      visible
+      onClose={onClose}
+    />,
+  );
+  act(() => {
+    fireEvent(screen.getByTestId('zoomable-image'), 'longPress');
+  });
+
+  act(() => {
+    screen.UNSAFE_getByType(Modal).props.onRequestClose();
+  });
+  expect(screen.queryByTestId('image-action-sheet')).toBeNull();
+  expect(onClose).not.toHaveBeenCalled();
+
+  act(() => {
+    screen.UNSAFE_getByType(Modal).props.onRequestClose();
+  });
+  expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 test('hidden viewers do not mount zoomable image resources', () => {

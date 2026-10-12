@@ -63,26 +63,33 @@ export function BottomSheetModal({
   onCloseRef.current = onClose;
   // 面板上沿在 Modal 根坐标系里的位置；Modal 铺满窗口，与手势的 y0 同一坐标系。
   const sheetTopRef = useRef<number | null>(null);
+  // 本次手势是否从顶部区域开始。面板根节点为了挡住蒙层点击会在按下时就成为
+  // 响应者，所以移动/松手阶段也必须按起点判断，不能只靠「移动时是否接管」。
+  const dragAllowedRef = useRef(false);
+  const startsInHandleZone = (y0: number) => {
+    const sheetTop = sheetTopRef.current;
+    return sheetTop !== null && y0 - sheetTop <= DISMISS_HANDLE_ZONE;
+  };
 
   const pan = useRef(
     PanResponder.create({
       // The sheet already owns the initial responder to keep the backdrop from
       // closing when a child is pressed. Only a clearly downward vertical move
       // that starts in the header zone is treated as a dismiss gesture.
-      onMoveShouldSetPanResponder: (_event, gesture) => {
-        const sheetTop = sheetTopRef.current;
-        if (sheetTop === null) return false;
-        const startsInHandleZone = gesture.y0 - sheetTop <= DISMISS_HANDLE_ZONE;
-        return (
-          startsInHandleZone &&
-          gesture.dy > 6 &&
-          Math.abs(gesture.dy) > Math.abs(gesture.dx)
-        );
+      onMoveShouldSetPanResponder: (_event, gesture) =>
+        startsInHandleZone(gesture.y0) &&
+        gesture.dy > 6 &&
+        Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderGrant: (_event, gesture) => {
+        dragAllowedRef.current = startsInHandleZone(gesture.y0);
       },
       onPanResponderMove: (_event, gesture) => {
+        if (!dragAllowedRef.current) return;
         dragY.setValue(Math.max(0, gesture.dy));
       },
       onPanResponderRelease: (_event, gesture) => {
+        if (!dragAllowedRef.current) return;
+        dragAllowedRef.current = false;
         const shouldDismiss =
           gesture.dy > DISMISS_DISTANCE || gesture.vy > DISMISS_VELOCITY;
         if (shouldDismiss) {
@@ -102,6 +109,7 @@ export function BottomSheetModal({
         }).start();
       },
       onPanResponderTerminate: () => {
+        dragAllowedRef.current = false;
         Animated.spring(dragY, {
           toValue: 0,
           useNativeDriver: true,
