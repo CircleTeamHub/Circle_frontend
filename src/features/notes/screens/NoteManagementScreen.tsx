@@ -39,6 +39,7 @@ import {
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
+import { resolveManagedWorkStatus } from '@/features/notes/utils/managed-work-status';
 import {
   applyNoteSourceStatusToSummaries,
   withNoteSyncRetry,
@@ -150,13 +151,6 @@ const s = StyleSheet.create({
   },
 });
 
-/** 老接口可能用 null/UNSET 表示尚未设置；管理页按业务默认展示为开工。 */
-function withDefaultWorkingStatus(note: NoteSummary): NoteSummary {
-  if (note.workStatus === 'WORKING' || note.workStatus === 'CLOSED') {
-    return note;
-  }
-  return { ...note, workStatus: 'WORKING' };
-}
 
 /** 群里的来源笔记必须是当前用户拥有的原始笔记；收藏副本不能反向绑定群状态。 */
 function isOwnedSourceNote(
@@ -200,6 +194,9 @@ export default function NoteManagementScreen() {
   const [notesLoading, setNotesLoading] = useState(false);
   const [notePickerVisible, setNotePickerVisible] = useState(false);
   const noteStatusChange = useNoteStatusSignalStore((state) => state.lastChange);
+  const noteStatusRecovery = useNoteStatusSignalStore(
+    (state) => state.recoveryVersion,
+  );
   const notesLoadSequenceRef = useRef(0);
 
   useEffect(() => {
@@ -280,11 +277,13 @@ export default function NoteManagementScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // 重连恢复时漏掉的状态事件只能整页重拉补回。
+      void noteStatusRecovery;
       void loadNotes();
       return () => {
         notesLoadSequenceRef.current += 1;
       };
-    }, [loadNotes]),
+    }, [loadNotes, noteStatusRecovery]),
   );
 
   const sourceNotes = useMemo(
@@ -379,6 +378,43 @@ export default function NoteManagementScreen() {
     [updateManagedNote],
   );
 
+  // 三态都能设：开工 / 打烊 / 清除（回到未设置，服务端收 null）。当前态不重复列出。
+  const handlePickNoteWorkStatus = useCallback(
+    (note: NoteSummary) => {
+      const current = resolveManagedWorkStatus(note);
+      const options: { value: NoteWorkStatus | null; label: string }[] = [
+        {
+          value: 'WORKING',
+          label: t('chat.groupManagement.noteWorking', { defaultValue: '开工' }),
+        },
+        {
+          value: 'CLOSED',
+          label: t('chat.groupManagement.noteClosed', { defaultValue: '打烊' }),
+        },
+        {
+          value: null,
+          label: t('chat.groupManagement.noteClearStatus', {
+            defaultValue: '清除状态',
+          }),
+        },
+      ];
+      Alert.alert(
+        t('chat.groupManagement.noteStatusLabel', { defaultValue: '场地状态' }),
+        undefined,
+        [
+          ...options
+            .filter((option) => (option.value ?? 'UNSET') !== current)
+            .map((option) => ({
+              text: option.label,
+              onPress: () => handleSetNoteWorkStatus(note, option.value),
+            })),
+          { text: t('common.cancel'), style: 'cancel' as const },
+        ],
+      );
+    },
+    [handleSetNoteWorkStatus, t],
+  );
+
   const d = useMemo(
     () => ({
       container: { backgroundColor: colors.background },
@@ -431,19 +467,20 @@ export default function NoteManagementScreen() {
   );
 
   const renderNoteRow = (note: NoteSummary) => {
-    const displayNote = withDefaultWorkingStatus(note);
-    const isWorking = displayNote.workStatus !== 'CLOSED';
-    const workLabel = isWorking
-      ? t('chat.groupManagement.noteWorking', { defaultValue: '开工' })
-      : t('chat.groupManagement.noteClosed', { defaultValue: '打烊' });
-    const nextWorkStatus: NoteWorkStatus = isWorking ? 'CLOSED' : 'WORKING';
+    const workStatus = resolveManagedWorkStatus(note);
+    const workLabel =
+      workStatus === 'WORKING'
+        ? t('chat.groupManagement.noteWorking', { defaultValue: '开工' })
+        : workStatus === 'CLOSED'
+          ? t('chat.groupManagement.noteClosed', { defaultValue: '打烊' })
+          : t('chat.groupManagement.noteUnset', { defaultValue: '未设置' });
     return (
       <View
         key={note.id}
         style={[s.noteCardWrap, { borderBottomColor: colors.divider }]}
       >
         <NoteCard
-          note={displayNote}
+          note={note}
           onPress={handleOpenNote}
           showActions={false}
           accessibilityLabel={note.title}
@@ -451,7 +488,7 @@ export default function NoteManagementScreen() {
         <View style={s.actionRow}>
           <Pressable
             style={[s.rowAction, d.action]}
-            onPress={() => handleSetNoteWorkStatus(note, nextWorkStatus)}
+            onPress={() => handlePickNoteWorkStatus(note)}
             accessibilityRole="button"
             accessibilityLabel={t('chat.groupManagement.noteStatusAction', {
               defaultValue: '切换笔记状态',
@@ -482,7 +519,7 @@ export default function NoteManagementScreen() {
   const renderUnboundNote = useCallback(
     ({ item }: { item: NoteSummary }) => (
       <NoteCard
-        note={withDefaultWorkingStatus(item)}
+        note={item}
         onPress={handleBindNoteCard}
         showActions={false}
         accessibilityLabel={item.title}

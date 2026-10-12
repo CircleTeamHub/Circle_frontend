@@ -18,6 +18,11 @@ export interface NoteSourceStatusChange {
 
 interface NoteStatusSignalState {
   version: number;
+  /**
+   * 只在「没有具体事件」的 bump 时前进（断线重连、冷启动恢复）。这期间漏掉的
+   * 事件无法逐条补回，订阅方必须整页重拉权威状态，而不是等 lastChange。
+   */
+  recoveryVersion: number;
   lastChange: NoteSourceStatusChange | null;
   bump: (change?: NoteSourceStatusChange) => void;
   reset: () => void;
@@ -25,11 +30,14 @@ interface NoteStatusSignalState {
 
 export const useNoteStatusSignalStore = create<NoteStatusSignalState>((set) => ({
   version: 0,
+  recoveryVersion: 0,
   lastChange: null,
   bump: (change) =>
     set((state) => ({
       version: state.version + 1,
-      ...(change ? { lastChange: change } : {}),
+      ...(change
+        ? { lastChange: change }
+        : { recoveryVersion: state.recoveryVersion + 1 }),
     })),
-  reset: () => set({ version: 0, lastChange: null }),
+  reset: () => set({ version: 0, recoveryVersion: 0, lastChange: null }),
 }));

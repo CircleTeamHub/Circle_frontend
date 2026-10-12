@@ -43,6 +43,7 @@ import { useMessageRenderer } from '@/features/chat/chat-detail/hooks/use-messag
 import { useCollectMessage } from '@/features/chat/chat-detail/hooks/use-collect-message';
 import { useMessageActions } from '@/features/chat/chat-detail/hooks/use-message-actions';
 import { useChatTimeline } from '@/features/chat/chat-detail/hooks/use-chat-timeline';
+import { useNoteCardStatusSync } from '@/features/chat/chat-detail/hooks/use-note-card-status-sync';
 import { useChatConversation } from '@/features/chat/chat-detail/hooks/use-chat-conversation';
 import { useKeyboardVisible } from '@/features/chat/chat-detail/hooks/use-keyboard-visible';
 import { useChatBackground } from '@/features/chat/chat-detail/hooks/use-chat-background';
@@ -248,6 +249,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     searchedMsgID,
     mergeAvatar,
   });
+
+  useNoteCardStatusSync(conversationID, conversationMessages);
 
   const selfAvatarUri = authUser?.avatarUrl ?? undefined;
   const selfName = authUser?.nickname ?? authUser?.accountId;

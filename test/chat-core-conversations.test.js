@@ -426,3 +426,33 @@ test('turning the global policy off clears the start boundary', () => {
 
   assert.equal(useChatStore.getState().viewerSelfDestructStartedAt, null);
 });
+
+test('note card status patch matches the root sourceNoteId and the card noteId', () => {
+  const { patchNoteSourceStatus } = loadStore();
+  const card = (content) => ({ id: 'm1', type: 'note-card', content });
+
+  // Realtime event keyed by the boss's root note.
+  const fromEvent = patchNoteSourceStatus(
+    card({ noteId: 'copy-1', sourceNoteId: 'boss', workStatus: 'WORKING' }),
+    'boss',
+    'CLOSED',
+    'ACTIVE',
+  );
+  assert.equal(fromEvent.content.workStatus, 'CLOSED');
+  assert.equal(fromEvent.content.publicationStatus, 'ACTIVE');
+
+  // Reconcile result keyed by the card's own noteId.
+  const fromReconcile = patchNoteSourceStatus(
+    card({ noteId: 'copy-1', sourceNoteId: 'boss' }),
+    'copy-1',
+    null,
+    'UNLISTED',
+  );
+  assert.equal(fromReconcile.content.workStatus, 'UNSET');
+  assert.equal(fromReconcile.content.publicationStatus, 'UNLISTED');
+
+  const other = card({ noteId: 'x' });
+  assert.equal(patchNoteSourceStatus(other, 'boss', 'CLOSED', 'ACTIVE'), other);
+  const unchanged = card({ noteId: 'boss', workStatus: 'CLOSED', publicationStatus: 'ACTIVE' });
+  assert.equal(patchNoteSourceStatus(unchanged, 'boss', 'CLOSED', 'ACTIVE'), unchanged);
+});

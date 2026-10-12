@@ -14,6 +14,7 @@ import { resolveCollectionSendPlan } from '@/features/chat/utils/message-collect
 import { logChatSendFailure } from '@/features/chat/chat-detail/helpers';
 import { type TFunction } from 'i18next';
 import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
+import { withFreshNoteSourceStatus } from '@/features/chat/utils/note-card-fresh-status';
 
 export interface AttachmentActionsParams {
   t: TFunction<"translation", undefined>;
@@ -198,7 +199,13 @@ export function useAttachmentActions({
         return;
       }
 
-      if (plan.kind === 'note' && !skipStatusWarning && shouldWarnNoteWorkStatus(plan.noteCard)) {
+      // 收藏里的笔记卡片是收藏时的状态快照，提醒前按来源实时状态重取。
+      const freshNoteCard =
+        plan.kind === 'note' && !skipStatusWarning
+          ? ((await withFreshNoteSourceStatus([plan.noteCard]))[0] ?? plan.noteCard)
+          : null;
+      if (!mountedRef.current) return;
+      if (freshNoteCard && shouldWarnNoteWorkStatus(freshNoteCard)) {
         Alert.alert(
           t('chat.forward.workStatusWarningTitle', { defaultValue: '订单状态可能变化' }),
           t('chat.forward.workStatusWarning', {

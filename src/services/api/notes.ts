@@ -253,6 +253,30 @@ export async function setNoteWorkStatus(
   );
 }
 
+export interface NoteSourceState {
+  noteId: string;
+  workStatus: 'WORKING' | 'CLOSED' | 'UNSET';
+  /** UNLISTED 也覆盖「当前用户读不到」——服务端不区分不存在与无权限。 */
+  publicationStatus: 'ACTIVE' | 'UNLISTED' | 'DELETED';
+}
+
+/** 单次最多 100 条；服务端沿收录链取根来源笔记的实时状态。 */
+export const NOTE_SOURCE_STATES_MAX = 100;
+
+export async function fetchNoteSourceStates(
+  noteIds: readonly string[],
+): Promise<NoteSourceState[]> {
+  const unique = [...new Set(noteIds.filter((id) => id.length > 0))].slice(
+    0,
+    NOTE_SOURCE_STATES_MAX,
+  );
+  if (unique.length === 0) return [];
+  return apiClient<NoteSourceState[]>('/note/source-states', {
+    method: 'POST',
+    body: { noteIds: unique },
+  });
+}
+
 export async function setNoteSourceGroup(
   id: string,
   conversationID: string | null,

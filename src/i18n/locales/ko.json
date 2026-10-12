@@ -543,6 +543,7 @@
       "noteWorking": "영업 중",
       "noteClosed": "영업 종료",
       "noteUnset": "미설정",
+      "noteClearStatus": "상태 지우기",
       "noteStatusAction": "노트 상태 변경",
       "noteUnlist": "게시 중지",
       "noteRelist": "다시 게시",

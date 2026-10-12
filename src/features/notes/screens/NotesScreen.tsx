@@ -113,6 +113,9 @@ export default function NotesScreen() {
   const [managerVisible, setManagerVisible] = useState(false);
   const tabOrderIds = useNotesTabOrderStore((state) => state.orderIds);
   const noteStatusChange = useNoteStatusSignalStore((state) => state.lastChange);
+  const noteStatusRecovery = useNoteStatusSignalStore(
+    (state) => state.recoveryVersion,
+  );
   const noteListVersion = useNoteListSignalStore((state) => state.version);
   // 从别处「查看」跳进来时要定位的笔记：滚到它并短暂高亮。
   const { highlightNoteId } = useLocalSearchParams<{ highlightNoteId?: string }>();
@@ -176,6 +179,8 @@ export default function NotesScreen() {
       // finish in chat while this screen stays mounted in another stack, so
       // collection invalidation still reloads the authoritative list.
       void noteListVersion;
+      // 断线/重启期间漏掉的来源状态事件无法逐条补回，恢复信号到达时整页重拉。
+      void noteStatusRecovery;
       setLoading(true);
       void load().catch(() => {
         // 加载失败不能静默吞掉 —— 空列表和网络错误要区分开，给用户重试入口。
@@ -184,7 +189,7 @@ export default function NotesScreen() {
           setLoading(false);
         }
       });
-    }, [load, noteListVersion]),
+    }, [load, noteListVersion, noteStatusRecovery]),
   );
 
   const handleRefreshNotes = useCallback(async () => {

@@ -621,6 +621,7 @@
       "noteWorking": "开工",
       "noteClosed": "打烊",
       "noteUnset": "未设置",
+      "noteClearStatus": "清除状态",
       "noteStatusAction": "切换笔记状态",
       "noteUnlist": "下架",
       "noteRelist": "恢复上架",

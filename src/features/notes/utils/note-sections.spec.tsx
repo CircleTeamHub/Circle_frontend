@@ -53,3 +53,65 @@ test('getNoteVideoItems returns signed videos once across note media sections', 
     }),
   );
 });
+
+test('getNoteVideoItems includes nested inline videos for the direct-export fallback', () => {
+  const result = getNoteVideoItems(
+    sections({
+      text: {
+        content: null,
+        contentJson: [
+          {
+            id: 'outer',
+            type: 'paragraph',
+            children: [
+              {
+                id: 'inline-video',
+                type: 'video',
+                props: {
+                  url: 'https://cdn.test/inline.mp4?signature=x',
+                  objectKey: 'notes/inline.mp4',
+                },
+              },
+            ],
+          },
+        ],
+      },
+      media: {
+        items: [
+          {
+            type: 'VIDEO',
+            objectKey: 'notes/inline.mp4',
+            url: 'https://cdn.test/inline.mp4?signature=y',
+          },
+        ],
+      },
+    }),
+  );
+
+  // The same object appears in both places; it must be exported once.
+  expect(result.map((item) => item.objectKey)).toEqual(['notes/inline.mp4']);
+
+  const inlineOnly = getNoteVideoItems(
+    sections({
+      text: {
+        content: null,
+        contentJson: [
+          {
+            id: 'outer',
+            type: 'paragraph',
+            children: [
+              {
+                id: 'inline-video',
+                type: 'video',
+                props: { url: 'https://cdn.test/only-inline.mp4' },
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  expect(inlineOnly.map((item) => item.url)).toEqual([
+    'https://cdn.test/only-inline.mp4',
+  ]);
+});

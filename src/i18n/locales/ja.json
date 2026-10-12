@@ -543,6 +543,7 @@
       "noteWorking": "営業中",
       "noteClosed": "閉店",
       "noteUnset": "未設定",
+      "noteClearStatus": "状態をクリア",
       "noteStatusAction": "ノートの状態を変更",
       "noteUnlist": "掲載停止",
       "noteRelist": "再掲載",

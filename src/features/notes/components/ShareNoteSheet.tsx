@@ -25,6 +25,7 @@ import {
 } from '@/features/chat/utils/note-batch-send';
 import type { Conversation, NoteCardData } from '@/types';
 import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
+import { withFreshNoteSourceStatus } from '@/features/chat/utils/note-card-fresh-status';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface ShareNoteSheetProps {
@@ -59,6 +60,8 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
   const [query, setQuery] = useState('');
   const mountedRef = useRef(true);
   const inFlightRef = useRef(false);
+  // 确认前的状态重取进行中；防止连点弹出两个确认框。
+  const checkingRef = useRef(false);
   const sendTimestampsRef = useRef<number[]>([]);
 
   useEffect(() => {
@@ -161,75 +164,89 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
           recipientCount,
           defaultValue: `把 ${targets.length} 条笔记发送给选中的 ${recipientCount} 个聊天对象？`,
           });
-    const hasUncertainWorkStatus = tasks.some(({ payload }) =>
-      shouldWarnNoteWorkStatus(payload),
-    );
-    const statusWarning = hasUncertainWorkStatus
-      ? `\n\n${t('notes.shareToChat.workStatusWarning', {
-          defaultValue: '订单状态可能已经变化（打烊或已下架），确认后仍会继续发送。',
-        })}`
-      : '';
-    Alert.alert(
-      t('notes.shareToChat.confirmTitle', { defaultValue: '发送笔记' }),
-      `${confirmMessage}${statusWarning}`,
-      [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-        {
-          text: t('common.send', { defaultValue: '发送' }),
-          onPress: () => {
-            if (inFlightRef.current) return;
-            inFlightRef.current = true;
-            setSending(true);
-            void (async () => {
-              // 顺序发送并遵守聊天发送的 20 条/10s 限流。
-              const failures: NoteCardSendTask[] = [];
-              for (const task of tasks) {
-                const delay = noteSendWindowDelayMs(sendTimestampsRef.current, Date.now());
-                if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-                sendTimestampsRef.current = recordNoteSendAttempt(
-                  sendTimestampsRef.current,
-                  Date.now(),
-                );
-                try {
-                  await sendCardMessage({
-                    conversationId: task.conversationId,
-                    type: 'note-card',
-                    payload: task.payload,
-                  });
-                } catch {
-                  failures.push(task);
+    // 弹层里的状态是打开时的快照；确认前按来源实时状态重取一次，提醒才可信。
+    if (checkingRef.current) return;
+    checkingRef.current = true;
+    void (async () => {
+      const freshPayloads = await withFreshNoteSourceStatus(
+        tasks.map((task) => task.payload),
+      );
+      checkingRef.current = false;
+      if (!mountedRef.current) return;
+      const freshTasks = tasks.map((task, index) => ({
+        ...task,
+        payload: freshPayloads[index] ?? task.payload,
+      }));
+      const hasUncertainWorkStatus = freshTasks.some(({ payload }) =>
+        shouldWarnNoteWorkStatus(payload),
+      );
+      const statusWarning = hasUncertainWorkStatus
+        ? `\n\n${t('notes.shareToChat.workStatusWarning', {
+            defaultValue: '订单状态可能已经变化（打烊或已下架），确认后仍会继续发送。',
+          })}`
+        : '';
+      Alert.alert(
+        t('notes.shareToChat.confirmTitle', { defaultValue: '发送笔记' }),
+        `${confirmMessage}${statusWarning}`,
+        [
+          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+          {
+            text: t('common.send', { defaultValue: '发送' }),
+            onPress: () => {
+              if (inFlightRef.current) return;
+              inFlightRef.current = true;
+              setSending(true);
+              void (async () => {
+                // 顺序发送并遵守聊天发送的 20 条/10s 限流。
+                const failures: NoteCardSendTask[] = [];
+                for (const task of freshTasks) {
+                  const delay = noteSendWindowDelayMs(sendTimestampsRef.current, Date.now());
+                  if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+                  sendTimestampsRef.current = recordNoteSendAttempt(
+                    sendTimestampsRef.current,
+                    Date.now(),
+                  );
+                  try {
+                    await sendCardMessage({
+                      conversationId: task.conversationId,
+                      type: 'note-card',
+                      payload: task.payload,
+                    });
+                  } catch {
+                    failures.push(task);
+                  }
                 }
-              }
-              if (!mountedRef.current) return;
-              if (failures.length === 0) {
-                setRetryTasks([]);
-                onClose();
-                Alert.alert(
-                  t('notes.shareToChat.sentTitle', { defaultValue: '已发送' }),
-                  t('notes.shareToChat.sentRecipientsMessage', {
-                    recipientCount,
-                    defaultValue: `笔记已发送到 ${recipientCount} 个聊天对象。`,
-                  }),
-                );
-              } else {
-                setRetryTasks(failures);
-                Alert.alert(
-                  t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
-                  t('notes.shareToChat.partialFailed', {
-                    count: failures.length,
-                    defaultValue: `有 ${failures.length} 条内容发送失败。重试时只会发送失败项。`,
-                  }),
-                );
-              }
-            })().finally(() => {
-              inFlightRef.current = false;
-              if (mountedRef.current) setSending(false);
-            });
+                if (!mountedRef.current) return;
+                if (failures.length === 0) {
+                  setRetryTasks([]);
+                  onClose();
+                  Alert.alert(
+                    t('notes.shareToChat.sentTitle', { defaultValue: '已发送' }),
+                    t('notes.shareToChat.sentRecipientsMessage', {
+                      recipientCount,
+                      defaultValue: `笔记已发送到 ${recipientCount} 个聊天对象。`,
+                    }),
+                  );
+                } else {
+                  setRetryTasks(failures);
+                  Alert.alert(
+                    t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
+                    t('notes.shareToChat.partialFailed', {
+                      count: failures.length,
+                      defaultValue: `有 ${failures.length} 条内容发送失败。重试时只会发送失败项。`,
+                    }),
+                  );
+                }
+              })().finally(() => {
+                inFlightRef.current = false;
+                if (mountedRef.current) setSending(false);
+              });
+            },
           },
-        },
-      ],
-      { cancelable: true },
-    );
+        ],
+        { cancelable: true },
+      );
+    })();
   }, [conversations, onClose, retryTasks, selectedIds, targets, t]);
 
   const renderItem = useCallback(

@@ -145,6 +145,7 @@ const ROUTE_TEMPLATES = [
   "/note/:id/source-group",
   "/note/:id/work-status",
   "/note/collect",
+  "/note/source-states",
   "/note/group",
   "/note/group/:id",
   "/note/recycle-bin",

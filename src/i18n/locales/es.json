@@ -547,6 +547,7 @@
       "noteWorking": "En servicio",
       "noteClosed": "Cerrado",
       "noteUnset": "Sin definir",
+      "noteClearStatus": "Quitar estado",
       "noteStatusAction": "Cambiar estado de la nota",
       "noteUnlist": "Retirar",
       "noteRelist": "Volver a publicar",

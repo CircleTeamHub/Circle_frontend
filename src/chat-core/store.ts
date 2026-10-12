@@ -1026,7 +1026,11 @@ export function sortConversations(
   });
 }
 
-function patchNoteSourceStatus(
+
+/**
+ * 把来源实时状态写进一条聊天笔记卡片；不相关或未变化的消息原样返回（保持引用）。
+ */
+export function patchNoteSourceStatus(
   message: ChatMessageDto,
   sourceNoteId: string,
   workStatus: 'WORKING' | 'CLOSED' | null,
@@ -1034,13 +1038,12 @@ function patchNoteSourceStatus(
 ): ChatMessageDto {
   if (message.type !== 'note-card') return message;
   const content = message.content ?? {};
-  const cardSourceId =
-    typeof content['sourceNoteId'] === 'string'
-      ? content['sourceNoteId']
-      : typeof content['noteId'] === 'string'
-        ? content['noteId']
-        : '';
-  if (cardSourceId !== sourceNoteId) return message;
+  // 实时事件按根来源 id 推送（服务端盖章的 sourceNoteId）；批量对账结果按
+  // 卡片自己的 noteId 返回。两种键都要能命中，老卡片没有 sourceNoteId。
+  const matches =
+    content['sourceNoteId'] === sourceNoteId ||
+    content['noteId'] === sourceNoteId;
+  if (!matches) return message;
   if (
     content['workStatus'] === (workStatus ?? 'UNSET') &&
     content['publicationStatus'] === publicationStatus

@@ -625,6 +625,7 @@
       "noteWorking": "Working",
       "noteClosed": "Closed",
       "noteUnset": "Not set",
+      "noteClearStatus": "Clear status",
       "noteStatusAction": "Change note status",
       "noteUnlist": "Unlist",
       "noteRelist": "Relist",

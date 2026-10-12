@@ -28,12 +28,14 @@ test('realtime note status events update the note signal and reconnect recovery 
   );
 });
 
-test('note list patches source status without reloading and reordering', () => {
+test('note list patches live source status in place and reloads only on recovery', () => {
   const notesScreen = read('src/features/notes/screens/NotesScreen.tsx');
   assert.match(notesScreen, /useNoteStatusSignalStore\(\(state\) => state\.lastChange\)/);
   assert.match(notesScreen, /applyNoteSourceStatusToSummaries/);
   assert.doesNotMatch(notesScreen, /useNoteStatusSignalStore\(\(state\) => state\.version\)/);
-  assert.match(notesScreen, /\}, \[load, noteListVersion\]\),/);
+  // 单条事件原地 patch 不重拉；断线/冷启动恢复漏掉的事件只能整页重拉补回。
+  assert.match(notesScreen, /state\.recoveryVersion/);
+  assert.match(notesScreen, /\}, \[load, noteListVersion, noteStatusRecovery\]\),/);
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
   assert.match(
     detail,
@@ -44,6 +46,8 @@ test('note list patches source status without reloading and reordering', () => {
   assert.match(management, /useNoteStatusSignalStore/);
   assert.match(management, /state\.lastChange/);
   assert.doesNotMatch(management, /state\.version/);
+  assert.match(management, /state\.recoveryVersion/);
+  assert.match(management, /\[loadNotes, noteStatusRecovery\]/);
 });
 
 test('note status signal keeps the latest source change and advances monotonically', () => {
@@ -67,7 +71,40 @@ test('note status signal keeps the latest source change and advances monotonical
   useNoteStatusSignalStore.getState().bump(change);
   assert.equal(useNoteStatusSignalStore.getState().version, 1);
   assert.deepEqual(useNoteStatusSignalStore.getState().lastChange, change);
+  assert.equal(useNoteStatusSignalStore.getState().recoveryVersion, 0);
   useNoteStatusSignalStore.getState().bump();
   assert.equal(useNoteStatusSignalStore.getState().version, 2);
   assert.deepEqual(useNoteStatusSignalStore.getState().lastChange, change);
+  // 无内容的 bump 是恢复信号：只有它推进 recoveryVersion。
+  assert.equal(useNoteStatusSignalStore.getState().recoveryVersion, 1);
+  useNoteStatusSignalStore.getState().bump(change);
+  assert.equal(useNoteStatusSignalStore.getState().recoveryVersion, 1);
+});
+
+test('chat detail reconciles cached note cards on open and on recovery', () => {
+  const screen = read('src/features/chat/screens/ChatDetailScreen.tsx');
+  assert.match(screen, /useNoteCardStatusSync\(conversationID, conversationMessages\)/);
+  const hook = read('src/features/chat/chat-detail/hooks/use-note-card-status-sync.ts');
+  assert.match(hook, /state\.recoveryVersion/);
+  assert.match(hook, /fetchNoteSourceStates\(pending\)/);
+  assert.match(hook, /applyNoteSourceStatus/);
+});
+
+test('every send-time status warning re-reads the live source status first', () => {
+  for (const file of [
+    'src/features/notes/components/ShareNoteSheet.tsx',
+    'src/features/chat/screens/ForwardPickerScreen.tsx',
+    'src/features/chat/chat-detail/hooks/use-attachment-actions.ts',
+  ]) {
+    const source = read(file);
+    assert.match(source, /withFreshNoteSourceStatus\(/, file);
+  }
+});
+
+test('note management offers working, closed and clear (null) without coercing unset', () => {
+  const management = read('src/features/notes/screens/NoteManagementScreen.tsx');
+  assert.doesNotMatch(management, /withDefaultWorkingStatus/);
+  assert.match(management, /resolveManagedWorkStatus\(note\)/);
+  assert.match(management, /value: null,[\s\S]*?noteClearStatus/);
+  assert.match(management, /handleSetNoteWorkStatus\(note, option\.value\)/);
 });

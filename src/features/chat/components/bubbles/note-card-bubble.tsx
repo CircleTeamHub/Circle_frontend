@@ -210,7 +210,8 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
                 {note.contentPreview}
               </Text>
             ) : null}
-            {note.publicationStatus === 'UNLISTED' ? (
+            {note.publicationStatus === 'UNLISTED' ||
+            note.publicationStatus === 'DELETED' ? (
               <Text style={[sNote.workStatus, { color: colors.warning }]}>
                 {t('chat.noteCard.workStatus.unlisted', { defaultValue: '已下架，状态可能变化' })}
               </Text>

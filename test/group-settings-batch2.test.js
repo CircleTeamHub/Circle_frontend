@@ -201,8 +201,10 @@ test('note management is a separate page from group management', () => {
   assert.match(noteManage, /function isOwnedSourceNote\(\n\s*note: NoteSummary,\n\s*currentUserID\?: string \| null,/);
   assert.match(noteManage, /note\.canEdit === true \|\|/);
   assert.match(noteManage, /note\.ownerId === currentUserID/);
-  assert.match(noteManage, /withDefaultWorkingStatus/);
-  assert.match(noteManage, /const nextWorkStatus: NoteWorkStatus = isWorking \? 'CLOSED' : 'WORKING'/);
+  // 场地状态三态：未设置不能被当成开工，管理页可设开工/打烊，也可清除回未设置。
+  assert.doesNotMatch(noteManage, /withDefaultWorkingStatus/);
+  assert.match(noteManage, /resolveManagedWorkStatus\(note\)/);
+  assert.match(noteManage, /handlePickNoteWorkStatus\(note\)/);
   assert.doesNotMatch(noteManage, /handleUnlistNote|noteUnlist|unlistNote/);
   assert.doesNotMatch(noteManage, /relistNote/);
   assert.match(routes, /export function getNoteManagementHref\(/);
