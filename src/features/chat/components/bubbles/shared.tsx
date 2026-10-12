@@ -30,6 +30,7 @@ interface MessageAvatarProps {
   selfAvatarUri?: string;
   senderName?: string;
   senderAvatarUri?: string;
+  onPress?: () => void;
 }
 
 /**
@@ -44,7 +45,9 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({
   selfAvatarUri,
   senderName,
   senderAvatarUri,
+  onPress,
 }) => {
+  const { t } = useTranslation();
   const hideChatAvatar = useAppSettingsStore(
     (state) => state.settings.hideChatAvatar,
   );
@@ -60,12 +63,32 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({
   if (message.suppressAvatar) {
     return <View style={sAvatar.mergedPlaceholder} />;
   }
-  return (
+  const avatar = (
     <Avatar
       size={AVATAR_SIZE}
       name={outgoing ? selfName : senderName}
       uri={outgoing ? selfAvatarUri : senderAvatarUri}
     />
+  );
+
+  // 头像按钮要有可读的名字，读屏才知道点了会打开谁的资料。
+  const accessibilityLabel = outgoing
+    ? t('chat.avatarA11y.self', { defaultValue: '查看我的资料' })
+    : t('chat.avatarA11y.user', {
+        name: senderName ?? '',
+        defaultValue: '查看{{name}}的资料',
+      });
+
+  return onPress ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+    >
+      {avatar}
+    </Pressable>
+  ) : (
+    avatar
   );
 };
 

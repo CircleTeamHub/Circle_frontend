@@ -185,6 +185,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const {
     handleBack,
     handleOpenMessageSender,
+    handleOpenSelfProfile,
     handleOpenUserCard,
     handleOpenHeaderTarget,
     statusColor,
@@ -342,6 +343,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     conversationTitle,
     avatarUrl,
     handleOpenMessageSender,
+    handleOpenSelfProfile,
     handleOpenUserCard,
     hideChatAvatar,
     d,

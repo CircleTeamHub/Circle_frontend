@@ -344,6 +344,10 @@
       "workStatusWarningTitle": "El estado del pedido puede haber cambiado",
       "workStatusWarning": "Esta nota está cerrada o retirada. Aun así puedes continuar enviándola."
     },
+    "avatarA11y": {
+      "self": "Ver mi perfil",
+      "user": "Ver el perfil de {{name}}"
+    },
     "snackbarNewMessage": "Mensaje nuevo",
     "snackbarPreviewFallback": "[Mensaje]",
     "history": {

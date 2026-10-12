@@ -341,6 +341,10 @@
       "workStatusWarningTitle": "注文状態が変わっている可能性があります",
       "workStatusWarning": "このノートは終了または非公開です。確認後も送信できます。"
     },
+    "avatarA11y": {
+      "self": "自分のプロフィールを見る",
+      "user": "{{name}}さんのプロフィールを見る"
+    },
     "snackbarNewMessage": "新着メッセージ",
     "snackbarPreviewFallback": "[メッセージ]",
     "history": {

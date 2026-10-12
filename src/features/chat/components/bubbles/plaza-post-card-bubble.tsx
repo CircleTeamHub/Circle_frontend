@@ -189,6 +189,7 @@ export const PlazaPostCardBubble: React.FC<PlazaPostCardBubbleProps> = ({
       selfAvatarUri={selfAvatarUri}
       senderName={senderName}
       senderAvatarUri={senderAvatarUri}
+      onPress={outgoing ? onAvatarPress : undefined}
     />
   );
 

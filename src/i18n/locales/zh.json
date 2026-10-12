@@ -419,6 +419,10 @@
       "workStatusWarningTitle": "订单状态可能变化",
       "workStatusWarning": "这条笔记标记为打烊或已下架，确认后仍会继续发送。"
     },
+    "avatarA11y": {
+      "self": "查看我的资料",
+      "user": "查看{{name}}的资料"
+    },
     "snackbarNewMessage": "新消息",
     "snackbarPreviewFallback": "[消息]",
     "history": {

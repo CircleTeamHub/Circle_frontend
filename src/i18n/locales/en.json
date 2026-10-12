@@ -422,6 +422,10 @@
       "workStatusWarningTitle": "Order status may have changed",
       "workStatusWarning": "This note is closed or unlisted. You can still continue sending it."
     },
+    "avatarA11y": {
+      "self": "View my profile",
+      "user": "View {{name}}'s profile"
+    },
     "snackbarNewMessage": "New message",
     "snackbarPreviewFallback": "[Message]",
     "history": {

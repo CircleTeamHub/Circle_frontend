@@ -341,6 +341,10 @@
       "workStatusWarningTitle": "주문 상태가 변경되었을 수 있습니다",
       "workStatusWarning": "이 노트는 영업 종료 또는 게시 중지 상태입니다. 확인 후에도 보낼 수 있습니다."
     },
+    "avatarA11y": {
+      "self": "내 프로필 보기",
+      "user": "{{name}}님의 프로필 보기"
+    },
     "snackbarNewMessage": "새 메시지",
     "snackbarPreviewFallback": "[메시지]",
     "history": {

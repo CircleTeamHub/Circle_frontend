@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import { ReceivedBubble } from './received-bubble';
 import { SentBubble } from './sent-bubble';
 import { NoteCardBubble } from './note-card-bubble';
@@ -244,6 +244,22 @@ test('sent bubble does not render the auth-backed circular frame', () => {
   const props = mockAvatar.mock.calls.at(-1)?.[0];
   expect(props).not.toHaveProperty('frameSource');
   expect(props).not.toHaveProperty('compactFrame');
+});
+
+test('sent avatar invokes the profile handler when pressed', () => {
+  const onAvatarPress = jest.fn();
+
+  const { getByLabelText } = render(
+    <SentBubble
+      message={sentMessage}
+      selfName="Self"
+      onAvatarPress={onAvatarPress}
+    />,
+  );
+
+  // Located by its accessible name, so screen readers announce the action.
+  fireEvent.press(getByLabelText('chat.avatarA11y.self'));
+  expect(onAvatarPress).toHaveBeenCalledTimes(1);
 });
 
 test.each([

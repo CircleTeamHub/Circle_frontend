@@ -119,6 +119,14 @@ export function useChatHeader({
     ],
   );
 
+  const handleOpenSelfProfile = useCallback(() => {
+    const profileId = authUser?.id ?? currentUserID ?? 'me';
+    const profileName = authUser?.nickname ?? authUser?.accountId;
+    // 资料页必须进入当前聊天所在的 tab 栈。这样返回时沿原栈回到聊天，
+    // 不会因为写死 profile scope 而跳到「我的」页面。
+    router.navigate(getUserProfileHref(scope, profileId, profileName));
+  }, [authUser?.accountId, authUser?.id, authUser?.nickname, currentUserID, scope]);
+
   const handleOpenUserCard = useCallback(
     async (userID: string, nickname?: string) => {
       if (isGroupChat && userID !== currentUserID) {
@@ -209,6 +217,7 @@ export function useChatHeader({
   return {
     handleBack,
     handleOpenMessageSender,
+    handleOpenSelfProfile,
     handleOpenUserCard,
     handleOpenHeaderTarget,
     statusColor,
