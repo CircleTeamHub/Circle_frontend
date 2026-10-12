@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { loadImagePickerModule } from '@/features/profile/image-picker';
@@ -53,6 +53,16 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
   // ref 在整段操作(选图 → 上传 → 落库)上同步关窗。
   const inFlightRef = useRef(false);
 
+  // 头像页加载时就把原生模块准备好，点击行时直接进入相册；不能把首次
+  // require 的桥接初始化时间叠加到用户的点击反馈上。
+  useEffect(() => {
+    try {
+      loadImagePickerModule();
+    } catch {
+      // 点击时会再次加载并按现有错误路径提示，预加载不改变失败语义。
+    }
+  }, []);
+
   const changeAvatar = useCallback(async () => {
     if (inFlightRef.current || changing) return;
     inFlightRef.current = true;
@@ -66,22 +76,48 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
         return;
       }
 
-      const permission =
-        await imagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert(
-          t('validation.cannotSelectImage'),
-          t('validation.albumPermission'),
-        );
-        return;
-      }
-
-      const result = await imagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
+      // 先直接唤起系统选择器。点击后先 get/request 权限会把原生权限桥接
+      // 延迟叠加到呈现动画上，部分 iOS 设备会因此等数秒才看到相册。
+      // 同时不要打开 allowsEditing：它会让 iOS 从秒开的 PHPicker 回退到老的
+      // UIImagePickerController。头像最终用 cover-fit 显示，原图无需先裁剪。
+      // 原生选择器自己能处理已授权状态；只有它明确失败时才走权限兜底。
+      const pickerOptions: Parameters<typeof imagePicker.launchImageLibraryAsync>[0] = {
         quality: 0.8,
         mediaTypes: ['images'],
-      });
+      };
+      let result: Awaited<ReturnType<typeof imagePicker.launchImageLibraryAsync>>;
+      try {
+        result = await imagePicker.launchImageLibraryAsync(pickerOptions);
+      } catch {
+        let permission;
+        try {
+          permission = await imagePicker.requestMediaLibraryPermissionsAsync();
+        } catch (permissionError) {
+          onFailure(permissionError);
+          Alert.alert(
+            failureTitle,
+            getApiErrorMessage(permissionError, t('common.networkError')),
+          );
+          return;
+        }
+        if (!permission.granted) {
+          Alert.alert(
+            t('validation.cannotSelectImage'),
+            t('validation.albumPermission'),
+          );
+          return;
+        }
+        try {
+          result = await imagePicker.launchImageLibraryAsync(pickerOptions);
+        } catch (retryError) {
+          onFailure(retryError);
+          Alert.alert(
+            failureTitle,
+            getApiErrorMessage(retryError, t('common.networkError')),
+          );
+          return;
+        }
+      }
       if (result.canceled || !result.assets[0]) return;
 
       const asset = result.assets[0];

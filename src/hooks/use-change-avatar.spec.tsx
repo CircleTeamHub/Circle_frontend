@@ -86,6 +86,13 @@ test('the presign required headers are forwarded verbatim to the upload', async 
     { 'If-None-Match': '*' },
   );
   expect(submit).toHaveBeenCalledWith('https://cdn/a.jpg');
+  // 已授权设备不应先等待权限桥接，再呈现系统选择器。
+  expect(mockPicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
+  // 不开启编辑裁剪，iOS 才会走快速的 PHPicker 路径。
+  expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledWith({
+    quality: 0.8,
+    mediaTypes: ['images'],
+  });
 });
 
 test('a rejected write shows the reason the server gave, not a blanket network error', async () => {

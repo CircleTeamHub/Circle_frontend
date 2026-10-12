@@ -83,6 +83,79 @@ test('at 1x a horizontal drag is left to the pager, and the pager may take over'
   expect(captured.onPanResponderTerminationRequest()).toBe(true);
 });
 
+test('a downward swipe at 1x requests dismissal after the threshold', () => {
+  const onSwipeDown = jest.fn();
+  renderImage({ onSwipeDown });
+
+  act(() => {
+    captured.onPanResponderGrant(
+      touchEvent([{ pageX: 150, pageY: 120 }]),
+      gesture(),
+    );
+    captured.onPanResponderMove(
+      touchEvent([{ pageX: 150, pageY: 240 }]),
+      gesture(0, 120),
+    );
+    captured.onPanResponderRelease(
+      touchEvent([{ pageX: 150, pageY: 240 }]),
+      { dx: 0, dy: 120, vy: 0 },
+    );
+  });
+
+  expect(onSwipeDown).toHaveBeenCalledTimes(1);
+});
+
+test('a tap with a few pixels of downward jitter still counts as a tap', () => {
+  const onTap = jest.fn();
+  const onSwipeDown = jest.fn();
+  renderImage({ onTap, onSwipeDown });
+
+  act(() => {
+    captured.onPanResponderGrant(
+      touchEvent([{ pageX: 150, pageY: 120 }]),
+      gesture(),
+    );
+    captured.onPanResponderMove(
+      touchEvent([{ pageX: 151, pageY: 123 }]),
+      gesture(1, 3),
+    );
+    captured.onPanResponderRelease(
+      touchEvent([{ pageX: 151, pageY: 123 }]),
+      { dx: 1, dy: 3, vy: 0 },
+    );
+    jest.advanceTimersByTime(300);
+  });
+
+  expect(onSwipeDown).not.toHaveBeenCalled();
+  expect(onTap).toHaveBeenCalledTimes(1);
+});
+
+test('releasing a pinch that ends at 1x with downward travel does not dismiss', () => {
+  const onSwipeDown = jest.fn();
+  renderImage({ onSwipeDown });
+
+  act(() => {
+    captured.onPanResponderGrant(
+      touchEvent([{ pageX: 100, pageY: 100 }, { pageX: 200, pageY: 100 }]),
+      gesture(),
+    );
+    captured.onPanResponderMove(
+      touchEvent([{ pageX: 100, pageY: 100 }, { pageX: 200, pageY: 100 }]),
+      gesture(),
+    );
+    captured.onPanResponderMove(
+      touchEvent([{ pageX: 100, pageY: 220 }, { pageX: 200, pageY: 220 }]),
+      gesture(0, 120),
+    );
+    captured.onPanResponderRelease(
+      touchEvent([]),
+      { dx: 0, dy: 120, vy: 0 },
+    );
+  });
+
+  expect(onSwipeDown).not.toHaveBeenCalled();
+});
+
 test('a two-finger pinch zooms in and then keeps the gesture away from the pager', () => {
   const onZoomedChange = jest.fn();
   renderImage({ onZoomedChange });
