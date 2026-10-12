@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { FlatList } from 'react-native';
 import { ImageViewer } from './image-viewer';
 
@@ -12,13 +12,37 @@ jest.mock('@/components/ui/zoomable-image', () => {
   };
 });
 
+jest.mock('@/components/ui/bottom-sheet-modal', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    BottomSheetModal: ({
+      visible,
+      children,
+    }: {
+      visible: boolean;
+      children: React.ReactNode;
+    }) => (visible ? <View testID="image-action-sheet">{children}</View> : null),
+  };
+});
+
 jest.mock('@/utils/save-image', () => ({
   saveImageToLibrary: jest.fn(),
 }));
 
 jest.mock('@/theme', () => ({
-  Spacing: { md: 8, lg: 16 },
-  Typography: { body: {} },
+  Radius: { xl: 20, full: 9999 },
+  Spacing: { sm: 4, md: 8, lg: 16 },
+  Typography: { body: {}, caption: {} },
+  useTheme: () => ({
+    colors: {
+      overlay: 'rgba(0,0,0,.4)',
+      surface: '#fff',
+      surfaceBorder: '#ddd',
+      text: '#111',
+      textSecondary: '#666',
+      iconAccent: '#6200ee',
+    },
+  }),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -58,6 +82,26 @@ test('standard previews keep disk caching and the save gesture', () => {
   const image = screen.getByTestId('zoomable-image');
   expect(image.props.cachePolicy).toBe('memory-disk');
   expect(image.props.onLongPress).toEqual(expect.any(Function));
+});
+
+test('long press opens the save bottom sheet and cancel closes it', () => {
+  render(
+    <ImageViewer
+      images={['https://example.test/ordinary.jpg']}
+      visible
+      onClose={jest.fn()}
+    />,
+  );
+
+  act(() => {
+    fireEvent(screen.getByTestId('zoomable-image'), 'longPress');
+  });
+  expect(screen.getByTestId('image-action-sheet')).toBeTruthy();
+  expect(screen.getByText('media.saveImage')).toBeTruthy();
+  expect(screen.getByText('common.cancel')).toBeTruthy();
+
+  fireEvent.press(screen.getByLabelText('common.cancel'));
+  expect(screen.queryByTestId('image-action-sheet')).toBeNull();
 });
 
 test('hidden viewers do not mount zoomable image resources', () => {

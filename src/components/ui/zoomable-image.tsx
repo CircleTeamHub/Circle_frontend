@@ -18,6 +18,7 @@ import { Image } from 'expo-image';
  *
  * - 双指捏合缩放（1x–4x），双击在 1x / 2.5x 之间切换
  * - 放大后单指拖拽平移，平移量按缩放比夹在图内
+ * - 1x 时下拉跟手，达到距离或速度阈值后关闭查看器
  * - 未放大时**不拦截**横向手势，交还给外层列表翻页（关键：
  *   onPanResponderTerminationRequest 在 1x 时放行，列表才抢得走）
  * - 长按触发菜单（保存图片）；web 上鼠标按住同样触发
@@ -28,6 +29,8 @@ const DOUBLE_TAP_SCALE = 2.5;
 const DOUBLE_TAP_WINDOW_MS = 280;
 const LONG_PRESS_MS = 500;
 const MOVE_TOLERANCE = 8;
+const SWIPE_DISMISS_DISTANCE = 96;
+const SWIPE_DISMISS_VELOCITY = 1.1;
 
 interface ZoomableImageProps {
   uri: string;
@@ -43,6 +46,8 @@ interface ZoomableImageProps {
   onZoomedChange?: (zoomed: boolean) => void;
   onTap?: () => void;
   onLongPress?: () => void;
+  /** 1x 时向下拖拽达到阈值后的关闭回调。 */
+  onSwipeDown?: () => void;
 }
 
 function distance(touches: { pageX: number; pageY: number }[]): number {
@@ -60,6 +65,7 @@ export function ZoomableImage({
   onZoomedChange,
   onTap,
   onLongPress,
+  onSwipeDown,
 }: ZoomableImageProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const translateX = useRef(new Animated.Value(0)).current;
@@ -230,6 +236,7 @@ export function ZoomableImage({
           gesture.current.panStartTx = view.current.tx;
           gesture.current.panStartTy = view.current.ty;
           gesture.current.pinchStartDistance = 0;
+          if (view.current.scale <= 1.01) translateY.setValue(0);
           clearLongPress();
           longPressTimer.current = setTimeout(() => {
             if (!gesture.current.moved) {
@@ -249,6 +256,8 @@ export function ZoomableImage({
           }
 
           if (touches.length === 2) {
+            gesture.current.moved = true;
+            clearLongPress();
             const current = distance(touches);
             if (gesture.current.pinchStartDistance === 0) {
               gesture.current.pinchStartDistance = current;
@@ -260,22 +269,43 @@ export function ZoomableImage({
             return;
           }
 
-          if (view.current.scale > 1.01) {
-            const extent = renderedExtent();
-            view.current.tx = clampTranslate(
-              gesture.current.panStartTx + gestureState.dx,
-              extent.w,
-            );
-            view.current.ty = clampTranslate(
-              gesture.current.panStartTy + gestureState.dy,
-              extent.h,
-            );
-            apply();
+          // 1x 时竖直向下拖动用于关闭查看器；横向拖动仍交给外层分页列表。
+          if (view.current.scale <= 1.01) {
+            const dragY = Math.max(0, gestureState.dy);
+            translateY.setValue(dragY);
+            return;
           }
+
+          const extent = renderedExtent();
+          view.current.tx = clampTranslate(
+            gesture.current.panStartTx + gestureState.dx,
+            extent.w,
+          );
+          view.current.ty = clampTranslate(
+            gesture.current.panStartTy + gestureState.dy,
+            extent.h,
+          );
+          apply();
         },
-        onPanResponderRelease: (event) => {
+        onPanResponderRelease: (event, gestureState) => {
           clearLongPress();
           gesture.current.pinchStartDistance = 0;
+
+          if (view.current.scale <= 1.01 && gestureState.dy > 0) {
+            const shouldDismiss =
+              gestureState.dy >= SWIPE_DISMISS_DISTANCE ||
+              gestureState.vy >= SWIPE_DISMISS_VELOCITY;
+            if (shouldDismiss) {
+              onSwipeDown?.();
+            } else {
+              Animated.spring(translateY, {
+                toValue: 0,
+                useNativeDriver: false,
+              }).start();
+            }
+            return;
+          }
+
           if (!gesture.current.moved && !gesture.current.longPressFired) {
             handleTap(event);
           }
@@ -283,6 +313,12 @@ export function ZoomableImage({
         onPanResponderTerminate: () => {
           clearLongPress();
           gesture.current.pinchStartDistance = 0;
+          if (view.current.scale <= 1.01) {
+            Animated.spring(translateY, {
+              toValue: 0,
+              useNativeDriver: false,
+            }).start();
+          }
         },
       }),
     [
@@ -293,6 +329,8 @@ export function ZoomableImage({
       onLongPress,
       renderedExtent,
       setScale,
+      translateY,
+      onSwipeDown,
     ],
   );
 

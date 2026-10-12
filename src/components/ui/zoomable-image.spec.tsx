@@ -83,6 +83,28 @@ test('at 1x a horizontal drag is left to the pager, and the pager may take over'
   expect(captured.onPanResponderTerminationRequest()).toBe(true);
 });
 
+test('a downward swipe at 1x requests dismissal after the threshold', () => {
+  const onSwipeDown = jest.fn();
+  renderImage({ onSwipeDown });
+
+  act(() => {
+    captured.onPanResponderGrant(
+      touchEvent([{ pageX: 150, pageY: 120 }]),
+      gesture(),
+    );
+    captured.onPanResponderMove(
+      touchEvent([{ pageX: 150, pageY: 240 }]),
+      gesture(0, 120),
+    );
+    captured.onPanResponderRelease(
+      touchEvent([{ pageX: 150, pageY: 240 }]),
+      { dx: 0, dy: 120, vy: 0 },
+    );
+  });
+
+  expect(onSwipeDown).toHaveBeenCalledTimes(1);
+});
+
 test('a two-finger pinch zooms in and then keeps the gesture away from the pager', () => {
   const onZoomedChange = jest.fn();
   renderImage({ onZoomedChange });
