@@ -84,8 +84,6 @@ const TAB_TEST_IDS: Record<string, string> = {
 };
 
 // —— bar 几何（全部自绘，不再受 React Navigation BottomTabItem 内层 padding 影响）——
-// 隐藏时把整条 bar 向下滑出屏幕：bar 高 + 底距 + 阴影余量。
-const TAB_BAR_HIDDEN_OFFSET = 140;
 const TAB_BAR_HEIGHT = 50;
 const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2; // 整条 bar 是完整胶囊，两端半圆
 const TAB_BAR_MARGIN_H = 32; // 左右外边距：再缩一圈后留白更多，bar 更窄
@@ -103,12 +101,9 @@ const TAB_ICON_SIZE = 18;
 // 现在退回 Thin：保留磨砂扩散，但还看得出是块玻璃。
 const TAB_BAR_BLUR_INTENSITY = 30;
 const TAB_BAR_TINT_ALPHA = 0.06;
-// 滑入/滑出：偏短 + ease-out，返回主页时弹得干脆。
-const TAB_BAR_ANIM_DURATION = 200;
-const TAB_BAR_EASING = Easing.out(Easing.cubic);
-
 type TabBarStyles = {
   tabBarWrapper: ViewStyle;
+  tabBarHidden: ViewStyle;
   tabBar: ViewStyle;
   tabBarBlurLayer: ViewStyle;
   tabBarTint: ViewStyle;
@@ -126,7 +121,6 @@ type TabBarStyles = {
 interface TabBarSurfaceProps {
   children: React.ReactNode;
   colorScheme: 'light' | 'dark';
-  hidden: boolean;
   styles: TabBarStyles;
 }
 
@@ -153,7 +147,6 @@ function TabBarFrostLayer({
 function TabBarSurface({
   children,
   colorScheme,
-  hidden,
   styles,
 }: TabBarSurfaceProps) {
   // GlassView 在旧系统上只是普通 View，显式使用 BlurView 才能让 iOS 18/17
@@ -169,9 +162,8 @@ function TabBarSurface({
       <GlassView
         colorScheme={colorScheme}
         glassEffectStyle={{
-          style: hidden ? 'none' : 'regular',
-          animate: true,
-          animationDuration: TAB_BAR_ANIM_DURATION / 1000,
+          style: 'regular',
+          animate: false,
         }}
         style={styles.tabBar}
       >
@@ -207,6 +199,8 @@ interface TabSlotProps {
   styles: TabBarStyles;
   onPress: () => void;
   accessibilityLabel: string;
+  /** 深层页面上整条 bar 只是透明：按钮必须同时退出键盘焦点、不可再被激活。 */
+  hidden: boolean;
   testID?: string;
 }
 
@@ -219,6 +213,7 @@ const TabSlot = memo(function TabSlot({
   styles,
   onPress,
   accessibilityLabel,
+  hidden,
   testID,
 }: TabSlotProps) {
   const pressScale = useSharedValue(1);
@@ -232,6 +227,8 @@ const TabSlot = memo(function TabSlot({
     <Pressable
       testID={testID}
       onPress={onPress}
+      disabled={hidden}
+      focusable={!hidden}
       onPressIn={() => {
         pressScale.value = withSpring(0.92, {
           damping: 18,
@@ -292,9 +289,8 @@ const TabSlot = memo(function TabSlot({
   );
 });
 
-// 浮动 tab bar：Reanimated translateY+opacity 平滑滑入/滑出（取代 display 瞬切，
-// 消除「返回 tab 根页时浮动条闪一下」）。内部整行自绘，每格 flex:1，
-// 选中态由 CustomTabBar 统一渲染液态指示器；点击时每格仍保留自己的按压缩放。
+// 浮动 tab bar：深层页面保持隐藏，回到 tab 根页时直接显示，不制造入场动效。
+// 内部整行自绘，每格 flex:1；选中态由 CustomTabBar 统一渲染液态指示器，点击时保留按压缩放。
 function CustomTabBar({
   state,
   navigation,
@@ -367,34 +363,18 @@ function CustomTabBar({
     previousIndex.current = activeIndex;
   }, [activeIndex, indicatorSquash, indicatorStretch, indicatorX, state.routes.length, tabItemsWidth]);
 
-  // 把 hidden 这个普通 prop 镜像进 shared value 再驱动动画：worklet 依赖被追踪的
-  // shared value，而非闭包捕获的 JS prop——即使将来 CustomTabBar 被 memo 化、
-  // 父级不再随 segment 重渲染，显隐动画也不会失效。
-  const hiddenProgress = useSharedValue(hidden ? 1 : 0);
-  useEffect(() => {
-    hiddenProgress.value = withTiming(hidden ? 1 : 0, {
-      duration: TAB_BAR_ANIM_DURATION,
-      easing: TAB_BAR_EASING,
-    });
-  }, [hidden, hiddenProgress]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: hiddenProgress.value * TAB_BAR_HIDDEN_OFFSET },
-    ],
-    // GlassView 的父级 opacity < 1 会让系统折射层停止渲染。iOS 仅做位移，
-    // 其它平台保留原有淡出；移出屏幕后 pointerEvents 已禁用。
-    opacity: Platform.OS === 'ios' ? 1 : 1 - hiddenProgress.value,
-  }));
-
   return (
-    <Animated.View
+    <View
       pointerEvents={hidden ? 'none' : 'box-none'}
-      style={[styles.tabBarWrapper, animatedStyle]}
+      style={[styles.tabBarWrapper, hidden && styles.tabBarHidden]}
+      // 透明 + 不接触摸还不够：读屏（iOS/Android）和网页键盘仍能聚焦到按钮，
+      // 隐藏时把整条 bar 移出无障碍树。
+      accessibilityElementsHidden={hidden}
+      importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
+      aria-hidden={hidden}
     >
       <TabBarSurface
         colorScheme={colorScheme}
-        hidden={hidden}
         styles={styles}
       >
         <View
@@ -436,22 +416,6 @@ function CustomTabBar({
                 target: route.key,
                 canPreventDefault: true,
               });
-              // 个人中心是一个独立 Stack。直接点击“我的”必须回到
-              // profile/index，而不是把上次停留的商城/设置页带回来。
-              // 这里直接针对嵌套 Stack 做 reset，避免父级 navigate(merge)
-              // 恢复上次停留的 mall 页面。
-              const nested = route.state as
-                | { key?: string; index?: number }
-                | undefined;
-              if (route.name === 'profile' && nested?.key) {
-                navigation.dispatch({
-                  ...CommonActions.reset({
-                    index: 0,
-                    routes: [{ name: 'index' }],
-                  }),
-                  target: nested.key,
-                });
-              }
               if (!focused && !event.defaultPrevented) {
                 navigation.dispatch({
                   ...CommonActions.navigate({ name: route.name, merge: true }),
@@ -473,13 +437,14 @@ function CustomTabBar({
                 accessibilityLabel={
                   options.tabBarAccessibilityLabel ?? label
                 }
+                hidden={hidden}
                 testID={TAB_TEST_IDS[route.name]}
               />
             );
           })}
         </View>
       </TabBarSurface>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -514,13 +479,9 @@ export default function TabLayout() {
 
   const styles = useMemo<TabBarStyles>(() => StyleSheet.create({
     // 底部锚定的全宽容器：absolute → 内容全幅延伸到浮动条之下；
-    // CustomTabBar 对它做 translateY/opacity 动画。
+    // 隐藏时只把同一个挂载实例设为透明，不做位移或卸载，回根页直接恢复显示。
     tabBarWrapper: {
-      // Web 用 fixed:隐藏时的 translateY(140) 会把 absolute 元素撑进祖先的
-      // 滚动区(body.scrollHeight 变成 视口+140),浏览器聚焦输入框时的程序化
-      // 滚动就把整页带下去 140px —— 顶部导航被吃掉、且因为 overflow:hidden
-      // 用户还滚不回来。fixed 元素不参与祖先滚动区计算,从源头掐断。
-      // 原生不认 'fixed',保持 absolute。
+      // Web 使用 fixed，避免浮动 bar 参与文档滚动区计算；原生使用 absolute。
       ...(Platform.OS === 'web'
         ? ({ position: 'fixed' } as unknown as ViewStyle)
         : ({ position: 'absolute' } as const)),
@@ -528,6 +489,9 @@ export default function TabLayout() {
       right: 0,
       bottom: 0,
       ...(isSplitLayout ? { alignItems: 'center' } : null),
+    },
+    tabBarHidden: {
+      opacity: 0,
     },
     tabBar: {
       flexDirection: 'row',

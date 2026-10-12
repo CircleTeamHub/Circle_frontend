@@ -564,7 +564,7 @@ function ConversationRowImpl({
     </Animated.View>
   );
 
-  // 置顶行铺了更深的 pinnedSurface：次要文字/免打扰图标换成置顶专用色保证对比度；
+  // 置顶行铺了浅灰 pinnedSurface：次要文字/免打扰图标换成置顶专用色保证对比度；
   // 临时群时钟角标的外圈也要融入置顶底色，而不是列表底色（浅色下会露一圈光环）。
   const metaTextStyle = item.pinned ? pinnedTimeStyle : timeStyle;
   const messageStyle = item.pinned ? pinnedPreviewStyle : previewStyle;
@@ -858,7 +858,7 @@ export default function MessagesScreen() {
       },
       preview,
       time,
-      // 置顶行铺了更深的 pinnedSurface，次要文字换成置顶专用色保证对比度（深色主题两者相同）。
+      // 置顶行铺了浅灰 pinnedSurface，次要文字换成置顶专用色保证对比度（深色主题两者相同）。
       pinnedPreview: { ...preview, color: colors.pinnedTextSecondary },
       pinnedTime: { ...time, color: colors.pinnedTextSecondary },
       draftPrefix: { color: colors.error },
@@ -876,7 +876,7 @@ export default function MessagesScreen() {
         color: colors.text,
         ...Typography.body,
       },
-      // 所有置顶行使用同一底色；浅色主题用中性灰底与普通会话区分。
+      // 所有置顶行使用同一底色；浅色主题用微信风格的浅灰与普通会话区分。
       pinnedSurface: {
         backgroundColor: colors.pinnedSurface,
       },

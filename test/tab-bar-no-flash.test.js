@@ -15,12 +15,8 @@ test('动态 tab 使用社交动态语义的光圈图标', () => {
   assert.doesNotMatch(layout, /play-circle-outline/);
 });
 
-// 回归：从无 tab bar 的深层页返回 tab 根页时，bar 会“闪一下才展示”。
-// 根因是浮动 bar 用 display:none↔flex 瞬间切换，返回时在 JS 状态提交那刻
-// 立即翻成 flex，浮动 bar 满不透明度直接出现在仍在退场的详情页之上。
-// 修复：用 Reanimated 包一层，靠 translateY+opacity 平滑滑入/滑出，
-// 不再瞬间切 display。
-test('tab bar 通过 Reanimated 动画滑入/滑出，而非瞬间 display 切换（消除返回闪烁）', () => {
+// 回归：深层页面隐藏 tab bar，返回 tab 根页时直接显示且不从底部滑入。
+test('tab bar 隐藏时不位移，返回根页直接显示', () => {
   const layout = read('app/(tabs)/_layout.tsx');
 
   // 不再用瞬间隐藏的 display:'none'，这是闪烁根因
@@ -30,18 +26,25 @@ test('tab bar 通过 Reanimated 动画滑入/滑出，而非瞬间 display 切�
     '不应再用 display:none 瞬间切换 tab bar',
   );
 
-  // 改用 Reanimated 动画
-  assert.match(layout, /react-native-reanimated/);
-  assert.match(layout, /useAnimatedStyle/);
-  assert.match(layout, /withTiming/);
-  assert.match(layout, /translateY/);
-  assert.match(layout, /opacity/);
+  // 所有页面保持同一个 tab bar 挂载；深层页只透明并禁用触摸，不用位移或卸载。
+  assert.match(layout, /useSegments/);
+  assert.match(layout, /const hideTabBar = segments\.length > 2/);
+  assert.match(layout, /hidden=\{hideTabBar\}/);
+  assert.doesNotMatch(layout, /if \(hidden\) return null/);
+  assert.doesNotMatch(layout, /hiddenProgress/);
+  assert.doesNotMatch(layout, /TAB_BAR_HIDDEN_OFFSET/);
+  assert.doesNotMatch(layout, /TAB_BAR_ANIM_DURATION/);
+  assert.doesNotMatch(layout, /TAB_BAR_EASING/);
+  assert.doesNotMatch(layout, /translateY: hidden/);
+  assert.match(layout, /pointerEvents=\{hidden \? 'none' : 'box-none'\}/);
+  assert.match(layout, /tabBarHidden: \{\s*opacity: 0/);
+  assert.match(layout, /animate: false/);
 
   // 用自定义 tabBar 包裹真正的 BottomTabBar（保留原生 tab 行为/徽标/高亮）
   assert.match(layout, /BottomTabBar/);
   assert.match(layout, /tabBar=\{/);
 
-  // 隐藏时禁用触摸，避免 off-screen 的 bar 仍捕获点击
+  // 隐藏时禁用触摸，避免透明的 bar 仍捕获点击
   assert.match(layout, /pointerEvents/);
 });
 
@@ -92,7 +95,8 @@ test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降�
   assert.match(layout, /isGlassEffectAPIAvailable\(\)/);
   assert.match(layout, /isLiquidGlassAvailable\(\)/);
   assert.match(layout, /glassEffectStyle=\{\{/);
-  assert.match(layout, /style: hidden \? 'none' : 'regular'/);
+  assert.match(layout, /style: 'regular'/);
+  assert.doesNotMatch(layout, /style: hidden \? 'none' : 'regular'/);
   assert.doesNotMatch(layout, /<GlassView[\s\S]*?isInteractive/);
   assert.doesNotMatch(layout, /tintColor=\{colors\.primaryLight\}/);
   assert.match(layout, /colorScheme=\{colorScheme\}/);
@@ -123,11 +127,8 @@ test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降�
   assert.match(layout, /pressScale\.value = withSpring\(0\.92/);
   assert.match(layout, /pressScale\.value = withSpring\(1/);
 
-  // GlassView 的父级 opacity 不能参与淡出，否则 iOS 26 会丢失折射层。
-  assert.match(
-    layout,
-    /opacity: Platform\.OS === 'ios' \? 1 : 1 - hiddenProgress\.value/,
-  );
+  // tab bar 持续挂载，玻璃材质本身也不播放显隐动画。
+  assert.match(layout, /animate: false/);
 });
 
 test('选中态在暗色下必须读得清，红点描边不能浮在玻璃上', () => {
@@ -205,4 +206,14 @@ test('磨砂层在两条 iOS 路径上都要有——液态玻璃本身不提供
   // 磨砂拉满，让扩散本身承担遮蔽；纯色遮罩退回去，否则质感被压成一块平板。
   assert.match(layout, /const TAB_BAR_BLUR_INTENSITY = \d+;/);
   assert.match(layout, /intensity=\{TAB_BAR_BLUR_INTENSITY\}/);
+});
+
+test('hidden tab bar leaves the accessibility tree and keyboard focus', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+  // 透明 + pointerEvents none 只挡住了触摸；读屏和网页键盘还能聚焦到看不见的按钮。
+  assert.match(layout, /accessibilityElementsHidden=\{hidden\}/);
+  assert.match(layout, /importantForAccessibility=\{hidden \? 'no-hide-descendants' : 'auto'\}/);
+  assert.match(layout, /aria-hidden=\{hidden\}/);
+  assert.match(layout, /disabled=\{hidden\}\s*\n\s*focusable=\{!hidden\}/);
+  assert.match(layout, /hidden=\{hidden\}\s*\n\s*testID=\{TAB_TEST_IDS\[route\.name\]\}/);
 });

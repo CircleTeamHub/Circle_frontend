@@ -824,7 +824,7 @@ export default function GroupManageScreen() {
         visible={silenceTargets.length > 0}
         title={t('chat.silencePickDuration', { defaultValue: '选择禁言时长' })}
         options={silenceOptions}
-        selectedValue={null}
+        selectedValue={null as number | null}
         onSelect={handleSelectSilenceDuration}
         onClose={() => setSilenceTargets([])}
       />
