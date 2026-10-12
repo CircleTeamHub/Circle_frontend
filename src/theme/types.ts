@@ -54,6 +54,8 @@ export interface ThemeColors {
   glassButton: string;
   success: string;
   warning: string;
+  /** 警示色用作文字/图标前景时的版本：浅色底上 warning 原色对比度不够 4.5:1。 */
+  warningText: string;
   orange: string;
   blue: string;
   purple: string;

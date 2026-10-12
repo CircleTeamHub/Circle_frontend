@@ -152,3 +152,13 @@ test('单卡色值只算一次：扩容档位与靓号页不再各自派生', ()
   assert.doesNotMatch(fancy, /iconForeground/);
   assert.match(fancy, /name="ribbon" size=\{22\} color=\{colors\.iconAccent\}/);
 });
+
+test('warning text and icons keep at least 4.5:1 contrast on surface in both themes', () => {
+  for (const [name, colors] of [['dark', darkColors], ['light', lightColors]]) {
+    const foreground = luminance(colors.warningText);
+    const background = luminance(colors.surface);
+    const contrast = (Math.max(foreground, background) + 0.05) /
+      (Math.min(foreground, background) + 0.05);
+    assert.ok(contrast >= 4.5, `${name} warningText contrast was ${contrast.toFixed(2)}:1`);
+  }
+});

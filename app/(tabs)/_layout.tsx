@@ -199,6 +199,8 @@ interface TabSlotProps {
   styles: TabBarStyles;
   onPress: () => void;
   accessibilityLabel: string;
+  /** 深层页面上整条 bar 只是透明：按钮必须同时退出键盘焦点、不可再被激活。 */
+  hidden: boolean;
   testID?: string;
 }
 
@@ -211,6 +213,7 @@ const TabSlot = memo(function TabSlot({
   styles,
   onPress,
   accessibilityLabel,
+  hidden,
   testID,
 }: TabSlotProps) {
   const pressScale = useSharedValue(1);
@@ -224,6 +227,8 @@ const TabSlot = memo(function TabSlot({
     <Pressable
       testID={testID}
       onPress={onPress}
+      disabled={hidden}
+      focusable={!hidden}
       onPressIn={() => {
         pressScale.value = withSpring(0.92, {
           damping: 18,
@@ -362,6 +367,11 @@ function CustomTabBar({
     <View
       pointerEvents={hidden ? 'none' : 'box-none'}
       style={[styles.tabBarWrapper, hidden && styles.tabBarHidden]}
+      // 透明 + 不接触摸还不够：读屏（iOS/Android）和网页键盘仍能聚焦到按钮，
+      // 隐藏时把整条 bar 移出无障碍树。
+      accessibilityElementsHidden={hidden}
+      importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
+      aria-hidden={hidden}
     >
       <TabBarSurface
         colorScheme={colorScheme}
@@ -427,6 +437,7 @@ function CustomTabBar({
                 accessibilityLabel={
                   options.tabBarAccessibilityLabel ?? label
                 }
+                hidden={hidden}
                 testID={TAB_TEST_IDS[route.name]}
               />
             );

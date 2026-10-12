@@ -542,10 +542,24 @@ export default function UserProfileScreen() {
         INFO_ROW_IDS.filter((id) => id !== 'description' || descriptionValue)
       : NON_FRIEND_INFO_ROW_IDS;
   const showProfileActions = !isCurrentUser;
-  // 已是好友时不再展示「已添加好友」标签；只有服务端明确返回 NONE，
-  // 才提示对方尚未添加，并用感叹号保留清晰的关系提醒。
-  const showNotAddedFriendNotice =
-    !isCurrentUser && !friendStatusLoadError && friendStatus === 'NONE';
+  // 已是好友时不再展示「已添加好友」标签，其余关系一律保留提示：待通过 / 待处理 /
+  // 已拉黑时添加按钮是隐藏的，查询失败也不能和「已确定的关系」混在一起，没有这行
+  // 字用户就不知道为什么没法操作。只有「未添加」用警示样式加感叹号。
+  const friendStatusLabelKey = isCurrentUser
+    ? null
+    : friendStatusLoadError
+      ? 'userProfile.relationshipStatus.unavailable'
+      : friendStatus === 'NONE'
+        ? 'userProfile.relationshipStatus.notAdded'
+        : friendStatus === 'PENDING_SENT'
+          ? 'userProfile.relationshipStatus.requestSent'
+          : friendStatus === 'PENDING_RECEIVED'
+            ? 'userProfile.relationshipStatus.requestReceived'
+            : friendStatus === 'BLOCKED'
+              ? 'userProfile.relationshipStatus.blocked'
+              : null;
+  const friendStatusIsWarning =
+    friendStatusLabelKey === 'userProfile.relationshipStatus.notAdded';
   const canSendFriendRequest = canOpenSendFriendRequest({
     isCurrentUser,
     profileId,
@@ -907,12 +921,19 @@ export default function UserProfileScreen() {
       },
       friendStatusChip: {
         backgroundColor: colors.surface,
-        borderColor: colors.warning,
+        borderColor: colors.surfaceBorder,
       },
       friendStatusText: {
-        color: colors.warning,
+        color: colors.textSecondary,
         ...Typography.caption,
         fontWeight: '600' as const,
+      },
+      // 边框可以用原橙色，文字和图标必须用对比度够的 warningText。
+      friendStatusChipWarning: {
+        borderColor: colors.warning,
+      },
+      friendStatusTextWarning: {
+        color: colors.warningText,
       },
       signature: {
         color: colors.textSecondary,
@@ -1031,18 +1052,30 @@ export default function UserProfileScreen() {
               style={d.name}
             />
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
-            {showNotAddedFriendNotice ? (
+            {friendStatusLabelKey ? (
               <View
-                style={[s.metaChip, d.friendStatusChip]}
+                style={[
+                  s.metaChip,
+                  d.friendStatusChip,
+                  friendStatusIsWarning && d.friendStatusChipWarning,
+                ]}
                 accessibilityRole="text"
               >
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={14}
-                  color={colors.warning}
-                />
-                <Text style={[d.metaChipText, d.friendStatusText]}>
-                  {t('userProfile.relationshipStatus.notAdded')}
+                {friendStatusIsWarning ? (
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={14}
+                    color={colors.warningText}
+                  />
+                ) : null}
+                <Text
+                  style={[
+                    d.metaChipText,
+                    d.friendStatusText,
+                    friendStatusIsWarning && d.friendStatusTextWarning,
+                  ]}
+                >
+                  {t(friendStatusLabelKey)}
                 </Text>
               </View>
             ) : null}

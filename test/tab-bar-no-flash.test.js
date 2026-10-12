@@ -207,3 +207,13 @@ test('磨砂层在两条 iOS 路径上都要有——液态玻璃本身不提供
   assert.match(layout, /const TAB_BAR_BLUR_INTENSITY = \d+;/);
   assert.match(layout, /intensity=\{TAB_BAR_BLUR_INTENSITY\}/);
 });
+
+test('hidden tab bar leaves the accessibility tree and keyboard focus', () => {
+  const layout = read('app/(tabs)/_layout.tsx');
+  // 透明 + pointerEvents none 只挡住了触摸；读屏和网页键盘还能聚焦到看不见的按钮。
+  assert.match(layout, /accessibilityElementsHidden=\{hidden\}/);
+  assert.match(layout, /importantForAccessibility=\{hidden \? 'no-hide-descendants' : 'auto'\}/);
+  assert.match(layout, /aria-hidden=\{hidden\}/);
+  assert.match(layout, /disabled=\{hidden\}\s*\n\s*focusable=\{!hidden\}/);
+  assert.match(layout, /hidden=\{hidden\}\s*\n\s*testID=\{TAB_TEST_IDS\[route\.name\]\}/);
+});

@@ -39,6 +39,8 @@ export const darkColors: ThemeColors = {
   error: '#FF6B6B',
   success: '#22C55E',
   warning: '#FB8C00',
+  // 深色面上原色对比度已足够，文字直接沿用。
+  warningText: '#FB8C00',
   orange: '#F97316',
   danger: '#FF6B6B',
   dangerFill: '#E5484D',
@@ -103,6 +105,8 @@ export const lightColors: ThemeColors = {
   error: '#FF6B6B',
   success: '#22C55E',
   warning: '#FB8C00',
+  // 白底上 #FB8C00 只有约 2.4:1；文字和图标用深一档的琥珀色（约 5:1）。
+  warningText: '#B45309',
   orange: '#F97316',
   danger: '#E5484D',
   dangerFill: '#E5484D',
