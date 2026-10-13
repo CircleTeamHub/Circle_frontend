@@ -4,23 +4,26 @@ import type { ThemeColors } from './types';
 const PRIMARY = '#6366F1';
 
 /**
- * 暗色下的品牌紫强调色。brandPurple #7C5CF0 在背景 #1A1B23 上只有 3.79:1、
- * 在 surface #252630 上 3.32:1，都低于 4.5:1；提亮到同色系的 #B18AFF 后分别是
- * 6.49:1 / 5.68:1。
+ * 暗色下的品牌紫强调色。brandPurple #7C5CF0 在 surface #1C1C1E 上低于 4.5:1；
+ * 提亮到同色系的 #B18AFF 后，在背景 #000000 / surface #1C1C1E 上分别是 7.95:1 / 6.44:1。
  *
  * tab 选中态（tabBarActive）与强调图标（iconAccent）必须是同一个值 —— 同一个
  * 「被点亮的紫」在一屏里出现两种深浅，用户只会当成渲染 bug。
  */
 const DARK_ACCENT = '#B18AFF';
 
+/**
+ * 暗色底板取 iOS 系统暗色（OLED 纯黑，无蓝紫偏色）：
+ * 背景 #000000 → 卡片 #1C1C1E → 次级块 #2C2C2E，分割线 #38383A、描边 #48484A。
+ */
 export const darkColors: ThemeColors = {
-  background: '#1A1B23',
-  surface: '#252630',
-  pinnedSurface: '#252630',
+  background: '#000000',
+  surface: '#1C1C1E',
+  pinnedSurface: '#1C1C1E',
   pinnedTextSecondary: '#FFFFFF',
-  surfaceBorder: '#565A6B',
-  switchOffTrack: '#565A6B',
-  divider: '#3C3E4B',
+  surfaceBorder: '#48484A',
+  switchOffTrack: '#48484A',
+  divider: '#38383A',
   primary: PRIMARY,
   iconAccent: DARK_ACCENT,
   primaryLight: 'rgba(99, 102, 241, 0.25)',
@@ -29,9 +32,10 @@ export const darkColors: ThemeColors = {
   brandPurple: '#7C5CF0',
   // tab 选中态与 iconAccent 同源（见 DARK_ACCENT）。
   tabBarActive: DARK_ACCENT,
-  link: '#A86BF0',
+  // 链接与强调色同源，避免一屏两种紫。
+  link: DARK_ACCENT,
   text: '#FFFFFF',
-  // 暗色下次要文字一律纯白 —— 任何灰阶在 #1A1B23 上都糊。层级靠字号/字重区分,不靠明度。
+  // 暗色下次要文字一律纯白 —— 任何灰阶在暗底上都糊。层级靠字号/字重区分,不靠明度。
   textSecondary: '#FFFFFF',
   white: '#FFFFFF',
   black: '#000000',
@@ -45,7 +49,7 @@ export const darkColors: ThemeColors = {
   danger: '#FF6B6B',
   dangerFill: '#E5484D',
   badgeUnread: '#C62828',
-  surfaceMuted: '#30323E',
+  surfaceMuted: '#2C2C2E',
   glassBorder: 'rgba(255, 255, 255, 0.24)',
   glassButton: 'rgba(255, 255, 255, 0.10)',
   blue: '#3B82F6',
@@ -56,8 +60,8 @@ export const darkColors: ThemeColors = {
   badgeCredit: '#3B82F6',
   badgeFancy: '#A855F7',
   sentBubble: '#6366F1',
-  receivedBubble: '#252630',
-  inputBg: '#252630',
+  receivedBubble: '#1C1C1E',
+  inputBg: '#1C1C1E',
   memberCardBg: '#D4A574',
   memberCardText: '#5C3D1A',
   memberTagBg: '#312E81',
@@ -71,7 +75,7 @@ export const darkColors: ThemeColors = {
   newUserBadgeRing: 'rgba(47, 109, 84, 0.18)',
   sentTimeText: 'rgba(255, 255, 255, 0.8)',
   overlay: 'rgba(0, 0, 0, 0.4)',
-  chatBackgroundScrim: 'rgba(26, 27, 35, 0.35)',
+  chatBackgroundScrim: 'rgba(0, 0, 0, 0.35)',
   statusBarStyle: 'light',
 };
 

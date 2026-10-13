@@ -212,9 +212,9 @@ export default function NoteBlockEditor({
   }
 
   const isDark = theme === 'dark';
-  const bg = isDark ? '#1A1B23' : '#ffffff';
-  const border = isDark ? '#565A6B' : '#E5E7EB';
-  const toolbarBg = isDark ? '#1A1B23' : '#ffffff';
+  const bg = isDark ? '#000000' : '#ffffff';
+  const border = isDark ? '#48484A' : '#E5E7EB';
+  const toolbarBg = isDark ? '#000000' : '#ffffff';
   const iconColor = isDark ? '#FFFFFF' : '#6B7280';
   const activeColor = '#6366F1';
 
