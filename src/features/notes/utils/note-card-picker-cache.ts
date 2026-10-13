@@ -90,6 +90,8 @@ export function getCachedNotePickerFriends(accountId: string | null | undefined)
 }
 
 export function getCachedNotePickerGroups(accountId: string | null | undefined) {
+  const storeGroups = primeGroupsFromChatStore(accountId);
+  if (storeGroups) return storeGroups;
   return accountId && groupsCache?.accountId === accountId ? groupsCache.value : null;
 }
 

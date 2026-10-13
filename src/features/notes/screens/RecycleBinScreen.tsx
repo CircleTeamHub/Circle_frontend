@@ -52,7 +52,7 @@ export default function RecycleBinScreen() {
   // 响应落地时代际不匹配即丢弃，不再把刚恢复的笔记写回回收站列表。
   const loadGenerationRef = useRef(0);
   const load = useCallback(async () => {
-    const generation = loadGenerationRef.current;
+    const generation = ++loadGenerationRef.current;
     const notesData = await fetchDeletedNotes();
     if (!mountedRef.current) return;
     if (generation !== loadGenerationRef.current) return;
