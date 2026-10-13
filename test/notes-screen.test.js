@@ -688,3 +688,16 @@ test('EditNoteScreen: 个人名片和群名片都单选，选另一个即替换�
   // 标题用 h2 档（20/26），不再是 24 号大字。
   assert.match(src, /titleInput:\s*\{[\s\S]*?fontSize: 20,[\s\S]*?lineHeight: 26,/);
 });
+
+test('EditNoteScreen: 笔记块排序的拖动把手在行首', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+  // 把手 → 序号 → 名称；把手不能再排在名称后面。
+  assert.match(
+    src,
+    /style=\{\[s\.composerSortDragHandle[\s\S]*?<\/View>\s*<Text style=\{\[s\.composerSortIndex[\s\S]*?<Text style=\{\[s\.composerSortRowLabel/,
+  );
+  assert.doesNotMatch(
+    src,
+    /<Text style=\{\[s\.composerSortRowLabel[\s\S]{0,200}<\/Text>\s*<View\s+style=\{\[s\.composerSortDragHandle/,
+  );
+});

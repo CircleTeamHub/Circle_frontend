@@ -3985,12 +3985,7 @@ export default function EditNoteScreen() {
                         : null,
                   ]}
                 >
-                  <Text style={[s.composerSortIndex, { color: colors.textSecondary }]}>
-                    {index + 1}
-                  </Text>
-                  <Text style={[s.composerSortRowLabel, { color: colors.text }]} numberOfLines={1}>
-                    {label}
-                  </Text>
+                  {/* 拖动把手放在行首：拇指从左侧按住就能拖，序号和名称跟在后面。 */}
                   <View
                     style={[s.composerSortDragHandle, { backgroundColor: colors.background }]}
                     accessible
@@ -4008,6 +4003,12 @@ export default function EditNoteScreen() {
                       color={colors.textSecondary}
                     />
                   </View>
+                  <Text style={[s.composerSortIndex, { color: colors.textSecondary }]}>
+                    {index + 1}
+                  </Text>
+                  <Text style={[s.composerSortRowLabel, { color: colors.text }]} numberOfLines={1}>
+                    {label}
+                  </Text>
                 </Animated.View>
               );
             })
