@@ -86,6 +86,9 @@ export function LoginSecurityCodeGate() {
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const [gateState, setGateState] = useState<GateState>('unlocked');
+  // 应用锁状态是否已确认（拉到状态 / 失败兜底 / 未登录）。确认前一律当作上锁，
+  // 陌生设备登录的批准弹窗不出来。
+  const [lockStatusKnown, setLockStatusKnown] = useState(false);
   const [securityCode, setSecurityCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
@@ -132,6 +135,7 @@ export function LoginSecurityCodeGate() {
       setSecurityCode('');
       setError(null);
       setGateState('unlocked');
+      setLockStatusKnown(!isLoading);
       return;
     }
 
@@ -146,11 +150,13 @@ export function LoginSecurityCodeGate() {
       if (requestIdRef.current !== requestId) return;
       securityCodeEnabledRef.current = status.enabled;
       setGateState(status.enabled ? 'locked' : 'unlocked');
+      setLockStatusKnown(true);
     } catch (requestError) {
       if (requestIdRef.current !== requestId) return;
       // 状态拉取失败时保留上一次已知状态，避免把「拿不到状态」误判为「未开启」、
       // 从而把已开启安全码的账号静默放行。已知已开启 -> 保持锁定（fail-closed），
       // 未知/未开启 -> 维持解锁，避免后端抖动时把所有人挡在门外。
+      setLockStatusKnown(true);
       setGateState(securityCodeEnabledRef.current ? 'locked' : 'unlocked');
       reportHandledFailure('securityCode', 'statusCheck', requestError);
     }
@@ -226,8 +232,8 @@ export function LoginSecurityCodeGate() {
 
   // 应用锁没解开时，陌生设备登录的批准弹窗不能出来（否则拿到手机的人能直接点同意）。
   useEffect(() => {
-    useLoginApprovalStore.getState().setAppLocked(visible);
-  }, [visible]);
+    useLoginApprovalStore.getState().setAppLocked(visible || !lockStatusKnown);
+  }, [lockStatusKnown, visible]);
 
   return (
     <Modal

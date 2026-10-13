@@ -19,6 +19,11 @@ type LoginApprovalState = {
   appLocked: boolean;
   /** 新设备已用验证码登录成功的请求：本机还亮着验证码的话可以收起了。 */
   consumedId: string | null;
+  /**
+   * 本机或别的设备已经处理过的请求。晚到的列表响应（发起于处理之前）会把它们
+   * 带回来，按这里过滤掉，免得同一请求再问一遍。
+   */
+  handledIds: string[];
   refresh: () => Promise<void>;
   remove: (challengeId: string) => void;
   markResolved: (
@@ -33,11 +38,20 @@ let inFlight: Promise<void> | null = null;
 
 export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
   pending: [],
-  appLocked: false,
+  // 默认视为已上锁：冷启动时应用锁状态还没拉回来，不能先把「是我」按钮亮出来。
+  // 由 LoginSecurityCodeGate 在拿到状态后解开。
+  appLocked: true,
   consumedId: null,
+  handledIds: [],
   refresh: () => {
     inFlight ??= fetchPendingLoginChallenges()
-      .then((pending) => set({ pending: Array.isArray(pending) ? pending : [] }))
+      .then((pending) =>
+        set((state) => ({
+          pending: (Array.isArray(pending) ? pending : []).filter(
+            (item) => !state.handledIds.includes(item.id),
+          ),
+        })),
+      )
       .catch((error) => {
         reportHandledFailure('loginApproval', 'fetchPending', error);
       })
@@ -49,14 +63,16 @@ export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
   remove: (challengeId) =>
     set((state) => ({
       pending: state.pending.filter((item) => item.id !== challengeId),
+      handledIds: [...state.handledIds, challengeId].slice(-50),
     })),
   markResolved: (challengeId, status) =>
     set((state) => ({
       pending: state.pending.filter((item) => item.id !== challengeId),
+      handledIds: [...state.handledIds, challengeId].slice(-50),
       consumedId: status === 'CONSUMED' ? challengeId : state.consumedId,
     })),
   setAppLocked: (appLocked) => set({ appLocked }),
-  reset: () => set({ pending: [], consumedId: null }),
+  reset: () => set({ pending: [], consumedId: null, handledIds: [] }),
 }));
 
 setLoginChallengeListener((event) => {

@@ -55,11 +55,14 @@ export function useLoginApproval() {
     }
   }, [active, consumedId]);
 
+  // 有待问的请求或正在显示验证码时才走秒：过期的请求要能自己消失。
+  const ticking = active?.kind === 'code' || pending.length > 0;
   useEffect(() => {
-    if (active?.kind !== 'code') return undefined;
+    if (!ticking) return undefined;
+    setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(timer);
-  }, [active?.kind]);
+  }, [ticking]);
 
   const stage: LoginApprovalStage | null = useMemo(() => {
     if (!enabled || appLocked) return null;

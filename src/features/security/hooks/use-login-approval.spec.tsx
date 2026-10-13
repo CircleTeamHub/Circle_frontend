@@ -31,7 +31,12 @@ const challenge = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  useLoginApprovalStore.setState({ pending: [], appLocked: false, consumedId: null });
+  useLoginApprovalStore.setState({
+    pending: [],
+    appLocked: false,
+    consumedId: null,
+    handledIds: [],
+  });
   jest.mocked(fetchPendingLoginChallenges).mockResolvedValue([challenge]);
 });
 
@@ -94,4 +99,36 @@ test('another device handling the request dismisses the prompt here', async () =
   act(() => useLoginApprovalStore.getState().markResolved('c1', 'APPROVED'));
 
   expect(result.current.stage).toBeNull();
+});
+
+test('a late list response does not bring back a request already handled', async () => {
+  let resolveLate: (value: (typeof challenge)[]) => void = () => undefined;
+  jest
+    .mocked(fetchPendingLoginChallenges)
+    .mockReturnValueOnce(new Promise((resolve) => (resolveLate = resolve)));
+  const { result } = renderHook(() => useLoginApproval());
+
+  act(() => useLoginApprovalStore.getState().markResolved('c1', 'REJECTED'));
+  await act(async () => resolveLate([challenge]));
+
+  expect(result.current.stage).toBeNull();
+});
+
+test('an ask disappears by itself once it expires', async () => {
+  jest.useFakeTimers();
+  try {
+    jest.mocked(fetchPendingLoginChallenges).mockResolvedValue([
+      { ...challenge, expiresAt: new Date(Date.now() + 2_000).toISOString() },
+    ]);
+    const { result } = renderHook(() => useLoginApproval());
+    await waitFor(() => expect(result.current.stage?.kind).toBe('ask'));
+
+    await act(async () => {
+      jest.advanceTimersByTime(3_000);
+    });
+
+    expect(result.current.stage).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
 });
