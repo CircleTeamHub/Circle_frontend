@@ -2623,6 +2623,7 @@
       "saving": "保存中...",
       "contactPickerTitle": "选择联系人",
       "groupPickerTitle": "选择群组",
+      "groupPickerHint": "只显示你是群主的群。选中后，这条笔记会出现在该群设置的「笔记管理」里。",
       "contactSearchPlaceholder": "搜索联系人",
       "groupSearchPlaceholder": "搜索群组",
       "cardPickerNoResults": "没有匹配结果",

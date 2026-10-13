@@ -1041,6 +1041,7 @@
       "saving": "Guardando...",
       "contactPickerTitle": "Elegir contacto",
       "groupPickerTitle": "Elegir grupo",
+      "groupPickerHint": "Solo se muestran los grupos de los que eres propietario. La nota aparecerá en la gestión de notas de ese grupo.",
       "contactSearchPlaceholder": "Buscar contactos",
       "groupSearchPlaceholder": "Buscar grupos",
       "cardPickerNoResults": "No hay coincidencias",

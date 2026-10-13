@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Easing,
   AppState,
   Platform,
   InteractionManager,
@@ -87,14 +88,14 @@ import {
   type StructuredNoteMediaItem,
 } from '@/features/notes/utils/note-sections';
 import {
-  getCachedNotePickerCircles,
+  getCachedNotePickerGroups,
   getCachedNotePickerFriends,
-  isNotePickerCirclesFresh,
+  isNotePickerGroupsFresh,
   isNotePickerFriendsFresh,
-  loadNotePickerCircles,
+  loadNotePickerGroups,
   loadNotePickerFriends,
   prefetchNoteCardPickerData,
-  type NoteCardPickerCircle,
+  type NoteCardPickerGroup,
 } from '@/features/notes/utils/note-card-picker-cache';
 import {
   buildNoteComposerBlocksMetadata,
@@ -221,6 +222,8 @@ const COMPOSER_ACTIONS: readonly {
 const FIXED_TITLE_BLOCK: NoteComposerBlock = { id: 'title-fixed', kind: 'title' };
 
 const COMPOSER_SORT_ROW_HEIGHT = 58;
+// 松手后被拖的行滑进空位的时长：够短不拖沓，又能看清它落到了哪。
+const COMPOSER_DROP_DURATION = 120;
 // 文字块是笔记的主体：默认给到能写十来行的高度，最小也留出 240，
 // 免得扣掉工具栏后只剩两三行可见。
 const DEFAULT_TEXT_EDITOR_HEIGHT = 360;
@@ -570,10 +573,11 @@ export default function EditNoteScreen() {
   const [contactItems, setContactItems] = useState<NoteCardDraft[]>([]);
   const [groupCardItems, setGroupCardItems] = useState<NoteCardDraft[]>([]);
   // 收藏副本的来源群名片属于老板的固定来源标识，中间人只能查看，不能替换或删除。
+  // 源笔记的群名片就是群设置「笔记管理」的绑定，群主可以在这里改选或移除。
   const [sourceGroupCardLocked, setSourceGroupCardLocked] = useState(false);
   const [cardPickerKind, setCardPickerKind] = useState<CardPickerKind | null>(null);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
-  const [circles, setCircles] = useState<NoteCardPickerCircle[]>([]);
+  const [groupOptions, setGroupOptions] = useState<NoteCardPickerGroup[]>([]);
   const [cardPickerLoading, setCardPickerLoading] = useState(false);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [cardPickerSearch, setCardPickerSearch] = useState('');
@@ -583,7 +587,7 @@ export default function EditNoteScreen() {
     cardPickerRequestRef.current += 1;
     cardPickerSessionRef.current = null;
     setFriends([]);
-    setCircles([]);
+    setGroupOptions([]);
     setSelectedCardIds([]);
     setCardPickerKind(null);
     setCardPickerLoading(false);
@@ -705,9 +709,9 @@ export default function EditNoteScreen() {
     () => contactPickerItems.filter((item) => !cardPickerSearchTerm || item.searchText.includes(cardPickerSearchTerm)),
     [cardPickerSearchTerm, contactPickerItems],
   );
-  const filteredCircleItems = useMemo(
-    () => circles.filter((circle) => !cardPickerSearchTerm || circle.name.toLocaleLowerCase().includes(cardPickerSearchTerm)),
-    [cardPickerSearchTerm, circles],
+  const filteredGroupItems = useMemo(
+    () => groupOptions.filter((group) => !cardPickerSearchTerm || group.name.toLocaleLowerCase().includes(cardPickerSearchTerm)),
+    [cardPickerSearchTerm, groupOptions],
   );
 
   useEffect(() => {
@@ -810,11 +814,34 @@ export default function EditNoteScreen() {
 
     composerDragMetaRef.current = null;
     composerDragY.stopAnimation();
-    composerDragY.setValue(0);
+    // 不在这里 setValue(0)：Animated 的值会立刻写到原生视图上，而新顺序要等
+    // 下一次提交才生效，中间那一帧被拖的行会先跳回原位再跳到新位置（整块
+    // 面板像刷新了一下）。拖动结束后这一行不再绑定 composerDragY，下次按下
+    // 时 grant 会重新归零。
     setDraggingComposerBlockId(null);
     setComposerDragStartIndex(null);
     setComposerDragActiveIndex(null);
   }, [composerDragY]);
+
+  // 松手后先把被拖的行滑进目标空位（其余行此时已经让好位），动画结束再提交
+  // 新顺序：提交那一刻画面上每一行都已经在最终位置，不会再跳。
+  const settleComposerDrag = useCallback(() => {
+    const meta = composerDragMetaRef.current;
+    if (!meta) {
+      finishComposerDrag();
+      return;
+    }
+    const targetDy = (meta.activeIndex - meta.startIndex) * COMPOSER_SORT_ROW_HEIGHT;
+    Animated.timing(composerDragY, {
+      toValue: targetDy,
+      duration: COMPOSER_DROP_DURATION,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(() => {
+      // 动画期间可能已因退出排序模式等原因收尾过，避免重复提交。
+      if (composerDragMetaRef.current === meta) finishComposerDrag();
+    });
+  }, [composerDragY, finishComposerDrag]);
 
   const getComposerDragResponder = useCallback(
     (blockId: string) => {
@@ -869,8 +896,8 @@ export default function EditNoteScreen() {
           const visualDy = Math.max(minDy, Math.min(maxDy, gestureState.dy));
           composerDragY.setValue(visualDy);
         },
-        onPanResponderRelease: finishComposerDrag,
-        onPanResponderTerminate: finishComposerDrag,
+        onPanResponderRelease: settleComposerDrag,
+        onPanResponderTerminate: settleComposerDrag,
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => true,
       });
@@ -878,7 +905,7 @@ export default function EditNoteScreen() {
       composerDragRespondersRef.current.set(blockId, responder);
       return responder;
     },
-    [composerDragY, finishComposerDrag],
+    [composerDragY, settleComposerDrag],
   );
 
   useEffect(() => {
@@ -1243,7 +1270,7 @@ export default function EditNoteScreen() {
         setMediaOwnerByClientId(storedOwnerMap);
         setContactItems(((normalizedSections as any).contacts?.items ?? []) as NoteCardDraft[]);
         setGroupCardItems(((normalizedSections as any).groups?.items ?? []) as NoteCardDraft[]);
-        setSourceGroupCardLocked(Boolean(note.sourceConversationID || note.collectedFrom?.group));
+        setSourceGroupCardLocked(Boolean(note.collectedFrom?.group));
         setUnrecoverableMediaCount(
           countUnrecoverableSectionMedia([
             ...normalizedSections.media.items,
@@ -2319,18 +2346,18 @@ export default function EditNoteScreen() {
     const cachedFriends = kind === 'contact'
       ? getCachedNotePickerFriends(accountId)
       : null;
-    const cachedCircles = kind === 'group'
-      ? getCachedNotePickerCircles(accountId)
+    const cachedGroups = kind === 'group'
+      ? getCachedNotePickerGroups(accountId)
       : null;
     const hasCached = kind === 'contact'
       ? cachedFriends !== null
-      : cachedCircles !== null;
+      : cachedGroups !== null;
     setFriends(cachedFriends ?? []);
-    setCircles(cachedCircles ?? []);
+    setGroupOptions(cachedGroups ?? []);
 
     const isFresh = kind === 'contact'
       ? isNotePickerFriendsFresh(accountId)
-      : isNotePickerCirclesFresh(accountId);
+      : isNotePickerGroupsFresh(accountId);
     // Cached data is usable immediately. A stale cache refreshes in the
     // background without blocking the picker or showing a spinner.
     setCardPickerLoading(!hasCached);
@@ -2341,8 +2368,8 @@ export default function EditNoteScreen() {
         const nextFriends = await loadNotePickerFriends(accountId);
         if (isCurrentRequest()) setFriends(nextFriends);
       } else {
-        const nextCircles = await loadNotePickerCircles(accountId);
-        if (isCurrentRequest()) setCircles(nextCircles);
+        const nextGroups = await loadNotePickerGroups(accountId);
+        if (isCurrentRequest()) setGroupOptions(nextGroups);
       }
     } catch (error) {
       reportHandledFailure('noteEditor', 'cardPickerLoad', error);
@@ -2393,16 +2420,16 @@ export default function EditNoteScreen() {
       ]);
     } else {
       setGroupCardItems([
-        ...groupCardItems.filter((item) => selectedCardIds.includes(item.id) && !circles.some((option) => option.id === item.id)),
-        ...circles.filter((circle) => selectedCardIds.includes(circle.id)).map((circle) => ({
-          id: circle.id,
-          name: circle.name,
-          faceURL: circle.avatarUrl,
+        ...groupCardItems.filter((item) => selectedCardIds.includes(item.id) && !groupOptions.some((option) => option.id === item.id)),
+        ...groupOptions.filter((group) => selectedCardIds.includes(group.id)).map((group) => ({
+          id: group.id,
+          name: group.name,
+          faceURL: group.avatarUrl ?? null,
         })),
       ]);
     }
     closeCardPicker();
-  }, [cardPickerKind, circles, contactPickerItems, contactItems, groupCardItems, closeCardPicker, selectedCardIds, sourceGroupCardLocked]);
+  }, [cardPickerKind, groupOptions, contactPickerItems, contactItems, groupCardItems, closeCardPicker, selectedCardIds, sourceGroupCardLocked]);
 
   const handleOpenLocationPicker = useCallback(() => {
     if (pendingSubmissionRef.current || saveInFlightRef.current || !isRouteDataReady || uploadInFlightRef.current) return;
@@ -4083,6 +4110,13 @@ export default function EditNoteScreen() {
                 ? t('notes.edit.contactPickerTitle', { defaultValue: '选择联系人' })
                 : t('notes.edit.groupPickerTitle', { defaultValue: '选择群组' })}
             </Text>
+            {cardPickerKind === 'group' ? (
+              <Text style={[s.cardPickerHint, d.groupSheetRowMeta]}>
+                {t('notes.edit.groupPickerHint', {
+                  defaultValue: '只显示你是群主的群。选中后，这条笔记会出现在该群设置的「笔记管理」里。',
+                })}
+              </Text>
+            ) : null}
             <View
               style={[
                 s.cardPickerSearchWrap,
@@ -4161,7 +4195,7 @@ export default function EditNoteScreen() {
                     </Text>
                   )
                 ) : (
-                  filteredCircleItems.length > 0 ? filteredCircleItems.map((item) => {
+                  filteredGroupItems.length > 0 ? filteredGroupItems.map((item) => {
                     const selected = selectedCardIds.includes(item.id);
                     return (
                       <Pressable
@@ -4439,6 +4473,7 @@ const s = StyleSheet.create({
     borderRadius: Radius.full,
   },
   groupSheetTitle: { ...Typography.h3, fontWeight: '700' },
+  cardPickerHint: { ...Typography.small, lineHeight: 18 },
   groupSheetList: { maxHeight: 360 },
   groupSheetListContent: { gap: Spacing.xs, paddingBottom: Spacing.xs },
   groupSheetRow: {

@@ -1035,6 +1035,7 @@
       "saving": "保存中...",
       "contactPickerTitle": "連絡先を選択",
       "groupPickerTitle": "グループを選択",
+      "groupPickerHint": "あなたがオーナーのグループのみ表示されます。選択すると、このノートはそのグループ設定の「ノート管理」に表示されます。",
       "contactSearchPlaceholder": "連絡先を検索",
       "groupSearchPlaceholder": "グループを検索",
       "cardPickerNoResults": "一致する項目がありません",

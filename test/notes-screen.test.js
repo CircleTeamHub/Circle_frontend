@@ -681,7 +681,7 @@ test('EditNoteScreen: 个人名片和群名片都单选，选另一个即替换�
   // 群名片同样单选。
   assert.match(
     src,
-    /filteredCircleItems\.map[\s\S]*?onPress=\{\(\) => setSelectedCardIds\(selected \? \[\] : \[item\.id\]\)\}\s*accessibilityRole="radio"/,
+    /filteredGroupItems\.map[\s\S]*?onPress=\{\(\) => setSelectedCardIds\(selected \? \[\] : \[item\.id\]\)\}\s*accessibilityRole="radio"/,
   );
   assert.doesNotMatch(src, /setSelectedCardIds\(\(current\) => selected \? current\.filter/);
 
@@ -700,4 +700,35 @@ test('EditNoteScreen: 笔记块排序的拖动把手在行首', () => {
     src,
     /<Text style=\{\[s\.composerSortRowLabel[\s\S]{0,200}<\/Text>\s*<View\s+style=\{\[s\.composerSortDragHandle/,
   );
+});
+
+// 回归：拖动换完顺序，被拖的行先跳回原位再落到新位置，整块排序面板像刷新了一下。
+test('EditNoteScreen: 松手后被拖的行先滑进空位再提交新顺序，不会跳一下', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  // 松手走 settle：先动画到目标空位，结束后才提交顺序。
+  assert.match(src, /onPanResponderRelease: settleComposerDrag,/);
+  assert.match(src, /onPanResponderTerminate: settleComposerDrag,/);
+  assert.match(
+    src,
+    /const targetDy = \(meta\.activeIndex - meta\.startIndex\) \* COMPOSER_SORT_ROW_HEIGHT;[\s\S]*?Animated\.timing\(composerDragY, \{\s*toValue: targetDy,[\s\S]*?\}\)\.start\(\(\) => \{[\s\S]*?finishComposerDrag\(\);/,
+  );
+  // 收尾时不能先把位移清零（会先于新顺序作用到原生视图上）。
+  const finish = src.slice(
+    src.indexOf('const finishComposerDrag = useCallback'),
+    src.indexOf('const settleComposerDrag = useCallback'),
+  );
+  assert.doesNotMatch(finish, /composerDragY\.setValue\(0\)/);
+});
+
+// 群名片就是群设置「笔记管理」的绑定：选择器只列我当群主的群；源笔记可改选/移除，
+// 只有收藏副本的来源群名片才锁定。
+test('EditNoteScreen: 群名片即群绑定——只列群主的群，源笔记不锁定', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+  const cache = read('src/features/notes/utils/note-card-picker-cache.ts');
+
+  assert.match(src, /setSourceGroupCardLocked\(Boolean\(note\.collectedFrom\?\.group\)\);/);
+  assert.doesNotMatch(src, /setSourceGroupCardLocked\(Boolean\(note\.sourceConversationID/);
+  assert.match(src, /t\('notes\.edit\.groupPickerHint'/);
+  assert.match(cache, /conversation\.myRole === 'OWNER'/);
 });

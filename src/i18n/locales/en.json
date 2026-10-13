@@ -2631,6 +2631,7 @@
       "saving": "Saving...",
       "contactPickerTitle": "Choose contact",
       "groupPickerTitle": "Choose group",
+      "groupPickerHint": "Only groups you own are listed. The note will show up in that group’s Note management.",
       "contactSearchPlaceholder": "Search contacts",
       "groupSearchPlaceholder": "Search groups",
       "cardPickerNoResults": "No matches",

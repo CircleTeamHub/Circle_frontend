@@ -1,59 +1,101 @@
 import { fetchFriends } from '@/services/api/friends';
-import { fetchMyCircles } from '@/services/api/circles';
-import { useCirclesStore } from '@/features/discover/store/use-circles-store';
+import { loadChatConversations } from '@/chat-core/api';
+import { useChatStore } from '@/chat-core/store';
 import {
-  getCachedNotePickerCircles,
+  getCachedNotePickerGroups,
+  loadNotePickerGroups,
   prefetchNoteCardPickerData,
 } from './note-card-picker-cache';
 
 jest.mock('@/services/api/friends', () => ({ fetchFriends: jest.fn() }));
-jest.mock('@/services/api/circles', () => ({ fetchMyCircles: jest.fn() }));
-jest.mock('@/features/discover/store/use-circles-store', () => ({
-  useCirclesStore: { getState: jest.fn() },
+jest.mock('@/chat-core/api', () => ({ loadChatConversations: jest.fn() }));
+jest.mock('@/chat-core/store', () => ({
+  useChatStore: { getState: jest.fn() },
+}));
+// 只关心「哪些会话进选择器、取哪个 id」，展示名直接用会话上的名字。
+jest.mock('@/chat-core/mappers', () => ({
+  mapChatConversationToUI: (dto: {
+    name?: string | null;
+    circle?: { name?: string } | null;
+    avatarUrl?: string | null;
+  }) => ({ name: dto.circle?.name ?? dto.name ?? '', avatarUrl: dto.avatarUrl ?? undefined }),
 }));
 
-const mockGetCirclesState = jest.mocked(useCirclesStore.getState);
+const mockGetChatState = jest.mocked(useChatStore.getState);
+
+const circleGroup = {
+  id: 'conv-circle',
+  type: 'GROUP',
+  circleId: 'circle-1',
+  circle: { name: '圈子群' },
+  myRole: 'OWNER',
+  joinedAt: '2026-10-01T00:00:00.000Z',
+  lastMessageAt: null,
+};
+const standaloneGroup = {
+  id: 'conv-standalone',
+  type: 'GROUP',
+  circleId: null,
+  circle: null,
+  name: '独立群',
+  avatarUrl: 'https://cdn.test/g.png',
+  myRole: 'OWNER',
+  joinedAt: '2026-10-02T00:00:00.000Z',
+  lastMessageAt: null,
+};
+// 只是成员/管理员的群：群名片即绑定，只有群主能绑，不进选择器。
+const memberGroup = {
+  id: 'conv-member',
+  type: 'GROUP',
+  circleId: null,
+  circle: null,
+  name: '我只是成员',
+  myRole: 'MEMBER',
+  joinedAt: '2026-10-03T00:00:00.000Z',
+  lastMessageAt: null,
+};
+const adminCircleGroup = { ...circleGroup, id: 'conv-admin', circleId: 'circle-2', myRole: 'ADMIN' };
+const direct = { id: 'conv-direct', type: 'DIRECT', circleId: null, lastMessageAt: null };
+const temp = { id: 'conv-temp', type: 'TEMP', circleId: null, lastMessageAt: null };
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGetCirclesState.mockReturnValue({
-    joinedCircles: [],
-    createdCircles: [],
-    myCirclesLoading: false,
-    myCirclesError: null,
-  } as never);
+  mockGetChatState.mockReturnValue({ conversations: [] } as never);
   jest.mocked(fetchFriends).mockResolvedValue([]);
-  jest.mocked(fetchMyCircles).mockResolvedValue([]);
+  jest.mocked(loadChatConversations).mockResolvedValue([]);
 });
 
-test('prefetch reuses the already loaded circle store and fetches friends in the background', async () => {
-  mockGetCirclesState.mockReturnValue({
-    joinedCircles: [{ id: 'joined', name: '已加入', avatarUrl: null }],
-    createdCircles: [{ id: 'created', name: '我创建的', avatarUrl: null }],
-    myCirclesLoading: false,
-    myCirclesError: null,
+test('lists every group chat I own — circle groups and standalone groups — not just circles', async () => {
+  mockGetChatState.mockReturnValue({
+    conversations: [direct, circleGroup, temp, memberGroup, standaloneGroup, adminCircleGroup],
   } as never);
 
-  await prefetchNoteCardPickerData('account-with-store-data');
+  const groups = await loadNotePickerGroups('account-a');
 
-  expect(getCachedNotePickerCircles('account-with-store-data')).toEqual([
-    { id: 'joined', name: '已加入', avatarUrl: null },
-    { id: 'created', name: '我创建的', avatarUrl: null },
+  // 最近加入的在前；圈子群沿用圈子 id，独立群用会话 id。
+  expect(groups).toEqual([
+    { id: 'conv-standalone', name: '独立群', avatarUrl: 'https://cdn.test/g.png' },
+    { id: 'circle-1', name: '圈子群', avatarUrl: undefined },
   ]);
-  expect(fetchMyCircles).not.toHaveBeenCalled();
-  expect(fetchFriends).toHaveBeenCalledTimes(1);
+  // 单聊、临时会话不是群聊。
+  expect(groups.map((group) => group.id)).not.toContain('conv-direct');
+  expect(groups.map((group) => group.id)).not.toContain('conv-temp');
+  // 不是群主的群（成员、管理员）不进选择器。
+  expect(groups.map((group) => group.id)).not.toContain('conv-member');
+  expect(groups.map((group) => group.id)).not.toContain('circle-2');
+  // 会话列表已在 store 里，不再打网络。
+  expect(loadChatConversations).not.toHaveBeenCalled();
 });
 
-test('prefetch falls back to the direct circle API when the global store is empty', async () => {
-  jest.mocked(fetchMyCircles)
-    .mockResolvedValueOnce([{ id: 'joined', name: '已加入', avatarUrl: null }] as never)
-    .mockResolvedValueOnce([{ id: 'created', name: '我创建的', avatarUrl: null }] as never);
+test('falls back to the conversation API when the chat store has not loaded yet', async () => {
+  jest.mocked(loadChatConversations).mockResolvedValueOnce([standaloneGroup, circleGroup] as never);
 
-  await prefetchNoteCardPickerData('account-without-store-data');
+  await prefetchNoteCardPickerData('account-b');
 
-  expect(fetchMyCircles).toHaveBeenCalledTimes(2);
-  expect(getCachedNotePickerCircles('account-without-store-data')).toEqual([
-    { id: 'joined', name: '已加入', avatarUrl: null },
-    { id: 'created', name: '我创建的', avatarUrl: null },
+  expect(loadChatConversations).toHaveBeenCalledTimes(1);
+  expect(getCachedNotePickerGroups('account-b')).toEqual([
+    { id: 'conv-standalone', name: '独立群', avatarUrl: 'https://cdn.test/g.png' },
+    { id: 'circle-1', name: '圈子群', avatarUrl: undefined },
   ]);
+  expect(fetchFriends).toHaveBeenCalledTimes(1);
 });

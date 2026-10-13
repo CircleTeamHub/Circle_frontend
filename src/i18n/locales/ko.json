@@ -1035,6 +1035,7 @@
       "saving": "저장 중...",
       "contactPickerTitle": "연락처 선택",
       "groupPickerTitle": "그룹 선택",
+      "groupPickerHint": "내가 방장인 그룹만 표시됩니다. 선택하면 이 노트가 해당 그룹 설정의 “노트 관리”에 표시됩니다.",
       "contactSearchPlaceholder": "연락처 검색",
       "groupSearchPlaceholder": "그룹 검색",
       "cardPickerNoResults": "일치하는 항목이 없습니다",

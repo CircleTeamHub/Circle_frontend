@@ -68,10 +68,10 @@ const mockCachedFriends = jest.fn();
 const mockCachedCircles = jest.fn();
 jest.mock('@/features/notes/utils/note-card-picker-cache', () => ({
   getCachedNotePickerFriends: (...args: unknown[]) => mockCachedFriends(...args),
-  getCachedNotePickerCircles: (...args: unknown[]) => mockCachedCircles(...args),
-  isNotePickerFriendsFresh: () => false, isNotePickerCirclesFresh: () => false,
+  getCachedNotePickerGroups: (...args: unknown[]) => mockCachedCircles(...args),
+  isNotePickerFriendsFresh: () => false, isNotePickerGroupsFresh: () => false,
   loadNotePickerFriends: (...args: unknown[]) => mockPickerFriends(...args),
-  loadNotePickerCircles: (...args: unknown[]) => mockPickerCircles(...args),
+  loadNotePickerGroups: (...args: unknown[]) => mockPickerCircles(...args),
   prefetchNoteCardPickerData: () => Promise.resolve(),
 }));
 const mockFetchNoteGroups = jest.fn();
