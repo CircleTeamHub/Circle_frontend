@@ -31,7 +31,7 @@ type NoteDocumentBodyProps = {
   order: readonly NoteSectionKind[];
   layout?: unknown;
   onContactPress?: (id: string, name?: string) => void;
-  onGroupPress?: (id: string, name?: string) => void;
+  onGroupPress?: (id: string, name?: string, conversationID?: string) => void;
   onMediaError?: () => void;
   onImagePress?: (uri: string, objectKey?: string) => void;
   lazyMedia?: boolean;

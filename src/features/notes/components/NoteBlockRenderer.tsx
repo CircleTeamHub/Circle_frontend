@@ -294,13 +294,18 @@ function ContactCard({
   group,
   onPress,
 }: {
-  onPress?: (id: string, name?: string) => void;
+  onPress?: (id: string, name?: string, conversationID?: string) => void;
   card: Record<string, unknown>;
   group: boolean;
 }) {
   const { colors } = useTheme();
   const id = group && typeof card.circleId === 'string' ? card.circleId : typeof card.id === 'string' ? card.id : '';
   const name = typeof card.name === 'string' ? card.name : '';
+  // 独立群名片：服务端标注的会话 id，打开时进群聊而不是圈子详情。
+  const conversationID =
+    group && typeof card.conversationID === 'string' && card.conversationID
+      ? card.conversationID
+      : undefined;
   const avatar =
     (typeof card.faceURL === 'string' && card.faceURL) ||
     (typeof card.avatarUrl === 'string' && card.avatarUrl) ||
@@ -314,7 +319,7 @@ function ContactCard({
   return (
     <Pressable
       style={[s.peerCard, { backgroundColor: colors.surface, borderColor: colors.surfaceBorder }]}
-      onPress={onPress && id ? () => onPress(id, name) : undefined}
+      onPress={onPress && id ? () => (conversationID ? onPress(id, name, conversationID) : onPress(id, name)) : undefined}
       disabled={!onPress || !id}
       accessibilityRole={onPress && id ? 'button' : undefined}
       accessibilityLabel={name || id}
@@ -396,7 +401,7 @@ const BlockView = memo(function BlockView({
   onMediaError?: () => void;
   onImagePress?: (uri: string, objectKey?: string) => void;
   onContactPress?: (id: string, name?: string) => void;
-  onGroupPress?: (id: string, name?: string) => void;
+  onGroupPress?: (id: string, name?: string, conversationID?: string) => void;
   lazyMedia?: boolean;
 }) {
   const { colors } = useTheme();
@@ -560,7 +565,7 @@ interface Props {
   onMediaError?: () => void;
   onImagePress?: (uri: string, objectKey?: string) => void;
   onContactPress?: (id: string, name?: string) => void;
-  onGroupPress?: (id: string, name?: string) => void;
+  onGroupPress?: (id: string, name?: string, conversationID?: string) => void;
   lazyMedia?: boolean;
   depth?: number;
 }

@@ -39,9 +39,6 @@ const s = StyleSheet.create({
     ...Typography.small,
     fontWeight: '600',
   },
-  helper: {
-    ...Typography.small,
-  },
   input: {
     minHeight: 52,
     borderWidth: 1,
@@ -143,9 +140,6 @@ export default function EditFriendRemarkScreen() {
       fieldLabel: {
         color: colors.textSecondary,
       },
-      helper: {
-        color: colors.textSecondary,
-      },
       input: {
         color: colors.text,
         backgroundColor: colors.background,
@@ -215,9 +209,6 @@ export default function EditFriendRemarkScreen() {
         placeholderTextColor={colors.textSecondary}
         style={[s.input, d.input]}
       />
-      <Text style={[s.helper, d.helper]}>
-        {t('userProfile.editRemark.helper')}
-      </Text>
     </View>
   );
 

@@ -293,6 +293,11 @@ export async function fetchDeletedNotes(): Promise<NoteSummary[]> {
 }
 
 /** FE#92 回收站：恢复软删笔记（后端恢复为 ACTIVE）。 */
+/** 回收站「立即删除」：不等 30 天到期，直接永久删除（只接受已在回收站的笔记）。 */
+export async function purgeNote(id: string): Promise<void> {
+  await apiClient<void>(`/note/${id}/permanent`, { method: 'DELETE' });
+}
+
 export async function restoreNote(id: string): Promise<void> {
   return apiClient<void>(`/note/${id}/restore`, { method: 'POST' });
 }

@@ -650,7 +650,8 @@ test('ShareNoteSheet sends the note as a card to a chosen friend/group', () => {
   assert.match(sheet, /sendCardMessage/);
   assert.match(sheet, /type: 'note-card'/);
   assert.match(sheet, /BottomSheetModal/);
-  assert.match(sheet, /notes\.shareToChat\.title/);
+  // 面板顶部不再放「分享给好友或群聊」标题。
+  assert.doesNotMatch(sheet, /notes\.shareToChat\.title/);
 });
 
 test('ShareNoteSheet search text has a complete vertical line box', () => {
@@ -667,4 +668,67 @@ test('ShareNoteSheet maps send failures to stable user-facing copy', () => {
   assert.match(sheet, /setRetryTasks\(failures\)/);
   assert.match(sheet, /t\('notes\.shareToChat\.partialFailed', \{\s*count: failures\.length/);
   assert.doesNotMatch(sheet, /error instanceof Error\s*\?\s*error\.message/);
+});
+
+test('EditNoteScreen: 个人名片和群名片都单选，选另一个即替换；标题字号收小一档', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  // 联系人选择器是单选：点选只保留这一个 id，再点同一个则取消。
+  assert.match(
+    src,
+    /filteredContactPickerItems\.map[\s\S]*?onPress=\{\(\) => setSelectedCardIds\(selected \? \[\] : \[item\.id\]\)\}\s*accessibilityRole="radio"/,
+  );
+  // 群名片同样单选。
+  assert.match(
+    src,
+    /filteredGroupItems\.map[\s\S]*?onPress=\{\(\) => setSelectedCardIds\(selected \? \[\] : \[item\.id\]\)\}\s*accessibilityRole="radio"/,
+  );
+  assert.doesNotMatch(src, /setSelectedCardIds\(\(current\) => selected \? current\.filter/);
+
+  // 标题用 h2 档（20/26），不再是 24 号大字。
+  assert.match(src, /titleInput:\s*\{[\s\S]*?fontSize: 20,[\s\S]*?lineHeight: 26,/);
+});
+
+test('EditNoteScreen: 笔记块排序的拖动把手在行首', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+  // 把手 → 序号 → 名称；把手不能再排在名称后面。
+  assert.match(
+    src,
+    /style=\{\[s\.composerSortDragHandle[\s\S]*?<\/View>\s*<Text style=\{\[s\.composerSortIndex[\s\S]*?<Text style=\{\[s\.composerSortRowLabel/,
+  );
+  assert.doesNotMatch(
+    src,
+    /<Text style=\{\[s\.composerSortRowLabel[\s\S]{0,200}<\/Text>\s*<View\s+style=\{\[s\.composerSortDragHandle/,
+  );
+});
+
+// 回归：拖动换完顺序，被拖的行先跳回原位再落到新位置，整块排序面板像刷新了一下。
+test('EditNoteScreen: 松手后被拖的行先滑进空位再提交新顺序，不会跳一下', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  // 松手走 settle：先动画到目标空位，结束后才提交顺序。
+  assert.match(src, /onPanResponderRelease: settleComposerDrag,/);
+  assert.match(src, /onPanResponderTerminate: settleComposerDrag,/);
+  assert.match(
+    src,
+    /const targetDy = \(meta\.activeIndex - meta\.startIndex\) \* COMPOSER_SORT_ROW_HEIGHT;[\s\S]*?Animated\.timing\(composerDragY, \{\s*toValue: targetDy,[\s\S]*?\}\)\.start\(\(\) => \{[\s\S]*?finishComposerDrag\(\);/,
+  );
+  // 收尾时不能先把位移清零（会先于新顺序作用到原生视图上）。
+  const finish = src.slice(
+    src.indexOf('const finishComposerDrag = useCallback'),
+    src.indexOf('const settleComposerDrag = useCallback'),
+  );
+  assert.doesNotMatch(finish, /composerDragY\.setValue\(0\)/);
+});
+
+// 群名片就是群设置「笔记管理」的绑定：选择器只列我当群主的群；源笔记可改选/移除，
+// 只有收藏副本的来源群名片才锁定。
+test('EditNoteScreen: 群名片即群绑定——只列群主的群，源笔记不锁定', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+  const cache = read('src/features/notes/utils/note-card-picker-cache.ts');
+
+  assert.match(src, /setSourceGroupCardLocked\(Boolean\(note\.collectedFrom\?\.group\)\);/);
+  assert.doesNotMatch(src, /setSourceGroupCardLocked\(Boolean\(note\.sourceConversationID/);
+  assert.match(src, /t\('notes\.edit\.groupPickerHint'/);
+  assert.match(cache, /conversation\.myRole === 'OWNER'/);
 });

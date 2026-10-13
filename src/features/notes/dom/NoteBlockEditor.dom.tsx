@@ -30,12 +30,10 @@ interface PendingInsert {
 // Toolbar 文案不能在 WebView 里走 i18n —— DOM bridge 跑在隔离的 JS realm，
 // react-i18next 的 instance 拿不到。统一在 native 侧 translate 后通过 props 传进来。
 export interface NoteEditorToolbarLabels {
-  headingType: string;
   paragraphType: string;
   bulletListType: string;
   imageTitle: string;
   videoTitle: string;
-  codeTitle: string;
 }
 
 interface Props {
@@ -54,6 +52,7 @@ interface Props {
 }
 
 type ActiveType = 'paragraph' | 'heading' | 'bulletListItem';
+type ToolbarType = Exclude<ActiveType, 'heading'>;
 
 function insertPendingMedia(
   editor: Pick<
@@ -203,28 +202,25 @@ export default function NoteBlockEditor({
     onInsertHandled();
   }, [pendingInserts, editor, onInsertHandled]);
 
-  function applyType(type: ActiveType) {
+  function applyType(type: ToolbarType) {
     if (!editable) return;
     const pos = editor.getTextCursorPosition();
     if (!pos?.block) return;
 
-    if (type === 'heading') {
-      editor.updateBlock(pos.block, { type: 'heading', props: { level: 1 } });
-    } else {
-      editor.updateBlock(pos.block, { type } as PartialBlock);
-    }
+    editor.updateBlock(pos.block, { type } as PartialBlock);
     setActiveType(type);
   }
 
   const isDark = theme === 'dark';
-  const bg = isDark ? '#1A1B23' : '#ffffff';
-  const border = isDark ? '#565A6B' : '#E5E7EB';
-  const toolbarBg = isDark ? '#1A1B23' : '#ffffff';
+  const bg = isDark ? '#000000' : '#ffffff';
+  const border = isDark ? '#48484A' : '#E5E7EB';
+  const toolbarBg = isDark ? '#000000' : '#ffffff';
   const iconColor = isDark ? '#FFFFFF' : '#6B7280';
   const activeColor = '#6366F1';
 
-  const TYPES: { label: string; type: ActiveType; title: string }[] = [
-    { label: 'H', type: 'heading', title: toolbarLabels.headingType },
+  // 工具栏只给正文和列表两种块。标题（H）和代码（<>）已下线：
+  // 旧笔记里存过的标题块、代码块照常渲染，只是不再提供新建入口。
+  const TYPES: { label: string; type: ToolbarType; title: string }[] = [
     { label: 'T', type: 'paragraph', title: toolbarLabels.paragraphType },
     { label: '≡', type: 'bulletListItem', title: toolbarLabels.bulletListType },
   ];
@@ -250,7 +246,7 @@ export default function NoteBlockEditor({
           background-color: ${bg};
         }
         .note-editor .bn-editor {
-          padding: 12px;
+          padding: 8px 10px;
           background-color: ${bg};
         }
         .note-editor .bn-inline-content {
@@ -293,7 +289,7 @@ export default function NoteBlockEditor({
           flexDirection: 'row',
           alignItems: 'center',
           borderTop: `1px solid ${border}`,
-          padding: '8px 12px',
+          padding: '4px 8px',
           gap: 4,
           backgroundColor: toolbarBg,
           flexShrink: 0,
@@ -400,31 +396,6 @@ export default function NoteBlockEditor({
           </>
         ) : null}
 
-        {/* Code */}
-        <button
-          disabled={!editable}
-          onClick={() => {
-            if (!editable) return;
-            const pos = editor.getTextCursorPosition();
-            if (pos?.block) {
-              editor.updateBlock(pos.block, { type: 'codeBlock' } as PartialBlock);
-            }
-          }}
-          title={toolbarLabels.codeTitle}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 8,
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 13,
-            fontWeight: 700,
-            fontFamily: 'monospace',
-            background: 'transparent',
-            color: iconColor,
-          }}
-        >
-          {'<>'}
-        </button>
       </div>
     </div>
   );

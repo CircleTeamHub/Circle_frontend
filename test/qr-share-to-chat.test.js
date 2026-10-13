@@ -81,7 +81,9 @@ test('ShareQrSheet 把二维码当 qr-card 卡片发进所选会话', () => {
   assert.match(sheet, /sendCardMessage/);
   assert.match(sheet, /type: 'qr-card'/);
   assert.match(sheet, /BottomSheetModal/);
-  assert.match(sheet, /qr\.shareToChat\.title/);
+  // 面板顶部不再放「分享给好友或群聊」标题；点选即发，不弹确认、不弹「已发送」。
+  assert.doesNotMatch(sheet, /qr\.shareToChat\.title/);
+  assert.doesNotMatch(sheet, /qr\.shareToChat\.(confirmTitle|confirmMessage|sentTitle|sentMessage)/);
 
   // 发图那条链路整条撤掉:不再截 PNG、不再 presign、不再占 chat/ 存储配额。
   assert.doesNotMatch(sheet, /sendImageMessage|requestUploadPresign|qrBase64/);
@@ -102,7 +104,7 @@ test('会话选择器支持就地搜索，且空态与搜不到分开', () => {
 test('并发发送被 inFlightRef 挡住，失败文案不泄露底层 error.message', () => {
   const sheet = read('src/features/qr/components/ShareQrSheet.tsx');
 
-  assert.match(sheet, /if \(inFlightRef\.current\) return;/);
+  assert.match(sheet, /if \(!card \|\| inFlightRef\.current\) return;/);
   assert.match(sheet, /qr\.shareToChat\.failedMessage/);
   assert.doesNotMatch(sheet, /error instanceof Error\s*\?\s*error\.message/);
 });
@@ -270,15 +272,10 @@ test('后端把 qr-card 列进客户端可发类型，并给了预览标签', ()
 
 test('分享 sheet / 卡片 / 列表预览的文案五种语言都齐，旧的 shareLink 已下线', () => {
   const shareToChatKeys = [
-    'title',
     'searchPlaceholder',
     'friendHint',
     'groupHint',
     'sending',
-    'confirmTitle',
-    'confirmMessage',
-    'sentTitle',
-    'sentMessage',
     'failedTitle',
     'failedMessage',
     'loadFailed',
@@ -326,9 +323,6 @@ test('分享 sheet / 卡片 / 列表预览的文案五种语言都齐，旧的 s
 test('带插值的文案在五种语言里都保留占位符', () => {
   for (const lng of LOCALES) {
     const json = readLocale(lng);
-    const confirm = json.qr.shareToChat.confirmMessage;
-    assert.ok(confirm.includes('{{subject}}'), `${lng} confirmMessage 缺 {{subject}}`);
-    assert.ok(confirm.includes('{{name}}'), `${lng} confirmMessage 缺 {{name}}`);
     assert.ok(json.im.preview.qr.includes('{{name}}'), `${lng} preview.qr 缺 {{name}}`);
   }
 });

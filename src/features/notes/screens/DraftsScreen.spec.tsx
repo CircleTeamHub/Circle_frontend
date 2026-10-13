@@ -103,14 +103,52 @@ test('a delayed remote list and later refresh cannot resurrect a deleted local d
   } finally { view.unmount(); alert.mockRestore(); }
 });
 
+function pressAlertButton(alert: jest.SpyInstance, text: string) {
+  act(() => { alert.mock.calls.at(-1)?.[2]?.find((button: { text: string }) => button.text === text)?.onPress?.(); });
+}
+const pendingSubmission = (id: string, extra: Record<string, unknown> = {}) =>
+  ({ noteId: null, input: { title: 'Original write', media: [], clientDraftID: id }, ...extra });
+
 test('deletion re-reads a latest pending publication instead of trusting the old displayed summary', async () => {
   saveLocalNoteDraft('a', localDraft('pending-result')); const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const view = render(<DraftsScreen />);
   try {
     await screen.findByText('pending-result');
-    saveLocalNoteDraft('a', localDraft('pending-result', { pendingSubmission: { noteId: null, input: { title: 'Original write', media: [], clientDraftID: 'pending-result' } } }));
-    confirmDelete(alert);
+    fireEvent.press(screen.getAllByLabelText('notes.drafts.deleteLabel')[0]);
+    // 确认框已弹出后另一处才挂上「未确认」标记：不能按旧摘要静默删除。
+    saveLocalNoteDraft('a', localDraft('pending-result', { pendingSubmission: pendingSubmission('pending-result') }));
+    pressAlertButton(alert, 'common.delete');
     expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.pendingSubmitDeleteBlocked');
     expect(loadLocalNoteDraft('a', 'pending-result')?.pendingSubmission).toBeTruthy(); expect(deleteNoteDraft).not.toHaveBeenCalled();
+  } finally { view.unmount(); alert.mockRestore(); }
+});
+
+test('an unconfirmed draft explains the risk and is deleted only after "delete anyway"', async () => {
+  saveLocalNoteDraft('a', localDraft('unconfirmed', { pendingSubmission: pendingSubmission('unconfirmed') }));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const view = render(<DraftsScreen />);
+  try {
+    await screen.findByText('unconfirmed');
+    fireEvent.press(screen.getAllByLabelText('notes.drafts.deleteLabel')[0]);
+    expect(alert.mock.calls.at(-1)?.[1]).toBe('notes.drafts.deleteUnconfirmedMessage');
+    pressAlertButton(alert, 'common.cancel');
+    expect(loadLocalNoteDraft('a', 'unconfirmed')).toBeTruthy();
+    fireEvent.press(screen.getAllByLabelText('notes.drafts.deleteLabel')[0]);
+    pressAlertButton(alert, 'notes.drafts.deleteAnyway');
+    expect(screen.queryByText('unconfirmed')).toBeNull(); expect(loadLocalNoteDraft('a', 'unconfirmed')).toBeNull();
+    await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith('unconfirmed'));
+  } finally { view.unmount(); alert.mockRestore(); }
+});
+
+test('a draft whose server result mismatched the snapshot still warns about losing content', async () => {
+  // 服务端回过笔记、但与本地快照不一致（例如正文结构被丢）：本地草稿可能是唯一完整副本。
+  saveLocalNoteDraft('a', localDraft('mismatch', { pendingSubmission: pendingSubmission('mismatch', { conflictingNoteId: 'note-1' }) }));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const view = render(<DraftsScreen />);
+  try {
+    await screen.findByText('mismatch');
+    fireEvent.press(screen.getAllByLabelText('notes.drafts.deleteLabel')[0]);
+    expect(alert.mock.calls.at(-1)?.[1]).toBe('notes.drafts.deleteUnconfirmedMessage');
+    pressAlertButton(alert, 'notes.drafts.deleteAnyway');
+    expect(screen.queryByText('mismatch')).toBeNull(); expect(loadLocalNoteDraft('a', 'mismatch')).toBeNull();
+    await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith('mismatch'));
   } finally { view.unmount(); alert.mockRestore(); }
 });
 
@@ -151,13 +189,28 @@ test('an old DELETE response cannot clear another account retry queue or hide it
   } finally { deletion.resolve(); view.unmount(); alert.mockRestore(); }
 });
 
+test('a failed deletion banner from one account does not follow the screen to the next account', async () => {
+  saveLocalNoteDraft('a', localDraft('a-failed')); saveLocalNoteDraft('b', localDraft('b-draft'));
+  jest.mocked(deleteNoteDraft).mockRejectedValueOnce(new Error('offline'));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const view = render(<DraftsScreen />);
+  try {
+    await screen.findByText('a-failed'); confirmDelete(alert);
+    await screen.findByText('notes.drafts.deletePending');
+    mockAuth.user = { id: 'b' }; mockAuth.sessionEpoch += 1; view.rerender(<DraftsScreen />);
+    await screen.findByText('b-draft');
+    await waitFor(() => expect(screen.queryByText('notes.drafts.deletePending')).toBeNull());
+    expect(loadPendingNoteDraftDeletions('a')).toEqual(['a-failed']);
+  } finally { view.unmount(); alert.mockRestore(); }
+});
+
 test('multiple retry clicks and queued deletions issue one server DELETE at a time', async () => {
   saveLocalNoteDraft('a', localDraft('serial-first')); saveLocalNoteDraft('a', localDraft('serial-second'));
   const first = deferred<void>(); jest.mocked(deleteNoteDraft).mockReturnValueOnce(first.promise);
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const view = render(<DraftsScreen />);
   try {
     await screen.findByText('serial-first'); confirmDelete(alert); await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledTimes(1));
-    confirmDelete(alert); fireEvent.press(screen.getByRole('button', { name: 'common.retry' })); fireEvent.press(screen.getByRole('button', { name: 'common.retry' }));
+    // 第二个删除在第一个 DELETE 未返回时排队：同步提示条不提前闪出（只在真失败后出现）。
+    confirmDelete(alert); expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
     expect(deleteNoteDraft).toHaveBeenCalledTimes(1);
     await act(async () => { first.resolve(); await first.promise; });
     await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledTimes(2)); await waitFor(() => expect(loadPendingNoteDraftDeletions('a')).toEqual([]));

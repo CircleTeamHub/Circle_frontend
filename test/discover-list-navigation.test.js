@@ -131,7 +131,7 @@ test('notification center scopes its list to the requested bell domain', () => {
 });
 
 test('tab badges follow the moved moments and plaza ownership', () => {
-  const source = read('app/(tabs)/_layout.tsx');
+  const source = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
 
   assert.match(source, /signupUnread: state\.signupUnread/);
   // 各 tab 合计各自的未读。曾经读 discoverUnread（= 好友申请 +

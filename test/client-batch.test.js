@@ -140,8 +140,15 @@ test('回收站：恢复成功与刷新失败分离；刷新失败可感知 (rou
     screen.indexOf('const d = useMemo'),
   );
   assert.match(restore, /restoreFailedTitle[\s\S]*return;/);
-  // 服务端已恢复：本地先移行，刷新失败静默保留
-  assert.match(restore, /setNotes\(\(prev\) => prev\.filter/);
+  // 服务端已恢复：本地先移行，刷新失败静默保留（恢复与立即删除共用 removeSettledNote；
+  // 行为测试见 RecycleBinScreen.spec.tsx）。
+  assert.match(restore, /await removeSettledNote\(note\.id\)/);
+  const settle = screen.slice(
+    screen.indexOf('const removeSettledNote'),
+    screen.indexOf('const handlePurge'),
+  );
+  assert.match(settle, /setNotes\(\(prev\) => prev\.filter/);
+  assert.match(settle, /await load\(\);\s*\} catch \{/);
   // 下拉刷新失败被捕获并提示（不再 unhandled rejection）
   const refresh = screen.slice(
     screen.indexOf('const handleRefresh'),

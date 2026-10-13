@@ -140,6 +140,7 @@ const ROUTE_TEMPLATES = [
   "/note/:id/groups",
   "/note/:id/pin",
   "/note/:id/remark",
+  "/note/:id/permanent",
   "/note/:id/restore",
   "/note/:id/status",
   "/note/:id/source-group",

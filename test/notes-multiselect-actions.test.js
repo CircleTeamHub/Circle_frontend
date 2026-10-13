@@ -106,15 +106,11 @@ test('source chips open the right chat: sender -> private, group -> group conver
 
   assert.match(screen, /handleSourcePress/);
   assert.match(screen, /getChatDetailHref\(/);
-  assert.match(screen, /'group',\s*\)/);
-  assert.match(screen, /'private',\s*\)/);
-  // 群 chip 带收藏时的消息 id：进群直接定位到笔记原消息。
-  assert.match(screen, /from\.clientMsgID,\s*'group',/);
-  // 私聊只在快照本来就是私聊会话时带 conversationID，群聊直接用来源会话。
-  assert.match(
-    screen,
-    /from\.conversationType === 'private' \? from\.conversationID : undefined/,
-  );
+  // 跳转目标由 resolveNoteCardButtons 统一给出（名片 → 聊天，与收藏来源一致时带原会话/原消息），
+  // 行为测试见 test/note-card-peers.test.js。
+  assert.match(screen, /resolveNoteCardButtons\(note\)/);
+  assert.match(screen, /card\.conversationID,\s*card\.clientMsgID,/);
+  assert.match(screen, /target === 'group' \? 'group' : 'private'/);
 });
 
 test('remark is wired end to end: PATCH api, sheet editor, in-place list update', () => {
@@ -161,13 +157,20 @@ test('ShareNoteSheet sends every selected note card to each selected conversatio
   assert.match(sheet, /const tasks = isRetry\s*\? retryTasks\s*:\s*selectedConversations\.flatMap/);
   assert.match(sheet, /targets\.map\(\(payload\) => \(\{ conversationId: conversation\.id, payload \}\)\)/);
   // 发送的是确认前按来源实时状态重取过的任务列表。
-  assert.match(sheet, /for \(const task of freshTasks\)/);
+  // 发送遍历的是按实时状态重取过的任务：freshTasks 交给 performSend 逐条发。
+  assert.match(sheet, /for \(const task of sendTasks\)/);
+  assert.match(sheet, /performSend\(freshTasks\)/);
+  assert.doesNotMatch(sheet, /performSend\(tasks\)/);
   assert.match(sheet, /withFreshNoteSourceStatus\(\s*tasks\.map\(\(task\) => task\.payload\)/);
   assert.match(sheet, /conversationId: task\.conversationId/);
   assert.match(sheet, /payload: task\.payload/);
   assert.match(sheet, /failures\.push\(task\)/);
   assert.match(sheet, /setRetryTasks\(failures\)/);
-  assert.match(sheet, /notes\.shareToChat\.confirmRecipientsMessage/);
+  // 点「发送」即发：不弹确认、不弹「已发送」，也不再放面板标题。
+  // 唯一保留的确认是订单状态可能已变化的业务提醒。
+  assert.doesNotMatch(sheet, /notes\.shareToChat\.(title|confirmRecipientsMessage|confirmRetryMessage|sentTitle|sentRecipientsMessage)\b/);
+  assert.match(sheet, /if \(!hasUncertainWorkStatus\) \{\s*performSend\(freshTasks\);\s*return;/);
+  assert.match(sheet, /notes\.shareToChat\.workStatusWarning/);
   assert.match(sheet, /notes\.shareToChat\.partialFailed/);
 
   assert.match(screen, /handleBatchShare/);
@@ -227,7 +230,6 @@ test('all five locales carry the new multi-select/remark/group-picker keys', () 
     ['notes', 'selection', 'next'],
     ['notes', 'remarkSheet', 'title'],
     ['notes', 'remarkSheet', 'batchTitle'],
-    ['notes', 'shareToChat', 'confirmBatchMessage'],
     ['notes', 'shareToChat', 'partialFailed'],
     ['notes', 'shareToChat', 'limitExceeded'],
     ['notes', 'remarkSheet', 'placeholder'],

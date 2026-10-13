@@ -104,7 +104,6 @@ function NoteBlockEditorImpl({
   const language: 'zh' | 'en' = i18n.language?.startsWith('zh') ? 'zh' : 'en';
   const toolbarLabels = useMemo(
     () => ({
-      headingType: t('notes.editor.toolbar.heading', { defaultValue: '标题' }),
       paragraphType: t('notes.editor.toolbar.paragraph', {
         defaultValue: '正文',
       }),
@@ -113,7 +112,6 @@ function NoteBlockEditorImpl({
       }),
       imageTitle: t('notes.editor.toolbar.imageTitle', { defaultValue: '图片' }),
       videoTitle: t('notes.editor.toolbar.videoTitle', { defaultValue: '视频' }),
-      codeTitle: t('notes.editor.toolbar.code', { defaultValue: '代码' }),
     }),
     [t],
   );

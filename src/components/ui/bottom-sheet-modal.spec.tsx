@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Animated, PanResponder, Text } from 'react-native';
-import { BottomSheetModal } from './bottom-sheet-modal';
+import { BottomSheetFlatList, BottomSheetModal } from './bottom-sheet-modal';
 
 jest.mock('@/components/ui/keyboard-avoiding-container', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -15,6 +15,7 @@ jest.mock('@/components/ui/keyboard-avoiding-container', () => {
 type Gesture = { dx: number; dy: number; vy: number; y0: number };
 type Handlers = {
   onMoveShouldSetPanResponder: (event: unknown, gesture: Gesture) => boolean;
+  onMoveShouldSetPanResponderCapture: (event: unknown, gesture: Gesture) => boolean;
   onPanResponderGrant: (event: unknown, gesture: Gesture) => void;
   onPanResponderMove: (event: unknown, gesture: Gesture) => void;
   onPanResponderRelease: (event: unknown, gesture: Gesture) => void;
@@ -36,9 +37,14 @@ const timingSpy = jest.spyOn(Animated, 'timing').mockImplementation(
     }) as Animated.CompositeAnimation,
 );
 
+const springSpy = jest.spyOn(Animated, 'spring').mockImplementation(
+  () => ({ start: () => undefined }) as unknown as Animated.CompositeAnimation,
+);
+
 afterAll(() => {
   createSpy.mockRestore();
   timingSpy.mockRestore();
+  springSpy.mockRestore();
 });
 
 function renderSheetAt(top: number, onClose = jest.fn()) {
@@ -65,7 +71,7 @@ function drag(y0: number, dy: number, vy = 0) {
 test('a downward drag from the header claims the gesture and dismisses the sheet', () => {
   const onClose = renderSheetAt(400);
   expect(handlers.onMoveShouldSetPanResponder({}, { dx: 0, dy: 20, vy: 0, y0: 420 })).toBe(true);
-  drag(420, 120);
+  drag(420, 200);
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
@@ -82,4 +88,56 @@ test('horizontal or upward drags on the header are not treated as dismiss', () =
   renderSheetAt(400);
   expect(handlers.onMoveShouldSetPanResponder({}, { dx: 40, dy: 10, vy: 0, y0: 420 })).toBe(false);
   expect(handlers.onMoveShouldSetPanResponder({}, { dx: 0, dy: -20, vy: 0, y0: 420 })).toBe(false);
+});
+
+test('a short or gentle header drag springs back instead of dismissing', () => {
+  const onClose = renderSheetAt(400);
+  // 拖出 90pt 没过 120 的门槛；快甩但只拖出 30pt 也不算。
+  drag(420, 100);
+  drag(420, 40, 3);
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+function renderListSheetAt(top: number, onClose = jest.fn()) {
+  render(
+    <BottomSheetModal visible onClose={onClose}>
+      <BottomSheetFlatList
+        testID="sheet-list"
+        data={['a', 'b']}
+        keyExtractor={(item) => item}
+        renderItem={({ item }) => <Text>{item}</Text>}
+      />
+    </BottomSheetModal>,
+  );
+  fireEvent(screen.getByTestId('bottom-sheet-content'), 'layout', {
+    nativeEvent: { layout: { x: 0, y: top, width: 390, height: 400 } },
+  });
+  return onClose;
+}
+
+function scrollListTo(y: number) {
+  fireEvent.scroll(screen.getByTestId('sheet-list'), {
+    nativeEvent: {
+      contentOffset: { x: 0, y },
+      contentSize: { width: 390, height: 2000 },
+      layoutMeasurement: { width: 390, height: 300 },
+    },
+  });
+}
+
+test('with its list at the top, a body drag pins the list and moves the sheet', () => {
+  const onClose = renderListSheetAt(400);
+  expect(handlers.onMoveShouldSetPanResponderCapture({}, { dx: 0, dy: 20, vy: 0, y0: 600 })).toBe(true);
+  drag(600, 200);
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test('while its list is scrolled down, a body drag scrolls the list and leaves the sheet alone', () => {
+  const onClose = renderListSheetAt(400);
+  scrollListTo(240);
+  expect(handlers.onMoveShouldSetPanResponderCapture({}, { dx: 0, dy: 40, vy: 0, y0: 600 })).toBe(false);
+  drag(600, 300, 3);
+  expect(onClose).not.toHaveBeenCalled();
+  // 把手区域始终可拖。
+  expect(handlers.onMoveShouldSetPanResponderCapture({}, { dx: 0, dy: 20, vy: 0, y0: 420 })).toBe(true);
 });

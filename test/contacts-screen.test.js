@@ -61,7 +61,7 @@ test('new friends screen exists as a friend-activity inbox with per-item read fl
 });
 
 test('contacts unread indicators use the shared unread store', () => {
-  const tabsLayoutSource = read('app/(tabs)/_layout.tsx');
+  const tabsLayoutSource = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
   const contactsSource = read('src/features/contacts/screens/ContactsScreen.tsx');
   const menuRowSource = read('src/components/ui/menu-row.tsx');
   const badgeSource = read('src/components/ui/unread-count-badge.tsx');

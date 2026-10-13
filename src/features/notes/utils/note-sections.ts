@@ -50,6 +50,8 @@ export type NoteContactCard = {
 export type NoteGroupCard = {
   id: string;
   name: string;
+  /** 独立群名片由服务端标注的群会话 id；圈子群名片没有。只信服务端返回值。 */
+  conversationID?: string | null;
   faceURL?: string | null;
   avatarUrl?: string | null;
   groupId?: string | null;

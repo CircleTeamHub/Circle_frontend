@@ -15,7 +15,10 @@ import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
-import { fetchDeletedNotes, restoreNote } from '@/services/api/notes';
+import { detachLocalNoteDraftsFromNote } from '@/features/notes/utils/note-editor-drafts';
+import { ApiError } from '@/services/api/api-error';
+import { fetchDeletedNotes, purgeNote, restoreNote } from '@/services/api/notes';
+import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const keyExtractor = (item: NoteSummary) => item.id;
@@ -93,35 +96,108 @@ export default function RecycleBinScreen() {
   }, [load, t]);
 
   const closeMenu = useCallback(() => setMenuNote(null), []);
+  const userId = useAuthStore((state) => state.user?.id);
+
+  // 恢复 / 立即删除请求还在路上时这行仍在列表里：不许再对它开菜单，免得对一条
+  // 已经处理掉的笔记再点一次，拿到 404 与误导性的失败提示。
+  const pendingIdsRef = useRef(new Set<string>());
+  const openMenu = useCallback((note: NoteSummary) => {
+    if (!pendingIdsRef.current.has(note.id)) setMenuNote(note);
+  }, []);
+
+  // 服务端确认这行已离开回收站：本地移除并刷新；刷新失败不再报错。
+  const removeSettledNote = useCallback(
+    async (noteId: string) => {
+      if (!mountedRef.current) return;
+      // 作废在飞的旧刷新（其响应还包含这一行）
+      loadGenerationRef.current += 1;
+      setNotes((prev) => prev.filter((item) => item.id !== noteId));
+      try {
+        await load();
+      } catch {
+        // 列表下次 focus / 下拉时自然重试
+      }
+    },
+    [load],
+  );
+
+  // 立即删除不可撤销：先二次确认，确认后从列表里移除；与恢复一样，服务端成功后的
+  // 刷新失败不再报错（那行已经真的删掉了）。
+  const handlePurge = useCallback(() => {
+    const note = menuNote;
+    if (!note) return;
+    closeMenu();
+    Alert.alert(
+      t('notes.alerts.purgeTitle', { defaultValue: '立即删除笔记？' }),
+      t('notes.alerts.purgeConfirm', { defaultValue: '笔记会被永久删除，无法恢复。' }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('notes.actions.purge', { defaultValue: '立即删除' }),
+          style: 'destructive',
+          onPress: async () => {
+            if (pendingIdsRef.current.has(note.id)) return;
+            pendingIdsRef.current.add(note.id);
+            try {
+              try {
+                await purgeNote(note.id);
+              } catch (error) {
+                // 404：已经被到期清理或另一台设备删掉 —— 目标状态已达成，按成功处理，
+                // 否则用户会对着一条不存在的笔记反复重试。
+                if (!(error instanceof ApiError && error.status === 404)) {
+                  if (mountedRef.current) {
+                    Alert.alert(
+                      t('notes.alerts.deleteFailedTitle', { defaultValue: '删除失败' }),
+                      t('common.retryLater', { defaultValue: '请稍后重试' }),
+                    );
+                  }
+                  return;
+                }
+              }
+              // 本地「编辑这篇笔记」的草稿改成新笔记草稿，内容保留、不再指向已删笔记。
+              if (userId) {
+                try {
+                  detachLocalNoteDraftsFromNote(userId, note.id);
+                } catch {
+                  // 本地存储失败不影响删除结果；草稿保存时会按 404 提示。
+                }
+              }
+              await removeSettledNote(note.id);
+            } finally {
+              pendingIdsRef.current.delete(note.id);
+            }
+          },
+        },
+      ],
+    );
+  }, [closeMenu, menuNote, removeSettledNote, t, userId]);
 
   const handleRestore = useCallback(async () => {
     const note = menuNote;
     if (!note) return;
     closeMenu();
+    if (pendingIdsRef.current.has(note.id)) return;
+    pendingIdsRef.current.add(note.id);
     try {
-      await restoreNote(note.id);
-    } catch {
-      if (mountedRef.current) {
-        Alert.alert(
-          t('notes.alerts.restoreFailedTitle', { defaultValue: '恢复失败' }),
-          t('common.retryLater', { defaultValue: '请稍后重试' }),
-        );
+      try {
+        await restoreNote(note.id);
+      } catch {
+        if (mountedRef.current) {
+          Alert.alert(
+            t('notes.alerts.restoreFailedTitle', { defaultValue: '恢复失败' }),
+            t('common.retryLater', { defaultValue: '请稍后重试' }),
+          );
+        }
+        return;
       }
-      return;
+      // round 2 review：恢复已在服务端成功 —— 之后的列表刷新失败不能再报
+      // 「恢复失败」（用户会对着已恢复的笔记反复重试）。本地先把这行移出
+      // 列表（乐观且真实：服务端已恢复），刷新失败只静默保留现状。
+      await removeSettledNote(note.id);
+    } finally {
+      pendingIdsRef.current.delete(note.id);
     }
-    // round 2 review：恢复已在服务端成功 —— 之后的列表刷新失败不能再报
-    // 「恢复失败」（用户会对着已恢复的笔记反复重试）。本地先把这行移出
-    // 列表（乐观且真实：服务端已恢复），刷新失败只静默保留现状。
-    if (!mountedRef.current) return;
-    // 作废在飞的旧刷新（其响应包含恢复前的这行）
-    loadGenerationRef.current += 1;
-    setNotes((prev) => prev.filter((item) => item.id !== note.id));
-    try {
-      await load();
-    } catch {
-      // 列表下次 focus / 下拉时自然重试
-    }
-  }, [closeMenu, load, menuNote, t]);
+  }, [closeMenu, menuNote, removeSettledNote, t]);
 
   const d = useMemo(
     () => ({
@@ -132,6 +208,7 @@ export default function RecycleBinScreen() {
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
       sheetAction: { color: colors.iconAccent },
+      sheetDanger: { color: colors.danger },
     }),
     [colors],
   );
@@ -139,9 +216,9 @@ export default function RecycleBinScreen() {
   const renderNote = useCallback(
     ({ item }: { item: NoteSummary }) => (
       // 已删笔记不可打开详情（后端详情路径按 status 过滤）；点击即弹恢复菜单。
-      <NoteCard note={item} onPress={setMenuNote} onMorePress={setMenuNote} />
+      <NoteCard note={item} onPress={openMenu} onMorePress={openMenu} />
     ),
-    [],
+    [openMenu],
   );
 
   return (
@@ -226,6 +303,17 @@ export default function RecycleBinScreen() {
           <Ionicons name="refresh-outline" size={20} color={colors.iconAccent} />
           <Text style={[s.sheetLabel, d.sheetAction]}>
             {t('notes.actions.restore', { defaultValue: '恢复' })}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={s.sheetRow}
+          onPress={handlePurge}
+          accessibilityRole="button"
+          accessibilityLabel={t('notes.actions.purge', { defaultValue: '立即删除' })}
+        >
+          <Ionicons name="trash-outline" size={20} color={colors.danger} />
+          <Text style={[s.sheetLabel, d.sheetDanger]}>
+            {t('notes.actions.purge', { defaultValue: '立即删除' })}
           </Text>
         </Pressable>
       </BottomSheetModal>

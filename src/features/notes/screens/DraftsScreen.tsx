@@ -6,9 +6,12 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  LayoutAnimation,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +20,7 @@ import { fetchNoteDrafts, deleteNoteDraft } from '@/services/api/notes';
 import type { NoteDraftSummary } from '@/features/notes/types';
 import {
   loadLocalNoteDraftSummaries,
+  hasLocalNoteDraftPendingSubmission,
   stageLocalNoteDraftDeletion,
   finishLocalNoteDraftDeletion,
   confirmNoteDraftDeletion,
@@ -52,6 +56,11 @@ function mergeDrafts(
     }
   }
   return [...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+// Android 旧架构需显式开启 LayoutAnimation（iOS 与新架构默认可用）。
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 export default function DraftsScreen() {
@@ -95,15 +104,22 @@ export default function DraftsScreen() {
       } finally {
         if (mountedRef.current && isCurrentSession()) setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
       }
-    } } finally { deletionRunRef.current.delete(sessionKey); }
+    } } finally {
+      deletionRunRef.current.delete(sessionKey);
+      // 队列为空（含换账号后新会话本来就没有待删项）时也要落一次真实计数，
+      // 不能让上一个会话失败留下的提示条挂到当前会话上。
+      if (mountedRef.current && isCurrentSession()) setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
+    }
   }, [userId, isCurrentSession, sessionKey]);
 
   const load = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
+    // 换了账号/会话：上一个会话的待删提示立即清掉，新会话的计数等 retryDeletions 落定。
+    if (loadedSessionRef.current !== sessionKey) setPendingDeleteCount(0);
     loadedSessionRef.current = sessionKey;
     const local = userId ? loadLocalNoteDraftSummaries(userId) : [];
     setItems(mergeDrafts(local, []));
-    setPendingDeleteCount(userId ? loadPendingNoteDraftDeletions(userId).length : 0);
+    // 待删队列的提示同样等本次重试的结果再显示（见 retryDeletions），避免进页面先闪一下。
     setLoading(false);
     if (!userId || !isCurrentSession()) return;
     void retryDeletions();
@@ -142,39 +158,55 @@ export default function DraftsScreen() {
     [router, isCurrentSession, sessionKey, userId],
   );
 
+  const performDelete = useCallback(
+    (item: DraftListItem, discardPendingSubmission: boolean) => {
+      if (!isCurrentSession() || !userId || loadedSessionRef.current !== sessionKey) return;
+      loadGenerationRef.current += 1;
+      try {
+        // Check the latest durable record, not the possibly stale list summary.
+        if (!stageLocalNoteDraftDeletion(userId, item.id, [], { discardPendingSubmission })) {
+          // 确认框弹出后草稿才挂上「未确认」标记（另一处正在提交）：不静默删，让用户重新确认。
+          Alert.alert(t('common.errorOccurred'), t('notes.drafts.pendingSubmitDeleteBlocked'));
+          return;
+        }
+        // 卡片淡出、下面的卡片顺势上移，而不是瞬间消失。
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setItems((current) => current.filter((draft) => draft.id !== item.id));
+        // 「同步未完成」提示只在服务端删除真的失败后由 retryDeletions 显示；这里不提前置位，
+        // 否则每删一个都会闪出提示条、把列表往下推一下，删除成功后又立刻消失。
+        void retryDeletions();
+      } catch {
+        if (isLocalNoteDraftDeleted(userId, item.id)) setItems((current) => current.filter((draft) => draft.id !== item.id));
+        setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
+        Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed'));
+      }
+    },
+    [t, userId, isCurrentSession, sessionKey, retryDeletions],
+  );
+
   const removeDraft = useCallback(
     (item: DraftListItem) => {
+      // 带「提交结果未确认」标记的草稿不再一律拒删：明确提示可能丢内容，由用户决定。
+      // 服务端回过笔记但内容不一致也按未确认处理（回来的笔记可能不完整）。
+      const pending = userId ? hasLocalNoteDraftPendingSubmission(userId, item.id) : false;
       Alert.alert(
         t('notes.drafts.deleteTitle', { defaultValue: '删除草稿？' }),
-        t('notes.drafts.deleteMessage', { defaultValue: '删除后无法恢复。' }),
+        pending
+          ? t('notes.drafts.deleteUnconfirmedMessage')
+          : t('notes.drafts.deleteMessage', { defaultValue: '删除后无法恢复。' }),
         [
           { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
           {
-            text: t('common.delete', { defaultValue: '删除' }),
+            text: pending
+              ? t('notes.drafts.deleteAnyway')
+              : t('common.delete', { defaultValue: '删除' }),
             style: 'destructive',
-            onPress: () => {
-              if (!isCurrentSession() || !userId || loadedSessionRef.current !== sessionKey) return;
-              loadGenerationRef.current += 1;
-              try {
-                // Check the latest durable record, not the possibly stale list summary.
-                if (!stageLocalNoteDraftDeletion(userId, item.id)) {
-                  Alert.alert(t('common.errorOccurred'), t('notes.drafts.pendingSubmitDeleteBlocked', { defaultValue: '这份草稿的保存结果尚未确认。请先打开草稿并重试确认保存，再决定是否删除。' }));
-                  return;
-                }
-                setItems((current) => current.filter((draft) => draft.id !== item.id));
-                setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
-                void retryDeletions();
-              } catch {
-                if (isLocalNoteDraftDeleted(userId, item.id)) setItems((current) => current.filter((draft) => draft.id !== item.id));
-                setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
-                Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed'));
-              }
-            },
+            onPress: () => performDelete(item, pending),
           },
         ],
       );
     },
-    [t, userId, isCurrentSession, sessionKey, retryDeletions],
+    [t, userId, performDelete],
   );
 
   const empty = useMemo(

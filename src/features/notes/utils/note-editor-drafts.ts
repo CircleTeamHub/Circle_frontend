@@ -406,10 +406,28 @@ export function removeLocalNoteDraft(
   cleanRecordings(userId, record);
 }
 
-/** Stage deletion before removing content; never discard a publication recovery marker. */
-export function stageLocalNoteDraftDeletion(userId: string, draftId: string, additionalRecordingIds: readonly string[] = []): boolean {
+/**
+ * 草稿是否挂着「提交结果未确认」标记。服务端回过笔记但与本地快照不一致
+ * （conflictingNoteId）同样算未确认：回来的笔记可能缺内容（例如正文结构被丢），
+ * 本地草稿可能是唯一完整的副本，删除前必须按「可能丢内容」提示。
+ */
+export function hasLocalNoteDraftPendingSubmission(userId: string, draftId: string): boolean {
+  return Boolean(readLocalNoteDraft(userId, draftId)?.pendingSubmission);
+}
+
+/**
+ * Stage deletion before removing content. A publication recovery marker blocks
+ * deletion unless the user explicitly chose to discard it after being told the
+ * outcome is unconfirmed (`discardPendingSubmission`).
+ */
+export function stageLocalNoteDraftDeletion(
+  userId: string,
+  draftId: string,
+  additionalRecordingIds: readonly string[] = [],
+  options: { discardPendingSubmission?: boolean } = {},
+): boolean {
   const record = readLocalNoteDraft(userId, draftId);
-  if (record?.pendingSubmission) return false;
+  if (record?.pendingSubmission && !options.discardPendingSubmission) return false;
   const pending = readDeletions(userId);
   const existing = pending.find((item) => item.id === draftId);
   writeDeletions(userId, [
@@ -461,6 +479,25 @@ export function confirmNoteDraftDeletion(userId: string, draftId: string, cleane
   deletedDrafts.add(draftKey(userId, draftId));
   writeDeletions(userId, current.filter((item) => item.id !== draftId));
   return true;
+}
+
+/**
+ * 笔记被永久删除后，本地「编辑这篇笔记」的草稿改成新笔记草稿：内容保留，保存时
+ * 走新建而不是去更新一篇已不存在的笔记（与服务端草稿 sourceNoteID 的 onDelete:
+ * SetNull 同口径）。指向它的「未确认提交」目标已不存在，一并丢掉。
+ */
+export function detachLocalNoteDraftsFromNote(userId: string, noteId: string): void {
+  for (const item of readIndex(userId).items) {
+    if (item.noteId !== noteId) continue;
+    const record = readLocalNoteDraft(userId, item.id);
+    if (!record || record.noteId !== noteId) continue;
+    saveLocalNoteDraft(userId, {
+      ...record,
+      noteId: null,
+      pendingSubmission:
+        record.pendingSubmission?.noteId === noteId ? undefined : record.pendingSubmission,
+    });
+  }
 }
 
 export function removeAllLocalNoteDrafts(

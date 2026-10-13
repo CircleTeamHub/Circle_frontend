@@ -28,6 +28,7 @@ import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import {
   getUserProfileHref,
+  getChatDetailHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
@@ -142,6 +143,20 @@ export default function NoteDetailScreen() {
   // 焦点没变、useFocusEffect 不触发，只能靠这里）。30s 节流 —— 图片本身坏掉时重拉救不了，
   // 不能让 onError → refetch → onError 打转。
   const lastMediaRetryRef = useRef(0);
+  // 群名片：独立群（服务端标注了会话 id）直接进群聊；圈子群名片维持进圈子详情。
+  const handleGroupCardPress = useCallback(
+    (id: string, name?: string, conversationID?: string) => {
+      if (conversationID) {
+        router.push(
+          getChatDetailHref(scope, conversationID, name, undefined, conversationID, undefined, 'group'),
+        );
+        return;
+      }
+      router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', id));
+    },
+    [router, scope],
+  );
+
   const handleMediaError = useCallback(() => {
     const now = Date.now();
     if (now - lastMediaRetryRef.current < 30_000) return;
@@ -488,7 +503,7 @@ export default function NoteDetailScreen() {
             order={detailOrder}
             layout={readOnlyLayout}
             onContactPress={(id, name) => router.navigate(getUserProfileHref(scope, id, name))}
-            onGroupPress={(id) => router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', id))}
+            onGroupPress={handleGroupCardPress}
             onMediaError={handleMediaError}
             onImagePress={handleImagePress}
             onSectionLayout={trackSectionLayout}

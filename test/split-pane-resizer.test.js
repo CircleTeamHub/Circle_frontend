@@ -45,7 +45,7 @@ test('the store clamps both fresh and previously persisted widths', () => {
 
 test('list pane and floating tab bar read the same width source', () => {
   const messages = read('src/features/messages/screens/MessagesScreen.tsx');
-  const tabs = read('app/(tabs)/_layout.tsx');
+  const tabs = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
 
   for (const source of [messages, tabs]) {
     assert.match(source, /useSplitPaneStore\(\(state\) => state\.listPaneWidth\)/);
