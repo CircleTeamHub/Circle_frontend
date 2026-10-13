@@ -120,11 +120,24 @@ export function useAuth() {
       inFlightRef.current = true;
       safeSetSubmitting(true);
       try {
-        const tokens = await loginRequest({
+        const result = await loginRequest({
           identifier: normalizedIdentifier,
           password,
         });
-        await onAuthSuccess(tokens);
+        if (result.kind === 'deviceVerification') {
+          // 陌生设备：去验证页等受信任设备批准，拿到验证码后才有 token。
+          const { challenge } = result;
+          router.push({
+            pathname: '/(auth)/device-verification',
+            params: {
+              challengeId: challenge.id,
+              expiresAt: challenge.expiresAt,
+              securityCode: challenge.securityCodeAvailable ? '1' : '0',
+            },
+          });
+          return;
+        }
+        await onAuthSuccess(result.tokens);
       } catch (requestError) {
         await clearLocalSession();
         safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')));
@@ -133,7 +146,20 @@ export function useAuth() {
         safeSetSubmitting(false);
       }
     },
-    [onAuthSuccess, safeSetError, safeSetSubmitting],
+    [onAuthSuccess, router, safeSetError, safeSetSubmitting],
+  );
+
+  /** 陌生设备通过验证后，用验证接口发回的 token 走与密码登录相同的收尾。 */
+  const completeVerifiedLogin = useCallback(
+    async (tokens: AuthTokens) => {
+      try {
+        await onAuthSuccess(tokens);
+      } catch (requestError) {
+        await clearLocalSession();
+        throw requestError;
+      }
+    },
+    [onAuthSuccess],
   );
 
   const register = useCallback(
@@ -335,6 +361,7 @@ export function useAuth() {
 
   return {
     login,
+    completeVerifiedLogin,
     register,
     logout,
     switchAccount,

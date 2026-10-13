@@ -121,6 +121,14 @@ type RealtimeEvent =
       payload?: Partial<NoteSourceStatusChange>;
     }
   | {
+      type: 'auth.login.challenge.created';
+      payload?: { challengeId?: string };
+    }
+  | {
+      type: 'auth.login.challenge.resolved';
+      payload?: { challengeId?: string; status?: string };
+    }
+  | {
       type: 'call.invite';
       payload?: CallInvitePayload;
     }
@@ -601,6 +609,22 @@ function handleRealtimeEvent(message: RealtimeEvent) {
         message.payload.status,
       );
       return;
+    case 'auth.login.challenge.created':
+      // 轻量 poke：详情（设备、IP、时间）走 REST，权限判定在服务端。
+      loginChallengeListener?.({ type: 'created' });
+      return;
+    case 'auth.login.challenge.resolved': {
+      const { challengeId, status } = message.payload ?? {};
+      if (
+        typeof challengeId !== 'string' ||
+        (status !== 'APPROVED' && status !== 'REJECTED' && status !== 'CONSUMED')
+      ) {
+        reportRealtimeFailureOnce('malformedPayload');
+        return;
+      }
+      loginChallengeListener?.({ type: 'resolved', challengeId, status });
+      return;
+    }
     case 'call.invite':
       if (!isCallInvitePayload(message.payload)) {
         reportRealtimeFailureOnce('malformedPayload');
@@ -788,6 +812,25 @@ function openRealtimeSocket(normalizedToken: string) {
  * 这些时机都意味着「情况变了，现在就重试」，所以把退避归零并立刻建连；
  * 断线后的自动重连不走这里（见 scheduleReconnect），否则退避无法递增。
  */
+export type LoginChallengeRealtimeEvent =
+  | { type: 'created' }
+  | {
+      type: 'resolved';
+      challengeId: string;
+      status: 'APPROVED' | 'REJECTED' | 'CONSUMED';
+    };
+
+// 陌生设备登录事件的消费方（login-approval-store）自己注册进来：realtime 不反向依赖
+// 业务 store，测试桩也不必为它补模块。
+let loginChallengeListener: ((event: LoginChallengeRealtimeEvent) => void) | null =
+  null;
+
+export function setLoginChallengeListener(
+  listener: ((event: LoginChallengeRealtimeEvent) => void) | null,
+) {
+  loginChallengeListener = listener;
+}
+
 export function connectRealtime(token: string) {
   const normalizedToken = token.trim();
 

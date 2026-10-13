@@ -1,0 +1,219 @@
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { AuthInput } from '@/components/ui/auth-input';
+import { NavHeader } from '@/components/ui/nav-header';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { getApiErrorMessage } from '@/services/api/errors';
+import { useAuth } from '@/hooks/use-auth';
+import {
+  useDeviceVerification,
+  type DeviceVerificationPhase,
+} from '@/features/auth/hooks/use-device-verification';
+
+const CODE_PATTERN = /^\d{6}$/;
+const SECURITY_CODE_PATTERN = /^\d{4,6}$/;
+
+const s = StyleSheet.create({
+  container: { paddingHorizontal: Spacing.lg, gap: 20 },
+  iconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginTop: Spacing.md,
+  },
+  intro: { ...Typography.bodyRegular, lineHeight: 22 },
+  statusBox: { borderRadius: Radius.md, padding: Spacing.md },
+  statusText: { ...Typography.caption, lineHeight: 20 },
+  error: { ...Typography.caption },
+  submitBtn: {
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitText: { fontSize: 16, fontWeight: '600' },
+  link: { ...Typography.caption, textAlign: 'center', paddingVertical: Spacing.sm },
+});
+
+function formatCountdown(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes}:${rest.toString().padStart(2, '0')}`;
+}
+
+/**
+ * 陌生设备登录验证：等受信任设备批准，输入它显示的 6 位验证码后才登录。
+ * 受信任设备不在身边且设置过登录安全码时，可改用安全码。
+ */
+export default function DeviceVerificationScreen() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    challengeId: string;
+    expiresAt: string;
+    securityCode?: string;
+  }>();
+  const { completeVerifiedLogin } = useAuth();
+  const [code, setCode] = useState('');
+  const [useSecurityCode, setUseSecurityCode] = useState(false);
+  const securityCodeAvailable = params.securityCode === '1';
+
+  const verification = useDeviceVerification({
+    challengeId: params.challengeId ?? '',
+    expiresAt: params.expiresAt ?? new Date(0).toISOString(),
+    onVerified: completeVerifiedLogin,
+  });
+  const { phase, remainingSeconds, submitting } = verification;
+  const isTerminal = phase === 'rejected' || phase === 'expired';
+  const pattern = useSecurityCode ? SECURITY_CODE_PATTERN : CODE_PATTERN;
+  const canSubmit = !submitting && !isTerminal && pattern.test(code.trim());
+
+  const onSubmit = useCallback(() => {
+    if (!canSubmit) return;
+    if (useSecurityCode) void verification.submitSecurityCode(code);
+    else void verification.submitCode(code);
+  }, [canSubmit, code, useSecurityCode, verification]);
+
+  const toggleMode = useCallback(() => {
+    setUseSecurityCode((value) => !value);
+    setCode('');
+  }, []);
+
+  const onResend = useCallback(() => {
+    setCode('');
+    void verification.resend();
+  }, [verification]);
+
+  const backToLogin = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(auth)/login');
+  }, [router]);
+
+  const statusText = useMemo(() => {
+    const texts: Record<DeviceVerificationPhase, string> = {
+      waiting: t('auth.deviceVerification.waiting', {
+        time: formatCountdown(remainingSeconds),
+      }),
+      approved: t('auth.deviceVerification.approved', {
+        seconds: remainingSeconds,
+      }),
+      codeExpired: t('auth.deviceVerification.approvedExpired'),
+      rejected: t('auth.deviceVerification.rejected'),
+      expired: t('auth.deviceVerification.expired'),
+    };
+    return useSecurityCode && !isTerminal
+      ? t('auth.deviceVerification.securityCodeIntro')
+      : texts[phase];
+  }, [isTerminal, phase, remainingSeconds, t, useSecurityCode]);
+
+  const d = useMemo(
+    () => ({
+      page: { flex: 1, backgroundColor: colors.background },
+      iconWrap: { backgroundColor: colors.primaryLight },
+      intro: { color: colors.textSecondary },
+      statusBox: { backgroundColor: colors.surface },
+      statusText: { color: phase === 'rejected' ? colors.error : colors.text },
+      error: { color: colors.error },
+      submit: { backgroundColor: colors.primary },
+      submitDisabled: { backgroundColor: colors.surfaceBorder },
+      submitText: { color: colors.white },
+      link: { color: colors.primary },
+    }),
+    [colors, phase],
+  );
+
+  const errorText = verification.error
+    ? getApiErrorMessage(verification.error, t('auth.deviceVerification.failed'))
+    : null;
+
+  return (
+    <KeyboardAvoidingContainer style={[d.page, { paddingTop: insets.top }]}>
+      <NavHeader
+        title={t('auth.deviceVerification.title')}
+        fallbackHref="/(auth)/login"
+      />
+      <ScrollView
+        contentContainerStyle={s.container}
+        {...keyboardDismissOnDragProps}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={[s.iconWrap, d.iconWrap]}>
+          <Ionicons name="shield-checkmark-outline" size={28} color={colors.primary} />
+        </View>
+        <Text style={[s.intro, d.intro]}>{t('auth.deviceVerification.intro')}</Text>
+        <View style={[s.statusBox, d.statusBox]} accessibilityLiveRegion="polite">
+          <Text style={[s.statusText, d.statusText]}>{statusText}</Text>
+        </View>
+
+        {isTerminal ? null : (
+          <AuthInput
+            placeholder={
+              useSecurityCode
+                ? t('auth.deviceVerification.securityCodePlaceholder')
+                : t('auth.deviceVerification.codePlaceholder')
+            }
+            value={code}
+            onChangeText={setCode}
+            keyboardType="number-pad"
+            secureTextEntry={useSecurityCode}
+            textContentType={useSecurityCode ? 'password' : 'oneTimeCode'}
+            autoComplete={useSecurityCode ? 'off' : 'one-time-code'}
+          />
+        )}
+
+        {errorText ? <Text style={[s.error, d.error]}>{errorText}</Text> : null}
+
+        {phase === 'rejected' ? (
+          <Pressable style={[s.submitBtn, d.submit]} onPress={backToLogin}>
+            <Text style={[s.submitText, d.submitText]}>
+              {t('auth.deviceVerification.backToLogin')}
+            </Text>
+          </Pressable>
+        ) : phase === 'expired' ? (
+          <Pressable
+            style={[s.submitBtn, submitting ? d.submitDisabled : d.submit]}
+            onPress={onResend}
+            disabled={submitting}
+          >
+            <Text style={[s.submitText, d.submitText]}>
+              {t('auth.deviceVerification.resend')}
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={[s.submitBtn, canSubmit ? d.submit : d.submitDisabled]}
+            onPress={onSubmit}
+            disabled={!canSubmit}
+          >
+            <Text style={[s.submitText, d.submitText]}>
+              {submitting
+                ? t('auth.deviceVerification.submitting')
+                : t('auth.deviceVerification.submit')}
+            </Text>
+          </Pressable>
+        )}
+
+        {securityCodeAvailable && !isTerminal ? (
+          <Pressable onPress={toggleMode} hitSlop={8}>
+            <Text style={[s.link, d.link]}>
+              {useSecurityCode
+                ? t('auth.deviceVerification.useTrustedDevice')
+                : t('auth.deviceVerification.useSecurityCode')}
+            </Text>
+          </Pressable>
+        ) : null}
+      </ScrollView>
+    </KeyboardAvoidingContainer>
+  );
+}

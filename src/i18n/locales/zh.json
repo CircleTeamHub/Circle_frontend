@@ -138,6 +138,25 @@
       "submitting": "重置中…",
       "successBody": "所有设备已退出登录，请用新密码重新登录。",
       "successTitle": "密码已重置"
+    },
+    "deviceVerification": {
+      "title": "陌生设备登录验证",
+      "intro": "检测到陌生设备登录，需要验证。验证请求已发送到你的受信任设备，请在受信任设备上确认后，输入显示的验证码。",
+      "waiting": "等待受信任设备确认 · 剩余 {{time}}",
+      "approved": "受信任设备已确认，请在 {{seconds}} 秒内输入验证码",
+      "approvedExpired": "验证码已失效，请在受信任设备上重新获取",
+      "rejected": "受信任设备拒绝了这次登录。如果不是你本人操作，请尽快修改密码。",
+      "expired": "验证请求已过期，请重新发送",
+      "codePlaceholder": "6 位验证码",
+      "securityCodePlaceholder": "登录安全码",
+      "securityCodeIntro": "输入你设置的登录安全码完成验证。",
+      "submit": "验证并登录",
+      "submitting": "验证中…",
+      "resend": "重新发送验证请求",
+      "useSecurityCode": "受信任设备不在身边？改用登录安全码",
+      "useTrustedDevice": "改用受信任设备验证",
+      "backToLogin": "返回登录",
+      "failed": "验证失败，请重试"
     }
   },
   "onboarding": {
@@ -2178,7 +2197,7 @@
         "logoutCurrent": "退出当前设备",
         "logoutOthers": "退出其他设备",
         "removeTitle": "移除登录设备",
-        "removeMessage": "移除后，该设备需要重新登录才能继续使用。",
+        "removeMessage": "移除后，该设备需要重新登录，并经受信任设备验证后才能继续使用。",
         "removeCurrentMessage": "这是当前设备，确认后会退出登录。",
         "loadFailed": "加载登录设备失败，请稍后重试",
         "removeFailed": "移除设备失败，请稍后重试",
@@ -3487,7 +3506,16 @@
     "CHAT_GROUP_QR_JOIN_DISABLED": "该群已关闭二维码入群",
     "CHAT_GROUP_AVATAR_URL_INVALID": "群头像地址无效",
     "CHAT_DELIVERY_ID_CONFLICT": "消息发送失败，请重新输入后再发",
-    "FRIEND_GROUP_ADD_FORBIDDEN": "该群不允许成员互加好友"
+    "FRIEND_GROUP_ADD_FORBIDDEN": "该群不允许成员互加好友",
+    "AUTH_DEVICE_ID_REQUIRED": "检测到陌生设备登录，请升级到最新版本后重试",
+    "AUTH_DEVICE_NOT_TRUSTED": "当前设备不是受信任设备，无法处理登录请求",
+    "AUTH_DEVICE_VERIFICATION_RATE_LIMITED": "验证请求过于频繁，请 10 分钟后再试",
+    "AUTH_DEVICE_CODE_INVALID": "验证码错误，请核对受信任设备上显示的验证码",
+    "AUTH_LOGIN_CHALLENGE_INVALID": "登录验证请求无效，请重新登录",
+    "AUTH_LOGIN_CHALLENGE_EXPIRED": "验证码已失效，请重新发起验证",
+    "AUTH_LOGIN_CHALLENGE_REJECTED": "登录请求已被受信任设备拒绝",
+    "AUTH_LOGIN_CHALLENGE_LOCKED": "验证码错误次数过多，本次验证已作废，请重新发起",
+    "AUTH_SECURITY_CODE_NOT_SET": "未设置登录安全码，请在受信任设备上确认登录"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",
@@ -3559,5 +3587,26 @@
       "groupFooter": "扫一扫或点击加入群聊",
       "circleFooter": "扫一扫或点击加入圈子"
     }
+  },
+  "loginApproval": {
+    "title": "检测到陌生设备登录",
+    "device": "设备：{{value}}",
+    "ip": "IP：{{value}}",
+    "time": "时间：{{value}}",
+    "question": "是你本人在登录吗？",
+    "warning": "切勿把验证码告诉任何人，包括自称客服的人。",
+    "reject": "不是我",
+    "approve": "是我，获取验证码",
+    "approving": "处理中…",
+    "codeTitle": "登录验证码",
+    "codeHint": "请在 {{seconds}} 秒内在新设备上输入，否则验证码失效。",
+    "codeExpired": "验证码已失效",
+    "regenerate": "重新获取验证码",
+    "done": "完成",
+    "rejectedTitle": "已拒绝这次登录",
+    "rejectedBody": "有人知道你的密码并尝试登录，建议立即修改密码。",
+    "changePassword": "去修改密码",
+    "later": "稍后",
+    "failed": "操作失败，请稍后重试"
   }
 }

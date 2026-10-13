@@ -24,6 +24,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useLoginApprovalStore } from '@/features/security/store/login-approval-store';
 
 type GateState = 'checking' | 'locked' | 'verifying' | 'unlocked';
 
@@ -222,6 +223,11 @@ export function LoginSecurityCodeGate() {
     !isLoading &&
     !onboardingRequired &&
     (gateState === 'locked' || gateState === 'verifying');
+
+  // 应用锁没解开时，陌生设备登录的批准弹窗不能出来（否则拿到手机的人能直接点同意）。
+  useEffect(() => {
+    useLoginApprovalStore.getState().setAppLocked(visible);
+  }, [visible]);
 
   return (
     <Modal

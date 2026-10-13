@@ -244,6 +244,15 @@ function isWrappedResponse<T>(
   );
 }
 
+// 本机设备 ID 的来源由启动时注册（见 app/_layout）：client 不直接依赖安全存储，
+// 测试与 web 桩都不必为它补模块。
+type DeviceIdProvider = () => Promise<string | null>;
+let deviceIdProvider: DeviceIdProvider | null = null;
+
+export function registerDeviceIdProvider(provider: DeviceIdProvider | null) {
+  deviceIdProvider = provider;
+}
+
 async function executeRequest<T>(
   endpoint: string,
   options: RequestOptions,
@@ -281,6 +290,10 @@ async function executeRequest<T>(
   });
 
   const serializedBody = body == null ? undefined : serializeRequestBody(body);
+  // 每个请求都带本机设备 ID：登录 / 续签据此判断是否受信任设备。
+  const deviceId = deviceIdProvider
+    ? await deviceIdProvider().catch(() => null)
+    : null;
   const controller = new AbortController();
   // 15s 是整个请求的预算:headers + body。定时器必须活到 body 读完为止——
   // 流式 fetch(web)下 fetch 只等到 headers 就 resolve,body 还在传;
@@ -299,6 +312,7 @@ async function executeRequest<T>(
             ? { 'Content-Type': serializedBody.contentType }
             : {}),
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          ...(deviceId ? { 'X-Device-Id': deviceId } : {}),
           ...Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== 'x-request-id')),
           'X-Request-Id': requestId,
         },

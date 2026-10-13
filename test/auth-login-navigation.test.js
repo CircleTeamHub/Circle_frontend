@@ -76,7 +76,9 @@ function loadUseAuth(fixtures = {}) {
         fixtures.fetchCurrentUser ?? (async () => fixtures.user),
       fetchCurrentUserWithToken:
         fixtures.fetchCurrentUserWithToken ?? (async () => fixtures.user),
-      login: fixtures.loginRequest ?? (async () => fixtures.tokens),
+      login:
+        fixtures.loginRequest ??
+        (async () => ({ kind: 'tokens', tokens: fixtures.tokens })),
       logout: async () => {},
       register: fixtures.registerRequest ?? (async () => fixtures.tokens),
     },

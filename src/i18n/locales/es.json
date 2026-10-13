@@ -25,7 +25,7 @@
         "logoutCurrent": "Cerrar sesión en este dispositivo",
         "logoutOthers": "Cerrar sesión en otros dispositivos",
         "removeTitle": "Quitar dispositivo",
-        "removeMessage": "Tras quitarlo, este dispositivo deberá iniciar sesión de nuevo para continuar.",
+        "removeMessage": "Tras eliminarlo, este dispositivo deberá iniciar sesión de nuevo y ser aprobado por un dispositivo de confianza.",
         "removeCurrentMessage": "Este es el dispositivo actual. Al confirmar, se cerrará tu sesión.",
         "loadFailed": "No se pudieron cargar los dispositivos. Inténtalo más tarde.",
         "removeFailed": "No se pudo quitar el dispositivo. Inténtalo más tarde.",
@@ -2797,6 +2797,25 @@
       "submitting": "Restableciendo…",
       "successBody": "Se cerró la sesión en todos los dispositivos. Inicia sesión con tu nueva contraseña.",
       "successTitle": "Contraseña restablecida"
+    },
+    "deviceVerification": {
+      "title": "Verificación de nuevo dispositivo",
+      "intro": "Este inicio de sesión proviene de un dispositivo desconocido. Enviamos una solicitud de verificación a tus dispositivos de confianza. Confírmala allí e introduce el código que aparece.",
+      "waiting": "Esperando a un dispositivo de confianza · quedan {{time}}",
+      "approved": "Confirmado en tu dispositivo de confianza. Introduce el código en {{seconds}} s",
+      "approvedExpired": "El código ha caducado. Obtén uno nuevo en tu dispositivo de confianza",
+      "rejected": "Tu dispositivo de confianza rechazó este inicio de sesión. Si no fuiste tú, cambia tu contraseña ahora.",
+      "expired": "La solicitud de verificación ha caducado. Envía una nueva",
+      "codePlaceholder": "Código de 6 dígitos",
+      "securityCodePlaceholder": "Código de seguridad de inicio de sesión",
+      "securityCodeIntro": "Introduce el código de seguridad de inicio de sesión que configuraste.",
+      "submit": "Verificar e iniciar sesión",
+      "submitting": "Verificando…",
+      "resend": "Enviar una nueva solicitud",
+      "useSecurityCode": "¿No tienes un dispositivo de confianza a mano? Usa tu código de seguridad",
+      "useTrustedDevice": "Verificar con un dispositivo de confianza",
+      "backToLogin": "Volver al inicio de sesión",
+      "failed": "La verificación falló. Inténtalo de nuevo"
     }
   },
   "media": {
@@ -3495,7 +3514,16 @@
     "CHAT_GROUP_QR_JOIN_DISABLED": "Unirse con código QR está desactivado en este grupo",
     "CHAT_GROUP_AVATAR_URL_INVALID": "La dirección del avatar del grupo no es válida",
     "CHAT_DELIVERY_ID_CONFLICT": "No se pudo enviar el mensaje. Vuelve a escribirlo e inténtalo de nuevo",
-    "FRIEND_GROUP_ADD_FORBIDDEN": "Este grupo no permite que los miembros se añadan como amigos"
+    "FRIEND_GROUP_ADD_FORBIDDEN": "Este grupo no permite que los miembros se añadan como amigos",
+    "AUTH_DEVICE_ID_REQUIRED": "Inicio de sesión desde un nuevo dispositivo. Actualiza a la última versión e inténtalo de nuevo",
+    "AUTH_DEVICE_NOT_TRUSTED": "Este dispositivo no es de confianza y no puede gestionar solicitudes de inicio de sesión",
+    "AUTH_DEVICE_VERIFICATION_RATE_LIMITED": "Demasiadas solicitudes de verificación. Inténtalo de nuevo en 10 minutos",
+    "AUTH_DEVICE_CODE_INVALID": "Código incorrecto. Revisa el código que aparece en tu dispositivo de confianza",
+    "AUTH_LOGIN_CHALLENGE_INVALID": "La solicitud de verificación no es válida. Vuelve a iniciar sesión",
+    "AUTH_LOGIN_CHALLENGE_EXPIRED": "El código ha caducado. Vuelve a iniciar la verificación",
+    "AUTH_LOGIN_CHALLENGE_REJECTED": "Un dispositivo de confianza rechazó este inicio de sesión",
+    "AUTH_LOGIN_CHALLENGE_LOCKED": "Demasiados códigos incorrectos. Esta verificación se canceló; vuelve a empezar",
+    "AUTH_SECURITY_CODE_NOT_SET": "No hay un código de seguridad configurado. Confirma en un dispositivo de confianza"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",
@@ -3567,5 +3595,26 @@
       "groupFooter": "Escanea o toca para unirte al grupo",
       "circleFooter": "Escanea o toca para unirte al círculo"
     }
+  },
+  "loginApproval": {
+    "title": "Inicio de sesión desde un nuevo dispositivo",
+    "device": "Dispositivo: {{value}}",
+    "ip": "IP: {{value}}",
+    "time": "Hora: {{value}}",
+    "question": "¿Eres tú quien inicia sesión?",
+    "warning": "Nunca compartas este código con nadie, ni siquiera con quien diga ser de soporte.",
+    "reject": "No soy yo",
+    "approve": "Sí, obtener código",
+    "approving": "Procesando…",
+    "codeTitle": "Código de inicio de sesión",
+    "codeHint": "Introdúcelo en el nuevo dispositivo en {{seconds}} s o caducará.",
+    "codeExpired": "El código ha caducado",
+    "regenerate": "Obtener un código nuevo",
+    "done": "Listo",
+    "rejectedTitle": "Inicio de sesión rechazado",
+    "rejectedBody": "Alguien conoce tu contraseña e intentó iniciar sesión. Te recomendamos cambiarla ahora.",
+    "changePassword": "Cambiar contraseña",
+    "later": "Más tarde",
+    "failed": "No se pudo completar. Inténtalo de nuevo más tarde"
   }
 }

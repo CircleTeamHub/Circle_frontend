@@ -38,6 +38,9 @@ import { NotificationSnackbarHost } from '@/features/notifications/components/No
 import { PushNotificationRouteHandler } from '@/features/notifications/components/PushNotificationRouteHandler';
 import { PushNotificationTokenRegistrar } from '@/features/notifications/components/PushNotificationTokenRegistrar';
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
+import { LoginApprovalHost } from '@/features/security/components/LoginApprovalHost';
+import { registerDeviceIdProvider } from '@/services/api/client';
+import { getDeviceId } from '@/services/auth/device-id';
 import { AppBlurTarget } from '@/components/app/app-blur-target';
 import { AppDialogHost } from '@/components/app/app-dialog-host';
 import { TopNoticeHost } from '@/components/app/top-notice-host';
@@ -78,6 +81,9 @@ SplashScreen.preventAutoHideAsync();
 
 // 过滤 Expo DOM 组件在导航卸载竞态时抛出的 injectJavaScript 拒绝（属于已知良性错误）
 silenceDomBridgeRejection();
+
+// 每个 API 请求带上本机设备 ID（陌生设备登录验证），要早于任何请求注册。
+registerDeviceIdProvider(getDeviceId);
 
 async function registerLiveKitGlobals() {
   if (!NativeModules.WebRTCModule) {
@@ -347,6 +353,8 @@ function RootLayout() {
           <PushNotificationRouteHandler />
           <PushNotificationTokenRegistrar />
           <CallInviteHost />
+          {/* 陌生设备登录：本机作为受信任设备时弹「是否是你本人」并下发验证码。 */}
+          <LoginApprovalHost />
           <AccountSwitcherSheet />
           <LoginSecurityCodeGate />
           {/* 三端统一的弹窗宿主：Alert.alert / Alert.prompt 经 alert-bridge 全部投到这里。 */}
