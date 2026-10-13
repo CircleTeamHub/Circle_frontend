@@ -3419,6 +3419,7 @@
     "FRIEND_REQUEST_MESSAGE_LIMIT": "You can send up to 5 messages before they reply",
     "NOTE_NOT_FOUND": "Note not found",
     "NOTE_GROUP_NOT_FOUND": "Note group not found",
+    "NOTE_GROUP_BIND_FORBIDDEN": "Only the group owner can attach a note to this group, or the group is no longer available",
     "NOTE_IMAGE_TOO_LARGE": "The image is too large to embed",
     "NOTE_SHARE_LINK_INVALID": "This share link is not valid",
     "CALL_NOT_INVITED": "You haven't been invited to this call",

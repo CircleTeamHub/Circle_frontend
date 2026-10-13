@@ -9,6 +9,12 @@ export interface NoteCardButton {
   conversationID?: string;
   /** 与收藏来源群一致时带上原消息 id，进群直接定位到笔记原消息。 */
   clientMsgID?: string;
+  /**
+   * 群按钮去哪：收藏来源群和独立群（服务端标注了会话 id）直接进群聊；其余圈子群
+   * 进圈子详情，与详情页群名片同一口径 —— 收藏者未必是那个圈子的成员，直接进群聊
+   * 只会卡在预览。个人名片恒为 chat。
+   */
+  target: 'chat' | 'circle';
 }
 
 export interface NoteCardButtons {
@@ -40,6 +46,10 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
   const group = firstValid(note.cardPreview?.groups) ?? sourceGroup;
   const contactIsSource =
     contact !== null && from?.conversationType === 'private' && sourceSender?.id === contact.id;
+  const groupConversationID =
+    group && 'conversationID' in group && typeof group.conversationID === 'string' && group.conversationID
+      ? group.conversationID
+      : null;
   // 旧版圈子卡片的 id 是 OpenIM groupID，路由要用服务端给的规范圈子 UUID。
   const groupCircleId =
     group && 'circleId' in group && typeof group.circleId === 'string' && group.circleId
@@ -56,6 +66,7 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
           id: contact.id,
           name: contact.name,
           faceURL: contact.faceURL ?? null,
+          target: 'chat',
           ...(contactIsSource && from ? { conversationID: from.conversationID } : {}),
         }
       : null,
@@ -64,12 +75,13 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
           id: groupCircleId ?? group.id,
           name: group.name,
           faceURL: group.faceURL ?? null,
+          target: groupIsSource || groupConversationID ? 'chat' : 'circle',
           // 独立群名片由服务端标注会话 id（卡片 id 不是圈子 id），必须按会话进群；
           // 与收藏来源是同一个群时还带原消息 id，进群直接定位。
           ...(groupIsSource && from
             ? { conversationID: from.conversationID, clientMsgID: from.clientMsgID }
-            : 'conversationID' in group && typeof group.conversationID === 'string' && group.conversationID
-              ? { conversationID: group.conversationID }
+            : groupConversationID
+              ? { conversationID: groupConversationID }
               : {}),
         }
       : null,

@@ -216,6 +216,21 @@ test('an explicit discard deletes a draft even when it carries a publication rec
   assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), ['pending']);
 });
 
+test('a permanently deleted note detaches local drafts that edit it, keeping their content', () => {
+  const store = memoryStorage(); const utils = loadDraftUtils({}, store);
+  utils.saveLocalNoteDraft('owner', { ...draft('edit-gone'), noteId: 'gone', title: 'Keep me',
+    pendingSubmission: { noteId: 'gone', input: { title: 'x', media: [], clientDraftID: 'edit-gone' } } });
+  utils.saveLocalNoteDraft('owner', { ...draft('edit-other'), noteId: 'other' });
+  utils.detachLocalNoteDraftsFromNote('owner', 'gone');
+  const detached = utils.loadLocalNoteDraft('owner', 'edit-gone');
+  // 服务端草稿 sourceNoteID 是 onDelete: SetNull，本地同口径：变成「新笔记」草稿，内容保留。
+  assert.equal(detached.noteId, null);
+  assert.equal(detached.title, 'Keep me');
+  // 指向已删笔记的「未确认提交」也一并失效（那次更新的目标已不存在）。
+  assert.equal(detached.pendingSubmission, undefined);
+  assert.equal(utils.loadLocalNoteDraft('owner', 'edit-other').noteId, 'other');
+});
+
 test('partial content or recording deletion stays retryable and never cleans a retained recording', async () => {
   const store = memoryStorage(); let failFiles = true; const removed = [];
   const utils = loadDraftUtils({ removeNoteRecording: async (...args) => { if (failFiles) throw new Error('disk unavailable'); removed.push(args); } }, store);

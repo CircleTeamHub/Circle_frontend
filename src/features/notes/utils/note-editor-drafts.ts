@@ -481,6 +481,25 @@ export function confirmNoteDraftDeletion(userId: string, draftId: string, cleane
   return true;
 }
 
+/**
+ * 笔记被永久删除后，本地「编辑这篇笔记」的草稿改成新笔记草稿：内容保留，保存时
+ * 走新建而不是去更新一篇已不存在的笔记（与服务端草稿 sourceNoteID 的 onDelete:
+ * SetNull 同口径）。指向它的「未确认提交」目标已不存在，一并丢掉。
+ */
+export function detachLocalNoteDraftsFromNote(userId: string, noteId: string): void {
+  for (const item of readIndex(userId).items) {
+    if (item.noteId !== noteId) continue;
+    const record = readLocalNoteDraft(userId, item.id);
+    if (!record || record.noteId !== noteId) continue;
+    saveLocalNoteDraft(userId, {
+      ...record,
+      noteId: null,
+      pendingSubmission:
+        record.pendingSubmission?.noteId === noteId ? undefined : record.pendingSubmission,
+    });
+  }
+}
+
 export function removeAllLocalNoteDrafts(
   userId: string | null | undefined,
 ): void {

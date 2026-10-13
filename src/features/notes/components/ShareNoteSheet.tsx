@@ -158,6 +158,9 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       setSending(true);
+      // 限流下多条发送会持续数秒：期间面板被关掉、又为别的笔记打开时，这一轮的
+      // 收尾（关面板 / 写入失败重试项）只属于它自己那次打开，不能落到新面板上。
+      const sendGeneration = openGenerationRef.current;
       void (async () => {
         // 顺序发送并遵守聊天发送的 20 条/10s 限流。
         const failures: NoteCardSendTask[] = [];
@@ -178,7 +181,7 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
             failures.push(task);
           }
         }
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || openGenerationRef.current !== sendGeneration) return;
         if (failures.length === 0) {
           // 全部成功直接收起面板，不再弹「已发送」。
           setRetryTasks([]);

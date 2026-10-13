@@ -34,3 +34,8 @@ test('详情页群名片：独立群（带会话 id）进群聊，圈子群仍�
   assert.match(detail, /if \(conversationID\) \{\s*router\.push\(\s*getChatDetailHref\(scope, conversationID, name, undefined, conversationID, undefined, 'group'\),/);
   assert.match(detail, /router\.push\(getCircleDetailHref\(scope === 'discover' \? 'discover' : 'messages', id\)\);/);
 });
+
+test('列表群按钮：target 为 circle 时进圈子详情，与详情页群名片同口径', () => {
+  const screen = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(screen, /if \(card\.target === 'circle'\) \{\s*router\.push\(getCircleDetailHref\(scope === 'discover' \? 'discover' : 'messages', card\.id\)\);\s*return;/);
+});

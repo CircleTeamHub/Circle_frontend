@@ -55,6 +55,7 @@ import {
 } from '@/features/notes/utils/note-sync';
 import {
   getChatDetailHref,
+  getCircleDetailHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
 import {
@@ -480,6 +481,10 @@ export default function NotesScreen() {
       const { contact, group } = resolveNoteCardButtons(note);
       const card = target === 'group' ? group : contact;
       if (!card) return;
+      if (card.target === 'circle') {
+        router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', card.id));
+        return;
+      }
       // 聊天页入**当前所在** tab 栈（笔记多挂在 profile 下），不写死 messages ——
       // 写死会把聊天页推进消息栈，返回时落到 IM 首页而不是来时的笔记页。
       router.push(

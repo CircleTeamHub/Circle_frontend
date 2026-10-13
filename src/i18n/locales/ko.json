@@ -3411,6 +3411,7 @@
     "FRIEND_REQUEST_MESSAGE_LIMIT": "상대가 답장하기 전에는 최대 5개의 메시지만 보낼 수 있습니다",
     "NOTE_NOT_FOUND": "노트를 찾을 수 없습니다",
     "NOTE_GROUP_NOT_FOUND": "노트 그룹을 찾을 수 없습니다",
+    "NOTE_GROUP_BIND_FORBIDDEN": "그룹장만 이 그룹에 노트를 연결할 수 있거나, 그룹을 더 이상 사용할 수 없습니다",
     "NOTE_IMAGE_TOO_LARGE": "이미지가 너무 커서 삽입할 수 없습니다",
     "NOTE_SHARE_LINK_INVALID": "유효하지 않은 공유 링크입니다",
     "CALL_NOT_INVITED": "이 통화에 초대되지 않았습니다",

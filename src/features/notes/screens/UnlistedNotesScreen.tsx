@@ -108,6 +108,12 @@ export default function UnlistedNotesScreen() {
 
   const closeMenu = useCallback(() => setMenuNote(null), []);
 
+  // 上架 / 删除请求还在路上时这行仍在列表里：不许再对它开菜单重复操作。
+  const pendingIdsRef = useRef(new Set<string>());
+  const openMenu = useCallback((note: NoteSummary) => {
+    if (!pendingIdsRef.current.has(note.id)) setMenuNote(note);
+  }, []);
+
   // 上架/删除已在服务端成功：这行一定离开「已下架」列表。先本地移除（真实且乐观），
   // 再刷新；刷新失败不能再报「上架/删除失败」，否则用户会对已成功的操作反复重试。
   // load() 自带序号，会作废在飞的旧刷新（其响应还包含这一行）。
@@ -126,6 +132,8 @@ export default function UnlistedNotesScreen() {
     const note = menuNote;
     if (!note) return;
     closeMenu();
+    if (pendingIdsRef.current.has(note.id)) return;
+    pendingIdsRef.current.add(note.id);
     try {
       await relistNote(note.id);
     } catch {
@@ -136,6 +144,8 @@ export default function UnlistedNotesScreen() {
         );
       }
       return;
+    } finally {
+      pendingIdsRef.current.delete(note.id);
     }
     removeSettledNote(note.id);
   }, [closeMenu, menuNote, removeSettledNote, t]);
@@ -156,6 +166,8 @@ export default function UnlistedNotesScreen() {
           text: t('notes.actions.delete', { defaultValue: '删除' }),
           style: 'destructive',
           onPress: async () => {
+            if (pendingIdsRef.current.has(note.id)) return;
+            pendingIdsRef.current.add(note.id);
             try {
               await deleteNote(note.id);
             } catch {
@@ -166,6 +178,8 @@ export default function UnlistedNotesScreen() {
                 );
               }
               return;
+            } finally {
+              pendingIdsRef.current.delete(note.id);
             }
             removeSettledNote(note.id);
           },
@@ -191,9 +205,9 @@ export default function UnlistedNotesScreen() {
 
   const renderNote = useCallback(
     ({ item }: { item: NoteSummary }) => (
-      <NoteCard note={item} onPress={openNote} onMorePress={setMenuNote} />
+      <NoteCard note={item} onPress={openNote} onMorePress={openMenu} />
     ),
-    [openNote],
+    [openMenu, openNote],
   );
 
   return (

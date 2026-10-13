@@ -101,3 +101,40 @@ test('an open sheet still sends right after the status check', async () => {
   expect(sendCardMessage).toHaveBeenCalledWith({ conversationId: 'conv-1', type: 'note-card', payload });
   expect(onClose).toHaveBeenCalled();
 });
+
+test('a send loop still running when the sheet is closed and reopened does not touch the new opening', async () => {
+  jest.mocked(withFreshNoteSourceStatus).mockResolvedValueOnce([payload] as never);
+  const pendingSend = deferred<void>();
+  jest.mocked(sendCardMessage).mockReturnValueOnce(pendingSend.promise as never);
+  const onClose = jest.fn();
+  const view = render(<ShareNoteSheet payloads={[payload]} onClose={onClose} />);
+  selectAndSend();
+  await act(async () => { await Promise.resolve(); });
+  expect(sendCardMessage).toHaveBeenCalledTimes(1);
+  // 发送中被关掉，又为另一条笔记打开。
+  view.rerender(<ShareNoteSheet payloads={null} onClose={onClose} />);
+  const other = { ...payload, noteId: 'note-2' } as unknown as NoteCardData;
+  view.rerender(<ShareNoteSheet payloads={[other]} onClose={onClose} />);
+  await act(async () => { pendingSend.resolve(); await pendingSend.promise; });
+  // 旧一轮成功的收尾不能把新打开的面板关掉。
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+test('failures from a closed opening are not carried into the next opening as retry items', async () => {
+  jest.mocked(withFreshNoteSourceStatus).mockResolvedValueOnce([payload] as never);
+  const pendingSend = deferred<void>();
+  jest.mocked(sendCardMessage).mockReturnValueOnce(pendingSend.promise.then(() => { throw new Error('offline'); }) as never);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const onClose = jest.fn();
+  try {
+    const view = render(<ShareNoteSheet payloads={[payload]} onClose={onClose} />);
+    selectAndSend();
+    await act(async () => { await Promise.resolve(); });
+    view.rerender(<ShareNoteSheet payloads={null} onClose={onClose} />);
+    const other = { ...payload, noteId: 'note-2' } as unknown as NoteCardData;
+    view.rerender(<ShareNoteSheet payloads={[other]} onClose={onClose} />);
+    await act(async () => { pendingSend.resolve(); await Promise.resolve(); await Promise.resolve(); });
+    expect(alert).not.toHaveBeenCalledWith('notes.shareToChat.failedTitle', expect.anything());
+    expect(screen.queryByText('notes.shareToChat.retryFailed')).toBeNull();
+  } finally { alert.mockRestore(); }
+});
