@@ -15,7 +15,7 @@ import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
-import { fetchDeletedNotes, restoreNote } from '@/services/api/notes';
+import { fetchDeletedNotes, purgeNote, restoreNote } from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const keyExtractor = (item: NoteSummary) => item.id;
@@ -94,6 +94,46 @@ export default function RecycleBinScreen() {
 
   const closeMenu = useCallback(() => setMenuNote(null), []);
 
+  // 立即删除不可撤销：先二次确认，确认后从列表里移除；与恢复一样，服务端成功后的
+  // 刷新失败不再报错（那行已经真的删掉了）。
+  const handlePurge = useCallback(() => {
+    const note = menuNote;
+    if (!note) return;
+    closeMenu();
+    Alert.alert(
+      t('notes.alerts.purgeTitle', { defaultValue: '立即删除笔记？' }),
+      t('notes.alerts.purgeConfirm', { defaultValue: '笔记会被永久删除，无法恢复。' }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('notes.actions.purge', { defaultValue: '立即删除' }),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await purgeNote(note.id);
+            } catch {
+              if (mountedRef.current) {
+                Alert.alert(
+                  t('notes.alerts.deleteFailedTitle', { defaultValue: '删除失败' }),
+                  t('common.retryLater', { defaultValue: '请稍后重试' }),
+                );
+              }
+              return;
+            }
+            if (!mountedRef.current) return;
+            loadGenerationRef.current += 1;
+            setNotes((prev) => prev.filter((item) => item.id !== note.id));
+            try {
+              await load();
+            } catch {
+              // 列表下次 focus / 下拉时自然重试
+            }
+          },
+        },
+      ],
+    );
+  }, [closeMenu, load, menuNote, t]);
+
   const handleRestore = useCallback(async () => {
     const note = menuNote;
     if (!note) return;
@@ -132,6 +172,7 @@ export default function RecycleBinScreen() {
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
       sheetAction: { color: colors.iconAccent },
+      sheetDanger: { color: colors.danger },
     }),
     [colors],
   );
@@ -226,6 +267,17 @@ export default function RecycleBinScreen() {
           <Ionicons name="refresh-outline" size={20} color={colors.iconAccent} />
           <Text style={[s.sheetLabel, d.sheetAction]}>
             {t('notes.actions.restore', { defaultValue: '恢复' })}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={s.sheetRow}
+          onPress={handlePurge}
+          accessibilityRole="button"
+          accessibilityLabel={t('notes.actions.purge', { defaultValue: '立即删除' })}
+        >
+          <Ionicons name="trash-outline" size={20} color={colors.danger} />
+          <Text style={[s.sheetLabel, d.sheetDanger]}>
+            {t('notes.actions.purge', { defaultValue: '立即删除' })}
           </Text>
         </Pressable>
       </BottomSheetModal>

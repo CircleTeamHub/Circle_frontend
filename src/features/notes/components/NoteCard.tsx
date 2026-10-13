@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import type { NoteSummary } from '@/features/notes/types';
+import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
 import { buildNoteMeta } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
@@ -80,15 +81,12 @@ function NoteCardInner({
     t,
   );
 
-  // 收藏来的笔记在列表上亮出来源：发送者 chip（→私聊）+ 群 chip（→群聊）。
-  // 快照缺关键字段（历史坏数据）时对应 chip 不渲染，避免点了跳不动。
-  const sender = note.collectedFrom?.sender;
-  const senderChip = sender?.id && sender.name ? sender : null;
-  const group =
-    note.collectedFrom?.conversationType === 'group'
-      ? note.collectedFrom.group
-      : null;
-  const groupChip = group?.id && group.name ? group : null;
+  // 底部两个按钮 = 这条笔记的个人名片（→私聊）和群名片（→群聊）。收藏来的笔记由
+  // 后端用来源发送者/群预填，自己写的笔记就是编辑器里添加的名片。
+  const { contact: senderChip, group: groupChip } = useMemo(
+    () => resolveNoteCardButtons(note),
+    [note],
+  );
 
   const handlePress = useCallback(() => onPress(note), [note, onPress]);
 
@@ -189,22 +187,8 @@ function NoteCardInner({
             {note.contentPreview}
           </Text>
         ) : null}
-        {note.status === 'UNLISTED' ? (
-          <View
-            style={[
-              s.statusBadge,
-              {
-                backgroundColor: withAlpha(colors.warning, 0.14),
-                borderColor: withAlpha(colors.warning, 0.34),
-              },
-            ]}
-          >
-            <Ionicons name="eye-off-outline" size={13} color={colors.warning} />
-            <Text style={[s.status, { color: colors.warning }]} numberOfLines={1}>
-              {t('notes.list.statusUnlisted', { defaultValue: '已下架，状态可能变化' })}
-            </Text>
-          </View>
-        ) : note.workStatus === 'WORKING' || note.workStatus === 'CLOSED' ? (
+        {/* 已下架的笔记只出现在「已下架」页，那里不再重复挂状态标签。 */}
+        {note.status === 'UNLISTED' ? null : note.workStatus === 'WORKING' || note.workStatus === 'CLOSED' ? (
           <View
             style={[
               s.statusBadge,
@@ -264,7 +248,7 @@ function NoteCardInner({
       ) : null}
       </View>
 
-      {/* 来源双按钮通栏铺在卡片底部：左=分享人(→私聊)，右=来源群(→群聊定位原消息)。 */}
+      {/* 名片双按钮通栏铺在卡片底部：左=个人名片(→私聊)，右=群名片(→群聊；收藏来的定位原消息)。 */}
       {senderChip || groupChip ? (
         <View style={s.sourceRow}>
           {senderChip ? (

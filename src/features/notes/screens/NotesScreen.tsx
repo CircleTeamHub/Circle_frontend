@@ -25,6 +25,8 @@ import {
   type NoteSourceTarget,
 } from '@/features/notes/components/NoteCard';
 import { NoteActionsSheet } from '@/features/notes/components/NoteActionsSheet';
+import { NotesHeaderActions } from '@/features/notes/components/NotesHeaderActions';
+import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
 import { NoteRemarkSheet } from '@/features/notes/components/NoteRemarkSheet';
 import { NoteGroupPickerSheet } from '@/features/notes/components/NoteGroupPickerSheet';
 import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
@@ -360,6 +362,18 @@ export default function NotesScreen() {
   }, [groups, notes.length, t, tabOrderIds, ungroupedCount]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
+  const openRecycleBin = useCallback(
+    () => router.push('/(tabs)/profile/notes/recycle-bin' as never),
+    [router],
+  );
+  const openUnlisted = useCallback(
+    () => router.push('/(tabs)/profile/notes/unlisted' as never),
+    [router],
+  );
+  const openDrafts = useCallback(
+    () => router.push('/(tabs)/profile/notes/drafts' as never),
+    [router],
+  );
 
   const handleActiveGroupDeleted = useCallback(
     (groupId: string) => {
@@ -462,38 +476,21 @@ export default function NotesScreen() {
   // 与详情页跳回来源一致，固定挂 messages 栈。
   const handleSourcePress = useCallback(
     (note: NoteSummary, target: NoteSourceTarget) => {
-      const from = note.collectedFrom;
-      if (!from) return;
+      // 按钮就是笔记的个人名片 / 群名片；与收藏来源一致时会带上原会话和原消息。
+      const { contact, group } = resolveNoteCardButtons(note);
+      const card = target === 'group' ? group : contact;
+      if (!card) return;
       // 聊天页入**当前所在** tab 栈（笔记多挂在 profile 下），不写死 messages ——
       // 写死会把聊天页推进消息栈，返回时落到 IM 首页而不是来时的笔记页。
-      if (target === 'group') {
-        const group = from.group;
-        if (!group?.id || !group.name) return;
-        router.push(
-          getChatDetailHref(
-            scope,
-            group.id,
-            group.name,
-            group.faceURL ?? undefined,
-            from.conversationID,
-            // 带上收藏时的消息 id：进群直接定位到这条笔记的原消息。
-            from.clientMsgID,
-            'group',
-          ),
-        );
-        return;
-      }
-      const sender = from.sender;
-      if (!sender?.id || !sender.name) return;
       router.push(
         getChatDetailHref(
           scope,
-          sender.id,
-          sender.name,
-          sender.faceURL ?? undefined,
-          from.conversationType === 'private' ? from.conversationID : undefined,
-          undefined,
-          'private',
+          card.id,
+          card.name,
+          card.faceURL ?? undefined,
+          card.conversationID,
+          card.clientMsgID,
+          target === 'group' ? 'group' : 'private',
         ),
       );
     },
@@ -831,45 +828,12 @@ export default function NotesScreen() {
                 </Pressable>
               </>
             ) : (
-              <>
-                <Pressable
-                  style={[s.unlistedBtn, d.unlistedBtn, compactActions && { minWidth: 44, minHeight: 44, justifyContent: 'center' }]}
-                  onPress={() =>
-                    router.push('/(tabs)/profile/notes/recycle-bin' as never)
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel={t('notes.recycleBin')}
-                >
-                  <Ionicons name="trash-outline" size={15} color={colors.textSecondary} />
-                  {!compactActions ? <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
-                    {t('notes.recycleBin', { defaultValue: '回收站' })}
-                  </Text> : null}
-                </Pressable>
-                <Pressable
-                  style={[s.unlistedBtn, d.unlistedBtn, compactActions && { minWidth: 44, minHeight: 44, justifyContent: 'center' }]}
-                  onPress={() =>
-                    router.push('/(tabs)/profile/notes/unlisted' as never)
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel={t('notes.unlisted')}
-                >
-                  <Ionicons name="archive-outline" size={15} color={colors.textSecondary} />
-                  {!compactActions ? <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
-                    {t('notes.unlisted', { defaultValue: '已下架' })}
-                  </Text> : null}
-                </Pressable>
-                <Pressable
-                  style={[s.unlistedBtn, d.unlistedBtn, compactActions && { minWidth: 44, minHeight: 44, justifyContent: 'center' }]}
-                  onPress={() => router.push('/(tabs)/profile/notes/drafts' as never)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('notes.drafts.title', { defaultValue: '草稿箱' })}
-                >
-                  <Ionicons name="document-text-outline" size={15} color={colors.textSecondary} />
-                  {!compactActions ? <Text style={[s.unlistedBtnText, d.unlistedBtnText]}>
-                    {t('notes.drafts.title', { defaultValue: '草稿箱' })}
-                  </Text> : null}
-                </Pressable>
-              </>
+              <NotesHeaderActions
+                compact={compactActions}
+                onOpenRecycleBin={openRecycleBin}
+                onOpenUnlisted={openUnlisted}
+                onOpenDrafts={openDrafts}
+              />
             )}
           </View>
         </View>

@@ -194,6 +194,27 @@ test('a latest publication recovery marker blocks deletion despite an older summ
   assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), []);
 });
 
+test('pending publication state is readable so the drafts list can explain a blocked delete', () => {
+  const store = memoryStorage(); const utils = loadDraftUtils({}, store);
+  utils.saveLocalNoteDraft('owner', draft('plain'));
+  assert.equal(utils.getLocalNoteDraftPendingState('owner', 'plain'), 'none');
+  utils.saveLocalNoteDraft('owner', { ...draft('unknown'), pendingSubmission: { noteId: null, input: { title: 'x', media: [], clientDraftID: 'unknown' } } });
+  assert.equal(utils.getLocalNoteDraftPendingState('owner', 'unknown'), 'unconfirmed');
+  // 服务端已经回了一条笔记（只是快照比对不一致）：内容已落库，删草稿不会丢东西。
+  utils.saveLocalNoteDraft('owner', { ...draft('saved'), pendingSubmission: { noteId: null, conflictingNoteId: 'note-1', input: { title: 'x', media: [], clientDraftID: 'saved' } } });
+  assert.equal(utils.getLocalNoteDraftPendingState('owner', 'saved'), 'savedOnServer');
+});
+
+test('an explicit discard deletes a draft even when it carries a publication recovery marker', () => {
+  const store = memoryStorage(); const utils = loadDraftUtils({}, store);
+  const pendingSubmission = { noteId: null, input: { title: 'Original write', media: [], clientDraftID: 'pending' } };
+  utils.saveLocalNoteDraft('owner', { ...draft('pending'), pendingSubmission });
+  assert.equal(utils.stageLocalNoteDraftDeletion('owner', 'pending'), false);
+  assert.equal(utils.stageLocalNoteDraftDeletion('owner', 'pending', [], { discardPendingSubmission: true }), true);
+  assert.equal(utils.loadLocalNoteDraft('owner', 'pending'), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), ['pending']);
+});
+
 test('partial content or recording deletion stays retryable and never cleans a retained recording', async () => {
   const store = memoryStorage(); let failFiles = true; const removed = [];
   const utils = loadDraftUtils({ removeNoteRecording: async (...args) => { if (failFiles) throw new Error('disk unavailable'); removed.push(args); } }, store);

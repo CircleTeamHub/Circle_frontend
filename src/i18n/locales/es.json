@@ -937,6 +937,7 @@
       "relist": "Volver a publicar",
       "more": "Más",
       "restore": "Restaurar",
+      "purge": "Eliminar ahora",
       "multiSelect": "Selección múltiple",
       "remark": "Comentario",
       "editNote": "Editar nota",
@@ -969,6 +970,8 @@
       "remarkFailedTitle": "No se pudo guardar el comentario",
       "deleteTitle": "Eliminar nota",
       "deleteConfirm": "Las notas eliminadas se pueden recuperar desde la papelera y se borran definitivamente a los 30 días.",
+      "purgeTitle": "¿Eliminar la nota ahora?",
+      "purgeConfirm": "La nota se eliminará de forma permanente y no se podrá recuperar.",
       "batchFailedTitle": "Algunas acciones fallaron",
       "batchPartialFailed": "Falló la operación en {{count}} notas; siguen seleccionadas, inténtalo de nuevo.",
       "batchUnlistTitle": "Retirar notas",
@@ -994,6 +997,9 @@
       "empty": "No tienes borradores",
       "deleteTitle": "¿Eliminar borrador?",
       "deleteMessage": "Este borrador no se puede recuperar después de eliminarlo.",
+      "deleteSavedMessage": "Este borrador ya se guardó como nota. Eliminar el borrador no afectará a la nota guardada.",
+      "deleteUnconfirmedMessage": "Aún no se ha confirmado si este borrador se guardó como nota. Puede que sí o puede que no. El borrador no se podrá recuperar después de eliminarlo.",
+      "deleteAnyway": "Eliminar de todos modos",
       "unsavedTitle": "¿Guardar la nota sin terminar?",
       "unsavedMessage": "El contenido sin guardar se guardará en Borradores para que puedas continuar más tarde.",
       "discard": "Salir sin guardar",
@@ -1222,7 +1228,6 @@
       "fromSource": "De {{name}}",
       "statusWorking": "En servicio",
       "statusClosed": "Cerrado",
-      "statusUnlisted": "Retirado; el estado puede haber cambiado",
       "remark": "Comentario: {{text}}",
       "openSenderChat": "Chatear con {{name}}",
       "openGroupChat": "Abrir el chat del grupo {{name}}"
@@ -2157,8 +2162,7 @@
       "saveFailed": "No se pudo guardar la nota",
       "loading": "Cargando nota...",
       "label": "Nota para {{name}}",
-      "placeholder": "Escribe un nombre de nota",
-      "helper": "Las notas aparecen en tu lista de contactos y en el perfil. Déjalo en blanco para borrarla."
+      "placeholder": "Escribe un nombre de nota"
     },
     "editTags": {
       "missingFriend": "Amigo no encontrado",

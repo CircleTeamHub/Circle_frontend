@@ -933,6 +933,7 @@
       "relist": "公開に戻す",
       "more": "その他",
       "restore": "復元",
+      "purge": "今すぐ削除",
       "multiSelect": "複数選択",
       "remark": "メモ",
       "editNote": "ノートを編集",
@@ -965,6 +966,8 @@
       "remarkFailedTitle": "メモを保存できませんでした",
       "deleteTitle": "ノートを削除",
       "deleteConfirm": "削除したノートはごみ箱から復元でき、30日後に自動的に消去されます。",
+      "purgeTitle": "ノートを今すぐ削除しますか？",
+      "purgeConfirm": "ノートは完全に削除され、復元できません。",
       "batchFailedTitle": "一部の操作に失敗しました",
       "batchPartialFailed": "{{count}}件のノートの操作に失敗しました。選択は保持されています。もう一度お試しください。",
       "batchUnlistTitle": "まとめて非公開",
@@ -990,6 +993,9 @@
       "empty": "下書きはありません",
       "deleteTitle": "下書きを削除しますか？",
       "deleteMessage": "削除した下書きは復元できません。",
+      "deleteSavedMessage": "この下書きはすでにノートとして保存されています。下書きを削除しても保存済みのノートには影響しません。",
+      "deleteUnconfirmedMessage": "この下書きの保存結果はまだ確認できていません。ノートとして保存された可能性も、されていない可能性もあります。削除すると下書きは復元できません。",
+      "deleteAnyway": "それでも削除",
       "unsavedTitle": "未完成のノートを保存しますか？",
       "unsavedMessage": "保存していない内容を下書きに保存し、後で編集を続けられます。",
       "discard": "保存せずに退出",
@@ -1216,7 +1222,6 @@
       "fromSource": "{{name}}から",
       "statusWorking": "稼働中",
       "statusClosed": "終了",
-      "statusUnlisted": "非公開・状態が変わっている可能性があります",
       "remark": "メモ：{{text}}",
       "openSenderChat": "{{name}}とチャット",
       "openGroupChat": "グループチャット{{name}}を開く"
@@ -2149,8 +2154,7 @@
       "saveFailed": "表示名の保存に失敗しました",
       "loading": "表示名を読み込み中...",
       "label": "{{name}} さんの表示名",
-      "placeholder": "表示名を入力",
-      "helper": "表示名は連絡先リストとプロフィールに表示されます。空欄にすると削除されます。"
+      "placeholder": "表示名を入力"
     },
     "editTags": {
       "missingFriend": "友だちが見つかりません",

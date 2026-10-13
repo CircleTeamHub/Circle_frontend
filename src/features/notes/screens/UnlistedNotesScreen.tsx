@@ -20,7 +20,7 @@ import {
   applyNoteSourceStatusToSummaries,
   withNoteSyncRetry,
 } from '@/features/notes/utils/note-sync';
-import { fetchNotes, relistNote } from '@/services/api/notes';
+import { deleteNote, fetchNotes, relistNote } from '@/services/api/notes';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const keyExtractor = (item: NoteSummary) => item.id;
@@ -125,6 +125,39 @@ export default function UnlistedNotesScreen() {
     }
   }, [closeMenu, load, menuNote, t]);
 
+  // 删除是软删除：笔记进回收站（30 天后自动清除），与「我的笔记」列表的删除同一个接口。
+  const handleDeleteNote = useCallback(() => {
+    const note = menuNote;
+    if (!note) return;
+    closeMenu();
+    Alert.alert(
+      t('notes.alerts.deleteTitle', { defaultValue: '删除笔记' }),
+      t('notes.alerts.deleteConfirm', {
+        defaultValue: '删除后可在回收站找回，30 天后自动清除。',
+      }),
+      [
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
+        {
+          text: t('notes.actions.delete', { defaultValue: '删除' }),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteNote(note.id);
+              if (mountedRef.current) await load();
+            } catch {
+              if (mountedRef.current) {
+                Alert.alert(
+                  t('notes.alerts.deleteFailedTitle', { defaultValue: '删除失败' }),
+                  t('common.retryLater', { defaultValue: '请稍后重试' }),
+                );
+              }
+            }
+          },
+        },
+      ],
+    );
+  }, [closeMenu, load, menuNote, t]);
+
   const d = useMemo(
     () => ({
       container: { backgroundColor: colors.background },
@@ -135,6 +168,7 @@ export default function UnlistedNotesScreen() {
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
       sheetAction: { color: colors.iconAccent },
+      sheetDanger: { color: colors.danger },
     }),
     [colors],
   );
@@ -228,6 +262,17 @@ export default function UnlistedNotesScreen() {
           <Ionicons name="cloud-upload-outline" size={20} color={colors.iconAccent} />
           <Text style={[s.sheetLabel, d.sheetAction]}>
             {t('notes.actions.relist', { defaultValue: '上架' })}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={s.sheetRow}
+          onPress={handleDeleteNote}
+          accessibilityRole="button"
+          accessibilityLabel={t('notes.actions.delete', { defaultValue: '删除' })}
+        >
+          <Ionicons name="trash-outline" size={20} color={colors.danger} />
+          <Text style={[s.sheetLabel, d.sheetDanger]}>
+            {t('notes.actions.delete', { defaultValue: '删除' })}
           </Text>
         </Pressable>
       </BottomSheetModal>

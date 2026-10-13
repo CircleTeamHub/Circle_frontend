@@ -1983,8 +1983,7 @@
       "saveFailed": "Failed to save remark",
       "loading": "Loading remark...",
       "label": "Remark for {{name}}",
-      "placeholder": "Enter a remark name",
-      "helper": "Remarks appear in your contacts list and profile page. Leave blank to clear it."
+      "placeholder": "Enter a remark name"
     },
     "editTags": {
       "missingFriend": "Friend not found",
@@ -2527,6 +2526,7 @@
       "relist": "Relist",
       "more": "More",
       "restore": "Restore",
+      "purge": "Delete now",
       "multiSelect": "Select multiple",
       "remark": "Remark",
       "editNote": "Edit note",
@@ -2559,6 +2559,8 @@
       "remarkFailedTitle": "Failed to save remark",
       "deleteTitle": "Delete note",
       "deleteConfirm": "Deleted notes can be recovered from the recycle bin and are purged after 30 days.",
+      "purgeTitle": "Delete note now?",
+      "purgeConfirm": "The note will be permanently deleted and cannot be recovered.",
       "batchFailedTitle": "Some actions failed",
       "batchPartialFailed": "{{count}} notes failed and remain selected. Please try again.",
       "batchUnlistTitle": "Unlist notes",
@@ -2584,6 +2586,9 @@
       "empty": "Your drafts are empty",
       "deleteTitle": "Delete draft?",
       "deleteMessage": "This draft cannot be recovered after deletion.",
+      "deleteSavedMessage": "This draft was already saved as a note. Deleting the draft won't affect the saved note.",
+      "deleteUnconfirmedMessage": "The save result for this draft hasn't been confirmed — it may or may not have been saved as a note. The draft can't be recovered after deletion.",
+      "deleteAnyway": "Delete anyway",
       "unsavedTitle": "Save the unfinished note?",
       "unsavedMessage": "Unsaved content will be placed in Drafts so you can continue editing later.",
       "discard": "Leave without saving",
@@ -2812,7 +2817,6 @@
       "fromSource": "From {{name}}",
       "statusWorking": "Working",
       "statusClosed": "Closed",
-      "statusUnlisted": "Unlisted; status may have changed",
       "remark": "Remark: {{text}}",
       "openSenderChat": "Chat with {{name}}",
       "openGroupChat": "Open group chat {{name}}"

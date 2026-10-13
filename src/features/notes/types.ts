@@ -127,6 +127,18 @@ export interface NoteCollectedFrom {
   collectedAt?: string;
 }
 
+/** 列表卡片上的名片摘要（个人名片 / 群名片），只有展示所需字段。 */
+export interface NoteCardPeer {
+  id: string;
+  name: string;
+  faceURL?: string | null;
+}
+
+export interface NoteCardPreview {
+  contacts: NoteCardPeer[];
+  groups: NoteCardPeer[];
+}
+
 export interface NoteSummary {
   id: string;
   title: string;
@@ -148,6 +160,11 @@ export interface NoteSummary {
   hasText?: boolean;
   showcaseCount?: number;
   hasLocation?: boolean;
+  /** 笔记里个人名片 / 群名片的总数；旧接口缺省按 0 处理。 */
+  contactCount?: number;
+  groupCardCount?: number;
+  /** 名片摘要（每类最多 3 个），仅笔记主人可见；旧接口缺省时不展示。 */
+  cardPreview?: NoteCardPreview | null;
   createdAt: string;
   updatedAt: string;
   ownerId?: string | null;

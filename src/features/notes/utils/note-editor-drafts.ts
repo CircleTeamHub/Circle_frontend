@@ -406,10 +406,32 @@ export function removeLocalNoteDraft(
   cleanRecordings(userId, record);
 }
 
-/** Stage deletion before removing content; never discard a publication recovery marker. */
-export function stageLocalNoteDraftDeletion(userId: string, draftId: string, additionalRecordingIds: readonly string[] = []): boolean {
+/**
+ * 草稿上挂着的「提交结果未确认」标记：
+ * - savedOnServer：服务端已经回了一条笔记（只是与本地快照比对不一致），内容已落库；
+ * - unconfirmed：没拿到任何结果（超时/断网），可能保存了也可能没有。
+ */
+export type NoteDraftPendingState = 'none' | 'savedOnServer' | 'unconfirmed';
+
+export function getLocalNoteDraftPendingState(userId: string, draftId: string): NoteDraftPendingState {
+  const pending = readLocalNoteDraft(userId, draftId)?.pendingSubmission;
+  if (!pending) return 'none';
+  return pending.conflictingNoteId ? 'savedOnServer' : 'unconfirmed';
+}
+
+/**
+ * Stage deletion before removing content. A publication recovery marker blocks
+ * deletion unless the user explicitly chose to discard it after being told the
+ * outcome is unconfirmed (`discardPendingSubmission`).
+ */
+export function stageLocalNoteDraftDeletion(
+  userId: string,
+  draftId: string,
+  additionalRecordingIds: readonly string[] = [],
+  options: { discardPendingSubmission?: boolean } = {},
+): boolean {
   const record = readLocalNoteDraft(userId, draftId);
-  if (record?.pendingSubmission) return false;
+  if (record?.pendingSubmission && !options.discardPendingSubmission) return false;
   const pending = readDeletions(userId);
   const existing = pending.find((item) => item.id === draftId);
   writeDeletions(userId, [
