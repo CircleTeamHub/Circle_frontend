@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 test('动态 tab 使用社交动态语义的光圈图标', () => {
-  const layout = read('app/(tabs)/_layout.tsx');
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
 
   assert.match(
     layout,
@@ -16,8 +16,8 @@ test('动态 tab 使用社交动态语义的光圈图标', () => {
 });
 
 // 回归：深层页面隐藏 tab bar，返回 tab 根页时直接显示且不从底部滑入。
-test('tab bar 隐藏时不位移，返回根页直接显示', () => {
-  const layout = read('app/(tabs)/_layout.tsx');
+test('tab bar 隐藏时瞬时移出屏幕，返回根页直接显示', () => {
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
 
   // 不再用瞬间隐藏的 display:'none'，这是闪烁根因
   assert.doesNotMatch(
@@ -26,18 +26,23 @@ test('tab bar 隐藏时不位移，返回根页直接显示', () => {
     '不应再用 display:none 瞬间切换 tab bar',
   );
 
-  // 所有页面保持同一个 tab bar 挂载；深层页只透明并禁用触摸，不用位移或卸载。
+  // 所有页面保持同一个 tab bar 挂载；深层页瞬时挪出屏幕并禁用触摸，不卸载、不做动画。
   assert.match(layout, /useSegments/);
   assert.match(layout, /const hideTabBar = segments\.length > 2/);
   assert.match(layout, /hidden=\{hideTabBar\}/);
   assert.doesNotMatch(layout, /if \(hidden\) return null/);
   assert.doesNotMatch(layout, /hiddenProgress/);
-  assert.doesNotMatch(layout, /TAB_BAR_HIDDEN_OFFSET/);
   assert.doesNotMatch(layout, /TAB_BAR_ANIM_DURATION/);
   assert.doesNotMatch(layout, /TAB_BAR_EASING/);
   assert.doesNotMatch(layout, /translateY: hidden/);
   assert.match(layout, /pointerEvents=\{hidden \? 'none' : 'box-none'\}/);
-  assert.match(layout, /tabBarHidden: \{\s*opacity: 0/);
+  // 回归：隐藏不能动 opacity。GlassView / BlurView 祖先透明度归零会停掉材质层，
+  // 回到根页要重新生成材质，tab bar 会晚一拍（约 1 秒）才出现。
+  assert.match(
+    layout,
+    /tabBarHidden: \{\s*transform: \[\{ translateY: TAB_BAR_HIDDEN_OFFSET \}\]/,
+  );
+  assert.doesNotMatch(layout, /tabBarHidden: \{\s*opacity/);
   assert.match(layout, /animate: false/);
 
   // 用自定义 tabBar 包裹真正的 BottomTabBar（保留原生 tab 行为/徽标/高亮）
@@ -49,7 +54,7 @@ test('tab bar 隐藏时不位移，返回根页直接显示', () => {
 });
 
 test('自绘 tab bar：避开系统导航栏，选中态用弹性胶囊反馈当前 tab', () => {
-  const layout = read('app/(tabs)/_layout.tsx');
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
 
   // bar 是完整胶囊
   assert.match(layout, /const TAB_BAR_HEIGHT = \d+/);
@@ -84,7 +89,7 @@ test('自绘 tab bar：避开系统导航栏，选中态用弹性胶囊反馈当
 });
 
 test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降级', () => {
-  const layout = read('app/(tabs)/_layout.tsx');
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
   const pkg = JSON.parse(read('package.json'));
 
   // 只断言依赖在场：写死版本号会让每次例行 expo install --fix 都红在这里，
@@ -132,7 +137,7 @@ test('iOS tab bar 使用真液态玻璃，并为旧系统提供原生模糊降�
 });
 
 test('选中态在暗色下必须读得清，红点描边不能浮在玻璃上', () => {
-  const layout = read('app/(tabs)/_layout.tsx');
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
   const colorsSrc = read('src/theme/colors.ts');
 
   // brandPurple #7C5CF0 在暗色底 #1A1B23 上只有 3.79:1，9px 文字需要 4.5:1，
@@ -166,7 +171,7 @@ test('选中态在暗色下必须读得清，红点描边不能浮在玻璃上',
 });
 
 test('玻璃 tab bar 上要垫一层半透明底色，不能让下方内容直接透穿', () => {
-  const layout = read('app/(tabs)/_layout.tsx');
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
 
   // iOS 上 tabBar 自身底色是 transparent —— GlassView / BlurView 必须采样下方
   // 内容才有材质。代价是身下一有真实内容（动态 tab 现在直接就是圈子广场的
@@ -187,7 +192,7 @@ test('玻璃 tab bar 上要垫一层半透明底色，不能让下方内容直�
 });
 
 test('磨砂层在两条 iOS 路径上都要有——液态玻璃本身不提供磨砂强度', () => {
-  const layout = read('app/(tabs)/_layout.tsx');
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
 
   // expo-glass-effect 的 GlassView 只有 clear/regular/none，没有磨砂强度旋钮，
   // 液态玻璃偏"清透折射"而不是"磨砂扩散"。所以 iOS 26 这条路径要在玻璃之上
@@ -208,8 +213,36 @@ test('磨砂层在两条 iOS 路径上都要有——液态玻璃本身不提供
   assert.match(layout, /intensity=\{TAB_BAR_BLUR_INTENSITY\}/);
 });
 
-test('hidden tab bar leaves the accessibility tree and keyboard focus', () => {
+// 回归：原生端返回 tab 首页时 bar 晚约半秒才出现。全局浮层靠导航状态切显隐，
+// 而手势返回的状态要等原生转场结束才回调（真机实测 transitionEnd 后才收到）。
+// 正解是跟系统 App 一样：bar 属于首页内容，推入的页面盖住它，返回时随首页滑回。
+test('原生端 tab bar 由各 tab 首页渲染，不再靠导航状态切显隐', () => {
   const layout = read('app/(tabs)/_layout.tsx');
+  const root = read('src/components/app/tab-root-screen.tsx');
+
+  // 原生端 Tabs 只发布导航器 props，不渲染全局浮层；Web 仍走全局浮层。
+  assert.match(
+    layout,
+    /Platform\.OS === 'web' \? \(\s*<FloatingTabBar tabProps=\{props\} hidden=\{hideTabBar\} \/>\s*\) : \(\s*<TabBarBridge \{\.\.\.props\} \/>/,
+  );
+  assert.match(layout, /useLayoutEffect\(\(\) => \{\s*publish\(props\);/);
+
+  // 首页外壳在原生端把 bar 作为本页内容渲染，且永远不隐藏。
+  assert.match(root, /if \(Platform\.OS === 'web'\) return <>\{children\}<\/>/);
+  assert.match(root, /<FloatingTabBar tabProps=\{tabProps\} hidden=\{false\} \/>/);
+
+  // 四个 tab 首页都必须套上外壳，少一个那个 tab 就没有 bar。
+  for (const tab of ['messages', 'contacts', 'discover', 'profile']) {
+    assert.match(
+      read(`app/(tabs)/${tab}/index.tsx`),
+      /<TabRootScreen>[\s\S]*<\/TabRootScreen>/,
+      `${tab} 首页没有套 TabRootScreen`,
+    );
+  }
+});
+
+test('hidden tab bar leaves the accessibility tree and keyboard focus', () => {
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
   // 透明 + pointerEvents none 只挡住了触摸；读屏和网页键盘还能聚焦到看不见的按钮。
   assert.match(layout, /accessibilityElementsHidden=\{hidden\}/);
   assert.match(layout, /importantForAccessibility=\{hidden \? 'no-hide-descendants' : 'auto'\}/);

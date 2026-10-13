@@ -6,7 +6,7 @@ const path = require('node:path');
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 test('tabs keep per-tab stack state (popToTopOnBlur must stay off)', () => {
-  const layout = read('app/(tabs)/_layout.tsx');
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
   // 曾用 popToTopOnBlur 兜底跨 tab 压栈,但它会连正常的 tab 内浏览状态一起
   // 清掉。正确解法是圈子路由按 scope 镜像(聊天名片在本 tab 内打开),
   // tab 状态保留。
@@ -14,7 +14,7 @@ test('tabs keep per-tab stack state (popToTopOnBlur must stay off)', () => {
 });
 
 test('clicking 我的 pops the profile stack without an invalid nested reset', () => {
-  const layout = read('app/(tabs)/_layout.tsx');
+  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
   // 个人中心内打开商城等子页后，重新点击 tab 不能把子页状态带回来；
   // tabPress listener 已经针对真实的嵌套栈执行 popToTop，不能再向未知的
   // `index` 路由发 CommonActions.reset，否则 React Navigation 会报未处理 action。
