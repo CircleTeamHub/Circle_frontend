@@ -67,8 +67,11 @@ function readGroupsFromChatStore(accountId: string | null | undefined) {
     // The picker still has its direct API fallback if the store cannot load.
     return null;
   }
-  const { conversations } = useChatStore.getState();
-  return conversations.length > 0 ? groupsFromConversations(conversations) : null;
+  // 只有拿到过服务端全量快照才可信：从资料页「发消息」会先 upsert 单个私聊、
+  // 冷启动也会先灌本地残影，数组非空却不完整，拿它当权威会让选择器一个群都没有
+  // 还被缓存 5 分钟。全量快照下空列表就是真的没有群，直接返回。
+  const { conversations, conversationsSnapshotLoaded } = useChatStore.getState();
+  return conversationsSnapshotLoaded ? groupsFromConversations(conversations) : null;
 }
 
 function primeGroupsFromChatStore(accountId: string | null | undefined) {

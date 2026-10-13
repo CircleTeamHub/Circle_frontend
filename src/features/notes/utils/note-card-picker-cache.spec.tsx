@@ -60,7 +60,7 @@ const temp = { id: 'conv-temp', type: 'TEMP', circleId: null, lastMessageAt: nul
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGetChatState.mockReturnValue({ conversations: [] } as never);
+  mockGetChatState.mockReturnValue({ conversations: [], conversationsSnapshotLoaded: false } as never);
   jest.mocked(fetchFriends).mockResolvedValue([]);
   jest.mocked(loadChatConversations).mockResolvedValue([]);
 });
@@ -68,6 +68,7 @@ beforeEach(() => {
 test('lists every group chat I own — circle groups and standalone groups — not just circles', async () => {
   mockGetChatState.mockReturnValue({
     conversations: [direct, circleGroup, temp, memberGroup, standaloneGroup, adminCircleGroup],
+    conversationsSnapshotLoaded: true,
   } as never);
 
   const groups = await loadNotePickerGroups('account-a');
@@ -98,4 +99,24 @@ test('falls back to the conversation API when the chat store has not loaded yet'
     { id: 'circle-1', name: '圈子群', avatarUrl: undefined },
   ]);
   expect(fetchFriends).toHaveBeenCalledTimes(1);
+});
+
+test('a partial store (only a direct chat upserted before bootstrap) is not trusted', async () => {
+  // 从资料页「发消息」先 upsert 了一条私聊：数组非空，但还没拿到过全量快照。
+  mockGetChatState.mockReturnValue({ conversations: [direct], conversationsSnapshotLoaded: false } as never);
+  jest.mocked(loadChatConversations).mockResolvedValueOnce([direct, standaloneGroup] as never);
+
+  const groups = await loadNotePickerGroups('account-c');
+
+  expect(loadChatConversations).toHaveBeenCalledTimes(1);
+  expect(groups).toEqual([{ id: 'conv-standalone', name: '独立群', avatarUrl: 'https://cdn.test/g.png' }]);
+});
+
+test('a complete snapshot with no owned groups is authoritative and does not refetch', async () => {
+  mockGetChatState.mockReturnValue({ conversations: [direct], conversationsSnapshotLoaded: true } as never);
+
+  const groups = await loadNotePickerGroups('account-d');
+
+  expect(groups).toEqual([]);
+  expect(loadChatConversations).not.toHaveBeenCalled();
 });

@@ -40,7 +40,15 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
   const group = firstValid(note.cardPreview?.groups) ?? sourceGroup;
   const contactIsSource =
     contact !== null && from?.conversationType === 'private' && sourceSender?.id === contact.id;
-  const groupIsSource = group !== null && sourceGroup?.id === group.id;
+  // 旧版圈子卡片的 id 是 OpenIM groupID，路由要用服务端给的规范圈子 UUID。
+  const groupCircleId =
+    group && 'circleId' in group && typeof group.circleId === 'string' && group.circleId
+      ? group.circleId
+      : null;
+  const groupIsSource =
+    group !== null &&
+    sourceGroup !== null &&
+    (sourceGroup.id === group.id || sourceGroup.id === groupCircleId);
 
   return {
     contact: contact
@@ -53,7 +61,7 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
       : null,
     group: group
       ? {
-          id: group.id,
+          id: groupCircleId ?? group.id,
           name: group.name,
           faceURL: group.faceURL ?? null,
           // 独立群名片由服务端标注会话 id（卡片 id 不是圈子 id），必须按会话进群；

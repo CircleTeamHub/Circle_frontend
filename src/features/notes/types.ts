@@ -134,6 +134,8 @@ export interface NoteCardPeer {
   faceURL?: string | null;
   /** 仅独立群名片：服务端标注的群会话 id（卡片 id 就是会话 id，不是圈子 id）。 */
   conversationID?: string | null;
+  /** 仅圈子群名片：规范圈子 UUID。旧版卡片的 id 是 OpenIM groupID 时靠它路由。 */
+  circleId?: string | null;
 }
 
 export interface NoteCardPreview {

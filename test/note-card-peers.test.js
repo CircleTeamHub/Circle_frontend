@@ -93,3 +93,17 @@ test('名片就是收藏来源群时，仍以来源会话和原消息为准', ()
   }));
   assert.deepEqual(result.group, { id: 'src-group', name: '来源群', faceURL: null, conversationID: 'conv-g', clientMsgID: 'msg-1' });
 });
+
+test('旧版圈子群名片（id 是 OpenIM groupID）按服务端给的规范圈子 id 进群', () => {
+  const result = plain(resolveNoteCardButtons({
+    cardPreview: { contacts: [], groups: [{ id: 'legacy-group-id', circleId: 'circle-uuid', name: '老圈子', conversationID: null }] },
+  }));
+  assert.equal(result.group.id, 'circle-uuid');
+  assert.equal(result.group.conversationID, undefined);
+  // 收藏来源记的是规范圈子 id 时也认得出是同一个群，照样带原消息。
+  const collected = plain(resolveNoteCardButtons({
+    collectedFrom: { ...groupSource, group: { id: 'circle-uuid', name: '老圈子' } },
+    cardPreview: { contacts: [], groups: [{ id: 'legacy-group-id', circleId: 'circle-uuid', name: '老圈子' }] },
+  }));
+  assert.equal(collected.group.clientMsgID, 'msg-1');
+});
