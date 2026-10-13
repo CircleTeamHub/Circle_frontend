@@ -138,15 +138,17 @@ test('an unconfirmed draft explains the risk and is deleted only after "delete a
   } finally { view.unmount(); alert.mockRestore(); }
 });
 
-test('a draft the server already saved as a note says so and deletes normally', async () => {
-  saveLocalNoteDraft('a', localDraft('saved', { pendingSubmission: pendingSubmission('saved', { conflictingNoteId: 'note-1' }) }));
+test('a draft whose server result mismatched the snapshot still warns about losing content', async () => {
+  // 服务端回过笔记、但与本地快照不一致（例如正文结构被丢）：本地草稿可能是唯一完整副本。
+  saveLocalNoteDraft('a', localDraft('mismatch', { pendingSubmission: pendingSubmission('mismatch', { conflictingNoteId: 'note-1' }) }));
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const view = render(<DraftsScreen />);
   try {
-    await screen.findByText('saved');
-    confirmDelete(alert);
-    expect(alert.mock.calls.at(-1)?.[1]).toBe('notes.drafts.deleteSavedMessage');
-    expect(screen.queryByText('saved')).toBeNull(); expect(loadLocalNoteDraft('a', 'saved')).toBeNull();
-    await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith('saved'));
+    await screen.findByText('mismatch');
+    fireEvent.press(screen.getAllByLabelText('notes.drafts.deleteLabel')[0]);
+    expect(alert.mock.calls.at(-1)?.[1]).toBe('notes.drafts.deleteUnconfirmedMessage');
+    pressAlertButton(alert, 'notes.drafts.deleteAnyway');
+    expect(screen.queryByText('mismatch')).toBeNull(); expect(loadLocalNoteDraft('a', 'mismatch')).toBeNull();
+    await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith('mismatch'));
   } finally { view.unmount(); alert.mockRestore(); }
 });
 
@@ -185,6 +187,20 @@ test('an old DELETE response cannot clear another account retry queue or hide it
     expect(loadPendingNoteDraftDeletions('a')).toEqual(['same-draft']); expect(loadPendingNoteDraftDeletions('b')).toEqual([]);
     expect(screen.queryByText('notes.drafts.deletePending')).toBeNull();
   } finally { deletion.resolve(); view.unmount(); alert.mockRestore(); }
+});
+
+test('a failed deletion banner from one account does not follow the screen to the next account', async () => {
+  saveLocalNoteDraft('a', localDraft('a-failed')); saveLocalNoteDraft('b', localDraft('b-draft'));
+  jest.mocked(deleteNoteDraft).mockRejectedValueOnce(new Error('offline'));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const view = render(<DraftsScreen />);
+  try {
+    await screen.findByText('a-failed'); confirmDelete(alert);
+    await screen.findByText('notes.drafts.deletePending');
+    mockAuth.user = { id: 'b' }; mockAuth.sessionEpoch += 1; view.rerender(<DraftsScreen />);
+    await screen.findByText('b-draft');
+    await waitFor(() => expect(screen.queryByText('notes.drafts.deletePending')).toBeNull());
+    expect(loadPendingNoteDraftDeletions('a')).toEqual(['a-failed']);
+  } finally { view.unmount(); alert.mockRestore(); }
 });
 
 test('multiple retry clicks and queued deletions issue one server DELETE at a time', async () => {

@@ -2342,7 +2342,9 @@ export default function EditNoteScreen() {
     setCardPickerKind(kind);
     setCardPickerSearch('');
     const current = kind === 'contact' ? contactItems : groupCardItems;
-    setSelectedCardIds(current.map((item) => item.id));
+    // 名片是单选；旧版本多选留下的多张名片，打开选择器时只认第一张，
+    // 避免多个单选项同时亮起、点一下全清空，确认后也只保留一张。
+    setSelectedCardIds(current.slice(0, 1).map((item) => item.id));
     const cachedFriends = kind === 'contact'
       ? getCachedNotePickerFriends(accountId)
       : null;
@@ -2409,6 +2411,7 @@ export default function EditNoteScreen() {
       closeCardPicker();
       return;
     }
+    // 单选不变量在确认时再兜一次底：无论选中集合里有几项，最多落一张名片。
     if (cardPickerKind === 'contact') {
       setContactItems([
         ...contactItems.filter((item) => selectedCardIds.includes(item.id) && !contactPickerItems.some((option) => option.id === item.id)),
@@ -2417,7 +2420,7 @@ export default function EditNoteScreen() {
           name: item.name,
           faceURL: item.avatarUrl,
         })),
-      ]);
+      ].slice(0, 1));
     } else {
       setGroupCardItems([
         ...groupCardItems.filter((item) => selectedCardIds.includes(item.id) && !groupOptions.some((option) => option.id === item.id)),
@@ -2426,7 +2429,7 @@ export default function EditNoteScreen() {
           name: group.name,
           faceURL: group.avatarUrl ?? null,
         })),
-      ]);
+      ].slice(0, 1));
     }
     closeCardPicker();
   }, [cardPickerKind, groupOptions, contactPickerItems, contactItems, groupCardItems, closeCardPicker, selectedCardIds, sourceGroupCardLocked]);

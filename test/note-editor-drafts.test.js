@@ -194,15 +194,16 @@ test('a latest publication recovery marker blocks deletion despite an older summ
   assert.deepEqual(JSON.parse(JSON.stringify(utils.loadPendingNoteDraftDeletions('owner'))), []);
 });
 
-test('pending publication state is readable so the drafts list can explain a blocked delete', () => {
+test('any publication recovery marker counts as pending, including a mismatched server result', () => {
   const store = memoryStorage(); const utils = loadDraftUtils({}, store);
   utils.saveLocalNoteDraft('owner', draft('plain'));
-  assert.equal(utils.getLocalNoteDraftPendingState('owner', 'plain'), 'none');
+  assert.equal(utils.hasLocalNoteDraftPendingSubmission('owner', 'plain'), false);
   utils.saveLocalNoteDraft('owner', { ...draft('unknown'), pendingSubmission: { noteId: null, input: { title: 'x', media: [], clientDraftID: 'unknown' } } });
-  assert.equal(utils.getLocalNoteDraftPendingState('owner', 'unknown'), 'unconfirmed');
-  // 服务端已经回了一条笔记（只是快照比对不一致）：内容已落库，删草稿不会丢东西。
-  utils.saveLocalNoteDraft('owner', { ...draft('saved'), pendingSubmission: { noteId: null, conflictingNoteId: 'note-1', input: { title: 'x', media: [], clientDraftID: 'saved' } } });
-  assert.equal(utils.getLocalNoteDraftPendingState('owner', 'saved'), 'savedOnServer');
+  assert.equal(utils.hasLocalNoteDraftPendingSubmission('owner', 'unknown'), true);
+  // 服务端回了笔记但与快照不一致：回来的笔记可能缺内容（例如正文结构被丢），本地草稿
+  // 可能是唯一完整副本 —— 不能当成「已安全保存」。
+  utils.saveLocalNoteDraft('owner', { ...draft('mismatch'), pendingSubmission: { noteId: null, conflictingNoteId: 'note-1', input: { title: 'x', media: [], clientDraftID: 'mismatch' } } });
+  assert.equal(utils.hasLocalNoteDraftPendingSubmission('owner', 'mismatch'), true);
 });
 
 test('an explicit discard deletes a draft even when it carries a publication recovery marker', () => {

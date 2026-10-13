@@ -204,3 +204,12 @@ test('attached contact and group cards activate their destinations', () => {
   expect(contact).toHaveBeenCalledWith('friend-id', 'Friend');
   expect(group).toHaveBeenCalledWith('circle-id', 'Group');
 });
+
+test('a standalone group card passes its server-marked conversation id so it opens the chat', () => {
+  const group = jest.fn();
+  render(<NoteBlockRenderer onGroupPress={group} blocks={[
+    { type: 'group', props: { id: 'conv-uuid', conversationID: 'conv-uuid', name: 'Standalone' } },
+  ]} />);
+  fireEvent.press(screen.getByRole('button', { name: 'Standalone' }));
+  expect(group).toHaveBeenCalledWith('conv-uuid', 'Standalone', 'conv-uuid');
+});

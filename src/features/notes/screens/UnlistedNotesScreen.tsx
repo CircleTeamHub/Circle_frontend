@@ -108,13 +108,26 @@ export default function UnlistedNotesScreen() {
 
   const closeMenu = useCallback(() => setMenuNote(null), []);
 
+  // 上架/删除已在服务端成功：这行一定离开「已下架」列表。先本地移除（真实且乐观），
+  // 再刷新；刷新失败不能再报「上架/删除失败」，否则用户会对已成功的操作反复重试。
+  // load() 自带序号，会作废在飞的旧刷新（其响应还包含这一行）。
+  const removeSettledNote = useCallback(
+    (noteId: string) => {
+      if (!mountedRef.current) return;
+      setNotes((current) => current.filter((item) => item.id !== noteId));
+      void load().catch(() => {
+        // 列表下次 focus / 下拉时自然重试
+      });
+    },
+    [load],
+  );
+
   const handleRelistNote = useCallback(async () => {
     const note = menuNote;
     if (!note) return;
     closeMenu();
     try {
       await relistNote(note.id);
-      if (mountedRef.current) await load();
     } catch {
       if (mountedRef.current) {
         Alert.alert(
@@ -122,8 +135,10 @@ export default function UnlistedNotesScreen() {
           t('common.retryLater', { defaultValue: '请稍后重试' }),
         );
       }
+      return;
     }
-  }, [closeMenu, load, menuNote, t]);
+    removeSettledNote(note.id);
+  }, [closeMenu, menuNote, removeSettledNote, t]);
 
   // 删除是软删除：笔记进回收站（30 天后自动清除），与「我的笔记」列表的删除同一个接口。
   const handleDeleteNote = useCallback(() => {
@@ -143,7 +158,6 @@ export default function UnlistedNotesScreen() {
           onPress: async () => {
             try {
               await deleteNote(note.id);
-              if (mountedRef.current) await load();
             } catch {
               if (mountedRef.current) {
                 Alert.alert(
@@ -151,12 +165,14 @@ export default function UnlistedNotesScreen() {
                   t('common.retryLater', { defaultValue: '请稍后重试' }),
                 );
               }
+              return;
             }
+            removeSettledNote(note.id);
           },
         },
       ],
     );
-  }, [closeMenu, load, menuNote, t]);
+  }, [closeMenu, menuNote, removeSettledNote, t]);
 
   const d = useMemo(
     () => ({

@@ -1806,6 +1806,38 @@ test.each(['contact', 'group'] as const)('clears %s picker rows and ignores the 
 });
 
 
+test('a legacy note with several contact cards opens the single-select picker with one card and saves one', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft({ sections: {
+    contacts: { items: [{ id: 'friend-1', name: 'One', faceURL: null }, { id: 'friend-2', name: 'Two', faceURL: null }] },
+  } }));
+  mockCachedFriends.mockReturnValue([
+    { id: 'friend-1', nickname: 'One', remark: '', accountId: 'one' },
+    { id: 'friend-2', nickname: 'Two', remark: '', accountId: 'two' },
+  ]);
+  mockPickerFriends.mockResolvedValue([
+    { id: 'friend-1', nickname: 'One', remark: '', accountId: 'one' },
+    { id: 'friend-2', nickname: 'Two', remark: '', accountId: 'two' },
+  ]);
+  jest.mocked(createNote).mockImplementationOnce(async (input) => noteResult(input));
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.contact' }));
+    fireEvent.press(screen.getByText('notes.edit.addContact'));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Two' })).toBeTruthy());
+    // 旧数据两张名片都在，但单选器里只亮第一张。
+    expect(screen.getByRole('radio', { name: 'One' }).props.accessibilityState?.checked).toBe(true);
+    expect(screen.getByRole('radio', { name: 'Two' }).props.accessibilityState?.checked).toBe(false);
+    expect(screen.getAllByRole('radio').filter((row) => row.props.accessibilityState?.checked)).toHaveLength(1);
+    // 不做任何点选直接确认：也只保留一张。
+    fireEvent.press(screen.getByText('common.done'));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(jest.mocked(createNote).mock.calls.at(-1)?.[0].sections?.contacts?.items?.map((item) => item.id)).toEqual(['friend-1']);
+  } finally { rendered.unmount(); }
+});
+
 test('a later edit of the same note uses a fresh draft lifecycle ID', async () => {
   mockRouteId = 'same-note';
   const submit = async () => {

@@ -407,16 +407,12 @@ export function removeLocalNoteDraft(
 }
 
 /**
- * 草稿上挂着的「提交结果未确认」标记：
- * - savedOnServer：服务端已经回了一条笔记（只是与本地快照比对不一致），内容已落库；
- * - unconfirmed：没拿到任何结果（超时/断网），可能保存了也可能没有。
+ * 草稿是否挂着「提交结果未确认」标记。服务端回过笔记但与本地快照不一致
+ * （conflictingNoteId）同样算未确认：回来的笔记可能缺内容（例如正文结构被丢），
+ * 本地草稿可能是唯一完整的副本，删除前必须按「可能丢内容」提示。
  */
-export type NoteDraftPendingState = 'none' | 'savedOnServer' | 'unconfirmed';
-
-export function getLocalNoteDraftPendingState(userId: string, draftId: string): NoteDraftPendingState {
-  const pending = readLocalNoteDraft(userId, draftId)?.pendingSubmission;
-  if (!pending) return 'none';
-  return pending.conflictingNoteId ? 'savedOnServer' : 'unconfirmed';
+export function hasLocalNoteDraftPendingSubmission(userId: string, draftId: string): boolean {
+  return Boolean(readLocalNoteDraft(userId, draftId)?.pendingSubmission);
 }
 
 /**

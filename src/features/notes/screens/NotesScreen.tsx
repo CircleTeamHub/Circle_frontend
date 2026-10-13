@@ -1021,15 +1021,20 @@ export default function NotesScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
+  // minHeight 而不是固定高度：右侧入口带文字，系统大字号下会比 44 略高。
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 44,
+    gap: Spacing.sm,
+    minHeight: 44,
   },
+  // 占满返回键之外的宽度并允许收缩，入口再多再长也不会被挤出屏幕。
   headerRight: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: Spacing.md,
   },
   pageTitle: { ...Typography.h1, marginTop: Spacing.xs },

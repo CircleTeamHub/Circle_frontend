@@ -77,7 +77,11 @@ export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
               accessibilityLabel={action.label}
             >
               <Ionicons name={action.icon} size={15} color={colors.textSecondary} />
-              <Text style={[s.pillLabel, d.label]} numberOfLines={1}>
+              <Text
+                style={[s.pillLabel, d.label]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={HEADER_LABEL_MAX_FONT_SCALE}
+              >
                 {action.label}
               </Text>
             </Pressable>
@@ -97,7 +101,11 @@ export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
             accessibilityLabel={action.label}
           >
             <Ionicons name={action.icon} size={18} color={colors.text} />
-            <Text style={[s.tileLabel, d.label]} numberOfLines={1}>
+            <Text
+              style={[s.tileLabel, d.label]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={HEADER_LABEL_MAX_FONT_SCALE}
+            >
               {action.label}
             </Text>
           </Pressable>
@@ -107,13 +115,22 @@ export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
   },
 );
 
+/**
+ * 页头只有一行：返回键 + 三个入口。系统大字号下标签继续放大会把入口挤出屏幕，
+ * 这里把标签放大上限定在 1.3 倍（无障碍朗读仍读完整标签），超出的宽度靠
+ * 方块收缩 + 单行省略消化。
+ */
+const HEADER_LABEL_MAX_FONT_SCALE = 1.3;
+
 const s = StyleSheet.create({
   pillRow: {
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
   },
   pill: {
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
@@ -121,22 +138,26 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: Radius.pill,
   },
-  pillLabel: { ...Typography.small, fontWeight: '500' },
+  pillLabel: { flexShrink: 1, ...Typography.small, fontWeight: '500' },
   tileRow: {
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
   },
+  // 可以收缩（窄屏 + 大字号时三块平分剩余宽度），但不小于 44 的点击区域。
   tile: {
-    minWidth: 52,
-    minHeight: 48,
+    flexShrink: 1,
+    minWidth: 44,
+    maxWidth: 88,
+    minHeight: 44,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs + 2,
+    paddingVertical: Spacing.xs,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
   },
   tilePressed: { opacity: 0.5 },
-  tileLabel: { fontSize: 11, lineHeight: 14, fontWeight: '500' },
+  tileLabel: { maxWidth: '100%', fontSize: 11, lineHeight: 14, fontWeight: '500' },
 });

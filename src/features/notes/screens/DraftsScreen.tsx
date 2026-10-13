@@ -20,7 +20,7 @@ import { fetchNoteDrafts, deleteNoteDraft } from '@/services/api/notes';
 import type { NoteDraftSummary } from '@/features/notes/types';
 import {
   loadLocalNoteDraftSummaries,
-  getLocalNoteDraftPendingState,
+  hasLocalNoteDraftPendingSubmission,
   stageLocalNoteDraftDeletion,
   finishLocalNoteDraftDeletion,
   confirmNoteDraftDeletion,
@@ -104,11 +104,18 @@ export default function DraftsScreen() {
       } finally {
         if (mountedRef.current && isCurrentSession()) setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
       }
-    } } finally { deletionRunRef.current.delete(sessionKey); }
+    } } finally {
+      deletionRunRef.current.delete(sessionKey);
+      // 队列为空（含换账号后新会话本来就没有待删项）时也要落一次真实计数，
+      // 不能让上一个会话失败留下的提示条挂到当前会话上。
+      if (mountedRef.current && isCurrentSession()) setPendingDeleteCount(loadPendingNoteDraftDeletions(userId).length);
+    }
   }, [userId, isCurrentSession, sessionKey]);
 
   const load = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
+    // 换了账号/会话：上一个会话的待删提示立即清掉，新会话的计数等 retryDeletions 落定。
+    if (loadedSessionRef.current !== sessionKey) setPendingDeleteCount(0);
     loadedSessionRef.current = sessionKey;
     const local = userId ? loadLocalNoteDraftSummaries(userId) : [];
     setItems(mergeDrafts(local, []));
@@ -179,26 +186,22 @@ export default function DraftsScreen() {
 
   const removeDraft = useCallback(
     (item: DraftListItem) => {
-      // 带「提交结果未确认」标记的草稿不再一律拒删：说明实际情况后由用户决定。
-      // 服务端回过笔记 → 内容已落库，删草稿不丢东西；完全没结果 → 明确告知可能丢内容。
-      const pendingState = userId ? getLocalNoteDraftPendingState(userId, item.id) : 'none';
-      const message =
-        pendingState === 'savedOnServer'
-          ? t('notes.drafts.deleteSavedMessage')
-          : pendingState === 'unconfirmed'
-            ? t('notes.drafts.deleteUnconfirmedMessage')
-            : t('notes.drafts.deleteMessage', { defaultValue: '删除后无法恢复。' });
+      // 带「提交结果未确认」标记的草稿不再一律拒删：明确提示可能丢内容，由用户决定。
+      // 服务端回过笔记但内容不一致也按未确认处理（回来的笔记可能不完整）。
+      const pending = userId ? hasLocalNoteDraftPendingSubmission(userId, item.id) : false;
       Alert.alert(
         t('notes.drafts.deleteTitle', { defaultValue: '删除草稿？' }),
-        message,
+        pending
+          ? t('notes.drafts.deleteUnconfirmedMessage')
+          : t('notes.drafts.deleteMessage', { defaultValue: '删除后无法恢复。' }),
         [
           { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
           {
-            text: pendingState === 'unconfirmed'
+            text: pending
               ? t('notes.drafts.deleteAnyway')
               : t('common.delete', { defaultValue: '删除' }),
             style: 'destructive',
-            onPress: () => performDelete(item, pendingState !== 'none'),
+            onPress: () => performDelete(item, pending),
           },
         ],
       );

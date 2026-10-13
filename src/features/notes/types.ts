@@ -132,6 +132,8 @@ export interface NoteCardPeer {
   id: string;
   name: string;
   faceURL?: string | null;
+  /** 仅独立群名片：服务端标注的群会话 id（卡片 id 就是会话 id，不是圈子 id）。 */
+  conversationID?: string | null;
 }
 
 export interface NoteCardPreview {

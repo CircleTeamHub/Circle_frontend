@@ -74,3 +74,22 @@ test('缺 id 或名称的坏数据跳过，取下一个有效名片', () => {
   assert.equal(result.contact.id, 'u2');
   assert.equal(result.group, null);
 });
+
+test('独立群名片带服务端标注的会话 id：按会话进群（卡片 id 不是圈子 id）', () => {
+  const result = plain(resolveNoteCardButtons({
+    collectedFrom: null,
+    cardPreview: { contacts: [], groups: [{ id: 'conv-uuid', name: '独立群', conversationID: 'conv-uuid' }] },
+  }));
+  assert.deepEqual(result.group, { id: 'conv-uuid', name: '独立群', faceURL: null, conversationID: 'conv-uuid' });
+  // 圈子群名片没有 conversationID：维持按圈子进群。
+  const circle = plain(resolveNoteCardButtons({ cardPreview: { contacts: [], groups: [{ id: 'circle-1', name: '圈子群' }] } }));
+  assert.equal(circle.group.conversationID, undefined);
+});
+
+test('名片就是收藏来源群时，仍以来源会话和原消息为准', () => {
+  const result = plain(resolveNoteCardButtons({
+    collectedFrom: groupSource,
+    cardPreview: { contacts: [], groups: [{ id: 'src-group', name: '来源群', conversationID: 'conv-g' }] },
+  }));
+  assert.deepEqual(result.group, { id: 'src-group', name: '来源群', faceURL: null, conversationID: 'conv-g', clientMsgID: 'msg-1' });
+});

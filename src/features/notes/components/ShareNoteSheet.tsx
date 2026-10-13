@@ -62,6 +62,9 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
   // 确认前的状态重取进行中；防止连点弹出两个确认框。
   const checkingRef = useRef(false);
   const sendTimestampsRef = useRef<number[]>([]);
+  // 面板一次「打开」的代数：关闭即作废。面板关闭后组件仍挂载，发送前的状态重取
+  // 若在关闭之后才返回，必须丢弃，不能在用户已经关掉面板后静默发出去。
+  const openGenerationRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -76,6 +79,7 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
       setQuery('');
       setSelectedIds(new Set());
       setRetryTasks([]);
+      openGenerationRef.current += 1;
     }
   }, [visible]);
 
@@ -198,12 +202,19 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
     // 弹层里的状态是打开时的快照；发送前按来源实时状态重取一次，提醒才可信。
     if (checkingRef.current) return;
     checkingRef.current = true;
+    const generation = openGenerationRef.current;
+    const isSameOpening = () =>
+      mountedRef.current && openGenerationRef.current === generation;
     void (async () => {
-      const freshPayloads = await withFreshNoteSourceStatus(
-        tasks.map((task) => task.payload),
-      );
-      checkingRef.current = false;
-      if (!mountedRef.current) return;
+      let freshPayloads: NoteCardSendTask['payload'][];
+      try {
+        freshPayloads = await withFreshNoteSourceStatus(
+          tasks.map((task) => task.payload),
+        );
+      } finally {
+        checkingRef.current = false;
+      }
+      if (!isSameOpening()) return;
       const freshTasks = tasks.map((task, index) => ({
         ...task,
         payload: freshPayloads[index] ?? task.payload,
@@ -224,7 +235,13 @@ export function ShareNoteSheet({ payloads, onClose }: ShareNoteSheetProps) {
         }),
         [
           { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-          { text: t('common.send', { defaultValue: '发送' }), onPress: () => performSend(freshTasks) },
+          {
+            text: t('common.send', { defaultValue: '发送' }),
+            // 提醒弹出后面板若已被关掉（或重新打开换了收件人），这次确认作废。
+            onPress: () => {
+              if (isSameOpening()) performSend(freshTasks);
+            },
+          },
         ],
         { cancelable: true },
       );

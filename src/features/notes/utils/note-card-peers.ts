@@ -56,9 +56,13 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
           id: group.id,
           name: group.name,
           faceURL: group.faceURL ?? null,
+          // 独立群名片由服务端标注会话 id（卡片 id 不是圈子 id），必须按会话进群；
+          // 与收藏来源是同一个群时还带原消息 id，进群直接定位。
           ...(groupIsSource && from
             ? { conversationID: from.conversationID, clientMsgID: from.clientMsgID }
-            : {}),
+            : 'conversationID' in group && typeof group.conversationID === 'string' && group.conversationID
+              ? { conversationID: group.conversationID }
+              : {}),
         }
       : null,
   };
