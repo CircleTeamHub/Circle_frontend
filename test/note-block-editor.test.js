@@ -255,3 +255,25 @@ test('inserted media blocks carry the object key and known metadata', () => {
   assert.equal(blocks[0].props.height, 80);
   assert.equal(blocks[0].props.mimeType, 'image/jpeg');
 });
+
+// 用户反馈：文本框工具栏的「标题（H）」和「<>（代码，看着像《》）」删掉；
+// 文字块可写区域太小，整体放大并收紧层层叠加的内边距。
+test('note text editor toolbar offers only paragraph and list, and the text block gets more room', () => {
+  const dom = fs.readFileSync(path.join(__dirname, '..', 'src/features/notes/dom/NoteBlockEditor.dom.tsx'), 'utf8');
+  const screen = fs.readFileSync(path.join(__dirname, '..', 'src/features/notes/screens/EditNoteScreen.tsx'), 'utf8');
+
+  assert.doesNotMatch(dom, /label: 'H'/);
+  assert.doesNotMatch(dom, /\{'<>'\}/);
+  assert.doesNotMatch(dom, /headingType|codeTitle/);
+  assert.match(dom, /\{ label: 'T', type: 'paragraph'/);
+  assert.match(dom, /\{ label: '≡', type: 'bulletListItem'/);
+  assert.match(dom, /\.note-editor \.bn-editor \{\s*padding: 8px 10px;/);
+
+  assert.match(screen, /const DEFAULT_TEXT_EDITOR_HEIGHT = 360;/);
+  assert.match(screen, /const MIN_TEXT_EDITOR_HEIGHT = 240;/);
+  assert.match(screen, /textEditorFrame: \{[\s\S]*?marginHorizontal: -Spacing\.sm,/);
+  // 纵向留白也收紧：文字卡片上下与间距用 8，拖动条 20。
+  assert.match(screen, /textSectionBlock: \{\s*paddingVertical: Spacing\.sm,\s*gap: Spacing\.sm,/);
+  assert.match(screen, /<View style=\{\[s\.sectionBlock, s\.textSectionBlock, d\.sectionShell\]\}>/);
+  assert.match(screen, /const TEXT_EDITOR_RESIZE_HANDLE_HEIGHT = 20;/);
+});

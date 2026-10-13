@@ -221,10 +221,12 @@ const COMPOSER_ACTIONS: readonly {
 const FIXED_TITLE_BLOCK: NoteComposerBlock = { id: 'title-fixed', kind: 'title' };
 
 const COMPOSER_SORT_ROW_HEIGHT = 58;
-const DEFAULT_TEXT_EDITOR_HEIGHT = 200;
-const MIN_TEXT_EDITOR_HEIGHT = 200;
+// 文字块是笔记的主体：默认给到能写十来行的高度，最小也留出 240，
+// 免得扣掉工具栏后只剩两三行可见。
+const DEFAULT_TEXT_EDITOR_HEIGHT = 360;
+const MIN_TEXT_EDITOR_HEIGHT = 240;
 const MAX_TEXT_EDITOR_HEIGHT = 640;
-const TEXT_EDITOR_RESIZE_HANDLE_HEIGHT = 26;
+const TEXT_EDITOR_RESIZE_HANDLE_HEIGHT = 20;
 
 const VIDEO_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
@@ -3226,7 +3228,7 @@ export default function EditNoteScreen() {
         const textEditorResizeResponder = getTextEditorResizeResponder(block.id);
         return (
           <>
-        <View style={[s.sectionBlock, d.sectionShell]}>
+        <View style={[s.sectionBlock, s.textSectionBlock, d.sectionShell]}>
           {renderSectionHeader(
             'text-outline',
             t('notes.edit.sections.text', { defaultValue: '文字' }),
@@ -4128,8 +4130,9 @@ export default function EditNoteScreen() {
                       <Pressable
                         key={item.id}
                         style={[s.cardPickerRow, d.groupSheetRow]}
-                        onPress={() => setSelectedCardIds((current) => selected ? current.filter((id) => id !== item.id) : [...current, item.id])}
-                        accessibilityRole="checkbox"
+                        // 个人名片一篇笔记只放一张：单选，选另一个人就替换掉当前这张。
+                        onPress={() => setSelectedCardIds(selected ? [] : [item.id])}
+                        accessibilityRole="radio"
                         accessibilityLabel={item.name}
                         accessibilityState={{ checked: selected }}
                       >
@@ -4163,8 +4166,9 @@ export default function EditNoteScreen() {
                       <Pressable
                         key={item.id}
                         style={[s.cardPickerRow, d.groupSheetRow]}
-                        onPress={() => setSelectedCardIds((current) => selected ? current.filter((id) => id !== item.id) : [...current, item.id])}
-                        accessibilityRole="checkbox"
+                        // 群名片同样一篇只放一张：单选，选另一个群就替换。
+                        onPress={() => setSelectedCardIds(selected ? [] : [item.id])}
+                        accessibilityRole="radio"
                         accessibilityLabel={item.name}
                         accessibilityState={{ checked: selected }}
                       >
@@ -4378,11 +4382,11 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.xs,
-    minHeight: 60,
-    maxHeight: 84,
-    fontSize: 24,
+    minHeight: 56,
+    maxHeight: 76,
+    fontSize: 20,
     fontWeight: '700',
-    lineHeight: 30,
+    lineHeight: 26,
   },
   metaRow: {
     flexDirection: 'row',
@@ -4576,6 +4580,12 @@ const s = StyleSheet.create({
     padding: Spacing.md,
     gap: Spacing.md,
   },
+  // 文字块把纵向留白收紧到 8：卡片上下、标题与编辑框之间都不需要整档 16，
+  // 省下的高度都给可写区域。
+  textSectionBlock: {
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
   secondarySection: {
     marginHorizontal: Spacing.lg,
     marginBottom: 0,
@@ -4621,6 +4631,9 @@ const s = StyleSheet.create({
   textEditorFrame: {
     height: DEFAULT_TEXT_EDITOR_HEIGHT,
     minHeight: MIN_TEXT_EDITOR_HEIGHT,
+    // 卡片内边距 + 编辑器内边距叠起来太宽：编辑框向两侧撑出 8pt 贴近卡片边，
+    // 卡片标题行仍与其他区块对齐。
+    marginHorizontal: -Spacing.sm,
     overflow: 'hidden',
     borderRadius: Radius.md,
     borderCurve: 'continuous',

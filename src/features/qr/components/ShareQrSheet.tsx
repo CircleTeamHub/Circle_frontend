@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -13,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
-import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
+import { BottomSheetModal, BottomSheetFlatList } from '@/components/ui/bottom-sheet-modal';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { loadChatConversations } from '@/chat-core/api';
 import { sendCardMessage } from '@/chat-core/client';
@@ -105,7 +104,6 @@ export function ShareQrSheet({ card, onClose }: ShareQrSheetProps) {
       backdrop: { backgroundColor: colors.overlay },
       sheet: { backgroundColor: colors.surface },
       handle: { backgroundColor: colors.surfaceBorder },
-      title: { color: colors.text },
       name: { color: colors.text },
       hint: { color: colors.textSecondary },
       separator: { backgroundColor: colors.divider },
@@ -118,56 +116,33 @@ export function ShareQrSheet({ card, onClose }: ShareQrSheetProps) {
 
   const send = useCallback(
     (conversation: Conversation) => {
+      // 点选即发：不再弹发送确认，成功后直接收起面板、不再弹「已发送」。
       if (!card || inFlightRef.current) return;
-      Alert.alert(
-        t('qr.shareToChat.confirmTitle', { defaultValue: '发送二维码' }),
-        t('qr.shareToChat.confirmMessage', {
-          subject: card.name,
-          name: conversation.name,
-          defaultValue: `把「${card.name}」的二维码发送给 ${conversation.name}？`,
-        }),
-        [
-          { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-          {
-            text: t('common.send', { defaultValue: '发送' }),
-            onPress: () => {
-              if (inFlightRef.current) return;
-              inFlightRef.current = true;
-              setSendingId(conversation.id);
-              void sendCardMessage({
-                conversationId: conversation.id,
-                type: 'qr-card',
-                payload: card,
-              })
-                .then(() => {
-                  if (!mountedRef.current) return;
-                  onClose();
-                  Alert.alert(
-                    t('qr.shareToChat.sentTitle', { defaultValue: '已发送' }),
-                    t('qr.shareToChat.sentMessage', {
-                      defaultValue: '二维码已发送到聊天。',
-                    }),
-                  );
-                })
-                .catch(() => {
-                  if (!mountedRef.current) return;
-                  // 失败不给 error.message —— 那可能是上传/网络层的英文原文。
-                  Alert.alert(
-                    t('qr.shareToChat.failedTitle', { defaultValue: '发送失败' }),
-                    t('qr.shareToChat.failedMessage', {
-                      defaultValue: '二维码没能发出去，请稍后重试。',
-                    }),
-                  );
-                })
-                .finally(() => {
-                  inFlightRef.current = false;
-                  if (mountedRef.current) setSendingId('');
-                });
-            },
-          },
-        ],
-        { cancelable: true },
-      );
+      inFlightRef.current = true;
+      setSendingId(conversation.id);
+      void sendCardMessage({
+        conversationId: conversation.id,
+        type: 'qr-card',
+        payload: card,
+      })
+        .then(() => {
+          if (!mountedRef.current) return;
+          onClose();
+        })
+        .catch(() => {
+          if (!mountedRef.current) return;
+          // 失败不给 error.message —— 那可能是上传/网络层的英文原文。
+          Alert.alert(
+            t('qr.shareToChat.failedTitle', { defaultValue: '发送失败' }),
+            t('qr.shareToChat.failedMessage', {
+              defaultValue: '二维码没能发出去，请稍后重试。',
+            }),
+          );
+        })
+        .finally(() => {
+          inFlightRef.current = false;
+          if (mountedRef.current) setSendingId('');
+        });
     },
     [card, onClose, t],
   );
@@ -217,9 +192,6 @@ export function ShareQrSheet({ card, onClose }: ShareQrSheetProps) {
       sheetStyle={[s.sheet, d.sheet, { paddingBottom: insets.bottom || Spacing.lg }]}
     >
       <View style={[s.handle, d.handle]} />
-      <Text style={[s.title, d.title]}>
-        {t('qr.shareToChat.title', { defaultValue: '分享给好友或群聊' })}
-      </Text>
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator color={colors.primary} />
@@ -284,7 +256,7 @@ export function ShareQrSheet({ card, onClose }: ShareQrSheetProps) {
               </Text>
             </View>
           ) : (
-            <FlatList
+            <BottomSheetFlatList
               data={visibleConversations}
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
@@ -312,12 +284,8 @@ const s = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: Radius.full,
-    marginBottom: Spacing.sm,
-  },
-  title: {
-    ...Typography.h3,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.sm,
+    // 顶部不再有标题，把手下方直接是搜索框，留一档 md 间距。
+    marginBottom: Spacing.md,
   },
   searchWrap: {
     marginHorizontal: Spacing.lg,

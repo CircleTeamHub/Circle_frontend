@@ -650,7 +650,8 @@ test('ShareNoteSheet sends the note as a card to a chosen friend/group', () => {
   assert.match(sheet, /sendCardMessage/);
   assert.match(sheet, /type: 'note-card'/);
   assert.match(sheet, /BottomSheetModal/);
-  assert.match(sheet, /notes\.shareToChat\.title/);
+  // 面板顶部不再放「分享给好友或群聊」标题。
+  assert.doesNotMatch(sheet, /notes\.shareToChat\.title/);
 });
 
 test('ShareNoteSheet search text has a complete vertical line box', () => {
@@ -667,4 +668,23 @@ test('ShareNoteSheet maps send failures to stable user-facing copy', () => {
   assert.match(sheet, /setRetryTasks\(failures\)/);
   assert.match(sheet, /t\('notes\.shareToChat\.partialFailed', \{\s*count: failures\.length/);
   assert.doesNotMatch(sheet, /error instanceof Error\s*\?\s*error\.message/);
+});
+
+test('EditNoteScreen: 个人名片和群名片都单选，选另一个即替换；标题字号收小一档', () => {
+  const src = read('src/features/notes/screens/EditNoteScreen.tsx');
+
+  // 联系人选择器是单选：点选只保留这一个 id，再点同一个则取消。
+  assert.match(
+    src,
+    /filteredContactPickerItems\.map[\s\S]*?onPress=\{\(\) => setSelectedCardIds\(selected \? \[\] : \[item\.id\]\)\}\s*accessibilityRole="radio"/,
+  );
+  // 群名片同样单选。
+  assert.match(
+    src,
+    /filteredCircleItems\.map[\s\S]*?onPress=\{\(\) => setSelectedCardIds\(selected \? \[\] : \[item\.id\]\)\}\s*accessibilityRole="radio"/,
+  );
+  assert.doesNotMatch(src, /setSelectedCardIds\(\(current\) => selected \? current\.filter/);
+
+  // 标题用 h2 档（20/26），不再是 24 号大字。
+  assert.match(src, /titleInput:\s*\{[\s\S]*?fontSize: 20,[\s\S]*?lineHeight: 26,/);
 });
