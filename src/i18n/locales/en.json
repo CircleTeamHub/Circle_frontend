@@ -3523,6 +3523,7 @@
     "AUTH_LOGIN_CHALLENGE_EXPIRED": "The code has expired. Please start verification again",
     "AUTH_LOGIN_CHALLENGE_REJECTED": "This sign-in was declined on a trusted device",
     "AUTH_LOGIN_CHALLENGE_LOCKED": "Too many incorrect codes. This verification was cancelled; please start again",
+    "AUTH_SESSION_DEVICE_UNBOUND": "Your sign-in needs to be refreshed. Please try again",
     "AUTH_SECURITY_CODE_NOT_SET": "No login security code is set. Please confirm on a trusted device"
   },
   "qr": {

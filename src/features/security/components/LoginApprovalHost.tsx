@@ -1,6 +1,7 @@
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -80,6 +81,13 @@ export function LoginApprovalHost() {
     }),
     [colors],
   );
+
+  // 弹窗出现时收起键盘：iOS 的键盘在应用窗口之上，不收会挡住「是我 / 不是我」，
+  // 而询问阶段没有别的关闭方式（还会把按键继续打进底下的输入框）。
+  const prompting = stage !== null;
+  useEffect(() => {
+    if (prompting) Keyboard.dismiss();
+  }, [prompting]);
 
   const goChangePassword = useCallback(() => {
     approval.close();

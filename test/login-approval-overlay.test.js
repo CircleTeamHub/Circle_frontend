@@ -28,3 +28,23 @@ test('the app lock hides the approval prompt before it locks on backgrounding', 
     /setAppLocked\(true\);\s*setGateState\('locked'\);/,
   );
 });
+
+test('the approval prompt dismisses the keyboard when it appears', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/security/components/LoginApprovalHost.tsx'),
+    'utf8',
+  );
+  assert.match(source, /if \(prompting\) Keyboard\.dismiss\(\);/);
+});
+
+test('the new device can resend once the approved code has expired', () => {
+  const screen = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/auth/screens/DeviceVerificationScreen.tsx'),
+    'utf8',
+  );
+  assert.match(
+    screen,
+    /needsResend =\s*phase === 'expired' \|\| \(phase === 'codeExpired' && !useSecurityCode\)/,
+  );
+  assert.match(screen, /\) : needsResend \? \(/);
+});

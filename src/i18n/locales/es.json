@@ -3523,6 +3523,7 @@
     "AUTH_LOGIN_CHALLENGE_EXPIRED": "El código ha caducado. Vuelve a iniciar la verificación",
     "AUTH_LOGIN_CHALLENGE_REJECTED": "Un dispositivo de confianza rechazó este inicio de sesión",
     "AUTH_LOGIN_CHALLENGE_LOCKED": "Demasiados códigos incorrectos. Esta verificación se canceló; vuelve a empezar",
+    "AUTH_SESSION_DEVICE_UNBOUND": "Tu sesión necesita actualizarse. Inténtalo de nuevo",
     "AUTH_SECURITY_CODE_NOT_SET": "No hay un código de seguridad configurado. Confirma en un dispositivo de confianza"
   },
   "qr": {

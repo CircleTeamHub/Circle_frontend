@@ -3515,6 +3515,7 @@
     "AUTH_LOGIN_CHALLENGE_EXPIRED": "確認コードの有効期限が切れました。もう一度確認を開始してください",
     "AUTH_LOGIN_CHALLENGE_REJECTED": "このログインは信頼済みデバイスで拒否されました",
     "AUTH_LOGIN_CHALLENGE_LOCKED": "確認コードの誤りが多すぎるため、この確認は無効になりました。もう一度開始してください",
+    "AUTH_SESSION_DEVICE_UNBOUND": "ログイン状態の更新が必要です。しばらくしてから再度お試しください",
     "AUTH_SECURITY_CODE_NOT_SET": "ログインセキュリティコードが設定されていません。信頼済みデバイスで承認してください"
   },
   "qr": {

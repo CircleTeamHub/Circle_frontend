@@ -3515,6 +3515,7 @@
     "AUTH_LOGIN_CHALLENGE_EXPIRED": "验证码已失效，请重新发起验证",
     "AUTH_LOGIN_CHALLENGE_REJECTED": "登录请求已被受信任设备拒绝",
     "AUTH_LOGIN_CHALLENGE_LOCKED": "验证码错误次数过多，本次验证已作废，请重新发起",
+    "AUTH_SESSION_DEVICE_UNBOUND": "登录状态需要更新，请稍后重试",
     "AUTH_SECURITY_CODE_NOT_SET": "未设置登录安全码，请在受信任设备上确认登录"
   },
   "qr": {

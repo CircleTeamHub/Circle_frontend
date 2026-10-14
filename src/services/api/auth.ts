@@ -8,7 +8,7 @@
  * - logout：使 refreshToken 失效
  */
 import * as Device from "expo-device";
-import { apiClient } from "@/services/api/client";
+import { apiClient, refreshSessionAccessToken } from "@/services/api/client";
 import { normalizeUser } from "@/services/api/utils";
 import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
 import { UserFacingError } from "@/utils/user-facing-error";
@@ -206,25 +206,48 @@ export type PendingLoginChallenge = {
 };
 
 /** 受信任设备：待处理的陌生设备登录请求。 */
+/**
+ * 功能上线前登录的会话还没绑定设备，批准相关接口会回 AUTH_SESSION_DEVICE_UNBOUND。
+ * 这时用 refresh token 续签一次（续签时服务端绑定本机设备并记为受信任），再重试
+ * 一次。不走 401：apiClient 在「续签后仍 401」时会清会话登出，这里续签没绑上也
+ * 只是本次失败，不能把人踢下线。
+ */
+async function withDeviceBoundSession<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    const errorCode = (error as { errorCode?: unknown } | null)?.errorCode;
+    if (errorCode !== "AUTH_SESSION_DEVICE_UNBOUND") throw error;
+    await refreshSessionAccessToken();
+    return request();
+  }
+}
+
 export async function fetchPendingLoginChallenges() {
-  return apiClient<PendingLoginChallenge[]>("/auth/login-challenges", {
-    method: "GET",
-  });
+  return withDeviceBoundSession(() =>
+    apiClient<PendingLoginChallenge[]>("/auth/login-challenges", {
+      method: "GET",
+    }),
+  );
 }
 
 /** 受信任设备：确认是本人，拿到 60 秒有效的验证码。 */
 export async function approveLoginChallenge(challengeId: string) {
-  return apiClient<{ code: string; codeExpiresAt: string }>(
-    `/auth/login-challenges/${encodeURIComponent(challengeId)}/approve`,
-    { method: "POST" },
+  return withDeviceBoundSession(() =>
+    apiClient<{ code: string; codeExpiresAt: string }>(
+      `/auth/login-challenges/${encodeURIComponent(challengeId)}/approve`,
+      { method: "POST" },
+    ),
   );
 }
 
 /** 受信任设备：不是本人，拒绝这次登录。 */
 export async function rejectLoginChallenge(challengeId: string) {
-  return apiClient<void>(
-    `/auth/login-challenges/${encodeURIComponent(challengeId)}/reject`,
-    { method: "POST" },
+  return withDeviceBoundSession(() =>
+    apiClient<void>(
+      `/auth/login-challenges/${encodeURIComponent(challengeId)}/reject`,
+      { method: "POST" },
+    ),
   );
 }
 

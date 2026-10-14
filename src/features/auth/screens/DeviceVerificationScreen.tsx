@@ -76,6 +76,10 @@ export default function DeviceVerificationScreen() {
   });
   const { phase, remainingSeconds, submitting } = verification;
   const isTerminal = phase === 'rejected' || phase === 'expired';
+  // 批准过但 60 秒的码已过期：重新发起会把请求退回受信任设备、再次弹窗确认。
+  // 用安全码时不需要受信任设备，窗口内照样能输，所以只在验证码模式下切成重发。
+  const needsResend =
+    phase === 'expired' || (phase === 'codeExpired' && !useSecurityCode);
   const pattern = useSecurityCode ? SECURITY_CODE_PATTERN : CODE_PATTERN;
   const canSubmit = !submitting && !isTerminal && pattern.test(code.trim());
 
@@ -156,7 +160,7 @@ export default function DeviceVerificationScreen() {
           <Text style={[s.statusText, d.statusText]}>{statusText}</Text>
         </View>
 
-        {isTerminal ? null : (
+        {isTerminal || (phase === 'codeExpired' && !useSecurityCode) ? null : (
           <AuthInput
             placeholder={
               useSecurityCode
@@ -180,7 +184,7 @@ export default function DeviceVerificationScreen() {
               {t('auth.deviceVerification.backToLogin')}
             </Text>
           </Pressable>
-        ) : phase === 'expired' ? (
+        ) : needsResend ? (
           <Pressable
             style={[s.submitBtn, submitting ? d.submitDisabled : d.submit]}
             onPress={onResend}
