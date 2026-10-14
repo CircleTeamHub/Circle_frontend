@@ -3,6 +3,7 @@
  * a given snackbar item, with no side effects, so the decision can be
  * unit-tested independently of navigation.
  */
+import { getGroupEntryHref } from '@/features/groups/routes';
 import type { Href } from 'expo-router';
 import type { NotificationSnackbarItem } from '@/features/notifications/store/use-notification-snackbar-store';
 import { notificationDomain } from '@/features/notifications/utils/notification-domain';
@@ -43,6 +44,7 @@ export function getSnackbarRoute(
   item: NotificationSnackbarItem,
   options: SnackbarRouteOptions,
 ): Href {
+  if (item.kind === 'notification' && item.fromGroupAdmission?.id) return getGroupEntryHref(options.scope ?? 'messages', { admissionId: item.fromGroupAdmission.id });
   if (item.kind === 'chat') {
     return {
       pathname: '/(tabs)/messages/chat-detail',
@@ -120,7 +122,7 @@ export function getSnackbarRoute(
   }
 
   if (
-    (item.type === 'CIRCLE_INVITATION_APPROVED' ||
+    (item.type === 'CIRCLE_INVITATION_RECEIVED' || item.type === 'CIRCLE_INVITATION_APPROVED' ||
       item.type === 'CIRCLE_INVITATION_REJECTED' ||
       item.type === 'CIRCLE_ADMIN_OVERRIDE_APPROVED') &&
     item.fromInvitation?.id

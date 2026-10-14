@@ -24,7 +24,7 @@ export const ATTACHMENT_ITEMS: readonly {
   { id: 'media', icon: 'images-outline', labelKey: 'chat.attachments.mediaHub', label: '自媒体' },
   { id: 'voice-call', icon: 'call-outline', labelKey: 'chat.attachments.voiceCall', label: '语/视频通话' },
   { id: 'location', icon: 'location-outline', labelKey: 'chat.attachments.location', label: '位置' },
-  { id: 'notes', icon: 'create-outline', labelKey: 'chat.attachments.notes', label: '笔记' },
+  { id: 'notes', icon: 'document-text-outline', labelKey: 'chat.attachments.notes', label: '笔记' },
   { id: 'friend-card', icon: 'person-outline', labelKey: 'chat.attachments.friendCard', label: '好友名片' },
   { id: 'favorites', icon: 'star-outline', labelKey: 'chat.attachments.favorites', label: '我的收藏' },
   { id: 'transfer', icon: 'card-outline', labelKey: 'chat.attachments.transfer', label: '转账' },

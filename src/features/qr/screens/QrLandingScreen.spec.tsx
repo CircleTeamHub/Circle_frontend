@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import QrLandingScreen from './QrLandingScreen';
+import { acceptGroupQrInvitation } from '@/services/api/group-admissions';
 import { resolveQrToken } from '@/services/api/qr';
 
 const mockRouter = {
@@ -51,6 +52,7 @@ jest.mock('@/components/ui/group-chat-avatar', () => ({
   GroupChatAvatar: () => null,
 }));
 
+jest.mock('@/services/api/group-admissions', () => ({ acceptGroupQrInvitation: jest.fn() }));
 jest.mock('@/services/api/qr', () => ({
   resolveQrToken: jest.fn(),
   joinByQrToken: jest.fn(),
@@ -110,4 +112,19 @@ test('顶层 /qr（外部相机深链）没有 tab 段时回落 messages', async
       pathname: '/(tabs)/messages/user/[id]/request',
     }),
   );
+});
+
+
+test('opening a group QR only previews it; acceptance with pending approval never opens chat', async () => {
+  jest.mocked(resolveQrToken).mockResolvedValue({ ...userPreview, type: 'GROUP', memberCount: 2 });
+  jest.mocked(acceptGroupQrInvitation).mockResolvedValue({ type: 'GROUP', status: 'PENDING', admissionId: 'request-1' });
+  render(<QrLandingScreen />);
+  const button = await screen.findByRole('button');
+  expect(acceptGroupQrInvitation).not.toHaveBeenCalled();
+  expect(mockRouter.replace).not.toHaveBeenCalled();
+  fireEvent.press(button);
+  await screen.findByText('groupAdmission.accept');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(acceptGroupQrInvitation).toHaveBeenCalledWith('l'.repeat(32));
+  expect(mockRouter.replace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(tabs)/messages/group-entry', params: { admissionId: 'request-1' } }));
 });

@@ -61,13 +61,14 @@ test("notification snackbar host keeps unread badges in sync when tapped", () =>
   assert.doesNotMatch(host, /systemUnread/i);
 });
 
-test("notification snackbar host suppresses chat banners on the messages list", () => {
+test("notification snackbar host suppresses only the active conversation", () => {
   const host = read(
     "src/features/notifications/components/NotificationSnackbarHost.tsx",
   );
   assert.match(host, /useSegments/);
-  assert.match(host, /onMessagesList/);
-  assert.match(host, /shown\.kind === 'chat' && onMessagesList/);
+  assert.doesNotMatch(host, /onMessagesList/);
+  assert.match(host, /current\.conversationID === activeConversationId/);
+  assert.match(host, /shown\.conversationID === activeConversationId/);
 });
 
 test("notification snackbar host skips SYSTEM toasts via the realtime handler", () => {

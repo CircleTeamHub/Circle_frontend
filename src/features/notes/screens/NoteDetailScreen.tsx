@@ -1,3 +1,4 @@
+import { getGroupEntryHref } from '@/features/groups/routes';
 import { Ionicons } from '@expo/vector-icons';
 import {
   useFocusEffect,
@@ -28,7 +29,6 @@ import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card
 import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
 import {
   getUserProfileHref,
-  getChatDetailHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
@@ -148,7 +148,7 @@ export default function NoteDetailScreen() {
     (id: string, name?: string, conversationID?: string) => {
       if (conversationID) {
         router.push(
-          getChatDetailHref(scope, conversationID, name, undefined, conversationID, undefined, 'group'),
+          getGroupEntryHref(scope, { groupId: conversationID }),
         );
         return;
       }

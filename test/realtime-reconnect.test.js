@@ -126,6 +126,7 @@ function loadRealtimeHarness(options = {}) {
       timers.delete(id);
     },
     require: withObservabilityStubs((request) => {
+      if (request === '@/services/api/group-admissions') return { refreshGroupAdmissionUnread: async () => {} };
       switch (request) {
         case '@/constants/config':
           return { REALTIME_WS_URL: 'wss://realtime.example.test/ws' };

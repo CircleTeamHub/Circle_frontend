@@ -1,3 +1,5 @@
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
+import { getGroupEntryHref } from '@/features/groups/routes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -8,7 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,7 +53,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 type PickerMode = 'admin' | 'silence' | 'remove' | 'transfer' | null;
 
 /** 群策略开关分两段展示:进群允许方式 / 成员权限。 */
-const JOIN_POLICY_KEYS = ['memberCanInvite', 'qrJoinEnabled'] as const;
+const JOIN_POLICY_KEYS = ['memberCanInvite', 'qrJoinEnabled', 'cardJoinEnabled', 'joinApprovalRequired'] as const;
 const MEMBER_POLICY_KEYS = [
   'membersCanViewRoster',
   'membersCanViewProfiles',
@@ -106,6 +108,7 @@ const s = StyleSheet.create({
  * 差异只在 useGroupAdminActions 里选哪套端点。本人角色每次聚焦都重查,不吃快照。
  */
 export default function GroupManageScreen() {
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -345,7 +348,7 @@ export default function GroupManageScreen() {
   const handleTogglePolicy = useCallback(
     (key: PolicyKey, next: boolean) => {
       if (settingPending || !policies) return;
-      const previous = policies[key];
+      const previous = policies[key] ?? true;
       setSettingPending(key);
       patchPolicyKey(key, next);
       updateGroupChatPolicies(conversationID, { [key]: next })
@@ -673,7 +676,7 @@ export default function GroupManageScreen() {
               {t('chat.groupManagement.joinMethods', { defaultValue: '进群允许方式' })}
             </Text>
           </View>
-          {renderPolicyRows(JOIN_POLICY_KEYS)}
+          {renderPolicyRows(isStandaloneGroup ? JOIN_POLICY_KEYS : ['memberCanInvite', 'qrJoinEnabled'])}
         </View>
 
         <View style={[s.section, d.section]}>
@@ -687,6 +690,7 @@ export default function GroupManageScreen() {
           {renderPolicyRows(MEMBER_POLICY_KEYS)}
         </View>
 
+        {isStandaloneGroup ? <View style={[s.section, d.section]}>{renderLinkRow(t('groupAdmission.manage'), () => router.push(getGroupEntryHref(scope, { groupId: conversationID, manage: '1' })), 'group-admissions-manage')}</View> : null}
         {isOwner ? (
           <View style={[s.section, d.section]}>
             <View style={s.sectionHeader}>

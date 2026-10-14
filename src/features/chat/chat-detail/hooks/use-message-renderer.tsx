@@ -1,3 +1,5 @@
+import { GroupInvitationBubble } from '@/features/groups/GroupInvitationBubble';
+import { getGroupEntryHref } from '@/features/groups/routes';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { memo, type ReactElement, useCallback } from 'react';
 import { type ChatMessage } from '@/types';
@@ -302,6 +304,8 @@ export function useMessageRenderer({
             hideStatus={isGroupChat}
           />
         ));
+      case 'group-invitation':
+        return <GroupInvitationBubble message={item} senderName={receivedDisplayName(item)} senderAvatarUri={receivedAvatarUri(item)} selfName={selfName} selfAvatarUri={selfAvatarUri} onPress={(admissionId, circle) => { if (circle) router.push({ pathname: scope === 'discover' ? '/(tabs)/discover/invitation/[id]' : '/(tabs)/messages/invitation/[id]', params: { id: admissionId } }); else router.push(getGroupEntryHref(scope, { admissionId })); }} />;
       case 'circle-card':
         return withMessageActions(item, (
           <CircleCardBubble

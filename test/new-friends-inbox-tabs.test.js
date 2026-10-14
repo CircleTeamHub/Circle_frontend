@@ -47,23 +47,21 @@ test('the two tabs split the width evenly with centred labels', () => {
 
 test('one search box filters whichever tab is showing', () => {
   const screen = read('src/features/contacts/screens/NewFriendsScreen.tsx');
-  const list = read('src/features/contacts/components/NewGroupsInboxList.tsx');
+  const list = read('src/features/groups/GroupAdmissionsList.tsx');
 
   assert.match(screen, /contacts\.friendActivity\.searchPlaceholder/);
   assert.match(screen, /filterFriendInboxRows\(buildFriendActivityInboxRows\(activities\), query\)/);
   assert.match(screen, /<NewGroupsInboxList query=\{query\} \/>/);
-  assert.match(list, /filterGroupChatRows\(/);
+  assert.match(list, /query\.trim\(\)\.toLocaleLowerCase\(\)/);
 });
 
-// 群组是群聊，不是圈子：这张表只能读会话列表，不能去拉圈子邀请。
-test('the groups tab lists group chats, never circle invitations', () => {
-  const list = read('src/features/contacts/components/NewGroupsInboxList.tsx');
-
+test('the groups inbox combines pending invitations, applications and joined groups', () => {
+  const list = read('src/features/groups/GroupAdmissionsList.tsx');
+  assert.match(list, /fetchGroupAdmissions/);
+  assert.match(list, /fetchMyApplications/);
   assert.match(list, /loadChatConversations/);
-  assert.match(list, /selectGroupConversations/);
-  assert.match(list, /getChatDetailHref\(\s*'contacts',/);
-  assert.doesNotMatch(list, /fetchMyPendingVerifications|fetchMyApplications|circle-invitation/);
-  assert.doesNotMatch(list, /verification\/\[id\]/);
+  assert.match(list, /getGroupEntryHref/);
+  assert.match(list, /getChatDetailHref/);
 });
 
 // 两屏群聊列表共用会话 DTO 上这两个字段：入群时刻决定排序，在座人数上行。
@@ -94,14 +92,12 @@ test(
   },
 );
 
-test('the groups tab keeps the same load and refresh guards as the friends tab', () => {
-  const list = read('src/features/contacts/components/NewGroupsInboxList.tsx');
-
-  assert.match(list, /const \[refreshing, setRefreshing\] = useState\(false\)/);
-  assert.match(list, /const handleRefreshGroups = useCallback/);
-  assert.match(list, /if \(refreshInFlightRef\.current\) return;/);
-  assert.match(list, /mountedRef/);
-  assert.match(list, /const isCancelled = \(\) =>[\s\S]{0,160}!mountedRef\.current/);
+test('the groups inbox fences stale loads and deduplicates paging', () => {
+  const list = read('src/features/groups/GroupAdmissionsList.tsx');
+  assert.match(list, /if \(paging\.current\) return;/);
+  assert.match(list, /version !== generation\.current/);
+  assert.match(list, /generation\.current\+\+/);
+  assert.match(list, /old\.some/);
 });
 
 // 深链/推送直接落到子屏时，栈里没有上一级：返回键必须回上级页面，不能切 tab。

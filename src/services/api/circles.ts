@@ -217,3 +217,10 @@ export async function fetchPendingInvitationsForCircle(
     `/circle-invitation/circle/${circleId}/pending`,
   );
 }
+
+export function respondToCircleInvitation(id: string, accept: boolean): Promise<CircleInvitation> {
+  if (accept) return apiClient(`/circle-invitation/${encodeURIComponent(id)}/accept`, { method: 'POST' });
+  return apiClient(`/circle-invitation/${encodeURIComponent(id)}/decline`, { method: 'POST' });
+}
+
+export function markCircleInvitationSeen(id: string) { return apiClient(`/circle-invitation/${encodeURIComponent(id)}/seen`, { method: 'POST' }); }

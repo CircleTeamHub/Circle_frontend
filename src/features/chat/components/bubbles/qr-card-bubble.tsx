@@ -50,7 +50,7 @@ const TYPE_LABEL_FALLBACK: Record<QrCardType, string> = {
 
 const TYPE_FOOTER_FALLBACK: Record<QrCardType, string> = {
   user: '扫一扫或点击加好友',
-  group: '扫一扫或点击加入群聊',
+  group: '扫一扫或点击查看群邀请',
   circle: '扫一扫或点击加入圈子',
 };
 

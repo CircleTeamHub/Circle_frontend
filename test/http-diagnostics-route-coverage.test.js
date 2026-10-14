@@ -90,7 +90,7 @@ test('every static apiClient call maps to a reviewed diagnostic route', () => {
   }
 
   assert.ok(callCount >= 160, `expected broad apiClient coverage, saw ${callCount}`);
-  assert.deepEqual([...relativeImports].sort(), ['src/services/api/calls.ts', 'src/services/api/groups.ts', 'src/services/api/notes.ts', 'src/services/api/qr.ts']);
+  assert.deepEqual([...relativeImports].sort(), ['src/services/api/calls.ts', 'src/services/api/group-admissions.ts', 'src/services/api/groups.ts', 'src/services/api/notes.ts', 'src/services/api/qr.ts']);
   assert.deepEqual(uncovered, []);
   assert.deepEqual(dynamic, [
     'src/features/location/services/geocoder-fetch.ts:33',

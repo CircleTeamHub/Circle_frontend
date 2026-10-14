@@ -467,6 +467,8 @@ export function mapChatMessageDtoToUI(
         type: 'friend-card',
         friendCard: sanitizeFriendCard(content),
       };
+    case 'group-invitation':
+      return { ...base, type: 'group-invitation', groupInvitation: { admissionId: textField(content, 'admissionId', 64), circleInvitationId: textField(content, 'circleInvitationId', 64), groupName: textField(content, 'groupName', 60), avatarUrl: optionalTextField(content, 'avatarUrl', 2048) } };
     case 'circle-card':
       return {
         ...base,
@@ -730,6 +732,8 @@ export function groupPolicyLabel(policy: string): string {
   const key: Record<string, string> = {
     memberCanInvite: 'chat.groupPolicy.memberCanInvite',
     qrJoinEnabled: 'chat.groupPolicy.qrJoinEnabled',
+    cardJoinEnabled: 'chat.groupPolicy.cardJoinEnabled',
+    joinApprovalRequired: 'chat.groupPolicy.joinApprovalRequired',
     membersCanViewRoster: 'chat.groupPolicy.membersCanViewRoster',
     membersCanViewProfiles: 'chat.groupPolicy.membersCanViewProfiles',
     membersCanAddFriends: 'chat.groupPolicy.membersCanAddFriends',

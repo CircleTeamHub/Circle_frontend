@@ -506,14 +506,18 @@
       "qrJoinEnabled": "QRコードで参加",
       "membersCanViewProfiles": "メンバーがプロフィールを見られる",
       "membersCanAddFriends": "メンバーが友だち追加できる",
-      "membersCanViewRoster": "メンバー一覧を表示"
+      "membersCanViewRoster": "メンバー一覧を表示",
+      "cardJoinEnabled": "Allow requests through group cards",
+      "joinApprovalRequired": "Require approval to join"
     },
     "groupPolicyHint": {
       "memberCanInvite": "オフにするとオーナーと管理者のみメンバーを追加できます",
       "qrJoinEnabled": "オフにすると発行済みのグループQRコードも使えなくなります",
       "membersCanViewProfiles": "オフにすると一般メンバーはグループから他のメンバーのプロフィールを開けません",
       "membersCanAddFriends": "オフにすると一般メンバーはグループ経由で友だち追加できません",
-      "membersCanViewRoster": "オフにすると一般メンバーはメンバー一覧を見られません"
+      "membersCanViewRoster": "オフにすると一般メンバーはメンバー一覧を見られません",
+      "cardJoinEnabled": "Non-members can request to join through a group card",
+      "joinApprovalRequired": "Member invitations and QR entry require approval; owner and admin invitations join after acceptance"
     },
     "groupManagement": {
       "admins": "管理者",
@@ -3487,7 +3491,10 @@
     "CHAT_GROUP_QR_JOIN_DISABLED": "このグループではQRコードでの参加がオフです",
     "CHAT_GROUP_AVATAR_URL_INVALID": "グループアイコンのURLが無効です",
     "CHAT_DELIVERY_ID_CONFLICT": "メッセージを送信できませんでした。もう一度入力して送信してください",
-    "FRIEND_GROUP_ADD_FORBIDDEN": "このグループではメンバー同士の友だち追加ができません"
+    "FRIEND_GROUP_ADD_FORBIDDEN": "このグループではメンバー同士の友だち追加ができません",
+    "CHAT_GROUP_ACCEPT_REQUIRED": "Please accept the group invitation first",
+    "CHAT_GROUP_INVITATION_INVALID": "This invitation has expired or is no longer valid",
+    "CHAT_GROUP_APPLICATION_DISABLED": "This group is not accepting requests through cards"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",
@@ -3556,8 +3563,44 @@
       "groupType": "グループQRコード",
       "circleType": "サークルQRコード",
       "userFooter": "スキャンまたはタップで友だち追加",
-      "groupFooter": "スキャンまたはタップでグループに参加",
+      "groupFooter": "Scan or tap to view the group invitation",
       "circleFooter": "スキャンまたはタップでサークルに参加"
+    }
+  },
+  "groupAdmission": {
+    "title": "Group details and invitation",
+    "members": "{{count}} members",
+    "invitedBy": "{{name}} invited you to this group",
+    "invitedByYou": "You invited {{name}} to this group",
+    "invitedPerson": "{{inviter}} invited {{applicant}} to this group",
+    "personStatus": "{{name}}: {{status}}",
+    "applicant": "Applicant: {{name}}",
+    "enter": "Enter group chat",
+    "accept": "Accept invitation",
+    "decline": "Decline invitation",
+    "approve": "Approve request",
+    "reject": "Reject request",
+    "apply": "Request to join",
+    "reason": "Reason (optional, up to 200 characters)",
+    "viewInvitation": "View invitation",
+    "manage": "Join requests and invitations",
+    "empty": "No group invitations or requests",
+    "loadFailed": "Unable to load group details. Please retry.",
+    "actionFailed": "Action could not be completed",
+    "actionUncertain": "The result could not be confirmed. We refreshed the status; check it before trying again.",
+    "reviewRequired": "An administrator must approve your request before you can access group messages.",
+    "acceptRequired": "Accept a valid invitation to join this group.",
+    "applicationDisabled": "This group is not accepting card requests",
+    "unavailable": "This group is no longer available",
+    "preview": "[Group invitation]",
+    "status": {
+      "INVITED": "Awaiting acceptance",
+      "PENDING": "Awaiting administrator approval",
+      "JOINED": "Joined group",
+      "LEFT": "Left the group",
+      "DECLINED": "Invitation declined",
+      "REJECTED": "Request rejected",
+      "EXPIRED": "Invitation or request expired"
     }
   }
 }

@@ -1,3 +1,4 @@
+import { UnreadCountBadge } from '@/components/ui/unread-count-badge';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +8,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 export interface InboxTab {
   id: string;
   label: string;
+  unreadCount?: number;
 }
 
 interface InboxTabsHeaderProps {
@@ -36,6 +38,13 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingTop: Spacing.md,
     gap: 6,
+  },
+  tabLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    maxWidth: '100%',
   },
   // 选中条常驻占位（未选中时透明），否则切页签时文字会上下跳。
   indicator: {
@@ -117,12 +126,15 @@ export const InboxTabsHeader: React.FC<InboxTabsHeaderProps> = ({
               accessibilityLabel={tab.label}
               accessibilityState={{ selected: active }}
             >
-              <Text
-                style={[d.tabLabel, active && d.tabLabelActive]}
-                numberOfLines={1}
-              >
-                {tab.label}
-              </Text>
+              <View style={s.tabLabelRow} testID={`inbox-tab-label-${tab.id}`}>
+                <Text
+                  style={[d.tabLabel, { flexShrink: 1 }, active && d.tabLabelActive]}
+                  numberOfLines={1}
+                >
+                  {tab.label}
+                </Text>
+                {tab.unreadCount ? <UnreadCountBadge count={tab.unreadCount} /> : null}
+              </View>
               <View
                 style={[s.indicator, active ? d.indicator : d.indicatorIdle]}
               />

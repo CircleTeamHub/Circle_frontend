@@ -3,6 +3,7 @@ import { Animated, PanResponder, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useChatStore } from '@/chat-core/store';
 import { Avatar } from '@/components/ui/avatar';
 import {
   TopBannerCard,
@@ -45,9 +46,7 @@ export function NotificationSnackbarHost() {
     (state) => state.dismissCurrent,
   );
 
-  // True when the user is already looking at the conversation list — a chat
-  // toast there is redundant, so we skip past it.
-  const onMessagesList = segments[segments.length - 1] === 'messages';
+  const activeConversationId = useChatStore((state) => state.activeConversationId);
   const notificationScope = (segments as readonly string[]).includes('discover')
     ? 'discover'
     : 'messages';
@@ -102,12 +101,19 @@ export function NotificationSnackbarHost() {
   // Read the latest route inside effects without making them depend on it —
   // otherwise navigating mid-banner would re-run the entrance effect (re-animate,
   // reset the auto-dismiss timer, re-fire the sound).
-  const onMessagesListRef = useRef(onMessagesList);
-  onMessagesListRef.current = onMessagesList;
+  const activeConversationRef = useRef(activeConversationId);
+  activeConversationRef.current = activeConversationId;
+
+  useEffect(() => {
+    if (current?.kind === 'chat' && current.conversationID === activeConversationId) {
+      clearTimer();
+      dismissCurrent();
+    }
+  }, [current, activeConversationId, clearTimer, dismissCurrent]);
 
   const isVisible = useCallback(
     (item: typeof shown) =>
-      !!item && !(item.kind === 'chat' && onMessagesListRef.current),
+      !!item && !(item.kind === 'chat' && item.conversationID === activeConversationRef.current),
     [],
   );
 
@@ -134,8 +140,7 @@ export function NotificationSnackbarHost() {
   useEffect(() => {
     if (!shown) return;
 
-    if (shown.kind === 'chat' && onMessagesListRef.current) {
-      dismissCurrent();
+    if (shown.kind === 'chat' && shown.conversationID === activeConversationRef.current) {
       return;
     }
 
@@ -149,10 +154,13 @@ export function NotificationSnackbarHost() {
     // 圈子通知的提示音由「圈子通知设置 → 声音提醒」单独控制；关掉只静音，
     // 横幅和未读红点照常。
     const silent =
-      shown.kind === 'notification' &&
-      shown.type.startsWith('CIRCLE_') &&
-      !circleSoundAllowed(useCircleNotificationStore.getState());
-    notify({ silent });
+      shown.kind === 'chat'
+        ? shown.silent === true
+        : shown.type.startsWith('CIRCLE_') &&
+          !circleSoundAllowed(useCircleNotificationStore.getState());
+    if (!(shown.kind === 'chat' && shown.silent)) {
+      notify({ silent });
+    }
 
     timerRef.current = setTimeout(dismissCurrent, AUTO_DISMISS_MS);
     return clearTimer;
@@ -218,7 +226,7 @@ export function NotificationSnackbarHost() {
     }
   }, [shown, clearTimer, dismissCurrent, notificationScope, router, t]);
 
-  if (!shown || !row || (shown.kind === 'chat' && onMessagesList)) {
+  if (!shown || !row || (shown.kind === 'chat' && shown.conversationID === activeConversationId)) {
     return null;
   }
 
