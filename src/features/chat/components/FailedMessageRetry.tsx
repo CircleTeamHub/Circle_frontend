@@ -44,7 +44,7 @@ export function FailedMessageRetry({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  row: { flexDirection: 'column-reverse', alignItems: 'flex-end' },
   button: { width: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   bubble: { flexShrink: 1 },
 });

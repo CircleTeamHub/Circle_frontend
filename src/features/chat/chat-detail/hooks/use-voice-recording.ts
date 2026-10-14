@@ -1,3 +1,4 @@
+import { mediaErrorGuard } from '@/features/chat/utils/media-error-guard';
 import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
@@ -195,6 +196,7 @@ export function useVoiceRecording({
    */
   const uploadAndSendVoice = useCallback(
     async (soundPath: string, duration: number, deliveryId: string) => {
+      const canReportError = mediaErrorGuard(conversationID, mountedRef);
       try {
         if (isTempChat) {
           await assertMyTempChatConversationOpen(conversationID);
@@ -231,7 +233,7 @@ export function useVoiceRecording({
         });
         // 气泡标红留在原地(长按可重发),而不是让那段录音凭空消失。
         failMediaSend(conversationID, deliveryId);
-        if (mountedRef.current) {
+        if (canReportError()) {
           setSendError(
             getChatSendErrorMessage(
               error,

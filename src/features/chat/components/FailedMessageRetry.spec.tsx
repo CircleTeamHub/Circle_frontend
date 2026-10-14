@@ -1,5 +1,5 @@
 import { fireEvent, render } from '@testing-library/react-native';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View, StyleSheet } from 'react-native';
 import type { ChatMessage } from '@/types';
 import { FailedMessageRetry } from './FailedMessageRetry';
 
@@ -51,4 +51,13 @@ test.each([
   );
   expect(view.queryByRole('button')).toBeNull();
   expect(view.getByText('message')).toBeTruthy();
+});
+
+
+test('failed card retry does not add horizontal width on a 320 point screen', () => {
+  const ui = render(<FailedMessageRetry message={{ ...failed, type: 'note-card', outgoing: true }} onRetry={jest.fn()}><View style={{ width: 260 }}><Text>card</Text></View></FailedMessageRetry>);
+  const retry = ui.getByLabelText('chat.messageActions.retryFailed');
+  expect(ui.UNSAFE_getAllByType(View).some(view => StyleSheet.flatten(view.props.style)?.flexDirection === 'column-reverse')).toBe(true);
+  expect(retry).toBeTruthy();
+  expect(ui.getByText('card')).toBeTruthy();
 });
