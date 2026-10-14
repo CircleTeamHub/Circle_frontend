@@ -204,3 +204,14 @@ test('the auth route cannot be dismissed during old-session teardown', () => {
   render(<LoginScreen />);
   expect(usePreventRemove).toHaveBeenCalledWith(true, expect.any(Function));
 });
+
+
+test('pending login disables both auth route transitions', () => {
+  mockAuthState.submitting = true;
+  render(<LoginScreen />);
+  expect(screen.getByRole('link', { name: 'auth.forgotPassword' })).toBeDisabled();
+  expect(screen.getByRole('link', { name: 'auth.registerNow' })).toBeDisabled();
+  fireEvent.press(screen.getByText('auth.forgotPassword'));
+  fireEvent.press(screen.getByText('auth.registerNow'));
+  expect(mockPush).not.toHaveBeenCalled();
+});

@@ -255,7 +255,7 @@ export default function RegisterScreen() {
             back 到非 (auth) 栈或栈底空。 */}
         <View style={s.loginRow}>
           <Text style={d.loginHint}>{t('auth.hasAccount')}</Text>
-          <Pressable onPress={() => router.replace('/(auth)/login')}>
+          <Pressable disabled={submitting} accessibilityState={{ disabled: submitting }} onPress={() => { if (!submitting) router.replace('/(auth)/login'); }}>
             <Text style={[s.loginLink, d.loginLink]}>{t('auth.loginNow')}</Text>
           </Pressable>
         </View>

@@ -15,7 +15,7 @@ import { useNetworkStatus } from '@/hooks/use-network-status';
 import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { Spacing, Typography, useTheme, withAlpha } from '@/theme';
-import { Link, router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -144,10 +144,11 @@ export default function LoginScreen() {
   );
 
   const onForgotPassword = useCallback(() => {
+    if (submitting) return;
     // FE#92：真实重置流程（circle_be PR #120 起后端可用），不再是占位提示。
     // 新路由在 expo typegen 重新生成前先 as never（仓内 group-call 同款惯例）
     router.push("/(auth)/forgot-password" as never);
-  }, []);
+  }, [submitting]);
 
   const onSubmit = useCallback(() => {
     login(identifier, password);
@@ -206,7 +207,7 @@ export default function LoginScreen() {
           autoComplete="current-password"
         />
         <View style={s.forgotRow}>
-          <Pressable onPress={onForgotPassword} hitSlop={8} accessibilityRole="link">
+          <Pressable disabled={submitting} accessibilityState={{ disabled: submitting }} onPress={onForgotPassword} hitSlop={8} accessibilityRole="link">
             <Text style={[s.forgotLink, { color: colors.link }]}>
               {t('auth.forgotPassword')}
             </Text>
@@ -244,13 +245,12 @@ export default function LoginScreen() {
         <Text style={[s.registerHint, { color: colors.textSecondary }]}>
           {t('auth.noAccount')}
         </Text>
-        <Link href="/(auth)/register" asChild>
-          <Pressable hitSlop={8} accessibilityRole="link">
+          <Pressable disabled={submitting} accessibilityState={{ disabled: submitting }} onPress={() => { if (!submitting) router.push('/(auth)/register'); }} hitSlop={8} accessibilityRole="link">
             <Text style={[s.registerLink, { color: colors.link }]}>
               {t('auth.registerNow')}
             </Text>
           </Pressable>
-        </Link>
+
       </View>
     </View>
   );
