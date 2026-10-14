@@ -26,6 +26,7 @@ const sSent = StyleSheet.create({
   },
   sentContent: {
     alignItems: 'flex-end',
+    flexShrink: 1,
     maxWidth: 280,
   },
   sentBubble: {

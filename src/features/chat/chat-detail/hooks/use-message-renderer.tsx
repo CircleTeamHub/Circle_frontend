@@ -1,5 +1,6 @@
 import { GroupInvitationBubble } from '@/features/groups/GroupInvitationBubble';
 import { getGroupEntryHref } from '@/features/groups/routes';
+import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetry';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { memo, type ReactElement, useCallback } from 'react';
 import { type ChatMessage } from '@/types';
@@ -41,6 +42,7 @@ import {
 interface MessageRowProps {
   item: ChatMessage;
   renderMessage: (item: ChatMessage) => ReactElement | null;
+  handleRetryMessage: (message: ChatMessage) => void;
 }
 
 /**
@@ -50,8 +52,13 @@ interface MessageRowProps {
 const MessageRow = memo(function MessageRow({
   item,
   renderMessage,
+  handleRetryMessage,
 }: MessageRowProps) {
-  return renderMessage(item);
+  return (
+    <FailedMessageRetry message={item} onRetry={handleRetryMessage}>
+      {renderMessage(item)}
+    </FailedMessageRetry>
+  );
 });
 
 export interface MessageRendererParams {
@@ -75,6 +82,7 @@ export interface MessageRendererParams {
   handleToggleReaction: (message: ChatMessage, emoji: string) => void;
   getMessageLongPressHandler: (message: ChatMessage) => (event: GestureResponderEvent) => void;
   handleStartCall: () => void;
+  handleRetryMessage: (message: ChatMessage) => void;
 }
 
 /**
@@ -102,6 +110,7 @@ export function useMessageRenderer({
   handleToggleReaction,
   getMessageLongPressHandler,
   handleStartCall,
+  handleRetryMessage,
 }: MessageRendererParams) {
   // 群聊接收消息的显示名：本地备注覆盖 > 群成员权威昵称 > 消息自带昵称 > 会话标题。
   // 群成员昵称排在消息自带 senderNickname 之前——后者可能为空而回落成原始 hex id，
@@ -447,9 +456,13 @@ export function useMessageRenderer({
 
   const renderItem = useCallback(
     ({ item }: { item: ChatMessage }) => (
-      <MessageRow item={item} renderMessage={renderMessage} />
+      <MessageRow
+        item={item}
+        renderMessage={renderMessage}
+        handleRetryMessage={handleRetryMessage}
+      />
     ),
-    [renderMessage],
+    [renderMessage, handleRetryMessage],
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);

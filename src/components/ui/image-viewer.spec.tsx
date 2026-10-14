@@ -95,6 +95,25 @@ test('long press opens the save menu inside the viewer modal and cancel closes i
   expect(onClose).not.toHaveBeenCalled();
 });
 
+test('save menu hides the viewer controls from Android accessibility focus', () => {
+  render(
+    <ImageViewer
+      images={['https://example.test/ordinary.jpg']}
+      visible
+      onClose={jest.fn()}
+    />,
+  );
+
+  const viewerContent = screen.getByTestId('image-viewer-content');
+  expect(viewerContent.props.importantForAccessibility).toBe('auto');
+
+  act(() => {
+    fireEvent(screen.getByTestId('zoomable-image'), 'longPress');
+  });
+
+  expect(viewerContent.props.importantForAccessibility).toBe('no-hide-descendants');
+});
+
 test('Android back closes the save menu first, then the viewer', () => {
   const onClose = jest.fn();
   render(

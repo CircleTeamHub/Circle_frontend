@@ -322,7 +322,9 @@
       "readersNone": "まだ誰も読んでいません",
       "readersMore": "{{names}} ほか {{count}} 人",
       "editing": "メッセージを編集",
-      "resend": "再送信"
+      "resend": "再送信",
+      "resendConfirm": "このメッセージを再送信しますか？",
+      "retryFailed": "送信失敗。タップして再送信"
     },
     "mentions": {
       "empty": "メンションできるメンバーがいません"

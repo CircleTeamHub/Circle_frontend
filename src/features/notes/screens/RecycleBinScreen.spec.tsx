@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, FlatList } from 'react-native';
 import RecycleBinScreen from './RecycleBinScreen';
 import { ApiError } from '@/services/api/api-error';
 import { fetchDeletedNotes, purgeNote, restoreNote } from '@/services/api/notes';
@@ -44,6 +44,16 @@ jest.mock('@/features/notes/utils/note-editor-drafts', () => ({ detachLocalNoteD
 jest.mock('@/services/api/notes', () => ({ fetchDeletedNotes: jest.fn(), purgeNote: jest.fn(), restoreNote: jest.fn() }));
 
 const note = { id: 'n1', title: '回收站里的笔记', groups: [], status: 'DELETED' };
+
+function deferred<T>() {
+  let reject!: (error: unknown) => void;
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
 
 function confirmPurge(alert: jest.SpyInstance) {
   fireEvent.press(screen.getByLabelText('notes.actions.purge'));
@@ -105,4 +115,53 @@ test('a row whose restore is still in flight cannot be acted on again', async ()
   await act(async () => { finishRestore(); });
   await waitFor(() => expect(screen.queryByText('回收站里的笔记')).toBeNull());
   expect(restoreNote).toHaveBeenCalledTimes(1);
+});
+
+test('a slower focus load cannot overwrite a newer pull-to-refresh result', async () => {
+  const focusLoad = deferred<never[]>();
+  const refreshLoad = deferred<never[]>();
+  jest
+    .mocked(fetchDeletedNotes)
+    .mockReset()
+    .mockReturnValueOnce(focusLoad.promise)
+    .mockReturnValueOnce(refreshLoad.promise);
+
+  render(<RecycleBinScreen />);
+  await waitFor(() => expect(fetchDeletedNotes).toHaveBeenCalledTimes(1));
+
+  fireEvent(screen.UNSAFE_getByType(FlatList), 'refresh');
+  await waitFor(() => expect(fetchDeletedNotes).toHaveBeenCalledTimes(2));
+
+  await act(async () => {
+    refreshLoad.resolve([
+      { ...note, id: 'new', title: '较新的回收站结果' },
+    ] as never);
+  });
+  expect(screen.getByText('较新的回收站结果')).toBeTruthy();
+
+  await act(async () => {
+    focusLoad.resolve([
+      { ...note, id: 'old', title: '过期的首次加载结果' },
+    ] as never);
+  });
+
+  expect(screen.queryByText('过期的首次加载结果')).toBeNull();
+  expect(screen.getByText('较新的回收站结果')).toBeTruthy();
+});
+
+
+test('a failed newer refresh does not discard the successful initial load', async () => {
+  const focus = deferred<never[]>();
+  const refresh = deferred<never[]>();
+  jest.mocked(fetchDeletedNotes).mockReset().mockReturnValueOnce(focus.promise).mockReturnValueOnce(refresh.promise);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    render(<RecycleBinScreen />);
+    await waitFor(() => expect(fetchDeletedNotes).toHaveBeenCalledTimes(1));
+    fireEvent(screen.UNSAFE_getByType(FlatList), 'refresh');
+    await act(async () => refresh.reject(new Error('network')));
+    await act(async () => focus.resolve([note] as never));
+    expect(screen.getByText('回收站里的笔记')).toBeTruthy();
+    expect(screen.UNSAFE_getByType(FlatList).props.refreshing).toBe(false);
+  } finally { alert.mockRestore(); }
 });

@@ -120,3 +120,20 @@ test('a complete snapshot with no owned groups is authoritative and does not ref
   expect(groups).toEqual([]);
   expect(loadChatConversations).not.toHaveBeenCalled();
 });
+
+test('cached groups follow ownership changes already present in the authoritative chat snapshot', async () => {
+  mockGetChatState.mockReturnValue({
+    conversations: [circleGroup],
+    conversationsSnapshotLoaded: true,
+  } as never);
+  await loadNotePickerGroups('account-e');
+
+  mockGetChatState.mockReturnValue({
+    conversations: [{ ...memberGroup, myRole: 'OWNER', name: '新群主的群' }],
+    conversationsSnapshotLoaded: true,
+  } as never);
+
+  expect(getCachedNotePickerGroups('account-e')).toEqual([
+    { id: 'conv-member', name: '新群主的群', avatarUrl: undefined },
+  ]);
+});

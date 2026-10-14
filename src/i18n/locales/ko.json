@@ -322,7 +322,9 @@
       "readersNone": "아직 아무도 읽지 않았습니다",
       "readersMore": "{{names}} 외 {{count}}명",
       "editing": "메시지 수정",
-      "resend": "다시 보내기"
+      "resend": "다시 보내기",
+      "resendConfirm": "이 메시지를 다시 보내시겠습니까?",
+      "retryFailed": "전송 실패. 눌러서 다시 보내기"
     },
     "mentions": {
       "empty": "멘션할 수 있는 멤버가 없습니다"

@@ -400,7 +400,9 @@
       "readersNone": "还没有人读到这条消息",
       "readersMore": "{{names}} 等,共 {{count}} 人以上已读",
       "editing": "编辑消息",
-      "resend": "重发"
+      "resend": "重发",
+      "resendConfirm": "重新发送这条消息？",
+      "retryFailed": "发送失败，点击重发"
     },
     "mentions": {
       "empty": "暂无可 @ 的成员"

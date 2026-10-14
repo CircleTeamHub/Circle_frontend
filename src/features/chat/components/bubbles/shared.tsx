@@ -14,9 +14,16 @@ import type { ChatMessage } from '@/types';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 
 export const AVATAR_SIZE = 36;
+export const AVATAR_COLUMN_SIZE = 44;
 /** 合并头像时的等宽占位：这一条不画头像，但那一列的宽度必须留着。 */
 const sAvatar = StyleSheet.create({
-  mergedPlaceholder: { width: AVATAR_SIZE },
+  container: {
+    width: AVATAR_COLUMN_SIZE,
+    height: AVATAR_COLUMN_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mergedPlaceholder: { width: AVATAR_COLUMN_SIZE },
 });
 export const CHAT_CARD_STANDARD_WIDTH = 260;
 export const LOCATION_CARD_WIDTH = 248;
@@ -81,6 +88,7 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({
 
   return onPress ? (
     <Pressable
+      style={sAvatar.container}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
@@ -88,7 +96,7 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({
       {avatar}
     </Pressable>
   ) : (
-    avatar
+    <View style={sAvatar.container}>{avatar}</View>
   );
 };
 
