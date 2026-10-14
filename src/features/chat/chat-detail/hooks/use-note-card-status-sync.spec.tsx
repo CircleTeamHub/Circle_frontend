@@ -72,3 +72,133 @@ test('only fetches newly loaded cards and retries ids whose fetch failed', async
   // 'a' failed before, so it is retried together with the new 'b'.
   expect(mockFetch.mock.calls[1][0].sort()).toEqual(['a', 'b']);
 });
+
+test('does not restart an in-flight reconcile for unrelated text messages', async () => {
+  let resolveFetch!: (value: unknown[]) => void;
+  mockFetch.mockReturnValue(
+    new Promise((resolve) => {
+      resolveFetch = resolve;
+    }),
+  );
+  const { rerender } = renderHook(
+    ({ list }: { list: ChatMessageDto[] }) => useNoteCardStatusSync('conv-1', list),
+    { initialProps: { list: [noteCard('m1', 'a')] } },
+  );
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+
+  rerender({ list: [noteCard('m1', 'a'), text('m2')] });
+  expect(mockFetch).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    resolveFetch([
+      { noteId: 'a', workStatus: 'CLOSED', publicationStatus: 'UNLISTED' },
+    ]);
+    await Promise.resolve();
+  });
+  expect(mockApply).toHaveBeenCalledWith('a', 'CLOSED', 'UNLISTED');
+});
+
+test('does not overwrite a newer realtime status with an older reconcile response', async () => {
+  let resolveFetch!: (value: unknown[]) => void;
+  mockFetch.mockReturnValue(
+    new Promise((resolve) => {
+      resolveFetch = resolve;
+    }),
+  );
+  const messages = [
+    {
+      ...noteCard('m1', 'copy-a'),
+      content: { noteId: 'copy-a', sourceNoteId: 'root-a' },
+    } as ChatMessageDto,
+  ];
+  renderHook(() => useNoteCardStatusSync('conv-1', messages));
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(['copy-a']));
+
+  await act(async () => {
+    useNoteStatusSignalStore.getState().bump({
+      sourceNoteId: 'root-a',
+      workStatus: 'CLOSED',
+      status: 'UNLISTED',
+      available: false,
+      changedAt: '2026-10-12T20:20:00.000Z',
+    });
+    resolveFetch([
+      { noteId: 'copy-a', workStatus: 'WORKING', publicationStatus: 'ACTIVE' },
+    ]);
+    await Promise.resolve();
+  });
+
+  expect(mockApply).not.toHaveBeenCalled();
+});
+
+test('ignores a pre-reconnect response that resolves after the recovery request', async () => {
+  let resolveBeforeReconnect!: (value: unknown[]) => void;
+  let resolveAfterReconnect!: (value: unknown[]) => void;
+  mockFetch
+    .mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveBeforeReconnect = resolve;
+      }),
+    )
+    .mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAfterReconnect = resolve;
+      }),
+    );
+  const messages = [noteCard('m1', 'a')];
+  renderHook(() => useNoteCardStatusSync('conv-1', messages));
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+
+  act(() => {
+    useNoteStatusSignalStore.getState().bump();
+  });
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+
+  await act(async () => {
+    resolveAfterReconnect([
+      { noteId: 'a', workStatus: 'CLOSED', publicationStatus: 'UNLISTED' },
+    ]);
+    await Promise.resolve();
+  });
+  expect(mockApply).toHaveBeenLastCalledWith('a', 'CLOSED', 'UNLISTED');
+
+  await act(async () => {
+    resolveBeforeReconnect([
+      { noteId: 'a', workStatus: 'WORKING', publicationStatus: 'ACTIVE' },
+    ]);
+    await Promise.resolve();
+  });
+  expect(mockApply).toHaveBeenCalledTimes(1);
+});
+
+test('ignores a response from an unmounted chat after a newer chat reconciles', async () => {
+  let resolveOld!: (value: unknown[]) => void;
+  mockFetch.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveOld = resolve;
+    }),
+  );
+  const old = renderHook(() =>
+    useNoteCardStatusSync('conv-old', [noteCard('old-message', 'a')]),
+  );
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+  old.unmount();
+
+  mockFetch.mockResolvedValueOnce([
+    { noteId: 'a', workStatus: 'CLOSED', publicationStatus: 'UNLISTED' },
+  ]);
+  renderHook(() =>
+    useNoteCardStatusSync('conv-new', [noteCard('new-message', 'a')]),
+  );
+  await waitFor(() =>
+    expect(mockApply).toHaveBeenLastCalledWith('a', 'CLOSED', 'UNLISTED'),
+  );
+
+  await act(async () => {
+    resolveOld([
+      { noteId: 'a', workStatus: 'WORKING', publicationStatus: 'ACTIVE' },
+    ]);
+    await Promise.resolve();
+  });
+  expect(mockApply).toHaveBeenCalledTimes(1);
+});

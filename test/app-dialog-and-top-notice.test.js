@@ -74,7 +74,8 @@ test('dialog host runs the button callback synchronously before closing (web use
 
 test('dialog host wires the store queue, dismissal policy and the reduce-motion preference', () => {
   const host = read('src/components/app/app-dialog-host.tsx');
-  assert.match(host, /useAppDialogStore\(\(state\) => state\.queue\[0\]/);
+  assert.match(host, /useAppDialogStore\(\(state\) => state\.queue\)/);
+  assert.match(host, /const head = queue\[0\] \?\? null/);
   assert.match(host, /resolveDialogDismissal\(shown\)/);
   assert.match(host, /useReduceMotion\(\)/);
   assert.match(host, /<KeyboardAvoidingContainer/);
