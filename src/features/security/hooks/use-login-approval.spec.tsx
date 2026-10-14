@@ -132,3 +132,23 @@ test('an ask disappears by itself once it expires', async () => {
     jest.useRealTimers();
   }
 });
+
+test('a pending-list request from the previous account is dropped after reset', async () => {
+  let resolveOld: (value: (typeof challenge)[]) => void = () => undefined;
+  jest
+    .mocked(fetchPendingLoginChallenges)
+    .mockReturnValueOnce(new Promise((resolve) => (resolveOld = resolve)))
+    .mockResolvedValueOnce([]);
+  const store = useLoginApprovalStore.getState();
+
+  void store.refresh();
+  store.reset();
+  await act(async () => {
+    await useLoginApprovalStore.getState().refresh();
+  });
+  // 新账号自己发了请求，没有复用旧账号那个。
+  expect(fetchPendingLoginChallenges).toHaveBeenCalledTimes(2);
+
+  await act(async () => resolveOld([challenge]));
+  expect(useLoginApprovalStore.getState().pending).toEqual([]);
+});

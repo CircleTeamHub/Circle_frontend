@@ -35,6 +35,9 @@ type LoginApprovalState = {
 };
 
 let inFlight: Promise<void> | null = null;
+// 每次 reset（登出 / 切换账号）递增。旧账号发出的请求晚到时按代次丢弃，也不会被
+// 新账号的 refresh 复用——否则上一个账号的登录请求会出现在新账号的弹窗里。
+let generation = 0;
 
 export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
   pending: [],
@@ -44,21 +47,26 @@ export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
   consumedId: null,
   handledIds: [],
   refresh: () => {
-    inFlight ??= fetchPendingLoginChallenges()
-      .then((pending) =>
+    if (inFlight) return inFlight;
+    const requestGeneration = generation;
+    const request: Promise<void> = fetchPendingLoginChallenges()
+      .then((pending) => {
+        if (requestGeneration !== generation) return;
         set((state) => ({
           pending: (Array.isArray(pending) ? pending : []).filter(
             (item) => !state.handledIds.includes(item.id),
           ),
-        })),
-      )
+        }));
+      })
       .catch((error) => {
+        if (requestGeneration !== generation) return;
         reportHandledFailure('loginApproval', 'fetchPending', error);
       })
       .finally(() => {
-        inFlight = null;
+        if (inFlight === request) inFlight = null;
       });
-    return inFlight;
+    inFlight = request;
+    return request;
   },
   remove: (challengeId) =>
     set((state) => ({
@@ -72,7 +80,11 @@ export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
       consumedId: status === 'CONSUMED' ? challengeId : state.consumedId,
     })),
   setAppLocked: (appLocked) => set({ appLocked }),
-  reset: () => set({ pending: [], consumedId: null, handledIds: [] }),
+  reset: () => {
+    generation += 1;
+    inFlight = null;
+    set({ pending: [], consumedId: null, handledIds: [] });
+  },
 }));
 
 setLoginChallengeListener((event) => {

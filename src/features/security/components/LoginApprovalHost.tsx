@@ -1,7 +1,6 @@
 import { useCallback, useMemo, type ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -13,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useLoginApproval } from '@/features/security/hooks/use-login-approval';
+import { DialogOverlay } from '@/components/app/dialog-overlay';
 
 const s = StyleSheet.create({
   overlay: {
@@ -189,11 +189,10 @@ export function LoginApprovalHost() {
         : 'loginApproval.rejectedTitle';
 
   return (
-    <Modal
+    // 不用 RN Modal：iOS 上它从根 VC present，与应用锁的 Modal 同时弹会被 UIKit
+    // 拒绝（应用锁可能因此出不来）。DialogOverlay 在 iOS 走 FullWindowOverlay。
+    <DialogOverlay
       visible
-      transparent
-      animationType="fade"
-      statusBarTranslucent
       // 询问阶段必须明确选「是我 / 不是我」，返回键不关；其余阶段可直接关。
       onRequestClose={stage.kind === 'ask' ? () => undefined : approval.close}
     >
@@ -206,6 +205,6 @@ export function LoginApprovalHost() {
           {body}
         </View>
       </View>
-    </Modal>
+    </DialogOverlay>
   );
 }
