@@ -209,6 +209,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
   const isLoading = useAuthStore((state) => state.isLoading);
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const accountSwitching = useAccountSwitcherStore((state) => state.switching);
+  const addingAccount = useAccountSwitcherStore((state) => state.addingAccount);
   const { colors } = useTheme();
   const decision = getAuthRouteDecision({
     firstSegment,
@@ -216,6 +217,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
     isLoading,
     onboardingRequired,
     accountSwitching,
+    addingAccount,
   });
 
   if (decision.type === 'redirect') {

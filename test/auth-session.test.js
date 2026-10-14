@@ -131,6 +131,11 @@ function makeBaseMocks() {
         getState: () => ({ reset: () => calls.push('resetNotifications') }),
       },
     },
+    '@/features/notifications/store/use-notification-snackbar-store': {
+      useNotificationSnackbarStore: {
+        getState: () => ({ reset: () => calls.push('resetNotificationSnackbar') }),
+      },
+    },
     '@/stores/userVipStore': {
       invalidateVipLevels: () => calls.push('invalidateVip'),
     },
@@ -180,6 +185,8 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetDiscover',
     'resetMoments',
     'resetNotifications',
+    // 排队中的消息横幅是上一个账号的私聊预览,切号/添加账号后不能在新账号里接着弹、被点开。
+    'resetNotificationSnackbar',
     'invalidateVip',
     'resetDiagnosticBreadcrumbs',
     'clearStorage',
@@ -268,6 +275,8 @@ test('clearLocalSession still clears local state when a teardown handler throws'
     'resetDiscover',
     'resetMoments',
     'resetNotifications',
+    // 排队中的消息横幅是上一个账号的私聊预览,切号/添加账号后不能在新账号里接着弹、被点开。
+    'resetNotificationSnackbar',
     'invalidateVip',
     'resetDiagnosticBreadcrumbs',
     'clearStorage',

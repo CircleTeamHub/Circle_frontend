@@ -13,6 +13,8 @@ type AuthRouteDecisionInput = {
   onboardingRequired: boolean;
   /** 切换账号进行中:会话短暂处于「已清空、新账号未激活」,此时不做任何重定向。 */
   accountSwitching?: boolean;
+  /** 「添加账号」:当前账号仍登着,放它进 (auth) 页登录另一个号。 */
+  addingAccount?: boolean;
 };
 
 export function getAuthRouteDecision({
@@ -21,6 +23,7 @@ export function getAuthRouteDecision({
   isLoading,
   onboardingRequired,
   accountSwitching = false,
+  addingAccount = false,
 }: AuthRouteDecisionInput): AuthRouteDecision {
   if (accountSwitching) return { type: 'allow' };
 
@@ -51,7 +54,7 @@ export function getAuthRouteDecision({
     return { type: 'redirect', href: '/(tabs)/messages' };
   }
 
-  if (isAuthenticated && isAuthRoute) {
+  if (isAuthenticated && isAuthRoute && !addingAccount) {
     return { type: 'redirect', href: '/(tabs)/messages' };
   }
 

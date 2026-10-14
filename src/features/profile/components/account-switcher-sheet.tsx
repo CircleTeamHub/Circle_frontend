@@ -143,6 +143,8 @@ export function AccountSwitcherSheet() {
   );
 
   function handleAddAccount() {
+    // 先立标记再跳:当前账号还登着,不放行的话根守卫会把登录页当场换回消息页。
+    useAccountSwitcherStore.getState().setAddingAccount(true);
     close();
     router.push('/(auth)/login');
   }

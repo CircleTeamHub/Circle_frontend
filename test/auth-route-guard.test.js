@@ -277,7 +277,71 @@ test('the root guard and switchToAccount share the account-switching flag', () =
   const auth = fs.readFileSync(path.join(__dirname, '..', 'src/hooks/use-auth.ts'), 'utf8');
 
   assert.match(layout, /useAccountSwitcherStore\(\(state\) => state\.switching\)/);
-  assert.match(layout, /accountSwitching,\n\s*\}\);/);
+  assert.match(layout, /getAuthRouteDecision\(\{[^}]*\baccountSwitching,/);
   assert.match(auth, /setSwitching\(true\);\s*\n\s*try \{/);
   assert.match(auth, /finally \{\s*\n\s*useAccountSwitcherStore\.getState\(\)\.setSwitching\(false\);/);
+});
+
+test('adding an account: a signed-in user may open the login page instead of being bounced to messages', () => {
+  const { getAuthRouteDecision } = loadPolicy();
+
+  // 「切换账号 → 添加账号」时当前账号仍登着;平时那条「已登录别停在登录页」的
+  // 重定向会把人立刻弹回聊天页,登录另一个号根本进不去。
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: '(auth)',
+      isAuthenticated: true,
+      isLoading: false,
+      onboardingRequired: false,
+      addingAccount: true,
+    })),
+    { type: 'allow' },
+  );
+  // 没在添加账号时规则照旧。
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: '(auth)',
+      isAuthenticated: true,
+      isLoading: false,
+      onboardingRequired: false,
+      addingAccount: false,
+    })),
+    { type: 'redirect', href: '/(tabs)/messages' },
+  );
+  // 添加账号不放宽别的页:未登录照样只能待在 (auth)。
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: '(tabs)',
+      isAuthenticated: false,
+      isLoading: false,
+      onboardingRequired: false,
+      addingAccount: true,
+    })),
+    { type: 'redirect', href: '/(auth)/login' },
+  );
+});
+
+test('the add-account entry, the root guard and the policy share the adding-account flag', () => {
+  const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+  const layout = read('app/_layout.tsx');
+  const sheet = read('src/features/profile/components/account-switcher-sheet.tsx');
+
+  // 弹层要在跳登录页之前立起标记,否则守卫在 push 落地那一帧就把人送回消息页。
+  const handler = sheet.slice(sheet.indexOf('function handleAddAccount'));
+  assert.ok(
+    handler.indexOf('setAddingAccount(true)') > -1 &&
+      handler.indexOf('setAddingAccount(true)') < handler.indexOf("router.push('/(auth)/login')"),
+    'handleAddAccount must raise addingAccount before pushing the login page',
+  );
+  assert.match(layout, /useAccountSwitcherStore\(\(state\) => state\.addingAccount\)/);
+  assert.match(layout, /getAuthRouteDecision\(\{[^}]*\baddingAccount,/);
+  // 标记跟 (auth) 分组的挂载期走:(auth) 离开导航栈时收回(登录成功跳走或用户返回放弃)。
+  const authLayout = read('app/(auth)/_layout.tsx');
+  assert.match(authLayout, /useAddingAccountScope\(\);/);
+  // 登录页压在已登录的会话上时要给出可见的返回键,不能只靠滑动手势。
+  const login = read('src/features/auth/screens/LoginScreen.tsx');
+  const backButton = read('src/features/auth/components/AddAccountBackButton.tsx');
+  assert.match(login, /<AddAccountBackButton \/>/);
+  assert.match(backButton, /state\.addingAccount/);
+  assert.match(backButton, /router\.back\(\)/);
 });

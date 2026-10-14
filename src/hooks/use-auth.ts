@@ -43,6 +43,42 @@ type AuthSuccessOptions = {
   startAppServices?: boolean;
 };
 
+/**
+ * 离开当前账号前把它连同最新 token 记回本机账号列表。服务端每次刷新都会轮换
+ * refresh token,列表里若还是登录时那一对,切回来就拿作废的 token 撞 401、被当成
+ * 过期账号移除。
+ */
+function rememberCurrentAccount() {
+  const { user, accessToken, refreshToken } = useAuthStore.getState();
+  if (!user || !accessToken || !refreshToken) return;
+  useKnownAccountsStore.getState().upsertAccount({
+    user,
+    accessToken,
+    refreshToken,
+    updatedAt: Date.now(),
+  });
+}
+
+/** 发起登录时已经登着的会话(「添加账号」),失败时要原样保留它。 */
+function liveSessionEpoch(): number | null {
+  const { isAuthenticated, sessionEpoch } = useAuthStore.getState();
+  return isAuthenticated ? sessionEpoch : null;
+}
+
+/**
+ * 登录失败时清掉这次登录留下的半截会话;但「添加账号」时若失败发生在拆旧会话之前
+ * (密码错、拉资料失败),旧账号还原封不动地登着,不能连它一起登出。
+ */
+function clearFailedLoginSession(preservedEpoch: number | null): Promise<void> {
+  if (
+    preservedEpoch !== null &&
+    useAuthStore.getState().sessionEpoch === preservedEpoch
+  ) {
+    return Promise.resolve();
+  }
+  return clearLocalSession();
+}
+
 export function useAuth() {
   const router = useRouter();
   // selector 化：避免订阅整个 authStore —— token 后台刷新或别处更新 user
@@ -82,9 +118,31 @@ export function useAuth() {
         fetchCurrentUserWithToken(tokens.accessToken),
       );
 
-      setSession(tokens, user, {
-        onboardingRequired: options.onboardingRequired ?? false,
-      });
+      const current = useAuthStore.getState();
+      const replacingSession = current.isAuthenticated;
+      if (replacingSession && current.user?.id === user.id) {
+        // 「添加账号」登的就是当前账号:拆会话会清掉本账号的草稿、待发媒体、聊天背景
+        // 等本地数据,所以只换上新 token;被顶替的旧 token 在服务端撤销,别留一个没人
+        // 持有的活会话挂在登录设备列表里。
+        const supersededRefreshToken = current.refreshToken;
+        current.setTokens(tokens);
+        current.setUser(user);
+        if (supersededRefreshToken) {
+          void logoutRequest(supersededRefreshToken).catch((err) => {
+            reportHandledFailure('auth', 'revokeSupersededSession', err);
+          });
+        }
+      } else {
+        if (replacingSession) {
+          // 「添加账号」:上一个账号此刻还登着。记下它再拆掉本地会话(IM、依赖 store、
+          // 持久化),不撤销服务端会话 —— 它留在账号列表里,随时能切回来。
+          rememberCurrentAccount();
+          await clearLocalSession();
+        }
+        setSession(tokens, user, {
+          onboardingRequired: options.onboardingRequired ?? false,
+        });
+      }
 
       // 记入「本设备登录过的账号」，供切换账号免密快速进入。
       useKnownAccountsStore.getState().upsertAccount({
@@ -102,8 +160,14 @@ export function useAuth() {
 
       // 登录页本身由根布局的 AuthRouteGuard 监听 session 状态并跳转。
       // 这里不再命令式 replace，避免和 <Redirect> 同帧竞争导致主页入栈两次。
+      // 例外是「添加账号」:登录页压在旧账号的 tabs 之上,守卫此时放行不跳,而它的
+      // replace 也会再挂一份 tabs,这里退回原来那一层并切到消息页。按标记而非
+      // replacingSession 判断:停在登录页期间旧账号可能已被远端踢下线。
+      if (replacingSession || useAccountSwitcherStore.getState().addingAccount) {
+        router.dismissTo('/(tabs)/messages');
+      }
     },
-    [setSession],
+    [router, setSession],
   );
 
   const login = useCallback(
@@ -119,6 +183,7 @@ export function useAuth() {
       }
       inFlightRef.current = true;
       safeSetSubmitting(true);
+      const preservedEpoch = liveSessionEpoch();
       try {
         const result = await loginRequest({
           identifier: normalizedIdentifier,
@@ -139,7 +204,7 @@ export function useAuth() {
         }
         await onAuthSuccess(result.tokens);
       } catch (requestError) {
-        await clearLocalSession();
+        await clearFailedLoginSession(preservedEpoch);
         safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')));
       } finally {
         inFlightRef.current = false;
@@ -152,10 +217,11 @@ export function useAuth() {
   /** 陌生设备通过验证后，用验证接口发回的 token 走与密码登录相同的收尾。 */
   const completeVerifiedLogin = useCallback(
     async (tokens: AuthTokens) => {
+      const preservedEpoch = liveSessionEpoch();
       try {
         await onAuthSuccess(tokens);
       } catch (requestError) {
-        await clearLocalSession();
+        await clearFailedLoginSession(preservedEpoch);
         throw requestError;
       }
     },
@@ -190,6 +256,7 @@ export function useAuth() {
       // 账号是否已经落到服务端 —— 决定失败了该怎么报。
       // registerRequest 一旦返回，邮箱就被占用了，此后再失败都不是「注册失败」。
       let accountCreated = false;
+      const preservedEpoch = liveSessionEpoch();
       try {
         const normalizedInviteCode = inviteCode.trim();
         const tokens = await registerRequest({
@@ -210,7 +277,7 @@ export function useAuth() {
           // 注册成功、只是建会话那步崩了（真实事故：/auth/me 连着 500）。
           // 这里若报「注册失败」，用户会原样重试并撞上自己刚占掉的邮箱拿 409，
           // 而密码其实早已生效 —— 邮箱就这么废在半路上。必须告诉他去登录。
-          await clearLocalSession().catch((cleanupError) => {
+          await clearFailedLoginSession(preservedEpoch).catch((cleanupError) => {
             reportHandledFailure('auth', 'registerSessionCleanup', cleanupError);
           });
           safeSetError(i18n.t('auth.errors.registerSucceededSessionFailed'));
@@ -286,6 +353,7 @@ export function useAuth() {
       useAccountSwitcherStore.getState().setSwitching(true);
       try {
         // teardown 当前账号（IM 登出、清空依赖 store、清持久化会话）。
+        rememberCurrentAccount();
         await clearLocalSession();
 
         // 先用存储的资料乐观激活，UI 立即切到目标账号。

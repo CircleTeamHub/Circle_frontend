@@ -1,6 +1,7 @@
 import { AuthInput } from '@/components/ui/auth-input';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { AddAccountBackButton } from '@/features/auth/components/AddAccountBackButton';
 import { LoginPrimaryButton } from '@/features/auth/components/LoginPrimaryButton';
 import { LoginSky } from '@/features/auth/components/LoginSky';
 import {
@@ -311,6 +312,8 @@ export default function LoginScreen() {
           </>
         )}
       </ScrollView>
+      {/* 「添加账号」时登录页压在已登录会话上,给出返回键 */}
+      <AddAccountBackButton />
     </KeyboardAvoidingContainer>
   );
 }
