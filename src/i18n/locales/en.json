@@ -3612,6 +3612,7 @@
       "REJECTED": "Request rejected",
       "EXPIRED": "Invitation or request expired",
       "CANCELLED": "Application cancelled"
-    }
+    },
+    "sentInvitation": "You invited them to join the group"
   }
 }

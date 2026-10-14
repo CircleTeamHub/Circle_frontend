@@ -3612,6 +3612,7 @@
       "REJECTED": "Solicitud rechazada",
       "EXPIRED": "Invitación o solicitud caducada",
       "CANCELLED": "Solicitud cancelada"
-    }
+    },
+    "sentInvitation": "Invitaste a esta persona al grupo"
   }
 }

@@ -276,7 +276,9 @@ export function GroupAdmissionsList({
               setCircleInvitations(old => old.map(row => circleIds.includes(row.id) ? { ...row, unreadCount: 0 } : row));
               return refreshGroupAdmissionUnread();
             }).catch(e => reportHandledFailure('groupAdmission', 'seen', e));
-            if (item.circleInvitation)
+            if (item.circleInvitation && item.groupId && ['APPROVED', 'ADMIN_APPROVED'].includes(item.circleInvitation.status))
+              router.push(getChatDetailHref(scope, item.sourceId ?? item.groupId, item.name, item.avatar ?? undefined, item.groupId, undefined, 'group'));
+            else if (item.circleInvitation)
               router.push({
                 pathname: "/(tabs)/discover/invitation/[id]",
                 params: { id: item.circleInvitation.id },

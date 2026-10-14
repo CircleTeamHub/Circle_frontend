@@ -175,7 +175,7 @@ export default function GroupEntryScreen() {
       if (action && detail) await actOnGroupAdmission(detail.id, action);
       else {
         const applied = await applyToGroup(group.id, reason) as { id?: string };
-        if (admissionId && applied.id && applied.id !== admissionId &&
+        if (applied.id && applied.id !== admissionId &&
             version === generation.current && useAuthStore.getState().sessionEpoch === sessionEpoch) {
           router.setParams({ admissionId: applied.id });
           return;

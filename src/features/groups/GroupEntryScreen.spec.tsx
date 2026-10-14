@@ -238,3 +238,10 @@ it('circle member navigation keeps circle source ID and chat conversation ID dis
   render(<GroupEntryScreen />);
   await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(expect.objectContaining({ params: expect.objectContaining({ sourceID: 'circle-id', conversationID: 'chat-id' }) })));
 });
+
+test('a first card application stores its returned ID for subsequent realtime updates', async () => {
+  jest.mocked(applyToGroup).mockResolvedValue({ id: 'first-application', status: 'PENDING' } as never);
+  render(<GroupEntryScreen />);
+  fireEvent.press(await screen.findByLabelText('groupAdmission.apply'));
+  await waitFor(() => expect(mockRouter.setParams).toHaveBeenCalledWith({ admissionId: 'first-application' }));
+});

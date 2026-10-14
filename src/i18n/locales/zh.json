@@ -3604,6 +3604,7 @@
       "REJECTED": "申请未通过",
       "EXPIRED": "邀请或申请已过期",
       "CANCELLED": "申请已取消"
-    }
+    },
+    "sentInvitation": "你邀请对方加入群聊"
   }
 }

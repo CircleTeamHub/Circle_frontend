@@ -1,3 +1,4 @@
+import type { GestureResponderEvent } from 'react-native';
 import { useCallback, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -20,6 +21,7 @@ export function GroupInvitationBubble({
   selfName,
   selfAvatarUri,
   onPress,
+  onLongPress,
 }: {
   message: ChatMessage;
   senderName?: string;
@@ -27,6 +29,7 @@ export function GroupInvitationBubble({
   selfName?: string;
   selfAvatarUri?: string;
   onPress: (id: string, circle?: boolean) => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
 }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<GroupAdmissionStatus | "CANCELLED" | null>(null);
@@ -85,7 +88,7 @@ export function GroupInvitationBubble({
       }
       leading={<GroupChatAvatar name={name} uri={uri} size={48} />}
       title={name}
-      subtitle={t("groupAdmission.invitedBy", {
+      subtitle={t(message.outgoing ? "groupAdmission.sentInvitation" : "groupAdmission.invitedBy", {
         name: senderName ?? selfName ?? "",
       })}
       footer={
@@ -94,6 +97,7 @@ export function GroupInvitationBubble({
           : t("groupAdmission.viewInvitation")
       }
       onPress={() => onPress(id, Boolean(circleId))}
+      onLongPress={onLongPress}
     />
   );
 }

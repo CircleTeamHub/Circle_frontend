@@ -211,3 +211,12 @@ test('retry after a failed refresh uses page one instead of the old pagination c
   await waitFor(() => expect(fetchGroupAdmissions).toHaveBeenCalledTimes(3));
   expect(fetchGroupAdmissions).toHaveBeenLastCalledWith(undefined, undefined);
 });
+
+test('a joined circle merged with approved invitation history opens its conversation', async () => {
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [], nextCursor: null });
+  jest.mocked(fetchMyApplications).mockResolvedValue([{ id: 'history', circleId: 'circle', circleName: '已加入圈子', status: 'APPROVED', inviter: {}, applicant: {} }] as never);
+  mockConversations = [{ id: 'chat', type: 'GROUP', circleId: 'circle', name: '已加入圈子', unreadCount: 0 }];
+  const ui = render(<GroupAdmissionsList includeJoined />);
+  fireEvent.press(await ui.findByText('已加入圈子'));
+  expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(tabs)/contacts/chat-detail' }));
+});
