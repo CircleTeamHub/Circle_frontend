@@ -124,7 +124,7 @@ export function useAuth() {
       );
 
       const current = useAuthStore.getState();
-      if ((options.isAttemptCurrent && !options.isAttemptCurrent()) || (options.expectedSessionEpoch != null && current.sessionEpoch !== options.expectedSessionEpoch)) {
+      if (!mountedRef.current || (options.isAttemptCurrent && !options.isAttemptCurrent()) || (options.expectedSessionEpoch != null && current.sessionEpoch !== options.expectedSessionEpoch)) {
         void logoutRequest(tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
         return;
       }
