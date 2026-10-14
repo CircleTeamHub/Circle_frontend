@@ -155,3 +155,8 @@ test("snackbar route resolver covers all actionable notification targets", () =>
   assert.match(route, /fromTrace\?\.id/);
   assert.match(route, /\/\(tabs\)\/discover\/moment\/\[id\]/);
 });
+
+test('admission banners preserve badges belonging to discover domains', () => {
+  const host = read('src/features/notifications/components/NotificationSnackbarHost.tsx');
+  assert.match(host, /const domain = notificationDomain\(shown.type\);\s*if \(domain\) badgeStore.setDiscoverUnread/);
+});

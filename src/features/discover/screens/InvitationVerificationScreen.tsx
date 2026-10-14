@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -32,7 +33,7 @@ const MIN_SLOTS = 1;
 
 const s = StyleSheet.create({
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: Spacing.lg,
   },
   progressRow: {
@@ -250,7 +251,7 @@ export default function InvitationVerificationScreen() {
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('invitation.joinTitle', { name: invitation.circleName })} />
-      <View style={s.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[s.content, { paddingBottom: insets.bottom + Spacing.lg }]}>
         <Text style={[s.subtitle, d.subtitle]}>
           {t('invitation.requireVerifiers', { count: totalSlots })}
         </Text>
@@ -366,7 +367,7 @@ export default function InvitationVerificationScreen() {
             </Text>
           </View>
         ) : null}
-      </View>
+      </ScrollView>
     </View>
   );
 }

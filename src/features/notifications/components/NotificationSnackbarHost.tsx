@@ -196,10 +196,8 @@ export function NotificationSnackbarHost() {
       if (!shown.read) {
         // 总数和所属域的计数一起减；只减总数会让对应铃铛的红点一直挂着。
         const badgeStore = useTabBadgeStore.getState();
-        badgeStore.setDiscoverUnread(
-          Math.max(0, badgeStore.discoverUnread - 1),
-        );
         const domain = notificationDomain(shown.type);
+        if (domain) badgeStore.setDiscoverUnread(Math.max(0, badgeStore.discoverUnread - 1));
         if (domain === 'moments') {
           badgeStore.setMomentsUnread(Math.max(0, badgeStore.momentsUnread - 1));
         } else if (domain === 'circle') {

@@ -200,3 +200,14 @@ test('replays a notification refresh once the initial load settles', async () =>
   await waitFor(() => expect(fetchGroupAdmissions).toHaveBeenCalledTimes(2));
   expect(await ui.findByText('新邀请')).toBeTruthy();
 });
+
+test('retry after a failed refresh uses page one instead of the old pagination cursor', async () => {
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [], nextCursor: 'page-2' });
+  const ui = render(<GroupAdmissionsList />);
+  await waitFor(() => expect(ui.UNSAFE_getByType(FlatList).props.refreshing).toBe(false));
+  jest.mocked(fetchGroupAdmissions).mockRejectedValueOnce(new Error('offline'));
+  fireEvent(ui.UNSAFE_getByType(FlatList), 'refresh');
+  fireEvent.press(await ui.findByText('common.retry'));
+  await waitFor(() => expect(fetchGroupAdmissions).toHaveBeenCalledTimes(3));
+  expect(fetchGroupAdmissions).toHaveBeenLastCalledWith(undefined, undefined);
+});

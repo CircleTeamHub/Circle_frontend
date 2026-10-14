@@ -83,6 +83,7 @@ export function GroupAdmissionsList({
   const [error, setError] = useState("");
   const generation = useRef(0);
   const paging = useRef(false);
+  const failedCursor = useRef<string | undefined>(undefined);
   const refreshPending = useRef(false);
   const load = useCallback(
     async function loadPage(next?: string): Promise<void> {
@@ -114,8 +115,10 @@ export function GroupAdmissionsList({
         setCursor(result.nextCursor);
         setError("");
       } catch (e) {
-        if (version === generation.current)
+        if (version === generation.current) {
+          failedCursor.current = next;
           setError(getApiErrorMessage(e, t("groupAdmission.loadFailed")));
+        }
         reportHandledFailure("groupAdmission", "list", e);
       } finally {
         if (version === generation.current) {
@@ -247,7 +250,7 @@ export function GroupAdmissionsList({
         error ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => void load(cursor ?? undefined)}
+            onPress={() => void load(failedCursor.current)}
             style={{ padding: Spacing.md }}
           >
             <Text style={{ color: colors.text }}>{error}</Text>
