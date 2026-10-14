@@ -3,13 +3,14 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { FlatList, StyleSheet } from 'react-native';
 import { GroupAdmissionsList } from './GroupAdmissionsList';
 import { InboxTabsHeader } from '@/features/contacts/components/InboxTabsHeader';
-import { fetchGroupAdmissions } from '@/services/api/group-admissions';
+import { fetchGroupAdmissions, markGroupAdmissionSeen } from '@/services/api/group-admissions';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { fetchMyApplications } from '@/services/api/circles';
 
 const mockAuth = { sessionEpoch: 1, user: { id: 'actor' } };
 const mockPush = jest.fn();
 let mockConversations: any[] = [];
+let mockInteractive: any[] = [];
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -37,10 +38,10 @@ jest.mock('@/chat-core/store', () => ({ useChatStore: (select: (s: unknown) => u
 jest.mock('@/chat-core/api', () => ({ loadChatConversations: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@/chat-core/mappers', () => ({ mapChatConversationToUI: jest.fn() }));
 jest.mock('@/features/notifications/store/use-notification-center-store', () => ({
-  useNotificationCenterStore: (select: (s: unknown) => unknown) => select({ interactive: [] }),
+  useNotificationCenterStore: (select: (s: unknown) => unknown) => select({ interactive: mockInteractive }),
 }));
-jest.mock('@/services/api/group-admissions', () => ({ fetchGroupAdmissions: jest.fn(), refreshGroupAdmissionUnread: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('@/services/api/circles', () => ({ fetchMyApplications: jest.fn() }));
+jest.mock('@/services/api/group-admissions', () => ({ fetchGroupAdmissions: jest.fn(), markGroupAdmissionSeen: jest.fn().mockResolvedValue(undefined), refreshGroupAdmissionUnread: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('@/services/api/circles', () => ({ fetchMyApplications: jest.fn(), markCircleInvitationSeen: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_: unknown, fallback: string) => fallback }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: () => null }));
@@ -52,6 +53,7 @@ jest.mock('@/theme', () => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockConversations = [];
+  mockInteractive = [];
   jest.mocked(mapChatConversationToUI).mockImplementation((c: any) => ({ name: c.name, sourceID: c.circleId ?? c.id, unreadCount: c.unreadCount }) as any);
   jest.mocked(fetchMyApplications).mockResolvedValue([]);
 });
@@ -171,4 +173,30 @@ test.each([['APPROVED','已加入群聊'],['ADMIN_APPROVED','已加入群聊'],[
   const ui = render(<GroupAdmissionsList />);
   await ui.findByText(label);
   expect(ui.queryByText('已提交，等待管理员审核')).toBeNull();
+});
+
+test('opening one merged group clears unread admission cycles including older records', async () => {
+  const group = { id: 'g', name: '同一群', avatarUrl: null };
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [
+    { id: 'old', conversationId: 'g', unreadCount: 1, group, updatedAt: '2026-10-12', status: 'JOINED' },
+    { id: 'new', conversationId: 'g', unreadCount: 2, group, updatedAt: '2026-10-14', status: 'INVITED' },
+  ] as any, nextCursor: null });
+  const ui = render(<GroupAdmissionsList />);
+  fireEvent.press(await ui.findByText('同一群'));
+  await waitFor(() => expect(markGroupAdmissionSeen).toHaveBeenCalledWith('old'));
+  expect(markGroupAdmissionSeen).toHaveBeenCalledWith('new');
+  await waitFor(() => expect(ui.UNSAFE_getByType(FlatList).props.data[0].unreadCount).toBe(0));
+});
+
+test('replays a notification refresh once the initial load settles', async () => {
+  let resolve!: (value: any) => void;
+  jest.mocked(fetchGroupAdmissions).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [{ id: 'new', group: { name: '新邀请', avatarUrl: null }, status: 'INVITED' }] as any, nextCursor: null });
+  const ui = render(<GroupAdmissionsList />);
+  await waitFor(() => expect(fetchGroupAdmissions).toHaveBeenCalledTimes(1));
+  mockInteractive = [{ id: 'notification', type: 'GROUP_ADMISSION' }];
+  ui.rerender(<GroupAdmissionsList />);
+  resolve({ items: [], nextCursor: null });
+  await waitFor(() => expect(fetchGroupAdmissions).toHaveBeenCalledTimes(2));
+  expect(await ui.findByText('新邀请')).toBeTruthy();
 });

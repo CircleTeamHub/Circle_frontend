@@ -29,7 +29,7 @@ export function GroupInvitationBubble({
   onPress: (id: string, circle?: boolean) => void;
 }) {
   const { t } = useTranslation();
-  const [status, setStatus] = useState<GroupAdmissionStatus | null>(null);
+  const [status, setStatus] = useState<GroupAdmissionStatus | "CANCELLED" | null>(null);
   const user = useAuthStore((s) => s.user?.id);
   const circleId = message.groupInvitation?.circleInvitationId ?? "";
   const id = circleId || message.groupInvitation?.admissionId || "";
@@ -52,9 +52,7 @@ export function GroupInvitationBubble({
                 status: (record.status === "APPROVED" ||
                 record.status === "ADMIN_APPROVED"
                   ? "JOINED"
-                  : record.status === "CANCELLED"
-                    ? "DECLINED"
-                    : record.status) as GroupAdmissionStatus,
+                  : record.status) as GroupAdmissionStatus | "CANCELLED",
               }))
             : fetchGroupAdmission(id)
         )

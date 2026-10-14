@@ -2,7 +2,7 @@ import { mapChatConversationToUI } from "@/chat-core/mappers";
 import { selectGroupConversations } from "@/features/contacts/utils/group-chat-rows";
 import { useNotificationCenterStore } from "@/features/notifications/store/use-notification-center-store";
 import { keyboardDismissOnDragProps } from "@/components/ui/keyboard-dismiss";
-import { fetchMyApplications } from "@/services/api/circles";
+import { fetchMyApplications, markCircleInvitationSeen } from "@/services/api/circles";
 import type { CircleInvitation } from "@/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -16,6 +16,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   fetchGroupAdmissions,
+  markGroupAdmissionSeen,
   refreshGroupAdmissionUnread,
   type GroupAdmissionDetail,
 } from "@/services/api/group-admissions";
@@ -39,6 +40,8 @@ type Row = {
   name: string;
   avatar: string | null;
   admission?: GroupAdmissionDetail;
+  admissionIds?: string[];
+  circleInvitationIds?: string[];
   circleInvitation?: CircleInvitation;
   groupId?: string;
   sourceId?: string;
@@ -80,9 +83,10 @@ export function GroupAdmissionsList({
   const [error, setError] = useState("");
   const generation = useRef(0);
   const paging = useRef(false);
+  const refreshPending = useRef(false);
   const load = useCallback(
-    async (next?: string) => {
-      if (paging.current) return;
+    async function loadPage(next?: string): Promise<void> {
+      if (paging.current) { if (!next) refreshPending.current = true; return; }
       paging.current = true;
       const version = generation.current;
       if (!next) setLoading(true);
@@ -117,6 +121,7 @@ export function GroupAdmissionsList({
         if (version === generation.current) {
           setLoading(false);
           paging.current = false;
+          if (refreshPending.current) { refreshPending.current = false; void loadPage(); }
         }
       }
     },
@@ -126,6 +131,7 @@ export function GroupAdmissionsList({
     useCallback(() => {
       generation.current++;
       paging.current = false;
+      refreshPending.current = false;
       setItems([]);
       setCircleInvitations([]);
       setCursor(null);
@@ -140,6 +146,7 @@ export function GroupAdmissionsList({
       return () => {
         generation.current++;
         paging.current = false;
+        refreshPending.current = false;
       };
     }, [includeJoined, load]),
   );
@@ -158,6 +165,7 @@ export function GroupAdmissionsList({
       name: a.group.name,
       avatar: a.group.avatarUrl,
       admission: a,
+      admissionIds: (a.unreadCount ?? 0) > 0 ? [a.id] : [],
       unreadCount: a.unreadCount ?? 0,
     }));
     const ownAdmissions = [...items].filter((a) => a.isApplicant || a.applicantId === userId)
@@ -187,6 +195,7 @@ export function GroupAdmissionsList({
       name: invitation.circleName,
       avatar: null,
       circleInvitation: invitation,
+      circleInvitationIds: (invitation.unreadCount ?? 0) > 0 ? [invitation.id] : [],
       unreadCount: invitation.unreadCount ?? 0,
     }));
     // The scoped manager view still lists individual people requiring decisions.
@@ -198,6 +207,8 @@ export function GroupAdmissionsList({
       const existing = byGroup.get(row.identity);
       if (existing) {
         existing.unreadCount += row.unreadCount;
+        existing.admissionIds = [...(existing.admissionIds ?? []), ...(row.admissionIds ?? [])];
+        existing.circleInvitationIds = [...(existing.circleInvitationIds ?? []), ...(row.circleInvitationIds ?? [])];
         existing.groupId ??= row.groupId;
         existing.sourceId ??= row.sourceId;
       } else byGroup.set(row.identity, { ...row, key: row.identity });
@@ -251,6 +262,17 @@ export function GroupAdmissionsList({
             ? `${item.name}, ${t("common.unreadCount", { count: item.unreadCount })}`
             : item.name}
           onPress={() => {
+            const admissionIds = item.admissionIds ?? [];
+            const circleIds = item.circleInvitationIds ?? [];
+            if (admissionIds.length || circleIds.length) void Promise.all([
+              ...admissionIds.map(id => markGroupAdmissionSeen(id)),
+              ...circleIds.map(id => markCircleInvitationSeen(id)),
+            ]).then(() => {
+              if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+              setItems(old => old.map(row => admissionIds.includes(row.id) ? { ...row, unreadCount: 0 } : row));
+              setCircleInvitations(old => old.map(row => circleIds.includes(row.id) ? { ...row, unreadCount: 0 } : row));
+              return refreshGroupAdmissionUnread();
+            }).catch(e => reportHandledFailure('groupAdmission', 'seen', e));
             if (item.circleInvitation)
               router.push({
                 pathname: "/(tabs)/discover/invitation/[id]",
