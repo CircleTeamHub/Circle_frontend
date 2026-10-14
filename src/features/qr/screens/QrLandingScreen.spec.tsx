@@ -128,3 +128,9 @@ test('opening a group QR only previews it; acceptance with pending approval neve
   expect(acceptGroupQrInvitation).toHaveBeenCalledWith('l'.repeat(32));
   expect(mockRouter.replace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(tabs)/messages/group-entry', params: { admissionId: 'request-1' } }));
 });
+
+test.each([['GROUP', 'groupAdmission.accept'], ['CIRCLE', 'qr.joinCircle']] as const)('uses the proper action label for %s QR', async (type, label) => {
+  jest.mocked(resolveQrToken).mockResolvedValue({ ...userPreview, type, memberCount: 2 });
+  render(<QrLandingScreen />);
+  expect(await screen.findByText(label)).toBeTruthy();
+});

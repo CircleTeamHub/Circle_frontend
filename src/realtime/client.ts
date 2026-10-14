@@ -525,7 +525,6 @@ function handleRealtimeEvent(message: RealtimeEvent) {
         .setRealtimeCount(message.payload?.count ?? 0);
       return;
     case 'interaction.unread.changed': {
-      void refreshGroupAdmissionUnread().catch(error => reportHandledFailure('groupAdmission', 'unread', error));
       // 总闸关掉时连红点也不显示（产品图：关闭 = 禁用所有通知）。互动总数里
       // 也含着圈子那一份，只清 circleUnread 的话 tab 上照样亮着。
       const gated = gateCircleUnread(

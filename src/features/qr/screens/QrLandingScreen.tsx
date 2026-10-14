@@ -175,7 +175,7 @@ export default function QrLandingScreen() {
     if (preview.viewerState === 'ALREADY_IN') {
       return preview.type === 'GROUP' ? t('qr.enterGroup') : t('qr.alreadyInCircle');
     }
-    return t('groupAdmission.accept');
+    return preview.type === 'GROUP' ? t('groupAdmission.accept') : t('qr.joinCircle');
   }, [preview, t]);
 
   const subtitle = useMemo(() => {

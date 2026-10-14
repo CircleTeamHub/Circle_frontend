@@ -98,6 +98,7 @@ function loadRealtimeHarness(options = {}) {
 
   // 徽标写入全部记下来，好断言「总闸关着时圈子那一份到底进没进展示层」。
   const badgeWrites = [];
+  let admissionRefreshes = 0;
   const badgeState = {
     messagesUnread: 0,
     contactsUnread: 0,
@@ -126,7 +127,7 @@ function loadRealtimeHarness(options = {}) {
       timers.delete(id);
     },
     require: withObservabilityStubs((request) => {
-      if (request === '@/services/api/group-admissions') return { refreshGroupAdmissionUnread: async () => {} };
+      if (request === '@/services/api/group-admissions') return { refreshGroupAdmissionUnread: async () => { admissionRefreshes++; } };
       switch (request) {
         case '@/constants/config':
           return { REALTIME_WS_URL: 'wss://realtime.example.test/ws' };
@@ -270,6 +271,7 @@ function loadRealtimeHarness(options = {}) {
     clearedSessions,
     sentryReports,
     badgeWrites,
+    admissionRefreshCount: () => admissionRefreshes,
     badgeState,
     circleNotifications,
     latestSocket: () => sockets[sockets.length - 1],
@@ -683,4 +685,13 @@ test('reconnected sockets re-send the auth frame', () => {
     token: 'token-a',
   });
   assert.equal(harness.realtimeConnected.at(-1), true);
+});
+
+test('generic interactions do not refresh admission unread counts', async () => {
+  const harness = connectedHarness();
+  deliver(harness, 'badge.snapshot', { discoverUnread: 0 });
+  await new Promise(setImmediate);
+  const before = harness.admissionRefreshCount();
+  for (let i = 0; i < 20; i++) deliver(harness, 'interaction.unread.changed', { count: i });
+  assert.equal(harness.admissionRefreshCount(), before);
 });
