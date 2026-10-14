@@ -51,11 +51,15 @@ export default function RecycleBinScreen() {
   // round 3 review：加载代际 —— restore 成功会推进代际，仍在飞的旧刷新
   // 响应落地时代际不匹配即丢弃，不再把刚恢复的笔记写回回收站列表。
   const loadGenerationRef = useRef(0);
+  const requestSequenceRef = useRef(0);
+  const successfulRequestRef = useRef(0);
   const load = useCallback(async () => {
-    const generation = ++loadGenerationRef.current;
+    const generation = loadGenerationRef.current;
+    const request = ++requestSequenceRef.current;
     const notesData = await fetchDeletedNotes();
     if (!mountedRef.current) return;
-    if (generation !== loadGenerationRef.current) return;
+    if (generation !== loadGenerationRef.current || request < successfulRequestRef.current) return;
+    successfulRequestRef.current = request;
     setNotes(notesData);
     setLoadError(false);
     setLoading(false);

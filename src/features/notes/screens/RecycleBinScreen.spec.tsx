@@ -46,11 +46,13 @@ jest.mock('@/services/api/notes', () => ({ fetchDeletedNotes: jest.fn(), purgeNo
 const note = { id: 'n1', title: '回收站里的笔记', groups: [], status: 'DELETED' };
 
 function deferred<T>() {
+  let reject!: (error: unknown) => void;
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
+  const promise = new Promise<T>((done, fail) => {
     resolve = done;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 function confirmPurge(alert: jest.SpyInstance) {
@@ -145,4 +147,21 @@ test('a slower focus load cannot overwrite a newer pull-to-refresh result', asyn
 
   expect(screen.queryByText('过期的首次加载结果')).toBeNull();
   expect(screen.getByText('较新的回收站结果')).toBeTruthy();
+});
+
+
+test('a failed newer refresh does not discard the successful initial load', async () => {
+  const focus = deferred<never[]>();
+  const refresh = deferred<never[]>();
+  jest.mocked(fetchDeletedNotes).mockReset().mockReturnValueOnce(focus.promise).mockReturnValueOnce(refresh.promise);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    render(<RecycleBinScreen />);
+    await waitFor(() => expect(fetchDeletedNotes).toHaveBeenCalledTimes(1));
+    fireEvent(screen.UNSAFE_getByType(FlatList), 'refresh');
+    await act(async () => refresh.reject(new Error('network')));
+    await act(async () => focus.resolve([note] as never));
+    expect(screen.getByText('回收站里的笔记')).toBeTruthy();
+    expect(screen.UNSAFE_getByType(FlatList).props.refreshing).toBe(false);
+  } finally { alert.mockRestore(); }
 });
