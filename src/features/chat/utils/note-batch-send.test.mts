@@ -5,6 +5,7 @@ import {
   MAX_NOTE_BATCH_SELECTION,
   NOTE_BATCH_SEND_WINDOW_LIMIT,
   NOTE_BATCH_SEND_WINDOW_MS,
+  appendNoteBatchRun,
   buildNoteSendTasks,
   hasAnyNoteSendOption,
   isAllNoteSendOptions,
@@ -16,6 +17,41 @@ import {
   type ImportedNoteChatMedia,
   type NoteSendOptions,
 } from './note-batch-send.ts';
+
+test('serial batch slots preserve trigger order when refreshes resolve out of order', async () => {
+  let releaseFirst!: () => void;
+  let releaseSecond!: () => void;
+  const firstRefresh = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const secondRefresh = new Promise<void>((resolve) => {
+    releaseSecond = resolve;
+  });
+  const events: string[] = [];
+
+  const first = appendNoteBatchRun(Promise.resolve(), async () => {
+    events.push('refresh-first');
+    await firstRefresh;
+    events.push('send-first');
+  });
+  const second = appendNoteBatchRun(first, async () => {
+    events.push('refresh-second');
+    await secondRefresh;
+    events.push('send-second');
+  });
+
+  releaseSecond();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.deepEqual(events, ['refresh-first']);
+  releaseFirst();
+  await Promise.all([first, second]);
+  assert.deepEqual(events, [
+    'refresh-first',
+    'send-first',
+    'refresh-second',
+    'send-second',
+  ]);
+});
 
 function makeNote(overrides: Partial<NoteSummary> = {}): NoteSummary {
   return {

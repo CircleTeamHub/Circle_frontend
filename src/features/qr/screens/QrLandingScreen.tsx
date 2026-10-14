@@ -1,3 +1,5 @@
+import { acceptGroupQrInvitation } from '@/services/api/group-admissions';
+import { getGroupEntryHref } from '@/features/groups/routes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -133,7 +135,12 @@ export default function QrLandingScreen() {
 
     setJoining(true);
     try {
-      const result = await joinByQrToken(token);
+      const result = preview.type === 'GROUP' ? await acceptGroupQrInvitation(token) : await joinByQrToken(token);
+      if (result.type === 'GROUP' && result.status === 'PENDING') {
+        if ('admissionId' in result && result.admissionId) router.replace(getGroupEntryHref(scope, { admissionId: result.admissionId }));
+        else Alert.alert(t('groupAdmission.status.PENDING'));
+        return;
+      }
       if (result.type === 'GROUP' && result.conversationId) {
         openConversation(result.conversationId, preview.name);
         return;
@@ -168,7 +175,7 @@ export default function QrLandingScreen() {
     if (preview.viewerState === 'ALREADY_IN') {
       return preview.type === 'GROUP' ? t('qr.enterGroup') : t('qr.alreadyInCircle');
     }
-    return preview.type === 'GROUP' ? t('qr.joinGroup') : t('qr.joinCircle');
+    return preview.type === 'GROUP' ? t('groupAdmission.accept') : t('qr.joinCircle');
   }, [preview, t]);
 
   const subtitle = useMemo(() => {

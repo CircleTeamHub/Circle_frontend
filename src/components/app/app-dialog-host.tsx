@@ -46,7 +46,8 @@ const s = StyleSheet.create({
 export function AppDialogHost() {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const head = useAppDialogStore((state) => state.queue[0] ?? null);
+  const queue = useAppDialogStore((state) => state.queue);
+  const head = queue[0] ?? null;
   const [shown, setShown] = useState<QueuedDialog | null>(null);
   const [promptValue, setPromptValue] = useState('');
   const progress = useRef(new Animated.Value(0)).current;
@@ -61,6 +62,15 @@ export function AppDialogHost() {
     setShown(head);
     setPromptValue(head.prompt?.defaultValue ?? '');
   }, [head, shown]);
+
+  // 调用方卸载时可能直接从 store 移除自己的弹窗；宿主也必须同步清掉本地 shown，
+  // 否则旧决定框会悬在后续页面上。
+  useEffect(() => {
+    if (!shown || queue.some((dialog) => dialog.id === shown.id)) return;
+    closingRef.current = false;
+    progress.stopAnimation();
+    setShown(null);
+  }, [progress, queue, shown]);
 
   useEffect(() => {
     if (!shown) return;

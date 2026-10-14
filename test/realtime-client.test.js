@@ -107,7 +107,7 @@ test('realtime notification.created only prepends bell types but banners everyth
   // prepend 受白名单门控；横幅入队在铃铛门外执行（圈子类另受「圈子通知设置」门控，见下）。
   assert.match(
     client,
-    /if \(BELL_NOTIFICATION_TYPES\.has\(payload\.type\)\) \{[\s\S]*?setInteractive\(/,
+    /if \(BELL_NOTIFICATION_TYPES\.has\(payload\.type\)[^\n]*\) \{[\s\S]*?setInteractive\(/,
   );
   assert.match(
     client,

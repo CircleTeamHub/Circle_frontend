@@ -3,11 +3,13 @@ import {
   type RefObject,
   type SetStateAction,
   useCallback,
+  useEffect,
   useRef,
 } from 'react';
 import { type NoteSummary } from '@/features/notes/types';
 import {
   buildNoteSendTasks,
+  appendNoteBatchRun,
   type ImportedNoteChatMedia,
   type NoteSendOptions,
   type NoteSendTask,
@@ -30,8 +32,26 @@ import { getChatSendErrorMessage, reportChatSendFailure } from '@/chat-core/send
 import { devWarn } from '@/utils/dev-log';
 import { type TFunction } from 'i18next';
 import { type AuthUser } from '@/stores/authStore';
-import { Alert } from 'react-native';
 import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
+import { withFreshNoteSourceStatus } from '@/features/chat/utils/note-card-fresh-status';
+import {
+  dismissDialog,
+  showDialog,
+  useAppDialogStore,
+} from '@/components/app/app-dialog-store';
+
+function waitForDialogRemoval(id: number): Promise<void> {
+  const isRemoved = () =>
+    !useAppDialogStore.getState().queue.some((dialog) => dialog.id === id);
+  if (isRemoved()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsubscribe = useAppDialogStore.subscribe(() => {
+      if (!isRemoved()) return;
+      unsubscribe();
+      resolve();
+    });
+  });
+}
 
 export interface NoteBatchSendParams {
   t: TFunction<"translation", undefined>;
@@ -59,6 +79,19 @@ export function useNoteBatchSend({
   // 批量发笔记的串行队列:第二批在上一批发完之前不开跑,避免两次突发叠进
   // 服务端同一个 20 条/10s 的用户级 send 桶(消息触限会被直接拒收)。
   const noteBatchQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const warningDialogRef = useRef<{
+    id: number;
+    cancel: () => void;
+  } | null>(null);
+  useEffect(
+    () => () => {
+      const pending = warningDialogRef.current;
+      if (!pending) return;
+      warningDialogRef.current = null;
+      pending.cancel();
+    },
+    [],
+  );
   // 真实滚动窗口跨批保留；批量最多用 17/20 个槽位，余下 3 个留给手动发送。
   const noteSendTimestampsRef = useRef<number[]>([]);
   /**
@@ -228,36 +261,97 @@ export function useNoteBatchSend({
       if (!sourceID || isPreviewMode || notes.length === 0) {
         return Promise.resolve();
       }
-      const enqueue = () => {
-        const previous = noteBatchQueueRef.current;
-        const run = previous
-          .catch(() => undefined)
-          .then(() => runNoteBatchSend(notes, options));
-        // 队列尾永不 reject,后续批次才接得上。
-        noteBatchQueueRef.current = run.catch(() => undefined);
-        return run;
-      };
-      if (notes.some((note) => shouldWarnNoteWorkStatus(note))) {
-        Alert.alert(
-          t('chat.forward.workStatusWarningTitle', {
-            defaultValue: '订单状态可能变化',
-          }),
-          t('chat.forward.workStatusWarning', {
-            defaultValue: '这批笔记中有订单标记为打烊或已下架，确认后仍会继续发送。',
-          }),
-          [
-            { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-            {
-              text: t('common.send', { defaultValue: '继续发送' }),
-              onPress: () => void enqueue(),
-            },
-          ],
+      const run = appendNoteBatchRun(noteBatchQueueRef.current, async () => {
+        if (!mountedRef.current) return;
+        const freshCards = await withFreshNoteSourceStatus(
+          notes.map((note) =>
+            buildNoteCardPayloadFromSummary(note, authUser?.id ?? null),
+          ),
         );
-        return Promise.resolve();
-      }
-      return enqueue();
+        if (!mountedRef.current) return;
+        const freshNotes = notes.map((note, index) => ({
+          ...note,
+          workStatus: freshCards[index]?.workStatus ?? note.workStatus,
+          status: freshCards[index]?.publicationStatus ?? note.status,
+        }));
+        if (freshNotes.some((note) => shouldWarnNoteWorkStatus(note))) {
+          await new Promise<void>((resolve, reject) => {
+            let settled = false;
+            let sending = false;
+            let dialogId = 0;
+            let removed = Promise.resolve();
+            const clear = () => {
+              if (warningDialogRef.current?.id === dialogId) {
+                warningDialogRef.current = null;
+              }
+            };
+            const settle = () => {
+              if (settled) return;
+              settled = true;
+              clear();
+              resolve();
+            };
+            const fail = (error: unknown) => {
+              if (settled) return;
+              settled = true;
+              clear();
+              reject(error);
+            };
+            const settleAfterRemoval = () => {
+              void removed.then(settle);
+            };
+            dialogId = showDialog({
+              deduplicate: false,
+              title: t('chat.forward.workStatusWarningTitle', {
+                defaultValue: '订单状态可能变化',
+              }),
+              message: t('chat.forward.workStatusWarning', {
+                defaultValue:
+                  '这批笔记中有订单标记为打烊或已下架，确认后仍会继续发送。',
+              }),
+              buttons: [
+                {
+                  text: t('common.cancel', { defaultValue: '取消' }),
+                  style: 'cancel',
+                  onPress: settleAfterRemoval,
+                },
+                {
+                  text: t('common.send', { defaultValue: '继续发送' }),
+                  onPress: () => {
+                    if (!mountedRef.current) {
+                      settleAfterRemoval();
+                      return;
+                    }
+                    sending = true;
+                    void runNoteBatchSend(freshNotes, options).then(
+                      () => removed.then(settle),
+                      (error: unknown) => removed.then(() => fail(error)),
+                    );
+                  },
+                },
+              ],
+              cancelable: true,
+              onDismiss: settleAfterRemoval,
+            });
+            removed = waitForDialogRemoval(dialogId);
+            void removed.then(() => { if (!sending) settle(); });
+            warningDialogRef.current = {
+              id: dialogId,
+              cancel: () => {
+                dismissDialog(dialogId);
+                settleAfterRemoval();
+              },
+            };
+          });
+          return;
+        }
+        await runNoteBatchSend(freshNotes, options);
+      });
+      // 队列尾永不 reject,后续批次才接得上。
+      noteBatchQueueRef.current = run.catch(() => undefined);
+      return run;
     },
-    [isPreviewMode, runNoteBatchSend, sourceID, t],
+    [authUser?.id, isPreviewMode, mountedRef, runNoteBatchSend, sourceID, t],
   );
 
   return {

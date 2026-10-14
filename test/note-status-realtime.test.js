@@ -95,6 +95,7 @@ test('every send-time status warning re-reads the live source status first', () 
     'src/features/notes/components/ShareNoteSheet.tsx',
     'src/features/chat/screens/ForwardPickerScreen.tsx',
     'src/features/chat/chat-detail/hooks/use-attachment-actions.ts',
+    'src/features/chat/chat-detail/hooks/use-note-batch-send.ts',
   ]) {
     const source = read(file);
     assert.match(source, /withFreshNoteSourceStatus\(/, file);

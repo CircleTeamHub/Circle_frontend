@@ -132,7 +132,7 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   // 整份快照会把期间 dispatcher 应用的远端 group-policy-changed 一起抹掉。
   assert.match(screen, /const patchPolicyKey = useCallback\(/);
   assert.match(screen, /policies: \{ \.\.\.cached\.policies, \[key\]: value \}/);
-  assert.match(screen, /const previous = policies\[key\];/);
+  assert.match(screen, /const previous = policies\[key\] \?\? true;/);
   assert.match(screen, /patchPolicyKey\(key, previous\);/);
   assert.doesNotMatch(screen, /patchConversation\(\{ policies \}\)/);
   // 回滚之后再重拉一次:服务端上真正的状态说了算。

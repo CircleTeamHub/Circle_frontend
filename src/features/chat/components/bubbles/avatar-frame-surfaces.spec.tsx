@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { ReceivedBubble } from './received-bubble';
 import { SentBubble } from './sent-bubble';
 import { NoteCardBubble } from './note-card-bubble';
@@ -260,6 +261,20 @@ test('sent avatar invokes the profile handler when pressed', () => {
   // Located by its accessible name, so screen readers announce the action.
   fireEvent.press(getByLabelText('chat.avatarA11y.self'));
   expect(onAvatarPress).toHaveBeenCalledTimes(1);
+});
+
+test('interactive chat avatars expose a 44-point touch target', () => {
+  const { getByLabelText } = render(
+    <SentBubble
+      message={sentMessage}
+      selfName="Self"
+      onAvatarPress={jest.fn()}
+    />,
+  );
+
+  expect(StyleSheet.flatten(getByLabelText('chat.avatarA11y.self').props.style)).toEqual(
+    expect.objectContaining({ width: 44, height: 44 }),
+  );
 });
 
 test.each([

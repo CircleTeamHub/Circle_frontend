@@ -2,8 +2,8 @@
  * 群聊列表的共用口径：「我的群聊」和「新的朋友 / 新的群组」都吃这两个函数。
  *
  * 群聊 = 会话（ChatConversation type=GROUP，含圈子群与独立群），不是圈子。
- * 群聊没有入群申请这一套（拉人即进、扫码即进，后端没有 join-request 模型），
- * 所以「新」只能按本人入群时刻算：ChatMember.joinedAt，由会话 DTO 透出。
+ * 这里只处理已经加入的群聊，按本人入群时刻排序；待接受邀请和入群申请
+ * 由 GroupAdmissionsList 从独立的申请接口读取。
  */
 interface JoinableConversation {
   type: string;

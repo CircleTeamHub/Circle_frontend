@@ -1,3 +1,4 @@
+import { getGroupEntryHref } from '@/features/groups/routes';
 import { Ionicons } from '@expo/vector-icons';
 import {
   useFocusEffect,
@@ -482,6 +483,10 @@ export default function NotesScreen() {
       const { contact, group } = resolveNoteCardButtons(note);
       const card = target === 'group' ? group : contact;
       if (!card) return;
+      if (target === 'group' && card.target === 'chat') {
+        router.push(getGroupEntryHref(scope, { groupId: card.conversationID ?? card.id, searchedMsgID: card.clientMsgID }));
+        return;
+      }
       if (card.target === 'circle') {
         router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', card.id));
         return;

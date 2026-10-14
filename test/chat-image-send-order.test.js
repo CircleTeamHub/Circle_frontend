@@ -48,6 +48,11 @@ function harness() {
         case '@/features/chat/utils/chat-media-policy': return { isChatImageTooLarge: () => false, isChatVideoTooLarge: () => false, isChatVideoTooLong: () => false };
         case '@/services/api/credit-policy': return { assertLocalCanSendMessage() {} };
         case '@/features/chat/chat-detail/constants': return { VIDEO_UPLOAD_TIMEOUT_MS: 1000 };
+        case '@/features/chat/utils/media-error-guard': return loadTsModule('src/features/chat/utils/media-error-guard.ts', { requireShim: (dependency) => {
+          if (dependency === '@/stores/authStore') return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
+          if (dependency === '@/chat-core/store') return { useChatStore: { getState: () => ({ activeConversationId: 'chat' }) } };
+          throw new Error('Unexpected guard dependency: ' + dependency);
+        } });
         case '@/features/chat/utils/media-upload-scheduler': return scheduler;
         default: throw new Error('Unexpected dependency: ' + name);
       }

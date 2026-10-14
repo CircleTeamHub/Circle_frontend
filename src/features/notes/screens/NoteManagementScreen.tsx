@@ -1,3 +1,4 @@
+import { getGroupEntryHref } from '@/features/groups/routes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -470,6 +471,10 @@ export default function NoteManagementScreen() {
       const { contact, group } = resolveNoteCardButtons(note);
       const card = target === 'group' ? group : contact;
       if (!card) return;
+      if (target === 'group' && card.target === 'chat') {
+        router.push(getGroupEntryHref(scope, { groupId: card.conversationID ?? card.id, searchedMsgID: card.clientMsgID }));
+        return;
+      }
       if (card.target === 'circle') {
         router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', card.id));
         return;

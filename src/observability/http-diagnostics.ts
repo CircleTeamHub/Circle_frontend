@@ -1,6 +1,17 @@
 // Reviewed API route shapes only. New/unrecognized routes become /__other__.
 // Parameters are position-based, never guessed from the spelling of an identifier.
 const ROUTE_TEMPLATES = [
+  "/chat/groups/:id/preview",
+  "/chat/groups/:id/applications",
+  "/chat/group-admissions",
+  "/chat/group-admissions/unread",
+  "/chat/group-admissions/:id",
+  "/chat/group-admissions/:id/action",
+  "/chat/group-admissions/:id/seen",
+  "/qr/tokens/:id/accept",
+  "/circle-invitation/:id/accept",
+  "/circle-invitation/:id/seen",
+  "/circle-invitation/:id/decline",
   "/advertisements",
   "/circle-plaza/me/posts/:id/signups/read",
   "/friend/activities/unread-count",

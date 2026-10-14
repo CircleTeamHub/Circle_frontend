@@ -57,6 +57,7 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'forgot-password',
   'forward-picker',
   'group-call',
+  'group-entry',
   'group-expansion',
   'group-log',
   'group-manage',

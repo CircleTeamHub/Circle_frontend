@@ -7,6 +7,7 @@ import { create } from 'zustand';
 type TabBadgeSnapshot = {
   messagesUnread?: number;
   contactsUnread?: number;
+  groupAdmissionsUnread?: number;
   discoverUnread?: number;
   momentsUnread?: number;
   circleUnread?: number;
@@ -17,6 +18,7 @@ type TabBadgeSnapshot = {
 type TabBadgeState = {
   messagesUnread: number;
   contactsUnread: number;
+  groupAdmissionsUnread: number;
   /** 互动消息 unread 总数 (= momentsUnread + circleUnread + 好友申请通知). */
   discoverUnread: number;
   /** 朋友圈铃铛 unread —— 动态点赞/评论/回复/@ + 资料点赞。 */
@@ -29,6 +31,7 @@ type TabBadgeState = {
   isRealtimeConnected: boolean;
   lastSyncedAt: number | null;
   setMessagesUnread: (count: number) => void;
+  setGroupAdmissionsUnread: (count: number) => void;
   setContactsUnread: (count: number) => void;
   setDiscoverUnread: (count: number) => void;
   setMomentsUnread: (count: number) => void;
@@ -43,6 +46,7 @@ type TabBadgeState = {
 const initialState = {
   messagesUnread: 0,
   contactsUnread: 0,
+  groupAdmissionsUnread: 0,
   discoverUnread: 0,
   momentsUnread: 0,
   circleUnread: 0,
@@ -55,6 +59,7 @@ const initialState = {
 export const useTabBadgeStore = create<TabBadgeState>((set) => ({
   ...initialState,
   setMessagesUnread: (messagesUnread) => set({ messagesUnread }),
+  setGroupAdmissionsUnread: (groupAdmissionsUnread) => set({ groupAdmissionsUnread }),
   setContactsUnread: (contactsUnread) => set({ contactsUnread }),
   setDiscoverUnread: (discoverUnread) => set({ discoverUnread }),
   setMomentsUnread: (momentsUnread) => set({ momentsUnread }),
@@ -65,6 +70,7 @@ export const useTabBadgeStore = create<TabBadgeState>((set) => ({
     set((state) => ({
       messagesUnread: snapshot.messagesUnread ?? state.messagesUnread,
       contactsUnread: snapshot.contactsUnread ?? state.contactsUnread,
+      groupAdmissionsUnread: snapshot.groupAdmissionsUnread ?? state.groupAdmissionsUnread,
       discoverUnread: snapshot.discoverUnread ?? state.discoverUnread,
       momentsUnread: snapshot.momentsUnread ?? state.momentsUnread,
       circleUnread: snapshot.circleUnread ?? state.circleUnread,

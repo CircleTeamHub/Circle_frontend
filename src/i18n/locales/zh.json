@@ -419,7 +419,9 @@
       "readersNone": "还没有人读到这条消息",
       "readersMore": "{{names}} 等,共 {{count}} 人以上已读",
       "editing": "编辑消息",
-      "resend": "重发"
+      "resend": "重发",
+      "resendConfirm": "重新发送这条消息？",
+      "retryFailed": "发送失败，点击重发"
     },
     "mentions": {
       "empty": "暂无可 @ 的成员"
@@ -603,14 +605,18 @@
       "qrJoinEnabled": "二维码入群",
       "membersCanViewProfiles": "成员可查看他人资料",
       "membersCanAddFriends": "成员可添加好友",
-      "membersCanViewRoster": "显示群成员"
+      "membersCanViewRoster": "显示群成员",
+      "cardJoinEnabled": "允许名片申请入群",
+      "joinApprovalRequired": "入群需要审核"
     },
     "groupPolicyHint": {
       "memberCanInvite": "关闭后只有群主和管理员可以拉人进群",
       "qrJoinEnabled": "关闭后已签发的群二维码也无法入群",
       "membersCanViewProfiles": "关闭后普通成员无法从群里打开他人资料",
       "membersCanAddFriends": "关闭后普通成员无法通过群添加好友",
-      "membersCanViewRoster": "关闭后普通成员看不到群成员名单"
+      "membersCanViewRoster": "关闭后普通成员看不到群成员名单",
+      "cardJoinEnabled": "未入群用户可从群名片提交申请，管理员审核后加入",
+      "joinApprovalRequired": "普通成员邀请和二维码入群需要审核；群主或管理员邀请，接受后即可入群"
     },
     "groupManagement": {
       "admins": "群管理员",
@@ -3516,7 +3522,10 @@
     "AUTH_LOGIN_CHALLENGE_REJECTED": "登录请求已被受信任设备拒绝",
     "AUTH_LOGIN_CHALLENGE_LOCKED": "验证码错误次数过多，本次验证已作废，请重新发起",
     "AUTH_SESSION_DEVICE_UNBOUND": "登录状态需要更新，请稍后重试",
-    "AUTH_SECURITY_CODE_NOT_SET": "未设置登录安全码，请在受信任设备上确认登录"
+    "AUTH_SECURITY_CODE_NOT_SET": "未设置登录安全码，请在受信任设备上确认登录",
+    "CHAT_GROUP_ACCEPT_REQUIRED": "请先处理并接受群邀请",
+    "CHAT_GROUP_INVITATION_INVALID": "邀请已过期或失效",
+    "CHAT_GROUP_APPLICATION_DISABLED": "该群暂不接受名片申请"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",
@@ -3585,7 +3594,7 @@
       "groupType": "群聊二维码",
       "circleType": "圈子二维码",
       "userFooter": "扫一扫或点击加好友",
-      "groupFooter": "扫一扫或点击加入群聊",
+      "groupFooter": "扫一扫或点击查看群邀请",
       "circleFooter": "扫一扫或点击加入圈子"
     }
   },
@@ -3609,5 +3618,43 @@
     "changePassword": "去修改密码",
     "later": "稍后",
     "failed": "操作失败，请稍后重试"
+  },
+  "groupAdmission": {
+    "title": "群资料与邀请",
+    "members": "{{count}} 人",
+    "invitedBy": "{{name}} 邀请你加入群聊",
+    "invitedByYou": "你邀请{{name}}加入群聊",
+    "invitedPerson": "{{inviter}} 邀请{{applicant}}加入群聊",
+    "personStatus": "{{name}}：{{status}}",
+    "applicant": "申请人：{{name}}",
+    "enter": "进入群聊",
+    "accept": "接受邀请",
+    "decline": "拒绝邀请",
+    "approve": "同意入群",
+    "reject": "拒绝申请",
+    "apply": "申请入群",
+    "reason": "申请理由（选填，最多 200 字）",
+    "viewInvitation": "查看邀请",
+    "manage": "入群申请与邀请",
+    "empty": "暂无入群邀请或申请",
+    "loadFailed": "群资料加载失败，请重试",
+    "actionFailed": "操作未完成",
+    "actionUncertain": "暂时无法确认结果，已重新查询。请查看最新状态后再操作。",
+    "reviewRequired": "加入群聊需要管理员审核，通过后才能查看群消息。",
+    "acceptRequired": "接受有效邀请后才能加入群聊。",
+    "applicationDisabled": "该群暂不接受名片申请",
+    "unavailable": "群聊已解散或不可用",
+    "preview": "[群邀请]",
+    "status": {
+      "INVITED": "等待接受邀请",
+      "PENDING": "已提交，等待管理员审核",
+      "JOINED": "已加入群聊",
+      "LEFT": "已退出群聊",
+      "DECLINED": "已拒绝邀请",
+      "REJECTED": "申请未通过",
+      "EXPIRED": "邀请或申请已过期",
+      "CANCELLED": "申请已取消"
+    },
+    "sentInvitation": "你邀请对方加入群聊"
   }
 }

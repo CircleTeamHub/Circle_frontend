@@ -28,10 +28,10 @@ test('三个入口都带文字标签和无障碍名称', () => {
   assert.match(actions, /accessibilityLabel=\{action\.label\}/);
 });
 
-test('详情页群名片：独立群（带会话 id）进群聊，圈子群仍进圈子详情', () => {
+test('详情页群名片：独立群先查询入群资格，圈子群仍进圈子详情', () => {
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
   assert.match(detail, /onGroupPress=\{handleGroupCardPress\}/);
-  assert.match(detail, /if \(conversationID\) \{\s*router\.push\(\s*getChatDetailHref\(scope, conversationID, name, undefined, conversationID, undefined, 'group'\),/);
+  assert.match(detail, /getGroupEntryHref\(scope, \{ groupId: conversationID \}\)/);
   assert.match(detail, /router\.push\(getCircleDetailHref\(scope === 'discover' \? 'discover' : 'messages', id\)\);/);
 });
 
