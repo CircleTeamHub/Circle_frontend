@@ -13,10 +13,15 @@
     "splash": {
       "image": "./assets/images/splash-tagline.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
+      "backgroundColor": "#6230B0"
     },
     "ios": {
       "bundleIdentifier": "com.yiboding.circleim",
+      "splash": {
+        "image": "./assets/images/splash-night.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#6230B0"
+      },
       "supportsTablet": true,
       "infoPlist": {
         "NSAppTransportSecurity": {
@@ -118,7 +123,8 @@
       "./plugins/with-local-sentry-auto-upload-disabled",
       "./plugins/with-android-allow-backup-disabled",
       "./plugins/with-android-release-signing",
-      "./plugins/with-android-gradle-memory"
+      "./plugins/with-android-gradle-memory",
+      "./plugins/with-ios-xcode27-compat"
     ],
     "experiments": {
       "typedRoutes": true

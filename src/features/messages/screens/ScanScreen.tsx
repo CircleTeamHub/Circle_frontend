@@ -9,6 +9,7 @@ import {
 } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
+import { launchImageLibraryFast } from '@/features/profile/image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -212,16 +213,17 @@ export default function ScanScreen() {
     if (isHandlingResult || pickingFromAlbum) return;
     setPickingFromAlbum(true);
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
-        return;
-      }
-      const picked = await ImagePicker.launchImageLibraryAsync({
+      // 直接唤起相册:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+      const outcome = await launchImageLibraryFast(ImagePicker, {
         mediaTypes: ['images'],
         allowsMultipleSelection: false,
         quality: 1,
       });
+      if (outcome.status === 'denied') {
+        Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
+        return;
+      }
+      const picked = outcome.result;
       if (picked.canceled || picked.assets.length === 0) return;
 
       const [found] = await scanFromURLAsync(picked.assets[0].uri, ['qr']);

@@ -1,14 +1,20 @@
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/badge';
 import { PlazaFeed } from '@/features/discover/components/plaza-feed';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+
+// 发帖入口用 App 图标里的纸飞机，垫一个跟随主题的圆底。
+const PLANE_LOGO = require('../../../../assets/images/login-logo-plane.png');
+// 深色模式用提亮版（同色相、亮度上调），原图的深紫笔画在深灰圆底上发闷。
+const PLANE_LOGO_DARK = require('../../../../assets/images/plane-fab-dark.png');
 
 const s = StyleSheet.create({
   // tab 根屏的头部：大标题 + 右侧动作，没有返回箭头（对齐 ContactsScreen）。
@@ -44,18 +50,30 @@ const s = StyleSheet.create({
     position: 'absolute',
     right: Spacing.lg,
     bottom: 110,
-    width: 52,
-    height: 52,
-    borderRadius: Radius.pill,
+    width: 56,
+    height: 56,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  fabPressed: {
+    transform: [{ scale: 0.94 }],
+  },
+  fabPlane: {
+    width: 34,
+    height: 34,
   },
 });
 
 export default function CirclePlazaScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
   // 圈子铃铛 = 圈子通知（担保验证/入圈审批/圈子帖动态）+ 报名管理，两者相加。
   // 朋友圈的互动不进这里。
@@ -74,8 +92,11 @@ export default function CirclePlazaScreen() {
         color: colors.text,
         ...Typography.title,
       },
+      // 跟随主题：浅色白底、深色 #1C1C1E 卡片底。
       fab: {
-        backgroundColor: colors.primary,
+        backgroundColor: colors.surface,
+        borderColor: withAlpha(colors.primary, 0.24),
+        shadowColor: colors.primary,
       },
     }),
     [colors, insets.top],
@@ -153,12 +174,16 @@ export default function CirclePlazaScreen() {
         <PlazaFeed />
       </View>
       <Pressable
-        style={[s.fab, d.fab]}
+        style={({ pressed }) => [s.fab, d.fab, pressed ? s.fabPressed : null]}
         onPress={handleCreatePost}
         accessibilityRole="button"
         accessibilityLabel={t('plaza.create.title')}
       >
-        <Ionicons name="add" size={24} color={colors.white} />
+        <Image
+          source={resolvedMode === 'dark' ? PLANE_LOGO_DARK : PLANE_LOGO}
+          style={s.fabPlane}
+          contentFit="contain"
+        />
       </Pressable>
     </View>
   );

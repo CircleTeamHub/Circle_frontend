@@ -544,7 +544,7 @@
       "noteManagement": "Gestión de notas",
       "noteManagementHint": "Solo se muestran las notas de lugares publicadas; el estado orienta al coordinador y puedes retirarlas aquí.",
       "noteRestricted": "Solo el propietario del grupo puede gestionar las notas",
-      "bindNote": "Asociar mi nota",
+      "bindNote": "Asociar nota",
       "bindNoteHint": "Toca una tarjeta para asociarla a este grupo",
       "noteStatusLabel": "Estado del lugar",
       "noSourceNotes": "No hay notas sin asociar",
@@ -557,6 +557,7 @@
       "noteRelist": "Volver a publicar",
       "noteUnbindTitle": "¿Quitar la asociación con el grupo de origen?",
       "noteUnbindHint": "La nota dejará de aparecer en la gestión de notas de este grupo.",
+      "noteUnbindAction": "Quitar (desvincular del grupo)",
       "noteUnbind": "Quitar asociación"
     },
     "groupEvent": {
@@ -927,7 +928,7 @@
       "viewImage": "Ver imagen"
     },
     "actions": {
-      "new": "Nueva",
+      "new": "Crear",
       "qrCode": "Código QR",
       "share": "Compartir",
       "pin": "Fijar arriba",
@@ -1696,7 +1697,6 @@
     },
     "shortcutOrder": {
       "title": "Editar orden de círculos",
-      "hint": "La lista horizontal usará este orden",
       "reset": "Restablecer orden"
     },
     "commentInput": {

@@ -641,7 +641,7 @@
       "noteManagement": "Note management",
       "noteManagementHint": "Only listed venue notes are shown; status guides coordinators, and you can unlist notes here.",
       "noteRestricted": "Only the group owner can manage this group's notes",
-      "bindNote": "Associate my note",
+      "bindNote": "Associate note",
       "bindNoteHint": "Tap a note card to associate it with this group",
       "noteStatusLabel": "Venue status",
       "noSourceNotes": "No unassociated notes",
@@ -654,6 +654,7 @@
       "noteRelist": "Relist",
       "noteUnbindTitle": "Remove source group association?",
       "noteUnbindHint": "This note will no longer appear in this group's note management.",
+      "noteUnbindAction": "Remove (unlink from group)",
       "noteUnbind": "Remove association"
     },
     "groupEvent": {
@@ -1132,7 +1133,6 @@
     },
     "shortcutOrder": {
       "title": "Edit circle order",
-      "hint": "The horizontal circle list will use this order",
       "reset": "Reset order"
     },
     "commentInput": {
@@ -2535,7 +2535,7 @@
       "viewImage": "View image"
     },
     "actions": {
-      "new": "New",
+      "new": "Create",
       "qrCode": "QR code",
       "share": "Share",
       "pin": "Pin to top",

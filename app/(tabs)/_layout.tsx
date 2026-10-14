@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { Tabs, useSegments } from 'expo-router';
 import { StackActions } from '@react-navigation/native';
@@ -15,12 +15,15 @@ import { useTabBarBridgeStore } from '@/stores/tabBarBridgeStore';
 // props 发布出去，自身不画任何东西。深层页面不渲染 bar，因此无需显隐开关。
 function TabBarBridge(props: BottomTabBarProps) {
   const publish = useTabBarBridgeStore((state) => state.publish);
+  const unpublish = useTabBarBridgeStore((state) => state.unpublish);
+  const [owner] = useState(() => Symbol('tab-bar-bridge'));
   // layout effect + useSyncExternalStore：同一帧内把新 state 同步给首页里的
   // bar，切 tab 时选中态不会落后一帧。
   useLayoutEffect(() => {
-    publish(props);
+    publish(owner, props);
   });
-  useEffect(() => () => publish(null), [publish]);
+  // 只撤下自己那份：tabs 重建时旧桥的清理晚于新桥发布,无条件置空会让 bar 消失。
+  useEffect(() => () => unpublish(owner), [owner, unpublish]);
   return null;
 }
 

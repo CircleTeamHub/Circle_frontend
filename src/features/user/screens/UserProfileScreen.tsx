@@ -581,6 +581,10 @@ export default function UserProfileScreen() {
     [isCurrentUser, profile.contact],
   );
 
+  const handleOpenProfileEdit = useCallback(() => {
+    router.push('/(tabs)/profile/settings');
+  }, [router]);
+
   const handleCopyContact = useCallback(
     async (row: VisibleProfileContact) => {
       try {
@@ -1031,7 +1035,16 @@ export default function UserProfileScreen() {
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={s.hero}>
+        {/* 看自己时整块资料头(头像/名字/性别地区/签名)都是「编辑个人信息」的入口;看别人时不可点。 */}
+        <Pressable
+          style={s.hero}
+          disabled={!isCurrentUser}
+          onPress={handleOpenProfileEdit}
+          accessibilityRole={isCurrentUser ? 'button' : undefined}
+          accessibilityLabel={
+            isCurrentUser ? t('appSettings.rows.profile.label') : undefined
+          }
+        >
           <View style={s.avatarStage}>
             <View
               style={[s.avatarRing, d.avatarRing]}
@@ -1129,7 +1142,7 @@ export default function UserProfileScreen() {
               <UserIconRow icons={profile.displayIcons ?? []} />
             </View>
           ) : null}
-        </View>
+        </Pressable>
 
         {contactRows.length > 0 || infoRowGroups.length > 0 ? (
           // 联系方式卡与下面的资料卡共用同一个 s.sections 容器 —— gap 只作用于

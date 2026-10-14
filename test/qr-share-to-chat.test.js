@@ -333,9 +333,10 @@ test('扫码页保留相册识别入口 —— 对面转发出去的码截图也
   const screen = read('src/features/messages/screens/ScanScreen.tsx');
 
   assert.match(screen, /scanFromURLAsync/);
-  assert.match(screen, /launchImageLibraryAsync/);
+  assert.match(screen, /launchImageLibraryFast\(ImagePicker/);
   assert.match(screen, /messages\.scanFromAlbum/);
-  assert.match(screen, /requestMediaLibraryPermissionsAsync/);
+  // 相册权限由 launchImageLibraryFast 兜底请求;拒绝时这里给出提示。
+  assert.match(screen, /outcome\.status === 'denied'/);
   assert.match(screen, /permissions\.photoLibrary/);
   assert.match(screen, /messages\.scanAlbumNoCodeMessage/);
   assert.match(screen, /messages\.scanAlbumFailedMessage/);

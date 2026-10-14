@@ -11,6 +11,7 @@ import {
 import { updateUserProfile } from '@/services/api/profile';
 
 jest.mock('@/features/profile/image-picker', () => ({
+  ...jest.requireActual('@/features/profile/image-picker'),
   loadImagePickerModule: jest.fn(),
 }));
 jest.mock('@/services/api/upload', () => ({
@@ -77,6 +78,12 @@ test('concurrent changeCover calls upload only once', async () => {
   });
 
   expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledTimes(1);
+  // 直接唤起相册,不先请求权限,也不开 allowsEditing(iOS 才走秒开的 PHPicker)。
+  expect(mockPicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
+  expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledWith({
+    quality: 0.8,
+    mediaTypes: ['images'],
+  });
   expect(requestUploadPresign).toHaveBeenCalledTimes(1);
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(1);
   expect(updateUserProfile).toHaveBeenCalledTimes(1);

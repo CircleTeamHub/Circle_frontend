@@ -1,19 +1,40 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Image } from 'expo-image';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   Easing,
+  Platform,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { ChatBubbleIcon } from '@/components/app/chat-bubble-icon';
+import { SplashMeteors } from '@/components/app/splash-meteors';
+import { SplashStars } from '@/components/app/splash-stars';
+import { getCoverFrame } from '@/components/app/splash-night-frame';
+import nightLayout from '../../../assets/splash/night-layout.json';
 
-// 品牌紫 #7C5CF0 按原色相加深。
-const STARTUP_SPLASH_BACKGROUND = '#634AC0';
-const STARTUP_ICON_SIZE = 165;
+// 「紫色夜空」：原生启动图（iOS cover 铺满 splash-night.png）与这里的底图
+// splash-night-bg.png 由同一份布局生成，按同样的 cover 裁切对齐，图标/星星的位置和
+// 大小一致 —— 系统启动屏交接给 JS 时画面不动，之后才开始闪烁、流星与旋转。
+// 两张图由 scripts/generate-splash-night.mjs 生成，改布局后重跑它。
+const NIGHT_BACKDROP = require('../../../assets/images/splash-night-bg.png');
+const STARTUP_SPLASH_BACKGROUND = nightLayout.baseColor;
 const STARTUP_SPLASH_MAX_WAIT_MS = 5000;
+// 底图解码失败/过慢时也要及时交出原生启动屏，别让用户卡在静态画面。
+const BACKDROP_READY_FALLBACK_MS = 800;
+// 安卓 12+ 的系统启动屏做不了整屏图片，只有纯色 + 小图标。安卓上 JS 开屏先复刻
+// 那一帧（同色、同尺寸图标），再淡入夜空并把图标放大到夜空布局的尺寸，过渡连续不跳。
+const NEEDS_SYSTEM_SPLASH_HANDOFF = Platform.OS === 'android';
+const ANDROID_SYSTEM_ICON_DP =
+  (nightLayout.androidSystemSplash.imageWidthDp * nightLayout.iconWidth) /
+  nightLayout.androidSystemSplash.imageCanvasPx;
+const HANDOFF_FADE_MS = 500;
 
 type StartupSplashProps = {
   canFinish?: boolean;
+  /** 夜空底图已上屏：父层此时再隐藏原生启动屏，交接无闪烁。 */
+  onBackdropReady?: () => void;
   children?: ReactNode;
 };
 
@@ -21,7 +42,20 @@ type StartupSplashProps = {
  * JS 启动完成后展示的短动画。
  * 原生启动图只能提供静态画面，旋转在这里执行，避免首屏直接闪现。
  */
-export function StartupSplash({ canFinish = true, children }: StartupSplashProps) {
+export function StartupSplash({
+  canFinish = true,
+  onBackdropReady,
+  children,
+}: StartupSplashProps) {
+  const window = useWindowDimensions();
+  const frame = getCoverFrame(window.width, window.height);
+  const iconSize = nightLayout.iconWidth * frame.scale;
+  const backdropOpacity = useRef(
+    new Animated.Value(NEEDS_SYSTEM_SPLASH_HANDOFF ? 0 : 1),
+  ).current;
+  const iconZoom = useRef(
+    new Animated.Value(NEEDS_SYSTEM_SPLASH_HANDOFF ? ANDROID_SYSTEM_ICON_DP / iconSize : 1),
+  ).current;
   const rotation = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
   const iconOpacity = useRef(new Animated.Value(1)).current;
@@ -32,6 +66,20 @@ export function StartupSplash({ canFinish = true, children }: StartupSplashProps
   const [rotationDone, setRotationDone] = useState(false);
   const [revealDone, setRevealDone] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  const [backdropReady, setBackdropReady] = useState(false);
+  const readyNotifiedRef = useRef(false);
+
+  const markBackdropReady = useCallback(() => {
+    setBackdropReady(true);
+    if (readyNotifiedRef.current) return;
+    readyNotifiedRef.current = true;
+    onBackdropReady?.();
+  }, [onBackdropReady]);
+
+  useEffect(() => {
+    const fallback = setTimeout(markBackdropReady, BACKDROP_READY_FALLBACK_MS);
+    return () => clearTimeout(fallback);
+  }, [markBackdropReady]);
 
   // Authentication may be waiting on a pair of network timeouts. Keep the
   // branded transition short, then expose the normal route guard/loading UI
@@ -46,6 +94,28 @@ export function StartupSplash({ canFinish = true, children }: StartupSplashProps
   }, [canFinish]);
 
   useEffect(() => {
+    if (!backdropReady || !NEEDS_SYSTEM_SPLASH_HANDOFF) return;
+    const handoff = Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        duration: HANDOFF_FADE_MS,
+        easing: Easing.out(Easing.cubic),
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.timing(iconZoom, {
+        duration: HANDOFF_FADE_MS,
+        easing: Easing.out(Easing.cubic),
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+    ]);
+    handoff.start();
+    return () => handoff.stop();
+  }, [backdropOpacity, backdropReady, iconZoom]);
+
+  useEffect(() => {
+    // 原生启动屏还盖在上面时不开始转，免得用户错过前半段。
+    if (!backdropReady) return;
     let cancelled = false;
     const spin = Animated.sequence([
       Animated.delay(1000),
@@ -82,7 +152,7 @@ export function StartupSplash({ canFinish = true, children }: StartupSplashProps
       cancelled = true;
       spin.stop();
     };
-  }, [rotation, scale]);
+  }, [backdropReady, rotation, scale]);
 
   useEffect(() => {
     if (!rotationDone || (!canFinish && !timedOut)) {
@@ -164,8 +234,25 @@ export function StartupSplash({ canFinish = true, children }: StartupSplashProps
         pointerEvents={revealDone ? 'none' : 'box-only'}
         style={[styles.container, { opacity: overlayOpacity, transform: [{ scale: overlayScale }] }]}
       >
-        <Animated.View style={{ opacity: iconOpacity, transform: [{ rotate }, { scale }] }}>
-          <ChatBubbleIcon size={STARTUP_ICON_SIZE} />
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity }]}>
+          <Image
+            source={NIGHT_BACKDROP}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            onLoad={markBackdropReady}
+            onError={markBackdropReady}
+          />
+        </Animated.View>
+        {backdropReady ? (
+          <>
+            <SplashStars frame={frame} />
+            <SplashMeteors />
+          </>
+        ) : null}
+        <Animated.View
+          style={{ opacity: iconOpacity, transform: [{ rotate }, { scale }, { scale: iconZoom }] }}
+        >
+          <ChatBubbleIcon size={iconSize} />
         </Animated.View>
       </Animated.View>
     </View>

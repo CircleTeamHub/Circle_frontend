@@ -281,6 +281,9 @@ export function useAuth() {
       safeSetError(null);
       inFlightRef.current = true;
       safeSetSubmitting(true);
+      // 下面先清旧会话再激活新账号,中间有一段「未登录」空窗;让根守卫在此期间
+      // 不重定向,导航只由本流程结尾那一次 replace 决定。
+      useAccountSwitcherStore.getState().setSwitching(true);
       try {
         // teardown 当前账号（IM 登出、清空依赖 store、清持久化会话）。
         await clearLocalSession();
@@ -352,6 +355,7 @@ export function useAuth() {
           router.replace('/(tabs)/messages');
         }
       } finally {
+        useAccountSwitcherStore.getState().setSwitching(false);
         inFlightRef.current = false;
         safeSetSubmitting(false);
       }

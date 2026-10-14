@@ -201,10 +201,10 @@ test('note management is a separate page from group management', () => {
   assert.match(noteManage, /function isOwnedSourceNote\(\n\s*note: NoteSummary,\n\s*currentUserID\?: string \| null,/);
   assert.match(noteManage, /note\.canEdit === true \|\|/);
   assert.match(noteManage, /note\.ownerId === currentUserID/);
-  // 场地状态三态：未设置不能被当成开工，管理页可设开工/打烊，也可清除回未设置。
+  // 卡片下方三个按钮：开工 / 打烊 / 移除；未设置不当成开工，只在新关联时补默认开工。
   assert.doesNotMatch(noteManage, /withDefaultWorkingStatus/);
   assert.match(noteManage, /resolveManagedWorkStatus\(note\)/);
-  assert.match(noteManage, /handlePickNoteWorkStatus\(note\)/);
+  assert.match(noteManage, /handleSetNoteWorkStatus\(note, option\.value\)/);
   assert.doesNotMatch(noteManage, /handleUnlistNote|noteUnlist|unlistNote/);
   assert.doesNotMatch(noteManage, /relistNote/);
   assert.match(routes, /export function getNoteManagementHref\(/);

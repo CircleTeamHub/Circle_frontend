@@ -52,15 +52,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.md,
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.md,
   },
   title: {
     flex: 1,
     ...Typography.h3,
-  },
-  hint: {
-    ...Typography.caption,
-    marginBottom: Spacing.md,
   },
   list: {
     maxHeight: 420,
@@ -277,11 +273,6 @@ export function CircleShortcutOrderSheet({
           <Ionicons name="close" size={24} color={colors.textSecondary} />
         </Pressable>
       </View>
-      <Text style={[s.hint, { color: colors.textSecondary }]}>
-        {t('discover.shortcutOrder.hint', {
-          defaultValue: '上方横向列表会按这个顺序展示',
-        })}
-      </Text>
 
       <ScrollView
         style={s.list}
@@ -310,13 +301,6 @@ export function CircleShortcutOrderSheet({
                 rowAnimatedStyle,
               ]}
             >
-              <CircleAvatar uri={circle.avatarUrl} size={34} />
-              <Text
-                style={[s.rowText, { color: colors.text }]}
-                numberOfLines={1}
-              >
-                {circle.name}
-              </Text>
               <View
                 style={[
                   s.dragHandle,
@@ -330,6 +314,13 @@ export function CircleShortcutOrderSheet({
                   color={colors.textSecondary}
                 />
               </View>
+              <CircleAvatar uri={circle.avatarUrl} size={34} />
+              <Text
+                style={[s.rowText, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {circle.name}
+              </Text>
             </Animated.View>
           );
         })}

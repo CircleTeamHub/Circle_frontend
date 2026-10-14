@@ -14,10 +14,24 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
  */
 type TabBarBridgeState = {
   tabProps: BottomTabBarProps | null;
-  publish: (tabProps: BottomTabBarProps | null) => void;
+  /** 当前发布者。tabs 被重建时新旧两个桥会短暂并存。 */
+  owner: symbol | null;
+  publish: (owner: symbol, tabProps: BottomTabBarProps) => void;
+  /** 只撤下自己发布的那份。 */
+  unpublish: (owner: symbol) => void;
 };
 
-export const useTabBarBridgeStore = create<TabBarBridgeState>((set) => ({
+/**
+ * 撤销必须认发布者:新桥在 layout effect 里发布,而被替换掉的旧桥的卸载清理是
+ * passive effect,同一次提交里排在新桥发布**之后**执行。旧实现无条件置空,
+ * 于是登录/切换账号后 bar 一直是空的,要等下一次导航状态变化重新发布才冒出来。
+ */
+export const useTabBarBridgeStore = create<TabBarBridgeState>((set, get) => ({
   tabProps: null,
-  publish: (tabProps) => set({ tabProps }),
+  owner: null,
+  publish: (owner, tabProps) => set({ owner, tabProps }),
+  unpublish: (owner) => {
+    if (get().owner !== owner) return;
+    set({ owner: null, tabProps: null });
+  },
 }));

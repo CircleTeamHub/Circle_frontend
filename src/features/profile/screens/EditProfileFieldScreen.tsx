@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -34,7 +34,10 @@ import {
   CITY_PROVINCES,
   findProvinceByCity,
 } from '@/features/profile/city-options';
-import { loadImagePickerModule } from '@/features/profile/image-picker';
+import {
+  launchImageLibraryFast,
+  loadImagePickerModule,
+} from '@/features/profile/image-picker';
 import {
   getAvatarPickerPermissionDeniedMessage,
 } from '@/features/profile/avatar-picker-feedback';
@@ -314,6 +317,16 @@ export default function EditProfileFieldScreen() {
     [colors],
   );
 
+  // 进页面就把原生模块准备好,别把首次 require 的桥接初始化叠加到点击反馈上。
+  useEffect(() => {
+    if (field?.id !== 'avatar') return;
+    try {
+      loadImagePickerModule();
+    } catch {
+      // 点击时会再次加载并按现有错误路径提示。
+    }
+  }, [field?.id]);
+
   async function handlePickAvatar() {
     const imagePicker = loadImagePickerModule();
 
@@ -325,24 +338,21 @@ export default function EditProfileFieldScreen() {
       return;
     }
 
-    const permission =
-      await imagePicker.requestMediaLibraryPermissionsAsync();
+    // 直接唤起相册、不开 allowsEditing:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+    const outcome = await launchImageLibraryFast(imagePicker, {
+      quality: 0.8,
+      mediaTypes: ['images'],
+    });
 
-    if (!permission.granted) {
+    if (outcome.status === 'denied') {
       const message =
-        getAvatarPickerPermissionDeniedMessage(permission) ??
+        getAvatarPickerPermissionDeniedMessage(outcome.permission) ??
         t('validation.albumPermission');
       Alert.alert(t('validation.cannotSelectImage'), message);
       return;
     }
 
-    const result = await imagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-      mediaTypes: ['images'],
-    });
-
+    const { result } = outcome;
     if (result.canceled || !result.assets[0]) {
       return;
     }

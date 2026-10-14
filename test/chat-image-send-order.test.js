@@ -26,6 +26,12 @@ function harness() {
           requestMediaLibraryPermissionsAsync: async () => ({ granted: true }),
           launchImageLibraryAsync: async () => ({ canceled: false, assets: ['first.jpg', 'second.jpg'].map((uri) => ({ uri, mimeType: 'image/jpeg' })) }),
         };
+        case '@/features/profile/image-picker': return {
+          launchImageLibraryFast: async (picker, options) => ({
+            status: 'picked',
+            result: await picker.launchImageLibraryAsync(options),
+          }),
+        };
         case '@/services/api/temp-chat': return { assertMyTempChatConversationOpen: async () => {} };
         case '@/services/api/upload': return {
           requestUploadPresign: async (input) => ({ key: input.filename, uploadUrl: input.filename, requiredHeaders: {} }),

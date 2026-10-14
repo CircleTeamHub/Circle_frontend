@@ -11,6 +11,8 @@ type AuthRouteDecisionInput = {
   isAuthenticated: boolean;
   isLoading: boolean;
   onboardingRequired: boolean;
+  /** 切换账号进行中:会话短暂处于「已清空、新账号未激活」,此时不做任何重定向。 */
+  accountSwitching?: boolean;
 };
 
 export function getAuthRouteDecision({
@@ -18,7 +20,10 @@ export function getAuthRouteDecision({
   isAuthenticated,
   isLoading,
   onboardingRequired,
+  accountSwitching = false,
 }: AuthRouteDecisionInput): AuthRouteDecision {
+  if (accountSwitching) return { type: 'allow' };
+
   const isAuthRoute = firstSegment === '(auth)';
   const isOnboardingRoute = firstSegment === '(onboarding)';
   // 邀请链接的收件人多半还没登录。/invite 不在 (auth) 分组里,不单独放行的话

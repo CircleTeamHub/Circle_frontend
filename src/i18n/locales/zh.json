@@ -637,7 +637,7 @@
       "noteManagement": "笔记管理",
       "noteManagementHint": "仅展示已上架的场地笔记；状态用于提醒盯单，也可以在这里下架。",
       "noteRestricted": "仅群主可以管理本群笔记",
-      "bindNote": "关联我的笔记",
+      "bindNote": "关联笔记",
       "bindNoteHint": "点击笔记卡片即可关联到本群",
       "noteStatusLabel": "场地状态",
       "noSourceNotes": "暂无未关联的笔记",
@@ -650,6 +650,7 @@
       "noteRelist": "恢复上架",
       "noteUnbindTitle": "解除来源群关联？",
       "noteUnbindHint": "解除后，这条笔记不会再出现在本群的笔记管理里。",
+      "noteUnbindAction": "移除（与本群解绑）",
       "noteUnbind": "解除关联"
     },
     "groupEvent": {
@@ -1128,7 +1129,6 @@
     },
     "shortcutOrder": {
       "title": "调整圈子顺序",
-      "hint": "上方横向列表会按这个顺序展示",
       "reset": "恢复默认"
     },
     "commentInput": {
@@ -2529,7 +2529,7 @@
       "viewImage": "查看图片"
     },
     "actions": {
-      "new": "新建",
+      "new": "创建",
       "qrCode": "二维码",
       "share": "分享",
       "pin": "置顶",

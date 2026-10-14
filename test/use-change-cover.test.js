@@ -9,7 +9,8 @@ test('useChangeCover picks an image, uploads to covers folder and patches profil
   assert.match(src, /export function useChangeCover/);
   // 选图（沿用 profile 的图片选择器）
   assert.match(src, /loadImagePickerModule/);
-  assert.match(src, /launchImageLibraryAsync/);
+  assert.match(src, /launchImageLibraryFast\(imagePicker/);
+  assert.doesNotMatch(src, /allowsEditing:\s*true/);
   // 上传到 covers 文件夹
   assert.match(src, /requestUploadPresign/);
   assert.match(src, /folder:\s*'covers'/);

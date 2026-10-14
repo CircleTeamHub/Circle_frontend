@@ -140,10 +140,12 @@ function assertSolidWhitePng(rel) {
   }
 }
 
-test('expo splash config uses a white background and the standalone chat icon', () => {
+test('expo splash config matches the JS startup splash color and uses the standalone chat icon', () => {
   const app = readJson('app.json').expo;
 
-  assert.equal(app.splash.backgroundColor, '#FFFFFF');
+  // 原生启动图底色必须与 JS 开屏夜空同源（night-layout.json），否则启动时会先闪一屏别的颜色。
+  const nightLayout = readJson('assets/splash/night-layout.json');
+  assert.equal(app.splash.backgroundColor, nightLayout.baseColor);
   assert.equal(app.splash.image, './assets/images/splash-tagline.png');
   assert.equal(app.android.adaptiveIcon.backgroundColor, '#FFFFFF');
   assert.equal(
@@ -267,4 +269,30 @@ test('iOS home-screen icon is a full-bleed frosted mark with no alpha', () => {
   );
   assert.ok(Math.abs(mark.centerX - 0.5) < 0.05, `mark centerX ${mark.centerX}`);
   assert.ok(Math.abs(mark.centerY - 0.5) < 0.05, `mark centerY ${mark.centerY}`);
+});
+
+test('iOS native splash is the full-bleed night sky the JS splash continues from', () => {
+  const app = readJson('app.json').expo;
+  const layout = readJson('assets/splash/night-layout.json');
+
+  assert.deepEqual(app.ios.splash, {
+    image: './assets/images/splash-night.png',
+    resizeMode: 'cover',
+    backgroundColor: layout.baseColor,
+  });
+
+  // 原生图与 JS 底图都由 night-layout 生成；尺寸必须等于设计稿，cover 映射才对得上。
+  for (const rel of ['assets/images/splash-night.png', 'assets/images/splash-night-bg.png']) {
+    const image = PNG.sync.read(read(rel));
+    assert.equal(image.width, layout.width, rel);
+    assert.equal(image.height, layout.height, rel);
+  }
+
+  const splash = readText('src/components/app/startup-splash.tsx');
+  assert.match(splash, /splash-night-bg\.png/);
+  assert.match(splash, /contentFit="cover"/);
+  assert.match(splash, /nightLayout\.iconWidth \* frame\.scale/);
+  // 原生启动屏要等夜空底图上屏后才隐藏，交接无闪烁。
+  const rootLayout = readText('app/_layout.tsx');
+  assert.match(rootLayout, /onBackdropReady=\{hideNativeSplash\}/);
 });

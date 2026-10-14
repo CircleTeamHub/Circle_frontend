@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Spacing, Typography, useTheme } from '@/theme';
 import type { Circle } from '@/types';
 
 interface CircleFilterBarProps {
@@ -17,11 +17,12 @@ interface FilterItem {
   name: string;
 }
 
+// Mirrors the notes group tabs (NotesScreen tabsRow): plain text labels with
+// an underline on the active one, so more circle names fit on one row.
 const s = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    alignItems: 'flex-end',
     marginBottom: Spacing.sm,
   },
   list: {
@@ -29,25 +30,30 @@ const s = StyleSheet.create({
     minWidth: 0,
   },
   listContent: {
-    gap: Spacing.sm,
+    gap: Spacing.md,
+    paddingHorizontal: 2,
+    alignItems: 'flex-end',
   },
-  pill: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs + 2,
-    borderRadius: Radius.full,
-    borderWidth: 1,
+  tab: {
+    paddingTop: Spacing.xs,
+    paddingBottom: 6,
+    alignItems: 'center',
   },
-  pillText: {
-    ...Typography.caption,
-    fontWeight: '600',
+  tabText: {
+    ...Typography.bodyRegular,
+    fontWeight: '500',
+  },
+  tabLine: {
+    height: 2,
+    borderRadius: 1,
+    width: '100%',
+    marginTop: Spacing.xs,
   },
   editButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
+    width: 40,
+    paddingBottom: 6,
+    alignItems: 'flex-end',
     justifyContent: 'center',
-    borderWidth: 1,
   },
 });
 
@@ -72,24 +78,16 @@ export const CircleFilterBar: React.FC<CircleFilterBarProps> = ({
     ({ item }: { item: FilterItem }) => {
       const isActive = item.id === selectedId;
       return (
-        <Pressable
-          onPress={() => onSelect(item.id)}
-          style={[
-            s.pill,
-            {
-              backgroundColor: isActive ? colors.primary : colors.surface,
-              borderColor: isActive ? colors.primary : colors.surfaceBorder,
-            },
-          ]}
-        >
+        <Pressable onPress={() => onSelect(item.id)} style={s.tab}>
           <Text
-            style={[
-              s.pillText,
-              { color: isActive ? colors.white : colors.textSecondary },
-            ]}
+            style={[s.tabText, { color: colors.text }]}
+            numberOfLines={1}
           >
             {item.name}
           </Text>
+          {isActive ? (
+            <View style={[s.tabLine, { backgroundColor: colors.primary }]} />
+          ) : null}
         </Pressable>
       );
     },
@@ -109,20 +107,10 @@ export const CircleFilterBar: React.FC<CircleFilterBarProps> = ({
         style={s.list}
         contentContainerStyle={s.listContent}
       />
-      <Pressable
-        style={[
-          s.editButton,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.surfaceBorder,
-          },
-        ]}
-        onPress={onEditOrder}
-        hitSlop={8}
-      >
+      <Pressable style={s.editButton} onPress={onEditOrder} hitSlop={8}>
         <Ionicons
-          name="reorder-three-outline"
-          size={22}
+          name="ellipsis-horizontal"
+          size={20}
           color={colors.textSecondary}
         />
       </Pressable>

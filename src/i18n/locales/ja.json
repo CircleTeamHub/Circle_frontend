@@ -540,7 +540,7 @@
       "noteManagement": "ノート管理",
       "noteManagementHint": "掲載中の会場ノートのみ表示します。状態は担当者への案内で、ここから掲載停止できます。",
       "noteRestricted": "グループオーナーのみノートを管理できます",
-      "bindNote": "自分のノートを関連付ける",
+      "bindNote": "ノートを関連付ける",
       "bindNoteHint": "ノートカードをタップしてこのグループに関連付けます",
       "noteStatusLabel": "会場の状態",
       "noSourceNotes": "関連付けられるノートはありません",
@@ -553,6 +553,7 @@
       "noteRelist": "再掲載",
       "noteUnbindTitle": "元グループとの関連付けを解除しますか？",
       "noteUnbindHint": "このノートはグループのノート管理に表示されなくなります。",
+      "noteUnbindAction": "削除（グループとの紐付けを解除）",
       "noteUnbind": "関連付けを解除"
     },
     "groupEvent": {
@@ -923,7 +924,7 @@
       "viewImage": "画像を見る"
     },
     "actions": {
-      "new": "新規",
+      "new": "作成",
       "qrCode": "QRコード",
       "share": "共有",
       "pin": "上部に固定",
@@ -1688,7 +1689,6 @@
     },
     "shortcutOrder": {
       "title": "サークルの順序を編集",
-      "hint": "横並びのサークル一覧はこの順序で表示されます",
       "reset": "標準に戻す"
     },
     "commentInput": {

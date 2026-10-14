@@ -225,7 +225,10 @@ test('原生端 tab bar 由各 tab 首页渲染，不再靠导航状态切显隐
     layout,
     /Platform\.OS === 'web' \? \(\s*<FloatingTabBar tabProps=\{props\} hidden=\{hideTabBar\} \/>\s*\) : \(\s*<TabBarBridge \{\.\.\.props\} \/>/,
   );
-  assert.match(layout, /useLayoutEffect\(\(\) => \{\s*publish\(props\);/);
+  assert.match(layout, /useLayoutEffect\(\(\) => \{\s*publish\(owner, props\);/);
+  // 卸载只撤下自己那份,不能无条件置空(旧桥清理晚于新桥发布)。
+  assert.match(layout, /unpublish\(owner\)/);
+  assert.doesNotMatch(layout, /publish\(null\)/);
 
   // 首页外壳在原生端把 bar 作为本页内容渲染，且永远不隐藏。
   assert.match(root, /if \(Platform\.OS === 'web'\) return <>\{children\}<\/>/);
@@ -249,4 +252,9 @@ test('hidden tab bar leaves the accessibility tree and keyboard focus', () => {
   assert.match(layout, /aria-hidden=\{hidden\}/);
   assert.match(layout, /disabled=\{hidden\}\s*\n\s*focusable=\{!hidden\}/);
   assert.match(layout, /hidden=\{hidden\}\s*\n\s*testID=\{TAB_TEST_IDS\[route\.name\]\}/);
+});
+
+test('旧 tab bar 桥卸载时不会撤掉新桥刚发布的 bar（登录后 bar 迟迟不出现）', () => {
+  const store = read('src/stores/tabBarBridgeStore.ts');
+  assert.match(store, /unpublish: \(owner\) => \{\s*if \(get\(\)\.owner !== owner\) return;/);
 });

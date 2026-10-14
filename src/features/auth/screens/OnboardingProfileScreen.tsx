@@ -23,7 +23,10 @@ import {
 import {
   getAvatarPickerPermissionDeniedMessage,
 } from '@/features/profile/avatar-picker-feedback';
-import { loadImagePickerModule } from '@/features/profile/image-picker';
+import {
+  launchImageLibraryFast,
+  loadImagePickerModule,
+} from '@/features/profile/image-picker';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { updateUserProfile, type UpdateProfilePayload } from '@/services/api/profile';
 import {
@@ -173,21 +176,19 @@ export default function OnboardingProfileScreen() {
       return;
     }
 
-    const permission = await imagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
+    // 直接唤起相册、不开 allowsEditing:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+    const outcome = await launchImageLibraryFast(imagePicker, {
+      quality: 0.8,
+      mediaTypes: ['images'],
+    });
+    if (outcome.status === 'denied') {
       const message =
-        getAvatarPickerPermissionDeniedMessage(permission) ??
+        getAvatarPickerPermissionDeniedMessage(outcome.permission) ??
         t('validation.albumPermission');
       Alert.alert(t('validation.cannotSelectImage'), message);
       return;
     }
-
-    const result = await imagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-      mediaTypes: ['images'],
-    });
+    const { result } = outcome;
 
     if (result.canceled || !result.assets[0]) {
       return;

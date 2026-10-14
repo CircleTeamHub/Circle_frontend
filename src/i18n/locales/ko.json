@@ -540,7 +540,7 @@
       "noteManagement": "노트 관리",
       "noteManagementHint": "게시 중인 장소 노트만 표시합니다. 상태는 담당자에게 안내하며 여기서 게시를 중지할 수 있습니다.",
       "noteRestricted": "그룹 소유자만 이 그룹의 노트를 관리할 수 있습니다",
-      "bindNote": "내 노트 연결",
+      "bindNote": "노트 연결",
       "bindNoteHint": "노트 카드를 눌러 이 그룹에 연결하세요",
       "noteStatusLabel": "장소 상태",
       "noSourceNotes": "연결할 노트가 없습니다",
@@ -553,6 +553,7 @@
       "noteRelist": "다시 게시",
       "noteUnbindTitle": "원본 그룹 연결을 해제할까요?",
       "noteUnbindHint": "이 노트는 이 그룹의 노트 관리에서 더 이상 표시되지 않습니다.",
+      "noteUnbindAction": "제거 (그룹과 연결 해제)",
       "noteUnbind": "연결 해제"
     },
     "groupEvent": {
@@ -923,7 +924,7 @@
       "viewImage": "이미지 보기"
     },
     "actions": {
-      "new": "새로 만들기",
+      "new": "만들기",
       "qrCode": "QR 코드",
       "share": "공유",
       "pin": "상단 고정",
@@ -1688,7 +1689,6 @@
     },
     "shortcutOrder": {
       "title": "서클 순서 편집",
-      "hint": "가로 서클 목록이 이 순서로 표시돼요",
       "reset": "기본 순서로"
     },
     "commentInput": {

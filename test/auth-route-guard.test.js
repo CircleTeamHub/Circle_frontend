@@ -242,3 +242,42 @@ test('signed-in users are not bounced off the invite route', () => {
     { type: 'redirect', href: '/(onboarding)/profile' },
   );
 });
+
+test('account switch in progress: no redirect while the old session is cleared and the new one not yet active', () => {
+  const { getAuthRouteDecision } = loadPolicy();
+
+  // 切换中途 isAuthenticated 短暂为 false;此时若重定向到登录页,会和切换结尾的跳转抢导航。
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: '(tabs)',
+      isAuthenticated: false,
+      isLoading: false,
+      onboardingRequired: false,
+      accountSwitching: true,
+    })),
+    { type: 'allow' },
+  );
+  // 新账号激活后若导航还停在登录页,也交给切换流程自己 replace。
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: '(auth)',
+      isAuthenticated: true,
+      isLoading: false,
+      onboardingRequired: false,
+      accountSwitching: true,
+    })),
+    { type: 'allow' },
+  );
+});
+
+test('the root guard and switchToAccount share the account-switching flag', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const layout = fs.readFileSync(path.join(__dirname, '..', 'app/_layout.tsx'), 'utf8');
+  const auth = fs.readFileSync(path.join(__dirname, '..', 'src/hooks/use-auth.ts'), 'utf8');
+
+  assert.match(layout, /useAccountSwitcherStore\(\(state\) => state\.switching\)/);
+  assert.match(layout, /accountSwitching,\n\s*\}\);/);
+  assert.match(auth, /setSwitching\(true\);\s*\n\s*try \{/);
+  assert.match(auth, /finally \{\s*\n\s*useAccountSwitcherStore\.getState\(\)\.setSwitching\(false\);/);
+});
