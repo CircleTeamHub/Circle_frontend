@@ -94,7 +94,7 @@ test(
 
 test('the groups inbox fences stale loads and deduplicates paging', () => {
   const list = read('src/features/groups/GroupAdmissionsList.tsx');
-  assert.match(list, /if \(paging\.current\) return;/);
+  assert.match(list, /if \(paging\.current\) \{[^}]*return;/);
   assert.match(list, /version !== generation\.current/);
   assert.match(list, /generation\.current\+\+/);
   assert.match(list, /old\.some/);
