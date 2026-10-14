@@ -90,6 +90,7 @@ export function useAuth() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
   const [submitting, setSubmitting] = useState(false);
+  const [committing, setCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 在 await 长链路中守护 setState：用户在登录/登出中途离开屏幕时
@@ -146,7 +147,9 @@ export function useAuth() {
           // 「添加账号」:上一个账号此刻还登着。记下它再拆掉本地会话(IM、依赖 store、
           // 持久化),不撤销服务端会话 —— 它留在账号列表里,随时能切回来。
           rememberCurrentAccount();
-          await clearLocalSession();
+          setCommitting(true);
+          try { await clearLocalSession(); }
+          finally { if (mountedRef.current) setCommitting(false); }
           if (!mountedRef.current || (options.isAttemptCurrent && !options.isAttemptCurrent())) {
             if (!useAuthStore.getState().isAuthenticated && current.user && current.accessToken && current.refreshToken) {
               setSession({ accessToken: current.accessToken, refreshToken: current.refreshToken }, current.user, { onboardingRequired: current.onboardingRequired });
@@ -456,6 +459,7 @@ export function useAuth() {
     switchAccount,
     switchToAccount,
     submitting,
+    committing,
     error,
     isAuthenticated,
     isLoading,

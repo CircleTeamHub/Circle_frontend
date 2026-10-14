@@ -417,3 +417,20 @@ test('canceling while old-session teardown is pending restores the old account r
   expect(mockSetSession).toHaveBeenCalledWith({ accessToken: 'a-access', refreshToken: 'a-refresh' }, originalUser, expect.any(Object));
   expect(mockSetSession).not.toHaveBeenCalledWith(expect.objectContaining({ accessToken: 'b-access' }), expect.anything(), expect.anything());
 });
+
+test('the irreversible cleanup phase is exposed as a navigation commit lock', async () => {
+  mockAuthState = { ...signedOutState, isAuthenticated: true, user: { id: 'A' }, accessToken: 'a-access', refreshToken: 'a-refresh', sessionEpoch: 4 };
+  jest.mocked(loginRequest).mockResolvedValue({ kind: 'tokens', tokens: { accessToken: 'b-access', refreshToken: 'b-refresh' } } as never);
+  jest.mocked(fetchCurrentUserWithToken).mockResolvedValue({ id: 'B' } as never);
+  let finish!: () => void;
+  let draft = 'unsent draft';
+  jest.mocked(clearLocalSession).mockImplementationOnce(() => new Promise<void>(resolve => { finish = () => { draft = ''; resolve(); }; }));
+  const { result } = renderHook(() => useAuth());
+  let login!: Promise<void>;
+  act(() => { login = result.current.login('user_123', 'password1'); });
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  expect(result.current.committing).toBe(true);
+  expect(draft).toBe('unsent draft');
+  await act(async () => { finish(); await login; });
+  expect(result.current.committing).toBe(false);
+});

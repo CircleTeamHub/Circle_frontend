@@ -1,3 +1,4 @@
+import { usePreventRemove } from '@react-navigation/native';
 import { useDeviceVerificationStore, type PendingDeviceVerification } from '@/features/auth/store/device-verification-store';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -70,7 +71,8 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
   useEffect(() => () => {
     if (useDeviceVerificationStore.getState().challenge?.id === challenge.id) useDeviceVerificationStore.getState().setChallenge(null);
   }, [challenge.id]);
-  const { completeVerifiedLogin } = useAuth();
+  const { completeVerifiedLogin, committing } = useAuth();
+  usePreventRemove(Boolean(committing), () => {});
   const [code, setCode] = useState('');
   const [useSecurityCode, setUseSecurityCode] = useState(false);
   const securityCodeAvailable = challenge.securityCodeAvailable;

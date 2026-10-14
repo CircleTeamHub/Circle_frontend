@@ -1,3 +1,4 @@
+import { usePreventRemove } from '@react-navigation/native';
 import { useState, useMemo } from 'react';
 import {
   View,
@@ -81,7 +82,8 @@ export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
-  const { register, submitting, error } = useAuth();
+  const { register, submitting, error, committing } = useAuth();
+  usePreventRemove(Boolean(committing), () => {});
   const { t } = useTranslation();
   const { inviteCode: inviteCodeParam } = useLocalSearchParams<{
     inviteCode?: string;

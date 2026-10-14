@@ -1,3 +1,4 @@
+import { usePreventRemove } from '@react-navigation/native';
 import { AuthInput } from '@/components/ui/auth-input';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -125,7 +126,8 @@ export default function LoginScreen() {
   const { width, height } = useWindowDimensions();
   const { colors } = useTheme();
   const reduceMotion = useReduceMotion();
-  const { login, submitting, error } = useAuth();
+  const { login, submitting, error, committing } = useAuth();
+  usePreventRemove(Boolean(committing), () => {});
   const { t } = useTranslation();
   // 从「切换账号」过期分支或注册成功跳来时预填登录标识。
   // 保留 email 作为旧深链参数，避免已有链接失效。
