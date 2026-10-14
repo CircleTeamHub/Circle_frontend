@@ -91,6 +91,19 @@ export function useAuth() {
   const isLoading = useAuthStore((state) => state.isLoading);
   const [submitting, setSubmitting] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [dismissPending, setDismissPending] = useState(false);
+  useEffect(() => {
+    if (!dismissPending || committing) return;
+    let active = true;
+    // Removal guards update during this render. Dispatch only after all passive
+    // effects have removed the commit guard from the auth route.
+    void Promise.resolve().then(() => {
+      if (!active) return;
+      setDismissPending(false);
+      router.dismissTo('/(tabs)/messages');
+    });
+    return () => { active = false; };
+  }, [committing, dismissPending, router]);
   const [error, setError] = useState<string | null>(null);
 
   // 在 await 长链路中守护 setState：用户在登录/登出中途离开屏幕时
@@ -183,10 +196,10 @@ export function useAuth() {
       // replace 也会再挂一份 tabs,这里退回原来那一层并切到消息页。按标记而非
       // replacingSession 判断:停在登录页期间旧账号可能已被远端踢下线。
       if (replacingSession || useAccountSwitcherStore.getState().addingAccount) {
-        router.dismissTo('/(tabs)/messages');
+        setDismissPending(true);
       }
     },
-    [router, setSession],
+    [setSession],
   );
 
   const login = useCallback(

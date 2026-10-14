@@ -1,4 +1,7 @@
-import { act, renderHook } from '@testing-library/react-native';
+import React from 'react';
+import { View } from 'react-native';
+import { NavigationContainer, createNavigationContainerRef, createNavigatorFactory, useNavigationBuilder, StackRouter, StackActions, usePreventRemove } from '@react-navigation/native';
+import { act, render, renderHook, waitFor } from '@testing-library/react-native';
 import { useAuth } from './use-auth';
 import {
   fetchCurrentUser,
@@ -433,4 +436,36 @@ test('the irreversible cleanup phase is exposed as a navigation commit lock', as
   expect(draft).toBe('unsent draft');
   await act(async () => { finish(); await login; });
   expect(result.current.committing).toBe(false);
+});
+
+
+test('adding an account dismisses the auth route after the real removal guard unlocks', async () => {
+  signInPreviousAccount();
+  jest.mocked(loginRequest).mockResolvedValue({ kind: 'tokens', tokens });
+  jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(user as never);
+  let finish!: () => void;
+  jest.mocked(clearLocalSession).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+  const navigation = createNavigationContainerRef();
+  let auth!: ReturnType<typeof useAuth>;
+  function Login() {
+    auth = useAuth();
+    usePreventRemove(auth.committing, () => {});
+    return <View />;
+  }
+  function Navigator(props: any) {
+    const { state, descriptors, NavigationContent } = useNavigationBuilder(StackRouter, props);
+    return <NavigationContent>{state.routes.map(route => <View key={route.key}>{descriptors[route.key].render()}</View>)}</NavigationContent>;
+  }
+  const Stack = createNavigatorFactory(Navigator)();
+  mockRouter.dismissTo.mockImplementation(() => navigation.dispatch(StackActions.popTo('Tabs')));
+  const screen = render(<NavigationContainer ref={navigation} initialState={{ index: 1, routes: [{ name: 'Tabs' }, { name: 'Login' }] }}><Stack.Navigator><Stack.Screen name="Tabs" component={View} /><Stack.Screen name="Login" component={Login} /></Stack.Navigator></NavigationContainer>);
+  let pending!: Promise<void>;
+  act(() => { pending = auth.login('user_123', 'password1'); });
+  await waitFor(() => expect(auth.committing).toBe(true));
+  act(() => navigation.dispatch(StackActions.pop()));
+  expect(navigation.getCurrentRoute()?.name).toBe('Login');
+  await act(async () => { finish(); await pending; });
+  await waitFor(() => expect(navigation.getCurrentRoute()?.name).toBe('Tabs'));
+  screen.unmount();
+  mockRouter.dismissTo.mockReset();
 });
