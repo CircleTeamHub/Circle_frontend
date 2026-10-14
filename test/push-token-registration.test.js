@@ -198,7 +198,7 @@ function makeHarness(options = {}) {
     },
     registerPushToken: async (input) => {
       registerCalls.push(input);
-      return options.registerPushToken?.(input, stored);
+      return (await options.registerPushToken?.(input, stored)) ?? { deviceBound: true };
     },
     revokePushToken: async (token, revocationSecret) => {
       revokeCalls.push({ token, revocationSecret });
@@ -298,6 +298,7 @@ test('the chat handshake only reads a token confirmed for the same account', () 
     userId: 'user-1',
     revocationSecret: SECRET_A,
     status: 'registered',
+      deviceBindingVersion: 1,
   };
   // 聊天连接握手带上它,服务端才能只跳过「正开着 App 的这台设备」。
   let module = loadRegistrar(state(registered).storage);
@@ -390,6 +391,7 @@ test('restart migration preserves legacy active and tombstone wins duplicate mod
     userId: 'user-1',
     revocationSecret: SECRET_A,
     status: 'registered',
+      deviceBindingVersion: 1,
   };
   const duplicateMemory = memoryStorage({
     'circle-im-push-registration': JSON.stringify({
@@ -744,6 +746,7 @@ test('toggle-off retires locally and uses public revocation without auth state',
       userId: 'user-1',
       revocationSecret: SECRET_A,
       status: 'registered',
+      deviceBindingVersion: 1,
     },
   });
   await harness.orchestrator.sync({
@@ -854,6 +857,7 @@ test('saturated user replacement retires A before blocking B until flush succeed
       userId: 'user-a',
       revocationSecret: SECRET_A,
       status: 'registered',
+      deviceBindingVersion: 1,
     },
     token: 'user-b-token',
     secret: SECRET_B,
@@ -1149,4 +1153,27 @@ test('JPush on iOS still registers with APNs through JPush after the system prom
     harness.registerCalls.map((call) => call.token),
     ['jpush-registration-1'],
   );
+});
+
+
+test('a pre-binding registered token is upgraded with the same revocation secret', async () => {
+  const h = makeHarness({ stored: { token: 'ExponentPushToken[token-1]', userId: 'user-1', revocationSecret: SECRET_A, status: 'registered' }, token: 'ExponentPushToken[token-1]' });
+  await h.orchestrator.sync(enabled('user-1'));
+  assert.equal(h.registerCalls.length, 1);
+  assert.equal(h.registerCalls[0].revocationSecret, SECRET_A);
+  assert.equal(h.getStored().deviceBindingVersion, 1);
+  await h.orchestrator.sync(enabled('user-1'));
+  assert.equal(h.registerCalls.length, 1);
+});
+
+
+test('an older server acknowledgement does not suppress a later device-binding upgrade', async () => {
+  let bound = false;
+  const h = makeHarness({ registerPushToken: async () => ({ deviceBound: bound }) });
+  await h.orchestrator.sync(enabled());
+  assert.equal(h.getStored().deviceBindingVersion, undefined);
+  bound = true;
+  await h.orchestrator.sync(enabled());
+  assert.equal(h.registerCalls.length, 2);
+  assert.equal(h.getStored().deviceBindingVersion, 1);
 });

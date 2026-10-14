@@ -196,11 +196,13 @@ export async function deleteNotification(id: string): Promise<void> {
   await apiClient<void>(`/notification/${id}`, { method: 'DELETE' });
 }
 
-export async function registerPushToken(input: RegisterPushTokenInput): Promise<void> {
-  await apiClient<void>('/notification/push-token', {
+export async function registerPushToken(input: RegisterPushTokenInput): Promise<{ deviceBound: boolean }> {
+  const result = await apiClient<unknown>('/notification/push-token', {
     method: 'PUT',
     body: input,
   });
+  // Older servers return no acknowledgement; keep the registration eligible for upgrade.
+  return { deviceBound: isPlainObject(result) && result.deviceBound === true };
 }
 
 export async function revokePushToken(
