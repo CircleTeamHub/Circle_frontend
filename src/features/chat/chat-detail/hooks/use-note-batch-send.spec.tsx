@@ -1,3 +1,5 @@
+import { startChatSend } from '@/chat-core/send-handle';
+import { sendCardMessage } from '@/chat-core/client';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { NoteSummary } from '@/features/notes/types';
 import {
@@ -160,16 +162,21 @@ test('a second warning waits for the first dialog to be removed', async () => {
 });
 
 
-test('two mounted hooks sharing a deduplicated warning both settle their queues', async () => {
+test('separate chat warnings preserve each confirmed batch', async () => {
+  jest.mocked(startChatSend).mockImplementation((send: (callback: () => void) => Promise<unknown>) => ({ queued: true, delivered: Promise.resolve(send(() => {})) }));
+  jest.mocked(sendCardMessage).mockResolvedValue({} as never);
   mockWithFreshNoteSourceStatus.mockImplementation(async (cards: unknown[]) => cards.map(card => ({ ...(card as object), workStatus: 'CLOSED', publicationStatus: 'ACTIVE' })));
-  const create = () => renderHook(() => useNoteBatchSend({ t: ((key: string) => key) as never, authUser: null, setSendError: jest.fn(), mountedRef: { current: true }, sourceID: 's', conversationID: 'c', isPreviewMode: false }));
-  const first = create(); const second = create();
-  const options = { card: false, media: false, showcase: false, location: false };
+  const create = (conversationID: string) => renderHook(() => useNoteBatchSend({ t: ((key: string) => key) as never, authUser: null, setSendError: jest.fn(), mountedRef: { current: true }, sourceID: conversationID, conversationID, isPreviewMode: false }));
+  const first = create('a'); const second = create('b');
+  const options = { card: true, media: false, showcase: false, location: false };
   let a!: Promise<void>; let b!: Promise<void>;
   act(() => { a = first.result.current.handlePickNoteBatch([note], options); b = second.result.current.handlePickNoteBatch([note], options); });
-  await waitFor(() => expect(mockWithFreshNoteSourceStatus).toHaveBeenCalledTimes(2));
-  await waitFor(() => expect(useAppDialogStore.getState().queue).toHaveLength(1));
-  act(() => dismissDialog(useAppDialogStore.getState().queue[0].id));
+  await waitFor(() => expect(useAppDialogStore.getState().queue).toHaveLength(2));
+  for (const dialog of [...useAppDialogStore.getState().queue]) {
+    act(() => { dialog.buttons?.[1].onPress?.(); dismissDialog(dialog.id); });
+  }
   await act(async () => { await Promise.all([a, b]); });
+  expect(sendCardMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'a' }));
+  expect(sendCardMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'b' }));
   expect(useAppDialogStore.getState().queue).toHaveLength(0);
 });

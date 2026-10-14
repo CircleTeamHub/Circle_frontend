@@ -27,6 +27,8 @@ export interface DialogPromptConfig {
 }
 
 export interface DialogRequest {
+  /** Disable merging when callbacks belong to distinct operations. */
+  deduplicate?: boolean;
   title: string;
   message?: string;
   /** 为空时宿主补一个本地化的「知道了」。 */
@@ -62,6 +64,7 @@ interface AppDialogState {
 let nextId = 1;
 
 function isSameDialog(a: DialogRequest, b: DialogRequest): boolean {
+  if (a.deduplicate === false || b.deduplicate === false) return false;
   if (a.prompt || b.prompt) return false;
   if (a.title !== b.title || a.message !== b.message) return false;
   const aTexts = (a.buttons ?? []).map((button) => button.text);

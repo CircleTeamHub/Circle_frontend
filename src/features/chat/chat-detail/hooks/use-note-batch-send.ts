@@ -301,6 +301,7 @@ export function useNoteBatchSend({
               void removed.then(settle);
             };
             dialogId = showDialog({
+              deduplicate: false,
               title: t('chat.forward.workStatusWarningTitle', {
                 defaultValue: '订单状态可能变化',
               }),
