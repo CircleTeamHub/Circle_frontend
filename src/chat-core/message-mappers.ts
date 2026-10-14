@@ -468,7 +468,7 @@ export function mapChatMessageDtoToUI(
         friendCard: sanitizeFriendCard(content),
       };
     case 'group-invitation':
-      return { ...base, type: 'group-invitation', groupInvitation: { admissionId: textField(content, 'admissionId', 64), circleInvitationId: textField(content, 'circleInvitationId', 64), groupName: textField(content, 'groupName', 60), avatarUrl: optionalTextField(content, 'avatarUrl', 2048) } };
+      return { ...base, type: 'group-invitation', groupInvitation: { admissionId: textField(content, 'admissionId', 64), circleInvitationId: textField(content, 'circleInvitationId', 64), groupName: textField(content, 'groupName', 60), avatarUrl: mediaField(content, 'avatarUrl') } };
     case 'circle-card':
       return {
         ...base,

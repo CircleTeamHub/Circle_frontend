@@ -163,3 +163,12 @@ test('leaving then receiving a new invitation or application keeps one row and i
   expect(ui.getAllByText('重新入群')).toHaveLength(1);
   expect(ui.UNSAFE_getByType(FlatList).props.data[0].unreadCount).toBe(0);
 });
+
+
+test.each([['APPROVED','已加入群聊'],['ADMIN_APPROVED','已加入群聊'],['REJECTED','申请未通过'],['CANCELLED','申请已取消']])('circle status %s is rendered accurately', async (status, label) => {
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [], nextCursor: null });
+  jest.mocked(fetchMyApplications).mockResolvedValue([{ id: 'status-circle', circleId: 'circle', circleName: '圈', status, inviter: {}, applicant: {} }] as any);
+  const ui = render(<GroupAdmissionsList />);
+  await ui.findByText(label);
+  expect(ui.queryByText('已提交，等待管理员审核')).toBeNull();
+});

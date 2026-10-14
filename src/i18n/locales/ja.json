@@ -507,8 +507,8 @@
       "membersCanViewProfiles": "メンバーがプロフィールを見られる",
       "membersCanAddFriends": "メンバーが友だち追加できる",
       "membersCanViewRoster": "メンバー一覧を表示",
-      "cardJoinEnabled": "Allow requests through group cards",
-      "joinApprovalRequired": "Require approval to join"
+      "cardJoinEnabled": "名刺からの参加申請を許可",
+      "joinApprovalRequired": "参加時に承認を求める"
     },
     "groupPolicyHint": {
       "memberCanInvite": "オフにするとオーナーと管理者のみメンバーを追加できます",
@@ -516,8 +516,8 @@
       "membersCanViewProfiles": "オフにすると一般メンバーはグループから他のメンバーのプロフィールを開けません",
       "membersCanAddFriends": "オフにすると一般メンバーはグループ経由で友だち追加できません",
       "membersCanViewRoster": "オフにすると一般メンバーはメンバー一覧を見られません",
-      "cardJoinEnabled": "Non-members can request to join through a group card",
-      "joinApprovalRequired": "Member invitations and QR entry require approval; owner and admin invitations join after acceptance"
+      "cardJoinEnabled": "未参加のユーザーはグループ名刺から参加を申請できます",
+      "joinApprovalRequired": "一般メンバーの招待とQRからの参加は承認が必要です。オーナーや管理者の招待は承諾後に参加できます"
     },
     "groupManagement": {
       "admins": "管理者",
@@ -3492,9 +3492,9 @@
     "CHAT_GROUP_AVATAR_URL_INVALID": "グループアイコンのURLが無効です",
     "CHAT_DELIVERY_ID_CONFLICT": "メッセージを送信できませんでした。もう一度入力して送信してください",
     "FRIEND_GROUP_ADD_FORBIDDEN": "このグループではメンバー同士の友だち追加ができません",
-    "CHAT_GROUP_ACCEPT_REQUIRED": "Please accept the group invitation first",
-    "CHAT_GROUP_INVITATION_INVALID": "This invitation has expired or is no longer valid",
-    "CHAT_GROUP_APPLICATION_DISABLED": "This group is not accepting requests through cards"
+    "CHAT_GROUP_ACCEPT_REQUIRED": "先にグループ招待を承諾してください",
+    "CHAT_GROUP_INVITATION_INVALID": "招待の期限が切れたか、無効になりました",
+    "CHAT_GROUP_APPLICATION_DISABLED": "このグループは名刺からの参加申請を受け付けていません"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",
@@ -3563,44 +3563,45 @@
       "groupType": "グループQRコード",
       "circleType": "サークルQRコード",
       "userFooter": "スキャンまたはタップで友だち追加",
-      "groupFooter": "Scan or tap to view the group invitation",
+      "groupFooter": "スキャンまたはタップして招待を確認",
       "circleFooter": "スキャンまたはタップでサークルに参加"
     }
   },
   "groupAdmission": {
-    "title": "Group details and invitation",
-    "members": "{{count}} members",
-    "invitedBy": "{{name}} invited you to this group",
-    "invitedByYou": "You invited {{name}} to this group",
-    "invitedPerson": "{{inviter}} invited {{applicant}} to this group",
-    "personStatus": "{{name}}: {{status}}",
-    "applicant": "Applicant: {{name}}",
-    "enter": "Enter group chat",
-    "accept": "Accept invitation",
-    "decline": "Decline invitation",
-    "approve": "Approve request",
-    "reject": "Reject request",
-    "apply": "Request to join",
-    "reason": "Reason (optional, up to 200 characters)",
-    "viewInvitation": "View invitation",
-    "manage": "Join requests and invitations",
-    "empty": "No group invitations or requests",
-    "loadFailed": "Unable to load group details. Please retry.",
-    "actionFailed": "Action could not be completed",
-    "actionUncertain": "The result could not be confirmed. We refreshed the status; check it before trying again.",
-    "reviewRequired": "An administrator must approve your request before you can access group messages.",
-    "acceptRequired": "Accept a valid invitation to join this group.",
-    "applicationDisabled": "This group is not accepting card requests",
-    "unavailable": "This group is no longer available",
-    "preview": "[Group invitation]",
+    "title": "グループ情報と招待",
+    "members": "{{count}}人",
+    "invitedBy": "{{name}}さんがあなたをグループに招待しました",
+    "invitedByYou": "あなたが{{name}}さんをグループに招待しました",
+    "invitedPerson": "{{inviter}}さんが{{applicant}}さんをグループに招待しました",
+    "personStatus": "{{name}}：{{status}}",
+    "applicant": "申請者：{{name}}",
+    "enter": "チャットに入る",
+    "accept": "招待を承諾",
+    "decline": "招待を辞退",
+    "approve": "参加を承認",
+    "reject": "申請を却下",
+    "apply": "参加を申請",
+    "reason": "申請理由（任意・200文字以内）",
+    "viewInvitation": "招待を見る",
+    "manage": "参加申請と招待",
+    "empty": "参加申請や招待はありません",
+    "loadFailed": "グループ情報を取得できませんでした。再試行してください。",
+    "actionFailed": "操作を完了できませんでした",
+    "actionUncertain": "結果を確認できなかったため、状態を再取得しました。最新の状態を確認してください。",
+    "reviewRequired": "管理者の承認後に参加でき、メッセージを閲覧できます。",
+    "acceptRequired": "有効な招待を承諾すると参加できます。",
+    "applicationDisabled": "このグループは名刺からの参加申請を受け付けていません",
+    "unavailable": "グループは利用できません",
+    "preview": "[グループ招待]",
     "status": {
-      "INVITED": "Awaiting acceptance",
-      "PENDING": "Awaiting administrator approval",
-      "JOINED": "Joined group",
-      "LEFT": "Left the group",
-      "DECLINED": "Invitation declined",
-      "REJECTED": "Request rejected",
-      "EXPIRED": "Invitation or request expired"
+      "INVITED": "招待の承諾待ち",
+      "PENDING": "申請済み・管理者の承認待ち",
+      "JOINED": "参加済み",
+      "LEFT": "グループを退出しました",
+      "DECLINED": "招待を辞退しました",
+      "REJECTED": "申請が却下されました",
+      "EXPIRED": "招待または申請の期限が切れました",
+      "CANCELLED": "申請が取り消されました"
     }
   }
 }

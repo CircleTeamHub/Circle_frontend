@@ -231,3 +231,10 @@ it("a departed applicant can submit a new application from an old invitation det
   fireEvent.press(apply);
   await waitFor(() => expect(mockRouter.setParams).toHaveBeenCalledWith({ admissionId: "new-application" }));
 });
+
+
+it('circle member navigation keeps circle source ID and chat conversation ID distinct', async () => {
+  jest.mocked(fetchGroupPreview).mockResolvedValue({ ...group, id: 'chat-id', circleId: 'circle-id', isMember: true });
+  render(<GroupEntryScreen />);
+  await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(expect.objectContaining({ params: expect.objectContaining({ sourceID: 'circle-id', conversationID: 'chat-id' }) })));
+});

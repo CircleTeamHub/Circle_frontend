@@ -136,3 +136,14 @@ test('every locale defines the new tab, search and group-inbox copy', () => {
     );
   }
 });
+
+
+test('admission copy is localized in Spanish, Japanese and Korean', () => {
+  const en = JSON.parse(read('src/i18n/locales/en.json'));
+  for (const locale of ['es', 'ja', 'ko']) {
+    const localized = JSON.parse(read(`src/i18n/locales/${locale}.json`));
+    for (const key of ['title', 'accept', 'apply', 'loadFailed']) assert.notEqual(localized.groupAdmission[key], en.groupAdmission[key]);
+    assert.notEqual(localized.chat.groupPolicy.cardJoinEnabled, en.chat.groupPolicy.cardJoinEnabled);
+    assert.notEqual(localized.qr.card.groupFooter, en.qr.card.groupFooter);
+  }
+});

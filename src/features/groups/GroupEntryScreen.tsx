@@ -84,7 +84,7 @@ export default function GroupEntryScreen() {
       router.replace(
         getChatDetailHref(
           scope,
-          g.id,
+          g.circleId ?? g.id,
           g.name,
           g.avatarUrl ?? undefined,
           g.id,

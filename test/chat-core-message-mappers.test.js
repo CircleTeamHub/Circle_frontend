@@ -563,3 +563,10 @@ test('voice messages apply the same allowlist to both url and localUri', () => {
   // 主地址被拒之后不能从 localUri 溜出去 —— 那正是绕过白名单的形态。
   assert.equal(hostile.voiceUrl ?? hostile.audioUrl ?? undefined, undefined);
 });
+
+
+test('group invitation avatars reject hostile remote URLs', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const ui = mapChatMessageDtoToUI(dto({ type: 'group-invitation', content: { admissionId: 'a', groupName: 'g', avatarUrl: 'https://attacker.example/beacon.gif' } }), 'u1', 0);
+  assert.equal(ui.groupInvitation.avatarUrl, null);
+});

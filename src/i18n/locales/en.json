@@ -3608,7 +3608,8 @@
       "LEFT": "Left the group",
       "DECLINED": "Invitation declined",
       "REJECTED": "Request rejected",
-      "EXPIRED": "Invitation or request expired"
+      "EXPIRED": "Invitation or request expired",
+      "CANCELLED": "Application cancelled"
     }
   }
 }

@@ -290,9 +290,7 @@ export function GroupAdmissionsList({
             <Text style={{ color: colors.textSecondary }}>
               {item.circleInvitation
                 ? t(
-                    item.circleInvitation.status === "INVITED"
-                      ? "groupAdmission.status.INVITED"
-                      : "groupAdmission.status.PENDING",
+                    `groupAdmission.status.${({ INVITED: 'INVITED', PENDING: 'PENDING', APPROVED: 'JOINED', ADMIN_APPROVED: 'JOINED', REJECTED: 'REJECTED', CANCELLED: 'CANCELLED' } as const)[item.circleInvitation.status]}`,
                   )
                 : item.admission
                   ? `${getGroupAdmissionRelationship(item.admission, userId, t)} · ${getGroupAdmissionStatus(item.admission, userId, t)}`
