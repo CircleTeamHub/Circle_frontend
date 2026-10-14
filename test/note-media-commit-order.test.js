@@ -83,7 +83,7 @@ test('批量上传失败上报真实错误而不是自造的占位错误', () =>
 // 挡住，与这个标签无关。
 test('「上传中」直到相册返回文件之后才亮', () => {
   const handler = sectionMediaHandler();
-  const picker = handler.indexOf('launchImageLibraryAsync(');
+  const picker = handler.indexOf('launchImageLibraryFast(');
   const indicator = handler.indexOf('setUploadingSection(uploadKey)');
 
   assert.ok(picker > 0 && indicator > 0);

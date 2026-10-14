@@ -400,7 +400,9 @@ test("app settings search filters settings rows instead of rendering a placehold
   assert.match(source, /'camera'/);
   assert.match(source, /settingsDetails\.permissions\.\$\{key\}/);
   assert.match(source, /settingsDetails\.about\.privacyPolicy/);
-  assert.match(source, /pathname:\s*'\/\(tabs\)\/profile\/edit\/\[field\]'/);
+  // 资料字段的搜索结果落到个人信息页,由页面弹出底部编辑面板。
+  assert.match(source, /pathname:\s*'\/\(tabs\)\/profile\/settings',\s*params:\s*\{ field \}/);
+  assert.doesNotMatch(source, /profile\/edit\/\[field\]/);
   assert.match(source, /rowMatchesSearch/);
   assert.match(source, /appSettings\.searchNoResults/);
   assert.doesNotMatch(source, /<Text style=\{d\.searchText\}>\{t\('appSettings\.searchPlaceholder'\)\}<\/Text>/);
@@ -1325,4 +1327,31 @@ test("privacy self-destruct updates the chat cache policy immediately", () => {
   // 就是「同一个功能两张档位表」那个 bug 的原样复发。
   assert.match(source, /BURN_DURATION_CHOICES/);
   assert.doesNotMatch(source, /\[0,\s*1,\s*2,\s*7,\s*30\]/);
+});
+
+test("profile info rows edit in a bottom sheet instead of pushing a separate page", () => {
+  const screen = fs.readFileSync(
+    path.join(process.cwd(), "src/features/profile/screens/SettingsScreen.tsx"),
+    "utf8",
+  );
+  const sheet = fs.readFileSync(
+    path.join(process.cwd(), "src/features/profile/components/profile-field-edit-sheet.tsx"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(screen, /profile\/edit\/\[field\]/);
+  assert.match(screen, /<ProfileFieldEditSheet fieldId=\{editingFieldId\}/);
+  // 头像直接唤起相册,不经过面板。
+  assert.match(screen, /item\.type === 'avatar'[\s\S]*?changeAvatar\(\)/);
+  // 设置搜索带 ?field= 进来时直接弹出对应面板。
+  assert.match(screen, /useLocalSearchParams<\{ field\?: string \}>/);
+
+  assert.match(sheet, /BottomSheetModal/);
+  assert.match(sheet, /BirthdayColumns/);
+  assert.match(sheet, /CityColumns/);
+  assert.match(sheet, /toProfileUpdatePayload\(field\.id, nextValue\)/);
+  assert.match(sheet, /validateProfileFieldValue\(field\.id, nextValue\)/);
+  // Modal 里的输入框在安卓上要延后聚焦,否则键盘不弹。
+  assert.match(sheet, /useModalInputAutoFocus\(inputRef/);
+  assert.match(sheet, /autoFocus=\{MODAL_INPUT_NATIVE_AUTO_FOCUS\}/);
 });

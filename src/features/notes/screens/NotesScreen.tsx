@@ -70,6 +70,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import type { NoteCardData } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -966,19 +967,16 @@ export default function NotesScreen() {
           </Pressable>
         </View>
       ) : (
-        <Pressable
-          style={[s.floatingNewButton, d.newBtn, { bottom: insets.bottom + Spacing.lg }]}
+        <FloatingActionButton
+          style={{ bottom: insets.bottom + Spacing.lg }}
           onPress={() =>
             router.push({
               pathname: '/(tabs)/profile/notes/edit',
               params: { draftId: createNoteDraftId(), draftMode: 'new' },
             } as never)
           }
-          accessibilityRole="button"
-          accessibilityLabel={t('notes.actions.new', { defaultValue: '新建' })}
-        >
-          <Ionicons name="add" size={26} color={colors.white} />
-        </Pressable>
+          label={t('notes.actions.new', { defaultValue: '创建' })}
+        />
       )}
 
       <GroupManagerSheet
@@ -1123,18 +1121,4 @@ const s = StyleSheet.create({
   },
   bottomBtnText: { ...Typography.body, fontWeight: '600' },
   btnDisabled: { opacity: 0.5 },
-  floatingNewButton: {
-    position: 'absolute',
-    right: Spacing.lg,
-    width: 56,
-    height: 56,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
-  },
 });

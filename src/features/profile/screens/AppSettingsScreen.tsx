@@ -63,8 +63,9 @@ const PROFILE_SEARCH_ROWS: AppSettingsRow[] = [
 ].map((field) => ({
   id: `profile-${field}`,
   labelKey: `profileFields.${field}`,
+  // 落到个人信息页并直接弹出该字段的底部编辑面板。
   route: {
-    pathname: '/(tabs)/profile/edit/[field]',
+    pathname: '/(tabs)/profile/settings',
     params: { field },
   },
 }));

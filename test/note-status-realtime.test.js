@@ -102,10 +102,14 @@ test('every send-time status warning re-reads the live source status first', () 
   }
 });
 
-test('note management offers working, closed and clear (null) without coercing unset', () => {
+test('note management shows working / closed / remove buttons and defaults newly bound notes to working', () => {
   const management = read('src/features/notes/screens/NoteManagementScreen.tsx');
   assert.doesNotMatch(management, /withDefaultWorkingStatus/);
   assert.match(management, /resolveManagedWorkStatus\(note\)/);
-  assert.match(management, /value: null,[\s\S]*?noteClearStatus/);
+  assert.match(management, /value: 'WORKING',[\s\S]*?value: 'CLOSED',/);
   assert.match(management, /handleSetNoteWorkStatus\(note, option\.value\)/);
+  assert.match(management, /handleUnbindNote\(note\)/);
+  // 只给「未设置」的笔记补默认开工，已设过的状态在关联时保留。
+  assert.match(management, /const needsDefaultStatus = resolveManagedWorkStatus\(note\) === 'UNSET';/);
+  assert.match(management, /if \(needsDefaultStatus\) \{[\s\S]*?setNoteWorkStatus\(note\.id, 'WORKING'\)/);
 });

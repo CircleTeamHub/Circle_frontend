@@ -147,6 +147,7 @@ function loadUseAuth(fixtures = {}) {
     module: { exports: {} },
     exports: {},
     require: withObservabilityStubs((request) => {
+      if (request === '@/features/auth/store/device-verification-store') return { useDeviceVerificationStore: { getState: () => ({ setChallenge: () => {} }) } };
       if (request in modules) return modules[request];
       throw new Error(`Unexpected import: ${request}`);
     }),

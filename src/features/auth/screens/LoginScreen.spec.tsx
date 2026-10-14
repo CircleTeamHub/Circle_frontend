@@ -1,8 +1,11 @@
+import { usePreventRemove } from '@react-navigation/native';
 import React from 'react';
 import { AccessibilityInfo, Platform, StyleSheet } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import LoginScreen from './LoginScreen';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+
+jest.mock('@react-navigation/native', () => ({ usePreventRemove: jest.fn() }));
 
 const mockLogin = jest.fn();
 const mockPush = jest.fn();
@@ -50,6 +53,7 @@ jest.mock('@/hooks/use-auth', () => ({
     login: mockLogin,
     submitting: mockAuthState.submitting,
     error: mockAuthState.error,
+    committing: true,
   }),
 }));
 
@@ -194,4 +198,20 @@ test('web keyboard focus marks the whole auth field and clears on blur', () => {
   } finally {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: original });
   }
+});
+
+test('the auth route cannot be dismissed during old-session teardown', () => {
+  render(<LoginScreen />);
+  expect(usePreventRemove).toHaveBeenCalledWith(true, expect.any(Function));
+});
+
+
+test('pending login disables both auth route transitions', () => {
+  mockAuthState.submitting = true;
+  render(<LoginScreen />);
+  expect(screen.getByRole('link', { name: 'auth.forgotPassword' })).toBeDisabled();
+  expect(screen.getByRole('link', { name: 'auth.registerNow' })).toBeDisabled();
+  fireEvent.press(screen.getByText('auth.forgotPassword'));
+  fireEvent.press(screen.getByText('auth.registerNow'));
+  expect(mockPush).not.toHaveBeenCalled();
 });

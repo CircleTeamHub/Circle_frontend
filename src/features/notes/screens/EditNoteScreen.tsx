@@ -6,6 +6,7 @@ import {
 } from 'expo-audio';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { launchImageLibraryFast } from '@/features/profile/image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -1761,11 +1762,9 @@ export default function EditNoteScreen() {
         !blockId || composerBlocksRef.current.some((block) => block.id === blockId);
       const uploadKey: UploadingSection = `${target}:${kind}`;
       try {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!uploadOperationGuardRef.current.isActive(operationToken)) return;
-        if (!permission.granted) return;
-
-        const result = await ImagePicker.launchImageLibraryAsync({
+        // 直接唤起相册、不开 allowsEditing:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+        const outcome = await launchImageLibraryFast(ImagePicker, {
           mediaTypes: kind === 'media'
             ? ['images', 'videos']
             : kind === 'video'
@@ -1776,6 +1775,8 @@ export default function EditNoteScreen() {
           selectionLimit: MAX_NOTE_MEDIA_SELECTION,
           orderedSelection: true,
         });
+        if (outcome.status === 'denied') return;
+        const { result } = outcome;
         const pickerAssets = result.assets ?? [];
         if (!uploadOperationGuardRef.current.isActive(operationToken)) {
           pickerPreviewDisposerRef.current.retainAssets(pickerAssets);

@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { launchImageLibraryFast } from '@/features/profile/image-picker';
 import { Component, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -142,16 +143,16 @@ function NoteBlockEditorImpl({
       // 传成功、已经插进文档的那几条用的就是本地地址，不能在这一轮里释放。
       let insertedPreviewUris: ReadonlySet<string> = new Set<string>();
       try {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) return;
-
-        const result = await ImagePicker.launchImageLibraryAsync({
+        // 直接唤起相册、不开 allowsEditing:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+        const outcome = await launchImageLibraryFast(ImagePicker, {
           mediaTypes: kind === 'video' ? ['videos'] : ['images'],
           quality: 0.85,
           allowsMultipleSelection: true,
           selectionLimit: MAX_NOTE_MEDIA_SELECTION,
           orderedSelection: true,
         });
+        if (outcome.status === 'denied') return;
+        const { result } = outcome;
         if (result.canceled || !result.assets.length) return;
 
         pickerPreviewDisposerRef.current.retainAssets(result.assets);

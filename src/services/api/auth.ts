@@ -8,7 +8,7 @@
  * - logout：使 refreshToken 失效
  */
 import * as Device from "expo-device";
-import { apiClient } from "@/services/api/client";
+import { apiClient, refreshSessionAccessToken } from "@/services/api/client";
 import { normalizeUser } from "@/services/api/utils";
 import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
 import { UserFacingError } from "@/utils/user-facing-error";
@@ -79,9 +79,41 @@ function getDeviceName() {
   return Device.modelName ?? `circle-im-${Device.osName ?? "device"}`;
 }
 
-export async function login(payload: { identifier: string; password: string }) {
+/** 密码正确但设备陌生：服务端不发 token，只给一个待受信任设备批准的验证单。 */
+export type LoginChallenge = {
+  id: string;
+  expiresAt: string;
+  securityCodeAvailable: boolean;
+};
+
+export type LoginResult =
+  | { kind: "tokens"; tokens: AuthTokens }
+  | { kind: "deviceVerification"; challenge: LoginChallenge };
+
+function parseLoginChallenge(value: unknown): LoginChallenge | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (v.deviceVerificationRequired !== true) return null;
+  const challenge = v.challenge as Record<string, unknown> | undefined;
+  if (
+    !challenge ||
+    typeof challenge.id !== "string" ||
+    typeof challenge.expiresAt !== "string"
+  ) {
+    throw new UserFacingError("认证返回数据格式异常，请重试");
+  }
+  return {
+    id: challenge.id,
+    expiresAt: challenge.expiresAt,
+    securityCodeAvailable: challenge.securityCodeAvailable === true,
+  };
+}
+
+export async function login(
+  payload: { identifier: string; password: string },
+): Promise<LoginResult> {
   const identifier = payload.identifier.trim();
-  const raw = await apiClient<AuthTokens>("/auth/login", {
+  const raw = await apiClient<unknown>("/auth/login", {
     method: "POST",
     auth: false,
     headers: {
@@ -94,7 +126,129 @@ export async function login(payload: { identifier: string; password: string }) {
       // x-device-name 头)。已装机旧版本仍会发,后端继续接受。
     },
   });
+  const challenge = parseLoginChallenge(raw);
+  if (challenge) return { kind: "deviceVerification", challenge };
+  return { kind: "tokens", tokens: ensureAuthTokens(raw) };
+}
+
+export type LoginChallengeStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "EXPIRED"
+  | "CONSUMED";
+
+/** 新设备轮询：受信任设备是否已点同意 / 拒绝。 */
+export async function fetchLoginChallengeStatus(challengeId: string) {
+  return apiClient<{
+    status: LoginChallengeStatus;
+    expiresAt: string;
+    codeExpiresAt: string | null;
+  }>(`/auth/login-challenges/${encodeURIComponent(challengeId)}/status`, {
+    method: "GET",
+    auth: false,
+  });
+}
+
+/** 新设备：输入受信任设备上显示的 6 位验证码，通过即拿到 token。 */
+export async function verifyLoginChallengeCode(
+  challengeId: string,
+  code: string,
+) {
+  const raw = await apiClient<AuthTokens>(
+    `/auth/login-challenges/${encodeURIComponent(challengeId)}/verify`,
+    {
+      method: "POST",
+      auth: false,
+      headers: { "x-device-name": getDeviceName() },
+      body: { code },
+    },
+  );
   return ensureAuthTokens(raw);
+}
+
+/** 新设备：受信任设备不在身边时改用登录安全码。 */
+export async function verifyLoginChallengeSecurityCode(
+  challengeId: string,
+  securityCode: string,
+) {
+  const raw = await apiClient<AuthTokens>(
+    `/auth/login-challenges/${encodeURIComponent(challengeId)}/security-code`,
+    {
+      method: "POST",
+      auth: false,
+      headers: { "x-device-name": getDeviceName() },
+      body: { securityCode },
+    },
+  );
+  return ensureAuthTokens(raw);
+}
+
+/** 新设备：验证请求过期后重新发起（服务端沿用原设备信息，计入频率限制）。 */
+export async function resendLoginChallenge(challengeId: string) {
+  const raw = await apiClient<unknown>(
+    `/auth/login-challenges/${encodeURIComponent(challengeId)}/resend`,
+    { method: "POST", auth: false },
+  );
+  const challenge = parseLoginChallenge(raw);
+  if (!challenge) throw new UserFacingError("认证返回数据格式异常，请重试");
+  return challenge;
+}
+
+export type PendingLoginChallenge = {
+  id: string;
+  deviceName: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  expiresAt: string;
+  status: "PENDING" | "APPROVED";
+};
+
+/** 受信任设备：待处理的陌生设备登录请求。 */
+/**
+ * 功能上线前登录的会话还没绑定设备，批准相关接口会回 AUTH_SESSION_DEVICE_UNBOUND。
+ * 这时用 refresh token 续签一次（续签时服务端绑定本机设备并记为受信任），再重试
+ * 一次。不走 401：apiClient 在「续签后仍 401」时会清会话登出，这里续签没绑上也
+ * 只是本次失败，不能把人踢下线。
+ */
+async function withDeviceBoundSession<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    const errorCode = (error as { errorCode?: unknown } | null)?.errorCode;
+    if (errorCode !== "AUTH_SESSION_DEVICE_UNBOUND") throw error;
+    await refreshSessionAccessToken();
+    return request();
+  }
+}
+
+export async function fetchPendingLoginChallenges() {
+  return withDeviceBoundSession(() =>
+    apiClient<PendingLoginChallenge[]>("/auth/login-challenges", {
+      method: "GET",
+    }),
+  );
+}
+
+/** 受信任设备：确认是本人，拿到 60 秒有效的验证码。 */
+export async function approveLoginChallenge(challengeId: string) {
+  return withDeviceBoundSession(() =>
+    apiClient<{ code: string; codeExpiresAt: string }>(
+      `/auth/login-challenges/${encodeURIComponent(challengeId)}/approve`,
+      { method: "POST" },
+    ),
+  );
+}
+
+/** 受信任设备：不是本人，拒绝这次登录。 */
+export async function rejectLoginChallenge(challengeId: string) {
+  return withDeviceBoundSession(() =>
+    apiClient<void>(
+      `/auth/login-challenges/${encodeURIComponent(challengeId)}/reject`,
+      { method: "POST" },
+    ),
+  );
 }
 
 export async function register(payload: {
@@ -224,6 +378,7 @@ export async function logoutAll() {
 export type AuthSession = {
   id: string;
   isCurrent: boolean;
+  trustedOnly?: boolean;
   deviceName: string | null;
   ip: string | null;
   userAgent: string | null;

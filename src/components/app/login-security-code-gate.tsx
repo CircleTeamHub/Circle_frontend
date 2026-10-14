@@ -24,6 +24,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useLoginApprovalStore } from '@/features/security/store/login-approval-store';
 
 type GateState = 'checking' | 'locked' | 'verifying' | 'unlocked';
 
@@ -85,6 +86,9 @@ export function LoginSecurityCodeGate() {
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const [gateState, setGateState] = useState<GateState>('unlocked');
+  // 应用锁状态是替哪个账号确认的（拉到状态 / 失败兜底）。与当前账号不一致——冷启动、
+  // 重新登录、切换账号——一律当作上锁，陌生设备登录的批准弹窗不出来。
+  const [lockStatusUserId, setLockStatusUserId] = useState<string | null>(null);
   const [securityCode, setSecurityCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
@@ -131,8 +135,11 @@ export function LoginSecurityCodeGate() {
       setSecurityCode('');
       setError(null);
       setGateState('unlocked');
+      setLockStatusUserId(null);
       return;
     }
+
+    const statusUserId = useAuthStore.getState().user?.id ?? null;
 
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
@@ -145,6 +152,7 @@ export function LoginSecurityCodeGate() {
       if (requestIdRef.current !== requestId) return;
       securityCodeEnabledRef.current = status.enabled;
       setGateState(status.enabled ? 'locked' : 'unlocked');
+      setLockStatusUserId(statusUserId);
     } catch (requestError) {
       if (requestIdRef.current !== requestId) return;
       // 状态拉取失败时保留上一次已知状态，避免把「拿不到状态」误判为「未开启」、
@@ -167,6 +175,8 @@ export function LoginSecurityCodeGate() {
           !useAuthStore.getState().onboardingRequired &&
           securityCodeEnabledRef.current
         ) {
+          // 先同步收起批准弹窗再上锁：两者同一帧切换时，锁屏不能被批准弹窗挡住。
+          useLoginApprovalStore.getState().setAppLocked(true);
           setGateState('locked');
         }
         return;
@@ -222,6 +232,12 @@ export function LoginSecurityCodeGate() {
     !isLoading &&
     !onboardingRequired &&
     (gateState === 'locked' || gateState === 'verifying');
+
+  // 应用锁没解开时，陌生设备登录的批准弹窗不能出来（否则拿到手机的人能直接点同意）。
+  const lockStatusKnown = lockStatusUserId !== null && lockStatusUserId === userId;
+  useEffect(() => {
+    useLoginApprovalStore.getState().setAppLocked(visible || !lockStatusKnown);
+  }, [lockStatusKnown, visible]);
 
   return (
     <Modal

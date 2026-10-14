@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import * as ImagePicker from 'expo-image-picker';
+import { launchImageLibraryFast } from '@/features/profile/image-picker';
 import { type ChatMediaFile } from '@/features/chat/chat-detail/types';
 import { assertMyTempChatConversationOpen } from '@/services/api/temp-chat';
 import {
@@ -468,11 +469,6 @@ export function useMediaSend({
     async (kind: 'photo' | 'video') => {
       if (!sourceID || isPreviewMode) return;
       if (inFlightRef.current) return;
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
-        return;
-      }
       // iOS 选视频时让系统导出成 720p H.264:手机拍的 4K 视频一分钟几百 MB,
       // 原样上传既慢又常常超过 100MB 上限发不出去。导出发生在选择器关掉之后、
       // 结果回来之前,长视频要十几秒,期间在顶部提示一下。安卓的选择器不转码。
@@ -488,7 +484,8 @@ export function useMediaSend({
         : null;
       let result: ImagePicker.ImagePickerResult;
       try {
-        result = await ImagePicker.launchImageLibraryAsync({
+        // 直接唤起相册:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+        const outcome = await launchImageLibraryFast(ImagePicker, {
           mediaTypes: kind === 'photo' ? ['images'] : ['videos'],
           preferredAssetRepresentationMode:
             ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
@@ -499,6 +496,11 @@ export function useMediaSend({
             ? { videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720 }
             : {}),
         });
+        if (outcome.status === 'denied') {
+          Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
+          return;
+        }
+        result = outcome.result;
       } catch (error) {
         // 读不出所选文件、iOS 转码不支持这个视频编码或转码失败。调用方是 void 调用,
         // 不接住的话用户选完什么都没发生,也没有任何提示。

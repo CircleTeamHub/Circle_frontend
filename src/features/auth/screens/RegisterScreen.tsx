@@ -1,3 +1,4 @@
+import { usePreventRemove } from '@react-navigation/native';
 import { useState, useMemo } from 'react';
 import {
   View,
@@ -81,7 +82,8 @@ export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
-  const { register, submitting, error } = useAuth();
+  const { register, submitting, error, committing } = useAuth();
+  usePreventRemove(Boolean(committing), () => {});
   const { t } = useTranslation();
   const { inviteCode: inviteCodeParam } = useLocalSearchParams<{
     inviteCode?: string;
@@ -253,7 +255,7 @@ export default function RegisterScreen() {
             back 到非 (auth) 栈或栈底空。 */}
         <View style={s.loginRow}>
           <Text style={d.loginHint}>{t('auth.hasAccount')}</Text>
-          <Pressable onPress={() => router.replace('/(auth)/login')}>
+          <Pressable disabled={submitting} accessibilityState={{ disabled: submitting }} onPress={() => { if (!submitting) router.replace('/(auth)/login'); }}>
             <Text style={[s.loginLink, d.loginLink]}>{t('auth.loginNow')}</Text>
           </Pressable>
         </View>

@@ -687,6 +687,14 @@ test('reconnected sockets re-send the auth frame', () => {
   assert.equal(harness.realtimeConnected.at(-1), true);
 });
 
+test('badge recovery refreshes login challenges missed during disconnection', async () => {
+  const harness = loadRealtimeHarness();
+  const events = [];
+  harness.setLoginChallengeListener((event) => events.push(event));
+  await harness.recoverTabBadgeSnapshot({ force: true });
+  assert.equal(JSON.stringify(events), JSON.stringify([{ type: 'created' }]));
+});
+
 test('generic interactions do not refresh admission unread counts', async () => {
   const harness = connectedHarness();
   deliver(harness, 'badge.snapshot', { discoverUnread: 0 });

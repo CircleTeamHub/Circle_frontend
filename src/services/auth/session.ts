@@ -71,6 +71,13 @@ async function loadNotificationCenterStore() {
   return useNotificationCenterStore;
 }
 
+async function loadNotificationSnackbarStore() {
+  const { useNotificationSnackbarStore } = await import(
+    '@/features/notifications/store/use-notification-snackbar-store'
+  );
+  return useNotificationSnackbarStore;
+}
+
 async function loadVipLevelsInvalidator() {
   const { invalidateVipLevels } = await import('@/stores/userVipStore');
   return invalidateVipLevels;
@@ -229,6 +236,7 @@ async function performClearLocalSession(
   const useDiscoverStore = await loadDiscoverStore();
   const useMomentsStore = await loadMomentsStore();
   const useNotificationCenterStore = await loadNotificationCenterStore();
+  const useNotificationSnackbarStore = await loadNotificationSnackbarStore();
   const invalidateVipLevels = await loadVipLevelsInvalidator();
 
   // 先清 auth，让订阅 useAuthStore 的组件立刻看到"未登录"，
@@ -252,6 +260,9 @@ async function performClearLocalSession(
   useDiscoverStore.getState().reset();
   useMomentsStore.getState().reset();
   useNotificationCenterStore.getState().reset();
+  // 排队中的横幅是上一个账号的私聊/通知预览:不清的话切号后还会在新账号里弹出,
+  // 点开就带着旧账号的会话 id 跳转、扣新账号的角标。
+  useNotificationSnackbarStore.getState().reset();
   // 清 userId→vipLevel 缓存：否则切到 B 账号后，通讯录/会话里 A 账号见过的用户仍带
   // A 会话缓存的会员档位（虽同源，但语义上应随会话重建）。
   invalidateVipLevels();

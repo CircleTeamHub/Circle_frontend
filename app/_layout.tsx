@@ -7,7 +7,7 @@ import {
 import { useFonts } from 'expo-font';        // 加载自定义字体
 import { Redirect, Stack, useSegments } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
 import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 // 必须在入口文件最早引入，启用动画引擎。
 import 'react-native-reanimated';
@@ -34,10 +34,14 @@ import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
 import { MemberNameAnimationProvider } from '@/components/ui/member-name-animation';
 import { AccountSwitcherSheet } from '@/features/profile/components/account-switcher-sheet';
+import { useAccountSwitcherStore } from '@/stores/accountSwitcherStore';
 import { NotificationSnackbarHost } from '@/features/notifications/components/NotificationSnackbarHost';
 import { PushNotificationRouteHandler } from '@/features/notifications/components/PushNotificationRouteHandler';
 import { PushNotificationTokenRegistrar } from '@/features/notifications/components/PushNotificationTokenRegistrar';
 import { CallInviteHost } from '@/features/call/components/CallInviteHost';
+import { LoginApprovalHost } from '@/features/security/components/LoginApprovalHost';
+import { registerDeviceIdProvider } from '@/services/api/client';
+import { getDeviceId } from '@/services/auth/device-id';
 import { AppBlurTarget } from '@/components/app/app-blur-target';
 import { AppDialogHost } from '@/components/app/app-dialog-host';
 import { TopNoticeHost } from '@/components/app/top-notice-host';
@@ -78,6 +82,9 @@ SplashScreen.preventAutoHideAsync();
 
 // 过滤 Expo DOM 组件在导航卸载竞态时抛出的 injectJavaScript 拒绝（属于已知良性错误）
 silenceDomBridgeRejection();
+
+// 每个 API 请求带上本机设备 ID（陌生设备登录验证），要早于任何请求注册。
+registerDeviceIdProvider(getDeviceId);
 
 async function registerLiveKitGlobals() {
   if (!NativeModules.WebRTCModule) {
@@ -201,12 +208,16 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
+  const accountSwitching = useAccountSwitcherStore((state) => state.switching);
+  const addingAccount = useAccountSwitcherStore((state) => state.addingAccount);
   const { colors } = useTheme();
   const decision = getAuthRouteDecision({
     firstSegment,
     isAuthenticated,
     isLoading,
     onboardingRequired,
+    accountSwitching,
+    addingAccount,
   });
 
   if (decision.type === 'redirect') {
@@ -259,7 +270,6 @@ function RootLayout() {
    * 主题在迁移完成后才挂载 ThemeProvider，初始 useState 即可读到迁移过的值。
    */
   const [migrated, setMigrated] = useState(false);
-  const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
   useEffect(() => {
     setSentryUserId(sentryUserId);
   }, [sentryUserId]);
@@ -286,30 +296,15 @@ function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  // 字体和迁移都就绪后隐藏系统启动屏，再交给 React 启动动画平滑过渡到 App。
-  useEffect(() => {
-    if (!loaded || !migrated) {
-      return;
-    }
-
-    let cancelled = false;
-    SplashScreen.hideAsync()
-      .catch(() => {
-        // 已经被隐藏；忽略即可。
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setNativeSplashHidden(true);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [loaded, migrated]);
+  // 原生启动屏等 JS 开屏的夜空底图上屏后再隐藏：两者是同一张画面，交接无闪烁。
+  const hideNativeSplash = useCallback(() => {
+    SplashScreen.hideAsync().catch(() => {
+      // 已经被隐藏；忽略即可。
+    });
+  }, []);
 
   // 字体或迁移未就绪前不渲染任何内容（原生启动屏仍显示）。
-  if (!loaded || !migrated || !nativeSplashHidden) return null;
+  if (!loaded || !migrated) return null;
 
   const appContent = (
     // ThemeProvider：提供全局主题上下文（颜色、深浅色模式等）
@@ -347,6 +342,8 @@ function RootLayout() {
           <PushNotificationRouteHandler />
           <PushNotificationTokenRegistrar />
           <CallInviteHost />
+          {/* 陌生设备登录：本机作为受信任设备时弹「是否是你本人」并下发验证码。 */}
+          <LoginApprovalHost />
           <AccountSwitcherSheet />
           <LoginSecurityCodeGate />
           {/* 三端统一的弹窗宿主：Alert.alert / Alert.prompt 经 alert-bridge 全部投到这里。 */}
@@ -359,7 +356,7 @@ function RootLayout() {
   );
 
   return (
-    <StartupSplash canFinish={!authLoading}>
+    <StartupSplash canFinish={!authLoading} onBackdropReady={hideNativeSplash}>
       {appContent}
     </StartupSplash>
   );

@@ -25,7 +25,7 @@
         "logoutCurrent": "この端末からログアウト",
         "logoutOthers": "他の端末からログアウト",
         "removeTitle": "ログイン端末を削除",
-        "removeMessage": "削除すると、この端末は続けるために再度ログインが必要になります。",
+        "removeMessage": "削除すると、このデバイスは再ログインし、信頼済みデバイスでの承認が必要になります。",
         "removeCurrentMessage": "これは現在の端末です。確認するとログアウトします。",
         "loadFailed": "ログイン端末の読み込みに失敗しました。後でもう一度お試しください。",
         "removeFailed": "端末の削除に失敗しました。後でもう一度お試しください。",
@@ -546,7 +546,7 @@
       "noteManagement": "ノート管理",
       "noteManagementHint": "掲載中の会場ノートのみ表示します。状態は担当者への案内で、ここから掲載停止できます。",
       "noteRestricted": "グループオーナーのみノートを管理できます",
-      "bindNote": "自分のノートを関連付ける",
+      "bindNote": "ノートを関連付ける",
       "bindNoteHint": "ノートカードをタップしてこのグループに関連付けます",
       "noteStatusLabel": "会場の状態",
       "noSourceNotes": "関連付けられるノートはありません",
@@ -559,6 +559,7 @@
       "noteRelist": "再掲載",
       "noteUnbindTitle": "元グループとの関連付けを解除しますか？",
       "noteUnbindHint": "このノートはグループのノート管理に表示されなくなります。",
+      "noteUnbindAction": "削除（グループとの紐付けを解除）",
       "noteUnbind": "関連付けを解除"
     },
     "groupEvent": {
@@ -929,7 +930,7 @@
       "viewImage": "画像を見る"
     },
     "actions": {
-      "new": "新規",
+      "new": "作成",
       "qrCode": "QRコード",
       "share": "共有",
       "pin": "上部に固定",
@@ -1694,7 +1695,6 @@
     },
     "shortcutOrder": {
       "title": "サークルの順序を編集",
-      "hint": "横並びのサークル一覧はこの順序で表示されます",
       "reset": "標準に戻す"
     },
     "commentInput": {
@@ -2795,6 +2795,25 @@
       "submitting": "再設定中…",
       "successBody": "すべての端末からログアウトしました。新しいパスワードでログインしてください。",
       "successTitle": "パスワードを再設定しました"
+    },
+    "deviceVerification": {
+      "title": "新しいデバイスの確認",
+      "intro": "見慣れないデバイスからのログインです。信頼済みデバイスに確認リクエストを送信しました。信頼済みデバイスで承認し、表示された確認コードを入力してください。",
+      "waiting": "信頼済みデバイスの承認待ち · 残り {{time}}",
+      "approved": "信頼済みデバイスで承認されました。{{seconds}} 秒以内にコードを入力してください",
+      "approvedExpired": "コードの有効期限が切れました。信頼済みデバイスで再取得してください",
+      "rejected": "信頼済みデバイスがこのログインを拒否しました。心当たりがない場合はすぐにパスワードを変更してください。",
+      "expired": "確認リクエストの有効期限が切れました。再送信してください",
+      "codePlaceholder": "6 桁の確認コード",
+      "securityCodePlaceholder": "ログインセキュリティコード",
+      "securityCodeIntro": "設定したログインセキュリティコードを入力して確認します。",
+      "submit": "確認してログイン",
+      "submitting": "確認中…",
+      "resend": "確認リクエストを再送信",
+      "useSecurityCode": "信頼済みデバイスが手元にない場合はセキュリティコードを使用",
+      "useTrustedDevice": "信頼済みデバイスで確認する",
+      "backToLogin": "ログインに戻る",
+      "failed": "確認に失敗しました。もう一度お試しください"
     }
   },
   "media": {
@@ -3494,6 +3513,16 @@
     "CHAT_GROUP_AVATAR_URL_INVALID": "グループアイコンのURLが無効です",
     "CHAT_DELIVERY_ID_CONFLICT": "メッセージを送信できませんでした。もう一度入力して送信してください",
     "FRIEND_GROUP_ADD_FORBIDDEN": "このグループではメンバー同士の友だち追加ができません",
+    "AUTH_DEVICE_ID_REQUIRED": "新しいデバイスからのログインです。最新バージョンに更新して再度お試しください",
+    "AUTH_DEVICE_NOT_TRUSTED": "このデバイスは信頼済みではないため、ログインリクエストを処理できません",
+    "AUTH_DEVICE_VERIFICATION_RATE_LIMITED": "確認リクエストが多すぎます。10 分後に再度お試しください",
+    "AUTH_DEVICE_CODE_INVALID": "確認コードが正しくありません。信頼済みデバイスに表示されたコードを確認してください",
+    "AUTH_LOGIN_CHALLENGE_INVALID": "確認リクエストが無効です。再度ログインしてください",
+    "AUTH_LOGIN_CHALLENGE_EXPIRED": "確認コードの有効期限が切れました。もう一度確認を開始してください",
+    "AUTH_LOGIN_CHALLENGE_REJECTED": "このログインは信頼済みデバイスで拒否されました",
+    "AUTH_LOGIN_CHALLENGE_LOCKED": "確認コードの誤りが多すぎるため、この確認は無効になりました。もう一度開始してください",
+    "AUTH_SESSION_DEVICE_UNBOUND": "ログイン状態の更新が必要です。しばらくしてから再度お試しください",
+    "AUTH_SECURITY_CODE_NOT_SET": "ログインセキュリティコードが設定されていません。信頼済みデバイスで承認してください",
     "CHAT_GROUP_ACCEPT_REQUIRED": "先にグループ招待を承諾してください",
     "CHAT_GROUP_INVITATION_INVALID": "招待の期限が切れたか、無効になりました",
     "CHAT_GROUP_APPLICATION_DISABLED": "このグループは名刺からの参加申請を受け付けていません"
@@ -3568,6 +3597,27 @@
       "groupFooter": "スキャンまたはタップして招待を確認",
       "circleFooter": "スキャンまたはタップでサークルに参加"
     }
+  },
+  "loginApproval": {
+    "title": "新しいデバイスからのログイン",
+    "device": "デバイス：{{value}}",
+    "ip": "IP：{{value}}",
+    "time": "時刻：{{value}}",
+    "question": "ご本人によるログインですか？",
+    "warning": "確認コードは誰にも教えないでください。サポートを名乗る人にも同様です。",
+    "reject": "自分ではない",
+    "approve": "自分です、コードを取得",
+    "approving": "処理中…",
+    "codeTitle": "ログイン確認コード",
+    "codeHint": "{{seconds}} 秒以内に新しいデバイスで入力してください。過ぎると無効になります。",
+    "codeExpired": "コードの有効期限が切れました",
+    "regenerate": "コードを再取得",
+    "done": "完了",
+    "rejectedTitle": "このログインを拒否しました",
+    "rejectedBody": "誰かがあなたのパスワードを知っていてログインを試みました。すぐにパスワードを変更することをおすすめします。",
+    "changePassword": "パスワードを変更",
+    "later": "後で",
+    "failed": "操作に失敗しました。しばらくしてから再度お試しください"
   },
   "groupAdmission": {
     "title": "グループ情報と招待",

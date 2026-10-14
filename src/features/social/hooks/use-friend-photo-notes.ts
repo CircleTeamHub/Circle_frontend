@@ -1,7 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { loadImagePickerModule } from '@/features/profile/image-picker';
+import {
+  launchImageLibraryFast,
+  loadImagePickerModule,
+} from '@/features/profile/image-picker';
 import {
   requestUploadPresign,
   resolveUploadContentType,
@@ -57,20 +60,19 @@ export function useFriendPhotoNotes(): UseFriendPhotoNotesResult {
         return;
       }
 
-      const permission =
-        await imagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
+      // 直接唤起相册、不开 allowsEditing:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+      const outcome = await launchImageLibraryFast(imagePicker, {
+        quality: 0.8,
+        mediaTypes: ['images'],
+      });
+      if (outcome.status === 'denied') {
         Alert.alert(
           t('validation.cannotSelectImage'),
           t('validation.albumPermission'),
         );
         return;
       }
-
-      const result = await imagePicker.launchImageLibraryAsync({
-        quality: 0.8,
-        mediaTypes: ['images'],
-      });
+      const { result } = outcome;
       if (result.canceled || !result.assets[0]) {
         return;
       }

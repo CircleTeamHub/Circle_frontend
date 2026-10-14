@@ -1,8 +1,11 @@
 import { Stack } from 'expo-router';
+import { useAddingAccountScope } from '@/features/auth/hooks/use-adding-account-scope';
 import { useTheme } from '@/theme';
 
 export default function AuthLayout() {
   const { colors } = useTheme();
+  // 「切换账号 → 添加账号」压在已登录会话上的这一趟:离开 (auth) 时收回放行标记。
+  useAddingAccountScope();
 
   return (
     <Stack
