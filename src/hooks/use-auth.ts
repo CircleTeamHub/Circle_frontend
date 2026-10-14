@@ -147,6 +147,13 @@ export function useAuth() {
           // 持久化),不撤销服务端会话 —— 它留在账号列表里,随时能切回来。
           rememberCurrentAccount();
           await clearLocalSession();
+          if (!mountedRef.current || (options.isAttemptCurrent && !options.isAttemptCurrent())) {
+            if (!useAuthStore.getState().isAuthenticated && current.user && current.accessToken && current.refreshToken) {
+              setSession({ accessToken: current.accessToken, refreshToken: current.refreshToken }, current.user, { onboardingRequired: current.onboardingRequired });
+            }
+            void logoutRequest(tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
+            return;
+          }
         }
         setSession(tokens, user, {
           onboardingRequired: options.onboardingRequired ?? false,

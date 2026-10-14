@@ -24,6 +24,7 @@ export function useLoginApproval() {
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   const activeEpochRef = useRef(sessionEpoch);
   const mountedRef = useRef(true);
+  const actionPending = useRef(false);
   useEffect(() => () => { mountedRef.current = false; }, []);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
@@ -44,7 +45,7 @@ export function useLoginApproval() {
     if (activeEpochRef.current !== sessionEpoch) {
       activeEpochRef.current = sessionEpoch;
       store.reset();
-      setActive(null); setBusy(false); setError(null);
+      setActive(null); setBusy(false); setError(null); actionPending.current = false;
     }
     if (!enabled) {
       store.reset();
@@ -83,6 +84,8 @@ export function useLoginApproval() {
   }, [active, appLocked, enabled, foreground, now, pending, sessionEpoch]);
 
   const runApprove = useCallback(async (challengeId: string) => {
+    if (actionPending.current) return;
+    actionPending.current = true;
     const epoch = useAuthStore.getState().sessionEpoch;
     const current = () => mountedRef.current && useAuthStore.getState().sessionEpoch === epoch;
     setBusy(true);
@@ -104,7 +107,7 @@ export function useLoginApproval() {
       // 多半是已被别的设备处理 / 已过期：刷新队列，让弹窗跟着收起。
       void useLoginApprovalStore.getState().refresh();
     } finally {
-      if (current()) setBusy(false);
+      if (current()) { actionPending.current = false; setBusy(false); }
     }
   }, []);
 
@@ -119,7 +122,8 @@ export function useLoginApproval() {
   }, [busy, runApprove, stage]);
 
   const reject = useCallback(async () => {
-    if (busy || stage?.kind !== 'ask') return;
+    if (busy || actionPending.current || stage?.kind !== 'ask') return;
+    actionPending.current = true;
     const challengeId = stage.challenge.id;
     const epoch = useAuthStore.getState().sessionEpoch;
     const current = () => mountedRef.current && useAuthStore.getState().sessionEpoch === epoch;
@@ -135,7 +139,7 @@ export function useLoginApproval() {
       setError(rejectError);
       void useLoginApprovalStore.getState().refresh();
     } finally {
-      if (current()) setBusy(false);
+      if (current()) { actionPending.current = false; setBusy(false); }
     }
   }, [busy, stage]);
 

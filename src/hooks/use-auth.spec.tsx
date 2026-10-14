@@ -399,3 +399,21 @@ test.each(['login', 'profile'])('leaving add-account during pending %s keeps the
   expect(mockSetTokens).not.toHaveBeenCalled();
   expect(mockAuthState.user).toEqual({ id: 'A' });
 });
+
+test('canceling while old-session teardown is pending restores the old account rather than activating the new one', async () => {
+  const originalUser = { id: 'A' };
+  mockAuthState = { ...signedOutState, isAuthenticated: true, sessionEpoch: 4, accessToken: 'a-access', refreshToken: 'a-refresh', user: originalUser };
+  jest.mocked(loginRequest).mockResolvedValue({ kind: 'tokens', tokens: { accessToken: 'b-access', refreshToken: 'b-refresh' } } as never);
+  jest.mocked(fetchCurrentUserWithToken).mockResolvedValue({ id: 'B' } as never);
+  let finish!: () => void;
+  jest.mocked(clearLocalSession).mockImplementationOnce(() => new Promise<void>(resolve => { finish = () => { mockAuthState = { ...signedOutState, sessionEpoch: 5 }; resolve(); }; }));
+  const { result, unmount } = renderHook(() => useAuth());
+  let login!: Promise<void>;
+  act(() => { login = result.current.login('user_123', 'password1'); });
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  expect(clearLocalSession).toHaveBeenCalled();
+  unmount();
+  await act(async () => { finish(); await login; });
+  expect(mockSetSession).toHaveBeenCalledWith({ accessToken: 'a-access', refreshToken: 'a-refresh' }, originalUser, expect.any(Object));
+  expect(mockSetSession).not.toHaveBeenCalledWith(expect.objectContaining({ accessToken: 'b-access' }), expect.anything(), expect.anything());
+});

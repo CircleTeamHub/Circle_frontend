@@ -197,3 +197,12 @@ test('refreshes a stale request after a rejected rejection', async () => {
   await act(async () => result.current.reject());
   await waitFor(() => expect(result.current.stage).toBeNull());
 });
+
+test('approve and reject in the same render issue just one non-idempotent action', async () => {
+  jest.mocked(approveLoginChallenge).mockReturnValue(new Promise(() => {}));
+  const { result } = renderHook(() => useLoginApproval());
+  await waitFor(() => expect(result.current.stage?.kind).toBe('ask'));
+  act(() => { result.current.approve(); result.current.approve(); void result.current.reject(); });
+  expect(approveLoginChallenge).toHaveBeenCalledTimes(1);
+  expect(rejectLoginChallenge).not.toHaveBeenCalled();
+});

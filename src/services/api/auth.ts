@@ -378,6 +378,7 @@ export async function logoutAll() {
 export type AuthSession = {
   id: string;
   isCurrent: boolean;
+  trustedOnly?: boolean;
   deviceName: string | null;
   ip: string | null;
   userAgent: string | null;
