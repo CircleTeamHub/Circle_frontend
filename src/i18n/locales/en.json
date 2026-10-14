@@ -403,7 +403,9 @@
       "readersNone": "No one has read this yet",
       "readersMore": "{{names}} and {{count}} more",
       "editing": "Editing message",
-      "resend": "Resend"
+      "resend": "Resend",
+      "resendConfirm": "Resend this message?",
+      "retryFailed": "Send failed. Tap to resend"
     },
     "mentions": {
       "empty": "No members available to mention"

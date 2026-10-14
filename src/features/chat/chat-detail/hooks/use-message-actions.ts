@@ -8,7 +8,8 @@ import {
   useState,
 } from 'react';
 import { type ChatMessage } from '@/types';
-import { useChatStore } from '@/chat-core/store';
+import { useChatStore, type StoredChatMessage } from '@/chat-core/store';
+import { useAuthStore } from '@/stores/authStore';
 import { router } from 'expo-router';
 import { Alert, type GestureResponderEvent } from 'react-native';
 import { revokeChatMessage, sendChatReaction } from '@/chat-core/socket-manager';
@@ -309,6 +310,60 @@ export function useMessageActions({
     [conversationID, t, mountedRef],
   );
 
+  const resendMessage = useCallback(
+    (message: ChatMessage) => {
+      const epoch = useAuthStore.getState().sessionEpoch;
+      const isCurrent = () =>
+        mountedRef.current &&
+        useAuthStore.getState().sessionEpoch === epoch &&
+        useChatStore.getState().activeConversationId === conversationID;
+      const isFailed = () => {
+        const dto = useChatStore
+          .getState()
+          .messagesByConversation[conversationID]?.find(
+            (item) => item.id === message.id && item.d === message.deliveryId,
+          ) as StoredChatMessage | undefined;
+        return dto?.height === 0 && dto.failed === true;
+      };
+      if (!message.deliveryId || !isCurrent() || !isFailed()) return;
+      setSendError(null);
+      void retryFailedChatMessage(conversationID, message.deliveryId, {
+        reuploadMedia: reuploadPendingMediaRef.current ?? undefined,
+      }).catch((error: unknown) => {
+        if (!isCurrent()) return;
+        setSendError(
+          getChatSendErrorMessage(
+            error,
+            t('chat.detail.sendFailedText', { defaultValue: '发送失败' }),
+          ),
+        );
+      });
+    },
+    [conversationID, mountedRef, reuploadPendingMediaRef, setSendError, t],
+  );
+
+  const handleRetryMessage = useCallback(
+    (message: ChatMessage) => {
+      if (message.sendStatus !== 3 || !message.deliveryId) return;
+      const epoch = useAuthStore.getState().sessionEpoch;
+      Alert.alert(
+        t('chat.messageActions.resend'),
+        t('chat.messageActions.resendConfirm'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('chat.messageActions.resend'),
+            onPress: () => {
+              if (useAuthStore.getState().sessionEpoch !== epoch) return;
+              resendMessage(message);
+            },
+          },
+        ],
+      );
+    },
+    [resendMessage, t],
+  );
+
   const messageActions = useMemo<MessageAction[]>(() => {
     const message = actionMenu?.message;
     if (!message) return [];
@@ -323,20 +378,7 @@ export function useMessageActions({
         key: 'resend',
         icon: 'refresh-outline',
         label: t('chat.messageActions.resend', { defaultValue: '重发' }),
-        onPress: () => {
-          void retryFailedChatMessage(
-            conversationID,
-            message.deliveryId as string,
-            { reuploadMedia: reuploadPendingMediaRef.current ?? undefined },
-          ).catch((error: unknown) => {
-            setSendError(
-              getChatSendErrorMessage(
-                error,
-                t('chat.detail.sendFailedText', { defaultValue: '发送失败' }),
-              ),
-            );
-          });
-        },
+        onPress: () => resendMessage(message),
       });
     }
     // 回应只给能渲染回应条的气泡开放。图片/语音/位置/各类卡片走的是自己的组件,
@@ -463,8 +505,7 @@ export function useMessageActions({
     handleReportMessage,
     handleRevokeMessage,
     t,
-    reuploadPendingMediaRef,
-    setSendError,
+    resendMessage,
   ]);
 
   const getMessageLongPressHandler = useCallback(
@@ -483,6 +524,7 @@ export function useMessageActions({
     reactionOptions,
     handlePickReaction,
     messageActions,
+    handleRetryMessage,
     getMessageLongPressHandler,
   };
 }

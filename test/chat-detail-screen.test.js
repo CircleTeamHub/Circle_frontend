@@ -300,7 +300,7 @@ test('chat detail guards async send UI state after unmount', () => {
     assert.notEqual(index, -1, `${message} missing`);
     // The i18n wrapper puts the string a few lines below the guard, so widen the lookback.
     const guardWindow = source.slice(Math.max(0, index - 320), index);
-    assert.match(guardWindow, /mountedRef\.current/, `${message} should be mounted-guarded`);
+    assert.match(guardWindow, /mountedRef\.current|canReportError\(\)/, `${message} should be mounted-guarded`);
   }
   assert.match(source, /if \(mountedRef\.current\) setVoiceActionBusy\(false\)/);
   assert.match(source, /if \(mountedRef\.current\) setCancelArmed\(false\)/);

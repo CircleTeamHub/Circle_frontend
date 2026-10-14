@@ -299,6 +299,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     reactionOptions,
     handlePickReaction,
     messageActions,
+    handleRetryMessage,
     getMessageLongPressHandler,
   } = useMessageActions({
     t,
@@ -352,6 +353,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     selfAvatarUri,
     selfName,
     handleToggleReaction,
+    handleRetryMessage,
     getMessageLongPressHandler,
     handleStartCall,
   });

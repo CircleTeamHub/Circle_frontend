@@ -1,3 +1,4 @@
+import { mediaErrorGuard } from '@/features/chat/utils/media-error-guard';
 import {
   type Dispatch,
   type RefObject,
@@ -115,6 +116,7 @@ export function useMediaSend({
       deliveryId: string,
       turn?: ImageSendTurn,
     ) => {
+      const canReportError = mediaErrorGuard(conversationID, mountedRef);
       try {
         assertMediaSendSessionCurrent(deliveryId);
         if (isTempChat) {
@@ -172,7 +174,7 @@ export function useMediaSend({
         });
         // 气泡标红留在原地(长按可重发),而不是让这张图凭空消失。
         failMediaSend(conversationID, deliveryId);
-        if (mountedRef.current) {
+        if (canReportError()) {
           setSendError(
             getChatSendErrorMessage(
               error,
@@ -271,6 +273,7 @@ export function useMediaSend({
       contentType: string,
       deliveryId: string,
     ) => {
+      const canReportError = mediaErrorGuard(conversationID, mountedRef);
       try {
         assertMediaSendSessionCurrent(deliveryId);
         if (isTempChat) {
@@ -324,7 +327,7 @@ export function useMediaSend({
           isGroupChat,
         });
         failMediaSend(conversationID, deliveryId);
-        if (mountedRef.current) {
+        if (canReportError()) {
           setSendError(
             getChatSendErrorMessage(
               error,
