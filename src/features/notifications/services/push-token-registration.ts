@@ -29,6 +29,7 @@ type StoredPushRegistration = {
   userId: string;
   revocationSecret: string;
   status: 'pending' | 'registered';
+  deviceBindingVersion?: 1;
 };
 
 type PushTokenRevocation = Pick<
@@ -720,7 +721,7 @@ export function createPushTokenRegistrationOrchestrator(
           dependencies.setStoredRegistration(candidate);
         }
       }
-      if (candidate.status === 'registered') return;
+      if (candidate.status === 'registered' && candidate.deviceBindingVersion === 1) return;
 
       const registrationCandidate = candidate;
       await enqueueRemoteMutation(async () => {
@@ -734,9 +735,9 @@ export function createPushTokenRegistrationOrchestrator(
         ) {
           return;
         }
-        if (activeBefore.status === 'registered') return;
+        if (activeBefore.status === 'registered' && activeBefore.deviceBindingVersion === 1) return;
 
-        await dependencies.registerPushToken({
+        const acknowledgement = await dependencies.registerPushToken({
           token,
           platform: dependencies.platform,
           provider,
@@ -757,6 +758,7 @@ export function createPushTokenRegistrationOrchestrator(
           dependencies.setStoredRegistration({
             ...registrationCandidate,
             status: 'registered',
+            ...(acknowledgement?.deviceBound ? { deviceBindingVersion: 1 as const } : {}),
           });
           dependencies.onRegistered?.({
             userId: registrationCandidate.userId,
