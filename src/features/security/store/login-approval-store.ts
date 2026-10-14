@@ -35,6 +35,7 @@ type LoginApprovalState = {
 };
 
 let inFlight: Promise<void> | null = null;
+let refreshQueued = false;
 // 每次 reset（登出 / 切换账号）递增。旧账号发出的请求晚到时按代次丢弃，也不会被
 // 新账号的 refresh 复用——否则上一个账号的登录请求会出现在新账号的弹窗里。
 let generation = 0;
@@ -47,24 +48,30 @@ export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
   consumedId: null,
   handledIds: [],
   refresh: () => {
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      refreshQueued = true;
+      return inFlight;
+    }
     const requestGeneration = generation;
-    const request: Promise<void> = fetchPendingLoginChallenges()
-      .then((pending) => {
-        if (requestGeneration !== generation) return;
-        set((state) => ({
-          pending: (Array.isArray(pending) ? pending : []).filter(
-            (item) => !state.handledIds.includes(item.id),
-          ),
-        }));
-      })
-      .catch((error) => {
-        if (requestGeneration !== generation) return;
-        reportHandledFailure('loginApproval', 'fetchPending', error);
-      })
-      .finally(() => {
-        if (inFlight === request) inFlight = null;
-      });
+    const request = (async () => {
+      do {
+        refreshQueued = false;
+        try {
+          const pending = await fetchPendingLoginChallenges();
+          if (requestGeneration !== generation) return;
+          set((state) => ({
+            pending: (Array.isArray(pending) ? pending : []).filter(
+              (item) => !state.handledIds.includes(item.id),
+            ),
+          }));
+        } catch (error) {
+          if (requestGeneration !== generation) return;
+          reportHandledFailure('loginApproval', 'fetchPending', error);
+        }
+      } while (refreshQueued && requestGeneration === generation);
+    })().finally(() => {
+      if (inFlight === request) inFlight = null;
+    });
     inFlight = request;
     return request;
   },
@@ -83,6 +90,7 @@ export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
   reset: () => {
     generation += 1;
     inFlight = null;
+    refreshQueued = false;
     set({ pending: [], consumedId: null, handledIds: [] });
   },
 }));
