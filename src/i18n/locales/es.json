@@ -325,7 +325,9 @@
       "readersNone": "Nadie lo ha leído todavía",
       "readersMore": "{{names}} y {{count}} más",
       "editing": "Editando mensaje",
-      "resend": "Reenviar"
+      "resend": "Reenviar",
+      "resendConfirm": "¿Reenviar este mensaje?",
+      "retryFailed": "Error de envío. Toca para reenviar"
     },
     "mentions": {
       "empty": "No hay miembros para mencionar"
