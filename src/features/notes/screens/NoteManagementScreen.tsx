@@ -338,7 +338,9 @@ export default function NoteManagementScreen() {
         );
       } catch (err) {
         openActionError(err);
+        return false;
       }
+      return true;
     },
     [openActionError],
   );
@@ -365,15 +367,20 @@ export default function NoteManagementScreen() {
           ),
         );
         if (needsDefaultStatus) {
-          await updateManagedNote(
+          const updated = await updateManagedNote(
             note,
             () => setNoteWorkStatus(note.id, 'WORKING'),
             { workStatus: 'WORKING' },
           );
+          if (!updated) {
+            try { await setNoteSourceGroup(note.id, note.sourceConversationID ?? null); }
+            catch (rollbackError) { openActionError(rollbackError); }
+            await loadNotes();
+          }
         }
       })();
     },
-    [conversationID, currentUserID, notes, openActionError, updateManagedNote],
+    [conversationID, currentUserID, notes, openActionError, updateManagedNote, loadNotes],
   );
 
   const handleUnbindNote = useCallback(

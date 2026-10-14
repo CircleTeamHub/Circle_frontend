@@ -380,3 +380,22 @@ test('registering from the add-account page keeps the signed-in account when the
   expect(mockAuthState.isAuthenticated).toBe(true);
   expect(result.current.error).toBe('auth.errors.registerSucceededSessionFailed');
 });
+
+test.each(['login', 'profile'])('leaving add-account during pending %s keeps the original session', async (pendingStep) => {
+  const current = { ...signedOutState, user: { id: 'A' }, isAuthenticated: true, sessionEpoch: 4, refreshToken: 'a-refresh' };
+  mockAuthState = current;
+  let resolve!: (value: any) => void;
+  const waiting = new Promise<any>(done => { resolve = done; });
+  if (pendingStep === 'login') jest.mocked(loginRequest).mockReturnValueOnce(waiting);
+  else { jest.mocked(loginRequest).mockResolvedValueOnce({ kind: 'tokens', tokens: { accessToken: 'b-access', refreshToken: 'b-refresh' } } as never); jest.mocked(fetchCurrentUserWithToken).mockReturnValueOnce(waiting); }
+  const { result, unmount } = renderHook(() => useAuth());
+  let login!: Promise<void>;
+  act(() => { login = result.current.login('user_123', 'password1'); });
+  await act(async () => { await Promise.resolve(); });
+  unmount();
+  await act(async () => { resolve(pendingStep === 'login' ? { kind: 'tokens', tokens: { accessToken: 'b-access', refreshToken: 'b-refresh' } } : { id: 'B' }); await login; });
+  expect(clearLocalSession).not.toHaveBeenCalled();
+  expect(mockSetSession).not.toHaveBeenCalled();
+  expect(mockSetTokens).not.toHaveBeenCalled();
+  expect(mockAuthState.user).toEqual({ id: 'A' });
+});

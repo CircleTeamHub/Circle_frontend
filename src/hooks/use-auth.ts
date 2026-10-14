@@ -42,6 +42,8 @@ import { reportHandledFailure } from '@/observability/report-failure';
 type AuthSuccessOptions = {
   onboardingRequired?: boolean;
   startAppServices?: boolean;
+  isAttemptCurrent?: () => boolean;
+  expectedSessionEpoch?: number | null;
 };
 
 /**
@@ -93,8 +95,10 @@ export function useAuth() {
   // 在 await 长链路中守护 setState：用户在登录/登出中途离开屏幕时
   // 不再触发 "setState on unmounted component" 警告。
   const mountedRef = useRef(true);
+  const authAttemptRef = useRef(0);
   useEffect(() => {
     mountedRef.current = true;
+    authAttemptRef.current++;
     return () => {
       mountedRef.current = false;
     };
@@ -120,6 +124,10 @@ export function useAuth() {
       );
 
       const current = useAuthStore.getState();
+      if ((options.isAttemptCurrent && !options.isAttemptCurrent()) || (options.expectedSessionEpoch != null && current.sessionEpoch !== options.expectedSessionEpoch)) {
+        void logoutRequest(tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
+        return;
+      }
       const replacingSession = current.isAuthenticated;
       if (replacingSession && current.user?.id === user.id) {
         // 「添加账号」登的就是当前账号:拆会话会清掉本账号的草稿、待发媒体、聊天背景
@@ -185,11 +193,17 @@ export function useAuth() {
       inFlightRef.current = true;
       safeSetSubmitting(true);
       const preservedEpoch = liveSessionEpoch();
+      const attempt = ++authAttemptRef.current;
+      const isAttemptCurrent = () => mountedRef.current && authAttemptRef.current === attempt;
       try {
         const result = await loginRequest({
           identifier: normalizedIdentifier,
           password,
         });
+        if (!isAttemptCurrent() || (preservedEpoch !== null && useAuthStore.getState().sessionEpoch !== preservedEpoch)) {
+          if (result.kind !== 'deviceVerification') void logoutRequest(result.tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
+          return;
+        }
         if (result.kind === 'deviceVerification') {
           // 陌生设备：去验证页等受信任设备批准，拿到验证码后才有 token。
           const { challenge } = result;
@@ -197,8 +211,9 @@ export function useAuth() {
           router.push({ pathname: '/(auth)/device-verification' });
           return;
         }
-        await onAuthSuccess(result.tokens);
+        await onAuthSuccess(result.tokens, { isAttemptCurrent, expectedSessionEpoch: preservedEpoch });
       } catch (requestError) {
+        if (!isAttemptCurrent()) return;
         await clearFailedLoginSession(preservedEpoch);
         safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')));
       } finally {
