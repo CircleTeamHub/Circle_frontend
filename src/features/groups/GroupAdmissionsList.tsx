@@ -92,28 +92,23 @@ export function GroupAdmissionsList({
       const version = generation.current;
       if (!next) setLoading(true);
       try {
-        const [result, circleRows] = await Promise.all([
+        const responses = await Promise.allSettled([
           fetchGroupAdmissions(next, groupId),
           !groupId && !next ? fetchMyApplications() : Promise.resolve(null),
+          includeJoined && !next ? loadChatConversations() : Promise.resolve(null),
         ]);
-        if (
-          version !== generation.current ||
-          useAuthStore.getState().sessionEpoch !== sessionEpoch
-        )
-          return;
-        if (circleRows) setCircleInvitations(circleRows);
-        setItems((old) =>
-          next
-            ? [
-                ...old,
-                ...result.items.filter(
-                  (row) => !old.some((item) => item.id === row.id),
-                ),
-              ]
-            : result.items,
-        );
-        setCursor(result.nextCursor);
-        setError("");
+        if (version !== generation.current || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+        const [admissionsResult, circleResult] = responses;
+        if (circleResult.status === 'fulfilled' && circleResult.value) setCircleInvitations(circleResult.value);
+        if (admissionsResult.status === 'fulfilled') {
+          const result = admissionsResult.value;
+          setItems(old => next ? [...old, ...result.items.filter(row => !old.some(item => item.id === row.id))] : result.items);
+          setCursor(result.nextCursor);
+        }
+        const failures = responses.filter((response): response is PromiseRejectedResult => response.status === 'rejected');
+        failedCursor.current = next;
+        setError(failures.length ? getApiErrorMessage(failures[0].reason, t('groupAdmission.loadFailed')) : '');
+        for (const failure of failures) reportHandledFailure('groupAdmission', 'listSource', failure.reason);
       } catch (e) {
         if (version === generation.current) {
           failedCursor.current = next;
@@ -128,7 +123,7 @@ export function GroupAdmissionsList({
         }
       }
     },
-    [groupId, t, sessionEpoch],
+    [groupId, t, sessionEpoch, includeJoined],
   );
   useFocusEffect(
     useCallback(() => {
@@ -142,16 +137,12 @@ export function GroupAdmissionsList({
       void refreshGroupAdmissionUnread().catch((e) =>
         reportHandledFailure("groupAdmission", "unread", e),
       );
-      if (includeJoined)
-        void loadChatConversations().catch((e) =>
-          reportHandledFailure("groupAdmission", "joinedGroups", e),
-        );
       return () => {
         generation.current++;
         paging.current = false;
         refreshPending.current = false;
       };
-    }, [includeJoined, load]),
+    }, [load]),
   );
   const lastNotification = useRef(latestNotification);
   useEffect(() => {
