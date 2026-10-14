@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useDeviceVerificationStore, type PendingDeviceVerification } from '@/features/auth/store/device-verification-store';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,23 +56,28 @@ function formatCountdown(seconds: number): string {
  * 受信任设备不在身边且设置过登录安全码时，可改用安全码。
  */
 export default function DeviceVerificationScreen() {
+  const challenge = useDeviceVerificationStore((state) => state.challenge);
+  const router = useRouter();
+  useEffect(() => { if (!challenge) router.replace('/(auth)/login'); }, [challenge, router]);
+  return challenge ? <DeviceVerificationContent challenge={challenge} /> : null;
+}
+
+function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVerification }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    challengeId: string;
-    expiresAt: string;
-    securityCode?: string;
-  }>();
+  useEffect(() => () => {
+    if (useDeviceVerificationStore.getState().challenge?.id === challenge.id) useDeviceVerificationStore.getState().setChallenge(null);
+  }, [challenge.id]);
   const { completeVerifiedLogin } = useAuth();
   const [code, setCode] = useState('');
   const [useSecurityCode, setUseSecurityCode] = useState(false);
-  const securityCodeAvailable = params.securityCode === '1';
+  const securityCodeAvailable = challenge.securityCodeAvailable;
 
   const verification = useDeviceVerification({
-    challengeId: params.challengeId ?? '',
-    expiresAt: params.expiresAt ?? new Date(0).toISOString(),
+    challengeId: challenge.id,
+    expiresAt: challenge.expiresAt,
     onVerified: completeVerifiedLogin,
   });
   const { phase, remainingSeconds, submitting } = verification;

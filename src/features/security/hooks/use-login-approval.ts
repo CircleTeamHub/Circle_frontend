@@ -5,7 +5,7 @@
  *   - 是我：向服务端换取 6 位验证码（60 秒有效）并展示，用户念给自己的新设备输入；
  *   - 不是我：作废这次登录，并建议立刻改密码（对方已经知道密码）。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import {
   approveLoginChallenge,
@@ -21,6 +21,10 @@ export type LoginApprovalStage =
   | { kind: 'rejected' };
 
 export function useLoginApproval() {
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const activeEpochRef = useRef(sessionEpoch);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const pending = useLoginApprovalStore((state) => state.pending);
@@ -37,6 +41,11 @@ export function useLoginApproval() {
 
   useEffect(() => {
     const store = useLoginApprovalStore.getState();
+    if (activeEpochRef.current !== sessionEpoch) {
+      activeEpochRef.current = sessionEpoch;
+      store.reset();
+      setActive(null); setBusy(false); setError(null);
+    }
     if (!enabled) {
       store.reset();
       setActive(null);
@@ -48,7 +57,7 @@ export function useLoginApproval() {
       if (next === 'active') void useLoginApprovalStore.getState().refresh();
     });
     return () => subscription.remove();
-  }, [enabled]);
+  }, [enabled, sessionEpoch]);
 
   // 新设备已经用这枚码登录成功：验证码面板自动收起。
   useEffect(() => {
@@ -67,17 +76,20 @@ export function useLoginApproval() {
   }, [ticking]);
 
   const stage: LoginApprovalStage | null = useMemo(() => {
-    if (!enabled || appLocked || !foreground) return null;
+    if (!enabled || appLocked || !foreground || activeEpochRef.current !== sessionEpoch) return null;
     if (active) return active;
     const next = pending.find((item) => Date.parse(item.expiresAt) > now);
     return next ? { kind: 'ask', challenge: next } : null;
-  }, [active, appLocked, enabled, foreground, now, pending]);
+  }, [active, appLocked, enabled, foreground, now, pending, sessionEpoch]);
 
   const runApprove = useCallback(async (challengeId: string) => {
+    const epoch = useAuthStore.getState().sessionEpoch;
+    const current = () => mountedRef.current && useAuthStore.getState().sessionEpoch === epoch;
     setBusy(true);
     setError(null);
     try {
       const result = await approveLoginChallenge(challengeId);
+      if (!current()) return;
       useLoginApprovalStore.getState().remove(challengeId);
       setNow(Date.now());
       setActive({
@@ -87,11 +99,12 @@ export function useLoginApproval() {
         codeExpiresAt: Date.parse(result.codeExpiresAt),
       });
     } catch (approveError) {
+      if (!current()) return;
       setError(approveError);
       // 多半是已被别的设备处理 / 已过期：刷新队列，让弹窗跟着收起。
       void useLoginApprovalStore.getState().refresh();
     } finally {
-      setBusy(false);
+      if (current()) setBusy(false);
     }
   }, []);
 
@@ -108,16 +121,21 @@ export function useLoginApproval() {
   const reject = useCallback(async () => {
     if (busy || stage?.kind !== 'ask') return;
     const challengeId = stage.challenge.id;
+    const epoch = useAuthStore.getState().sessionEpoch;
+    const current = () => mountedRef.current && useAuthStore.getState().sessionEpoch === epoch;
     setBusy(true);
     setError(null);
     try {
       await rejectLoginChallenge(challengeId);
+      if (!current()) return;
       useLoginApprovalStore.getState().remove(challengeId);
       setActive({ kind: 'rejected' });
     } catch (rejectError) {
+      if (!current()) return;
       setError(rejectError);
+      void useLoginApprovalStore.getState().refresh();
     } finally {
-      setBusy(false);
+      if (current()) setBusy(false);
     }
   }, [busy, stage]);
 

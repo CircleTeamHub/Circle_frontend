@@ -158,7 +158,6 @@ export function LoginSecurityCodeGate() {
       // 状态拉取失败时保留上一次已知状态，避免把「拿不到状态」误判为「未开启」、
       // 从而把已开启安全码的账号静默放行。已知已开启 -> 保持锁定（fail-closed），
       // 未知/未开启 -> 维持解锁，避免后端抖动时把所有人挡在门外。
-      setLockStatusUserId(statusUserId);
       setGateState(securityCodeEnabledRef.current ? 'locked' : 'unlocked');
       reportHandledFailure('securityCode', 'statusCheck', requestError);
     }

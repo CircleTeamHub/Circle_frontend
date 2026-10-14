@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/stores/authStore';
 import { AppState, type AppStateStatus } from 'react-native';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useLoginApproval } from './use-login-approval';
@@ -15,10 +16,10 @@ jest.mock('@/services/api/auth', () => ({
 }));
 jest.mock('@/realtime/client', () => ({ setLoginChallengeListener: jest.fn() }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ isAuthenticated: true, onboardingRequired: false }),
-}));
+jest.mock('@/stores/authStore', () => {
+  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  return { useAuthStore: create(() => ({ isAuthenticated: true, onboardingRequired: false, sessionEpoch: 1 })) };
+});
 
 const challenge = {
   id: 'c1',
@@ -32,7 +33,9 @@ const challenge = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
   AppState.currentState = 'active';
+  useAuthStore.setState({ sessionEpoch: 1 });
   useLoginApprovalStore.setState({
     pending: [],
     appLocked: false,
@@ -172,4 +175,25 @@ test('the approval code is hidden on background even without a security-code loc
     await act(async () => change('active'));
     expect(result.current.stage?.kind).toBe('code');
   } finally { subscription.mockRestore(); }
+});
+
+test('discards approval codes after switching accounts', async () => {
+  let resolve!: (value: { code: string; codeExpiresAt: string }) => void;
+  jest.mocked(approveLoginChallenge).mockReturnValue(new Promise((done) => { resolve = done; }));
+  const { result } = renderHook(() => useLoginApproval());
+  await waitFor(() => expect(result.current.stage?.kind).toBe('ask'));
+  act(() => result.current.approve());
+  act(() => useAuthStore.setState({ sessionEpoch: 2 }));
+  await act(async () => resolve({ code: '123456', codeExpiresAt: new Date(Date.now() + 60000).toISOString() }));
+  expect(result.current.stage?.kind).not.toBe('code');
+  expect(result.current.busy).toBe(false);
+});
+
+test('refreshes a stale request after a rejected rejection', async () => {
+  jest.mocked(rejectLoginChallenge).mockRejectedValue(new Error('already handled'));
+  const { result } = renderHook(() => useLoginApproval());
+  await waitFor(() => expect(result.current.stage?.kind).toBe('ask'));
+  jest.mocked(fetchPendingLoginChallenges).mockResolvedValue([]);
+  await act(async () => result.current.reject());
+  await waitFor(() => expect(result.current.stage).toBeNull());
 });

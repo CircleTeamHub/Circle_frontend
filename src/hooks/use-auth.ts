@@ -1,3 +1,4 @@
+import { useDeviceVerificationStore } from '@/features/auth/store/device-verification-store';
 /**
  * use-auth.ts — 认证业务 Hook
  *
@@ -192,14 +193,8 @@ export function useAuth() {
         if (result.kind === 'deviceVerification') {
           // 陌生设备：去验证页等受信任设备批准，拿到验证码后才有 token。
           const { challenge } = result;
-          router.push({
-            pathname: '/(auth)/device-verification',
-            params: {
-              challengeId: challenge.id,
-              expiresAt: challenge.expiresAt,
-              securityCode: challenge.securityCodeAvailable ? '1' : '0',
-            },
-          });
+          useDeviceVerificationStore.getState().setChallenge(challenge);
+          router.push({ pathname: '/(auth)/device-verification' });
           return;
         }
         await onAuthSuccess(result.tokens);

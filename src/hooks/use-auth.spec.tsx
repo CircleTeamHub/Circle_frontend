@@ -172,11 +172,7 @@ test('an unknown device goes to verification without creating a session', async 
 
   expect(mockRouterPush).toHaveBeenCalledWith({
     pathname: '/(auth)/device-verification',
-    params: {
-      challengeId: 'challenge-1',
-      expiresAt: '2026-10-14T00:05:00.000Z',
-      securityCode: '1',
-    },
+
   });
   expect(fetchCurrentUserWithToken).not.toHaveBeenCalled();
   expect(mockSetSession).not.toHaveBeenCalled();

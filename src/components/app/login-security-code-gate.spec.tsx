@@ -84,3 +84,11 @@ test('switching to another account re-blocks the prompt until that account’s l
   // B 开了安全码：锁屏出现，批准弹窗继续挡住。
   expect(useLoginApprovalStore.getState().appLocked).toBe(true);
 });
+
+test('keeps approval actions locked when the account security status request fails', async () => {
+  jest.mocked(fetchLoginSecurityCodeStatus).mockRejectedValue(new Error('offline'));
+  render(<LoginSecurityCodeGate />);
+  await waitFor(() => expect(fetchLoginSecurityCodeStatus).toHaveBeenCalled());
+  await act(async () => {});
+  expect(useLoginApprovalStore.getState().appLocked).toBe(true);
+});
