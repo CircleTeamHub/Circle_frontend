@@ -123,3 +123,15 @@ test('retries session completion with retained tokens instead of consuming the c
   expect(complete).toHaveBeenCalledTimes(2);
   expect(complete).toHaveBeenLastCalledWith(tokens);
 });
+
+test('does not overlap slow status polls', async () => {
+  jest.useFakeTimers();
+  let resolve!: (value: any) => void;
+  jest.mocked(fetchLoginChallengeStatus).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  const { result, unmount } = renderHook(() => useDeviceVerification({ challengeId: 'c', expiresAt: new Date(Date.now() + 300000).toISOString(), onVerified: jest.fn() }));
+  await act(async () => { jest.advanceTimersByTime(9000); });
+  expect(fetchLoginChallengeStatus).toHaveBeenCalledTimes(1);
+  await act(async () => resolve({ status: 'APPROVED', expiresAt: new Date(Date.now() + 300000).toISOString(), codeExpiresAt: new Date(Date.now() + 60000).toISOString() }));
+  expect(result.current.phase).toBe('approved');
+  unmount(); jest.useRealTimers();
+});

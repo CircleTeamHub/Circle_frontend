@@ -141,6 +141,7 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
   const [birthday, setBirthday] = useState<BirthdayDraft>(() => parseBirthdayValue(initialValue));
   const [city, setCity] = useState<CityDraft>(() => parseCityValue(initialValue));
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const isTextField = field.editorType === undefined;
   useModalInputAutoFocus(inputRef, isTextField ? field.id : null);
@@ -152,12 +153,13 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
   ];
 
   async function save(nextValue: string) {
-    if (!user || saving) return;
+    if (!user || savingRef.current) return;
     const validationError = validateProfileFieldValue(field.id, nextValue);
     if (validationError) {
       Alert.alert(t('validation.cannotSave'), validationError);
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     try {
       const nextUser = await updateUserProfile(
@@ -173,6 +175,7 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
         getApiErrorMessage(error, t('validation.saveFailed')),
       );
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }

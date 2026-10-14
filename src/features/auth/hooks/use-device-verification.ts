@@ -99,7 +99,10 @@ export function useDeviceVerification({
   useEffect(() => {
     if (isTerminal || completionPending) return undefined;
     let cancelled = false;
+    let polling = false;
     const poll = async () => {
+      if (polling || cancelled) return;
+      polling = true;
       try {
         const next = await fetchLoginChallengeStatus(challengeId);
         if (cancelled) return;
@@ -114,7 +117,7 @@ export function useDeviceVerification({
         if (!cancelled && code && TERMINAL_ERROR_PHASE[code]) {
           setTerminalPhase(TERMINAL_ERROR_PHASE[code]);
         }
-      }
+      } finally { polling = false; }
     };
     void poll();
     const timer = setInterval(poll, POLL_INTERVAL_MS);
