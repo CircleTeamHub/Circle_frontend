@@ -512,14 +512,18 @@
       "qrJoinEnabled": "Unirse con código QR",
       "membersCanViewProfiles": "Los miembros pueden ver perfiles",
       "membersCanAddFriends": "Los miembros pueden añadir amigos",
-      "membersCanViewRoster": "Mostrar lista de miembros"
+      "membersCanViewRoster": "Mostrar lista de miembros",
+      "cardJoinEnabled": "Permitir solicitudes desde tarjetas",
+      "joinApprovalRequired": "Requerir aprobación para unirse"
     },
     "groupPolicyHint": {
       "memberCanInvite": "Si está desactivado, solo el propietario y los administradores pueden añadir miembros",
       "qrJoinEnabled": "Si está desactivado, los códigos QR del grupo ya emitidos dejan de funcionar",
       "membersCanViewProfiles": "Si está desactivado, los miembros normales no pueden abrir perfiles de otros miembros desde el grupo",
       "membersCanAddFriends": "Si está desactivado, los miembros normales no pueden añadir amigos a través del grupo",
-      "membersCanViewRoster": "Si está desactivado, los miembros normales no pueden ver la lista"
+      "membersCanViewRoster": "Si está desactivado, los miembros normales no pueden ver la lista",
+      "cardJoinEnabled": "Quienes no son miembros pueden solicitar unirse desde la tarjeta del grupo",
+      "joinApprovalRequired": "Las invitaciones de miembros y el acceso por QR requieren aprobación; las del propietario o administradores solo requieren aceptación"
     },
     "groupManagement": {
       "admins": "Administradores",
@@ -3497,7 +3501,10 @@
     "CHAT_GROUP_QR_JOIN_DISABLED": "Unirse con código QR está desactivado en este grupo",
     "CHAT_GROUP_AVATAR_URL_INVALID": "La dirección del avatar del grupo no es válida",
     "CHAT_DELIVERY_ID_CONFLICT": "No se pudo enviar el mensaje. Vuelve a escribirlo e inténtalo de nuevo",
-    "FRIEND_GROUP_ADD_FORBIDDEN": "Este grupo no permite que los miembros se añadan como amigos"
+    "FRIEND_GROUP_ADD_FORBIDDEN": "Este grupo no permite que los miembros se añadan como amigos",
+    "CHAT_GROUP_ACCEPT_REQUIRED": "Acepta primero la invitación al grupo",
+    "CHAT_GROUP_INVITATION_INVALID": "La invitación ha caducado o ya no es válida",
+    "CHAT_GROUP_APPLICATION_DISABLED": "Este grupo no acepta solicitudes desde tarjetas"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",
@@ -3566,8 +3573,46 @@
       "groupType": "Código QR del grupo",
       "circleType": "Código QR del círculo",
       "userFooter": "Escanea o toca para agregar como amigo",
-      "groupFooter": "Escanea o toca para unirte al grupo",
+      "groupFooter": "Escanea o toca para ver la invitación",
       "circleFooter": "Escanea o toca para unirte al círculo"
     }
+  },
+  "groupAdmission": {
+    "title": "Información e invitación del grupo",
+    "members": "{{count}} miembros",
+    "invitedBy": "{{name}} te invitó al grupo",
+    "invitedByYou": "Invitaste a {{name}} al grupo",
+    "invitedPerson": "{{inviter}} invitó a {{applicant}} al grupo",
+    "personStatus": "{{name}}: {{status}}",
+    "applicant": "Solicitante: {{name}}",
+    "enter": "Entrar al chat",
+    "accept": "Aceptar invitación",
+    "decline": "Rechazar invitación",
+    "approve": "Aprobar solicitud",
+    "reject": "Rechazar solicitud",
+    "apply": "Solicitar unirse",
+    "reason": "Motivo (opcional, hasta 200 caracteres)",
+    "viewInvitation": "Ver invitación",
+    "manage": "Solicitudes e invitaciones",
+    "empty": "No hay solicitudes ni invitaciones",
+    "loadFailed": "No se pudo cargar el grupo. Inténtalo de nuevo.",
+    "actionFailed": "La operación no se completó",
+    "actionUncertain": "No pudimos confirmar el resultado. Se ha consultado el estado de nuevo; compruébalo antes de continuar.",
+    "reviewRequired": "Un administrador debe aprobar tu ingreso antes de que puedas ver los mensajes.",
+    "acceptRequired": "Acepta una invitación válida para unirte.",
+    "applicationDisabled": "Este grupo no acepta solicitudes desde tarjetas.",
+    "unavailable": "El grupo ya no está disponible.",
+    "preview": "[Invitación al grupo]",
+    "status": {
+      "INVITED": "Esperando aceptación",
+      "PENDING": "Solicitud enviada; esperando aprobación",
+      "JOINED": "Se unió al grupo",
+      "LEFT": "Salió del grupo",
+      "DECLINED": "Invitación rechazada",
+      "REJECTED": "Solicitud rechazada",
+      "EXPIRED": "Invitación o solicitud caducada",
+      "CANCELLED": "Solicitud cancelada"
+    },
+    "sentInvitation": "Invitaste a esta persona al grupo"
   }
 }

@@ -1,3 +1,4 @@
+import { refreshGroupAdmissionUnread } from '@/services/api/group-admissions';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
@@ -130,6 +131,7 @@ export default function ContactsScreen() {
   const friendActivityCountKnown = useFriendActivityUnreadStore(
     (state) => state.countKnown,
   );
+  const groupAdmissionsUnread = useTabBadgeStore((state) => state.groupAdmissionsUnread);
   const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
   const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.refresh,
@@ -156,6 +158,7 @@ export default function ContactsScreen() {
     useCallback(() => {
       void loadFriends();
       void refreshUnreadFriendActivityCount();
+      void refreshGroupAdmissionUnread().catch(error => reportHandledFailure('groupAdmission', 'unread', error));
     }, [loadFriends, refreshUnreadFriendActivityCount]),
   );
 
@@ -321,9 +324,7 @@ export default function ContactsScreen() {
         {QUICK_ACTIONS.map((action, index) => {
           const badgeCount =
             action.id === 'new-friends'
-              ? friendActivityCountKnown
-                ? unreadFriendActivityCount
-                : 0
+              ? groupAdmissionsUnread + (friendActivityCountKnown ? unreadFriendActivityCount : 0)
               : action.id === 'moments'
                 ? momentsUnread
                 : 0;

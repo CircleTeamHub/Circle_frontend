@@ -3,6 +3,7 @@ import type { NotificationItem } from '@/types';
 
 export type ChatSnackbarItem = {
   kind: 'chat';
+  silent?: boolean;
   id: string;
   title: string;
   summary: string;

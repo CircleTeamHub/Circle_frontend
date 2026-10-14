@@ -590,14 +590,18 @@
       "qrJoinEnabled": "Join via QR code",
       "membersCanViewProfiles": "Members can view profiles",
       "membersCanAddFriends": "Members can add friends",
-      "membersCanViewRoster": "Show member list"
+      "membersCanViewRoster": "Show member list",
+      "cardJoinEnabled": "Allow requests through group cards",
+      "joinApprovalRequired": "Require approval to join"
     },
     "groupPolicyHint": {
       "memberCanInvite": "When off, only the owner and admins can add members",
       "qrJoinEnabled": "When off, existing group QR codes stop working",
       "membersCanViewProfiles": "When off, regular members cannot open other members’ profiles from the group",
       "membersCanAddFriends": "When off, regular members cannot add friends through the group",
-      "membersCanViewRoster": "When off, regular members cannot see the member list"
+      "membersCanViewRoster": "When off, regular members cannot see the member list",
+      "cardJoinEnabled": "Non-members can request to join through a group card",
+      "joinApprovalRequired": "Member invitations and QR entry require approval; owner and admin invitations join after acceptance"
     },
     "groupManagement": {
       "admins": "Admins",
@@ -3497,7 +3501,10 @@
     "CHAT_GROUP_QR_JOIN_DISABLED": "Joining via QR code is turned off in this group",
     "CHAT_GROUP_AVATAR_URL_INVALID": "Invalid group avatar address",
     "CHAT_DELIVERY_ID_CONFLICT": "Message failed to send. Please re-enter it and try again",
-    "FRIEND_GROUP_ADD_FORBIDDEN": "This group does not allow members to add each other as friends"
+    "FRIEND_GROUP_ADD_FORBIDDEN": "This group does not allow members to add each other as friends",
+    "CHAT_GROUP_ACCEPT_REQUIRED": "Please accept the group invitation first",
+    "CHAT_GROUP_INVITATION_INVALID": "This invitation has expired or is no longer valid",
+    "CHAT_GROUP_APPLICATION_DISABLED": "This group is not accepting requests through cards"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",
@@ -3566,8 +3573,46 @@
       "groupType": "Group QR Code",
       "circleType": "Circle QR Code",
       "userFooter": "Scan or tap to add as friend",
-      "groupFooter": "Scan or tap to join the group",
+      "groupFooter": "Scan or tap to view the group invitation",
       "circleFooter": "Scan or tap to join the circle"
     }
+  },
+  "groupAdmission": {
+    "title": "Group details and invitation",
+    "members": "{{count}} members",
+    "invitedBy": "{{name}} invited you to this group",
+    "invitedByYou": "You invited {{name}} to this group",
+    "invitedPerson": "{{inviter}} invited {{applicant}} to this group",
+    "personStatus": "{{name}}: {{status}}",
+    "applicant": "Applicant: {{name}}",
+    "enter": "Enter group chat",
+    "accept": "Accept invitation",
+    "decline": "Decline invitation",
+    "approve": "Approve request",
+    "reject": "Reject request",
+    "apply": "Request to join",
+    "reason": "Reason (optional, up to 200 characters)",
+    "viewInvitation": "View invitation",
+    "manage": "Join requests and invitations",
+    "empty": "No group invitations or requests",
+    "loadFailed": "Unable to load group details. Please retry.",
+    "actionFailed": "Action could not be completed",
+    "actionUncertain": "The result could not be confirmed. We refreshed the status; check it before trying again.",
+    "reviewRequired": "An administrator must approve your request before you can access group messages.",
+    "acceptRequired": "Accept a valid invitation to join this group.",
+    "applicationDisabled": "This group is not accepting card requests",
+    "unavailable": "This group is no longer available",
+    "preview": "[Group invitation]",
+    "status": {
+      "INVITED": "Awaiting acceptance",
+      "PENDING": "Awaiting administrator approval",
+      "JOINED": "Joined group",
+      "LEFT": "Left the group",
+      "DECLINED": "Invitation declined",
+      "REJECTED": "Request rejected",
+      "EXPIRED": "Invitation or request expired",
+      "CANCELLED": "Application cancelled"
+    },
+    "sentInvitation": "You invited them to join the group"
   }
 }

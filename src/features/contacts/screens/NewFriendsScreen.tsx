@@ -1,3 +1,4 @@
+import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
@@ -78,6 +79,7 @@ export default function NewFriendsScreen() {
   const [activities, setActivities] = useState<FriendActivity[]>([]);
   // 页签是主轴：好友动态和入圈申请是两批数据、两套接口，分开收才不会互相淹没。
   const [activeTab, setActiveTab] = useState<'friends' | 'groups'>('friends');
+  const groupAdmissionsUnread = useTabBadgeStore(s => s.groupAdmissionsUnread);
   // 关键词跨页签保留：用户常常只记得名字、不记得那是个人还是圈子。
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -284,9 +286,9 @@ export default function NewFriendsScreen() {
   const tabs = useMemo(
     () => [
       { id: 'friends' as const, label: t('contacts.friendActivity.tabFriends') },
-      { id: 'groups' as const, label: t('contacts.friendActivity.tabGroups') },
+      { id: 'groups' as const, label: t('contacts.friendActivity.tabGroups'), unreadCount: groupAdmissionsUnread },
     ],
-    [t],
+    [groupAdmissionsUnread, t],
   );
 
   return (

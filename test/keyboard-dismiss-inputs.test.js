@@ -24,7 +24,7 @@ const INPUT_SCROLL_FILES = [
   'src/features/contacts/screens/FriendActivityDetailScreen.tsx',
   'src/features/contacts/screens/GroupsScreen.tsx',
   'src/features/contacts/screens/NewFriendsScreen.tsx',
-  'src/features/contacts/components/NewGroupsInboxList.tsx',
+  'src/features/groups/GroupAdmissionsList.tsx',
   'src/features/notifications/screens/PostSignupsScreen.tsx',
   'src/features/user/screens/EditFriendRemarkScreen.tsx',
   'src/features/user/screens/EditFriendTagsScreen.tsx',

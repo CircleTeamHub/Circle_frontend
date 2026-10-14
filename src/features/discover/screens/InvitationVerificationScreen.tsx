@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,7 +19,9 @@ import {
 import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { fetchInvitation } from '@/services/api/circles';
+import { useAuthStore } from '@/stores/authStore';
+import { refreshGroupAdmissionUnread } from '@/services/api/group-admissions';
+import { markCircleInvitationSeen, respondToCircleInvitation, fetchInvitation } from '@/services/api/circles';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { CircleInvitation, CircleInvitationVerifier } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -29,7 +33,7 @@ const MIN_SLOTS = 1;
 
 const s = StyleSheet.create({
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: Spacing.lg,
   },
   progressRow: {
@@ -135,6 +139,7 @@ export default function InvitationVerificationScreen() {
   }, [loadInvitation]);
 
   useEffect(() => {
+    void markCircleInvitationSeen(id).then(() => refreshGroupAdmissionUnread()).catch(error => reportHandledFailure('circleInvitation', 'markSeen', error));
     void markMatchingTargetNotificationsRead({ invitationId: id });
   }, [id]);
 
@@ -150,6 +155,18 @@ export default function InvitationVerificationScreen() {
     }),
     [colors],
   );
+
+  const [responding, setResponding] = useState(false);
+  const consentPending = useRef(false);
+  const currentUserId = useAuthStore(state => state.user?.id);
+  const handleConsent = async (accept: boolean) => {
+    if (consentPending.current || !invitation) return;
+    consentPending.current = true;
+    setResponding(true);
+    try { const next = await respondToCircleInvitation(invitation.id, accept); setInvitation(next); await markMatchingTargetNotificationsRead({ invitationId: invitation.id }); await refreshGroupAdmissionUnread(); }
+    catch (error) { reportHandledFailure('circleInvitation', 'consent', error); Alert.alert(t('groupAdmission.actionFailed')); void loadInvitation(); }
+    finally { consentPending.current = false; setResponding(false); }
+  };
 
   const totalSlots = Math.max(MIN_SLOTS, invitation?.requiredCount ?? MIN_SLOTS);
 
@@ -234,7 +251,7 @@ export default function InvitationVerificationScreen() {
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('invitation.joinTitle', { name: invitation.circleName })} />
-      <View style={s.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[s.content, { paddingBottom: insets.bottom + Spacing.lg }]}>
         <Text style={[s.subtitle, d.subtitle]}>
           {t('invitation.requireVerifiers', { count: totalSlots })}
         </Text>
@@ -320,6 +337,7 @@ export default function InvitationVerificationScreen() {
           })}
         </View>
 
+        {invitation.status === 'INVITED' ? <View style={{ gap: Spacing.md }}><Text style={d.subtitle}>{t('groupAdmission.invitedBy', { name: invitation.inviter.nickname })}</Text>{invitation.applicant.id === currentUserId ? <>{[true, false].map(accept => <Pressable key={String(accept)} accessibilityRole="button" disabled={responding} style={[s.addButton, d.addButton]} onPress={() => void handleConsent(accept)}><Text style={d.addButtonText}>{t(accept ? 'groupAdmission.accept' : 'groupAdmission.decline')}</Text></Pressable>)}</> : <Text style={d.subtitle}>{t('groupAdmission.status.INVITED')}</Text>}</View> : null}
         {/* Add verifier button */}
         {canAddMore ? (
           <Pressable
@@ -349,7 +367,7 @@ export default function InvitationVerificationScreen() {
             </Text>
           </View>
         ) : null}
-      </View>
+      </ScrollView>
     </View>
   );
 }

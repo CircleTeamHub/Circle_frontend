@@ -461,7 +461,7 @@ export function useTabBadgeMap(): Record<string, number> {
   } =
     useTabBadgeStore(useShallow((state) => ({
       messagesUnread: state.messagesUnread,
-      contactsUnread: state.contactsUnread,
+      contactsUnread: state.contactsUnread + state.groupAdmissionsUnread,
       momentsUnread: state.momentsUnread,
       circleUnread: state.circleUnread,
       signupUnread: state.signupUnread,

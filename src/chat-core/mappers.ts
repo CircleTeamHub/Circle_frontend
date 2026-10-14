@@ -116,6 +116,8 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
       return tPreview('transfer', '[转账]');
     case 'note-card':
       return tCardPreview('note', '[笔记]', 'title', message.content['title']);
+    case 'group-invitation':
+      return i18n.t('groupAdmission.preview');
     case 'verification-card':
       return tCardPreview(
         'verification',

@@ -1,3 +1,4 @@
+import { getGroupEntryHref } from '@/features/groups/routes';
 import type { Href } from 'expo-router';
 
 type PushData = Record<string, unknown>;
@@ -34,6 +35,7 @@ const VERIFICATION_NOTIFICATION_TYPES = new Set([
 ]);
 
 const INVITATION_NOTIFICATION_TYPES = new Set([
+  'CIRCLE_INVITATION_RECEIVED',
   'CIRCLE_INVITATION_APPROVED',
   'CIRCLE_INVITATION_REJECTED',
   'CIRCLE_ADMIN_OVERRIDE_APPROVED',
@@ -52,6 +54,8 @@ export function resolvePushNotificationRoute(data: PushData): Href | null {
   const invitationId = firstText(data, ['invitationId', 'invitationID']);
   const postId = firstText(data, ['postId', 'postID', 'circlePostId', 'circlePostID']);
 
+  const groupAdmissionId = firstText(data, ['groupAdmissionId']);
+  if ((type === 'GROUP_ADMISSION' || route === 'group-admission') && groupAdmissionId) return getGroupEntryHref('messages', { admissionId: groupAdmissionId });
   if (route === 'home') {
     return '/(tabs)/messages';
   }

@@ -56,6 +56,7 @@ function loadRealtimeClient(mocks) {
     setTimeout,
     clearTimeout,
     require: withObservabilityStubs((specifier) => {
+      if (specifier === '@/services/api/group-admissions') return { refreshGroupAdmissionUnread: async () => {} };
       if (specifier in mocks) return mocks[specifier];
       if (specifier.startsWith('@/')) return {};
       return require(specifier);

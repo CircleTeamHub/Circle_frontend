@@ -1,3 +1,4 @@
+import { getGroupEntryHref } from '@/features/groups/routes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -32,9 +33,12 @@ import { fetchCircleDetail } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { NoteCard } from '@/features/notes/components/NoteCard';
+import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
+import { NoteCard, type NoteSourceTarget } from '@/features/notes/components/NoteCard';
 import type { NoteSummary, NoteWorkStatus } from '@/features/notes/types';
 import {
+  getChatDetailHref,
+  getCircleDetailHref,
   getNoteDetailHref,
   getUserProfileScopeFromSegments,
 } from '@/features/user/utils/routes';
@@ -466,6 +470,35 @@ export default function NoteManagementScreen() {
     [router, scope],
   );
 
+  // 卡片底部名片按钮与「我的笔记」同一套跳转：个人名片 → 私聊，群名片 → 群聊/圈子。
+  const handleSourcePress = useCallback(
+    (note: NoteSummary, target: NoteSourceTarget) => {
+      const { contact, group } = resolveNoteCardButtons(note);
+      const card = target === 'group' ? group : contact;
+      if (!card) return;
+      if (target === 'group' && card.target === 'chat') {
+        router.push(getGroupEntryHref(scope, { groupId: card.conversationID ?? card.id, searchedMsgID: card.clientMsgID }));
+        return;
+      }
+      if (card.target === 'circle') {
+        router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', card.id));
+        return;
+      }
+      router.push(
+        getChatDetailHref(
+          scope,
+          card.id,
+          card.name,
+          card.faceURL ?? undefined,
+          card.conversationID,
+          card.clientMsgID,
+          target === 'group' ? 'group' : 'private',
+        ),
+      );
+    },
+    [router, scope],
+  );
+
   const renderNoteRow = (note: NoteSummary) => {
     const workStatus = resolveManagedWorkStatus(note);
     const workLabel =
@@ -482,6 +515,7 @@ export default function NoteManagementScreen() {
         <NoteCard
           note={note}
           onPress={handleOpenNote}
+          onSourcePress={handleSourcePress}
           showActions={false}
           accessibilityLabel={note.title}
         />

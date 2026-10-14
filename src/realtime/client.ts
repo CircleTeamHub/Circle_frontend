@@ -1,3 +1,4 @@
+import { refreshGroupAdmissionUnread } from '@/services/api/group-admissions';
 import { REALTIME_WS_URL } from '@/constants/config';
 import { reportError } from '@/observability/sentry';
 import { fetchMySignupsUnreadCount } from '@/services/api/plaza';
@@ -466,13 +467,14 @@ function isNoteSourceStatusChange(
 }
 
 function handleNotificationCreated(payload: NotificationItem) {
+  if ((payload.type === 'GROUP_ADMISSION' || payload.type === 'CIRCLE_INVITATION_RECEIVED')) void refreshGroupAdmissionUnread().catch(error => reportHandledFailure('groupAdmission', 'unread', error));
   // SYSTEM notifications are not part of the interactive list and have no
   // in-app landing screen, so toasting one would route nowhere. Skip them.
   if (payload.type === 'SYSTEM') {
     return;
   }
 
-  if (BELL_NOTIFICATION_TYPES.has(payload.type)) {
+  if (BELL_NOTIFICATION_TYPES.has(payload.type) || (payload.type === 'GROUP_ADMISSION' || payload.type === 'CIRCLE_INVITATION_RECEIVED')) {
     const store = useNotificationCenterStore.getState();
     store.setInteractive([
       payload,
@@ -658,6 +660,7 @@ const RECOVERY_THROTTLE_MS = 30_000;
 let lastRecoveryAt = 0;
 
 export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
+  void refreshGroupAdmissionUnread().catch(error => reportHandledFailure('groupAdmission', 'unread', error));
   const now = Date.now();
   if (!options?.force && now - lastRecoveryAt < RECOVERY_THROTTLE_MS) {
     return;

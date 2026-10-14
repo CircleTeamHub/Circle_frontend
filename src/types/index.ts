@@ -148,6 +148,7 @@ export interface TransferCardData {
 }
 
 export interface ChatMessage {
+  groupInvitation?: { admissionId: string; circleInvitationId?: string; groupName: string; avatarUrl: string | null };
   id: string;
   /** 仅用于本地展示：连续消息合并时隐藏本条旁边的头像。 */
   suppressAvatar?: boolean;
@@ -163,6 +164,7 @@ export interface ChatMessage {
     | 'note-card'
     | 'friend-card'
     | 'circle-card'
+    | 'group-invitation'
     | 'transfer-card'
     | 'verification-card'
     | 'plaza-post-card'
@@ -535,6 +537,7 @@ export interface CircleInvitationUser {
 }
 
 export interface CircleInvitation {
+  unreadCount?: number;
   id: string;
   circleId: string;
   circleName: string;
@@ -543,7 +546,7 @@ export interface CircleInvitation {
   requiredCount: number;
   approvedCount: number;
   /** CANCELLED：服务端把失效的申请收成的终态（不是通过，也不是拒绝）。 */
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ADMIN_APPROVED' | 'CANCELLED';
+  status: 'INVITED' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'ADMIN_APPROVED' | 'CANCELLED';
   verifiers: CircleInvitationVerifier[];
   createdAt: string;
 }
@@ -604,6 +607,8 @@ export interface CreateMomentInput {
 
 export type NotificationType =
   | 'SYSTEM'
+  | 'GROUP_ADMISSION'
+  | 'CIRCLE_INVITATION_RECEIVED'
   | 'MESSAGE_RECEIVED'
   | 'MEMBER_MENTION'
   | 'MESSAGE_QUOTE'
@@ -645,6 +650,7 @@ export interface NotificationItem {
     firstImage: string | null;
   } | null;
   fromInvitation: { id: string; status: string } | null;
+  fromGroupAdmission?: { id: string; status: string } | null;
   fromMessage?: {
     id?: string;
     messageID?: string;
