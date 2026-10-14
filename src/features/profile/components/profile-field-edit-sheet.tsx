@@ -26,10 +26,10 @@ import {
   toProfileUpdatePayload,
   validateProfileFieldValue,
 } from '@/features/profile/profile-edit-config';
-import { findProvinceByCity } from '@/features/profile/city-options';
 import {
   formatBirthdayDraft,
   parseBirthdayValue,
+  parseCityValue,
   type BirthdayDraft,
 } from '@/features/profile/utils/profile-field-pickers';
 import {
@@ -139,14 +139,7 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
   }, []);
   const [value, setValue] = useState(initialValue);
   const [birthday, setBirthday] = useState<BirthdayDraft>(() => parseBirthdayValue(initialValue));
-  const [city, setCity] = useState<CityDraft>(() => {
-    const region = findProvinceByCity(initialValue);
-    const current = initialValue.trim();
-    return {
-      region: region.name,
-      city: region.cities.includes(current) ? current : region.cities[0] ?? '',
-    };
-  });
+  const [city, setCity] = useState<CityDraft>(() => parseCityValue(initialValue));
   const [saving, setSaving] = useState(false);
 
   const isTextField = field.editorType === undefined;

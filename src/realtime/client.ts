@@ -687,6 +687,7 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
     return;
   }
   lastRecoveryAt = now;
+  loginChallengeListener?.({ type: 'created' });
 
   try {
     const [contactsUnread, signupUnread, notificationSummary] =

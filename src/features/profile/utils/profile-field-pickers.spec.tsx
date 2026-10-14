@@ -2,6 +2,7 @@ import {
   formatBirthdayDraft,
   getBirthdayYears,
   parseBirthdayValue,
+  parseCityValue,
   updateBirthdayDraft,
 } from './profile-field-pickers';
 
@@ -28,4 +29,8 @@ test('formats with zero padding and lists years from this year back to 1950', ()
   const years = getBirthdayYears(2026);
   expect(years[0]).toBe(2026);
   expect(years[years.length - 1]).toBe(1950);
+});
+
+test('keeps a saved city outside the picker catalog when confirming unchanged', () => {
+  expect(parseCityValue(' San Francisco ').city).toBe('San Francisco');
 });

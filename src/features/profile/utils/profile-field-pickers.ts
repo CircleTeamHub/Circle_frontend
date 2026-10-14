@@ -1,3 +1,5 @@
+import { findProvinceByCity } from '../city-options';
+
 export interface BirthdayDraft {
   year: number;
   month: number;
@@ -51,4 +53,9 @@ export function getBirthdayYears(currentYear = new Date().getFullYear()): number
     { length: currentYear - BIRTHDAY_FIRST_YEAR + 1 },
     (_, index) => currentYear - index,
   );
+}
+
+export function parseCityValue(value: string) {
+  const region = findProvinceByCity(value);
+  return { region: region.name, city: value.trim() || region.cities[0] || '' };
 }

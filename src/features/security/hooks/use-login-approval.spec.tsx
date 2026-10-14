@@ -1,3 +1,4 @@
+import { AppState, type AppStateStatus } from 'react-native';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useLoginApproval } from './use-login-approval';
 import {
@@ -31,6 +32,7 @@ const challenge = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  AppState.currentState = 'active';
   useLoginApprovalStore.setState({
     pending: [],
     appLocked: false,
@@ -151,4 +153,23 @@ test('a pending-list request from the previous account is dropped after reset', 
 
   await act(async () => resolveOld([challenge]));
   expect(useLoginApprovalStore.getState().pending).toEqual([]);
+});
+
+
+test('the approval code is hidden on background even without a security-code lock', async () => {
+  let change!: (state: AppStateStatus) => void;
+  const subscription = jest.spyOn(AppState, 'addEventListener').mockImplementation((_, listener) => { change = listener; return { remove: jest.fn() }; });
+  jest.mocked(approveLoginChallenge).mockResolvedValue({ code: '482913', codeExpiresAt: new Date(Date.now() + 60000).toISOString() });
+  try {
+    const { result } = renderHook(() => useLoginApproval());
+    await waitFor(() => expect(result.current.stage?.kind).toBe('ask'));
+    await act(async () => result.current.approve());
+    expect(result.current.stage?.kind).toBe('code');
+    act(() => change('inactive'));
+    expect(result.current.stage).toBeNull();
+    act(() => change('background'));
+    expect(result.current.stage).toBeNull();
+    await act(async () => change('active'));
+    expect(result.current.stage?.kind).toBe('code');
+  } finally { subscription.mockRestore(); }
 });

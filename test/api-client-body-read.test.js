@@ -254,3 +254,15 @@ test('apiClient still surfaces a readable body unchanged', async () => {
   // 逐字段断言:payload 由 vm realm 内的 JSON.parse 产生,deepStrictEqual 会因原型跨 realm 不同而失败。
   assert.equal((await apiClient('/circle')).id, 7);
 });
+
+
+test('a stalled device ID provider is covered by the whole-request timeout', async () => {
+  const timers = makeFakeTimers();
+  const { apiClient, registerDeviceIdProvider } = loadApiClient({ timers });
+  registerDeviceIdProvider(() => new Promise(() => {}));
+  const pending = apiClient('/circle');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(timers.isArmed(), true);
+  timers.fire();
+  await assert.rejects(pending, error => error.failureKind === 'timeout');
+});

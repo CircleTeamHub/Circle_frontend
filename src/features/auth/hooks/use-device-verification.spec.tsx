@@ -111,3 +111,15 @@ test('an expired request can be resent and returns to waiting', async () => {
   await waitFor(() => expect(fetchLoginChallengeStatus).toHaveBeenCalledWith('c2'));
   expect(result.current.phase).toBe('waiting');
 });
+
+test('retries session completion with retained tokens instead of consuming the code again', async () => {
+  jest.mocked(verifyLoginChallengeCode).mockResolvedValue(tokens);
+  const complete = jest.fn().mockRejectedValueOnce(new Error('bootstrap')).mockResolvedValueOnce(undefined);
+  const { result } = renderHook(() => useDeviceVerification({ challengeId: 'c1', expiresAt: inFiveMinutes(), onVerified: complete }));
+  await act(async () => result.current.submitCode('123456'));
+  expect(result.current.completionPending).toBe(true);
+  await act(async () => result.current.submitCode('123456'));
+  expect(verifyLoginChallengeCode).toHaveBeenCalledTimes(1);
+  expect(complete).toHaveBeenCalledTimes(2);
+  expect(complete).toHaveBeenLastCalledWith(tokens);
+});

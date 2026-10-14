@@ -29,6 +29,7 @@ export function useLoginApproval() {
   const [active, setActive] = useState<
     Exclude<LoginApprovalStage, { kind: 'ask' }> | null
   >(null);
+  const [foreground, setForeground] = useState((AppState.currentState ?? 'active') === 'active');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -43,6 +44,7 @@ export function useLoginApproval() {
     }
     void store.refresh();
     const subscription = AppState.addEventListener('change', (next) => {
+      setForeground(next === 'active');
       if (next === 'active') void useLoginApprovalStore.getState().refresh();
     });
     return () => subscription.remove();
@@ -65,11 +67,11 @@ export function useLoginApproval() {
   }, [ticking]);
 
   const stage: LoginApprovalStage | null = useMemo(() => {
-    if (!enabled || appLocked) return null;
+    if (!enabled || appLocked || !foreground) return null;
     if (active) return active;
     const next = pending.find((item) => Date.parse(item.expiresAt) > now);
     return next ? { kind: 'ask', challenge: next } : null;
-  }, [active, appLocked, enabled, now, pending]);
+  }, [active, appLocked, enabled, foreground, now, pending]);
 
   const runApprove = useCallback(async (challengeId: string) => {
     setBusy(true);

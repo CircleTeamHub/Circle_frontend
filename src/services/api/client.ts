@@ -291,9 +291,6 @@ async function executeRequest<T>(
 
   const serializedBody = body == null ? undefined : serializeRequestBody(body);
   // 每个请求都带本机设备 ID：登录 / 续签据此判断是否受信任设备。
-  const deviceId = deviceIdProvider
-    ? await deviceIdProvider().catch(() => null)
-    : null;
   const controller = new AbortController();
   // 15s 是整个请求的预算:headers + body。定时器必须活到 body 读完为止——
   // 流式 fetch(web)下 fetch 只等到 headers 就 resolve,body 还在传;
@@ -303,6 +300,11 @@ async function executeRequest<T>(
   try {
     let res: Response;
     try {
+      const deviceId = deviceIdProvider ? await new Promise<string | null>((resolve, reject) => {
+        const abort = () => reject(Object.assign(new Error('Request timed out'), { name: 'AbortError' }));
+        controller.signal.addEventListener('abort', abort, { once: true });
+        void deviceIdProvider!().catch(() => null).then(resolve).finally(() => controller.signal.removeEventListener('abort', abort));
+      }) : null;
       res = await fetch(url, {
         method,
         headers: {

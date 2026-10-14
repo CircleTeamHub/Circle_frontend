@@ -71,6 +71,8 @@ export function useDeviceVerification({
   const [error, setError] = useState<unknown>(null);
   const [terminalPhase, setTerminalPhase] =
     useState<DeviceVerificationPhase | null>(null);
+  const verifiedTokensRef = useRef<AuthTokens | null>(null);
+  const [completionPending, setCompletionPending] = useState(false);
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
 
@@ -78,11 +80,12 @@ export function useDeviceVerification({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      verifiedTokensRef.current = null;
     };
   }, []);
 
   const phase: DeviceVerificationPhase =
-    terminalPhase ??
+    completionPending ? 'approved' : terminalPhase ??
     (expiresAt <= now && status === 'PENDING'
       ? 'expired'
       : toPhase(status, codeExpiresAt, now));
@@ -94,7 +97,7 @@ export function useDeviceVerification({
   }, []);
 
   useEffect(() => {
-    if (isTerminal) return undefined;
+    if (isTerminal || completionPending) return undefined;
     let cancelled = false;
     const poll = async () => {
       try {
@@ -119,7 +122,7 @@ export function useDeviceVerification({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [challengeId, isTerminal]);
+  }, [challengeId, isTerminal, completionPending]);
 
   const run = useCallback(
     async (request: () => Promise<AuthTokens>) => {
@@ -128,14 +131,17 @@ export function useDeviceVerification({
       setSubmitting(true);
       setError(null);
       try {
-        const tokens = await request();
+        const tokens = verifiedTokensRef.current ?? await request();
+        verifiedTokensRef.current = tokens;
+        if (!mountedRef.current) return;
+        setCompletionPending(true);
         await onVerified(tokens);
       } catch (submitError) {
         if (!mountedRef.current) return;
         setError(submitError);
         const code =
           submitError instanceof ApiError ? submitError.errorCode : undefined;
-        if (code && TERMINAL_ERROR_PHASE[code]) {
+        if (!verifiedTokensRef.current && code && TERMINAL_ERROR_PHASE[code]) {
           setTerminalPhase(TERMINAL_ERROR_PHASE[code]);
         }
       } finally {
@@ -161,7 +167,7 @@ export function useDeviceVerification({
   );
 
   const resend = useCallback(async () => {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current || verifiedTokensRef.current) return;
     inFlightRef.current = true;
     setSubmitting(true);
     setError(null);
@@ -192,6 +198,7 @@ export function useDeviceVerification({
     submitting,
     error,
     submitCode,
+    completionPending,
     submitSecurityCode,
     resend,
   };
