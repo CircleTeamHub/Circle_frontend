@@ -277,6 +277,7 @@ export function useNoteBatchSend({
         if (freshNotes.some((note) => shouldWarnNoteWorkStatus(note))) {
           await new Promise<void>((resolve, reject) => {
             let settled = false;
+            let sending = false;
             let dialogId = 0;
             let removed = Promise.resolve();
             const clear = () => {
@@ -320,6 +321,7 @@ export function useNoteBatchSend({
                       settleAfterRemoval();
                       return;
                     }
+                    sending = true;
                     void runNoteBatchSend(freshNotes, options).then(
                       () => removed.then(settle),
                       (error: unknown) => removed.then(() => fail(error)),
@@ -331,6 +333,7 @@ export function useNoteBatchSend({
               onDismiss: settleAfterRemoval,
             });
             removed = waitForDialogRemoval(dialogId);
+            void removed.then(() => { if (!sending) settle(); });
             warningDialogRef.current = {
               id: dialogId,
               cancel: () => {

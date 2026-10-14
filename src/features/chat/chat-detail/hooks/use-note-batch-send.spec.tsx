@@ -158,3 +158,18 @@ test('a second warning waits for the first dialog to be removed', async () => {
   });
   await second;
 });
+
+
+test('two mounted hooks sharing a deduplicated warning both settle their queues', async () => {
+  mockWithFreshNoteSourceStatus.mockImplementation(async (cards: unknown[]) => cards.map(card => ({ ...(card as object), workStatus: 'CLOSED', publicationStatus: 'ACTIVE' })));
+  const create = () => renderHook(() => useNoteBatchSend({ t: ((key: string) => key) as never, authUser: null, setSendError: jest.fn(), mountedRef: { current: true }, sourceID: 's', conversationID: 'c', isPreviewMode: false }));
+  const first = create(); const second = create();
+  const options = { card: false, media: false, showcase: false, location: false };
+  let a!: Promise<void>; let b!: Promise<void>;
+  act(() => { a = first.result.current.handlePickNoteBatch([note], options); b = second.result.current.handlePickNoteBatch([note], options); });
+  await waitFor(() => expect(mockWithFreshNoteSourceStatus).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(useAppDialogStore.getState().queue).toHaveLength(1));
+  act(() => dismissDialog(useAppDialogStore.getState().queue[0].id));
+  await act(async () => { await Promise.all([a, b]); });
+  expect(useAppDialogStore.getState().queue).toHaveLength(0);
+});
