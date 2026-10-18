@@ -2,6 +2,7 @@ import {
   approveLoginChallenge,
   fetchPendingLoginChallenges,
   rejectLoginChallenge,
+  requestLoginRecovery,
 } from './auth';
 import { apiClient, refreshSessionAccessToken } from '@/services/api/client';
 
@@ -62,4 +63,27 @@ test('a second unbound answer after the refresh surfaces as an error instead of 
   await expect(fetchPendingLoginChallenges()).rejects.toBe(unbound);
   expect(refreshSessionAccessToken).toHaveBeenCalledTimes(1);
   expect(apiClient).toHaveBeenCalledTimes(2);
+});
+
+test('requesting recovery returns the challenge with its completion time', async () => {
+  jest.mocked(apiClient).mockResolvedValueOnce({
+    deviceVerificationRequired: true,
+    challenge: {
+      id: 'c1',
+      expiresAt: '2026-10-26T00:00:00.000Z',
+      securityCodeAvailable: false,
+      recoveryAvailableAt: '2026-10-19T00:00:00.000Z',
+    },
+  });
+
+  await expect(requestLoginRecovery('c1')).resolves.toEqual({
+    id: 'c1',
+    expiresAt: '2026-10-26T00:00:00.000Z',
+    securityCodeAvailable: false,
+    recoveryAvailableAt: '2026-10-19T00:00:00.000Z',
+  });
+  expect(apiClient).toHaveBeenCalledWith(
+    '/auth/login-challenges/c1/recovery',
+    { method: 'POST', auth: false },
+  );
 });

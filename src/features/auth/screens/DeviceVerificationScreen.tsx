@@ -17,6 +17,7 @@ import {
   useDeviceVerification,
   type DeviceVerificationPhase,
 } from '@/features/auth/hooks/use-device-verification';
+import { DeviceRecoverySection } from '@/features/auth/components/DeviceRecoverySection';
 
 const CODE_PATTERN = /^\d{6}$/;
 const SECURITY_CODE_PATTERN = /^\d{4,6}$/;
@@ -46,6 +47,16 @@ const s = StyleSheet.create({
   link: { ...Typography.caption, textAlign: 'center', paddingVertical: Spacing.sm },
 });
 
+function formatDateTime(timestamp: number, locale: string): string {
+  return new Date(timestamp).toLocaleString(locale, {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 function formatCountdown(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
@@ -64,7 +75,7 @@ export default function DeviceVerificationScreen() {
 }
 
 function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVerification }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -80,10 +91,12 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
   const verification = useDeviceVerification({
     challengeId: challenge.id,
     expiresAt: challenge.expiresAt,
+    recoveryAvailableAt: challenge.recoveryAvailableAt,
     onVerified: completeVerifiedLogin,
   });
   const { phase, remainingSeconds, submitting } = verification;
   const isTerminal = phase === 'rejected' || phase === 'expired';
+  const inRecoveryView = phase === 'recoveryWaiting' || phase === 'recoveryReady';
   // 批准过但 60 秒的码已过期：重新发起会把请求退回受信任设备、再次弹窗确认。
   // 用安全码时不需要受信任设备，窗口内照样能输，所以只在验证码模式下切成重发。
   const needsResend =
@@ -112,6 +125,10 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
     else router.replace('/(auth)/login');
   }, [router]);
 
+  const onRequestRecovery = useCallback(() => {
+    void verification.requestRecovery();
+  }, [verification]);
+
   const statusText = useMemo(() => {
     const texts: Record<DeviceVerificationPhase, string> = {
       waiting: t('auth.deviceVerification.waiting', {
@@ -123,11 +140,27 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
       codeExpired: t('auth.deviceVerification.approvedExpired'),
       rejected: t('auth.deviceVerification.rejected'),
       expired: t('auth.deviceVerification.expired'),
+      recoveryWaiting: t('auth.deviceVerification.recoveryWaiting', {
+        time:
+          verification.recoveryAvailableAt !== null
+            ? formatDateTime(verification.recoveryAvailableAt, i18n.language)
+            : '',
+      }),
+      recoveryReady: t('auth.deviceVerification.recoveryReady'),
     };
-    return useSecurityCode && !isTerminal
+    return useSecurityCode && !isTerminal && !inRecoveryView
       ? t('auth.deviceVerification.securityCodeIntro')
       : texts[phase];
-  }, [isTerminal, phase, remainingSeconds, t, useSecurityCode]);
+  }, [
+    i18n.language,
+    inRecoveryView,
+    isTerminal,
+    phase,
+    remainingSeconds,
+    t,
+    useSecurityCode,
+    verification.recoveryAvailableAt,
+  ]);
 
   const d = useMemo(
     () => ({
@@ -168,7 +201,9 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
           <Text style={[s.statusText, d.statusText]}>{statusText}</Text>
         </View>
 
-        {isTerminal || (phase === 'codeExpired' && !useSecurityCode) ? null : (
+        {isTerminal ||
+        inRecoveryView ||
+        (phase === 'codeExpired' && !useSecurityCode) ? null : (
           <AuthInput
             placeholder={
               useSecurityCode
@@ -186,7 +221,7 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
 
         {errorText ? <Text style={[s.error, d.error]}>{errorText}</Text> : null}
 
-        {phase === 'rejected' ? (
+        {inRecoveryView ? null : phase === 'rejected' ? (
           <Pressable style={[s.submitBtn, d.submit]} onPress={backToLogin}>
             <Text style={[s.submitText, d.submitText]}>
               {t('auth.deviceVerification.backToLogin')}
@@ -216,7 +251,15 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
           </Pressable>
         )}
 
-        {securityCodeAvailable && !isTerminal ? (
+        <DeviceRecoverySection
+          phase={phase}
+          requested={verification.recoveryAvailableAt !== null}
+          submitting={submitting}
+          onRequest={onRequestRecovery}
+          onBackToLogin={backToLogin}
+        />
+
+        {securityCodeAvailable && !isTerminal && !inRecoveryView ? (
           <Pressable onPress={toggleMode} hitSlop={8}>
             <Text style={[s.link, d.link]}>
               {useSecurityCode

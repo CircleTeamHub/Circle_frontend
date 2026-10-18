@@ -147,6 +147,14 @@ export function LoginApprovalHost() {
             value: formatTime(challenge.createdAt, i18n.language),
           })}
         </Text>
+        {challenge.recoveryAvailableAt ? (
+          // 找回申请：不处理的话到点对方就能登录、并把这台设备退出 —— 必须讲清楚。
+          <Text style={[s.warning, d.warning]}>
+            {t('loginApproval.recoveryNotice', {
+              value: formatTime(challenge.recoveryAvailableAt, i18n.language),
+            })}
+          </Text>
+        ) : null}
         <Text style={[s.question, d.question]}>{t('loginApproval.question')}</Text>
         <Text style={[s.warning, d.warning]}>{t('loginApproval.warning')}</Text>
         {errorText ? <Text style={[s.error, d.error]}>{errorText}</Text> : null}

@@ -156,7 +156,16 @@
       "useSecurityCode": "No trusted device nearby? Use your security code",
       "useTrustedDevice": "Verify with a trusted device instead",
       "backToLogin": "Back to sign in",
-      "failed": "Verification failed. Please try again"
+      "failed": "Verification failed. Please try again",
+      "recoveryEntry": "No trusted device available? Recover your account",
+      "recoveryConfirmTitle": "Recover your account",
+      "recoveryConfirmBody": "If your previous device was lost, reinstalled or reset, you can request recovery: sign in again on this device after 24 hours to get into your account, and every other device will be signed out and lose its trust. During the wait all your trusted devices are notified and can decline; changing your password also cancels the request.",
+      "recoveryConfirm": "Request recovery",
+      "recoveryCancel": "Cancel",
+      "recoveryWaiting": "Recovery requested. After {{time}}, sign in again on this device to get into your account. Your trusted devices are notified in the meantime and can decline.",
+      "recoveryReady": "The waiting period is over. Go back and sign in with your password on this device to finish the recovery.",
+      "recoveryGoLogin": "Go to sign in",
+      "recoveryUnderstood": "Got it"
     }
   },
   "onboarding": {
@@ -3533,7 +3542,8 @@
     "AUTH_SECURITY_CODE_NOT_SET": "No login security code is set. Please confirm on a trusted device",
     "CHAT_GROUP_ACCEPT_REQUIRED": "Please accept the group invitation first",
     "CHAT_GROUP_INVITATION_INVALID": "This invitation has expired or is no longer valid",
-    "CHAT_GROUP_APPLICATION_DISABLED": "This group is not accepting requests through cards"
+    "CHAT_GROUP_APPLICATION_DISABLED": "This group is not accepting requests through cards",
+    "AUTH_LOGIN_RECOVERY_LIMITED": "Too many recovery requests. Please wait for the existing ones to finish"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",
@@ -3625,7 +3635,8 @@
     "rejectedBody": "Someone knows your password and tried to sign in. We recommend changing it now.",
     "changePassword": "Change password",
     "later": "Later",
-    "failed": "Something went wrong. Please try again later"
+    "failed": "Something went wrong. Please try again later",
+    "recoveryNotice": "This is a recovery request: unless you decline, it can sign in to your account after {{value}} and sign out your other devices."
   },
   "groupAdmission": {
     "title": "Group details and invitation",

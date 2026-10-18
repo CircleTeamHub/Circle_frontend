@@ -95,6 +95,7 @@ const ROUTE_TEMPLATES = [
   "/auth/login-challenges/:id/status",
   "/auth/login-challenges/:id/verify",
   "/auth/login-challenges/:id/security-code",
+  "/auth/login-challenges/:id/recovery",
   "/auth/login-challenges/:id/resend",
   "/auth/login-challenges/:id/approve",
   "/auth/login-challenges/:id/reject",

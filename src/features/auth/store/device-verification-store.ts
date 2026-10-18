@@ -4,6 +4,7 @@ export interface PendingDeviceVerification {
   id: string;
   expiresAt: string;
   securityCodeAvailable: boolean;
+  recoveryAvailableAt: string | null;
 }
 
 // Authentication capabilities stay in memory and never enter URLs or persisted storage.

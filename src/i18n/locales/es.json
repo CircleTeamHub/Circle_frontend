@@ -2821,7 +2821,16 @@
       "useSecurityCode": "¿No tienes un dispositivo de confianza a mano? Usa tu código de seguridad",
       "useTrustedDevice": "Verificar con un dispositivo de confianza",
       "backToLogin": "Volver al inicio de sesión",
-      "failed": "La verificación falló. Inténtalo de nuevo"
+      "failed": "La verificación falló. Inténtalo de nuevo",
+      "recoveryEntry": "¿No tienes ningún dispositivo de confianza? Recupera tu cuenta",
+      "recoveryConfirmTitle": "Recuperar tu cuenta",
+      "recoveryConfirmBody": "Si perdiste, reinstalaste o restableciste tu dispositivo anterior, puedes solicitar la recuperación: pasadas 24 horas, vuelve a iniciar sesión en este dispositivo para entrar en tu cuenta; todos los demás dispositivos cerrarán sesión y dejarán de ser de confianza. Durante la espera, tus dispositivos de confianza reciben un aviso y pueden rechazarla; cambiar la contraseña también la cancela.",
+      "recoveryConfirm": "Solicitar recuperación",
+      "recoveryCancel": "Cancelar",
+      "recoveryWaiting": "Recuperación solicitada. A partir de {{time}}, vuelve a iniciar sesión en este dispositivo para entrar en tu cuenta. Mientras tanto, tus dispositivos de confianza reciben un aviso y pueden rechazarla.",
+      "recoveryReady": "El periodo de espera terminó. Vuelve e inicia sesión con tu contraseña en este dispositivo para completar la recuperación.",
+      "recoveryGoLogin": "Ir a iniciar sesión",
+      "recoveryUnderstood": "Entendido"
     }
   },
   "media": {
@@ -3533,7 +3542,8 @@
     "AUTH_SECURITY_CODE_NOT_SET": "No hay un código de seguridad configurado. Confirma en un dispositivo de confianza",
     "CHAT_GROUP_ACCEPT_REQUIRED": "Acepta primero la invitación al grupo",
     "CHAT_GROUP_INVITATION_INVALID": "La invitación ha caducado o ya no es válida",
-    "CHAT_GROUP_APPLICATION_DISABLED": "Este grupo no acepta solicitudes desde tarjetas"
+    "CHAT_GROUP_APPLICATION_DISABLED": "Este grupo no acepta solicitudes desde tarjetas",
+    "AUTH_LOGIN_RECOVERY_LIMITED": "Demasiadas solicitudes de recuperación. Espera a que se resuelvan las actuales"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",
@@ -3625,7 +3635,8 @@
     "rejectedBody": "Alguien conoce tu contraseña e intentó iniciar sesión. Te recomendamos cambiarla ahora.",
     "changePassword": "Cambiar contraseña",
     "later": "Más tarde",
-    "failed": "No se pudo completar. Inténtalo de nuevo más tarde"
+    "failed": "No se pudo completar. Inténtalo de nuevo más tarde",
+    "recoveryNotice": "Es una solicitud de recuperación: si no la rechazas, podrá iniciar sesión en tu cuenta a partir de {{value}} y cerrará la sesión de tus otros dispositivos."
   },
   "groupAdmission": {
     "title": "Información e invitación del grupo",

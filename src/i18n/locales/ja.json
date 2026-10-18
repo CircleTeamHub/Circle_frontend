@@ -2813,7 +2813,16 @@
       "useSecurityCode": "信頼済みデバイスが手元にない場合はセキュリティコードを使用",
       "useTrustedDevice": "信頼済みデバイスで確認する",
       "backToLogin": "ログインに戻る",
-      "failed": "確認に失敗しました。もう一度お試しください"
+      "failed": "確認に失敗しました。もう一度お試しください",
+      "recoveryEntry": "信頼済みデバイスが使えない場合はアカウントを復旧",
+      "recoveryConfirmTitle": "アカウントの復旧を申請",
+      "recoveryConfirmBody": "以前のデバイスを紛失・再インストール・初期化した場合は復旧を申請できます。24 時間後にこのデバイスで再度ログインするとアカウントに入れ、ほかのデバイスはすべてログアウトされ信頼が解除されます。待機中はすべての信頼済みデバイスに通知が届き、拒否できます。パスワードを変更しても申請は取り消されます。",
+      "recoveryConfirm": "復旧を申請",
+      "recoveryCancel": "キャンセル",
+      "recoveryWaiting": "復旧を申請しました。{{time}} 以降にこのデバイスで再度ログインするとアカウントに入れます。その間、信頼済みデバイスに通知が届き、拒否することができます。",
+      "recoveryReady": "待機期間が終わりました。ログイン画面に戻り、このデバイスでパスワードを入力して復旧を完了してください。",
+      "recoveryGoLogin": "ログインへ",
+      "recoveryUnderstood": "了解"
     }
   },
   "media": {
@@ -3525,7 +3534,8 @@
     "AUTH_SECURITY_CODE_NOT_SET": "ログインセキュリティコードが設定されていません。信頼済みデバイスで承認してください",
     "CHAT_GROUP_ACCEPT_REQUIRED": "先にグループ招待を承諾してください",
     "CHAT_GROUP_INVITATION_INVALID": "招待の期限が切れたか、無効になりました",
-    "CHAT_GROUP_APPLICATION_DISABLED": "このグループは名刺からの参加申請を受け付けていません"
+    "CHAT_GROUP_APPLICATION_DISABLED": "このグループは名刺からの参加申請を受け付けていません",
+    "AUTH_LOGIN_RECOVERY_LIMITED": "復旧の申請が多すぎます。既存の申請が処理されてからもう一度お試しください"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",
@@ -3617,7 +3627,8 @@
     "rejectedBody": "誰かがあなたのパスワードを知っていてログインを試みました。すぐにパスワードを変更することをおすすめします。",
     "changePassword": "パスワードを変更",
     "later": "後で",
-    "failed": "操作に失敗しました。しばらくしてから再度お試しください"
+    "failed": "操作に失敗しました。しばらくしてから再度お試しください",
+    "recoveryNotice": "これは復旧の申請です。拒否しない場合、{{value}} 以降にこのデバイスがあなたのアカウントにログインし、ほかのデバイスはログアウトされます。"
   },
   "groupAdmission": {
     "title": "グループ情報と招待",

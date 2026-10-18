@@ -84,6 +84,8 @@ export type LoginChallenge = {
   id: string;
   expiresAt: string;
   securityCodeAvailable: boolean;
+  /** 已申请找回时，等待期结束的时间（之后在这台设备上用密码登录即可）；没申请为 null。 */
+  recoveryAvailableAt: string | null;
 };
 
 export type LoginResult =
@@ -106,6 +108,10 @@ function parseLoginChallenge(value: unknown): LoginChallenge | null {
     id: challenge.id,
     expiresAt: challenge.expiresAt,
     securityCodeAvailable: challenge.securityCodeAvailable === true,
+    recoveryAvailableAt:
+      typeof challenge.recoveryAvailableAt === "string"
+        ? challenge.recoveryAvailableAt
+        : null,
   };
 }
 
@@ -144,6 +150,7 @@ export async function fetchLoginChallengeStatus(challengeId: string) {
     status: LoginChallengeStatus;
     expiresAt: string;
     codeExpiresAt: string | null;
+    recoveryAvailableAt?: string | null;
   }>(`/auth/login-challenges/${encodeURIComponent(challengeId)}/status`, {
     method: "GET",
     auth: false,
@@ -195,6 +202,20 @@ export async function resendLoginChallenge(challengeId: string) {
   return challenge;
 }
 
+/**
+ * 新设备：受信任设备全都用不了（原来的手机重装 / 丢失 / 恢复出厂）时申请找回。
+ * 等待期后在这台设备上用密码登录即可；期间受信任设备会收到提醒并能拒绝。
+ */
+export async function requestLoginRecovery(challengeId: string) {
+  const raw = await apiClient<unknown>(
+    `/auth/login-challenges/${encodeURIComponent(challengeId)}/recovery`,
+    { method: "POST", auth: false },
+  );
+  const challenge = parseLoginChallenge(raw);
+  if (!challenge) throw new UserFacingError("认证返回数据格式异常，请重试");
+  return challenge;
+}
+
 export type PendingLoginChallenge = {
   id: string;
   deviceName: string | null;
@@ -203,6 +224,8 @@ export type PendingLoginChallenge = {
   createdAt: string;
   expiresAt: string;
   status: "PENDING" | "APPROVED";
+  /** 这是一条找回申请：不处理的话到这个时间后对方就能登录。 */
+  recoveryAvailableAt?: string | null;
 };
 
 /** 受信任设备：待处理的陌生设备登录请求。 */

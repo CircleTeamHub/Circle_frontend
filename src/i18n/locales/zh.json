@@ -156,7 +156,16 @@
       "useSecurityCode": "受信任设备不在身边？改用登录安全码",
       "useTrustedDevice": "改用受信任设备验证",
       "backToLogin": "返回登录",
-      "failed": "验证失败，请重试"
+      "failed": "验证失败，请重试",
+      "recoveryEntry": "受信任设备都用不了？申请找回账号",
+      "recoveryConfirmTitle": "申请找回账号",
+      "recoveryConfirmBody": "如果原来的设备已经丢失、重装或恢复出厂，可以申请找回：24 小时后在这台设备上重新登录即可进入账号，其他设备会被退出并取消信任。等待期间你所有的受信任设备都会收到提醒，可以直接拒绝；修改密码也会取消这次申请。",
+      "recoveryConfirm": "申请找回",
+      "recoveryCancel": "取消",
+      "recoveryWaiting": "已申请找回。{{time}} 之后，回到登录页在这台设备上重新登录即可进入账号。期间你的受信任设备会收到提醒，可以拒绝。",
+      "recoveryReady": "等待期已过。回到登录页，在这台设备上用密码重新登录即可完成找回。",
+      "recoveryGoLogin": "去登录",
+      "recoveryUnderstood": "我知道了"
     }
   },
   "onboarding": {
@@ -3525,7 +3534,8 @@
     "AUTH_SECURITY_CODE_NOT_SET": "未设置登录安全码，请在受信任设备上确认登录",
     "CHAT_GROUP_ACCEPT_REQUIRED": "请先处理并接受群邀请",
     "CHAT_GROUP_INVITATION_INVALID": "邀请已过期或失效",
-    "CHAT_GROUP_APPLICATION_DISABLED": "该群暂不接受名片申请"
+    "CHAT_GROUP_APPLICATION_DISABLED": "该群暂不接受名片申请",
+    "AUTH_LOGIN_RECOVERY_LIMITED": "找回申请过多，请等现有申请处理完后再试"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",
@@ -3617,7 +3627,8 @@
     "rejectedBody": "有人知道你的密码并尝试登录，建议立即修改密码。",
     "changePassword": "去修改密码",
     "later": "稍后",
-    "failed": "操作失败，请稍后重试"
+    "failed": "操作失败，请稍后重试",
+    "recoveryNotice": "这是一个找回申请：如果不拒绝，对方将在 {{value}} 之后登录你的账号，并让你的其他设备退出。"
   },
   "groupAdmission": {
     "title": "群资料与邀请",
