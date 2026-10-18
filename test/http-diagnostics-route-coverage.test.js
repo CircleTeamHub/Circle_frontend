@@ -95,5 +95,6 @@ test('every static apiClient call maps to a reviewed diagnostic route', () => {
   assert.deepEqual(dynamic, [
     'src/features/location/services/geocoder-fetch.ts:33',
     'src/services/api/utils.ts:65',
+    'src/services/e2ee/client.ts:29',
   ]);
 });

@@ -1,14 +1,7 @@
 import { Text } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import { RouteErrorBoundary, reportRouteRenderError } from './RouteErrorBoundary';
 import { reportError } from './sentry';
-
-jest.mock('expo-router', () => ({
-  ErrorBoundary: ({ error }: { error: Error }) => {
-    const { Text: RNText } = jest.requireActual('react-native');
-    return <RNText testID="fallback">{error.message}</RNText>;
-  },
-}));
 
 jest.mock('./sentry', () => ({
   reportError: jest.fn(),
@@ -20,20 +13,27 @@ jest.mock('@/utils/client-diagnostics', () => ({
 
 const mockReportError = jest.mocked(reportError);
 
+jest.mock('@/i18n', () => ({
+  __esModule: true,
+  default: { t: (_key: string, options: { defaultValue: string }) => options.defaultValue },
+}));
+
 describe('RouteErrorBoundary', () => {
   beforeEach(() => {
     mockReportError.mockClear();
   });
 
-  it('renders the expo-router fallback and reports the render error to Sentry once', () => {
+  it('hides raw render errors, allows retry and reports to Sentry once', () => {
     const error = new Error('render exploded');
     const retry = jest.fn(async () => {});
 
-    const { getByTestId, rerender } = render(
+    const { getByTestId, queryByText, rerender } = render(
       <RouteErrorBoundary error={error} retry={retry} />,
     );
 
-    expect(getByTestId('fallback')).toHaveTextContent('render exploded');
+    expect(queryByText('render exploded')).toBeNull();
+    fireEvent.press(getByTestId('router_error_retry'));
+    expect(retry).toHaveBeenCalledTimes(1);
     expect(mockReportError).toHaveBeenCalledTimes(1);
     expect(mockReportError).toHaveBeenCalledWith(error, {
       component: 'RouteErrorBoundary',

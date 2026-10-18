@@ -156,7 +156,9 @@
       "useSecurityCode": "受信任设备不在身边？改用登录安全码",
       "useTrustedDevice": "改用受信任设备验证",
       "backToLogin": "返回登录",
-      "failed": "验证失败，请重试"
+      "failed": "验证失败，请重试",
+      "recoveryIntro": "重装 App 或原设备不可用时，可验证绑定邮箱并重设密码来恢复登录。恢复后旧设备会退出登录；加密聊天历史需另行恢复。",
+      "recoverByEmail": "原设备不可用？通过邮箱恢复登录"
     }
   },
   "onboarding": {

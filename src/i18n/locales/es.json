@@ -2821,7 +2821,9 @@
       "useSecurityCode": "¿No tienes un dispositivo de confianza a mano? Usa tu código de seguridad",
       "useTrustedDevice": "Verificar con un dispositivo de confianza",
       "backToLogin": "Volver al inicio de sesión",
-      "failed": "La verificación falló. Inténtalo de nuevo"
+      "failed": "La verificación falló. Inténtalo de nuevo",
+      "recoveryIntro": "Si reinstalaste la app o no puedes usar tu dispositivo anterior, verifica tu correo vinculado y restablece la contraseña. Se cerrarán las sesiones anteriores. El historial cifrado requiere una recuperación aparte.",
+      "recoverByEmail": "¿Dispositivo anterior no disponible? Recuperar por correo"
     }
   },
   "media": {
