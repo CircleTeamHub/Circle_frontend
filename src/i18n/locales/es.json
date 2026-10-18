@@ -2804,6 +2804,8 @@
     },
     "deviceVerification": {
       "title": "Verificación de nuevo dispositivo",
+      "recoveryIntro": "Si reinstalaste la app o no puedes usar tu dispositivo anterior, verifica tu correo vinculado y restablece la contraseña. Se cerrarán las sesiones anteriores. El historial cifrado requiere una recuperación aparte.",
+      "recoverByEmail": "¿Dispositivo anterior no disponible? Recuperar por correo",
       "intro": "Este inicio de sesión proviene de un dispositivo desconocido. Enviamos una solicitud de verificación a tus dispositivos de confianza. Confírmala allí e introduce el código que aparece.",
       "waiting": "Esperando a un dispositivo de confianza · quedan {{time}}",
       "approved": "Confirmado en tu dispositivo de confianza. Introduce el código en {{seconds}} s",
@@ -2819,9 +2821,7 @@
       "useSecurityCode": "¿No tienes un dispositivo de confianza a mano? Usa tu código de seguridad",
       "useTrustedDevice": "Verificar con un dispositivo de confianza",
       "backToLogin": "Volver al inicio de sesión",
-      "failed": "La verificación falló. Inténtalo de nuevo",
-      "recoveryIntro": "Si reinstalaste la app o no puedes usar tu dispositivo anterior, verifica tu correo vinculado y restablece la contraseña. Se cerrarán las sesiones anteriores. El historial cifrado requiere una recuperación aparte.",
-      "recoverByEmail": "¿Dispositivo anterior no disponible? Recuperar por correo"
+      "failed": "La verificación falló. Inténtalo de nuevo"
     }
   },
   "media": {
@@ -2980,11 +2980,13 @@
     "hint": "Aviso"
   },
   "systemAnnouncements": {
+    "nextAnnouncement": "Siguiente aviso",
+    "unreadCount": "{{count}} notificaciones sin leer",
     "title": "Anuncios del sistema",
     "detailTitle": "Detalles del anuncio",
     "openAnnouncement": "Ver detalles de {{title}}",
     "unavailable": "Este anuncio no está disponible o se ha retirado",
-    "subtitle": "Aquí aparecerán la información más reciente de la app windnote.ai, las novedades de versiones y las notas de los parches.",
+    "subtitle": "Avisos y notificaciones, del más reciente al más antiguo.",
     "systemNotifications": "Notificaciones de la cuenta",
     "empty": "No hay notificaciones del sistema",
     "loadFailed": "No se pudieron cargar las notificaciones del sistema. Desliza para reintentar",

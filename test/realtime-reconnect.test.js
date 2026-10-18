@@ -82,6 +82,7 @@ function loadRealtimeHarness(options = {}) {
   let nextTimerId = 1;
   const timers = new Map();
 
+  let announcementChanges = 0;
   const realtimeConnected = [];
   const clearedSessions = [];
   const sentryReports = [];
@@ -129,6 +130,7 @@ function loadRealtimeHarness(options = {}) {
     require: withObservabilityStubs((request) => {
       if (request === '@/services/api/group-admissions') return { refreshGroupAdmissionUnread: async () => { admissionRefreshes++; } };
       switch (request) {
+        case '@/features/profile/store-announcement-signal': return {useAnnouncementSignalStore:{getState:()=>({bump:()=>{announcementChanges++;}})}};
         case '@/constants/config':
           return { REALTIME_WS_URL: 'wss://realtime.example.test/ws' };
         case '@/services/api/plaza':
@@ -272,6 +274,7 @@ function loadRealtimeHarness(options = {}) {
     sentryReports,
     badgeWrites,
     admissionRefreshCount: () => admissionRefreshes,
+    announcementChangeCount: () => announcementChanges,
     badgeState,
     circleNotifications,
     latestSocket: () => sockets[sockets.length - 1],
@@ -702,4 +705,14 @@ test('generic interactions do not refresh admission unread counts', async () => 
   const before = harness.admissionRefreshCount();
   for (let i = 0; i < 20; i++) deliver(harness, 'interaction.unread.changed', { count: i });
   assert.equal(harness.admissionRefreshCount(), before);
+});
+
+
+test('announcement realtime invalidation refreshes views and reconnect repairs missed changes',()=>{
+ const harness=loadRealtimeHarness();harness.connectRealtime('token-a');openLatestSocket(harness);deliverSnapshot(harness);
+ const initial=harness.announcementChangeCount();
+ harness.latestSocket().onmessage({data:JSON.stringify({type:'system.announcement.changed',payload:{changedAt:new Date().toISOString()}})});
+ assert.equal(harness.announcementChangeCount(),initial+1);
+ harness.latestSocket().onclose({});harness.runPendingReconnect();openLatestSocket(harness);deliverSnapshot(harness);
+ assert.equal(harness.announcementChangeCount(),initial+2);
 });

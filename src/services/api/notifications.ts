@@ -67,6 +67,7 @@ function isNotificationItemShape(value: unknown): value is NotificationItem {
     value.id.length > 0 &&
     typeof value.type === 'string' &&
     typeof value.content === 'string' &&
+    (value.title == null || typeof value.title === 'string') &&
     typeof value.read === 'boolean' &&
     typeof value.createdAt === 'string'
   );
@@ -265,4 +266,25 @@ export async function updateCircleOfflinePushEnabled(
   );
   return expectShape(raw, isCirclePushPreferenceShape, '圈子推送设置格式异常')
     .circleOfflinePushEnabled;
+}
+
+export interface ScrollingAnnouncement {
+  notificationID: string;
+  id: string;
+  title: string | null;
+  content: string;
+  createdAt: string;
+}
+export async function fetchScrollingAnnouncements(): Promise<ScrollingAnnouncement[]> {
+  const raw = await apiClient<{ items: ScrollingAnnouncement[] }>('/notification/announcements/scrolling');
+  if (!isPlainObject(raw) || !Array.isArray(raw.items) || !raw.items.every((item) =>
+    isPlainObject(item) && typeof item.id === 'string' && typeof item.notificationID === 'string' && (item.title == null || typeof item.title === 'string') && typeof item.content === 'string' && typeof item.createdAt === 'string')) {
+    throw new Error('Invalid scrolling announcement response');
+  }
+  return raw.items;
+}
+
+export async function fetchProfileNotificationDetail(id: string): Promise<NotificationItem> {
+  const raw = await apiClient<NotificationItem>(`/notification/profile/${encodeURIComponent(id)}/detail`);
+  return expectShape(raw, isNotificationItemShape, '公告详情数据格式异常');
 }

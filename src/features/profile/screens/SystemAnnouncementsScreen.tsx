@@ -1,3 +1,4 @@
+import { useAnnouncementSignalStore } from '../store-announcement-signal';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -13,11 +14,12 @@ import {
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useAuthStore } from '@/stores/authStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
-import { SYSTEM_ANNOUNCEMENTS } from '@/features/profile/system-announcements';
 import type { NotificationItem } from '@/types';
 
 const s = StyleSheet.create({
   card: {
+    height: 156,
+    overflow: 'hidden',
     borderRadius: Radius.lg,
     padding: Spacing.md,
     gap: Spacing.sm,
@@ -38,6 +40,8 @@ export default function SystemAnnouncementsScreen() {
   const setProfileUnread = useTabBadgeStore((state) => state.setProfileUnread);
   const ownerId = useAuthStore((state) => state.user?.id);
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const announcementVersion = useAnnouncementSignalStore(state=>state.version);
+  const [loadedVersion, setLoadedVersion] = useState(announcementVersion);
   const sessionKey = `${ownerId ?? ''}:${sessionEpoch}`;
   const mountedRef = useRef(true);
   const paginationEpochRef = useRef(0);
@@ -50,7 +54,12 @@ export default function SystemAnnouncementsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const visibleItems = cachedSessionKey === sessionKey ? items : [];
+  const visibleItems = useMemo(() => cachedSessionKey === sessionKey && loadedVersion === announcementVersion
+    ? [...items].sort((a, b) => {
+      const dateOrder = (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0);
+      return dateOrder || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+    })
+    : [], [cachedSessionKey, sessionKey, items, loadedVersion, announcementVersion]);
   const isCurrentSession = useCallback(() => {
     const auth = useAuthStore.getState();
     return mountedRef.current && auth.user?.id === ownerId && auth.sessionEpoch === sessionEpoch;
@@ -90,10 +99,6 @@ export default function SystemAnnouncementsScreen() {
         ...Typography.bodyRegular,
         lineHeight: 21,
       },
-      sectionTitle: {
-        color: colors.text,
-        ...Typography.h3,
-      },
       emptyText: {
         color: colors.textSecondary,
         ...Typography.bodyRegular,
@@ -128,6 +133,7 @@ export default function SystemAnnouncementsScreen() {
       const result = await fetchProfileNotificationsPage();
       if (!isCurrentSession() || epoch !== paginationEpochRef.current) return;
       setItems(result.items);
+      setLoadedVersion(announcementVersion);
       setNextCursor(result.nextCursor);
       setLoadError(null);
     } catch (error) {
@@ -150,11 +156,12 @@ export default function SystemAnnouncementsScreen() {
         setRefreshing(false);
       }
     }
-  }, [isCurrentSession, ownerId, sessionKey, t]);
+  }, [isCurrentSession, ownerId, sessionKey, t, announcementVersion]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void load();
-  }, [load]);
+    return () => { paginationEpochRef.current += 1; };
+  }, [load]));
 
   useFocusEffect(
     useCallback(() => {
@@ -213,66 +220,32 @@ export default function SystemAnnouncementsScreen() {
 
   const renderSystemNotification = useCallback(
     ({ item }: { item: NotificationItem }) => (
-      <View style={[s.card, d.card]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('systemAnnouncements.openAnnouncement', { title: item.title?.trim() || t('notifications.system') })}
+        style={[s.card, d.card]}
+        onPress={() => router.push({ pathname: '/(tabs)/profile/system-announcements/[id]', params: { id: item.id } })}
+      >
         <View style={s.cardHeader}>
           <Ionicons
             name="notifications-outline"
             size={20}
             color={colors.iconAccent}
           />
-          <Text style={d.title}>{t('notifications.system')}</Text>
+          <Text style={d.title} numberOfLines={1} maxFontSizeMultiplier={1.3}>{item.title?.trim() || t('notifications.system')}</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
         </View>
-        <Text style={d.meta}>{new Date(item.createdAt).toLocaleString()}</Text>
-        <Text style={d.body}>{item.content}</Text>
-      </View>
+        <Text style={d.meta} numberOfLines={1} maxFontSizeMultiplier={1.3}>{new Date(item.createdAt).toLocaleString()}</Text>
+        <Text style={d.body} numberOfLines={2} ellipsizeMode="tail" maxFontSizeMultiplier={1.3}>{item.content}</Text>
+      </Pressable>
     ),
-    [colors.iconAccent, d, t],
+    [colors.iconAccent, colors.textSecondary, d, router, t],
   );
 
   const ListHeader = (
     <View style={{ gap: Spacing.md }}>
       <Text style={d.intro}>{t('systemAnnouncements.subtitle')}</Text>
-
-      {SYSTEM_ANNOUNCEMENTS.map((item) => (
-        <Pressable
-          key={item.id}
-          accessibilityRole="button"
-          accessibilityLabel={t('systemAnnouncements.openAnnouncement', {
-            defaultValue: '查看{{title}}详情',
-            title: t(item.titleKey),
-          })}
-          style={[s.card, d.card]}
-          onPress={() =>
-            router.push({
-              pathname: '/(tabs)/profile/system-announcements/[id]',
-              params: { id: item.id },
-            })
-          }
-        >
-          <View style={s.cardHeader}>
-            <Ionicons name="megaphone-outline" size={20} color={colors.iconAccent} />
-            <Text style={d.title}>{t(item.titleKey)}</Text>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={colors.textSecondary}
-            />
-          </View>
-          <Text style={d.meta}>{t(item.metaKey)}</Text>
-          <Text numberOfLines={2} style={d.body}>
-            {t(item.bodyKey)}
-          </Text>
-        </Pressable>
-      ))}
-
-      {visibleItems.length > 0 || (cachedSessionKey === sessionKey && loadError) ? (
-        <>
-          <Text style={d.sectionTitle}>
-            {t('systemAnnouncements.systemNotifications')}
-          </Text>
-          {loadError ? <Text style={d.emptyText}>{loadError}</Text> : null}
-        </>
-      ) : null}
+      {cachedSessionKey === sessionKey && loadError ? <Text style={d.emptyText}>{loadError}</Text> : null}
     </View>
   );
 
@@ -284,7 +257,9 @@ export default function SystemAnnouncementsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderSystemNotification}
         ListHeaderComponent={ListHeader}
-        ListEmptyComponent={null}
+        ListEmptyComponent={!refreshing && !loadError ? (
+          <Text style={d.emptyText}>{t('systemAnnouncements.empty')}</Text>
+        ) : null}
         ListFooterComponent={cachedSessionKey === sessionKey && pageError ? (
           <Pressable accessibilityRole="button" onPress={() => { void loadMore(true); }}>
             <Text style={d.emptyText}>{t('common.retry', { defaultValue: '重试' })}</Text>

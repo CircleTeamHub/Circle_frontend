@@ -636,6 +636,7 @@ export type NotificationType =
   | 'PROFILE_LIKE';
 
 export interface NotificationItem {
+  title?: string | null;
   id: string;
   type: NotificationType;
   content: string;
