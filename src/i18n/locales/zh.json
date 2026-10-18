@@ -2446,7 +2446,8 @@
     "codeUpdateDisabledTitle": "暂不可检查",
     "codeUpdateDisabledMessage": "开发版不支持在线应用内容更新，请使用正式构建验证。",
     "codeUpdateFailedTitle": "应用内容更新失败",
-    "codeUpdateFailedMessage": "无法下载应用内容更新，请检查网络后重试。"
+    "codeUpdateFailedMessage": "无法下载应用内容更新，请检查网络后重试。",
+    "requiredTitle": "请更新后继续使用"
   },
   "shareScreen": {
     "inviteCode": "邀请码",

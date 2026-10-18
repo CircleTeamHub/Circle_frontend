@@ -2678,7 +2678,8 @@
     "codeUpdateDisabledTitle": "Comprobación no disponible",
     "codeUpdateDisabledMessage": "Las actualizaciones en línea no están disponibles en versiones de desarrollo. Usa una compilación de producción para verificarlas.",
     "codeUpdateFailedTitle": "Error al actualizar el contenido",
-    "codeUpdateFailedMessage": "No se pudo descargar la actualización del contenido. Comprueba la conexión e inténtalo de nuevo."
+    "codeUpdateFailedMessage": "No se pudo descargar la actualización del contenido. Comprueba la conexión e inténtalo de nuevo.",
+    "requiredTitle": "Update required to continue"
   },
   "shareScreen": {
     "inviteUnavailable": "Código de invitación no disponible",

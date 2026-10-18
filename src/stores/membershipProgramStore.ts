@@ -4,6 +4,8 @@ import {
   type MembershipProgramStatus,
 } from '@/services/api/membership';
 import { retry } from '@/utils/retry';
+import i18n from '@/i18n';
+import { getApiErrorMessage } from '@/services/api/errors';
 
 type FetchStatusOptions = {
   force?: boolean;
@@ -52,13 +54,10 @@ export const useMembershipProgramStore = create<MembershipProgramState>(
           guardedSet({ status, error: null });
           return status;
         } catch (error) {
-          const message =
-            error &&
-            typeof error === 'object' &&
-            'message' in error &&
-            typeof error.message === 'string'
-              ? error.message
-              : 'membership program status unavailable';
+          const message = getApiErrorMessage(
+            error,
+            i18n.t('common.retryLater', { defaultValue: '请稍后重试' }),
+          );
           guardedSet({
             error: message,
           });

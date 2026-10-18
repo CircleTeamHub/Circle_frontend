@@ -2452,7 +2452,8 @@
     "codeUpdateDisabledTitle": "Check unavailable",
     "codeUpdateDisabledMessage": "Online app content updates are unavailable in development builds. Use a release build to verify them.",
     "codeUpdateFailedTitle": "App content update failed",
-    "codeUpdateFailedMessage": "The app content update could not be downloaded. Check your connection and try again."
+    "codeUpdateFailedMessage": "The app content update could not be downloaded. Check your connection and try again.",
+    "requiredTitle": "Update required to continue"
   },
   "shareScreen": {
     "inviteCode": "Invite Code",

@@ -2670,7 +2670,8 @@
     "codeUpdateDisabledTitle": "確認できません",
     "codeUpdateDisabledMessage": "開発版ではオンライン更新を確認できません。リリースビルドで確認してください。",
     "codeUpdateFailedTitle": "アプリ内容の更新に失敗しました",
-    "codeUpdateFailedMessage": "アプリ内容をダウンロードできません。通信状況を確認して、もう一度お試しください。"
+    "codeUpdateFailedMessage": "アプリ内容をダウンロードできません。通信状況を確認して、もう一度お試しください。",
+    "requiredTitle": "Update required to continue"
   },
   "shareScreen": {
     "inviteUnavailable": "招待コードを利用できません",

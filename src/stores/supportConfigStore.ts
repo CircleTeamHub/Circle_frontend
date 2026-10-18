@@ -7,6 +7,8 @@ import {
   type SupportConfig,
 } from '@/services/api/support';
 import { retry } from '@/utils/retry';
+import i18n from '@/i18n';
+import { getApiErrorMessage } from '@/services/api/errors';
 
 type FetchConfigOptions = {
   force?: boolean;
@@ -55,13 +57,10 @@ export const useSupportConfigStore = create<SupportConfigState>((set, get) => ({
         guardedSet({ config, error: null });
         return config;
       } catch (error) {
-        const message =
-          error &&
-          typeof error === 'object' &&
-          'message' in error &&
-          typeof error.message === 'string'
-            ? error.message
-            : 'support config unavailable';
+        const message = getApiErrorMessage(
+          error,
+          i18n.t('common.retryLater', { defaultValue: '请稍后重试' }),
+        );
         // 拉不到就作废缓存(fail closed)。这份配置是「谁是官方客服」的唯一授权源:
         // 管理台撤掉某个客服后,如果刷新失败仍沿用旧列表,那个已被撤销的账号会
         // 继续以官方身份出现在充值/纠纷/账号客服里,用户照样把身份、订单、转账
