@@ -352,14 +352,14 @@ test('GroupExpansionScreen retains an ambiguous purchase key across focus reload
   assert.match(src, /pendingIntentRef\.current\s*=\s*null/);
 });
 
-test('ProfileScreen shows a red dot on system announcements when profile notifications are unread', () => {
+test('ProfileScreen shows the unread notification count on system announcements', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
 
   assert.match(src, /useTabBadgeStore/);
   assert.match(src, /profileUnread/);
   assert.match(src, /item\.id === MENU_ID\.SYSTEM_ANNOUNCEMENTS/);
   assert.match(src, /const hasUnread = item\.id === MENU_ID\.SYSTEM_ANNOUNCEMENTS && profileUnread > 0/);
-  assert.match(src, /\{hasUnread \? \([\s\S]*?s\.menuUnreadDot[\s\S]*?backgroundColor: colors\.error/);
+  assert.match(src, /hasUnread \? <ProfileUnreadBadge count=\{profileUnread\}/);
 });
 
 test('ProfileScreen 宫格标签放得下最长的一条，不会按字符断行', () => {

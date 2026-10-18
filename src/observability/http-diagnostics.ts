@@ -75,6 +75,8 @@ const ROUTE_TEMPLATES = [
   "/mall/fancy-numbers/me",
   "/mall/fancy-numbers/renew",
   "/note/group/order",
+  "/notification/announcements/scrolling",
+  "/notification/profile/:id/detail",
   "/notification/profile/list",
   "/notification/profile/read-all",
   "/notification/push-token/revoke",
