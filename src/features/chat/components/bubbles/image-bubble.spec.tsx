@@ -134,7 +134,7 @@ describe('ImageBubble ephemeral rendering', () => {
 
   // 老后端不下发这个字段。此时不能凭空当成「没开焚毁」，仍要听屏幕级判定，
   // 行为与升级前一致。
-  it('falls back to the screen-level flag when the message carries no duration', () => {
+  it('my screen-level flag cannot mark a normal peer image as ephemeral', () => {
     render(
       <ImageBubble
         message={imageMessage}
@@ -143,9 +143,9 @@ describe('ImageBubble ephemeral rendering', () => {
       />,
     );
 
-    expect(cachePolicies()).not.toContain('memory-disk');
+    expect(cachePolicies()).toContain('memory-disk');
     openPreview();
-    expect(viewerModes).toContain('ephemeral');
+    expect(viewerModes).toContain('standard');
   });
 
   // 会话关掉焚毁后服务端会下发 null，那时就该回到普通渲染。

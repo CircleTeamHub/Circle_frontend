@@ -155,6 +155,10 @@ export default function AccountSecuritySettingsScreen() {
               disabled: singleDeviceLoading || singleDeviceSubmitting,
               onValueChange: handleSingleDeviceLoginChange,
             },
+            ...(process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true' ? [{
+              id: 'encryption-devices', labelKey: 'e2ee.title',
+              onPress: () => router.push('/encryption' as never),
+            }] : []),
             {
               id: "login-device-management",
               labelKey: "settingsDetails.accountSecurity.loginDeviceManagement",

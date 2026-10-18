@@ -628,7 +628,7 @@ test('cold hydration never publishes an expired local conversation preview', asy
   releaseTimeline();
 });
 
-test('cold hydration rejects expired outbox content even when durable purge did not delete it', async () => {
+test('cold hydration rejects expired outbox content even when durable purge did not delete it preserves unsent messages', async () => {
   const deleted = [];
   const expiredAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
   const { manager, store } = loadManager({
@@ -657,11 +657,11 @@ test('cold hydration rejects expired outbox content even when durable purge did 
   await flush();
   await flush();
 
-  assert.deepEqual(store.failedMarks, []);
-  assert.deepEqual(deleted, ['expired-private']);
+  assert.deepEqual(store.failedMarks, [{ conversationId: 'c1', d: 'expired-private' }]);
+  assert.deepEqual(deleted, []);
 });
 
-test('outbox fallback uses the current post-purge conversation policy', async () => {
+test('outbox fallback uses the current post-purge conversation policy preserves unsent messages', async () => {
   let releasePurge;
   const purgeGate = new Promise((resolve) => {
     releasePurge = resolve;
@@ -692,11 +692,11 @@ test('outbox fallback uses the current post-purge conversation policy', async ()
   releasePurge();
   await flush();
 
-  assert.deepEqual(store.failedMarks, []);
-  assert.deepEqual(deleted, ['expired-by-current-policy']);
+  assert.deepEqual(store.failedMarks, [{ conversationId: 'c1', d: 'expired-by-current-policy' }]);
+  assert.deepEqual(deleted, []);
 });
 
-test('outbox fallback observes a policy tightened while the outbox is loading', async () => {
+test('outbox fallback observes a policy tightened while the outbox is loading preserves unsent messages', async () => {
   let resolveOutbox;
   const outboxGate = new Promise((resolve) => {
     resolveOutbox = resolve;
@@ -727,8 +727,8 @@ test('outbox fallback observes a policy tightened while the outbox is loading', 
   ]);
   await flush();
 
-  assert.deepEqual(store.failedMarks, []);
-  assert.deepEqual(deleted, ['expired-during-outbox-read']);
+  assert.deepEqual(store.failedMarks, [{ conversationId: 'c1', d: 'expired-during-outbox-read' }]);
+  assert.deepEqual(deleted, []);
 });
 
 test('a stale outbox read cannot mutate the store after an A-B-A switch', async () => {

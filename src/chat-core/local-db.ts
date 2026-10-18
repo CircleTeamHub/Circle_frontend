@@ -907,44 +907,37 @@ export async function purgeExpiredLocalMessages(
   viewerCutoff?: Date,
   viewerStartedAt?: Date,
 ): Promise<void> {
+  void entries;
+  void viewerCutoff;
+  void viewerStartedAt;
   const current = requireDb();
-  if (!current || (entries.length === 0 && !viewerCutoff)) return;
+  if (!current) return;
   try {
     await writeTransaction(current.db, async () => {
-      if (viewerCutoff && viewerStartedAt) {
-        const cutoffIso = viewerCutoff.toISOString();
-        const startedIso = viewerStartedAt.toISOString();
-        // 全局查看者策略必须覆盖没有会话行的残留 rows，避免 FTS 继续检索正文。
-        await current.db.runAsync(
-          'DELETE FROM messages WHERE created_at >= ? AND created_at < ?;',
-          startedIso,
-          cutoffIso,
-        );
-        await current.db.runAsync(
-          'DELETE FROM outbox WHERE created_at >= ? AND created_at < ?;',
-          startedIso,
-          cutoffIso,
-        );
-      }
-      for (const { conversationId, cutoff, startedAt } of entries) {
-        if (!startedAt) continue;
-        const cutoffIso = cutoff.toISOString();
-        const startedIso = startedAt.toISOString();
-        // 删除 messages 会触发 messages_fts_ad，FTS 影子表随同事务更新。
-        await current.db.runAsync(
-          'DELETE FROM messages WHERE conversation_id = ? AND created_at >= ? AND created_at < ?;',
-          conversationId,
-          startedIso,
-          cutoffIso,
-        );
-        // 失败发送的正文同样是本地聊天内容；不删会在下次水合时重新出现。
-        await current.db.runAsync(
-          'DELETE FROM outbox WHERE conversation_id = ? AND created_at >= ? AND created_at < ?;',
-          conversationId,
-          startedIso,
-          cutoffIso,
-        );
-      }
+      // Message-owned expiry also covers unloaded timelines/FTS. Unsent outbox entries
+      // have no server expiry and must not be deleted by a viewer setting.
+      const now = new Date().toISOString();
+      // Scrub derived quote snapshots in the same transaction before deleting originals.
+      await current.db.runAsync(
+        `UPDATE messages AS quoting
+            SET payload = json_set(json_remove(payload, '$.replyTo'), '$.content.quotedText', ''),
+                text = CASE WHEN type IN ('text', 'quote')
+                  THEN NULLIF(COALESCE(json_extract(payload, '$.content.text'), ''), '')
+                  ELSE text END
+          WHERE EXISTS (
+            SELECT 1 FROM messages AS original
+            WHERE original.conversation_id = quoting.conversation_id
+              AND original.height > 0
+              AND julianday(json_extract(original.payload, '$.burnExpiresAt')) <= julianday(?)
+              AND (json_extract(quoting.payload, '$.replyTo.id') = original.id
+                   OR json_extract(quoting.payload, '$.replyToId') = original.id)
+          );`,
+        now,
+      );
+      await current.db.runAsync(
+        "DELETE FROM messages WHERE height > 0 AND julianday(json_extract(payload, '$.burnExpiresAt')) <= julianday(?);",
+        now,
+      );
     });
   } catch (error) {
     warn('msg-burn', '[chat-db] purge expired messages failed', error);

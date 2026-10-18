@@ -82,12 +82,9 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   selfDestructCacheKey = '',
 }) => {
   const { colors } = useTheme();
-  // 消息自己带的焚毁秒数优先于屏幕级判定。屏幕级那个是从会话列表缓存算的，
-  // 推送冷启动时列表可能还没到，查不到就会读成「没开焚毁」，于是这张该焚毁的
-  // 图片按普通图片渲染：原图落盘、长按可存相册。等缓存补齐再翻转已经晚了。
-  // 消息上的值由服务端逐条下发，不依赖任何加载顺序；老后端不发时为 undefined，
-  // 此时仍回落到屏幕级判定，行为与升级前一致。
-  const ephemeral = (message.burnDurationSec ?? 0) > 0 || selfDestructEnabled;
+  // Only this message’s author-stamped duration controls media retention.
+  void selfDestructEnabled;
+  const ephemeral = (message.burnDurationSec ?? 0) > 0;
   const [previewVisible, setPreviewVisible] = useState(false);
   const previewPolicyRef = useRef(`${ephemeral}:${selfDestructCacheKey}`);
   const avatarNode = (

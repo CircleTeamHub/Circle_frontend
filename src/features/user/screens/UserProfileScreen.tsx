@@ -175,6 +175,11 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
     alignItems: 'center',
   },
+  recognitionRow: {
+    paddingTop: Spacing.lg,
+    alignItems: 'flex-end',
+    paddingBottom: Spacing.sm,
+  },
   recognitionPill: {
     minWidth: 58,
     height: 32,
@@ -999,7 +1004,23 @@ export default function UserProfileScreen() {
     >
       <NavHeader
         title={t('userProfile.title')}
-        rightSlot={
+        rightActions={!isCurrentUser ? [{
+          icon: 'settings-outline',
+          onPress: handleOpenChatInfo,
+          accessibilityLabel: t('profile.settings'),
+          disabled: !canOpenChatInfo,
+        }] : undefined}
+      />
+      {fetchError ? (
+        <Text style={{ color: colors.error, textAlign: 'center', paddingVertical: 6, ...Typography.small }}>
+          {fetchError}
+        </Text>
+      ) : null}
+      <ScrollView
+        contentContainerStyle={d.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={s.recognitionRow}>
           <View
             style={[s.recognitionPill, d.recognitionPill]}
             accessibilityLabel={t('userProfile.likesReceived', {
@@ -1024,17 +1045,7 @@ export default function UserProfileScreen() {
             )}
             <Text style={d.recognitionText}>{likeCount}</Text>
           </View>
-        }
-      />
-      {fetchError ? (
-        <Text style={{ color: colors.error, textAlign: 'center', paddingVertical: 6, ...Typography.small }}>
-          {fetchError}
-        </Text>
-      ) : null}
-      <ScrollView
-        contentContainerStyle={d.content}
-        showsVerticalScrollIndicator={false}
-      >
+        </View>
         {/* 看自己时整块资料头(头像/名字/性别地区/签名)都是「编辑个人信息」的入口;看别人时不可点。 */}
         <Pressable
           style={s.hero}

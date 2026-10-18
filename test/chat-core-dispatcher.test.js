@@ -146,6 +146,9 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
     get currentUserId() {
       return state.currentUserId;
     },
+    get appForeground() {
+      return state.appForeground;
+    },
     get activeConversationId() {
       return state.activeConversationId;
     },
@@ -712,6 +715,26 @@ test('self messages and the open conversation never raise a banner', () => {
   assert.equal(other.state.banners.length, 0);
 });
 
+test('messages from another conversation banner while a conversation is open', () => {
+  const { socket, state } = loadDispatcher({
+    conversations: [directConversation()],
+    activeConversationId: 'another-conversation',
+  });
+  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
+  assert.equal(state.banners.length, 1);
+  assert.equal(state.banners[0].conversationID, DIRECT_ID);
+});
+
+test('background messages do not leave an in-app banner queued for foreground', () => {
+  const { socket, state } = loadDispatcher({
+    conversations: [directConversation()],
+    appForeground: false,
+  });
+  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
+  assert.equal(state.banners.length, 0);
+  assert.equal(state.ingested.length, 1);
+});
+
 test('chat:typing routes to applyTyping, skipping self and malformed payloads', () => {
   const { socket, state } = loadDispatcher();
   socket.emit('chat:typing', { conversationId: 'c1', userId: 'peer' });
@@ -725,13 +748,14 @@ test('chat:typing routes to applyTyping, skipping self and malformed payloads', 
   assert.equal(state.typings.length, 1);
 });
 
-test('muted conversations are stored but never banner', () => {
+test('muted conversations still banner silently', () => {
   const { socket, state } = loadDispatcher({
     conversations: [directConversation({ muted: true })],
   });
   socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
   assert.equal(state.ingested.length, 1, 'muted still stores the message');
-  assert.equal(state.banners.length, 0, 'muted must not banner');
+  assert.equal(state.banners.length, 1);
+  assert.equal(state.banners[0].silent, true);
 });
 
 test('a redelivered locally-deleted message never reaches the banner', () => {
@@ -1059,7 +1083,7 @@ test('a remote burn-changed system message updates the conversation setting', ()
       id: 'sys-1',
       type: 'system',
       content: {
-        kind: 'burn-changed',
+        kind: 'burn-changed', userId: 'me',
         seconds: 30,
         burnStartedAt: '2026-09-11T19:30:00.000Z',
       },
@@ -1326,4 +1350,10 @@ test('an old durable mutation never advances the cursor after session rebinding'
   await Promise.resolve();
   await Promise.resolve();
   assert.deepEqual(state.liveRevisions, []);
+});
+
+test('another author changing burn never changes my own conversation setting', () => {
+  const {socket,state} = loadDispatcher({conversations:[directConversation()]});
+  socket.emit('chat:msg',dto({conversationId:DIRECT_ID,type:'system',sender:null,content:{kind:'burn-changed',userId:'other',seconds:60}}));
+  assert.equal(state.burnDurations.length,0);
 });

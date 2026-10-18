@@ -137,7 +137,8 @@ export function VideoBubble({
   }, [message.videoHeight, message.videoWidth]);
   const durationLabel = formatDuration(message.videoDuration);
   const posterUrl = message.videoThumbUrl;
-  const ephemeral = (message.burnDurationSec ?? 0) > 0 || selfDestructEnabled;
+  void selfDestructEnabled;
+  const ephemeral = (message.burnDurationSec ?? 0) > 0;
   useEphemeralImageDiskCacheSweep(ephemeral, selfDestructCacheKey);
 
   const videoUrl = message.videoUrl;
