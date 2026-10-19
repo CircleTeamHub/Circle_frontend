@@ -1604,6 +1604,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       (m) => m.id === messageId && m.height === 0 && m.d,
     );
     if (failedTarget?.d) {
+      if (failedTarget.type === 'encrypted-text') {
+        const clientMessageId = (
+          failedTarget.content.envelope as { clientMessageId?: string }
+        )?.clientMessageId;
+        if (clientMessageId) {
+          purgeEncryptedBody({ conversationId, clientMessageId });
+        }
+      }
       void outboxDelete(failedTarget.d);
       // 没传完的媒体在持久目录里还有一份副本(chat-core/pending-media),一起删。
       const userId = get().currentUserId;
