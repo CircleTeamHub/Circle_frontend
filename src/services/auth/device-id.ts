@@ -35,7 +35,8 @@ async function stableAndroidDeviceId(): Promise<string | null> {
   if (Platform.OS !== 'android') return null;
   try {
     const androidId = Application.getAndroidId();
-    if (typeof androidId !== 'string' || androidId.length === 0) return null;
+    if (typeof androidId !== 'string' || !/^[0-9a-f]{16}$/i.test(androidId) ||
+        /^(.)\1{15}$/i.test(androidId) || androidId.toLowerCase() === '9774d56d682e549c') return null;
     const digest = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       `${ANDROID_ID_NAMESPACE}:${androidId}`,

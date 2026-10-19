@@ -212,7 +212,7 @@ export async function requestLoginRecovery(challengeId: string) {
     { method: "POST", auth: false },
   );
   const challenge = parseLoginChallenge(raw);
-  if (!challenge) throw new UserFacingError("认证返回数据格式异常，请重试");
+  if (!challenge || !challenge.recoveryAvailableAt || !Number.isFinite(Date.parse(challenge.recoveryAvailableAt))) throw new UserFacingError("认证返回数据格式异常，请重试");
   return challenge;
 }
 

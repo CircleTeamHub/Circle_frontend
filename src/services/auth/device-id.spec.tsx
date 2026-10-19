@@ -37,7 +37,7 @@ const VALID = /^[A-Za-z0-9_-]{16,128}$/;
 beforeEach(() => {
   store.clear();
   jest.clearAllMocks();
-  mockGetAndroidId.mockReturnValue('9774d56d682e549c');
+  mockGetAndroidId.mockReturnValue('b83ac4219d56ef07');
 });
 
 afterEach(() => {
@@ -54,7 +54,7 @@ test('android: a reinstall (empty secure storage) derives the same device id aga
   expect(first).toMatch(/^a1-[0-9a-f]{64}$/);
   expect(afterReinstall).toBe(first);
   // 只发加盐摘要，不发 ANDROID_ID 原值。
-  expect(first).not.toContain('9774d56d682e549c');
+  expect(first).not.toContain('b83ac4219d56ef07');
 });
 
 test('android: an install that already stored an id keeps it (its sessions are bound to it)', async () => {
@@ -67,7 +67,7 @@ test('android: an install that already stored an id keeps it (its sessions are b
 test('android: a short or missing ANDROID_ID still yields a valid id', async () => {
   jest.replaceProperty(Platform, 'OS', 'android');
   mockGetAndroidId.mockReturnValue('1a');
-  await expect(loadFresh().getDeviceId()).resolves.toMatch(VALID);
+  await expect(loadFresh().getDeviceId()).resolves.toBe('11111111-2222-4333-8444-555555555555');
 
   store.clear();
   mockGetAndroidId.mockImplementation(() => {

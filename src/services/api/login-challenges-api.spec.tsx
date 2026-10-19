@@ -87,3 +87,8 @@ test('requesting recovery returns the challenge with its completion time', async
     { method: 'POST', auth: false },
   );
 });
+
+ test.each([undefined, null, 'invalid'])('recovery rejects invalid completion timestamp %s', async (recoveryAvailableAt) => {
+ jest.mocked(apiClient).mockResolvedValueOnce({deviceVerificationRequired: true, challenge: { id: 'c1', expiresAt: '2026-10-26T00:00:00.000Z', securityCodeAvailable: false, recoveryAvailableAt }});
+ await expect(requestLoginRecovery('c1')).rejects.toThrow('认证返回数据格式异常');
+ });

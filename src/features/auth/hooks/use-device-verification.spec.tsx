@@ -224,3 +224,13 @@ describe('recovery (no trusted device available)', () => {
     await waitFor(() => expect(result.current.phase).toBe('rejected'));
   });
 });
+
+test('resending an expired recovery clears its previous completion time', async () => {
+ jest.mocked(fetchLoginChallengeStatus).mockResolvedValue({status: 'PENDING', expiresAt: inFiveMinutes(), codeExpiresAt: null, recoveryAvailableAt: null});
+ jest.mocked(resendLoginChallenge).mockResolvedValue({id: 'c2', expiresAt: inFiveMinutes(), securityCodeAvailable: false, recoveryAvailableAt: null});
+ const {result} = renderHook(() => useDeviceVerification({challengeId:'c1', expiresAt: new Date(Date.now()-1000).toISOString(), recoveryAvailableAt: new Date(Date.now()-2000).toISOString(), onVerified: jest.fn()}));
+ expect(result.current.phase).toBe('expired');
+ await act(async () => { await result.current.resend(); });
+ expect(result.current.phase).toBe('waiting');
+ expect(result.current.recoveryAvailableAt).toBeNull();
+});

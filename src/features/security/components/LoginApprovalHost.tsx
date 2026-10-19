@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  ScrollView,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -22,7 +23,7 @@ const s = StyleSheet.create({
     padding: Spacing.lg,
     backgroundColor: 'rgba(0, 0, 0, 0.48)',
   },
-  card: { borderRadius: Radius.lg, padding: Spacing.lg, gap: Spacing.md },
+  card: { maxHeight: '90%', flexShrink: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: Spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   title: { ...Typography.h3, flex: 1 },
   detail: { ...Typography.bodyRegular, lineHeight: 20 },
@@ -218,7 +219,7 @@ export function LoginApprovalHost() {
             <Ionicons name="shield-checkmark-outline" size={24} color={colors.primary} />
             <Text style={[s.title, d.title]}>{t(titleKey)}</Text>
           </View>
-          {body}
+          <ScrollView contentContainerStyle={{ gap: Spacing.md }} bounces={false}>{body}</ScrollView>
         </View>
       </View>
     </DialogOverlay>

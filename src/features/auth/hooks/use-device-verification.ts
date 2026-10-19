@@ -212,6 +212,7 @@ export function useDeviceVerification({
       const next = await resendLoginChallenge(challengeId);
       if (!mountedRef.current) return;
       setChallengeId(next.id);
+      setRecoveryAt(parseTime(next.recoveryAvailableAt));
       setExpiresAt(Date.parse(next.expiresAt));
       setStatus('PENDING');
       setCodeExpiresAt(null);
