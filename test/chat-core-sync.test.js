@@ -601,3 +601,14 @@ test('queued invalidations are discarded on account switching before SQLite open
   assert.deepEqual(calls.fetches, []);
   sync.resetChatSync();
 });
+
+test('a failed forced expiry pull retries with bounded backoff',async()=>{
+ const {sync,calls,runTimers}=loadSync({localStates:{c1:{revision:10,hasMessages:false}},pages:{c1:[()=>Promise.reject(new Error('timeout')),page({nextRevision:11,throughRevision:11})]}});
+ sync.startChatSync('u1');await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:10}]);sync.noteLiveRevision('c1',11,false);await flush();runTimers();await flush();runTimers();await flush();
+ assert.deepEqual(calls.fetches,[['c1',10],['c1',10]]);sync.resetChatSync();
+});
+test('a forced pull beyond the page cap keeps the normal large-gap cache reset',async()=>{
+ const {sync,calls,runTimers}=loadSync({localStates:{c1:{revision:10,hasMessages:false}}});
+ sync.startChatSync('u1');await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:10}]);sync.noteLiveRevision('c1',5010,false);await flush();runTimers();await flush();
+ assert.deepEqual(calls.fetches,[]);assert.deepEqual(calls.resets,[['c1',5010]]);sync.resetChatSync();
+});

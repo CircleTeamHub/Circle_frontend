@@ -67,6 +67,7 @@ const forcedPullTargets = new Map<string, number>();
 const flights = new Map<string, Promise<void>>();
 let runningSyncs = 0;
 const slotWaiters: (() => void)[] = [];
+const forcedFailures = new Map<string, number>();
 const gapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const gapTargets = new Map<string, number>();
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -101,6 +102,7 @@ export function resetChatSync(): void {
   flights.clear();
   for (const timer of gapTimers.values()) clearTimeout(timer);
   gapTimers.clear();
+  forcedFailures.clear();
   gapTargets.clear();
   for (const timer of persistTimers.values()) clearTimeout(timer);
   persistTimers.clear();
@@ -298,17 +300,11 @@ async function syncConversation(
   if (!isCurrent(gen)) return;
   const cursor = cursorFor(conversationId);
   const forcedTarget = forcedPullTargets.get(conversationId);
-  if (forcedTarget !== undefined && cursor.revision < forcedTarget) {
-    await pullUntil(conversationId, Math.max(target, forcedTarget), gen);
-    if (isCurrent(gen) && cursorFor(conversationId).revision >= (forcedPullTargets.get(conversationId) ?? forcedTarget)) {
-      forcedPullTargets.delete(conversationId);
-    }
-    return;
-  }
+  target = Math.max(target, forcedTarget ?? 0);
   const plan = planConversationSync({
     localRevision: cursor.revision,
     targetRevision: target,
-    hasLocalMessages: cursor.hasMessages || hasMemoryMessages(conversationId),
+    hasLocalMessages: forcedTarget !== undefined || cursor.hasMessages || hasMemoryMessages(conversationId),
   });
   switch (plan.kind) {
     case 'up-to-date':
@@ -319,9 +315,11 @@ async function syncConversation(
       return;
     case 'jump':
       await resetConversationCache(conversationId, plan.revision, gen);
+      if (isCurrent(gen) && cursorFor(conversationId).revision >= (forcedPullTargets.get(conversationId) ?? 0)) forcedPullTargets.delete(conversationId);
       return;
     case 'pull':
       await pullUntil(conversationId, plan.to, gen);
+      if (isCurrent(gen) && cursorFor(conversationId).revision >= (forcedPullTargets.get(conversationId) ?? 0)) forcedPullTargets.delete(conversationId);
       return;
   }
 }
@@ -336,11 +334,21 @@ function scheduleConversationSync(
     .catch(() => undefined)
     .then(() => withSyncSlot(() => syncConversation(conversationId, target, gen)));
   flights.set(conversationId, run);
-  const settled = run.catch((error: unknown) =>
-    reportHandledFailure('chatSync', 'conversationSync', error),
-  );
+  const settled = run.catch((error: unknown) => {
+    reportHandledFailure('chatSync', 'conversationSync', error);
+  });
   void settled.then(() => {
     if (flights.get(conversationId) === run) flights.delete(conversationId);
+    const wanted = forcedPullTargets.get(conversationId);
+    if (!isCurrent(gen) || wanted === undefined) { forcedFailures.delete(conversationId); return; }
+    const attempts = forcedFailures.get(conversationId) ?? 0;
+    if (attempts >= 3 || gapTimers.has(conversationId)) return;
+    forcedFailures.set(conversationId, attempts + 1);
+    const timer = setTimeout(() => {
+      gapTimers.delete(conversationId);
+      if (isCurrent(gen)) void scheduleConversationSync(conversationId, wanted, gen);
+    }, GAP_SYNC_DELAY_MS * 2 ** attempts);
+    gapTimers.set(conversationId, timer);
   });
   return settled;
 }
