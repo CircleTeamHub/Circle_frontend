@@ -87,7 +87,7 @@ function loadSync(options = {}) {
     messagesByConversation: options.memory ?? {},
     activeConversationId: options.active ?? null,
     applySyncPage: (conversationId, result) =>
-      calls.storePages.push({ conversationId, nextRevision: result.nextRevision }),
+      calls.storePages.push({ conversationId, nextRevision: result.nextRevision, messages: result.messages }),
     evictConversationCache: (conversationId) => calls.evictions.push(conversationId),
   };
   const syncPlan = runModule('src/chat-core/sync-plan.ts', () => {
@@ -108,11 +108,12 @@ function loadSync(options = {}) {
             },
             loadChatHistory: async (conversationId) => {
               calls.histories.push(conversationId);
+              return (await options.loadHistory?.(conversationId)) ?? { messages: [] };
             },
           };
         case './local-db':
           return {
-            initChatLocalDb: async () => true,
+            initChatLocalDb: options.openDb ?? (async () => true),
             readLocalSyncStates: async () => {
               calls.stateReads += 1;
               return new Map(Object.entries(options.localStates ?? {}));
@@ -544,4 +545,155 @@ test('a cache reset that did not land locally keeps the stored cursor where it w
   await flush();
   // 写下去的话,重启后本地库里还留着作废前那批消息,而游标已经在 5001。
   assert.deepEqual(calls.cursorWrites, []);
+});
+
+
+test('an expiry invalidation pulls without a loaded timeline instead of adopting the cursor', async () => {
+  const expiry = '2026-10-19T00:01:00Z';
+  const { sync, calls, runTimers } = loadSync({
+    localStates: { c1: { revision: 10, hasMessages: false } },
+    pages: { c1: [page({ messages: [msg('m1', 1, 11, { burnExpiresAt: expiry })], nextRevision: 11, throughRevision: 11 })] },
+  });
+  sync.startChatSync('u1');
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 10 }]);
+  sync.noteLiveRevision('c1', 11, false);
+  await flush();
+  runTimers();
+  await flush();
+  assert.deepEqual(calls.fetches, [['c1', 10]]);
+  assert.equal(calls.localPages[0].upserts[0].burnExpiresAt, expiry);
+  assert.equal(calls.localPages[0].revision, 11);
+  sync.resetChatSync();
+});
+
+test('an invalidation arriving during cursor initialization survives an older captured snapshot', async () => {
+  let opened;
+  const opening = new Promise((resolve) => { opened = resolve; });
+  const { sync, calls, runTimers } = loadSync({
+    openDb: () => opening,
+    localStates: { c1: { revision: 10, hasMessages: false } },
+    pages: { c1: [page({ messages: [msg('m1', 1, 11)], nextRevision: 11, throughRevision: 11 })] },
+  });
+  sync.startChatSync('u1');
+  const snapshot = sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 10 }]);
+  sync.noteLiveRevision('c1', 11, false);
+  assert.equal(calls.fetches.length, 0);
+  opened(true);
+  await snapshot;
+  await flush();
+  runTimers();
+  await flush();
+  assert.deepEqual(calls.fetches, [['c1', 10]]);
+  assert.equal(calls.localPages[0].revision, 11);
+  sync.resetChatSync();
+});
+
+test('queued invalidations are discarded on account switching before SQLite opens', async () => {
+  let opened;
+  const opening = new Promise((resolve) => { opened = resolve; });
+  const { sync, calls, runTimers } = loadSync({ openDb: () => opening });
+  sync.startChatSync('u1');
+  sync.noteLiveRevision('c1', 11, false);
+  sync.startChatSync('u2');
+  opened(true);
+  await flush();
+  runTimers();
+  await flush();
+  assert.deepEqual(calls.fetches, []);
+  sync.resetChatSync();
+});
+
+
+test('failed forced expiry pulls retry with capped backoff until the authoritative page is stored', async () => {
+  const { sync, calls, timers, runTimers } = loadSync({
+    localStates: { c1: { revision: 10, hasMessages: false } },
+    pages: { c1: [() => Promise.reject(new Error('timeout')), () => Promise.reject(new Error('offline')), page({ nextRevision: 11, throughRevision: 11 })] },
+  });
+  sync.startChatSync('u1');
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 10 }]);
+  sync.noteLiveRevision('c1', 11, false);
+  runTimers(); await flush();
+  assert.deepEqual([...timers.values()].map(t => t.delay), [1500]);
+  assert.equal(calls.localPages.length, 0);
+  runTimers(); await flush();
+  assert.deepEqual([...timers.values()].map(t => t.delay), [3000]);
+  runTimers(); await flush();
+  assert.deepEqual(calls.fetches, [['c1', 10], ['c1', 10], ['c1', 10]]);
+  assert.equal(calls.localPages[0].revision, 11);
+  assert.equal(timers.size, 0);
+  sync.resetChatSync();
+});
+
+test('a forced invalidation above the live window and page cap resets and refreshes once instead of replaying pages', async () => {
+  const { sync, calls, runTimers } = loadSync({ localStates: { c1: { revision: 10, hasMessages: false } } });
+  sync.startChatSync('u1');
+  sync.noteLiveRevision('c1', 10_000, false);
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 9000 }]);
+  runTimers(); await flush();
+  assert.deepEqual(calls.fetches, []);
+  assert.deepEqual(calls.resets, [['c1', 10_000]]);
+  assert.deepEqual(calls.histories, ['c1']);
+  sync.resetChatSync();
+});
+
+test('failed forced retries are cancelled on account switch', async () => {
+  const { sync, calls, runTimers } = loadSync({ localStates: { c1: { revision: 10, hasMessages: false } }, pages: { c1: [() => Promise.reject(new Error('timeout'))] } });
+  sync.startChatSync('u1');
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 10 }]);
+  sync.noteLiveRevision('c1', 11, false);
+  runTimers(); await flush();
+  sync.startChatSync('u2');
+  runTimers(); await flush();
+  assert.deepEqual(calls.fetches, [['c1', 10]]);
+  sync.resetChatSync();
+});
+
+
+test('a forced large-gap reload is retried if the history request fails after the reset', async () => {
+  let reloads = 0;
+  const { sync, calls, runTimers } = loadSync({ localStates: { c1: { revision: 10, hasMessages: false } }, loadHistory: () => { if (++reloads === 1) throw new Error('offline'); } });
+  sync.startChatSync('u1');
+  sync.noteLiveRevision('c1', 10_000, false);
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 9000 }]);
+  runTimers(); await flush();
+  assert.equal(reloads, 2);
+  assert.deepEqual(calls.fetches, []);
+  assert.deepEqual(calls.resets, [['c1', 10_000]]);
+  sync.resetChatSync();
+});
+
+test('a failed forced expiry pull retries with bounded backoff',async()=>{
+ const {sync,calls,runTimers}=loadSync({localStates:{c1:{revision:10,hasMessages:false}},pages:{c1:[()=>Promise.reject(new Error('timeout')),page({nextRevision:11,throughRevision:11})]}});
+ sync.startChatSync('u1');await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:10}]);sync.noteLiveRevision('c1',11,false);await flush();runTimers();await flush();runTimers();await flush();
+ assert.deepEqual(calls.fetches,[['c1',10],['c1',10]]);sync.resetChatSync();
+});
+test('a forced pull beyond the page cap keeps the normal large-gap cache reset',async()=>{
+ const {sync,calls,runTimers}=loadSync({localStates:{c1:{revision:10,hasMessages:false}}});
+ sync.startChatSync('u1');await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:10}]);sync.noteLiveRevision('c1',5010,false);await flush();runTimers();await flush();
+ assert.deepEqual(calls.fetches,[]);assert.deepEqual(calls.resets,[['c1',5010]]);sync.resetChatSync();
+});
+
+
+test('permanent forced-sync failures stop after six retries and resume on a new snapshot', async () => {
+  const { sync, calls, timers, runTimers } = loadSync({ localStates: { c1: { revision: 10, hasMessages: false } }, pages: { c1: Array.from({length: 20}, () => () => Promise.reject(new Error('permanent'))) } });
+  sync.startChatSync('u1');
+  await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:10}]);
+  sync.noteLiveRevision('c1',11,false);
+  for (let i=0;i<15;i++) { runTimers(); await flush(); }
+  assert.equal(calls.fetches.length,7);
+  assert.equal(timers.size,0);
+  await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:11}]);
+  assert.equal(calls.fetches.length,8);
+  sync.resetChatSync();
+});
+
+test('a forced large-gap history reload reconciles the matching offscreen preview DTO', async () => {
+ const expiry = new Date(Date.now()+60_000).toISOString();
+ const updated=msg('latest',99,10000,{burnDurationSec:60,burnExpiresAt:expiry});
+ const {sync,calls,runTimers}=loadSync({localStates:{c1:{revision:10,hasMessages:false}},loadHistory:async()=>({messages:[updated]})});
+ sync.startChatSync('u1');sync.noteLiveRevision('c1',10000,false);
+ await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:9000}]);
+ runTimers();await flush();
+ assert.equal(calls.storePages[0].messages[0].burnExpiresAt,expiry);
+ sync.resetChatSync();
 });

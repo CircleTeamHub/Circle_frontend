@@ -43,11 +43,11 @@ export function useBurnNotice({
     ? noticeUsesConversationPolicy
       ? t('chat.detail.disappearingMessageNotice', {
           duration: formatBurnDuration(effectiveBurnDurationSec),
-          defaultValue: '你发送的新消息将在 {{duration}} 后消失，不影响对方发送的消息',
+          defaultValue: '你发送的新消息将在对方已读 {{duration}} 后消失，不影响对方发送的消息。平台会在消息消失后留存180天，供授权管理员审计。',
         })
       : t('chat.detail.personalDisappearingMessageNotice', {
           duration: formatBurnDuration(effectiveBurnDurationSec),
-          defaultValue: '你发送的新消息将在 {{duration}} 后消失，不影响对方发送的消息',
+          defaultValue: '你发送的新消息将在对方已读 {{duration}} 后消失，不影响对方发送的消息。平台会在消息消失后留存180天，供授权管理员审计。',
         })
     : null;
 

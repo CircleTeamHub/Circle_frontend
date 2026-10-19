@@ -102,6 +102,7 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
     presenceApplied: [],
     presenceCleared: [],
     liveRevisions: [],
+    expiryInvalidations: [],
     dismissedNotifications: [],
     ...storeOverrides,
   };
@@ -306,8 +307,10 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
     }
     if (request === './sync') {
       return {
-        noteLiveRevision: (conversationId, revision) =>
-          state.liveRevisions.push([conversationId, revision]),
+        noteLiveRevision: (conversationId, revision, applied) => {
+          state.liveRevisions.push([conversationId, revision]);
+          if (applied === false) state.expiryInvalidations.push([conversationId, revision]);
+        },
       };
     }
     if (request === 'react-native') {
@@ -1356,4 +1359,16 @@ test('another author changing burn never changes my own conversation setting', (
   const {socket,state} = loadDispatcher({conversations:[directConversation()]});
   socket.emit('chat:msg',dto({conversationId:DIRECT_ID,type:'system',sender:null,content:{kind:'burn-changed',userId:'other',seconds:60}}));
   assert.equal(state.burnDurations.length,0);
+});
+
+
+test('burn start requests authoritative expiry sync without advancing the durable cursor', () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:burn_started', { conversationId: 'c1', revision: 42 });
+  assert.deepEqual(state.expiryInvalidations, [['c1', 42]]);
+  assert.equal(state.ingested.length, 0);
+  for (const payload of [null, {}, { conversationId: '', revision: 1 }, { conversationId: 'c1', revision: -1 }, { conversationId: 'c1', revision: 1.5 }]) {
+    socket.emit('chat:burn_started', payload);
+  }
+  assert.equal(state.expiryInvalidations.length, 1);
 });

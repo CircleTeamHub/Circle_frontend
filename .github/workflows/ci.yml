@@ -105,6 +105,9 @@ jobs:
           ref=main
           backend_ref="$HEAD_REF"
           case "$HEAD_REF" in
+            codex/read-started-burn-client)
+              backend_ref=codex/read-started-burn-retention
+              ;;
             feat/trusted-device-login)
               # The paired auth backend is merged; main also includes group admission.
               backend_ref=main

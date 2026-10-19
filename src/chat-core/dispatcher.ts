@@ -563,6 +563,24 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
     },
   );
 
+  socket.on(
+    CHAT_EVENTS.burnStarted,
+    (payload: { conversationId: string; revision: number }) => {
+      if (!isLive()) return;
+      if (
+        !payload ||
+        typeof payload.conversationId !== 'string' ||
+        !payload.conversationId ||
+        !Number.isSafeInteger(payload.revision) ||
+        payload.revision <= 0
+      ) return;
+      flushIncomingMessageBatch();
+      // No content in this invalidation: keep the durable cursor behind it
+      // until the authoritative sync page has persisted the new expiry.
+      noteLiveRevision(payload.conversationId, payload.revision, false);
+    },
+  );
+
   socket.on(CHAT_EVENTS.read, (payload: ChatReadBroadcast) => {
     if (!isLive()) return;
     try {
