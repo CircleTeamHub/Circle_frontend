@@ -1,4 +1,5 @@
 import {
+  login,
   approveLoginChallenge,
   fetchPendingLoginChallenges,
   rejectLoginChallenge,
@@ -92,3 +93,8 @@ test('requesting recovery returns the challenge with its completion time', async
  jest.mocked(apiClient).mockResolvedValueOnce({deviceVerificationRequired: true, challenge: { id: 'c1', expiresAt: '2026-10-26T00:00:00.000Z', securityCodeAvailable: false, recoveryAvailableAt }});
  await expect(requestLoginRecovery('c1')).rejects.toThrow('认证返回数据格式异常');
  });
+
+test('login rejects malformed recovery timestamps instead of clearing the waiting state', async () => {
+ jest.mocked(apiClient).mockResolvedValueOnce({deviceVerificationRequired:true,challenge:{id:'c1',expiresAt:'2026-10-26T00:00:00Z',recoveryAvailableAt:'invalid'}});
+ await expect(login({identifier:'test',password:'password'})).rejects.toThrow('认证返回数据格式异常');
+});

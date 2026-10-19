@@ -37,6 +37,7 @@ const VALID = /^[A-Za-z0-9_-]{16,128}$/;
 beforeEach(() => {
   store.clear();
   jest.clearAllMocks();
+  jest.spyOn(Platform, 'Version', 'get').mockReturnValue(35);
   mockGetAndroidId.mockReturnValue('b83ac4219d56ef07');
 });
 
@@ -84,4 +85,18 @@ test('ios keeps a random keychain id and never asks for ANDROID_ID', async () =>
     '11111111-2222-4333-8444-555555555555',
   );
   expect(mockGetAndroidId).not.toHaveBeenCalled();
+});
+
+test('pre-Oreo Android never derives device trust from the shared system ID', async () => {
+ jest.replaceProperty(Platform, 'OS', 'android');
+ jest.spyOn(Platform, 'Version', 'get').mockReturnValue(25);
+ await expect(loadFresh().getDeviceId()).resolves.toBe('11111111-2222-4333-8444-555555555555');
+ expect(mockGetAndroidId).not.toHaveBeenCalled();
+});
+test('a high-entropy unpadded Android ID remains stable across reinstalls', async () => {
+ jest.replaceProperty(Platform, 'OS', 'android');
+ mockGetAndroidId.mockReturnValue('b83ac4219d56ef0');
+ const first=await loadFresh().getDeviceId();store.clear();
+ expect(first).toMatch(/^a1-[0-9a-f]{64}$/);
+ await expect(loadFresh().getDeviceId()).resolves.toBe(first);
 });

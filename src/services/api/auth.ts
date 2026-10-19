@@ -100,7 +100,8 @@ function parseLoginChallenge(value: unknown): LoginChallenge | null {
   if (
     !challenge ||
     typeof challenge.id !== "string" ||
-    typeof challenge.expiresAt !== "string"
+    typeof challenge.expiresAt !== "string" ||
+    (challenge.recoveryAvailableAt != null && (typeof challenge.recoveryAvailableAt !== "string" || !Number.isFinite(Date.parse(challenge.recoveryAvailableAt))))
   ) {
     throw new UserFacingError("认证返回数据格式异常，请重试");
   }
