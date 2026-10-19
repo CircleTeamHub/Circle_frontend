@@ -598,7 +598,7 @@ test('burn expiry is scheduled and self-destruct images avoid disk caching', () 
   assert.match(image, /cachePolicy=\{ephemeral \? 'memory' : 'memory-disk'\}/);
   assert.match(
     image,
-    /const ephemeral = \(message\.burnDurationSec \?\? 0\) > 0/,
+    /const ephemeral = isEphemeralMessage\(message, selfDestructEnabled\)/,
   );
   assert.match(image, /selfDestructCacheKey/);
 });

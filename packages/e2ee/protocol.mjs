@@ -256,7 +256,10 @@ export class ProtocolDevice {
     const { record, revision } = await this.journal.load();
     const id = digest([message.conversationId, message.senderDeviceId, message.clientMessageId]);
     const existing = await getItem(this.journal, record, 'inbox', id);
-    if (existing && JSON.stringify(existing) !== JSON.stringify(message)) throw new Error('Conflicting archived message');
+    if (existing) {
+      const immutable = value => [value.conversationId, value.senderDeviceId, value.clientMessageId, value.ciphertext];
+      if (JSON.stringify(immutable(existing)) !== JSON.stringify(immutable(message)) || (!existing.purged && JSON.stringify(existing.body) !== JSON.stringify(message.body))) throw new Error('Conflicting archived message');
+    }
     if (!existing) { record.inbox[id] = message; await this.journal.save(revision, record); }
   }
   async confirmIdentity(pin) {

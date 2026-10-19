@@ -176,3 +176,15 @@ test('purges archived bodies durably while keeping replay metadata', async t => 
  assert.equal((await reopened.getItem('inbox',id)).body,undefined);
  assert.equal((await reopened.getItem('inbox',id)).purged,true);
 });
+
+test('restoring an annotated archive entry is idempotent and preserves expiry', async t => {
+ const f=await fixture(t);const journal=await f.open('alice');
+ const {ProtocolDevice}=await import('@circle/e2ee');
+ await journal.save(0,{groups:{},outbox:{},inbox:{}});
+ const d=new ProtocolDevice(journal,'alice',journal.deviceId,new Map(),{});
+ const message={conversationId:'room',senderDeviceId:'sender',clientMessageId:'entry',ciphertext:'cipher',body:{text:'original'}};
+ await d.importMessage(message);await d.annotateMessage(message,{expiresAt:'2030-01-01T00:00:00Z',serverMessageId:'server'});
+ await d.importMessage(message);
+ assert.equal((await d.message(message)).expiresAt,'2030-01-01T00:00:00Z');
+ await assert.rejects(d.importMessage({...message,ciphertext:'different'}),/Conflicting/);
+});
