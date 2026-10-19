@@ -102,7 +102,7 @@ function zustandMiddlewareStub() {
   };
 }
 
-function runModule(rel, requireImpl) {
+function runModule(rel, requireImpl, globals = {}) {
   const context = {
     Date,
     // Store tests exercise expiry state transitions, not wall-clock scheduling. Do not
@@ -112,6 +112,7 @@ function runModule(rel, requireImpl) {
     module: { exports: {} },
     exports: {},
     require: withChatCoreStubs(requireImpl),
+    ...globals,
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpile(rel), context);
@@ -150,7 +151,7 @@ function loadChatStore(overrides = {}) {
     }
     if (request === './burn-durations') return loadBurnDurations();
       throw new Error(`unexpected require: ${request}`);
-  });
+  }, overrides.globals);
   return { ...store, ...deletedMessages };
 }
 
@@ -2098,4 +2099,36 @@ test('legacy cache falls back to its stored conversation policy but explicit nul
  await store.ingestMessages('conv-1',[msg({id:'legacy-no-duration',height:1,createdAt:new Date(Date.now()-120000).toISOString()}),msg({id:'server-kept',height:2,createdAt:new Date(Date.now()-120000).toISOString(),burnExpiresAt:null})]);
  await store.purgeExpiredBurnMessages();
  assert.deepEqual(Array.from(useChatStore.getState().messagesByConversation['conv-1'],m=>m.id),['server-kept']);
+});
+
+
+test('an offscreen pulled preview persists its deadline, hydrates it, and expires without a broadcast', async () => {
+ let now=Date.now();
+ class ClockDate extends Date { static now(){ return now; } }
+ let nextTimer=0;
+ const timers=new Map();
+ const globals={Date:ClockDate,setTimeout:(fn)=>{const id=++nextTimer;timers.set(id,fn);return id;},clearTimeout:(id)=>timers.delete(id)};
+ let saved;
+ const localDb={upsertLocalConversation:async (value)=>{saved=JSON.parse(JSON.stringify(value));}};
+ const {useChatStore}=loadChatStore({globals,localDb});
+ const store=useChatStore.getState();
+ store.setCurrentUserId('me');
+ store.setConversations([conversation({lastMessage:msg({id:'latest',burnDurationSec:60,burnExpiresAt:null})})]);
+ const deadline=new Date(now+60_000).toISOString();
+ await store.applySyncPage('conv-1',{messages:[msg({id:'latest',revision:10000,burnDurationSec:60,burnExpiresAt:deadline})],nextRevision:10000,throughRevision:10000,hasMore:false,resetRequired:false,readHeight:0,clearedBeforeHeight:0});
+ assert.equal(store.messagesByConversation['conv-1'],undefined);
+ assert.equal(saved.lastMessage.burnExpiresAt,deadline);
+ assert.equal(timers.size,1);
+ const persisted=saved;
+ const cold=loadChatStore({globals,localDb}).useChatStore.getState();
+ cold.setCurrentUserId('me');
+ cold.hydrateLocalSnapshot([persisted],{});
+ await cold.purgeExpiredBurnMessages();
+ assert.equal(cold.conversations[0].lastMessage.burnExpiresAt,deadline);
+ now+=60_001;
+ for(const fn of [...timers.values()]) fn();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(store.conversations[0].lastMessage,null);
+ assert.equal(cold.conversations[0].lastMessage,null);
+ assert.equal(saved.lastMessage,null);
 });

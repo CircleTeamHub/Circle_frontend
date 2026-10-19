@@ -87,7 +87,7 @@ function loadSync(options = {}) {
     messagesByConversation: options.memory ?? {},
     activeConversationId: options.active ?? null,
     applySyncPage: (conversationId, result) =>
-      calls.storePages.push({ conversationId, nextRevision: result.nextRevision }),
+      calls.storePages.push({ conversationId, nextRevision: result.nextRevision, messages: result.messages }),
     evictConversationCache: (conversationId) => calls.evictions.push(conversationId),
   };
   const syncPlan = runModule('src/chat-core/sync-plan.ts', () => {
@@ -108,7 +108,7 @@ function loadSync(options = {}) {
             },
             loadChatHistory: async (conversationId) => {
               calls.histories.push(conversationId);
-              return options.loadHistory?.(conversationId);
+              return (await options.loadHistory?.(conversationId)) ?? { messages: [] };
             },
           };
         case './local-db':
@@ -671,4 +671,29 @@ test('a forced pull beyond the page cap keeps the normal large-gap cache reset',
  const {sync,calls,runTimers}=loadSync({localStates:{c1:{revision:10,hasMessages:false}}});
  sync.startChatSync('u1');await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:10}]);sync.noteLiveRevision('c1',5010,false);await flush();runTimers();await flush();
  assert.deepEqual(calls.fetches,[]);assert.deepEqual(calls.resets,[['c1',5010]]);sync.resetChatSync();
+});
+
+
+test('permanent forced-sync failures stop after six retries and resume on a new snapshot', async () => {
+  const { sync, calls, timers, runTimers } = loadSync({ localStates: { c1: { revision: 10, hasMessages: false } }, pages: { c1: Array.from({length: 20}, () => () => Promise.reject(new Error('permanent'))) } });
+  sync.startChatSync('u1');
+  await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:10}]);
+  sync.noteLiveRevision('c1',11,false);
+  for (let i=0;i<15;i++) { runTimers(); await flush(); }
+  assert.equal(calls.fetches.length,7);
+  assert.equal(timers.size,0);
+  await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:11}]);
+  assert.equal(calls.fetches.length,8);
+  sync.resetChatSync();
+});
+
+test('a forced large-gap history reload reconciles the matching offscreen preview DTO', async () => {
+ const expiry = new Date(Date.now()+60_000).toISOString();
+ const updated=msg('latest',99,10000,{burnDurationSec:60,burnExpiresAt:expiry});
+ const {sync,calls,runTimers}=loadSync({localStates:{c1:{revision:10,hasMessages:false}},loadHistory:async()=>({messages:[updated]})});
+ sync.startChatSync('u1');sync.noteLiveRevision('c1',10000,false);
+ await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:9000}]);
+ runTimers();await flush();
+ assert.equal(calls.storePages[0].messages[0].burnExpiresAt,expiry);
+ sync.resetChatSync();
 });

@@ -527,7 +527,7 @@ interface ChatStoreState {
    * 一页增量同步落到内存(不落盘:本地库那半由同步协调器在一个事务里写,
    * 与游标一起提交)。清空水位、本人已读、墓碑、撤回引用脱敏都在这里收敛。
    */
-  applySyncPage: (conversationId: string, page: ChatSyncPageDto) => void;
+  applySyncPage: (conversationId: string, page: ChatSyncPageDto) => Promise<void>;
   /** 丢掉一个会话的已确认消息缓存(同步落后太多跳到最新 / 服务端要求重建时)。 */
   evictConversationCache: (conversationId: string) => void;
   /** 每会话当前的内存窗口大小(翻页时扩张)。 */
@@ -1815,7 +1815,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
   },
 
-  applySyncPage: (conversationId, page) => {
+  applySyncPage: async (conversationId, page) => {
     const state = get();
     const currentUserId = state.currentUserId;
 
@@ -1930,6 +1930,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         });
       }
     }
+    // Offscreen previews also need a durable fixed deadline and an expiry timer.
+    await get().purgeExpiredBurnMessages();
+    if (get().currentUserId !== currentUserId) return;
+    const reconciled = get().conversations.find((c) => c.id === conversationId);
+    if (reconciled) await upsertLocalConversation(reconciled);
   },
 
   evictConversationCache: (conversationId) => {

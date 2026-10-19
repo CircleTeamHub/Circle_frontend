@@ -260,9 +260,11 @@ async function pullUntil(
     if (!result || !isCurrent(gen)) return;
     if (result.resetRequired) {
       await resetConversationCache(conversationId, result.throughRevision, gen);
+      if (forcedPullTargets.has(conversationId) && isCurrent(gen)) await reloadForcedHistory(conversationId, gen);
       return;
     }
-    useChatStore.getState().applySyncPage(conversationId, result);
+    await useChatStore.getState().applySyncPage(conversationId, result);
+    if (!isCurrent(gen)) return;
     const tombstoneIds = result.messages
       .filter((m) => m.deleted === true)
       .map((m) => m.id);
@@ -300,6 +302,17 @@ async function pullUntil(
   }
 }
 
+async function reloadForcedHistory(conversationId: string, gen: number): Promise<void> {
+  const page = await loadChatHistory(conversationId);
+  if (!isCurrent(gen)) return;
+  await useChatStore.getState().applySyncPage(conversationId, {
+    messages: page.messages, readHeight: 0, clearedBeforeHeight: 0,
+    nextRevision: cursorFor(conversationId).revision,
+    throughRevision: cursorFor(conversationId).revision,
+    hasMore: false, resetRequired: false,
+  });
+}
+
 async function syncConversation(
   conversationId: string,
   target: number,
@@ -320,7 +333,7 @@ async function syncConversation(
       // A previous forced reset may have reached the cursor but failed its reload.
       if (forcedTarget !== undefined) {
         if (!cursor.durable) await resetConversationCache(conversationId, wanted, gen);
-        if (isCurrent(gen)) await loadChatHistory(conversationId);
+        if (isCurrent(gen)) await reloadForcedHistory(conversationId, gen);
       }
       break;
     case 'adopt':
@@ -330,7 +343,7 @@ async function syncConversation(
     case 'jump':
       await resetConversationCache(conversationId, plan.revision, gen);
       // Offscreen previews also need the current expiry; do not replay old pages.
-      if (forcedTarget !== undefined && isCurrent(gen)) await loadChatHistory(conversationId);
+      if (forcedTarget !== undefined && isCurrent(gen)) await reloadForcedHistory(conversationId, gen);
       break;
     case 'pull':
       await pullUntil(conversationId, plan.to, gen);
@@ -343,7 +356,9 @@ async function syncConversation(
 
 function retryForcedSync(conversationId: string, gen: number): void {
   if (!isCurrent(gen) || !forcedPullTargets.has(conversationId) || forcedRetryTimers.has(conversationId)) return;
-  const attempts = Math.min(6, (forcedRetryAttempts.get(conversationId) ?? 0) + 1);
+  const previousAttempts = forcedRetryAttempts.get(conversationId) ?? 0;
+  if (previousAttempts >= 6) return; // Resume on the next connection/foreground snapshot.
+  const attempts = previousAttempts + 1;
   forcedRetryAttempts.set(conversationId, attempts);
   const delay = Math.min(30_000, GAP_SYNC_DELAY_MS * 2 ** (attempts - 1));
   forcedRetryTimers.set(conversationId, setTimeout(() => {
@@ -409,6 +424,10 @@ export async function syncConversationsFromSnapshot(
     local,
     options.prioritize ?? null,
   );
+  for (const [id, target] of forcedPullTargets) {
+    forcedRetryAttempts.delete(id);
+    if (!targets.some((item) => item.id === id)) targets.push({ id, target });
+  }
   await Promise.all(
     targets.map(({ id, target }) => scheduleConversationSync(id, target, gen)),
   );
