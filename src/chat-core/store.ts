@@ -102,7 +102,7 @@ export function readViewerTypingPolicy(userId: string): ViewerTypingPolicy {
 /**
  * 阅后即焚「开启时间」的唯一归一化口。
  *
- * 用于本人设置的展示与跨端状态同步；消息销毁只认发送时的 burnExpiresAt。
+ * 用于本人设置的展示与跨端状态同步；消息销毁只认服务端固定的 burnExpiresAt。
  *
  * @param known 该入库点已知的上一个开启时间(没有就传 null)
  */

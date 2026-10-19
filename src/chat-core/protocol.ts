@@ -11,6 +11,8 @@ export const CHAT_EVENTS = {
   send: 'chat:send',
   /** 双向：已读水位（客户端上报带 ack；服务端广播成员推进） */
   read: 'chat:read',
+  /** Server expiry update; fetch the revision stream. */
+  burnStarted: 'chat:burn_started',
   /** 双向：正在输入 */
   typing: 'chat:typing',
   /** 服务端 → 客户端：新消息 */
@@ -190,7 +192,7 @@ export interface ChatMessageDto {
   reactions?: ChatReactionSummary[];
   /** 发送者首次发送时确定的时长；媒体缓存/转发限制逐条读取，不继承查看者设置。 */
   burnDurationSec?: number | null;
-  /** 发送者首次发送时确定的到期时间；null 表示不会焚毁。 */
+  /** 服务端固定的到期时间；单聊首次已读前为 null，是否启用由 burnDurationSec 判断。 */
   burnExpiresAt?: string | null;
   /** 幂等键：本地乐观消息靠它与服务端回执/广播对账替换。 */
   d: string | null;
