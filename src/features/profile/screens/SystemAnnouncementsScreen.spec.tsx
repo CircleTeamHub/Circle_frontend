@@ -1,3 +1,4 @@
+import { useAnnouncementSignalStore } from '../store-announcement-signal';
 import React from 'react';
 import {
   act,
@@ -22,6 +23,7 @@ let mockAuth = { user: { id: 'account-a' }, sessionEpoch: 1 };
 const mockTranslate = (key: string, options?: Record<string, string>) => {
   const translations: Record<string, string> = {
     'systemAnnouncements.title': '系统公告',
+    'systemAnnouncements.openAnnouncement': '查看{{title}}详情',
     'systemAnnouncements.subtitle': '公告列表',
     'systemAnnouncements.systemNotifications': '账号通知',
     'systemAnnouncements.latestAppInfo.title': '最新 App 信息',
@@ -281,29 +283,17 @@ test('old account page and read results cannot change the new account', async ()
   expect(mockSetProfileUnread).not.toHaveBeenCalled();
 });
 
-test('opens a static announcement detail and hides the empty account-notification section', async () => {
-  const request = deferred<NotificationCursorPage>();
-  mockFetchProfileNotificationsPage.mockReturnValue(request.promise);
+test('shows a unified list without static category cards', async () => {
+  mockFetchProfileNotificationsPage.mockResolvedValue({ items: [], nextCursor: null });
   render(<SystemAnnouncementsScreen />);
-
-  await act(async () => {
-    request.resolve({ items: [], nextCursor: null });
-  });
-
-  await waitFor(() =>
-    expect(mockFetchProfileNotificationsPage).toHaveBeenCalledWith(),
-  );
-  fireEvent.press(screen.getByLabelText('查看最新 App 信息详情'));
-
-  expect(mockRouter.push).toHaveBeenCalledWith({
-    pathname: '/(tabs)/profile/system-announcements/[id]',
-    params: { id: 'latestAppInfo' },
-  });
+  await waitFor(() => expect(mockFetchProfileNotificationsPage).toHaveBeenCalled());
+  expect(screen.queryByText('最新 App 信息')).toBeNull();
+  expect(screen.queryByText('更新')).toBeNull();
+  expect(screen.queryByText('补丁')).toBeNull();
   expect(screen.queryByText('账号通知')).toBeNull();
-  expect(screen.queryByText('暂无系统通知')).toBeNull();
 });
 
-test('labels backend-delivered profile messages as account notifications', async () => {
+test('shows backend-delivered messages without a separate category heading', async () => {
   const notification: NotificationItem = {
     id: 'notice-1',
     type: 'PROFILE_LIKE',
@@ -325,8 +315,8 @@ test('labels backend-delivered profile messages as account notifications', async
     request.resolve({ items: [notification], nextCursor: null });
   });
 
-  expect(await screen.findByText('账号通知')).toBeTruthy();
-  expect(screen.getByText('你的账号安全设置已更新')).toBeTruthy();
+  expect(await screen.findByText('你的账号安全设置已更新')).toBeTruthy();
+  expect(screen.queryByText('账号通知')).toBeNull();
 });
 
 test('follows the profile notification cursor when the list reaches the end', async () => {
@@ -362,4 +352,48 @@ test('follows the profile notification cursor when the list reaches the end', as
     ),
   );
   expect(await screen.findByText('第二页')).toBeTruthy();
+});
+
+
+test('sorts all received notifications newest first regardless of type and page order', async () => {
+  const old = { ...notice('old'), type: 'SYSTEM' as const, createdAt: '2026-01-01T00:00:00Z' };
+  const fresh = { ...notice('fresh'), createdAt: '2026-10-17T12:00:00Z' };
+  mockFetchProfileNotificationsPage.mockResolvedValue({ items: [old, fresh], nextCursor: null });
+  const view = render(<SystemAnnouncementsScreen />);
+  await screen.findByText('fresh');
+  const output = JSON.stringify(view.toJSON());
+  expect(output.indexOf('fresh')).toBeLessThan(output.indexOf('old'));
+});
+
+test('renders an announcement title above its body and keeps the legacy fallback', async () => {
+  mockFetchProfileNotificationsPage.mockResolvedValue({ items: [
+    { ...notice('body-with-title'), title: '版本维护通知' },
+    notice('legacy-body'),
+  ], nextCursor: null });
+  render(<SystemAnnouncementsScreen />);
+  expect(await screen.findByText('版本维护通知')).toBeTruthy();
+  expect(screen.getByText('body-with-title')).toBeTruthy();
+  expect(screen.getByText('legacy-body')).toBeTruthy();
+  expect(screen.getAllByText('系统通知')).toHaveLength(1);
+});
+
+test('limits card previews and opens full details using only the notification ID', async () => {
+  const content = '很长的公告正文。'.repeat(200);
+  mockFetchProfileNotificationsPage.mockResolvedValue({items:[{...notice('real-notice'),title:'维护公告',content}],nextCursor:null});
+  render(<SystemAnnouncementsScreen />);
+  const preview = await screen.findByText(content);
+  expect(preview.props.numberOfLines).toBe(2);
+  expect(screen.getByText('维护公告').props.numberOfLines).toBe(1);
+  fireEvent.press(screen.getByRole('button',{name:'查看维护公告详情'}));
+  expect(mockRouter.push).toHaveBeenCalledWith({pathname:'/(tabs)/profile/system-announcements/[id]',params:{id:'real-notice'}});
+});
+
+
+test('immediately hides old rows and reloads when an announcement is edited or deleted',async()=>{
+ const pending=deferred<NotificationCursorPage>();
+ mockFetchProfileNotificationsPage.mockResolvedValueOnce({items:[notice('old-content')],nextCursor:null}).mockReturnValueOnce(pending.promise);
+ render(<SystemAnnouncementsScreen />);await screen.findByText('old-content');
+ act(()=>useAnnouncementSignalStore.getState().bump());expect(screen.queryByText('old-content')).toBeNull();
+ await act(async()=>{pending.resolve({items:[],nextCursor:null});});
+ expect(mockFetchProfileNotificationsPage).toHaveBeenCalledTimes(2);
 });

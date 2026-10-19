@@ -19,6 +19,9 @@ const I18N = {
       const table = {
         'serverErrors.AUTH_INVALID_CREDENTIALS': 'Incorrect email, user ID, or password',
         'serverErrors.TRACE_EMPTY_COMMENT': 'Comment cannot be empty',
+        'common.errors.requestTimeout': 'Request timed out. Please try again.',
+        'common.errors.networkUnavailable': 'Check your connection and try again.',
+        'common.errors.uploadFailed': 'Upload failed. Please try again later.',
         'serverErrors.MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED':
           "You've reached your membership tier's joined-circle limit",
       };
@@ -172,13 +175,19 @@ test('UserFacingError message passes through — it was written for the user', (
   );
 });
 
-test('client-built status-0 ApiError copy (timeout/offline) passes through', () => {
-  const err = new FakeApiError('请求超时，请检查网络连接后重试', undefined);
-  err.status = 0;
-  assert.equal(
-    getApiErrorMessage(err, 'fallback'),
-    '请求超时，请检查网络连接后重试',
-  );
+test('status-0 API errors use localized failure kinds, never raw messages', () => {
+  for (const [kind, expected] of [
+    ['timeout', 'Request timed out. Please try again.'],
+    ['network', 'Check your connection and try again.'],
+    ['body-read', 'Check your connection and try again.'],
+    [undefined, 'fallback'],
+    ['INTERNAL_NETWORK_ERROR', 'fallback'],
+  ]) {
+    const err = new FakeApiError('ECONNREFUSED http://internal-host', undefined);
+    err.status = 0;
+    err.failureKind = kind;
+    assert.equal(getApiErrorMessage(err, 'fallback'), expected);
+  }
 });
 
 test('server-status ApiError without errorCode still hides the raw message', () => {
@@ -187,10 +196,10 @@ test('server-status ApiError without errorCode still hides the raw message', () 
   assert.equal(getApiErrorMessage(err, 'fallback'), 'fallback');
 });
 
-test('StorageUploadError sanitized copy passes through (send-errors precedent)', () => {
+test('StorageUploadError hides provider codes, status and raw details', () => {
   const error = new Error('上传失败 (403: AccessDenied)');
   error.name = 'StorageUploadError';
-  assert.equal(getApiErrorMessage(error, 'fallback'), '上传失败 (403: AccessDenied)');
+  assert.equal(getApiErrorMessage(error, 'fallback'), 'Upload failed. Please try again later.');
 });
 
 test('avatar-frame response diagnostics are never exposed to users', () => {
@@ -452,6 +461,15 @@ test('every whitelisted server error code is localized in every locale', () => {
         bundle.serverErrors[code].trim().length === 0,
     );
     assert.deepEqual(missing, [], `${lng}.json serverErrors missing: ${missing.join(', ')}`);
+  }
+});
+
+test('localized server error messages never include internal error codes', () => {
+  for (const language of ['zh', 'en', 'es', 'ja', 'ko']) {
+    const messages = JSON.parse(readLocale(language)).serverErrors;
+    for (const [code, message] of Object.entries(messages)) {
+      assert.doesNotMatch(message, /\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/, `${language}.${code}`);
+    }
   }
 });
 

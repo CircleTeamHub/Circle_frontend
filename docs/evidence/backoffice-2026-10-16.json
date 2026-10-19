@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-16",
+  "environment": "local-only",
+  "backend": {"passed": 4236, "skipped": 15, "build": "passed", "typecheck": "passed"},
+  "admin": {"passed": 169, "build": "passed", "typecheck": "passed"},
+  "app": {"nodePassed": 3119, "focusedBehaviorPassed": 19, "typecheck": "passed", "lint": "passed"},
+  "realHttpPostgresAcceptance": {"passed": 24, "command": "npx ts-node -r tsconfig-paths/register scripts/test-console-local.ts", "fixtures": "UUID-scoped, cleaned after run"},
+  "browser": ["push operations", "task overview", "user timeline and device/session metadata", "insights coverage notice", "release decision preview", "one request ID links a failure to its diagnostic record", "automation keys direct navigation and refresh", "database-triggered event and session timestamps match"],
+  "notPerformed": ["online deployment", "real app artifact installation", "App Store release", "physical-device acceptance of these new backoffice features"]
+}

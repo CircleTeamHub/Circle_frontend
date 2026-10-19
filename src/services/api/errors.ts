@@ -14,9 +14,9 @@ import { isUserFacingError } from '@/utils/user-facing-error';
  * 普通 Error 的 message 一律不透出 —— 那里装的是「Failed to fetch」「websocket
  * error」、TypeError 文本或服务端内部消息,不是给用户看的。可以直出的只有三类,
  * 共同点是文案由我们自己按当前语言构造:
- * - status 0 的 ApiError:客户端自造的超时/断网文案(见 client.ts bodyReadError 等);
+ * - status 0 的 ApiError:按客户端 failureKind 映射超时/断网文案;
  * - UserFacingError:业务代码显式标记「这句就是写给用户的」;
- * - StorageUploadError:上传模块构造、已去掉签名 URL/对象 key 的安全文案
+ * - StorageUploadError:统一映射上传失败文案，不透出存储服务错误文本
  *   (与 send-errors.getChatSendErrorMessage 的既有白名单同一条线)。
  */
 export function getApiErrorMessage(error: unknown, fallback: string): string {
@@ -29,8 +29,14 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
         defaultValue: fallback,
       });
     }
-    if (error.status === 0 && error.message) {
-      return error.message;
+    if (error.status === 0) {
+      if (error.failureKind === 'timeout') {
+        return i18n.t('common.errors.requestTimeout', { defaultValue: fallback });
+      }
+      if (error.failureKind === 'network' || error.failureKind === 'body-read') {
+        return i18n.t('common.errors.networkUnavailable', { defaultValue: fallback });
+      }
+      return fallback;
     }
     return fallback;
   }
@@ -41,10 +47,9 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
 
   if (
     error instanceof Error &&
-    error.name === 'StorageUploadError' &&
-    error.message
+    error.name === 'StorageUploadError'
   ) {
-    return error.message;
+    return i18n.t('common.errors.uploadFailed', { defaultValue: fallback });
   }
 
   return fallback;

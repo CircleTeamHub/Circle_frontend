@@ -1,5 +1,4 @@
-import Constants, { ExecutionEnvironment } from 'expo-constants';
-import * as Application from 'expo-application';
+import { checkForManagedUpdate } from './managed-update-service';
 import {
   cacheDirectory,
   deleteAsync as deleteFileAsync,
@@ -11,23 +10,8 @@ import {
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform } from 'react-native';
 import {
-  isAndroidUpdateAvailable,
-  parseGitHubReleaseManifest,
   type AndroidReleaseManifest,
 } from './app-update-manifest';
-
-const DEFAULT_ANDROID_UPDATE_MANIFEST_URL =
-  'https://github.com/CircleTeamHub/windnote-releases/releases/latest/download/release.json';
-const UPDATE_CHECK_TIMEOUT_MS = 10_000;
-
-interface UpdateCheckDependencies {
-  platform: string;
-  executionEnvironment: string;
-  nativeBuildVersion: string | null;
-  isDevelopment: boolean;
-  appVariant?: unknown;
-  fetchImpl: typeof fetch;
-}
 
 interface AndroidInstallerDependencies {
   platform: string;
@@ -41,9 +25,6 @@ interface AndroidInstallerDependencies {
   startActivityAsync: typeof IntentLauncher.startActivityAsync;
 }
 
-export const ANDROID_UPDATE_MANIFEST_URL =
-  DEFAULT_ANDROID_UPDATE_MANIFEST_URL;
-
 type NativeFS = typeof import('react-native-fs');
 type NativeFSModule = NativeFS & { default?: NativeFS };
 
@@ -56,54 +37,9 @@ async function hashAndroidUpdateFile(
   return nativeFs.hash(filePath, algorithm);
 }
 
-function assertSecureManifestUrl(): void {
-  const url = new URL(ANDROID_UPDATE_MANIFEST_URL);
-  if (url.protocol !== 'https:' || url.username || url.password) {
-    throw new Error('Android update manifest URL must use HTTPS');
-  }
-}
-
-export async function checkForAndroidUpdate(
-  dependencies: UpdateCheckDependencies = {
-    platform: Platform.OS,
-    executionEnvironment: Constants.executionEnvironment,
-    nativeBuildVersion: Application.nativeBuildVersion,
-    isDevelopment: typeof __DEV__ !== 'undefined' && __DEV__,
-    appVariant: Constants.expoConfig?.extra?.appVariant,
-    fetchImpl: fetch,
-  },
-): Promise<AndroidReleaseManifest | null> {
-  if (
-    dependencies.platform !== 'android' ||
-    dependencies.isDevelopment ||
-    dependencies.appVariant === 'preprod' ||
-    dependencies.executionEnvironment === ExecutionEnvironment.StoreClient
-  ) {
-    return null;
-  }
-
-  assertSecureManifestUrl();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS);
-
-  try {
-    const response = await dependencies.fetchImpl(ANDROID_UPDATE_MANIFEST_URL, {
-      cache: 'no-store',
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      throw new Error(`Android update check failed with status ${response.status}`);
-    }
-
-    const manifest = parseGitHubReleaseManifest(await response.json());
-    const versionCode = Number(dependencies.nativeBuildVersion ?? '');
-    return isAndroidUpdateAvailable(versionCode, manifest)
-      ? manifest
-      : null;
-  } finally {
-    clearTimeout(timer);
-  }
+/** Manual checks use exactly the same rollout and withdrawal decisions as startup. */
+export async function checkForAndroidUpdate():Promise<AndroidReleaseManifest|null> {
+  return (await checkForManagedUpdate())?.manifest??null;
 }
 
 async function removeCachedApk(

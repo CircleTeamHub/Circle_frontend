@@ -141,6 +141,8 @@
     },
     "deviceVerification": {
       "title": "New device verification",
+      "recoveryIntro": "If you reinstalled the app or cannot use your previous device, verify your linked email and reset your password to sign in again. Previous devices will be signed out. Encrypted chat history requires separate recovery.",
+      "recoverByEmail": "Previous device unavailable? Recover with email",
       "intro": "This sign-in is from a device we don't recognize. A verification request has been sent to your trusted devices. Confirm it there, then enter the code it shows.",
       "waiting": "Waiting for a trusted device · {{time}} left",
       "approved": "Confirmed on your trusted device. Enter the code within {{seconds}}s",
@@ -367,8 +369,8 @@
       "voiceHoldToTalk": "Hold to talk",
       "previewPlaceholder": "Connection not ready",
       "inputPlaceholder": "Type a message…",
-      "disappearingMessageNotice": "Disappearing messages are on in this chat. New messages disappear after {{duration}}.",
-      "personalDisappearingMessageNotice": "You have turned on disappearing messages. New messages disappear after {{duration}}.",
+      "disappearingMessageNotice": "Your new messages disappear after {{duration}}. Messages sent by others are unaffected.",
+      "personalDisappearingMessageNotice": "Your new messages disappear after {{duration}}. Messages sent by others are unaffected.",
       "attachmentPanelLabel": "Open attachment panel",
       "sendFailedText": "Failed to send message, please try again",
       "sensitiveWordBlocked": "Message blocked: it contains prohibited words",
@@ -1068,9 +1070,6 @@
     }
   },
   "discover": {
-    "adLabel": "Advertisement",
-    "adOpen": "Open advertisement: {{title}}",
-    "adLinkFailed": "Unable to open this link. Please try again.",
     "title": "Discover",
     "circleTitle": "Circle Activity",
     "plaza": "Plaza",
@@ -2159,11 +2158,13 @@
     }
   },
   "systemAnnouncements": {
+    "nextAnnouncement": "Next announcement",
+    "unreadCount": "{{count}} unread notifications",
     "title": "System Announcements",
     "detailTitle": "Announcement Details",
     "openAnnouncement": "View {{title}} details",
     "unavailable": "This announcement is unavailable or has been removed",
-    "subtitle": "Latest windnote.ai app information, release updates, and patch notes will appear here.",
+    "subtitle": "Announcements and notifications, newest first.",
     "systemNotifications": "Account Notifications",
     "empty": "No system notifications",
     "loadFailed": "System notifications failed to load. Pull to retry",
@@ -2450,7 +2451,8 @@
     "codeUpdateDisabledTitle": "Check unavailable",
     "codeUpdateDisabledMessage": "Online app content updates are unavailable in development builds. Use a release build to verify them.",
     "codeUpdateFailedTitle": "App content update failed",
-    "codeUpdateFailedMessage": "The app content update could not be downloaded. Check your connection and try again."
+    "codeUpdateFailedMessage": "The app content update could not be downloaded. Check your connection and try again.",
+    "requiredTitle": "Update required to continue"
   },
   "shareScreen": {
     "inviteCode": "Invite Code",
@@ -3046,8 +3048,8 @@
       "groupDismissed": "Group disbanded",
       "messageRevoked": "A message was recalled",
       "friendAdded": "You're now friends — say hello!",
-      "burnEnabled": "Disappearing messages on ({{duration}})",
-      "burnDisabled": "Disappearing messages off",
+      "burnEnabled": "The sender enabled disappearing messages for their new messages ({{duration}})",
+      "burnDisabled": "The sender disabled disappearing messages for their new messages",
       "memberSilenced": "A member was muted for {{duration}}",
       "memberSilencedIndefinitely": "A member was muted",
       "memberUnsilenced": "A member was unmuted",
@@ -3664,5 +3666,35 @@
       "CANCELLED": "Application cancelled"
     },
     "sentInvitation": "You invited them to join the group"
+  },
+  "e2ee": {
+    "title": "Text encryption and devices",
+    "encryptedText": "[Encrypted text]",
+    "unlockRequired": "Cannot decrypt. Verify devices and sync keys in chat settings.",
+    "disclosure": "Text only. Authorized administrator devices can decrypt text; the server has no private decryption keys. Images, videos and files are excluded. Enabling applies to future texts. New devices cannot automatically read earlier encrypted history. In this development release, the enabling device manages membership; revoking it pauses sending.",
+    "failed": "Operation incomplete. Check device approval, participant and administrator registration, and verified keys, then retry.",
+    "done": "Completed",
+    "verify": "Verify device keys",
+    "verifyHint": "Compare each full public key with its device in person or through an independent trusted channel, including administrator devices. Trust only exact matches.",
+    "verified": "All keys match",
+    "register": "Register device / publish joining key",
+    "deviceLabel": "My App device",
+    "approve": "Approve device",
+    "revoke": "Revoke device",
+    "revokeHint": "This identity cannot be restored. Update conversation keys before sending again. Previously read history cannot be remotely erased.",
+    "conversation": "Conversation",
+    "updateMembers": "Update devices and keys",
+    "enable": "Enable text encryption (permanent)",
+    "sync": "Join / sync encrypted conversation",
+    "refresh": "Refresh device status",
+    "recoveryHint": "Keep your recovery code offline: it decrypts archived text. Register this device first. Archive history on the old device, then enter the code and restore on the new device. Sending keys are never rolled back. Verify the new device and update conversation membership to exchange new messages. Cleared, recalled and expired messages cannot be restored.",
+    "createRecovery": "Create / show local recovery code",
+    "recoveryCode": "Recovery code",
+    "recoverDevice": "Approve this device with recovery code",
+    "backupHistory": "Archive locally decrypted history",
+    "restoreHistory": "Restore archived history",
+    "archiveCount": "Processed {{count}} messages",
+    "repairKey": "Create a replacement encryption device",
+    "repairKeyHint": "The system key is missing. Keep the old sealed database and create a fresh device, then register it and use your recovery code to restore archived history. History that was never archived cannot be recovered."
   }
 }

@@ -75,6 +75,7 @@ function transpile(rel) {
 
 function runModule(rel, requireImpl, extraGlobals = {}) {
   const context = {
+    process: { env: {} },
     Date,
     Math,
     Number,

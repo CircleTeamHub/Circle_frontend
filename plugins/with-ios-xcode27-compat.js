@@ -92,6 +92,22 @@ function addPodDeploymentTargetFloor(podfile) {
   return podfile.replace(anchor, `$1${POD_SNIPPET}`);
 }
 
+/** Xcode header lookup must not resolve the system's same-named sqlite3.h. */
+function addSqliteHeaderNamespace(podfile) {
+  const marker = '# [with-ios-xcode27-compat] namespaced SQLite header';
+  if (podfile.includes(marker)) return podfile;
+  const anchor = /(react_native_post_install\([\s\S]*?\n\s*\))/;
+  if (!anchor.test(podfile)) throw new Error('Missing React Native post_install hook');
+  return podfile.replace(anchor, `$1
+    ${marker}
+    sqlite_umbrella = installer.sandbox.root + 'Target Support Files/ExpoSQLite/ExpoSQLite-umbrella.h'
+    if File.exist?(sqlite_umbrella)
+      original = File.read(sqlite_umbrella)
+      namespaced = original.gsub('#import "sqlite3.h"', '#import <ExpoSQLite/sqlite3.h>')
+      File.write(sqlite_umbrella, namespaced) if namespaced != original
+    end`);
+}
+
 /** 返回带 scene manifest 的新 Info.plist 对象（不改入参）。 */
 function addSceneManifest(infoPlist) {
   return {
@@ -123,9 +139,9 @@ function addSceneDelegate(appDelegate) {
 
 function withIosXcode27Compat(config) {
   config = withPodfile(config, (modConfig) => {
-    modConfig.modResults.contents = addPodDeploymentTargetFloor(
+    modConfig.modResults.contents = addSqliteHeaderNamespace(addPodDeploymentTargetFloor(
       modConfig.modResults.contents,
-    );
+    ));
     return modConfig;
   });
   config = withInfoPlist(config, (modConfig) => {
@@ -146,3 +162,5 @@ module.exports = withIosXcode27Compat;
 module.exports.addPodDeploymentTargetFloor = addPodDeploymentTargetFloor;
 module.exports.addSceneManifest = addSceneManifest;
 module.exports.addSceneDelegate = addSceneDelegate;
+
+module.exports.addSqliteHeaderNamespace = addSqliteHeaderNamespace;

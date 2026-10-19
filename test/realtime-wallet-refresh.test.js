@@ -79,6 +79,7 @@ function loadHarness() {
     require: (request) => {
       if (request === '@/services/api/group-admissions') return { refreshGroupAdmissionUnread: async () => {} };
       switch (request) {
+        case '@/features/profile/store-announcement-signal': return {useAnnouncementSignalStore:{getState:()=>({bump:()=>{}})}};
         case "@/constants/config":
           return { REALTIME_WS_URL: "wss://example.test/chat-ws" };
         case "@/observability/sentry":

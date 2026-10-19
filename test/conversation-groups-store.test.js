@@ -40,6 +40,7 @@ function loadStore(apiMocks) {
     console: { warn: () => {} },
     require: withObservabilityStubs((specifier) => {
       if (specifier === 'zustand') return require('zustand');
+      if (specifier === '@/services/api/errors') return { getApiErrorMessage: (_error, fallback) => fallback };
       if (specifier === 'zustand/middleware') return require('zustand/middleware');
       if (specifier === '@/storage') return { mmkvJsonStorage };
       if (specifier === '@/services/api/conversation-groups') return apiMocks;
@@ -112,7 +113,7 @@ test('load() surfaces error message and keeps loading=false on failure', async (
   await useMessageGroupsStore.getState().load();
 
   assert.equal(useMessageGroupsStore.getState().loading, false);
-  assert.equal(useMessageGroupsStore.getState().error, 'network down');
+  assert.equal(useMessageGroupsStore.getState().error, '加载失败');
   assert.deepEqual(
     JSON.parse(JSON.stringify(useMessageGroupsStore.getState().groups)),
     [],

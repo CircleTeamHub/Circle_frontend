@@ -510,9 +510,7 @@ export default function ChatInfoScreen() {
   const isCircleOwner = Boolean(groupID) && isOwner;
   const isAdmin = selfGroupRole === 'ADMIN';
   const canManageGroup = isOwner || isAdmin;
-  // 阅后即焚仍由群主/管理员管理;全群清空会推进所有成员的历史水位,
-  // 因此只允许群主。服务端也会再次校验,这里先把普通成员和管理员的全群入口收掉。
-  const canWipeGroupForEveryone = canManageGroup || isStandaloneGroupOwner;
+  // 全群清空仅限群主；阅后即焚由每个成员管理自己的新消息。
   const canClearGroupForEveryone = isOwner;
   const collapsedGroupMemberLimit = GROUP_MEMBER_COLUMNS * COLLAPSED_GROUP_MEMBER_ROWS - (canManageGroup ? 1 : 0);
   const visibleGroupMembers = useMemo(
@@ -1520,7 +1518,7 @@ export default function ChatInfoScreen() {
     [actionPending.mute, dropOptimisticConversationStateKey, resolvedConversationID, runConversationAction, t],
   );
 
-  // S-01 会话级阅后即焚:当前档位跟随会话 DTO(REST 回执会经 store 更新)。
+  // 本人发送的新消息的阅后即焚时长，REST 回执只更新本人的设置。
   const burnDurationSec = activeConversation?.burnDurationSec ?? null;
 
   // 十七个档位 + 关闭,而 Android 的 Alert 最多渲染 3 个按钮 —— 用 Alert 的话
@@ -1859,6 +1857,7 @@ export default function ChatInfoScreen() {
           contentContainerStyle={[s.groupContent, { paddingBottom: insets.bottom + Spacing.xl }]}
           showsVerticalScrollIndicator={false}
         >
+          {resolvedConversationID && <MenuRow icon="lock-closed-outline" label={t('e2ee.title')} onPress={() => router.push({ pathname: '/encryption' as never, params: { conversationId: resolvedConversationID } })} />}
           {canViewMemberDirectory ? (
             <View style={s.groupMemberSection}>
             <View style={s.groupMemberGrid}>
@@ -2061,8 +2060,7 @@ export default function ChatInfoScreen() {
               onToggle={actionPending.pin ? undefined : handleTogglePinned}
               showArrow={false}
             />
-            {canWipeGroupForEveryone ? (
-              <>
+            <>
                 <Divider />
                 <GroupInfoRow
                   label={t('chat.burnAfterReading')}
@@ -2073,8 +2071,7 @@ export default function ChatInfoScreen() {
                   }
                   onPress={handleOpenBurnOptions}
                 />
-              </>
-            ) : null}
+            </>
             <Divider />
             <GroupInfoRow
               label={t('chat.clearHistory')}
@@ -2199,6 +2196,7 @@ export default function ChatInfoScreen() {
           <MenuRow icon="pricetag-outline" label={t('chat.tags')} onPress={handleOpenTags} />
           <Divider />
           <MenuRow icon="search-outline" label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
+          {resolvedConversationID && <MenuRow icon="lock-closed-outline" label={t('e2ee.title')} onPress={() => router.push({ pathname: '/encryption' as never, params: { conversationId: resolvedConversationID } })} />}
           <Divider />
           <MenuRow icon="image-outline" label={t('chat.chatBackground')} onPress={handleOpenChatBackground} />
           <Divider />

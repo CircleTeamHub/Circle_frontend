@@ -38,6 +38,7 @@ function loadClient({
   retryOutbox = [],
   deliveryIds = null,
   outboxDelays = {},
+  encrypt = null,
 }) {
   const filePath = path.join(process.cwd(), 'src/chat-core/client.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
@@ -90,11 +91,13 @@ function loadClient({
   };
 
   const context = {
+    process: { env: { EXPO_PUBLIC_E2EE_TEXT_ENABLED: encrypt ? 'true' : 'false' } },
     Date,
     Math,
     module: { exports: {} },
     exports: {},
     require: withChatCoreStubs((request) => {
+      if (request === '@/services/e2ee/client') return { encryptOutgoingText: encrypt };
       if (request === '@/services/api/credit-policy') {
         return {
           assertLocalCanSendMessage: () => {
@@ -626,4 +629,23 @@ test('媒体发送复用已上屏气泡的 d,不会再造一条', async () => {
 
   const sentPayload = calls.sentPayloads.at(-1);
   assert.equal(sentPayload.d, 'd-existing');
+});
+
+
+test('encrypted text reaches the outbox and transport without its plaintext or quote snapshot', async () => {
+  const encrypted = { envelope: { ciphertext: 'opaque', epoch: '1' }, signature: 'proof' };
+  const { api, calls } = loadClient({ blocked: false, encrypt: async () => encrypted });
+  await api.sendQuoteMessage({ conversationId: 'c1', text: 'never persist this', quotedText: 'private quote' });
+  assert.equal(calls.sentPayloads[0].type, 'encrypted-text');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.sentPayloads[0].content)), encrypted);
+  assert.equal(JSON.stringify(calls.outboxEntries).includes('never persist this'), false);
+  assert.equal(JSON.stringify(calls.outboxEntries).includes('private quote'), false);
+});
+
+test('encryption failure cannot fall back to plaintext or insert an optimistic message', async () => {
+  const { api, calls } = loadClient({ blocked: false, encrypt: async () => { throw new Error('device revoked'); } });
+  await assert.rejects(api.sendTextMessage({ conversationId: 'c1', text: 'private' }), /device revoked/);
+  assert.equal(calls.sent, 0);
+  assert.equal(calls.ingest, 0);
+  assert.equal(calls.outboxUpserts.length, 0);
 });

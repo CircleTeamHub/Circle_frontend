@@ -115,9 +115,7 @@ export function useChatConversation({
       (conversation?.burnDurationSec ?? 0) > 0
     );
   });
-  // 与 selfDestructEnabled 分开：那一个还掺了「本人的全局阅后即焚窗口」，那是
-  // 我对自己视图的设置，不是发送者对我的承诺。转发 / 收藏的闸只认会话上的焚毁
-  // 开关 —— 服务端的转发拒绝也正是按这一条判的。
+  // 本人的发送策略用于设置/提示；转发、收藏和媒体缓存按每条消息的时长判定。
   const conversationBurnEnabled = useChatStore((state) => {
     const conversation = state.conversations.find(
       (candidate) => candidate.id === conversationID,

@@ -205,14 +205,18 @@ test('user profile screen uses a compact rounded-square avatar stage', () => {
   );
 });
 
-test('user profile screen shows received like count in the header', () => {
+test('user profile screen places likes below the header and reuses more-info settings navigation', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/user/screens/UserProfileScreen.tsx',
   );
   const source = fs.readFileSync(filePath, 'utf8');
 
-  assert.match(source, /rightSlot=\{/);
+  assert.match(source, /rightActions=\{!isCurrentUser/);
+  assert.match(source, /icon: 'settings-outline'/);
+  assert.match(source, /onPress: handleOpenChatInfo/);
+  assert.match(source, /disabled: !canOpenChatInfo/);
+  assert.ok(source.indexOf('style={s.recognitionRow}') > source.indexOf('<ScrollView'));
   assert.match(source, /recognitionPill/);
   assert.match(source, /like-outline\.png/);
   assert.match(source, /recognitionIconImage/);

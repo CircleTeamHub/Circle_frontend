@@ -1350,6 +1350,35 @@ test('unread convergence ignores messages this user sent', () => {
   assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
 });
 
+test('reconnect snapshot keeps offline unread when the cache ends at the old read watermark', () => {
+  const { useChatStore, selectTotalUnread } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.ingestMessages('conv-1', [msg({ id: 'm1', height: 1 })]);
+  store.applyRead('conv-1', 'me', 1);
+  store.setConversations([conversation({
+    unreadCount: 2,
+    lastMessage: msg({ id: 'm3', height: 3 }),
+  })]);
+  assert.equal(selectTotalUnread(useChatStore.getState()), 2);
+});
+
+test('partial unread cache cannot reduce the authoritative unread count', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.ingestMessages('conv-1', [
+    msg({ id: 'm1', height: 1 }),
+    msg({ id: 'm3', height: 3 }),
+  ]);
+  store.applyRead('conv-1', 'me', 1);
+  store.setConversations([conversation({
+    unreadCount: 2,
+    lastMessage: msg({ id: 'm3', height: 3 }),
+  })]);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 2);
+});
+
 test('applyRead rejects fractional and non-finite heights', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
@@ -1420,6 +1449,7 @@ test('burn expiry removes both cached messages and the conversation preview', ()
   const expired = msg({
     id: 'expired-burn-message',
     createdAt: new Date(Date.now() - 120_000).toISOString(),
+    burnExpiresAt: new Date(Date.now() - 60_000).toISOString(),
   });
   store.setConversations([
     conversation({
@@ -1529,7 +1559,9 @@ test('burn expiry clears the stale unread badge with its expired preview', () =>
   const store = useChatStore.getState();
   const expired = msg({
     id: 'expired-unread-message',
+    sender: {id: 'other', nickname: 'other', avatarUrl: null},
     createdAt: new Date(Date.now() - 120_000).toISOString(),
+    burnExpiresAt: new Date(Date.now() - 60_000).toISOString(),
   });
   store.setConversations([
     conversation({
@@ -1538,7 +1570,7 @@ test('burn expiry clears the stale unread badge with its expired preview', () =>
       burnStartedAt: new Date(Date.now() - 180_000).toISOString(),
       lastMessage: expired,
       lastMessageAt: expired.createdAt,
-      unreadCount: 3,
+      unreadCount: 1,
     }),
   ]);
   store.ingestMessages('conv-1', [expired]);
@@ -1571,7 +1603,7 @@ test('server burned-message notifications remove the peer copy and roll back pre
   assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'older');
 });
 
-test('viewer self-destruct policy purges cached content without conversation burn', () => {
+test('my setting cannot purge messages without an author-stamped expiry', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
   assert.equal(typeof store.setViewerSelfDestructSec, 'function');
@@ -1597,9 +1629,9 @@ test('viewer self-destruct policy purges cached content without conversation bur
 
   assert.equal(
     useChatStore.getState().messagesByConversation['conv-1'].length,
-    0,
+    1,
   );
-  assert.equal(useChatStore.getState().conversations[0].lastMessage, null);
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, expired.id);
 });
 
 test('server snapshots advance the self-destruct cache epoch when a conversation policy changes', () => {
@@ -1675,7 +1707,7 @@ test('a membership teardown clears the cache without leaving a watermark', () =>
 
 // 服务端与 App 都按持久化的 burnStartedAt 保留开启前的消息。chat:burned_messages
 // 不能把边界之前的本地副本一并删掉，否则实时通知会短暂破坏这条跨端契约。
-test('server burned-message notifications keep messages sent before this device saw burn enabled', () => {
+test('another author burn notification ignores my setting activation boundary', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();
   const now = Date.now();
@@ -1712,17 +1744,17 @@ test('server burned-message notifications keep messages sent before this device 
 
   assert.equal(
     useChatStore.getState().messagesByConversation['conv-1'].map((m) => m.id).join(','),
-    'before-start',
+    '',
   );
   assert.equal(
-    useChatStore.getState().conversations[0].lastMessage.id,
-    'before-start',
+    useChatStore.getState().conversations[0].lastMessage,
+    null,
   );
   // 本地库按同一边界删：内存窗口外的行也不能越过边界。
   assert.equal(deletes.length, 1);
   assert.equal(deletes[0][0], 'conv-1');
   assert.deepEqual([...deletes[0][1]], ['before-start', 'after-start']);
-  assert.equal(deletes[0][2]?.createdAtNotBefore, startedAt);
+  assert.equal(deletes[0][2], undefined);
 });
 
 test('server burned-message notifications converge fully when this device never saw burn enabled', () => {
@@ -1966,7 +1998,7 @@ test('conversation snapshots carry this user read position and clear floor to of
   assert.equal(useChatStore.getState().clearedBeforeHeightByConversation['conv-1'], 2);
 });
 
-test('an unsent photo is deleted from the device when its message burns', async () => {
+test('unsent media is preserved because it has no server expiry', async () => {
   const deleted = [];
   const { useChatStore } = loadChatStore({
     pendingMedia: {
@@ -2005,9 +2037,65 @@ test('an unsent photo is deleted from the device when its message burns', async 
 
   assert.equal(
     useChatStore.getState().messagesByConversation['conv-1'].length,
-    0,
+    1,
   );
   // 气泡和 outbox 行都烧掉了,副本不跟着删的话,这张没发出去的私人照片要等到
   // 下次冷启动清孤儿(还得过宽限期)或者登出才会从设备上消失。
-  assert.deepEqual(deleted, [['me', 'd-photo']]);
+  assert.deepEqual(deleted, []);
+});
+
+test('only the author-stamped message expires; another sender and their setting are preserved', async () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  const expired = msg({ id: 'mine', height: 1, sender: { id: 'me', nickname: 'me', avatarUrl: null }, burnExpiresAt: new Date(Date.now() - 1).toISOString() });
+  const peer = msg({ id: 'peer', height: 2, sender: { id: 'other', nickname: 'other', avatarUrl: null } });
+  store.setConversations([conversation({burnDurationSec:60, unreadCount:1, lastMessage:expired})]);
+  await store.ingestMessages('conv-1', [expired, peer]);
+  await store.purgeExpiredBurnMessages();
+  const state = useChatStore.getState();
+  assert.deepEqual(Array.from(state.messagesByConversation['conv-1'], (m) => m.id), ['peer']);
+  assert.equal(state.conversations[0].unreadCount, 1, 'my expiring message cannot clear the peer unread');
+  assert.equal(state.conversations[0].burnDurationSec, 60);
+});
+
+test('receiving an expiring peer message starts expiry cleanup with my setting off', async () => {
+  const {useChatStore} = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation({burnDurationSec:null})]);
+  await store.ingestMessages('conv-1', [msg({id:'expired-peer',burnExpiresAt:new Date(Date.now()-1).toISOString()})]);
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length,0);
+  assert.equal(useChatStore.getState().conversations[0].burnDurationSec,null);
+});
+
+test('local expiry removes the author message and scrubs quotes without deleting peer replies', async () => {
+  const {useChatStore} = loadChatStore();
+  const store = useChatStore.getState();
+  const gone = msg({id:'gone',height:1,burnExpiresAt:new Date(Date.now()-1).toISOString()});
+  const reply = msg({id:'reply',height:2,type:'quote',replyToId:'gone',replyTo:{id:'gone',type:'text',text:'private original'},content:{text:'peer reply',quotedText:'private original'}});
+  store.setConversations([conversation({lastMessage:reply})]);
+  await store.ingestMessages('conv-1',[gone,reply]);
+  const state=useChatStore.getState();
+  assert.equal(state.messagesByConversation['conv-1'].length,1);
+  assert.equal(state.messagesByConversation['conv-1'][0].content.text,'peer reply');
+  assert.equal(state.messagesByConversation['conv-1'][0].content.quotedText,'');
+  assert.equal(state.conversations[0].lastMessage.content.quotedText,'');
+});
+
+test('upgrade removes an expired legacy row whose server expiry field is absent', async () => {
+ const {useChatStore} = loadChatStore();
+ const store = useChatStore.getState();
+ store.setConversations([conversation()]);
+ await store.ingestMessages('conv-1',[msg({id:'legacy',height:1,burnDurationSec:60,createdAt:new Date(Date.now()-120000).toISOString()})]);
+ await store.purgeExpiredBurnMessages();
+ assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length,0);
+});
+
+test('legacy cache falls back to its stored conversation policy but explicit null keeps the server decision', async () => {
+ const {useChatStore} = loadChatStore(); const store=useChatStore.getState();
+ store.setConversations([conversation({burnDurationSec:60,burnStartedAt:new Date(Date.now()-300000).toISOString()})]);
+ await store.ingestMessages('conv-1',[msg({id:'legacy-no-duration',height:1,createdAt:new Date(Date.now()-120000).toISOString()}),msg({id:'server-kept',height:2,createdAt:new Date(Date.now()-120000).toISOString(),burnExpiresAt:null})]);
+ await store.purgeExpiredBurnMessages();
+ assert.deepEqual(Array.from(useChatStore.getState().messagesByConversation['conv-1'],m=>m.id),['server-kept']);
 });

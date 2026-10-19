@@ -336,9 +336,9 @@ test('typing flows end to end: throttle-send behind settings, store expiry, head
   assert.match(dispatcher, /CHAT_EVENTS\.typing/);
 });
 
-test('muted conversations suppress the in-app banner', () => {
+test('muted conversations enqueue silent in-app banners', () => {
   const dispatcher = read('src/chat-core/dispatcher.ts');
-  assert.match(dispatcher, /conversation\.muted\) return 'suppressed'/);
+  assert.match(dispatcher, /silent: conversation\.muted/);
 });
 
 test('file and unknown message types render placeholders, never blank bubbles', () => {
@@ -598,7 +598,7 @@ test('burn expiry is scheduled and self-destruct images avoid disk caching', () 
   assert.match(image, /cachePolicy=\{ephemeral \? 'memory' : 'memory-disk'\}/);
   assert.match(
     image,
-    /const ephemeral = \(message\.burnDurationSec \?\? 0\) > 0 \|\| selfDestructEnabled/,
+    /const ephemeral = isEphemeralMessage\(message, selfDestructEnabled\)/,
   );
   assert.match(image, /selfDestructCacheKey/);
 });

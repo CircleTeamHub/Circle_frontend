@@ -23,6 +23,7 @@ import {
 } from '@/services/api/conversation-groups';
 import type { CustomConversationGroup } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { getApiErrorMessage } from '@/services/api/errors';
 
 interface ConversationGroupsState {
   groups: CustomConversationGroup[];
@@ -93,12 +94,10 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
           });
         } catch (err) {
           reportHandledFailure('messageGroups', 'load', err);
-          // 用 duck-typing 而非 `instanceof Error` —— 后者在 vm.runInNewContext / 跨 realm
-          // 场景下不可靠；任意带 string message 的对象都接受。
-          const message =
-            err && typeof err === 'object' && typeof (err as { message?: unknown }).message === 'string'
-              ? (err as { message: string }).message
-              : i18n.t('messages.groups.loadFailed', { defaultValue: '加载失败' });
+          const message = getApiErrorMessage(
+            err,
+            i18n.t('messages.groups.loadFailed', { defaultValue: '加载失败' }),
+          );
           set({ loading: false, error: message });
         }
       },

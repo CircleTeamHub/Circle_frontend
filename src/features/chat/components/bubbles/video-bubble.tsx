@@ -1,3 +1,4 @@
+import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -137,7 +138,7 @@ export function VideoBubble({
   }, [message.videoHeight, message.videoWidth]);
   const durationLabel = formatDuration(message.videoDuration);
   const posterUrl = message.videoThumbUrl;
-  const ephemeral = (message.burnDurationSec ?? 0) > 0 || selfDestructEnabled;
+  const ephemeral = isEphemeralMessage(message, selfDestructEnabled);
   useEphemeralImageDiskCacheSweep(ephemeral, selfDestructCacheKey);
 
   const videoUrl = message.videoUrl;

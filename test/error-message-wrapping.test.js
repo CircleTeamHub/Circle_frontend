@@ -105,3 +105,15 @@ test('client diagnostics expose a helper for raw error detail', () => {
   const src = read('src/utils/client-diagnostics.ts');
   assert.match(src, /export function diagnosticErrorMessage/);
 });
+
+test('UI error stores map failures instead of copying raw messages', () => {
+  for (const file of [
+    'src/features/messages/store/use-message-groups-store.ts',
+    'src/stores/supportConfigStore.ts',
+    'src/stores/membershipProgramStore.ts',
+  ]) {
+    const src = read(file);
+    assert.match(src, /getApiErrorMessage\(/, file);
+    assert.doesNotMatch(src, /(?:err|error)(?:\s+as\s+\{[^}]*\})?\)?\.message/, file);
+  }
+});

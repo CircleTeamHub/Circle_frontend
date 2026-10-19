@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import {
-  ErrorBoundary as ExpoRouterErrorBoundary,
-  type ErrorBoundaryProps,
-} from 'expo-router';
+import type { ErrorBoundaryProps } from 'expo-router';
+import { Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import i18n from '@/i18n';
+import { darkColors, lightColors } from '@/theme/colors';
 import { reportError } from './sentry';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
@@ -34,9 +34,33 @@ export function reportRouteRenderError(error: unknown): boolean {
 }
 
 export function RouteErrorBoundary(props: ErrorBoundaryProps) {
-  const { error } = props;
+  const { error, retry } = props;
+  // 不依赖可能正在崩溃的 ThemeProvider。
+  const colors = useColorScheme() === 'dark' ? darkColors : lightColors;
   useEffect(() => {
     reportRouteRenderError(error);
   }, [error]);
-  return <ExpoRouterErrorBoundary {...props} />;
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text accessibilityRole="alert" style={[styles.message, { color: colors.text }]}>
+        {i18n.t('common.retryLater', { defaultValue: '请稍后重试' })}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        testID="router_error_retry"
+        onPress={retry}
+        style={[styles.button, { backgroundColor: colors.primary }]}
+      >
+        <Text style={{ color: colors.white }}>
+          {i18n.t('common.retry', { defaultValue: '重试' })}
+        </Text>
+      </Pressable>
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16 },
+  message: { fontSize: 16, textAlign: 'center' },
+  button: { minHeight: 48, minWidth: 96, justifyContent: 'center', alignItems: 'center', borderRadius: 12 },
+});

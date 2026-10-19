@@ -708,7 +708,7 @@ export function fetchMessageReaders(
   );
 }
 
-/** S-01 会话级阅后即焚:任一方设置双方生效(GROUP 限圈主/管理员);0=关。 */
+/** 设置本人新发送消息的焚毁时长；不会修改其他成员的设置。0=关。 */
 export async function setChatBurnDuration(
   conversationId: string,
   seconds: number | null,

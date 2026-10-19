@@ -1185,7 +1185,7 @@ test("storage settings only contains storage actions and omits account actions",
   assert.doesNotMatch(storageSource, /settingsDetails\.storage\.logout/);
 });
 
-test("system announcements screen exposes latest app information and patches", () => {
+test("system announcements screen shows server notifications and opens their details", () => {
   const source = fs.readFileSync(
     path.join(
       process.cwd(),
@@ -1222,11 +1222,14 @@ test("system announcements screen exposes latest app information and patches", (
   assert.match(source, /fetchProfileNotifications/);
   assert.match(source, /markProfileNotificationsRead/);
   assert.match(source, /FlatList/);
-  assert.match(source, /SYSTEM_ANNOUNCEMENTS\.map/);
+  assert.match(source, /data=\{visibleItems\}/);
+  assert.match(source, /height:\s*156/);
+  assert.match(source, /Date\.parse\(b\.createdAt\)/);
+  assert.doesNotMatch(source, /SYSTEM_ANNOUNCEMENTS\.map/);
   assert.match(source, /accessibilityRole="button"/);
   assert.match(source, /profile\/system-announcements\/\[id\]/);
-  assert.match(source, /ListEmptyComponent=\{null\}/);
-  assert.match(detail, /getSystemAnnouncement\(announcementId\)/);
+  assert.match(source, /ListEmptyComponent=/);
+  assert.match(detail, /fetchProfileNotificationDetail\(notificationId\)/);
   assert.match(detail, /systemAnnouncements\.detailTitle/);
   assert.match(detail, /systemAnnouncements\.unavailable/);
   assert.match(detailRoute, /SystemAnnouncementDetailScreen/);

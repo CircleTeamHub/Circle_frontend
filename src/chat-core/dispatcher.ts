@@ -267,6 +267,8 @@ function applyRemoteBurnChange(
   if (message.type !== 'system') return;
   const content = message.content;
   if (content['kind'] !== 'burn-changed') return;
+  // The notice names its author; other members' choices cannot change my setting.
+  if (content['userId'] !== store.currentUserId) return;
   const seconds = content['seconds'];
   if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return;
   // 新服务端随系统消息带持久化边界，保证改档位不会把旧窗口重置；滚动升级期间
@@ -874,6 +876,8 @@ function enqueueForegroundBanner(
   message: ChatMessageDto,
 ): 'enqueued' | 'suppressed' | 'needs-conversation' {
   const store = useChatStore.getState();
+  if (store.appForeground === false) return 'suppressed';
+  if (message.burnExpiresAt && Date.parse(message.burnExpiresAt) <= Date.now()) return 'suppressed';
   const selfId = store.currentUserId;
   if (selfId !== null && message.sender?.id === selfId) return 'suppressed';
   if (store.activeConversationId === message.conversationId) return 'suppressed';
@@ -883,8 +887,7 @@ function enqueueForegroundBanner(
     (c) => c.id === message.conversationId,
   );
   if (!conversation) return 'needs-conversation';
-  // 免打扰的会话不弹端内横幅(与推送静音同一语义;未读数照常累计)。
-  if (conversation.muted) return 'suppressed';
+  // 免打扰仍显示端内横幅,但不发声音/震动提示。
 
   const isGroup = conversation.type === 'GROUP';
   // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
@@ -907,6 +910,7 @@ function enqueueForegroundBanner(
 
   useNotificationSnackbarStore.getState().enqueueChatMessage({
     id: message.id,
+    silent: conversation.muted,
     title,
     summary,
     // 头像地址仍要过媒体白名单:横幅一出现就会自动发起这次图片请求。

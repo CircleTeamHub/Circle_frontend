@@ -32,6 +32,8 @@ function loadStore(fetchConfig) {
   const mod = loadTsModule('src/stores/supportConfigStore.ts', {
     requireShim: (specifier) => {
       if (specifier === 'zustand') return require('zustand');
+      if (specifier === '@/i18n') return { __esModule: true, default: { t: (_key, options) => options.defaultValue } };
+      if (specifier === '@/services/api/errors') return { getApiErrorMessage: (_error, fallback) => fallback };
       if (specifier === '@/services/api/support') {
         return {
           SUPPORT_CATEGORY_IDS: [
@@ -103,7 +105,7 @@ test('a failed forced refresh expires the cached roster instead of keeping a rev
   // 订单、转账凭证发过去 —— 撤销就永远不生效。宁可空,屏幕据 error 显示重试。
   assert.equal(result, null);
   assert.equal(store.getState().config, null);
-  assert.equal(store.getState().error, 'offline');
+  assert.equal(store.getState().error, '请稍后重试');
   assert.equal(store.getState().loading, false);
 });
 

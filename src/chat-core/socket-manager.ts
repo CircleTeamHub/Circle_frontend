@@ -42,7 +42,6 @@ import {
   CHAT_EVENTS,
   CHAT_WS_PATH,
   SERVER_COMPENSATED_TYPES,
-  type ChatConversationDto,
   type ChatPresenceDetail,
   type ChatReadAck,
   type ChatSendAck,
@@ -683,20 +682,6 @@ function teardownSocket(): void {
  * 不覆盖已到手的服务端数据);outbox 里的失败消息还原成失败态乐观气泡;
  * 未上报的已读水位种回 pending 队列。全程尽力而为。
  */
-function effectiveSelfDestructSeconds(
-  conversation: ChatConversationDto | undefined,
-  viewerSelfDestructSec: number,
-): number | null {
-  const viewerSeconds = viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
-  const conversationSeconds =
-    conversation?.burnDurationSec && conversation.burnDurationSec > 0
-      ? conversation.burnDurationSec
-      : null;
-  return conversationSeconds && viewerSeconds
-    ? Math.min(conversationSeconds, viewerSeconds)
-    : (conversationSeconds ?? viewerSeconds);
-}
-
 const DROP_OUTBOX_ENTRY = Symbol('dropOutboxEntry');
 
 /**
@@ -775,33 +760,7 @@ async function hydrateFromLocalDb(
     // 还被 outbox 引用着、副本也还在的待发媒体(d)。读不出 outbox 时为 null:
     // 不清理 —— 把「读失败」当成「没有待发」会删光所有没发出去的照片和录音。
     const referencedMedia = outboxEntries ? new Set<string>() : null;
-    // purge 或 outbox 读取期间服务端快照/设置页都可能收紧策略；兜底必须使用
-    // 异步读取完成后的当前策略，不能回退到刚从 SQLite 读出的旧会话策略。
-    const policyState = useChatStore.getState();
-    const conversationsById = new Map(
-      policyState.conversations.map((conversation) => [
-        conversation.id,
-        conversation,
-      ]),
-    );
-    const viewerSelfDestructSec = policyState.viewerSelfDestructSec;
-    const outboxCutoffNow = Date.now();
     for (const entry of pending) {
-      const selfDestructSeconds = effectiveSelfDestructSeconds(
-        conversationsById.get(entry.conversationId),
-        viewerSelfDestructSec,
-      );
-      const createdAt = Date.parse(entry.createdAt);
-      // SQLite 删除失败会被本地缓存层降级吞掉；水合入口仍须执行同一策略，不能把
-      // 尚未删掉的私密正文重新插回时间线。删除会在后续周期 sweep 中继续重试。
-      if (
-        selfDestructSeconds &&
-        Number.isFinite(createdAt) &&
-        createdAt < outboxCutoffNow - selfDestructSeconds * 1000
-      ) {
-        void outboxDelete(entry.d);
-        continue;
-      }
       // 先认账:本地时间线里已经有同 d 的**已确认**消息(height>0),说明这条
       // 其实发出去了,只是当初出队那一下没落盘。不拦住的话 mergeMessages 按 d
       // 去重会把那条已确认的删掉、换上下面这个 height=0 的占位,再被
