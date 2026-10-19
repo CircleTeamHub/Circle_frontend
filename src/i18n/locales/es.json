@@ -2802,7 +2802,8 @@
       "submit": "Restablecer contraseña",
       "submitting": "Restableciendo…",
       "successBody": "Se cerró la sesión en todos los dispositivos. Inicia sesión con tu nueva contraseña.",
-      "successTitle": "Contraseña restablecida"
+      "successTitle": "Contraseña restablecida",
+      "spamHint": "¿No recibiste el código? Revisa la carpeta de spam y añade el remitente a tus contactos."
     },
     "deviceVerification": {
       "title": "Verificación de nuevo dispositivo",

@@ -2794,7 +2794,8 @@
       "submit": "비밀번호 재설정",
       "submitting": "재설정 중…",
       "successBody": "모든 기기에서 로그아웃되었습니다. 새 비밀번호로 다시 로그인해 주세요.",
-      "successTitle": "비밀번호가 재설정되었습니다"
+      "successTitle": "비밀번호가 재설정되었습니다",
+      "spamHint": "인증 코드를 받지 못했나요? 스팸함을 확인하고 발신 주소를 연락처에 추가해 주세요."
     },
     "deviceVerification": {
       "title": "새 기기 인증",

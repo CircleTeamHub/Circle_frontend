@@ -137,7 +137,8 @@
       "submit": "Reset password",
       "submitting": "Resetting…",
       "successBody": "All devices have been signed out. Please log in with your new password.",
-      "successTitle": "Password reset"
+      "successTitle": "Password reset",
+      "spamHint": "Didn't get the code? Check your spam folder and add the sender to your contacts."
     },
     "deviceVerification": {
       "title": "New device verification",

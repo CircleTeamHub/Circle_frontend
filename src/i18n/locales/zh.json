@@ -137,7 +137,8 @@
       "submit": "重置密码",
       "submitting": "重置中…",
       "successBody": "所有设备已退出登录，请用新密码重新登录。",
-      "successTitle": "密码已重置"
+      "successTitle": "密码已重置",
+      "spamHint": "没收到验证码？请查看垃圾邮件文件夹，并把发件地址加入联系人。"
     },
     "deviceVerification": {
       "title": "陌生设备登录验证",

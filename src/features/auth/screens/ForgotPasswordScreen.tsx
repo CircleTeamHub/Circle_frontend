@@ -45,6 +45,10 @@ const s = StyleSheet.create({
   error: {
     ...Typography.caption,
   },
+  hint: {
+    ...Typography.caption,
+    lineHeight: 18,
+  },
   submitBtn: {
     height: 50,
     borderRadius: 25,
@@ -150,6 +154,7 @@ export function ForgotPasswordScreen() {
       page: { flex: 1, backgroundColor: colors.background },
       title: { color: colors.text },
       subtitle: { color: colors.textSecondary },
+      hint: { color: colors.textSecondary },
       sendText: { color: colors.primary },
       sendTextDisabled: { color: colors.textSecondary },
       error: { color: colors.error },
@@ -228,6 +233,15 @@ export function ForgotPasswordScreen() {
           textContentType="newPassword"
           autoComplete="new-password"
         />
+
+        {sendCode.running ? (
+          // 验证码邮件常被 QQ / 163 判进垃圾箱：重发解决不了，提示去垃圾箱找最有效。
+          <Text style={[s.hint, d.hint]}>
+            {t('auth.resetPassword.spamHint', {
+              defaultValue: '没收到验证码？请查看垃圾邮件文件夹，并把发件地址加入联系人。',
+            })}
+          </Text>
+        ) : null}
 
         {error || sendCode.error ? (
           <Text style={[s.error, d.error]}>{error ?? sendCode.error}</Text>
