@@ -22,14 +22,7 @@ export function useBurnNotice({
   remoteBurnPolicy,
   conversationType,
 }: BurnNoticeParams) {
-  // 会话级阅后即焚由任一方开启后对双方生效；个人全局阅后即焚也要在自己的
-  // 私聊里明确提示。提示开关曾经是一个已经从设置页移除的旧本地字段，继续读取
-  // 它会让历史上保存为 false 的用户永久看不到提示，因此这里不再用它拦截。
-  // 会话策略和本人的全局策略同时存在时，实际删除逻辑取更短的窗口；顶部提示
-  // 必须使用同一套规则。否则「个人 5 分钟 + 会话 1 周」会实际 5 分钟消失，
-  // 页面却写成 1 周，提示反而误导用户。
-  // 深链/联系人入口可能在全量会话列表之前打开；私聊页单独拉一次会话策略补齐开关。
-  // 对端的全局阅后即焚只过滤他自己的视图、不会烧掉这边的消息，不进提示也不进清理。
+  // REST/会话 DTO 只提供本人的发送策略；另一位成员的设置不进入此提示。
   const resolvedConversationBurnDurationSec = conversationBurnEnabled
     ? conversationBurnDurationSec
     : (remoteBurnPolicy?.burnDurationSec ?? 0);
@@ -50,11 +43,11 @@ export function useBurnNotice({
     ? noticeUsesConversationPolicy
       ? t('chat.detail.disappearingMessageNotice', {
           duration: formatBurnDuration(effectiveBurnDurationSec),
-          defaultValue: '此对话已开启阅后即焚，新消息将在 {{duration}} 后消失',
+          defaultValue: '你发送的新消息将在对方已读 {{duration}} 后消失，不影响对方发送的消息。平台会在消息消失后留存180天，供授权管理员审计。',
         })
       : t('chat.detail.personalDisappearingMessageNotice', {
           duration: formatBurnDuration(effectiveBurnDurationSec),
-          defaultValue: '你已开启阅后即焚，新消息将在 {{duration}} 后消失',
+          defaultValue: '你发送的新消息将在对方已读 {{duration}} 后消失，不影响对方发送的消息。平台会在消息消失后留存180天，供授权管理员审计。',
         })
     : null;
 

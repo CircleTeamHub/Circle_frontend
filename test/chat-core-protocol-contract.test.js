@@ -24,6 +24,7 @@ const hasBackend = fs.existsSync(BACKEND_CONSTANTS_PATH);
 const FE_EVENTS = {
   send: 'chat:send',
   read: 'chat:read',
+  burnStarted: 'chat:burn_started',
   typing: 'chat:typing',
   message: 'chat:msg',
   conversation: 'chat:conversation',

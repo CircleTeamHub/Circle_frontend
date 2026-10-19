@@ -99,7 +99,8 @@
     "react-native-webview": "13.16.0",
     "react-native-worklets": "0.10.3",
     "socket.io-client": "^4.8.3",
-    "zustand": "^5.0.12"
+    "zustand": "^5.0.12",
+    "@circle/e2ee": "file:packages/e2ee"
   },
   "overrides": {
     "@expo/cli": {

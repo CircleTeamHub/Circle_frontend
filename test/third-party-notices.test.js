@@ -71,6 +71,10 @@ test('license artifacts are deterministic, complete, and machine-readable', () =
   assert.equal(sbom.metadata.component.version, '1.0.1');
   assert.ok(sbom.components.length > 100);
   const componentNames = new Set(sbom.components.map((component) => component.name));
+  assert.equal(componentNames.has('@circle/e2ee'), false, 'private local code is first-party');
+  for (const dependency of ['ts-mls', '@hpke/core', '@noble/ciphers', '@noble/curves', '@noble/hashes']) {
+    assert.ok(componentNames.has(dependency), `local package dependency is still included: ${dependency}`);
+  }
   for (const platformPackage of [
     '@sentry/cli-linux-x64',
     '@sentry/cli-win32-x64',

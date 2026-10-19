@@ -270,8 +270,8 @@
       "voiceHoldToTalk": "Mantén para hablar",
       "previewPlaceholder": "La conexión no está lista",
       "inputPlaceholder": "Escribe un mensaje…",
-      "disappearingMessageNotice": "Los mensajes temporales están activados en este chat. Los mensajes nuevos desaparecen después de {{duration}}.",
-      "personalDisappearingMessageNotice": "Has activado los mensajes temporales. Los mensajes nuevos desaparecen después de {{duration}}.",
+      "disappearingMessageNotice": "Tus nuevos mensajes desaparecen {{duration}} después de que el destinatario los lea. Los mensajes de otros no cambian. La plataforma conserva los mensajes desaparecidos durante 180 días para revisión administrativa autorizada.",
+      "personalDisappearingMessageNotice": "Tus nuevos mensajes desaparecen {{duration}} después de que el destinatario los lea. Los mensajes de otros no cambian. La plataforma conserva los mensajes desaparecidos durante 180 días para revisión administrativa autorizada.",
       "attachmentPanelLabel": "Abrir panel de adjuntos",
       "sendFailedText": "No se pudo enviar el mensaje, inténtalo de nuevo",
       "sensitiveWordBlocked": "Mensaje bloqueado: contiene palabras prohibidas",
@@ -1632,9 +1632,6 @@
     "loadVerifiersFailed": "Error al cargar candidatos, inténtalo de nuevo"
   },
   "discover": {
-    "adLabel": "Publicidad",
-    "adOpen": "Abrir anuncio: {{title}}",
-    "adLinkFailed": "No se pudo abrir este enlace. Inténtalo de nuevo.",
     "title": "Momentos",
     "circleTitle": "Actividad de círculos",
     "plaza": "Plaza",
@@ -2678,7 +2675,8 @@
     "codeUpdateDisabledTitle": "Comprobación no disponible",
     "codeUpdateDisabledMessage": "Las actualizaciones en línea no están disponibles en versiones de desarrollo. Usa una compilación de producción para verificarlas.",
     "codeUpdateFailedTitle": "Error al actualizar el contenido",
-    "codeUpdateFailedMessage": "No se pudo descargar la actualización del contenido. Comprueba la conexión e inténtalo de nuevo."
+    "codeUpdateFailedMessage": "No se pudo descargar la actualización del contenido. Comprueba la conexión e inténtalo de nuevo.",
+    "requiredTitle": "Update required to continue"
   },
   "shareScreen": {
     "inviteUnavailable": "Código de invitación no disponible",
@@ -2807,6 +2805,8 @@
     },
     "deviceVerification": {
       "title": "Verificación de nuevo dispositivo",
+      "recoveryIntro": "Si reinstalaste la app o no puedes usar tu dispositivo anterior, verifica tu correo vinculado y restablece la contraseña. Se cerrarán las sesiones anteriores. El historial cifrado requiere una recuperación aparte.",
+      "recoverByEmail": "¿Dispositivo anterior no disponible? Recuperar por correo",
       "intro": "Este inicio de sesión proviene de un dispositivo desconocido. Enviamos una solicitud de verificación a tus dispositivos de confianza. Confírmala allí e introduce el código que aparece.",
       "waiting": "Esperando a un dispositivo de confianza · quedan {{time}}",
       "approved": "Confirmado en tu dispositivo de confianza. Introduce el código en {{seconds}} s",
@@ -2990,11 +2990,13 @@
     "hint": "Aviso"
   },
   "systemAnnouncements": {
+    "nextAnnouncement": "Siguiente aviso",
+    "unreadCount": "{{count}} notificaciones sin leer",
     "title": "Anuncios del sistema",
     "detailTitle": "Detalles del anuncio",
     "openAnnouncement": "Ver detalles de {{title}}",
     "unavailable": "Este anuncio no está disponible o se ha retirado",
-    "subtitle": "Aquí aparecerán la información más reciente de la app windnote.ai, las novedades de versiones y las notas de los parches.",
+    "subtitle": "Avisos y notificaciones, del más reciente al más antiguo.",
     "systemNotifications": "Notificaciones de la cuenta",
     "empty": "No hay notificaciones del sistema",
     "loadFailed": "No se pudieron cargar las notificaciones del sistema. Desliza para reintentar",
@@ -3091,8 +3093,8 @@
       "groupDismissed": "Grupo disuelto",
       "messageRevoked": "Se retiró un mensaje",
       "friendAdded": "Ahora son amigos, ¡salúdense!",
-      "burnEnabled": "Mensajes temporales activados ({{duration}})",
-      "burnDisabled": "Mensajes temporales desactivados",
+      "burnEnabled": "El remitente activó los mensajes temporales para sus nuevos mensajes ({{duration}})",
+      "burnDisabled": "El remitente desactivó los mensajes temporales para sus nuevos mensajes",
       "memberSilenced": "Un miembro fue silenciado durante {{duration}}",
       "memberSilencedIndefinitely": "Un miembro fue silenciado",
       "memberUnsilenced": "Se quitó el silencio a un miembro",
@@ -3676,5 +3678,35 @@
       "CANCELLED": "Solicitud cancelada"
     },
     "sentInvitation": "Invitaste a esta persona al grupo"
+  },
+  "e2ee": {
+    "title": "Text encryption and devices",
+    "encryptedText": "[Encrypted text]",
+    "unlockRequired": "Cannot decrypt. Verify devices and sync keys in chat settings.",
+    "disclosure": "Text only. Authorized administrator devices can decrypt text; the server has no private decryption keys. Images, videos and files are excluded. Enabling applies to future texts. New devices cannot automatically read earlier encrypted history. In this development release, the enabling device manages membership; revoking it pauses sending.",
+    "failed": "Operation incomplete. Check device approval, participant and administrator registration, and verified keys, then retry.",
+    "done": "Completed",
+    "verify": "Verify device keys",
+    "verifyHint": "Compare each full public key with its device in person or through an independent trusted channel, including administrator devices. Trust only exact matches.",
+    "verified": "All keys match",
+    "register": "Register device / publish joining key",
+    "deviceLabel": "My App device",
+    "approve": "Approve device",
+    "revoke": "Revoke device",
+    "revokeHint": "This identity cannot be restored. Update conversation keys before sending again. Previously read history cannot be remotely erased.",
+    "conversation": "Conversation",
+    "updateMembers": "Update devices and keys",
+    "enable": "Enable text encryption (permanent)",
+    "sync": "Join / sync encrypted conversation",
+    "refresh": "Refresh device status",
+    "recoveryHint": "Keep your recovery code offline: it decrypts archived text. Register this device first. Archive history on the old device, then enter the code and restore on the new device. Sending keys are never rolled back. Verify the new device and update conversation membership to exchange new messages. Cleared, recalled and expired messages cannot be restored.",
+    "createRecovery": "Create / show local recovery code",
+    "recoveryCode": "Recovery code",
+    "recoverDevice": "Approve this device with recovery code",
+    "backupHistory": "Archive locally decrypted history",
+    "restoreHistory": "Restore archived history",
+    "archiveCount": "Processed {{count}} messages",
+    "repairKey": "Create a replacement encryption device",
+    "repairKeyHint": "The system key is missing. Keep the old sealed database and create a fresh device, then register it and use your recovery code to restore archived history. History that was never archived cannot be recovered."
   }
 }

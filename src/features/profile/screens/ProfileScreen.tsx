@@ -1,3 +1,5 @@
+import { ProfileUnreadBadge } from "../components/ProfileUnreadBadge";
+import { ScrollingAnnouncements } from "../components/ScrollingAnnouncements";
 import { Avatar } from "@/components/ui/avatar";
 import { GradientCover } from "@/components/ui/gradient-cover";
 import { MemberName } from "@/components/ui/member-name";
@@ -99,15 +101,6 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   menuLabel: { ...Typography.bodyRegular, fontWeight: "500", textAlign: "center" },
-  menuUnreadDot: {
-    position: "absolute",
-    top: -3,
-    right: -3,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 2,
-  },
   profileRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -395,7 +388,7 @@ export default function ProfileScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={item.label}
-          accessibilityHint={hasUnread ? t('messages.unread') : undefined}
+          accessibilityHint={hasUnread ? t('systemAnnouncements.unreadCount', { count: profileUnread }) : undefined}
           onPress={() => handleMenuPress(item)}
           style={({ pressed }) => [
             s.menuTile,
@@ -409,10 +402,8 @@ export default function ProfileScreen() {
               size={28}
               color={tint}
             />
-            {hasUnread ? (
-              <View style={[s.menuUnreadDot, { backgroundColor: colors.error, borderColor: colors.surface }]} />
-            ) : null}
           </View>
+          {hasUnread ? <ProfileUnreadBadge count={profileUnread} /> : null}
           {/* tile 内宽只有 (屏宽-72)/3-16 ≈ 91pt(393) / 85pt(375)：英文
               "System Announcements" 与日文「サポートセンター」都放不下一行。
               两行 + 自动缩字，避免按字符断成 'Announcemen / ts'。 */}
@@ -574,6 +565,7 @@ export default function ProfileScreen() {
           )}
         </Pressable>
       </View>
+      <ScrollingAnnouncements />
     </View>
   );
 

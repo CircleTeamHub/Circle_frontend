@@ -9,6 +9,7 @@
  */
 function makeChatCoreStubs() {
   return {
+    '@/services/e2ee/lifecycle': { purgeEncryptedBody: () => {} },
     './chat-notifications': {
       CHAT_NOTIFICATION_CHANNEL_ID: 'chat',
       ensureChatNotificationChannel: async () => {},

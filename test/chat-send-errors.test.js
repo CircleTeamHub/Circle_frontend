@@ -49,7 +49,7 @@ function loadSendErrors({ dev = false } = {}) {
           default: {
             // 真实词条的替身:只有已知 code 才有 serverErrors 文案。
             t: (key, opts) =>
-              key.startsWith('serverErrors.') || key === 'chat.detail.sensitiveWordBlocked'
+              key.startsWith('serverErrors.') || key === 'chat.detail.sensitiveWordBlocked' || key === 'common.errors.uploadFailed'
                 ? `i18n:${key}`
                 : (opts?.defaultValue ?? key),
           },
@@ -128,25 +128,25 @@ test('transient and unknown failures keep the generic retry copy', () => {
   assert.equal(api.getChatSendErrorMessage(new Error('boom'), 'RETRY'), 'RETRY');
 });
 
-test('development builds append the structured socket ack code only', () => {
+test('development builds also hide internal socket ack codes and details', () => {
   const { api, ChatSendError } = loadSendErrors({ dev: true });
   assert.equal(
     api.getChatSendErrorMessage(
       new ChatSendError('CHAT_INVALID_PAYLOAD', 'internal detail'),
       'RETRY',
     ),
-    'RETRY (CHAT_INVALID_PAYLOAD)',
+    'RETRY',
   );
 });
 
-test('sanitized storage upload failures remain actionable to the user', () => {
+test('storage upload failures hide provider codes and use localized copy', () => {
   const { api } = loadSendErrors();
   const error = new Error('上传失败 (400: InvalidRequest)');
   error.name = 'StorageUploadError';
 
   assert.equal(
     api.getChatSendErrorMessage(error, 'RETRY'),
-    '上传失败 (400: InvalidRequest)',
+    'i18n:common.errors.uploadFailed',
   );
   // Arbitrary errors cannot opt into displaying backend/internal text.
   assert.equal(api.getChatSendErrorMessage(new Error('private detail'), 'RETRY'), 'RETRY');

@@ -148,6 +148,7 @@ export interface TransferCardData {
 }
 
 export interface ChatMessage {
+  encryptedContent?: import('@circle/e2ee/relay-client.mjs').EncryptedContent;
   groupInvitation?: { admissionId: string; circleInvitationId?: string; groupName: string; avatarUrl: string | null };
   id: string;
   /** 仅用于本地展示：连续消息合并时隐藏本条旁边的头像。 */
@@ -187,6 +188,7 @@ export interface ChatMessage {
   // 会话查找。带在消息上是为了不依赖「会话列表已加载」——推送冷启动时消息可能
   // 先到，查不到就会把该焚毁的图片按普通图片渲染（落盘 + 可存相册）。
   burnDurationSec?: number | null;
+  burnExpiresAt?: string | null;
   time?: string;
   senderName?: string;
   // 发送者用户 id（UUID 形式），仅接收消息携带；群聊点头像跳对方资料用。
@@ -635,6 +637,7 @@ export type NotificationType =
   | 'PROFILE_LIKE';
 
 export interface NotificationItem {
+  title?: string | null;
   id: string;
   type: NotificationType;
   content: string;

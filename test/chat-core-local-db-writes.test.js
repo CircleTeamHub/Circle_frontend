@@ -363,22 +363,15 @@ test('burn expiry purge batches message and outbox deletion in one transaction',
 
   assert.equal(db.state.transactions, transactionsBefore + 1);
   const deletes = deleteStatements(db);
-  assert.equal(deletes.filter((statement) => statement.sql.includes('messages')).length, 2);
-  assert.equal(deletes.filter((statement) => statement.sql.includes('outbox')).length, 2);
-  // 每条 DELETE 都带 startedAt 下界:阅后即焚是从开启那一刻起生效的。
-  assert.ok(
-    deletes.every((statement) => statement.sql.includes('created_at >= ?')),
-    'purge must be bounded below by startedAt',
-  );
-  assert.ok(
-    deletes.some((statement) => statement.params.includes('2026-08-01T00:00:00.000Z')),
-    'conv-1 startedAt must reach the statement',
-  );
+  assert.equal(deletes.length, 1);
+  assert.match(deletes[0].sql, /burnExpiresAt/);
+  assert.match(deletes[0].sql, /height > 0/);
+  assert.doesNotMatch(deletes[0].sql, /outbox|created_at >=/);
 });
 
 // 没有开启时间就什么都不删 —— 否则一次清理会把用户开启阅后即焚**之前**的
 // 历史一起抹掉,而这既不是用户的意思,也没有任何提示。
-test('burn expiry purge deletes nothing without a startedAt boundary', async () => {
+test('purge uses message expiry rather than another user activation boundary', async () => {
   const db = fakeDatabase();
   const { api } = loadLocalDb(db);
   await api.initChatLocalDb('user-1');
@@ -388,10 +381,11 @@ test('burn expiry purge deletes nothing without a startedAt boundary', async () 
     new Date('2026-08-10T00:00:00.000Z'),
   );
 
-  assert.equal(deleteStatements(db).length, 0);
+  assert.equal(deleteStatements(db).length, 1);
+  assert.match(deleteStatements(db)[0].sql, /burnExpiresAt/);
 });
 
-test('viewer self-destruct also purges orphaned cached rows globally', async () => {
+test('message expiry also purges orphaned cached rows without using my settings', async () => {
   const db = fakeDatabase();
   const { api } = loadLocalDb(db);
   await api.initChatLocalDb('user-1');
@@ -403,7 +397,7 @@ test('viewer self-destruct also purges orphaned cached rows globally', async () 
   );
 
   const deletes = deleteStatements(db);
-  assert.equal(deletes.length, 2);
+  assert.equal(deletes.length, 1);
   assert.ok(
     deletes.every((statement) => !statement.sql.includes('conversation_id')),
     'global viewer policy must not depend on the hydrated conversation list',

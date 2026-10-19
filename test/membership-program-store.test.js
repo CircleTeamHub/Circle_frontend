@@ -17,6 +17,8 @@ function loadStore(fetchStatus) {
   const mod = loadTsModule('src/stores/membershipProgramStore.ts', {
     requireShim: (specifier) => {
       if (specifier === 'zustand') return require('zustand');
+      if (specifier === '@/i18n') return { __esModule: true, default: { t: (_key, options) => options.defaultValue } };
+      if (specifier === '@/services/api/errors') return { getApiErrorMessage: (_error, fallback) => fallback };
       if (specifier === '@/services/api/membership') {
         return {
           fetchMembershipProgramStatus: () => {
@@ -96,5 +98,5 @@ test('failed refresh preserves the last authoritative status', async () => {
     status,
   );
   assert.deepEqual(store.getState().status, status);
-  assert.equal(store.getState().error, 'offline');
+  assert.equal(store.getState().error, '请稍后重试');
 });

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { storage } from '@/storage';
+import { purgeEncryptedBody } from '@/services/e2ee/lifecycle';
 import { isBurnDurationChoice } from './burn-durations';
 import {
   isMessageDeletedLocally,
@@ -102,9 +103,7 @@ export function readViewerTypingPolicy(userId: string): ViewerTypingPolicy {
 /**
  * 阅后即焚「开启时间」的唯一归一化口。
  *
- * 过期判定要求开启时间可解析(见 purgeExpiredBurnMessages),所以每个入库点都必须
- * 保证:关着 → null;开着 → 一个可解析的时刻。少收一处的表现是「界面显示已开启、
- * 消息永不焚毁」,而且不会报任何错 —— 前两轮就是逐个补,补漏了第三个入口。
+ * 用于本人设置的展示与跨端状态同步；消息销毁只认服务端固定的 burnExpiresAt。
  *
  * @param known 该入库点已知的上一个开启时间(没有就传 null)
  */
@@ -151,6 +150,20 @@ function normalizeViewerSelfDestructSec(seconds: number): number | null {
  */
 export type ChatConversationState = ChatConversationDto;
 
+/** Only server-stamped expiry can delete a message; viewer settings cannot. */
+function messageBurnExpiry(message: Pick<ChatMessageDto, 'burnExpiresAt' | 'height' | 'burnDurationSec' | 'createdAt'>, conversation?: ChatConversationDto): number | null {
+  if (message.height <= 0) return null;
+  if (!Object.hasOwn(message, 'burnExpiresAt')) {
+    const duration = message.burnDurationSec ?? conversation?.burnDurationSec ?? 0;
+    const createdAt = Date.parse(message.createdAt);
+    const startedAt = conversation?.burnStartedAt ? Date.parse(conversation.burnStartedAt) : null;
+    if (duration > 0 && Number.isFinite(createdAt) && (startedAt === null || createdAt >= startedAt)) return createdAt + duration * 1000;
+  }
+  if (!message.burnExpiresAt) return null;
+  const expiry = Date.parse(message.burnExpiresAt);
+  return Number.isFinite(expiry) ? expiry : null;
+}
+
 /** Removes expired local previews before a cold-start snapshot reaches the UI. */
 export function sanitizeExpiredConversationPreviews(
   conversations: ChatConversationState[],
@@ -162,34 +175,12 @@ export function sanitizeExpiredConversationPreviews(
     now = viewerSelfDestructStartedAt;
     viewerSelfDestructStartedAt = null;
   }
-  const viewerSeconds = viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
-  const viewerStart = viewerSelfDestructStartedAt
-    ? Date.parse(viewerSelfDestructStartedAt)
-    : NaN;
+  void viewerSelfDestructSec;
   return conversations.map((conversation) => {
-    const conversationSeconds =
-      conversation.burnDurationSec && conversation.burnDurationSec > 0
-        ? conversation.burnDurationSec
-        : null;
-    const previewCreatedAt = conversation.lastMessage
-      ? Date.parse(conversation.lastMessage.createdAt)
-      : NaN;
-    const burnStart = conversation.burnStartedAt
-      ? Date.parse(conversation.burnStartedAt)
-      : NaN;
-    const expiresAt = Number.isFinite(previewCreatedAt)
-      ? Math.min(
-          Number.isFinite(burnStart) && conversationSeconds
-            ? previewCreatedAt + conversationSeconds * 1000
-            : Infinity,
-          Number.isFinite(viewerStart) && viewerSeconds && previewCreatedAt >= viewerStart
-            ? previewCreatedAt + viewerSeconds * 1000
-            : Infinity,
-        )
-      : Infinity;
+    const expiresAt = conversation.lastMessage ? messageBurnExpiry(conversation.lastMessage, conversation) : null;
     if (
       !conversation.lastMessage ||
-      !Number.isFinite(previewCreatedAt) ||
+      expiresAt === null ||
       expiresAt > now
     ) {
       return conversation;
@@ -198,7 +189,7 @@ export function sanitizeExpiredConversationPreviews(
       ...conversation,
       lastMessage: null,
       lastMessageAt: null,
-      unreadCount: 0,
+      unreadCount: conversation.unreadCount,
     };
   });
 }
@@ -536,7 +527,7 @@ interface ChatStoreState {
    * 一页增量同步落到内存(不落盘:本地库那半由同步协调器在一个事务里写,
    * 与游标一起提交)。清空水位、本人已读、墓碑、撤回引用脱敏都在这里收敛。
    */
-  applySyncPage: (conversationId: string, page: ChatSyncPageDto) => void;
+  applySyncPage: (conversationId: string, page: ChatSyncPageDto) => Promise<void>;
   /** 丢掉一个会话的已确认消息缓存(同步落后太多跳到最新 / 服务端要求重建时)。 */
   evictConversationCache: (conversationId: string) => void;
   /** 每会话当前的内存窗口大小(翻页时扩张)。 */
@@ -755,7 +746,7 @@ function hasStaleLiveRevision(
 /**
  * 自己的已读水位推进后,本机未读的收敛值。
  *
- * 有本地时间线时按时间线数「水位之上、非本人发、没撤回」的条数(与服务端口径一致)。
+ * 只有本地时间线完整覆盖水位至末条时,才按时间线数剩余未读。
  * 时间线不在内存里(会话没打开过)时**不再用 `latestHeight - readHeight` 估算**:
  * 高度差把自己发的、系统提示、撤回的消息都算了进去,估出来的数比真实未读大,而
  * min 收敛只会停在一个错的正数上。此时只认「读到了末条」这一种确定情况 —— 清零;
@@ -770,18 +761,25 @@ function convergeUnread(
 ): ChatConversationDto[] | undefined {
   const target = conversations[index];
   const latestHeight = target.lastMessage?.height ?? 0;
+  // 重连快照先于消息补拉落地:旧缓存含已读消息不代表新未读区间也已缓存。
+  // 缺一条都不能用局部条数下调服务端未读,否则离线消息的红点会被清零。
+  const unreadHeights = new Set(
+    timeline
+      .filter((m) => m.height > readHeight && m.height <= latestHeight)
+      .map((m) => m.height),
+  );
   const coversTimeline =
-    timeline.length > 0 &&
-    timeline.some((m) => m.height > 0 && m.height <= readHeight);
-  const remaining = coversTimeline
-    ? timeline.filter(
-        (m) =>
-          m.height > readHeight &&
-          (m.sender?.id ?? null) !== currentUserId &&
-          !m.revokedAt,
-      ).length
-    : readHeight >= latestHeight
-      ? 0
+    latestHeight > readHeight &&
+    unreadHeights.size === latestHeight - readHeight;
+  const remaining = readHeight >= latestHeight
+    ? 0
+    : coversTimeline
+      ? timeline.filter(
+          (m) =>
+            m.height > readHeight &&
+            (m.sender?.id ?? null) !== currentUserId &&
+            !m.revokedAt,
+        ).length
       : target.unreadCount;
   const converged = Math.min(target.unreadCount, remaining);
   if (converged === target.unreadCount) return undefined;
@@ -1155,21 +1153,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const { messagesByConversation, conversations } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
     const target = index >= 0 ? conversations[index] : null;
-    // 边界之前的消息按产品承诺保留；老服务端没提供边界时只能以焚毁通知为准，
-    // 与其它端收敛。
-    const burnStartMs = target?.burnStartedAt
-      ? Date.parse(target.burnStartedAt)
-      : NaN;
-    const hasBurnStart = Number.isFinite(burnStartMs);
-    const isBurned = (message: { id: string; createdAt: string }): boolean => {
-      if (!ids.has(message.id)) return false;
-      if (!hasBurnStart) return true;
-      const createdAtMs = Date.parse(message.createdAt);
-      return !Number.isFinite(createdAtMs) || createdAtMs >= burnStartMs;
-    };
-    const deleteOptions = hasBurnStart
-      ? { createdAtNotBefore: new Date(burnStartMs).toISOString() }
-      : undefined;
+    const isBurned = (message: { id: string }): boolean => ids.has(message.id);
+    const deleteOptions = undefined;
     // 引用了被焚消息的气泡:快照与 quotedText 都带着原文,一并脱敏(本地库那半尽力而为)。
     void redactLocalQuotesOf(conversationId, [...ids], 'gone');
     const rawTimeline = messagesByConversation[conversationId] ?? [];
@@ -1441,6 +1426,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // 而本地库原样留着 —— 不清的话开 App 第一眼看到的就是本该烧掉的内容。
   },
   applyIncomingMessage: (message) => {
+    const expiry = messageBurnExpiry(message, get().conversations.find(c => c.id === message.conversationId));
+    if (expiry !== null && expiry <= Date.now()) return true;
     const {
       conversations,
       currentUserId,
@@ -1608,6 +1595,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   removeMessage: (conversationId, messageId) => {
+    purgeEncryptedBody({ conversationId, serverMessageId: messageId });
     void deleteLocalMessage(conversationId, messageId);
     // height=0 的失败气泡根本不在 messages 表里 —— 它只存在于 outbox。
     // 不把 outbox 行一起删掉的话,那条(用户认为已经删除的)私信正文会无限期
@@ -1818,13 +1806,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
     // G-01:唯一写入口顺手落盘(广播/回执/历史/补拉都汇到这里)。
     // 增量同步例外:它的本地库那半与游标在一个事务里写(见 sync.ts)。
-    if (options?.persist !== false) {
-      return persistLocalMessages(conversationId, incoming);
-    }
-    return Promise.resolve(true);
+    const hasExpiry = incoming.some((message) => messageBurnExpiry(message, get().conversations.find(c => c.id === conversationId)) !== null);
+    const persisted = options?.persist !== false
+      ? persistLocalMessages(conversationId, incoming) : Promise.resolve(true);
+    return persisted.then((durable) => {
+      if (hasExpiry) void get().purgeExpiredBurnMessages();
+      return durable;
+    });
   },
 
-  applySyncPage: (conversationId, page) => {
+  applySyncPage: async (conversationId, page) => {
     const state = get();
     const currentUserId = state.currentUserId;
 
@@ -1939,6 +1930,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         });
       }
     }
+    // Offscreen previews also need a durable fixed deadline and an expiry timer.
+    await get().purgeExpiredBurnMessages();
+    if (get().currentUserId !== currentUserId) return;
+    const reconciled = get().conversations.find((c) => c.id === conversationId);
+    if (reconciled) await upsertLocalConversation(reconciled);
   },
 
   evictConversationCache: (conversationId) => {
@@ -2241,77 +2237,38 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   purgeExpiredBurnMessages: async () => {
+    purgeEncryptedBody({ expired: true });
     const {
       conversations,
       messagesByConversation,
-      viewerSelfDestructSec,
-      viewerSelfDestructStartedAt,
     } = get();
     let nextTimelines: Record<string, ChatMessageDto[]> | null = null;
     let nextConversations: ChatConversationState[] | null = null;
     const durablePreviewWrites: Promise<void>[] = [];
     const localPurges: { conversationId: string; cutoff: Date; startedAt: Date }[] = [];
-    /** 烧掉的失败气泡:它们在 Documents 里还各有一份没发出去的源文件副本。 */
-    const burnedPendingMedia: string[] = [];
     let nextExpiryAt: number | null = null;
-    const viewerSeconds =
-      viewerSelfDestructSec > 0 ? viewerSelfDestructSec : null;
-    const viewerStartMs = viewerSelfDestructStartedAt
-      ? Date.parse(viewerSelfDestructStartedAt)
-      : NaN;
     const now = Date.now();
     for (const conversation of conversations) {
-      const conversationSeconds =
-        conversation.burnDurationSec && conversation.burnDurationSec > 0
-          ? conversation.burnDurationSec
-          : null;
-      const burnStartMs = conversation.burnStartedAt
-        ? Date.parse(conversation.burnStartedAt)
-        : NaN;
-      const burnStart = Number.isFinite(burnStartMs)
-        ? new Date(burnStartMs)
-        : null;
-      const burnCutoff = conversationSeconds
-        ? new Date(now - conversationSeconds * 1000)
-        : null;
       const timeline = messagesByConversation[conversation.id];
-      const expiryFor = (message: ChatMessageDto): number | null => {
-        const createdAt = Date.parse(message.createdAt);
-        if (!Number.isFinite(createdAt)) return null;
-        const expiries: number[] = [];
-        if (
-          conversationSeconds &&
-          Number.isFinite(burnStartMs) &&
-          createdAt >= burnStartMs
-        ) {
-          expiries.push(createdAt + conversationSeconds * 1000);
-        }
-        if (
-          viewerSeconds &&
-          Number.isFinite(viewerStartMs) &&
-          createdAt >= viewerStartMs
-        ) {
-          expiries.push(createdAt + viewerSeconds * 1000);
-        }
-        return expiries.length > 0 ? Math.min(...expiries) : null;
-      };
-      if (conversationSeconds && burnStart && burnCutoff) {
-        localPurges.push({
-          conversationId: conversation.id,
-          cutoff: burnCutoff,
-          startedAt: burnStart,
-        });
+      const expiryFor = (message: ChatMessageDto) => messageBurnExpiry(message, conversation);
+      const expiredIds = new Set((timeline ?? []).filter((message) => {
+        const expiry = expiryFor(message);
+        return expiry !== null && expiry <= now;
+      }).map((message) => message.id));
+      for (const message of timeline ?? []) if (expiredIds.has(message.id) && message.type === 'encrypted-text') {
+        purgeEncryptedBody({ conversationId: conversation.id, clientMessageId: (message.content.envelope as {clientMessageId?: string})?.clientMessageId });
       }
-      const kept = (timeline ?? []).filter((m) => {
+      const rawPreview = conversation.lastMessage;
+      const rawPreviewExpiry = rawPreview ? expiryFor(rawPreview) : null;
+      if (rawPreview && rawPreviewExpiry !== null && rawPreviewExpiry <= now) expiredIds.add(rawPreview.id);
+      let kept = (timeline ?? []).filter((m) => {
         const expiresAt = expiryFor(m);
         if (expiresAt === null || expiresAt > now) return true;
-        // 没发出去的失败气泡(height=0)在持久目录里还留着源文件:那张照片/那段
-        // 录音本身。正文随 outbox 行一起烧掉(purgeExpiredLocalMessages),副本
-        // 没人删的话要等下次冷启动清孤儿、甚至登出才消失。
-        if (m.height === 0 && m.d) burnedPendingMedia.push(m.d);
         return false;
       });
-      const preview = conversation.lastMessage;
+      kept = redactQuotesInTimeline(kept, expiredIds, 'gone') ?? kept;
+      const preview = rawPreview
+        ? (redactQuotesInTimeline([rawPreview], expiredIds, 'gone')?.[0] ?? rawPreview) : null;
       const schedulableMessages =
         preview && !kept.some((message) => message.id === preview.id)
           ? [...kept, preview]
@@ -2322,7 +2279,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           nextExpiryAt = expiresAt;
         }
       }
-      if (timeline?.length && kept.length !== timeline.length) {
+      if (timeline?.length && (kept.length !== timeline.length || kept.some((m, index) => m !== timeline[index]))) {
         nextTimelines ??= { ...messagesByConversation };
         nextTimelines[conversation.id] = kept;
       }
@@ -2333,18 +2290,25 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       // available. The preview itself carries enough information to determine
       // expiry; an unloaded/empty timeline is never proof of deletion.
       const previewExpiresAt = preview ? expiryFor(preview) : null;
-      if (
-        preview &&
-        previewExpiresAt !== null &&
-        previewExpiresAt <= now
-      ) {
-        const replacement = kept.length > 0 ? kept[kept.length - 1] : null;
+      const previewExpired = previewExpiresAt !== null && previewExpiresAt <= now;
+      const expired = new Map((timeline ?? []).filter((message) => {
+        const expiry = expiryFor(message);
+        return expiry !== null && expiry <= now;
+      }).map((message) => [message.id, message]));
+      if (previewExpired && preview) expired.set(preview.id, preview);
+      const selfId = get().currentUserId;
+      const readHeight = get().readWatermarks[conversation.id]?.[selfId ?? ''] ?? 0;
+      const expiredUnread = [...expired.values()].filter((message) =>
+        message.height > readHeight && !message.revokedAt &&
+        (selfId === null || message.sender?.id !== selfId),
+      ).length;
+      if (previewExpired || preview !== rawPreview || (expiredUnread > 0 && conversation.unreadCount > 0)) {
+        const replacement = previewExpired ? (kept[kept.length - 1] ?? null) : preview;
         const sanitized = {
           ...conversation,
           lastMessage: replacement,
           lastMessageAt: replacement?.createdAt ?? null,
-          // 在下一份服务器快照到来前，不能让已过期预览继续带着幽灵红点。
-          unreadCount: 0,
+          unreadCount: Math.max(0, conversation.unreadCount - expiredUnread),
         };
         nextConversations ??= [...conversations];
         const index = nextConversations.findIndex(
@@ -2366,30 +2330,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     }
     scheduleNextBurnPurge(
       nextExpiryAt,
-      Number.isFinite(viewerStartMs) ||
-        conversations.some(
-          (conversation) =>
-            (conversation.burnDurationSec ?? 0) > 0 &&
-            Boolean(conversation.burnStartedAt),
-        ),
+      nextExpiryAt !== null,
     );
-    const userId = get().currentUserId;
     await Promise.all([
-      purgeExpiredLocalMessages(
-        localPurges,
-        viewerSeconds === null
-          ? undefined
-          : new Date(now - viewerSeconds * 1000),
-        Number.isFinite(viewerStartMs) ? new Date(viewerStartMs) : undefined,
-      ),
+      purgeExpiredLocalMessages(localPurges),
       ...durablePreviewWrites,
-      ...(userId
-        ? burnedPendingMedia.map((d) => deletePendingMedia(userId, d))
-        : []),
     ]);
   },
 
   clearConversationLocal: (conversationId, clearedBeforeHeight) => {
+    purgeEncryptedBody({ conversationId });
     void clearLocalConversationMessages(conversationId);
     const {
       conversations,
@@ -2477,6 +2427,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     ) {
       return false;
     }
+    purgeEncryptedBody({ conversationId, serverMessageId: messageId });
     const alreadyRevoked =
       Boolean(existing?.revokedAt) ||
       (target?.lastMessage?.id === messageId &&

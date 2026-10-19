@@ -1,3 +1,4 @@
+import { AppOperationsHost } from "@/components/app/AppOperationsHost";
 // 导入 React Navigation 的主题系统，用于给导航栏（header、tab bar 等）应用深色/浅色主题
 import {
   DarkTheme,
@@ -311,6 +312,7 @@ function RootLayout() {
     <ThemeProvider>
       <MemberNameAnimationProvider>
         <AppUpdateHost />
+        <AppOperationsHost />
         <SessionBootstrap />
         <AuthRouteGuard>
           {/* Android 玻璃面（弹窗 / 顶部横幅）的模糊靶子：整棵 App 内容。 */}

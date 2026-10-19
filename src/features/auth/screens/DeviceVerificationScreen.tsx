@@ -259,6 +259,21 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
           onBackToLogin={backToLogin}
         />
 
+        <View style={{ gap: Spacing.sm }}>
+          <Text style={[s.intro, d.intro]}>{t('auth.deviceVerification.recoveryIntro')}</Text>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityState={{ disabled: submitting || committing }}
+            disabled={submitting || committing}
+            hitSlop={8}
+            onPress={() => {
+              if (!submitting && !committing) router.replace('/(auth)/forgot-password');
+            }}
+          >
+            <Text style={d.link}>{t('auth.deviceVerification.recoverByEmail')}</Text>
+          </Pressable>
+        </View>
+
         {securityCodeAvailable && !isTerminal && !inRecoveryView ? (
           <Pressable onPress={toggleMode} hitSlop={8}>
             <Text style={[s.link, d.link]}>

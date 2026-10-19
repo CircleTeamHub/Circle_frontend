@@ -267,8 +267,8 @@
       "voiceHoldToTalk": "눌러서 말하기",
       "previewPlaceholder": "연결이 완료되지 않았습니다",
       "inputPlaceholder": "메시지 입력…",
-      "disappearingMessageNotice": "이 채팅에서 사라지는 메시지가 켜져 있습니다. 새 메시지는 {{duration}} 후 사라집니다.",
-      "personalDisappearingMessageNotice": "사라지는 메시지를 켰습니다. 새 메시지는 {{duration}} 후 사라집니다.",
+      "disappearingMessageNotice": "내가 보내는 새 메시지는 상대방이 읽은 후 {{duration}}이 지나면 사라집니다. 다른 사람의 메시지에는 영향을 주지 않습니다. 플랫폼은 권한 있는 관리자의 감사를 위해 사라진 메시지를 180일 동안 보관합니다.",
+      "personalDisappearingMessageNotice": "내가 보내는 새 메시지는 상대방이 읽은 후 {{duration}}이 지나면 사라집니다. 다른 사람의 메시지에는 영향을 주지 않습니다. 플랫폼은 권한 있는 관리자의 감사를 위해 사라진 메시지를 180일 동안 보관합니다.",
       "attachmentPanelLabel": "첨부 패널 열기",
       "sendFailedText": "메시지를 보내지 못했습니다. 다시 시도해 주세요",
       "sensitiveWordBlocked": "금지어가 포함되어 있어 메시지가 차단되었습니다",
@@ -1624,9 +1624,6 @@
     "loadVerifiersFailed": "후보를 불러오지 못했습니다, 다시 시도하세요"
   },
   "discover": {
-    "adLabel": "광고",
-    "adOpen": "광고 열기: {{title}}",
-    "adLinkFailed": "링크를 열 수 없습니다. 다시 시도해 주세요.",
     "title": "모먼트",
     "circleTitle": "서클 활동",
     "plaza": "광장",
@@ -2670,7 +2667,8 @@
     "codeUpdateDisabledTitle": "확인할 수 없습니다",
     "codeUpdateDisabledMessage": "개발 빌드에서는 온라인 앱 콘텐츠 업데이트를 확인할 수 없습니다. 릴리스 빌드에서 확인하세요.",
     "codeUpdateFailedTitle": "앱 콘텐츠 업데이트 실패",
-    "codeUpdateFailedMessage": "앱 콘텐츠 업데이트를 다운로드할 수 없습니다. 네트워크를 확인한 후 다시 시도하세요."
+    "codeUpdateFailedMessage": "앱 콘텐츠 업데이트를 다운로드할 수 없습니다. 네트워크를 확인한 후 다시 시도하세요.",
+    "requiredTitle": "Update required to continue"
   },
   "shareScreen": {
     "inviteUnavailable": "초대 코드를 사용할 수 없습니다",
@@ -2799,6 +2797,8 @@
     },
     "deviceVerification": {
       "title": "새 기기 인증",
+      "recoveryIntro": "앱을 다시 설치했거나 이전 기기를 사용할 수 없다면 연결된 이메일을 인증하고 비밀번호를 재설정하여 로그인할 수 있습니다. 이전 기기는 로그아웃됩니다. 암호화된 채팅 기록은 별도로 복구해야 합니다.",
+      "recoverByEmail": "이전 기기를 사용할 수 없나요? 이메일로 복구",
       "intro": "알 수 없는 기기에서 로그인을 시도했습니다. 신뢰할 수 있는 기기로 인증 요청을 보냈습니다. 해당 기기에서 확인한 뒤 표시된 인증 코드를 입력하세요.",
       "waiting": "신뢰할 수 있는 기기의 확인 대기 중 · {{time}} 남음",
       "approved": "신뢰할 수 있는 기기에서 확인했습니다. {{seconds}}초 안에 코드를 입력하세요",
@@ -2982,11 +2982,13 @@
     "hint": "알림"
   },
   "systemAnnouncements": {
+    "nextAnnouncement": "다음 공지",
+    "unreadCount": "읽지 않은 알림 {{count}}개",
     "title": "시스템 공지",
     "detailTitle": "공지 상세",
     "openAnnouncement": "{{title}} 상세 보기",
     "unavailable": "이 공지는 존재하지 않거나 게시가 종료되었습니다",
-    "subtitle": "windnote.ai 앱의 최신 정보, 버전 업데이트, 패치 안내가 여기에 표시됩니다.",
+    "subtitle": "받은 공지와 알림을 최신순으로 표시합니다.",
     "systemNotifications": "계정 알림",
     "empty": "시스템 알림이 없습니다",
     "loadFailed": "시스템 알림을 불러오지 못했습니다. 아래로 당겨 다시 시도하세요",
@@ -3083,8 +3085,8 @@
       "groupDismissed": "그룹이 해산되었습니다",
       "messageRevoked": "메시지가 회수되었습니다",
       "friendAdded": "이제 친구가 되었어요. 인사해 보세요",
-      "burnEnabled": "사라지는 메시지 켜짐({{duration}})",
-      "burnDisabled": "사라지는 메시지 꺼짐",
+      "burnEnabled": "보낸 사람이 자신의 새 메시지에 사라지는 메시지를 켰습니다({{duration}})",
+      "burnDisabled": "보낸 사람이 자신의 새 메시지에 사라지는 메시지를 껐습니다",
       "memberSilenced": "멤버가 {{duration}} 동안 채팅 금지되었습니다",
       "memberSilencedIndefinitely": "멤버가 채팅 금지되었습니다",
       "memberUnsilenced": "멤버의 채팅 금지가 해제되었습니다",
@@ -3668,5 +3670,35 @@
       "CANCELLED": "신청이 취소되었습니다"
     },
     "sentInvitation": "상대방을 그룹에 초대했어요"
+  },
+  "e2ee": {
+    "title": "Text encryption and devices",
+    "encryptedText": "[Encrypted text]",
+    "unlockRequired": "Cannot decrypt. Verify devices and sync keys in chat settings.",
+    "disclosure": "Text only. Authorized administrator devices can decrypt text; the server has no private decryption keys. Images, videos and files are excluded. Enabling applies to future texts. New devices cannot automatically read earlier encrypted history. In this development release, the enabling device manages membership; revoking it pauses sending.",
+    "failed": "Operation incomplete. Check device approval, participant and administrator registration, and verified keys, then retry.",
+    "done": "Completed",
+    "verify": "Verify device keys",
+    "verifyHint": "Compare each full public key with its device in person or through an independent trusted channel, including administrator devices. Trust only exact matches.",
+    "verified": "All keys match",
+    "register": "Register device / publish joining key",
+    "deviceLabel": "My App device",
+    "approve": "Approve device",
+    "revoke": "Revoke device",
+    "revokeHint": "This identity cannot be restored. Update conversation keys before sending again. Previously read history cannot be remotely erased.",
+    "conversation": "Conversation",
+    "updateMembers": "Update devices and keys",
+    "enable": "Enable text encryption (permanent)",
+    "sync": "Join / sync encrypted conversation",
+    "refresh": "Refresh device status",
+    "recoveryHint": "Keep your recovery code offline: it decrypts archived text. Register this device first. Archive history on the old device, then enter the code and restore on the new device. Sending keys are never rolled back. Verify the new device and update conversation membership to exchange new messages. Cleared, recalled and expired messages cannot be restored.",
+    "createRecovery": "Create / show local recovery code",
+    "recoveryCode": "Recovery code",
+    "recoverDevice": "Approve this device with recovery code",
+    "backupHistory": "Archive locally decrypted history",
+    "restoreHistory": "Restore archived history",
+    "archiveCount": "Processed {{count}} messages",
+    "repairKey": "Create a replacement encryption device",
+    "repairKeyHint": "The system key is missing. Keep the old sealed database and create a fresh device, then register it and use your recovery code to restore archived history. History that was never archived cannot be recovered."
   }
 }

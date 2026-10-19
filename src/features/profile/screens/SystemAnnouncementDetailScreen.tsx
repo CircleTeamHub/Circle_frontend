@@ -1,103 +1,52 @@
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useAnnouncementSignalStore } from '../store-announcement-signal';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
-import { getSystemAnnouncement } from '@/features/profile/system-announcements';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
-
-const s = StyleSheet.create({
-  container: { flex: 1 },
-  content: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    gap: Spacing.md,
-  },
-  card: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.lg,
-    gap: Spacing.md,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-});
+import { Spacing, useTheme } from '@/theme';
+import { useAuthStore } from '@/stores/authStore';
+import { fetchProfileNotificationDetail } from '@/services/api/notifications';
+import { reportHandledFailure } from '@/observability/report-failure';
+import type { NotificationItem } from '@/types';
 
 export default function SystemAnnouncementDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
-  const announcementId = Array.isArray(id) ? id[0] : id;
-  const announcement = getSystemAnnouncement(announcementId);
+  const notificationId = Array.isArray(id) ? id[0] : id;
+  const owner = useAuthStore(state => `${state.user?.id ?? ''}:${state.sessionEpoch}`);
+  const [result, setResult] = useState<{key: string; item: NotificationItem} | null>(null);
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const d = useMemo(
-    () => ({
-      container: { backgroundColor: colors.background },
-      card: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
-      },
-      title: { color: colors.text, ...Typography.h2, flex: 1 },
-      meta: { color: colors.textSecondary, ...Typography.small },
-      body: {
-        color: colors.text,
-        ...Typography.bodyRegular,
-        lineHeight: 24,
-      },
-      unavailable: {
-        color: colors.textSecondary,
-        ...Typography.bodyRegular,
-        textAlign: 'center' as const,
-        paddingVertical: Spacing.xl,
-      },
-    }),
-    [colors],
-  );
+  const announcementVersion = useAnnouncementSignalStore(state=>state.version);
+  const key = `${owner}:${notificationId ?? ''}:${announcementVersion}`;
+  const item = result?.key === key ? result.item : null;
+  useEffect(() => {
+    let active = true;
+    setResult(null);setError(false);
+    if (!notificationId) { setError(true); return; }
+    void fetchProfileNotificationDetail(notificationId).then(value => {
+      if (active) setResult({key,item:value});
+    }).catch(failure => {
+      if (active) {setError(true);reportHandledFailure('profile','announcementDetail',failure);}
+    });
+    return () => {active=false;};
+  },[key,notificationId,retry]);
 
-  return (
-    <View style={[s.container, d.container, { paddingTop: insets.top }]}>
-      <NavHeader
-        title={t('systemAnnouncements.detailTitle', {
-          defaultValue: '公告详情',
-        })}
-        fallbackHref="/(tabs)/profile/system-announcements"
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[
-          s.content,
-          { paddingBottom: insets.bottom + Spacing.xl },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {announcement ? (
-          <View style={[s.card, d.card]}>
-            <View style={s.titleRow}>
-              <Ionicons name="megaphone-outline" size={24} color={colors.iconAccent} />
-              <Text selectable style={d.title}>
-                {t(announcement.titleKey)}
-              </Text>
-            </View>
-            <Text selectable style={d.meta}>
-              {t(announcement.metaKey)}
-            </Text>
-            <Text selectable style={d.body}>
-              {t(announcement.bodyKey)}
-            </Text>
-          </View>
-        ) : (
-          <Text selectable style={d.unavailable}>
-            {t('systemAnnouncements.unavailable', {
-              defaultValue: '该公告不存在或已下线',
-            })}
-          </Text>
-        )}
-      </ScrollView>
-    </View>
-  );
+  return <View style={{flex:1,backgroundColor:colors.background,paddingTop:insets.top}}>
+    <NavHeader title={t('systemAnnouncements.detailTitle')} fallbackHref="/(tabs)/profile/system-announcements" />
+    <ScrollView contentContainerStyle={{padding:Spacing.lg,paddingBottom:insets.bottom+Spacing.xl,gap:Spacing.md}}>
+      {item ? <>
+        <Text selectable style={{color:colors.text,fontSize:24,lineHeight:32,fontWeight:'700'}}>{item.title?.trim() || t('notifications.system')}</Text>
+        <Text style={{color:colors.textSecondary,fontSize:13}}>{new Date(item.createdAt).toLocaleString()}</Text>
+        <Text selectable style={{color:colors.text,fontSize:16,lineHeight:26}}>{item.content}</Text>
+      </> : error ? <>
+        <Text style={{color:colors.textSecondary}}>{t('systemAnnouncements.unavailable')}</Text>
+        <Pressable accessibilityRole="button" onPress={()=>setRetry(value=>value+1)}><Text style={{color:colors.primary}}>{t('common.retry')}</Text></Pressable>
+      </> : <Text style={{color:colors.textSecondary}}>{t('common.loading')}</Text>}
+    </ScrollView>
+  </View>;
 }

@@ -1,3 +1,4 @@
+import { useAnnouncementSignalStore } from '@/features/profile/store-announcement-signal';
 import { refreshGroupAdmissionUnread } from '@/services/api/group-admissions';
 import { REALTIME_WS_URL } from '@/constants/config';
 import { reportError } from '@/observability/sentry';
@@ -55,6 +56,7 @@ type BadgeSnapshotPayload = {
 };
 
 type RealtimeEvent =
+  | {type: 'system.announcement.changed'; payload?: {changedAt?:string}}
   | {
       type: 'badge.snapshot';
       payload?: BadgeSnapshotPayload;
@@ -327,6 +329,7 @@ function runPostAuthenticationRecovery(): void {
   // 认证成功后网关会立刻回推一帧 badge.snapshot；这里再补一次 HTTP
   // recovery，把断线期间错过的 notification.created 列表项拉回来。
   void recoverTabBadgeSnapshot({ force: shouldForceRecovery });
+  useAnnouncementSignalStore.getState().bump();
   if (!shouldForceRecovery) return;
   // review P2：断线重连的空窗里错过的 moments.feed.updated 补不回来 ——
   // 重连成功后 bump 一次信号，让 feed 组件自查新帖数（app 全程前台、
@@ -577,6 +580,10 @@ function handleRealtimeEvent(message: RealtimeEvent) {
       } else {
         void refreshWalletBalanceBestEffort();
       }
+      return;
+    case 'system.announcement.changed':
+      useAnnouncementSignalStore.getState().bump();
+      void recoverTabBadgeSnapshot({force:true});
       return;
     case 'system.notification.unread.changed':
       badgeStore.setProfileUnread(message.payload?.count ?? 0);

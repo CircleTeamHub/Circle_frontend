@@ -1,8 +1,10 @@
+import { checkForManagedUpdate } from "@/features/app-update/managed-update-service";
 import Constants from 'expo-constants';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -85,7 +87,7 @@ export default function AboutVersionScreen() {
 
   const checkNow = async () => {
     if (checkingRef.current || installingRef.current) return;
-    if (Platform.OS !== 'android') {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
       Alert.alert(
         t('settingsDetails.about.checkUpdates'),
         t('appUpdate.androidOnlyMessage'),
@@ -96,6 +98,12 @@ export default function AboutVersionScreen() {
     checkingRef.current = true;
     setChecking(true);
     try {
+      if(Platform.OS==='ios') {
+        const update=await checkForManagedUpdate();if(!mountedRef.current)return;
+        if(!update) {Alert.alert(t('appUpdate.latestTitle'),t('appUpdate.latestMessage'));return;}
+        Alert.alert(t('appUpdate.availableTitle'),t('appUpdate.availableMessage',{version:update.version}),[{text:t('common.cancel'),style:'cancel'},{text:t('appUpdate.updateNow'),onPress:()=>{void Linking.openURL(update.url).catch(()=>Alert.alert(t('appUpdate.installFailedTitle'),t('appUpdate.installFailedMessage')));}}]);
+        return;
+      }
       const manifest = await checkForAndroidUpdate();
       if (!mountedRef.current) return;
       if (!manifest) {

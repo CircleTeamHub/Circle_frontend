@@ -16,18 +16,16 @@ test('Android update installation is configured and mounted at the app root', ()
   assert.match(layout, /AppUpdateHost/);
 });
 
-test('update service uses a bounded no-store check and the Android package installer', () => {
+test('managed update decisions preserve validated installers and use the bounded API client', () => {
   const source = read('src/features/app-update/app-update-service.ts');
-
-  assert.match(source, /dependencies\.platform !== 'android'/);
-  assert.match(source, /dependencies\.appVariant === 'preprod'/);
-  assert.match(
-    source,
-    /CircleTeamHub\/windnote-releases\/releases\/latest\/download\/release\.json/,
-  );
-  assert.match(source, /cache:\s*'no-store'/);
-  assert.match(source, /AbortController/);
-  assert.match(source, /10_000/);
+  const managed = read('src/features/app-update/managed-update-service.ts');
+  const policy = read('src/features/app-update/managed-update-policy.ts');
+  const api = read('src/services/api/client.ts');
+  assert.match(source, /checkForManagedUpdate/);
+  assert.match(read('src/services/api/app-operations.ts'), /app-operations\/update/);
+  assert.match(managed, /digestStringAsync/);
+  assert.match(policy, /parseGitHubReleaseManifest/);
+  assert.match(api, /AbortController/);
   assert.match(source, /expo-file-system\/legacy/);
   assert.match(source, /getContentUriAsync/);
   assert.match(source, /android\.intent\.action\.VIEW/);

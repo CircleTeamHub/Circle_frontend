@@ -100,6 +100,8 @@ jest.mock('expo-router', () => {
     },
   };
 });
+jest.mock('@/services/e2ee/client', () => ({ decryptText: jest.fn(), encryptOutgoingText: jest.fn().mockResolvedValue(null) }));
+
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
 jest.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => undefined },

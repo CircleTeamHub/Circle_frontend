@@ -134,7 +134,7 @@ describe('ImageBubble ephemeral rendering', () => {
 
   // 老后端不下发这个字段。此时不能凭空当成「没开焚毁」，仍要听屏幕级判定，
   // 行为与升级前一致。
-  it('falls back to the screen-level flag when the message carries no duration', () => {
+  it('legacy images keep their conversation-level ephemeral protection', () => {
     render(
       <ImageBubble
         message={imageMessage}
@@ -143,7 +143,7 @@ describe('ImageBubble ephemeral rendering', () => {
       />,
     );
 
-    expect(cachePolicies()).not.toContain('memory-disk');
+    expect(cachePolicies()).toContain('memory');
     openPreview();
     expect(viewerModes).toContain('ephemeral');
   });
@@ -288,4 +288,9 @@ describe('ImageBubble cache keys', () => {
       uri: 'https://media.example.com/thumb.jpg',
     });
   });
+});
+
+it('an expiry stamp without a duration still prevents persistent image caching',()=>{
+ render(<ImageBubble message={{...imageMessage,burnExpiresAt:'2030-01-01T00:00:00Z'}} outgoing={false}/>);
+ expect(cachePolicies()).not.toContain('memory-disk');openPreview();expect(viewerModes).toContain('ephemeral');
 });

@@ -630,16 +630,16 @@ test('message forward picker only offers media forwarding for confirmed sources'
 // 服务端已经按 CHAT_FORWARD_FORBIDDEN 拒掉焚毁会话里别人发的消息（「短暂性是发送者
 // 对收件人的承诺」）。端上不挡的话，用户点「转发」、挑好目标会话，才在最后一步吃到
 // 那个错误 —— 与 call-record 那个「永远不会成功的重试」是同一个毛病。
-test('阅后即焚会话里别人发的消息不提供转发入口', () => {
+test('只有发送者开启焚毁的消息才限制转发，我的设置不限制对方消息', () => {
   const canForwardMessage = loadCanForwardMessage();
 
   assert.equal(
     canForwardMessage(
-      { id: 'm-1', type: 'image', outgoing: false },
+      { id: 'm-1', type: 'image', outgoing: false, burnDurationSec: null },
       { id: 'm-1', height: 9 },
       true,
     ),
-    false,
+    true,
   );
   // 会话开关还没到（推送冷启动时会话列表可能还没拉回来），消息自带的秒数同样算数。
   assert.equal(

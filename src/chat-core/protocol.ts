@@ -11,6 +11,8 @@ export const CHAT_EVENTS = {
   send: 'chat:send',
   /** 双向：已读水位（客户端上报带 ack；服务端广播成员推进） */
   read: 'chat:read',
+  /** Server expiry update; fetch the revision stream. */
+  burnStarted: 'chat:burn_started',
   /** 双向：正在输入 */
   typing: 'chat:typing',
   /** 服务端 → 客户端：新消息 */
@@ -188,17 +190,10 @@ export interface ChatMessageDto {
   editedAt?: string | null;
   /** 表情回应聚合；无回应缺省。 */
   reactions?: ChatReactionSummary[];
-  /**
-   * 所属会话的阅后即焚秒数；null/缺省 = 未开启。
-   *
-   * 与会话 DTO 上那个是同一个值，逐条消息带一份是有意的：从会话列表缓存里查
-   * 这个值要赌「列表已经加载好」，而推送冷启动时消息可能先到 —— 查不到就当成
-   * 没开焚毁，原图落盘、长按可存相册，等缓存补齐已经晚了。带在消息上，渲染这
-   * 条消息所需的一切就都在消息里。
-   *
-   * 缺省要按「未知」处理而不是「关」：老后端不发这个字段，此时回落到会话查找。
-   */
+  /** 发送者首次发送时确定的时长；媒体缓存/转发限制逐条读取，不继承查看者设置。 */
   burnDurationSec?: number | null;
+  /** 服务端固定的到期时间；单聊首次已读前为 null，是否启用由 burnDurationSec 判断。 */
+  burnExpiresAt?: string | null;
   /** 幂等键：本地乐观消息靠它与服务端回执/广播对账替换。 */
   d: string | null;
   createdAt: string;
@@ -281,6 +276,7 @@ export function isChatMessageDto(value: unknown): value is ChatMessageDto {
   if (!isValidReplySnapshot(value['replyTo'])) return false;
   if (!isOptionalTimestamp(value['revokedAt'])) return false;
   if (!isOptionalTimestamp(value['editedAt'])) return false;
+  if (!isOptionalTimestamp(value['burnExpiresAt'])) return false;
   const revokedBy = value['revokedBy'];
   if (
     revokedBy !== null &&
@@ -549,6 +545,7 @@ export interface ChatTempChatInfo {
 }
 
 export interface ChatConversationDto {
+  textEncryption?: string;
   id: string;
   type: ChatConversationType;
   peer: ChatSenderInfo | null;
@@ -593,9 +590,9 @@ export interface ChatConversationDto {
   myRole?: 'OWNER' | 'ADMIN' | 'MEMBER' | null;
   /** 群策略开关(仅 GROUP)。 */
   policies?: ChatGroupPoliciesDto | null;
-  /** 会话级阅后即焚秒数（S-01）；null/缺省 = 关。 */
+  /** 本人发送的新消息的阅后即焚秒数；null/缺省 = 关。 */
   burnDurationSec?: number | null;
-  /** 会话级阅后即焚首次启用时刻；启用期间改档位不会重置。 */
+  /** 本人当前发送策略的设置时刻；不改变已发送消息的到期时间。 */
   burnStartedAt?: string | null;
   /**
    * DIRECT 会话对端座位的已读水位；冷启动恢复「已读」用。可选：兼容还没带它的后端。

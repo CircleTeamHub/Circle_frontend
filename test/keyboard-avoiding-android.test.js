@@ -31,12 +31,12 @@ const CONTAINER = path.join(
 // 强制）之后，windowSoftInputMode=adjustResize 不再缩窗口。RN 的 KeyboardAvoidingView 在
 // Android 上 behavior=undefined 就只是个普通 View：键盘整个盖住聊天输入栏、表单底部按钮
 // （Android 16 模拟器实测，聊天输入栏被压到键盘下面）。统一收口到一个容器，两端都走 padding。
-test('the shared keyboard container pads above the keyboard on both platforms', () => {
+test('the shared keyboard container pads only while the Android keyboard is visible', () => {
   const src = read(CONTAINER);
 
   assert.match(src, /KeyboardAvoidingView/);
   assert.match(src, /behavior = 'padding'/);
-  assert.doesNotMatch(src, /Platform\.OS/);
+  assert.match(src, /enabled && \(Platform\.OS !== 'android' \|\| Number\(Platform.Version\) < 30 \|\| keyboardVisible\)/);
 });
 
 test('no file drives React Native KeyboardAvoidingView directly', () => {

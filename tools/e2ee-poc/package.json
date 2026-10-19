@@ -1,0 +1,23 @@
+{
+  "name": "circle-e2ee-protocol-poc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test *.test.mjs",
+    "test:portable": "node --import ./test-support/no-subtle.mjs --test protocol.test.mjs vectors.test.mjs integration-seams.test.mjs",
+    "benchmark": "node --import ./test-support/no-subtle.mjs benchmark.mjs"
+  },
+  "dependencies": {
+    "@circle/e2ee": "file:../../packages/e2ee",
+    "@hpke/common": "1.10.1",
+    "@hpke/core": "1.9.0",
+    "@hpke/dhkem-x25519": "1.8.0",
+    "@noble/ciphers": "2.1.1",
+    "@noble/curves": "2.0.1",
+    "@noble/hashes": "2.3.0",
+    "ts-mls": "1.6.4"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.4"
+  }
+}

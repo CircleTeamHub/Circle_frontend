@@ -87,6 +87,7 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
   if (!message) return '';
   if (message.revokedAt) return tPreview('revoked', '[消息已撤回]');
   switch (message.type) {
+    case 'encrypted-text': return i18n.t('e2ee.encryptedText');
     case 'text':
     case 'quote': {
       const text = message.content['text'];

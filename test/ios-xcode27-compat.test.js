@@ -70,3 +70,12 @@ test('expo-router patch guards the iOS 16-only UIMenu subtitle', () => {
   const body = fs.readFileSync(path.join(process.cwd(), 'patches', routerPatch), 'utf8');
   assert.match(body, /\+\s+if #available\(iOS 16\.0, \*\), let subtitle = subtitle \{/);
 });
+
+test('SQLite umbrella imports the namespaced encryption header exactly once', () => {
+  const { addSqliteHeaderNamespace } = require('../plugins/with-ios-xcode27-compat');
+  const source = 'post_install do |installer|\n  react_native_post_install(\n    installer,\n  )\nend';
+  const output = addSqliteHeaderNamespace(source);
+  assert.match(output, /#import <ExpoSQLite\/sqlite3.h>/);
+  assert.match(output, /File.write\(sqlite_umbrella, namespaced\) if namespaced != original/);
+  assert.equal(addSqliteHeaderNamespace(output), output);
+});

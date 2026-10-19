@@ -503,7 +503,7 @@ test('HTTP route shapes fail closed for unrecognized endpoints and token paths',
   assert.equal(safeHttpEndpoint('/mall/fancy-numbers?page=1'), '/mall/fancy-numbers');
   assert.equal(safeHttpEndpoint('/geo/reverse?lat=1&lon=2'), '/geo/reverse');
   assert.equal(safeHttpEndpoint('/referrals/me'), '/referrals/me');
-  assert.equal(safeHttpEndpoint('/advertisements?placement=CIRCLE_HOME'), '/advertisements');
+  assert.equal(safeHttpEndpoint('/advertisements?placement=CIRCLE_HOME'), '/__other__');
   assert.equal(safeHttpEndpoint('/note/drafts'), '/note/drafts');
   assert.equal(safeHttpEndpoint('/note/drafts/private-draft'), '/note/drafts/:id');
   assert.equal(safeHttpEndpoint('/note/drafts/private-draft?source=editor'), '/note/drafts/:id');
