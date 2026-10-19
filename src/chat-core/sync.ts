@@ -62,6 +62,8 @@ let cursorsReady = false;
 /** 本机有可用的本地库(Web、以及没有 SQLCipher 的构建没有):只有它才有「落盘」可言。 */
 let localDbInUse = false;
 const cursors = new Map<string, ConversationCursor>();
+/** Received invalidations must fetch content, even without a loaded timeline. */
+const forcedPullTargets = new Map<string, number>();
 const flights = new Map<string, Promise<void>>();
 let runningSyncs = 0;
 const slotWaiters: (() => void)[] = [];
@@ -95,6 +97,7 @@ export function resetChatSync(): void {
   cursorsReady = false;
   localDbInUse = false;
   cursors.clear();
+  forcedPullTargets.clear();
   flights.clear();
   for (const timer of gapTimers.values()) clearTimeout(timer);
   gapTimers.clear();
@@ -294,6 +297,14 @@ async function syncConversation(
 ): Promise<void> {
   if (!isCurrent(gen)) return;
   const cursor = cursorFor(conversationId);
+  const forcedTarget = forcedPullTargets.get(conversationId);
+  if (forcedTarget !== undefined && cursor.revision < forcedTarget) {
+    await pullUntil(conversationId, Math.max(target, forcedTarget), gen);
+    if (isCurrent(gen) && cursorFor(conversationId).revision >= (forcedPullTargets.get(conversationId) ?? forcedTarget)) {
+      forcedPullTargets.delete(conversationId);
+    }
+    return;
+  }
   const plan = planConversationSync({
     localRevision: cursor.revision,
     targetRevision: target,
@@ -379,28 +390,31 @@ function scheduleGapSync(conversationId: string, target: number, gen: number): v
 
 /**
  * 实时事件已经应用到 store 之后调用:revision 与游标连续就推进,出现缺口就排一次补拉。
- * 游标还没从本地库读出来(冷启动头几秒)的事件不算数 —— 连接时的快照同步会覆盖它们。
+ * 未应用的失效事件会保留到游标加载完成，并强制拉取权威数据；普通已应用事件由快照对账。
  */
 export function noteLiveRevision(
   conversationId: string,
   revision: number | undefined,
   applied = true,
 ): void {
-  if (!sessionUserId || !cursorsReady) return;
+  if (!sessionUserId) return;
   if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision <= 0) {
     return;
   }
   const gen = generation;
   if (!applied) {
-    // The event was received but its target was outside the in-memory window
-    // (or the local mutation did not reach SQLite). Keep the durable cursor
-    // behind it and fetch the authoritative sync page instead. Advancing here
-    // would make a restart skip the cached edit/reaction/revoke forever.
-    if (cursorFor(conversationId).revision < revision) {
-      scheduleGapSync(conversationId, revision, gen);
-    }
+    // Preserve events received after a snapshot was captured but before SQLite
+    // opened. Snapshot adoption must not skip the authoritative expiry update.
+    forcedPullTargets.set(conversationId, Math.max(revision, forcedPullTargets.get(conversationId) ?? 0));
+    const schedule = () => {
+      if (!isCurrent(gen)) return;
+      if (cursorFor(conversationId).revision < revision) scheduleGapSync(conversationId, revision, gen);
+    };
+    if (cursorsReady) schedule();
+    else void ensureCursorsLoaded(gen).then(schedule).catch((error: unknown) => reportHandledFailure('chatSync', 'invalidationInit', error));
     return;
   }
+  if (!cursorsReady) return;
   const cursor = cursorFor(conversationId);
   const step = advanceRevisionCursor(cursor.revision, cursor.pendingAbove, revision);
   cursor.pendingAbove = step.pendingAbove;

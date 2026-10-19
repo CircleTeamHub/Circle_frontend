@@ -112,7 +112,7 @@ function loadSync(options = {}) {
           };
         case './local-db':
           return {
-            initChatLocalDb: async () => true,
+            initChatLocalDb: options.openDb ?? (async () => true),
             readLocalSyncStates: async () => {
               calls.stateReads += 1;
               return new Map(Object.entries(options.localStates ?? {}));
@@ -544,4 +544,60 @@ test('a cache reset that did not land locally keeps the stored cursor where it w
   await flush();
   // 写下去的话,重启后本地库里还留着作废前那批消息,而游标已经在 5001。
   assert.deepEqual(calls.cursorWrites, []);
+});
+
+
+test('an expiry invalidation pulls without a loaded timeline instead of adopting the cursor', async () => {
+  const expiry = '2026-10-19T00:01:00Z';
+  const { sync, calls, runTimers } = loadSync({
+    localStates: { c1: { revision: 10, hasMessages: false } },
+    pages: { c1: [page({ messages: [msg('m1', 1, 11, { burnExpiresAt: expiry })], nextRevision: 11, throughRevision: 11 })] },
+  });
+  sync.startChatSync('u1');
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 10 }]);
+  sync.noteLiveRevision('c1', 11, false);
+  await flush();
+  runTimers();
+  await flush();
+  assert.deepEqual(calls.fetches, [['c1', 10]]);
+  assert.equal(calls.localPages[0].upserts[0].burnExpiresAt, expiry);
+  assert.equal(calls.localPages[0].revision, 11);
+  sync.resetChatSync();
+});
+
+test('an invalidation arriving during cursor initialization survives an older captured snapshot', async () => {
+  let opened;
+  const opening = new Promise((resolve) => { opened = resolve; });
+  const { sync, calls, runTimers } = loadSync({
+    openDb: () => opening,
+    localStates: { c1: { revision: 10, hasMessages: false } },
+    pages: { c1: [page({ messages: [msg('m1', 1, 11)], nextRevision: 11, throughRevision: 11 })] },
+  });
+  sync.startChatSync('u1');
+  const snapshot = sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 10 }]);
+  sync.noteLiveRevision('c1', 11, false);
+  assert.equal(calls.fetches.length, 0);
+  opened(true);
+  await snapshot;
+  await flush();
+  runTimers();
+  await flush();
+  assert.deepEqual(calls.fetches, [['c1', 10]]);
+  assert.equal(calls.localPages[0].revision, 11);
+  sync.resetChatSync();
+});
+
+test('queued invalidations are discarded on account switching before SQLite opens', async () => {
+  let opened;
+  const opening = new Promise((resolve) => { opened = resolve; });
+  const { sync, calls, runTimers } = loadSync({ openDb: () => opening });
+  sync.startChatSync('u1');
+  sync.noteLiveRevision('c1', 11, false);
+  sync.startChatSync('u2');
+  opened(true);
+  await flush();
+  runTimers();
+  await flush();
+  assert.deepEqual(calls.fetches, []);
+  sync.resetChatSync();
 });
