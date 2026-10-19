@@ -459,11 +459,14 @@ test('a persisted past burn deadline is removed from SQLite and FTS before recon
   const { api, warnings } = loadLocalDb(db);
   try {
     assert.equal(await api.initChatLocalDb('test-user'), true);
+    for (const legacy of [false, true]) {
     const original = { ...msg('secretneedle', 1), revision: 10, burnDurationSec: 60, burnExpiresAt: null };
     await api.persistLocalMessages('conv-1', [original]);
     assert.equal((await api.searchLocalChatMessages('secretneedle', 10)).length, 1);
+    const pulled = { ...original, revision: 11, burnExpiresAt: new Date(Date.now()-1000).toISOString() };
+    if (legacy) delete pulled.burnExpiresAt;
     assert.equal(await api.applyLocalSyncPage('conv-1', {
-      upserts: [{ ...original, revision: 11, burnExpiresAt: new Date(Date.now()-1000).toISOString() }],
+      upserts: [pulled],
       deletedIds: [], clearedBeforeHeight: 0, revision: 11,
     }), true);
     await api.purgeExpiredLocalMessages([]);
@@ -471,5 +474,6 @@ test('a persisted past burn deadline is removed from SQLite and FTS before recon
     assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM messages_fts WHERE messages_fts MATCH 'secretneedle'").get().n, 0);
     assert.equal((await api.readRecentLocalMessages('conv-1', 50)).length, 0);
     assert.equal(warnings.length, 0, JSON.stringify(warnings));
+    }
   } finally { await api.closeChatLocalDb(); }
 });

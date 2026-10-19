@@ -1933,7 +1933,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     }
     // Ordinary incremental pages need no global burn sweep. The coordinator has
     // already persisted this page before scheduling expiry cleanup and timers.
-    if (live.some((message) => message.burnExpiresAt != null)) {
+    if (live.some((message) => messageBurnExpiry(message, get().conversations.find((c) => c.id === conversationId)) !== null)) {
       await get().purgeExpiredBurnMessages();
     }
     if (get().currentUserId !== currentUserId) return;
