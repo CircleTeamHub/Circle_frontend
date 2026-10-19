@@ -64,10 +64,11 @@ let localDbInUse = false;
 const cursors = new Map<string, ConversationCursor>();
 /** Received invalidations must fetch content, even without a loaded timeline. */
 const forcedPullTargets = new Map<string, number>();
+const forcedRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const forcedRetryAttempts = new Map<string, number>();
 const flights = new Map<string, Promise<void>>();
 let runningSyncs = 0;
 const slotWaiters: (() => void)[] = [];
-const forcedFailures = new Map<string, number>();
 const gapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const gapTargets = new Map<string, number>();
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -99,10 +100,12 @@ export function resetChatSync(): void {
   localDbInUse = false;
   cursors.clear();
   forcedPullTargets.clear();
+  for (const timer of forcedRetryTimers.values()) clearTimeout(timer);
+  forcedRetryTimers.clear();
+  forcedRetryAttempts.clear();
   flights.clear();
   for (const timer of gapTimers.values()) clearTimeout(timer);
   gapTimers.clear();
-  forcedFailures.clear();
   gapTargets.clear();
   for (const timer of persistTimers.values()) clearTimeout(timer);
   persistTimers.clear();
@@ -152,7 +155,12 @@ async function ensureCursorsLoaded(gen: number): Promise<void> {
     }
     cursorsReady = true;
   })();
-  await cursorsLoading;
+  const loading = cursorsLoading;
+  try { await loading; }
+  catch (error) {
+    if (isCurrent(gen) && cursorsLoading === loading) cursorsLoading = null;
+    throw error;
+  }
 }
 
 /**
@@ -300,28 +308,56 @@ async function syncConversation(
   if (!isCurrent(gen)) return;
   const cursor = cursorFor(conversationId);
   const forcedTarget = forcedPullTargets.get(conversationId);
-  target = Math.max(target, forcedTarget ?? 0);
+  const wanted = Math.max(target, forcedTarget ?? 0);
   const plan = planConversationSync({
     localRevision: cursor.revision,
-    targetRevision: target,
+    targetRevision: wanted,
+    // Invalidation overrides empty-cache adoption, while preserving large-gap reset.
     hasLocalMessages: forcedTarget !== undefined || cursor.hasMessages || hasMemoryMessages(conversationId),
   });
   switch (plan.kind) {
     case 'up-to-date':
-      return;
+      // A previous forced reset may have reached the cursor but failed its reload.
+      if (forcedTarget !== undefined) {
+        if (!cursor.durable) await resetConversationCache(conversationId, wanted, gen);
+        if (isCurrent(gen)) await loadChatHistory(conversationId);
+      }
+      break;
     case 'adopt':
       advanceCursorTo(conversationId, plan.revision);
       schedulePersist(conversationId, gen);
-      return;
+      break;
     case 'jump':
       await resetConversationCache(conversationId, plan.revision, gen);
-      if (isCurrent(gen) && cursorFor(conversationId).revision >= (forcedPullTargets.get(conversationId) ?? 0)) forcedPullTargets.delete(conversationId);
-      return;
+      // Offscreen previews also need the current expiry; do not replay old pages.
+      if (forcedTarget !== undefined && isCurrent(gen)) await loadChatHistory(conversationId);
+      break;
     case 'pull':
       await pullUntil(conversationId, plan.to, gen);
-      if (isCurrent(gen) && cursorFor(conversationId).revision >= (forcedPullTargets.get(conversationId) ?? 0)) forcedPullTargets.delete(conversationId);
-      return;
+      break;
   }
+  if (isCurrent(gen) && forcedTarget !== undefined && cursorFor(conversationId).durable && cursorFor(conversationId).revision >= (forcedPullTargets.get(conversationId) ?? forcedTarget)) {
+    forcedPullTargets.delete(conversationId);
+  }
+}
+
+function retryForcedSync(conversationId: string, gen: number): void {
+  if (!isCurrent(gen) || !forcedPullTargets.has(conversationId) || forcedRetryTimers.has(conversationId)) return;
+  const attempts = Math.min(6, (forcedRetryAttempts.get(conversationId) ?? 0) + 1);
+  forcedRetryAttempts.set(conversationId, attempts);
+  const delay = Math.min(30_000, GAP_SYNC_DELAY_MS * 2 ** (attempts - 1));
+  forcedRetryTimers.set(conversationId, setTimeout(() => {
+    forcedRetryTimers.delete(conversationId);
+    if (!isCurrent(gen)) return;
+    const target = forcedPullTargets.get(conversationId);
+    if (target === undefined) return;
+    void ensureCursorsLoaded(gen).then(() => {
+      if (isCurrent(gen)) return scheduleConversationSync(conversationId, target, gen);
+    }).catch((error: unknown) => {
+      reportHandledFailure('chatSync', 'invalidationRetry', error);
+      retryForcedSync(conversationId, gen);
+    });
+  }, delay));
 }
 
 function scheduleConversationSync(
@@ -334,21 +370,20 @@ function scheduleConversationSync(
     .catch(() => undefined)
     .then(() => withSyncSlot(() => syncConversation(conversationId, target, gen)));
   flights.set(conversationId, run);
-  const settled = run.catch((error: unknown) => {
-    reportHandledFailure('chatSync', 'conversationSync', error);
-  });
+  const settled = run.catch((error: unknown) =>
+    reportHandledFailure('chatSync', 'conversationSync', error),
+  );
   void settled.then(() => {
+    if (!isCurrent(gen)) return;
     if (flights.get(conversationId) === run) flights.delete(conversationId);
-    const wanted = forcedPullTargets.get(conversationId);
-    if (!isCurrent(gen) || wanted === undefined) { forcedFailures.delete(conversationId); return; }
-    const attempts = forcedFailures.get(conversationId) ?? 0;
-    if (attempts >= 3 || gapTimers.has(conversationId)) return;
-    forcedFailures.set(conversationId, attempts + 1);
-    const timer = setTimeout(() => {
-      gapTimers.delete(conversationId);
-      if (isCurrent(gen)) void scheduleConversationSync(conversationId, wanted, gen);
-    }, GAP_SYNC_DELAY_MS * 2 ** attempts);
-    gapTimers.set(conversationId, timer);
+    if (forcedPullTargets.has(conversationId)) {
+      if (!flights.has(conversationId)) retryForcedSync(conversationId, gen);
+    } else {
+      const retry = forcedRetryTimers.get(conversationId);
+      if (retry) clearTimeout(retry);
+      forcedRetryTimers.delete(conversationId);
+      forcedRetryAttempts.delete(conversationId);
+    }
   });
   return settled;
 }
@@ -411,15 +446,20 @@ export function noteLiveRevision(
   }
   const gen = generation;
   if (!applied) {
+    if (cursorsReady && cursorFor(conversationId).revision >= revision) return;
     // Preserve events received after a snapshot was captured but before SQLite
     // opened. Snapshot adoption must not skip the authoritative expiry update.
     forcedPullTargets.set(conversationId, Math.max(revision, forcedPullTargets.get(conversationId) ?? 0));
     const schedule = () => {
       if (!isCurrent(gen)) return;
       if (cursorFor(conversationId).revision < revision) scheduleGapSync(conversationId, revision, gen);
+      else if ((forcedPullTargets.get(conversationId) ?? 0) <= cursorFor(conversationId).revision) forcedPullTargets.delete(conversationId);
     };
     if (cursorsReady) schedule();
-    else void ensureCursorsLoaded(gen).then(schedule).catch((error: unknown) => reportHandledFailure('chatSync', 'invalidationInit', error));
+    else void ensureCursorsLoaded(gen).then(schedule).catch((error: unknown) => {
+      reportHandledFailure('chatSync', 'invalidationInit', error);
+      retryForcedSync(conversationId, gen);
+    });
     return;
   }
   if (!cursorsReady) return;

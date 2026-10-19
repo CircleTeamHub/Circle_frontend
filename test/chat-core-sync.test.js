@@ -108,6 +108,7 @@ function loadSync(options = {}) {
             },
             loadChatHistory: async (conversationId) => {
               calls.histories.push(conversationId);
+              return options.loadHistory?.(conversationId);
             },
           };
         case './local-db':
@@ -599,6 +600,65 @@ test('queued invalidations are discarded on account switching before SQLite open
   runTimers();
   await flush();
   assert.deepEqual(calls.fetches, []);
+  sync.resetChatSync();
+});
+
+
+test('failed forced expiry pulls retry with capped backoff until the authoritative page is stored', async () => {
+  const { sync, calls, timers, runTimers } = loadSync({
+    localStates: { c1: { revision: 10, hasMessages: false } },
+    pages: { c1: [() => Promise.reject(new Error('timeout')), () => Promise.reject(new Error('offline')), page({ nextRevision: 11, throughRevision: 11 })] },
+  });
+  sync.startChatSync('u1');
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 10 }]);
+  sync.noteLiveRevision('c1', 11, false);
+  runTimers(); await flush();
+  assert.deepEqual([...timers.values()].map(t => t.delay), [1500]);
+  assert.equal(calls.localPages.length, 0);
+  runTimers(); await flush();
+  assert.deepEqual([...timers.values()].map(t => t.delay), [3000]);
+  runTimers(); await flush();
+  assert.deepEqual(calls.fetches, [['c1', 10], ['c1', 10], ['c1', 10]]);
+  assert.equal(calls.localPages[0].revision, 11);
+  assert.equal(timers.size, 0);
+  sync.resetChatSync();
+});
+
+test('a forced invalidation above the live window and page cap resets and refreshes once instead of replaying pages', async () => {
+  const { sync, calls, runTimers } = loadSync({ localStates: { c1: { revision: 10, hasMessages: false } } });
+  sync.startChatSync('u1');
+  sync.noteLiveRevision('c1', 10_000, false);
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 9000 }]);
+  runTimers(); await flush();
+  assert.deepEqual(calls.fetches, []);
+  assert.deepEqual(calls.resets, [['c1', 10_000]]);
+  assert.deepEqual(calls.histories, ['c1']);
+  sync.resetChatSync();
+});
+
+test('failed forced retries are cancelled on account switch', async () => {
+  const { sync, calls, runTimers } = loadSync({ localStates: { c1: { revision: 10, hasMessages: false } }, pages: { c1: [() => Promise.reject(new Error('timeout'))] } });
+  sync.startChatSync('u1');
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 10 }]);
+  sync.noteLiveRevision('c1', 11, false);
+  runTimers(); await flush();
+  sync.startChatSync('u2');
+  runTimers(); await flush();
+  assert.deepEqual(calls.fetches, [['c1', 10]]);
+  sync.resetChatSync();
+});
+
+
+test('a forced large-gap reload is retried if the history request fails after the reset', async () => {
+  let reloads = 0;
+  const { sync, calls, runTimers } = loadSync({ localStates: { c1: { revision: 10, hasMessages: false } }, loadHistory: () => { if (++reloads === 1) throw new Error('offline'); } });
+  sync.startChatSync('u1');
+  sync.noteLiveRevision('c1', 10_000, false);
+  await sync.syncConversationsFromSnapshot([{ id: 'c1', syncRevision: 9000 }]);
+  runTimers(); await flush();
+  assert.equal(reloads, 2);
+  assert.deepEqual(calls.fetches, []);
+  assert.deepEqual(calls.resets, [['c1', 10_000]]);
   sync.resetChatSync();
 });
 
