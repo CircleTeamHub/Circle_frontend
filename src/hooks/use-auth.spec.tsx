@@ -165,6 +165,7 @@ test('an unknown device goes to verification without creating a session', async 
       id: 'challenge-1',
       expiresAt: '2026-10-14T00:05:00.000Z',
       securityCodeAvailable: true,
+      recoveryAvailableAt: null,
     },
   });
   const { result } = renderHook(() => useAuth());

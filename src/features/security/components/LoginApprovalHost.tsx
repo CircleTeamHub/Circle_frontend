@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  ScrollView,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -22,7 +23,7 @@ const s = StyleSheet.create({
     padding: Spacing.lg,
     backgroundColor: 'rgba(0, 0, 0, 0.48)',
   },
-  card: { borderRadius: Radius.lg, padding: Spacing.lg, gap: Spacing.md },
+  card: { maxHeight: '90%', flexShrink: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: Spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   title: { ...Typography.h3, flex: 1 },
   detail: { ...Typography.bodyRegular, lineHeight: 20 },
@@ -147,6 +148,14 @@ export function LoginApprovalHost() {
             value: formatTime(challenge.createdAt, i18n.language),
           })}
         </Text>
+        {challenge.recoveryAvailableAt ? (
+          // 找回申请：不处理的话到点对方就能登录、并把这台设备退出 —— 必须讲清楚。
+          <Text style={[s.warning, d.warning]}>
+            {t('loginApproval.recoveryNotice', {
+              value: formatTime(challenge.recoveryAvailableAt, i18n.language),
+            })}
+          </Text>
+        ) : null}
         <Text style={[s.question, d.question]}>{t('loginApproval.question')}</Text>
         <Text style={[s.warning, d.warning]}>{t('loginApproval.warning')}</Text>
         {errorText ? <Text style={[s.error, d.error]}>{errorText}</Text> : null}
@@ -210,7 +219,7 @@ export function LoginApprovalHost() {
             <Ionicons name="shield-checkmark-outline" size={24} color={colors.primary} />
             <Text style={[s.title, d.title]}>{t(titleKey)}</Text>
           </View>
-          {body}
+          <ScrollView contentContainerStyle={{ gap: Spacing.md }} bounces={false}>{body}</ScrollView>
         </View>
       </View>
     </DialogOverlay>

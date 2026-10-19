@@ -9,7 +9,7 @@ let mockCommitting = false;
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace, canGoBack: () => true, back: jest.fn() }) }));
 jest.mock('@react-navigation/native', () => ({ usePreventRemove: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: () => 'failed' }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/theme', () => {
@@ -19,9 +19,9 @@ jest.mock('@/theme', () => {
 });
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ completeVerifiedLogin: jest.fn(), committing: mockCommitting }) }));
-jest.mock('@/features/auth/hooks/use-device-verification', () => ({ useDeviceVerification: () => ({ phase: 'waiting', remainingSeconds: 300, submitting: mockSubmitting, error: null }) }));
+jest.mock('@/features/auth/hooks/use-device-verification', () => ({ useDeviceVerification: () => ({ phase: 'waiting', remainingSeconds: 300, recoveryAvailableAt: null, submitting: mockSubmitting, error: null }) }));
 
-beforeEach(() => { jest.clearAllMocks(); mockSubmitting = false; mockCommitting = false; useDeviceVerificationStore.getState().setChallenge({ id: 'challenge', expiresAt: new Date(Date.now()+300000).toISOString(), securityCodeAvailable: false }); });
+beforeEach(() => { jest.clearAllMocks(); mockSubmitting = false; mockCommitting = false; useDeviceVerificationStore.getState().setChallenge({ id: 'challenge', expiresAt: new Date(Date.now()+300000).toISOString(), securityCodeAvailable: false, recoveryAvailableAt: null }); });
 afterEach(() => { useDeviceVerificationStore.getState().setChallenge(null); });
 test('offers email recovery without requiring a trusted device or security code', () => {
  render(<DeviceVerificationScreen />);

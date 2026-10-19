@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useDeviceVerification } from './use-device-verification';
 import {
   fetchLoginChallengeStatus,
+  requestLoginRecovery,
   resendLoginChallenge,
   verifyLoginChallengeCode,
 } from '@/services/api/auth';
@@ -9,6 +10,7 @@ import { ApiError } from '@/services/api/api-error';
 
 jest.mock('@/services/api/auth', () => ({
   fetchLoginChallengeStatus: jest.fn(),
+  requestLoginRecovery: jest.fn(),
   resendLoginChallenge: jest.fn(),
   verifyLoginChallengeCode: jest.fn(),
   verifyLoginChallengeSecurityCode: jest.fn(),
@@ -92,6 +94,7 @@ test('an expired request can be resent and returns to waiting', async () => {
     id: 'c2',
     expiresAt: inFiveMinutes(),
     securityCodeAvailable: false,
+    recoveryAvailableAt: null,
   });
   const { result } = renderHook(() =>
     useDeviceVerification({ challengeId: 'c1', expiresAt: past, onVerified: jest.fn() }),
@@ -134,4 +137,113 @@ test('does not overlap slow status polls', async () => {
   await act(async () => resolve({ status: 'APPROVED', expiresAt: new Date(Date.now() + 300000).toISOString(), codeExpiresAt: new Date(Date.now() + 60000).toISOString() }));
   expect(result.current.phase).toBe('approved');
   unmount(); jest.useRealTimers();
+});
+
+describe('recovery (no trusted device available)', () => {
+  const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
+
+  test('requesting recovery switches to the waiting view with the completion time', async () => {
+    const availableAt = inHours(24);
+    jest.mocked(requestLoginRecovery).mockResolvedValue({
+      id: 'c1',
+      expiresAt: inHours(24 * 8),
+      securityCodeAvailable: false,
+      recoveryAvailableAt: availableAt,
+    });
+    const { result } = renderHook(() =>
+      useDeviceVerification({ challengeId: 'c1', expiresAt: inFiveMinutes(), onVerified: jest.fn() }),
+    );
+    await waitFor(() => expect(result.current.phase).toBe('waiting'));
+
+    await act(async () => {
+      await result.current.requestRecovery();
+    });
+
+    expect(requestLoginRecovery).toHaveBeenCalledWith('c1');
+    expect(result.current.phase).toBe('recoveryWaiting');
+    expect(result.current.recoveryAvailableAt).toBe(Date.parse(availableAt));
+    // 倒计时按等待期算，而不是 5 分钟的批准窗口。
+    expect(result.current.remainingSeconds).toBeGreaterThan(23 * 3600);
+  });
+
+  test('a pending recovery whose waiting period passed asks to sign in again', async () => {
+    const past = new Date(Date.now() - 1_000).toISOString();
+    jest.mocked(fetchLoginChallengeStatus).mockResolvedValue({
+      status: 'PENDING',
+      expiresAt: inHours(24 * 7),
+      codeExpiresAt: null,
+      recoveryAvailableAt: past,
+    });
+    const { result } = renderHook(() =>
+      useDeviceVerification({
+        challengeId: 'c1',
+        expiresAt: inHours(24 * 7),
+        recoveryAvailableAt: past,
+        onVerified: jest.fn(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.phase).toBe('recoveryReady'));
+  });
+
+  test('if a trusted device approves during the wait, the code can be entered right away', async () => {
+    jest.mocked(fetchLoginChallengeStatus).mockResolvedValue({
+      status: 'APPROVED',
+      expiresAt: inHours(24 * 7),
+      codeExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      recoveryAvailableAt: inHours(20),
+    });
+    const { result } = renderHook(() =>
+      useDeviceVerification({
+        challengeId: 'c1',
+        expiresAt: inHours(24 * 7),
+        recoveryAvailableAt: inHours(20),
+        onVerified: jest.fn(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.phase).toBe('approved'));
+  });
+
+  test('a recovery declined by a trusted device ends the flow', async () => {
+    jest.mocked(fetchLoginChallengeStatus).mockResolvedValue({
+      status: 'REJECTED',
+      expiresAt: inHours(24 * 7),
+      codeExpiresAt: null,
+      recoveryAvailableAt: inHours(20),
+    });
+    const { result } = renderHook(() =>
+      useDeviceVerification({
+        challengeId: 'c1',
+        expiresAt: inHours(24 * 7),
+        recoveryAvailableAt: inHours(20),
+        onVerified: jest.fn(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.phase).toBe('rejected'));
+  });
+});
+
+test('resending an expired recovery clears its previous completion time', async () => {
+ jest.mocked(fetchLoginChallengeStatus).mockResolvedValue({status: 'PENDING', expiresAt: inFiveMinutes(), codeExpiresAt: null, recoveryAvailableAt: null});
+ jest.mocked(resendLoginChallenge).mockResolvedValue({id: 'c2', expiresAt: inFiveMinutes(), securityCodeAvailable: false, recoveryAvailableAt: null});
+ const {result} = renderHook(() => useDeviceVerification({challengeId:'c1', expiresAt: new Date(Date.now()-1000).toISOString(), recoveryAvailableAt: new Date(Date.now()-2000).toISOString(), onVerified: jest.fn()}));
+ expect(result.current.phase).toBe('expired');
+ await act(async () => { await result.current.resend(); });
+ expect(result.current.phase).toBe('waiting');
+ expect(result.current.recoveryAvailableAt).toBeNull();
+});
+
+test('malformed status timestamps preserve the existing recovery deadline', async () => {
+ const deadline=new Date(Date.now()+86400000).toISOString();
+ jest.mocked(fetchLoginChallengeStatus).mockResolvedValue({status:'PENDING',expiresAt:inFiveMinutes(),codeExpiresAt:null,recoveryAvailableAt:'malformed'});
+ const {result}=renderHook(()=>useDeviceVerification({challengeId:'c1',expiresAt:inFiveMinutes(),recoveryAvailableAt:deadline,onVerified:jest.fn()}));
+ await act(async()=>{});expect(result.current.phase).toBe('recoveryWaiting');
+ expect(result.current.recoveryAvailableAt).toBe(Date.parse(deadline));
+});
+test('a failed recovery poll retries before an approval code can expire',async()=>{
+ jest.useFakeTimers();jest.mocked(fetchLoginChallengeStatus).mockRejectedValueOnce(new Error('timeout')).mockResolvedValue({status:'APPROVED',expiresAt:inFiveMinutes(),codeExpiresAt:new Date(Date.now()+60000).toISOString(),recoveryAvailableAt:null});
+ const {result,unmount}=renderHook(()=>useDeviceVerification({challengeId:'c1',expiresAt:inFiveMinutes(),recoveryAvailableAt:new Date(Date.now()+86400000).toISOString(),onVerified:jest.fn()}));
+ await act(async()=>{});await act(async()=>{jest.advanceTimersByTime(3000);});expect(result.current.phase).toBe('approved');unmount();jest.useRealTimers();
 });

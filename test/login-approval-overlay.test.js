@@ -48,3 +48,12 @@ test('the new device can resend once the approved code has expired', () => {
   );
   assert.match(screen, /\) : needsResend \? \(/);
 });
+
+test('the approval prompt tells the owner when a recovery request would complete on its own', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/security/components/LoginApprovalHost.tsx'),
+    'utf8',
+  );
+  assert.match(source, /challenge\.recoveryAvailableAt \?/);
+  assert.match(source, /loginApproval\.recoveryNotice/);
+});

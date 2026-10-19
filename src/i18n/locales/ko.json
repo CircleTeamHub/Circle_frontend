@@ -2792,7 +2792,8 @@
       "submit": "비밀번호 재설정",
       "submitting": "재설정 중…",
       "successBody": "모든 기기에서 로그아웃되었습니다. 새 비밀번호로 다시 로그인해 주세요.",
-      "successTitle": "비밀번호가 재설정되었습니다"
+      "successTitle": "비밀번호가 재설정되었습니다",
+      "spamHint": "인증 코드를 받지 못했나요? 스팸함을 확인하고 발신 주소를 연락처에 추가해 주세요."
     },
     "deviceVerification": {
       "title": "새 기기 인증",
@@ -2813,7 +2814,16 @@
       "useSecurityCode": "신뢰할 수 있는 기기가 없나요? 보안 코드로 인증",
       "useTrustedDevice": "신뢰할 수 있는 기기로 인증",
       "backToLogin": "로그인으로 돌아가기",
-      "failed": "인증에 실패했습니다. 다시 시도해 주세요"
+      "failed": "인증에 실패했습니다. 다시 시도해 주세요",
+      "recoveryEntry": "신뢰할 수 있는 기기를 쓸 수 없나요? 계정 복구 신청",
+      "recoveryConfirmTitle": "계정 복구 신청",
+      "recoveryConfirmBody": "이전 기기를 잃어버렸거나 재설치·초기화했다면 복구를 신청할 수 있습니다. 24시간 뒤 이 기기에서 다시 로그인하면 계정에 들어갈 수 있고, 다른 기기는 모두 로그아웃되며 신뢰가 해제됩니다. 기다리는 동안 모든 신뢰할 수 있는 기기에 알림이 가며 거부할 수 있고, 비밀번호를 변경해도 신청이 취소됩니다.",
+      "recoveryConfirm": "복구 신청",
+      "recoveryCancel": "취소",
+      "recoveryWaiting": "복구를 신청했습니다. {{time}} 이후 이 기기에서 다시 로그인하면 계정에 들어갈 수 있습니다. 그동안 신뢰할 수 있는 기기에 알림이 가며 거부할 수 있습니다.",
+      "recoveryReady": "대기 기간이 끝났습니다. 로그인 화면으로 돌아가 이 기기에서 비밀번호로 다시 로그인하면 복구가 완료됩니다.",
+      "recoveryGoLogin": "로그인하기",
+      "recoveryUnderstood": "알겠습니다"
     }
   },
   "media": {
@@ -3527,7 +3537,8 @@
     "AUTH_SECURITY_CODE_NOT_SET": "로그인 보안 코드가 설정되지 않았습니다. 신뢰할 수 있는 기기에서 확인해 주세요",
     "CHAT_GROUP_ACCEPT_REQUIRED": "먼저 그룹 초대를 수락해 주세요",
     "CHAT_GROUP_INVITATION_INVALID": "초대가 만료되었거나 유효하지 않습니다",
-    "CHAT_GROUP_APPLICATION_DISABLED": "이 그룹은 명함을 통한 가입 신청을 받지 않습니다"
+    "CHAT_GROUP_APPLICATION_DISABLED": "이 그룹은 명함을 통한 가입 신청을 받지 않습니다",
+    "AUTH_LOGIN_RECOVERY_LIMITED": "복구 신청이 너무 많습니다. 기존 신청이 처리된 뒤 다시 시도해 주세요"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",
@@ -3619,7 +3630,8 @@
     "rejectedBody": "누군가 비밀번호를 알고 로그인을 시도했습니다. 지금 비밀번호를 변경하는 것이 좋습니다.",
     "changePassword": "비밀번호 변경",
     "later": "나중에",
-    "failed": "작업에 실패했습니다. 잠시 후 다시 시도해 주세요"
+    "failed": "작업에 실패했습니다. 잠시 후 다시 시도해 주세요",
+    "recoveryNotice": "계정 복구 신청입니다. 거부하지 않으면 {{value}} 이후 이 기기가 계정에 로그인하고 다른 기기는 로그아웃됩니다."
   },
   "groupAdmission": {
     "title": "그룹 정보 및 초대",
