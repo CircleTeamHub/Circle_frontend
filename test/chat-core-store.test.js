@@ -2132,3 +2132,14 @@ test('an offscreen pulled preview persists its deadline, hydrates it, and expire
  assert.equal(cold.conversations[0].lastMessage,null);
  assert.equal(saved.lastMessage,null);
 });
+
+
+test('ordinary sync pages do not run global expiry sweeps or rewrite unchanged previews', async () => {
+ let sweeps=0,writes=0;
+ const {useChatStore}=loadChatStore({localDb:{purgeExpiredLocalMessages:async()=>{sweeps++;},upsertLocalConversation:async()=>{writes++;}}});
+ const store=useChatStore.getState();
+ store.setConversations([conversation({lastMessage:msg({id:'preview'})})]);
+ await new Promise(resolve=>setImmediate(resolve));sweeps=0;writes=0;
+ for(let revision=1;revision<4;revision++)await store.applySyncPage('conv-1',{messages:[msg({id:'unrelated',revision})],nextRevision:revision,throughRevision:revision,hasMore:false,resetRequired:false,readHeight:0,clearedBeforeHeight:0});
+ assert.equal(sweeps,0);assert.equal(writes,0);
+});
