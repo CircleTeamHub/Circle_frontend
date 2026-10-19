@@ -1,3 +1,4 @@
+import { reportHandledFailure } from '@/observability/report-failure';
 import { onEncryptedBodyPurge, purgeEncryptedBody } from './lifecycle';
 import { ProtocolDevice } from '@circle/e2ee';
 import { EncryptionClient, type EncryptedContent } from '@circle/e2ee/relay-client.mjs';
@@ -117,7 +118,7 @@ onEncryptedBodyPurge(({conversationId, clientMessageId, serverMessageId, expired
     const metadata = value as unknown as {serverMessageId?: string; expiresAt?: string};
     return expired ? Boolean(metadata.expiresAt && Date.parse(metadata.expiresAt) <= Date.now())
       : value.conversationId === conversationId && (!serverMessageId || metadata.serverMessageId === serverMessageId) && (!clientMessageId || value.clientMessageId === clientMessageId);
-  }))).catch(() => { console.warn('Encrypted body purge failed'); });
+  }))).catch(() => { reportHandledFailure('e2ee', 'purgeBodies', new Error('Encrypted body purge failed')); });
 });
 
 export async function recoverMissingLocalKey() {
