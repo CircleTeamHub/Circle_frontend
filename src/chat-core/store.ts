@@ -1810,13 +1810,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const persisted = options?.persist !== false
       ? persistLocalMessages(conversationId, incoming) : Promise.resolve(true);
     return persisted.then((durable) => {
-      if (hasExpiry) void get().purgeExpiredBurnMessages();
+      if (hasExpiry && options?.persist !== false) void get().purgeExpiredBurnMessages();
       return durable;
     });
   },
 
   applySyncPage: async (conversationId, page) => {
     const state = get();
+    const originalConversation = state.conversations.find((c) => c.id === conversationId);
     const currentUserId = state.currentUserId;
 
     const localFloor =
@@ -1930,11 +1931,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         });
       }
     }
-    // Offscreen previews also need a durable fixed deadline and an expiry timer.
-    await get().purgeExpiredBurnMessages();
+    // Ordinary incremental pages need no global burn sweep. The coordinator has
+    // already persisted this page before scheduling expiry cleanup and timers.
+    if (live.some((message) => messageBurnExpiry(message, get().conversations.find((c) => c.id === conversationId)) !== null)) {
+      await get().purgeExpiredBurnMessages();
+    }
     if (get().currentUserId !== currentUserId) return;
     const reconciled = get().conversations.find((c) => c.id === conversationId);
-    if (reconciled) await upsertLocalConversation(reconciled);
+    if (reconciled && reconciled !== originalConversation) {
+      await upsertLocalConversation(reconciled);
+    }
   },
 
   evictConversationCache: (conversationId) => {

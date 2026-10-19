@@ -285,6 +285,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     snapshotSyncs: [],
     syncStarts: [],
     syncResets: 0,
+    syncResumes: 0,
     tokenRefreshes: 0,
     pendingMediaPrunes: [],
     initialHistory: [],
@@ -327,6 +328,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
       AppState: { currentState: options.appState ?? 'active' },
     },
     './sync': {
+      resumePendingChatSync: async () => { apiCalls.syncResumes += 1; },
       setConversationCacheResetHandler: () => {},
       startChatSync: (userId) => apiCalls.syncStarts.push(userId),
       resetChatSync: () => {
@@ -1164,7 +1166,7 @@ test('a push token confirmation leaves the connection alone when it is not neede
 });
 
 test('app background/foreground is reported in the handshake and on the live socket', () => {
-  const { manager, socket, captured, store } = loadManager();
+  const { manager, socket, captured, store, apiCalls } = loadManager();
   manager.setChatAppState('background');
   assert.equal(store.appForeground, false);
   manager.connectChat('jwt', 'u1');
@@ -1182,8 +1184,10 @@ test('app background/foreground is reported in the handshake and on the live soc
       .map((e) => e.event),
     ['chat:foreground'],
   );
+  assert.equal(apiCalls.syncResumes, 1);
   // 状态没变不重复上报。
   manager.setChatAppState('foreground');
+  assert.equal(apiCalls.syncResumes, 1);
   assert.equal(
     socket.emitted.filter((e) => e.event === 'chat:foreground').length,
     1,

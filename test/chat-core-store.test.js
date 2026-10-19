@@ -2132,3 +2132,30 @@ test('an offscreen pulled preview persists its deadline, hydrates it, and expire
  assert.equal(cold.conversations[0].lastMessage,null);
  assert.equal(saved.lastMessage,null);
 });
+
+
+test('ordinary sync pages do not run global expiry sweeps or rewrite unchanged previews', async () => {
+ let sweeps=0,writes=0;
+ const {useChatStore}=loadChatStore({localDb:{purgeExpiredLocalMessages:async()=>{sweeps++;},upsertLocalConversation:async()=>{writes++;}}});
+ const store=useChatStore.getState();
+ store.setConversations([conversation({lastMessage:msg({id:'preview'})})]);
+ await new Promise(resolve=>setImmediate(resolve));sweeps=0;writes=0;
+ for(let revision=1;revision<4;revision++)await store.applySyncPage('conv-1',{messages:[msg({id:'unrelated',revision})],nextRevision:revision,throughRevision:revision,hasMore:false,resetRequired:false,readHeight:0,clearedBeforeHeight:0});
+ assert.equal(sweeps,0);assert.equal(writes,0);
+});
+
+
+test('legacy sync DTOs without a fixed expiry still clear elapsed burn content', async () => {
+ let sweeps=0;
+ const {useChatStore}=loadChatStore({localDb:{purgeExpiredLocalMessages:async()=>{sweeps++;}}});
+ const store=useChatStore.getState();
+ const cached=msg({id:'legacy',burnExpiresAt:null});
+ store.setConversations([conversation({lastMessage:cached})]);
+ await store.ingestMessages('conv-1',[cached]);
+ await new Promise(resolve=>setImmediate(resolve));sweeps=0;
+ const legacy={...cached,burnDurationSec:60,revision:2};delete legacy.burnExpiresAt;
+ await store.applySyncPage('conv-1',{messages:[legacy],nextRevision:2,throughRevision:2,hasMore:false,resetRequired:false,readHeight:0,clearedBeforeHeight:0});
+ assert.equal(sweeps,1);
+ assert.equal(store.conversations[0].lastMessage,null);
+ assert.equal(store.messagesByConversation['conv-1'].length,0);
+});

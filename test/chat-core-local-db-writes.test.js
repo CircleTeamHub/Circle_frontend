@@ -438,3 +438,42 @@ test('burned-message delete without a boundary removes exactly the listed ids', 
   assert.doesNotMatch(deletes[0].sql, /created_at/);
   assert.deepEqual(deletes[0].params, ['conv-1', 'm1']);
 });
+
+test('a persisted past burn deadline is removed from SQLite and FTS before reconciliation finishes', async () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const sqlite = new DatabaseSync(':memory:');
+  // Exercise production SQL/FTS; SQLCipher negotiation is stubbed for this in-memory test.
+  const db = {
+    execAsync: async (sql) => sqlite.exec(sql),
+    getFirstAsync: async (sql, ...params) => sql.includes('cipher_version')
+      ? { cipher_version: 'test' } : sqlite.prepare(sql).get(...params),
+    getAllAsync: async (sql, ...params) => sqlite.prepare(sql).all(...params),
+    runAsync: async (sql, ...params) => sqlite.prepare(sql).run(...params),
+    closeAsync: async () => sqlite.close(),
+    withTransactionAsync: async (task) => {
+      sqlite.exec('BEGIN');
+      try { await task(); sqlite.exec('COMMIT'); }
+      catch (error) { sqlite.exec('ROLLBACK'); throw error; }
+    },
+  };
+  const { api, warnings } = loadLocalDb(db);
+  try {
+    assert.equal(await api.initChatLocalDb('test-user'), true);
+    for (const legacy of [false, true]) {
+    const original = { ...msg('secretneedle', 1), revision: 10, burnDurationSec: 60, burnExpiresAt: null };
+    await api.persistLocalMessages('conv-1', [original]);
+    assert.equal((await api.searchLocalChatMessages('secretneedle', 10)).length, 1);
+    const pulled = { ...original, revision: 11, burnExpiresAt: new Date(Date.now()-1000).toISOString() };
+    if (legacy) delete pulled.burnExpiresAt;
+    assert.equal(await api.applyLocalSyncPage('conv-1', {
+      upserts: [pulled],
+      deletedIds: [], clearedBeforeHeight: 0, revision: 11,
+    }), true);
+    await api.purgeExpiredLocalMessages([]);
+    assert.equal((await api.searchLocalChatMessages('secretneedle', 10)).length, 0);
+    assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM messages_fts WHERE messages_fts MATCH 'secretneedle'").get().n, 0);
+    assert.equal((await api.readRecentLocalMessages('conv-1', 50)).length, 0);
+    assert.equal(warnings.length, 0, JSON.stringify(warnings));
+    }
+  } finally { await api.closeChatLocalDb(); }
+});
