@@ -86,8 +86,10 @@ function loadSync(options = {}) {
   const storeState = {
     messagesByConversation: options.memory ?? {},
     activeConversationId: options.active ?? null,
-    applySyncPage: (conversationId, result) =>
-      calls.storePages.push({ conversationId, nextRevision: result.nextRevision, messages: result.messages }),
+    applySyncPage: async (conversationId, result) => {
+      calls.storePages.push({ conversationId, nextRevision: result.nextRevision, messages: result.messages });
+      await options.applyStorePage?.(conversationId, result);
+    },
     evictConversationCache: (conversationId) => calls.evictions.push(conversationId),
   };
   const syncPlan = runModule('src/chat-core/sync-plan.ts', () => {
@@ -695,5 +697,27 @@ test('a forced large-gap history reload reconciles the matching offscreen previe
  await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:9000}]);
  runTimers();await flush();
  assert.equal(calls.storePages[0].messages[0].burnExpiresAt,expiry);
+ sync.resetChatSync();
+});
+
+
+test('pulled deadlines are persisted before the store purges expired local content', async () => {
+ let storedDeadline=null;
+ const expiry=new Date(Date.now()-1000).toISOString();
+ const {sync}=loadSync({localStates:{c1:{revision:10,hasMessages:true}},pages:{c1:[page({messages:[msg('cached',1,11,{burnExpiresAt:expiry})],nextRevision:11,throughRevision:11})]},
+ applyPage:async (_id,page)=>{storedDeadline=page.upserts[0].burnExpiresAt;return true;},
+ applyStorePage:async ()=>assert.equal(storedDeadline,expiry)});
+ sync.startChatSync('u1');
+ await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:11}]);
+ sync.resetChatSync();
+});
+
+test('foreground resumes exhausted invalidations while the websocket session stays connected', async () => {
+ const {sync,calls,timers,runTimers}=loadSync({localStates:{c1:{revision:10,hasMessages:false}},pages:{c1:[...Array.from({length:7},()=>()=>Promise.reject(new Error('offline'))),page({nextRevision:11,throughRevision:11})]}});
+ sync.startChatSync('u1');await sync.syncConversationsFromSnapshot([{id:'c1',syncRevision:10}]);sync.noteLiveRevision('c1',11,false);
+ for(let i=0;i<15;i++){runTimers();await flush();}
+ assert.equal(calls.fetches.length,7);assert.equal(timers.size,0);
+ await sync.resumePendingChatSync();
+ assert.equal(calls.fetches.length,8);assert.equal(calls.localPages[0].revision,11);assert.equal(timers.size,0);
  sync.resetChatSync();
 });

@@ -263,8 +263,6 @@ async function pullUntil(
       if (forcedPullTargets.has(conversationId) && isCurrent(gen)) await reloadForcedHistory(conversationId, gen);
       return;
     }
-    await useChatStore.getState().applySyncPage(conversationId, result);
-    if (!isCurrent(gen)) return;
     const tombstoneIds = result.messages
       .filter((m) => m.deleted === true)
       .map((m) => m.id);
@@ -285,6 +283,9 @@ async function pullUntil(
         clearedBeforeHeight: result.clearedBeforeHeight,
         revision: result.nextRevision,
       }));
+    if (!isCurrent(gen)) return;
+    // Expiry cleanup must observe the newly persisted deadlines, including FTS rows.
+    await useChatStore.getState().applySyncPage(conversationId, result);
     if (!isCurrent(gen)) return;
     if (!persisted && localDbInUse) {
       // 这一页没落盘:就停在这里。继续翻下一页的话,下一页自己的事务会把游标写到
@@ -492,5 +493,15 @@ export function noteLiveRevision(
   }
   if (step.gap) {
     scheduleGapSync(conversationId, Math.max(...step.pendingAbove), gen);
+  }
+}
+
+/** Foreground recovery retries retained invalidations without fetching a full snapshot. */
+export async function resumePendingChatSync(): Promise<void> {
+  if (!forcedPullTargets.size) return;
+  try {
+    await syncConversationsFromSnapshot([]);
+  } catch (error) {
+    reportHandledFailure('chatSync', 'foregroundRecovery', error);
   }
 }

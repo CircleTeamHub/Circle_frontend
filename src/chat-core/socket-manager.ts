@@ -18,6 +18,7 @@ import {
 import { loadChatConversations, loadChatHistory } from './api';
 import {
   resetChatSync,
+  resumePendingChatSync,
   startChatSync,
   syncConversationsFromSnapshot,
 } from './sync';
@@ -661,6 +662,7 @@ export function setChatAppState(next: ChatAppState): void {
   useChatStore.getState().setAppForeground(next === 'foreground');
   if (appState === next) return;
   appState = next;
+  if (next === 'foreground') void resumePendingChatSync();
   const current = socket;
   if (!current?.connected) return;
   current.emit(
