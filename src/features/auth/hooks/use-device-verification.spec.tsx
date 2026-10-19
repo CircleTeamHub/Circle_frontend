@@ -234,3 +234,16 @@ test('resending an expired recovery clears its previous completion time', async 
  expect(result.current.phase).toBe('waiting');
  expect(result.current.recoveryAvailableAt).toBeNull();
 });
+
+test('malformed status timestamps preserve the existing recovery deadline', async () => {
+ const deadline=new Date(Date.now()+86400000).toISOString();
+ jest.mocked(fetchLoginChallengeStatus).mockResolvedValue({status:'PENDING',expiresAt:inFiveMinutes(),codeExpiresAt:null,recoveryAvailableAt:'malformed'});
+ const {result}=renderHook(()=>useDeviceVerification({challengeId:'c1',expiresAt:inFiveMinutes(),recoveryAvailableAt:deadline,onVerified:jest.fn()}));
+ await act(async()=>{});expect(result.current.phase).toBe('recoveryWaiting');
+ expect(result.current.recoveryAvailableAt).toBe(Date.parse(deadline));
+});
+test('a failed recovery poll retries before an approval code can expire',async()=>{
+ jest.useFakeTimers();jest.mocked(fetchLoginChallengeStatus).mockRejectedValueOnce(new Error('timeout')).mockResolvedValue({status:'APPROVED',expiresAt:inFiveMinutes(),codeExpiresAt:new Date(Date.now()+60000).toISOString(),recoveryAvailableAt:null});
+ const {result,unmount}=renderHook(()=>useDeviceVerification({challengeId:'c1',expiresAt:inFiveMinutes(),recoveryAvailableAt:new Date(Date.now()+86400000).toISOString(),onVerified:jest.fn()}));
+ await act(async()=>{});await act(async()=>{jest.advanceTimersByTime(3000);});expect(result.current.phase).toBe('approved');unmount();jest.useRealTimers();
+});

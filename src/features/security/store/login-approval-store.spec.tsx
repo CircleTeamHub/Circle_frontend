@@ -39,3 +39,11 @@ test('queued refreshes from the old account do not replay or overwrite the new a
   expect(fetchPendingLoginChallenges).toHaveBeenCalledTimes(2);
   expect(useLoginApprovalStore.getState().pending.map(item => item.id)).toEqual(['account-b']);
 });
+
+test('a new recovery request requeues an approved ID exactly once', async () => {
+ const store=useLoginApprovalStore.getState();
+ useLoginApprovalStore.setState({pending:[{id:'c1',recoveryAvailableAt:null}] as never});store.remove('c1');
+ jest.mocked(fetchPendingLoginChallenges).mockResolvedValue([{id:'c1',recoveryAvailableAt:'2026-10-21T00:00:00Z'}] as never);
+ await store.refresh();expect(useLoginApprovalStore.getState().pending).toHaveLength(1);
+ store.remove('c1');await store.refresh();expect(useLoginApprovalStore.getState().pending).toHaveLength(0);
+});

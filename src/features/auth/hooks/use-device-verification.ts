@@ -128,18 +128,21 @@ export function useDeviceVerification({
     if (isTerminal || completionPending) return undefined;
     let cancelled = false;
     let polling = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
     const poll = async () => {
       if (polling || cancelled) return;
       polling = true;
       try {
         const next = await fetchLoginChallengeStatus(challengeId);
         if (cancelled) return;
+        failures = 0;
         setStatus(next.status);
         setExpiresAt(Date.parse(next.expiresAt));
         setCodeExpiresAt(
           next.codeExpiresAt ? Date.parse(next.codeExpiresAt) : null,
         );
-        if (next.recoveryAvailableAt !== undefined) {
+        if (next.recoveryAvailableAt === null || parseTime(next.recoveryAvailableAt) !== null) {
           setRecoveryAt(parseTime(next.recoveryAvailableAt));
         }
       } catch (pollError) {
@@ -147,6 +150,10 @@ export function useDeviceVerification({
         const code = pollError instanceof ApiError ? pollError.errorCode : undefined;
         if (!cancelled && code && TERMINAL_ERROR_PHASE[code]) {
           setTerminalPhase(TERMINAL_ERROR_PHASE[code]);
+        }
+        if (!cancelled && !(code && TERMINAL_ERROR_PHASE[code]) && failures < 2) {
+          failures++;
+          retryTimer = setTimeout(() => { void poll(); }, POLL_INTERVAL_MS * failures);
         }
       } finally { polling = false; }
     };
@@ -158,6 +165,7 @@ export function useDeviceVerification({
     return () => {
       cancelled = true;
       clearInterval(timer);
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [challengeId, isTerminal, completionPending, inRecovery]);
 

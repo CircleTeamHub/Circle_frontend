@@ -24,6 +24,7 @@ type LoginApprovalState = {
    * 带回来，按这里过滤掉，免得同一请求再问一遍。
    */
   handledIds: string[];
+  handledRecoveryAt: Record<string,string | null>;
   refresh: () => Promise<void>;
   remove: (challengeId: string) => void;
   markResolved: (
@@ -47,6 +48,7 @@ export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
   appLocked: true,
   consumedId: null,
   handledIds: [],
+  handledRecoveryAt: {},
   refresh: () => {
     if (inFlight) {
       refreshQueued = true;
@@ -61,7 +63,7 @@ export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
           if (requestGeneration !== generation) return;
           set((state) => ({
             pending: (Array.isArray(pending) ? pending : []).filter(
-              (item) => !state.handledIds.includes(item.id),
+              (item) => !state.handledIds.includes(item.id) || Boolean(item.recoveryAvailableAt && item.recoveryAvailableAt !== state.handledRecoveryAt[item.id]),
             ),
           }));
         } catch (error) {
@@ -79,11 +81,13 @@ export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
     set((state) => ({
       pending: state.pending.filter((item) => item.id !== challengeId),
       handledIds: [...state.handledIds, challengeId].slice(-50),
+      handledRecoveryAt: Object.fromEntries([...state.handledIds, challengeId].slice(-50).map(id => [id, id === challengeId ? state.pending.find(item=>item.id===id)?.recoveryAvailableAt ?? null : state.handledRecoveryAt[id] ?? null])),
     })),
   markResolved: (challengeId, status) =>
     set((state) => ({
       pending: state.pending.filter((item) => item.id !== challengeId),
       handledIds: [...state.handledIds, challengeId].slice(-50),
+      handledRecoveryAt: Object.fromEntries([...state.handledIds, challengeId].slice(-50).map(id => [id, id === challengeId ? state.pending.find(item=>item.id===id)?.recoveryAvailableAt ?? null : state.handledRecoveryAt[id] ?? null])),
       consumedId: status === 'CONSUMED' ? challengeId : state.consumedId,
     })),
   setAppLocked: (appLocked) => set({ appLocked }),
@@ -91,7 +95,7 @@ export const useLoginApprovalStore = create<LoginApprovalState>((set) => ({
     generation += 1;
     inFlight = null;
     refreshQueued = false;
-    set({ pending: [], consumedId: null, handledIds: [] });
+    set({ pending: [], consumedId: null, handledIds: [], handledRecoveryAt: {} });
   },
 }));
 
