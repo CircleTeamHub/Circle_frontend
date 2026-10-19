@@ -159,3 +159,20 @@ test('explicit missing-key recovery preserves the old sealed database and create
   assert.equal((await replacement.load()).record, null);
   assert.equal(fs.existsSync(path.join(f.directory, 'e2ee-v1-alice.sqlite')), true);
 });
+
+test('purges archived bodies durably while keeping replay metadata', async t => {
+ const f = await fixture(t); const journal = await f.open('alice');
+ const {ProtocolDevice} = await import('@circle/e2ee');
+ const envelope = {conversationId:'room',senderDeviceId:'sender',clientMessageId:'message'};
+ const id = crypto.createHash('sha256').update(JSON.stringify(['room','sender','message'])).digest('hex');
+ await journal.save(0,{groups:{},outbox:{},inbox:{[id]:{...envelope,body:{text:'sensitive'},ciphertext:'cipher'}}});
+ const device = new ProtocolDevice(journal,'alice',journal.deviceId,new Map(),{});
+ assert.equal((await device.message(envelope)).body.text,'sensitive');
+ await device.purgeMessages(value => value.conversationId === 'room');
+ assert.equal(await device.message(envelope),undefined);
+ assert.equal((await journal.pageItems('inbox','',20))[0].value.body,undefined);
+ assert.equal((await journal.getItem('inbox',id)).ciphertext,'cipher');
+ await journal.close();const reopened=await f.open('alice');
+ assert.equal((await reopened.getItem('inbox',id)).body,undefined);
+ assert.equal((await reopened.getItem('inbox',id)).purged,true);
+});

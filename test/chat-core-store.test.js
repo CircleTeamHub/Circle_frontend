@@ -2082,3 +2082,20 @@ test('local expiry removes the author message and scrubs quotes without deleting
   assert.equal(state.messagesByConversation['conv-1'][0].content.quotedText,'');
   assert.equal(state.conversations[0].lastMessage.content.quotedText,'');
 });
+
+test('upgrade removes an expired legacy row whose server expiry field is absent', async () => {
+ const {useChatStore} = loadChatStore();
+ const store = useChatStore.getState();
+ store.setConversations([conversation()]);
+ await store.ingestMessages('conv-1',[msg({id:'legacy',height:1,burnDurationSec:60,createdAt:new Date(Date.now()-120000).toISOString()})]);
+ await store.purgeExpiredBurnMessages();
+ assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length,0);
+});
+
+test('legacy cache falls back to its stored conversation policy but explicit null keeps the server decision', async () => {
+ const {useChatStore} = loadChatStore(); const store=useChatStore.getState();
+ store.setConversations([conversation({burnDurationSec:60,burnStartedAt:new Date(Date.now()-300000).toISOString()})]);
+ await store.ingestMessages('conv-1',[msg({id:'legacy-no-duration',height:1,createdAt:new Date(Date.now()-120000).toISOString()}),msg({id:'server-kept',height:2,createdAt:new Date(Date.now()-120000).toISOString(),burnExpiresAt:null})]);
+ await store.purgeExpiredBurnMessages();
+ assert.deepEqual(Array.from(useChatStore.getState().messagesByConversation['conv-1'],m=>m.id),['server-kept']);
+});

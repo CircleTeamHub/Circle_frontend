@@ -27,6 +27,7 @@ export interface JournalRecord {
 export type ArchiveBucket = 'inbox' | 'outbox';
 export interface ArchiveItem { id: string; value: any }
 export interface Journal {
+  transformInbox?(matches: (value: any) => boolean, transform: (value: any) => any, ids?: string[]): Promise<void>;
   getItem?(bucket: ArchiveBucket, id: string): Promise<any>;
   pageItems?(bucket: ArchiveBucket, after: string, limit: number): Promise<ArchiveItem[]>;
   load(): Promise<{ revision: number; record: JournalRecord | null }> | { revision: number; record: JournalRecord | null };
@@ -48,6 +49,8 @@ export class ProtocolDevice {
   send(conversationId: string, id: string, body: Record<string, unknown>): Promise<Envelope>;
   receive(envelope: Envelope): Promise<Record<string, unknown>>;
   message(envelope: Envelope): Promise<DecryptedMessage | undefined>;
+  annotateMessage(envelope: Envelope, metadata: Record<string, unknown>): Promise<void>;
+  purgeMessages(matches: (value: DecryptedMessage) => boolean): Promise<void>;
   messagePage(after?: string, limit?: number): Promise<ArchiveItem[]>;
   importMessage(message: DecryptedMessage): Promise<void>;
   messages(): Promise<DecryptedMessage[]>;

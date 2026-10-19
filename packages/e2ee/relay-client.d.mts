@@ -22,5 +22,6 @@ export class EncryptionClient {
   recover(code: string): Promise<void>;
   backupHistory(reason?: string, onProgress?: (count: number) => void): Promise<number>;
   restoreHistory(reason?: string, onProgress?: (count: number) => void): Promise<number>;
-  decrypt(content: EncryptedContent, reason?: string): Promise<Record<string, unknown>>;
+  resolveMessages(messages: Envelope[], reason?: string): Promise<any[]>;
+  decrypt(content: EncryptedContent, reason?: string, resolved?: any[]): Promise<Record<string, unknown>>;
 }
