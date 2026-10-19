@@ -1857,6 +1857,7 @@ export default function ChatInfoScreen() {
           contentContainerStyle={[s.groupContent, { paddingBottom: insets.bottom + Spacing.xl }]}
           showsVerticalScrollIndicator={false}
         >
+          {resolvedConversationID && <MenuRow icon="lock-closed-outline" label={t('e2ee.title')} onPress={() => router.push({ pathname: '/encryption' as never, params: { conversationId: resolvedConversationID } })} />}
           {canViewMemberDirectory ? (
             <View style={s.groupMemberSection}>
             <View style={s.groupMemberGrid}>
@@ -2195,7 +2196,7 @@ export default function ChatInfoScreen() {
           <MenuRow icon="pricetag-outline" label={t('chat.tags')} onPress={handleOpenTags} />
           <Divider />
           <MenuRow icon="search-outline" label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
-          {process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true' && resolvedConversationID && <MenuRow icon="lock-closed-outline" label={t('e2ee.title')} onPress={() => router.push({ pathname: '/encryption' as never, params: { conversationId: resolvedConversationID } })} />}
+          {resolvedConversationID && <MenuRow icon="lock-closed-outline" label={t('e2ee.title')} onPress={() => router.push({ pathname: '/encryption' as never, params: { conversationId: resolvedConversationID } })} />}
           <Divider />
           <MenuRow icon="image-outline" label={t('chat.chatBackground')} onPress={handleOpenChatBackground} />
           <Divider />

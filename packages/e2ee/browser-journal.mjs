@@ -90,6 +90,41 @@ export async function openBrowserJournal(userId, password, databaseName = `circl
         };
         await done;
       },
+      async transformInbox(matches, transform, ids) {
+        assertOpen();
+        const tx = db.transaction('archive', 'readwrite');
+        const done = completed(tx);
+        const store = tx.objectStore('archive');
+        if (ids) {
+          for (const id of ids) {
+            const read = store.get(['inbox', id]);
+            read.onsuccess = () => {
+              try {
+                assertOpen();
+                if (!read.result) return;
+                const itemScope = `${scope}:inbox:${id}`;
+                const value = openJournal(key, itemScope, 1, unb64(read.result));
+                if (matches(value)) store.put(b64(sealJournal(key, itemScope, 1, transform(value))), ['inbox', id]);
+              } catch { tx.abort(); }
+            };
+          }
+          await done;
+          return;
+        }
+        const scan = store.openCursor(IDBKeyRange.bound(['inbox', ''], ['inbox', '\uffff']));
+        scan.onsuccess = () => {
+          try {
+            assertOpen();
+            const cursor = scan.result;
+            if (!cursor) return;
+            const itemScope = `${scope}:inbox:${cursor.key[1]}`;
+            const value = openJournal(key, itemScope, 1, unb64(cursor.value));
+            if (matches(value)) cursor.update(b64(sealJournal(key, itemScope, 1, transform(value))));
+            cursor.continue();
+          } catch { tx.abort(); }
+        };
+        await done;
+      },
       async close() { if (closed) return; closed = true; key.fill(0); db.close(); },
     };
   } catch (error) { key?.fill(0); db.close(); throw error; }

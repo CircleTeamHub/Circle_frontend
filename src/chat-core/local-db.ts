@@ -914,6 +914,12 @@ export async function purgeExpiredLocalMessages(
   if (!current) return;
   try {
     await writeTransaction(current.db, async () => {
+      // Upgrade legacy rows that already recorded their per-message duration.
+      await current.db.runAsync(`UPDATE messages SET payload=json_set(payload, '$.burnExpiresAt', strftime('%Y-%m-%dT%H:%M:%fZ', json_extract(payload, '$.createdAt'), '+' || json_extract(payload, '$.burnDurationSec') || ' seconds')) WHERE height>0 AND json_type(payload, '$.burnExpiresAt') IS NULL AND json_extract(payload, '$.burnDurationSec')>0;`);
+      await current.db.runAsync(`UPDATE messages SET payload=json_set(payload, '$.burnExpiresAt', strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+' || (SELECT json_extract(c.payload, '$.burnDurationSec') FROM conversations c WHERE c.id=messages.conversation_id) || ' seconds'))
+        WHERE height>0 AND json_type(payload, '$.burnExpiresAt') IS NULL
+          AND EXISTS (SELECT 1 FROM conversations c WHERE c.id=messages.conversation_id AND json_extract(c.payload, '$.burnDurationSec')>0
+            AND json_extract(c.payload, '$.burnStartedAt') IS NOT NULL AND julianday(messages.created_at)>=julianday(json_extract(c.payload, '$.burnStartedAt')));`);
       // Message-owned expiry also covers unloaded timelines/FTS. Unsent outbox entries
       // have no server expiry and must not be deleted by a viewer setting.
       const now = new Date().toISOString();

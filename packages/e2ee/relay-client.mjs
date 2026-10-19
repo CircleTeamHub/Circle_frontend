@@ -221,7 +221,7 @@ export class EncryptionClient {
     for (;;) {
       const page = await this.device.messagePage(after, 20);
       if (!page.length) return count;
-      count += await this.archiveMessages(page.map(v => v.value), reason);
+      count += await this.archiveMessages(page.map(v => v.value).filter(value => value.body), reason);
       onProgress?.(count);
       after = page.at(-1).id;
     }
@@ -244,6 +244,7 @@ export class EncryptionClient {
           // server directory data alone still cannot create a trusted identity.
           await d.confirmIdentity(pin);
           await d.importMessage(message);
+          await d.annotateMessage(e, {expiresAt: item.expiresAt, serverMessageId: item.messageID});
           count++;
         }
         onProgress?.(count);
@@ -253,10 +254,10 @@ export class EncryptionClient {
       }
     } finally { key.close(); }
   }
-  async decrypt(content, reason) {
+  async decrypt(content, reason, resolved) {
     const e = content.envelope;
     const d = this.device;
-    const readable = await this.resolveMessages([e], reason);
+    const readable = resolved ?? await this.resolveMessages([e], reason);
     if (readable.length !== 1 || readable[0].content.envelope.ciphertext !== e.ciphertext) throw new Error('Message is no longer available');
     const cached = await d.message(e);
     const current = await this.isEncrypted(e.conversationId) ? await d.snapshot(e.conversationId) : null;
@@ -268,6 +269,7 @@ export class EncryptionClient {
     // The decrypted copy is durable locally before backup. A failed upload is
     // retried on the next read or explicit archive sweep, never regenerated MLS.
     if (!readable[0].archived) await this.archiveMessages([cached ?? await d.message(e)], reason, readable);
+    await d.annotateMessage(e, { expiresAt: readable[0].expiresAt, serverMessageId: readable[0].messageID });
     return body;
   }
 }

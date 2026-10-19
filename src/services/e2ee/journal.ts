@@ -105,6 +105,22 @@ async function createDeviceJournal(userId: string): Promise<DeviceJournal> {
           assertOpen();
         });
       },
+      async transformInbox(matches, transform, ids) {
+        assertOpen();
+        await db.withExclusiveTransactionAsync(async tx => {
+          const rows = ids
+            ? (await Promise.all(ids.map(id => tx.getFirstAsync<{id: string; sealed: Uint8Array}>("SELECT id, sealed FROM archive WHERE bucket='inbox' AND id=?", id)))).filter((row): row is {id: string; sealed: Uint8Array} => row !== null)
+            : await tx.getAllAsync<{id: string; sealed: Uint8Array}>("SELECT id, sealed FROM archive WHERE bucket='inbox'");
+          for (const row of rows) {
+            assertOpen();
+            const itemScope = `${aadScope}:inbox:${row.id}`;
+            const value = openJournal(storageKey, itemScope, 1, row.sealed) as unknown as Record<string, unknown>;
+            if (matches(value)) {
+              await tx.runAsync("UPDATE archive SET sealed=? WHERE bucket='inbox' AND id=?", sealJournal(storageKey, itemScope, 1, transform(value)), row.id);
+            }
+          }
+        });
+      },
       async close() {
         if (closed) return;
         closed = true;

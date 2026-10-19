@@ -4,6 +4,8 @@ import { EncryptedText } from './EncryptedText';
 import { decryptText } from '@/services/e2ee/client';
 import type { ChatMessage } from '@/types';
 let mockEpoch = 1;
+let mockFocus: () => void;
+jest.mock('@react-navigation/native', () => ({ useFocusEffect: (effect: () => void) => { mockFocus = effect; } }));
 jest.mock('@/services/e2ee/client', () => ({ decryptText: jest.fn() }));
 jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign((select: (s: { sessionEpoch: number }) => unknown) => select({ sessionEpoch: mockEpoch }), { getState: () => ({ sessionEpoch: mockEpoch }) }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -34,4 +36,12 @@ it('discards a decryption result after unmount', async () => {
   view.unmount();
   await act(async () => resolve({ text: 'late secret' }));
   expect(message.text).toBeUndefined();
+});
+
+it('retries a failed bubble when chat regains focus after key recovery', async () => {
+ (decryptText as jest.Mock).mockRejectedValueOnce(new Error('missing key')).mockResolvedValue({text:'restored'});
+ render(<EncryptedText message={message}>{bubble}</EncryptedText>);
+ await screen.findByText('e2ee.unlockRequired');
+ act(() => mockFocus());
+ expect(await screen.findByText('restored')).toBeTruthy();
 });

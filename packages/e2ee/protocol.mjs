@@ -227,9 +227,25 @@ export class ProtocolDevice {
     result.consumed.forEach(zeroOutUint8Array);
     return body;
   }
+  async annotateMessage(envelope, metadata) {
+    const matches = value => value.conversationId === envelope.conversationId && value.senderDeviceId === envelope.senderDeviceId && value.clientMessageId === envelope.clientMessageId;
+    const { record, revision } = await this.journal.load();
+    for (const [id, value] of Object.entries(record.inbox ?? {})) if (matches(value)) record.inbox[id] = {...value, ...metadata};
+    await this.journal.save(revision, record);
+    await this.journal.transformInbox?.(matches, value => ({...value, ...metadata}), [digest([envelope.conversationId, envelope.senderDeviceId, envelope.clientMessageId])]);
+  }
+  async purgeMessages(matches) {
+    const { record, revision } = await this.journal.load();
+    for (const [id, value] of Object.entries(record.inbox ?? {})) {
+      if (matches(value)) { const { body, ...metadata } = value; record.inbox[id] = { ...metadata, purged: true }; }
+    }
+    await this.journal.save(revision, record);
+    await this.journal.transformInbox?.(matches, value => { const {body, ...metadata} = value; return {...metadata, purged: true}; });
+  }
   async message(envelope) {
     const { record } = await this.journal.load();
-    return getItem(this.journal, record, 'inbox', digest([envelope.conversationId, envelope.senderDeviceId, envelope.clientMessageId]));
+    const value = await getItem(this.journal, record, 'inbox', digest([envelope.conversationId, envelope.senderDeviceId, envelope.clientMessageId]));
+    return value?.purged ? undefined : value;
   }
   async messagePage(after = '', limit = 50) { return pageItems(this.journal, 'inbox', after, limit); }
   async messages() {
