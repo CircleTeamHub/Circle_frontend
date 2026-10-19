@@ -2,7 +2,7 @@ import type { ChatMessage } from '@/types';
 
 type EphemeralCheckInput = Pick<
   ChatMessage,
-  'outgoing' | 'type' | 'burnDurationSec'
+  'outgoing' | 'type' | 'burnDurationSec' | 'burnExpiresAt'
 >;
 
 /**
@@ -21,12 +21,16 @@ type EphemeralCheckInput = Pick<
  *
  * 只看消息发送者决定的时长；我自己的会话设置不能限制对方消息。
  */
+export function isEphemeralMessage(message: Pick<ChatMessage, 'burnDurationSec' | 'burnExpiresAt'>, legacyFallback: boolean): boolean {
+  return (message.burnDurationSec ?? 0) > 0 || Boolean(message.burnExpiresAt) ||
+    (message.burnDurationSec === undefined && message.burnExpiresAt === undefined && legacyFallback);
+}
+
 export function isEphemeralPeerMessage(
   message: EphemeralCheckInput,
   conversationBurnEnabled: boolean,
 ): boolean {
-  void conversationBurnEnabled;
-  const ephemeral = (message.burnDurationSec ?? 0) > 0;
+  const ephemeral = isEphemeralMessage(message, conversationBurnEnabled);
   if (!ephemeral) return false;
   // 'sent' 是纯文本的自己发；其余类型靠 outgoing 标记（与 ChatDetailScreen 里
   // 判断气泡归属的那一处同一条规则）。

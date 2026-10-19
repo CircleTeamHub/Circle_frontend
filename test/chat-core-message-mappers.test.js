@@ -570,3 +570,13 @@ test('group invitation avatars reject hostile remote URLs', () => {
   const ui = mapChatMessageDtoToUI(dto({ type: 'group-invitation', content: { admissionId: 'a', groupName: 'g', avatarUrl: 'https://attacker.example/beacon.gif' } }), 'u1', 0);
   assert.equal(ui.groupInvitation.avatarUrl, null);
 });
+
+test('message burn metadata preserves explicit no-burn and legacy absence', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const modern = mapChatMessageDtoToUI(dto({ burnDurationSec: null, burnExpiresAt: null }), 'u1', 0);
+  assert.equal(modern.burnDurationSec, null);
+  assert.equal(modern.burnExpiresAt, null);
+  const expiry = '2026-10-20T00:00:00Z';
+  assert.equal(mapChatMessageDtoToUI(dto({ burnExpiresAt: expiry }), 'u1', 0).burnExpiresAt, expiry);
+  assert.equal(mapChatMessageDtoToUI(dto(), 'u1', 0).burnDurationSec, undefined);
+});

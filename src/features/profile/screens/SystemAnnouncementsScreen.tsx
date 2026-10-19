@@ -166,10 +166,11 @@ export default function SystemAnnouncementsScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      const readVersion = announcementVersion;
       if (!ownerId) return;
       void markProfileNotificationsRead()
         .then(() => {
-          if (active && isCurrentSession()) setProfileUnread(0);
+          if (active && isCurrentSession() && useAnnouncementSignalStore.getState().version === readVersion) setProfileUnread(0);
         })
         .catch((error) => {
           if (!active || !isCurrentSession()) return;
@@ -181,7 +182,7 @@ export default function SystemAnnouncementsScreen() {
       return () => {
         active = false;
       };
-    }, [isCurrentSession, ownerId, setProfileUnread]),
+    }, [isCurrentSession, ownerId, setProfileUnread, announcementVersion]),
   );
 
   const loadMore = useCallback(async (retry = false) => {

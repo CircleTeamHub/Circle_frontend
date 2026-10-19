@@ -348,7 +348,8 @@ export function mapChatMessageDtoToUI(
     time: formatChatTimestamp(dto.createdAt),
     // 会话级设置，逐条带下来。渲染阅后即焚图片的判定不能依赖会话列表是否已
     // 加载（推送冷启动时它可能还没到）。老后端不发 → undefined → 调用方回落。
-    burnDurationSec: dto.burnDurationSec ?? undefined,
+    burnDurationSec: dto.burnDurationSec,
+    burnExpiresAt: dto.burnExpiresAt,
     senderID: isSent ? undefined : (dto.sender?.id ?? undefined),
     // 群昵称优先:群里所有人看到的就是它。成员目录被「是否显示群成员」关掉时
     // 客户端只剩这条线,回落账号昵称就等于当着全群把人改回了另一个名字。

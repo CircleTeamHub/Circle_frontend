@@ -635,7 +635,7 @@ test('只有发送者开启焚毁的消息才限制转发，我的设置不限�
 
   assert.equal(
     canForwardMessage(
-      { id: 'm-1', type: 'image', outgoing: false },
+      { id: 'm-1', type: 'image', outgoing: false, burnDurationSec: null },
       { id: 'm-1', height: 9 },
       true,
     ),

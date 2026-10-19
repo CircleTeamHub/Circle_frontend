@@ -1,3 +1,4 @@
+import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Image } from 'expo-image';
@@ -83,8 +84,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
 }) => {
   const { colors } = useTheme();
   // Only this message’s author-stamped duration controls media retention.
-  void selfDestructEnabled;
-  const ephemeral = (message.burnDurationSec ?? 0) > 0;
+  const ephemeral = isEphemeralMessage(message, selfDestructEnabled);
   const [previewVisible, setPreviewVisible] = useState(false);
   const previewPolicyRef = useRef(`${ephemeral}:${selfDestructCacheKey}`);
   const avatarNode = (

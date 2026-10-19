@@ -36,7 +36,7 @@ test('the shared keyboard container pads only while the Android keyboard is visi
 
   assert.match(src, /KeyboardAvoidingView/);
   assert.match(src, /behavior = 'padding'/);
-  assert.match(src, /enabled && \(Platform\.OS !== 'android' \|\| keyboardVisible\)/);
+  assert.match(src, /enabled && \(Platform\.OS !== 'android' \|\| Number\(Platform.Version\) < 30 \|\| keyboardVisible\)/);
 });
 
 test('no file drives React Native KeyboardAvoidingView directly', () => {

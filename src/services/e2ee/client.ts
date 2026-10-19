@@ -60,7 +60,12 @@ export async function encryptOutgoingText(conversationId: string, id: string, co
   const client = await getEncryptionClient();
   return client.run(async () => {
     const directory = await client.directory(conversationId);
-    if (directory.mode !== 'MLS_V1' && !await client.isEncrypted(conversationId)) return null;
+    // An unconfirmed local group may remain after a timed-out enable request.
+    // The server mode decides whether new text is encrypted; never downgrade a known encrypted conversation.
+    if (directory.mode !== 'MLS_V1') {
+      if (knownEncrypted) throw new Error('Encrypted conversation is not available');
+      return null;
+    }
     return client.encrypt(conversationId, id, content);
   });
 }
@@ -78,6 +83,8 @@ function scheduleBodyExpiry(expiresAt: string | null | undefined) {
 }
 
 export function decryptText(content: EncryptedContent, pendingOwn = false): Promise<Record<string, unknown>> {
+  const e = content?.envelope;
+  if (!e || typeof e !== 'object' || ['conversationId','senderDeviceId','clientMessageId','ciphertext'].some(key => typeof e[key as keyof typeof e] !== 'string' || !e[key as keyof typeof e]) || typeof content.signature !== 'string' || !content.signature) return Promise.reject(new Error('Invalid encrypted message'));
   return new Promise((resolve, reject) => {
     pendingDecryptions.push({ content, pendingOwn, epoch: useAuthStore.getState().sessionEpoch, resolve, reject });
     if (pendingDecryptions.length === 1) setTimeout(() => { void flushDecryptions(); }, 0);

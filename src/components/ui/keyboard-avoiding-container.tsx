@@ -41,7 +41,7 @@ export function KeyboardAvoidingContainer({
     <KeyboardAvoidingView
       behavior={behavior}
       {...props}
-      enabled={enabled && (Platform.OS !== 'android' || keyboardVisible)}
+      enabled={enabled && (Platform.OS !== 'android' || Number(Platform.Version) < 30 || keyboardVisible)}
     />
   );
 }
