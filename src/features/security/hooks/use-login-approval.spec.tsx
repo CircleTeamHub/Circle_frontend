@@ -77,6 +77,73 @@ test('the code panel closes once the new device has signed in', async () => {
   await waitFor(() => expect(result.current.stage).toBeNull());
 });
 
+test('a matching recovery request takes over when the approval code expires', async () => {
+  jest.useFakeTimers();
+  try {
+    jest.mocked(approveLoginChallenge).mockResolvedValue({
+      code: '482913',
+      codeExpiresAt: new Date(Date.now() + 2_000).toISOString(),
+    });
+    const recoveryChallenge = {
+      ...challenge,
+      recoveryAvailableAt: new Date(Date.now() + 86_400_000).toISOString(),
+    };
+    const { result, unmount } = renderHook(() => useLoginApproval());
+    await waitFor(() => expect(result.current.stage?.kind).toBe('ask'));
+    act(() => result.current.approve());
+    await waitFor(() => expect(result.current.stage?.kind).toBe('code'));
+
+    act(() => useLoginApprovalStore.setState({ pending: [recoveryChallenge] }));
+    expect(result.current.stage?.kind).toBe('code');
+
+    await act(async () => {
+      jest.advanceTimersByTime(3_000);
+    });
+
+    expect(result.current.stage).toEqual({
+      kind: 'ask',
+      challenge: recoveryChallenge,
+    });
+    unmount();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('an unrelated recovery request does not close an expired approval code', async () => {
+  jest.useFakeTimers();
+  try {
+    jest.mocked(approveLoginChallenge).mockResolvedValue({
+      code: '482913',
+      codeExpiresAt: new Date(Date.now() + 2_000).toISOString(),
+    });
+    const { result, unmount } = renderHook(() => useLoginApproval());
+    await waitFor(() => expect(result.current.stage?.kind).toBe('ask'));
+    act(() => result.current.approve());
+    await waitFor(() => expect(result.current.stage?.kind).toBe('code'));
+
+    act(() => useLoginApprovalStore.setState({
+      pending: [{
+        ...challenge,
+        id: 'c2',
+        recoveryAvailableAt: new Date(Date.now() + 86_400_000).toISOString(),
+      }],
+    }));
+
+    await act(async () => {
+      jest.advanceTimersByTime(3_000);
+    });
+
+    expect(result.current.stage).toEqual(expect.objectContaining({
+      kind: 'code',
+      challengeId: 'c1',
+    }));
+    unmount();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 test('rejecting suggests changing the password', async () => {
   jest.mocked(rejectLoginChallenge).mockResolvedValue(undefined);
   const { result } = renderHook(() => useLoginApproval());
