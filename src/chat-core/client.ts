@@ -347,6 +347,18 @@ function persistInSendOrder(
   return current;
 }
 
+type RecognizedTextEncryptionMode = 'PLAIN' | 'MLS_V1';
+
+function requireRecognizedTextEncryptionMode(
+  mode: string | undefined,
+): RecognizedTextEncryptionMode {
+  if (mode === 'PLAIN' || mode === 'MLS_V1') return mode;
+  throw new ChatSendError(
+    'CHAT_INVALID_PAYLOAD',
+    '会话加密状态尚未就绪',
+  );
+}
+
 /**
  * 发送核心:乐观 DTO(height=0, id=local:{d})立即入库并联动会话列表;
  * ack 返回后以真 id/height 替换(store 按 d 对账);失败置失败态并抛出。
@@ -372,13 +384,10 @@ export async function sendWithOptimism(
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
   if (options.type === 'text' || options.type === 'quote') {
-    const mode = store.conversations.find(c => c.id === options.conversationId)?.textEncryption;
-    if (mode !== 'PLAIN' && mode !== 'MLS_V1') {
-      throw new ChatSendError(
-        'CHAT_INVALID_PAYLOAD',
-        '会话加密状态尚未就绪',
-      );
-    }
+    const mode = requireRecognizedTextEncryptionMode(
+      store.conversations.find((c) => c.id === options.conversationId)
+        ?.textEncryption,
+    );
     if (process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true' || mode === 'MLS_V1') {
       const { encryptOutgoingText } = await import('@/services/e2ee/client');
       const encrypted = await encryptOutgoingText(options.conversationId, d, options.content, mode === 'MLS_V1');
@@ -1037,6 +1046,30 @@ async function runRetry(
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
   const { localPreviewContent, pendingMedia, ...wirePayload } = entry.payload;
+  // 旧 outbox 可能来自模式加载前或会话开启加密前。重试不能绕过首发门禁，
+  // 更不能把先前落盘的 text/quote 明文送进现在的加密会话。
+  if (
+    entry.payload.type === 'text' ||
+    entry.payload.type === 'quote' ||
+    entry.payload.type === 'encrypted-text'
+  ) {
+    const mode = requireRecognizedTextEncryptionMode(
+      useChatStore
+        .getState()
+        .conversations.find((item) => item.id === conversationId)
+        ?.textEncryption,
+    );
+    if (
+      (entry.payload.type === 'text' || entry.payload.type === 'quote') &&
+      (mode === 'MLS_V1' ||
+        process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true')
+    ) {
+      throw new ChatSendError(
+        'CHAT_INVALID_PAYLOAD',
+        '会话加密状态已变化，请重新发送消息',
+      );
+    }
+  }
   if (pendingMedia) {
     const userId = useChatStore.getState().currentUserId;
     if (userId) {

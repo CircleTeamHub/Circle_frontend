@@ -40,6 +40,7 @@ function loadClient({
   outboxDelays = {},
   encrypt = null,
   conversationModes = { c1: 'PLAIN', c2: 'PLAIN' },
+  e2eeEnabled = encrypt !== null,
 }) {
   const filePath = path.join(process.cwd(), 'src/chat-core/client.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
@@ -95,7 +96,9 @@ function loadClient({
   };
 
   const context = {
-    process: { env: { EXPO_PUBLIC_E2EE_TEXT_ENABLED: encrypt ? 'true' : 'false' } },
+    process: {
+      env: { EXPO_PUBLIC_E2EE_TEXT_ENABLED: e2eeEnabled ? 'true' : 'false' },
+    },
     Date,
     Math,
     module: { exports: {} },
@@ -328,6 +331,98 @@ test('a session switch while retry persistence is pending cannot resend the old 
 
   await assert.rejects(retry, /会话已结束/);
   assert.equal(loaded.calls.sent, 0);
+  assert.deepEqual(loaded.calls.failedMarks, []);
+});
+
+function retryEntry(type, content) {
+  return {
+    d: 'd-retry',
+    conversationId: 'c1',
+    payload: {
+      conversationId: 'c1',
+      type,
+      content,
+      d: 'd-retry',
+    },
+    createdAt: new Date().toISOString(),
+  };
+}
+
+for (const scenario of [
+  { label: 'missing mode', conversationModes: {} },
+  {
+    label: 'unsupported mode',
+    conversationModes: { c1: 'FUTURE_V2' },
+  },
+  {
+    label: 'MLS_V1 mode',
+    conversationModes: { c1: 'MLS_V1' },
+    type: 'quote',
+  },
+  {
+    label: 'global E2EE flag',
+    conversationModes: { c1: 'PLAIN' },
+    e2eeEnabled: true,
+  },
+]) {
+  test(`plaintext outbox retry fails closed for ${scenario.label}`, async () => {
+    const loaded = loadClient({
+      blocked: false,
+      retryOutbox: [
+        retryEntry(scenario.type ?? 'text', { text: 'legacy plaintext' }),
+      ],
+      conversationModes: scenario.conversationModes,
+      e2eeEnabled: scenario.e2eeEnabled,
+    });
+
+    await assert.rejects(
+      loaded.api.retryFailedChatMessage('c1', 'd-retry'),
+    );
+
+    assert.equal(loaded.calls.sent, 0);
+    assert.equal(loaded.calls.outboxUpserts.length, 0);
+    assert.deepEqual(loaded.calls.retryMarks, [
+      { conversationId: 'c1', d: 'd-retry' },
+    ]);
+    assert.deepEqual(loaded.calls.failedMarks, [
+      { conversationId: 'c1', d: 'd-retry' },
+    ]);
+  });
+}
+
+test('PLAIN mode still retries a plaintext outbox row', async () => {
+  const loaded = loadClient({
+    blocked: false,
+    retryOutbox: [retryEntry('quote', { text: 'plain', quotedText: 'quote' })],
+    conversationModes: { c1: 'PLAIN' },
+  });
+
+  await loaded.api.retryFailedChatMessage('c1', 'd-retry');
+
+  assert.equal(loaded.calls.sent, 1);
+  assert.equal(loaded.calls.sentPayloads[0].type, 'quote');
+  assert.deepEqual(loaded.calls.failedMarks, []);
+});
+
+test('MLS_V1 mode still retries an encrypted-text outbox row', async () => {
+  const encrypted = {
+    envelope: { ciphertext: 'opaque', epoch: '1' },
+    signature: 'proof',
+  };
+  const loaded = loadClient({
+    blocked: false,
+    retryOutbox: [retryEntry('encrypted-text', encrypted)],
+    conversationModes: { c1: 'MLS_V1' },
+  });
+
+  await loaded.api.retryFailedChatMessage('c1', 'd-retry');
+
+  assert.equal(loaded.calls.sent, 1);
+  assert.equal(loaded.calls.sentPayloads[0].type, 'encrypted-text');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(loaded.calls.sentPayloads[0].content)),
+    encrypted,
+  );
   assert.deepEqual(loaded.calls.failedMarks, []);
 });
 
