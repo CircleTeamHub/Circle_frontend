@@ -563,6 +563,51 @@ test('a normal user still sends through the same path', async () => {
   assert.ok(calls.ingest > 0);
 });
 
+test('the global E2EE flag preserves authoritative PLAIN first sends', async () => {
+  const { api, calls } = loadClient({
+    blocked: false,
+    conversationModes: { c1: 'PLAIN' },
+    e2eeEnabled: true,
+    encrypt: async () => null,
+  });
+
+  await api.sendTextMessage({ conversationId: 'c1', text: 'server says plain' });
+
+  assert.equal(calls.sent, 1);
+  assert.equal(calls.sentPayloads[0].type, 'text');
+  assert.deepEqual(calls.failedMarks, []);
+});
+
+test('authoritative PLAIN allowance still rechecks the local mode before transport', async () => {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const loaded = loadClient({
+    blocked: false,
+    conversationModes: { c1: 'PLAIN' },
+    e2eeEnabled: true,
+    encrypt: async () => null,
+    outboxDelays: { 'd-test': gate },
+  });
+
+  const send = loaded.api.sendTextMessage({
+    conversationId: 'c1',
+    text: 'must remain plain at transport time',
+  });
+  await flush();
+  loaded.storeState.conversations = [
+    { id: 'c1', textEncryption: 'MLS_V1' },
+  ];
+  release();
+
+  await assert.rejects(send);
+  assert.equal(loaded.calls.sent, 0);
+  assert.deepEqual(loaded.calls.failedMarks, [
+    { conversationId: 'c1', d: 'd-test' },
+  ]);
+});
+
 test('forwarded media persists a key-free local preview without sending it', async () => {
   const { api, calls } = loadClient({ blocked: false });
 

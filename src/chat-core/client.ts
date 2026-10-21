@@ -362,6 +362,7 @@ function requireRecognizedTextEncryptionMode(
 function assertCurrentModeAllowsTextPayload(
   conversationId: string,
   type: string,
+  allowAuthoritativePlaintext = false,
 ): void {
   if (type !== 'text' && type !== 'quote' && type !== 'encrypted-text') return;
   const mode = requireRecognizedTextEncryptionMode(
@@ -373,7 +374,8 @@ function assertCurrentModeAllowsTextPayload(
   if (
     (type === 'text' || type === 'quote') &&
     (mode === 'MLS_V1' ||
-      process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true')
+      (process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true' &&
+        !allowAuthoritativePlaintext))
   ) {
     throw new ChatSendError(
       'CHAT_INVALID_PAYLOAD',
@@ -406,6 +408,7 @@ export async function sendWithOptimism(
   assertChatSessionFence(fence);
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
+  let allowAuthoritativePlaintext = false;
   if (options.type === 'text' || options.type === 'quote') {
     const mode = requireRecognizedTextEncryptionMode(
       store.conversations.find((c) => c.id === options.conversationId)
@@ -416,6 +419,7 @@ export async function sendWithOptimism(
       const encrypted = await encryptOutgoingText(options.conversationId, d, options.content, mode === 'MLS_V1');
       assertChatSessionFence(fence);
       if (encrypted) options = { ...options, type: 'encrypted-text', content: { ...encrypted }, localContent: undefined, outboxPreviewContent: undefined, replyToId: undefined, forwardFromMessageId: undefined };
+      else if (mode === 'PLAIN') allowAuthoritativePlaintext = true;
     }
   }
   const failedAfterHeight = captureSendAnchor(options.conversationId);
@@ -482,6 +486,7 @@ export async function sendWithOptimism(
     assertCurrentModeAllowsTextPayload(
       options.conversationId,
       options.type,
+      allowAuthoritativePlaintext,
     );
     const ack = await sendChatMessage({
       conversationId: options.conversationId,
