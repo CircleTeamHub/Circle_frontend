@@ -1151,6 +1151,39 @@ test('deleting a failed encrypted send purges its journal body by client message
   );
 });
 
+test('deleting a plaintext bubble after an encrypted retry purges the retry journal by d', () => {
+  const purges = [];
+  const { useChatStore } = loadChatStore({
+    lifecycle: { purgeEncryptedBody: (target) => purges.push(target) },
+  });
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([conversation()]);
+  // 首发 PLAIN 失败后，MLS 重试会用同一个 d 写密文 journal；即使重试的
+  // transport 再失败，时间线里的原气泡仍然是 text，而不是 encrypted-text。
+  store.ingestMessages('conv-1', [
+    msg({
+      id: 'local:plain-then-encrypted',
+      height: 0,
+      d: 'plain-then-encrypted',
+      type: 'text',
+      content: { text: 'original plaintext' },
+      sender: { id: 'me' },
+      failed: true,
+    }),
+  ]);
+
+  store.removeMessage('conv-1', 'local:plain-then-encrypted');
+
+  assert.ok(
+    purges.some(
+      (target) =>
+        target.conversationId === 'conv-1' &&
+        target.clientMessageId === 'plain-then-encrypted',
+    ),
+  );
+});
+
 test('the same holds when the server echo beats the ack', () => {
   const { useChatStore } = loadChatStore();
   const store = useChatStore.getState();

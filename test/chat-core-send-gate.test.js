@@ -400,6 +400,25 @@ function retryEntry(type, content) {
   };
 }
 
+test('a low-credit outbox retry is rejected before local or transport changes', async () => {
+  const loaded = loadClient({
+    blocked: true,
+    retryOutbox: [retryEntry('text', { text: 'must remain failed' })],
+    conversationModes: { c1: 'PLAIN' },
+  });
+
+  await assert.rejects(
+    loaded.api.retryFailedChatMessage('c1', 'd-retry'),
+    loaded.CreditPolicyError,
+  );
+
+  assert.equal(loaded.calls.gate, 1);
+  assert.deepEqual(loaded.calls.retryMarks, []);
+  assert.deepEqual(loaded.calls.failedMarks, []);
+  assert.deepEqual(loaded.calls.outboxUpserts, []);
+  assert.equal(loaded.calls.sent, 0);
+});
+
 for (const scenario of [
   { label: 'missing mode', conversationModes: {} },
   {
