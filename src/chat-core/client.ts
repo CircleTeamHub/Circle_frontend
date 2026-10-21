@@ -373,6 +373,12 @@ export async function sendWithOptimism(
   const store = useChatStore.getState();
   if (options.type === 'text' || options.type === 'quote') {
     const mode = store.conversations.find(c => c.id === options.conversationId)?.textEncryption;
+    if (mode !== 'PLAIN' && mode !== 'MLS_V1') {
+      throw new ChatSendError(
+        'CHAT_INVALID_PAYLOAD',
+        '会话加密状态尚未就绪',
+      );
+    }
     if (process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true' || mode === 'MLS_V1') {
       const { encryptOutgoingText } = await import('@/services/e2ee/client');
       const encrypted = await encryptOutgoingText(options.conversationId, d, options.content, mode === 'MLS_V1');

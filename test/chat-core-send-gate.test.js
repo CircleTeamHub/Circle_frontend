@@ -39,6 +39,7 @@ function loadClient({
   deliveryIds = null,
   outboxDelays = {},
   encrypt = null,
+  conversationModes = { c1: 'PLAIN', c2: 'PLAIN' },
 }) {
   const filePath = path.join(process.cwd(), 'src/chat-core/client.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
@@ -87,7 +88,10 @@ function loadClient({
     revertConversationPreview: () => {},
     upsertConversation: () => {},
     messagesByConversation: {},
-    conversations: [],
+    conversations: Object.entries(conversationModes).map(([id, textEncryption]) => ({
+      id,
+      textEncryption,
+    })),
   };
 
   const context = {
@@ -634,7 +638,11 @@ test('媒体发送复用已上屏气泡的 d,不会再造一条', async () => {
 
 test('encrypted text reaches the outbox and transport without its plaintext or quote snapshot', async () => {
   const encrypted = { envelope: { ciphertext: 'opaque', epoch: '1' }, signature: 'proof' };
-  const { api, calls } = loadClient({ blocked: false, encrypt: async () => encrypted });
+  const { api, calls } = loadClient({
+    blocked: false,
+    encrypt: async () => encrypted,
+    conversationModes: { c1: 'MLS_V1', c2: 'MLS_V1' },
+  });
   await api.sendQuoteMessage({ conversationId: 'c1', text: 'never persist this', quotedText: 'private quote' });
   assert.equal(calls.sentPayloads[0].type, 'encrypted-text');
   assert.deepEqual(JSON.parse(JSON.stringify(calls.sentPayloads[0].content)), encrypted);
@@ -643,9 +651,37 @@ test('encrypted text reaches the outbox and transport without its plaintext or q
 });
 
 test('encryption failure cannot fall back to plaintext or insert an optimistic message', async () => {
-  const { api, calls } = loadClient({ blocked: false, encrypt: async () => { throw new Error('device revoked'); } });
+  const { api, calls } = loadClient({
+    blocked: false,
+    encrypt: async () => { throw new Error('device revoked'); },
+    conversationModes: { c1: 'MLS_V1', c2: 'MLS_V1' },
+  });
   await assert.rejects(api.sendTextMessage({ conversationId: 'c1', text: 'private' }), /device revoked/);
   assert.equal(calls.sent, 0);
   assert.equal(calls.ingest, 0);
   assert.equal(calls.outboxUpserts.length, 0);
 });
+
+for (const [label, conversationModes] of [
+  ['missing', {}],
+  ['unsupported', { c1: 'FUTURE_V2' }],
+]) {
+  test(`unknown encryption mode (${label}) fails before any send side effect`, async () => {
+    const { api, calls } = loadClient({ blocked: false, conversationModes });
+    let created = 0;
+
+    await assert.rejects(
+      api.sendTextMessage({
+        conversationId: 'c1',
+        text: 'must stay local',
+        onCreate: () => { created += 1; },
+      }),
+    );
+
+    assert.equal(calls.ingest, 0);
+    assert.equal(calls.applied, 0);
+    assert.equal(calls.outboxUpserts.length, 0);
+    assert.equal(calls.sent, 0);
+    assert.equal(created, 0);
+  });
+}
