@@ -180,6 +180,7 @@ function loadSendStack({ onSend, outboxEntries = [], onBackfill = () => {} }) {
     if (request === './send-errors') return { reportChatSendFailure: () => {} };
     if (request === './socket-manager') {
       return {
+        ChatSendError: class extends Error {},
         createDeliveryId: () => 'd-test',
         markConversationRead: () => {},
         sendChatMessage: onSend,
@@ -230,6 +231,7 @@ test('a server echo that beats the ack is not overwritten by the synthetic confi
       pinned: false,
       muted: false,
       lastMessageAt: null,
+      textEncryption: 'PLAIN',
     },
   ]);
 
@@ -282,7 +284,7 @@ test('without an echo the ack still confirms the optimistic message', async () =
   });
   const state = store.useChatStore.getState();
   state.setCurrentUserId('me');
-  state.setConversations([]);
+  state.setConversations([directConversation('c1')]);
 
   const result = await client.sendTextMessage({ conversationId: 'c1', text: 'hi' });
   const timeline = store.useChatStore.getState().messagesByConversation['c1'];
@@ -304,6 +306,7 @@ function directConversation(id) {
     pinned: false,
     muted: false,
     lastMessageAt: null,
+    textEncryption: 'PLAIN',
   };
 }
 
@@ -460,7 +463,7 @@ test('a no-echo retry without a local preview does not backfill', async () => {
   });
   const state = store.useChatStore.getState();
   state.setCurrentUserId('me');
-  state.setConversations([]);
+  state.setConversations([directConversation('c1')]);
 
   await client.retryFailedChatMessage('c1', 'd-text');
 
@@ -474,6 +477,7 @@ test('send captures the current server height for a later failure position', asy
     },
   });
   const state = store.useChatStore.getState();
+  state.setConversations([directConversation('c1')]);
   state.ingestMessages('c1', [
     {
       id: 'srv-7',
@@ -527,7 +531,7 @@ test('forwarding into a conversation with no loaded timeline keeps the failure v
   const { hasFailedLatestMessage } = loadFailedPreview();
   const state = store.useChatStore.getState();
   state.setCurrentUserId('me');
-  state.setConversations([]);
+  state.setConversations([directConversation('c-fwd')]);
 
   // ForwardPicker/分享:发进本次会话从未打开过的会话,时间线里什么都没有。
   await assert.rejects(

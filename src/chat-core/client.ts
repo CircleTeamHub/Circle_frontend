@@ -1077,10 +1077,47 @@ async function runRetry(
     (item) => item.d === d && item.conversationId === conversationId,
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
-  const { localPreviewContent, pendingMedia, ...wirePayload } = entry.payload;
-  // 旧 outbox 可能来自模式加载前或会话开启加密前。重试不能绕过首发门禁，
-  // 更不能把先前落盘的 text/quote 明文送进现在的加密会话。
-  assertCurrentModeAllowsTextPayload(conversationId, entry.payload.type);
+  let retryPayload = entry.payload;
+  let allowAuthoritativePlaintext = false;
+  if (retryPayload.type === 'text' || retryPayload.type === 'quote') {
+    const mode = requireRecognizedTextEncryptionMode(
+      useChatStore
+        .getState()
+        .conversations.find((conversation) => conversation.id === conversationId)
+        ?.textEncryption,
+    );
+    if (
+      mode === 'MLS_V1' ||
+      process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true'
+    ) {
+      const { encryptOutgoingText } = await import('@/services/e2ee/client');
+      const encrypted = await encryptOutgoingText(
+        conversationId,
+        d,
+        retryPayload.content,
+        mode === 'MLS_V1',
+      );
+      assertChatSessionFence(fence);
+      if (encrypted) {
+        retryPayload = {
+          conversationId,
+          type: 'encrypted-text',
+          content: { ...encrypted },
+          d,
+        };
+      } else if (mode === 'PLAIN') {
+        allowAuthoritativePlaintext = true;
+      }
+    }
+  }
+  const { localPreviewContent, pendingMedia, ...wirePayload } = retryPayload;
+  // 旧 outbox 可能来自模式加载前或会话开启加密前。上面重新做权威判定后，
+  // 这里仍按当前本地模式复核，避免异步加密期间发生的模式切换穿透门禁。
+  assertCurrentModeAllowsTextPayload(
+    conversationId,
+    retryPayload.type,
+    allowAuthoritativePlaintext,
+  );
   if (pendingMedia) {
     const userId = useChatStore.getState().currentUserId;
     if (userId) {
@@ -1113,10 +1150,15 @@ async function runRetry(
   assertChatSessionFence(fence);
   await outboxUpsert({
     ...entry,
+    payload: retryPayload,
     ...(Number.isFinite(retryAnchor) ? { failedAfterHeight: retryAnchor } : {}),
   });
   assertChatSessionFence(fence);
-  assertCurrentModeAllowsTextPayload(conversationId, wirePayload.type);
+  assertCurrentModeAllowsTextPayload(
+    conversationId,
+    wirePayload.type,
+    allowAuthoritativePlaintext,
+  );
   const ack = await sendChatMessage(wirePayload);
   assertChatSessionFence(fence);
   void outboxDelete(d);
@@ -1137,10 +1179,13 @@ async function runRetry(
     id: ack.messageId,
     conversationId,
     height: ack.height,
-    type: entry.payload.type,
-    content: optimistic?.content ?? entry.payload.content,
+    type: retryPayload.type,
+    content:
+      retryPayload.type === 'encrypted-text'
+        ? retryPayload.content
+        : (optimistic?.content ?? retryPayload.content),
     sender: optimistic?.sender ?? selfSenderInfo(),
-    replyToId: entry.payload.replyToId ?? null,
+    replyToId: retryPayload.replyToId ?? null,
     d,
     createdAt: entry.createdAt,
   };

@@ -64,6 +64,7 @@ function loadClient({
     retryMarks: [],
     removed: [],
     reverted: 0,
+    ingestedMessages: [],
   };
   const authState = {
     user: { id: 'me', nickname: '我', avatarUrl: null },
@@ -71,8 +72,9 @@ function loadClient({
   };
   class CreditPolicyError extends Error {}
   const storeState = {
-    ingestMessages: () => {
+    ingestMessages: (_conversationId, messages) => {
       calls.ingest += 1;
+      calls.ingestedMessages.push(...messages);
     },
     applyIncomingMessage: () => {
       calls.applied += 1;
@@ -140,7 +142,13 @@ function loadClient({
           sendChatMessage: async (payload) => {
             calls.sent += 1;
             calls.sentPayloads.push(payload);
-            if (sendFails) throw new Error('ack timeout');
+            if (
+              typeof sendFails === 'function'
+                ? sendFails(payload)
+                : sendFails
+            ) {
+              throw new Error('ack timeout');
+            }
             return { messageId: 'm1', height: 1 };
           },
         };
@@ -398,16 +406,6 @@ for (const scenario of [
     label: 'unsupported mode',
     conversationModes: { c1: 'FUTURE_V2' },
   },
-  {
-    label: 'MLS_V1 mode',
-    conversationModes: { c1: 'MLS_V1' },
-    type: 'quote',
-  },
-  {
-    label: 'global E2EE flag',
-    conversationModes: { c1: 'PLAIN' },
-    e2eeEnabled: true,
-  },
 ]) {
   test(`plaintext outbox retry fails closed for ${scenario.label}`, async () => {
     const loaded = loadClient({
@@ -446,6 +444,85 @@ test('PLAIN mode still retries a plaintext outbox row', async () => {
   assert.equal(loaded.calls.sent, 1);
   assert.equal(loaded.calls.sentPayloads[0].type, 'quote');
   assert.deepEqual(loaded.calls.failedMarks, []);
+});
+
+test('a global-E2EE authoritative PLAIN failure can retry the same outbox row', async () => {
+  let transportAttempts = 0;
+  let encryptionChecks = 0;
+  const retryOutbox = [];
+  const loaded = loadClient({
+    blocked: false,
+    retryOutbox,
+    conversationModes: { c1: 'PLAIN' },
+    e2eeEnabled: true,
+    encrypt: async () => {
+      encryptionChecks += 1;
+      return null;
+    },
+    sendFails: () => {
+      transportAttempts += 1;
+      return transportAttempts === 1;
+    },
+  });
+
+  await assert.rejects(
+    loaded.api.sendTextMessage({ conversationId: 'c1', text: 'retry me' }),
+    /ack timeout/,
+  );
+  retryOutbox.push(loaded.calls.outboxEntries[0]);
+
+  await loaded.api.retryFailedChatMessage('c1', 'd-test');
+
+  assert.equal(loaded.calls.sent, 2);
+  assert.equal(encryptionChecks, 2);
+  assert.deepEqual(
+    loaded.calls.sentPayloads.map((payload) => payload.type),
+    ['text', 'text'],
+  );
+  assert.deepEqual(loaded.calls.retryMarks, [
+    { conversationId: 'c1', d: 'd-test' },
+  ]);
+});
+
+test('a plaintext retry upgrades its outbox and wire payload when MLS becomes authoritative', async () => {
+  const encrypted = {
+    envelope: { ciphertext: 'opaque-upgrade', epoch: '2' },
+    signature: 'proof-upgrade',
+  };
+  const encryptCalls = [];
+  const loaded = loadClient({
+    blocked: false,
+    retryOutbox: [retryEntry('text', { text: 'must be replaced' })],
+    conversationModes: { c1: 'MLS_V1' },
+    encrypt: async (...args) => {
+      encryptCalls.push(args);
+      return encrypted;
+    },
+  });
+
+  await loaded.api.retryFailedChatMessage('c1', 'd-retry');
+
+  assert.deepEqual(encryptCalls, [
+    ['c1', 'd-retry', { text: 'must be replaced' }, true],
+  ]);
+  assert.equal(loaded.calls.sent, 1);
+  assert.equal(loaded.calls.sentPayloads[0].type, 'encrypted-text');
+  assert.equal(
+    JSON.stringify(loaded.calls.sentPayloads[0]).includes('must be replaced'),
+    false,
+  );
+  assert.equal(loaded.calls.outboxEntries.at(-1).payload.type, 'encrypted-text');
+  assert.equal(
+    JSON.stringify(loaded.calls.outboxEntries.at(-1)).includes(
+      'must be replaced',
+    ),
+    false,
+  );
+  assert.equal(loaded.calls.ingestedMessages.at(-1).type, 'encrypted-text');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(loaded.calls.ingestedMessages.at(-1).content)),
+    encrypted,
+  );
 });
 
 test('MLS_V1 mode still retries an encrypted-text outbox row', async () => {
