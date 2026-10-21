@@ -359,6 +359,29 @@ function requireRecognizedTextEncryptionMode(
   );
 }
 
+function assertCurrentModeAllowsTextPayload(
+  conversationId: string,
+  type: string,
+): void {
+  if (type !== 'text' && type !== 'quote' && type !== 'encrypted-text') return;
+  const mode = requireRecognizedTextEncryptionMode(
+    useChatStore
+      .getState()
+      .conversations.find((conversation) => conversation.id === conversationId)
+      ?.textEncryption,
+  );
+  if (
+    (type === 'text' || type === 'quote') &&
+    (mode === 'MLS_V1' ||
+      process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true')
+  ) {
+    throw new ChatSendError(
+      'CHAT_INVALID_PAYLOAD',
+      '会话加密状态已变化，请重新发送消息',
+    );
+  }
+}
+
 /**
  * 发送核心:乐观 DTO(height=0, id=local:{d})立即入库并联动会话列表;
  * ack 返回后以真 id/height 替换(store 按 d 对账);失败置失败态并抛出。
@@ -456,6 +479,10 @@ export async function sendWithOptimism(
   });
   assertChatSessionFence(fence);
   try {
+    assertCurrentModeAllowsTextPayload(
+      options.conversationId,
+      options.type,
+    );
     const ack = await sendChatMessage({
       conversationId: options.conversationId,
       type: options.type,
@@ -1048,28 +1075,7 @@ async function runRetry(
   const { localPreviewContent, pendingMedia, ...wirePayload } = entry.payload;
   // 旧 outbox 可能来自模式加载前或会话开启加密前。重试不能绕过首发门禁，
   // 更不能把先前落盘的 text/quote 明文送进现在的加密会话。
-  if (
-    entry.payload.type === 'text' ||
-    entry.payload.type === 'quote' ||
-    entry.payload.type === 'encrypted-text'
-  ) {
-    const mode = requireRecognizedTextEncryptionMode(
-      useChatStore
-        .getState()
-        .conversations.find((item) => item.id === conversationId)
-        ?.textEncryption,
-    );
-    if (
-      (entry.payload.type === 'text' || entry.payload.type === 'quote') &&
-      (mode === 'MLS_V1' ||
-        process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true')
-    ) {
-      throw new ChatSendError(
-        'CHAT_INVALID_PAYLOAD',
-        '会话加密状态已变化，请重新发送消息',
-      );
-    }
-  }
+  assertCurrentModeAllowsTextPayload(conversationId, entry.payload.type);
   if (pendingMedia) {
     const userId = useChatStore.getState().currentUserId;
     if (userId) {
@@ -1105,6 +1111,7 @@ async function runRetry(
     ...(Number.isFinite(retryAnchor) ? { failedAfterHeight: retryAnchor } : {}),
   });
   assertChatSessionFence(fence);
+  assertCurrentModeAllowsTextPayload(conversationId, wirePayload.type);
   const ack = await sendChatMessage(wirePayload);
   assertChatSessionFence(fence);
   void outboxDelete(d);

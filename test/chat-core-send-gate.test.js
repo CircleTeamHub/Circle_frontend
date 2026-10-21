@@ -63,6 +63,7 @@ function loadClient({
     failedMarks: [],
     retryMarks: [],
     removed: [],
+    reverted: 0,
   };
   const authState = {
     user: { id: 'me', nickname: '我', avatarUrl: null },
@@ -86,7 +87,9 @@ function loadClient({
     removeMessage: (conversationId, messageId) => {
       calls.removed.push({ conversationId, messageId });
     },
-    revertConversationPreview: () => {},
+    revertConversationPreview: () => {
+      calls.reverted += 1;
+    },
     upsertConversation: () => {},
     messagesByConversation: {},
     conversations: Object.entries(conversationModes).map(([id, textEncryption]) => ({
@@ -188,7 +191,13 @@ function loadClient({
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context);
-  return { api: context.module.exports, calls, CreditPolicyError, authState };
+  return {
+    api: context.module.exports,
+    calls,
+    CreditPolicyError,
+    authState,
+    storeState,
+  };
 }
 
 test('every public send API is gated on credit score', async () => {
@@ -334,6 +343,41 @@ test('a session switch while retry persistence is pending cannot resend the old 
   assert.deepEqual(loaded.calls.failedMarks, []);
 });
 
+for (const nextMode of ['MLS_V1', undefined]) {
+  test(`a plaintext first send rechecks mode after outbox persistence: ${String(nextMode)}`, async () => {
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const loaded = loadClient({
+      blocked: false,
+      conversationModes: { c1: 'PLAIN' },
+      outboxDelays: { 'd-test': gate },
+    });
+
+    const send = loaded.api.sendTextMessage({
+      conversationId: 'c1',
+      text: 'must not cross the mode change',
+    });
+    await flush();
+
+    loaded.storeState.conversations = [
+      nextMode === undefined
+        ? { id: 'c1' }
+        : { id: 'c1', textEncryption: nextMode },
+    ];
+    release();
+
+    await assert.rejects(send);
+    assert.equal(loaded.calls.sent, 0);
+    assert.deepEqual(loaded.calls.outboxUpserts, ['text']);
+    assert.deepEqual(loaded.calls.failedMarks, [
+      { conversationId: 'c1', d: 'd-test' },
+    ]);
+    assert.equal(loaded.calls.reverted, 1);
+  });
+}
+
 function retryEntry(type, content) {
   return {
     d: 'd-retry',
@@ -425,6 +469,37 @@ test('MLS_V1 mode still retries an encrypted-text outbox row', async () => {
   );
   assert.deepEqual(loaded.calls.failedMarks, []);
 });
+
+for (const nextMode of ['MLS_V1', undefined]) {
+  test(`a plaintext retry rechecks mode after outbox persistence: ${String(nextMode)}`, async () => {
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const loaded = loadClient({
+      blocked: false,
+      retryOutbox: [retryEntry('text', { text: 'legacy plaintext' })],
+      conversationModes: { c1: 'PLAIN' },
+      outboxDelays: { 'd-retry': gate },
+    });
+
+    const retry = loaded.api.retryFailedChatMessage('c1', 'd-retry');
+    await flush();
+
+    loaded.storeState.conversations = [
+      nextMode === undefined
+        ? { id: 'c1' }
+        : { id: 'c1', textEncryption: nextMode },
+    ];
+    release();
+
+    await assert.rejects(retry);
+    assert.equal(loaded.calls.sent, 0);
+    assert.deepEqual(loaded.calls.failedMarks, [
+      { conversationId: 'c1', d: 'd-retry' },
+    ]);
+  });
+}
 
 test('a media delivery remains bound to the session that created its bubble', async () => {
   const loaded = loadClient({ blocked: false });
