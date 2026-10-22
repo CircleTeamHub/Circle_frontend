@@ -18,16 +18,43 @@ import {
   type DiagnosticBreadcrumb,
 } from '@/utils/client-diagnostics';
 import { STATIC_ROUTE_SEGMENTS } from './route-segments';
+import { TRACED_SPAN_NAMES } from './tracing';
+
+interface NavigationIntegrationLike {
+  registerNavigationContainer: (navigationContainerRef: unknown) => void;
+}
 
 /** Minimal slice of the Sentry SDK we depend on — lets tests inject a fake. */
 export interface SentryLike {
   init: (options: Record<string, unknown>) => void;
   wrap: <P>(component: P) => P;
+  reactNavigationIntegration?: (options: {
+    useFullPathsForNavigationRoutes: boolean;
+  }) => NavigationIntegrationLike;
 }
 
 // Adapt the SDK's wider types to our minimal interface at this single boundary.
 const defaultClient = Sentry as unknown as SentryLike;
 let sentryInitialized = false;
+let navigationIntegration: NavigationIntegrationLike | undefined;
+
+/**
+ * 导航追踪是性能数据的根：冷启动指标挂在第一个导航 transaction 上，XHR span
+ * 也要有父 span 才会被发出。没有它，tracesSampleRate 再高也一条性能数据都没有。
+ * 全路径命名（__root/(tabs)/messages/index）由 sanitizeNavigationRouteName 归一化。
+ */
+function createNavigationIntegration(
+  client: SentryLike,
+): NavigationIntegrationLike | undefined {
+  if (typeof client.reactNavigationIntegration !== 'function') return undefined;
+  try {
+    return client.reactNavigationIntegration({
+      useFullPathsForNavigationRoutes: true,
+    });
+  } catch {
+    return undefined;
+  }
+}
 
 export interface SentryConfigSources {
   env?: Record<string, string | undefined>;
@@ -99,6 +126,7 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
     readTrimmed(process.env.EXPO_PUBLIC_SENTRY_RELEASE);
   const dist =
     readTrimmed(options.dist) ?? readTrimmed(process.env.EXPO_PUBLIC_SENTRY_DIST);
+  const navigation = createNavigationIntegration(client);
   try {
     client.init({
       dsn,
@@ -112,6 +140,13 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // 对 IM 产品，「消息发送慢」到底慢在哪一段就无法回答。5% 足够看趋势，
       // 又把 Sentry 配额消耗控制在可预期范围内。
       tracesSampleRate,
+      integrations: navigation ? [navigation] : [],
+      // 原生端默认是 [/.*/]：每个 XHR 都带 sentry-trace / baggage 头，连发往第三方
+      // 存储的预签名上传 PUT 也带，等于把 release 和 DSN public key 发给第三方。
+      // 后端不消费这两个头（请求串联走 X-Request-Id），所以一个都不发。空数组会
+      // 覆盖 SDK 默认值；undefined 不会。将来后端接分布式追踪时再收窄到 API 源，
+      // 同时把这两个头加进后端 CORS allowedHeaders（web 端跨源会触发预检）。
+      tracePropagationTargets: [],
       // Never attach PII (IP, cookies, request bodies) by default.
       sendDefaultPii: false,
       attachScreenshot: false,
@@ -129,10 +164,25 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       beforeSendSpan: sanitizeAutomaticSpan,
     });
     sentryInitialized = true;
+    navigationIntegration = navigation;
     return true;
   } catch {
     sentryInitialized = false;
+    navigationIntegration = undefined;
     return false;
+  }
+}
+
+/**
+ * 把 Expo Router 的导航容器交给 Sentry 导航追踪。Sentry 未初始化时是 no-op；
+ * 重复注册同一个 ref 由 SDK 自己去重。
+ */
+export function registerSentryNavigationContainer(navigationContainerRef: unknown): void {
+  if (!navigationIntegration) return;
+  try {
+    navigationIntegration.registerNavigationContainer(navigationContainerRef);
+  } catch {
+    // Observability must never change navigation behavior.
   }
 }
 
@@ -343,6 +393,38 @@ export function sanitizeTransactionName(value: unknown): string {
   if (normalized.some((segment) => segment === '')) return REDACTED_TRANSACTION;
 
   return `/${normalized.join('/')}`;
+}
+
+/** Expo Router 根导航器的内部路由名，不是 URL 段。 */
+const NAVIGATION_ROOT_ROUTE = '__root';
+
+/**
+ * React Navigation 的路由名（`__root/(tabs)/messages/user/[id]`）是代码里的文件名，
+ * 不含参数值；去掉根导航器和 index 段、补上前导 / 之后，按 URL 路径同一套白名单
+ * 归一化。必须幂等：同一个名字先在根 span 上、再在 transaction 上各过一遍。
+ */
+function sanitizeNavigationRouteName(value: unknown): string {
+  if (typeof value !== 'string') return REDACTED_TRANSACTION;
+  const segments = value
+    .trim()
+    .split('/')
+    .filter(
+      (segment) =>
+        segment !== '' && segment !== NAVIGATION_ROOT_ROUTE && segment !== 'index',
+    );
+  if (segments.length === 0) return '/';
+  return sanitizeTransactionName(`/${segments.join('/')}`);
+}
+
+/**
+ * 导航 transaction（source=component）按路由名归一化；tracing.ts 固定表里的自定义
+ * span 名原样保留；其余仍走 URL 路径规则。
+ */
+function sanitizeEventTransactionName(value: unknown, source: unknown): string {
+  if (typeof value === 'string' && TRACED_SPAN_NAMES.has(value)) return value;
+  return source === 'component'
+    ? sanitizeNavigationRouteName(value)
+    : sanitizeTransactionName(value);
 }
 
 function sanitizeStringForSentry(value: string): string {
@@ -582,7 +664,10 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
   }
   if ('message' in source) safe.message = '[REDACTED_EVENT_MESSAGE]';
   if ('transaction' in source) {
-    safe.transaction = sanitizeTransactionName(source.transaction);
+    safe.transaction = sanitizeEventTransactionName(
+      source.transaction,
+      readTransactionSource(source.transaction_info),
+    );
   }
   const exception = sanitizeException(source.exception);
   if (exception) safe.exception = exception;
@@ -594,12 +679,8 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
   if (tags) safe.tags = tags;
   const extra = sanitizeEventExtra(source.extra);
   if (extra) safe.extra = extra;
-  const trace = sanitizeTraceContext(
-    source.contexts && typeof source.contexts === 'object'
-      ? (source.contexts as Record<string, unknown>).trace
-      : undefined,
-  );
-  if (trace) safe.contexts = { trace };
+  const contexts = sanitizeEventContexts(source.contexts);
+  if (contexts) safe.contexts = contexts;
   if (Array.isArray(source.fingerprint)) {
     safe.fingerprint = source.fingerprint.map((part) =>
       sanitizeStringForSentry(String(part)),
@@ -667,6 +748,25 @@ function sanitizeAutomaticSpan(span: SpanJSON): SpanJSON {
       : {}),
     ...(span.is_segment !== undefined ? { is_segment: span.is_segment } : {}),
     ...(span.segment_id ? { segment_id: span.segment_id } : {}),
+    ...(span.is_segment === true ? sanitizeSegmentSpanFields(span) : {}),
+  };
+}
+
+/**
+ * 根 span（is_segment）就是 transaction 本身。@sentry/core 先对它跑 beforeSendSpan，
+ * 再把结果 merge 回 transaction 事件 —— 没带回来的 description / measurements 会以
+ * undefined 覆盖 transaction 名和冷启动指标，之后才轮到 beforeSendTransaction。
+ * 所以这两项要在这里按 transaction 的同一套规则保留下来。子 span 的 description
+ * 照旧丢弃（常带 URL）。
+ */
+function sanitizeSegmentSpanFields(span: SpanJSON): Partial<SpanJSON> {
+  const measurements = sanitizeMeasurements(span.measurements);
+  return {
+    description: sanitizeEventTransactionName(
+      span.description,
+      span.data?.['sentry.source'],
+    ),
+    ...(measurements ? { measurements } : {}),
   };
 }
 
@@ -701,6 +801,102 @@ function sanitizeTraceContext(value: unknown): Record<string, unknown> | undefin
       ? { status: source.status }
       : {}),
   };
+}
+
+/**
+ * SDK 自动填的 contexts 里可以离开设备的字段（白名单）。没有它们就没法按机型、
+ * 系统版本、App 版本或 OTA 版本筛崩溃。字段名对应 @sentry/react-native 7 的
+ * devicecontext / expocontext 集成。
+ *
+ * 刻意不在单子上的：设备名（常是「张三的 iPhone」）、设备 ID、device_app_hash、
+ * boot_time、精确的剩余内存/存储（组合起来可做设备指纹）、时区与语言（culture
+ * 整个不收）、内核版本串（可能带主机名）、emergency_launch_reason（原生错误文本，
+ * iOS 上带含安装 UUID 的沙盒路径）。新增字段前先确认它不是标识符。
+ */
+const SAFE_AUTOMATIC_CONTEXT_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  device: [
+    'model',
+    'model_id',
+    'family',
+    'brand',
+    'manufacturer',
+    'arch',
+    'simulator',
+    'memory_size',
+    'low_memory',
+  ],
+  os: ['name', 'version', 'build'],
+  app: [
+    'app_version',
+    'app_build',
+    'app_identifier',
+    'app_name',
+    'build_type',
+    'in_foreground',
+  ],
+  ota_updates: [
+    'is_enabled',
+    'update_id',
+    'channel',
+    'runtime_version',
+    'check_automatically',
+    'is_embedded_launch',
+    'is_emergency_launch',
+    'is_using_embedded_assets',
+    'launch_duration',
+    'created_at',
+  ],
+};
+const MAX_CONTEXT_STRING_LENGTH = 128;
+const MAX_VIEW_NAMES = 5;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeAutomaticContext(
+  value: unknown,
+  fields: readonly string[],
+): Record<string, unknown> | undefined {
+  if (!isRecord(value)) return undefined;
+  const safe: Record<string, unknown> = {};
+  for (const field of fields) {
+    const child = value[field];
+    if (typeof child === 'boolean' || (typeof child === 'number' && Number.isFinite(child))) {
+      safe[field] = child;
+    } else if (typeof child === 'string' && child.length <= MAX_CONTEXT_STRING_LENGTH) {
+      safe[field] = sanitizeStringForSentry(child);
+    }
+  }
+  return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
+/** app.view_names 是 SDK 记下的当前路由名，与导航 transaction 名同一套归一化。 */
+function sanitizeViewNames(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const names = value
+    .slice(-MAX_VIEW_NAMES)
+    .map(sanitizeNavigationRouteName)
+    .filter((name) => name !== REDACTED_TRANSACTION);
+  return names.length > 0 ? names : undefined;
+}
+
+function sanitizeEventContexts(value: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(value)) return undefined;
+  const safe: Record<string, unknown> = {};
+  const trace = sanitizeTraceContext(value.trace);
+  if (trace) safe.trace = trace;
+  for (const [name, fields] of Object.entries(SAFE_AUTOMATIC_CONTEXT_FIELDS)) {
+    const context = sanitizeAutomaticContext(value[name], fields);
+    if (context) safe[name] = context;
+  }
+  const viewNames = sanitizeViewNames(isRecord(value.app) ? value.app.view_names : undefined);
+  if (viewNames) safe.app = { ...(isRecord(safe.app) ? safe.app : {}), view_names: viewNames };
+  return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
+function readTransactionSource(value: unknown): unknown {
+  return isRecord(value) ? value.source : undefined;
 }
 
 function readSafeTraceField(value: unknown): value is string {
@@ -745,14 +941,13 @@ function sanitizeAutomaticTransaction(
     ...sanitizeAutomaticBaseEvent(event),
     type: 'transaction',
   };
-  safe.transaction = sanitizeTransactionName(event.transaction);
+  safe.transaction = sanitizeEventTransactionName(
+    event.transaction,
+    readTransactionSource(event.transaction_info),
+  );
   safe.spans = (event.spans ?? [])
     .filter(hasValidSpanIds)
     .map(sanitizeAutomaticSpan);
-  const trace = sanitizeTraceContext(event.contexts?.trace);
-  if (trace) {
-    safe.contexts = { trace } as TransactionEvent['contexts'];
-  }
   const measurements = sanitizeMeasurements(event.measurements);
   if (measurements) safe.measurements = measurements;
   if (event.transaction_info?.source) {

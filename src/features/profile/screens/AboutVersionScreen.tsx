@@ -22,6 +22,8 @@ import {
   downloadOtaUpdate,
   reloadOtaUpdate,
 } from '@/features/app-update/ota-update-service';
+import { stopAutomaticOtaFailureWatch } from '@/features/app-update/ota-health';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const styles = StyleSheet.create({
@@ -72,7 +74,8 @@ export default function AboutVersionScreen() {
     setInstalling(true);
     try {
       await downloadAndInstallAndroidUpdate(manifest);
-    } catch {
+    } catch (error) {
+      reportHandledFailure('appUpdate', 'manualInstall', error);
       if (mountedRef.current) {
         Alert.alert(
           t('appUpdate.installFailedTitle'),
@@ -101,7 +104,7 @@ export default function AboutVersionScreen() {
       if(Platform.OS==='ios') {
         const update=await checkForManagedUpdate();if(!mountedRef.current)return;
         if(!update) {Alert.alert(t('appUpdate.latestTitle'),t('appUpdate.latestMessage'));return;}
-        Alert.alert(t('appUpdate.availableTitle'),t('appUpdate.availableMessage',{version:update.version}),[{text:t('common.cancel'),style:'cancel'},{text:t('appUpdate.updateNow'),onPress:()=>{void Linking.openURL(update.url).catch(()=>Alert.alert(t('appUpdate.installFailedTitle'),t('appUpdate.installFailedMessage')));}}]);
+        Alert.alert(t('appUpdate.availableTitle'),t('appUpdate.availableMessage',{version:update.version}),[{text:t('common.cancel'),style:'cancel'},{text:t('appUpdate.updateNow'),onPress:()=>{void Linking.openURL(update.url).catch((error: unknown)=>{reportHandledFailure('appUpdate','manualInstall',error);Alert.alert(t('appUpdate.installFailedTitle'),t('appUpdate.installFailedMessage'));});}}]);
         return;
       }
       const manifest = await checkForAndroidUpdate();
@@ -127,7 +130,8 @@ export default function AboutVersionScreen() {
           },
         ],
       );
-    } catch {
+    } catch (error) {
+      reportHandledFailure('appUpdate', 'manualCheck', error);
       if (mountedRef.current) {
         Alert.alert(
           t('appUpdate.checkFailedTitle'),
@@ -145,6 +149,8 @@ export default function AboutVersionScreen() {
   const checkOtaNow = async () => {
     if (checkingOta || busy) return;
     setCheckingOta(true);
+    // 手动检查接管 expo-updates 状态机：之后的状态机错误归这次检查，由下面的 catch 上报。
+    stopAutomaticOtaFailureWatch();
     try {
       const result = await downloadOtaUpdate();
       if (!mountedRef.current) return;
@@ -157,7 +163,8 @@ export default function AboutVersionScreen() {
             {
               text: t('appUpdate.reloadNow'),
               onPress: () => {
-                void reloadOtaUpdate().catch(() => {
+                void reloadOtaUpdate().catch((error: unknown) => {
+                  reportHandledFailure('otaUpdate', 'reload', error);
                   if (mountedRef.current) {
                     Alert.alert(
                       t('appUpdate.codeUpdateFailedTitle'),
@@ -180,7 +187,8 @@ export default function AboutVersionScreen() {
           t('appUpdate.codeLatestMessage'),
         );
       }
-    } catch {
+    } catch (error) {
+      reportHandledFailure('otaUpdate', 'manualCheck', error);
       if (mountedRef.current) {
         Alert.alert(
           t('appUpdate.codeUpdateFailedTitle'),

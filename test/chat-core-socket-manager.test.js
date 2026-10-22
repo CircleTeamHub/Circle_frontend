@@ -159,6 +159,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
   const dismissedNotifications = [];
   const reports = [];
   const diagnostics = [];
+  const spans = [];
   const storeModule = (() => {
     const state = {
       connected: false,
@@ -433,6 +434,13 @@ function loadManager(localDbOverrides = {}, options = {}) {
     '@/observability/sentry': {
       reportError: (error, context) => reports.push({ error, context }),
     },
+    '@/observability/tracing': {
+      startOperationSpan: (operation) => {
+        const span = { operation, ends: [] };
+        spans.push(span);
+        return { end: (status) => span.ends.push(status ?? 'ok') };
+      },
+    },
     // 队列逻辑零依赖,跑真的;定时器跟着用例注入的走。
     './send-queue': runModule('src/chat-core/send-queue.ts', {}, globals),
   }, globals);
@@ -449,6 +457,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     apiCalls,
     reports,
     diagnostics,
+    spans,
     mmkvStore,
     dismissedNotifications,
   };
@@ -2125,4 +2134,123 @@ test('冷启动水合:outbox 读不出来时不清理待发媒体副本', async 
   await flush();
 
   assert.deepEqual(apiCalls.pendingMediaPrunes, []);
+});
+
+// 性能追踪：建连与发消息各一个自定义 span。span 只认操作名和结果枚举 ——
+// 用户、会话、消息内容、token 都不可能经由这里进 Sentry。
+
+test('chat socket connect is traced from the handshake to its first outcome', () => {
+  const { manager, socket, spans } = loadManager();
+  manager.connectChat('jwt-secret', 'u1');
+  assert.equal(spans.length, 1);
+  assert.equal(spans[0].operation, 'chatConnect');
+  assert.deepEqual(spans[0].ends, []);
+
+  socket.fire('connect');
+  assert.deepEqual(spans[0].ends, ['ok']);
+  // socket.io 断线自动重连也会再触发 connect;那不是这次建连,span 只结束一次。
+  socket.fire('disconnect', 'transport close');
+  socket.fire('connect');
+  assert.deepEqual(spans[0].ends, ['ok']);
+  assert.equal(spans.length, 1);
+});
+
+test('a failed chat handshake ends the connect span with a status mapped from the reason', () => {
+  const { manager, socket, spans } = loadManager();
+  manager.connectChat('jwt-secret', 'u1');
+  socket.fire('connect_error', new Error('unauthorized jwt-secret u1'));
+  socket.fire('connect_error', new Error('unauthorized jwt-secret u1'));
+  assert.deepEqual(spans[0].ends, ['unauthenticated']);
+  assert.doesNotMatch(JSON.stringify(spans), /jwt-secret|u1/);
+});
+
+test('connect failure reasons map onto Sentry span statuses', () => {
+  for (const [message, status] of [
+    ['forbidden origin', 'permission_denied'],
+    ['rate limit exceeded', 'resource_exhausted'],
+    ['timeout', 'deadline_exceeded'],
+    ['server error', 'internal_error'],
+    ['websocket error', 'unavailable'],
+    ['network offline', 'unavailable'],
+    ['something odd', 'unknown_error'],
+  ]) {
+    const { manager, socket, spans } = loadManager();
+    manager.connectChat('jwt', 'u1');
+    socket.fire('connect_error', new Error(message));
+    assert.deepEqual(spans[0].ends, [status], message);
+  }
+});
+
+test('a connect started while the app is in the background is not traced', () => {
+  // 后台拉起(静默推送)时导航 idle span 不记录,第一个根 span 会被 appStart 当成冷启动
+  // 宿主,建连耗时就被冷启动时长撑大了。后台建连本来也不是用户在等的那一次。
+  const { manager, spans } = loadManager({}, { appState: 'background' });
+  manager.connectChat('jwt', 'u1');
+  assert.deepEqual(spans, []);
+});
+
+test('a replaced or torn-down socket cancels its pending connect span', () => {
+  const { manager, spans } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  manager.suspendChat();
+  assert.deepEqual(spans[0].ends, ['cancelled']);
+
+  manager.connectChat('jwt', 'u1');
+  manager.connectChat('jwt', 'u2');
+  assert.deepEqual(spans[1].ends, ['cancelled']);
+  manager.disconnectChat();
+  assert.deepEqual(spans[2].ends, ['cancelled']);
+});
+
+test('an expired token refreshes without starting a connect span', () => {
+  const { manager, spans } = loadManager();
+  manager.connectChat('expired-jwt', 'u1');
+  assert.deepEqual(spans, []);
+});
+
+test('sending a message is traced until the server ack settles it', async () => {
+  const { manager, socket, spans } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+
+  socket.ackResponder = (event, payload, cb) =>
+    cb(null, { ok: true, messageId: 'm1', height: 3, d: payload.d });
+  await manager.sendChatMessage({
+    conversationId: 'c-private',
+    type: 'text',
+    content: { text: 'blue pineapple' },
+    d: 'd1',
+  });
+  const sends = spans.filter((span) => span.operation === 'chatSend');
+  assert.equal(sends.length, 1);
+  assert.deepEqual(sends[0].ends, ['ok']);
+
+  socket.ackResponder = (event, payload, cb) =>
+    cb(null, { ok: false, code: 'CHAT_SENSITIVE_WORD_BLOCKED' });
+  await assert.rejects(
+    manager.sendChatMessage({
+      conversationId: 'c-private',
+      type: 'text',
+      content: { text: 'blue pineapple' },
+      d: 'd2',
+    }),
+  );
+  const failed = spans.filter((span) => span.operation === 'chatSend')[1];
+  // 服务端明确拒收(敏感词、被拉黑……):重发也没用。
+  assert.deepEqual(failed.ends, ['failed_precondition']);
+  assert.doesNotMatch(JSON.stringify(spans), /c-private|blue pineapple|d1|d2/);
+});
+
+test('a send that never got a connection ends its span as unavailable', async () => {
+  const timers = createFakeTimers();
+  const { manager, spans } = loadManager({}, { timers });
+  const sent = manager
+    .sendChatMessage({ conversationId: 'c1', type: 'text', content: { text: 'x' }, d: 'd3' })
+    .catch(() => {});
+  await flush();
+  timers.run(60_000);
+  await sent;
+  const send = spans.find((span) => span.operation === 'chatSend');
+  assert.deepEqual(send.ends, ['unavailable']);
 });

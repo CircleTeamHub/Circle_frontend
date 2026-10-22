@@ -8,4 +8,10 @@ module.exports = {
   },
   setUser() {},
   captureException() {},
+  startInactiveSpan() {
+    return { setStatus() {}, end() {} };
+  },
+  reactNavigationIntegration() {
+    return { name: 'ReactNavigation', registerNavigationContainer() {} };
+  },
 };

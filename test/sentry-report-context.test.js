@@ -98,6 +98,8 @@ function loadSentry() {
       switch (request) {
         case './route-segments':
           return loadTsModule('src/observability/route-segments.ts', {});
+        case './tracing':
+          return loadTsModule('src/observability/tracing.ts', { requireShim: () => ({}) });
         case '@sentry/react-native':
           return { init() {}, wrap: (c) => c, captureException() {} };
         case 'expo-constants':
