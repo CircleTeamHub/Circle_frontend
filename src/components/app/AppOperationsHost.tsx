@@ -57,7 +57,7 @@ export function AppOperationsHost() {
         inFlight = false;
       }
     };
-    void record();
+    if (AppState.currentState === "active") void record();
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") void record();
     });

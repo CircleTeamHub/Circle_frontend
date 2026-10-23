@@ -689,6 +689,26 @@ function handleSocketMessage(rawData: string) {
 
 const RECOVERY_THROTTLE_MS = 30_000;
 let lastRecoveryAt = 0;
+let recoverySequence = 0;
+let latestRecoveryId = 0;
+
+function captureRecoverySessionIdentity(): {
+  sessionEpoch: number;
+  userId: string | null;
+} {
+  const auth = useAuthStore.getState();
+  return { sessionEpoch: auth.sessionEpoch, userId: auth.user?.id ?? null };
+}
+
+function isRecoverySessionCurrent(
+  owner: { sessionEpoch: number; userId: string | null },
+): boolean {
+  const auth = useAuthStore.getState();
+  return (
+    auth.sessionEpoch === owner.sessionEpoch &&
+    (auth.user?.id ?? null) === owner.userId
+  );
+}
 
 export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
   void refreshGroupAdmissionUnread().catch(error => reportHandledFailure('groupAdmission', 'unread', error));
@@ -699,6 +719,13 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
   lastRecoveryAt = now;
   loginChallengeListener?.({ type: 'created' });
 
+  recoverySequence += 1;
+  const recoveryId = recoverySequence;
+  latestRecoveryId = recoveryId;
+  const owner = captureRecoverySessionIdentity();
+  const isCurrentRecovery = () =>
+    recoveryId === latestRecoveryId && isRecoverySessionCurrent(owner);
+
   try {
     const [contactsUnread, signupUnread, notificationSummary] =
       await Promise.all([
@@ -707,6 +734,7 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
         fetchNotificationUnreadSummary(),
       ]);
 
+    if (!isCurrentRecovery()) return;
     applyBadgeSnapshot({
       contactsUnread,
       discoverUnread: notificationSummary.discoverUnread,
@@ -721,7 +749,9 @@ export async function recoverTabBadgeSnapshot(options?: { force?: boolean }) {
   }
 
   try {
-    mergeRecoveredInteractiveNotifications(await fetchNotifications(1));
+    const notifications = await fetchNotifications(1);
+    if (!isCurrentRecovery()) return;
+    mergeRecoveredInteractiveNotifications(notifications);
   } catch (err) {
     // Recovery is best-effort; the notification center screen still has its
     // own pull-to-refresh path if this list backfill fails.

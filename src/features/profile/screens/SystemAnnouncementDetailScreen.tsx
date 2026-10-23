@@ -7,7 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Spacing, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
-import { fetchProfileNotificationDetail } from '@/services/api/notifications';
+import {
+  fetchProfileNotificationDetail,
+  markNotificationRead,
+} from '@/services/api/notifications';
 import { reportHandledFailure } from '@/observability/report-failure';
 import type { NotificationItem } from '@/types';
 
@@ -29,7 +32,15 @@ export default function SystemAnnouncementDetailScreen() {
     setResult(null);setError(false);
     if (!notificationId) { setError(true); return; }
     void fetchProfileNotificationDetail(notificationId).then(value => {
-      if (active) setResult({key,item:value});
+      if (!active) return;
+      setResult({key,item:value});
+      if (!value.read) {
+        void markNotificationRead(notificationId).catch(failure => {
+          if (active) {
+            reportHandledFailure('profile','announcementMarkRead',failure);
+          }
+        });
+      }
     }).catch(failure => {
       if (active) {setError(true);reportHandledFailure('profile','announcementDetail',failure);}
     });
