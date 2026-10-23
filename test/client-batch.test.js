@@ -57,7 +57,9 @@ test('重置凭据在 dev 日志中被脱敏（code / newPassword）(review)', (
   const plain = JSON.parse(JSON.stringify(redacted));
   assert.equal(plain.code, '[REDACTED]');
   assert.equal(plain.newPassword, '[REDACTED]');
-  assert.equal(plain.email, 'a@b.com');
+  // 日志与 Sentry 共用一份敏感名单之后，联系方式在 dev 日志里也脱敏（截屏、录屏、
+  // 贴出来的 Metro 日志同样会泄漏）。
+  assert.equal(plain.email, '[REDACTED]');
 });
 
 test('二维码 bearer token 在请求 URL 日志中被脱敏 (review)', () => {

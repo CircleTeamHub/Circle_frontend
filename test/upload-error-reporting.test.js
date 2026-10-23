@@ -11,6 +11,7 @@ function loadUpload({
   responseBody = '',
   onReport = () => {},
   fetchError,
+  now,
 } = {}) {
   const filePath = path.join(process.cwd(), 'src/services/api/upload.ts');
   const source = fs.readFileSync(filePath, 'utf8');
@@ -26,6 +27,7 @@ function loadUpload({
     module: { exports: {} },
     exports: {},
     AbortController,
+    ...(now ? { Date: { now } } : {}),
     setTimeout,
     clearTimeout,
     fetch: async () => {
@@ -200,4 +202,32 @@ test('storage failures retain status and an allowed code while discarding provid
   assert.equal(reports[0].context.status, 403);
   assert.equal(reports[0].context.storageCode, 'AccessDenied');
   assert.doesNotMatch(JSON.stringify(reports), /private-|secret=token/);
+});
+
+test('a storage outage reports once per failure shape per minute, not once per upload', async () => {
+  // 存储宕机时每次上传都报一条，会按「用户数 × 重试次数」刷爆配额，后面真正的新问题
+  // 反而发不出去。与 services/api/client.ts 同一套：按签名 60 秒一次。
+  let clock = 1_000;
+  const reports = [];
+  const { uploadFileToPresignedUrl } = loadUpload({
+    status: 503,
+    responseBody: '<Error><Code>SlowDown</Code></Error>',
+    onReport: (_err, ctx) => reports.push(ctx),
+    now: () => clock,
+  });
+  const upload = (contentType = 'image/png') =>
+    assert.rejects(() => uploadFileToPresignedUrl('https://store/x', contentType, {}, {}));
+
+  await upload();
+  await upload();
+  await upload();
+  assert.equal(reports.length, 1);
+
+  // 不同的失败形状（这里是内容类型）各有自己的额度。
+  await upload('video/mp4');
+  assert.equal(reports.length, 2);
+
+  clock += 60_000;
+  await upload();
+  assert.equal(reports.length, 3, 'the same shape reports again after the window');
 });

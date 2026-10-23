@@ -53,6 +53,26 @@ function uploadStatusError(status: number, body?: unknown): Error {
   );
 }
 
+// 存储宕机时每次上传都报一条，会按「用户数 × 重试次数」刷爆配额。与
+// services/api/client.ts 的 shouldCaptureFailure 同一套：同一失败形状 60 秒报一次，
+// 形状数有上限，超出的并入溢出桶。
+const lastUploadFailureReports = new Map<string, number>();
+const UPLOAD_FAILURE_REPORT_WINDOW_MS = 60_000;
+const MAX_UPLOAD_FAILURE_REPORT_KEYS = 100;
+
+function shouldReportUploadFailure(key: string): boolean {
+  const now = Date.now();
+  for (const [entry, timestamp] of lastUploadFailureReports) {
+    if (now - timestamp >= UPLOAD_FAILURE_REPORT_WINDOW_MS) lastUploadFailureReports.delete(entry);
+  }
+  const boundedKey = lastUploadFailureReports.has(key) || lastUploadFailureReports.size < MAX_UPLOAD_FAILURE_REPORT_KEYS - 1
+    ? key : '__other__';
+  const previous = lastUploadFailureReports.get(boundedKey);
+  if (previous !== undefined && now - previous < UPLOAD_FAILURE_REPORT_WINDOW_MS) return false;
+  lastUploadFailureReports.set(boundedKey, now);
+  return true;
+}
+
 /**
  * Runs a storage upload (raw PUT, not via apiClient so the API chokepoint never
  * sees it) and reports any failure to Sentry before re-throwing it unchanged.
@@ -66,12 +86,28 @@ async function runStorageUpload<T>(
   try {
     return await task();
   } catch (error) {
-    reportError(sanitizeUploadErrorForReport(error), {
-      operation: 'upload',
-      platform: Platform.OS,
-      ...context,
-      ...(error instanceof StorageUploadError ? { status: error.status, ...(error.storageCode ? { storageCode: error.storageCode } : {}) } : {}),
-    });
+    const storage = error instanceof StorageUploadError
+      ? { status: error.status, ...(error.storageCode ? { storageCode: error.storageCode } : {}) }
+      : {};
+    const signature = [
+      context.kind,
+      context.contentType,
+      storage.status ?? 'network',
+      storage.storageCode ?? '-',
+      error instanceof Error ? error.name : typeof error,
+    ].join(':');
+    try {
+      if (shouldReportUploadFailure(signature)) {
+        reportError(sanitizeUploadErrorForReport(error), {
+          operation: 'upload',
+          platform: Platform.OS,
+          ...context,
+          ...storage,
+        });
+      }
+    } catch {
+      // A reporting failure must not replace the original upload error.
+    }
     throw error;
   }
 }

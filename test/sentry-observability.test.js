@@ -32,6 +32,8 @@ function load(rel, stubs = {}) {
           return load(path.relative(process.cwd(), resolved), stubs);
         }
       }
+      // 共享脱敏清单要跑真的，否则「两边用的是同一份」无从验证。
+      if (s === "@/utils/redact") return load("src/utils/redact.ts", stubs);
       if (s.startsWith("@/")) return {};
       return require(s);
     },
@@ -105,6 +107,7 @@ test("production Expo transform inlines the public DSN before runtime", () => {
       if (name === "@/utils/client-diagnostics") return { readDiagnosticBreadcrumbs: () => [] };
       if (name === "./route-segments") return { STATIC_ROUTE_SEGMENTS: new Set() };
       if (name === "./tracing") return { TRACED_SPAN_NAMES: new Set() };
+      if (name === "@/utils/redact") return load("src/utils/redact.ts");
       return require(name);
     },
   };
@@ -1188,4 +1191,83 @@ test("alphabetic dynamic ids are redacted, not mistaken for static routes", () =
     "/(tabs)/discover/circle/:id",
   );
   assert.equal(sanitizeTransactionName("/circle/privatecircle"), "/circle/:id");
+});
+
+test("storage provider codes reach Sentry as a tag and split upload issues", () => {
+  // upload.ts 早就把白名单内的存储错误码放进 context，但 sentry.ts 的白名单没有
+  // storageCode，一直在这里被丢掉：AccessDenied（签名 bug）和 SlowDown（限流）
+  // 混成同一个 issue。
+  const { initSentry, reportError } = loadSentry();
+  const initCalls = [];
+  initSentry({ client: { init: (o) => initCalls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const captures = [];
+  const capture = { captureException: (_e, ctx) => captures.push(ctx) };
+
+  reportError(new Error("x"), { operation: "upload", kind: "presigned-put", status: 403, storageCode: "AccessDenied" }, capture);
+  reportError(new Error("x"), { operation: "upload", kind: "presigned-put", status: 503, storageCode: "SlowDown" }, capture);
+  reportError(new Error("x"), { operation: "upload", kind: "presigned-put", storageCode: "Access Denied <Key>private</Key>" }, capture);
+
+  assert.equal(captures[0].extra.storageCode, "AccessDenied");
+  assert.equal(captures[0].tags.storageCode, "AccessDenied");
+  assert.notEqual(captures[0].fingerprint.join("|"), captures[1].fingerprint.join("|"));
+  assert.equal(captures[2].extra.storageCode, undefined);
+  assert.equal(captures[2].tags.storageCode, undefined);
+  assert.doesNotMatch(JSON.stringify(captures[2]), /private/);
+
+  const finalEvent = initCalls[0].beforeSend({ tags: captures[0].tags, extra: captures[0].extra });
+  assert.equal(finalEvent.tags.storageCode, "AccessDenied");
+  assert.equal(finalEvent.extra.storageCode, "AccessDenied");
+});
+
+test("chat send error codes split into separate issues", () => {
+  const { reportError } = loadSentry();
+  const captures = [];
+  const capture = { captureException: (_e, ctx) => captures.push(ctx) };
+
+  reportError(new Error("x"), { operation: "chatSend", kind: "text", code: "CHAT_ACK_TIMEOUT" }, capture);
+  reportError(new Error("x"), { operation: "chatSend", kind: "text", code: "CHAT_INVALID_PAYLOAD" }, capture);
+  reportError(new Error("x"), { operation: "chatSend", kind: "text", code: "free text with spaces" }, capture);
+
+  assert.equal(captures[0].fingerprint.join("|"), "chatSend|text|error|CHAT_ACK_TIMEOUT");
+  assert.equal(captures[1].fingerprint.join("|"), "chatSend|text|error|CHAT_INVALID_PAYLOAD");
+  assert.equal(captures[0].tags.code, "CHAT_ACK_TIMEOUT");
+  // 形状不对的 code 不进 tag、不进 fingerprint，也不进 extra。
+  assert.equal(captures[2].fingerprint.join("|"), "chatSend|text|error");
+  assert.equal(captures[2].tags.code, undefined);
+  assert.equal(captures[2].extra.code, undefined);
+});
+
+test("Sentry and dev-log redaction share one sensitive field list", () => {
+  // 两份清单分叉过两次：redact 有 revocationsecret / qrtoken / pollkey / newpassword，
+  // sentry 漏了；sentry 有 email / phone，redact 漏了。现在只有 utils/redact.ts 一份。
+  const sentrySource = fs.readFileSync(path.join(process.cwd(), "src/observability/sentry.ts"), "utf8");
+  assert.doesNotMatch(sentrySource, /SENSITIVE_CONTEXT_KEYS|const SENSITIVE_[A-Z_]*KEYS\s*=\s*new Set/);
+  assert.match(sentrySource, /import \{[^}]*\bisSensitiveFieldKey\b[^}]*\} from '@\/utils\/redact'/);
+
+  const breadcrumbs = [{
+    event: "auth.reset.failed",
+    details: {
+      email: "person@example.test",
+      phoneNumber: "+1 415 555 1234",
+      pollKey: "poll-secret",
+      qrToken: "qr-secret",
+      newPassword: "new-secret",
+      revocationSecret: "revoke-secret",
+      stage: "submit",
+    },
+  }];
+  const sentry = load("src/observability/sentry.ts", {
+    "@sentry/react-native": { init() {}, wrap: (c) => c, captureException() {} },
+    "expo-constants": { expoConfig: { extra: {} } },
+    "@/utils/client-diagnostics": { readDiagnosticBreadcrumbs: () => breadcrumbs },
+  });
+  const captures = [];
+  sentry.reportError(new Error("x"), { operation: "auth", kind: "reset" }, {
+    captureException: (_e, ctx) => captures.push(ctx),
+  });
+  const details = captures[0].extra.clientDiagnostics[0].details;
+  for (const key of ["email", "phoneNumber", "pollKey", "qrToken", "newPassword", "revocationSecret"]) {
+    assert.equal(details[key], "[REDACTED]", key);
+  }
+  assert.equal(details.stage, "submit");
 });

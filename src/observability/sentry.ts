@@ -17,6 +17,7 @@ import {
   readDiagnosticBreadcrumbs,
   type DiagnosticBreadcrumb,
 } from '@/utils/client-diagnostics';
+import { isSensitiveFieldKey } from '@/utils/redact';
 import { STATIC_ROUTE_SEGMENTS } from './route-segments';
 import { TRACED_SPAN_NAMES } from './tracing';
 
@@ -254,29 +255,8 @@ const PRESIGNED_URL_MARKERS = [
   'X-Amz-Signature=',
   'x-id=PutObject',
 ];
-// 这份清单与 utils/redact.ts 的 SENSITIVE_KEYS 是两份独立的表（那份给日志，这份给
-// Sentry 上报），已经分叉过一次：redact 有 revocationsecret，这里漏了，而推送撤销密钥
-// 正是通知链路的密钥之一。精确匹配的 Set 不会因为有 'secret' 就拦住
-// 'revocationsecret'。往任一份加敏感字段时，另一份也要加。
-const SENSITIVE_CONTEXT_KEYS = new Set([
-  'authorization',
-  'cookie',
-  'password',
-  'token',
-  'accesstoken',
-  'refreshtoken',
-  'revocationsecret',
-  'imtoken',
-  'idtoken',
-  'apikey',
-  'secret',
-  'uploadurl',
-  'fileurl',
-  'email',
-  'phone',
-  'phonenumber',
-  'mobile',
-]);
+// 嵌套字段的敏感名单只有一份，在 utils/redact.ts（isSensitiveFieldKey）。这里曾经
+// 抄过一份，与日志那份分叉过两次。
 const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'endpointPath',
   'method',
@@ -291,6 +271,7 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'platform',
   'contentType',
   'code',
+  'storageCode',
   'size',
   'category',
   'agentIndex',
@@ -314,6 +295,8 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'kind',
   'traceId',
   'requestId',
+  'code',
+  'storageCode',
 ]);
 const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'circleId',
@@ -449,11 +432,31 @@ function sanitizeContextForSentry(value: unknown, depth = 0): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = SENSITIVE_CONTEXT_KEYS.has(key.toLowerCase())
+    out[key] = isSensitiveFieldKey(key)
       ? '[REDACTED]'
       : sanitizeContextForSentry(child, depth + 1);
   }
   return out;
+}
+
+/**
+ * code / storageCode 会进 tag 和 fingerprint：只收常量形状（错误码枚举），自由文本
+ * 进来会炸出无数个 issue，还可能带出响应体内容。其他键不受影响。
+ */
+const SAFE_ERROR_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+const SAFE_STORAGE_CODE = /^[A-Za-z]{1,64}$/;
+
+function isSafeErrorCode(key: string, value: unknown): boolean {
+  if (key === 'code') {
+    return (
+      (typeof value === 'number' && Number.isSafeInteger(value)) ||
+      (typeof value === 'string' && SAFE_ERROR_CODE.test(value))
+    );
+  }
+  if (key === 'storageCode') {
+    return typeof value === 'string' && SAFE_STORAGE_CODE.test(value);
+  }
+  return true;
 }
 
 function sanitizeReportContext(
@@ -475,6 +478,7 @@ function sanitizeReportContext(
     if (key === 'durationMs' && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
       continue;
     }
+    if (!isSafeErrorCode(key, value)) continue;
     if (
       value == null ||
       typeof value === 'string' ||
@@ -585,6 +589,7 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
     if (key === 'requestId' && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
       continue;
     }
+    if (!isSafeErrorCode(key, child)) continue;
     if (typeof child === 'string' || typeof child === 'number') {
       safe[key] = sanitizeContextForSentry(child);
     }
@@ -1022,6 +1027,8 @@ function buildCaptureContext(
     'kind',
     'traceId',
     'requestId',
+    'code',
+    'storageCode',
   ];
   const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
     const value = safeContext ? readTagValue(safeContext, key) : undefined;
@@ -1052,10 +1059,14 @@ function buildCaptureContext(
   } else if (tags.operation) {
     // 非 API 失败（如 upload）：error.message 已本地化，若沿用 Sentry 默认按消息分组，
     // 同一故障会按语言碎成多个 issue。用稳定的 operation + kind 组 fingerprint。
+    // 错误码不同就是不同的故障（发消息 ack 超时 vs 非法载荷；存储 AccessDenied 签名
+    // 问题 vs SlowDown 限流），各自成 issue。
     captureContext.fingerprint = [
       tags.operation,
       tags.kind ?? 'unknown-kind',
       tags.failureKind ?? 'error',
+      ...(tags.code ? [tags.code] : []),
+      ...(tags.storageCode ? [tags.storageCode] : []),
     ];
   }
   return captureContext;
