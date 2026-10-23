@@ -58,6 +58,11 @@ import {
 } from './store';
 import { devWarn } from '@/utils/dev-log';
 import { reportHandledFailure } from '@/observability/report-failure';
+import {
+  startOperationSpan,
+  type OperationSpan,
+  type SpanFailureStatus,
+} from '@/observability/tracing';
 
 /**
  * 自研聊天 socket 管理器（squady SocketManager 的 TS 移植，按本仓
@@ -105,6 +110,31 @@ type ChatDisconnectReason =
   | 'timeout'
   | 'transport_error'
   | 'unknown';
+
+/** 建连失败原因 → Sentry span 状态(接收端只认这套枚举)。 */
+const CONNECT_FAILURE_SPAN_STATUS: Readonly<
+  Record<ChatConnectFailureReason, SpanFailureStatus>
+> = {
+  unauthorized: 'unauthenticated',
+  forbidden: 'permission_denied',
+  not_found: 'not_found',
+  rate_limited: 'resource_exhausted',
+  timeout: 'deadline_exceeded',
+  server_error: 'internal_error',
+  transport_error: 'unavailable',
+  network_error: 'unavailable',
+  unknown: 'unknown_error',
+};
+
+/**
+ * 结束建连 span。只记第一次结果:socket.io 之后的自动重连不算「这次建连」,
+ * 否则一次长断网会把 span 撑到恢复为止,耗时数据就没法读了。
+ */
+function finishConnectSpan(failureStatus?: SpanFailureStatus): void {
+  const span = pendingConnectSpan;
+  pendingConnectSpan = null;
+  span?.end(failureStatus);
+}
 
 function createConnectionTraceId(): string {
   return `ws-${randomUUID()}`;
@@ -280,6 +310,8 @@ let serverReconnectAttempt = 0;
 let serverReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 /** 本次故障里是否已经因为「token 没过期却被拒」刷新过一次。连上过才清。 */
 let handshakeRefreshRequested = false;
+/** 这条 socket 从发起握手到第一次有结果的性能 span;结束后置空。 */
+let pendingConnectSpan: OperationSpan | null = null;
 
 /** ack {ok:false} 的类型化错误：code = circle_be ChatErrorCode 字符串码。 */
 export class ChatSendError extends Error {
@@ -386,6 +418,10 @@ export function connectChat(token: string, userId: string): void {
   // 服务端就把正在用 App 的人当成后台,照发推送。
   let handshakeAppState: ChatAppState = appState;
   let connectedAt: number | null = null;
+  // 后台建连(静默推送拉起)不计:那时导航 span 不记录,这条会被当成冷启动宿主,
+  // 耗时被冷启动时长撑大;而且也不是用户在等的那一次。
+  pendingConnectSpan =
+    appState === 'foreground' ? startOperationSpan('chatConnect') : null;
   const next = io(CHAT_WS_URL, {
     path: CHAT_WS_PATH,
     transports: ['websocket'],
@@ -409,6 +445,7 @@ export function connectChat(token: string, userId: string): void {
 
   next.on('connect', () => {
     if (gen !== sessionGen) return;
+    finishConnectSpan();
     consecutiveConnectErrors = 0;
     reportedCurrentConnectOutage = false;
     handshakeRefreshRequested = false;
@@ -482,6 +519,7 @@ export function connectChat(token: string, userId: string): void {
     devWarn('[chat] connect error', err?.message ?? err);
     consecutiveConnectErrors += 1;
     const reason = classifyConnectFailure(err);
+    finishConnectSpan(CONNECT_FAILURE_SPAN_STATUS[reason]);
     logClientDiagnostic('chat.ws.connect_error', {
       stage: 'handshake',
       reason,
@@ -672,6 +710,7 @@ export function setChatAppState(next: ChatAppState): void {
 }
 
 function teardownSocket(): void {
+  finishConnectSpan('cancelled');
   clearServerReconnectTimer();
   if (!socket) return;
   socket.removeAllListeners();
@@ -945,7 +984,37 @@ const sendQueue = createChatSendQueue<ChatSendPayload, ChatSendAckOk>({
  * 进发送队列,连上后用同一个 d 接着发,最多等一分钟(见 send-queue)。
  */
 export function sendChatMessage(input: ChatSendPayload): Promise<ChatSendAckOk> {
-  return sendQueue.enqueue(input);
+  // 从进队到最终 ack 的端到端耗时,含断线排队与重发 —— 用户感知的「发送慢」。
+  const span = startOperationSpan('chatSend');
+  return sendQueue.enqueue(input).then(
+    (ack) => {
+      span.end();
+      return ack;
+    },
+    (error: unknown) => {
+      span.end(chatSendSpanStatus(error));
+      throw error;
+    },
+  );
+}
+
+/**
+ * 发送失败 → Sentry span 状态。具体错误码不进 span:非预期的错误码由
+ * send-errors 的 reportChatSendFailure 上报。
+ */
+function chatSendSpanStatus(error: unknown): SpanFailureStatus {
+  if (!(error instanceof ChatSendError)) return 'internal_error';
+  switch (error.code) {
+    case 'CHAT_ACK_TIMEOUT':
+      return 'deadline_exceeded';
+    case 'CHAT_NOT_CONNECTED':
+      return 'unavailable';
+    case 'CHAT_RATE_LIMITED':
+      return 'resource_exhausted';
+    default:
+      // 服务端明确拒收(敏感词、被拉黑……),重发也没用。
+      return 'failed_precondition';
+  }
 }
 
 /** 已读上报：本地水位合并（只增不减），连接可用时逐条 flush 带 ack。 */

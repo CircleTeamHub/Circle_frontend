@@ -464,6 +464,7 @@ test('real API diagnostics reach the final Sentry privacy boundary with matching
       if (name === 'expo-constants') return { __esModule: true, default: { expoConfig: { extra: {} } } };
       if (name === '@/utils/client-diagnostics') return diagnostics;
       if (name === './route-segments') return loadTsModule('src/observability/route-segments.ts');
+      if (name === './tracing') return loadTsModule('src/observability/tracing.ts', { requireShim: () => ({}) });
       return require(name);
     },
   });

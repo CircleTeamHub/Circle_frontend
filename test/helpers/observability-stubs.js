@@ -1,6 +1,7 @@
 /**
  * 观测层桩：源码里的 catch 站点统一走 `@/observability/report-failure`（dev 打印 +
- * 面包屑 + 去重后进 Sentry）与 `@/utils/dev-log`。node --test 的 VM 装载器解析不了
+ * 面包屑 + 去重后进 Sentry）与 `@/utils/dev-log`，性能 span 走
+ * `@/observability/tracing`。node --test 的 VM 装载器解析不了
  * `@/` 别名、也不该在测试里碰原生 Sentry，所以给这两个模块一份无副作用的默认替身。
  *
  * withObservabilityStubs 包住测试自己的 require 实现：测试若显式提供了这两个模块
@@ -16,6 +17,9 @@ function makeObservabilityStubs() {
     },
     '@/utils/dev-log': {
       devWarn() {},
+    },
+    '@/observability/tracing': {
+      startOperationSpan: () => ({ end() {} }),
     },
     '@/utils/client-diagnostics': {
       logClientDiagnostic() {},

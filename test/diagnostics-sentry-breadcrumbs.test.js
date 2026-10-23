@@ -51,6 +51,8 @@ function loadDiagnosticsWithSentry({ dev = false } = {}) {
     requireShim: (request) => {
       if (request === './route-segments')
         return loadTsModule('src/observability/route-segments.ts', {});
+      if (request === './tracing')
+        return loadTsModule('src/observability/tracing.ts', { requireShim: () => ({}) });
       if (request === '@/utils/client-diagnostics') return diagnostics;
       if (request === '@sentry/react-native') return sentrySdk;
       if (request === 'expo-constants') return { expoConfig: { extra: {} } };
@@ -286,6 +288,8 @@ test('a throwing breadcrumb reader still lets the error itself be reported', () 
     requireShim: (request) => {
       if (request === './route-segments')
         return loadTsModule('src/observability/route-segments.ts', {});
+      if (request === './tracing')
+        return loadTsModule('src/observability/tracing.ts', { requireShim: () => ({}) });
       if (request === '@/utils/client-diagnostics') {
         return {
           readDiagnosticBreadcrumbs: () => {

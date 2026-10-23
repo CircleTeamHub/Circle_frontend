@@ -6,7 +6,12 @@ import {
   ThemeProvider as NavThemeProvider,
 } from '@react-navigation/native';
 import { useFonts } from 'expo-font';        // 加载自定义字体
-import { Redirect, Stack, useSegments } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
+import {
+  Redirect,
+  Stack,
+  useNavigationContainerRef,
+  useSegments,
+} from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
 import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
@@ -49,11 +54,13 @@ import { TopNoticeHost } from '@/components/app/top-notice-host';
 import { WebDocumentTitle } from '@/components/app/web-document-title';
 import { StartupSplash } from '@/components/app/startup-splash';
 import { AppUpdateHost } from '@/features/app-update/AppUpdateHost';
+import { startOtaHealthReporting } from '@/features/app-update/ota-health';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
   initSentry,
   wrapWithSentry,
   captureSentryTestError,
+  registerSentryNavigationContainer,
   setSentryUserId,
 } from '@/observability/sentry';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -71,6 +78,10 @@ initSentry();
 if (__DEV__ && process.env.EXPO_PUBLIC_SENTRY_TEST === '1') {
   captureSentryTestError();
 }
+
+// OTA 回滚到内置包（isEmergencyLaunch）与启动时自动检查/下载失败的上报。
+// 要在 initSentry 之后：Sentry 没初始化时上报是 no-op。
+startOtaHealthReporting();
 
 type PersistedStore = {
   persist?: {
@@ -258,6 +269,8 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
 function RootLayout() {
   const sentryUserId = useAuthStore((state) => state.user?.id ?? null);
   const authLoading = useAuthStore((state) => state.isLoading);
+  // 导航追踪：冷启动指标和 XHR span 都要挂在导航 transaction 上才会被发出。
+  const navigationRef = useNavigationContainerRef();
   // 加载自定义字体，loaded 为 true 时字体就绪，error 表示加载失败
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -274,6 +287,10 @@ function RootLayout() {
   useEffect(() => {
     setSentryUserId(sentryUserId);
   }, [sentryUserId]);
+
+  useEffect(() => {
+    registerSentryNavigationContainer(navigationRef);
+  }, [navigationRef]);
 
   useEffect(() => {
     let cancelled = false;
