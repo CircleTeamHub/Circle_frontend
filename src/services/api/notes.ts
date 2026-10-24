@@ -1,4 +1,5 @@
 import { apiClient, ApiError } from './client';
+import { collectOffsetPages, readHasMore } from './pagination';
 import type {
   CollectNoteSource,
   CreateNoteInput,
@@ -18,13 +19,53 @@ import type {
   NoteWorkStatus,
 } from '@/features/notes/types';
 
+/** 与服务端默认页大小一致(NOTE_LIST_DEFAULT_LIMIT=500,也是上限)。 */
+const NOTE_PAGE_SIZE = 500;
+/** 翻页安全上限:20 页 × 500 = 1 万条笔记。 */
+const NOTE_MAX_PAGES = 20;
+
+let lastNoteMutationAt = 0;
+
+/**
+ * 笔记相关的写请求(新建/编辑/删除/置顶/分组…)成功后记一笔。列表页回到前台时据此
+ * 判断能不能跳过重拉:拉过之后只要改过任何东西,就必须重拉。宁可多拉,不显示旧数据。
+ * 包的是 Promise 而不是 apiClient 本身:每个调用点仍然是静态路径,诊断路由覆盖照常能扫到。
+ */
+async function markNoteWrite<T>(request: Promise<T>): Promise<T> {
+  const result = await request;
+  lastNoteMutationAt = Date.now();
+  return result;
+}
+
+/** since 之后有没有成功的笔记写请求。 */
+export function notesMutatedSince(since: number): boolean {
+  return lastNoteMutationAt >= since;
+}
+
+/**
+ * 我的笔记列表,翻到底。服务端每页最多 500 条,靠 X-Has-More 说明还有没有;只取第一页的话
+ * 笔记超过 500 条的用户,后面的笔记会从列表里静默消失。
+ */
 export async function fetchNotes(params?: ListNotesParams): Promise<NoteSummary[]> {
-  const q = new URLSearchParams();
-  if (params?.status) q.set('status', params.status);
-  if (params?.groupId) q.set('groupId', params.groupId);
-  if (params?.search) q.set('search', params.search);
-  const qs = q.toString();
-  return apiClient<NoteSummary[]>(`/note${qs ? `?${qs}` : ''}`);
+  const base = new URLSearchParams();
+  if (params?.status) base.set('status', params.status);
+  if (params?.groupId) base.set('groupId', params.groupId);
+  if (params?.search) base.set('search', params.search);
+  return collectOffsetPages(
+    async (page) => {
+      const q = new URLSearchParams(base);
+      if (page > 1) q.set('page', String(page));
+      const qs = q.toString();
+      const signal = { hasMore: null as boolean | null };
+      const rows = await apiClient<NoteSummary[]>(`/note${qs ? `?${qs}` : ''}`, {
+        onResponseHeaders: (headers) => {
+          signal.hasMore = readHasMore(headers);
+        },
+      });
+      return { rows, hasMore: signal.hasMore };
+    },
+    { pageSize: NOTE_PAGE_SIZE, maxPages: NOTE_MAX_PAGES },
+  );
 }
 
 export async function fetchNoteDetail(id: string): Promise<NoteDetail> {
@@ -43,16 +84,16 @@ export async function saveNoteDraft(
   id: string,
   input: SaveNoteDraftInput,
 ): Promise<NoteDraftDetail> {
-  return apiClient<NoteDraftDetail>(`/note/drafts/${encodeURIComponent(id)}`, {
+  return markNoteWrite(apiClient<NoteDraftDetail>(`/note/drafts/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: input,
-  });
+  }));
 }
 
 export async function deleteNoteDraft(id: string): Promise<void> {
-  await apiClient<void>(`/note/drafts/${encodeURIComponent(id)}`, {
+  await markNoteWrite(apiClient<void>(`/note/drafts/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-  });
+  }));
 }
 
 /**
@@ -63,18 +104,18 @@ export async function importNoteChatMedia(
   noteId: string,
   sections: NoteChatMediaSection[],
 ): Promise<NoteChatMediaImportResult> {
-  return apiClient<NoteChatMediaImportResult>(`/note/${noteId}/chat-media`, {
+  return markNoteWrite(apiClient<NoteChatMediaImportResult>(`/note/${noteId}/chat-media`, {
     method: 'POST',
     body: { sections },
-  });
+  }));
 }
 
 export async function createNote(input: CreateNoteInput): Promise<NoteDetail> {
-  return apiClient<NoteDetail>('/note', { method: 'POST', body: input });
+  return markNoteWrite(apiClient<NoteDetail>('/note', { method: 'POST', body: input }));
 }
 
 export async function updateNote(id: string, input: CreateNoteInput): Promise<NoteDetail> {
-  return apiClient<NoteDetail>(`/note/${id}`, { method: 'PATCH', body: input });
+  return markNoteWrite(apiClient<NoteDetail>(`/note/${id}`, { method: 'PATCH', body: input }));
 }
 
 // 仅替换 note 的 group 归属。批量调整分组成员时使用 —— 避免对每条 note 先 fetch 详情再
@@ -83,10 +124,10 @@ export async function updateNoteGroupIds(
   id: string,
   groupIds: string[],
 ): Promise<{ id: string; groupIds: string[] }> {
-  return apiClient<{ id: string; groupIds: string[] }>(`/note/${id}/groups`, {
+  return markNoteWrite(apiClient<{ id: string; groupIds: string[] }>(`/note/${id}/groups`, {
     method: 'PATCH',
     body: { groupIds },
-  });
+  }));
 }
 
 export type CollectNoteResult = {
@@ -184,10 +225,10 @@ export async function collectNote(
   };
 
   try {
-    return await apiClient<CollectNoteResult>('/note/collect', {
+    return await markNoteWrite(apiClient<CollectNoteResult>('/note/collect', {
       method: 'POST',
       body,
-    });
+    }));
   } catch (error) {
     if (!options || !hasCollectOptions(options) || !isUnsupportedCollectOptionsError(error, options)) {
       throw error;
@@ -196,10 +237,10 @@ export async function collectNote(
     // Do not retry arbitrary 400s. This branch is only for an older DTO that
     // explicitly rejected one of the new optional properties, so the base
     // collection request remains safe to retry and idempotent server-side.
-    const result = await apiClient<CollectNoteResult>('/note/collect', {
+    const result = await markNoteWrite(apiClient<CollectNoteResult>('/note/collect', {
       method: 'POST',
       body: { noteId, source },
-    });
+    }));
     if (!result.note?.id) return result;
 
     const updated = await updateNote(
@@ -215,31 +256,31 @@ export async function setNoteRemark(
   id: string,
   remark: string | null,
 ): Promise<void> {
-  await apiClient<{ id: string; remark: string | null }>(`/note/${id}/remark`, {
+  await markNoteWrite(apiClient<{ id: string; remark: string | null }>(`/note/${id}/remark`, {
     method: 'PATCH',
     body: { remark },
-  });
+  }));
 }
 
 export async function togglePinNote(id: string, pinned: boolean): Promise<void> {
-  await apiClient<{ id: string; pinned: boolean }>(`/note/${id}/pin`, {
+  await markNoteWrite(apiClient<{ id: string; pinned: boolean }>(`/note/${id}/pin`, {
     method: 'PATCH',
     body: { pinned },
-  });
+  }));
 }
 
 export async function unlistNote(id: string): Promise<void> {
-  await apiClient<{ id: string; status: 'UNLISTED' }>(`/note/${id}/status`, {
+  await markNoteWrite(apiClient<{ id: string; status: 'UNLISTED' }>(`/note/${id}/status`, {
     method: 'PATCH',
     body: { status: 'UNLISTED' },
-  });
+  }));
 }
 
 export async function relistNote(id: string): Promise<void> {
-  await apiClient<{ id: string; status: 'ACTIVE' }>(`/note/${id}/status`, {
+  await markNoteWrite(apiClient<{ id: string; status: 'ACTIVE' }>(`/note/${id}/status`, {
     method: 'PATCH',
     body: { status: 'ACTIVE' },
-  });
+  }));
 }
 
 /** 老板可选的订单状态；传 null 清除状态，不影响笔记上架与转发。 */
@@ -247,10 +288,10 @@ export async function setNoteWorkStatus(
   id: string,
   workStatus: NoteWorkStatus | null,
 ): Promise<{ id: string; workStatus: NoteWorkStatus | null }> {
-  return apiClient<{ id: string; workStatus: NoteWorkStatus | null }>(
+  return markNoteWrite(apiClient<{ id: string; workStatus: NoteWorkStatus | null }>(
     `/note/${id}/work-status`,
     { method: 'PATCH', body: { workStatus } },
-  );
+  ));
 }
 
 export interface NoteSourceState {
@@ -281,10 +322,10 @@ export async function setNoteSourceGroup(
   id: string,
   conversationID: string | null,
 ): Promise<{ id: string; sourceConversationID: string | null }> {
-  return apiClient<{ id: string; sourceConversationID: string | null }>(
+  return markNoteWrite(apiClient<{ id: string; sourceConversationID: string | null }>(
     `/note/${id}/source-group`,
     { method: 'PATCH', body: { conversationID } },
-  );
+  ));
 }
 
 /** FE#92 回收站：已软删笔记列表。 */
@@ -295,34 +336,34 @@ export async function fetchDeletedNotes(): Promise<NoteSummary[]> {
 /** FE#92 回收站：恢复软删笔记（后端恢复为 ACTIVE）。 */
 /** 回收站「立即删除」：不等 30 天到期，直接永久删除（只接受已在回收站的笔记）。 */
 export async function purgeNote(id: string): Promise<void> {
-  await apiClient<void>(`/note/${id}/permanent`, { method: 'DELETE' });
+  await markNoteWrite(apiClient<void>(`/note/${id}/permanent`, { method: 'DELETE' }));
 }
 
 export async function restoreNote(id: string): Promise<void> {
-  return apiClient<void>(`/note/${id}/restore`, { method: 'POST' });
+  return markNoteWrite(apiClient<void>(`/note/${id}/restore`, { method: 'POST' }));
 }
 
 export async function deleteNote(id: string): Promise<void> {
-  await apiClient<void>(`/note/${id}`, { method: 'DELETE' });
+  await markNoteWrite(apiClient<void>(`/note/${id}`, { method: 'DELETE' }));
 }
 
 export async function createNoteShareLink(
   input: CreateNoteShareLinkInput,
 ): Promise<NoteShareLink> {
-  return apiClient<NoteShareLink>('/note/share-links', {
+  return markNoteWrite(apiClient<NoteShareLink>('/note/share-links', {
     method: 'POST',
     body: input,
-  });
+  }));
 }
 
 export async function createNoteExport(
   noteId: string,
   input: CreateNoteExportInput,
 ): Promise<NoteExportResult> {
-  return apiClient<NoteExportResult>(`/note/${noteId}/exports`, {
+  return markNoteWrite(apiClient<NoteExportResult>(`/note/${noteId}/exports`, {
     method: 'POST',
     body: input,
-  });
+  }));
 }
 
 export async function fetchNoteGroups(): Promise<NoteGroup[]> {
@@ -330,20 +371,20 @@ export async function fetchNoteGroups(): Promise<NoteGroup[]> {
 }
 
 export async function createNoteGroup(name: string): Promise<NoteGroup> {
-  return apiClient<NoteGroup>('/note/group', { method: 'POST', body: { name } });
+  return markNoteWrite(apiClient<NoteGroup>('/note/group', { method: 'POST', body: { name } }));
 }
 
 export async function updateNoteGroup(id: string, name: string): Promise<NoteGroup> {
-  return apiClient<NoteGroup>(`/note/group/${id}`, { method: 'PATCH', body: { name } });
+  return markNoteWrite(apiClient<NoteGroup>(`/note/group/${id}`, { method: 'PATCH', body: { name } }));
 }
 
 export async function deleteNoteGroup(id: string): Promise<void> {
-  await apiClient<void>(`/note/group/${id}`, { method: 'DELETE' });
+  await markNoteWrite(apiClient<void>(`/note/group/${id}`, { method: 'DELETE' }));
 }
 
 export async function reorderNoteGroups(groupIds: string[]): Promise<NoteGroup[]> {
-  return apiClient<NoteGroup[]>('/note/group/order', {
+  return markNoteWrite(apiClient<NoteGroup[]>('/note/group/order', {
     method: 'PATCH',
     body: { groupIds },
-  });
+  }));
 }

@@ -449,6 +449,7 @@ export default function ProfileScreen() {
               name={displayName}
               vipLevel={vipLevel}
               style={d.profileName}
+              animated
             />
             <Pressable
               style={s.accountRow}

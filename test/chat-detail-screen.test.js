@@ -760,12 +760,15 @@ test('收藏失败走 getApiErrorMessage，服务端错误码才有出口', () =
 // 不是发送者对我的承诺，不该连带禁掉转发和收藏。
 test('焚毁闸只看会话开关，不掺本人的全局阅后即焚窗口', () => {
   const detail = readChatDetailSource();
-  const start = detail.indexOf('const conversationBurnEnabled = useChatStore(');
-  assert.ok(start > 0);
-  const body = detail.slice(start, detail.indexOf('});', start));
-
-  assert.match(body, /burnDurationSec/);
-  assert.doesNotMatch(body, /viewerSelfDestruct/);
+  // 字段从按 id 查到的那一个会话对象上派生(聊天页只查一次会话)。
+  const gate = detail.match(/const conversationBurnEnabled = ([^;]+);/);
+  assert.ok(gate, 'conversationBurnEnabled must be derived in one expression');
+  assert.match(gate[1], /^conversationBurnDurationSec > 0$/);
+  assert.doesNotMatch(gate[1], /viewerSelfDestruct/);
+  const duration = detail.match(/const conversationBurnDurationSec = ([^;]+);/);
+  assert.ok(duration);
+  assert.match(duration[1], /conversation\?\.burnDurationSec/);
+  assert.doesNotMatch(duration[1], /viewerSelfDestruct/);
 });
 
 test('note detail routes exist in every tab stack so back returns to the source tab', () => {

@@ -583,9 +583,12 @@ test('burn-expired messages are purged from the local cache', () => {
   assert.match(web, /purgeExpiredLocalMessages/);
   const store = read('src/chat-core/store.ts');
   assert.match(store, /purgeExpiredBurnMessages/);
-  // 三个触发点:拿到会话快照、档位变更、冷启动水合。
-  const calls = store.match(/get\(\)\.purgeExpiredBurnMessages\(\)/g) ?? [];
-  assert.ok(calls.length >= 3, `expected >=3 purge triggers, got ${calls.length}`);
+  // 全量扫的三个触发点:拿到会话快照、全局档位变更(store)、冷启动水合(socket-manager)。
+  // 单个会话的变更只扫那个会话(带 conversationIds),不算在这里。
+  const fullSweeps = store.match(/get\(\)\.purgeExpiredBurnMessages\(\)/g) ?? [];
+  assert.ok(fullSweeps.length >= 2, `expected >=2 full purge triggers, got ${fullSweeps.length}`);
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /await useChatStore\.getState\(\)\.purgeExpiredBurnMessages\(\)/);
 });
 
 test('burn expiry is scheduled and self-destruct images avoid disk caching', () => {

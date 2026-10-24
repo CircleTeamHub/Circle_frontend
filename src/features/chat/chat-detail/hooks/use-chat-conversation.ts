@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
 import { useChatStore } from '@/chat-core/store';
+import type { ChatConversationDto } from '@/chat-core/protocol';
 import { isGroupManager } from '@/features/chat/group-admin-permissions';
 // 消息数据面已切到 chat-core;成员目录 / @ 候选 / 在线状态仍走 OpenIM 双轨
 // (OpenIM groupID === circle.id,ID 同值,Phase 3 随成员子系统一起迁)。
@@ -46,37 +47,29 @@ export function useChatConversation({
   const [resolvedConversationID, setResolvedConversationID] =
     useState(paramConversationID);
   const conversationID = paramConversationID || resolvedConversationID;
-  const storedConversationType = useChatStore((state) =>
-    state.conversations.find((candidate) => candidate.id === conversationID)?.type,
+  // 只按 id 取一次本会话对象,其余字段在渲染时派生。原来十来个选择器各自在每次 store
+  // 写入(含「正在输入」「在线」这类高频事件)时把整个会话数组 find 一遍,群一多就是
+  // 每次写入上千次比较。会话对象是不可变更新:别的会话变了,这个引用不变。
+  const selectConversation = useCallback(
+    (state: { conversations: ChatConversationDto[] }) =>
+      state.conversations.find((candidate) => candidate.id === conversationID),
+    [conversationID],
   );
+  const conversation = useChatStore(selectConversation);
+  const storedConversationType = conversation?.type;
   const isTempChat =
     params.conversationKind === 'temp' || storedConversationType === 'TEMP';
   // 独立群聊(微信群):GROUP 会话但不挂圈子。circleId 从会话缓存读 ——
   // 从消息列表进来时缓存必有;推送冷启动短暂未知时按圈子群处理,
   // 缓存到位后本判定即时翻转。
-  const storedCircleId = useChatStore((state) =>
-    state.conversations.find((candidate) => candidate.id === conversationID)
-      ?.circleId,
-  );
-  const membersCanViewRoster = useChatStore((state) =>
-    state.conversations.find((candidate) => candidate.id === conversationID)
-      ?.policies?.membersCanViewRoster ?? null,
-  );
+  const storedCircleId = conversation?.circleId;
+  const membersCanViewRoster = conversation?.policies?.membersCanViewRoster ?? null;
   const isStandaloneGroup =
     storedConversationType === 'GROUP' && storedCircleId === null;
   // 本人被禁言(群主/管理员施加):输入区锁住并说明原因,免得每次都撞服务端拒绝。
   // 到期后的禁言服务端读侧已按未禁言返回;缓存里的旧值在这里再兜一次。
-  const selfSilencedFlag = useChatStore((state) =>
-    Boolean(
-      state.conversations.find((candidate) => candidate.id === conversationID)
-        ?.silenced,
-    ),
-  );
-  const selfSilencedUntil = useChatStore(
-    (state) =>
-      state.conversations.find((candidate) => candidate.id === conversationID)
-        ?.silencedUntil ?? null,
-  );
+  const selfSilencedFlag = Boolean(conversation?.silenced);
+  const selfSilencedUntil = conversation?.silencedUntil ?? null;
   const [silenceClock, setSilenceClock] = useState(() => Date.now());
   useEffect(() => {
     if (!selfSilencedFlag || !selfSilencedUntil) return;
@@ -97,57 +90,34 @@ export function useChatConversation({
   }, [selfSilencedFlag, selfSilencedUntil, silenceClock]);
   // 全员禁言:群主/管理员豁免,其余人和被单独禁言一样锁输入区。
   // myRole 缺省(老后端)时按普通成员处理 —— 服务端照样会拒,提前锁住不会更糟。
-  const groupMuteAllActive = useChatStore((state) => {
-    const conversation = state.conversations.find(
-      (candidate) => candidate.id === conversationID,
-    );
-    if (!conversation?.muteAll) return false;
-    return !isGroupManager(conversation.myRole ?? null);
-  });
+  const groupMuteAllActive =
+    Boolean(conversation?.muteAll) && !isGroupManager(conversation?.myRole ?? null);
   // 输入区是否锁住:被单独禁言,或全员禁言且自己不是管理员。
   const composerLocked = selfSilenced || groupMuteAllActive;
-  const selfDestructEnabled = useChatStore((state) => {
-    const conversation = state.conversations.find(
-      (candidate) => candidate.id === conversationID,
-    );
-    return (
-      state.viewerSelfDestructSec > 0 ||
-      (conversation?.burnDurationSec ?? 0) > 0
-    );
-  });
-  // 本人的发送策略用于设置/提示；转发、收藏和媒体缓存按每条消息的时长判定。
-  const conversationBurnEnabled = useChatStore((state) => {
-    const conversation = state.conversations.find(
-      (candidate) => candidate.id === conversationID,
-    );
-    return (conversation?.burnDurationSec ?? 0) > 0;
-  });
-  const conversationBurnDurationSec = useChatStore((state) => {
-    const conversation = state.conversations.find(
-      (candidate) => candidate.id === conversationID,
-    );
-    return conversation?.burnDurationSec ?? 0;
-  });
-  // 「这张图片能不能落盘」的策略指纹:账号、查看者全局阅后即焚(何时开的)、本会话
-  // 焚毁(何时开的)。跨冷启动稳定,只在策略真的变了时才变 —— 图片气泡按它记
-  // 「这个策略下清过磁盘缓存」,不能拿每次启动都从 0 重数的 selfDestructPolicyEpoch。
-  const selfDestructCacheKey = useChatStore((state) => {
-    const conversation = state.conversations.find(
-      (candidate) => candidate.id === conversationID,
-    );
-    const viewer =
-      state.viewerSelfDestructSec > 0
-        ? `on@${state.viewerSelfDestructStartedAt ?? ''}`
-        : 'off';
-    const burn =
-      (conversation?.burnDurationSec ?? 0) > 0
-        ? `on@${conversation?.burnStartedAt ?? ''}`
-        : 'off';
-    return `${state.currentUserId ?? ''}|viewer:${viewer}|burn:${conversationID}@${burn}`;
-  });
   const viewerSelfDestructSec = useChatStore(
     (state) => state.viewerSelfDestructSec,
   );
+  const viewerSelfDestructStartedAt = useChatStore(
+    (state) => state.viewerSelfDestructStartedAt,
+  );
+  const storeUserId = useChatStore((state) => state.currentUserId);
+  const conversationBurnDurationSec = conversation?.burnDurationSec ?? 0;
+  const selfDestructEnabled =
+    viewerSelfDestructSec > 0 || conversationBurnDurationSec > 0;
+  // 本人的发送策略用于设置/提示；转发、收藏和媒体缓存按每条消息的时长判定。
+  const conversationBurnEnabled = conversationBurnDurationSec > 0;
+  // 「这张图片能不能落盘」的策略指纹:账号、查看者全局阅后即焚(何时开的)、本会话
+  // 焚毁(何时开的)。跨冷启动稳定,只在策略真的变了时才变 —— 图片气泡按它记
+  // 「这个策略下清过磁盘缓存」,不能拿每次启动都从 0 重数的 selfDestructPolicyEpoch。
+  const selfDestructCacheKey = (() => {
+    const viewer =
+      viewerSelfDestructSec > 0 ? `on@${viewerSelfDestructStartedAt ?? ''}` : 'off';
+    const burn =
+      conversationBurnDurationSec > 0
+        ? `on@${conversation?.burnStartedAt ?? ''}`
+        : 'off';
+    return `${storeUserId ?? ''}|viewer:${viewer}|burn:${conversationID}@${burn}`;
+  })();
   const [remoteBurnPolicy, setRemoteBurnPolicy] = useState<{
     burnDurationSec: number | null;
     burnStartedAt: string | null;
@@ -180,11 +150,7 @@ export function useChatConversation({
 
   // 权限重查只在页面在前台时兜底轮询,角色变了立刻重查(见 useGroupMemberViewAccess)。
   const isFocused = useIsFocused();
-  const cachedRole = useChatStore(
-    (state) =>
-      state.conversations.find((candidate) => candidate.id === conversationID)
-        ?.myRole ?? null,
-  );
+  const cachedRole = conversation?.myRole ?? null;
   const {
     canViewMembers: canViewCircleMembers,
     revalidate: revalidateCircleMemberAccess,
@@ -204,14 +170,9 @@ export function useChatConversation({
     isTempChat || isStandaloneGroup || canViewCircleMembers;
   // 「成员可查看他人资料」:三张屏共用 allowsMemberProfiles(群主/管理员豁免;
   // 策略缺省=老后端,按开放处理)。
-  const canViewMemberProfilesByPolicy = useChatStore((state) => {
-    const conversation = state.conversations.find(
-      (candidate) => candidate.id === conversationID,
-    );
-    return allowsMemberProfiles({
-      role: conversation?.myRole,
-      policies: conversation?.policies,
-    });
+  const canViewMemberProfilesByPolicy = allowsMemberProfiles({
+    role: conversation?.myRole,
+    policies: conversation?.policies,
   });
   const revalidateMemberViewAccess = useCallback(
     () =>

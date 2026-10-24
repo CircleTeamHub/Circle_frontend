@@ -229,6 +229,24 @@ function buildCreateFriendRequestBody(
   };
 }
 
+let lastFriendMutationAt = 0;
+
+/**
+ * 好友相关的写请求(加/删好友、处理申请、备注、标签、拉黑、权限…)成功后记一笔。
+ * 通讯录回到前台时据此判断能不能跳过重拉。包的是 Promise 而不是 apiClient 本身:
+ * 每个调用点仍然是静态路径,诊断路由覆盖照常能扫到。
+ */
+async function markFriendWrite<T>(request: Promise<T>): Promise<T> {
+  const result = await request;
+  lastFriendMutationAt = Date.now();
+  return result;
+}
+
+/** since 之后有没有成功的好友写请求。 */
+export function friendsMutatedSince(since: number): boolean {
+  return lastFriendMutationAt >= since;
+}
+
 export async function fetchFriends() {
   const friends = await apiClient<unknown[]>('/friend');
   return normalizeFriendProfiles(friends);
@@ -239,13 +257,13 @@ export async function fetchFriendTags() {
 }
 
 export async function createFriendTag(name: string, color?: string | null) {
-  return apiClient<FriendTag>('/friend/tags', {
+  return markFriendWrite(apiClient<FriendTag>('/friend/tags', {
     method: 'POST',
     body: {
       name: name.trim(),
       ...(color ? { color } : {}),
     },
-  });
+  }));
 }
 
 export async function fetchFriendsByTag(tagId: string) {
@@ -270,16 +288,16 @@ export async function fetchFriendSettings(friendUserId: string) {
 }
 
 export async function addFriendToBlacklist(friendUserId: string) {
-  return apiClient<void>('/friend/block', {
+  return markFriendWrite(apiClient<void>('/friend/block', {
     method: 'POST',
     body: { targetId: friendUserId },
-  });
+  }));
 }
 
 export async function removeFriendFromBlacklist(friendUserId: string) {
-  return apiClient<void>(`/friend/block/${friendUserId}`, {
+  return markFriendWrite(apiClient<void>(`/friend/block/${friendUserId}`, {
     method: 'DELETE',
-  });
+  }));
 }
 
 export async function fetchBlockedUsers() {
@@ -291,9 +309,9 @@ export async function fetchBlockedUsers() {
 }
 
 export async function deleteFriendRelationship(friendUserId: string) {
-  return apiClient<void>(`/friend/${friendUserId}`, {
+  return markFriendWrite(apiClient<void>(`/friend/${friendUserId}`, {
     method: 'DELETE',
-  });
+  }));
 }
 
 export async function setFriendRemark(
@@ -302,35 +320,35 @@ export async function setFriendRemark(
 ) {
   // 之前 remark?.trim() 调用两次。存本地常量更清晰，空 trim 结果也归一为 null 一致。
   const trimmed = remark?.trim() ?? '';
-  return apiClient<void>(`/friend/${friendUserId}/remark`, {
+  return markFriendWrite(apiClient<void>(`/friend/${friendUserId}/remark`, {
     method: 'PATCH',
     body: {
       remark: trimmed.length > 0 ? trimmed : null,
     },
-  });
+  }));
 }
 
 export async function setFriendPermission(
   friendUserId: string,
   permission: FriendPermission,
 ) {
-  return apiClient<void>(`/friend/${friendUserId}/permission`, {
+  return markFriendWrite(apiClient<void>(`/friend/${friendUserId}/permission`, {
     method: 'PATCH',
     body: { permission },
-  });
+  }));
 }
 
 export async function assignFriendTag(friendUserId: string, tagId: string) {
-  return apiClient<void>(`/friend/${friendUserId}/tags`, {
+  return markFriendWrite(apiClient<void>(`/friend/${friendUserId}/tags`, {
     method: 'POST',
     body: { tagId },
-  });
+  }));
 }
 
 export async function removeFriendTag(friendUserId: string, tagId: string) {
-  return apiClient<void>(`/friend/${friendUserId}/tags/${tagId}`, {
+  return markFriendWrite(apiClient<void>(`/friend/${friendUserId}/tags/${tagId}`, {
     method: 'DELETE',
-  });
+  }));
 }
 
 export function createFriendRequest(
@@ -349,10 +367,10 @@ export async function createFriendRequest(
       ? { targetId: inputOrTargetId, ...(message ? { message } : {}) }
       : inputOrTargetId;
 
-  return apiClient<void>('/friend/requests', {
+  return markFriendWrite(apiClient<void>('/friend/requests', {
     method: 'POST',
     body: buildCreateFriendRequestBody(input),
-  });
+  }));
 }
 
 export async function fetchFriendActivities() {
@@ -373,27 +391,27 @@ export async function fetchFriendActivityDetail(activityId: string) {
 }
 
 export async function markFriendActivityRead(activityId: string) {
-  return apiClient<void>(`/friend/activities/${activityId}/read`, {
+  return markFriendWrite(apiClient<void>(`/friend/activities/${activityId}/read`, {
     method: 'POST',
-  });
+  }));
 }
 
 export async function acceptFriendRequest(requestId: string) {
-  return apiClient<void>(`/friend/requests/${requestId}/accept`, {
+  return markFriendWrite(apiClient<void>(`/friend/requests/${requestId}/accept`, {
     method: 'POST',
-  });
+  }));
 }
 
 export async function rejectFriendRequest(requestId: string) {
-  return apiClient<void>(`/friend/requests/${requestId}/reject`, {
+  return markFriendWrite(apiClient<void>(`/friend/requests/${requestId}/reject`, {
     method: 'POST',
-  });
+  }));
 }
 
 export async function cancelFriendRequest(requestId: string) {
-  return apiClient<void>(`/friend/requests/${requestId}`, {
+  return markFriendWrite(apiClient<void>(`/friend/requests/${requestId}`, {
     method: 'DELETE',
-  });
+  }));
 }
 
 export const FRIEND_REPORT_CATEGORIES = [
@@ -413,10 +431,10 @@ export async function reportFriend(
     evidence?: string[];
   },
 ) {
-  return apiClient<void>(`/friend/${friendUserId}/report`, {
+  return markFriendWrite(apiClient<void>(`/friend/${friendUserId}/report`, {
     method: 'POST',
     body: payload,
-  });
+  }));
 }
 
 // ─── Friend request message thread ──────────────────────────────────────────
@@ -441,11 +459,11 @@ export async function sendFriendRequestMessage(
   requestId: string,
   content: string,
 ): Promise<FriendRequestMessage> {
-  return apiClient<FriendRequestMessage>(
+  return markFriendWrite(apiClient<FriendRequestMessage>(
     `/friend/requests/${requestId}/messages`,
     {
       method: 'POST',
       body: { content },
     },
-  );
+  ));
 }

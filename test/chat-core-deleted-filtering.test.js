@@ -87,6 +87,11 @@ function loadDeleted() {
     if (request === '@/observability/sentry') return { reportError: () => {} };
     if (request === './local-db') return __localDbStub;
     if (request === '@/utils/retry') return { retry: (operation) => operation() };
+    // chat-core/api 拉会话快照的翻页与失败上报(纯函数用真实实现)。
+    if (request === '@/services/api/pagination') {
+      return require('./helpers/load-ts-module').loadTsModule('src/services/api/pagination.ts');
+    }
+    if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
     throw new Error(`unexpected require: ${request}`);
   });
 }
@@ -96,6 +101,11 @@ function loadDateWindow() {
     'src/features/chat/chat-history-date-window.ts',
     (request) => {
       if (request === '@/utils/retry') return { retry: (operation) => operation() };
+      // chat-core/api 拉会话快照的翻页与失败上报(纯函数用真实实现)。
+      if (request === '@/services/api/pagination') {
+        return require('./helpers/load-ts-module').loadTsModule('src/services/api/pagination.ts');
+      }
+      if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
       throw new Error(`unexpected require: ${request}`);
     },
   );
@@ -145,6 +155,11 @@ test('search responses drop locally deleted messages', () => {
     if (request === './protocol') return {};
     if (request === './local-db') return __localDbStub;
     if (request === '@/utils/retry') return { retry: (operation) => operation() };
+    // chat-core/api 拉会话快照的翻页与失败上报(纯函数用真实实现)。
+    if (request === '@/services/api/pagination') {
+      return require('./helpers/load-ts-module').loadTsModule('src/services/api/pagination.ts');
+    }
+    if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
     throw new Error(`unexpected require: ${request}`);
   });
 
@@ -210,6 +225,11 @@ function loadApi(deleted, respond) {
     if (request === './protocol') return {};
     if (request === './local-db') return __localDbStub;
     if (request === '@/utils/retry') return { retry: (operation) => operation() };
+    // chat-core/api 拉会话快照的翻页与失败上报(纯函数用真实实现)。
+    if (request === '@/services/api/pagination') {
+      return require('./helpers/load-ts-module').loadTsModule('src/services/api/pagination.ts');
+    }
+    if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
     throw new Error(`unexpected require: ${request}`);
   });
 }

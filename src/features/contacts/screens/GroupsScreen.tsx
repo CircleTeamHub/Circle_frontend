@@ -17,9 +17,12 @@ import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { FilterTabs } from '@/components/ui/filter-tabs';
-import { loadChatConversations } from '@/chat-core/api';
+import { canSkipConversationFocusReload, loadChatConversations } from '@/chat-core/api';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
+import { selectConversations } from '@/chat-core/conversation-selectors';
+import { useScreenLive } from '@/hooks/use-screen-live';
+import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import type { ChatConversationDto } from '@/chat-core/protocol';
 import {
   filterGroupChatRows,
@@ -134,7 +137,10 @@ export default function GroupsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const conversations = useChatStore((state) => state.conversations);
+  // 从这里点进群聊后,本页紧挨在聊天页下面,原生栈不会冻结它;不停订阅的话
+  // 每来一条消息都要把所有群重新映射一遍。右滑返回一开始就恢复,露出来的是最新列表。
+  const isLive = useScreenLive();
+  const conversations = useStoreWhileActive(useChatStore, selectConversations, isLive);
 
   const [activeCategory, setActiveCategory] = useState<GroupCategory>('all');
   // 关键词跨分类保留：用户常常只记得群名、不记得它算「我加入的」还是「我管理的」。
@@ -147,10 +153,13 @@ export default function GroupsScreen() {
 
   // 会话列表是全局 store（自己带会话期闸门），这屏不留副本，也就没有脏写的问题。
   const loadGroups = useCallback(
-    async (signal?: { cancelled: boolean }) => {
+    async (signal?: { cancelled: boolean }, options?: { skipIfFresh?: boolean }) => {
       const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
       try {
-        await loadChatConversations();
+        // 聚焦触发的刷新:连接正常且刚拉过完整快照就跳过(入群/退群有实时会话事件)。
+        if (!(options?.skipIfFresh && canSkipConversationFocusReload())) {
+          await loadChatConversations();
+        }
         if (isCancelled()) return;
         setError(null);
       } catch (caughtError) {
@@ -171,7 +180,7 @@ export default function GroupsScreen() {
     useCallback(() => {
       mountedRef.current = true;
       const signal = { cancelled: false };
-      void loadGroups(signal);
+      void loadGroups(signal, { skipIfFresh: true });
       return () => {
         signal.cancelled = true;
         mountedRef.current = false;

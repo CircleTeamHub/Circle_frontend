@@ -91,11 +91,11 @@ function scheduleMountedSweep(): void {
   }
   mountedSweepTimer = setTimeout(() => {
     mountedSweepTimer = null;
-    if (appIsActive) {
-      for (const userId of mountedCounts.keys()) {
-        if (!isFresh(userId)) {
-          requestUserAppearance(userId);
-        }
+    // 后台会在 AppState 回调里取消巡检;万一还是在后台醒了,不续约,等回前台再接上。
+    if (!appIsActive) return;
+    for (const userId of mountedCounts.keys()) {
+      if (!isFresh(userId)) {
+        requestUserAppearance(userId);
       }
     }
     scheduleMountedSweep();
@@ -342,6 +342,8 @@ AppState.addEventListener('change', (status) => {
       backgroundedAt = Date.now();
     }
     appIsActive = false;
+    // 后台不巡检:巡检到期也不会发请求,却要每分钟唤醒一次 JS(安卓后台还活着)。
+    cancelMountedSweep();
     return;
   }
   const now = Date.now();
@@ -351,17 +353,17 @@ AppState.addEventListener('change', (status) => {
   backgroundedAt = null;
   lastForegroundAt = now;
   appIsActive = true;
-  if (awayDuration < REAL_BACKGROUND_REFRESH_MS) {
-    return;
-  }
-  for (const userId of mountedCounts.keys()) {
-    fetchedAt.delete(userId);
-    if (requested.has(userId)) {
-      refreshAfterSettlement.add(userId);
-      continue;
+  if (awayDuration >= REAL_BACKGROUND_REFRESH_MS) {
+    for (const userId of mountedCounts.keys()) {
+      fetchedAt.delete(userId);
+      if (requested.has(userId)) {
+        refreshAfterSettlement.add(userId);
+        continue;
+      }
+      requestUserAppearance(userId);
     }
-    requestUserAppearance(userId);
   }
+  // 进后台时停了巡检,不论离开多久回来都要接上。
   scheduleMountedSweep();
 });
 

@@ -18,6 +18,8 @@ import { loadChatConversations } from '@/chat-core/api';
 import { sendCardMessage } from '@/chat-core/client';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
+import { selectConversations } from '@/chat-core/conversation-selectors';
+import { useStoreWhileActive } from '@/hooks/use-store-while-active';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { Conversation, QrCardData } from '@/types';
 
@@ -41,7 +43,9 @@ export function ShareQrSheet({ card, onClose }: ShareQrSheetProps) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
-  const rawConversations = useChatStore((state) => state.conversations);
+  // 面板关着时也挂在二维码页里:只在打开时才跟着会话列表走,否则每条消息都要把
+  // 所有会话重新映射一遍。打开那一刻按最新状态取值。
+  const rawConversations = useStoreWhileActive(useChatStore, selectConversations, visible);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [sendingId, setSendingId] = useState('');

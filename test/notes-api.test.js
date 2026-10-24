@@ -121,3 +121,68 @@ test('upload.ts allows notes folder', () => {
   const src = read('src/services/api/upload.ts');
   assert.match(src, /notes/);
 });
+
+// ---- 行为:笔记多的用户 ------------------------------------------------------
+const { loadTsModule } = require('./helpers/load-ts-module');
+
+function loadNotesApi(respond) {
+  const calls = [];
+  const notes = loadTsModule('src/services/api/notes.ts', {
+    requireShim: (request) => {
+      if (request === './client') {
+        return {
+          ApiError: class ApiError extends Error {},
+          apiClient: async (endpoint, options = {}) => {
+            calls.push({ endpoint, method: options.method ?? 'GET' });
+            const { rows, headers = {} } = respond(endpoint, options);
+            options.onResponseHeaders?.({ get: (name) => headers[name] ?? null });
+            return rows;
+          },
+        };
+      }
+      if (request === './pagination') {
+        return loadTsModule('src/services/api/pagination.ts');
+      }
+      throw new Error(`unexpected require: ${request}`);
+    },
+    context: { URLSearchParams },
+  });
+  return { notes, calls };
+}
+
+test('fetchNotes reads every page instead of silently stopping at 500 notes', async () => {
+  // 服务端每页最多 500 条、靠 X-Has-More 说明还有没有;只取第一页的话后面的笔记
+  // 在列表里直接看不到。
+  const { notes, calls } = loadNotesApi((endpoint) =>
+    endpoint.includes('page=2')
+      ? { rows: [{ id: 'n501' }], headers: { 'X-Has-More': 'false' } }
+      : { rows: [{ id: 'n1' }, { id: 'n2' }], headers: { 'X-Has-More': 'true' } },
+  );
+  const all = await notes.fetchNotes({ status: 'ACTIVE' });
+  assert.deepEqual(Array.from(all, (note) => note.id), ['n1', 'n2', 'n501']);
+  assert.deepEqual(
+    calls.map((call) => call.endpoint),
+    ['/note?status=ACTIVE', '/note?status=ACTIVE&page=2'],
+  );
+});
+
+test('a single page of notes costs a single request', async () => {
+  const { notes, calls } = loadNotesApi(() => ({
+    rows: [{ id: 'n1' }],
+    headers: { 'X-Has-More': 'false' },
+  }));
+  await notes.fetchNotes();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].endpoint, '/note');
+});
+
+test('note writes mark the list stale; reads and the source-state lookup do not', async () => {
+  const { notes } = loadNotesApi(() => ({ rows: [] }));
+  const before = Date.now();
+  await notes.fetchNotes();
+  await notes.fetchNoteSourceStates(['n1']);
+  assert.equal(notes.notesMutatedSince(before), false);
+
+  await notes.togglePinNote('n1', true);
+  assert.equal(notes.notesMutatedSince(before), true);
+});

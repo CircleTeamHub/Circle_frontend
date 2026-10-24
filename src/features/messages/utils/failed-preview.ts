@@ -45,3 +45,31 @@ export function hasFailedLatestMessage(
   }
   return false;
 }
+
+// store 是不可变更新:没变的会话,消息数组引用不变,判定直接复用;只有真变了的那几个
+// 会话才重扫。会话列表的选择器每次 chat store 写入都会跑(「正在输入」「已送达」「在线」
+// 这类高频小事件也算),不缓存的话 100 个群、几千条内存消息,每个小事件都要全量扫一遍。
+const failedVerdictByMessages = new WeakMap<readonly StoredChatMessage[], boolean>();
+
+function hasFailedLatestMessageCached(messages: readonly StoredChatMessage[]): boolean {
+  const cached = failedVerdictByMessages.get(messages);
+  if (cached !== undefined) return cached;
+  const verdict = hasFailedLatestMessage(messages);
+  failedVerdictByMessages.set(messages, verdict);
+  return verdict;
+}
+
+/**
+ * 「最新一次发送失败」的会话 id,排序后用换行拼成一个串。返回字符串而不是 Set:
+ * 引用比较退化成值比较,失败集合没变时订阅方不重渲染。
+ */
+export function selectFailedConversationKey(state: {
+  messagesByConversation: Readonly<Record<string, readonly StoredChatMessage[] | undefined>>;
+}): string {
+  const ids: string[] = [];
+  for (const id in state.messagesByConversation) {
+    const messages = state.messagesByConversation[id];
+    if (messages?.length && hasFailedLatestMessageCached(messages)) ids.push(id);
+  }
+  return ids.sort().join('\n');
+}

@@ -292,6 +292,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     initialHistory: [],
     privacyFetches: 0,
     privacyResponse: { messageSelfDestructSec: 2 * 24 * 60 * 60 },
+    localTimelinesRead: [],
   };
   const mmkvStore = new Map();
   const mmkv = {
@@ -300,6 +301,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     remove: (key) => mmkvStore.delete(key),
   };
   const protocol = runModule('src/chat-core/protocol.ts', {});
+  const appStateModule = { currentState: options.appState ?? 'active' };
   const clock = { now: Date.now() };
   class FakeDate extends Date {
     static now() {
@@ -326,7 +328,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
     'react-native': {
       Platform: { OS: 'android' },
-      AppState: { currentState: options.appState ?? 'active' },
+      AppState: appStateModule,
     },
     './sync': {
       resumePendingChatSync: async () => { apiCalls.syncResumes += 1; },
@@ -383,6 +385,9 @@ function loadManager(localDbOverrides = {}, options = {}) {
       loadChatHistory: (conversationId) => {
         apiCalls.initialHistory.push(conversationId);
         return Promise.resolve({ messages: [], nextBeforeHeight: null });
+      },
+      markLocalTimelinesRead: (ids) => {
+        apiCalls.localTimelinesRead.push(...ids);
       },
     },
     './local-db': {
@@ -449,6 +454,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     socket,
     captured,
     clock,
+    appState: appStateModule,
     announceRegisteredPushToken: (registration) => {
       for (const listener of registeredTokenListeners) listener(registration);
     },
@@ -2253,4 +2259,140 @@ test('a send that never got a connection ends its span as unavailable', async ()
   await sent;
   const send = spans.find((span) => span.operation === 'chatSend');
   assert.deepEqual(send.ends, ['unavailable']);
+});
+
+test('冷启动水合:只预读最近活跃的会话时间线,有待发消息的会话无论多旧都读', async () => {
+  // 群多的用户:原来冷启动对每个会话串行读 50 条进内存(几百次查询、上万条消息常驻)。
+  // 其余会话打开时由 loadChatHistory 从本地库补读。
+  const now = Date.now();
+  const conversations = Array.from({ length: 40 }, (_, index) => ({
+    id: `c${index}`,
+    pinned: false,
+    lastMessageAt: new Date(now - index * 60_000).toISOString(),
+  }));
+  const read = [];
+  const { manager } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => conversations,
+    readRecentLocalMessages: async (conversationId) => {
+      read.push(conversationId);
+      return [];
+    },
+    outboxList: async () => [
+      {
+        d: 'd-old',
+        conversationId: 'c39',
+        payload: { conversationId: 'c39', type: 'text', content: {}, d: 'd-old' },
+        createdAt: new Date(now - 60_000).toISOString(),
+      },
+    ],
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  const expected = [...Array.from({ length: 30 }, (_, index) => `c${index}`), 'c39'];
+  assert.deepEqual([...read].sort(), [...expected].sort());
+});
+
+test('冷启动水合:预读过的会话记为「本地已读」,打开时不再重复读本地库', async () => {
+  const { manager, apiCalls } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [
+      { id: 'c1', pinned: false, lastMessageAt: new Date().toISOString() },
+    ],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => [],
+  });
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  assert.deepEqual(apiCalls.localTimelinesRead, ['c1']);
+});
+
+test('冷启动水合:读不出 outbox 时退回全部预读(宁可多读,不能漏判已发出的待发消息)', async () => {
+  const now = Date.now();
+  const conversations = Array.from({ length: 35 }, (_, index) => ({
+    id: `c${index}`,
+    pinned: false,
+    lastMessageAt: new Date(now - index * 60_000).toISOString(),
+  }));
+  const read = [];
+  const { manager } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => conversations,
+    readRecentLocalMessages: async (conversationId) => {
+      read.push(conversationId);
+      return [];
+    },
+    readOutboxEntries: async () => null,
+  });
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  assert.equal(read.length, 35);
+});
+
+test('reconnecting reports delivery for direct messages that arrived while disconnected', async () => {
+  // 安卓后台断开期间收到的消息只走了推送;实时那条「收到即报送达」没机会跑,
+  // 对账时要补报,否则对方一直看到「已发送」。
+  const { manager, socket, store, apiCalls, appState } = loadManager();
+  apiCalls.conversationSnapshot = [
+    { id: 'dm-1', type: 'DIRECT', lastMessage: { height: 3, sender: { id: 'peer' } } },
+  ];
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+  // 首连(冷启动)不补报:那时 store 常常还是空的,每个单聊都会算「新到」。
+  assert.deepEqual(
+    socket.emitted.filter((entry) => entry.event === 'chat:delivered'),
+    [],
+  );
+
+  store.conversations = [
+    { id: 'dm-1', type: 'DIRECT', lastMessage: { height: 3, sender: { id: 'peer' } } },
+  ];
+  appState.currentState = 'background';
+  manager.suspendChatForBackground();
+  // 回前台到握手完成之间,REST 先把新快照写进了 store:基线得是断开那一刻的。
+  store.conversations = [
+    { id: 'dm-1', type: 'DIRECT', lastMessage: { height: 8, sender: { id: 'peer' } } },
+  ];
+  apiCalls.conversationSnapshot = [
+    { id: 'dm-1', type: 'DIRECT', lastMessage: { height: 8, sender: { id: 'peer' } } },
+    { id: 'group-1', type: 'GROUP', lastMessage: { height: 5, sender: { id: 'peer' } } },
+  ];
+  appState.currentState = 'active';
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+
+  const delivered = socket.emitted.filter((entry) => entry.event === 'chat:delivered');
+  assert.deepEqual(
+    delivered.map((entry) => ({ ...entry.payload })),
+    [{ conversationId: 'dm-1', height: 8 }],
+  );
+});
+
+test('a background suspend is not undone by reconnects until the app is in the foreground', () => {
+  // 后台里 token 刷新会让 session-bootstrap 重跑 connectChat;连回去的话再也没人断。
+  const { manager, socket, apiCalls, appState, diagnostics } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+  const startsBefore = apiCalls.syncStarts.length;
+
+  appState.currentState = 'background';
+  manager.suspendChatForBackground();
+  assert.equal(socket.connected, false);
+  assert.ok(
+    diagnostics.some((entry) => entry.event === 'chat.ws.background_suspended'),
+  );
+
+  manager.connectChat('jwt-rotated', 'u1');
+  assert.equal(apiCalls.syncStarts.length, startsBefore, '还在后台:不连');
+
+  appState.currentState = 'active';
+  manager.connectChat('jwt-rotated', 'u1');
+  assert.equal(apiCalls.syncStarts.length, startsBefore + 1, '回前台照常连');
 });

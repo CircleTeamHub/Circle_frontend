@@ -11,6 +11,7 @@ import type {
   ChatMessageDto,
   ChatSyncPageDto,
 } from './protocol';
+import { reuseUnchanged, structurallyEqual } from '@/utils/structural-sharing';
 import {
   clearLocalConversationMessages,
   deleteLocalMessage,
@@ -347,28 +348,67 @@ function dropTimelineThrough(
 }
 
 let burnPurgeTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * 各会话下一条焚毁消息的到期时刻(上次扫到这个会话时算的)。
+ *
+ * 收到一条焚毁消息、某个会话改了档位,只需要重扫那一个会话;到点时只扫到期的会话。
+ * 原来每次都把内存里全部会话的全部消息扫一遍(每条还要解析几次时间),焚毁群一活跃,
+ * 收一条消息的开销就翻倍。
+ */
+const burnExpiryByConversation = new Map<string, number>();
+/**
+ * 上一次全量扫的时刻。清理定时器排着(还有没到期的焚毁消息)时,至少每分钟全量扫一次,
+ * 接住没经过登记的写入。
+ */
+let lastFullBurnSweepAt = 0;
 
 function clearBurnPurgeTimer(): void {
   if (burnPurgeTimer) clearTimeout(burnPurgeTimer);
   burnPurgeTimer = null;
 }
 
-function scheduleNextBurnPurge(
-  nextExpiryAt: number | null,
-  hasSelfDestructPolicy: boolean,
-): void {
+function forgetBurnSchedule(): void {
   clearBurnPurgeTimer();
-  if (!hasSelfDestructPolicy) return;
+  burnExpiryByConversation.clear();
+  lastFullBurnSweepAt = 0;
+}
+
+/** 离上次全量扫满一分钟了 —— 或者设备时钟往回调过(上次全量扫的时刻落在了将来)。 */
+function isFullBurnSweepDue(now: number): boolean {
+  return (
+    now < lastFullBurnSweepAt || now >= lastFullBurnSweepAt + BURN_PURGE_SWEEP_MS
+  );
+}
+
+function scheduleNextBurnPurge(): void {
+  clearBurnPurgeTimer();
+  let earliest: number | null = null;
+  for (const expiresAt of burnExpiryByConversation.values()) {
+    if (earliest === null || expiresAt < earliest) earliest = expiresAt;
+  }
+  if (earliest === null) return;
+  const fullSweepDueAt = lastFullBurnSweepAt + BURN_PURGE_SWEEP_MS;
+  // 封顶一分钟:时钟往回调过的话算出来的延时可能超过定时器上限,引擎会按 1ms 跑,
+  // 清理就成了空转。
   const delay = Math.min(
-    nextExpiryAt === null
-      ? BURN_PURGE_SWEEP_MS
-      : Math.max(1, nextExpiryAt - Date.now() + 1),
     BURN_PURGE_SWEEP_MS,
+    Math.max(1, Math.min(earliest + 1, fullSweepDueAt) - Date.now()),
   );
   burnPurgeTimer = setTimeout(() => {
     burnPurgeTimer = null;
-    void useChatStore.getState().purgeExpiredBurnMessages();
+    const full = isFullBurnSweepDue(Date.now());
+    void useChatStore
+      .getState()
+      .purgeExpiredBurnMessages(full ? undefined : { conversationIds: [] });
   }, delay);
+}
+
+/** 会话预览是一条会焚毁的消息:它也得登记到期时刻,否则要等下一次全量扫才清。 */
+function hasBurnPreview(conversation: ChatConversationDto): boolean {
+  return (
+    conversation.lastMessage !== null &&
+    messageBurnExpiry(conversation.lastMessage, conversation) !== null
+  );
 }
 
 /**
@@ -463,6 +503,15 @@ interface ChatStoreState {
   conversationsSnapshotSeq: number;
   /** 单会话回写(偏好变更/新建后),保持排序不变量。 */
   upsertConversation: (conversation: ChatConversationDto) => void;
+  /**
+   * 单个会话的权威快照(GET /chat/conversations/:id)合并进列表:和全量快照走同一套
+   * 对账(焚毁状态、本机删除的预览、更新的实时预览、已读/清空水位、对端水位种子)。
+   * 不动 conversationsSnapshotLoaded / Seq(这不是一份完整快照);内容没变就什么都不写。
+   */
+  mergeConversationSnapshot: (
+    conversation: ChatConversationDto,
+    requestPreviewRevision?: number,
+  ) => void;
   /** G-01 冷启动水合:本地库快照灌回内存(仅在对应结构为空时生效)。 */
   hydrateLocalSnapshot: (
     conversations: ChatConversationDto[],
@@ -500,8 +549,12 @@ interface ChatStoreState {
    * 也没有删除事件,后续 REST 页「少了哪些行」同样对不出来。不主动清的话,
    * 冷启动水合与本地 FTS 搜索仍然能把本该烧掉的正文端出来 —— 阅后即焚在
    * 本地这一侧等于没生效。拿到会话快照与档位变更时各清一次。
+   *
+   * 传 conversationIds 只扫这几个会话、外加已经到期的会话;不传是全量扫。
    */
-  purgeExpiredBurnMessages: () => Promise<void>;
+  purgeExpiredBurnMessages: (scope?: {
+    conversationIds: readonly string[];
+  }) => Promise<void>;
   setActiveConversationId: (conversationId: string | null) => void;
   /** lastSeenAt 省略 = 不改动已有的最近在线(旧服务端的 boolean ack);null = 不知道。 */
   applyPresence: (
@@ -1276,8 +1329,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             ),
           ),
     );
+    // 内容没变的会话沿用旧对象,什么都没变时连数组也沿用:回到消息页的重拉多半
+    // 一模一样,不复用的话每一行、每个按会话取值的订阅方都要重渲染一遍。
+    const nextConversations = reuseUnchanged(currentConversations, reconciledConversations);
     set({
-      conversations: reconciledConversations,
+      conversations: nextConversations,
       // 只有全量拉取会走到这里(upsertConversation 不置位)。
       conversationsSnapshotLoaded: true,
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
@@ -1300,8 +1356,91 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
     // 快照带着每个会话当前的焚毁档位 —— 顺手把已到期的本地缓存清掉。
     void get().purgeExpiredBurnMessages();
-    // G-01:快照落盘(fire-and-forget,本地库失败不影响主链路)。
-    void persistLocalConversations(get().conversations);
+    // G-01:快照落盘(fire-and-forget,本地库失败不影响主链路)。整表没变就不重写:
+    // 落盘是整表 DELETE + 逐行 INSERT,群多时每次回到消息页都写一遍很费电。
+    if (nextConversations !== currentConversations) {
+      void persistLocalConversations(get().conversations);
+    }
+  },
+  mergeConversationSnapshot: (incoming, requestPreviewRevision) => {
+    const {
+      conversations: currentConversations,
+      messagesByConversation,
+      readWatermarks,
+      deliveredWatermarks,
+      currentUserId,
+      clearedBeforeHeightByConversation,
+      selfDestructPolicyEpoch,
+      livePreviewByConversation,
+    } = get();
+    const current = currentConversations.find((c) => c.id === incoming.id);
+    const withBurnState = mergeConversationBurnState(incoming, current);
+    const burnPolicyChanged = hasBurnPolicyChanged(
+      current ? [current] : [],
+      [withBurnState],
+    );
+    // 另一台设备清空过:快照里的水位比本机高,水位之下的本地记录要删掉。
+    const raisedFloors = collectRaisedClearFloors(
+      [incoming],
+      clearedBeforeHeightByConversation,
+    );
+    const floors =
+      raisedFloors.size === 0
+        ? clearedBeforeHeightByConversation
+        : {
+            ...clearedBeforeHeightByConversation,
+            ...Object.fromEntries(raisedFloors),
+          };
+    const timelines = dropTimelineThrough(messagesByConversation, raisedFloors);
+    for (const [conversationId, floor] of raisedFloors) {
+      void deleteLocalMessagesBelow(conversationId, floor + 1);
+    }
+    const timeline = messagesByConversation[incoming.id];
+    const reconciled = reconcileWithLocalWatermarks(
+      preserveNewerLivePreview(
+        reconcileDeletedPreview(withBurnState, timeline),
+        current,
+        timeline,
+        livePreviewByConversation[incoming.id],
+        requestPreviewRevision,
+      ),
+      readWatermarks[incoming.id]?.[currentUserId ?? ''] ?? 0,
+      floors[incoming.id] ?? 0,
+      timelines[incoming.id] ?? [],
+      currentUserId,
+    );
+    const next =
+      current && structurallyEqual(current, reconciled) ? current : reconciled;
+    set({
+      conversations:
+        next === current
+          ? currentConversations
+          : sortConversations([
+              ...currentConversations.filter((c) => c.id !== incoming.id),
+              next,
+            ]),
+      readWatermarks: seedSelfReadWatermarks(
+        seedPeerReadWatermarks(readWatermarks, [incoming]),
+        [incoming],
+        currentUserId,
+      ),
+      deliveredWatermarks: seedPeerDeliveredWatermarks(deliveredWatermarks, [
+        incoming,
+      ]),
+      ...(raisedFloors.size > 0
+        ? {
+            clearedBeforeHeightByConversation: floors,
+            messagesByConversation: timelines,
+          }
+        : {}),
+      ...(burnPolicyChanged
+        ? { selfDestructPolicyEpoch: selfDestructPolicyEpoch + 1 }
+        : {}),
+    });
+    if (burnPolicyChanged || hasBurnPreview(next)) {
+      void get().purgeExpiredBurnMessages({ conversationIds: [incoming.id] });
+    }
+    if (next !== current) void upsertLocalConversation(next);
   },
   upsertConversation: (conversation) => {
     const { conversations, messagesByConversation, readWatermarks } = get();
@@ -1320,6 +1459,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         get().currentUserId,
       ),
     });
+    if (hasBurnPreview(reconciled)) {
+      void get().purgeExpiredBurnMessages({ conversationIds: [reconciled.id] });
+    }
     void upsertLocalConversation(reconciled);
   },
   removeConversation: (conversationId) => {
@@ -1810,7 +1952,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const persisted = options?.persist !== false
       ? persistLocalMessages(conversationId, incoming) : Promise.resolve(true);
     return persisted.then((durable) => {
-      if (hasExpiry && options?.persist !== false) void get().purgeExpiredBurnMessages();
+      if (hasExpiry && options?.persist !== false) {
+        void get().purgeExpiredBurnMessages({ conversationIds: [conversationId] });
+      }
       return durable;
     });
   },
@@ -1934,7 +2078,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // Ordinary incremental pages need no global burn sweep. The coordinator has
     // already persisted this page before scheduling expiry cleanup and timers.
     if (live.some((message) => messageBurnExpiry(message, get().conversations.find((c) => c.id === conversationId)) !== null)) {
-      await get().purgeExpiredBurnMessages();
+      await get().purgeExpiredBurnMessages({ conversationIds: [conversationId] });
     }
     if (get().currentUserId !== currentUserId) return;
     const reconciled = get().conversations.find((c) => c.id === conversationId);
@@ -2239,11 +2383,26 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       ],
       selfDestructPolicyEpoch: selfDestructPolicyEpoch + 1,
     });
-    void get().purgeExpiredBurnMessages();
+    void get().purgeExpiredBurnMessages({ conversationIds: [conversationId] });
   },
 
-  purgeExpiredBurnMessages: async () => {
-    purgeEncryptedBody({ expired: true });
+  purgeExpiredBurnMessages: async (scope) => {
+    const now = Date.now();
+    // 全量扫:冷启动水合、整表快照、全局档位变化、到点兜底。其余只扫点名的会话和
+    // 已到期的会话(到期记录见 burnExpiryByConversation)。
+    let targets: Set<string> | null = null;
+    if (scope) {
+      targets = new Set(scope.conversationIds);
+      for (const [conversationId, expiresAt] of burnExpiryByConversation) {
+        if (expiresAt <= now) targets.add(conversationId);
+      }
+    } else {
+      // 整个加密正文库过一遍,很重。正文平时按各自的到期时刻清(e2ee/client),
+      // 这里只是兜底,不能每收一条焚毁消息就跑一次。
+      purgeEncryptedBody({ expired: true });
+      burnExpiryByConversation.clear();
+      lastFullBurnSweepAt = now;
+    }
     const {
       conversations,
       messagesByConversation,
@@ -2252,11 +2411,21 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     let nextConversations: ChatConversationState[] | null = null;
     const durablePreviewWrites: Promise<void>[] = [];
     const localPurges: { conversationId: string; cutoff: Date; startedAt: Date }[] = [];
-    let nextExpiryAt: number | null = null;
-    const now = Date.now();
+    let expiredAny = false;
     for (const conversation of conversations) {
+      // 扫到的从 targets 里划掉,剩下的就是已经不在列表里的会话。
+      if (targets && !targets.delete(conversation.id)) continue;
       const timeline = messagesByConversation[conversation.id];
-      const expiryFor = (message: ChatMessageDto) => messageBurnExpiry(message, conversation);
+      // 每条消息的到期时刻下面要用好几次,只算一次(要解析时间字符串)。
+      const expiries = new Map<ChatMessageDto, number | null>();
+      const expiryFor = (message: ChatMessageDto) => {
+        let expiresAt = expiries.get(message);
+        if (expiresAt === undefined) {
+          expiresAt = messageBurnExpiry(message, conversation);
+          expiries.set(message, expiresAt);
+        }
+        return expiresAt;
+      };
       const expiredIds = new Set((timeline ?? []).filter((message) => {
         const expiry = expiryFor(message);
         return expiry !== null && expiry <= now;
@@ -2279,12 +2448,15 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         preview && !kept.some((message) => message.id === preview.id)
           ? [...kept, preview]
           : kept;
+      let nextExpiryAt: number | null = null;
       for (const message of schedulableMessages) {
         const expiresAt = expiryFor(message);
         if (expiresAt !== null && expiresAt > now && (nextExpiryAt === null || expiresAt < nextExpiryAt)) {
           nextExpiryAt = expiresAt;
         }
       }
+      if (nextExpiryAt === null) burnExpiryByConversation.delete(conversation.id);
+      else burnExpiryByConversation.set(conversation.id, nextExpiryAt);
       if (timeline?.length && (kept.length !== timeline.length || kept.some((m, index) => m !== timeline[index]))) {
         nextTimelines ??= { ...messagesByConversation };
         nextTimelines[conversation.id] = kept;
@@ -2302,6 +2474,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         return expiry !== null && expiry <= now;
       }).map((message) => [message.id, message]));
       if (previewExpired && preview) expired.set(preview.id, preview);
+      if (expired.size > 0) expiredAny = true;
       const selfId = get().currentUserId;
       const readHeight = get().readWatermarks[conversation.id]?.[selfId ?? ''] ?? 0;
       const expiredUnread = [...expired.values()].filter((message) =>
@@ -2334,12 +2507,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           : {}),
       });
     }
-    scheduleNextBurnPurge(
-      nextExpiryAt,
-      nextExpiryAt !== null,
-    );
+    for (const conversationId of targets ?? []) {
+      burnExpiryByConversation.delete(conversationId);
+    }
+    scheduleNextBurnPurge();
     await Promise.all([
-      purgeExpiredLocalMessages(localPurges),
+      // 本地库那一趟是几条整表 UPDATE/DELETE。点名扫又什么都没过期的(收到一条还没到期的
+      // 焚毁消息)不跑:库里只剩不在内存里的过期行,留给全量扫。
+      ...(targets && !expiredAny ? [] : [purgeExpiredLocalMessages(localPurges)]),
       ...durablePreviewWrites,
     ]);
   },
@@ -2625,7 +2800,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     }),
 
   reset: () => {
-    clearBurnPurgeTimer();
+    forgetBurnSchedule();
     set({
       connected: false,
       connecting: false,

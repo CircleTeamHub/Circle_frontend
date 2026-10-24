@@ -59,7 +59,8 @@ test('the groups inbox combines pending invitations, applications and joined gro
   const list = read('src/features/groups/GroupAdmissionsList.tsx');
   assert.match(list, /fetchGroupAdmissions/);
   assert.match(list, /fetchMyApplications/);
-  assert.match(list, /loadChatConversations/);
+  // 「已加入」复用新鲜的会话快照,没有才整表拉(ensureChatConversations)。
+  assert.match(list, /ensureChatConversations/);
   assert.match(list, /getGroupEntryHref/);
   assert.match(list, /getChatDetailHref/);
 });

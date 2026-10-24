@@ -35,7 +35,8 @@ test('note list patches live source status in place and reloads only on recovery
   assert.doesNotMatch(notesScreen, /useNoteStatusSignalStore\(\(state\) => state\.version\)/);
   // 单条事件原地 patch 不重拉；断线/冷启动恢复漏掉的事件只能整页重拉补回。
   assert.match(notesScreen, /state\.recoveryVersion/);
-  assert.match(notesScreen, /\}, \[load, noteListVersion, noteStatusRecovery\]\),/);
+  // sessionEpoch:聚焦跳过重拉的判定按账号区分(见 notes-screen.test.js)。
+  assert.match(notesScreen, /\}, \[load, noteListVersion, noteStatusRecovery, sessionEpoch\]\),/);
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
   assert.match(
     detail,
@@ -47,7 +48,8 @@ test('note list patches live source status in place and reloads only on recovery
   assert.match(management, /state\.lastChange/);
   assert.doesNotMatch(management, /state\.version/);
   assert.match(management, /state\.recoveryVersion/);
-  assert.match(management, /\[loadNotes, noteStatusRecovery\]/);
+  // notesReloadGate:回到页面时没有变化就不重拉(见 friends-write-marker.test.js)。
+  assert.match(management, /\[loadNotes, noteStatusRecovery, notesReloadGate\]/);
 });
 
 test('note status signal keeps the latest source change and advances monotonically', () => {

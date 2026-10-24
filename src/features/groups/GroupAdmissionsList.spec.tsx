@@ -1,4 +1,4 @@
-import { loadChatConversations } from '@/chat-core/api';
+import { ensureChatConversations } from '@/chat-core/api';
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { FlatList, StyleSheet } from 'react-native';
@@ -36,7 +36,8 @@ jest.mock('@/stores/authStore', () => ({
   useAuthStore: Object.assign((select: (s: unknown) => unknown) => select(mockAuth), { getState: () => mockAuth }),
 }));
 jest.mock('@/chat-core/store', () => ({ useChatStore: (select: (s: unknown) => unknown) => select({ conversations: mockConversations }) }));
-jest.mock('@/chat-core/api', () => ({ loadChatConversations: jest.fn().mockResolvedValue(undefined) }));
+// 「已加入」走 ensureChatConversations(有新鲜快照就复用,否则整表拉)。
+jest.mock('@/chat-core/api', () => ({ ensureChatConversations: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@/chat-core/mappers', () => ({ mapChatConversationToUI: jest.fn() }));
 jest.mock('@/features/notifications/store/use-notification-center-store', () => ({
   useNotificationCenterStore: (select: (s: unknown) => unknown) => select({ interactive: mockInteractive }),
@@ -239,11 +240,11 @@ test('standalone admission failure preserves successful circle history', async (
 
 test('pull-to-refresh retries joined conversations after the initial request fails', async () => {
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [], nextCursor: null });
-  jest.mocked(loadChatConversations).mockRejectedValueOnce(new Error('offline'));
-  jest.mocked(loadChatConversations).mockImplementationOnce(async () => { mockConversations = [{ id: 'joined', type: 'GROUP', name: '恢复的群聊' }]; return [] as never; });
+  jest.mocked(ensureChatConversations).mockRejectedValueOnce(new Error('offline'));
+  jest.mocked(ensureChatConversations).mockImplementationOnce(async () => { mockConversations = [{ id: 'joined', type: 'GROUP', name: '恢复的群聊' }]; return [] as never; });
   const ui = render(<GroupAdmissionsList includeJoined />);
   await ui.findByText('common.retry');
   fireEvent(ui.UNSAFE_getByType(FlatList), 'refresh');
   expect(await ui.findByText('恢复的群聊')).toBeTruthy();
-  expect(loadChatConversations).toHaveBeenCalledTimes(2);
+  expect(ensureChatConversations).toHaveBeenCalledTimes(2);
 });

@@ -5,17 +5,24 @@ import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import {
+  canSkipConversationFocusReload,
   clearChatConversationHistory,
   loadChatConversations,
   updateChatConversationPreferences,
 } from "@/chat-core/api";
 import { mapChatConversationToUI } from "@/chat-core/mappers";
 import { markConversationRead } from "@/chat-core/socket-manager";
-import { selectTotalUnread, type StoredChatMessage, useChatStore } from "@/chat-core/store";
+import { selectTotalUnread, useChatStore } from "@/chat-core/store";
+import { selectConversations } from "@/chat-core/conversation-selectors";
 import ChatDetailScreen, {
   type EmbeddedChatParams,
 } from "@/features/chat/screens/ChatDetailScreen";
-import { hasFailedLatestMessage } from "@/features/messages/utils/failed-preview";
+import { selectFailedConversationKey } from "@/features/messages/utils/failed-preview";
+import {
+  parsePinnedLayoutKey,
+  pinnedLayoutKeyOf,
+  type PinnedGroupPosition,
+} from "@/features/messages/utils/pinned-layout";
 import { useComposerDraftStore } from "@/chat-core/composer-drafts";
 import { draftPreviewText } from "@/chat-core/composer-draft-model";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
@@ -29,6 +36,8 @@ import {
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { SplitPaneResizer } from "@/components/app/split-pane-resizer";
 import { useDesktopSplitLayout } from "@/hooks/use-desktop-split-layout";
+import { useScreenLive } from "@/hooks/use-screen-live";
+import { useStoreWhileActive } from "@/hooks/use-store-while-active";
 import { useSplitPaneStore } from "@/stores/splitPaneStore";
 import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
@@ -86,23 +95,6 @@ const MENU_ACTION_KEYS: {
   { id: "scan", icon: "scan-outline", key: "messages.scan" },
   { id: "seatManagement", icon: "call-outline", key: "messages.seatManagement" },
 ];
-
-type PinnedGroupPosition = "single" | "first" | "middle" | "last" | "none";
-
-function getPinnedGroupPosition(
-  items: ConversationWithLocalUnread[],
-  index: number,
-): PinnedGroupPosition {
-  const current = items[index];
-  if (!current?.pinned) return "none";
-
-  const previousPinned = Boolean(items[index - 1]?.pinned);
-  const nextPinned = Boolean(items[index + 1]?.pinned);
-  if (!previousPinned && !nextPinned) return "single";
-  if (!previousPinned) return "first";
-  if (!nextPinned) return "last";
-  return "middle";
-}
 
 // 静态样式（不依赖主题色，提取到组件外避免每次渲染重建）
 const s = StyleSheet.create({
@@ -447,11 +439,15 @@ function ConversationRowImpl({
   // 静止时（translateX = 0）整层透明：swipeForeground 带 borderRadius，圆角那
   // 一小块不上色，常驻在底下的操作层最右是 colors.error，红色会从缺口里透成
   // 两道月牙 —— 行背景越暗越扎眼。一开始滑就立刻实体化，不影响揭示动画。
-  const swipeActionsOpacity = translateX.interpolate({
-    inputRange: [-SWIPE_ACTIONS_WIDTH, -1, 0],
-    outputRange: [1, 1, 0],
-    extrapolate: 'clamp',
-  });
+  const swipeActionsOpacity = useMemo(
+    () =>
+      translateX.interpolate({
+        inputRange: [-SWIPE_ACTIONS_WIDTH, -1, 0],
+        outputRange: [1, 1, 0],
+        extrapolate: 'clamp',
+      }),
+    [translateX],
+  );
 
   const closeSwipe = useCallback(() => animateTo(0), [animateTo]);
   const openSwipe = useCallback(
@@ -733,7 +729,15 @@ export default function MessagesScreen() {
     [t],
   );
 
-  const rawConversations = useChatStore((state) => state.conversations);
+  // 页面不在前台(切到别的 tab,或聊天页压在上面)时不再跟着聊天 store 走:原生栈
+  // 为了右滑返回不会冻结紧挨在当前页下面的这一页,不停订阅的话每条消息都整表重算。
+  // 右滑返回一开始就恢复(useScreenLive),露出来的是最新列表;focus effect 也会重拉一遍会话。
+  const isLive = useScreenLive();
+  const rawConversations = useStoreWhileActive(
+    useChatStore,
+    selectConversations,
+    isLive,
+  );
   const currentUserID = useChatStore((state) => state.currentUserId);
   const connectionError = useChatStore((state) => state.error);
   const imConnected = useChatStore((state) => state.connected);
@@ -774,6 +778,9 @@ export default function MessagesScreen() {
       // bootstrap is still restoring the current user. Wait for the scoped
       // chat session, then rerun the focus effect when it becomes available.
       if (!currentUserID) return;
+      // 连接正常、刚拉过完整快照就不重拉(30 秒窗口):进出聊天页来回切,原来每次都重拉
+      // 最多 500 个会话。会话变化靠实时会话事件推送,建群会就地写 store。
+      if (canSkipConversationFocusReload()) return;
 
       loadChatConversations().catch((err) => {
         // 列表加载失败时保留已有会话,empty state 兜底显示。
@@ -819,7 +826,8 @@ export default function MessagesScreen() {
     }
   }, []);
 
-  const totalUnread = useChatStore(selectTotalUnread);
+  // tab 角标不靠这里:chat-core/app-badge 在根上独立同步,本页冻结或失焦都不影响。
+  const totalUnread = useStoreWhileActive(useChatStore, selectTotalUnread, isLive);
   const setMessagesUnread = useTabBadgeStore((state) => state.setMessagesUnread);
 
   // 依赖主题色的动态样式，colors 变化时重新计算
@@ -908,19 +916,26 @@ export default function MessagesScreen() {
   );
 
   // 最新一条发送失败的会话 id 集合,拼成排序串让引用比较退化成值比较:
-  // 只在失败集合真变了才触发下游 useMemo,消息洪泛不抖动列表。
-  const failedConversationKey = useChatStore((state) => {
-    const ids: string[] = [];
-    for (const [id, messages] of Object.entries(state.messagesByConversation)) {
-      if (hasFailedLatestMessage(messages as StoredChatMessage[])) ids.push(id);
-    }
-    return ids.sort().join('\n');
-  });
+  // 只在失败集合真变了才触发下游 useMemo,消息洪泛不抖动列表。选择器按会话缓存判定,
+  // 每次 store 写入只重扫消息数组真换了的会话。
+  const failedConversationKey = useStoreWhileActive(
+    useChatStore,
+    selectFailedConversationKey,
+    isLive,
+  );
 
   // 输入框草稿(按账号持久化,见 chat-core/composer-drafts)。正开着的那个会话不显示:
   // 桌面分栏下人正在右边打字,左边跟着闪「[草稿]」没有意义。
-  const composerDrafts = useComposerDraftStore((state) =>
-    currentUserID ? state.draftsByUser[currentUserID] : undefined,
+  // 在聊天页里打字会逐字写草稿;压在下面的本页没必要跟着每个按键重渲染。
+  const selectComposerDrafts = useCallback(
+    (state: ReturnType<typeof useComposerDraftStore.getState>) =>
+      currentUserID ? state.draftsByUser[currentUserID] : undefined,
+    [currentUserID],
+  );
+  const composerDrafts = useStoreWhileActive(
+    useComposerDraftStore,
+    selectComposerDrafts,
+    isLive,
   );
   const activeConversationId = useChatStore(
     (state) => state.activeConversationId,
@@ -1155,11 +1170,15 @@ export default function MessagesScreen() {
       if (conversation.conversationType !== 'group' || conversation.isTempChat) {
         return true;
       }
-      const raw = rawConversations.find((item) => item.id === conversation.id);
+      // 点删除时才读 store:依赖整张会话数组的话,这个回调每来一条消息就换引用,
+      // 经 onDelete 传给每一行,行的 memo 全部失效。
+      const raw = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === conversation.id);
       // myRole 是服务端按当前用户实时计算的角色;ownerId 兜底兼容旧会话 DTO。
       return raw?.myRole === 'OWNER' || raw?.ownerId === currentUserID;
     },
-    [currentUserID, rawConversations],
+    [currentUserID],
   );
 
   const handleConfirmDeleteConversation = useCallback(
@@ -1248,15 +1267,21 @@ export default function MessagesScreen() {
 
   // 点击已读图标 → 将当前筛选标签下所有会话标记为已读
   // 自研栈:逐会话上报末条 height(pending 队列有断线重试),本地未读即时归零。
+  // 经 ref 读当前可见列表:直接依赖它的话回调每条消息换引用,列表头跟着整个重建。
+  const visibleConversationsRef = useRef(visibleConversations);
+  useEffect(() => {
+    visibleConversationsRef.current = visibleConversations;
+  }, [visibleConversations]);
   const handleClearUnread = useCallback(() => {
+    const visible = visibleConversationsRef.current;
     const dtoById = new Map(
       useChatStore.getState().conversations.map((c) => [c.id, c]),
     );
-    for (const c of visibleConversations) {
+    for (const c of visible) {
       markConversationRead(c.id, dtoById.get(c.id)?.lastMessage?.height ?? 0);
     }
-    clearManyLocalUnread(visibleConversations.map((c) => c.id));
-  }, [clearManyLocalUnread, visibleConversations]);
+    clearManyLocalUnread(visible.map((c) => c.id));
+  }, [clearManyLocalUnread]);
 
   // 菜单项点击处理：关闭菜单并按 id 路由跳转
   const handleMenuAction = useCallback(
@@ -1271,13 +1296,24 @@ export default function MessagesScreen() {
     [router],
   );
 
+  // 置顶分组的形状只随置顶/筛选/折叠变化;新消息只会挪动非置顶行。用签名串当依赖,
+  // renderItem 与分隔线才不会每来一条消息都换引用(换了 FlatList 会把可见行全过一遍)。
+  const pinnedLayoutKey = useMemo(
+    () => pinnedLayoutKeyOf(displayedConversations),
+    [displayedConversations],
+  );
+  const pinnedLayout = useMemo(
+    () => parsePinnedLayoutKey(pinnedLayoutKey),
+    [pinnedLayoutKey],
+  );
+
   // 单条会话行渲染：头像（私聊可点击进主页）+ 名称/预览/时间/未读数
   const renderItem = useCallback(
     ({ item, index }: ListRenderItemInfo<ConversationWithLocalUnread>) => (
       <ConversationRow
         item={item}
         testID={E2E_TEST_IDS.messagesConversation(item.id)}
-        pinnedGroupPosition={getPinnedGroupPosition(displayedConversations, index)}
+        pinnedGroupPosition={pinnedLayout.positions.get(item.id) ?? "none"}
         labels={swipeLabels}
         rowBackgroundColor={
           isSplitLayout && embeddedChat?.conversationID === item.id
@@ -1322,21 +1358,11 @@ export default function MessagesScreen() {
       handleTogglePinnedFold,
       isSplitLayout,
       pinnedFoldAnchorIndex,
+      pinnedLayout,
       showAllPinned,
       swipeLabels,
-      displayedConversations,
     ],
   );
-
-  const hiddenPinnedSeparatorIDs = useMemo(() => {
-    const ids = new Set<string>();
-    displayedConversations.forEach((conversation, index) => {
-      if (conversation.pinned && displayedConversations[index + 1]?.pinned) {
-        ids.add(conversation.id);
-      }
-    });
-    return ids;
-  }, [displayedConversations]);
 
   const renderSeparator = useCallback(
     ({
@@ -1344,8 +1370,8 @@ export default function MessagesScreen() {
     }: {
       leadingItem?: ConversationWithLocalUnread;
     }) =>
-      leadingItem && hiddenPinnedSeparatorIDs.has(leadingItem.id) ? null : <Divider />,
-    [hiddenPinnedSeparatorIDs],
+      leadingItem && pinnedLayout.hiddenSeparatorIds.has(leadingItem.id) ? null : <Divider />,
+    [pinnedLayout],
   );
   const keyExtractor = useCallback((item: Conversation) => item.id, []);
 
@@ -1451,6 +1477,10 @@ export default function MessagesScreen() {
         showsVerticalScrollIndicator={false}
         refreshing={refreshing}
         onRefresh={handleRefreshConversations}
+        // 默认窗口是 21 屏,100 个会话基本全部挂着;收窄到和笔记/聊天列表同一档。
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={11}
       />
 
       {/* 右上角「+」弹出菜单（Modal 实现，点击蒙层关闭） */}
