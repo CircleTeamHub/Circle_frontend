@@ -32,9 +32,16 @@ jest.mock('@/chat-core/client', () => ({ sendCardMessage: jest.fn(() => Promise.
 jest.mock('@/chat-core/mappers', () => ({
   mapChatConversationToUI: (item: { id: string; name: string }) => ({ id: item.id, name: item.name, conversationType: 'single' }),
 }));
-jest.mock('@/chat-core/store', () => ({
-  useChatStore: (selector: (state: { conversations: unknown[] }) => unknown) => selector({ conversations: mockConversations }),
-}));
+jest.mock('@/chat-core/store', () => {
+  // 和真实 zustand store 同形:面板只在打开时才订阅(useStoreWhileActive 走 getState/subscribe)。
+  // 惰性取值:工厂随 jest.mock 提升,执行时 mockConversations 还没初始化。
+  const getState = () => ({ conversations: mockConversations });
+  const useChatStore = (selector: (current: { conversations: unknown[] }) => unknown) =>
+    selector(getState());
+  useChatStore.getState = getState;
+  useChatStore.subscribe = () => () => {};
+  return { useChatStore };
+});
 jest.mock('@/features/chat/utils/note-batch-send', () => ({
   noteSendWindowDelayMs: () => 0,
   recordNoteSendAttempt: (timestamps: number[]) => timestamps,
