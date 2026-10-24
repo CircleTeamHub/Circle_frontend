@@ -146,6 +146,9 @@ function loadChatStore(overrides = {}) {
     }
     if (request === './local-db') return overrides.localDb
       ? { ...__localDbStub, ...overrides.localDb } : __localDbStub;
+    if (request === '@/services/e2ee/lifecycle' && overrides.e2eeLifecycle) {
+      return overrides.e2eeLifecycle;
+    }
     if (request === '@/storage') {
       return { storage: { set: () => {}, getString: () => undefined } };
     }
@@ -2300,4 +2303,260 @@ test('a single snapshot that changes the burn policy advances the self-destruct 
   );
 
   assert.equal(useChatStore.getState().selfDestructPolicyEpoch, before + 1);
+});
+
+// ---- 焚毁清理只扫到期的会话 ------------------------------------------------
+// 原来每收到一条焚毁消息、每到一个到期时刻,都把内存里全部会话的全部消息扫一遍
+// (每条解析三四次时间)。焚毁群一活跃,收消息的开销就翻倍。
+
+/** 可控的时钟:store 里的 Date.now() 跟着走,顺便数 Date.parse 的次数(扫了多少条)。 */
+function burnClock() {
+  const clock = { now: Date.now(), parses: 0 };
+  class FakeDate extends Date {
+    constructor(...args) {
+      if (args.length === 0) super(clock.now);
+      else super(...args);
+    }
+    static now() {
+      return clock.now;
+    }
+    static parse(value) {
+      clock.parses += 1;
+      return Date.parse(value);
+    }
+  }
+  const timers = new Map();
+  let nextTimer = 1;
+  return {
+    clock,
+    globals: {
+      Date: FakeDate,
+      setTimeout: (fn, ms) => {
+        const id = nextTimer++;
+        timers.set(id, { fn, at: clock.now + ms });
+        return id;
+      },
+      clearTimeout: (id) => {
+        timers.delete(id);
+      },
+    },
+    /** 排着的定时器各自还要等多久。 */
+    pendingDelays: () => [...timers.values()].map((timer) => timer.at - clock.now),
+    advance(ms) {
+      clock.now += ms;
+      for (const [id, timer] of [...timers]) {
+        if (timer.at > clock.now) continue;
+        timers.delete(id);
+        timer.fn();
+      }
+    },
+  };
+}
+
+const burnFlush = () => new Promise((resolve) => setImmediate(resolve));
+
+function burnMessage(conversationId, index, expiresAt) {
+  return msg({
+    id: `${conversationId}-${index}`,
+    conversationId,
+    height: index + 1,
+    burnExpiresAt: new Date(expiresAt).toISOString(),
+  });
+}
+
+function seedBurnConversations(useChatStore, clock) {
+  useChatStore.getState().setConversations([
+    conversation({ id: 'busy' }),
+    conversation({ id: 'quiet' }),
+  ]);
+  const quietHistory = Array.from({ length: 200 }, (_, index) =>
+    burnMessage('quiet', index, clock.now + 3_600_000),
+  );
+  return useChatStore.getState().ingestMessages('quiet', quietHistory);
+}
+
+test('an incoming burn message re-scans only its own conversation', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+  // 对照:全量扫确实要把 quiet 的 200 条都过一遍。
+  env.clock.parses = 0;
+  void useChatStore.getState().purgeExpiredBurnMessages();
+  assert.ok(env.clock.parses >= 200, `full sweep parsed ${env.clock.parses}`);
+
+  env.clock.parses = 0;
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 30_000)]);
+  await burnFlush();
+
+  assert.ok(env.clock.parses < 50, `parsed ${env.clock.parses} timestamps`);
+  assert.equal(useChatStore.getState().messagesByConversation.quiet.length, 200);
+});
+
+test('a burn policy change re-scans only that conversation', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+
+  env.clock.parses = 0;
+  useChatStore
+    .getState()
+    .applyBurnDuration('busy', 60, new Date(env.clock.now).toISOString());
+  await burnFlush();
+
+  assert.ok(env.clock.parses < 50, `parsed ${env.clock.parses} timestamps`);
+});
+
+test('a due message is removed on time without re-scanning the other conversations', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 10_000)]);
+  await burnFlush();
+
+  env.clock.parses = 0;
+  env.advance(10_001);
+  await burnFlush();
+
+  assert.equal(useChatStore.getState().messagesByConversation.busy.length, 0);
+  assert.equal(useChatStore.getState().messagesByConversation.quiet.length, 200);
+  assert.ok(env.clock.parses < 50, `parsed ${env.clock.parses} timestamps`);
+});
+
+test('burn messages that skipped registration are still swept within a minute', async () => {
+  // 兜底:定时器排着时至少每分钟全量扫一次,接住没经过登记的(比如不落盘的写入)。
+  // 这里定时器由 quiet 那 200 条(一小时后到期)排着。
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 20_000)], {
+      persist: false,
+    });
+  await burnFlush();
+
+  env.advance(60_001);
+  await burnFlush();
+  assert.equal(useChatStore.getState().messagesByConversation.busy.length, 0);
+  assert.equal(useChatStore.getState().messagesByConversation.quiet.length, 200);
+});
+
+test('a burn preview from a single-conversation refresh is cleared on time', async () => {
+  // 预览可能是一条本机没收到的焚毁消息(漏了实时那条,单个会话刷新带回来的)。
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  const refreshed = burnMessage('busy', 0, env.clock.now + 10_000);
+  useChatStore
+    .getState()
+    .mergeConversationSnapshot(
+      conversation({ id: 'busy', lastMessage: refreshed, lastMessageAt: refreshed.createdAt }),
+    );
+  const edited = burnMessage('quiet', 500, env.clock.now + 10_000);
+  useChatStore.getState().upsertConversation(
+    conversation({ id: 'quiet', lastMessage: edited, lastMessageAt: edited.createdAt }),
+  );
+  await burnFlush();
+
+  env.advance(10_001);
+  await burnFlush();
+
+  const byId = Object.fromEntries(
+    useChatStore.getState().conversations.map((item) => [item.id, item]),
+  );
+  assert.equal(byId.busy.lastMessage, null);
+  assert.notEqual(byId.quiet.lastMessage?.id, edited.id);
+});
+
+test('an already-due conversation is swept by the next burn message anywhere', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 10_000)]);
+  await burnFlush();
+
+  env.clock.now += 10_001; // 定时器还没来得及跑
+  await useChatStore
+    .getState()
+    .ingestMessages('quiet', [burnMessage('quiet', 300, env.clock.now + 60_000)]);
+  await burnFlush();
+
+  assert.equal(useChatStore.getState().messagesByConversation.busy.length, 0);
+});
+
+test('a scoped sweep that expires nothing skips the whole-store purges', async () => {
+  // 本地库那一趟是整表 UPDATE/DELETE,加密正文那一趟是整个正文库:都不能每条消息跑一次。
+  const env = burnClock();
+  let localSweeps = 0;
+  let bodySweeps = 0;
+  const { useChatStore } = loadChatStore({
+    globals: env.globals,
+    localDb: {
+      purgeExpiredLocalMessages: async () => {
+        localSweeps += 1;
+      },
+    },
+    e2eeLifecycle: {
+      purgeEncryptedBody: (value) => {
+        if (value.expired) bodySweeps += 1;
+      },
+    },
+  });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+
+  localSweeps = 0;
+  bodySweeps = 0;
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 10_000)]);
+  await burnFlush();
+  assert.deepEqual([localSweeps, bodySweeps], [0, 0]);
+
+  env.advance(10_001);
+  await burnFlush();
+  assert.equal(localSweeps, 1, '真的过期了:本地库要清');
+
+  await useChatStore.getState().purgeExpiredBurnMessages();
+  assert.deepEqual([localSweeps, bodySweeps], [2, 1], '全量扫两样都跑');
+});
+
+test('a device clock set back does not leave the purge timer spinning', async () => {
+  // 时钟往回调一个月:算出来的延时超过定时器上限,引擎会按 1ms 跑。
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+
+  env.clock.now -= 30 * 24 * 3_600_000;
+  await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: [] });
+
+  const delays = env.pendingDelays();
+  assert.ok(delays.length > 0);
+  assert.ok(
+    delays.every((delay) => delay <= 60_000),
+    `delays ${delays.join(',')}`,
+  );
+});
+
+test('logging out forgets the burn schedule', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+  assert.ok(env.pendingDelays().length > 0);
+
+  useChatStore.getState().reset();
+  assert.equal(env.pendingDelays().length, 0);
+  // 上一个账号的到期记录也不能留:否则下一次点名扫又按它们排起定时器。
+  await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: [] });
+  assert.equal(env.pendingDelays().length, 0);
 });
