@@ -260,3 +260,77 @@ test('an injected app-side fetcher can authenticate the configured geocoder', as
     direct.restore();
   }
 });
+
+// 吞掉的失败交给调用方上报：本模块要在纯 node 下跑，不能 import 观测层。
+// 上报回调只拿到阶段枚举和原始错误，坐标、地名都不经过它。
+
+type FailureCall = { stage: string; error: unknown };
+
+function recordFailures(): { calls: FailureCall[]; report: (stage: 'nativeResolver' | 'geocoderConfig' | 'lookup', error: unknown) => void } {
+  const calls: FailureCall[] = [];
+  return { calls, report: (stage, error) => calls.push({ stage, error }) };
+}
+
+test('a failed server lookup is handed to the failure reporter', async () => {
+  const failures = recordFailures();
+  const outage = new Error('reverse geocode failed: 503');
+  const place = await resolvePlace(
+    22.6,
+    114.1,
+    GEOCODER_BASE_URL,
+    undefined,
+    async () => {
+      throw outage;
+    },
+    failures.report,
+  );
+  assert.equal(place, null);
+  assert.deepEqual(failures.calls, [{ stage: 'lookup', error: outage }]);
+});
+
+test('a throwing native resolver is reported once, then skipped', async () => {
+  resetNativeResolverAvailability();
+  const failures = recordFailures();
+  const unsupported = new Error('Could not find the Geocoder');
+  const resolver = async () => {
+    throw unsupported;
+  };
+  try {
+    await resolvePlace(22.61, 114.11, null, resolver, fetch, failures.report);
+    await resolvePlace(22.62, 114.12, null, resolver, fetch, failures.report);
+    assert.deepEqual(failures.calls, [{ stage: 'nativeResolver', error: unsupported }]);
+  } finally {
+    resetNativeResolverAvailability();
+  }
+});
+
+test('a malformed geocoder URL in the build config is reported, not silently ignored', async () => {
+  const previous = process.env.EXPO_PUBLIC_GEOCODER_BASE_URL;
+  process.env.EXPO_PUBLIC_GEOCODER_BASE_URL = 'https://[not-a-valid-host';
+  const failures = recordFailures();
+  try {
+    const place = await resolvePlace(22.63, 114.13, undefined, undefined, fetch, failures.report);
+    assert.equal(place, null);
+    assert.equal(failures.calls.length, 1);
+    assert.equal(failures.calls[0].stage, 'geocoderConfig');
+  } finally {
+    if (previous === undefined) delete process.env.EXPO_PUBLIC_GEOCODER_BASE_URL;
+    else process.env.EXPO_PUBLIC_GEOCODER_BASE_URL = previous;
+  }
+});
+
+test('a throwing failure reporter never breaks the lookup contract', async () => {
+  const place = await resolvePlace(
+    22.64,
+    114.14,
+    GEOCODER_BASE_URL,
+    undefined,
+    async () => {
+      throw new Error('offline');
+    },
+    () => {
+      throw new Error('reporter crashed');
+    },
+  );
+  assert.equal(place, null);
+});
