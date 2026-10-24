@@ -59,6 +59,7 @@ function loadRealtimeClient(mocks) {
       if(specifier === '@/features/profile/store-announcement-signal') return {useAnnouncementSignalStore:{getState:()=>({bump:()=>{}})}};
       if (specifier === '@/services/api/group-admissions') return { refreshGroupAdmissionUnread: async () => {} };
       if (specifier in mocks) return mocks[specifier];
+      if (specifier === 'expo-crypto') return { randomUUID: () => '123e4567-e89b-42d3-a456-426614174000' };
       if (specifier.startsWith('@/')) return {};
       return require(specifier);
     }),

@@ -144,7 +144,8 @@ test('原生地图包只能延迟 require，不能顶层 import', () => {
   // 整个选点页拖崩。
   assert.doesNotMatch(source, /^import .*from 'expo-gaode-map'/m);
   assert.match(source, /require\('expo-gaode-map'\)/);
-  assert.match(source, /catch \{\s*\n\s*return null;/);
+  // 加载失败一律回落 null（配了 key 的构建另外上报，见 amap-native-surface.spec）。
+  assert.match(source, /catch \(error\) \{\s*\n[^\n]*reportHandledFailure\('location', 'amapModuleLoad', error\);\s*\n\s*return null;/);
 });
 
 test('网页端有一份桩，永远不去碰原生包', () => {

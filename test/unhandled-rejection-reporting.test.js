@@ -2,8 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
-// silenceDomBridgeRejection 顶掉了 Sentry 自带的 rejection tracker 钩子,所以它
-// 是整个 app 未处理 rejection 进 Sentry 的唯一出口。这里钉住三条不变量:
+// silenceDomBridgeRejection 启用的是 promise 包的 tracker:只在 JSC(非 Hermes)
+// 上生效,那时它顶掉了 Sentry 自带的钩子,是未处理 rejection 进 Sentry 的出口。
+// Hermes 上真正生效的是 Sentry 自己的 HermesInternal tracker,同一套过滤与限流在
+// sentry.ts 的 beforeSend 里(见 sentry-observability.test.js)。这里钉住三条不变量:
 //   1. DOM 桥接的那类良性 rejection 仍然被静默;
 //   2. 其余 rejection 会转发给 Sentry,但同一签名只报一次、总量封顶 ——
 //      和 reportHandledFailure / RouteErrorBoundary 一样,别让一个反复 reject 的
@@ -31,6 +33,9 @@ function loadTracker() {
           };
         case '@/utils/dev-log':
           return { devWarn: (message) => warnings.push(message) };
+        // 过滤与限流跑真的:Sentry beforeSend 与这个 tracker 共用同一份预算。
+        case '@/observability/unhandled-rejection-filter':
+          return loadTsModule('src/observability/unhandled-rejection-filter.ts');
         default:
           throw new Error(`unexpected import: ${request}`);
       }

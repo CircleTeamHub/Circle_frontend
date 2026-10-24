@@ -118,6 +118,8 @@ export function getChatSendErrorMessage(
  */
 const reportedSendFailures = new Set<string>();
 
+const CHAT_ERROR_CODE_SHAPE = /^[A-Z][A-Z0-9_]{0,63}$/;
+
 /** 测试隔离用。 */
 export function resetChatSendFailureTelemetry(): void {
   reportedSendFailures.clear();
@@ -138,8 +140,12 @@ export function reportChatSendFailure(
   messageType: string,
   error: unknown,
 ): void {
+  // code 是 Sentry 的分组键:只收常量形状的码,其余归一个桶,免得服务端回来的
+  // 任意文本炸出无数个 issue。
   const code =
-    error instanceof ChatSendError ? error.code : 'CHAT_UNKNOWN_FAILURE';
+    error instanceof ChatSendError && CHAT_ERROR_CODE_SHAPE.test(error.code)
+      ? error.code
+      : 'CHAT_UNKNOWN_FAILURE';
   // 预期内的策略拒绝(禁言/拉黑/限流…)不是故障,用户那侧已经拿到确切原因。
   if (EXPECTED_CHAT_SEND_ERROR_CODES.has(code)) return;
 

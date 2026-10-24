@@ -226,3 +226,14 @@ test('the failing send path actually calls the reporter', () => {
   // 这一行是生产环境唯一的发送失败信号。
   assert.match(client, /reportChatSendFailure\(options\.type, error\)/);
 });
+
+test('a malformed error code is reported under one stable bucket', () => {
+  // code 现在进 Sentry 的 fingerprint:服务端回什么就原样当分组键的话,一个带空格或
+  // 带内容的码会炸出无数个 issue,去重表也会无限长。
+  const { api, reports, ChatSendError } = loadSendErrors();
+  api.reportChatSendFailure('text', new ChatSendError('weird code with private text'));
+  api.reportChatSendFailure('text', new ChatSendError('another weird one'));
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].ctx.code, 'CHAT_UNKNOWN_FAILURE');
+  assert.doesNotMatch(JSON.stringify(reports), /private text|weird/);
+});

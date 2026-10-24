@@ -50,6 +50,7 @@ function loadRealtimeHarness(options = {}) {
   }).outputText;
 
   const sockets = [];
+  let uuidCounter = 0;
 
   class FakeWebSocket {
     static CONNECTING = 0;
@@ -57,8 +58,11 @@ function loadRealtimeHarness(options = {}) {
     static CLOSING = 2;
     static CLOSED = 3;
 
-    constructor(url) {
+    constructor(url, protocols, options) {
       this.url = url;
+      this.protocols = protocols;
+      this.options = options;
+      this.argumentCount = arguments.length;
       this.readyState = FakeWebSocket.CONNECTING;
       this.sent = [];
       this.onopen = null;
@@ -250,6 +254,15 @@ function loadRealtimeHarness(options = {}) {
           };
         case '@/services/api/client':
           return { refreshSessionAccessToken: async () => 'fresh-token' };
+        case 'expo-crypto':
+          return {
+            // 每条连接一个合法的 v4 uuid,便于断言「换连接换 trace id」。
+            randomUUID: () => {
+              if (options.randomUUIDThrows) throw new Error('crypto.randomUUID is not available');
+              uuidCounter += 1;
+              return `123e4567-e89b-42d3-a456-${String(uuidCounter).padStart(12, '0')}`;
+            },
+          };
         default:
           return require(request);
       }
@@ -292,6 +305,11 @@ function loadRealtimeHarness(options = {}) {
   };
 }
 
+/** 这条连接握手时带的 trace id(x-connection-trace-id 头)。 */
+function traceIdOf(socket) {
+  return socket.options?.headers?.['x-connection-trace-id'];
+}
+
 test('malformed realtime reporting resets only when the session lifecycle ends', () => {
   const harness = loadRealtimeHarness();
   harness.connectRealtime('token-a');
@@ -307,7 +325,7 @@ test('malformed realtime reporting resets only when the session lifecycle ends',
   assert.equal(harness.sentryReports.length, 2);
   assert.deepEqual(
     { ...harness.sentryReports[1].context },
-    { operation: 'realtime', kind: 'malformedPayload' },
+    { operation: 'realtime', kind: 'malformedPayload', traceId: traceIdOf(harness.latestSocket()) },
   );
 });
 
@@ -326,7 +344,7 @@ test('schema-invalid known realtime frames are reported as malformed payloads', 
   assert.equal(harness.sentryReports.length, 1);
   assert.deepEqual(
     { ...harness.sentryReports[0].context },
-    { operation: 'realtime', kind: 'malformedPayload' },
+    { operation: 'realtime', kind: 'malformedPayload', traceId: traceIdOf(harness.latestSocket()) },
   );
 });
 
@@ -340,7 +358,7 @@ test('an auth-frame send failure never marks the socket connected and still retr
   assert.equal(harness.realtimeConnected.includes(true), false);
   assert.deepEqual(
     { ...harness.sentryReports[0].context },
-    { operation: 'realtime', kind: 'authFrameSend' },
+    { operation: 'realtime', kind: 'authFrameSend', traceId: traceIdOf(harness.latestSocket()) },
   );
 
   failLatestSocket(harness);
@@ -412,6 +430,7 @@ test('realtime reports one outage at the third consecutive failure and resets af
       operation: 'realtime',
       kind: 'consecutiveConnectionFailures',
       attempts: 3,
+      traceId: traceIdOf(harness.latestSocket()),
     },
   );
   harness.runPendingReconnect();
@@ -686,6 +705,7 @@ test('reconnected sockets re-send the auth frame', () => {
   assert.deepEqual(JSON.parse(harness.latestSocket().sent[0]), {
     type: 'auth',
     token: 'token-a',
+    traceId: traceIdOf(harness.latestSocket()),
   });
   assert.equal(harness.realtimeConnected.at(-1), true);
 });
@@ -715,4 +735,37 @@ test('announcement realtime invalidation refreshes views and reconnect repairs m
  assert.equal(harness.announcementChangeCount(),initial+1);
  harness.latestSocket().onclose({});harness.runPendingReconnect();openLatestSocket(harness);deliverSnapshot(harness);
  assert.equal(harness.announcementChangeCount(),initial+2);
+});
+
+test('every realtime socket carries a fresh connection trace id in the header and the auth frame', () => {
+  // 仿照聊天 socket:同一个 ws-<uuid> 既进 x-connection-trace-id 头(原生端),
+  // 也进认证帧(web 端加不了自定义头),Sentry 上报带同一个值,客户端与网关日志
+  // 才能按连接对上。
+  const harness = loadRealtimeHarness();
+  harness.connectRealtime('token-a');
+  openLatestSocket(harness);
+  const first = harness.latestSocket();
+  const firstTraceId = traceIdOf(first);
+  assert.match(firstTraceId, /^ws-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.equal(JSON.parse(first.sent[0]).traceId, firstTraceId);
+  // protocols 必须是 undefined:浏览器会把 null 当成名为 "null" 的子协议。
+  assert.equal(first.argumentCount, 3);
+  assert.equal(first.protocols, undefined);
+
+  failLatestSocket(harness);
+  harness.runPendingReconnect();
+  const second = harness.latestSocket();
+  assert.notEqual(second, first);
+  assert.notEqual(traceIdOf(second), firstTraceId, 'a reconnect is a new connection with a new id');
+});
+
+test('a platform without crypto.randomUUID still connects with a well-formed trace id', () => {
+  // web 的非安全源（局域网 http 调试）没有 crypto.randomUUID，expo-crypto 会抛。
+  // 关联 id 生成失败不能把建连本身弄崩。
+  const harness = loadRealtimeHarness({ randomUUIDThrows: true });
+  assert.doesNotThrow(() => harness.connectRealtime('token-a'));
+  assert.match(
+    traceIdOf(harness.latestSocket()),
+    /^ws-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
 });

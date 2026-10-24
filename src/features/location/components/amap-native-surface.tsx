@@ -1,7 +1,9 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AMAP_PRIVACY_CONSENT_VERSION } from '@/features/location/services/amap-privacy-consent';
+import { getAmapNativeKey } from '@/features/location/utils/location-map';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * 高德原生地图载体。
@@ -60,19 +62,44 @@ type AmapModule = {
  * 延迟加载：这个包在 Expo Go 里、或者装了依赖还没 prebuild 时没有对应的原生模块，
  * 顶层 import 会直接把整个选点页拖崩。拿不到就当没有，调用方会回落到网页地图。
  */
-function loadAmapModule(): AmapModule | null {
+function requireAmapModule(): unknown {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('expo-gaode-map');
+}
+
+class AmapModuleIncompatibleError extends Error {
+  constructor() {
+    super('expo-gaode-map is missing MapView or the privacy API');
+    this.name = 'AmapModuleIncompatible';
+  }
+}
+
+/**
+ * 本构建给这个平台配了高德 key（app.config.js 才会装原生插件）时，模块缺失才算故障。
+ * 没配 key 的构建（Expo Go、未 prebuild、预发布包）本来就没有这个原生模块，
+ * 回落网页地图是设计行为，不上报。
+ */
+const amapConfiguredForBuild = getAmapNativeKey(Platform.OS) !== '';
+
+export function loadAmapModule(
+  load: () => unknown = requireAmapModule,
+  amapConfigured: boolean = amapConfiguredForBuild,
+): AmapModule | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const loaded = require('expo-gaode-map') as AmapModule;
+    const loaded = load() as Partial<AmapModule> | undefined;
     if (
       !loaded?.MapView ||
       !loaded.ExpoGaodeMapModule?.setPrivacyConfig ||
       !loaded.ExpoGaodeMapModule?.getPrivacyStatus
     ) {
+      if (amapConfigured) {
+        reportHandledFailure('location', 'amapModuleLoad', new AmapModuleIncompatibleError());
+      }
       return null;
     }
-    return loaded;
-  } catch {
+    return loaded as AmapModule;
+  } catch (error) {
+    if (amapConfigured) reportHandledFailure('location', 'amapModuleLoad', error);
     return null;
   }
 }
@@ -98,7 +125,8 @@ export function configureAmapPrivacy(): boolean {
       privacyVersion: AMAP_PRIVACY_CONSENT_VERSION,
     });
     return amapModule.ExpoGaodeMapModule.getPrivacyStatus().isReady;
-  } catch {
+  } catch (error) {
+    reportHandledFailure('location', 'amapPrivacyConfig', error);
     return false;
   }
 }

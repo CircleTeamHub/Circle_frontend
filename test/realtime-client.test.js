@@ -74,13 +74,14 @@ test('realtime client authenticates with a message frame, never via the URL', ()
   const client = read('src/realtime/client.ts');
 
   // 网关只认 {type:'auth',token} 消息帧；URL 带 token 会泄漏进日志且不被读取。
+  // traceId 只是连接关联用的副本，网关的 parseAuthMessage 容忍额外字段。
   assert.match(
     client,
-    /onopen[\s\S]*?send\(JSON\.stringify\(\{ type: 'auth', token: normalizedToken \}\)\)/,
+    /onopen[\s\S]*?send\(\s*JSON\.stringify\(\{ type: 'auth', token: normalizedToken, traceId: socketTraceId \}\),?\s*\)/,
   );
   assert.doesNotMatch(client, /[?&]token=/);
   assert.doesNotMatch(client, /encodeURIComponent\(token\)/);
-  assert.match(client, /new WebSocket\(REALTIME_WS_URL\)/);
+  assert.match(client, /new \(WebSocket as unknown as HeaderedWebSocketConstructor\)\(REALTIME_WS_URL, undefined, \{/);
 });
 
 test('realtime notification.created only prepends bell types but banners everything non-system', () => {

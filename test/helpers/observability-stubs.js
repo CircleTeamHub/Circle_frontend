@@ -21,6 +21,9 @@ function makeObservabilityStubs() {
     '@/observability/tracing': {
       startOperationSpan: () => ({ end() {} }),
     },
+    '@/observability/metrics': {
+      recordMetric() {},
+    },
     '@/utils/client-diagnostics': {
       logClientDiagnostic() {},
       diagnosticErrorMessage: (error) =>

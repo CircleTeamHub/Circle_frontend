@@ -22,6 +22,11 @@ import {
 import { reportError } from '@/observability/sentry';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { devWarn } from '@/utils/dev-log';
+import type { CallTelemetry } from '@/features/call/call-telemetry';
+import {
+  useCallRoomTelemetry,
+  useCallTelemetry,
+} from '@/features/call/use-call-telemetry';
 
 
 const s = StyleSheet.create({
@@ -146,13 +151,21 @@ const s = StyleSheet.create({
 // 同屏最多渲染的视频瓦片数（本地优先）。9 宫格再往上就该做分页/焦点视图，
 // 当前产品形态（小群）先钉住资源上界。
 const MAX_VIDEO_TILES = 9;
+/** livekit DisconnectReason.CLIENT_INITIATED。 */
+const CLIENT_INITIATED_DISCONNECT = 1;
 
 function initials(name: string) {
   const trimmed = name.trim();
   return trimmed.slice(0, 2).toUpperCase() || '?';
 }
 
-function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
+function CallRoomContent({
+  liveKitModule,
+  callTelemetry,
+}: {
+  liveKitModule: LiveKitModule;
+  callTelemetry: CallTelemetry;
+}) {
   const {
     useConnectionState,
     useLocalParticipant,
@@ -165,6 +178,7 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
   const { t } = useTranslation();
   const room = useRoomContext();
   const connectionState = useConnectionState();
+  useCallRoomTelemetry(room, connectionState, callTelemetry);
   const participants = useParticipants();
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled } =
     useLocalParticipant();
@@ -252,6 +266,9 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
     if (!activeCall || leaving) return;
     setLeaving(true);
     try {
+      // leaveActiveCall 会清空 activeCall、让 LiveKitRoom 卸载，之后 room.disconnect()
+      // 发出的 Disconnected 已经没人收：本端挂断在这里先记下。
+      callTelemetry.disconnected(CLIENT_INITIATED_DISCONNECT);
       // 通知后端 + 清空本地状态统一走 leaveActiveCall（幂等，内部已吞掉网络错误）。
       await leaveActiveCall();
       await room.disconnect().catch(() => undefined);
@@ -260,7 +277,7 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
       setLeaving(false);
       router.back();
     }
-  }, [activeCall, leaving, room]);
+  }, [activeCall, callTelemetry, leaving, room]);
 
   // 离开通话屏幕（系统返回手势 / router.back / 通话结束导致 LiveKitRoom 卸载）时：
   // 1. leaveActiveCall —— 告诉后端我们走了，否则返回手势离开的人会永远挂在成员列表里
@@ -426,6 +443,8 @@ export default function GroupCallScreen() {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [roomVersion, setRoomVersion] = useState(0);
+  // 通话质量遥测：一个 LiveKitRoom（roomVersion）一份。必须在所有提前 return 之前。
+  const callTelemetry = useCallTelemetry(roomVersion);
   const mountedRef = useRef(true);
   const reportedRoomErrorRef = useRef(false);
   const [liveKitModule, setLiveKitModule] = useState<
@@ -545,6 +564,8 @@ export default function GroupCallScreen() {
         // 自动暂停下行，dynacast 让发布端按需暂停无人看的层；渲染上限
         // MAX_VIDEO_TILES 是第二道闸。
         options={{ adaptiveStream: true, dynacast: true }}
+        onConnected={callTelemetry.connected}
+        onDisconnected={callTelemetry.disconnected}
         onError={(error) => {
           if (!reportedRoomErrorRef.current) {
             reportedRoomErrorRef.current = true;
@@ -561,7 +582,7 @@ export default function GroupCallScreen() {
       >
         {/* 必须在 Room 内：远端音轨的播放载体（web 是 <audio>，原生 no-op）。 */}
         <RoomAudioRenderer />
-        <CallRoomContent liveKitModule={liveKitModule} />
+        <CallRoomContent liveKitModule={liveKitModule} callTelemetry={callTelemetry} />
       </LiveKitRoom>
       {connectError ? (
         <View style={s.errorBar}>
