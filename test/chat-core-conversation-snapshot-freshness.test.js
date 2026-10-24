@@ -111,6 +111,7 @@ function loadApi(options = {}) {
   const state = { conversationPreviewRevision: 0, epoch: 1 };
   const ingested = [];
   const localReads = [];
+  const merged = [];
   const api = runModule('src/chat-core/api.ts', (request) => {
     if (request === '@/services/api/client') {
       return {
@@ -150,6 +151,9 @@ function loadApi(options = {}) {
         useChatStore: {
           getState: () => ({
             conversationPreviewRevision: state.conversationPreviewRevision,
+            mergeConversationSnapshot: (conversation, revision) => {
+              merged.push({ conversation, revision });
+            },
             setConversations: (conversations, revision) => {
               snapshots.push(conversations);
               snapshotRevisions.push(revision);
@@ -189,7 +193,7 @@ function loadApi(options = {}) {
     }
     throw new Error(`unexpected require: ${request}`);
   });
-  return { api, calls, snapshots, snapshotRevisions, burnUpdates, state, reported, ingested, localReads };
+  return { api, calls, snapshots, snapshotRevisions, burnUpdates, state, reported, ingested, localReads, merged };
 }
 
 /** 让在途 Promise 链上所有能跑的微任务都跑完。 */
@@ -577,4 +581,132 @@ test('expired burn messages read from the local cache are not shown', async () =
   assert.deepEqual(Array.from(ingested[0].messages, (m) => m.id), ['alive', 'plain']);
   respond(calls[0], { messages: [] });
   await history.catch(() => undefined);
+});
+
+test('refreshing one conversation fetches just that row and merges it with the request revision', async () => {
+  const { api, calls, merged, snapshots, state } = loadApi();
+  state.conversationPreviewRevision = 7;
+  const request = api.refreshChatConversation('conv-1');
+  assert.equal(calls[0].url, '/chat/conversations/conv-1');
+  respond(calls[0], { id: 'conv-1', muted: true });
+  await request;
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].conversation.id, 'conv-1');
+  assert.equal(merged[0].revision, 7);
+  // 不是整表快照:不能走 setConversations。
+  assert.equal(snapshots.length, 0);
+});
+
+test('a failed single refresh rejects so the caller can fall back to the full list', async () => {
+  const { api, calls, merged } = loadApi();
+  const request = api.refreshChatConversation('conv-1');
+  calls[0].reject(Object.assign(new Error('Not Found'), { status: 404 }));
+  await assert.rejects(request);
+  assert.equal(merged.length, 0);
+});
+
+test('a page that needs the whole list reuses a fresh snapshot instead of refetching', async () => {
+  const { api, calls, state } = loadApi();
+  const load = api.loadChatConversations();
+  respond(calls[0], [{ id: 'a' }], { 'X-Has-More': 'false' });
+  await load;
+
+  await api.ensureChatConversations();
+  assert.equal(calls.length, 1, 'fresh snapshot while connected: no second request');
+
+  // 实时连接断了:会话变化收不到推送,必须重新拉。
+  state.connected = false;
+  const reload = api.ensureChatConversations();
+  assert.equal(calls.length, 2);
+  respond(calls[1], [{ id: 'a' }], { 'X-Has-More': 'false' });
+  await reload;
+});
+
+test('a page that needs one conversation fetches just it, and falls back to the list on failure', async () => {
+  const { api, calls } = loadApi();
+  const single = api.refreshConversationOrList('conv-1');
+  assert.equal(calls[0].url, '/chat/conversations/conv-1');
+  respond(calls[0], { id: 'conv-1' });
+  await single;
+  assert.equal(calls.length, 1);
+
+  // 老服务端没有单个会话接口:退回整表。
+  const fallback = api.refreshConversationOrList('conv-1');
+  calls[1].reject(Object.assign(new Error('Not Found'), { status: 404 }));
+  await flush();
+  assert.equal(calls[2].url, '/chat/conversations?limit=500');
+  respond(calls[2], [{ id: 'conv-1' }], { 'X-Has-More': 'false' });
+  await fallback;
+});
+
+test('a single refresh waits for an in-flight full reload so the older snapshot cannot overwrite it', async () => {
+  // 整表请求发在变更之前、却晚于单个刷新落地的话,会拿旧状态盖掉刚合并的这一行。
+  const { api, calls, merged, snapshots } = loadApi();
+  const full = api.loadChatConversations();
+  const single = api.refreshChatConversation('conv-1');
+  await flush();
+  assert.equal(calls.length, 1, 'the single GET waits for the in-flight full reload');
+
+  respond(calls[0], [{ id: 'conv-1', muted: false }], { 'X-Has-More': 'false' });
+  await full;
+  await flush();
+  assert.equal(calls[1].url, '/chat/conversations/conv-1');
+  respond(calls[1], { id: 'conv-1', muted: true });
+  await single;
+  assert.equal(snapshots.length, 1);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].conversation.muted, true);
+});
+
+test('a single refresh rejects a body that is not the requested conversation', async () => {
+  const { api, calls, merged } = loadApi();
+  const single = api.refreshChatConversation('conv-1');
+  respond(calls[0], [{ id: 'conv-1' }]);
+  await assert.rejects(single);
+  assert.equal(merged.length, 0);
+});
+
+test('an old server without the endpoint is not asked again in the same session', async () => {
+  const { api, calls } = loadApi();
+  const first = api.refreshChatConversation('conv-1');
+  calls[0].reject(Object.assign(new Error('Cannot GET'), { status: 404 }));
+  await assert.rejects(first);
+
+  await assert.rejects(api.refreshChatConversation('conv-2'));
+  assert.equal(calls.length, 1, 'no second request after a route-missing 404');
+});
+
+test('a "gone" 404 does not mark the endpoint as unsupported', async () => {
+  const { api, calls } = loadApi();
+  const first = api.refreshChatConversation('hidden');
+  calls[0].reject(
+    Object.assign(new Error('gone'), { status: 404, errorCode: 'CHAT_CONVERSATION_NOT_FOUND' }),
+  );
+  await assert.rejects(first);
+  const second = api.refreshChatConversation('conv-2');
+  assert.equal(calls.length, 2);
+  respond(calls[1], { id: 'conv-2' });
+  await second;
+});
+
+test('a single refresh that lands after an account switch is dropped', async () => {
+  const { api, calls, merged, state } = loadApi();
+  const single = api.refreshChatConversation('conv-1');
+  state.epoch = 2;
+  respond(calls[0], { id: 'conv-1' });
+  await single;
+  assert.equal(merged.length, 0);
+});
+
+test('a single refresh reads the local timeline behind a locally deleted preview first', async () => {
+  const { api, calls, localReads, ingested, merged } = loadApi({
+    deletedIds: ['m-deleted'],
+    localRows: { 'conv-1': [{ id: 'm-prev', height: 4 }] },
+  });
+  const single = api.refreshChatConversation('conv-1');
+  respond(calls[0], { id: 'conv-1', lastMessage: { id: 'm-deleted', d: null } });
+  await single;
+  assert.deepEqual(localReads, ['conv-1']);
+  assert.equal(ingested.length, 1);
+  assert.equal(merged.length, 1);
 });

@@ -90,6 +90,11 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
     typings: [],
     backfills: 0,
     backfillOptions: [],
+    // 单会话刷新(会话元信息事件):记下刷了谁;refreshFails 里的 id 让请求失败。
+    refreshed: [],
+    refreshFails: new Set(),
+    refreshGone: new Set(),
+    refreshApplied: [],
     // 全量会话快照序号:防复活标记的自愈判据要拿它区分「移除之后新拉的快照」
     // 和「移除之前就在途、之后才落地的旧快照」。
     conversationsSnapshotSeq: 0,
@@ -224,6 +229,26 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
     }
     if (request === './api') {
       return {
+        refreshChatConversation: (conversationId, options = {}) => {
+          state.refreshed.push(conversationId);
+          if (state.refreshGone.has(conversationId)) {
+            return Promise.reject(
+              Object.assign(new Error('gone'), { status: 403, errorCode: 'CHAT_NOT_MEMBER' }),
+            );
+          }
+          if (state.refreshFails.has(conversationId)) {
+            return Promise.reject(Object.assign(new Error('refresh failed'), { status: 500 }));
+          }
+          // 真实实现在请求返回、结果落地前才问 shouldApply;这里同样等一拍再问,记下回答。
+          return Promise.resolve().then(() => {
+            state.refreshApplied.push({
+              conversationId,
+              applied: options.shouldApply?.() !== false,
+            });
+          });
+        },
+        isConversationGoneError: (error) =>
+          error?.errorCode === 'CHAT_NOT_MEMBER' || error?.errorCode === 'CHAT_CONVERSATION_NOT_FOUND',
         loadChatConversations: (options) => {
           state.backfills += 1;
           // vm 里建的对象原型不同,deepEqual 前要展开成本侧对象。
@@ -1226,9 +1251,10 @@ test('remote group metadata changes schedule an authoritative conversation refre
     );
 
     await state.runBackfill();
-    assert.equal(state.backfills, 1, `${kind} did not refresh conversation metadata`);
-    // 系统消息不带完整新值:补拉要的是落库之后的快照,不能复用在途的旧请求。
-    assert.deepEqual(state.backfillOptions, [{ fresh: true }], kind);
+    // 系统消息不带完整新值:要一份落库之后的权威数据 —— 现在只取这一个会话
+    // (refreshChatConversation 会先等在途的整表请求,不复用发在变更之前的旧快照)。
+    assert.deepEqual(state.refreshed, ['c1'], `${kind} did not refresh conversation metadata`);
+    assert.equal(state.backfills, 0, `${kind} should not reload the whole list`);
     dispatcher.cancelConversationBackfill();
   }
 });
@@ -1371,4 +1397,117 @@ test('burn start requests authoritative expiry sync without advancing the durabl
     socket.emit('chat:burn_started', payload);
   }
   assert.equal(state.expiryInvalidations.length, 1);
+});
+
+// ---- 会话元信息事件只刷新那一个会话 ----------------------------------------
+// 置顶/免打扰(含别的设备)、群公告/头像/群主/角色/全员禁言都会推 updated;原来每条都
+// 整表重拉,群一多就是几百 KB。现在只取那一个,失败才退回整表。
+
+async function flushMicrotasks() {
+  for (let index = 0; index < 6; index += 1) await Promise.resolve();
+}
+
+test('a conversation update refreshes only that conversation', async () => {
+  const { socket, state } = loadDispatcher();
+  socket.emit('chat:conversation', { kind: 'updated', conversationId: 'c1', userId: 'me' });
+  await state.runBackfill();
+  await flushMicrotasks();
+  assert.deepEqual(state.refreshed, ['c1']);
+  assert.equal(state.backfills, 0);
+});
+
+test('a burst of updates is coalesced per conversation', async () => {
+  const { socket, state } = loadDispatcher();
+  for (const conversationId of ['c1', 'c1', 'c2', 'c1']) {
+    socket.emit('chat:conversation', { kind: 'updated', conversationId, userId: 'me' });
+  }
+  await state.runBackfill();
+  await flushMicrotasks();
+  assert.deepEqual([...state.refreshed].sort(), ['c1', 'c2']);
+  assert.equal(state.backfills, 0);
+});
+
+test('a failed single refresh falls back to the full reload', async () => {
+  // 老服务端没有单个会话接口、会话已不在列表里、网络失败:都退回原来的整表重拉。
+  const { socket, state } = loadDispatcher();
+  state.refreshFails.add('c1');
+  socket.emit('chat:conversation', { kind: 'updated', conversationId: 'c1', userId: 'me' });
+  await state.runBackfill();
+  await flushMicrotasks();
+  assert.equal(state.backfills, 0);
+
+  await state.runBackfill();
+  assert.equal(state.backfills, 1);
+  assert.equal(state.backfillOptions[0].fresh, true);
+});
+
+test('too many conversations in one burst take a single full reload instead', async () => {
+  const { socket, state } = loadDispatcher();
+  for (let index = 0; index < 9; index += 1) {
+    socket.emit('chat:conversation', {
+      kind: 'joined',
+      conversationId: `c${index}`,
+      userId: 'me',
+    });
+  }
+  await state.runBackfill();
+  await flushMicrotasks();
+  assert.deepEqual(state.refreshed, []);
+
+  await state.runBackfill();
+  assert.equal(state.backfills, 1);
+});
+
+test('a removal right after an update cancels the pending single refresh', async () => {
+  const { socket, state } = loadDispatcher({ conversations: [{ id: 'c1', type: 'GROUP' }] });
+  socket.emit('chat:conversation', { kind: 'updated', conversationId: 'c1', userId: 'me' });
+  socket.emit('chat:conversation', { kind: 'removed', conversationId: 'c1', userId: 'me' });
+  await state.runBackfill();
+  await flushMicrotasks();
+  // 不然拿回来的是 403,再白白触发一次整表重拉。
+  assert.deepEqual(state.refreshed, []);
+  assert.equal(state.backfills, 0);
+});
+
+test('a conversation the server says is gone and that is not listed here needs no full reload', async () => {
+  // 隐藏了的会话、刚退出的会话:单个接口 403/404 是预期结果,本机又没有这一行,什么都不用做。
+  const { socket, state } = loadDispatcher({ conversations: [] });
+  state.refreshGone.add('hidden-1');
+  socket.emit('chat:conversation', { kind: 'updated', conversationId: 'hidden-1', userId: 'me' });
+  await state.runBackfill();
+  await flushMicrotasks();
+  await state.runBackfill();
+  assert.equal(state.backfills, 0);
+});
+
+test('a conversation the server says is gone but is still listed here gets the full reload', async () => {
+  const { socket, state } = loadDispatcher({ conversations: [{ id: 'c1', type: 'GROUP' }] });
+  state.refreshGone.add('c1');
+  socket.emit('chat:conversation', { kind: 'updated', conversationId: 'c1', userId: 'me' });
+  await state.runBackfill();
+  await flushMicrotasks();
+  await state.runBackfill();
+  assert.equal(state.backfills, 1);
+});
+
+test('a single refresh does not resurrect a conversation removed while it was in flight', async () => {
+  const { socket, state } = loadDispatcher({ conversations: [{ id: 'c1', type: 'GROUP' }] });
+  socket.emit('chat:conversation', { kind: 'updated', conversationId: 'c1', userId: 'me' });
+  state.fireBackfill();
+  // 请求在途时收到移出事件。
+  socket.emit('chat:conversation', { kind: 'removed', conversationId: 'c1', userId: 'me' });
+  await flushMicrotasks();
+  assert.deepEqual(
+    state.refreshApplied.map((entry) => entry.applied),
+    [false],
+  );
+});
+
+test('logging out drops pending single refreshes', async () => {
+  const { socket, state, dispatcher } = loadDispatcher();
+  socket.emit('chat:conversation', { kind: 'updated', conversationId: 'c1', userId: 'me' });
+  dispatcher.cancelConversationBackfill();
+  await state.runBackfill();
+  await flushMicrotasks();
+  assert.deepEqual(state.refreshed, []);
 });

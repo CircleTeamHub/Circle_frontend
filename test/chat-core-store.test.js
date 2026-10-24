@@ -2202,3 +2202,102 @@ test('a snapshot reload replaces only the conversations that changed', () => {
   assert.notEqual(byId(secondBefore.id), secondBefore);
   assert.equal(byId('conv-2').unreadCount, 3);
 });
+
+// ---- 单个会话快照(GET /chat/conversations/:id)合并 -------------------------
+// 会话元信息变更事件只刷新那一个会话;合并要和全量快照走同一套对账。
+
+test('a single conversation snapshot replaces only that row', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conversation({ id: 'conv-1', muted: false }),
+    conversation({ id: 'conv-2', muted: false }),
+  ]);
+  const before = useChatStore.getState();
+  const untouched = before.conversations.find((c) => c.id === 'conv-2');
+
+  useChatStore.getState().mergeConversationSnapshot(conversation({ id: 'conv-1', muted: true }));
+
+  const after = useChatStore.getState();
+  assert.equal(after.conversations.find((c) => c.id === 'conv-1').muted, true);
+  assert.equal(after.conversations.find((c) => c.id === 'conv-2'), untouched);
+  // 这不是一份完整快照:不能动快照序号与「已加载」标记。
+  assert.equal(after.conversationsSnapshotSeq, before.conversationsSnapshotSeq);
+  assert.equal(after.conversationsSnapshotLoaded, before.conversationsSnapshotLoaded);
+});
+
+test('an unchanged single snapshot leaves the list array untouched', () => {
+  const { useChatStore } = loadChatStore();
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
+  const before = useChatStore.getState().conversations;
+
+  useChatStore.getState().mergeConversationSnapshot(conversation({ id: 'conv-1' }));
+
+  assert.equal(useChatStore.getState().conversations, before);
+});
+
+test('a single snapshot adds a newly joined conversation in sorted position', () => {
+  const { useChatStore } = loadChatStore();
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
+
+  useChatStore.getState().mergeConversationSnapshot(conversation({ id: 'conv-new', pinned: true }));
+
+  // store 在 vm 里跑,数组原型跨上下文,先转成本上下文数组再比。
+  assert.deepEqual(
+    Array.from(useChatStore.getState().conversations, (c) => c.id),
+    ['conv-new', 'conv-1'],
+  );
+});
+
+test('a single snapshot requested before a live message does not roll its preview back', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const first = msg({ id: 'm1', height: 1 });
+  store.setConversations([conversation({ id: 'conv-1', lastMessage: first })]);
+  const requestRevision = useChatStore.getState().conversationPreviewRevision;
+
+  // 请求发出之后才到的实时消息。
+  useChatStore.getState().applyIncomingMessage(msg({ id: 'm2', height: 2 }));
+
+  useChatStore
+    .getState()
+    .mergeConversationSnapshot(conversation({ id: 'conv-1', lastMessage: first }), requestRevision);
+
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'm2');
+});
+
+test('a single snapshot with a raised clear floor drops the cleared part of the timeline', () => {
+  // 另一台设备清空过:单个会话快照带回更高的清空水位,本机水位之下的消息要一起清掉。
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'conv-1' })]);
+  store.ingestMessages('conv-1', [
+    msg({ id: 'a', height: 1 }),
+    msg({ id: 'b', height: 2 }),
+    msg({ id: 'c', height: 3 }),
+  ]);
+
+  useChatStore
+    .getState()
+    .mergeConversationSnapshot(conversation({ id: 'conv-1', clearedBeforeHeight: 2 }));
+
+  const remaining = useChatStore.getState().messagesByConversation['conv-1'] ?? [];
+  assert.deepEqual(Array.from(remaining, (m) => m.id), ['c']);
+  assert.equal(useChatStore.getState().clearedBeforeHeightByConversation['conv-1'], 2);
+});
+
+test('a single snapshot that changes the burn policy advances the self-destruct epoch', () => {
+  const { useChatStore } = loadChatStore();
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1', burnDurationSec: null })]);
+  const before = useChatStore.getState().selfDestructPolicyEpoch;
+
+  useChatStore.getState().mergeConversationSnapshot(
+    conversation({
+      id: 'conv-1',
+      burnDurationSec: 60,
+      burnStartedAt: '2026-08-05T12:00:00.000Z',
+    }),
+  );
+
+  assert.equal(useChatStore.getState().selfDestructPolicyEpoch, before + 1);
+});

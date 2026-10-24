@@ -11,7 +11,7 @@ import type {
   ChatMessageDto,
   ChatSyncPageDto,
 } from './protocol';
-import { reuseUnchanged } from '@/utils/structural-sharing';
+import { reuseUnchanged, structurallyEqual } from '@/utils/structural-sharing';
 import {
   clearLocalConversationMessages,
   deleteLocalMessage,
@@ -464,6 +464,15 @@ interface ChatStoreState {
   conversationsSnapshotSeq: number;
   /** 单会话回写(偏好变更/新建后),保持排序不变量。 */
   upsertConversation: (conversation: ChatConversationDto) => void;
+  /**
+   * 单个会话的权威快照(GET /chat/conversations/:id)合并进列表:和全量快照走同一套
+   * 对账(焚毁状态、本机删除的预览、更新的实时预览、已读/清空水位、对端水位种子)。
+   * 不动 conversationsSnapshotLoaded / Seq(这不是一份完整快照);内容没变就什么都不写。
+   */
+  mergeConversationSnapshot: (
+    conversation: ChatConversationDto,
+    requestPreviewRevision?: number,
+  ) => void;
   /** G-01 冷启动水合:本地库快照灌回内存(仅在对应结构为空时生效)。 */
   hydrateLocalSnapshot: (
     conversations: ChatConversationDto[],
@@ -1309,6 +1318,84 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     if (nextConversations !== currentConversations) {
       void persistLocalConversations(get().conversations);
     }
+  },
+  mergeConversationSnapshot: (incoming, requestPreviewRevision) => {
+    const {
+      conversations: currentConversations,
+      messagesByConversation,
+      readWatermarks,
+      deliveredWatermarks,
+      currentUserId,
+      clearedBeforeHeightByConversation,
+      selfDestructPolicyEpoch,
+      livePreviewByConversation,
+    } = get();
+    const current = currentConversations.find((c) => c.id === incoming.id);
+    const withBurnState = mergeConversationBurnState(incoming, current);
+    const burnPolicyChanged = hasBurnPolicyChanged(
+      current ? [current] : [],
+      [withBurnState],
+    );
+    // 另一台设备清空过:快照里的水位比本机高,水位之下的本地记录要删掉。
+    const raisedFloors = collectRaisedClearFloors(
+      [incoming],
+      clearedBeforeHeightByConversation,
+    );
+    const floors =
+      raisedFloors.size === 0
+        ? clearedBeforeHeightByConversation
+        : {
+            ...clearedBeforeHeightByConversation,
+            ...Object.fromEntries(raisedFloors),
+          };
+    const timelines = dropTimelineThrough(messagesByConversation, raisedFloors);
+    for (const [conversationId, floor] of raisedFloors) {
+      void deleteLocalMessagesBelow(conversationId, floor + 1);
+    }
+    const timeline = messagesByConversation[incoming.id];
+    const reconciled = reconcileWithLocalWatermarks(
+      preserveNewerLivePreview(
+        reconcileDeletedPreview(withBurnState, timeline),
+        current,
+        timeline,
+        livePreviewByConversation[incoming.id],
+        requestPreviewRevision,
+      ),
+      readWatermarks[incoming.id]?.[currentUserId ?? ''] ?? 0,
+      floors[incoming.id] ?? 0,
+      timelines[incoming.id] ?? [],
+      currentUserId,
+    );
+    const next =
+      current && structurallyEqual(current, reconciled) ? current : reconciled;
+    set({
+      conversations:
+        next === current
+          ? currentConversations
+          : sortConversations([
+              ...currentConversations.filter((c) => c.id !== incoming.id),
+              next,
+            ]),
+      readWatermarks: seedSelfReadWatermarks(
+        seedPeerReadWatermarks(readWatermarks, [incoming]),
+        [incoming],
+        currentUserId,
+      ),
+      deliveredWatermarks: seedPeerDeliveredWatermarks(deliveredWatermarks, [
+        incoming,
+      ]),
+      ...(raisedFloors.size > 0
+        ? {
+            clearedBeforeHeightByConversation: floors,
+            messagesByConversation: timelines,
+          }
+        : {}),
+      ...(burnPolicyChanged
+        ? { selfDestructPolicyEpoch: selfDestructPolicyEpoch + 1 }
+        : {}),
+    });
+    if (burnPolicyChanged) void get().purgeExpiredBurnMessages();
+    if (next !== current) void upsertLocalConversation(next);
   },
   upsertConversation: (conversation) => {
     const { conversations, messagesByConversation, readWatermarks } = get();

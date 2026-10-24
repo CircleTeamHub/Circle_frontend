@@ -169,12 +169,48 @@ const FOCUS_RELOAD_FRESH_MS = 30_000;
  * 群一多,一次全量会话快照就是几百 KB 的 JSON,来回切页面每次都拉很费电。
  */
 export function canSkipConversationFocusReload(): boolean {
+  return hasFreshConversationSnapshot(FOCUS_RELOAD_FRESH_MS);
+}
+
+/** 实时连接正常、store 里是完整快照、且快照不超过 maxAgeMs。 */
+function hasFreshConversationSnapshot(maxAgeMs: number): boolean {
   const state = useChatStore.getState();
   return (
     state.connected &&
     state.conversationsSnapshotLoaded &&
-    isConversationSnapshotFresh(FOCUS_RELOAD_FRESH_MS)
+    isConversationSnapshotFresh(maxAgeMs)
   );
+}
+
+/** 列表类页面(入群申请里的「已加入」等)复用会话快照的窗口。 */
+const LIST_REUSE_FRESH_MS = 2 * 60_000;
+
+/**
+ * 页面需要整张会话列表时用:手上有新鲜的完整快照(实时连接正常时会话变化靠事件推送)
+ * 就直接用 store 里那份,否则照常拉。群一多,每打开一次就全量拉一次很费电。
+ */
+export function ensureChatConversations(
+  options: { force?: boolean } = {},
+): Promise<ChatConversationDto[]> {
+  // force:用户主动下拉刷新,不复用。
+  if (!options.force && hasFreshConversationSnapshot(LIST_REUSE_FRESH_MS)) {
+    return Promise.resolve(useChatStore.getState().conversations);
+  }
+  return loadChatConversations();
+}
+
+/**
+ * 页面只关心某一个会话的最新元信息时用(群管理、群笔记管理读它的 policies / myRole):
+ * 只取这一个;老服务端没有单个会话接口、或单取失败时退回整表重拉。
+ */
+export async function refreshConversationOrList(conversationId: string): Promise<void> {
+  try {
+    await refreshChatConversation(conversationId);
+  } catch (error) {
+    // 断网:整表同样拉不到,不必再失败一次。
+    if ((error as { status?: unknown } | null)?.status === 0) throw error;
+    await loadChatConversations();
+  }
 }
 
 function isBadRequest(error: unknown): boolean {
@@ -380,6 +416,66 @@ async function hydrateTimelinesBehindDeletedPreviews(
       void useChatStore.getState().ingestMessages(conversation.id, local, { persist: false });
     }
   }
+}
+
+/** GET /chat/conversations/:id 的这两个错误码表示会话已不在本人列表里(已退出 / 已隐藏)。 */
+const CONVERSATION_GONE_CODES: ReadonlySet<string> = new Set([
+  'CHAT_NOT_MEMBER',
+  'CHAT_CONVERSATION_NOT_FOUND',
+]);
+
+export function isConversationGoneError(error: unknown): boolean {
+  const code = (error as { errorCode?: unknown } | null)?.errorCode;
+  return typeof code === 'string' && CONVERSATION_GONE_CODES.has(code);
+}
+
+/** 当前账号的服务端有没有单个会话接口(null = 还不知道)。老服务端每次都 404,知道了就不再试。 */
+let singleConversationSupport: { epoch: number; supported: boolean } | null = null;
+
+/**
+ * 只刷新一个会话(会话元信息变更事件后用):取 GET /chat/conversations/:id,按全量快照
+ * 同一套对账合并进列表。群一多,为一条置顶/免打扰/群公告变更重拉整张列表是几百 KB。
+ *
+ * - 在途的整表请求可能发在这次变更之前:先等它落地,否则它晚到时会拿旧状态盖掉这一行。
+ * - 末条被本机删掉、本地时间线又没读过的会话,先读本地时间线(同整表路径),预览才不会变空。
+ * - shouldApply 返回 false(比如请求期间收到了移出事件)就丢弃结果,不把会话「复活」。
+ * - 失败(老服务端没有这个接口、会话已不在本人列表里、网络)原样抛出,由调用方决定是否整表重拉。
+ */
+export async function refreshChatConversation(
+  conversationId: string,
+  options: { shouldApply?: () => boolean } = {},
+): Promise<void> {
+  const epoch = useAuthStore.getState().sessionEpoch;
+  if (singleConversationSupport?.epoch === epoch && !singleConversationSupport.supported) {
+    throw Object.assign(new Error('single conversation endpoint unavailable'), { status: 404 });
+  }
+  const sameSession = sessionGate();
+  const inFlight =
+    conversationsRequest && conversationsRequestEpoch === epoch ? conversationsRequest : null;
+  if (inFlight) await inFlight.then(() => undefined, () => undefined);
+  if (!sameSession()) return;
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  let conversation: ChatConversationDto;
+  try {
+    conversation = await apiClient<ChatConversationDto>(
+      `/chat/conversations/${encodeURIComponent(conversationId)}`,
+    );
+  } catch (error) {
+    // 没有错误码的 404 = 老服务端没有这个接口:这次登录内不再试,直接走整表。
+    const status = (error as { status?: unknown } | null)?.status;
+    if (status === 404 && !isConversationGoneError(error)) {
+      singleConversationSupport = { epoch, supported: false };
+    }
+    throw error;
+  }
+  if (!conversation || typeof conversation !== 'object' || conversation.id !== conversationId) {
+    throw new Error('single conversation response did not match the requested id');
+  }
+  const stillWanted = () => sameSession() && options.shouldApply?.() !== false;
+  if (!stillWanted()) return;
+  await hydrateTimelinesBehindDeletedPreviews([conversation], sameSession);
+  if (!stillWanted()) return;
+  useChatStore.getState().mergeConversationSnapshot(conversation, requestPreviewRevision);
 }
 
 /** 读取会话级阅后即焚档位（深链/联系人入口可能先于会话列表打开聊天页）。 */

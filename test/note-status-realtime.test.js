@@ -48,7 +48,8 @@ test('note list patches live source status in place and reloads only on recovery
   assert.match(management, /state\.lastChange/);
   assert.doesNotMatch(management, /state\.version/);
   assert.match(management, /state\.recoveryVersion/);
-  assert.match(management, /\[loadNotes, noteStatusRecovery\]/);
+  // notesReloadGate:回到页面时没有变化就不重拉(见 friends-write-marker.test.js)。
+  assert.match(management, /\[loadNotes, noteStatusRecovery, notesReloadGate\]/);
 });
 
 test('note status signal keeps the latest source change and advances monotonically', () => {

@@ -42,7 +42,18 @@ jest.mock('@/features/notes/components/NoteCard', () => {
     ),
   };
 });
-jest.mock('@/services/api/notes', () => ({ fetchNotes: jest.fn(), deleteNote: jest.fn(), relistNote: jest.fn() }));
+jest.mock('@/services/api/notes', () => ({
+  fetchNotes: jest.fn(),
+  deleteNote: jest.fn(),
+  relistNote: jest.fn(),
+  // 回到页面跳过重拉的判定:这里一律当作「之后改过」,每次聚焦照常重拉。
+  notesMutatedSince: jest.fn(() => true),
+}));
+// 聚焦重拉的判定按账号区分(useFocusReloadGate 读 sessionEpoch)。
+jest.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector: (state: { sessionEpoch: number }) => unknown) =>
+    selector({ sessionEpoch: 1 }),
+}));
 
 const note = { id: 'n1', title: '已下架的笔记', groups: [], status: 'UNLISTED' };
 
