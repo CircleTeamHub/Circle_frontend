@@ -1347,3 +1347,17 @@ test("session tracking is explicitly on so web reports release health too", () =
   initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
   assert.equal(calls[0].enableAutoSessionTracking, true);
 });
+
+test("web unhandled rejections (browser global handler mechanism) pass the same gate", () => {
+  // web 上挂的是 browserGlobalHandlersIntegration，mechanism.type 带命名空间前缀。
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const webEvent = (error) => [
+    { exception: { values: [{ type: "Error", value: error.message, mechanism: { type: "auto.browser.global_handlers.onunhandledrejection", handled: false } }] } },
+    { originalException: error },
+  ];
+  assert.equal(calls[0].beforeSend(...webEvent(new Error("DomWebView: injectJavaScript after unmount"))), null);
+  assert.notEqual(calls[0].beforeSend(...webEvent(new Error("web flake"))), null);
+  assert.equal(calls[0].beforeSend(...webEvent(new Error("web flake"))), null);
+});

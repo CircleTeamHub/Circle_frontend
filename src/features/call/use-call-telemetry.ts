@@ -32,6 +32,7 @@ export function useCallRoomTelemetry(
   // 子组件的 effect 先于 LiveKitRoom 自己发起建连的 effect 执行：这里就是建连起点。
   useEffect(() => {
     telemetry.roomMounted();
+    return () => telemetry.roomUnmounted();
   }, [telemetry]);
 
   useEffect(() => {

@@ -722,10 +722,16 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
  * 签名取原始错误（脱敏之后 value 已被替换），在脱敏之前判断。
  */
 function isUnhandledRejectionEvent(event: ErrorEvent): boolean {
+  // Hermes / JSC：'onunhandledrejection'；web 的 browserGlobalHandlersIntegration 带命名
+  // 空间前缀：'auto.browser.global_handlers.onunhandledrejection'。
   return (
-    event.exception?.values?.some(
-      (value) => value.mechanism?.type === 'onunhandledrejection',
-    ) ?? false
+    event.exception?.values?.some((value) => {
+      const type = value.mechanism?.type;
+      return (
+        type === 'onunhandledrejection' ||
+        (typeof type === 'string' && type.endsWith('.onunhandledrejection'))
+      );
+    }) ?? false
   );
 }
 

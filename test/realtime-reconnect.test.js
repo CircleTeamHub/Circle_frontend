@@ -258,6 +258,7 @@ function loadRealtimeHarness(options = {}) {
           return {
             // 每条连接一个合法的 v4 uuid,便于断言「换连接换 trace id」。
             randomUUID: () => {
+              if (options.randomUUIDThrows) throw new Error('crypto.randomUUID is not available');
               uuidCounter += 1;
               return `123e4567-e89b-42d3-a456-${String(uuidCounter).padStart(12, '0')}`;
             },
@@ -756,4 +757,15 @@ test('every realtime socket carries a fresh connection trace id in the header an
   const second = harness.latestSocket();
   assert.notEqual(second, first);
   assert.notEqual(traceIdOf(second), firstTraceId, 'a reconnect is a new connection with a new id');
+});
+
+test('a platform without crypto.randomUUID still connects with a well-formed trace id', () => {
+  // web 的非安全源（局域网 http 调试）没有 crypto.randomUUID，expo-crypto 会抛。
+  // 关联 id 生成失败不能把建连本身弄崩。
+  const harness = loadRealtimeHarness({ randomUUIDThrows: true });
+  assert.doesNotThrow(() => harness.connectRealtime('token-a'));
+  assert.match(
+    traceIdOf(harness.latestSocket()),
+    /^ws-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
 });

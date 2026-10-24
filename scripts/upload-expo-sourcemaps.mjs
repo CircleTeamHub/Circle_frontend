@@ -3,7 +3,10 @@
  * 把 `expo export` / `eas update` 产出目录里的 source map 传到 Sentry。
  *
  * 用法：node scripts/upload-expo-sourcemaps.mjs <export-dir> [--optional] [--delete-maps]
+ *       node scripts/upload-expo-sourcemaps.mjs --check
  *
+ * - --check：只校验凭据。OTA 要在 `eas update` 发布之前跑：上传一步在发布之后，
+ *   缺凭据到那时才发现，更新已经在用户手里了。
  * - 默认 fail-closed：缺 SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT 直接失败。OTA 包
  *   是发给真实用户的代码，缺 map 的话 OTA 之后的崩溃栈全是混淆过的 —— 与 Android 发版
  *   工作流的 sentry-upload 门禁同一口径。
@@ -42,6 +45,16 @@ function deleteSourceMaps(maps) {
 }
 
 const args = process.argv.slice(2);
+const missing = REQUIRED_ENV.filter((name) => !process.env[name]?.trim());
+
+if (args.includes('--check')) {
+  if (missing.length > 0) {
+    fail(`Sentry source map upload config is missing: ${missing.join(', ')}.`);
+  }
+  console.log('Sentry source map upload config is present.');
+  process.exit(0);
+}
+
 const optional = args.includes('--optional');
 const deleteMaps = args.includes('--delete-maps');
 const exportDir = args.find((arg) => !arg.startsWith('--'));
@@ -51,7 +64,6 @@ if (!existsSync(exportDir) || !statSync(exportDir).isDirectory()) {
   fail(`export directory not found: ${exportDir}`);
 }
 
-const missing = REQUIRED_ENV.filter((name) => !process.env[name]?.trim());
 const maps = findSourceMaps(exportDir);
 
 if (missing.length > 0) {

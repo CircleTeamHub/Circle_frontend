@@ -95,3 +95,15 @@ test("web export and OTA scripts are wired to the uploader", () => {
   const ota = fs.readFileSync(path.join(process.cwd(), "docs/ota-updates.md"), "utf8");
   assert.match(ota, /npm run sourcemaps:ota/);
 });
+
+test("--check validates credentials up front so an OTA can fail before it is published", () => {
+  const missing = run(["--check"], { SENTRY_ORG: "windnote" });
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /missing: SENTRY_AUTH_TOKEN, SENTRY_PROJECT\./);
+  const ok = run(["--check"], CREDENTIALS);
+  assert.equal(ok.status, 0, ok.stderr);
+  const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
+  assert.match(pkg.scripts["sourcemaps:ota:check"], /upload-expo-sourcemaps\.mjs --check$/);
+  const ota = fs.readFileSync(path.join(process.cwd(), "docs/ota-updates.md"), "utf8");
+  assert.match(ota, /npm run sourcemaps:ota:check && eas update/);
+});

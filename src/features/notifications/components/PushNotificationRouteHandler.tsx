@@ -193,10 +193,9 @@ export function PushNotificationRouteHandler() {
         subscription = initializePushResponseListener(
           notifications,
           (response) => {
-            if (response) {
-              const { request } = response.notification;
-              pushTelemetry.opened('expo', request.identifier, request.content.data);
-            }
+            // 读形状全用可选链：遥测绝不能挡在路由前面。
+            const request = response?.notification?.request;
+            pushTelemetry.opened('expo', request?.identifier ?? '', request?.content?.data);
             controller.handleResponse(response);
           },
           (error) => {
@@ -204,8 +203,8 @@ export function PushNotificationRouteHandler() {
           },
         );
         receivedSubscription = notifications.addNotificationReceivedListener((notification) => {
-          const { request } = notification;
-          pushTelemetry.received('expo', request.identifier, request.content.data);
+          const request = notification?.request;
+          pushTelemetry.received('expo', request?.identifier ?? '', request?.content?.data);
         });
         notifications.setNotificationHandler({
           handleNotification: async () => ({

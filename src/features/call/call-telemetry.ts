@@ -81,8 +81,12 @@ export interface CallTelemetryDependencies {
 export interface CallTelemetry {
   /** LiveKitRoom 真正挂载（开始建连）的时刻；之前的组件加载时间不算建连。 */
   roomMounted: () => void;
+  /**
+   * LiveKitRoom 卸载。挂断 / 对端结束时 activeCall 先被清空、房间先卸载，它的
+   * Disconnected 监听已经摘掉，之后才发出的断开事件没人收 —— 在这里收尾。
+   */
+  roomUnmounted: () => void;
   connected: () => void;
-  connectFailed: () => void;
   connectionStateChanged: (state: string) => void;
   qualityChanged: (quality: unknown) => void;
   disconnected: (reason?: unknown) => void;
@@ -101,12 +105,15 @@ export function createCallTelemetry(
 ): CallTelemetry {
   const deps = { ...defaultDependencies, ...overrides };
   let connectStartedAt = deps.now();
+  let roomMountedOnce = false;
   let connectSettled = false;
   let inSession = false;
   let finished = false;
   let reconnecting = false;
   let reconnects = 0;
   let qualityBreadcrumbs = 0;
+  // 抖动的链路每秒都可能在 good / poor 之间来回：次数在内存里累计，收尾时按档发一次。
+  const degradedCounts: Record<DegradedQuality, number> = { poor: 0, lost: 0 };
   let currentDegraded: DegradedQuality | null = null;
   let degradedSince = 0;
   const degradedSeconds: Record<DegradedQuality, number> = { poor: 0, lost: 0 };
@@ -136,6 +143,9 @@ export function createCallTelemetry(
     inSession = false;
     closeDegradedInterval();
     for (const quality of ['poor', 'lost'] as const) {
+      if (degradedCounts[quality] > 0) {
+        deps.recordMetric('call.quality.degraded', degradedCounts[quality], { quality });
+      }
       if (degradedSeconds[quality] > 0) {
         deps.recordMetric('call.quality.degraded_time', Math.round(degradedSeconds[quality]), { quality });
       }
@@ -144,22 +154,27 @@ export function createCallTelemetry(
     if (reasonName) deps.recordMetric('call.disconnect', 1, { reason: reasonName });
   };
 
+  /** 卸载 / 屏幕离开时收尾：没开始建连的不记建连样本，也不编一个断开原因以外的东西。 */
+  const finishWithoutEvent = () => {
+    if (finished) return;
+    finished = true;
+    if (roomMountedOnce) settleConnect('cancelled');
+    finishSession(inSession ? 'UNSPECIFIED' : null);
+  };
+
   return {
     roomMounted: () =>
       safely(() => {
         if (connectSettled || finished) return;
+        roomMountedOnce = true;
         connectStartedAt = deps.now();
       }),
+    roomUnmounted: () => safely(finishWithoutEvent),
     connected: () =>
       safely(() => {
         if (finished || inSession) return;
         settleConnect('connected');
         inSession = true;
-      }),
-    connectFailed: () =>
-      safely(() => {
-        if (finished || inSession) return;
-        settleConnect('failed');
       }),
     connectionStateChanged: (state) =>
       safely(() => {
@@ -183,7 +198,7 @@ export function createCallTelemetry(
         if (!next) return;
         currentDegraded = next;
         degradedSince = deps.now();
-        deps.recordMetric('call.quality.degraded', 1, { quality: next });
+        degradedCounts[next] += 1;
         if (qualityBreadcrumbs < MAX_QUALITY_BREADCRUMBS) {
           qualityBreadcrumbs += 1;
           deps.logDiagnostic('call.quality.degraded', { reason: next });
@@ -194,23 +209,19 @@ export function createCallTelemetry(
         if (finished) return;
         finished = true;
         const [reasonName, status] = classifyDisconnect(reason);
-        if (!inSession) {
+        const wasInSession = inSession;
+        if (!wasInSession) {
+          // 建连阶段就断了（livekit 连接失败时先发 JOIN_FAILURE 的 Disconnected 再 reject）。
           settleConnect(status === 'abnormal' ? 'failed' : 'cancelled');
         }
         finishSession(reasonName);
-        if (status === 'abnormal') {
+        // 建连阶段的失败 onError 已经报了 livekit/roomConnection，这里不重复报。
+        if (status === 'abnormal' && wasInSession) {
           deps.reportFailure('call', 'abnormalDisconnect', new CallDisconnectError(reasonName), {
             code: reasonName,
           });
         }
       }),
-    dispose: () =>
-      safely(() => {
-        if (finished) return;
-        finished = true;
-        settleConnect('cancelled');
-        // 屏幕卸载时 onDisconnected 可能还没到：照常收尾，但不编一个断开原因。
-        finishSession(null);
-      }),
+    dispose: () => safely(finishWithoutEvent),
   };
 }

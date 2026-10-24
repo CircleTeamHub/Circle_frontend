@@ -221,8 +221,19 @@ let reportedCurrentConnectionOutage = false;
 let connectionTraceId: string | null = null;
 const reportedRealtimeFailures = new Set<string>();
 
+/**
+ * web 的非安全源（局域网 http 调试）没有 crypto.randomUUID，expo-crypto 会抛：关联 id
+ * 生成失败不能把建连弄崩，退回一个同形状（v4）的本地随机 id —— 它只用于关联，不涉安全。
+ */
 function createConnectionTraceId(): string {
-  return `ws-${randomUUID()}`;
+  try {
+    return `ws-${randomUUID()}`;
+  } catch {
+    const hex = (length: number) =>
+      Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    const variant = '89ab'[Math.floor(Math.random() * 4)];
+    return `ws-${hex(8)}-${hex(4)}-4${hex(3)}-${variant}${hex(3)}-${hex(12)}`;
+  }
 }
 
 /**

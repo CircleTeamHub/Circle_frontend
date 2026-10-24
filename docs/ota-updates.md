@@ -31,17 +31,22 @@ eas update --channel production --environment production --message "Describe the
 SDK 55 requires the `--environment` flag. Preview updates use the `preview`
 channel and the preview EAS environment.
 
-Then upload the update's source maps to Sentry from the same checkout:
+Publish together with the Sentry source map upload, in one chain:
 
 ```bash
-npm run sourcemaps:ota
+npm run sourcemaps:ota:check && eas update --channel production --environment production --message "Describe the change" && npm run sourcemaps:ota
 ```
 
-It reads the `dist/` directory that `eas update` just wrote and needs
-`SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` (`SENTRY_URL` defaults to
-`https://sentry.io/`). It fails when any of them is missing or when `dist/` has no
-`.map` files, because crash stacks from an update without uploaded maps stay
-minified. Maps are matched by debug ID, so no release or dist value is needed.
+- `sourcemaps:ota:check` runs first because the upload happens after `eas update`
+  has already published: a missing credential found only then means users already
+  have an update whose crash stacks stay minified.
+- `sourcemaps:ota` uploads the maps from the `dist/` directory that `eas update`
+  just wrote. Keep `dist/` until it succeeds: the next `eas update` or
+  `expo export` overwrites it, and those maps are then gone.
+- Both need `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` exported in the
+  shell (`.env` files are not read for this check); `SENTRY_URL` defaults to
+  `https://sentry.io/`. The upload fails when `dist/` has no `.map` files.
+- Maps are matched by debug ID, so no release or dist value is needed.
 
 Do not bump `expo.version` for a JavaScript-only update. With the current
 `runtimeVersion` policy, changing the app version creates a new native runtime.

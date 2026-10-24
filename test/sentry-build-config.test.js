@@ -122,3 +122,54 @@ test('a CI workflow re-checks the iOS Sentry wiring whenever Expo config or plug
   assert.match(workflow, /npx expo prebuild --platform ios --no-install --clean/);
   assert.match(workflow, /node \.github\/scripts\/verify-ios-sentry-config\.js/);
 });
+
+test('the iOS guard never expands the auth token into an xtrace build log', () => {
+  // sentry-xcode-debug-files.sh 先 set -x 再 source .xcode.env：`-z "$SENTRY_AUTH_TOKEN"`
+  // 在 xtrace 下会把令牌原文打进 Xcode / EAS 构建日志。
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const {
+    appendSentryDisableAutoUpload,
+  } = require('../plugins/with-local-sentry-auto-upload-disabled');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xcode-env-'));
+  fs.writeFileSync(path.join(dir, '.xcode.env'), appendSentryDisableAutoUpload(''));
+  const result = spawnSync('bash', ['-xc', `source "${dir}/.xcode.env"`], {
+    env: {
+      PATH: process.env.PATH,
+      CONFIGURATION: 'Release',
+      SENTRY_AUTH_TOKEN: 'sntrys_SECRET_TOKEN',
+      SENTRY_ORG: 'windnote',
+      SENTRY_PROJECT: 'react-native',
+    },
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0);
+  assert.doesNotMatch(result.stderr, /sntrys_SECRET_TOKEN/);
+});
+
+test('a local opt-out in ios/.xcode.env.local covers Xcode GUI Release builds', () => {
+  // Product > Profile / Archive 从 Xcode 界面启动，带不进环境变量；而 .xcode.env.local
+  // 要到守卫之后才被 source。守卫自己读一下同目录 .xcode.env.local 里的显式声明。
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const {
+    appendSentryDisableAutoUpload,
+  } = require('../plugins/with-local-sentry-auto-upload-disabled');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xcode-env-'));
+  fs.writeFileSync(path.join(dir, '.xcode.env'), appendSentryDisableAutoUpload(''));
+  const sourceIt = () =>
+    spawnSync('bash', ['-c', `source "${dir}/.xcode.env"; echo "FLAG=\${SENTRY_DISABLE_AUTO_UPLOAD:-unset}"`], {
+      env: { PATH: process.env.PATH, CONFIGURATION: 'Release' },
+      encoding: 'utf8',
+    });
+
+  assert.equal(sourceIt().status, 1, 'no opt-out: still fails');
+
+  fs.writeFileSync(path.join(dir, '.xcode.env.local'), 'export NODE_BINARY=/opt/node\nexport SENTRY_DISABLE_AUTO_UPLOAD=true\n');
+  const optedOut = sourceIt();
+  assert.equal(optedOut.status, 0);
+  assert.match(optedOut.stdout, /FLAG=true/);
+  assert.match(optedOut.stdout + optedOut.stderr, /warning: .*Sentry/);
+});
