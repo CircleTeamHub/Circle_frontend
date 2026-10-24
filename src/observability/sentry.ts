@@ -11,6 +11,7 @@ import type {
   Event,
   EventHint,
   ErrorEvent,
+  Metric,
   SpanJSON,
   TransactionEvent,
 } from '@sentry/core';
@@ -21,6 +22,7 @@ import {
 import { isSensitiveFieldKey } from '@/utils/redact';
 import { STATIC_ROUTE_SEGMENTS } from './route-segments';
 import { TRACED_SPAN_NAMES } from './tracing';
+import { allowedMetricAttributes, metricDefinition } from './metrics';
 import {
   isBenignDomBridgeRejection,
   rejectionMessage,
@@ -169,6 +171,7 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       beforeBreadcrumb: sanitizeAutomaticBreadcrumb,
       beforeSendTransaction: sanitizeAutomaticTransaction,
       beforeSendSpan: sanitizeAutomaticSpan,
+      beforeSendMetric: sanitizeMetric,
     });
     sentryInitialized = true;
     navigationIntegration = navigation;
@@ -743,6 +746,41 @@ function sanitizeAutomaticEvent(event: ErrorEvent): ErrorEvent {
   return {
     ...sanitizeAutomaticBaseEvent(event),
     type: undefined,
+  };
+}
+
+/** SDK 自动补的指标属性里，只有这几项不是标识：版本、环境、SDK。 */
+const SAFE_SDK_METRIC_ATTRIBUTES = [
+  'sentry.release',
+  'sentry.environment',
+  'sentry.sdk.name',
+  'sentry.sdk.version',
+] as const;
+
+/**
+ * 指标的最后一道白名单：名字和类型必须与 metrics.ts 的表一致，单位取表里的，
+ * 属性只留表里声明的枚举值和上面几项 SDK 元数据。SDK 自动补的 user.id /
+ * user.email / user.name 在这里被剥掉（setSentryUserId 恒清空，这是第二道保险）。
+ */
+function sanitizeMetric(metric: Metric): Metric | null {
+  if (!metric || typeof metric !== 'object') return null;
+  const definition = metricDefinition(metric.name);
+  if (!definition || definition.type !== metric.type) return null;
+  if (typeof metric.value !== 'number' || !Number.isFinite(metric.value)) return null;
+  const source = isRecord(metric.attributes) ? metric.attributes : {};
+  const attributes: Record<string, unknown> = allowedMetricAttributes(definition, source);
+  for (const key of SAFE_SDK_METRIC_ATTRIBUTES) {
+    const value = source[key];
+    if (typeof value === 'string' && value.length <= MAX_CONTEXT_STRING_LENGTH) {
+      attributes[key] = value;
+    }
+  }
+  return {
+    name: metric.name,
+    type: metric.type,
+    value: metric.value,
+    ...(definition.unit ? { unit: definition.unit } : {}),
+    attributes,
   };
 }
 

@@ -1,4 +1,5 @@
 import type { ComponentType, PropsWithChildren } from 'react';
+import type { CallRoomEvents } from './use-call-telemetry';
 import { NativeModules } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
@@ -34,6 +35,9 @@ export type LiveKitModule = {
       // livekit-client RoomOptions 的子集（只声明用到的字段）
       options?: { adaptiveStream?: boolean; dynacast?: boolean };
       onError?: (error: Error) => void;
+      onConnected?: () => void;
+      // livekit DisconnectReason 数值；原生端类型不带它，运行时可能拿不到。
+      onDisconnected?: (reason?: number) => void;
     }>
   >;
   VideoTrack: ComponentType<{
@@ -59,7 +63,7 @@ export type LiveKitModule = {
     identity: string;
     name?: string;
   }[];
-  useRoomContext: () => {
+  useRoomContext: () => CallRoomEvents & {
     disconnect: () => Promise<void>;
   };
   /**

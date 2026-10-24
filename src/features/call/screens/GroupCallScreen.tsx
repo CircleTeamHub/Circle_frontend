@@ -22,6 +22,11 @@ import {
 import { reportError } from '@/observability/sentry';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { devWarn } from '@/utils/dev-log';
+import type { CallTelemetry } from '@/features/call/call-telemetry';
+import {
+  useCallRoomTelemetry,
+  useCallTelemetry,
+} from '@/features/call/use-call-telemetry';
 
 
 const s = StyleSheet.create({
@@ -152,7 +157,13 @@ function initials(name: string) {
   return trimmed.slice(0, 2).toUpperCase() || '?';
 }
 
-function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
+function CallRoomContent({
+  liveKitModule,
+  callTelemetry,
+}: {
+  liveKitModule: LiveKitModule;
+  callTelemetry: CallTelemetry;
+}) {
   const {
     useConnectionState,
     useLocalParticipant,
@@ -165,6 +176,7 @@ function CallRoomContent({ liveKitModule }: { liveKitModule: LiveKitModule }) {
   const { t } = useTranslation();
   const room = useRoomContext();
   const connectionState = useConnectionState();
+  useCallRoomTelemetry(room, connectionState, callTelemetry);
   const participants = useParticipants();
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled } =
     useLocalParticipant();
@@ -426,6 +438,8 @@ export default function GroupCallScreen() {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [roomVersion, setRoomVersion] = useState(0);
+  // 通话质量遥测：一个 LiveKitRoom（roomVersion）一份。必须在所有提前 return 之前。
+  const callTelemetry = useCallTelemetry(roomVersion);
   const mountedRef = useRef(true);
   const reportedRoomErrorRef = useRef(false);
   const [liveKitModule, setLiveKitModule] = useState<
@@ -545,7 +559,10 @@ export default function GroupCallScreen() {
         // 自动暂停下行，dynacast 让发布端按需暂停无人看的层；渲染上限
         // MAX_VIDEO_TILES 是第二道闸。
         options={{ adaptiveStream: true, dynacast: true }}
+        onConnected={callTelemetry.connected}
+        onDisconnected={callTelemetry.disconnected}
         onError={(error) => {
+          callTelemetry.connectFailed();
           if (!reportedRoomErrorRef.current) {
             reportedRoomErrorRef.current = true;
             reportError(error, {
@@ -561,7 +578,7 @@ export default function GroupCallScreen() {
       >
         {/* 必须在 Room 内：远端音轨的播放载体（web 是 <audio>，原生 no-op）。 */}
         <RoomAudioRenderer />
-        <CallRoomContent liveKitModule={liveKitModule} />
+        <CallRoomContent liveKitModule={liveKitModule} callTelemetry={callTelemetry} />
       </LiveKitRoom>
       {connectError ? (
         <View style={s.errorBar}>

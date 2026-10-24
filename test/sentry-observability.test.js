@@ -108,6 +108,7 @@ test("production Expo transform inlines the public DSN before runtime", () => {
       if (name === "./route-segments") return { STATIC_ROUTE_SEGMENTS: new Set() };
       if (name === "./tracing") return { TRACED_SPAN_NAMES: new Set() };
       if (name === "./unhandled-rejection-filter") return load("src/observability/unhandled-rejection-filter.ts");
+      if (name === "./metrics") return load("src/observability/metrics.ts", { "@sentry/react-native": {} });
       if (name === "@/utils/redact") return load("src/utils/redact.ts");
       return require(name);
     },

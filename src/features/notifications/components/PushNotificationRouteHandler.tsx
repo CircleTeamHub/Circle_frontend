@@ -12,6 +12,7 @@ import {
   isAlreadyOnPushTarget,
 } from '@/features/notifications/utils/push-response-controller';
 import { initializePushResponseListener } from '@/features/notifications/utils/push-response-listener';
+import { pushTelemetry } from '@/features/notifications/utils/push-telemetry';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import {
@@ -148,9 +149,15 @@ export function PushNotificationRouteHandler() {
     if (Platform.OS === 'web') return;
     let mounted = true;
     let subscription: { remove: () => void } | null = null;
+    let receivedSubscription: { remove: () => void } | null = null;
     initializeJPush();
     const unsubscribeJPush = subscribeJPush((event) => {
-      if (event.notificationEventType !== 'notificationOpened') return;
+      if (
+        event.notificationEventType !== 'notificationOpened' &&
+        event.notificationEventType !== 'notificationArrived'
+      ) {
+        return;
+      }
       let data: Record<string, unknown> =
         event.extras && typeof event.extras === 'object' ? event.extras : {};
       if (typeof event.extras === 'string') {
@@ -163,6 +170,12 @@ export function PushNotificationRouteHandler() {
           data = {};
         }
       }
+      // 送达 / 打开的粗粒度遥测：只记通道和推送大类，不碰内容。
+      if (event.notificationEventType === 'notificationArrived') {
+        pushTelemetry.received('jpush', event.messageID ?? '', data);
+        return;
+      }
+      pushTelemetry.opened('jpush', event.messageID ?? '', data);
       controller.handleResponse({
         notification: {
           request: {
@@ -179,11 +192,21 @@ export function PushNotificationRouteHandler() {
         if (!mounted) return;
         subscription = initializePushResponseListener(
           notifications,
-          controller.handleResponse,
+          (response) => {
+            if (response) {
+              const { request } = response.notification;
+              pushTelemetry.opened('expo', request.identifier, request.content.data);
+            }
+            controller.handleResponse(response);
+          },
           (error) => {
             reportHandledFailure('notifications', 'getLastResponse', error);
           },
         );
+        receivedSubscription = notifications.addNotificationReceivedListener((notification) => {
+          const { request } = notification;
+          pushTelemetry.received('expo', request.identifier, request.content.data);
+        });
         notifications.setNotificationHandler({
           handleNotification: async () => ({
             shouldShowBanner: false,
@@ -200,6 +223,7 @@ export function PushNotificationRouteHandler() {
     return () => {
       mounted = false;
       subscription?.remove();
+      receivedSubscription?.remove();
       unsubscribeJPush();
       controller.dispose();
     };

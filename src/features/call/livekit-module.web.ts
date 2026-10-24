@@ -1,4 +1,5 @@
 import { createElement, type ComponentType, type CSSProperties, type PropsWithChildren } from 'react';
+import type { CallRoomEvents } from './use-call-telemetry';
 import { StyleSheet } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { reportError } from '@/observability/sentry';
@@ -27,6 +28,9 @@ export type LiveKitModule = {
       video?: boolean;
       options?: { adaptiveStream?: boolean; dynacast?: boolean };
       onError?: (error: Error) => void;
+      onConnected?: () => void;
+      // livekit DisconnectReason 数值；原生端类型不带它，运行时可能拿不到。
+      onDisconnected?: (reason?: number) => void;
     }>
   >;
   VideoTrack: ComponentType<{
@@ -50,7 +54,7 @@ export type LiveKitModule = {
     identity: string;
     name?: string;
   }[];
-  useRoomContext: () => {
+  useRoomContext: () => CallRoomEvents & {
     disconnect: () => Promise<void>;
   };
   /** 见原生档注释：web 上少了它远端就是哑的。 */
