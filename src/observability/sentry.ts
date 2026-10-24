@@ -156,6 +156,10 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // 覆盖 SDK 默认值；undefined 不会。将来后端接分布式追踪时再收窄到 API 源，
       // 同时把这两个头加进后端 CORS allowedHeaders（web 端跨源会触发预检）。
       tracePropagationTargets: [],
+      // 会话统计（release health：崩溃率 / 无崩溃会话比例）。原生 SDK 默认就开；
+      // web 端只有显式为 true 才挂 browserSessionIntegration，之前 web 一条会话都没有。
+      // 会话的 did 取自 Sentry user，而 setSentryUserId 恒清空，所以不带账号标识。
+      enableAutoSessionTracking: true,
       // Never attach PII (IP, cookies, request bodies) by default.
       sendDefaultPii: false,
       attachScreenshot: false,

@@ -1338,3 +1338,12 @@ test("the rejection budget never throttles ordinary error events", () => {
     assert.notEqual(event, null);
   }
 });
+
+test("session tracking is explicitly on so web reports release health too", () => {
+  // @sentry/react-native 只有 enableAutoSessionTracking 为真时才在 web 挂
+  // browserSessionIntegration；原生 SDK 默认开，web 不开就一条会话都没有。
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  assert.equal(calls[0].enableAutoSessionTracking, true);
+});

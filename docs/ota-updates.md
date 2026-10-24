@@ -31,6 +31,18 @@ eas update --channel production --environment production --message "Describe the
 SDK 55 requires the `--environment` flag. Preview updates use the `preview`
 channel and the preview EAS environment.
 
+Then upload the update's source maps to Sentry from the same checkout:
+
+```bash
+npm run sourcemaps:ota
+```
+
+It reads the `dist/` directory that `eas update` just wrote and needs
+`SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` (`SENTRY_URL` defaults to
+`https://sentry.io/`). It fails when any of them is missing or when `dist/` has no
+`.map` files, because crash stacks from an update without uploaded maps stay
+minified. Maps are matched by debug ID, so no release or dist value is needed.
+
 Do not bump `expo.version` for a JavaScript-only update. With the current
 `runtimeVersion` policy, changing the app version creates a new native runtime.
 Bump `expo.version` and `android.versionCode` only when a new binary is needed.

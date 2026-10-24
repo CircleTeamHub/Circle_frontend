@@ -3,10 +3,17 @@ const path = require('node:path');
 const { withAppBuildGradle, withDangerousMod } = require('expo/config-plugins');
 
 const IOS_UPLOAD_GUARD_MARKER = 'circle-im-sentry-upload-config-guard';
+// Release 构建（不论本地还是 CI/EAS）缺 Sentry 凭据直接失败：本地打的 Release 包同样会
+// 被分发，静默跳过上传的话，那个版本的崩溃栈在 Sentry 里永远符号化不了。确实不分发的
+// 本地 Release 构建，要在启动构建的环境里显式设 SENTRY_DISABLE_AUTO_UPLOAD=true（与
+// Android 守卫同一个逃生口；写在 .xcode.env.local 里不行 —— 它在这段之后才被 source）。
+// Debug 构建缺凭据照旧静默跳过。
 const DISABLE_AUTO_UPLOAD_BLOCK = `# ${IOS_UPLOAD_GUARD_MARKER}:start
-if [[ -z "$SENTRY_AUTH_TOKEN" || -z "$SENTRY_ORG" || -z "$SENTRY_PROJECT" ]]; then
-  if [[ "$CONFIGURATION" == *Release* && ( -n "\${CI:-}" || -n "\${EAS_BUILD:-}" ) ]]; then
-    echo "Sentry upload config is required for CI/EAS Release archives." >&2
+if [[ "\${SENTRY_DISABLE_AUTO_UPLOAD:-}" == "true" ]]; then
+  :
+elif [[ -z "\${SENTRY_AUTH_TOKEN:-}" || -z "\${SENTRY_ORG:-}" || -z "\${SENTRY_PROJECT:-}" ]]; then
+  if [[ "\${CONFIGURATION:-}" == *Release* ]]; then
+    echo "error: Sentry upload config is required for Release builds. Set SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT, or start a build that is never distributed with SENTRY_DISABLE_AUTO_UPLOAD=true." >&2
     exit 1
   fi
   export SENTRY_DISABLE_AUTO_UPLOAD=true

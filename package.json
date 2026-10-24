@@ -11,6 +11,8 @@
     "pretypecheck": "expo customize tsconfig.json",
     "typecheck": "tsc --noEmit",
     "expo:config": "expo config --type public",
+    "export:web": "expo export --platform web --source-maps && node scripts/upload-expo-sourcemaps.mjs dist --optional --delete-maps",
+    "sourcemaps:ota": "node scripts/upload-expo-sourcemaps.mjs dist",
     "test": "node --test \"test/*.js\" \"src/**/*.test.mts\"",
     "test:behavior": "jest",
     "test:testing-tools": "node --test test/safe-test-config.test.js test/e2e-locator-contract.test.js test/maestro-flows.test.js test/load-test-protocol.test.js test/load-scenarios.test.js test/performance-report.test.js test/performance-scripts.test.js test/testing-docs.test.js",
