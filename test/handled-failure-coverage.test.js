@@ -130,8 +130,8 @@ test('the root layout routes render errors and unhandled rejections into Sentry'
   );
   assert.match(boundary, /reportError\(error, \{\s*component: 'RouteErrorBoundary'/);
 
-  // silenceDomBridgeRejection 覆盖了 Sentry 自己的 unhandled-rejection 钩子，
-  // 它必须把过滤后的 rejection 转发回去。
+  // JSC 上 silenceDomBridgeRejection 覆盖了 Sentry 自己的 unhandled-rejection 钩子，
+  // 它必须把过滤后的 rejection 转发回去（Hermes 上走 sentry.ts 的 beforeSend 闸门）。
   const tracker = fs.readFileSync(
     path.join(process.cwd(), 'src/utils/silence-dom-bridge-rejection.ts'),
     'utf8',

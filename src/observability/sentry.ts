@@ -9,6 +9,7 @@ import * as Sentry from '@sentry/react-native';
 import type {
   Breadcrumb,
   Event,
+  EventHint,
   ErrorEvent,
   SpanJSON,
   TransactionEvent,
@@ -20,6 +21,11 @@ import {
 import { isSensitiveFieldKey } from '@/utils/redact';
 import { STATIC_ROUTE_SEGMENTS } from './route-segments';
 import { TRACED_SPAN_NAMES } from './tracing';
+import {
+  isBenignDomBridgeRejection,
+  rejectionMessage,
+  shouldReportUnhandledRejection,
+} from './unhandled-rejection-filter';
 
 interface NavigationIntegrationLike {
   registerNavigationContainer: (navigationContainerRef: unknown) => void;
@@ -159,7 +165,7 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // hooks cannot scrub payload fields emitted only by native crash code.
       // Manual reportError calls already sanitize their payloads, but native /
       // unhandled SDK events and automatic breadcrumbs bypass that helper.
-      beforeSend: sanitizeAutomaticEvent,
+      beforeSend: filterAndSanitizeErrorEvent,
       beforeBreadcrumb: sanitizeAutomaticBreadcrumb,
       beforeSendTransaction: sanitizeAutomaticTransaction,
       beforeSendSpan: sanitizeAutomaticSpan,
@@ -699,6 +705,38 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
     if (key in source) safe[key] = sanitizeContextForSentry(source[key]);
   }
   return safe as Event;
+}
+
+/**
+ * 未处理 Promise rejection 的过滤与限流。Hermes 上真正生效的 tracker 是 SDK 自己挂在
+ * HermesInternal 上的（web 上是全局 unhandledrejection 事件），silence-dom-bridge-
+ * rejection 的 promise 包 tracker 在那里从不触发 —— 所以闸门放在所有引擎都经过的
+ * beforeSend，按 mechanism 只作用于未处理 rejection，手动 reportError 不受影响。
+ * 签名取原始错误（脱敏之后 value 已被替换），在脱敏之前判断。
+ */
+function isUnhandledRejectionEvent(event: ErrorEvent): boolean {
+  return (
+    event.exception?.values?.some(
+      (value) => value.mechanism?.type === 'onunhandledrejection',
+    ) ?? false
+  );
+}
+
+function filterAndSanitizeErrorEvent(
+  event: ErrorEvent,
+  hint?: EventHint,
+): ErrorEvent | null {
+  if (event && typeof event === 'object' && isUnhandledRejectionEvent(event)) {
+    const original = hint?.originalException ?? event.exception?.values?.[0]?.value;
+    const message = rejectionMessage(original);
+    if (
+      isBenignDomBridgeRejection(message) ||
+      !shouldReportUnhandledRejection(original, message)
+    ) {
+      return null;
+    }
+  }
+  return sanitizeAutomaticEvent(event);
 }
 
 function sanitizeAutomaticEvent(event: ErrorEvent): ErrorEvent {

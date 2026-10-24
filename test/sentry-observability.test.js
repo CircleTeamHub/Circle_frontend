@@ -107,6 +107,7 @@ test("production Expo transform inlines the public DSN before runtime", () => {
       if (name === "@/utils/client-diagnostics") return { readDiagnosticBreadcrumbs: () => [] };
       if (name === "./route-segments") return { STATIC_ROUTE_SEGMENTS: new Set() };
       if (name === "./tracing") return { TRACED_SPAN_NAMES: new Set() };
+      if (name === "./unhandled-rejection-filter") return load("src/observability/unhandled-rejection-filter.ts");
       if (name === "@/utils/redact") return load("src/utils/redact.ts");
       return require(name);
     },
@@ -1270,4 +1271,69 @@ test("Sentry and dev-log redaction share one sensitive field list", () => {
     assert.equal(details[key], "[REDACTED]", key);
   }
   assert.equal(details.stage, "submit");
+});
+
+// Hermes 上真正生效的未处理 rejection tracker 是 SDK 自己挂在 HermesInternal 上的
+// （reactNativeErrorHandlersIntegration）；silence-dom-bridge-rejection 启用的 promise
+// 包 tracker 只管 JSC，在 Hermes 上从不触发。所以 DOM 桥接过滤和按签名限流必须放在
+// 所有引擎都会经过的 beforeSend 里，按 mechanism.type 只作用于未处理 rejection。
+function unhandledRejectionEvent(error) {
+  return [
+    {
+      exception: {
+        values: [{
+          type: error instanceof Error ? error.name : "Error",
+          value: error instanceof Error ? error.message : String(error),
+          mechanism: { type: "onunhandledrejection", handled: true },
+        }],
+      },
+    },
+    { originalException: error },
+  ];
+}
+
+test("unhandled rejections are deduped per signature on every engine", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const beforeSend = calls[0].beforeSend;
+
+  assert.notEqual(beforeSend(...unhandledRejectionEvent(new TypeError("x is not a function"))), null);
+  assert.equal(beforeSend(...unhandledRejectionEvent(new TypeError("x is not a function"))), null);
+  assert.notEqual(beforeSend(...unhandledRejectionEvent(new RangeError("different failure"))), null);
+});
+
+test("the benign DOM bridge teardown rejection never reaches Sentry", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const dropped = calls[0].beforeSend(
+    ...unhandledRejectionEvent(new Error("DomWebView: injectJavaScript on a destroyed view")),
+  );
+  assert.equal(dropped, null);
+});
+
+test("distinct unhandled rejection signatures are capped per process", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const sent = [];
+  for (let i = 0; i < 100; i += 1) {
+    const event = calls[0].beforeSend(...unhandledRejectionEvent(new Error(`flood ${i}`)));
+    if (event) sent.push(event);
+  }
+  assert.ok(sent.length >= 10 && sent.length < 100, `expected a bounded number, got ${sent.length}`);
+});
+
+test("the rejection budget never throttles ordinary error events", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  for (let i = 0; i < 30; i += 1) {
+    const event = calls[0].beforeSend(
+      { exception: { values: [{ type: "Error", value: "same", mechanism: { type: "generic", handled: true } }] } },
+      { originalException: new Error("same") },
+    );
+    assert.notEqual(event, null);
+  }
 });
