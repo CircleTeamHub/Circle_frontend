@@ -223,7 +223,8 @@ test('member profiles and friend requests honor the two member-permission switch
   assert.match(info, /member\.userId !== currentUserID &&\s*\n\s*!canViewMemberProfiles/);
 
   const detail = readChatDetailSource();
-  assert.match(detail, /const canViewMemberProfilesByPolicy = useChatStore/);
+  // 字段从按 id 查到的那一个会话对象上派生(聊天页只查一次会话,见 chat-detail-conversation-selector)。
+  assert.match(detail, /const canViewMemberProfilesByPolicy = allowsMemberProfiles\(\{/);
   assert.match(detail, /viaConversationID: conversationID/);
 
   const search = read('src/features/chat/screens/SearchGroupMembersScreen.tsx');
@@ -276,8 +277,10 @@ test('the invite screen survives a forbidden member directory', () => {
 
 test('chat detail locks the composer under group-wide mute for non-managers', () => {
   const detail = readChatDetailSource();
-  assert.match(detail, /const groupMuteAllActive = useChatStore/);
-  assert.match(detail, /return !isGroupManager\(conversation\.myRole \?\? null\);/);
+  assert.match(
+    detail,
+    /const groupMuteAllActive =\s*Boolean\(conversation\?\.muteAll\) && !isGroupManager\(conversation\?\.myRole \?\? null\);/,
+  );
   assert.match(detail, /const composerLocked = selfSilenced \|\| groupMuteAllActive;/);
   assert.match(detail, /chat\.youAreMutedAll/);
 });

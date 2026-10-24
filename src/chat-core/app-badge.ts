@@ -44,9 +44,36 @@ export function syncAppBadge(total: number): void {
     });
 }
 
+let lastInputs: { conversations: unknown; overrides: unknown } | null = null;
+let lastTotal = 0;
+
 /** tab 与图标角标共用的口径:服务端未读 + 本机「标记为未读」覆盖。 */
 function totalWithLocalOverrides(): number {
   const state = useChatStore.getState();
+  // chat store 每次写入都会来到这里(「正在输入」「在线」「已送达」也算),而这些事件
+  // 不改会话列表。两份输入引用都没变就直接用上次的结果,免得每次都整表求和、建 Map。
+  let overridesNow: unknown;
+  try {
+    overridesNow = useLocalUnreadStore.getState().overrides;
+  } catch {
+    // 本地覆盖 store 未就绪:不缓存,按下面的口径照常算(那里会退回纯服务端口径)。
+    return computeTotalWithLocalOverrides(state);
+  }
+  if (
+    lastInputs &&
+    lastInputs.conversations === state.conversations &&
+    lastInputs.overrides === overridesNow
+  ) {
+    return lastTotal;
+  }
+  lastTotal = computeTotalWithLocalOverrides(state);
+  lastInputs = { conversations: state.conversations, overrides: overridesNow };
+  return lastTotal;
+}
+
+function computeTotalWithLocalOverrides(
+  state: ReturnType<typeof useChatStore.getState>,
+): number {
   const serverTotal = selectTotalUnread(state);
   let overrides = 0;
   try {

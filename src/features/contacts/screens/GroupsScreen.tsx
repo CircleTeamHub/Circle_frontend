@@ -17,7 +17,7 @@ import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { FilterTabs } from '@/components/ui/filter-tabs';
-import { loadChatConversations } from '@/chat-core/api';
+import { canSkipConversationFocusReload, loadChatConversations } from '@/chat-core/api';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useChatStore } from '@/chat-core/store';
 import { selectConversations } from '@/chat-core/conversation-selectors';
@@ -153,10 +153,13 @@ export default function GroupsScreen() {
 
   // 会话列表是全局 store（自己带会话期闸门），这屏不留副本，也就没有脏写的问题。
   const loadGroups = useCallback(
-    async (signal?: { cancelled: boolean }) => {
+    async (signal?: { cancelled: boolean }, options?: { skipIfFresh?: boolean }) => {
       const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
       try {
-        await loadChatConversations();
+        // 聚焦触发的刷新:连接正常且刚拉过完整快照就跳过(入群/退群有实时会话事件)。
+        if (!(options?.skipIfFresh && canSkipConversationFocusReload())) {
+          await loadChatConversations();
+        }
         if (isCancelled()) return;
         setError(null);
       } catch (caughtError) {
@@ -177,7 +180,7 @@ export default function GroupsScreen() {
     useCallback(() => {
       mountedRef.current = true;
       const signal = { cancelled: false };
-      void loadGroups(signal);
+      void loadGroups(signal, { skipIfFresh: true });
       return () => {
         signal.cancelled = true;
         mountedRef.current = false;

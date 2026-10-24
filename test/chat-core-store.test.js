@@ -167,7 +167,12 @@ function loadConversationSnapshotApi(useChatStore) {
       useAuthStore: { getState: () => authState },
     };
     if (request === './store') return { useChatStore };
-    if (request === './deleted-messages') return { withoutLocallyDeleted: (messages) => messages };
+    if (request === './deleted-messages') {
+      return {
+        withoutLocallyDeleted: (messages) => messages,
+        isMessageDeletedLocally: () => false,
+      };
+    }
     if (request === './clear-history-target') return { getKnownClearTargetHeight: () => undefined };
     if (request === '../features/chat/chat-history-date-window') return {};
     if (request === './local-db') return __localDbStub;
@@ -2158,4 +2163,42 @@ test('legacy sync DTOs without a fixed expiry still clear elapsed burn content',
  assert.equal(sweeps,1);
  assert.equal(store.conversations[0].lastMessage,null);
  assert.equal(store.messagesByConversation['conv-1'].length,0);
+});
+
+// 回到消息页的重拉多半一模一样:没变的会话沿用旧对象,全都没变连数组都不换,
+// 订阅方(会话列表的行、按会话取值的选择器)一个都不用重渲染。群多时这次重拉很贵。
+test('a snapshot reload that changed nothing keeps the same conversations array', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conversation({ id: 'conv-1', peer: { id: 'p1', nickname: 'A', avatarUrl: null } }),
+    conversation({ id: 'conv-2', peer: { id: 'p2', nickname: 'B', avatarUrl: null } }),
+  ]);
+  const before = useChatStore.getState().conversations;
+
+  useChatStore.getState().setConversations([
+    conversation({ id: 'conv-1', peer: { id: 'p1', nickname: 'A', avatarUrl: null } }),
+    conversation({ id: 'conv-2', peer: { id: 'p2', nickname: 'B', avatarUrl: null } }),
+  ]);
+  assert.equal(useChatStore.getState().conversations, before);
+});
+
+test('a snapshot reload replaces only the conversations that changed', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conversation({ id: 'conv-1', unreadCount: 0 }),
+    conversation({ id: 'conv-2', unreadCount: 0 }),
+  ]);
+  const [firstBefore, secondBefore] = useChatStore.getState().conversations;
+
+  useChatStore.getState().setConversations([
+    conversation({ id: 'conv-1', unreadCount: 0 }),
+    conversation({ id: 'conv-2', unreadCount: 3 }),
+  ]);
+  const after = useChatStore.getState().conversations;
+  const byId = (id) => after.find((item) => item.id === id);
+  assert.equal(byId(firstBefore.id), firstBefore);
+  assert.notEqual(byId(secondBefore.id), secondBefore);
+  assert.equal(byId('conv-2').unreadCount, 3);
 });

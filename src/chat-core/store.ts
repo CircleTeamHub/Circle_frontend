@@ -11,6 +11,7 @@ import type {
   ChatMessageDto,
   ChatSyncPageDto,
 } from './protocol';
+import { reuseUnchanged } from '@/utils/structural-sharing';
 import {
   clearLocalConversationMessages,
   deleteLocalMessage,
@@ -1276,8 +1277,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             ),
           ),
     );
+    // 内容没变的会话沿用旧对象,什么都没变时连数组也沿用:回到消息页的重拉多半
+    // 一模一样,不复用的话每一行、每个按会话取值的订阅方都要重渲染一遍。
+    const nextConversations = reuseUnchanged(currentConversations, reconciledConversations);
     set({
-      conversations: reconciledConversations,
+      conversations: nextConversations,
       // 只有全量拉取会走到这里(upsertConversation 不置位)。
       conversationsSnapshotLoaded: true,
       conversationsSnapshotSeq: get().conversationsSnapshotSeq + 1,
@@ -1300,8 +1304,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
     // 快照带着每个会话当前的焚毁档位 —— 顺手把已到期的本地缓存清掉。
     void get().purgeExpiredBurnMessages();
-    // G-01:快照落盘(fire-and-forget,本地库失败不影响主链路)。
-    void persistLocalConversations(get().conversations);
+    // G-01:快照落盘(fire-and-forget,本地库失败不影响主链路)。整表没变就不重写:
+    // 落盘是整表 DELETE + 逐行 INSERT,群多时每次回到消息页都写一遍很费电。
+    if (nextConversations !== currentConversations) {
+      void persistLocalConversations(get().conversations);
+    }
   },
   upsertConversation: (conversation) => {
     const { conversations, messagesByConversation, readWatermarks } = get();

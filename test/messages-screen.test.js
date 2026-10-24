@@ -545,4 +545,27 @@ test('screens that stay mounted under a pushed screen only subscribe to conversa
     'utf8',
   );
   assert.match(shareSheet, /useStoreWhileActive\(\s*useChatStore,\s*selectConversations,\s*visible/);
+
+  const qrSheet = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/qr/components/ShareQrSheet.tsx'),
+    'utf8',
+  );
+  assert.match(qrSheet, /useStoreWhileActive\(\s*useChatStore,\s*selectConversations,\s*visible/);
+});
+
+test('returning to the messages list skips the reload right after a fresh snapshot', () => {
+  // 群多:一次全量会话快照是几百 KB;进出聊天页来回切,原来每次都重拉。
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+  const focus = source.slice(source.indexOf('useFocusEffect('));
+  assert.match(focus.slice(0, 1200), /if \(canSkipConversationFocusReload\(\)\) return;/);
+
+  const groups = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/contacts/screens/GroupsScreen.tsx'),
+    'utf8',
+  );
+  assert.match(groups, /options\?\.skipIfFresh && canSkipConversationFocusReload\(\)/);
+  assert.match(groups, /loadGroups\(signal, \{ skipIfFresh: true \}\)/);
 });

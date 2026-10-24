@@ -292,6 +292,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     initialHistory: [],
     privacyFetches: 0,
     privacyResponse: { messageSelfDestructSec: 2 * 24 * 60 * 60 },
+    localTimelinesRead: [],
   };
   const mmkvStore = new Map();
   const mmkv = {
@@ -383,6 +384,9 @@ function loadManager(localDbOverrides = {}, options = {}) {
       loadChatHistory: (conversationId) => {
         apiCalls.initialHistory.push(conversationId);
         return Promise.resolve({ messages: [], nextBeforeHeight: null });
+      },
+      markLocalTimelinesRead: (ids) => {
+        apiCalls.localTimelinesRead.push(...ids);
       },
     },
     './local-db': {
@@ -2253,4 +2257,74 @@ test('a send that never got a connection ends its span as unavailable', async ()
   await sent;
   const send = spans.find((span) => span.operation === 'chatSend');
   assert.deepEqual(send.ends, ['unavailable']);
+});
+
+test('冷启动水合:只预读最近活跃的会话时间线,有待发消息的会话无论多旧都读', async () => {
+  // 群多的用户:原来冷启动对每个会话串行读 50 条进内存(几百次查询、上万条消息常驻)。
+  // 其余会话打开时由 loadChatHistory 从本地库补读。
+  const now = Date.now();
+  const conversations = Array.from({ length: 40 }, (_, index) => ({
+    id: `c${index}`,
+    pinned: false,
+    lastMessageAt: new Date(now - index * 60_000).toISOString(),
+  }));
+  const read = [];
+  const { manager } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => conversations,
+    readRecentLocalMessages: async (conversationId) => {
+      read.push(conversationId);
+      return [];
+    },
+    outboxList: async () => [
+      {
+        d: 'd-old',
+        conversationId: 'c39',
+        payload: { conversationId: 'c39', type: 'text', content: {}, d: 'd-old' },
+        createdAt: new Date(now - 60_000).toISOString(),
+      },
+    ],
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  const expected = [...Array.from({ length: 30 }, (_, index) => `c${index}`), 'c39'];
+  assert.deepEqual([...read].sort(), [...expected].sort());
+});
+
+test('冷启动水合:预读过的会话记为「本地已读」,打开时不再重复读本地库', async () => {
+  const { manager, apiCalls } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => [
+      { id: 'c1', pinned: false, lastMessageAt: new Date().toISOString() },
+    ],
+    readRecentLocalMessages: async () => [],
+    outboxList: async () => [],
+  });
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  assert.deepEqual(apiCalls.localTimelinesRead, ['c1']);
+});
+
+test('冷启动水合:读不出 outbox 时退回全部预读(宁可多读,不能漏判已发出的待发消息)', async () => {
+  const now = Date.now();
+  const conversations = Array.from({ length: 35 }, (_, index) => ({
+    id: `c${index}`,
+    pinned: false,
+    lastMessageAt: new Date(now - index * 60_000).toISOString(),
+  }));
+  const read = [];
+  const { manager } = loadManager({
+    initChatLocalDb: async () => true,
+    readLocalConversations: async () => conversations,
+    readRecentLocalMessages: async (conversationId) => {
+      read.push(conversationId);
+      return [];
+    },
+    readOutboxEntries: async () => null,
+  });
+  manager.connectChat('jwt', 'u1');
+  await flush();
+  assert.equal(read.length, 35);
 });

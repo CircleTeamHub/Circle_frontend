@@ -1,4 +1,6 @@
 import { apiClient } from '@/services/api/client';
+import { collectCursorPages, readHasMore } from '@/services/api/pagination';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { retry } from '@/utils/retry';
 import { useAuthStore } from '@/stores/authStore';
 import type {
@@ -13,14 +15,14 @@ import type {
   ChatSyncPageDto,
 } from './protocol';
 import { resolveLocalDaySearchWindow } from '../features/chat/chat-history-date-window';
-import { withoutLocallyDeleted } from './deleted-messages';
+import { isMessageDeletedLocally, withoutLocallyDeleted } from './deleted-messages';
 import { getKnownClearTargetHeight } from './clear-history-target';
 import {
   deleteLocalMessagesBelow,
   readRecentLocalMessages,
   searchLocalChatMessages,
 } from './local-db';
-import { useChatStore } from './store';
+import { sortConversations, useChatStore } from './store';
 
 /**
  * chat-core 的 REST 冷路径(circle_be /api/v1/chat/*)。
@@ -91,6 +93,159 @@ function completePendingHistoryClear(
   }
 }
 
+/**
+ * 本次登录期间已经把本地库时间线读进过内存的会话。冷启动只预读最近活跃的那批,其余的
+ * 第一次打开时读;不能拿「内存里有没有消息」来判断 —— 没预读的会话收到一条实时消息后
+ * 内存里就有了这一条,却从没读过本地那几十条缓存(离线时整个会话只剩这一条)。
+ */
+let localTimelineReads: { epoch: number; ids: Set<string> } | null = null;
+
+function localTimelineReadSet(): Set<string> {
+  const epoch = useAuthStore.getState().sessionEpoch;
+  if (!localTimelineReads || localTimelineReads.epoch !== epoch) {
+    localTimelineReads = { epoch, ids: new Set() };
+  }
+  return localTimelineReads.ids;
+}
+
+export function hasReadLocalTimeline(conversationId: string): boolean {
+  return localTimelineReadSet().has(conversationId);
+}
+
+/** 冷启动预读完、或第一次打开时读完本地时间线后记一笔。 */
+export function markLocalTimelinesRead(conversationIds: Iterable<string>): void {
+  const reads = localTimelineReadSet();
+  for (const id of conversationIds) reads.add(id);
+}
+
+/**
+ * 本地库里已经过了焚毁时刻、但还没被清理掉的消息。清理定时器只按内存里的到期时刻排,
+ * 没预读进内存的会话没人替它定时 —— 从本地读出来(打开会话、全局搜索)时在内存里
+ * 先滤掉,并在后台补一次清理(那是几条全表 UPDATE/DELETE,不能每次读都同步跑)。
+ */
+function withoutExpiredBurn<T extends { burnExpiresAt?: string | null }>(
+  messages: readonly T[],
+  now = Date.now(),
+): T[] {
+  const kept = messages.filter((message) => {
+    if (!message.burnExpiresAt) return true;
+    const expiresAt = Date.parse(message.burnExpiresAt);
+    return !Number.isFinite(expiresAt) || expiresAt > now;
+  });
+  if (kept.length !== messages.length) {
+    try {
+      void useChatStore.getState().purgeExpiredBurnMessages();
+    } catch (error) {
+      reportHandledFailure('chatSync', 'expiredLocalPurge', error);
+    }
+  }
+  return kept;
+}
+
+const CONVERSATION_PAGE_LIMIT = 500;
+/** 键集翻页的安全上限:20 页 × 500 = 1 万个会话。 */
+const CONVERSATION_MAX_PAGES = 20;
+
+let lastConversationSnapshot: { epoch: number; at: number } | null = null;
+
+/**
+ * 当前账号最近一次完整会话快照落地后是否还没超过 maxAgeMs。时刻记的是请求**发出**
+ * 的时候(数据就是那一刻的),时钟回拨(差值为负)一律当作不新鲜。
+ */
+export function isConversationSnapshotFresh(maxAgeMs: number, now = Date.now()): boolean {
+  const snapshot = lastConversationSnapshot;
+  if (!snapshot || snapshot.epoch !== useAuthStore.getState().sessionEpoch) return false;
+  const age = now - snapshot.at;
+  return age >= 0 && age <= maxAgeMs;
+}
+
+/** 回到消息页/群聊页时的重拉节流窗口。 */
+const FOCUS_RELOAD_FRESH_MS = 30_000;
+
+/**
+ * 回到页面时能不能跳过这次全量重拉:实时连接正常、store 里是完整快照、且刚拉过。
+ * 会话变化靠实时事件推送(入群/退群/被移出/偏好变更都有会话事件,建群会就地写 store),
+ * 重连时 socket-manager 总会重拉一次;下拉刷新不受影响。
+ * 群一多,一次全量会话快照就是几百 KB 的 JSON,来回切页面每次都拉很费电。
+ */
+export function canSkipConversationFocusReload(): boolean {
+  const state = useChatStore.getState();
+  return (
+    state.connected &&
+    state.conversationsSnapshotLoaded &&
+    isConversationSnapshotFresh(FOCUS_RELOAD_FRESH_MS)
+  );
+}
+
+function isBadRequest(error: unknown): boolean {
+  return (error as { status?: unknown } | null)?.status === 400;
+}
+
+/**
+ * 当前账号的服务端支不支持会话列表的键集游标(null = 还不知道)。知道支持之后直接按
+ * 游标翻,省掉那一发会被丢弃的旧模式第一页;知道不支持就不再试探(老服务端每次都 400)。
+ */
+let keysetSupport: { epoch: number; supported: boolean } | null = null;
+
+function keysetSupportFor(epoch: number): boolean | null {
+  return keysetSupport && keysetSupport.epoch === epoch ? keysetSupport.supported : null;
+}
+
+class KeysetUnsupportedError extends Error {}
+
+/**
+ * 按会话 id 键集游标把全部会话取齐。第一页按活跃度排序,翻页期间来新消息会让会话在
+ * 页与页之间挪位,按偏移翻会漏会重;id 顺序稳定,取齐之后按活跃度排好再返回
+ * (增量同步按返回顺序排队,最近的会话要先追平)。
+ *
+ * 老服务端不认 cursor(白名单校验 400),或静默忽略它(说「后面还有」却不给游标)时
+ * 抛 KeysetUnsupportedError,由调用方退回旧模式。其他失败原样抛出 —— 不能拿一份
+ * 截断的列表去整表替换,500 以后的会话会从列表和角标里消失。
+ */
+async function walkConversationCursor(
+  sameSession: () => boolean,
+  onFirstAttempt: () => void,
+): Promise<ChatConversationDto[]> {
+  let first = true;
+  let sessionChanged = false;
+  const all = await collectCursorPages(
+    async (cursor) => {
+      // 换了账号:旧账号的游标不能拿新账号的 token 接着翻(还会占新账号的限流额度)。
+      if (!sameSession()) {
+        sessionChanged = true;
+        return { rows: [], nextCursor: null };
+      }
+      const signal = { hasMore: null as boolean | null, nextCursor: null as string | null };
+      let rows: ChatConversationDto[];
+      try {
+        rows = await retry(
+          () => {
+            if (first) onFirstAttempt();
+            return apiClient<ChatConversationDto[]>(
+              `/chat/conversations?limit=${CONVERSATION_PAGE_LIMIT}&cursor=${encodeURIComponent(cursor)}`,
+              {
+                onResponseHeaders: (headers) => {
+                  signal.hasMore = readHasMore(headers);
+                  signal.nextCursor = headers.get('X-Next-Cursor');
+                },
+              },
+            );
+          },
+          { tries: 2, backoffMs: 400 },
+        );
+      } catch (error) {
+        if (isBadRequest(error)) throw new KeysetUnsupportedError();
+        throw error;
+      }
+      first = false;
+      if (signal.hasMore === true && !signal.nextCursor) throw new KeysetUnsupportedError();
+      return { rows, nextCursor: signal.nextCursor };
+    },
+    { maxPages: CONVERSATION_MAX_PAGES },
+  );
+  return sessionChanged ? all : sortConversations(all);
+}
+
 export interface LoadChatConversationsOptions {
   /**
    * 要一份「此刻之后才发出」的快照,不复用在途请求。
@@ -118,21 +273,23 @@ export async function loadChatConversations(
     // 在途请求的成败与这一发无关,只等它先落地。
     if (inFlight) await inFlight.then(() => undefined, () => undefined);
     let requestPreviewRevision: number | undefined;
-    // 启动阶段常见的是一次网络/网关抖动，而不是会话不存在。GET 列表请求
-    // 可安全重试一次；确定性的 4xx 仍由 retry 立即抛出，避免掩盖认证问题。
-    const conversations = await retry(
-      // Backend defaults this endpoint to 100 rows. The app replaces its whole
-      // conversation snapshot with the response and does not have a cursor to
-      // fetch another page, so use the endpoint's advertised maximum here.
-      () => {
-        // Capture each actual attempt after any queued request/retry wait.
-        requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
-        return apiClient<ChatConversationDto[]>('/chat/conversations?limit=500');
-      },
-      { tries: 2, backoffMs: 400 },
+    // Capture each actual attempt after any queued request/retry wait.
+    const captureRevision = () => {
+      requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+    };
+    // 新鲜度按请求发出的时刻算:快照就是那一刻的数据,翻多页也不往后延。
+    const startedAt = Date.now();
+    const conversations = await loadConversationSnapshot(
+      requestEpoch,
+      sameSession,
+      captureRevision,
     );
     if (sameSession()) {
+      await hydrateTimelinesBehindDeletedPreviews(conversations, sameSession);
+    }
+    if (sameSession()) {
       useChatStore.getState().setConversations(conversations, requestPreviewRevision);
+      lastConversationSnapshot = { epoch: requestEpoch, at: startedAt };
     }
     return conversations;
   })();
@@ -148,6 +305,81 @@ export async function loadChatConversations(
   // 丢掉，否则一次网络失败会在没有调用方 await 时变成 unhandled rejection。
   void request.then(clearRequest, clearRequest);
   return request;
+}
+
+/**
+ * 一份完整的会话快照。已知支持游标就直接按游标翻;否则先发旧模式第一页
+ * (`limit=500`,多数账号一页就够),被截断(X-Has-More: true)再按游标取齐。
+ */
+async function loadConversationSnapshot(
+  epoch: number,
+  sameSession: () => boolean,
+  captureRevision: () => void,
+): Promise<ChatConversationDto[]> {
+  const support = keysetSupportFor(epoch);
+  if (support === true) {
+    try {
+      return await walkConversationCursor(sameSession, captureRevision);
+    } catch (error) {
+      if (!(error instanceof KeysetUnsupportedError)) throw error;
+      // 服务端回滚到了老版本:记下来,这一发退回旧模式。
+      keysetSupport = { epoch, supported: false };
+    }
+  }
+
+  const firstPageSignal = { hasMore: null as boolean | null };
+  // 启动阶段常见的是一次网络/网关抖动，而不是会话不存在。GET 列表请求
+  // 可安全重试一次；确定性的 4xx 仍由 retry 立即抛出，避免掩盖认证问题。
+  const firstPage = await retry(
+    // Backend defaults this endpoint to 100 rows; ask for its maximum so most
+    // accounts get the whole list in one request. Beyond that the server sets
+    // X-Has-More and the rest is fetched by keyset cursor.
+    () => {
+      captureRevision();
+      return apiClient<ChatConversationDto[]>('/chat/conversations?limit=500', {
+        onResponseHeaders: (headers) => {
+          firstPageSignal.hasMore = readHasMore(headers);
+        },
+      });
+    },
+    { tries: 2, backoffMs: 400 },
+  );
+  if (firstPageSignal.hasMore !== true || keysetSupportFor(epoch) === false) {
+    return firstPage;
+  }
+  try {
+    // 首发的预览修订号已经记在第一页上(更早,更保守),这里不再覆盖。
+    const all = await walkConversationCursor(sameSession, () => undefined);
+    keysetSupport = { epoch, supported: true };
+    return all;
+  } catch (error) {
+    if (!(error instanceof KeysetUnsupportedError)) throw error;
+    // 老服务端:与之前的行为一致,只有第一页。记下来,之后不再试探。
+    keysetSupport = { epoch, supported: false };
+    return firstPage;
+  }
+}
+
+/**
+ * 会话末条被本机删掉了、而这个会话的本地时间线还没读进内存(冷启动只预读最近活跃的
+ * 那批):先把本地最近几十条读进来,setConversations 才能把预览回退到上一条,
+ * 而不是变成空白。服务端不知道本机的删除墓碑,快照里末条还是那条被删的。
+ */
+async function hydrateTimelinesBehindDeletedPreviews(
+  conversations: readonly ChatConversationDto[],
+  sameSession: () => boolean,
+): Promise<void> {
+  for (const conversation of conversations) {
+    const last = conversation.lastMessage;
+    if (!last || !isMessageDeletedLocally(last.id, last.d)) continue;
+    if (hasReadLocalTimeline(conversation.id)) continue;
+    const local = withoutExpiredBurn(await readRecentLocalMessages(conversation.id, 50));
+    if (!sameSession()) return;
+    markLocalTimelinesRead([conversation.id]);
+    if (local.length > 0) {
+      void useChatStore.getState().ingestMessages(conversation.id, local, { persist: false });
+    }
+  }
 }
 
 /** 读取会话级阅后即焚档位（深链/联系人入口可能先于会话列表打开聊天页）。 */
@@ -401,18 +633,20 @@ export async function loadChatHistory(
   const inMemory = store.messagesByConversation[conversationId] ?? [];
   let localMax = 0;
   if (options.beforeHeight === undefined) {
-    if (inMemory.length === 0) {
-      const local = await readRecentLocalMessages(
-        conversationId,
-        options.limit ?? 50,
+    if (!hasReadLocalTimeline(conversationId)) {
+      const local = withoutExpiredBurn(
+        await readRecentLocalMessages(conversationId, options.limit ?? 50),
       );
-      if (
-        local.length > 0 &&
-        sameSession() &&
-        useChatStore.getState().currentUserId === hydratingUser
-      ) {
+      const stillCurrent =
+        sameSession() && useChatStore.getState().currentUserId === hydratingUser;
+      if (stillCurrent) markLocalTimelinesRead([conversationId]);
+      if (local.length > 0 && stillCurrent) {
         useChatStore.getState().ingestMessages(conversationId, local);
         for (const message of local) {
+          if (message.height > localMax) localMax = message.height;
+        }
+      } else {
+        for (const message of inMemory) {
           if (message.height > localMax) localMax = message.height;
         }
       }
@@ -662,8 +896,8 @@ export async function searchAllChatMessagesLocalFirst(
   limit = 50,
   onLocalResults?: (messages: ChatMessageDto[]) => void,
 ): Promise<ChatMessageDto[]> {
-  const local = withoutLocallyDeleted(
-    await searchLocalChatMessages(keyword, limit),
+  const local = withoutExpiredBurn(
+    withoutLocallyDeleted(await searchLocalChatMessages(keyword, limit)),
   );
   // 本地结果先给出去。等在服务端那趟上再渲染的话,离线时用户要盯着空列表
   // 一直等到 apiClient 的 15 秒超时 —— 明明结果早就在手上了。

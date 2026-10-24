@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Divider } from "@/components/ui/divider";
 import { FilterTabs } from "@/components/ui/filter-tabs";
 import {
+  canSkipConversationFocusReload,
   clearChatConversationHistory,
   loadChatConversations,
   updateChatConversationPreferences,
@@ -777,6 +778,9 @@ export default function MessagesScreen() {
       // bootstrap is still restoring the current user. Wait for the scoped
       // chat session, then rerun the focus effect when it becomes available.
       if (!currentUserID) return;
+      // 连接正常、刚拉过完整快照就不重拉(30 秒窗口):进出聊天页来回切,原来每次都重拉
+      // 最多 500 个会话。会话变化靠实时会话事件推送,建群会就地写 store。
+      if (canSkipConversationFocusReload()) return;
 
       loadChatConversations().catch((err) => {
         // 列表加载失败时保留已有会话,empty state 兜底显示。

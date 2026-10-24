@@ -15,7 +15,7 @@ import {
   getRegisteredPushToken,
   subscribeRegisteredPushToken,
 } from '@/features/notifications/services/push-token-registration';
-import { loadChatConversations, loadChatHistory } from './api';
+import { loadChatConversations, loadChatHistory, markLocalTimelinesRead } from './api';
 import {
   resetChatSync,
   resumePendingChatSync,
@@ -39,6 +39,8 @@ import { dismissChatNotifications } from './chat-notifications';
 import { prunePendingMedia, resolvePendingMediaUri } from './pending-media';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import { createChatSendQueue } from './send-queue';
+import { pickEagerTimelineIds } from './eager-hydration';
+import { isMessageDeletedLocally } from './deleted-messages';
 import {
   CHAT_EVENTS,
   CHAT_WS_PATH,
@@ -752,6 +754,25 @@ async function restorePendingMediaPreview(
   };
 }
 
+/** 冷启动预读时间线的会话数(列表首屏 + 最近常聊的那些)。 */
+const EAGER_TIMELINE_CONVERSATIONS = 30;
+
+async function pickEagerHydration(
+  conversations: readonly import('./protocol').ChatConversationDto[],
+): Promise<Set<string> | null> {
+  const outbox = await readOutboxEntries();
+  if (!outbox) return null;
+  const mustInclude = new Set(outbox.map((entry) => entry.conversationId));
+  for (const conversation of conversations) {
+    const last = conversation.lastMessage;
+    if (last && isMessageDeletedLocally(last.id, last.d)) mustInclude.add(conversation.id);
+  }
+  return pickEagerTimelineIds(conversations, {
+    limit: EAGER_TIMELINE_CONVERSATIONS,
+    mustInclude,
+  });
+}
+
 async function hydrateFromLocalDb(
   userId: string,
   generation: number,
@@ -779,9 +800,16 @@ async function hydrateFromLocalDb(
     // 离线用户得盯着空列表等它跑完 —— 而列表本身早就在手上了。
     if (!isCurrentSession()) return;
     useChatStore.getState().hydrateLocalSnapshot(conversations, {});
+    // 只预读最近活跃的那批会话的时间线:群一多,逐会话串行读就是几百次查询、上万条消息
+    // 常驻内存。其余会话打开时由 loadChatHistory 从本地库补读(内存为空就先读本地)。
+    // 两类无论多旧都要预读:有待发消息的(下面要靠时间线认出「其实已经发出去了」),
+    // 末条被本地删掉的(会话预览要靠时间线回退到上一条)。读不出 outbox 时全部预读。
+    const eagerIds = await pickEagerHydration(conversations);
+    if (!isCurrentSession()) return;
     const timelines: Record<string, import('./protocol').ChatMessageDto[]> = {};
     for (const conversation of conversations) {
       if (!isCurrentSession()) return;
+      if (eagerIds && !eagerIds.has(conversation.id)) continue;
       timelines[conversation.id] = await readRecentLocalMessages(
         conversation.id,
         50,
@@ -789,6 +817,7 @@ async function hydrateFromLocalDb(
       if (!isCurrentSession()) return;
     }
     if (!isCurrentSession()) return;
+    markLocalTimelinesRead(Object.keys(timelines));
     useChatStore.getState().hydrateLocalSnapshot(conversations, timelines);
     // 等待 SQLite/FTS/outbox 的到期删除真正落盘，不能让后面的 outbox 水合把
     // 已过期的失败发送重新插回时间线。
