@@ -20,6 +20,10 @@ function makeChatCoreStubs() {
     get '@/utils/structural-sharing'() {
       return require('./load-ts-module').loadTsModule('src/utils/structural-sharing.ts');
     },
+    // 重连对账补报「已送达」的判定:纯函数,用真实实现。
+    get './delivered-catch-up'() {
+      return require('./load-ts-module').loadTsModule('src/chat-core/delivered-catch-up.ts');
+    },
     // 冷启动预载名单:纯函数,用真实实现。
     get './eager-hydration'() {
       return require('./load-ts-module').loadTsModule('src/chat-core/eager-hydration.ts');

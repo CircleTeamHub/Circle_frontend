@@ -301,6 +301,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     remove: (key) => mmkvStore.delete(key),
   };
   const protocol = runModule('src/chat-core/protocol.ts', {});
+  const appStateModule = { currentState: options.appState ?? 'active' };
   const clock = { now: Date.now() };
   class FakeDate extends Date {
     static now() {
@@ -327,7 +328,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     '@/constants/config': { CHAT_WS_URL: 'http://api.test' },
     'react-native': {
       Platform: { OS: 'android' },
-      AppState: { currentState: options.appState ?? 'active' },
+      AppState: appStateModule,
     },
     './sync': {
       resumePendingChatSync: async () => { apiCalls.syncResumes += 1; },
@@ -453,6 +454,7 @@ function loadManager(localDbOverrides = {}, options = {}) {
     socket,
     captured,
     clock,
+    appState: appStateModule,
     announceRegisteredPushToken: (registration) => {
       for (const listener of registeredTokenListeners) listener(registration);
     },
@@ -2327,4 +2329,70 @@ test('冷启动水合:读不出 outbox 时退回全部预读(宁可多读,不能
   manager.connectChat('jwt', 'u1');
   await flush();
   assert.equal(read.length, 35);
+});
+
+test('reconnecting reports delivery for direct messages that arrived while disconnected', async () => {
+  // 安卓后台断开期间收到的消息只走了推送;实时那条「收到即报送达」没机会跑,
+  // 对账时要补报,否则对方一直看到「已发送」。
+  const { manager, socket, store, apiCalls, appState } = loadManager();
+  apiCalls.conversationSnapshot = [
+    { id: 'dm-1', type: 'DIRECT', lastMessage: { height: 3, sender: { id: 'peer' } } },
+  ];
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+  // 首连(冷启动)不补报:那时 store 常常还是空的,每个单聊都会算「新到」。
+  assert.deepEqual(
+    socket.emitted.filter((entry) => entry.event === 'chat:delivered'),
+    [],
+  );
+
+  store.conversations = [
+    { id: 'dm-1', type: 'DIRECT', lastMessage: { height: 3, sender: { id: 'peer' } } },
+  ];
+  appState.currentState = 'background';
+  manager.suspendChatForBackground();
+  // 回前台到握手完成之间,REST 先把新快照写进了 store:基线得是断开那一刻的。
+  store.conversations = [
+    { id: 'dm-1', type: 'DIRECT', lastMessage: { height: 8, sender: { id: 'peer' } } },
+  ];
+  apiCalls.conversationSnapshot = [
+    { id: 'dm-1', type: 'DIRECT', lastMessage: { height: 8, sender: { id: 'peer' } } },
+    { id: 'group-1', type: 'GROUP', lastMessage: { height: 5, sender: { id: 'peer' } } },
+  ];
+  appState.currentState = 'active';
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+  await flush();
+
+  const delivered = socket.emitted.filter((entry) => entry.event === 'chat:delivered');
+  assert.deepEqual(
+    delivered.map((entry) => ({ ...entry.payload })),
+    [{ conversationId: 'dm-1', height: 8 }],
+  );
+});
+
+test('a background suspend is not undone by reconnects until the app is in the foreground', () => {
+  // 后台里 token 刷新会让 session-bootstrap 重跑 connectChat;连回去的话再也没人断。
+  const { manager, socket, apiCalls, appState, diagnostics } = loadManager();
+  manager.connectChat('jwt', 'u1');
+  socket.connected = true;
+  socket.fire('connect');
+  const startsBefore = apiCalls.syncStarts.length;
+
+  appState.currentState = 'background';
+  manager.suspendChatForBackground();
+  assert.equal(socket.connected, false);
+  assert.ok(
+    diagnostics.some((entry) => entry.event === 'chat.ws.background_suspended'),
+  );
+
+  manager.connectChat('jwt-rotated', 'u1');
+  assert.equal(apiCalls.syncStarts.length, startsBefore, '还在后台:不连');
+
+  appState.currentState = 'active';
+  manager.connectChat('jwt-rotated', 'u1');
+  assert.equal(apiCalls.syncStarts.length, startsBefore + 1, '回前台照常连');
 });

@@ -1,9 +1,13 @@
-import { AppState } from 'react-native';
-import { render, waitFor } from '@testing-library/react-native';
+import { AppState, Platform } from 'react-native';
+import { act, render, waitFor } from '@testing-library/react-native';
 import { SessionBootstrap } from './session-bootstrap';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
-import { connectChat } from '@/chat-core/socket-manager';
+import {
+  connectChat,
+  suspendChatForBackground,
+} from '@/chat-core/socket-manager';
+import { disconnectRealtime } from '@/realtime/client';
 import { reportError } from '@/observability/sentry';
 import { ApiError } from '@/services/api/client';
 import type { AuthUser } from '@/stores/authStore';
@@ -39,6 +43,13 @@ jest.mock('@/chat-core/socket-manager', () => ({
   connectChat: jest.fn(),
   disconnectChat: jest.fn(),
   suspendChat: jest.fn(),
+  suspendChatForBackground: jest.fn(),
+  setChatAppState: jest.fn(),
+}));
+// 还有消息没发完(后台里视频还在传):到点也不断。
+const mockSends = { unfinished: false };
+jest.mock('@/chat-core/client', () => ({
+  hasUnfinishedChatSends: () => mockSends.unfinished,
 }));
 jest.mock('@/realtime/client', () => ({
   connectRealtime: jest.fn(),
@@ -267,4 +278,116 @@ test('onboarding sessions do not connect the chat socket', async () => {
     { timeout: 3_000 },
   );
   expect(mockConnectChat).not.toHaveBeenCalled();
+});
+
+// ---- 安卓后台:离开超过 60 秒断开聊天长连接,交给推送 -------------------------
+describe('android background disconnect', () => {
+  const mockSuspendForBackground = suspendChatForBackground as jest.MockedFunction<
+    typeof suspendChatForBackground
+  >;
+  const mockDisconnectRealtime = disconnectRealtime as jest.MockedFunction<
+    typeof disconnectRealtime
+  >;
+  const restores: (() => void)[] = [];
+
+  const override = <T extends object>(target: T, key: keyof T, value: unknown) => {
+    const original = Object.getOwnPropertyDescriptor(target, key);
+    Object.defineProperty(target, key, { configurable: true, get: () => value });
+    restores.push(() => {
+      if (original) Object.defineProperty(target, key, original);
+    });
+  };
+
+  /** SessionBootstrap 注册的那个前后台监听。 */
+  const appStateListener = () => {
+    const calls = (AppState.addEventListener as jest.Mock).mock.calls.filter(
+      ([event]) => event === 'change',
+    );
+    return calls[calls.length - 1][1] as (state: string) => void;
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockSends.unfinished = false;
+    mockFetchCurrentUser.mockResolvedValue(storedUser);
+  });
+
+  afterEach(() => {
+    while (restores.length > 0) restores.pop()?.();
+    jest.useRealTimers();
+  });
+
+  test('suspends only the chat connection after 60 seconds in the background', () => {
+    override(Platform, 'OS', 'android');
+    render(<SessionBootstrap />);
+    const realtimeBefore = mockDisconnectRealtime.mock.calls.length;
+
+    act(() => appStateListener()('background'));
+    act(() => {
+      jest.advanceTimersByTime(59_999);
+    });
+    expect(mockSuspendForBackground).not.toHaveBeenCalled();
+
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(mockSuspendForBackground).toHaveBeenCalledTimes(1);
+    // 实时连接留着:来电邀请只走它,没有推送兜底。
+    expect(mockDisconnectRealtime.mock.calls.length).toBe(realtimeBefore);
+  });
+
+  test('coming back within 60 seconds keeps the connection', () => {
+    override(Platform, 'OS', 'android');
+    render(<SessionBootstrap />);
+
+    act(() => appStateListener()('background'));
+    act(() => {
+      jest.advanceTimersByTime(30_000);
+    });
+    act(() => appStateListener()('active'));
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+    expect(mockSuspendForBackground).not.toHaveBeenCalled();
+  });
+
+  test('unfinished sends keep the connection until they are done', () => {
+    override(Platform, 'OS', 'android');
+    mockSends.unfinished = true;
+    render(<SessionBootstrap />);
+
+    act(() => appStateListener()('background'));
+    act(() => {
+      jest.advanceTimersByTime(180_000);
+    });
+    expect(mockSuspendForBackground).not.toHaveBeenCalled();
+
+    mockSends.unfinished = false;
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+    expect(mockSuspendForBackground).toHaveBeenCalledTimes(1);
+  });
+
+  test('already in the background when mounted still counts down', () => {
+    override(Platform, 'OS', 'android');
+    override(AppState, 'currentState', 'background');
+    render(<SessionBootstrap />);
+
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+    expect(mockSuspendForBackground).toHaveBeenCalledTimes(1);
+  });
+
+  test('iOS is left alone (the system suspends the app by itself)', () => {
+    override(Platform, 'OS', 'ios');
+    render(<SessionBootstrap />);
+
+    act(() => appStateListener()('background'));
+    act(() => {
+      jest.advanceTimersByTime(120_000);
+    });
+    expect(mockSuspendForBackground).not.toHaveBeenCalled();
+  });
 });

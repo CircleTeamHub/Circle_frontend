@@ -120,6 +120,7 @@ function loadStack({
   onSend = async () => ({ messageId: 'srv-1', height: 9 }),
   localDb = {},
   pendingMedia = {},
+  queuedSends = () => false,
 } = {}) {
   const localDbStub = { ...__localDbStub, ...localDb };
   const pendingMediaStub = {
@@ -174,6 +175,7 @@ function loadStack({
       return {
         ChatSendError,
         createDeliveryId: () => 'd-test',
+        hasQueuedChatSends: queuedSends,
         markConversationRead: () => {},
         sendChatMessage: onSend,
       };
@@ -569,4 +571,37 @@ test('an uploaded media message resends its keyed payload without the local-only
     },
   ]);
   assert.deepEqual(deletedCopies, [['me', 'd-keyed']]);
+});
+
+test('unfinished sends cover uploads, retries and the send queue', async () => {
+  // 安卓后台断开聊天连接前要问这一句:后台里视频还在传的话,断了它传完也发不出去。
+  let queued = false;
+  const { client } = loadStack({ queuedSends: () => queued });
+  assert.equal(client.hasUnfinishedChatSends(), false);
+
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const d = client.startMediaSend({
+    conversationId: 'c1',
+    type: 'video',
+    localContent: { localUri: 'file:///a.mp4' },
+    retry: async () => {
+      await gate;
+    },
+  });
+  assert.equal(client.hasUnfinishedChatSends(), true, '还在上传');
+  client.failMediaSend('c1', d);
+  assert.equal(client.hasUnfinishedChatSends(), false, '失败了:气泡标红,不再等');
+
+  const retry = client.retryFailedChatMessage('c1', d);
+  assert.equal(client.hasUnfinishedChatSends(), true, '长按重发在跑');
+  release();
+  await retry;
+  client.finishMediaSend(d);
+  assert.equal(client.hasUnfinishedChatSends(), false);
+
+  queued = true;
+  assert.equal(client.hasUnfinishedChatSends(), true, '排在发送队列里等 ack');
 });
