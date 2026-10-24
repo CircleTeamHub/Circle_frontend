@@ -86,7 +86,7 @@ async function runStorageUpload<T>(
   try {
     return await task();
   } catch (error) {
-    const storage = error instanceof StorageUploadError
+    const storage: { status?: number; storageCode?: string } = error instanceof StorageUploadError
       ? { status: error.status, ...(error.storageCode ? { storageCode: error.storageCode } : {}) }
       : {};
     const signature = [

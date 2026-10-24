@@ -81,7 +81,7 @@ test('realtime client authenticates with a message frame, never via the URL', ()
   );
   assert.doesNotMatch(client, /[?&]token=/);
   assert.doesNotMatch(client, /encodeURIComponent\(token\)/);
-  assert.match(client, /new WebSocket\(REALTIME_WS_URL, undefined, \{/);
+  assert.match(client, /new \(WebSocket as unknown as HeaderedWebSocketConstructor\)\(REALTIME_WS_URL, undefined, \{/);
 });
 
 test('realtime notification.created only prepends bell types but banners everything non-system', () => {

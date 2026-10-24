@@ -224,6 +224,16 @@ const reportedRealtimeFailures = new Set<string>();
 function createConnectionTraceId(): string {
   return `ws-${randomUUID()}`;
 }
+
+/**
+ * React Native 的 WebSocket 比 DOM 多一个 options 参数（握手头）；tsc 解析到的是
+ * DOM 那份两参签名，这里按 RN 的实际签名收窄一次。浏览器会忽略第三个参数。
+ */
+type HeaderedWebSocketConstructor = new (
+  url: string,
+  protocols: undefined,
+  options: { headers: Record<string, string> },
+) => WebSocket;
 let walletRefreshPromise: Promise<void> | null = null;
 // 「在途那一发的快照已经过时了」这件事按会话记，而不是一个会被 disconnect 清掉
 // 的布尔:token 轮换会调 disconnectRealtime,但在途请求仍然允许落地(见下),脏标记
@@ -759,7 +769,7 @@ function openRealtimeSocket(normalizedToken: string) {
   connectionTraceId = socketTraceId;
   // 第二个参数必须是 undefined：浏览器会把 null 当成名为 "null" 的子协议。
   // 第三个参数是 React Native WebSocket 的扩展（握手头），浏览器会忽略它。
-  const nextSocket = new WebSocket(REALTIME_WS_URL, undefined, {
+  const nextSocket = new (WebSocket as unknown as HeaderedWebSocketConstructor)(REALTIME_WS_URL, undefined, {
     headers: { 'x-connection-trace-id': socketTraceId },
   });
   socket = nextSocket;
