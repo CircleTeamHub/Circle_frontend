@@ -2560,3 +2560,51 @@ test('logging out forgets the burn schedule', async () => {
   await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: [] });
   assert.equal(env.pendingDelays().length, 0);
 });
+
+// ---- 加密正文的清理只能点名到那一条 -----------------------------------------
+test('an expired encrypted message without an envelope purges only its own body', async () => {
+  // 撤回后的加密消息正文是空对象、没有信封。原来按 clientMessageId 清理时传了
+  // undefined,等于「这个会话的所有加密正文」—— 其余消息全变成解不开。
+  const purges = [];
+  const { useChatStore } = loadChatStore({
+    e2eeLifecycle: { purgeEncryptedBody: (value) => purges.push({ ...value }) },
+  });
+  const past = new Date(Date.now() - 60_000).toISOString();
+  const revoked = msg({
+    id: 'srv-revoked',
+    height: 1,
+    type: 'encrypted-text',
+    content: {},
+    burnExpiresAt: past,
+  });
+  const sealed = msg({
+    id: 'srv-sealed',
+    height: 2,
+    type: 'encrypted-text',
+    content: { envelope: { clientMessageId: 'client-sealed' } },
+    burnExpiresAt: past,
+  });
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
+  await useChatStore.getState().ingestMessages('conv-1', [revoked, sealed], { persist: false });
+  purges.length = 0;
+
+  await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: ['conv-1'] });
+
+  assert.deepEqual(purges, [
+    { conversationId: 'conv-1', serverMessageId: 'srv-revoked' },
+    { conversationId: 'conv-1', clientMessageId: 'client-sealed' },
+  ]);
+});
+
+test('clearing a conversation locally asks for its whole encrypted-body purge explicitly', () => {
+  const purges = [];
+  const { useChatStore } = loadChatStore({
+    e2eeLifecycle: { purgeEncryptedBody: (value) => purges.push({ ...value }) },
+  });
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
+  purges.length = 0;
+
+  useChatStore.getState().clearConversationLocal('conv-1', null);
+
+  assert.deepEqual(purges, [{ conversationId: 'conv-1', wholeConversation: true }]);
+});

@@ -1,5 +1,5 @@
 import { reportHandledFailure } from '@/observability/report-failure';
-import { onEncryptedBodyPurge, purgeEncryptedBody } from './lifecycle';
+import { encryptedBodyPurgeMatches, hasEncryptedBodyPurgeTarget, onEncryptedBodyPurge, purgeEncryptedBody, type StoredEncryptedBody } from './lifecycle';
 import { ProtocolDevice } from '@circle/e2ee';
 import { EncryptionClient, type EncryptedContent } from '@circle/e2ee/relay-client.mjs';
 import * as Crypto from 'expo-crypto';
@@ -118,14 +118,14 @@ async function flushDecryptions() {
     }
   } catch (error) { for (const item of pending) item.reject(error); }
 }
-onEncryptedBodyPurge(({conversationId, clientMessageId, serverMessageId, expired}) => {
-  const promise = active?.promise ?? (conversationId ? getEncryptionClient() : undefined);
+onEncryptedBodyPurge(purge => {
+  // 没指明清哪些(单条清理却一个标识都没有):什么都不清,也不用为它去开加密库。
+  if (!hasEncryptedBodyPurgeTarget(purge)) return;
+  const promise = active?.promise ?? (purge.conversationId ? getEncryptionClient() : undefined);
   if (!promise) return;
-  void promise.then(client => client.run(() => client.device.purgeMessages(value => {
-    const metadata = value as unknown as {serverMessageId?: string; expiresAt?: string};
-    return expired ? Boolean(metadata.expiresAt && Date.parse(metadata.expiresAt) <= Date.now())
-      : value.conversationId === conversationId && (!serverMessageId || metadata.serverMessageId === serverMessageId) && (!clientMessageId || value.clientMessageId === clientMessageId);
-  }))).catch(() => { reportHandledFailure('e2ee', 'purgeBodies', new Error('Encrypted body purge failed')); });
+  void promise.then(client => client.run(() => client.device.purgeMessages(value =>
+    encryptedBodyPurgeMatches(purge, value as unknown as StoredEncryptedBody, Date.now()),
+  ))).catch(() => { reportHandledFailure('e2ee', 'purgeBodies', new Error('Encrypted body purge failed')); });
 });
 
 export async function recoverMissingLocalKey() {

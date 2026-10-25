@@ -403,6 +403,14 @@ function scheduleNextBurnPurge(): void {
   }, delay);
 }
 
+/** 加密消息信封里的 clientMessageId(本机正文库按它存);撤回后没有信封。 */
+function encryptedClientMessageId(message: ChatMessageDto): string | null {
+  const envelope = message.content.envelope;
+  if (!envelope || typeof envelope !== 'object') return null;
+  const id = (envelope as { clientMessageId?: unknown }).clientMessageId;
+  return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
 /** 会话预览是一条会焚毁的消息:它也得登记到期时刻,否则要等下一次全量扫才清。 */
 function hasBurnPreview(conversation: ChatConversationDto): boolean {
   return (
@@ -2431,7 +2439,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         return expiry !== null && expiry <= now;
       }).map((message) => message.id));
       for (const message of timeline ?? []) if (expiredIds.has(message.id) && message.type === 'encrypted-text') {
-        purgeEncryptedBody({ conversationId: conversation.id, clientMessageId: (message.content.envelope as {clientMessageId?: string})?.clientMessageId });
+        // 没有信封(撤回后正文是空对象)就按服务端 id 清;绝不能只给会话 id ——
+        // 那是「整个会话的正文」。
+        const clientMessageId = encryptedClientMessageId(message);
+        purgeEncryptedBody(
+          clientMessageId
+            ? { conversationId: conversation.id, clientMessageId }
+            : { conversationId: conversation.id, serverMessageId: message.id },
+        );
       }
       const rawPreview = conversation.lastMessage;
       const rawPreviewExpiry = rawPreview ? expiryFor(rawPreview) : null;
@@ -2520,7 +2535,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   clearConversationLocal: (conversationId, clearedBeforeHeight) => {
-    purgeEncryptedBody({ conversationId });
+    purgeEncryptedBody({ conversationId, wholeConversation: true });
     void clearLocalConversationMessages(conversationId);
     const {
       conversations,
