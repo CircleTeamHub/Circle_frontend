@@ -44,21 +44,12 @@ export function useComposerDraftPersistence({
   messages,
   paused,
 }: ComposerDraftBinding): { clearPersistedDraft: () => void } {
-  const textEncryption = useChatStore(
-    (state) =>
-      state.conversations.find(
-        (conversation) => conversation.id === conversationId,
-      )?.textEncryption,
-  );
-  const mode =
-    textEncryption === 'PLAIN' || textEncryption === 'MLS_V1'
-      ? textEncryption
-      : null;
+  const encrypted = useChatStore(s => s.conversations.find(c => c.id === conversationId)?.textEncryption === 'MLS_V1');
   const restoredKeyRef = useRef<string | null>(null);
   const pendingQuoteIdRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestRef = useRef({ draft, mentionTargets, quoteTarget, paused, mode });
-  latestRef.current = { draft, mentionTargets, quoteTarget, paused, mode };
+  const latestRef = useRef({ draft, mentionTargets, quoteTarget, paused, encrypted });
+  latestRef.current = { draft, mentionTargets, quoteTarget, paused, encrypted };
   const sessionKey = userId ? `${userId}:${conversationId}` : null;
 
   const flushSave = useCallback(() => {
@@ -70,11 +61,10 @@ export function useComposerDraftPersistence({
       return;
     }
     const latest = latestRef.current;
-    if (latest.mode === 'MLS_V1') {
+    if (latest.encrypted) {
       useComposerDraftStore.getState().clearDraft(userId, conversationId);
       return;
     }
-    if (latest.mode !== 'PLAIN') return;
     if (latest.paused || process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true') return;
     const quoteId =
       latest.quoteTarget && !isLocalMessageId(latest.quoteTarget.id)
@@ -94,10 +84,13 @@ export function useComposerDraftPersistence({
   // 进入会话(或会话/账号切换)时恢复一次。输入框里已经有内容(分享带进来的开场白等)
   // 时不覆盖。
   useEffect(() => {
-    if (!sessionKey || !mode || restoredKeyRef.current === sessionKey) return;
+    if (!sessionKey || restoredKeyRef.current === sessionKey) return;
     restoredKeyRef.current = sessionKey;
     pendingQuoteIdRef.current = null;
-    if (mode === 'MLS_V1') return;
+    if (encrypted) {
+      if (userId) useComposerDraftStore.getState().clearDraft(userId, conversationId);
+      return;
+    }
     const saved = readComposerDraft(userId, conversationId);
     if (!saved) return;
     if (latestRef.current.draft.length === 0 && saved.text.length > 0) {
@@ -107,13 +100,11 @@ export function useComposerDraftPersistence({
     if (saved.quoteMessageId && !latestRef.current.quoteTarget) {
       pendingQuoteIdRef.current = saved.quoteMessageId;
     }
-  }, [conversationId, mode, sessionKey, setDraft, setMentionTargets, userId]);
+  }, [conversationId, sessionKey, setDraft, setMentionTargets, userId, encrypted]);
 
   useEffect(() => {
-    if (mode === 'MLS_V1' && userId) {
-      useComposerDraftStore.getState().clearDraft(userId, conversationId);
-    }
-  }, [mode, userId, conversationId]);
+    if (encrypted && userId) useComposerDraftStore.getState().clearDraft(userId, conversationId);
+  }, [encrypted, userId, conversationId]);
 
   // 引用目标要等历史页加载进来才找得到。
   useEffect(() => {
@@ -126,20 +117,13 @@ export function useComposerDraftPersistence({
   }, [messages, quoteTarget, setQuoteTarget]);
 
   useEffect(() => {
+    if (!sessionKey || restoredKeyRef.current !== sessionKey || paused) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    if (
-      !sessionKey ||
-      restoredKeyRef.current !== sessionKey ||
-      mode !== 'PLAIN' ||
-      paused
-    ) {
-      return;
-    }
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
       flushSave();
     }, DRAFT_SAVE_DELAY_MS);
-  }, [draft, flushSave, mentionTargets, mode, paused, quoteTarget, sessionKey]);
+  }, [draft, flushSave, mentionTargets, paused, quoteTarget, sessionKey]);
 
   // 离开会话:把还在防抖里的那一次立刻写掉。
   useEffect(() => () => flushSave(), [flushSave]);

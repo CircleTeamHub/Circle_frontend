@@ -120,9 +120,6 @@ function loadStack({
   onSend = async () => ({ messageId: 'srv-1', height: 9 }),
   localDb = {},
   pendingMedia = {},
-  encryptOutgoingText = null,
-  purgeEncryptedBody = () => {},
-  textEncryption = 'PLAIN',
 } = {}) {
   const localDbStub = { ...__localDbStub, ...localDb };
   const pendingMediaStub = {
@@ -139,7 +136,6 @@ function loadStack({
       });
     if (request === './local-db') return localDbStub;
     if (request === './pending-media') return pendingMediaStub;
-    if (request === '@/services/e2ee/lifecycle') return { purgeEncryptedBody };
     if (request === './deleted-messages') {
       return {
         isMessageDeletedLocally: () => false,
@@ -156,8 +152,6 @@ function loadStack({
   const client = runModule('src/chat-core/client.ts', (request) => {
     if (request === '@/services/api/credit-policy')
       return { assertLocalCanSendMessage: () => {} };
-    if (request === '@/services/e2ee/client')
-      return { encryptOutgoingText };
     if (request === '@/stores/authStore') {
       return {
         useAuthStore: {
@@ -193,8 +187,6 @@ function loadStack({
     if (request === './pending-media') return pendingMediaStub;
     if (request === './burn-durations') return loadBurnDurations();
       throw new Error(`unexpected require: ${request}`);
-  }, {
-    process: { env: { EXPO_PUBLIC_E2EE_TEXT_ENABLED: 'false' } },
   });
 
   const state = store.useChatStore.getState();
@@ -211,7 +203,6 @@ function loadStack({
       pinned: false,
       muted: false,
       lastMessageAt: null,
-      textEncryption,
     },
   ]);
   return { client, store };
@@ -221,75 +212,6 @@ const bubble = (store, d) =>
   (store.useChatStore.getState().messagesByConversation['c1'] ?? []).find(
     (m) => m.d === d,
   );
-
-test('deleting a PLAIN bubble purges the journal created by its failed MLS retry', async () => {
-  const outbox = new Map();
-  const journal = new Set();
-  const purges = [];
-  const sentPayloads = [];
-  const { client, store } = loadStack({
-    onSend: async (payload) => {
-      sentPayloads.push(JSON.parse(JSON.stringify(payload)));
-      throw new Error('ack timeout');
-    },
-    localDb: {
-      outboxUpsert: async (entry) => {
-        outbox.set(entry.d, JSON.parse(JSON.stringify(entry)));
-      },
-      outboxList: async () => Array.from(outbox.values()),
-    },
-    encryptOutgoingText: async (conversationId, d, content, required) => {
-      assert.equal(conversationId, 'c1');
-      assert.equal(required, true);
-      assert.deepEqual(content, { text: 'upgrade me' });
-      journal.add(d);
-      return {
-        envelope: { clientMessageId: d, ciphertext: 'opaque' },
-        signature: 'proof',
-      };
-    },
-    purgeEncryptedBody: (target) => {
-      purges.push(target);
-      if (target.clientMessageId) journal.delete(target.clientMessageId);
-    },
-  });
-
-  await assert.rejects(
-    client.sendTextMessage({ conversationId: 'c1', text: 'upgrade me' }),
-    /ack timeout/,
-  );
-  const d = 'd-test';
-  assert.equal(bubble(store, d).type, 'text');
-  assert.equal(bubble(store, d).failed, true);
-
-  const plainConversation = store.useChatStore.getState().conversations[0];
-  store.useChatStore.setState({
-    conversations: [{ ...plainConversation, textEncryption: 'MLS_V1' }],
-  });
-  await assert.rejects(
-    client.retryFailedChatMessage('c1', d),
-    /ack timeout/,
-  );
-
-  assert.deepEqual(
-    sentPayloads.map((payload) => payload.type),
-    ['text', 'encrypted-text'],
-  );
-  assert.equal(outbox.get(d).payload.type, 'encrypted-text');
-  assert.equal(journal.has(d), true);
-  assert.equal(bubble(store, d).type, 'text');
-  assert.equal(bubble(store, d).failed, true);
-
-  store.useChatStore.getState().removeMessage('c1', `local:${d}`);
-
-  assert.equal(journal.has(d), false);
-  assert.ok(
-    purges.some(
-      (target) =>
-        target.conversationId === 'c1' && target.clientMessageId === d,
-    ),
-  );
-});
 
 test('并发重发只跑一次上传', async () => {
   const { client, store } = loadStack();

@@ -135,9 +135,6 @@ function loadChatStore(overrides = {}) {
   const store = runModule('src/chat-core/store.ts', (request) => {
     if (request === 'zustand') return zustandStub();
     if (request === './deleted-messages') return deletedMessages;
-    if (request === '@/services/e2ee/lifecycle' && overrides.lifecycle) {
-      return overrides.lifecycle;
-    }
     if (request === './pending-media' && overrides.pendingMedia) {
       return overrides.pendingMedia;
     }
@@ -1119,69 +1116,6 @@ test('deleting an unconfirmed bubble survives its ack replacing the id', () => {
   const confirmed = msg({ id: 'server-1', height: 7, d: 'd-1', sender: { id: 'me' } });
   store.ingestMessages('conv-1', [confirmed]);
   assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
-});
-
-test('deleting a failed encrypted send purges its journal body by client message id', () => {
-  const purges = [];
-  const { useChatStore } = loadChatStore({
-    lifecycle: { purgeEncryptedBody: (target) => purges.push(target) },
-  });
-  const store = useChatStore.getState();
-  store.setCurrentUserId('me');
-  store.setConversations([conversation()]);
-  store.ingestMessages('conv-1', [
-    msg({
-      id: 'local:delivery-1',
-      height: 0,
-      d: 'delivery-1',
-      type: 'encrypted-text',
-      content: { envelope: { clientMessageId: 'encrypted-client-1' } },
-      sender: { id: 'me' },
-    }),
-  ]);
-
-  store.removeMessage('conv-1', 'local:delivery-1');
-
-  assert.ok(
-    purges.some(
-      (target) =>
-        target.conversationId === 'conv-1' &&
-        target.clientMessageId === 'encrypted-client-1',
-    ),
-  );
-});
-
-test('deleting a plaintext bubble after an encrypted retry purges the retry journal by d', () => {
-  const purges = [];
-  const { useChatStore } = loadChatStore({
-    lifecycle: { purgeEncryptedBody: (target) => purges.push(target) },
-  });
-  const store = useChatStore.getState();
-  store.setCurrentUserId('me');
-  store.setConversations([conversation()]);
-  // 首发 PLAIN 失败后，MLS 重试会用同一个 d 写密文 journal；即使重试的
-  // transport 再失败，时间线里的原气泡仍然是 text，而不是 encrypted-text。
-  store.ingestMessages('conv-1', [
-    msg({
-      id: 'local:plain-then-encrypted',
-      height: 0,
-      d: 'plain-then-encrypted',
-      type: 'text',
-      content: { text: 'original plaintext' },
-      sender: { id: 'me' },
-      failed: true,
-    }),
-  ]);
-
-  store.removeMessage('conv-1', 'local:plain-then-encrypted');
-
-  assert.ok(
-    purges.some(
-      (target) =>
-        target.conversationId === 'conv-1' &&
-        target.clientMessageId === 'plain-then-encrypted',
-    ),
-  );
 });
 
 test('the same holds when the server echo beats the ack', () => {

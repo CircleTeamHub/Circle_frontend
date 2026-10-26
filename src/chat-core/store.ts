@@ -1604,17 +1604,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       (m) => m.id === messageId && m.height === 0 && m.d,
     );
     if (failedTarget?.d) {
-      // PLAIN 首发失败后可能在 MLS 重试时以同一个 d 写入密文 journal，但时间线
-      // 里的原气泡仍是 text/quote。按 d 幂等清理，不能依赖气泡当前的 type。
-      purgeEncryptedBody({ conversationId, clientMessageId: failedTarget.d });
-      if (failedTarget.type === 'encrypted-text') {
-        const clientMessageId = (
-          failedTarget.content.envelope as { clientMessageId?: string }
-        )?.clientMessageId;
-        if (clientMessageId && clientMessageId !== failedTarget.d) {
-          purgeEncryptedBody({ conversationId, clientMessageId });
-        }
-      }
       void outboxDelete(failedTarget.d);
       // 没传完的媒体在持久目录里还有一份副本(chat-core/pending-media),一起删。
       const userId = get().currentUserId;

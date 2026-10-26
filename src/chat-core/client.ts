@@ -347,43 +347,6 @@ function persistInSendOrder(
   return current;
 }
 
-type RecognizedTextEncryptionMode = 'PLAIN' | 'MLS_V1';
-
-function requireRecognizedTextEncryptionMode(
-  mode: string | undefined,
-): RecognizedTextEncryptionMode {
-  if (mode === 'PLAIN' || mode === 'MLS_V1') return mode;
-  throw new ChatSendError(
-    'CHAT_INVALID_PAYLOAD',
-    '会话加密状态尚未就绪',
-  );
-}
-
-function assertCurrentModeAllowsTextPayload(
-  conversationId: string,
-  type: string,
-  allowAuthoritativePlaintext = false,
-): void {
-  if (type !== 'text' && type !== 'quote' && type !== 'encrypted-text') return;
-  const mode = requireRecognizedTextEncryptionMode(
-    useChatStore
-      .getState()
-      .conversations.find((conversation) => conversation.id === conversationId)
-      ?.textEncryption,
-  );
-  if (
-    (type === 'text' || type === 'quote') &&
-    (mode === 'MLS_V1' ||
-      (process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true' &&
-        !allowAuthoritativePlaintext))
-  ) {
-    throw new ChatSendError(
-      'CHAT_INVALID_PAYLOAD',
-      '会话加密状态已变化，请重新发送消息',
-    );
-  }
-}
-
 /**
  * 发送核心:乐观 DTO(height=0, id=local:{d})立即入库并联动会话列表;
  * ack 返回后以真 id/height 替换(store 按 d 对账);失败置失败态并抛出。
@@ -408,18 +371,13 @@ export async function sendWithOptimism(
   assertChatSessionFence(fence);
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
-  let allowAuthoritativePlaintext = false;
   if (options.type === 'text' || options.type === 'quote') {
-    const mode = requireRecognizedTextEncryptionMode(
-      store.conversations.find((c) => c.id === options.conversationId)
-        ?.textEncryption,
-    );
+    const mode = store.conversations.find(c => c.id === options.conversationId)?.textEncryption;
     if (process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true' || mode === 'MLS_V1') {
       const { encryptOutgoingText } = await import('@/services/e2ee/client');
       const encrypted = await encryptOutgoingText(options.conversationId, d, options.content, mode === 'MLS_V1');
       assertChatSessionFence(fence);
       if (encrypted) options = { ...options, type: 'encrypted-text', content: { ...encrypted }, localContent: undefined, outboxPreviewContent: undefined, replyToId: undefined, forwardFromMessageId: undefined };
-      else if (mode === 'PLAIN') allowAuthoritativePlaintext = true;
     }
   }
   const failedAfterHeight = captureSendAnchor(options.conversationId);
@@ -483,11 +441,6 @@ export async function sendWithOptimism(
   });
   assertChatSessionFence(fence);
   try {
-    assertCurrentModeAllowsTextPayload(
-      options.conversationId,
-      options.type,
-      allowAuthoritativePlaintext,
-    );
     const ack = await sendChatMessage({
       conversationId: options.conversationId,
       type: options.type,
@@ -1080,47 +1033,7 @@ async function runRetry(
     (item) => item.d === d && item.conversationId === conversationId,
   );
   if (!entry) throw new ChatSendError('CHAT_INVALID_PAYLOAD', '找不到待重发的消息');
-  let retryPayload = entry.payload;
-  let allowAuthoritativePlaintext = false;
-  if (retryPayload.type === 'text' || retryPayload.type === 'quote') {
-    const mode = requireRecognizedTextEncryptionMode(
-      useChatStore
-        .getState()
-        .conversations.find((conversation) => conversation.id === conversationId)
-        ?.textEncryption,
-    );
-    if (
-      mode === 'MLS_V1' ||
-      process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true'
-    ) {
-      const { encryptOutgoingText } = await import('@/services/e2ee/client');
-      const encrypted = await encryptOutgoingText(
-        conversationId,
-        d,
-        retryPayload.content,
-        mode === 'MLS_V1',
-      );
-      assertChatSessionFence(fence);
-      if (encrypted) {
-        retryPayload = {
-          conversationId,
-          type: 'encrypted-text',
-          content: { ...encrypted },
-          d,
-        };
-      } else if (mode === 'PLAIN') {
-        allowAuthoritativePlaintext = true;
-      }
-    }
-  }
-  const { localPreviewContent, pendingMedia, ...wirePayload } = retryPayload;
-  // 旧 outbox 可能来自模式加载前或会话开启加密前。上面重新做权威判定后，
-  // 这里仍按当前本地模式复核，避免异步加密期间发生的模式切换穿透门禁。
-  assertCurrentModeAllowsTextPayload(
-    conversationId,
-    retryPayload.type,
-    allowAuthoritativePlaintext,
-  );
+  const { localPreviewContent, pendingMedia, ...wirePayload } = entry.payload;
   if (pendingMedia) {
     const userId = useChatStore.getState().currentUserId;
     if (userId) {
@@ -1153,15 +1066,9 @@ async function runRetry(
   assertChatSessionFence(fence);
   await outboxUpsert({
     ...entry,
-    payload: retryPayload,
     ...(Number.isFinite(retryAnchor) ? { failedAfterHeight: retryAnchor } : {}),
   });
   assertChatSessionFence(fence);
-  assertCurrentModeAllowsTextPayload(
-    conversationId,
-    wirePayload.type,
-    allowAuthoritativePlaintext,
-  );
   const ack = await sendChatMessage(wirePayload);
   assertChatSessionFence(fence);
   void outboxDelete(d);
@@ -1182,13 +1089,10 @@ async function runRetry(
     id: ack.messageId,
     conversationId,
     height: ack.height,
-    type: retryPayload.type,
-    content:
-      retryPayload.type === 'encrypted-text'
-        ? retryPayload.content
-        : (optimistic?.content ?? retryPayload.content),
+    type: entry.payload.type,
+    content: optimistic?.content ?? entry.payload.content,
     sender: optimistic?.sender ?? selfSenderInfo(),
-    replyToId: retryPayload.replyToId ?? null,
+    replyToId: entry.payload.replyToId ?? null,
     d,
     createdAt: entry.createdAt,
   };

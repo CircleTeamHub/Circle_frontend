@@ -39,8 +39,6 @@ function loadClient({
   deliveryIds = null,
   outboxDelays = {},
   encrypt = null,
-  conversationModes = { c1: 'PLAIN', c2: 'PLAIN' },
-  e2eeEnabled = encrypt !== null,
 }) {
   const filePath = path.join(process.cwd(), 'src/chat-core/client.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
@@ -63,8 +61,6 @@ function loadClient({
     failedMarks: [],
     retryMarks: [],
     removed: [],
-    reverted: 0,
-    ingestedMessages: [],
   };
   const authState = {
     user: { id: 'me', nickname: '我', avatarUrl: null },
@@ -72,9 +68,8 @@ function loadClient({
   };
   class CreditPolicyError extends Error {}
   const storeState = {
-    ingestMessages: (_conversationId, messages) => {
+    ingestMessages: () => {
       calls.ingest += 1;
-      calls.ingestedMessages.push(...messages);
     },
     applyIncomingMessage: () => {
       calls.applied += 1;
@@ -89,21 +84,14 @@ function loadClient({
     removeMessage: (conversationId, messageId) => {
       calls.removed.push({ conversationId, messageId });
     },
-    revertConversationPreview: () => {
-      calls.reverted += 1;
-    },
+    revertConversationPreview: () => {},
     upsertConversation: () => {},
     messagesByConversation: {},
-    conversations: Object.entries(conversationModes).map(([id, textEncryption]) => ({
-      id,
-      textEncryption,
-    })),
+    conversations: [],
   };
 
   const context = {
-    process: {
-      env: { EXPO_PUBLIC_E2EE_TEXT_ENABLED: e2eeEnabled ? 'true' : 'false' },
-    },
+    process: { env: { EXPO_PUBLIC_E2EE_TEXT_ENABLED: encrypt ? 'true' : 'false' } },
     Date,
     Math,
     module: { exports: {} },
@@ -142,13 +130,7 @@ function loadClient({
           sendChatMessage: async (payload) => {
             calls.sent += 1;
             calls.sentPayloads.push(payload);
-            if (
-              typeof sendFails === 'function'
-                ? sendFails(payload)
-                : sendFails
-            ) {
-              throw new Error('ack timeout');
-            }
+            if (sendFails) throw new Error('ack timeout');
             return { messageId: 'm1', height: 1 };
           },
         };
@@ -199,13 +181,7 @@ function loadClient({
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context);
-  return {
-    api: context.module.exports,
-    calls,
-    CreditPolicyError,
-    authState,
-    storeState,
-  };
+  return { api: context.module.exports, calls, CreditPolicyError, authState };
 }
 
 test('every public send API is gated on credit score', async () => {
@@ -351,252 +327,6 @@ test('a session switch while retry persistence is pending cannot resend the old 
   assert.deepEqual(loaded.calls.failedMarks, []);
 });
 
-for (const nextMode of ['MLS_V1', undefined]) {
-  test(`a plaintext first send rechecks mode after outbox persistence: ${String(nextMode)}`, async () => {
-    let release;
-    const gate = new Promise((resolve) => {
-      release = resolve;
-    });
-    const loaded = loadClient({
-      blocked: false,
-      conversationModes: { c1: 'PLAIN' },
-      outboxDelays: { 'd-test': gate },
-    });
-
-    const send = loaded.api.sendTextMessage({
-      conversationId: 'c1',
-      text: 'must not cross the mode change',
-    });
-    await flush();
-
-    loaded.storeState.conversations = [
-      nextMode === undefined
-        ? { id: 'c1' }
-        : { id: 'c1', textEncryption: nextMode },
-    ];
-    release();
-
-    await assert.rejects(send);
-    assert.equal(loaded.calls.sent, 0);
-    assert.deepEqual(loaded.calls.outboxUpserts, ['text']);
-    assert.deepEqual(loaded.calls.failedMarks, [
-      { conversationId: 'c1', d: 'd-test' },
-    ]);
-    assert.equal(loaded.calls.reverted, 1);
-  });
-}
-
-function retryEntry(type, content) {
-  return {
-    d: 'd-retry',
-    conversationId: 'c1',
-    payload: {
-      conversationId: 'c1',
-      type,
-      content,
-      d: 'd-retry',
-    },
-    createdAt: new Date().toISOString(),
-  };
-}
-
-test('a low-credit outbox retry is rejected before local or transport changes', async () => {
-  const loaded = loadClient({
-    blocked: true,
-    retryOutbox: [retryEntry('text', { text: 'must remain failed' })],
-    conversationModes: { c1: 'PLAIN' },
-  });
-
-  await assert.rejects(
-    loaded.api.retryFailedChatMessage('c1', 'd-retry'),
-    loaded.CreditPolicyError,
-  );
-
-  assert.equal(loaded.calls.gate, 1);
-  assert.deepEqual(loaded.calls.retryMarks, []);
-  assert.deepEqual(loaded.calls.failedMarks, []);
-  assert.deepEqual(loaded.calls.outboxUpserts, []);
-  assert.equal(loaded.calls.sent, 0);
-});
-
-for (const scenario of [
-  { label: 'missing mode', conversationModes: {} },
-  {
-    label: 'unsupported mode',
-    conversationModes: { c1: 'FUTURE_V2' },
-  },
-]) {
-  test(`plaintext outbox retry fails closed for ${scenario.label}`, async () => {
-    const loaded = loadClient({
-      blocked: false,
-      retryOutbox: [
-        retryEntry(scenario.type ?? 'text', { text: 'legacy plaintext' }),
-      ],
-      conversationModes: scenario.conversationModes,
-      e2eeEnabled: scenario.e2eeEnabled,
-    });
-
-    await assert.rejects(
-      loaded.api.retryFailedChatMessage('c1', 'd-retry'),
-    );
-
-    assert.equal(loaded.calls.sent, 0);
-    assert.equal(loaded.calls.outboxUpserts.length, 0);
-    assert.deepEqual(loaded.calls.retryMarks, [
-      { conversationId: 'c1', d: 'd-retry' },
-    ]);
-    assert.deepEqual(loaded.calls.failedMarks, [
-      { conversationId: 'c1', d: 'd-retry' },
-    ]);
-  });
-}
-
-test('PLAIN mode still retries a plaintext outbox row', async () => {
-  const loaded = loadClient({
-    blocked: false,
-    retryOutbox: [retryEntry('quote', { text: 'plain', quotedText: 'quote' })],
-    conversationModes: { c1: 'PLAIN' },
-  });
-
-  await loaded.api.retryFailedChatMessage('c1', 'd-retry');
-
-  assert.equal(loaded.calls.sent, 1);
-  assert.equal(loaded.calls.sentPayloads[0].type, 'quote');
-  assert.deepEqual(loaded.calls.failedMarks, []);
-});
-
-test('a global-E2EE authoritative PLAIN failure can retry the same outbox row', async () => {
-  let transportAttempts = 0;
-  let encryptionChecks = 0;
-  const retryOutbox = [];
-  const loaded = loadClient({
-    blocked: false,
-    retryOutbox,
-    conversationModes: { c1: 'PLAIN' },
-    e2eeEnabled: true,
-    encrypt: async () => {
-      encryptionChecks += 1;
-      return null;
-    },
-    sendFails: () => {
-      transportAttempts += 1;
-      return transportAttempts === 1;
-    },
-  });
-
-  await assert.rejects(
-    loaded.api.sendTextMessage({ conversationId: 'c1', text: 'retry me' }),
-    /ack timeout/,
-  );
-  retryOutbox.push(loaded.calls.outboxEntries[0]);
-
-  await loaded.api.retryFailedChatMessage('c1', 'd-test');
-
-  assert.equal(loaded.calls.sent, 2);
-  assert.equal(encryptionChecks, 2);
-  assert.deepEqual(
-    loaded.calls.sentPayloads.map((payload) => payload.type),
-    ['text', 'text'],
-  );
-  assert.deepEqual(loaded.calls.retryMarks, [
-    { conversationId: 'c1', d: 'd-test' },
-  ]);
-});
-
-test('a plaintext retry upgrades its outbox and wire payload when MLS becomes authoritative', async () => {
-  const encrypted = {
-    envelope: { ciphertext: 'opaque-upgrade', epoch: '2' },
-    signature: 'proof-upgrade',
-  };
-  const encryptCalls = [];
-  const loaded = loadClient({
-    blocked: false,
-    retryOutbox: [retryEntry('text', { text: 'must be replaced' })],
-    conversationModes: { c1: 'MLS_V1' },
-    encrypt: async (...args) => {
-      encryptCalls.push(args);
-      return encrypted;
-    },
-  });
-
-  await loaded.api.retryFailedChatMessage('c1', 'd-retry');
-
-  assert.deepEqual(encryptCalls, [
-    ['c1', 'd-retry', { text: 'must be replaced' }, true],
-  ]);
-  assert.equal(loaded.calls.sent, 1);
-  assert.equal(loaded.calls.sentPayloads[0].type, 'encrypted-text');
-  assert.equal(
-    JSON.stringify(loaded.calls.sentPayloads[0]).includes('must be replaced'),
-    false,
-  );
-  assert.equal(loaded.calls.outboxEntries.at(-1).payload.type, 'encrypted-text');
-  assert.equal(
-    JSON.stringify(loaded.calls.outboxEntries.at(-1)).includes(
-      'must be replaced',
-    ),
-    false,
-  );
-  assert.equal(loaded.calls.ingestedMessages.at(-1).type, 'encrypted-text');
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(loaded.calls.ingestedMessages.at(-1).content)),
-    encrypted,
-  );
-});
-
-test('MLS_V1 mode still retries an encrypted-text outbox row', async () => {
-  const encrypted = {
-    envelope: { ciphertext: 'opaque', epoch: '1' },
-    signature: 'proof',
-  };
-  const loaded = loadClient({
-    blocked: false,
-    retryOutbox: [retryEntry('encrypted-text', encrypted)],
-    conversationModes: { c1: 'MLS_V1' },
-  });
-
-  await loaded.api.retryFailedChatMessage('c1', 'd-retry');
-
-  assert.equal(loaded.calls.sent, 1);
-  assert.equal(loaded.calls.sentPayloads[0].type, 'encrypted-text');
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(loaded.calls.sentPayloads[0].content)),
-    encrypted,
-  );
-  assert.deepEqual(loaded.calls.failedMarks, []);
-});
-
-for (const nextMode of ['MLS_V1', undefined]) {
-  test(`a plaintext retry rechecks mode after outbox persistence: ${String(nextMode)}`, async () => {
-    let release;
-    const gate = new Promise((resolve) => {
-      release = resolve;
-    });
-    const loaded = loadClient({
-      blocked: false,
-      retryOutbox: [retryEntry('text', { text: 'legacy plaintext' })],
-      conversationModes: { c1: 'PLAIN' },
-      outboxDelays: { 'd-retry': gate },
-    });
-
-    const retry = loaded.api.retryFailedChatMessage('c1', 'd-retry');
-    await flush();
-
-    loaded.storeState.conversations = [
-      nextMode === undefined
-        ? { id: 'c1' }
-        : { id: 'c1', textEncryption: nextMode },
-    ];
-    release();
-
-    await assert.rejects(retry);
-    assert.equal(loaded.calls.sent, 0);
-    assert.deepEqual(loaded.calls.failedMarks, [
-      { conversationId: 'c1', d: 'd-retry' },
-    ]);
-  });
-}
-
 test('a media delivery remains bound to the session that created its bubble', async () => {
   const loaded = loadClient({ blocked: false });
   const deliveryId = loaded.api.startMediaSend({
@@ -657,51 +387,6 @@ test('a normal user still sends through the same path', async () => {
   assert.equal(calls.gate, 1);
   assert.equal(calls.sent, 1);
   assert.ok(calls.ingest > 0);
-});
-
-test('the global E2EE flag preserves authoritative PLAIN first sends', async () => {
-  const { api, calls } = loadClient({
-    blocked: false,
-    conversationModes: { c1: 'PLAIN' },
-    e2eeEnabled: true,
-    encrypt: async () => null,
-  });
-
-  await api.sendTextMessage({ conversationId: 'c1', text: 'server says plain' });
-
-  assert.equal(calls.sent, 1);
-  assert.equal(calls.sentPayloads[0].type, 'text');
-  assert.deepEqual(calls.failedMarks, []);
-});
-
-test('authoritative PLAIN allowance still rechecks the local mode before transport', async () => {
-  let release;
-  const gate = new Promise((resolve) => {
-    release = resolve;
-  });
-  const loaded = loadClient({
-    blocked: false,
-    conversationModes: { c1: 'PLAIN' },
-    e2eeEnabled: true,
-    encrypt: async () => null,
-    outboxDelays: { 'd-test': gate },
-  });
-
-  const send = loaded.api.sendTextMessage({
-    conversationId: 'c1',
-    text: 'must remain plain at transport time',
-  });
-  await flush();
-  loaded.storeState.conversations = [
-    { id: 'c1', textEncryption: 'MLS_V1' },
-  ];
-  release();
-
-  await assert.rejects(send);
-  assert.equal(loaded.calls.sent, 0);
-  assert.deepEqual(loaded.calls.failedMarks, [
-    { conversationId: 'c1', d: 'd-test' },
-  ]);
 });
 
 test('forwarded media persists a key-free local preview without sending it', async () => {
@@ -949,11 +634,7 @@ test('媒体发送复用已上屏气泡的 d,不会再造一条', async () => {
 
 test('encrypted text reaches the outbox and transport without its plaintext or quote snapshot', async () => {
   const encrypted = { envelope: { ciphertext: 'opaque', epoch: '1' }, signature: 'proof' };
-  const { api, calls } = loadClient({
-    blocked: false,
-    encrypt: async () => encrypted,
-    conversationModes: { c1: 'MLS_V1', c2: 'MLS_V1' },
-  });
+  const { api, calls } = loadClient({ blocked: false, encrypt: async () => encrypted });
   await api.sendQuoteMessage({ conversationId: 'c1', text: 'never persist this', quotedText: 'private quote' });
   assert.equal(calls.sentPayloads[0].type, 'encrypted-text');
   assert.deepEqual(JSON.parse(JSON.stringify(calls.sentPayloads[0].content)), encrypted);
@@ -962,37 +643,9 @@ test('encrypted text reaches the outbox and transport without its plaintext or q
 });
 
 test('encryption failure cannot fall back to plaintext or insert an optimistic message', async () => {
-  const { api, calls } = loadClient({
-    blocked: false,
-    encrypt: async () => { throw new Error('device revoked'); },
-    conversationModes: { c1: 'MLS_V1', c2: 'MLS_V1' },
-  });
+  const { api, calls } = loadClient({ blocked: false, encrypt: async () => { throw new Error('device revoked'); } });
   await assert.rejects(api.sendTextMessage({ conversationId: 'c1', text: 'private' }), /device revoked/);
   assert.equal(calls.sent, 0);
   assert.equal(calls.ingest, 0);
   assert.equal(calls.outboxUpserts.length, 0);
 });
-
-for (const [label, conversationModes] of [
-  ['missing', {}],
-  ['unsupported', { c1: 'FUTURE_V2' }],
-]) {
-  test(`unknown encryption mode (${label}) fails before any send side effect`, async () => {
-    const { api, calls } = loadClient({ blocked: false, conversationModes });
-    let created = 0;
-
-    await assert.rejects(
-      api.sendTextMessage({
-        conversationId: 'c1',
-        text: 'must stay local',
-        onCreate: () => { created += 1; },
-      }),
-    );
-
-    assert.equal(calls.ingest, 0);
-    assert.equal(calls.applied, 0);
-    assert.equal(calls.outboxUpserts.length, 0);
-    assert.equal(calls.sent, 0);
-    assert.equal(created, 0);
-  });
-}
