@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
 import { isDefinitiveAuthFailure } from '@/services/api/client';
 import {
@@ -7,7 +7,9 @@ import {
   disconnectChat,
   setChatAppState,
   suspendChat,
+  suspendChatForBackground,
 } from '@/chat-core/socket-manager';
+import { hasUnfinishedChatSends } from '@/chat-core/client';
 import {
   connectRealtime,
   disconnectRealtime,
@@ -21,6 +23,7 @@ import { reportError } from '@/observability/sentry';
 import { retry } from '@/utils/retry';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { createBackgroundDisconnect } from '@/components/app/background-disconnect';
 
 /**
  * SessionBootstrap — 无 UI 的启动引导组件，挂载在 app 根节点。
@@ -94,14 +97,33 @@ export function SessionBootstrap() {
       return;
     }
 
+    // 安卓退到后台 JS 照跑、聊天长连接一直连着,每个群的每条消息都在后台处理一遍。
+    // 离开超过 60 秒就断开聊天连接(挂起,不清数据),新消息交给推送;回前台下面照常
+    // 重连对账。还有消息没发完(后台里视频还在传)就再等一轮。
+    // 实时连接不断:来电邀请只走它、没有推送兜底,而它平时几乎没有流量。
+    // iOS 系统约 30 秒就挂起 App,不需要这套。
+    const backgroundDisconnect =
+      Platform.OS === 'android'
+        ? createBackgroundDisconnect({
+            shouldStayConnected: hasUnfinishedChatSends,
+            disconnect: suspendChatForBackground,
+          })
+        : null;
+    // 本 effect 重跑(引导状态变化)会清掉上一轮的计时;已经在后台的话接着计。
+    if (AppState.currentState === 'background') {
+      backgroundDisconnect?.onBackground();
+    }
+
     const subscription = AppState.addEventListener('change', (nextState) => {
       // 前后台都要告诉聊天连接:退到后台时服务端推送照发、本机不再把开着的
       // 会话当成「正在看」(否则锁屏期间的消息被悄悄标成已读)。inactive
       // (控制中心下拉、来电横幅)界面仍可见,不算后台。
       setChatAppState(nextState === 'background' ? 'background' : 'foreground');
+      if (nextState === 'background') backgroundDisconnect?.onBackground();
       if (nextState !== 'active') {
         return;
       }
+      backgroundDisconnect?.onForeground();
 
       const {
         accessToken: nextAccessToken,
@@ -128,6 +150,7 @@ export function SessionBootstrap() {
 
     return () => {
       subscription.remove();
+      backgroundDisconnect?.dispose();
     };
   }, [hasHydrated, onboardingRequired]);
 

@@ -24,7 +24,10 @@ import {
 } from '@/features/discover/store/use-circle-notification-store';
 import { useNotificationCenterStore } from '@/features/notifications/store/use-notification-center-store';
 import { notificationDomain } from '@/features/notifications/utils/notification-domain';
-import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
+import {
+  snackbarBannerKey,
+  useNotificationSnackbarStore,
+} from '@/features/notifications/store/use-notification-snackbar-store';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -122,6 +125,12 @@ export function NotificationSnackbarHost() {
   useEffect(() => {
     if (current === shown) return;
 
+    // 还是这一格横幅,只是同一会话来了新消息:直接换内容,不走退场再进场。
+    if (current && shown && snackbarBannerKey(current) === snackbarBannerKey(shown)) {
+      setShown(current);
+      return;
+    }
+
     if (!isVisible(shown)) {
       setShown(current);
       return;
@@ -136,11 +145,17 @@ export function NotificationSnackbarHost() {
     });
   }, [current, shown, anim, isVisible]);
 
-  // Entrance + auto-dismiss effect, keyed on what's actually shown.
+  // Entrance + auto-dismiss effect, keyed on which banner is shown — not on its
+  // content: a newer message replacing the banner on screen must not re-animate,
+  // re-play the sound or restart the auto-dismiss timer.
+  const shownKey = shown ? snackbarBannerKey(shown) : null;
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
   useEffect(() => {
-    if (!shown) return;
+    const item = shownRef.current;
+    if (!item || shownKey === null) return;
 
-    if (shown.kind === 'chat' && shown.conversationID === activeConversationRef.current) {
+    if (item.kind === 'chat' && item.conversationID === activeConversationRef.current) {
       return;
     }
 
@@ -152,19 +167,16 @@ export function NotificationSnackbarHost() {
       useNativeDriver: true,
     }).start();
     // 圈子通知的提示音由「圈子通知设置 → 声音提醒」单独控制；关掉只静音，
-    // 横幅和未读红点照常。
+    // 横幅和未读红点照常。免打扰的会话根本不进横幅（见 chat-core/dispatcher）。
     const silent =
-      shown.kind === 'chat'
-        ? shown.silent === true
-        : shown.type.startsWith('CIRCLE_') &&
-          !circleSoundAllowed(useCircleNotificationStore.getState());
-    if (!(shown.kind === 'chat' && shown.silent)) {
-      notify({ silent });
-    }
+      item.kind === 'notification' &&
+      item.type.startsWith('CIRCLE_') &&
+      !circleSoundAllowed(useCircleNotificationStore.getState());
+    notify({ silent });
 
     timerRef.current = setTimeout(dismissCurrent, AUTO_DISMISS_MS);
     return clearTimer;
-  }, [shown, dismissCurrent, anim, dragY, clearTimer, notify]);
+  }, [shownKey, dismissCurrent, anim, dragY, clearTimer, notify]);
 
   const row = useMemo(
     () => {

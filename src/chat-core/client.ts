@@ -11,6 +11,7 @@ import { reportChatSendFailure } from './send-errors';
 import {
   ChatSendError,
   createDeliveryId,
+  hasQueuedChatSends,
   markConversationRead,
   sendChatMessage,
 } from './socket-manager';
@@ -371,15 +372,6 @@ export async function sendWithOptimism(
   assertChatSessionFence(fence);
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
-  if (options.type === 'text' || options.type === 'quote') {
-    const mode = store.conversations.find(c => c.id === options.conversationId)?.textEncryption;
-    if (process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true' || mode === 'MLS_V1') {
-      const { encryptOutgoingText } = await import('@/services/e2ee/client');
-      const encrypted = await encryptOutgoingText(options.conversationId, d, options.content, mode === 'MLS_V1');
-      assertChatSessionFence(fence);
-      if (encrypted) options = { ...options, type: 'encrypted-text', content: { ...encrypted }, localContent: undefined, outboxPreviewContent: undefined, replyToId: undefined, forwardFromMessageId: undefined };
-    }
-  }
   const failedAfterHeight = captureSendAnchor(options.conversationId);
   const anchorFields =
     failedAfterHeight === undefined ? {} : { failedAfterHeight };
@@ -977,6 +969,17 @@ function hasUploadedObjectKey(content: Record<string, unknown>): boolean {
  * 复用同一个 d 只能让最后落库的那条聊天消息不重复,拦不住上传本身。
  */
 const retriesInFlight = new Set<string>();
+
+/**
+ * 还有消息没发完:媒体在上传、长按重发在跑、或者排在发送队列里等 ack。
+ * 安卓后台断开聊天连接前要问这一句(见 session-bootstrap)—— 断了的话,后台里传完的
+ * 那条进队后等不到连接,一分钟后标红,而它的上传其实早就成功了。
+ */
+export function hasUnfinishedChatSends(): boolean {
+  return (
+    activeMediaSends.size > 0 || retriesInFlight.size > 0 || hasQueuedChatSends()
+  );
+}
 
 /**
  * G-01 重发:失败气泡长按「重发」。复用同一 d(服务端幂等兜底,绝不重复入库);

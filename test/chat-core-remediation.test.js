@@ -336,9 +336,10 @@ test('typing flows end to end: throttle-send behind settings, store expiry, head
   assert.match(dispatcher, /CHAT_EVENTS\.typing/);
 });
 
-test('muted conversations enqueue silent in-app banners', () => {
+test('muted conversations raise no in-app banner', () => {
+  // 免打扰就是不打扰:端内横幅也不弹(行为测试见 chat-core-dispatcher)。
   const dispatcher = read('src/chat-core/dispatcher.ts');
-  assert.match(dispatcher, /silent: conversation\.muted/);
+  assert.match(dispatcher, /if \(conversation\.muted\) return 'suppressed';/);
 });
 
 test('file and unknown message types render placeholders, never blank bubbles', () => {
@@ -583,9 +584,12 @@ test('burn-expired messages are purged from the local cache', () => {
   assert.match(web, /purgeExpiredLocalMessages/);
   const store = read('src/chat-core/store.ts');
   assert.match(store, /purgeExpiredBurnMessages/);
-  // 三个触发点:拿到会话快照、档位变更、冷启动水合。
-  const calls = store.match(/get\(\)\.purgeExpiredBurnMessages\(\)/g) ?? [];
-  assert.ok(calls.length >= 3, `expected >=3 purge triggers, got ${calls.length}`);
+  // 全量扫的三个触发点:拿到会话快照、全局档位变更(store)、冷启动水合(socket-manager)。
+  // 单个会话的变更只扫那个会话(带 conversationIds),不算在这里。
+  const fullSweeps = store.match(/get\(\)\.purgeExpiredBurnMessages\(\)/g) ?? [];
+  assert.ok(fullSweeps.length >= 2, `expected >=2 full purge triggers, got ${fullSweeps.length}`);
+  const manager = read('src/chat-core/socket-manager.ts');
+  assert.match(manager, /await useChatStore\.getState\(\)\.purgeExpiredBurnMessages\(\)/);
 });
 
 test('burn expiry is scheduled and self-destruct images avoid disk caching', () => {

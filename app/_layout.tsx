@@ -6,7 +6,12 @@ import {
   ThemeProvider as NavThemeProvider,
 } from '@react-navigation/native';
 import { useFonts } from 'expo-font';        // 加载自定义字体
-import { Redirect, Stack, useSegments } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
+import {
+  Redirect,
+  Stack,
+  useNavigationContainerRef,
+  useSegments,
+} from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
 import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
@@ -19,6 +24,10 @@ import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
 import { excludeMmkvDirFromIOSBackup } from '@/storage/ios-backup-exclusion';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
+// 文字加密已停用,但本机可能还存着以前解密过的正文:删除 / 清空 / 焚毁时要接着清。
+// 清理监听注册在这个模块顶层 —— 原来由加密气泡顺带加载,现在气泡不解密了,改在这里加载。
+// 第二阶段删加密库时一起删掉这一行。
+import '@/services/e2ee/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';
@@ -49,11 +58,13 @@ import { TopNoticeHost } from '@/components/app/top-notice-host';
 import { WebDocumentTitle } from '@/components/app/web-document-title';
 import { StartupSplash } from '@/components/app/startup-splash';
 import { AppUpdateHost } from '@/features/app-update/AppUpdateHost';
+import { startOtaHealthReporting } from '@/features/app-update/ota-health';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
   initSentry,
   wrapWithSentry,
   captureSentryTestError,
+  registerSentryNavigationContainer,
   setSentryUserId,
 } from '@/observability/sentry';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -71,6 +82,10 @@ initSentry();
 if (__DEV__ && process.env.EXPO_PUBLIC_SENTRY_TEST === '1') {
   captureSentryTestError();
 }
+
+// OTA 回滚到内置包（isEmergencyLaunch）与启动时自动检查/下载失败的上报。
+// 要在 initSentry 之后：Sentry 没初始化时上报是 no-op。
+startOtaHealthReporting();
 
 type PersistedStore = {
   persist?: {
@@ -177,6 +192,8 @@ function RootStack() {
           开启横向返回手势，让带有自定义返回按钮的页面也支持从左侧滑回。 */}
       <Stack
         screenOptions={{
+          // 看不见的页面冻结渲染(切走的 tab、栈里更深的页面),不再跟着每条消息重算。
+          freezeOnBlur: true,
           headerShown: false,                          // 所有页面不显示系统 header
           animation: 'slide_from_right',               // 页面切换动画：从右侧滑入
           contentStyle: { backgroundColor: colors.background },
@@ -258,6 +275,8 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
 function RootLayout() {
   const sentryUserId = useAuthStore((state) => state.user?.id ?? null);
   const authLoading = useAuthStore((state) => state.isLoading);
+  // 导航追踪：冷启动指标和 XHR span 都要挂在导航 transaction 上才会被发出。
+  const navigationRef = useNavigationContainerRef();
   // 加载自定义字体，loaded 为 true 时字体就绪，error 表示加载失败
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -274,6 +293,10 @@ function RootLayout() {
   useEffect(() => {
     setSentryUserId(sentryUserId);
   }, [sentryUserId]);
+
+  useEffect(() => {
+    registerSentryNavigationContainer(navigationRef);
+  }, [navigationRef]);
 
   useEffect(() => {
     let cancelled = false;

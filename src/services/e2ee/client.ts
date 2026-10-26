@@ -1,5 +1,5 @@
 import { reportHandledFailure } from '@/observability/report-failure';
-import { onEncryptedBodyPurge, purgeEncryptedBody } from './lifecycle';
+import { encryptedBodyPurgeMatches, hasEncryptedBodyPurgeTarget, onEncryptedBodyPurge, purgeEncryptedBody, type StoredEncryptedBody } from './lifecycle';
 import { ProtocolDevice } from '@circle/e2ee';
 import { EncryptionClient, type EncryptedContent } from '@circle/e2ee/relay-client.mjs';
 import * as Crypto from 'expo-crypto';
@@ -9,7 +9,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { openDeviceJournal, prepareReplacementJournal, type DeviceJournal } from './journal';
 
 let active: { epoch: number; promise: Promise<EncryptionClient>; journal?: DeviceJournal } | undefined;
-export function encryptionEnabled() { return process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true'; }
 export function getEncryptionClient(): Promise<EncryptionClient> {
   const { user, sessionEpoch } = useAuthStore.getState();
   if (!user) return Promise.reject(new Error('Sign in before using encrypted chat'));
@@ -55,20 +54,6 @@ registerLogoutHandler(async () => {
   await previous?.journal?.close();
 });
 
-export async function encryptOutgoingText(conversationId: string, id: string, content: Record<string, unknown>, knownEncrypted: boolean) {
-  if (!encryptionEnabled() && !knownEncrypted) return null;
-  const client = await getEncryptionClient();
-  return client.run(async () => {
-    const directory = await client.directory(conversationId);
-    // An unconfirmed local group may remain after a timed-out enable request.
-    // The server mode decides whether new text is encrypted; never downgrade a known encrypted conversation.
-    if (directory.mode !== 'MLS_V1') {
-      if (knownEncrypted) throw new Error('Encrypted conversation is not available');
-      return null;
-    }
-    return client.encrypt(conversationId, id, content);
-  });
-}
 type DecryptRequest = { content: EncryptedContent; epoch: number; pendingOwn: boolean; resolve: (body: Record<string, unknown>) => void; reject: (error: unknown) => void };
 let pendingDecryptions: DecryptRequest[] = [];
 const bodyExpiries = new Set<number>();
@@ -118,14 +103,14 @@ async function flushDecryptions() {
     }
   } catch (error) { for (const item of pending) item.reject(error); }
 }
-onEncryptedBodyPurge(({conversationId, clientMessageId, serverMessageId, expired}) => {
-  const promise = active?.promise ?? (conversationId ? getEncryptionClient() : undefined);
+onEncryptedBodyPurge(purge => {
+  // 没指明清哪些(单条清理却一个标识都没有):什么都不清,也不用为它去开加密库。
+  if (!hasEncryptedBodyPurgeTarget(purge)) return;
+  const promise = active?.promise ?? (purge.conversationId ? getEncryptionClient() : undefined);
   if (!promise) return;
-  void promise.then(client => client.run(() => client.device.purgeMessages(value => {
-    const metadata = value as unknown as {serverMessageId?: string; expiresAt?: string};
-    return expired ? Boolean(metadata.expiresAt && Date.parse(metadata.expiresAt) <= Date.now())
-      : value.conversationId === conversationId && (!serverMessageId || metadata.serverMessageId === serverMessageId) && (!clientMessageId || value.clientMessageId === clientMessageId);
-  }))).catch(() => { reportHandledFailure('e2ee', 'purgeBodies', new Error('Encrypted body purge failed')); });
+  void promise.then(client => client.run(() => client.device.purgeMessages(value =>
+    encryptedBodyPurgeMatches(purge, value as unknown as StoredEncryptedBody, Date.now()),
+  ))).catch(() => { reportHandledFailure('e2ee', 'purgeBodies', new Error('Encrypted body purge failed')); });
 });
 
 export async function recoverMissingLocalKey() {

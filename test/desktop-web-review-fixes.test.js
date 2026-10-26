@@ -202,8 +202,12 @@ test('CI launches the client-only production export in a real browser', () => {
   // failure this smoke test is intended to catch.
   const appConfig = JSON.parse(read('app.json'));
   assert.equal(appConfig.expo.web.output, 'single');
-  assert.match(workflow, /expo export --platform web/);
+  // 导出命令收进了 npm run export:web（带 --source-maps 与 Sentry 上传步骤）。
+  const exportScript = JSON.parse(read('package.json')).scripts['export:web'];
+  assert.match(workflow, /run: npm run export:web/);
+  assert.match(exportScript, /expo export --platform web/);
   assert.doesNotMatch(workflow, /--no-ssg/);
+  assert.doesNotMatch(exportScript, /--no-ssg/);
   assert.match(workflow, /EXPO_PUBLIC_API_URL: https:\/\/api\.web-export\.invalid/);
   assert.match(workflow, /node \.github\/scripts\/smoke-web-export\.js/);
 

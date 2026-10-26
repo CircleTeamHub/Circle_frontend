@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react-native';
 import { LocationCard } from './location-card';
 import { resolvePlace } from '@/features/location/services/reverse-geocode';
+import { reportGeocodeFailure } from '@/features/location/services/geocode-failure-reporting';
 import type { ChatMessage } from '@/types';
 
 // 这条 spec 只关心「渲染时有没有对第三方发出瓦片请求」，所以把 bubble 依赖的
@@ -174,13 +175,15 @@ describe('LocationCard address resolution', () => {
       ).toBeTruthy();
     });
     // 第四个参数是设备侧反查：它答得上来就不会去烧服务端按次计费的额度，
-    // 漏传不会让任何断言变红，所以在这里钉住。
+    // 漏传不会让任何断言变红，所以在这里钉住。第六个是失败上报：漏传的话反查
+    // 失败又回到生产无声。
     expect(mockResolvePlace).toHaveBeenCalledWith(
       37.32698,
       -121.88435,
       undefined,
       expect.any(Function),
       expect.any(Function),
+      reportGeocodeFailure,
     );
     // 标题是用户自己的表达，反查回来的路名不许盖掉。
     expect(screen.getByText('我的位置')).toBeTruthy();

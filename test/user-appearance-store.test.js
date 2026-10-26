@@ -644,3 +644,20 @@ test('reset cancels pending retries and prevents cross-account in-flight writes'
   assert.equal(calls.length, 1);
   assert.equal(store.timerCount(), 0);
 });
+
+test('the mounted sweep stops in the background and resumes in the foreground', async () => {
+  // 后台时它原来照样每分钟醒一次(只是不发请求)—— 安卓后台 JS 还活着,白白耗电。
+  const store = loadStore(async (ids) =>
+    Object.fromEntries(ids.map((id) => [id, { vipLevel: 1, avatarFrame: null }])),
+  );
+  store.useUserAppearance('alice');
+  await store.advance(60);
+  assert.equal(store.timerCount(), 1);
+
+  store.background();
+  assert.equal(store.timerCount(), 0, 'no wake-ups while backgrounded');
+
+  // 很快回来(不足一次真后台刷新的阈值)也要把巡检接上。
+  store.foreground();
+  assert.equal(store.timerCount(), 1);
+});

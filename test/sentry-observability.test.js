@@ -32,6 +32,8 @@ function load(rel, stubs = {}) {
           return load(path.relative(process.cwd(), resolved), stubs);
         }
       }
+      // 共享脱敏清单要跑真的，否则「两边用的是同一份」无从验证。
+      if (s === "@/utils/redact") return load("src/utils/redact.ts", stubs);
       if (s.startsWith("@/")) return {};
       return require(s);
     },
@@ -104,6 +106,10 @@ test("production Expo transform inlines the public DSN before runtime", () => {
       if (name === "expo-constants") return { default: { expoConfig: { extra: {} } } };
       if (name === "@/utils/client-diagnostics") return { readDiagnosticBreadcrumbs: () => [] };
       if (name === "./route-segments") return { STATIC_ROUTE_SEGMENTS: new Set() };
+      if (name === "./tracing") return { TRACED_SPAN_NAMES: new Set() };
+      if (name === "./unhandled-rejection-filter") return load("src/observability/unhandled-rejection-filter.ts");
+      if (name === "./metrics") return load("src/observability/metrics.ts", { "@sentry/react-native": {} });
+      if (name === "@/utils/redact") return load("src/utils/redact.ts");
       return require(name);
     },
   };
@@ -252,6 +258,172 @@ test("error event sanitizer retains only valid distributed trace context", () =>
   assert.equal(event.contexts.device, undefined);
   const invalid = calls[0].beforeSend({ contexts: { trace: { trace_id: "0".repeat(32), span_id: "b".repeat(16) } } });
   assert.equal(invalid.contexts, undefined);
+});
+
+// SDK 自动填的设备/系统/App/OTA 上下文。字段名与 @sentry/react-native 7 的
+// devicecontext、expocontext 集成一致；标识类字段（设备名、设备 ID、安装哈希、
+// 时区与语言、带沙盒路径的回退原因）混在其中，正好用来钉住白名单的两个方向。
+function automaticContexts() {
+  return {
+    device: {
+      name: "Alice's iPhone",
+      id: "device-uuid-1",
+      device_unique_identifier: "unique-device-1",
+      model: "iPhone15,2",
+      model_id: "D73AP",
+      family: "iOS",
+      brand: "Apple",
+      manufacturer: "Apple",
+      arch: "arm64e",
+      simulator: false,
+      memory_size: 6_000_000_000,
+      low_memory: false,
+      free_memory: 123_456_789,
+      boot_time: "2026-10-01T08:00:00Z",
+      timezone: "Asia/Shanghai",
+      locale: "zh_CN",
+    },
+    os: {
+      name: "iOS",
+      version: "18.1",
+      build: "22B83",
+      kernel_version: "Darwin Kernel Version 24.1.0 alice-macbook.local",
+      rooted: false,
+    },
+    app: {
+      app_version: "1.4.0",
+      app_build: "140",
+      app_identifier: "com.windnote.app",
+      app_name: "WindNote",
+      build_type: "app-store",
+      in_foreground: true,
+      device_app_hash: "install-hash-1",
+      app_start_time: "2026-10-01T08:00:01Z",
+      view_names: ["__root/(tabs)/messages/user/[id]"],
+    },
+    ota_updates: {
+      is_enabled: true,
+      update_id: "0f9c2b4e-6a1d-4c3e-9b7a-2d5e8f1a3c6b",
+      channel: "production",
+      runtime_version: "1.4.0",
+      check_automatically: "on_load",
+      is_embedded_launch: false,
+      is_emergency_launch: true,
+      is_using_embedded_assets: false,
+      emergency_launch_reason:
+        "/var/mobile/Containers/Data/Application/5A1B2C3D/.expo-internal/update failed",
+      launch_duration: 120,
+      created_at: "2026-10-01T00:00:00.000Z",
+    },
+    culture: { locale: "zh-CN", timezone: "Asia/Shanghai" },
+    profile: { caption: "private profile blue pineapple" },
+  };
+}
+
+const EXPECTED_SAFE_CONTEXTS = {
+  device: {
+    model: "iPhone15,2",
+    model_id: "D73AP",
+    family: "iOS",
+    brand: "Apple",
+    manufacturer: "Apple",
+    arch: "arm64e",
+    simulator: false,
+    memory_size: 6_000_000_000,
+    low_memory: false,
+  },
+  os: { name: "iOS", version: "18.1", build: "22B83" },
+  app: {
+    app_version: "1.4.0",
+    app_build: "140",
+    app_identifier: "com.windnote.app",
+    app_name: "WindNote",
+    build_type: "app-store",
+    in_foreground: true,
+    // 路由名是代码里的文件名（不含参数值），归一化成与 transaction 同一种形状。
+    view_names: ["/(tabs)/messages/user/[param]"],
+  },
+  ota_updates: {
+    is_enabled: true,
+    update_id: "0f9c2b4e-6a1d-4c3e-9b7a-2d5e8f1a3c6b",
+    channel: "production",
+    runtime_version: "1.4.0",
+    check_automatically: "on_load",
+    is_embedded_launch: false,
+    is_emergency_launch: true,
+    is_using_embedded_assets: false,
+    launch_duration: 120,
+    created_at: "2026-10-01T00:00:00.000Z",
+  },
+};
+
+const IDENTIFYING_CONTEXT_VALUES =
+  /Alice|device-uuid-1|unique-device-1|install-hash-1|Asia\/Shanghai|zh_CN|zh-CN|alice-macbook|Containers|5A1B2C3D|123456789|blue pineapple|2026-10-01T08/;
+
+test("error events keep non-identifying device, os, app and OTA context", () => {
+  // 之前只留 contexts.trace：没法按机型、系统版本、App 版本或 OTA 版本筛崩溃。
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+
+  const event = calls[0].beforeSend({
+    contexts: {
+      ...automaticContexts(),
+      trace: { trace_id: "a".repeat(32), span_id: "b".repeat(16) },
+    },
+  });
+
+  const { trace, ...rest } = JSON.parse(JSON.stringify(event.contexts));
+  assert.equal(trace.trace_id, "a".repeat(32));
+  assert.deepEqual(rest, EXPECTED_SAFE_CONTEXTS);
+  assert.doesNotMatch(JSON.stringify(event), IDENTIFYING_CONTEXT_VALUES);
+});
+
+test("transaction events keep the same non-identifying context allowlist", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+
+  const transaction = calls[0].beforeSendTransaction({
+    type: "transaction",
+    transaction: "/settings",
+    start_timestamp: 1,
+    timestamp: 2,
+    contexts: {
+      ...automaticContexts(),
+      trace: { trace_id: "a".repeat(32), span_id: "b".repeat(16), op: "navigation" },
+    },
+  });
+
+  const { trace, ...rest } = JSON.parse(JSON.stringify(transaction.contexts));
+  assert.equal(trace.op, "navigation");
+  assert.deepEqual(rest, EXPECTED_SAFE_CONTEXTS);
+  assert.doesNotMatch(JSON.stringify(transaction), IDENTIFYING_CONTEXT_VALUES);
+});
+
+test("context allowlist keeps only bounded primitive values", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+
+  const event = calls[0].beforeSend({
+    contexts: {
+      device: {
+        model: { nested: "private blue pineapple" },
+        brand: "x".repeat(200),
+        family: "Bearer top-secret-token",
+        memory_size: Number.NaN,
+      },
+      os: { name: ["iOS"] },
+      app: { view_names: "not-an-array", app_version: "1.4.0" },
+      ota_updates: "not-an-object",
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(event.contexts)), {
+    device: { family: "Bearer [REDACTED]" },
+    app: { app_version: "1.4.0" },
+  });
 });
 
 test("transaction and span filters sanitize nested request data", () => {
@@ -782,6 +954,236 @@ test("beforeSendTransaction applies the route-shape rule to the event", () => {
   assert.equal(scrubbed.transaction, "/(tabs)/discover/circle/:id");
 });
 
+test("navigation transactions are named after the Expo Router route template", () => {
+  // reactNavigationIntegration 用嵌套导航器的路由名拼全路径（__root/(tabs)/...），
+  // 不以 / 开头；不归一化的话每条导航 transaction 都会被整体遮成 [REDACTED_TRANSACTION]。
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const name = (transaction, source = "component") =>
+    calls[0].beforeSendTransaction({
+      type: "transaction",
+      transaction,
+      transaction_info: { source },
+      start_timestamp: 1,
+      timestamp: 2,
+    }).transaction;
+
+  assert.equal(name("__root/(tabs)/messages/index"), "/(tabs)/messages");
+  assert.equal(name("__root/(tabs)/messages/user/[id]"), "/(tabs)/messages/user/[param]");
+  assert.equal(name("__root/index"), "/");
+  // 路由名本来就不含参数值；万一出现不在路由表里的段，照旧当标识符处理。
+  assert.equal(name("__root/(tabs)/messages/user/alice"), "/(tabs)/messages/user/:id");
+  assert.equal(name("__root/(tabs)/private route"), "[REDACTED_TRANSACTION]");
+  // 非导航来源不享受这条归一化。
+  assert.equal(name("__root/(tabs)/messages/index", "custom"), "[REDACTED_TRANSACTION]");
+});
+
+test("custom chat spans keep their fixed names; other custom names stay redacted", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const name = (transaction) =>
+    calls[0].beforeSendTransaction({
+      type: "transaction",
+      transaction,
+      transaction_info: { source: "custom" },
+      start_timestamp: 1,
+      timestamp: 2,
+    }).transaction;
+
+  assert.equal(name("chat.message.send"), "chat.message.send");
+  assert.equal(name("chat.socket.connect"), "chat.socket.connect");
+  assert.equal(name("chat.message.send blue pineapple"), "[REDACTED_TRANSACTION]");
+});
+
+test("already-normalized transaction names survive a second sanitizing pass", () => {
+  // core 对根 span 跑过 beforeSendSpan 之后，beforeSendTransaction 会再处理一遍同一个名字。
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  for (const [transaction, source] of [
+    ["/(tabs)/messages", "component"],
+    ["/(tabs)/messages/user/[param]", "component"],
+    ["/(tabs)/messages/user/:id", "component"],
+    ["/", "component"],
+    ["/(tabs)/discover/circle/:id", "url"],
+    ["chat.socket.connect", "custom"],
+  ]) {
+    const event = calls[0].beforeSendTransaction({
+      type: "transaction",
+      transaction,
+      transaction_info: { source },
+      start_timestamp: 1,
+      timestamp: 2,
+    });
+    assert.equal(event.transaction, transaction);
+  }
+});
+
+// 走真的 @sentry/core 处理链。core 先对根 span 跑 beforeSendSpan，再把结果 merge 回
+// 事件（undefined 也会覆盖），最后才跑 beforeSendTransaction —— 根 span 上没带回的
+// description / measurements 会把 transaction 名和冷启动指标清掉。只直接调
+// beforeSendTransaction 的测试看不到这一层。
+async function sendThroughSentryCore(event) {
+  const core = require("@sentry/core");
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const { beforeSend, beforeSendTransaction, beforeSendSpan } = calls[0];
+  const sent = [];
+  class TestClient extends core.Client {
+    eventFromException() {
+      return Promise.resolve({});
+    }
+    eventFromMessage() {
+      return Promise.resolve({});
+    }
+  }
+  const client = new TestClient({
+    dsn: "https://public@example.invalid/1",
+    integrations: [],
+    stackParser: () => [],
+    transport: () => ({
+      send: (envelope) => {
+        sent.push(envelope);
+        return Promise.resolve({});
+      },
+      flush: () => Promise.resolve(true),
+    }),
+    beforeSend,
+    beforeSendTransaction,
+    beforeSendSpan,
+  });
+  client.init();
+  client.captureEvent(event);
+  await client.flush(1000);
+  assert.equal(sent.length, 1, "the transaction should reach the transport");
+  const [, items] = sent[0];
+  return items[0][1];
+}
+
+test("navigation names and cold start survive the real Sentry core pipeline", async () => {
+  const sent = await sendThroughSentryCore({
+    type: "transaction",
+    transaction: "__root/(tabs)/messages/user/[id]",
+    transaction_info: { source: "component" },
+    start_timestamp: 1,
+    timestamp: 2,
+    contexts: {
+      trace: {
+        trace_id: "a".repeat(32),
+        span_id: "b".repeat(16),
+        op: "navigation",
+        data: { "sentry.source": "component", "route.key": "private-route-key" },
+      },
+    },
+    measurements: {
+      app_start_cold: { value: 1234, unit: "millisecond" },
+      private_metric: { value: 1, unit: "none" },
+    },
+    spans: [],
+  });
+
+  assert.equal(sent.transaction, "/(tabs)/messages/user/[param]");
+  assert.deepEqual(JSON.parse(JSON.stringify(sent.measurements)), {
+    app_start_cold: { value: 1234, unit: "millisecond" },
+  });
+  assert.doesNotMatch(JSON.stringify(sent), /private-route-key|private_metric/);
+});
+
+test("custom chat span names survive the real Sentry core pipeline", async () => {
+  const sent = await sendThroughSentryCore({
+    type: "transaction",
+    transaction: "chat.message.send",
+    transaction_info: { source: "custom" },
+    start_timestamp: 1,
+    timestamp: 2,
+    contexts: {
+      trace: {
+        trace_id: "a".repeat(32),
+        span_id: "b".repeat(16),
+        op: "chat.send",
+        status: "deadline_exceeded",
+        data: { "sentry.source": "custom" },
+      },
+    },
+    spans: [],
+  });
+
+  assert.equal(sent.transaction, "chat.message.send");
+  assert.equal(sent.contexts.trace.op, "chat.send");
+  assert.equal(sent.contexts.trace.status, "deadline_exceeded");
+});
+
+test("trace headers are never attached to outgoing requests", () => {
+  // 原生端默认 tracePropagationTargets=[/.*/]：每个 XHR 都带 sentry-trace / baggage，
+  // 连发往第三方存储的预签名 PUT 也带上 release 和 public key。后端不消费这两个头，
+  // 请求串联靠 X-Request-Id。空数组（而不是 undefined）才能盖掉 SDK 默认值。
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  assert.equal(Array.isArray(calls[0].tracePropagationTargets), true);
+  assert.equal(calls[0].tracePropagationTargets.length, 0);
+});
+
+test("initSentry wires navigation tracing so cold start and XHR spans have a root", () => {
+  const { initSentry, registerSentryNavigationContainer } = loadSentry();
+  const created = [];
+  const registered = [];
+  const integration = {
+    name: "ReactNavigation",
+    registerNavigationContainer: (ref) => registered.push(ref),
+  };
+  const calls = [];
+  initSentry({
+    client: {
+      init: (o) => calls.push(o),
+      wrap: (c) => c,
+      reactNavigationIntegration: (options) => {
+        created.push(options);
+        return integration;
+      },
+    },
+    dsn: "https://a@o/1",
+  });
+
+  assert.equal(created.length, 1);
+  assert.equal(created[0].useFullPathsForNavigationRoutes, true);
+  assert.equal(calls[0].integrations.length, 1);
+  assert.equal(calls[0].integrations[0], integration);
+
+  const ref = { current: { addListener() {} } };
+  registerSentryNavigationContainer(ref);
+  assert.equal(registered.length, 1);
+  assert.equal(registered[0], ref);
+});
+
+test("navigation registration is inert without Sentry and never throws", () => {
+  const { initSentry, registerSentryNavigationContainer } = loadSentry();
+  assert.doesNotThrow(() => registerSentryNavigationContainer({ current: null }));
+
+  initSentry({
+    client: {
+      init() {},
+      wrap: (c) => c,
+      reactNavigationIntegration: () => ({
+        registerNavigationContainer: () => {
+          throw new Error("navigation container unavailable");
+        },
+      }),
+    },
+    dsn: "https://a@o/1",
+  });
+  assert.doesNotThrow(() => registerSentryNavigationContainer({ current: {} }));
+});
+
+test("root layout registers the Expo Router navigation container with Sentry", () => {
+  const layout = fs.readFileSync(path.join(process.cwd(), "app/_layout.tsx"), "utf8");
+  assert.match(layout, /\buseNavigationContainerRef\b[^;]*from 'expo-router'/s);
+  assert.match(layout, /registerSentryNavigationContainer\(navigationRef\)/);
+});
+
 test("alphabetic dynamic ids are redacted, not mistaken for static routes", () => {
   // review #161：MyCirclesScreen 会 router.push(`/(tabs)/discover/circle/${id}`)，
   // 而后端 id 是不透明的 —— 靠「id 一定含数字」来判定就是漏点本身。
@@ -791,4 +1193,171 @@ test("alphabetic dynamic ids are redacted, not mistaken for static routes", () =
     "/(tabs)/discover/circle/:id",
   );
   assert.equal(sanitizeTransactionName("/circle/privatecircle"), "/circle/:id");
+});
+
+test("storage provider codes reach Sentry as a tag and split upload issues", () => {
+  // upload.ts 早就把白名单内的存储错误码放进 context，但 sentry.ts 的白名单没有
+  // storageCode，一直在这里被丢掉：AccessDenied（签名 bug）和 SlowDown（限流）
+  // 混成同一个 issue。
+  const { initSentry, reportError } = loadSentry();
+  const initCalls = [];
+  initSentry({ client: { init: (o) => initCalls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const captures = [];
+  const capture = { captureException: (_e, ctx) => captures.push(ctx) };
+
+  reportError(new Error("x"), { operation: "upload", kind: "presigned-put", status: 403, storageCode: "AccessDenied" }, capture);
+  reportError(new Error("x"), { operation: "upload", kind: "presigned-put", status: 503, storageCode: "SlowDown" }, capture);
+  reportError(new Error("x"), { operation: "upload", kind: "presigned-put", storageCode: "Access Denied <Key>private</Key>" }, capture);
+
+  assert.equal(captures[0].extra.storageCode, "AccessDenied");
+  assert.equal(captures[0].tags.storageCode, "AccessDenied");
+  assert.notEqual(captures[0].fingerprint.join("|"), captures[1].fingerprint.join("|"));
+  assert.equal(captures[2].extra.storageCode, undefined);
+  assert.equal(captures[2].tags.storageCode, undefined);
+  assert.doesNotMatch(JSON.stringify(captures[2]), /private/);
+
+  const finalEvent = initCalls[0].beforeSend({ tags: captures[0].tags, extra: captures[0].extra });
+  assert.equal(finalEvent.tags.storageCode, "AccessDenied");
+  assert.equal(finalEvent.extra.storageCode, "AccessDenied");
+});
+
+test("chat send error codes split into separate issues", () => {
+  const { reportError } = loadSentry();
+  const captures = [];
+  const capture = { captureException: (_e, ctx) => captures.push(ctx) };
+
+  reportError(new Error("x"), { operation: "chatSend", kind: "text", code: "CHAT_ACK_TIMEOUT" }, capture);
+  reportError(new Error("x"), { operation: "chatSend", kind: "text", code: "CHAT_INVALID_PAYLOAD" }, capture);
+  reportError(new Error("x"), { operation: "chatSend", kind: "text", code: "free text with spaces" }, capture);
+
+  assert.equal(captures[0].fingerprint.join("|"), "chatSend|text|error|CHAT_ACK_TIMEOUT");
+  assert.equal(captures[1].fingerprint.join("|"), "chatSend|text|error|CHAT_INVALID_PAYLOAD");
+  assert.equal(captures[0].tags.code, "CHAT_ACK_TIMEOUT");
+  // 形状不对的 code 不进 tag、不进 fingerprint，也不进 extra。
+  assert.equal(captures[2].fingerprint.join("|"), "chatSend|text|error");
+  assert.equal(captures[2].tags.code, undefined);
+  assert.equal(captures[2].extra.code, undefined);
+});
+
+test("Sentry and dev-log redaction share one sensitive field list", () => {
+  // 两份清单分叉过两次：redact 有 revocationsecret / qrtoken / pollkey / newpassword，
+  // sentry 漏了；sentry 有 email / phone，redact 漏了。现在只有 utils/redact.ts 一份。
+  const sentrySource = fs.readFileSync(path.join(process.cwd(), "src/observability/sentry.ts"), "utf8");
+  assert.doesNotMatch(sentrySource, /SENSITIVE_CONTEXT_KEYS|const SENSITIVE_[A-Z_]*KEYS\s*=\s*new Set/);
+  assert.match(sentrySource, /import \{[^}]*\bisSensitiveFieldKey\b[^}]*\} from '@\/utils\/redact'/);
+
+  const breadcrumbs = [{
+    event: "auth.reset.failed",
+    details: {
+      email: "person@example.test",
+      phoneNumber: "+1 415 555 1234",
+      pollKey: "poll-secret",
+      qrToken: "qr-secret",
+      newPassword: "new-secret",
+      revocationSecret: "revoke-secret",
+      stage: "submit",
+    },
+  }];
+  const sentry = load("src/observability/sentry.ts", {
+    "@sentry/react-native": { init() {}, wrap: (c) => c, captureException() {} },
+    "expo-constants": { expoConfig: { extra: {} } },
+    "@/utils/client-diagnostics": { readDiagnosticBreadcrumbs: () => breadcrumbs },
+  });
+  const captures = [];
+  sentry.reportError(new Error("x"), { operation: "auth", kind: "reset" }, {
+    captureException: (_e, ctx) => captures.push(ctx),
+  });
+  const details = captures[0].extra.clientDiagnostics[0].details;
+  for (const key of ["email", "phoneNumber", "pollKey", "qrToken", "newPassword", "revocationSecret"]) {
+    assert.equal(details[key], "[REDACTED]", key);
+  }
+  assert.equal(details.stage, "submit");
+});
+
+// Hermes 上真正生效的未处理 rejection tracker 是 SDK 自己挂在 HermesInternal 上的
+// （reactNativeErrorHandlersIntegration）；silence-dom-bridge-rejection 启用的 promise
+// 包 tracker 只管 JSC，在 Hermes 上从不触发。所以 DOM 桥接过滤和按签名限流必须放在
+// 所有引擎都会经过的 beforeSend 里，按 mechanism.type 只作用于未处理 rejection。
+function unhandledRejectionEvent(error) {
+  return [
+    {
+      exception: {
+        values: [{
+          type: error instanceof Error ? error.name : "Error",
+          value: error instanceof Error ? error.message : String(error),
+          mechanism: { type: "onunhandledrejection", handled: true },
+        }],
+      },
+    },
+    { originalException: error },
+  ];
+}
+
+test("unhandled rejections are deduped per signature on every engine", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const beforeSend = calls[0].beforeSend;
+
+  assert.notEqual(beforeSend(...unhandledRejectionEvent(new TypeError("x is not a function"))), null);
+  assert.equal(beforeSend(...unhandledRejectionEvent(new TypeError("x is not a function"))), null);
+  assert.notEqual(beforeSend(...unhandledRejectionEvent(new RangeError("different failure"))), null);
+});
+
+test("the benign DOM bridge teardown rejection never reaches Sentry", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const dropped = calls[0].beforeSend(
+    ...unhandledRejectionEvent(new Error("DomWebView: injectJavaScript on a destroyed view")),
+  );
+  assert.equal(dropped, null);
+});
+
+test("distinct unhandled rejection signatures are capped per process", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const sent = [];
+  for (let i = 0; i < 100; i += 1) {
+    const event = calls[0].beforeSend(...unhandledRejectionEvent(new Error(`flood ${i}`)));
+    if (event) sent.push(event);
+  }
+  assert.ok(sent.length >= 10 && sent.length < 100, `expected a bounded number, got ${sent.length}`);
+});
+
+test("the rejection budget never throttles ordinary error events", () => {
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  for (let i = 0; i < 30; i += 1) {
+    const event = calls[0].beforeSend(
+      { exception: { values: [{ type: "Error", value: "same", mechanism: { type: "generic", handled: true } }] } },
+      { originalException: new Error("same") },
+    );
+    assert.notEqual(event, null);
+  }
+});
+
+test("session tracking is explicitly on so web reports release health too", () => {
+  // @sentry/react-native 只有 enableAutoSessionTracking 为真时才在 web 挂
+  // browserSessionIntegration；原生 SDK 默认开，web 不开就一条会话都没有。
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  assert.equal(calls[0].enableAutoSessionTracking, true);
+});
+
+test("web unhandled rejections (browser global handler mechanism) pass the same gate", () => {
+  // web 上挂的是 browserGlobalHandlersIntegration，mechanism.type 带命名空间前缀。
+  const { initSentry } = loadSentry();
+  const calls = [];
+  initSentry({ client: { init: (o) => calls.push(o), wrap: (c) => c }, dsn: "https://a@o/1" });
+  const webEvent = (error) => [
+    { exception: { values: [{ type: "Error", value: error.message, mechanism: { type: "auto.browser.global_handlers.onunhandledrejection", handled: false } }] } },
+    { originalException: error },
+  ];
+  assert.equal(calls[0].beforeSend(...webEvent(new Error("DomWebView: injectJavaScript after unmount"))), null);
+  assert.notEqual(calls[0].beforeSend(...webEvent(new Error("web flake"))), null);
+  assert.equal(calls[0].beforeSend(...webEvent(new Error("web flake"))), null);
 });

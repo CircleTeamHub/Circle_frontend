@@ -67,6 +67,11 @@ function loadApi(requests) {
         return loadDateWindow();
       }
       if (request === '@/utils/retry') return { retry: (operation) => operation() };
+      // chat-core/api 拉会话快照的翻页与失败上报(纯函数用真实实现)。
+      if (request === '@/services/api/pagination') {
+        return require('./helpers/load-ts-module').loadTsModule('src/services/api/pagination.ts');
+      }
+      if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
       throw new Error(`unexpected require: ${request}`);
     },
   };

@@ -1,4 +1,3 @@
-import { EncryptedText } from '@/features/chat/components/EncryptedText';
 import { GroupInvitationBubble } from '@/features/groups/GroupInvitationBubble';
 import { getGroupEntryHref } from '@/features/groups/routes';
 import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetry';
@@ -191,8 +190,8 @@ export function useMessageRenderer({
       case 'system-notice': return <SystemNoticePill text={item.text ?? ''} />;
       case 'received':
         return withMessageActions(item, (
-          <EncryptedTextOrPlain message={item}>{display => <ReceivedBubble
-            message={display}
+          <ReceivedBubble
+            message={item}
             senderName={receivedDisplayName(item)}
             senderAvatarUri={receivedAvatarUri(item)}
             onAvatarPress={() => handleOpenMessageSender(item)}
@@ -202,12 +201,12 @@ export function useMessageRenderer({
                 : undefined
             }
             onReactionPress={(emoji) => handleToggleReaction(item, emoji)}
-          />}</EncryptedTextOrPlain>
+          />
         ));
       case 'sent':
         return withMessageActions(item, (
-          <EncryptedTextOrPlain message={item}>{display => <SentBubble
-            message={display}
+          <SentBubble
+            message={item}
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={handleOpenSelfProfile}
@@ -218,7 +217,7 @@ export function useMessageRenderer({
                 : undefined
             }
             onReactionPress={(emoji) => handleToggleReaction(item, emoji)}
-          />}</EncryptedTextOrPlain>
+          />
         ));
       case 'location':
         return withMessageActions(item, (
@@ -472,8 +471,4 @@ export function useMessageRenderer({
     renderItem,
     keyExtractor,
   };
-}
-
-function EncryptedTextOrPlain({ message, children }: { message: ChatMessage; children: (message: ChatMessage) => ReactElement }) {
-  return message.encryptedContent ? <EncryptedText message={message}>{children}</EncryptedText> : children(message);
 }

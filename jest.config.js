@@ -30,5 +30,6 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@sentry/react-native$': '<rootDir>/test/jest/sentry-react-native.mock.js',
+    '^@shopify/react-native-skia$': '<rootDir>/test/jest/react-native-skia.mock.js',
   },
 };

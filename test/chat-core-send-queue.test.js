@@ -278,3 +278,17 @@ test('an emit that throws synchronously is treated like a rejected attempt', asy
   });
   await assert.rejects(queue.enqueue({ conversationId: 'c1', d: 'd1' }), (error) => error.code === 'BROKEN');
 });
+
+test('hasPending covers queued, in-flight and finished sends', async () => {
+  const { queue, link, send, attemptFor } = setup({ connected: false });
+  assert.equal(queue.hasPending(), false);
+  send('c1', 'd1');
+  assert.equal(queue.hasPending(), true, '没连上、排着等');
+  link.connected = true;
+  queue.resume();
+  await flush();
+  assert.equal(queue.hasPending(), true, '发出去了、等 ack');
+  attemptFor('d1').resolve('ack-1');
+  await flush();
+  assert.equal(queue.hasPending(), false);
+});

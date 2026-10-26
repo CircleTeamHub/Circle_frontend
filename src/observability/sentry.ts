@@ -9,7 +9,9 @@ import * as Sentry from '@sentry/react-native';
 import type {
   Breadcrumb,
   Event,
+  EventHint,
   ErrorEvent,
+  Metric,
   SpanJSON,
   TransactionEvent,
 } from '@sentry/core';
@@ -17,17 +19,51 @@ import {
   readDiagnosticBreadcrumbs,
   type DiagnosticBreadcrumb,
 } from '@/utils/client-diagnostics';
+import { isSensitiveFieldKey } from '@/utils/redact';
 import { STATIC_ROUTE_SEGMENTS } from './route-segments';
+import { TRACED_SPAN_NAMES } from './tracing';
+import { allowedMetricAttributes, metricDefinition } from './metrics';
+import {
+  isBenignDomBridgeRejection,
+  rejectionMessage,
+  shouldReportUnhandledRejection,
+} from './unhandled-rejection-filter';
+
+interface NavigationIntegrationLike {
+  registerNavigationContainer: (navigationContainerRef: unknown) => void;
+}
 
 /** Minimal slice of the Sentry SDK we depend on — lets tests inject a fake. */
 export interface SentryLike {
   init: (options: Record<string, unknown>) => void;
   wrap: <P>(component: P) => P;
+  reactNavigationIntegration?: (options: {
+    useFullPathsForNavigationRoutes: boolean;
+  }) => NavigationIntegrationLike;
 }
 
 // Adapt the SDK's wider types to our minimal interface at this single boundary.
 const defaultClient = Sentry as unknown as SentryLike;
 let sentryInitialized = false;
+let navigationIntegration: NavigationIntegrationLike | undefined;
+
+/**
+ * 导航追踪是性能数据的根：冷启动指标挂在第一个导航 transaction 上，XHR span
+ * 也要有父 span 才会被发出。没有它，tracesSampleRate 再高也一条性能数据都没有。
+ * 全路径命名（__root/(tabs)/messages/index）由 sanitizeNavigationRouteName 归一化。
+ */
+function createNavigationIntegration(
+  client: SentryLike,
+): NavigationIntegrationLike | undefined {
+  if (typeof client.reactNavigationIntegration !== 'function') return undefined;
+  try {
+    return client.reactNavigationIntegration({
+      useFullPathsForNavigationRoutes: true,
+    });
+  } catch {
+    return undefined;
+  }
+}
 
 export interface SentryConfigSources {
   env?: Record<string, string | undefined>;
@@ -99,6 +135,7 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
     readTrimmed(process.env.EXPO_PUBLIC_SENTRY_RELEASE);
   const dist =
     readTrimmed(options.dist) ?? readTrimmed(process.env.EXPO_PUBLIC_SENTRY_DIST);
+  const navigation = createNavigationIntegration(client);
   try {
     client.init({
       dsn,
@@ -112,6 +149,17 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // 对 IM 产品，「消息发送慢」到底慢在哪一段就无法回答。5% 足够看趋势，
       // 又把 Sentry 配额消耗控制在可预期范围内。
       tracesSampleRate,
+      integrations: navigation ? [navigation] : [],
+      // 原生端默认是 [/.*/]：每个 XHR 都带 sentry-trace / baggage 头，连发往第三方
+      // 存储的预签名上传 PUT 也带，等于把 release 和 DSN public key 发给第三方。
+      // 后端不消费这两个头（请求串联走 X-Request-Id），所以一个都不发。空数组会
+      // 覆盖 SDK 默认值；undefined 不会。将来后端接分布式追踪时再收窄到 API 源，
+      // 同时把这两个头加进后端 CORS allowedHeaders（web 端跨源会触发预检）。
+      tracePropagationTargets: [],
+      // 会话统计（release health：崩溃率 / 无崩溃会话比例）。原生 SDK 默认就开；
+      // web 端只有显式为 true 才挂 browserSessionIntegration，之前 web 一条会话都没有。
+      // 会话的 did 取自 Sentry user，而 setSentryUserId 恒清空，所以不带账号标识。
+      enableAutoSessionTracking: true,
       // Never attach PII (IP, cookies, request bodies) by default.
       sendDefaultPii: false,
       attachScreenshot: false,
@@ -123,16 +171,32 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // hooks cannot scrub payload fields emitted only by native crash code.
       // Manual reportError calls already sanitize their payloads, but native /
       // unhandled SDK events and automatic breadcrumbs bypass that helper.
-      beforeSend: sanitizeAutomaticEvent,
+      beforeSend: filterAndSanitizeErrorEvent,
       beforeBreadcrumb: sanitizeAutomaticBreadcrumb,
       beforeSendTransaction: sanitizeAutomaticTransaction,
       beforeSendSpan: sanitizeAutomaticSpan,
+      beforeSendMetric: sanitizeMetric,
     });
     sentryInitialized = true;
+    navigationIntegration = navigation;
     return true;
   } catch {
     sentryInitialized = false;
+    navigationIntegration = undefined;
     return false;
+  }
+}
+
+/**
+ * 把 Expo Router 的导航容器交给 Sentry 导航追踪。Sentry 未初始化时是 no-op；
+ * 重复注册同一个 ref 由 SDK 自己去重。
+ */
+export function registerSentryNavigationContainer(navigationContainerRef: unknown): void {
+  if (!navigationIntegration) return;
+  try {
+    navigationIntegration.registerNavigationContainer(navigationContainerRef);
+  } catch {
+    // Observability must never change navigation behavior.
   }
 }
 
@@ -204,29 +268,8 @@ const PRESIGNED_URL_MARKERS = [
   'X-Amz-Signature=',
   'x-id=PutObject',
 ];
-// 这份清单与 utils/redact.ts 的 SENSITIVE_KEYS 是两份独立的表（那份给日志，这份给
-// Sentry 上报），已经分叉过一次：redact 有 revocationsecret，这里漏了，而推送撤销密钥
-// 正是通知链路的密钥之一。精确匹配的 Set 不会因为有 'secret' 就拦住
-// 'revocationsecret'。往任一份加敏感字段时，另一份也要加。
-const SENSITIVE_CONTEXT_KEYS = new Set([
-  'authorization',
-  'cookie',
-  'password',
-  'token',
-  'accesstoken',
-  'refreshtoken',
-  'revocationsecret',
-  'imtoken',
-  'idtoken',
-  'apikey',
-  'secret',
-  'uploadurl',
-  'fileurl',
-  'email',
-  'phone',
-  'phonenumber',
-  'mobile',
-]);
+// 嵌套字段的敏感名单只有一份，在 utils/redact.ts（isSensitiveFieldKey）。这里曾经
+// 抄过一份，与日志那份分叉过两次。
 const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'endpointPath',
   'method',
@@ -241,6 +284,7 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'platform',
   'contentType',
   'code',
+  'storageCode',
   'size',
   'category',
   'agentIndex',
@@ -264,6 +308,8 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'kind',
   'traceId',
   'requestId',
+  'code',
+  'storageCode',
 ]);
 const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'circleId',
@@ -345,6 +391,38 @@ export function sanitizeTransactionName(value: unknown): string {
   return `/${normalized.join('/')}`;
 }
 
+/** Expo Router 根导航器的内部路由名，不是 URL 段。 */
+const NAVIGATION_ROOT_ROUTE = '__root';
+
+/**
+ * React Navigation 的路由名（`__root/(tabs)/messages/user/[id]`）是代码里的文件名，
+ * 不含参数值；去掉根导航器和 index 段、补上前导 / 之后，按 URL 路径同一套白名单
+ * 归一化。必须幂等：同一个名字先在根 span 上、再在 transaction 上各过一遍。
+ */
+function sanitizeNavigationRouteName(value: unknown): string {
+  if (typeof value !== 'string') return REDACTED_TRANSACTION;
+  const segments = value
+    .trim()
+    .split('/')
+    .filter(
+      (segment) =>
+        segment !== '' && segment !== NAVIGATION_ROOT_ROUTE && segment !== 'index',
+    );
+  if (segments.length === 0) return '/';
+  return sanitizeTransactionName(`/${segments.join('/')}`);
+}
+
+/**
+ * 导航 transaction（source=component）按路由名归一化；tracing.ts 固定表里的自定义
+ * span 名原样保留；其余仍走 URL 路径规则。
+ */
+function sanitizeEventTransactionName(value: unknown, source: unknown): string {
+  if (typeof value === 'string' && TRACED_SPAN_NAMES.has(value)) return value;
+  return source === 'component'
+    ? sanitizeNavigationRouteName(value)
+    : sanitizeTransactionName(value);
+}
+
 function sanitizeStringForSentry(value: string): string {
   const sanitized = value
     .replace(SENSITIVE_URL_PATTERN, '[REDACTED_URL]')
@@ -367,11 +445,31 @@ function sanitizeContextForSentry(value: unknown, depth = 0): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = SENSITIVE_CONTEXT_KEYS.has(key.toLowerCase())
+    out[key] = isSensitiveFieldKey(key)
       ? '[REDACTED]'
       : sanitizeContextForSentry(child, depth + 1);
   }
   return out;
+}
+
+/**
+ * code / storageCode 会进 tag 和 fingerprint：只收常量形状（错误码枚举），自由文本
+ * 进来会炸出无数个 issue，还可能带出响应体内容。其他键不受影响。
+ */
+const SAFE_ERROR_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+const SAFE_STORAGE_CODE = /^[A-Za-z]{1,64}$/;
+
+function isSafeErrorCode(key: string, value: unknown): boolean {
+  if (key === 'code') {
+    return (
+      (typeof value === 'number' && Number.isSafeInteger(value)) ||
+      (typeof value === 'string' && SAFE_ERROR_CODE.test(value))
+    );
+  }
+  if (key === 'storageCode') {
+    return typeof value === 'string' && SAFE_STORAGE_CODE.test(value);
+  }
+  return true;
 }
 
 function sanitizeReportContext(
@@ -393,6 +491,7 @@ function sanitizeReportContext(
     if (key === 'durationMs' && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
       continue;
     }
+    if (!isSafeErrorCode(key, value)) continue;
     if (
       value == null ||
       typeof value === 'string' ||
@@ -503,6 +602,7 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
     if (key === 'requestId' && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
       continue;
     }
+    if (!isSafeErrorCode(key, child)) continue;
     if (typeof child === 'string' || typeof child === 'number') {
       safe[key] = sanitizeContextForSentry(child);
     }
@@ -582,7 +682,10 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
   }
   if ('message' in source) safe.message = '[REDACTED_EVENT_MESSAGE]';
   if ('transaction' in source) {
-    safe.transaction = sanitizeTransactionName(source.transaction);
+    safe.transaction = sanitizeEventTransactionName(
+      source.transaction,
+      readTransactionSource(source.transaction_info),
+    );
   }
   const exception = sanitizeException(source.exception);
   if (exception) safe.exception = exception;
@@ -594,12 +697,8 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
   if (tags) safe.tags = tags;
   const extra = sanitizeEventExtra(source.extra);
   if (extra) safe.extra = extra;
-  const trace = sanitizeTraceContext(
-    source.contexts && typeof source.contexts === 'object'
-      ? (source.contexts as Record<string, unknown>).trace
-      : undefined,
-  );
-  if (trace) safe.contexts = { trace };
+  const contexts = sanitizeEventContexts(source.contexts);
+  if (contexts) safe.contexts = contexts;
   if (Array.isArray(source.fingerprint)) {
     safe.fingerprint = source.fingerprint.map((part) =>
       sanitizeStringForSentry(String(part)),
@@ -615,10 +714,83 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
   return safe as Event;
 }
 
+/**
+ * 未处理 Promise rejection 的过滤与限流。Hermes 上真正生效的 tracker 是 SDK 自己挂在
+ * HermesInternal 上的（web 上是全局 unhandledrejection 事件），silence-dom-bridge-
+ * rejection 的 promise 包 tracker 在那里从不触发 —— 所以闸门放在所有引擎都经过的
+ * beforeSend，按 mechanism 只作用于未处理 rejection，手动 reportError 不受影响。
+ * 签名取原始错误（脱敏之后 value 已被替换），在脱敏之前判断。
+ */
+function isUnhandledRejectionEvent(event: ErrorEvent): boolean {
+  // Hermes / JSC：'onunhandledrejection'；web 的 browserGlobalHandlersIntegration 带命名
+  // 空间前缀：'auto.browser.global_handlers.onunhandledrejection'。
+  return (
+    event.exception?.values?.some((value) => {
+      const type = value.mechanism?.type;
+      return (
+        type === 'onunhandledrejection' ||
+        (typeof type === 'string' && type.endsWith('.onunhandledrejection'))
+      );
+    }) ?? false
+  );
+}
+
+function filterAndSanitizeErrorEvent(
+  event: ErrorEvent,
+  hint?: EventHint,
+): ErrorEvent | null {
+  if (event && typeof event === 'object' && isUnhandledRejectionEvent(event)) {
+    const original = hint?.originalException ?? event.exception?.values?.[0]?.value;
+    const message = rejectionMessage(original);
+    if (
+      isBenignDomBridgeRejection(message) ||
+      !shouldReportUnhandledRejection(original, message)
+    ) {
+      return null;
+    }
+  }
+  return sanitizeAutomaticEvent(event);
+}
+
 function sanitizeAutomaticEvent(event: ErrorEvent): ErrorEvent {
   return {
     ...sanitizeAutomaticBaseEvent(event),
     type: undefined,
+  };
+}
+
+/** SDK 自动补的指标属性里，只有这几项不是标识：版本、环境、SDK。 */
+const SAFE_SDK_METRIC_ATTRIBUTES = [
+  'sentry.release',
+  'sentry.environment',
+  'sentry.sdk.name',
+  'sentry.sdk.version',
+] as const;
+
+/**
+ * 指标的最后一道白名单：名字和类型必须与 metrics.ts 的表一致，单位取表里的，
+ * 属性只留表里声明的枚举值和上面几项 SDK 元数据。SDK 自动补的 user.id /
+ * user.email / user.name 在这里被剥掉（setSentryUserId 恒清空，这是第二道保险）。
+ */
+function sanitizeMetric(metric: Metric): Metric | null {
+  if (!metric || typeof metric !== 'object') return null;
+  const definition = metricDefinition(metric.name);
+  if (!definition || definition.type !== metric.type) return null;
+  if (typeof metric.value !== 'number' || !Number.isFinite(metric.value)) return null;
+  const source = isRecord(metric.attributes) ? metric.attributes : {};
+  const attributes: Record<string, unknown> = allowedMetricAttributes(definition, source);
+  for (const key of SAFE_SDK_METRIC_ATTRIBUTES) {
+    const value = source[key];
+    if (typeof value === 'string' && value.length <= MAX_CONTEXT_STRING_LENGTH) {
+      attributes[key] = value;
+    }
+  }
+  return {
+    name: metric.name,
+    type: metric.type,
+    value: metric.value,
+    ...(definition.unit ? { unit: definition.unit } : {}),
+    attributes,
   };
 }
 
@@ -667,6 +839,25 @@ function sanitizeAutomaticSpan(span: SpanJSON): SpanJSON {
       : {}),
     ...(span.is_segment !== undefined ? { is_segment: span.is_segment } : {}),
     ...(span.segment_id ? { segment_id: span.segment_id } : {}),
+    ...(span.is_segment === true ? sanitizeSegmentSpanFields(span) : {}),
+  };
+}
+
+/**
+ * 根 span（is_segment）就是 transaction 本身。@sentry/core 先对它跑 beforeSendSpan，
+ * 再把结果 merge 回 transaction 事件 —— 没带回来的 description / measurements 会以
+ * undefined 覆盖 transaction 名和冷启动指标，之后才轮到 beforeSendTransaction。
+ * 所以这两项要在这里按 transaction 的同一套规则保留下来。子 span 的 description
+ * 照旧丢弃（常带 URL）。
+ */
+function sanitizeSegmentSpanFields(span: SpanJSON): Partial<SpanJSON> {
+  const measurements = sanitizeMeasurements(span.measurements);
+  return {
+    description: sanitizeEventTransactionName(
+      span.description,
+      span.data?.['sentry.source'],
+    ),
+    ...(measurements ? { measurements } : {}),
   };
 }
 
@@ -701,6 +892,102 @@ function sanitizeTraceContext(value: unknown): Record<string, unknown> | undefin
       ? { status: source.status }
       : {}),
   };
+}
+
+/**
+ * SDK 自动填的 contexts 里可以离开设备的字段（白名单）。没有它们就没法按机型、
+ * 系统版本、App 版本或 OTA 版本筛崩溃。字段名对应 @sentry/react-native 7 的
+ * devicecontext / expocontext 集成。
+ *
+ * 刻意不在单子上的：设备名（常是「张三的 iPhone」）、设备 ID、device_app_hash、
+ * boot_time、精确的剩余内存/存储（组合起来可做设备指纹）、时区与语言（culture
+ * 整个不收）、内核版本串（可能带主机名）、emergency_launch_reason（原生错误文本，
+ * iOS 上带含安装 UUID 的沙盒路径）。新增字段前先确认它不是标识符。
+ */
+const SAFE_AUTOMATIC_CONTEXT_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  device: [
+    'model',
+    'model_id',
+    'family',
+    'brand',
+    'manufacturer',
+    'arch',
+    'simulator',
+    'memory_size',
+    'low_memory',
+  ],
+  os: ['name', 'version', 'build'],
+  app: [
+    'app_version',
+    'app_build',
+    'app_identifier',
+    'app_name',
+    'build_type',
+    'in_foreground',
+  ],
+  ota_updates: [
+    'is_enabled',
+    'update_id',
+    'channel',
+    'runtime_version',
+    'check_automatically',
+    'is_embedded_launch',
+    'is_emergency_launch',
+    'is_using_embedded_assets',
+    'launch_duration',
+    'created_at',
+  ],
+};
+const MAX_CONTEXT_STRING_LENGTH = 128;
+const MAX_VIEW_NAMES = 5;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeAutomaticContext(
+  value: unknown,
+  fields: readonly string[],
+): Record<string, unknown> | undefined {
+  if (!isRecord(value)) return undefined;
+  const safe: Record<string, unknown> = {};
+  for (const field of fields) {
+    const child = value[field];
+    if (typeof child === 'boolean' || (typeof child === 'number' && Number.isFinite(child))) {
+      safe[field] = child;
+    } else if (typeof child === 'string' && child.length <= MAX_CONTEXT_STRING_LENGTH) {
+      safe[field] = sanitizeStringForSentry(child);
+    }
+  }
+  return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
+/** app.view_names 是 SDK 记下的当前路由名，与导航 transaction 名同一套归一化。 */
+function sanitizeViewNames(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const names = value
+    .slice(-MAX_VIEW_NAMES)
+    .map(sanitizeNavigationRouteName)
+    .filter((name) => name !== REDACTED_TRANSACTION);
+  return names.length > 0 ? names : undefined;
+}
+
+function sanitizeEventContexts(value: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(value)) return undefined;
+  const safe: Record<string, unknown> = {};
+  const trace = sanitizeTraceContext(value.trace);
+  if (trace) safe.trace = trace;
+  for (const [name, fields] of Object.entries(SAFE_AUTOMATIC_CONTEXT_FIELDS)) {
+    const context = sanitizeAutomaticContext(value[name], fields);
+    if (context) safe[name] = context;
+  }
+  const viewNames = sanitizeViewNames(isRecord(value.app) ? value.app.view_names : undefined);
+  if (viewNames) safe.app = { ...(isRecord(safe.app) ? safe.app : {}), view_names: viewNames };
+  return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
+function readTransactionSource(value: unknown): unknown {
+  return isRecord(value) ? value.source : undefined;
 }
 
 function readSafeTraceField(value: unknown): value is string {
@@ -745,14 +1032,13 @@ function sanitizeAutomaticTransaction(
     ...sanitizeAutomaticBaseEvent(event),
     type: 'transaction',
   };
-  safe.transaction = sanitizeTransactionName(event.transaction);
+  safe.transaction = sanitizeEventTransactionName(
+    event.transaction,
+    readTransactionSource(event.transaction_info),
+  );
   safe.spans = (event.spans ?? [])
     .filter(hasValidSpanIds)
     .map(sanitizeAutomaticSpan);
-  const trace = sanitizeTraceContext(event.contexts?.trace);
-  if (trace) {
-    safe.contexts = { trace } as TransactionEvent['contexts'];
-  }
   const measurements = sanitizeMeasurements(event.measurements);
   if (measurements) safe.measurements = measurements;
   if (event.transaction_info?.source) {
@@ -827,6 +1113,8 @@ function buildCaptureContext(
     'kind',
     'traceId',
     'requestId',
+    'code',
+    'storageCode',
   ];
   const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
     const value = safeContext ? readTagValue(safeContext, key) : undefined;
@@ -857,10 +1145,14 @@ function buildCaptureContext(
   } else if (tags.operation) {
     // 非 API 失败（如 upload）：error.message 已本地化，若沿用 Sentry 默认按消息分组，
     // 同一故障会按语言碎成多个 issue。用稳定的 operation + kind 组 fingerprint。
+    // 错误码不同就是不同的故障（发消息 ack 超时 vs 非法载荷；存储 AccessDenied 签名
+    // 问题 vs SlowDown 限流），各自成 issue。
     captureContext.fingerprint = [
       tags.operation,
       tags.kind ?? 'unknown-kind',
       tags.failureKind ?? 'error',
+      ...(tags.code ? [tags.code] : []),
+      ...(tags.storageCode ? [tags.storageCode] : []),
     ];
   }
   return captureContext;

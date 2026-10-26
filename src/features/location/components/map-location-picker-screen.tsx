@@ -22,6 +22,7 @@ import { MapSurface } from '@/features/location/components/map-surface';
 import { resolvePlace } from '@/features/location/services/reverse-geocode';
 import { resolvePlaceOnDevice } from '@/features/location/services/native-reverse-geocode';
 import { geocoderFetch } from '@/features/location/services/geocoder-fetch';
+import { reportGeocodeFailure } from '@/features/location/services/geocode-failure-reporting';
 import {
   grantAmapPrivacyConsent,
   hasAmapPrivacyConsent,
@@ -589,6 +590,7 @@ export function MapLocationPickerScreen({
         undefined,
         resolvePlaceOnDevice,
         geocoderFetch,
+        reportGeocodeFailure,
       ).then((place) => {
         if (!place || generation !== centerGenerationRef.current) return;
         setCandidateLocation((current) => ({

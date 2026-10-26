@@ -26,6 +26,7 @@ import {
 } from '@/features/location/services/reverse-geocode';
 import { resolvePlaceOnDevice } from '@/features/location/services/native-reverse-geocode';
 import { geocoderFetch } from '@/features/location/services/geocoder-fetch';
+import { reportGeocodeFailure } from '@/features/location/services/geocode-failure-reporting';
 import {
   CHAT_CARD_PADDING_VERTICAL,
   LOCATION_CARD_WIDTH,
@@ -226,6 +227,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
       undefined,
       resolvePlaceOnDevice,
       geocoderFetch,
+      reportGeocodeFailure,
     ).then(
       (place) => {
         if (!cancelled) setResolvedPlace(place);

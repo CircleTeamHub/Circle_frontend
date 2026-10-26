@@ -1,3 +1,4 @@
+import { randomUUID } from 'expo-crypto';
 import { useAnnouncementSignalStore } from '@/features/profile/store-announcement-signal';
 import { refreshGroupAdmissionUnread } from '@/services/api/group-admissions';
 import { REALTIME_WS_URL } from '@/constants/config';
@@ -212,7 +213,38 @@ let reconnectAttempt = 0;
 // 换号或登出时 sessionEpoch 变了,标记自然作废,不会替新账号补拉。
 let reconnectRecoveryPendingSession: number | null = null;
 let reportedCurrentConnectionOutage = false;
+/**
+ * 当前这条连接的关联 id（ws-<uuid v4>），每次 new WebSocket 换一个。与聊天 socket
+ * 同一套：原生端走 x-connection-trace-id 握手头，web 端加不了自定义头，认证帧里带
+ * 一份副本；本端的 Sentry 上报带同一个值。网关侧解析见 PR 说明（需要后端配合）。
+ */
+let connectionTraceId: string | null = null;
 const reportedRealtimeFailures = new Set<string>();
+
+/**
+ * web 的非安全源（局域网 http 调试）没有 crypto.randomUUID，expo-crypto 会抛：关联 id
+ * 生成失败不能把建连弄崩，退回一个同形状（v4）的本地随机 id —— 它只用于关联，不涉安全。
+ */
+function createConnectionTraceId(): string {
+  try {
+    return `ws-${randomUUID()}`;
+  } catch {
+    const hex = (length: number) =>
+      Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    const variant = '89ab'[Math.floor(Math.random() * 4)];
+    return `ws-${hex(8)}-${hex(4)}-4${hex(3)}-${variant}${hex(3)}-${hex(12)}`;
+  }
+}
+
+/**
+ * React Native 的 WebSocket 比 DOM 多一个 options 参数（握手头）；tsc 解析到的是
+ * DOM 那份两参签名，这里按 RN 的实际签名收窄一次。浏览器会忽略第三个参数。
+ */
+type HeaderedWebSocketConstructor = new (
+  url: string,
+  protocols: undefined,
+  options: { headers: Record<string, string> },
+) => WebSocket;
 let walletRefreshPromise: Promise<void> | null = null;
 // 「在途那一发的快照已经过时了」这件事按会话记，而不是一个会被 disconnect 清掉
 // 的布尔:token 轮换会调 disconnectRealtime,但在途请求仍然允许落地(见下),脏标记
@@ -296,6 +328,7 @@ function reportRealtimeFailureOnce(kind: string): void {
   reportError(new Error(`realtime ${kind} failure`), {
     operation: 'realtime',
     kind,
+    ...(connectionTraceId ? { traceId: connectionTraceId } : {}),
   });
 }
 
@@ -311,6 +344,7 @@ function reportRealtimeConnectionOutage(): void {
     operation: 'realtime',
     kind: 'consecutiveConnectionFailures',
     attempts: reconnectAttempt,
+    ...(connectionTraceId ? { traceId: connectionTraceId } : {}),
   });
 }
 
@@ -772,7 +806,13 @@ function openRealtimeSocket(normalizedToken: string) {
   currentToken = normalizedToken;
   closeSocket();
 
-  const nextSocket = new WebSocket(REALTIME_WS_URL);
+  const socketTraceId = createConnectionTraceId();
+  connectionTraceId = socketTraceId;
+  // 第二个参数必须是 undefined：浏览器会把 null 当成名为 "null" 的子协议。
+  // 第三个参数是 React Native WebSocket 的扩展（握手头），浏览器会忽略它。
+  const nextSocket = new (WebSocket as unknown as HeaderedWebSocketConstructor)(REALTIME_WS_URL, undefined, {
+    headers: { 'x-connection-trace-id': socketTraceId },
+  });
   socket = nextSocket;
 
   // 这条连接是否已经收到过帧 = 认证是否真的通过。补拉全部挂在它后面。
@@ -784,7 +824,7 @@ function openRealtimeSocket(normalizedToken: string) {
     // 退化成每秒锤一次后端。归零挪到 onmessage —— 收到帧才代表认证真的过了。
     // 必须先发认证帧，否则网关 10s 后以 1008 踢掉连接，且期间收不到任何事件。
     try {
-      nextSocket.send(JSON.stringify({ type: 'auth', token: normalizedToken }));
+      nextSocket.send(JSON.stringify({ type: 'auth', token: normalizedToken, traceId: socketTraceId }));
     } catch (err) {
       reportRealtimeFailureOnce('authFrameSend');
       useTabBadgeStore.getState().setRealtimeConnected(false);

@@ -201,6 +201,7 @@ const ROUTE_TEMPLATES = [
   "/trace/feed",
   "/circle",
   "/circle-invitation/:id",
+  "/chat/conversations/:id",
   "/circle/:id",
   "/collections",
   "/collections/:id",

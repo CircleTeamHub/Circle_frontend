@@ -21,7 +21,7 @@ import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import { ThemedSwitch } from '@/components/ui/themed-switch';
 import {
   fetchChatMembers,
-  loadChatConversations,
+  refreshConversationOrList,
   setGroupChatMuteAll,
   transferGroupChatOwner,
   updateGroupChatPolicies,
@@ -187,10 +187,13 @@ export default function GroupManageScreen() {
       // chat store 里。成员权限三个开关读的是会话 DTO 上的 policies;
       // 只拉成员和圈子详情会让 policies 为空,点击随后被静默忽略。
       // 会话列表刷新失败不应阻断成员管理,所以把它单独降级为空结果。
-      const conversationsPromise = loadChatConversations().catch((err: unknown) => {
-        reportHandledFailure('groupManage', 'loadPolicies', err);
-        return null;
-      });
+      // 只需要这一个群的 DTO(policies / myRole):单个取,不再为它重拉整张会话列表。
+      const conversationsPromise = refreshConversationOrList(conversationID).catch(
+        (err: unknown) => {
+          reportHandledFailure('groupManage', 'loadPolicies', err);
+          return null;
+        },
+      );
       const [directory, detail] = await Promise.all([
         fetchChatMembers(conversationID),
         groupID ? fetchCircleDetail(groupID) : Promise.resolve(null),
@@ -318,10 +321,11 @@ export default function GroupManageScreen() {
 
   /** 乐观更新失败后把服务端的真实状态重新拉一遍(拉不到就维持回滚值)。 */
   const resyncConversations = useCallback(() => {
-    void loadChatConversations().catch((err: unknown) =>
+    if (!conversationID) return;
+    void refreshConversationOrList(conversationID).catch((err: unknown) =>
       reportHandledFailure('groupManage', 'resyncAfterSettingFailure', err),
     );
-  }, []);
+  }, [conversationID]);
 
   const handleToggleMuteAll = useCallback(
     (next: boolean) => {

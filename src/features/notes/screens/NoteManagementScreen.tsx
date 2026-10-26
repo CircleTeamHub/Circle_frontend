@@ -22,7 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { NavHeader } from '@/components/ui/nav-header';
-import { fetchChatMembers, loadChatConversations } from '@/chat-core/api';
+import { fetchChatMembers, refreshConversationOrList } from '@/chat-core/api';
 import type { ChatMemberDto } from '@/chat-core/protocol';
 import {
   type GroupRole,
@@ -53,9 +53,12 @@ import {
 } from '@/features/notes/utils/note-sync';
 import {
   fetchNotes,
+  notesMutatedSince,
   setNoteSourceGroup,
   setNoteWorkStatus,
 } from '@/services/api/notes';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { reuseUnchanged } from '@/utils/structural-sharing';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -237,10 +240,13 @@ export default function NoteManagementScreen() {
     setLoading(true);
     setError(false);
     try {
-      const conversationsPromise = loadChatConversations().catch((err: unknown) => {
-        reportHandledFailure('noteManagement', 'loadConversation', err);
-        return null;
-      });
+      // 只需要这一个群的 DTO:单个取,不再为它重拉整张会话列表。
+      const conversationsPromise = refreshConversationOrList(conversationID).catch(
+        (err: unknown) => {
+          reportHandledFailure('noteManagement', 'loadConversation', err);
+          return null;
+        },
+      );
       const [directory, detail] = await Promise.all([
         fetchChatMembers(conversationID),
         groupID ? fetchCircleDetail(groupID) : Promise.resolve(null),
@@ -275,14 +281,22 @@ export default function NoteManagementScreen() {
     [t],
   );
 
+  // 回到页面时:刚拉过、之后没有任何笔记写请求、重连恢复信号也没变,就不重拉整页笔记。
+  const notesReloadGate = useFocusReloadGate({
+    key: noteStatusRecovery,
+    mutatedSince: notesMutatedSince,
+  });
+
   const loadNotes = useCallback(async () => {
     if (!isOwner) return;
     const sequence = ++notesLoadSequenceRef.current;
+    const startedAt = Date.now();
     setNotesLoading(true);
     try {
       const nextNotes = await withNoteSyncRetry(() => fetchNotes());
       if (sequence !== notesLoadSequenceRef.current) return;
-      setNotes(nextNotes);
+      setNotes((current) => reuseUnchanged(current, nextNotes));
+      notesReloadGate.markLoaded(startedAt);
     } catch (err) {
       if (sequence !== notesLoadSequenceRef.current) return;
       reportHandledFailure('noteManagement', 'loadNotes', err);
@@ -290,17 +304,17 @@ export default function NoteManagementScreen() {
     } finally {
       if (sequence === notesLoadSequenceRef.current) setNotesLoading(false);
     }
-  }, [isOwner, openActionError]);
+  }, [isOwner, notesReloadGate, openActionError]);
 
   useFocusEffect(
     useCallback(() => {
       // 重连恢复时漏掉的状态事件只能整页重拉补回。
       void noteStatusRecovery;
-      void loadNotes();
+      if (!notesReloadGate.shouldSkip()) void loadNotes();
       return () => {
         notesLoadSequenceRef.current += 1;
       };
-    }, [loadNotes, noteStatusRecovery]),
+    }, [loadNotes, noteStatusRecovery, notesReloadGate]),
   );
 
   const sourceNotes = useMemo(

@@ -7,6 +7,7 @@ import {
   useSegments,
 } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { reuseUnchanged } from '@/utils/structural-sharing';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -63,6 +64,7 @@ import {
   deleteNote,
   fetchNoteGroups,
   fetchNotes,
+  notesMutatedSince,
   setNoteWorkStatus,
   togglePinNote,
   unlistNote,
@@ -83,6 +85,9 @@ const ItemSeparator = memo(function ItemSeparator() {
   return <View style={{ height: Spacing.sm }} />;
 });
 
+
+/** 回到笔记列表时的重拉节流窗口(期间有任何笔记写请求都会照常重拉)。 */
+const NOTES_FOCUS_RELOAD_FRESH_MS = 30_000;
 export default function NotesScreen() {
   const { width, fontScale } = useWindowDimensions();
   const compactActions = width < 520 || fontScale > 1.2;
@@ -94,6 +99,7 @@ export default function NotesScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
 
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [groups, setGroups] = useState<NoteGroup[]>([]);
@@ -122,6 +128,13 @@ export default function NotesScreen() {
     (state) => state.recoveryVersion,
   );
   const noteListVersion = useNoteListSignalStore((state) => state.version);
+  // 上一次聚焦重拉成功时的时刻与两个失效信号(回到前台时判断能不能跳过重拉)。
+  const lastLoadRef = useRef<{
+    at: number;
+    epoch: number;
+    version: number;
+    recovery: number;
+  } | null>(null);
   // 从别处「查看」跳进来时要定位的笔记：滚到它并短暂高亮。
   const { highlightNoteId } = useLocalSearchParams<{ highlightNoteId?: string }>();
   const listRef = useRef<FlatList<NoteSummary>>(null);
@@ -151,15 +164,18 @@ export default function NotesScreen() {
     );
   }, [noteStatusChange]);
 
-  const load = useCallback(async () => {
+  // 返回这次结果是否真的落到了界面上(被更新的一次加载顶掉时为 false)。
+  const load = useCallback(async (): Promise<boolean> => {
     const sequence = ++loadSequenceRef.current;
     try {
       const [notesData, groupsData] = await withNoteSyncRetry(() =>
         Promise.all([fetchNotes({ status: 'ACTIVE' }), fetchNoteGroups()]),
       );
-      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
-      setNotes(notesData);
-      setGroups(groupsData);
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return false;
+      // 内容没变的笔记/分组沿用旧对象:NoteCard 是 memo 的,几百条笔记重拉一次
+      // 不至于整张列表重渲染;什么都没变时连数组都不换。
+      setNotes((current) => reuseUnchanged(current, notesData));
+      setGroups((current) => reuseUnchanged(current, groupsData));
       // 刷新后清掉已不在列表里的选中项 —— 被删/下架的笔记退出批量目标
       setSelectedIds((prev) =>
         pruneSelection(
@@ -169,9 +185,10 @@ export default function NotesScreen() {
       );
       setLoadError(false);
       setLoading(false);
+      return true;
     } catch (error) {
       // A newer focus/realtime refresh owns the result and error state.
-      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return false;
       throw error;
     }
   }, []);
@@ -183,19 +200,50 @@ export default function NotesScreen() {
       // move the just-updated note to a different position. A collection can
       // finish in chat while this screen stays mounted in another stack, so
       // collection invalidation still reloads the authoritative list.
-      void noteListVersion;
       // 断线/重启期间漏掉的来源状态事件无法逐条补回，恢复信号到达时整页重拉。
-      void noteStatusRecovery;
+      // 两个信号没变、30 秒内刚拉过、之后也没有任何笔记写请求(见 notesMutatedSince)
+      // 时跳过:笔记多的用户每次进出编辑页都整页重拉几百条,很费电。
+      const last = lastLoadRef.current;
+      const startedAt = Date.now();
+      const epoch = sessionEpoch;
+      const age = last ? startedAt - last.at : -1;
+      if (
+        last &&
+        last.epoch === epoch &&
+        last.version === noteListVersion &&
+        last.recovery === noteStatusRecovery &&
+        // 时钟回拨时差值为负:当作不新鲜,照常重拉。
+        age >= 0 &&
+        age <= NOTES_FOCUS_RELOAD_FRESH_MS &&
+        !notesMutatedSince(last.at)
+      ) {
+        return;
+      }
       setLoading(true);
-      void load().catch(() => {
-        // 加载失败不能静默吞掉 —— 空列表和网络错误要区分开，给用户重试入口。
-        if (mountedRef.current) {
-          setLoadError(true);
-          setLoading(false);
-        }
-      });
-    }, [load, noteListVersion, noteStatusRecovery]),
+      void load()
+        .then((applied) => {
+          // 被更新的一次加载顶掉了:那次若失败,下次回来不能误以为刚拉过。
+          if (!applied) return;
+          lastLoadRef.current = {
+            at: startedAt,
+            epoch,
+            version: noteListVersion,
+            recovery: noteStatusRecovery,
+          };
+        })
+        .catch(() => {
+          // 加载失败不能静默吞掉 —— 空列表和网络错误要区分开，给用户重试入口。
+          if (mountedRef.current) {
+            setLoadError(true);
+            setLoading(false);
+          }
+        });
+    }, [load, noteListVersion, noteStatusRecovery, sessionEpoch]),
   );
+
+  const reloadAfterMembershipChange = useCallback(async () => {
+    await load();
+  }, [load]);
 
   const handleRefreshNotes = useCallback(async () => {
     if (refreshInFlightRef.current) return;
@@ -985,7 +1033,7 @@ export default function NotesScreen() {
         groups={groups}
         setGroups={setGroups}
         notes={notes}
-        onMembershipsChanged={load}
+        onMembershipsChanged={reloadAfterMembershipChange}
         onActiveGroupDeleted={handleActiveGroupDeleted}
       />
       <NoteActionsSheet

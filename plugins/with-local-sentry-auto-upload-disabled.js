@@ -3,10 +3,31 @@ const path = require('node:path');
 const { withAppBuildGradle, withDangerousMod } = require('expo/config-plugins');
 
 const IOS_UPLOAD_GUARD_MARKER = 'circle-im-sentry-upload-config-guard';
+// Release 构建（不论本地还是 CI/EAS）缺 Sentry 凭据直接失败：本地打的 Release 包同样会
+// 被分发，静默跳过上传的话，那个版本的崩溃栈在 Sentry 里永远符号化不了。
+//
+// 确实不分发的本地 Release 构建要显式声明 SENTRY_DISABLE_AUTO_UPLOAD=true（与 Android
+// 守卫同一个逃生口）：启动构建时的环境变量 / xcodebuild 构建设置都行；从 Xcode 界面
+// 启动的 Profile / Archive 带不进环境变量，所以这里也认同目录 .xcode.env.local 里的
+// `export SENTRY_DISABLE_AUTO_UPLOAD=true` —— 它本身在这段之后才被 source，只能先 grep。
+// Debug 构建缺凭据照旧静默跳过。
+//
+// 凭据只判断「有没有」（${VAR:+set}）：sentry-xcode-debug-files.sh 先 set -x 再 source
+// 本文件，展开原值会把令牌打进构建日志。
 const DISABLE_AUTO_UPLOAD_BLOCK = `# ${IOS_UPLOAD_GUARD_MARKER}:start
-if [[ -z "$SENTRY_AUTH_TOKEN" || -z "$SENTRY_ORG" || -z "$SENTRY_PROJECT" ]]; then
-  if [[ "$CONFIGURATION" == *Release* && ( -n "\${CI:-}" || -n "\${EAS_BUILD:-}" ) ]]; then
-    echo "Sentry upload config is required for CI/EAS Release archives." >&2
+__sentry_guard_env_local="$(dirname "\${BASH_SOURCE[0]:-$0}")/.xcode.env.local"
+if [[ "\${SENTRY_DISABLE_AUTO_UPLOAD:-}" != "true" && -f "$__sentry_guard_env_local" ]] \\
+  && grep -Eq '^[[:space:]]*export[[:space:]]+SENTRY_DISABLE_AUTO_UPLOAD=true[[:space:]]*$' "$__sentry_guard_env_local"; then
+  export SENTRY_DISABLE_AUTO_UPLOAD=true
+fi
+unset __sentry_guard_env_local
+if [[ "\${SENTRY_DISABLE_AUTO_UPLOAD:-}" == "true" ]]; then
+  if [[ "\${CONFIGURATION:-}" == *Release* ]]; then
+    echo "warning: Sentry symbol upload is disabled (SENTRY_DISABLE_AUTO_UPLOAD=true); do not distribute this build." >&2
+  fi
+elif [[ -z "\${SENTRY_AUTH_TOKEN:+set}" || -z "\${SENTRY_ORG:+set}" || -z "\${SENTRY_PROJECT:+set}" ]]; then
+  if [[ "\${CONFIGURATION:-}" == *Release* ]]; then
+    echo "error: Sentry upload config is required for Release builds. Set SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT. For a build that is never distributed, set SENTRY_DISABLE_AUTO_UPLOAD=true: in the environment, as an xcodebuild build setting, or as 'export SENTRY_DISABLE_AUTO_UPLOAD=true' in ios/.xcode.env.local." >&2
     exit 1
   fi
   export SENTRY_DISABLE_AUTO_UPLOAD=true
@@ -49,7 +70,8 @@ tasks.configureEach { task ->
 
 function appendSentryDisableAutoUpload(content) {
   if (DISABLE_AUTO_UPLOAD_PATTERN.test(content)) {
-    return content.replace(DISABLE_AUTO_UPLOAD_PATTERN, DISABLE_AUTO_UPLOAD_BLOCK);
+    // 替换函数而不是字符串：块里的 shell 有 `$'` 这类 replace 特殊序列。
+    return content.replace(DISABLE_AUTO_UPLOAD_PATTERN, () => DISABLE_AUTO_UPLOAD_BLOCK);
   }
 
   const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
