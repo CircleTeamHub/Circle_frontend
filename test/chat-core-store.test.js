@@ -146,9 +146,6 @@ function loadChatStore(overrides = {}) {
     }
     if (request === './local-db') return overrides.localDb
       ? { ...__localDbStub, ...overrides.localDb } : __localDbStub;
-    if (request === '@/services/e2ee/lifecycle' && overrides.e2eeLifecycle) {
-      return overrides.e2eeLifecycle;
-    }
     if (request === '@/storage') {
       return { storage: { set: () => {}, getString: () => undefined } };
     }
@@ -2493,10 +2490,9 @@ test('an already-due conversation is swept by the next burn message anywhere', a
 });
 
 test('a scoped sweep that expires nothing skips the whole-store purges', async () => {
-  // 本地库那一趟是整表 UPDATE/DELETE,加密正文那一趟是整个正文库:都不能每条消息跑一次。
+  // 本地库那一趟是整表 UPDATE/DELETE:不能每条消息跑一次。
   const env = burnClock();
   let localSweeps = 0;
-  let bodySweeps = 0;
   const { useChatStore } = loadChatStore({
     globals: env.globals,
     localDb: {
@@ -2504,29 +2500,23 @@ test('a scoped sweep that expires nothing skips the whole-store purges', async (
         localSweeps += 1;
       },
     },
-    e2eeLifecycle: {
-      purgeEncryptedBody: (value) => {
-        if (value.expired) bodySweeps += 1;
-      },
-    },
   });
   await seedBurnConversations(useChatStore, env.clock);
   await burnFlush();
 
   localSweeps = 0;
-  bodySweeps = 0;
   await useChatStore
     .getState()
     .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 10_000)]);
   await burnFlush();
-  assert.deepEqual([localSweeps, bodySweeps], [0, 0]);
+  assert.equal(localSweeps, 0);
 
   env.advance(10_001);
   await burnFlush();
   assert.equal(localSweeps, 1, '真的过期了:本地库要清');
 
   await useChatStore.getState().purgeExpiredBurnMessages();
-  assert.deepEqual([localSweeps, bodySweeps], [2, 1], '全量扫两样都跑');
+  assert.equal(localSweeps, 2, '全量扫要跑');
 });
 
 test('a device clock set back does not leave the purge timer spinning', async () => {
@@ -2559,52 +2549,4 @@ test('logging out forgets the burn schedule', async () => {
   // 上一个账号的到期记录也不能留:否则下一次点名扫又按它们排起定时器。
   await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: [] });
   assert.equal(env.pendingDelays().length, 0);
-});
-
-// ---- 加密正文的清理只能点名到那一条 -----------------------------------------
-test('an expired encrypted message without an envelope purges only its own body', async () => {
-  // 撤回后的加密消息正文是空对象、没有信封。原来按 clientMessageId 清理时传了
-  // undefined,等于「这个会话的所有加密正文」—— 其余消息全变成解不开。
-  const purges = [];
-  const { useChatStore } = loadChatStore({
-    e2eeLifecycle: { purgeEncryptedBody: (value) => purges.push({ ...value }) },
-  });
-  const past = new Date(Date.now() - 60_000).toISOString();
-  const revoked = msg({
-    id: 'srv-revoked',
-    height: 1,
-    type: 'encrypted-text',
-    content: {},
-    burnExpiresAt: past,
-  });
-  const sealed = msg({
-    id: 'srv-sealed',
-    height: 2,
-    type: 'encrypted-text',
-    content: { envelope: { clientMessageId: 'client-sealed' } },
-    burnExpiresAt: past,
-  });
-  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
-  await useChatStore.getState().ingestMessages('conv-1', [revoked, sealed], { persist: false });
-  purges.length = 0;
-
-  await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: ['conv-1'] });
-
-  assert.deepEqual(purges, [
-    { conversationId: 'conv-1', serverMessageId: 'srv-revoked' },
-    { conversationId: 'conv-1', clientMessageId: 'client-sealed' },
-  ]);
-});
-
-test('clearing a conversation locally asks for its whole encrypted-body purge explicitly', () => {
-  const purges = [];
-  const { useChatStore } = loadChatStore({
-    e2eeLifecycle: { purgeEncryptedBody: (value) => purges.push({ ...value }) },
-  });
-  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
-  purges.length = 0;
-
-  useChatStore.getState().clearConversationLocal('conv-1', null);
-
-  assert.deepEqual(purges, [{ conversationId: 'conv-1', wholeConversation: true }]);
 });

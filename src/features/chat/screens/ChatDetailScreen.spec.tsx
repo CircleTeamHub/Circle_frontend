@@ -19,7 +19,6 @@ import { useChatStore } from '@/chat-core/store';
 import { useComposerDraftStore } from '@/chat-core/composer-drafts';
 import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
 import i18n from '@/i18n';
-import { decryptText } from '@/services/e2ee/client';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 /**
@@ -102,7 +101,6 @@ jest.mock('expo-router', () => {
     },
   };
 });
-jest.mock('@/services/e2ee/client', () => ({ decryptText: jest.fn() }));
 
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
 jest.mock('react-i18next', () => ({
@@ -371,10 +369,9 @@ test('mounts a direct chat, shows the cached history and loads the focused conve
   await waitFor(() => expect(markConversationAsRead).toHaveBeenCalled(), SETTLE);
 });
 
-// 文字加密已停用:已有的加密消息只显示占位文案。原来每个加密气泡挂载、回到页面、
-// 回到前台都要发一次签名请求再解密一遍,这是发热来源之一。
-test('an encrypted message shows the placeholder and is never decrypted', async () => {
-  jest.mocked(decryptText).mockResolvedValue({ text: 'secret body' });
+// 文字加密已整体删除:老开发数据里残留的 encrypted-text 消息走未知类型的占位文案,
+// 不崩、不渲染空白气泡,也不把信封里的密文当正文显示出来。
+test('a leftover encrypted-text message renders the unsupported-type placeholder', async () => {
   const encrypted: ChatMessageDto = {
     ...message(3, PEER, ''),
     type: 'encrypted-text',
@@ -398,13 +395,9 @@ test('an encrypted message shows the placeholder and is never decrypted', async 
   render(<ChatDetailScreen />);
 
   expect(
-    await screen.findByText(`received:${i18n.t('e2ee.encryptedText')}`, {}, SETTLE),
+    await screen.findByText(`received:${i18n.t('im.message.unsupported')}`, {}, SETTLE),
   ).toBeTruthy();
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  });
-  expect(screen.queryByText('received:secret body')).toBeNull();
-  expect(decryptText).not.toHaveBeenCalled();
+  expect(screen.queryByText(/opaque/)).toBeNull();
 });
 
 test('a conversation scrolled up to the memory ceiling points to history search', async () => {

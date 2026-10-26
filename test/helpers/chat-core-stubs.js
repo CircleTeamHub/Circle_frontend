@@ -33,7 +33,6 @@ function makeChatCoreStubs() {
       withoutLocallyDeleted: (messages) => messages,
       markMessageDeletedLocally: () => {},
     },
-    '@/services/e2ee/lifecycle': { purgeEncryptedBody: () => {} },
     './chat-notifications': {
       CHAT_NOTIFICATION_CHANNEL_ID: 'chat',
       ensureChatNotificationChannel: async () => {},

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { storage } from '@/storage';
-import { purgeEncryptedBody } from '@/services/e2ee/lifecycle';
 import { isBurnDurationChoice } from './burn-durations';
 import {
   isMessageDeletedLocally,
@@ -401,14 +400,6 @@ function scheduleNextBurnPurge(): void {
       .getState()
       .purgeExpiredBurnMessages(full ? undefined : { conversationIds: [] });
   }, delay);
-}
-
-/** 加密消息信封里的 clientMessageId(本机正文库按它存);撤回后没有信封。 */
-function encryptedClientMessageId(message: ChatMessageDto): string | null {
-  const envelope = message.content.envelope;
-  if (!envelope || typeof envelope !== 'object') return null;
-  const id = (envelope as { clientMessageId?: unknown }).clientMessageId;
-  return typeof id === 'string' && id.length > 0 ? id : null;
 }
 
 /** 会话预览是一条会焚毁的消息:它也得登记到期时刻,否则要等下一次全量扫才清。 */
@@ -1745,7 +1736,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   removeMessage: (conversationId, messageId) => {
-    purgeEncryptedBody({ conversationId, serverMessageId: messageId });
     void deleteLocalMessage(conversationId, messageId);
     // height=0 的失败气泡根本不在 messages 表里 —— 它只存在于 outbox。
     // 不把 outbox 行一起删掉的话,那条(用户认为已经删除的)私信正文会无限期
@@ -2405,9 +2395,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         if (expiresAt <= now) targets.add(conversationId);
       }
     } else {
-      // 整个加密正文库过一遍,很重。正文平时按各自的到期时刻清(e2ee/client),
-      // 这里只是兜底,不能每收一条焚毁消息就跑一次。
-      purgeEncryptedBody({ expired: true });
       burnExpiryByConversation.clear();
       lastFullBurnSweepAt = now;
     }
@@ -2438,16 +2425,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         const expiry = expiryFor(message);
         return expiry !== null && expiry <= now;
       }).map((message) => message.id));
-      for (const message of timeline ?? []) if (expiredIds.has(message.id) && message.type === 'encrypted-text') {
-        // 没有信封(撤回后正文是空对象)就按服务端 id 清;绝不能只给会话 id ——
-        // 那是「整个会话的正文」。
-        const clientMessageId = encryptedClientMessageId(message);
-        purgeEncryptedBody(
-          clientMessageId
-            ? { conversationId: conversation.id, clientMessageId }
-            : { conversationId: conversation.id, serverMessageId: message.id },
-        );
-      }
       const rawPreview = conversation.lastMessage;
       const rawPreviewExpiry = rawPreview ? expiryFor(rawPreview) : null;
       if (rawPreview && rawPreviewExpiry !== null && rawPreviewExpiry <= now) expiredIds.add(rawPreview.id);
@@ -2535,7 +2512,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   clearConversationLocal: (conversationId, clearedBeforeHeight) => {
-    purgeEncryptedBody({ conversationId, wholeConversation: true });
     void clearLocalConversationMessages(conversationId);
     const {
       conversations,
@@ -2623,7 +2599,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     ) {
       return false;
     }
-    purgeEncryptedBody({ conversationId, serverMessageId: messageId });
     const alreadyRevoked =
       Boolean(existing?.revokedAt) ||
       (target?.lastMessage?.id === messageId &&

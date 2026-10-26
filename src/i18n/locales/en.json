@@ -142,7 +142,7 @@
     },
     "deviceVerification": {
       "title": "New device verification",
-      "recoveryIntro": "If you reinstalled the app or cannot use your previous device, verify your linked email and reset your password to sign in again. Previous devices will be signed out. Encrypted chat history requires separate recovery.",
+      "recoveryIntro": "If you reinstalled the app or cannot use your previous device, verify your linked email and reset your password to sign in again. Previous devices will be signed out.",
       "recoverByEmail": "Previous device unavailable? Recover with email",
       "intro": "This sign-in is from a device we don't recognize. A verification request has been sent to your trusted devices. Confirm it there, then enter the code it shows.",
       "waiting": "Waiting for a trusted device · {{time}} left",
@@ -3532,7 +3532,6 @@
     "CHAT_GROUP_QR_JOIN_DISABLED": "Joining via QR code is turned off in this group",
     "CHAT_GROUP_AVATAR_URL_INVALID": "Invalid group avatar address",
     "CHAT_DELIVERY_ID_CONFLICT": "Message failed to send. Please re-enter it and try again",
-    "CHAT_TEXT_ENCRYPTION_DISABLED": "Encrypted messages are no longer supported. Send a regular message instead",
     "FRIEND_GROUP_ADD_FORBIDDEN": "This group does not allow members to add each other as friends",
     "AUTH_DEVICE_ID_REQUIRED": "Sign-in from a new device. Please update to the latest version and try again",
     "AUTH_DEVICE_NOT_TRUSTED": "This device is not trusted and cannot handle sign-in requests",
@@ -3679,8 +3678,5 @@
       "CANCELLED": "Application cancelled"
     },
     "sentInvitation": "You invited them to join the group"
-  },
-  "e2ee": {
-    "encryptedText": "[Encrypted text]"
   }
 }

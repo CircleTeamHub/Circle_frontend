@@ -383,9 +383,6 @@ export function mapChatMessageDtoToUI(
   } satisfies Partial<ChatMessage>;
 
   switch (dto.type) {
-    case 'encrypted-text':
-      return { ...base, type: isSent ? 'sent' : 'received', text: i18n.t('e2ee.encryptedText'), encryptedContent: content as unknown as NonNullable<ChatMessage['encryptedContent']> };
-
     case 'quote': {
       // 真引用优先:replyTo 快照给出权威预览与跳转坐标;
       // 原消息被物理删除时快照缺省,回落发送时固化的 quotedText 文本。

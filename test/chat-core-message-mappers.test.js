@@ -498,6 +498,26 @@ test('falls back to a text bubble for a malformed call-record payload', () => {
   }
 });
 
+// 文字加密已删除:老开发数据里残留的 encrypted-text 没有专门分支,走未知类型的占位文案。
+// 信封里的密文、签名都不是正文,不能当 text 显示,也不能渲染成空白气泡。
+test('a leftover encrypted-text message falls back to the unsupported placeholder', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const ui = mapChatMessageDtoToUI(
+    dto({
+      type: 'encrypted-text',
+      content: {
+        envelope: { clientMessageId: 'client-1', ciphertext: 'opaque' },
+        signature: 'proof',
+      },
+    }),
+    'u1',
+    0,
+  );
+  assert.equal(ui.type, 'received');
+  assert.equal(ui.text, 'im.message.unsupported');
+  assert.equal('encryptedContent' in ui, false);
+});
+
 // ── 对端可控媒体地址:整个 content 由发送方构造,服务端只校验 object key ──────
 test('image messages only render URLs that pass the media allowlist', () => {
   const { mapChatMessageDtoToUI } = loadMappers();

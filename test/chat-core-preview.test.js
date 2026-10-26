@@ -138,6 +138,19 @@ test('an overlong peer filename is truncated for the list row', () => {
   assert.ok(preview.length <= 61, `got ${preview.length}`);
 });
 
+// 文字加密已删除:残留的 encrypted-text 在会话列表里和其它未知类型一样显示通用标签。
+test('a leftover encrypted-text message previews like any unknown type', () => {
+  const { getChatMessagePreview } = loadMappers({ withRealLocale: true });
+  const preview = getChatMessagePreview(
+    dto({
+      type: 'encrypted-text',
+      content: { envelope: { ciphertext: 'opaque' }, signature: 'proof' },
+    }),
+  );
+  assert.equal(preview, getChatMessagePreview(dto({ type: 'future-type' })));
+  assert.notEqual(preview, '');
+});
+
 test('卡片预览不能把 {{占位符}} 漏到列表上', () => {
   // 真词条是「[笔记] {{title}}」这种带插值的。mapper 只传了 key 不传值时,
   // i18next 会把 `{{title}}` 原样留下 —— 列表里就显示成「[笔记] {{title}}」。
