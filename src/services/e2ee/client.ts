@@ -9,7 +9,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { openDeviceJournal, prepareReplacementJournal, type DeviceJournal } from './journal';
 
 let active: { epoch: number; promise: Promise<EncryptionClient>; journal?: DeviceJournal } | undefined;
-export function encryptionEnabled() { return process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true'; }
 export function getEncryptionClient(): Promise<EncryptionClient> {
   const { user, sessionEpoch } = useAuthStore.getState();
   if (!user) return Promise.reject(new Error('Sign in before using encrypted chat'));
@@ -55,20 +54,6 @@ registerLogoutHandler(async () => {
   await previous?.journal?.close();
 });
 
-export async function encryptOutgoingText(conversationId: string, id: string, content: Record<string, unknown>, knownEncrypted: boolean) {
-  if (!encryptionEnabled() && !knownEncrypted) return null;
-  const client = await getEncryptionClient();
-  return client.run(async () => {
-    const directory = await client.directory(conversationId);
-    // An unconfirmed local group may remain after a timed-out enable request.
-    // The server mode decides whether new text is encrypted; never downgrade a known encrypted conversation.
-    if (directory.mode !== 'MLS_V1') {
-      if (knownEncrypted) throw new Error('Encrypted conversation is not available');
-      return null;
-    }
-    return client.encrypt(conversationId, id, content);
-  });
-}
 type DecryptRequest = { content: EncryptedContent; epoch: number; pendingOwn: boolean; resolve: (body: Record<string, unknown>) => void; reject: (error: unknown) => void };
 let pendingDecryptions: DecryptRequest[] = [];
 const bodyExpiries = new Set<number>();

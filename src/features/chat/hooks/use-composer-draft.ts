@@ -1,4 +1,3 @@
-import { useChatStore } from '@/chat-core/store';
 import { useCallback, useEffect, useRef } from 'react';
 import {
   readComposerDraft,
@@ -44,12 +43,11 @@ export function useComposerDraftPersistence({
   messages,
   paused,
 }: ComposerDraftBinding): { clearPersistedDraft: () => void } {
-  const encrypted = useChatStore(s => s.conversations.find(c => c.id === conversationId)?.textEncryption === 'MLS_V1');
   const restoredKeyRef = useRef<string | null>(null);
   const pendingQuoteIdRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestRef = useRef({ draft, mentionTargets, quoteTarget, paused, encrypted });
-  latestRef.current = { draft, mentionTargets, quoteTarget, paused, encrypted };
+  const latestRef = useRef({ draft, mentionTargets, quoteTarget, paused });
+  latestRef.current = { draft, mentionTargets, quoteTarget, paused };
   const sessionKey = userId ? `${userId}:${conversationId}` : null;
 
   const flushSave = useCallback(() => {
@@ -61,11 +59,7 @@ export function useComposerDraftPersistence({
       return;
     }
     const latest = latestRef.current;
-    if (latest.encrypted) {
-      useComposerDraftStore.getState().clearDraft(userId, conversationId);
-      return;
-    }
-    if (latest.paused || process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true') return;
+    if (latest.paused) return;
     const quoteId =
       latest.quoteTarget && !isLocalMessageId(latest.quoteTarget.id)
         ? latest.quoteTarget.id
@@ -87,10 +81,6 @@ export function useComposerDraftPersistence({
     if (!sessionKey || restoredKeyRef.current === sessionKey) return;
     restoredKeyRef.current = sessionKey;
     pendingQuoteIdRef.current = null;
-    if (encrypted) {
-      if (userId) useComposerDraftStore.getState().clearDraft(userId, conversationId);
-      return;
-    }
     const saved = readComposerDraft(userId, conversationId);
     if (!saved) return;
     if (latestRef.current.draft.length === 0 && saved.text.length > 0) {
@@ -100,11 +90,7 @@ export function useComposerDraftPersistence({
     if (saved.quoteMessageId && !latestRef.current.quoteTarget) {
       pendingQuoteIdRef.current = saved.quoteMessageId;
     }
-  }, [conversationId, sessionKey, setDraft, setMentionTargets, userId, encrypted]);
-
-  useEffect(() => {
-    if (encrypted && userId) useComposerDraftStore.getState().clearDraft(userId, conversationId);
-  }, [encrypted, userId, conversationId]);
+  }, [conversationId, sessionKey, setDraft, setMentionTargets, userId]);
 
   // 引用目标要等历史页加载进来才找得到。
   useEffect(() => {

@@ -24,6 +24,10 @@ import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
 import { excludeMmkvDirFromIOSBackup } from '@/storage/ios-backup-exclusion';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
+// 文字加密已停用,但本机可能还存着以前解密过的正文:删除 / 清空 / 焚毁时要接着清。
+// 清理监听注册在这个模块顶层 —— 原来由加密气泡顺带加载,现在气泡不解密了,改在这里加载。
+// 第二阶段删加密库时一起删掉这一行。
+import '@/services/e2ee/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
 import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';

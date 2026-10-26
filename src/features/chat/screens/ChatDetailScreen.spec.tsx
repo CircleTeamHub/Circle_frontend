@@ -18,6 +18,8 @@ import { fetchChatMembers } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
 import { useComposerDraftStore } from '@/chat-core/composer-drafts';
 import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
+import i18n from '@/i18n';
+import { decryptText } from '@/services/e2ee/client';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 /**
@@ -100,7 +102,7 @@ jest.mock('expo-router', () => {
     },
   };
 });
-jest.mock('@/services/e2ee/client', () => ({ decryptText: jest.fn(), encryptOutgoingText: jest.fn().mockResolvedValue(null) }));
+jest.mock('@/services/e2ee/client', () => ({ decryptText: jest.fn() }));
 
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
 jest.mock('react-i18next', () => ({
@@ -367,6 +369,42 @@ test('mounts a direct chat, shows the cached history and loads the focused conve
     SETTLE,
   );
   await waitFor(() => expect(markConversationAsRead).toHaveBeenCalled(), SETTLE);
+});
+
+// 文字加密已停用:已有的加密消息只显示占位文案。原来每个加密气泡挂载、回到页面、
+// 回到前台都要发一次签名请求再解密一遍,这是发热来源之一。
+test('an encrypted message shows the placeholder and is never decrypted', async () => {
+  jest.mocked(decryptText).mockResolvedValue({ text: 'secret body' });
+  const encrypted: ChatMessageDto = {
+    ...message(3, PEER, ''),
+    type: 'encrypted-text',
+    content: {
+      envelope: {
+        conversationId: CONVERSATION,
+        senderDeviceId: 'peer-device',
+        clientMessageId: 'd-encrypted',
+        ciphertext: 'opaque',
+      },
+      signature: 'proof',
+    },
+  };
+  useChatStore.setState({
+    messagesByConversation: {
+      [CONVERSATION]: [encrypted, message(2, ME, '晚上吃什么'), message(1, PEER, '在吗')],
+      [GROUP]: [],
+    },
+  });
+
+  render(<ChatDetailScreen />);
+
+  expect(
+    await screen.findByText(`received:${i18n.t('e2ee.encryptedText')}`, {}, SETTLE),
+  ).toBeTruthy();
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  expect(screen.queryByText('received:secret body')).toBeNull();
+  expect(decryptText).not.toHaveBeenCalled();
 });
 
 test('a conversation scrolled up to the memory ceiling points to history search', async () => {
