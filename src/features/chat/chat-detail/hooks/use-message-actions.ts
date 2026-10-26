@@ -419,7 +419,7 @@ export function useMessageActions({
         onPress: () => handleRevokeMessage(message),
       });
     }
-    if (!message.encryptedContent && message.text?.trim()) {
+    if (message.text?.trim()) {
       actions.push({
         key: 'copy',
         icon: 'copy-outline',
@@ -427,7 +427,7 @@ export function useMessageActions({
         onPress: () => void handleCopyMessage(message),
       });
     }
-    if (!message.encryptedContent) actions.push({
+    actions.push({
       key: 'quote',
       icon: 'return-up-back-outline',
       label: t('chat.messageActions.quote', { defaultValue: '引用' }),
@@ -435,7 +435,7 @@ export function useMessageActions({
     });
     // 只在真能转发时给入口:通话记录走到转发页只会抛「不支持」,
     // 而 catch 提示的是「请重试」—— 一个永远不会成功的重试。
-    if (!message.encryptedContent && canForwardMessage(message, dto, conversationBurnEnabled)) {
+    if (canForwardMessage(message, dto, conversationBurnEnabled)) {
       actions.push({
         key: 'forward',
         icon: 'arrow-redo-outline',
@@ -452,7 +452,7 @@ export function useMessageActions({
     // 都不会成功。与隔壁转发对未确认媒体的处理同一条理由:不提供入口。
     if (
       !isEphemeralPeerMessage(message, conversationBurnEnabled) &&
-      !message.encryptedContent && !isLocalMessageId(message.id)
+      !isLocalMessageId(message.id)
     ) {
       // 笔记卡片走的是 collectNote（快照复制进「我的笔记」），不是进收藏列表 ——
       // 标签跟着实际行为叫「添加」，别让同一个「收藏」在两种消息上意思不同。

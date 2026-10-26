@@ -142,7 +142,7 @@
     },
     "deviceVerification": {
       "title": "陌生设备登录验证",
-      "recoveryIntro": "重装 App 或原设备不可用时，可验证绑定邮箱并重设密码来恢复登录。恢复后旧设备会退出登录；加密聊天历史需另行恢复。",
+      "recoveryIntro": "重装 App 或原设备不可用时，可验证绑定邮箱并重设密码来恢复登录。恢复后旧设备会退出登录。",
       "recoverByEmail": "原设备不可用？通过邮箱恢复登录",
       "intro": "检测到陌生设备登录，需要验证。验证请求已发送到你的受信任设备，请在受信任设备上确认后，输入显示的验证码。",
       "waiting": "等待受信任设备确认 · 剩余 {{time}}",
@@ -3524,7 +3524,6 @@
     "CHAT_GROUP_QR_JOIN_DISABLED": "该群已关闭二维码入群",
     "CHAT_GROUP_AVATAR_URL_INVALID": "群头像地址无效",
     "CHAT_DELIVERY_ID_CONFLICT": "消息发送失败，请重新输入后再发",
-    "CHAT_TEXT_ENCRYPTION_DISABLED": "加密消息已停用，请直接发送普通消息",
     "FRIEND_GROUP_ADD_FORBIDDEN": "该群不允许成员互加好友",
     "AUTH_DEVICE_ID_REQUIRED": "检测到陌生设备登录，请升级到最新版本后重试",
     "AUTH_DEVICE_NOT_TRUSTED": "当前设备不是受信任设备，无法处理登录请求",
@@ -3671,8 +3670,5 @@
       "CANCELLED": "申请已取消"
     },
     "sentInvitation": "你邀请对方加入群聊"
-  },
-  "e2ee": {
-    "encryptedText": "[加密文字]"
   }
 }
