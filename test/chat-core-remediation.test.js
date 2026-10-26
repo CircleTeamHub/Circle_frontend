@@ -336,9 +336,10 @@ test('typing flows end to end: throttle-send behind settings, store expiry, head
   assert.match(dispatcher, /CHAT_EVENTS\.typing/);
 });
 
-test('muted conversations enqueue silent in-app banners', () => {
+test('muted conversations raise no in-app banner', () => {
+  // 免打扰就是不打扰:端内横幅也不弹(行为测试见 chat-core-dispatcher)。
   const dispatcher = read('src/chat-core/dispatcher.ts');
-  assert.match(dispatcher, /silent: conversation\.muted/);
+  assert.match(dispatcher, /if \(conversation\.muted\) return 'suppressed';/);
 });
 
 test('file and unknown message types render placeholders, never blank bubbles', () => {

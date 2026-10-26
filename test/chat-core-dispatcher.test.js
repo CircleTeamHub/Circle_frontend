@@ -753,6 +753,16 @@ test('messages from another conversation banner while a conversation is open', (
   assert.equal(state.banners[0].conversationID, DIRECT_ID);
 });
 
+test('muted conversations never raise an in-app banner', () => {
+  // 免打扰就是不打扰:原来只是不响,横幅照弹 —— 群一多,顶部横幅一个接一个停不下来。
+  const { socket, state } = loadDispatcher({
+    conversations: [directConversation({ muted: true })],
+  });
+  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
+  assert.equal(state.ingested.length, 1, 'muted still stores the message');
+  assert.equal(state.banners.length, 0);
+});
+
 test('background messages do not leave an in-app banner queued for foreground', () => {
   const { socket, state } = loadDispatcher({
     conversations: [directConversation()],
@@ -774,16 +784,6 @@ test('chat:typing routes to applyTyping, skipping self and malformed payloads', 
     socket.emit('chat:typing', bad);
   }
   assert.equal(state.typings.length, 1);
-});
-
-test('muted conversations still banner silently', () => {
-  const { socket, state } = loadDispatcher({
-    conversations: [directConversation({ muted: true })],
-  });
-  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
-  assert.equal(state.ingested.length, 1, 'muted still stores the message');
-  assert.equal(state.banners.length, 1);
-  assert.equal(state.banners[0].silent, true);
 });
 
 test('a redelivered locally-deleted message never reaches the banner', () => {

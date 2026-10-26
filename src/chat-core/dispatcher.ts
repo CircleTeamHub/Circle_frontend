@@ -951,7 +951,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
  * enqueueChatMessage 至今零调用方(NotificationSnackbarHost 仍支持 chat 项),
  * 于是在非会话页收到消息完全没有提示、也没有点进去的入口。
  *
- * 抑制规则:自己发的不弹;当前正打开的那个会话不弹;系统消息不弹;
+ * 抑制规则:自己发的不弹;当前正打开的那个会话不弹;系统消息不弹;免打扰的会话不弹;
  * 元信息不足以给出正确标题与跳转目标的不弹。
  *
  * 返回 'needs-conversation' 表示「这条本该弹,但会话元信息还没到」——
@@ -974,7 +974,8 @@ function enqueueForegroundBanner(
     (c) => c.id === message.conversationId,
   );
   if (!conversation) return 'needs-conversation';
-  // 免打扰仍显示端内横幅,但不发声音/震动提示。
+  // 免打扰就是不打扰:端内横幅也不弹。原来只是不响、横幅照弹,群一多横幅停不下来。
+  if (conversation.muted) return 'suppressed';
 
   const isGroup = conversation.type === 'GROUP';
   // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
@@ -997,7 +998,6 @@ function enqueueForegroundBanner(
 
   useNotificationSnackbarStore.getState().enqueueChatMessage({
     id: message.id,
-    silent: conversation.muted,
     title,
     summary,
     // 头像地址仍要过媒体白名单:横幅一出现就会自动发起这次图片请求。
