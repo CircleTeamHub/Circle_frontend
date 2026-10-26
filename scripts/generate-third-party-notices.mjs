@@ -205,15 +205,6 @@ function buildOutputs() {
       return null;
     }
     const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-    // Private packages inside this repository are first-party code. Their
-    // dependencies were already traversed and still require license notices.
-    if (
-      pkg.private === true &&
-      component.resolved?.startsWith('file:') &&
-      path.relative(ROOT, fs.realpathSync(component.packagePath)).startsWith(`packages${path.sep}`)
-    ) {
-      return null;
-    }
     const license = declaredLicense(pkg, component.treeLicense);
     if (!license) {
       missing.push(`${component.key}: license metadata missing`);

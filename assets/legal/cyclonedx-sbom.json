@@ -2771,66 +2771,6 @@
     },
     {
       "type": "library",
-      "bom-ref": "pkg:npm/%40hpke/common@1.10.1",
-      "name": "@hpke/common",
-      "version": "1.10.1",
-      "purl": "pkg:npm/%40hpke/common@1.10.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/dajiaji/hpke-js.git"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "pkg:npm/%40hpke/core@1.9.0",
-      "name": "@hpke/core",
-      "version": "1.9.0",
-      "purl": "pkg:npm/%40hpke/core@1.9.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/dajiaji/hpke-js.git"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "pkg:npm/%40hpke/dhkem-x25519@1.8.0",
-      "name": "@hpke/dhkem-x25519",
-      "version": "1.8.0",
-      "purl": "pkg:npm/%40hpke/dhkem-x25519@1.8.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/dajiaji/hpke-js.git"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "bom-ref": "pkg:npm/%40isaacs/ttlcache@1.4.1",
       "name": "@isaacs/ttlcache",
       "version": "1.4.1",
@@ -3546,86 +3486,6 @@
         {
           "type": "vcs",
           "url": "https://github.com/LottieFiles/dotlottie-web.git"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "pkg:npm/%40noble/ciphers@2.1.1",
-      "name": "@noble/ciphers",
-      "version": "2.1.1",
-      "purl": "pkg:npm/%40noble/ciphers@2.1.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/paulmillr/noble-ciphers.git"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "pkg:npm/%40noble/curves@2.0.1",
-      "name": "@noble/curves",
-      "version": "2.0.1",
-      "purl": "pkg:npm/%40noble/curves@2.0.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/paulmillr/noble-curves.git"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "pkg:npm/%40noble/hashes@2.0.1",
-      "name": "@noble/hashes",
-      "version": "2.0.1",
-      "purl": "pkg:npm/%40noble/hashes@2.0.1",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/paulmillr/noble-hashes.git"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "pkg:npm/%40noble/hashes@2.3.0",
-      "name": "@noble/hashes",
-      "version": "2.3.0",
-      "purl": "pkg:npm/%40noble/hashes@2.3.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/paulmillr/noble-hashes.git"
         }
       ]
     },
@@ -21324,26 +21184,6 @@
         {
           "type": "vcs",
           "url": "https://github.com/wooorm/trough"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "pkg:npm/ts-mls@1.6.4",
-      "name": "ts-mls",
-      "version": "1.6.4",
-      "purl": "pkg:npm/ts-mls@1.6.4",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/LukaJCB/ts-mls.git"
         }
       ]
     },
