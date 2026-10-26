@@ -371,15 +371,6 @@ export async function sendWithOptimism(
   assertChatSessionFence(fence);
   const d = options.deliveryId ?? createDeliveryId();
   const store = useChatStore.getState();
-  if (options.type === 'text' || options.type === 'quote') {
-    const mode = store.conversations.find(c => c.id === options.conversationId)?.textEncryption;
-    if (process.env.EXPO_PUBLIC_E2EE_TEXT_ENABLED === 'true' || mode === 'MLS_V1') {
-      const { encryptOutgoingText } = await import('@/services/e2ee/client');
-      const encrypted = await encryptOutgoingText(options.conversationId, d, options.content, mode === 'MLS_V1');
-      assertChatSessionFence(fence);
-      if (encrypted) options = { ...options, type: 'encrypted-text', content: { ...encrypted }, localContent: undefined, outboxPreviewContent: undefined, replyToId: undefined, forwardFromMessageId: undefined };
-    }
-  }
   const failedAfterHeight = captureSendAnchor(options.conversationId);
   const anchorFields =
     failedAfterHeight === undefined ? {} : { failedAfterHeight };

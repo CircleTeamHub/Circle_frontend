@@ -3524,6 +3524,7 @@
     "CHAT_GROUP_QR_JOIN_DISABLED": "该群已关闭二维码入群",
     "CHAT_GROUP_AVATAR_URL_INVALID": "群头像地址无效",
     "CHAT_DELIVERY_ID_CONFLICT": "消息发送失败，请重新输入后再发",
+    "CHAT_TEXT_ENCRYPTION_DISABLED": "加密消息已停用，请直接发送普通消息",
     "FRIEND_GROUP_ADD_FORBIDDEN": "该群不允许成员互加好友",
     "AUTH_DEVICE_ID_REQUIRED": "检测到陌生设备登录，请升级到最新版本后重试",
     "AUTH_DEVICE_NOT_TRUSTED": "当前设备不是受信任设备，无法处理登录请求",
@@ -3672,33 +3673,6 @@
     "sentInvitation": "你邀请对方加入群聊"
   },
   "e2ee": {
-    "title": "文字加密与设备",
-    "encryptedText": "[加密文字]",
-    "unlockRequired": "无法解密，请到聊天设置核对设备并同步密钥",
-    "disclosure": "仅文字消息加密。授权管理员设备可以解密文字，服务器不持有解密私钥。图片、视频、文件不在本次范围。启用仅影响之后发送的文字；新设备不能自动读取加入前的加密历史。此开发版本由启用设备管理成员，撤销它会暂停发送。",
-    "failed": "操作未完成。请检查设备是否已批准、所有成员与管理员是否已登记并核对密钥，然后重试。",
-    "done": "操作已完成",
-    "verify": "核对设备密钥",
-    "verifyHint": "请通过当面或独立可信渠道，与每台设备核对页面展示的完整公钥。只有完全一致才能信任，包括管理员设备。",
-    "verified": "已逐一核对一致",
-    "register": "登记此设备 / 发布加入密钥",
-    "deviceLabel": "我的 App 设备",
-    "approve": "批准设备",
-    "revoke": "撤销设备",
-    "revokeHint": "撤销后不能恢复该设备身份，须更新会话成员密钥后继续发送。已读取的历史无法远程抹除。",
-    "conversation": "当前会话",
-    "updateMembers": "更新会话设备与密钥",
-    "enable": "开启文字加密（不可降级）",
-    "sync": "加入 / 同步加密会话",
-    "refresh": "刷新设备状态",
-    "recoveryHint": "恢复码可解密已归档的文字，请离线妥善保管。先登记本机设备；旧设备归档后，新设备输入恢复码并恢复历史。恢复不会重新使用旧的发送密钥；新消息仍需核对新设备并更新会话成员。已清空、撤回、过期的内容不会恢复。",
-    "createRecovery": "创建 / 查看本机恢复码",
-    "recoveryCode": "恢复码",
-    "recoverDevice": "使用恢复码批准本机",
-    "backupHistory": "归档本机已解密的历史",
-    "restoreHistory": "恢复已归档的历史",
-    "archiveCount": "已处理 {{count}} 条历史消息",
-    "repairKey": "重新建立本机加密设备",
-    "repairKeyHint": "系统中的旧密钥已丢失。将保留旧密文数据库并建立新设备；随后请登记设备、输入恢复码并恢复已归档历史。未归档的旧记录无法恢复。"
+    "encryptedText": "[加密文字]"
   }
 }
