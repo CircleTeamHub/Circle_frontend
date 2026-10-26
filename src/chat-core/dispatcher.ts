@@ -19,7 +19,7 @@ import { useNotificationSnackbarStore } from '@/features/notifications/store/use
 import { reportError } from '@/observability/sentry';
 import { allowPeerMediaUrl } from '@/services/api/utils';
 import i18n from '@/i18n';
-import { loadChatConversations } from './api';
+import { isConversationGoneError, loadChatConversations, refreshChatConversation } from './api';
 import { dismissChatNotifications } from './chat-notifications';
 import { isMessageDeletedLocally } from './deleted-messages';
 import { reportChatDelivered } from './socket-manager';
@@ -47,6 +47,11 @@ const CONVERSATION_BACKFILL_DEBOUNCE_MS = 800;
  */
 const INCOMING_MESSAGE_BATCH_WINDOW_MS = 24;
 let backfillTimer: ReturnType<typeof setTimeout> | null = null;
+/** 等着单独刷新的会话(会话元信息变更事件),与整表补拉共用防抖时长。 */
+const pendingConversationRefreshes = new Set<string>();
+let conversationRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+/** 一阵事件里要刷新的会话太多时,一个个取不如整表拉一次。 */
+const MAX_SINGLE_CONVERSATION_REFRESHES = 8;
 let incomingMessageBatchTimer: ReturnType<typeof setTimeout> | null = null;
 let incomingMessageBatch: ChatMessageDto[] = [];
 let incomingMessageIsLive: (() => boolean) | null = null;
@@ -174,6 +179,56 @@ function scheduleConversationBackfill(isLive: () => boolean): void {
   }, CONVERSATION_BACKFILL_DEBOUNCE_MS);
 }
 
+/**
+ * 会话元信息变更(joined/updated:置顶、免打扰、群公告/头像/群主/角色/全员禁言…)只刷新
+ * 那几个会话。原来每条都整表重拉,群多、多设备时这是持续的流量和 CPU。
+ * 任何失败(老服务端没有单个会话接口、会话已不在本人列表里、网络)都退回整表重拉。
+ */
+function scheduleConversationRefresh(conversationId: string, isLive: () => boolean): void {
+  pendingConversationRefreshes.add(conversationId);
+  if (conversationRefreshTimer !== null) return;
+  conversationRefreshTimer = setTimeout(() => {
+    conversationRefreshTimer = null;
+    const ids = [...pendingConversationRefreshes];
+    pendingConversationRefreshes.clear();
+    if (!isLive()) return;
+    // 整表补拉已经排着了:它会把这些会话一并带回,不必再一个个取。
+    if (backfillTimer !== null) return;
+    if (ids.length > MAX_SINGLE_CONVERSATION_REFRESHES) {
+      scheduleConversationBackfill(isLive);
+      return;
+    }
+    void Promise.allSettled(
+      ids.map((id) =>
+        // 请求期间收到了移出/退出事件:结果作废,不把会话「复活」回列表。
+        refreshChatConversation(id, { shouldApply: () => !removedConversations.has(id) }),
+      ),
+    ).then((results) => {
+      let needsFullReload = false;
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') return;
+        const err: unknown = result.reason;
+        if (isConversationGoneError(err)) {
+          // 服务端说这个会话已不在本人列表里(退出/隐藏)。本机也没有这一行就什么都不用做;
+          // 有的话交给整表补拉收走(移出的完整处理在那条路径上)。
+          const known = useChatStore
+            .getState()
+            .conversations.some((conversation) => conversation.id === ids[index]);
+          if (known) needsFullReload = true;
+          return;
+        }
+        needsFullReload = true;
+        // 老服务端没有这个接口(404)、限流(429)、断网(0):整表补拉本就是预期路径,不上报。
+        const status = (err as { status?: unknown } | null)?.status;
+        if (status !== 404 && status !== 429 && status !== 0) {
+          reportHandledFailure('chatSync', 'conversationRefresh', err);
+        }
+      });
+      if (needsFullReload && isLive()) scheduleConversationBackfill(isLive);
+    });
+  }, CONVERSATION_BACKFILL_DEBOUNCE_MS);
+}
+
 /** 测试与登出用:丢掉在途的补拉计时器与攒着的横幅。 */
 export function cancelConversationBackfill(): void {
   pendingBanners.clear();
@@ -182,6 +237,11 @@ export function cancelConversationBackfill(): void {
   if (backfillTimer !== null) {
     clearTimeout(backfillTimer);
     backfillTimer = null;
+  }
+  pendingConversationRefreshes.clear();
+  if (conversationRefreshTimer !== null) {
+    clearTimeout(conversationRefreshTimer);
+    conversationRefreshTimer = null;
   }
   cancelIncomingMessageBatch();
 }
@@ -478,8 +538,15 @@ function processIncomingMessageBatch(messages: ChatMessageDto[]): void {
       : enqueueForegroundBanner(message) === 'needs-conversation';
     if (deferredForMissingConversation) rememberPendingBanner(message);
     if (needsConversation) rememberPendingBanner(message);
-    if (!appliedById.get(key) || needsConversation || metadataChanged) {
+    if (!appliedById.get(key) || needsConversation) {
       scheduleConversationBackfill(incomingMessageIsLive ?? (() => true));
+    } else if (metadataChanged) {
+      // 群公告/头像/群主变更服务端只发这条系统消息,没有会话事件:只刷新这一个会话
+      // (同一会话的 updated 事件在同一个防抖窗口里合并)。
+      scheduleConversationRefresh(
+        message.conversationId,
+        incomingMessageIsLive ?? (() => true),
+      );
     }
   }
   for (const conversationId of grouped.keys()) {
@@ -848,6 +915,8 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       }
       if (payload.kind === 'removed' || payload.kind === 'left') {
         rememberRemovedConversation(payload.conversationId);
+        // 还排着的单个刷新作废:否则拿回来的是 403,再白白触发一次整表重拉。
+        pendingConversationRefreshes.delete(payload.conversationId);
         pendingBanners.delete(payload.conversationId);
         const wasActive =
           store.activeConversationId === payload.conversationId;
@@ -867,9 +936,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         }
         return;
       }
-      // joined:重新入群要解除防复活标记;updated 同样只需刷新元信息。
+      // joined:重新入群要解除防复活标记;updated 同样只需刷新元信息 —— 只刷这一个。
       removedConversations.delete(payload.conversationId);
-      scheduleConversationBackfill(isLive);
+      scheduleConversationRefresh(payload.conversationId, isLive);
     } catch (err) {
       devWarn('[chat] conversation handler failed', err);
       reportChatEventFailureOnce('conversation', 'handlerFailure');
@@ -882,7 +951,7 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
  * enqueueChatMessage 至今零调用方(NotificationSnackbarHost 仍支持 chat 项),
  * 于是在非会话页收到消息完全没有提示、也没有点进去的入口。
  *
- * 抑制规则:自己发的不弹;当前正打开的那个会话不弹;系统消息不弹;
+ * 抑制规则:自己发的不弹;当前正打开的那个会话不弹;系统消息不弹;免打扰的会话不弹;
  * 元信息不足以给出正确标题与跳转目标的不弹。
  *
  * 返回 'needs-conversation' 表示「这条本该弹,但会话元信息还没到」——
@@ -905,7 +974,8 @@ function enqueueForegroundBanner(
     (c) => c.id === message.conversationId,
   );
   if (!conversation) return 'needs-conversation';
-  // 免打扰仍显示端内横幅,但不发声音/震动提示。
+  // 免打扰就是不打扰:端内横幅也不弹。原来只是不响、横幅照弹,群一多横幅停不下来。
+  if (conversation.muted) return 'suppressed';
 
   const isGroup = conversation.type === 'GROUP';
   // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
@@ -928,7 +998,6 @@ function enqueueForegroundBanner(
 
   useNotificationSnackbarStore.getState().enqueueChatMessage({
     id: message.id,
-    silent: conversation.muted,
     title,
     summary,
     // 头像地址仍要过媒体白名单:横幅一出现就会自动发起这次图片请求。

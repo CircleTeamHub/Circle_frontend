@@ -10,6 +10,8 @@ export default function AuthLayout() {
   return (
     <Stack
       screenOptions={{
+        // 看不见的页面冻结渲染(切走的 tab、栈里更深的页面),不再跟着每条消息重算。
+        freezeOnBlur: true,
         // 这个项目用的是自定义 NavHeader 组件，不用系统自带的导航栏。
         // Expo Router 的 Stack 默认会渲染一个系统原生的顶部 header（有返回按钮、标题等）。
         // 设置 headerShown: false 把它隐藏掉，然后在每个 Screen 里自己用 NavHeader 

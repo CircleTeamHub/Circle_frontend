@@ -112,3 +112,89 @@ test("notification snackbar store queues chat message targets", () => {
     "conversation-1",
   );
 });
+
+// ---- 同一个会话只留一条横幅 --------------------------------------------------
+// 原来每条消息排一个横幅(各 4 秒):群一多,横幅一个接一个停不下来,每个都要重新进场、
+// 再响一次;安卓上横幅还是实时毛玻璃,显示期间整个界面每帧多画一遍。
+
+function chat(id, conversationID, summary = id) {
+  return {
+    id,
+    title: conversationID,
+    summary,
+    avatarUrl: null,
+    conversationID,
+    sourceID: conversationID,
+    conversationType: "group",
+  };
+}
+
+test("a newer chat message replaces the queued banner of the same conversation in place", () => {
+  const { useNotificationSnackbarStore } = load(
+    "src/features/notifications/store/use-notification-snackbar-store.ts",
+  );
+  const store = useNotificationSnackbarStore.getState();
+  store.reset();
+  store.enqueueNotification(notification);
+  store.enqueueChatMessage(chat("a1", "group-a"));
+  store.enqueueChatMessage(chat("b1", "group-b"));
+  store.enqueueChatMessage(chat("a2", "group-a"));
+
+  assert.deepEqual(
+    Array.from(useNotificationSnackbarStore.getState().queue, (item) => item.id),
+    ["n1", "a2", "b1"],
+  );
+});
+
+test("a newer chat message updates the banner on screen without becoming a new banner", () => {
+  const { useNotificationSnackbarStore, snackbarBannerKey } = load(
+    "src/features/notifications/store/use-notification-snackbar-store.ts",
+  );
+  const store = useNotificationSnackbarStore.getState();
+  store.reset();
+  store.enqueueChatMessage(chat("a1", "group-a", "first"));
+  store.enqueueChatMessage(chat("a2", "group-a", "second"));
+
+  const { queue, current } = useNotificationSnackbarStore.getState();
+  assert.equal(queue.length, 1);
+  assert.equal(current.summary, "second");
+  // 界面按这个判断是不是同一个横幅:同一个就只换内容,不重新进场。
+  assert.equal(snackbarBannerKey(current), "a1");
+
+  // 那条横幅收起之后再来的消息,是一条新横幅。
+  useNotificationSnackbarStore.getState().dismissCurrent();
+  useNotificationSnackbarStore.getState().enqueueChatMessage(chat("a3", "group-a"));
+  assert.equal(snackbarBannerKey(useNotificationSnackbarStore.getState().current), "a3");
+});
+
+test("system notifications are never merged with each other", () => {
+  const { useNotificationSnackbarStore } = load(
+    "src/features/notifications/store/use-notification-snackbar-store.ts",
+  );
+  const store = useNotificationSnackbarStore.getState();
+  store.reset();
+  store.enqueueNotification(notification);
+  store.enqueueNotification({ ...notification, id: "n2" });
+  assert.equal(useNotificationSnackbarStore.getState().queue.length, 2);
+});
+
+test("a redelivered older message does not take the merged banner back", () => {
+  // 重连后服务端可能把已经被替换掉的旧消息再投一遍:它不能把横幅换回旧内容。
+  const { useNotificationSnackbarStore } = load(
+    "src/features/notifications/store/use-notification-snackbar-store.ts",
+  );
+  const store = useNotificationSnackbarStore.getState();
+  store.reset();
+  store.enqueueChatMessage(chat("a1", "group-a", "first"));
+  store.enqueueChatMessage(chat("b1", "group-b"));
+  store.enqueueChatMessage(chat("b2", "group-b", "second"));
+  store.enqueueChatMessage(chat("a2", "group-a", "second"));
+  store.enqueueChatMessage(chat("a1", "group-a", "first"));
+  store.enqueueChatMessage(chat("b1", "group-b", "first"));
+
+  const { queue } = useNotificationSnackbarStore.getState();
+  assert.deepEqual(
+    Array.from(queue, (item) => item.summary),
+    ["second", "second"],
+  );
+});

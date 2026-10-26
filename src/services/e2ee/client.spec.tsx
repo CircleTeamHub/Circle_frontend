@@ -1,4 +1,5 @@
 import { decryptText } from './client';
+import { purgeEncryptedBody } from './lifecycle';
 import type { EncryptedContent } from '@circle/e2ee/relay-client.mjs';
 let mockEpoch = 0;
 const mockResolve = jest.fn();
@@ -48,4 +49,18 @@ it('one malformed encrypted bubble does not reject valid members of the batch',a
  await expect(invalid).rejects.toThrow('Invalid encrypted');
  await expect(valid).resolves.toEqual({text:'valid'});
  expect(mockResolve.mock.calls[0][0]).toHaveLength(1);
+});
+
+it('a single-message body purge without an identifier never clears the whole conversation',async()=>{
+ // 撤回后的加密消息没有信封:按它清理时原来会把整个会话的正文一起删掉。
+ await decryptText(content('warm'));
+ await new Promise(resolve=>setTimeout(resolve,0));
+ mockDevice.purgeMessages.mockClear();
+ purgeEncryptedBody({conversationId:'room'});
+ purgeEncryptedBody({conversationId:'room',clientMessageId:'a'});
+ await new Promise(resolve=>setTimeout(resolve,0));
+ expect(mockDevice.purgeMessages).toHaveBeenCalledTimes(1);
+ const matches=mockDevice.purgeMessages.mock.calls[0][0] as (value:unknown)=>boolean;
+ expect(matches({conversationId:'room',clientMessageId:'a'})).toBe(true);
+ expect(matches({conversationId:'room',clientMessageId:'b'})).toBe(false);
 });

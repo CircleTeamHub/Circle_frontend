@@ -20,7 +20,9 @@ import {
   applyNoteSourceStatusToSummaries,
   withNoteSyncRetry,
 } from '@/features/notes/utils/note-sync';
-import { deleteNote, fetchNotes, relistNote } from '@/services/api/notes';
+import { deleteNote, fetchNotes, notesMutatedSince, relistNote } from '@/services/api/notes';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { reuseUnchanged } from '@/utils/structural-sharing';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const keyExtractor = (item: NoteSummary) => item.id;
@@ -55,18 +57,26 @@ export default function UnlistedNotesScreen() {
     );
   }, [noteStatusChange]);
 
-  const load = useCallback(async () => {
+  // 回到页面时:刚拉过、之后没有任何笔记写请求、来源状态信号也没变,就不重拉。
+  const reloadGate = useFocusReloadGate({
+    key: noteStatusVersion,
+    mutatedSince: notesMutatedSince,
+  });
+
+  // 返回这次结果是否真的落到了界面上(被更新的一次加载顶掉时为 false)。
+  const load = useCallback(async (): Promise<boolean> => {
     const sequence = ++loadSequenceRef.current;
     try {
       const notesData = await withNoteSyncRetry(() =>
         fetchNotes({ status: 'UNLISTED' }),
       );
-      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
-      setNotes(notesData);
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return false;
+      setNotes((current) => reuseUnchanged(current, notesData));
       setLoadError(false);
       setLoading(false);
+      return true;
     } catch (error) {
-      if (!mountedRef.current || sequence !== loadSequenceRef.current) return;
+      if (!mountedRef.current || sequence !== loadSequenceRef.current) return false;
       throw error;
     }
   }, []);
@@ -75,14 +85,20 @@ export default function UnlistedNotesScreen() {
     useCallback(() => {
       // Re-run the focus loader when a realtime source-status signal advances.
       void noteStatusVersion;
+      if (reloadGate.shouldSkip()) return;
+      const startedAt = Date.now();
       setLoading(true);
-      void load().catch(() => {
-        if (mountedRef.current) {
-          setLoadError(true);
-          setLoading(false);
-        }
-      });
-    }, [load, noteStatusVersion]),
+      void load()
+        .then((applied) => {
+          if (applied) reloadGate.markLoaded(startedAt);
+        })
+        .catch(() => {
+          if (mountedRef.current) {
+            setLoadError(true);
+            setLoading(false);
+          }
+        });
+    }, [load, noteStatusVersion, reloadGate]),
   );
 
   const handleRefreshNotes = useCallback(async () => {

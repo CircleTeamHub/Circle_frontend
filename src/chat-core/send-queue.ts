@@ -43,6 +43,8 @@ export interface ChatSendQueue<TItem extends ChatSendQueueItem, TAck> {
   resume: () => void;
   /** 会话身份结束(登出、换账号):全部判失败,之后到的 ack 一律忽略。 */
   abortAll: (error: Error) => void;
+  /** 还有没结果的消息(排着、在发、等 ack)。 */
+  hasPending: () => boolean;
 }
 
 interface PendingSend<TItem, TAck> {
@@ -193,5 +195,5 @@ export function createChatSendQueue<TItem extends ChatSendQueueItem, TAck>(
     }
   }
 
-  return { enqueue, resume, abortAll };
+  return { enqueue, resume, abortAll, hasPending: () => queues.size > 0 };
 }

@@ -15,7 +15,7 @@ import {
   getRegisteredPushToken,
   subscribeRegisteredPushToken,
 } from '@/features/notifications/services/push-token-registration';
-import { loadChatConversations, loadChatHistory } from './api';
+import { loadChatConversations, loadChatHistory, markLocalTimelinesRead } from './api';
 import {
   resetChatSync,
   resumePendingChatSync,
@@ -39,6 +39,9 @@ import { dismissChatNotifications } from './chat-notifications';
 import { prunePendingMedia, resolvePendingMediaUri } from './pending-media';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import { createChatSendQueue } from './send-queue';
+import { pickEagerTimelineIds } from './eager-hydration';
+import { deliveredCatchUpReports } from './delivered-catch-up';
+import { isMessageDeletedLocally } from './deleted-messages';
 import {
   CHAT_EVENTS,
   CHAT_WS_PATH,
@@ -295,6 +298,21 @@ function currentAppState(): ChatAppState {
 let appState: ChatAppState = currentAppState();
 /** 服务端刚说过「token 到期」:紧跟着的那次断开要去刷新 token,而不是干等。 */
 let sessionExpiredNotified = false;
+/**
+ * 安卓后台挂起中(见 suspendChatForBackground)。挂着期间 token 轮换之类触发的
+ * connectChat 一律不连 —— 否则后台里一次 token 刷新就把连接悄悄连回去,之后再没人断。
+ * 只有 App 真的不在后台了才作数,所以回前台那次 connectChat 照常连上,不靠谁记得清标志。
+ */
+let suspendedForBackground = false;
+/**
+ * 连接断开那一刻本机记的各会话末条高度。重连对账时拿服务端快照跟它比,补报断开期间
+ * 到达的单聊「已送达」(见 deliveredCatchUpReports)。
+ *
+ * 必须断开时记,不能等重连时现读 store:回前台到握手完成之间可能有 REST 先把会话列表
+ * 写进 store,差异就被抹平了。首连没有这份,冷启动不补报 —— 那时 store 常常还是空的,
+ * 每个单聊都算「新到」,一次性把服务端的送达限流打满。
+ */
+let deliveredBaseline: ReadonlyMap<string, number> | null = null;
 let tokenRefreshInFlight = false;
 let tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -349,6 +367,10 @@ export function createDeliveryId(): string {
 }
 
 export function connectChat(token: string, userId: string): void {
+  if (suspendedForBackground) {
+    if (currentAppState() === 'background') return;
+    suspendedForBackground = false;
+  }
   const store = useChatStore.getState();
   // 已连着、而且连的就是这个人:no-op(回前台补连、token 轮换都走这条)。
   // 身份不同必须重连:冷启动时磁盘上的 user 快照可能缺失或属于上一个账号,
@@ -370,6 +392,7 @@ export function connectChat(token: string, userId: string): void {
     flushingReads = false;
     readFlushRequested = false;
     hadConnectedForUser = null;
+    deliveredBaseline = null;
     // 换账号是真正的会话边界:新账号的第一次连不上,值得单独报一次。
     reportedCurrentConnectOutage = false;
     serverReconnectAttempt = 0;
@@ -494,6 +517,7 @@ export function connectChat(token: string, userId: string): void {
       reason: classifyDisconnectReason(reason),
       platform: Platform.OS,
     });
+    captureDeliveredBaseline();
     useChatStore.getState().setConnected(false);
     if (
       connectedAt !== null &&
@@ -579,6 +603,7 @@ export function disconnectChat(): void {
   // 只有真登出/换账号才丢待发已读:那些水位属于上一个会话身份。
   pendingReads.clear();
   hadConnectedForUser = null;
+  deliveredBaseline = null;
   // 同步游标只清内存那份:本地库里按账号分库记着,同一账号再登录接着用。
   resetChatSync();
   // 登出是真正的会话边界:store.reset() 之后 currentUserId 归 null,下次
@@ -601,6 +626,7 @@ export function disconnectChat(): void {
  * 重连由 connectChat 负责,它自己会在换账号时清 store。
  */
 export function suspendChat(): void {
+  if (socket?.connected) captureDeliveredBaseline();
   sessionGen += 1;
   cancelConversationBackfill();
   // 刻意不清 pendingReads:token 轮换会走这条路,清掉的话那些还没拿到 ack 的
@@ -617,6 +643,29 @@ export function suspendChat(): void {
   teardownSocket();
   useChatStore.getState().setConnected(false);
   useChatStore.getState().setConnecting(false);
+}
+
+/**
+ * 安卓后台待满一分钟:断开聊天连接,新消息交给推送(见 session-bootstrap)。
+ * 数据全留着(同 suspendChat);回前台 connectChat 重连、对账、补报送达。
+ */
+export function suspendChatForBackground(): void {
+  suspendedForBackground = true;
+  logClientDiagnostic('chat.ws.background_suspended', { platform: Platform.OS });
+  suspendChat();
+}
+
+/** 记下断开那一刻的末条高度;已经记着的(重连还没成功又断了)保留最早那份。 */
+function captureDeliveredBaseline(): void {
+  if (deliveredBaseline) return;
+  deliveredBaseline = new Map(
+    useChatStore
+      .getState()
+      .conversations.map((conversation) => [
+        conversation.id,
+        conversation.lastMessage?.height ?? 0,
+      ]),
+  );
 }
 
 function clearTokenRefreshTimer(): void {
@@ -752,6 +801,25 @@ async function restorePendingMediaPreview(
   };
 }
 
+/** 冷启动预读时间线的会话数(列表首屏 + 最近常聊的那些)。 */
+const EAGER_TIMELINE_CONVERSATIONS = 30;
+
+async function pickEagerHydration(
+  conversations: readonly import('./protocol').ChatConversationDto[],
+): Promise<Set<string> | null> {
+  const outbox = await readOutboxEntries();
+  if (!outbox) return null;
+  const mustInclude = new Set(outbox.map((entry) => entry.conversationId));
+  for (const conversation of conversations) {
+    const last = conversation.lastMessage;
+    if (last && isMessageDeletedLocally(last.id, last.d)) mustInclude.add(conversation.id);
+  }
+  return pickEagerTimelineIds(conversations, {
+    limit: EAGER_TIMELINE_CONVERSATIONS,
+    mustInclude,
+  });
+}
+
 async function hydrateFromLocalDb(
   userId: string,
   generation: number,
@@ -779,9 +847,16 @@ async function hydrateFromLocalDb(
     // 离线用户得盯着空列表等它跑完 —— 而列表本身早就在手上了。
     if (!isCurrentSession()) return;
     useChatStore.getState().hydrateLocalSnapshot(conversations, {});
+    // 只预读最近活跃的那批会话的时间线:群一多,逐会话串行读就是几百次查询、上万条消息
+    // 常驻内存。其余会话打开时由 loadChatHistory 从本地库补读(内存为空就先读本地)。
+    // 两类无论多旧都要预读:有待发消息的(下面要靠时间线认出「其实已经发出去了」),
+    // 末条被本地删掉的(会话预览要靠时间线回退到上一条)。读不出 outbox 时全部预读。
+    const eagerIds = await pickEagerHydration(conversations);
+    if (!isCurrentSession()) return;
     const timelines: Record<string, import('./protocol').ChatMessageDto[]> = {};
     for (const conversation of conversations) {
       if (!isCurrentSession()) return;
+      if (eagerIds && !eagerIds.has(conversation.id)) continue;
       timelines[conversation.id] = await readRecentLocalMessages(
         conversation.id,
         50,
@@ -789,6 +864,7 @@ async function hydrateFromLocalDb(
       if (!isCurrentSession()) return;
     }
     if (!isCurrentSession()) return;
+    markLocalTimelinesRead(Object.keys(timelines));
     useChatStore.getState().hydrateLocalSnapshot(conversations, timelines);
     // 等待 SQLite/FTS/outbox 的到期删除真正落盘，不能让后面的 outbox 水合把
     // 已过期的失败发送重新插回时间线。
@@ -886,9 +962,21 @@ async function hydrateFromLocalDb(
  */
 function resyncConversations(userId: string, isReconnect: boolean): void {
   const prioritize = useChatStore.getState().activeConversationId;
+  const baseline = isReconnect ? deliveredBaseline : null;
+  deliveredBaseline = null;
   void loadChatConversations()
     .then((conversations) => {
       if (useChatStore.getState().currentUserId !== userId) return;
+      // 断开期间到的消息只走了推送,实时那条「收到即报送达」没机会跑。
+      if (baseline) {
+        for (const report of deliveredCatchUpReports(
+          baseline,
+          conversations,
+          userId,
+        )) {
+          reportChatDelivered(report.conversationId, report.height);
+        }
+      }
       return syncConversationsFromSnapshot(conversations, { prioritize });
     })
     .catch((err: unknown) => {
@@ -917,6 +1005,11 @@ function resyncConversations(userId: string, isReconnect: boolean): void {
 
 export function isChatConnected(): boolean {
   return socket?.connected === true;
+}
+
+/** 发送队列里还有没结果的消息(排着、在发、等 ack)。 */
+export function hasQueuedChatSends(): boolean {
+  return sendQueue.hasPending();
 }
 
 /** 会话身份结束(登出、换账号)时,还没发出去的消息拿到的错误。 */

@@ -61,7 +61,7 @@ test('userVipStore force-refreshes mounted names only after a real background in
   assert.match(store, /AppState\.addEventListener\('change'/);
   assert.match(store, /status !== 'active'/);
   assert.match(store, /REAL_BACKGROUND_REFRESH_MS/);
-  assert.match(store, /awayDuration < REAL_BACKGROUND_REFRESH_MS/);
+  assert.match(store, /awayDuration >= REAL_BACKGROUND_REFRESH_MS/);
   assert.match(store, /fetchedAt\.delete\(userId\)/);
 });
 

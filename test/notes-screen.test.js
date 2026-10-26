@@ -732,3 +732,19 @@ test('EditNoteScreen: 群名片即群绑定——只列群主的群，源笔记�
   assert.match(src, /t\('notes\.edit\.groupPickerHint'/);
   assert.match(cache, /conversation\.myRole === 'OWNER'/);
 });
+
+test('the notes list reuses unchanged rows and skips focus reloads while nothing changed', () => {
+  // 笔记多:进出编辑页每次都整页重拉几百条、整表重渲染,很费电。
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/notes/screens/NotesScreen.tsx'),
+    'utf8',
+  );
+  assert.match(source, /setNotes\(\(current\) => reuseUnchanged\(current, notesData\)\)/);
+  assert.match(source, /setGroups\(\(current\) => reuseUnchanged\(current, groupsData\)\)/);
+  // 跳过重拉的四个条件缺一不可:两个失效信号没变、在窗口内、之后没有任何笔记写请求。
+  assert.match(source, /last\.version === noteListVersion/);
+  assert.match(source, /last\.recovery === noteStatusRecovery/);
+  assert.match(source, /last\.epoch === epoch/);
+  assert.match(source, /age >= 0 &&\s*age <= NOTES_FOCUS_RELOAD_FRESH_MS/);
+  assert.match(source, /!notesMutatedSince\(last\.at\)/);
+});

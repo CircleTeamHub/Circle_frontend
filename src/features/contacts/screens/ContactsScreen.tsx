@@ -10,7 +10,9 @@ import {
   type ContactFriendSection,
 } from '@/features/contacts/contact-friends';
 import { getUserProfileHref } from '@/features/user/utils/routes';
-import { fetchFriends, type FriendProfile } from '@/services/api/friends';
+import { fetchFriends, friendsMutatedSince, type FriendProfile } from '@/services/api/friends';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { reuseUnchanged } from '@/utils/structural-sharing';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Spacing, Typography, useTheme } from '@/theme';
@@ -137,14 +139,24 @@ export default function ContactsScreen() {
     (state) => state.refresh,
   );
 
+  // 回到通讯录时:刚拉过、之后没有好友相关的写请求、好友动态(对方通过申请等实时事件)
+  // 也没变,就不重拉 —— 好友多的用户进出聊天页、资料页每次都整表重拉很费电。
+  const friendsReloadGate = useFocusReloadGate({
+    key: unreadFriendActivityCount,
+    mutatedSince: friendsMutatedSince,
+  });
+
   const loadFriends = useCallback(async () => {
+    const startedAt = Date.now();
     setLoading(true);
 
     try {
       const nextFriends = await fetchFriends();
       if (!mountedRef.current) return;
-      setFriends(nextFriends);
+      // 内容没变的好友沿用旧对象,列表行不必全部重渲染。
+      setFriends((current) => reuseUnchanged(current, nextFriends));
       setError(null);
+      friendsReloadGate.markLoaded(startedAt);
     } catch (error) {
       if (!mountedRef.current) return;
       setError(t('contacts.loadFailed'));
@@ -152,14 +164,14 @@ export default function ContactsScreen() {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [t]);
+  }, [friendsReloadGate, t]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadFriends();
+      if (!friendsReloadGate.shouldSkip()) void loadFriends();
       void refreshUnreadFriendActivityCount();
       void refreshGroupAdmissionUnread().catch(error => reportHandledFailure('groupAdmission', 'unread', error));
-    }, [loadFriends, refreshUnreadFriendActivityCount]),
+    }, [friendsReloadGate, loadFriends, refreshUnreadFriendActivityCount]),
   );
 
   useEffect(

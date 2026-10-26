@@ -146,6 +146,9 @@ function loadChatStore(overrides = {}) {
     }
     if (request === './local-db') return overrides.localDb
       ? { ...__localDbStub, ...overrides.localDb } : __localDbStub;
+    if (request === '@/services/e2ee/lifecycle' && overrides.e2eeLifecycle) {
+      return overrides.e2eeLifecycle;
+    }
     if (request === '@/storage') {
       return { storage: { set: () => {}, getString: () => undefined } };
     }
@@ -167,7 +170,12 @@ function loadConversationSnapshotApi(useChatStore) {
       useAuthStore: { getState: () => authState },
     };
     if (request === './store') return { useChatStore };
-    if (request === './deleted-messages') return { withoutLocallyDeleted: (messages) => messages };
+    if (request === './deleted-messages') {
+      return {
+        withoutLocallyDeleted: (messages) => messages,
+        isMessageDeletedLocally: () => false,
+      };
+    }
     if (request === './clear-history-target') return { getKnownClearTargetHeight: () => undefined };
     if (request === '../features/chat/chat-history-date-window') return {};
     if (request === './local-db') return __localDbStub;
@@ -2158,4 +2166,445 @@ test('legacy sync DTOs without a fixed expiry still clear elapsed burn content',
  assert.equal(sweeps,1);
  assert.equal(store.conversations[0].lastMessage,null);
  assert.equal(store.messagesByConversation['conv-1'].length,0);
+});
+
+// 回到消息页的重拉多半一模一样:没变的会话沿用旧对象,全都没变连数组都不换,
+// 订阅方(会话列表的行、按会话取值的选择器)一个都不用重渲染。群多时这次重拉很贵。
+test('a snapshot reload that changed nothing keeps the same conversations array', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conversation({ id: 'conv-1', peer: { id: 'p1', nickname: 'A', avatarUrl: null } }),
+    conversation({ id: 'conv-2', peer: { id: 'p2', nickname: 'B', avatarUrl: null } }),
+  ]);
+  const before = useChatStore.getState().conversations;
+
+  useChatStore.getState().setConversations([
+    conversation({ id: 'conv-1', peer: { id: 'p1', nickname: 'A', avatarUrl: null } }),
+    conversation({ id: 'conv-2', peer: { id: 'p2', nickname: 'B', avatarUrl: null } }),
+  ]);
+  assert.equal(useChatStore.getState().conversations, before);
+});
+
+test('a snapshot reload replaces only the conversations that changed', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conversation({ id: 'conv-1', unreadCount: 0 }),
+    conversation({ id: 'conv-2', unreadCount: 0 }),
+  ]);
+  const [firstBefore, secondBefore] = useChatStore.getState().conversations;
+
+  useChatStore.getState().setConversations([
+    conversation({ id: 'conv-1', unreadCount: 0 }),
+    conversation({ id: 'conv-2', unreadCount: 3 }),
+  ]);
+  const after = useChatStore.getState().conversations;
+  const byId = (id) => after.find((item) => item.id === id);
+  assert.equal(byId(firstBefore.id), firstBefore);
+  assert.notEqual(byId(secondBefore.id), secondBefore);
+  assert.equal(byId('conv-2').unreadCount, 3);
+});
+
+// ---- 单个会话快照(GET /chat/conversations/:id)合并 -------------------------
+// 会话元信息变更事件只刷新那一个会话;合并要和全量快照走同一套对账。
+
+test('a single conversation snapshot replaces only that row', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conversation({ id: 'conv-1', muted: false }),
+    conversation({ id: 'conv-2', muted: false }),
+  ]);
+  const before = useChatStore.getState();
+  const untouched = before.conversations.find((c) => c.id === 'conv-2');
+
+  useChatStore.getState().mergeConversationSnapshot(conversation({ id: 'conv-1', muted: true }));
+
+  const after = useChatStore.getState();
+  assert.equal(after.conversations.find((c) => c.id === 'conv-1').muted, true);
+  assert.equal(after.conversations.find((c) => c.id === 'conv-2'), untouched);
+  // 这不是一份完整快照:不能动快照序号与「已加载」标记。
+  assert.equal(after.conversationsSnapshotSeq, before.conversationsSnapshotSeq);
+  assert.equal(after.conversationsSnapshotLoaded, before.conversationsSnapshotLoaded);
+});
+
+test('an unchanged single snapshot leaves the list array untouched', () => {
+  const { useChatStore } = loadChatStore();
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
+  const before = useChatStore.getState().conversations;
+
+  useChatStore.getState().mergeConversationSnapshot(conversation({ id: 'conv-1' }));
+
+  assert.equal(useChatStore.getState().conversations, before);
+});
+
+test('a single snapshot adds a newly joined conversation in sorted position', () => {
+  const { useChatStore } = loadChatStore();
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
+
+  useChatStore.getState().mergeConversationSnapshot(conversation({ id: 'conv-new', pinned: true }));
+
+  // store 在 vm 里跑,数组原型跨上下文,先转成本上下文数组再比。
+  assert.deepEqual(
+    Array.from(useChatStore.getState().conversations, (c) => c.id),
+    ['conv-new', 'conv-1'],
+  );
+});
+
+test('a single snapshot requested before a live message does not roll its preview back', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  const first = msg({ id: 'm1', height: 1 });
+  store.setConversations([conversation({ id: 'conv-1', lastMessage: first })]);
+  const requestRevision = useChatStore.getState().conversationPreviewRevision;
+
+  // 请求发出之后才到的实时消息。
+  useChatStore.getState().applyIncomingMessage(msg({ id: 'm2', height: 2 }));
+
+  useChatStore
+    .getState()
+    .mergeConversationSnapshot(conversation({ id: 'conv-1', lastMessage: first }), requestRevision);
+
+  assert.equal(useChatStore.getState().conversations[0].lastMessage.id, 'm2');
+});
+
+test('a single snapshot with a raised clear floor drops the cleared part of the timeline', () => {
+  // 另一台设备清空过:单个会话快照带回更高的清空水位,本机水位之下的消息要一起清掉。
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'conv-1' })]);
+  store.ingestMessages('conv-1', [
+    msg({ id: 'a', height: 1 }),
+    msg({ id: 'b', height: 2 }),
+    msg({ id: 'c', height: 3 }),
+  ]);
+
+  useChatStore
+    .getState()
+    .mergeConversationSnapshot(conversation({ id: 'conv-1', clearedBeforeHeight: 2 }));
+
+  const remaining = useChatStore.getState().messagesByConversation['conv-1'] ?? [];
+  assert.deepEqual(Array.from(remaining, (m) => m.id), ['c']);
+  assert.equal(useChatStore.getState().clearedBeforeHeightByConversation['conv-1'], 2);
+});
+
+test('a single snapshot that changes the burn policy advances the self-destruct epoch', () => {
+  const { useChatStore } = loadChatStore();
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1', burnDurationSec: null })]);
+  const before = useChatStore.getState().selfDestructPolicyEpoch;
+
+  useChatStore.getState().mergeConversationSnapshot(
+    conversation({
+      id: 'conv-1',
+      burnDurationSec: 60,
+      burnStartedAt: '2026-08-05T12:00:00.000Z',
+    }),
+  );
+
+  assert.equal(useChatStore.getState().selfDestructPolicyEpoch, before + 1);
+});
+
+// ---- 焚毁清理只扫到期的会话 ------------------------------------------------
+// 原来每收到一条焚毁消息、每到一个到期时刻,都把内存里全部会话的全部消息扫一遍
+// (每条解析三四次时间)。焚毁群一活跃,收消息的开销就翻倍。
+
+/** 可控的时钟:store 里的 Date.now() 跟着走,顺便数 Date.parse 的次数(扫了多少条)。 */
+function burnClock() {
+  const clock = { now: Date.now(), parses: 0 };
+  class FakeDate extends Date {
+    constructor(...args) {
+      if (args.length === 0) super(clock.now);
+      else super(...args);
+    }
+    static now() {
+      return clock.now;
+    }
+    static parse(value) {
+      clock.parses += 1;
+      return Date.parse(value);
+    }
+  }
+  const timers = new Map();
+  let nextTimer = 1;
+  return {
+    clock,
+    globals: {
+      Date: FakeDate,
+      setTimeout: (fn, ms) => {
+        const id = nextTimer++;
+        timers.set(id, { fn, at: clock.now + ms });
+        return id;
+      },
+      clearTimeout: (id) => {
+        timers.delete(id);
+      },
+    },
+    /** 排着的定时器各自还要等多久。 */
+    pendingDelays: () => [...timers.values()].map((timer) => timer.at - clock.now),
+    advance(ms) {
+      clock.now += ms;
+      for (const [id, timer] of [...timers]) {
+        if (timer.at > clock.now) continue;
+        timers.delete(id);
+        timer.fn();
+      }
+    },
+  };
+}
+
+const burnFlush = () => new Promise((resolve) => setImmediate(resolve));
+
+function burnMessage(conversationId, index, expiresAt) {
+  return msg({
+    id: `${conversationId}-${index}`,
+    conversationId,
+    height: index + 1,
+    burnExpiresAt: new Date(expiresAt).toISOString(),
+  });
+}
+
+function seedBurnConversations(useChatStore, clock) {
+  useChatStore.getState().setConversations([
+    conversation({ id: 'busy' }),
+    conversation({ id: 'quiet' }),
+  ]);
+  const quietHistory = Array.from({ length: 200 }, (_, index) =>
+    burnMessage('quiet', index, clock.now + 3_600_000),
+  );
+  return useChatStore.getState().ingestMessages('quiet', quietHistory);
+}
+
+test('an incoming burn message re-scans only its own conversation', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+  // 对照:全量扫确实要把 quiet 的 200 条都过一遍。
+  env.clock.parses = 0;
+  void useChatStore.getState().purgeExpiredBurnMessages();
+  assert.ok(env.clock.parses >= 200, `full sweep parsed ${env.clock.parses}`);
+
+  env.clock.parses = 0;
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 30_000)]);
+  await burnFlush();
+
+  assert.ok(env.clock.parses < 50, `parsed ${env.clock.parses} timestamps`);
+  assert.equal(useChatStore.getState().messagesByConversation.quiet.length, 200);
+});
+
+test('a burn policy change re-scans only that conversation', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+
+  env.clock.parses = 0;
+  useChatStore
+    .getState()
+    .applyBurnDuration('busy', 60, new Date(env.clock.now).toISOString());
+  await burnFlush();
+
+  assert.ok(env.clock.parses < 50, `parsed ${env.clock.parses} timestamps`);
+});
+
+test('a due message is removed on time without re-scanning the other conversations', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 10_000)]);
+  await burnFlush();
+
+  env.clock.parses = 0;
+  env.advance(10_001);
+  await burnFlush();
+
+  assert.equal(useChatStore.getState().messagesByConversation.busy.length, 0);
+  assert.equal(useChatStore.getState().messagesByConversation.quiet.length, 200);
+  assert.ok(env.clock.parses < 50, `parsed ${env.clock.parses} timestamps`);
+});
+
+test('burn messages that skipped registration are still swept within a minute', async () => {
+  // 兜底:定时器排着时至少每分钟全量扫一次,接住没经过登记的(比如不落盘的写入)。
+  // 这里定时器由 quiet 那 200 条(一小时后到期)排着。
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 20_000)], {
+      persist: false,
+    });
+  await burnFlush();
+
+  env.advance(60_001);
+  await burnFlush();
+  assert.equal(useChatStore.getState().messagesByConversation.busy.length, 0);
+  assert.equal(useChatStore.getState().messagesByConversation.quiet.length, 200);
+});
+
+test('a burn preview from a single-conversation refresh is cleared on time', async () => {
+  // 预览可能是一条本机没收到的焚毁消息(漏了实时那条,单个会话刷新带回来的)。
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  const refreshed = burnMessage('busy', 0, env.clock.now + 10_000);
+  useChatStore
+    .getState()
+    .mergeConversationSnapshot(
+      conversation({ id: 'busy', lastMessage: refreshed, lastMessageAt: refreshed.createdAt }),
+    );
+  const edited = burnMessage('quiet', 500, env.clock.now + 10_000);
+  useChatStore.getState().upsertConversation(
+    conversation({ id: 'quiet', lastMessage: edited, lastMessageAt: edited.createdAt }),
+  );
+  await burnFlush();
+
+  env.advance(10_001);
+  await burnFlush();
+
+  const byId = Object.fromEntries(
+    useChatStore.getState().conversations.map((item) => [item.id, item]),
+  );
+  assert.equal(byId.busy.lastMessage, null);
+  assert.notEqual(byId.quiet.lastMessage?.id, edited.id);
+});
+
+test('an already-due conversation is swept by the next burn message anywhere', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 10_000)]);
+  await burnFlush();
+
+  env.clock.now += 10_001; // 定时器还没来得及跑
+  await useChatStore
+    .getState()
+    .ingestMessages('quiet', [burnMessage('quiet', 300, env.clock.now + 60_000)]);
+  await burnFlush();
+
+  assert.equal(useChatStore.getState().messagesByConversation.busy.length, 0);
+});
+
+test('a scoped sweep that expires nothing skips the whole-store purges', async () => {
+  // 本地库那一趟是整表 UPDATE/DELETE,加密正文那一趟是整个正文库:都不能每条消息跑一次。
+  const env = burnClock();
+  let localSweeps = 0;
+  let bodySweeps = 0;
+  const { useChatStore } = loadChatStore({
+    globals: env.globals,
+    localDb: {
+      purgeExpiredLocalMessages: async () => {
+        localSweeps += 1;
+      },
+    },
+    e2eeLifecycle: {
+      purgeEncryptedBody: (value) => {
+        if (value.expired) bodySweeps += 1;
+      },
+    },
+  });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+
+  localSweeps = 0;
+  bodySweeps = 0;
+  await useChatStore
+    .getState()
+    .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 10_000)]);
+  await burnFlush();
+  assert.deepEqual([localSweeps, bodySweeps], [0, 0]);
+
+  env.advance(10_001);
+  await burnFlush();
+  assert.equal(localSweeps, 1, '真的过期了:本地库要清');
+
+  await useChatStore.getState().purgeExpiredBurnMessages();
+  assert.deepEqual([localSweeps, bodySweeps], [2, 1], '全量扫两样都跑');
+});
+
+test('a device clock set back does not leave the purge timer spinning', async () => {
+  // 时钟往回调一个月:算出来的延时超过定时器上限,引擎会按 1ms 跑。
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+
+  env.clock.now -= 30 * 24 * 3_600_000;
+  await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: [] });
+
+  const delays = env.pendingDelays();
+  assert.ok(delays.length > 0);
+  assert.ok(
+    delays.every((delay) => delay <= 60_000),
+    `delays ${delays.join(',')}`,
+  );
+});
+
+test('logging out forgets the burn schedule', async () => {
+  const env = burnClock();
+  const { useChatStore } = loadChatStore({ globals: env.globals });
+  await seedBurnConversations(useChatStore, env.clock);
+  await burnFlush();
+  assert.ok(env.pendingDelays().length > 0);
+
+  useChatStore.getState().reset();
+  assert.equal(env.pendingDelays().length, 0);
+  // 上一个账号的到期记录也不能留:否则下一次点名扫又按它们排起定时器。
+  await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: [] });
+  assert.equal(env.pendingDelays().length, 0);
+});
+
+// ---- 加密正文的清理只能点名到那一条 -----------------------------------------
+test('an expired encrypted message without an envelope purges only its own body', async () => {
+  // 撤回后的加密消息正文是空对象、没有信封。原来按 clientMessageId 清理时传了
+  // undefined,等于「这个会话的所有加密正文」—— 其余消息全变成解不开。
+  const purges = [];
+  const { useChatStore } = loadChatStore({
+    e2eeLifecycle: { purgeEncryptedBody: (value) => purges.push({ ...value }) },
+  });
+  const past = new Date(Date.now() - 60_000).toISOString();
+  const revoked = msg({
+    id: 'srv-revoked',
+    height: 1,
+    type: 'encrypted-text',
+    content: {},
+    burnExpiresAt: past,
+  });
+  const sealed = msg({
+    id: 'srv-sealed',
+    height: 2,
+    type: 'encrypted-text',
+    content: { envelope: { clientMessageId: 'client-sealed' } },
+    burnExpiresAt: past,
+  });
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
+  await useChatStore.getState().ingestMessages('conv-1', [revoked, sealed], { persist: false });
+  purges.length = 0;
+
+  await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: ['conv-1'] });
+
+  assert.deepEqual(purges, [
+    { conversationId: 'conv-1', serverMessageId: 'srv-revoked' },
+    { conversationId: 'conv-1', clientMessageId: 'client-sealed' },
+  ]);
+});
+
+test('clearing a conversation locally asks for its whole encrypted-body purge explicitly', () => {
+  const purges = [];
+  const { useChatStore } = loadChatStore({
+    e2eeLifecycle: { purgeEncryptedBody: (value) => purges.push({ ...value }) },
+  });
+  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
+  purges.length = 0;
+
+  useChatStore.getState().clearConversationLocal('conv-1', null);
+
+  assert.deepEqual(purges, [{ conversationId: 'conv-1', wholeConversation: true }]);
 });

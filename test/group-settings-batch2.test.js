@@ -121,7 +121,8 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   assert.match(screen, /updateGroupChatPolicies\(conversationID, \{ \[key\]: next \}\)/);
   // 群管理从圈子详情进入时 store 可能还没有会话 DTO;进入页面必须刷新
   // policies,否则成员权限三个开关没有可写的状态。
-  assert.match(screen, /const conversationsPromise = loadChatConversations\(\)\.catch/);
+  // 只需要这一个群的 DTO(policies):单个取,失败才退回整表(见 refreshConversationOrList)。
+  assert.match(screen, /const conversationsPromise = refreshConversationOrList\(conversationID\)\.catch/);
   assert.match(screen, /await conversationsPromise;/);
   assert.match(screen, /disabled: policies === null/);
   assert.match(screen, /transferGroupChatOwner\(conversationID, member\.userId\)/);
@@ -137,7 +138,8 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   assert.doesNotMatch(screen, /patchConversation\(\{ policies \}\)/);
   // 回滚之后再重拉一次:服务端上真正的状态说了算。
   assert.match(screen, /const resyncConversations = useCallback\(/);
-  assert.match(screen, /void loadChatConversations\(\)/);
+  // 只重拉这一个群(失败才退回整表),服务端上真正的状态说了算。
+  assert.match(screen, /void refreshConversationOrList\(conversationID\)/);
   // 群主转让只属于独立群聊;提升成员上限只属于圈子群。
   assert.match(screen, /isStandaloneGroup\s*\?\s*renderLinkRow\(/);
   assert.match(screen, /pathname: '\/\(tabs\)\/profile\/group-expansion'/);
@@ -223,7 +225,8 @@ test('member profiles and friend requests honor the two member-permission switch
   assert.match(info, /member\.userId !== currentUserID &&\s*\n\s*!canViewMemberProfiles/);
 
   const detail = readChatDetailSource();
-  assert.match(detail, /const canViewMemberProfilesByPolicy = useChatStore/);
+  // 字段从按 id 查到的那一个会话对象上派生(聊天页只查一次会话,见 chat-detail-conversation-selector)。
+  assert.match(detail, /const canViewMemberProfilesByPolicy = allowsMemberProfiles\(\{/);
   assert.match(detail, /viaConversationID: conversationID/);
 
   const search = read('src/features/chat/screens/SearchGroupMembersScreen.tsx');
@@ -276,8 +279,10 @@ test('the invite screen survives a forbidden member directory', () => {
 
 test('chat detail locks the composer under group-wide mute for non-managers', () => {
   const detail = readChatDetailSource();
-  assert.match(detail, /const groupMuteAllActive = useChatStore/);
-  assert.match(detail, /return !isGroupManager\(conversation\.myRole \?\? null\);/);
+  assert.match(
+    detail,
+    /const groupMuteAllActive =\s*Boolean\(conversation\?\.muteAll\) && !isGroupManager\(conversation\?\.myRole \?\? null\);/,
+  );
   assert.match(detail, /const composerLocked = selfSilenced \|\| groupMuteAllActive;/);
   assert.match(detail, /chat\.youAreMutedAll/);
 });

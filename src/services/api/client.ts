@@ -28,6 +28,11 @@ type RequestOptions = {
   accessToken?: string | null;
   /** @deprecated Bodies are never logged; retained for caller compatibility. */
   logResponseBody?: boolean;
+  /**
+   * 成功响应的响应头(分页信号 X-Has-More / X-Next-Cursor 只走头)。只在 2xx 时回调;
+   * 网页端跨域读不到后端没有在 CORS exposedHeaders 里放行的头。
+   */
+  onResponseHeaders?: (headers: Headers) => void;
 };
 
 type ApiResponse<T> = {
@@ -602,20 +607,24 @@ export async function apiClient<T>(
         );
       }
 
-      return unwrapResponse(retryRequest.res, retryRequest.payload, {
+      const retried = unwrapResponse(retryRequest.res, retryRequest.payload, {
         endpoint,
         method: options.method ?? 'GET',
         requestId: retryRequest.requestId,
         durationMs: retryRequest.durationMs,
       });
+      options.onResponseHeaders?.(retryRequest.res.headers);
+      return retried;
     }
 
-    return unwrapResponse(initialRequest.res, initialRequest.payload, {
+    const data = unwrapResponse(initialRequest.res, initialRequest.payload, {
       endpoint,
       method: options.method ?? 'GET',
       requestId: initialRequest.requestId,
       durationMs: initialRequest.durationMs,
     });
+    options.onResponseHeaders?.(initialRequest.res.headers);
+    return data;
   } catch (error) {
     // Report unexpected backend failures (network + 5xx) to Sentry; expected
     // 4xx (validation/auth/not-found) are left to normal handling. Behavior is

@@ -12,11 +12,19 @@ test('messages screen renders pinned conversations as compact grouped surfaces w
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /pinnedSurface/);
-  assert.match(source, /type PinnedGroupPosition = "single" \| "first" \| "middle" \| "last" \| "none"/);
-  assert.match(source, /getPinnedGroupPosition/);
+  const pinnedLayoutSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/utils/pinned-layout.ts'),
+    'utf8',
+  );
+  assert.match(
+    pinnedLayoutSource,
+    /type PinnedGroupPosition = 'single' \| 'first' \| 'middle' \| 'last' \| 'none'/,
+  );
+  // 置顶分组形状收在 pinned-layout 工具里,按签名串缓存(见下面的稳定性用例)。
+  assert.match(source, /from "@\/features\/messages\/utils\/pinned-layout"/);
   assert.match(
     source,
-    /pinnedGroupPosition=\{getPinnedGroupPosition\(displayedConversations, index\)\}/,
+    /pinnedGroupPosition=\{pinnedLayout\.positions\.get\(item\.id\) \?\? "none"\}/,
   );
   assert.match(source, /getPinnedRowStyle\(pinnedGroupPosition\)/);
   assert.match(source, /getPinnedSurfaceStyle\(pinnedGroupPosition\)/);
@@ -24,9 +32,10 @@ test('messages screen renders pinned conversations as compact grouped surfaces w
   assert.match(source, /pinnedRowMiddle/);
   assert.match(source, /pinnedSurfaceMiddle/);
   assert.doesNotMatch(source, /name="pin"/);
-  assert.match(source, /const hiddenPinnedSeparatorIDs = useMemo/);
-  assert.match(source, /displayedConversations\[index \+ 1\]\?\.pinned/);
-  assert.match(source, /hiddenPinnedSeparatorIDs\.has\(leadingItem\.id\) \? null : <Divider \/>/);
+  assert.match(
+    source,
+    /pinnedLayout\.hiddenSeparatorIds\.has\(leadingItem\.id\) \? null : <Divider \/>/,
+  );
   assert.doesNotMatch(source, /trailingItem/);
   assert.match(source, /ItemSeparatorComponent=\{renderSeparator\}/);
 });
@@ -62,7 +71,13 @@ test('pinned fold toggle sits in the threshold conversation card and folds both 
   // 箭头与未读数共享右下角尾部区域，点击箭头不能冒泡进入会话。
   assert.match(source, /rowBottomTrailing/);
   assert.match(source, /event\.stopPropagation\(\)/);
-  assert.match(source, /const nextPinned = Boolean\(items\[index \+ 1\]\?\.pinned\)/);
+  assert.match(
+    fs.readFileSync(
+      path.join(process.cwd(), 'src/features/messages/utils/pinned-layout.ts'),
+      'utf8',
+    ),
+    /const nextPinned = Boolean\(rows\[index \+ 1\]\?\.pinned\)/,
+  );
 });
 
 test('conversation row keeps mute, unread, and pinned-fold indicators in one non-overlapping trailing lane', () => {
@@ -366,7 +381,10 @@ test('会话行静止时不画滑动操作层——否则红色删除键会从�
   // 上面盖的 swipeForeground 带 borderRadius，圆角那一小块不上色，
   // 底下的红就从缺口里露出来。行背景越暗，这道红越扎眼。
   // 根治：静止（translateX = 0）时把操作层的不透明度压到 0，压根不画。
-  assert.match(source, /const swipeActionsOpacity = translateX\.interpolate\(/);
+  assert.match(
+    source,
+    /const swipeActionsOpacity = useMemo\(\s*\(\) =>\s*translateX\.interpolate\(/,
+  );
   assert.match(source, /outputRange: \[1, 1, 0\]/);
   assert.match(source, /<Animated\.View style=\{\[s\.swipeActions, \{ opacity: swipeActionsOpacity \}\]\}>/);
   // 操作层不能再是静态 View，否则 opacity 绑不上动画值。
@@ -449,4 +467,105 @@ test('pinned rows recolour time/preview/mute icon via precomputed styles and ble
   );
   assert.match(source, /badgeBorderColor=\{badgeBorderColor\}/);
   assert.doesNotMatch(source, /badgeBorderColor=\{rowBackgroundColor\}/);
+});
+
+// 发热回归:任何一个群来一条消息,store 都会重排出新的 conversations 数组。
+// 行回调 / renderItem 只要依赖整张列表,每一行的 memo 就全部失效,100 个群就是
+// 每条消息重画 ~100 行;切到别的页面也照样跑。
+test('conversation row callbacks and renderItem do not depend on whole lists', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+  const depsOf = (name) => {
+    const start = source.indexOf(`const ${name} = useCallback(`);
+    assert.ok(start >= 0, `${name} should be a useCallback`);
+    const body = source.slice(start);
+    // useCallback( … , [deps]) —— 取第一个以 "],\n  );" 收尾的依赖数组。
+    const match = body.match(/\[([^\]]*)\],\s*\);/);
+    assert.ok(match, `could not find deps of ${name}`);
+    return match[1];
+  };
+
+  assert.doesNotMatch(depsOf('canClearGroupForEveryone'), /rawConversations|conversations/);
+  assert.doesNotMatch(depsOf('handleConfirmDeleteConversation'), /rawConversations/);
+  assert.doesNotMatch(
+    depsOf('renderItem'),
+    /displayedConversations|visibleConversations|conversations\b/,
+  );
+  assert.doesNotMatch(depsOf('renderSeparator'), /displayedConversations/);
+  assert.doesNotMatch(depsOf('handleClearUnread'), /visibleConversations/);
+});
+
+test('the conversation list stops following the chat store while its screen is not focused', () => {
+  // 聊天页压在会话列表正上方时,原生栈为了右滑返回不会冻结列表 —— 列表得自己停。
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+  // 右滑返回时 isFocused 要等手势结束才变;useScreenLive 在手势一开始就恢复订阅。
+  assert.match(source, /const isLive = useScreenLive\(\)/);
+  assert.match(
+    source,
+    /const rawConversations = useStoreWhileActive\(\s*useChatStore,\s*selectConversations,\s*isLive,?\s*\)/,
+  );
+  assert.match(
+    source,
+    /const failedConversationKey = useStoreWhileActive\(\s*useChatStore,\s*selectFailedConversationKey,\s*isLive,?\s*\)/,
+  );
+  assert.match(
+    source,
+    /const totalUnread = useStoreWhileActive\(\s*useChatStore,\s*selectTotalUnread,\s*isLive,?\s*\)/,
+  );
+  // 失败判定不能在组件里逐会话全量扫消息;判定收在可缓存的选择器里。
+  assert.doesNotMatch(source, /Object\.entries\(state\.messagesByConversation\)/);
+});
+
+test('the conversation FlatList keeps a bounded render window', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+  const list = source.slice(source.indexOf('<FlatList'));
+  const props = list.slice(0, list.indexOf('/>'));
+  assert.match(props, /initialNumToRender=\{\d+\}/);
+  assert.match(props, /maxToRenderPerBatch=\{\d+\}/);
+  assert.match(props, /windowSize=\{\d+\}/);
+});
+
+test('screens that stay mounted under a pushed screen only subscribe to conversations while visible', () => {
+  const groups = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/contacts/screens/GroupsScreen.tsx'),
+    'utf8',
+  );
+  assert.match(groups, /useStoreWhileActive\(\s*useChatStore,\s*selectConversations,\s*isLive/);
+
+  const shareSheet = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/notes/components/ShareNoteSheet.tsx'),
+    'utf8',
+  );
+  assert.match(shareSheet, /useStoreWhileActive\(\s*useChatStore,\s*selectConversations,\s*visible/);
+
+  const qrSheet = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/qr/components/ShareQrSheet.tsx'),
+    'utf8',
+  );
+  assert.match(qrSheet, /useStoreWhileActive\(\s*useChatStore,\s*selectConversations,\s*visible/);
+});
+
+test('returning to the messages list skips the reload right after a fresh snapshot', () => {
+  // 群多:一次全量会话快照是几百 KB;进出聊天页来回切,原来每次都重拉。
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+  const focus = source.slice(source.indexOf('useFocusEffect('));
+  assert.match(focus.slice(0, 1200), /if \(canSkipConversationFocusReload\(\)\) return;/);
+
+  const groups = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/contacts/screens/GroupsScreen.tsx'),
+    'utf8',
+  );
+  assert.match(groups, /options\?\.skipIfFresh && canSkipConversationFocusReload\(\)/);
+  assert.match(groups, /loadGroups\(signal, \{ skipIfFresh: true \}\)/);
 });

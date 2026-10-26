@@ -25,7 +25,7 @@ import { Divider } from "@/components/ui/divider";
 import { UnreadCountBadge } from "@/components/ui/unread-count-badge";
 import { useAuthStore } from "@/stores/authStore";
 import { useChatStore } from "@/chat-core/store";
-import { loadChatConversations } from "@/chat-core/api";
+import { ensureChatConversations } from "@/chat-core/api";
 import {
   getChatDetailHref,
   type UserProfileScope,
@@ -86,7 +86,7 @@ export function GroupAdmissionsList({
   const failedCursor = useRef<string | undefined>(undefined);
   const refreshPending = useRef(false);
   const load = useCallback(
-    async function loadPage(next?: string): Promise<void> {
+    async function loadPage(next?: string, force = false): Promise<void> {
       if (paging.current) { if (!next) refreshPending.current = true; return; }
       paging.current = true;
       const version = generation.current;
@@ -95,7 +95,8 @@ export function GroupAdmissionsList({
         const responses = await Promise.allSettled([
           fetchGroupAdmissions(next, groupId),
           !groupId && !next ? fetchMyApplications() : Promise.resolve(null),
-          includeJoined && !next ? loadChatConversations() : Promise.resolve(null),
+          // 「已加入」只需要一份新鲜的会话列表:刚拉过就直接用,不再每次刷新都全量拉。
+          includeJoined && !next ? ensureChatConversations({ force }) : Promise.resolve(null),
         ]);
         if (version !== generation.current || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
         const [admissionsResult, circleResult] = responses;
@@ -223,7 +224,8 @@ export function GroupAdmissionsList({
       ItemSeparatorComponent={Divider}
       contentContainerStyle={{ padding: Spacing.lg }}
       refreshing={loading}
-      onRefresh={() => void load()}
+      // 用户主动下拉:会话快照也强制重拉,不复用。
+      onRefresh={() => void load(undefined, true)}
       onEndReached={() => {
         if (cursor && !loading && !error) void load(cursor);
       }}

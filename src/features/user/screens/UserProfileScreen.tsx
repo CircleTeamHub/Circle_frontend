@@ -1074,6 +1074,7 @@ export default function UserProfileScreen() {
               vipLevel={profileVipLevel}
               userId={profileId}
               style={d.name}
+              animated
             />
             <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
             {friendStatusLabelKey ? (

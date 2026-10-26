@@ -26,16 +26,63 @@ test('MemberName renders diamond as a solid purple while super uses a looping fl
   assert.match(src, /diamond: '#[0-9A-Fa-f]{6}'/);
   assert.doesNotMatch(src, /const STATIC_GRADIENT_TIERS/);
   assert.doesNotMatch(src, /diamond:\s*\[/); // diamond 不再是渐变色带数组
-  // 仅顶档 super 逐字流动。
-  assert.match(src, /const isFlow = tier === 'super'/);
+  // 仅顶档 super 流动(且需调用处显式打开)。
+  assert.match(src, /animated && tier === 'super'/);
   assert.doesNotMatch(src, /tier === 'diamond'/);
 
-  // Super still uses real animation: looping shared value + per-char interpolateColor.
-  assert.match(src, /from 'react-native-reanimated'/);
+  // Super still runs a real looping clock; the flow itself is a separate,
+  // platform-split renderer (Skia on native, see the test below).
   assert.match(animationSrc, /withRepeat\(/);
-  assert.match(src, /interpolateColor\(/);
-  // Animation can be disabled for dense lists; solid tiers are unaffected.
-  assert.match(src, /animated = true/);
+  assert.match(src, /<MemberNameFlow/);
+  // Animation is opt-in: dense lists get the static gradient by default.
+  assert.match(src, /animated = false/);
+});
+
+// 回归:旧实现逐字 useAnimatedStyle 改文字颜色,每帧都触发布局树提交 + 文字重排,
+// 顶档会员一在屏幕上手机就发烫。原生端的流光必须由 Skia 在 UI 线程直接画。
+test('the native flow is painted by Skia, never by per-frame animated React styles', () => {
+  const flow = read('src/components/ui/member-name-flow.tsx');
+  assert.match(flow, /from '@shopify\/react-native-skia'/);
+  assert.match(flow, /useDerivedValue\(/);
+  assert.doesNotMatch(flow, /useAnimatedStyle|useAnimatedProps|interpolateColor/);
+  assert.doesNotMatch(src, /useAnimatedStyle|useAnimatedProps|interpolateColor/);
+  // Web 没有加载 CanvasKit,沿用逐字插值;两份必须同扩展名,否则 Metro 会先命中 .tsx。
+  assert.ok(
+    fs.existsSync(path.join(__dirname, '..', 'src/components/ui/member-name-flow.web.tsx')),
+    'web needs its own flow renderer (Skia is native-only here)',
+  );
+});
+
+test('only profile headers opt into the flowing animation; every list stays static', () => {
+  const ALLOWED = new Set([
+    'src/features/profile/screens/ProfileScreen.tsx',
+    'src/features/user/screens/UserProfileScreen.tsx',
+  ]);
+  const root = path.join(__dirname, '..');
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(rel);
+      else if (/\.tsx$/.test(entry.name) && !/\.spec\.tsx$/.test(entry.name)) files.push(rel);
+    }
+  };
+  walk('src');
+  walk('app');
+
+  const optedIn = new Set();
+  for (const rel of files) {
+    const text = fs.readFileSync(path.join(root, rel), 'utf8');
+    for (const block of text.match(/<MemberName\b[\s\S]*?\/>/g) ?? []) {
+      if (/\banimated\b(?!=\{false\})/.test(block)) optedIn.add(rel.split(path.sep).join('/'));
+    }
+  }
+  for (const rel of optedIn) {
+    assert.ok(ALLOWED.has(rel), `${rel} animates MemberName; lists and feeds must stay static`);
+  }
+  for (const rel of ALLOWED) {
+    assert.ok(optedIn.has(rel), `${rel} lost its flowing header name`);
+  }
 });
 
 test('MemberName degrades to a plain name for non-members / missing vipLevel', () => {
