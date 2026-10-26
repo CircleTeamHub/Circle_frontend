@@ -35,6 +35,30 @@ export type NativeResolver = (
   longitude: number,
 ) => Promise<ResolvedPlace | null>;
 
+/**
+ * 反查链路里被吞掉的失败（设备反查抛错、服务地址配置非法、服务端查询失败）交给
+ * 调用方上报。本模块要在纯 node 下跑测试，不能 import 观测层；回调只拿到阶段枚举
+ * 和原始错误，坐标与地名都不经过它。
+ */
+export type GeocodeFailureStage = 'nativeResolver' | 'geocoderConfig' | 'lookup';
+export type GeocodeFailureReporter = (
+  stage: GeocodeFailureStage,
+  error: unknown,
+) => void;
+
+/** 上报本身出错也不能打破「永不抛错」的约定。 */
+function notifyFailure(
+  onFailure: GeocodeFailureReporter | undefined,
+  stage: GeocodeFailureStage,
+  error: unknown,
+): void {
+  try {
+    onFailure?.(stage, error);
+  } catch {
+    // 可观测性绝不能改变业务行为。
+  }
+}
+
 export type GeocoderFetch = (
   input: string | URL,
   init?: RequestInit,
@@ -52,12 +76,14 @@ async function tryNativeResolver(
   resolver: NativeResolver | undefined,
   latitude: number,
   longitude: number,
+  onFailure?: GeocodeFailureReporter,
 ): Promise<ResolvedPlace | null> {
   if (!resolver || nativeResolverUnavailable) return null;
   try {
     return await resolver(latitude, longitude);
-  } catch {
+  } catch (error) {
     nativeResolverUnavailable = true;
+    notifyFailure(onFailure, 'nativeResolver', error);
     return null;
   }
 }
@@ -92,7 +118,7 @@ function cacheKey(latitude: number, longitude: number): string {
   return `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
 }
 
-function getConfiguredBaseUrl(): string | null {
+function getConfiguredBaseUrl(onFailure?: GeocodeFailureReporter): string | null {
   const raw = process.env.EXPO_PUBLIC_GEOCODER_BASE_URL?.trim();
   if (!raw) return null;
   try {
@@ -106,7 +132,8 @@ function getConfiguredBaseUrl(): string | null {
     url.search = '';
     url.hash = '';
     return url.toString().replace(/\/$/, '');
-  } catch {
+  } catch (error) {
+    notifyFailure(onFailure, 'geocoderConfig', error);
     return null;
   }
 }
@@ -146,11 +173,14 @@ async function requestPlace(
 export async function resolvePlace(
   latitude: number,
   longitude: number,
-  baseUrl = getConfiguredBaseUrl(),
+  configuredBaseUrl?: string | null,
   nativeResolver?: NativeResolver,
   fetchImpl: GeocoderFetch = fetch,
+  onFailure?: GeocodeFailureReporter,
 ): Promise<ResolvedPlace | null> {
   if (!isUsableCoordinate(latitude, longitude)) return null;
+  const baseUrl =
+    configuredBaseUrl === undefined ? getConfiguredBaseUrl(onFailure) : configuredBaseUrl;
   // 设备自带的反查是免费的，服务端那条路要烧地图服务商的配额——两条都没有才放弃。
   if (!baseUrl && (!nativeResolver || nativeResolverUnavailable)) return null;
 
@@ -167,6 +197,7 @@ export async function resolvePlace(
     baseUrl,
     nativeResolver,
     fetchImpl,
+    onFailure,
   )
     .then((place) => {
       // 查不到也缓存，省得同一个点每次展开都再走一遍两条链路。
@@ -174,7 +205,10 @@ export async function resolvePlace(
       return place;
     })
     // 失败不写缓存：下次展开还能再试一次。
-    .catch(() => null)
+    .catch((error: unknown) => {
+      notifyFailure(onFailure, 'lookup', error);
+      return null;
+    })
     .finally(() => {
       inFlight.delete(key);
     });
@@ -196,8 +230,9 @@ async function resolveFromAnySource(
   baseUrl: string | null,
   nativeResolver: NativeResolver | undefined,
   fetchImpl: GeocoderFetch,
+  onFailure: GeocodeFailureReporter | undefined,
 ): Promise<ResolvedPlace | null> {
-  const native = await tryNativeResolver(nativeResolver, latitude, longitude);
+  const native = await tryNativeResolver(nativeResolver, latitude, longitude, onFailure);
   if (native) return native;
   if (!baseUrl) return null;
   return enqueue(() => requestPlace(latitude, longitude, baseUrl, fetchImpl));

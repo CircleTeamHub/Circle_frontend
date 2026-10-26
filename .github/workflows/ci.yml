@@ -204,7 +204,10 @@ jobs:
           # CI 只做可部署性 smoke；真实发布必须把这里替换为生产 HTTPS API origin。
           # 使用保留的 .invalid TLD，避免测试 bundle 意外请求任何真实服务。
           EXPO_PUBLIC_API_URL: https://api.web-export.invalid
-        run: npx expo export --platform web
+        # export:web 带 --source-maps 导出，再把 map 传 Sentry：这里没有凭据，
+        # 按 --optional 跳过并警告，同时删掉 .map（不随部署公开源码）。正式 web
+        # 部署用同一条命令、配好 SENTRY_* 就会上传。
+        run: npm run export:web
 
       - name: Assert release API URL baked into web bundle
         run: |

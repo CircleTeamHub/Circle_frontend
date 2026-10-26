@@ -9,7 +9,9 @@ import * as Sentry from '@sentry/react-native';
 import type {
   Breadcrumb,
   Event,
+  EventHint,
   ErrorEvent,
+  Metric,
   SpanJSON,
   TransactionEvent,
 } from '@sentry/core';
@@ -17,8 +19,15 @@ import {
   readDiagnosticBreadcrumbs,
   type DiagnosticBreadcrumb,
 } from '@/utils/client-diagnostics';
+import { isSensitiveFieldKey } from '@/utils/redact';
 import { STATIC_ROUTE_SEGMENTS } from './route-segments';
 import { TRACED_SPAN_NAMES } from './tracing';
+import { allowedMetricAttributes, metricDefinition } from './metrics';
+import {
+  isBenignDomBridgeRejection,
+  rejectionMessage,
+  shouldReportUnhandledRejection,
+} from './unhandled-rejection-filter';
 
 interface NavigationIntegrationLike {
   registerNavigationContainer: (navigationContainerRef: unknown) => void;
@@ -147,6 +156,10 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // 覆盖 SDK 默认值；undefined 不会。将来后端接分布式追踪时再收窄到 API 源，
       // 同时把这两个头加进后端 CORS allowedHeaders（web 端跨源会触发预检）。
       tracePropagationTargets: [],
+      // 会话统计（release health：崩溃率 / 无崩溃会话比例）。原生 SDK 默认就开；
+      // web 端只有显式为 true 才挂 browserSessionIntegration，之前 web 一条会话都没有。
+      // 会话的 did 取自 Sentry user，而 setSentryUserId 恒清空，所以不带账号标识。
+      enableAutoSessionTracking: true,
       // Never attach PII (IP, cookies, request bodies) by default.
       sendDefaultPii: false,
       attachScreenshot: false,
@@ -158,10 +171,11 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // hooks cannot scrub payload fields emitted only by native crash code.
       // Manual reportError calls already sanitize their payloads, but native /
       // unhandled SDK events and automatic breadcrumbs bypass that helper.
-      beforeSend: sanitizeAutomaticEvent,
+      beforeSend: filterAndSanitizeErrorEvent,
       beforeBreadcrumb: sanitizeAutomaticBreadcrumb,
       beforeSendTransaction: sanitizeAutomaticTransaction,
       beforeSendSpan: sanitizeAutomaticSpan,
+      beforeSendMetric: sanitizeMetric,
     });
     sentryInitialized = true;
     navigationIntegration = navigation;
@@ -254,29 +268,8 @@ const PRESIGNED_URL_MARKERS = [
   'X-Amz-Signature=',
   'x-id=PutObject',
 ];
-// 这份清单与 utils/redact.ts 的 SENSITIVE_KEYS 是两份独立的表（那份给日志，这份给
-// Sentry 上报），已经分叉过一次：redact 有 revocationsecret，这里漏了，而推送撤销密钥
-// 正是通知链路的密钥之一。精确匹配的 Set 不会因为有 'secret' 就拦住
-// 'revocationsecret'。往任一份加敏感字段时，另一份也要加。
-const SENSITIVE_CONTEXT_KEYS = new Set([
-  'authorization',
-  'cookie',
-  'password',
-  'token',
-  'accesstoken',
-  'refreshtoken',
-  'revocationsecret',
-  'imtoken',
-  'idtoken',
-  'apikey',
-  'secret',
-  'uploadurl',
-  'fileurl',
-  'email',
-  'phone',
-  'phonenumber',
-  'mobile',
-]);
+// 嵌套字段的敏感名单只有一份，在 utils/redact.ts（isSensitiveFieldKey）。这里曾经
+// 抄过一份，与日志那份分叉过两次。
 const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'endpointPath',
   'method',
@@ -291,6 +284,7 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'platform',
   'contentType',
   'code',
+  'storageCode',
   'size',
   'category',
   'agentIndex',
@@ -314,6 +308,8 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'kind',
   'traceId',
   'requestId',
+  'code',
+  'storageCode',
 ]);
 const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'circleId',
@@ -449,11 +445,31 @@ function sanitizeContextForSentry(value: unknown, depth = 0): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = SENSITIVE_CONTEXT_KEYS.has(key.toLowerCase())
+    out[key] = isSensitiveFieldKey(key)
       ? '[REDACTED]'
       : sanitizeContextForSentry(child, depth + 1);
   }
   return out;
+}
+
+/**
+ * code / storageCode 会进 tag 和 fingerprint：只收常量形状（错误码枚举），自由文本
+ * 进来会炸出无数个 issue，还可能带出响应体内容。其他键不受影响。
+ */
+const SAFE_ERROR_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
+const SAFE_STORAGE_CODE = /^[A-Za-z]{1,64}$/;
+
+function isSafeErrorCode(key: string, value: unknown): boolean {
+  if (key === 'code') {
+    return (
+      (typeof value === 'number' && Number.isSafeInteger(value)) ||
+      (typeof value === 'string' && SAFE_ERROR_CODE.test(value))
+    );
+  }
+  if (key === 'storageCode') {
+    return typeof value === 'string' && SAFE_STORAGE_CODE.test(value);
+  }
+  return true;
 }
 
 function sanitizeReportContext(
@@ -475,6 +491,7 @@ function sanitizeReportContext(
     if (key === 'durationMs' && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
       continue;
     }
+    if (!isSafeErrorCode(key, value)) continue;
     if (
       value == null ||
       typeof value === 'string' ||
@@ -585,6 +602,7 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
     if (key === 'requestId' && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
       continue;
     }
+    if (!isSafeErrorCode(key, child)) continue;
     if (typeof child === 'string' || typeof child === 'number') {
       safe[key] = sanitizeContextForSentry(child);
     }
@@ -696,10 +714,83 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
   return safe as Event;
 }
 
+/**
+ * 未处理 Promise rejection 的过滤与限流。Hermes 上真正生效的 tracker 是 SDK 自己挂在
+ * HermesInternal 上的（web 上是全局 unhandledrejection 事件），silence-dom-bridge-
+ * rejection 的 promise 包 tracker 在那里从不触发 —— 所以闸门放在所有引擎都经过的
+ * beforeSend，按 mechanism 只作用于未处理 rejection，手动 reportError 不受影响。
+ * 签名取原始错误（脱敏之后 value 已被替换），在脱敏之前判断。
+ */
+function isUnhandledRejectionEvent(event: ErrorEvent): boolean {
+  // Hermes / JSC：'onunhandledrejection'；web 的 browserGlobalHandlersIntegration 带命名
+  // 空间前缀：'auto.browser.global_handlers.onunhandledrejection'。
+  return (
+    event.exception?.values?.some((value) => {
+      const type = value.mechanism?.type;
+      return (
+        type === 'onunhandledrejection' ||
+        (typeof type === 'string' && type.endsWith('.onunhandledrejection'))
+      );
+    }) ?? false
+  );
+}
+
+function filterAndSanitizeErrorEvent(
+  event: ErrorEvent,
+  hint?: EventHint,
+): ErrorEvent | null {
+  if (event && typeof event === 'object' && isUnhandledRejectionEvent(event)) {
+    const original = hint?.originalException ?? event.exception?.values?.[0]?.value;
+    const message = rejectionMessage(original);
+    if (
+      isBenignDomBridgeRejection(message) ||
+      !shouldReportUnhandledRejection(original, message)
+    ) {
+      return null;
+    }
+  }
+  return sanitizeAutomaticEvent(event);
+}
+
 function sanitizeAutomaticEvent(event: ErrorEvent): ErrorEvent {
   return {
     ...sanitizeAutomaticBaseEvent(event),
     type: undefined,
+  };
+}
+
+/** SDK 自动补的指标属性里，只有这几项不是标识：版本、环境、SDK。 */
+const SAFE_SDK_METRIC_ATTRIBUTES = [
+  'sentry.release',
+  'sentry.environment',
+  'sentry.sdk.name',
+  'sentry.sdk.version',
+] as const;
+
+/**
+ * 指标的最后一道白名单：名字和类型必须与 metrics.ts 的表一致，单位取表里的，
+ * 属性只留表里声明的枚举值和上面几项 SDK 元数据。SDK 自动补的 user.id /
+ * user.email / user.name 在这里被剥掉（setSentryUserId 恒清空，这是第二道保险）。
+ */
+function sanitizeMetric(metric: Metric): Metric | null {
+  if (!metric || typeof metric !== 'object') return null;
+  const definition = metricDefinition(metric.name);
+  if (!definition || definition.type !== metric.type) return null;
+  if (typeof metric.value !== 'number' || !Number.isFinite(metric.value)) return null;
+  const source = isRecord(metric.attributes) ? metric.attributes : {};
+  const attributes: Record<string, unknown> = allowedMetricAttributes(definition, source);
+  for (const key of SAFE_SDK_METRIC_ATTRIBUTES) {
+    const value = source[key];
+    if (typeof value === 'string' && value.length <= MAX_CONTEXT_STRING_LENGTH) {
+      attributes[key] = value;
+    }
+  }
+  return {
+    name: metric.name,
+    type: metric.type,
+    value: metric.value,
+    ...(definition.unit ? { unit: definition.unit } : {}),
+    attributes,
   };
 }
 
@@ -1022,6 +1113,8 @@ function buildCaptureContext(
     'kind',
     'traceId',
     'requestId',
+    'code',
+    'storageCode',
   ];
   const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
     const value = safeContext ? readTagValue(safeContext, key) : undefined;
@@ -1052,10 +1145,14 @@ function buildCaptureContext(
   } else if (tags.operation) {
     // 非 API 失败（如 upload）：error.message 已本地化，若沿用 Sentry 默认按消息分组，
     // 同一故障会按语言碎成多个 issue。用稳定的 operation + kind 组 fingerprint。
+    // 错误码不同就是不同的故障（发消息 ack 超时 vs 非法载荷；存储 AccessDenied 签名
+    // 问题 vs SlowDown 限流），各自成 issue。
     captureContext.fingerprint = [
       tags.operation,
       tags.kind ?? 'unknown-kind',
       tags.failureKind ?? 'error',
+      ...(tags.code ? [tags.code] : []),
+      ...(tags.storageCode ? [tags.storageCode] : []),
     ];
   }
   return captureContext;

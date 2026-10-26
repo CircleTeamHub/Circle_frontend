@@ -11,6 +11,7 @@ module.exports = {
   startInactiveSpan() {
     return { setStatus() {}, end() {} };
   },
+  metrics: { count() {}, distribution() {} },
   reactNavigationIntegration() {
     return { name: 'ReactNavigation', registerNavigationContainer() {} };
   },

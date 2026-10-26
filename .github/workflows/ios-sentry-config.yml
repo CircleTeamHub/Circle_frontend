@@ -1,0 +1,52 @@
+# iOS 还没有发版 CI。这条工作流在 Linux 上跑一次 iOS prebuild（不需要 Xcode），
+# 校验 Sentry 的符号上传接线：.xcode.env 的「Release 缺凭据就失败」守卫，以及
+# 工程里的 debug 符号上传阶段。改动 Expo 配置或插件时触发。
+
+name: iOS Sentry config
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app.json'
+      - 'app.config.js'
+      - 'plugins/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ios-sentry-config.yml'
+      - '.github/scripts/verify-ios-sentry-config.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-sentry-config-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: "iOS prebuild keeps the Sentry upload guard"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Prebuild iOS project
+        env:
+          CI: "1"
+        run: npx expo prebuild --platform ios --no-install --clean
+
+      - name: Verify Sentry upload wiring
+        run: node .github/scripts/verify-ios-sentry-config.js
