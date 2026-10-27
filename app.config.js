@@ -25,6 +25,21 @@ module.exports = () => {
     );
   }
   const pushProvider = configuredPushProvider || (jpushAppKey ? 'jpush' : 'expo');
+  // iOS 来电的构建期开关（不做运行时地区判断）：默认 callkit = PushKit + CallKit；
+  // notification 留给将来的中国区 App Store 包 —— 工信部要求中国区停用 CallKit，而 iOS 13 起
+  // VoIP 推送必须上报 CallKit，所以该包把 CallKit / PushKit 整个编译出去，改由服务端经极光发
+  // time-sensitive 通知 + 自带铃声（≤30 秒）。
+  const iosCallMode = process.env.EXPO_PUBLIC_IOS_CALL_MODE?.trim() || 'callkit';
+  if (!new Set(['callkit', 'notification']).has(iosCallMode)) {
+    throw new Error(
+      `EXPO_PUBLIC_IOS_CALL_MODE must be callkit or notification, received ${iosCallMode}`,
+    );
+  }
+  if (iosCallMode === 'notification' && pushProvider !== 'jpush') {
+    throw new Error(
+      'EXPO_PUBLIC_IOS_CALL_MODE=notification rings through JPush and requires EXPO_PUBLIC_JPUSH_APP_KEY',
+    );
+  }
   const jpushProduction = !isPreproduction;
   const updateChannel = isPreproduction ? 'preview' : 'production';
   // 高德移动端密钥分别绑定 Android 包名+签名与 iOS Bundle ID，不能跨平台复用。
@@ -58,7 +73,12 @@ module.exports = () => {
         }
       : {}),
     plugins: [
-      ...(baseConfig.plugins ?? []),
+      // 通知模式的来电铃声要进 iOS 包（APNs 的 sound 只能引用包内文件）；CallKit 包用系统铃声。
+      ...(baseConfig.plugins ?? []).map((plugin) =>
+        plugin === 'expo-notifications' && iosCallMode === 'notification'
+          ? ['expo-notifications', { sounds: ['./assets/sounds/call_ring.caf'] }]
+          : plugin,
+      ),
       ...(amapAndroidKey || amapIosKey
         ? [
             [
@@ -70,6 +90,7 @@ module.exports = () => {
             ],
           ]
         : []),
+      ['./plugins/with-call-push', { iosMode: iosCallMode }],
       [
         './plugins/with-jpush',
         {
@@ -89,6 +110,7 @@ module.exports = () => {
       ...(baseConfig.extra ?? {}),
       appVariant: isPreproduction ? 'preprod' : 'production',
       pushProvider,
+      iosCallMode,
       jpushProduction,
       ...(jpushAppKey ? { jpushAppKey } : {}),
       ...(easProjectId

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="call_push_channel_name">수신 전화</string>
+  <string name="call_push_channel_description">음성·영상 통화 수신 알림</string>
+  <string name="call_push_incoming_audio">음성 통화 요청</string>
+  <string name="call_push_incoming_video">영상 통화 요청</string>
+  <string name="call_push_public_title">수신 전화</string>
+  <string name="call_push_answer">받기</string>
+  <string name="call_push_decline">거절</string>
+</resources>

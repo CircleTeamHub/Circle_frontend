@@ -1,0 +1,29 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- 锁屏 / 亮屏时直接拉起来电界面。安卓 14 起 Google Play 会在安装时收回非通话类 App
+       的这项权限；我们不经 Play 分发，默认是授予的，仍在运行时检查 canUseFullScreenIntent。 -->
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+
+  <application>
+    <!-- 来电透传的接收端：继承 jpush-react-native 的 JPushModuleReceiver，截下 call.* 透传，
+         其余消息 super 回原逻辑。原接收端由 App 清单（plugins/with-call-push.js）用
+         tools:node="remove" 去掉 —— 那一条必须在 App 清单里才压得过库清单。
+         声明放在库清单而不是 App 清单：App 的 lintVitalRelease 只检查 App 自己清单里的
+         组件，而父类链上的极光 SDK 不在 App 的编译类路径上，lint 证明不了它是
+         BroadcastReceiver，会报 Instantiatable（极光自己的接收端同样声明在库清单里）。 -->
+    <receiver
+      android:name=".CallJPushReceiver"
+      android:enabled="true"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="cn.jpush.android.intent.RECEIVER_MESSAGE" />
+        <category android:name="${applicationId}" />
+      </intent-filter>
+    </receiver>
+
+    <!-- 来电通知上的「拒绝」：不拉起界面，直接收掉通知并告诉服务端。 -->
+    <receiver
+      android:name=".CallActionReceiver"
+      android:exported="false" />
+  </application>
+</manifest>

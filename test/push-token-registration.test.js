@@ -224,6 +224,13 @@ function makeHarness(options = {}) {
     ...(options.prepareNotifications
       ? { prepareNotifications: options.prepareNotifications }
       : {}),
+    ...(options.getToken ? { getToken: options.getToken } : {}),
+    ...(options.requiresNotificationPermission === false
+      ? { requiresNotificationPermission: false }
+      : {}),
+    ...(options.getRegistrationExtras
+      ? { getRegistrationExtras: options.getRegistrationExtras }
+      : {}),
   });
   return {
     orchestrator,
@@ -1176,4 +1183,126 @@ test('an older server acknowledgement does not suppress a later device-binding u
   await h.orchestrator.sync(enabled());
   assert.equal(h.registerCalls.length, 2);
   assert.equal(h.getStored().deviceBindingVersion, 1);
+});
+
+const VOIP_TOKEN = 'ab'.repeat(32);
+
+test('registers a PushKit VoIP token without asking for notification permission', async () => {
+  const harness = makeHarness({
+    provider: 'apns_voip',
+    projectId: null,
+    requiresNotificationPermission: false,
+    getToken: async () => VOIP_TOKEN,
+    getRegistrationExtras: () => ({
+      callPushVersion: 1,
+      apnsEnvironment: 'development',
+    }),
+  });
+
+  await harness.orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'user-1',
+    pushEnabled: true,
+  });
+
+  // VoIP 推送由 CallKit 响铃，不需要系统通知权限：关了通知也照样能来电。
+  assert.equal(harness.getModuleLoads(), 0);
+  assert.equal(harness.registerCalls.length, 1);
+  assert.equal(harness.registerCalls[0].token, VOIP_TOKEN);
+  assert.equal(harness.registerCalls[0].provider, 'apns_voip');
+  assert.equal(harness.registerCalls[0].callPushVersion, 1);
+  assert.equal(harness.registerCalls[0].apnsEnvironment, 'development');
+  assert.equal(harness.registerCalls[0].projectId, null);
+  assert.equal(harness.getStored().status, 'registered');
+});
+
+test('waits for PushKit to hand out a token before registering', async () => {
+  const harness = makeHarness({
+    provider: 'apns_voip',
+    requiresNotificationPermission: false,
+    getToken: async () => '',
+  });
+
+  await harness.orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'user-1',
+    pushEnabled: true,
+  });
+
+  assert.equal(harness.registerCalls.length, 0);
+  assert.equal(harness.getStored(), null);
+});
+
+test('re-registers the same token once when its call-push declaration changes', async () => {
+  let extras = {};
+  const harness = makeHarness({
+    provider: 'jpush',
+    platform: 'android',
+    jpush: {
+      initializeJPush() {},
+      requestJPushPermission() {},
+      getJPushRegistrationId: async () => 'registration-id',
+    },
+    getRegistrationExtras: () => extras,
+  });
+  const sync = () =>
+    harness.orchestrator.sync({
+      isAuthenticated: true,
+      userId: 'user-1',
+      pushEnabled: true,
+    });
+
+  await sync();
+  await sync();
+  assert.equal(harness.registerCalls.length, 1);
+  assert.equal(harness.registerCalls[0].callPushVersion, undefined);
+
+  // 升级到打过新原生包的版本：token 没变，但要告诉服务端「这台能响铃了」。
+  extras = { callPushVersion: 1 };
+  await sync();
+  await sync();
+
+  assert.equal(harness.registerCalls.length, 2);
+  assert.equal(harness.registerCalls[1].token, 'registration-id');
+  assert.equal(harness.registerCalls[1].callPushVersion, 1);
+  // 同一把撤销密钥，不是换了一个新登记。
+  assert.equal(
+    harness.registerCalls[1].revocationSecret,
+    harness.registerCalls[0].revocationSecret,
+  );
+  assert.equal(harness.getRevocations().length, 0);
+});
+
+test('treats registrations stored before extras existed as declaring nothing', async () => {
+  const harness = makeHarness({
+    stored: {
+      token: 'ExponentPushToken[default]',
+      userId: 'user-1',
+      revocationSecret: SECRET_A,
+      status: 'registered',
+      deviceBindingVersion: 1,
+    },
+    getRegistrationExtras: () => ({}),
+  });
+
+  await harness.orchestrator.sync({
+    isAuthenticated: true,
+    userId: 'user-1',
+    pushEnabled: true,
+  });
+
+  // 升级后不该让每台设备都无谓地重新登记一次。
+  assert.equal(harness.registerCalls.length, 0);
+});
+
+test('the default registrar declares call push only when the JPush token carries calls', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/notifications/services/push-token-registration.ts'),
+    'utf8',
+  );
+  // jpushCarriesCalls：安卓，或中国区通知模式的 iOS；CallKit 包的 iOS 走 VoIP token。
+  assert.match(
+    source,
+    /provider === 'jpush' && jpushCarriesCalls\(\)\s*\? \{ callPushVersion: CALL_PUSH_VERSION \}/,
+  );
 });

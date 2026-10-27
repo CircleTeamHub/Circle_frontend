@@ -1,24 +1,26 @@
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Radius, Spacing, Typography } from '@/theme';
-import { acceptCall, rejectCall } from '@/services/api/calls';
-import { getApiErrorMessage } from '@/services/api/errors';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import { useIncomingCallExpiry } from '@/features/call/hooks/use-incoming-call-expiry';
 import { useCallReconciliation } from '@/features/call/hooks/use-call-reconciliation';
 import '@/features/call/call-session-teardown';
-import { reportHandledFailure } from '@/observability/report-failure';
+import { nativeOwnsIncomingCallUi } from '@/features/call/push/call-push-native';
+import {
+  answerIncomingCall,
+  declineIncomingCall,
+} from '@/features/call/push/incoming-call-actions';
+import { useCallPushBridge } from '@/features/call/push/use-call-push-bridge';
+import { useRingingCallWatchdog } from '@/features/call/push/use-ringing-call-watchdog';
 
 const s = StyleSheet.create({
   overlay: {
@@ -79,11 +81,18 @@ export function CallInviteHost() {
   const { t } = useTranslation();
   // 回前台时与服务端对账（#93）：清掉断线期间已在服务端结束的本地通话残留。
   useCallReconciliation();
+  // 推送来电：原生事件（CallKit / 全屏通知上的接听、拒接）↔ store。
+  useCallPushBridge();
+  useRingingCallWatchdog();
   const incomingCall = useCallStore((state) => state.incomingCall);
-  const setActiveCall = useCallStore((state) => state.setActiveCall);
+  const nativeUiFallbackCallId = useCallStore((state) => state.nativeUiFallbackCallId);
   const resetCallState = useCallStore((state) => state.resetCallState);
   const [busyAction, setBusyAction] = useState<'accept' | 'reject' | null>(null);
-  const visible = Boolean(incomingCall);
+  // iOS 打过新原生包后来电一律走 CallKit 的系统界面，这里不再叠一层弹窗 —— 除非 CallKit
+  // 没接下这一通（勿扰过滤等），那就由这里兜底。
+  const visible =
+    Boolean(incomingCall) &&
+    (!nativeOwnsIncomingCallUi() || nativeUiFallbackCallId === incomingCall?.callId);
   // review P1：VIDEO 邀请必须如实标示 —— 接听即发布摄像头，套着语音来电的
   // 皮会让用户在不知情下开摄像头。
   const isVideoInvite = incomingCall?.callType === 'VIDEO';
@@ -92,33 +101,21 @@ export function CallInviteHost() {
     if (!incomingCall || busyAction) return;
     setBusyAction('accept');
     try {
-      const response = await acceptCall(incomingCall.callId);
-      setActiveCall(response.call, response.livekit);
-      router.push('/(chat)/group-call' as never);
-    } catch (error) {
-      resetCallState();
-      Alert.alert(
-        t('common.errorOccurred'),
-        getApiErrorMessage(error, t('common.errorOccurred')),
-      );
-      reportHandledFailure('call', 'accept', error);
+      await answerIncomingCall(incomingCall.callId);
     } finally {
       setBusyAction(null);
     }
-  }, [busyAction, incomingCall, resetCallState, setActiveCall, t]);
+  }, [busyAction, incomingCall]);
 
   const handleReject = useCallback(async () => {
     if (!incomingCall || busyAction) return;
     setBusyAction('reject');
     try {
-      await rejectCall(incomingCall.callId);
-    } catch (error) {
-      reportHandledFailure('call', 'reject', error);
+      await declineIncomingCall(incomingCall.callId);
     } finally {
-      resetCallState();
       setBusyAction(null);
     }
-  }, [busyAction, incomingCall, resetCallState]);
+  }, [busyAction, incomingCall]);
 
   // 安全网：来电到 expiresAt 仍未接听 / 拒绝时自动清除，避免丢失的终止推送把
   // 全屏来电弹窗永久卡住。

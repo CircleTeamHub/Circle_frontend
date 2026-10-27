@@ -57,6 +57,7 @@ require_file src/chat/chat.types.ts
 require_file src/common/app-error-codes.ts
 require_file src/realtime/realtime.service.ts
 require_symbol src/realtime/realtime.service.ts broadcastMomentsFeedUpdated
+require_symbol src/call/call-push.service.ts CALL_PUSH_VERSION
 
 [ "$missing" -eq 0 ] || exit 1
 echo "OK: backend contract sources present"

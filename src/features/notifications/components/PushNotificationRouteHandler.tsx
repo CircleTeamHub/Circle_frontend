@@ -7,6 +7,7 @@ import {
   type Href,
 } from 'expo-router';
 import { resolvePushNotificationRoute } from '@/features/notifications/utils/push-notification-route';
+import { handleCallNotification } from '@/features/call/push/incoming-call-actions';
 import {
   createPushResponseController,
   isAlreadyOnPushTarget,
@@ -173,9 +174,12 @@ export function PushNotificationRouteHandler() {
       // 送达 / 打开的粗粒度遥测：只记通道和推送大类，不碰内容。
       if (event.notificationEventType === 'notificationArrived') {
         pushTelemetry.received('jpush', event.messageID ?? '', data);
+        handleCallNotification(data);
         return;
       }
       pushTelemetry.opened('jpush', event.messageID ?? '', data);
+      // 中国区通知模式的来电通知：点开 = 在应用内弹出来电，不按普通推送路由。
+      if (handleCallNotification(data)) return;
       controller.handleResponse({
         notification: {
           request: {

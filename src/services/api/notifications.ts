@@ -20,7 +20,8 @@ export type NotificationUnreadSummary = {
 
 export type PushTokenPlatform = 'ios' | 'android' | 'web';
 
-export type PushTokenProvider = 'expo' | 'jpush';
+/** apns_voip：iOS PushKit 的 VoIP token，只用于推送来电。 */
+export type PushTokenProvider = 'expo' | 'jpush' | 'apns_voip';
 
 export type NotificationCursorPage = {
   items: NotificationItem[];
@@ -34,6 +35,10 @@ export type RegisterPushTokenInput = {
   revocationSecret: string;
   projectId?: string | null;
   appVersion?: string | null;
+  /** 能处理的来电推送协议版本；不带 = 服务端不给这台设备发来电推送。 */
+  callPushVersion?: number;
+  /** 仅 apns_voip：TestFlight / App Store 包是 production，Xcode 调试包是 development。 */
+  apnsEnvironment?: 'development' | 'production';
 };
 
 // 未读数都会进 Badge.count 渲染；非数字会让 RN 的 Text 节点抛错。
