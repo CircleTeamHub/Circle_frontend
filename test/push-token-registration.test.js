@@ -1295,13 +1295,14 @@ test('treats registrations stored before extras existed as declaring nothing', a
   assert.equal(harness.registerCalls.length, 0);
 });
 
-test('the default registrar declares call push only for Android JPush builds with the native module', () => {
+test('the default registrar declares call push only when the JPush token carries calls', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/notifications/services/push-token-registration.ts'),
     'utf8',
   );
+  // jpushCarriesCalls：安卓，或中国区通知模式的 iOS；CallKit 包的 iOS 走 VoIP token。
   assert.match(
     source,
-    /Platform\.OS === 'android' && provider === 'jpush' && supportsCallPush\(\)\s*\? \{ callPushVersion: CALL_PUSH_VERSION \}/,
+    /provider === 'jpush' && jpushCarriesCalls\(\)\s*\? \{ callPushVersion: CALL_PUSH_VERSION \}/,
   );
 });

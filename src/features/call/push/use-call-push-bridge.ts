@@ -10,7 +10,7 @@ import type {
   CallPushNativeEvent,
   CallPushNativeModule,
 } from '../../../../modules/call-push';
-import { getCallPushModule } from './call-push-native';
+import { getCallPushModule, nativeOwnsIncomingCallUi } from './call-push-native';
 import {
   dismissReasonFromNative,
   notifyVoipTokenChanged,
@@ -25,6 +25,19 @@ import {
 /** 原生层已经在响的那几通（推送来的）：JS 不必再交给它响一次。 */
 const nativeRinging = new Set<string>();
 
+/** 收掉原生振铃 / 系统通话界面的唯一出口：顺带把它从 nativeRinging 里拿掉。 */
+async function endNativeCall(
+  callId: string,
+  reason: Parameters<CallPushNativeModule['endCall']>[1],
+): Promise<void> {
+  nativeRinging.delete(callId);
+  try {
+    await getCallPushModule()?.endCall(callId, reason);
+  } catch (error) {
+    reportHandledFailure('call', 'nativeEndCall', error);
+  }
+}
+
 function nativeCall(invite: CallInvitePayload) {
   return {
     callId: invite.callId,
@@ -35,28 +48,54 @@ function nativeCall(invite: CallInvitePayload) {
   };
 }
 
-function isReady(): boolean {
-  const auth = useAuthStore.getState();
-  return auth.isAuthenticated && !auth.isLoading;
+/** 登录态恢复完了（不论有没有登录）：在此之前原生事件留在队列里。 */
+function sessionSettled(): boolean {
+  return !useAuthStore.getState().isLoading;
+}
+
+/**
+ * 没登录（登出时 token 撤销还在排队、会话被远程撤销……）却收到了来电：接不了，收掉原生
+ * 振铃 / 系统通话界面，别让 CallKit 一直挂在「已接通」。
+ */
+async function handleWhileSignedOut(event: CallPushNativeEvent): Promise<void> {
+  if (event.type === 'voipToken') return;
+  await endNativeCall(event.callId, 'failed');
 }
 
 async function handleNativeEvent(event: CallPushNativeEvent): Promise<void> {
-  const native = getCallPushModule();
+  if (!useAuthStore.getState().isAuthenticated) {
+    await handleWhileSignedOut(event);
+    return;
+  }
   switch (event.type) {
     case 'voipToken':
       notifyVoipTokenChanged();
       return;
-    case 'incoming':
-      nativeRinging.add(event.callId);
-      await recoverRingingCall(event.callId);
+    case 'incoming': {
+      // 安卓 App 在前台时原生层不弹通知（shown=false），之后切后台要由 JS 补发。
+      if (event.shown) nativeRinging.add(event.callId);
+      // 原生层在响、服务端却说这通早不找我了（冷启动期间主叫取消 / 别处已接）：WS 不会重放
+      // 那些事件，看门狗也只盯 store 里的来电 —— 这里不收，CallKit 会白响到超时。
+      if ((await recoverRingingCall(event.callId)) === 'gone') {
+        await endNativeCall(event.callId, 'ended');
+      }
+      return;
+    }
+    case 'unavailable':
+      // 系统来电界面没接下（iOS 勿扰过滤等）：应用内弹窗兜底。
+      useCallStore.getState().setNativeUiFallback(event.callId);
       return;
     case 'answer': {
-      // 推送拉起的冷启动：WS 还没连上，store 里没有这通，先问服务端补上。
-      if (!(await recoverRingingCall(event.callId))) {
-        await native?.endCall(event.callId, 'ended');
+      // 推送拉起的冷启动：WS 还没连上，store 里没有这通，先问服务端补上。确定早已结束就
+      // 收掉；问不到（网络差）也照样试着接 —— accept 本身会给出结论。
+      if ((await recoverRingingCall(event.callId)) === 'gone') {
+        await endNativeCall(event.callId, 'ended');
         return;
       }
-      await answerIncomingCall(event.callId);
+      if (!(await answerIncomingCall(event.callId))) {
+        // store 里没有这通时 store → 原生的同步不会触发：直接收掉系统通话界面。
+        await endNativeCall(event.callId, 'failed');
+      }
       return;
     }
     case 'decline':
@@ -69,11 +108,13 @@ async function handleNativeEvent(event: CallPushNativeEvent): Promise<void> {
         await leaveActiveCall();
       }
       return;
-    case 'end':
-      useCallStore
-        .getState()
-        .dismissIncomingCall(event.callId, dismissReasonFromNative(event.reason));
+    case 'end': {
+      const reason = dismissReasonFromNative(event.reason);
+      useCallStore.getState().dismissIncomingCall(event.callId, reason);
+      // store 里没有这通时上面什么都不做：仍要让原生层收尾（安卓放开锁屏显示等），幂等。
+      await endNativeCall(event.callId, reason);
       return;
+    }
   }
 }
 
@@ -81,8 +122,8 @@ function createEventDrainer(native: CallPushNativeModule) {
   let draining = false;
   let pending = false;
   return async function drain(): Promise<void> {
-    // 登录态没就绪时事件留在原生队列里：接听要带会话去 accept。
-    if (!isReady()) return;
+    // 登录态还在恢复时事件留在原生队列里：接听要带会话去 accept。
+    if (!sessionSettled()) return;
     if (draining) {
       pending = true;
       return;
@@ -112,8 +153,10 @@ function createEventDrainer(native: CallPushNativeModule) {
 
 /**
  * 把 store 里的来电状态同步给原生层：
- * - iOS：每一通来电都交给 CallKit 响铃（同一个 UUID 重复上报是幂等的），应用内不再弹窗；
- * - 安卓：App 在后台时才交给原生层发全屏来电通知（前台有应用内弹窗）；
+ * - iOS（CallKit 模式）：每一通来电都交给 CallKit 响铃（同一个 UUID 重复上报是幂等的），
+ *   应用内不再弹窗；
+ * - 安卓：App 在后台时才交给原生层发全屏来电通知（前台有应用内弹窗）；中国区通知模式的
+ *   iOS 原生层没有来电界面，showIncomingCall 是空操作；
  * - 这通不再响 / 结束了：收掉原生振铃或系统通话界面，带上结束原因。
  */
 function mirrorStoreToNative(native: CallPushNativeModule): () => void {
@@ -126,10 +169,7 @@ function mirrorStoreToNative(native: CallPushNativeModule): () => void {
     });
   };
   const endNatively = (callId: string, reason: Parameters<CallPushNativeModule['endCall']>[1]) => {
-    nativeRinging.delete(callId);
-    void native.endCall(callId, reason).catch((error) => {
-      reportHandledFailure('call', 'nativeEndCall', error);
-    });
+    void endNativeCall(callId, reason);
   };
 
   let previous = useCallStore.getState();
@@ -142,7 +182,7 @@ function mirrorStoreToNative(native: CallPushNativeModule): () => void {
     const wasLive = before.activeCall?.id ?? wasRinging?.callId ?? null;
 
     if (ringing && ringing.callId !== wasRinging?.callId) {
-      if (Platform.OS === 'ios' || AppState.currentState !== 'active') {
+      if (nativeOwnsIncomingCallUi() || AppState.currentState !== 'active') {
         showNatively(ringing);
       }
     }
@@ -172,7 +212,7 @@ function mirrorStoreToNative(native: CallPushNativeModule): () => void {
 
 /** 推送来电的 JS 侧：原生事件 → store / 接口；store → 原生振铃。挂在全局的 CallInviteHost 里。 */
 export function useCallPushBridge(): void {
-  const ready = useAuthStore((state) => state.isAuthenticated && !state.isLoading);
+  const ready = useAuthStore((state) => !state.isLoading);
 
   useEffect(() => {
     const native = getCallPushModule();

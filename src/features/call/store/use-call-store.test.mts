@@ -22,6 +22,7 @@ function resetStore() {
     answeringCallId: null,
     recentlyEndedCallIds: [],
     lastDismissal: null,
+    nativeUiFallbackCallId: null,
   });
 }
 
@@ -220,4 +221,29 @@ test('reports why the active call ended', () => {
     callId: 'call-1',
     reason: 'canceled',
   });
+});
+
+test('does not tear down the call this device is answering', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+  useCallStore.getState().setAnsweringCallId('call-1');
+
+  // accept 已提交：对账说「不再邀请你」、撤销推送说「已在其他设备接听」—— 说的都是本机。
+  useCallStore.getState().dismissIncomingCall('call-1', 'ended');
+  useCallStore.getState().dismissIncomingCall('call-1', 'answered_elsewhere');
+  assert.equal(useCallStore.getState().incomingCall?.callId, 'call-1');
+
+  // 只有接听本身失败才收。
+  useCallStore.getState().dismissIncomingCall('call-1', 'failed');
+  assert.equal(useCallStore.getState().incomingCall, null);
+});
+
+test('flags a ringing call the system call UI could not take', () => {
+  resetStore();
+  useCallStore.getState().setNativeUiFallback('call-1');
+  assert.equal(useCallStore.getState().nativeUiFallbackCallId, null);
+
+  useCallStore.getState().handleCallInvite(invite);
+  useCallStore.getState().setNativeUiFallback('call-1');
+  assert.equal(useCallStore.getState().nativeUiFallbackCallId, 'call-1');
 });

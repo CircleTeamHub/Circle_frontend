@@ -17,9 +17,12 @@ class CallPushPackage : Package {
 }
 
 /**
- * 通知上的「接听」与全屏来电都是拉起主 Activity 的 PendingIntent：在这里认出它们，
- * 排一个 answer 事件给 JS，并让 Activity 能显示在锁屏之上。也顺带记录 App 是否在前台
- * （前台时来电由 WS + 应用内弹窗负责，原生层不再弹通知）。
+ * 通知上的「接听」与全屏来电都是拉起主 Activity 的 PendingIntent：在这里认出它们。
+ * - 接听：排一个 answer 事件给 JS，并让 Activity 显示在锁屏之上（通话页要在锁屏上用）；
+ * - 全屏来电 / 点通知（open）：只排一个 incoming 让 JS 补出应用内来电弹窗，**不**越过锁屏 ——
+ *   否则 JS 还没把弹窗拿出来之前，整个 App（聊天列表等）都能在不解锁的情况下操作。锁屏上
+ *   用户用通知自带的「接听 / 拒绝」即可。
+ * 也顺带记录 App 是否在前台（前台时来电由 WS + 应用内弹窗负责，原生层不再弹通知）。
  */
 class CallPushActivityListener : ReactActivityLifecycleListener {
   override fun onCreate(activity: Activity, savedInstanceState: Bundle?) {
@@ -47,10 +50,12 @@ class CallPushActivityListener : ReactActivityLifecycleListener {
     // 用过就清掉：Activity 重建（旋转、回收）时不能再接听一次。
     intent.removeExtra(IncomingCallNotifier.EXTRA_ACTION)
     intent.removeExtra(IncomingCallNotifier.EXTRA_CALL_ID)
-    showOverLockScreen(activity)
     if (action == IncomingCallNotifier.ACTION_ANSWER) {
+      showOverLockScreen(activity)
       IncomingCallNotifier.cancel(activity, callId)
       CallPushEvents.enqueue(mapOf("type" to "answer", "callId" to callId))
+    } else {
+      CallPushEvents.enqueue(mapOf("type" to "incoming", "callId" to callId, "shown" to true))
     }
   }
 

@@ -44,9 +44,20 @@ function current(overrides: Record<string, unknown> = {}, selfStatus = 'INVITED'
 
 test('parses every event the native layer queues', () => {
   assert.deepEqual(parseCallPushEvent({ type: 'voipToken' }), { type: 'voipToken' });
-  for (const type of ['incoming', 'answer', 'hangup']) {
+  for (const type of ['unavailable', 'answer', 'hangup']) {
     assert.deepEqual(parseCallPushEvent({ type, callId: 'c1' }), { type, callId: 'c1' });
   }
+  assert.deepEqual(parseCallPushEvent({ type: 'incoming', callId: 'c1', shown: false }), {
+    type: 'incoming',
+    callId: 'c1',
+    shown: false,
+  });
+  // 旧版本原生层不带 shown：当作响了。
+  assert.deepEqual(parseCallPushEvent({ type: 'incoming', callId: 'c1' }), {
+    type: 'incoming',
+    callId: 'c1',
+    shown: true,
+  });
   assert.deepEqual(
     parseCallPushEvent({ type: 'decline', callId: 'c1', declinedByNative: true }),
     { type: 'decline', callId: 'c1', declinedByNative: true },

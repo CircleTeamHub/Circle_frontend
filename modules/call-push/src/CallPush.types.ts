@@ -2,8 +2,12 @@
 export type CallPushNativeEvent =
   /** iOS：PushKit token 变了（新发 / 作废），JS 重新登记。 */
   | { type: 'voipToken' }
-  /** 原生层已经开始为这通电话响铃（推送来的，或 JS 交给它的）。 */
-  | { type: 'incoming'; callId: string }
+  /**
+   * 推送送来了这通邀请。shown = 原生层真的响了（安卓 App 在前台时不弹通知，交给应用内弹窗）。
+   */
+  | { type: 'incoming'; callId: string; shown: boolean }
+  /** iOS：CallKit 没接下这通（勿扰过滤等），需要应用内弹窗兜底。 */
+  | { type: 'unavailable'; callId: string }
   /** 用户在系统来电界面 / 全屏通知上点了接听：JS 去 accept 并入会。 */
   | { type: 'answer'; callId: string }
   /**

@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import {
   registerPushToken,
@@ -11,7 +10,11 @@ import {
 } from '@/features/notifications/services/push-token-registration';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
-import { CALL_PUSH_VERSION, getCallPushModule } from './call-push-native';
+import {
+  CALL_PUSH_VERSION,
+  getCallPushModule,
+  usesVoipPush,
+} from './call-push-native';
 
 const VOIP_REGISTRATION_KEY = 'circle-im-voip-push-registration';
 
@@ -56,9 +59,9 @@ type VoipOrchestrator = ReturnType<typeof createVoipPushTokenRegistrationOrchest
 
 let shared: VoipOrchestrator | null = null;
 
-/** 只有 iOS 且打过新原生包才有；其余平台返回 null。 */
+/** 只有 CallKit 模式的 iOS 且打过新原生包才有；其余（含中国区通知模式）返回 null。 */
 export function getVoipPushTokenRegistrationOrchestrator(): VoipOrchestrator | null {
-  if (Platform.OS !== 'ios' || !getCallPushModule()) return null;
+  if (!usesVoipPush()) return null;
   shared ??= createVoipPushTokenRegistrationOrchestrator();
   return shared;
 }

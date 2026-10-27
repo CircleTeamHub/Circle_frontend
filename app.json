@@ -124,8 +124,7 @@
       "./plugins/with-android-allow-backup-disabled",
       "./plugins/with-android-release-signing",
       "./plugins/with-android-gradle-memory",
-      "./plugins/with-ios-xcode27-compat",
-      "./plugins/with-call-push"
+      "./plugins/with-ios-xcode27-compat"
     ],
     "experiments": {
       "typedRoutes": true

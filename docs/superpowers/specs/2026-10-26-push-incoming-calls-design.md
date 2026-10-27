@@ -28,7 +28,8 @@
 ## 1. 决策
 
 > **拍板结果（2026-10-26）**：
-> - **D1 = A**：iOS 不上中国区，走 PushKit + CallKit；3B 只留档，不实现。
+> - **D1 = A**：先上 TestFlight，默认走 PushKit + CallKit。
+> - **构建期开关**：`EXPO_PUBLIC_IOS_CALL_MODE=callkit|notification`，默认 `callkit`，留给将来的中国区 App Store 包。**不做运行时地区判断。** `notification` 模式的包把 CallKit / PushKit 整个编译出去，来电走 3B 的 time-sensitive 通知。见 §3B 的「实现」。
 > - **D2–D4 按建议**：安卓本期只走极光长连接透传；推送带单通拒接令牌；推送里放主叫昵称（群通话再放群名）。
 > - **D5**：.p8 由用户稍后提供。没配凭据时后端跳过 VoIP 推送，安卓透传照发。
 > - **TestFlight 先测**：TestFlight 包走 APNs production，Xcode 调试包走 sandbox。为了让同一个后端同时服务两种包，由客户端登记 VoIP token 时上报环境（看包里有没有 `embedded.mobileprovision`），后端按 token 选主机，不用全局开关。
@@ -106,8 +107,23 @@ sequenceDiagram
   - `apns_collapse_id: call:<callId>`；
   - `time_to_live` 等于剩余振铃秒数。
 - `CALL_INVITE` 类别注册两个按钮：「接听」（foreground：拉起 App，由 JS 接听）和「拒接」（不拉到前台：原生用 `declineToken` 调 `/push-decline`）。按钮回调要挂进 expo-notifications 和极光已经占用的 `UNUserNotificationCenter` 代理链，具体挂法实现时确认。
-- 撤销：用同一个 collapse-id 发一条**静音**通知（「通话已取消」「未接来电」「已在其他设备接听」），覆盖掉原来那条。替换是否会立刻停掉还在播放的铃声，**必须真机验证**。不行就退回「不超过 30 秒、自然结束」。
+- 撤销：用同一个 collapse-id 发一条**静音**通知（「对方已取消通话」「未接来电」「已在其他设备接听」），覆盖掉原来那条。替换是否会立刻停掉还在播放的铃声，**必须真机验证**。不行就退回「不超过 30 秒、自然结束」。
 - 体验上限：锁屏只是一条横幅加 30 秒铃声，没有系统通话界面。这是中国区所有 IM 共同的天花板。
+
+**实现（构建期开关 `EXPO_PUBLIC_IOS_CALL_MODE=notification`）**：
+- 构建：
+  - `app.config.js` 校验开关取值，通知模式要求同时配置极光；
+  - `with-call-push` 插件不加 `voip` 后台模式，改加 time-sensitive entitlement，并在 `Podfile.properties.json` 写入 `callPush.iosMode`；
+  - podspec 据此加上编译条件 `CALL_PUSH_NO_CALLKIT`，不链接 CallKit / PushKit。CallKit 实现整份包在条件编译里，另有一个同 API 的空实现，作用是按 collapse-id 收掉通知中心里的来电通知；
+  - 铃声 `assets/sounds/call_ring.caf` 是自合成的 28 秒铃声，只有通知模式的包会通过 expo-notifications 的 `sounds` 打进去。
+- 后端：iOS 极光 token 声明了 `callPushVersion`，就发 time-sensitive 来电通知。只有通知模式的包会声明；CallKit 包的 iOS 极光 token 从不声明，所以同一台设备不会两边都响。
+- 接听与拒接：
+  - **本期没有通知上的「接听 / 拒绝」按钮**。点开通知后，JS 从极光的 `notificationOpened` 事件拿到邀请，补出应用内来电弹窗，在弹窗里接听或拒接；
+  - App 活着时，收到撤销通知会收掉弹窗。
+- ⚠️ 上线中国区包之前要确认三件事：
+  - 极光 REST API 会把 `interruption-level` 透传给 APNs；
+  - 静音覆盖能不能停掉正在播放的铃声；
+  - Apple 对中国区包里 PushKit 的审核口径。
 
 ### 3C. 安卓 — 极光透传 + 全屏来电通知
 
@@ -266,6 +282,17 @@ sequenceDiagram
 7. 断网时来电、在振铃窗口外恢复网络：不会补响。
 8. 旧版本包：行为和今天完全一样。
 9. 安卓 14 关掉全屏权限：降级为横幅，设置页有提示。
+
+## 8.5 审查后补上的行为（2026-10-27）
+
+- **冷启动期间来电已经结束**（主叫取消、别处已接）：WS 不会重放这些事件。JS 处理 `incoming` 时向服务端确认，确定不再邀请我，就收掉 CallKit；问不到（网络差）则不动，交给到期计时。iOS 原生层另外记住最近结束的通话，迟到的 VoIP 推送上报后立刻结束。
+- **本机正在接听时**，对账结果和「已在其他设备接听」撤销都不能把这通收掉（服务端此时已把我记成 JOINED）；只有接听本身失败才收。
+- **CallKit 拒绝上报**（勿扰过滤等）：原生层发 `unavailable`，应用内弹窗兜底，不让主叫白响。
+- **未登录时收到来电**（token 撤销还在排队）：原生事件一律收掉，CallKit 不会一直挂在「已接通」。
+- **安卓锁屏**：只有「接听」会让 App 显示在锁屏之上。全屏来电 / 点通知只补出应用内弹窗，不越过锁屏，否则 JS 还没把弹窗拿出来之前，整个 App 都能在不解锁的情况下操作。拒接和撤销时原生层自己放开锁屏显示。
+- **安卓前台收到透传时原生层不响**（`shown=false`），切到后台后由 JS 补发通知。
+- **APNs 长连**：请求超时或流提前断开时丢弃会话并重连，避免一条半开连接拖住之后的每一通来电。
+- **极光 1003**（参数不合法）：在来电路径上不再当作死令牌，否则新载荷字段一旦被判不合法，就会把被叫的极光 token 全部停掉，聊天推送一起断。
 
 ## 9. 实现对照（2026-10-26）
 

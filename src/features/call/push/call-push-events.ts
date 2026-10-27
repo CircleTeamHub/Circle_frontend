@@ -15,6 +15,9 @@ export function parseCallPushEvent(value: unknown): CallPushNativeEvent | null {
   if (typeof callId !== 'string' || callId.length === 0) return null;
   switch (event.type) {
     case 'incoming':
+      // 旧版本原生层不带 shown：当作响了（iOS 一律是 CallKit 在响）。
+      return { type: 'incoming', callId, shown: event.shown !== false };
+    case 'unavailable':
     case 'answer':
     case 'hangup':
       return { type: event.type, callId };

@@ -85,10 +85,14 @@ export function CallInviteHost() {
   useCallPushBridge();
   useRingingCallWatchdog();
   const incomingCall = useCallStore((state) => state.incomingCall);
+  const nativeUiFallbackCallId = useCallStore((state) => state.nativeUiFallbackCallId);
   const resetCallState = useCallStore((state) => state.resetCallState);
   const [busyAction, setBusyAction] = useState<'accept' | 'reject' | null>(null);
-  // iOS 打过新原生包后来电一律走 CallKit 的系统界面，这里不再叠一层弹窗。
-  const visible = Boolean(incomingCall) && !nativeOwnsIncomingCallUi();
+  // iOS 打过新原生包后来电一律走 CallKit 的系统界面，这里不再叠一层弹窗 —— 除非 CallKit
+  // 没接下这一通（勿扰过滤等），那就由这里兜底。
+  const visible =
+    Boolean(incomingCall) &&
+    (!nativeOwnsIncomingCallUi() || nativeUiFallbackCallId === incomingCall?.callId);
   // review P1：VIDEO 邀请必须如实标示 —— 接听即发布摄像头，套着语音来电的
   // 皮会让用户在不知情下开摄像头。
   const isVideoInvite = incomingCall?.callType === 'VIDEO';

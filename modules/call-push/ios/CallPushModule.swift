@@ -14,8 +14,8 @@ public class CallPushModule: Module {
 
     Events("onCallEventsAvailable")
 
-    OnStartObserving {
-      CallPushCenter.shared.onEventsAvailable = { [weak self] in
+    OnStartObserving { [weak self] in
+      CallPushCenter.shared.onEventsAvailable = {
         self?.sendEvent("onCallEventsAvailable", [:])
       }
     }

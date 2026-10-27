@@ -1,3 +1,7 @@
+// CallKit 模式（默认）的实现。中国区通知模式的包（EXPO_PUBLIC_IOS_CALL_MODE=notification）
+// 定义 CALL_PUSH_NO_CALLKIT，整份文件不参与编译 —— 二进制里不能出现 CallKit / PushKit；
+// 同名的空实现在 CallPushNotificationCenter.swift。
+#if !CALL_PUSH_NO_CALLKIT
 import AVFAudio
 import CallKit
 import Foundation
@@ -31,11 +35,14 @@ final class CallPushCenter: NSObject {
   private static let clockSkewTolerance: TimeInterval = 60
   private static let minRingSeconds: TimeInterval = 10
   private static let maxRingSeconds: TimeInterval = 90
+  /// 刚结束的通话记多久：迟到的 VoIP 推送（WS 先到、已拒接 / 已取消）不能再响一次。
+  private static let recentlyEndedTtl: TimeInterval = 10 * 60
 
   private let defaults = UserDefaults.standard
   private var registry: PKPushRegistry?
   private lazy var provider: CXProvider = makeProvider()
   private var calls: [UUID: RingingCall] = [:]
+  private var recentlyEnded: [UUID: Date] = [:]
   private var pendingEvents: [[String: Any]] = []
   var onEventsAvailable: (() -> Void)?
 
@@ -87,9 +94,9 @@ final class CallPushCenter: NSObject {
   func endCall(callId: String, reason: String) {
     // 接通了：CallKit 那通电话继续（它就是通话本身），不结束。
     guard reason != "answered" else { return }
-    guard let uuid = UUID(uuidString: callId), let call = calls.removeValue(forKey: uuid) else {
-      return
-    }
+    guard let uuid = UUID(uuidString: callId) else { return }
+    rememberEnded(uuid)
+    guard let call = calls.removeValue(forKey: uuid) else { return }
     call.expiryTimer?.invalidate()
     provider.reportCall(with: uuid, endedAt: nil, reason: Self.endedReason(reason))
   }
@@ -119,7 +126,11 @@ final class CallPushCenter: NSObject {
       // 载荷坏了或早已过期：规则仍要求上报一通来电，报完立刻结束。
       let uuid = invite.flatMap { UUID(uuidString: $0.callId) } ?? UUID()
       if calls[uuid] != nil {
-        completion?()
+        // 这通已经在响 / 已接通（迟到的重复推送）：照样上报一次（CallKit 回
+        // callUUIDAlreadyExists），但绝不能把正在进行的这通结束掉。
+        provider.reportNewIncomingCall(with: uuid, update: Self.update(for: invite)) { _ in
+          completion?()
+        }
         return
       }
       provider.reportNewIncomingCall(with: uuid, update: Self.update(for: invite)) { [weak self] _ in
@@ -129,10 +140,29 @@ final class CallPushCenter: NSObject {
       return
     }
 
-    if calls[uuid] != nil {
+    if var existing = calls[uuid] {
       // 同一通电话已经在响（WS 与推送都到了）：再报一次满足 Apple 的规则，CallKit
-      // 会回 callUUIDAlreadyExists，现有的振铃保持不动。
+      // 会回 callUUIDAlreadyExists，现有的振铃保持不动。JS 先报的那份没有拒接令牌，
+      // 推送带来的补上 —— 锁屏拒接才不用等 JS 醒来。
+      if existing.declineToken == nil, let token = invite.declineToken {
+        existing = RingingCall(
+          callId: existing.callId,
+          declineToken: token,
+          answered: existing.answered,
+          expiryTimer: existing.expiryTimer
+        )
+        calls[uuid] = existing
+      }
       provider.reportNewIncomingCall(with: uuid, update: Self.update(for: invite)) { _ in
+        completion?()
+      }
+      return
+    }
+
+    if isRecentlyEnded(uuid) {
+      // 本机已经收掉过这通（拒接 / 对方取消 / 别处接听）：规则要求上报，报完立刻结束。
+      provider.reportNewIncomingCall(with: uuid, update: Self.update(for: invite)) { [weak self] _ in
+        self?.provider.reportCall(with: uuid, endedAt: nil, reason: .remoteEnded)
         completion?()
       }
       return
@@ -150,13 +180,14 @@ final class CallPushCenter: NSObject {
       if let error = error as NSError?,
          !(error.domain == CXErrorDomainIncomingCall
            && error.code == CXErrorCodeIncomingCallError.callUUIDAlreadyExists.rawValue) {
-        // 勿扰 / 屏蔽名单等：系统没让它响。
+        // 勿扰 / 屏蔽名单等：系统没让它响。别把来电从 JS 那边抹掉 —— App 在前台时
+        // 应用内弹窗兜底，否则主叫白响到超时。
         self.calls.removeValue(forKey: uuid)
-        self.enqueue(["type": "end", "callId": invite.callId, "reason": "failed"])
+        self.enqueue(["type": "unavailable", "callId": invite.callId])
         return
       }
       self.scheduleExpiry(uuid, at: invite.expiresAt)
-      self.enqueue(["type": "incoming", "callId": invite.callId])
+      self.enqueue(["type": "incoming", "callId": invite.callId, "shown": true])
     }
   }
 
@@ -168,10 +199,22 @@ final class CallPushCenter: NSObject {
     let timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
       guard let self, let call = self.calls[uuid], !call.answered else { return }
       self.calls.removeValue(forKey: uuid)
+      self.rememberEnded(uuid)
       self.provider.reportCall(with: uuid, endedAt: nil, reason: .unanswered)
       self.enqueue(["type": "end", "callId": call.callId, "reason": "missed"])
     }
     calls[uuid]?.expiryTimer = timer
+  }
+
+  private func rememberEnded(_ uuid: UUID) {
+    let now = Date()
+    recentlyEnded = recentlyEnded.filter { now.timeIntervalSince($0.value) < Self.recentlyEndedTtl }
+    recentlyEnded[uuid] = now
+  }
+
+  private func isRecentlyEnded(_ uuid: UUID) -> Bool {
+    guard let endedAt = recentlyEnded[uuid] else { return false }
+    return Date().timeIntervalSince(endedAt) < Self.recentlyEndedTtl
   }
 
   private func enqueue(_ event: [String: Any]) {
@@ -268,8 +311,9 @@ extension CallPushCenter: PKPushRegistryDelegate {
 
 extension CallPushCenter: CXProviderDelegate {
   func providerDidReset(_ provider: CXProvider) {
-    for call in calls.values {
+    for (uuid, call) in calls {
       call.expiryTimer?.invalidate()
+      rememberEnded(uuid)
       enqueue(["type": "end", "callId": call.callId, "reason": "failed"])
     }
     calls.removeAll()
@@ -294,6 +338,7 @@ extension CallPushCenter: CXProviderDelegate {
       return
     }
     call.expiryTimer?.invalidate()
+    rememberEnded(action.callUUID)
     if call.answered {
       enqueue(["type": "hangup", "callId": call.callId])
     } else {
@@ -311,3 +356,5 @@ extension CallPushCenter: CXProviderDelegate {
     WebRTCAudioBridge.didDeactivate(audioSession)
   }
 }
+
+#endif

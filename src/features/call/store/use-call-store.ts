@@ -29,7 +29,13 @@ type CallStoreState = {
   recentlyEndedCallIds: string[];
   /** 最近一次收掉振铃的原因；原生层据此给 CallKit 报对应的结束原因。 */
   lastDismissal: { callId: string; reason: CallDismissReason } | null;
+  /**
+   * 系统来电界面没能接下的那通（iOS 上 CallKit 报错，例如勿扰过滤）：应用内弹窗兜底，
+   * 别让它悄悄消失、主叫白响 45 秒。
+   */
+  nativeUiFallbackCallId: string | null;
   setAnsweringCallId: (callId: string | null) => void;
+  setNativeUiFallback: (callId: string) => void;
   /**
    * 本人在另一台设备上接听 / 拒接了这通：本机还在响就收掉。本机正在接听的不动。
    */
@@ -37,7 +43,11 @@ type CallStoreState = {
     callId: string,
     reason: Extract<CallDismissReason, 'answered_elsewhere' | 'declined_elsewhere'>,
   ) => void;
-  /** 收掉一通还在振铃的来电（原生层拒接 / 到期 / 撤销推送）；已接通的不动。 */
+  /**
+   * 收掉一通还在振铃的来电（原生层拒接 / 到期 / 撤销推送 / 对账）；已接通的不动。
+   * 本机正在接听的那通也不动 —— accept 提交后服务端已把我记成 JOINED，对账与撤销推送都会
+   * 说「不再邀请你」，那正是本机接起来了；只有接听失败本身（'failed'）才收。
+   */
   dismissIncomingCall: (callId: string, reason: CallDismissReason) => void;
   setActiveCall: (
     call: CallSession | null,
@@ -158,6 +168,7 @@ export const useCallStore = create<CallStoreState>((set) => ({
   answeringCallId: null,
   recentlyEndedCallIds: [],
   lastDismissal: null,
+  nativeUiFallbackCallId: null,
   setActiveCall: (call, livekit = null) =>
     set({
       activeCall: call,
@@ -167,6 +178,10 @@ export const useCallStore = create<CallStoreState>((set) => ({
     }),
   setLiveKitCredentials: (livekit) => set({ livekit }),
   setAnsweringCallId: (answeringCallId) => set({ answeringCallId }),
+  setNativeUiFallback: (callId) =>
+    set((state) =>
+      state.incomingCall?.callId === callId ? { nativeUiFallbackCallId: callId } : state,
+    ),
   // 同一通邀请可能从 WS、推送（原生层）、回前台对账三条路各来一次：按 callId 去重；
   // 已经结束的、本机已接通的，都不再弹。
   handleCallInvite: (payload) =>
@@ -201,7 +216,10 @@ export const useCallStore = create<CallStoreState>((set) => ({
     }),
   dismissIncomingCall: (callId, reason) =>
     set((state) => {
-      if (state.incomingCall?.callId !== callId) {
+      if (
+        state.incomingCall?.callId !== callId ||
+        (state.answeringCallId === callId && reason !== 'failed')
+      ) {
         return state;
       }
       return {

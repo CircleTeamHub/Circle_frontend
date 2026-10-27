@@ -32,14 +32,17 @@ object CallPushHandler {
       "call.invite" -> {
         val invite = CallPushInvite.fromExtras(extras) ?: return
         if (invite.isExpired(nowMs) || CallPushStore.isDismissed(context, invite.callId, nowMs)) return
-        CallPushEvents.enqueue(mapOf("type" to "incoming", "callId" to invite.callId))
         // App 在前台时 WS 会送到同一通邀请，应用内弹窗负责；后台 / 没在跑才由原生层响铃。
-        if (!AppVisibility.foreground) IncomingCallNotifier.show(context, invite)
+        // shown 告诉 JS 原生层有没有真的响：前台没响的，切到后台时要由 JS 补发。
+        val shown = !AppVisibility.foreground
+        if (shown) IncomingCallNotifier.show(context, invite)
+        CallPushEvents.enqueue(mapOf("type" to "incoming", "callId" to invite.callId, "shown" to shown))
       }
       "call.dismiss" -> {
         val callId = extras.optString("callId").ifEmpty { return }
         CallPushStore.markDismissed(context, callId, nowMs)
         IncomingCallNotifier.cancel(context, callId)
+        CallPushActivityListener.releaseLockScreen()
         CallPushEvents.enqueue(
           mapOf("type" to "end", "callId" to callId, "reason" to extras.optString("reason", "ended")),
         )
@@ -57,6 +60,7 @@ class CallActionReceiver : BroadcastReceiver() {
     val baseUrl = CallPushStore.apiBaseUrl(context)
     IncomingCallNotifier.cancel(context, callId)
     CallPushStore.markDismissed(context, callId)
+    CallPushActivityListener.releaseLockScreen()
     val declinedByNative = token != null && baseUrl != null
     CallPushEvents.enqueue(
       mapOf("type" to "decline", "callId" to callId, "declinedByNative" to declinedByNative),

@@ -21,7 +21,7 @@ import {
 } from '@/features/notifications/services/jpush';
 import {
   CALL_PUSH_VERSION,
-  supportsCallPush,
+  jpushCarriesCalls,
 } from '@/features/call/push/call-push-native';
 
 type NotificationsModule = typeof import('expo-notifications');
@@ -899,13 +899,14 @@ async function loadNotificationsModule() {
 }
 
 /**
- * 安卓的极光 token 同时承载来电透传：打过新原生包（有 CallPush 模块）才声明能处理，
- * 否则服务端照旧不给这台设备发来电推送。iOS 的来电走单独登记的 VoIP token。
+ * 极光 token 同时承载来电时（安卓的透传；中国区通知模式 iOS 的 time-sensitive 通知），
+ * 打过新原生包（有 CallPush 模块）才声明能处理，否则服务端照旧不给这台设备发来电推送。
+ * CallKit 模式的 iOS 来电走单独登记的 VoIP token，这里不声明。
  */
 function defaultRegistrationExtras(
   provider: PushTokenProvider,
 ): PushRegistrationExtras {
-  return Platform.OS === 'android' && provider === 'jpush' && supportsCallPush()
+  return provider === 'jpush' && jpushCarriesCalls()
     ? { callPushVersion: CALL_PUSH_VERSION }
     : {};
 }
