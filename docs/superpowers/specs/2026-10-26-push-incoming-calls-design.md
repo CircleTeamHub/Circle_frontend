@@ -300,7 +300,7 @@ sequenceDiagram
   - `src/call/call-push.service.ts`：邀请、撤销、目标筛选；
   - `src/notification/apns-voip.client.ts`：http2 + ES256，按 token 选择环境；
   - `src/call/call-decline-token.ts`、`call-push.controller.ts`：`/push-decline` 接口；
-  - 迁移 `20261026120000_call_push_tokens`。
+  - 迁移 `20261027120000_call_push_tokens`。
 - 前端原生（`modules/call-push`，本地 Expo 模块，由 `plugins/with-call-push.js` 改清单和 Info.plist）：
   - iOS：`CallPushCenter.swift`，PushKit + CallKit + 原生拒接；
   - 安卓：`CallJPushReceiver`（继承极光接收端）、`IncomingCallNotifier`（CallStyle 全屏通知）、`CallActionReceiver`（拒接）。
