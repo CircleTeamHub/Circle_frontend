@@ -22,7 +22,7 @@ import {
   readRecentLocalMessages,
   searchLocalChatMessages,
 } from './local-db';
-import { sortConversations, useChatStore } from './store';
+import { conversationsLeftSince, sortConversations, useChatStore } from './store';
 
 /**
  * chat-core 的 REST 冷路径(circle_be /api/v1/chat/*)。
@@ -323,11 +323,13 @@ export async function loadChatConversations(
     if (sameSession()) {
       await hydrateTimelinesBehindDeletedPreviews(conversations, sameSession);
     }
-    if (sameSession()) {
-      useChatStore.getState().setConversations(conversations, requestPreviewRevision);
-      lastConversationSnapshot = { epoch: requestEpoch, at: startedAt };
-    }
-    return conversations;
+    if (!sameSession()) return conversations;
+    useChatStore.getState().setConversations(conversations, requestPreviewRevision);
+    lastConversationSnapshot = { epoch: requestEpoch, at: startedAt };
+    const left = conversationsLeftSince(requestPreviewRevision);
+    return left.size === 0
+      ? conversations
+      : conversations.filter((conversation) => !left.has(conversation.id));
   })();
   conversationsRequest = request;
   conversationsRequestEpoch = requestEpoch;
