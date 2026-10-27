@@ -10,8 +10,9 @@ const {
 //
 // 安卓：jpush-react-native 的 JPushModuleReceiver 是唯一接 RECEIVER_MESSAGE 的组件。换成
 // 继承它的 CallJPushReceiver —— 来电透传在原生层截下（JS 没跑也能全屏响铃），其余消息
-// super 回原逻辑。替换必须写在 App 清单里：tools:node="remove" 只对优先级更低的清单生效，
-// 写在库清单里取决于库之间的合并顺序，靠不住。
+// super 回原逻辑。去掉原接收端必须写在 App 清单里：tools:node="remove" 只对优先级更低的
+// 清单生效，写在库清单里取决于库之间的合并顺序，靠不住。新接收端本身声明在 call-push 的
+// 库清单里（见那里的注释：写进 App 清单会被 lintVitalRelease 以 Instantiatable 拦下）。
 //
 // iOS 按构建期开关 iosMode 二选一（app.config.js 的 EXPO_PUBLIC_IOS_CALL_MODE）：
 // - callkit（默认）：UIBackgroundModes 加 voip，PushKit 才会把 VoIP 推送投给（含被杀掉的）App；
@@ -23,8 +24,8 @@ const POD_PROPERTY = 'callPush.iosMode';
 const TIME_SENSITIVE_ENTITLEMENT =
   'com.apple.developer.usernotifications.time-sensitive';
 const JPUSH_RECEIVER = 'cn.jiguang.plugins.push.receiver.JPushModuleReceiver';
+// 早期版本把它写进过 App 清单：重新 prebuild 时顺手清掉，避免与库清单里的声明重复。
 const CALL_RECEIVER = 'expo.modules.callpush.CallJPushReceiver';
-const JPUSH_MESSAGE_ACTION = 'cn.jpush.android.intent.RECEIVER_MESSAGE';
 
 function replaceJPushReceiver(androidManifest) {
   androidManifest.manifest.$ = {
@@ -41,19 +42,6 @@ function replaceJPushReceiver(androidManifest) {
     ...others,
     {
       $: { 'android:name': JPUSH_RECEIVER, 'tools:node': 'remove' },
-    },
-    {
-      $: {
-        'android:name': CALL_RECEIVER,
-        'android:enabled': 'true',
-        'android:exported': 'false',
-      },
-      'intent-filter': [
-        {
-          action: [{ $: { 'android:name': JPUSH_MESSAGE_ACTION } }],
-          category: [{ $: { 'android:name': '${applicationId}' } }],
-        },
-      ],
     },
   ];
   return androidManifest;

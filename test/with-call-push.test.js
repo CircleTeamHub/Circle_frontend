@@ -21,26 +21,35 @@ function manifest(receivers = []) {
   };
 }
 
-test('swaps the JPush receiver for the call-aware subclass in the app manifest', () => {
+test('removes the JPush receiver from the app manifest so the call-aware subclass takes over', () => {
   const result = replaceJPushReceiver(
-    manifest([{ $: { 'android:name': 'some.other.Receiver' } }]),
+    manifest([
+      { $: { 'android:name': 'some.other.Receiver' } },
+      // 早期版本写进 App 清单的声明：要清掉。
+      { $: { 'android:name': CALL_RECEIVER } },
+    ]),
   );
   const receivers = result.manifest.application[0].receiver;
 
   assert.equal(result.manifest.$['xmlns:tools'], 'http://schemas.android.com/tools');
-  assert.deepEqual(receivers[0], { $: { 'android:name': 'some.other.Receiver' } });
   // tools:node=remove 写在 App 清单里才压得过库清单。
-  assert.deepEqual(receivers.find((r) => r.$['android:name'] === JPUSH_RECEIVER), {
-    $: { 'android:name': JPUSH_RECEIVER, 'tools:node': 'remove' },
-  });
-  const call = receivers.find((r) => r.$['android:name'] === CALL_RECEIVER);
-  assert.equal(call.$['android:exported'], 'false');
-  assert.deepEqual(call['intent-filter'], [
-    {
-      action: [{ $: { 'android:name': 'cn.jpush.android.intent.RECEIVER_MESSAGE' } }],
-      category: [{ $: { 'android:name': '${applicationId}' } }],
-    },
+  assert.deepEqual(receivers, [
+    { $: { 'android:name': 'some.other.Receiver' } },
+    { $: { 'android:name': JPUSH_RECEIVER, 'tools:node': 'remove' } },
   ]);
+});
+
+test('the call-aware receiver is declared in the library manifest, not the app manifest', () => {
+  // 写进 App 清单会被 lintVitalRelease 拦下（Instantiatable：父类链上的极光 SDK 不在
+  // App 的编译类路径上）。库清单里的组件不在 App lint 的检查范围内。
+  const libraryManifest = fs.readFileSync(
+    path.join(process.cwd(), 'modules/call-push/android/src/main/AndroidManifest.xml'),
+    'utf8',
+  );
+  assert.match(
+    libraryManifest,
+    /<receiver\s+android:name="\.CallJPushReceiver"[^>]*android:exported="false">\s*<intent-filter>\s*<action android:name="cn\.jpush\.android\.intent\.RECEIVER_MESSAGE" \/>\s*<category android:name="\$\{applicationId\}" \/>/,
+  );
 });
 
 test('is idempotent across repeated prebuilds', () => {
@@ -48,7 +57,7 @@ test('is idempotent across repeated prebuilds', () => {
   const twice = replaceJPushReceiver(once);
   const names = twice.manifest.application[0].receiver.map((r) => r.$['android:name']);
 
-  assert.deepEqual(names.sort(), [CALL_RECEIVER, JPUSH_RECEIVER].sort());
+  assert.deepEqual(names, [JPUSH_RECEIVER]);
 });
 
 test('adds the voip background mode without dropping existing modes', () => {
