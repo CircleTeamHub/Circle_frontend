@@ -40,7 +40,7 @@ import { prunePendingMedia, resolvePendingMediaUri } from './pending-media';
 import { bindChatEvents, cancelConversationBackfill } from './dispatcher';
 import { createChatSendQueue } from './send-queue';
 import { pickEagerTimelineIds } from './eager-hydration';
-import { deliveredCatchUpReports } from './delivered-catch-up';
+import { DELIVERED_CATCH_UP_LIMIT, deliveredCatchUpReports } from './delivered-catch-up';
 import { isMessageDeletedLocally } from './deleted-messages';
 import {
   CHAT_EVENTS,
@@ -313,6 +313,19 @@ let suspendedForBackground = false;
  * 每个单聊都算「新到」,一次性把服务端的送达限流打满。
  */
 let deliveredBaseline: ReadonlyMap<string, number> | null = null;
+/**
+ * 补报「已送达」时,一批之后隔多久补下一批。服务端送达限流的窗口是 10 秒,多留 2 秒
+ * 给网络时延和同一份额度里的实时送达。
+ */
+const DELIVERED_CATCH_UP_INTERVAL_MS = 12_000;
+/**
+ * 还没补报的「已送达」(超出一批的部分)。断线不丢:断开时记的基线已经包含了它们,
+ * 下次对账不会再算出来,丢了就永远补不上。登出 / 换账号才清。
+ */
+let deliveredCatchUpBacklog: readonly { conversationId: string; height: number }[] = [];
+let deliveredCatchUpTimer: ReturnType<typeof setTimeout> | null = null;
+/** 上一批补报发出的时刻。重连不重置:窗口内重连了也得等满间隔,不然多出的那批被限流吞掉。 */
+let lastDeliveredCatchUpAt = 0;
 let tokenRefreshInFlight = false;
 let tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -393,6 +406,7 @@ export function connectChat(token: string, userId: string): void {
     readFlushRequested = false;
     hadConnectedForUser = null;
     deliveredBaseline = null;
+    dropDeliveredCatchUp();
     // 换账号是真正的会话边界:新账号的第一次连不上,值得单独报一次。
     reportedCurrentConnectOutage = false;
     serverReconnectAttempt = 0;
@@ -504,6 +518,8 @@ export function connectChat(token: string, userId: string): void {
     void flushPendingReads();
     // 断线期间排着的消息按原顺序、同一个 d 接着发。
     sendQueue.resume();
+    // 上次没补完的送达接着排(按间隔);这次对账的快照请求失败也不会把它们卡住。
+    flushDeliveredCatchUp();
     resyncConversations(userId, isReconnect);
   });
   next.on(CHAT_EVENTS.sessionExpired, () => {
@@ -604,6 +620,7 @@ export function disconnectChat(): void {
   pendingReads.clear();
   hadConnectedForUser = null;
   deliveredBaseline = null;
+  dropDeliveredCatchUp();
   // 同步游标只清内存那份:本地库里按账号分库记着,同一账号再登录接着用。
   resetChatSync();
   // 登出是真正的会话边界:store.reset() 之后 currentUserId 归 null,下次
@@ -640,9 +657,62 @@ export function suspendChat(): void {
   flushingReads = false;
   readFlushRequested = false;
   clearTokenRefreshTimer();
+  clearDeliveredCatchUpTimer();
   teardownSocket();
   useChatStore.getState().setConnected(false);
   useChatStore.getState().setConnecting(false);
+}
+
+function clearDeliveredCatchUpTimer(): void {
+  if (!deliveredCatchUpTimer) return;
+  clearTimeout(deliveredCatchUpTimer);
+  deliveredCatchUpTimer = null;
+}
+
+function dropDeliveredCatchUp(): void {
+  clearDeliveredCatchUpTimer();
+  deliveredCatchUpBacklog = [];
+  lastDeliveredCatchUpAt = 0;
+}
+
+/**
+ * 把这次对账算出来的补报并进排队的那些(同一会话留更高的水位,这次的排前面),
+ * 先报一批,剩下的隔一个限流窗口再报。
+ */
+function queueDeliveredCatchUp(
+  reports: readonly { conversationId: string; height: number }[],
+): void {
+  const merged = new Map<string, number>();
+  for (const report of [...reports, ...deliveredCatchUpBacklog]) {
+    const prior = merged.get(report.conversationId) ?? 0;
+    if (report.height > prior) merged.set(report.conversationId, report.height);
+  }
+  deliveredCatchUpBacklog = Array.from(merged, ([conversationId, height]) => ({
+    conversationId,
+    height,
+  }));
+  flushDeliveredCatchUp();
+}
+
+function flushDeliveredCatchUp(): void {
+  clearDeliveredCatchUpTimer();
+  // 没连着就先排着,下次连上时接着报。
+  if (!socket?.connected || deliveredCatchUpBacklog.length === 0) return;
+  const wait = lastDeliveredCatchUpAt + DELIVERED_CATCH_UP_INTERVAL_MS - Date.now();
+  if (wait > 0) {
+    deliveredCatchUpTimer = setTimeout(flushDeliveredCatchUp, wait);
+    return;
+  }
+  const batch = deliveredCatchUpBacklog.slice(0, DELIVERED_CATCH_UP_LIMIT);
+  deliveredCatchUpBacklog = deliveredCatchUpBacklog.slice(DELIVERED_CATCH_UP_LIMIT);
+  lastDeliveredCatchUpAt = Date.now();
+  for (const report of batch) reportChatDelivered(report.conversationId, report.height);
+  if (deliveredCatchUpBacklog.length > 0) {
+    deliveredCatchUpTimer = setTimeout(
+      flushDeliveredCatchUp,
+      DELIVERED_CATCH_UP_INTERVAL_MS,
+    );
+  }
 }
 
 /**
@@ -967,16 +1037,11 @@ function resyncConversations(userId: string, isReconnect: boolean): void {
   void loadChatConversations()
     .then((conversations) => {
       if (useChatStore.getState().currentUserId !== userId) return;
-      // 断开期间到的消息只走了推送,实时那条「收到即报送达」没机会跑。
-      if (baseline) {
-        for (const report of deliveredCatchUpReports(
-          baseline,
-          conversations,
-          userId,
-        )) {
-          reportChatDelivered(report.conversationId, report.height);
-        }
-      }
+      // 断开期间到的消息只走了推送,实时那条「收到即报送达」没机会跑。上次没报完的
+      // 也在这里接着报。
+      queueDeliveredCatchUp(
+        baseline ? deliveredCatchUpReports(baseline, conversations, userId) : [],
+      );
       return syncConversationsFromSnapshot(conversations, { prioritize });
     })
     .catch((err: unknown) => {

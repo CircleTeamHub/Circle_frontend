@@ -978,6 +978,79 @@ function reconcileDeletedPreview(
 }
 
 /**
+ * 会话进出(退群 / 被移出 / 入群 / 本机建的会话)发生在预览时钟的哪一刻。
+ *
+ * 会话多时快照要翻好几页、拉好几秒:先拉回来的页早于这期间的退群,刚退的群会被它带回
+ * 列表;快照又是整表替换,这期间刚入的群、页里还没有,会被它从列表里抹掉。晚于请求
+ * 发出时刻的进出以本机为准,早于的交给快照(快照落地后就清掉,不会越攒越多)。
+ */
+const membershipChanges = new Map<string, { revision: number; present: boolean }>();
+
+/**
+ * 请求发出之后才退掉 / 被移出的会话。setConversations 已经把它们从 store 剔掉了,
+ * 拿着这份快照的调用方(重连同步、送达补报、清空记录)也要剔:否则还会去同步一个已经
+ * 退掉的群。
+ */
+export function conversationsLeftSince(
+  requestPreviewRevision: number | undefined,
+): ReadonlySet<string> {
+  const left = new Set<string>();
+  if (requestPreviewRevision === undefined) return left;
+  for (const [conversationId, change] of membershipChanges) {
+    if (!change.present && change.revision > requestPreviewRevision) left.add(conversationId);
+  }
+  return left;
+}
+
+function applyMembershipChanges(
+  snapshot: ChatConversationDto[],
+  currentById: ReadonlyMap<string, ChatConversationDto>,
+  requestPreviewRevision: number | undefined,
+): ChatConversationDto[] {
+  if (requestPreviewRevision === undefined || membershipChanges.size === 0) {
+    return snapshot;
+  }
+  const listed = new Set(snapshot.map((conversation) => conversation.id));
+  const left = new Set<string>();
+  const joined: ChatConversationDto[] = [];
+  for (const [conversationId, change] of membershipChanges) {
+    if (change.revision <= requestPreviewRevision) {
+      membershipChanges.delete(conversationId);
+      continue;
+    }
+    if (!change.present) {
+      left.add(conversationId);
+      continue;
+    }
+    const current = currentById.get(conversationId);
+    if (current && !listed.has(conversationId)) joined.push(current);
+  }
+  if (left.size === 0 && joined.length === 0) return snapshot;
+  return [
+    ...snapshot.filter((conversation) => !left.has(conversation.id)),
+    ...joined,
+  ];
+}
+
+/**
+ * 快照那一页之后实时到的、会计入未读的消息数(口径同 applyIncomingMessage:不是自己发的;
+ * 撤回的、本机删掉的不算)。正在看的会话不计未读。
+ */
+function unreadArrivedAfter(
+  snapshotHeight: number,
+  timeline: ChatMessageDto[] | undefined,
+  currentUserId: string | null,
+): number {
+  return (timeline ?? []).filter(
+    (message) =>
+      message.height > snapshotHeight &&
+      !(currentUserId !== null && message.sender?.id === currentUserId) &&
+      !message.revokedAt &&
+      !isMessageDeletedLocally(message.id, message.d),
+  ).length;
+}
+
+/**
  * 只保护请求期间推进的实时/本地预览。单凭更高的 height 无法区分新消息和
  * 另一台设备已焚毁的离线缓存；权威快照允许把后者回退到仍存在的消息。
  *
@@ -990,6 +1063,7 @@ function preserveNewerLivePreview(
   timeline: ChatMessageDto[] | undefined,
   livePreview: LiveConversationPreview | undefined,
   requestPreviewRevision: number | undefined,
+  unreadContext: { currentUserId: string | null; viewing: boolean },
 ): ChatConversationDto {
   const local = current?.lastMessage;
   if (!local || isMessageDeletedLocally(local.id, local.d)) return conversation;
@@ -1026,6 +1100,15 @@ function preserveNewerLivePreview(
     ...conversation,
     lastMessage: local,
     lastMessageAt: current?.lastMessageAt ?? local.createdAt,
+    // 这一页拉在新消息之前,未读还是旧的:在它的基础上加上这页之后实时到的那几条。
+    // 不能拿本机的未读数取大 —— 本机的可能是旧的(另一台设备早读过了),快照才对。
+    ...(arrivedDuringRequest && !unreadContext.viewing
+      ? {
+          unreadCount:
+            conversation.unreadCount +
+            unreadArrivedAfter(snapshotHeight, timeline, unreadContext.currentUserId),
+        }
+      : {}),
   };
 }
 
@@ -1255,7 +1338,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     void deleteLocalMessages(conversationId, [...ids], deleteOptions);
     if (nextConversation) void upsertLocalConversation(nextConversation);
   },
-  setConversations: (conversations, requestPreviewRevision) => {
+  setConversations: (snapshot, requestPreviewRevision) => {
     const {
       conversations: currentConversations,
       messagesByConversation,
@@ -1265,9 +1348,18 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       clearedBeforeHeightByConversation,
       selfDestructPolicyEpoch,
       livePreviewByConversation,
+      appForeground,
+      activeConversationId,
     } = get();
+    const isViewing = (conversationId: string) =>
+      appForeground && activeConversationId === conversationId;
     const currentById = new Map(
       currentConversations.map((conversation) => [conversation.id, conversation]),
+    );
+    const conversations = applyMembershipChanges(
+      snapshot,
+      currentById,
+      requestPreviewRevision,
     );
     const conversationsWithBurnState = conversations.map((c) =>
       mergeConversationBurnState(c, currentById.get(c.id)),
@@ -1312,6 +1404,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             messagesByConversation[c.id],
             livePreviewByConversation[c.id],
             requestPreviewRevision,
+            { currentUserId, viewing: isViewing(c.id) },
           ),
         )
           // 快照是请求发出那一刻的事实。这段时间里本账号可能已经在另一台
@@ -1402,6 +1495,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         timeline,
         livePreviewByConversation[incoming.id],
         requestPreviewRevision,
+        {
+          currentUserId,
+          viewing:
+            get().appForeground && get().activeConversationId === incoming.id,
+        },
       ),
       readWatermarks[incoming.id]?.[currentUserId ?? ''] ?? 0,
       floors[incoming.id] ?? 0,
@@ -1410,7 +1508,15 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     );
     const next =
       current && structurallyEqual(current, reconciled) ? current : reconciled;
+    // 单个会话刷新带回来一个本机原来没有的会话(刚入群):同 upsertConversation,记一笔入群,
+    // 免得在途的整表快照(拉在入群之前)把它抹掉。
+    const joinedRevision =
+      current === undefined ? get().conversationPreviewRevision + 1 : null;
+    if (joinedRevision !== null) {
+      membershipChanges.set(incoming.id, { revision: joinedRevision, present: true });
+    }
     set({
+      ...(joinedRevision !== null ? { conversationPreviewRevision: joinedRevision } : {}),
       conversations:
         next === current
           ? currentConversations
@@ -1450,7 +1556,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       withBurnState,
       messagesByConversation[withBurnState.id],
     );
+    // 只有本机原来没有的会话才算「入群」。改备注、免打扰之类的补丁不算 —— 否则一份
+    // 本来就不含它的快照(服务端那边已经移出了)反而被它留住。
+    const joined = current === undefined;
+    const revision = get().conversationPreviewRevision + 1;
+    if (joined) membershipChanges.set(reconciled.id, { revision, present: true });
     set({
+      ...(joined ? { conversationPreviewRevision: revision } : {}),
       conversations: sortConversations([...rest, reconciled]),
       readWatermarks: seedSelfReadWatermarks(
         seedPeerReadWatermarks(readWatermarks, [reconciled]),
@@ -1487,7 +1599,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       state.typingUntilByConversation;
     const { [conversationId]: _livePreview, ...livePreviewByConversation } =
       state.livePreviewByConversation;
+    const revision = state.conversationPreviewRevision + 1;
+    membershipChanges.set(conversationId, { revision, present: false });
     set({
+      conversationPreviewRevision: revision,
       conversations: state.conversations.filter((c) => c.id !== conversationId),
       // A removed/left conversation is no longer reachable from the UI. Drop
       // its timeline and all per-conversation bookkeeping together; retaining
@@ -2791,6 +2906,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
 
   reset: () => {
     forgetBurnSchedule();
+    membershipChanges.clear();
     set({
       connected: false,
       connecting: false,
