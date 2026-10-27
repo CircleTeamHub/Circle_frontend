@@ -6,9 +6,9 @@ interface CatchUpConversation {
 }
 
 /**
- * 一次最多补报几个会话。服务端送达限流每人 10 秒 30 次、超出的静默丢弃,实时收到消息
- * 的送达也走同一份额度 —— 补报不能把它占满。超出的是最不活跃的那些:对方继续显示
- * 「已发送」,这边点开会话就变「已读」。
+ * 一批最多补报几个会话。服务端送达限流每人 10 秒 30 次、超出的静默丢弃,实时收到消息
+ * 的送达也走同一份额度 —— 补报不能把它占满。超出的隔一个窗口再补下一批
+ * (见 socket-manager 的 DELIVERED_CATCH_UP_INTERVAL_MS),最近活跃的先报。
  */
 export const DELIVERED_CATCH_UP_LIMIT = 20;
 
@@ -24,7 +24,7 @@ export function deliveredCatchUpReports(
   previousLastHeights: ReadonlyMap<string, number>,
   snapshot: readonly CatchUpConversation[],
   currentUserId: string,
-  limit = DELIVERED_CATCH_UP_LIMIT,
+  limit = Number.POSITIVE_INFINITY,
 ): { conversationId: string; height: number }[] {
   const candidates: { conversationId: string; height: number; at: string }[] = [];
   for (const conversation of snapshot) {
