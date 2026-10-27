@@ -8,10 +8,37 @@ import type {
   CallStatePayload,
 } from '../types';
 
+/** 振铃为什么收掉：交给原生层（iOS CallKit 的结束原因）。 */
+export type CallDismissReason =
+  | 'ended'
+  | 'canceled'
+  | 'missed'
+  | 'failed'
+  | 'answered_elsewhere'
+  | 'declined_elsewhere';
+
+/** 记住最近结束 / 收掉的几通：迟到的推送邀请、WS 与推送的重复邀请都不该让它再响。 */
+const RECENT_ENDED_LIMIT = 20;
+
 type CallStoreState = {
   incomingCall: CallInvitePayload | null;
   activeCall: CallSession | null;
   livekit: CallLiveKitCredentials | null;
+  /** 本机正在接听（accept 请求在路上）的那通：WS 先送到「本人已加入」时别把它当成别处接听。 */
+  answeringCallId: string | null;
+  recentlyEndedCallIds: string[];
+  /** 最近一次收掉振铃的原因；原生层据此给 CallKit 报对应的结束原因。 */
+  lastDismissal: { callId: string; reason: CallDismissReason } | null;
+  setAnsweringCallId: (callId: string | null) => void;
+  /**
+   * 本人在另一台设备上接听 / 拒接了这通：本机还在响就收掉。本机正在接听的不动。
+   */
+  handleSelfParticipantSettled: (
+    callId: string,
+    reason: Extract<CallDismissReason, 'answered_elsewhere' | 'declined_elsewhere'>,
+  ) => void;
+  /** 收掉一通还在振铃的来电（原生层拒接 / 到期 / 撤销推送）；已接通的不动。 */
+  dismissIncomingCall: (callId: string, reason: CallDismissReason) => void;
   setActiveCall: (
     call: CallSession | null,
     livekit?: CallLiveKitCredentials | null,
@@ -24,6 +51,17 @@ type CallStoreState = {
   handleCallEnded: (payload: CallStatePayload) => void;
   resetCallState: () => void;
 };
+
+function rememberEnded(ids: string[], callId: string): string[] {
+  return [...ids.filter((id) => id !== callId), callId].slice(-RECENT_ENDED_LIMIT);
+}
+
+function reasonForStatus(status: CallStatePayload['status']): CallDismissReason {
+  if (status === 'CANCELED') return 'canceled';
+  if (status === 'MISSED') return 'missed';
+  if (status === 'FAILED') return 'failed';
+  return 'ended';
+}
 
 function participantFromInvite(
   user: CallInvitePayload['initiator'],
@@ -117,18 +155,63 @@ export const useCallStore = create<CallStoreState>((set) => ({
   incomingCall: null,
   activeCall: null,
   livekit: null,
+  answeringCallId: null,
+  recentlyEndedCallIds: [],
+  lastDismissal: null,
   setActiveCall: (call, livekit = null) =>
     set({
       activeCall: call,
       incomingCall: null,
       livekit,
+      answeringCallId: null,
     }),
   setLiveKitCredentials: (livekit) => set({ livekit }),
+  setAnsweringCallId: (answeringCallId) => set({ answeringCallId }),
+  // 同一通邀请可能从 WS、推送（原生层）、回前台对账三条路各来一次：按 callId 去重；
+  // 已经结束的、本机已接通的，都不再弹。
   handleCallInvite: (payload) =>
-    set({
-      incomingCall: payload,
-      activeCall: callFromInvite(payload),
-      livekit: null,
+    set((state) => {
+      if (
+        state.recentlyEndedCallIds.includes(payload.callId) ||
+        state.incomingCall?.callId === payload.callId ||
+        (state.activeCall?.id === payload.callId &&
+          state.activeCall.status !== 'RINGING')
+      ) {
+        return state;
+      }
+      return {
+        incomingCall: payload,
+        activeCall: callFromInvite(payload),
+        livekit: null,
+        answeringCallId: null,
+      };
+    }),
+  handleSelfParticipantSettled: (callId, reason) =>
+    set((state) => {
+      if (state.incomingCall?.callId !== callId || state.answeringCallId === callId) {
+        return state;
+      }
+      return {
+        incomingCall: null,
+        activeCall: state.activeCall?.id === callId ? null : state.activeCall,
+        livekit: state.activeCall?.id === callId ? null : state.livekit,
+        recentlyEndedCallIds: rememberEnded(state.recentlyEndedCallIds, callId),
+        lastDismissal: { callId, reason },
+      };
+    }),
+  dismissIncomingCall: (callId, reason) =>
+    set((state) => {
+      if (state.incomingCall?.callId !== callId) {
+        return state;
+      }
+      return {
+        incomingCall: null,
+        activeCall: state.activeCall?.id === callId ? null : state.activeCall,
+        livekit: state.activeCall?.id === callId ? null : state.livekit,
+        answeringCallId: state.answeringCallId === callId ? null : state.answeringCallId,
+        recentlyEndedCallIds: rememberEnded(state.recentlyEndedCallIds, callId),
+        lastDismissal: { callId, reason },
+      };
     }),
   handleCallParticipantJoined: (payload) =>
     set((state) => {
@@ -180,15 +263,37 @@ export const useCallStore = create<CallStoreState>((set) => ({
     }),
   handleCallEnded: (payload) =>
     set((state) => {
+      const recentlyEndedCallIds = rememberEnded(
+        state.recentlyEndedCallIds,
+        payload.callId,
+      );
       if (state.activeCall?.id !== payload.callId) {
-        return state;
+        return { recentlyEndedCallIds };
       }
       return {
         incomingCall: null,
         activeCall: null,
         livekit: null,
+        answeringCallId: null,
+        recentlyEndedCallIds,
+        lastDismissal: {
+          callId: payload.callId,
+          reason: reasonForStatus(payload.status),
+        },
       };
     }),
   resetCallState: () =>
-    set({ incomingCall: null, activeCall: null, livekit: null }),
+    set((state) => {
+      const current = state.activeCall?.id ?? state.incomingCall?.callId ?? null;
+      return {
+        incomingCall: null,
+        activeCall: null,
+        livekit: null,
+        answeringCallId: null,
+        recentlyEndedCallIds: current
+          ? rememberEnded(state.recentlyEndedCallIds, current)
+          : state.recentlyEndedCallIds,
+        lastDismissal: current ? { callId: current, reason: 'ended' } : null,
+      };
+    }),
 }));

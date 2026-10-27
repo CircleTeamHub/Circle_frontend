@@ -6,6 +6,7 @@ import {
   revokePushToken,
   type PushTokenPlatform,
   type PushTokenProvider,
+  type RegisterPushTokenInput,
 } from '@/services/api/notifications';
 import { storage } from '@/storage';
 import { useAuthStore } from '@/stores/authStore';
@@ -18,6 +19,10 @@ import {
   initializeJPush,
   requestJPushPermission,
 } from '@/features/notifications/services/jpush';
+import {
+  CALL_PUSH_VERSION,
+  supportsCallPush,
+} from '@/features/call/push/call-push-native';
 
 type NotificationsModule = typeof import('expo-notifications');
 type NotificationPermissionResult = Awaited<
@@ -30,7 +35,15 @@ type StoredPushRegistration = {
   revocationSecret: string;
   status: 'pending' | 'registered';
   deviceBindingVersion?: 1;
+  /** 登记时附带字段（来电推送版本等）的指纹：变了就要重新登记一次，哪怕 token 没变。 */
+  fingerprint?: string;
 };
+
+/** 随 token 一起登记的附加字段：来电推送协议版本、VoIP token 的 APNs 环境。 */
+export type PushRegistrationExtras = Pick<
+  RegisterPushTokenInput,
+  'callPushVersion' | 'apnsEnvironment'
+>;
 
 type PushTokenRevocation = Pick<
   StoredPushRegistration,
@@ -67,6 +80,18 @@ type PushTokenRegistrationOrchestratorDependencies = {
   removeLegacyCleanup?: (value: LegacyPushCleanup) => void;
   generateRevocationSecret: () => string;
   loadNotificationsModule: () => Promise<NotificationsModule | null>;
+  /**
+   * 自带取 token 的方式（iOS PushKit 的 VoIP token）。不给时按 provider 取极光 / Expo 的。
+   */
+  getToken?: () => Promise<string>;
+  /**
+   * 默认 true。VoIP 推送不需要系统通知权限（CallKit 自己响铃），给 false 跳过申请：
+   * 用户关了通知也照样能来电。
+   */
+  requiresNotificationPermission?: boolean;
+  getRegistrationExtras?: () =>
+    | PushRegistrationExtras
+    | Promise<PushRegistrationExtras>;
   /**
    * 请求权限之前准备通知渠道(聊天渠道)。安卓 13 起应用一个渠道都没有时系统不弹
    * 权限框;失败只记诊断,不挡注册 —— 推送会回落到默认渠道。
@@ -296,6 +321,63 @@ export function retireStoredRegistrationAtomically() {
   return active;
 }
 
+/**
+ * 另一份独立的登记状态（同 v2 形状，没有历史迁移）：iOS 的 VoIP token 与极光 / Expo
+ * token 是同一台设备上的两个 token，各自登记、各自撤销，不能挤在同一个槽里。
+ */
+export function createPushRegistrationStore(key: string) {
+  type State = { version: 2; active: StoredPushRegistration | null; tombstones: PushTokenRevocation[] };
+  const read = (): State => {
+    let parsed: unknown = null;
+    try {
+      const raw = storage.getString(key);
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = null;
+    }
+    const state = parsed as Partial<State> | null;
+    return {
+      version: 2,
+      active: isModernRegistration(state?.active) ? state!.active! : null,
+      tombstones: Array.isArray(state?.tombstones)
+        ? state!.tombstones!.filter((item) =>
+            isModernRegistration({ ...item, userId: 'v2', status: 'pending' }),
+          )
+        : [],
+    };
+  };
+  const write = (state: State) => storage.set(key, JSON.stringify(state));
+  return {
+    getStoredRegistration: () => read().active,
+    setStoredRegistration: (value: StoredPushRegistration | null) =>
+      write({ ...read(), active: value }),
+    getPendingRevocations: () => read().tombstones,
+    setPendingRevocations: (value: PushTokenRevocation[]) =>
+      write({ ...read(), tombstones: value }),
+    retireStoredRegistration: () => {
+      const state = read();
+      const active = state.active;
+      if (!active) return null;
+      const exists = state.tombstones.some(
+        (item) =>
+          item.token === active.token &&
+          item.revocationSecret === active.revocationSecret,
+      );
+      write({
+        ...state,
+        active: null,
+        tombstones: exists
+          ? state.tombstones
+          : [
+              ...state.tombstones,
+              { token: active.token, revocationSecret: active.revocationSecret },
+            ],
+      });
+      return active;
+    },
+  };
+}
+
 function getLegacyRegistration() {
   const active = readPushState().active;
   return !isModernRegistration(active) && isLegacyRegistration(active)
@@ -386,7 +468,7 @@ function generateFallbackRevocationSecret() {
   return createUuidV4FromBytes(bytes);
 }
 
-function generateRevocationSecret() {
+export function generateRevocationSecret() {
   try {
     if (typeof require === 'function') {
       const crypto = require('expo-crypto') as ExpoCryptoModule;
@@ -537,6 +619,60 @@ export function createPushTokenRegistrationOrchestrator(
     void flushPendingRevocations();
   }
 
+  /**
+   * 两种 provider 都要过系统通知权限:JPush 自己的 requestPermission 只是 iOS
+   * 的 APNs 注册,Android 13+ 的 POST_NOTIFICATIONS 运行时权限得由这里申请 ——
+   * 否则 JPush ID 照样登记成功,系统却把每一条通知都拦掉。
+   * 拿到权限返回通知模块,否则(或期间已过期)返回 null。
+   */
+  async function ensureNotificationPermission(
+    userId: string,
+    isStale: () => boolean,
+  ): Promise<NotificationsModule | null> {
+    const notifications = await dependencies.loadNotificationsModule();
+    if (!notifications || isStale()) return null;
+
+    if (dependencies.prepareNotifications) {
+      try {
+        await dependencies.prepareNotifications(notifications);
+      } catch {
+        dependencies.reportDiagnostic('push_notification_channels_failed', {
+          platform: dependencies.platform,
+        });
+      }
+      if (isStale()) return null;
+    }
+
+    let permissions = await notifications.getPermissionsAsync();
+    if (isStale()) return null;
+    if (!isNotificationGranted(permissions, notifications)) {
+      if (
+        permissions.canAskAgain === false ||
+        permissionAttemptedUserIds.has(userId)
+      ) {
+        return null;
+      }
+      permissionAttemptedUserIds.add(userId);
+      try {
+        permissions = await notifications.requestPermissionsAsync({
+          android: {},
+          ios: {
+            allowAlert: true,
+            allowBadge: true,
+            allowSound: true,
+          },
+        });
+      } catch (error) {
+        permissionAttemptedUserIds.delete(userId);
+        throw error;
+      }
+      if (isStale() || !isNotificationGranted(permissions, notifications)) {
+        return null;
+      }
+    }
+    return notifications;
+  }
+
   const orchestrator = {
     flushPendingRevocations,
     logout() {
@@ -621,53 +757,14 @@ export function createPushTokenRegistrationOrchestrator(
         Boolean(input.isCancelled?.());
 
       const provider = dependencies.provider ?? 'expo';
-      // 两种 provider 都要过系统通知权限:JPush 自己的 requestPermission 只是 iOS
-      // 的 APNs 注册,Android 13+ 的 POST_NOTIFICATIONS 运行时权限得由这里申请 ——
-      // 否则 JPush ID 照样登记成功,系统却把每一条通知都拦掉。
-      const notifications = await dependencies.loadNotificationsModule();
-      if (!notifications || isStale()) return;
-
-      if (dependencies.prepareNotifications) {
-        try {
-          await dependencies.prepareNotifications(notifications);
-        } catch {
-          dependencies.reportDiagnostic('push_notification_channels_failed', {
-            platform: dependencies.platform,
-          });
-        }
-        if (isStale()) return;
+      const notifications =
+        dependencies.requiresNotificationPermission === false
+          ? null
+          : await ensureNotificationPermission(input.userId, isStale);
+      if (dependencies.requiresNotificationPermission !== false && !notifications) {
+        return;
       }
-
-      let permissions = await notifications.getPermissionsAsync();
       if (isStale()) return;
-      if (!isNotificationGranted(permissions, notifications)) {
-        if (
-          permissions.canAskAgain === false ||
-          permissionAttemptedUserIds.has(input.userId)
-        ) {
-          return;
-        }
-        permissionAttemptedUserIds.add(input.userId);
-        try {
-          permissions = await notifications.requestPermissionsAsync({
-            android: {},
-            ios: {
-              allowAlert: true,
-              allowBadge: true,
-              allowSound: true,
-            },
-          });
-        } catch (error) {
-          permissionAttemptedUserIds.delete(input.userId);
-          throw error;
-        }
-        if (
-          isStale() ||
-          !isNotificationGranted(permissions, notifications)
-        ) {
-          return;
-        }
-      }
 
       const projectId = dependencies.getProjectId();
       if (provider === 'expo' && !projectId) {
@@ -679,15 +776,20 @@ export function createPushTokenRegistrationOrchestrator(
 
       const legacy = dependencies.getLegacyRegistration?.() ?? null;
       let token = '';
-      if (provider === 'jpush') {
+      if (dependencies.getToken) {
+        token = await dependencies.getToken();
+      } else if (provider === 'jpush') {
         initializeJPush();
         if (dependencies.platform === 'ios') requestJPushPermission();
         token = await getJPushRegistrationId();
-      } else {
+      } else if (notifications) {
         const result = await notifications.getExpoPushTokenAsync({ projectId: projectId! });
         token = result.data;
       }
       if (!token || isStale()) return;
+      const extras = (await dependencies.getRegistrationExtras?.()) ?? {};
+      const fingerprint = JSON.stringify(extras);
+      if (isStale()) return;
 
       if (
         legacy?.userId === input.userId &&
@@ -714,12 +816,17 @@ export function createPushTokenRegistrationOrchestrator(
           userId: input.userId,
           revocationSecret: dependencies.generateRevocationSecret(),
           status: 'pending',
+          fingerprint,
         };
         if (legacy && dependencies.replaceLegacyRegistration) {
           dependencies.replaceLegacyRegistration(candidate);
         } else {
           dependencies.setStoredRegistration(candidate);
         }
+      } else if ((candidate.fingerprint ?? '{}') !== fingerprint) {
+        // 同一个 token，附带字段变了（例如升级到支持来电推送的版本）：同一把撤销密钥重新登记。
+        candidate = { ...candidate, status: 'pending', fingerprint };
+        dependencies.setStoredRegistration(candidate);
       }
       if (candidate.status === 'registered' && candidate.deviceBindingVersion === 1) return;
 
@@ -744,6 +851,7 @@ export function createPushTokenRegistrationOrchestrator(
           revocationSecret: registrationCandidate.revocationSecret,
           projectId: provider === 'expo' ? projectId : null,
           appVersion: dependencies.appVersion,
+          ...extras,
         });
 
         const currentDesired = desiredRegistration;
@@ -790,13 +898,28 @@ async function loadNotificationsModule() {
   }
 }
 
+/**
+ * 安卓的极光 token 同时承载来电透传：打过新原生包（有 CallPush 模块）才声明能处理，
+ * 否则服务端照旧不给这台设备发来电推送。iOS 的来电走单独登记的 VoIP token。
+ */
+function defaultRegistrationExtras(
+  provider: PushTokenProvider,
+): PushRegistrationExtras {
+  return Platform.OS === 'android' && provider === 'jpush' && supportsCallPush()
+    ? { callPushVersion: CALL_PUSH_VERSION }
+    : {};
+}
+
 function createDefaultPushTokenRegistrationOrchestrator() {
   const configuredProvider =
     (Constants.expoConfig?.extra as { pushProvider?: unknown } | undefined)
       ?.pushProvider;
+  const provider: PushTokenProvider =
+    configuredProvider === 'jpush' ? 'jpush' : 'expo';
   return createPushTokenRegistrationOrchestrator({
     platform: Platform.OS as PushTokenPlatform,
-    provider: configuredProvider === 'jpush' ? 'jpush' : 'expo',
+    provider,
+    getRegistrationExtras: () => defaultRegistrationExtras(provider),
     appVersion: Constants.expoConfig?.version ?? null,
     getProjectId,
     getStoredRegistration,

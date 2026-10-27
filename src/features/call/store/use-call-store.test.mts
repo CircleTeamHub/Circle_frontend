@@ -13,8 +13,20 @@ const invite = {
   createdAt: '2026-06-11T03:00:00.000Z',
 };
 
+// resetCallState 会把当前那通记成「刚结束」（迟到的邀请不再响）：用例之间要的是一张白纸。
+function resetStore() {
+  useCallStore.setState({
+    incomingCall: null,
+    activeCall: null,
+    livekit: null,
+    answeringCallId: null,
+    recentlyEndedCallIds: [],
+    lastDismissal: null,
+  });
+}
+
 test('stores an incoming call invite', () => {
-  useCallStore.getState().resetCallState();
+  resetStore();
 
   useCallStore.getState().handleCallInvite(invite);
 
@@ -24,7 +36,7 @@ test('stores an incoming call invite', () => {
 });
 
 test('marks participants as joined from realtime updates', () => {
-  useCallStore.getState().resetCallState();
+  resetStore();
   useCallStore.getState().handleCallInvite(invite);
 
   useCallStore.getState().handleCallParticipantJoined({
@@ -42,7 +54,7 @@ test('marks participants as joined from realtime updates', () => {
 });
 
 test('stores LiveKit credentials for an accepted or started call', () => {
-  useCallStore.getState().resetCallState();
+  resetStore();
 
   useCallStore.getState().setActiveCall(
     {
@@ -71,7 +83,7 @@ test('stores LiveKit credentials for an accepted or started call', () => {
 });
 
 test('marks participants as rejected from realtime updates', () => {
-  useCallStore.getState().resetCallState();
+  resetStore();
   useCallStore.getState().handleCallInvite(invite);
 
   useCallStore.getState().handleCallParticipantRejected({
@@ -88,7 +100,7 @@ test('marks participants as rejected from realtime updates', () => {
 });
 
 test('clears active call state when a call ends', () => {
-  useCallStore.getState().resetCallState();
+  resetStore();
   useCallStore.getState().handleCallInvite(invite);
 
   useCallStore.getState().handleCallEnded({
@@ -102,4 +114,110 @@ test('clears active call state when a call ends', () => {
   assert.equal(useCallStore.getState().incomingCall, null);
   assert.equal(useCallStore.getState().activeCall, null);
   assert.equal(useCallStore.getState().livekit, null);
+});
+
+test('ignores a duplicate invite for the call that is already ringing', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+  const first = useCallStore.getState().incomingCall;
+
+  // WS 与推送（回前台对账）各送来一次。
+  useCallStore.getState().handleCallInvite({ ...invite, invitees: [] });
+
+  assert.equal(useCallStore.getState().incomingCall, first);
+});
+
+test('does not ring again for a call that already ended or was declined here', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+  useCallStore.getState().resetCallState();
+
+  useCallStore.getState().handleCallInvite(invite);
+  assert.equal(useCallStore.getState().incomingCall, null);
+
+  useCallStore.getState().handleCallEnded({
+    callId: 'call-9',
+    status: 'CANCELED',
+    endReason: 'CANCELED',
+    endedAt: '2026-06-11T03:00:20.000Z',
+    changedAt: '2026-06-11T03:00:20.000Z',
+  });
+  // 撤销先到、邀请后到（推送不保证顺序）。
+  useCallStore.getState().handleCallInvite({ ...invite, callId: 'call-9' });
+  assert.equal(useCallStore.getState().incomingCall, null);
+});
+
+test('does not replace a call this device already joined with a late invite', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+  useCallStore.getState().setActiveCall({
+    ...useCallStore.getState().activeCall!,
+    status: 'ACTIVE',
+  });
+
+  useCallStore.getState().handleCallInvite(invite);
+
+  assert.equal(useCallStore.getState().incomingCall, null);
+  assert.equal(useCallStore.getState().activeCall?.status, 'ACTIVE');
+});
+
+test('stops ringing when this user answered on another device', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+
+  useCallStore.getState().handleSelfParticipantSettled('call-1', 'answered_elsewhere');
+
+  assert.equal(useCallStore.getState().incomingCall, null);
+  assert.equal(useCallStore.getState().activeCall, null);
+  assert.deepEqual(useCallStore.getState().lastDismissal, {
+    callId: 'call-1',
+    reason: 'answered_elsewhere',
+  });
+  useCallStore.getState().handleCallInvite(invite);
+  assert.equal(useCallStore.getState().incomingCall, null);
+});
+
+test('keeps ringing UI while this device is the one answering', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+  useCallStore.getState().setAnsweringCallId('call-1');
+
+  // 本机 accept 还在路上，WS 先送到了「本人已加入」。
+  useCallStore.getState().handleSelfParticipantSettled('call-1', 'answered_elsewhere');
+
+  assert.equal(useCallStore.getState().incomingCall?.callId, 'call-1');
+});
+
+test('dismisses only the ringing call it was asked to', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+
+  useCallStore.getState().dismissIncomingCall('call-other', 'missed');
+  assert.equal(useCallStore.getState().incomingCall?.callId, 'call-1');
+
+  useCallStore.getState().dismissIncomingCall('call-1', 'missed');
+  assert.equal(useCallStore.getState().incomingCall, null);
+  assert.equal(useCallStore.getState().activeCall, null);
+  assert.deepEqual(useCallStore.getState().lastDismissal, {
+    callId: 'call-1',
+    reason: 'missed',
+  });
+});
+
+test('reports why the active call ended', () => {
+  resetStore();
+  useCallStore.getState().handleCallInvite(invite);
+
+  useCallStore.getState().handleCallEnded({
+    callId: 'call-1',
+    status: 'CANCELED',
+    endReason: 'CANCELED',
+    endedAt: '2026-06-11T03:00:20.000Z',
+    changedAt: '2026-06-11T03:00:20.000Z',
+  });
+
+  assert.deepEqual(useCallStore.getState().lastDismissal, {
+    callId: 'call-1',
+    reason: 'canceled',
+  });
 });

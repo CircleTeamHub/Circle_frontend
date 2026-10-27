@@ -1,6 +1,6 @@
 # 推送来电（App 在后台 / 未运行也能响铃）设计
 
-日期：2026-10-26 · 状态：**待拍板**（先定第 1 节的决策，再动代码）
+日期：2026-10-26 · 状态：**已拍板并实现**（2026-10-26：D1 = A，D2–D4 按建议；D5 的 .p8 待用户提供。先上 TestFlight 测试）
 涉及仓库：circle-im（前端，Expo SDK 55 / RN 0.83 新架构）、circle_be（NestJS / Prisma）
 
 ## 0. 背景与目标
@@ -25,7 +25,13 @@
 - 后台断开实时连接（属于发热那条线的后续）。
 - 给旧版本 App 补发「来电」普通通知。
 
-## 1. 需要你拍板的决策
+## 1. 决策
+
+> **拍板结果（2026-10-26）**：
+> - **D1 = A**：iOS 不上中国区，走 PushKit + CallKit；3B 只留档，不实现。
+> - **D2–D4 按建议**：安卓本期只走极光长连接透传；推送带单通拒接令牌；推送里放主叫昵称（群通话再放群名）。
+> - **D5**：.p8 由用户稍后提供。没配凭据时后端跳过 VoIP 推送，安卓透传照发。
+> - **TestFlight 先测**：TestFlight 包走 APNs production，Xcode 调试包走 sandbox。为了让同一个后端同时服务两种包，由客户端登记 VoIP token 时上报环境（看包里有没有 `embedded.mobileprovision`），后端按 token 选主机，不用全局开关。
 
 | # | 决策 | 选项 | 建议 |
 |---|---|---|---|
@@ -116,7 +122,7 @@ sequenceDiagram
 - **撤销。** 后端发透传 `call.dismiss`，接收端收掉对应 `callId` 的通知。原生层另外记一份最近撤销过的 `callId`（最多 20 条，按 `expiresAt` 过期），防止「撤销先到、邀请后到」的乱序。邀请到达时如果 `expiresAt` 已过，直接丢弃。
 - **权限。**
   - 清单加 `USE_FULL_SCREEN_INTENT`。安卓 14 起只有 Google Play 会在安装时收回这项权限；我们走 GitHub 发 APK、不经过 Play，默认是授予的。
-  - 仍用 `canUseFullScreenIntent()` 检查一次。被用户关掉时，就在设置页提示并跳到 `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`，同时降级成横幅通知。
+  - 被用户关掉时，系统自动降级成横幅通知（仍然响铃）。原生模块已提供 `canUseFullScreenIntent()` 和 `openFullScreenIntentSettings()`，但设置页的提示入口**本期没做**，留作后续。
 - **覆盖范围（D2 ①）。** 只要极光长连接还活着就能收到，包括后台断开聊天 socket 以后，因为极光连接和聊天 socket 是两条独立的连接。国产 ROM 上划掉 App 后长连接被杀，透传会在 TTL 内连接恢复时补到，过期就丢弃。
 
 ## 4. 后端
@@ -148,6 +154,7 @@ sequenceDiagram
   "callId": "<uuid>",
   "callType": "AUDIO",              // AUDIO | VIDEO
   "sessionType": "single",          // single | group
+  "callerId": "<uuid>",             // CallKit 的 handle；不显示给用户
   "callerName": "小明",              // D4；截断到 32 字
   "groupName": "周末羽毛球",          // 仅 group，可空
   "expiresAt": "2026-10-26T12:00:45.000Z",
@@ -260,7 +267,23 @@ sequenceDiagram
 8. 旧版本包：行为和今天完全一样。
 9. 安卓 14 关掉全屏权限：降级为横幅，设置页有提示。
 
-## 9. 交付划分
+## 9. 实现对照（2026-10-26）
+
+- 后端（circle_be `feat/push-incoming-calls`）：
+  - `src/call/call-push.service.ts`：邀请、撤销、目标筛选；
+  - `src/notification/apns-voip.client.ts`：http2 + ES256，按 token 选择环境；
+  - `src/call/call-decline-token.ts`、`call-push.controller.ts`：`/push-decline` 接口；
+  - 迁移 `20261026120000_call_push_tokens`。
+- 前端原生（`modules/call-push`，本地 Expo 模块，由 `plugins/with-call-push.js` 改清单和 Info.plist）：
+  - iOS：`CallPushCenter.swift`，PushKit + CallKit + 原生拒接；
+  - 安卓：`CallJPushReceiver`（继承极光接收端）、`IncomingCallNotifier`（CallStyle 全屏通知）、`CallActionReceiver`（拒接）。
+- 前端 JS（`src/features/call/push/`）：
+  - `use-call-push-bridge.ts`：原生事件与 store 双向同步；
+  - `incoming-call-actions.ts`：接听、拒接、恢复，弹窗与原生界面共用；
+  - `use-ringing-call-watchdog.ts`：后台振铃时对账；
+  - `voip-token-registration.ts`：单独登记 VoIP token。
+
+## 10. 交付划分
 
 - 两个仓库使用同名分支 `feat/push-incoming-calls`，各开一个 PR。
 - 后端 PR 可以先合：旧客户端从不声明 `callPushVersion`，所以零影响。
