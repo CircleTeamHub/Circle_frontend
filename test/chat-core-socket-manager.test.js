@@ -2396,3 +2396,117 @@ test('a background suspend is not undone by reconnects until the app is in the f
   manager.connectChat('jwt-rotated', 'u1');
   assert.equal(apiCalls.syncStarts.length, startsBefore + 1, '回前台照常连');
 });
+
+/** 跟着假时钟走的定时器:推进时间,到点的都跑(补报节奏按时刻算,不按固定延迟)。 */
+function createClockTimers() {
+  let nextId = 1;
+  let clock = null;
+  const pending = new Map();
+  return {
+    bind(target) {
+      clock = target;
+    },
+    setTimeout: (fn, ms) => {
+      const id = nextId;
+      nextId += 1;
+      pending.set(id, { fn, at: clock.now + ms });
+      return id;
+    },
+    clearTimeout: (id) => {
+      pending.delete(id);
+    },
+    advance(ms) {
+      clock.now += ms;
+      for (const [id, timer] of [...pending.entries()].sort((a, b) => a[1].at - b[1].at)) {
+        if (timer.at > clock.now || !pending.has(id)) continue;
+        pending.delete(id);
+        timer.fn();
+      }
+    },
+  };
+}
+
+async function loadCatchUpScenario() {
+  // 服务端送达限流每人 10 秒 30 次、超出静默丢弃,实时送达也走这份额度:一批 20 个,
+  // 剩下的隔一段时间再补,不能直接丢。
+  const timers = createClockTimers();
+  const loaded = loadManager({}, { timers, fakeClock: true });
+  timers.bind(loaded.clock);
+  const { manager, socket, store, apiCalls, appState } = loaded;
+  const dms = (height) =>
+    Array.from({ length: 45 }, (_, index) => ({
+      id: `dm-${String(index).padStart(2, '0')}`,
+      type: 'DIRECT',
+      lastMessageAt: `2026-10-27T00:00:${String(index).padStart(2, '0')}.000Z`,
+      lastMessage: { height, sender: { id: 'peer' } },
+    }));
+  const connect = async (user = 'u1') => {
+    manager.connectChat('jwt', user);
+    socket.connected = true;
+    socket.fire('connect');
+    await flush();
+  };
+  const delivered = () =>
+    socket.emitted
+      .filter((entry) => entry.event === 'chat:delivered')
+      .map((entry) => entry.payload.conversationId);
+  apiCalls.conversationSnapshot = dms(1);
+  await connect();
+  store.conversations = dms(1);
+  appState.currentState = 'background';
+  manager.suspendChatForBackground();
+  apiCalls.conversationSnapshot = dms(2);
+  appState.currentState = 'active';
+  await connect();
+  // 真实 store 这时已被对账快照更新;断开时记的基线就是它。
+  store.conversations = dms(2);
+  return { timers, manager, socket, apiCalls, connect, delivered };
+}
+
+test('delivered catch-up beyond one batch is paced and survives a disconnect', async () => {
+  const { timers, manager, socket, connect, delivered } = await loadCatchUpScenario();
+  assert.equal(delivered().length, 20);
+  assert.equal(delivered()[0], 'dm-44', '最近活跃的先报');
+
+  // 窗口内断线重连:不能立刻再报一批(会被限流吞掉,而且丢了就补不回来)。
+  socket.fire('disconnect', 'transport close');
+  await connect();
+  assert.equal(delivered().length, 20);
+
+  timers.advance(12_000);
+  assert.equal(delivered().length, 40);
+
+  // 断线期间剩下的排着,重连后到点接着补(基线已经包含它们,不排着就永远补不上)。
+  manager.suspendChat();
+  timers.advance(12_000);
+  assert.equal(delivered().length, 40);
+  await connect();
+  assert.equal(new Set(delivered()).size, 45);
+});
+
+test('pending delivered catch-up is dropped on logout and on an account switch', async () => {
+  const logout = await loadCatchUpScenario();
+  assert.equal(logout.delivered().length, 20);
+  logout.manager.disconnectChat();
+  logout.apiCalls.conversationSnapshot = [];
+  await logout.connect('u2');
+  logout.timers.advance(60_000);
+  assert.equal(logout.delivered().length, 20, '下一个账号不能把上一个账号的会话报出去');
+
+  const switched = await loadCatchUpScenario();
+  switched.apiCalls.conversationSnapshot = [];
+  await switched.connect('u2');
+  switched.timers.advance(60_000);
+  assert.equal(switched.delivered().length, 20);
+});
+
+test('pending delivered catch-up resumes on connect even if the snapshot request fails', async () => {
+  const { timers, manager, apiCalls, connect, delivered } = await loadCatchUpScenario();
+  assert.equal(delivered().length, 20);
+  manager.suspendChat();
+  timers.advance(12_000);
+  // 这次对账的会话快照请求失败了:排着的补报照样按节奏接着报,不能卡到下一次成功的对账。
+  apiCalls.conversationSnapshot = { then: (_resolve, reject) => reject(new Error('offline')) };
+  await connect();
+  assert.equal(delivered().length, 40);
+});

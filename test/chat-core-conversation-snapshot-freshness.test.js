@@ -173,6 +173,7 @@ function loadApi(options = {}) {
             connected: state.connected ?? true,
           }),
         },
+        conversationsLeftSince: () => new Set(),
         // 与真实 store 同口径的简化排序:置顶优先,再按末条时间倒序。
         sortConversations: (items) =>
           [...items].sort((a, b) => {

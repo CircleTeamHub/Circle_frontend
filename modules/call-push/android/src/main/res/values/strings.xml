@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="call_push_channel_name">Incoming calls</string>
+  <string name="call_push_channel_description">Rings for voice and video calls</string>
+  <string name="call_push_incoming_audio">Voice call</string>
+  <string name="call_push_incoming_video">Video call</string>
+  <string name="call_push_public_title">Incoming call</string>
+  <string name="call_push_answer">Answer</string>
+  <string name="call_push_decline">Decline</string>
+</resources>

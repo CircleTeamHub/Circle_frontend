@@ -1,7 +1,0 @@
-{
-  "repository": "https://github.com/mlswg/mls-implementations",
-  "commit": "2034fe72e0c805a683ba76165660c834f2a8142a",
-  "path": "test-vectors/crypto-basics.json",
-  "sourceSha256": "17cfcf89af9f51d0f2aa7af77f6f9ec99376a039214b6d42a6f11646b83e8c29",
-  "selection": "cipher_suite == 1; all six crypto-basics vectors"
-}

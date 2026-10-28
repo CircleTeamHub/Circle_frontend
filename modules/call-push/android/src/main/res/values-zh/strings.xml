@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="call_push_channel_name">来电</string>
+  <string name="call_push_channel_description">语音、视频通话来电响铃</string>
+  <string name="call_push_incoming_audio">邀请你语音通话</string>
+  <string name="call_push_incoming_video">邀请你视频通话</string>
+  <string name="call_push_public_title">来电</string>
+  <string name="call_push_answer">接听</string>
+  <string name="call_push_decline">拒绝</string>
+</resources>

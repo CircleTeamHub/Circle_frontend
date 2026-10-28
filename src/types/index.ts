@@ -148,7 +148,6 @@ export interface TransferCardData {
 }
 
 export interface ChatMessage {
-  encryptedContent?: import('@circle/e2ee/relay-client.mjs').EncryptedContent;
   groupInvitation?: { admissionId: string; circleInvitationId?: string; groupName: string; avatarUrl: string | null };
   id: string;
   /** 仅用于本地展示：连续消息合并时隐藏本条旁边的头像。 */

@@ -2,9 +2,6 @@
 // Parameters are position-based, never guessed from the spelling of an identifier.
 const ROUTE_TEMPLATES = [
   "/app-operations/open", "/app-operations/update",
-  "/e2ee/recovery", "/e2ee/recovery/setup", "/e2ee/recovery/restore", "/e2ee/archive/resolve", "/e2ee/archive/write", "/e2ee/archive/read", "/e2ee/conversations/:id/takeover",
-  "/e2ee/devices", "/e2ee/devices/:id/approve", "/e2ee/devices/:id/revoke",
-  "/e2ee/packages", "/e2ee/conversations/:id", "/e2ee/conversations/:id/epochs", "/e2ee/conversations/:id/events",
   "/chat/groups/:id/preview",
   "/chat/groups/:id/applications",
   "/chat/group-admissions",

@@ -146,9 +146,6 @@ function loadChatStore(overrides = {}) {
     }
     if (request === './local-db') return overrides.localDb
       ? { ...__localDbStub, ...overrides.localDb } : __localDbStub;
-    if (request === '@/services/e2ee/lifecycle' && overrides.e2eeLifecycle) {
-      return overrides.e2eeLifecycle;
-    }
     if (request === '@/storage') {
       return { storage: { set: () => {}, getString: () => undefined } };
     }
@@ -158,7 +155,7 @@ function loadChatStore(overrides = {}) {
   return { ...store, ...deletedMessages };
 }
 
-function loadConversationSnapshotApi(useChatStore) {
+function loadConversationSnapshotApi(useChatStore, storeModule = {}) {
   const authState = { sessionEpoch: 1 };
   const calls = [];
   const api = runModule('src/chat-core/api.ts', (request) => {
@@ -169,7 +166,12 @@ function loadConversationSnapshotApi(useChatStore) {
     if (request === '@/stores/authStore') return {
       useAuthStore: { getState: () => authState },
     };
-    if (request === './store') return { useChatStore };
+    if (request === './store') {
+      return {
+        useChatStore,
+        conversationsLeftSince: storeModule.conversationsLeftSince ?? (() => new Set()),
+      };
+    }
     if (request === './deleted-messages') {
       return {
         withoutLocallyDeleted: (messages) => messages,
@@ -2493,10 +2495,9 @@ test('an already-due conversation is swept by the next burn message anywhere', a
 });
 
 test('a scoped sweep that expires nothing skips the whole-store purges', async () => {
-  // 本地库那一趟是整表 UPDATE/DELETE,加密正文那一趟是整个正文库:都不能每条消息跑一次。
+  // 本地库那一趟是整表 UPDATE/DELETE:不能每条消息跑一次。
   const env = burnClock();
   let localSweeps = 0;
-  let bodySweeps = 0;
   const { useChatStore } = loadChatStore({
     globals: env.globals,
     localDb: {
@@ -2504,29 +2505,23 @@ test('a scoped sweep that expires nothing skips the whole-store purges', async (
         localSweeps += 1;
       },
     },
-    e2eeLifecycle: {
-      purgeEncryptedBody: (value) => {
-        if (value.expired) bodySweeps += 1;
-      },
-    },
   });
   await seedBurnConversations(useChatStore, env.clock);
   await burnFlush();
 
   localSweeps = 0;
-  bodySweeps = 0;
   await useChatStore
     .getState()
     .ingestMessages('busy', [burnMessage('busy', 0, env.clock.now + 10_000)]);
   await burnFlush();
-  assert.deepEqual([localSweeps, bodySweeps], [0, 0]);
+  assert.equal(localSweeps, 0);
 
   env.advance(10_001);
   await burnFlush();
   assert.equal(localSweeps, 1, '真的过期了:本地库要清');
 
   await useChatStore.getState().purgeExpiredBurnMessages();
-  assert.deepEqual([localSweeps, bodySweeps], [2, 1], '全量扫两样都跑');
+  assert.equal(localSweeps, 2, '全量扫要跑');
 });
 
 test('a device clock set back does not leave the purge timer spinning', async () => {
@@ -2561,50 +2556,176 @@ test('logging out forgets the burn schedule', async () => {
   assert.equal(env.pendingDelays().length, 0);
 });
 
-// ---- 加密正文的清理只能点名到那一条 -----------------------------------------
-test('an expired encrypted message without an envelope purges only its own body', async () => {
-  // 撤回后的加密消息正文是空对象、没有信封。原来按 clientMessageId 清理时传了
-  // undefined,等于「这个会话的所有加密正文」—— 其余消息全变成解不开。
-  const purges = [];
-  const { useChatStore } = loadChatStore({
-    e2eeLifecycle: { purgeEncryptedBody: (value) => purges.push({ ...value }) },
-  });
-  const past = new Date(Date.now() - 60_000).toISOString();
-  const revoked = msg({
-    id: 'srv-revoked',
-    height: 1,
-    type: 'encrypted-text',
-    content: {},
-    burnExpiresAt: past,
-  });
-  const sealed = msg({
-    id: 'srv-sealed',
-    height: 2,
-    type: 'encrypted-text',
-    content: { envelope: { clientMessageId: 'client-sealed' } },
-    burnExpiresAt: past,
-  });
-  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
-  await useChatStore.getState().ingestMessages('conv-1', [revoked, sealed], { persist: false });
-  purges.length = 0;
+// ---- 快照请求期间的变化不能被旧快照盖掉 -------------------------------------
+// 会话多时快照要翻好几页、拉好几秒:先拉回来的页可能早于这期间的新消息、退群、入群。
 
-  await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: ['conv-1'] });
+const peerSender = { id: 'other', nickname: '对方', avatarUrl: null };
 
-  assert.deepEqual(purges, [
-    { conversationId: 'conv-1', serverMessageId: 'srv-revoked' },
-    { conversationId: 'conv-1', clientMessageId: 'client-sealed' },
+test('a message that arrives during a snapshot request keeps its unread count', async () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  const before = msg({ id: 'before', height: 9, sender: peerSender });
+  store.setConversations([
+    conversation({ lastMessage: before, lastMessageAt: before.createdAt, unreadCount: 2 }),
   ]);
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  // 派发器的顺序:先联动会话行,再入时间线。
+  const during = msg({ id: 'during', height: 10, sender: peerSender });
+  store.applyIncomingMessage(during);
+  await store.ingestMessages('conv-1', [during]);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 3);
+
+  // 这一页是在新消息之前拉的:末条和未读都还是旧的。
+  store.setConversations([
+    conversation({ lastMessage: before, lastMessageAt: before.createdAt, unreadCount: 2 }),
+  ], requestPreviewRevision);
+
+  const [row] = useChatStore.getState().conversations;
+  assert.equal(row.lastMessage.id, 'during');
+  assert.equal(row.unreadCount, 3);
 });
 
-test('clearing a conversation locally asks for its whole encrypted-body purge explicitly', () => {
-  const purges = [];
-  const { useChatStore } = loadChatStore({
-    e2eeLifecycle: { purgeEncryptedBody: (value) => purges.push({ ...value }) },
-  });
-  useChatStore.getState().setConversations([conversation({ id: 'conv-1' })]);
-  purges.length = 0;
+test('a conversation left during a snapshot request is not brought back by it', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'stay' }), conversation({ id: 'left' })]);
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  store.removeConversation('left');
 
-  useChatStore.getState().clearConversationLocal('conv-1', null);
+  store.setConversations(
+    [conversation({ id: 'stay' }), conversation({ id: 'left' })],
+    requestPreviewRevision,
+  );
+  assert.deepEqual(Array.from(useChatStore.getState().conversations, (c) => c.id), ['stay']);
 
-  assert.deepEqual(purges, [{ conversationId: 'conv-1', wholeConversation: true }]);
+  // 退群之后才发出的快照里又有它(重新入群了):以快照为准。
+  const laterRevision = useChatStore.getState().conversationPreviewRevision;
+  store.setConversations(
+    [conversation({ id: 'stay' }), conversation({ id: 'left' })],
+    laterRevision,
+  );
+  assert.deepEqual(
+    Array.from(useChatStore.getState().conversations, (c) => c.id).sort(),
+    ['left', 'stay'],
+  );
+});
+
+test('a conversation joined during a snapshot request survives a snapshot that predates it', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'old' })]);
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  store.upsertConversation(conversation({ id: 'joined' }));
+
+  store.setConversations([conversation({ id: 'old' })], requestPreviewRevision);
+  assert.deepEqual(
+    Array.from(useChatStore.getState().conversations, (c) => c.id).sort(),
+    ['joined', 'old'],
+  );
+
+  // 入群之后才发出的快照里没有它(又被移出了):以快照为准。
+  const laterRevision = useChatStore.getState().conversationPreviewRevision;
+  store.setConversations([conversation({ id: 'old' })], laterRevision);
+  assert.deepEqual(Array.from(useChatStore.getState().conversations, (c) => c.id), ['old']);
+});
+
+test('a snapshot lowers a stale local unread count; only messages after its page are added', async () => {
+  // 另一台设备早读过了:本机的 5 是旧的,快照的 0 才对。请求期间再来一条,结果是 1,
+  // 不是拿本机的数取大得出的 6。
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  const before = msg({ id: 'before', height: 9, sender: peerSender });
+  store.setConversations([
+    conversation({ lastMessage: before, lastMessageAt: before.createdAt, unreadCount: 5 }),
+  ]);
+  const quiet = useChatStore.getState().conversationPreviewRevision;
+  store.setConversations([
+    conversation({ lastMessage: before, lastMessageAt: before.createdAt, unreadCount: 0 }),
+  ], quiet);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+
+  store.setConversations([
+    conversation({ lastMessage: before, lastMessageAt: before.createdAt, unreadCount: 5 }),
+  ]);
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  const during = msg({ id: 'during', height: 10, sender: peerSender });
+  store.applyIncomingMessage(during);
+  await store.ingestMessages('conv-1', [during]);
+  store.setConversations([
+    conversation({ lastMessage: before, lastMessageAt: before.createdAt, unreadCount: 0 }),
+  ], requestPreviewRevision);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+});
+
+test('an own message during a snapshot request adds no unread', async () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  const before = msg({ id: 'before', height: 9, sender: peerSender });
+  store.setConversations([
+    conversation({ lastMessage: before, lastMessageAt: before.createdAt, unreadCount: 2 }),
+  ]);
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  const own = msg({ id: 'own', height: 10, sender: { id: 'me', nickname: '我', avatarUrl: null } });
+  store.applyIncomingMessage(own);
+  await store.ingestMessages('conv-1', [own]);
+  store.setConversations([
+    conversation({ lastMessage: before, lastMessageAt: before.createdAt, unreadCount: 0 }),
+  ], requestPreviewRevision);
+  const [row] = useChatStore.getState().conversations;
+  assert.equal(row.lastMessage.id, 'own');
+  assert.equal(row.unreadCount, 0);
+});
+
+test('editing a conversation during a snapshot request does not count as joining it', () => {
+  // 改备注、免打扰之类的补丁不是入群:快照里没有它(服务端已经移出了),就该没有。
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'patched' }), conversation({ id: 'other' })]);
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  store.upsertConversation(conversation({ id: 'patched', myRemark: '新备注' }));
+  store.setConversations([conversation({ id: 'other' })], requestPreviewRevision);
+  assert.deepEqual(Array.from(useChatStore.getState().conversations, (c) => c.id), ['other']);
+});
+
+test('a conversation joined through a single refresh during a snapshot request is kept', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'old' })]);
+  const requestPreviewRevision = useChatStore.getState().conversationPreviewRevision;
+  store.mergeConversationSnapshot(conversation({ id: 'joined' }));
+  store.setConversations([conversation({ id: 'old' })], requestPreviewRevision);
+  assert.deepEqual(
+    Array.from(useChatStore.getState().conversations, (c) => c.id).sort(),
+    ['joined', 'old'],
+  );
+});
+
+test('logging out forgets conversations left during a pending snapshot', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'x' })]);
+  const oldRevision = useChatStore.getState().conversationPreviewRevision;
+  store.removeConversation('x');
+  store.reset();
+  // 换了账号,上一个账号的退群记录不能把这个账号快照里的同 id 会话剔掉。
+  store.setConversations([conversation({ id: 'x' })], oldRevision);
+  assert.deepEqual(Array.from(useChatStore.getState().conversations, (c) => c.id), ['x']);
+});
+
+test('loadChatConversations hands callers the list without conversations left mid-request', async () => {
+  // 重连同步、送达补报都拿这个返回值:还带着刚退的群,就会去同步一个已经退掉的群。
+  const storeModule = loadChatStore();
+  const { useChatStore } = storeModule;
+  const { api, calls } = loadConversationSnapshotApi(useChatStore, storeModule);
+  const store = useChatStore.getState();
+  store.setConversations([conversation({ id: 'stay' }), conversation({ id: 'left' })]);
+  const pending = api.loadChatConversations({ fresh: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  store.removeConversation('left');
+  calls[0].resolve([conversation({ id: 'stay' }), conversation({ id: 'left' })]);
+  const returned = await pending;
+  assert.deepEqual(Array.from(returned, (c) => c.id), ['stay']);
 });

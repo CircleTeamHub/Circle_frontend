@@ -38,8 +38,6 @@ function loadClient({
   retryOutbox = [],
   deliveryIds = null,
   outboxDelays = {},
-  conversations = [],
-  e2eeFlag = 'false',
 }) {
   const filePath = path.join(process.cwd(), 'src/chat-core/client.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
@@ -62,7 +60,6 @@ function loadClient({
     failedMarks: [],
     retryMarks: [],
     removed: [],
-    e2eeClientRequests: 0,
   };
   const authState = {
     user: { id: 'me', nickname: '我', avatarUrl: null },
@@ -89,20 +86,15 @@ function loadClient({
     revertConversationPreview: () => {},
     upsertConversation: () => {},
     messagesByConversation: {},
-    conversations,
+    conversations: [],
   };
 
   const context = {
-    process: { env: { EXPO_PUBLIC_E2EE_TEXT_ENABLED: e2eeFlag } },
     Date,
     Math,
     module: { exports: {} },
     exports: {},
     require: withChatCoreStubs((request) => {
-      if (request === '@/services/e2ee/client') {
-        calls.e2eeClientRequests += 1;
-        return {};
-      }
       if (request === '@/services/api/credit-policy') {
         return {
           assertLocalCanSendMessage: () => {
@@ -665,20 +657,4 @@ test('媒体发送复用已上屏气泡的 d,不会再造一条', async () => {
 
   const sentPayload = calls.sentPayloads.at(-1);
   assert.equal(sentPayload.d, 'd-existing');
-});
-
-
-// 文字加密已停用:会话快照里还留着 MLS_V1、开发开关还开着,发出去的也只能是明文,
-// 并且发送路径不再去碰加密库。
-test('text and quotes go out as plain text even in a conversation still marked as encrypted', async () => {
-  const { api, calls } = loadClient({
-    blocked: false,
-    conversations: [{ id: 'c1', textEncryption: 'MLS_V1' }],
-    e2eeFlag: 'true',
-  });
-  await api.sendTextMessage({ conversationId: 'c1', text: 'hello' });
-  await api.sendQuoteMessage({ conversationId: 'c1', text: 'reply', quotedText: 'quoted' });
-  assert.deepEqual(calls.sentPayloads.map((payload) => payload.type), ['text', 'quote']);
-  assert.equal(calls.sentPayloads[0].content.text, 'hello');
-  assert.equal(calls.e2eeClientRequests, 0);
 });

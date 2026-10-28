@@ -1,0 +1,25 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.callpush'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.callpush"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // CallJPushReceiver 继承 jpush-react-native 的接收端（它是无条件依赖，每个安卓构建都会链接），
+  // 来电透传在这里截下，其余消息原样交回给它。
+  implementation project(':jpush-react-native')
+  // 只为编译 CustomMessage / JPushMessageReceiver；运行时由 jpush-react-native 带进来。
+  compileOnly 'cn.jiguang.sdk:jpush:6.2.0'
+  // NotificationCompat.CallStyle 需要 core 1.9+。
+  implementation 'androidx.core:core:1.13.1'
+}

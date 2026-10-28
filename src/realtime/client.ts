@@ -681,6 +681,13 @@ function handleRealtimeEvent(message: RealtimeEvent) {
         return;
       }
       callStore.handleCallParticipantJoined(message.payload);
+      // 本人在另一台设备上接听了：本机还在响就收掉（推送来电时各设备都在响）。
+      if (message.payload.user.id === useAuthStore.getState().user?.id) {
+        callStore.handleSelfParticipantSettled(
+          message.payload.callId,
+          'answered_elsewhere',
+        );
+      }
       return;
     case 'call.participant.left':
       if (!isCallParticipantPayload(message.payload)) {
@@ -695,6 +702,12 @@ function handleRealtimeEvent(message: RealtimeEvent) {
         return;
       }
       callStore.handleCallParticipantRejected(message.payload);
+      if (message.payload.user.id === useAuthStore.getState().user?.id) {
+        callStore.handleSelfParticipantSettled(
+          message.payload.callId,
+          'declined_elsewhere',
+        );
+      }
       return;
     case 'call.ended':
     case 'call.canceled':

@@ -159,6 +159,7 @@ jobs:
           require_file ../circle_be/src/common/app-error-codes.ts
           require_file ../circle_be/src/realtime/realtime.service.ts
           require_symbol ../circle_be/src/realtime/realtime.service.ts broadcastMomentsFeedUpdated
+          require_symbol ../circle_be/src/call/call-push.service.ts CALL_PUSH_VERSION
 
           [ "$missing" -eq 0 ] || exit 1
           echo "OK: backend contract sources present"

@@ -123,6 +123,7 @@ const COMPLETE_BACKEND = {
   'src/chat/chat.types.ts': 'export interface ChatConversationDto {}\n',
   'src/common/app-error-codes.ts': 'export const APP_ERROR_CODES = {};\n',
   'src/realtime/realtime.service.ts': 'broadcastMomentsFeedUpdated() {}\n',
+  'src/call/call-push.service.ts': 'export const CALL_PUSH_VERSION = 1;\n',
 };
 
 function fakeBackend(files) {

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="call_push_channel_name">Llamadas entrantes</string>
+  <string name="call_push_channel_description">Suena con las llamadas de voz y video</string>
+  <string name="call_push_incoming_audio">Llamada de voz</string>
+  <string name="call_push_incoming_video">Videollamada</string>
+  <string name="call_push_public_title">Llamada entrante</string>
+  <string name="call_push_answer">Contestar</string>
+  <string name="call_push_decline">Rechazar</string>
+</resources>

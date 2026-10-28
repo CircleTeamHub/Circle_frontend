@@ -545,7 +545,6 @@ export interface ChatTempChatInfo {
 }
 
 export interface ChatConversationDto {
-  textEncryption?: string;
   id: string;
   type: ChatConversationType;
   peer: ChatSenderInfo | null;

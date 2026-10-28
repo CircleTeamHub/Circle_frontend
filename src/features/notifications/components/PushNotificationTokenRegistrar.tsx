@@ -6,6 +6,8 @@ import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-s
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import { pushTokenRegistrationOrchestrator } from '@/features/notifications/services/push-token-registration';
 import { subscribeJPushConnection } from '@/features/notifications/services/jpush';
+import { getVoipPushTokenRegistrationOrchestrator } from '@/features/call/push/voip-token-registration';
+import { subscribeVoipTokenChanges } from '@/features/call/push/call-push-events';
 
 export function PushNotificationTokenRegistrar() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -20,6 +22,16 @@ export function PushNotificationTokenRegistrar() {
     () => registerLogoutHandler(pushTokenRegistrationOrchestrator.logout),
     [],
   );
+
+  // iOS 的来电走单独登记的 PushKit VoIP token：跟普通推送同一个开关、同一套登出撤销。
+  useEffect(() => {
+    const voip = getVoipPushTokenRegistrationOrchestrator();
+    return voip ? registerLogoutHandler(voip.logout) : undefined;
+  }, []);
+
+  useEffect(() => subscribeVoipTokenChanges(() => {
+    setPermissionRefreshKey((value) => value + 1);
+  }), []);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -50,6 +62,19 @@ export function PushNotificationTokenRegistrar() {
       .catch((error) => {
         reportNotificationFailure('push_token_register_failed', error, {
           platform: Platform.OS,
+        });
+      });
+    void getVoipPushTokenRegistrationOrchestrator()
+      ?.sync({
+        isAuthenticated,
+        userId,
+        pushEnabled,
+        isCancelled: () => cancelled,
+      })
+      .catch((error) => {
+        reportNotificationFailure('push_token_register_failed', error, {
+          platform: Platform.OS,
+          provider: 'apns_voip',
         });
       });
 
