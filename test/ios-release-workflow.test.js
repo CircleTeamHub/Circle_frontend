@@ -11,12 +11,13 @@ test('iOS release workflow keeps build and TestFlight submission separate', () =
   assert.match(workflow, /name: iOS Build and TestFlight/);
   assert.match(workflow, /group: circle-ios-release/);
   assert.match(workflow, /cancel-in-progress: false/);
-  assert.match(workflow, /eas-cli@latest build --platform ios --profile production/);
+  assert.match(workflow, /eas-cli@latest build --platform ios --profile production --environment production/);
+  assert.match(workflow, /prepare-backend-contracts\.sh/);
   assert.ok(workflow.includes('npx eas-cli@latest submit --platform ios --path "$RUNNER_TEMP/ios-release/circle-im.ipa" --non-interactive'));
   assert.match(workflow, /Validate iOS native configuration/);
   assert.match(workflow, /verify-ios-sentry-config\.js/);
   assert.match(workflow, /name: ios-release-\$\{\{ github\.sha \}\}/);
-  assert.match(workflow, /shasum -a 256/);
+  assert.match(workflow, /cd \"\$RUNNER_TEMP\" && shasum -a 256 circle-im\.ipa/);
 });
 
 test('EAS production profile uses remote version allocation and iOS resources', () => {
@@ -44,4 +45,6 @@ test('TestFlight inspection workflow passes App Store Connect credentials by env
   assert.match(workflow, /IOS_TESTFLIGHT_GROUP_IDS/);
   assert.match(workflow, /RELEASE_FEISHU_WEBHOOK_URL/);
   assert.match(workflow, /scripts\/inspect-testflight-groups\.mjs/);
+  const inspector = read('scripts/inspect-testflight-groups.mjs');
+  assert.match(inspector, /betaGroups\/\$\{encodeURIComponent\(groupId\)\}\/relationships\/app/);
 });

@@ -38,9 +38,6 @@ jobs:
       EXPO_PUBLIC_JPUSH_APP_KEY: ${{ vars.EXPO_PUBLIC_JPUSH_APP_KEY }}
       EXPO_PUBLIC_PUSH_PROVIDER: ${{ vars.EXPO_PUBLIC_PUSH_PROVIDER }}
       EXPO_PUBLIC_AMAP_IOS_KEY: ${{ vars.EXPO_PUBLIC_AMAP_IOS_KEY }}
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
       EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
     steps:
       - name: Checkout
@@ -53,6 +50,14 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+
+      # The application test suite contains cross-repo contracts that read
+      # ../circle_be; provision it before npm ci/tests so those checks cannot
+      # silently skip in this release workflow.
+      - name: Checkout backend for cross-repo contracts
+        env:
+          BACKEND_REF_CANDIDATE: ${{ github.ref_name }}
+        run: bash .github/scripts/prepare-backend-contracts.sh
 
       - name: Install dependencies
         run: npm ci
@@ -73,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$EAS_TOKEN"
-          npx eas-cli@latest build --platform ios --profile production --non-interactive --wait --json > "$RUNNER_TEMP/eas-build.json"
+          npx eas-cli@latest build --platform ios --profile production --environment production --non-interactive --wait --json > "$RUNNER_TEMP/eas-build.json"
           node - <<'NODE'
           const fs = require('node:fs');
           const raw = fs.readFileSync(process.env.RUNNER_TEMP + '/eas-build.json', 'utf8');
@@ -91,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           artifact_name="ios-release-${GITHUB_SHA::12}"
-          shasum -a 256 "$RUNNER_TEMP/circle-im.ipa" > "$RUNNER_TEMP/circle-im.ipa.sha256"
+          (cd "$RUNNER_TEMP" && shasum -a 256 circle-im.ipa > circle-im.ipa.sha256)
           node - <<'NODE'
           const fs = require('node:fs');
           const crypto = require('node:crypto');

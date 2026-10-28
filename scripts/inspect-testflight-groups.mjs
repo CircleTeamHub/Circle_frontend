@@ -38,7 +38,8 @@ async function inspect() {
   for (const groupId of groupIds) {
     try {
       const group = await api(`/v1/betaGroups/${encodeURIComponent(groupId)}`);
-      const owner = group.data?.relationships?.app?.data?.id;
+      const relationship = await api(`/v1/betaGroups/${encodeURIComponent(groupId)}/relationships/app`);
+      const owner = relationship.data?.id;
       const name = group.data?.attributes?.name || '(unnamed)';
       if (owner !== app.id) failures.push(`${groupId} (${name}): belongs to App ${owner || 'unknown'}, expected ${app.id}`);
       else results.push(`${groupId} (${name})`);
