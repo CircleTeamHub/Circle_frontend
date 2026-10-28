@@ -3537,8 +3537,7 @@
     "AUTH_SECURITY_CODE_NOT_SET": "로그인 보안 코드가 설정되지 않았습니다. 신뢰할 수 있는 기기에서 확인해 주세요",
     "CHAT_GROUP_ACCEPT_REQUIRED": "먼저 그룹 초대를 수락해 주세요",
     "CHAT_GROUP_INVITATION_INVALID": "초대가 만료되었거나 유효하지 않습니다",
-    "CHAT_GROUP_APPLICATION_DISABLED": "이 그룹은 명함을 통한 가입 신청을 받지 않습니다",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "복구 신청이 너무 많습니다. 기존 신청이 처리된 뒤 다시 시도해 주세요"
+    "CHAT_GROUP_APPLICATION_DISABLED": "이 그룹은 명함을 통한 가입 신청을 받지 않습니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",

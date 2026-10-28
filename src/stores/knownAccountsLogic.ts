@@ -4,6 +4,8 @@
  * 仅 `import type`，运行时不拉入 authStore / storage。
  */
 import type { AuthUser } from '@/stores/authStore';
+// @ts-ignore The Node test runner and Metro both resolve explicit TypeScript modules.
+import { migratePersistedUser } from './appearance-migration.ts';
 
 export interface KnownAccount {
   user: AuthUser;
@@ -14,57 +16,28 @@ export interface KnownAccount {
 
 export const KNOWN_ACCOUNTS_PERSIST_VERSION = 1;
 
-function migrateKnownAccountUser(user: AuthUser): AuthUser {
-  const rawUser = user as unknown as Record<string, unknown>;
-  const hasAppearance = Object.prototype.hasOwnProperty.call(
-    rawUser,
-    'avatarFrameAppearance',
-  );
-  const rawAppearance = rawUser.avatarFrameAppearance;
-  const appearanceRecord =
-    rawAppearance &&
-    typeof rawAppearance === 'object' &&
-    !Array.isArray(rawAppearance)
-      ? (rawAppearance as Record<string, unknown>)
-      : null;
-  const parsedAppearance =
-    appearanceRecord &&
-    typeof appearanceRecord.id === 'string' &&
-    typeof appearanceRecord.key === 'string' &&
-    typeof appearanceRecord.name === 'string' &&
-    (appearanceRecord.imageUrl === null ||
-      typeof appearanceRecord.imageUrl === 'string')
-      ? {
-          id: appearanceRecord.id,
-          key: appearanceRecord.key,
-          name: appearanceRecord.name,
-          imageUrl: null,
-        }
-      : null;
-  const vipLevel =
-    typeof rawUser.vipLevel === 'number' ? rawUser.vipLevel : null;
-  const avatarFrameAppearance = hasAppearance
-    ? parsedAppearance
-    : vipLevel === 3
-      ? {
-          id: 'legacy-membership-diamond',
-          key: 'membership-diamond',
-          name: 'Diamond membership frame',
-          imageUrl: null,
-        }
-      : vipLevel !== null && vipLevel >= 4
-        ? {
-            id: 'legacy-membership-super',
-            key: 'membership-super',
-            name: 'Super membership frame',
-            imageUrl: null,
-          }
-        : null;
-  return {
-    ...user,
-    avatarFrame: null,
-    avatarFrameAppearance,
-  };
+function isPersistedKnownAccount(value: unknown): value is {
+  user: AuthUser;
+  accessToken: string;
+  refreshToken: string;
+  updatedAt: number;
+} {
+  if (typeof value !== 'object' || value === null) return false;
+  const account = value as Record<string, unknown>;
+  if (
+    typeof account.accessToken !== 'string' ||
+    account.accessToken.length === 0 ||
+    typeof account.refreshToken !== 'string' ||
+    account.refreshToken.length === 0 ||
+    typeof account.updatedAt !== 'number' ||
+    !Number.isFinite(account.updatedAt) ||
+    typeof account.user !== 'object' ||
+    account.user === null
+  ) {
+    return false;
+  }
+  const user = account.user as Record<string, unknown>;
+  return typeof user.id === 'string' && user.id.length > 0;
 }
 
 export function migrateKnownAccountsPersist(
@@ -77,21 +50,14 @@ export function migrateKnownAccountsPersist(
   if (!Array.isArray(state.accounts)) return state;
   return {
     ...state,
-    accounts: state.accounts.map((account) => {
-      if (
-        typeof account !== 'object' ||
-        account === null ||
-        !('user' in account) ||
-        typeof account.user !== 'object' ||
-        account.user === null
-      ) {
-        return account;
-      }
-      return {
+    // Drop malformed records at the persistence boundary. Keeping them would
+    // make every consumer trust a cast and can crash the account switcher.
+    accounts: state.accounts
+      .filter(isPersistedKnownAccount)
+      .map((account) => ({
         ...account,
-        user: migrateKnownAccountUser(account.user as AuthUser),
-      };
-    }),
+        user: migratePersistedUser(account.user),
+      })),
   };
 }
 
@@ -110,4 +76,5 @@ export function removeKnownAccount(
   userId: string,
 ): KnownAccount[] {
   return accounts.filter((item) => item.user.id !== userId);
+
 }

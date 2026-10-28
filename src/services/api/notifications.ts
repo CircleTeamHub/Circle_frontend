@@ -78,6 +78,10 @@ function isNotificationItemShape(value: unknown): value is NotificationItem {
   );
 }
 
+function isNotificationItemArray(value: unknown): value is NotificationItem[] {
+  return Array.isArray(value) && value.every(isNotificationItemShape);
+}
+
 function isNotificationCursorPageShape(
   value: unknown,
 ): value is NotificationCursorPage {
@@ -118,7 +122,8 @@ export async function fetchNotifications(
   domain?: NotificationDomain | null,
 ): Promise<NotificationItem[]> {
   const query = domain ? `?page=${page}&domain=${domain}` : `?page=${page}`;
-  return apiClient<NotificationItem[]>(`/notification/list${query}`);
+  const raw = await apiClient<unknown>(`/notification/list${query}`);
+  return expectShape(raw, isNotificationItemArray, '通知数据格式异常');
 }
 
 function readNotificationCursorPage(
@@ -156,9 +161,10 @@ export async function fetchNotificationsPage(
 export async function fetchProfileNotifications(
   page = 1,
 ): Promise<NotificationItem[]> {
-  return apiClient<NotificationItem[]>(
+  const raw = await apiClient<unknown>(
     `/notification/profile/list?page=${page}`,
   );
+  return expectShape(raw, isNotificationItemArray, '系统通知数据格式异常');
 }
 
 /** Keyset page for the profile/system-notification list. */
@@ -280,13 +286,35 @@ export interface ScrollingAnnouncement {
   content: string;
   createdAt: string;
 }
+
+function isScrollingAnnouncementPage(
+  value: unknown,
+): value is { items: ScrollingAnnouncement[] } {
+  return (
+    isPlainObject(value) &&
+    Array.isArray(value.items) &&
+    value.items.every(
+      (item) =>
+        isPlainObject(item) &&
+        typeof item.id === 'string' &&
+        item.id.length > 0 &&
+        typeof item.notificationID === 'string' &&
+        item.notificationID.length > 0 &&
+        (item.title == null || typeof item.title === 'string') &&
+        typeof item.content === 'string' &&
+        typeof item.createdAt === 'string' &&
+        Number.isFinite(Date.parse(item.createdAt)),
+    )
+  );
+}
+
 export async function fetchScrollingAnnouncements(): Promise<ScrollingAnnouncement[]> {
-  const raw = await apiClient<{ items: ScrollingAnnouncement[] }>('/notification/announcements/scrolling');
-  if (!isPlainObject(raw) || !Array.isArray(raw.items) || !raw.items.every((item) =>
-    isPlainObject(item) && typeof item.id === 'string' && typeof item.notificationID === 'string' && (item.title == null || typeof item.title === 'string') && typeof item.content === 'string' && typeof item.createdAt === 'string')) {
-    throw new Error('Invalid scrolling announcement response');
-  }
-  return raw.items;
+  const raw = await apiClient<unknown>('/notification/announcements/scrolling');
+  return expectShape(
+    raw,
+    isScrollingAnnouncementPage,
+    '公告数据格式异常',
+  ).items;
 }
 
 export async function fetchProfileNotificationDetail(id: string): Promise<NotificationItem> {

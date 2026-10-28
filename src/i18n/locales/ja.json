@@ -3537,8 +3537,7 @@
     "AUTH_SECURITY_CODE_NOT_SET": "ログインセキュリティコードが設定されていません。信頼済みデバイスで承認してください",
     "CHAT_GROUP_ACCEPT_REQUIRED": "先にグループ招待を承諾してください",
     "CHAT_GROUP_INVITATION_INVALID": "招待の期限が切れたか、無効になりました",
-    "CHAT_GROUP_APPLICATION_DISABLED": "このグループは名刺からの参加申請を受け付けていません",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "復旧の申請が多すぎます。既存の申請が処理されてからもう一度お試しください"
+    "CHAT_GROUP_APPLICATION_DISABLED": "このグループは名刺からの参加申請を受け付けていません"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",

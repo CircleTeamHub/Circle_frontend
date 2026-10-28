@@ -49,6 +49,7 @@ export function AppOperationsHost() {
                 : "stable",
             eventID: pendingID,
         });
+        if (disposed || useAuthStore.getState().sessionEpoch !== epoch) return;
         pendingID = null;
         lastSuccess = Date.now();
       } catch {

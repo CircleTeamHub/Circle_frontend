@@ -9,6 +9,7 @@
  */
 import * as Device from "expo-device";
 import { apiClient, refreshSessionAccessToken } from "@/services/api/client";
+import { isDisplayIconShape } from "@/services/api/response-shapes";
 import { normalizeUser } from "@/services/api/utils";
 import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
 import { UserFacingError } from "@/utils/user-facing-error";
@@ -71,6 +72,70 @@ export type BackendAuthUser = {
   likeCount?: number;
   recognitionCount?: number;
 };
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isBackendAuthUser(value: unknown): value is BackendAuthUser {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.accountId === "string" &&
+    typeof value.inviteCode === "string" &&
+    typeof value.nickname === "string" &&
+    isNullableString(value.avatarUrl) &&
+    (value.avatarFrame === undefined || isNullableString(value.avatarFrame)) &&
+    (value.avatarFrameAppearance === undefined ||
+      value.avatarFrameAppearance === null ||
+      isPlainObject(value.avatarFrameAppearance)) &&
+    isNullableString(value.cover) &&
+    isNullableString(value.email) &&
+    isNullableString(value.phoneNumber) &&
+    isNullableString(value.wechat) &&
+    isNullableString(value.qq) &&
+    isNullableString(value.whatsup) &&
+    isNullableString(value.persona) &&
+    isNullableString(value.helloWords) &&
+    isNullableString(value.birthday) &&
+    (value.gender === "male" ||
+      value.gender === "female" ||
+      value.gender === "other" ||
+      value.gender === "unset") &&
+    isNullableString(value.city) &&
+    typeof value.vipLevel === "number" &&
+    Number.isFinite(value.vipLevel) &&
+    typeof value.creditScore === "number" &&
+    Number.isFinite(value.creditScore) &&
+    typeof value.fancyNumber === "boolean" &&
+    Array.isArray(value.displayIcons) &&
+    value.displayIcons.every(isDisplayIconShape) &&
+    typeof value.role === "string" &&
+    typeof value.status === "string" &&
+    isNullableString(value.lastOnline) &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string" &&
+    (value.receivedLikeCount === undefined ||
+      (typeof value.receivedLikeCount === "number" &&
+        Number.isFinite(value.receivedLikeCount))) &&
+    (value.likeCount === undefined ||
+      (typeof value.likeCount === "number" && Number.isFinite(value.likeCount))) &&
+    (value.recognitionCount === undefined ||
+      (typeof value.recognitionCount === "number" &&
+        Number.isFinite(value.recognitionCount)))
+  );
+}
+
+function ensureBackendAuthUser(value: unknown): BackendAuthUser {
+  if (!isBackendAuthUser(value)) {
+    throw new UserFacingError("用户资料返回数据格式异常，请重试");
+  }
+  return value;
+}
 
 // 会话管理列表里用来区分设备的展示名。用 modelName（"iPhone 15 Pro"）而不是
 // deviceName —— 后者在 iOS 上是用户自命名（"Alice 的 iPhone"），是实名 PII，
@@ -303,16 +368,16 @@ export async function register(payload: {
 
 
 export async function fetchCurrentUser() {
-  const user = await apiClient<BackendAuthUser>("/auth/me");
-  return normalizeUser(user);
+  const user = await apiClient<unknown>("/auth/me");
+  return normalizeUser(ensureBackendAuthUser(user));
 }
 
 export async function fetchCurrentUserWithToken(accessToken: string) {
-  const user = await apiClient<BackendAuthUser>("/auth/me", {
+  const user = await apiClient<unknown>("/auth/me", {
     auth: false,
     accessToken,
   });
-  return normalizeUser(user);
+  return normalizeUser(ensureBackendAuthUser(user));
 }
 
 export async function logout(refreshToken: string) {

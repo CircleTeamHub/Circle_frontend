@@ -1,5 +1,5 @@
 import { apiClient } from '@/services/api/client';
-import { buildQuery, normalizeMediaUrl } from '@/services/api/utils';
+import { allowPeerMediaUrl, buildQuery } from '@/services/api/utils';
 import type {
   Circle,
   CircleDetail,
@@ -16,10 +16,10 @@ const MY_CIRCLES_PAGE_SIZE = 100;
 function normalizeCircle<T extends Circle>(circle: T): T {
   return {
     ...circle,
-    avatarUrl: circle.avatarUrl ? normalizeMediaUrl(circle.avatarUrl) : null,
-    cover: circle.cover ? normalizeMediaUrl(circle.cover) : null,
+    avatarUrl: circle.avatarUrl ? allowPeerMediaUrl(circle.avatarUrl) : null,
+    cover: circle.cover ? allowPeerMediaUrl(circle.cover) : null,
     currentIconUrl: circle.currentIconUrl
-      ? normalizeMediaUrl(circle.currentIconUrl)
+      ? allowPeerMediaUrl(circle.currentIconUrl)
       : null,
   };
 }
@@ -57,10 +57,15 @@ export async function fetchCircleDetail(id: string): Promise<CircleDetail> {
 export async function createCircle(
   input: CreateCircleInput,
 ): Promise<CircleDetail> {
-  return apiClient<CircleDetail>('/circle', {
+  const detail = await apiClient<CircleDetail>('/circle', {
     method: 'POST',
     body: (input),
   });
+  return {
+    ...normalizeCircle(detail),
+    myRole: detail.myRole,
+    myStatus: detail.myStatus,
+  };
 }
 
 export async function updateCircle(
@@ -99,13 +104,14 @@ export async function uploadCircleIcon(
   id: string,
   input: { imageUrl: string; name?: string },
 ) {
-  return apiClient<{ id: string; name: string; imageUrl: string | null }>(
+  const result = await apiClient<{ id: string; name: string; imageUrl: string | null }>(
     `/circle/${id}/icon/upload`,
     {
       method: 'POST',
       body: input,
     },
   );
+  return { ...result, imageUrl: allowPeerMediaUrl(result.imageUrl) };
 }
 
 export async function selectCircleIcon(
@@ -168,7 +174,7 @@ export async function fetchEligibleVerifiers(
   );
   return list.map((user) => ({
     ...user,
-    avatarUrl: normalizeMediaUrl(user.avatarUrl),
+    avatarUrl: allowPeerMediaUrl(user.avatarUrl),
   }));
 }
 

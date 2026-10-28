@@ -3545,8 +3545,7 @@
     "AUTH_SECURITY_CODE_NOT_SET": "No login security code is set. Please confirm on a trusted device",
     "CHAT_GROUP_ACCEPT_REQUIRED": "Please accept the group invitation first",
     "CHAT_GROUP_INVITATION_INVALID": "This invitation has expired or is no longer valid",
-    "CHAT_GROUP_APPLICATION_DISABLED": "This group is not accepting requests through cards",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "Too many recovery requests. Please wait for the existing ones to finish"
+    "CHAT_GROUP_APPLICATION_DISABLED": "This group is not accepting requests through cards"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",

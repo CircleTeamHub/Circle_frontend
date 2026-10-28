@@ -2,7 +2,7 @@ import { apiClient } from '@/services/api/client';
 import {
   buildQuery,
   normalizeUserAvatarFrameAppearance,
-  normalizeMediaUrl,
+  allowPeerMediaUrl,
 } from '@/services/api/utils';
 import { normalizeImageMedia } from './image-media';
 import type {
@@ -34,7 +34,7 @@ function normalizeDisplayIcons(icons: unknown): DisplayIcon[] {
     const item = icon as DisplayIcon;
     return {
       ...item,
-      imageUrl: item.imageUrl ? normalizeMediaUrl(item.imageUrl) : null,
+      imageUrl: item.imageUrl ? allowPeerMediaUrl(item.imageUrl) : null,
     };
   });
 }
@@ -59,10 +59,10 @@ export function normalizePlazaPost(
     author: {
       ...post.author,
       avatarUrl: post.author.avatarUrl
-        ? normalizeMediaUrl(post.author.avatarUrl)
+        ? allowPeerMediaUrl(post.author.avatarUrl)
         : null,
       avatarFrame: post.author.avatarFrame
-        ? normalizeMediaUrl(post.author.avatarFrame)
+        ? allowPeerMediaUrl(post.author.avatarFrame)
         : null,
       avatarFrameAppearance: normalizeUserAvatarFrameAppearance(
         post.author.avatarFrameAppearance,
@@ -171,7 +171,7 @@ function normalizeMyPost(post: unknown): MyCirclePost {
     circleId: stringField(p.circleId),
     excerpt: stringField(p.excerpt),
     firstImage: firstImage
-      ? (normalizeMediaUrl(firstImage) ?? firstImage)
+      ? allowPeerMediaUrl(firstImage)
       : null,
     signupCount: numberField(p.signupCount),
     unreadSignupCount: numberField(p.unreadSignupCount),
@@ -208,7 +208,7 @@ function normalizePostSignup(signup: unknown): PostSignupItem {
   return {
     userId: stringField(s.userId),
     nickname: stringField(s.nickname, '用户'),
-    avatarUrl: avatarUrl ? (normalizeMediaUrl(avatarUrl) ?? avatarUrl) : null,
+    avatarUrl: avatarUrl ? allowPeerMediaUrl(avatarUrl) : null,
     accountId: stringField(s.accountId),
     signedAt: stringField(s.signedAt),
     seen: booleanField(s.seen),

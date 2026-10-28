@@ -13,7 +13,7 @@ test('circle cover: type, API, and upload hook are wired', () => {
   assert.match(api, /export async function setCircleCover/);
   assert.match(api, /\/circle\/\$\{id\}\/cover/);
   // normalizeCircle resolves the cover media url like avatarUrl
-  assert.match(api, /cover: circle\.cover \? normalizeMediaUrl/);
+  assert.match(api, /cover: circle\.cover \? allowPeerMediaUrl/);
 
   const hook = read(
     'src/features/discover/hooks/use-change-circle-cover.ts',

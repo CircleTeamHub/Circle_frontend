@@ -1,5 +1,6 @@
 import type { BurnDurationSec } from '@/chat-core/burn-durations';
 import { apiClient } from '@/services/api/client';
+import { expectShape, isPlainObject } from '@/utils/validate';
 
 export type MomentsVisibility = 'ALL' | 'FRIENDS_ONLY' | 'PRIVATE';
 export type PrivacyPermission = 'EVERYONE' | 'FRIENDS_ONLY' | 'NONE';
@@ -41,15 +42,60 @@ export type PrivacySettings = {
 
 export type UpdatePrivacySettingsPayload = Partial<PrivacySettings>;
 
+const PRIVACY_VISIBILITIES = new Set<MomentsVisibility>([
+  'ALL',
+  'FRIENDS_ONLY',
+  'PRIVATE',
+]);
+const PRIVACY_PERMISSIONS = new Set<PrivacyPermission>([
+  'EVERYONE',
+  'FRIENDS_ONLY',
+  'NONE',
+]);
+
+function isPrivacySettings(value: unknown): value is PrivacySettings {
+  if (!isPlainObject(value)) return false;
+  const booleans = [
+    'allowStrangerMessages',
+    'showPhone',
+    'showEmail',
+    'showWechat',
+    'showQQ',
+    'showWhatsup',
+    'addMeByAccount',
+    'addMeByPhone',
+    'addMeByQrCode',
+    'addMeByGroup',
+  ];
+  return (
+    typeof value.messageSelfDestructSec === 'number' &&
+    Number.isFinite(value.messageSelfDestructSec) &&
+    typeof value.momentsVisibility === 'string' &&
+    PRIVACY_VISIBILITIES.has(value.momentsVisibility as MomentsVisibility) &&
+    booleans.every((key) => typeof value[key] === 'boolean') &&
+    typeof value.callPermission === 'string' &&
+    PRIVACY_PERMISSIONS.has(value.callPermission as PrivacyPermission) &&
+    typeof value.groupInvitePermission === 'string' &&
+    PRIVACY_PERMISSIONS.has(value.groupInvitePermission as PrivacyPermission) &&
+    (value.directMessageAutoReplyEnabled === undefined || typeof value.directMessageAutoReplyEnabled === 'boolean') &&
+    (value.directMessageAutoReplyText === undefined || typeof value.directMessageAutoReplyText === 'string') &&
+    (value.shareOnlineStatus === undefined || typeof value.shareOnlineStatus === 'boolean') &&
+    (value.shareTypingInDirect === undefined || typeof value.shareTypingInDirect === 'boolean') &&
+    (value.shareTypingInGroup === undefined || typeof value.shareTypingInGroup === 'boolean')
+  );
+}
+
 export async function fetchPrivacySettings() {
-  return apiClient<PrivacySettings>('/privacy/settings');
+  const raw = await apiClient<unknown>('/privacy/settings');
+  return expectShape(raw, isPrivacySettings, '隐私设置数据格式异常');
 }
 
 export async function updatePrivacySettings(
   payload: UpdatePrivacySettingsPayload,
 ) {
-  return apiClient<PrivacySettings>('/privacy/settings', {
+  const raw = await apiClient<unknown>('/privacy/settings', {
     method: 'PATCH',
     body: payload,
   });
+  return expectShape(raw, isPrivacySettings, '隐私设置数据格式异常');
 }

@@ -31,6 +31,7 @@ function loadCirclesApi(deps) {
       if (request === '@/services/api/utils') {
         return {
           buildQuery: () => '',
+          allowPeerMediaUrl: deps.normalizeMediaUrl,
           normalizeMediaUrl: deps.normalizeMediaUrl,
         };
       }
