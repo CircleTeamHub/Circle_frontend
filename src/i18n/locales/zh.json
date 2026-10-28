@@ -3537,7 +3537,8 @@
     "AUTH_SECURITY_CODE_NOT_SET": "未设置登录安全码，请在受信任设备上确认登录",
     "CHAT_GROUP_ACCEPT_REQUIRED": "请先处理并接受群邀请",
     "CHAT_GROUP_INVITATION_INVALID": "邀请已过期或失效",
-    "CHAT_GROUP_APPLICATION_DISABLED": "该群暂不接受名片申请"
+    "CHAT_GROUP_APPLICATION_DISABLED": "该群暂不接受名片申请",
+    "AUTH_LOGIN_RECOVERY_LIMITED": "找回申请过多，请等现有申请处理完后再试"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",
