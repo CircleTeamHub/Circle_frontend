@@ -991,6 +991,9 @@ export async function retryFailedChatMessage(
   options: RetryFailedChatMessageOptions = {},
 ): Promise<void> {
   if (retriesInFlight.has(d)) return;
+  // 重发也必须在任何气泡/outbox 状态变化之前过信用分门禁。媒体闭包里的实际
+  // 发送仍会再次校验，避免上传期间信用状态变化后继续发出。
+  assertLocalCanSendMessage();
   const fence = captureChatSessionFence();
   assertChatSessionFence(fence);
   retriesInFlight.add(d);

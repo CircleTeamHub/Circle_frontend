@@ -324,6 +324,37 @@ test('a session switch while retry persistence is pending cannot resend the old 
   assert.deepEqual(loaded.calls.failedMarks, []);
 });
 
+test('a low-credit outbox retry is rejected before local or transport changes', async () => {
+  // 重发也要先过信用分门禁:原来重发绕过了它,低信用用户靠长按重发照样能发出去。
+  const loaded = loadClient({
+    blocked: true,
+    retryOutbox: [
+      {
+        d: 'd-retry',
+        conversationId: 'c1',
+        payload: {
+          conversationId: 'c1',
+          type: 'text',
+          content: { text: 'must remain failed' },
+          d: 'd-retry',
+        },
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  });
+
+  await assert.rejects(
+    loaded.api.retryFailedChatMessage('c1', 'd-retry'),
+    loaded.CreditPolicyError,
+  );
+
+  assert.equal(loaded.calls.gate, 1);
+  assert.deepEqual(loaded.calls.retryMarks, []);
+  assert.deepEqual(loaded.calls.failedMarks, []);
+  assert.deepEqual(loaded.calls.outboxUpserts, []);
+  assert.equal(loaded.calls.sent, 0);
+});
+
 test('a media delivery remains bound to the session that created its bubble', async () => {
   const loaded = loadClient({ blocked: false });
   const deliveryId = loaded.api.startMediaSend({

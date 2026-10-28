@@ -4,6 +4,10 @@ import { AppOperationsHost } from "./AppOperationsHost";
 import { apiClient } from "@/services/api/client";
 import { getDeviceId } from "@/services/auth/device-id";
 const mockState = { isAuthenticated: true, isLoading:false,accessToken:"local-test-token" as string|null, sessionEpoch: 1 };
+const originalAppStateCurrentState = Object.getOwnPropertyDescriptor(
+  AppState,
+  "currentState",
+);
 jest.mock("@/stores/authStore", () => ({
   useAuthStore: Object.assign(
     (selector: (s: typeof mockState) => unknown) => selector(mockState),
@@ -24,6 +28,10 @@ jest.mock("expo-constants", () => ({
   default: { expoConfig: { version: "1.0.0", extra: {} } },
 }));
 beforeEach(() => {
+  Object.defineProperty(AppState, "currentState", {
+    configurable: true,
+    value: "active",
+  });
   jest.mocked(apiClient).mockReset();
   jest.mocked(getDeviceId).mockReset();
   mockState.isAuthenticated = true;
@@ -32,7 +40,16 @@ beforeEach(() => {
   jest.mocked(getDeviceId).mockResolvedValue("local-device-identifier");
   jest.mocked(apiClient).mockResolvedValue({ recorded: true });
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+  if (originalAppStateCurrentState) {
+    Object.defineProperty(
+      AppState,
+      "currentState",
+      originalAppStateCurrentState,
+    );
+  }
+});
 it("records coarse metadata and removes the lifecycle subscription on unmount", async () => {
   const remove = jest.fn();
   jest.spyOn(AppState, "addEventListener").mockReturnValue({ remove });
@@ -48,6 +65,24 @@ it("records coarse metadata and removes the lifecycle subscription on unmount", 
   expect(JSON.stringify(options)).not.toContain("local-device-identifier");
   view.unmount();
   expect(remove).toHaveBeenCalled();
+});
+it("waits for an active foreground before recording the initial app open", async () => {
+  let foreground!: (state: import("react-native").AppStateStatus) => void;
+  Object.defineProperty(AppState, "currentState", {
+    configurable: true,
+    value: "background",
+  });
+  jest.spyOn(AppState, "addEventListener").mockImplementation((_, listener) => {
+    foreground = listener;
+    return { remove: jest.fn() };
+  });
+
+  render(<AppOperationsHost />);
+  expect(getDeviceId).not.toHaveBeenCalled();
+  expect(apiClient).not.toHaveBeenCalled();
+
+  await act(async () => foreground("active"));
+  await waitFor(() => expect(apiClient).toHaveBeenCalledTimes(1));
 });
 it("does not report an old account after an asynchronous device read crosses account switching", async () => {
   let resolveDevice!: (value: string) => void;

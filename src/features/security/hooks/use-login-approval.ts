@@ -68,8 +68,8 @@ export function useLoginApproval() {
   }, [active, consumedId]);
 
   useEffect(() => {
-    if (active?.kind === 'code' && active.codeExpiresAt <= Date.now() && pending.some(item => item.id === active.challengeId && item.recoveryAvailableAt)) setActive(null);
-  }, [active, pending]);
+    if (active?.kind === 'code' && active.codeExpiresAt <= now && pending.some(item => item.id === active.challengeId && item.recoveryAvailableAt)) setActive(null);
+  }, [active, now, pending]);
 
   // 有待问的请求或正在显示验证码时才走秒：过期的请求要能自己消失。
   const ticking = active?.kind === 'code' || pending.length > 0;
