@@ -1,0 +1,165 @@
+name: iOS Build and TestFlight
+
+on:
+  push:
+    tags:
+      - 'v*'
+  schedule:
+    - cron: '30 19 * * *'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Upload the validated IPA to TestFlight
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: circle-ios-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ios_build:
+    name: Build iOS IPA
+    if: github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      artifact_name: ${{ steps.metadata.outputs.artifact_name }}
+    env:
+      EXPO_PUBLIC_EAS_PROJECT_ID: ${{ vars.EXPO_PUBLIC_EAS_PROJECT_ID }}
+      EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+      EXPO_PUBLIC_CHAT_WS_URL: ${{ vars.EXPO_PUBLIC_CHAT_WS_URL }}
+      EXPO_PUBLIC_MEDIA_ORIGINS: ${{ vars.EXPO_PUBLIC_MEDIA_ORIGINS }}
+      EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
+      EXPO_PUBLIC_JPUSH_APP_KEY: ${{ vars.EXPO_PUBLIC_JPUSH_APP_KEY }}
+      EXPO_PUBLIC_PUSH_PROVIDER: ${{ vars.EXPO_PUBLIC_PUSH_PROVIDER }}
+      EXPO_PUBLIC_AMAP_IOS_KEY: ${{ vars.EXPO_PUBLIC_AMAP_IOS_KEY }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run application checks
+        run: npm run ci
+
+      - name: Validate iOS native configuration
+        env:
+          CI: '1'
+        run: |
+          set -euo pipefail
+          npx expo prebuild --platform ios --clean --no-install
+          node .github/scripts/verify-ios-sentry-config.js
+          test "$(node -p "require('./app.json').expo.ios.bundleIdentifier")" = 'com.yiboding.circleim'
+
+      - name: Build iOS artifact with EAS
+        run: |
+          set -euo pipefail
+          test -n "$EAS_TOKEN"
+          npx eas-cli@latest build --platform ios --profile production --non-interactive --wait --json > "$RUNNER_TEMP/eas-build.json"
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const raw = fs.readFileSync(process.env.RUNNER_TEMP + '/eas-build.json', 'utf8');
+          const builds = JSON.parse(raw);
+          const build = Array.isArray(builds) ? builds[0] : builds;
+          if (!build?.artifacts?.buildUrl) throw new Error('EAS did not return an iOS artifact URL');
+          fs.writeFileSync(process.env.RUNNER_TEMP + '/eas-artifact-url', build.artifacts.buildUrl + '\n');
+          fs.writeFileSync(process.env.RUNNER_TEMP + '/eas-build-id', (build.id || '') + '\n');
+          NODE
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/circle-im.ipa" "$(cat "$RUNNER_TEMP/eas-artifact-url")"
+          test -s "$RUNNER_TEMP/circle-im.ipa"
+
+      - name: Record IPA receipt
+        id: metadata
+        run: |
+          set -euo pipefail
+          artifact_name="ios-release-${GITHUB_SHA::12}"
+          shasum -a 256 "$RUNNER_TEMP/circle-im.ipa" > "$RUNNER_TEMP/circle-im.ipa.sha256"
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const path = process.env.RUNNER_TEMP + '/circle-im.ipa';
+          const receipt = {
+            source: process.env.GITHUB_SHA,
+            buildId: fs.readFileSync(process.env.RUNNER_TEMP + '/eas-build-id', 'utf8').trim(),
+            sha256: crypto.createHash('sha256').update(fs.readFileSync(path)).digest('hex'),
+            bundleIdentifier: 'com.yiboding.circleim',
+            version: require('./app.json').expo.version,
+          };
+          fs.writeFileSync(process.env.RUNNER_TEMP + '/ios-release.json', JSON.stringify(receipt, null, 2) + '\n');
+          NODE
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Retain signed IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-release-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/circle-im.ipa
+            ${{ runner.temp }}/circle-im.ipa.sha256
+            ${{ runner.temp }}/ios-release.json
+          if-no-files-found: error
+          retention-days: 14
+
+  ios_publish:
+    name: Upload iOS IPA to TestFlight
+    needs: ios_build
+    if: (github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/v') || inputs.publish == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ios-testflight
+    env:
+      EXPO_PUBLIC_EAS_PROJECT_ID: ${{ vars.EXPO_PUBLIC_EAS_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Download signed IPA
+        uses: actions/download-artifact@v8
+        with:
+          name: ios-release-${{ github.sha }}
+          path: ${{ runner.temp }}/ios-release
+
+      - name: Verify IPA receipt
+        working-directory: ${{ runner.temp }}/ios-release
+        run: |
+          set -euo pipefail
+          shasum -a 256 -c circle-im.ipa.sha256
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const receipt = JSON.parse(fs.readFileSync('ios-release.json', 'utf8'));
+          if (receipt.source !== process.env.GITHUB_SHA) throw new Error('IPA source commit mismatch');
+          if (receipt.bundleIdentifier !== 'com.yiboding.circleim') throw new Error('IPA bundle ID mismatch');
+          NODE
+
+      - name: Submit IPA to TestFlight
+        env:
+          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$EAS_TOKEN"
+          npx eas-cli@latest submit --platform ios --path "$RUNNER_TEMP/ios-release/circle-im.ipa" --non-interactive

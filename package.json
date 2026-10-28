@@ -31,7 +31,8 @@
     "licenses:generate": "node scripts/generate-third-party-notices.mjs",
     "licenses:check": "node scripts/generate-third-party-notices.mjs --check",
     "ci": "npm run typecheck && npm run expo:config && npm run lint && npm test && npm run test:behavior",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "ios:testflight:inspect": "node scripts/inspect-testflight-groups.mjs"
   },
   "dependencies": {
     "@blocknote/core": "^0.47.3",
