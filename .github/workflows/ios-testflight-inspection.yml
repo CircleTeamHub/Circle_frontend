@@ -1,0 +1,33 @@
+name: iOS TestFlight Inspection
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: circle-ios-testflight-inspection
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    name: Verify TestFlight groups
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ASC_KEY_ID: ${{ vars.APP_STORE_CONNECT_API_KEY_ID }}
+      ASC_ISSUER_ID: ${{ vars.APP_STORE_CONNECT_API_ISSUER_ID }}
+      ASC_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+      IOS_BUNDLE_ID: com.yiboding.circleim
+      IOS_TESTFLIGHT_GROUP_IDS: ${{ vars.IOS_TESTFLIGHT_GROUP_IDS }}
+      FEISHU_WEBHOOK_URL: ${{ secrets.RELEASE_FEISHU_WEBHOOK_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Inspect App Store Connect groups
+        run: node scripts/inspect-testflight-groups.mjs
