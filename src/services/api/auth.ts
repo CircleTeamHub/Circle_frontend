@@ -112,8 +112,9 @@ function isBackendAuthUser(value: unknown): value is BackendAuthUser {
     typeof value.creditScore === "number" &&
     Number.isFinite(value.creditScore) &&
     typeof value.fancyNumber === "boolean" &&
-    Array.isArray(value.displayIcons) &&
-    value.displayIcons.every(isDisplayIconShape) &&
+    (value.displayIcons === undefined ||
+      (Array.isArray(value.displayIcons) &&
+        value.displayIcons.every(isDisplayIconShape))) &&
     typeof value.role === "string" &&
     typeof value.status === "string" &&
     isNullableString(value.lastOnline) &&
@@ -134,7 +135,9 @@ function ensureBackendAuthUser(value: unknown): BackendAuthUser {
   if (!isBackendAuthUser(value)) {
     throw new UserFacingError("用户资料返回数据格式异常，请重试");
   }
-  return value;
+  // Older backends omitted this field; keep the mixed-version fallback while
+  // still rejecting a malformed value when the field is present.
+  return { ...value, displayIcons: value.displayIcons ?? [] };
 }
 
 // 会话管理列表里用来区分设备的展示名。用 modelName（"iPhone 15 Pro"）而不是
