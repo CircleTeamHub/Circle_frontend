@@ -221,10 +221,15 @@ export function LoginSecurityCodeGate() {
   }
 
   async function handleLogout() {
-    await clearLocalSession();
-    setGateState('unlocked');
-    setSecurityCode('');
-    router.replace('/(auth)/login');
+    try {
+      await clearLocalSession();
+    } catch (error) {
+      reportHandledFailure('securityCodeGate', 'logoutCleanup', error);
+    } finally {
+      setGateState('unlocked');
+      setSecurityCode('');
+      router.replace('/(auth)/login');
+    }
   }
 
   const visible =

@@ -803,35 +803,58 @@ export async function loadChatHistory(
  */
 const BACKFILL_PAGE_LIMIT = 100;
 const BACKFILL_PAGES_MAX = 10;
+const BACKFILL_TOTAL_PAGE_BUDGET = 100;
+const BACKFILL_DEADLINE_MS = 30_000;
 
 /**
  * G-13 断线重连对账:从 afterHeight 起升序追平缺口。
  * 与 chat:msg 广播共用 ingestMessages 入库(按 id/d 幂等去重),
- * 追平(nextAfterHeight=null)即停。
+ * 追平(nextAfterHeight=null)即停；超过总预算则留下游标，等待下一次重连继续。
  */
 export async function backfillConversationSince(
   conversationId: string,
   afterHeight: number,
 ): Promise<void> {
   let cursor = afterHeight;
-  for (let page = 0; page < BACKFILL_PAGES_MAX; page += 1) {
-    const params = new URLSearchParams();
-    params.set('afterHeight', String(cursor));
-    params.set('limit', String(BACKFILL_PAGE_LIMIT));
-    const sameSession = sessionGate();
-    const dto = await apiClient<ChatHistoryPageDto>(
-      `/chat/conversations/${conversationId}/messages?${params.toString()}`,
-    );
-    if (!sameSession()) return;
-    useChatStore.getState().ingestMessages(conversationId, dto.messages);
-    if (dto.nextAfterHeight == null) return;
-    // 游标不前进 = 服务端在原地打转,继续追只会死循环。
-    if (dto.nextAfterHeight <= cursor) return;
-    cursor = dto.nextAfterHeight;
+  let pagesFetched = 0;
+  const deadline = Date.now() + BACKFILL_DEADLINE_MS;
+  while (pagesFetched < BACKFILL_TOTAL_PAGE_BUDGET) {
+    if (Date.now() >= deadline) {
+      reportHandledFailure('chatSync', 'backfillBudgetExceeded', {
+        conversationId,
+        afterHeight,
+        pagesFetched,
+      });
+      return;
+    }
+    let batchPages = 0;
+    for (; batchPages < BACKFILL_PAGES_MAX; batchPages += 1) {
+      pagesFetched += 1;
+      const params = new URLSearchParams();
+      params.set('afterHeight', String(cursor));
+      params.set('limit', String(BACKFILL_PAGE_LIMIT));
+      const sameSession = sessionGate();
+      const dto = await apiClient<ChatHistoryPageDto>(
+        `/chat/conversations/${conversationId}/messages?${params.toString()}`,
+      );
+      if (!sameSession()) return;
+      useChatStore.getState().ingestMessages(conversationId, dto.messages);
+      if (dto.nextAfterHeight == null) return;
+      // 游标不前进 = 服务端在原地打转,继续追只会死循环。
+      if (dto.nextAfterHeight <= cursor) return;
+      cursor = dto.nextAfterHeight;
+      if (pagesFetched >= BACKFILL_TOTAL_PAGE_BUDGET) break;
+    }
+    if (pagesFetched >= BACKFILL_TOTAL_PAGE_BUDGET) {
+      reportHandledFailure('chatSync', 'backfillBudgetExceeded', {
+        conversationId,
+        afterHeight,
+        pagesFetched,
+      });
+      return;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
-  // 一批 1000 条追完游标还活着:让出一轮事件循环再接着追,别把 UI 卡死。
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  await backfillConversationSince(conversationId, cursor);
 }
 
 /** 增量同步单页条数(与服务端 SYNC_PAGE_MAX 对齐)。 */

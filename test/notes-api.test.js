@@ -131,6 +131,9 @@ function loadNotesApi(respond) {
       if (request === './pagination') {
         return loadTsModule('src/services/api/pagination.ts');
       }
+      if (request === '@/services/api/utils') {
+        return { allowPeerMediaUrl: (value) => value ?? null };
+      }
       throw new Error(`unexpected require: ${request}`);
     },
     context: { URLSearchParams },

@@ -1,5 +1,6 @@
 import { apiClient, ApiError } from './client';
 import { collectOffsetPages, readHasMore } from './pagination';
+import { allowPeerMediaUrl } from '@/services/api/utils';
 import type {
   CollectNoteSource,
   CreateNoteInput,
@@ -23,6 +24,58 @@ const NOTE_PAGE_SIZE = 500;
 const NOTE_MAX_PAGES = 20;
 
 let lastNoteMutationAt = 0;
+
+function sanitizeNoteMediaItem<T extends Record<string, unknown>>(item: T): T {
+  const next = { ...item };
+  const record = next as Record<string, unknown>;
+  if (typeof record.url === 'string') {
+    record.url = allowPeerMediaUrl(record.url) ?? '';
+  }
+  if (typeof record.posterUrl === 'string') {
+    record.posterUrl = allowPeerMediaUrl(record.posterUrl);
+  }
+  return next;
+}
+
+function sanitizeNoteSections<T extends NoteSummary>(note: T): T {
+  if (!note.sections) return note;
+  const sections = { ...note.sections };
+  for (const key of ['media', 'showcase', 'audio'] as const) {
+    const section = sections[key];
+    if (section?.items) {
+      sections[key] = {
+        ...section,
+        items: section.items.map((item) =>
+          sanitizeNoteMediaItem(item as unknown as Record<string, unknown>),
+        ) as unknown as typeof section.items,
+      };
+    }
+  }
+  return { ...note, sections };
+}
+
+function sanitizeNoteSummary<T extends NoteSummary>(note: T): T {
+  const sanitized = sanitizeNoteSections(note);
+  return {
+    ...sanitized,
+    cover: sanitized.cover
+      ? {
+          ...sanitized.cover,
+          url: allowPeerMediaUrl(sanitized.cover.url) ?? '',
+        }
+      : null,
+  };
+}
+
+function sanitizeNoteDetail(note: NoteDetail): NoteDetail {
+  const sanitized = sanitizeNoteSummary(note);
+  return {
+    ...sanitized,
+    media: note.media.map((item) =>
+      sanitizeNoteMediaItem(item as unknown as Record<string, unknown>) as unknown as NoteDetail['media'][number],
+    ),
+  };
+}
 
 /**
  * 笔记相关的写请求(新建/编辑/删除/置顶/分组…)成功后记一笔。列表页回到前台时据此
@@ -60,14 +113,15 @@ export async function fetchNotes(params?: ListNotesParams): Promise<NoteSummary[
           signal.hasMore = readHasMore(headers);
         },
       });
-      return { rows, hasMore: signal.hasMore };
+      return { rows: rows.map(sanitizeNoteSummary), hasMore: signal.hasMore };
     },
     { pageSize: NOTE_PAGE_SIZE, maxPages: NOTE_MAX_PAGES },
   );
 }
 
 export async function fetchNoteDetail(id: string): Promise<NoteDetail> {
-  return apiClient<NoteDetail>(`/note/${id}`);
+  const note = await apiClient<NoteDetail>(`/note/${id}`);
+  return sanitizeNoteDetail(note);
 }
 
 export async function fetchNoteDrafts(): Promise<NoteDraftSummary[]> {

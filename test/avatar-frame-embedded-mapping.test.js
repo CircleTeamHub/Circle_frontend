@@ -20,6 +20,8 @@ function apiUtilsShim() {
     fetchCountEndpoint: async () => 0,
     normalizeMediaUrl: (value) =>
       typeof value === 'string' ? `media:${value}` : value ?? null,
+    allowPeerMediaUrl: (value) =>
+      typeof value === 'string' ? `media:${value}` : value ?? null,
     normalizeAvatarFrameAppearance,
     normalizeUserAvatarFrameAppearance: (value, vipLevel) => {
       if (value !== undefined) return normalizeAvatarFrameAppearance(value);

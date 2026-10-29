@@ -7,6 +7,10 @@ function loadImageMedia() {
     requireShim: (request) => {
       if (request === '@/services/api/utils') {
         return {
+          allowPeerMediaUrl: (value) =>
+            typeof value === 'string'
+              ? value.replace('http://localhost', 'https://cdn.example')
+              : value,
           normalizeMediaUrl: (value) =>
             typeof value === 'string'
               ? value.replace('http://localhost', 'https://cdn.example')

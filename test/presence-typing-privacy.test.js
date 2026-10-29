@@ -85,8 +85,8 @@ test('presence protocol: detail query, last-seen + hidden broadcast, header hide
   assert.match(manager, /typeof value === 'boolean'/, '旧服务端的 boolean ack 仍要收');
 
   const dispatcher = read('src/chat-core/dispatcher.ts');
-  assert.match(dispatcher, /payload\.hidden === true/);
-  assert.match(dispatcher, /store\.clearPresence\(payload\.userId\)/);
+  assert.match(dispatcher, /validPayload\.hidden === true/);
+  assert.match(dispatcher, /store\.clearPresence\(validPayload\.userId\)/);
 
   const store = read('src/chat-core/store.ts');
   assert.match(store, /lastSeenByUser: Record<string, string \| null>;/);

@@ -2,7 +2,7 @@ import { apiClient } from '@/services/api/client';
 import {
   fetchCountEndpoint,
   normalizeAvatarFrameAppearance,
-  normalizeMediaUrl,
+  allowPeerMediaUrl,
 } from '@/services/api/utils';
 import type { AvatarFrameAppearance } from '@/types';
 
@@ -140,7 +140,7 @@ function normalizeFriendProfile(friend: unknown): FriendProfile | null {
     id,
     accountId,
     nickname,
-    avatarUrl: normalizeMediaUrl(normalizeNullableString(friend.avatarUrl)),
+    avatarUrl: allowPeerMediaUrl(normalizeNullableString(friend.avatarUrl)),
     avatarFrameAppearance: normalizeAvatarFrameAppearance(
       friend.avatarFrameAppearance,
     ),
@@ -186,7 +186,7 @@ function normalizeFriendActivity(
     ...activity,
     counterparty: {
       ...activity.counterparty,
-      avatarUrl: normalizeMediaUrl(activity.counterparty.avatarUrl),
+      avatarUrl: allowPeerMediaUrl(activity.counterparty.avatarUrl),
       avatarFrameAppearance: normalizeAvatarFrameAppearance(
         activity.counterparty.avatarFrameAppearance,
       ),
@@ -282,7 +282,7 @@ export async function fetchFriendSettings(friendUserId: string) {
   return {
     ...settings,
     photos: (settings.photos ?? [])
-      .map((photo) => normalizeMediaUrl(photo))
+      .map((photo) => allowPeerMediaUrl(photo))
       .filter((photo): photo is string => Boolean(photo)),
   };
 }
@@ -304,7 +304,7 @@ export async function fetchBlockedUsers() {
   const users = await apiClient<BlockedUser[]>('/friend/blocked');
   return users.map((user) => ({
     ...user,
-    avatarUrl: normalizeMediaUrl(user.avatarUrl),
+    avatarUrl: allowPeerMediaUrl(user.avatarUrl),
   }));
 }
 

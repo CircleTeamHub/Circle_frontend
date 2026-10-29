@@ -2,7 +2,7 @@ import { apiClient } from '@/services/api/client';
 import {
   buildQuery,
   normalizeUserAvatarFrameAppearance,
-  normalizeMediaUrl,
+  allowPeerMediaUrl,
 } from '@/services/api/utils';
 import { normalizeImageMedia } from './image-media';
 import type {
@@ -54,7 +54,7 @@ export function normalizeMoment(post: BackendMomentPost): MomentPost {
     author: {
       ...post.author,
       avatarUrl: post.author.avatarUrl
-        ? normalizeMediaUrl(post.author.avatarUrl)
+        ? allowPeerMediaUrl(post.author.avatarUrl)
         : null,
       avatarFrameAppearance: normalizeUserAvatarFrameAppearance(
         post.author.avatarFrameAppearance,

@@ -61,7 +61,20 @@ export async function updateUserProfile(
       ...refreshedUser,
       ...payload,
     };
-  } catch {
+  } catch (error) {
+    // A stale read may be safely hidden for a transient network/5xx failure.
+    // Authentication, session-switch, schema, and programming errors must
+    // propagate so callers cannot commit the previous account as a success.
+    const status =
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { name?: unknown }).name === 'ApiError' &&
+      typeof (error as { status?: unknown }).status === 'number'
+        ? (error as { status: number }).status
+        : null;
+    if (status === null || (status !== 0 && status < 500)) {
+      throw error;
+    }
     if (patchedUser) {
       return {
         ...patchedUser,

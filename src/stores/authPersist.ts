@@ -16,7 +16,8 @@
  *   做的是「原样向前迁移」：保留 token / user，让会话平滑跨过版本号。
  */
 import type { AuthUser } from './authStore';
-import type { AvatarFrameAppearance } from '@/types';
+// @ts-ignore The Node test runner and Metro both resolve explicit TypeScript modules.
+import { migratePersistedUser } from './appearance-migration.ts';
 
 /** persist 实际落盘的字段子集（必须与 authStore 的 partialize 保持一致） */
 export interface PersistedAuthState {
@@ -50,55 +51,8 @@ export function migrateAuthPersist(
   if (!state.user || typeof state.user !== 'object') {
     return state;
   }
-  const rawUser = state.user as unknown as Record<string, unknown>;
-  const hasAppearance = Object.prototype.hasOwnProperty.call(
-    rawUser,
-    'avatarFrameAppearance',
-  );
-  const rawAppearance = rawUser.avatarFrameAppearance;
-  const appearanceRecord =
-    rawAppearance && typeof rawAppearance === 'object' && !Array.isArray(rawAppearance)
-      ? (rawAppearance as Record<string, unknown>)
-      : null;
-  const parsedAppearance =
-    appearanceRecord &&
-    typeof appearanceRecord.id === 'string' &&
-    typeof appearanceRecord.key === 'string' &&
-    typeof appearanceRecord.name === 'string' &&
-    (appearanceRecord.imageUrl === null ||
-      typeof appearanceRecord.imageUrl === 'string')
-      ? ({
-          id: appearanceRecord.id,
-          key: appearanceRecord.key,
-          name: appearanceRecord.name,
-          imageUrl: null,
-        } as AvatarFrameAppearance)
-      : null;
-  const vipLevel =
-    typeof rawUser.vipLevel === 'number' ? rawUser.vipLevel : null;
-  const avatarFrameAppearance = hasAppearance
-    ? parsedAppearance
-    : vipLevel === 3
-      ? {
-          id: 'legacy-membership-diamond',
-          key: 'membership-diamond',
-          name: 'Diamond membership frame',
-          imageUrl: null,
-        }
-      : vipLevel !== null && vipLevel >= 4
-        ? {
-            id: 'legacy-membership-super',
-            key: 'membership-super',
-            name: 'Super membership frame',
-            imageUrl: null,
-          }
-        : null;
   return {
     ...state,
-    user: {
-      ...rawUser,
-      avatarFrame: null,
-      avatarFrameAppearance,
-    } as AuthUser,
+    user: migratePersistedUser(state.user),
   };
 }

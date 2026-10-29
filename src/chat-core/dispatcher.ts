@@ -3,6 +3,17 @@ import type { Socket } from 'socket.io-client';
 import {
   CHAT_EVENTS,
   isChatMessageDto,
+  isChatBurnedMessagesBroadcast,
+  isChatBurnStartedBroadcast,
+  isChatConversationBroadcast,
+  isChatDeliveredBroadcast,
+  isChatEditBroadcast,
+  isChatHistoryClearedBroadcast,
+  isChatPresenceBroadcast,
+  isChatReadBroadcast,
+  isChatReactionBroadcast,
+  isChatRevokeBroadcast,
+  isChatTypingBroadcast,
   type ChatConversationBroadcast,
   type ChatHistoryClearedBroadcast,
   type ChatMessageDto,
@@ -80,6 +91,25 @@ function reportChatEventFailureOnce(operation: string, kind: string): void {
     operation,
     kind,
   });
+}
+
+function runChatEvent<T>(
+  operation: string,
+  payload: unknown,
+  validate: (value: unknown) => value is T,
+  handler: (value: T) => void,
+): void {
+  if (!validate(payload)) {
+    devWarn(`[chat] dropped malformed ${operation} payload`);
+    reportChatEventFailureOnce(operation, 'malformedPayload');
+    return;
+  }
+  try {
+    handler(payload);
+  } catch (error) {
+    devWarn(`[chat] ${operation} handler failed`, error);
+    reportChatEventFailureOnce(operation, 'handlerFailure');
+  }
 }
 
 /**
@@ -292,13 +322,6 @@ function rememberRemovedConversation(conversationId: string): void {
   }
 }
 
-const CONVERSATION_CHANGE_KINDS: ReadonlySet<string> = new Set([
-  'joined',
-  'left',
-  'removed',
-  'updated',
-]);
-
 const GROUP_METADATA_CHANGE_KINDS: ReadonlySet<string> = new Set([
   'group-notice-updated',
   'group-avatar-updated',
@@ -382,20 +405,6 @@ function applyBurnedMessagesChange(
   store: ReturnType<typeof useChatStore.getState>,
   payload: ChatBurnedMessagesBroadcast,
 ): void {
-  if (
-    !payload ||
-    typeof payload.conversationId !== 'string' ||
-    payload.conversationId.length === 0 ||
-    !Array.isArray(payload.messageIds) ||
-    payload.messageIds.length === 0 ||
-    payload.messageIds.length > 500 ||
-    payload.messageIds.some(
-      (messageId) =>
-        typeof messageId !== 'string' || messageId.length === 0,
-    )
-  ) {
-    throw new Error('malformed burned messages payload');
-  }
   const burnedIds = [...new Set(payload.messageIds)];
   store.applyBurnedMessages(payload.conversationId, burnedIds);
   // 消息烧掉了,通知栏里的正文不能还留着。
@@ -619,13 +628,10 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
     CHAT_EVENTS.burnedMessages,
     (payload: ChatBurnedMessagesBroadcast) => {
       if (!isLive()) return;
-      try {
+      runChatEvent('burnedMessages', payload, isChatBurnedMessagesBroadcast, (validPayload) => {
         flushIncomingMessageBatch();
-        applyBurnedMessagesChange(useChatStore.getState(), payload);
-      } catch (err) {
-        devWarn('[chat] dropped malformed burned messages payload', err);
-        reportChatEventFailureOnce('burnedMessages', 'malformedPayload');
-      }
+        applyBurnedMessagesChange(useChatStore.getState(), validPayload);
+      });
     },
   );
 
@@ -633,314 +639,186 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
     CHAT_EVENTS.burnStarted,
     (payload: { conversationId: string; revision: number }) => {
       if (!isLive()) return;
-      if (
-        !payload ||
-        typeof payload.conversationId !== 'string' ||
-        !payload.conversationId ||
-        !Number.isSafeInteger(payload.revision) ||
-        payload.revision <= 0
-      ) return;
-      flushIncomingMessageBatch();
-      // No content in this invalidation: keep the durable cursor behind it
-      // until the authoritative sync page has persisted the new expiry.
-      noteLiveRevision(payload.conversationId, payload.revision, false);
+      runChatEvent('burnStarted', payload, isChatBurnStartedBroadcast, (validPayload) => {
+        flushIncomingMessageBatch();
+        // No content in this invalidation: keep the durable cursor behind it
+        // until the authoritative sync page has persisted the new expiry.
+        noteLiveRevision(validPayload.conversationId, validPayload.revision, false);
+      });
     },
   );
 
   socket.on(CHAT_EVENTS.read, (payload: ChatReadBroadcast) => {
     if (!isLive()) return;
-    try {
-      if (
-        !payload ||
-        typeof payload.conversationId !== 'string' ||
-        typeof payload.userId !== 'string' ||
-        // 只看 typeof 的话 1.5 / Infinity / NaN 都能过,而这个数会被写进
-        // unreadCount,一路传到 tab 与原生角标 API,还会污染已读水位。
-        !Number.isSafeInteger(payload.height) ||
-        payload.height < 0
-      ) {
-        devWarn('[chat] dropped malformed read payload');
-        reportChatEventFailureOnce('readReceipt', 'malformedPayload');
-        return;
-      }
+    runChatEvent('readReceipt', payload, isChatReadBroadcast, (validPayload) => {
       flushIncomingMessageBatch();
       const store = useChatStore.getState();
-      store.applyRead(payload.conversationId, payload.userId, payload.height);
+      store.applyRead(validPayload.conversationId, validPayload.userId, validPayload.height);
       // 本人在别的设备上读过了,这台的通知栏也收起来(对端读到哪与我无关)。
-      if (payload.userId === store.currentUserId) {
-        dismissChatNotifications(payload.conversationId);
+      if (validPayload.userId === store.currentUserId) {
+        dismissChatNotifications(validPayload.conversationId);
       }
-    } catch (err) {
-      devWarn('[chat] read handler failed', err);
-      reportChatEventFailureOnce('readReceipt', 'handlerFailure');
-    }
+    });
   });
 
   socket.on(
     CHAT_EVENTS.historyCleared,
     (payload: ChatHistoryClearedBroadcast) => {
       if (!isLive()) return;
-      try {
-        if (
-          !payload ||
-          typeof payload.conversationId !== 'string' ||
-          payload.conversationId.length === 0 ||
-          typeof payload.clearedBy !== 'string' ||
-          payload.clearedBy.length === 0 ||
-          !Number.isSafeInteger(payload.clearedBeforeHeight) ||
-          payload.clearedBeforeHeight < 0
-        ) {
-          reportChatEventFailureOnce('historyCleared', 'malformedPayload');
-          return;
-        }
+      runChatEvent('historyCleared', payload, isChatHistoryClearedBroadcast, (validPayload) => {
         flushIncomingMessageBatch();
         useChatStore
           .getState()
           .clearConversationLocal(
-            payload.conversationId,
-            payload.clearedBeforeHeight,
+            validPayload.conversationId,
+            validPayload.clearedBeforeHeight,
           );
-        dismissChatNotifications(payload.conversationId);
-      } catch (err) {
-        devWarn('[chat] history-cleared handler failed', err);
-        reportChatEventFailureOnce('historyCleared', 'handlerFailure');
-      }
+        dismissChatNotifications(validPayload.conversationId);
+      });
     },
   );
 
   socket.on(CHAT_EVENTS.presence, (payload: ChatPresenceBroadcast) => {
     if (!isLive()) return;
-    try {
-      if (
-        !payload ||
-        typeof payload.userId !== 'string' ||
-        typeof payload.online !== 'boolean'
-      ) {
-        reportChatEventFailureOnce('presence', 'malformedPayload');
-        return;
-      }
+    runChatEvent('presence', payload, isChatPresenceBroadcast, (validPayload) => {
       const store = useChatStore.getState();
-      if (payload.hidden === true) {
+      if (validPayload.hidden === true) {
         // 对方刚关掉「显示在线时间」:忘掉此人,界面回到「未知」而不是「离线」。
-        store.clearPresence(payload.userId);
+        store.clearPresence(validPayload.userId);
         return;
       }
       store.applyPresence(
-        payload.userId,
-        payload.online,
+        validPayload.userId,
+        validPayload.online,
         // 下线广播不带时刻(旧版服务端)= 此刻刚下线;带了就按服务端说的,
         // 包括 null(「显示在线时间」翻回来时服务端可能还没记录过)。
-        payload.online
+        validPayload.online
           ? null
-          : payload.lastSeenAt === undefined
+          : validPayload.lastSeenAt === undefined
             ? new Date().toISOString()
-            : payload.lastSeenAt,
+            : validPayload.lastSeenAt,
       );
-    } catch (err) {
-      devWarn('[chat] presence handler failed', err);
-      reportChatEventFailureOnce('presence', 'handlerFailure');
-    }
+    });
   });
 
   socket.on(CHAT_EVENTS.typing, (payload: ChatTypingBroadcast) => {
     if (!isLive()) return;
-    try {
-      if (
-        !payload ||
-        typeof payload.conversationId !== 'string' ||
-        typeof payload.userId !== 'string'
-      ) {
-        return;
-      }
+    runChatEvent('typing', payload, isChatTypingBroadcast, (validPayload) => {
       const store = useChatStore.getState();
       // 服务端 except 的只是发送那只 socket:自己另一台设备的 typing
       // 仍会广播过来,不该给自己看「对方正在输入」。
-      if (payload.userId === store.currentUserId) return;
-      store.applyTyping(payload.conversationId);
-    } catch (err) {
-      devWarn('[chat] typing handler failed', err);
-      reportChatEventFailureOnce('typing', 'handlerFailure');
-    }
+      if (validPayload.userId === store.currentUserId) return;
+      store.applyTyping(validPayload.conversationId);
+    });
   });
 
   socket.on(CHAT_EVENTS.delivered, (payload: ChatDeliveredBroadcast) => {
     if (!isLive()) return;
-    try {
-      if (
-        !payload ||
-        typeof payload.conversationId !== 'string' ||
-        typeof payload.userId !== 'string' ||
-        !Number.isSafeInteger(payload.height) ||
-        payload.height < 0
-      ) {
-        devWarn('[chat] dropped malformed delivered payload');
-        reportChatEventFailureOnce('delivered', 'malformedPayload');
-        return;
-      }
+    runChatEvent('delivered', payload, isChatDeliveredBroadcast, (validPayload) => {
       flushIncomingMessageBatch();
       useChatStore
         .getState()
-        .applyDelivered(payload.conversationId, payload.userId, payload.height);
-    } catch (err) {
-      devWarn('[chat] delivered handler failed', err);
-      reportChatEventFailureOnce('delivered', 'handlerFailure');
-    }
+        .applyDelivered(validPayload.conversationId, validPayload.userId, validPayload.height);
+    });
   });
 
   socket.on(CHAT_EVENTS.reaction, (payload: ChatReactionBroadcast) => {
     if (!isLive()) return;
-    try {
-      if (
-        !payload ||
-        typeof payload.conversationId !== 'string' ||
-        typeof payload.messageId !== 'string' ||
-        typeof payload.emoji !== 'string' ||
-        typeof payload.userId !== 'string' ||
-        (payload.op !== 'add' && payload.op !== 'remove')
-      ) {
-        devWarn('[chat] dropped malformed reaction payload');
-        reportChatEventFailureOnce('reaction', 'malformedPayload');
-        return;
-      }
+    runChatEvent('reaction', payload, isChatReactionBroadcast, (validPayload) => {
       flushIncomingMessageBatch();
-      const revision = optionalRevision(payload.revision);
+      const revision = optionalRevision(validPayload.revision);
       const applied = useChatStore
         .getState()
         .applyReaction(
-          payload.conversationId,
-          payload.messageId,
-          payload.emoji,
-          payload.userId,
-          payload.op,
+          validPayload.conversationId,
+          validPayload.messageId,
+          validPayload.emoji,
+          validPayload.userId,
+          validPayload.op,
           revision,
         );
-      noteLiveMutationRevision(payload.conversationId, revision, applied);
-    } catch (err) {
-      devWarn('[chat] reaction handler failed', err);
-      reportChatEventFailureOnce('reaction', 'handlerFailure');
-    }
+      noteLiveMutationRevision(validPayload.conversationId, revision, applied);
+    });
   });
 
   socket.on(CHAT_EVENTS.edit, (payload: ChatEditBroadcast) => {
     if (!isLive()) return;
-    try {
-      if (
-        !payload ||
-        typeof payload.conversationId !== 'string' ||
-        typeof payload.messageId !== 'string' ||
-        typeof payload.editedAt !== 'string' ||
-        typeof payload.content !== 'object' ||
-        payload.content === null
-      ) {
-        devWarn('[chat] dropped malformed edit payload');
-        reportChatEventFailureOnce('edit', 'malformedPayload');
-        return;
-      }
+    runChatEvent('edit', payload, isChatEditBroadcast, (validPayload) => {
       flushIncomingMessageBatch();
-      const revision = optionalRevision(payload.revision);
+      const revision = optionalRevision(validPayload.revision);
       const applied = useChatStore
         .getState()
         .applyEdit(
-          payload.conversationId,
-          payload.messageId,
-          payload.content as Record<string, unknown>,
-          payload.editedAt,
+          validPayload.conversationId,
+          validPayload.messageId,
+          validPayload.content,
+          validPayload.editedAt,
           revision,
         );
-      noteLiveMutationRevision(payload.conversationId, revision, applied);
-    } catch (err) {
-      devWarn('[chat] edit handler failed', err);
-      reportChatEventFailureOnce('edit', 'handlerFailure');
-    }
+      noteLiveMutationRevision(validPayload.conversationId, revision, applied);
+    });
   });
 
   socket.on(CHAT_EVENTS.revoke, (payload: ChatRevokeBroadcast) => {
     if (!isLive()) return;
-    try {
-      if (
-        !payload ||
-        typeof payload.conversationId !== 'string' ||
-        typeof payload.messageId !== 'string' ||
-        typeof payload.revokedBy !== 'string'
-      ) {
-        devWarn('[chat] dropped malformed revoke payload');
-        reportChatEventFailureOnce('revoke', 'malformedPayload');
-        return;
-      }
+    runChatEvent('revoke', payload, isChatRevokeBroadcast, (validPayload) => {
       flushIncomingMessageBatch();
-      const revision = optionalRevision(payload.revision);
-      const height = optionalRevision(payload.height);
+      const revision = optionalRevision(validPayload.revision);
+      const height = optionalRevision(validPayload.height);
       const applied = useChatStore
         .getState()
-        .applyRevoke(payload.conversationId, payload.messageId, payload.revokedBy, {
+        .applyRevoke(validPayload.conversationId, validPayload.messageId, validPayload.revokedBy, {
           ...(height !== undefined ? { height } : {}),
-          ...(payload.senderId === null || typeof payload.senderId === 'string'
-            ? { senderId: payload.senderId }
+          ...(validPayload.senderId === null || typeof validPayload.senderId === 'string'
+            ? { senderId: validPayload.senderId }
             : {}),
           ...(revision !== undefined ? { revision } : {}),
         });
-      noteLiveMutationRevision(payload.conversationId, revision, applied);
+      noteLiveMutationRevision(validPayload.conversationId, revision, applied);
       // 撤回之后通知栏里的原文不能还留着。
-      dismissChatNotifications(payload.conversationId, [payload.messageId]);
-    } catch (err) {
-      devWarn('[chat] revoke handler failed', err);
-      reportChatEventFailureOnce('revoke', 'handlerFailure');
-    }
+      dismissChatNotifications(validPayload.conversationId, [validPayload.messageId]);
+    });
   });
 
   socket.on(CHAT_EVENTS.conversation, (payload: ChatConversationBroadcast) => {
     if (!isLive()) return;
-    try {
-      if (
-        !payload ||
-        typeof payload.conversationId !== 'string' ||
-        payload.conversationId.length === 0 ||
-        typeof payload.userId !== 'string' ||
-        !CONVERSATION_CHANGE_KINDS.has(payload.kind)
-      ) {
-        devWarn('[chat] dropped malformed conversation payload');
-        reportChatEventFailureOnce('conversation', 'malformedPayload');
-        return;
-      }
+    runChatEvent('conversation', payload, isChatConversationBroadcast, (validPayload) => {
       flushIncomingMessageBatch();
       const store = useChatStore.getState();
       // 个人房定向事件只该是本人的;万一串了宁可丢弃,不替别人操作本机列表。
       if (
         store.currentUserId !== null &&
-        payload.userId !== store.currentUserId
+        validPayload.userId !== store.currentUserId
       ) {
         return;
       }
-      if (payload.kind === 'removed' || payload.kind === 'left') {
-        rememberRemovedConversation(payload.conversationId);
+      if (validPayload.kind === 'removed' || validPayload.kind === 'left') {
+        rememberRemovedConversation(validPayload.conversationId);
         // 还排着的单个刷新作废:否则拿回来的是 403,再白白触发一次整表重拉。
-        pendingConversationRefreshes.delete(payload.conversationId);
-        pendingBanners.delete(payload.conversationId);
+        pendingConversationRefreshes.delete(validPayload.conversationId);
+        pendingBanners.delete(validPayload.conversationId);
         const wasActive =
-          store.activeConversationId === payload.conversationId;
-        store.removeConversation(payload.conversationId);
+          store.activeConversationId === validPayload.conversationId;
+        store.removeConversation(validPayload.conversationId);
         // 正开着的那个会话要连时间线一起收走。只摘列表行的话,详情页的消息、
         // 输入框和成员入口原封不动留在屏幕上 —— 已经被移出的人还能继续翻聊天
         // 记录、继续按发送(服务端会拒,但界面上看不出自己已经不在群里)。
         if (wasActive) {
           // null = 只清缓存、不留清空水位:留了的话,以后重新入群时这段
           // 历史会被 ingestMessages 一直挡在外面。
-          store.clearConversationLocal(payload.conversationId, null);
+          store.clearConversationLocal(validPayload.conversationId, null);
           store.setActiveConversationId(null);
         }
         // 正看着这个群被移出才提示;left 是本人在别处的主动动作,静默收走即可。
-        if (payload.kind === 'removed' && wasActive) {
+        if (validPayload.kind === 'removed' && wasActive) {
           Alert.alert(i18n.t('im.conversation.removedFromGroup'));
         }
         return;
       }
       // joined:重新入群要解除防复活标记;updated 同样只需刷新元信息 —— 只刷这一个。
       removedConversations.delete(payload.conversationId);
-      scheduleConversationRefresh(payload.conversationId, isLive);
-    } catch (err) {
-      devWarn('[chat] conversation handler failed', err);
-      reportChatEventFailureOnce('conversation', 'handlerFailure');
-    }
+      scheduleConversationRefresh(validPayload.conversationId, isLive);
+    });
   });
 }
 

@@ -934,7 +934,7 @@ test('chat:revoke carries position, author and revision so an unopened conversat
   ]);
   assert.deepEqual(state.liveRevisions, [['c1', 31]]);
 
-  // 老后端不带这些字段、或者字段畸形:照常撤回,只是不做额外推断。
+  // 当前协议要求这些字段合法；畸形事件整体丢弃，避免状态游标被污染。
   socket.emit('chat:revoke', {
     conversationId: 'c1',
     messageId: 'm8',
@@ -942,12 +942,8 @@ test('chat:revoke carries position, author and revision so an unopened conversat
     height: -1,
     revision: 'x',
   });
-  assert.deepEqual(state.revokes[1], {
-    conversationId: 'c1',
-    messageId: 'm8',
-    revokedBy: 'peer',
-  });
-  assert.deepEqual(state.liveRevisions[1], ['c1', undefined]);
+  assert.equal(state.revokes.length, 1);
+  assert.deepEqual(state.liveRevisions, [['c1', 31]]);
 });
 
 // ---- 会话变更序号流:实时事件推进同步游标 ----

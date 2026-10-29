@@ -1,4 +1,4 @@
-import { normalizeMediaUrl } from '@/services/api/utils';
+import { allowPeerMediaUrl } from '@/services/api/utils';
 import type { ImageMediaVariant } from '@/types';
 
 type RecordLike = Record<string, unknown>;
@@ -19,7 +19,7 @@ function numberValue(value: unknown): number | null {
 
 function urlValue(value: unknown): string | null {
   const raw = stringValue(value);
-  return raw ? normalizeMediaUrl(raw) ?? raw : null;
+  return raw ? allowPeerMediaUrl(raw) : null;
 }
 
 /**
