@@ -1,7 +1,7 @@
-import { fetchCurrentUser } from './auth';
-import { apiClient } from './client';
+import { fetchCurrentUser } from '@/services/api/auth';
+import { apiClient } from '@/services/api/client';
 
-jest.mock('./client', () => ({ apiClient: jest.fn() }));
+jest.mock('@/services/api/client', () => ({ apiClient: jest.fn() }));
 jest.mock('@/services/api/utils', () => ({ normalizeUser: (value: unknown) => value }));
 
 const baseUser = {
