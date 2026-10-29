@@ -30,7 +30,11 @@ function load(apiResponse) {
           },
         };
       if (s === "@/services/api/utils")
-        return { buildQuery: () => "", normalizeMediaUrl: (u) => u };
+        return {
+          buildQuery: () => "",
+          allowPeerMediaUrl: (u) => u,
+          normalizeMediaUrl: (u) => u,
+        };
       if (s === "./image-media")
         return {
           normalizeImageMedia: (imagesValue) => ({

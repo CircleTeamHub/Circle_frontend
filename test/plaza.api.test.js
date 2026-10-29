@@ -48,6 +48,8 @@ function loadPlazaApi(apiResponses) {
             const qs = q.toString();
             return qs ? `?${qs}` : '';
           },
+          allowPeerMediaUrl: (value) =>
+            value ? value.replace('http://localhost', 'http://192.168.1.65') : value ?? null,
           normalizeMediaUrl: (value) =>
             value ? value.replace('http://localhost', 'http://192.168.1.65') : value ?? null,
           normalizeAvatarFrameAppearance: (value) => value ?? null,

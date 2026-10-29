@@ -442,6 +442,150 @@ export interface ChatPresenceBroadcast {
   hidden?: boolean;
 }
 
+const CHAT_CONVERSATION_CHANGE_KINDS = new Set<ChatConversationChangeKind>([
+  'joined',
+  'left',
+  'removed',
+  'updated',
+]);
+
+function isSafeHeight(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isNonEmptyStringValue(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+export function isChatReadBroadcast(value: unknown): value is ChatReadBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    isNonEmptyStringValue(value.userId) &&
+    isSafeHeight(value.height)
+  );
+}
+
+export function isChatHistoryClearedBroadcast(
+  value: unknown,
+): value is ChatHistoryClearedBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    isNonEmptyStringValue(value.clearedBy) &&
+    isSafeHeight(value.clearedBeforeHeight)
+  );
+}
+
+export function isChatBurnedMessagesBroadcast(
+  value: unknown,
+): value is ChatBurnedMessagesBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    Array.isArray(value.messageIds) &&
+    value.messageIds.length > 0 &&
+    value.messageIds.length <= 500 &&
+    value.messageIds.every(isNonEmptyStringValue) &&
+    (value.revisions === undefined ||
+      (Array.isArray(value.revisions) &&
+        value.revisions.length === value.messageIds.length &&
+        value.revisions.every((revision) =>
+          typeof revision === 'number' && Number.isSafeInteger(revision) && revision >= 0,
+        )))
+  );
+}
+
+export function isChatBurnStartedBroadcast(
+  value: unknown,
+): value is { conversationId: string; revision: number } {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    typeof value.revision === 'number' &&
+    Number.isSafeInteger(value.revision) &&
+    value.revision > 0
+  );
+}
+
+export function isChatPresenceBroadcast(value: unknown): value is ChatPresenceBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.userId) &&
+    typeof value.online === 'boolean' &&
+    (value.lastSeenAt === undefined || value.lastSeenAt === null || isOptionalTimestamp(value.lastSeenAt)) &&
+    (value.hidden === undefined || typeof value.hidden === 'boolean')
+  );
+}
+
+export function isChatTypingBroadcast(value: unknown): value is ChatTypingBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    isNonEmptyStringValue(value.userId)
+  );
+}
+
+export function isChatDeliveredBroadcast(value: unknown): value is ChatDeliveredBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    isNonEmptyStringValue(value.userId) &&
+    isSafeHeight(value.height)
+  );
+}
+
+export function isChatReactionBroadcast(value: unknown): value is ChatReactionBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    isNonEmptyStringValue(value.messageId) &&
+    isNonEmptyStringValue(value.emoji) &&
+    isNonEmptyStringValue(value.userId) &&
+    (value.op === 'add' || value.op === 'remove') &&
+    (value.revision === undefined ||
+      (typeof value.revision === 'number' && Number.isSafeInteger(value.revision) && value.revision >= 0))
+  );
+}
+
+export function isChatEditBroadcast(value: unknown): value is ChatEditBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    isNonEmptyStringValue(value.messageId) &&
+    isPlainObject(value.content) &&
+    isOptionalTimestamp(value.editedAt) &&
+    typeof value.editedAt === 'string' &&
+    (value.revision === undefined ||
+      (typeof value.revision === 'number' && Number.isSafeInteger(value.revision) && value.revision >= 0))
+  );
+}
+
+export function isChatRevokeBroadcast(value: unknown): value is ChatRevokeBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    isNonEmptyStringValue(value.messageId) &&
+    isNonEmptyStringValue(value.revokedBy) &&
+    (value.height === undefined || isSafeHeight(value.height)) &&
+    (value.senderId === undefined || value.senderId === null || typeof value.senderId === 'string') &&
+    (value.revision === undefined ||
+      (typeof value.revision === 'number' && Number.isSafeInteger(value.revision) && value.revision >= 0))
+  );
+}
+
+export function isChatConversationBroadcast(
+  value: unknown,
+): value is ChatConversationBroadcast {
+  return (
+    isPlainObject(value) &&
+    isNonEmptyStringValue(value.conversationId) &&
+    isNonEmptyStringValue(value.userId) &&
+    typeof value.kind === 'string' &&
+    CHAT_CONVERSATION_CHANGE_KINDS.has(value.kind as ChatConversationChangeKind)
+  );
+}
+
 /** 会话成员(GET /chat/conversations/:id/members);role 仅 GROUP 有值。 */
 export interface ChatMemberDto {
   userId: string;

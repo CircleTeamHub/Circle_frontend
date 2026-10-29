@@ -1,5 +1,7 @@
 import { apiClient } from '@/services/api/client';
-import { normalizeMediaUrl } from '@/services/api/utils';
+import { isDisplayIconShape } from '@/services/api/response-shapes';
+import { allowPeerMediaUrl } from '@/services/api/utils';
+import { expectShape, isPlainObject } from '@/utils/validate';
 import type { DisplayIcon, IconOption, SystemIconKey } from '@/types';
 
 export type IconOptionsResponse = {
@@ -19,19 +21,47 @@ export type UpdateDisplayIconInput = {
 function normalizeOption(option: IconOption): IconOption {
   return {
     ...option,
-    imageUrl: normalizeMediaUrl(option.imageUrl),
+    imageUrl: allowPeerMediaUrl(option.imageUrl),
   };
 }
 
 function normalizeDisplayIcon(icon: DisplayIcon): DisplayIcon {
   return {
     ...icon,
-    imageUrl: normalizeMediaUrl(icon.imageUrl),
+    imageUrl: allowPeerMediaUrl(icon.imageUrl),
   };
 }
 
+function isIconOption(value: unknown): value is IconOption {
+  return (
+    isPlainObject(value) &&
+    (value.type === 'SYSTEM' || value.type === 'CIRCLE') &&
+    typeof value.title === 'string' &&
+    (value.imageUrl === null || typeof value.imageUrl === 'string') &&
+    (value.fallbackIconName === null || typeof value.fallbackIconName === 'string') &&
+    typeof value.selected === 'boolean'
+  );
+}
+
+function isIconOptionsResponse(value: unknown): value is IconOptionsResponse {
+  return (
+    isPlainObject(value) &&
+    Array.isArray(value.systemIcons) &&
+    value.systemIcons.every(isIconOption) &&
+    Array.isArray(value.circleIcons) &&
+    value.circleIcons.every(isIconOption) &&
+    Array.isArray(value.displayIcons) &&
+    value.displayIcons.every(isDisplayIconShape)
+  );
+}
+
 export async function fetchIconOptions(): Promise<IconOptionsResponse> {
-  const response = await apiClient<IconOptionsResponse>('/icon/options');
+  const raw = await apiClient<unknown>('/icon/options');
+  const response = expectShape(
+    raw,
+    isIconOptionsResponse,
+    '图标配置数据格式异常',
+  );
 
   return {
     systemIcons: response.systemIcons.map(normalizeOption),
@@ -43,10 +73,15 @@ export async function fetchIconOptions(): Promise<IconOptionsResponse> {
 export async function updateDisplayIcons(
   items: UpdateDisplayIconInput[],
 ): Promise<DisplayIcon[]> {
-  const response = await apiClient<DisplayIcon[]>('/icon/display', {
+  const raw = await apiClient<unknown>('/icon/display', {
     method: 'PUT',
     body: { items },
   });
 
-  return response.map(normalizeDisplayIcon);
+  return expectShape(
+    raw,
+    (value): value is DisplayIcon[] =>
+      Array.isArray(value) && value.every(isDisplayIconShape),
+    '图标配置数据格式异常',
+  ).map(normalizeDisplayIcon);
 }

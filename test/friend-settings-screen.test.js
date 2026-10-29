@@ -29,7 +29,10 @@ function loadFriendsApi(deps) {
       }
 
       if (request === '@/services/api/utils') {
-        return { normalizeMediaUrl: deps.normalizeMediaUrl };
+        return {
+          allowPeerMediaUrl: deps.normalizeMediaUrl,
+          normalizeMediaUrl: deps.normalizeMediaUrl,
+        };
       }
 
       throw new Error(`Unexpected import: ${request}`);

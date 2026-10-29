@@ -21,7 +21,7 @@ function loadCirclesApi(apiClient) {
             const encoded = query.toString();
             return encoded ? `?${encoded}` : '';
           },
-          normalizeMediaUrl: (value) => value ?? null,
+          allowPeerMediaUrl: (value) => value ?? null,
         };
       }
       if (specifier === './collect-cursor-pages') return cursorPages;

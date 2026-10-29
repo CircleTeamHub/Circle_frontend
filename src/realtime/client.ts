@@ -469,7 +469,9 @@ function applyBadgeSnapshot(snapshot: BadgeSnapshotPayload) {
 }
 
 async function refreshCurrentUserSummary() {
+  const epoch = currentSessionEpoch();
   const user = await fetchCurrentUser();
+  if (currentSessionEpoch() !== epoch) return;
   useAuthStore.getState().setUser(user);
 }
 
@@ -820,6 +822,7 @@ function openRealtimeSocket(normalizedToken: string) {
   closeSocket();
 
   const socketTraceId = createConnectionTraceId();
+  const socketSessionEpoch = currentSessionEpoch();
   connectionTraceId = socketTraceId;
   // 第二个参数必须是 undefined：浏览器会把 null 当成名为 "null" 的子协议。
   // 第三个参数是 React Native WebSocket 的扩展（握手头），浏览器会忽略它。
@@ -827,11 +830,14 @@ function openRealtimeSocket(normalizedToken: string) {
     headers: { 'x-connection-trace-id': socketTraceId },
   });
   socket = nextSocket;
+  const isCurrentSocket = () =>
+    socket === nextSocket && currentSessionEpoch() === socketSessionEpoch;
 
   // 这条连接是否已经收到过帧 = 认证是否真的通过。补拉全部挂在它后面。
   let authenticatedOnThisSocket = false;
 
   nextSocket.onopen = () => {
+    if (!isCurrentSocket()) return;
     // 退避不在这里归零：握手成功只说明 WS 通了，认证还没发生。网关可能紧接着
     // 以 1008 踢掉（会话撤销 / 连接数超限），那时归零会让退避永远停在第一档，
     // 退化成每秒锤一次后端。归零挪到 onmessage —— 收到帧才代表认证真的过了。
@@ -849,6 +855,7 @@ function openRealtimeSocket(normalizedToken: string) {
   };
 
   nextSocket.onmessage = (event) => {
+    if (!isCurrentSocket()) return;
     if (typeof event.data !== 'string') {
       return;
     }
@@ -865,13 +872,13 @@ function openRealtimeSocket(normalizedToken: string) {
   };
 
   nextSocket.onerror = () => {
+    if (!isCurrentSocket()) return;
     useTabBadgeStore.getState().setRealtimeConnected(false);
   };
 
   nextSocket.onclose = (event: unknown) => {
-    if (socket === nextSocket) {
-      socket = null;
-    }
+    if (!isCurrentSocket()) return;
+    socket = null;
 
     useTabBadgeStore.getState().setRealtimeConnected(false);
 

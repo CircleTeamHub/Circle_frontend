@@ -46,7 +46,10 @@ test('createFriendRequest omits blank optional fields from the request body', as
         calls.push({ endpoint, options });
       },
     },
-    '@/services/api/utils': { normalizeMediaUrl: (value) => value },
+    '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value,
+      normalizeMediaUrl: (value) => value,
+    },
   });
 
   await createFriendRequest({
@@ -77,7 +80,10 @@ test('createFriendRequest forwards non-empty message, remark, and tagIds in the 
         calls.push({ endpoint, options });
       },
     },
-    '@/services/api/utils': { normalizeMediaUrl: (value) => value },
+    '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value,
+      normalizeMediaUrl: (value) => value,
+    },
   });
 
   await createFriendRequest({
@@ -111,7 +117,10 @@ test('createFriendRequest forwards description and photos, and only sends a non-
         calls.push({ endpoint, options });
       },
     },
-    '@/services/api/utils': { normalizeMediaUrl: (value) => value },
+    '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value,
+      normalizeMediaUrl: (value) => value,
+    },
   });
 
   await createFriendRequest({
@@ -159,7 +168,7 @@ test('fetchFriendSettings normalizes photo urls and passes through other fields'
       }),
     },
     '@/services/api/utils': {
-      allowPeerMediaUrl: (value) => value ?? null,
+      allowPeerMediaUrl: (value) => (value ? `https://cdn/${value}` : null),
       normalizeMediaUrl: (value) => (value ? `https://cdn/${value}` : null),
     },
   });
@@ -179,7 +188,10 @@ test('createFriendRequest still supports the positional message overload', async
         calls.push({ endpoint, options });
       },
     },
-    '@/services/api/utils': { normalizeMediaUrl: (value) => value },
+    '@/services/api/utils': {
+      allowPeerMediaUrl: (value) => value,
+      normalizeMediaUrl: (value) => value,
+    },
   });
 
   await createFriendRequest('target-id', '你好，我是小李');

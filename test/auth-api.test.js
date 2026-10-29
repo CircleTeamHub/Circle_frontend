@@ -37,6 +37,21 @@ function loadAuthApi(apiClientMock) {
         };
       }
 
+      if (request === "@/services/api/response-shapes") {
+        return {
+          isDisplayIconShape: (value) =>
+            value &&
+            typeof value === "object" &&
+            typeof value.id === "string" &&
+            (value.type === "SYSTEM" || value.type === "CIRCLE") &&
+            typeof value.title === "string" &&
+            (value.imageUrl === null || typeof value.imageUrl === "string") &&
+            (value.fallbackIconName === null || typeof value.fallbackIconName === "string") &&
+            typeof value.sortOrder === "number" &&
+            Number.isFinite(value.sortOrder),
+        };
+      }
+
       // react-native 只是为了拿 Platform.OS；测试里给个固定 iOS 即可。
       if (request === "react-native") {
         return { Platform: { OS: "ios" } };

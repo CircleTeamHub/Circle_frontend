@@ -17,6 +17,20 @@ export type MallProductAction =
   | 'redeem-code'
   | 'wallet';
 
+const MALL_PRODUCT_ACTIONS = new Set<MallProductAction>([
+  'avatar-frame',
+  'buy-code',
+  'experience',
+  'fancy-number',
+  'fancy-number-renew',
+  'group-expansion',
+  'membership',
+  'recharge-card-create',
+  'recharge-card-list',
+  'redeem-code',
+  'wallet',
+]);
+
 // ---- 后端 wire 形状（GET /mall/sections，与 circle_be src/mall/mall.service.ts 对齐）----
 // 后端发的是 name / title（显示串），不是 nameKey / titleKey。屏幕不直接消费这个形状。
 type MallProductDTO = {
@@ -107,7 +121,11 @@ function isMallSectionArray(value: unknown): value is MallSectionDTO[] {
           (product) =>
             isPlainObject(product) &&
             isNonEmptyString(product.id) &&
-            typeof product.name === 'string',
+            typeof product.name === 'string' &&
+            typeof product.icon === 'string' &&
+            typeof product.color === 'string' &&
+            typeof product.action === 'string' &&
+            MALL_PRODUCT_ACTIONS.has(product.action as MallProductAction),
         ),
     )
   );
