@@ -11,8 +11,7 @@ test('userVipStore batches userId->vipLevel lookups behind a debounce', () => {
   const store = read('src/stores/userAppearanceStore.ts');
   assert.match(store, /fetchUserAppearances/);
   assert.match(compatibility, /export function useUserVipLevel/);
-  assert.match(compatibility, /export function requestVipLevel/);
-  assert.match(compatibility, /state\.levels\[normalizedId\]/);
+  assert.match(compatibility, /state\.appearances\[normalizedId\]\?\.vipLevel/);
   // Debounced batch + dedupe via the `requested` set so N names = 1 request.
   assert.match(store, /setTimeout/);
   assert.match(store, /requested/);
@@ -26,7 +25,7 @@ test('cached VIP levels expire via a TTL so a server-side upgrade is picked up w
   assert.match(store, /CACHE_TTL_MS/);
   assert.match(store, /function isFresh/);
   assert.match(store, /fetchedAt/);
-  // requestVipLevel 用新鲜度而非「已缓存即跳过」决定是否重拉。
+  // requestUserAppearance 用新鲜度而非「已缓存即跳过」决定是否重拉。
   assert.match(store, /isFresh\(normalizedId\)\s*\|\|\s*requested\.has\(normalizedId\)/);
   // 成功拉取后记录时间戳并移出 requested，TTL 过期后可重新入队。
   assert.match(store, /fetchedAt\.set\(id, now\)/);
@@ -74,24 +73,6 @@ test('userVipStore drops superseded batch responses (no out-of-order stale overw
   assert.match(store, /if \(batchGeneration !== startGeneration\)/);
 });
 
-test('fetchVipLevels throws on a malformed response instead of caching a downgrade', () => {
-  const users = read('src/services/api/users.ts');
-  assert.match(users, /export async function fetchVipLevels/);
-  assert.match(users, /\/user\/vip-levels/);
-  assert.match(users, /method: 'POST'/);
-  // 畸形响应(非对象 / 数组 / 值非有限数字)必须 THROW,让 userVipStore.flush 的 catch 走
-  // 重试、保住缓存正档——绝不能兜底成 {} 被 flush 当成「这批都不是会员」的权威成功清缓存。
-  assert.match(users, /typeof raw !== 'object' \|\| Array\.isArray\(raw\)/);
-  assert.match(
-    users,
-    /throw new Error\(\s*'Malformed \/user\/vip-levels response: expected a JSON object'/,
-  );
-  assert.match(users, /typeof level !== 'number' \|\| !Number\.isFinite\(level\)/);
-  assert.match(users, /non-numeric level for/);
-  // 旧的「兜底成 {}」分支必须彻底消失。
-  assert.doesNotMatch(users, /typeof raw !== 'object'\) \{\s*return \{\};/);
-});
-
 test('MemberName resolves tier from a userId via the vip cache', () => {
   const src = read('src/components/ui/member-name.tsx');
   assert.match(src, /useUserVipLevel/);
@@ -99,9 +80,9 @@ test('MemberName resolves tier from a userId via the vip cache', () => {
   assert.match(src, /userId\?: string \| null/);
 });
 
-test('useUserVipLevel subscribes directly to the level projection', () => {
+test('useUserVipLevel subscribes directly to the cached appearance vipLevel', () => {
   const store = read('src/stores/userVipStore.ts');
-  assert.match(store, /state\.levels\[normalizedId\]/);
+  assert.match(store, /state\.appearances\[normalizedId\]\?\.vipLevel/);
   assert.match(store, /useRequestUserAppearance\(normalizedId\)/);
   assert.doesNotMatch(store, /useUserAppearance\(userId\)\?\.vipLevel/);
 });
@@ -109,12 +90,9 @@ test('useUserVipLevel subscribes directly to the level projection', () => {
 test('useUserVipLevel trims once for both its subscription and request key', () => {
   const requestedIds = [];
   const appearanceStore = {
-    invalidateUserAppearances() {},
-    requestUserAppearance() {},
     useRequestUserAppearance: (userId) => requestedIds.push(userId),
-    useUserAppearance() {},
     useUserAppearanceStore: (selector) =>
-      selector({ levels: { alice: 4 } }),
+      selector({ appearances: { alice: { vipLevel: 4, avatarFrame: null } } }),
   };
   const { useUserVipLevel } = loadTsModule('src/stores/userVipStore.ts', {
     requireShim: (request) => {

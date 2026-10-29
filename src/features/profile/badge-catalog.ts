@@ -34,14 +34,6 @@ export function getSystemExplanationKey(
   }
 }
 
-export function getOptionExplanationKey(
-  option: Pick<IconOption, 'type' | 'systemKey'> | null,
-): IconExplanationKey {
-  if (!option) return 'empty';
-  if (option.type === 'CIRCLE') return 'circle';
-  return getSystemExplanationKey(option.systemKey);
-}
-
 /**
  * 徽章墙里的一枚徽章视图（拥有 / 未拥有统一形态）。
  * - owned=true 时 option 为后端返回的真实可选项，可加入资料展示位。

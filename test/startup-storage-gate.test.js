@@ -80,17 +80,22 @@ function loadStorage(seed = {}) {
   return { mod, store };
 }
 
+// 「标记未读」store 已删除:残留的会话 ID 是账号私有数据,不再随登出清盘。
+const LOCAL_UNREAD_KEY = 'circle-im-local-unread-overrides';
+
 test('升级清理:回执挂账队列的孤儿键被抹掉', () => {
   const { mod, store } = loadStorage({
     [PENDING_ACKS_KEY]: JSON.stringify([
       { key: 'idem-key-1', userId: 'user-1' },
     ]),
+    [LOCAL_UNREAD_KEY]: JSON.stringify({ state: { overrides: { 'conv-1': true } } }),
     'circle-im-theme-mode': 'dark',
   });
 
   mod.purgeOrphanedKeys();
 
   assert.equal(store.has(PENDING_ACKS_KEY), false, '孤儿键必须删掉');
+  assert.equal(store.has(LOCAL_UNREAD_KEY), false, '标记未读的残留必须删掉');
   // 只删清单里的键,别的偏好一个都不能碰。
   assert.equal(store.get('circle-im-theme-mode'), 'dark');
 });

@@ -20,7 +20,6 @@ import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
-import { UserIconRow } from '@/components/ui/user-icon-row';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
@@ -47,7 +46,6 @@ import {
 import { ensureDirectConversation } from '@/chat-core/client';
 import type { ChatConversationDto, ChatMemberDto } from '@/chat-core/protocol';
 import { useChatStore } from '@/chat-core/store';
-import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import {
   type GroupRole,
@@ -99,7 +97,6 @@ import { fetchMyTempChats } from '@/services/api/temp-chat';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { topNotice } from '@/components/app/top-notice-store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import type { DisplayIcon } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
@@ -562,7 +559,6 @@ export default function ChatInfoScreen() {
         : `direct:${friendId}`;
   const basePinned = activeConversation?.pinned ?? false;
   const baseMuted = activeConversation?.muted ?? false;
-  const displayIcons = useMemo(() => [] as DisplayIcon[], []);
   const backHref = useMemo(() => {
     if (originScope === 'messages') {
       if (isGroupConversation) {
@@ -1567,7 +1563,6 @@ export default function ChatInfoScreen() {
         forEveryone,
       })
         .then(() => {
-          useLocalUnreadStore.getState().clearUnread(resolvedConversationID);
           Alert.alert(
             forEveryone
               ? t('chat.clearHistoryDoneDirect', {
@@ -2189,7 +2184,6 @@ export default function ChatInfoScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.section, d.section]}>
-          <UserIconRow icons={displayIcons} compact />
           <MenuRow icon="create-outline" label={t('chat.setRemark')} onPress={handleOpenRemark} />
           <Divider />
           <MenuRow icon="pricetag-outline" label={t('chat.tags')} onPress={handleOpenTags} />

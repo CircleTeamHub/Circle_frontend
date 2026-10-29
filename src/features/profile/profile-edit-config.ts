@@ -211,14 +211,8 @@ function buildProfileEditFields() {
   ] satisfies (EditableField | UnsupportedField)[];
 }
 
-export const PROFILE_EDIT_FIELDS = buildProfileEditFields();
-
-export function getProfileEditFields() {
-  return buildProfileEditFields();
-}
-
 export function getProfileEditField(fieldId: string) {
-  return getProfileEditFields().find((field) => field.id === fieldId);
+  return buildProfileEditFields().find((field) => field.id === fieldId);
 }
 
 function normalizeGenderValue(value: string) {

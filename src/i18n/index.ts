@@ -113,11 +113,6 @@ export function setLanguage(lang: AppLanguagePreference) {
   }
 }
 
-export function getCurrentLanguage(): AppLanguage {
-  const language = i18n.language?.toLowerCase();
-  return isAppLanguage(language) ? language : 'zh';
-}
-
 export function getCurrentLanguagePreference(): AppLanguagePreference {
   return getSavedLanguagePreference();
 }

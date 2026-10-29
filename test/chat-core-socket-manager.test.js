@@ -256,11 +256,10 @@ function loadManager(localDbOverrides = {}, options = {}) {
     };
     return {
       useChatStore: { getState: () => state },
-      sanitizeExpiredConversationPreviews: (conversations, viewerSeconds, now = Date.now()) =>
+      sanitizeExpiredConversationPreviews: (conversations, now = Date.now()) =>
         conversations.map((conversation) => {
-          const seconds = viewerSeconds > 0 ? viewerSeconds : null;
-          const createdAt = Date.parse(conversation.lastMessage?.createdAt ?? '');
-          return seconds && Number.isFinite(createdAt) && createdAt < now - seconds * 1000
+          const expiresAt = Date.parse(conversation.lastMessage?.burnExpiresAt ?? '');
+          return Number.isFinite(expiresAt) && expiresAt <= now
             ? { ...conversation, lastMessage: null, lastMessageAt: null, unreadCount: 0 }
             : conversation;
         }),
@@ -617,6 +616,7 @@ test('cold hydration never publishes an expired local conversation preview', asy
     id: 'expired',
     conversationId: 'c1',
     createdAt: '2026-08-01T00:00:00.000Z',
+    burnExpiresAt: '2026-08-02T00:00:00.000Z',
   };
   const { manager, socket, store } = loadManager({
     initChatLocalDb: async () => true,

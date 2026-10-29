@@ -57,7 +57,6 @@ function loadStore(apiMocks) {
   vm.runInNewContext(transpiled, context, { filename: filePath });
   return {
     useMessageGroupsStore: context.module.exports.useMessageGroupsStore,
-    getGroupsForConversation: context.module.exports.getGroupsForConversation,
     mmkvBacking,
   };
 }
@@ -380,29 +379,5 @@ test('reset() clears in-memory state and MMKV cache', async () => {
     mmkvBacking.has('circle-im-conversation-groups'),
     false,
     'mmkv cache should be cleared',
-  );
-});
-
-test('getGroupsForConversation() returns groups that include the conversationID', () => {
-  const groups = [
-    makeGroup({ id: 'g-1', conversationIDs: ['c-1', 'c-2'] }),
-    makeGroup({ id: 'g-2', conversationIDs: ['c-3'] }),
-    makeGroup({ id: 'g-3', conversationIDs: ['c-1', 'c-3'] }),
-  ];
-  // 直接 require module again to get the export — but we already loaded it.
-  // For this pure utility, re-import with no mocks needed.
-  const apiMocks = {
-    fetchConversationGroups: async () => [],
-    createConversationGroup: async () => makeGroup(),
-    updateConversationGroup: async () => makeGroup(),
-    deleteConversationGroup: async () => undefined,
-    setConversationGroupMembers: async () => makeGroup(),
-  };
-  const { getGroupsForConversation } = loadStore(apiMocks);
-
-  const result = getGroupsForConversation('c-1', groups);
-  assert.deepEqual(
-    result.map((g) => g.id),
-    ['g-1', 'g-3'],
   );
 });

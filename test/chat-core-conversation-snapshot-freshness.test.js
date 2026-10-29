@@ -159,6 +159,8 @@ function loadApi(options = {}) {
               snapshotRevisions.push(revision);
             },
             applyBurnDuration: (...args) => burnUpdates.push(args),
+            purgeExpiredBurnMessages:
+              options.purgeExpiredBurnMessages ?? (() => Promise.resolve()),
             ingestMessages: (conversationId, messages, ingestOptions) => {
               ingested.push({ conversationId, messages, options: ingestOptions });
               return Promise.resolve(true);
@@ -580,6 +582,21 @@ test('expired burn messages read from the local cache are not shown', async () =
   const history = api.loadChatHistory('conv-b');
   await flush();
   assert.deepEqual(Array.from(ingested[0].messages, (m) => m.id), ['alive', 'plain']);
+  respond(calls[0], { messages: [] });
+  await history.catch(() => undefined);
+});
+
+test('a failed background burn purge is reported instead of becoming an unhandled rejection', async () => {
+  // 后台清理是 async:同步 try/catch 接不住它的 rejection,`void` 掉又没人处理。
+  const failure = new Error('purge failed');
+  const past = new Date(Date.now() - 60_000).toISOString();
+  const { api, calls, reported } = loadApi({
+    localRows: { 'conv-p': [{ id: 'expired', height: 1, burnExpiresAt: past }] },
+    purgeExpiredBurnMessages: () => Promise.reject(failure),
+  });
+  const history = api.loadChatHistory('conv-p');
+  await flush();
+  assert.deepEqual(reported, [['chatSync', 'expiredLocalPurge', failure]]);
   respond(calls[0], { messages: [] });
   await history.catch(() => undefined);
 });

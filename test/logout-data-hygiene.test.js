@@ -24,32 +24,7 @@ function mmkvShim() {
 // store 级行为：resetForLogout 真正清空账号级状态
 // ---------------------------------------------------------------------------
 
-test('local-unread / chat-preferences / discover-filter 的 resetForLogout 清空账号级状态 (#97)', () => {
-  const unreadShims = {
-    zustand: require('zustand'),
-    'zustand/middleware': require('zustand/middleware'),
-    '@/storage': mmkvShim(),
-    '@/features/messages/utils/local-unread': loadTsModule(
-      'src/features/messages/utils/local-unread.ts',
-    ),
-  };
-  const { useLocalUnreadStore } = loadTsModule(
-    'src/features/messages/store/use-local-unread-store.ts',
-    {
-      requireShim: (specifier) => {
-        if (unreadShims[specifier]) return unreadShims[specifier];
-        throw new Error(`unexpected import: ${specifier}`);
-      },
-    },
-  );
-  useLocalUnreadStore.getState().markUnread('conv-a');
-  assert.ok(useLocalUnreadStore.getState().overrides['conv-a']);
-  useLocalUnreadStore.getState().resetForLogout();
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(useLocalUnreadStore.getState().overrides)),
-    {},
-  );
-
+test('chat-preferences / discover-filter 的 resetForLogout 清空账号级状态 (#97)', () => {
   const prefShims = {
     zustand: require('zustand'),
     'zustand/middleware': require('zustand/middleware'),
@@ -189,7 +164,6 @@ test('登出清理清单点名每一个账号级持久化 store，幸存者留�
   const session = read('src/services/auth/session.ts');
 
   assert.match(session, /ACCOUNT_SCOPED_STORE_LOADERS/);
-  assert.match(session, /use-local-unread-store/);
   assert.match(session, /use-chat-preferences-store/);
   assert.match(session, /use-discover-filter-store/);
   assert.match(session, /use-circle-shortcut-order-store/);
@@ -243,7 +217,7 @@ test('磁盘足迹与 clearStorage 同档，不受 sessionEpoch 守卫影响 (#2
 test('session.ts 惰性加载 discover / vip store，避免与 api client 的模块环 (#131 P1)', () => {
   const session = read('src/services/auth/session.ts');
 
-  // 静态 import 这两个会成环:session.ts → use-discover-store/userVipStore → services/api/*
+  // 静态 import 这两个会成环:session.ts → use-discover-store/userAppearanceStore → services/api/*
   // → api/client.ts → session.ts。api/client 求值时 registerLogoutHandler,而 session.ts 尚未
   // 初始化完、logoutHandlers 未就绪,冷启动可能崩。改为登出流程里按需 import() 破环(与
   // loadMessageGroupsStore / loadCirclesStore 同一模式)。
@@ -254,15 +228,15 @@ test('session.ts 惰性加载 discover / vip store，避免与 api client 的模
   );
   assert.doesNotMatch(
     session,
-    /^import\s*\{[^}]*invalidateVipLevels[^}]*\}\s*from/m,
-    'invalidateVipLevels 不能再静态 import',
+    /^import\s*\{[^}]*invalidateUserAppearances[^}]*\}\s*from/m,
+    'invalidateUserAppearances 不能再静态 import',
   );
   // 改为惰性 loader
   assert.match(
     session,
     /await import\(\s*'@\/features\/discover\/store\/use-discover-store'\s*\)/,
   );
-  assert.match(session, /await import\('@\/stores\/userVipStore'\)/);
+  assert.match(session, /await import\('@\/stores\/userAppearanceStore'\)/);
   assert.match(session, /const useDiscoverStore = await loadDiscoverStore\(\)/);
   assert.match(
     session,

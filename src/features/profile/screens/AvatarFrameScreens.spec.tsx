@@ -27,7 +27,6 @@ const mockKnownAccountUpsert = jest.fn();
 const mockAppearance = {
   state: {
     appearances: {} as Record<string, UserAppearance>,
-    levels: {} as Record<string, number>,
     refreshTick: 0,
   },
 };
@@ -141,10 +140,6 @@ jest.mock('@/stores/userAppearanceStore', () => ({
         appearances: {
           ...mockAppearance.state.appearances,
           [userId]: appearance,
-        },
-        levels: {
-          ...mockAppearance.state.levels,
-          [userId]: appearance.vipLevel,
         },
       };
     },
@@ -295,7 +290,6 @@ beforeEach(() => {
   setAuth(makeUser());
   mockAppearance.state = {
     appearances: {},
-    levels: {},
     refreshTick: 0,
   };
 });
@@ -435,7 +429,6 @@ test('failed equip preserves auth, appearance cache, and equipped UI state', asy
         avatarFrame: priorAppearance,
       },
     },
-    levels: { [priorUser.id]: priorUser.vipLevel },
     refreshTick: 7,
   };
   const priorCache = structuredClone(mockAppearance.state);
@@ -471,7 +464,6 @@ test('successful equip updates auth and the user appearance cache', async () => 
       [priorUser.id]: { vipLevel: 1, avatarFrame: null },
       untouched: { vipLevel: 4, avatarFrame: null },
     },
-    levels: { [priorUser.id]: 1, untouched: 4 },
     refreshTick: 3,
   };
   const equippedInventory = makeInventory('frame-a');
@@ -509,7 +501,6 @@ test('successful equip updates auth and the user appearance cache', async () => 
       },
       untouched: { vipLevel: 4, avatarFrame: null },
     },
-    levels: { [priorUser.id]: priorUser.vipLevel, untouched: 4 },
     refreshTick: 3,
   });
   expect(mockKnownAccountUpsert).toHaveBeenCalledWith({

@@ -38,7 +38,7 @@ function loadProfileEditConfig(stubs = {}) {
 }
 
 test('editable fields are exposed and unsupported rows stay non-editable', () => {
-  const { PROFILE_EDIT_FIELDS, getProfileEditField } = loadProfileEditConfig({
+  const { getProfileEditField } = loadProfileEditConfig({
     '@/i18n': {
       default: {
         t: (key) => key,
@@ -46,7 +46,6 @@ test('editable fields are exposed and unsupported rows stay non-editable', () =>
     },
   });
 
-  assert.equal(Array.isArray(PROFILE_EDIT_FIELDS), true);
   assert.equal(getProfileEditField('avatar').editable, true);
   assert.equal(getProfileEditField('avatar').editorType, 'avatar');
   assert.equal(getProfileEditField('nickname').editable, true);

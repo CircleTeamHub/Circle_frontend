@@ -1,5 +1,4 @@
 import type { ImageSourcePropType } from 'react-native';
-import { getMembershipTierForVipLevel } from '@/features/profile/membership-plans';
 import { normalizeAvatarFrameImageUrl } from '@/services/api/utils';
 import type { AvatarFrameAppearance } from '@/types';
 
@@ -33,12 +32,4 @@ export function getAvatarFrameSource(
   }
   const remoteUrl = normalizeAvatarFrameImageUrl(frame.imageUrl);
   return remoteUrl ? { uri: remoteUrl } : null;
-}
-
-/** 按 vipLevel 取会员头像框;仅钻石/超级有框,其余档位与非会员返回 null。 */
-export function getMembershipFrameAsset(
-  vipLevel: number | null | undefined,
-): ImageSourcePropType | null {
-  const tier = vipLevel != null ? getMembershipTierForVipLevel(vipLevel) : null;
-  return tier === 'diamond' || tier === 'super' ? FRAME_ASSETS[tier] : null;
 }

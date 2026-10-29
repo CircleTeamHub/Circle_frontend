@@ -887,29 +887,17 @@ export async function clearLocalConversationMessages(
 /**
  * 焚毁到期的本地清理。
  *
- * 服务端 sweeper 把过期消息物删了,但本地缓存不会自己知道:没有到期元数据、
- * 没有删除事件,后续 REST 页「少了哪些行」也无从对账。于是
- * readRecentLocalMessages 和 FTS 搜索仍然能把「本该烧掉」的正文端出来,
- * 冷启动之后更是原样恢复 —— 阅后即焚在本地这一侧等于没生效。
+ * 服务端 sweeper 把过期消息物删了,但本地缓存不会自己知道:没有删除事件,
+ * 后续 REST 页「少了哪些行」也无从对账。于是 readRecentLocalMessages 和
+ * FTS 搜索仍然能把「本该烧掉」的正文端出来,冷启动之后更是原样恢复 ——
+ * 阅后即焚在本地这一侧等于没生效。
  *
- * 这里按会话的焚毁时长直接删本地行(DELETE 会触发 messages_fts_ad,
- * FTS 影子表跟着一起清)。判据用消息自己的 createdAt,与服务端 sweeper
- * 和读路径过滤同一把尺子。
+ * 判据是每条消息自己的 burnExpiresAt,不看会话或本机的焚毁设置;还没记到期时刻
+ * 的旧行先按消息自带的焚毁时长、或会话焚毁时长(只补开启时刻之后创建的行)从
+ * createdAt 补算。到期行删除前先抹掉引用它的快照;DELETE 会触发 messages_fts_ad,
+ * FTS 影子表跟着一起清。
  */
-export interface ExpiredLocalMessagePurge {
-  conversationId: string;
-  cutoff: Date;
-  startedAt?: Date;
-}
-
-export async function purgeExpiredLocalMessages(
-  entries: readonly ExpiredLocalMessagePurge[],
-  viewerCutoff?: Date,
-  viewerStartedAt?: Date,
-): Promise<void> {
-  void entries;
-  void viewerCutoff;
-  void viewerStartedAt;
+export async function purgeExpiredLocalMessages(): Promise<void> {
   const current = requireDb();
   if (!current) return;
   try {

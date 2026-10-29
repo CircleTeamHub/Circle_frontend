@@ -77,17 +77,6 @@ export function toggleCitySelection({
   };
 }
 
-export function resolveSingleCitySelection(
-  selected: string[],
-  isNationwide: boolean,
-) {
-  if (isNationwide) {
-    return NATIONWIDE_CITY_VALUE;
-  }
-
-  return selected[0] ?? null;
-}
-
 export function resolveMultiCitySelection(
   selected: string[],
   isNationwide: boolean,

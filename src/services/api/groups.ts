@@ -18,13 +18,6 @@ export async function leaveGroup(groupID: string) {
   });
 }
 
-export async function inviteGroupMembers(groupID: string, userIDs: string[]) {
-  return apiClient<GroupMemberSyncResult>(`/group/${groupID}/members/invite`, {
-    method: 'POST',
-    body: { userIDs },
-  });
-}
-
 export async function removeGroupMember(groupID: string, userID: string) {
   return apiClient<GroupMemberSyncResult>(`/group/${groupID}/members/${userID}`, {
     method: 'DELETE',

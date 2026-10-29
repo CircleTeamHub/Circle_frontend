@@ -1,9 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  createMediaUploadScheduler,
-  splitPhotoSelection,
-} from './media-upload-scheduler.ts';
+import { createMediaUploadScheduler } from './media-upload-scheduler.ts';
 
 test('limits active uploads and starts queued work in FIFO order', async () => {
   const scheduler = createMediaUploadScheduler({ concurrency: 2 });
@@ -81,18 +78,4 @@ test('supports a configurable concurrency and validates invalid values', async (
     () => createMediaUploadScheduler({ concurrency: 1.5 }),
     /positive integer/,
   );
-});
-
-test('keeps the editor for one photo and sends every photo in a batch', () => {
-  const one = { id: 'one' };
-  assert.deepEqual(splitPhotoSelection([one]), {
-    editorAsset: one,
-    uploadAssets: [],
-  });
-
-  const many = [{ id: 'one' }, { id: 'two' }, { id: 'three' }];
-  assert.deepEqual(splitPhotoSelection(many), {
-    editorAsset: null,
-    uploadAssets: many,
-  });
 });

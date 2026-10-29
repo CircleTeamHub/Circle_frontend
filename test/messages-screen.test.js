@@ -215,25 +215,6 @@ test('messages screen only offers group-wide clear to the group owner', () => {
   assert.match(source, /canClearGroupForEveryone\(conversation\)/);
 });
 
-test('messages screen counts local unread overrides before applying local badges', () => {
-  const filePath = path.join(
-    process.cwd(),
-    'src/features/messages/screens/MessagesScreen.tsx',
-  );
-  const source = fs.readFileSync(filePath, 'utf8');
-
-  assert.match(source, /const rawMappedConversations = useMemo/);
-  assert.match(source, /applyLocalUnreadOverrides\(\s*rawMappedConversations,/);
-  assert.match(
-    source,
-    /countLocalUnreadOverrides\(rawMappedConversations, localUnreadOverrides\)/,
-  );
-  assert.doesNotMatch(
-    source,
-    /countLocalUnreadOverrides\(conversations, localUnreadOverrides\)/,
-  );
-});
-
 test('messages screen no longer exposes the notification bell entry', () => {
   const filePath = path.join(
     process.cwd(),

@@ -167,15 +167,8 @@ function messageBurnExpiry(message: Pick<ChatMessageDto, 'burnExpiresAt' | 'heig
 /** Removes expired local previews before a cold-start snapshot reaches the UI. */
 export function sanitizeExpiredConversationPreviews(
   conversations: ChatConversationState[],
-  viewerSelfDestructSec: number,
-  viewerSelfDestructStartedAt: string | null | number = null,
   now = Date.now(),
 ): ChatConversationState[] {
-  if (typeof viewerSelfDestructStartedAt === 'number') {
-    now = viewerSelfDestructStartedAt;
-    viewerSelfDestructStartedAt = null;
-  }
-  void viewerSelfDestructSec;
   return conversations.map((conversation) => {
     const expiresAt = conversation.lastMessage ? messageBurnExpiry(conversation.lastMessage, conversation) : null;
     if (
@@ -189,7 +182,6 @@ export function sanitizeExpiredConversationPreviews(
       ...conversation,
       lastMessage: null,
       lastMessageAt: null,
-      unreadCount: conversation.unreadCount,
     };
   });
 }
@@ -2520,7 +2512,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     let nextTimelines: Record<string, ChatMessageDto[]> | null = null;
     let nextConversations: ChatConversationState[] | null = null;
     const durablePreviewWrites: Promise<void>[] = [];
-    const localPurges: { conversationId: string; cutoff: Date; startedAt: Date }[] = [];
     let expiredAny = false;
     for (const conversation of conversations) {
       // 扫到的从 targets 里划掉,剩下的就是已经不在列表里的会话。
@@ -2621,7 +2612,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     await Promise.all([
       // 本地库那一趟是几条整表 UPDATE/DELETE。点名扫又什么都没过期的(收到一条还没到期的
       // 焚毁消息)不跑:库里只剩不在内存里的过期行,留给全量扫。
-      ...(targets && !expiredAny ? [] : [purgeExpiredLocalMessages(localPurges)]),
+      ...(targets && !expiredAny ? [] : [purgeExpiredLocalMessages()]),
       ...durablePreviewWrites,
     ]);
   },
