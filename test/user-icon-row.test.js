@@ -29,7 +29,6 @@ test('UserIconRow renders system badges from local artwork and circle icons in c
   assert.match(row, /marginTop:\s*-6/);
   assert.match(row, /dense\s*\?\s*s\.denseLabel\s*:\s*null/);
   assert.match(row, /contentFit="contain"/);
-  assert.doesNotMatch(row, /SystemIconArt/);
   assert.doesNotMatch(row, /PARTNER/);
   assert.match(row, /s\.circle/);
   assert.match(row, /resolveFallbackIcon/);

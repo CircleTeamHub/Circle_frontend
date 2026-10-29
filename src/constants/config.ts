@@ -9,7 +9,6 @@
  */
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { APP_DISPLAY_NAME } from './branding';
 import { evaluateTransportGuard } from './transport-security';
 import { buildRuntimeApiTargetId } from '@/testing/runtime-api-target';
 
@@ -203,8 +202,6 @@ export const CHAT_WS_URL = assertSecureTransport(
   ),
   'CHAT_WS_URL',
 );
-
-export const APP_NAME = APP_DISPLAY_NAME;
 
 // 客服账号曾经是这里的编译期常量(EXPO_PUBLIC_SUPPORT_ACCOUNT_ID,默认回退 imAdmin)。
 // 已改为后端下发:GET /support/config → supportConfigStore,管理台维护。

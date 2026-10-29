@@ -1,19 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { fetchCircleDetail } from '@/services/api/circles';
-import {
-  canViewCircleMembers,
-  roleLevelFromCircleRole,
-} from '@/features/chat/group-member-permissions';
+import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
 
 export interface GroupSelfMember {
   userID: string;
-  /** OpenIM roleLevel 兼容值(OWNER=100/ADMIN=60/MEMBER=20):ChatInfo 的
-   *  角色管理仍按数字比较,圈子角色在此换算,该屏迁移后可删。 */
-  roleLevel: number;
   role: 'OWNER' | 'ADMIN' | 'MEMBER';
-  /** 群内昵称:圈子模型暂无此概念,恒 undefined(ChatInfo 兜底到空串)。 */
-  nickname?: string;
 }
 
 /**
@@ -78,7 +70,6 @@ export function useGroupMemberViewAccess(params: {
     return {
       userID: currentUserID,
       role,
-      roleLevel: roleLevelFromCircleRole(role),
     };
   }, [currentUserID, enabled, groupID]);
 

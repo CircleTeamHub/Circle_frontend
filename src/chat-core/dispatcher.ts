@@ -37,7 +37,6 @@ import { reportChatDelivered } from './socket-manager';
 import { getChatMessagePreview } from './mappers';
 import { useChatStore } from './store';
 import { noteLiveRevision } from './sync';
-import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { devWarn } from '@/utils/dev-log';
 
@@ -674,7 +673,6 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
             validPayload.conversationId,
             validPayload.clearedBeforeHeight,
           );
-        useLocalUnreadStore.getState().clearUnread(validPayload.conversationId);
         dismissChatNotifications(validPayload.conversationId);
       });
     },

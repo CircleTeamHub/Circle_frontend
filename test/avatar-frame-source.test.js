@@ -7,12 +7,6 @@ function loadMembershipFrames() {
   return {
     module: loadTsModule('src/features/profile/membership-frames.ts', {
       requireShim: (request) => {
-        if (request === '@/features/profile/membership-plans') {
-          return {
-            getMembershipTierForVipLevel: (level) =>
-              level === 3 ? 'diamond' : level >= 4 ? 'super' : null,
-          };
-        }
         if (request === '@/services/api/utils') {
           return {
             normalizeAvatarFrameImageUrl: (value) =>
@@ -94,10 +88,4 @@ test('avatar frame source uses a remote URI for unknown keys and null for no ima
     }),
     null,
   );
-});
-
-test('legacy vip-level frame resolver remains available during surface migration', () => {
-  const { module, assetByPath } = loadMembershipFrames();
-  assert.equal(module.getMembershipFrameAsset(3), assetByPath.get('diamond'));
-  assert.equal(module.getMembershipFrameAsset(1), null);
 });

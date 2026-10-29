@@ -14,7 +14,6 @@ test("bottom sheets avoid native slide modal animation that lifts the dark backd
     "src/features/profile/screens/EditProfileFieldScreen.tsx",
     "src/features/messages/components/CreateTempChatModal.tsx",
     "src/features/messages/components/ShareTempChatModal.tsx",
-    "src/features/notes/components/NoteShareQrSheet.tsx",
   ];
 
   for (const relativePath of bottomSheetFiles) {

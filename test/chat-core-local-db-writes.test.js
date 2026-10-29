@@ -348,18 +348,7 @@ test('burn expiry purge batches message and outbox deletion in one transaction',
   await api.initChatLocalDb('user-1');
   const transactionsBefore = db.state.transactions;
 
-  await api.purgeExpiredLocalMessages([
-    {
-      conversationId: 'conv-1',
-      cutoff: new Date('2026-08-10T00:00:00.000Z'),
-      startedAt: new Date('2026-08-01T00:00:00.000Z'),
-    },
-    {
-      conversationId: 'conv-2',
-      cutoff: new Date('2026-08-09T00:00:00.000Z'),
-      startedAt: new Date('2026-08-02T00:00:00.000Z'),
-    },
-  ]);
+  await api.purgeExpiredLocalMessages();
 
   assert.equal(db.state.transactions, transactionsBefore + 1);
   const deletes = deleteStatements(db);
@@ -376,10 +365,7 @@ test('purge uses message expiry rather than another user activation boundary', a
   const { api } = loadLocalDb(db);
   await api.initChatLocalDb('user-1');
 
-  await api.purgeExpiredLocalMessages(
-    [{ conversationId: 'conv-1', cutoff: new Date('2026-08-10T00:00:00.000Z') }],
-    new Date('2026-08-10T00:00:00.000Z'),
-  );
+  await api.purgeExpiredLocalMessages();
 
   assert.equal(deleteStatements(db).length, 1);
   assert.match(deleteStatements(db)[0].sql, /burnExpiresAt/);
@@ -390,11 +376,7 @@ test('message expiry also purges orphaned cached rows without using my settings'
   const { api } = loadLocalDb(db);
   await api.initChatLocalDb('user-1');
 
-  await api.purgeExpiredLocalMessages(
-    [],
-    new Date('2026-08-10T00:00:00.000Z'),
-    new Date('2026-08-01T00:00:00.000Z'),
-  );
+  await api.purgeExpiredLocalMessages();
 
   const deletes = deleteStatements(db);
   assert.equal(deletes.length, 1);
@@ -469,7 +451,7 @@ test('a persisted past burn deadline is removed from SQLite and FTS before recon
       upserts: [pulled],
       deletedIds: [], clearedBeforeHeight: 0, revision: 11,
     }), true);
-    await api.purgeExpiredLocalMessages([]);
+    await api.purgeExpiredLocalMessages();
     assert.equal((await api.searchLocalChatMessages('secretneedle', 10)).length, 0);
     assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM messages_fts WHERE messages_fts MATCH 'secretneedle'").get().n, 0);
     assert.equal((await api.readRecentLocalMessages('conv-1', 50)).length, 0);

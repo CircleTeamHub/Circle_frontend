@@ -70,7 +70,6 @@ test('NotesScreen bottom bar keeps only the 新建 button', () => {
   assert.doesNotMatch(src, /buildShareInput/);
   assert.doesNotMatch(src, /ensureShareLink/);
   assert.doesNotMatch(src, /openQrSheet/);
-  assert.doesNotMatch(src, /NoteShareQrSheet/);
   assert.doesNotMatch(src, /qrVisible/);
   // 单条笔记分享改为「弹会话选择器发给好友/群聊」：不再生成网页分享链接。
   assert.match(src, /handleShareNote\b/);

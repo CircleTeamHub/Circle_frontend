@@ -260,24 +260,6 @@ export interface ListNotesParams {
   search?: string;
 }
 
-export interface CreateNoteShareLinkInput {
-  title: string;
-  status?: Exclude<NoteStatus, 'DELETED'>;
-  group?: 'ungrouped';
-  groupId?: string;
-  search?: string;
-  noteIds?: string[];
-}
-
-export interface NoteShareLink {
-  id: string;
-  token: string;
-  url: string;
-  expiresAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
-}
-
 /** 批量发笔记进聊天时,需要服务端拷贝媒体的两个分区。 */
 export type NoteChatMediaSection = 'media' | 'showcase';
 

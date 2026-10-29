@@ -24,29 +24,24 @@ function loadUtils() {
   return context.module.exports;
 }
 
-test('the basemap preview uses a valid tile for the selected coordinates', () => {
-  const { getOpenStreetMapTileUrl } = loadUtils();
-  const url = getOpenStreetMapTileUrl(22.4806, 113.9464, 15);
-
-  // OSM 数据 + CARTO 的底图向渲染；@2x 是因为气泡按 256 CSS px 摆瓦片。
-  assert.match(
-    url,
-    /^https:\/\/basemaps\.cartocdn\.com\/rastertiles\/voyager\/15\/\d+\/\d+@2x\.png$/,
-  );
-});
-
 test('the dark scheme swaps in the dark basemap style', () => {
-  const { getOpenStreetMapTileUrl, getBasemapUrlTemplate } = loadUtils();
+  const { getBasemapUrlTemplate, getOpenStreetMapPreviewTiles } = loadUtils();
+  const tileUrls = (options) =>
+    getOpenStreetMapPreviewTiles(22.4806, 113.9464, 252, 124, 15, options).tiles.map(
+      (tile) => tile.url,
+    );
 
-  assert.match(
-    getOpenStreetMapTileUrl(22.4806, 113.9464, 15, { scheme: 'dark' }),
-    /^https:\/\/basemaps\.cartocdn\.com\/dark_all\/15\/\d+\/\d+@2x\.png$/,
-  );
+  for (const url of tileUrls({ scheme: 'dark' })) {
+    assert.match(url, /^https:\/\/basemaps\.cartocdn\.com\/dark_all\/15\/\d+\/\d+@2x\.png$/);
+  }
   // 非高分屏不该白白多下 4 倍字节。
-  assert.match(
-    getOpenStreetMapTileUrl(22.4806, 113.9464, 15, { retina: false }),
-    /^https:\/\/basemaps\.cartocdn\.com\/rastertiles\/voyager\/15\/\d+\/\d+\.png$/,
-  );
+  for (const url of tileUrls({ retina: false })) {
+    assert.match(
+      url,
+      /^https:\/\/basemaps\.cartocdn\.com\/rastertiles\/voyager\/15\/\d+\/\d+\.png$/,
+    );
+  }
+
   // Leaflet 模板把 {r} 留给调用方按 devicePixelRatio 自己填。
   assert.equal(
     getBasemapUrlTemplate('light'),
@@ -59,10 +54,10 @@ test('the dark scheme swaps in the dark basemap style', () => {
 });
 
 test('invalid coordinates never produce a remote map request', () => {
-  const { getOpenStreetMapTileUrl } = loadUtils();
+  const { getOpenStreetMapPreviewTiles } = loadUtils();
 
-  assert.equal(getOpenStreetMapTileUrl(91, 113), null);
-  assert.equal(getOpenStreetMapTileUrl(22, Number.NaN), null);
+  assert.equal(getOpenStreetMapPreviewTiles(91, 113, 252, 124), null);
+  assert.equal(getOpenStreetMapPreviewTiles(22, Number.NaN, 252, 124), null);
 });
 
 test('system map URLs carry coordinates and a safely encoded label', () => {

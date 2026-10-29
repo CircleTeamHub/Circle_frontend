@@ -100,15 +100,7 @@ export async function deleteLocalMessages(
   _messageIds: readonly string[],
 ): Promise<void> {}
 
-export async function purgeExpiredLocalMessages(
-  _entries: readonly {
-    conversationId: string;
-    cutoff: Date;
-    startedAt?: Date;
-  }[],
-  _viewerCutoff?: Date,
-  _viewerStartedAt?: Date,
-): Promise<void> {}
+export async function purgeExpiredLocalMessages(): Promise<void> {}
 
 export async function clearLocalConversationMessages(
   _conversationId: string,

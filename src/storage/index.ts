@@ -139,8 +139,15 @@ const MIGRATION_FLAG = '__migrated_from_async_storage_v1';
  * 而回执**冲销失败**留下的旧条目(最多 100 条,每条含一枚支付幂等键 + userId)
  * 从此没人再碰。卡片改由服务端签发后,队列实现与 /coin/gift/card-sent 端点
  * 都已删除,这些条目再也不会被冲销 —— 只能在这里一次性抹掉。
+ *
+ * circle-im-local-unread-overrides:会话列表「标记未读」的本地覆盖。滑动入口在
+ * #171 移除后 store 也已删除,它不再参与登出清盘;残留的会话 ID 是账号私有数据,
+ * 留着会跨账号存活(违背 #97 的登出清理),在这里抹掉。
  */
-const ORPHANED_KEYS = ['circle-im-gift-card-pending-acks'] as const;
+const ORPHANED_KEYS = [
+  'circle-im-gift-card-pending-acks',
+  'circle-im-local-unread-overrides',
+] as const;
 
 let migrationPromise: Promise<void> | null = null;
 

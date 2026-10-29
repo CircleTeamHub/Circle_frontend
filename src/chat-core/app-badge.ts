@@ -1,8 +1,6 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
-import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
-import { countLocalUnreadOverrides } from '@/features/messages/utils/local-unread';
 import { selectTotalUnread, useChatStore } from './store';
 
 /**
@@ -44,58 +42,25 @@ export function syncAppBadge(total: number): void {
     });
 }
 
-let lastInputs: { conversations: unknown; overrides: unknown } | null = null;
+let lastConversations: unknown = null;
 let lastTotal = 0;
 
-/** tab 与图标角标共用的口径:服务端未读 + 本机「标记为未读」覆盖。 */
-function totalWithLocalOverrides(): number {
+/** tab 与图标角标共用的口径:服务端未读合计。 */
+function memoizedTotalUnread(): number {
   const state = useChatStore.getState();
   // chat store 每次写入都会来到这里(「正在输入」「在线」「已送达」也算),而这些事件
-  // 不改会话列表。两份输入引用都没变就直接用上次的结果,免得每次都整表求和、建 Map。
-  let overridesNow: unknown;
-  try {
-    overridesNow = useLocalUnreadStore.getState().overrides;
-  } catch {
-    // 本地覆盖 store 未就绪:不缓存,按下面的口径照常算(那里会退回纯服务端口径)。
-    return computeTotalWithLocalOverrides(state);
-  }
-  if (
-    lastInputs &&
-    lastInputs.conversations === state.conversations &&
-    lastInputs.overrides === overridesNow
-  ) {
-    return lastTotal;
-  }
-  lastTotal = computeTotalWithLocalOverrides(state);
-  lastInputs = { conversations: state.conversations, overrides: overridesNow };
+  // 不改会话列表。会话列表引用没变就直接用上次的结果,免得每次都整表求和。
+  if (lastConversations === state.conversations) return lastTotal;
+  lastTotal = selectTotalUnread(state);
+  lastConversations = state.conversations;
   return lastTotal;
-}
-
-function computeTotalWithLocalOverrides(
-  state: ReturnType<typeof useChatStore.getState>,
-): number {
-  const serverTotal = selectTotalUnread(state);
-  let overrides = 0;
-  try {
-    // 与 MessagesScreen 的 tab 角标同一个函数、同一个口径。
-    overrides = countLocalUnreadOverrides(
-      state.conversations.map((c) => ({ id: c.id, unreadCount: c.unreadCount })),
-      useLocalUnreadStore.getState().overrides,
-    );
-  } catch {
-    // 本地覆盖 store 未就绪:退回纯服务端口径。
-  }
-  return serverTotal + overrides;
 }
 
 /** 幂等安装 store 订阅;connectChat 时调用,登出 reset 会把角标随之清零。 */
 export function initChatAppBadgeSync(): void {
   if (installed) return;
   installed = true;
-  const push = (): void => syncAppBadge(totalWithLocalOverrides());
+  const push = (): void => syncAppBadge(memoizedTotalUnread());
   useChatStore.subscribe(push);
-  // 「滑动标记为未读」只改本地覆盖 store,chat store 一动不动 —— 不订阅它的话
-  // tab 上有红点、图标角标却是 0,而且此后再也不会自己对上。
-  useLocalUnreadStore.subscribe(push);
   push();
 }

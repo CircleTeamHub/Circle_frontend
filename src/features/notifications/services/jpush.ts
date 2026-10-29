@@ -16,9 +16,6 @@ type JPushModule = {
   getRegistrationID: (callback: (result: { registerID?: string }) => void) => void;
   addNotificationListener: (callback: (event: JPushNotification) => void) => void;
   addConnectEventListener?: (callback: (event: { connectEnable?: boolean }) => void) => void;
-  setAlias: (params: { sequence: number; alias: string }) => void;
-  deleteAlias: (params: { sequence: number }) => void;
-  addTagAliasListener?: (callback: (result: { sequence?: number; code?: number }) => void) => void;
   removeListener?: (callback: Function) => void;
   requestPermission?: (options: {
     alert: boolean;
@@ -38,7 +35,6 @@ const listeners = new Set<(event: JPushNotification) => void>();
 const connectionListeners = new Set<() => void>();
 let moduleInstance: JPushModule | null | undefined;
 let initialized = false;
-let sequence = 0;
 
 function getModule(): JPushModule | null {
   if (moduleInstance !== undefined) return moduleInstance;
@@ -66,10 +62,6 @@ function getProductionEnvironment() {
     | { jpushProduction?: unknown }
     | undefined)?.jpushProduction;
   return typeof configured === 'boolean' ? configured : !__DEV__;
-}
-
-export function isJPushConfigured() {
-  return Platform.OS !== 'web' && Boolean(getAppKey()) && Boolean(getModule());
 }
 
 export function initializeJPush() {
@@ -158,41 +150,6 @@ export function getJPushRegistrationId(): Promise<string> {
     }
     readRegistrationId();
   });
-}
-
-function runAliasOperation(
-  operation: (value: { sequence: number }) => void,
-): Promise<void> {
-  initializeJPush();
-  const jpush = getModule();
-  if (!jpush) return Promise.resolve();
-  const operationSequence = ++sequence;
-  return new Promise((resolve, reject) => {
-    const listener = (result: { sequence?: number; code?: number }) => {
-      if (result.sequence !== operationSequence) return;
-      jpush.removeListener?.(listener);
-      if ((result.code ?? 0) === 0) resolve();
-      else reject(new Error(`JPush alias operation failed: ${result.code}`));
-    };
-    jpush.addTagAliasListener?.(listener);
-    try {
-      operation({ sequence: operationSequence });
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-export function setJPushAlias(alias: string) {
-  const jpush = getModule();
-  if (!jpush) return Promise.resolve();
-  return runAliasOperation((params) => jpush.setAlias({ ...params, alias }));
-}
-
-export function deleteJPushAlias() {
-  const jpush = getModule();
-  if (!jpush) return Promise.resolve();
-  return runAliasOperation((params) => jpush.deleteAlias(params));
 }
 
 export type { JPushNotification };

@@ -78,22 +78,6 @@ export function getProfileMetaItems(profile: ProfileMetaSource) {
   return [formatGenderLabel(profile.gender), city];
 }
 
-export function getFriendActionLabel(status: FriendStatus | null | undefined) {
-  switch (status) {
-    case 'PENDING_SENT':
-      return i18n.t('userProfile.friendAction.pendingSent');
-    case 'PENDING_RECEIVED':
-      return i18n.t('userProfile.friendAction.pendingReceived');
-    case 'ACCEPTED':
-      return i18n.t('userProfile.friendAction.accepted');
-    case 'BLOCKED':
-      return i18n.t('userProfile.friendAction.blocked');
-    case 'NONE':
-    default:
-      return i18n.t('userProfile.friendAction.add');
-  }
-}
-
 type SendFriendRequestAvailabilityInput = {
   isCurrentUser: boolean;
   profileId: string;

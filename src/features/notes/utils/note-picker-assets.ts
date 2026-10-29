@@ -25,10 +25,6 @@ export function revokeOwnedPickerPreview(uri: string | undefined) {
   }
 }
 
-export function revokeOwnedPickerPreviews(items: readonly PickerAsset[]) {
-  items.forEach((item) => revokeOwnedPickerPreview(item.uri));
-}
-
 /** Tracks only picker-owned web object URLs so cleanup cannot revoke an active preview twice. */
 export function createPickerPreviewDisposer() {
   const ownedUris = new Set<string>();

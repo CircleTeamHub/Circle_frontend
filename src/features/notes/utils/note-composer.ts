@@ -59,18 +59,6 @@ export const NOTE_COMPOSER_SINGLETON_KINDS: readonly NoteComposerBlockKind[] = [
   'group',
 ];
 
-export const DEFAULT_NOTE_COMPOSER_ORDER: readonly NoteComposerBlockKind[] = [
-  'title',
-  'text',
-  'image',
-  'audio',
-  'video',
-  'showcase',
-  'location',
-  'contact',
-  'group',
-];
-
 const LAYOUT_BLOCK_TYPE = 'noteLayout';
 
 function isKind(value: unknown): value is NoteComposerBlockKind {

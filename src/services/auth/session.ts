@@ -49,7 +49,7 @@ async function loadCirclesStore() {
 }
 
 // 与上面两个 loader 同理惰性加载:静态 import 这两个会形成
-// session.ts → use-discover-store/userVipStore → services/api/* → api/client.ts → session.ts
+// session.ts → use-discover-store/userAppearanceStore → services/api/* → api/client.ts → session.ts
 // 的模块环。api/client.ts 求值时会 registerLogoutHandler,而彼时 session.ts 还没初始化完、
 // 它的 logoutHandlers 绑定尚未就绪,可能在冷启动阶段崩。改为登出流程里按需 import 破环。
 async function loadDiscoverStore() {
@@ -79,8 +79,8 @@ async function loadNotificationSnackbarStore() {
 }
 
 async function loadVipLevelsInvalidator() {
-  const { invalidateVipLevels } = await import('@/stores/userVipStore');
-  return invalidateVipLevels;
+  const { invalidateUserAppearances } = await import('@/stores/userAppearanceStore');
+  return invalidateUserAppearances;
 }
 
 type PersistedResettableStore = {
@@ -109,9 +109,6 @@ type PersistedResettableStore = {
  * 成为一次显式决定，而不是默认幸存。
  */
 const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] = [
-  async () =>
-    (await import('@/features/messages/store/use-local-unread-store'))
-      .useLocalUnreadStore,
   async () => {
     const { clearUnreferencedChatBackgroundImages, useChatPreferencesStore } =
       await import('@/features/chat/store/use-chat-preferences-store');

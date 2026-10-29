@@ -5,7 +5,6 @@ import type {
   CollectNoteSource,
   CreateNoteInput,
   CreateNoteExportInput,
-  CreateNoteShareLinkInput,
   ListNotesParams,
   NoteChatMediaImportResult,
   NoteChatMediaSection,
@@ -14,7 +13,6 @@ import type {
   NoteDraftSummary,
   NoteExportResult,
   NoteGroup,
-  NoteShareLink,
   NoteSummary,
   SaveNoteDraftInput,
   NoteWorkStatus,
@@ -399,15 +397,6 @@ export async function restoreNote(id: string): Promise<void> {
 
 export async function deleteNote(id: string): Promise<void> {
   await markNoteWrite(apiClient<void>(`/note/${id}`, { method: 'DELETE' }));
-}
-
-export async function createNoteShareLink(
-  input: CreateNoteShareLinkInput,
-): Promise<NoteShareLink> {
-  return markNoteWrite(apiClient<NoteShareLink>('/note/share-links', {
-    method: 'POST',
-    body: input,
-  }));
 }
 
 export async function createNoteExport(

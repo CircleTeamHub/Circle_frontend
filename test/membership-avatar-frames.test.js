@@ -15,12 +15,10 @@ test('membership avatar frame assets exist (diamond + super)', () => {
   }
 });
 
-test('membership-frames maps only diamond/super tiers to a frame', () => {
+test('membership-frames bundles only the diamond/super frame assets', () => {
   const src = read('src/features/profile/membership-frames.ts');
-  assert.match(src, /getMembershipTierForVipLevel/);
   assert.match(src, /diamond: require\([^)]*frames\/diamond\.png/);
   assert.match(src, /super: require\([^)]*frames\/super\.png/);
-  assert.match(src, /tier === 'diamond' \|\| tier === 'super'/);
   assert.match(src, /export const AVATAR_FRAME_SCALE/);
 });
 

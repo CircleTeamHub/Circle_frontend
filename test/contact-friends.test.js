@@ -39,7 +39,7 @@ function loadTsModule(relativePath, stubs = {}) {
 }
 
 test('contact friend helpers group and sort friends by normalized display key', () => {
-  const { buildContactSections, buildRecentFriends, getFriendDisplayName } =
+  const { buildContactSections, getFriendDisplayName } =
     loadTsModule('src/features/contacts/contact-friends.ts');
 
   const friends = [
@@ -87,11 +87,6 @@ test('contact friend helpers group and sort friends by normalized display key', 
 
   assert.equal(getFriendDisplayName(friends[0]), 'Alice');
   assert.equal(getFriendDisplayName(friends[3]), 'bravo');
-
-  assert.deepEqual(
-    Array.from(buildRecentFriends(friends), (friend) => friend.id),
-    ['friend-2', 'friend-1', 'friend-3', 'friend-4'],
-  );
 
   const sections = Array.from(buildContactSections(friends));
 

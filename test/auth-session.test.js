@@ -136,8 +136,8 @@ function makeBaseMocks() {
         getState: () => ({ reset: () => calls.push('resetNotificationSnackbar') }),
       },
     },
-    '@/stores/userVipStore': {
-      invalidateVipLevels: () => calls.push('invalidateVip'),
+    '@/stores/userAppearanceStore': {
+      invalidateUserAppearances: () => calls.push('invalidateVip'),
     },
     '@/utils/client-diagnostics': {
       resetDiagnosticBreadcrumbs: () => calls.push('resetDiagnosticBreadcrumbs'),
@@ -197,8 +197,8 @@ test('clearLocalSession preserves the startup gate until account cleanup settles
   const { mocks, clearSessionOptions } = makeBaseMocks();
   const storageClearStarted = deferred();
   const releaseStorageClear = deferred();
-  mocks['@/features/messages/store/use-local-unread-store'] = {
-    useLocalUnreadStore: {
+  mocks['@/features/discover/store/use-discover-filter-store'] = {
+    useDiscoverFilterStore: {
       getState: () => ({ resetForLogout: () => {} }),
       persist: {
         clearStorage: async () => {
@@ -511,18 +511,18 @@ test('relogin during store load: skips in-memory reset but still clears the old 
   // - 磁盘 clearStorage 仍要执行（否则上一账号的持久化足迹留在共享 MMKV key
   //   上，下次冷启动水合会渗进新会话 —— 正是本 review 指出的泄漏）。
   const { mocks, calls, authState } = makeBaseMocks();
-  mocks['@/features/messages/store/use-local-unread-store'] = {
-    useLocalUnreadStore: {
+  mocks['@/features/discover/store/use-discover-filter-store'] = {
+    useDiscoverFilterStore: {
       getState: () => ({
-        resetForLogout: () => calls.push('resetLocalUnread'),
+        resetForLogout: () => calls.push('resetDiscoverFilter'),
       }),
       persist: {
-        clearStorage: () => calls.push('clearLocalUnreadStorage'),
+        clearStorage: () => calls.push('clearDiscoverFilterStorage'),
       },
     },
   };
   mocks.__onRequire = (request) => {
-    if (request === '@/features/messages/store/use-local-unread-store') {
+    if (request === '@/features/discover/store/use-discover-filter-store') {
       authState.accessToken = 'access-b';
       authState.refreshToken = 'refresh-b';
       authState.sessionEpoch += 1;
@@ -535,21 +535,21 @@ test('relogin during store load: skips in-memory reset but still clears the old 
 
   assert.ok(calls.includes('sessionB'));
   // 新会话已抢占 —— 不能擦它的内存状态
-  assert.equal(calls.includes('resetLocalUnread'), false);
+  assert.equal(calls.includes('resetDiscoverFilter'), false);
   // 但旧账号的磁盘 key 仍被清掉，杜绝下次水合泄漏
-  assert.ok(calls.includes('clearLocalUnreadStorage'));
+  assert.ok(calls.includes('clearDiscoverFilterStorage'));
 });
 
 test('relogin mid-load still disk-clears the REMAINING account-scoped stores, not just the one being loaded (review P1)', async () => {
   // 会话在清单中途变化不得 return 掉后面的 store —— 每一个共享 key 都要清。
   const { mocks, calls, authState } = makeBaseMocks();
-  mocks['@/features/messages/store/use-local-unread-store'] = {
-    useLocalUnreadStore: {
+  mocks['@/features/discover/store/use-discover-filter-store'] = {
+    useDiscoverFilterStore: {
       getState: () => ({
-        resetForLogout: () => calls.push('resetLocalUnread'),
+        resetForLogout: () => calls.push('resetDiscoverFilter'),
       }),
       persist: {
-        clearStorage: () => calls.push('clearLocalUnreadStorage'),
+        clearStorage: () => calls.push('clearDiscoverFilterStorage'),
       },
     },
   };
@@ -565,7 +565,7 @@ test('relogin mid-load still disk-clears the REMAINING account-scoped stores, no
   };
   // 在加载第一个账号级 store 时抢占会话
   mocks.__onRequire = (request) => {
-    if (request === '@/features/messages/store/use-local-unread-store') {
+    if (request === '@/features/chat/store/use-chat-preferences-store') {
       authState.sessionEpoch += 1;
       calls.push('sessionB');
     }
@@ -576,11 +576,11 @@ test('relogin mid-load still disk-clears the REMAINING account-scoped stores, no
 
   assert.ok(calls.includes('sessionB'));
   // 会话已变：两个 store 都不做内存重置
-  assert.equal(calls.includes('resetLocalUnread'), false);
   assert.equal(calls.includes('resetChatPreferences'), false);
+  assert.equal(calls.includes('resetDiscoverFilter'), false);
   // 但两个 store 的磁盘 key 都被清 —— 循环没有在会话变化时提前退出
-  assert.ok(calls.includes('clearLocalUnreadStorage'));
   assert.ok(calls.includes('clearChatPreferencesStorage'));
+  assert.ok(calls.includes('clearDiscoverFilterStorage'));
 });
 
 test('clearLocalSession falls back to secure auth removeItem when persist.clearStorage rejects (defense in depth: tokens must not remain on disk)', async () => {

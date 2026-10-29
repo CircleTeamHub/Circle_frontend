@@ -10,14 +10,11 @@ import type { UserAppearance } from '@/types';
 
 interface UserAppearanceState {
   appearances: Record<string, UserAppearance>;
-  /** Compatibility projection used by existing userVipStore selectors. */
-  levels: Record<string, number>;
   refreshTick: number;
 }
 
 export const useUserAppearanceStore = create<UserAppearanceState>(() => ({
   appearances: {},
-  levels: {},
   refreshTick: 0,
 }));
 
@@ -150,7 +147,6 @@ function applyAuthoritativeResult(
   }
   useUserAppearanceStore.setState((state) => {
     const appearances = { ...state.appearances };
-    const levels = { ...state.levels };
     let changed = false;
     for (const id of ids) {
       const appearance = Object.prototype.hasOwnProperty.call(result, id)
@@ -171,15 +167,13 @@ function applyAuthoritativeResult(
       if (
         !current ||
         current.vipLevel !== appearance.vipLevel ||
-        !sameFrame ||
-        state.levels[id] !== appearance.vipLevel
+        !sameFrame
       ) {
         appearances[id] = appearance;
-        levels[id] = appearance.vipLevel;
         changed = true;
       }
     }
-    return changed ? { appearances, levels } : state;
+    return changed ? { appearances } : state;
   });
 }
 
@@ -314,10 +308,6 @@ export function reconcileUserAppearance(
       ...state.appearances,
       [normalizedId]: appearance,
     },
-    levels: {
-      ...state.levels,
-      [normalizedId]: appearance.vipLevel,
-    },
   }));
 }
 
@@ -331,7 +321,6 @@ export function invalidateUserAppearances(): void {
   fetchedAt.clear();
   useUserAppearanceStore.setState((state) => ({
     appearances: {},
-    levels: {},
     refreshTick: state.refreshTick + 1,
   }));
 }

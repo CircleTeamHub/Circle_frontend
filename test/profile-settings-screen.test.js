@@ -1193,13 +1193,6 @@ test("system announcements screen shows server notifications and opens their det
     ),
     "utf8",
   );
-  const catalog = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      "src/features/profile/system-announcements.ts",
-    ),
-    "utf8",
-  );
   const detail = fs.readFileSync(
     path.join(
       process.cwd(),
@@ -1216,9 +1209,6 @@ test("system announcements screen shows server notifications and opens their det
   );
 
   assert.match(source, /NavHeader title=\{t\('systemAnnouncements\.title'\)\}/);
-  assert.match(catalog, /systemAnnouncements\.latestAppInfo/);
-  assert.match(catalog, /systemAnnouncements\.updates/);
-  assert.match(catalog, /systemAnnouncements\.patches/);
   assert.match(source, /fetchProfileNotifications/);
   assert.match(source, /markProfileNotificationsRead/);
   assert.match(source, /FlatList/);

@@ -6,7 +6,6 @@ import {
   clampCitiesToLimit,
   resolveFilterCityLimit,
   resolveMultiCitySelection,
-  resolveSingleCitySelection,
   toggleCitySelection,
 } from './city-selection.ts';
 
@@ -93,9 +92,6 @@ test('multi-select mode enforces the maximum city limit', () => {
 });
 
 test('selection resolvers return API-safe values', () => {
-  assert.equal(resolveSingleCitySelection(['广州'], false), '广州');
-  assert.equal(resolveSingleCitySelection([], true), '全国');
-  assert.equal(resolveSingleCitySelection([], false), null);
   assert.deepEqual(resolveMultiCitySelection(['广州', '深圳'], false), [
     '广州',
     '深圳',

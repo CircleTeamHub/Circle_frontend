@@ -61,7 +61,6 @@ const i18nStub = {
 test('friend activity copy maps event types to inbox text and groups inbox rows by counterparty', () => {
   const {
     getFriendActivityCopy,
-    hasUnreadFriendActivities,
     buildFriendActivityInboxRows,
   } = loadTsModule('src/features/contacts/friend-activities.ts', {
     '@/i18n': i18nStub,
@@ -81,8 +80,6 @@ test('friend activity copy maps event types to inbox text and groups inbox rows 
     }),
     /通过了你的好友申请/,
   );
-  assert.equal(hasUnreadFriendActivities(1), true);
-  assert.equal(hasUnreadFriendActivities(0), false);
 
   const rows = buildFriendActivityInboxRows([
     {
