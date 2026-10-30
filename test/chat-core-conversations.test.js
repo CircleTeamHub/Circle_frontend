@@ -274,6 +274,49 @@ test('markConversationReadLocal zeroes unread without touching others', () => {
   assert.equal(byId.get('b'), 5);
 });
 
+test('markConversationReadLocal keeps the read watermark across a stale snapshot', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conv({
+      lastMessage: msg({ height: 5, sender: { id: 'u2' } }),
+      unreadCount: 2,
+    }),
+  ]);
+
+  store.markConversationReadLocal('conv-1', 5);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+  assert.equal(useChatStore.getState().readWatermarks['conv-1'].me, 5);
+
+  // A list refresh can return the snapshot that was read before the socket ack.
+  store.setConversations([
+    conv({
+      lastMessage: msg({ height: 5, sender: { id: 'u2' } }),
+      unreadCount: 2,
+    }),
+  ]);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+});
+
+test('read ack does not clear a message received after the reported height', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conv({
+      lastMessage: msg({ height: 5, sender: { id: 'u2' } }),
+      unreadCount: 1,
+    }),
+  ]);
+
+  store.markConversationReadLocal('conv-1', 5);
+  store.applyIncomingMessage(msg({ id: 'm2', height: 6 }));
+  store.markConversationReadLocal('conv-1', 5);
+
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+});
+
 test('selectTotalUnread excludes muted conversations', () => {
   const { selectTotalUnread } = loadStore();
   const total = selectTotalUnread({

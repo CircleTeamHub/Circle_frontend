@@ -1207,6 +1207,11 @@ async function flushPendingReads(): Promise<void> {
       try {
         await emitReadWithAck(current, conversationId, height);
         if (gen !== sessionGen) return;
+        // DIRECT 回执发到会话房时不包含发起回执的这台 socket。ack 成功后
+        // 仍要把本机水位落进 store，否则下一次旧快照会把已清掉的未读数写回来。
+        useChatStore
+          .getState()
+          .markConversationReadLocal(conversationId, height);
         const afterAck = pendingReads.get(conversationId);
         if (afterAck !== undefined && afterAck <= height) {
           pendingReads.delete(conversationId);
@@ -1303,7 +1308,7 @@ export function markConversationRead(
   height: number,
 ): void {
   markChatRead(conversationId, height);
-  useChatStore.getState().markConversationReadLocal(conversationId);
+  useChatStore.getState().markConversationReadLocal(conversationId, height);
   // 看过了,通知栏里这个会话的通知一并收起。
   dismissChatNotifications(conversationId);
 }

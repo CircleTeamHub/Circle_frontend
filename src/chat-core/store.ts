@@ -527,8 +527,11 @@ interface ChatStoreState {
    * 或补拉换掉了同 id 的合成确认之后让预览跟上时间线。
    */
   revertConversationPreview: (conversationId: string) => void;
-  /** 本端已读的乐观归零(socket 上报之外的即时 UI 反馈)。 */
-  markConversationReadLocal: (conversationId: string) => void;
+  /**
+   * 本端已读的乐观归零(socket 上报之外的即时 UI 反馈)。传入水位时一并
+   * 记录本机已读水位，避免服务端旧快照在回执落地前把未读数写回来。
+   */
+  markConversationReadLocal: (conversationId: string, height?: number) => void;
   /** 乐观消息发送失败:按 d 标记,气泡转失败态。 */
   markMessageFailed: (conversationId: string, d: string) => void;
   /** 重发开始:失败气泡回到「发送中」(清 failed,sendStatus 3→1)。 */
@@ -1925,17 +1928,53 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
   },
 
-  markConversationReadLocal: (conversationId) => {
-    const { conversations } = get();
+  markConversationReadLocal: (conversationId, height) => {
+    const {
+      conversations,
+      currentUserId,
+      readWatermarks,
+    } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
-    if (index < 0 || conversations[index].unreadCount === 0) return;
-    const next = { ...conversations[index], unreadCount: 0 };
+    const validHeight =
+      Number.isSafeInteger(height) && (height as number) > 0
+        ? (height as number)
+        : 0;
+    let nextReadWatermarks = readWatermarks;
+    if (currentUserId && validHeight > 0) {
+      const prior = readWatermarks[conversationId]?.[currentUserId] ?? 0;
+      if (validHeight > prior) {
+        nextReadWatermarks = {
+          ...readWatermarks,
+          [conversationId]: {
+            ...(readWatermarks[conversationId] ?? {}),
+            [currentUserId]: validHeight,
+          },
+        };
+      }
+    }
+
+    // 水位带到某条消息时，只清掉「已读到这条」的未读。已读回执在途期间
+    // 可能又收到更高的消息，不能在 ack 到达时把那条新消息也清掉。
+    const latestHeight = conversations[index]?.lastMessage?.height ?? 0;
+    const canClearUnread = validHeight === 0 || latestHeight <= validHeight;
+    const shouldClearUnread =
+      index >= 0 && canClearUnread && conversations[index].unreadCount > 0;
+    const readWatermarksChanged = nextReadWatermarks !== readWatermarks;
+    if (!shouldClearUnread && !readWatermarksChanged) return;
+
     set({
-      conversations: [
-        ...conversations.slice(0, index),
-        next,
-        ...conversations.slice(index + 1),
-      ],
+      ...(shouldClearUnread
+        ? {
+            conversations: [
+              ...conversations.slice(0, index),
+              { ...conversations[index], unreadCount: 0 },
+              ...conversations.slice(index + 1),
+            ],
+          }
+        : {}),
+      ...(readWatermarksChanged
+        ? { readWatermarks: nextReadWatermarks }
+        : {}),
     });
   },
   setActiveConversationId: (conversationId) =>

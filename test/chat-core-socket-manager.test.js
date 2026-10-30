@@ -233,6 +233,10 @@ function loadManager(localDbOverrides = {}, options = {}) {
       activeConversationId: null,
       conversations: [],
       messagesByConversation: {},
+      readCalls: [],
+      markConversationReadLocal(conversationId, height) {
+        state.readCalls.push({ conversationId, height });
+      },
       // 冷启动水合会用到这三个;默认 initChatLocalDb=false 时根本走不到,
       // 只有显式打开本地库的用例才会触发。
       hydrated: [],
@@ -1485,7 +1489,7 @@ test('sendChatMessage resolves on ok ack and surfaces server error codes', async
 });
 
 test('offline reads merge to the max height and flush once on connect', async () => {
-  const { manager, socket } = loadManager();
+  const { manager, socket, store } = loadManager();
   manager.connectChat('jwt', 'u1');
   // 未连接:两次上报只在本地合并,不产生任何 emit。
   const acked = [];
@@ -1505,6 +1509,7 @@ test('offline reads merge to the max height and flush once on connect', async ()
   assert.equal(acked.length, 1);
   assert.equal(acked[0].conversationId, 'c1');
   assert.equal(acked[0].height, 7);
+  assert.deepEqual(store.readCalls, [{ conversationId: 'c1', height: 7 }]);
 });
 
 test('switching accounts drops the previous account pending read watermarks', async () => {
