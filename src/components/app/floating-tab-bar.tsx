@@ -163,16 +163,15 @@ function TabBarSurface({
       <GlassView
         colorScheme={colorScheme}
         glassEffectStyle={{
-          style: 'regular',
+          // GlassView 的子节点会被挂进原生玻璃的 contentView。把 BlurView
+          // 或半透明 tint 再叠进去会盖住 UIGlassEffect，最终看起来像实心白板。
+          // Liquid Glass 路径只让系统材质负责折射和透明度；BlurView 仅用于旧系统
+          // fallback（见下方 iOS 分支）。
+          style: 'clear',
           animate: false,
         }}
         style={styles.tabBar}
       >
-        {/* GlassView 只有 clear/regular/none，液态玻璃偏清透折射、没有磨砂强度
-            可调。要磨砂就得在玻璃之上自己叠一层材质，否则 iOS 26 和旧系统
-            会长成两种东西。 */}
-        <TabBarFrostLayer colorScheme={colorScheme} styles={styles} />
-        <View style={styles.tabBarTint} pointerEvents="none" />
         {children}
       </GlassView>
     );
