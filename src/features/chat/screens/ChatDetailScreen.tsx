@@ -243,6 +243,9 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     displayMessages,
     handleMessageListScroll,
     handleJumpToUnread,
+    handleUnreadStartVisibilityChange,
+    showUnreadJump,
+    unreadStartMessageID,
     highlightedMessageID,
     handleQuotePress,
   } = useChatTimeline({
@@ -611,10 +614,13 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         handleLoadOlder={handleLoadOlder}
         historyWindowFull={historyWindowFull}
         unreadCount={entryUnreadCount}
+        showUnreadJump={showUnreadJump}
+        unreadStartMessageID={unreadStartMessageID}
         messages={messages}
         displayMessages={displayMessages}
         handleMessageListScroll={handleMessageListScroll}
         handleJumpToUnread={handleJumpToUnread}
+        handleUnreadStartVisibilityChange={handleUnreadStartVisibilityChange}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         closeInputPanels={closeInputPanels}

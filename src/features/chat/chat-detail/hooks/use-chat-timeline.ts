@@ -306,6 +306,19 @@ export function useChatTimeline({
     },
     [currentUserID, entryReadHeight],
   );
+  const unreadStartMessageID = useMemo(
+    () => findUnreadStart(conversationMessages ?? [])?.id ?? null,
+    [conversationMessages, findUnreadStart],
+  );
+  const [unreadStartVisible, setUnreadStartVisible] = useState(false);
+  const [unreadJumpDismissed, setUnreadJumpDismissed] = useState(false);
+  useEffect(() => {
+    setUnreadStartVisible(false);
+    setUnreadJumpDismissed(false);
+  }, [conversationID, entryReadHeight, entryUnreadCount]);
+  const handleUnreadStartVisibilityChange = useCallback((visible: boolean) => {
+    setUnreadStartVisible(visible);
+  }, []);
 
   const handleJumpToUnread = useCallback(() => {
     if (!conversationID || entryUnreadCount <= 0 || unreadJumpInFlightRef.current) {
@@ -342,6 +355,7 @@ export function useChatTimeline({
             .sort((a, b) => a.height - b.height)[0]?.id ??
           null;
         if (!targetID) return;
+        setUnreadJumpDismissed(true);
         pendingUnreadJumpIDRef.current = targetID;
         const index = messagesRef.current.findIndex(
           (message) => message.id === targetID,
@@ -579,6 +593,10 @@ export function useChatTimeline({
     displayMessages,
     handleMessageListScroll,
     handleJumpToUnread,
+    handleUnreadStartVisibilityChange,
+    showUnreadJump:
+      entryUnreadCount > 0 && !unreadStartVisible && !unreadJumpDismissed,
+    unreadStartMessageID,
     highlightedMessageID,
     handleQuotePress,
   };

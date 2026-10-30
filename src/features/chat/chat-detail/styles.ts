@@ -50,7 +50,7 @@ export const chatDetailStyles = StyleSheet.create({
   },
   unreadJumpButton: {
     position: 'absolute',
-    top: Spacing.md,
+    bottom: Spacing.md,
     right: Spacing.md,
     minHeight: 40,
     maxWidth: '78%',
