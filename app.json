@@ -10,9 +10,6 @@
       "circleim"
     ],
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "backgroundColor": "#000000"
-    },
     "ios": {
       "bundleIdentifier": "com.yiboding.circleim",
       "supportsTablet": true,

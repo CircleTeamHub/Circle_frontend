@@ -4,10 +4,10 @@ const fs = require('node:fs');
 
 const read = (path) => fs.readFileSync(path, 'utf8');
 
-test('root layout transitions directly from the native splash to the app', () => {
+test('root layout renders the app without a JavaScript splash gate', () => {
   const source = read('app/_layout.tsx');
 
-  assert.match(source, /SplashScreen\.hideAsync\(\)/);
+  assert.doesNotMatch(source, /expo-splash-screen|SplashScreen|preventAutoHideAsync|hideAsync/);
   assert.doesNotMatch(source, /LaunchReveal/);
   assert.doesNotMatch(source, /launchRevealDone/);
   assert.doesNotMatch(source, /appScale/);

@@ -108,7 +108,7 @@ function assertSolidWhitePng(rel) {
 
 test('expo startup config has no branded splash artwork', () => {
   const app = readJson('app.json').expo;
-  assert.deepEqual(app.splash, { backgroundColor: '#000000' });
+  assert.equal(app.splash, undefined);
   assert.equal(app.ios.splash, undefined);
   assert.equal(app.android.adaptiveIcon.backgroundColor, '#FFFFFF');
   assert.equal(
@@ -176,6 +176,7 @@ test('expo startup config has no branded splash artwork', () => {
   const rootLayout = readText('app/_layout.tsx');
   assert.doesNotMatch(rootLayout, /StartupSplash/);
   assert.doesNotMatch(rootLayout, /splash-night|splash-tagline/);
+  assert.doesNotMatch(rootLayout, /expo-splash-screen|preventAutoHideAsync|hideAsync/);
   for (const rel of [
     'assets/images/splash-icon.png',
     'assets/images/splash-night-bg.png',

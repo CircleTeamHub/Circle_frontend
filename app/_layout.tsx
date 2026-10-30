@@ -11,8 +11,7 @@ import {
   useNavigationContainerRef,
   useSegments,
 } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
-import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 // 必须在入口文件最早引入，启用动画引擎。
 import 'react-native-reanimated';
@@ -77,9 +76,6 @@ type PersistedStore = {
     rehydrate?: () => unknown;
   };
 };
-
-// 阻止启动屏自动隐藏，等待认证所需的本地状态就绪后立即隐藏
-SplashScreen.preventAutoHideAsync();
 
 // 过滤 Expo DOM 组件在导航卸载竞态时抛出的 injectJavaScript 拒绝（属于已知良性错误）
 silenceDomBridgeRejection();
@@ -300,10 +296,9 @@ function RootLayout() {
    *
    * 迁移结束前 zustand store 已经用空 MMKV 同步完成了一次 hydration，
    * 因此迁移完成后认证 store 需要重新读取 MMKV，并刷新 i18n；其余持久化 store
-   * 在认证水合后后台重新读取。主题在迁移完成后才挂载 ThemeProvider，初始
-   * useState 即可读到迁移过的值。
+   * 在认证水合后后台重新读取。ThemeProvider 与路由会立即挂载，AuthRouteGuard
+   * 在认证状态可用前负责渲染加载态。
    */
-  const [startupReady, setStartupReady] = useState(false);
   useEffect(() => {
     setSentryUserId(sentryUserId);
   }, [sentryUserId]);
@@ -313,31 +308,14 @@ function RootLayout() {
   }, [navigationRef]);
 
   useEffect(() => {
-    let cancelled = false;
-
     // 引导逻辑搬到模块级 ensureStartupBootstrap()（记忆化 → 只跑一次）。
-    // 这里只负责在认证 store 水合后解除启动闸门；其余 store 已在后台继续恢复。
-    ensureStartupBootstrap().finally(() => {
-      if (!cancelled) {
-        setStartupReady(true);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    // 认证 store 与其余持久化状态继续在后台恢复，不阻塞首屏路由渲染。
+    void ensureStartupBootstrap();
   }, []);
 
-  // 原生启动屏只作为系统级加载背景，不再叠加 JS 设计或过渡动画。认证所需的
-  // 本地状态一就绪就隐藏它；/auth/me 和非关键 store 继续在页面背后执行。
+  // 原生启动屏不再由 JS 手动阻塞；认证 store 水合期间由 AuthRouteGuard
+  // 渲染现有路由加载态，首屏不会继续停留在系统启动背景上。
   useEffect(() => {
-    if (!startupReady) return;
-    SplashScreen.hideAsync().catch(() => {
-      // 已经被隐藏；忽略即可。
-    });
-
-    // OTA 错误监听和 LiveKit 全局注册都不影响首屏路由，延迟到首帧之后，避免
-    // 它们的模块初始化争抢启动时的 JS 线程。
     const timer = setTimeout(() => {
       void import('@/features/app-update/ota-health')
         .then(({ startOtaHealthReporting }) => {
@@ -349,10 +327,7 @@ function RootLayout() {
       void registerLiveKitGlobals();
     }, 0);
     return () => clearTimeout(timer);
-  }, [startupReady]);
-
-  // 认证 store 水合前不渲染路由（原生启动背景仍显示）。
-  if (!startupReady) return null;
+  }, []);
 
   const appContent = (
     // ThemeProvider：提供全局主题上下文（颜色、深浅色模式等）
