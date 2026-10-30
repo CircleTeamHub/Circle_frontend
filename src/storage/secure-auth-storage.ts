@@ -221,9 +221,15 @@ function sanitizeAuthEnvelope(envelope: PersistEnvelope | null): PersistEnvelope
 }
 
 async function loadAuthItem(key: string): Promise<string | null> {
-  const metadataValue = await getLegacyItem(key);
+  // Metadata stays in MMKV while tokens live in SecureStore. Read both stores
+  // together so the cold-start hydration path does not pay their latency in
+  // series on every launch.
+  const [metadataValue, initialTokens] = await Promise.all([
+    getLegacyItem(key),
+    readTokenBundle(key),
+  ]);
   const envelope = asEnvelope(parseJson(metadataValue));
-  let tokens = await readTokenBundle(key);
+  let tokens = initialTokens;
 
   const state = isRecord(envelope?.state) ? envelope.state : {};
   const legacyTokens = extractTokenBundle(state);

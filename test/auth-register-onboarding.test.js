@@ -146,11 +146,11 @@ test('root layout waits for persisted auth hydration before rendering routes', (
   const layout = read('app/_layout.tsx');
 
   assert.match(layout, /async function rehydratePersistedStore/);
-  assert.match(layout, /await Promise\.all\(\[/);
   assert.match(layout, /rehydratePersistedStore\('auth', useAuthStore\)/);
-  assert.match(layout, /setMigrated\(true\)/);
+  assert.match(layout, /setStartupReady\(true\)/);
   assert.ok(
-    layout.indexOf('await Promise.all([') < layout.indexOf('setMigrated(true)'),
-    'setMigrated(true) must happen after persisted stores finish rehydrating',
+    layout.indexOf("rehydratePersistedStore('auth', useAuthStore)") <
+      layout.indexOf('setStartupReady(true)'),
+    'setStartupReady(true) must happen after auth hydration',
   );
 });

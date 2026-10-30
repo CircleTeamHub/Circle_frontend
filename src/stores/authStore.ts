@@ -8,8 +8,8 @@
  *
  * hasHydrated：SecureStore 持久化读取完成后由 onRehydrateStorage 置为 true，
  *   SessionBootstrap 监听此字段决定何时执行会话恢复。
- * isLoading：初始为 true，SessionBootstrap 完成后（成功或失败）置为 false，
- *   app/index.tsx 在 isLoading=false 后才根据 isAuthenticated 决定跳转目标。
+ * isLoading：初始为 true，SessionBootstrap 完成后（成功或失败）置为 false。
+ *   已水合出完整本地会话时，路由会先使用缓存进入主界面，网络校验在后台进行。
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';

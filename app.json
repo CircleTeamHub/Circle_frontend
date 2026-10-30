@@ -11,17 +11,10 @@
     ],
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash-tagline.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#6230B0"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "bundleIdentifier": "com.yiboding.circleim",
-      "splash": {
-        "image": "./assets/images/splash-night.png",
-        "resizeMode": "cover",
-        "backgroundColor": "#6230B0"
-      },
       "supportsTablet": true,
       "infoPlist": {
         "NSAppTransportSecurity": {

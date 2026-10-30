@@ -86,6 +86,21 @@ test('protected routes render no interactive app UI while auth state is loading'
   );
 });
 
+test('a hydrated cached session can enter the app while /auth/me refreshes in background', () => {
+  const { getAuthRouteDecision } = loadPolicy();
+
+  assert.deepEqual(
+    plain(getAuthRouteDecision({
+      firstSegment: undefined,
+      isAuthenticated: true,
+      isLoading: true,
+      hasCachedSession: true,
+      onboardingRequired: false,
+    })),
+    { type: 'allow' },
+  );
+});
+
 test('logged-in users are kept out of login/register screens', () => {
   const { getAuthRouteDecision } = loadPolicy();
 

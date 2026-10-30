@@ -10,6 +10,8 @@ type AuthRouteDecisionInput = {
   firstSegment: string | undefined;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** 本地已水合出可用会话时，先展示缓存页面，网络校验在后台进行。 */
+  hasCachedSession?: boolean;
   onboardingRequired: boolean;
   /** 切换账号进行中:会话短暂处于「已清空、新账号未激活」,此时不做任何重定向。 */
   accountSwitching?: boolean;
@@ -21,6 +23,7 @@ export function getAuthRouteDecision({
   firstSegment,
   isAuthenticated,
   isLoading,
+  hasCachedSession = false,
   onboardingRequired,
   accountSwitching = false,
   addingAccount = false,
@@ -36,7 +39,7 @@ export function getAuthRouteDecision({
   // 页面自己送去邀请中心,所以这里与 isAuthRoute 分开表达。
   const isPublicRoute = isAuthRoute || firstSegment === 'invite';
 
-  if (isLoading) {
+  if (isLoading && !hasCachedSession) {
     return isPublicRoute ? { type: 'allow' } : { type: 'loading' };
   }
 
