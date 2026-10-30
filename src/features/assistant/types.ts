@@ -14,10 +14,12 @@ export type AssistantSubscription = {
   circleName: string;
   circleCities: string[];
   cities: string[];
+  keywords: string[];
   followsCircleCities: boolean;
   sourceTypes: string[];
   enabled: boolean;
   pushEnabled: boolean;
+  noteStatusAlerts: boolean;
   createdAt: string;
   updatedAt: string;
 };

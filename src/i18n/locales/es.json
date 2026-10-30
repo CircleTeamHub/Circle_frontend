@@ -12,7 +12,23 @@
     "selectCircle": "Elegir",
     "allCities": "Todas las ciudades",
     "noCircle": "Elige o únete a un círculo antes de activar los avisos.",
-    "enable": "Activar avisos"
+    "enable": "Activar avisos",
+    "intro": "Hola, soy el asistente de WindNote. Puedo avisarte de novedades de la ciudad según tus círculos y palabras clave, y decirte cuando una nota guardada deje de estar disponible.",
+    "askCircle": "¿Qué círculo quieres seguir?",
+    "askCircleWithContext": "Ahora estás viendo «{{circle}}». ¿Quieres seguir este círculo o elegir otro?",
+    "selectedCircle": "Quiero seguir «{{circle}}».",
+    "askKeywords": "Perfecto. ¿Qué palabras clave quieres seguir? Añade varias separadas por comas o sigue toda la información de este círculo.",
+    "allKeywords": "Seguir toda la información de este círculo.",
+    "selectedKeywords": "Seguiré: {{keywords}}.",
+    "continue": "Continuar",
+    "askNoteStatus": "Una última pregunta: ¿quieres que te avise si el propietario retira o elimina una nota guardada?",
+    "noteStatusYes": "Sí, avísame.",
+    "noteStatusNo": "Ahora no.",
+    "cityScope": "Ámbito de ciudades: {{cities}}",
+    "keywordPlaceholder": "Por ejemplo: conciertos, empleo, exposiciones",
+    "allKeywordsButton": "Seguir todo",
+    "noteStatusYesButton": "Seguir cambios de estado de notas",
+    "noteStatusNoButton": "Ahora no"
   },
   "settingsDetails": {
     "accountSecurity": {

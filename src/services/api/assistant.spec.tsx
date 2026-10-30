@@ -70,3 +70,43 @@ it('rejects a bootstrap response for a non-support conversation', async () => {
 
   await expect(fetchAssistantBootstrap()).rejects.toThrow('助手初始化数据格式异常');
 });
+
+it('defaults onboarding fields for subscriptions created before the assistant wizard', async () => {
+  mockedApiClient.mockResolvedValueOnce({
+    assistant: {
+      key: 'windnote-assistant',
+      displayName: '风信助手',
+      avatarKey: 'windnote-mascot-v1',
+      conversationId: 'assistant-conversation',
+    },
+    conversation,
+    unreadCount: 0,
+    subscriptions: [
+      {
+        id: 'subscription-1',
+        circleId: 'circle-1',
+        circleName: '北京生活圈',
+        circleCities: ['北京'],
+        cities: ['北京'],
+        followsCircleCities: false,
+        sourceTypes: ['PLAZA_POST'],
+        enabled: true,
+        pushEnabled: true,
+        createdAt: '2026-10-30T10:00:00.000Z',
+        updatedAt: '2026-10-30T10:00:00.000Z',
+      },
+    ],
+    contextCircle: null,
+    capabilities: {
+      infoSubscriptions: true,
+      noteStatusAlerts: true,
+      dailyDigest: false,
+    },
+  });
+
+  const result = await fetchAssistantBootstrap();
+
+  expect(result.subscriptions[0]).toEqual(
+    expect.objectContaining({ keywords: [], noteStatusAlerts: true }),
+  );
+});

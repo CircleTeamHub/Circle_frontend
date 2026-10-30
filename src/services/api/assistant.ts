@@ -35,10 +35,13 @@ function isSubscriptionShape(value: unknown): value is AssistantSubscription {
     typeof value.circleName === 'string' &&
     isStringArray(value.circleCities) &&
     isStringArray(value.cities) &&
+    (value.keywords === undefined || isStringArray(value.keywords)) &&
     typeof value.followsCircleCities === 'boolean' &&
     isStringArray(value.sourceTypes) &&
     typeof value.enabled === 'boolean' &&
     typeof value.pushEnabled === 'boolean' &&
+    (value.noteStatusAlerts === undefined ||
+      typeof value.noteStatusAlerts === 'boolean') &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string'
   );
@@ -102,7 +105,11 @@ function parseBootstrap(value: unknown): AssistantBootstrapResponse {
     },
     conversation: value.conversation,
     unreadCount: value.unreadCount,
-    subscriptions,
+    subscriptions: subscriptions.map((subscription) => ({
+      ...subscription,
+      keywords: subscription.keywords ?? [],
+      noteStatusAlerts: subscription.noteStatusAlerts ?? true,
+    })),
     contextCircle: parseCircleContext(value.contextCircle ?? null),
     capabilities: {
       infoSubscriptions: capabilities.infoSubscriptions,
@@ -124,7 +131,9 @@ export async function fetchAssistantBootstrap(
 export async function createAssistantSubscription(input: {
   circleId: string;
   cities?: string[];
+  keywords?: string[];
   pushEnabled?: boolean;
+  noteStatusAlerts?: boolean;
 }): Promise<AssistantSubscription> {
   return apiClient<AssistantSubscription>('/assistant/subscriptions', {
     method: 'POST',

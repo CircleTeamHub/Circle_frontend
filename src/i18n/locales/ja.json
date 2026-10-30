@@ -12,7 +12,23 @@
     "selectCircle": "選択",
     "allCities": "すべての都市",
     "noCircle": "通知を有効にするにはサークルを選択または参加してください。",
-    "enable": "通知を有効にする"
+    "enable": "通知を有効にする",
+    "intro": "こんにちは、風信アシスタントです。フォローしたサークルとキーワードに基づいて都市情報を通知し、保存したノートが非公開または削除されたときにもお知らせします。",
+    "askCircle": "どのサークルをフォローしますか？",
+    "askCircleWithContext": "現在「{{circle}}」を閲覧しています。このサークルをフォローしますか？別のサークルも選べます。",
+    "selectedCircle": "「{{circle}}」をフォローします。",
+    "askKeywords": "わかりました。どのキーワードをフォローしますか？カンマで区切って入力するか、このサークルのすべての情報をフォローできます。",
+    "allKeywords": "このサークルのすべての情報をフォローします。",
+    "selectedKeywords": "フォローするキーワード：{{keywords}}。",
+    "continue": "続ける",
+    "askNoteStatus": "最後に、保存したノートが作成者によって非公開または削除されたときに通知しますか？",
+    "noteStatusYes": "はい、通知してください。",
+    "noteStatusNo": "今は不要です。",
+    "cityScope": "都市範囲：{{cities}}",
+    "keywordPlaceholder": "例：コンサート、求人、展示会",
+    "allKeywordsButton": "すべてフォロー",
+    "noteStatusYesButton": "ノートの状態変更をフォロー",
+    "noteStatusNoButton": "今は不要"
   },
   "settingsDetails": {
     "accountSecurity": {

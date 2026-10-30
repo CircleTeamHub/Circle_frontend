@@ -12,7 +12,23 @@
     "selectCircle": "선택",
     "allCities": "모든 도시",
     "noCircle": "알림을 켜려면 서클을 선택하거나 가입하세요.",
-    "enable": "알림 켜기"
+    "enable": "알림 켜기",
+    "intro": "안녕하세요. WindNote 어시스턴트입니다. 팔로우한 서클과 키워드에 맞는 도시 소식을 알려드리고, 저장한 노트가 비공개 또는 삭제되면 알려드릴게요.",
+    "askCircle": "어떤 서클을 팔로우할까요?",
+    "askCircleWithContext": "지금 ‘{{circle}}’을(를) 보고 있어요. 이 서클을 팔로우할까요? 다른 서클도 선택할 수 있어요.",
+    "selectedCircle": "‘{{circle}}’을(를) 팔로우할게요.",
+    "askKeywords": "좋아요. 어떤 키워드를 팔로우할까요? 쉼표로 여러 개를 입력하거나 이 서클의 모든 소식을 팔로우할 수 있어요.",
+    "allKeywords": "이 서클의 모든 소식을 팔로우할게요.",
+    "selectedKeywords": "팔로우할 키워드: {{keywords}}.",
+    "continue": "계속",
+    "askNoteStatus": "마지막 질문이에요. 저장한 노트가 작성자에 의해 비공개 처리되거나 삭제되면 알려드릴까요?",
+    "noteStatusYes": "네, 알려주세요.",
+    "noteStatusNo": "지금은 괜찮아요.",
+    "cityScope": "도시 범위: {{cities}}",
+    "keywordPlaceholder": "예: 콘서트, 채용, 전시",
+    "allKeywordsButton": "모든 소식 팔로우",
+    "noteStatusYesButton": "노트 상태 변경 팔로우",
+    "noteStatusNoButton": "지금은 안 함"
   },
   "settingsDetails": {
     "accountSecurity": {
