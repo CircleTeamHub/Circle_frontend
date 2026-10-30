@@ -1512,6 +1512,18 @@ test('offline reads merge to the max height and flush once on connect', async ()
   assert.deepEqual(store.readCalls, [{ conversationId: 'c1', height: 7 }]);
 });
 
+test('cold-start pending reads restore before the first conversation snapshot', async () => {
+  const { manager, store } = loadManager({
+    initChatLocalDb: async () => true,
+    pendingReadsList: async () => [{ conversationId: 'c1', height: 7 }],
+  });
+
+  manager.connectChat('jwt', 'u1');
+  await flush();
+
+  assert.deepEqual(store.readCalls, [{ conversationId: 'c1', height: 7 }]);
+});
+
 test('switching accounts drops the previous account pending read watermarks', async () => {
   const { manager, socket } = loadManager();
   manager.connectChat('jwt-a', 'account-a');

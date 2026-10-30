@@ -1417,7 +1417,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           .map((c) =>
             reconcileWithLocalWatermarks(
               c,
-              readWatermarks[c.id]?.[currentUserId ?? ''] ?? 0,
+              seededReadWatermarks[c.id]?.[currentUserId ?? ''] ?? 0,
               floors[c.id] ?? 0,
               timelines[c.id] ?? [],
               currentUserId,
@@ -1491,6 +1491,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       void deleteLocalMessagesBelow(conversationId, floor + 1);
     }
     const timeline = messagesByConversation[incoming.id];
+    const seededReadWatermarks = seedSelfReadWatermarks(
+      seedPeerReadWatermarks(readWatermarks, [incoming]),
+      [incoming],
+      currentUserId,
+    );
     const reconciled = reconcileWithLocalWatermarks(
       preserveNewerLivePreview(
         reconcileDeletedPreview(withBurnState, timeline),
@@ -1504,7 +1509,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             get().appForeground && get().activeConversationId === incoming.id,
         },
       ),
-      readWatermarks[incoming.id]?.[currentUserId ?? ''] ?? 0,
+      seededReadWatermarks[incoming.id]?.[currentUserId ?? ''] ?? 0,
       floors[incoming.id] ?? 0,
       timelines[incoming.id] ?? [],
       currentUserId,
@@ -1527,11 +1532,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               ...currentConversations.filter((c) => c.id !== incoming.id),
               next,
             ]),
-      readWatermarks: seedSelfReadWatermarks(
-        seedPeerReadWatermarks(readWatermarks, [incoming]),
-        [incoming],
-        currentUserId,
-      ),
+      readWatermarks: seededReadWatermarks,
       deliveredWatermarks: seedPeerDeliveredWatermarks(deliveredWatermarks, [
         incoming,
       ]),
@@ -1635,10 +1636,28 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
    */
   hydrateLocalSnapshot: (conversations, messagesByConversation) => {
     const state = get();
+    const seededReadWatermarks = seedSelfReadWatermarks(
+      state.readWatermarks,
+      conversations,
+      state.currentUserId,
+    );
+    const selfReadHeight = (conversationId: string): number =>
+      seededReadWatermarks[conversationId]?.[state.currentUserId ?? ''] ?? 0;
+    const reconciledLocalConversations = conversations.map((conversation) =>
+      reconcileWithLocalWatermarks(
+        conversation,
+        selfReadHeight(conversation.id),
+        state.clearedBeforeHeightByConversation[conversation.id] ?? 0,
+        messagesByConversation[conversation.id] ?? [],
+        state.currentUserId,
+      ),
+    );
     // 服务端快照一旦成功，null 预览就是权威值，不能被本地旧时间线覆盖。
     if (!state.conversationsSnapshotLoaded && conversations.length > 0) {
-      const localById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
-      const withLocalPreviews = conversations.map((conversation) =>
+      const localById = new Map(
+        reconciledLocalConversations.map((conversation) => [conversation.id, conversation]),
+      );
+      const withLocalPreviews = reconciledLocalConversations.map((conversation) =>
         hydratePreviewFromLocalTimeline(
           conversation,
           messagesByConversation[conversation.id],
@@ -1667,6 +1686,33 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           set({ conversations: sortConversations(merged) });
         }
       }
+    }
+    if (state.conversationsSnapshotLoaded && conversations.length > 0) {
+      // The authoritative rows can arrive before the local cache. If the cache
+      // carries a newer optimistic read height, reconcile only the unread
+      // field; keep the server's preview and membership data untouched.
+      const reconciledCurrent = state.conversations.map((conversation) =>
+        reconcileWithLocalWatermarks(
+          conversation,
+          selfReadHeight(conversation.id),
+          state.clearedBeforeHeightByConversation[conversation.id] ?? 0,
+          messagesByConversation[conversation.id] ?? [],
+          state.currentUserId,
+        ),
+      );
+      if (
+        reconciledCurrent.some(
+          (conversation, index) => conversation !== state.conversations[index],
+        )
+      ) {
+        set({ conversations: reconciledCurrent });
+      }
+    }
+    if (seededReadWatermarks !== state.readWatermarks) {
+      // A local cache can finish after the authoritative snapshot. Keep any
+      // persisted read progress without allowing the cache to overwrite the
+      // server's conversation rows.
+      set({ readWatermarks: seededReadWatermarks });
     }
     const nextTimelines: Record<string, ChatMessageDto[]> = {
       ...state.messagesByConversation,
@@ -1935,6 +1981,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       readWatermarks,
     } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
+    const currentConversation = index >= 0 ? conversations[index] : null;
     const validHeight =
       Number.isSafeInteger(height) && (height as number) > 0
         ? (height as number)
@@ -1959,15 +2006,42 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const canClearUnread = validHeight === 0 || latestHeight <= validHeight;
     const shouldClearUnread =
       index >= 0 && canClearUnread && conversations[index].unreadCount > 0;
+    const priorConversationReadHeight =
+      currentConversation &&
+      Number.isSafeInteger(currentConversation.readHeight) &&
+      (currentConversation.readHeight as number) > 0
+        ? (currentConversation.readHeight as number)
+        : 0;
+    const nextConversationReadHeight = currentUserId
+      ? Math.max(
+          priorConversationReadHeight,
+          readWatermarks[conversationId]?.[currentUserId] ?? 0,
+          validHeight,
+        )
+      : priorConversationReadHeight;
+    const readHeightChanged =
+      currentConversation !== null &&
+      nextConversationReadHeight > priorConversationReadHeight;
     const readWatermarksChanged = nextReadWatermarks !== readWatermarks;
-    if (!shouldClearUnread && !readWatermarksChanged) return;
+    if (!shouldClearUnread && !readWatermarksChanged && !readHeightChanged) return;
+
+    const nextConversation =
+      currentConversation && (shouldClearUnread || readHeightChanged)
+        ? {
+            ...currentConversation,
+            ...(shouldClearUnread ? { unreadCount: 0 } : {}),
+            ...(readHeightChanged
+              ? { readHeight: nextConversationReadHeight }
+              : {}),
+          }
+        : null;
 
     set({
-      ...(shouldClearUnread
+      ...(nextConversation
         ? {
             conversations: [
               ...conversations.slice(0, index),
-              { ...conversations[index], unreadCount: 0 },
+              nextConversation,
               ...conversations.slice(index + 1),
             ],
           }
@@ -1976,6 +2050,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         ? { readWatermarks: nextReadWatermarks }
         : {}),
     });
+    // Keep the optimistic read state in the local conversation cache too. On a
+    // cold start this prevents the first local render from restoring a badge
+    // that was already cleared before the previous process exited.
+    if (nextConversation) void upsertLocalConversation(nextConversation);
   },
   setActiveConversationId: (conversationId) =>
     set({ activeConversationId: conversationId }),

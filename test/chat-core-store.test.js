@@ -892,6 +892,31 @@ test('a redelivered deleted message neither returns nor inflates unread', () => 
   );
 });
 
+test('marking a conversation read persists its local watermark and badge state', async () => {
+  let persisted;
+  const { useChatStore } = loadChatStore({
+    localDb: {
+      upsertLocalConversation: async (conversation) => {
+        persisted = conversation;
+      },
+    },
+  });
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conversation({
+      lastMessage: msg({ height: 5, sender: { id: 'other' } }),
+      unreadCount: 1,
+    }),
+  ]);
+
+  store.markConversationReadLocal('conv-1', 5);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(persisted.unreadCount, 0);
+  assert.equal(persisted.readHeight, 5);
+});
+
 test('tombstones stay bounded so long-lived installs cannot grow unbounded', () => {
   const { useChatStore, DELETED_MESSAGES_CAP, useDeletedMessagesStore } =
     loadChatStore();
@@ -1922,6 +1947,61 @@ test('a sync page applies tombstones, the clear floor and this user read positio
   assert.equal(state.clearedBeforeHeightByConversation['conv-1'], 1);
   assert.equal(state.readWatermarks['conv-1'].me, 4);
   assert.equal(state.conversations[0].unreadCount, 0);
+});
+
+test('a snapshot read height reconciles unread in the same pass', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conversation({
+      lastMessage: msg({ height: 5, sender: { id: 'other' } }),
+      unreadCount: 1,
+      readHeight: 5,
+    }),
+  ]);
+
+  const state = useChatStore.getState();
+  assert.equal(state.conversations[0].unreadCount, 0);
+  assert.equal(state.readWatermarks['conv-1'].me, 5);
+});
+
+test('local hydration restores the persisted read height before the server snapshot', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.hydrateLocalSnapshot([
+    conversation({
+      lastMessage: msg({ height: 5, sender: { id: 'other' } }),
+      unreadCount: 1,
+      readHeight: 5,
+    }),
+  ], {});
+
+  const state = useChatStore.getState();
+  assert.equal(state.conversations[0].unreadCount, 0);
+  assert.equal(state.readWatermarks['conv-1'].me, 5);
+});
+
+test('local hydration also reconciles a snapshot that arrived first', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conversation({
+      lastMessage: msg({ height: 5, sender: { id: 'other' } }),
+      unreadCount: 1,
+    }),
+  ]);
+  store.hydrateLocalSnapshot([
+    conversation({
+      lastMessage: msg({ height: 5, sender: { id: 'other' } }),
+      unreadCount: 1,
+      readHeight: 5,
+    }),
+  ], {});
+
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
 });
 
 test('the open conversation still counts unread while the app is in the background', () => {
