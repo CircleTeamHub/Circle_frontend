@@ -1264,10 +1264,6 @@ export default function MessagesScreen() {
     router.push("/(tabs)/messages/find");
   }, [router]);
 
-  const handleOpenAssistant = useCallback(() => {
-    router.push("/(tabs)/messages/assistant");
-  }, [router]);
-
   const handleFilterPress = useCallback(
     (index: number) => {
       const filter = filterItems[index];
@@ -1397,15 +1393,6 @@ export default function MessagesScreen() {
       <View style={s.titleRow}>
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
-          <Pressable
-            style={s.actionButton}
-            onPress={handleOpenAssistant}
-            accessibilityRole="button"
-            accessibilityLabel={t('assistant.open', { defaultValue: '打开风信助手' })}
-            testID="messages-open-assistant"
-          >
-            <AssistantAvatar size={26} />
-          </Pressable>
           {/* ✓✓：一键已读（按当前筛选范围） */}
           <Pressable style={s.actionButton} onPress={handleClearUnread}>
             <Ionicons
@@ -1472,7 +1459,6 @@ export default function MessagesScreen() {
     filterItems,
     handleClearUnread,
     handleFilterPress,
-    handleOpenAssistant,
     handleOpenFind,
     handleOpenGroups,
     imConnected,
