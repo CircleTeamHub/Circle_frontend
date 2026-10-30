@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
 import { useChatStore } from '@/chat-core/store';
@@ -20,6 +20,12 @@ export interface ChatConversationParams {
   t: TFunction<"translation", undefined>;
   params: ChatDetailRouteParams;
   currentUserID: string | null;
+}
+
+function parseNonNegativeRouteNumber(value: string | undefined): number | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 /**
@@ -56,6 +62,38 @@ export function useChatConversation({
     [conversationID],
   );
   const conversation = useChatStore(selectConversation);
+  const routeInitialUnreadCount = parseNonNegativeRouteNumber(
+    params.initialUnreadCount,
+  );
+  const routeInitialReadHeight = parseNonNegativeRouteNumber(
+    params.initialReadHeight,
+  );
+  const entryUnreadCountRef = useRef<number | null>(routeInitialUnreadCount);
+  const entryReadHeightRef = useRef<number | null>(routeInitialReadHeight);
+  const [entryUnreadCount, setEntryUnreadCount] = useState<number | null>(
+    routeInitialUnreadCount,
+  );
+  const [entryReadHeight, setEntryReadHeight] = useState<number | null>(
+    routeInitialReadHeight,
+  );
+  useEffect(() => {
+    if (entryUnreadCountRef.current === null && conversation) {
+      const value = Math.max(0, conversation.unreadCount);
+      entryUnreadCountRef.current = value;
+      setEntryUnreadCount(value);
+    }
+    if (entryReadHeightRef.current === null && conversation) {
+      const value = parseNonNegativeRouteNumber(
+        typeof conversation.readHeight === 'number'
+          ? String(conversation.readHeight)
+          : undefined,
+      );
+      if (value !== null) {
+        entryReadHeightRef.current = value;
+        setEntryReadHeight(value);
+      }
+    }
+  }, [conversation]);
   const storedConversationType = conversation?.type;
   const isAssistantConversation =
     params.conversationKind === 'support' || storedConversationType === 'SUPPORT';
@@ -248,6 +286,8 @@ export function useChatConversation({
     conversationTitle,
     avatarUrl,
     searchedMsgID,
+    entryUnreadCount: entryUnreadCount ?? 0,
+    entryReadHeight: entryReadHeight ?? 0,
     isPreviewMode,
   };
 }

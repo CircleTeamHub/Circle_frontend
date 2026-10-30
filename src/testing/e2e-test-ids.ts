@@ -20,6 +20,7 @@ export const E2E_TEST_IDS = Object.freeze({
   chatScreen: 'windnote.chat.screen',
   chatBack: 'windnote.chat.back',
   chatMessageList: 'windnote.chat.message-list',
+  chatUnreadJump: 'windnote.chat.unread-jump',
   chatInput: 'windnote.chat.composer.input',
   chatSend: 'windnote.chat.composer.send',
   contactsScreen: 'windnote.contacts.screen',

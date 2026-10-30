@@ -18,6 +18,11 @@ export function useChatDetailThemedStyles({
   const d = useMemo(() => ({
     container: { flex: 1, backgroundColor: colors.background },
     messageArea: { backgroundColor: backgroundStyle.backgroundColor },
+    unreadJumpButton: {
+      backgroundColor: colors.surface,
+      borderColor: colors.surfaceBorder,
+    },
+    unreadJumpText: { color: colors.success },
     headerName: { color: colors.text },
     onlineDot: { backgroundColor: statusColor },
     headerStatusText: { color: statusColor },

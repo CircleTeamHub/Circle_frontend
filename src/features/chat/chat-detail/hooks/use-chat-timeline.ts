@@ -39,6 +39,7 @@ import {
   HIGHLIGHT_VISIBLE_MS,
   LATEST_MESSAGE_SCROLL_THRESHOLD,
   QUOTE_PAGING_MAX,
+  UNREAD_PAGING_MAX,
 } from '@/features/chat/chat-detail/constants';
 import { type ChatMessageDto } from '@/chat-core/protocol';
 
@@ -52,6 +53,8 @@ export interface ChatTimelineParams {
   conversationMessages: ChatMessageDto[];
   peerReadHeight: number;
   peerDeliveredHeight: number;
+  entryUnreadCount: number;
+  entryReadHeight: number;
   searchedMsgID: string;
   mergeAvatar: boolean;
 }
@@ -70,6 +73,8 @@ export function useChatTimeline({
   conversationMessages,
   peerReadHeight,
   peerDeliveredHeight,
+  entryUnreadCount,
+  entryReadHeight,
   searchedMsgID,
   mergeAvatar,
 }: ChatTimelineParams) {
@@ -86,6 +91,8 @@ export function useChatTimeline({
   // 为定位搜索目标而翻页时的在途标记:effect 会随 messages 变化重跑,
   // 不挡住的话每一页返回都会再打一次请求。
   const searchPagingRef = useRef(false);
+  const unreadJumpInFlightRef = useRef(false);
+  const pendingUnreadJumpIDRef = useRef<string | null>(null);
   // scrollToIndex 失败重试的次数与在飞的定时器。没有上限时，一次失败的定位会
   // 每 250ms 重试同一个 index，而每次重试又可能再次触发 onScrollToIndexFailed —— 在
   // 变高气泡 + 虚拟化回收下能连续跳动好几秒，看起来就像进聊天页就卡住。
@@ -281,6 +288,98 @@ export function useChatTimeline({
   // 异步分页回来时闭包里的 messages 已经过期,滚动要按最新那份算 index。
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+
+  const findUnreadStart = useCallback(
+    (timeline: readonly ChatMessageDto[]): ChatMessageDto | null => {
+      let candidate: ChatMessageDto | null = null;
+      for (const message of timeline) {
+        if (
+          message.height <= entryReadHeight ||
+          message.revokedAt ||
+          message.sender?.id === currentUserID
+        ) {
+          continue;
+        }
+        if (!candidate || message.height < candidate.height) candidate = message;
+      }
+      return candidate;
+    },
+    [currentUserID, entryReadHeight],
+  );
+
+  const handleJumpToUnread = useCallback(() => {
+    if (!conversationID || entryUnreadCount <= 0 || unreadJumpInFlightRef.current) {
+      return;
+    }
+    unreadJumpInFlightRef.current = true;
+    void (async () => {
+      try {
+        let timeline =
+          useChatStore.getState().messagesByConversation[conversationID] ?? [];
+        let candidate = findUnreadStart(timeline);
+        for (let page = 0; page < UNREAD_PAGING_MAX; page += 1) {
+          const oldestHeight = timeline.reduce(
+            (oldest, message) =>
+              message.height > 0 ? Math.min(oldest, message.height) : oldest,
+            Number.POSITIVE_INFINITY,
+          );
+          const needsEarlierPage =
+            hasMoreHistory(conversationID) &&
+            (candidate === null ||
+              (entryReadHeight > 0 && oldestHeight > entryReadHeight));
+          if (!needsEarlierPage) break;
+          await loadOlderConversationMessages(conversationID);
+          if (!mountedRef.current) return;
+          timeline =
+            useChatStore.getState().messagesByConversation[conversationID] ?? [];
+          candidate = findUnreadStart(timeline);
+        }
+
+        const targetID =
+          candidate?.id ??
+          [...timeline]
+            .filter((message) => message.height > 0)
+            .sort((a, b) => a.height - b.height)[0]?.id ??
+          null;
+        if (!targetID) return;
+        pendingUnreadJumpIDRef.current = targetID;
+        const index = messagesRef.current.findIndex(
+          (message) => message.id === targetID,
+        );
+        if (index >= 0) {
+          flatListRef.current?.scrollToIndex({
+            index,
+            animated: true,
+            viewPosition: 0.3,
+          });
+          pendingUnreadJumpIDRef.current = null;
+        }
+      } catch (error) {
+        reportHandledFailure('chatDetail', 'jumpToUnread', error);
+      } finally {
+        unreadJumpInFlightRef.current = false;
+      }
+    })();
+  }, [
+    conversationID,
+    entryReadHeight,
+    entryUnreadCount,
+    findUnreadStart,
+    mountedRef,
+  ]);
+
+  useEffect(() => {
+    const targetID = pendingUnreadJumpIDRef.current;
+    if (!targetID) return;
+    const index = messages.findIndex((message) => message.id === targetID);
+    if (index < 0) return;
+    pendingUnreadJumpIDRef.current = null;
+    flatListRef.current?.scrollToIndex({
+      index,
+      animated: true,
+      viewPosition: 0.3,
+    });
+  }, [messages]);
 
   const handleMessageListScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -479,6 +578,7 @@ export function useChatTimeline({
     messages,
     displayMessages,
     handleMessageListScroll,
+    handleJumpToUnread,
     highlightedMessageID,
     handleQuotePress,
   };

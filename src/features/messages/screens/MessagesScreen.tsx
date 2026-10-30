@@ -1105,6 +1105,12 @@ export default function MessagesScreen() {
           | EmbeddedChatParams["conversationKind"],
         ...(conversation.isAssistant ? { assistantKey: 'windnote-assistant' } : {}),
         avatarUrl: conversation.avatarUrl,
+        ...(conversation.unreadCount > 0
+          ? { initialUnreadCount: String(conversation.unreadCount) }
+          : {}),
+        ...(Number.isSafeInteger(dto?.readHeight) && (dto?.readHeight ?? 0) >= 0
+          ? { initialReadHeight: String(dto?.readHeight) }
+          : {}),
       };
 
       // 分栏模式：右栏内嵌详情，不做路由跳转（窄窗仍走原页栈，行为不变）。

@@ -385,6 +385,8 @@
       "lastSeenDays_other": "{{count}} 天前在线",
       "previewNotice": "连接尚未完成，请稍后重试",
       "historyWindowFull": "更早的消息请在聊天记录里搜索查看",
+      "jumpToUnread": "跳转到未读消息起点，共 {{count}} 条",
+      "unreadMessages": "未读 {{count}} 条消息",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",
       "voiceReleaseSend": "松开发送 {{seconds}}\"",

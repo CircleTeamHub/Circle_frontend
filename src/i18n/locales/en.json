@@ -388,6 +388,8 @@
       "lastSeenDays_other": "Last seen {{count}} days ago",
       "previewNotice": "The connection isn't ready yet. Please try again shortly.",
       "historyWindowFull": "To see older messages, search the chat history.",
+      "jumpToUnread": "Jump to the start of {{count}} unread messages",
+      "unreadMessages": "{{count}} unread messages",
       "recordingSeconds": "Recording {{seconds}}s",
       "voiceReleaseCancel": "Release to cancel",
       "voiceReleaseSend": "Release to send {{seconds}}\"",

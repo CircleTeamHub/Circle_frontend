@@ -276,6 +276,8 @@
       "lastSeenDays_other": "{{count}}日前にオンライン",
       "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
       "historyWindowFull": "これより前のメッセージは、チャット履歴で検索してください。",
+      "jumpToUnread": "未読{{count}}件の先頭へ移動",
+      "unreadMessages": "未読 {{count}}件",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",
       "voiceReleaseSend": "指を離して送信 {{seconds}}\"",

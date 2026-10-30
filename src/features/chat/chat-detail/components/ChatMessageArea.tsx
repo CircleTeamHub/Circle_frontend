@@ -4,6 +4,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
+  Pressable,
   Text,
   View,
 } from 'react-native';
@@ -17,6 +18,7 @@ import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
 import { type ChatMessage } from '@/types';
+import { Ionicons } from '@expo/vector-icons';
 
 export interface ChatMessageAreaProps {
   colors: ThemeColors;
@@ -33,9 +35,11 @@ export interface ChatMessageAreaProps {
   handleLoadOlder: () => void;
   /** 深翻到内存窗口上限,不再往上翻:列表顶上提示去聊天记录里搜。 */
   historyWindowFull: boolean;
+  unreadCount: number;
   messages: ChatMessage[];
   displayMessages: ChatMessage[];
   handleMessageListScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  handleJumpToUnread: () => void;
   renderItem: (info: { item: ChatMessage }) => ReactElement | null;
   keyExtractor: (item: ChatMessage) => string;
   closeInputPanels: () => void;
@@ -61,9 +65,11 @@ export function ChatMessageArea({
   messagesLengthRef,
   handleLoadOlder,
   historyWindowFull,
+  unreadCount,
   messages,
   displayMessages,
   handleMessageListScroll,
+  handleJumpToUnread,
   renderItem,
   keyExtractor,
   closeInputPanels,
@@ -185,6 +191,30 @@ export function ChatMessageArea({
           }, 250);
         }}
       />
+      {unreadCount > 0 ? (
+        <Pressable
+          testID={E2E_TEST_IDS.chatUnreadJump}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.detail.jumpToUnread', {
+            count: unreadCount,
+            defaultValue: `跳转到未读消息起点，共 ${unreadCount} 条`,
+          })}
+          onPress={handleJumpToUnread}
+          style={[s.unreadJumpButton, d.unreadJumpButton]}
+        >
+          <Ionicons name="chevron-up" size={18} color={d.unreadJumpText.color} />
+          <Text
+            style={[s.unreadJumpText, d.unreadJumpText]}
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.2}
+          >
+            {t('chat.detail.unreadMessages', {
+              count: unreadCount,
+              defaultValue: `未读 ${unreadCount} 条消息`,
+            })}
+          </Text>
+        </Pressable>
+      ) : null}
       {isPreviewMode ? (
         <Text style={[s.previewNotice, Typography.small, { color: colors.text }]}>
           {t('chat.detail.previewNotice', {

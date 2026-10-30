@@ -76,6 +76,8 @@ export const PANEL_LAYOUT_ANIM = {
 
 /** 引用跳转最多往回翻几页(一页 50 条);翻不到就放弃,不能无界翻。 */
 export const QUOTE_PAGING_MAX = 10;
+/** 未读起点最多向前补拉的页数，避免点击跳转在超长会话里无限等待。 */
+export const UNREAD_PAGING_MAX = 10;
 
 /** 定位高亮的停留时长:够看清"跳到了哪条",又不会赖着不走。 */
 export const HIGHLIGHT_VISIBLE_MS = 3000;

@@ -154,6 +154,16 @@ test('messages screen reloads conversations on focus without resetting the activ
   assert.match(source, /setActiveFilterId\(filter\.id\)/);
 });
 
+test('conversation navigation preserves unread context for the chat jump button', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
+    'utf8',
+  );
+
+  assert.match(source, /initialUnreadCount: String\(conversation\.unreadCount\)/);
+  assert.match(source, /initialReadHeight: String\(dto\?\.readHeight\)/);
+});
+
 test('messages screen supports pull-to-refresh for the conversation list', () => {
   const filePath = path.join(
     process.cwd(),

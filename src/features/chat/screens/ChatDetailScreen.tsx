@@ -80,6 +80,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     assistantKey?: string;
     avatarUrl?: string;
     searchedMsgID?: string;
+    initialUnreadCount?: string;
+    initialReadHeight?: string;
   }>();
   const params = embedded ?? routeParams;
   // 聊天页在哪个 tab 栈打开（messages/discover/...），决定返回兜底与子页面跳转的 scope。
@@ -148,6 +150,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     conversationTitle,
     avatarUrl,
     searchedMsgID,
+    entryUnreadCount,
+    entryReadHeight,
     isPreviewMode,
   } = useChatConversation({
     t,
@@ -238,6 +242,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     messages,
     displayMessages,
     handleMessageListScroll,
+    handleJumpToUnread,
     highlightedMessageID,
     handleQuotePress,
   } = useChatTimeline({
@@ -250,6 +255,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     conversationMessages,
     peerReadHeight,
     peerDeliveredHeight,
+    entryUnreadCount,
+    entryReadHeight,
     searchedMsgID,
     mergeAvatar,
   });
@@ -603,9 +610,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         messagesLengthRef={messagesLengthRef}
         handleLoadOlder={handleLoadOlder}
         historyWindowFull={historyWindowFull}
+        unreadCount={entryUnreadCount}
         messages={messages}
         displayMessages={displayMessages}
         handleMessageListScroll={handleMessageListScroll}
+        handleJumpToUnread={handleJumpToUnread}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         closeInputPanels={closeInputPanels}
