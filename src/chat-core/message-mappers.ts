@@ -508,6 +508,39 @@ export function mapChatMessageDtoToUI(
       if (!callRecord) break;
       return { ...base, type: 'call-record', callRecord };
     }
+    case 'assistant-note-status': {
+      const title = textField(content, 'title', 160) || '这篇笔记';
+      const status = str(content['status']);
+      const key =
+        status === 'DELETED'
+          ? 'assistant.noteDeleted'
+          : status === 'MODERATION_REMOVED'
+            ? 'assistant.noteUnavailable'
+            : 'assistant.noteUnlisted';
+      return {
+        ...base,
+        type: isSent ? 'sent' : 'received',
+        text: i18n.t(key, {
+          defaultValue:
+            status === 'DELETED'
+              ? '你添加的笔记《{{title}}》已被作者删除。'
+              : status === 'MODERATION_REMOVED'
+                ? '你添加的笔记《{{title}}》当前不可用。'
+                : '你添加的笔记《{{title}}》已被作者下架。',
+          title,
+        }),
+      };
+    }
+    case 'assistant-info-alert':
+    case 'assistant-command-result': {
+      const text =
+        textField(content, 'summary', 500) || textField(content, 'text', 500);
+      return {
+        ...base,
+        type: isSent ? 'sent' : 'received',
+        text: text || i18n.t('assistant.generic', { defaultValue: '风信助手有一条新提醒。' }),
+      };
+    }
     case 'file': {
       // 旧 OpenIM 栈遗留的文件消息(自研栈没有发送入口):渲染成带文件名的
       // 文本气泡,别让历史记录里出现一排空白。

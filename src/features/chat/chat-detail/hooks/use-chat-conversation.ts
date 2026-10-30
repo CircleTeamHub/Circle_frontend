@@ -57,6 +57,8 @@ export function useChatConversation({
   );
   const conversation = useChatStore(selectConversation);
   const storedConversationType = conversation?.type;
+  const isAssistantConversation =
+    params.conversationKind === 'support' || storedConversationType === 'SUPPORT';
   const isTempChat =
     params.conversationKind === 'temp' || storedConversationType === 'TEMP';
   // 独立群聊(微信群):GROUP 会话但不挂圈子。circleId 从会话缓存读 ——
@@ -224,6 +226,7 @@ export function useChatConversation({
     sourceID,
     conversationID,
     isTempChat,
+    isAssistantConversation,
     selfSilencedUntil,
     selfSilenced,
     composerLocked,

@@ -77,6 +77,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     title?: string;
     conversationType?: 'private' | 'group';
     conversationKind?: 'direct' | 'group' | 'temp' | 'support';
+    assistantKey?: string;
     avatarUrl?: string;
     searchedMsgID?: string;
   }>();
@@ -140,6 +141,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     peerDeliveredHeight,
     conversationType,
     isGroupChat,
+    isAssistantConversation,
     canViewGroupMemberProfiles,
     canViewMemberProfilesByPolicy,
     revalidateMemberViewAccess,
@@ -199,6 +201,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     sourceID,
     conversationID,
     isTempChat,
+    isAssistantConversation,
     conversationType,
     isGroupChat,
     canViewMemberProfilesByPolicy,
@@ -560,6 +563,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         sourceID={sourceID}
         conversationID={conversationID}
         isTempChat={isTempChat}
+        isAssistant={isAssistantConversation}
         isGroupChat={isGroupChat}
         conversationTitle={conversationTitle}
         avatarUrl={avatarUrl}

@@ -26,6 +26,7 @@ export default function MessagesLayout() {
       }}
     >
       <Stack.Screen name="index" />
+      <Stack.Screen name="assistant" />
       <Stack.Screen name="chat-detail" />
       <Stack.Screen name="chat-info" />
       <Stack.Screen name="chat-history-search" />

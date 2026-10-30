@@ -1,4 +1,19 @@
 {
+  "assistant": {
+    "name": "WindNote 어시스턴트",
+    "open": "WindNote 어시스턴트 열기",
+    "subtitle": "알림 도우미",
+    "generic": "WindNote 어시스턴트에 새 알림이 있습니다.",
+    "noteUnlisted": "추가한 노트 ‘{{title}}’가 작성자에 의해 비공개 처리되었습니다.",
+    "noteDeleted": "추가한 노트 ‘{{title}}’가 작성자에 의해 삭제되었습니다.",
+    "noteUnavailable": "추가한 노트 ‘{{title}}’를 현재 사용할 수 없습니다.",
+    "setupTitle": "도시 정보 알림 켜기",
+    "setupHint": "서클을 선택하면 해당 서클의 도시 범위로 새 게시물을 매칭합니다.",
+    "selectCircle": "선택",
+    "allCities": "모든 도시",
+    "noCircle": "알림을 켜려면 서클을 선택하거나 가입하세요.",
+    "enable": "알림 켜기"
+  },
   "settingsDetails": {
     "accountSecurity": {
       "title": "계정 및 보안",

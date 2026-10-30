@@ -4,6 +4,7 @@ import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { Ionicons } from '@expo/vector-icons';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Avatar } from '@/components/ui/avatar';
+import { AssistantAvatar } from '@/features/assistant/components/AssistantAvatar';
 import { router } from 'expo-router';
 import { getChatInfoTopHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { type EmbeddedChatParams } from '@/features/chat/chat-detail/types';
@@ -19,6 +20,7 @@ export interface ChatDetailHeaderProps {
   sourceID: string;
   conversationID: string;
   isTempChat: boolean;
+  isAssistant: boolean;
   isGroupChat: boolean;
   conversationTitle: string;
   avatarUrl: string | undefined;
@@ -38,6 +40,7 @@ export function ChatDetailHeader({
   sourceID,
   conversationID,
   isTempChat,
+  isAssistant,
   isGroupChat,
   conversationTitle,
   avatarUrl,
@@ -57,8 +60,10 @@ export function ChatDetailHeader({
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
       )}
-      <Pressable onPress={handleOpenHeaderTarget}>
-        {isGroupChat ? (
+      <Pressable onPress={isAssistant ? undefined : handleOpenHeaderTarget}>
+        {isAssistant ? (
+          <AssistantAvatar size={36} />
+        ) : isGroupChat ? (
           <GroupChatAvatar
             size={36}
             name={conversationTitle}
@@ -83,22 +88,24 @@ export function ChatDetailHeader({
           ) : null}
         </View>
       </View>
-      <Pressable
-        hitSlop={8}
-        onPress={() =>
-          router.push(
-            getChatInfoTopHref(scope, {
-              conversationID,
-              sourceID,
-              title: conversationTitle,
-              conversationType: isGroupChat ? 'group' : 'private',
-              originScope: scope,
-            }),
-          )
-        }
-      >
-        <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
-      </Pressable>
+      {isAssistant ? null : (
+        <Pressable
+          hitSlop={8}
+          onPress={() =>
+            router.push(
+              getChatInfoTopHref(scope, {
+                conversationID,
+                sourceID,
+                title: conversationTitle,
+                conversationType: isGroupChat ? 'group' : 'private',
+                originScope: scope,
+              }),
+            )
+          }
+        >
+          <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
+        </Pressable>
+      )}
     </View>
   );
 }

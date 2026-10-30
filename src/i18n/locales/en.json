@@ -5,6 +5,21 @@
     "addAccount": "Add Account",
     "empty": "No other accounts"
   },
+  "assistant": {
+    "name": "WindNote Assistant",
+    "open": "Open WindNote Assistant",
+    "subtitle": "Reminder assistant",
+    "generic": "WindNote Assistant has a new reminder.",
+    "noteUnlisted": "The note \"{{title}}\" you added was unlisted by its owner.",
+    "noteDeleted": "The note \"{{title}}\" you added was deleted by its owner.",
+    "noteUnavailable": "The note \"{{title}}\" you added is currently unavailable.",
+    "setupTitle": "Enable city updates",
+    "setupHint": "Choose a circle and WindNote Assistant will match new posts using that circle's cities.",
+    "selectCircle": "Choose",
+    "allCities": "All cities",
+    "noCircle": "Choose or join a circle before enabling reminders.",
+    "enable": "Enable reminders"
+  },
   "media": {
     "saveImage": "Save image",
     "savedTitle": "Saved",

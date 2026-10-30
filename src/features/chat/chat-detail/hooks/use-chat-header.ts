@@ -25,6 +25,7 @@ export interface ChatHeaderParams {
   sourceID: string;
   conversationID: string;
   isTempChat: boolean;
+  isAssistantConversation: boolean;
   conversationType: ConversationKind;
   isGroupChat: boolean;
   canViewMemberProfilesByPolicy: boolean;
@@ -45,6 +46,7 @@ export function useChatHeader({
   sourceID,
   conversationID,
   isTempChat,
+  isAssistantConversation,
   conversationType,
   isGroupChat,
   canViewMemberProfilesByPolicy,
@@ -76,6 +78,7 @@ export function useChatHeader({
 
   const handleOpenMessageSender = useCallback(
     async (msg: ChatMessage) => {
+      if (isAssistantConversation) return;
       if (isGroupChat) {
         // 群聊：跳该消息发送者本人的资料（senderID 已还原成 UUID 形式）。
         if (!msg.senderID) return;
@@ -112,6 +115,7 @@ export function useChatHeader({
       conversationTitle,
       currentUserID,
       sourceID,
+      isAssistantConversation,
       isGroupChat,
       revalidateMemberViewAccess,
       scope,
@@ -154,20 +158,23 @@ export function useChatHeader({
   );
 
   const handleOpenHeaderTarget = useCallback(() => {
+    if (isAssistantConversation) return;
     // 群聊点头部头像 → 进群信息（与右上角 ⋮ 一致）；单聊 → 进个人资料。
     if (isGroupChat) {
       openGroupInfo();
       return;
     }
     router.navigate(getUserProfileHref(scope, sourceID, conversationTitle));
-  }, [isGroupChat, openGroupInfo, scope, sourceID, conversationTitle]);
+  }, [conversationTitle, isAssistantConversation, isGroupChat, openGroupInfo, scope, sourceID]);
 
   // 单聊场景下订阅对方在线状态。订阅 Promise 立刻返回当前快照，
   // 之后由全局 onUserStatusChanged 维护增量。
   const peerImId = useMemo(
     () =>
-      conversationType === 'single' && sourceID ? sourceID : null,
-    [conversationType, sourceID],
+      !isAssistantConversation && conversationType === 'single' && sourceID
+        ? sourceID
+        : null,
+    [conversationType, isAssistantConversation, sourceID],
   );
   // 对端「正在输入」有效期;到期自动回落在线状态。
   const typingUntil = useChatStore(
@@ -189,15 +196,18 @@ export function useChatHeader({
   // 其他用户上下线不触发本页重渲染;离线时带「N 分钟前在线」并每分钟刷新。
   const peerPresence = usePeerPresence(peerImId);
   const peerOnline = peerPresence.online;
-  const statusColor =
-    conversationType !== 'single' || authUser?.accountId === sourceID
+  const statusColor = isAssistantConversation
+    ? colors.primary
+    : conversationType !== 'single' || authUser?.accountId === sourceID
       ? colors.online
       : peerOnline
         ? colors.online
         : colors.text;
   // 头部副标题:自己 > 正在输入 > 群聊 > 对方在线 / 最近在线。单聊对方关了
   // 「显示在线时间」(或还没拿到状态)时整行不画 —— 画「离线」仍是在泄露信息。
-  const headerStatusText =
+  const headerStatusText = isAssistantConversation
+    ? t('assistant.subtitle', { defaultValue: '提醒助手' })
+    :
     authUser?.accountId === sourceID
       ? t('chat.detail.statusSelf', { defaultValue: '自己' })
       : // 群聊分支原来直接落「群聊」二字,typingVisible 根本没机会参与判断 ——

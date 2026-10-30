@@ -5,6 +5,21 @@
     "addAccount": "添加账号",
     "empty": "暂无其他账号"
   },
+  "assistant": {
+    "name": "风信助手",
+    "open": "打开风信助手",
+    "subtitle": "提醒助手",
+    "generic": "风信助手有一条新提醒。",
+    "noteUnlisted": "你添加的笔记《{{title}}》已被作者下架。",
+    "noteDeleted": "你添加的笔记《{{title}}》已被作者删除。",
+    "noteUnavailable": "你添加的笔记《{{title}}》当前不可用。",
+    "setupTitle": "开启城市信息提醒",
+    "setupHint": "选择一个圈子，风信助手会按照这个圈子的城市范围匹配新动态。",
+    "selectCircle": "选择",
+    "allCities": "不限城市",
+    "noCircle": "请先选择或加入一个圈子，再开启提醒。",
+    "enable": "开启提醒"
+  },
   "media": {
     "saveImage": "保存图片",
     "savedTitle": "已保存",

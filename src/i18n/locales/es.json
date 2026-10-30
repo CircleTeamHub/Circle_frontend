@@ -1,4 +1,19 @@
 {
+  "assistant": {
+    "name": "Asistente de WindNote",
+    "open": "Abrir el asistente de WindNote",
+    "subtitle": "Asistente de recordatorios",
+    "generic": "El asistente de WindNote tiene un nuevo aviso.",
+    "noteUnlisted": "La nota «{{title}}» que añadiste fue retirada por su propietario.",
+    "noteDeleted": "La nota «{{title}}» que añadiste fue eliminada por su propietario.",
+    "noteUnavailable": "La nota «{{title}}» que añadiste no está disponible ahora.",
+    "setupTitle": "Activar avisos por ciudad",
+    "setupHint": "Elige un círculo y WindNote Assistant relacionará las nuevas publicaciones con sus ciudades.",
+    "selectCircle": "Elegir",
+    "allCities": "Todas las ciudades",
+    "noCircle": "Elige o únete a un círculo antes de activar los avisos.",
+    "enable": "Activar avisos"
+  },
   "settingsDetails": {
     "accountSecurity": {
       "title": "Cuenta y seguridad",

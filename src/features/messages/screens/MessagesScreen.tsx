@@ -64,6 +64,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
+import { AssistantAvatar } from '@/features/assistant/components/AssistantAvatar';
 
 const SWIPE_ACTION_WIDTH = 76;
 const SWIPE_ACTIONS_WIDTH = SWIPE_ACTION_WIDTH * 3;
@@ -603,7 +604,11 @@ function ConversationRowImpl({
               : null,
           ]}
         >
-          {item.conversationType === "private" ? (
+          {item.isAssistant ? (
+            <Pressable onPress={() => onOpenConversation(item)}>
+              <AssistantAvatar size={40} />
+            </Pressable>
+          ) : item.conversationType === "private" ? (
             <Pressable onPress={() => onOpenUserProfile(item)}>
               <Avatar size={40} name={item.name} uri={item.avatarUrl} />
             </Pressable>
@@ -628,7 +633,7 @@ function ConversationRowImpl({
                 <MemberName
                   name={item.name}
                   userId={
-                    item.conversationType === 'private'
+                    item.conversationType === 'private' && !item.isAssistant
                       ? item.sourceID
                       : undefined
                   }
@@ -1098,6 +1103,7 @@ export default function MessagesScreen() {
         conversationType: conversation.conversationType,
         conversationKind: dto?.type.toLowerCase() as
           | EmbeddedChatParams["conversationKind"],
+        ...(conversation.isAssistant ? { assistantKey: 'windnote-assistant' } : {}),
         avatarUrl: conversation.avatarUrl,
       };
 
@@ -1252,6 +1258,10 @@ export default function MessagesScreen() {
     router.push("/(tabs)/messages/find");
   }, [router]);
 
+  const handleOpenAssistant = useCallback(() => {
+    router.push("/(tabs)/messages/assistant");
+  }, [router]);
+
   const handleFilterPress = useCallback(
     (index: number) => {
       const filter = filterItems[index];
@@ -1381,6 +1391,15 @@ export default function MessagesScreen() {
       <View style={s.titleRow}>
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
+          <Pressable
+            style={s.actionButton}
+            onPress={handleOpenAssistant}
+            accessibilityRole="button"
+            accessibilityLabel={t('assistant.open', { defaultValue: '打开风信助手' })}
+            testID="messages-open-assistant"
+          >
+            <AssistantAvatar size={26} />
+          </Pressable>
           {/* ✓✓：一键已读（按当前筛选范围） */}
           <Pressable style={s.actionButton} onPress={handleClearUnread}>
             <Ionicons
@@ -1447,6 +1466,7 @@ export default function MessagesScreen() {
     filterItems,
     handleClearUnread,
     handleFilterPress,
+    handleOpenAssistant,
     handleOpenFind,
     handleOpenGroups,
     imConnected,

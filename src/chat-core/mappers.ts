@@ -132,6 +132,44 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
         'title',
         message.content['title'],
       );
+    case 'assistant-note-status':
+      {
+        const title =
+          typeof message.content['title'] === 'string'
+            ? message.content['title'].trim().slice(0, PREVIEW_FIELD_MAX)
+            : '';
+        const status = message.content['status'];
+        const key =
+          status === 'DELETED'
+            ? 'assistant.noteDeleted'
+            : status === 'MODERATION_REMOVED'
+              ? 'assistant.noteUnavailable'
+              : 'assistant.noteUnlisted';
+        const fallback =
+          status === 'DELETED'
+            ? '你添加的笔记《{{title}}》已被作者删除。'
+            : status === 'MODERATION_REMOVED'
+              ? '你添加的笔记《{{title}}》当前不可用。'
+              : '你添加的笔记《{{title}}》已被作者下架。';
+        const localized = i18n.t(key, {
+          defaultValue: fallback,
+          title: title || '这篇笔记',
+        });
+        return localized.length > PREVIEW_FIELD_MAX
+          ? `${localized.slice(0, PREVIEW_FIELD_MAX)}…`
+          : localized;
+      }
+    case 'assistant-info-alert':
+      return tCardPreview(
+        'assistant',
+        '[风信助手提醒]',
+        'title',
+        message.content['title'],
+      );
+    case 'assistant-command-result':
+      return i18n.t('assistant.generic', {
+        defaultValue: '风信助手有一条新提醒。',
+      });
     case 'friend-card':
       return tCardPreview('card', '[卡片]', 'name', message.content['nickname']);
     case 'circle-card':
@@ -151,12 +189,17 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
  */
 export function mapChatConversationToUI(dto: ChatConversationDto): Conversation {
   const isCircleGroup = dto.type === 'GROUP';
+  const isAssistant = dto.type === 'SUPPORT';
   const isDirectLike = dto.type === 'DIRECT' || dto.type === 'SUPPORT';
 
   let name: string;
   let avatarRaw: string | null;
   let sourceID: string;
-  if (isCircleGroup) {
+  if (isAssistant) {
+    name = dto.name?.trim() || i18n.t('assistant.name', { defaultValue: '风信助手' });
+    avatarRaw = dto.avatarUrl ?? null;
+    sourceID = dto.id;
+  } else if (isCircleGroup) {
     // 群备注优先:那是我给这个群起的名字,只有我看得见,和好友备注同一语义。
     // 没设置才用群名 —— 圈子群走 Circle,独立群聊用会话自己的 name,
     // 空群名兜底通用「群聊」标题(微信语义,建群可以不起名)。
@@ -200,5 +243,6 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
     isTempChat: dto.type === 'TEMP',
     pinned: dto.pinned,
     muted: dto.muted,
+    ...(isAssistant ? { isAssistant: true } : {}),
   };
 }

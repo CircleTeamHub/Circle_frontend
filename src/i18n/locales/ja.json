@@ -1,4 +1,19 @@
 {
+  "assistant": {
+    "name": "風信アシスタント",
+    "open": "風信アシスタントを開く",
+    "subtitle": "リマインダーアシスタント",
+    "generic": "風信アシスタントに新しいリマインダーがあります。",
+    "noteUnlisted": "追加したノート「{{title}}」は作成者によって非公開になりました。",
+    "noteDeleted": "追加したノート「{{title}}」は作成者によって削除されました。",
+    "noteUnavailable": "追加したノート「{{title}}」は現在利用できません。",
+    "setupTitle": "都市情報の通知を有効にする",
+    "setupHint": "サークルを選ぶと、そのサークルの都市設定で新しい投稿を照合します。",
+    "selectCircle": "選択",
+    "allCities": "すべての都市",
+    "noCircle": "通知を有効にするにはサークルを選択または参加してください。",
+    "enable": "通知を有効にする"
+  },
   "settingsDetails": {
     "accountSecurity": {
       "title": "アカウントとセキュリティ",

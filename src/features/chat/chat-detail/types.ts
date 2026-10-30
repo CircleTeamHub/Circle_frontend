@@ -21,6 +21,7 @@ export type ChatDetailRouteParams = {
   title?: string;
   conversationType?: 'private' | 'group';
   conversationKind?: 'direct' | 'group' | 'temp' | 'support';
+  assistantKey?: string;
   avatarUrl?: string;
   searchedMsgID?: string;
 };
@@ -33,6 +34,7 @@ export type EmbeddedChatParams = {
   title?: string;
   conversationType?: 'private' | 'group';
   conversationKind?: 'direct' | 'group' | 'temp' | 'support';
+  assistantKey?: string;
   avatarUrl?: string;
   searchedMsgID?: string;
 };
