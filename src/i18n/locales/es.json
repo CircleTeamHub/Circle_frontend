@@ -1242,9 +1242,10 @@
       }
     },
     "stats": "{{groupCount}} grupos · {{noteCount}} notas",
+    "noteCount": "Notas: {{count}}",
     "tabs": {
-      "all": "Todas {{count}}",
-      "ungrouped": "Sin grupo {{count}}"
+      "all": "Todas",
+      "ungrouped": "Sin grupo"
     },
     "section": {
       "text": "Texto",
@@ -2448,6 +2449,7 @@
     "fieldNotEditable": "Este campo no se puede editar",
     "returnToSettings": "Vuelve a Ajustes.",
     "systemAnnouncements": "Avisos del sistema",
+    "announcementTag": "Aviso",
     "viewAnnouncements": "Novedades",
     "addIcon": "Añadir insignia",
     "myIcons": "Mis insignias",

@@ -15,8 +15,11 @@ jest.mock('@/observability/report-failure', () => ({reportHandledFailure:jest.fn
 jest.mock('react-i18next', () => ({useTranslation:()=>({t:(key:string)=>key})}));
 jest.mock('react-native-safe-area-context', () => ({useSafeAreaInsets:()=>({top:0,bottom:0})}));
 jest.mock('@expo/vector-icons',()=>({Ionicons:()=>null}));
-jest.mock('@/theme',()=>({useTheme:()=>({colors:{primary:'#6855ee'}}),withAlpha:()=> '#eee'}));
+jest.mock('@/theme',()=>({...jest.requireActual('@/theme/tokens'),useTheme:()=>({colors:{primary:'#6855ee'}}),withAlpha:()=> '#eee'}));
 const notice={id:'1',notificationID:'notification-1',title:'第一条公告',content:'完整公告正文',createdAt:'2026-10-17T00:00:00Z'};
+// 标题与正文分两段样式渲染,中间空两格;读屏标签是「标题 正文」。
+const line='第一条公告  完整公告正文';
+const label='第一条公告 完整公告正文';
 beforeEach(()=>{jest.clearAllMocks();mockOwner='user-a';mockReduceMotion=true;AppState.currentState='active';});
 test('hides the banner when no announcement is selected',async()=>{
  jest.mocked(fetchScrollingAnnouncements).mockResolvedValue([]);
@@ -25,8 +28,7 @@ test('hides the banner when no announcement is selected',async()=>{
 test('shows title and body together and opens the shared detail page',async()=>{
  jest.mocked(fetchScrollingAnnouncements).mockResolvedValue([notice]);
  render(<ScrollingAnnouncements />);
- const label='第一条公告：完整公告正文';
- await screen.findByText(label);
+ await screen.findByText(line);
  fireEvent.press(screen.getByRole('button',{name:label}));
  expect(mockPush).toHaveBeenCalledWith({pathname:'/(tabs)/profile/system-announcements/[id]',params:{id:'notification-1'}});
 });
@@ -34,7 +36,7 @@ test('discards a late response from the previous account',async()=>{
  let resolve!: (value: typeof notice[])=>void;
  jest.mocked(fetchScrollingAnnouncements).mockReturnValueOnce(new Promise(r=>{resolve=r;})).mockResolvedValueOnce([]);
  const view=render(<ScrollingAnnouncements />);mockOwner='user-b';view.rerender(<ScrollingAnnouncements />);
- await act(async()=>{resolve([notice]);});expect(screen.queryByText('第一条公告：完整公告正文')).toBeNull();
+ await act(async()=>{resolve([notice]);});expect(screen.queryByText(line)).toBeNull();
 });
 
 test('scrolls overflowing text horizontally and stops the animation on unmount',async()=>{
@@ -44,10 +46,10 @@ test('scrolls overflowing text horizontally and stops the animation on unmount',
  jest.mocked(fetchScrollingAnnouncements).mockResolvedValue([notice]);
  const view=render(<ScrollingAnnouncements />);
  try {
-  await screen.findByText('第一条公告：完整公告正文');
+  await screen.findByText(line);
   const viewport=screen.UNSAFE_getAllByType(View).find(node=>node.props.onLayout);
   fireEvent(viewport!,'layout',{nativeEvent:{layout:{width:100,height:30,x:0,y:0}}});
-  const measurement=screen.getByText('第一条公告：完整公告正文');
+  const measurement=screen.getByText(line);
   fireEvent(measurement,'layout',{nativeEvent:{layout:{width:600,height:20,x:0,y:0}}});
   expect(animation.start).toHaveBeenCalled();
   view.unmount();expect(animation.stop).toHaveBeenCalled();
@@ -60,7 +62,7 @@ test('does not animate when the full text already fits',async()=>{
  jest.mocked(fetchScrollingAnnouncements).mockResolvedValue([notice]);
  const view=render(<ScrollingAnnouncements />);
  try {
-  const label=await screen.findByText('第一条公告：完整公告正文');
+  const label=await screen.findByText(line);
   const viewport=screen.UNSAFE_getAllByType(View).find(node=>node.props.onLayout);
   fireEvent(viewport!,'layout',{nativeEvent:{layout:{width:300,height:30,x:0,y:0}}});
   fireEvent(label,'layout',{nativeEvent:{layout:{width:100,height:20,x:0,y:0}}});
@@ -72,7 +74,7 @@ test('does not animate when the full text already fits',async()=>{
 test('immediately removes the old banner on a realtime invalidation',async()=>{
  let resolve!: (value:typeof notice[])=>void;
  jest.mocked(fetchScrollingAnnouncements).mockResolvedValueOnce([notice]).mockReturnValueOnce(new Promise(r=>{resolve=r;}));
- render(<ScrollingAnnouncements />);await screen.findByText('第一条公告：完整公告正文');
- act(()=>useAnnouncementSignalStore.getState().bump());expect(screen.queryByText('第一条公告：完整公告正文')).toBeNull();
+ render(<ScrollingAnnouncements />);await screen.findByText(line);
+ act(()=>useAnnouncementSignalStore.getState().bump());expect(screen.queryByText(line)).toBeNull();
  await act(async()=>{resolve([]);});expect(fetchScrollingAnnouncements).toHaveBeenCalledTimes(2);
 });

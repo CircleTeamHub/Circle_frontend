@@ -1236,9 +1236,10 @@
       }
     },
     "stats": "{{groupCount}} グループ · {{noteCount}} 件のノート",
+    "noteCount": "ノート {{count}} 件",
     "tabs": {
-      "all": "すべて {{count}}",
-      "ungrouped": "未分類 {{count}}"
+      "all": "すべて",
+      "ungrouped": "未分類"
     },
     "section": {
       "text": "テキスト",
@@ -2440,6 +2441,7 @@
     "fieldNotEditable": "この項目は編集できません",
     "returnToSettings": "設定に戻ってください。",
     "systemAnnouncements": "システムのお知らせ",
+    "announcementTag": "お知らせ",
     "viewAnnouncements": "最新を見る",
     "addIcon": "バッジを追加",
     "myIcons": "バッジコレクション",

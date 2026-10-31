@@ -1830,6 +1830,7 @@
     "fieldNotEditable": "该字段暂不支持编辑",
     "returnToSettings": "请返回账号设置页。",
     "systemAnnouncements": "系统公告",
+    "announcementTag": "公告",
     "viewAnnouncements": "查看最新",
     "addIcon": "添加徽章",
     "myIcons": "我的徽章",
@@ -2853,9 +2854,10 @@
       }
     },
     "stats": "共 {{groupCount}} 个分组，合计 {{noteCount}} 条笔记",
+    "noteCount": "{{count}} 条笔记",
     "tabs": {
-      "all": "全部 {{count}}",
-      "ungrouped": "未分组 {{count}}"
+      "all": "全部",
+      "ungrouped": "未分组"
     },
     "section": {
       "text": "文字",

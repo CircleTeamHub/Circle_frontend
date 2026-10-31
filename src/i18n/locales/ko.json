@@ -1236,9 +1236,10 @@
       }
     },
     "stats": "그룹 {{groupCount}}개 · 노트 {{noteCount}}개",
+    "noteCount": "노트 {{count}}개",
     "tabs": {
-      "all": "전체 {{count}}",
-      "ungrouped": "미분류 {{count}}"
+      "all": "전체",
+      "ungrouped": "미분류"
     },
     "section": {
       "text": "텍스트",
@@ -2440,6 +2441,7 @@
     "fieldNotEditable": "이 항목은 편집할 수 없습니다",
     "returnToSettings": "설정으로 돌아가세요.",
     "systemAnnouncements": "시스템 공지",
+    "announcementTag": "공지",
     "viewAnnouncements": "최신 보기",
     "addIcon": "배지 추가",
     "myIcons": "배지 컬렉션",

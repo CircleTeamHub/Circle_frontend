@@ -277,11 +277,6 @@ export default function NotesScreen() {
     return [...result].sort((a, b) => Number(b.pinned) - Number(a.pinned));
   }, [notes, activeTab, search]);
 
-  const ungroupedCount = useMemo(
-    () => notes.filter((note) => note.groups.length === 0).length,
-    [notes],
-  );
-
   /**
    * 「查看」跳进来的定位：滚到那条笔记并短暂高亮。
    *
@@ -387,10 +382,7 @@ export default function NotesScreen() {
         return [
           {
             id: 'all',
-            label: t('notes.tabs.all', {
-              count: notes.length,
-              defaultValue: `全部 ${notes.length}`,
-            }),
+            label: t('notes.tabs.all', { defaultValue: '全部' }),
           },
         ];
       }
@@ -398,19 +390,16 @@ export default function NotesScreen() {
         return [
           {
             id: 'ungrouped',
-            label: t('notes.tabs.ungrouped', {
-              count: ungroupedCount,
-              defaultValue: `未分组 ${ungroupedCount}`,
-            }),
+            label: t('notes.tabs.ungrouped', { defaultValue: '未分组' }),
           },
         ];
       }
       const group = byId.get(id);
       return group
-        ? [{ id: group.id, label: `${group.name} ${group.noteCount}` }]
+        ? [{ id: group.id, label: group.name }]
         : [];
     });
-  }, [groups, notes.length, t, tabOrderIds, ungroupedCount]);
+  }, [groups, t, tabOrderIds]);
 
   const closeManager = useCallback(() => setManagerVisible(false), []);
   const openRecycleBin = useCallback(
@@ -813,6 +802,7 @@ export default function NotesScreen() {
       tabInactive: { color: colors.text },
       tabActiveLine: { backgroundColor: colors.primary },
       statsText: { color: colors.text },
+      noteCountText: { color: colors.textSecondary },
       searchWrap: { backgroundColor: colors.surface },
       searchInput: { color: colors.text },
       searchPlaceholder: colors.textSecondary,
@@ -897,7 +887,8 @@ export default function NotesScreen() {
           </View>
         </View>
 
-        {/* 页面标题；选择模式下才显示当前选择数量。 */}
+        {/* 页面标题；下面一行平时是当前分组(含搜索)的笔记数——分组标签上不再挂数字，
+            选择模式下换成已选数量。 */}
         <Text style={[s.pageTitle, d.headerTitle]}>
           {t('notes.title', { defaultValue: '我的笔记' })}
         </Text>
@@ -908,7 +899,14 @@ export default function NotesScreen() {
               defaultValue: `已选 ${selectedIds.length} 项`,
             })}
           </Text>
-        ) : null}
+        ) : loading || loadError ? null : (
+          <Text style={[s.statsText, d.noteCountText]}>
+            {t('notes.noteCount', {
+              count: filteredNotes.length,
+              defaultValue: `${filteredNotes.length} 条笔记`,
+            })}
+          </Text>
+        )}
 
         <View style={s.tabsRow}>
           <ScrollView

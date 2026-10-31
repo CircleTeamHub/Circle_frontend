@@ -1836,6 +1836,7 @@
     "fieldNotEditable": "This field cannot be edited",
     "returnToSettings": "Please return to settings.",
     "systemAnnouncements": "System Announcements",
+    "announcementTag": "Notice",
     "viewAnnouncements": "Latest",
     "addIcon": "Add badge",
     "myIcons": "Badge Collection",
@@ -2861,9 +2862,10 @@
       }
     },
     "stats": "{{groupCount}} groups · {{noteCount}} notes",
+    "noteCount": "Notes: {{count}}",
     "tabs": {
-      "all": "All {{count}}",
-      "ungrouped": "Ungrouped {{count}}"
+      "all": "All",
+      "ungrouped": "Ungrouped"
     },
     "section": {
       "text": "Text",
