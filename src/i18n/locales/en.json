@@ -1844,15 +1844,8 @@
     "viewAnnouncements": "Latest",
     "addIcon": "Add badge",
     "myIcons": "Badge Collection",
-    "myDecorations": "My Decorations",
-    "decorations": {
-      "title": "My Decorations",
-      "badges": "My Badges",
-      "badgesSubtitle": "View and choose badges shown on your profile",
-      "avatarFrames": "My Avatar Frames",
-      "avatarFramesSubtitle": "View owned avatar frames and change your current look",
-      "openHint": "Open your badges and avatar frames"
-    },
+    "badges": "My Badges",
+    "badgesHint": "View and choose badges shown on your profile",
     "avatarFrames": {
       "title": "My Avatar Frames",
       "detailTitle": "Avatar Frame Details",

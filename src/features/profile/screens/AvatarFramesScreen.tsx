@@ -343,7 +343,7 @@ export default function AvatarFramesScreen() {
       <View style={{ paddingTop: insets.top }}>
         <NavHeader
           title={t('profile.avatarFrames.title')}
-          fallbackHref="/(tabs)/profile/decorations"
+          fallbackHref="/(tabs)/profile"
         />
       </View>
       <FlatList

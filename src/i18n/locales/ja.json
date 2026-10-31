@@ -2451,15 +2451,8 @@
     "viewAnnouncements": "最新を見る",
     "addIcon": "バッジを追加",
     "myIcons": "バッジコレクション",
-    "myDecorations": "マイ装飾",
-    "decorations": {
-      "title": "マイ装飾",
-      "badges": "マイバッジ",
-      "badgesSubtitle": "プロフィールに表示するバッジを確認・選択します",
-      "avatarFrames": "マイアバターフレーム",
-      "avatarFramesSubtitle": "所有中のフレームを確認して現在の装飾を変更します",
-      "openHint": "バッジとアバターフレームを開きます"
-    },
+    "badges": "マイバッジ",
+    "badgesHint": "プロフィールに表示するバッジを確認・選択します",
     "avatarFrames": {
       "title": "マイアバターフレーム",
       "detailTitle": "アバターフレーム詳細",

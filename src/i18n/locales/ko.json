@@ -2451,15 +2451,8 @@
     "viewAnnouncements": "최신 보기",
     "addIcon": "배지 추가",
     "myIcons": "배지 컬렉션",
-    "myDecorations": "내 꾸미기",
-    "decorations": {
-      "title": "내 꾸미기",
-      "badges": "내 배지",
-      "badgesSubtitle": "프로필에 표시할 배지를 확인하고 선택합니다",
-      "avatarFrames": "내 프로필 프레임",
-      "avatarFramesSubtitle": "보유한 프레임을 확인하고 현재 꾸미기를 변경합니다",
-      "openHint": "내 배지와 프로필 프레임을 엽니다"
-    },
+    "badges": "내 배지",
+    "badgesHint": "프로필에 표시할 배지를 확인하고 선택합니다",
     "avatarFrames": {
       "title": "내 프로필 프레임",
       "detailTitle": "프로필 프레임 상세",

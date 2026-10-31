@@ -1838,15 +1838,8 @@
     "viewAnnouncements": "查看最新",
     "addIcon": "添加徽章",
     "myIcons": "我的徽章",
-    "myDecorations": "我的装扮",
-    "decorations": {
-      "title": "我的装扮",
-      "badges": "我的徽章",
-      "badgesSubtitle": "查看和选择展示在个人资料中的徽章",
-      "avatarFrames": "我的头像框",
-      "avatarFramesSubtitle": "查看已拥有的头像框并切换当前装扮",
-      "openHint": "打开我的徽章和头像框"
-    },
+    "badges": "我的徽章",
+    "badgesHint": "查看和选择展示在个人资料中的徽章",
     "avatarFrames": {
       "title": "我的头像框",
       "detailTitle": "头像框详情",

@@ -190,7 +190,8 @@ test('MyIconsScreen leaves without saving when the back button is pressed', () =
   const src = read('src/features/profile/screens/MyIconsScreen.tsx');
 
   const header = src.match(/<NavHeader[\s\S]*?\/>/)?.[0] ?? '';
-  assert.match(header, /fallbackHref="\/\(tabs\)\/profile\/decorations"/);
+  // 没有返回栈时回到「我的」(「我的装扮」中转页已取消)。
+  assert.match(header, /fallbackHref="\/\(tabs\)\/profile"/);
   assert.doesNotMatch(header, /onBackPress=/);
   assert.match(
     src,

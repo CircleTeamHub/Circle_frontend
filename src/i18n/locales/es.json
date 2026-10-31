@@ -2459,15 +2459,8 @@
     "viewAnnouncements": "Novedades",
     "addIcon": "Añadir insignia",
     "myIcons": "Mis insignias",
-    "myDecorations": "Mis decoraciones",
-    "decorations": {
-      "title": "Mis decoraciones",
-      "badges": "Mis insignias",
-      "badgesSubtitle": "Consulta y elige las insignias que aparecen en tu perfil",
-      "avatarFrames": "Mis marcos de avatar",
-      "avatarFramesSubtitle": "Consulta tus marcos y cambia la decoración actual",
-      "openHint": "Abre tus insignias y marcos de avatar"
-    },
+    "badges": "Mis insignias",
+    "badgesHint": "Consulta y elige las insignias que aparecen en tu perfil",
     "avatarFrames": {
       "title": "Mis marcos de avatar",
       "detailTitle": "Detalles del marco",

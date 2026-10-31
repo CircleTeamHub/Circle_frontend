@@ -379,8 +379,9 @@ export default function ProfileScreen() {
     router.push("/(tabs)/profile/credit-score" as never);
   }, [router]);
 
-  const handleOpenDecorations = useCallback(() => {
-    router.push('/(tabs)/profile/decorations' as never);
+  // 「我的装扮」中转页已取消(只剩徽章一项):直达徽章页。
+  const handleOpenBadges = useCallback(() => {
+    router.push('/(tabs)/profile/icons' as never);
   }, [router]);
 
   const handleMenuPress = useCallback(
@@ -554,15 +555,15 @@ export default function ProfileScreen() {
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={t('profile.myDecorations')}
-          accessibilityHint={t('profile.decorations.openHint')}
+          accessibilityLabel={t('profile.badges')}
+          accessibilityHint={t('profile.badgesHint')}
           style={s.memberCardHeader}
-          onPress={handleOpenDecorations}
+          onPress={handleOpenBadges}
         >
           <View style={s.memberHeaderLeft}>
-            <Ionicons name="sparkles" size={15} color={colors.white} />
+            <Ionicons name="ribbon" size={15} color={colors.white} />
             <Text style={d.memberCardAction}>
-              {t('profile.myDecorations', { defaultValue: '我的装扮' })}
+              {t('profile.badges', { defaultValue: '我的徽章' })}
             </Text>
           </View>
           <Ionicons
@@ -573,10 +574,10 @@ export default function ProfileScreen() {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={t('profile.myDecorations')}
-          accessibilityHint={t('profile.decorations.openHint')}
+          accessibilityLabel={t('profile.badges')}
+          accessibilityHint={t('profile.badgesHint')}
           style={s.memberIdentityRow}
-          onPress={handleOpenDecorations}
+          onPress={handleOpenBadges}
         >
           {displayIcons.length > 0 ? (
             <View style={s.memberIdentityItem}>
