@@ -480,7 +480,7 @@ export default function ProfileScreen() {
           <Pressable
             testID="profile-open-assistant"
             accessibilityRole="button"
-            accessibilityLabel={t('assistant.open', { defaultValue: '打开风信助手' })}
+            accessibilityLabel={t('assistant.open', { defaultValue: '打开AI小助手' })}
             hitSlop={6}
             onPress={handleOpenAssistant}
             style={({ pressed }) => [

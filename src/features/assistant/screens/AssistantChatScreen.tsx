@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { AssistantAvatar } from '@/features/assistant/components/AssistantAvatar';
+import { AssistantFloatingHeader } from '@/features/assistant/components/AssistantFloatingHeader';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
   createAssistantSubscription,
@@ -77,7 +77,15 @@ export default function AssistantChatScreen() {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [assistantSpinning, setAssistantSpinning] = useState(false);
   const entryIdRef = useRef(0);
+  const spinResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (spinResetTimerRef.current) clearTimeout(spinResetTimerRef.current);
+    };
+  }, []);
 
   const circles = useMemo(() => {
     const byId = new Map<string, Circle>();
@@ -108,13 +116,26 @@ export default function AssistantChatScreen() {
     return cached ? circleContext(cached) : null;
   }, [availableCircles, bootstrap?.contextCircle, selectedCircleId]);
 
-  const appendEntry = useCallback((role: ChatEntry['role'], text: string) => {
-    entryIdRef.current += 1;
-    setEntries((current) => [
-      ...current,
-      { id: entryIdRef.current, role, text },
-    ]);
+  const triggerAssistantSpin = useCallback(() => {
+    setAssistantSpinning(true);
+    if (spinResetTimerRef.current) clearTimeout(spinResetTimerRef.current);
+    spinResetTimerRef.current = setTimeout(() => {
+      setAssistantSpinning(false);
+      spinResetTimerRef.current = null;
+    }, 1200);
   }, []);
+
+  const appendEntry = useCallback(
+    (role: ChatEntry['role'], text: string) => {
+      entryIdRef.current += 1;
+      setEntries((current) => [
+        ...current,
+        { id: entryIdRef.current, role, text },
+      ]);
+      if (role === 'assistant') triggerAssistantSpin();
+    },
+    [triggerAssistantSpin],
+  );
 
   const navigateToChat = useCallback(
     (data: AssistantBootstrapResponse) => {
@@ -158,15 +179,16 @@ export default function AssistantChatScreen() {
           role: 'assistant',
           text: t('assistant.intro', {
             defaultValue:
-              '你好，我是风信助手。我可以根据你关注的圈子和关键词提醒城市信息，也可以提醒你关注的笔记被下架。',
+              '你好，我是AI小助手。我可以根据你关注的圈子和关键词提醒城市信息，也可以提醒你关注的笔记被下架。',
           }),
         },
         { id: 2, role: 'assistant', text: contextText },
       ]);
       entryIdRef.current = 2;
+      triggerAssistantSpin();
       if (!data.contextCircle) void fetchMyCircles();
     },
-    [fetchMyCircles, t],
+    [fetchMyCircles, t, triggerAssistantSpin],
   );
 
   const openAssistant = useCallback(async () => {
@@ -298,7 +320,11 @@ export default function AssistantChatScreen() {
           { backgroundColor: colors.background, paddingTop: insets.top },
         ]}
       >
-        <AssistantAvatar size={76} />
+        <AssistantFloatingHeader
+          onBack={() => router.back()}
+          spinning={assistantSpinning}
+          title={t('assistant.name', { defaultValue: 'AI小助手' })}
+        />
         <Text selectable style={[styles.error, { color: colors.textSecondary }]}>
           {error}
         </Text>
@@ -323,7 +349,11 @@ export default function AssistantChatScreen() {
           { backgroundColor: colors.background, paddingTop: insets.top },
         ]}
       >
-        <AssistantAvatar size={76} />
+        <AssistantFloatingHeader
+          onBack={() => router.back()}
+          spinning={assistantSpinning}
+          title={t('assistant.name', { defaultValue: 'AI小助手' })}
+        />
         <ActivityIndicator color={colors.primary} style={styles.loader} />
         <Text style={[styles.loading, { color: colors.textSecondary }]}>
           {t('common.loading', { defaultValue: '加载中…' })}
@@ -334,31 +364,28 @@ export default function AssistantChatScreen() {
 
   return (
     <KeyboardAvoidingContainer
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[
+        styles.container,
+        { backgroundColor: colors.background, paddingTop: insets.top },
+      ]}
     >
+      <AssistantFloatingHeader
+        onBack={() => router.back()}
+        spinning={assistantSpinning}
+        title={t('assistant.name', { defaultValue: 'AI小助手' })}
+      />
       <ScrollView
+        style={styles.scroll}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           styles.chatContainer,
           {
-            paddingTop: insets.top + Spacing.md,
+            paddingTop: Spacing.md,
             paddingBottom: insets.bottom + Spacing.xl,
           },
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.assistantHeader}>
-          <AssistantAvatar size={48} />
-          <View style={styles.headerCopy}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>
-              {t('assistant.name', { defaultValue: '风信助手' })}
-            </Text>
-            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-              {t('assistant.subtitle', { defaultValue: '提醒助手' })}
-            </Text>
-          </View>
-        </View>
-
         <View style={styles.messages}>
           {entries.map((entry) => (
             <View
@@ -541,11 +568,8 @@ export default function AssistantChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  scroll: { flex: 1 },
   chatContainer: { paddingHorizontal: Spacing.lg, gap: Spacing.lg },
-  assistantHeader: { alignItems: 'center', flexDirection: 'row', gap: Spacing.md },
-  headerCopy: { gap: 2 },
-  headerTitle: { ...Typography.title, fontWeight: '700' },
-  headerSubtitle: { ...Typography.caption },
   messages: { gap: Spacing.md },
   bubble: { borderRadius: Radius.lg, maxWidth: '86%', padding: Spacing.md },
   assistantBubble: { borderCurve: 'continuous' },

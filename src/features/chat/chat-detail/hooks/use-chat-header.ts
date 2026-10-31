@@ -205,10 +205,7 @@ export function useChatHeader({
         : colors.text;
   // 头部副标题:自己 > 正在输入 > 群聊 > 对方在线 / 最近在线。单聊对方关了
   // 「显示在线时间」(或还没拿到状态)时整行不画 —— 画「离线」仍是在泄露信息。
-  const headerStatusText = isAssistantConversation
-    ? t('assistant.subtitle', { defaultValue: '提醒助手' })
-    :
-    authUser?.accountId === sourceID
+  const headerStatusText = authUser?.accountId === sourceID
       ? t('chat.detail.statusSelf', { defaultValue: '自己' })
       : // 群聊分支原来直接落「群聊」二字,typingVisible 根本没机会参与判断 ——
         // 群成员照常上报 typing,却没有任何人看得见。

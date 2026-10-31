@@ -860,7 +860,7 @@ function enqueueForegroundBanner(
   // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
   const title = isAssistant
     ? conversation.name?.trim() ||
-      i18n.t('assistant.name', { defaultValue: '风信助手' })
+      i18n.t('assistant.name', { defaultValue: 'AI小助手' })
     : isGroup
       ? (conversation.circle?.name ??
         (conversation.name?.trim() ||

@@ -159,6 +159,42 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     currentUserID,
   });
 
+  const [assistantSpinning, setAssistantSpinning] = useState(false);
+  const assistantLatestMessageIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isAssistantConversation) {
+      assistantLatestMessageIdRef.current = null;
+      setAssistantSpinning(false);
+      return;
+    }
+
+    const latestMessage = (conversationMessages ?? []).reduce<
+      (typeof conversationMessages)[number] | null
+    >((latest, candidate) => {
+      if (!latest || candidate.height > latest.height) return candidate;
+      return latest;
+    }, null);
+
+    if (!latestMessage) return;
+    if (assistantLatestMessageIdRef.current === null) {
+      assistantLatestMessageIdRef.current = latestMessage.id;
+      return;
+    }
+    if (assistantLatestMessageIdRef.current === latestMessage.id) return;
+
+    assistantLatestMessageIdRef.current = latestMessage.id;
+    if (latestMessage.sender?.id === currentUserID) return;
+
+    setAssistantSpinning(true);
+    const timer = setTimeout(() => setAssistantSpinning(false), 1400);
+    return () => clearTimeout(timer);
+  }, [conversationMessages, currentUserID, isAssistantConversation]);
+
+  const assistantDisplayName = isAssistantConversation
+    ? t('assistant.name', { defaultValue: 'AI小助手' })
+    : conversationTitle;
+
   // review R2：失去目录权限的瞬间清空已选 @ 目标与候选缓存——否则降权后
   // handleSend 仍会把滞留的 mention（含 @所有人）当作有效目标发出去。
   useEffect(() => {
@@ -575,14 +611,15 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         isTempChat={isTempChat}
         isAssistant={isAssistantConversation}
         isGroupChat={isGroupChat}
-        conversationTitle={conversationTitle}
+        conversationTitle={assistantDisplayName}
         avatarUrl={avatarUrl}
         handleBack={handleBack}
         handleOpenHeaderTarget={handleOpenHeaderTarget}
         headerStatusText={headerStatusText}
+        assistantSpinning={assistantSpinning}
         d={d}
       />
-      <Divider />
+      {isAssistantConversation ? null : <Divider />}
       {conversationBurnNoticeText ? (
         <View
           testID="chat-disappearing-message-notice"

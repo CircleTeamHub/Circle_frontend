@@ -4,7 +4,7 @@ import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { Ionicons } from '@expo/vector-icons';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Avatar } from '@/components/ui/avatar';
-import { AssistantAvatar } from '@/features/assistant/components/AssistantAvatar';
+import { AssistantFloatingHeader } from '@/features/assistant/components/AssistantFloatingHeader';
 import { router } from 'expo-router';
 import { getChatInfoTopHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { type EmbeddedChatParams } from '@/features/chat/chat-detail/types';
@@ -27,6 +27,7 @@ export interface ChatDetailHeaderProps {
   handleBack: () => void;
   handleOpenHeaderTarget: () => void;
   headerStatusText: string;
+  assistantSpinning?: boolean;
   d: ChatDetailThemedStyles;
 }
 
@@ -47,8 +48,19 @@ export function ChatDetailHeader({
   handleBack,
   handleOpenHeaderTarget,
   headerStatusText,
+  assistantSpinning = false,
   d,
 }: ChatDetailHeaderProps) {
+  if (isAssistant) {
+    return (
+      <AssistantFloatingHeader
+        onBack={embedded ? undefined : handleBack}
+        spinning={assistantSpinning}
+        title={conversationTitle}
+      />
+    );
+  }
+
   return (
     <View style={s.header}>
       {embedded ? null : (
@@ -60,10 +72,8 @@ export function ChatDetailHeader({
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
       )}
-      <Pressable onPress={isAssistant ? undefined : handleOpenHeaderTarget}>
-        {isAssistant ? (
-          <AssistantAvatar size={36} />
-        ) : isGroupChat ? (
+      <Pressable onPress={handleOpenHeaderTarget}>
+        {isGroupChat ? (
           <GroupChatAvatar
             size={36}
             name={conversationTitle}

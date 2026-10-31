@@ -162,13 +162,13 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
     case 'assistant-info-alert':
       return tCardPreview(
         'assistant',
-        '[风信助手提醒]',
+        '[AI小助手提醒]',
         'title',
         message.content['title'],
       );
     case 'assistant-command-result':
       return i18n.t('assistant.generic', {
-        defaultValue: '风信助手有一条新提醒。',
+        defaultValue: 'AI小助手有一条新提醒。',
       });
     case 'friend-card':
       return tCardPreview('card', '[卡片]', 'name', message.content['nickname']);
@@ -196,7 +196,7 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
   let avatarRaw: string | null;
   let sourceID: string;
   if (isAssistant) {
-    name = dto.name?.trim() || i18n.t('assistant.name', { defaultValue: '风信助手' });
+    name = i18n.t('assistant.name', { defaultValue: 'AI小助手' });
     avatarRaw = dto.avatarUrl ?? null;
     sourceID = dto.id;
   } else if (isCircleGroup) {

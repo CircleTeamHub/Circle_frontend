@@ -538,7 +538,7 @@ export function mapChatMessageDtoToUI(
       return {
         ...base,
         type: isSent ? 'sent' : 'received',
-        text: text || i18n.t('assistant.generic', { defaultValue: '风信助手有一条新提醒。' }),
+        text: text || i18n.t('assistant.generic', { defaultValue: 'AI小助手有一条新提醒。' }),
       };
     }
     case 'file': {
