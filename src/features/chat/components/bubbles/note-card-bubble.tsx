@@ -70,6 +70,18 @@ const sNote = StyleSheet.create({
     fontWeight: '700',
     marginTop: 5,
   },
+  // 与笔记页的开工/打烊标签同一套实心底(workingFill / closedFill + onStatusFill)。
+  workStatusPill: {
+    alignSelf: 'flex-start',
+    borderRadius: Radius.full,
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+  },
+  workStatusPillText: {
+    ...Typography.tiny,
+    fontWeight: '700',
+  },
   meta: {
     ...Typography.tinyRegular,
     marginTop: 6,
@@ -217,21 +229,23 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
                 {t('chat.noteCard.workStatus.unlisted', { defaultValue: '已下架，状态可能变化' })}
               </Text>
             ) : note.workStatus === 'WORKING' || note.workStatus === 'CLOSED' ? (
-              <Text
+              <View
                 style={[
-                  sNote.workStatus,
+                  sNote.workStatusPill,
                   {
-                    color:
+                    backgroundColor:
                       note.workStatus === 'WORKING'
-                        ? NOTE_CARD_ACTIVE_GREEN
-                        : colors.warning,
+                        ? colors.workingFill
+                        : colors.closedFill,
                   },
                 ]}
               >
-                {note.workStatus === 'WORKING'
-                  ? t('chat.noteCard.workStatus.working', { defaultValue: '开工' })
-                  : t('chat.noteCard.workStatus.closed', { defaultValue: '打烊' })}
-              </Text>
+                <Text style={[sNote.workStatusPillText, { color: colors.onStatusFill }]}>
+                  {note.workStatus === 'WORKING'
+                    ? t('chat.noteCard.workStatus.working', { defaultValue: '开工' })
+                    : t('chat.noteCard.workStatus.closed', { defaultValue: '打烊' })}
+                </Text>
+              </View>
             ) : null}
           </View>
         </View>
