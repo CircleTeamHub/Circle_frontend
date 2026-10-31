@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -26,20 +27,38 @@ import {
   type CollectionType,
   type UserCollection,
 } from '@/services/api/collections';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
+import type { ThemeColors } from '@/theme/types';
 import type { ConversationType } from '@/types';
+
+type IoniconName = keyof typeof Ionicons.glyphMap;
 
 // 'ALL' 是「全部」伪类型：不按类型过滤，拉取所有收藏。其余对应后端 CollectionType。
 // NOTE 不再展示：收藏笔记已改为直接复制进「我的笔记」（collectNote）。
 type CollectionTab = 'ALL' | Exclude<CollectionType, 'NOTE'>;
 
-const COLLECTION_TYPES: { id: CollectionTab; labelKey: string; icon: string }[] = [
+const COLLECTION_TYPES: { id: CollectionTab; labelKey: string; icon: IoniconName }[] = [
   { id: 'ALL', labelKey: 'profile.collections.tabs.all', icon: 'albums-outline' },
   { id: 'CHAT', labelKey: 'profile.collections.tabs.chat', icon: 'chatbubble-ellipses-outline' },
   { id: 'VIDEO', labelKey: 'profile.collections.tabs.video', icon: 'videocam-outline' },
   { id: 'VOICE', labelKey: 'profile.collections.tabs.voice', icon: 'mic-outline' },
   { id: 'MESSAGE', labelKey: 'profile.collections.tabs.message', icon: 'mail-outline' },
 ];
+
+// 卡片左侧的类型图标块：每种收藏一个语义色，列表里一眼分得清是聊天、视频还是语音。
+function typeVisual(type: CollectionType, colors: ThemeColors): { icon: IoniconName; tint: string } {
+  switch (type) {
+    case 'VIDEO':
+      return { icon: 'videocam', tint: colors.orange };
+    case 'VOICE':
+      return { icon: 'mic', tint: colors.success };
+    case 'MESSAGE':
+      return { icon: 'mail', tint: colors.brandPurple };
+    case 'CHAT':
+    default:
+      return { icon: 'chatbubble-ellipses', tint: colors.primary };
+  }
+}
 
 type CollectionSource = {
   messageID: string;
@@ -137,42 +156,65 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xs,
   },
-  empty: {
+  state: {
     borderRadius: Radius.xl,
-    padding: Spacing.xl,
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: Spacing.sm,
+  },
+  stateIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  retry: {
+    marginTop: Spacing.xs,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs + 2,
   },
   itemCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
     borderRadius: Radius.lg,
     padding: Spacing.md,
-    gap: Spacing.xs,
   },
-  itemTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
+  itemPressed: {
+    opacity: 0.72,
+  },
+  typeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   itemText: {
     flex: 1,
     gap: Spacing.xs,
   },
-  sourceRow: {
-    marginTop: Spacing.xs,
-  },
-  sourceActions: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  sourceAction: {
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: Spacing.xs,
+    marginTop: 2,
+  },
+  metaText: {
+    flexShrink: 1,
+  },
+  moreButton: {
+    width: 32,
+    height: 32,
+    marginRight: -Spacing.xs,
+    marginTop: -Spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
@@ -189,7 +231,10 @@ export default function CollectionsScreen() {
   const [activeType, setActiveType] = useState<CollectionTab>('ALL');
   const [items, setItems] = useState<UserCollection[]>([]);
   const [loading, setLoading] = useState(true);
+  // 加载失败占满列表区并给「重试」；删除失败只在顶部提示一行，列表照常可用。
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [statusText, setStatusText] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   // 标签横向可滚动时，在右侧显示「更多」箭头提示；滚到末尾自动隐藏。
   const [showTabsHint, setShowTabsHint] = useState(false);
   const tabsViewportWidth = useRef(0);
@@ -207,6 +252,7 @@ export default function CollectionsScreen() {
 
     async function loadCollections() {
       setLoading(true);
+      setLoadError(null);
       setStatusText(null);
       try {
         const nextItems = await fetchCollections(
@@ -218,7 +264,8 @@ export default function CollectionsScreen() {
         }
       } catch {
         if (!cancelled) {
-          setStatusText(
+          setItems([]);
+          setLoadError(
             t('profile.collections.loadError', {
               defaultValue: '收藏加载失败，请稍后重试',
             }),
@@ -236,7 +283,7 @@ export default function CollectionsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [activeType, t]);
+  }, [activeType, reloadKey, t]);
 
   // useCallback：作为 prop 传进列表行，引用稳定 renderItem 的 memo 才有意义。
   const handleDelete = useCallback(
@@ -298,45 +345,46 @@ export default function CollectionsScreen() {
         color: colors.white,
         fontWeight: '700' as const,
       },
-      empty: {
+      card: {
         backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.surfaceBorder,
       },
-      emptyTitle: {
+      stateTitle: {
         color: colors.text,
-        ...Typography.h2,
+        ...Typography.h3,
       },
-      exampleCard: {
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.surfaceBorder,
-      },
-      exampleDesc: {
+      stateHint: {
         color: colors.textSecondary,
         ...Typography.caption,
+        textAlign: 'center' as const,
+      },
+      statusText: {
+        color: colors.error,
+        ...Typography.caption,
+      },
+      offlineText: {
+        color: colors.textSecondary,
+        ...Typography.caption,
+      },
+      retry: {
+        borderColor: colors.surfaceBorder,
+      },
+      retryText: {
+        color: colors.text,
+        ...Typography.caption,
+        fontWeight: '700' as const,
       },
       itemTitle: {
         color: colors.text,
         ...Typography.body,
+        fontWeight: '600' as const,
       },
       itemDesc: {
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      deleteText: {
-        color: colors.error,
-        ...Typography.caption,
-        fontWeight: '700' as const,
-      },
-      sourceAction: {
-        borderColor: colors.surfaceBorder,
-        backgroundColor: colors.background,
-      },
-      sourceActionText: {
-        color: colors.text,
-        ...Typography.caption,
-        fontWeight: '700' as const,
+      metaText: {
+        color: colors.textSecondary,
+        ...Typography.small,
       },
     }),
     [colors, insets.bottom, insets.top],
@@ -362,91 +410,95 @@ export default function CollectionsScreen() {
     router.navigate(getUserProfileHref('profile', source.senderID, source.senderName));
   }, []);
 
-  const renderSource = useCallback(
-    (source: CollectionSource | null) => {
-      if (!source) return null;
-      const canOpenMessage = Boolean(source.sourceID && source.conversationType);
-      return (
-        <View style={s.sourceRow}>
-          <Text style={d.itemDesc}>{formatCollectionSource(source, t)}</Text>
-          <View style={s.sourceActions}>
-            {canOpenMessage ? (
-              <Pressable
-                style={[s.sourceAction, d.sourceAction]}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  openSourceMessage(source);
-                }}
-              >
-                <Ionicons name="navigate-outline" size={13} color={colors.text} />
-                <Text style={d.sourceActionText}>
-                  {t('profile.collections.backToMessages', { defaultValue: '回到消息' })}
-                </Text>
-              </Pressable>
-            ) : null}
-            {source.senderID ? (
-              <Pressable
-                style={[s.sourceAction, d.sourceAction]}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  openSenderProfile(source);
-                }}
-              >
-                <Ionicons name="person-outline" size={13} color={colors.text} />
-                <Text style={d.sourceActionText}>
-                  {t('profile.collections.sender', { defaultValue: '发送人' })}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      );
+  // 「…」菜单：回到消息 / 发送人 / 删除。删除是低频的破坏性操作，不再每张卡片挂一个红字。
+  const openItemMenu = useCallback(
+    (item: UserCollection, source: CollectionSource | null) => {
+      const canOpenMessage = Boolean(source?.sourceID && source.conversationType);
+      Alert.alert(item.title, source ? formatCollectionSource(source, t) : undefined, [
+        ...(source && canOpenMessage
+          ? [
+              {
+                text: t('profile.collections.backToMessages', { defaultValue: '回到消息' }),
+                onPress: () => openSourceMessage(source),
+              },
+            ]
+          : []),
+        ...(source?.senderID
+          ? [
+              {
+                text: t('profile.collections.sender', { defaultValue: '发送人' }),
+                onPress: () => openSenderProfile(source),
+              },
+            ]
+          : []),
+        {
+          text: t('common.delete', { defaultValue: '删除' }),
+          style: 'destructive' as const,
+          onPress: () => handleDelete(item.id),
+        },
+        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' as const },
+      ]);
     },
-    [
-      colors.text,
-      d.itemDesc,
-      d.sourceAction,
-      d.sourceActionText,
-      openSenderProfile,
-      openSourceMessage,
-      t,
-    ],
+    [handleDelete, openSenderProfile, openSourceMessage, t],
   );
 
   const renderItem = useCallback(
     ({ item }: { item: UserCollection }) => {
       const source = resolveCollectionSource(item, t);
+      const canOpenMessage = Boolean(source?.sourceID && source.conversationType);
+      const visual = typeVisual(item.type, colors);
       return (
-        <View style={[s.itemCard, d.exampleCard]}>
-          <View style={s.itemTop}>
-            <View style={s.itemText}>
-              <Text style={d.itemTitle}>{item.title}</Text>
-              {item.summary ? (
-                <Text style={d.itemDesc}>{item.summary}</Text>
-              ) : null}
-              {renderSource(source)}
-            </View>
-            <Pressable
-              onPress={(event) => {
-                event.stopPropagation();
-                handleDelete(item.id);
-              }}
-            >
-              <Text style={d.deleteText}>
-                {t('common.delete', { defaultValue: '删除' })}
-              </Text>
-            </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={item.title}
+          // 点卡片 = 回到原消息（最常用的去处）；没有来源可回时卡片只是展示。
+          disabled={!canOpenMessage}
+          onPress={() => {
+            if (source) openSourceMessage(source);
+          }}
+          style={({ pressed }) => [s.itemCard, d.card, pressed && s.itemPressed]}
+        >
+          <View style={[s.typeIcon, { backgroundColor: withAlpha(visual.tint, 0.14) }]}>
+            <Ionicons name={visual.icon} size={20} color={visual.tint} />
           </View>
-        </View>
+          <View style={s.itemText}>
+            <Text style={d.itemTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
+            {item.summary ? (
+              <Text style={d.itemDesc} numberOfLines={2}>
+                {item.summary}
+              </Text>
+            ) : null}
+            {source ? (
+              <View style={s.metaRow}>
+                <Ionicons name="return-down-forward" size={12} color={colors.textSecondary} />
+                <Text style={[s.metaText, d.metaText]} numberOfLines={1}>
+                  {formatCollectionSource(source, t)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.collections.more', { defaultValue: '更多操作' })}
+            hitSlop={8}
+            style={s.moreButton}
+            // 嵌套 Pressable 由最内层抢到触摸，不会再触发外层卡片的「回到消息」。
+            onPress={() => openItemMenu(item, source)}
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+          </Pressable>
+        </Pressable>
       );
     },
-    [d, handleDelete, renderSource, t],
+    [colors, d, openItemMenu, openSourceMessage, t],
   );
 
   const listHeader = (
     <View style={s.listHeader}>
       {isOffline ? (
-        <Text style={d.exampleDesc}>
+        <Text style={d.offlineText}>
           {t('common.offline', { defaultValue: '当前无网络连接，部分功能可能不可用' })}
         </Text>
       ) : null}
@@ -478,11 +530,13 @@ export default function CollectionsScreen() {
             return (
               <Pressable
                 key={item.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
                 style={[s.tab, d.tab, selected && d.tabActive]}
                 onPress={() => setActiveType(item.id)}
               >
                 <Ionicons
-                  name={item.icon as any}
+                  name={item.icon}
                   size={16}
                   color={selected ? colors.white : colors.textSecondary}
                 />
@@ -500,13 +554,45 @@ export default function CollectionsScreen() {
         ) : null}
       </View>
 
-      {statusText ? <Text style={d.exampleDesc}>{statusText}</Text> : null}
+      {statusText ? <Text style={d.statusText}>{statusText}</Text> : null}
+    </View>
+  );
+
+  const listEmpty = loading ? (
+    <View style={[s.state, d.card]}>
+      <ActivityIndicator color={colors.primary} />
+    </View>
+  ) : loadError ? (
+    <View style={[s.state, d.card]}>
+      <Ionicons name="cloud-offline-outline" size={32} color={colors.textSecondary} />
+      <Text style={d.stateHint}>{loadError}</Text>
+      <Pressable
+        accessibilityRole="button"
+        style={[s.retry, d.retry]}
+        onPress={() => setReloadKey((key) => key + 1)}
+      >
+        <Text style={d.retryText}>{t('common.retry', { defaultValue: '重试' })}</Text>
+      </Pressable>
+    </View>
+  ) : (
+    <View style={[s.state, d.card]}>
+      <View style={[s.stateIcon, { backgroundColor: withAlpha(colors.primary, 0.12) }]}>
+        <Ionicons name={active.icon} size={30} color={colors.primary} />
+      </View>
+      <Text style={d.stateTitle}>
+        {t('profile.collections.empty', { defaultValue: '还没有收藏' })}
+      </Text>
+      <Text style={d.stateHint}>
+        {t('profile.collections.emptyHint', {
+          defaultValue: '在聊天里长按消息，选择「收藏」',
+        })}
+      </Text>
     </View>
   );
 
   return (
     <View style={d.container}>
-      <NavHeader title="" />
+      <NavHeader title={t('profile.collections.menuLabel', { defaultValue: '我的收藏' })} />
       {/* 收藏无分页、随使用无限增长 —— 必须虚拟化，不能 ScrollView + map 全量挂载。 */}
       <FlatList
         data={items}
@@ -515,16 +601,7 @@ export default function CollectionsScreen() {
         contentContainerStyle={[s.content, d.content]}
         ListHeaderComponent={listHeader}
         ItemSeparatorComponent={ItemSeparator}
-        ListEmptyComponent={
-          loading ? null : (
-            <View style={[s.empty, d.empty]}>
-              <Ionicons name={active.icon as any} size={44} color={colors.textSecondary} />
-              <Text style={d.emptyTitle}>
-                {t('profile.collections.empty', { defaultValue: '还没有收藏' })}
-              </Text>
-            </View>
-          )
-        }
+        ListEmptyComponent={listEmpty}
       />
     </View>
   );

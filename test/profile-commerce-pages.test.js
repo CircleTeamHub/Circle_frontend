@@ -692,8 +692,12 @@ test('WalletScreen keeps balance errors outside the clipped card artwork', () =>
   const src = read('src/features/profile/screens/WalletScreen.tsx');
   assert.match(
     src,
-    /<View style=\{s\.cardBottomRow\}>[\s\S]*?<\/View>\s*<\/View>\s*\{walletError \?/,
-    'walletError should render after balanceCard closes',
+    /<WalletBalanceCard[\s\S]*?\/>\s*\{walletError \?/,
+    'walletError should render after the balance card, not inside its clipped artwork',
+  );
+  assert.doesNotMatch(
+    read('src/features/profile/components/wallet-balance-card.tsx'),
+    /walletError|loadError/,
   );
   assert.match(
     src,

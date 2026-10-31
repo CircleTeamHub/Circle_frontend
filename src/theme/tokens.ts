@@ -41,6 +41,10 @@ export const Gradients = {
   // AI小助手：小助手气泡的靛蓝 → 信号青。
   exploreMoments: ['#8C52FF', '#E85BC8'] as const,
   exploreAssistant: ['#4A2FE6', '#2EC5E8'] as const,
+  // 钱包黑金卡：左上偏亮的石墨 → 近黑（金属卡的受光面），配三档香槟金箔
+  // （亮 → 主 → 暗，亮档用于数字，主档用于描边与字标，暗档给芯片阴影）。
+  blackCard: ['#3A3A3F', '#18181B', '#060607'] as const,
+  goldFoil: ['#F3E2B3', '#D9B96E', '#A07A2C'] as const,
 } as const;
 
 /**

@@ -182,8 +182,16 @@ test('wallet balance renders without waiting for transaction history', () => {
   assert.match(wallet, /async function loadHistory\(\)/);
   assert.match(wallet, /const \[loadingHistory, setLoadingHistory\]/);
   // 余额的等待态只受余额请求影响,空列表文案只受流水请求影响。
-  assert.match(wallet, /\{loadingWallet \? '\.\.\.' : balance\}/);
-  assert.match(wallet, /transactions\.length === 0 && !loadingHistory/);
+  assert.match(wallet, /loading=\{loadingWallet\}/);
+  assert.match(
+    read('src/features/profile/components/wallet-balance-card.tsx'),
+    /\{loading \? '\.\.\.' : hidden \? '••••••' : formattedBalance\}/,
+  );
+  // 流水单独一个 effect(可单独重试),列表组件只拿流水自己的加载态。
+  assert.match(wallet, /\}, \[t, walletVersion, historyReloadKey\]\);/);
+  assert.match(wallet, /loading=\{loadingHistory\}/);
+  const history = read('src/features/profile/components/wallet-history.tsx');
+  assert.match(history, /if \(loading && transactions\.length === 0\)/);
 });
 
 // 翻页请求是按旧游标取的:期间发生过刷新,拼上去就会重复/漏行,
@@ -308,15 +316,15 @@ test('a failed native share is reported with a fallback path', () => {
 // 不传 locale 的 toLocaleDateString 跟着设备语言走：应用内切过语言的人，钱包
 // 会一半是所选语言、一半是设备语言。仓里已有集中映射，别再各写各的。
 test('wallet ledger dates follow the app language, not the device', () => {
-  const wallet = read('src/features/profile/screens/WalletScreen.tsx');
+  // 流水列表已拆到 WalletHistory：月份标题和每行时间都用应用语言的 locale。
+  const history = read('src/features/profile/components/wallet-history.tsx');
 
   assert.match(
-    wallet,
+    history,
     /import \{ getLocalizedDateTimeLocale \} from '@\/utils\/locale'/,
   );
-  assert.match(
-    wallet,
-    /toLocaleDateString\(\s*(\/\/[^\n]*\n\s*)*getLocalizedDateTimeLocale\(i18n\.language\),/,
-  );
-  assert.doesNotMatch(wallet, /toLocaleDateString\(\)/);
+  assert.match(history, /const locale = getLocalizedDateTimeLocale\(i18n\.language\);/);
+  assert.match(history, /toLocaleDateString\(locale,/);
+  assert.match(history, /toLocaleString\(locale,/);
+  assert.doesNotMatch(history, /toLocale(Date)?String\(\)/);
 });
