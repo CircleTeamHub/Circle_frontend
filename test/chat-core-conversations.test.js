@@ -153,7 +153,7 @@ function loadMappers() {
         return {
           default: {
             language: 'zh',
-            t: (key) => (key === 'tempChats.title' ? '临时群聊' : key),
+            t: (key) => (key === 'tempChats.titlePlaceholder' ? '临时聊天' : key),
           },
         };
       }
@@ -387,7 +387,7 @@ test('TEMP conversation never falls back to the latest sender on an old backend'
     }),
   );
 
-  assert.equal(ui.name, '临时群聊');
+  assert.equal(ui.name, '临时聊天');
 });
 
 // —— 自毁策略:开启时间与 duration 同等重要（Codex P1 两条） ——

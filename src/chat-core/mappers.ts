@@ -229,10 +229,11 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
   } else {
     // TEMP 没有固定对端，但有自己的稳定房间名。绝不能拿末条发送者当标题：
     // 房主发完消息后列表会看起来像「和自己聊天」，访客发言又会让房名反复变化。
-    // 通用标题兜底兼容 App 先于后端发布的短暂窗口。
+    // 通用房间名兜底兼容 App 先于后端发布的短暂窗口(与后端默认房名一致)。
+    // 不能用列表页标题 tempChats.title(坐席):那是入口名,不是会话名。
     name =
       dto.tempChat?.title.trim() ||
-      i18n.t('tempChats.title', { defaultValue: '临时群聊' });
+      i18n.t('tempChats.titlePlaceholder', { defaultValue: '临时聊天' });
     avatarRaw = null;
     sourceID = dto.id;
   }
