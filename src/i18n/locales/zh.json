@@ -1559,6 +1559,11 @@
     "upgradeTitle": "升级情况",
     "toNext": "距离 {{title}} 还差 {{points}} 分",
     "maxReached": "已达到当前最高信誉档位",
+    "introButton": "介绍",
+    "introTitle": "信誉值介绍",
+    "introNote": "信誉值只根据你在 App 内的交友行为表现来评估，与任何积分、金钱都绝不挂钩。",
+    "range": "{{min}}–{{max}} 分",
+    "currentTag": "当前",
     "tier": {
       "excellent": {
         "title": "优秀信誉",
@@ -1581,7 +1586,8 @@
       "improve": "如何提升",
       "deduct": "扣分规则",
       "impact": "权益影响",
-      "recent": "近期记录"
+      "recent": "近期记录",
+      "tiers": "信誉档位"
     },
     "improveRules": [
       "完善真实资料、头像和常用联系方式",
@@ -1598,10 +1604,14 @@
       "高信誉用户可展示更高可信度标签",
       "低信誉时部分活动可能需要人工审核"
     ],
-    "recentRecords": [
-      "暂无近期信誉变动记录",
-      "后续会接入真实加分、扣分和申诉流水"
-    ]
+    "recentEmpty": "暂无近期信誉变动记录",
+    "recentEmptyHint": "信誉值的每次加分、扣分都会记录在这里",
+    "recentLoadFailed": "近期记录加载失败",
+    "scoreAfter": "变动后 {{score}}",
+    "reasons": {
+      "friendReport": "被举报并核实",
+      "other": "信誉值调整"
+    }
   },
   "profile": {
     "creditScore": "信用值",

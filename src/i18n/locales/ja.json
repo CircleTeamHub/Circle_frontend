@@ -2942,6 +2942,11 @@
     "upgradeTitle": "進捗状況",
     "toNext": "{{title}}まであと{{points}}ポイント",
     "maxReached": "最高の信頼度ランクに達しました",
+    "introButton": "説明",
+    "introTitle": "信頼度について",
+    "introNote": "信頼度はアプリ内での交流のふるまいだけで評価され、ポイントやお金とは一切関係ありません。",
+    "range": "{{min}}〜{{max}}点",
+    "currentTag": "現在",
     "tier": {
       "excellent": {
         "title": "優秀",
@@ -2964,7 +2969,8 @@
       "improve": "上げる方法",
       "deduct": "下がる理由",
       "impact": "影響する場面",
-      "recent": "最近の記録"
+      "recent": "最近の記録",
+      "tiers": "ランク"
     },
     "improveRules": [
       "正確なプロフィール、アイコン、連絡先を入力する",
@@ -2981,10 +2987,14 @@
       "信頼度の高いユーザーは、より強い信頼バッジを表示できます",
       "信頼度が低いと、一部のイベントで手動審査が必要になる場合があります"
     ],
-    "recentRecords": [
-      "最近の信頼度の変動はまだありません",
-      "今後、実際の加点、減点、異議申し立ての履歴がここに表示されます"
-    ]
+    "recentEmpty": "最近の信頼度の変動はまだありません",
+    "recentEmptyHint": "信頼度の加点・減点はすべてここに記録されます",
+    "recentLoadFailed": "最近の記録を読み込めませんでした",
+    "scoreAfter": "変動後 {{score}}",
+    "reasons": {
+      "friendReport": "通報が認定されました",
+      "other": "信頼度の調整"
+    }
   },
   "validation": {
     "nicknameEmpty": "ニックネームを入力してください",

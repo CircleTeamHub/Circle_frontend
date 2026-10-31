@@ -2942,6 +2942,11 @@
     "upgradeTitle": "진행 상황",
     "toNext": "{{title}}까지 {{points}}점 남음",
     "maxReached": "최고 평판 등급에 도달했습니다",
+    "introButton": "소개",
+    "introTitle": "평판 안내",
+    "introNote": "평판은 앱 안에서의 교류 활동만으로 평가되며, 포인트나 금전과는 절대 연결되지 않습니다.",
+    "range": "{{min}}~{{max}}점",
+    "currentTag": "현재",
     "tier": {
       "excellent": {
         "title": "우수",
@@ -2964,7 +2969,8 @@
       "improve": "올리는 방법",
       "deduct": "내려가는 이유",
       "impact": "적용되는 곳",
-      "recent": "최근 기록"
+      "recent": "최근 기록",
+      "tiers": "평판 등급"
     },
     "improveRules": [
       "진실한 프로필, 프로필 사진, 연락처를 작성하세요",
@@ -2981,10 +2987,14 @@
       "평판이 높은 사용자는 더 강한 신뢰 배지를 표시할 수 있습니다",
       "평판이 낮으면 일부 이벤트에서 수동 심사가 필요할 수 있습니다"
     ],
-    "recentRecords": [
-      "아직 최근 평판 변동이 없습니다",
-      "이후 실제 가점, 감점, 이의 신청 내역이 여기에 표시됩니다"
-    ]
+    "recentEmpty": "아직 최근 평판 변동이 없습니다",
+    "recentEmptyHint": "평판의 가점과 감점은 모두 여기에 기록됩니다",
+    "recentLoadFailed": "최근 기록을 불러오지 못했습니다",
+    "scoreAfter": "변동 후 {{score}}",
+    "reasons": {
+      "friendReport": "신고 사실 확인",
+      "other": "평판 조정"
+    }
   },
   "validation": {
     "nicknameEmpty": "닉네임을 입력하세요",

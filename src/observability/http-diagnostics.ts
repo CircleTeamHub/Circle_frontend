@@ -133,6 +133,7 @@ const ROUTE_TEMPLATES = [
   "/coin/transactions",
   "/coin/wallet",
   "/conversation-groups/:id/members",
+  "/credit/events",
   "/friend/:id/remark",
   "/friend/:id/permission",
   "/friend/:id/report",

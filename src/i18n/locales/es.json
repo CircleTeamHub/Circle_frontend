@@ -2950,6 +2950,11 @@
     "upgradeTitle": "Progreso",
     "toNext": "{{points}} puntos para {{title}}",
     "maxReached": "Has alcanzado el nivel de reputación más alto",
+    "introButton": "Info",
+    "introTitle": "Sobre la reputación",
+    "introNote": "Tu reputación se basa solo en cómo te relacionas con otras personas en la app y nunca está ligada a puntos ni a dinero.",
+    "range": "{{min}}–{{max}} pts",
+    "currentTag": "Actual",
     "tier": {
       "excellent": {
         "title": "Excelente",
@@ -2972,7 +2977,8 @@
       "improve": "Cómo mejorar",
       "deduct": "Qué la reduce",
       "impact": "Dónde se aplica",
-      "recent": "Actividad reciente"
+      "recent": "Actividad reciente",
+      "tiers": "Niveles"
     },
     "improveRules": [
       "Completa un perfil auténtico, con foto y datos de contacto",
@@ -2989,10 +2995,14 @@
       "Los usuarios con alta reputación pueden mostrar distintivos de confianza más fuertes",
       "La baja reputación puede requerir revisión manual en algunos eventos"
     ],
-    "recentRecords": [
-      "Aún no hay cambios de reputación recientes",
-      "Aquí se mostrarán más adelante las subidas, penalizaciones y apelaciones reales"
-    ]
+    "recentEmpty": "Aún no hay cambios de reputación recientes",
+    "recentEmptyHint": "Aquí verás cada subida o penalización de tu reputación",
+    "recentLoadFailed": "No se pudo cargar la actividad reciente",
+    "scoreAfter": "Ahora {{score}}",
+    "reasons": {
+      "friendReport": "Denuncia confirmada",
+      "other": "Ajuste de reputación"
+    }
   },
   "validation": {
     "nicknameEmpty": "El apodo no puede estar vacío",

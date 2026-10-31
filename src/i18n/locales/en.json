@@ -1565,6 +1565,11 @@
     "upgradeTitle": "Progress",
     "toNext": "{{points}} points to {{title}}",
     "maxReached": "You've reached the highest reputation tier",
+    "introButton": "About",
+    "introTitle": "About reputation",
+    "introNote": "Your reputation is based only on how you connect with people in the app. It is never tied to points or money.",
+    "range": "{{min}}–{{max}} pts",
+    "currentTag": "Current",
     "tier": {
       "excellent": {
         "title": "Excellent",
@@ -1587,7 +1592,8 @@
       "improve": "How to improve",
       "deduct": "What lowers it",
       "impact": "Where it applies",
-      "recent": "Recent activity"
+      "recent": "Recent activity",
+      "tiers": "Tiers"
     },
     "improveRules": [
       "Complete a genuine profile, avatar and contact details",
@@ -1604,10 +1610,14 @@
       "High-reputation users can show stronger trust badges",
       "Low reputation may require manual review for some events"
     ],
-    "recentRecords": [
-      "No recent reputation changes yet",
-      "Real gains, deductions and appeals will be shown here later"
-    ]
+    "recentEmpty": "No recent reputation changes yet",
+    "recentEmptyHint": "Every gain or deduction to your reputation is listed here",
+    "recentLoadFailed": "Couldn't load recent activity",
+    "scoreAfter": "Now {{score}}",
+    "reasons": {
+      "friendReport": "Report upheld",
+      "other": "Reputation adjustment"
+    }
   },
   "profile": {
     "creditScore": "Credit Score",
