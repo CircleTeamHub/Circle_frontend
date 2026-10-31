@@ -168,7 +168,10 @@ test('chat info screen serves the member directory straight from chat-core membe
   // review R2：权限走活体 hook；目录只有 canViewMemberDirectory=true 才拉，
   // 撤权时 focus 回调重跑并清空目录。
   assert.match(source, /useGroupMemberViewAccess\(\{/);
-  assert.match(source, /if \(!canViewMemberDirectory\) \{\s*\n\s*setGroupMembers\(\[\]\);\s*\n\s*return;/);
+  // 中间允许重拉闸门的记账行;撤权翻转 canViewMemberDirectory 会改变闸门的失效键,
+  // 所以撤权后回到本页一定重跑、清空目录,不会被「30 秒内刚拉过」跳过。
+  assert.match(source, /if \(!canViewMemberDirectory\) \{\s*\n\s*setGroupMembers\(\[\]\);[\s\S]{0,160}?\n\s*return;/);
+  assert.match(source, /groupReloadGate = useFocusReloadGate\(\{\s*key: `\$\{groupDataKey\}:\$\{canViewMemberDirectory\}/);
   assert.match(source, /const members = await fetchChatMembers\(conversationDto\.id\);/);
   assert.match(source, /uri=\{member\.avatarUrl \?\? undefined\}/);
 });

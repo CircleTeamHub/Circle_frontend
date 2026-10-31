@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fetchMyCircles } from '@/services/api/circles';
+import { circlesMutatedSince, fetchMyCircles } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { Circle } from '@/types';
 import { deriveManagedCircles } from './managed-circles';
@@ -42,8 +42,19 @@ interface CirclesState {
 // await 也可能等到建圈前的快照。
 let myCirclesInFlight: Promise<MyCirclesFetchResult> | null = null;
 let myCirclesRunSeq = 0;
+// 发现页每次切 tab、从帖子详情回来都会聚焦调一次(3 个请求)。上次完整拉成功(按请求发出
+// 时刻计)之后 30 秒内、也没有圈子写请求,就直接用 store 里的。别人那边的变化(审批通过、
+// 被移出、解散)最多晚 30 秒出现;下拉刷新与变更后的 force 不受影响。
+const MY_CIRCLES_MAX_AGE_MS = 30_000;
+let myCirclesLoadedAt: number | null = null;
 
-export const useCirclesStore = create<CirclesState>((set) => ({
+function myCirclesFresh(): boolean {
+  if (myCirclesLoadedAt === null) return false;
+  const age = Date.now() - myCirclesLoadedAt;
+  return age >= 0 && age <= MY_CIRCLES_MAX_AGE_MS && !circlesMutatedSince(myCirclesLoadedAt);
+}
+
+export const useCirclesStore = create<CirclesState>((set, get) => ({
   joinedCircles: [],
   createdCircles: [],
   managedCircles: [],
@@ -55,7 +66,12 @@ export const useCirclesStore = create<CirclesState>((set) => ({
     if (myCirclesInFlight && !options.force) {
       return myCirclesInFlight;
     }
+    if (!options.force && myCirclesFresh()) {
+      const { joinedCircles, createdCircles } = get();
+      return Promise.resolve({ ok: true, joined: joinedCircles, created: createdCircles });
+    }
     const runId = ++myCirclesRunSeq;
+    const startedAt = Date.now();
     // 只有最新代际的运行可写 store；reset()/force 之后陈旧响应静默丢弃。
     const guardedSet: typeof set = (partial) => {
       if (runId === myCirclesRunSeq) set(partial);
@@ -85,6 +101,7 @@ export const useCirclesStore = create<CirclesState>((set) => ({
           appliedCircles: applied,
           myCirclesError: null,
         });
+        if (runId === myCirclesRunSeq) myCirclesLoadedAt = startedAt;
         // 返回本次 run 的快照 —— 调用方（如发帖提交前校验）据此判断，不必回读 store，
         // 从而不受并发 force/reset 代际覆盖的影响。
         return { ok: true, joined, created };
@@ -128,6 +145,7 @@ export const useCirclesStore = create<CirclesState>((set) => ({
     // 合并进旧在飞请求，把刚退掉的圈子又写回列表。
     myCirclesRunSeq += 1;
     myCirclesInFlight = null;
+    myCirclesLoadedAt = null;
     set((state) => {
       const remove = (list: Circle[]) =>
         list.filter((circle) => circle.id !== id);
@@ -149,6 +167,7 @@ export const useCirclesStore = create<CirclesState>((set) => ({
     // 上一个账号的在飞请求）。
     myCirclesRunSeq += 1;
     myCirclesInFlight = null;
+    myCirclesLoadedAt = null;
     set({
       joinedCircles: [],
       createdCircles: [],

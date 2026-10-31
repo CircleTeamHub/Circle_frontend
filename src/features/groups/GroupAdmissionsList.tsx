@@ -32,6 +32,8 @@ import {
 } from "@/features/user/utils/routes";
 import { reportHandledFailure } from "@/observability/report-failure";
 import { getApiErrorMessage } from "@/services/api/errors";
+import { useFocusReloadGate } from "@/hooks/use-focus-reload-gate";
+import { groupOrCircleMutatedSince } from "@/features/chat/utils/group-reload-key";
 import { Spacing, useTheme } from "@/theme";
 import { getGroupEntryHref } from "./routes";
 import { getGroupAdmissionRelationship, getGroupAdmissionStatus } from "./admission-copy";
@@ -85,11 +87,19 @@ export function GroupAdmissionsList({
   const paging = useRef(false);
   const failedCursor = useRef<string | undefined>(undefined);
   const refreshPending = useRef(false);
+  const loadedEpoch = useRef<number | null>(null);
+  // 从入群详情/会话回来:30 秒内、同账号、没有新的入群/圈子邀请通知、也没有群或圈子写请求
+  // (审批、接受、标记已读都算),就不重拉第一页、我的申请和会话列表。
+  const admissionsReloadGate = useFocusReloadGate({
+    key: `${groupId ?? ""}:${latestNotification ?? ""}`,
+    mutatedSince: groupOrCircleMutatedSince,
+  });
   const load = useCallback(
     async function loadPage(next?: string, force = false): Promise<void> {
       if (paging.current) { if (!next) refreshPending.current = true; return; }
       paging.current = true;
       const version = generation.current;
+      const startedAt = Date.now();
       if (!next) setLoading(true);
       try {
         const responses = await Promise.allSettled([
@@ -110,6 +120,11 @@ export function GroupAdmissionsList({
         failedCursor.current = next;
         setError(failures.length ? getApiErrorMessage(failures[0].reason, t('groupAdmission.loadFailed')) : '');
         for (const failure of failures) reportHandledFailure('groupAdmission', 'listSource', failure.reason);
+        // 第一页各路都拉成功才算「拉过」;任一失败下次聚焦照样重试。
+        if (!next && failures.length === 0) {
+          loadedEpoch.current = sessionEpoch;
+          admissionsReloadGate.markLoaded(startedAt);
+        }
       } catch (e) {
         if (version === generation.current) {
           failedCursor.current = next;
@@ -124,26 +139,32 @@ export function GroupAdmissionsList({
         }
       }
     },
-    [groupId, t, sessionEpoch, includeJoined],
+    [groupId, t, sessionEpoch, includeJoined, admissionsReloadGate],
   );
   useFocusEffect(
     useCallback(() => {
-      generation.current++;
-      paging.current = false;
-      refreshPending.current = false;
-      setItems([]);
-      setCircleInvitations([]);
-      setCursor(null);
-      void load();
+      // 角标未读数很便宜、又直接决定红点对不对:照常刷新。
       void refreshGroupAdmissionUnread().catch((e) =>
         reportHandledFailure("groupAdmission", "unread", e),
       );
-      return () => {
+      const stopInFlight = () => {
         generation.current++;
         paging.current = false;
         refreshPending.current = false;
       };
-    }, [load]),
+      if (admissionsReloadGate.shouldSkip()) return stopInFlight;
+      generation.current++;
+      paging.current = false;
+      refreshPending.current = false;
+      // 只有换了账号才清空;同一个账号回来时保留旧行,第一页到了再整体替换,不闪成空白。
+      if (loadedEpoch.current !== sessionEpoch) {
+        setItems([]);
+        setCircleInvitations([]);
+        setCursor(null);
+      }
+      void load();
+      return stopInFlight;
+    }, [admissionsReloadGate, load, sessionEpoch]),
   );
   const lastNotification = useRef(latestNotification);
   useEffect(() => {

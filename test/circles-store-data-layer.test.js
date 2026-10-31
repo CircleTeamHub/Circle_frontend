@@ -16,7 +16,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function loadCirclesStore({ fetchMyCirclesImpl, fetchCirclesImpl } = {}) {
+function loadCirclesStore({ fetchMyCirclesImpl, fetchCirclesImpl, circlesMutatedSince } = {}) {
   const calls = { my: [], all: 0 };
   const shims = {
     zustand: require('zustand'),
@@ -31,6 +31,7 @@ function loadCirclesStore({ fetchMyCirclesImpl, fetchCirclesImpl } = {}) {
         if (fetchCirclesImpl) return fetchCirclesImpl();
         return { items: [], total: 0 };
       },
+      circlesMutatedSince: circlesMutatedSince ?? (() => false),
     },
     '@/services/api/errors': {
       getApiErrorMessage: (_e, fallback) => fallback,
@@ -82,8 +83,9 @@ test('fetchMyCircles 并发合并为一次请求，且不预清已渲染列表 (
   assert.equal(store.getState().joinedCircles[0].id, 'c2');
   assert.equal(store.getState().myCirclesLoading, false);
 
-  // 完成后可再次拉取（单飞句柄已释放）
-  await store.getState().fetchMyCircles();
+  // 完成后可再次拉取（单飞句柄已释放）。不带 force 的话 30 秒内直接用 store
+  // (见「reuses the store」用例),这里验的是句柄,所以强制起飞。
+  await store.getState().fetchMyCircles({ force: true });
   assert.equal(calls.my.length, 6);
 });
 
@@ -295,4 +297,42 @@ test('force 拉取绕过在飞合并（建圈后强制重拉）(review P1)', asy
     'src/features/discover/screens/CreateCircleScreen.tsx',
   );
   assert.match(createScreen, /fetchMyCircles\(\{ force: true \}\)/);
+});
+
+// 发现页每次切 tab、从帖子详情回来都会聚焦重拉「我的圈子」(3 个请求)。30 秒内、
+// 之后也没有圈子相关写请求时直接用 store 里的;force(建圈/编辑后)照样重拉。
+test('a non-forced fetch right after a load reuses the store without network', async () => {
+  const { mod, calls } = loadCirclesStore({
+    fetchMyCirclesImpl: async (kind) =>
+      kind === 'joined' ? [{ id: 'c1', name: 'one', myRole: 'MEMBER' }] : [],
+  });
+  const store = mod.useCirclesStore;
+  await store.getState().fetchMyCircles();
+  assert.equal(calls.my.length, 3);
+
+  const again = await store.getState().fetchMyCircles();
+  assert.equal(calls.my.length, 3, 'second call within the window must not hit the network');
+  assert.equal(again.ok, true);
+  assert.deepEqual(again.joined.map((c) => c.id), ['c1']);
+});
+
+test('a circle write since the last load forces the next fetch', async () => {
+  let mutated = false;
+  const { mod, calls } = loadCirclesStore({ circlesMutatedSince: () => mutated });
+  const store = mod.useCirclesStore;
+  await store.getState().fetchMyCircles();
+  mutated = true;
+  await store.getState().fetchMyCircles();
+  assert.equal(calls.my.length, 6);
+});
+
+test('force and reset always refetch', async () => {
+  const { mod, calls } = loadCirclesStore();
+  const store = mod.useCirclesStore;
+  await store.getState().fetchMyCircles();
+  await store.getState().fetchMyCircles({ force: true });
+  assert.equal(calls.my.length, 6);
+  store.getState().reset();
+  await store.getState().fetchMyCircles();
+  assert.equal(calls.my.length, 9);
 });

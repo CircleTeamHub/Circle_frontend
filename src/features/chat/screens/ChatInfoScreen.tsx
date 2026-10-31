@@ -86,8 +86,14 @@ import {
   addFriendToBlacklist,
   deleteFriendRelationship,
   fetchFriendStatus,
+  friendsMutatedSince,
   removeFriendFromBlacklist,
 } from '@/services/api/friends';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import {
+  groupConversationReloadKey,
+  groupOrCircleMutatedSince,
+} from '@/features/chat/utils/group-reload-key';
 import {
   dissolveCircle,
   fetchCircleDetail,
@@ -605,6 +611,17 @@ export default function ChatInfoScreen() {
     optimisticConversationState.pinned !== undefined ||
     optimisticConversationState.muted !== undefined;
 
+  // 从头像、公告、成员资料等子页面回来:30 秒内、没有相关写请求、实时字段也没变,
+  // 就不重拉(圈子群一次要拉详情 + 取或建会话 + 全量成员目录)。
+  const friendStatusReloadGate = useFocusReloadGate({
+    key: friendId ?? '',
+    mutatedSince: friendsMutatedSince,
+  });
+  const groupReloadGate = useFocusReloadGate({
+    key: `${groupDataKey}:${canViewMemberDirectory}:${groupConversationReloadKey(activeConversation)}`,
+    mutatedSince: groupOrCircleMutatedSince,
+  });
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -615,11 +632,18 @@ export default function ChatInfoScreen() {
           cancelled = true;
         };
       }
+      if (friendStatusReloadGate.shouldSkip()) {
+        return () => {
+          cancelled = true;
+        };
+      }
+      const startedAt = Date.now();
 
       fetchFriendStatus(friendId)
         .then((status) => {
           if (!cancelled) {
             setBlacklist(status.status === 'BLOCKED');
+            friendStatusReloadGate.markLoaded(startedAt);
           }
         })
         .catch(() => {
@@ -631,7 +655,7 @@ export default function ChatInfoScreen() {
       return () => {
         cancelled = true;
       };
-    }, [friendId, isGroupConversation]),
+    }, [friendId, friendStatusReloadGate, isGroupConversation]),
   );
 
   useFocusEffect(
@@ -646,6 +670,12 @@ export default function ChatInfoScreen() {
         setGroupMembers([]);
         setGroupConversation(null);
       }
+      if (groupReloadGate.shouldSkip()) {
+        return () => {
+          cancelled = true;
+        };
+      }
+      const startedAt = Date.now();
 
       // 临时房走会话自己的成员端点:没有圈子详情可查(没有 name/description/
       // memberCount),会话 id 也已经在手上,不需要 get-or-create。
@@ -660,7 +690,9 @@ export default function ChatInfoScreen() {
         }
         fetchChatMembers(tempConversationID)
           .then((members) => {
-            if (!cancelled) setGroupMembers(members);
+            if (cancelled) return;
+            setGroupMembers(members);
+            groupReloadGate.markLoaded(startedAt);
           })
           .catch(() => {
             // 返回子页面时保留已显示的成员列表，下一次聚焦继续重试。
@@ -675,7 +707,9 @@ export default function ChatInfoScreen() {
         // (服务端座位校验,全员可见)。
         fetchChatMembers(conversationID)
           .then((members) => {
-            if (!cancelled) setGroupMembers(members);
+            if (cancelled) return;
+            setGroupMembers(members);
+            groupReloadGate.markLoaded(startedAt);
           })
           .catch(() => {
             // 保留已有内容，避免网络抖动造成群信息页闪动。
@@ -691,6 +725,15 @@ export default function ChatInfoScreen() {
         };
       }
 
+      // 详情和成员目录都拉成功才算「拉过」;任一失败下次聚焦照样重试。
+      let detailLoaded = false;
+      let directoryLoaded = false;
+      const markIfComplete = () => {
+        if (!cancelled && detailLoaded && directoryLoaded) {
+          groupReloadGate.markLoaded(startedAt);
+        }
+      };
+
       // 群信息=圈子详情:群名=name,群公告=圈子简介 description,人数=memberCount。
       fetchCircleDetail(groupID)
         .then((detail) => {
@@ -700,6 +743,8 @@ export default function ChatInfoScreen() {
               notice: detail.description,
               memberCount: detail.memberCount,
             });
+            detailLoaded = true;
+            markIfComplete();
           }
         })
         .catch(() => {
@@ -719,6 +764,8 @@ export default function ChatInfoScreen() {
           useChatStore.getState?.().upsertConversation?.(conversationDto);
           if (!canViewMemberDirectory) {
             setGroupMembers([]);
+            directoryLoaded = true;
+            markIfComplete();
             return;
           }
           // 成员头像/昵称以 fetchChatMembers 返回为准(后端即事实源,无需再
@@ -726,6 +773,8 @@ export default function ChatInfoScreen() {
           const members = await fetchChatMembers(conversationDto.id);
           if (!cancelled) {
             setGroupMembers(members);
+            directoryLoaded = true;
+            markIfComplete();
           }
         } catch {
           // 成员请求失败时保留已渲染的名单，不让短暂网络错误造成整页抖动。
@@ -741,6 +790,7 @@ export default function ChatInfoScreen() {
       conversationID,
       groupID,
       groupDataKey,
+      groupReloadGate,
       isGroupConversation,
       isStandaloneGroup,
       isTempConversation,

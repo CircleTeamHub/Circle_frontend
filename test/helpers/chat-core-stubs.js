@@ -24,6 +24,10 @@ function makeChatCoreStubs() {
     get './delivered-catch-up'() {
       return require('./load-ts-module').loadTsModule('src/chat-core/delivered-catch-up.ts');
     },
+    // 群写请求记号:纯函数,用真实实现(群操作成功后让群页面回来时重拉)。
+    get '@/services/api/group-writes'() {
+      return require('./load-ts-module').loadTsModule('src/services/api/group-writes.ts');
+    },
     // 冷启动预载名单:纯函数,用真实实现。
     get './eager-hydration'() {
       return require('./load-ts-module').loadTsModule('src/chat-core/eager-hydration.ts');

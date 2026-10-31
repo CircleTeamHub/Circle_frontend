@@ -46,7 +46,8 @@ import {
   readNoteComposerOrder,
 } from '@/features/notes/utils/note-composer';
 import { shouldUseDirectVideoExportFallback } from '@/features/notes/utils/note-export';
-import { createNoteExport, fetchNoteDetail } from '@/services/api/notes';
+import { createNoteExport, fetchNoteDetail, notesMutatedSince } from '@/services/api/notes';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
 import { downloadMediaToCache, saveMediaToLibrary } from '@/utils/save-image';
@@ -96,6 +97,13 @@ export default function NoteDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const sectionYRef = useRef<Partial<Record<NoteSectionKind, number>>>({});
   const scrolledSectionRef = useRef<string | null>(null);
+  const noteLoadedRef = useRef(false);
+  // 从编辑页/群名片回来:编辑会走笔记写请求(notesMutatedSince)必重拉;只是看了看就回来、
+  // 30 秒内、来源状态没变,就不再重拉。窗口远小于媒体签名的有效期。
+  const reloadGate = useFocusReloadGate({
+    key: `${id ?? ''}:${noteStatusVersion}`,
+    mutatedSince: notesMutatedSince,
+  });
 
   const loadNote = useCallback(() => {
     // Re-run the focus loader when a realtime source-status signal advances.
@@ -105,13 +113,17 @@ export default function NoteDetailScreen() {
       return () => undefined;
     }
     let cancelled = false;
-    setLoading(true);
+    const startedAt = Date.now();
+    // 已经有内容时后台刷新,不整屏转圈(回到页面时那一下闪烁)。
+    if (!noteLoadedRef.current) setLoading(true);
     setLoadError(null);
     withNoteSyncRetry(() => fetchNoteDetail(id))
       .then((data) => {
         if (cancelled) return;
         setNote(data);
         setLoading(false);
+        noteLoadedRef.current = true;
+        reloadGate.markLoaded(startedAt);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -132,12 +144,17 @@ export default function NoteDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [id, noteStatusVersion, t]);
+  }, [id, noteStatusVersion, reloadGate, t]);
 
   // useFocusEffect 而不是 useEffect：笔记媒体现在走 presign-on-read，URL 是有 TTL 的短时
   // 签名。只在 mount 拉一次的话，从编辑页/别的 tab 回来时手里还是旧签名，过期就整屏空图。
   // 每次获得焦点重拉既拿到新签名，也顺带刷新编辑后的内容（与 NotesScreen 一致）。
-  useFocusEffect(loadNote);
+  useFocusEffect(
+    useCallback(
+      () => (reloadGate.shouldSkip() ? undefined : loadNote()),
+      [loadNote, reloadGate],
+    ),
+  );
 
   // 图片 403 自愈：presign 签名过期时重拉一次拿新签名（App 挂后台数小时再回来滚动，
   // 焦点没变、useFocusEffect 不触发，只能靠这里）。30s 节流 —— 图片本身坏掉时重拉救不了，

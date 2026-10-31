@@ -44,7 +44,8 @@ test('dissolveCircle calls DELETE /circle/:id', () => {
   const api = read('src/services/api/circles.ts');
   assert.match(
     api,
-    /export async function dissolveCircle\(id: string\): Promise<void> \{\s*\n\s*await apiClient<void>\(`\/circle\/\$\{id\}`, \{ method: 'DELETE' \}\);/,
+    // 写请求外面包了 markCircleWrite(发现页/圈子详情据此判断回来要不要重拉),端点不变。
+    /export async function dissolveCircle\(id: string\): Promise<void> \{\s*\n\s*await markCircleWrite\(apiClient<void>\(`\/circle\/\$\{id\}`, \{ method: 'DELETE' \}\)\);/,
   );
   // 退圈端点没有被顺手改掉:两条路径必须并存。
   assert.match(api, /`\/circle\/\$\{id\}\/leave`, \{ method: 'DELETE' \}/);

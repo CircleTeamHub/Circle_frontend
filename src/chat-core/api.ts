@@ -1,4 +1,5 @@
 import { apiClient } from '@/services/api/client';
+import { markGroupWrite } from '@/services/api/group-writes';
 import { collectCursorPages, readHasMore } from '@/services/api/pagination';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { retry } from '@/utils/retry';
@@ -514,10 +515,10 @@ export function createGroupChatConversation(input: {
   name: string;
   memberIds: string[];
 }): Promise<ChatConversationDto> {
-  return apiClient<ChatConversationDto>('/chat/conversations/group', {
+  return markGroupWrite(apiClient<ChatConversationDto>('/chat/conversations/group', {
     method: 'POST',
     body: { name: input.name.trim(), memberIds: input.memberIds },
-  });
+  }));
 }
 
 /** 独立群聊:拉自己的好友进群。 */
@@ -525,19 +526,19 @@ export function inviteGroupChatMembers(
   conversationId: string,
   memberIds: string[],
 ): Promise<ChatConversationDto> {
-  return apiClient<ChatConversationDto>(
+  return markGroupWrite(apiClient<ChatConversationDto>(
     `/chat/conversations/${conversationId}/members`,
     { method: 'POST', body: { memberIds } },
-  );
+  ));
 }
 
 /** 独立群聊:退出群聊(群主退群服务端自动转移)。 */
 export function leaveGroupChatConversation(
   conversationId: string,
 ): Promise<void> {
-  return apiClient<void>(`/chat/conversations/${conversationId}/leave`, {
+  return markGroupWrite(apiClient<void>(`/chat/conversations/${conversationId}/leave`, {
     method: 'POST',
-  });
+  }));
 }
 
 /**
@@ -547,9 +548,9 @@ export function leaveGroupChatConversation(
 export function dissolveGroupChatConversation(
   conversationId: string,
 ): Promise<void> {
-  return apiClient<void>(`/chat/conversations/${conversationId}/dissolve`, {
+  return markGroupWrite(apiClient<void>(`/chat/conversations/${conversationId}/dissolve`, {
     method: 'POST',
-  });
+  }));
 }
 
 /** 独立群聊:改群名(任一在座成员)。 */
@@ -557,10 +558,10 @@ export function renameGroupChatConversation(
   conversationId: string,
   name: string,
 ): Promise<ChatConversationDto> {
-  return apiClient<ChatConversationDto>(
+  return markGroupWrite(apiClient<ChatConversationDto>(
     `/chat/conversations/${conversationId}/name`,
     { method: 'PATCH', body: { name } },
-  );
+  ));
 }
 
 /**
@@ -588,10 +589,10 @@ export function setGroupChatMemberRole(
   userId: string,
   role: 'ADMIN' | 'MEMBER',
 ): Promise<{ userId: string; role: 'ADMIN' | 'MEMBER' }> {
-  return apiClient<{ userId: string; role: 'ADMIN' | 'MEMBER' }>(
+  return markGroupWrite(apiClient<{ userId: string; role: 'ADMIN' | 'MEMBER' }>(
     `/chat/conversations/${conversationId}/members/${userId}/role`,
     { method: 'PATCH', body: { role } },
-  );
+  ));
 }
 
 /** 独立群聊:群主/管理员移出成员(圈子群走 services/api/groups 的 removeGroupMember)。 */
@@ -599,10 +600,10 @@ export function removeGroupChatMember(
   conversationId: string,
   userId: string,
 ): Promise<void> {
-  return apiClient<void>(
+  return markGroupWrite(apiClient<void>(
     `/chat/conversations/${conversationId}/members/${userId}`,
     { method: 'DELETE' },
-  );
+  ));
 }
 
 /** 禁言成员(两种群;群主/管理员)。durationSec = null 表示直到解除;重复调用覆盖时长。 */
@@ -611,10 +612,10 @@ export function silenceChatMember(
   userId: string,
   durationSec: number | null,
 ): Promise<ChatMemberSilenceDto> {
-  return apiClient<ChatMemberSilenceDto>(
+  return markGroupWrite(apiClient<ChatMemberSilenceDto>(
     `/chat/conversations/${conversationId}/members/${userId}/silence`,
     { method: 'PUT', body: { durationSec } },
-  );
+  ));
 }
 
 /** 解除禁言(两种群;群主/管理员;未禁言时幂等)。 */
@@ -622,10 +623,10 @@ export function unsilenceChatMember(
   conversationId: string,
   userId: string,
 ): Promise<ChatMemberSilenceDto> {
-  return apiClient<ChatMemberSilenceDto>(
+  return markGroupWrite(apiClient<ChatMemberSilenceDto>(
     `/chat/conversations/${conversationId}/members/${userId}/silence`,
     { method: 'DELETE' },
-  );
+  ));
 }
 
 /**
@@ -636,10 +637,10 @@ export function setMyGroupChatRemark(
   conversationId: string,
   remark: string,
 ): Promise<{ remark: string | null }> {
-  return apiClient<{ remark: string | null }>(
+  return markGroupWrite(apiClient<{ remark: string | null }>(
     `/chat/conversations/${conversationId}/my-remark`,
     { method: 'PATCH', body: { remark } },
-  );
+  ));
 }
 
 /** 群昵称:改自己在本群的显示名,全群可见。任一在座成员可改;空串清除回落账号昵称。 */
@@ -647,10 +648,10 @@ export function setMyGroupChatAlias(
   conversationId: string,
   alias: string,
 ): Promise<{ alias: string | null }> {
-  return apiClient<{ alias: string | null }>(
+  return markGroupWrite(apiClient<{ alias: string | null }>(
     `/chat/conversations/${conversationId}/my-alias`,
     { method: 'PATCH', body: { alias } },
-  );
+  ));
 }
 
 /** 全员禁言开关(两种群;群主/管理员;管理员与群主豁免)。 */
@@ -658,10 +659,10 @@ export function setGroupChatMuteAll(
   conversationId: string,
   enabled: boolean,
 ): Promise<{ muteAll: boolean }> {
-  return apiClient<{ muteAll: boolean }>(
+  return markGroupWrite(apiClient<{ muteAll: boolean }>(
     `/chat/conversations/${conversationId}/mute-all`,
     { method: 'PATCH', body: { enabled } },
-  );
+  ));
 }
 
 /** 独立群聊:群主转让(新群主的管理员标记与禁言清零,原群主降为普通成员)。 */
@@ -669,10 +670,10 @@ export function transferGroupChatOwner(
   conversationId: string,
   userId: string,
 ): Promise<void> {
-  return apiClient<void>(`/chat/conversations/${conversationId}/owner`, {
+  return markGroupWrite(apiClient<void>(`/chat/conversations/${conversationId}/owner`, {
     method: 'POST',
     body: { userId },
-  });
+  }));
 }
 
 /** 独立群聊:群公告(群主/管理员;空串清空)。 */
@@ -680,10 +681,10 @@ export function setGroupChatNotice(
   conversationId: string,
   notice: string,
 ): Promise<{ notice: string | null }> {
-  return apiClient<{ notice: string | null }>(
+  return markGroupWrite(apiClient<{ notice: string | null }>(
     `/chat/conversations/${conversationId}/notice`,
     { method: 'PATCH', body: { notice } },
-  );
+  ));
 }
 
 /** 独立群聊:群头像(群主/管理员;URL 必须来自本应用存储)。 */
@@ -691,10 +692,10 @@ export function setGroupChatAvatar(
   conversationId: string,
   avatarUrl: string,
 ): Promise<{ avatarUrl: string }> {
-  return apiClient<{ avatarUrl: string }>(
+  return markGroupWrite(apiClient<{ avatarUrl: string }>(
     `/chat/conversations/${conversationId}/avatar`,
     { method: 'PATCH', body: { avatarUrl } },
-  );
+  ));
 }
 
 /** 群策略开关(两种群;群主/管理员)。只传要改的键。 */
@@ -702,10 +703,10 @@ export function updateGroupChatPolicies(
   conversationId: string,
   patch: Partial<ChatGroupPoliciesDto>,
 ): Promise<ChatGroupPoliciesDto> {
-  return apiClient<ChatGroupPoliciesDto>(
+  return markGroupWrite(apiClient<ChatGroupPoliciesDto>(
     `/chat/conversations/${conversationId}/policies`,
     { method: 'PATCH', body: patch },
-  );
+  ));
 }
 
 /**

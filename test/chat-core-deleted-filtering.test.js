@@ -92,6 +92,7 @@ function loadDeleted() {
       return require('./helpers/load-ts-module').loadTsModule('src/services/api/pagination.ts');
     }
     if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
+    if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
     throw new Error(`unexpected require: ${request}`);
   });
 }
@@ -106,6 +107,7 @@ function loadDateWindow() {
         return require('./helpers/load-ts-module').loadTsModule('src/services/api/pagination.ts');
       }
       if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
+      if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
       throw new Error(`unexpected require: ${request}`);
     },
   );
@@ -160,6 +162,7 @@ test('search responses drop locally deleted messages', () => {
       return require('./helpers/load-ts-module').loadTsModule('src/services/api/pagination.ts');
     }
     if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
+    if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
     throw new Error(`unexpected require: ${request}`);
   });
 
@@ -230,6 +233,7 @@ function loadApi(deleted, respond) {
       return require('./helpers/load-ts-module').loadTsModule('src/services/api/pagination.ts');
     }
     if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
+    if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
     throw new Error(`unexpected require: ${request}`);
   });
 }
