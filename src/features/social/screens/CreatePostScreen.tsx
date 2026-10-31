@@ -299,6 +299,21 @@ export default function CreatePostScreen() {
     inFlightRef.current = true;
     setSubmitting(true);
     try {
+      const hasOversizedImage = images.some(
+        (asset) =>
+          typeof asset.fileSize === 'number' &&
+          asset.fileSize > LIMITS.IMAGE_MAX_SIZE_MB * 1024 * 1024,
+      );
+      if (hasOversizedImage) {
+        Alert.alert(
+          t('plaza.create.failedTitle', { defaultValue: '发布失败' }),
+          t('upload.errors.fileTooLarge', {
+            maxMb: LIMITS.IMAGE_MAX_SIZE_MB,
+          }),
+        );
+        return;
+      }
+
       // 发帖前用权威成员列表校验所选圈子仍可用：强制刷新一次，剔除已删除/退出的
       // 圈子。这是唯一防线，覆盖「离开圈子后未经选择页、直接在已有草稿上发帖」。
       // 判据只有「是否在成员列表里」，不做 UUID 格式假设 —— 避免误伤后端合法的
@@ -332,16 +347,6 @@ export default function CreatePostScreen() {
 
       const outcomes = await mapWithConcurrency(images, 3, async (asset) => {
         try {
-          if (
-            typeof asset.fileSize === 'number' &&
-            asset.fileSize > LIMITS.IMAGE_MAX_SIZE_MB * 1024 * 1024
-          ) {
-            throw new Error(
-              t('validation.imageSizeLimit', {
-                defaultValue: `图片不能超过 ${LIMITS.IMAGE_MAX_SIZE_MB}MB`,
-              }),
-            );
-          }
           const fileName = asset.uri.split('/').pop() || 'photo.jpg';
           const contentType =
             resolveUploadContentType({
@@ -388,7 +393,11 @@ export default function CreatePostScreen() {
                 count: failedUploads,
                 defaultValue: `有${failedUploads}张图片上传失败，请重试`,
               });
-        throw new Error(reason);
+        Alert.alert(
+          t('plaza.create.failedTitle', { defaultValue: '发布失败' }),
+          reason,
+        );
+        return;
       }
 
       const post = await createPlazaPost({

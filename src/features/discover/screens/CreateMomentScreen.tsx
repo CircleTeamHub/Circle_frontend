@@ -166,20 +166,25 @@ export default function CreateMomentScreen() {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     try {
+      const hasOversizedImage = images.some(
+        (asset) =>
+          typeof asset.fileSize === 'number' &&
+          asset.fileSize > LIMITS.IMAGE_MAX_SIZE_MB * 1024 * 1024,
+      );
+      if (hasOversizedImage) {
+        Alert.alert(
+          t('moment.publishFailed'),
+          t('upload.errors.fileTooLarge', {
+            maxMb: LIMITS.IMAGE_MAX_SIZE_MB,
+          }),
+        );
+        return;
+      }
+
       // 并发上传，cap=3（#108）：串行九图最坏 ~18s；全量并发又会同时打满
       // presign + S3 PUT。per-item 失败就地吞掉记 null，序号与所选图片一一对应。
       const outcomes = await mapWithConcurrency(images, 3, async (asset) => {
         try {
-          if (
-            typeof asset.fileSize === 'number' &&
-            asset.fileSize > LIMITS.IMAGE_MAX_SIZE_MB * 1024 * 1024
-          ) {
-            throw new Error(
-              t('validation.imageSizeLimit', {
-                defaultValue: `图片不能超过 ${LIMITS.IMAGE_MAX_SIZE_MB}MB`,
-              }),
-            );
-          }
           const fileName = asset.uri.split('/').pop() || 'photo.jpg';
           const contentType =
             resolveUploadContentType({
@@ -221,7 +226,8 @@ export default function CreateMomentScreen() {
           failedUploads === images.length
             ? t('moment.uploadFailed')
             : t('moment.partialUploadFailed', { count: failedUploads });
-        throw new Error(reason);
+        Alert.alert(t('moment.publishFailed'), reason);
+        return;
       }
 
       const moment = await createMoment({

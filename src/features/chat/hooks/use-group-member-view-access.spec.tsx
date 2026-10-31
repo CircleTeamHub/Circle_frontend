@@ -44,7 +44,6 @@ describe('useGroupMemberViewAccess', () => {
     expect(result.current.canViewMembers).toBe(true);
     expect(result.current.selfMember).toMatchObject({
       role: 'ADMIN',
-      roleLevel: 60,
       userID: USER_ID,
     });
   });

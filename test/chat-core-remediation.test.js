@@ -386,14 +386,6 @@ test('the app badge retries when setBadgeCountAsync resolves false', () => {
   assert.match(badge, /lastApplied = null/);
 });
 
-test('the app badge includes the local mark-as-unread overrides', () => {
-  // 滑动「标记为未读」只改本地覆盖 store —— 不订阅它的话 tab 上有红点、
-  // 图标角标是 0,而且此后再也不会自己对上。
-  const badge = read('src/chat-core/app-badge.ts');
-  assert.match(badge, /useLocalUnreadStore\.subscribe/);
-  assert.match(badge, /countLocalUnreadOverrides/);
-});
-
 test('the delivered watermark is coalesced, not just deduped', () => {
   // 每条新消息的 height 都更高,所以「只挡重复或更低」等于一条都挡不住:
   // 群里一次消息洪峰会变成 N 人 × M 条的上行风暴。
@@ -470,7 +462,6 @@ test('clear-all-chats loads the authoritative conversation list first', () => {
   // 那些会话一条水位都没写,却照样报「已清空」。
   const actions = read('src/features/profile/hooks/use-storage-actions.ts');
   assert.match(actions, /loadChatConversations\(\)/);
-  assert.match(actions, /resetForLogout/);
   assert.doesNotMatch(actions, /forEveryone:\s*true/);
 });
 

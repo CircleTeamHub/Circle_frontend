@@ -64,18 +64,6 @@ test('relistNote calls PATCH /note/:id/status with ACTIVE', () => {
   assert.match(src, /status:\s*'ACTIVE'/);
 });
 
-test('createNoteShareLink posts the current notes view to /note/share-links', () => {
-  const src = read('src/services/api/notes.ts');
-  const typesSource = read('src/features/notes/types.ts');
-
-  assert.match(typesSource, /CreateNoteShareLinkInput/);
-  assert.match(typesSource, /NoteShareLink/);
-  assert.match(src, /createNoteShareLink/);
-  assert.match(src, /\/note\/share-links/);
-  assert.match(src, /method:\s*'POST'/);
-  assert.match(src, /body:\s*input/);
-});
-
 test('createNoteExport posts export requests to /note/:id/exports and returns downloadable metadata', () => {
   const src = read('src/services/api/notes.ts');
   const typesSource = read('src/features/notes/types.ts');

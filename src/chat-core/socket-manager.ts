@@ -938,8 +938,6 @@ async function hydrateFromLocalDb(
     if (!isCurrentSession()) return;
     const conversations = sanitizeExpiredConversationPreviews(
       persistedConversations,
-      useChatStore.getState().viewerSelfDestructSec,
-      useChatStore.getState().viewerSelfDestructStartedAt,
     );
     for (let index = 0; index < conversations.length; index += 1) {
       if (conversations[index] !== persistedConversations[index]) {
@@ -1084,10 +1082,6 @@ function resyncConversations(userId: string, isReconnect: boolean): void {
       reportHandledFailure('chatSync', 'reconnectInitialHistory', err),
     );
   }
-}
-
-export function isChatConnected(): boolean {
-  return socket?.connected === true;
 }
 
 /** 发送队列里还有没结果的消息(排着、在发、等 ack)。 */

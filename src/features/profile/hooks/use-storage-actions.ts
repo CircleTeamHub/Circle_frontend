@@ -14,7 +14,6 @@ import {
 } from '@/chat-core/api';
 import { wipeChatLocalDb } from '@/chat-core/local-db';
 import { useChatStore } from '@/chat-core/store';
-import { useLocalUnreadStore } from '@/features/messages/store/use-local-unread-store';
 
 export interface UseStorageActionsResult {
   cacheSizeLabel: string;
@@ -149,9 +148,6 @@ export function useStorageActions(): UseStorageActionsResult {
               const failed = outcomes.filter(
                 (o) => o.status === 'rejected',
               ).length;
-              // 「标记为未读」的本地覆盖也要一起清:只清 chat store 的话,
-              // 那些会话在列表和 tab 上仍然顶着一个红点,而里面已经空了。
-              useLocalUnreadStore.getState().resetForLogout();
               // 用 clearCachedChats 而非 reset:socket 还连着,reset 会清掉
               // currentUserId 并标记 disconnected,而 connectChat 对已连接的
               // socket 直接 return —— 之后的消息判不出收发方向、未读也算错。

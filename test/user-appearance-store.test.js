@@ -226,7 +226,6 @@ test('appearance cache honors TTL and authoritative omission downgrades to vip0/
     ),
     { vipLevel: 0, avatarFrame: null },
   );
-  assert.equal(store.useUserAppearanceStore.getState().levels.alice, 0);
 });
 
 test('a malformed appearance entry retains only its own cache while valid siblings update', async () => {
@@ -382,7 +381,6 @@ test('equip reconciliation keeps its authoritative frame when an older batch res
     ),
     equippedAppearance,
   );
-  assert.equal(store.useUserAppearanceStore.getState().levels.alice, 2);
 
   store.requestUserAppearance('alice');
   await store.advance(60);

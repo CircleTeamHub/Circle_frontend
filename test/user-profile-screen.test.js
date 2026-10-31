@@ -66,7 +66,6 @@ function loadProfileView() {
 test('profile view formats self check, gender, and city for the detail header', () => {
   const {
     canOpenSendFriendRequest,
-    getFriendActionLabel,
     formatGenderLabel,
     getProfileMetaItems,
     isCurrentUserProfile,
@@ -120,12 +119,6 @@ test('profile view formats self check, gender, and city for the detail header', 
     }),
     null,
   );
-
-  assert.equal(getFriendActionLabel('NONE'), '添加好友');
-  assert.equal(getFriendActionLabel('PENDING_SENT'), '已发送申请');
-  assert.equal(getFriendActionLabel('PENDING_RECEIVED'), '等待对方处理');
-  assert.equal(getFriendActionLabel('ACCEPTED'), '已添加');
-  assert.equal(getFriendActionLabel('BLOCKED'), '无法添加');
 
   assert.equal(
     canOpenSendFriendRequest({

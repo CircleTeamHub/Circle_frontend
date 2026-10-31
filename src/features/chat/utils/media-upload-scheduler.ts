@@ -89,17 +89,3 @@ export function createMediaUploadScheduler(
 export const chatMediaUploadScheduler = createMediaUploadScheduler({
   concurrency: DEFAULT_MEDIA_UPLOAD_CONCURRENCY,
 });
-
-/**
- * A single selected photo keeps the existing editor flow. A multi-selection
- * skips the editor and returns every asset for independent optimistic sends.
- */
-export function splitPhotoSelection<T>(assets: readonly T[]): {
-  editorAsset: T | null;
-  uploadAssets: T[];
-} {
-  if (assets.length === 1) {
-    return { editorAsset: assets[0] ?? null, uploadAssets: [] };
-  }
-  return { editorAsset: null, uploadAssets: [...assets] };
-}

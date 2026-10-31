@@ -289,14 +289,3 @@ export const useMessageGroupsStore = create<ConversationGroupsState>()(
     },
   ),
 );
-
-/**
- * 工具：给定 conversationID，返回它属于哪些分组。
- * 不是 hook —— 用在 selector 内部或外部纯函数链路里。
- */
-export function getGroupsForConversation(
-  conversationID: string,
-  groups: CustomConversationGroup[],
-): CustomConversationGroup[] {
-  return groups.filter((g) => g.conversationIDs.includes(conversationID));
-}

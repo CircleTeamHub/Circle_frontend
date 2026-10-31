@@ -93,13 +93,3 @@ export function redactSensitiveFields(value: unknown): unknown {
   }
   return redacted;
 }
-
-export function redactSensitiveHeaders(
-  headers: Record<string, string>,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers)) {
-    out[k] = SENSITIVE_KEYS.has(k.toLowerCase()) ? '[REDACTED]' : v;
-  }
-  return out;
-}

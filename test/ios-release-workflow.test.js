@@ -20,6 +20,25 @@ test('iOS release workflow keeps build and TestFlight submission separate', () =
   assert.match(workflow, /cd \"\$RUNNER_TEMP\" && shasum -a 256 circle-im\.ipa/);
 });
 
+test('iOS release credentials are protected from unreviewed refs', () => {
+  const workflow = read('.github/workflows/ios-release.yml');
+  const buildJob = workflow.match(/\n  ios_build:\n([\s\S]*?)(?=\n  ios_publish:\n)/)?.[1];
+  const publishJob = workflow.match(/\n  ios_publish:\n([\s\S]*)/)?.[1];
+  assert.ok(buildJob, 'ios_build job not found');
+  assert.ok(publishJob, 'ios_publish job not found');
+
+  assert.doesNotMatch(workflow, /\n  push:\n[\s\S]*?tags:/);
+  assert.doesNotMatch(workflow, /refs\/tags\/v/);
+  assert.match(buildJob, /if: .*github\.ref == 'refs\/heads\/main'/);
+  assert.match(publishJob, /if: .*github\.ref == 'refs\/heads\/main'/);
+  assert.match(buildJob, /environment: ios-testflight/);
+  assert.match(publishJob, /environment: ios-testflight/);
+
+  const buildJobEnvironment = buildJob.match(/\n    env:\n([\s\S]*?)(?=\n    steps:)/)?.[1] ?? '';
+  assert.doesNotMatch(buildJobEnvironment, /EAS_TOKEN/);
+  assert.match(buildJob, /name: Build iOS artifact with EAS[\s\S]*?env:\n\s+EAS_TOKEN: \$\{\{ secrets\.EAS_TOKEN \}\}/);
+});
+
 test('EAS production profile uses remote version allocation and iOS resources', () => {
   const eas = JSON.parse(read('eas.json'));
   assert.equal(eas.cli.appVersionSource, 'remote');

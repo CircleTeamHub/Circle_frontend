@@ -51,11 +51,6 @@ function reportEvictionOnce(size: number): void {
   });
 }
 
-/** 测试隔离用。 */
-export function resetTombstoneTelemetry(): void {
-  reportedEviction = false;
-}
-
 interface DeletedMessagesState {
   /**
    * 已删标识 → 删除时刻(毫秒)。值只用于超限淘汰,不参与判定。

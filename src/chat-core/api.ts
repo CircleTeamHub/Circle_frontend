@@ -134,11 +134,10 @@ function withoutExpiredBurn<T extends { burnExpiresAt?: string | null }>(
     return !Number.isFinite(expiresAt) || expiresAt > now;
   });
   if (kept.length !== messages.length) {
-    try {
-      void useChatStore.getState().purgeExpiredBurnMessages();
-    } catch (error) {
-      reportHandledFailure('chatSync', 'expiredLocalPurge', error);
-    }
+    void useChatStore
+      .getState()
+      .purgeExpiredBurnMessages()
+      .catch((error) => reportHandledFailure('chatSync', 'expiredLocalPurge', error));
   }
   return kept;
 }

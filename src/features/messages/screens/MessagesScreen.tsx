@@ -27,12 +27,6 @@ import { useComposerDraftStore } from "@/chat-core/composer-drafts";
 import { draftPreviewText } from "@/chat-core/composer-draft-model";
 import { useMessageGroupsStore } from "@/features/messages/store/use-message-groups-store";
 import { orderMessageFilters } from "@/features/messages/utils/message-filter-order";
-import { useLocalUnreadStore } from "@/features/messages/store/use-local-unread-store";
-import {
-  applyLocalUnreadOverrides,
-  countLocalUnreadOverrides,
-  type ConversationWithLocalUnread,
-} from "@/features/messages/utils/local-unread";
 import { getUserProfileHref } from "@/features/user/utils/routes";
 import { SplitPaneResizer } from "@/components/app/split-pane-resizer";
 import { useDesktopSplitLayout } from "@/hooks/use-desktop-split-layout";
@@ -340,7 +334,7 @@ type ConversationRowLabels = {
 };
 
 type ConversationRowProps = {
-  item: ConversationWithLocalUnread;
+  item: Conversation;
   testID: string;
   pinnedGroupPosition: PinnedGroupPosition;
   labels: ConversationRowLabels;
@@ -752,9 +746,6 @@ export default function MessagesScreen() {
   );
   const conversationGroups = useMessageGroupsStore((state) => state.groups);
   const filterOrder = useMessageGroupsStore((state) => state.filterOrder);
-  const localUnreadOverrides = useLocalUnreadStore((state) => state.overrides);
-  const clearLocalUnread = useLocalUnreadStore((state) => state.clearUnread);
-  const clearManyLocalUnread = useLocalUnreadStore((state) => state.clearMany);
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
   const [refreshing, setRefreshing] = useState(false);
@@ -898,8 +889,7 @@ export default function MessagesScreen() {
 
   // 筛选标签列表 = 固定标签 + 用户自定义群组（动态追加）
   // 按源 ConversationItem 引用缓存映射结果：未变化的会话保持同一 UI 对象引用。
-  // 配合 applyLocalUnreadOverrides 对未覆盖项的引用透传 + memo 化的 ConversationRow，
-  // 新消息到达时只有变化的那几行重渲染，而非整列表。
+  // 配合 memo 化的 ConversationRow，新消息到达时只有变化的那几行重渲染，而非整列表。
   const convMapCacheRef = useRef<
     WeakMap<object, ReturnType<typeof mapChatConversationToUI>>
   >(new WeakMap());
@@ -919,11 +909,6 @@ export default function MessagesScreen() {
       [],
     );
   }, [rawConversations]);
-
-  const baseConversations = useMemo(
-    () => applyLocalUnreadOverrides(rawMappedConversations, localUnreadOverrides),
-    [localUnreadOverrides, rawMappedConversations],
-  );
 
   // 最新一条发送失败的会话 id 集合,拼成排序串让引用比较退化成值比较:
   // 只在失败集合真变了才触发下游 useMemo,消息洪泛不抖动列表。选择器按会话缓存判定,
@@ -957,14 +942,14 @@ export default function MessagesScreen() {
   // 草稿优先于失败标记(微信同款):人回到列表最该看到的是自己还有话没发完。
   const conversations = useMemo(() => {
     const hasDrafts = composerDrafts && Object.keys(composerDrafts).length > 0;
-    if (!failedConversationKey && !hasDrafts) return baseConversations;
+    if (!failedConversationKey && !hasDrafts) return rawMappedConversations;
     const failedIds = new Set(
       failedConversationKey ? failedConversationKey.split('\n') : [],
     );
     const prefix = t('im.preview.sendFailedPrefix', {
       defaultValue: '[发送失败]',
     });
-    return baseConversations.map((conversation) => {
+    return rawMappedConversations.map((conversation) => {
       const draft =
         conversation.id === activeConversationId
           ? undefined
@@ -978,17 +963,15 @@ export default function MessagesScreen() {
     });
   }, [
     activeConversationId,
-    baseConversations,
     composerDrafts,
     failedConversationKey,
+    rawMappedConversations,
     t,
   ]);
 
   useEffect(() => {
-    setMessagesUnread(
-      totalUnread + countLocalUnreadOverrides(rawMappedConversations, localUnreadOverrides),
-    );
-  }, [localUnreadOverrides, rawMappedConversations, setMessagesUnread, totalUnread]);
+    setMessagesUnread(totalUnread);
+  }, [setMessagesUnread, totalUnread]);
 
   // Filter 列表 = 基础 4 项 + 用户设置了 pinnedToTabs 的自定义分组，
   // 再应用用户保存的统一顺序（固定项和自定义项可以互相穿插）。
@@ -1093,7 +1076,6 @@ export default function MessagesScreen() {
   // 点击会话行 → 进入聊天详情页（立即跳转，不等服务端 mark-read / refresh）
   const handleConversationPress = useCallback(
     (conversation: Conversation) => {
-      clearLocalUnread(conversation.id);
       // Fire-and-forget：本地未读立即归零 + socket 上报已读水位（末条 height），
       // 不阻塞导航；详情页有自己的拉取逻辑。
       const dto = useChatStore
@@ -1141,7 +1123,7 @@ export default function MessagesScreen() {
         params: detailParams,
       });
     },
-    [clearLocalUnread, isSplitLayout, router],
+    [isSplitLayout, router],
   );
 
   const handleOpenUserProfile = useCallback(
@@ -1213,7 +1195,6 @@ export default function MessagesScreen() {
   const handleConfirmDeleteConversation = useCallback(
     (conversation: Conversation) => {
       const deleteConversation = (deleteForEveryone: boolean) => {
-        clearLocalUnread(conversation.id);
         void (async () => {
           try {
             await clearChatConversationHistory(conversation.id, {
@@ -1273,7 +1254,7 @@ export default function MessagesScreen() {
         ],
       );
     },
-    [canClearGroupForEveryone, clearLocalUnread, t],
+    [canClearGroupForEveryone, t],
   );
 
   // 点击搜索图标 → 跳转搜索页
@@ -1309,8 +1290,7 @@ export default function MessagesScreen() {
     for (const c of visible) {
       markConversationRead(c.id, dtoById.get(c.id)?.lastMessage?.height ?? 0);
     }
-    clearManyLocalUnread(visible.map((c) => c.id));
-  }, [clearManyLocalUnread]);
+  }, []);
 
   // 菜单项点击处理：关闭菜单并按 id 路由跳转
   const handleMenuAction = useCallback(
@@ -1338,7 +1318,7 @@ export default function MessagesScreen() {
 
   // 单条会话行渲染：头像（私聊可点击进主页）+ 名称/预览/时间/未读数
   const renderItem = useCallback(
-    ({ item, index }: ListRenderItemInfo<ConversationWithLocalUnread>) => (
+    ({ item, index }: ListRenderItemInfo<Conversation>) => (
       <ConversationRow
         item={item}
         testID={E2E_TEST_IDS.messagesConversation(item.id)}
@@ -1397,7 +1377,7 @@ export default function MessagesScreen() {
     ({
       leadingItem,
     }: {
-      leadingItem?: ConversationWithLocalUnread;
+      leadingItem?: Conversation;
     }) =>
       leadingItem && pinnedLayout.hiddenSeparatorIds.has(leadingItem.id) ? null : <Divider />,
     [pinnedLayout],

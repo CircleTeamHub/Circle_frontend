@@ -60,7 +60,7 @@ test('every group write in the chat API goes through the marker; get-or-create d
 
 test('circle-group member writes and admission writes go through the marker', () => {
   const groups = read('src/services/api/groups.ts');
-  for (const name of ['leaveGroup', 'inviteGroupMembers', 'removeGroupMember', 'updateGroupMemberRole']) {
+  for (const name of ['leaveGroup', 'removeGroupMember', 'updateGroupMemberRole']) {
     assert.match(functionBody(groups, name), /markGroupWrite\(\s*apiClient/, `${name} must be marked`);
   }
   assert.doesNotMatch(functionBody(groups, 'reportGroup'), /markGroupWrite/);

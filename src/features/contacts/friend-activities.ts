@@ -37,10 +37,6 @@ export function getFriendActivityCopy(
   }
 }
 
-export function hasUnreadFriendActivities(count: number) {
-  return count > 0;
-}
-
 export function getFriendActivityDisplayName(
   activity: Pick<FriendActivity, 'counterparty'>,
 ) {

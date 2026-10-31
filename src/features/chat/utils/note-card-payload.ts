@@ -14,68 +14,6 @@ function normalizePeerSnapshot(value: unknown): NoteCardPeerSnapshot | null {
   return { id, name, faceURL };
 }
 
-function finiteNonNegative(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-    ? value
-    : 0;
-}
-
-function normalizeWorkStatus(value: unknown): NoteCardData['workStatus'] {
-  return value === 'WORKING' || value === 'CLOSED' || value === 'UNSET'
-    ? value
-    : 'UNSET';
-}
-
-function normalizePublicationStatus(value: unknown): NoteCardData['publicationStatus'] {
-  return value === 'ACTIVE' || value === 'UNLISTED' || value === 'DELETED'
-    ? value
-    : 'ACTIVE';
-}
-
-export function normalizeNoteCardPayload(raw: unknown): NoteCardData | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const candidate = raw as Partial<NoteCardData>;
-  if (typeof candidate.noteId !== 'string' || typeof candidate.title !== 'string') {
-    return null;
-  }
-
-  const imageCount = finiteNonNegative(candidate.imageCount);
-  const videoCount = finiteNonNegative(candidate.videoCount);
-  const contentPreview =
-    typeof candidate.contentPreview === 'string' ? candidate.contentPreview : null;
-  const personalCardSnapshot = normalizePeerSnapshot(candidate.personalCardSnapshot);
-  const sourceGroupCardSnapshot = normalizePeerSnapshot(candidate.sourceGroupCardSnapshot);
-
-  return {
-    noteId: candidate.noteId,
-    ...(typeof candidate.sourceNoteId === 'string' && candidate.sourceNoteId.length > 0
-      ? { sourceNoteId: candidate.sourceNoteId }
-      : {}),
-    ...(personalCardSnapshot ? { personalCardSnapshot } : {}),
-    ...(sourceGroupCardSnapshot ? { sourceGroupCardSnapshot } : {}),
-    ownerId: candidate.ownerId ?? null,
-    title: candidate.title,
-    contentPreview,
-    coverUrl: typeof candidate.coverUrl === 'string' ? candidate.coverUrl : null,
-    imageCount,
-    videoCount,
-    // 私有笔记分组只能在「我的笔记」里出现，不能随聊天卡片泄露。
-    groupNames: [],
-    workStatus: normalizeWorkStatus(candidate.workStatus),
-    publicationStatus: normalizePublicationStatus(candidate.publicationStatus),
-    hasText:
-      typeof candidate.hasText === 'boolean'
-        ? candidate.hasText
-        : Boolean(contentPreview?.trim()),
-    showcaseCount:
-      typeof candidate.showcaseCount === 'number'
-        ? Math.max(0, candidate.showcaseCount)
-        : imageCount,
-    hasLocation:
-      typeof candidate.hasLocation === 'boolean' ? candidate.hasLocation : false,
-  };
-}
-
 export function buildNoteCardPayloadFromSummary(
   note: NoteSummary,
   ownerId: string | null | undefined,

@@ -107,13 +107,6 @@ test('非法坐标不触发原生分支', () => {
   assert.equal(getBasemapProvider(22, Number.NaN, true), 'carto');
 });
 
-test('署名随底图源走', () => {
-  const { getBasemapAttribution } = loadUtils({});
-
-  assert.match(getBasemapAttribution('amap-native'), /高德/);
-  assert.match(getBasemapAttribution('carto'), /OpenStreetMap/);
-});
-
 test('GCJ-02 往返回得到原点（亚米级）', () => {
   const { wgs84ToGcj02, gcj02ToWgs84 } = loadUtils({});
 

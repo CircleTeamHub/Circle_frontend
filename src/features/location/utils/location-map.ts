@@ -84,42 +84,6 @@ export function hasValidLocationCoordinates(
   );
 }
 
-export function getOpenStreetMapTileUrl(
-  latitude: number,
-  longitude: number,
-  zoom = 15,
-  { scheme = 'light', retina = true }: BasemapOptions = {},
-): string | null {
-  if (!hasValidLocationCoordinates(latitude, longitude)) return null;
-  const safeZoom = Math.min(19, Math.max(0, Math.round(zoom)));
-  const tileCount = 2 ** safeZoom;
-  const mercatorLatitude = Math.min(
-    WEB_MERCATOR_MAX_LATITUDE,
-    Math.max(-WEB_MERCATOR_MAX_LATITUDE, latitude),
-  );
-  const latitudeRadians = (mercatorLatitude * Math.PI) / 180;
-  const x = Math.min(
-    tileCount - 1,
-    Math.max(0, Math.floor(((longitude + 180) / 360) * tileCount)),
-  );
-  const y = Math.min(
-    tileCount - 1,
-    Math.max(
-      0,
-      Math.floor(
-        ((1 -
-          Math.log(
-            Math.tan(latitudeRadians) + 1 / Math.cos(latitudeRadians),
-          ) /
-            Math.PI) /
-          2) *
-          tileCount,
-      ),
-    ),
-  );
-  return basemapTile(scheme, safeZoom, x, y, retina);
-}
-
 /** 一个格子在预览图里的位置，与具体底图源无关。 */
 type TileCell = {
   zoom: number;
@@ -342,8 +306,6 @@ export function buildSystemMapUrls(
  */
 export type BasemapProvider = 'carto' | 'amap-native';
 
-const AMAP_ATTRIBUTION = '© 高德地图';
-
 export function getAmapNativeKey(platform: string): string {
   // Expo 是按字面量静态替换 process.env.EXPO_PUBLIC_*，这里只能写成完整形式。
   if (platform === 'android') {
@@ -372,10 +334,6 @@ export function getBasemapProvider(
   if (!hasValidLocationCoordinates(latitude, longitude)) return 'carto';
   // 高德在境外基本没有数据（实测 z15 的境外瓦片只有 179 字节，是张空白图）。
   return isOutOfChina(latitude, longitude) ? 'carto' : 'amap-native';
-}
-
-export function getBasemapAttribution(provider: BasemapProvider): string {
-  return provider === 'amap-native' ? AMAP_ATTRIBUTION : BASEMAP_ATTRIBUTION;
 }
 
 /**

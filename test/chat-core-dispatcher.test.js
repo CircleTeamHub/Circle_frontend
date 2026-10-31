@@ -99,7 +99,6 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
     // 和「移除之前就在途、之后才落地的旧快照」。
     conversationsSnapshotSeq: 0,
     cleared: [],
-    clearedUnread: [],
     burnDurations: [],
     burnedMessages: [],
     upserts: [],
@@ -318,15 +317,6 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
         },
       };
     }
-    if (request === '@/features/messages/store/use-local-unread-store') {
-      return {
-        useLocalUnreadStore: {
-          getState: () => ({
-            clearUnread: (conversationId) => state.clearedUnread.push(conversationId),
-          }),
-        },
-      };
-    }
     if (request === './socket-manager') {
       return { reportChatDelivered: (cid, h) => state.deliveredReports.push({ cid, h }) };
     }
@@ -403,7 +393,7 @@ test('a synchronous message burst is ingested once per conversation after the le
   assert.equal(state.ingested.length, 3);
 });
 
-test('chat:history_cleared removes the direct timeline and local unread override', () => {
+test('chat:history_cleared removes the direct timeline', () => {
   const { socket, state } = loadDispatcher();
   socket.emit('chat:history_cleared', {
     conversationId: 'c1',
@@ -411,7 +401,6 @@ test('chat:history_cleared removes the direct timeline and local unread override
     clearedBy: 'peer',
   });
   assert.deepEqual(state.cleared, [{ conversationId: 'c1', height: 42 }]);
-  assert.deepEqual(state.clearedUnread, ['c1']);
 });
 
 test('chat:burned_messages removes expired messages on the peer device', () => {
@@ -447,7 +436,6 @@ test('malformed chat:history_cleared payloads cannot clear local data', () => {
     clearedBy: 'peer',
   });
   assert.equal(state.cleared.length, 0);
-  assert.equal(state.clearedUnread.length, 0);
 });
 
 test('malformed payloads never reach the store', () => {
