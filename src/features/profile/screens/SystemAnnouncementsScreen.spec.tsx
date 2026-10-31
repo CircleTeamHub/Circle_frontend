@@ -94,12 +94,23 @@ jest.mock('react-native', () => {
   });
 });
 
+// mockRefocus() 模拟离开再回到页面：每个 useFocusEffect 先清理、再重跑回调。
+const mockRefocusers = new Set<() => void>();
+const mockRefocus = () => mockRefocusers.forEach((refocus) => refocus());
 jest.mock('expo-router', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   return {
     useRouter: () => mockRouter,
     useFocusEffect: (callback: () => void | (() => void)) => {
-      ReactModule.useEffect(() => callback(), [callback]);
+      const [focusCount, setFocusCount] = ReactModule.useState(0);
+      ReactModule.useEffect(() => {
+        const refocus = () => setFocusCount((count: number) => count + 1);
+        mockRefocusers.add(refocus);
+        return () => {
+          mockRefocusers.delete(refocus);
+        };
+      }, []);
+      ReactModule.useEffect(() => callback(), [callback, focusCount]);
     },
   };
 });
@@ -396,4 +407,22 @@ test('immediately hides old rows and reloads when an announcement is edited or d
  act(()=>useAnnouncementSignalStore.getState().bump());expect(screen.queryByText('old-content')).toBeNull();
  await act(async()=>{pending.resolve({items:[],nextCursor:null});});
  expect(mockFetchProfileNotificationsPage).toHaveBeenCalledTimes(2);
+});
+
+test('a failed mark-read is retried on the next focus even inside the reload window', async () => {
+  mockMarkProfileNotificationsRead.mockRejectedValueOnce(new Error('offline'));
+  render(<SystemAnnouncementsScreen />);
+  await waitFor(() => expect(mockMarkProfileNotificationsRead).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(mockFetchProfileNotificationsPage).toHaveBeenCalledTimes(1));
+
+  // 列表在 30 秒窗口内不重拉，但上次标已读失败了，必须重试，否则「我的」角标一直挂着。
+  await act(async () => { mockRefocus(); });
+  expect(mockFetchProfileNotificationsPage).toHaveBeenCalledTimes(1);
+  expect(mockMarkProfileNotificationsRead).toHaveBeenCalledTimes(2);
+  expect(mockSetProfileUnread).toHaveBeenCalledWith(0);
+
+  // 重试成功后回到原来的节奏：窗口内再回来两样都不发。
+  await act(async () => { mockRefocus(); });
+  expect(mockFetchProfileNotificationsPage).toHaveBeenCalledTimes(1);
+  expect(mockMarkProfileNotificationsRead).toHaveBeenCalledTimes(2);
 });

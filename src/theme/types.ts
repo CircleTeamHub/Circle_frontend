@@ -54,6 +54,15 @@ export interface ThemeColors {
   glassButton: string;
   success: string;
   warning: string;
+  /** 开工状态的实心底(笔记管理按钮、笔记卡片标签),两个主题同值。 */
+  workingFill: string;
+  /** 打烊状态的实心底:橘黄,比 warning 那个橙色更亮更偏黄。 */
+  closedFill: string;
+  /**
+   * 开工/打烊实心底上的文字与图标。浅色模式用深色字(绿底 7.5:1、橘黄底 8.6:1);
+   * 暗色模式按产品要求用白字,对比度只有 2:1 左右,是有意的取舍,别当 bug 改回。
+   */
+  onStatusFill: string;
   /** 警示色用作文字/图标前景时的版本：浅色底上 warning 原色对比度不够 4.5:1。 */
   warningText: string;
   orange: string;

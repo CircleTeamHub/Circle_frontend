@@ -16,6 +16,7 @@ export interface Conversation {
   isTempChat?: boolean;
   pinned: boolean;
   muted: boolean;
+  isAssistant?: boolean;
   /** 输入框里还有没发出去的内容:列表预览换成「[草稿] …」。 */
   draftPreview?: string;
 }

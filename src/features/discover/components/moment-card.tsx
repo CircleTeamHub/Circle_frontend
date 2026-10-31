@@ -6,7 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberName } from '@/components/ui/member-name';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { getUserProfileHref } from '@/features/user/utils/routes';
+import {
+  getUserProfileHref,
+  type UserProfileScope,
+} from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import {
   buildLikedFriendsPreview,
@@ -18,6 +21,8 @@ import type { MomentPost } from '@/types';
 
 interface MomentCardProps {
   post: MomentPost;
+  /** 所在 tab 栈：点头像在本栈打开作者资料，不跨 tab。 */
+  scope: UserProfileScope;
   onLike: (postId: string) => void;
   onPress: (postId: string) => void;
   /** 点评论按钮：就地评论（缺省时退回跳详情）。 */
@@ -91,6 +96,7 @@ const s = StyleSheet.create({
 
 export const MomentCard: React.FC<MomentCardProps> = ({
   post,
+  scope,
   onLike,
   onPress,
   onComment,
@@ -152,8 +158,8 @@ export const MomentCard: React.FC<MomentCardProps> = ({
     likedFriendsPreview.separator === '、' ? '' : likedFriendsPreview.separator;
 
   const handleAvatarPress = useCallback(() => {
-    router.navigate(getUserProfileHref('discover', post.author.id));
-  }, [router, post.author.id]);
+    router.navigate(getUserProfileHref(scope, post.author.id));
+  }, [router, scope, post.author.id]);
 
   return (
     <View style={s.card}>

@@ -36,10 +36,21 @@ jest.mock('@/components/ui/menu-row', () => ({ MenuRow: () => null }));
 jest.mock('@/components/ui/nav-header', () => ({
   NavHeader: ({ rightSlot }: { rightSlot?: React.ReactNode }) => rightSlot ?? null,
 }));
+let mockFriendsMutated = false;
 jest.mock('@/services/api/friends', () => ({
   fetchFriendTags: jest.fn(),
   fetchFriendsByTag: jest.fn(),
   createFriendTag: jest.fn(),
+  friendsMutatedSince: () => mockFriendsMutated,
+}));
+// 聚焦重拉闸门读好友动态未读数与账号代际(见 use-focus-reload-gate)。
+jest.mock('@/stores/friendActivityUnreadStore', () => ({
+  useFriendActivityUnreadStore: (select: (state: { count: number }) => unknown) =>
+    select({ count: 0 }),
+}));
+jest.mock('@/stores/authStore', () => ({
+  useAuthStore: (select: (state: { sessionEpoch: number }) => unknown) =>
+    select({ sessionEpoch: 1 }),
 }));
 jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
@@ -64,7 +75,10 @@ test('two immediate create presses send only one non-idempotent request', async 
   expect(createFriendTag).toHaveBeenCalledWith('同事');
 });
 
-test('refreshes tag counts when returning from a tag detail screen', async () => {
+// 标签详情里增删成员走 assignFriendTag/removeFriendTag(都记好友写请求):回来必须重拉人数;
+// 只是看了看就回来则不重拉(每个标签都要整表拉一次好友)。
+test('refreshes tag counts when returning after a friend or tag change', async () => {
+  mockFriendsMutated = false;
   jest.mocked(fetchFriendTags).mockResolvedValue([
     { id: 'tag-1', ownerID: 'owner-1', name: '同事', color: null },
   ]);
@@ -75,10 +89,29 @@ test('refreshes tag counts when returning from a tag detail screen', async () =>
   render(<FriendTagsScreen />);
   await waitFor(() => expect(fetchFriendsByTag).toHaveBeenCalledTimes(1));
 
+  mockFriendsMutated = true;
   await act(async () => {
     mockFocusCallback?.();
     await Promise.resolve();
   });
 
   await waitFor(() => expect(fetchFriendsByTag).toHaveBeenCalledTimes(2));
+});
+
+test('does not refetch every tag when returning without any change', async () => {
+  mockFriendsMutated = false;
+  jest.mocked(fetchFriendTags).mockResolvedValue([
+    { id: 'tag-1', ownerID: 'owner-1', name: '同事', color: null },
+  ]);
+  jest.mocked(fetchFriendsByTag).mockReset().mockResolvedValue([]);
+
+  render(<FriendTagsScreen />);
+  await waitFor(() => expect(fetchFriendsByTag).toHaveBeenCalledTimes(1));
+
+  await act(async () => {
+    mockFocusCallback?.();
+    await Promise.resolve();
+  });
+
+  expect(fetchFriendsByTag).toHaveBeenCalledTimes(1);
 });

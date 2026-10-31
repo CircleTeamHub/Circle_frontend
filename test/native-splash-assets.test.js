@@ -50,40 +50,6 @@ function getLogoCoverage(rel) {
   };
 }
 
-function getNonWhiteRowBands(rel) {
-  const image = PNG.sync.read(read(rel));
-  const occupiedRows = [];
-
-  for (let y = 0; y < image.height; y += 1) {
-    let occupied = false;
-    for (let x = 0; x < image.width; x += 1) {
-      const i = (y * image.width + x) * 4;
-      const isWhite =
-        image.data[i] > 245 && image.data[i + 1] > 245 && image.data[i + 2] > 245;
-      if (image.data[i + 3] > 10 && !isWhite) {
-        occupied = true;
-        break;
-      }
-    }
-    if (occupied) occupiedRows.push(y);
-  }
-
-  const bands = [];
-  for (const row of occupiedRows) {
-    const current = bands.at(-1);
-    if (!current || row > current.end + 1) {
-      bands.push({ start: row, end: row });
-    } else {
-      current.end = row;
-    }
-  }
-
-  return bands.map(({ start, end }) => ({
-    start: start / image.height,
-    end: (end + 1) / image.height,
-  }));
-}
-
 /**
  * 按饱和度挑出「品牌标本体」的包围盒。
  *
@@ -140,13 +106,10 @@ function assertSolidWhitePng(rel) {
   }
 }
 
-test('expo splash config matches the JS startup splash color and uses the standalone chat icon', () => {
+test('expo startup config has no branded splash artwork', () => {
   const app = readJson('app.json').expo;
-
-  // 原生启动图底色必须与 JS 开屏夜空同源（night-layout.json），否则启动时会先闪一屏别的颜色。
-  const nightLayout = readJson('assets/splash/night-layout.json');
-  assert.equal(app.splash.backgroundColor, nightLayout.baseColor);
-  assert.equal(app.splash.image, './assets/images/splash-tagline.png');
+  assert.equal(app.splash, undefined);
+  assert.equal(app.ios.splash, undefined);
   assert.equal(app.android.adaptiveIcon.backgroundColor, '#FFFFFF');
   assert.equal(
     app.android.adaptiveIcon.foregroundImage,
@@ -162,12 +125,6 @@ test('expo splash config matches the JS startup splash color and uses the standa
   );
 
   const assets = [
-    {
-      rel: 'assets/images/splash-tagline.png',
-      minCoverage: 0.25,
-      maxCoverage: 0.6,
-      maxCenterOffsetY: 0.06,
-    },
     {
       rel: 'assets/images/android-icon-foreground.png',
       minCoverage: 0.42,
@@ -214,12 +171,26 @@ test('expo splash config matches the JS startup splash color and uses the standa
     }
   }
 
-  const splashBands = getNonWhiteRowBands('assets/images/splash-tagline.png');
-  assert.equal(splashBands.length, 1, 'splash image should contain only the chat icon');
-  assert.ok(splashBands[0].start > 0.2, 'chat icon should be vertically centered');
-  assert.ok(splashBands[0].end < 0.8, 'chat icon should be vertically centered');
-
   assertSolidWhitePng('assets/images/android-icon-background.png');
+
+  const rootLayout = readText('app/_layout.tsx');
+  assert.doesNotMatch(rootLayout, /StartupSplash/);
+  assert.doesNotMatch(rootLayout, /splash-night|splash-tagline/);
+  assert.doesNotMatch(rootLayout, /expo-splash-screen|preventAutoHideAsync|hideAsync/);
+  for (const rel of [
+    'assets/images/splash-icon.png',
+    'assets/images/splash-night-bg.png',
+    'assets/images/splash-night.png',
+    'assets/images/splash-tagline.png',
+    'assets/splash/night-layout.json',
+    'src/components/app/startup-splash.tsx',
+  ]) {
+    assert.equal(
+      fs.existsSync(path.join(process.cwd(), rel)),
+      false,
+      `${rel} must be removed`,
+    );
+  }
 });
 
 test('iOS home-screen icon is a full-bleed frosted mark with no alpha', () => {
@@ -269,30 +240,4 @@ test('iOS home-screen icon is a full-bleed frosted mark with no alpha', () => {
   );
   assert.ok(Math.abs(mark.centerX - 0.5) < 0.05, `mark centerX ${mark.centerX}`);
   assert.ok(Math.abs(mark.centerY - 0.5) < 0.05, `mark centerY ${mark.centerY}`);
-});
-
-test('iOS native splash is the full-bleed night sky the JS splash continues from', () => {
-  const app = readJson('app.json').expo;
-  const layout = readJson('assets/splash/night-layout.json');
-
-  assert.deepEqual(app.ios.splash, {
-    image: './assets/images/splash-night.png',
-    resizeMode: 'cover',
-    backgroundColor: layout.baseColor,
-  });
-
-  // 原生图与 JS 底图都由 night-layout 生成；尺寸必须等于设计稿，cover 映射才对得上。
-  for (const rel of ['assets/images/splash-night.png', 'assets/images/splash-night-bg.png']) {
-    const image = PNG.sync.read(read(rel));
-    assert.equal(image.width, layout.width, rel);
-    assert.equal(image.height, layout.height, rel);
-  }
-
-  const splash = readText('src/components/app/startup-splash.tsx');
-  assert.match(splash, /splash-night-bg\.png/);
-  assert.match(splash, /contentFit="cover"/);
-  assert.match(splash, /nightLayout\.iconWidth \* frame\.scale/);
-  // 原生启动屏要等夜空底图上屏后才隐藏，交接无闪烁。
-  const rootLayout = readText('app/_layout.tsx');
-  assert.match(rootLayout, /onBackdropReady=\{hideNativeSplash\}/);
 });

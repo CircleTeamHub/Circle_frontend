@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { markGroupWrite } from './group-writes';
 import { expectShape, isPlainObject } from '@/utils/validate';
 import type { FriendReportCategory } from './friends';
 
@@ -26,23 +27,23 @@ function isGroupMemberRoleResult(value: unknown): value is GroupMemberRoleResult
 }
 
 export async function leaveGroup(groupID: string) {
-  return apiClient<void>(`/group/${groupID}/leave`, {
+  return markGroupWrite(apiClient<void>(`/group/${groupID}/leave`, {
     method: 'DELETE',
-  });
+  }));
 }
 
 export async function removeGroupMember(groupID: string, userID: string) {
-  const raw = await apiClient<unknown>(`/group/${groupID}/members/${userID}`, {
+  const raw = await markGroupWrite(apiClient<unknown>(`/group/${groupID}/members/${userID}`, {
     method: 'DELETE',
-  });
+  }));
   return expectShape(raw, isGroupMemberSyncResult, '群成员操作结果格式异常');
 }
 
 export async function updateGroupMemberRole(groupID: string, userID: string, role: GroupMemberRole) {
-  const raw = await apiClient<unknown>(`/group/${groupID}/members/${userID}/role`, {
+  const raw = await markGroupWrite(apiClient<unknown>(`/group/${groupID}/members/${userID}/role`, {
     method: 'PATCH',
     body: { role },
-  });
+  }));
   return expectShape(raw, isGroupMemberRoleResult, '群成员角色结果格式异常');
 }
 

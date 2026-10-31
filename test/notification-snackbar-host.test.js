@@ -37,7 +37,7 @@ test("notification snackbar host passes current stack scope to the route resolve
   const host = read(
     "src/features/notifications/components/NotificationSnackbarHost.tsx",
   );
-  assert.match(host, /const notificationScope = .*includes\('discover'\)/);
+  assert.match(host, /const notificationScope = getNotificationScope\(segments\);/);
   assert.match(host, /scope: notificationScope/);
 });
 

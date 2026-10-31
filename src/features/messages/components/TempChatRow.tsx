@@ -16,7 +16,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 interface TempChatRowProps {
   room: TempChatListItem;
   isLast: boolean;
-  /** 进群 / 结束请求在途时显示 loading，替换掉更多按钮。 */
+  /** 进群 / 结束 / 删除请求在途时显示 loading，替换掉更多按钮。 */
   isBusy: boolean;
   /** 不可进入（非活跃或已有房间在打开中）时禁用整行点击。 */
   disabled: boolean;
@@ -149,7 +149,8 @@ export default function TempChatRow({
         </View>
         {isBusy ? (
           <ActivityIndicator size="small" color={colors.primary} />
-        ) : room.isActive ? (
+        ) : (
+          // 已结束 / 已过期的房间也要能点开菜单:删除对所有房间都可用。
           <Pressable
             hitSlop={8}
             accessibilityLabel={t('tempChats.more')}
@@ -161,7 +162,7 @@ export default function TempChatRow({
               color={colors.textSecondary}
             />
           </Pressable>
-        ) : null}
+        )}
       </Pressable>
       {isLast ? null : <Divider />}
     </View>

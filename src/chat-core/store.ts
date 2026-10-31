@@ -519,8 +519,11 @@ interface ChatStoreState {
    * 或补拉换掉了同 id 的合成确认之后让预览跟上时间线。
    */
   revertConversationPreview: (conversationId: string) => void;
-  /** 本端已读的乐观归零(socket 上报之外的即时 UI 反馈)。 */
-  markConversationReadLocal: (conversationId: string) => void;
+  /**
+   * 本端已读的乐观归零(socket 上报之外的即时 UI 反馈)。传入水位时一并
+   * 记录本机已读水位，避免服务端旧快照在回执落地前把未读数写回来。
+   */
+  markConversationReadLocal: (conversationId: string, height?: number) => void;
   /** 乐观消息发送失败:按 d 标记,气泡转失败态。 */
   markMessageFailed: (conversationId: string, d: string) => void;
   /** 重发开始:失败气泡回到「发送中」(清 failed,sendStatus 3→1)。 */
@@ -1406,7 +1409,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           .map((c) =>
             reconcileWithLocalWatermarks(
               c,
-              readWatermarks[c.id]?.[currentUserId ?? ''] ?? 0,
+              seededReadWatermarks[c.id]?.[currentUserId ?? ''] ?? 0,
               floors[c.id] ?? 0,
               timelines[c.id] ?? [],
               currentUserId,
@@ -1480,6 +1483,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       void deleteLocalMessagesBelow(conversationId, floor + 1);
     }
     const timeline = messagesByConversation[incoming.id];
+    const seededReadWatermarks = seedSelfReadWatermarks(
+      seedPeerReadWatermarks(readWatermarks, [incoming]),
+      [incoming],
+      currentUserId,
+    );
     const reconciled = reconcileWithLocalWatermarks(
       preserveNewerLivePreview(
         reconcileDeletedPreview(withBurnState, timeline),
@@ -1493,7 +1501,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             get().appForeground && get().activeConversationId === incoming.id,
         },
       ),
-      readWatermarks[incoming.id]?.[currentUserId ?? ''] ?? 0,
+      seededReadWatermarks[incoming.id]?.[currentUserId ?? ''] ?? 0,
       floors[incoming.id] ?? 0,
       timelines[incoming.id] ?? [],
       currentUserId,
@@ -1516,11 +1524,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
               ...currentConversations.filter((c) => c.id !== incoming.id),
               next,
             ]),
-      readWatermarks: seedSelfReadWatermarks(
-        seedPeerReadWatermarks(readWatermarks, [incoming]),
-        [incoming],
-        currentUserId,
-      ),
+      readWatermarks: seededReadWatermarks,
       deliveredWatermarks: seedPeerDeliveredWatermarks(deliveredWatermarks, [
         incoming,
       ]),
@@ -1624,10 +1628,28 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
    */
   hydrateLocalSnapshot: (conversations, messagesByConversation) => {
     const state = get();
+    const seededReadWatermarks = seedSelfReadWatermarks(
+      state.readWatermarks,
+      conversations,
+      state.currentUserId,
+    );
+    const selfReadHeight = (conversationId: string): number =>
+      seededReadWatermarks[conversationId]?.[state.currentUserId ?? ''] ?? 0;
+    const reconciledLocalConversations = conversations.map((conversation) =>
+      reconcileWithLocalWatermarks(
+        conversation,
+        selfReadHeight(conversation.id),
+        state.clearedBeforeHeightByConversation[conversation.id] ?? 0,
+        messagesByConversation[conversation.id] ?? [],
+        state.currentUserId,
+      ),
+    );
     // 服务端快照一旦成功，null 预览就是权威值，不能被本地旧时间线覆盖。
     if (!state.conversationsSnapshotLoaded && conversations.length > 0) {
-      const localById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
-      const withLocalPreviews = conversations.map((conversation) =>
+      const localById = new Map(
+        reconciledLocalConversations.map((conversation) => [conversation.id, conversation]),
+      );
+      const withLocalPreviews = reconciledLocalConversations.map((conversation) =>
         hydratePreviewFromLocalTimeline(
           conversation,
           messagesByConversation[conversation.id],
@@ -1656,6 +1678,33 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
           set({ conversations: sortConversations(merged) });
         }
       }
+    }
+    if (state.conversationsSnapshotLoaded && conversations.length > 0) {
+      // The authoritative rows can arrive before the local cache. If the cache
+      // carries a newer optimistic read height, reconcile only the unread
+      // field; keep the server's preview and membership data untouched.
+      const reconciledCurrent = state.conversations.map((conversation) =>
+        reconcileWithLocalWatermarks(
+          conversation,
+          selfReadHeight(conversation.id),
+          state.clearedBeforeHeightByConversation[conversation.id] ?? 0,
+          messagesByConversation[conversation.id] ?? [],
+          state.currentUserId,
+        ),
+      );
+      if (
+        reconciledCurrent.some(
+          (conversation, index) => conversation !== state.conversations[index],
+        )
+      ) {
+        set({ conversations: reconciledCurrent });
+      }
+    }
+    if (seededReadWatermarks !== state.readWatermarks) {
+      // A local cache can finish after the authoritative snapshot. Keep any
+      // persisted read progress without allowing the cache to overwrite the
+      // server's conversation rows.
+      set({ readWatermarks: seededReadWatermarks });
     }
     const nextTimelines: Record<string, ChatMessageDto[]> = {
       ...state.messagesByConversation,
@@ -1917,18 +1966,86 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     });
   },
 
-  markConversationReadLocal: (conversationId) => {
-    const { conversations } = get();
+  markConversationReadLocal: (conversationId, height) => {
+    const {
+      conversations,
+      currentUserId,
+      readWatermarks,
+    } = get();
     const index = conversations.findIndex((c) => c.id === conversationId);
-    if (index < 0 || conversations[index].unreadCount === 0) return;
-    const next = { ...conversations[index], unreadCount: 0 };
+    const currentConversation = index >= 0 ? conversations[index] : null;
+    const validHeight =
+      Number.isSafeInteger(height) && (height as number) > 0
+        ? (height as number)
+        : 0;
+    let nextReadWatermarks = readWatermarks;
+    if (currentUserId && validHeight > 0) {
+      const prior = readWatermarks[conversationId]?.[currentUserId] ?? 0;
+      if (validHeight > prior) {
+        nextReadWatermarks = {
+          ...readWatermarks,
+          [conversationId]: {
+            ...(readWatermarks[conversationId] ?? {}),
+            [currentUserId]: validHeight,
+          },
+        };
+      }
+    }
+
+    // 水位带到某条消息时，只清掉「已读到这条」的未读。已读回执在途期间
+    // 可能又收到更高的消息，不能在 ack 到达时把那条新消息也清掉。
+    const latestHeight = conversations[index]?.lastMessage?.height ?? 0;
+    const canClearUnread = validHeight === 0 || latestHeight <= validHeight;
+    const shouldClearUnread =
+      index >= 0 && canClearUnread && conversations[index].unreadCount > 0;
+    const priorConversationReadHeight =
+      currentConversation &&
+      Number.isSafeInteger(currentConversation.readHeight) &&
+      (currentConversation.readHeight as number) > 0
+        ? (currentConversation.readHeight as number)
+        : 0;
+    const nextConversationReadHeight = currentUserId
+      ? Math.max(
+          priorConversationReadHeight,
+          readWatermarks[conversationId]?.[currentUserId] ?? 0,
+          validHeight,
+        )
+      : priorConversationReadHeight;
+    const readHeightChanged =
+      currentConversation !== null &&
+      nextConversationReadHeight > priorConversationReadHeight;
+    const readWatermarksChanged = nextReadWatermarks !== readWatermarks;
+    if (!shouldClearUnread && !readWatermarksChanged && !readHeightChanged) return;
+
+    const nextConversation =
+      currentConversation && (shouldClearUnread || readHeightChanged)
+        ? {
+            ...currentConversation,
+            ...(shouldClearUnread ? { unreadCount: 0 } : {}),
+            ...(readHeightChanged
+              ? { readHeight: nextConversationReadHeight }
+              : {}),
+          }
+        : null;
+
     set({
-      conversations: [
-        ...conversations.slice(0, index),
-        next,
-        ...conversations.slice(index + 1),
-      ],
+      ...(nextConversation
+        ? {
+            conversations: [
+              ...conversations.slice(0, index),
+              nextConversation,
+              ...conversations.slice(index + 1),
+            ],
+          }
+        : {}),
+      ...(readWatermarksChanged
+        ? { readWatermarks: nextReadWatermarks }
+        : {}),
     });
+    // Keep the optimistic read state in the local conversation cache too. On a
+    // cold start this prevents the first local render from restoring a badge
+    // that was already cleared before the previous process exited.
+    if (nextConversation) void upsertLocalConversation(nextConversation);
   },
   setActiveConversationId: (conversationId) =>
     set({ activeConversationId: conversationId }),
@@ -2926,12 +3043,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 }));
 
-/** 消息 tab 角标 = 非免打扰会话的未读合计(免打扰只显红点由 UI 层处理)。 */
+/**
+ * 消息 tab 角标 = 普通、非免打扰会话的未读合计。
+ * AI 小助手走独立入口，不占用消息 tab 的列表和角标口径。
+ */
 export function selectTotalUnread(state: {
   conversations: ChatConversationDto[];
 }): number {
   return state.conversations.reduce(
-    (sum, c) => (c.muted ? sum : sum + c.unreadCount),
+    (sum, c) =>
+      c.type === 'SUPPORT' || c.muted ? sum : sum + c.unreadCount,
     0,
   );
 }

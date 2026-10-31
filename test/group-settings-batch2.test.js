@@ -210,7 +210,7 @@ test('note management is a separate page from group management', () => {
   assert.doesNotMatch(noteManage, /handleUnlistNote|noteUnlist|unlistNote/);
   assert.doesNotMatch(noteManage, /relistNote/);
   assert.match(routes, /export function getNoteManagementHref\(/);
-  for (const tab of ['messages', 'contacts', 'discover', 'profile']) {
+  for (const tab of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
     const route = read(`app/(tabs)/${tab}/note-management.tsx`);
     assert.match(route, /NoteManagementScreen/);
     assert.match(routes, new RegExp(`'/\\(tabs\\)/${tab}/note-management'`));

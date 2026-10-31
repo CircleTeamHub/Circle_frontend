@@ -1,6 +1,7 @@
 import { ProfileUnreadBadge } from "../components/ProfileUnreadBadge";
 import { ScrollingAnnouncements } from "../components/ScrollingAnnouncements";
 import { Avatar } from "@/components/ui/avatar";
+import { AssistantAvatar } from "@/features/assistant/components/AssistantAvatar";
 import { GradientCover } from "@/components/ui/gradient-cover";
 import { MemberName } from "@/components/ui/member-name";
 import { UserIconRow } from "@/components/ui/user-icon-row";
@@ -124,6 +125,15 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   profileAction: { alignItems: "center", gap: Spacing.xs },
+  assistantButton: {
+    alignItems: "center",
+    borderCurve: "continuous",
+    borderRadius: 999,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  assistantButtonPressed: { opacity: 0.72, transform: [{ scale: 0.94 }] },
   memberCard: {
     borderRadius: Radius.lg,
     padding: Spacing.md,
@@ -348,6 +358,10 @@ export default function ProfileScreen() {
     router.push("/(tabs)/profile/share");
   }, [router]);
 
+  const handleOpenAssistant = useCallback(() => {
+    router.push("/(tabs)/messages/assistant");
+  }, [router]);
+
   // 我的二维码(名片):微信同款,账号行右侧的小码图标进入。
   const handleOpenMyQr = useCallback(() => {
     router.push({ pathname: "/qr-code", params: { type: "user" } });
@@ -365,8 +379,9 @@ export default function ProfileScreen() {
     router.push("/(tabs)/profile/credit-score" as never);
   }, [router]);
 
-  const handleOpenDecorations = useCallback(() => {
-    router.push('/(tabs)/profile/decorations' as never);
+  // 「我的装扮」中转页已取消(只剩徽章一项):直达徽章页。
+  const handleOpenBadges = useCallback(() => {
+    router.push('/(tabs)/profile/icons' as never);
   }, [router]);
 
   const handleMenuPress = useCallback(
@@ -463,6 +478,20 @@ export default function ProfileScreen() {
           </View>
         </View>
         <View style={s.profileRight}>
+          <Pressable
+            testID="profile-open-assistant"
+            accessibilityRole="button"
+            accessibilityLabel={t('assistant.open', { defaultValue: '打开AI小助手' })}
+            hitSlop={6}
+            onPress={handleOpenAssistant}
+            style={({ pressed }) => [
+              s.assistantButton,
+              { backgroundColor: colors.primaryLight },
+              pressed && s.assistantButtonPressed,
+            ]}
+          >
+            <AssistantAvatar size={26} />
+          </Pressable>
           <Pressable style={s.profileAction} onPress={handleOpenShare}>
             <Ionicons
               name="share-social-outline"
@@ -526,15 +555,15 @@ export default function ProfileScreen() {
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={t('profile.myDecorations')}
-          accessibilityHint={t('profile.decorations.openHint')}
+          accessibilityLabel={t('profile.badges')}
+          accessibilityHint={t('profile.badgesHint')}
           style={s.memberCardHeader}
-          onPress={handleOpenDecorations}
+          onPress={handleOpenBadges}
         >
           <View style={s.memberHeaderLeft}>
-            <Ionicons name="sparkles" size={15} color={colors.white} />
+            <Ionicons name="ribbon" size={15} color={colors.white} />
             <Text style={d.memberCardAction}>
-              {t('profile.myDecorations', { defaultValue: '我的装扮' })}
+              {t('profile.badges', { defaultValue: '我的徽章' })}
             </Text>
           </View>
           <Ionicons
@@ -545,10 +574,10 @@ export default function ProfileScreen() {
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={t('profile.myDecorations')}
-          accessibilityHint={t('profile.decorations.openHint')}
+          accessibilityLabel={t('profile.badges')}
+          accessibilityHint={t('profile.badgesHint')}
           style={s.memberIdentityRow}
-          onPress={handleOpenDecorations}
+          onPress={handleOpenBadges}
         >
           {displayIcons.length > 0 ? (
             <View style={s.memberIdentityItem}>

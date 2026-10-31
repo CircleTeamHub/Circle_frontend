@@ -9,51 +9,46 @@ const read = (relativePath) =>
 
 const LOCALES = ['zh', 'en', 'ja', 'ko', 'es'];
 
-test('profile member card opens the decorations hub from both wardrobe entry points', () => {
+// 「我的装扮」中转页已取消:它只剩「徽章」一行(头像框在功能开关后面),
+// 资料卡上的入口改名「徽章」并直达徽章页。
+test('profile member card opens the badge page directly from both entry points', () => {
   const source = read('src/features/profile/screens/ProfileScreen.tsx');
   const memberCard =
     source.match(/\{\/\* Member card \*\/\}[\s\S]*?(?=\n  return \()/)?.[0] ?? '';
 
-  assert.match(
-    source,
-    /router\.push\(['"]\/\(tabs\)\/profile\/decorations['"]/,
-  );
-  assert.match(memberCard, /profile\.myDecorations/);
-  assert.match(memberCard, /onPress=\{handleOpenDecorations\}/);
-  assert.doesNotMatch(memberCard, /onPress=\{handleOpenIcons\}/);
+  assert.match(source, /router\.push\(['"]\/\(tabs\)\/profile\/icons['"]/);
+  assert.match(memberCard, /profile\.badges/);
+  assert.match(memberCard, /onPress=\{handleOpenBadges\}/);
   assert.equal(
     (memberCard.match(/accessibilityRole="button"/g) ?? []).length >= 4,
     true,
   );
   assert.equal(
-    (memberCard.match(/accessibilityLabel=\{t\('profile\.myDecorations'/g) ?? [])
-      .length,
+    (memberCard.match(/accessibilityLabel=\{t\('profile\.badges'/g) ?? []).length,
     2,
   );
   assert.equal(
-    (
-      memberCard.match(
-        /accessibilityHint=\{t\('profile\.decorations\.openHint'/g,
-      ) ?? []
-    ).length,
+    (memberCard.match(/accessibilityHint=\{t\('profile\.badgesHint'/g) ?? []).length,
     2,
   );
 });
 
-test('decorations hub route exposes badges and avatar frames as accessible navigation rows', () => {
-  const route = read('app/(tabs)/profile/decorations.tsx');
-  const screen = read(
+test('the decorations hub page is gone and nothing links to it', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const rel of [
+    'app/(tabs)/profile/decorations.tsx',
     'src/features/profile/screens/MyDecorationsScreen.tsx',
-  );
-
-  assert.match(route, /MyDecorationsScreen/);
-  assert.match(screen, /<NavHeader/);
-  assert.match(screen, /contentInsetAdjustmentBehavior="automatic"/);
-  assert.match(screen, /profile\.decorations\.badges/);
-  assert.match(screen, /profile\.decorations\.avatarFrames/);
-  assert.match(screen, /\/\(tabs\)\/profile\/icons/);
-  assert.match(screen, /\/\(tabs\)\/profile\/avatar-frames/);
-  assert.match(screen, /accessibilityRole="button"/);
+  ]) {
+    assert.equal(fs.existsSync(path.join(process.cwd(), rel)), false, `${rel} should be removed`);
+  }
+  for (const rel of [
+    'src/features/profile/screens/ProfileScreen.tsx',
+    'src/features/profile/screens/MyIconsScreen.tsx',
+    'src/features/profile/screens/AvatarFramesScreen.tsx',
+  ]) {
+    assert.doesNotMatch(read(rel), /\/\(tabs\)\/profile\/decorations/, rel);
+  }
 });
 
 test('avatar-frame collection route renders wardrobe states, preview, and detail navigation', () => {
@@ -160,16 +155,14 @@ test('avatar-frame pages expose complete detail content and localize all five lo
   );
   const referenceKeys = Object.keys(locales.zh.profile.avatarFrames).sort();
   for (const locale of LOCALES) {
-    assert.equal(
-      locales[locale].profile.myDecorations.length > 0,
-      true,
-      `${locale}.profile.myDecorations`,
-    );
-    assert.deepEqual(
-      Object.keys(locales[locale].profile.decorations).sort(),
-      Object.keys(locales.zh.profile.decorations).sort(),
-      `${locale}.profile.decorations parity`,
-    );
+    // 资料卡入口改名「徽章」后,文案在 profile.badges / profile.badgesHint。
+    for (const key of ['badges', 'badgesHint']) {
+      assert.equal(
+        locales[locale].profile[key].length > 0,
+        true,
+        `${locale}.profile.${key}`,
+      );
+    }
     assert.deepEqual(
       Object.keys(locales[locale].profile.avatarFrames).sort(),
       referenceKeys,

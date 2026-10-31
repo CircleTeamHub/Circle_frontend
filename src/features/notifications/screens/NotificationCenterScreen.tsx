@@ -31,6 +31,7 @@ import {
 } from '@/features/notifications/utils/notification-summary';
 import { mapMyPostToRow } from '@/features/notifications/utils/my-post-summary';
 import {
+  getNotificationScope,
   getSnackbarRoute,
   isUserProfileSnackbarRoute,
 } from '@/features/notifications/utils/snackbar-route';
@@ -104,9 +105,7 @@ export default function NotificationCenterScreen() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const cursorScopeRef = useRef({ domain, ownerId, sessionEpoch });
   const [loadError, setLoadError] = useState<string | null>(null);
-  const notificationScope = (segments as readonly string[]).includes('discover')
-    ? 'discover'
-    : 'messages';
+  const notificationScope = getNotificationScope(segments);
 
   useEffect(() => {
     mountedRef.current = true;

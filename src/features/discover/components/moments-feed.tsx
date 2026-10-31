@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
@@ -28,6 +28,10 @@ import { MomentCommentInput } from './moment-comment-input';
 import { MomentMentionNotice } from './moment-mention-notice';
 import type { MomentPost } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
+import {
+  getMomentDetailHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 
 const s = StyleSheet.create({
   // MomentCommentInput 是 absolute 全铺浮层，需要一个定位上下文来托管。
@@ -72,6 +76,8 @@ export const MomentsFeed: React.FC = () => {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
+  // 详情、作者资料都开在当前 tab 栈里：探索页的朋友圈不能把人甩去圈子 tab。
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const {
     moments,
     loading,
@@ -214,12 +220,9 @@ export const MomentsFeed: React.FC = () => {
 
   const handlePress = useCallback(
     (postId: string) => {
-      router.push({
-        pathname: '/(tabs)/discover/moment/[id]',
-        params: { id: postId },
-      });
+      router.push(getMomentDetailHref(scope, postId));
     },
-    [router],
+    [router, scope],
   );
 
   const handleComment = useCallback((postId: string) => {
@@ -280,13 +283,14 @@ export const MomentsFeed: React.FC = () => {
     ({ item }: { item: MomentPost }) => (
       <MomentCard
         post={item}
+        scope={scope}
         onLike={handleLike}
         onPress={handlePress}
         onComment={handleComment}
         onReplyComment={handleReplyComment}
       />
     ),
-    [handleLike, handlePress, handleComment, handleReplyComment],
+    [handleLike, handlePress, handleComment, handleReplyComment, scope],
   );
 
   const keyExtractor = useCallback((item: MomentPost) => item.id, []);

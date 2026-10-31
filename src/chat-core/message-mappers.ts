@@ -15,7 +15,7 @@ import type {
   VerificationCardData,
 } from '@/types';
 import { formatBurnDuration } from './burn-durations';
-import { formatChatTimestamp } from './mappers';
+import { formatChatTimestamp, noteStatusPreviewText } from './mappers';
 import type { StoredChatMessage } from './store';
 
 // 档位表和标签都收进 burn-durations(全局隐私设置也要用同一份),
@@ -507,6 +507,25 @@ export function mapChatMessageDtoToUI(
       const callRecord = parseCallRecord(content);
       if (!callRecord) break;
       return { ...base, type: 'call-record', callRecord };
+    }
+    case 'assistant-note-status': {
+      const title = textField(content, 'title', 160) || '这篇笔记';
+      const [key, defaultValue] = noteStatusPreviewText(content['status']);
+      return {
+        ...base,
+        type: isSent ? 'sent' : 'received',
+        text: i18n.t(key, { defaultValue, title }),
+      };
+    }
+    case 'assistant-info-alert':
+    case 'assistant-command-result': {
+      const text =
+        textField(content, 'summary', 500) || textField(content, 'text', 500);
+      return {
+        ...base,
+        type: isSent ? 'sent' : 'received',
+        text: text || i18n.t('assistant.generic', { defaultValue: 'AI小助手有一条新提醒。' }),
+      };
     }
     case 'file': {
       // 旧 OpenIM 栈遗留的文件消息(自研栈没有发送入口):渲染成带文件名的

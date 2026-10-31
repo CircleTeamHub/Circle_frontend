@@ -68,7 +68,9 @@ test('moments screen reuses the feed and keeps its create action', () => {
 
   assert.match(source, /<MomentsFeed \/>/);
   assert.match(source, /\/\(tabs\)\/discover\/create-moment/);
-  assert.match(source, /name="add"/);
+  assert.match(source, /\/\(tabs\)\/explore\/create-moment/);
+  // 发朋友圈按钮与笔记页同款：带文字的胶囊主操作。
+  assert.match(source, /<FloatingActionButton[\s\S]*?onPress=\{handleCreateMoment\}[\s\S]*?label=\{t\('moment\.createTitle'\)\}/);
 });
 
 test('circle plaza screen owns filter and create actions', () => {
@@ -111,7 +113,11 @@ test('circle plaza owns the circle notification bell and opens the circle domain
 test('moments bell opens the moments domain of the notification center', () => {
   const source = read('src/features/discover/screens/MomentsScreen.tsx');
 
-  assert.match(source, /pathname: '\/\(tabs\)\/discover\/notification-center'/);
+  // 探索栈里打开的朋友圈落到探索那份通知中心，圈子 / 联系人栈的旧路由仍落圈子栈。
+  assert.match(
+    source,
+    /pathname: inExplore\s*\?\s*'\/\(tabs\)\/explore\/notification-center'\s*:\s*'\/\(tabs\)\/discover\/notification-center'/,
+  );
   assert.match(source, /params: \{ domain: 'moments' \}/);
 });
 
@@ -137,10 +143,9 @@ test('tab badges follow the moved moments and plaza ownership', () => {
   // 各 tab 合计各自的未读。曾经读 discoverUnread（= 好友申请 +
   // 朋友圈 + 圈子 的并集，互动消息列表页的全集口径），一条未读好友申请
   // 就会把动态 tab 也点亮 —— 好友申请的规范 UI 是「新的朋友」，归联系人。
-  assert.match(
-    source,
-    /contacts: contactsUnread \+ momentsUnread/,
-  );
+  // 朋友圈随入口迁到探索 tab，红点也跟过去，联系人只剩好友/入群申请。
+  assert.match(source, /contacts: contactsUnread,/);
+  assert.match(source, /explore: momentsUnread,/);
   assert.match(source, /discover: circleUnread \+ signupUnread/);
   assert.doesNotMatch(source, /discover: discoverUnread/);
 });

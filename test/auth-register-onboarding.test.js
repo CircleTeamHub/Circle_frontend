@@ -144,13 +144,15 @@ test('session bootstrap reconciles stale onboarding state before starting app se
 
 test('root layout waits for persisted auth hydration before rendering routes', () => {
   const layout = read('app/_layout.tsx');
+  const policy = read('src/components/app/auth-route-policy.ts');
+  const bootstrap =
+    layout.match(/function ensureStartupBootstrap\(\)[\s\S]*?\n}\n/)?.[0] ?? '';
 
   assert.match(layout, /async function rehydratePersistedStore/);
-  assert.match(layout, /await Promise\.all\(\[/);
-  assert.match(layout, /rehydratePersistedStore\('auth', useAuthStore\)/);
-  assert.match(layout, /setMigrated\(true\)/);
-  assert.ok(
-    layout.indexOf('await Promise.all([') < layout.indexOf('setMigrated(true)'),
-    'setMigrated(true) must happen after persisted stores finish rehydrating',
-  );
+  assert.match(bootstrap, /await rehydratePersistedStore\('auth', useAuthStore\)/);
+  assert.match(layout, /void ensureStartupBootstrap\(\)/);
+  // JS 不再挡原生启动屏:认证水合期间由 AuthRouteGuard 渲染加载态,
+  // 没有缓存会话时要等 isLoading 结束才放行路由。
+  assert.match(layout, /decision\.type === 'loading'/);
+  assert.match(policy, /if \(isLoading && !hasCachedSession\)/);
 });

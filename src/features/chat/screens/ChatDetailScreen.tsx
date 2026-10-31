@@ -77,8 +77,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     title?: string;
     conversationType?: 'private' | 'group';
     conversationKind?: 'direct' | 'group' | 'temp' | 'support';
+    assistantKey?: string;
     avatarUrl?: string;
     searchedMsgID?: string;
+    initialUnreadCount?: string;
+    initialReadHeight?: string;
   }>();
   const params = embedded ?? routeParams;
   // 聊天页在哪个 tab 栈打开（messages/discover/...），决定返回兜底与子页面跳转的 scope。
@@ -140,18 +143,57 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     peerDeliveredHeight,
     conversationType,
     isGroupChat,
+    isAssistantConversation,
     canViewGroupMemberProfiles,
     canViewMemberProfilesByPolicy,
     revalidateMemberViewAccess,
     conversationTitle,
     avatarUrl,
     searchedMsgID,
+    entryUnreadCount,
+    entryReadHeight,
     isPreviewMode,
   } = useChatConversation({
     t,
     params,
     currentUserID,
   });
+
+  const [assistantSpinning, setAssistantSpinning] = useState(false);
+  const assistantLatestMessageIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isAssistantConversation) {
+      assistantLatestMessageIdRef.current = null;
+      setAssistantSpinning(false);
+      return;
+    }
+
+    const latestMessage = (conversationMessages ?? []).reduce<
+      (typeof conversationMessages)[number] | null
+    >((latest, candidate) => {
+      if (!latest || candidate.height > latest.height) return candidate;
+      return latest;
+    }, null);
+
+    if (!latestMessage) return;
+    if (assistantLatestMessageIdRef.current === null) {
+      assistantLatestMessageIdRef.current = latestMessage.id;
+      return;
+    }
+    if (assistantLatestMessageIdRef.current === latestMessage.id) return;
+
+    assistantLatestMessageIdRef.current = latestMessage.id;
+    if (latestMessage.sender?.id === currentUserID) return;
+
+    setAssistantSpinning(true);
+    const timer = setTimeout(() => setAssistantSpinning(false), 1400);
+    return () => clearTimeout(timer);
+  }, [conversationMessages, currentUserID, isAssistantConversation]);
+
+  const assistantDisplayName = isAssistantConversation
+    ? t('assistant.name', { defaultValue: 'AI小助手' })
+    : conversationTitle;
 
   // review R2：失去目录权限的瞬间清空已选 @ 目标与候选缓存——否则降权后
   // handleSend 仍会把滞留的 mention（含 @所有人）当作有效目标发出去。
@@ -199,6 +241,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     sourceID,
     conversationID,
     isTempChat,
+    isAssistantConversation,
     conversationType,
     isGroupChat,
     canViewMemberProfilesByPolicy,
@@ -235,6 +278,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     messages,
     displayMessages,
     handleMessageListScroll,
+    handleJumpToUnread,
+    handleUnreadStartVisibilityChange,
+    showUnreadJump,
+    unreadStartMessageID,
     highlightedMessageID,
     handleQuotePress,
   } = useChatTimeline({
@@ -247,6 +294,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     conversationMessages,
     peerReadHeight,
     peerDeliveredHeight,
+    entryUnreadCount,
+    entryReadHeight,
     searchedMsgID,
     mergeAvatar,
   });
@@ -560,15 +609,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         sourceID={sourceID}
         conversationID={conversationID}
         isTempChat={isTempChat}
+        isAssistant={isAssistantConversation}
         isGroupChat={isGroupChat}
-        conversationTitle={conversationTitle}
+        conversationTitle={assistantDisplayName}
         avatarUrl={avatarUrl}
         handleBack={handleBack}
         handleOpenHeaderTarget={handleOpenHeaderTarget}
         headerStatusText={headerStatusText}
+        assistantSpinning={assistantSpinning}
         d={d}
       />
-      <Divider />
+      {isAssistantConversation ? null : <Divider />}
       {conversationBurnNoticeText ? (
         <View
           testID="chat-disappearing-message-notice"
@@ -599,9 +650,14 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         messagesLengthRef={messagesLengthRef}
         handleLoadOlder={handleLoadOlder}
         historyWindowFull={historyWindowFull}
+        unreadCount={entryUnreadCount}
+        showUnreadJump={showUnreadJump}
+        unreadStartMessageID={unreadStartMessageID}
         messages={messages}
         displayMessages={displayMessages}
         handleMessageListScroll={handleMessageListScroll}
+        handleJumpToUnread={handleJumpToUnread}
+        handleUnreadStartVisibilityChange={handleUnreadStartVisibilityChange}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         closeInputPanels={closeInputPanels}

@@ -83,6 +83,26 @@ export function formatChatTimestamp(iso: string | null): string {
 }
 
 /** 末条消息 → 列表预览文本(媒体/卡片走 im.preview.* 既有词条)。 */
+/**
+ * Assistant note reminders, shared by the list preview and the chat bubble.
+ * New ones are only CLOSED / WORKING; the other statuses stay so reminders
+ * already in someone's history still read right.
+ */
+export function noteStatusPreviewText(status: unknown): [string, string] {
+  switch (status) {
+    case 'CLOSED':
+      return ['assistant.noteClosed', '你添加的笔记《{{title}}》已打烊。'];
+    case 'WORKING':
+      return ['assistant.noteReopened', '你添加的笔记《{{title}}》已开工。'];
+    case 'DELETED':
+      return ['assistant.noteDeleted', '你添加的笔记《{{title}}》已被作者删除。'];
+    case 'MODERATION_REMOVED':
+      return ['assistant.noteUnavailable', '你添加的笔记《{{title}}》当前不可用。'];
+    default:
+      return ['assistant.noteUnlisted', '你添加的笔记《{{title}}》已被作者下架。'];
+  }
+}
+
 export function getChatMessagePreview(message: ChatMessageDto | null): string {
   if (!message) return '';
   if (message.revokedAt) return tPreview('revoked', '[消息已撤回]');
@@ -132,6 +152,32 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
         'title',
         message.content['title'],
       );
+    case 'assistant-note-status':
+      {
+        const title =
+          typeof message.content['title'] === 'string'
+            ? message.content['title'].trim().slice(0, PREVIEW_FIELD_MAX)
+            : '';
+        const [key, fallback] = noteStatusPreviewText(message.content['status']);
+        const localized = i18n.t(key, {
+          defaultValue: fallback,
+          title: title || '这篇笔记',
+        });
+        return localized.length > PREVIEW_FIELD_MAX
+          ? `${localized.slice(0, PREVIEW_FIELD_MAX)}…`
+          : localized;
+      }
+    case 'assistant-info-alert':
+      return tCardPreview(
+        'assistant',
+        '[AI小助手提醒]',
+        'title',
+        message.content['title'],
+      );
+    case 'assistant-command-result':
+      return i18n.t('assistant.generic', {
+        defaultValue: 'AI小助手有一条新提醒。',
+      });
     case 'friend-card':
       return tCardPreview('card', '[卡片]', 'name', message.content['nickname']);
     case 'circle-card':
@@ -151,12 +197,17 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
  */
 export function mapChatConversationToUI(dto: ChatConversationDto): Conversation {
   const isCircleGroup = dto.type === 'GROUP';
+  const isAssistant = dto.type === 'SUPPORT';
   const isDirectLike = dto.type === 'DIRECT' || dto.type === 'SUPPORT';
 
   let name: string;
   let avatarRaw: string | null;
   let sourceID: string;
-  if (isCircleGroup) {
+  if (isAssistant) {
+    name = i18n.t('assistant.name', { defaultValue: 'AI小助手' });
+    avatarRaw = dto.avatarUrl ?? null;
+    sourceID = dto.id;
+  } else if (isCircleGroup) {
     // 群备注优先:那是我给这个群起的名字,只有我看得见,和好友备注同一语义。
     // 没设置才用群名 —— 圈子群走 Circle,独立群聊用会话自己的 name,
     // 空群名兜底通用「群聊」标题(微信语义,建群可以不起名)。
@@ -178,10 +229,11 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
   } else {
     // TEMP 没有固定对端，但有自己的稳定房间名。绝不能拿末条发送者当标题：
     // 房主发完消息后列表会看起来像「和自己聊天」，访客发言又会让房名反复变化。
-    // 通用标题兜底兼容 App 先于后端发布的短暂窗口。
+    // 通用房间名兜底兼容 App 先于后端发布的短暂窗口(与后端默认房名一致)。
+    // 不能用列表页标题 tempChats.title(坐席):那是入口名,不是会话名。
     name =
       dto.tempChat?.title.trim() ||
-      i18n.t('tempChats.title', { defaultValue: '临时群聊' });
+      i18n.t('tempChats.titlePlaceholder', { defaultValue: '临时聊天' });
     avatarRaw = null;
     sourceID = dto.id;
   }
@@ -200,5 +252,6 @@ export function mapChatConversationToUI(dto: ChatConversationDto): Conversation 
     isTempChat: dto.type === 'TEMP',
     pinned: dto.pinned,
     muted: dto.muted,
+    ...(isAssistant ? { isAssistant: true } : {}),
   };
 }

@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { fetchMembershipProgramStatus } from '@/services/api/membership';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { useAuthStore } from '@/stores/authStore';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
@@ -24,6 +25,9 @@ import { PlazaPostCard } from './plaza-post-card';
 import { CircleFilterBar } from './circle-filter-bar';
 import { CircleShortcutOrderSheet } from './circle-shortcut-order-sheet';
 import type { CirclePlazaPost } from '@/types';
+
+/** 会员计划开关没有本地写请求能改它:只按 30 秒窗口和账号判断要不要重拉。 */
+const NO_TRACKED_WRITES = () => false;
 
 const s = StyleSheet.create({
   listContent: {
@@ -105,14 +109,28 @@ export const PlazaFeed: React.FC = () => {
   const membershipBlocked =
     plazaMembershipRequired || (programEnabled === true && vipLevel <= 0);
 
+  // 发现页是 tab 根:每次切 tab 都会聚焦。刚拉过(30 秒内、同账号)就沿用已知值。
+  const programReloadGate = useFocusReloadGate({
+    key: 'membership-program',
+    mutatedSince: NO_TRACKED_WRITES,
+  });
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      if (programReloadGate.shouldSkip()) {
+        return () => {
+          active = false;
+        };
+      }
+      const startedAt = Date.now();
       // 不在每次聚焦时把 programEnabled 重置为 null——那会让整屏闪一下 spinner、丢滚动位置。
       // 首次加载本就是 null(显示 spinner);重新聚焦时保留上次已知值、原地刷新,避免闪烁。
       void fetchMembershipProgramStatus()
         .then((status) => {
-          if (active) setProgramEnabled(status.enabled);
+          if (!active) return;
+          setProgramEnabled(status.enabled);
+          // 失败时的 fail-open 不算「拉到了」:下次聚焦照样重试。
+          programReloadGate.markLoaded(startedAt);
         })
         .catch(() => {
           // rollout 状态查询瞬时失败（超时 / 5xx）时 fail-open：不要预设「已开放」而把
@@ -123,7 +141,7 @@ export const PlazaFeed: React.FC = () => {
       return () => {
         active = false;
       };
-    }, []),
+    }, [programReloadGate]),
   );
 
   const myPlazaCircles = useMemo(() => {
@@ -141,7 +159,7 @@ export const PlazaFeed: React.FC = () => {
 
   // 圈子快捷入口随页面获得焦点刷新（#107）：在别处加入/退出圈子后回到广场，
   // 不再要等组件重挂载才更新。fetchMyCircles 自带单飞（#106），焦点抖动不会
-  // 放大成并发请求风暴。
+  // 放大成并发请求风暴；刚拉过且之后没有圈子写请求时直接用 store 里的(见 store)。
   useFocusEffect(
     useCallback(() => {
       if (programEnabled === null || membershipBlocked) return;

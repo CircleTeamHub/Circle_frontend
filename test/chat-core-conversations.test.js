@@ -153,7 +153,7 @@ function loadMappers() {
         return {
           default: {
             language: 'zh',
-            t: (key) => (key === 'tempChats.title' ? '临时群聊' : key),
+            t: (key) => (key === 'tempChats.titlePlaceholder' ? '临时聊天' : key),
           },
         };
       }
@@ -274,6 +274,49 @@ test('markConversationReadLocal zeroes unread without touching others', () => {
   assert.equal(byId.get('b'), 5);
 });
 
+test('markConversationReadLocal keeps the read watermark across a stale snapshot', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conv({
+      lastMessage: msg({ height: 5, sender: { id: 'u2' } }),
+      unreadCount: 2,
+    }),
+  ]);
+
+  store.markConversationReadLocal('conv-1', 5);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+  assert.equal(useChatStore.getState().readWatermarks['conv-1'].me, 5);
+
+  // A list refresh can return the snapshot that was read before the socket ack.
+  store.setConversations([
+    conv({
+      lastMessage: msg({ height: 5, sender: { id: 'u2' } }),
+      unreadCount: 2,
+    }),
+  ]);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 0);
+});
+
+test('read ack does not clear a message received after the reported height', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conv({
+      lastMessage: msg({ height: 5, sender: { id: 'u2' } }),
+      unreadCount: 1,
+    }),
+  ]);
+
+  store.markConversationReadLocal('conv-1', 5);
+  store.applyIncomingMessage(msg({ id: 'm2', height: 6 }));
+  store.markConversationReadLocal('conv-1', 5);
+
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+});
+
 test('selectTotalUnread excludes muted conversations', () => {
   const { selectTotalUnread } = loadStore();
   const total = selectTotalUnread({
@@ -284,6 +327,17 @@ test('selectTotalUnread excludes muted conversations', () => {
     ],
   });
   assert.equal(total, 5);
+});
+
+test('selectTotalUnread excludes the independent AI assistant conversation', () => {
+  const { selectTotalUnread } = loadStore();
+  const total = selectTotalUnread({
+    conversations: [
+      conv({ id: 'assistant', type: 'SUPPORT', unreadCount: 9 }),
+      conv({ id: 'chat', unreadCount: 2 }),
+    ],
+  });
+  assert.equal(total, 2);
 });
 
 test('conversation mapper renders group identity from circle info', () => {
@@ -333,7 +387,7 @@ test('TEMP conversation never falls back to the latest sender on an old backend'
     }),
   );
 
-  assert.equal(ui.name, '临时群聊');
+  assert.equal(ui.name, '临时聊天');
 });
 
 // —— 自毁策略:开启时间与 duration 同等重要（Codex P1 两条） ——

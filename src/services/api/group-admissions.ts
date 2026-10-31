@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { markGroupWrite } from "./group-writes";
 export type GroupAdmissionStatus =
   "INVITED" | "PENDING" | "JOINED" | "DECLINED" | "REJECTED" | "EXPIRED" | "LEFT";
 export interface GroupAdmission {
@@ -47,16 +48,16 @@ export function fetchGroupAdmission(id: string) {
   );
 }
 export function applyToGroup(id: string, reason: string) {
-  return apiClient(`/chat/groups/${encodeURIComponent(id)}/applications`, {
+  return markGroupWrite(apiClient(`/chat/groups/${encodeURIComponent(id)}/applications`, {
     method: "POST",
     body: { reason },
-  });
+  }));
 }
 export function actOnGroupAdmission(id: string, action: GroupAdmissionAction) {
-  return apiClient<GroupAdmissionDetail>(
+  return markGroupWrite(apiClient<GroupAdmissionDetail>(
     `/chat/group-admissions/${encodeURIComponent(id)}/action`,
     { method: "POST", body: { action } },
-  );
+  ));
 }
 export function fetchGroupAdmissions(cursor?: string, groupId?: string) {
   return apiClient<{
@@ -67,12 +68,12 @@ export function fetchGroupAdmissions(cursor?: string, groupId?: string) {
   );
 }
 export function acceptGroupQrInvitation(token: string) {
-  return apiClient<{
+  return markGroupWrite(apiClient<{
     type: "GROUP";
     status: "JOINED" | "PENDING";
     conversationId?: string;
     admissionId?: string;
-  }>(`/qr/tokens/${encodeURIComponent(token)}/accept`, { method: "POST" });
+  }>(`/qr/tokens/${encodeURIComponent(token)}/accept`, { method: "POST" }));
 }
 let unreadGeneration = 0;
 export async function refreshGroupAdmissionUnread() {
@@ -92,9 +93,9 @@ export async function refreshGroupAdmissionUnread() {
     useTabBadgeStore.getState().setGroupAdmissionsUnread(result.count);
 }
 export async function markGroupAdmissionSeen(id: string) {
-  await apiClient(`/chat/group-admissions/${encodeURIComponent(id)}/seen`, {
+  await markGroupWrite(apiClient(`/chat/group-admissions/${encodeURIComponent(id)}/seen`, {
     method: "POST",
-  });
+  }));
   const { useNotificationCenterStore } =
     await import("@/features/notifications/store/use-notification-center-store");
   const store = useNotificationCenterStore.getState();

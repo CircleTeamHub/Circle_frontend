@@ -39,7 +39,9 @@ import {
   joinCircle,
   fetchMyApplications,
   setCircleAvatar,
+  circlesMutatedSince,
 } from '@/services/api/circles';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { ApiError } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
@@ -316,10 +318,10 @@ export default function CircleDetailScreen() {
     };
   }, []);
 
-  const loadCircle = useCallback(async (options?: { showInitialLoading?: boolean }) => {
+  const loadCircle = useCallback(async (options?: { showInitialLoading?: boolean }): Promise<boolean> => {
     if (!id) {
       if (mountedRef.current) setLoading(false);
-      return;
+      return false;
     }
 
     const requestId = ++circleRequestRef.current;
@@ -328,11 +330,12 @@ export default function CircleDetailScreen() {
     setLoadError(null);
     try {
       const data = await fetchCircleDetail(id);
-      if (!mountedRef.current || requestId !== circleRequestRef.current) return;
+      if (!mountedRef.current || requestId !== circleRequestRef.current) return false;
       setCircle(data);
       hasLoadedRef.current = true;
+      return true;
     } catch (error) {
-      if (!mountedRef.current || requestId !== circleRequestRef.current) return;
+      if (!mountedRef.current || requestId !== circleRequestRef.current) return false;
       const isNotFound = error instanceof ApiError && error.status === 404;
       setLoadError(
         isNotFound ? null : getApiErrorMessage(error, t('circle.loadError')),
@@ -347,6 +350,7 @@ export default function CircleDetailScreen() {
         hasLoadedRef.current = result.hasLoaded;
         return result.circle;
       });
+      return false;
     } finally {
       if (
         mountedRef.current &&
@@ -381,13 +385,20 @@ export default function CircleDetailScreen() {
     }
   }, [id]);
 
+  // 从编辑/审核/邀请等子页面回来:那些操作都走圈子写请求(circlesMutatedSince),有改动必重拉;
+  // 只是看了看就回来、30 秒内,不再重发详情和「我的申请」整表。
+  const reloadGate = useFocusReloadGate({ key: id, mutatedSince: circlesMutatedSince });
   useFocusEffect(
     useCallback(() => {
+      if (reloadGate.shouldSkip()) return;
+      const startedAt = Date.now();
       // 从子页面（入圈审核/邀请等）返回时静默刷新，保住滚动位置；
       // 只有首次进入（或首载失败后）才显示整页 loading。
-      void loadCircle({ showInitialLoading: !hasLoadedRef.current });
+      void loadCircle({ showInitialLoading: !hasLoadedRef.current }).then((loaded) => {
+        if (loaded) reloadGate.markLoaded(startedAt);
+      });
       void loadMyInvitation();
-    }, [loadCircle, loadMyInvitation]),
+    }, [loadCircle, loadMyInvitation, reloadGate]),
   );
 
   const handleRefreshCircle = useCallback(async () => {

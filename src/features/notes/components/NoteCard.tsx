@@ -193,26 +193,22 @@ function NoteCardInner({
             style={[
               s.statusBadge,
               {
-                backgroundColor: withAlpha(
-                  note.workStatus === 'WORKING' ? colors.success : colors.warning,
-                  0.14,
-                ),
-                borderColor: withAlpha(
-                  note.workStatus === 'WORKING' ? colors.success : colors.warning,
-                  0.34,
-                ),
+                backgroundColor:
+                  note.workStatus === 'WORKING' ? colors.workingFill : colors.closedFill,
+                borderColor:
+                  note.workStatus === 'WORKING' ? colors.workingFill : colors.closedFill,
               },
             ]}
           >
             <Ionicons
               name={note.workStatus === 'WORKING' ? 'checkmark-circle-outline' : 'moon-outline'}
               size={13}
-              color={note.workStatus === 'WORKING' ? colors.success : colors.warning}
+              color={colors.onStatusFill}
             />
             <Text
               style={[
                 s.status,
-                { color: note.workStatus === 'WORKING' ? colors.success : colors.warning },
+                { color: colors.onStatusFill },
               ]}
               numberOfLines={1}
             >

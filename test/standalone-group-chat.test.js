@@ -46,6 +46,9 @@ function loadChatCoreApi(calls) {
       if (request === '@/stores/authStore') {
         return { useAuthStore: { getState: () => ({ sessionEpoch: 1 }) } };
       }
+      if (request === '@/services/api/group-writes') {
+        return { markGroupWrite: (pending) => pending, groupsMutatedSince: () => false };
+      }
       return {};
     },
   };

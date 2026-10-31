@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import { resolveChatDetailIdentity } from '@/features/chat/chat-detail-identity';
 import { useChatStore } from '@/chat-core/store';
@@ -20,6 +20,12 @@ export interface ChatConversationParams {
   t: TFunction<"translation", undefined>;
   params: ChatDetailRouteParams;
   currentUserID: string | null;
+}
+
+function parseNonNegativeRouteNumber(value: string | undefined): number | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 /**
@@ -56,7 +62,55 @@ export function useChatConversation({
     [conversationID],
   );
   const conversation = useChatStore(selectConversation);
+  const routeInitialUnreadCount = parseNonNegativeRouteNumber(
+    params.initialUnreadCount,
+  );
+  const routeInitialReadHeight = parseNonNegativeRouteNumber(
+    params.initialReadHeight,
+  );
+  // The conversation row and the local read-watermark map are updated through
+  // different async paths. Capture the higher value once at entry so a stale
+  // row cannot make messages already read on this device look unread again.
+  const localReadHeight = useChatStore(
+    (state) =>
+      (currentUserID && conversationID
+        ? state.readWatermarks[conversationID]?.[currentUserID]
+        : 0) ?? 0,
+  );
+  const initialEntryReadHeight = Math.max(
+    routeInitialReadHeight ?? 0,
+    localReadHeight,
+  );
+  const entryUnreadCountRef = useRef<number | null>(routeInitialUnreadCount);
+  const entryReadHeightRef = useRef<number | null>(
+    initialEntryReadHeight > 0 ? initialEntryReadHeight : routeInitialReadHeight,
+  );
+  const [entryUnreadCount, setEntryUnreadCount] = useState<number | null>(
+    routeInitialUnreadCount,
+  );
+  const [entryReadHeight, setEntryReadHeight] = useState<number | null>(
+    entryReadHeightRef.current,
+  );
+  useEffect(() => {
+    if (entryUnreadCountRef.current === null && conversation) {
+      const value = Math.max(0, conversation.unreadCount);
+      entryUnreadCountRef.current = value;
+      setEntryUnreadCount(value);
+    }
+    if (entryReadHeightRef.current === null && conversation) {
+      const conversationReadHeight = parseNonNegativeRouteNumber(
+        typeof conversation.readHeight === 'number'
+          ? String(conversation.readHeight)
+          : undefined,
+      );
+      const value = Math.max(conversationReadHeight ?? 0, localReadHeight);
+      entryReadHeightRef.current = value;
+      setEntryReadHeight(value);
+    }
+  }, [conversation, localReadHeight]);
   const storedConversationType = conversation?.type;
+  const isAssistantConversation =
+    params.conversationKind === 'support' || storedConversationType === 'SUPPORT';
   const isTempChat =
     params.conversationKind === 'temp' || storedConversationType === 'TEMP';
   // 独立群聊(微信群):GROUP 会话但不挂圈子。circleId 从会话缓存读 ——
@@ -224,6 +278,7 @@ export function useChatConversation({
     sourceID,
     conversationID,
     isTempChat,
+    isAssistantConversation,
     selfSilencedUntil,
     selfSilenced,
     composerLocked,
@@ -245,6 +300,8 @@ export function useChatConversation({
     conversationTitle,
     avatarUrl,
     searchedMsgID,
+    entryUnreadCount: entryUnreadCount ?? 0,
+    entryReadHeight: entryReadHeight ?? 0,
     isPreviewMode,
   };
 }

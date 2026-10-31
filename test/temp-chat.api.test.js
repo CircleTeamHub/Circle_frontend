@@ -255,3 +255,14 @@ test("endTempChat posts to the end endpoint and returns the new status", async (
   ]);
   assert.deepEqual(result, { status: "ENDED" });
 });
+
+test("deleteTempChat sends DELETE for the room and resolves without a body", async () => {
+  const { api, calls } = loadTempChatApi(undefined);
+
+  await assert.doesNotReject(api.deleteTempChat("tc-1"));
+
+  // 模块跑在 vm 上下文里,参数对象原型不同,按 JSON 比较。
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    ["/temp-chat/tc-1", { method: "DELETE" }],
+  ]);
+});

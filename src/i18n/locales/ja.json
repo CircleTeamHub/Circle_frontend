@@ -1,4 +1,37 @@
 {
+  "assistant": {
+    "name": "風信アシスタント",
+    "open": "風信アシスタントを開く",
+    "subtitle": "リマインダーアシスタント",
+    "generic": "風信アシスタントに新しいリマインダーがあります。",
+    "noteUnlisted": "追加したノート「{{title}}」は作成者によって非公開になりました。",
+    "noteDeleted": "追加したノート「{{title}}」は作成者によって削除されました。",
+    "noteClosed": "追加したノート「{{title}}」は終了になりました。",
+    "noteReopened": "追加したノート「{{title}}」は稼働中になりました。",
+    "noteUnavailable": "追加したノート「{{title}}」は現在利用できません。",
+    "setupTitle": "都市情報の通知を有効にする",
+    "setupHint": "サークルを選ぶと、そのサークルの都市設定で新しい投稿を照合します。",
+    "selectCircle": "選択",
+    "allCities": "すべての都市",
+    "noCircle": "通知を有効にするにはサークルを選択または参加してください。",
+    "enable": "通知を有効にする",
+    "intro": "こんにちは、風信アシスタントです。フォローしたサークルとキーワードに基づいて都市情報を通知し、ノートライブラリのノートが終了・稼働中に切り替わったときにもお知らせします。",
+    "askCircle": "どのサークルをフォローしますか？",
+    "askCircleWithContext": "現在「{{circle}}」を閲覧しています。このサークルをフォローしますか？別のサークルも選べます。",
+    "selectedCircle": "「{{circle}}」をフォローします。",
+    "askKeywords": "わかりました。どのキーワードをフォローしますか？カンマで区切って入力するか、このサークルのすべての情報をフォローできます。",
+    "allKeywords": "このサークルのすべての情報をフォローします。",
+    "selectedKeywords": "フォローするキーワード：{{keywords}}。",
+    "continue": "続ける",
+    "askNoteStatus": "最後に、ライブラリのノートが作成者によって終了・稼働中に切り替わったときに通知しますか？",
+    "noteStatusYes": "はい、通知してください。",
+    "noteStatusNo": "今は不要です。",
+    "cityScope": "都市範囲：{{cities}}",
+    "keywordPlaceholder": "例：コンサート、求人、展示会",
+    "allKeywordsButton": "すべてフォロー",
+    "noteStatusYesButton": "通知する",
+    "noteStatusNoButton": "今は不要"
+  },
   "settingsDetails": {
     "accountSecurity": {
       "title": "アカウントとセキュリティ",
@@ -261,6 +294,8 @@
       "lastSeenDays_other": "{{count}}日前にオンライン",
       "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
       "historyWindowFull": "これより前のメッセージは、チャット履歴で検索してください。",
+      "jumpToUnread": "未読{{count}}件の先頭へ移動",
+      "unreadMessages": "未読 {{count}}件",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",
       "voiceReleaseSend": "指を離して送信 {{seconds}}\"",
@@ -839,7 +874,7 @@
     "scanAlbumNoCodeMessage": "この画像には読み取れるQRコードがありません。別の画像でお試しください。",
     "scanAlbumFailedTitle": "読み取れません",
     "scanAlbumFailedMessage": "しばらくしてからもう一度お試しください。",
-    "seatManagement": "一時グループチャット",
+    "seatManagement": "座席管理",
     "groupManagement": "グループ管理",
     "loadFailed": "会話を読み込めませんでした。ネットワークを確認して再試行してください",
     "noConversations": "会話がありません",
@@ -1201,9 +1236,10 @@
       }
     },
     "stats": "{{groupCount}} グループ · {{noteCount}} 件のノート",
+    "noteCount": "ノート {{count}} 件",
     "tabs": {
-      "all": "すべて {{count}}",
-      "ungrouped": "未分類 {{count}}"
+      "all": "すべて",
+      "ungrouped": "未分類"
     },
     "section": {
       "text": "テキスト",
@@ -1283,9 +1319,9 @@
     "recycleBinTitle": "ごみ箱"
   },
   "tempChats": {
-    "title": "一時グループチャット",
+    "title": "座席",
     "create": "一時チャットを作成",
-    "refresh": "一時グループチャット一覧を更新",
+    "refresh": "座席一覧を更新",
     "loading": "一時チャットを読み込み中",
     "createFailed": "一時チャットの作成に失敗しました",
     "loadFailed": "一時チャットの読み込みに失敗しました",
@@ -1318,6 +1354,12 @@
     "endConfirmMessage": "終了するとゲストは退出され、再参加できなくなります。",
     "endConfirm": "終了",
     "endFailed": "終了に失敗しました。再試行してください",
+    "actionDelete": "削除",
+    "deleteConfirmTitle": "この一時チャットを削除しますか？",
+    "deleteConfirmMessage": "リストから削除され、対応する会話も削除されます。",
+    "deleteActiveConfirmMessage": "この一時チャットは進行中です。削除するとチャットを終了してすべてのゲストを退出させ、招待リンクも無効になります。",
+    "deleteConfirm": "削除",
+    "deleteFailed": "削除に失敗しました。再試行してください",
     "status": {
       "active": "進行中",
       "ended": "終了",
@@ -1907,7 +1949,7 @@
     "title": "連絡先",
     "searchPlaceholder": "連絡先を検索...",
     "newFriends": "新しい友だち",
-    "seats": "一時グループチャット",
+    "seats": "座席",
     "groups": "マイグループ",
     "circles": "サークル",
     "tags": "タグ",
@@ -2183,6 +2225,8 @@
       "title": "マイウォレット",
       "confirmRecharge": "チャージを確認",
       "balance": "クレジット残高",
+      "showBalance": "残高を表示",
+      "hideBalance": "残高を隠す",
       "recharge": "クレジットをチャージ",
       "memberAgreement": "会員サービス規約",
       "loadError": "クレジット残高の読み込みに失敗しました。しばらくしてから再試行してください。",
@@ -2328,6 +2372,8 @@
       "backToMessages": "メッセージに戻る",
       "sender": "送信者",
       "empty": "保存済みアイテムはまだありません",
+      "emptyHint": "チャットでメッセージを長押しして「保存」を選びます",
+      "more": "その他の操作",
       "loadError": "コレクションの読み込みに失敗しました。しばらくしてから再試行してください。",
       "deleteError": "コレクションの削除に失敗しました。しばらくしてから再試行してください。",
       "conversationFallback": "チャット",
@@ -2405,18 +2451,12 @@
     "fieldNotEditable": "この項目は編集できません",
     "returnToSettings": "設定に戻ってください。",
     "systemAnnouncements": "システムのお知らせ",
+    "announcementTag": "お知らせ",
     "viewAnnouncements": "最新を見る",
     "addIcon": "バッジを追加",
     "myIcons": "バッジコレクション",
-    "myDecorations": "マイ装飾",
-    "decorations": {
-      "title": "マイ装飾",
-      "badges": "マイバッジ",
-      "badgesSubtitle": "プロフィールに表示するバッジを確認・選択します",
-      "avatarFrames": "マイアバターフレーム",
-      "avatarFramesSubtitle": "所有中のフレームを確認して現在の装飾を変更します",
-      "openHint": "バッジとアバターフレームを開きます"
-    },
+    "badges": "マイバッジ",
+    "badgesHint": "プロフィールに表示するバッジを確認・選択します",
     "avatarFrames": {
       "title": "マイアバターフレーム",
       "detailTitle": "アバターフレーム詳細",
@@ -2484,6 +2524,8 @@
       "currentIdentity": "現在のステータス",
       "catalogHint": "会員ランクを選択して特典を確認できます。開通とアップグレードはカスタマーサービスが対応します。",
       "chooseTier": "会員ランクを選択",
+      "perMonth": "月あたり約 ¥{{price}}",
+      "benefitUpgraded": "アップグレードで向上",
       "recommended": "おすすめ",
       "lifetime": "永久",
       "selected": "選択中",
@@ -2720,9 +2762,13 @@
   "tabs": {
     "messages": "メッセージ",
     "contacts": "連絡先",
-    "discover": "発見",
+    "circles": "サークル",
+    "explore": "探索",
     "profile": "マイページ",
     "unreadCount": "未読 {{count}} 件"
+  },
+  "explore": {
+    "title": "探索"
   },
   "onboarding": {
     "profileTitle": "プロフィールを完成させる",
@@ -2902,6 +2948,11 @@
     "upgradeTitle": "進捗状況",
     "toNext": "{{title}}まであと{{points}}ポイント",
     "maxReached": "最高の信頼度ランクに達しました",
+    "introButton": "説明",
+    "introTitle": "信頼度について",
+    "introNote": "信頼度はアプリ内での交流のふるまいだけで評価され、ポイントやお金とは一切関係ありません。",
+    "range": "{{min}}〜{{max}}点",
+    "currentTag": "現在",
     "tier": {
       "excellent": {
         "title": "優秀",
@@ -2924,7 +2975,8 @@
       "improve": "上げる方法",
       "deduct": "下がる理由",
       "impact": "影響する場面",
-      "recent": "最近の記録"
+      "recent": "最近の記録",
+      "tiers": "ランク"
     },
     "improveRules": [
       "正確なプロフィール、アイコン、連絡先を入力する",
@@ -2941,10 +2993,14 @@
       "信頼度の高いユーザーは、より強い信頼バッジを表示できます",
       "信頼度が低いと、一部のイベントで手動審査が必要になる場合があります"
     ],
-    "recentRecords": [
-      "最近の信頼度の変動はまだありません",
-      "今後、実際の加点、減点、異議申し立ての履歴がここに表示されます"
-    ]
+    "recentEmpty": "最近の信頼度の変動はまだありません",
+    "recentEmptyHint": "信頼度の加点・減点はすべてここに記録されます",
+    "recentLoadFailed": "最近の記録を読み込めませんでした",
+    "scoreAfter": "変動後 {{score}}",
+    "reasons": {
+      "friendReport": "通報が認定されました",
+      "other": "信頼度の調整"
+    }
   },
   "validation": {
     "nicknameEmpty": "ニックネームを入力してください",
@@ -3375,6 +3431,7 @@
     "TEMP_CHAT_FULL": "参加人数が上限に達しています",
     "TEMP_CHAT_CREATOR_ONLY": "作成者のみが終了できます",
     "TEMP_CHAT_UPLOAD_QUOTA_EXCEEDED": "アップロード容量の上限に達しました。しばらくしてからお試しください",
+    "TEMP_CHAT_DAILY_CREATE_LIMIT": "一時チャットは1日5件まで作成できます。明日もう一度お試しください",
     "PLAZA_MEMBERSHIP_REQUIRED": "会員にアップグレードしてサークル投稿を見る",
     "PLAZA_NOT_ACTIVE_MEMBER": "サークルのアクティブメンバーのみが投稿できます",
     "PLAZA_ADMIN_ONLY_POST": "このサークルでは管理者のみが投稿できます",

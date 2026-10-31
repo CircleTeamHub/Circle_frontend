@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { StyleSheet, View } from 'react-native';
 import WalletScreen from './WalletScreen';
 import { fetchCoinTransactions, fetchWallet } from '@/services/api/coin';
@@ -26,22 +26,6 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
-jest.mock('react-native-svg', () => {
-  const ReactModule = jest.requireActual<typeof import('react')>('react');
-  const { View: RNView } =
-    jest.requireActual<typeof import('react-native')>('react-native');
-  return {
-    __esModule: true,
-    default: ({ children }: { children?: React.ReactNode }) =>
-      ReactModule.createElement(RNView, null, children),
-    Path: () => null,
-  };
-});
-
-jest.mock('@/components/ui/gradient-cover', () => ({
-  GradientCover: () => null,
-}));
-
 jest.mock('@/components/ui/nav-header', () => ({
   NavHeader: () => null,
 }));
@@ -66,27 +50,15 @@ jest.mock('@/stores/walletRealtimeStore', () => ({
   ) => selector(mockWalletState),
 }));
 
+// 真实 token 与浅色色板，只替换掉会牵出原生存储的 ThemeProvider。
 jest.mock('@/theme', () => ({
-  Gradients: { memberCard: ['#6200ee', '#7c4dff'] },
-  Radius: { md: 12, xl: 24 },
-  Spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 },
-  Typography: {
-    small: {},
-    caption: {},
-    body: {},
-    bodyRegular: {},
-    h3: {},
-  },
-  useTheme: () => ({
-    colors: {
-      background: '#ffffff',
-      surface: '#f5f5f5',
-      text: '#111111',
-      textSecondary: '#666666',
-      error: '#cc0000',
-      success: '#008800',
-    },
-  }),
+  ...jest.requireActual('@/theme/tokens'),
+  useTheme: () => ({ colors: jest.requireActual('@/theme/colors').lightColors }),
+}));
+
+const mockRouter = { push: jest.fn() };
+jest.mock('expo-router', () => ({
+  useRouter: () => mockRouter,
 }));
 
 const mockFetchWallet = fetchWallet as jest.MockedFunction<typeof fetchWallet>;
@@ -122,4 +94,66 @@ test('a long balance error remains complete and outside the clipped card at narr
   expect(error.props.children).toBe(longWalletError);
   expect(error.props.numberOfLines).toBeUndefined();
   expect(StyleSheet.flatten(error.props.style).position).not.toBe('absolute');
+});
+
+test('the invite shortcut opens the referral page and recharge stays disabled', async () => {
+  mockFetchWallet.mockResolvedValue({ balance: 120 } as Awaited<ReturnType<typeof fetchWallet>>);
+  render(<WalletScreen />);
+
+  fireEvent.press(await screen.findByText('邀请有礼'));
+  expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)/profile/share');
+
+  const recharge = screen.getByText('积分充值');
+  let tile = recharge.parent;
+  while (tile && !tile.props.accessibilityState) tile = tile.parent;
+  expect(tile?.props.accessibilityState).toEqual({ disabled: true });
+  expect(screen.getByText('积分购买暂未开放。')).toBeTruthy();
+});
+
+test('history groups rows by month and a failed load can be retried', async () => {
+  mockFetchWallet.mockResolvedValue({ balance: 120 } as Awaited<ReturnType<typeof fetchWallet>>);
+  mockFetchCoinTransactions.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([
+    {
+      id: 'tx-1',
+      type: 'REFERRAL_REWARD',
+      amount: 50,
+      balance: 120,
+      note: null,
+      relatedID: null,
+      createdAt: '2026-10-20T08:30:00.000Z',
+    },
+    {
+      id: 'tx-2',
+      type: 'GIFT_SENT',
+      amount: -20,
+      balance: 70,
+      note: null,
+      relatedID: null,
+      createdAt: '2026-09-02T08:30:00.000Z',
+    },
+  ]);
+  render(<WalletScreen />);
+
+  fireEvent.press(await screen.findByText('重试'));
+
+  expect(await screen.findByText('邀请好友奖励')).toBeTruthy();
+  expect(screen.getByText('赠送积分')).toBeTruthy();
+  expect(mockFetchCoinTransactions).toHaveBeenCalledTimes(2);
+  // 两个月份各一个分组标题；收入带 + 号，支出不带。
+  expect(screen.getAllByText(/2026/)).toHaveLength(2);
+  expect(screen.getByText('+50')).toBeTruthy();
+  expect(screen.getByText('-20')).toBeTruthy();
+});
+
+test('the card formats the balance and the eye button hides it', async () => {
+  mockFetchWallet.mockResolvedValue({ balance: 12800 } as Awaited<ReturnType<typeof fetchWallet>>);
+  render(<WalletScreen />);
+
+  expect(await screen.findByText('12,800')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('隐藏余额'));
+  expect(screen.queryByText('12,800')).toBeNull();
+  expect(screen.getByText('••••••')).toBeTruthy();
+
+  fireEvent.press(screen.getByLabelText('显示余额'));
+  expect(screen.getByText('12,800')).toBeTruthy();
 });

@@ -5,15 +5,13 @@ import {
   DefaultTheme,
   ThemeProvider as NavThemeProvider,
 } from '@react-navigation/native';
-import { useFonts } from 'expo-font';        // 加载自定义字体
 import {
   Redirect,
   Stack,
   useNavigationContainerRef,
   useSegments,
 } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
-import * as SplashScreen from 'expo-splash-screen'; // 控制启动屏（闪屏）的显示与隐藏
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 // 必须在入口文件最早引入，启用动画引擎。
 import 'react-native-reanimated';
@@ -25,10 +23,6 @@ import { excludeMmkvDirFromIOSBackup } from '@/storage/ios-backup-exclusion';
 import { silenceDomBridgeRejection } from '@/utils/silence-dom-bridge-rejection';
 import { ensureLiveKitGlobals } from '@/utils/livekit-globals';
 import { useAuthStore } from '@/stores/authStore';
-import { useKnownAccountsStore } from '@/stores/knownAccountsStore';
-import { useChatPreferencesStore } from '@/features/chat/store/use-chat-preferences-store';
-import { useCircleNotificationStore } from '@/features/discover/store/use-circle-notification-store';
-import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 import {
   E2E_TARGET_MARKER_ENABLED,
   RUNTIME_API_TARGET_ID,
@@ -52,9 +46,7 @@ import { AppBlurTarget } from '@/components/app/app-blur-target';
 import { AppDialogHost } from '@/components/app/app-dialog-host';
 import { TopNoticeHost } from '@/components/app/top-notice-host';
 import { WebDocumentTitle } from '@/components/app/web-document-title';
-import { StartupSplash } from '@/components/app/startup-splash';
 import { AppUpdateHost } from '@/features/app-update/AppUpdateHost';
-import { startOtaHealthReporting } from '@/features/app-update/ota-health';
 import { ThemeProvider, useTheme } from '@/theme';
 import {
   initSentry,
@@ -79,18 +71,11 @@ if (__DEV__ && process.env.EXPO_PUBLIC_SENTRY_TEST === '1') {
   captureSentryTestError();
 }
 
-// OTA 回滚到内置包（isEmergencyLaunch）与启动时自动检查/下载失败的上报。
-// 要在 initSentry 之后：Sentry 没初始化时上报是 no-op。
-startOtaHealthReporting();
-
 type PersistedStore = {
   persist?: {
     rehydrate?: () => unknown;
   };
 };
-
-// 阻止启动屏自动隐藏，等待字体加载完成后再手动隐藏
-SplashScreen.preventAutoHideAsync();
 
 // 过滤 Expo DOM 组件在导航卸载竞态时抛出的 injectJavaScript 拒绝（属于已知良性错误）
 silenceDomBridgeRejection();
@@ -111,8 +96,6 @@ async function registerLiveKitGlobals() {
   }
 }
 
-void registerLiveKitGlobals();
-
 async function rehydratePersistedStore(name: string, store: PersistedStore) {
   const rehydrate = store.persist?.rehydrate;
   if (typeof rehydrate !== 'function') {
@@ -127,12 +110,39 @@ async function rehydratePersistedStore(name: string, store: PersistedStore) {
   }
 }
 
+async function rehydrateSecondaryStores(): Promise<void> {
+  try {
+    // 非关键 store 延迟加载，避免它们的模块求值和持久化读取阻塞首屏。
+    const [
+      { useKnownAccountsStore },
+      { useChatPreferencesStore },
+      { useDiscoverFilterStore },
+      { useCircleNotificationStore },
+    ] = await Promise.all([
+      import('@/stores/knownAccountsStore'),
+      import('@/features/chat/store/use-chat-preferences-store'),
+      import('@/features/discover/store/use-discover-filter-store'),
+      import('@/features/discover/store/use-circle-notification-store'),
+    ]);
+
+    await Promise.all([
+      rehydratePersistedStore('known accounts', useKnownAccountsStore),
+      rehydratePersistedStore('chat preferences', useChatPreferencesStore),
+      rehydratePersistedStore('discover filter', useDiscoverFilterStore),
+      rehydratePersistedStore('circle notification', useCircleNotificationStore),
+    ]);
+  } catch (error) {
+    reportHandledFailure('startup', 'secondaryStoreImport', error);
+  }
+}
+
 /**
- * 启动引导（AsyncStorage→MMKV 迁移 + 各持久化 store 一次性水合 + i18n）用模块级
+ * 启动引导（AsyncStorage→MMKV 迁移 + 认证 store 水合 + i18n）用模块级
  * promise 记忆化，确保**只执行一次**：dev StrictMode 会重复挂载根布局、effect 也可能
  * 因重挂再次触发，若每次都 rehydrate，迟到的水合会和登录/注册写入抢跑、用旧持久化覆盖
  * 内存里的新会话（此前 onboarding 被弹回的放大器）。复用同一个 promise 后，无论触发几次
- * 都只真正水合一次。
+ * 都只真正水合一次。认证状态是进入路由的唯一关键依赖；偏好和通知等非关键
+ * store 在认证水合后后台恢复，避免它们把首屏挡住。
  */
 let startupBootstrapPromise: Promise<void> | null = null;
 function ensureStartupBootstrap(): Promise<void> {
@@ -145,16 +155,14 @@ function ensureStartupBootstrap(): Promise<void> {
     } catch (err) {
       reportHandledFailure('startup', 'storageInit', err);
     }
-    await Promise.all([
-      rehydratePersistedStore('auth', useAuthStore),
-      rehydratePersistedStore('known accounts', useKnownAccountsStore),
-      rehydratePersistedStore('chat preferences', useChatPreferencesStore),
-      rehydratePersistedStore('discover filter', useDiscoverFilterStore),
-      rehydratePersistedStore('circle notification', useCircleNotificationStore),
-    ]);
+    // 认证 hydration 决定首屏该进主界面还是登录页，必须在启动门内完成。
+    await rehydratePersistedStore('auth', useAuthStore);
     rehydrateLanguageFromStorage();
     // 语言就位后再装：Alert.alert / Alert.prompt 全部改投自绘弹窗，默认按钮取当前语言。
     installAlertBridge();
+    // 这些状态不会决定首个路由。放到认证水合之后后台执行，首屏先出来，旧版
+    // AsyncStorage 迁移已经完成，因此不会读到迁移前的快照。
+    void rehydrateSecondaryStores();
     // 尽力而为，不 await：MMKV 目录的 iOS 备份排除（#88），失败不影响启动。
     void excludeMmkvDirFromIOSBackup();
   })();
@@ -221,6 +229,15 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
   const firstSegment = segments[0];
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const hasCachedSession = useAuthStore(
+    (state) =>
+      state.isAuthenticated &&
+      typeof state.accessToken === 'string' &&
+      state.accessToken.length > 0 &&
+      typeof state.refreshToken === 'string' &&
+      state.refreshToken.length > 0 &&
+      Boolean(state.user?.id),
+  );
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const accountSwitching = useAccountSwitcherStore((state) => state.switching);
   const addingAccount = useAccountSwitcherStore((state) => state.addingAccount);
@@ -229,6 +246,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
     firstSegment,
     isAuthenticated,
     isLoading,
+    hasCachedSession,
     onboardingRequired,
     accountSwitching,
     addingAccount,
@@ -267,25 +285,20 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
 }
 
 // RootLayout：应用真正的根组件
-// 职责：迁移旧版 AsyncStorage 数据到 MMKV → 加载字体 → 隐藏启动屏 → 挂载主题 Provider → 渲染路由结构
+// 职责：完成认证所需的本地存储初始化 → 立即隐藏原生启动屏 → 挂载主题 Provider → 渲染路由结构
 function RootLayout() {
   const sentryUserId = useAuthStore((state) => state.user?.id ?? null);
-  const authLoading = useAuthStore((state) => state.isLoading);
   // 导航追踪：冷启动指标和 XHR span 都要挂在导航 transaction 上才会被发出。
   const navigationRef = useNavigationContainerRef();
-  // 加载自定义字体，loaded 为 true 时字体就绪，error 表示加载失败
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
 
   /**
    * 旧版 AsyncStorage → MMKV 一次性数据迁移闸门。
    *
    * 迁移结束前 zustand store 已经用空 MMKV 同步完成了一次 hydration，
-   * 因此迁移完成后需要让所有持久化 store 重新读取 MMKV，并刷新 i18n。
-   * 主题在迁移完成后才挂载 ThemeProvider，初始 useState 即可读到迁移过的值。
+   * 因此迁移完成后认证 store 需要重新读取 MMKV，并刷新 i18n；其余持久化 store
+   * 在认证水合后后台重新读取。ThemeProvider 与路由会立即挂载，AuthRouteGuard
+   * 在认证状态可用前负责渲染加载态。
    */
-  const [migrated, setMigrated] = useState(false);
   useEffect(() => {
     setSentryUserId(sentryUserId);
   }, [sentryUserId]);
@@ -295,36 +308,26 @@ function RootLayout() {
   }, [navigationRef]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    // 引导逻辑搬到模块级 ensureStartupBootstrap()（记忆化 → 只跑一次）；
-    // 这里只负责在它完成后解除启动闸门。无论迁移成功与否，bootstrap 内部都会
-    // 继续 rehydrate，保证启动屏不会永远卡住。
-    ensureStartupBootstrap().finally(() => {
-      if (!cancelled) {
-        setMigrated(true);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    // 引导逻辑搬到模块级 ensureStartupBootstrap()（记忆化 → 只跑一次）。
+    // 认证 store 与其余持久化状态继续在后台恢复，不阻塞首屏路由渲染。
+    void ensureStartupBootstrap();
   }, []);
 
-  // 字体加载出错时直接抛出，触发 ErrorBoundary 展示错误页
+  // 原生启动屏不再由 JS 手动阻塞；认证 store 水合期间由 AuthRouteGuard
+  // 渲染现有路由加载态，首屏不会继续停留在系统启动背景上。
   useEffect(() => {
-    if (error) throw error;
-  }, [error]);
-
-  // 原生启动屏等 JS 开屏的夜空底图上屏后再隐藏：两者是同一张画面，交接无闪烁。
-  const hideNativeSplash = useCallback(() => {
-    SplashScreen.hideAsync().catch(() => {
-      // 已经被隐藏；忽略即可。
-    });
+    const timer = setTimeout(() => {
+      void import('@/features/app-update/ota-health')
+        .then(({ startOtaHealthReporting }) => {
+          startOtaHealthReporting();
+        })
+        .catch((error) => {
+          reportHandledFailure('startup', 'otaHealthImport', error);
+        });
+      void registerLiveKitGlobals();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
-
-  // 字体或迁移未就绪前不渲染任何内容（原生启动屏仍显示）。
-  if (!loaded || !migrated) return null;
 
   const appContent = (
     // ThemeProvider：提供全局主题上下文（颜色、深浅色模式等）
@@ -376,11 +379,7 @@ function RootLayout() {
     </ThemeProvider>
   );
 
-  return (
-    <StartupSplash canFinish={!authLoading} onBackdropReady={hideNativeSplash}>
-      {appContent}
-    </StartupSplash>
-  );
+  return appContent;
 }
 
 // 用 Sentry 包裹根组件（启用触摸/导航埋点）；未配置 DSN 时返回原组件、行为不变。

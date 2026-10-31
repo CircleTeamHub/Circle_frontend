@@ -514,19 +514,19 @@ export default function NoteManagementScreen() {
       value: Exclude<NoteWorkStatus, 'UNSET'>;
       label: string;
       icon: 'checkmark-circle-outline' | 'moon-outline';
-      color: string;
+      fill: string;
     }[] = [
       {
         value: 'WORKING',
         label: t('chat.groupManagement.noteWorking', { defaultValue: '开工' }),
         icon: 'checkmark-circle-outline',
-        color: colors.success,
+        fill: colors.workingFill,
       },
       {
         value: 'CLOSED',
         label: t('chat.groupManagement.noteClosed', { defaultValue: '打烊' }),
         icon: 'moon-outline',
-        color: colors.warning,
+        fill: colors.closedFill,
       },
     ];
     return (
@@ -548,10 +548,7 @@ export default function NoteManagementScreen() {
                   s.noteActionButton,
                   d.actionButton,
                   active
-                    ? {
-                        backgroundColor: withAlpha(option.color, 0.14),
-                        borderColor: withAlpha(option.color, 0.5),
-                      }
+                    ? { backgroundColor: option.fill, borderColor: option.fill }
                     : null,
                 ]}
                 // 已是当前状态再点不做事，避免误触清掉状态。
@@ -567,12 +564,12 @@ export default function NoteManagementScreen() {
                 <Ionicons
                   name={option.icon}
                   size={16}
-                  color={active ? option.color : colors.textSecondary}
+                  color={active ? colors.onStatusFill : colors.textSecondary}
                 />
                 <Text
                   style={[
                     s.noteActionText,
-                    { color: active ? option.color : colors.textSecondary },
+                    { color: active ? colors.onStatusFill : colors.textSecondary },
                   ]}
                   numberOfLines={1}
                 >

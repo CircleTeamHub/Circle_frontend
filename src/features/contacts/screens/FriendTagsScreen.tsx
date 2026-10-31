@@ -11,8 +11,11 @@ import {
   createFriendTag,
   fetchFriendTags,
   fetchFriendsByTag,
+  friendsMutatedSince,
   type FriendTag,
 } from '@/services/api/friends';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -121,8 +124,19 @@ export default function FriendTagsScreen() {
   const newTagInputRef = useRef<TextInput>(null);
   useModalInputAutoFocus(newTagInputRef, createTagVisible);
 
+  // 每个标签都要整表拉一次好友只为数人数(1+N 个请求)。从标签详情回来时,
+  // 30 秒内、之后没有好友/标签写请求、好友动态也没变,就不重拉(与通讯录同一口径)。
+  const unreadFriendActivityCount = useFriendActivityUnreadStore(
+    (state) => state.count,
+  );
+  const tagsReloadGate = useFocusReloadGate({
+    key: unreadFriendActivityCount,
+    mutatedSince: friendsMutatedSince,
+  });
+
   const loadTags = useCallback(async (signal?: { cancelled: boolean }) => {
     const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
+    const startedAt = Date.now();
     setLoading(true);
 
     try {
@@ -137,6 +151,7 @@ export default function FriendTagsScreen() {
       if (isCancelled()) return;
       setTags(counts);
       setError(null);
+      tagsReloadGate.markLoaded(startedAt);
     } catch {
       if (isCancelled()) return;
       setError(t('contacts.tagsScreen.loadFailed'));
@@ -145,16 +160,17 @@ export default function FriendTagsScreen() {
         setLoading(false);
       }
     }
-  }, [t]);
+  }, [t, tagsReloadGate]);
 
   useFocusEffect(
     useCallback(() => {
+      if (tagsReloadGate.shouldSkip()) return;
       const signal = { cancelled: false };
       void loadTags(signal);
       return () => {
         signal.cancelled = true;
       };
-    }, [loadTags]),
+    }, [loadTags, tagsReloadGate]),
   );
 
   useEffect(

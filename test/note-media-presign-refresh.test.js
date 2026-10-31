@@ -11,8 +11,10 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 test('note detail reloads on focus so expired presigned media urls refresh', () => {
   const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
 
-  // 只在 mount 拉一次的话，从编辑页 / 别的 tab 回来时手里还是旧签名。
-  assert.match(src, /useFocusEffect\(loadNote\)/);
+  // 只在 mount 拉一次的话，从编辑页 / 别的 tab 回来时手里还是旧签名。聚焦重拉经过
+  // 重拉闸门:只有 30 秒内刚拉过(远小于签名有效期)才跳过,所以签名照样会被刷新。
+  assert.match(src, /useFocusEffect\(\s*useCallback\(\s*\(\) => \(reloadGate\.shouldSkip\(\) \? undefined : loadNote\(\)\)/);
+  assert.doesNotMatch(src, /useFocusReloadGate\(\{[^}]*maxAgeMs/, 'keep the default 30s window, well under the presign TTL');
   assert.doesNotMatch(src, /useEffect\(\(\)\s*=>\s*loadNote\(\)/);
 });
 

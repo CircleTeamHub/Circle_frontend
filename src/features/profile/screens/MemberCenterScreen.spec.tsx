@@ -62,6 +62,7 @@ const mockTheme: { resolvedMode: 'light' | 'dark' } = { resolvedMode: 'light' };
 
 jest.mock('@/theme', () => ({
   ...jest.requireActual<typeof import('@/theme/icon-color')>('@/theme/icon-color'),
+  withAlpha: jest.requireActual<typeof import('@/theme/tokens')>('@/theme/tokens').withAlpha,
   Radius: { xs: 4, sm: 8 },
   Spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
   Typography: {
@@ -86,6 +87,7 @@ jest.mock('@/theme', () => ({
       primary: '#6200ee',
       primaryLight: '#eee8ff',
       white: '#fff',
+      success: '#16a34a',
     },
   }),
 }));
@@ -439,6 +441,34 @@ test('tapping contact during the first load waits for the response instead of cl
     }),
   );
   expect(Alert.alert).not.toHaveBeenCalled();
+});
+
+test('multi-month plans show a per-month price to compare value', async () => {
+  render(<MemberCenterScreen />);
+  await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
+
+  // 半年 1288/6 ≈ 215，年费 1998/12 ≈ 167；单月、每日、永久不折算。
+  expect(screen.getByText('约 ¥215/月')).toBeTruthy();
+  expect(screen.getByText('约 ¥167/月')).toBeTruthy();
+  expect(screen.getAllByText(/\/月$/)).toHaveLength(2);
+});
+
+test('upgrading marks only the benefits that improve over the current tier', async () => {
+  setAuth(user(2));
+  mockFetchCurrentUser.mockResolvedValue(user(2));
+  render(<MemberCenterScreen />);
+  await waitFor(() => expect(mockFetchCurrentUser).toHaveBeenCalledTimes(1));
+
+  // 图标桩把图标名渲染成文字：数 arrow-up-circle 就是数「提升」标记。
+  // 选中的就是当前档：没有任何标记。
+  expect(screen.queryAllByText('arrow-up-circle')).toHaveLength(0);
+
+  fireEvent.press(screen.getByLabelText('年费会员，12 个月，¥1998'));
+  // 半年 → 年费：人数/圈子/笔记/城市/名字颜色/徽章六项变好（靓号默认隐藏）。
+  expect(screen.getAllByText('arrow-up-circle')).toHaveLength(6);
+
+  fireEvent.press(screen.getByLabelText('包月会员，1 个月，¥298'));
+  expect(screen.queryAllByText('arrow-up-circle')).toHaveLength(0);
 });
 
 test('rules actions navigate to the membership rules screen', async () => {

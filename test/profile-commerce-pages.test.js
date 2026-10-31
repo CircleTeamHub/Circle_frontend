@@ -629,8 +629,9 @@ test('MemberRulesScreen and every locale use the daily plus four-tier support-as
   }
 });
 
-test('CreditScoreScreen explains score status and change rules via i18n', () => {
+test('CreditScoreScreen keeps the score on the page and moves the rules behind the intro button', () => {
   const src = read('src/features/profile/screens/CreditScoreScreen.tsx');
+  const sheet = read('src/features/profile/components/credit-intro-sheet.tsx');
 
   assert.match(src, /useAuthStore/);
   assert.match(src, /creditScore/);
@@ -638,19 +639,40 @@ test('CreditScoreScreen explains score status and change rules via i18n', () => 
   assert.match(src, /useTranslation/);
   assert.match(src, /t\("credit\.title"\)/);
   assert.match(src, /credit\.tier\./);
-  assert.match(src, /credit\.(improveRules|deductRules|impacts|recentRecords)/);
   assert.doesNotMatch(src, /信誉值详情/);
 
-  // 两个语言包都必须提供 credit 段的关键 key，避免缺 key 露出裸键名。
-  const zh = JSON.parse(read('src/i18n/locales/zh.json'));
-  const en = JSON.parse(read('src/i18n/locales/en.json'));
-  for (const bundle of [zh, en]) {
-    assert.ok(bundle.credit?.title);
-    assert.ok(bundle.credit?.tier?.excellent?.title);
-    assert.ok(Array.isArray(bundle.credit?.improveRules));
-    assert.ok(bundle.credit?.sections?.recent);
+  // 规则类说明只在右上角「介绍」打开的弹层里出现，页面主体不再铺开。
+  assert.match(src, /rightSlot=/);
+  assert.match(src, /t\("credit\.introButton"\)/);
+  assert.match(src, /<CreditIntroSheet/);
+  assert.doesNotMatch(src, /credit\.(improveRules|deductRules|impacts)/);
+  assert.match(sheet, /BottomSheetModal/);
+  // 面板根节点按下即成为 JS responder；新架构 iOS 下它是 ScrollView 的祖先就会禁用滚动。
+  // 纯文字正文必须由 ScrollView 内部的节点先接住触摸，弹层才能上下滑。
+  assert.match(sheet, /<ScrollView[\s\S]*onStartShouldSetResponder=\{claimTouch\}[\s\S]*<\/ScrollView>/);
+  // 「与积分、金钱无关」的声明要在弹层最前面，打开就能看到。
+  assert.ok(sheet.indexOf('credit.introNote') < sheet.indexOf('credit.sections.tiers'));
+  for (const key of ['improveRules', 'deductRules', 'impacts']) {
+    assert.match(sheet, new RegExp(`credit\\.${key}`));
   }
+
+  const zh = JSON.parse(read('src/i18n/locales/zh.json'));
   assert.equal(zh.credit.title, '信誉值详情');
+  assert.equal(zh.credit.introButton, '介绍');
+  // 五个语言包都必须提供完整的 credit 段，避免缺 key 露出裸键名。
+  for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
+    const credit = JSON.parse(read(`src/i18n/locales/${locale}.json`)).credit;
+    for (const key of ['introButton', 'introTitle', 'introNote', 'currentTag', 'recentEmpty', 'recentEmptyHint', 'recentLoadFailed']) {
+      assert.ok(credit?.[key], `${locale}: credit.${key}`);
+    }
+    assert.match(credit.range, /\{\{min\}\}.*\{\{max\}\}/, `${locale}: credit.range`);
+    assert.ok(credit.sections?.tiers, `${locale}: credit.sections.tiers`);
+    assert.match(credit.scoreAfter, /\{\{score\}\}/, `${locale}: credit.scoreAfter`);
+    assert.ok(credit.reasons?.friendReport && credit.reasons?.other, `${locale}: credit.reasons`);
+    for (const key of ['improveRules', 'deductRules', 'impacts']) {
+      assert.ok(Array.isArray(credit[key]) && credit[key].length > 0, `${locale}: credit.${key}`);
+    }
+  }
 });
 
 test('WalletScreen shows the balance without an unsupported recharge action', () => {
@@ -670,8 +692,12 @@ test('WalletScreen keeps balance errors outside the clipped card artwork', () =>
   const src = read('src/features/profile/screens/WalletScreen.tsx');
   assert.match(
     src,
-    /<View style=\{s\.cardBottomRow\}>[\s\S]*?<\/View>\s*<\/View>\s*\{walletError \?/,
-    'walletError should render after balanceCard closes',
+    /<WalletBalanceCard[\s\S]*?\/>\s*\{walletError \?/,
+    'walletError should render after the balance card, not inside its clipped artwork',
+  );
+  assert.doesNotMatch(
+    read('src/features/profile/components/wallet-balance-card.tsx'),
+    /walletError|loadError/,
   );
   assert.match(
     src,

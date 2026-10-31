@@ -61,7 +61,8 @@ test('push notification data resolves to app routes with anchors', () => {
     traceId: 'moment-1',
     replyId: 'comment-9',
   });
-  assert.equal(traceRoute.pathname, '/(tabs)/discover/moment/[id]');
+  // 朋友圈住在探索 tab，系统推送直接落在那里。
+  assert.equal(traceRoute.pathname, '/(tabs)/explore/moment/[id]');
   assert.equal(traceRoute.params.id, 'moment-1');
   assert.equal(traceRoute.params.targetCommentId, 'comment-9');
 
@@ -140,7 +141,7 @@ test('push notification data resolves to app routes with anchors', () => {
     traceId: 'moment-mention',
     replyId: 'reply-mention',
   });
-  assert.equal(traceMentionRoute.pathname, '/(tabs)/discover/moment/[id]');
+  assert.equal(traceMentionRoute.pathname, '/(tabs)/explore/moment/[id]');
   assert.equal(traceMentionRoute.params.id, 'moment-mention');
   assert.equal(traceMentionRoute.params.targetCommentId, 'reply-mention');
 });

@@ -4,19 +4,24 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
+  Pressable,
   Text,
   View,
+  type ViewToken,
 } from 'react-native';
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { MAX_SCROLL_TO_INDEX_RETRIES } from '@/features/chat/chat-detail/constants';
 import { type ThemeColors, Typography } from '@/theme';
 import { type TFunction } from 'i18next';
-import { type ReactElement, type RefObject } from 'react';
+import { useCallback, type ReactElement, type RefObject } from 'react';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
 import { type ChatMessage } from '@/types';
+import { Ionicons } from '@expo/vector-icons';
+
+const UNREAD_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 1 } as const;
 
 export interface ChatMessageAreaProps {
   colors: ThemeColors;
@@ -33,9 +38,14 @@ export interface ChatMessageAreaProps {
   handleLoadOlder: () => void;
   /** 深翻到内存窗口上限,不再往上翻:列表顶上提示去聊天记录里搜。 */
   historyWindowFull: boolean;
+  unreadCount: number;
+  showUnreadJump: boolean;
+  unreadStartMessageID: string | null;
   messages: ChatMessage[];
   displayMessages: ChatMessage[];
   handleMessageListScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  handleJumpToUnread: () => void;
+  handleUnreadStartVisibilityChange: (visible: boolean) => void;
   renderItem: (info: { item: ChatMessage }) => ReactElement | null;
   keyExtractor: (item: ChatMessage) => string;
   closeInputPanels: () => void;
@@ -61,15 +71,33 @@ export function ChatMessageArea({
   messagesLengthRef,
   handleLoadOlder,
   historyWindowFull,
+  unreadCount,
+  showUnreadJump,
+  unreadStartMessageID,
   messages,
   displayMessages,
   handleMessageListScroll,
+  handleJumpToUnread,
+  handleUnreadStartVisibilityChange,
   renderItem,
   keyExtractor,
   closeInputPanels,
   isVoiceRecording,
   voiceElapsedSeconds,
 }: ChatMessageAreaProps) {
+  const handleViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (!unreadStartMessageID) {
+        handleUnreadStartVisibilityChange(false);
+        return;
+      }
+      handleUnreadStartVisibilityChange(
+        viewableItems.some((token) => token.item?.id === unreadStartMessageID),
+      );
+    },
+    [handleUnreadStartVisibilityChange, unreadStartMessageID],
+  );
+
   return (
     <View style={[s.messageArea, d.messageArea]}>
       {backgroundImageUri ? (
@@ -133,6 +161,8 @@ export function ChatMessageArea({
         keyboardShouldPersistTaps="handled"
         onScroll={handleMessageListScroll}
         scrollEventThrottle={32}
+        onViewableItemsChanged={handleViewableItemsChanged}
+        viewabilityConfig={UNREAD_VIEWABILITY_CONFIG}
         onScrollBeginDrag={closeInputPanels}
         // scrollToIndex 在 inverted + 没设 getItemLayout 时，目标 index 超出已渲染窗口
         // 就会抛 "scrollToIndex out of range"。fallback：先滚到能测到的最远 index，
@@ -185,6 +215,30 @@ export function ChatMessageArea({
           }, 250);
         }}
       />
+      {showUnreadJump && unreadCount > 0 ? (
+        <Pressable
+          testID={E2E_TEST_IDS.chatUnreadJump}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.detail.jumpToUnread', {
+            count: unreadCount,
+            defaultValue: `跳转到未读消息起点，共 ${unreadCount} 条`,
+          })}
+          onPress={handleJumpToUnread}
+          style={[s.unreadJumpButton, d.unreadJumpButton]}
+        >
+          <Ionicons name="chevron-up" size={18} color={d.unreadJumpText.color} />
+          <Text
+            style={[s.unreadJumpText, d.unreadJumpText]}
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.2}
+          >
+            {t('chat.detail.unreadMessages', {
+              count: unreadCount,
+              defaultValue: `未读 ${unreadCount} 条消息`,
+            })}
+          </Text>
+        </Pressable>
+      ) : null}
       {isPreviewMode ? (
         <Text style={[s.previewNotice, Typography.small, { color: colors.text }]}>
           {t('chat.detail.previewNotice', {

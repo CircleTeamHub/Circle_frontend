@@ -58,6 +58,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
+import { AssistantAvatar } from '@/features/assistant/components/AssistantAvatar';
 
 const SWIPE_ACTION_WIDTH = 76;
 const SWIPE_ACTIONS_WIDTH = SWIPE_ACTION_WIDTH * 3;
@@ -597,7 +598,11 @@ function ConversationRowImpl({
               : null,
           ]}
         >
-          {item.conversationType === "private" ? (
+          {item.isAssistant ? (
+            <Pressable onPress={() => onOpenConversation(item)}>
+              <AssistantAvatar size={40} />
+            </Pressable>
+          ) : item.conversationType === "private" ? (
             <Pressable onPress={() => onOpenUserProfile(item)}>
               <Avatar size={40} name={item.name} uri={item.avatarUrl} />
             </Pressable>
@@ -622,7 +627,7 @@ function ConversationRowImpl({
                 <MemberName
                   name={item.name}
                   userId={
-                    item.conversationType === 'private'
+                    item.conversationType === 'private' && !item.isAssistant
                       ? item.sourceID
                       : undefined
                   }
@@ -890,14 +895,19 @@ export default function MessagesScreen() {
   >(new WeakMap());
   const rawMappedConversations = useMemo(() => {
     const cache = convMapCacheRef.current;
-    return rawConversations.map((raw) => {
-      let mapped = cache.get(raw);
-      if (!mapped) {
-        mapped = mapChatConversationToUI(raw);
-        cache.set(raw, mapped);
-      }
-      return mapped;
-    });
+    return rawConversations.reduce<ReturnType<typeof mapChatConversationToUI>[]>(
+      (items, raw) => {
+        let mapped = cache.get(raw);
+        if (!mapped) {
+          mapped = mapChatConversationToUI(raw);
+          cache.set(raw, mapped);
+        }
+        // AI 小助手是独立入口，不混入普通消息列表或消息 tab 未读口径。
+        if (!mapped.isAssistant) items.push(mapped);
+        return items;
+      },
+      [],
+    );
   }, [rawConversations]);
 
   // 最新一条发送失败的会话 id 集合,拼成排序串让引用比较退化成值比较:
@@ -1071,6 +1081,18 @@ export default function MessagesScreen() {
       const dto = useChatStore
         .getState()
         .conversations.find((c) => c.id === conversation.id);
+      const currentUserID = useChatStore.getState().currentUserId;
+      // 入口参数必须保存“点击前”的最高已读水位。会话 DTO 可能还是旧快照，
+      // 但本机已读回执已经写进内存（或上一轮冷启动从本地恢复）；只取 DTO
+      // 会把这些已读消息重新判成未读，下一次进会话时又出现在未读起点之前。
+      const localReadHeight =
+        currentUserID && dto
+          ? (useChatStore.getState().readWatermarks[dto.id]?.[currentUserID] ?? 0)
+          : 0;
+      const initialReadHeight = Math.max(
+        dto?.readHeight ?? 0,
+        localReadHeight,
+      );
       markConversationRead(conversation.id, dto?.lastMessage?.height ?? 0);
 
       const detailParams: EmbeddedChatParams = {
@@ -1080,7 +1102,14 @@ export default function MessagesScreen() {
         conversationType: conversation.conversationType,
         conversationKind: dto?.type.toLowerCase() as
           | EmbeddedChatParams["conversationKind"],
+        ...(conversation.isAssistant ? { assistantKey: 'windnote-assistant' } : {}),
         avatarUrl: conversation.avatarUrl,
+        ...(conversation.unreadCount > 0
+          ? { initialUnreadCount: String(conversation.unreadCount) }
+          : {}),
+        ...(Number.isSafeInteger(initialReadHeight) && initialReadHeight >= 0
+          ? { initialReadHeight: String(initialReadHeight) }
+          : {}),
       };
 
       // 分栏模式：右栏内嵌详情，不做路由跳转（窄窗仍走原页栈，行为不变）。

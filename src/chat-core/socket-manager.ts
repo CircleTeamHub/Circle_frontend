@@ -260,6 +260,9 @@ async function hydrateWithResolvedViewerPolicy(
   // 先摘掉上一账号的句柄并开始开新库；隐私策略只阻塞快照发布，不能让旧库在
   // 慢 REST 请求期间继续服务新账号的 local-first 读写。
   const localDbReady = initChatLocalDb(userId);
+  // 已读队列只依赖本地库，不依赖隐私策略。先把它恢复进内存，避免会话快照
+  // 抢在水位恢复之前落地，把上一轮已经看过的消息重新显示成未读。
+  void restorePendingReadsBeforeSnapshot(userId, generation, localDbReady);
   await refreshViewerSelfDestructSec(userId);
   if (
     generation !== sessionGen ||
@@ -276,6 +279,36 @@ async function hydrateWithResolvedViewerPolicy(
     return;
   }
   await hydrateFromLocalDb(userId, generation, true);
+}
+
+async function restorePendingReadsBeforeSnapshot(
+  userId: string,
+  generation: number,
+  localDbReady: Promise<boolean>,
+): Promise<void> {
+  const isCurrentSession = (): boolean =>
+    generation === sessionGen && useChatStore.getState().currentUserId === userId;
+  try {
+    if (!(await localDbReady) || !isCurrentSession()) return;
+    const persistedReads = await pendingReadsList();
+    if (!isCurrentSession()) return;
+    let restored = false;
+    for (const { conversationId, height } of persistedReads) {
+      if (!Number.isInteger(height) || height <= 0) continue;
+      const prior = pendingReads.get(conversationId) ?? 0;
+      if (height <= prior) continue;
+      pendingReads.set(conversationId, height);
+      // 会话快照可能还没到:markConversationReadLocal 会先记水位,快照
+      // 到达后再按这条水位收敛未读数。
+      useChatStore.getState().markConversationReadLocal(conversationId, height);
+      restored = true;
+    }
+    // 冷启动时 socket 可能已经先连上了 —— 那次 connect 钩子 flush 的是一个空
+    // 队列。种回来之后立即补发,不等用户又读一条或下一次重连。
+    if (restored) void flushPendingReads();
+  } catch (err) {
+    reportHandledFailure('chatSync', 'pendingReadHydrate', err);
+  }
 }
 
 let socket: Socket | null = null;
@@ -1001,21 +1034,6 @@ async function hydrateFromLocalDb(
       useChatStore.getState().markMessageFailed(entry.conversationId, entry.d);
     }
     if (referencedMedia) void prunePendingMedia(userId, referencedMedia);
-    // 已读水位:App 被杀前没 ack 的上报补回队列,连上即 flush。
-    let restored = false;
-    const persistedReads = await pendingReadsList();
-    if (!isCurrentSession()) return;
-    for (const { conversationId, height } of persistedReads) {
-      const prior = pendingReads.get(conversationId) ?? 0;
-      if (height > prior) {
-        pendingReads.set(conversationId, height);
-        restored = true;
-      }
-    }
-    // 冷启动时 socket 可能已经先连上了 —— 那次 connect 钩子 flush 的是一个空
-    // 队列。种回来之后不再 flush 的话,这些水位要等到用户又读了一条消息或者
-    // 下一次重连才发得出去,服务端那边一直是未读。
-    if (restored) void flushPendingReads();
   } catch (err) {
     reportHandledFailure('chatSync', 'localHydrate', err);
   }
@@ -1201,6 +1219,11 @@ async function flushPendingReads(): Promise<void> {
       try {
         await emitReadWithAck(current, conversationId, height);
         if (gen !== sessionGen) return;
+        // DIRECT 回执发到会话房时不包含发起回执的这台 socket。ack 成功后
+        // 仍要把本机水位落进 store，否则下一次旧快照会把已清掉的未读数写回来。
+        useChatStore
+          .getState()
+          .markConversationReadLocal(conversationId, height);
         const afterAck = pendingReads.get(conversationId);
         if (afterAck !== undefined && afterAck <= height) {
           pendingReads.delete(conversationId);
@@ -1297,7 +1320,7 @@ export function markConversationRead(
   height: number,
 ): void {
   markChatRead(conversationId, height);
-  useChatStore.getState().markConversationReadLocal(conversationId);
+  useChatStore.getState().markConversationReadLocal(conversationId, height);
   // 看过了,通知栏里这个会话的通知一并收起。
   dismissChatNotifications(conversationId);
 }

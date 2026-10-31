@@ -709,6 +709,20 @@ test('recognizes encoded profile user target for replace navigation', () => {
   );
 });
 
+test('recognizes the explore moment detail as an already-open push target', () => {
+  const { isAlreadyOnPushTarget } = load(
+    'src/features/notifications/utils/push-response-controller.ts',
+  );
+  const momentPush = {
+    pathname: '/(tabs)/explore/moment/[id]',
+    params: { id: 'trace-1' },
+  };
+
+  // 朋友圈推送落在探索 tab;已经开着同一条动态时不能再压一层详情页。
+  assert.equal(isAlreadyOnPushTarget('/explore/moment/trace-1', momentPush), true);
+  assert.equal(isAlreadyOnPushTarget('/explore/moment/trace-2', momentPush), false);
+});
+
 test('registers the listener before reading and clearing the last response', () => {
   const { initializePushResponseListener } = load(
     'src/features/notifications/utils/push-response-listener.ts',

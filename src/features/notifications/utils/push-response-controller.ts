@@ -98,6 +98,10 @@ export function isAlreadyOnPushTarget(pathname: string, route: Href) {
   if (target === '/(tabs)/discover/moment/[id]') {
     return pathname === `/discover/moment/${encodeURIComponent(routeParam(route, 'id'))}`;
   }
+  // 朋友圈推送现在落在探索 tab;旧的 discover 目标留给仍指向那里的深链。
+  if (target === '/(tabs)/explore/moment/[id]') {
+    return pathname === `/explore/moment/${encodeURIComponent(routeParam(route, 'id'))}`;
+  }
   if (target === '/(tabs)/discover/verification/[id]') {
     return pathname === `/discover/verification/${encodeURIComponent(routeParam(route, 'id'))}`;
   }

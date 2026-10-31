@@ -21,8 +21,13 @@ export type ChatDetailRouteParams = {
   title?: string;
   conversationType?: 'private' | 'group';
   conversationKind?: 'direct' | 'group' | 'temp' | 'support';
+  assistantKey?: string;
   avatarUrl?: string;
   searchedMsgID?: string;
+  /** 进入聊天前会话列表里的未读数，用于在本页展示跳转入口。 */
+  initialUnreadCount?: string;
+  /** 进入聊天前本人的已读水位，用于定位未读区间起点。 */
+  initialReadHeight?: string;
 };
 
 // type 而非 interface：路由跳转处要把它原样塞给 router.push 的 params，
@@ -33,6 +38,9 @@ export type EmbeddedChatParams = {
   title?: string;
   conversationType?: 'private' | 'group';
   conversationKind?: 'direct' | 'group' | 'temp' | 'support';
+  assistantKey?: string;
   avatarUrl?: string;
   searchedMsgID?: string;
+  initialUnreadCount?: string;
+  initialReadHeight?: string;
 };

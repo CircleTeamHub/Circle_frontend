@@ -15,6 +15,10 @@ import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useAuthStore } from '@/stores/authStore';
 import { reportNotificationFailure } from '@/features/notifications/utils/report-failure';
 import type { NotificationItem } from '@/types';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+
+/** 公告由服务端下发,本地没有写请求能改列表:新公告靠 announcementVersion 失效。 */
+const NO_TRACKED_WRITES = () => false;
 
 const s = StyleSheet.create({
   card: {
@@ -112,8 +116,19 @@ export default function SystemAnnouncementsScreen() {
     return () => { mountedRef.current = false; };
   }, []);
 
+  // 从公告详情回来:30 秒内、同账号、没有新公告,就不重拉第一页(那会丢掉已加载的分页),
+  // 也不再重复「全部已读」—— 两件事用同一个闸门判断。
+  const announcementsReloadGate = useFocusReloadGate({
+    key: `${sessionKey}:${announcementVersion}`,
+    mutatedSince: NO_TRACKED_WRITES,
+  });
+  // 「全部已读」失败过就不受闸门约束:列表还新鲜可以不重拉,但已读必须在下次回来时重试,
+  // 否则「我的」上的未读角标会一直挂到窗口过期。
+  const markReadPendingRef = useRef(false);
+
   const load = useCallback(async () => {
     const epoch = ++paginationEpochRef.current;
+    const startedAt = Date.now();
     setRefreshing(true);
     setLoadingMore(false);
     pageInFlightRef.current = false;
@@ -136,6 +151,7 @@ export default function SystemAnnouncementsScreen() {
       setLoadedVersion(announcementVersion);
       setNextCursor(result.nextCursor);
       setLoadError(null);
+      announcementsReloadGate.markLoaded(startedAt);
     } catch (error) {
       if (!isCurrentSession() || epoch !== paginationEpochRef.current) return;
       reportNotificationFailure('notification_load_more_failed', error, {
@@ -156,23 +172,30 @@ export default function SystemAnnouncementsScreen() {
         setRefreshing(false);
       }
     }
-  }, [isCurrentSession, ownerId, sessionKey, t, announcementVersion]);
+  }, [isCurrentSession, ownerId, sessionKey, t, announcementVersion, announcementsReloadGate]);
 
   useFocusEffect(useCallback(() => {
-    void load();
+    if (!announcementsReloadGate.shouldSkip()) void load();
     return () => { paginationEpochRef.current += 1; };
-  }, [load]));
+  }, [load, announcementsReloadGate]));
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       const readVersion = announcementVersion;
-      if (!ownerId) return;
+      if (
+        !ownerId ||
+        (announcementsReloadGate.shouldSkip() && !markReadPendingRef.current)
+      ) {
+        return;
+      }
       void markProfileNotificationsRead()
         .then(() => {
+          markReadPendingRef.current = false;
           if (active && isCurrentSession() && useAnnouncementSignalStore.getState().version === readVersion) setProfileUnread(0);
         })
         .catch((error) => {
+          markReadPendingRef.current = true;
           if (!active || !isCurrentSession()) return;
           reportNotificationFailure(
             'notification_mark_all_read_failed',
@@ -182,7 +205,7 @@ export default function SystemAnnouncementsScreen() {
       return () => {
         active = false;
       };
-    }, [isCurrentSession, ownerId, setProfileUnread, announcementVersion]),
+    }, [isCurrentSession, ownerId, setProfileUnread, announcementVersion, announcementsReloadGate]),
   );
 
   const loadMore = useCallback(async (retry = false) => {

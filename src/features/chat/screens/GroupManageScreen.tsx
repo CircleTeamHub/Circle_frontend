@@ -1,6 +1,6 @@
 import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { getGroupEntryHref } from '@/features/groups/routes';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -46,6 +46,11 @@ import {
 } from '@/features/chat/hooks/use-group-admin-actions';
 import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import { fetchCircleDetail } from '@/services/api/circles';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import {
+  groupConversationReloadKey,
+  groupOrCircleMutatedSince,
+} from '@/features/chat/utils/group-reload-key';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -132,6 +137,18 @@ export default function GroupManageScreen() {
   const [circleRole, setCircleRole] = useState<GroupRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const loadedRef = useRef(false);
+  // 从入群审核、扩容等页面回来:30 秒内、没有群/圈子写请求、实时字段没变,就不再拉成员
+  // 目录 + 圈子详情 + 会话。本页的管理操作都是群写请求,做过就必重拉。
+  const conversationReloadKey = useChatStore((state) =>
+    groupConversationReloadKey(
+      state.conversations.find((candidate) => candidate.id === conversationID),
+    ),
+  );
+  const reloadGate = useFocusReloadGate({
+    key: `${conversationID}:${groupID}:${conversationReloadKey}`,
+    mutatedSince: groupOrCircleMutatedSince,
+  });
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [selectedMemberIDs, setSelectedMemberIDs] = useState<Set<string>>(
     () => new Set(),
@@ -180,7 +197,9 @@ export default function GroupManageScreen() {
       setError(true);
       return;
     }
-    setLoading(true);
+    const startedAt = Date.now();
+    // 已经有内容时后台刷新,不整屏转圈(回到页面时那一下闪烁)。
+    if (!loadedRef.current) setLoading(true);
     setError(false);
     try {
       // 群管理页可能是从圈子详情直接进入的,此时会话 DTO 还不一定在
@@ -204,18 +223,21 @@ export default function GroupManageScreen() {
       );
       // 等待这次快照写入 store,避免开关在旧值/空值上渲染后马上被覆盖。
       await conversationsPromise;
+      loadedRef.current = true;
+      reloadGate.markLoaded(startedAt);
     } catch (err) {
       setError(true);
       reportHandledFailure('groupManage', 'load', err);
     } finally {
       setLoading(false);
     }
-  }, [conversationID, groupID]);
+  }, [conversationID, groupID, reloadGate]);
 
   useFocusEffect(
     useCallback(() => {
+      if (reloadGate.shouldSkip()) return;
       void load();
-    }, [load]),
+    }, [load, reloadGate]),
   );
 
   const openActionError = useCallback(
@@ -415,6 +437,7 @@ export default function GroupManageScreen() {
       params.originScope === 'contacts' ||
       params.originScope === 'profile' ||
       params.originScope === 'discover' ||
+      params.originScope === 'explore' ||
       params.originScope === 'messages'
         ? params.originScope
         : 'messages';

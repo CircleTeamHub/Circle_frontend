@@ -85,22 +85,22 @@ test('ProfileScreen shows selected identity badges inside the gold member card',
   assert.match(src, /UserIconRow/);
   assert.match(memberCardBlock, /memberIdentityRow/);
   assert.match(memberCardBlock, /memberIdentityItem/);
-  assert.match(src, /profile\/decorations/);
+  assert.match(src, /profile\/icons/);
   assert.match(memberCardBlock, /tone="member"/);
   assert.match(read('src/components/ui/user-icon-row.tsx'), /UserIconBadge/);
   assert.doesNotMatch(src, /Date\.now\(\) - accountCreatedAt/);
 });
 
-test('ProfileScreen keeps a visible decorations entry when no icons are selected', () => {
+test('ProfileScreen keeps a visible badges entry when no icons are selected', () => {
   const src = read('src/features/profile/screens/ProfileScreen.tsx');
   const memberCardBlock = src.match(/\{\/\* Member card \*\/\}[\s\S]*?(?=\n  return \()/)?.[0] ?? '';
 
   assert.match(memberCardBlock, /displayIcons\.length > 0 \?/);
-  assert.match(memberCardBlock, /handleOpenDecorations/);
+  assert.match(memberCardBlock, /handleOpenBadges/);
   assert.match(memberCardBlock, /profile\.addIcon/);
-  assert.match(memberCardBlock, /profile\.myDecorations/);
-  assert.match(memberCardBlock, /<Pressable[\s\S]*style=\{s\.memberCardHeader\}[\s\S]*onPress=\{handleOpenDecorations\}/);
-  assert.match(memberCardBlock, /<Pressable[\s\S]*style=\{s\.memberIdentityRow\}[\s\S]*onPress=\{handleOpenDecorations\}/);
+  assert.match(memberCardBlock, /profile\.badges/);
+  assert.match(memberCardBlock, /<Pressable[\s\S]*style=\{s\.memberCardHeader\}[\s\S]*onPress=\{handleOpenBadges\}/);
+  assert.match(memberCardBlock, /<Pressable[\s\S]*style=\{s\.memberIdentityRow\}[\s\S]*onPress=\{handleOpenBadges\}/);
 });
 
 test('ProfileScreen does not show membership or account status beside the moved badge', () => {

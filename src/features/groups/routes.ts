@@ -16,6 +16,8 @@ export function getGroupEntryHref(
       return { pathname: "/(tabs)/contacts/group-entry", params };
     case "discover":
       return { pathname: "/(tabs)/discover/group-entry", params };
+    case "explore":
+      return { pathname: "/(tabs)/explore/group-entry", params };
     default:
       return { pathname: "/(tabs)/messages/group-entry", params };
   }

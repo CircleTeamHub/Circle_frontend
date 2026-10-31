@@ -54,9 +54,16 @@ import {
 import {
   fetchFriendSettings,
   fetchFriendStatus,
+  friendsMutatedSince,
   type FriendSettings,
   type FriendStatus,
 } from '@/services/api/friends';
+import {
+  evictUserProfileCache,
+  isProfileCacheFresh,
+  readUserProfileCache,
+  writeUserProfileCache,
+} from '@/features/user/profile-cache';
 import { fetchUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
@@ -245,6 +252,14 @@ const s = StyleSheet.create({
   },
 });
 
+/** 别人的资料没有写追踪:窗口内一律算新鲜。 */
+const NO_TRACKED_WRITES = () => false;
+
+/** 好友状态/设置的缓存只在之后没有好友相关写请求时才拿来先画(刚加/删好友后它已过时)。 */
+function cachedFriendValue<T>(stamp: { value: T; at: number } | undefined): T | null {
+  return stamp && !friendsMutatedSince(stamp.at) ? stamp.value : null;
+}
+
 export default function UserProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -256,6 +271,13 @@ export default function UserProfileScreen() {
     name?: string;
     viaConversationID?: string;
   }>();
+  const profileId =
+    typeof params.id === 'string' ? params.id : 'unknown';
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  // 看过的人先用内存缓存画出来;聚焦时再按新鲜度决定要不要重拉(见 profile-cache)。
+  const [initialCache] = useState(() =>
+    readUserProfileCache(useAuthStore.getState().sessionEpoch, profileId),
+  );
   // 从群里点进来的资料页:该群关掉「成员可添加好友」且我不是群主/管理员时,
   // 不放加好友入口(服务端对带 viaConversationId 的申请同样会拒)。
   const viaConversationID =
@@ -270,11 +292,23 @@ export default function UserProfileScreen() {
     );
   });
   const currentUser = useAuthStore((state) => state.user);
-  const [remoteProfile, setRemoteProfile] = useState<UserProfileData | null>(null);
+  const [remoteProfile, setRemoteProfile] = useState<UserProfileData | null>(
+    () => initialCache?.profile?.value ?? null,
+  );
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [friendStatus, setFriendStatus] = useState<FriendStatus | null>(null);
+  const [friendStatus, setFriendStatus] = useState<FriendStatus | null>(
+    () => cachedFriendValue(initialCache?.friendStatus),
+  );
+  /** 当前 friendStatus 属于哪个用户;同一个人重新聚焦时不清空、只后台刷新。 */
+  const friendStatusOwnerRef = useRef<string | null>(
+    friendStatus === null
+      ? null
+      : resolveCanonicalProfileUserId(profileId, initialCache?.profile?.value),
+  );
   const [friendStatusLoadError, setFriendStatusLoadError] = useState(false);
-  const [friendSettings, setFriendSettings] = useState<FriendSettings | null>(null);
+  const [friendSettings, setFriendSettings] = useState<FriendSettings | null>(
+    () => cachedFriendValue(initialCache?.friendSettings),
+  );
   const [openingChat, setOpeningChat] = useState(false);
   const [recognitionIconImageFailed, setRecognitionIconImageFailed] =
     useState(false);
@@ -287,8 +321,6 @@ export default function UserProfileScreen() {
     [],
   );
 
-  const profileId =
-    typeof params.id === 'string' ? params.id : 'unknown';
   const scope = getUserProfileScopeFromSegments(segments);
   const isCurrentUser = isCurrentUserProfile(profileId, currentUser);
   const canonicalProfileUserId = resolveCanonicalProfileUserId(
@@ -374,13 +406,23 @@ export default function UserProfileScreen() {
         };
       }
 
+      // 刚拉过就直接用缓存;同步成缓存里那份(可能是另一个资料页实例刚拉的)。
+      const cachedProfile = readUserProfileCache(sessionEpoch, profileId)?.profile;
+      if (isProfileCacheFresh(cachedProfile, Date.now(), NO_TRACKED_WRITES)) {
+        setRemoteProfile(cachedProfile.value);
+        return () => {
+          cancelled = true;
+        };
+      }
+      const startedAt = Date.now();
+
       fetchUserProfile(profileId)
         .then((profile) => {
           if (cancelled) {
             return;
           }
 
-          setRemoteProfile({
+          const loaded: UserProfileData = {
             id: profile.id,
             name:
               profile.nickname ||
@@ -407,9 +449,15 @@ export default function UserProfileScreen() {
               qq: profile.qq,
             },
             remarkHint: profile.nickname,
+          };
+          setRemoteProfile(loaded);
+          writeUserProfileCache(sessionEpoch, profileId, {
+            profile: { value: loaded, at: startedAt },
           });
         })
         .catch((error) => {
+          // 拉不到(含被群规矩挡住、无权查看)就别再拿缓存里的旧资料给人看。
+          evictUserProfileCache(sessionEpoch, profileId);
           if (!cancelled) {
             setRemoteProfile(null);
             // 「成员可查看他人资料」关掉的群里打开对方资料,服务端回
@@ -423,7 +471,7 @@ export default function UserProfileScreen() {
       return () => {
         cancelled = true;
       };
-    }, [currentUser, isCurrentUser, profileId, t]),
+    }, [currentUser, isCurrentUser, profileId, sessionEpoch, t]),
   );
 
   useFocusEffect(
@@ -431,6 +479,7 @@ export default function UserProfileScreen() {
       let cancelled = false;
 
       if (!canonicalProfileUserId || isCurrentUser) {
+        friendStatusOwnerRef.current = null;
         setFriendStatusLoadError(false);
         setFriendStatus(null);
         return () => {
@@ -438,12 +487,29 @@ export default function UserProfileScreen() {
         };
       }
 
-      setFriendStatusLoadError(false);
-      setFriendStatus(null);
-      setFriendSettings(null);
+      // 从聊天等页面返回同一个人的资料时,沿用已有的好友状态在后台刷新;先清空再拉回来
+      // 会让依赖好友状态的按钮和设置区整块消失又出现(返回时闪一下)。换了人才清空。
+      if (friendStatusOwnerRef.current !== canonicalProfileUserId) {
+        friendStatusOwnerRef.current = canonicalProfileUserId;
+        setFriendStatusLoadError(false);
+        setFriendStatus(null);
+        setFriendSettings(null);
+      }
+
+      const cachedStatus = readUserProfileCache(sessionEpoch, profileId)?.friendStatus;
+      if (isProfileCacheFresh(cachedStatus, Date.now(), friendsMutatedSince)) {
+        setFriendStatus(cachedStatus.value);
+        return () => {
+          cancelled = true;
+        };
+      }
+      const startedAt = Date.now();
 
       fetchFriendStatus(canonicalProfileUserId)
         .then((status) => {
+          writeUserProfileCache(sessionEpoch, profileId, {
+            friendStatus: { value: status.status, at: startedAt },
+          });
           if (!cancelled) {
             setFriendStatusLoadError(false);
             setFriendStatus(status.status);
@@ -460,7 +526,7 @@ export default function UserProfileScreen() {
       return () => {
         cancelled = true;
       };
-    }, [canonicalProfileUserId, isCurrentUser]),
+    }, [canonicalProfileUserId, isCurrentUser, profileId, sessionEpoch]),
   );
 
   useFocusEffect(
@@ -478,8 +544,20 @@ export default function UserProfileScreen() {
         };
       }
 
+      const cachedSettings = readUserProfileCache(sessionEpoch, profileId)?.friendSettings;
+      if (isProfileCacheFresh(cachedSettings, Date.now(), friendsMutatedSince)) {
+        setFriendSettings(cachedSettings.value);
+        return () => {
+          cancelled = true;
+        };
+      }
+      const startedAt = Date.now();
+
       fetchFriendSettings(canonicalProfileUserId)
         .then((settings) => {
+          writeUserProfileCache(sessionEpoch, profileId, {
+            friendSettings: { value: settings, at: startedAt },
+          });
           if (!cancelled) {
             setFriendSettings(settings);
           }
@@ -494,7 +572,7 @@ export default function UserProfileScreen() {
       return () => {
         cancelled = true;
       };
-    }, [canonicalProfileUserId, friendStatus, isCurrentUser]),
+    }, [canonicalProfileUserId, friendStatus, isCurrentUser, profileId, sessionEpoch]),
   );
 
   const rawProfile = remoteProfile ?? fallbackProfile;
@@ -678,6 +756,28 @@ export default function UserProfileScreen() {
 
   const handleOpenChat = useCallback(async () => {
     if (!canonicalProfileUserId || openingChat) {
+      return;
+    }
+
+    // 聊过的人本机已有私聊会话:直接进,不等网络。只有第一次聊才去服务端建会话 ——
+    // 那一步可能被拉黑/隐私设置拒掉,在资料页弹错比进了聊天页却发不出去好。
+    const existing = useChatStore
+      .getState()
+      .conversations.find(
+        (conversation) =>
+          conversation.type === 'DIRECT' &&
+          conversation.peer?.id === canonicalProfileUserId,
+      );
+    if (existing) {
+      router.push(
+        getChatDetailHref(
+          scope,
+          canonicalProfileUserId,
+          displayName,
+          profile.avatarUrl,
+          existing.id,
+        ),
+      );
       return;
     }
 

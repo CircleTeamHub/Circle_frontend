@@ -9,9 +9,9 @@ tags:
 - runFlow:
     file: ../subflows/ensure-signed-in.yaml
 - tapOn:
-    id: windnote.tabs.discover
+    id: windnote.tabs.explore
 - tapOn:
-    id: windnote.discover.moments-entry
+    id: windnote.explore.moments-entry
 - extendedWaitUntil:
     visible:
       id: windnote.moments.screen

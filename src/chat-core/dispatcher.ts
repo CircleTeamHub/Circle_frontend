@@ -853,19 +853,25 @@ function enqueueForegroundBanner(
   // 免打扰就是不打扰:端内横幅也不弹。原来只是不响、横幅照弹,群一多横幅停不下来。
   if (conversation.muted) return 'suppressed';
 
+  const isAssistant = conversation.type === 'SUPPORT';
   const isGroup = conversation.type === 'GROUP';
   // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
-  const title = isGroup
-    ? (conversation.circle?.name ??
-      (conversation.name?.trim() ||
-        i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' })))
-    : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
+  const title = isAssistant
+    ? conversation.name?.trim() ||
+      i18n.t('assistant.name', { defaultValue: 'AI小助手' })
+    : isGroup
+      ? (conversation.circle?.name ??
+        (conversation.name?.trim() ||
+          i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' })))
+      : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');
   const avatarRaw = isGroup
     ? (conversation.circle?.avatarUrl ?? null)
     : (conversation.peer?.avatarUrl ?? null);
-  const sourceID = isGroup
-    ? (conversation.circleId ?? conversation.id)
-    : (conversation.peer?.id ?? '');
+  const sourceID = isAssistant
+    ? conversation.id
+    : isGroup
+      ? (conversation.circleId ?? conversation.id)
+      : (conversation.peer?.id ?? '');
 
   if (!title || !sourceID) return 'suppressed';
   const summary = isGroup

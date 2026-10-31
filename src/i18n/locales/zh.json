@@ -5,6 +5,39 @@
     "addAccount": "添加账号",
     "empty": "暂无其他账号"
   },
+  "assistant": {
+    "name": "AI小助手",
+    "open": "打开AI小助手",
+    "subtitle": "AI小助手",
+    "generic": "AI小助手有一条新提醒。",
+    "noteUnlisted": "你添加的笔记《{{title}}》已被作者下架。",
+    "noteDeleted": "你添加的笔记《{{title}}》已被作者删除。",
+    "noteClosed": "你添加的笔记《{{title}}》已打烊。",
+    "noteReopened": "你添加的笔记《{{title}}》已开工。",
+    "noteUnavailable": "你添加的笔记《{{title}}》当前不可用。",
+    "setupTitle": "开启城市信息提醒",
+    "setupHint": "选择一个圈子，AI小助手会按照这个圈子的城市范围匹配新动态。",
+    "selectCircle": "选择",
+    "allCities": "不限城市",
+    "noCircle": "请先选择或加入一个圈子，再开启提醒。",
+    "enable": "开启提醒",
+    "intro": "你好，我是AI小助手。我可以根据你关注的圈子和关键词提醒城市信息，也可以在你笔记库里的笔记打烊或开工时提醒你。",
+    "askCircle": "你想关注哪个圈子的信息？",
+    "askCircleWithContext": "你现在正在浏览「{{circle}}」。要关注这个圈子吗？也可以选择其他圈子。",
+    "selectedCircle": "我想关注「{{circle}}」。",
+    "askKeywords": "好的。你想关注哪些关键词？可以输入多个，用逗号分隔；也可以选择关注这个圈子的全部信息。",
+    "allKeywords": "关注这个圈子的全部信息。",
+    "selectedKeywords": "我关注：{{keywords}}。",
+    "continue": "继续",
+    "askNoteStatus": "最后一个问题：你笔记库里收藏的笔记打烊或开工时，要提醒你吗？",
+    "noteStatusYes": "需要，提醒我。",
+    "noteStatusNo": "暂时不用。",
+    "cityScope": "城市范围：{{cities}}",
+    "keywordPlaceholder": "例如：演唱会、招聘、展览",
+    "allKeywordsButton": "关注全部信息",
+    "noteStatusYesButton": "提醒我",
+    "noteStatusNoButton": "暂时不用"
+  },
   "media": {
     "saveImage": "保存图片",
     "savedTitle": "已保存",
@@ -179,9 +212,13 @@
   "tabs": {
     "messages": "消息",
     "contacts": "联系人",
-    "discover": "动态",
+    "circles": "圈子",
+    "explore": "探索",
     "profile": "我的",
     "unreadCount": "{{count}} 条未读"
+  },
+  "explore": {
+    "title": "探索"
   },
   "messages": {
     "title": "消息",
@@ -209,7 +246,7 @@
     "scanAlbumNoCodeMessage": "这张图片里没有可识别的二维码，换一张试试。",
     "scanAlbumFailedTitle": "识别失败",
     "scanAlbumFailedMessage": "请稍后重试。",
-    "seatManagement": "临时群聊",
+    "seatManagement": "坐席管理",
     "groupManagement": "群组管理",
     "loadFailed": "会话加载失败，请检查网络后重试",
     "noConversations": "暂无会话",
@@ -370,6 +407,8 @@
       "lastSeenDays_other": "{{count}} 天前在线",
       "previewNotice": "连接尚未完成，请稍后重试",
       "historyWindowFull": "更早的消息请在聊天记录里搜索查看",
+      "jumpToUnread": "跳转到未读消息起点，共 {{count}} 条",
+      "unreadMessages": "未读 {{count}} 条消息",
       "recordingSeconds": "正在录音 {{seconds}} 秒",
       "voiceReleaseCancel": "松开 取消",
       "voiceReleaseSend": "松开发送 {{seconds}}\"",
@@ -926,7 +965,7 @@
     "title": "联系人",
     "searchPlaceholder": "搜索账号或好友...",
     "newFriends": "新的朋友",
-    "seats": "临时群聊",
+    "seats": "坐席",
     "groups": "我的群聊",
     "circles": "圈子",
     "tags": "标签",
@@ -1520,6 +1559,11 @@
     "upgradeTitle": "升级情况",
     "toNext": "距离 {{title}} 还差 {{points}} 分",
     "maxReached": "已达到当前最高信誉档位",
+    "introButton": "介绍",
+    "introTitle": "信誉值介绍",
+    "introNote": "信誉值只根据你在 App 内的交友行为表现来评估，与任何积分、金钱都绝不挂钩。",
+    "range": "{{min}}–{{max}} 分",
+    "currentTag": "当前",
     "tier": {
       "excellent": {
         "title": "优秀信誉",
@@ -1542,7 +1586,8 @@
       "improve": "如何提升",
       "deduct": "扣分规则",
       "impact": "权益影响",
-      "recent": "近期记录"
+      "recent": "近期记录",
+      "tiers": "信誉档位"
     },
     "improveRules": [
       "完善真实资料、头像和常用联系方式",
@@ -1559,10 +1604,14 @@
       "高信誉用户可展示更高可信度标签",
       "低信誉时部分活动可能需要人工审核"
     ],
-    "recentRecords": [
-      "暂无近期信誉变动记录",
-      "后续会接入真实加分、扣分和申诉流水"
-    ]
+    "recentEmpty": "暂无近期信誉变动记录",
+    "recentEmptyHint": "信誉值的每次加分、扣分都会记录在这里",
+    "recentLoadFailed": "近期记录加载失败",
+    "scoreAfter": "变动后 {{score}}",
+    "reasons": {
+      "friendReport": "被举报并核实",
+      "other": "信誉值调整"
+    }
   },
   "profile": {
     "creditScore": "信用值",
@@ -1573,6 +1622,8 @@
       "title": "我的钱包",
       "confirmRecharge": "确认充值",
       "balance": "积分余额",
+      "showBalance": "显示余额",
+      "hideBalance": "隐藏余额",
       "recharge": "积分充值",
       "memberAgreement": "《会员服务协议》",
       "loadError": "积分余额加载失败，请稍后重试",
@@ -1718,6 +1769,8 @@
       "backToMessages": "回到消息",
       "sender": "发送人",
       "empty": "还没有收藏",
+      "emptyHint": "在聊天里长按消息，选择「收藏」",
+      "more": "更多操作",
       "loadError": "收藏加载失败，请稍后重试",
       "deleteError": "删除收藏失败，请稍后重试",
       "conversationFallback": "聊天",
@@ -1795,18 +1848,12 @@
     "fieldNotEditable": "该字段暂不支持编辑",
     "returnToSettings": "请返回账号设置页。",
     "systemAnnouncements": "系统公告",
+    "announcementTag": "公告",
     "viewAnnouncements": "查看最新",
     "addIcon": "添加徽章",
     "myIcons": "我的徽章",
-    "myDecorations": "我的装扮",
-    "decorations": {
-      "title": "我的装扮",
-      "badges": "我的徽章",
-      "badgesSubtitle": "查看和选择展示在个人资料中的徽章",
-      "avatarFrames": "我的头像框",
-      "avatarFramesSubtitle": "查看已拥有的头像框并切换当前装扮",
-      "openHint": "打开我的徽章和头像框"
-    },
+    "badges": "我的徽章",
+    "badgesHint": "查看和选择展示在个人资料中的徽章",
     "avatarFrames": {
       "title": "我的头像框",
       "detailTitle": "头像框详情",
@@ -1874,6 +1921,8 @@
       "currentIdentity": "当前身份",
       "catalogHint": "选择会员档位查看对应权益，开通和升级由客服协助处理。",
       "chooseTier": "选择会员档位",
+      "perMonth": "约 ¥{{price}}/月",
+      "benefitUpgraded": "升级后提升",
       "recommended": "推荐",
       "lifetime": "永久",
       "selected": "已选择",
@@ -2493,9 +2542,9 @@
     "above90": "90分以上"
   },
   "tempChats": {
-    "title": "临时群聊",
+    "title": "坐席",
     "create": "创建临时聊天",
-    "refresh": "刷新临时群聊列表",
+    "refresh": "刷新坐席列表",
     "loading": "正在加载临时聊天",
     "createFailed": "创建临时聊天失败",
     "loadFailed": "加载临时聊天失败",
@@ -2528,6 +2577,12 @@
     "endConfirmMessage": "结束后访客将被移出且无法再加入。",
     "endConfirm": "结束",
     "endFailed": "结束失败，请重试",
+    "actionDelete": "删除",
+    "deleteConfirmTitle": "删除该临时聊天？",
+    "deleteConfirmMessage": "删除后将从列表中移除，对应的会话也会一并移除。",
+    "deleteActiveConfirmMessage": "该临时聊天仍在进行中。删除会先结束聊天、移出所有访客，邀请链接随即失效。",
+    "deleteConfirm": "删除",
+    "deleteFailed": "删除失败，请重试",
     "status": {
       "active": "进行中",
       "ended": "已结束",
@@ -2818,9 +2873,10 @@
       }
     },
     "stats": "共 {{groupCount}} 个分组，合计 {{noteCount}} 条笔记",
+    "noteCount": "{{count}} 条笔记",
     "tabs": {
-      "all": "全部 {{count}}",
-      "ungrouped": "未分组 {{count}}"
+      "all": "全部",
+      "ungrouped": "未分组"
     },
     "section": {
       "text": "文字",
@@ -3375,6 +3431,7 @@
     "TEMP_CHAT_FULL": "人数已满",
     "TEMP_CHAT_CREATOR_ONLY": "只有创建者可以结束",
     "TEMP_CHAT_UPLOAD_QUOTA_EXCEEDED": "上传额度已用尽，请稍后再试",
+    "TEMP_CHAT_DAILY_CREATE_LIMIT": "每天最多创建 5 个临时聊天，今天的次数已用完",
     "PLAZA_MEMBERSHIP_REQUIRED": "升级会员查看圈子动态",
     "PLAZA_NOT_ACTIVE_MEMBER": "只有圈子活跃成员才能发帖",
     "PLAZA_ADMIN_ONLY_POST": "该圈子仅管理员可以发帖",

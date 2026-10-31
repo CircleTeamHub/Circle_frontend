@@ -28,7 +28,10 @@ import {
 } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
-import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
+import {
+  getMomentDetailHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { fetchUserProfile } from '@/services/api/profile';
@@ -153,12 +156,9 @@ export default function UserMomentsScreen() {
 
   const handlePress = useCallback(
     (postId: string) => {
-      router.push({
-        pathname: '/(tabs)/discover/moment/[id]',
-        params: { id: postId },
-      });
+      router.push(getMomentDetailHref(scope, postId));
     },
-    [router],
+    [router, scope],
   );
 
   const renderItem = useCallback(

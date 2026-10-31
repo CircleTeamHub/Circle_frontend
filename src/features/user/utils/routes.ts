@@ -1,13 +1,19 @@
 import type { Href } from 'expo-router';
 
-export type UserProfileScope = 'messages' | 'contacts' | 'profile' | 'discover';
+export type UserProfileScope =
+  | 'messages'
+  | 'contacts'
+  | 'profile'
+  | 'discover'
+  | 'explore';
 
 type UserProfileHref = {
   pathname:
     | '/(tabs)/messages/user/[id]'
     | '/(tabs)/contacts/user/[id]'
     | '/(tabs)/profile/user/[id]'
-    | '/(tabs)/discover/user/[id]';
+    | '/(tabs)/discover/user/[id]'
+    | '/(tabs)/explore/user/[id]';
   params: { id: string; name?: string; viaConversationID?: string };
 };
 
@@ -16,7 +22,8 @@ type ChatDetailHref = {
     | '/(tabs)/messages/chat-detail'
     | '/(tabs)/contacts/chat-detail'
     | '/(tabs)/profile/chat-detail'
-    | '/(tabs)/discover/chat-detail';
+    | '/(tabs)/discover/chat-detail'
+    | '/(tabs)/explore/chat-detail';
   params: {
     sourceID: string;
     conversationType: 'private' | 'group';
@@ -51,6 +58,8 @@ export function getUserProfileHref(
       return { pathname: '/(tabs)/profile/user/[id]', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/user/[id]', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/user/[id]', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/user/[id]', params };
@@ -84,6 +93,8 @@ export function getSendFriendRequestHref(
       return { pathname: '/(tabs)/profile/user/[id]/request', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/user/[id]/request', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/user/[id]/request', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/user/[id]/request', params };
@@ -109,6 +120,8 @@ export function getEditFriendRemarkHref(
       return { pathname: '/(tabs)/profile/user/[id]/remark', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/user/[id]/remark', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/user/[id]/remark', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/user/[id]/remark', params };
@@ -129,6 +142,8 @@ export function getEditFriendTagsHref(
       return { pathname: '/(tabs)/profile/user/[id]/tags', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/user/[id]/tags', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/user/[id]/tags', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/user/[id]/tags', params };
@@ -149,6 +164,8 @@ export function getEditFriendPermissionHref(
       return { pathname: '/(tabs)/profile/user/[id]/permission', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/user/[id]/permission', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/user/[id]/permission', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/user/[id]/permission', params };
@@ -170,10 +187,28 @@ export function getUserMomentsHref(
       return href('/(tabs)/profile/user/[id]/moments');
     case 'discover':
       return href('/(tabs)/discover/user/[id]/moments');
+    case 'explore':
+      return href('/(tabs)/explore/user/[id]/moments');
     case 'messages':
     default:
       return href('/(tabs)/messages/user/[id]/moments');
   }
+}
+
+/**
+ * 朋友圈详情只镜像在探索（朋友圈的家）和圈子两个栈。其余栈（如联系人/我的里
+ * 的个人相册）仍落到 discover 那份，保持改版前的行为。
+ */
+export function getMomentDetailHref(
+  scope: UserProfileScope,
+  id: string,
+  targetCommentId?: string,
+): Href {
+  const params = { id, ...(targetCommentId ? { targetCommentId } : {}) };
+  if (scope === 'explore') {
+    return { pathname: '/(tabs)/explore/moment/[id]', params };
+  }
+  return { pathname: '/(tabs)/discover/moment/[id]', params };
 }
 
 export function getFriendActivityDetailHref(id: string): Href {
@@ -207,6 +242,8 @@ export function getChatDetailHref(
       return { pathname: '/(tabs)/profile/chat-detail', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/chat-detail', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/chat-detail', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/chat-detail', params };
@@ -214,7 +251,7 @@ export function getChatDetailHref(
 }
 
 /**
- * 扫码落地页。四个 tab 栈各镜像一份 —— 落地页自己还要往下跳(看资料 / 加好友 /
+ * 扫码落地页。每个 tab 栈各镜像一份 —— 落地页自己还要往下跳(看资料 / 加好友 /
  * 进群聊),它得和调用它的页面在同一个栈里,下一跳才不会把用户甩去别的 tab、返回
  * 也才落在上一层。外部系统相机的深链另走顶层 app/qr.tsx:那种进入方式本来就没有
  * 来源栈。App 内扫码器(#202)走的 messages 这一份,就是本函数 scope='messages'。
@@ -232,6 +269,8 @@ export function getQrLandingHref(
       return { pathname: '/(tabs)/profile/qr', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/qr', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/qr', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/qr', params };
@@ -253,6 +292,8 @@ export function getNoteDetailHref(
       return { pathname: '/(tabs)/profile/notes/[id]', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/notes/[id]', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/notes/[id]', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/notes/[id]', params };
@@ -268,6 +309,8 @@ export function getTabHomeHref(scope: UserProfileScope): Href {
       return '/(tabs)/profile';
     case 'discover':
       return '/(tabs)/discover';
+    case 'explore':
+      return '/(tabs)/explore';
     case 'messages':
     default:
       return '/(tabs)/messages';
@@ -290,6 +333,8 @@ export function getChatInfoTopHref(
       return { pathname: '/(tabs)/profile/chat-info', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/chat-info', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/chat-info', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/chat-info', params };
@@ -318,6 +363,8 @@ export function getChatInfoHref(
       return { pathname: '/(tabs)/profile/user/[id]/chat-info', params };
     case 'discover':
       return { pathname: '/(tabs)/discover/user/[id]/chat-info', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/user/[id]/chat-info', params };
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/chat-info', params };
@@ -364,6 +411,8 @@ export function getEditGroupNoticeHref(
       return { pathname: '/(tabs)/profile/edit-group-notice', params: routeParams } as unknown as Href;
     case 'discover':
       return { pathname: '/(tabs)/discover/edit-group-notice', params: routeParams } as unknown as Href;
+    case 'explore':
+      return { pathname: '/(tabs)/explore/edit-group-notice', params: routeParams } as unknown as Href;
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/edit-group-notice', params: routeParams } as unknown as Href;
@@ -414,6 +463,8 @@ export function getGroupLogHref(
       return { pathname: '/(tabs)/profile/group-log', params: routeParams } as unknown as Href;
     case 'discover':
       return { pathname: '/(tabs)/discover/group-log', params: routeParams } as unknown as Href;
+    case 'explore':
+      return { pathname: '/(tabs)/explore/group-log', params: routeParams } as unknown as Href;
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/group-log', params: routeParams } as unknown as Href;
@@ -439,6 +490,8 @@ export function getGroupManageHref(
       return { pathname: '/(tabs)/profile/group-manage', params: routeParams } as unknown as Href;
     case 'discover':
       return { pathname: '/(tabs)/discover/group-manage', params: routeParams } as unknown as Href;
+    case 'explore':
+      return { pathname: '/(tabs)/explore/group-manage', params: routeParams } as unknown as Href;
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/group-manage', params: routeParams } as unknown as Href;
@@ -463,6 +516,8 @@ export function getNoteManagementHref(
       return { pathname: '/(tabs)/profile/note-management', params: routeParams } as unknown as Href;
     case 'discover':
       return { pathname: '/(tabs)/discover/note-management', params: routeParams } as unknown as Href;
+    case 'explore':
+      return { pathname: '/(tabs)/explore/note-management', params: routeParams } as unknown as Href;
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/note-management', params: routeParams } as unknown as Href;
@@ -492,6 +547,8 @@ export function getGroupMemberSearchHref(
       return { pathname: '/(tabs)/profile/search-group-members', params: routeParams } as unknown as Href;
     case 'discover':
       return { pathname: '/(tabs)/discover/search-group-members', params: routeParams } as unknown as Href;
+    case 'explore':
+      return { pathname: '/(tabs)/explore/search-group-members', params: routeParams } as unknown as Href;
     case 'messages':
     default:
       return { pathname: '/(tabs)/messages/search-group-members', params: routeParams } as unknown as Href;
@@ -608,13 +665,15 @@ export function getUserProfileScopeFromSegments(
       segment === 'contacts' ||
       segment === 'profile' ||
       segment === 'messages' ||
-      segment === 'discover',
+      segment === 'discover' ||
+      segment === 'explore',
   );
 
   if (
     scope === 'contacts' ||
     scope === 'profile' ||
-    scope === 'discover'
+    scope === 'discover' ||
+    scope === 'explore'
   ) {
     return scope;
   }

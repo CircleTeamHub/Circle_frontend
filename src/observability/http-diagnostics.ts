@@ -1,6 +1,10 @@
 // Reviewed API route shapes only. New/unrecognized routes become /__other__.
 // Parameters are position-based, never guessed from the spelling of an identifier.
 const ROUTE_TEMPLATES = [
+  '/assistant/bootstrap',
+  '/assistant/preferences',
+  '/assistant/subscriptions',
+  '/assistant/subscriptions/:id',
   "/app-operations/open", "/app-operations/update",
   "/chat/groups/:id/preview",
   "/chat/groups/:id/applications",
@@ -129,6 +133,7 @@ const ROUTE_TEMPLATES = [
   "/coin/transactions",
   "/coin/wallet",
   "/conversation-groups/:id/members",
+  "/credit/events",
   "/friend/:id/remark",
   "/friend/:id/permission",
   "/friend/:id/report",

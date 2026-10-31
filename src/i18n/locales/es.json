@@ -1,4 +1,37 @@
 {
+  "assistant": {
+    "name": "Asistente de WindNote",
+    "open": "Abrir el asistente de WindNote",
+    "subtitle": "Asistente de recordatorios",
+    "generic": "El asistente de WindNote tiene un nuevo aviso.",
+    "noteUnlisted": "La nota «{{title}}» que añadiste fue retirada por su propietario.",
+    "noteDeleted": "La nota «{{title}}» que añadiste fue eliminada por su propietario.",
+    "noteClosed": "La nota «{{title}}» que añadiste está marcada como cerrada.",
+    "noteReopened": "La nota «{{title}}» que añadiste vuelve a estar en servicio.",
+    "noteUnavailable": "La nota «{{title}}» que añadiste no está disponible ahora.",
+    "setupTitle": "Activar avisos por ciudad",
+    "setupHint": "Elige un círculo y WindNote Assistant relacionará las nuevas publicaciones con sus ciudades.",
+    "selectCircle": "Elegir",
+    "allCities": "Todas las ciudades",
+    "noCircle": "Elige o únete a un círculo antes de activar los avisos.",
+    "enable": "Activar avisos",
+    "intro": "Hola, soy el asistente de WindNote. Puedo avisarte de novedades de la ciudad según tus círculos y palabras clave, y decirte cuando una nota de tu biblioteca se cierre o vuelva a estar en servicio.",
+    "askCircle": "¿Qué círculo quieres seguir?",
+    "askCircleWithContext": "Ahora estás viendo «{{circle}}». ¿Quieres seguir este círculo o elegir otro?",
+    "selectedCircle": "Quiero seguir «{{circle}}».",
+    "askKeywords": "Perfecto. ¿Qué palabras clave quieres seguir? Añade varias separadas por comas o sigue toda la información de este círculo.",
+    "allKeywords": "Seguir toda la información de este círculo.",
+    "selectedKeywords": "Seguiré: {{keywords}}.",
+    "continue": "Continuar",
+    "askNoteStatus": "Una última pregunta: ¿quieres que te avise si el propietario cierra una nota de tu biblioteca o la vuelve a poner en servicio?",
+    "noteStatusYes": "Sí, avísame.",
+    "noteStatusNo": "Ahora no.",
+    "cityScope": "Ámbito de ciudades: {{cities}}",
+    "keywordPlaceholder": "Por ejemplo: conciertos, empleo, exposiciones",
+    "allKeywordsButton": "Seguir todo",
+    "noteStatusYesButton": "Avísame",
+    "noteStatusNoButton": "Ahora no"
+  },
   "settingsDetails": {
     "accountSecurity": {
       "title": "Cuenta y seguridad",
@@ -264,6 +297,8 @@
       "lastSeenDays_other": "Últ. vez hace {{count}} días",
       "previewNotice": "La conexión aún no está lista. Vuelve a intentarlo en un momento.",
       "historyWindowFull": "Para ver mensajes anteriores, busca en el historial del chat.",
+      "jumpToUnread": "Ir al inicio de {{count}} mensajes sin leer",
+      "unreadMessages": "{{count}} mensajes sin leer",
       "recordingSeconds": "Grabando {{seconds}} s",
       "voiceReleaseCancel": "Suelta para cancelar",
       "voiceReleaseSend": "Suelta para enviar {{seconds}}\"",
@@ -843,7 +878,7 @@
     "scanAlbumNoCodeMessage": "Esta imagen no contiene un código QR legible. Prueba con otra.",
     "scanAlbumFailedTitle": "Error al escanear",
     "scanAlbumFailedMessage": "Inténtalo de nuevo.",
-    "seatManagement": "Chats grupales temporales",
+    "seatManagement": "Gestión de puestos",
     "groupManagement": "Gestión de grupos",
     "loadFailed": "No se pudieron cargar las conversaciones. Revisa tu conexión e inténtalo de nuevo",
     "noConversations": "No hay conversaciones",
@@ -1207,9 +1242,10 @@
       }
     },
     "stats": "{{groupCount}} grupos · {{noteCount}} notas",
+    "noteCount": "Notas: {{count}}",
     "tabs": {
-      "all": "Todas {{count}}",
-      "ungrouped": "Sin grupo {{count}}"
+      "all": "Todas",
+      "ungrouped": "Sin grupo"
     },
     "section": {
       "text": "Texto",
@@ -1289,9 +1325,9 @@
     }
   },
   "tempChats": {
-    "title": "Chats grupales temporales",
+    "title": "Puestos",
     "create": "Crear chat temporal",
-    "refresh": "Actualizar chats grupales temporales",
+    "refresh": "Actualizar puestos",
     "loading": "Cargando chats temporales",
     "createFailed": "No se pudo crear el chat temporal",
     "loadFailed": "No se pudieron cargar los chats temporales",
@@ -1324,6 +1360,12 @@
     "endConfirmMessage": "Los invitados serán expulsados y no podrán volver a unirse una vez que termine.",
     "endConfirm": "Terminar",
     "endFailed": "No se pudo terminar, reinténtalo",
+    "actionDelete": "Eliminar",
+    "deleteConfirmTitle": "¿Eliminar este chat temporal?",
+    "deleteConfirmMessage": "Se quitará de tu lista junto con su conversación.",
+    "deleteActiveConfirmMessage": "Este chat temporal sigue activo. Al eliminarlo primero se termina el chat, se expulsa a todos los invitados y el enlace de invitación deja de funcionar.",
+    "deleteConfirm": "Eliminar",
+    "deleteFailed": "No se pudo eliminar, reinténtalo",
     "status": {
       "active": "Activo",
       "ended": "Terminado",
@@ -1915,7 +1957,7 @@
     "title": "Contactos",
     "searchPlaceholder": "Buscar contactos...",
     "newFriends": "Nuevos amigos",
-    "seats": "Chats grupales temporales",
+    "seats": "Puestos",
     "groups": "Mis grupos",
     "circles": "Círculos",
     "tags": "Etiquetas",
@@ -2191,6 +2233,8 @@
       "title": "Mi cartera",
       "confirmRecharge": "Confirmar recarga",
       "balance": "Saldo de créditos",
+      "showBalance": "Mostrar saldo",
+      "hideBalance": "Ocultar saldo",
       "recharge": "Recargar créditos",
       "memberAgreement": "Acuerdo de servicio de membresía",
       "loadError": "Error al cargar el saldo de créditos. Inténtalo de nuevo más tarde.",
@@ -2336,6 +2380,8 @@
       "backToMessages": "Volver a Mensajes",
       "sender": "Remitente",
       "empty": "Aún no hay elementos guardados",
+      "emptyHint": "Mantén pulsado un mensaje en un chat y elige Guardar",
+      "more": "Más acciones",
       "loadError": "Error al cargar los guardados. Inténtalo de nuevo más tarde.",
       "deleteError": "Error al eliminar el guardado. Inténtalo de nuevo más tarde.",
       "conversationFallback": "Chat",
@@ -2413,18 +2459,12 @@
     "fieldNotEditable": "Este campo no se puede editar",
     "returnToSettings": "Vuelve a Ajustes.",
     "systemAnnouncements": "Avisos del sistema",
+    "announcementTag": "Aviso",
     "viewAnnouncements": "Novedades",
     "addIcon": "Añadir insignia",
     "myIcons": "Mis insignias",
-    "myDecorations": "Mis decoraciones",
-    "decorations": {
-      "title": "Mis decoraciones",
-      "badges": "Mis insignias",
-      "badgesSubtitle": "Consulta y elige las insignias que aparecen en tu perfil",
-      "avatarFrames": "Mis marcos de avatar",
-      "avatarFramesSubtitle": "Consulta tus marcos y cambia la decoración actual",
-      "openHint": "Abre tus insignias y marcos de avatar"
-    },
+    "badges": "Mis insignias",
+    "badgesHint": "Consulta y elige las insignias que aparecen en tu perfil",
     "avatarFrames": {
       "title": "Mis marcos de avatar",
       "detailTitle": "Detalles del marco",
@@ -2492,6 +2532,8 @@
       "currentIdentity": "Estado actual",
       "catalogHint": "Selecciona un nivel para ver sus beneficios. Atención al cliente gestiona la activación y las mejoras.",
       "chooseTier": "Elige un nivel de membresía",
+      "perMonth": "≈ ¥{{price}}/mes",
+      "benefitUpgraded": "Mejora al subir de nivel",
       "recommended": "Recomendado",
       "lifetime": "De por vida",
       "selected": "Seleccionado",
@@ -2728,9 +2770,13 @@
   "tabs": {
     "messages": "Mensajes",
     "contacts": "Contactos",
-    "discover": "Descubrir",
+    "circles": "Círculos",
+    "explore": "Explorar",
     "profile": "Yo",
     "unreadCount": "{{count}} sin leer"
+  },
+  "explore": {
+    "title": "Explorar"
   },
   "onboarding": {
     "profileTitle": "Completa tu perfil",
@@ -2910,6 +2956,11 @@
     "upgradeTitle": "Progreso",
     "toNext": "{{points}} puntos para {{title}}",
     "maxReached": "Has alcanzado el nivel de reputación más alto",
+    "introButton": "Info",
+    "introTitle": "Sobre la reputación",
+    "introNote": "Tu reputación se basa solo en cómo te relacionas con otras personas en la app y nunca está ligada a puntos ni a dinero.",
+    "range": "{{min}}–{{max}} pts",
+    "currentTag": "Actual",
     "tier": {
       "excellent": {
         "title": "Excelente",
@@ -2932,7 +2983,8 @@
       "improve": "Cómo mejorar",
       "deduct": "Qué la reduce",
       "impact": "Dónde se aplica",
-      "recent": "Actividad reciente"
+      "recent": "Actividad reciente",
+      "tiers": "Niveles"
     },
     "improveRules": [
       "Completa un perfil auténtico, con foto y datos de contacto",
@@ -2949,10 +3001,14 @@
       "Los usuarios con alta reputación pueden mostrar distintivos de confianza más fuertes",
       "La baja reputación puede requerir revisión manual en algunos eventos"
     ],
-    "recentRecords": [
-      "Aún no hay cambios de reputación recientes",
-      "Aquí se mostrarán más adelante las subidas, penalizaciones y apelaciones reales"
-    ]
+    "recentEmpty": "Aún no hay cambios de reputación recientes",
+    "recentEmptyHint": "Aquí verás cada subida o penalización de tu reputación",
+    "recentLoadFailed": "No se pudo cargar la actividad reciente",
+    "scoreAfter": "Ahora {{score}}",
+    "reasons": {
+      "friendReport": "Denuncia confirmada",
+      "other": "Ajuste de reputación"
+    }
   },
   "validation": {
     "nicknameEmpty": "El apodo no puede estar vacío",
@@ -3383,6 +3439,7 @@
     "TEMP_CHAT_FULL": "Este chat está lleno",
     "TEMP_CHAT_CREATOR_ONLY": "Solo el creador puede finalizar este chat",
     "TEMP_CHAT_UPLOAD_QUOTA_EXCEEDED": "Has alcanzado el límite de subida, inténtalo más tarde",
+    "TEMP_CHAT_DAILY_CREATE_LIMIT": "Puedes crear hasta 5 chats temporales al día. Vuelve a intentarlo mañana.",
     "PLAZA_MEMBERSHIP_REQUIRED": "Mejora tu membresía para ver publicaciones del círculo",
     "PLAZA_NOT_ACTIVE_MEMBER": "Solo los miembros activos del círculo pueden publicar",
     "PLAZA_ADMIN_ONLY_POST": "Solo los administradores pueden publicar en este círculo",

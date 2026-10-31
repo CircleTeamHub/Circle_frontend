@@ -33,7 +33,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useMembershipProgramStore } from '@/stores/membershipProgramStore';
 import { useSupportConfigStore } from '@/stores/supportConfigStore';
 import { selectSupportAgents } from '@/stores/support-config-selectors';
-import { iconForeground, Radius, Spacing, Typography, useTheme } from '@/theme';
+import { iconForeground, Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 
@@ -114,6 +114,17 @@ const TIER_VISUALS: Record<
 // 未开通（普通用户）时的中性 hero 渐变（品牌紫）。
 const NEUTRAL_HERO_GRADIENT = ['#5B4BE6', '#7C5CF0', '#A86BF0'] as const;
 
+// 权益格子的图标：先看图标就知道是哪一项，不用逐行读标签。
+const BENEFIT_ICONS: Record<MembershipBenefitId, keyof typeof Ionicons.glyphMap> = {
+  'group-member-limit': 'people',
+  'joined-groups': 'planet',
+  'note-storage': 'document-text',
+  'city-filters': 'location',
+  'fancy-number': 'diamond',
+  'name-color': 'color-palette',
+  badge: 'ribbon',
+};
+
 function formatCountBenefit(
   benefitId: MembershipBenefitId,
   value: number,
@@ -171,10 +182,6 @@ const s = StyleSheet.create({
   heroTextCol: {
     flex: 1,
     gap: 4,
-  },
-  heroEyebrow: {
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
   },
   heroNameRow: {
     flexDirection: 'row',
@@ -246,25 +253,34 @@ const s = StyleSheet.create({
     alignItems: 'baseline',
     gap: 1,
   },
-  benefitsPanel: {
+  // 权益两列格子：图标 + 数值 + 名称，扫一眼就能对比档位差异。
+  benefitsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: Spacing.sm,
+  },
+  benefitTile: {
+    width: '48.5%',
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
+    padding: Spacing.md,
+    gap: Spacing.sm,
   },
-  benefitRow: {
-    minHeight: 52,
+  benefitIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  benefitValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    gap: Spacing.xs,
   },
   benefitText: {
-    flex: 1,
     gap: 2,
-  },
-  contactSection: {
-    gap: Spacing.sm,
   },
   marketingPanel: {
     borderRadius: Radius.sm,
@@ -272,12 +288,21 @@ const s = StyleSheet.create({
     padding: Spacing.lg,
     gap: Spacing.md,
   },
+  // 联系客服按钮常驻底部：五档方案 + 权益一屏放不下，按钮不能沉在最底下。
+  ctaBar: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   cta: {
     minHeight: 52,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.md,
+  },
+  ctaPressed: {
+    opacity: 0.85,
   },
 });
 
@@ -479,7 +504,16 @@ export default function MemberCenterScreen() {
         paddingTop: insets.top,
       },
       content: {
-        paddingBottom: insets.bottom + Spacing.xl,
+        paddingBottom: Spacing.xl,
+      },
+      ctaBar: {
+        backgroundColor: colors.surface,
+        borderTopColor: colors.surfaceBorder,
+        paddingBottom: insets.bottom + Spacing.sm,
+      },
+      perMonth: {
+        color: colors.textSecondary,
+        ...Typography.small,
       },
       heroEyebrow: {
         color: 'rgba(255,255,255,0.75)',
@@ -497,12 +531,6 @@ export default function MemberCenterScreen() {
       sectionTitle: {
         color: colors.text,
         ...Typography.h2,
-        flexShrink: 1,
-      },
-      rulesLink: {
-        color: colors.primary,
-        ...Typography.caption,
-        fontWeight: '700' as const,
         flexShrink: 1,
       },
       tierCard: {
@@ -540,13 +568,9 @@ export default function MemberCenterScreen() {
         fontWeight: '800' as const,
         fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
       },
-      benefitsPanel: {
+      benefitTile: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
-      },
-      benefitDivider: {
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: colors.divider,
       },
       benefitLabel: {
         color: colors.textSecondary,
@@ -555,6 +579,8 @@ export default function MemberCenterScreen() {
       benefitValue: {
         color: colors.text,
         ...Typography.body,
+        fontWeight: '700' as const,
+        flexShrink: 1,
       },
       upgradeNote: {
         color: colors.textSecondary,
@@ -664,7 +690,7 @@ export default function MemberCenterScreen() {
               )}
             </View>
             <View style={s.heroTextCol}>
-              <Text style={[s.heroEyebrow, d.heroEyebrow]}>
+              <Text style={d.heroEyebrow}>
                 {t('profile.membership.currentIdentity', {
                   defaultValue: '当前身份',
                 })}
@@ -685,18 +711,6 @@ export default function MemberCenterScreen() {
           <Text style={d.sectionTitle}>
             {t('profile.membership.chooseTier', { defaultValue: '选择会员档位' })}
           </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('profile.memberRules.link', {
-              defaultValue: '会员规则',
-            })}
-            hitSlop={8}
-            onPress={() => router.push('/(tabs)/profile/member-rules' as never)}
-          >
-            <Text style={d.rulesLink}>
-              {t('profile.memberRules.link', { defaultValue: '会员规则' })}
-            </Text>
-          </Pressable>
         </View>
 
         {/* 五个购买方案纵向展示；每日会员复用白银权益与视觉，不新增后端等级。 */}
@@ -802,6 +816,15 @@ export default function MemberCenterScreen() {
                       {plan.price.amount}
                     </Text>
                   </View>
+                  {/* 多月方案折算到每月，方便横向比较性价比。 */}
+                  {plan.duration.type === 'months' && plan.duration.months > 1 ? (
+                    <Text style={d.perMonth}>
+                      {t('profile.membership.perMonth', {
+                        defaultValue: '约 ¥{{price}}/月',
+                        price: Math.round(plan.price.amount / plan.duration.months),
+                      })}
+                    </Text>
+                  ) : null}
                   {selected ? (
                     <Ionicons
                       name="checkmark-circle"
@@ -818,8 +841,8 @@ export default function MemberCenterScreen() {
         <Text style={d.sectionTitle}>
           {t('profile.membership.benefitsTitle', { defaultValue: '会员权益' })}
         </Text>
-        <View style={[s.benefitsPanel, d.benefitsPanel]}>
-          {visibleBenefits.map((benefit, index) => {
+        <View style={s.benefitsGrid}>
+          {visibleBenefits.map((benefit) => {
             const value = benefit.values[selectedPlan.tier];
             const defaultValue =
               typeof value === 'number'
@@ -832,28 +855,44 @@ export default function MemberCenterScreen() {
                     value,
                   })
                 : t(`profile.membership.benefitValues.${value}`, { defaultValue });
+            // 升级时把比当前档更好的权益标出来：一眼看到补差价换来了什么。
+            const improves =
+              isUpgrade && currentTier !== null && benefit.values[currentTier] !== value;
 
             return (
-              <View
-                key={benefit.id}
-                style={[
-                  s.benefitRow,
-                  index < visibleBenefits.length - 1 && d.benefitDivider,
-                ]}
-              >
-                <Ionicons
-                  name="checkmark-circle"
-                  size={20}
-                  color={selectedTierAccent}
-                />
+              <View key={benefit.id} style={[s.benefitTile, d.benefitTile]}>
+                <View
+                  style={[
+                    s.benefitIcon,
+                    { backgroundColor: withAlpha(TIER_VISUALS[selectedPlan.tier].accent, 0.14) },
+                  ]}
+                >
+                  <Ionicons
+                    name={BENEFIT_ICONS[benefit.id]}
+                    size={17}
+                    color={selectedTierAccent}
+                  />
+                </View>
                 <View style={s.benefitText}>
-                  <Text style={d.benefitLabel}>
+                  <View style={s.benefitValueRow}>
+                    <Text style={d.benefitValue} selectable numberOfLines={1}>
+                      {valueText}
+                    </Text>
+                    {improves ? (
+                      <Ionicons
+                        name="arrow-up-circle"
+                        size={15}
+                        color={colors.success}
+                        accessibilityLabel={t('profile.membership.benefitUpgraded', {
+                          defaultValue: '升级后提升',
+                        })}
+                      />
+                    ) : null}
+                  </View>
+                  <Text style={d.benefitLabel} numberOfLines={2}>
                     {t(benefit.labelKey, {
                       defaultValue: DEFAULT_BENEFIT_LABELS[benefit.id],
                     })}
-                  </Text>
-                  <Text style={d.benefitValue} selectable>
-                    {valueText}
                   </Text>
                 </View>
               </View>
@@ -861,16 +900,19 @@ export default function MemberCenterScreen() {
           })}
         </View>
 
-        <View style={s.contactSection}>
-          <Text style={d.upgradeNote}>
-            {t('profile.membership.upgradeDifferenceNote', {
-              defaultValue: '已开通会员可联系客服补差价升级，升级后立即生效，原会员剩余价值由客服核算抵扣。',
-            })}
-          </Text>
+        <Text style={d.upgradeNote}>
+          {t('profile.membership.upgradeDifferenceNote', {
+            defaultValue: '已开通会员可联系客服补差价升级，升级后立即生效，原会员剩余价值由客服核算抵扣。',
+          })}
+        </Text>
+      </ScrollView>
+      )}
+      {showMembershipProgram ? (
+        <View style={[s.ctaBar, d.ctaBar]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={contactLabel}
-            style={[s.cta, d.cta]}
+            style={({ pressed }) => [s.cta, d.cta, pressed && s.ctaPressed]}
             onPress={() => {
               void handleContactSupport();
             }}
@@ -878,8 +920,7 @@ export default function MemberCenterScreen() {
             <Text style={d.ctaText}>{contactLabel}</Text>
           </Pressable>
         </View>
-      </ScrollView>
-      )}
+      ) : null}
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { Ionicons } from '@expo/vector-icons';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Avatar } from '@/components/ui/avatar';
+import { AssistantFloatingHeader } from '@/features/assistant/components/AssistantFloatingHeader';
 import { router } from 'expo-router';
 import { getChatInfoTopHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { type EmbeddedChatParams } from '@/features/chat/chat-detail/types';
@@ -19,12 +20,14 @@ export interface ChatDetailHeaderProps {
   sourceID: string;
   conversationID: string;
   isTempChat: boolean;
+  isAssistant: boolean;
   isGroupChat: boolean;
   conversationTitle: string;
   avatarUrl: string | undefined;
   handleBack: () => void;
   handleOpenHeaderTarget: () => void;
   headerStatusText: string;
+  assistantSpinning?: boolean;
   d: ChatDetailThemedStyles;
 }
 
@@ -38,14 +41,26 @@ export function ChatDetailHeader({
   sourceID,
   conversationID,
   isTempChat,
+  isAssistant,
   isGroupChat,
   conversationTitle,
   avatarUrl,
   handleBack,
   handleOpenHeaderTarget,
   headerStatusText,
+  assistantSpinning = false,
   d,
 }: ChatDetailHeaderProps) {
+  if (isAssistant) {
+    return (
+      <AssistantFloatingHeader
+        onBack={embedded ? undefined : handleBack}
+        spinning={assistantSpinning}
+        title={conversationTitle}
+      />
+    );
+  }
+
   return (
     <View style={s.header}>
       {embedded ? null : (
@@ -83,22 +98,24 @@ export function ChatDetailHeader({
           ) : null}
         </View>
       </View>
-      <Pressable
-        hitSlop={8}
-        onPress={() =>
-          router.push(
-            getChatInfoTopHref(scope, {
-              conversationID,
-              sourceID,
-              title: conversationTitle,
-              conversationType: isGroupChat ? 'group' : 'private',
-              originScope: scope,
-            }),
-          )
-        }
-      >
-        <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
-      </Pressable>
+      {isAssistant ? null : (
+        <Pressable
+          hitSlop={8}
+          onPress={() =>
+            router.push(
+              getChatInfoTopHref(scope, {
+                conversationID,
+                sourceID,
+                title: conversationTitle,
+                conversationType: isGroupChat ? 'group' : 'private',
+                originScope: scope,
+              }),
+            )
+          }
+        >
+          <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
+        </Pressable>
+      )}
     </View>
   );
 }

@@ -110,6 +110,26 @@ test('new messages follow the latest position without hijacking history reading'
   assert.match(source, /onScroll=\{handleMessageListScroll\}/);
 });
 
+test('chat detail exposes a jump-to-unread entry point and pages to its start', () => {
+  const source = readChatDetailSource();
+
+  assert.match(source, /initialUnreadCount/);
+  assert.match(source, /initialReadHeight/);
+  assert.match(source, /findUnreadStart/);
+  assert.match(source, /handleJumpToUnread/);
+  assert.match(source, /handleUnreadStartVisibilityChange/);
+  assert.match(source, /showUnreadJump/);
+  assert.match(source, /unreadStartMessageID/);
+  assert.match(source, /bottom: Spacing\.md/);
+  assert.match(source, /onViewableItemsChanged/);
+  assert.match(source, /setUnreadJumpDismissed\(true\)/);
+  assert.match(source, /const targetID =\s*candidate\?\.id \?\? null/);
+  assert.match(source, /entryUnreadCount > 0 &&[\s\S]*unreadStartMessageID !== null/);
+  assert.match(source, /loadOlderConversationMessages\(conversationID\)/);
+  assert.match(source, /chatUnreadJump/);
+  assert.match(source, /unreadMessages/);
+});
+
 test('chat detail screen supports preview mode without an IM conversation', () => {
   const source = readChatDetailSource();
 
