@@ -137,6 +137,24 @@ test('note publication capacity has an actionable localized error in every langu
   } finally { I18N.default.t = original; }
 });
 
+// 第 6 个临时聊天被拒时,用户看到的必须是本地化的「每日上限」,而不是兜底的「创建失败」
+// 或服务端中文原文。
+test('temp chat daily create limit has a localized error in every language', () => {
+  const original = I18N.default.t;
+  try {
+    for (const language of ['zh', 'en', 'es', 'ja', 'ko']) {
+      const bundle = JSON.parse(readLocale(language));
+      const message = bundle.serverErrors.TEMP_CHAT_DAILY_CREATE_LIMIT;
+      assert.ok(typeof message === 'string' && message.includes('5'), language);
+      I18N.default.t = (key, options) => bundle.serverErrors[key.slice('serverErrors.'.length)] ?? options.defaultValue;
+      assert.equal(
+        getApiErrorMessage(new FakeApiError('每天最多创建 5 个临时聊天', 'TEMP_CHAT_DAILY_CREATE_LIMIT'), 'fallback'),
+        message,
+      );
+    }
+  } finally { I18N.default.t = original; }
+});
+
 function readLocale(language) {
   return fs.readFileSync(path.join(process.cwd(), `src/i18n/locales/${language}.json`), 'utf8');
 }

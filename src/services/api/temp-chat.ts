@@ -105,6 +105,14 @@ export async function createTempChat(
   });
 }
 
+/**
+ * 删除自己建的房间。进行中的会先被结束(访客移出、链接失效),房主这边的会话
+ * 也一并移除;已经删过的再删照样成功(204)。
+ */
+export async function deleteTempChat(id: string): Promise<void> {
+  await apiClient<void>(`/temp-chat/${id}`, { method: 'DELETE' });
+}
+
 export async function endTempChat(
   id: string,
 ): Promise<{ status: TempChatStatus }> {

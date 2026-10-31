@@ -11,8 +11,10 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavHeader } from '@/components/ui/nav-header';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { useChatStore } from '@/chat-core/store';
 import {
   createTempChat,
+  deleteTempChat,
   endTempChat,
   fetchMyTempChats,
   isTempChatOpenable,
@@ -41,7 +43,8 @@ export default function TempChatsScreen() {
   const { t } = useTranslation();
   const openingGroupRef = useRef<string | null>(null);
   const creatingRoomRef = useRef(false);
-  const endingRoomRef = useRef<string | null>(null);
+  // 结束 / 删除共用一把闸:同一时刻只处理一间房,防双击确认发两次请求。
+  const pendingRoomRef = useRef<string | null>(null);
 
   const [rooms, setRooms] = useState<TempChatListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +53,7 @@ export default function TempChatsScreen() {
   const [openingGroupId, setOpeningGroupId] = useState<string | null>(null);
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [createVisible, setCreateVisible] = useState(false);
-  const [endingRoomId, setEndingRoomId] = useState<string | null>(null);
+  const [pendingRoomId, setPendingRoomId] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<{
     title: string;
     shareUrl: string | null;
@@ -115,12 +118,21 @@ export default function TempChatsScreen() {
     setCreateVisible(true);
   }, []);
 
+  // 操作失败走对话框:列表的 error 只在空列表时渲染,新建面板开着时也会把它盖住。
+  const showActionError = useCallback(
+    (titleKey: string, caughtError: unknown) => {
+      const title = t(titleKey);
+      const message = getApiErrorMessage(caughtError, title);
+      Alert.alert(title, message === title ? undefined : message);
+    },
+    [t],
+  );
+
   const handleSubmitCreate = useCallback(
     async (payload: CreateTempChatPayload) => {
       if (creatingRoomRef.current) return;
       creatingRoomRef.current = true;
       setCreatingRoom(true);
-      setError(null);
       try {
         const created = await createTempChat(payload);
         setCreateVisible(false);
@@ -128,35 +140,59 @@ export default function TempChatsScreen() {
         // 刚建好就展示链接，方便房主直接复制给参与者。
         setShareTarget({ title: created.title, shareUrl: created.shareUrl });
       } catch (caughtError) {
-        setError(getApiErrorMessage(caughtError, t('tempChats.createFailed')));
+        // 面板保持打开;每日上限等服务端错误按 errorCode 本地化后弹出来。
+        showActionError('tempChats.createFailed', caughtError);
         reportHandledFailure('tempChats', 'create', caughtError);
       } finally {
         creatingRoomRef.current = false;
         setCreatingRoom(false);
       }
     },
-    [loadRooms, t],
+    [loadRooms, showActionError],
   );
 
   const endRoom = useCallback(
     async (room: TempChatListItem) => {
-      // 防止结束请求在途时被重复触发（双击确认 / 列表抖动），避免对同一房间发两次 end。
-      if (endingRoomRef.current) return;
-      endingRoomRef.current = room.id;
-      setEndingRoomId(room.id);
-      setError(null);
+      if (pendingRoomRef.current) return;
+      pendingRoomRef.current = room.id;
+      setPendingRoomId(room.id);
       try {
         await endTempChat(room.id);
         await loadRooms({ refresh: true });
       } catch (caughtError) {
-        setError(getApiErrorMessage(caughtError, t('tempChats.endFailed')));
+        showActionError('tempChats.endFailed', caughtError);
         reportHandledFailure('tempChats', 'end', caughtError);
       } finally {
-        endingRoomRef.current = null;
-        setEndingRoomId(null);
+        pendingRoomRef.current = null;
+        setPendingRoomId(null);
       }
     },
-    [loadRooms, t],
+    [loadRooms, showActionError],
+  );
+
+  const deleteRoom = useCallback(
+    async (room: TempChatListItem) => {
+      if (pendingRoomRef.current) return;
+      pendingRoomRef.current = room.id;
+      setPendingRoomId(room.id);
+      try {
+        await deleteTempChat(room.id);
+        setRooms((current) =>
+          current.filter((candidate) => candidate.id !== room.id),
+        );
+        // 服务端让房主离座并推 left 事件给其他设备;本机直接收走,不等事件。
+        if (room.conversationId) {
+          useChatStore.getState().removeConversation(room.conversationId);
+        }
+      } catch (caughtError) {
+        showActionError('tempChats.deleteFailed', caughtError);
+        reportHandledFailure('tempChats', 'delete', caughtError);
+      } finally {
+        pendingRoomRef.current = null;
+        setPendingRoomId(null);
+      }
+    },
+    [showActionError],
   );
 
   const confirmEndRoom = useCallback(
@@ -177,8 +213,36 @@ export default function TempChatsScreen() {
     [endRoom, t],
   );
 
+  const confirmDeleteRoom = useCallback(
+    (room: TempChatListItem) => {
+      // 进行中的房间删除前会先被结束,提示里要说清访客会被移出。
+      const messageKey = isTempChatOpenable(room)
+        ? 'tempChats.deleteActiveConfirmMessage'
+        : 'tempChats.deleteConfirmMessage';
+      Alert.alert(t('tempChats.deleteConfirmTitle'), t(messageKey), [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('tempChats.deleteConfirm'),
+          style: 'destructive',
+          onPress: () => void deleteRoom(room),
+        },
+      ]);
+    },
+    [deleteRoom, t],
+  );
+
   const handleRoomActions = useCallback(
     (room: TempChatListItem) => {
+      const deleteAction = {
+        text: t('tempChats.actionDelete'),
+        style: 'destructive' as const,
+        onPress: () => confirmDeleteRoom(room),
+      };
+      const cancelAction = { text: t('common.cancel'), style: 'cancel' as const };
+      if (!isTempChatOpenable(room)) {
+        Alert.alert(room.title, undefined, [deleteAction, cancelAction]);
+        return;
+      }
       Alert.alert(room.title, undefined, [
         {
           text: t('tempChats.copyLink'),
@@ -190,10 +254,11 @@ export default function TempChatsScreen() {
           style: 'destructive',
           onPress: () => confirmEndRoom(room),
         },
-        { text: t('common.cancel'), style: 'cancel' },
+        deleteAction,
+        cancelAction,
       ]);
     },
-    [confirmEndRoom, t],
+    [confirmDeleteRoom, confirmEndRoom, t],
   );
 
   const handleOpenRoom = useCallback(
@@ -238,13 +303,13 @@ export default function TempChatsScreen() {
       <TempChatRow
         room={item}
         isLast={index === rooms.length - 1}
-        isBusy={openingGroupId === item.groupId || endingRoomId === item.id}
+        isBusy={openingGroupId === item.groupId || pendingRoomId === item.id}
         disabled={!isTempChatOpenable(item) || Boolean(openingGroupRef.current)}
         onOpen={handleOpenRoom}
         onActions={handleRoomActions}
       />
     ),
-    [endingRoomId, handleOpenRoom, handleRoomActions, openingGroupId, rooms.length],
+    [handleOpenRoom, handleRoomActions, openingGroupId, pendingRoomId, rooms.length],
   );
 
   return (
