@@ -7,7 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter, useSegments } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -26,7 +26,6 @@ import { useChatStore } from '@/chat-core/store';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useTheme, Radius, Spacing, Typography } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
-import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import type { Circle } from '@/types';
 import {
@@ -69,7 +68,13 @@ export default function AssistantChatScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const contextCircleId = useDiscoverStore((state) => state.selectedCircleId);
+  // 圈子上下文只认入口显式带来的参数。广场的圈子筛选是另一回事:从探索或「我的」打开时
+  // 拿它当上下文,向导会按一个用户早就不在看的圈子判断,已有那个圈子的订阅还会直接跳过设置。
+  const { contextCircleId: contextCircleParam } = useLocalSearchParams<{
+    contextCircleId?: string;
+  }>();
+  const contextCircleId =
+    typeof contextCircleParam === 'string' && contextCircleParam ? contextCircleParam : null;
   const joinedCircles = useCirclesStore((state) => state.joinedCircles);
   const createdCircles = useCirclesStore((state) => state.createdCircles);
   const fetchMyCircles = useCirclesStore((state) => state.fetchMyCircles);
