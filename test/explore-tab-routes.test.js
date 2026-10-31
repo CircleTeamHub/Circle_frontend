@@ -81,6 +81,16 @@ test('the assistant opened from explore hands off to a chat in the same stack', 
   assert.doesNotMatch(screen, /pathname: '\/\(tabs\)\/messages\/chat-detail'/);
 });
 
+test('group invites opened from explore chat info stay in the explore stack', () => {
+  assert.ok(exists('app/(tabs)/explore/invite-group-members.tsx'));
+  assert.ok(exists('app/(tabs)/explore/circle/[id]/invite-friends.tsx'));
+  const src = read('src/features/chat/screens/ChatInfoScreen.tsx');
+  const handler =
+    src.match(/const handleOpenInviteGroupMembers = useCallback\([\s\S]*?\n  \}, \[/)?.[0] ?? '';
+  assert.match(handler, /scope === 'explore'\) pathname = '\/\(tabs\)\/explore\/invite-group-members'/);
+  assert.match(handler, /'\/\(tabs\)\/explore\/circle\/\[id\]\/invite-friends'/);
+});
+
 test('explore home is two tiles with names only: moments first, then the assistant', () => {
   const screen = read('src/features/explore/screens/ExploreScreen.tsx');
   const cards = [...screen.matchAll(/<ExploreTile\n[\s\S]*?\n {10}\/>/g)].map((match) => match[0]);

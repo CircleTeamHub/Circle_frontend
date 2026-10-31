@@ -142,6 +142,8 @@ export async function createAssistantSubscription(input: {
   keywords?: string[];
   pushEnabled?: boolean;
 }): Promise<AssistantSubscription> {
+  // 不带 Idempotency-Key:服务端按 (用户, 圈子) 唯一键 upsert,响应丢失或向导整体重试
+  // 再发一次只会更新同一行,不会建出重复订阅。
   return apiClient<AssistantSubscription>('/assistant/subscriptions', {
     method: 'POST',
     body: input,

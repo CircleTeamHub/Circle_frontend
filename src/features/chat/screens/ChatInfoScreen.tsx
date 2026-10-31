@@ -1195,21 +1195,28 @@ export default function ChatInfoScreen() {
   const handleOpenInviteGroupMembers = useCallback(() => {
     if (isStandaloneGroup) {
       // 独立群聊:好友多选直接进群(无担保流程)。
-      router.push({
-        pathname:
-          scope === 'discover'
-            ? '/(tabs)/discover/invite-group-members'
-            : '/(tabs)/messages/invite-group-members',
-        params: { conversationID, title: groupTitle },
-      });
+      let pathname:
+        | '/(tabs)/discover/invite-group-members'
+        | '/(tabs)/explore/invite-group-members'
+        | '/(tabs)/messages/invite-group-members' = '/(tabs)/messages/invite-group-members';
+      if (scope === 'discover') pathname = '/(tabs)/discover/invite-group-members';
+      if (scope === 'explore') pathname = '/(tabs)/explore/invite-group-members';
+      router.push({ pathname, params: { conversationID, title: groupTitle } });
       return;
     }
     if (!groupID) {
       return;
     }
 
-    // 圈子群:「加群成员」=邀请好友进圈(担保邀请流程);邀请页只挂在
-    // messages/discover 两个栈,其余 scope 统一走 messages 栈。
+    // 圈子群:「加群成员」=邀请好友进圈(担保邀请流程);邀请页挂在
+    // messages/discover/explore 三个栈,联系人/我的两个 scope 走 messages 栈。
+    if (scope === 'explore') {
+      router.push({
+        pathname: '/(tabs)/explore/circle/[id]/invite-friends',
+        params: { id: groupID, title: groupTitle },
+      });
+      return;
+    }
     router.push(
       getCircleInviteFriendsHref(scope === 'discover' ? 'discover' : 'messages', groupID, groupTitle),
     );

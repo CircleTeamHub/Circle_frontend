@@ -590,6 +590,9 @@ export function useChatTimeline({
     handleMessageListScroll,
     handleJumpToUnread,
     handleUnreadStartVisibilityChange,
+    // 未读一定比已读水位新,而首屏窗口就是最新一页:有未读时窗口里必有一条水位以上的
+    // 消息,unreadStartMessageID 不会是 null(真正起点更早时由 handleJumpToUnread 往回翻)。
+    // 只有未读全是自己发的或已撤回时它才是 null,那时没有可跳的目标,按钮就该藏起来。
     showUnreadJump:
       entryUnreadCount > 0 &&
       unreadStartMessageID !== null &&
