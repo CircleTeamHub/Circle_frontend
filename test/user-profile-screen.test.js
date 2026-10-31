@@ -640,3 +640,74 @@ test('user profile shows the peer online state through the shared presence chann
     '性别/地区那一枚 + 在线那一枚',
   );
 });
+
+const userProfileSource = () =>
+  fs.readFileSync(
+    path.join(process.cwd(), 'src/features/user/screens/UserProfileScreen.tsx'),
+    'utf8',
+  );
+
+// 聊过的人本机已有私聊会话:点「发起聊天」直接进,不再先显示「正在打开聊天」等一次网络。
+test('starting a chat with a known peer opens the local conversation before any network call', () => {
+  const source = userProfileSource();
+  const handler = source.match(/const handleOpenChat = useCallback\(async \(\) => \{([\s\S]*?)\n  \}, \[/);
+  assert.ok(handler, 'handleOpenChat not found');
+  const body = handler[1];
+  const lookup = body.search(/conversations\.find\(/);
+  const ensure = body.search(/ensureDirectConversation\(/);
+  assert.ok(lookup >= 0, 'handleOpenChat must look up the local conversation first');
+  assert.ok(lookup < ensure, 'local lookup must run before ensureDirectConversation');
+  assert.match(body, /type === 'DIRECT'/);
+  assert.match(body, /peer\?\.id === canonicalProfileUserId/);
+});
+
+// 从聊天返回资料页时,同一个人的好友状态不能先清空再拉回来 —— 那会让按钮区闪一下。
+test('refocusing the same profile keeps friend status instead of blanking it', () => {
+  const source = userProfileSource();
+  const effect = source.match(/fetchFriendStatus\(canonicalProfileUserId\)/);
+  assert.ok(effect, 'friend status fetch not found');
+  const before = source.slice(0, effect.index);
+  const effectStart = before.lastIndexOf('useFocusEffect(');
+  const effectHead = before.slice(effectStart);
+  assert.match(
+    effectHead,
+    /friendStatusOwnerRef\.current !== canonicalProfileUserId[\s\S]*setFriendStatus\(null\)/,
+    'friend status may only be cleared when the profile switches to another user',
+  );
+});
+
+// 资料页内存缓存:先用缓存画出来,窗口内不重发请求;拉取失败(含无权查看)要把缓存踢掉。
+const focusEffectAround = (source, marker) => {
+  const at = source.indexOf(marker);
+  assert.ok(at >= 0, `${marker} not found`);
+  const start = source.lastIndexOf('useFocusEffect(', at);
+  const end = source.indexOf('\n  );\n', at);
+  return source.slice(start, end);
+};
+
+test('profile page seeds its state from the in-memory profile cache', () => {
+  const source = userProfileSource();
+  assert.match(source, /readUserProfileCache\(/);
+  assert.match(source, /useState<UserProfileData \| null>\(\s*\(\) => initialCache/);
+  assert.match(source, /useState<FriendStatus \| null>\(\s*\(\) =>/);
+});
+
+test('profile fetch is skipped while the cached profile is fresh and refreshes the cache otherwise', () => {
+  const effect = focusEffectAround(userProfileSource(), 'fetchUserProfile(profileId)');
+  const fresh = effect.indexOf('isProfileCacheFresh(');
+  const fetch = effect.indexOf('fetchUserProfile(profileId)');
+  assert.ok(fresh >= 0 && fresh < fetch, 'freshness check must come before the fetch');
+  assert.match(effect, /writeUserProfileCache\([^)]*\{\s*profile:/);
+  assert.match(effect, /\.catch\([\s\S]*evictUserProfileCache\(/);
+});
+
+test('friend status and settings use the cache and revalidate after any friend write', () => {
+  const source = userProfileSource();
+  for (const marker of ['fetchFriendStatus(canonicalProfileUserId)', 'fetchFriendSettings(canonicalProfileUserId)']) {
+    const effect = focusEffectAround(source, marker);
+    const fresh = effect.indexOf('isProfileCacheFresh(');
+    assert.ok(fresh >= 0 && fresh < effect.indexOf(marker), `${marker}: freshness check must come first`);
+    assert.match(effect, /friendsMutatedSince/);
+    assert.match(effect, /writeUserProfileCache\(/);
+  }
+});
