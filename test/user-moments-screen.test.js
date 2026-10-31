@@ -16,7 +16,7 @@ test('UserMomentsScreen wires header + album list + pagination', () => {
   assert.match(src, /fetchUserProfile/); // 拉封面/头像
   assert.match(src, /getProfileSignature/); // 拉个性签名
   assert.match(src, /signature=\{signature\}/);
-  assert.match(src, /moment\/\[id\]/); // 跳详情复用现有路由
+  assert.match(src, /getMomentDetailHref\(scope, postId\)/); // 跳详情复用现有路由，按所在栈解析
   assert.match(src, /discover\.noMoments/); // 空态复用现有文案
   const endReached = /const handleEndReached[\s\S]*?\n  }, \[[^\]]*\]\);/.exec(src)?.[0] ?? '';
   assert.doesNotMatch(endReached, /!error/, 'a failed refresh must not block the still-valid next cursor');

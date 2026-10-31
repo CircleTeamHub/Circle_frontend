@@ -52,6 +52,7 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'drafts',
   'edit',
   'edit-group-notice',
+  'explore',
   'fancy-number',
   'filter',
   'find',

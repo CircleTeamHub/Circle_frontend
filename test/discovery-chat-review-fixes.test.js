@@ -58,21 +58,27 @@ test('a picked location survives an in-flight send instead of vanishing', () => 
   assert.match(screen, /if \(!slotFree\) \{[\s\S]{0,240}locationSendFailed/);
 });
 
-// momentsUnread = 朋友圈铃铛的未读数。发现页把它画成朋友圈那一行的红点，那这条路
-// 必须能走到真正能看到并清掉它的地方（铃铛中心的 moments 域）。
+// momentsUnread = 朋友圈铃铛的未读数。探索 tab 把它画成 tab 红点和朋友圈卡片的红点，
+// 那这条路必须能走到真正能看到并清掉它的地方（铃铛中心的 moments 域），且留在探索栈里。
 test('the moments screen reaches the moment notifications its badge counts', () => {
   const moments = read('src/features/discover/screens/MomentsScreen.tsx');
-  const contacts = read('src/features/contacts/screens/ContactsScreen.tsx');
+  const explore = read('src/features/explore/screens/ExploreScreen.tsx');
 
   assert.match(moments, /momentsUnread/);
   assert.match(moments, /\(tabs\)\/discover\/notification-center/);
   assert.match(moments, /params: \{ domain: 'moments' \}/);
   assert.match(moments, /<Badge count=\{momentsUnread\}/);
-  // 朋友圈入口已迁入联系人页。
-  assert.match(contacts, /id: 'moments'/);
-  assert.match(contacts, /momentsUnread = useTabBadgeStore/);
+  // 从探索栈打开的朋友圈，铃铛和发动态都留在探索栈。
+  assert.match(moments, /inExplore\s*\?\s*'\/\(tabs\)\/explore\/notification-center'/);
+  assert.match(moments, /inExplore \? '\/\(tabs\)\/explore\/create-moment'/);
+  assert.match(read('app/(tabs)/explore/notification-center.tsx'), /NotificationCenterScreen/);
+  // 朋友圈入口已迁入探索 tab 首页的卡片。
+  assert.match(explore, /momentsUnread = useTabBadgeStore/);
+  assert.match(explore, /badgeCount=\{momentsUnread\}/);
   // 圈子的未读不许混进朋友圈铃铛。
-  assert.doesNotMatch(moments, /circleUnread|discoverUnread|signupUnread/);
+  for (const source of [moments, explore]) {
+    assert.doesNotMatch(source, /circleUnread|discoverUnread|signupUnread/);
+  }
 });
 
 // 筛选条件在广场页设置、全局生效。「我的圈子」面板挂在圈子管理 / 我的圈子下，

@@ -164,7 +164,7 @@ test('二维码落地页跟随来源栈：进哪一栈由 scope 决定，且只�
     'QR 落地页目标必须走 getQrLandingHref(scope),不能写死 pathname',
   );
   assert.match(routes, /export function getQrLandingHref\(/);
-  for (const scope of ['messages', 'contacts', 'profile', 'discover']) {
+  for (const scope of ['messages', 'contacts', 'profile', 'discover', 'explore']) {
     const route = `app/(tabs)/${scope}/qr.tsx`;
     assert.ok(routes.includes(`'/(tabs)/${scope}/qr'`), `helper 缺 ${scope} 分支`);
     assert.equal(exists(route), true, `${route} should exist`);

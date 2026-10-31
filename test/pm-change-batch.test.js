@@ -20,17 +20,25 @@ test('registration enters the app without requiring the optional profile step', 
   );
 });
 
-test('contacts owns moments while discover owns the plaza and circle management', () => {
+test('explore owns moments while the circles tab owns the plaza and circle management', () => {
   const contacts = read('src/features/contacts/screens/ContactsScreen.tsx');
-  // 动态 tab 的根屏就是圈子广场本身（不再有中转的入口列表）。
+  // 圈子 tab（路由目录 discover）的根屏就是圈子广场本身（不再有中转的入口列表）。
   const discover = read('src/features/discover/screens/CirclePlazaScreen.tsx');
-  const momentsRoute = read('app/(tabs)/contacts/moments.tsx');
+  const explore = read('src/features/explore/screens/ExploreScreen.tsx');
 
-  assert.match(contacts, /id: 'moments'/);
-  assert.match(contacts, /key: 'discover\.moments'/);
+  // 朋友圈从联系人页迁到探索 tab：首页两张卡片，朋友圈在前、AI小助手在后。
+  assert.doesNotMatch(contacts, /id: 'moments'/);
   assert.doesNotMatch(contacts, /id: 'circles'/);
-  assert.match(contacts, /\/(?:\(tabs\)\/)?contacts\/moments/);
-  assert.match(momentsRoute, /MomentsScreen/);
+  assert.match(read('app/(tabs)/explore/index.tsx'), /ExploreScreen/);
+  assert.ok(
+    explore.indexOf('E2E_TEST_IDS.exploreMomentsEntry') < explore.indexOf('E2E_TEST_IDS.exploreAssistantEntry'),
+    '朋友圈卡片排在 AI小助手前面',
+  );
+  assert.match(explore, /router\.push\('\/\(tabs\)\/explore\/moments'\)/);
+  assert.match(explore, /router\.push\('\/\(tabs\)\/explore\/assistant'\)/);
+  assert.match(read('app/(tabs)/explore/moments.tsx'), /MomentsScreen/);
+  // 旧的联系人栈朋友圈路由保留，老链接仍能打开。
+  assert.match(read('app/(tabs)/contacts/moments.tsx'), /MomentsScreen/);
   assert.match(read('app/(tabs)/discover/index.tsx'), /CirclePlazaScreen/);
   assert.doesNotMatch(discover, /\/\(tabs\)\/discover\/moments/);
   assert.match(discover, /handleOpenCircleManagement/);

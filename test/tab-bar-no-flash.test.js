@@ -5,14 +5,21 @@ const fs = require('node:fs');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
-test('动态 tab 使用社交动态语义的光圈图标', () => {
-  const layout = (read('app/(tabs)/_layout.tsx') + read('src/components/app/floating-tab-bar.tsx'));
+test('五个 tab 依次是 消息/联系人/圈子/探索/我的，圈子用 App 纸飞机标', () => {
+  const bar = read('src/components/app/floating-tab-bar.tsx');
+  const names = [...bar.slice(bar.indexOf('export const TAB_KEYS'), bar.indexOf('const TAB_BY_NAME'))
+    .matchAll(/name: '(\w+)'/g)].map((match) => match[1]);
+  assert.deepEqual(names, ['messages', 'contacts', 'discover', 'explore', 'profile']);
 
+  // 圈子 tab 的路由目录沿用 discover（深链都挂在下面），文案是「圈子」。
+  assert.match(bar, /name: 'discover',\s*icon: 'plane-logo',\s*key: 'tabs\.circles'/);
   assert.match(
-    layout,
-    /name: 'discover',[\s\S]*?icon: 'aperture-outline',[\s\S]*?selectedIcon: 'aperture',[\s\S]*?key: 'tabs\.discover'/,
+    bar,
+    /name: 'explore',\s*icon: 'compass-outline',\s*selectedIcon: 'compass',\s*key: 'tabs\.explore'/,
   );
-  assert.doesNotMatch(layout, /play-circle-outline/);
+  // 纸飞机随选中态着色，和 Ionicons 一样走 iconTint。
+  assert.match(bar, /<PlaneLogoIcon[\s\S]*?color=\{iconTint\}[\s\S]*?filled=\{focused\}/);
+  assert.match(bar, /explore: E2E_TEST_IDS\.tabsExplore/);
 });
 
 // 回归：深层页面隐藏 tab bar，返回 tab 根页时直接显示且不从底部滑入。
@@ -232,8 +239,8 @@ test('原生端 tab bar 由各 tab 首页渲染，不再靠导航状态切显隐
   assert.match(root, /if \(Platform\.OS === 'web'\) return <>\{children\}<\/>/);
   assert.match(root, /<FloatingTabBar tabProps=\{tabProps\} hidden=\{false\} \/>/);
 
-  // 四个 tab 首页都必须套上外壳，少一个那个 tab 就没有 bar。
-  for (const tab of ['messages', 'contacts', 'discover', 'profile']) {
+  // 每个 tab 首页都必须套上外壳，少一个那个 tab 就没有 bar。
+  for (const tab of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
     assert.match(
       read(`app/(tabs)/${tab}/index.tsx`),
       /<TabRootScreen>[\s\S]*<\/TabRootScreen>/,

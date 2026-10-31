@@ -394,7 +394,10 @@ export default function ChatInfoScreen() {
       : friendName;
   const routeSourceID = friendId;
   const originScope =
-    params.originScope === 'contacts' || params.originScope === 'profile' || params.originScope === 'discover'
+    params.originScope === 'contacts' ||
+    params.originScope === 'profile' ||
+    params.originScope === 'discover' ||
+    params.originScope === 'explore'
       ? params.originScope
       : 'messages';
   const scope = originScope;

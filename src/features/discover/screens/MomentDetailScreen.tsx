@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
@@ -27,7 +27,10 @@ import {
   flattenMomentCommentThreads,
   type MomentCommentRow,
 } from '@/features/discover/utils/moment-comments';
-import { getUserProfileHref } from '@/features/user/utils/routes';
+import {
+  getUserProfileHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 import {
   toggleMomentLike,
   addMomentComment,
@@ -154,6 +157,7 @@ export default function MomentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const router = useRouter();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const { id, targetCommentId } = useLocalSearchParams<{
     id: string;
     targetCommentId?: string;
@@ -610,7 +614,7 @@ export default function MomentDetailScreen() {
       <View style={s.postSection}>
         <Pressable
           style={s.authorRow}
-          onPress={() => router.navigate(getUserProfileHref('discover', post.author.id))}
+          onPress={() => router.navigate(getUserProfileHref(scope, post.author.id))}
         >
           <Avatar
             size={44}

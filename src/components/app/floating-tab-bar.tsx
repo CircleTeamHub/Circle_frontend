@@ -36,13 +36,18 @@ import {
   isLiquidGlassAvailable,
 } from 'expo-glass-effect';
 import { devWarn } from '@/utils/dev-log';
+import { PlaneLogoIcon } from '@/components/app/plane-logo-icon';
 
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+// 圈子 tab 用 App 自己的纸飞机标（PlaneLogoIcon），其余是 Ionicons 的描边/实心一对。
 export type TabKey = {
   name: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  selectedIcon: keyof typeof Ionicons.glyphMap;
   key: string;
-};
+} & (
+  | { icon: 'plane-logo' }
+  | { icon: IoniconName; selectedIcon: IoniconName }
+);
 
 export const TAB_KEYS: TabKey[] = [
   {
@@ -57,11 +62,17 @@ export const TAB_KEYS: TabKey[] = [
     selectedIcon: 'people',
     key: 'tabs.contacts',
   },
+  // 路由目录沿用 discover（圈子广场、圈子详情等深链都挂在它下面），显示为「圈子」。
   {
     name: 'discover',
-    icon: 'aperture-outline',
-    selectedIcon: 'aperture',
-    key: 'tabs.discover',
+    icon: 'plane-logo',
+    key: 'tabs.circles',
+  },
+  {
+    name: 'explore',
+    icon: 'compass-outline',
+    selectedIcon: 'compass',
+    key: 'tabs.explore',
   },
   {
     name: 'profile',
@@ -79,6 +90,7 @@ const TAB_TEST_IDS: Record<string, string> = {
   messages: E2E_TEST_IDS.tabsMessages,
   contacts: E2E_TEST_IDS.tabsContacts,
   discover: E2E_TEST_IDS.tabsDiscover,
+  explore: E2E_TEST_IDS.tabsExplore,
   profile: E2E_TEST_IDS.tabsProfile,
 };
 
@@ -96,6 +108,8 @@ const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V * 2;
 const TAB_PILL_RADIUS = TAB_PILL_HEIGHT / 2; // 只裁剪单个 tab 的按压反馈，不绘制背景
 const TAB_PILL_GAP = 2; // 每格 tab 左右留白，互不相贴
 const TAB_ICON_SIZE = 18;
+// 纸飞机是斜放的，同尺寸下视觉面积比 Ionicons 小一圈，放大一点对齐。
+const TAB_LOGO_SIZE_BOOST = 3;
 // 磨砂靠材质散射，不靠纯色板。这两个数和材质档位是一组，一起决定"透多少"：
 // systemThickMaterial + intensity 100 + alpha 0.5 曾经把透明度吃干净 ——
 // Thick 是给 sheet/弹窗用的最厚材质，本身就接近不透明，三层叠上就成了实心板。
@@ -260,11 +274,19 @@ const TabSlot = memo(function TabSlot({
           ]}
         >
           <View style={styles.iconWrap}>
-            <Ionicons
-              name={focused ? tab.selectedIcon : tab.icon}
-              size={focused ? TAB_ICON_SIZE + 1 : TAB_ICON_SIZE}
-              color={iconTint}
-            />
+            {tab.icon === 'plane-logo' ? (
+              <PlaneLogoIcon
+                size={(focused ? TAB_ICON_SIZE + 1 : TAB_ICON_SIZE) + TAB_LOGO_SIZE_BOOST}
+                color={iconTint}
+                filled={focused}
+              />
+            ) : (
+              <Ionicons
+                name={focused ? tab.selectedIcon : tab.icon}
+                size={focused ? TAB_ICON_SIZE + 1 : TAB_ICON_SIZE}
+                color={iconTint}
+              />
+            )}
             {badgeCount > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText} numberOfLines={1} maxFontSizeMultiplier={1}>
@@ -469,14 +491,15 @@ export function useTabBadgeMap(): Record<string, number> {
 
 
 
-  // 各 tab 汇总自己辖下的未读：联系人含朋友圈，动态含圈子和报名管理。
+  // 各 tab 汇总自己辖下的未读：圈子含圈子通知和报名管理，探索含朋友圈。
   // 曾经读的 discoverUnread 是「好友申请 + 朋友圈 + 圈子」的并集（互动消息
-  // 列表页的全集口径），于是一条未读好友申请会同时点亮联系人和动态两个
+  // 列表页的全集口径），于是一条未读好友申请会同时点亮联系人和圈子两个
   // tab —— 而好友申请的规范 UI 是「新的朋友」，归联系人。
   const badgeMap: Record<string, number> = useMemo(() => ({
     messages: messagesUnread,
-    contacts: contactsUnread + momentsUnread,
+    contacts: contactsUnread,
     discover: circleUnread + signupUnread,
+    explore: momentsUnread,
     profile: profileUnread,
   }), [
     messagesUnread,

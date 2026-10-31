@@ -2771,9 +2771,13 @@
   "tabs": {
     "messages": "Mensajes",
     "contacts": "Contactos",
-    "discover": "Descubrir",
+    "circles": "Círculos",
+    "explore": "Explorar",
     "profile": "Yo",
     "unreadCount": "{{count}} sin leer"
+  },
+  "explore": {
+    "title": "Explorar"
   },
   "onboarding": {
     "profileTitle": "Completa tu perfil",

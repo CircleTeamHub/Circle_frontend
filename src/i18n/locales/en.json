@@ -212,9 +212,13 @@
   "tabs": {
     "messages": "Messages",
     "contacts": "Contacts",
-    "discover": "Discover",
+    "circles": "Circles",
+    "explore": "Explore",
     "profile": "Me",
     "unreadCount": "{{count}} unread"
+  },
+  "explore": {
+    "title": "Explore"
   },
   "messages": {
     "title": "Messages",

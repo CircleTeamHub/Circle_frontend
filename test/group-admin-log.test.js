@@ -269,13 +269,13 @@ test('group log reads the event ledger and the management screen is reachable fr
   assert.match(manageScreen, /\{isOwner \? \(/);
   assert.match(manageScreen, /if \(!canManage\)/);
 
-  for (const tab of ['messages', 'contacts', 'discover', 'profile']) {
+  for (const tab of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
     const route = read(`app/(tabs)/${tab}/group-manage.tsx`);
     assert.match(route, /GroupManageScreen/);
   }
   const routes = read('src/features/user/utils/routes.ts');
   assert.match(routes, /export function getGroupManageHref\(/);
-  for (const tab of ['messages', 'contacts', 'discover', 'profile']) {
+  for (const tab of ['messages', 'contacts', 'discover', 'explore', 'profile']) {
     assert.match(routes, new RegExp(`'/\\(tabs\\)/${tab}/group-manage'`));
   }
   assert.match(read('src/observability/route-segments.ts'), /'group-manage'/);

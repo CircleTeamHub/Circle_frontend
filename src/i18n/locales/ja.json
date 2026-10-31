@@ -2763,9 +2763,13 @@
   "tabs": {
     "messages": "メッセージ",
     "contacts": "連絡先",
-    "discover": "発見",
+    "circles": "サークル",
+    "explore": "探索",
     "profile": "マイページ",
     "unreadCount": "未読 {{count}} 件"
+  },
+  "explore": {
+    "title": "探索"
   },
   "onboarding": {
     "profileTitle": "プロフィールを完成させる",

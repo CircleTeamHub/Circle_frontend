@@ -36,6 +36,7 @@ const { getSnackbarRoute, isUserProfileSnackbarRoute } = load(
 );
 const OPTS = { untitledPost: "(untitled post)" };
 const DISCOVER_OPTS = { untitledPost: "(untitled post)", scope: "discover" };
+const EXPLORE_OPTS = { untitledPost: "(untitled post)", scope: "explore" };
 
 test('notification center routes stay checked by Expo typed routes', () => {
   const files = [
@@ -227,6 +228,10 @@ test("getSnackbarRoute routes profile likes to the liker's profile per scope", (
   assert.equal(isUserProfileSnackbarRoute(discoverRoute), true);
   assert.equal(discoverRoute.params.id, "user-9");
   assert.equal(discoverRoute.params.name, "小赞");
+
+  const exploreRoute = getSnackbarRoute(item, EXPLORE_OPTS);
+  assert.equal(exploreRoute.pathname, "/(tabs)/explore/user/[id]");
+  assert.equal(isUserProfileSnackbarRoute(exploreRoute), true);
 });
 
 test("getSnackbarRoute falls back when a profile like lacks the liker", () => {
@@ -270,12 +275,17 @@ test("getSnackbarRoute routes message-linked notifications to the exact chat mes
 });
 
 test("getSnackbarRoute routes trace-linked notifications to the moment", () => {
-  const route = getSnackbarRoute(
-    notification({ fromTrace: { id: "t9", excerpt: "x", firstImage: null } }),
-    OPTS,
-  );
-  assert.equal(route.pathname, "/(tabs)/discover/moment/[id]");
-  assert.equal(route.params.id, "t9");
+  const item = notification({ fromTrace: { id: "t9", excerpt: "x", firstImage: null } });
+  // 朋友圈住在探索 tab：消息栈、探索栈都落到探索那份详情。
+  for (const opts of [OPTS, EXPLORE_OPTS]) {
+    const route = getSnackbarRoute(item, opts);
+    assert.equal(route.pathname, "/(tabs)/explore/moment/[id]");
+    assert.equal(route.params.id, "t9");
+  }
+  // 正在圈子 tab 上时留在本栈，不跨 tab。
+  const discoverRoute = getSnackbarRoute(item, DISCOVER_OPTS);
+  assert.equal(discoverRoute.pathname, "/(tabs)/discover/moment/[id]");
+  assert.equal(discoverRoute.params.id, "t9");
 });
 
 test("getSnackbarRoute carries reply anchors into moment detail", () => {
@@ -286,7 +296,7 @@ test("getSnackbarRoute carries reply anchors into moment detail", () => {
     }),
     OPTS,
   );
-  assert.equal(route.pathname, "/(tabs)/discover/moment/[id]");
+  assert.equal(route.pathname, "/(tabs)/explore/moment/[id]");
   assert.equal(route.params.id, "t9");
   assert.equal(route.params.targetCommentId, "r7");
 });
@@ -319,4 +329,23 @@ test("getSnackbarRoute's discover fallback lands in the bell that owns the type"
   );
   assert.equal(moments.pathname, "/(tabs)/discover/notification-center");
   assert.equal(moments.params.domain, "moments");
+});
+
+test("getSnackbarRoute's explore fallback only owns the moments bell", () => {
+  const moments = getSnackbarRoute(notification({ type: "TRACE_LIKE" }), EXPLORE_OPTS);
+  assert.equal(moments.pathname, "/(tabs)/explore/notification-center");
+  assert.equal(moments.params.domain, "moments");
+
+  // 探索 tab 没有圈子铃铛:圈子 / 系统类兜底仍回消息页的通知中心。
+  assert.equal(
+    getSnackbarRoute(notification({ type: "SYSTEM" }), EXPLORE_OPTS),
+    "/(tabs)/messages/notifications",
+  );
+});
+
+test("getNotificationScope maps the current tab stack to a notification scope", () => {
+  const { getNotificationScope } = load("src/features/notifications/utils/snackbar-route.ts");
+  assert.equal(getNotificationScope(["(tabs)", "discover", "circle", "[id]"]), "discover");
+  assert.equal(getNotificationScope(["(tabs)", "explore", "moment", "[id]"]), "explore");
+  assert.equal(getNotificationScope(["(tabs)", "contacts"]), "messages");
 });

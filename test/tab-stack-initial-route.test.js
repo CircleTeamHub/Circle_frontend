@@ -31,7 +31,7 @@ test('clicking 我的 pops the profile stack without an invalid nested reset', (
 test('every tab stack anchors index as initialRouteName (cross-tab push safety)', () => {
   // 跨 tab 压栈（聊天点圈子名片→discover/circle、横幅→messages/chat-detail 等）
   // 若目标栈底没有首页，返回无处可去，tab 永远卡在被压入的页面。
-  for (const tab of ['discover', 'messages', 'contacts', 'profile']) {
+  for (const tab of ['discover', 'explore', 'messages', 'contacts', 'profile']) {
     const layout = read(`app/(tabs)/${tab}/_layout.tsx`);
     assert.match(
       layout,

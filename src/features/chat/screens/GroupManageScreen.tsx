@@ -437,6 +437,7 @@ export default function GroupManageScreen() {
       params.originScope === 'contacts' ||
       params.originScope === 'profile' ||
       params.originScope === 'discover' ||
+      params.originScope === 'explore' ||
       params.originScope === 'messages'
         ? params.originScope
         : 'messages';

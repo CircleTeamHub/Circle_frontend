@@ -14,6 +14,7 @@ import { markNotificationRead } from '@/services/api/notifications';
 import { Spacing, useTheme } from '@/theme';
 import { mapNotificationToRow } from '@/features/notifications/utils/notification-summary';
 import {
+  getNotificationScope,
   getSnackbarRoute,
   isUserProfileSnackbarRoute,
 } from '@/features/notifications/utils/snackbar-route';
@@ -50,9 +51,7 @@ export function NotificationSnackbarHost() {
   );
 
   const activeConversationId = useChatStore((state) => state.activeConversationId);
-  const notificationScope = (segments as readonly string[]).includes('discover')
-    ? 'discover'
-    : 'messages';
+  const notificationScope = getNotificationScope(segments);
 
   const [shown, setShown] = useState(current);
 

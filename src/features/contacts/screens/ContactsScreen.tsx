@@ -44,7 +44,6 @@ const QUICK_ACTION_KEYS: {
   { id: 'new-friends', icon: 'person-add', key: 'contacts.newFriends', iconBg: '#F97316' },
   { id: 'groups', icon: 'chatbubbles', key: 'contacts.groups', iconBg: '#22C55E' },
   { id: 'seats', icon: 'chatbubble', key: 'contacts.seats', iconBg: '#3B82F6' },
-  { id: 'moments', icon: 'images', key: 'discover.moments', iconBg: '#F97316' },
   { id: 'tags', icon: 'pricetag', key: 'contacts.tags', iconBg: '#A855F7' },
 ];
 
@@ -134,7 +133,6 @@ export default function ContactsScreen() {
     (state) => state.countKnown,
   );
   const groupAdmissionsUnread = useTabBadgeStore((state) => state.groupAdmissionsUnread);
-  const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
   const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.refresh,
   );
@@ -272,8 +270,6 @@ export default function ContactsScreen() {
         router.push('/(tabs)/contacts/seats');
       } else if (id === 'groups') {
         router.push('/(tabs)/contacts/groups');
-      } else if (id === 'moments') {
-        router.push('/(tabs)/contacts/moments');
       } else if (id === 'tags') {
         router.push('/(tabs)/contacts/tags');
       }
@@ -337,17 +333,10 @@ export default function ContactsScreen() {
           const badgeCount =
             action.id === 'new-friends'
               ? groupAdmissionsUnread + (friendActivityCountKnown ? unreadFriendActivityCount : 0)
-              : action.id === 'moments'
-                ? momentsUnread
-                : 0;
+              : 0;
           return (
             <View key={action.label}>
               <MenuRow
-                testID={
-                  action.id === 'moments'
-                    ? E2E_TEST_IDS.discoverMomentsEntry
-                    : undefined
-                }
                 icon={action.icon}
                 iconBgColor={action.iconBg}
                 label={action.label}

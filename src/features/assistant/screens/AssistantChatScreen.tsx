@@ -7,7 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -29,6 +29,10 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { useDiscoverStore } from '@/features/discover/store/use-discover-store';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import type { Circle } from '@/types';
+import {
+  getChatDetailHref,
+  getUserProfileScopeFromSegments,
+} from '@/features/user/utils/routes';
 
 type WizardStep = 'circle' | 'keywords' | 'note-status';
 type ChatEntry = {
@@ -61,6 +65,7 @@ function circleScopeText(
 
 export default function AssistantChatScreen() {
   const router = useRouter();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -143,19 +148,24 @@ export default function AssistantChatScreen() {
       useChatStore
         .getState()
         .mergeConversationSnapshot(data.conversation);
+      // 换成本栈的聊天页：从探索 tab 进来就留在探索 tab，返回落回探索首页。
+      const chatHref = getChatDetailHref(
+        scope,
+        data.conversation.id,
+        data.assistant.displayName,
+        undefined,
+        data.conversation.id,
+      );
       router.replace({
-        pathname: '/(tabs)/messages/chat-detail',
+        pathname: chatHref.pathname,
         params: {
-          conversationID: data.conversation.id,
-          sourceID: data.conversation.id,
-          title: data.assistant.displayName,
-          conversationType: 'private',
+          ...chatHref.params,
           conversationKind: 'support',
           assistantKey: data.assistant.key,
         },
       });
     },
-    [router],
+    [router, scope],
   );
 
   const startWizard = useCallback(

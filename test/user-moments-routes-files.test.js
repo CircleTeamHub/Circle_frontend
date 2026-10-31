@@ -5,7 +5,7 @@ const path = require('node:path');
 const exists = (p) => fs.existsSync(path.join(process.cwd(), p));
 const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8');
 
-const scopes = ['discover', 'profile', 'contacts', 'messages'];
+const scopes = ['discover', 'explore', 'profile', 'contacts', 'messages'];
 
 test('every tab scope has a user/[id]/moments route re-exporting the screen', () => {
   for (const scope of scopes) {

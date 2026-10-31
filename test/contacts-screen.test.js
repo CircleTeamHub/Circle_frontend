@@ -27,16 +27,15 @@ test('contacts quick actions keep the agreed order and entries', () => {
   );
   const ids = [...block.matchAll(/id: '([\w-]+)'/g)].map((match) => match[1]);
 
-  // 顺序是产品定的；朋友圈入口归联系人，圈子管理归动态广场，避免入口重复。
+  // 顺序是产品定的；朋友圈入口归探索 tab，圈子管理归圈子广场，避免入口重复。
   // 这里钉住整张列表，避免哪次重排又把它们挤掉。
   assert.deepEqual(ids, [
     'new-friends',
     'groups',
     'seats',
-    'moments',
     'tags',
   ]);
-  assert.match(block, /id: 'moments'[^}]*key: 'discover\.moments'/);
+  assert.doesNotMatch(block, /id: 'moments'/);
   assert.doesNotMatch(block, /id: 'circles'/);
 });
 

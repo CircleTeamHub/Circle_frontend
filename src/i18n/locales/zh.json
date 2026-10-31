@@ -212,9 +212,13 @@
   "tabs": {
     "messages": "消息",
     "contacts": "联系人",
-    "discover": "动态",
+    "circles": "圈子",
+    "explore": "探索",
     "profile": "我的",
     "unreadCount": "{{count}} 条未读"
+  },
+  "explore": {
+    "title": "探索"
   },
   "messages": {
     "title": "消息",

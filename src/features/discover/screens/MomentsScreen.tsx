@@ -1,14 +1,16 @@
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/badge';
+import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { NavHeader } from '@/components/ui/nav-header';
 import { MomentsFeed } from '@/features/discover/components/moments-feed';
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
-import { Radius, Spacing, useTheme } from '@/theme';
+import { Spacing, useTheme } from '@/theme';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
@@ -27,16 +29,6 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },
-  fab: {
-    position: 'absolute',
-    right: Spacing.lg,
-    bottom: 110,
-    width: 52,
-    height: 52,
-    borderRadius: Radius.pill,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
 });
 
 export default function MomentsScreen() {
@@ -47,6 +39,8 @@ export default function MomentsScreen() {
   // 朋友圈铃铛只算朋友圈的未读（动态点赞/评论/回复/@ + 资料点赞）。圈子的通知
   // 归广场页那个铃铛(domain=circle)，两边不互相报红点。
   const momentsUnread = useTabBadgeStore((state) => state.momentsUnread);
+  // 朋友圈的家在探索 tab；圈子 / 联系人栈里的旧路由仍走圈子栈那套子页。
+  const inExplore = getUserProfileScopeFromSegments(useSegments()) === 'explore';
 
   const d = useMemo(
     () => ({
@@ -55,29 +49,34 @@ export default function MomentsScreen() {
         paddingTop: insets.top,
         backgroundColor: colors.background,
       },
+      // 发朋友圈按钮与笔记页同款（FloatingActionButton），贴着安全区底部。
       fab: {
-        backgroundColor: colors.primary,
+        bottom: insets.bottom + Spacing.lg,
       },
     }),
-    [colors, insets.top],
+    [colors, insets.bottom, insets.top],
   );
 
   const handleCreateMoment = useCallback(() => {
-    router.push('/(tabs)/discover/create-moment');
-  }, [router]);
+    router.push(
+      inExplore ? '/(tabs)/explore/create-moment' : '/(tabs)/discover/create-moment',
+    );
+  }, [inExplore, router]);
 
   const handleOpenNotifications = useCallback(() => {
     router.push({
-      pathname: '/(tabs)/discover/notification-center',
+      pathname: inExplore
+        ? '/(tabs)/explore/notification-center'
+        : '/(tabs)/discover/notification-center',
       params: { domain: 'moments' },
     });
-  }, [router]);
+  }, [inExplore, router]);
 
   return (
     <View testID={E2E_TEST_IDS.momentsScreen} style={d.container}>
       <NavHeader
         title={t('discover.moments')}
-        fallbackHref="/(tabs)/discover"
+        fallbackHref={inExplore ? '/(tabs)/explore' : '/(tabs)/discover'}
         rightSlot={
           <Pressable
             style={s.notificationButton}
@@ -100,15 +99,12 @@ export default function MomentsScreen() {
       <View style={s.content}>
         <MomentsFeed />
       </View>
-      <Pressable
+      <FloatingActionButton
         testID={E2E_TEST_IDS.momentsCreate}
-        style={[s.fab, d.fab]}
+        style={d.fab}
         onPress={handleCreateMoment}
-        accessibilityRole="button"
-        accessibilityLabel={t('moment.createTitle')}
-      >
-        <Ionicons name="add" size={24} color={colors.white} />
-      </Pressable>
+        label={t('moment.createTitle')}
+      />
     </View>
   );
 }

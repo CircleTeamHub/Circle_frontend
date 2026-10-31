@@ -2763,9 +2763,13 @@
   "tabs": {
     "messages": "메시지",
     "contacts": "연락처",
-    "discover": "발견",
+    "circles": "서클",
+    "explore": "탐색",
     "profile": "나",
     "unreadCount": "읽지 않음 {{count}}개"
+  },
+  "explore": {
+    "title": "탐색"
   },
   "onboarding": {
     "profileTitle": "프로필 완성하기",

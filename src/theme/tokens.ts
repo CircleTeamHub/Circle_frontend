@@ -37,6 +37,10 @@ export const Gradients = {
   defaultCover: ['#6E7BF0', '#CFC8F5', '#DBAAEF'] as const,
   // 会员卡渐变（左下深紫 → 中紫 → 右上亮紫），用于个人页「我的图标」卡片底。
   memberCard: ['#5B4BE6', '#7C5CF0', '#A86BF0'] as const,
+  // 探索页入口磁贴（左下 → 右上）。朋友圈：纸飞机机翼紫 → 品红；
+  // AI小助手：小助手气泡的靛蓝 → 信号青。
+  exploreMoments: ['#8C52FF', '#E85BC8'] as const,
+  exploreAssistant: ['#4A2FE6', '#2EC5E8'] as const,
 } as const;
 
 /**

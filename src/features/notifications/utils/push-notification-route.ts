@@ -130,9 +130,10 @@ export function resolvePushNotificationRoute(data: PushData): Href | null {
     };
   }
 
+  // 朋友圈住在探索 tab：系统推送点进来直接落在那里。
   if (traceId && (route === 'trace' || route === 'moment' || route === '')) {
     return {
-      pathname: '/(tabs)/discover/moment/[id]',
+      pathname: '/(tabs)/explore/moment/[id]',
       params: {
         id: traceId,
         ...(replyId ? { targetCommentId: replyId } : {}),

@@ -180,6 +180,7 @@ export default function GroupExpansionScreen() {
     params.returnScope === 'contacts' ||
     params.returnScope === 'profile' ||
     params.returnScope === 'discover' ||
+    params.returnScope === 'explore' ||
     params.returnScope === 'messages'
       ? params.returnScope
       : null;
