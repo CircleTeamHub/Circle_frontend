@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AssistantAvatar } from '@/features/assistant/components/AssistantAvatar';
@@ -20,7 +21,7 @@ export function AssistantFloatingHeader({
   spinning = false,
   onBack,
 }: AssistantFloatingHeaderProps) {
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -38,33 +39,34 @@ export function AssistantFloatingHeader({
           style={[
             styles.backButton,
             {
-              backgroundColor: colors.surface,
-              borderColor: colors.surfaceBorder,
+              backgroundColor: colors.glassButton,
+              borderColor: colors.glassBorder,
               top: insets.top + Spacing.sm,
             },
           ]}
         >
-          <Ionicons name="chevron-back" size={25} color={colors.text} />
+          <Ionicons name="chevron-back" size={21} color={colors.text} />
         </Pressable>
       ) : null}
-      <View style={[styles.stage, { paddingTop: insets.top + 42 }]}>
-        <View
+      <View style={[styles.stage, { paddingTop: insets.top + 26 }]}>
+        <BlurView
+          intensity={32}
+          tint={resolvedMode === 'dark' ? 'dark' : 'light'}
           style={[
             styles.avatarFrame,
             {
-              backgroundColor: colors.white,
-              borderColor: colors.surfaceBorder,
+              borderColor: colors.glassBorder,
             },
           ]}
         >
-          <AssistantAvatar size={78} spinning={spinning} />
-        </View>
+          <AssistantAvatar size={58} spinning={spinning} />
+        </BlurView>
         <View
           style={[
             styles.titlePill,
             {
-              backgroundColor: colors.surface,
-              borderColor: colors.surfaceBorder,
+              backgroundColor: colors.glassButton,
+              borderColor: colors.glassBorder,
             },
           ]}
         >
@@ -89,12 +91,12 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     borderRadius: 25,
     borderWidth: StyleSheet.hairlineWidth,
-    height: 50,
-    left: Spacing.md,
+    height: 42,
+    left: Spacing.sm,
     justifyContent: 'center',
     position: 'absolute',
     top: Spacing.md,
-    width: 50,
+    width: 42,
     zIndex: 2,
   },
   stage: {
@@ -106,19 +108,21 @@ const styles = StyleSheet.create({
   avatarFrame: {
     alignItems: 'center',
     borderCurve: 'continuous',
-    borderRadius: 44,
+    borderRadius: 32,
     borderWidth: StyleSheet.hairlineWidth,
-    height: 88,
+    height: 64,
     justifyContent: 'center',
-    width: 88,
-    boxShadow: '0 5px 18px rgba(0, 0, 0, 0.16)',
+    overflow: 'hidden',
+    width: 64,
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.18)',
   },
   titlePill: {
     borderCurve: 'continuous',
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    marginTop: -6,
-    paddingHorizontal: Spacing.lg,
+    marginTop: -5,
+    maxWidth: 120,
+    paddingHorizontal: 14,
     paddingVertical: Spacing.xs,
     zIndex: 2,
   },
