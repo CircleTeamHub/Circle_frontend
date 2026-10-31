@@ -161,7 +161,9 @@ test('conversation navigation preserves unread context for the chat jump button'
   );
 
   assert.match(source, /initialUnreadCount: String\(conversation\.unreadCount\)/);
-  assert.match(source, /initialReadHeight: String\(dto\?\.readHeight\)/);
+  assert.match(source, /readWatermarks\[dto\.id\]\?\.\[currentUserID\]/);
+  assert.match(source, /Math\.max\(\s*dto\?\.readHeight \?\? 0,\s*localReadHeight/);
+  assert.match(source, /initialReadHeight: String\(initialReadHeight\)/);
 });
 
 test('messages screen supports pull-to-refresh for the conversation list', () => {

@@ -349,11 +349,7 @@ export function useChatTimeline({
         }
 
         const targetID =
-          candidate?.id ??
-          [...timeline]
-            .filter((message) => message.height > 0)
-            .sort((a, b) => a.height - b.height)[0]?.id ??
-          null;
+          candidate?.id ?? null;
         if (!targetID) return;
         setUnreadJumpDismissed(true);
         pendingUnreadJumpIDRef.current = targetID;
@@ -595,7 +591,10 @@ export function useChatTimeline({
     handleJumpToUnread,
     handleUnreadStartVisibilityChange,
     showUnreadJump:
-      entryUnreadCount > 0 && !unreadStartVisible && !unreadJumpDismissed,
+      entryUnreadCount > 0 &&
+      unreadStartMessageID !== null &&
+      !unreadStartVisible &&
+      !unreadJumpDismissed,
     unreadStartMessageID,
     highlightedMessageID,
     handleQuotePress,

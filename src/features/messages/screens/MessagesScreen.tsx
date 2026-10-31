@@ -1094,6 +1094,18 @@ export default function MessagesScreen() {
       const dto = useChatStore
         .getState()
         .conversations.find((c) => c.id === conversation.id);
+      const currentUserID = useChatStore.getState().currentUserId;
+      // 入口参数必须保存“点击前”的最高已读水位。会话 DTO 可能还是旧快照，
+      // 但本机已读回执已经写进内存（或上一轮冷启动从本地恢复）；只取 DTO
+      // 会把这些已读消息重新判成未读，下一次进会话时又出现在未读起点之前。
+      const localReadHeight =
+        currentUserID && dto
+          ? (useChatStore.getState().readWatermarks[dto.id]?.[currentUserID] ?? 0)
+          : 0;
+      const initialReadHeight = Math.max(
+        dto?.readHeight ?? 0,
+        localReadHeight,
+      );
       markConversationRead(conversation.id, dto?.lastMessage?.height ?? 0);
 
       const detailParams: EmbeddedChatParams = {
@@ -1108,8 +1120,8 @@ export default function MessagesScreen() {
         ...(conversation.unreadCount > 0
           ? { initialUnreadCount: String(conversation.unreadCount) }
           : {}),
-        ...(Number.isSafeInteger(dto?.readHeight) && (dto?.readHeight ?? 0) >= 0
-          ? { initialReadHeight: String(dto?.readHeight) }
+        ...(Number.isSafeInteger(initialReadHeight) && initialReadHeight >= 0
+          ? { initialReadHeight: String(initialReadHeight) }
           : {}),
       };
 

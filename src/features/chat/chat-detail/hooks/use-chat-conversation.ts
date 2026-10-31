@@ -68,13 +68,28 @@ export function useChatConversation({
   const routeInitialReadHeight = parseNonNegativeRouteNumber(
     params.initialReadHeight,
   );
+  // The conversation row and the local read-watermark map are updated through
+  // different async paths. Capture the higher value once at entry so a stale
+  // row cannot make messages already read on this device look unread again.
+  const localReadHeight = useChatStore(
+    (state) =>
+      (currentUserID && conversationID
+        ? state.readWatermarks[conversationID]?.[currentUserID]
+        : 0) ?? 0,
+  );
+  const initialEntryReadHeight = Math.max(
+    routeInitialReadHeight ?? 0,
+    localReadHeight,
+  );
   const entryUnreadCountRef = useRef<number | null>(routeInitialUnreadCount);
-  const entryReadHeightRef = useRef<number | null>(routeInitialReadHeight);
+  const entryReadHeightRef = useRef<number | null>(
+    initialEntryReadHeight > 0 ? initialEntryReadHeight : routeInitialReadHeight,
+  );
   const [entryUnreadCount, setEntryUnreadCount] = useState<number | null>(
     routeInitialUnreadCount,
   );
   const [entryReadHeight, setEntryReadHeight] = useState<number | null>(
-    routeInitialReadHeight,
+    entryReadHeightRef.current,
   );
   useEffect(() => {
     if (entryUnreadCountRef.current === null && conversation) {
@@ -83,17 +98,16 @@ export function useChatConversation({
       setEntryUnreadCount(value);
     }
     if (entryReadHeightRef.current === null && conversation) {
-      const value = parseNonNegativeRouteNumber(
+      const conversationReadHeight = parseNonNegativeRouteNumber(
         typeof conversation.readHeight === 'number'
           ? String(conversation.readHeight)
           : undefined,
       );
-      if (value !== null) {
-        entryReadHeightRef.current = value;
-        setEntryReadHeight(value);
-      }
+      const value = Math.max(conversationReadHeight ?? 0, localReadHeight);
+      entryReadHeightRef.current = value;
+      setEntryReadHeight(value);
     }
-  }, [conversation]);
+  }, [conversation, localReadHeight]);
   const storedConversationType = conversation?.type;
   const isAssistantConversation =
     params.conversationKind === 'support' || storedConversationType === 'SUPPORT';
