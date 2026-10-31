@@ -106,7 +106,7 @@ function loadMappers(options = {}) {
         };
       }
       if (request === './mappers') {
-        return { formatChatTimestamp: () => '12:00' };
+        return options.mappers ?? { formatChatTimestamp: () => '12:00' };
       }
       if (request === './store') return {};
       if (request === '@/types') return {};
@@ -599,4 +599,51 @@ test('message burn metadata preserves explicit no-burn and legacy absence', () =
   const expiry = '2026-10-20T00:00:00Z';
   assert.equal(mapChatMessageDtoToUI(dto({ burnExpiresAt: expiry }), 'u1', 0).burnExpiresAt, expiry);
   assert.equal(mapChatMessageDtoToUI(dto(), 'u1', 0).burnDurationSec, undefined);
+});
+
+// 列表预览与聊天气泡共用一张「状态 → 词条」表(mappers.ts);之前气泡另写了一份,
+// 加打烊时只改了列表,聊天里的打烊提醒一直显示成「已被作者下架」。
+function loadRealListMappers() {
+  const ctx = {
+    Date,
+    Number,
+    module: { exports: {} },
+    exports: {},
+    require: (request) => {
+      if (request === '@/i18n') return { default: { t: (key) => key, language: 'zh' } };
+      if (request === '@/services/api/utils') return { normalizeMediaUrl: (u) => u ?? null };
+      if (request === '@/utils/locale') {
+        return { resolveDateLocale: () => 'zh-CN', chatHistoryDateLocale: () => 'zh-CN' };
+      }
+      if (request === './local-db') return __localDbStub;
+      return {};
+    },
+  };
+  ctx.exports = ctx.module.exports;
+  vm.runInNewContext(transpile('src/chat-core/mappers.ts'), ctx);
+  return ctx.module.exports;
+}
+
+test('assistant note reminders read 打烊 and 开工 in the chat bubble', () => {
+  const list = loadRealListMappers();
+  const { mapChatMessageDtoToUI } = loadMappers({
+    mappers: {
+      formatChatTimestamp: () => '12:00',
+      noteStatusPreviewText: list.noteStatusPreviewText,
+    },
+  });
+  const bubble = (status) =>
+    mapChatMessageDtoToUI(
+      dto({
+        type: 'assistant-note-status',
+        content: { title: '东京拉面', status },
+        sender: null,
+      }),
+      'u1',
+      0,
+    ).text;
+
+  assert.equal(bubble('CLOSED'), 'assistant.noteClosed');
+  assert.equal(bubble('WORKING'), 'assistant.noteReopened');
+  assert.equal(bubble('UNLISTED'), 'assistant.noteUnlisted');
 });

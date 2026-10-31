@@ -84,10 +84,11 @@ export function formatChatTimestamp(iso: string | null): string {
 
 /** 末条消息 → 列表预览文本(媒体/卡片走 im.preview.* 既有词条)。 */
 /**
- * Assistant note reminders. New ones are only CLOSED / WORKING; the other
- * statuses stay so reminders already in someone's history still read right.
+ * Assistant note reminders, shared by the list preview and the chat bubble.
+ * New ones are only CLOSED / WORKING; the other statuses stay so reminders
+ * already in someone's history still read right.
  */
-function noteStatusPreviewText(status: unknown): [string, string] {
+export function noteStatusPreviewText(status: unknown): [string, string] {
   switch (status) {
     case 'CLOSED':
       return ['assistant.noteClosed', '你添加的笔记《{{title}}》已打烊。'];

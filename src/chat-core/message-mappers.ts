@@ -15,7 +15,7 @@ import type {
   VerificationCardData,
 } from '@/types';
 import { formatBurnDuration } from './burn-durations';
-import { formatChatTimestamp } from './mappers';
+import { formatChatTimestamp, noteStatusPreviewText } from './mappers';
 import type { StoredChatMessage } from './store';
 
 // 档位表和标签都收进 burn-durations(全局隐私设置也要用同一份),
@@ -510,25 +510,11 @@ export function mapChatMessageDtoToUI(
     }
     case 'assistant-note-status': {
       const title = textField(content, 'title', 160) || '这篇笔记';
-      const status = str(content['status']);
-      const key =
-        status === 'DELETED'
-          ? 'assistant.noteDeleted'
-          : status === 'MODERATION_REMOVED'
-            ? 'assistant.noteUnavailable'
-            : 'assistant.noteUnlisted';
+      const [key, defaultValue] = noteStatusPreviewText(content['status']);
       return {
         ...base,
         type: isSent ? 'sent' : 'received',
-        text: i18n.t(key, {
-          defaultValue:
-            status === 'DELETED'
-              ? '你添加的笔记《{{title}}》已被作者删除。'
-              : status === 'MODERATION_REMOVED'
-                ? '你添加的笔记《{{title}}》当前不可用。'
-                : '你添加的笔记《{{title}}》已被作者下架。',
-          title,
-        }),
+        text: i18n.t(key, { defaultValue, title }),
       };
     }
     case 'assistant-info-alert':
