@@ -234,3 +234,29 @@ test('超长标题在列表里被截断', () => {
   );
   assert.ok(preview.length <= 70, `got ${preview.length}`);
 });
+
+test('助手的笔记提醒区分打烊和开工', () => {
+  const preview = (mappers, status) =>
+    mappers.getChatMessagePreview(
+      dto({ type: 'assistant-note-status', content: { title: 'Ramen', status } }),
+    );
+
+  const zh = loadMappers({ withRealLocale: true });
+  assert.match(preview(zh, 'CLOSED'), /打烊/);
+  assert.match(preview(zh, 'WORKING'), /开工/);
+  // 改规则之前发出去的下架/删除提醒仍在聊天记录里,要照旧显示。
+  assert.match(preview(zh, 'UNLISTED'), /下架/);
+  assert.match(preview(zh, 'DELETED'), /删除/);
+
+  const CHINESE = /[一-鿿]/;
+  for (const locale of ['en', 'ja', 'ko', 'es']) {
+    const mappers = loadMappers({ withRealLocale: true, locale });
+    const closed = preview(mappers, 'CLOSED');
+    const working = preview(mappers, 'WORKING');
+    for (const text of [closed, working]) {
+      assert.ok(!text.startsWith('assistant.'), `${locale} 缺词条: ${text}`);
+      if (locale !== 'ja') assert.ok(!CHINESE.test(text), `${locale} 漏中文: ${text}`);
+    }
+    assert.notEqual(closed, working, `${locale} 打烊和开工同文案`);
+  }
+});

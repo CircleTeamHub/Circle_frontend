@@ -1,4 +1,4 @@
-import { fetchAssistantBootstrap } from './assistant';
+import { fetchAssistantBootstrap, updateAssistantPreferences } from './assistant';
 import { apiClient } from '@/services/api/client';
 
 jest.mock('./client', () => ({
@@ -107,6 +107,57 @@ it('defaults onboarding fields for subscriptions created before the assistant wi
   const result = await fetchAssistantBootstrap();
 
   expect(result.subscriptions[0]).toEqual(
-    expect.objectContaining({ keywords: [], noteStatusAlerts: true }),
+    expect.objectContaining({ keywords: [] }),
   );
+  expect(result.subscriptions[0]).not.toHaveProperty('noteStatusAlerts');
+});
+
+const bootstrapWith = (extra: Record<string, unknown>) => ({
+  assistant: {
+    key: 'windnote-assistant',
+    displayName: '风信助手',
+    avatarKey: 'windnote-mascot-v1',
+    conversationId: 'assistant-conversation',
+  },
+  conversation,
+  unreadCount: 0,
+  ...bootstrapExtras,
+  ...extra,
+});
+
+it('reads the note alert switch from the user-level preferences', async () => {
+  mockedApiClient.mockResolvedValueOnce(
+    bootstrapWith({ preferences: { noteStatusAlerts: false } }),
+  );
+
+  const result = await fetchAssistantBootstrap();
+
+  expect(result.preferences).toEqual({ noteStatusAlerts: false });
+});
+
+it('treats a backend without preferences as note alerts on', async () => {
+  mockedApiClient.mockResolvedValueOnce(bootstrapWith({}));
+
+  const result = await fetchAssistantBootstrap();
+
+  expect(result.preferences).toEqual({ noteStatusAlerts: true });
+});
+
+it('rejects malformed preferences', async () => {
+  mockedApiClient.mockResolvedValueOnce(
+    bootstrapWith({ preferences: { noteStatusAlerts: 'yes' } }),
+  );
+
+  await expect(fetchAssistantBootstrap()).rejects.toThrow('助手初始化数据格式异常');
+});
+
+it('saves the note alert switch per user', async () => {
+  mockedApiClient.mockResolvedValueOnce({ noteStatusAlerts: false });
+
+  await updateAssistantPreferences({ noteStatusAlerts: false });
+
+  expect(mockedApiClient).toHaveBeenCalledWith('/assistant/preferences', {
+    method: 'PATCH',
+    body: { noteStatusAlerts: false },
+  });
 });

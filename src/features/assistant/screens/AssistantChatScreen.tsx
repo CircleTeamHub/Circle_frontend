@@ -16,6 +16,7 @@ import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-con
 import {
   createAssistantSubscription,
   fetchAssistantBootstrap,
+  updateAssistantPreferences,
 } from '@/services/api/assistant';
 import type {
   AssistantBootstrapResponse,
@@ -179,7 +180,7 @@ export default function AssistantChatScreen() {
           role: 'assistant',
           text: t('assistant.intro', {
             defaultValue:
-              '你好，我是AI小助手。我可以根据你关注的圈子和关键词提醒城市信息，也可以提醒你关注的笔记被下架。',
+              '你好，我是AI小助手。我可以根据你关注的圈子和关键词提醒城市信息，也可以在你笔记库里的笔记打烊或开工时提醒你。',
           }),
         },
         { id: 2, role: 'assistant', text: contextText },
@@ -253,8 +254,37 @@ export default function AssistantChatScreen() {
     setKeywordDraft('');
   }, [keywordDraft]);
 
-  const continueToNoteStatus = useCallback(
+  const finishSetup = useCallback(
+    async (chosenKeywords: string[], noteStatusAlerts?: boolean) => {
+      if (!selectedCircleId || !bootstrap || submitting) return;
+      setSubmitting(true);
+      setError(null);
+      try {
+        await Promise.all([
+          createAssistantSubscription({
+            circleId: selectedCircleId,
+            keywords: chosenKeywords,
+          }),
+          noteStatusAlerts === undefined
+            ? undefined
+            : updateAssistantPreferences({ noteStatusAlerts }),
+        ]);
+        navigateToChat(bootstrap);
+      } catch (cause) {
+        reportHandledFailure('assistant', 'saveSetup', cause);
+        const message = getApiErrorMessage(cause, t('common.networkError'));
+        setError(message);
+        appendEntry('assistant', message);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [appendEntry, bootstrap, navigateToChat, selectedCircleId, submitting, t],
+  );
+
+  const confirmKeywords = useCallback(
     (unrestricted: boolean) => {
+      if (submitting) return;
       const nextDraftKeywords = unrestricted ? [] : splitKeywords(keywordDraft);
       const nextKeywords = unrestricted
         ? []
@@ -271,45 +301,36 @@ export default function AssistantChatScreen() {
               keywords: nextKeywords.join('、'),
             }),
       );
+      // The note reminder is a per-user setting, so only the first setup asks;
+      // adding another circle later goes straight to saving.
+      if (bootstrap && bootstrap.subscriptions.length > 0) {
+        void finishSetup(nextKeywords);
+        return;
+      }
       appendEntry(
         'assistant',
         t('assistant.askNoteStatus', {
-          defaultValue: '最后一个问题：要不要提醒你关注的笔记被作者下架或删除？',
+          defaultValue:
+            '最后一个问题：你笔记库里收藏的笔记打烊或开工时，要提醒你吗？',
         }),
       );
       setStep('note-status');
     },
-    [appendEntry, keywordDraft, keywords, t],
+    [appendEntry, bootstrap, finishSetup, keywordDraft, keywords, submitting, t],
   );
 
   const handleNoteStatusChoice = useCallback(
-    async (enabled: boolean) => {
+    (enabled: boolean) => {
       if (!selectedCircleId || !bootstrap || submitting) return;
-      setSubmitting(true);
-      setError(null);
       appendEntry(
         'user',
         enabled
           ? t('assistant.noteStatusYes', { defaultValue: '需要，提醒我。' })
           : t('assistant.noteStatusNo', { defaultValue: '暂时不用。' }),
       );
-      try {
-        await createAssistantSubscription({
-          circleId: selectedCircleId,
-          keywords,
-          noteStatusAlerts: enabled,
-        });
-        navigateToChat(bootstrap);
-      } catch (cause) {
-        reportHandledFailure('assistant', 'createSubscription', cause);
-        const message = getApiErrorMessage(cause, t('common.networkError'));
-        setError(message);
-        appendEntry('assistant', message);
-      } finally {
-        setSubmitting(false);
-      }
+      void finishSetup(keywords, enabled);
     },
-    [appendEntry, bootstrap, keywords, navigateToChat, selectedCircleId, submitting, t],
+    [appendEntry, bootstrap, finishSetup, keywords, selectedCircleId, submitting, t],
   );
 
   if (error && !bootstrap) {
@@ -506,7 +527,8 @@ export default function AssistantChatScreen() {
             ) : null}
             <Pressable
               accessibilityRole="button"
-              onPress={() => continueToNoteStatus(false)}
+              disabled={submitting}
+              onPress={() => confirmKeywords(false)}
               style={[styles.primaryAction, { backgroundColor: colors.primary }]}
             >
               <Text style={{ color: colors.white, ...Typography.body }}>
@@ -518,7 +540,8 @@ export default function AssistantChatScreen() {
             {keywords.length > 0 || keywordDraft.trim() ? (
               <Pressable
                 accessibilityRole="button"
-                onPress={() => continueToNoteStatus(true)}
+                disabled={submitting}
+                onPress={() => confirmKeywords(true)}
                 style={[styles.secondaryAction, { borderColor: colors.surfaceBorder }]}
               >
                 <Text style={{ color: colors.textSecondary, ...Typography.body }}>
@@ -534,21 +557,21 @@ export default function AssistantChatScreen() {
             <Pressable
               accessibilityRole="button"
               disabled={submitting}
-              onPress={() => void handleNoteStatusChoice(true)}
+              onPress={() => handleNoteStatusChoice(true)}
               style={[styles.primaryAction, { backgroundColor: colors.primary }]}
             >
               {submitting ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
                 <Text style={{ color: colors.white, ...Typography.body }}>
-                  {t('assistant.noteStatusYesButton', { defaultValue: '关注笔记下架动态' })}
+                  {t('assistant.noteStatusYesButton', { defaultValue: '提醒我' })}
                 </Text>
               )}
             </Pressable>
             <Pressable
               accessibilityRole="button"
               disabled={submitting}
-              onPress={() => void handleNoteStatusChoice(false)}
+              onPress={() => handleNoteStatusChoice(false)}
               style={[styles.secondaryAction, { borderColor: colors.surfaceBorder }]}
             >
               <Text style={{ color: colors.textSecondary, ...Typography.body }}>

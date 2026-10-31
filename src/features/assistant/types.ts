@@ -19,9 +19,14 @@ export type AssistantSubscription = {
   sourceTypes: string[];
   enabled: boolean;
   pushEnabled: boolean;
-  noteStatusAlerts: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+/** User-level settings, independent of any circle subscription. */
+export type AssistantPreferences = {
+  /** Remind when a note in the library is marked closed (打烊) or working (开工) at its source. */
+  noteStatusAlerts: boolean;
 };
 
 export type AssistantBootstrapResponse = {
@@ -35,6 +40,7 @@ export type AssistantBootstrapResponse = {
   unreadCount: number;
   subscriptions: AssistantSubscription[];
   contextCircle: AssistantCircleContext | null;
+  preferences: AssistantPreferences;
   capabilities: {
     infoSubscriptions: boolean;
     noteStatusAlerts: boolean;

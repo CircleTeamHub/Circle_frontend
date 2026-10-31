@@ -4,6 +4,7 @@ import { isPlainObject } from '@/utils/validate';
 import type { ChatConversationDto } from '@/chat-core/protocol';
 import type {
   AssistantBootstrapResponse,
+  AssistantPreferences,
   AssistantSubscription,
 } from '@/features/assistant/types';
 
@@ -40,8 +41,6 @@ function isSubscriptionShape(value: unknown): value is AssistantSubscription {
     isStringArray(value.sourceTypes) &&
     typeof value.enabled === 'boolean' &&
     typeof value.pushEnabled === 'boolean' &&
-    (value.noteStatusAlerts === undefined ||
-      typeof value.noteStatusAlerts === 'boolean') &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string'
   );
@@ -58,6 +57,15 @@ function parseCircleContext(value: unknown): AssistantBootstrapResponse['context
     throw new Error('助手初始化数据格式异常');
   }
   return { id: value.id, name: value.name, cities: value.cities };
+}
+
+function parsePreferences(value: unknown): AssistantPreferences {
+  // Backends from before user-level preferences omit the field; alerts default on.
+  if (value === undefined) return { noteStatusAlerts: true };
+  if (!isPlainObject(value) || typeof value.noteStatusAlerts !== 'boolean') {
+    throw new Error('助手初始化数据格式异常');
+  }
+  return { noteStatusAlerts: value.noteStatusAlerts };
 }
 
 function parseBootstrap(value: unknown): AssistantBootstrapResponse {
@@ -108,9 +116,9 @@ function parseBootstrap(value: unknown): AssistantBootstrapResponse {
     subscriptions: subscriptions.map((subscription) => ({
       ...subscription,
       keywords: subscription.keywords ?? [],
-      noteStatusAlerts: subscription.noteStatusAlerts ?? true,
     })),
     contextCircle: parseCircleContext(value.contextCircle ?? null),
+    preferences: parsePreferences(value.preferences),
     capabilities: {
       infoSubscriptions: capabilities.infoSubscriptions,
       noteStatusAlerts: capabilities.noteStatusAlerts,
@@ -133,10 +141,18 @@ export async function createAssistantSubscription(input: {
   cities?: string[];
   keywords?: string[];
   pushEnabled?: boolean;
-  noteStatusAlerts?: boolean;
 }): Promise<AssistantSubscription> {
   return apiClient<AssistantSubscription>('/assistant/subscriptions', {
     method: 'POST',
+    body: input,
+  });
+}
+
+export async function updateAssistantPreferences(
+  input: AssistantPreferences,
+): Promise<AssistantPreferences> {
+  return apiClient<AssistantPreferences>('/assistant/preferences', {
+    method: 'PATCH',
     body: input,
   });
 }

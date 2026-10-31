@@ -83,6 +83,25 @@ export function formatChatTimestamp(iso: string | null): string {
 }
 
 /** 末条消息 → 列表预览文本(媒体/卡片走 im.preview.* 既有词条)。 */
+/**
+ * Assistant note reminders. New ones are only CLOSED / WORKING; the other
+ * statuses stay so reminders already in someone's history still read right.
+ */
+function noteStatusPreviewText(status: unknown): [string, string] {
+  switch (status) {
+    case 'CLOSED':
+      return ['assistant.noteClosed', '你添加的笔记《{{title}}》已打烊。'];
+    case 'WORKING':
+      return ['assistant.noteReopened', '你添加的笔记《{{title}}》已开工。'];
+    case 'DELETED':
+      return ['assistant.noteDeleted', '你添加的笔记《{{title}}》已被作者删除。'];
+    case 'MODERATION_REMOVED':
+      return ['assistant.noteUnavailable', '你添加的笔记《{{title}}》当前不可用。'];
+    default:
+      return ['assistant.noteUnlisted', '你添加的笔记《{{title}}》已被作者下架。'];
+  }
+}
+
 export function getChatMessagePreview(message: ChatMessageDto | null): string {
   if (!message) return '';
   if (message.revokedAt) return tPreview('revoked', '[消息已撤回]');
@@ -138,19 +157,7 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
           typeof message.content['title'] === 'string'
             ? message.content['title'].trim().slice(0, PREVIEW_FIELD_MAX)
             : '';
-        const status = message.content['status'];
-        const key =
-          status === 'DELETED'
-            ? 'assistant.noteDeleted'
-            : status === 'MODERATION_REMOVED'
-              ? 'assistant.noteUnavailable'
-              : 'assistant.noteUnlisted';
-        const fallback =
-          status === 'DELETED'
-            ? '你添加的笔记《{{title}}》已被作者删除。'
-            : status === 'MODERATION_REMOVED'
-              ? '你添加的笔记《{{title}}》当前不可用。'
-              : '你添加的笔记《{{title}}》已被作者下架。';
+        const [key, fallback] = noteStatusPreviewText(message.content['status']);
         const localized = i18n.t(key, {
           defaultValue: fallback,
           title: title || '这篇笔记',

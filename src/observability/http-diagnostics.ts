@@ -2,6 +2,7 @@
 // Parameters are position-based, never guessed from the spelling of an identifier.
 const ROUTE_TEMPLATES = [
   '/assistant/bootstrap',
+  '/assistant/preferences',
   '/assistant/subscriptions',
   '/assistant/subscriptions/:id',
   "/app-operations/open", "/app-operations/update",
