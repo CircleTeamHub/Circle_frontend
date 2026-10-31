@@ -197,7 +197,9 @@ export default function AssistantChatScreen() {
       ]);
       entryIdRef.current = 2;
       triggerAssistantSpin();
-      if (!data.contextCircle) void fetchMyCircles();
+      // 带着当前圈子进来时文案也说「可以选择其他圈子」：冷启动/深链进来圈子 store
+      // 还是空的，不拉的话选项里只剩当前这一个。
+      void fetchMyCircles();
     },
     [fetchMyCircles, t, triggerAssistantSpin],
   );

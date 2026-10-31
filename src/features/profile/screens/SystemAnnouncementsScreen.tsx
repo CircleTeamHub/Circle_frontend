@@ -122,6 +122,9 @@ export default function SystemAnnouncementsScreen() {
     key: `${sessionKey}:${announcementVersion}`,
     mutatedSince: NO_TRACKED_WRITES,
   });
+  // 「全部已读」失败过就不受闸门约束:列表还新鲜可以不重拉,但已读必须在下次回来时重试,
+  // 否则「我的」上的未读角标会一直挂到窗口过期。
+  const markReadPendingRef = useRef(false);
 
   const load = useCallback(async () => {
     const epoch = ++paginationEpochRef.current;
@@ -180,12 +183,19 @@ export default function SystemAnnouncementsScreen() {
     useCallback(() => {
       let active = true;
       const readVersion = announcementVersion;
-      if (!ownerId || announcementsReloadGate.shouldSkip()) return;
+      if (
+        !ownerId ||
+        (announcementsReloadGate.shouldSkip() && !markReadPendingRef.current)
+      ) {
+        return;
+      }
       void markProfileNotificationsRead()
         .then(() => {
+          markReadPendingRef.current = false;
           if (active && isCurrentSession() && useAnnouncementSignalStore.getState().version === readVersion) setProfileUnread(0);
         })
         .catch((error) => {
+          markReadPendingRef.current = true;
           if (!active || !isCurrentSession()) return;
           reportNotificationFailure(
             'notification_mark_all_read_failed',
