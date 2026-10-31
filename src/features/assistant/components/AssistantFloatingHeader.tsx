@@ -49,18 +49,28 @@ export function AssistantFloatingHeader({
         </Pressable>
       ) : null}
       <View style={[styles.stage, { paddingTop: insets.top + 26 }]}>
-        <BlurView
-          intensity={32}
-          tint={resolvedMode === 'dark' ? 'dark' : 'light'}
-          style={[
-            styles.avatarFrame,
-            {
-              borderColor: colors.glassBorder,
-            },
-          ]}
-        >
-          <AssistantAvatar size={58} spinning={spinning} />
-        </BlurView>
+        <View style={styles.avatarBubble}>
+          <BlurView
+            intensity={32}
+            tint={resolvedMode === 'dark' ? 'dark' : 'light'}
+            style={[
+              styles.avatarBubbleSurface,
+              { borderColor: colors.glassBorder },
+            ]}
+          />
+          <View
+            style={[
+              styles.avatarBubbleTail,
+              {
+                backgroundColor: colors.glassButton,
+                borderColor: colors.glassBorder,
+              },
+            ]}
+          />
+          <View style={styles.avatarBubbleIcon}>
+            <AssistantAvatar size={66} spinning={spinning} />
+          </View>
+        </View>
         <View
           style={[
             styles.titlePill,
@@ -105,16 +115,46 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     paddingTop: Spacing.sm,
   },
-  avatarFrame: {
+  avatarBubble: {
+    alignItems: 'center',
+    height: 78,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 88,
+    zIndex: 1,
+  },
+  avatarBubbleSurface: {
     alignItems: 'center',
     borderCurve: 'continuous',
     borderRadius: 32,
     borderWidth: StyleSheet.hairlineWidth,
-    height: 64,
+    height: 74,
     justifyContent: 'center',
     overflow: 'hidden',
-    width: 64,
+    position: 'absolute',
+    width: 86,
     boxShadow: '0 4px 16px rgba(0, 0, 0, 0.18)',
+  },
+  avatarBubbleTail: {
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 4,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    bottom: -1,
+    height: 18,
+    left: 13,
+    position: 'absolute',
+    transform: [{ rotate: '24deg' }],
+    width: 26,
+    zIndex: 0,
+  },
+  avatarBubbleIcon: {
+    alignItems: 'center',
+    height: 72,
+    justifyContent: 'center',
+    width: 80,
+    zIndex: 2,
   },
   titlePill: {
     borderCurve: 'continuous',
