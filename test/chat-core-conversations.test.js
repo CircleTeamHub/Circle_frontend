@@ -329,6 +329,17 @@ test('selectTotalUnread excludes muted conversations', () => {
   assert.equal(total, 5);
 });
 
+test('selectTotalUnread excludes the independent AI assistant conversation', () => {
+  const { selectTotalUnread } = loadStore();
+  const total = selectTotalUnread({
+    conversations: [
+      conv({ id: 'assistant', type: 'SUPPORT', unreadCount: 9 }),
+      conv({ id: 'chat', unreadCount: 2 }),
+    ],
+  });
+  assert.equal(total, 2);
+});
+
 test('conversation mapper renders group identity from circle info', () => {
   // mapper 依赖 i18n/locale/工具,直接做源码级断言(与 realtime 测试同风格)。
   const source = fs.readFileSync(

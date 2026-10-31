@@ -79,7 +79,9 @@ function computeTotalWithLocalOverrides(
   try {
     // 与 MessagesScreen 的 tab 角标同一个函数、同一个口径。
     overrides = countLocalUnreadOverrides(
-      state.conversations.map((c) => ({ id: c.id, unreadCount: c.unreadCount })),
+      state.conversations
+        .filter((c) => c.type !== 'SUPPORT')
+        .map((c) => ({ id: c.id, unreadCount: c.unreadCount })),
       useLocalUnreadStore.getState().overrides,
     );
   } catch {

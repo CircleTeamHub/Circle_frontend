@@ -3052,12 +3052,16 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 }));
 
-/** 消息 tab 角标 = 非免打扰会话的未读合计(免打扰只显红点由 UI 层处理)。 */
+/**
+ * 消息 tab 角标 = 普通、非免打扰会话的未读合计。
+ * AI 小助手走独立入口，不占用消息 tab 的列表和角标口径。
+ */
 export function selectTotalUnread(state: {
   conversations: ChatConversationDto[];
 }): number {
   return state.conversations.reduce(
-    (sum, c) => (c.muted ? sum : sum + c.unreadCount),
+    (sum, c) =>
+      c.type === 'SUPPORT' || c.muted ? sum : sum + c.unreadCount,
     0,
   );
 }

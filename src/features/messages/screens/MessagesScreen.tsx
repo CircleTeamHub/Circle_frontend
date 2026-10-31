@@ -905,14 +905,19 @@ export default function MessagesScreen() {
   >(new WeakMap());
   const rawMappedConversations = useMemo(() => {
     const cache = convMapCacheRef.current;
-    return rawConversations.map((raw) => {
-      let mapped = cache.get(raw);
-      if (!mapped) {
-        mapped = mapChatConversationToUI(raw);
-        cache.set(raw, mapped);
-      }
-      return mapped;
-    });
+    return rawConversations.reduce<ReturnType<typeof mapChatConversationToUI>[]>(
+      (items, raw) => {
+        let mapped = cache.get(raw);
+        if (!mapped) {
+          mapped = mapChatConversationToUI(raw);
+          cache.set(raw, mapped);
+        }
+        // AI 小助手是独立入口，不混入普通消息列表或消息 tab 未读口径。
+        if (!mapped.isAssistant) items.push(mapped);
+        return items;
+      },
+      [],
+    );
   }, [rawConversations]);
 
   const baseConversations = useMemo(
