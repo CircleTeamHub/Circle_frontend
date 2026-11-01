@@ -43,6 +43,7 @@ import {
   getCircleDetailHref,
   getNoteDetailHref,
   getUserProfileScopeFromSegments,
+  toCircleScope,
 } from '@/features/user/utils/routes';
 import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
@@ -490,7 +491,7 @@ export default function NoteManagementScreen() {
         return;
       }
       if (card.target === 'circle') {
-        router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', card.id));
+        router.push(getCircleDetailHref(toCircleScope(scope), card.id));
         return;
       }
       router.push(

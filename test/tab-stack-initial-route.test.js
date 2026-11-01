@@ -52,8 +52,8 @@ test('messages "新建群聊" stays in the messages stack', () => {
 });
 
 test('screens mirrored into both stacks route their sub-pages by scope', () => {
-  // create-circle / circle/[id]/edit 两个栈都有镜像，共用 circle-form-body。
-  // 表单里的「关联城市」若写死 discover，从聊天那侧进去就会跨 tab 跳走。
+  // create-circle / circle/[id]/edit 在多个栈都有镜像，共用 circle-form-body。
+  // 表单里的「关联城市」若写死某个 tab，从别的栈进去就会跨 tab 跳走。
   for (const rel of [
     'app/(tabs)/messages/create-circle.tsx',
     'app/(tabs)/messages/select-city.tsx',
@@ -68,5 +68,6 @@ test('screens mirrored into both stacks route their sub-pages by scope', () => {
 
   const form = read('src/features/discover/components/circle-form-body.tsx');
   assert.match(form, /useSegments/);
-  assert.match(form, /inDiscoverStack[\s\S]{0,120}\/\(tabs\)\/messages\/select-city/);
+  assert.match(form, /getCircleScopeFromSegments\(segments\)/);
+  assert.match(form, /`\/\(tabs\)\/\$\{circleScope\}\/select-city`/);
 });

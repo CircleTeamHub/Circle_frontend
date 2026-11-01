@@ -75,10 +75,7 @@ test('circle screens derive scope from segments for every internal push', () => 
     assert.match(detail, new RegExp(`${helper}\\(\\s*circleScope`));
   }
   // 进入群聊按 scope 选栈。
-  assert.match(
-    detail,
-    /circleScope === 'messages'\s*\?\s*'\/\(tabs\)\/messages\/chat-detail'/,
-  );
+  assert.match(detail, /`\/\(tabs\)\/\$\{circleScope\}\/chat-detail`/);
   assert.doesNotMatch(detail, /'\/\(tabs\)\/discover\/circle\/\[id\]\/(edit|invite|admin)'/);
 
   assert.match(inviteMenu, /getCircleShareHref\(circleScope/);

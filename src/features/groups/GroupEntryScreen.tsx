@@ -25,6 +25,7 @@ import {
   getChatDetailHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
+  toCircleScope,
 } from "@/features/user/utils/routes";
 import { useAuthStore } from "@/stores/authStore";
 import {
@@ -114,7 +115,7 @@ export default function GroupEntryScreen() {
         if (next.circleId && !next.isMember) {
           router.replace(
             getCircleDetailHref(
-              scope === "discover" ? "discover" : "messages",
+              toCircleScope(scope),
               next.circleId,
             ),
           );

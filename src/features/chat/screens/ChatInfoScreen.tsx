@@ -79,6 +79,7 @@ import {
   getNoteManagementHref,
   getRecommendFriendHref,
   getUserProfileHref,
+  toCircleScope,
 } from '@/features/user/utils/routes';
 import {
   addFriendToBlacklist,
@@ -1210,15 +1211,8 @@ export default function ChatInfoScreen() {
 
     // 圈子群:「加群成员」=邀请好友进圈(担保邀请流程);邀请页挂在
     // messages/discover/explore 三个栈,联系人/我的两个 scope 走 messages 栈。
-    if (scope === 'explore') {
-      router.push({
-        pathname: '/(tabs)/explore/circle/[id]/invite-friends',
-        params: { id: groupID, title: groupTitle },
-      });
-      return;
-    }
     router.push(
-      getCircleInviteFriendsHref(scope === 'discover' ? 'discover' : 'messages', groupID, groupTitle),
+      getCircleInviteFriendsHref(toCircleScope(scope), groupID, groupTitle),
     );
   }, [conversationID, groupID, groupTitle, isStandaloneGroup, scope]);
 

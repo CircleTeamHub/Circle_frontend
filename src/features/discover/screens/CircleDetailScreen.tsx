@@ -286,7 +286,7 @@ export default function CircleDetailScreen() {
   const invitationRequestRef = useRef(0);
 
   // 进入圈子群聊：先解析出会话 ID（否则聊天页拿不到 conversationID 会停在预览模式），
-  // 再入 discover 栈，返回时回到圈子详情。
+  // 再入当前栈，返回时回到圈子详情。
   const handleEnterGroupChat = useCallback(async () => {
     const groupID = circle?.groupID;
     if (!groupID || enteringGroupChat) return;
@@ -294,10 +294,7 @@ export default function CircleDetailScreen() {
       setEnteringGroupChat(true);
       const conversation = await ensureCircleConversation(groupID);
       router.push({
-        pathname:
-          circleScope === 'messages'
-            ? '/(tabs)/messages/chat-detail'
-            : '/(tabs)/discover/chat-detail',
+        pathname: `/(tabs)/${circleScope}/chat-detail` as const,
         params: {
           conversationID: conversation.conversationID,
           sourceID: groupID,

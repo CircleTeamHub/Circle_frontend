@@ -22,6 +22,7 @@ import {
   CIRCLE_VIP_OPTIONS_VALUES,
 } from '@/features/discover/constants/circle-form';
 import type { CircleFormApi } from '@/features/discover/hooks/use-circle-form';
+import { getCircleScopeFromSegments } from '@/features/user/utils/routes';
 
 interface CircleFormBodyProps {
   form: CircleFormApi;
@@ -251,7 +252,7 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
     [t],
   );
 
-  const inDiscoverStack = (segments as readonly string[]).includes('discover');
+  const circleScope = getCircleScopeFromSegments(segments);
 
   const vipLabel =
     VIP_OPTIONS.find((option) => option.value === form.joinVipRestriction)
@@ -260,16 +261,14 @@ export const CircleFormBody: React.FC<CircleFormBodyProps> = ({ form }) => {
     CREDIT_OPTIONS.find((option) => option.value === form.joinCreditRestriction)
       ?.label ?? t('common.noRestriction');
 
-  // 建圈/编辑圈子两个页面在 discover 和 messages 两个栈里都有镜像，选城市页要跟着
-  // 当前栈走 —— 写死 discover 会把用户连人带栈甩到「动态」tab 去（跨 tab 压栈）。
+  // 建圈/编辑圈子在 discover、messages、explore 栈里都有镜像，选城市页要跟着
+  // 当前栈走 —— 写死某个 tab 会把用户连人带栈甩过去（跨 tab 压栈）。
   const handleSelectCities = useCallback(() => {
     router.push({
-      pathname: inDiscoverStack
-        ? '/(tabs)/discover/select-city'
-        : '/(tabs)/messages/select-city',
+      pathname: `/(tabs)/${circleScope}/select-city` as const,
       params: { multiSelect: 'true' },
     });
-  }, [router, inDiscoverStack]);
+  }, [router, circleScope]);
 
   const handleRemoveCity = useCallback(
     (city: string) => {
