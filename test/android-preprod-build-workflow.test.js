@@ -106,13 +106,10 @@ function createR2Harness({ hasLatest = true, prefix = 'preprod-r2-' } = {}) {
 
   const candidate = Buffer.from('verified-preproduction-apk');
   const candidateSha = crypto.createHash('sha256').update(candidate).digest('hex');
+  fs.writeFileSync(path.join(tempDir, 'windnote-preprod.apk'), candidate);
   fs.writeFileSync(
-    path.join(tempDir, 'windnote-preprod-v1.0.1.apk'),
-    candidate,
-  );
-  fs.writeFileSync(
-    path.join(tempDir, 'windnote-preprod-v1.0.1.apk.sha256'),
-    `${candidateSha}  windnote-preprod-v1.0.1.apk\n`,
+    path.join(tempDir, 'windnote-preprod.apk.sha256'),
+    `${candidateSha}  windnote-preprod.apk\n`,
   );
   const oldLatest = Buffer.from('previous-preproduction-apk');
   if (hasLatest) {
@@ -138,6 +135,8 @@ function createR2Harness({ hasLatest = true, prefix = 'preprod-r2-' } = {}) {
     GITHUB_RUN_ATTEMPT: '1',
     RUNNER_TEMP: tempDir,
     FAKE_R2_DIR: stateDir,
+    APK_PATH: path.join(tempDir, 'windnote-preprod.apk'),
+    CHECKSUM_PATH: path.join(tempDir, 'windnote-preprod.apk.sha256'),
   };
   return {
     candidate,
@@ -272,8 +271,10 @@ test('preproduction workflow publishes the verified artifact to an isolated R2 c
     download,
     /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8\.0\.1/,
   );
-  assert.match(download, /name: android-preprod-v1\.0\.1/);
-  assert.match(publish, /sha256sum -c windnote-preprod-v1\.0\.1\.apk\.sha256/);
+  assert.match(download, /name: \$\{\{ needs\.build\.outputs\.artifact_name \}\}/);
+  assert.match(publish, /sha256sum -c [\"']?\$\{\{ needs\.build\.outputs\.checksum_name \}\}/);
+  assert.match(upload, /APK_PATH: \$\{\{ runner\.temp \}\}\/android-preprod\/\$\{\{ needs\.build\.outputs\.apk_name \}\}/);
+  assert.match(upload, /CHECKSUM_PATH: \$\{\{ runner\.temp \}\}\/android-preprod\/\$\{\{ needs\.build\.outputs\.checksum_name \}\}/);
 
   for (const credential of [
     'AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}',
@@ -771,10 +772,14 @@ test('preproduction build verifies signing, identity, version, and embedded endp
   assert.match(verify, /apksigner.*verify --verbose --print-certs/);
   assert.match(verify, /aapt.*dump badging/);
   assert.match(verify, /com\.yiboding\.circleim\.preprod/);
-  assert.match(verify, /versionCode='1000001'/);
-  assert.match(verify, /versionName='1\.0\.1'/);
+  assert.match(verify, /version_code=\"\$\(node -p/);
+  assert.match(verify, /app_version=\"\$\(node -p/);
+  assert.match(verify, /versionCode='\$version_code'/);
+  assert.match(verify, /versionName='\$app_version'/);
   assert.match(verify, /verify-android-preprod\.js apk/);
-  assert.match(verify, /windnote-preprod-v1\.0\.1\.apk/);
+  assert.match(verify, /artifact_name=\"android-preprod-\$\{app_version\}\"/);
+  assert.match(verify, /apk_name=\"windnote-preprod-\$\{app_version\}\.apk\"/);
+  assert.match(verify, /checksum_name=\"\$\{apk_name\}\.sha256\"/);
   assert.match(verify, /sha256sum/);
 
   const cleanup = workflowStep(build, 'Remove signing material');
@@ -789,9 +794,9 @@ test('preproduction artifact contains APK, digest, notices, and SBOM for 30 days
 
   assert.match(upload, /actions\/upload-artifact@/);
   assert.match(upload, /retention-days: 30/);
-  assert.match(upload, /runner\.temp.*android-preprod-v1\.0\.1\//);
-  assert.match(workflow, /windnote-preprod-v1\.0\.1\.apk/);
-  assert.match(workflow, /windnote-preprod-v1\.0\.1\.apk\.sha256/);
+  assert.match(upload, /runner\.temp.*stage_artifact\.outputs\.artifact_name/);
+  assert.match(workflow, /windnote-preprod-\$\{app_version\}\.apk/);
+  assert.match(workflow, /\$\{apk_name\}\.sha256/);
   assert.match(workflow, /THIRD_PARTY_NOTICES\.txt/);
   assert.match(workflow, /cyclonedx-sbom\.json/);
   assert.match(upload, /if-no-files-found: error/);
