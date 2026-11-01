@@ -2,9 +2,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const BASE_APP_CONFIG = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '../../app.json'), 'utf8'),
+).expo;
+
 const EXPECTED = Object.freeze({
-  version: '1.0.1',
-  versionCode: 1000001,
+  version: BASE_APP_CONFIG.version,
+  versionCode: BASE_APP_CONFIG.android?.versionCode,
   packageName: 'com.yiboding.circleim.preprod',
   appName: '风信测试版',
   appVariant: 'preprod',
