@@ -241,6 +241,10 @@ test('preproduction workflow publishes the verified artifact to an isolated R2 c
   const workflow = read(WORKFLOW_PATH);
   const build = workflowJob(workflow, 'build');
   const publish = workflowJob(workflow, 'publish');
+  const buildArtifactUpload = workflowStep(
+    build,
+    'Upload private preproduction artifact',
+  );
   const download = workflowStep(publish, 'Download verified preproduction artifact');
   const upload = workflowStep(
     publish,
@@ -275,6 +279,30 @@ test('preproduction workflow publishes the verified artifact to an isolated R2 c
   assert.match(publish, /sha256sum -c [\"']?\$\{\{ needs\.build\.outputs\.checksum_name \}\}/);
   assert.match(upload, /APK_PATH: \$\{\{ runner\.temp \}\}\/android-preprod\/\$\{\{ needs\.build\.outputs\.apk_name \}\}/);
   assert.match(upload, /CHECKSUM_PATH: \$\{\{ runner\.temp \}\}\/android-preprod\/\$\{\{ needs\.build\.outputs\.checksum_name \}\}/);
+  const currentApp = JSON.parse(read('app.json')).expo;
+  const expectedArtifactName = `android-preprod-${currentApp.version}`;
+  const expectedApkName = `windnote-preprod-${currentApp.version}.apk`;
+  const expectedChecksumName = `${expectedApkName}.sha256`;
+  const stage = workflowStep(build, 'Verify and stage preproduction APK');
+  assert.deepEqual(
+    {
+      artifactName: expectedArtifactName,
+      apkName: expectedApkName,
+      checksumName: expectedChecksumName,
+    },
+    {
+      artifactName: `android-preprod-${currentApp.version}`,
+      apkName: `windnote-preprod-${currentApp.version}.apk`,
+      checksumName: `windnote-preprod-${currentApp.version}.apk.sha256`,
+    },
+  );
+  assert.match(stage, /artifact_name=\"android-preprod-\$\{app_version\}\"/);
+  assert.match(stage, /apk_name=\"windnote-preprod-\$\{app_version\}\.apk\"/);
+  assert.match(stage, /checksum_name=\"\$\{apk_name\}\.sha256\"/);
+  assert.match(
+    buildArtifactUpload,
+    /path: \$\{\{ runner\.temp \}\}\/\$\{\{ steps\.stage_artifact\.outputs\.artifact_name \}\}\//,
+  );
 
   for (const credential of [
     'AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}',
@@ -823,9 +851,9 @@ test('preproduction verifier fails closed for metadata and APK endpoint drift', 
   } = require('../.github/scripts/verify-android-preprod');
   const app = {
     name: EXPECTED.appName,
-    version: '1.0.1',
+    version: EXPECTED.version,
     extra: { appVariant: EXPECTED.appVariant },
-    android: { versionCode: 1000001, package: EXPECTED.packageName },
+    android: { versionCode: EXPECTED.versionCode, package: EXPECTED.packageName },
   };
   const env = {
     EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
@@ -836,7 +864,17 @@ test('preproduction verifier fails closed for metadata and APK endpoint drift', 
   assert.deepEqual(validateMetadata({ app, env }), []);
   assert.match(
     validateMetadata({ app: { ...app, version: '1.0.0' }, env }).join('\n'),
-    /version.*1\.0\.1/i,
+    new RegExp(`version.*${EXPECTED.version.replaceAll('.', '\\.')}`, 'i'),
+  );
+  assert.match(
+    validateMetadata({
+      app: {
+        ...app,
+        android: { ...app.android, versionCode: EXPECTED.versionCode + 1 },
+      },
+      env,
+    }).join('\n'),
+    /versionCode/i,
   );
   assert.match(
     validateMetadata({ app: { ...app, extra: {} }, env }).join('\n'),
