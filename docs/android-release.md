@@ -12,7 +12,7 @@ PR #57 does not by itself authorize public distribution. A successful private bu
 
 Configure metadata and signing for the private build without putting secret values in documentation, logs, issues, or pull requests.
 
-The current preproduction candidate is Android `v1.0.1` (`versionCode` `1000001`). Its test deployment contract is:
+The preproduction APK takes its version and `versionCode` from `app.json` for each `main` build. The current candidate is Android `v1.0.1` (`versionCode` `1000001`). Its test deployment contract is:
 
 - API and chat fallback: `https://api-43-133-201-42.sslip.io`
 - media origins, in this order (`EXPO_PUBLIC_MEDIA_ORIGINS`):
@@ -29,12 +29,12 @@ The test APK is a separately installable application named `风信测试版` wit
 
 The first build with the `.preprod` package ID is an intentional one-time cutover, not an in-place upgrade. Existing testers must uninstall the old website APK that used `com.yiboding.circleim`, install `风信测试版` from the refreshed test URL, and sign in again; its local session/database cannot migrate across Android package IDs. Do not keep using the old install: it shares production identity and still contains the old production-update behavior. The website/operator announcement for this cutover must say “卸载旧测试版、安装风信测试版、重新登录” before the stable object is promoted.
 
-The workflow validates the exact `v1.0.1` metadata and Tokyo endpoint contract, checks the generated dependency notices/SBOM, runs the full application CI, signs the APK, then verifies its certificate, package ID, version, and embedded endpoints. A distributable test build fails closed when `EXPO_PUBLIC_SENTRY_DSN` is absent or malformed. It deliberately sets `SENTRY_DISABLE_AUTO_UPLOAD=true`: runtime crash reporting remains enabled through the DSN, but a preproduction build must not create a production Sentry release or upload source maps. The canonical tagged public-release path does not set that opt-out and remains fail-closed on its complete Sentry configuration.
+The workflow validates the current `app.json` metadata and Tokyo endpoint contract, checks the generated dependency notices/SBOM, runs the full application CI, signs the APK, then verifies its certificate, package ID, version, and embedded endpoints. A distributable test build fails closed when `EXPO_PUBLIC_SENTRY_DSN` is absent or malformed. It deliberately sets `SENTRY_DISABLE_AUTO_UPLOAD=true`: runtime crash reporting remains enabled through the DSN, but a preproduction build must not create a production Sentry release or upload source maps. The canonical tagged public-release path does not set that opt-out and remains fail-closed on its complete Sentry configuration.
 
-The successful build retains one private Actions artifact named `android-preprod-v1.0.1` for 30 days. It contains:
+The successful build retains one private Actions artifact named `android-preprod-<app version>` for 30 days. It contains:
 
-- `windnote-preprod-v1.0.1.apk`
-- `windnote-preprod-v1.0.1.apk.sha256`
+- `windnote-preprod-<app version>.apk`
+- `windnote-preprod-<app version>.apk.sha256`
 - `THIRD_PARTY_NOTICES.txt`
 - `cyclonedx-sbom.json`
 
@@ -42,13 +42,13 @@ The separate publish job downloads that exact artifact and verifies its checksum
 
 `https://pub-9d36120697ca455b9fb0e430da8b9481.r2.dev/android/preprod/latest/windnote.apk`
 
-This URL is public and unauthenticated: anyone who knows it can download the preproduction APK. Cloudflare documents `r2.dev` as a development URL, so it is suitable only for the current inner test; use a custom R2 domain before broad production traffic. This preproduction path is intentionally separate from the formal `android/latest/windnote.apk` channel. It does not create a GitHub Release, does not enable `ANDROID_PUBLIC_RELEASE_ENABLED`, and is not evidence that the formal legal distribution gate below passed.
+This URL is public and unauthenticated: anyone who knows it can download the preproduction APK. Cloudflare documents `r2.dev` as a development URL, so it is suitable only for the current inner test; use a custom R2 domain before broad production traffic. The Cloudflare Pages `main` site now uses this stable preproduction URL, so each successful approved `main` build updates the APK behind the website button. This preproduction path is intentionally separate from the formal `android/latest/windnote.apk` channel. It does not create a GitHub Release, does not enable `ANDROID_PUBLIC_RELEASE_ENABLED`, and is not evidence that the formal legal distribution gate below passed.
 
 The two distribution channels are deliberately different:
 
 | Channel | Trigger | Successful build location | Public stable location |
 | --- | --- | --- | --- |
-| Inner-test / ordinary `main` build | Every push to `main`, or a manual rebuild | Private Actions artifact `android-preprod-v1.0.1`, retained 30 days | `android/preprod/latest/windnote.apk` after the dedicated preproduction gate passes |
+| Inner-test / ordinary `main` build | Every push to `main`, or a manual rebuild | Private Actions artifact `android-preprod-<app version>`, retained 30 days | `android/preprod/latest/windnote.apk` after the dedicated preproduction gate passes |
 | Formal production release | A reviewed immutable `v*` tag | Private Actions artifact and GitHub Release candidate | `android/latest/windnote.apk` only after the formal protected release gate passes |
 
 Required preproduction publishing configuration:

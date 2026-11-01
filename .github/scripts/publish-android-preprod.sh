@@ -12,8 +12,8 @@ set -euo pipefail
 : "${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required}"
 : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 
-apk_path="${APK_PATH:-windnote-preprod-v1.0.1.apk}"
-checksum_path="${CHECKSUM_PATH:-windnote-preprod-v1.0.1.apk.sha256}"
+apk_path="${APK_PATH:-windnote-preprod.apk}"
+checksum_path="${CHECKSUM_PATH:-windnote-preprod.apk.sha256}"
 endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 versioned_key="android/preprod/builds/${GITHUB_SHA}/windnote.apk"
 latest_key="android/preprod/latest/windnote.apk"
