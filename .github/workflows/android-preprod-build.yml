@@ -164,9 +164,11 @@ jobs:
           cp assets/legal/THIRD_PARTY_NOTICES.txt "$artifact_dir/"
           cp assets/legal/cyclonedx-sbom.json "$artifact_dir/"
           (cd "$artifact_dir" && sha256sum "$apk_name" > "$checksum_name")
-          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
-          echo "apk_name=$apk_name" >> "$GITHUB_OUTPUT"
-          echo "checksum_name=$checksum_name" >> "$GITHUB_OUTPUT"
+          {
+            echo "artifact_name=$artifact_name"
+            echo "apk_name=$apk_name"
+            echo "checksum_name=$checksum_name"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload private preproduction artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
