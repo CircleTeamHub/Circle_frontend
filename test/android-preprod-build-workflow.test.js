@@ -71,6 +71,56 @@ const workflowStep = (job, stepName) => {
   return nextStep === -1 ? remainder : remainder.slice(0, nextStep + 1);
 };
 
+function renderArtifactOutputs(stage, version, versionCode) {
+  const marker = '        run: |\n';
+  const markerStart = stage.indexOf(marker);
+  assert.notEqual(markerStart, -1, 'expected a shell run block');
+  const shellLines = stage
+    .slice(markerStart + marker.length)
+    .split('\n')
+    .map((line) => line.replace(/^ {10}/, ''));
+  const relevant = shellLines
+    .filter((line) => {
+      const trimmed = line.trim();
+      return (
+        trimmed.startsWith('app_version=') ||
+        trimmed.startsWith('version_code=') ||
+        trimmed.startsWith('artifact_name=') ||
+        trimmed.startsWith('apk_name=') ||
+        trimmed.startsWith('checksum_name=') ||
+        trimmed.startsWith('echo "artifact_name=') ||
+        trimmed.startsWith('echo "apk_name=') ||
+        trimmed.startsWith('echo "checksum_name=') ||
+        trimmed === '{' ||
+        trimmed === '} >> "$GITHUB_OUTPUT"'
+      );
+    })
+    .map((line) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('app_version=')) return `app_version="${version}"`;
+      if (trimmed.startsWith('version_code=')) return `version_code="${versionCode}"`;
+      return trimmed;
+    });
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'windnote-output-contract-'));
+  const outputPath = path.join(tempDir, 'github-output');
+  try {
+    const result = spawnSync(releaseScriptShell(), ['-c', ['set -euo pipefail', ...relevant].join('\n')], {
+      encoding: 'utf8',
+      env: { ...process.env, GITHUB_OUTPUT: outputPath },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return Object.fromEntries(
+      fs
+        .readFileSync(outputPath, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => line.split('=')),
+    );
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 const fakeObjectPath = (stateDir, key) =>
   path.join(stateDir, `${Buffer.from(key).toString('base64url')}.json`);
 
@@ -299,6 +349,12 @@ test('preproduction workflow publishes the verified artifact to an isolated R2 c
   assert.match(stage, /artifact_name=\"android-preprod-\$\{app_version\}\"/);
   assert.match(stage, /apk_name=\"windnote-preprod-\$\{app_version\}\.apk\"/);
   assert.match(stage, /checksum_name=\"\$\{apk_name\}\.sha256\"/);
+  const rendered = renderArtifactOutputs(stage, '9.9.9', 1000009);
+  assert.deepEqual(rendered, {
+    artifact_name: 'android-preprod-9.9.9',
+    apk_name: 'windnote-preprod-9.9.9.apk',
+    checksum_name: 'windnote-preprod-9.9.9.apk.sha256',
+  });
   assert.match(
     buildArtifactUpload,
     /path: \$\{\{ runner\.temp \}\}\/\$\{\{ steps\.stage_artifact\.outputs\.artifact_name \}\}\//,
