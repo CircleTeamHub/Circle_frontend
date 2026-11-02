@@ -77,13 +77,13 @@ export function useChatConversation({
         ? state.readWatermarks[conversationID]?.[currentUserID]
         : 0) ?? 0,
   );
-  const initialEntryReadHeight = Math.max(
-    routeInitialReadHeight ?? 0,
-    localReadHeight,
-  );
   const entryUnreadCountRef = useRef<number | null>(routeInitialUnreadCount);
+  // 路由带了水位就只信它:消息列表在点击前已取好 max(会话 readHeight, 本机水位),
+  // 随后才标已读 —— 首帧这里读到的本机水位已被推到最新一条。再和它取 max,入口水位
+  // 就等于最新,找不到未读起点,「未读 N 条」按钮永远不出。不带参数的入口(通知等)
+  // 首帧还没标已读,才回落到本机水位。
   const entryReadHeightRef = useRef<number | null>(
-    initialEntryReadHeight > 0 ? initialEntryReadHeight : routeInitialReadHeight,
+    routeInitialReadHeight ?? (localReadHeight > 0 ? localReadHeight : null),
   );
   const [entryUnreadCount, setEntryUnreadCount] = useState<number | null>(
     routeInitialUnreadCount,

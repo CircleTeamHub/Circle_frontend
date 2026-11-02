@@ -125,7 +125,9 @@ export const BubbleStatusText: React.FC<BubbleStatusTextProps> = ({ message }) =
     // G-07 送达回执:对端设备收到了但还没读。
     text = t('chat.message.delivered', { defaultValue: '已送达' });
   } else {
-    text = t('chat.message.unread', { defaultValue: '未读' });
+    // 服务端已收下、对端设备还没回执。原来写「未读」:对端在线时这一段只有零点几秒,
+    // 每条消息都会「发送中 → 未读 → 已送达」闪一下;叫「已发送」才是这一段的实情。
+    text = t('chat.message.sent', { defaultValue: '已发送' });
   }
   return (
     <Text style={{ ...Typography.tinyRegular, color, marginLeft: 4 }}>
