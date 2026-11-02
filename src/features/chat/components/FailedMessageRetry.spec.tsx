@@ -1,4 +1,5 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
+import * as ReactNative from 'react-native';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
 import type { ChatMessage } from '@/types';
 import { FailedMessageRetry } from './FailedMessageRetry';
@@ -54,7 +55,27 @@ test.each([
 });
 
 
+afterEach(() => jest.restoreAllMocks());
+
+const windowWidth = (width: number) => {
+  const native = jest.requireActual<typeof ReactNative>('react-native');
+  jest.spyOn(native, 'useWindowDimensions').mockReturnValue({ width, height: 844, scale: 3, fontScale: 1 });
+};
+
+test('retry sits to the left of the failed message, vertically centered', () => {
+  windowWidth(390);
+  const ui = render(
+    <FailedMessageRetry message={{ ...failed, outgoing: true }} onRetry={jest.fn()}><Text>message</Text></FailedMessageRetry>,
+  );
+  const row = ui.getByTestId('failed-message-retry');
+  expect(StyleSheet.flatten(row.props.style)).toMatchObject({ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' });
+  const [first, second] = row.children as ReactNative.View[] as unknown as Parameters<typeof within>[0][];
+  expect(within(first).queryByText('message')).toBeNull();
+  expect(within(second).getByText('message')).toBeTruthy();
+});
+
 test('failed card retry does not add horizontal width on a 320 point screen', () => {
+  windowWidth(320);
   const ui = render(<FailedMessageRetry message={{ ...failed, type: 'note-card', outgoing: true }} onRetry={jest.fn()}><View style={{ width: 260 }}><Text>card</Text></View></FailedMessageRetry>);
   const retry = ui.getByLabelText('chat.messageActions.retryFailed');
   expect(ui.UNSAFE_getAllByType(View).some(view => StyleSheet.flatten(view.props.style)?.flexDirection === 'column-reverse')).toBe(true);

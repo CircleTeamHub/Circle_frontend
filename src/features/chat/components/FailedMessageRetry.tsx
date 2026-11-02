@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/theme';
@@ -11,6 +11,11 @@ interface FailedMessageRetryProps {
   children: ReactNode;
 }
 
+// Widest outgoing row: plaza poster card 264 + gap 8 + avatar 36, plus the 32pt
+// retry target and the list's 2pt side insets. Narrower screens (320pt) stack the
+// retry under the row so a fixed-width card is never pushed off screen.
+const MIN_WIDTH_FOR_SIDE_RETRY = 344;
+
 /** A separate retry target keeps media previews and card navigation usable. */
 export function FailedMessageRetry({
   message,
@@ -19,6 +24,7 @@ export function FailedMessageRetry({
 }: FailedMessageRetryProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
   if (
     message.sendStatus !== 3 ||
     !message.deliveryId ||
@@ -28,7 +34,10 @@ export function FailedMessageRetry({
   }
 
   return (
-    <View style={styles.row}>
+    <View
+      testID="failed-message-retry"
+      style={width >= MIN_WIDTH_FOR_SIDE_RETRY ? styles.row : styles.stacked}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('chat.messageActions.retryFailed')}
@@ -44,7 +53,8 @@ export function FailedMessageRetry({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'column-reverse', alignItems: 'flex-end' },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  stacked: { flexDirection: 'column-reverse', alignItems: 'flex-end' },
   button: { width: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   bubble: { flexShrink: 1 },
 });
