@@ -1056,7 +1056,7 @@ test('preproduction media origins pin the COS bucket and the rate-limited delive
     validateMetadata,
   } = require('../.github/scripts/verify-android-preprod');
   const cos = 'https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com';
-  const delivery = 'https://media-43-133-201-42.sslip.io';
+  const delivery = 'https://api-43-134-85-95.sslip.io';
   // 测试服后端配了 OBJECT_STORAGE_DELIVERY_URL:公开目录(头像、封面……)的永久地址
   // 走限流的投递域名,私有媒体的预签名地址仍直连 COS。App 的媒体白名单缺哪一个,
   // 那一类图片、语音、封面就会被客户端整片丢掉。
@@ -1078,7 +1078,7 @@ test('preproduction media origins pin the COS bucket and the rate-limited delive
     cos,
     delivery,
     `${cos},${delivery},`,
-    `${cos},http://media-43-133-201-42.sslip.io`,
+    `${cos},http://api-43-134-85-95.sslip.io`,
     `${cos},${delivery}/`,
   ]) {
     assert.match(
@@ -1089,13 +1089,18 @@ test('preproduction media origins pin the COS bucket and the rate-limited delive
   }
 
   const bothHosts = Buffer.from(
-    ['api-43-133-201-42.sslip.io', ...EXPECTED.mediaHosts].join('\n'),
+    [EXPECTED.apiHost, ...EXPECTED.mediaHosts].join('\n'),
   );
   assert.deepEqual(validateApkContents(bothHosts), []);
   assert.match(
-    validateApkContents(
-      Buffer.from(`${EXPECTED.apiHost}\nwindnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com`),
-    ).join('\n'),
-    /media-43-133-201-42\.sslip\.io/,
+    validateApkContents(Buffer.from(EXPECTED.apiHost)).join('\n'),
+    /windnote-preprod-tokyo-1447743949\.cos\.ap-tokyo\.myqcloud\.com/,
   );
+  // 东京旧机的 sslip 域名跟着已易主的 IP 走,残留在包里就是把令牌发给陌生人。
+  for (const stale of ['api-43-133-201-42.sslip.io', 'media-43-133-201-42.sslip.io']) {
+    assert.match(
+      validateApkContents(Buffer.concat([bothHosts, Buffer.from(`\n${stale}`)])).join('\n'),
+      new RegExp(stale.replace(/\./g, '\\.')),
+    );
+  }
 });

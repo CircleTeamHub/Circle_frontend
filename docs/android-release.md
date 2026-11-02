@@ -14,12 +14,12 @@ Configure metadata and signing for the private build without putting secret valu
 
 The preproduction APK takes its version and `versionCode` from `app.json` for each `main` build. The current candidate is Android `v1.0.1` (`versionCode` `1000001`). Its test deployment contract is:
 
-- API and chat fallback: `https://api-43-133-201-42.sslip.io`
+- API and chat fallback: `https://api-43-134-85-95.sslip.io`
 - media origins, in this order (`EXPO_PUBLIC_MEDIA_ORIGINS`):
   - `https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com` — the COS bucket; presigned URLs for private media still point here
-  - `https://media-43-133-201-42.sslip.io` — the rate-limited delivery domain the backend's `OBJECT_STORAGE_DELIVERY_URL` uses for permanent public-folder URLs (avatars, covers, posts)
+  - `https://api-43-134-85-95.sslip.io` — the rate-limited delivery origin the backend's `OBJECT_STORAGE_DELIVERY_URL` uses for permanent public-folder URLs (avatars, covers, posts); Caddy serves it under `/circle/*` on the API domain and proxies to the COS bucket
 
-These values identify the Tokyo test stack, not production. A preproduction workflow must verify every expected hostname is embedded and that obsolete tunnel/OpenIM hostnames are absent before retaining its private artifact.
+These values identify the Singapore test stack (`43.134.85.95`), not production. The Tokyo stack (`43.133.201.42`) expired in 2026-10 and its IP was reassigned, so its `sslip.io` hostnames are listed as forbidden. A preproduction workflow must verify every expected hostname is embedded and that obsolete tunnel/OpenIM hostnames are absent before retaining its private artifact.
 
 ## Preproduction APK
 

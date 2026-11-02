@@ -29,7 +29,7 @@ const workflowStep = (job, stepName) => {
 test('release rollout documentation records the fail-closed operating contract', () => {
   const documentation = read('docs/android-release.md');
 
-  assert.match(documentation, /https:\/\/api-43-133-201-42\.sslip\.io/);
+  assert.match(documentation, /https:\/\/api-43-134-85-95\.sslip\.io/);
   assert.match(
     documentation,
     /https:\/\/windnote-preprod-tokyo-1447743949\.cos\.ap-tokyo\.myqcloud\.com/,
