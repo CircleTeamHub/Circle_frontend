@@ -86,7 +86,7 @@ test('ProfileScreen shows selected identity badges inside the gold member card',
   assert.match(memberCardBlock, /memberIdentityRow/);
   assert.match(memberCardBlock, /memberIdentityItem/);
   assert.match(src, /profile\/icons/);
-  assert.match(memberCardBlock, /tone="member"/);
+  assert.match(memberCardBlock, /<UserIconRow icons=\{displayIcons\} \/>/);
   assert.match(read('src/components/ui/user-icon-row.tsx'), /UserIconBadge/);
   assert.doesNotMatch(src, /Date\.now\(\) - accountCreatedAt/);
 });

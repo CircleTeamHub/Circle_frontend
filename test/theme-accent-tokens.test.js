@@ -129,11 +129,16 @@ test('白底上的图标不走提亮：提亮紫在 #FFFFFF 上只有 2.6:1', ()
     filter,
     /<Ionicons name="close" size=\{13\} color=\{colors\.iconAccent\}/,
   );
-  // clearBtn 是 primary 实心底、文字是白色：图标必须跟文字同色。
+  // clearBtn 是描边次要按钮、文字是 colors.text:图标必须跟文字同色。
   assert.match(
     filter,
-    /<Ionicons name="trash-outline" size=\{18\} color=\{colors\.white\} \/>/,
+    /<Ionicons name="trash-outline" size=\{18\} color=\{colors\.text\} \/>/,
   );
+  // 分组图标底是实心主色、图标白色;不再用 colors.text 做底(深色下与白色图标同色,看不见)。
+  assert.match(filter, /sectionIcon: \{ backgroundColor: colors\.primary \}/);
+  assert.doesNotMatch(filter, /sectionIcon: \{ backgroundColor: colors\.text \}/);
+  // 右上角不放没有行为的帮助图标。
+  assert.doesNotMatch(filter, /help-circle-outline/);
 
   const share = read('src/features/profile/screens/ShareScreen.tsx');
   assert.doesNotMatch(share, /share-social-outline" size=\{18\} color=\{colors\.iconAccent\}/);

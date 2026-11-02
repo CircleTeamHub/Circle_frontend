@@ -113,7 +113,12 @@ test('circle detail screen renders read-only rule summaries instead of a setting
   const enLocale = read('src/i18n/locales/en.json');
 
   assert.match(source, /t\('circle\.rulesSummary'\)/);
-  assert.doesNotMatch(source, /t\('circle\.settings'\)/);
+  // 「圈子设置」只作为右上角设置按钮的读屏标签,正文里不再有设置菜单块。
+  assert.equal((source.match(/t\('circle\.settings'\)/g) ?? []).length, 1);
+  assert.match(
+    source,
+    /rightIcon=\{isOwnerOrAdmin \? 'settings-outline' : undefined\}\s*\n\s*rightAccessibilityLabel=\{isOwnerOrAdmin \? t\('circle\.settings'\) : undefined\}/,
+  );
   assert.doesNotMatch(source, /<MenuRow/);
 
   assert.match(zhLocale, /"rulesSummary":\s*"入圈规则"/);

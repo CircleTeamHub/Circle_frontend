@@ -1,0 +1,126 @@
+diff --git a/node_modules/expo-camera/ios/CameraViewModule.swift b/node_modules/expo-camera/ios/CameraViewModule.swift
+index 9393b89..78f963f 100644
+--- a/node_modules/expo-camera/ios/CameraViewModule.swift
++++ b/node_modules/expo-camera/ios/CameraViewModule.swift
+@@ -159,9 +159,6 @@ public final class CameraViewModule: Module, ScannerResultHandler {
+ 
+       Prop("barcodeScannerSettings") { (view, settings: BarcodeSettings?) in
+         if let settings {
+-          if view.barcodeScanner?.isAvailable == false {
+-            self.appContext?.jsLogger.warn("Barcode scanning has been disabled")
+-          }
+           view.setBarcodeScannerSettings(settings: settings)
+         }
+       }
+diff --git a/node_modules/expo-camera/ios/Current/BarcodeScanner.swift b/node_modules/expo-camera/ios/Current/BarcodeScanner.swift
+index a1d71b6..bc16b07 100644
+--- a/node_modules/expo-camera/ios/Current/BarcodeScanner.swift
++++ b/node_modules/expo-camera/ios/Current/BarcodeScanner.swift
+@@ -98,11 +98,10 @@ class BarcodeScanner: NSObject, BarcodeScanningResponseHandler {
+       return
+     }
+ 
+-    guard barcodeProvider != nil else {
+-      return
+-    }
+-
+-    if metadataOutput == nil || videoDataOutput == nil {
++    // QR and every other natively supported symbology go through AVFoundation; the
++    // ZXing provider (companion pod) is only the fallback for pdf417/code39/codabar.
++    // Backport of expo/expo#49692: without the companion pod, all scanning used to stop.
++    if metadataOutput == nil || (barcodeProvider != nil && videoDataOutput == nil) {
+       addOutputs()
+       if metadataOutput == nil {
+         return
+@@ -125,10 +124,6 @@ class BarcodeScanner: NSObject, BarcodeScanningResponseHandler {
+   }
+ 
+   private func addOutputs() {
+-    guard let barcodeProvider else {
+-      return
+-    }
+-
+     delegate = MetaDataDelegate(
+       settings: settings,
+       previewLayer: previewLayer,
+@@ -146,7 +141,7 @@ class BarcodeScanner: NSObject, BarcodeScanningResponseHandler {
+       }
+     }
+ 
+-    if videoDataOutput == nil {
++    if barcodeProvider != nil && videoDataOutput == nil {
+       let output = AVCaptureVideoDataOutput()
+       output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+       output.alwaysDiscardsLateVideoFrames = true
+diff --git a/node_modules/expo-camera/ios/Current/BarcodeScanningResponseHandler.swift b/node_modules/expo-camera/ios/Current/BarcodeScanningResponseHandler.swift
+index 53cf8c4..3d28ad3 100644
+--- a/node_modules/expo-camera/ios/Current/BarcodeScanningResponseHandler.swift
++++ b/node_modules/expo-camera/ios/Current/BarcodeScanningResponseHandler.swift
+@@ -1,3 +1,3 @@
+-protocol BarcodeScanningResponseHandler {
++protocol BarcodeScanningResponseHandler: AnyObject {
+   func onScanningResult(_ result: [String: Any])
+ }
+diff --git a/node_modules/expo-camera/ios/Current/MetaDataDelegate.swift b/node_modules/expo-camera/ios/Current/MetaDataDelegate.swift
+index fee448f..b4199dc 100644
+--- a/node_modules/expo-camera/ios/Current/MetaDataDelegate.swift
++++ b/node_modules/expo-camera/ios/Current/MetaDataDelegate.swift
+@@ -4,18 +4,19 @@ import CoreImage
+ class MetaDataDelegate: NSObject, AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
+   private var settings: [String: [AVMetadataObject.ObjectType]]
+   private var previewLayer: AVCaptureVideoPreviewLayer?
+-  private let barcodeProvider: ExpoBarcodeScannerProvider
++  private let barcodeProvider: ExpoBarcodeScannerProvider?
+   private var barcodeProviderEnabled = true
+   private var barcodeProviderFPSProcessed = 6.0
+   private var lastFrameTimeStamp = 0.0
+-  private let responseHandler: BarcodeScanningResponseHandler
++  // weak: BarcodeScanner owns this delegate, a strong back-reference leaks both (expo/expo#49692).
++  private weak var responseHandler: BarcodeScanningResponseHandler?
+ 
+   private let ciContext = CIContext()
+ 
+   init(
+     settings: [String: [AVMetadataObject.ObjectType]],
+     previewLayer: AVCaptureVideoPreviewLayer?,
+-    barcodeProvider: ExpoBarcodeScannerProvider,
++    barcodeProvider: ExpoBarcodeScannerProvider?,
+     barcodeProviderEnabled: Bool,
+     metadataResultHandler: BarcodeScanningResponseHandler
+   ) {
+@@ -31,7 +32,7 @@ class MetaDataDelegate: NSObject, AVCaptureMetadataOutputObjectsDelegate, AVCapt
+       return
+     }
+ 
+-    let barcodeProviderTypes = Set(barcodeProvider.supportedTypes)
++    let barcodeProviderTypes = Set(barcodeProvider?.supportedTypes ?? [])
+ 
+     for metadata in metadataObjects {
+       var codeMetadata = metadata as? AVMetadataMachineReadableCodeObject
+@@ -47,7 +48,7 @@ class MetaDataDelegate: NSObject, AVCaptureMetadataOutputObjectsDelegate, AVCapt
+ 
+         if let codeMetadata {
+           if codeMetadata.stringValue != nil && codeMetadata.type == barcodeType {
+-            self.responseHandler.onScanningResult(BarcodeScannerUtils.avMetadataCodeObjectToDictionary(codeMetadata))
++            self.responseHandler?.onScanningResult(BarcodeScannerUtils.avMetadataCodeObjectToDictionary(codeMetadata))
+           }
+         }
+       }
+@@ -55,7 +56,7 @@ class MetaDataDelegate: NSObject, AVCaptureMetadataOutputObjectsDelegate, AVCapt
+   }
+ 
+   func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+-    guard barcodeProviderEnabled else {
++    guard barcodeProviderEnabled, let barcodeProvider else {
+       return
+     }
+ 
+@@ -69,7 +70,7 @@ class MetaDataDelegate: NSObject, AVCaptureMetadataOutputObjectsDelegate, AVCapt
+       if let videoFrame = CMSampleBufferGetImageBuffer(sampleBuffer),
+          let image = createImage(from: videoFrame) {
+         for result in barcodeProvider.scanBarcodes(from: image) {
+-          self.responseHandler.onScanningResult(result)
++          self.responseHandler?.onScanningResult(result)
+         }
+       }
+     }

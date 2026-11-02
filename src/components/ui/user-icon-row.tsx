@@ -16,7 +16,6 @@ type Props = {
   icons: DisplayIcon[];
   compact?: boolean;
   compactSize?: CompactSize;
-  tone?: 'default' | 'member';
   // compact 模式下最多展示几个徽章，其余折叠成 "+N"。默认 3；空间紧张的卡片
   // （如广场帖头部，要给用户名/圈子标签让位）可传更小值。非 compact 不受影响。
   maxVisible?: number;
@@ -30,7 +29,6 @@ type BadgeProps = {
   compact?: boolean;
   compactSize?: CompactSize;
   dense?: boolean;
-  tone?: 'default' | 'member';
   // 显式像素尺寸（如徽章详情大图）。给定时按该尺寸原生渲染，不走 compact/default 档，
   // 也不靠 transform 放大 —— 避免把小尺寸位图上采样糊掉。
   size?: number;
@@ -150,9 +148,6 @@ const s = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0,
     textAlign: 'center',
-  },
-  denseLabel: {
-    marginTop: -6,
   },
   compactCount: {
     width: 34,
@@ -295,7 +290,6 @@ export function UserIconBadge({
   compact = false,
   compactSize = 'default',
   dense = false,
-  tone = 'default',
   size,
 }: BadgeProps) {
   const { colors } = useTheme();
@@ -326,13 +320,12 @@ export function UserIconBadge({
     icon.type === 'SYSTEM' ? getSystemBadgeVisualScale(icon) : 1;
   const systemBadgeTranslateY =
     icon.type === 'SYSTEM' ? getSystemBadgeVisualTranslateY(icon) : 0;
+  // 徽章下面不再画名字(新手/会员/圈子徽章),名字只留给读屏。
   const label =
     icon.type === 'SYSTEM' ? formatIconLabel(icon) : CIRCLE_BADGE_LABEL;
-  const labelColor = tone === 'member' ? colors.white : colors.text;
   const isSmallCompact = compact && compactSize === 'small';
   // 显式 size（详情大图）优先：按该尺寸原生定尺寸、不做 transform 放大 —— 小图上采样才是糊的根因。
   const hasExplicitSize = size !== undefined;
-  const showLabel = !compact && !hasExplicitSize;
   // 四态尺寸（default / compact / smallCompact × system-badge / circle）用查表替代
   // 深层嵌套三元，可读且易扩展。显式 size 分支直接用 size（此处已收窄为 number）。
   const shellSizeStyle =
@@ -373,7 +366,11 @@ export function UserIconBadge({
   ];
 
   return (
-    <View style={[s.item, dense ? s.denseItem : null]}>
+    <View
+      style={[s.item, dense ? s.denseItem : null]}
+      accessible
+      accessibilityLabel={label}
+    >
       <View
         style={[
           hasSystemBadgeImage ? s.systemBadgeShell : s.badgeFrame,
@@ -451,14 +448,6 @@ export function UserIconBadge({
           </View>
         )}
       </View>
-      {showLabel ? (
-        <Text
-          style={[s.label, dense ? s.denseLabel : null, { color: labelColor }]}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -467,7 +456,6 @@ function UserIconRowComponent({
   icons,
   compact = false,
   compactSize = 'default',
-  tone = 'default',
   maxVisible = 3,
   showOverflowCount = true,
 }: Props) {
@@ -493,7 +481,6 @@ function UserIconRowComponent({
           icon={icon}
           compact={compact}
           compactSize={compactSize}
-          tone={tone}
         />
       ))}
       {hiddenCount > 0 ? (

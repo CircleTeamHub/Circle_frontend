@@ -115,7 +115,7 @@ export default function CreateTempChatModal({
         backgroundColor: 'rgba(0,0,0,0.45)',
       },
       card: {
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
         paddingBottom: insets.bottom + Spacing.lg,
       },
       handle: {
@@ -131,7 +131,7 @@ export default function CreateTempChatModal({
         ...Typography.caption,
       },
       titleInput: {
-        backgroundColor: colors.surface,
+        backgroundColor: colors.surfaceMuted,
         color: colors.text,
         ...Typography.bodyRegular,
       },
@@ -175,7 +175,7 @@ export default function CreateTempChatModal({
       style={[
         s.chip,
         {
-          backgroundColor: selected ? colors.primary : colors.surface,
+          backgroundColor: selected ? colors.primary : colors.surfaceMuted,
         },
       ]}
       onPress={onPress}

@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+import { useTheme } from '@/theme';
 
 interface BottomSheetModalProps {
   visible: boolean;
@@ -102,6 +103,10 @@ export function BottomSheetModal({
   statusBarTranslucent = true,
   avoidKeyboard = true,
 }: BottomSheetModalProps) {
+  const { colors } = useTheme();
+  // 默认就压暗背后的页面:面板常和页面同底色,没有蒙层两者分不出边界。
+  // 调用方传了 backdropStyle 的照旧覆盖。
+  const d = useMemo(() => ({ backdrop: { backgroundColor: colors.overlay } }), [colors.overlay]);
   const progress = useRef(new Animated.Value(1)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const onCloseRef = useRef(onClose);
@@ -250,7 +255,8 @@ export function BottomSheetModal({
       statusBarTranslucent={statusBarTranslucent}
     >
       <Pressable
-        style={[s.backdrop, backdropStyle]}
+        testID="bottom-sheet-backdrop"
+        style={[s.backdrop, d.backdrop, backdropStyle]}
         onPress={closeOnBackdropPress ? onClose : undefined}
       >
         {/* 面板里有输入框时，键盘弹起把整个面板顶上去；蒙层仍铺满全屏。

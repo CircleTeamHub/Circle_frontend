@@ -7,6 +7,10 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { InboxTabsHeader } from '@/features/contacts/components/InboxTabsHeader';
 import { NewGroupsInboxList } from '@/features/contacts/components/NewGroupsInboxList';
 import { filterFriendInboxRows } from '@/features/contacts/utils/friend-inbox-filter';
+import {
+  readFriendActivitiesCache,
+  writeFriendActivitiesCache,
+} from '@/features/contacts/friend-activities-cache';
 import { markFriendActivitiesRead } from '@/features/contacts/utils/mark-friend-activities-read';
 import {
   buildFriendActivityInboxRows,
@@ -17,9 +21,12 @@ import { getFriendActivityDetailHref } from '@/features/user/utils/routes';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 import {
   fetchFriendActivities,
+  friendsMutatedSince,
   type FriendActivity,
 } from '@/services/api/friends';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { useAuthStore } from '@/stores/authStore';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
@@ -76,13 +83,16 @@ export default function NewFriendsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t, i18n } = useTranslation();
-  const [activities, setActivities] = useState<FriendActivity[]>([]);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  // null = 这个账号还没有能用的列表,只有这时才整页转圈;上次拉到的先画出来,聚焦时后台重拉。
+  const [activities, setActivities] = useState<FriendActivity[] | null>(() =>
+    readFriendActivitiesCache(sessionEpoch, friendsMutatedSince),
+  );
   // 页签是主轴：好友动态和入圈申请是两批数据、两套接口，分开收才不会互相淹没。
   const [activeTab, setActiveTab] = useState<'friends' | 'groups'>('friends');
   const groupAdmissionsUnread = useTabBadgeStore(s => s.groupAdmissionsUnread);
   // 关键词跨页签保留：用户常常只记得名字、不记得那是个人还是圈子。
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [navigating, setNavigating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -91,33 +101,34 @@ export default function NewFriendsScreen() {
   const refreshUnreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.refresh,
   );
+  const unreadFriendActivityCount = useFriendActivityUnreadStore(
+    (state) => state.count,
+  );
 
-  const loadActivities = useCallback(async (signal?: { cancelled: boolean }) => {
-    const isCancelled = () => Boolean(signal?.cancelled) || !mountedRef.current;
-    setLoading(true);
+  // 从详情页回来:刚拉过、之后没有好友写请求(已读/同意/拒绝都算)、也没有新动态(未读数
+  // 没变),就不重拉。
+  const reloadGate = useFocusReloadGate({
+    key: unreadFriendActivityCount,
+    mutatedSince: friendsMutatedSince,
+  });
+
+  const loadActivities = useCallback(async () => {
+    const startedAt = Date.now();
+    // 清掉上次的错误:没有列表时重试期间转圈,有列表时错误本来也不展示。
+    setError(null);
 
     try {
       const nextActivities = await fetchFriendActivities();
-      if (isCancelled()) return;
+      // 页面已经退出也照样记下:下次进来就不用再转圈。
+      writeFriendActivitiesCache(sessionEpoch, nextActivities, startedAt);
+      if (!mountedRef.current) return;
       setActivities(nextActivities);
-      setError(null);
+      reloadGate.markLoaded(startedAt);
     } catch {
-      if (isCancelled()) return;
+      if (!mountedRef.current) return;
       setError(t('contacts.friendActivity.loadFailed'));
-    } finally {
-      if (!isCancelled()) {
-        setLoading(false);
-      }
     }
-  }, [t]);
-
-  useEffect(() => {
-    const signal = { cancelled: false };
-    loadActivities(signal);
-    return () => {
-      signal.cancelled = true;
-    };
-  }, [loadActivities]);
+  }, [reloadGate, sessionEpoch, t]);
 
   useEffect(
     () => () => {
@@ -128,9 +139,10 @@ export default function NewFriendsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!reloadGate.shouldSkip()) void loadActivities();
       void refreshUnreadFriendActivityCount();
       void markMatchingTargetNotificationsRead({ friendRequests: true });
-    }, [refreshUnreadFriendActivityCount]),
+    }, [loadActivities, refreshUnreadFriendActivityCount, reloadGate]),
   );
 
   const handleRefreshActivities = useCallback(async () => {
@@ -184,7 +196,7 @@ export default function NewFriendsScreen() {
   );
 
   const inboxRows = useMemo(
-    () => filterFriendInboxRows(buildFriendActivityInboxRows(activities), query),
+    () => filterFriendInboxRows(buildFriendActivityInboxRows(activities ?? []), query),
     [activities, query],
   );
 
@@ -216,6 +228,7 @@ export default function NewFriendsScreen() {
                 if (unreadCount > 0) {
                   const readIds = await markFriendActivitiesRead(item.unreadActivityIds);
                   setActivities((current) =>
+                    current &&
                     current.map((activity) =>
                       readIds.includes(activity.id)
                         ? { ...activity, readAt: new Date().toISOString() }
@@ -256,12 +269,7 @@ export default function NewFriendsScreen() {
     [d, i18n.language, inboxRows.length, navigating, router, t],
   );
 
-  const emptyState = loading ? (
-    <View style={s.stateBlock}>
-      <ActivityIndicator color={colors.primary} />
-      <Text style={d.stateText}>{t('contacts.friendActivity.loading')}</Text>
-    </View>
-  ) : error ? (
+  const emptyState = error ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
       <Pressable
@@ -272,6 +280,11 @@ export default function NewFriendsScreen() {
       >
         <Text style={d.retryButtonText}>{t('common.retry')}</Text>
       </Pressable>
+    </View>
+  ) : activities === null ? (
+    <View style={s.stateBlock}>
+      <ActivityIndicator color={colors.primary} />
+      <Text style={d.stateText}>{t('contacts.friendActivity.loading')}</Text>
     </View>
   ) : (
     <View style={s.stateBlock}>

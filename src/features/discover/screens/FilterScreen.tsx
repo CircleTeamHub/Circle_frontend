@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
+import { PlaneLogoIcon } from '@/components/app/plane-logo-icon';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useCirclesStore } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
@@ -37,10 +38,11 @@ const s = StyleSheet.create({
     paddingVertical: Spacing.md,
     gap: Spacing.md,
   },
+  // 圆角方块 + 实心主色:原来是 colors.text 实心圆配白色图标,深色模式下两者同为白色,图标直接看不见。
   sectionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -52,7 +54,7 @@ const s = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.sm,
     paddingBottom: Spacing.md,
-    paddingLeft: 60,
+    paddingLeft: 56,
   },
   chip: {
     flexDirection: 'row',
@@ -72,10 +74,10 @@ const s = StyleSheet.create({
   },
   divider: {
     height: 1,
-    marginLeft: 60,
+    marginLeft: 56,
   },
   emptyHint: {
-    paddingLeft: 60,
+    paddingLeft: 56,
     paddingBottom: Spacing.md,
   },
   footer: {
@@ -87,11 +89,14 @@ const s = StyleSheet.create({
   actionBtn: {
     flex: 1,
     height: 48,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: Spacing.xs,
+  },
+  actionBtnDisabled: {
+    opacity: 0.4,
   },
 });
 
@@ -167,6 +172,8 @@ export default function FilterScreen() {
   const handleClear = useCallback(() => {
     clearDraft();
   }, [clearDraft]);
+  const hasDraft =
+    draftCircleIds.length > 0 || draftCities.length > 0 || draftNationwide;
 
   const handleSave = useCallback(() => {
     saveFilter();
@@ -183,7 +190,7 @@ export default function FilterScreen() {
     () => ({
       container: { backgroundColor: colors.background },
       card: { backgroundColor: colors.surface },
-      sectionIcon: { backgroundColor: colors.text },
+      sectionIcon: { backgroundColor: colors.primary },
       sectionTitle: {
         color: colors.text,
         ...Typography.h3,
@@ -202,11 +209,14 @@ export default function FilterScreen() {
         ...Typography.caption,
       },
       divider: { backgroundColor: colors.divider },
+      // 清空是次要操作:描边按钮,和主操作「保存」分出主次。
       clearBtn: {
-        backgroundColor: colors.primary,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.surfaceBorder,
       },
       clearText: {
-        color: colors.white,
+        color: colors.text,
         ...Typography.body,
         fontWeight: '600' as const,
       },
@@ -224,10 +234,7 @@ export default function FilterScreen() {
 
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
-      <NavHeader
-        title={t('discover.filter.title')}
-        rightIcon="help-circle-outline"
-      />
+      <NavHeader title={t('discover.filter.title')} />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -236,8 +243,9 @@ export default function FilterScreen() {
       >
         <View style={[s.card, d.card]}>
           <Pressable style={s.sectionRow} onPress={handleOpenCircles}>
+            {/* 和底栏「圈子」同一个纸飞机标。 */}
             <View style={[s.sectionIcon, d.sectionIcon]}>
-              <Ionicons name="apps" size={22} color={colors.white} />
+              <PlaneLogoIcon size={24} color={colors.white} filled />
             </View>
             <Text style={[s.sectionTitle, d.sectionTitle]}>
               {t('discover.filter.selectCircles')}
@@ -276,7 +284,7 @@ export default function FilterScreen() {
 
           <Pressable style={s.sectionRow} onPress={handleOpenCities}>
             <View style={[s.sectionIcon, d.sectionIcon]}>
-              <Ionicons name="business" size={22} color={colors.white} />
+              <Ionicons name="location" size={20} color={colors.white} />
             </View>
             <Text style={[s.sectionTitle, d.sectionTitle]}>
               {t('discover.filter.selectRegions')}
@@ -336,15 +344,22 @@ export default function FilterScreen() {
 
       <View style={[s.footer, { paddingBottom: insets.bottom || Spacing.md }]}>
         <Pressable
-          style={[s.actionBtn, d.clearBtn]}
+          style={[s.actionBtn, d.clearBtn, hasDraft ? null : s.actionBtnDisabled]}
           onPress={handleClear}
+          disabled={!hasDraft}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !hasDraft }}
         >
-          {/* primary 实心按钮：图标与 clearText 同为白色，不能走 iconAccent。 */}
-          <Ionicons name="trash-outline" size={18} color={colors.white} />
+          {/* 描边按钮:图标与 clearText 同为 colors.text。 */}
+          <Ionicons name="trash-outline" size={18} color={colors.text} />
           <Text style={d.clearText}>{t('discover.filter.clear')}</Text>
         </Pressable>
-        <Pressable style={[s.actionBtn, d.saveBtn]} onPress={handleSave}>
-          <Ionicons name="save-outline" size={18} color={colors.white} />
+        <Pressable
+          style={[s.actionBtn, d.saveBtn]}
+          onPress={handleSave}
+          accessibilityRole="button"
+        >
+          <Ionicons name="checkmark" size={20} color={colors.white} />
           <Text style={d.saveText}>{t('discover.filter.save')}</Text>
         </Pressable>
       </View>

@@ -50,7 +50,8 @@ test('one search box filters whichever tab is showing', () => {
   const list = read('src/features/groups/GroupAdmissionsList.tsx');
 
   assert.match(screen, /contacts\.friendActivity\.searchPlaceholder/);
-  assert.match(screen, /filterFriendInboxRows\(buildFriendActivityInboxRows\(activities\), query\)/);
+  // activities 为 null = 还没有列表(转圈中),按空表过滤。
+  assert.match(screen, /filterFriendInboxRows\(buildFriendActivityInboxRows\(activities \?\? \[\]\), query\)/);
   assert.match(screen, /<NewGroupsInboxList query=\{query\} \/>/);
   assert.match(list, /query\.trim\(\)\.toLocaleLowerCase\(\)/);
 });

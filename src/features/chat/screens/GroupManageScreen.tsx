@@ -45,6 +45,12 @@ import {
   useGroupAdminActions,
 } from '@/features/chat/hooks/use-group-admin-actions';
 import { groupMemberDisplayName } from '@/features/chat/group-member-display';
+import {
+  evictGroupInfoCache,
+  readGroupInfoCache,
+  writeGroupInfoCache,
+} from '@/features/chat/group-info-cache';
+import { useAuthStore } from '@/stores/authStore';
 import { fetchCircleDetail } from '@/services/api/circles';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import {
@@ -133,11 +139,25 @@ export default function GroupManageScreen() {
       state.conversations.find((candidate) => candidate.id === conversationID)
         ?.ownerId ?? null,
   );
-  const [members, setMembers] = useState<ChatMemberDto[]>([]);
-  const [circleRole, setCircleRole] = useState<GroupRole | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedCircleRole = useChatStore(
+    (state) =>
+      state.conversations.find((candidate) => candidate.id === conversationID)
+        ?.myRole ?? null,
+  );
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  // 与 ChatInfoScreen.groupDataKey 同一套键:两页共用一份成员缓存。
+  const groupDataKey = groupID ? `circle:${groupID}` : `standalone:${conversationID}`;
+  // 看过这个群(本页或群聊信息页)就先用上次的成员画出来,聚焦回调照常后台重拉;
+  // 一份都没有才整屏转圈。只读挂载那一刻,之后以本页拉到的为准。
+  const [cachedMembers] = useState(
+    () => readGroupInfoCache(sessionEpoch, groupDataKey)?.members,
+  );
+  const [members, setMembers] = useState<ChatMemberDto[]>(cachedMembers ?? []);
+  // undefined = 本次进入还没查回圈子详情。
+  const [circleRole, setCircleRole] = useState<GroupRole | null | undefined>(undefined);
+  const [loading, setLoading] = useState(!cachedMembers);
   const [error, setError] = useState(false);
-  const loadedRef = useRef(false);
+  const loadedRef = useRef(Boolean(cachedMembers));
   // 从入群审核、扩容等页面回来:30 秒内、没有群/圈子写请求、实时字段没变,就不再拉成员
   // 目录 + 圈子详情 + 会话。本页的管理操作都是群写请求,做过就必重拉。
   const conversationReloadKey = useChatStore((state) =>
@@ -185,11 +205,19 @@ export default function GroupManageScreen() {
       state.conversations.find((candidate) => candidate.id === conversationID)
         ?.policies ?? null,
   );
+  // 圈子群:圈子详情第一次查回来之前,先按会话 DTO 上的 myRole 画(与 ChatInfoScreen.
+  // cachedCircleRole 同款)。只影响展示 —— 管理动作执行前都现场重查角色(fail-closed,
+  // 见 useGroupAdminActions),写接口服务端鉴权;查回来就以它为准。
   const selfRole: GroupRole | null = isStandaloneGroup
     ? resolveStandaloneSelfRole({ members, currentUserID, ownerId })
-    : circleRole;
+    : circleRole === undefined
+      ? cachedCircleRole
+      : circleRole;
   const isOwner = selfRole === 'OWNER';
   const canManage = isGroupManager(selfRole);
+  // 圈子详情没回来、DTO 上也没有可借的角色(从圈子详情直进):先转圈,别先下「无权管理」的结论。
+  const awaitingCircleRole =
+    !isStandaloneGroup && circleRole === undefined && !canManage;
 
   const load = useCallback(async () => {
     if (!conversationID) {
@@ -218,6 +246,7 @@ export default function GroupManageScreen() {
         groupID ? fetchCircleDetail(groupID) : Promise.resolve(null),
       ]);
       setMembers(directory);
+      writeGroupInfoCache(sessionEpoch, groupDataKey, { members: directory });
       setCircleRole(
         detail && detail.myStatus === 'ACTIVE' ? detail.myRole : null,
       );
@@ -226,12 +255,14 @@ export default function GroupManageScreen() {
       loadedRef.current = true;
       reloadGate.markLoaded(startedAt);
     } catch (err) {
+      // 分不清是被移出群/撤权还是网络抖动:缓存一并作废,下次进来重新拉。
+      evictGroupInfoCache(sessionEpoch, groupDataKey);
       setError(true);
       reportHandledFailure('groupManage', 'load', err);
     } finally {
       setLoading(false);
     }
-  }, [conversationID, groupID, reloadGate]);
+  }, [conversationID, groupDataKey, groupID, reloadGate, sessionEpoch]);
 
   useFocusEffect(
     useCallback(() => {
@@ -257,14 +288,19 @@ export default function GroupManageScreen() {
     isStandaloneGroup,
     currentUserID,
     selfRole,
-    onMemberUpdated: (userId, patch) =>
+    // 本页就地改了成员:缓存作废(与 ChatInfoScreen 同口径),下次进来不先显示改之前的样子。
+    onMemberUpdated: (userId, patch) => {
+      evictGroupInfoCache(sessionEpoch, groupDataKey);
       setMembers((current) =>
         current.map((member) =>
           member.userId === userId ? { ...member, ...patch } : member,
         ),
-      ),
-    onMemberRemoved: (userId) =>
-      setMembers((current) => current.filter((member) => member.userId !== userId)),
+      );
+    },
+    onMemberRemoved: (userId) => {
+      evictGroupInfoCache(sessionEpoch, groupDataKey);
+      setMembers((current) => current.filter((member) => member.userId !== userId));
+    },
     onError: openActionError,
   });
 
@@ -646,7 +682,7 @@ export default function GroupManageScreen() {
   );
 
   let body: React.ReactNode;
-  if (loading) {
+  if (loading || (awaitingCircleRole && !error)) {
     body = (
       <View style={s.center}>
         <ActivityIndicator color={colors.primary} />

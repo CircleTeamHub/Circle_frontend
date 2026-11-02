@@ -798,7 +798,7 @@
       "sending": "Enviando",
       "sendFailed": "Fallido",
       "read": "Leído",
-      "unread": "No leído",
+      "sent": "Enviado",
       "delivered": "Entregado",
       "edited": "(editado)"
     },
@@ -1539,7 +1539,9 @@
     "leaveConfirm": "Salir",
     "leaveFailedTitle": "Error al salir",
     "leaveMessage": "¿Salir de este círculo?",
-    "leaveTitle": "Salir del círculo"
+    "leaveTitle": "Salir del círculo",
+    "viewPosts": "Ver publicaciones del círculo",
+    "postsTitle": "Publicaciones del círculo"
   },
   "myIcons": {
     "title": "Mis insignias",
@@ -1687,8 +1689,8 @@
     "createCircle": "Crear círculo",
     "joined": "Unido",
     "myCreated": "Creados",
-    "myManaged": "Gestionados",
-    "myApplied": "Solicitados",
+    "myManaged": "Gestionar círculos",
+    "myApplied": "Mis solicitudes",
     "noCircles": "Sin círculos",
     "newPosts": "{{count}} publicaciones nuevas, toca para ver",
     "noMoments": "Aún no hay momentos",
@@ -1760,7 +1762,9 @@
       "fancyNumber": "ID premium",
       "vip": "VIP{{level}}+",
       "credit": "Crédito {{score}}+"
-    }
+    },
+    "loadPostsFailed": "No se pudieron cargar las publicaciones. Inténtalo más tarde.",
+    "loadMorePostsFailed": "No se pudieron cargar más publicaciones. Toca para reintentar."
   },
   "plaza": {
     "manageSignups": "{{count}} inscritos",

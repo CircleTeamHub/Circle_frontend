@@ -50,7 +50,7 @@ function PickerColumnInner<T extends string | number>({
   return (
     <View style={s.column}>
       <ScrollView
-        style={[s.list, { backgroundColor: colors.surface, borderColor: colors.surfaceBorder }]}
+        style={[s.list, { backgroundColor: colors.surfaceMuted, borderColor: colors.surfaceBorder }]}
         nestedScrollEnabled
       >
         {options.map((option) => {

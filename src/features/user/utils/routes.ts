@@ -724,6 +724,17 @@ export function getCircleEditHref(scope: CircleScope, circleId: string): Href {
   };
 }
 
+export function getCirclePostsHref(
+  scope: CircleScope,
+  circleId: string,
+  circleName: string,
+): Href {
+  return {
+    pathname: `/(tabs)/${scope}/circle/[id]/posts` as const,
+    params: { id: circleId, name: circleName },
+  };
+}
+
 export function getCircleAdminHref(scope: CircleScope, circleId: string): Href {
   return {
     pathname: `/(tabs)/${scope}/circle/[id]/admin` as const,

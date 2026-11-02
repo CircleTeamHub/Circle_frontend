@@ -1,6 +1,7 @@
 import { GroupInvitationBubble } from '@/features/groups/GroupInvitationBubble';
 import { getGroupEntryHref } from '@/features/groups/routes';
 import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetry';
+import { messageRowKey } from '@/chat-core/local-message-id';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { memo, type ReactElement, useCallback } from 'react';
 import { type ChatMessage } from '@/types';
@@ -467,10 +468,8 @@ export function useMessageRenderer({
     [renderMessage, handleRetryMessage],
   );
 
-  const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
-
   return {
     renderItem,
-    keyExtractor,
+    keyExtractor: messageRowKey,
   };
 }

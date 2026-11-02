@@ -26,6 +26,11 @@ import {
   useChatStore,
   viewerTypingPolicyFromPrivacy,
 } from '@/chat-core/store';
+import {
+  readPrivacySettingsCache,
+  writePrivacySettingsCache,
+} from '@/features/profile/privacy-settings-cache';
+import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 type ActiveSheet =
@@ -115,7 +120,11 @@ export default function PrivacySettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const [settings, setSettings] = useState<PrivacySettings | null>(null);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  // 先画这个账号上次拿到的真实设置,没有才退回默认值;后台照常重拉,拉完之前仍不可拨。
+  const [settings, setSettings] = useState<PrivacySettings | null>(() =>
+    readPrivacySettingsCache(sessionEpoch),
+  );
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -149,6 +158,7 @@ export default function PrivacySettingsScreen() {
         return;
       }
       setSettings(loaded);
+      writePrivacySettingsCache(sessionEpoch, loaded);
       // 服务端不下发全局阅后即焚的开启时间：store 在档位变化时记本机观察到的时刻。
       useChatStore
         .getState()
@@ -166,7 +176,7 @@ export default function PrivacySettingsScreen() {
     } finally {
       if (request === privacyRequestSequence.current) setLoading(false);
     }
-  }, [t]);
+  }, [sessionEpoch, t]);
 
   useEffect(() => {
     void loadSettings();
@@ -189,6 +199,7 @@ export default function PrivacySettingsScreen() {
         return;
       }
       setSettings(updated);
+      writePrivacySettingsCache(sessionEpoch, updated);
       // 服务端不下发全局阅后即焚的开启时间：store 在档位变化时记本机观察到的时刻。
       useChatStore
         .getState()

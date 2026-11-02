@@ -10,7 +10,8 @@ test('circle detail keeps scroll position when returning from sub-pages', () => 
 
   // focus 回本页必须静默刷新：loading 分支会卸载整个 ScrollView，
   // 重挂后滚动位置归零（用户从入圈审核返回被弹回顶部）。
-  assert.match(src, /const hasLoadedRef = useRef\(false\)/);
+  // 从内存缓存画出来的也算已加载（见 circle-detail-cache）：再进不整页转圈。
+  assert.match(src, /const hasLoadedRef = useRef\(circle !== null\)/);
   assert.match(src, /hasLoadedRef\.current = true/);
   assert.match(
     src,

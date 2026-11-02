@@ -24,6 +24,12 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { createCircleChatConversation, fetchChatMembers } from '@/chat-core/api';
 import type { ChatConversationDto, ChatMemberDto } from '@/chat-core/protocol';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
+import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
+import {
+  evictGroupInfoCache,
+  readGroupInfoCache,
+  writeGroupInfoCache,
+} from '@/features/chat/group-info-cache';
 import { allowsMemberProfiles } from '@/features/chat/utils/group-policy';
 import {
   getUserProfileHref,
@@ -32,6 +38,7 @@ import {
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { useChatStore } from '@/chat-core/store';
+import { useAuthStore } from '@/stores/authStore';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -87,9 +94,24 @@ export default function SearchGroupMembersScreen() {
     !groupID && typeof params.conversationID === 'string' ? params.conversationID : '';
   const isStandaloneGroup = Boolean(standaloneConversationID);
   const currentUserID = useChatStore((state) => state.currentUserId);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  // 临时房也从「群成员」行进来(只带会话 id),按会话类型认出它,好和群聊信息页用同一个键。
+  const isTempRoom = useChatStore(
+    (state) =>
+      isStandaloneGroup &&
+      state.conversations.find((item) => item.id === standaloneConversationID)
+        ?.type === 'TEMP',
+  );
+  // 与 ChatInfoScreen.groupDataKey 同一套键:两页共用一份成员缓存。
+  const groupDataKey = groupID
+    ? `circle:${groupID}`
+    : `${isTempRoom ? 'temp' : 'standalone'}:${standaloneConversationID}`;
   const [query, setQuery] = useState('');
-  const [members, setMembers] = useState<ChatMemberDto[]>([]);
-  const [membersLoading, setMembersLoading] = useState(false);
+  // null = 还没有可显示的名单。看过这个群就先用上次的名单画出来,下面照常后台重拉;
+  // 只读挂载那一刻 —— 之后键变了(会话晚到 store 认出是临时房)也不清空已显示的内容。
+  const [members, setMembers] = useState<ChatMemberDto[] | null>(
+    () => readGroupInfoCache(sessionEpoch, groupDataKey)?.members ?? null,
+  );
   // 圈子群的会话 DTO(取或建的结果):从圈子详情等入口进来时 store 里可能还没有
   // 该会话,策略开关与会话 id 都以它兜底 —— 与 ChatInfoScreen.groupConversation 同款。
   const [circleConversation, setCircleConversation] =
@@ -124,7 +146,7 @@ export default function SearchGroupMembersScreen() {
       null,
   );
   const {
-    canViewMembers: circleAuthorized,
+    canViewMembers: liveCircleAuthorized,
     selfMember: circleSelfMember,
     resolved: accessResolved,
     revalidate,
@@ -136,6 +158,13 @@ export default function SearchGroupMembersScreen() {
     active: isFocused,
     roleHint: cachedRole,
   });
+  // 活体角色第一次查回来之前(一次 /circle/:id 往返),先按会话 DTO 上的 myRole 判
+  // (与 ChatInfoScreen.cachedCircleRole 同款):不然有缓存也得干等这一轮。只影响展示 ——
+  // 目录接口服务端鉴权,点开资料前还会 fail-closed 现场重查;活体结果一到就以它为准。
+  const circleAuthorized = accessResolved
+    ? liveCircleAuthorized
+    : canViewCircleMembers(cachedRole) ||
+      (cachedRole === 'MEMBER' && membersCanViewRoster === true);
   const authorized = isStandaloneGroup || circleAuthorized;
   // 「成员可查看他人资料」策略:两种群同一判据(群主/管理员豁免,普通成员按开关),
   // 与 ChatInfoScreen / ChatDetailScreen 共用 allowsMemberProfiles —— 这个策略只在
@@ -162,10 +191,10 @@ export default function SearchGroupMembersScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    setMembersLoading(true);
     // 圈子成员角色与「显示群成员」策略是两道闸。即使当前普通成员还
     // 没权限,也必须先取到会话 DTO,否则策略打开后 effect 永远不会重跑。
     // 独立群聊直接按会话 id 取成员;圈子群先取/建会话再按策略决定是否拉目录。
+    // 重拉期间不清空已显示的名单(后台刷新),结果回来再整体替换。
     const loadMembers = isStandaloneGroup
       ? fetchChatMembers(standaloneConversationID)
       : createCircleChatConversation(groupID).then((conversation) => {
@@ -175,32 +204,50 @@ export default function SearchGroupMembersScreen() {
             useChatStore.getState?.().upsertConversation?.(conversation);
           }
           if (!circleAuthorized && conversation.policies?.membersCanViewRoster !== true) {
-            return [] as ChatMemberDto[];
+            return null;
           }
           return fetchChatMembers(conversation.id);
         });
     loadMembers
       .then((nextMembers) => {
-        if (!cancelled) setMembers(nextMembers);
+        if (cancelled) return;
+        if (nextMembers) {
+          writeGroupInfoCache(sessionEpoch, groupDataKey, { members: nextMembers });
+        } else {
+          // 没有目录权限:缓存里的名单也不能再给他看(群聊信息页同一份)。
+          evictGroupInfoCache(sessionEpoch, groupDataKey);
+        }
+        setMembers(nextMembers);
       })
       .catch(() => {
-        if (!cancelled) setMembers([]);
-      })
-      .finally(() => {
-        if (!cancelled) setMembersLoading(false);
+        if (cancelled) return;
+        // 分不清是被撤权还是网络抖动:按撤权处理,下次进来重新拉。
+        evictGroupInfoCache(sessionEpoch, groupDataKey);
+        setMembers([]);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [authorized, circleAuthorized, groupID, isStandaloneGroup, standaloneConversationID]);
+  }, [
+    authorized,
+    circleAuthorized,
+    groupDataKey,
+    groupID,
+    isStandaloneGroup,
+    sessionEpoch,
+    standaloneConversationID,
+  ]);
 
-  const loading = !accessResolved || membersLoading;
+  // 有权看:有名单(缓存或刚拉到的)就直接画,一份都没有才转圈。无权:活体角色查回来
+  // 之前不下结论(可能马上就有权了),先转圈;查回来仍无权才显示「无权查看」。
+  const loading = authorized ? members === null : !accessResolved;
 
   const trimmedQuery = query.trim().toLowerCase();
   // 搜索也认群昵称:群里认得的是它,只按账号昵称搜会搜不到人。
   const filteredMembers = useMemo(
-    () => members.filter((member) => groupMemberMatchesQuery(member, trimmedQuery)),
+    () =>
+      (members ?? []).filter((member) => groupMemberMatchesQuery(member, trimmedQuery)),
     [members, trimmedQuery],
   );
 

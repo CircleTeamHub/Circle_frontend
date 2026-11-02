@@ -58,12 +58,12 @@ export default function ShareTempChatModal({
     () => ({
       backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
       card: {
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
         paddingBottom: insets.bottom + Spacing.lg,
       },
       handle: { backgroundColor: colors.surfaceBorder },
       heading: { color: colors.text, ...Typography.h3 },
-      linkBox: { backgroundColor: colors.surface },
+      linkBox: { backgroundColor: colors.surfaceMuted },
       linkText: { color: colors.textSecondary, ...Typography.small },
       copyButton: { backgroundColor: colors.primary },
       copyText: {

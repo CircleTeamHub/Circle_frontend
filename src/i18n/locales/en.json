@@ -911,7 +911,7 @@
       "sending": "Sending",
       "sendFailed": "Failed",
       "read": "Read",
-      "unread": "Unread",
+      "sent": "Sent",
       "delivered": "Delivered",
       "edited": "(edited)"
     },
@@ -1132,8 +1132,8 @@
     "createCircle": "Create Circle",
     "joined": "Joined",
     "myCreated": "Created",
-    "myManaged": "Managed",
-    "myApplied": "Applied",
+    "myManaged": "Manage circles",
+    "myApplied": "My applications",
     "noCircles": "No circles",
     "newPosts": "{{count}} new posts, tap to view",
     "noMoments": "No moments yet",
@@ -1205,7 +1205,9 @@
       "fancyNumber": "Fancy ID",
       "vip": "VIP{{level}}+",
       "credit": "Credit {{score}}+"
-    }
+    },
+    "loadPostsFailed": "Couldn’t load posts. Please try again later.",
+    "loadMorePostsFailed": "Couldn’t load more posts. Tap to retry."
   },
   "circle": {
     "inviteVerifiers": "Invite friends to verify ({{approved}}/{{required}})",
@@ -1331,7 +1333,9 @@
     "leaveConfirm": "Leave",
     "leaveFailedTitle": "Failed to leave",
     "leaveMessage": "Leave this circle?",
-    "leaveTitle": "Leave circle"
+    "leaveTitle": "Leave circle",
+    "viewPosts": "View circle posts",
+    "postsTitle": "Circle posts"
   },
   "plaza": {
     "manageSignups": "{{count}} signed up",

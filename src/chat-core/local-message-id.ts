@@ -17,3 +17,15 @@ export const LOCAL_MESSAGE_ID_PREFIX = 'local:';
 export function isLocalMessageId(id: string | null | undefined): boolean {
   return typeof id === 'string' && id.startsWith(LOCAL_MESSAGE_ID_PREFIX);
 }
+
+/**
+ * 消息列表的行 key。乐观气泡 ack 后 id 从 local:<d> 换成服务端真 id,按 id 做 key
+ * 会让这一行整行卸载重挂(头像图片重新加载、状态字重画 —— 每发一条消息就闪一下)。
+ * d 从发送、确认到回声全程不变,mergeMessages 也按 d 去重,同一时间线里不会重复。
+ */
+export function messageRowKey(message: {
+  id: string;
+  deliveryId?: string;
+}): string {
+  return message.deliveryId ? `d:${message.deliveryId}` : message.id;
+}

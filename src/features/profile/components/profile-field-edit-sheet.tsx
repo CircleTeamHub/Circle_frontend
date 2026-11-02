@@ -200,7 +200,9 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
     <View
       style={[
         s.sheet,
-        { backgroundColor: colors.background, paddingBottom: insets.bottom + Spacing.lg },
+        // 面板用 surface、里面的选项/输入框降一级用 surfaceMuted:面板底若和页面一样是
+        // background,深色下纯黑叠纯黑,蒙层压不出边界。
+        { backgroundColor: colors.surface, paddingBottom: insets.bottom + Spacing.lg },
       ]}
     >
       <View style={[s.handle, { backgroundColor: colors.surfaceBorder }]} />
@@ -225,7 +227,7 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
       </View>
 
       {field.editorType === 'gender' ? (
-        <View style={[s.optionList, { backgroundColor: colors.surface }]}>
+        <View style={[s.optionList, { backgroundColor: colors.surfaceMuted }]}>
           {genderOptions.map((option, index) => {
             const isActive = formatProfileFieldValue(field.id, value) === option;
             return (
@@ -269,7 +271,7 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
             s.input,
             Typography.bodyRegular,
             {
-              backgroundColor: colors.surface,
+              backgroundColor: colors.surfaceMuted,
               borderColor: colors.surfaceBorder,
               color: colors.text,
             },
