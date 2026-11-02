@@ -1,13 +1,15 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   Platform,
   Pressable,
   StyleSheet,
+  type StyleProp,
   type ViewStyle,
   type TextStyle,
 } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { CommonActions } from '@react-navigation/native';
 import { type BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useDesktopSplitLayout } from '@/hooks/use-desktop-split-layout';
@@ -95,22 +97,32 @@ const TAB_TEST_IDS: Record<string, string> = {
 };
 
 // —— bar 几何（全部自绘，不再受 React Navigation BottomTabItem 内层 padding 影响）——
+// 比例照用户给的参考稿量出来(440pt 宽屏上):左边一条胶囊放常规 tab,右边一个和它
+// 等高、中线对齐的独立圆按钮放圈子;左 20 / 间隔 16 / 右 16,下沿压在安全区上沿。
 // 隐藏时把整条 bar 挪出屏幕：bar 高 + 底距 + 阴影余量。
 const TAB_BAR_HIDDEN_OFFSET = 140;
-const TAB_BAR_HEIGHT = 50;
+const TAB_BAR_HEIGHT = 60;
 const TAB_BAR_RADIUS = TAB_BAR_HEIGHT / 2; // 整条 bar 是完整胶囊，两端半圆
-const TAB_BAR_MARGIN_H = 32; // 左右外边距：再缩一圈后留白更多，bar 更窄
-const TAB_BAR_MARGIN_B = 2; // 距安全区底部（浮动）
-const TAB_BAR_SAFE_AREA_OVERLAP = 14; // 向下吃掉部分 iOS home indicator 安全区
-const TAB_BAR_PAD_H = 4; // 内边距：首尾 tab 内容不贴 bar 内沿
-const TAB_BAR_PAD_V = 4; // 上下内边距：tab 内容高 = bar 高 - 8
+const TAB_BAR_MARGIN_LEFT = 20;
+const TAB_BAR_MARGIN_RIGHT = 16;
+const TAB_FEATURED_GAP = 16; // bar 与右侧圆按钮之间
+const TAB_BAR_MIN_BOTTOM = 12; // 没有 home indicator 安全区的机型离屏幕底的距离
+const TAB_BAR_PAD_H = 5; // 内边距：选中底离 bar 内沿 5
+const TAB_BAR_PAD_V = 5;
 const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V * 2;
 const TAB_PILL_RADIUS = TAB_PILL_HEIGHT / 2; // 只裁剪单个 tab 的按压反馈，不绘制背景
-const TAB_PILL_GAP = 2; // 每格 tab 左右留白，互不相贴
-const TAB_ICON_SIZE = 18;
-// 圈子 tab 只放纸飞机、不带文字:省下文字那一行的高度给图标,比其余 tab 大一圈。
-// (纸飞机斜放,同尺寸下视觉面积本就比 Ionicons 小。)读屏标签仍由 options 提供。
-const TAB_LOGO_SIZE_BOOST = 7;
+const TAB_PILL_GAP = 0; // 选中底占满一格(参考稿的选中底就是整格宽)
+const TAB_ICON_SIZE = 22;
+// 圈子 tab 不进 bar:右侧独立圆按钮,和 bar 等高,一直是品牌紫渐变(与默认头像同一组)
+// 配白色纸飞机,选中时纸飞机填实。
+// 纸飞机按外框居中(小圆里眼睛比的是左右留白,按包络圆/重心左移实机看偏左),约占圆径一半。
+const TAB_FEATURED_SIZE = TAB_BAR_HEIGHT;
+const TAB_FEATURED_LOGO_SIZE = 30;
+const BRAND_GRADIENT_STOPS = [
+  { offset: '0', color: '#5548D9' },
+  { offset: '0.52', color: '#7467F5' },
+  { offset: '1', color: '#A58BFF' },
+] as const;
 // 磨砂靠材质散射，不靠纯色板。这两个数和材质档位是一组，一起决定"透多少"：
 // systemThickMaterial + intensity 100 + alpha 0.5 曾经把透明度吃干净 ——
 // Thick 是给 sheet/弹窗用的最厚材质，本身就接近不透明，三层叠上就成了实心板。
@@ -120,6 +132,7 @@ const TAB_BAR_TINT_ALPHA = 0.06;
 type TabBarStyles = {
   tabBarWrapper: ViewStyle;
   tabBarHidden: ViewStyle;
+  tabBarRow: ViewStyle;
   tabBar: ViewStyle;
   tabBarBlurLayer: ViewStyle;
   tabBarTint: ViewStyle;
@@ -128,6 +141,11 @@ type TabBarStyles = {
   pill: ViewStyle;
   liquidIndicator: ViewStyle;
   iconWrap: ViewStyle;
+  featuredButton: ViewStyle;
+  featuredGlow: ViewStyle;
+  featuredSurface: ViewStyle;
+  featuredFill: ViewStyle;
+  featuredBadge: ViewStyle;
   badge: ViewStyle;
   badgeText: TextStyle;
   label: TextStyle;
@@ -138,6 +156,8 @@ interface TabBarSurfaceProps {
   children: React.ReactNode;
   colorScheme: 'light' | 'dark';
   styles: TabBarStyles;
+  /** 右侧圈子圆按钮复用同一种玻璃材质,只换外形。 */
+  surfaceStyle?: StyleProp<ViewStyle>;
 }
 
 // 两条 iOS 路径共用的磨砂层。抽出来是为了让 iOS 26（玻璃 + 磨砂）和
@@ -164,6 +184,7 @@ function TabBarSurface({
   children,
   colorScheme,
   styles,
+  surfaceStyle,
 }: TabBarSurfaceProps) {
   // GlassView 在旧系统上只是普通 View，显式使用 BlurView 才能让 iOS 18/17
   // 也保留 Squady 式的半透明导航材质。API 可用性检查同时规避早期 iOS 26
@@ -185,7 +206,7 @@ function TabBarSurface({
           style: 'clear',
           animate: false,
         }}
-        style={styles.tabBar}
+        style={[styles.tabBar, surfaceStyle]}
       >
         {children}
       </GlassView>
@@ -194,7 +215,7 @@ function TabBarSurface({
 
   if (Platform.OS === 'ios') {
     return (
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, surfaceStyle]}>
         <TabBarFrostLayer colorScheme={colorScheme} styles={styles} />
         <View style={styles.tabBarTint} pointerEvents="none" />
         {children}
@@ -202,11 +223,16 @@ function TabBarSurface({
     );
   }
 
-  return <View style={styles.tabBar}>{children}</View>;
+  return <View style={[styles.tabBar, surfaceStyle]}>{children}</View>;
 }
 
+type BarTabKey = Extract<TabKey, { selectedIcon: IoniconName }>;
+type FeaturedTabKey = Extract<TabKey, { icon: 'plane-logo' }>;
+
+const isFeaturedTab = (tab: TabKey): tab is FeaturedTabKey => tab.icon === 'plane-logo';
+
 interface TabSlotProps {
-  tab: TabKey;
+  tab: BarTabKey;
   label: string;
   focused: boolean;
   badgeCount: number;
@@ -275,19 +301,11 @@ const TabSlot = memo(function TabSlot({
           ]}
         >
           <View style={styles.iconWrap}>
-            {tab.icon === 'plane-logo' ? (
-              <PlaneLogoIcon
-                size={(focused ? TAB_ICON_SIZE + 1 : TAB_ICON_SIZE) + TAB_LOGO_SIZE_BOOST}
-                color={iconTint}
-                filled={focused}
-              />
-            ) : (
-              <Ionicons
-                name={focused ? tab.selectedIcon : tab.icon}
-                size={focused ? TAB_ICON_SIZE + 1 : TAB_ICON_SIZE}
-                color={iconTint}
-              />
-            )}
+            <Ionicons
+              name={focused ? tab.selectedIcon : tab.icon}
+              size={focused ? TAB_ICON_SIZE + 1 : TAB_ICON_SIZE}
+              color={iconTint}
+            />
             {badgeCount > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText} numberOfLines={1} maxFontSizeMultiplier={1}>
@@ -296,20 +314,115 @@ const TabSlot = memo(function TabSlot({
               </View>
             ) : null}
           </View>
-          {tab.icon === 'plane-logo' ? null : (
-            <Text
-              style={[
-                styles.label,
-                focused && styles.labelActive,
-                { color: labelTint },
-              ]}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
-          )}
+          <Text
+            style={[
+              styles.label,
+              focused && styles.labelActive,
+              { color: labelTint },
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
         </Animated.View>
       )}
+    </Pressable>
+  );
+});
+
+interface FeaturedTabButtonProps {
+  focused: boolean;
+  badgeCount: number;
+  colors: ThemeColors;
+  colorScheme: 'light' | 'dark';
+  styles: TabBarStyles;
+  onPress: () => void;
+  accessibilityLabel: string;
+  hidden: boolean;
+  testID?: string;
+}
+
+// 右侧独立的圈子圆按钮:玻璃圆打底(和 bar 同一种材质,外圈 1pt 描边当亮边),上面一直
+// 盖着品牌紫渐变。按用户要求选中后也保持紫色,不跟 bar 里的 tab 一样换色。
+const FeaturedTabButton = memo(function FeaturedTabButton({
+  focused,
+  badgeCount,
+  colors,
+  colorScheme,
+  styles,
+  onPress,
+  accessibilityLabel,
+  hidden,
+  testID,
+}: FeaturedTabButtonProps) {
+  const gradientId = `tab-featured-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const pressScale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressScale.value }],
+  }));
+
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      disabled={hidden}
+      focusable={!hidden}
+      onPressIn={() => {
+        pressScale.value = withSpring(0.92, {
+          damping: 18,
+          stiffness: 420,
+          mass: 0.45,
+          reduceMotion: ReduceMotion.System,
+        });
+      }}
+      onPressOut={() => {
+        pressScale.value = withSpring(1, {
+          damping: 13,
+          stiffness: 340,
+          mass: 0.5,
+          reduceMotion: ReduceMotion.System,
+        });
+      }}
+      style={styles.featuredButton}
+      accessibilityRole="button"
+      accessibilityState={{ selected: focused }}
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={6}
+    >
+      <Animated.View style={[styles.featuredGlow, pressStyle]}>
+        <TabBarSurface
+          colorScheme={colorScheme}
+          styles={styles}
+          surfaceStyle={styles.featuredSurface}
+        >
+          {/* 用百分比画圆:玻璃面带 1pt 描边,里面能画的只有 58×58。按 60 写死圆心/半径,
+              右边和下边会被裁掉一截,看着像被压扁。百分比让它总是内切在可画区域里。 */}
+          <Svg
+            style={styles.featuredFill}
+            width="100%"
+            height="100%"
+            pointerEvents="none"
+          >
+            <Defs>
+              <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+                {BRAND_GRADIENT_STOPS.map((stop) => (
+                  <Stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
+                ))}
+              </LinearGradient>
+            </Defs>
+            <Circle cx="50%" cy="50%" r="50%" fill={`url(#${gradientId})`} />
+          </Svg>
+          {/* 选中与否都保持紫色;选中时纸飞机填实,提示当前在圈子。 */}
+          <PlaneLogoIcon size={TAB_FEATURED_LOGO_SIZE} color={colors.white} filled={focused} />
+        </TabBarSurface>
+        {badgeCount > 0 ? (
+          <View style={[styles.badge, styles.featuredBadge]}>
+            <Text style={styles.badgeText} numberOfLines={1} maxFontSizeMultiplier={1}>
+              {badgeCount > 99 ? '99+' : badgeCount}
+            </Text>
+          </View>
+        ) : null}
+      </Animated.View>
     </Pressable>
   );
 });
@@ -334,12 +447,31 @@ function CustomTabBar({
 }) {
   const { t } = useTranslation();
   const [tabItemsWidth, setTabItemsWidth] = useState(0);
-  const activeIndex = state.index;
+  // 圈子不进 bar:bar 只排常规 tab,圈子单独画成右侧圆按钮。顺序仍按导航器的路由。
+  const entries = state.routes.flatMap((route, routeIndex) => {
+    const tab = TAB_BY_NAME[route.name];
+    if (!tab) {
+      devWarn(
+        `[CustomTabBar] route "${route.name}" 未在 TAB_KEYS 中登记，已跳过该 tab。`,
+      );
+      return [];
+    }
+    return [{ route, routeIndex, tab }];
+  });
+  const barEntries = entries.flatMap(({ tab, ...rest }) =>
+    isFeaturedTab(tab) ? [] : [{ ...rest, tab }],
+  );
+  const featuredEntry = entries.find(({ tab }) => isFeaturedTab(tab));
+  // 选中底只在 bar 里移动;选中圈子时藏起来,位置停在上一个 tab,切回来从那里出发。
+  const activeBarIndex = barEntries.findIndex(({ routeIndex }) => routeIndex === state.index);
+  const barSlotCount = Math.max(barEntries.length, 1);
   const indicatorX = useSharedValue(TAB_PILL_GAP);
   const indicatorStretch = useSharedValue(1);
   const indicatorSquash = useSharedValue(1);
-  const previousIndex = useRef(activeIndex);
+  const indicatorOpacity = useSharedValue(activeBarIndex < 0 ? 0 : 1);
+  const previousIndex = useRef(activeBarIndex);
   const indicatorStyle = useAnimatedStyle(() => ({
+    opacity: indicatorOpacity.value,
     transform: [
       { translateX: indicatorX.value },
       { scaleX: indicatorStretch.value },
@@ -349,9 +481,14 @@ function CustomTabBar({
 
   useEffect(() => {
     if (tabItemsWidth <= 0) return;
-    const slotWidth = tabItemsWidth / Math.max(state.routes.length, 1);
-    const targetX = activeIndex * slotWidth + TAB_PILL_GAP;
-    const changedTab = previousIndex.current !== activeIndex;
+    const changedTab = previousIndex.current !== activeBarIndex;
+    previousIndex.current = activeBarIndex;
+    indicatorOpacity.value = withTiming(activeBarIndex < 0 ? 0 : 1, {
+      duration: changedTab ? 160 : 0,
+    });
+    if (activeBarIndex < 0) return;
+    const slotWidth = tabItemsWidth / barSlotCount;
+    const targetX = activeBarIndex * slotWidth + TAB_PILL_GAP;
 
     indicatorX.value = withTiming(targetX, {
       duration: changedTab ? 260 : 0,
@@ -385,8 +522,31 @@ function CustomTabBar({
         }),
       );
     }
-    previousIndex.current = activeIndex;
-  }, [activeIndex, indicatorSquash, indicatorStretch, indicatorX, state.routes.length, tabItemsWidth]);
+  }, [
+    activeBarIndex,
+    barSlotCount,
+    indicatorOpacity,
+    indicatorSquash,
+    indicatorStretch,
+    indicatorX,
+    tabItemsWidth,
+  ]);
+
+  const pressHandlerFor = (route: (typeof state.routes)[number], focused: boolean) => () => {
+    // 先发 tabPress：触发 Tabs.Screen 上的 listener（把该 tab 的内嵌栈
+    // popToTop，实现「点 tab 永远回首页」）。再在未聚焦时切换到该 tab。
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: route.key,
+      canPreventDefault: true,
+    });
+    if (!focused && !event.defaultPrevented) {
+      navigation.dispatch({
+        ...CommonActions.navigate({ name: route.name, merge: true }),
+        target: state.key,
+      });
+    }
+  };
 
   return (
     <View
@@ -398,77 +558,66 @@ function CustomTabBar({
       importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
       aria-hidden={hidden}
     >
-      <TabBarSurface
-        colorScheme={colorScheme}
-        styles={styles}
-      >
-        <View
-          style={styles.tabItems}
-          onLayout={(event) => setTabItemsWidth(event.nativeEvent.layout.width)}
+      <View style={styles.tabBarRow} pointerEvents="box-none">
+        <TabBarSurface
+          colorScheme={colorScheme}
+          styles={styles}
         >
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.liquidIndicator,
-              {
-                width: Math.max(
-                  tabItemsWidth / Math.max(state.routes.length, 1) - TAB_PILL_GAP * 2,
-                  0,
-                ),
-              },
-              indicatorStyle,
-            ]}
-          />
-          {state.routes.map((route, index) => {
-            const tab = TAB_BY_NAME[route.name];
-            if (!tab) {
-              devWarn(
-                `[CustomTabBar] route "${route.name}" 未在 TAB_KEYS 中登记，已跳过该 tab。`,
+          <View
+            style={styles.tabItems}
+            onLayout={(event) => setTabItemsWidth(event.nativeEvent.layout.width)}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.liquidIndicator,
+                { width: Math.max(tabItemsWidth / barSlotCount - TAB_PILL_GAP * 2, 0) },
+                indicatorStyle,
+              ]}
+            />
+            {barEntries.map(({ route, routeIndex, tab }) => {
+              const focused = state.index === routeIndex;
+              const label = t(tab.key);
+              return (
+                <TabSlot
+                  key={route.key}
+                  tab={tab}
+                  label={label}
+                  focused={focused}
+                  badgeCount={badgeMap[route.name] ?? 0}
+                  colors={colors}
+                  styles={styles}
+                  onPress={pressHandlerFor(route, focused)}
+                  accessibilityLabel={
+                    descriptors[route.key].options.tabBarAccessibilityLabel ?? label
+                  }
+                  hidden={hidden}
+                  testID={TAB_TEST_IDS[route.name]}
+                />
               );
-              return null;
+            })}
+          </View>
+        </TabBarSurface>
+        {featuredEntry ? (
+          <FeaturedTabButton
+            focused={state.index === featuredEntry.routeIndex}
+            badgeCount={badgeMap[featuredEntry.route.name] ?? 0}
+            colors={colors}
+            colorScheme={colorScheme}
+            styles={styles}
+            onPress={pressHandlerFor(
+              featuredEntry.route,
+              state.index === featuredEntry.routeIndex,
+            )}
+            accessibilityLabel={
+              descriptors[featuredEntry.route.key].options.tabBarAccessibilityLabel ??
+              t(featuredEntry.tab.key)
             }
-
-            const focused = state.index === index;
-            const label = t(tab.key);
-            const badgeCount = badgeMap[route.name] ?? 0;
-            const { options } = descriptors[route.key];
-
-            const onPress = () => {
-              // 先发 tabPress：触发 Tabs.Screen 上的 listener（把该 tab 的内嵌栈
-              // popToTop，实现「点 tab 永远回首页」）。再在未聚焦时切换到该 tab。
-              const event = navigation.emit({
-                type: 'tabPress',
-                target: route.key,
-                canPreventDefault: true,
-              });
-              if (!focused && !event.defaultPrevented) {
-                navigation.dispatch({
-                  ...CommonActions.navigate({ name: route.name, merge: true }),
-                  target: state.key,
-                });
-              }
-            };
-
-            return (
-              <TabSlot
-                key={route.key}
-                tab={tab}
-                label={label}
-                focused={focused}
-                badgeCount={badgeCount}
-                colors={colors}
-                styles={styles}
-                onPress={onPress}
-                accessibilityLabel={
-                  options.tabBarAccessibilityLabel ?? label
-                }
-                hidden={hidden}
-                testID={TAB_TEST_IDS[route.name]}
-              />
-            );
-          })}
-        </View>
-      </TabBarSurface>
+            hidden={hidden}
+            testID={TAB_TEST_IDS[featuredEntry.route.name]}
+          />
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -553,13 +702,23 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
     tabBarHidden: {
       transform: [{ translateY: TAB_BAR_HIDDEN_OFFSET }],
     },
-    tabBar: {
+    // 左边 bar(撑满剩余宽度)+ 右边圈子圆按钮,两者同高、中线对齐。
+    tabBarRow: {
       flexDirection: 'row',
       alignItems: 'center',
       // 分栏时保持和左栏导航相同的宽度，只做水平居中，不随视口拉伸变形。
       ...(isSplitLayout
-        ? { width: listPaneWidth - TAB_BAR_MARGIN_H * 2 }
+        ? { width: listPaneWidth - TAB_BAR_MARGIN_LEFT - TAB_BAR_MARGIN_RIGHT }
         : null),
+      marginLeft: TAB_BAR_MARGIN_LEFT,
+      marginRight: TAB_BAR_MARGIN_RIGHT,
+      // 下沿压在 home indicator 安全区上沿;没有安全区的机型离屏幕底留一点。
+      marginBottom: Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM),
+    },
+    tabBar: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
       height: TAB_BAR_HEIGHT,
       borderRadius: TAB_BAR_RADIUS,
       // iOS 的底色必须透明，才能让 GlassView / BlurView 采样下方内容；
@@ -572,8 +731,6 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
             ? 'rgba(255, 255, 255, 0.34)'
             : 'rgba(0, 0, 0, 0.12)'
           : colors.surfaceBorder,
-      marginHorizontal: TAB_BAR_MARGIN_H,
-      marginBottom: TAB_BAR_MARGIN_B + Math.max(insets.bottom - TAB_BAR_SAFE_AREA_OVERLAP, 0),
       paddingHorizontal: TAB_BAR_PAD_H,
       paddingVertical: TAB_BAR_PAD_V,
       // 不裁剪：阴影完整显示，且 tab 内容本就在内部不会溢出。
@@ -636,6 +793,36 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    featuredButton: {
+      marginLeft: TAB_FEATURED_GAP,
+    },
+    // 没选中时品牌紫的淡光晕,让它从玻璃上浮起来;只在 iOS 画(安卓 bar 是不透明 surface,
+    // elevation 投影是灰的,叠上去反而脏)。
+    featuredGlow: Platform.OS === 'ios'
+      ? {
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: resolvedMode === 'dark' ? 0.55 : 0.35,
+          shadowRadius: 10,
+        }
+      : {},
+    // 复用 bar 的玻璃材质,只把外形换成等高的正圆(圆角 = bar 的圆角)。
+    featuredSurface: {
+      flex: 0,
+      width: TAB_FEATURED_SIZE,
+      height: TAB_FEATURED_SIZE,
+      borderRadius: TAB_FEATURED_SIZE / 2,
+      paddingHorizontal: 0,
+      paddingVertical: 0,
+      justifyContent: 'center',
+    },
+    featuredFill: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    featuredBadge: {
+      top: 0,
+      right: 0,
+    },
     badge: {
       position: 'absolute',
       top: -3,
@@ -660,7 +847,7 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
       includeFontPadding: false,
     },
     label: {
-      fontSize: 9,
+      fontSize: 10,
       fontWeight: '500',
       letterSpacing: 0.2,
     },
