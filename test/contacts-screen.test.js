@@ -193,11 +193,14 @@ test('contacts list screens support pull-to-refresh', () => {
       /if \(!mountedRef\.current\) return;|const isCancelled = \(\) =>[\s\S]{0,160}!mountedRef\.current/,
       `${screen.name} should guard load completion by mount state`,
     );
-    assert.match(
-      screen.source,
-      /if \(mountedRef\.current(?:\s*&&[^)]*)?\) setLoading\(false\)|if \(!isCancelled\(\)\) \{\s*setLoading\(false\);?\s*\}/,
-      `${screen.name} should guard load cleanup by mount state`,
-    );
+    // 「新的朋友」没有 loading 标志(转圈由「还没有列表」推出,见其内存缓存),也就没有收尾要守。
+    if (/setLoading\(/.test(screen.source)) {
+      assert.match(
+        screen.source,
+        /if \(mountedRef\.current(?:\s*&&[^)]*)?\) setLoading\(false\)|if \(!isCancelled\(\)\) \{\s*setLoading\(false\);?\s*\}/,
+        `${screen.name} should guard load cleanup by mount state`,
+      );
+    }
     assert.match(
       screen.source,
       /mountedRef\.current[\s\S]{0,80}setRefreshing\(false\)/,

@@ -1,14 +1,19 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { ActivityIndicator, Alert } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import SearchGroupMembersScreen from './SearchGroupMembersScreen';
 import { createCircleChatConversation, fetchChatMembers } from '@/chat-core/api';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
+import {
+  readGroupInfoCache,
+  writeGroupInfoCache,
+} from '@/features/chat/group-info-cache';
 
 jest.setTimeout(30_000);
 const SETTLE = { timeout: 10_000 };
 
 const mockNavigate = jest.fn();
+const mockAuth = { sessionEpoch: 0 };
 const mockParams: { groupID?: string; conversationID?: string } = {};
 const mockChatState: {
   currentUserId: string;
@@ -54,6 +59,9 @@ jest.mock('@/chat-core/api', () => ({
 jest.mock('@/chat-core/store', () => ({
   useChatStore: (selector: (state: unknown) => unknown) => selector(mockChatState),
 }));
+jest.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector: (state: unknown) => unknown) => selector(mockAuth),
+}));
 jest.mock('@/features/chat/hooks/use-group-member-view-access', () => ({
   useGroupMemberViewAccess: jest.fn(),
 }));
@@ -82,8 +90,20 @@ const member = (userId: string, nickname: string) => ({
   role: 'MEMBER' as const,
 });
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
+const spinner = () => screen.UNSAFE_queryByType(ActivityIndicator);
+
 beforeEach(() => {
   jest.clearAllMocks();
+  // 每个用例换一个「账号」:成员缓存按 sessionEpoch 整份作废,用例之间互不串。
+  mockAuth.sessionEpoch += 1;
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   delete mockParams.groupID;
   delete mockParams.conversationID;
@@ -164,4 +184,116 @@ test('looking at my own profile is always allowed', async () => {
 
   await waitFor(() => expect(mockNavigate).toHaveBeenCalled(), SETTLE);
   expect(Alert.alert).not.toHaveBeenCalled();
+});
+
+describe('a group seen before', () => {
+  const HIDDEN_ROSTER = { ...CLOSED_POLICIES, membersCanViewRoster: false };
+  const cached = [member('me', '我'), member('u2', '张三')];
+
+  test('shows the cached members at once and swaps in the refresh behind them', async () => {
+    mockParams.conversationID = 'conv-1';
+    mockChatState.conversations = [
+      { id: 'conv-1', myRole: 'MEMBER', policies: CLOSED_POLICIES },
+    ];
+    // 与群聊信息页同一个键:那边拉过的名单,这里直接用。
+    writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:conv-1', {
+      members: cached as never,
+    });
+    const refresh = deferred<unknown>();
+    jest.mocked(fetchChatMembers).mockReturnValueOnce(refresh.promise as never);
+
+    render(<SearchGroupMembersScreen />);
+    expect(screen.getByText('张三')).toBeTruthy();
+    expect(spinner()).toBeNull();
+
+    await act(async () => {
+      refresh.resolve([member('me', '我'), member('u3', '李四')]);
+    });
+    expect(await screen.findByText('李四', {}, SETTLE)).toBeTruthy();
+    expect(screen.queryByText('张三')).toBeNull();
+    expect(spinner()).toBeNull();
+    expect(
+      readGroupInfoCache(mockAuth.sessionEpoch, 'standalone:conv-1')?.members?.map(
+        (item) => item.userId,
+      ),
+    ).toEqual(['me', 'u3']);
+  });
+
+  test('a temp room shares the chat info entry instead of starting its own', () => {
+    mockParams.conversationID = 'tmp-1';
+    mockChatState.conversations = [{ id: 'tmp-1', type: 'TEMP' }];
+    writeGroupInfoCache(mockAuth.sessionEpoch, 'temp:tmp-1', { members: cached as never });
+    jest.mocked(fetchChatMembers).mockReturnValueOnce(new Promise(() => {}) as never);
+
+    render(<SearchGroupMembersScreen />);
+    expect(screen.getByText('张三')).toBeTruthy();
+    expect(spinner()).toBeNull();
+  });
+
+  test('a circle manager sees the cached roster on the conversation role before the live role is back', () => {
+    mockParams.groupID = 'circle-1';
+    mockChatState.conversations = [
+      { id: 'conv-circle', circleId: 'circle-1', myRole: 'ADMIN', policies: HIDDEN_ROSTER },
+    ];
+    jest.mocked(useGroupMemberViewAccess).mockReturnValue({
+      canViewMembers: false,
+      selfMember: null,
+      resolved: false,
+      revalidate: jest.fn().mockResolvedValue(true),
+    });
+    writeGroupInfoCache(mockAuth.sessionEpoch, 'circle:circle-1', { members: cached as never });
+    jest.mocked(createCircleChatConversation).mockReturnValue(new Promise(() => {}) as never);
+
+    render(<SearchGroupMembersScreen />);
+    expect(screen.getByText('张三')).toBeTruthy();
+    expect(spinner()).toBeNull();
+  });
+
+  test('an ordinary member of a hidden roster waits for the live role instead of seeing the cache', () => {
+    mockParams.groupID = 'circle-1';
+    mockChatState.conversations = [
+      { id: 'conv-circle', circleId: 'circle-1', myRole: 'MEMBER', policies: HIDDEN_ROSTER },
+    ];
+    jest.mocked(useGroupMemberViewAccess).mockReturnValue({
+      canViewMembers: false,
+      selfMember: null,
+      resolved: false,
+      revalidate: jest.fn().mockResolvedValue(false),
+    });
+    writeGroupInfoCache(mockAuth.sessionEpoch, 'circle:circle-1', { members: cached as never });
+    jest.mocked(createCircleChatConversation).mockReturnValue(new Promise(() => {}) as never);
+
+    render(<SearchGroupMembersScreen />);
+    expect(screen.queryByText('张三')).toBeNull();
+    expect(spinner()).not.toBeNull();
+  });
+
+  test('losing access drops the cached roster so the next visit cannot show it', async () => {
+    mockParams.groupID = 'circle-1';
+    mockChatState.conversations = [
+      { id: 'conv-circle', circleId: 'circle-1', myRole: 'MEMBER', policies: HIDDEN_ROSTER },
+    ];
+    jest.mocked(useGroupMemberViewAccess).mockReturnValue({
+      canViewMembers: false,
+      selfMember: { userID: 'me', role: 'MEMBER' },
+      resolved: true,
+      revalidate: jest.fn().mockResolvedValue(false),
+    });
+    writeGroupInfoCache(mockAuth.sessionEpoch, 'circle:circle-1', { members: cached as never });
+    jest.mocked(createCircleChatConversation).mockResolvedValue({
+      id: 'conv-circle',
+      circleId: 'circle-1',
+      myRole: 'MEMBER',
+      policies: HIDDEN_ROSTER,
+    } as never);
+
+    render(<SearchGroupMembersScreen />);
+    expect(await screen.findByText('chat.groupMembersRestricted', {}, SETTLE)).toBeTruthy();
+    expect(screen.queryByText('张三')).toBeNull();
+    await waitFor(
+      () => expect(readGroupInfoCache(mockAuth.sessionEpoch, 'circle:circle-1')).toBeUndefined(),
+      SETTLE,
+    );
+    expect(fetchChatMembers).not.toHaveBeenCalled();
+  });
 });

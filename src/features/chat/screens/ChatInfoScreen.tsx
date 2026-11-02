@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
   Modal,
@@ -56,6 +56,13 @@ import { groupMemberDisplayName } from '@/features/chat/group-member-display';
 import { useChangeAvatar } from '@/hooks/use-change-avatar';
 import { useGroupAdminActions } from '@/features/chat/hooks/use-group-admin-actions';
 import { useGroupMemberViewAccess } from '@/features/chat/hooks/use-group-member-view-access';
+import {
+  evictGroupInfoCache,
+  readGroupInfoCache,
+  writeGroupInfoCache,
+} from '@/features/chat/group-info-cache';
+import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
+import { useAuthStore } from '@/stores/authStore';
 import {
   allowsMemberInvites,
   allowsMemberProfiles,
@@ -369,9 +376,7 @@ export default function ChatInfoScreen() {
   const inviteLinkCopyInFlightRef = useRef(false);
   const [actionPending, setActionPending] = useState(initialActionPending);
   const actionPendingRef = useRef(initialActionPending);
-  // 子页面返回时保留当前群资料，后台刷新完成后再替换，避免 focus effect
-  // 先清空成员/群资料导致整页闪白和滚动位置抖动。
-  const groupDataKeyRef = useRef<string | null>(null);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   const actionRequestTokenRef = useRef({
     pin: 0,
     mute: 0,
@@ -435,7 +440,10 @@ export default function ChatInfoScreen() {
     conversation?.tempChat?.title ||
     friendName ||
     t('chat.groupChat');
-  const memberCount = groupInfo?.memberCount ?? groupMembers.length;
+  // 圈子群以圈子详情为准;独立群聊和临时房以成员目录为准。会话快照里的人数只在两者
+  // 都还没回来时顶一下,标题不先闪「(0)」—— 它不随踢人/拉人刷新,不能当最终值。
+  const memberCount =
+    groupInfo?.memberCount ?? (groupMembers.length || conversation?.memberCount || 0);
   const currentUserID = useChatStore((state) => state.currentUserId);
   const [silenceClock, setSilenceClock] = useState(() => Date.now());
   useEffect(() => {
@@ -465,8 +473,9 @@ export default function ChatInfoScreen() {
   // 权限只在本页在前台时兜底轮询,角色变了立刻重查(见 useGroupMemberViewAccess)。
   const isFocused = useIsFocused();
   const {
-    selfMember: currentGroupMember,
-    canViewMembers: canViewCircleMemberDirectory,
+    selfMember: liveGroupMember,
+    canViewMembers: liveCanViewCircleMemberDirectory,
+    resolved: liveGroupRoleResolved,
     revalidate: revalidateMemberAccess,
   } = useGroupMemberViewAccess({
     enabled: Boolean(isGroupConversation && groupID && currentUserID),
@@ -476,6 +485,19 @@ export default function ChatInfoScreen() {
     active: isFocused,
     roleHint: conversation?.myRole ?? null,
   });
+  // 活体角色第一次查回来之前(一次 /circle/:id 往返),先按会话缓存里的 myRole 画:
+  // 不然成员网格和管理入口每次进来都要等这一轮才弹出来。只影响展示 —— 管理动作
+  // 执行前都现场重查角色,成员目录接口服务端鉴权;活体结果一到就以它为准。
+  const cachedCircleRole = liveGroupRoleResolved ? null : (conversation?.myRole ?? null);
+  const currentGroupMember =
+    liveGroupMember ??
+    (cachedCircleRole && currentUserID
+      ? { userID: currentUserID, role: cachedCircleRole }
+      : null);
+  const canViewCircleMemberDirectory = liveGroupRoleResolved
+    ? liveCanViewCircleMemberDirectory
+    : canViewCircleMembers(cachedCircleRole) ||
+      (cachedCircleRole === 'MEMBER' && membersCanViewRoster === true);
   // 临时房不是圈子,没有圈子角色可判——目录权限由后端的座位校验兜底
   // (GET /chat/conversations/:id/members),与 ChatDetailScreen 同口径。
   // 不放开的话本页会渲染群布局却永远 0 成员、没有成员目录。
@@ -658,18 +680,24 @@ export default function ChatInfoScreen() {
     }, [friendId, friendStatusReloadGate, isGroupConversation]),
   );
 
+  // 首次进入或切换到另一条会话:先换成这个群上次看到的内容(没看过才是空的),
+  // 下面的聚焦回调照常在后台重拉。放在 layout 阶段,首帧画出来的就是缓存,不先闪空白。
+  // 从头像、公告等子页面返回时 key 不变,不会走到这里,已有内容原样保留。
+  useLayoutEffect(() => {
+    const cached = readGroupInfoCache(sessionEpoch, groupDataKey);
+    setGroupInfo(cached?.groupInfo ?? null);
+    setGroupMembers(cached?.members ?? []);
+    setGroupConversation(null);
+  }, [groupDataKey, sessionEpoch]);
+  // 本页就地改了成员/群名:缓存作废,下次进来重新拉,不先显示改之前的样子。
+  const evictGroupCache = useCallback(
+    () => evictGroupInfoCache(sessionEpoch, groupDataKey),
+    [groupDataKey, sessionEpoch],
+  );
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      const isNewGroupTarget = groupDataKeyRef.current !== groupDataKey;
-      if (isNewGroupTarget) {
-        groupDataKeyRef.current = groupDataKey;
-        // 首次进入或切换到另一条会话时才清空；从头像、公告等子页面返回时
-        // 保留已有内容，让下面的请求在后台完成，不让页面先闪成空状态。
-        setGroupInfo(null);
-        setGroupMembers([]);
-        setGroupConversation(null);
-      }
       if (groupReloadGate.shouldSkip()) {
         return () => {
           cancelled = true;
@@ -692,10 +720,13 @@ export default function ChatInfoScreen() {
           .then((members) => {
             if (cancelled) return;
             setGroupMembers(members);
+            writeGroupInfoCache(sessionEpoch, groupDataKey, { members });
             groupReloadGate.markLoaded(startedAt);
           })
           .catch(() => {
-            // 返回子页面时保留已显示的成员列表，下一次聚焦继续重试。
+            // 屏上保留已显示的名单(网络抖动不闪);缓存作废 —— 失败也可能是已被移出,
+            // 下次进来不能再先画出旧名单。下一次聚焦继续重试。
+            evictGroupInfoCache(sessionEpoch, groupDataKey);
           });
         return () => {
           cancelled = true;
@@ -709,10 +740,12 @@ export default function ChatInfoScreen() {
           .then((members) => {
             if (cancelled) return;
             setGroupMembers(members);
+            writeGroupInfoCache(sessionEpoch, groupDataKey, { members });
             groupReloadGate.markLoaded(startedAt);
           })
           .catch(() => {
-            // 保留已有内容，避免网络抖动造成群信息页闪动。
+            // 同上:屏上保留,缓存作废。
+            evictGroupInfoCache(sessionEpoch, groupDataKey);
           });
         return () => {
           cancelled = true;
@@ -738,11 +771,13 @@ export default function ChatInfoScreen() {
       fetchCircleDetail(groupID)
         .then((detail) => {
           if (!cancelled) {
-            setGroupInfo({
+            const info = {
               name: detail.name,
               notice: detail.description,
               memberCount: detail.memberCount,
-            });
+            };
+            setGroupInfo(info);
+            writeGroupInfoCache(sessionEpoch, groupDataKey, { groupInfo: info });
             detailLoaded = true;
             markIfComplete();
           }
@@ -764,6 +799,8 @@ export default function ChatInfoScreen() {
           useChatStore.getState?.().upsertConversation?.(conversationDto);
           if (!canViewMemberDirectory) {
             setGroupMembers([]);
+            // 刚被撤权:缓存里的名单也不能再给他看。
+            evictGroupInfoCache(sessionEpoch, groupDataKey);
             directoryLoaded = true;
             markIfComplete();
             return;
@@ -773,11 +810,13 @@ export default function ChatInfoScreen() {
           const members = await fetchChatMembers(conversationDto.id);
           if (!cancelled) {
             setGroupMembers(members);
+            writeGroupInfoCache(sessionEpoch, groupDataKey, { members });
             directoryLoaded = true;
             markIfComplete();
           }
         } catch {
-          // 成员请求失败时保留已渲染的名单，不让短暂网络错误造成整页抖动。
+          // 屏上保留已渲染的名单;缓存作废(非成员时取或建会话直接 403,走不到上面的撤权分支)。
+          evictGroupInfoCache(sessionEpoch, groupDataKey);
         }
       };
       void loadMemberDirectory();
@@ -795,6 +834,7 @@ export default function ChatInfoScreen() {
       isStandaloneGroup,
       isTempConversation,
       resolvedConversationID,
+      sessionEpoch,
     ]),
   );
 
@@ -1094,11 +1134,12 @@ export default function ChatInfoScreen() {
       // 圈子群:群名即圈子名,改群名 = 改圈子 name。
       updateCircle(groupID, { name: trimmed })
         .then(() => {
+          evictGroupCache();
           setGroupInfo((current) => (current ? { ...current, name: trimmed } : current));
         })
         .catch(openActionError);
     });
-  }, [canManageGroup, groupID, groupTitle, isStandaloneGroup, openActionError, promptForText, t]);
+  }, [canManageGroup, evictGroupCache, groupID, groupTitle, isStandaloneGroup, openActionError, promptForText, t]);
 
   const handleSubmitStandaloneGroupRename = useCallback(async () => {
     if (renameSubmittingRef.current || !conversationID) return;
@@ -1285,11 +1326,14 @@ export default function ChatInfoScreen() {
     isStandaloneGroup,
     currentUserID,
     selfRole: selfGroupRole,
-    onMemberUpdated: (userId, patch) =>
+    onMemberUpdated: (userId, patch) => {
+      evictGroupCache();
       setGroupMembers((members) =>
         members.map((item) => (item.userId === userId ? { ...item, ...patch } : item)),
-      ),
+      );
+    },
     onMemberRemoved: (userId) => {
+      evictGroupCache();
       setGroupMembers((members) => members.filter((m) => m.userId !== userId));
       setGroupInfo((current) =>
         current && current.memberCount > 0 ? { ...current, memberCount: current.memberCount - 1 } : current,
@@ -1773,6 +1817,7 @@ export default function ChatInfoScreen() {
                 ? { ...current, myAlias: result.alias }
                 : current,
             );
+            evictGroupCache();
             setGroupMembers((members) =>
               members.map((member) =>
                 member.userId === currentUserID
@@ -1787,6 +1832,7 @@ export default function ChatInfoScreen() {
   }, [
     conversationID,
     currentUserID,
+    evictGroupCache,
     myGroupAlias,
     openActionError,
     promptForText,
@@ -2001,6 +2047,27 @@ export default function ChatInfoScreen() {
                 />
               </>
             )}
+            {/* 管理入口紧跟群公告(临时群没有公告行时紧跟群名称),群主/管理员不用滚到底找。 */}
+            {isOwner ? (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.groupManagement.noteManagement', {
+                    defaultValue: '笔记管理',
+                  })}
+                  onPress={handleOpenNoteManagement}
+                />
+              </>
+            ) : null}
+            {canManageGroup ? (
+              <>
+                <Divider />
+                <GroupInfoRow
+                  label={t('chat.groupManage', { defaultValue: '群管理' })}
+                  onPress={handleOpenGroupManage}
+                />
+              </>
+            ) : null}
             {canViewMemberDirectory ? (
               <>
                 <Divider />
@@ -2069,26 +2136,6 @@ export default function ChatInfoScreen() {
                 />
               </>
             )}
-            {isOwner ? (
-              <>
-                <Divider />
-                <GroupInfoRow
-                  label={t('chat.groupManagement.noteManagement', {
-                    defaultValue: '笔记管理',
-                  })}
-                  onPress={handleOpenNoteManagement}
-                />
-              </>
-            ) : null}
-            {canManageGroup ? (
-              <>
-                <Divider />
-                <GroupInfoRow
-                  label={t('chat.groupManage', { defaultValue: '群管理' })}
-                  onPress={handleOpenGroupManage}
-                />
-              </>
-            ) : null}
             <Divider />
           </View>
 

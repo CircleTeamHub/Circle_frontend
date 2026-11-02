@@ -161,7 +161,10 @@ test('chat info screen serves the member directory straight from chat-core membe
   assert.match(source, /useGroupMemberViewAccess\(\{/);
   // 中间允许重拉闸门的记账行;撤权翻转 canViewMemberDirectory 会改变闸门的失效键,
   // 所以撤权后回到本页一定重跑、清空目录,不会被「30 秒内刚拉过」跳过。
-  assert.match(source, /if \(!canViewMemberDirectory\) \{\s*\n\s*setGroupMembers\(\[\]\);[\s\S]{0,160}?\n\s*return;/);
+  // 撤权时连同内存缓存里的名单一起清掉,下次进来不会先显示旧名单。
+  assert.match(source, /if \(!canViewMemberDirectory\) \{\s*\n\s*setGroupMembers\(\[\]\);[\s\S]{0,120}?evictGroupInfoCache\(sessionEpoch, groupDataKey\);[\s\S]{0,160}?\n\s*return;/);
+  // 换群/首次进入在 layout 阶段先换成该群的缓存,首帧不闪空白;后台照常重拉。
+  assert.match(source, /useLayoutEffect\(\(\) => \{\s*const cached = readGroupInfoCache\(sessionEpoch, groupDataKey\);/);
   assert.match(source, /groupReloadGate = useFocusReloadGate\(\{\s*key: `\$\{groupDataKey\}:\$\{canViewMemberDirectory\}/);
   assert.match(source, /const members = await fetchChatMembers\(conversationDto\.id\);/);
   assert.match(source, /uri=\{member\.avatarUrl \?\? undefined\}/);
@@ -173,8 +176,11 @@ test('chat info screen keeps member access live while mounted', () => {
 
   // 自己的角色来自订阅驱动的 selfMember——群主撤权时 canManageGroup /
   // canViewMemberDirectory 立即翻转，不等重新聚焦。
-  assert.match(source, /selfMember: currentGroupMember,/);
-  assert.match(source, /canViewMembers: canViewCircleMemberDirectory,/);
+  assert.match(source, /selfMember: liveGroupMember,/);
+  assert.match(source, /canViewMembers: liveCanViewCircleMemberDirectory,/);
+  // 会话缓存里的 myRole 只在活体结果第一次回来前顶一下首屏,回来后一律以活体为准。
+  assert.match(source, /const cachedCircleRole = liveGroupRoleResolved \? null :/);
+  assert.match(source, /const canViewCircleMemberDirectory = liveGroupRoleResolved\s*\?\s*liveCanViewCircleMemberDirectory/);
   assert.match(source, /revalidate: revalidateMemberAccess,/);
   assert.doesNotMatch(source, /setCurrentGroupMember/);
   // 打开成员资料前 fail-closed 现场重查。
@@ -374,7 +380,13 @@ test('group member search keeps authorization live and revalidates before openin
   assert.match(source, /useGroupMemberViewAccess\(\{/);
   // 圈子群的授权来自活体角色 + 「显示群成员」策略;独立群聊没有圈子角色,
   // 目录全员可见(服务端座位校验)。
-  assert.match(source, /canViewMembers: circleAuthorized,/);
+  assert.match(source, /canViewMembers: liveCircleAuthorized,/);
+  // 活体角色查回来之前才借会话 DTO 上的 myRole(只影响展示,与 ChatInfoScreen 同款);
+  // 一旦 resolved 就只认活体结果。
+  assert.match(
+    source,
+    /const circleAuthorized = accessResolved\s*\n\s*\? liveCircleAuthorized\s*\n\s*: canViewCircleMembers\(cachedRole\)/,
+  );
   assert.match(source, /const authorized = isStandaloneGroup \|\| circleAuthorized;/);
   // 即使当前还没权限也要先取到圈子会话 DTO,否则策略打开后没有机会重跑。
   assert.match(source, /if \(!circleAuthorized && conversation\.policies\?\.membersCanViewRoster !== true\)/);
@@ -859,4 +871,44 @@ test('group admin actions revalidate the live role before mutating a member', ()
     source,
     /\(fresh\) => canManageGroupTarget\(fresh, targetRole\(member\)\)[\s\S]{0,500}await removeGroupMember\(groupID, member\.userId\)/,
   );
+});
+
+// 群主/管理员的两个管理入口紧跟群公告,不用滚到群成员、聊天记录、群昵称后面去找。
+test('note management and group manage rows sit right under the group notice', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx'),
+    'utf8',
+  );
+  const notice = source.indexOf("label={t('chat.groupNotice')}");
+  const noteManagement = source.indexOf("t('chat.groupManagement.noteManagement'");
+  const groupManage = source.indexOf("t('chat.groupManage', {");
+  const members = source.indexOf("t('chat.groupMembersRow'");
+  assert.ok(notice > 0 && noteManagement > 0 && groupManage > 0 && members > 0);
+  assert.ok(notice < noteManagement, '笔记管理应在群公告之后');
+  assert.ok(noteManagement < groupManage, '群管理紧跟笔记管理');
+  assert.ok(groupManage < members, '两个管理入口应排在群成员之前');
+});
+
+// 会话快照里的人数不随踢人/拉人刷新:独立群聊/临时房必须以成员目录为准,快照只在
+// 目录还没回来时顶一下。
+test('group info member count prefers the live directory over the conversation snapshot', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx'),
+    'utf8',
+  );
+  assert.match(
+    source,
+    /const memberCount =\s*groupInfo\?\.memberCount \?\? \(groupMembers\.length \|\| conversation\?\.memberCount \|\| 0\);/,
+  );
+});
+
+// 拉成员失败可能是已被移出:屏上保留(网络抖动不闪),缓存作废,下次进来不先画出旧名单。
+test('a failed member directory fetch drops the cached roster', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx'),
+    'utf8',
+  );
+  const catches = source.match(/\.catch\(\(\) => \{[\s\S]{0,200}?evictGroupInfoCache\(sessionEpoch, groupDataKey\);/g) ?? [];
+  assert.equal(catches.length, 2, 'temp + standalone fetch failures evict');
+  assert.match(source, /\} catch \{[\s\S]{0,160}?evictGroupInfoCache\(sessionEpoch, groupDataKey\);\n\s*\}\n\s*\};\n\s*void loadMemberDirectory\(\);/);
 });
