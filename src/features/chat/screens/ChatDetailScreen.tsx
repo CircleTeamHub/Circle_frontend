@@ -51,6 +51,7 @@ import { useChatHeader } from '@/features/chat/chat-detail/hooks/use-chat-header
 import { useBurnNotice } from '@/features/chat/chat-detail/hooks/use-burn-notice';
 import { ChatDetailHeader } from '@/features/chat/chat-detail/components/ChatDetailHeader';
 import { ChatMessageArea } from '@/features/chat/chat-detail/components/ChatMessageArea';
+import { ChatConnectionBanner } from '@/features/chat/components/ChatConnectionBanner';
 import { MentionPickerPanel } from '@/features/chat/chat-detail/components/MentionPickerPanel';
 import { ComposerBanners } from '@/features/chat/chat-detail/components/ComposerBanners';
 import { ChatComposerBar } from '@/features/chat/chat-detail/components/ChatComposerBar';
@@ -620,6 +621,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         d={d}
       />
       {isAssistantConversation ? null : <Divider />}
+      {/* 嵌在桌面分栏里时左侧消息列表已经挂着同一条提示。 */}
+      {embedded ? null : <ChatConnectionBanner style={s.connectionBanner} />}
       {conversationBurnNoticeText ? (
         <View
           testID="chat-disappearing-message-notice"

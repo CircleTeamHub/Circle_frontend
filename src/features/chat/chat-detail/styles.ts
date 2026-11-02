@@ -71,6 +71,10 @@ export const chatDetailStyles = StyleSheet.create({
     ...Typography.small,
     fontWeight: '600',
   },
+  connectionBanner: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+  },
   disappearingMessageNotice: {
     flexDirection: 'row',
     alignItems: 'center',

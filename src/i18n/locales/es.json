@@ -885,7 +885,7 @@
     "desktopEmptyDetail": "Selecciona una conversación para empezar a chatear",
     "imNotConnected": "IM no está conectado. Vuelve a iniciar sesión.",
     "imConnecting": "Conectando con IM…",
-    "imNetworkError": "La conexión de red es inestable. Cambia a una red mejor e inténtalo de nuevo.",
+    "imServerUnreachable": "No se puede conectar con el servidor. Reintentando…",
     "imServerError": "Hay un problema con el servidor. Inténtalo de nuevo más tarde.",
     "swipeMarkRead": "Marcar leído",
     "swipeMarkUnread": "Marcar no leído",
