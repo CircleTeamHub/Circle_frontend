@@ -791,11 +791,9 @@
       "video": "동영상"
     },
     "message": {
-      "sending": "전송 중",
       "sendFailed": "전송 실패",
       "read": "읽음",
-      "sent": "전송됨",
-      "delivered": "전달됨",
+      "unread": "안 읽음",
       "edited": "(수정됨)"
     },
     "friendCard": {

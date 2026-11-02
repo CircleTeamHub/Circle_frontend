@@ -795,11 +795,9 @@
       "video": "Vídeo"
     },
     "message": {
-      "sending": "Enviando",
       "sendFailed": "Fallido",
       "read": "Leído",
-      "sent": "Enviado",
-      "delivered": "Entregado",
+      "unread": "No leído",
       "edited": "(editado)"
     },
     "friendCard": {

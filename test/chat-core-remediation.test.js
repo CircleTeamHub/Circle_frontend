@@ -293,7 +293,10 @@ test('store lands delivered/reaction/edit updates', () => {
 test('batch-5 words exist in every locale', () => {
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
-    assert.ok(dict?.chat?.message?.delivered, `${locale} delivered`);
+    // 气泡状态只分「未读 / 已读」(用户拍板):送达回执照常同步(见上面几条),
+    // 只是不再单独显示「已送达」,这个字样随之下线。
+    assert.ok(dict?.chat?.message?.unread, `${locale} unread`);
+    assert.equal(dict?.chat?.message?.delivered, undefined, `${locale} delivered label retired`);
     assert.ok(dict?.chat?.messageActions?.react, `${locale} react`);
     assert.ok(dict?.serverErrors?.CHAT_EDIT_WINDOW_EXPIRED, `${locale} edit window`);
     assert.ok(dict?.serverErrors?.CHAT_EDIT_FORBIDDEN, `${locale} edit forbidden`);
