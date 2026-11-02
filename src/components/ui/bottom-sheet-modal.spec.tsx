@@ -1,7 +1,11 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { Animated, PanResponder, Text } from 'react-native';
+import { Animated, PanResponder, StyleSheet, Text } from 'react-native';
 import { BottomSheetFlatList, BottomSheetModal } from './bottom-sheet-modal';
+
+jest.mock('@/theme', () => ({
+  useTheme: () => ({ colors: { overlay: 'overlay-token' } }),
+}));
 
 jest.mock('@/components/ui/keyboard-avoiding-container', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -140,4 +144,25 @@ test('while its list is scrolled down, a body drag scrolls the list and leaves t
   expect(onClose).not.toHaveBeenCalled();
   // 把手区域始终可拖。
   expect(handlers.onMoveShouldSetPanResponderCapture({}, { dx: 0, dy: 20, vy: 0, y0: 420 })).toBe(true);
+});
+
+// 面板常和页面同底色(个人资料编辑就是),背后不压暗的话两者分不出边界。
+test('dims the page behind the sheet by default', () => {
+  render(
+    <BottomSheetModal visible onClose={jest.fn()}>
+      <Text>content</Text>
+    </BottomSheetModal>,
+  );
+  const style = StyleSheet.flatten(screen.getByTestId('bottom-sheet-backdrop').props.style);
+  expect(style.backgroundColor).toBe('overlay-token');
+});
+
+test('a caller backdropStyle still overrides the default dim', () => {
+  render(
+    <BottomSheetModal visible onClose={jest.fn()} backdropStyle={{ backgroundColor: 'red' }}>
+      <Text>content</Text>
+    </BottomSheetModal>,
+  );
+  const style = StyleSheet.flatten(screen.getByTestId('bottom-sheet-backdrop').props.style);
+  expect(style.backgroundColor).toBe('red');
 });

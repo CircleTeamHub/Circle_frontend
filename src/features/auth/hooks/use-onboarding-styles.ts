@@ -79,14 +79,14 @@ export function useOnboardingStyles() {
         backgroundColor: colors.overlay,
       },
       modalCard: {
-        backgroundColor: colors.background,
+        backgroundColor: colors.surface,
       },
       modalTitle: {
         color: colors.text,
         ...Typography.h3,
       },
       pickerList: {
-        backgroundColor: colors.surface,
+        backgroundColor: colors.surfaceMuted,
         borderColor: colors.surfaceBorder,
       },
       pickerItemText: {
