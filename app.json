@@ -35,7 +35,7 @@
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
+        "backgroundColor": "#B6AFF3",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
