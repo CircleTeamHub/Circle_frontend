@@ -111,23 +111,19 @@ interface BubbleStatusTextProps {
 export const BubbleStatusText: React.FC<BubbleStatusTextProps> = ({ message }) => {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const { sendStatus, isRead, isDelivered } = message;
+  const { sendStatus, isRead } = message;
   let text: string;
   let color = colors.text;
-  if (sendStatus === 1) {
-    text = t('chat.message.sending', { defaultValue: '发送中' });
-  } else if (sendStatus === 3) {
+  // 只分「未读 / 已读」两档:发送中、已发送、已送达都算未读。原来四个字样在一两秒内依次跳,
+  // 每发一条消息状态字都闪几下。发送失败不是进度状态(旁边有红色重发按钮),文字保留,
+  // 免得把没发出去的说成「未读」。
+  if (sendStatus === 3) {
     text = t('chat.message.sendFailed', { defaultValue: '发送失败' });
     color = colors.error;
   } else if (isRead) {
     text = t('chat.message.read', { defaultValue: '已读' });
-  } else if (isDelivered) {
-    // G-07 送达回执:对端设备收到了但还没读。
-    text = t('chat.message.delivered', { defaultValue: '已送达' });
   } else {
-    // 服务端已收下、对端设备还没回执。原来写「未读」:对端在线时这一段只有零点几秒,
-    // 每条消息都会「发送中 → 未读 → 已送达」闪一下;叫「已发送」才是这一段的实情。
-    text = t('chat.message.sent', { defaultValue: '已发送' });
+    text = t('chat.message.unread', { defaultValue: '未读' });
   }
   return (
     <Text style={{ ...Typography.tinyRegular, color, marginLeft: 4 }}>

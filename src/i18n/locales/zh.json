@@ -904,11 +904,9 @@
       "video": "视频"
     },
     "message": {
-      "sending": "发送中",
       "sendFailed": "发送失败",
       "read": "已读",
-      "sent": "已发送",
-      "delivered": "已送达",
+      "unread": "未读",
       "edited": "(已编辑)"
     },
     "friendCard": {
