@@ -12,21 +12,25 @@ const EXPECTED = Object.freeze({
   packageName: 'com.yiboding.circleim.preprod',
   appName: '风信测试版',
   appVariant: 'preprod',
-  apiUrl: 'https://api-43-133-201-42.sslip.io',
-  apiHost: 'api-43-133-201-42.sslip.io',
+  apiUrl: 'https://api-43-134-85-95.sslip.io',
+  apiHost: 'api-43-134-85-95.sslip.io',
   // 顺序即 EXPO_PUBLIC_MEDIA_ORIGINS 的逗号顺序。COS 直连域名给私有媒体的预签名
   // 地址用;限流的投递域名是后端 OBJECT_STORAGE_DELIVERY_URL,公开目录(头像、
   // 封面……)的永久地址由它拼出。少了哪个,App 都会把那一类媒体整片丢掉。
+  // 新加坡测试机把投递挂在 API 域的 /circle 下(Caddy 反代到 COS),所以第二项就是 API 域。
   mediaOrigins: Object.freeze([
     'https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com',
-    'https://media-43-133-201-42.sslip.io',
+    'https://api-43-134-85-95.sslip.io',
   ]),
   mediaHosts: Object.freeze([
     'windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com',
-    'media-43-133-201-42.sslip.io',
+    'api-43-134-85-95.sslip.io',
   ]),
   forbiddenStrings: [
     'application-diary-papua-dining.trycloudflare.com',
+    // 东京旧测试机 2026-10 到期、IP 已易主;sslip 域名跟着 IP 走,包里绝不能再出现。
+    'api-43-133-201-42.sslip.io',
+    'media-43-133-201-42.sslip.io',
     'EXPO_PUBLIC_OPENIM_API_URL',
     'EXPO_PUBLIC_OPENIM_WS_URL',
     '@openim/rn-client-sdk',
