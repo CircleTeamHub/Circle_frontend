@@ -19,7 +19,7 @@ import {
   View,
 } from "react-native";
 
-const CIRCLE_TAB_KEYS = ["joined", "created", "managed", "applied"] as const;
+const CIRCLE_TAB_KEYS = ["all", "joined", "created", "managed", "applied"] as const;
 
 const s = StyleSheet.create({
   container: {
@@ -117,6 +117,14 @@ export const MyCirclesPanel: React.FC = () => {
 
   const circles = useMemo(() => {
     const circlesByTab: Record<(typeof CIRCLE_TAB_KEYS)[number], Circle[]> = {
+      // 已创建的圈子也在已加入里,管理圈子是这两者派生的子集;按 id 去重并集即可。
+      all: [
+        ...new Map(
+          [...joinedCircles, ...createdCircles, ...appliedCircles].map(
+            (circle) => [circle.id, circle] as const,
+          ),
+        ).values(),
+      ],
       joined: joinedCircles,
       created: createdCircles,
       managed: managedCircles,
@@ -138,6 +146,7 @@ export const MyCirclesPanel: React.FC = () => {
 
   const circleFilterTabs = useMemo(
     () => [
+      t('common.all'),
       t('discover.joined'),
       t('discover.myCreated'),
       t('discover.myManaged'),
@@ -223,7 +232,7 @@ export const MyCirclesPanel: React.FC = () => {
         tabs={circleFilterTabs}
         activeIndex={activeTab}
         onTabPress={setActiveTab}
-        // 4 个筛选标签在西语/日语下更长，改可横向滚动避免挤压/换行。
+        // 5 个筛选标签在西语/日语下更长，改可横向滚动避免挤压/换行。
         scrollable
       />
 
@@ -246,7 +255,8 @@ export const MyCirclesPanel: React.FC = () => {
         </View>
       ) : null}
 
-      {myCirclesLoading ? (
+      {/* 只有手上什么都没有时才转圈;后台刷新时已缓存的列表留在屏上。 */}
+      {myCirclesLoading && circles.length === 0 ? (
         <View style={s.emptyContainer}>
           <ActivityIndicator color={colors.primary} />
         </View>

@@ -907,7 +907,7 @@
       "sending": "发送中",
       "sendFailed": "发送失败",
       "read": "已读",
-      "unread": "未读",
+      "sent": "已发送",
       "delivered": "已送达",
       "edited": "(已编辑)"
     },
@@ -1127,9 +1127,9 @@
     "circleDetail": "圈子详情",
     "createCircle": "创建圈子",
     "joined": "已加入",
-    "myCreated": "我创建的",
-    "myManaged": "我管理的",
-    "myApplied": "我申请的",
+    "myCreated": "已创建",
+    "myManaged": "管理圈子",
+    "myApplied": "我的申请",
     "noCircles": "暂无圈子",
     "newPosts": "有{{count}}条新动态，点击查看",
     "noMoments": "暂无朋友圈动态",
@@ -1201,7 +1201,9 @@
       "fancyNumber": "靓号",
       "vip": "VIP{{level}}+",
       "credit": "信用{{score}}+"
-    }
+    },
+    "loadPostsFailed": "帖子加载失败，请稍后重试",
+    "loadMorePostsFailed": "帖子加载失败，点击重试"
   },
   "circle": {
     "inviteVerifiers": "邀请好友为我验证 ({{approved}}/{{required}})",
@@ -1327,7 +1329,9 @@
     "leaveConfirm": "退出",
     "leaveFailedTitle": "退出失败",
     "leaveMessage": "确定退出该圈子吗？",
-    "leaveTitle": "退出圈子"
+    "leaveTitle": "退出圈子",
+    "viewPosts": "查看圈子帖子",
+    "postsTitle": "圈子帖子"
   },
   "plaza": {
     "manageSignups": "{{count}} 人报名",

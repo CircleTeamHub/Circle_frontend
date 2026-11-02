@@ -108,8 +108,9 @@ const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V * 2;
 const TAB_PILL_RADIUS = TAB_PILL_HEIGHT / 2; // 只裁剪单个 tab 的按压反馈，不绘制背景
 const TAB_PILL_GAP = 2; // 每格 tab 左右留白，互不相贴
 const TAB_ICON_SIZE = 18;
-// 纸飞机是斜放的，同尺寸下视觉面积比 Ionicons 小一圈，放大一点对齐。
-const TAB_LOGO_SIZE_BOOST = 3;
+// 圈子 tab 只放纸飞机、不带文字:省下文字那一行的高度给图标,比其余 tab 大一圈。
+// (纸飞机斜放,同尺寸下视觉面积本就比 Ionicons 小。)读屏标签仍由 options 提供。
+const TAB_LOGO_SIZE_BOOST = 7;
 // 磨砂靠材质散射，不靠纯色板。这两个数和材质档位是一组，一起决定"透多少"：
 // systemThickMaterial + intensity 100 + alpha 0.5 曾经把透明度吃干净 ——
 // Thick 是给 sheet/弹窗用的最厚材质，本身就接近不透明，三层叠上就成了实心板。
@@ -295,16 +296,18 @@ const TabSlot = memo(function TabSlot({
               </View>
             ) : null}
           </View>
-          <Text
-            style={[
-              styles.label,
-              focused && styles.labelActive,
-              { color: labelTint },
-            ]}
-            numberOfLines={1}
-          >
-            {label}
-          </Text>
+          {tab.icon === 'plane-logo' ? null : (
+            <Text
+              style={[
+                styles.label,
+                focused && styles.labelActive,
+                { color: labelTint },
+              ]}
+              numberOfLines={1}
+            >
+              {label}
+            </Text>
+          )}
         </Animated.View>
       )}
     </Pressable>

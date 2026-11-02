@@ -79,7 +79,9 @@ test('renders one badge when historical VIP selections resolve to the same ident
     />,
   );
 
-  expect(screen.getAllByText('钻石会员')).toHaveLength(1);
+  // 名字只作读屏标签,徽章下面不画文字。
+  expect(screen.getAllByLabelText('钻石会员')).toHaveLength(1);
+  expect(screen.queryByText('钻石会员')).toBeNull();
 });
 
 test('falls back to a visible vector badge when local artwork fails to load', () => {

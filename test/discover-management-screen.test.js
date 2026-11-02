@@ -5,12 +5,12 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
-test('circle management panel exposes joined created managed applied tabs in order', () => {
+test('circle management panel exposes all joined created managed applied tabs in order', () => {
   const source = read('src/features/discover/components/my-circles-panel.tsx');
 
   assert.match(
     source,
-    /const CIRCLE_TAB_KEYS = \["joined", "created", "managed", "applied"\] as const;/,
+    /const CIRCLE_TAB_KEYS = \["all", "joined", "created", "managed", "applied"\] as const;/,
   );
   assert.match(source, /t\('discover\.myManaged'\)/);
 });

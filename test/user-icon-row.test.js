@@ -11,8 +11,9 @@ test('UserIconRow renders system badges from local artwork and circle icons in c
   assert.match(row, /export function UserIconBadge/);
   assert.match(row, /formatIconLabel/);
   assert.match(row, /compactCircle/);
-  assert.match(row, /numberOfLines=\{1\}/);
-  assert.match(row, /tone\s*=\s*'default'/);
+  // 徽章下面不画名字(新手/会员/圈子徽章),名字只作读屏标签。
+  assert.match(row, /accessible\s*\n\s*accessibilityLabel=\{label\}/);
+  assert.doesNotMatch(row, /showLabel|labelColor|tone\s*=\s*'default'/);
   assert.match(row, /getSystemBadgeAsset/);
   assert.match(row, /getSystemBadgeVisualScale/);
   assert.match(row, /getSystemBadgeVisualTranslateY/);
@@ -25,9 +26,6 @@ test('UserIconRow renders system badges from local artwork and circle icons in c
   assert.match(row, /\{ translateY: systemBadgeTranslateY \* transformSizeRatio \}/);
   assert.match(row, /dense\s*=\s*false/);
   assert.match(row, /denseItem/);
-  assert.match(row, /denseLabel/);
-  assert.match(row, /marginTop:\s*-6/);
-  assert.match(row, /dense\s*\?\s*s\.denseLabel\s*:\s*null/);
   assert.match(row, /contentFit="contain"/);
   assert.doesNotMatch(row, /PARTNER/);
   assert.match(row, /s\.circle/);

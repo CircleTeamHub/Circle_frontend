@@ -38,6 +38,10 @@ test('circle detail and its sub-flow are mirrored under the messages stack', () 
     'app/(tabs)/messages/circle/[id]/invite.tsx',
     'app/(tabs)/messages/circle/[id]/invite-friends.tsx',
     'app/(tabs)/messages/circle/[id]/share.tsx',
+    // 圈子帖子:三个圈子栈各一份,从哪个 tab 的圈子详情进就留在哪个 tab。
+    'app/(tabs)/messages/circle/[id]/posts.tsx',
+    'app/(tabs)/discover/circle/[id]/posts.tsx',
+    'app/(tabs)/explore/circle/[id]/posts.tsx',
     'app/(tabs)/messages/invitation/[id].tsx',
     'app/(tabs)/messages/invitation/[id]/select-verifier.tsx',
     'app/(tabs)/messages/verification/[id].tsx',
@@ -123,4 +127,15 @@ test('circle route helpers return scoped paths and params for each sub-flow', ()
     pathname: '/(tabs)/messages/verification/[id]',
     params: { id: 'invite-1' },
   });
+});
+
+test('plaza post cards stay in the tab they are shown in', () => {
+  const card = read('src/features/discover/components/plaza-post-card.tsx');
+  const posts = read('src/features/discover/screens/CirclePostsScreen.tsx');
+  // 圈子帖子页在三个栈都有:点头像/报名管理不能把用户扔去圈子 tab。
+  assert.match(card, /scope = 'discover'/);
+  assert.match(card, /getUserProfileHref\(scope, post\.author\.id\)/);
+  assert.doesNotMatch(card, /getUserProfileHref\('discover', post\.author\.id\)/);
+  assert.match(posts, /getCircleScopeFromSegments\(useSegments\(\)\)/);
+  assert.match(posts, /<PlazaPostCard post=\{item\} onDeleted=\{handleDeleted\} scope=\{scope\} \/>/);
 });

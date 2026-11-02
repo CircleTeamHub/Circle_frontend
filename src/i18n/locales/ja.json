@@ -794,7 +794,7 @@
       "sending": "送信中",
       "sendFailed": "送信失敗",
       "read": "既読",
-      "unread": "未読",
+      "sent": "送信済み",
       "delivered": "配信済み",
       "edited": "(編集済み)"
     },
@@ -1531,7 +1531,9 @@
     "leaveConfirm": "退会",
     "leaveFailedTitle": "退会に失敗しました",
     "leaveMessage": "このサークルを退会しますか？",
-    "leaveTitle": "サークルを退会"
+    "leaveTitle": "サークルを退会",
+    "viewPosts": "サークルの投稿を見る",
+    "postsTitle": "サークルの投稿"
   },
   "myIcons": {
     "title": "マイバッジ",
@@ -1678,9 +1680,9 @@
     "circleDetail": "サークル詳細",
     "createCircle": "サークルを作成",
     "joined": "参加済み",
-    "myCreated": "作成した",
-    "myManaged": "管理中",
-    "myApplied": "申請中",
+    "myCreated": "作成済み",
+    "myManaged": "サークル管理",
+    "myApplied": "自分の申請",
     "noCircles": "サークルなし",
     "newPosts": "新着投稿{{count}}件、タップして表示",
     "noMoments": "モーメントはまだありません",
@@ -1752,7 +1754,9 @@
       "fancyNumber": "特別ID",
       "vip": "VIP{{level}}+",
       "credit": "信用{{score}}+"
-    }
+    },
+    "loadPostsFailed": "投稿を読み込めませんでした。しばらくしてから再度お試しください。",
+    "loadMorePostsFailed": "投稿を読み込めませんでした。タップして再試行"
   },
   "plaza": {
     "manageSignups": "{{count}}人が応募",

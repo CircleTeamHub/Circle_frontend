@@ -18,7 +18,12 @@ test('CircleDetailScreen clears stale invitation state before reloading', () => 
   const src = read(SRC);
   assert.match(src, /invitationRequestRef = useRef\(0\)/);
   assert.match(src, /const requestId = \+\+invitationRequestRef\.current/);
-  assert.match(src, /setMyInvitation\(null\);\s*if \(!id\) return;/);
+  // 重拉前先换成「这个圈子」缓存里的申请(没有就是 null):换圈子不残留上一个圈子的入口,
+  // 同一个圈子重拉期间也不先闪成「审核中」。
+  assert.match(
+    src,
+    /setMyInvitation\(readFreshCircleCache\(sessionEpoch, id\)\?\.invitation \?\? null\);\s*if \(!id\) return;/,
+  );
   assert.match(src, /requestId !== invitationRequestRef\.current/);
   assert.match(src, /catch \{[\s\S]*setMyInvitation\(null\);[\s\S]*\}/);
 });

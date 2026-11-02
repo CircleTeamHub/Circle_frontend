@@ -9,7 +9,7 @@ import { FEATURE_FLAGS } from '@/constants/feature-flags';
 import { buildRestrictionReasonText } from '@/features/discover/utils/plaza-restrictions';
 import { UserIconRow } from '@/components/ui/user-icon-row';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { getUserProfileHref } from '@/features/user/utils/routes';
+import { getUserProfileHref, type CircleScope } from '@/features/user/utils/routes';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import { getPostExpiryTier } from '@/features/discover/utils/plaza-post-expiry';
 import {
@@ -31,6 +31,13 @@ import type { CirclePlazaPost, DisplayIcon, SystemIconKey } from '@/types';
 
 interface PlazaPostCardProps {
   post: CirclePlazaPost;
+  /** 删除成功后通知宿主列表(广场之外的列表不在广场 store 里,要自己移除)。 */
+  onDeleted?: (postId: string) => void;
+  /**
+   * 卡片所在的 tab 栈。圈子帖子页在消息/圈子/探索三个栈都有,点头像、报名管理要留在
+   * 进来的那个 tab,不能跨 tab 压栈。广场只在圈子栈,默认 discover。
+   */
+  scope?: CircleScope;
 }
 
 // "不限制" 徽章配色（绿色=开放给所有人），与 RestrictionBadge 的彩色徽章风格统一。
@@ -147,7 +154,11 @@ const s = StyleSheet.create({
   },
 });
 
-export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
+export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
+  post,
+  onDeleted,
+  scope = 'discover',
+}) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
@@ -205,13 +216,12 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
     (FEATURE_FLAGS.fancyNumbers && post.signupRestrictions.fancyNumber);
 
   const handleManageSignups = useCallback(() => {
-    // Stay within the discover stack so "back" returns to the plaza feed,
-    // not the messages tab home.
+    // 留在当前 tab 栈,返回时回到来时的列表。探索栈没有报名管理页,只能回落到圈子栈。
     router.push({
-      pathname: '/(tabs)/discover/post-signups',
+      pathname: `/(tabs)/${scope === 'explore' ? 'discover' : scope}/post-signups` as const,
       params: { postId: post.id, title: post.content.slice(0, 24) },
     });
-  }, [router, post.id, post.content]);
+  }, [router, post.id, post.content, scope]);
 
   const storeRemovePlazaPost = useDiscoverStore((state) => state.removePlazaPost);
 
@@ -230,6 +240,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
             try {
               await deletePlazaPost(post.id);
               storeRemovePlazaPost(post.id);
+              onDeleted?.(post.id);
             } catch (error) {
               Alert.alert(
                 t('plaza.deleteFailedTitle', { defaultValue: '删除失败' }),
@@ -243,7 +254,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
         },
       ],
     );
-  }, [post.id, storeRemovePlazaPost, t]);
+  }, [onDeleted, post.id, storeRemovePlazaPost, t]);
 
   const handleShare = useCallback(() => {
     // 分享到对话：进好友选择页，选中后把帖子作为聊天卡片发到该会话。
@@ -381,8 +392,8 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({ post }) => {
       );
       return;
     }
-    router.navigate(getUserProfileHref('discover', post.author.id));
-  }, [post.canInteract, post.restrictions, post.author.id, router, t]);
+    router.navigate(getUserProfileHref(scope, post.author.id));
+  }, [post.canInteract, post.restrictions, post.author.id, router, scope, t]);
 
   const timeLabel = useMemo(
     () => formatRelativeTime(post.createdAt, t),

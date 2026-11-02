@@ -20,6 +20,7 @@ import {
 import {
   getCircleAdminHref,
   getCircleEditHref,
+  getCirclePostsHref,
   getCircleInviteHref,
   getCircleScopeFromSegments,
   getInvitationDetailHref,
@@ -57,6 +58,14 @@ import {
 import { ensureCircleConversation } from '@/chat-core/client';
 import type { CircleDetail, CircleInvitation } from '@/types';
 import { reduceCircleLoadFailure } from '@/features/discover/utils/circle-detail-load-state';
+import {
+  evictCircleDetailCache,
+  patchCachedCircle,
+  readCircleDetailCache,
+  writeCircleDetailCache,
+} from '@/features/discover/circle-detail-cache';
+import { groupOrCircleMutatedSince } from '@/features/chat/utils/group-reload-key';
+import { useAuthStore } from '@/stores/authStore';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 
 const s = StyleSheet.create({
@@ -256,6 +265,13 @@ const s = StyleSheet.create({
   },
 });
 
+// 拉到之后又有过群/圈子写操作(退圈、解散、编辑、加入……也可能发生在群聊信息等别的页面)
+// 就不用这份缓存:里面的成员关系可能已经不对,宁可整页转圈重拉,不先按旧状态画按钮。
+function readFreshCircleCache(epoch: number, circleId: string) {
+  const cached = readCircleDetailCache(epoch, circleId);
+  return cached?.at !== undefined && !groupOrCircleMutatedSince(cached.at) ? cached : undefined;
+}
+
 export default function CircleDetailScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -267,8 +283,13 @@ export default function CircleDetailScreen() {
   const segments = useSegments();
   const circleScope = getCircleScopeFromSegments(segments);
 
-  const [circle, setCircle] = useState<CircleDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  // 看过的圈子先用内存缓存画出来,聚焦回调照常在后台重拉(见 circle-detail-cache);
+  // 没缓存过才整页转圈。
+  const [circle, setCircle] = useState<CircleDetail | null>(
+    () => readFreshCircleCache(sessionEpoch, id)?.circle ?? null,
+  );
+  const [loading, setLoading] = useState(circle === null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [iconSaving, setIconSaving] = useState(false);
   const [enteringGroupChat, setEnteringGroupChat] = useState(false);
@@ -277,9 +298,10 @@ export default function CircleDetailScreen() {
   const refreshInFlightRef = useRef(false);
   // 首次成功加载后置 true：之后 focus 回本页只做静默刷新，不再进 loading 分支
   //（loading 分支会卸载整个 ScrollView，重挂后滚动位置归零 = 返回跳回顶部）。
-  const hasLoadedRef = useRef(false);
+  // 缓存里画出来的也算已加载:后台重拉失败只在顶部提示,不把整页换成错误页。
+  const hasLoadedRef = useRef(circle !== null);
   const [myInvitation, setMyInvitation] = useState<CircleInvitation | null>(
-    null,
+    () => readFreshCircleCache(sessionEpoch, id)?.invitation ?? null,
   );
   const mountedRef = useRef(true);
   const circleRequestRef = useRef(0);
@@ -325,15 +347,20 @@ export default function CircleDetailScreen() {
     const showInitialLoading = options?.showInitialLoading ?? true;
     if (showInitialLoading) setLoading(true);
     setLoadError(null);
+    const startedAt = Date.now();
     try {
       const data = await fetchCircleDetail(id);
       if (!mountedRef.current || requestId !== circleRequestRef.current) return false;
       setCircle(data);
+      writeCircleDetailCache(sessionEpoch, id, { circle: data, at: startedAt });
       hasLoadedRef.current = true;
       return true;
     } catch (error) {
       if (!mountedRef.current || requestId !== circleRequestRef.current) return false;
       const isNotFound = error instanceof ApiError && error.status === 404;
+      // 圈子没了(解散/不可见):缓存一并作废,下次别再先画出来。其余失败保留缓存,
+      // 与页面上「已有内容不清空」一致。
+      if (isNotFound) evictCircleDetailCache(sessionEpoch, id);
       setLoadError(
         isNotFound ? null : getApiErrorMessage(error, t('circle.loadError')),
       );
@@ -357,30 +384,33 @@ export default function CircleDetailScreen() {
         setLoading(false);
       }
     }
-  }, [id, t]);
+  }, [id, sessionEpoch, t]);
 
   // 当前用户在该圈是否有进行中的入圈申请（10 人担保验证）。有则在底部给出
   // 「邀请好友为我验证」入口——invitation 流程的接收侧本来没有前端入口。
   const loadMyInvitation = useCallback(async () => {
     const requestId = ++invitationRequestRef.current;
-    setMyInvitation(null);
+    // 先换成这个圈子缓存里的申请(没有就清空):换了圈子不残留上一个圈子的入口,
+    // 同一个圈子重拉期间按钮也不先闪成「审核中」。
+    setMyInvitation(readFreshCircleCache(sessionEpoch, id)?.invitation ?? null);
     if (!id) return;
     try {
       const apps = await fetchMyApplications();
       if (!mountedRef.current || requestId !== invitationRequestRef.current) {
         return;
       }
-      setMyInvitation(
+      const invitation =
         apps.find((inv) => inv.circleId === id && inv.status === 'PENDING') ??
-          null,
-      );
+        null;
+      setMyInvitation(invitation);
+      writeCircleDetailCache(sessionEpoch, id, { invitation });
     } catch {
       // 非关键路径，失败不阻塞详情页展示
       if (mountedRef.current && requestId === invitationRequestRef.current) {
         setMyInvitation(null);
       }
     }
-  }, [id]);
+  }, [id, sessionEpoch]);
 
   // 从编辑/审核/邀请等子页面回来:那些操作都走圈子写请求(circlesMutatedSince),有改动必重拉;
   // 只是看了看就回来、30 秒内,不再重发详情和「我的申请」整表。
@@ -421,6 +451,7 @@ export default function CircleDetailScreen() {
     setCircle((current) => (current ? { ...current, cover: url } : current));
     // Keep the cached circle lists in sync so they don't show a stale image.
     useCirclesStore.getState().patchCircle(id, { cover: url });
+    patchCachedCircle(sessionEpoch, id, { cover: url });
   });
 
   const submitCircleAvatar = useCallback(
@@ -435,8 +466,9 @@ export default function CircleDetailScreen() {
         current ? { ...current, avatarUrl: url } : current,
       );
       useCirclesStore.getState().patchCircle(id, { avatarUrl: url });
+      patchCachedCircle(sessionEpoch, id, { avatarUrl: url });
     },
-    [id],
+    [id, sessionEpoch],
   );
   // 仅圈主可换(服务端 assertOwner);与群头像共用同一个上传/落库流程。
   const { changeAvatar: changeCircleAvatar } = useChangeAvatar({
@@ -460,6 +492,8 @@ export default function CircleDetailScreen() {
       // 必须作废（force 绕过在飞合并），否则返回广场的 focus 刷新会 await
       // 到入圈前的列表。fire-and-forget，不阻塞本页刷新。
       void useCirclesStore.getState().fetchMyCircles({ force: true });
+      // 成员关系变了:缓存里还是入圈前的样子,先作废;下面重拉成功会写回新的。
+      evictCircleDetailCache(sessionEpoch, id);
       await loadCircle();
     } catch (error) {
       Alert.alert(
@@ -472,7 +506,7 @@ export default function CircleDetailScreen() {
     } finally {
       setJoining(false);
     }
-  }, [id, joining, loadCircle, t]);
+  }, [id, joining, loadCircle, sessionEpoch, t]);
 
   const handleLeaveCircle = useCallback(() => {
     if (!id) return;
@@ -488,6 +522,7 @@ export default function CircleDetailScreen() {
             try {
               await leaveCircle(id);
               useCirclesStore.getState().removeCircle(id);
+              evictCircleDetailCache(sessionEpoch, id);
               router.back();
             } catch (error) {
               Alert.alert(
@@ -502,7 +537,7 @@ export default function CircleDetailScreen() {
         },
       ],
     );
-  }, [id, router, t]);
+  }, [id, router, sessionEpoch, t]);
 
   const handleUploadCircleIcon = useCallback(async () => {
     if (!id || !isOwnerOrAdmin || iconSaving) {
@@ -643,7 +678,8 @@ export default function CircleDetailScreen() {
     >
       <NavHeader
         title={t('circle.detail')}
-        rightIcon={isOwnerOrAdmin ? 'create-outline' : undefined}
+        rightIcon={isOwnerOrAdmin ? 'settings-outline' : undefined}
+        rightAccessibilityLabel={isOwnerOrAdmin ? t('circle.settings') : undefined}
         onRightPress={
           isOwnerOrAdmin
             ? () =>
@@ -935,6 +971,20 @@ export default function CircleDetailScreen() {
               disabled={enteringGroupChat}
             >
               <Text style={[s.actionBtnText, d.chatBtnText]}>{t('circle.enterGroupChat')}</Text>
+            </Pressable>
+          ) : null}
+
+          {/* 查看圈子帖子 —— 服务端只给成员看本圈的帖子,入口同样只对正式成员开放。 */}
+          {isActiveMember ? (
+            <Pressable
+              style={[s.actionBtn, d.chatBtn]}
+              onPress={() =>
+                router.push(getCirclePostsHref(circleScope, circle.id, circle.name))
+              }
+            >
+              <Text style={[s.actionBtnText, d.chatBtnText]}>
+                {t('circle.viewPosts', { defaultValue: '查看圈子帖子' })}
+              </Text>
             </Pressable>
           ) : null}
 

@@ -13,6 +13,9 @@ test('五个 tab 依次是 消息/联系人/圈子/探索/我的，圈子用 App
 
   // 圈子 tab 的路由目录沿用 discover（深链都挂在下面），文案是「圈子」。
   assert.match(bar, /name: 'discover',\s*icon: 'plane-logo',\s*key: 'tabs\.circles'/);
+  // 纸飞机 tab 只画图标不带文字(文案只留给读屏),图标相应放大。
+  assert.match(bar, /\{tab\.icon === 'plane-logo' \? null : \(\s*<Text/);
+  assert.match(bar, /const TAB_LOGO_SIZE_BOOST = 7;/);
   assert.match(
     bar,
     /name: 'explore',\s*icon: 'compass-outline',\s*selectedIcon: 'compass',\s*key: 'tabs\.explore'/,

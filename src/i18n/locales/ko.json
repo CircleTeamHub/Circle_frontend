@@ -794,7 +794,7 @@
       "sending": "전송 중",
       "sendFailed": "전송 실패",
       "read": "읽음",
-      "unread": "안 읽음",
+      "sent": "전송됨",
       "delivered": "전달됨",
       "edited": "(수정됨)"
     },
@@ -1531,7 +1531,9 @@
     "leaveConfirm": "나가기",
     "leaveFailedTitle": "나가기 실패",
     "leaveMessage": "이 서클을 나갈까요?",
-    "leaveTitle": "서클 나가기"
+    "leaveTitle": "서클 나가기",
+    "viewPosts": "서클 게시물 보기",
+    "postsTitle": "서클 게시물"
   },
   "myIcons": {
     "title": "내 배지",
@@ -1679,8 +1681,8 @@
     "createCircle": "서클 만들기",
     "joined": "참여함",
     "myCreated": "만든 서클",
-    "myManaged": "관리 중",
-    "myApplied": "신청함",
+    "myManaged": "서클 관리",
+    "myApplied": "내 신청",
     "noCircles": "서클 없음",
     "newPosts": "새 게시물 {{count}}개, 눌러서 보기",
     "noMoments": "아직 모먼트가 없어요",
@@ -1752,7 +1754,9 @@
       "fancyNumber": "특별 ID",
       "vip": "VIP{{level}}+",
       "credit": "신용 {{score}}+"
-    }
+    },
+    "loadPostsFailed": "게시물을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    "loadMorePostsFailed": "게시물을 불러오지 못했습니다. 탭하여 다시 시도"
   },
   "plaza": {
     "manageSignups": "{{count}}명 신청",
