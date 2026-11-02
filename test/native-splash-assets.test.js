@@ -90,19 +90,60 @@ function getMarkCoverage(rel, minSaturation = 128) {
   };
 }
 
-function assertSolidWhitePng(rel) {
-  const image = PNG.sync.read(read(rel));
-  for (let y = 0; y < image.height; y += 1) {
-    for (let x = 0; x < image.width; x += 1) {
-      const i = (y * image.width + x) * 4;
-      assert.ok(
-        image.data[i] > 245 &&
-          image.data[i + 1] > 245 &&
-          image.data[i + 2] > 245 &&
-          image.data[i + 3] > 245,
-        `${rel} should be a solid white adaptive-icon background`,
-      );
+/**
+ * 安卓自适应图标与 iOS 桌面图标(icon.png)同一套磨砂紫。
+ *
+ * 安卓画布 108dp,桌面只露中间 72dp(各边裁掉 1/6)。背景层在这块可见方区的
+ * 四角必须与 icon.png 四角同色 —— 之前 iOS 换了玻璃稿而安卓三张图没人动,
+ * 两端图标就分了家。前景层四角必须透明,否则背景整片被前景的白底盖住。
+ */
+function assertAdaptiveIconMatchesIosIcon() {
+  const background = PNG.sync.read(read('assets/images/android-icon-background.png'));
+  const foreground = PNG.sync.read(read('assets/images/android-icon-foreground.png'));
+  const ios = PNG.sync.read(read('assets/images/icon.png'));
+
+  for (let i = 3; i < background.data.length; i += 4) {
+    if (background.data[i] !== 255) {
+      assert.fail('android-icon-background.png must be fully opaque');
     }
+  }
+
+  const rgbAt = (image, x, y) => {
+    const i = (Math.round(y) * image.width + Math.round(x)) * 4;
+    return [image.data[i], image.data[i + 1], image.data[i + 2]];
+  };
+  const inset = 8 / ios.width;
+  const visibleStart = background.width / 6;
+  const visibleSize = (background.width * 2) / 3;
+  for (const [u, v] of [
+    [inset, inset],
+    [1 - inset, inset],
+    [inset, 1 - inset],
+    [1 - inset, 1 - inset],
+  ]) {
+    const expected = rgbAt(ios, u * (ios.width - 1), v * (ios.height - 1));
+    const actual = rgbAt(
+      background,
+      visibleStart + u * visibleSize,
+      visibleStart + v * visibleSize,
+    );
+    assert.ok(
+      actual.every((channel, k) => Math.abs(channel - expected[k]) <= 12),
+      `android background at visible corner (${u},${v}) is rgb(${actual}) but icon.png has rgb(${expected})`,
+    );
+  }
+
+  for (const [x, y] of [
+    [0, 0],
+    [foreground.width - 1, 0],
+    [0, foreground.height - 1],
+    [foreground.width - 1, foreground.height - 1],
+  ]) {
+    assert.equal(
+      foreground.data[(y * foreground.width + x) * 4 + 3],
+      0,
+      `android-icon-foreground.png corner (${x},${y}) must be transparent so the frosted background shows`,
+    );
   }
 }
 
@@ -110,7 +151,6 @@ test('expo startup config has no branded splash artwork', () => {
   const app = readJson('app.json').expo;
   assert.equal(app.splash, undefined);
   assert.equal(app.ios.splash, undefined);
-  assert.equal(app.android.adaptiveIcon.backgroundColor, '#FFFFFF');
   assert.equal(
     app.android.adaptiveIcon.foregroundImage,
     './assets/images/android-icon-foreground.png',
@@ -126,9 +166,11 @@ test('expo startup config has no branded splash artwork', () => {
 
   const assets = [
     {
+      // 0.33–0.40 的画布 = 72dp 可见区的 50%–60%,与 iOS icon.png 里飞机约占
+      // 53% 同一比例;再大就压到磨砂面板的边。
       rel: 'assets/images/android-icon-foreground.png',
-      minCoverage: 0.42,
-      maxCoverage: 0.52,
+      minCoverage: 0.33,
+      maxCoverage: 0.4,
       maxCentroidOffsetX: 0.035,
     },
     {
@@ -171,7 +213,7 @@ test('expo startup config has no branded splash artwork', () => {
     }
   }
 
-  assertSolidWhitePng('assets/images/android-icon-background.png');
+  assertAdaptiveIconMatchesIosIcon();
 
   const rootLayout = readText('app/_layout.tsx');
   assert.doesNotMatch(rootLayout, /StartupSplash/);
