@@ -83,12 +83,56 @@ test('the assistant opened from explore hands off to a chat in the same stack', 
 
 test('group invites opened from explore chat info stay in the explore stack', () => {
   assert.ok(exists('app/(tabs)/explore/invite-group-members.tsx'));
-  assert.ok(exists('app/(tabs)/explore/circle/[id]/invite-friends.tsx'));
   const src = read('src/features/chat/screens/ChatInfoScreen.tsx');
   const handler =
     src.match(/const handleOpenInviteGroupMembers = useCallback\([\s\S]*?\n  \}, \[/)?.[0] ?? '';
   assert.match(handler, /scope === 'explore'\) pathname = '\/\(tabs\)\/explore\/invite-group-members'/);
-  assert.match(handler, /'\/\(tabs\)\/explore\/circle\/\[id\]\/invite-friends'/);
+  assert.match(handler, /getCircleInviteFriendsHref\(toCircleScope\(scope\), groupID, groupTitle\)/);
+});
+
+test('circle pages opened from explore stay in the explore stack', () => {
+  const routes = loadRoutes();
+
+  assert.equal(routes.getCircleScopeFromSegments(['(tabs)', 'explore', 'notes', '[id]']), 'explore');
+  assert.equal(routes.getCircleScopeFromSegments(['(tabs)', 'messages', 'circle', '[id]']), 'messages');
+  assert.equal(routes.getCircleScopeFromSegments(['(tabs)', 'discover', 'circle', '[id]']), 'discover');
+  assert.equal(routes.toCircleScope('explore'), 'explore');
+  assert.equal(routes.toCircleScope('discover'), 'discover');
+  // 联系人/我的没有圈子栈。
+  for (const scope of ['messages', 'contacts', 'profile']) {
+    assert.equal(routes.toCircleScope(scope), 'messages');
+  }
+
+  // 圈子链接用模板字符串拼栈名,上面那条字面量扫描看不到:逐个栈逐个链接查文件在不在。
+  const hrefs = (scope) => [
+    routes.getCircleDetailHref(scope, 'c1'),
+    routes.getPlazaPostDetailHref(scope, 'p1'),
+    routes.getCircleEditHref(scope, 'c1'),
+    routes.getCircleAdminHref(scope, 'c1'),
+    routes.getCircleInviteHref(scope, 'c1', 'title', 'avatar', 'MEMBER'),
+    routes.getCircleShareHref(scope, 'c1', 'title', 'avatar'),
+    routes.getCircleInviteFriendsHref(scope, 'c1', 'title'),
+    routes.getInvitationDetailHref(scope, 'i1'),
+    routes.getSelectVerifierHref(scope, { id: 'i1', circleId: 'c1', circleName: 'n' }),
+    routes.getVerificationDetailHref(scope, 'i1'),
+    // CircleDetailScreen 进圈子群聊、circle-form-body 选城市也按 circleScope 拼路径。
+    { pathname: `/(tabs)/${scope}/chat-detail` },
+    { pathname: `/(tabs)/${scope}/select-city` },
+  ];
+  const missing = [];
+  for (const scope of ['messages', 'discover', 'explore']) {
+    for (const { pathname } of hrefs(scope)) {
+      assert.ok(pathname.startsWith(`/(tabs)/${scope}/`), pathname);
+      if (!exists(`app${pathname}.tsx`)) missing.push(pathname);
+    }
+  }
+  assert.deepEqual(missing, []);
+  assert.match(read('src/features/discover/screens/CircleDetailScreen.tsx'), /`\/\(tabs\)\/\$\{circleScope\}\/chat-detail`/);
+  assert.match(read('src/features/discover/components/circle-form-body.tsx'), /`\/\(tabs\)\/\$\{circleScope\}\/select-city`/);
+
+  // 从探索进来的笔记、聊天名片、群入口都要按 toCircleScope 走,不能再把 explore 压成 messages。
+  const twoWay = /scope === ['"]discover['"] \? ['"](discover|\/\(tabs\)\/discover\/)/;
+  assert.deepEqual(walk('src').filter((rel) => twoWay.test(read(rel))), []);
 });
 
 test('explore home is two tiles with names only: moments first, then the assistant', () => {

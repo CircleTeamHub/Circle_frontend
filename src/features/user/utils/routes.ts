@@ -682,23 +682,27 @@ export function getUserProfileScopeFromSegments(
 }
 
 // ── Circle scope routes ──────────────────────────────────────────────────────
-// 圈子详情及其子页镜像在 messages 与 discover 两个栈：聊天里的圈子名片/验证
-// 卡必须在本 tab 内打开（从哪进从哪出），不允许跨 tab 压栈把用户扔去动态页。
+// 圈子详情及其子页镜像在 messages / discover / explore 三个栈：聊天里的圈子名片、
+// 笔记里的圈子来源都必须在本 tab 内打开（从哪进从哪出），不允许跨 tab 压栈。
 
-export type CircleScope = 'messages' | 'discover';
+export type CircleScope = 'messages' | 'discover' | 'explore';
 
 export function getCircleScopeFromSegments(
   segments: readonly string[],
 ): CircleScope {
-  return segments.includes('messages') ? 'messages' : 'discover';
+  if (segments.includes('messages')) return 'messages';
+  if (segments.includes('explore')) return 'explore';
+  return 'discover';
+}
+
+// 联系人/我的两个 tab 没有圈子栈，只能落到消息栈。
+export function toCircleScope(scope: UserProfileScope): CircleScope {
+  return scope === 'discover' || scope === 'explore' ? scope : 'messages';
 }
 
 export function getCircleDetailHref(scope: CircleScope, circleId: string): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/circle/[id]'
-        : '/(tabs)/discover/circle/[id]',
+    pathname: `/(tabs)/${scope}/circle/[id]` as const,
     params: { id: circleId },
   };
 }
@@ -708,30 +712,21 @@ export function getPlazaPostDetailHref(
   postId: string,
 ): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/plaza-post-detail'
-        : '/(tabs)/discover/plaza-post-detail',
+    pathname: `/(tabs)/${scope}/plaza-post-detail` as const,
     params: { id: postId },
   };
 }
 
 export function getCircleEditHref(scope: CircleScope, circleId: string): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/circle/[id]/edit'
-        : '/(tabs)/discover/circle/[id]/edit',
+    pathname: `/(tabs)/${scope}/circle/[id]/edit` as const,
     params: { id: circleId },
   };
 }
 
 export function getCircleAdminHref(scope: CircleScope, circleId: string): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/circle/[id]/admin'
-        : '/(tabs)/discover/circle/[id]/admin',
+    pathname: `/(tabs)/${scope}/circle/[id]/admin` as const,
     params: { id: circleId },
   };
 }
@@ -746,10 +741,7 @@ export function getCircleInviteHref(
   myRole?: 'OWNER' | 'ADMIN' | 'MEMBER' | null,
 ): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/circle/[id]/invite'
-        : '/(tabs)/discover/circle/[id]/invite',
+    pathname: `/(tabs)/${scope}/circle/[id]/invite` as const,
     params: { id: circleId, title, avatar, ...(myRole ? { myRole } : {}) },
   };
 }
@@ -761,10 +753,7 @@ export function getCircleShareHref(
   avatar: string,
 ): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/circle/[id]/share'
-        : '/(tabs)/discover/circle/[id]/share',
+    pathname: `/(tabs)/${scope}/circle/[id]/share` as const,
     params: { id: circleId, title, avatar },
   };
 }
@@ -775,10 +764,7 @@ export function getCircleInviteFriendsHref(
   title: string,
 ): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/circle/[id]/invite-friends'
-        : '/(tabs)/discover/circle/[id]/invite-friends',
+    pathname: `/(tabs)/${scope}/circle/[id]/invite-friends` as const,
     params: { id: circleId, title },
   };
 }
@@ -788,10 +774,7 @@ export function getInvitationDetailHref(
   invitationId: string,
 ): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/invitation/[id]'
-        : '/(tabs)/discover/invitation/[id]',
+    pathname: `/(tabs)/${scope}/invitation/[id]` as const,
     params: { id: invitationId },
   };
 }
@@ -801,10 +784,7 @@ export function getSelectVerifierHref(
   params: { id: string; circleId: string; circleName: string },
 ): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/invitation/[id]/select-verifier'
-        : '/(tabs)/discover/invitation/[id]/select-verifier',
+    pathname: `/(tabs)/${scope}/invitation/[id]/select-verifier` as const,
     params,
   };
 }
@@ -814,10 +794,8 @@ export function getVerificationDetailHref(
   invitationId: string,
 ): Href {
   return {
-    pathname:
-      scope === 'messages'
-        ? '/(tabs)/messages/verification/[id]'
-        : '/(tabs)/discover/verification/[id]',
+    pathname: `/(tabs)/${scope}/verification/[id]` as const,
     params: { id: invitationId },
   };
 }
+

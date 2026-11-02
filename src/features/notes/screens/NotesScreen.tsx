@@ -59,6 +59,7 @@ import {
   getChatDetailHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
+  toCircleScope,
 } from '@/features/user/utils/routes';
 import {
   deleteNote,
@@ -525,7 +526,7 @@ export default function NotesScreen() {
         return;
       }
       if (card.target === 'circle') {
-        router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', card.id));
+        router.push(getCircleDetailHref(toCircleScope(scope), card.id));
         return;
       }
       // 聊天页入**当前所在** tab 栈（笔记多挂在 profile 下），不写死 messages ——

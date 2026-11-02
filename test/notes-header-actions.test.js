@@ -32,10 +32,10 @@ test('详情页群名片：独立群先查询入群资格，圈子群仍进圈�
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
   assert.match(detail, /onGroupPress=\{handleGroupCardPress\}/);
   assert.match(detail, /getGroupEntryHref\(scope, \{ groupId: conversationID \}\)/);
-  assert.match(detail, /router\.push\(getCircleDetailHref\(scope === 'discover' \? 'discover' : 'messages', id\)\);/);
+  assert.match(detail, /router\.push\(getCircleDetailHref\(toCircleScope\(scope\), id\)\);/);
 });
 
 test('列表群按钮：target 为 circle 时进圈子详情，与详情页群名片同口径', () => {
   const screen = read('src/features/notes/screens/NotesScreen.tsx');
-  assert.match(screen, /if \(card\.target === 'circle'\) \{\s*router\.push\(getCircleDetailHref\(scope === 'discover' \? 'discover' : 'messages', card\.id\)\);\s*return;/);
+  assert.match(screen, /if \(card\.target === 'circle'\) \{\s*router\.push\(getCircleDetailHref\(toCircleScope\(scope\), card\.id\)\);\s*return;/);
 });

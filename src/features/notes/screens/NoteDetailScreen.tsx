@@ -31,6 +31,7 @@ import {
   getUserProfileHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
+  toCircleScope,
 } from '@/features/user/utils/routes';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import {
@@ -169,7 +170,7 @@ export default function NoteDetailScreen() {
         );
         return;
       }
-      router.push(getCircleDetailHref(scope === 'discover' ? 'discover' : 'messages', id));
+      router.push(getCircleDetailHref(toCircleScope(scope), id));
     },
     [router, scope],
   );
