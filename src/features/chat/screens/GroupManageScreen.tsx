@@ -139,11 +139,6 @@ export default function GroupManageScreen() {
       state.conversations.find((candidate) => candidate.id === conversationID)
         ?.ownerId ?? null,
   );
-  const cachedCircleRole = useChatStore(
-    (state) =>
-      state.conversations.find((candidate) => candidate.id === conversationID)
-        ?.myRole ?? null,
-  );
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   // 与 ChatInfoScreen.groupDataKey 同一套键:两页共用一份成员缓存。
   const groupDataKey = groupID ? `circle:${groupID}` : `standalone:${conversationID}`;
@@ -155,9 +150,11 @@ export default function GroupManageScreen() {
   const [members, setMembers] = useState<ChatMemberDto[]>(cachedMembers ?? []);
   // undefined = 本次进入还没查回圈子详情。
   const [circleRole, setCircleRole] = useState<GroupRole | null | undefined>(undefined);
-  const [loading, setLoading] = useState(!cachedMembers);
+  // 缓存不是当前授权证明。管理页每次进入都先等成员接口（以及圈子详情）确认
+  // 当前座位/角色，避免被踢或撤权后短暂显示旧名单和管理数据。
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const loadedRef = useRef(Boolean(cachedMembers));
+  const loadedRef = useRef(false);
   // 从入群审核、扩容等页面回来:30 秒内、没有群/圈子写请求、实时字段没变,就不再拉成员
   // 目录 + 圈子详情 + 会话。本页的管理操作都是群写请求,做过就必重拉。
   const conversationReloadKey = useChatStore((state) =>
@@ -205,19 +202,11 @@ export default function GroupManageScreen() {
       state.conversations.find((candidate) => candidate.id === conversationID)
         ?.policies ?? null,
   );
-  // 圈子群:圈子详情第一次查回来之前,先按会话 DTO 上的 myRole 画(与 ChatInfoScreen.
-  // cachedCircleRole 同款)。只影响展示 —— 管理动作执行前都现场重查角色(fail-closed,
-  // 见 useGroupAdminActions),写接口服务端鉴权;查回来就以它为准。
   const selfRole: GroupRole | null = isStandaloneGroup
     ? resolveStandaloneSelfRole({ members, currentUserID, ownerId })
-    : circleRole === undefined
-      ? cachedCircleRole
-      : circleRole;
+    : (circleRole ?? null);
   const isOwner = selfRole === 'OWNER';
   const canManage = isGroupManager(selfRole);
-  // 圈子详情没回来、DTO 上也没有可借的角色(从圈子详情直进):先转圈,别先下「无权管理」的结论。
-  const awaitingCircleRole =
-    !isStandaloneGroup && circleRole === undefined && !canManage;
 
   const load = useCallback(async () => {
     if (!conversationID) {
@@ -682,7 +671,7 @@ export default function GroupManageScreen() {
   );
 
   let body: React.ReactNode;
-  if (loading || (awaitingCircleRole && !error)) {
+  if (loading) {
     body = (
       <View style={s.center}>
         <ActivityIndicator color={colors.primary} />

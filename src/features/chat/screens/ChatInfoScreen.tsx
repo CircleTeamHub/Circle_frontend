@@ -61,7 +61,6 @@ import {
   readGroupInfoCache,
   writeGroupInfoCache,
 } from '@/features/chat/group-info-cache';
-import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
 import { useAuthStore } from '@/stores/authStore';
 import {
   allowsMemberInvites,
@@ -361,6 +360,10 @@ export default function ChatInfoScreen() {
   // 还没有该会话,置顶/免打扰的当前值与目标会话 id 都以它兜底。
   const [groupConversation, setGroupConversation] = useState<ChatConversationDto | null>(null);
   const [groupMembersExpanded, setGroupMembersExpanded] = useState(false);
+  // TEMP/独立群没有圈子角色 hook；缓存不能替代本次进入后的座位校验。
+  const [standaloneDirectoryAccess, setStandaloneDirectoryAccess] = useState<
+    'pending' | 'allowed' | 'denied'
+  >('pending');
   // 头像长按选了「禁言」的目标:先挑时长再调接口。
   const [silenceTarget, setSilenceTarget] = useState<ChatMemberDto | null>(null);
   const [renameDialogVisible, setRenameDialogVisible] = useState(false);
@@ -485,19 +488,10 @@ export default function ChatInfoScreen() {
     active: isFocused,
     roleHint: conversation?.myRole ?? null,
   });
-  // 活体角色第一次查回来之前(一次 /circle/:id 往返),先按会话缓存里的 myRole 画:
-  // 不然成员网格和管理入口每次进来都要等这一轮才弹出来。只影响展示 —— 管理动作
-  // 执行前都现场重查角色,成员目录接口服务端鉴权;活体结果一到就以它为准。
-  const cachedCircleRole = liveGroupRoleResolved ? null : (conversation?.myRole ?? null);
-  const currentGroupMember =
-    liveGroupMember ??
-    (cachedCircleRole && currentUserID
-      ? { userID: currentUserID, role: cachedCircleRole }
-      : null);
-  const canViewCircleMemberDirectory = liveGroupRoleResolved
-    ? liveCanViewCircleMemberDirectory
-    : canViewCircleMembers(cachedCircleRole) ||
-      (cachedCircleRole === 'MEMBER' && membersCanViewRoster === true);
+  // 成员姓名/头像是权限敏感数据：会话 DTO 上的旧 myRole 不能作为本次授权。
+  const currentGroupMember = liveGroupRoleResolved ? liveGroupMember : null;
+  const canViewCircleMemberDirectory =
+    liveGroupRoleResolved && liveCanViewCircleMemberDirectory;
   // 临时房不是圈子,没有圈子角色可判——目录权限由后端的座位校验兜底
   // (GET /chat/conversations/:id/members),与 ChatDetailScreen 同口径。
   // 不放开的话本页会渲染群布局却永远 0 成员、没有成员目录。
@@ -515,7 +509,9 @@ export default function ChatInfoScreen() {
   // 「是否显示群成员」再叠一层:关掉后普通成员看不到网格与成员行,
   // 群主/管理员不受限(判据与服务端 listMembers 一致,免得摆个必然 403 的入口)。
   const canViewMemberDirectory =
-    (isTempConversation || isStandaloneGroup || canViewCircleMemberDirectory) &&
+    (isTempConversation || isStandaloneGroup
+      ? standaloneDirectoryAccess === 'allowed'
+      : canViewCircleMemberDirectory) &&
     (isTempConversation ||
       isGroupManager(selfGroupRoleForRoster) ||
       rosterVisibleToMembers);
@@ -688,6 +684,7 @@ export default function ChatInfoScreen() {
     setGroupInfo(cached?.groupInfo ?? null);
     setGroupMembers(cached?.members ?? []);
     setGroupConversation(null);
+    setStandaloneDirectoryAccess('pending');
   }, [groupDataKey, sessionEpoch]);
   // 本页就地改了成员/群名:缓存作废,下次进来重新拉,不先显示改之前的样子。
   const evictGroupCache = useCallback(
@@ -720,6 +717,7 @@ export default function ChatInfoScreen() {
           .then((members) => {
             if (cancelled) return;
             setGroupMembers(members);
+            setStandaloneDirectoryAccess('allowed');
             writeGroupInfoCache(sessionEpoch, groupDataKey, { members });
             groupReloadGate.markLoaded(startedAt);
           })
@@ -727,6 +725,7 @@ export default function ChatInfoScreen() {
             // 屏上保留已显示的名单(网络抖动不闪);缓存作废 —— 失败也可能是已被移出,
             // 下次进来不能再先画出旧名单。下一次聚焦继续重试。
             evictGroupInfoCache(sessionEpoch, groupDataKey);
+            setStandaloneDirectoryAccess('denied');
           });
         return () => {
           cancelled = true;
@@ -740,12 +739,14 @@ export default function ChatInfoScreen() {
           .then((members) => {
             if (cancelled) return;
             setGroupMembers(members);
+            setStandaloneDirectoryAccess('allowed');
             writeGroupInfoCache(sessionEpoch, groupDataKey, { members });
             groupReloadGate.markLoaded(startedAt);
           })
           .catch(() => {
             // 同上:屏上保留,缓存作废。
             evictGroupInfoCache(sessionEpoch, groupDataKey);
+            setStandaloneDirectoryAccess('denied');
           });
         return () => {
           cancelled = true;

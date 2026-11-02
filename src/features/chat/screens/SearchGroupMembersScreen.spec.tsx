@@ -190,7 +190,7 @@ describe('a group seen before', () => {
   const HIDDEN_ROSTER = { ...CLOSED_POLICIES, membersCanViewRoster: false };
   const cached = [member('me', '我'), member('u2', '张三')];
 
-  test('shows the cached members at once and swaps in the refresh behind them', async () => {
+  test('keeps a standalone cached roster hidden until the seat check succeeds', async () => {
     mockParams.conversationID = 'conv-1';
     mockChatState.conversations = [
       { id: 'conv-1', myRole: 'MEMBER', policies: CLOSED_POLICIES },
@@ -203,8 +203,8 @@ describe('a group seen before', () => {
     jest.mocked(fetchChatMembers).mockReturnValueOnce(refresh.promise as never);
 
     render(<SearchGroupMembersScreen />);
-    expect(screen.getByText('张三')).toBeTruthy();
-    expect(spinner()).toBeNull();
+    expect(screen.queryByText('张三')).toBeNull();
+    expect(spinner()).not.toBeNull();
 
     await act(async () => {
       refresh.resolve([member('me', '我'), member('u3', '李四')]);
@@ -219,18 +219,18 @@ describe('a group seen before', () => {
     ).toEqual(['me', 'u3']);
   });
 
-  test('a temp room shares the chat info entry instead of starting its own', () => {
+  test('keeps a temp-room cached roster hidden until the seat check succeeds', () => {
     mockParams.conversationID = 'tmp-1';
     mockChatState.conversations = [{ id: 'tmp-1', type: 'TEMP' }];
     writeGroupInfoCache(mockAuth.sessionEpoch, 'temp:tmp-1', { members: cached as never });
     jest.mocked(fetchChatMembers).mockReturnValueOnce(new Promise(() => {}) as never);
 
     render(<SearchGroupMembersScreen />);
-    expect(screen.getByText('张三')).toBeTruthy();
-    expect(spinner()).toBeNull();
+    expect(screen.queryByText('张三')).toBeNull();
+    expect(spinner()).not.toBeNull();
   });
 
-  test('a circle manager sees the cached roster on the conversation role before the live role is back', () => {
+  test('keeps a circle manager cache hidden until the live role is back', () => {
     mockParams.groupID = 'circle-1';
     mockChatState.conversations = [
       { id: 'conv-circle', circleId: 'circle-1', myRole: 'ADMIN', policies: HIDDEN_ROSTER },
@@ -245,8 +245,8 @@ describe('a group seen before', () => {
     jest.mocked(createCircleChatConversation).mockReturnValue(new Promise(() => {}) as never);
 
     render(<SearchGroupMembersScreen />);
-    expect(screen.getByText('张三')).toBeTruthy();
-    expect(spinner()).toBeNull();
+    expect(screen.queryByText('张三')).toBeNull();
+    expect(spinner()).not.toBeNull();
   });
 
   test('an ordinary member of a hidden roster waits for the live role instead of seeing the cache', () => {
