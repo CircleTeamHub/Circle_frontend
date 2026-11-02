@@ -253,7 +253,7 @@
     "desktopEmptyDetail": "Select a conversation to start chatting",
     "imNotConnected": "IM isn't connected. Please sign in again.",
     "imConnecting": "Connecting to IM…",
-    "imNetworkError": "Your network connection is unstable. Switch to a better network and try again.",
+    "imServerUnreachable": "Can't reach the server. Retrying…",
     "imServerError": "The server is having a problem. Please try again later.",
     "swipeMarkRead": "Mark Read",
     "swipeMarkUnread": "Mark Unread",

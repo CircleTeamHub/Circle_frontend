@@ -881,7 +881,7 @@
     "desktopEmptyDetail": "대화를 선택해 채팅을 시작하세요",
     "imNotConnected": "IM에 연결되어 있지 않습니다. 다시 로그인해 주세요.",
     "imConnecting": "IM에 연결 중…",
-    "imNetworkError": "네트워크 연결이 불안정합니다. 더 안정적인 네트워크로 전환한 후 다시 시도해 주세요.",
+    "imServerUnreachable": "서버에 연결할 수 없습니다. 다시 연결하는 중…",
     "imServerError": "서버에 문제가 있습니다. 잠시 후 다시 시도해 주세요.",
     "swipeMarkRead": "읽음 표시",
     "swipeMarkUnread": "안 읽음 표시",

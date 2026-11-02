@@ -881,7 +881,7 @@
     "desktopEmptyDetail": "会話を選択してチャットを始めましょう",
     "imNotConnected": "IM に接続されていません。再度ログインしてください。",
     "imConnecting": "IM に接続中…",
-    "imNetworkError": "ネットワークが不安定です。より安定したネットワークに切り替えて、もう一度お試しください。",
+    "imServerUnreachable": "サーバーに接続できません。再接続しています…",
     "imServerError": "サーバーで問題が発生しています。しばらくしてからもう一度お試しください。",
     "swipeMarkRead": "既読にする",
     "swipeMarkUnread": "未読にする",

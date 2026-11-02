@@ -253,7 +253,7 @@
     "desktopEmptyDetail": "选择一个会话开始聊天",
     "imNotConnected": "IM 未连接，请重新登录后重试",
     "imConnecting": "正在连接 IM…",
-    "imNetworkError": "网络连接不稳定，请切换更好的网络后重试",
+    "imServerUnreachable": "无法连接服务器，正在重试…",
     "imServerError": "服务器异常，请稍后再试",
     "swipeMarkRead": "标记已读",
     "swipeMarkUnread": "标记未读",

@@ -18,6 +18,7 @@ import ChatDetailScreen, {
   type EmbeddedChatParams,
 } from "@/features/chat/screens/ChatDetailScreen";
 import { selectFailedConversationKey } from "@/features/messages/utils/failed-preview";
+import { ChatConnectionBanner } from "@/features/chat/components/ChatConnectionBanner";
 import {
   parsePinnedLayoutKey,
   pinnedLayoutKeyOf,
@@ -124,19 +125,6 @@ const s = StyleSheet.create({
     gap: Spacing.lg,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
-  },
-  imBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.md,
-  },
-  imBannerText: {
-    ...Typography.small,
-    fontWeight: "600",
   },
   // 标题行：左侧"消息"文字 + 右侧操作按钮组
   titleRow: {
@@ -740,7 +728,6 @@ export default function MessagesScreen() {
   const currentUserID = useChatStore((state) => state.currentUserId);
   const connectionError = useChatStore((state) => state.error);
   const imConnected = useChatStore((state) => state.connected);
-  const imConnecting = useChatStore((state) => state.connecting);
   const conversationsSnapshotLoaded = useChatStore(
     (state) => state.conversationsSnapshotLoaded,
   );
@@ -846,12 +833,6 @@ export default function MessagesScreen() {
       title: {
         color: colors.text,
         ...Typography.title,
-      },
-      imBanner: {
-        backgroundColor: colors.warning,
-      },
-      imBannerText: {
-        color: colors.white,
       },
       name: {
         color: colors.text,
@@ -1428,38 +1409,17 @@ export default function MessagesScreen() {
           <Text style={[s.addGroupIcon, { color: colors.textSecondary }]}>＋</Text>
         </Pressable>
       </View>
-      {/* 连接恢复期间保持安静；只有握手失败后才显示横幅。 */}
-      {!imConnected && !imConnecting && connectionError ? (
-        <View style={[s.imBanner, d.imBanner]}>
-          <Ionicons
-            name="cloud-offline-outline"
-            size={15}
-            color={d.imBannerText.color}
-          />
-          <Text style={[s.imBannerText, d.imBannerText]}>
-            {t(
-              connectionError === "network_error" ||
-                connectionError === "timeout" ||
-                connectionError === "transport_error"
-                ? "messages.imNetworkError"
-                : "messages.imServerError",
-            )}
-          </Text>
-        </View>
-      ) : null}
+      <ChatConnectionBanner />
     </View>
   ), [
     activeTab,
     colors,
-    connectionError,
     d,
     filterItems,
     handleClearUnread,
     handleFilterPress,
     handleOpenFind,
     handleOpenGroups,
-    imConnected,
-    imConnecting,
     t,
   ]);
 
