@@ -13,15 +13,28 @@ test('五个 tab 依次是 消息/联系人/圈子/探索/我的，圈子用 App
 
   // 圈子 tab 的路由目录沿用 discover（深链都挂在下面），文案是「圈子」。
   assert.match(bar, /name: 'discover',\s*icon: 'plane-logo',\s*key: 'tabs\.circles'/);
-  // 纸飞机 tab 只画图标不带文字(文案只留给读屏),图标相应放大。
-  assert.match(bar, /\{tab\.icon === 'plane-logo' \? null : \(\s*<Text/);
-  assert.match(bar, /const TAB_LOGO_SIZE_BOOST = 7;/);
+  // 圈子不进 bar:bar 只排其余四个 tab,圈子是右侧独立的圆按钮(参考稿)。
+  assert.match(bar, /const barEntries = entries\.flatMap\(\(\{ tab, \.\.\.rest \}\) =>\s*isFeaturedTab\(tab\) \? \[\] :/);
+  assert.match(bar, /const featuredEntry = entries\.find\(\(\{ tab \}\) => isFeaturedTab\(tab\)\);/);
+  assert.match(bar, /<FeaturedTabButton\s*focused=\{state\.index === featuredEntry\.routeIndex\}/);
+  // 圆按钮:选中与否都是品牌紫渐变 + 白色纸飞机(用户要求一直保持紫色),选中时纸飞机填实。
+  assert.match(bar, /<Svg\s*style=\{styles\.featuredFill\}/);
+  assert.doesNotMatch(bar, /\{focused \? null : \([\s\S]{0,200}?<Svg/);
+  assert.match(bar, /<Animated\.View style=\{\[styles\.featuredGlow, pressStyle\]\}>/);
+  // 渐变圆用百分比内切:玻璃面的 1pt 描边让可画区域只有 58×58,写死 60 的圆心/半径会被
+  // 裁掉右下各一截,看着像被压扁(实机反馈)。
+  assert.match(bar, /<Circle cx="50%" cy="50%" r="50%" fill=\{`url\(#\$\{gradientId\}\)`\} \/>/);
+  assert.doesNotMatch(bar, /cx=\{TAB_FEATURED_SIZE \/ 2\}/);
+  assert.match(
+    bar,
+    /<PlaneLogoIcon size=\{TAB_FEATURED_LOGO_SIZE\} color=\{colors\.white\} filled=\{focused\} \/>/,
+  );
+  // bar 里的格子不再有纸飞机分支。
+  assert.doesNotMatch(bar, /TAB_CENTER_|centerDisc|TAB_LOGO_SIZE_BOOST/);
   assert.match(
     bar,
     /name: 'explore',\s*icon: 'compass-outline',\s*selectedIcon: 'compass',\s*key: 'tabs\.explore'/,
   );
-  // 纸飞机随选中态着色，和 Ionicons 一样走 iconTint。
-  assert.match(bar, /<PlaneLogoIcon[\s\S]*?color=\{iconTint\}[\s\S]*?filled=\{focused\}/);
   assert.match(bar, /explore: E2E_TEST_IDS\.tabsExplore/);
 });
 
@@ -69,13 +82,11 @@ test('自绘 tab bar：避开系统导航栏，选中态用弹性胶囊反馈当
   // bar 是完整胶囊
   assert.match(layout, /const TAB_BAR_HEIGHT = \d+/);
   assert.match(layout, /const TAB_BAR_RADIUS = TAB_BAR_HEIGHT \/ 2/);
-  // 浮动条贴近底部安全区，不要悬得过高遮住列表主体。
-  assert.match(layout, /const TAB_BAR_MARGIN_B = 2/);
-  assert.match(layout, /const TAB_BAR_SAFE_AREA_OVERLAP = 14/);
-  // Android 三键/手势导航栏会占用底部 safe area，浮动 bar 必须叠加 bottom inset。
+  // 下沿压在 home indicator 安全区上沿(参考稿);Android 三键/手势导航栏会占用底部 safe area,
+  // 浮动 bar 必须让开 bottom inset;没有安全区的机型离屏幕底留一点。
   assert.match(layout, /useSafeAreaInsets/);
   assert.match(layout, /const insets = useSafeAreaInsets\(\)/);
-  assert.match(layout, /Math\.max\(insets\.bottom - TAB_BAR_SAFE_AREA_OVERLAP, 0\)/);
+  assert.match(layout, /marginBottom: Math\.max\(insets\.bottom, TAB_BAR_MIN_BOTTOM\)/);
   // 上下内边距 → 药丸高 = bar 高 - 2*PAD_V，不靠 flex 拉满救场
   assert.match(layout, /const TAB_BAR_PAD_V/);
   assert.match(layout, /const TAB_PILL_HEIGHT = TAB_BAR_HEIGHT - TAB_BAR_PAD_V \* 2/);
@@ -265,4 +276,45 @@ test('hidden tab bar leaves the accessibility tree and keyboard focus', () => {
 test('旧 tab bar 桥卸载时不会撤掉新桥刚发布的 bar（登录后 bar 迟迟不出现）', () => {
   const store = read('src/stores/tabBarBridgeStore.ts');
   assert.match(store, /unpublish: \(owner\) => \{\s*if \(get\(\)\.owner !== owner\) return;/);
+});
+
+// 尺寸比例照用户给的参考稿(440pt 宽屏实测):bar 与右侧圆按钮同高 60、中线对齐,
+// 左 20 / 间隔 16 / 右 16,内边距 5,选中底整格宽,图标 22、文字 10。
+test('tab bar proportions follow the reference layout', () => {
+  const bar = read('src/components/app/floating-tab-bar.tsx');
+  const num = (name) => Number(bar.match(new RegExp(`const ${name} = (-?[\\d.]+);`))[1]);
+  assert.equal(num('TAB_BAR_HEIGHT'), 60);
+  assert.match(bar, /const TAB_FEATURED_SIZE = TAB_BAR_HEIGHT;/);
+  assert.equal(num('TAB_BAR_MARGIN_LEFT'), 20);
+  assert.equal(num('TAB_FEATURED_GAP'), 16);
+  assert.equal(num('TAB_BAR_MARGIN_RIGHT'), 16);
+  assert.equal(num('TAB_BAR_PAD_H'), 5);
+  assert.equal(num('TAB_BAR_PAD_V'), 5);
+  assert.equal(num('TAB_PILL_GAP'), 0);
+  assert.equal(num('TAB_ICON_SIZE'), 22);
+  assert.match(bar, /label: \{\s*fontSize: 10,/);
+});
+
+// 圆按钮里的纸飞机按外框居中、约占圆径一半,且不贴圆边(按真实路径点算)。
+test('the circles button plane sits inside its circle', () => {
+  const bar = read('src/components/app/floating-tab-bar.tsx');
+  const icon = read('src/components/app/plane-logo-icon.tsx');
+  const num = (name) => Number(bar.match(new RegExp(`const ${name} = (-?[\\d.]+);`))[1]);
+  const circle = num('TAB_BAR_HEIGHT');
+  const size = num('TAB_FEATURED_LOGO_SIZE');
+  const viewBox = Number(icon.match(/const PLANE_LOGO_VIEWBOX = (\d+);/)[1]);
+  const points = [...icon.matchAll(/'(M[^']+)'/g)].flatMap(([, d]) => {
+    const n = d.match(/-?\d+(\.\d+)?/g).map(Number);
+    const pairs = [];
+    for (let i = 0; i + 1 < n.length; i += 2) pairs.push([n[i], n[i + 1]]);
+    return pairs;
+  });
+  assert.ok(points.length > 100, 'plane path points parsed');
+  const scale = size / viewBox;
+  const worst = Math.max(
+    ...points.map(([x, y]) => Math.hypot((x - viewBox / 2) * scale, (y - viewBox / 2) * scale)),
+  );
+  assert.ok(circle / 2 - worst >= 1.5, `plane comes within ${(circle / 2 - worst).toFixed(2)}pt of the circle edge`);
+  const ratio = size / circle;
+  assert.ok(ratio >= 0.45 && ratio <= 0.55, `plane is ${(ratio * 100).toFixed(0)}% of the circle`);
 });
