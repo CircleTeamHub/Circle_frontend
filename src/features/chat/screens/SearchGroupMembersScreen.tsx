@@ -112,6 +112,11 @@ export default function SearchGroupMembersScreen() {
   const [members, setMembers] = useState<ChatMemberDto[] | null>(
     () => readGroupInfoCache(sessionEpoch, groupDataKey)?.members ?? null,
   );
+  // 缓存只负责保存数据，不代表当前仍有权查看。每次进入都要等成员接口在本次
+  // 会话里确认座位/目录权限；否则被移出群或撤权后会先闪出旧成员姓名和头像。
+  const [directoryAccess, setDirectoryAccess] = useState<
+    'pending' | 'allowed' | 'denied'
+  >('pending');
   // 圈子群的会话 DTO(取或建的结果):从圈子详情等入口进来时 store 里可能还没有
   // 该会话,策略开关与会话 id 都以它兜底 —— 与 ChatInfoScreen.groupConversation 同款。
   const [circleConversation, setCircleConversation] =
@@ -165,7 +170,7 @@ export default function SearchGroupMembersScreen() {
     ? liveCircleAuthorized
     : canViewCircleMembers(cachedRole) ||
       (cachedRole === 'MEMBER' && membersCanViewRoster === true);
-  const authorized = isStandaloneGroup || circleAuthorized;
+  const authorized = directoryAccess === 'allowed' && (isStandaloneGroup || circleAuthorized);
   // 「成员可查看他人资料」策略:两种群同一判据(群主/管理员豁免,普通成员按开关),
   // 与 ChatInfoScreen / ChatDetailScreen 共用 allowsMemberProfiles —— 这个策略只在
   // 客户端拦,本页对圈子群直接放行就等于没有这道闸。圈子群的角色优先用活体
@@ -213,9 +218,11 @@ export default function SearchGroupMembersScreen() {
         if (cancelled) return;
         if (nextMembers) {
           writeGroupInfoCache(sessionEpoch, groupDataKey, { members: nextMembers });
+          setDirectoryAccess('allowed');
         } else {
           // 没有目录权限:缓存里的名单也不能再给他看(群聊信息页同一份)。
           evictGroupInfoCache(sessionEpoch, groupDataKey);
+          setDirectoryAccess('denied');
         }
         setMembers(nextMembers);
       })
@@ -223,6 +230,7 @@ export default function SearchGroupMembersScreen() {
         if (cancelled) return;
         // 分不清是被撤权还是网络抖动:按撤权处理,下次进来重新拉。
         evictGroupInfoCache(sessionEpoch, groupDataKey);
+        setDirectoryAccess('denied');
         setMembers([]);
       });
 
@@ -230,7 +238,6 @@ export default function SearchGroupMembersScreen() {
       cancelled = true;
     };
   }, [
-    authorized,
     circleAuthorized,
     groupDataKey,
     groupID,
@@ -241,7 +248,7 @@ export default function SearchGroupMembersScreen() {
 
   // 有权看:有名单(缓存或刚拉到的)就直接画,一份都没有才转圈。无权:活体角色查回来
   // 之前不下结论(可能马上就有权了),先转圈;查回来仍无权才显示「无权查看」。
-  const loading = authorized ? members === null : !accessResolved;
+  const loading = directoryAccess === 'pending';
 
   const trimmedQuery = query.trim().toLowerCase();
   // 搜索也认群昵称:群里认得的是它,只按账号昵称搜会搜不到人。

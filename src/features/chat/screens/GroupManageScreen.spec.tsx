@@ -181,7 +181,7 @@ describe('standalone group', () => {
     expect(cachedIDs('standalone:conv-1')).toEqual(['me', 'u2']);
   });
 
-  test('a group seen before opens on the cached roster and refreshes behind it', async () => {
+  test('a cached standalone roster stays hidden until the seat check succeeds', async () => {
     // 群聊信息页拉过的名单(同一个键),这里直接用。
     writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:conv-1', {
       members: [member('me', '我', 'OWNER'), member('u2', '张三', 'ADMIN')] as never,
@@ -190,8 +190,8 @@ describe('standalone group', () => {
     jest.mocked(fetchChatMembers).mockReturnValueOnce(directory.promise as never);
 
     render(<GroupManageScreen />);
-    expect(screen.getByText('张三')).toBeTruthy();
-    expect(spinner()).toBeNull();
+    expect(screen.queryByText('张三')).toBeNull();
+    expect(spinner()).not.toBeNull();
     expect(fetchChatMembers).toHaveBeenCalledWith('conv-1');
 
     await act(async () => {
@@ -244,7 +244,7 @@ describe('circle group', () => {
     });
   });
 
-  test('uses the conversation role until the circle detail answers, then follows it', async () => {
+  test('keeps cached circle management data hidden until the live role answers', async () => {
     mockChatState.conversations = [
       { id: 'conv-c', circleId: 'circle-1', myRole: 'OWNER', policies: POLICIES },
     ];
@@ -254,8 +254,8 @@ describe('circle group', () => {
     jest.mocked(fetchChatMembers).mockReturnValueOnce(directory.promise as never);
 
     render(<GroupManageScreen />);
-    expect(screen.getByText('张三')).toBeTruthy();
-    expect(spinner()).toBeNull();
+    expect(screen.queryByText('张三')).toBeNull();
+    expect(spinner()).not.toBeNull();
 
     // 活体角色以圈子详情为准:已经被撤成普通成员,管理页随即收起。
     await act(async () => {
