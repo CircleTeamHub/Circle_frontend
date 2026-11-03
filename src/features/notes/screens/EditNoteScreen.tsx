@@ -508,6 +508,7 @@ export default function EditNoteScreen() {
   const [titleAdded, setTitleAdded] = useState(false);
   const titleInputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const groupCardLayoutYRef = useRef(0);
   // 正文统计走独立的小 store，不进本组件的 state —— 见 note-text-stats.ts 的注释。
   const [textStatsStore] = useState(createNoteTextStatsStore);
   const textBlocksByIdRef = useRef<Record<string, Record<string, unknown>[]>>({});
@@ -2434,6 +2435,9 @@ export default function EditNoteScreen() {
           faceURL: group.avatarUrl ?? null,
         })),
       ].slice(0, 1));
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: groupCardLayoutYRef.current, animated: true });
+      });
     }
     closeCardPicker();
   }, [cardPickerKind, groupOptions, contactPickerItems, contactItems, groupCardItems, closeCardPicker, selectedCardIds, sourceGroupCardLocked]);
@@ -2560,8 +2564,8 @@ export default function EditNoteScreen() {
       return;
     }
     // 标题、位置、名片和群名片在笔记模型里各只有一个值；文字、媒体等
-    // 其余类型则是可重复的独立区块。工具栏只负责插入区块，区块内的
-    // 操作按钮才负责打开选择器、上传或开始录音，避免点击工具栏就跳出面板。
+    // 其余类型则是可重复的独立区块。群名片工具栏同时打开已有选择器；
+    // 其他类型仍由区块内的操作按钮打开选择器、上传或开始录音。
     if (isNoteComposerSingletonKind(kind) && composerBlocks.some((block) => block.kind === kind)) {
       return;
     }
@@ -3868,7 +3872,13 @@ export default function EditNoteScreen() {
             </View>
           ) : null}
           {editableComposerBlocks.map((block, index) => (
-            <View key={block.id} style={s.composerBlock}>{renderComposerSection(block, index)}</View>
+            <View
+              key={block.id}
+              style={s.composerBlock}
+              onLayout={block.kind === 'group' ? (event) => { groupCardLayoutYRef.current = event.nativeEvent.layout.y; } : undefined}
+            >
+              {renderComposerSection(block, index)}
+            </View>
           ))}
         </View>
       </ScrollView>
@@ -3890,7 +3900,10 @@ export default function EditNoteScreen() {
                 key={action.kind}
                 style={s.composerTool}
                 disabled={isEditingLocked}
-                onPress={() => addComposerBlock(action.kind)}
+                onPress={() => {
+                  addComposerBlock(action.kind);
+                  if (action.kind === 'group') void openCardPicker('group');
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={label}
               >

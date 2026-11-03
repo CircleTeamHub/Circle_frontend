@@ -1865,6 +1865,52 @@ test('does not publish while audio recording is active', async () => {
   rendered.unmount();
 });
 
+test('the group-card toolbar opens the picker directly and displays and saves the chosen group', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockPickerCircles.mockResolvedValue([{ id: 'owned-group', name: 'Selected group', avatarUrl: 'https://cdn.test/group.jpg' }]);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.group' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Selected group' })).toBeTruthy());
+    expect(mockPickerCircles).toHaveBeenCalledWith('owner-a');
+    fireEvent.press(screen.getByRole('radio', { name: 'Selected group' }));
+    fireEvent.press(screen.getByText('common.done'));
+    expect(screen.queryByRole('radio', { name: 'Selected group' })).toBeNull();
+    expect(screen.getByText('Selected group')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(jest.mocked(createNote).mock.calls.at(-1)?.[0].sections?.groups?.items).toEqual([
+      { id: 'owned-group', name: 'Selected group', faceURL: 'https://cdn.test/group.jpg' },
+    ]);
+  } finally { rendered.unmount(); }
+});
+
+test('the group-card toolbar reopens an existing card without duplicating its section and keeps it on cancel', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft({ sections: {
+    groups: { items: [{ id: 'owned-group', name: 'Existing group', faceURL: null }] },
+  } }));
+  mockCachedCircles.mockReturnValue([{ id: 'owned-group', name: 'Existing group' }]);
+  mockPickerCircles.mockResolvedValue([{ id: 'owned-group', name: 'Existing group' }]);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByText('Existing group')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.group' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Existing group' })).toBeTruthy());
+    expect(screen.getByRole('radio', { name: 'Existing group' }).props.accessibilityState.checked).toBe(true);
+    fireEvent.press(screen.getByText('common.cancel'));
+    expect(screen.getByText('Existing group')).toBeTruthy();
+    expect(screen.getAllByText('notes.edit.addGroup')).toHaveLength(1);
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(jest.mocked(createNote).mock.calls.at(-1)?.[0].sections?.groups?.items).toEqual([
+      { id: 'owned-group', name: 'Existing group' },
+    ]);
+  } finally { rendered.unmount(); }
+});
+
 test.each(['contact', 'group'] as const)('clears %s picker rows and ignores the old response after switching accounts', async (kind) => {
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
