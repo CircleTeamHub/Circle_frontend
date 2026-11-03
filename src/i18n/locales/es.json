@@ -308,6 +308,8 @@
       "disappearingMessageNotice": "Tus nuevos mensajes desaparecen {{duration}} después de que el destinatario los lea. Los mensajes de otros no cambian. La plataforma conserva los mensajes desaparecidos durante 180 días para revisión administrativa autorizada.",
       "personalDisappearingMessageNotice": "Tus nuevos mensajes desaparecen {{duration}} después de que el destinatario los lea. Los mensajes de otros no cambian. La plataforma conserva los mensajes desaparecidos durante 180 días para revisión administrativa autorizada.",
       "attachmentPanelLabel": "Abrir panel de adjuntos",
+      "voiceInputLabel": "Entrada de voz",
+      "emojiPanelLabel": "Abrir panel de emojis",
       "sendFailedText": "No se pudo enviar el mensaje, inténtalo de nuevo",
       "sensitiveWordBlocked": "Mensaje bloqueado: contiene palabras prohibidas",
       "recordStartFailed": "No se pudo iniciar la grabación, inténtalo de nuevo",

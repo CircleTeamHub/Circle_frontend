@@ -421,6 +421,8 @@
       "disappearingMessageNotice": "Your new messages disappear {{duration}} after the recipient reads them. Messages sent by others are unaffected. The platform retains disappeared messages for 180 days for authorized administrator review.",
       "personalDisappearingMessageNotice": "Your new messages disappear {{duration}} after the recipient reads them. Messages sent by others are unaffected. The platform retains disappeared messages for 180 days for authorized administrator review.",
       "attachmentPanelLabel": "Open attachment panel",
+      "voiceInputLabel": "Voice input",
+      "emojiPanelLabel": "Open emoji panel",
       "sendFailedText": "Failed to send message, please try again",
       "sensitiveWordBlocked": "Message blocked: it contains prohibited words",
       "recordStartFailed": "Failed to start recording, please try again",

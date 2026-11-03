@@ -129,6 +129,7 @@ jest.mock('@/theme', () => {
     Spacing: numbers,
     Radius: numbers,
     Typography: typography,
+    withAlpha: jest.requireActual('@/theme/tokens').withAlpha,
   };
 });
 jest.mock('@/storage', () => ({
@@ -628,13 +629,18 @@ test('a send refused before it reaches the screen keeps the draft', async () => 
   expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('留着我');
 });
 
-test('the empty-composer action opens the attachment panel, and the emoji panel inserts into the draft', async () => {
+test('the left attachment button stays available with a draft and the right emoji button inserts into it', async () => {
   render(<ChatDetailScreen />);
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
 
   expect(screen.queryByText('chat.attachments.location')).toBeNull();
+  fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), '你好');
+  expect(screen.getByText('icon:mic-outline')).toBeTruthy();
+  fireEvent(screen.getByTestId(E2E_TEST_IDS.chatInput), 'selectionChange', {
+    nativeEvent: { selection: { start: 2, end: 2 } },
+  });
   await act(async () => {
-    fireEvent.press(screen.getByTestId(E2E_TEST_IDS.chatSend));
+    fireEvent.press(screen.getByLabelText('chat.detail.attachmentPanelLabel'));
   });
   expect(await screen.findByText('chat.attachments.location', {}, SETTLE)).toBeTruthy();
 
@@ -649,7 +655,20 @@ test('the empty-composer action opens the attachment panel, and the emoji panel 
   await act(async () => {
     fireEvent.press(pick);
   });
-  expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('😀');
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('你好😀');
+  expect(sendTextMessage).not.toHaveBeenCalled();
+});
+
+test('the white emoji button switches from voice mode back to an editable draft', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByText('icon:mic-outline')));
+  expect(screen.queryByTestId(E2E_TEST_IDS.chatInput)).toBeNull();
+  expect(screen.getByText('chat.detail.voiceHoldToTalk')).toBeTruthy();
+
+  await act(async () => fireEvent.press(screen.getByText('icon:happy-outline')));
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput)).toBeTruthy();
+  expect(await screen.findByLabelText('pick-emoji', {}, SETTLE)).toBeTruthy();
 });
 
 test('touching the message area dismisses the keyboard and input panels without consuming message actions', async () => {

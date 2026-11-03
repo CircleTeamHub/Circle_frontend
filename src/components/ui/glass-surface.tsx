@@ -9,7 +9,7 @@ import {
 import { getAppBlurTarget } from '@/components/app/app-blur-target';
 import { useTheme, withAlpha } from '@/theme';
 
-export type GlassMaterial = 'dialog' | 'banner';
+export type GlassMaterial = 'dialog' | 'banner' | 'composer';
 
 /**
  * 弹窗蒙层的深浅。用户拍板**不要蒙层**（0）：玻璃卡片直接浮在内容上，模态靠全屏
@@ -57,6 +57,12 @@ const MATERIALS: Record<
     androidDim: 0,
     ios: { dark: 'systemUltraThinMaterialDark', light: 'systemUltraThinMaterialLight' },
   },
+  composer: {
+    intensity: 18,
+    tintAlpha: 0.06,
+    androidDim: 0,
+    ios: { dark: 'systemUltraThinMaterialDark', light: 'systemUltraThinMaterialLight' },
+  },
 };
 
 /** 没有液态玻璃兜底模糊的旧 iOS，磨砂强度补这么多，正文才不会和后面的字叠在一起。 */
@@ -84,7 +90,7 @@ const s = StyleSheet.create({
 });
 
 /**
- * 玻璃面：弹窗卡片与顶部横幅共用的材质外壳。
+ * 玻璃面：弹窗卡片、顶部横幅与聊天输入栏共用的材质外壳。
  *
  * - iOS 26+：expo-glass-effect 的液态玻璃（折射）+ 叠一层磨砂 + 半透明底色。
  *   只有折射没有磨砂的话正文糊在动态内容上读不清，也会和旧系统长成两种东西。
@@ -166,7 +172,7 @@ export function GlassSurface({ material, radius, style, children }: GlassSurface
     <View
       style={[
         frame,
-        { backgroundColor: withAlpha(colors.surface, FALLBACK_SURFACE_ALPHA) },
+        { backgroundColor: withAlpha(colors.surface, material === 'composer' ? 0.64 : FALLBACK_SURFACE_ALPHA) },
         // RNW 支持就有真磨砂，不支持就是普通半透明 —— 两种结果都可接受。
         Platform.OS === 'web' ? WEB_BACKDROP_BLUR : null,
       ]}

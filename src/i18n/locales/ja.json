@@ -305,6 +305,8 @@
       "disappearingMessageNotice": "あなたが送信する新しいメッセージは相手の既読から{{duration}}後に消えます。他の人のメッセージには影響しません。消えたメッセージは、権限を持つ管理者による監査のため180日間保存されます。",
       "personalDisappearingMessageNotice": "あなたが送信する新しいメッセージは相手の既読から{{duration}}後に消えます。他の人のメッセージには影響しません。消えたメッセージは、権限を持つ管理者による監査のため180日間保存されます。",
       "attachmentPanelLabel": "添付パネルを開く",
+      "voiceInputLabel": "音声入力",
+      "emojiPanelLabel": "絵文字パネルを開く",
       "sendFailedText": "メッセージを送信できませんでした。もう一度お試しください",
       "sensitiveWordBlocked": "禁止ワードが含まれているため、メッセージはブロックされました",
       "recordStartFailed": "録音を開始できませんでした。もう一度お試しください",
