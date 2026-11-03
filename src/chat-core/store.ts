@@ -1996,8 +1996,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     // 可能又收到更高的消息，不能在 ack 到达时把那条新消息也清掉。
     const latestHeight = conversations[index]?.lastMessage?.height ?? 0;
     const canClearUnread = validHeight === 0 || latestHeight <= validHeight;
-    const shouldClearUnread =
-      index >= 0 && canClearUnread && conversations[index].unreadCount > 0;
     const priorConversationReadHeight =
       currentConversation &&
       Number.isSafeInteger(currentConversation.readHeight) &&
@@ -2014,14 +2012,29 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     const readHeightChanged =
       currentConversation !== null &&
       nextConversationReadHeight > priorConversationReadHeight;
+    // 与多设备已读共用收敛规则：只有缓存完整覆盖剩余区间时才减少部分未读。
+    const converged = currentConversation && currentUserId && !canClearUnread
+      ? convergeUnread(
+          conversations,
+          index,
+          get().messagesByConversation[conversationId] ?? [],
+          nextConversationReadHeight,
+          currentUserId,
+        )
+      : undefined;
+    const nextUnreadCount = canClearUnread
+      ? 0
+      : converged?.[index].unreadCount ?? currentConversation?.unreadCount ?? 0;
+    const unreadCountChanged =
+      currentConversation !== null && nextUnreadCount !== currentConversation.unreadCount;
     const readWatermarksChanged = nextReadWatermarks !== readWatermarks;
-    if (!shouldClearUnread && !readWatermarksChanged && !readHeightChanged) return;
+    if (!unreadCountChanged && !readWatermarksChanged && !readHeightChanged) return;
 
     const nextConversation =
-      currentConversation && (shouldClearUnread || readHeightChanged)
+      currentConversation && (unreadCountChanged || readHeightChanged)
         ? {
             ...currentConversation,
-            ...(shouldClearUnread ? { unreadCount: 0 } : {}),
+            ...(unreadCountChanged ? { unreadCount: nextUnreadCount } : {}),
             ...(readHeightChanged
               ? { readHeight: nextConversationReadHeight }
               : {}),

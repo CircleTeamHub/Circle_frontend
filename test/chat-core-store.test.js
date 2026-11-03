@@ -917,6 +917,43 @@ test('marking a conversation read persists its local watermark and badge state',
   assert.equal(persisted.readHeight, 5);
 });
 
+test('partial local reads reduce unread once and persist the remaining count', async () => {
+  let persisted;
+  const { useChatStore } = loadChatStore({
+    localDb: { upsertLocalConversation: async (value) => { persisted = value; } },
+  });
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  const timeline = [1, 2, 3].map((height) => msg({ id: `m${height}`, height, sender: { id: 'other' } }));
+  store.setConversations([conversation({ lastMessage: timeline[2], unreadCount: 3, readHeight: 0 })]);
+  await store.ingestMessages('conv-1', timeline);
+
+  store.markConversationReadLocal('conv-1', 2);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+  // 重复确认和迟到的旧确认都不能把剩下的一条再扣掉。
+  store.markConversationReadLocal('conv-1', 2);
+  store.markConversationReadLocal('conv-1', 1);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 1);
+  assert.equal(persisted.readHeight, 2);
+  assert.equal(persisted.unreadCount, 1);
+});
+
+test('partial local reads wait for a complete unread interval before reducing the count', async () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  const timeline = [2, 3, 4, 5].map((height) => msg({ id: `m${height}`, height, sender: { id: 'other' } }));
+  store.setConversations([conversation({ lastMessage: timeline[3], unreadCount: 4, readHeight: 1 })]);
+  await store.ingestMessages('conv-1', [timeline[0], timeline[3]]);
+  store.markConversationReadLocal('conv-1', 2);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 4);
+
+  await store.ingestMessages('conv-1', timeline.slice(1, 3));
+  store.markConversationReadLocal('conv-1', 2);
+  assert.equal(useChatStore.getState().conversations[0].unreadCount, 3);
+});
+
 test('tombstones stay bounded so long-lived installs cannot grow unbounded', () => {
   const { useChatStore, DELETED_MESSAGES_CAP, useDeletedMessagesStore } =
     loadChatStore();
