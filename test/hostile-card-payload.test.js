@@ -82,6 +82,7 @@ function loadMappers() {
         };
       }
       if (request === '@/i18n') return { default: { t: (key) => key } };
+      if (request === './image-preview') return require('./helpers/load-ts-module').loadTsModule('src/chat-core/image-preview.ts');
       if (request === './mappers') return { formatChatTimestamp: () => '12:00' };
       if (request === './store') return {};
       if (request === '@/types') return {};

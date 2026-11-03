@@ -233,7 +233,9 @@ jest.mock('@/features/chat/components/emoji-picker', () => ({
     <MockPressable accessibilityLabel="pick-emoji" onPress={() => onSelect('😀')} />
   ),
 }));
-jest.mock('@/features/chat/components/MessageActionMenu', () => mockNullComponents());
+jest.mock('@/features/chat/components/MessageActionMenu', () => ({
+  MessageActionMenu: ({ anchor, actions, onDismiss }: { anchor: unknown; actions: { key: string; onPress: () => void }[]; onDismiss: () => void }) => anchor ? <MockView>{actions.map((action) => <MockPressable key={action.key} accessibilityLabel={`message-action-${action.key}`} onPress={() => { onDismiss(); action.onPress(); }} />)}</MockView> : null,
+}));
 jest.mock('@/features/chat/components/media-source-sheet', () => mockNullComponents());
 jest.mock('@/features/chat/components/photo-editor-modal', () => mockNullComponents());
 jest.mock('@/features/chat/components/voice-recording-overlay', () => mockNullComponents());
@@ -445,6 +447,21 @@ test('typing in the composer does not re-render the message bubbles', async () =
   expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('晚上见');
   // 原来每敲一个字,列表里挂着的每个气泡都重渲染一遍。
   expect(Object.fromEntries(mockBubbleRenders)).toEqual({});
+});
+
+test('message multi-select toggles chat rows and cancel restores the composer', async () => {
+  render(<ChatDetailScreen />);
+  const received = await screen.findByText('received:在吗', {}, SETTLE);
+  fireEvent(received, 'longPress', { nativeEvent: { pageX: 100, pageY: 200 } });
+  fireEvent.press(screen.getByLabelText('message-action-multi-select'));
+  expect(screen.queryByTestId(E2E_TEST_IDS.chatInput)).toBeNull();
+  expect(screen.getByRole('checkbox', { name: '在吗' }).props.accessibilityState.checked).toBe(true);
+  const other = screen.getByRole('checkbox', { name: '晚上吃什么' });
+  fireEvent.press(other);
+  expect(screen.getByRole('checkbox', { name: '晚上吃什么' }).props.accessibilityState.checked).toBe(true);
+  fireEvent.press(screen.getByLabelText('common.cancel'));
+  expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput)).toBeTruthy();
 });
 
 test('a read receipt re-renders only the message whose status changed', async () => {

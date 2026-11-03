@@ -78,12 +78,13 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
 
       // 先直接唤起系统选择器。点击后先 get/request 权限会把原生权限桥接
       // 延迟叠加到呈现动画上，部分 iOS 设备会因此等数秒才看到相册。
-      // 同时不要打开 allowsEditing：它会让 iOS 从秒开的 PHPicker 回退到老的
-      // UIImagePickerController。头像最终用 cover-fit 显示，原图无需先裁剪。
+      // 系统编辑器让用户在上传前确认头像裁剪。
       // 原生选择器自己能处理已授权状态；只有它明确失败时才走权限兜底。
       const pickerOptions: Parameters<typeof imagePicker.launchImageLibraryAsync>[0] = {
         quality: 0.8,
         mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
       };
       let result: Awaited<ReturnType<typeof imagePicker.launchImageLibraryAsync>>;
       try {

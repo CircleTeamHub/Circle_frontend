@@ -422,6 +422,8 @@ export default function UserProfileScreen() {
             return;
           }
 
+          useChatStore.getState().syncPeerAvatars([profile]);
+
           const loaded: UserProfileData = {
             id: profile.id,
             name:

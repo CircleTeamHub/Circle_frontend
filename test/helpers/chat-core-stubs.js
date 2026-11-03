@@ -32,6 +32,9 @@ function makeChatCoreStubs() {
     get './eager-hydration'() {
       return require('./load-ts-module').loadTsModule('src/chat-core/eager-hydration.ts');
     },
+    get './image-preview'() {
+      return require('./load-ts-module').loadTsModule('src/chat-core/image-preview.ts');
+    },
     './deleted-messages': {
       isMessageDeletedLocally: () => false,
       withoutLocallyDeleted: (messages) => messages,

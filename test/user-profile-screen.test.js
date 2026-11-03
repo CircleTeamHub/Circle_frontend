@@ -236,6 +236,7 @@ test('user profile screen refreshes profile data when returning to focus', () =>
     source,
     /useFocusEffect\(\s*useCallback\(\(\) => \{[\s\S]*fetchUserProfile\(profileId\)/,
   );
+  assert.match(source, /syncPeerAvatars\(\[profile\]\)/);
 });
 
 // 在线状态的展示改由 usePeerPresence 收口(多了最近在线时间,并且对方关了

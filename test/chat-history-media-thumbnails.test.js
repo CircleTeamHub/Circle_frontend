@@ -65,6 +65,7 @@ function runModule(rel, requireImpl) {
 function loadChatHistory() {
   // message-mappers 跑真实实现:localUri 的 scheme 白名单正是要断言的那条规则。
   const mappers = runModule('src/chat-core/message-mappers.ts', (request) => {
+    if (request === './image-preview') return require('./helpers/load-ts-module').loadTsModule('src/chat-core/image-preview.ts');
     if (request === '@/services/api/utils') {
       return {
         normalizeMediaUrl: (u) => u ?? null,

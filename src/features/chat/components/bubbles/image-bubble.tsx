@@ -11,6 +11,7 @@ import { useEphemeralImageDiskCacheSweep } from './ephemeral-image-cache';
 
 interface ImageBubbleProps {
   message: ChatMessage;
+  getGalleryMessages?: () => ChatMessage[];
   outgoing: boolean;
   senderName?: string;
   senderAvatarUri?: string;
@@ -71,6 +72,7 @@ const sImage = StyleSheet.create({
 
 export const ImageBubble: React.FC<ImageBubbleProps> = ({
   message,
+  getGalleryMessages,
   outgoing,
   senderName,
   senderAvatarUri,
@@ -86,6 +88,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   // Only this message’s author-stamped duration controls media retention.
   const ephemeral = isEphemeralMessage(message, selfDestructEnabled);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const galleryMessagesRef = useRef<ChatMessage[]>([]);
   const previewPolicyRef = useRef(`${ephemeral}:${selfDestructCacheKey}`);
   const avatarNode = (
     <MessageAvatar
@@ -128,13 +131,19 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
     displayUri,
     message.imageThumbUrl ? message.imageThumbKey : message.imageKey,
   );
-  const previewCacheKey = remoteCacheKey(
-    previewUri,
-    message.imageUrl ? message.imageKey : message.imageThumbKey,
-  );
+  const previewMessages = useMemo(() => {
+    if (!previewVisible || ephemeral) return [message];
+    const photos = galleryMessagesRef.current.filter((item) =>
+      (item.imageUrl || item.imageThumbUrl) &&
+      !isEphemeralMessage(item, selfDestructEnabled),
+    );
+    return photos.some((item) => item.id === message.id) ? photos : [message];
+  }, [ephemeral, message, previewVisible, selfDestructEnabled]);
   const handleOpenPreview = useCallback(() => {
-    if (previewUri) setPreviewVisible(true);
-  }, [previewUri]);
+    if (!previewUri) return;
+    galleryMessagesRef.current = getGalleryMessages?.() ?? [message];
+    setPreviewVisible(true);
+  }, [getGalleryMessages, message, previewUri]);
   const imageNode = (
     <View style={[sImage.body, outgoing ? sImage.bodyOutgoing : null]}>
       <Pressable
@@ -192,8 +201,12 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   // open. Mount it only for the image the user is actively previewing.
   const imageViewer = previewVisible ? (
     <ImageViewer
-      images={previewUri ? [previewUri] : []}
-      cacheKeys={previewUri ? [previewCacheKey] : undefined}
+      images={previewMessages.map((item) => (item.imageUrl ?? item.imageThumbUrl)!)}
+      cacheKeys={previewMessages.map((item) => remoteCacheKey(
+        item.imageUrl ?? item.imageThumbUrl,
+        item.imageUrl ? item.imageKey : item.imageThumbKey,
+      ))}
+      initialIndex={Math.max(0, previewMessages.findIndex((item) => item.id === message.id))}
       visible
       privacyMode={ephemeral ? 'ephemeral' : 'standard'}
       onClose={() => setPreviewVisible(false)}

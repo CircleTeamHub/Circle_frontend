@@ -113,6 +113,7 @@ export default function ChatBackgroundScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: false,
+      allowsEditing: true,
       quality: 0.85,
     });
     if (result.canceled) return;

@@ -32,12 +32,11 @@ test('ChatDetailScreen long-press opens the anchored menu instead of an Alert', 
   assert.match(src, /setActionMenu\(\{ message, x: pageX, y: pageY \}\)/);
   assert.match(src, /<MessageActionMenu/);
   assert.match(src, /actions=\{messageActions\}/);
-  // copy / forward / collect actions are offered, while the save action is removed.
+  // Core message actions remain available. Media save behavior and privacy gates
+  // are exercised in use-message-actions.spec.tsx.
   assert.match(src, /key: 'copy'/);
   assert.match(src, /key: 'forward'/);
   assert.match(src, /key: 'collect'/);
-  assert.doesNotMatch(src, /key: 'save'/);
-  assert.doesNotMatch(src, /handleSaveMessage/);
 });
 
 test('ChatDetailScreen wires long-press handlers into non-text message bubbles', () => {

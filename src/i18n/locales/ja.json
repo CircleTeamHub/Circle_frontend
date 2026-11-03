@@ -170,6 +170,7 @@
       "addMeMethods": "友だち追加の方法",
       "callPermission": "音声・ビデオ通話の権限",
       "groupInvitePermission": "グループ・サークル招待の権限",
+      "allowFriendGroupDirectJoin": "友だちがグループ作成時に確認なしで追加することを許可",
       "loadFailed": "プライバシー設定の読み込みに失敗しました",
       "saveFailed": "プライバシー設定の保存に失敗しました",
       "selfDestructOff": "オフ",
@@ -325,6 +326,22 @@
       "favoriteSendFailed": "お気に入りを送信できませんでした。もう一度お試しください",
       "favoriteLegacyVoiceUnsupported": "この旧バージョンの音声お気に入りは再送信できません"
     },
+    "stickers": {
+      "title": "カスタムスタンプ",
+      "add": "スタンプを追加",
+      "addImage": "写真から追加",
+      "save": "スタンプとして保存",
+      "saved": "スタンプを保存しました",
+      "remove": "スタンプを削除",
+      "removeConfirm": "このカスタムスタンプを削除しますか？",
+      "loadFailed": "スタンプを読み込めませんでした。タップして再試行",
+      "saveFailed": "スタンプを保存できませんでした。もう一度お試しください",
+      "sendFailed": "スタンプを送信できませんでした。もう一度お試しください",
+      "limitReached": "スタンプは200枚まで保存できます。先に削除してください",
+      "tooLarge": "スタンプ画像は5 MB以下にしてください",
+      "permissionDenied": "写真へのアクセスを許可してスタンプを追加してください",
+      "unsupportedImage": "画像ファイルを選択してください"
+    },
     "messageActions": {
       "title": "メッセージ操作",
       "collect": "保存",
@@ -338,6 +355,7 @@
       "quote": "引用",
       "delete": "削除",
       "deleteConfirm": "このローカルメッセージを削除しますか？",
+      "deleteSelectedConfirm": "選択した {{count}} 件のローカルメッセージを削除しますか？",
       "deleteFailed": "削除に失敗しました",
       "deleteFailedHint": "後でもう一度お試しください",
       "report": "報告",
@@ -509,6 +527,8 @@
     "clearHistoryForMe": "自分の履歴のみ削除",
     "clearHistoryForEveryone": "全員の履歴を削除",
     "groupLog": "グループログ",
+    "groupLogEvents": "メンバーの履歴",
+    "groupLogAdmissions": "申請と招待",
     "groupLogLoadFailed": "グループログを読み込めませんでした",
     "noGroupLog": "グループ活動はまだありません",
     "groupActivity": "グループ活動",
@@ -1365,6 +1385,11 @@
     }
   },
   "moment": {
+    "selectMedia": "写真や動画を追加",
+    "removeMedia": "写真や動画を削除",
+    "playVideo": "動画を再生",
+    "videoUnavailable": "動画を読み込めませんでした。後でもう一度お試しください。",
+    "openImage": "画像を表示",
     "createTitle": "モーメントを投稿",
     "contentPlaceholder": "いまの気持ち...",
     "visibility": "公開範囲",
@@ -3693,6 +3718,8 @@
     "recoveryNotice": "これは復旧の申請です。拒否しない場合、{{value}} 以降にこのデバイスがあなたのアカウントにログインし、ほかのデバイスはログアウトされます。"
   },
   "groupAdmission": {
+    "createdAt": "申請または招待日時：{{time}}",
+    "updatedAt": "状態更新日時：{{time}}",
     "title": "グループ情報と招待",
     "members": "{{count}}人",
     "invitedBy": "{{name}}さんがあなたをグループに招待しました",

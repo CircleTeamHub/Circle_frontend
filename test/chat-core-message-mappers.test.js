@@ -83,6 +83,7 @@ function loadQrPayload() {
 }
 
 function loadMappers(options = {}) {
+  const previews = options.previews ?? require('./helpers/load-ts-module').loadTsModule('src/chat-core/image-preview.ts');
   // 白名单替身:只放行「本站自己的媒体来源」,其余(含对端塞的任意主机)一律拒。
   const TRUSTED = ['https://cdn.trusted/', 'https://signed/'];
   const allow =
@@ -97,6 +98,7 @@ function loadMappers(options = {}) {
     module: { exports: {} },
     exports: {},
     require: (request) => {
+      if (request === './image-preview') return previews;
       if (request === '@/services/api/utils') {
         return { normalizeMediaUrl: (u) => u ?? null, allowPeerMediaUrl: allow };
       }
@@ -135,6 +137,20 @@ function dto(overrides = {}) {
     ...overrides,
   };
 }
+
+test('transient sticker previews are bounded and visible only for the current outgoing sender', () => {
+  const previews = require('./helpers/load-ts-module').loadTsModule('src/chat-core/image-preview.ts');
+  previews.setImagePreview('same-delivery', 'me', 'https://signed/sticker.png');
+  const mapper = loadMappers({ previews });
+  const outgoing = dto({ type: 'image', height: 0, d: 'same-delivery', sender: { id: 'me', nickname: 'Me', avatarUrl: null }, content: { key: 'chat/me/sticker.png' } });
+  assert.equal(mapper.mapChatMessageDtoToUI(outgoing, 'me').imageUrl, 'https://signed/sticker.png');
+  assert.equal(mapper.mapChatMessageDtoToUI({ ...outgoing, sender: { id: 'peer', nickname: 'Peer', avatarUrl: null } }, 'me').imageUrl, undefined);
+  assert.equal(mapper.mapChatMessageDtoToUI(outgoing, 'other').imageUrl, undefined);
+  assert.equal(mapper.mapChatMessageDtoToUI({ ...outgoing, content: { url: 'https://signed/authoritative.png' } }, 'me').imageUrl, 'https://signed/authoritative.png');
+  for (let i = 0; i < 256; i++) previews.setImagePreview(`delivery-${i}`, 'me', `https://signed/${i}.png`);
+  assert.equal(previews.getImagePreview('same-delivery', 'me'), undefined);
+  assert.equal(previews.getImagePreview('delivery-255', 'me'), 'https://signed/255.png');
+});
 
 test('text messages split sent/received by sender identity', () => {
   const { mapChatMessageDtoToUI } = loadMappers();

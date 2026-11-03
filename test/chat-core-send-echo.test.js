@@ -109,7 +109,10 @@ function zustandStub() {
 // outbox 的每一行(断言发送时捕获的失败锚点用)。
 function loadSendStack({ onSend, outboxEntries = [], onBackfill = () => {} }) {
   const outboxWrites = [];
+  const messageWrites = [];
+  const previews = runModule('src/chat-core/image-preview.ts', () => { throw new Error('unexpected dependency'); });
   const store = runModule('src/chat-core/store.ts', (request) => {
+    if (request === './image-preview') return previews;
     if (request === 'zustand') return zustandStub();
     // protocol.ts 零依赖:跑真的,别桩 —— SERVER_COMPENSATED_TYPES 是生产常量。
     if (request === './protocol')
@@ -121,7 +124,7 @@ function loadSendStack({ onSend, outboxEntries = [], onBackfill = () => {} }) {
         persistLocalConversations: async () => {},
         upsertLocalConversation: async () => {},
         removeLocalConversation: async () => {},
-        persistLocalMessages: async () => {},
+        persistLocalMessages: async (_conversationId, messages) => { messageWrites.push(...messages); },
         deleteLocalMessage: async () => {},
         purgeExpiredLocalMessages: async () => {},
         clearLocalConversationMessages: async () => {},
@@ -154,6 +157,7 @@ function loadSendStack({ onSend, outboxEntries = [], onBackfill = () => {} }) {
   });
 
   const client = runModule('src/chat-core/client.ts', (request) => {
+    if (request === './image-preview') return previews;
     if (request === '@/services/api/credit-policy') {
       return { assertLocalCanSendMessage: () => {} };
     }
@@ -203,8 +207,72 @@ function loadSendStack({ onSend, outboxEntries = [], onBackfill = () => {} }) {
       throw new Error(`unexpected require: ${request}`);
   });
 
-  return { client, store, outboxWrites };
+  const mapper = runModule('src/chat-core/message-mappers.ts', (request) => {
+    if (request === './image-preview') return previews;
+    if (request === '@/i18n') return { default: { t: (key) => key } };
+    if (request === '@/services/api/utils') return { allowPeerMediaUrl: (url) => url };
+    if (request === './mappers') return { formatChatTimestamp: () => '12:00' };
+    if (request === './burn-durations') return loadBurnDurations();
+    if (request === '@/features/qr/qr-payload') return {};
+    throw new Error(`unexpected mapper dependency: ${request}`);
+  });
+  return { client, store, outboxWrites, messageWrites, previews, mapper };
 }
+
+test('sticker pending and failed previews are visible but absent from persisted DTOs and outbox', async () => {
+  let rejectSend;
+  const stack = loadSendStack({ onSend: () => new Promise((_resolve, reject) => { rejectSend = reject; }) });
+  const state = stack.store.useChatStore.getState();
+  state.setCurrentUserId('me'); state.setConversations([directConversation('c1')]);
+  const send = stack.client.sendImageMessage({ conversationId: 'c1', key: 'chat/me/sticker.png', previewUrl: 'https://signed/sticker.png' });
+  const pending = state.messagesByConversation.c1[0];
+  assert.equal(stack.mapper.mapChatMessageDtoToUI(pending, 'me').imageUrl, 'https://signed/sticker.png');
+  while (!rejectSend) await Promise.resolve();
+  rejectSend(new Error('offline')); await assert.rejects(send);
+  const failed = stack.store.useChatStore.getState().messagesByConversation.c1[0];
+  assert.equal(stack.mapper.mapChatMessageDtoToUI(failed, 'me').imageUrl, 'https://signed/sticker.png');
+  assert.equal(stack.mapper.mapChatMessageDtoToUI(failed, 'me').sendStatus, 3);
+  assert.equal(JSON.stringify(stack.messageWrites).includes('https://signed/sticker.png'), false);
+  assert.equal(JSON.stringify(stack.outboxWrites).includes('https://signed/sticker.png'), false);
+  assert.equal(JSON.stringify(stack.store.useChatStore.getState().conversations).includes('https://signed/sticker.png'), false);
+  stack.store.useChatStore.getState().reset();
+  assert.equal(stack.previews.getImagePreview('d-test', 'me'), undefined);
+});
+
+test('sticker no-echo ack backfills canonical image and releases the transient preview', async () => {
+  const backfills = [];
+  let stack;
+  const canonical = canonicalForward('sticker-server', 20, 'd-test');
+  stack = loadSendStack({ onSend: async () => ({ messageId: canonical.id, height: canonical.height }), onBackfill: (id, height) => {
+    backfills.push([id, height]); stack.store.useChatStore.getState().ingestMessages(id, [canonical]);
+  } });
+  stack.store.useChatStore.getState().setCurrentUserId('me');
+  stack.store.useChatStore.getState().setConversations([directConversation('c1')]);
+  await stack.client.sendImageMessage({ conversationId: 'c1', key: 'chat/me/sticker.png', previewUrl: 'https://signed/sticker.png' });
+  await flushBackfill();
+  assert.deepEqual(backfills, [['c1', 19]]);
+  const message = stack.store.useChatStore.getState().messagesByConversation.c1[0];
+  assert.equal(stack.mapper.mapChatMessageDtoToUI(message, 'me').imageUrl, canonical.content.url);
+  assert.equal(stack.previews.getImagePreview('d-test', 'me'), undefined);
+});
+
+test('a cold-start sticker retry with only persisted image key hydrates after an idempotent no-echo ack', async () => {
+  const canonical = canonicalForward('cold-sticker', 30, 'd-sticker');
+  const backfills = [];
+  let stack;
+  stack = loadSendStack({
+    outboxEntries: [{ d: 'd-sticker', conversationId: 'c1', createdAt: '2026-08-19T10:00:00.000Z', payload: { type: 'image', content: { key: 'chat/me/sticker.png' } } }],
+    onSend: async () => ({ messageId: canonical.id, height: canonical.height }),
+    onBackfill: (id, height) => { backfills.push([id, height]); stack.store.useChatStore.getState().ingestMessages(id, [canonical]); },
+  });
+  stack.store.useChatStore.getState().setCurrentUserId('me');
+  stack.store.useChatStore.getState().setConversations([directConversation('c1')]);
+  await stack.client.retryFailedChatMessage('c1', 'd-sticker');
+  await flushBackfill();
+  assert.deepEqual(backfills, [['c1', 29]]);
+  const confirmed = stack.store.useChatStore.getState().messagesByConversation.c1[0];
+  assert.equal(stack.mapper.mapChatMessageDtoToUI(confirmed, 'me').imageUrl, canonical.content.url);
+});
 
 test('a server echo that beats the ack is not overwritten by the synthetic confirmation', async () => {
   let deliverEcho = null;

@@ -487,7 +487,7 @@ test('conversation row callbacks and renderItem do not depend on whole lists', (
     /displayedConversations|visibleConversations|conversations\b/,
   );
   assert.doesNotMatch(depsOf('renderSeparator'), /displayedConversations/);
-  assert.doesNotMatch(depsOf('handleClearUnread'), /visibleConversations/);
+  assert.doesNotMatch(depsOf('handleMarkConversationRead'), /visibleConversations|rawConversations/);
 });
 
 test('the conversation list stops following the chat store while its screen is not focused', () => {

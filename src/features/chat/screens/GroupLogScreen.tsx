@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import { fetchChatGroupEvents } from '@/chat-core/api';
+import { useChatStore } from '@/chat-core/store';
 import { groupEventText } from '@/chat-core/group-events';
+import { isGroupManager } from '@/features/chat/group-admin-permissions';
+import { GroupAdmissionsList } from '@/features/groups/GroupAdmissionsList';
+import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import type { ChatGroupEventDto } from '@/chat-core/protocol';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -34,6 +38,8 @@ const s = StyleSheet.create({
   cardBody: { flex: 1, gap: Spacing.xs },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
   retry: { marginTop: Spacing.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: Radius.lg },
+  tabs: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
+  tab: { flex: 1, alignItems: 'center', padding: Spacing.md, borderRadius: Radius.lg },
 });
 
 /** 每种事件一个图标;未知种类用通用图标(文案已由 groupEventText 兜底)。 */
@@ -75,8 +81,12 @@ export default function GroupLogScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const scope = getUserProfileScopeFromSegments(useSegments());
   const params = useLocalSearchParams<{ conversationID?: string; title?: string }>();
   const conversationID = typeof params.conversationID === 'string' ? params.conversationID : '';
+  const conversation = useChatStore((state) => state.conversations.find((item) => item.id === conversationID));
+  const canViewAdmissions = conversation?.type === 'GROUP' && !conversation.circleId && isGroupManager(conversation.myRole);
+  const [tab, setTab] = useState<'events' | 'admissions'>('events');
   const [entries, setEntries] = useState<ChatGroupEventDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -185,7 +195,27 @@ export default function GroupLogScreen() {
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('chat.groupLog', { defaultValue: '群日志' })} />
-      {loading ? (
+      {canViewAdmissions ? (
+        <View style={s.tabs}>
+          {([
+            ['events', t('chat.groupLogEvents', { defaultValue: '成员动态' })],
+            ['admissions', t('chat.groupLogAdmissions', { defaultValue: '申请与邀请' })],
+          ] as const).map(([id, label]) => (
+            <Pressable
+              key={id}
+              style={[s.tab, { backgroundColor: tab === id ? colors.primary : colors.surface }]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === id }}
+              onPress={() => setTab(id)}
+            >
+              <Text style={{ color: tab === id ? colors.white : colors.text }}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {canViewAdmissions && tab === 'admissions' ? (
+        <GroupAdmissionsList groupId={conversationID} scope={scope} />
+      ) : loading ? (
         <View style={s.center}><ActivityIndicator color={colors.primary} /></View>
       ) : error ? (
         <View style={s.center}>
