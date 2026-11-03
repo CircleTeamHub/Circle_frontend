@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import i18n from '@/i18n';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useChatStore } from './store';
 
 /**
  * 聊天通知在设备上的那一半:安卓通知渠道,以及「看过、撤回、焚毁之后把通知栏里
@@ -52,15 +53,25 @@ export async function ensureChatNotificationChannel(
 }
 
 /**
- * 收起通知栏里属于这个会话的聊天通知;给了 messageIds 就只收这几条。
+ * 收起会话的聊天通知；messageIds 限定消息，throughHeight 限定已读水位。
  *
- * 本机读过、本人别的设备读过、清空之后收整个会话;撤回、焚毁之后只收那几条 ——
- * 否则消息已经不在了,通知栏里的正文还在。尽力而为,失败不影响聊天本身。
+ * 本机和其它设备的已读只能清理水位以内；清空、撤回、焚毁保持原有范围。
+ * 旧推送不带序号时，仅按缓存里能确认已读的消息 ID 清理。
  */
 export function dismissChatNotifications(
   conversationId: string,
   messageIds?: readonly string[],
+  throughHeight?: number,
 ): void {
+  const legacyReadIds = new Set<string>();
+  if (throughHeight !== undefined) {
+    const state = useChatStore.getState();
+    for (const message of state.messagesByConversation[conversationId] ?? []) {
+      if (message.height <= throughHeight) legacyReadIds.add(message.id);
+    }
+    const lastMessage = state.conversations.find((item) => item.id === conversationId)?.lastMessage;
+    if (lastMessage && lastMessage.height <= throughHeight) legacyReadIds.add(lastMessage.id);
+  }
   void loadNotifications()
     .then(async (notifications) => {
       if (!notifications) return;
@@ -74,10 +85,13 @@ export function dismissChatNotifications(
         if (data?.type !== 'chat' || data.conversationId !== conversationId) {
           return false;
         }
-        return (
-          wanted === null ||
-          (typeof data.messageId === 'string' && wanted.has(data.messageId))
-        );
+        const messageId = typeof data.messageId === 'string' ? data.messageId : null;
+        if (wanted && (messageId === null || !wanted.has(messageId))) return false;
+        if (throughHeight === undefined) return true;
+        if (typeof data.height === 'number' && Number.isSafeInteger(data.height) && data.height > 0) {
+          return data.height <= throughHeight;
+        }
+        return messageId !== null && legacyReadIds.has(messageId);
       });
       await Promise.all(
         matching.map((notification) =>

@@ -8,8 +8,9 @@ import {
 import { useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, Spacing } from '@/theme';
+import { useTheme, Spacing, Typography } from '@/theme';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { BlurTargetView } from 'expo-blur';
 import { Divider } from '@/components/ui/divider';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
@@ -19,7 +20,7 @@ import { MediaSourceSheet } from '@/features/chat/components/media-source-sheet'
 import { MessageActionMenu } from '@/features/chat/components/MessageActionMenu';
 import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { type PendingMediaUpload } from '@/chat-core/client';
-import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
+import { ReactionPickerSheet } from '@/features/chat/components/reaction-picker-sheet';
 import { useComposerDraftPersistence } from '@/features/chat/hooks/use-composer-draft';
 import { useChatStore } from '@/chat-core/store';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
@@ -72,6 +73,8 @@ interface ChatDetailScreenProps {
 
 export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {}) {
   const insets = useSafeAreaInsets();
+  const messageBlurTarget = useRef<View>(null);
+  const [composerDockHeight, setComposerDockHeight] = useState(80 + Math.max(insets.bottom, 12));
   const { colors } = useTheme();
   const { t } = useTranslation();
   const routeParams = useLocalSearchParams<{
@@ -281,6 +284,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     messages,
     displayMessages,
     handleMessageListScroll,
+    handleImageViewed,
     handleJumpToUnread,
     handleUnreadStartVisibilityChange,
     showUnreadJump,
@@ -355,7 +359,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     handleToggleReaction,
     reactionTarget,
     setReactionTarget,
-    reactionOptions,
     handlePickReaction,
     messageActions,
     handleRetryMessage,
@@ -394,8 +397,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const {
     renderItem,
     keyExtractor,
+    imageViewer,
   } = useMessageRenderer({
     messages,
+    handleImageViewed,
     selectedMessageIds,
     handleToggleSelectedMessage,
     colors,
@@ -654,109 +659,139 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           </Text>
         </View>
       ) : null}
-      <ChatMessageArea
-        colors={colors}
-        t={t}
-        sendError={sendError}
-        mountedRef={mountedRef}
-        isPreviewMode={isPreviewMode}
-        backgroundImageUri={backgroundImageUri}
-        d={d}
-        flatListRef={flatListRef}
-        scrollRetryCountRef={scrollRetryCountRef}
-        scrollRetryTimerRef={scrollRetryTimerRef}
-        messagesLengthRef={messagesLengthRef}
-        handleLoadOlder={handleLoadOlder}
-        historyWindowFull={historyWindowFull}
-        unreadCount={entryUnreadCount}
-        showUnreadJump={showUnreadJump}
-        unreadStartMessageID={unreadStartMessageID}
-        messages={messages}
-        displayMessages={displayMessages}
-        handleMessageListScroll={handleMessageListScroll}
-        handleJumpToUnread={handleJumpToUnread}
-        handleUnreadStartVisibilityChange={handleUnreadStartVisibilityChange}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        closeInputPanels={closeInputPanels}
-        isVoiceRecording={isVoiceRecording}
-        voiceElapsedSeconds={voiceElapsedSeconds}
-      />
-      {selectedMessageIds !== null ? (
-        <View style={{ padding: Spacing.md, paddingBottom: insets.bottom || Spacing.md, backgroundColor: colors.surface }}>
-          <Text style={{ color: colors.text }}>{t('notes.selection.selectedCount', { count: selectedMessages.length })}</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Pressable onPress={handleCancelMessageSelection} accessibilityRole="button" accessibilityLabel={t('common.cancel')} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.text }}>{t('common.cancel')}</Text></Pressable>
-            <Pressable onPress={handleForwardSelectedMessages} disabled={!canForwardSelectedMessages} accessibilityRole="button" accessibilityState={{ disabled: !canForwardSelectedMessages }} style={{ minHeight: 44, justifyContent: 'center', opacity: canForwardSelectedMessages ? 1 : 0.4 }}><Text style={{ color: colors.iconAccent }}>{t('chat.messageActions.forward')}</Text></Pressable>
-            <Pressable onPress={handleDeleteSelectedMessages} disabled={selectedMessages.length === 0} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', opacity: selectedMessages.length ? 1 : 0.4 }}><Text style={{ color: colors.text }}>{t('common.delete')}</Text></Pressable>
-          </View>
+      <View style={s.chatBody}>
+        <BlurTargetView ref={messageBlurTarget} style={s.messageArea}>
+          <ChatMessageArea
+            composerInset={composerDockHeight}
+            colors={colors}
+            t={t}
+            mountedRef={mountedRef}
+            backgroundImageUri={backgroundImageUri}
+            d={d}
+            flatListRef={flatListRef}
+            scrollRetryCountRef={scrollRetryCountRef}
+            scrollRetryTimerRef={scrollRetryTimerRef}
+            messagesLengthRef={messagesLengthRef}
+            handleLoadOlder={handleLoadOlder}
+            historyWindowFull={historyWindowFull}
+            unreadCount={entryUnreadCount}
+            showUnreadJump={showUnreadJump}
+            unreadStartMessageID={unreadStartMessageID}
+            messages={messages}
+            displayMessages={displayMessages}
+            handleMessageListScroll={handleMessageListScroll}
+            handleJumpToUnread={handleJumpToUnread}
+            handleUnreadStartVisibilityChange={handleUnreadStartVisibilityChange}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            closeInputPanels={closeInputPanels}
+          />
+        </BlurTargetView>
+        <View
+          testID="chat-composer-dock"
+          pointerEvents="box-none"
+          style={s.composerDock}
+          onLayout={(event) => setComposerDockHeight(event.nativeEvent.layout.height)}
+        >
+          {selectedMessageIds !== null ? (
+            <View style={{ padding: Spacing.md, paddingBottom: insets.bottom || Spacing.md, backgroundColor: colors.surface }}>
+              <Text style={{ color: colors.text }}>{t('notes.selection.selectedCount', { count: selectedMessages.length })}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Pressable onPress={handleCancelMessageSelection} accessibilityRole="button" accessibilityLabel={t('common.cancel')} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.text }}>{t('common.cancel')}</Text></Pressable>
+                <Pressable onPress={handleForwardSelectedMessages} disabled={!canForwardSelectedMessages} accessibilityRole="button" accessibilityState={{ disabled: !canForwardSelectedMessages }} style={{ minHeight: 44, justifyContent: 'center', opacity: canForwardSelectedMessages ? 1 : 0.4 }}><Text style={{ color: colors.iconAccent }}>{t('chat.messageActions.forward')}</Text></Pressable>
+                <Pressable onPress={handleDeleteSelectedMessages} disabled={selectedMessages.length === 0} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', opacity: selectedMessages.length ? 1 : 0.4 }}><Text style={{ color: colors.text }}>{t('common.delete')}</Text></Pressable>
+              </View>
+            </View>
+          ) : <>
+          {isPreviewMode ? (
+            <Text style={[s.previewNotice, Typography.small, { color: colors.text }]}>
+              {t('chat.detail.previewNotice', {
+                defaultValue: '连接尚未完成，请稍后重试',
+              })}
+            </Text>
+          ) : null}
+          {sendError ? (
+            <Text style={[s.sendError, Typography.small, { color: colors.error }]}>
+              {sendError}
+            </Text>
+          ) : null}
+          {isVoiceRecording ? (
+            <Text style={[s.voiceStatus, { color: colors.primary }]}>
+              {t('chat.detail.recordingSeconds', {
+                defaultValue: '正在录音 {{seconds}} 秒',
+                seconds: voiceElapsedSeconds,
+              })}
+            </Text>
+          ) : null}
+          <MentionPickerPanel
+            colors={colors}
+            t={t}
+            mentionPickerVisible={mentionPickerVisible}
+            d={d}
+            visibleMentionCandidates={visibleMentionCandidates}
+            handlePickMention={handlePickMention}
+          />
+          <ComposerBanners
+            colors={colors}
+            t={t}
+            setDraft={setDraft}
+            selfSilencedUntil={selfSilencedUntil}
+            selfSilenced={selfSilenced}
+            composerLocked={composerLocked}
+            d={d}
+            quoteTarget={quoteTarget}
+            setQuoteTarget={setQuoteTarget}
+            editingMessageId={editingMessageId}
+            setEditingMessageId={setEditingMessageId}
+            pendingCard={pendingCard}
+            setPendingCard={setPendingCard}
+          />
+          <ChatComposerBar
+            blurTarget={messageBlurTarget}
+            insets={insets}
+            colors={colors}
+            t={t}
+            draft={draft}
+            setMentionPickerVisible={setMentionPickerVisible}
+            selfSilenced={selfSilenced}
+            composerLocked={composerLocked}
+            isPreviewMode={isPreviewMode}
+            keyboardVisible={keyboardVisible}
+            d={d}
+            attachmentOpen={attachmentOpen}
+            setAttachmentOpen={setAttachmentOpen}
+            emojiOpen={emojiOpen}
+            setEmojiOpen={setEmojiOpen}
+            handleAttachmentToggle={handleAttachmentToggle}
+            handleEmojiToggle={handleEmojiToggle}
+            selection={selection}
+            handleSelectionChange={handleSelectionChange}
+            handleDraftChange={handleDraftChange}
+            voiceInputMode={voiceInputMode}
+            cancelArmed={cancelArmed}
+            isVoiceRecording={isVoiceRecording}
+            voiceElapsedSeconds={voiceElapsedSeconds}
+            toggleVoiceInputMode={toggleVoiceInputMode}
+            voicePanResponder={voicePanResponder}
+            sending={sending}
+            pendingCard={pendingCard}
+            handleSend={handleSend}
+          />
+          </>}
         </View>
-      ) : <>
-      <Divider />
-      <MentionPickerPanel
-        colors={colors}
-        t={t}
-        mentionPickerVisible={mentionPickerVisible}
-        d={d}
-        visibleMentionCandidates={visibleMentionCandidates}
-        handlePickMention={handlePickMention}
-      />
-      <ComposerBanners
-        colors={colors}
-        t={t}
-        setDraft={setDraft}
-        selfSilencedUntil={selfSilencedUntil}
-        selfSilenced={selfSilenced}
-        composerLocked={composerLocked}
-        d={d}
-        quoteTarget={quoteTarget}
-        setQuoteTarget={setQuoteTarget}
-        editingMessageId={editingMessageId}
-        setEditingMessageId={setEditingMessageId}
-        pendingCard={pendingCard}
-        setPendingCard={setPendingCard}
-      />
-      <ChatComposerBar
-        insets={insets}
-        colors={colors}
-        t={t}
-        draft={draft}
-        setMentionPickerVisible={setMentionPickerVisible}
-        selfSilenced={selfSilenced}
-        composerLocked={composerLocked}
-        isPreviewMode={isPreviewMode}
-        keyboardVisible={keyboardVisible}
-        d={d}
-        attachmentOpen={attachmentOpen}
-        setAttachmentOpen={setAttachmentOpen}
-        emojiOpen={emojiOpen}
-        setEmojiOpen={setEmojiOpen}
-        handleAttachmentToggle={handleAttachmentToggle}
-        handleEmojiToggle={handleEmojiToggle}
-        selection={selection}
-        handleSelectionChange={handleSelectionChange}
-        handleDraftChange={handleDraftChange}
-        voiceInputMode={voiceInputMode}
-        cancelArmed={cancelArmed}
-        isVoiceRecording={isVoiceRecording}
-        voiceElapsedSeconds={voiceElapsedSeconds}
-        toggleVoiceInputMode={toggleVoiceInputMode}
-        voicePanResponder={voicePanResponder}
-        sending={sending}
-        pendingCard={pendingCard}
-        handleSend={handleSend}
-      />
-      {emojiOpen ? (
+      </View>
+      {imageViewer}
+      {selectedMessageIds === null && emojiOpen ? (
         <View
           style={[
             d.attachmentPanel,
             { paddingBottom: insets.bottom || Spacing.md },
           ]}
         >
-          <EmojiPicker onSelect={handleInsertEmoji} onSelectSticker={(sticker) => void handleSendSticker(sticker)} />
+          <EmojiPicker onSelect={handleInsertEmoji} onSelectSticker={handleSendSticker} />
         </View>
       ) : null}
-      <AttachmentPanel
+      {selectedMessageIds === null ? <AttachmentPanel
         insets={insets}
         colors={colors}
         t={t}
@@ -770,8 +805,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         setAttachmentPagerWidth={setAttachmentPagerWidth}
         attachmentPanResponder={attachmentPanResponder}
         handleAttachmentAction={handleAttachmentAction}
-      />
-      </>}
+      /> : null}
       <MessageActionMenu
         anchor={actionMenu ? { x: actionMenu.x, y: actionMenu.y } : null}
         actions={messageActions}
@@ -784,11 +818,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         onClose={() => setMediaSourceSheetVisible(false)}
       />
 
-      <OptionPickerSheet
+      <ReactionPickerSheet
         visible={reactionTarget !== null}
-        title={t('chat.messageActions.react', { defaultValue: '回应' })}
-        options={reactionOptions}
-        selectedValue=""
         onSelect={handlePickReaction}
         onClose={() => setReactionTarget(null)}
       />

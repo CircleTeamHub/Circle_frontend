@@ -272,6 +272,18 @@ export function useChatTimeline({
   // 还要停在最新消息附近:往上翻着看历史时新到的消息不算读过,滚回来再报。
   const isFocused = useIsFocused();
   const appForeground = useChatStore((state) => state.appForeground);
+  const handleImageViewed = useCallback((messageID: string) => {
+    const state = useChatStore.getState();
+    if (
+      !isFocused || !state.appForeground || !currentUserID ||
+      state.currentUserId !== currentUserID || state.activeConversationId !== conversationID
+    ) return;
+    const message = state.messagesByConversation[conversationID]?.find((item) => item.id === messageID);
+    if (!message || message.type !== 'image' || !message.sender || message.sender.id === currentUserID) return;
+    // Gallery pages can reveal incoming photos while the list remains in history.
+    // Use the selected DTO height so newer, unseen messages remain unread.
+    markConversationAsRead(conversationID, message.height);
+  }, [conversationID, currentUserID, isFocused]);
   useEffect(() => {
     if (
       !isFocused ||
@@ -588,6 +600,7 @@ export function useChatTimeline({
     messages,
     displayMessages,
     handleMessageListScroll,
+    handleImageViewed,
     handleJumpToUnread,
     handleUnreadStartVisibilityChange,
     // 未读一定比已读水位新,而首屏窗口就是最新一页:有未读时窗口里必有一条水位以上的

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Platform, Alert, AppState, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -57,7 +57,7 @@ const s = StyleSheet.create({
   addSticker: { height: 58, alignItems: 'center', justifyContent: 'center' },
 });
 
-export function EmojiPicker({ onSelect, onSelectSticker }: EmojiPickerProps) {
+export const EmojiPicker = memo(function EmojiPicker({ onSelect, onSelectSticker }: EmojiPickerProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { items, loading, error, refresh } = useStickerStore();
@@ -177,4 +177,4 @@ export function EmojiPicker({ onSelect, onSelectSticker }: EmojiPickerProps) {
       </ScrollView>
     </View>
   );
-}
+});

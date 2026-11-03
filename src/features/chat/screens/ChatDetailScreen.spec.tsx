@@ -1,6 +1,6 @@
 import React from 'react';
 // jest.mock 工厂里只能引用 mock 前缀的外部变量。
-import { Pressable as MockPressable, Text as MockText, View as MockView } from 'react-native';
+import { Keyboard, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
 import {
   act,
   fireEvent,
@@ -18,8 +18,10 @@ import { fetchChatMembers } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
 import { useComposerDraftStore } from '@/chat-core/composer-drafts';
 import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
+import type { ChatMessage } from '@/types';
 import i18n from '@/i18n';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { API_URL } from '@/constants/config';
 
 /**
  * 聊天详情页的挂载冒烟:页面由二十来个 hooks 和几块组件拼成(见 chat-detail/),
@@ -102,7 +104,8 @@ jest.mock('expo-router', () => {
   };
 });
 
-jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
+let mockFocused = true;
+jest.mock('@react-navigation/native', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => undefined },
   useTranslation: () => ({ t: mockT, i18n: { language: 'zh' } }),
@@ -126,6 +129,7 @@ jest.mock('@/theme', () => {
     Spacing: numbers,
     Radius: numbers,
     Typography: typography,
+    withAlpha: jest.requireActual('@/theme/tokens').withAlpha,
   };
 });
 jest.mock('@/storage', () => ({
@@ -226,8 +230,14 @@ jest.mock('@/features/chat/components/chat-bubble', () =>
       mockCountBubbleRender(message.id);
       return <MockText>{`received:${message.text ?? ''}`}</MockText>;
     },
+    ImageBubble: ({ message, onImagePress }: { message: ChatMessage; onImagePress: (message: ChatMessage) => void }) => (
+      <MockPressable testID={`photo:${message.id}`} onPress={() => onImagePress(message)} />
+    ),
   }),
 );
+jest.mock('@/components/ui/image-viewer', () => ({
+  ImageViewer: (props: object) => <MockView testID="conversation-image-viewer" {...props} />,
+}));
 jest.mock('@/features/chat/components/emoji-picker', () => ({
   EmojiPicker: ({ onSelect }: { onSelect: (emoji: string) => void }) => (
     <MockPressable accessibilityLabel="pick-emoji" onPress={() => onSelect('😀')} />
@@ -330,6 +340,7 @@ function standaloneGroup(): ChatConversationDto {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFocused = true;
   // clearAllMocks 不清 mockImplementation:发送桩的行为不能从上一条用例漏过来。
   jest.mocked(sendTextMessage).mockReset();
   jest.mocked(fetchChatMembers).mockResolvedValue([]);
@@ -432,6 +443,22 @@ test('leaving a deeply scrolled conversation hands its memory back', async () =>
   expect(state.historyFloorByConversation[CONVERSATION]).toBe(251);
 });
 
+test('the floating composer leaves scrollable space for the latest message as its height changes', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  const dock = screen.getByTestId('chat-composer-dock');
+  expect(dock).toHaveStyle({ position: 'absolute', bottom: 0 });
+  for (const height of [114, 180]) {
+    fireEvent(dock, 'layout', {
+      nativeEvent: { layout: { x: 0, y: 300, width: 390, height } },
+    });
+    const list = screen.getByTestId(E2E_TEST_IDS.chatMessageList);
+    // 倒序列表的 paddingTop 在视觉底部，给输入栏/回复预览留位，但视口仍延伸到屏幕底。
+    expect(StyleSheet.flatten(list.props.contentContainerStyle).paddingTop).toBe(height + 8);
+    expect(StyleSheet.flatten(list.props.style).paddingBottom).toBeUndefined();
+  }
+});
+
 test('typing in the composer does not re-render the message bubbles', async () => {
   render(<ChatDetailScreen />);
   await screen.findByText('received:在吗', {}, SETTLE);
@@ -498,6 +525,74 @@ test('a new incoming message renders only its own bubble', async () => {
   expect(mockBubbleRenders.get('msg-1') ?? 0).toBe(0);
   expect(mockBubbleRenders.get('msg-2') ?? 0).toBe(0);
 });
+
+function photoMessage(height: number, senderId = PEER): ChatMessageDto {
+  return {
+    ...message(height, senderId, ''),
+    type: 'image',
+    content: { url: `${API_URL}/media/${height}.jpg` },
+    burnDurationSec: 30,
+    burnExpiresAt: null,
+  };
+}
+
+test('viewing a newly received gallery photo while scrolled into history reports its read height and expiry closes it', async () => {
+  useChatStore.setState({ messagesByConversation: { [CONVERSATION]: [photoMessage(1)] } });
+  render(<ChatDetailScreen />);
+  await screen.findByTestId('photo:msg-1', {}, SETTLE);
+  await act(async () => fireEvent.scroll(screen.getByTestId(E2E_TEST_IDS.chatMessageList), {
+    nativeEvent: { contentOffset: { y: 1000, x: 0 }, layoutMeasurement: { height: 600, width: 400 }, contentSize: { height: 2000, width: 400 } },
+  }));
+  fireEvent.press(screen.getByTestId('photo:msg-1'));
+  expect(markConversationAsRead).toHaveBeenLastCalledWith(CONVERSATION, 1);
+  jest.mocked(markConversationAsRead).mockClear();
+
+  await act(async () => useChatStore.getState().ingestMessages(CONVERSATION, [
+    photoMessage(3), message(4, PEER, 'A newer unseen text'),
+  ]));
+  expect(markConversationAsRead).not.toHaveBeenCalled();
+  act(() => screen.getByTestId('conversation-image-viewer').props.onIndexChange(1));
+  expect(markConversationAsRead).toHaveBeenCalledWith(CONVERSATION, 3);
+  expect(markConversationAsRead).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('conversation-image-viewer').props.initialIndex).toBe(1);
+
+  await act(async () => {
+    useChatStore.getState().ingestMessages(CONVERSATION, [{
+      ...photoMessage(3), revision: 5, burnExpiresAt: new Date(Date.now() - 1).toISOString(),
+    }]);
+    await useChatStore.getState().purgeExpiredBurnMessages({ conversationIds: [CONVERSATION] });
+  });
+  expect(screen.queryByTestId('conversation-image-viewer')).toBeNull();
+});
+
+test.each(['background', 'other-chat', 'signed-out', 'other-user', 'unfocused', 'sent'])(
+  'gallery paging does not report a read for %s', async (state) => {
+    useChatStore.setState({ messagesByConversation: { [CONVERSATION]: [
+      photoMessage(1), photoMessage(3, state === 'sent' ? ME : PEER),
+    ] } });
+    const view = render(<ChatDetailScreen />);
+    await screen.findByTestId('photo:msg-1', {}, SETTLE);
+    await act(async () => fireEvent.scroll(screen.getByTestId(E2E_TEST_IDS.chatMessageList), {
+      nativeEvent: { contentOffset: { y: 1000, x: 0 }, layoutMeasurement: { height: 600, width: 400 }, contentSize: { height: 2000, width: 400 } },
+    }));
+    fireEvent.press(screen.getByTestId('photo:msg-1'));
+    // Retain the callback to cover an event queued before focus/account changes.
+    const onIndexChange = screen.getByTestId('conversation-image-viewer').props.onIndexChange;
+    await act(async () => {
+      if (state === 'background') useChatStore.setState({ appForeground: false });
+      if (state === 'other-chat') useChatStore.setState({ activeConversationId: OTHER });
+      if (state === 'signed-out') useChatStore.setState({ currentUserId: null });
+      if (state === 'other-user') useChatStore.setState({ currentUserId: OTHER });
+      if (state === 'unfocused') { mockFocused = false; view.rerender(<ChatDetailScreen />); }
+    });
+    jest.mocked(markConversationAsRead).mockClear();
+    act(() => {
+      if (state === 'unfocused') screen.getByTestId('conversation-image-viewer').props.onIndexChange(1);
+      else onIndexChange(1);
+    });
+    expect(markConversationAsRead).not.toHaveBeenCalled();
+  },
+);
 
 test('typing then pressing send posts the trimmed text and clears the composer', async () => {
   render(<ChatDetailScreen />);
@@ -567,13 +662,18 @@ test('a send refused before it reaches the screen keeps the draft', async () => 
   expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('留着我');
 });
 
-test('the empty-composer action opens the attachment panel, and the emoji panel inserts into the draft', async () => {
+test('the left attachment button stays available with a draft and the right emoji button inserts into it', async () => {
   render(<ChatDetailScreen />);
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
 
   expect(screen.queryByText('chat.attachments.location')).toBeNull();
+  fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), '你好');
+  expect(screen.getByText('icon:mic-outline')).toBeTruthy();
+  fireEvent(screen.getByTestId(E2E_TEST_IDS.chatInput), 'selectionChange', {
+    nativeEvent: { selection: { start: 2, end: 2 } },
+  });
   await act(async () => {
-    fireEvent.press(screen.getByTestId(E2E_TEST_IDS.chatSend));
+    fireEvent.press(screen.getByLabelText('chat.detail.attachmentPanelLabel'));
   });
   expect(await screen.findByText('chat.attachments.location', {}, SETTLE)).toBeTruthy();
 
@@ -588,7 +688,33 @@ test('the empty-composer action opens the attachment panel, and the emoji panel 
   await act(async () => {
     fireEvent.press(pick);
   });
-  expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('😀');
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('你好😀');
+  expect(sendTextMessage).not.toHaveBeenCalled();
+});
+
+test('the white emoji button switches from voice mode back to an editable draft', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByText('icon:mic-outline')));
+  expect(screen.queryByTestId(E2E_TEST_IDS.chatInput)).toBeNull();
+  expect(screen.getByText('chat.detail.voiceHoldToTalk')).toBeTruthy();
+
+  await act(async () => fireEvent.press(screen.getByText('icon:happy-outline')));
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput)).toBeTruthy();
+  expect(await screen.findByLabelText('pick-emoji', {}, SETTLE)).toBeTruthy();
+});
+
+test('touching the message area dismisses the keyboard and input panels without consuming message actions', async () => {
+  const dismiss = jest.spyOn(Keyboard, 'dismiss');
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await act(async () => fireEvent.press(screen.getByText('icon:happy-outline')));
+  expect(await screen.findByLabelText('pick-emoji', {}, SETTLE)).toBeTruthy();
+  dismiss.mockClear();
+  await act(async () => fireEvent(screen.getByTestId(E2E_TEST_IDS.chatMessageList), 'touchStart'));
+  expect(dismiss).toHaveBeenCalledTimes(1);
+  expect(screen.queryByLabelText('pick-emoji')).toBeNull();
+  dismiss.mockRestore();
 });
 
 test('in a group, typing @ lists members, picking one inserts the mention and the send carries it', async () => {

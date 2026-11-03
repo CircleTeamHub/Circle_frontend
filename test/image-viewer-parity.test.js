@@ -64,11 +64,11 @@ test('the viewer drives zoom/save through the shared cross-platform pieces', () 
   assert.match(viewer, /<ZoomableImage/);
   assert.match(
     viewer,
-    /onLongPress=\{privacyMode === 'ephemeral' \? undefined : handleLongPress\}/,
+    /onLongPress=\{\(privacyModes\?\.\[itemIndex\] \?\? privacyMode\) === 'ephemeral' \? undefined : handleLongPress\}/,
   );
   assert.match(
     viewer,
-    /cachePolicy=\{privacyMode === 'ephemeral' \? 'none' : 'memory-disk'\}/,
+    /cachePolicy=\{\(privacyModes\?\.\[itemIndex\] \?\? privacyMode\) === 'ephemeral' \? 'none' : 'memory-disk'\}/,
   );
   assert.match(viewer, /saveImageToLibrary/);
 

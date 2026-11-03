@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -217,6 +218,9 @@ export default function ScanScreen() {
       const outcome = await launchImageLibraryFast(ImagePicker, {
         mediaTypes: ['images'],
         allowsMultipleSelection: false,
+        // Android needs the code to occupy most of the image; crop screenshots first.
+        allowsEditing: Platform.OS === 'android',
+        aspect: [1, 1],
         quality: 1,
       });
       if (outcome.status === 'denied') {

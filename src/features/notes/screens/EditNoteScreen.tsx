@@ -212,7 +212,8 @@ const COMPOSER_ACTIONS: readonly {
   defaultLabel: string;
 }[] = [
   { kind: 'text', icon: 'text', translationKey: 'text', defaultLabel: '文字' },
-  { kind: 'image', icon: 'images-outline', translationKey: 'media', defaultLabel: '多媒体' },
+  { kind: 'image', icon: 'images-outline', translationKey: 'image', defaultLabel: '图片' },
+  { kind: 'video', icon: 'videocam-outline', translationKey: 'video', defaultLabel: '视频' },
   { kind: 'audio', icon: 'mic-outline', translationKey: 'audio', defaultLabel: '录音' },
   { kind: 'showcase', icon: 'play-circle-outline', translationKey: 'showcase', defaultLabel: '展示' },
   { kind: 'location', icon: 'location-outline', translationKey: 'location', defaultLabel: '位置' },
@@ -643,6 +644,11 @@ export default function EditNoteScreen() {
   const previewReadyTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
   const [previewImageViewerVisible, setPreviewImageViewerVisible] = useState(false);
   const [previewImageViewerIndex, setPreviewImageViewerIndex] = useState(0);
+  const [editorImageViewer, setEditorImageViewer] = useState<{
+    routeKey: string;
+    images: { uri: string; objectKey: string }[];
+    index: number;
+  } | null>(null);
   const [unrecoverableMediaCount, setUnrecoverableMediaCount] = useState(0);
   const [uploadingSection, setUploadingSection] = useState<UploadingSection>(null);
   const [locationDraft, setLocationDraft] = useState<LocationDraft>({
@@ -3114,7 +3120,7 @@ export default function EditNoteScreen() {
   ) => {
     const addTile = (
       <Pressable
-        style={[s.mediaPreviewTile, s.mediaAddTile, d.mediaPreviewTile]}
+        style={[s.mediaAddTile, d.mediaPreviewTile]}
         onPress={onAdd}
         disabled={!isRouteDataReady || uploadingSection !== null}
         accessibilityRole="button"
@@ -3141,15 +3147,34 @@ export default function EditNoteScreen() {
       );
     }
     return (
-      <View style={s.mediaPreviewGrid}>
+      <View style={s.mediaPreviewList}>
         {items.map((item) => {
           const thumbUri =
             item.type === 'VIDEO' ? item.posterUrl : item.previewUri ?? item.url;
           return (
             <View
               key={item.clientId}
-              style={[s.mediaPreviewTile, d.mediaPreviewTile]}
+              testID="note-media-preview-tile"
+              style={[
+                s.mediaPreviewTile,
+                d.mediaPreviewTile,
+                item.width && item.height ? { aspectRatio: item.width / item.height } : undefined,
+              ]}
             >
+              <Pressable
+                style={s.mediaThumb}
+                disabled={item.type !== 'IMAGE' || !thumbUri}
+                accessibilityRole={item.type === 'IMAGE' ? 'button' : undefined}
+                accessibilityLabel={t('notes.edit.imageItem', { defaultValue: '图片' })}
+                onPress={() => {
+                  const imageItems = items.filter((image) => image.type === 'IMAGE' && (image.previewUri || image.url));
+                  setEditorImageViewer({
+                    routeKey: draftRouteKey,
+                    images: imageItems.map((image) => ({ uri: (image.previewUri ?? image.url)!, objectKey: image.objectKey })),
+                    index: imageItems.findIndex((image) => image.clientId === item.clientId),
+                  });
+                }}
+              >
               {item.type === 'VIDEO' && item.previewUri ? (
                 <VideoDraftPreview uri={item.previewUri} />
               ) : thumbUri ? (
@@ -3157,7 +3182,7 @@ export default function EditNoteScreen() {
                   testID="note-media-preview-image"
                   source={{ uri: thumbUri }}
                   style={s.mediaThumb}
-                  contentFit="cover"
+                  contentFit="contain"
                 />
               ) : (
                 <View
@@ -3171,6 +3196,7 @@ export default function EditNoteScreen() {
                   />
                 </View>
               )}
+              </Pressable>
               <View style={[s.mediaBadge, d.mediaBadge]}>
                 <Ionicons
                   name={item.type === 'VIDEO' ? 'videocam' : 'image'}
@@ -3204,6 +3230,7 @@ export default function EditNoteScreen() {
     d.mediaBadge,
     d.mediaMeta,
     d.mediaPreviewTile,
+    draftRouteKey,
     handleRemoveSectionMedia,
     isRouteDataReady,
     uploadingSection,
@@ -3376,15 +3403,15 @@ export default function EditNoteScreen() {
         <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
           {renderSectionHeader(
             'images-outline',
-            t('notes.edit.sections.media', { defaultValue: '多媒体' }),
+            t('notes.edit.composer.image', { defaultValue: '图片' }),
             mediaSectionStatus,
             () => handleRemoveComposerBlock(block),
           )}
           {renderMediaList(
             getMediaItemsForBlock(mediaItems, 'media', block.id),
             'media',
-            () => void handleAddSectionMedia({ target: 'media', kind: 'media', blockId: block.id }),
-            t('notes.edit.addMedia', { defaultValue: '添加多媒体' }),
+            () => void handleAddSectionMedia({ target: 'media', kind: 'image', blockId: block.id }),
+            t('notes.edit.addImage', { defaultValue: '添加图片' }),
           )}
         </View>
 
@@ -3891,7 +3918,7 @@ export default function EditNoteScreen() {
         ]}
       >
         <View style={s.composerToolbar}>
-          {COMPOSER_ACTIONS.map((action) => {
+          {COMPOSER_ACTIONS.filter((action) => action.kind !== 'audio').map((action) => {
             const label = t(`notes.edit.composer.${action.translationKey}`, {
               defaultValue: action.defaultLabel,
             });
@@ -4115,6 +4142,15 @@ export default function EditNoteScreen() {
             )}
           </View>
         </Modal>
+      ) : null}
+      {editorImageViewer?.routeKey === draftRouteKey ? (
+        <ImageViewer
+          images={editorImageViewer.images.map((item) => item.uri)}
+          cacheKeys={editorImageViewer.images.map((item) => item.objectKey)}
+          visible
+          initialIndex={editorImageViewer.index}
+          onClose={() => setEditorImageViewer(null)}
+        />
       ) : null}
       {previewVisible && previewImageViewerVisible && previewData ? (
         <ImageViewer
@@ -4747,20 +4783,20 @@ const s = StyleSheet.create({
     gap: Spacing.xs,
   },
   sectionActionText: { ...Typography.small, fontWeight: '600' },
-  mediaPreviewGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  mediaPreviewList: {
     gap: Spacing.sm,
   },
   mediaPreviewTile: {
-    width: '31%',
-    minWidth: 96,
+    width: '100%',
     aspectRatio: 1,
     borderWidth: 1,
     borderRadius: Radius.md,
     overflow: 'hidden',
   },
   mediaAddTile: {
+    minHeight: 96,
+    borderWidth: 1,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.xs,

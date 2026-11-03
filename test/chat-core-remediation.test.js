@@ -270,12 +270,11 @@ test('the tab red dot follows the same total as the app badge (G-10)', () => {
 
 // ---- 批5:送达/回应/编辑/逐条已读(G-07) ----
 
-test('protocol declares the delivered/reaction/edit events and reaction whitelist', () => {
+test('protocol declares the delivered/reaction/edit events', () => {
   const protocol = read('src/chat-core/protocol.ts');
   for (const ev of ["'chat:delivered'", "'chat:reaction'", "'chat:edit'"]) {
     assert.match(protocol, new RegExp(ev));
   }
-  assert.match(protocol, /CHAT_REACTION_EMOJIS/);
 });
 
 test('receiving a foreign message reports the delivered watermark', () => {
@@ -456,7 +455,7 @@ test('revoke/edit rejections are localized instead of shown raw', () => {
 test('multi-option pickers do not rely on Alert (Android caps at 3 buttons)', () => {
   const detail = readChatDetailSource();
   const info = read('src/features/chat/screens/ChatInfoScreen.tsx');
-  assert.match(detail, /OptionPickerSheet/);
+  assert.match(detail, /ReactionPickerSheet/);
   assert.match(info, /OptionPickerSheet/);
 });
 

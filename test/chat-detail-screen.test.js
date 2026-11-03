@@ -89,7 +89,7 @@ test('chat detail screen exposes refined message insets and composer action hier
 
   assert.match(source, /messageListInset/);
   assert.match(source, /composerActionBtn/);
-  assert.match(source, /contentContainerStyle=\{\[s\.messageList, s\.messageListContent, s\.messageListInset\]\}/);
+  assert.match(source, /contentContainerStyle=\{\[s\.messageList, s\.messageListContent, s\.messageListInset, \{ paddingTop: composerInset \+ Spacing\.sm \}\]\}/);
 });
 
 test('new messages follow the latest position without hijacking history reading', () => {
@@ -208,7 +208,8 @@ test('chat detail screen scopes custom background images to the message area', (
     /<View style=\{\[d\.container,[\s\S]*?\]\}>[\s\S]*<ImageBackground[\s\S]*?style=\{StyleSheet\.absoluteFillObject\}/,
   );
   assert.match(source, /container:\s*\{\s*flex:\s*1,\s*backgroundColor:\s*colors\.background\s*\}/);
-  assert.match(source, /inputBar:\s*\{\s*backgroundColor:\s*colors\.background\s*\}/);
+  // 玻璃输入栏由主题根容器托底，背景图仍只属于上方的消息区。
+  assert.match(source, /inputBar:\s*\{\s*backgroundColor:\s*'transparent'\s*\}/);
 });
 
 test('chat detail screen logs text send failures without logging message bodies', () => {

@@ -75,7 +75,7 @@ test('preproduction metadata CLI loads the dynamic app variant', () => {
   assert.match(productionIdentity.stderr, /package.*preprod|variant.*preprod/i);
 });
 
-test('manifest CLI accepts Expo-generated preproduction schemes and rejects production schemes', () => {
+test('manifest CLI accepts Expo-generated preproduction schemes and rejects production schemes', async () => {
   const os = require('node:os');
   const tempProject = fs.mkdtempSync(
     path.join(os.tmpdir(), 'preprod-expo-config-'),
@@ -140,7 +140,8 @@ test('manifest CLI accepts Expo-generated preproduction schemes and rejects prod
     assert.equal(invalid.status, 1);
     assert.match(invalid.stderr, /production scheme|missing preproduction scheme/i);
   } finally {
-    fs.rmSync(tempProject, { recursive: true, force: true });
+    // Async removal handles Windows symlink fixtures without rmSync's EPERM failure.
+    await fs.promises.rm(tempProject, { recursive: true, force: true, maxRetries: 3 });
   }
 });
 

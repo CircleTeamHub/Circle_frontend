@@ -1,9 +1,10 @@
 import { GroupInvitationBubble } from '@/features/groups/GroupInvitationBubble';
+import { useConversationImageViewer } from './use-conversation-image-viewer';
 import { getGroupEntryHref } from '@/features/groups/routes';
 import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetry';
 import { messageRowKey } from '@/chat-core/local-message-id';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
-import { memo, type ReactElement, useCallback, useEffect, useRef } from 'react';
+import { memo, type ReactElement, useCallback } from 'react';
 import { type ChatMessage } from '@/types';
 import { type GestureResponderEvent, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -82,6 +83,7 @@ const MessageRow = memo(function MessageRow({
 
 export interface MessageRendererParams {
   messages: ChatMessage[];
+  handleImageViewed: (messageID: string) => void;
   selectedMessageIds: Set<string> | null;
   handleToggleSelectedMessage: (id: string) => void;
   colors: ThemeColors;
@@ -113,6 +115,7 @@ export interface MessageRendererParams {
  */
 export function useMessageRenderer({
   messages,
+  handleImageViewed,
   selectedMessageIds,
   handleToggleSelectedMessage,
   colors,
@@ -137,25 +140,11 @@ export function useMessageRenderer({
   handleStartCall,
   handleRetryMessage,
 }: MessageRendererParams) {
+  const { imageViewer, openImage } = useConversationImageViewer(messages, selfDestructEnabled, selfDestructCacheKey, handleImageViewed);
   // 群聊接收消息的显示名：本地备注覆盖 > 群成员权威昵称 > 消息自带昵称 > 会话标题。
   // 群成员昵称排在消息自带 senderNickname 之前——后者可能为空而回落成原始 hex id，
   // 成员表里的昵称才是能稳定显示的「对方名字」。
   const allRemarkOverrides = useFriendRemarkStore((state) => state.remarks);
-  const messagesRef = useRef(messages);
-  messagesRef.current = messages;
-  const galleryListenersRef = useRef(new Set<() => void>());
-  const getGalleryMessages = useCallback(
-    () => messagesRef.current.filter((message) => message.type === 'image').reverse(),
-    [],
-  );
-  // Only the open gallery subscribes; unchanged message rows keep their memoized props.
-  const subscribeGalleryMessages = useCallback((listener: () => void) => {
-    galleryListenersRef.current.add(listener);
-    return () => { galleryListenersRef.current.delete(listener); };
-  }, []);
-  useEffect(() => {
-    galleryListenersRef.current.forEach((listener) => listener());
-  }, [messages]);
   const receivedDisplayName = useCallback(
     (msg: ChatMessage) => {
       const override = msg.senderID
@@ -275,9 +264,8 @@ export function useMessageRenderer({
       case 'image':
         return withMessageActions(item, (
           <ImageBubble
+            onImagePress={openImage}
             message={item}
-            getGalleryMessages={getGalleryMessages}
-            subscribeGalleryMessages={subscribeGalleryMessages}
             outgoing={Boolean(item.outgoing)}
             senderName={receivedDisplayName(item)}
             senderAvatarUri={receivedAvatarUri(item)}
@@ -477,8 +465,6 @@ export function useMessageRenderer({
       default: return null;
     }
   }, [
-    getGalleryMessages,
-    subscribeGalleryMessages,
     receivedAvatarUri,
     receivedDisplayName,
     withGroupSenderLabel,
@@ -496,6 +482,7 @@ export function useMessageRenderer({
     getMessageLongPressHandler,
     withMessageActions,
     handleStartCall,
+    openImage,
   ]);
 
   const renderItem = useCallback(
@@ -514,6 +501,7 @@ export function useMessageRenderer({
   );
 
   return {
+    imageViewer,
     renderItem,
     keyExtractor: messageRowKey,
   };

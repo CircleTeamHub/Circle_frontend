@@ -58,6 +58,23 @@ test('reconciles card status on open and again after a reconnect recovery', asyn
   await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
 });
 
+test('refreshes an old collected card when its source changes while the chat remains open', async () => {
+  mockFetch.mockResolvedValueOnce([
+    { noteId: 'old-copy', workStatus: 'WORKING', publicationStatus: 'ACTIVE' },
+  ]).mockResolvedValueOnce([
+    { noteId: 'old-copy', workStatus: 'CLOSED', publicationStatus: 'ACTIVE' },
+  ]);
+  const messages = [noteCard('m1', 'old-copy')];
+  renderHook(() => useNoteCardStatusSync('conv-1', messages));
+  await waitFor(() => expect(mockApply).toHaveBeenLastCalledWith('old-copy', 'WORKING', 'ACTIVE'));
+  act(() => useNoteStatusSignalStore.getState().bump({
+    sourceNoteId: 'root-source', workStatus: 'CLOSED', status: 'ACTIVE',
+    available: true, changedAt: '2026-11-02T12:00:00.000Z',
+  }));
+  await waitFor(() => expect(mockApply).toHaveBeenLastCalledWith('old-copy', 'CLOSED', 'ACTIVE'));
+  expect(mockFetch).toHaveBeenCalledTimes(2);
+});
+
 test('older note cards still reconcile when more than 100 distinct notes are loaded', async () => {
   const recent = Array.from({ length: 100 }, (_, i) => noteCard(`m-${i}`, `note-${i}`));
   mockFetch.mockResolvedValue([]);

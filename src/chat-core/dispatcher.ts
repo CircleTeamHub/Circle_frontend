@@ -654,9 +654,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       flushIncomingMessageBatch();
       const store = useChatStore.getState();
       store.applyRead(validPayload.conversationId, validPayload.userId, validPayload.height);
-      // 本人在别的设备上读过了,这台的通知栏也收起来(对端读到哪与我无关)。
+      // 同步本人其它设备的已读范围，不清掉更高位置的未读通知。
       if (validPayload.userId === store.currentUserId) {
-        dismissChatNotifications(validPayload.conversationId);
+        dismissChatNotifications(validPayload.conversationId, undefined, validPayload.height);
       }
     });
   });

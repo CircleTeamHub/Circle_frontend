@@ -4,12 +4,77 @@ import { Alert, Platform, StyleSheet } from 'react-native';
 import { setAudioModeAsync } from 'expo-audio';
 import EditNoteScreen, { draftRecordFromServer, draftFingerprint } from './EditNoteScreen';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
+import { ImageViewer } from '@/components/ui/image-viewer';
 import { createNote, updateNote } from '@/services/api/notes';
 import { storage } from '@/storage';
 import { usePreventRemove } from '@react-navigation/native';
 import type { CreateNoteInput, NoteDetail, NoteDraftDetail } from '@/features/notes/types';
 import { ApiError } from '@/services/api/api-error';
 import { stageLocalNoteDraftDeletion, loadLocalNoteDraft, loadPendingNoteDraftDeletions } from '@/features/notes/utils/note-editor-drafts';
+
+jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: jest.fn(() => null) }));
+
+test('offers separate image and video blocks without a recording toolbar entry', async () => {
+  render(<EditNoteScreen />);
+  expect(screen.getByRole('button', { name: 'notes.edit.composer.image' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'notes.edit.composer.video' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'notes.edit.composer.media' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'notes.edit.composer.audio' })).toBeNull();
+
+  mockRequestPermission.mockResolvedValue({ granted: true });
+  mockLaunchPicker.mockResolvedValue({ canceled: true });
+  pressComposer('image');
+  await waitFor(() => expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ mediaTypes: ['images'] })));
+  pressComposer('video');
+  await waitFor(() => expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ mediaTypes: ['videos'] })));
+});
+
+test('stacks complete editor images at full width and opens the tapped image in the viewer', async () => {
+  mockRouteId = 'stacked-images';
+  const images = [
+    { id: 'one', type: 'IMAGE', objectKey: 'notes/one.jpg', url: 'https://cdn.example/one.jpg', width: 600, height: 900, sortOrder: 0 },
+    { id: 'two', type: 'IMAGE', objectKey: 'notes/two.jpg', url: 'https://cdn.example/two.jpg', width: 900, height: 600, sortOrder: 1 },
+  ];
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Images', contentJson: [], media: images, sections: { media: { items: images } }, groups: [], pinned: false,
+    createdAt: '2026-01-01T00:00:00Z',
+  });
+  render(<EditNoteScreen />);
+  const previews = await screen.findAllByTestId('note-media-preview-image');
+  const tiles = screen.getAllByTestId('note-media-preview-tile');
+  expect(tiles).toHaveLength(2);
+  expect(StyleSheet.flatten(tiles[0].props.style)).toMatchObject({ width: '100%', aspectRatio: 600 / 900 });
+  expect(StyleSheet.flatten(tiles[1].props.style)).toMatchObject({ width: '100%', aspectRatio: 900 / 600 });
+  expect(previews[0].props.contentFit).toBe('contain');
+  fireEvent.press(screen.getAllByRole('button', { name: 'notes.edit.imageItem' })[1]);
+  expect(jest.mocked(ImageViewer).mock.calls.at(-1)?.[0]).toMatchObject({
+    visible: true, images: images.map((item) => item.url), cacheKeys: images.map((item) => item.objectKey), initialIndex: 1,
+  });
+  act(() => jest.mocked(ImageViewer).mock.calls.at(-1)?.[0].onClose());
+  expect(screen.UNSAFE_queryByType(ImageViewer)).toBeNull();
+});
+
+test('keeps legacy audio editable and saves its attachment after removing the recording toolbar entry', async () => {
+  mockRouteId = 'legacy-audio';
+  const audio = { id: 'voice', type: 'AUDIO', objectKey: 'notes/voice.m4a', url: 'https://cdn.example/voice.m4a', durationMs: 2400, sortOrder: 0 };
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Legacy audio', contentJson: [], media: [audio], sections: { audio: { items: [audio] } }, groups: [], pinned: false,
+    createdAt: '2026-01-01T00:00:00Z',
+  });
+  render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Legacy audio');
+  expect(screen.queryByRole('button', { name: 'notes.edit.composer.audio' })).toBeNull();
+  expect(screen.getByText('notes.edit.audioDuration')).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.sort' }));
+  expect(screen.getAllByText('notes.edit.composer.audio')).toHaveLength(2);
+  fireEvent.press(screen.getByRole('button', { name: 'common.close' }));
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Updated legacy audio');
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(updateNote).toHaveBeenCalled());
+  expect(jest.mocked(updateNote).mock.calls.at(-1)?.[1].sections?.audio?.items).toEqual([
+    expect.objectContaining({ objectKey: audio.objectKey, durationMs: 2400 }),
+  ]);
+});
 
 // EditNoteScreen reads the current account for local/server draft persistence.
 // The real auth store hydrates through native encrypted storage, which is not
@@ -262,12 +327,9 @@ function locationAction() {
 }
 
 function pressComposer(kind: 'title' | 'text' | 'image' | 'video' | 'location') {
-  // Image/video share the multi-media action. Other actions reveal their
-  // section first; media and location then use the section's own control.
-  const action = kind === 'video' || kind === 'image' ? 'media' : kind;
-  fireEvent.press(screen.getByRole('button', { name: `notes.edit.composer.${action}` }));
+  fireEvent.press(screen.getByRole('button', { name: `notes.edit.composer.${kind}` }));
   if (kind === 'image' || kind === 'video') {
-    const addButtons = screen.getAllByRole('button', { name: 'notes.edit.addMedia' });
+    const addButtons = screen.getAllByRole('button', { name: `notes.edit.add${kind === 'image' ? 'Image' : 'Video'}` });
     fireEvent.press(addButtons[addButtons.length - 1]);
   } else if (kind === 'location') {
     fireEvent.press(locationAction());
@@ -1304,7 +1366,7 @@ test('reports a redacted aggregate when a section upload batch partially fails',
     expect.objectContaining({
       message: 'note media batch upload failed [Error]',
     }),
-      { failed: 1, total: 2, reason: 'media.media', errorNames: 'Error' },
+      { failed: 1, total: 2, reason: 'media.image', errorNames: 'Error' },
   );
   const reported = mockReportHandledFailure.mock.calls.find(
     (call: unknown[]) => call[1] === 'sectionMediaUploadBatch',
@@ -1830,7 +1892,6 @@ test('keeps a stopped recording after presign failure and retries the same local
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
-    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
     fireEvent.press(screen.getByText('notes.edit.startRecording'));
     await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
     fireEvent.press(screen.getByText('notes.edit.stopRecording'));
@@ -1851,10 +1912,11 @@ test('keeps a stopped recording after presign failure and retries the same local
 });
 
 test('does not publish while audio recording is active', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
   const rendered = render(<EditNoteScreen />);
-  pressComposer('title');
+  await screen.findByText('notes.edit.startRecording');
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Recording');
-  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
   fireEvent.press(screen.getByText('notes.edit.startRecording'));
   await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
   const done = screen.getByRole('button', { name: 'notes.edit.done' });
@@ -2098,7 +2160,6 @@ test('Back keeps an active recording available until it is explicitly stopped', 
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
-    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
     fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Recording draft');
     // Once the region and title are autosaved, their fingerprint cannot warn about the recording.
     await waitFor(() => expect(mockSaveDraft).toHaveBeenCalled(), { timeout: 2500 });
@@ -2126,7 +2187,6 @@ test.each(['account', 'sessionEpoch', 'route'] as const)(
     const rendered = render(<EditNoteScreen />);
     try {
       await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
-      fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
       fireEvent.press(screen.getByText('notes.edit.startRecording'));
       await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
       if (change === 'route') {
@@ -2154,7 +2214,6 @@ test('deleting an audio region cancels a recording start whose native preparatio
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
-    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
     fireEvent.press(screen.getByText('notes.edit.startRecording'));
     await waitFor(() => expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalled());
     fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.composer.audio' }));
@@ -2178,7 +2237,6 @@ test.each(['prepare', 'stop'] as const)(
     const rendered = render(<EditNoteScreen />);
     try {
       await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
-      fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
       fireEvent.press(screen.getByText('notes.edit.startRecording'));
       if (operation === 'prepare') {
         await waitFor(() => expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledTimes(1));
@@ -2191,7 +2249,6 @@ test.each(['prepare', 'stop'] as const)(
       mockDraftAuth.sessionEpoch += 1;
       rendered.rerender(<EditNoteScreen />);
       await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
-      fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
       fireEvent.press(screen.getByText('notes.edit.startRecording'));
       await act(async () => { await Promise.resolve(); });
       expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledTimes(1);
@@ -2213,7 +2270,7 @@ test.each(['prepare', 'stop'] as const)(
   },
 );
 
-test('a replacement audio region waits for the deleted region recorder to stop', async () => {
+test('deleting a legacy audio region finishes its pending recorder cleanup without recreating an entry', async () => {
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
   const pending = createDeferred<void>();
@@ -2221,25 +2278,18 @@ test('a replacement audio region waits for the deleted region recorder to stop',
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
-    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
     fireEvent.press(screen.getByText('notes.edit.startRecording'));
     await waitFor(() => expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy());
     fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.composer.audio' }));
     await waitFor(() => expect(mockRecorder.stop).toHaveBeenCalledTimes(1));
-    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.audio' }));
-    fireEvent.press(screen.getByText('notes.edit.startRecording'));
-    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByText('notes.edit.startRecording')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'notes.edit.composer.audio' })).toBeNull();
     expect(mockRecorder.prepareToRecordAsync).toHaveBeenCalledTimes(1);
     expect(mockRecorder.record).toHaveBeenCalledTimes(1);
     await act(async () => { pending.resolve(); await pending.promise; });
-    await waitFor(() => expect(mockRecorder.record).toHaveBeenCalledTimes(2));
-    const newRecordingOrder = mockRecorder.record.mock.invocationCallOrder[1];
-    jest.mocked(setAudioModeAsync).mock.calls.forEach(([mode], index) => {
-      if (mode.allowsRecording === false) {
-        expect(jest.mocked(setAudioModeAsync).mock.invocationCallOrder[index]).toBeLessThan(newRecordingOrder);
-      }
-    });
-    expect(screen.getByText('notes.edit.stopRecording')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeEnabled());
+    expect(screen.queryByText('notes.edit.stopRecording')).toBeNull();
+    expect(mockRecorder.record).toHaveBeenCalledTimes(1);
   } finally {
     await act(async () => { pending.resolve(); await pending.promise; rendered.unmount(); });
   }

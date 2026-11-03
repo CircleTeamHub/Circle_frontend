@@ -19,6 +19,9 @@ const FEATURE_KEYS = [
   'invitation.pendingTitle',
   'invitation.noPending',
   'invitation.waitingDesc',
+  'invitation.applicationProgress',
+  'invitation.invitedToJoin',
+  'invitation.invitedByYou',
   'invitation.viewerOnly',
   'invitation.settledRejected',
   'invitation.settledApproved',
@@ -45,7 +48,7 @@ const flatten = (obj, prefix = '') => {
   return out;
 };
 
-for (const lng of ['en', 'zh']) {
+for (const lng of ['en', 'zh', 'es', 'ja', 'ko']) {
   test(`${lng}.json defines every verification-feature i18n key`, () => {
     const flat = flatten(require(`../src/i18n/locales/${lng}.json`));
     const missing = FEATURE_KEYS.filter(

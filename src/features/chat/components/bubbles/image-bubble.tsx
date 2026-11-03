@@ -24,6 +24,7 @@ interface ImageBubbleProps {
   hideStatus?: boolean;
   selfDestructEnabled?: boolean;
   selfDestructCacheKey?: string;
+  onImagePress?: (message: ChatMessage) => void;
 }
 
 /** 本机文件等本地地址:不挂存储 key 当缓存键,免得把本地原片记在远端那张的名下。 */
@@ -86,6 +87,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   hideStatus,
   selfDestructEnabled = false,
   selfDestructCacheKey = '',
+  onImagePress,
 }) => {
   const { colors } = useTheme();
   // Only this message’s author-stamped duration controls media retention.
@@ -160,9 +162,12 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   }, [ephemeral, galleryMessages, message, previewVisible, selfDestructEnabled]);
   const handleOpenPreview = useCallback(() => {
     if (!previewUri) return;
-    setGalleryMessages(getGalleryMessages?.() ?? [message]);
-    setPreviewVisible(true);
-  }, [getGalleryMessages, message, previewUri]);
+    if (onImagePress) onImagePress(message);
+    else {
+      setGalleryMessages(getGalleryMessages?.() ?? [message]);
+      setPreviewVisible(true);
+    }
+  }, [getGalleryMessages, message, onImagePress, previewUri]);
   const imageNode = (
     <View style={[sImage.body, outgoing ? sImage.bodyOutgoing : null]}>
       <Pressable

@@ -418,8 +418,8 @@ function loadManager(localDbOverrides = {}, options = {}) {
     },
     './app-badge': { initChatAppBadgeSync: () => {} },
     './chat-notifications': {
-      dismissChatNotifications: (conversationId, messageIds) =>
-        dismissedNotifications.push({ conversationId, messageIds }),
+      dismissChatNotifications: (conversationId, messageIds, throughHeight) =>
+        dismissedNotifications.push({ conversationId, messageIds, throughHeight }),
     },
     '@/features/notifications/services/push-token-registration': {
       getRegisteredPushToken: (userId) =>
@@ -472,13 +472,13 @@ function loadManager(localDbOverrides = {}, options = {}) {
   };
 }
 
-test('reading a conversation on this device clears its notifications', () => {
+test('reading history on this device only dismisses notifications through the reported height', () => {
   const { manager, store, dismissedNotifications } = loadManager();
   store.markConversationReadLocal = () => {};
   manager.markConversationRead('c1', 7);
   assert.deepEqual(
     dismissedNotifications.map((entry) => ({ ...entry })),
-    [{ conversationId: 'c1', messageIds: undefined }],
+    [{ conversationId: 'c1', messageIds: undefined, throughHeight: 7 }],
   );
 });
 

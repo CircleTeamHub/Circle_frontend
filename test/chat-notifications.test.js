@@ -31,7 +31,7 @@ function fakeNotifications(presented = []) {
   };
 }
 
-function load({ os = 'android', notifications = fakeNotifications() } = {}) {
+function load({ os = 'android', notifications = fakeNotifications(), state = { messagesByConversation: {}, conversations: [] } } = {}) {
   const filePath = path.join(root, 'src/chat-core/chat-notifications.ts');
   const output = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
@@ -50,6 +50,7 @@ function load({ os = 'android', notifications = fakeNotifications() } = {}) {
     exports: {},
     require: (request) => {
       if (request === 'react-native') return { Platform: { OS: os } };
+      if (request === './store') return { useChatStore: { getState: () => state } };
       if (request === '@/i18n') return { __esModule: true, default: { t: (key) => key } };
       if (request === '@/observability/report-failure') {
         return { reportHandledFailure: (...args) => failures.push(args) };
@@ -139,6 +140,28 @@ test('a recall or burn clears just those messages', async () => {
   await settle();
   await settle();
   assert.deepEqual([...calls.dismissed], ['n2']);
+});
+
+test('a partial read preserves notifications above its height and unknown legacy notifications', async () => {
+  const notifications = fakeNotifications([
+    presented('read', { type: 'chat', conversationId: 'c1', messageId: 'm2', height: 2 }),
+    presented('read-edge', { type: 'chat', conversationId: 'c1', messageId: 'm3', height: 3 }),
+    presented('unread', { type: 'chat', conversationId: 'c1', messageId: 'm4', height: 4 }),
+    presented('other', { type: 'chat', conversationId: 'c2', messageId: 'm-other', height: 1 }),
+    presented('legacy-read', { type: 'chat', conversationId: 'c1', messageId: 'old-read' }),
+    presented('legacy-unread', { type: 'chat', conversationId: 'c1', messageId: 'old-unread' }),
+    presented('legacy-unknown', { type: 'chat', conversationId: 'c1', messageId: 'not-cached' }),
+    presented('invalid-height', { type: 'chat', conversationId: 'c1', messageId: 'not-cached', height: '1' }),
+    presented('last-known', { type: 'chat', conversationId: 'c1', messageId: 'last-known' }),
+  ]);
+  const { api, calls } = load({ notifications, state: {
+    messagesByConversation: { c1: [{ id: 'old-read', height: 1 }, { id: 'old-unread', height: 8 }] },
+    conversations: [{ id: 'c1', lastMessage: { id: 'last-known', height: 3 } }],
+  } });
+  api.dismissChatNotifications('c1', undefined, 3);
+  await settle();
+  await settle();
+  assert.deepEqual([...calls.dismissed].sort(), ['last-known', 'legacy-read', 'read', 'read-edge']);
 });
 
 test('web never loads expo-notifications, and failures are reported instead of thrown', async () => {

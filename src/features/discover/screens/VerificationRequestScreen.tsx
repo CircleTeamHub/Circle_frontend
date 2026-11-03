@@ -246,6 +246,7 @@ export default function VerificationRequestScreen() {
   // 「我是谁」的判定都不可信，必须先按未就绪处理，否则会把合法验证人误判成旁观者。
   const identityReady = currentUserId != null;
   const isApplicant = invitation.applicant.id === currentUserId;
+  const hasInviter = invitation.inviter.id !== invitation.applicant.id;
   const myVerifier = invitation.verifiers.find(
     (v) => v.verifier.id === currentUserId,
   );
@@ -331,10 +332,9 @@ export default function VerificationRequestScreen() {
       icon = 'time-outline';
       tone = colors.primary;
       label = t('invitation.waitingDesc', {
-        approved: invitation.approvedCount,
         total: invitation.requiredCount,
         defaultValue:
-          '正在等待好友验证（{{approved}}/{{total}}），满 {{total}} 人即可加入',
+          '获得 {{total}} 位圈内成员验证后即可加入',
       });
     } else {
       icon = 'eye-outline';
@@ -347,14 +347,16 @@ export default function VerificationRequestScreen() {
     return (
       <View style={[s.statusPill, { backgroundColor: colors.surface }]}>
         <Ionicons name={icon} size={20} color={tone} />
-        <Text style={{ color: tone, ...Typography.body }}>{label}</Text>
+        <Text style={{ color: tone, ...Typography.body, flexShrink: 1 }}>{label}</Text>
       </View>
     );
   };
 
   return (
     <View style={[d.container, { paddingTop: insets.top }]}>
-      <NavHeader title={t('invitation.verificationRequest')} />
+      <NavHeader
+        title={t(isApplicant ? 'invitation.applicationProgress' : 'invitation.verificationRequest')}
+      />
       <View style={s.content}>
         <View style={[s.card, d.card]}>
           <Avatar
@@ -366,11 +368,20 @@ export default function VerificationRequestScreen() {
             {invitation.applicant.nickname}
           </Text>
           <Text style={[s.descText, d.descText]}>
-            {t('invitation.wantsToJoin', { circle: invitation.circleName })}
+            {t(hasInviter ? 'invitation.invitedToJoin' : 'invitation.wantsToJoin', {
+              circle: invitation.circleName,
+            })}
           </Text>
-          <Text style={[s.descText, d.descText]}>
-            {t('invitation.invitedBy', { name: invitation.inviter.nickname })}
-          </Text>
+          {hasInviter ? (
+            <Text style={[s.descText, d.descText]}>
+              {t(
+                invitation.inviter.id === currentUserId
+                  ? 'invitation.invitedByYou'
+                  : 'invitation.invitedBy',
+                { name: invitation.inviter.nickname },
+              )}
+            </Text>
+          ) : null}
           <View style={s.progressBlock}>
             <View
               style={[s.progressTrack, { backgroundColor: colors.surfaceBorder }]}

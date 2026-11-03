@@ -163,8 +163,14 @@ setConversationCacheResetHandler((conversationId) => {
   void loadConversationMessages(conversationId).catch(() => undefined);
 });
 
-/** 已读:以本地已知的最大 height 上报水位 + 本地未读归零。 */
-export function markConversationAsRead(conversationId: string): void {
+/** 已读:缺省推进到本地最新消息；媒体查看器可只推进到实际看到的消息。 */
+export function markConversationAsRead(conversationId: string, throughHeight?: number): void {
+  if (throughHeight !== undefined) {
+    if (Number.isSafeInteger(throughHeight) && throughHeight > 0) {
+      markConversationRead(conversationId, throughHeight);
+    }
+    return;
+  }
   const state = useChatStore.getState();
   const messages = state.messagesByConversation[conversationId] ?? [];
   let height = 0;

@@ -9,6 +9,13 @@ const { buildContactSections, dedupeFriendsById } = loadTsModule(
 
 const f = (id, nickname, accountId = id) => ({ id, nickname, accountId });
 
+test('中文姓名和备注按拼音分组，不使用数字账号分组', () => {
+  const rows = [f('100', '张三'), f('101', '李四'), f('102', '王五'),
+    { ...f('103', 'Zoe'), remark: '陈一' }, f('104', 'Alice')];
+  const sections = buildContactSections(rows);
+  assert.deepEqual(Array.from(sections, (section) => section.title), ['A', 'C', 'L', 'W', 'Z']);
+});
+
 test('dedupeFriendsById 按 id 去重并保留首次出现', () => {
   const out = dedupeFriendsById([f('a', 'Alice'), f('a', 'Alice-dup'), f('b', 'Bob')]);
   assert.deepEqual(

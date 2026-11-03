@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { FlatList } from 'react-native';
 import { saveImageToLibrary } from '@/utils/save-image';
 import type { ChatMessage } from '@/types';
@@ -54,6 +54,7 @@ jest.mock('@/theme', () => ({
 }));
 
 const params = {
+  handleImageViewed: jest.fn(),
   selectedMessageIds: null,
   handleToggleSelectedMessage: jest.fn(),
   colors: { text: '#111', iconAccent: '#6200ee' },
@@ -77,8 +78,8 @@ const params = {
 } as unknown as Omit<MessageRendererParams, 'messages'>;
 
 function Messages({ messages }: { messages: ChatMessage[] }) {
-  const { renderItem, keyExtractor } = useMessageRenderer({ ...params, messages });
-  return <>{messages.map((item) => <React.Fragment key={keyExtractor(item)}>{renderItem({ item })}</React.Fragment>)}</>;
+  const { renderItem, keyExtractor, imageViewer } = useMessageRenderer({ ...params, messages });
+  return <>{messages.map((item) => <React.Fragment key={keyExtractor(item)}>{renderItem({ item })}</React.Fragment>)}{imageViewer}</>;
 }
 
 const photo = (id: string): ChatMessage => ({ id, type: 'image', imageUrl: `https://example.test/${id}.jpg` });
@@ -116,7 +117,7 @@ test.each([older, newer])('an open gallery drops revoked neighbor $id while its 
   expect(mockAvatarRender.mock.calls.filter(([id]) => id === unchangedNeighbor.id)).toHaveLength(inactiveRenders);
 });
 
-test('revoking the currently viewed last neighbor closes its save menu and resets to a valid photo', async () => {
+test('revoking the currently viewed neighbor closes the shared gallery and its save menu', () => {
   const view = render(<Messages messages={[newer, anchor, older]} />);
   openAnchor();
   swipeTo(2);
@@ -126,22 +127,19 @@ test('revoking the currently viewed last neighbor closes its save menu and reset
 
   view.rerender(<Messages messages={[revoked(newer), anchor, older]} />);
 
-  expect(galleryImages()).toEqual([older.imageUrl, anchor.imageUrl]);
+  expect(screen.queryByTestId('gallery-photo')).toBeNull();
   expect(screen.queryByTestId('image-action-sheet')).toBeNull();
-  expect(activePhoto().props.uri).toBe(anchor.imageUrl);
-  fireEvent(activePhoto(), 'longPress');
-  await act(async () => { fireEvent.press(screen.getByLabelText('media.saveImage')); });
-  expect(saveImageToLibrary).toHaveBeenCalledWith(anchor.imageUrl);
+  expect(saveImageToLibrary).not.toHaveBeenCalled();
 });
 
-test('removing a photo before the tapped anchor resets the gallery to the anchor at its new index', () => {
+test('removing an earlier photo keeps the currently viewed image at its new index', () => {
   const view = render(<Messages messages={[newer, anchor, older]} />);
   openAnchor();
   swipeTo(2);
   view.rerender(<Messages messages={[newer, anchor, revoked(older)]} />);
   expect(galleryImages()).toEqual([anchor.imageUrl, newer.imageUrl]);
-  expect(screen.UNSAFE_getByType(FlatList).props.initialScrollIndex).toBe(0);
-  expect(activePhoto().props.uri).toBe(anchor.imageUrl);
+  expect(screen.UNSAFE_getByType(FlatList).props.initialScrollIndex).toBe(1);
+  expect(activePhoto().props.uri).toBe(newer.imageUrl);
 });
 
 test('revoking the anchor unmounts its gallery and save menu', () => {
@@ -153,13 +151,13 @@ test('revoking the anchor unmounts its gallery and save menu', () => {
   expect(screen.queryByTestId('image-action-sheet')).toBeNull();
 });
 
-test('new arrivals keep the open gallery on its loaded page and are included on the next open', () => {
+test('new arrivals join the shared gallery without moving the currently viewed image', () => {
   const view = render(<Messages messages={[newer, anchor, older]} />);
   openAnchor();
   const arrival = photo('arrival');
   swipeTo(2);
   view.rerender(<Messages messages={[arrival, newer, anchor, older]} />);
-  expect(galleryImages()).toEqual([older.imageUrl, anchor.imageUrl, newer.imageUrl]);
+  expect(galleryImages()).toEqual([older.imageUrl, anchor.imageUrl, newer.imageUrl, arrival.imageUrl]);
   expect(activePhoto().props.uri).toBe(newer.imageUrl);
   fireEvent.press(screen.getByLabelText('common.close'));
   fireEvent.press(screen.getAllByTestId('chat-image-preview')[2]);

@@ -27,13 +27,14 @@ function stripNonTextSecondaryUses(source) {
     .replace(/placeholderTextColor=\{colors\.textSecondary\}/g, '');
 }
 
-test('collapsed Android chat composer does not invent a bottom inset', () => {
+test('the floating composer keeps a transparent gap while respecting the device bottom inset', () => {
   const source = read(
     'src/features/chat/chat-detail/components/ChatComposerBar.tsx',
   );
 
   assert.doesNotMatch(source, /insets\.bottom\s*\|\|\s*28/);
-  assert.match(source, /:\s*insets\.bottom,/);
+  assert.match(source, /Math\.max\(insets\.bottom, 12\)/);
+  assert.match(read('src/features/chat/chat-detail/hooks/use-chat-detail-themed-styles.ts'), /inputBar: \{ backgroundColor: 'transparent' \}/);
 });
 
 test('chat detail text uses the high-contrast text color', () => {

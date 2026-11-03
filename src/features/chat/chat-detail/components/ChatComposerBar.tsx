@@ -10,13 +10,14 @@ import {
   View,
 } from 'react-native';
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
-import { Spacing, type ThemeColors } from '@/theme';
+import { GlassSurface } from '@/components/ui/glass-surface';
+import { Spacing, useTheme, withAlpha, type ThemeColors } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { PANEL_LAYOUT_ANIM } from '@/features/chat/chat-detail/constants';
 import { type EdgeInsets } from 'react-native-safe-area-context';
 import { type TFunction } from 'i18next';
-import { type Dispatch, type SetStateAction } from 'react';
+import { type Dispatch, type RefObject, type SetStateAction } from 'react';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
@@ -24,6 +25,7 @@ import { type PlazaPostCardData } from '@/types';
 
 export interface ChatComposerBarProps {
   insets: EdgeInsets;
+  blurTarget?: RefObject<View | null>;
   colors: ThemeColors;
   t: TFunction<"translation", undefined>;
   draft: string;
@@ -58,6 +60,7 @@ export interface ChatComposerBarProps {
  */
 export function ChatComposerBar({
   insets,
+  blurTarget,
   colors,
   t,
   draft,
@@ -86,75 +89,97 @@ export function ChatComposerBar({
   pendingCard,
   handleSend,
 }: ChatComposerBarProps) {
+  const { resolvedMode } = useTheme();
+  const dark = resolvedMode === 'dark';
+  const hasContent = Boolean(draft.trim() || pendingCard);
+  const compactButton = hasContent ? { width: 44, height: 44, borderRadius: 22 } : undefined;
+  const mutedInk = withAlpha(colors.text, dark ? 0.5 : 0.55);
+  const buttonFill = withAlpha(colors.text, dark ? 0.09 : 0.05);
   return (
     <View
+      pointerEvents="box-none"
       style={[
         s.inputBar,
         d.inputBar,
         {
           // 键盘弹起 / 面板展开时无需安全区 padding（键盘或面板已占住底部），紧贴即可；
-          // 仅在底部裸露时使用系统实际报告的安全区；不能在 0 时硬补高度，
-          // Android 三键导航栏已由系统占位，再补会在输入栏下方形成白带。
+          // 底部裸露时保留安全区与至少 12pt 的悬浮间距；间距透明，消息仍从后方滚过。
           paddingBottom:
             attachmentOpen || emojiOpen || keyboardVisible
               ? Spacing.sm
-              : insets.bottom,
+              : Math.max(insets.bottom, 12),
         },
       ]}
     >
-      {/* 左侧：语音模式→切回键盘；文本模式→话筒。录音中由全屏浮层接管，禁用。
-          Web 直接不放录音入口：MediaRecorder 只出 webm/opus，原生端播不了，
-          跨端语音格式没对齐前先砍（微信桌面版同款取舍）；语音**播放**不受影响。 */}
-      {Platform.OS === 'web' ? null : (
-        <Pressable
-          key="voice-left"
-          style={[s.circleBtn, d.circleBtn]}
-          onPress={toggleVoiceInputMode}
-          disabled={isPreviewMode || isVoiceRecording || composerLocked}
-          hitSlop={8}
-        >
-          <Ionicons
-            name={voiceInputMode ? 'create-outline' : 'mic'}
-            size={22}
-            color={colors.textSecondary}
-          />
-        </Pressable>
-      )}
-
-      {/* 中间：文本模式=输入框；语音模式=按住说话（gesture 元素全程保持挂载）。 */}
-      {voiceInputMode ? (
+      <GlassSurface
+        material="composer"
+        blurTarget={blurTarget}
+        radius={35}
+        style={[
+          s.composerShell,
+          {
+            gap: hasContent ? 4 : 10,
+            borderColor: withAlpha(colors.text, dark ? 0.12 : 0.1),
+            boxShadow: `0 6px 18px ${withAlpha(colors.black, 0.12)}, inset 0 1px 4px ${withAlpha(colors.white, dark ? 0.12 : 0.7)}`,
+          },
+        ]}
+      >
         <View
-          key="voice-hold-bar"
+          pointerEvents="none"
           style={[
-            s.voiceHoldBar,
-            isVoiceRecording ? d.voiceHoldBarActive : d.voiceHoldBarIdle,
+            s.composerSheen,
+            {
+              backgroundColor: withAlpha(colors.white, dark ? 0.04 : 0.12),
+              borderTopColor: withAlpha(colors.white, dark ? 0.12 : 0.75),
+            },
           ]}
-          {...voicePanResponder.panHandlers}
+        />
+        <Pressable
+          style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
+          onPress={handleAttachmentToggle}
+          disabled={isPreviewMode || isVoiceRecording || composerLocked}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.detail.attachmentPanelLabel', { defaultValue: '打开附件面板' })}
+          accessibilityState={{ expanded: attachmentOpen }}
         >
-          <Text
+          <Ionicons name="add" size={26} color={mutedInk} />
+        </Pressable>
+
+        {/* 中间：文本模式=输入框；语音模式=按住说话（gesture 元素全程保持挂载）。 */}
+        {voiceInputMode ? (
+          <View
+            key="voice-hold-bar"
             style={[
-              s.voiceHoldText,
-              { color: isVoiceRecording ? colors.white : colors.text },
+              s.voiceHoldBar,
+              isVoiceRecording ? d.voiceHoldBarActive : d.voiceHoldBarIdle,
             ]}
+            {...voicePanResponder.panHandlers}
           >
-            {isVoiceRecording
-              ? cancelArmed
-                ? t('chat.detail.voiceReleaseCancel', {
-                    defaultValue: '松开 取消',
-                  })
-                : t('chat.detail.voiceReleaseSend', {
-                    defaultValue: '松开发送 {{seconds}}"',
-                    seconds: voiceElapsedSeconds,
-                  })
-              : t('chat.detail.voiceHoldToTalk', {
-                  defaultValue: '按住 说话',
-                })}
-          </Text>
-        </View>
-      ) : (
-        <View key="text-shell" style={[s.composerShell, d.composerShell]}>
+            <Text
+              style={[
+                s.voiceHoldText,
+                { color: isVoiceRecording ? colors.white : colors.text },
+              ]}
+            >
+              {isVoiceRecording
+                ? cancelArmed
+                  ? t('chat.detail.voiceReleaseCancel', {
+                      defaultValue: '松开 取消',
+                    })
+                  : t('chat.detail.voiceReleaseSend', {
+                      defaultValue: '松开发送 {{seconds}}"',
+                      seconds: voiceElapsedSeconds,
+                    })
+                : t('chat.detail.voiceHoldToTalk', {
+                    defaultValue: '按住 说话',
+                  })}
+            </Text>
+          </View>
+        ) : (
           <TextInput
+            key="text-input"
             testID={E2E_TEST_IDS.chatInput}
+            accessibilityLabel={t('chat.detail.inputPlaceholder')}
             style={[s.composerInput, d.composerInput]}
             placeholder={
               composerLocked
@@ -165,11 +190,9 @@ export function ChatComposerBar({
                   ? t('chat.detail.previewPlaceholder', {
                       defaultValue: '连接尚未完成',
                     })
-                  : t('chat.detail.inputPlaceholder', {
-                      defaultValue: '输入消息...',
-                    })
+                  : ''
             }
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={mutedInk}
             value={draft}
             onChangeText={handleDraftChange}
             selection={selection}
@@ -208,38 +231,53 @@ export function ChatComposerBar({
             }}
             editable={!isPreviewMode && !composerLocked}
           />
-          <Pressable onPress={handleEmojiToggle} hitSlop={8} disabled={isPreviewMode}>
-            <Ionicons
-              name="happy-outline"
-              size={22}
-              color={emojiOpen ? colors.iconAccent : colors.textSecondary}
-            />
-          </Pressable>
-        </View>
-      )}
+        )}
 
-      {/* 右侧：发送/附件。录音中由全屏浮层接管，禁用。 */}
-      <Pressable
-        key="voice-right"
-        testID={E2E_TEST_IDS.chatSend}
-        style={[s.circleBtn, s.composerActionBtn, d.circleBtn, d.composerActionBtn]}
-        onPress={draft.trim() || pendingCard ? handleSend : handleAttachmentToggle}
-        disabled={sending || isPreviewMode || isVoiceRecording || composerLocked}
-        accessibilityRole="button"
-        accessibilityLabel={
-          draft.trim() || pendingCard
-            ? t('common.send')
-            : t('chat.detail.attachmentPanelLabel', {
-                defaultValue: '打开附件面板',
-              })
-        }
-      >
-        <Ionicons
-          name={draft.trim() || pendingCard ? 'send' : 'add'}
-          size={22}
-          color={colors.textSecondary}
-        />
-      </Pressable>
+        {/* 发送入口按草稿显示；麦克风固定在表情按钮左边。 */}
+        {hasContent ? (
+          <Pressable
+            key="send"
+            testID={E2E_TEST_IDS.chatSend}
+            style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
+            onPress={handleSend}
+            disabled={sending || isPreviewMode || isVoiceRecording || composerLocked}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.send')}
+          >
+            <Ionicons name="arrow-up" size={24} color={colors.text} />
+          </Pressable>
+        ) : null}
+        <Pressable
+          key="voice"
+          style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
+          onPress={toggleVoiceInputMode}
+          // 网页端的 webm/opus 语音尚不能跨端播放，仅展示入口；App 保留原录音流程。
+          disabled={Platform.OS === 'web' || isPreviewMode || isVoiceRecording || composerLocked}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.detail.voiceInputLabel')}
+          accessibilityState={{ selected: voiceInputMode }}
+        >
+          <Ionicons name={voiceInputMode ? 'keypad-outline' : 'mic-outline'} size={24} color={mutedInk} />
+        </Pressable>
+        <Pressable
+          style={[
+            s.circleBtn,
+            s.composerActionBtn,
+            compactButton,
+            { backgroundColor: colors.white, borderColor: withAlpha(colors.black, 0.06) },
+          ]}
+          onPress={() => {
+            if (voiceInputMode) toggleVoiceInputMode();
+            handleEmojiToggle();
+          }}
+          disabled={isPreviewMode || isVoiceRecording || composerLocked}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.detail.emojiPanelLabel')}
+          accessibilityState={{ expanded: emojiOpen }}
+        >
+          <Ionicons name="happy-outline" size={26} color={emojiOpen ? colors.primaryDeep : colors.black} />
+        </Pressable>
+      </GlassSurface>
     </View>
   );
 }

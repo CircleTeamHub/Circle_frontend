@@ -358,16 +358,25 @@ test('EditNoteScreen group rows expose selected state accessibly', () => {
   assert.match(src, /name=\{selected \? 'checkmark-circle' : 'ellipse-outline'\}/);
 });
 
-test('EditNoteScreen renders four large structured note edit regions', () => {
+test('EditNoteScreen keeps structured regions with separate image and video actions and no recording toolbar entry', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
   assert.match(src, /ScrollView/);
   assert.match(src, /renderSectionHeader/);
   assert.match(src, /sectionBlock/);
   assert.match(src, /notes\.edit\.sections\.text/);
-  assert.match(src, /notes\.edit\.sections\.media/);
+  assert.match(src, /notes\.edit\.composer\.image/);
+  assert.match(src, /notes\.edit\.composer\.video/);
   assert.match(src, /notes\.edit\.sections\.showcase/);
   assert.match(src, /notes\.edit\.sections\.location/);
+  const actions = src.match(/const COMPOSER_ACTIONS:[\s\S]*?\[([\s\S]*?)\n\];/);
+  assert.ok(actions, 'composer actions not found');
+  assert.match(actions[1], /kind: 'image',[^\n]*translationKey: 'image'/);
+  assert.match(actions[1], /kind: 'video',[^\n]*translationKey: 'video'/);
+  assert.doesNotMatch(actions[1], /translationKey: 'media'/);
+  assert.match(src, /COMPOSER_ACTIONS\.filter\(\(action\) => action\.kind !== 'audio'\)\.map/);
+  // Existing audio remains editable even though it cannot be inserted from the toolbar.
+  assert.match(src, /case 'audio':/);
   assert.doesNotMatch(src, /editSections/);
   assert.doesNotMatch(src, /sectionGrid/);
 });
@@ -436,15 +445,22 @@ test('EditNoteScreen presents structured regions with quieter section chrome', (
   assert.match(src, /flexDirection:\s*'row'/);
 });
 
-test('EditNoteScreen renders media as a stable preview grid', () => {
+test('EditNoteScreen stacks full-width media previews and opens images in the viewer', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
   assert.match(src, /expo-image/);
-  assert.match(src, /mediaPreviewGrid/);
+  assert.match(src, /<View style=\{s\.mediaPreviewList\}>/);
+  assert.match(src, /mediaPreviewList:\s*\{\s*gap: Spacing\.sm,\s*\}/);
+  assert.doesNotMatch(src, /mediaPreviewGrid/);
   assert.match(src, /mediaPreviewTile/);
+  assert.match(src, /mediaPreviewTile:\s*\{\s*width: '100%'/);
+  assert.match(src, /aspectRatio: item\.width \/ item\.height/);
   assert.match(src, /mediaThumb/);
   assert.match(src, /mediaRemoveButton/);
-  assert.match(src, /contentFit="cover"/);
+  assert.match(src, /testID="note-media-preview-image"[\s\S]*?contentFit="contain"/);
+  assert.match(src, /setEditorImageViewer\(\{/);
+  assert.match(src, /initialIndex=\{editorImageViewer\.index\}/);
+  assert.match(src, /cacheKeys=\{editorImageViewer\.images\.map\(\(item\) => item\.objectKey\)\}/);
 });
 
 test('EditNoteScreen reports upload state in the affected media section without remounting its controls', () => {
