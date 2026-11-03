@@ -220,9 +220,11 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
     if (request === './store') return { useChatStore: { getState: () => storeState } };
     if (request === './chat-notifications') {
       return {
-        dismissChatNotifications: (conversationId, messageIds) =>
+        dismissChatNotifications: (conversationId, messageIds, throughHeight) =>
           state.dismissedNotifications.push(
-            messageIds ? { conversationId, messageIds: [...messageIds] } : { conversationId },
+            throughHeight !== undefined
+              ? { conversationId, throughHeight }
+              : messageIds ? { conversationId, messageIds: [...messageIds] } : { conversationId },
           ),
       };
     }
@@ -704,7 +706,7 @@ test('notifications are cleared when my other device reads, on clear, recall and
   assert.deepEqual(
     state.dismissedNotifications.map((entry) => ({ ...entry })),
     [
-      { conversationId: 'c1' },
+      { conversationId: 'c1', throughHeight: 3 },
       { conversationId: 'c2' },
       { conversationId: 'c3', messageIds: ['m-recalled'] },
       { conversationId: 'c4', messageIds: ['m-b1', 'm-b2'] },

@@ -1314,15 +1314,14 @@ export function queryChatPresence(userIds: string[]): void {
     );
 }
 
-/** 会话级已读：上报最新水位 + 本地未读乐观归零(消息页点入/滑动动作用)。 */
+/** 上报已读水位，同步本地未读数与该水位以内的通知。 */
 export function markConversationRead(
   conversationId: string,
   height: number,
 ): void {
   markChatRead(conversationId, height);
   useChatStore.getState().markConversationReadLocal(conversationId, height);
-  // 看过了,通知栏里这个会话的通知一并收起。
-  dismissChatNotifications(conversationId);
+  dismissChatNotifications(conversationId, undefined, height);
 }
 
 /** G-02 撤回:带 ack;权限与广播由服务端收口,失败抛 ChatSendError(code)。 */
