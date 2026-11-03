@@ -2,11 +2,12 @@ import { useEventListener } from 'expo';
 import { Image } from 'expo-image';
 import { useAudioPlayer, type AudioStatus } from 'expo-audio';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { toPlayableUri } from '@/features/chat/utils/media-uri';
+import type { NoteImageViewport } from '@/features/notes/utils/note-image-viewport';
 import {
   extractInlineText,
   MAX_NOTE_BLOCK_DEPTH,
@@ -14,6 +15,71 @@ import {
 
 type Block = Record<string, unknown>;
 type InlineNode = Record<string, unknown>;
+
+export const NoteImageViewportContext = createContext<NoteImageViewport | null>(null);
+
+function NoteImageView({
+  url, objectKey, aspectRatio, label, onError, onPress,
+}: {
+  url: string;
+  objectKey?: string;
+  aspectRatio: number;
+  label: string;
+  onError?: () => void;
+  onPress?: () => void;
+}) {
+  const { colors } = useTheme();
+  const viewport = useContext(NoteImageViewportContext);
+  const [visible, setVisible] = useState(viewport == null);
+  const frameRef = useRef<View>(null);
+  const unregisterRef = useRef<(() => void) | null>(null);
+  const mountedRef = useRef(true);
+  const measureFrame = useCallback(() => {
+    if (!viewport) return;
+    frameRef.current?.measureInWindow((_x, top, _width, height) => {
+      if (!mountedRef.current) return;
+      unregisterRef.current?.();
+      unregisterRef.current = viewport.register(top, height, setVisible);
+    });
+  }, [viewport]);
+  useEffect(() => {
+    mountedRef.current = true;
+    measureFrame();
+    return () => {
+      mountedRef.current = false;
+      unregisterRef.current?.();
+    };
+  }, [measureFrame]);
+
+  return (
+    <View ref={frameRef} collapsable={false} onLayout={measureFrame}>
+      <Pressable
+        accessibilityRole="imagebutton"
+        accessibilityLabel={label}
+        onPress={onPress}
+        disabled={!onPress}
+        style={s.mediaFrame}
+      >
+        {visible ? (
+          <Image
+            source={{ uri: url, ...(objectKey ? { cacheKey: objectKey } : {}) }}
+            recyclingKey={objectKey ?? url}
+            cachePolicy="memory-disk"
+            priority="low"
+            allowDownscaling
+            enforceEarlyResizing
+            transition={0}
+            style={[s.media, { aspectRatio }]}
+            contentFit="cover"
+            onError={onError}
+          />
+        ) : (
+          <View style={[s.media, { aspectRatio, backgroundColor: colors.surfaceMuted }]} />
+        )}
+      </Pressable>
+    </View>
+  );
+}
 
 // 满宽媒体按真实宽高比渲染（设计稿：无边框圆角大图）。比例夹在
 // [3:4, 16:9] 之间，极端全景/长图用 cover 轻裁，避免版面被撑破。
@@ -483,26 +549,14 @@ const BlockView = memo(function BlockView({
       const aspectRatio = resolveMediaAspectRatio(props, 1);
       return (
         <View>
-          <Pressable
-            accessibilityRole="imagebutton"
-            accessibilityLabel={caption || t('notes.accessibility.viewImage')}
-            onPress={() => onImagePress?.(url, objectKey)}
-            disabled={!onImagePress}
-            style={s.mediaFrame}
-          >
-            <Image
-              source={{ uri: url, ...(objectKey ? { cacheKey: objectKey } : {}) }}
-              recyclingKey={objectKey ?? url}
-              cachePolicy="memory-disk"
-              priority="low"
-              allowDownscaling
-              enforceEarlyResizing
-              transition={0}
-              style={[s.media, { aspectRatio }]}
-              contentFit="cover"
-              onError={onMediaError}
-            />
-          </Pressable>
+          <NoteImageView
+            url={url}
+            objectKey={objectKey}
+            aspectRatio={aspectRatio}
+            label={caption || t('notes.accessibility.viewImage')}
+            onPress={onImagePress ? () => onImagePress(url, objectKey) : undefined}
+            onError={onMediaError}
+          />
           {caption ? (
             <Text style={[s.caption, { color: d.secondary }]}>{caption}</Text>
           ) : null}

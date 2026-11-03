@@ -282,8 +282,18 @@ export function getNoteDetailHref(
   id: string,
   ownerId = '',
   section = '',
+  source?: { conversationId: string; messageId: string; messageHeight?: number },
 ): Href {
-  const params = { id, ownerId, ...(section ? { section } : {}) };
+  const params = {
+    id,
+    ownerId,
+    ...(section ? { section } : {}),
+    ...(source ? {
+      sourceConversationId: source.conversationId,
+      sourceMessageId: source.messageId,
+      ...(source.messageHeight ? { sourceMessageHeight: String(source.messageHeight) } : {}),
+    } : {}),
+  };
 
   switch (scope) {
     case 'contacts':

@@ -20,6 +20,7 @@ interface ImageBubbleProps {
   selfName?: string;
   selfAvatarUri?: string;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
   selfDestructEnabled?: boolean;
@@ -83,6 +84,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   selfName,
   selfAvatarUri,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
   selfDestructEnabled = false,
@@ -254,8 +256,8 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   return (
     <>
       <View style={sImage.row}>
-        {onAvatarPress ? (
-          <Pressable style={sImage.avatarSlot} onPress={onAvatarPress}>
+        {onAvatarPress || onAvatarLongPress ? (
+          <Pressable style={sImage.avatarSlot} onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350}>
             {avatarNode}
           </Pressable>
         ) : (

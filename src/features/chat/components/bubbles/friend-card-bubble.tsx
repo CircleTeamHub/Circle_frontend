@@ -19,6 +19,7 @@ interface FriendCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (card: FriendCardData) => void;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
@@ -32,6 +33,7 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
 }) => {
@@ -162,8 +164,8 @@ export const FriendCardBubble: React.FC<FriendCardBubbleProps> = ({
 
   return (
     <View style={sFriendCard.row}>
-      {onAvatarPress ? (
-        <Pressable style={sFriendCard.avatarSlot} onPress={onAvatarPress}>
+      {onAvatarPress || onAvatarLongPress ? (
+        <Pressable style={sFriendCard.avatarSlot} onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350}>
           {avatarNode}
         </Pressable>
       ) : (

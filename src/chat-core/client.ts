@@ -523,12 +523,19 @@ export function sendQuoteMessage(options: {
   text: string;
   quotedText: string;
   replyToId?: string;
+  mentions?: { userId: string; nickname: string }[];
+  atAll?: boolean;
   onCreate?: (message: ChatMessageDto) => void;
 }): Promise<ChatMessageDto> {
   return sendWithOptimism({
     conversationId: options.conversationId,
     type: 'quote',
-    content: { text: options.text, quotedText: options.quotedText },
+    content: {
+      text: options.text,
+      quotedText: options.quotedText,
+      ...(options.mentions?.length ? { mentions: options.mentions } : {}),
+      ...(options.atAll ? { atAll: true } : {}),
+    },
     replyToId: options.replyToId,
     onCreate: options.onCreate,
   });

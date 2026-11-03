@@ -27,7 +27,7 @@ export function getMentionsPresentInText(
     const nickname = mention.nickname.trim();
     if (!nickname) return false;
     const pattern = new RegExp(
-      `(^|\\s)@${escapeRegExp(nickname)}${MENTION_TRAILING_BOUNDARY}`,
+      `@${escapeRegExp(nickname)}${MENTION_TRAILING_BOUNDARY}`,
     );
     return pattern.test(text);
   });
@@ -35,7 +35,7 @@ export function getMentionsPresentInText(
 
 export function getActiveMentionQuery(text: string, cursor: number) {
   const beforeCursor = text.slice(0, Math.max(0, Math.min(cursor, text.length)));
-  const match = /(?:^|\s)@([^\s@]*)$/.exec(beforeCursor);
+  const match = /@([^\s@]*)$/.exec(beforeCursor);
   return match ? match[1] : null;
 }
 

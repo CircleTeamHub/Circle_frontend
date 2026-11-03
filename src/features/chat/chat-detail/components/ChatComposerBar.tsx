@@ -29,6 +29,7 @@ export interface ChatComposerBarProps {
   colors: ThemeColors;
   t: TFunction<"translation", undefined>;
   draft: string;
+  inputRef?: RefObject<TextInput | null>;
   setMentionPickerVisible: Dispatch<SetStateAction<boolean>>;
   selfSilenced: boolean;
   composerLocked: boolean;
@@ -64,6 +65,7 @@ export function ChatComposerBar({
   colors,
   t,
   draft,
+  inputRef,
   setMentionPickerVisible,
   selfSilenced,
   composerLocked,
@@ -177,6 +179,7 @@ export function ChatComposerBar({
           </View>
         ) : (
           <TextInput
+              ref={inputRef}
             key="text-input"
             testID={E2E_TEST_IDS.chatInput}
             accessibilityLabel={t('chat.detail.inputPlaceholder')}

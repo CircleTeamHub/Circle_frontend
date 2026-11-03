@@ -464,7 +464,7 @@ test('chat detail opens sent note cards from group chats', () => {
 
   assert.match(source, /case 'note-card':/);
   assert.match(source, /<NoteCardBubble[\s\S]*onPress=\{\(note\) =>/);
-  assert.match(source, /getNoteDetailHref\(scope, note\.noteId, note\.ownerId \?\? ''\)/);
+  assert.match(source, /getNoteDetailHref\(scope, note\.noteId, note\.ownerId \?\? '', '', \{/);
   assert.doesNotMatch(source, /pathname: '\/\(tabs\)\/profile\/notes\/\[id\]'/);
 });
 

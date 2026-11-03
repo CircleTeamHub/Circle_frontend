@@ -79,7 +79,9 @@ export function ImageViewer({
   const goTo = useCallback(
     (next: number) => {
       const clamped = Math.max(0, Math.min(images.length - 1, next));
+      if (clamped === indexRef.current) return;
       setIndex(clamped);
+      setZoomed(false);
       indexRef.current = clamped;
       setActionSheetVisible(false);
       onIndexChange?.(clamped);
@@ -143,6 +145,7 @@ export function ImageViewer({
       setIndex((current) => current === clamped ? current : clamped);
       indexRef.current = clamped;
       if (clamped !== index) {
+        setZoomed(false);
         setActionSheetVisible(false);
         onIndexChange?.(clamped);
       }
@@ -201,7 +204,9 @@ export function ImageViewer({
                     width={width}
                     height={height}
                     active={itemIndex === index}
-                    onZoomedChange={setZoomed}
+                    onZoomedChange={(locked) => {
+                      if (itemIndex === indexRef.current) setZoomed(locked);
+                    }}
                     onSwipeDown={handleSwipeDown}
                     // 单击关闭：全屏查看器里最顺手的退出方式（双击留给放大）。
                     onTap={onClose}

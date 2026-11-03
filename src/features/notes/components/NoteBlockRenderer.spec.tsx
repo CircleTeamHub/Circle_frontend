@@ -1,10 +1,15 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { View } from 'react-native';
 import { useVideoPlayer } from 'expo-video';
-import { NoteBlockRenderer } from './NoteBlockRenderer';
+import { NoteBlockRenderer, NoteImageViewportContext } from './NoteBlockRenderer';
+import { createNoteImageViewport } from '@/features/notes/utils/note-image-viewport';
 
 jest.mock('expo', () => ({ useEventListener: jest.fn() }));
-jest.mock('expo-image', () => ({ Image: () => null }));
+jest.mock('expo-image', () => ({ Image: () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return <View testID="note-image" />;
+} }));
 const mockAudioPlayer = {
   isLoaded: true,
   addListener: jest.fn((_event: string, _listener: (status: any) => void) => ({ remove: jest.fn() })),
@@ -59,6 +64,34 @@ beforeEach(() => {
   mockAudioPlayer.pause.mockClear();
   mockAudioPlayer.addListener.mockClear();
   jest.mocked(useVideoPlayer).mockClear();
+});
+
+test('note images measure initially, follow viewport visibility and unregister on unmount', () => {
+  const viewport = createNoteImageViewport();
+  viewport.setViewport(100, 400);
+  const registerImage = viewport.register;
+  const unregister = jest.fn();
+  const register = jest.spyOn(viewport, 'register').mockImplementation((...args) => {
+    const remove = registerImage(...args);
+    return () => { unregister(); remove(); };
+  });
+  const measure = jest.spyOn(View.prototype, 'measureInWindow').mockImplementation((callback) => callback(0, 200, 300, 100));
+  const view = render(
+    <NoteImageViewportContext.Provider value={viewport}>
+      <NoteBlockRenderer blocks={[{ type: 'image', props: { url: 'https://cdn.example/image.png' } }]} />
+    </NoteImageViewportContext.Provider>,
+  );
+  expect(measure).toHaveBeenCalled();
+  expect(screen.getByTestId('note-image')).toBeTruthy();
+  act(() => viewport.setScrollOffset(2000));
+  expect(screen.queryByTestId('note-image')).toBeNull();
+  act(() => viewport.setScrollOffset(0));
+  expect(screen.getByTestId('note-image')).toBeTruthy();
+  expect(register).toHaveBeenCalledTimes(1);
+  view.unmount();
+  expect(unregister).toHaveBeenCalledTimes(1);
+  act(() => viewport.setScrollOffset(2000));
+  measure.mockRestore();
 });
 
 test('pasted rich text displays link labels, nested lists, checklists and tables', () => {

@@ -22,6 +22,7 @@ interface NoteCardBubbleProps {
   onPress?: (note: NoteCardData) => void;
   onSectionPress?: (note: NoteCardData, section: 'text' | 'media' | 'showcase' | 'location') => void;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
@@ -120,6 +121,7 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
   onPress,
   onSectionPress,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
 }) => {
@@ -316,8 +318,8 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
 
   return (
     <View style={sNote.row}>
-      {onAvatarPress ? (
-        <Pressable style={sNote.avatarSlot} onPress={onAvatarPress}>
+      {onAvatarPress || onAvatarLongPress ? (
+        <Pressable style={sNote.avatarSlot} onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350}>
           {avatarNode}
         </Pressable>
       ) : (

@@ -12,6 +12,7 @@ interface ReceivedBubbleProps {
   senderName?: string;
   senderAvatarUri?: string;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   /** 真引用(G-09):点击引用块定位到原消息;原消息不可达时不传。 */
   onQuotePress?: () => void;
 }
@@ -53,6 +54,7 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
   senderName = '',
   senderAvatarUri,
   onAvatarPress,
+  onAvatarLongPress,
   onQuotePress,
   onReactionPress,
 }) => {
@@ -99,8 +101,8 @@ export const ReceivedBubble: React.FC<ReceivedBubbleProps> = ({
 
   return (
     <View style={sReceived.receivedRow}>
-      {onAvatarPress ? (
-        <Pressable style={sReceived.receivedAvatarSlot} onPress={onAvatarPress}>
+      {onAvatarPress || onAvatarLongPress ? (
+        <Pressable style={sReceived.receivedAvatarSlot} onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350}>
           {avatarNode}
         </Pressable>
       ) : (

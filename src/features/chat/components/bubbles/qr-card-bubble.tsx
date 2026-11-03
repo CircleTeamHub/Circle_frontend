@@ -19,6 +19,7 @@ interface QrCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (card: QrCardData) => void;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
@@ -71,6 +72,7 @@ export const QrCardBubble: React.FC<QrCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
 }) => {
@@ -125,6 +127,7 @@ export const QrCardBubble: React.FC<QrCardBubbleProps> = ({
       })}
       onPress={onPress ? () => onPress(card) : undefined}
       onAvatarPress={onAvatarPress}
+      onAvatarLongPress={onAvatarLongPress}
       onLongPress={onLongPress}
       hideStatus={hideStatus}
     />

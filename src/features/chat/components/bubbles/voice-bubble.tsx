@@ -16,6 +16,7 @@ interface VoiceBubbleProps {
   selfName?: string;
   selfAvatarUri?: string;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
@@ -90,6 +91,7 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
   selfName,
   selfAvatarUri,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
 }) => {
@@ -258,8 +260,8 @@ export const VoiceBubble: React.FC<VoiceBubbleProps> = ({
 
   return (
     <View style={sVoice.row}>
-      {onAvatarPress ? (
-        <Pressable style={sVoice.avatarSlot} onPress={onAvatarPress}>
+      {onAvatarPress || onAvatarLongPress ? (
+        <Pressable style={sVoice.avatarSlot} onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350}>
           {avatarNode}
         </Pressable>
       ) : (

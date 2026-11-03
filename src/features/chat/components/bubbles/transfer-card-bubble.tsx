@@ -20,6 +20,7 @@ interface TransferCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (data: TransferCardData) => void;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
@@ -101,6 +102,7 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
 }) => {
@@ -176,8 +178,8 @@ export const TransferCardBubble: React.FC<TransferCardBubbleProps> = ({
 
   return (
     <View style={sTransfer.row}>
-      {onAvatarPress ? (
-        <Pressable style={sTransfer.avatarSlot} onPress={onAvatarPress}>
+      {onAvatarPress || onAvatarLongPress ? (
+        <Pressable style={sTransfer.avatarSlot} onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350}>
           {avatarNode}
         </Pressable>
       ) : (

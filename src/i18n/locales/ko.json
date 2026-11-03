@@ -1040,6 +1040,9 @@
     "detail": {
       "loadFailed": "노트를 불러오지 못했습니다. 다시 시도해 주세요",
       "notFound": "노트를 찾을 수 없습니다",
+      "added": "추가됨",
+      "addFailed": "노트를 추가하지 못했습니다",
+      "addSourceUnavailable": "현재 공유 출처에서는 이 노트를 추가할 수 없습니다. 채팅으로 돌아가 원본 메시지에서 다시 열어 주세요.",
       "exportFailedTitle": "내보내기 실패",
       "exportFailedMessage": "잠시 후 다시 시도해 주세요",
       "locationFallback": "위치",

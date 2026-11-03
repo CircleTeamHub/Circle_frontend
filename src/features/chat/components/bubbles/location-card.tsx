@@ -41,6 +41,7 @@ interface LocationCardProps {
   selfName?: string;
   selfAvatarUri?: string;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
 }
 
@@ -130,6 +131,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
   selfName,
   selfAvatarUri,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
 }) => {
   const { colors, resolvedMode } = useTheme();
@@ -355,8 +357,8 @@ export const LocationCard: React.FC<LocationCardProps> = ({
 
   return (
     <View style={sLocation.receivedRow}>
-      {onAvatarPress ? (
-        <Pressable style={sLocation.receivedAvatarSlot} onPress={onAvatarPress}>
+      {onAvatarPress || onAvatarLongPress ? (
+        <Pressable style={sLocation.receivedAvatarSlot} onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350}>
           {avatarNode}
         </Pressable>
       ) : (

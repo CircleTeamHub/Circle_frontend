@@ -1,3 +1,4 @@
+import { useChatStore } from '@/chat-core/store';
 import { GroupInvitationBubble } from '@/features/groups/GroupInvitationBubble';
 import { useConversationImageViewer } from './use-conversation-image-viewer';
 import { getGroupEntryHref } from '@/features/groups/routes';
@@ -88,6 +89,7 @@ export interface MessageRendererParams {
   handleToggleSelectedMessage: (id: string) => void;
   colors: ThemeColors;
   scope: UserProfileScope;
+  conversationID: string;
   groupMemberNames: Record<string, string>;
   selfDestructEnabled: boolean;
   selfDestructCacheKey: string;
@@ -95,6 +97,7 @@ export interface MessageRendererParams {
   conversationTitle: string;
   avatarUrl: string | undefined;
   handleOpenMessageSender: (msg: ChatMessage) => Promise<void>;
+  onMentionSender?: (message: ChatMessage) => void;
   handleOpenSelfProfile: () => void;
   handleOpenUserCard: (userID: string, nickname?: string) => Promise<void>;
   hideChatAvatar: boolean;
@@ -120,6 +123,7 @@ export function useMessageRenderer({
   handleToggleSelectedMessage,
   colors,
   scope,
+  conversationID,
   groupMemberNames,
   selfDestructEnabled,
   selfDestructCacheKey,
@@ -127,6 +131,7 @@ export function useMessageRenderer({
   conversationTitle,
   avatarUrl,
   handleOpenMessageSender,
+  onMentionSender,
   handleOpenSelfProfile,
   handleOpenUserCard,
   hideChatAvatar,
@@ -166,6 +171,10 @@ export function useMessageRenderer({
       isGroupChat ? msg.senderAvatarUrl : (avatarUrl ?? msg.senderAvatarUrl),
     [isGroupChat, avatarUrl],
   );
+
+  const getAvatarLongPressHandler = useCallback((message: ChatMessage) =>
+    !message.outgoing && onMentionSender ? () => onMentionSender(message) : undefined,
+  [onMentionSender]);
 
   // 群聊在接收气泡上方显示发送者名字（微信样式）。senderID 仅接收消息携带。
   const withGroupSenderLabel = useCallback(
@@ -224,6 +233,7 @@ export function useMessageRenderer({
             senderName={receivedDisplayName(item)}
             senderAvatarUri={receivedAvatarUri(item)}
             onAvatarPress={() => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onQuotePress={
               item.quoteMessageId && !item.quoteRevoked
                 ? () => handleQuotePress(item)
@@ -258,6 +268,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
           />
         ));
@@ -272,6 +283,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
             selfDestructEnabled={selfDestructEnabled}
@@ -288,6 +300,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
             selfDestructEnabled={selfDestructEnabled}
@@ -304,6 +317,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
@@ -318,12 +332,21 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             onPress={(note) =>
-              router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? ''))
+              router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', '', {
+                conversationId: conversationID, messageId: item.id,
+                messageHeight: useChatStore.getState().messagesByConversation[conversationID]
+                  ?.find((message) => message.id === item.id)?.height,
+              }))
             }
             onSectionPress={(note, section) =>
-              router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', section))
+              router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', section, {
+                conversationId: conversationID, messageId: item.id,
+                messageHeight: useChatStore.getState().messagesByConversation[conversationID]
+                  ?.find((message) => message.id === item.id)?.height,
+              }))
             }
             hideStatus={isGroupChat}
           />
@@ -338,6 +361,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) => handleOpenUserCard(card.userID, card.nickname)}
             hideStatus={isGroupChat}
@@ -355,6 +379,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               // 在当前栈内打开圈子详情（从哪进从哪出），不跨 tab 压栈。
@@ -378,6 +403,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             // 点卡片 = 扫这张码:走扫码同一条落地页,由落地页按令牌自己判类型与有效性。
             // 进本栈那一份镜像,不能跳顶层 /qr:本页在四个 tab 栈和 (chat) 下都有挂载
@@ -399,6 +425,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               router.push(
@@ -421,6 +448,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onPress={(card) =>
               router.push(
                 getVerificationDetailHref(
@@ -442,6 +470,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             hideStatus={isGroupChat}
           />
@@ -456,6 +485,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
+            onAvatarLongPress={getAvatarLongPressHandler(item)}
             // 1:1 里点通话记录 = 回拨；群聊回拨走标题栏通话入口，避免误触发全群振铃。
             onCallBack={isGroupChat ? undefined : handleStartCall}
             onLongPress={getMessageLongPressHandler(item)}
@@ -469,6 +499,7 @@ export function useMessageRenderer({
     receivedDisplayName,
     withGroupSenderLabel,
     handleOpenMessageSender,
+    getAvatarLongPressHandler,
     handleOpenSelfProfile,
     handleOpenUserCard,
     handleQuotePress,
@@ -479,6 +510,7 @@ export function useMessageRenderer({
     selfAvatarUri,
     selfName,
     scope,
+    conversationID,
     getMessageLongPressHandler,
     withMessageActions,
     handleStartCall,

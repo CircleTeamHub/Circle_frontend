@@ -20,9 +20,12 @@ import {
   Text,
   View,
   type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteDocumentBody } from '@/features/notes/components/NoteDocumentBody';
+import { NoteImageViewportContext } from '@/features/notes/components/NoteBlockRenderer';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
@@ -47,7 +50,7 @@ import {
   readNoteComposerOrder,
 } from '@/features/notes/utils/note-composer';
 import { shouldUseDirectVideoExportFallback } from '@/features/notes/utils/note-export';
-import { createNoteExport, fetchNoteDetail, notesMutatedSince } from '@/services/api/notes';
+import { collectNote, createNoteExport, fetchNoteDetail, notesMutatedSince } from '@/services/api/notes';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
@@ -57,6 +60,8 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
 import { withNoteSyncRetry } from '@/features/notes/utils/note-sync';
+import { createNoteImageViewport } from '@/features/notes/utils/note-image-viewport';
+import { resolveNoteCollectSource } from '@/features/notes/utils/collect-note-source';
 
 function stripNoteCardBlocks(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -80,12 +85,22 @@ export default function NoteDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const { id, ownerId, section } = useLocalSearchParams<{
-    id: string;
-    ownerId?: string;
-    section?: string;
+  const params = useLocalSearchParams<{
+    id?: string | string[];
+    ownerId?: string | string[];
+    section?: string | string[];
+    sourceConversationId?: string | string[];
+    sourceMessageId?: string | string[];
+    sourceMessageHeight?: string | string[];
   }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const ownerId = Array.isArray(params.ownerId) ? params.ownerId[0] : params.ownerId;
+  const section = Array.isArray(params.section) ? params.section[0] : params.section;
+  const sourceConversationId = Array.isArray(params.sourceConversationId) ? params.sourceConversationId[0] : params.sourceConversationId;
+  const sourceMessageId = Array.isArray(params.sourceMessageId) ? params.sourceMessageId[0] : params.sourceMessageId;
+  const sourceMessageHeight = Array.isArray(params.sourceMessageHeight) ? params.sourceMessageHeight[0] : params.sourceMessageHeight;
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   const noteStatusVersion = useNoteStatusSignalStore((state) => state.version);
 
   const [note, setNote] = useState<NoteDetail | null>(null);
@@ -95,7 +110,23 @@ export default function NoteDetailScreen() {
   const [downloadMenuVisible, setDownloadMenuVisible] = useState(false);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [imageViewerIndex, setImageViewerIndex] = useState(0);
+  const [collectionState, setCollectionState] = useState<{
+    key: string;
+    status: 'adding' | 'added';
+  } | null>(null);
+  const collectionKey = `${sessionEpoch}:${id}`;
+  const currentCollectionKeyRef = useRef(collectionKey);
+  currentCollectionKeyRef.current = collectionKey;
+  const collectionRequestRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  const addingNote = collectionState?.key === collectionKey && collectionState.status === 'adding';
+  const addedNote = collectionState?.key === collectionKey && collectionState.status === 'added';
   const scrollRef = useRef<ScrollView>(null);
+  const imageViewport = useMemo(createNoteImageViewport, []);
   const sectionYRef = useRef<Partial<Record<NoteSectionKind, number>>>({});
   const scrolledSectionRef = useRef<string | null>(null);
   const noteLoadedRef = useRef(false);
@@ -347,6 +378,15 @@ export default function NoteDetailScreen() {
     scrolledSectionRef.current = scrollKey;
   }, [note, targetSection]);
 
+  const measureImageViewport = useCallback(() => {
+    scrollRef.current?.getNativeScrollRef()?.measureInWindow((_x, top, _width, height) => {
+      if (mountedRef.current) imageViewport.setViewport(top, height);
+    });
+  }, [imageViewport]);
+  const handleImageScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    imageViewport.setScrollOffset(event.nativeEvent.contentOffset.y);
+  }, [imageViewport]);
+
   useEffect(() => {
     scrolledSectionRef.current = null;
     const timer = setTimeout(scrollToRequestedSection, 100);
@@ -424,6 +464,63 @@ export default function NoteDetailScreen() {
     return Boolean(resolvedOwnerId && currentUserId === resolvedOwnerId);
   }, [currentUserId, note, ownerId]);
 
+  const hasChatSource = Boolean(sourceConversationId && sourceMessageId);
+  const handleAddNote = useCallback(async () => {
+    if (!note || note.id !== id || !hasChatSource || canEditNote || addedNote ||
+        collectionRequestRef.current === collectionKey) return;
+    const isCurrentRequest = () => mountedRef.current &&
+      currentCollectionKeyRef.current === collectionKey &&
+      useAuthStore.getState().sessionEpoch === sessionEpoch;
+    collectionRequestRef.current = collectionKey;
+    setCollectionState({ key: collectionKey, status: 'adding' });
+    try {
+      const source = await resolveNoteCollectSource(
+        note.id, sourceConversationId, sourceMessageId, sourceMessageHeight,
+      );
+      if (!isCurrentRequest()) return;
+      if (!source) {
+        Alert.alert(t('notes.detail.addFailed'), t('notes.detail.addSourceUnavailable'));
+        return;
+      }
+      const result = await collectNote(note.id, source);
+      if (!isCurrentRequest()) return;
+      setCollectionState({ key: collectionKey, status: 'added' });
+      Alert.alert(
+        t(result.alreadyCollected
+          ? 'chat.messageActions.noteAlreadyCollected'
+          : 'chat.messageActions.noteCollected'),
+        t('chat.messageActions.noteCollectedHint'),
+        [
+          {
+            text: t('common.view'),
+            onPress: () => {
+              if (!isCurrentRequest()) return;
+              router.push({
+                pathname: '/(tabs)/profile/notes',
+                params: { highlightNoteId: result.note.id },
+              } as never);
+            },
+          },
+          { text: t('common.confirm') },
+        ],
+      );
+    } catch (error) {
+      if (!isCurrentRequest()) return;
+      reportHandledFailure('notes', 'collectNote', error);
+      Alert.alert(
+        t('notes.detail.addFailed'),
+        getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
+      );
+    } finally {
+      if (collectionRequestRef.current === collectionKey) collectionRequestRef.current = null;
+      if (isCurrentRequest()) {
+        setCollectionState((state) => state?.key === collectionKey && state.status === 'adding'
+          ? null : state);
+      }
+    }
+  }, [addedNote, canEditNote, collectionKey, hasChatSource, id, note, router, sessionEpoch,
+    sourceConversationId, sourceMessageHeight, sourceMessageId, t]);
+
   const d = useMemo(
     () => ({
       container: { backgroundColor: colors.background },
@@ -500,6 +597,25 @@ export default function NoteDetailScreen() {
             <Pressable style={[s.headerIconBtn, d.iconBtn]} onPress={handleEdit} hitSlop={4}>
               <Ionicons name="pencil-outline" size={17} color={colors.text} />
             </Pressable>
+          ) : hasChatSource ? (
+            <Pressable
+              style={[s.headerIconBtn, s.headerAddBtn, d.iconBtn]}
+              onPress={() => void handleAddNote()}
+              disabled={addingNote || addedNote}
+              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel={t(addedNote ? 'notes.detail.added' : 'chat.messageActions.addToNotes')}
+              accessibilityState={{ disabled: addingNote || addedNote, busy: addingNote }}
+            >
+              {addingNote ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons name={addedNote ? 'checkmark' : 'add'} size={18} color={colors.text} />
+              )}
+              <Text style={[s.headerAddLabel, d.meta]}>
+                {t(addedNote ? 'notes.detail.added' : 'chat.messageActions.addToNotes')}
+              </Text>
+            </Pressable>
           ) : null}
         </View>
       </View>
@@ -510,23 +626,28 @@ export default function NoteDetailScreen() {
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={Platform.OS === 'android'}
+        onLayout={measureImageViewport}
+        onScroll={handleImageScroll}
+        scrollEventThrottle={64}
         onContentSizeChange={scrollToRequestedSection}
       >
-        {readOnlySections ? (
-          <NoteDocumentBody
-            title={note.title}
-            createdAt={note.createdAt}
-            groups={note.groups}
-            sections={readOnlySections}
-            order={detailOrder}
-            layout={readOnlyLayout}
-            onContactPress={(id, name) => router.navigate(getUserProfileHref(scope, id, name))}
-            onGroupPress={handleGroupCardPress}
-            onMediaError={handleMediaError}
-            onImagePress={handleImagePress}
-            onSectionLayout={trackSectionLayout}
-          />
-        ) : null}
+        <NoteImageViewportContext.Provider value={imageViewport}>
+          {readOnlySections ? (
+            <NoteDocumentBody
+              title={note.title}
+              createdAt={note.createdAt}
+              groups={note.groups}
+              sections={readOnlySections}
+              order={detailOrder}
+              layout={readOnlyLayout}
+              onContactPress={(id, name) => router.navigate(getUserProfileHref(scope, id, name))}
+              onGroupPress={handleGroupCardPress}
+              onMediaError={handleMediaError}
+              onImagePress={handleImagePress}
+              onSectionLayout={trackSectionLayout}
+            />
+          ) : null}
+        </NoteImageViewportContext.Provider>
       </ScrollView>
 
       {/* 只读详情保留下载动作；来源个人名片和群名片仅在编辑/config 区可见。 */}
@@ -642,6 +763,8 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerAddBtn: { width: 'auto', flexDirection: 'row', gap: 4, paddingHorizontal: Spacing.sm },
+  headerAddLabel: { ...Typography.small, fontWeight: '600' },
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: Spacing.lg,

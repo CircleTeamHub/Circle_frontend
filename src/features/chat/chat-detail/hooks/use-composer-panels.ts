@@ -9,6 +9,7 @@ import { Keyboard, LayoutAnimation, PanResponder } from 'react-native';
 import { PANEL_LAYOUT_ANIM } from '@/features/chat/chat-detail/constants';
 
 export interface ComposerPanelsParams {
+  mentionPickerVisible: boolean;
   setMentionPickerVisible: Dispatch<SetStateAction<boolean>>;
 }
 
@@ -16,6 +17,7 @@ export interface ComposerPanelsParams {
  * 输入栏下方的「+」工具面板与表情面板:展开/收起(带布局过渡)、互斥,拖动列表时一并收起。
  */
 export function useComposerPanels({
+  mentionPickerVisible,
   setMentionPickerVisible,
 }: ComposerPanelsParams) {
   const [attachmentOpen, setAttachmentOpen] = useState(false);
@@ -45,13 +47,13 @@ export function useComposerPanels({
   }, [animatePanels, setMentionPickerVisible]);
 
   // 在消息区下拉/滚动时收起底部面板与键盘（微信式：拖动列表即收回输入区叠层）。
-  const closeInputPanels = useCallback(() => {
-    animatePanels();
+  const closeInputPanels = useCallback((dismissKeyboard = true) => {
+    if (attachmentOpen || emojiOpen || mentionPickerVisible) animatePanels();
     setAttachmentOpen(false);
     setEmojiOpen(false);
     setMentionPickerVisible(false);
-    Keyboard.dismiss();
-  }, [animatePanels, setMentionPickerVisible]);
+    if (dismissKeyboard) Keyboard.dismiss();
+  }, [animatePanels, attachmentOpen, emojiOpen, mentionPickerVisible, setMentionPickerVisible]);
 
   // 附件面板下滑收回。面板里是一堆 Pressable 网格项，触摸落到子项上时子项会先抢
   // responder；必须用「捕获阶段」onMove...Capture 才能在明显向下滑时从子项手里截下手势。

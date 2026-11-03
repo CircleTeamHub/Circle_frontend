@@ -21,6 +21,7 @@ interface PlazaPostCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (card: PlazaPostCardData) => void;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
@@ -170,6 +171,7 @@ export const PlazaPostCardBubble: React.FC<PlazaPostCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
 }) => {
@@ -213,6 +215,7 @@ export const PlazaPostCardBubble: React.FC<PlazaPostCardBubbleProps> = ({
       outgoing={outgoing}
       avatarNode={avatarNode}
       onAvatarPress={onAvatarPress}
+      onAvatarLongPress={onAvatarLongPress}
       hideStatus={hideStatus}
       bodyStyle={s.body}
     >
