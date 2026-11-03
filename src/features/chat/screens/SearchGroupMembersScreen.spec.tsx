@@ -297,3 +297,29 @@ describe('a group seen before', () => {
     expect(fetchChatMembers).not.toHaveBeenCalled();
   });
 });
+
+
+test('live circle revocation hides an already loaded roster before the replacement request settles', async () => {
+  mockParams.groupID = 'circle-1';
+  const conversation = {
+    id: 'conv-circle', circleId: 'circle-1', myRole: 'ADMIN',
+    policies: { ...CLOSED_POLICIES, membersCanViewRoster: false },
+  };
+  mockChatState.conversations = [conversation];
+  jest.mocked(createCircleChatConversation).mockResolvedValue(conversation as never);
+  const view = render(<SearchGroupMembersScreen />);
+  expect(await screen.findByText('张三', {}, SETTLE)).toBeTruthy();
+
+  const replacement = deferred<unknown>();
+  jest.mocked(createCircleChatConversation).mockReturnValueOnce(replacement.promise as never);
+  jest.mocked(useGroupMemberViewAccess).mockReturnValue({
+    canViewMembers: false,
+    selfMember: { userID: 'me', role: 'MEMBER' },
+    resolved: true,
+    revalidate: jest.fn().mockResolvedValue(false),
+  });
+  view.rerender(<SearchGroupMembersScreen />);
+
+  expect(screen.queryByText('张三')).toBeNull();
+  expect(screen.getByText('chat.groupMembersRestricted')).toBeTruthy();
+});

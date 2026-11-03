@@ -170,7 +170,7 @@ export default function SearchGroupMembersScreen() {
     ? liveCircleAuthorized
     : canViewCircleMembers(cachedRole) ||
       (cachedRole === 'MEMBER' && membersCanViewRoster === true);
-  const authorized = directoryAccess === 'allowed';
+  const authorized = directoryAccess === 'allowed' && (isStandaloneGroup || circleAuthorized);
   // 「成员可查看他人资料」策略:两种群同一判据(群主/管理员豁免,普通成员按开关),
   // 与 ChatInfoScreen / ChatDetailScreen 共用 allowsMemberProfiles —— 这个策略只在
   // 客户端拦,本页对圈子群直接放行就等于没有这道闸。圈子群的角色优先用活体

@@ -391,7 +391,7 @@ test('group member search keeps authorization live and revalidates before openin
     source,
     /const circleAuthorized = accessResolved\s*\n\s*\? liveCircleAuthorized\s*\n\s*: canViewCircleMembers\(cachedRole\)/,
   );
-  assert.match(source, /const authorized = directoryAccess === 'allowed';/);
+  assert.match(source, /const authorized = directoryAccess === 'allowed' && \(isStandaloneGroup \|\| circleAuthorized\);/);
   assert.match(source, /setDirectoryAccess\('allowed'\);/);
   assert.match(source, /setDirectoryAccess\('denied'\);/);
   // 即使当前还没权限也要先取到圈子会话 DTO,否则策略打开后没有机会重跑。
