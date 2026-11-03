@@ -35,13 +35,15 @@ jest.mock('expo-image', () => {
 
 const viewerModes: unknown[] = [];
 const viewerCacheKeys: unknown[] = [];
+const viewerProps: { images?: string[]; initialIndex?: number }[] = [];
 jest.mock('@/components/ui/image-viewer', () => {
   const { View } =
     jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    ImageViewer: (props: { privacyMode?: unknown; cacheKeys?: unknown }) => {
+    ImageViewer: (props: { privacyMode?: unknown; cacheKeys?: unknown; images?: string[]; initialIndex?: number }) => {
       viewerModes.push(props.privacyMode);
       viewerCacheKeys.push(props.cacheKeys);
+      viewerProps.push(props);
       return <View testID="image-viewer" />;
     },
   };
@@ -95,6 +97,7 @@ function openPreview() {
 beforeEach(() => {
   imageProps.length = 0;
   viewerModes.length = 0;
+  viewerProps.length = 0;
 });
 
 describe('ImageBubble ephemeral rendering', () => {
@@ -293,4 +296,31 @@ describe('ImageBubble cache keys', () => {
 it('an expiry stamp without a duration still prevents persistent image caching',()=>{
  render(<ImageBubble message={{...imageMessage,burnExpiresAt:'2030-01-01T00:00:00Z'}} outgoing={false}/>);
  expect(cachePolicies()).not.toContain('memory-disk');openPreview();expect(viewerModes).toContain('ephemeral');
+});
+
+test('preview opens at the tapped image with neighboring conversation photos', () => {
+  const older: ChatMessage = { ...imageMessage, id: 'older', imageUrl: 'https://media.example.com/older.jpg', imageKey: 'chat/older.jpg' };
+  const current = { ...imageMessage, imageKey: 'chat/current.jpg' };
+  const newer: ChatMessage = { ...imageMessage, id: 'newer', imageUrl: 'https://media.example.com/newer.jpg', imageKey: 'chat/newer.jpg' };
+  render(<ImageBubble message={current} outgoing={false} getGalleryMessages={() => [older, current, newer]} />);
+  openPreview();
+  expect(viewerProps.at(-1)?.images).toEqual([older.imageUrl, current.imageUrl, newer.imageUrl]);
+  expect(viewerProps.at(-1)?.initialIndex).toBe(1);
+  expect(viewerCacheKeys.at(-1)).toEqual(['chat/older.jpg', 'chat/current.jpg', 'chat/newer.jpg']);
+});
+
+test('ordinary gallery cannot expose disappearing photos through a save-enabled viewer', () => {
+  const burning = { ...imageMessage, id: 'burning', burnDurationSec: 30, imageUrl: 'https://media.example.com/private.jpg' };
+  render(<ImageBubble message={imageMessage} outgoing={false} getGalleryMessages={() => [burning, imageMessage]} />);
+  openPreview();
+  expect(viewerProps.at(-1)?.images).toEqual([imageMessage.imageUrl]);
+  expect(viewerModes.at(-1)).toBe('standard');
+});
+
+test('disappearing images keep their isolated save-disabled preview', () => {
+  const burning = { ...imageMessage, id: 'burning', burnDurationSec: 30, imageUrl: 'https://media.example.com/private.jpg' };
+  render(<ImageBubble message={burning} outgoing={false} getGalleryMessages={() => [imageMessage, burning]} />);
+  openPreview();
+  expect(viewerProps.at(-1)?.images).toEqual([burning.imageUrl]);
+  expect(viewerModes.at(-1)).toBe('ephemeral');
 });

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { readChatDetailSource } = require('./helpers/chat-detail-source');
+const { loadTsModule } = require('./helpers/load-ts-module');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
@@ -77,5 +78,23 @@ test('forward picker names TEMP targets with their stable room title', () => {
     'src/features/chat/screens/ForwardPickerScreen.tsx',
   );
 
-  assert.match(forwardPicker, /conversation\.tempChat\?\.title/);
+  assert.match(forwardPicker, /mapChatConversationToUI/);
+  const { mapChatConversationToUI } = loadTsModule('src/chat-core/mappers.ts', {
+    requireShim: (name) => {
+      if (name === '@/i18n') return { default: { t: (key, options) => options?.defaultValue ?? key } };
+      if (name === '@/services/api/utils') return { normalizeMediaUrl: (url) => url };
+      if (name === '@/utils/locale') return { getLocalizedDateTimeLocale: () => 'en-US' };
+      throw new Error('Unexpected mapper dependency: ' + name);
+    },
+  });
+  const room = {
+    id: 'temp-1', type: 'TEMP', peer: null, circle: null, circleId: null,
+    tempChat: { id: 'room-1', title: '稳定接待房' },
+    lastMessageAt: null, unreadCount: 0, muted: false, pinned: false,
+  };
+  for (const nickname of ['房主', '访客']) {
+    const mapped = mapChatConversationToUI({ ...room, lastMessage: { type: 'text', content: { text: 'hello' }, sender: { nickname } } });
+    assert.equal(mapped.name, '稳定接待房');
+    assert.equal(mapped.isTempChat, true);
+  }
 });

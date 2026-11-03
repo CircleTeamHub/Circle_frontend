@@ -18,7 +18,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { ImageGrid } from '@/features/discover/components/image-grid';
+import { MomentMedia } from '@/features/discover/components/moment-media';
 import { MomentCommentInput } from '@/features/discover/components/moment-comment-input';
 import { MomentMentionNotice } from '@/features/discover/components/moment-mention-notice';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
@@ -625,7 +625,7 @@ export default function MomentDetailScreen() {
         </Pressable>
 
         <Text style={[s.postContent, d.postContent]}>{post.content}</Text>
-        <ImageGrid images={post.images} media={post.media} />
+        <MomentMedia images={post.images} media={post.media} attachments={post.attachments} />
 
         <View style={s.metaRow}>
           <Text style={[s.timeText, d.timeText]}>{timeLabel}</Text>

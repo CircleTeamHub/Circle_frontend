@@ -29,6 +29,7 @@ import {
   type ChatCardType,
 } from '@/chat-core/client';
 import { useChatStore } from '@/chat-core/store';
+import { mapChatConversationToUI } from '@/chat-core/mappers';
 import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
@@ -99,19 +100,7 @@ function num(value: unknown): number | undefined {
 }
 
 function conversationDisplayName(conversation: ChatConversationDto): string {
-  return (
-    conversation.tempChat?.title.trim() ||
-    conversation.circle?.name ||
-    conversation.peer?.nickname ||
-    i18n.t('chat.forward.single', { defaultValue: '单聊' })
-  );
-}
-
-function conversationAvatarUrl(conversation: ChatConversationDto): string | undefined {
-  return (
-    str(conversation.circle?.avatarUrl ?? undefined) ??
-    str(conversation.peer?.avatarUrl ?? undefined)
-  );
+  return mapChatConversationToUI(conversation).name;
 }
 
 /**
@@ -236,6 +225,8 @@ export default function ForwardPickerScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const pending = useMessageForwardStore((state) => state.pending);
+  const pendingBatch = useMessageForwardStore((state) => state.pendingBatch);
+  const setPendingBatch = useMessageForwardStore((state) => state.setPendingBatch);
   const clearPending = useMessageForwardStore((state) => state.clear);
   const conversations = useChatStore((state) => state.conversations);
   const [query, setQuery] = useState('');
@@ -243,6 +234,7 @@ export default function ForwardPickerScreen() {
   const mountedRef = useRef(true);
   // 转发前的来源状态重取进行中；防止连点弹出多个确认框。
   const statusCheckRef = useRef(false);
+  const sendingRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -271,21 +263,23 @@ export default function ForwardPickerScreen() {
    * 提醒才对得上老板当前的设置。取不到时退回快照，不阻断转发。
    */
   async function confirmForward(conversation: ChatConversationDto) {
-    const noteCard = pending?.message.noteCard;
-    if (pending?.message.type !== 'note-card' || !noteCard) {
+    const noteCards = (pendingBatch ?? (pending ? [pending] : [])).flatMap(({ message }) =>
+      message.type === 'note-card' && message.noteCard ? [message.noteCard] : [],
+    );
+    if (noteCards.length === 0) {
       void handleForward(conversation);
       return;
     }
     if (statusCheckRef.current) return;
     statusCheckRef.current = true;
-    let freshCard = noteCard;
+    let freshCards = noteCards;
     try {
-      [freshCard = noteCard] = await withFreshNoteSourceStatus([noteCard]);
+      freshCards = await withFreshNoteSourceStatus(noteCards);
     } finally {
       statusCheckRef.current = false;
     }
     if (!mountedRef.current) return;
-    if (!shouldWarnNoteWorkStatus(freshCard)) {
+    if (!freshCards.some(shouldWarnNoteWorkStatus)) {
       void handleForward(conversation);
       return;
     }
@@ -305,21 +299,28 @@ export default function ForwardPickerScreen() {
   }
 
   async function handleForward(conversation: ChatConversationDto) {
-    if (!pending || sendingID) return;
+    if (!pending || sendingRef.current) return;
+    sendingRef.current = true;
     setSendingID(conversation.id);
     try {
       // sendWithOptimism 已把发出的消息写进 chat-core store,无需手动 append。
       // 进了发送队列就算转发成功,不等送达:断线时队列会等到重连,之后仍发不出去的
       // 在目标会话里标红、可以长按重发。没进队(类型不支持、本地门禁)才报失败。
-      const handle = startChatSend((onCreate) =>
-        sendForwardedMessage(pending, conversation.id, onCreate),
-      );
-      if (handle.queued) {
-        void handle.delivered.catch((error: unknown) => {
-          reportHandledFailure('forward', 'forwardMessage', error);
-        });
-      } else {
-        await handle.delivered;
+      const items = pendingBatch ?? [pending];
+      for (let index = 0; index < items.length; index++) {
+        const handle = startChatSend((onCreate) =>
+          sendForwardedMessage(items[index], conversation.id, onCreate),
+        );
+        if (handle.queued) {
+          void handle.delivered.catch((error: unknown) => {
+            reportHandledFailure('forward', 'forwardMessage', error);
+          });
+        } else {
+          await handle.delivered;
+        }
+        // Already queued messages retain their own retry bubble. A later local
+        // failure must leave only the unsent remainder in this picker.
+        if (pendingBatch) setPendingBatch(items.slice(index + 1));
       }
       clearPending();
       if (!mountedRef.current) return;
@@ -334,6 +335,7 @@ export default function ForwardPickerScreen() {
       if (!mountedRef.current) return;
       Alert.alert(t('chat.forward.failed'), t('chat.forward.failedRetry'));
     } finally {
+      sendingRef.current = false;
       if (mountedRef.current) setSendingID(null);
     }
   }
@@ -396,7 +398,7 @@ export default function ForwardPickerScreen() {
         {...keyboardDismissOnDragProps}
         renderItem={({ item }) => {
           const busy = sendingID === item.id;
-          const name = conversationDisplayName(item);
+          const { name, avatarUrl } = mapChatConversationToUI(item);
           return (
             <Pressable
               style={[s.row, d.row]}
@@ -407,7 +409,7 @@ export default function ForwardPickerScreen() {
                 <GroupChatAvatar
                   size={42}
                   name={name}
-                  uri={conversationAvatarUrl(item)}
+                  uri={avatarUrl}
                   temporary={item.type === 'TEMP'}
                   badgeBorderColor={colors.surface}
                 />
@@ -416,7 +418,7 @@ export default function ForwardPickerScreen() {
                   size={42}
                   shape="square"
                   name={name}
-                  uri={conversationAvatarUrl(item)}
+                  uri={avatarUrl}
                 />
               )}
               <View style={s.rowText}>

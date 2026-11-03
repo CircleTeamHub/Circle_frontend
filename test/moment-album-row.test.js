@@ -8,7 +8,7 @@ test('MomentAlbumRow renders date column + content + grid + social, themed', () 
   const src = read('src/features/discover/components/moment-album-row.tsx');
   assert.match(src, /showDate/);
   assert.match(src, /getAlbumDateParts/);
-  assert.match(src, /ImageGrid/);
+  assert.match(src, /MomentMedia/);
   assert.match(src, /containerWidth=/); // 给九宫格传相册列宽
   assert.match(src, /formatRelativeTime/);
   // 主题：用 useTheme，不硬编码颜色

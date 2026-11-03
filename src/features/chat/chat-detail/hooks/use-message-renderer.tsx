@@ -3,9 +3,10 @@ import { getGroupEntryHref } from '@/features/groups/routes';
 import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetry';
 import { messageRowKey } from '@/chat-core/local-message-id';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
-import { memo, type ReactElement, useCallback } from 'react';
+import { memo, type ReactElement, useCallback, useEffect, useRef } from 'react';
 import { type ChatMessage } from '@/types';
 import { type GestureResponderEvent, Pressable, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { MemberName } from '@/components/ui/member-name';
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
 import {
@@ -46,6 +47,10 @@ interface MessageRowProps {
   item: ChatMessage;
   renderMessage: (item: ChatMessage) => ReactElement | null;
   handleRetryMessage: (message: ChatMessage) => void;
+  selectionMode: boolean;
+  selected: boolean;
+  onToggleSelected: (id: string) => void;
+  selectionColor: string;
 }
 
 /**
@@ -56,15 +61,29 @@ const MessageRow = memo(function MessageRow({
   item,
   renderMessage,
   handleRetryMessage,
+  selectionMode,
+  selected,
+  onToggleSelected,
+  selectionColor,
 }: MessageRowProps) {
-  return (
+  const content = (
     <FailedMessageRetry message={item} onRetry={handleRetryMessage}>
       {renderMessage(item)}
     </FailedMessageRetry>
   );
+  if (!selectionMode || item.type === 'date' || item.type === 'system-notice') return content;
+  return (
+    <Pressable onPress={() => onToggleSelected(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text ?? item.time} accessibilityState={{ checked: selected }} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={selectionColor} />
+      <View pointerEvents="none" style={{ flex: 1 }}>{content}</View>
+    </Pressable>
+  );
 });
 
 export interface MessageRendererParams {
+  messages: ChatMessage[];
+  selectedMessageIds: Set<string> | null;
+  handleToggleSelectedMessage: (id: string) => void;
   colors: ThemeColors;
   scope: UserProfileScope;
   groupMemberNames: Record<string, string>;
@@ -93,6 +112,9 @@ export interface MessageRendererParams {
  * 包一层长按菜单与定位高亮。
  */
 export function useMessageRenderer({
+  messages,
+  selectedMessageIds,
+  handleToggleSelectedMessage,
   colors,
   scope,
   groupMemberNames,
@@ -119,6 +141,21 @@ export function useMessageRenderer({
   // 群成员昵称排在消息自带 senderNickname 之前——后者可能为空而回落成原始 hex id，
   // 成员表里的昵称才是能稳定显示的「对方名字」。
   const allRemarkOverrides = useFriendRemarkStore((state) => state.remarks);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const galleryListenersRef = useRef(new Set<() => void>());
+  const getGalleryMessages = useCallback(
+    () => messagesRef.current.filter((message) => message.type === 'image').reverse(),
+    [],
+  );
+  // Only the open gallery subscribes; unchanged message rows keep their memoized props.
+  const subscribeGalleryMessages = useCallback((listener: () => void) => {
+    galleryListenersRef.current.add(listener);
+    return () => { galleryListenersRef.current.delete(listener); };
+  }, []);
+  useEffect(() => {
+    galleryListenersRef.current.forEach((listener) => listener());
+  }, [messages]);
   const receivedDisplayName = useCallback(
     (msg: ChatMessage) => {
       const override = msg.senderID
@@ -239,6 +276,8 @@ export function useMessageRenderer({
         return withMessageActions(item, (
           <ImageBubble
             message={item}
+            getGalleryMessages={getGalleryMessages}
+            subscribeGalleryMessages={subscribeGalleryMessages}
             outgoing={Boolean(item.outgoing)}
             senderName={receivedDisplayName(item)}
             senderAvatarUri={receivedAvatarUri(item)}
@@ -438,6 +477,8 @@ export function useMessageRenderer({
       default: return null;
     }
   }, [
+    getGalleryMessages,
+    subscribeGalleryMessages,
     receivedAvatarUri,
     receivedDisplayName,
     withGroupSenderLabel,
@@ -463,9 +504,13 @@ export function useMessageRenderer({
         item={item}
         renderMessage={renderMessage}
         handleRetryMessage={handleRetryMessage}
+        selectionMode={selectedMessageIds !== null}
+        selected={selectedMessageIds?.has(item.id) ?? false}
+        onToggleSelected={handleToggleSelectedMessage}
+        selectionColor={colors.iconAccent}
       />
     ),
-    [renderMessage, handleRetryMessage],
+    [renderMessage, handleRetryMessage, selectedMessageIds, handleToggleSelectedMessage, colors.iconAccent],
   );
 
   return {

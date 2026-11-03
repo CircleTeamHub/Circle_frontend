@@ -78,11 +78,12 @@ test('concurrent changeCover calls upload only once', async () => {
   });
 
   expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledTimes(1);
-  // 直接唤起相册,不先请求权限,也不开 allowsEditing(iOS 才走秒开的 PHPicker)。
+  // 上传前先由原生编辑器确认封面裁剪。
   expect(mockPicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
   expect(mockPicker.launchImageLibraryAsync).toHaveBeenCalledWith({
     quality: 0.8,
     mediaTypes: ['images'],
+    allowsEditing: true,
   });
   expect(requestUploadPresign).toHaveBeenCalledTimes(1);
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(1);

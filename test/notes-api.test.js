@@ -177,3 +177,16 @@ test('note writes mark the list stale; reads and the source-state lookup do not'
   await notes.togglePinNote('n1', true);
   assert.equal(notes.notesMutatedSince(before), true);
 });
+
+test('source-state lookup batches every distinct note instead of dropping notes after 100', async () => {
+  const batches = [];
+  const { notes } = loadNotesApi((endpoint, options) => {
+    assert.equal(endpoint, '/note/source-states');
+    batches.push(Array.from(options.body.noteIds));
+    return { rows: options.body.noteIds.map((noteId) => ({ noteId, workStatus: 'CLOSED', publicationStatus: 'UNLISTED' })) };
+  });
+  const ids = Array.from({ length: 205 }, (_, i) => `note-${i}`);
+  const states = await notes.fetchNoteSourceStates([...ids, '', 'note-0']);
+  assert.deepEqual(batches.map((batch) => batch.length), [100, 100, 5]);
+  assert.deepEqual(Array.from(states, (state) => state.noteId), ids);
+});

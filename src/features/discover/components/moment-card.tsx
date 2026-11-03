@@ -16,7 +16,7 @@ import {
   buildMomentCommentThreads,
   getMomentCommentPreviewState,
 } from '@/features/discover/utils/moment-comments';
-import { ImageGrid } from './image-grid';
+import { MomentMedia } from './moment-media';
 import type { MomentPost } from '@/types';
 
 interface MomentCardProps {
@@ -193,7 +193,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
 
         {/* Images：点图看大图（ImageGrid 内置查看器）；进详情留给文字区，
             否则外层 Pressable 会把点击抢走。 */}
-        <ImageGrid images={post.images} media={post.media} />
+        <MomentMedia images={post.images} media={post.media} attachments={post.attachments} />
 
         {/* Time + Actions */}
         <View style={s.headerRow}>

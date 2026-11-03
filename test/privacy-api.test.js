@@ -88,3 +88,20 @@ test('privacy api exposes account-level settings read and patch endpoints', asyn
     },
   ]);
 });
+
+test('direct-join consent accepts old responses and explicit booleans but rejects coercion', async () => {
+  const settings = {
+    messageSelfDestructSec: 0, momentsVisibility: 'ALL', allowStrangerMessages: true,
+    showPhone: false, showEmail: false, showWechat: false, showQQ: false, showWhatsup: false,
+    addMeByAccount: true, addMeByPhone: false, addMeByQrCode: true, addMeByGroup: true,
+    callPermission: 'EVERYONE', groupInvitePermission: 'EVERYONE',
+  };
+  for (const value of [undefined, false, true]) {
+    const api = loadPrivacyApi({ apiClient: async () => ({ ...settings, allowFriendGroupDirectJoin: value }) });
+    assert.equal((await api.fetchPrivacySettings()).allowFriendGroupDirectJoin, value);
+  }
+  for (const value of ['true', 'false', 1, null]) {
+    const api = loadPrivacyApi({ apiClient: async () => ({ ...settings, allowFriendGroupDirectJoin: value }) });
+    await assert.rejects(api.fetchPrivacySettings(), /invalid shape/);
+  }
+});

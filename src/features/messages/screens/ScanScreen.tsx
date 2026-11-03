@@ -1,9 +1,9 @@
 import { resolveMessageScanResult } from '@/features/messages/utils/scan-result';
+import { scanQrFromAlbum } from '@/features/messages/utils/scan-album-qr';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import {
   CameraView,
-  scanFromURLAsync,
   useCameraPermissions,
   type BarcodeScanningResult,
 } from 'expo-camera';
@@ -226,7 +226,7 @@ export default function ScanScreen() {
       const picked = outcome.result;
       if (picked.canceled || picked.assets.length === 0) return;
 
-      const [found] = await scanFromURLAsync(picked.assets[0].uri, ['qr']);
+      const found = await scanQrFromAlbum(picked.assets[0]);
       if (!found) {
         Alert.alert(
           t('messages.scanAlbumNoCodeTitle'),

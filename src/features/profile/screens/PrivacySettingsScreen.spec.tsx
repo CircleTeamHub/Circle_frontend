@@ -197,3 +197,29 @@ test('another account starts from the defaults, not the previous account setting
   expect(rowText('show-phone')).toHaveTextContent('false|disabled');
   expect(rowText('show-wechat')).toHaveTextContent('true|disabled');
 });
+
+test('direct group joining is off for legacy settings and saves only explicit opt-in', async () => {
+  (await visitOnce(REAL_SETTINGS)).unmount();
+  jest.mocked(fetchPrivacySettings).mockResolvedValueOnce(REAL_SETTINGS);
+  jest.mocked(updatePrivacySettings).mockResolvedValueOnce({
+    ...REAL_SETTINGS, allowFriendGroupDirectJoin: true,
+  } as PrivacySettings);
+  render(<PrivacySettingsScreen />);
+  await waitUntilLoaded();
+  expect(rowText('friend-group-direct-join')).toHaveTextContent('false|enabled');
+  await act(async () => { fireEvent.press(rowText('friend-group-direct-join')); });
+  expect(updatePrivacySettings).toHaveBeenCalledWith({ allowFriendGroupDirectJoin: true });
+  expect(rowText('friend-group-direct-join')).toHaveTextContent('true|enabled');
+});
+
+test('failed direct-join consent changes restore the previous saved choice', async () => {
+  const saved = { ...REAL_SETTINGS, allowFriendGroupDirectJoin: true } as PrivacySettings;
+  jest.mocked(fetchPrivacySettings).mockResolvedValueOnce(saved);
+  jest.mocked(updatePrivacySettings).mockRejectedValueOnce(new Error('offline'));
+  render(<PrivacySettingsScreen />);
+  await waitUntilLoaded();
+  expect(rowText('friend-group-direct-join')).toHaveTextContent('true|enabled');
+  await act(async () => { fireEvent.press(rowText('friend-group-direct-join')); });
+  expect(updatePrivacySettings).toHaveBeenCalledWith({ allowFriendGroupDirectJoin: false });
+  expect(rowText('friend-group-direct-join')).toHaveTextContent('true|enabled');
+});

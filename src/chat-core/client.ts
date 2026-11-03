@@ -29,6 +29,7 @@ import {
   resolvePendingMediaUri,
 } from './pending-media';
 import { setConversationCacheResetHandler } from './sync';
+import { deleteImagePreview, getImagePreview, setImagePreview } from './image-preview';
 
 /**
  * 聊天页面向的高层 API(对齐旧 src/im/client 的调用形态,屏幕换 import 即用)。
@@ -193,6 +194,8 @@ interface SendOptions {
    * 会把它当成可渲染地址 —— 对端就能借此投放一个静默追踪信标。
    */
   localContent?: Record<string, unknown>;
+  /** In-memory display URL for a saved sticker, never copied into any DTO. */
+  imagePreviewUrl?: string;
   /** 允许冷启动从 outbox 恢复的无 object-key 本地预览。 */
   outboxPreviewContent?: Record<string, unknown>;
   replyToId?: string;
@@ -371,6 +374,7 @@ export async function sendWithOptimism(
       : undefined) ?? captureChatSessionFence();
   assertChatSessionFence(fence);
   const d = options.deliveryId ?? createDeliveryId();
+  if (options.imagePreviewUrl && fence.userId) setImagePreview(d, fence.userId, options.imagePreviewUrl);
   const store = useChatStore.getState();
   const failedAfterHeight = captureSendAnchor(options.conversationId);
   const anchorFields =
@@ -453,7 +457,10 @@ export async function sendWithOptimism(
     const echoed = (
       next.messagesByConversation[options.conversationId] ?? []
     ).find((m) => m.id === ack.messageId);
-    if (echoed) return echoed;
+    if (echoed) {
+      if (typeof echoed.content['url'] === 'string') deleteImagePreview(d);
+      return echoed;
+    }
 
     const confirmed: ChatMessageDto = {
       ...optimistic,
@@ -464,8 +471,8 @@ export async function sendWithOptimism(
     next.applyIncomingMessage(confirmed);
     // 首发和重发一样会撞上「ack 到了、回声丢了」:转发媒体的乐观内容不权威,
     // 就这么当成已确认的话气泡会永远停在源对象的签名 url 上。
-    if (options.outboxPreviewContent) {
-      reconcileUnauthoritativeConfirmation(options.conversationId, ack.height);
+    if (options.outboxPreviewContent || options.imagePreviewUrl) {
+      reconcileUnauthoritativeConfirmation(options.conversationId, ack.height, options.imagePreviewUrl ? d : undefined);
     }
     return confirmed;
   } catch (error) {
@@ -526,6 +533,8 @@ export function sendImageMessage(options: {
   /** 上传后的 object key(经现有 /upload presign 流程),服务端读时签 URL。 */
   key: string;
   localUri?: string;
+  /** Transient sticker preview; stored only in the bounded delivery registry. */
+  previewUrl?: string;
   width?: number;
   height?: number;
   thumbKey?: string;
@@ -545,6 +554,7 @@ export function sendImageMessage(options: {
     },
     // 本机文件 uri 只喂自己的气泡,不上行。
     localContent: options.localUri ? { localUri: options.localUri } : undefined,
+    imagePreviewUrl: options.previewUrl,
     onCreate: options.onCreate,
   });
 }
@@ -1101,8 +1111,10 @@ async function runRetry(
   };
   store.ingestMessages(conversationId, [confirmed]);
   store.applyIncomingMessage(confirmed);
-  if (localPreviewContent) {
-    reconcileUnauthoritativeConfirmation(conversationId, ack.height);
+  const imageNeedsHydration = entry.payload.type === 'image' &&
+    !optimistic?.content['url'] && !optimistic?.content['localUri'];
+  if (localPreviewContent || getImagePreview(d, fence.userId) || imageNeedsHydration) {
+    reconcileUnauthoritativeConfirmation(conversationId, ack.height, d);
   }
 }
 
@@ -1120,6 +1132,7 @@ async function runRetry(
 function reconcileUnauthoritativeConfirmation(
   conversationId: string,
   ackHeight: number,
+  previewDeliveryId?: string,
 ): void {
   const epoch = useAuthStore.getState().sessionEpoch;
   void backfillConversationSince(conversationId, Math.max(ackHeight - 1, 0))
@@ -1127,6 +1140,7 @@ function reconcileUnauthoritativeConfirmation(
       // 切号后落地的补拉不该去动新账号的会话列表。
       if (useAuthStore.getState().sessionEpoch !== epoch) return;
       useChatStore.getState().revertConversationPreview(conversationId);
+      if (previewDeliveryId && useChatStore.getState().messagesByConversation[conversationId]?.some((message) => message.d === previewDeliveryId && typeof message.content['url'] === 'string')) deleteImagePreview(previewDeliveryId);
     })
     .catch(() => undefined);
 }

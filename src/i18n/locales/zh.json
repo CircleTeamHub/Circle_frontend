@@ -438,6 +438,22 @@
       "favoriteSendFailed": "收藏内容发送失败，请重试",
       "favoriteLegacyVoiceUnsupported": "这条旧版语音收藏无法重新发送"
     },
+    "stickers": {
+      "title": "自定义表情",
+      "add": "添加表情",
+      "addImage": "从相册添加",
+      "save": "保存为表情",
+      "saved": "已添加到表情",
+      "remove": "删除表情",
+      "removeConfirm": "删除这张自定义表情？",
+      "loadFailed": "表情加载失败，点击重试",
+      "saveFailed": "保存表情失败，请重试",
+      "sendFailed": "表情发送失败，请重试",
+      "limitReached": "自定义表情最多 200 张，请先删除一些表情",
+      "tooLarge": "表情图片不能超过 5 MB",
+      "permissionDenied": "请允许访问相册后添加表情",
+      "unsupportedImage": "请选择图片文件"
+    },
     "messageActions": {
       "title": "消息操作",
       "collect": "收藏",
@@ -451,6 +467,7 @@
       "quote": "引用",
       "delete": "删除",
       "deleteConfirm": "删除这条本地消息？",
+      "deleteSelectedConfirm": "删除所选 {{count}} 条本地消息？",
       "deleteFailed": "删除失败",
       "deleteFailedHint": "请稍后重试",
       "report": "举报",
@@ -622,6 +639,8 @@
     "clearHistoryForMe": "仅删除我的记录",
     "clearHistoryForEveryone": "删除所有人的记录",
     "groupLog": "群日志",
+    "groupLogEvents": "成员动态",
+    "groupLogAdmissions": "申请与邀请",
     "groupLogLoadFailed": "群日志加载失败",
     "noGroupLog": "暂无群日志",
     "groupActivity": "群聊活动",
@@ -1452,6 +1471,11 @@
     }
   },
   "moment": {
+    "selectMedia": "添加图片或视频",
+    "removeMedia": "移除图片或视频",
+    "playVideo": "播放视频",
+    "videoUnavailable": "视频加载失败，请稍后重试",
+    "openImage": "查看图片",
     "createTitle": "发朋友圈",
     "contentPlaceholder": "这一刻的想法...",
     "visibility": "谁可以看",
@@ -2377,6 +2401,7 @@
       "addMeMethods": "加我为好友的方式",
       "callPermission": "语音视频通话权限",
       "groupInvitePermission": "群聊圈子邀请权限",
+      "allowFriendGroupDirectJoin": "允许好友建群时直接加入",
       "loadFailed": "隐私设置加载失败",
       "saveFailed": "隐私设置保存失败",
       "selfDestructOff": "关闭",
@@ -3693,6 +3718,8 @@
     "recoveryNotice": "这是一个找回申请：如果不拒绝，对方将在 {{value}} 之后登录你的账号，并让你的其他设备退出。"
   },
   "groupAdmission": {
+    "createdAt": "申请或邀请时间：{{time}}",
+    "updatedAt": "状态更新时间：{{time}}",
     "title": "群资料与邀请",
     "members": "{{count}} 人",
     "invitedBy": "{{name}} 邀请你加入群聊",

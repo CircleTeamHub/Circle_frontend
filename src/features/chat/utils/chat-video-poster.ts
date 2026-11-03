@@ -42,7 +42,8 @@ async function generateChatVideoPoster(
 
 /**
  * 给聊天视频截一帧封面并上传,返回封面的 object key(写进消息的 thumbKey,服务端读时
- * 签成 thumbUrl)。原来视频没有封面,气泡在点播放之前是一块黑框,聊天记录的媒体宫格
+ * 签成 thumbUrl)。朋友圈可指定 posts 目录，读取时同样按 key 生成公开封面 URL。
+ * 原来视频没有封面,气泡在点播放之前是一块黑框,聊天记录的媒体宫格
  * 里也只能显示占位卡片。
  *
  * 截不到帧或上传失败返回 null:封面可有可无,视频照常发。
@@ -51,6 +52,7 @@ export async function uploadChatVideoPoster(
   uri: string,
   durationSeconds: number | undefined,
   filename: string,
+  folder: 'chat' | 'posts' = 'chat',
 ): Promise<{ key: string } | null> {
   try {
     const poster = await generateChatVideoPoster(uri, durationSeconds);
@@ -59,7 +61,7 @@ export async function uploadChatVideoPoster(
     const presign = await requestUploadPresign({
       filename: sanitizeUploadFilename(`poster-${base}.jpg`),
       contentType: 'image/jpeg',
-      folder: 'chat',
+      folder,
       fileUri: poster.uri,
     });
     await uploadLocalFileToPresignedUrl(

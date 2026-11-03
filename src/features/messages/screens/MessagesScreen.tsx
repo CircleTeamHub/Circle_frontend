@@ -132,7 +132,7 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  // 右侧操作按钮组（已读、搜索、+）
+  // 右侧操作按钮组（搜索、+）
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -318,6 +318,7 @@ type ConversationRowLabels = {
   unpin: string;
   mute: string;
   unmute: string;
+  markRead: string;
   delete: string;
 };
 
@@ -339,6 +340,7 @@ type ConversationRowProps = {
   onOpenUserProfile: (conversation: Conversation) => void;
   onTogglePinned: (conversation: Conversation) => void;
   onToggleMuted: (conversation: Conversation) => void;
+  onMarkRead: (conversation: Conversation) => void;
   onDelete: (conversation: Conversation) => void;
   /** 只传给第 N 个置顶会话：箭头嵌在该卡片右下角。 */
   pinnedFoldExpanded?: boolean;
@@ -365,6 +367,7 @@ function ConversationRowImpl({
   onOpenUserProfile,
   onTogglePinned,
   onToggleMuted,
+  onMarkRead,
   onDelete,
   pinnedFoldExpanded,
   pinnedFoldHiddenCount = 0,
@@ -472,10 +475,15 @@ function ConversationRowImpl({
     [closeSwipe, item],
   );
 
-  // 桌面网页版没有滑动手势(鼠标拖拽会误触),用右键 / 长按唤出同样的三个动作。
+  // 长按会话打开操作菜单；桌面网页版同时支持右键。
   // 菜单走 Alert(三端都由 AppDialogHost 渲染),与全 app 其他菜单同一套。
   const showRowActionMenu = useCallback(() => {
+    closeSwipe();
     Alert.alert('', '', [
+      {
+        text: labels.markRead,
+        onPress: () => onMarkRead(item),
+      },
       {
         text: item.pinned ? labels.unpin : labels.pin,
         onPress: () => onTogglePinned(item),
@@ -491,7 +499,7 @@ function ConversationRowImpl({
       },
       { text: t('common.cancel'), style: 'cancel' },
     ]);
-  }, [item, labels, onDelete, onToggleMuted, onTogglePinned, t]);
+  }, [closeSwipe, item, labels, onDelete, onMarkRead, onToggleMuted, onTogglePinned, t]);
 
   // Web 的右键:RN 没有这个手势,直接给宿主节点挂 DOM 监听。
   const rowRef = useRef<View>(null);
@@ -607,8 +615,7 @@ function ConversationRowImpl({
             testID={testID}
             style={s.rowContent}
             onPress={() => onOpenConversation(item)}
-            // 桌面没有滑动手势:长按(鼠标按住)与右键都能唤出置顶/静音/删除。
-            onLongPress={swipeEnabled ? undefined : showRowActionMenu}
+            onLongPress={showRowActionMenu}
           >
             <View style={s.rowTop}>
               <View style={s.nameRow}>
@@ -683,7 +690,7 @@ function ConversationRowImpl({
 // MessagesScreen：消息列表主页面
 // 功能：
 //   1. 展示所有会话，支持按标签筛选（全部/未读/群聊/私聊/自定义群组）
-//   2. 头部操作栏：搜索、一键已读
+//   2. 头部操作栏：搜索；长按会话可标记已读、删除或修改偏好
 //   3. 点击头像可进入用户主页（仅私聊），点击会话行进入聊天详情
 // memo 化会话行：配合上游稳定的 item 引用，未变化的行跳过重渲染。
 const ConversationRow = memo(ConversationRowImpl);
@@ -711,6 +718,7 @@ export default function MessagesScreen() {
       unpin: t("messages.swipeUnpin", { defaultValue: "取消置顶" }),
       mute: t("messages.swipeMute", { defaultValue: "静音" }),
       unmute: t("messages.swipeUnmute", { defaultValue: "取消静音" }),
+      markRead: t("messages.swipeMarkRead", { defaultValue: "标记已读" }),
       delete: t("messages.swipeDelete"),
     }),
     [t],
@@ -1256,21 +1264,9 @@ export default function MessagesScreen() {
     router.push("/(tabs)/messages/groups");
   }, [router]);
 
-  // 点击已读图标 → 将当前筛选标签下所有会话标记为已读
-  // 自研栈:逐会话上报末条 height(pending 队列有断线重试),本地未读即时归零。
-  // 经 ref 读当前可见列表:直接依赖它的话回调每条消息换引用,列表头跟着整个重建。
-  const visibleConversationsRef = useRef(visibleConversations);
-  useEffect(() => {
-    visibleConversationsRef.current = visibleConversations;
-  }, [visibleConversations]);
-  const handleClearUnread = useCallback(() => {
-    const visible = visibleConversationsRef.current;
-    const dtoById = new Map(
-      useChatStore.getState().conversations.map((c) => [c.id, c]),
-    );
-    for (const c of visible) {
-      markConversationRead(c.id, dtoById.get(c.id)?.lastMessage?.height ?? 0);
-    }
+  const handleMarkConversationRead = useCallback((conversation: Conversation) => {
+    const latest = useChatStore.getState().conversations.find((item) => item.id === conversation.id);
+    markConversationRead(conversation.id, latest?.lastMessage?.height ?? 0);
   }, []);
 
   // 菜单项点击处理：关闭菜单并按 id 路由跳转
@@ -1321,6 +1317,7 @@ export default function MessagesScreen() {
         onOpenUserProfile={handleOpenUserProfile}
         onTogglePinned={handleToggleConversationPinned}
         onToggleMuted={handleToggleConversationMuted}
+        onMarkRead={handleMarkConversationRead}
         onDelete={handleConfirmDeleteConversation}
         pinnedFoldExpanded={
           index === pinnedFoldAnchorIndex ? showAllPinned : undefined
@@ -1342,6 +1339,7 @@ export default function MessagesScreen() {
       embeddedChat?.conversationID,
       handleConfirmDeleteConversation,
       handleConversationPress,
+      handleMarkConversationRead,
       handleToggleConversationMuted,
       handleToggleConversationPinned,
       handleOpenUserProfile,
@@ -1371,14 +1369,6 @@ export default function MessagesScreen() {
       <View style={s.titleRow}>
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
-          {/* ✓✓：一键已读（按当前筛选范围） */}
-          <Pressable style={s.actionButton} onPress={handleClearUnread}>
-            <Ionicons
-              name="checkmark-done-outline"
-              size={24}
-              color={colors.text}
-            />
-          </Pressable>
           {/* 搜索按钮：跳转到统一搜索页（会话 + 联系人） */}
           <Pressable style={s.actionButton} onPress={handleOpenFind}>
             <Ionicons name="search-outline" size={24} color={colors.text} />
@@ -1416,7 +1406,6 @@ export default function MessagesScreen() {
     colors,
     d,
     filterItems,
-    handleClearUnread,
     handleFilterPress,
     handleOpenFind,
     handleOpenGroups,

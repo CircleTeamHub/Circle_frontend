@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Pressable,
   useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, useSegments } from 'expo-router';
@@ -30,6 +31,7 @@ import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
 import type { EmbeddedChatParams } from '@/features/chat/chat-detail/types';
 import { useVoiceRecording } from '@/features/chat/chat-detail/hooks/use-voice-recording';
 import { useMediaSend } from '@/features/chat/chat-detail/hooks/use-media-send';
+import { useStickerSend } from '@/features/chat/chat-detail/hooks/use-sticker-send';
 import { useLocationSend } from '@/features/chat/chat-detail/hooks/use-location-send';
 import { useChatCall } from '@/features/chat/chat-detail/hooks/use-chat-call';
 import { useNoteBatchSend } from '@/features/chat/chat-detail/hooks/use-note-batch-send';
@@ -341,6 +343,13 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   });
 
   const {
+    selectedMessageIds,
+    selectedMessages,
+    handleCancelMessageSelection,
+    handleToggleSelectedMessage,
+    handleDeleteSelectedMessages,
+    handleForwardSelectedMessages,
+    canForwardSelectedMessages,
     actionMenu,
     setActionMenu,
     handleToggleReaction,
@@ -352,6 +361,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     handleRetryMessage,
     getMessageLongPressHandler,
   } = useMessageActions({
+    messages,
     t,
     setDraft,
     setSendError,
@@ -385,6 +395,9 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     renderItem,
     keyExtractor,
   } = useMessageRenderer({
+    messages,
+    selectedMessageIds,
+    handleToggleSelectedMessage,
     colors,
     scope,
     groupMemberNames,
@@ -524,6 +537,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     isPreviewMode,
     uploadAndSendVoice,
   });
+
+  const { handleSendSticker } = useStickerSend({ t, inFlightRef, setSendError, mountedRef, sourceID, conversationID, isTempChat, composerLocked, isPreviewMode });
 
   const {
     handlePickNoteBatch,
@@ -667,6 +682,16 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         isVoiceRecording={isVoiceRecording}
         voiceElapsedSeconds={voiceElapsedSeconds}
       />
+      {selectedMessageIds !== null ? (
+        <View style={{ padding: Spacing.md, paddingBottom: insets.bottom || Spacing.md, backgroundColor: colors.surface }}>
+          <Text style={{ color: colors.text }}>{t('notes.selection.selectedCount', { count: selectedMessages.length })}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Pressable onPress={handleCancelMessageSelection} accessibilityRole="button" accessibilityLabel={t('common.cancel')} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.text }}>{t('common.cancel')}</Text></Pressable>
+            <Pressable onPress={handleForwardSelectedMessages} disabled={!canForwardSelectedMessages} accessibilityRole="button" accessibilityState={{ disabled: !canForwardSelectedMessages }} style={{ minHeight: 44, justifyContent: 'center', opacity: canForwardSelectedMessages ? 1 : 0.4 }}><Text style={{ color: colors.iconAccent }}>{t('chat.messageActions.forward')}</Text></Pressable>
+            <Pressable onPress={handleDeleteSelectedMessages} disabled={selectedMessages.length === 0} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', opacity: selectedMessages.length ? 1 : 0.4 }}><Text style={{ color: colors.text }}>{t('common.delete')}</Text></Pressable>
+          </View>
+        </View>
+      ) : <>
       <Divider />
       <MentionPickerPanel
         colors={colors}
@@ -728,7 +753,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             { paddingBottom: insets.bottom || Spacing.md },
           ]}
         >
-          <EmojiPicker onSelect={handleInsertEmoji} />
+          <EmojiPicker onSelect={handleInsertEmoji} onSelectSticker={(sticker) => void handleSendSticker(sticker)} />
         </View>
       ) : null}
       <AttachmentPanel
@@ -746,6 +771,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         attachmentPanResponder={attachmentPanResponder}
         handleAttachmentAction={handleAttachmentAction}
       />
+      </>}
       <MessageActionMenu
         anchor={actionMenu ? { x: actionMenu.x, y: actionMenu.y } : null}
         actions={messageActions}

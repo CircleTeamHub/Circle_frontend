@@ -6,7 +6,7 @@ import { useContentColumnWidth } from '@/components/app/desktop-centered-column'
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { formatRelativeTime } from '@/features/discover/utils/relative-time';
 import { getAlbumDateParts } from '@/features/discover/utils/album-date';
-import { ImageGrid } from './image-grid';
+import { MomentMedia } from './moment-media';
 import type { MomentPost } from '@/types';
 
 const DATE_COL_WIDTH = 56;
@@ -130,10 +130,11 @@ export const MomentAlbumRow: React.FC<MomentAlbumRowProps> = ({
           </Pressable>
         ) : null}
 
-        {post.images.length > 0 ? (
-          <ImageGrid
+        {post.images.length > 0 || post.attachments?.length ? (
+          <MomentMedia
             images={post.images}
             media={post.media}
+            attachments={post.attachments}
             containerWidth={contentWidth}
           />
         ) : null}

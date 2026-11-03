@@ -176,10 +176,12 @@ export default function OnboardingProfileScreen() {
       return;
     }
 
-    // 直接唤起相册、不开 allowsEditing:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+    // 使用系统编辑器，让用户在上传前确认头像裁剪。
     const outcome = await launchImageLibraryFast(imagePicker, {
       quality: 0.8,
       mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
     });
     if (outcome.status === 'denied') {
       const message =

@@ -57,6 +57,7 @@ function loadSystemNoticeText(translate) {
     exports: {},
     console,
     require(request) {
+      if (request === './image-preview') return require('./helpers/load-ts-module').loadTsModule('src/chat-core/image-preview.ts');
       if (request === '@/i18n') {
         return { __esModule: true, default: { t: translate, language: 'zh' } };
       }

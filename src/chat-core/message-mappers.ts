@@ -17,6 +17,7 @@ import type {
 import { formatBurnDuration } from './burn-durations';
 import { formatChatTimestamp, noteStatusPreviewText } from './mappers';
 import type { StoredChatMessage } from './store';
+import { getImagePreview } from './image-preview';
 
 // 档位表和标签都收进 burn-durations(全局隐私设置也要用同一份),
 // 这里保留出口:调用方一直是从 message-mappers 拿这个格式化函数的。
@@ -406,7 +407,7 @@ export function mapChatMessageDtoToUI(
       return {
         ...base,
         type: 'image',
-        imageUrl: mediaUrl(content, 'url'),
+        imageUrl: mediaUrl(content, 'url') ?? (isSent ? (allowPeerMediaUrl(getImagePreview(dto.d, currentUserId) ?? null) ?? undefined) : undefined),
         imageThumbUrl: str(content['thumbUrl'])
           ? (allowPeerMediaUrl(str(content['thumbUrl']) ?? null) ?? undefined)
           : undefined,
