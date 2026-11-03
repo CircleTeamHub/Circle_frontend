@@ -219,6 +219,7 @@ const COMPOSER_ACTIONS: readonly {
   { kind: 'location', icon: 'location-outline', translationKey: 'location', defaultLabel: '位置' },
   { kind: 'contact', icon: 'person-outline', translationKey: 'contact', defaultLabel: '名片' },
   { kind: 'group', icon: 'people-outline', translationKey: 'group', defaultLabel: '群名片' },
+  { kind: 'title', icon: 'text-outline', translationKey: 'title', defaultLabel: '标题' },
 ];
 
 const FIXED_TITLE_BLOCK: NoteComposerBlock = { id: 'title-fixed', kind: 'title' };
@@ -505,8 +506,10 @@ export default function EditNoteScreen() {
   useEffect(() => () => draftRemoteQueue.cancel(), [draftRemoteQueue]);
 
   const [title, setTitle] = useState('');
+  const [titleAdded, setTitleAdded] = useState(false);
   const titleInputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const groupCardLayoutYRef = useRef(0);
   // 正文统计走独立的小 store，不进本组件的 state —— 见 note-text-stats.ts 的注释。
   const [textStatsStore] = useState(createNoteTextStatsStore);
   const textBlocksByIdRef = useRef<Record<string, Record<string, unknown>[]>>({});
@@ -1085,6 +1088,7 @@ export default function EditNoteScreen() {
     pendingSubmissionRef.current = null;
     setPendingSubmission(null);
     setNavigating(false);
+    setTitleAdded(false);
     textEditorResizeMetaRef.current = null;
     textEditorHeightsRef.current = {};
     textEditorHeightValuesRef.current.clear();
@@ -1543,7 +1547,7 @@ export default function EditNoteScreen() {
       const hasLocalRecording = record.audioItems.some((item) => item.uploadStatus !== 'UPLOADED');
       try {
         await saveNoteDraft(editorDraftId, localDraftSummaryToServerInput(record));
-        if (!isCurrentSession()) return false;
+        if (!isCurrentSession() || navigationRequestedRef.current) return false;
         if (!hasLocalRecording) markPersisted(draftFingerprint(record));
         return !hasLocalRecording;
       } catch {
@@ -2437,6 +2441,9 @@ export default function EditNoteScreen() {
           faceURL: group.avatarUrl ?? null,
         })),
       ].slice(0, 1));
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: groupCardLayoutYRef.current, animated: true });
+      });
     }
     closeCardPicker();
   }, [cardPickerKind, groupOptions, contactPickerItems, contactItems, groupCardItems, closeCardPicker, selectedCardIds, sourceGroupCardLocked]);
@@ -2557,9 +2564,14 @@ export default function EditNoteScreen() {
 
   const addComposerBlock = useCallback((kind: NoteComposerBlockKind) => {
     if (pendingSubmissionRef.current || saveInFlightRef.current || (kind === 'group' && sourceGroupCardLocked)) return;
+    if (kind === 'title') {
+      setTitleAdded(true);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
     // 标题、位置、名片和群名片在笔记模型里各只有一个值；文字、媒体等
-    // 其余类型则是可重复的独立区块。工具栏只负责插入区块，区块内的
-    // 操作按钮才负责打开选择器、上传或开始录音，避免点击工具栏就跳出面板。
+    // 其余类型则是可重复的独立区块。群名片工具栏同时打开已有选择器；
+    // 其他类型仍由区块内的操作按钮打开选择器、上传或开始录音。
     if (isNoteComposerSingletonKind(kind) && composerBlocks.some((block) => block.kind === kind)) {
       return;
     }
@@ -2700,6 +2712,7 @@ export default function EditNoteScreen() {
     }
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
+      setTitleAdded(true);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       Alert.alert(
         t('notes.edit.validationTitle', { defaultValue: '请检查笔记内容' }),
@@ -2835,12 +2848,15 @@ export default function EditNoteScreen() {
         throw new Error('Note submission outcome differs from the saved snapshot');
       }
       navigationRequestedRef.current = true;
-      await draftSavePromiseRef.current.catch(() => undefined);
-      if (saveGenerationRef.current !== saveGeneration) return;
+      // The committed publication consumes its draft transactionally, so an
+      // older autosave cannot restore it and need not delay this navigation.
       removeLocalNoteDraft(currentUser?.id, editorDraftId);
       cleanupRecordingCopies();
-      await deleteNoteDraft(editorDraftId).catch(() => undefined);
-      if (saveGenerationRef.current !== saveGeneration) return;
+      // The note is already committed; remote draft housekeeping must not keep
+      // the editor waiting for another network request before returning.
+      void deleteNoteDraft(editorDraftId).catch((error) => {
+        reportHandledFailure('noteEditor', 'deleteConsumedDraft', error);
+      });
       completeNavigation(undefined, true);
     } catch (error) {
       if (saveGenerationRef.current !== saveGeneration) return;
@@ -3239,7 +3255,11 @@ export default function EditNoteScreen() {
               numberOfLines={2}
               textAlignVertical="top"
               editable={!isEditingLocked}
-              onChangeText={(value) => { if (!pendingSubmissionRef.current && !saveInFlightRef.current) setTitle(value); }}
+              onChangeText={(value) => {
+                if (pendingSubmissionRef.current || saveInFlightRef.current) return;
+                setTitleAdded(true);
+                setTitle(value);
+              }}
               maxLength={MAX_NOTE_TITLE_LENGTH}
               returnKeyType="next"
             />
@@ -3873,11 +3893,19 @@ export default function EditNoteScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View pointerEvents={isEditingLocked ? 'none' : 'auto'}>
-          <View key={FIXED_TITLE_BLOCK.id} style={s.composerBlock}>
-            {renderComposerSection(FIXED_TITLE_BLOCK, 0)}
-          </View>
+          {titleAdded || title.length > 0 ? (
+            <View key={FIXED_TITLE_BLOCK.id} style={s.composerBlock}>
+              {renderComposerSection(FIXED_TITLE_BLOCK, 0)}
+            </View>
+          ) : null}
           {editableComposerBlocks.map((block, index) => (
-            <View key={block.id} style={s.composerBlock}>{renderComposerSection(block, index)}</View>
+            <View
+              key={block.id}
+              style={s.composerBlock}
+              onLayout={block.kind === 'group' ? (event) => { groupCardLayoutYRef.current = event.nativeEvent.layout.y; } : undefined}
+            >
+              {renderComposerSection(block, index)}
+            </View>
           ))}
         </View>
       </ScrollView>
@@ -3899,7 +3927,10 @@ export default function EditNoteScreen() {
                 key={action.kind}
                 style={s.composerTool}
                 disabled={isEditingLocked}
-                onPress={() => addComposerBlock(action.kind)}
+                onPress={() => {
+                  addComposerBlock(action.kind);
+                  if (action.kind === 'group') void openCardPicker('group');
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={label}
               >

@@ -353,21 +353,21 @@ export interface NoteSourceState {
   publicationStatus: 'ACTIVE' | 'UNLISTED' | 'DELETED';
 }
 
-/** 单次最多 100 条；服务端沿收录链取根来源笔记的实时状态。 */
+/** 每次请求最多 100 条；服务端沿收录链取根来源笔记的实时状态。 */
 export const NOTE_SOURCE_STATES_MAX = 100;
 
 export async function fetchNoteSourceStates(
   noteIds: readonly string[],
 ): Promise<NoteSourceState[]> {
-  const unique = [...new Set(noteIds.filter((id) => id.length > 0))].slice(
-    0,
-    NOTE_SOURCE_STATES_MAX,
-  );
-  if (unique.length === 0) return [];
-  return apiClient<NoteSourceState[]>('/note/source-states', {
-    method: 'POST',
-    body: { noteIds: unique },
-  });
+  const unique = [...new Set(noteIds.filter((id) => id.length > 0))];
+  const states: NoteSourceState[] = [];
+  for (let offset = 0; offset < unique.length; offset += NOTE_SOURCE_STATES_MAX) {
+    states.push(...await apiClient<NoteSourceState[]>('/note/source-states', {
+      method: 'POST',
+      body: { noteIds: unique.slice(offset, offset + NOTE_SOURCE_STATES_MAX) },
+    }));
+  }
+  return states;
 }
 
 export async function setNoteSourceGroup(

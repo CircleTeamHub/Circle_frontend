@@ -110,6 +110,7 @@ const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   addMeByGroup: true,
   callPermission: 'EVERYONE',
   groupInvitePermission: 'EVERYONE',
+  allowFriendGroupDirectJoin: false,
   // 与后端 DEFAULT_PRIVACY_SETTINGS 对齐:在线状态与输入状态默认外露。
   shareOnlineStatus: true,
   shareTypingInDirect: true,
@@ -406,6 +407,15 @@ export default function PrivacySettingsScreen() {
                   t,
                 ),
                 onPress: () => setActiveSheet('group-invite-permission'),
+                disabled: loading || saving,
+              },
+              {
+                id: 'friend-group-direct-join',
+                labelKey: 'settingsDetails.privacy.allowFriendGroupDirectJoin',
+                type: 'toggle',
+                value: currentSettings.allowFriendGroupDirectJoin ?? false,
+                onValueChange: (value) =>
+                  void patchSettings({ allowFriendGroupDirectJoin: value }),
                 disabled: loading || saving,
               },
             ],

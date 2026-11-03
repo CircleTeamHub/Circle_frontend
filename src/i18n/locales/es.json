@@ -170,6 +170,7 @@
       "addMeMethods": "Formas de agregarme",
       "callPermission": "Permiso de llamadas de voz y vídeo",
       "groupInvitePermission": "Permiso de invitación a grupos y Círculos",
+      "allowFriendGroupDirectJoin": "Permitir que mis amigos me añadan directamente al crear un grupo",
       "loadFailed": "No se pudo cargar la configuración de privacidad",
       "saveFailed": "No se pudo guardar la configuración de privacidad",
       "selfDestructOff": "Desactivado",
@@ -330,6 +331,22 @@
       "favoriteSendFailed": "No se pudo enviar el favorito, inténtalo de nuevo",
       "favoriteLegacyVoiceUnsupported": "Este favorito de voz antiguo ya no se puede enviar"
     },
+    "stickers": {
+      "title": "Stickers personalizados",
+      "add": "Añadir sticker",
+      "addImage": "Añadir desde fotos",
+      "save": "Guardar como sticker",
+      "saved": "Sticker guardado",
+      "remove": "Eliminar sticker",
+      "removeConfirm": "¿Eliminar este sticker personalizado?",
+      "loadFailed": "No se pudieron cargar los stickers. Toca para reintentar",
+      "saveFailed": "No se pudo guardar el sticker. Inténtalo de nuevo",
+      "sendFailed": "No se pudo enviar el sticker. Inténtalo de nuevo",
+      "limitReached": "Puedes guardar hasta 200 stickers. Elimina uno primero",
+      "tooLarge": "Las imágenes de stickers no pueden superar los 5 MB",
+      "permissionDenied": "Permite el acceso a las fotos para añadir un sticker",
+      "unsupportedImage": "Selecciona un archivo de imagen"
+    },
     "messageActions": {
       "title": "Acciones del mensaje",
       "collect": "Guardar",
@@ -343,6 +360,7 @@
       "quote": "Responder",
       "delete": "Eliminar",
       "deleteConfirm": "¿Eliminar este mensaje local?",
+      "deleteSelectedConfirm": "¿Eliminar {{count}} mensajes locales seleccionados?",
       "deleteFailed": "No se pudo eliminar",
       "deleteFailedHint": "Inténtalo de nuevo más tarde",
       "report": "Reportar",
@@ -515,6 +533,8 @@
     "clearHistoryForMe": "Eliminar para mí",
     "clearHistoryForEveryone": "Eliminar para todos",
     "groupLog": "Registro del grupo",
+    "groupLogEvents": "Actividad de miembros",
+    "groupLogAdmissions": "Solicitudes e invitaciones",
     "groupLogLoadFailed": "No se pudo cargar el registro del grupo",
     "noGroupLog": "Aún no hay actividad del grupo",
     "groupActivity": "Actividad del grupo",
@@ -1373,6 +1393,11 @@
     }
   },
   "moment": {
+    "selectMedia": "Añadir fotos o vídeos",
+    "removeMedia": "Eliminar foto o vídeo",
+    "playVideo": "Reproducir vídeo",
+    "videoUnavailable": "No se pudo cargar el vídeo. Inténtalo de nuevo más tarde.",
+    "openImage": "Ver imagen",
     "createTitle": "Nuevo Momento",
     "contentPlaceholder": "¿Qué estás pensando...",
     "visibility": "Quién puede verlo",
@@ -3706,6 +3731,8 @@
     "recoveryNotice": "Es una solicitud de recuperación: si no la rechazas, podrá iniciar sesión en tu cuenta a partir de {{value}} y cerrará la sesión de tus otros dispositivos."
   },
   "groupAdmission": {
+    "createdAt": "Solicitud o invitación: {{time}}",
+    "updatedAt": "Estado actualizado: {{time}}",
     "title": "Información e invitación del grupo",
     "members": "{{count}} miembros",
     "invitedBy": "{{name}} te invitó al grupo",

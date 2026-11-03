@@ -351,7 +351,7 @@ export function useChatTimeline({
           const needsEarlierPage =
             hasMoreHistory(conversationID) &&
             (candidate === null ||
-              (entryReadHeight > 0 && oldestHeight > entryReadHeight));
+              oldestHeight > entryReadHeight);
           if (!needsEarlierPage) break;
           await loadOlderConversationMessages(conversationID);
           if (!mountedRef.current) return;

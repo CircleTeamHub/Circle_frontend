@@ -11,6 +11,7 @@ import type {
   MomentPost,
   PaginatedResponse,
   AvatarFrameAppearance,
+  MomentAttachment,
 } from '@/types';
 
 type BackendMomentPost = Omit<MomentPost, 'author'> & {
@@ -43,11 +44,19 @@ export function normalizeMoment(post: BackendMomentPost): MomentPost {
     (post as unknown as { images?: unknown }).images,
     (post as unknown as { media?: unknown }).media,
   );
+  const attachments = (Array.isArray(post.attachments) ? post.attachments : []).flatMap((item): MomentAttachment[] => {
+    if (!item || (item.type !== 'image' && item.type !== 'video')) return [];
+    const url = allowPeerMediaUrl(item.url);
+    if (!url) return [];
+    const posterUrl = allowPeerMediaUrl(item.posterUrl);
+    return [{ ...item, url, posterUrl: posterUrl ?? undefined }];
+  });
   return {
     ...post,
     // normalizeMediaUrl 返回 `string | null | undefined`；之前 `as string ?? url` 是骗类型系统，
     // null 也能命中 ?? 的 fallback，但 cast 谎报实际类型。直接用 ?? 即可，运行时行为不变。
     images: normalizedMedia.images,
+    attachments,
     ...(normalizedMedia.media.length > 0
       ? { media: normalizedMedia.media }
       : {}),

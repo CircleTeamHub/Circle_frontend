@@ -443,6 +443,22 @@
       "favoriteSendFailed": "Failed to send favorite, please try again",
       "favoriteLegacyVoiceUnsupported": "This legacy voice favorite can no longer be sent"
     },
+    "stickers": {
+      "title": "Custom stickers",
+      "add": "Add sticker",
+      "addImage": "Add from photos",
+      "save": "Save as sticker",
+      "saved": "Sticker saved",
+      "remove": "Remove sticker",
+      "removeConfirm": "Remove this custom sticker?",
+      "loadFailed": "Could not load stickers. Tap to retry",
+      "saveFailed": "Could not save sticker. Try again",
+      "sendFailed": "Could not send sticker. Try again",
+      "limitReached": "You can save up to 200 stickers. Remove a sticker first",
+      "tooLarge": "Sticker images must be 5 MB or smaller",
+      "permissionDenied": "Allow photo access to add a sticker",
+      "unsupportedImage": "Choose an image file"
+    },
     "messageActions": {
       "title": "Message actions",
       "collect": "Save",
@@ -456,6 +472,7 @@
       "quote": "Reply",
       "delete": "Delete",
       "deleteConfirm": "Delete this local message?",
+      "deleteSelectedConfirm": "Delete {{count}} selected local messages?",
       "deleteFailed": "Delete failed",
       "deleteFailedHint": "Please try again later",
       "report": "Report",
@@ -628,6 +645,8 @@
     "clearHistoryForMe": "Delete for me",
     "clearHistoryForEveryone": "Delete for everyone",
     "groupLog": "Group log",
+    "groupLogEvents": "Member activity",
+    "groupLogAdmissions": "Requests and invitations",
     "groupLogLoadFailed": "Failed to load group log",
     "noGroupLog": "No group activity yet",
     "groupActivity": "Group activity",
@@ -1458,6 +1477,11 @@
     }
   },
   "moment": {
+    "selectMedia": "Add photos or videos",
+    "removeMedia": "Remove photo or video",
+    "playVideo": "Play video",
+    "videoUnavailable": "Video could not load. Please try again later.",
+    "openImage": "View image",
     "createTitle": "New Moment",
     "contentPlaceholder": "What's on your mind...",
     "visibility": "Who can see",
@@ -2388,6 +2412,7 @@
       "addMeMethods": "Ways to Add Me",
       "callPermission": "Voice / Video Call Permission",
       "groupInvitePermission": "Group and Circle Invite Permission",
+      "allowFriendGroupDirectJoin": "Let friends add me directly when creating a group",
       "loadFailed": "Failed to load privacy settings",
       "saveFailed": "Failed to save privacy settings",
       "selfDestructOff": "Off",
@@ -3706,6 +3731,8 @@
     "recoveryNotice": "This is a recovery request: unless you decline, it can sign in to your account after {{value}} and sign out your other devices."
   },
   "groupAdmission": {
+    "createdAt": "Requested or invited at: {{time}}",
+    "updatedAt": "Status updated at: {{time}}",
     "title": "Group details and invitation",
     "members": "{{count}} members",
     "invitedBy": "{{name}} invited you to this group",

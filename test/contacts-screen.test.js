@@ -13,6 +13,7 @@ test('contacts screen loads real friends and routes quick actions to dedicated s
   assert.match(source, /fetchFriends/);
   assert.match(source, /useFocusEffect/);
   assert.match(source, /buildContactSections/);
+  assert.match(source, /syncPeerAvatars\(nextFriends\)/);
   assert.match(source, /router\.push\('\/\(tabs\)\/contacts\/new-friends'\)/);
   assert.match(source, /router\.push\('\/\(tabs\)\/contacts\/tags'\)/);
   assert.doesNotMatch(source, /const CONTACT_SECTIONS/);

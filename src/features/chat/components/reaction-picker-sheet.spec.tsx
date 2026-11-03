@@ -8,6 +8,13 @@ jest.mock('@/components/ui/bottom-sheet-modal', () => ({
   BottomSheetModal: ({ visible, children }: { visible: boolean; children: React.ReactNode }) =>
     visible ? <MockView>{children}</MockView> : null,
 }));
+// Custom stickers stay disabled for reactions; isolate their native session storage.
+jest.mock('@/services/api/upload', () => ({}));
+jest.mock('@/features/chat/utils/sticker-error', () => ({}));
+jest.mock('@/stores/authStore', () => ({ useAuthStore: () => 1 }));
+jest.mock('@/features/chat/store/use-sticker-store', () => ({
+  useStickerStore: () => ({ items: [], loading: false, error: false, refresh: jest.fn() }),
+}));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 }),

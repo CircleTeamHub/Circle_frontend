@@ -7,6 +7,7 @@ import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { memo, type ReactElement, useCallback } from 'react';
 import { type ChatMessage } from '@/types';
 import { type GestureResponderEvent, Pressable, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { MemberName } from '@/components/ui/member-name';
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
 import {
@@ -47,6 +48,10 @@ interface MessageRowProps {
   item: ChatMessage;
   renderMessage: (item: ChatMessage) => ReactElement | null;
   handleRetryMessage: (message: ChatMessage) => void;
+  selectionMode: boolean;
+  selected: boolean;
+  onToggleSelected: (id: string) => void;
+  selectionColor: string;
 }
 
 /**
@@ -57,17 +62,30 @@ const MessageRow = memo(function MessageRow({
   item,
   renderMessage,
   handleRetryMessage,
+  selectionMode,
+  selected,
+  onToggleSelected,
+  selectionColor,
 }: MessageRowProps) {
-  return (
+  const content = (
     <FailedMessageRetry message={item} onRetry={handleRetryMessage}>
       {renderMessage(item)}
     </FailedMessageRetry>
+  );
+  if (!selectionMode || item.type === 'date' || item.type === 'system-notice') return content;
+  return (
+    <Pressable onPress={() => onToggleSelected(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text ?? item.time} accessibilityState={{ checked: selected }} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={selectionColor} />
+      <View pointerEvents="none" style={{ flex: 1 }}>{content}</View>
+    </Pressable>
   );
 });
 
 export interface MessageRendererParams {
   messages: ChatMessage[];
   handleImageViewed: (messageID: string) => void;
+  selectedMessageIds: Set<string> | null;
+  handleToggleSelectedMessage: (id: string) => void;
   colors: ThemeColors;
   scope: UserProfileScope;
   groupMemberNames: Record<string, string>;
@@ -98,6 +116,8 @@ export interface MessageRendererParams {
 export function useMessageRenderer({
   messages,
   handleImageViewed,
+  selectedMessageIds,
+  handleToggleSelectedMessage,
   colors,
   scope,
   groupMemberNames,
@@ -471,9 +491,13 @@ export function useMessageRenderer({
         item={item}
         renderMessage={renderMessage}
         handleRetryMessage={handleRetryMessage}
+        selectionMode={selectedMessageIds !== null}
+        selected={selectedMessageIds?.has(item.id) ?? false}
+        onToggleSelected={handleToggleSelectedMessage}
+        selectionColor={colors.iconAccent}
       />
     ),
-    [renderMessage, handleRetryMessage],
+    [renderMessage, handleRetryMessage, selectedMessageIds, handleToggleSelectedMessage, colors.iconAccent],
   );
 
   return {

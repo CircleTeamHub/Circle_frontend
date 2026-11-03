@@ -33,6 +33,12 @@ import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
 import { LIMITS } from '@/constants/config';
+import { uploadChatVideoPoster } from '@/features/chat/utils/chat-video-poster';
+import { VIDEO_UPLOAD_TIMEOUT_MS } from '@/features/chat/chat-detail/constants';
+import type { MomentAttachmentInput } from '@/types';
+
+// /upload/presign currently caps videos at 100 MiB.
+const MOMENT_VIDEO_MAX_SIZE_MB = 100;
 
 const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: Spacing.lg },
@@ -140,8 +146,9 @@ export default function CreateMomentScreen() {
     // 入口外。仅当 launch 本身失败（老系统真的要权限）时再提示去设置。
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ['images', 'videos'],
         allowsMultipleSelection: true,
+        orderedSelection: true,
         selectionLimit: 9 - images.length,
         quality: 0.8,
       });
@@ -168,6 +175,7 @@ export default function CreateMomentScreen() {
     try {
       const hasOversizedImage = images.some(
         (asset) =>
+          asset.type !== 'video' &&
           typeof asset.fileSize === 'number' &&
           asset.fileSize > LIMITS.IMAGE_MAX_SIZE_MB * 1024 * 1024,
       );
@@ -180,24 +188,30 @@ export default function CreateMomentScreen() {
         );
         return;
       }
+      if (images.some((asset) => asset.type === 'video' && typeof asset.fileSize === 'number' && asset.fileSize > MOMENT_VIDEO_MAX_SIZE_MB * 1024 * 1024)) {
+        Alert.alert(t('moment.publishFailed'), t('upload.errors.fileTooLarge', { maxMb: MOMENT_VIDEO_MAX_SIZE_MB }));
+        return;
+      }
 
       // 并发上传，cap=3（#108）：串行九图最坏 ~18s；全量并发又会同时打满
       // presign + S3 PUT。per-item 失败就地吞掉记 null，序号与所选图片一一对应。
-      const outcomes = await mapWithConcurrency(images, 3, async (asset) => {
+      const outcomes = await mapWithConcurrency(images, 3, async (asset): Promise<{ attachment: MomentAttachmentInput; url: string } | null> => {
         try {
-          const fileName = asset.uri.split('/').pop() || 'photo.jpg';
+          const isVideo = asset.type === 'video';
+          const fileName = asset.fileName ?? (asset.uri.split('/').pop() || (isVideo ? 'video.mp4' : 'photo.jpg'));
           const contentType =
             resolveUploadContentType({
               mimeType: asset.mimeType,
               fileName,
-            }) ?? 'image/jpeg';
-          const prepared = await prepareChatImageForUpload({
+            }) ?? (isVideo ? 'video/mp4' : 'image/jpeg');
+          const input = {
             uri: asset.uri,
             width: asset.width,
             height: asset.height,
             contentType,
             filename: fileName,
-          });
+          };
+          const prepared = isVideo ? input : await prepareChatImageForUpload(input);
           const presign = await requestUploadPresign({
             filename: sanitizeUploadFilename(prepared.filename),
             contentType: prepared.contentType,
@@ -209,17 +223,30 @@ export default function CreateMomentScreen() {
             prepared.contentType,
             prepared.uri,
             presign.requiredHeaders,
+            isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
           );
-          return presign.fileUrl;
+          const duration = typeof asset.duration === 'number' ? asset.duration / 1000 : undefined;
+          const poster = isVideo ? await uploadChatVideoPoster(asset.uri, duration, fileName, 'posts') : null;
+          return {
+            url: presign.fileUrl,
+            attachment: {
+              type: isVideo ? 'video' : 'image',
+              key: presign.key,
+              ...(poster ? { posterKey: poster.key } : {}),
+              ...((prepared.width ?? 0) > 0 ? { width: prepared.width } : {}),
+              ...((prepared.height ?? 0) > 0 ? { height: prepared.height } : {}),
+              ...(isVideo && duration !== undefined ? { duration } : {}),
+            },
+          };
         } catch (error) {
-          reportHandledFailure('moments', 'imageUpload', error);
+          reportHandledFailure('moments', 'mediaUpload', error);
           return null;
         }
       });
-      const uploadedUrls = outcomes.filter(
-        (url): url is string => typeof url === 'string',
+      const uploaded = outcomes.filter(
+        (item): item is NonNullable<typeof item> => item !== null,
       );
-      const failedUploads = images.length - uploadedUrls.length;
+      const failedUploads = images.length - uploaded.length;
 
       if (failedUploads > 0) {
         const reason =
@@ -232,7 +259,8 @@ export default function CreateMomentScreen() {
 
       const moment = await createMoment({
         content: content.trim(),
-        images: uploadedUrls,
+        images: uploaded.filter((item) => item.attachment.type === 'image').map((item) => item.url),
+        attachments: uploaded.map((item) => item.attachment),
         visibility,
       });
 
@@ -272,17 +300,22 @@ export default function CreateMomentScreen() {
           <View style={s.photoRow}>
             {images.map((asset, i) => (
               <View key={`${asset.uri}-${i}`}>
-                <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />
+                {asset.type === 'video' ? (
+                  <View style={[s.photoThumb, { backgroundColor: colors.textSecondary, alignItems: 'center', justifyContent: 'center' }]}>
+                    <Ionicons name="videocam" size={28} color={colors.white} />
+                  </View>
+                ) : <Image source={{ uri: asset.uri }} style={s.photoThumb} contentFit="cover" />}
                 <Pressable
                   style={[s.removeBtn, { backgroundColor: colors.error }]}
                   onPress={() => handleRemoveImage(i)}
+                  accessibilityLabel={t('moment.removeMedia', { defaultValue: '移除图片或视频' })}
                 >
                   <Ionicons name="close" size={12} color={colors.white} />
                 </Pressable>
               </View>
             ))}
             {images.length < 9 ? (
-              <Pressable style={[s.photoBtn, d.photoBtn]} onPress={handlePickImages}>
+              <Pressable style={[s.photoBtn, d.photoBtn]} onPress={handlePickImages} accessibilityLabel={t('moment.selectMedia', { defaultValue: '添加图片或视频' })}>
                 <Ionicons name="add" size={24} color={colors.textSecondary} />
                 <Text style={[s.photoCount, d.photoCount]}>{images.length}/9</Text>
               </Pressable>

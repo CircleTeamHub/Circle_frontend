@@ -243,10 +243,14 @@ export default function NoteBlockEditor({
     >
       <style>{`
         .note-editor .bn-container {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
           background-color: ${bg};
         }
         .note-editor .bn-editor {
           padding: 8px 10px;
+          flex: 1;
           background-color: ${bg};
         }
         .note-editor .bn-inline-content {
@@ -256,6 +260,8 @@ export default function NoteBlockEditor({
       {/* Editor scroll area */}
       <div style={{
         flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
         minHeight: 0,
         overflowY: 'auto',
         overscrollBehaviorY: 'contain',

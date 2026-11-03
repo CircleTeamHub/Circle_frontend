@@ -11,12 +11,16 @@ type PendingForward = {
 
 interface MessageForwardState {
   pending: PendingForward | null;
+  pendingBatch: PendingForward[] | null;
   setPending: (item: PendingForward) => void;
+  setPendingBatch: (items: PendingForward[]) => void;
   clear: () => void;
 }
 
 export const useMessageForwardStore = create<MessageForwardState>((set) => ({
   pending: null,
-  setPending: (item) => set({ pending: item }),
-  clear: () => set({ pending: null }),
+  pendingBatch: null,
+  setPending: (item) => set({ pending: item, pendingBatch: null }),
+  setPendingBatch: (items) => set({ pending: items[0] ?? null, pendingBatch: items }),
+  clear: () => set({ pending: null, pendingBatch: null }),
 }));

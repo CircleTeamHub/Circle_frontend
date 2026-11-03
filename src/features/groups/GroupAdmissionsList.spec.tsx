@@ -26,8 +26,9 @@ jest.mock('react-i18next', () => {
     const value = key.startsWith('groupAdmission.')
       ? key.slice('groupAdmission.'.length).split('.').reduce((node: any, part: string) => node?.[part], copy)
       : undefined;
-    return typeof value === 'string'
-      ? value.replace(/\{\{(\w+)\}\}/g, (_: string, name: string) => String(params[name] ?? ''))
+    const translated = typeof value === 'string' ? value : params.defaultValue;
+    return typeof translated === 'string'
+      ? translated.replace(/\{\{(\w+)\}\}/g, (_: string, name: string) => String(params[name] ?? ''))
       : key;
   };
   return { useTranslation: () => ({ t }) };
@@ -58,6 +59,20 @@ beforeEach(() => {
   mockInteractive = [];
   jest.mocked(mapChatConversationToUI).mockImplementation((c: any) => ({ name: c.name, sourceID: c.circleId ?? c.id, unreadCount: c.unreadCount }) as any);
   jest.mocked(fetchMyApplications).mockResolvedValue([]);
+});
+
+test('scoped admission history shows inviter and request and status times', async () => {
+  const createdAt = '2026-10-29T10:00:00Z';
+  const updatedAt = '2026-10-30T12:00:00Z';
+  jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [{
+    id: 'a1', conversationId: 'g', kind: 'INVITE', status: 'JOINED',
+    applicantId: 'guest', applicantName: '小李', inviterId: 'member', inviterName: '小王',
+    createdAt, updatedAt, group: { id: 'g', name: '登山队', avatarUrl: null },
+  }] as any, nextCursor: null });
+  const ui = render(<GroupAdmissionsList groupId="g" />);
+  await ui.findByText(/小王.*小李/);
+  expect(ui.getByText(`申请或邀请时间：${new Date(createdAt).toLocaleString()}`)).toBeTruthy();
+  expect(ui.getByText(`状态更新时间：${new Date(updatedAt).toLocaleString()}`)).toBeTruthy();
 });
 
 test('tab count is beside the label and the underline stays below both', () => {

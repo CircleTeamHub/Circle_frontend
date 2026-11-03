@@ -337,6 +337,22 @@ export function GroupAdmissionsList({
                   ? `${getGroupAdmissionRelationship(item.admission, userId, t)} · ${getGroupAdmissionStatus(item.admission, userId, t)}`
                   : t("groupAdmission.status.JOINED")}
             </Text>
+            {groupId && item.admission?.createdAt ? (
+              <Text style={{ color: colors.textSecondary }}>
+                {t('groupAdmission.createdAt', {
+                  defaultValue: '申请或邀请时间：{{time}}',
+                  time: new Date(item.admission.createdAt).toLocaleString(),
+                })}
+              </Text>
+            ) : null}
+            {groupId && item.admission?.updatedAt && item.admission.updatedAt !== item.admission.createdAt ? (
+              <Text style={{ color: colors.textSecondary }}>
+                {t('groupAdmission.updatedAt', {
+                  defaultValue: '状态更新时间：{{time}}',
+                  time: new Date(item.admission.updatedAt).toLocaleString(),
+                })}
+              </Text>
+            ) : null}
           </View>
           <UnreadCountBadge count={item.unreadCount} testID={`group-inbox-unread-${item.admission?.id ?? (item.circleInvitation ? `circle-${item.circleInvitation.id}` : item.key)}`} />
         </Pressable>

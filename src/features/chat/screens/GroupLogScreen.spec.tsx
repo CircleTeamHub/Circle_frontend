@@ -2,10 +2,21 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import GroupLogScreen from './GroupLogScreen';
 import { fetchChatGroupEvents } from '@/chat-core/api';
+import type { ChatConversationDto } from '@/chat-core/protocol';
+
+let mockConversations: Partial<ChatConversationDto>[] = [];
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ conversationID: 'group-1' }),
+  useSegments: () => ['(tabs)', 'profile'],
 }));
+jest.mock('@/chat-core/store', () => ({
+  useChatStore: (select: (state: unknown) => unknown) => select({ conversations: mockConversations }),
+}));
+jest.mock('@/features/groups/GroupAdmissionsList', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { GroupAdmissionsList: ({ groupId }: { groupId: string }) => <Text>{`admissions:${groupId}`}</Text> };
+});
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -56,7 +67,29 @@ function event(id: string, text: string) {
 }
 
 beforeEach(() => {
+  mockConversations = [];
   jest.mocked(fetchChatGroupEvents).mockReset();
+});
+
+test('standalone managers can open application and invitation history from group logs', async () => {
+  mockConversations = [{ id: 'group-1', type: 'GROUP', circleId: null, myRole: 'OWNER' }];
+  jest.mocked(fetchChatGroupEvents).mockResolvedValue({ events: [], nextCursor: null });
+  render(<GroupLogScreen />);
+  fireEvent.press(await screen.findByText('chat.groupLogAdmissions'));
+  expect(screen.getByText('admissions:group-1')).toBeTruthy();
+  fireEvent.press(screen.getByText('chat.groupLogEvents'));
+  await screen.findByText('chat.noGroupLog');
+});
+
+test.each([
+  { type: 'GROUP' as const, circleId: null, myRole: 'MEMBER' as const },
+  { type: 'GROUP' as const, circleId: 'circle-1', myRole: 'OWNER' as const },
+])('does not expose standalone admission history for $myRole with circle $circleId', async (conversation) => {
+  mockConversations = [{ id: 'group-1', ...conversation }];
+  jest.mocked(fetchChatGroupEvents).mockResolvedValue({ events: [], nextCursor: null });
+  render(<GroupLogScreen />);
+  await screen.findByText('chat.noGroupLog');
+  expect(screen.queryByText('chat.groupLogAdmissions')).toBeNull();
 });
 
 test('loads every cursor page once and de-duplicates overlapping group logs', async () => {

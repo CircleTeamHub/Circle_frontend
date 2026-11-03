@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { clearImagePreviews } from './image-preview';
 import { storage } from '@/storage';
 import { isBurnDurationChoice } from './burn-durations';
 import {
@@ -494,6 +495,8 @@ interface ChatStoreState {
   conversationsSnapshotSeq: number;
   /** 单会话回写(偏好变更/新建后),保持排序不变量。 */
   upsertConversation: (conversation: ChatConversationDto) => void;
+  /** 通讯录/资料页拿到新头像时，同步已有私聊的展示快照。 */
+  syncPeerAvatars: (profiles: { id: string; avatarUrl: string | null }[]) => void;
   /**
    * 单个会话的权威快照(GET /chat/conversations/:id)合并进列表:和全量快照走同一套
    * 对账(焚毁状态、本机删除的预览、更新的实时预览、已读/清空水位、对端水位种子)。
@@ -1570,6 +1573,22 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       void get().purgeExpiredBurnMessages({ conversationIds: [reconciled.id] });
     }
     void upsertLocalConversation(reconciled);
+  },
+  syncPeerAvatars: (profiles) => {
+    const avatars = new Map(profiles.map((profile) => [profile.id, profile.avatarUrl]));
+    const current = get().conversations;
+    const conversations = current.map((conversation) => {
+      const peer = conversation.peer;
+      if (conversation.type !== 'DIRECT' || !peer || !avatars.has(peer.id)) return conversation;
+      const avatarUrl = avatars.get(peer.id)!;
+      if (peer.avatarUrl === avatarUrl) return conversation;
+      const updated = { ...conversation, peer: { ...peer, avatarUrl } };
+      void upsertLocalConversation(updated);
+      return updated;
+    });
+    if (conversations.some((conversation, index) => conversation !== current[index])) {
+      set({ conversations });
+    }
   },
   removeConversation: (conversationId) => {
     const state = get();
@@ -3026,6 +3045,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     }),
 
   reset: () => {
+    clearImagePreviews();
     forgetBurnSchedule();
     membershipChanges.clear();
     set({

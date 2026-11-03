@@ -3,15 +3,12 @@ import { useChatStore } from '@/chat-core/store';
 import type { ChatMessageDto } from '@/chat-core/protocol';
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
 import { reportHandledFailure } from '@/observability/report-failure';
-import {
-  fetchNoteSourceStates,
-  NOTE_SOURCE_STATES_MAX,
-} from '@/services/api/notes';
+import { fetchNoteSourceStates } from '@/services/api/notes';
 
-/** 从最新往前收集会话里笔记卡片的 noteId，去重后最多一批。 */
+/** 从最新往前收集会话里笔记卡片的 noteId；请求层负责分批。 */
 export function collectNoteCardIds(
   messages: readonly ChatMessageDto[] | undefined,
-  limit = NOTE_SOURCE_STATES_MAX,
+  limit = Infinity,
 ): string[] {
   if (!messages || messages.length === 0) return [];
   const ids: string[] = [];
@@ -48,6 +45,7 @@ export function useNoteCardStatusSync(
   const targetsKey = useMemo(() => {
     const ids = collectNoteCardIds(messages);
     const sourceIdByNoteId = new Map<string, string>();
+    const messageIdsByNoteId = new Map<string, string[]>();
     for (const message of messages ?? []) {
       if (message.type !== 'note-card') continue;
       const noteId = message.content?.['noteId'];
@@ -59,9 +57,16 @@ export function useNoteCardStatusSync(
           ? sourceNoteId
           : noteId,
       );
+      const messageIds = messageIdsByNoteId.get(noteId) ?? [];
+      messageIds.push(message.id);
+      messageIdsByNoteId.set(noteId, messageIds);
     }
     return JSON.stringify(
-      ids.map((noteId) => [noteId, sourceIdByNoteId.get(noteId) ?? noteId]),
+      ids.map((noteId) => [
+        noteId,
+        sourceIdByNoteId.get(noteId) ?? noteId,
+        JSON.stringify(messageIdsByNoteId.get(noteId)),
+      ]),
     );
   }, [messages]);
   const needsLegacyReconcile = (JSON.parse(targetsKey) as [string, string][])
@@ -69,30 +74,33 @@ export function useNoteCardStatusSync(
   // Modern cards are patched directly by the realtime handler. Only cards
   // without a distinct source id need another lookup for individual events.
   const syncVersion = needsLegacyReconcile ? statusVersion : recoveryVersion;
-  // 本会话、本恢复周期内已对账成功的 id；新加载出的卡片只补拉增量。
-  const syncedRef = useRef<{ key: string; ids: Set<string> }>({
+  // 同一笔记的旧消息翻页进来时也要补对账，不能只记住 noteId。
+  const syncedRef = useRef<{ key: string; ids: Map<string, string> }>({
     key: '',
-    ids: new Set(),
+    ids: new Map(),
   });
 
   useEffect(() => {
-    const targets = JSON.parse(targetsKey) as [string, string][];
+    const targets = JSON.parse(targetsKey) as [string, string, string][];
     if (!conversationId || targets.length === 0) {
       // 切到空会话也要换代，令上一会话仍在途的响应失效。
-      syncedRef.current = { key: '', ids: new Set() };
+      syncedRef.current = { key: '', ids: new Map() };
       return;
     }
     const epoch = `${conversationId}:${syncVersion}`;
     if (syncedRef.current.key !== epoch) {
-      syncedRef.current = { key: epoch, ids: new Set() };
+      syncedRef.current = { key: epoch, ids: new Map() };
     }
     const synced = syncedRef.current;
-    const pending = targets
-      .map(([noteId]) => noteId)
-      .filter((id) => !synced.ids.has(id));
+    const pendingTargets = targets.filter(
+      ([noteId, , messageIds]) => synced.ids.get(noteId) !== messageIds,
+    );
+    const pending = pendingTargets.map(([noteId]) => noteId);
     if (pending.length === 0) return;
-    pending.forEach((id) => synced.ids.add(id));
-    const sourceIdByNoteId = new Map(targets);
+    pendingTargets.forEach(([id, , messageIds]) => synced.ids.set(id, messageIds));
+    const sourceIdByNoteId = new Map(
+      targets.map(([noteId, sourceId]) => [noteId, sourceId]),
+    );
     const sourceVersionsAtRequest = useNoteStatusSignalStore.getState().sourceVersions;
     let active = true;
     let finished = false;

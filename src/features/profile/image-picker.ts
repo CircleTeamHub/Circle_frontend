@@ -49,8 +49,7 @@ export type FastImageLibraryOutcome =
  *
  * 点击后先 get/request 权限，会把原生权限桥接的延迟叠加到呈现动画上，部分 iOS
  * 设备要等好几秒才看到相册；iOS PHPicker / Android Photo Picker 本身不需要相册
- * 权限。调用方同样不要开 allowsEditing：iOS 上它会从秒开的 PHPicker 回退到老的
- * UIImagePickerController。
+ * 权限。需要上传前裁剪的头像/封面可开启 allowsEditing；iOS 会改用系统编辑选择器。
  *
  * 失败时先查当前权限:已授权说明失败与权限无关(读文件/转码失败等),原样上抛,
  * 不重新弹出相册;未授权才请求权限并重试一次。权限请求或重试本身的错误同样上抛,

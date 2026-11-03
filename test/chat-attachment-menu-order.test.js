@@ -73,8 +73,7 @@ test('picked and captured photos open the editor before any upload starts', () =
   assert.match(source, /onSend=\{handleSendEditedPhoto\}/);
   assert.match(source, /const accepted = await uploadAndSendImageAsset\(asset\)/);
 
-  // 视频不经过照片编辑器，继续走原有的视频发送策略。
-  assert.match(source, /await uploadAndSendVideoAsset\(pickedAsset\)/);
+  // Editor-before-upload and video bypass are exercised by chat-image-send-order.test.js.
 });
 
 test('photo editor copy stays localized in every supported language', () => {

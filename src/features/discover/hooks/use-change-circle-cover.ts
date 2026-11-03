@@ -48,10 +48,11 @@ export function useChangeCircleCover(
         return;
       }
 
-      // 直接唤起相册、不开 allowsEditing:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+      // 原生编辑完成后才上传，取消裁剪不改变当前封面。
       const outcome = await launchImageLibraryFast(imagePicker, {
         quality: 0.8,
         mediaTypes: ['images'],
+        allowsEditing: true,
       });
       if (outcome.status === 'denied') {
         Alert.alert(

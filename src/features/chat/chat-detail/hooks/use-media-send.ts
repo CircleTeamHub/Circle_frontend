@@ -50,7 +50,7 @@ import {
   type MediaUploadScheduler,
 } from '@/features/chat/utils/media-upload-scheduler';
 
-type ImageSendTurn = { wait: Promise<void>; release: () => void };
+type MediaSendTurn = { wait: Promise<void>; release: () => void };
 
 export interface MediaSendParams {
   t: TFunction<"translation", undefined>;
@@ -115,7 +115,7 @@ export function useMediaSend({
       filename: string,
       contentType: string,
       deliveryId: string,
-      turn?: ImageSendTurn,
+      turn?: MediaSendTurn,
     ) => {
       const canReportError = mediaErrorGuard(conversationID, mountedRef);
       try {
@@ -195,7 +195,7 @@ export function useMediaSend({
       filename: string,
       contentType: string,
       deliveryId: string,
-      turn?: ImageSendTurn,
+      turn?: MediaSendTurn,
     ) =>
       mediaUploadScheduler.enqueue(() =>
         uploadAndSendImage(asset, filename, contentType, deliveryId, turn),
@@ -204,7 +204,7 @@ export function useMediaSend({
   );
   // 相册选择与拍照共用同一套「上传→发送」流程，只有获取 asset 的来源不同。
   const uploadAndSendImageAsset = useCallback(
-    async (asset: ImagePicker.ImagePickerAsset, turn?: ImageSendTurn) => {
+    async (asset: ImagePicker.ImagePickerAsset, turn?: MediaSendTurn) => {
       // 体积 gate 与下面的 assertLocalCanSendMessage 同理：在 presign+上传之前拦掉。
       // 否则一张几十 MB 的原图会整份传完、用户干等之后才发现发不出去。上限与头像 /
       // 圈子封面 / 好友照片一致（10MB），此前只有聊天发图这条路径漏了 gate。
@@ -273,6 +273,7 @@ export function useMediaSend({
       filename: string,
       contentType: string,
       deliveryId: string,
+      turn?: MediaSendTurn,
     ) => {
       const canReportError = mediaErrorGuard(conversationID, mountedRef);
       try {
@@ -308,6 +309,8 @@ export function useMediaSend({
           uploaded = { key: presign.key, thumbKey: poster?.key };
           uploadedVideoKeysRef.current.set(deliveryId, uploaded);
         }
+        await turn?.wait;
+        assertMediaSendSessionCurrent(deliveryId);
         await sendVideoMessage({
           conversationId: conversationID,
           key: uploaded.key,
@@ -348,16 +351,18 @@ export function useMediaSend({
       filename: string,
       contentType: string,
       deliveryId: string,
+      turn?: MediaSendTurn,
     ) =>
       mediaUploadScheduler.enqueue(() =>
-        uploadAndSendVideo(asset, filename, contentType, deliveryId),
-      ),
+        uploadAndSendVideo(asset, filename, contentType, deliveryId, turn),
+      ).finally(() => turn?.release()),
     [mediaUploadScheduler, uploadAndSendVideo],
   );
 
   const uploadAndSendVideoAsset = useCallback(
-    async (asset: ImagePicker.ImagePickerAsset) => {
+    async (asset: ImagePicker.ImagePickerAsset, turn?: MediaSendTurn) => {
       if (isChatVideoTooLarge(asset.fileSize)) {
+        turn?.release();
         Alert.alert(
           t('chat.detail.videoRejectedTitle', { defaultValue: '视频无法发送' }),
           t('chat.detail.videoTooLarge', { defaultValue: '请选择 100MB 以内的视频' }),
@@ -365,6 +370,7 @@ export function useMediaSend({
         return;
       }
       if (isChatVideoTooLong(asset.duration)) {
+        turn?.release();
         Alert.alert(
           t('chat.detail.videoRejectedTitle', { defaultValue: '视频无法发送' }),
           t('chat.detail.videoTooLong', { defaultValue: '请选择 10 分钟以内的视频' }),
@@ -378,6 +384,7 @@ export function useMediaSend({
         fileName: filename,
       });
       if (!contentType?.startsWith('video/')) {
+        turn?.release();
         Alert.alert(
           t('chat.detail.videoRejectedTitle', { defaultValue: '视频无法发送' }),
           t('chat.detail.videoUnsupported', {
@@ -390,6 +397,7 @@ export function useMediaSend({
       try {
         assertLocalCanSendMessage();
       } catch (error) {
+        turn?.release();
         if (mountedRef.current) {
           setSendError(
             getChatSendErrorMessage(
@@ -418,7 +426,7 @@ export function useMediaSend({
         retry: (id) => enqueueVideoUpload(asset, filename, contentType, id),
         source: { uri: asset.uri, uploadName: filename, contentType },
       });
-      void enqueueVideoUpload(asset, filename, contentType, deliveryId);
+      void enqueueVideoUpload(asset, filename, contentType, deliveryId, turn);
     },
     [conversationID, t, enqueueVideoUpload, mountedRef, setSendError],
   );
@@ -490,8 +498,8 @@ export function useMediaSend({
           preferredAssetRepresentationMode:
             ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
           quality: 0.85,
-          allowsMultipleSelection: kind === 'photo',
-          selectionLimit: kind === 'photo' ? MAX_CHAT_IMAGE_SELECTION : 1,
+          allowsMultipleSelection: true,
+          selectionLimit: MAX_CHAT_IMAGE_SELECTION,
           ...(transcodeOnPick
             ? { videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720 }
             : {}),
@@ -547,13 +555,24 @@ export function useMediaSend({
             .map((asset) => {
               const wait = previousSend;
               let release!: () => void;
-              previousSend = new Promise<void>((resolve) => { release = resolve; });
+              previousSend = new Promise<void>((resolve) => {
+                release = () => { void wait.then(resolve); };
+              });
               return uploadAndSendImageAsset(asset, { wait, release });
             }),
         );
         return;
       }
-      await uploadAndSendVideoAsset(pickedAsset);
+      let previousSend = Promise.resolve();
+      await Promise.all(result.assets.map((asset) => {
+        const wait = previousSend;
+        let release!: () => void;
+        previousSend = new Promise<void>((resolve) => {
+          // A skipped/failed asset still follows its predecessor in the chain.
+          release = () => { void wait.then(resolve); };
+        });
+        return uploadAndSendVideoAsset(asset, { wait, release });
+      }));
     },
     [
       isPreviewMode,

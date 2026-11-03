@@ -564,11 +564,27 @@ export interface CircleInvitationVerifier {
 // Friend Moments (朋友圈) Types
 // ---------------------------------------------------------------------------
 
+export interface MomentAttachmentInput {
+  type: 'image' | 'video';
+  key: string;
+  posterKey?: string;
+  width?: number;
+  height?: number;
+  /** Video duration in seconds. */
+  duration?: number;
+}
+
+export interface MomentAttachment extends MomentAttachmentInput {
+  url: string;
+  posterUrl?: string;
+}
+
 export interface MomentPost {
   id: string;
   content: string;
   images: string[];
   media?: ImageMediaVariant[];
+  attachments?: MomentAttachment[];
   visibility: 'PUBLIC' | 'FRIENDS_ONLY' | 'PRIVATE';
   author: {
     id: string;
@@ -600,6 +616,7 @@ export interface MomentComment {
 export interface CreateMomentInput {
   content: string;
   images: string[];
+  attachments?: MomentAttachmentInput[];
   visibility: 'FRIENDS_ONLY' | 'PRIVATE';
 }
 

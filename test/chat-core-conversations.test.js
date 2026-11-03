@@ -219,6 +219,29 @@ test('conversations sort pinned-first then lastMessageAt desc', () => {
   );
 });
 
+test('fresh contact avatars update matching direct conversations without changing preview or unread state', () => {
+  const { useChatStore } = loadStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conv({ id: 'friend', unreadCount: 3, lastMessage: msg(), peer: { id: 'u2', nickname: '对方', avatarUrl: 'old.jpg' } }),
+    conv({ id: 'other', peer: { id: 'u3', nickname: '其他', avatarUrl: 'other.jpg' } }),
+    conv({ id: 'group', type: 'GROUP' }),
+  ]);
+  const before = useChatStore.getState().conversations;
+  store.syncPeerAvatars([{ id: 'u2', avatarUrl: 'new.jpg' }]);
+  const after = useChatStore.getState().conversations;
+  const friend = after.find((row) => row.id === 'friend');
+  assert.equal(friend.peer.avatarUrl, 'new.jpg');
+  assert.equal(friend.unreadCount, 3);
+  assert.equal(friend.lastMessage, before.find((row) => row.id === 'friend').lastMessage);
+  assert.equal(after.find((row) => row.id === 'other'), before.find((row) => row.id === 'other'));
+  assert.equal(after.find((row) => row.id === 'group'), before.find((row) => row.id === 'group'));
+  store.syncPeerAvatars([{ id: 'u2', avatarUrl: 'new.jpg' }]);
+  assert.equal(useChatStore.getState().conversations, after);
+  store.syncPeerAvatars([{ id: 'u2', avatarUrl: null }]);
+  assert.equal(useChatStore.getState().conversations.find((row) => row.id === 'friend').peer.avatarUrl, null);
+});
+
 test('incoming message bumps preview, unread and resorts', () => {
   const { useChatStore } = loadStore();
   const store = useChatStore.getState();

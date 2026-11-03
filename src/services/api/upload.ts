@@ -191,7 +191,7 @@ export function ensureFilenameExtension(
  */
 export type PublicUploadFolder = 'avatars' | 'covers' | 'posts' | 'friends';
 /** 私有目录：直连 403，只认 key（聊天 / 笔记读路径按 key 签发短时 URL）。 */
-export type PrivateUploadFolder = 'notes' | 'chat';
+export type PrivateUploadFolder = 'notes' | 'chat' | 'stickers';
 export type UploadFolder = PublicUploadFolder | PrivateUploadFolder;
 
 const PUBLIC_UPLOAD_FOLDERS: ReadonlySet<string> = new Set<PublicUploadFolder>([

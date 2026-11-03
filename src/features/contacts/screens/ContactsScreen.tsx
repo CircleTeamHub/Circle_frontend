@@ -1,5 +1,6 @@
 import { refreshGroupAdmissionUnread } from '@/services/api/group-admissions';
 import { Avatar } from '@/components/ui/avatar';
+import { useChatStore } from '@/chat-core/store';
 import { MemberName } from '@/components/ui/member-name';
 import { Divider } from '@/components/ui/divider';
 import { MenuRow } from '@/components/ui/menu-row';
@@ -151,6 +152,7 @@ export default function ContactsScreen() {
     try {
       const nextFriends = await fetchFriends();
       if (!mountedRef.current) return;
+      useChatStore.getState().syncPeerAvatars(nextFriends);
       // 内容没变的好友沿用旧对象,列表行不必全部重渲染。
       setFriends((current) => reuseUnchanged(current, nextFriends));
       setError(null);

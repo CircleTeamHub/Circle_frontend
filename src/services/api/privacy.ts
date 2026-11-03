@@ -29,6 +29,8 @@ export type PrivacySettings = {
   addMeByGroup: boolean;
   callPermission: PrivacyPermission;
   groupInvitePermission: PrivacyPermission;
+  // Older servers omit this setting; missing consent remains false in the UI.
+  allowFriendGroupDirectJoin?: boolean;
   // Optional during a rolling backend deployment; new servers always return both.
   directMessageAutoReplyEnabled?: boolean;
   directMessageAutoReplyText?: string;
@@ -77,6 +79,7 @@ function isPrivacySettings(value: unknown): value is PrivacySettings {
     PRIVACY_PERMISSIONS.has(value.callPermission as PrivacyPermission) &&
     typeof value.groupInvitePermission === 'string' &&
     PRIVACY_PERMISSIONS.has(value.groupInvitePermission as PrivacyPermission) &&
+    (value.allowFriendGroupDirectJoin === undefined || typeof value.allowFriendGroupDirectJoin === 'boolean') &&
     (value.directMessageAutoReplyEnabled === undefined || typeof value.directMessageAutoReplyEnabled === 'boolean') &&
     (value.directMessageAutoReplyText === undefined || typeof value.directMessageAutoReplyText === 'string') &&
     (value.shareOnlineStatus === undefined || typeof value.shareOnlineStatus === 'boolean') &&

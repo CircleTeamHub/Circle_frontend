@@ -4,25 +4,31 @@ import {
   type RefObject,
   type SetStateAction,
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { type ChatMessage } from '@/types';
 import { useChatStore, type StoredChatMessage } from '@/chat-core/store';
 import { useAuthStore } from '@/stores/authStore';
 import { router } from 'expo-router';
-import { Alert, type GestureResponderEvent } from 'react-native';
+import { Alert, Keyboard, Platform, type GestureResponderEvent } from 'react-native';
 import { revokeChatMessage, sendChatReaction } from '@/chat-core/socket-manager';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { fetchMessageReaders } from '@/chat-core/api';
 import { type MessageAction } from '@/features/chat/components/MessageActionMenu';
 import { type PendingMediaUpload, retryFailedChatMessage } from '@/chat-core/client';
 import { canForwardMessage } from '@/features/chat/screens/ForwardPickerScreen';
-import { isEphemeralPeerMessage } from '@/features/chat/utils/ephemeral-message';
+import { isEphemeralMessage, isEphemeralPeerMessage } from '@/features/chat/utils/ephemeral-message';
 import { isLocalMessageId } from '@/chat-core/local-message-id';
+import { saveMediaToLibrary } from '@/utils/save-image';
+import { useStickerStore } from '@/features/chat/store/use-sticker-store';
+import { getStickerErrorMessage } from '@/features/chat/utils/sticker-error';
 import { type TFunction } from 'i18next';
 
 export interface MessageActionsParams {
+  messages: ChatMessage[];
   t: TFunction<"translation", undefined>;
   setDraft: Dispatch<SetStateAction<string>>;
   setSendError: Dispatch<SetStateAction<string | null>>;
@@ -43,6 +49,7 @@ export interface MessageActionsParams {
  * 转发/收藏/删除/举报)并执行对应动作;表情回应选择面板的状态也在这里。
  */
 export function useMessageActions({
+  messages,
   t,
   setDraft,
   setSendError,
@@ -58,11 +65,97 @@ export function useMessageActions({
   handleCollectMessage,
 }: MessageActionsParams) {
   const setPendingForward = useMessageForwardStore((s) => s.setPending);
+  const setPendingForwardBatch = useMessageForwardStore((s) => s.setPendingBatch);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string> | null>(null);
+  useEffect(() => setSelectedMessageIds(null), [conversationID]);
+  const selectedMessages = useMemo(
+    () => messages.filter((message) => selectedMessageIds?.has(message.id)),
+    [messages, selectedMessageIds],
+  );
+  const handleCancelMessageSelection = useCallback(() => setSelectedMessageIds(null), []);
+  const handleStartMessageSelection = useCallback((message: ChatMessage) => {
+    Keyboard.dismiss();
+    setSelectedMessageIds(new Set([message.id]));
+  }, []);
+  const handleToggleSelectedMessage = useCallback((id: string) => {
+    setSelectedMessageIds((previous) => {
+      if (!previous) return previous;
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const canForwardSelectedMessages = selectedMessages.length > 0 && selectedMessages.every((message) =>
+    canForwardMessage(message, useChatStore.getState().messagesByConversation[conversationID]?.find((item) => item.id === message.id), conversationBurnEnabled),
+  );
+  const handleForwardSelectedMessages = useCallback(() => {
+    if (!canForwardSelectedMessages) return;
+    const dtos = useChatStore.getState().messagesByConversation[conversationID];
+    setPendingForwardBatch(selectedMessages.slice().reverse().map((message) => ({
+      message,
+      dto: dtos?.find((item) => item.id === message.id),
+    })));
+    setSelectedMessageIds(null);
+    router.push({ pathname: '/(tabs)/messages/forward-picker' });
+  }, [canForwardSelectedMessages, conversationID, selectedMessages, setPendingForwardBatch]);
+  const handleDeleteSelectedMessages = useCallback(() => {
+    if (selectedMessages.length === 0) return;
+    const epoch = useAuthStore.getState().sessionEpoch;
+    Alert.alert(t('chat.messageActions.delete'), t('chat.messageActions.deleteSelectedConfirm', {
+      count: selectedMessages.length,
+      defaultValue: '删除所选 {{count}} 条本地消息？',
+    }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => {
+        if (!mountedRef.current || useAuthStore.getState().sessionEpoch !== epoch) return;
+        for (const message of selectedMessages) useChatStore.getState().removeMessage(conversationID, message.id);
+        setSelectedMessageIds(null);
+      } },
+    ]);
+  }, [conversationID, mountedRef, selectedMessages, t]);
   const [actionMenu, setActionMenu] = useState<{
     message: ChatMessage;
     x: number;
     y: number;
   } | null>(null);
+  const savingMediaRef = useRef(false);
+  const savingStickerRef = useRef(false);
+  const handleSaveSticker = useCallback(async (message: ChatMessage) => {
+    if (savingStickerRef.current || message.type !== 'image' || isLocalMessageId(message.id) || isEphemeralMessage(message, conversationBurnEnabled)) return;
+    const epoch = useAuthStore.getState().sessionEpoch;
+    savingStickerRef.current = true;
+    try {
+      await useStickerStore.getState().save({ messageId: message.id });
+      if (mountedRef.current && useAuthStore.getState().sessionEpoch === epoch) Alert.alert(t('chat.stickers.saved'));
+    } catch (error) {
+      if (mountedRef.current && useAuthStore.getState().sessionEpoch === epoch) Alert.alert(getStickerErrorMessage(error, t, t('chat.stickers.saveFailed')));
+    } finally {
+      savingStickerRef.current = false;
+    }
+  }, [conversationBurnEnabled, mountedRef, t]);
+  const handleSaveMedia = useCallback(async (message: ChatMessage) => {
+    const url = message.type === 'video' ? message.videoUrl : message.imageUrl;
+    if (!url || savingMediaRef.current) return;
+    savingMediaRef.current = true;
+    const epoch = useAuthStore.getState().sessionEpoch;
+    try {
+      const outcome = await saveMediaToLibrary(
+        url,
+        message.type === 'video' ? { mimeType: 'video/mp4' } : undefined,
+      );
+      if (!mountedRef.current || useAuthStore.getState().sessionEpoch !== epoch) return;
+      if (outcome === 'denied') {
+        Alert.alert(t('media.saveDeniedTitle'), t('media.saveDeniedMessage'));
+      } else if (outcome === 'failed') {
+        Alert.alert(t('media.saveFailedTitle'), t('media.saveFailedMessage'));
+      } else if (Platform.OS !== 'web') {
+        Alert.alert(t('media.savedTitle'));
+      }
+    } finally {
+      savingMediaRef.current = false;
+    }
+  }, [mountedRef, t]);
 
   const handleCopyMessage = useCallback(async (message: ChatMessage) => {
     const text = message.text?.trim();
@@ -367,6 +460,28 @@ export function useMessageActions({
         (item) => item.id === message.id,
       );
     const actions: MessageAction[] = [];
+    actions.push({
+      key: 'multi-select',
+      icon: 'checkbox-outline',
+      label: t('notes.actions.multiSelect'),
+      onPress: () => handleStartMessageSelection(message),
+    });
+    if (
+      ((message.type === 'image' && message.imageUrl) ||
+        (message.type === 'video' && message.videoUrl)) &&
+      !isEphemeralMessage(message, conversationBurnEnabled) &&
+      !isLocalMessageId(message.id)
+    ) {
+      actions.push({
+        key: 'save',
+        icon: 'download-outline',
+        label: t(message.type === 'image' ? 'media.saveImage' : 'common.save'),
+        onPress: () => void handleSaveMedia(message),
+      });
+    }
+    if (message.type === 'image' && message.imageUrl && !isEphemeralMessage(message, conversationBurnEnabled) && !isLocalMessageId(message.id)) {
+      actions.push({ key: 'save-sticker', icon: 'happy-outline', label: t('chat.stickers.save'), onPress: () => void handleSaveSticker(message) });
+    }
     if (message.sendStatus === 3 && message.deliveryId) {
       actions.push({
         key: 'resend',
@@ -489,6 +604,9 @@ export function useMessageActions({
     conversationID,
     handleOpenReactionPicker,
     handleShowReaders,
+    handleSaveMedia,
+    handleSaveSticker,
+    handleStartMessageSelection,
     handleStartEditMessage,
     isGroupChat,
     handleCollectMessage,
@@ -510,6 +628,13 @@ export function useMessageActions({
   );
 
   return {
+    selectedMessageIds,
+    selectedMessages,
+    handleCancelMessageSelection,
+    handleToggleSelectedMessage,
+    handleDeleteSelectedMessages,
+    handleForwardSelectedMessages,
+    canForwardSelectedMessages,
     actionMenu,
     setActionMenu,
     handleToggleReaction,

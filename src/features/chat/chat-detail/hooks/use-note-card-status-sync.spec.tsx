@@ -75,6 +75,35 @@ test('refreshes an old collected card when its source changes while the chat rem
   expect(mockFetch).toHaveBeenCalledTimes(2);
 });
 
+test('older note cards still reconcile when more than 100 distinct notes are loaded', async () => {
+  const recent = Array.from({ length: 100 }, (_, i) => noteCard(`m-${i}`, `note-${i}`));
+  mockFetch.mockResolvedValue([]);
+  const { rerender } = renderHook(
+    ({ list }: { list: ChatMessageDto[] }) => useNoteCardStatusSync('conv-1', list),
+    { initialProps: { list: recent } },
+  );
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+  await act(async () => { await Promise.resolve(); });
+
+  mockFetch.mockResolvedValue([{ noteId: 'old-note', workStatus: 'CLOSED', publicationStatus: 'UNLISTED' }]);
+  rerender({ list: [noteCard('old-message', 'old-note'), ...recent] });
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(['old-note']));
+  await waitFor(() => expect(mockApply).toHaveBeenCalledWith('old-note', 'CLOSED', 'UNLISTED'));
+});
+
+test('loading an older occurrence of an already synced note refreshes that card too', async () => {
+  mockFetch.mockResolvedValue([{ noteId: 'a', workStatus: 'CLOSED', publicationStatus: 'UNLISTED' }]);
+  const { rerender } = renderHook(
+    ({ list }: { list: ChatMessageDto[] }) => useNoteCardStatusSync('conv-1', list),
+    { initialProps: { list: [noteCard('new-message', 'a')] } },
+  );
+  await waitFor(() => expect(mockApply).toHaveBeenCalledWith('a', 'CLOSED', 'UNLISTED'));
+  rerender({ list: [noteCard('old-message', 'a'), noteCard('new-message', 'a')] });
+  await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(mockApply).toHaveBeenCalledTimes(2));
+  expect(mockFetch).toHaveBeenLastCalledWith(['a']);
+});
+
 test('only fetches newly loaded cards and retries ids whose fetch failed', async () => {
   mockFetch.mockRejectedValueOnce(new Error('offline'));
   const { rerender } = renderHook(

@@ -327,8 +327,6 @@ function locationAction() {
 }
 
 function pressComposer(kind: 'title' | 'text' | 'image' | 'video' | 'location') {
-  // Each media action inserts a block; its own add button opens the picker.
-  if (kind === 'title') return;
   fireEvent.press(screen.getByRole('button', { name: `notes.edit.composer.${kind}` }));
   if (kind === 'image' || kind === 'video') {
     const addButtons = screen.getAllByRole('button', { name: `notes.edit.add${kind === 'image' ? 'Image' : 'Video'}` });
@@ -337,6 +335,98 @@ function pressComposer(kind: 'title' | 'text' | 'image' | 'video' | 'location') 
     fireEvent.press(locationAction());
   }
 }
+
+test('a new note stays blank until the title toolbar action is pressed', () => {
+  render(<EditNoteScreen />);
+
+  expect(screen.queryByPlaceholderText('notes.edit.titlePlaceholder')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'notes.edit.groupsLabel' })).toBeNull();
+  expect(mockEditorRenderCount).toBe(0);
+
+  pressComposer('title');
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '按需添加的标题');
+  expect(screen.getByDisplayValue('按需添加的标题')).toBeTruthy();
+  pressComposer('title');
+  expect(screen.getAllByPlaceholderText('notes.edit.titlePlaceholder')).toHaveLength(1);
+});
+
+test('a fresh draft route hides an empty title added in the previous editor', () => {
+  const rendered = render(<EditNoteScreen />);
+  pressComposer('title');
+  expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder')).toBeTruthy();
+
+  mockRouteDraftId = 'another-new-draft';
+  rendered.rerender(<EditNoteScreen />);
+  expect(screen.queryByPlaceholderText('notes.edit.titlePlaceholder')).toBeNull();
+  pressComposer('title');
+  expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('');
+});
+
+test('an existing title stays editable after it is cleared for replacement', async () => {
+  mockRouteId = 'replace-title-note';
+  render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Replacement note');
+
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '');
+  expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('');
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '新标题');
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(updateNote).toHaveBeenCalledWith(
+    'replace-title-note', expect.objectContaining({ title: '新标题' }),
+  ));
+});
+
+test('saving returns after server acceptance without waiting for draft cleanup', async () => {
+  const cleanup = createDeferred<void>();
+  mockDeleteDraft.mockReturnValueOnce(cleanup.promise);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    pressComposer('title');
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '保存完成即返回');
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRouter.back).toHaveBeenCalledTimes(1));
+  } finally {
+    await act(async () => { cleanup.resolve(); await cleanup.promise; });
+    rendered.unmount();
+  }
+});
+
+test('an accepted publication does not wait for an older cloud autosave', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const autosave = createDeferred<NoteDraftDetail>();
+  mockSaveDraft.mockReturnValueOnce(autosave.promise);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await screen.findByDisplayValue('remote');
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '比云草稿更新的正式保存');
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1), { timeout: 2500 });
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRouter.back).toHaveBeenCalledTimes(1));
+  } finally {
+    await act(async () => { autosave.resolve(reviewDraft()); await autosave.promise; });
+    rendered.unmount();
+  }
+});
+
+test('saving a blank note reveals the required title so it can be corrected', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<EditNoteScreen />);
+  expect(screen.queryByPlaceholderText('notes.edit.titlePlaceholder')).toBeNull();
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  expect(alert).toHaveBeenCalledWith(
+    'notes.edit.validationTitle', 'notes.edit.titleRequired', expect.any(Array),
+  );
+  expect(createNote).not.toHaveBeenCalled();
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '补充标题后保存');
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(createNote).toHaveBeenCalledWith(
+    expect.objectContaining({ title: '补充标题后保存' }),
+  ));
+});
 
 // The first editor interaction pays the cold-cache cost of loading the rich
 // editor and composer modules; keep that cost out of Jest's default 5s budget.
@@ -351,6 +441,7 @@ test('allows repeated text blocks and reorders each instance independently', asy
   expect(screen.getByText('notes.edit.composer.text 1')).toBeTruthy();
   expect(screen.getByText('notes.edit.composer.text 2')).toBeTruthy();
   fireEvent.press(screen.getByRole('button', { name: 'common.close' }));
+  pressComposer('title');
   fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), '可重复区块');
   fireEvent.press(screen.getByText('notes.edit.done'));
   await waitFor(() => expect(createNote).toHaveBeenCalled());
@@ -1836,6 +1927,52 @@ test('does not publish while audio recording is active', async () => {
   rendered.unmount();
 });
 
+test('the group-card toolbar opens the picker directly and displays and saves the chosen group', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockPickerCircles.mockResolvedValue([{ id: 'owned-group', name: 'Selected group', avatarUrl: 'https://cdn.test/group.jpg' }]);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.group' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Selected group' })).toBeTruthy());
+    expect(mockPickerCircles).toHaveBeenCalledWith('owner-a');
+    fireEvent.press(screen.getByRole('radio', { name: 'Selected group' }));
+    fireEvent.press(screen.getByText('common.done'));
+    expect(screen.queryByRole('radio', { name: 'Selected group' })).toBeNull();
+    expect(screen.getByText('Selected group')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(jest.mocked(createNote).mock.calls.at(-1)?.[0].sections?.groups?.items).toEqual([
+      { id: 'owned-group', name: 'Selected group', faceURL: 'https://cdn.test/group.jpg' },
+    ]);
+  } finally { rendered.unmount(); }
+});
+
+test('the group-card toolbar reopens an existing card without duplicating its section and keeps it on cancel', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft({ sections: {
+    groups: { items: [{ id: 'owned-group', name: 'Existing group', faceURL: null }] },
+  } }));
+  mockCachedCircles.mockReturnValue([{ id: 'owned-group', name: 'Existing group' }]);
+  mockPickerCircles.mockResolvedValue([{ id: 'owned-group', name: 'Existing group' }]);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByText('Existing group')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.group' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Existing group' })).toBeTruthy());
+    expect(screen.getByRole('radio', { name: 'Existing group' }).props.accessibilityState.checked).toBe(true);
+    fireEvent.press(screen.getByText('common.cancel'));
+    expect(screen.getByText('Existing group')).toBeTruthy();
+    expect(screen.getAllByText('notes.edit.addGroup')).toHaveLength(1);
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(createNote).toHaveBeenCalled());
+    expect(jest.mocked(createNote).mock.calls.at(-1)?.[0].sections?.groups?.items).toEqual([
+      { id: 'owned-group', name: 'Existing group' },
+    ]);
+  } finally { rendered.unmount(); }
+});
+
 test.each(['contact', 'group'] as const)('clears %s picker rows and ignores the old response after switching accounts', async (kind) => {
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
@@ -1921,7 +2058,8 @@ test('a fresh editor hydrates without requesting an unknown generated draft ID',
   mockDraftAuth.user = { id: 'owner-a', nickname: 'A' };
   const rendered = render(<EditNoteScreen />);
   try {
-    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.composer.title' })).toBeEnabled());
+    expect(screen.queryByPlaceholderText('notes.edit.titlePlaceholder')).toBeNull();
     expect(mockFetchDraft).not.toHaveBeenCalled();
   } finally { rendered.unmount(); }
 });
@@ -2743,7 +2881,10 @@ test('an old account submit result cannot delete its recovery snapshot or lock t
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
     fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' })); await waitFor(() => expect(createNote).toHaveBeenCalled());
     const oldInput = jest.mocked(createNote).mock.calls[0][0]; mockDraftAuth.user = { id: 'owner-b', nickname: 'B' }; mockDraftAuth.sessionEpoch += 1; mockRouteDraftId = undefined; rendered.rerender(<EditNoteScreen />);
-    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe(''));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.composer.title' })).toBeEnabled());
+    expect(screen.queryByPlaceholderText('notes.edit.titlePlaceholder')).toBeNull();
+    pressComposer('title');
+    expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('');
     fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'New account content');
     await act(async () => { gate.resolve(noteResult(oldInput)); await gate.promise; });
     expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('New account content'); expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.editable).toBe(true);
@@ -2900,7 +3041,10 @@ test('late consumed draft cleanup cannot navigate away from the next account edi
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
     fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' })); await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalled());
     mockDraftAuth.user = { id: 'owner-b', nickname: 'B' }; mockDraftAuth.sessionEpoch += 1; mockRouteDraftId = undefined; rendered.rerender(<EditNoteScreen />);
-    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe(''));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.composer.title' })).toBeEnabled());
+    expect(screen.queryByPlaceholderText('notes.edit.titlePlaceholder')).toBeNull();
+    pressComposer('title');
+    expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('');
     fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Current B content');
     await act(async () => { deletion.resolve(); await deletion.promise; });
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -2928,7 +3072,9 @@ test('New with an explicit unique route ID is immediately editable offline witho
   mockFetchDraft.mockReturnValue(new Promise(() => {}));
   const rendered = render(<EditNoteScreen />);
   try {
-    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.editable).toBe(true));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'notes.edit.composer.title' })).toBeEnabled());
+    pressComposer('title');
+    expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.editable).toBe(true);
     expect(mockFetchDraft).not.toHaveBeenCalled();
     fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'New offline draft');
     rendered.rerender(<EditNoteScreen />);
