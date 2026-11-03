@@ -159,6 +159,9 @@ export function ChatMessageArea({
         // 下拉/滚动消息列表即收起底部面板与键盘（微信式）。on-drag 让键盘跟手滑落。
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        // Observe the touch without claiming the responder: links, media taps
+        // and long presses still reach the bubble underneath.
+        onTouchStart={closeInputPanels}
         onScroll={handleMessageListScroll}
         scrollEventThrottle={32}
         onViewableItemsChanged={handleViewableItemsChanged}

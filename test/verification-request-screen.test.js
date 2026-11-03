@@ -29,7 +29,7 @@ test('verify screen shows post-response and settled states instead of buttons', 
   assert.match(src, /你已拒绝该申请/);
   assert.match(src, /该申请已通过/);
   // The applicant gets a waiting state, not actions.
-  assert.match(src, /正在等待好友验证/);
+  assert.match(src, /获得.*圈内成员验证后即可加入/);
 });
 
 test('verify screen renders a progress bar', () => {

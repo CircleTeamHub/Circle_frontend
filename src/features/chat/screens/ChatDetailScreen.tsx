@@ -18,7 +18,7 @@ import { MediaSourceSheet } from '@/features/chat/components/media-source-sheet'
 import { MessageActionMenu } from '@/features/chat/components/MessageActionMenu';
 import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { type PendingMediaUpload } from '@/chat-core/client';
-import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
+import { ReactionPickerSheet } from '@/features/chat/components/reaction-picker-sheet';
 import { useComposerDraftPersistence } from '@/features/chat/hooks/use-composer-draft';
 import { useChatStore } from '@/chat-core/store';
 import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
@@ -279,6 +279,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     messages,
     displayMessages,
     handleMessageListScroll,
+    handleImageViewed,
     handleJumpToUnread,
     handleUnreadStartVisibilityChange,
     showUnreadJump,
@@ -346,7 +347,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     handleToggleReaction,
     reactionTarget,
     setReactionTarget,
-    reactionOptions,
     handlePickReaction,
     messageActions,
     handleRetryMessage,
@@ -384,7 +384,10 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const {
     renderItem,
     keyExtractor,
+    imageViewer,
   } = useMessageRenderer({
+    messages,
+    handleImageViewed,
     colors,
     scope,
     groupMemberNames,
@@ -667,6 +670,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         isVoiceRecording={isVoiceRecording}
         voiceElapsedSeconds={voiceElapsedSeconds}
       />
+      {imageViewer}
       <Divider />
       <MentionPickerPanel
         colors={colors}
@@ -758,11 +762,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         onClose={() => setMediaSourceSheetVisible(false)}
       />
 
-      <OptionPickerSheet
+      <ReactionPickerSheet
         visible={reactionTarget !== null}
-        title={t('chat.messageActions.react', { defaultValue: '回应' })}
-        options={reactionOptions}
-        selectedValue=""
         onSelect={handlePickReaction}
         onClose={() => setReactionTarget(null)}
       />

@@ -43,16 +43,6 @@ export const CHAT_EVENTS = {
   sessionExpired: 'chat:session_expired',
 } as const;
 
-/** 表情回应白名单（与服务端镜像；越界服务端直接拒）。 */
-export const CHAT_REACTION_EMOJIS: readonly string[] = [
-  '👍',
-  '❤️',
-  '😂',
-  '😮',
-  '😢',
-  '🙏',
-];
-
 export interface ChatSendPayload {
   conversationId: string;
   type: string;

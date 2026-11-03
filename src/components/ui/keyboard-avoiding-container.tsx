@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, type KeyboardAvoidingViewProps } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, type KeyboardAvoidingViewProps, type KeyboardEvent } from 'react-native';
 
 /**
  * 全 App 唯一的键盘避让容器：键盘弹起时给底部加 padding，把输入框和底部按钮顶到键盘上方。
@@ -26,13 +26,24 @@ export function KeyboardAvoidingContainer({
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const animate = (event: KeyboardEvent) => {
+      if (!enabled) return;
+      if (event.duration > 0) Keyboard.scheduleLayoutAnimation(event);
+      else LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    };
+    const show = Keyboard.addListener('keyboardDidShow', (event) => {
+      animate(event);
+      setKeyboardVisible(true);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', (event) => {
+      animate(event);
+      setKeyboardVisible(false);
+    });
     return () => {
       show.remove();
       hide.remove();
     };
-  }, []);
+  }, [enabled]);
 
   // Android's hide event reports the visible window height (excluding system bars).
   // RN treats it as a keyboard top and leaves that difference as padding. Disable

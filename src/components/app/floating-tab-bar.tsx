@@ -809,6 +809,7 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
     // 复用 bar 的玻璃材质,只把外形换成等高的正圆(圆角 = bar 的圆角)。
     featuredSurface: {
       flex: 0,
+      borderWidth: resolvedMode === 'light' ? 0 : 1,
       width: TAB_FEATURED_SIZE,
       height: TAB_FEATURED_SIZE,
       borderRadius: TAB_FEATURED_SIZE / 2,

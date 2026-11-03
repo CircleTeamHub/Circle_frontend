@@ -1,4 +1,5 @@
 import { GroupInvitationBubble } from '@/features/groups/GroupInvitationBubble';
+import { useConversationImageViewer } from './use-conversation-image-viewer';
 import { getGroupEntryHref } from '@/features/groups/routes';
 import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetry';
 import { messageRowKey } from '@/chat-core/local-message-id';
@@ -65,6 +66,8 @@ const MessageRow = memo(function MessageRow({
 });
 
 export interface MessageRendererParams {
+  messages: ChatMessage[];
+  handleImageViewed: (messageID: string) => void;
   colors: ThemeColors;
   scope: UserProfileScope;
   groupMemberNames: Record<string, string>;
@@ -93,6 +96,8 @@ export interface MessageRendererParams {
  * 包一层长按菜单与定位高亮。
  */
 export function useMessageRenderer({
+  messages,
+  handleImageViewed,
   colors,
   scope,
   groupMemberNames,
@@ -115,6 +120,7 @@ export function useMessageRenderer({
   handleStartCall,
   handleRetryMessage,
 }: MessageRendererParams) {
+  const { imageViewer, openImage } = useConversationImageViewer(messages, selfDestructEnabled, selfDestructCacheKey, handleImageViewed);
   // 群聊接收消息的显示名：本地备注覆盖 > 群成员权威昵称 > 消息自带昵称 > 会话标题。
   // 群成员昵称排在消息自带 senderNickname 之前——后者可能为空而回落成原始 hex id，
   // 成员表里的昵称才是能稳定显示的「对方名字」。
@@ -238,6 +244,7 @@ export function useMessageRenderer({
       case 'image':
         return withMessageActions(item, (
           <ImageBubble
+            onImagePress={openImage}
             message={item}
             outgoing={Boolean(item.outgoing)}
             senderName={receivedDisplayName(item)}
@@ -455,6 +462,7 @@ export function useMessageRenderer({
     getMessageLongPressHandler,
     withMessageActions,
     handleStartCall,
+    openImage,
   ]);
 
   const renderItem = useCallback(
@@ -469,6 +477,7 @@ export function useMessageRenderer({
   );
 
   return {
+    imageViewer,
     renderItem,
     keyExtractor: messageRowKey,
   };

@@ -2,6 +2,7 @@ import { ScrollView, View, Text, Pressable, StyleSheet, Platform } from 'react-n
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography } from '@/theme';
 import { EMOJI_GROUPS } from '@/constants/emojis';
+import { memo } from 'react';
 
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
@@ -42,7 +43,7 @@ const s = StyleSheet.create({
   },
 });
 
-export function EmojiPicker({ onSelect }: EmojiPickerProps) {
+export const EmojiPicker = memo(function EmojiPicker({ onSelect }: EmojiPickerProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   return (
@@ -75,4 +76,4 @@ export function EmojiPicker({ onSelect }: EmojiPickerProps) {
       </ScrollView>
     </View>
   );
-}
+});

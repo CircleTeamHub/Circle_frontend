@@ -14,7 +14,6 @@ import { router } from 'expo-router';
 import { Alert, type GestureResponderEvent } from 'react-native';
 import { revokeChatMessage, sendChatReaction } from '@/chat-core/socket-manager';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
-import { CHAT_REACTION_EMOJIS } from '@/chat-core/protocol';
 import { fetchMessageReaders } from '@/chat-core/api';
 import { type MessageAction } from '@/features/chat/components/MessageActionMenu';
 import { type PendingMediaUpload, retryFailedChatMessage } from '@/chat-core/client';
@@ -215,13 +214,8 @@ export function useMessageActions({
     [conversationID],
   );
 
-  // 六个表情 + 取消 = 7 个按钮,而 Android 的 Alert 最多渲染 3 个 ——
-  // 安卓用户看不到后面几个表情,也就永远选不到。改用应用内选项面板。
+  // 回应使用与聊天输入共用的完整表情面板。
   const [reactionTarget, setReactionTarget] = useState<ChatMessage | null>(null);
-  const reactionOptions = useMemo(
-    () => CHAT_REACTION_EMOJIS.map((emoji) => ({ value: emoji, label: emoji })),
-    [],
-  );
 
   const handleOpenReactionPicker = useCallback((message: ChatMessage) => {
     setReactionTarget(message);
@@ -430,7 +424,7 @@ export function useMessageActions({
     actions.push({
       key: 'quote',
       icon: 'return-up-back-outline',
-      label: t('chat.messageActions.quote', { defaultValue: '引用' }),
+      label: t('chat.messageActions.quote', { defaultValue: '回复' }),
       onPress: () => handleQuoteMessage(message),
     });
     // 只在真能转发时给入口:通话记录走到转发页只会抛「不支持」,
@@ -521,7 +515,6 @@ export function useMessageActions({
     handleToggleReaction,
     reactionTarget,
     setReactionTarget,
-    reactionOptions,
     handlePickReaction,
     messageActions,
     handleRetryMessage,

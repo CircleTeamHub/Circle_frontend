@@ -115,12 +115,29 @@ export default function InvitationVerificationScreen() {
   const [invitation, setInvitation] = useState<CircleInvitation | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const currentUserId = useAuthStore(state => state.user?.id);
+  const repairAttempted = useRef(new Set<string>());
 
   const loadInvitation = useCallback(async () => {
     if (!id) return;
     setLoadError(null);
     try {
-      const data = await fetchInvitation(id);
+      let data = await fetchInvitation(id);
+      // 旧待验证单可能漏了邀请人首票；已有本人同意，只通过原接受接口补一次。
+      if (
+        data.status === 'PENDING' && data.approvedCount === 0 &&
+        data.applicant.id === currentUserId && data.inviter.id !== data.applicant.id &&
+        !data.verifiers.some(slot => slot.verifier.id === data.inviter.id) &&
+        !repairAttempted.current.has(id)
+      ) {
+        repairAttempted.current.add(id);
+        try {
+          data = await respondToCircleInvitation(id, true);
+          data = await fetchInvitation(id);
+        } catch (error) {
+          reportHandledFailure('circleInvitation', 'repairInviterVote', error);
+        }
+      }
       setInvitation(data);
     } catch (error) {
       // 之前是 Alert + setInvitation(null) 渲染 "不存在" —— 把临时网络错误误判成 404。
@@ -132,7 +149,7 @@ export default function InvitationVerificationScreen() {
     } finally {
       setLoading(false);
     }
-  }, [id, t]);
+  }, [id, t, currentUserId]);
 
   useEffect(() => {
     loadInvitation();
@@ -158,7 +175,6 @@ export default function InvitationVerificationScreen() {
 
   const [responding, setResponding] = useState(false);
   const consentPending = useRef(false);
-  const currentUserId = useAuthStore(state => state.user?.id);
   const handleConsent = async (accept: boolean) => {
     if (consentPending.current || !invitation) return;
     consentPending.current = true;

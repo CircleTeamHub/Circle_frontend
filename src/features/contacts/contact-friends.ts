@@ -6,6 +6,10 @@ export type ContactFriendSection = {
 };
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const PINYIN_LETTERS = 'ABCDEFGHJKLMNOPQRSTWXYZ';
+const PINYIN_BOUNDARIES = '阿八擦搭蛾发噶哈击喀垃妈拿哦啪期然撒塌挖昔压匝';
+const nameCollator = new Intl.Collator('zh-Hans-CN-u-co-pinyin', { sensitivity: 'base' });
+
 
 /**
  * 通讯录里这位好友该显示的名字：备注 > 昵称 > 账号。
@@ -26,7 +30,17 @@ export function getFriendDisplayName(
 
 function getAlphaInitial(value: string) {
   const initial = value.trim().charAt(0).toUpperCase();
-  return LETTERS.includes(initial) ? initial : null;
+  if (!initial) return null;
+  if (LETTERS.includes(initial)) return initial;
+  if (/^[\u3400-\u9fff]$/.test(initial)) {
+    for (let index = PINYIN_BOUNDARIES.length - 1; index >= 0; index -= 1) {
+      if (nameCollator.compare(initial, PINYIN_BOUNDARIES[index]) >= 0) {
+        return PINYIN_LETTERS[index];
+      }
+    }
+    return 'A';
+  }
+  return null;
 }
 
 export function getFriendSortKey(
@@ -43,8 +57,7 @@ export function getFriendSectionTitle(
 }
 
 function compareFriends(left: FriendProfile, right: FriendProfile) {
-  return getFriendSortKey(left)
-    .localeCompare(getFriendSortKey(right), 'en', { sensitivity: 'base' });
+  return nameCollator.compare(getFriendSortKey(left), getFriendSortKey(right));
 }
 
 /**

@@ -1,9 +1,10 @@
 import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -16,6 +17,8 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { useEphemeralImageDiskCacheSweep } from './ephemeral-image-cache';
 import { BubbleStatusText, MessageAvatar } from './shared';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 interface VideoBubbleProps {
   message: ChatMessage;
@@ -48,7 +51,22 @@ const s = StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: '#000',
   },
-  video: { width: '100%' },
+  fullscreen: { flex: 1, backgroundColor: '#000' },
+  playbackStatus: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
+  playbackText: { ...Typography.body, color: '#fff' },
+  retryButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: Spacing.lg },
+  closeButton: {
+    position: 'absolute',
+    right: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
   poster: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -98,6 +116,52 @@ function formatDuration(seconds?: number): string | null {
   return `${mm}:${String(ss).padStart(2, '0')}`;
 }
 
+/** Mount only while the fullscreen modal is open; useVideoPlayer releases on unmount. */
+function FullscreenVideo({ videoUrl }: { videoUrl: string }) {
+  const { t } = useTranslation();
+  const player = useVideoPlayer(null);
+  const [attempt, setAttempt] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setFailed(false);
+    const subscription = player.addListener('statusChange', ({ status }) => {
+      if (!cancelled && status === 'error') {
+        setFailed(true);
+        setLoading(false);
+        reportHandledFailure('chatMedia', 'videoPlayback', new Error('Video playback failed'));
+      }
+    });
+    void player.replaceAsync(videoUrl).then(() => {
+      if (!cancelled) player.play();
+    }).catch(() => {
+      if (!cancelled) {
+        setFailed(true);
+        reportHandledFailure('chatMedia', 'videoLoad', new Error('Video load failed'));
+      }
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; subscription.remove(); };
+  }, [attempt, player, videoUrl]);
+  return (
+    <>
+      <VideoView player={player} style={StyleSheet.absoluteFill} nativeControls contentFit="contain" surfaceType="textureView" />
+      {loading ? <View style={s.playbackStatus} pointerEvents="none"><ActivityIndicator color="#fff" /></View> : null}
+      {failed ? (
+        <View style={s.playbackStatus}>
+          <Text style={s.playbackText}>{t('chat.detail.videoUnavailable')}</Text>
+          <Pressable style={s.retryButton} onPress={() => setAttempt((value) => value + 1)} accessibilityRole="button" accessibilityLabel={t('common.retry')}>
+            <Text style={s.playbackText}>{t('common.retry')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </>
+  );
+}
+
 export function VideoBubble({
   message,
   outgoing,
@@ -113,22 +177,8 @@ export function VideoBubble({
 }: VideoBubbleProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  // 播放器**不**在挂载时装载媒体源。每个 VideoView 背后都是一个原生播放器实例，
-  // 一屏几条视频就会同时占用多路硬件解码器（iOS 上很快到上限，后面的气泡直接黑屏），
-  // 还会为每条消息拉取签名 URL 的首段数据。这里先建空播放器，用户点了播放才
-  // replaceAsync 装载 —— 列表滚动时只是几张静态封面。
-  const player = useVideoPlayer(null, (instance) => {
-    instance.loop = false;
-  });
-  const [activated, setActivated] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const insets = useSafeAreaInsets();
+  const [previewVisible, setPreviewVisible] = useState(false);
 
   const aspectRatio = useMemo(() => {
     const width = message.videoWidth ?? 0;
@@ -142,29 +192,19 @@ export function VideoBubble({
   useEphemeralImageDiskCacheSweep(ephemeral, selfDestructCacheKey);
 
   const videoUrl = message.videoUrl;
-  const handlePlay = useCallback(() => {
-    if (!videoUrl || activated || loading) return;
-    setLoading(true);
-    void player
-      .replaceAsync(videoUrl)
-      .then(() => {
-        if (!mountedRef.current) return;
-        setActivated(true);
-        player.play();
-      })
-      .catch(() => {
-        // 装载失败(签名过期/网络中断)保持封面态,用户可以再点一次重试。
-      })
-      .finally(() => {
-        if (mountedRef.current) setLoading(false);
-      });
-  }, [activated, loading, player, videoUrl]);
-
-  // 签名 URL 会过期后由读路径换发新的一条:源变了就退回封面态,
-  // 否则播放器还钉着上一条已失效的 URL。
   useEffect(() => {
-    setActivated(false);
-  }, [videoUrl]);
+    setPreviewVisible(false);
+  }, [ephemeral, selfDestructCacheKey]);
+  const videoViewer = previewVisible && videoUrl ? (
+    <Modal visible animationType="fade" statusBarTranslucent onRequestClose={() => setPreviewVisible(false)}>
+      <View style={s.fullscreen}>
+        <FullscreenVideo key={videoUrl} videoUrl={videoUrl} />
+        <Pressable style={[s.closeButton, { top: insets.top + Spacing.sm }]} onPress={() => setPreviewVisible(false)} accessibilityRole="button" accessibilityLabel={t('common.close')}>
+          <Ionicons name="close" size={26} color="#fff" />
+        </Pressable>
+      </View>
+    </Modal>
+  ) : null;
 
   const avatarNode = (
     <MessageAvatar
@@ -181,26 +221,19 @@ export function VideoBubble({
     <View style={[s.body, outgoing ? s.bodyOutgoing : null]}>
       <Pressable
         style={s.frame}
-        onPress={videoUrl && !activated ? handlePlay : undefined}
+        onPress={videoUrl ? () => setPreviewVisible(true) : undefined}
         onLongPress={onLongPress}
         delayLongPress={350}
-        accessibilityRole={videoUrl && !activated ? 'button' : undefined}
+        accessibilityRole={videoUrl ? 'button' : undefined}
         accessibilityLabel={
-          videoUrl && !activated
+          videoUrl
             ? t('chat.detail.playVideo', { defaultValue: '播放视频' })
             : undefined
         }
       >
         {videoUrl ? (
           <View style={{ aspectRatio }}>
-            <VideoView
-              player={player}
-              style={[s.video, StyleSheet.absoluteFillObject]}
-              nativeControls={activated}
-              contentFit="contain"
-              surfaceType="textureView"
-            />
-            {activated || !posterUrl ? null : (
+            {!posterUrl ? null : (
               <Image
                 testID="chat-video-poster"
                 source={
@@ -214,23 +247,17 @@ export function VideoBubble({
                 pointerEvents="none"
               />
             )}
-            {activated ? null : (
-              <View
-                style={[s.poster, posterUrl ? s.posterOverImage : null]}
-                pointerEvents="none"
-              >
-                <View style={s.playBadge}>
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Ionicons name="play" size={26} color="#FFFFFF" />
-                  )}
-                </View>
-                {durationLabel ? (
-                  <Text style={s.duration}>{durationLabel}</Text>
-                ) : null}
+            <View
+              style={[s.poster, posterUrl ? s.posterOverImage : null]}
+              pointerEvents="none"
+            >
+              <View style={s.playBadge}>
+                <Ionicons name="play" size={26} color="#FFFFFF" />
               </View>
-            )}
+              {durationLabel ? (
+                <Text style={s.duration}>{durationLabel}</Text>
+              ) : null}
+            </View>
           </View>
         ) : (
           <View style={s.unavailable}>
@@ -254,22 +281,28 @@ export function VideoBubble({
 
   if (outgoing) {
     return (
-      <View style={[s.row, s.rowOutgoing]}>
-        {body}
-        <View style={s.avatarSlot}>{avatarNode}</View>
-      </View>
+      <>
+        <View style={[s.row, s.rowOutgoing]}>
+          {body}
+          <View style={s.avatarSlot}>{avatarNode}</View>
+        </View>
+        {videoViewer}
+      </>
     );
   }
   return (
-    <View style={s.row}>
-      {onAvatarPress ? (
-        <Pressable style={s.avatarSlot} onPress={onAvatarPress}>
-          {avatarNode}
-        </Pressable>
-      ) : (
-        <View style={s.avatarSlot}>{avatarNode}</View>
-      )}
-      {body}
-    </View>
+    <>
+      <View style={s.row}>
+        {onAvatarPress ? (
+          <Pressable style={s.avatarSlot} onPress={onAvatarPress}>
+            {avatarNode}
+          </Pressable>
+        ) : (
+          <View style={s.avatarSlot}>{avatarNode}</View>
+        )}
+        {body}
+      </View>
+      {videoViewer}
+    </>
   );
 }

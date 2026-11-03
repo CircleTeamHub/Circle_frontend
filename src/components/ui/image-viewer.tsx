@@ -36,6 +36,8 @@ interface ImageViewerProps {
   visible: boolean;
   initialIndex?: number;
   privacyMode?: 'standard' | 'ephemeral';
+  privacyModes?: ('standard' | 'ephemeral')[];
+  onIndexChange?: (index: number) => void;
   onClose: () => void;
 }
 
@@ -45,6 +47,8 @@ export function ImageViewer({
   visible,
   initialIndex = 0,
   privacyMode = 'standard',
+  privacyModes,
+  onIndexChange,
   onClose,
 }: ImageViewerProps) {
   const { t } = useTranslation();
@@ -53,6 +57,7 @@ export function ImageViewer({
   const { colors } = useTheme();
   const listRef = useRef<FlatList<string>>(null);
   const [index, setIndex] = useState(initialIndex);
+  const indexRef = useRef(initialIndex);
   // 放大态下禁掉列表横滑，否则平移会被翻页抢走。
   const [zoomed, setZoomed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,6 +69,10 @@ export function ImageViewer({
       setIndex(initialIndex);
       setZoomed(false);
       setActionSheetVisible(false);
+      if (indexRef.current !== initialIndex) {
+        listRef.current?.scrollToIndex({ index: initialIndex, animated: false });
+      }
+      indexRef.current = initialIndex;
     }
   }, [visible, initialIndex]);
 
@@ -71,9 +80,12 @@ export function ImageViewer({
     (next: number) => {
       const clamped = Math.max(0, Math.min(images.length - 1, next));
       setIndex(clamped);
+      indexRef.current = clamped;
+      setActionSheetVisible(false);
+      onIndexChange?.(clamped);
       listRef.current?.scrollToIndex({ index: clamped, animated: true });
     },
-    [images.length],
+    [images.length, onIndexChange],
   );
 
   // Web：键盘左右翻页 / ESC 关闭（Modal 自己只处理 ESC 的部分实现）。
@@ -89,7 +101,7 @@ export function ImageViewer({
   }, [goTo, index, onClose, visible]);
 
   const handleSave = useCallback(async () => {
-    if (saving) return;
+    if (saving || (privacyModes?.[index] ?? privacyMode) === 'ephemeral') return;
     setSaving(true);
     try {
       const outcome = await saveImageToLibrary(images[index]);
@@ -104,7 +116,7 @@ export function ImageViewer({
     } finally {
       setSaving(false);
     }
-  }, [images, index, saving, t]);
+  }, [images, index, saving, t, privacyMode, privacyModes]);
 
   const handleLongPress = useCallback(() => {
     setActionSheetVisible(true);
@@ -129,8 +141,13 @@ export function ImageViewer({
       const next = Math.round(event.nativeEvent.contentOffset.x / width);
       const clamped = Math.max(0, Math.min(images.length - 1, next));
       setIndex((current) => current === clamped ? current : clamped);
+      indexRef.current = clamped;
+      if (clamped !== index) {
+        setActionSheetVisible(false);
+        onIndexChange?.(clamped);
+      }
     },
-    [images.length, width],
+    [images.length, width, index, onIndexChange],
   );
 
   // A viewer is embedded in feed/message cells. Do not keep a hidden native
@@ -180,7 +197,7 @@ export function ImageViewer({
                   <ZoomableImage
                     uri={item}
                     cacheKey={cacheKeys?.[itemIndex]}
-                    cachePolicy={privacyMode === 'ephemeral' ? 'none' : 'memory-disk'}
+                    cachePolicy={(privacyModes?.[itemIndex] ?? privacyMode) === 'ephemeral' ? 'none' : 'memory-disk'}
                     width={width}
                     height={height}
                     active={itemIndex === index}
@@ -188,7 +205,7 @@ export function ImageViewer({
                     onSwipeDown={handleSwipeDown}
                     // 单击关闭：全屏查看器里最顺手的退出方式（双击留给放大）。
                     onTap={onClose}
-                    onLongPress={privacyMode === 'ephemeral' ? undefined : handleLongPress}
+                    onLongPress={(privacyModes?.[itemIndex] ?? privacyMode) === 'ephemeral' ? undefined : handleLongPress}
                   />
                 ) : (
                   <View style={{ width, height }} />

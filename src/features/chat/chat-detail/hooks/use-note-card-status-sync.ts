@@ -39,9 +39,12 @@ export function useNoteCardStatusSync(
   conversationId: string | undefined,
   messages: readonly ChatMessageDto[] | undefined,
 ): void {
-  const recoveryVersion = useNoteStatusSignalStore(
-    (state) => state.recoveryVersion,
+  // Legacy collected cards have no sourceNoteId, so a source event cannot patch
+  // them by id alone. Reconcile them on status changes as well as reconnects.
+  const statusVersion = useNoteStatusSignalStore(
+    (state) => state.version,
   );
+  const recoveryVersion = useNoteStatusSignalStore((state) => state.recoveryVersion);
   const targetsKey = useMemo(() => {
     const ids = collectNoteCardIds(messages);
     const sourceIdByNoteId = new Map<string, string>();
@@ -61,6 +64,11 @@ export function useNoteCardStatusSync(
       ids.map((noteId) => [noteId, sourceIdByNoteId.get(noteId) ?? noteId]),
     );
   }, [messages]);
+  const needsLegacyReconcile = (JSON.parse(targetsKey) as [string, string][])
+    .some(([noteId, sourceId]) => noteId === sourceId);
+  // Modern cards are patched directly by the realtime handler. Only cards
+  // without a distinct source id need another lookup for individual events.
+  const syncVersion = needsLegacyReconcile ? statusVersion : recoveryVersion;
   // 本会话、本恢复周期内已对账成功的 id；新加载出的卡片只补拉增量。
   const syncedRef = useRef<{ key: string; ids: Set<string> }>({
     key: '',
@@ -74,7 +82,7 @@ export function useNoteCardStatusSync(
       syncedRef.current = { key: '', ids: new Set() };
       return;
     }
-    const epoch = `${conversationId}:${recoveryVersion}`;
+    const epoch = `${conversationId}:${syncVersion}`;
     if (syncedRef.current.key !== epoch) {
       syncedRef.current = { key: epoch, ids: new Set() };
     }
@@ -130,5 +138,5 @@ export function useNoteCardStatusSync(
         pending.forEach((id) => synced.ids.delete(id));
       }
     };
-  }, [conversationId, recoveryVersion, targetsKey]);
+  }, [conversationId, syncVersion, targetsKey]);
 }

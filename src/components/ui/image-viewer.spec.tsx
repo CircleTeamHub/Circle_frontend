@@ -71,6 +71,30 @@ test('standard previews keep disk caching and the save gesture', () => {
   expect(image.props.onLongPress).toEqual(expect.any(Function));
 });
 
+test('applies each conversation image privacy policy and reports horizontal paging', () => {
+  const onIndexChange = jest.fn();
+  render(<ImageViewer images={['ordinary.jpg', 'private.jpg']} privacyModes={['standard', 'ephemeral']} visible onClose={jest.fn()} onIndexChange={onIndexChange} />);
+  const images = screen.getAllByTestId('zoomable-image');
+  expect(images[0].props.cachePolicy).toBe('memory-disk');
+  expect(images[1].props.cachePolicy).toBe('none');
+  expect(images[1].props.onLongPress).toBeUndefined();
+  fireEvent.scroll(screen.UNSAFE_getByType(FlatList), { nativeEvent: { contentOffset: { x: 750, y: 0 } } });
+  expect(onIndexChange).toHaveBeenCalledWith(1);
+});
+
+test('does not interrupt a horizontal drag when the parent tracks the selected message', () => {
+  const scrollToIndex = jest.spyOn(FlatList.prototype, 'scrollToIndex');
+  function TrackedViewer() {
+    const [index, setIndex] = React.useState(0);
+    return <ImageViewer images={['0.jpg', '1.jpg']} visible initialIndex={index} onIndexChange={setIndex} onClose={jest.fn()} />;
+  }
+  render(<TrackedViewer />);
+  scrollToIndex.mockClear();
+  fireEvent.scroll(screen.UNSAFE_getByType(FlatList), { nativeEvent: { contentOffset: { x: 750, y: 0 } } });
+  expect(scrollToIndex).not.toHaveBeenCalled();
+  scrollToIndex.mockRestore();
+});
+
 test('long press opens the save menu inside the viewer modal and cancel closes it', () => {
   const onClose = jest.fn();
   render(

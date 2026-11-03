@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, render } from '@testing-library/react-native';
-import { Keyboard, KeyboardAvoidingView, Platform, View, type KeyboardEvent } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, LayoutAnimation, Platform, View, type KeyboardEvent } from 'react-native';
 import { KeyboardAvoidingContainer } from './keyboard-avoiding-container';
 
 afterEach(() => jest.restoreAllMocks());
@@ -61,4 +61,15 @@ test('iOS keeps its existing keyboard animation behavior', () => {
   setup('ios');
   const screen = render(<KeyboardAvoidingContainer><View /></KeyboardAvoidingContainer>);
   expect(screen.UNSAFE_getByType(KeyboardAvoidingView).props.enabled).toBe(true);
+});
+
+test('Android animates layout on show and hide even when native events have zero duration', async () => {
+  const { emit } = setup('android');
+  const animate = jest.spyOn(LayoutAnimation, 'configureNext');
+  render(<KeyboardAvoidingContainer><View /></KeyboardAvoidingContainer>);
+  await emit('keyboardDidShow');
+  expect(animate).toHaveBeenCalledWith(expect.objectContaining({ duration: expect.any(Number) }));
+  animate.mockClear();
+  await emit('keyboardDidHide');
+  expect(animate).toHaveBeenCalledWith(expect.objectContaining({ duration: expect.any(Number) }));
 });

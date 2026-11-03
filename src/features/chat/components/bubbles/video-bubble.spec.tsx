@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Modal } from 'react-native';
 import { Image } from 'expo-image';
 import { VideoBubble } from './video-bubble';
 import type { ChatMessage } from '@/types';
@@ -41,14 +42,22 @@ jest.mock('@/storage', () => ({
     set: (key: string, value: string) => mockStorageValues().set(key, value),
   },
 }));
+const mockPlayer = { replaceAsync: jest.fn(() => Promise.resolve()), play: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })), loop: false };
+const mockRelease = jest.fn();
 jest.mock('expo-video', () => {
+  const { useEffect } = jest.requireActual<typeof import('react')>('react');
   const { View } =
     jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    useVideoPlayer: () => ({ replaceAsync: jest.fn(), play: jest.fn(), loop: false }),
-    VideoView: () => <View />,
+    useVideoPlayer: () => {
+      useEffect(() => () => mockRelease(), []);
+      return mockPlayer;
+    },
+    VideoView: () => <View testID="video-player" />,
   };
 });
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -76,6 +85,51 @@ const video = {
 
 beforeEach(() => {
   posterProps.length = 0;
+  mockPlayer.replaceAsync.mockReset().mockResolvedValue(undefined);
+  mockPlayer.play.mockClear();
+  mockRelease.mockClear();
+});
+
+test('a tap opens full-screen playback and closing releases the active player', async () => {
+  render(<VideoBubble message={video} outgoing={false} />);
+  expect(screen.queryByTestId('video-player')).toBeNull();
+  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+  expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
+  await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+  expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(video.videoUrl);
+  fireEvent.press(screen.getByLabelText('common.close'));
+  expect(screen.queryByTestId('video-player')).toBeNull();
+  expect(mockRelease).toHaveBeenCalledTimes(1);
+});
+
+test('failed video loading exposes retry in full screen and retries without another inline player', async () => {
+  mockPlayer.replaceAsync.mockRejectedValueOnce(new Error('network'));
+  render(<VideoBubble message={video} outgoing={false} />);
+  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+  await waitFor(() => expect(screen.getByLabelText('common.retry')).toBeTruthy());
+  expect(mockPlayer.play).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByLabelText('common.retry'));
+  await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+});
+
+test('closing during loading does not start playback after the modal was dismissed', async () => {
+  let resolve!: () => void;
+  mockPlayer.replaceAsync.mockImplementationOnce(() => new Promise<void>((done) => { resolve = done; }));
+  render(<VideoBubble message={video} outgoing={false} />);
+  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+  fireEvent.press(screen.getByLabelText('common.close'));
+  await act(async () => resolve());
+  expect(mockPlayer.play).not.toHaveBeenCalled();
+  expect(mockRelease).toHaveBeenCalledTimes(1);
+});
+
+test('a refreshed signed URL replaces the open full-screen source', async () => {
+  const view = render(<VideoBubble message={video} outgoing={false} />);
+  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+  await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+  view.rerender(<VideoBubble message={{ ...video, videoUrl: 'https://media.example.com/clip.mp4?fresh' }} outgoing={false} />);
+  await waitFor(() => expect(mockPlayer.replaceAsync).toHaveBeenLastCalledWith('https://media.example.com/clip.mp4?fresh'));
+  expect(mockRelease).toHaveBeenCalledTimes(1);
 });
 
 describe('VideoBubble poster', () => {

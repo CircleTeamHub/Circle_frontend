@@ -20,8 +20,9 @@ test('video bubble mounts an empty player and loads the source only on play', ()
 
 // 签名 URL 过期后读路径会换发一条新的；播放器还钉着旧 URL 的话，
 // 用户看到的是一条永远转圈的视频。
-test('video bubble falls back to the poster state when the signed url changes', () => {
-  assert.match(source, /useEffect\(\(\) => \{\s*setActivated\(false\);\s*\}, \[videoUrl\]\)/);
+test('video bubble replaces fullscreen playback when the signed url changes', () => {
+  assert.match(source, /<FullscreenVideo key=\{videoUrl\} videoUrl=\{videoUrl\}/);
+  assert.match(source, /previewVisible && videoUrl/);
 });
 
 // 气泡文案跟着应用语言走，不能硬编码中文（i18n 五语种齐平测试覆盖键，
