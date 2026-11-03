@@ -130,6 +130,19 @@ test('chat detail exposes a jump-to-unread entry point and pages to its start', 
   assert.match(source, /unreadMessages/);
 });
 
+test('unread jump pages to the beginning when no message has ever been read', () => {
+  const source = readChatDetailSource();
+
+  // readHeight=0 means every accessible peer message is unread. If the first
+  // page is full, the actual start can be on an older page, so zero must not
+  // disable the same oldestHeight comparison used for non-zero watermarks.
+  assert.match(source, /oldestHeight > entryReadHeight/);
+  assert.doesNotMatch(
+    source,
+    /entryReadHeight > 0 &&\s*oldestHeight > entryReadHeight/,
+  );
+});
+
 test('chat detail screen supports preview mode without an IM conversation', () => {
   const source = readChatDetailSource();
 
