@@ -14,6 +14,7 @@ interface VerificationCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (card: VerificationCardData) => void;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
@@ -30,6 +31,7 @@ export const VerificationCardBubble: React.FC<VerificationCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
 }) => {
@@ -78,6 +80,7 @@ export const VerificationCardBubble: React.FC<VerificationCardBubbleProps> = ({
       footer={t('invitation.cardFooter', { defaultValue: '点击为 TA 验证' })}
       onPress={onPress ? () => onPress(card) : undefined}
       onAvatarPress={onAvatarPress}
+      onAvatarLongPress={onAvatarLongPress}
       onLongPress={onLongPress}
       hideStatus={hideStatus}
     />

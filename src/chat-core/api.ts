@@ -907,7 +907,7 @@ type ChatHistorySearchOptions = {
   limit?: number;
 };
 
-function fetchChatHistoryPage(
+export function fetchChatHistoryPage(
   conversationId: string,
   options: ChatHistorySearchOptions,
 ): Promise<ChatHistoryPageDto> {

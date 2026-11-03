@@ -75,7 +75,7 @@ test('the viewer drives zoom/save through the shared cross-platform pieces', () 
   const zoomable = read('src/components/ui/zoomable-image.tsx');
   assert.match(zoomable, /PanResponder\.create/);
   // 双指捏合是原生端的缩放手段，必须在平台无关的代码路径里。
-  assert.match(zoomable, /touches\.length === 2/);
+  assert.match(zoomable, /touches\.length >= 2/);
   // 关键不变量：手势主体（PanResponder 配置块）里不得有任何平台分支 ——
   // 捏合/双击/长按/平移必须两端同一份代码。web 只允许**额外**加滚轮。
   const responderStart = zoomable.indexOf('PanResponder.create');

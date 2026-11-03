@@ -242,6 +242,7 @@ export interface CardBubbleFrameProps {
   // 卡片旁的小头像（发送者 / 自己），尺寸 AVATAR_SIZE。
   avatarNode: React.ReactNode;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   hideStatus?: boolean;
   // 约束卡片本体宽度 / 对齐的 body 容器样式（各卡片传入自己的 maxWidth）。
   bodyStyle?: StyleProp<ViewStyle>;
@@ -257,6 +258,7 @@ export const CardBubbleFrame: React.FC<CardBubbleFrameProps> = ({
   outgoing,
   avatarNode,
   onAvatarPress,
+  onAvatarLongPress,
   hideStatus,
   bodyStyle,
   children,
@@ -299,8 +301,8 @@ export const CardBubbleFrame: React.FC<CardBubbleFrameProps> = ({
 
   return (
     <View style={sCardFrame.row}>
-      {onAvatarPress ? (
-        <Pressable style={sCardFrame.avatarSlot} onPress={onAvatarPress}>
+      {onAvatarPress || onAvatarLongPress ? (
+        <Pressable style={sCardFrame.avatarSlot} onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350}>
           {avatarNode}
         </Pressable>
       ) : (
@@ -326,6 +328,7 @@ export interface CompactCardBubbleProps {
   avatarNode: React.ReactNode;
   onPress?: () => void;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
@@ -344,6 +347,7 @@ export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
   avatarNode,
   onPress,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
 }) => {
@@ -362,6 +366,7 @@ export const CompactCardBubble: React.FC<CompactCardBubbleProps> = ({
       outgoing={outgoing}
       avatarNode={avatarNode}
       onAvatarPress={onAvatarPress}
+      onAvatarLongPress={onAvatarLongPress}
       hideStatus={hideStatus}
       bodyStyle={sCircleCard.body}
     >

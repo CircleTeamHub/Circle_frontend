@@ -13,6 +13,7 @@ import {
   loadConversationMessages,
   markConversationAsRead,
   sendTextMessage,
+  sendQuoteMessage,
 } from '@/chat-core/client';
 import { fetchChatMembers } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
@@ -226,9 +227,9 @@ jest.mock('@/features/chat/components/chat-bubble', () =>
       mockCountBubbleRender(message.id);
       return <MockText>{`sent:${message.text ?? ''}`}</MockText>;
     },
-    ReceivedBubble: ({ message }: { message: { id?: string; text?: string } }) => {
+    ReceivedBubble: ({ message, onAvatarLongPress }: { message: { id?: string; text?: string }; onAvatarLongPress?: () => void }) => {
       mockCountBubbleRender(message.id);
-      return <MockText>{`received:${message.text ?? ''}`}</MockText>;
+      return <MockView><MockPressable testID={`avatar:${message.id}`} onLongPress={onAvatarLongPress} /><MockText>{`received:${message.text ?? ''}`}</MockText></MockView>;
     },
     ImageBubble: ({ message, onImagePress }: { message: ChatMessage; onImagePress: (message: ChatMessage) => void }) => (
       <MockPressable testID={`photo:${message.id}`} onPress={() => onImagePress(message)} />
@@ -766,4 +767,35 @@ test('in a group, typing @ lists members, picking one inserts the mention and th
       }),
     SETTLE,
   );
+});
+
+
+test('long pressing a group sender avatar inserts their group name at the cursor and quoted replies keep the mention', async () => {
+  mockParams = { conversationID: GROUP, sourceID: GROUP, title: 'Group', conversationType: 'group', conversationKind: 'group' };
+  jest.mocked(fetchChatMembers).mockResolvedValue([{ userId: PEER, nickname: 'Peer', alias: '小方' }] as Awaited<ReturnType<typeof fetchChatMembers>>);
+  useChatStore.setState({ messagesByConversation: { [GROUP]: [{ ...message(1, PEER, 'hello'), conversationId: GROUP }] } });
+  render(<ChatDetailScreen />);
+  const input = await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  await waitFor(() => expect(fetchChatMembers).toHaveBeenCalledWith(GROUP), SETTLE);
+  fireEvent.changeText(input, '前后');
+  fireEvent(screen.getByTestId(E2E_TEST_IDS.chatInput), 'selectionChange', { nativeEvent: { selection: { start: 1, end: 1 } } });
+  fireEvent(screen.getByTestId('avatar:msg-1'), 'longPress', { nativeEvent: { pageX: 50, pageY: 200 } });
+  expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('前@小方 后');
+  fireEvent(screen.getByText('received:hello'), 'longPress', { nativeEvent: { pageX: 50, pageY: 200 } });
+  fireEvent.press(await screen.findByLabelText('message-action-quote', {}, SETTLE));
+  await act(async () => fireEvent.press(screen.getByTestId(E2E_TEST_IDS.chatSend)));
+  expect(sendQuoteMessage).toHaveBeenCalledWith(expect.objectContaining({
+    conversationId: GROUP, text: '前@小方 后', replyToId: 'msg-1',
+    mentions: [{ userId: PEER, nickname: '小方' }], atAll: false,
+  }));
+});
+
+test.each(['direct', 'muted'])('avatar mentions are unavailable in a %s chat', async (kind) => {
+  if (kind === 'muted') {
+    mockParams = { conversationID: GROUP, sourceID: GROUP, conversationType: 'group', conversationKind: 'group' };
+    useChatStore.setState({ conversations: [{ ...standaloneGroup(), muteAll: true }], messagesByConversation: { [GROUP]: [{ ...message(1, PEER, 'hello'), conversationId: GROUP }] } });
+  }
+  render(<ChatDetailScreen />);
+  const avatar = await screen.findByTestId('avatar:msg-1', {}, SETTLE);
+  expect(avatar.props.onLongPress).toBeUndefined();
 });

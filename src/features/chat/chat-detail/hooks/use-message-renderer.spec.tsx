@@ -2,11 +2,16 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { FlatList } from 'react-native';
 import { saveImageToLibrary } from '@/utils/save-image';
+import { getNoteDetailHref } from '@/features/user/utils/routes';
 import type { ChatMessage } from '@/types';
 import { useMessageRenderer, type MessageRendererParams } from './use-message-renderer';
 
 const mockAvatarRender = jest.fn();
 const mockRemarks = {};
+const mockMessagesByConversation: Record<string, { id: string; height: number }[]> = {};
+jest.mock('@/chat-core/store', () => ({
+  useChatStore: { getState: () => ({ messagesByConversation: mockMessagesByConversation }) },
+}));
 jest.mock('@/stores/friendRemarkStore', () => ({
   useFriendRemarkStore: (select: (state: unknown) => unknown) => select({ remarks: mockRemarks }),
 }));
@@ -15,6 +20,11 @@ jest.mock('@/features/chat/components/chat-bubble', () => {
   return {
     ImageBubble: jest.requireActual<typeof import('../../components/bubbles/image-bubble')>('../../components/bubbles/image-bubble').ImageBubble,
     SystemNoticePill: ({ text }: { text: string }) => <Text>{text}</Text>,
+    NoteCardBubble: ({ onPress, onSectionPress }: { onPress: (note: { noteId: string; ownerId: string }) => void; onSectionPress: (note: { noteId: string; ownerId: string }, section: string) => void }) => {
+      const { Pressable, View } = jest.requireActual<typeof import('react-native')>('react-native');
+      const note = { noteId: 'note-1', ownerId: 'owner' };
+      return <View><Pressable testID="open-note" onPress={() => onPress(note)} /><Pressable testID="open-note-media" onPress={() => onSectionPress(note, 'media')} /></View>;
+    },
   };
 });
 jest.mock('@/features/chat/components/bubbles/shared', () => ({
@@ -26,7 +36,7 @@ jest.mock('@/features/chat/components/FailedMessageRetry', () => ({
 }));
 jest.mock('@/features/groups/GroupInvitationBubble', () => ({ GroupInvitationBubble: () => null }));
 jest.mock('@/features/groups/routes', () => ({}));
-jest.mock('@/features/user/utils/routes', () => ({}));
+jest.mock('@/features/user/utils/routes', () => ({ getNoteDetailHref: jest.fn(() => '/note') }));
 jest.mock('@/components/ui/member-name', () => ({ MemberName: () => null }));
 jest.mock('@/features/chat/chat-detail/styles', () => ({ chatDetailStyles: {} }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
@@ -59,6 +69,7 @@ const params = {
   handleToggleSelectedMessage: jest.fn(),
   colors: { text: '#111', iconAccent: '#6200ee' },
   scope: 'messages',
+  conversationID: 'conversation',
   groupMemberNames: {},
   selfDestructEnabled: false,
   selfDestructCacheKey: '',
@@ -101,6 +112,18 @@ function swipeTo(index: number) {
 beforeEach(() => {
   mockAvatarRender.mockClear();
   jest.mocked(saveImageToLibrary).mockClear();
+  jest.mocked(getNoteDetailHref).mockClear();
+});
+
+test('note and section navigation preserve the source message and its cached height', () => {
+  const message: ChatMessage = { id: 'note-message', type: 'note-card' };
+  mockMessagesByConversation.conversation = [{ id: message.id, height: 42 }];
+  render(<Messages messages={[message]} />);
+  const source = { conversationId: 'conversation', messageId: 'note-message', messageHeight: 42 };
+  fireEvent.press(screen.getByTestId('open-note'));
+  expect(getNoteDetailHref).toHaveBeenLastCalledWith('messages', 'note-1', 'owner', '', source);
+  fireEvent.press(screen.getByTestId('open-note-media'));
+  expect(getNoteDetailHref).toHaveBeenLastCalledWith('messages', 'note-1', 'owner', 'media', source);
 });
 
 test.each([older, newer])('an open gallery drops revoked neighbor $id while its anchor row stays memoized', (neighbor) => {

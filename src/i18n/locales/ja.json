@@ -1040,6 +1040,9 @@
     "detail": {
       "loadFailed": "ノートを読み込めませんでした。もう一度お試しください",
       "notFound": "ノートが見つかりません",
+      "added": "追加済み",
+      "addFailed": "ノートを追加できませんでした",
+      "addSourceUnavailable": "この共有元からはノートを追加できません。チャットに戻り、元のメッセージから開き直してください。",
       "exportFailedTitle": "エクスポートに失敗しました",
       "exportFailedMessage": "しばらくしてからお試しください",
       "locationFallback": "位置",

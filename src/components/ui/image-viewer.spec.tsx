@@ -191,3 +191,19 @@ test('starts rendering a nonadjacent destination while a fling is still in progr
 
   expect(screen.getAllByTestId('zoomable-image').some((image) => image.props.uri === 'https://example.test/2.jpg')).toBe(true);
 });
+
+test('ignores prefetched page zoom callbacks and clears the old page lock during paging', () => {
+  render(<ImageViewer images={['0.jpg', '1.jpg']} visible onClose={jest.fn()} />);
+  const list = screen.UNSAFE_getByType(FlatList);
+  const [current, prefetched] = screen.getAllByTestId('zoomable-image');
+  act(() => prefetched.props.onZoomedChange(true));
+  expect(list.props.scrollEnabled).toBe(true);
+  act(() => current.props.onZoomedChange(true));
+  expect(list.props.scrollEnabled).toBe(false);
+  fireEvent.scroll(list, { nativeEvent: { contentOffset: { x: 750, y: 0 } } });
+  expect(list.props.scrollEnabled).toBe(true);
+  const next = screen.getAllByTestId('zoomable-image').find((image) => image.props.active);
+  act(() => next!.props.onZoomedChange(true));
+  act(() => current.props.onZoomedChange(false));
+  expect(list.props.scrollEnabled).toBe(false);
+});

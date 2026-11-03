@@ -47,7 +47,7 @@ export interface ChatMessageAreaProps {
   handleUnreadStartVisibilityChange: (visible: boolean) => void;
   renderItem: (info: { item: ChatMessage }) => ReactElement | null;
   keyExtractor: (item: ChatMessage) => string;
-  closeInputPanels: () => void;
+  closeInputPanels: (dismissKeyboard?: boolean) => void;
 }
 
 /**
@@ -156,12 +156,12 @@ export function ChatMessageArea({
         keyboardShouldPersistTaps="handled"
         // Observe the touch without claiming the responder: links, media taps
         // and long presses still reach the bubble underneath.
-        onTouchStart={closeInputPanels}
+        onTouchStart={() => closeInputPanels()}
         onScroll={handleMessageListScroll}
         scrollEventThrottle={32}
         onViewableItemsChanged={handleViewableItemsChanged}
         viewabilityConfig={UNREAD_VIEWABILITY_CONFIG}
-        onScrollBeginDrag={closeInputPanels}
+        onScrollBeginDrag={() => closeInputPanels()}
         // scrollToIndex 在 inverted + 没设 getItemLayout 时，目标 index 超出已渲染窗口
         // 就会抛 "scrollToIndex out of range"。fallback：先滚到能测到的最远 index，
         // 等下一帧布局完再精确跳到目标位置，避免搜索定位时整页崩。

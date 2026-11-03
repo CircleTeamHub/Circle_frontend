@@ -217,9 +217,13 @@ export function useComposerSend({
         if (!card.queued) await card.delivered;
         if (mountedRef.current) setPendingCard(null);
       }
-      // 2) 再发文字（非空才发）。引用 > @提及 > 普通文本。
+      // 2) 再发文字（非空才发）。引用消息也保留 @ 提醒信息。
       if (nextText) {
-        const activeMentionTargets = getMentionsPresentInText(nextText, mentionTargets);
+        const activeMentionTargets = isGroupChat ? getMentionsPresentInText(nextText, mentionTargets) : [];
+        const mentions = activeMentionTargets
+          .filter((m) => !m.isAll)
+          .map((m) => ({ userId: m.userID, nickname: m.nickname }));
+        const atAll = activeMentionTargets.some((m) => m.isAll);
         const message = track(
           startChatSend((onCreate) => {
             if (quoteTarget) {
@@ -230,6 +234,8 @@ export function useComposerSend({
                 replyToId: isLocalMessageId(quoteTarget.id)
                   ? undefined
                   : quoteTarget.id,
+                mentions,
+                atAll,
                 onCreate,
               });
             }
@@ -237,10 +243,8 @@ export function useComposerSend({
               return sendTextMessage({
                 conversationId: conversationID,
                 text: nextText,
-                mentions: activeMentionTargets
-                  .filter((m) => !m.isAll)
-                  .map((m) => ({ userId: m.userID, nickname: m.nickname })),
-                atAll: activeMentionTargets.some((m) => m.isAll),
+                mentions,
+                atAll,
                 onCreate,
               });
             }

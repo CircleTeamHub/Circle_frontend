@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, render, screen } from '@testing-library/react-native';
-import { PanResponder } from 'react-native';
+import { Animated, PanResponder } from 'react-native';
 import { ZoomableImage } from './zoomable-image';
 
 // 手势逻辑跑在 jest-expo 的**原生** preset 下 —— 手机端走的就是这条 PanResponder
@@ -9,10 +9,13 @@ import { ZoomableImage } from './zoomable-image';
 jest.mock('expo-image', () => {
   const { View: RNView } =
     jest.requireActual<typeof import('react-native')>('react-native');
-  return { Image: () => <RNView testID="zoomable-image" /> };
+  return { Image: (props: object) => <RNView testID="zoomable-image" {...props} /> };
 });
 
 type Handlers = {
+  onPanResponderStart: (event: unknown, state: unknown) => void;
+  onPanResponderEnd: (event: unknown, state: unknown) => void;
+  onPanResponderTerminate: () => void;
   onMoveShouldSetPanResponder: (event: unknown, state: unknown) => boolean;
   onPanResponderTerminationRequest: () => boolean;
   onPanResponderGrant: (event: unknown, state: unknown) => void;
@@ -29,10 +32,10 @@ const createSpy = jest
     return { panHandlers: {} } as ReturnType<typeof PanResponder.create>;
   });
 
-function touchEvent(points: { pageX: number; pageY: number }[], location = {}) {
+function touchEvent(points: { pageX: number; pageY: number; locationX?: number; locationY?: number }[], location = {}) {
   return {
     nativeEvent: {
-      touches: points,
+      touches: points.map((point) => ({ locationX: point.pageX, locationY: point.pageY, ...point })),
       locationX: 100,
       locationY: 100,
       ...location,
@@ -245,4 +248,150 @@ test('holding fires the long-press menu, and moving cancels it', () => {
     jest.advanceTimersByTime(600);
   });
   expect(onLongPress).toHaveBeenCalledTimes(1);
+});
+
+function transformValues() {
+  const transforms = screen.UNSAFE_getByType(Animated.View).props.style[1].transform;
+  return transforms.map((transform: Record<string, Animated.Value>) =>
+    (Object.values(transform)[0] as Animated.Value & { __getValue(): number }).__getValue(),
+  );
+}
+
+test('locks paging as soon as a second finger lands, even before zoom exceeds 1x', () => {
+  const onZoomedChange = jest.fn();
+  renderImage({ onZoomedChange });
+  act(() => captured.onPanResponderGrant(touchEvent([
+    { pageX: 100, pageY: 150 }, { pageX: 200, pageY: 150 },
+  ]), gesture()));
+  expect(onZoomedChange).toHaveBeenLastCalledWith(true);
+  expect(captured.onPanResponderTerminationRequest()).toBe(false);
+  act(() => captured.onPanResponderRelease(touchEvent([]), gesture()));
+  expect(onZoomedChange).toHaveBeenLastCalledWith(false);
+});
+
+test('preserves the root-local pinch focus after a prefetched page changes its window position', () => {
+  renderImage();
+  const pinch = (spread: number) => touchEvent([
+    { pageX: 800 + 100 - spread, pageY: 150, locationX: 100 - spread, locationY: 150 },
+    { pageX: 800 + 100 + spread, pageY: 150, locationX: 100 + spread, locationY: 150 },
+  ]);
+  act(() => {
+    captured.onPanResponderGrant(pinch(25), gesture());
+    captured.onPanResponderMove(pinch(25), gesture());
+    captured.onPanResponderMove(pinch(50), gesture());
+  });
+  expect(transformValues()).toEqual([50, 0, 2]);
+  expect(screen.UNSAFE_getByType(Animated.View).props.pointerEvents).toBe('none');
+});
+
+test('contains narrow images and reclamps immediately when intrinsic dimensions load', () => {
+  renderImage();
+  act(() => {
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }, { pageX: 200, pageY: 150 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 100, pageY: 150 }, { pageX: 200, pageY: 150 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 150, pageY: 150 }, { pageX: 350, pageY: 150 }]), gesture(100));
+  });
+  act(() => screen.getByTestId('zoomable-image').props.onLoad({ source: { width: 100, height: 300 } }));
+  expect(transformValues()).toEqual([0, 0, 2]);
+  act(() => {
+    captured.onPanResponderRelease(touchEvent([]), gesture());
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 200, pageY: 150 }]), gesture(100));
+  });
+  expect(transformValues()).toEqual([0, 0, 2]);
+  expect(screen.getByTestId('zoomable-image').props.enforceEarlyResizing).toBe(true);
+});
+
+test('continues from the pinch translation when one finger remains', () => {
+  renderImage();
+  act(() => {
+    captured.onPanResponderGrant(touchEvent([{ pageX: 75, pageY: 150 }, { pageX: 125, pageY: 150 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 75, pageY: 150 }, { pageX: 125, pageY: 150 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 50, pageY: 150 }, { pageX: 150, pageY: 150 }]), gesture());
+    captured.onPanResponderEnd(touchEvent([{ pageX: 150, pageY: 150 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 160, pageY: 150 }]), gesture(80));
+  });
+  expect(transformValues()).toEqual([60, 0, 2]);
+});
+
+test('a drag cancels a pending single tap instead of closing while moving', () => {
+  const onTap = jest.fn();
+  renderImage({ onTap });
+  act(() => {
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }]), gesture());
+    captured.onPanResponderRelease(touchEvent([]), gesture());
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 130, pageY: 150 }]), gesture(30));
+    jest.advanceTimersByTime(300);
+  });
+  expect(onTap).not.toHaveBeenCalled();
+});
+
+test('deactivating a page cancels pending taps and long presses', () => {
+  const onTap = jest.fn();
+  const onLongPress = jest.fn();
+  const props = { uri: 'a.jpg', width: 300, height: 300, onTap, onLongPress };
+  const view = render(<ZoomableImage {...props} active />);
+  act(() => {
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }]), gesture());
+    captured.onPanResponderRelease(touchEvent([]), gesture());
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }]), gesture());
+  });
+  view.rerender(<ZoomableImage {...props} active={false} />);
+  act(() => jest.advanceTimersByTime(600));
+  expect(onTap).not.toHaveBeenCalled();
+  expect(onLongPress).not.toHaveBeenCalled();
+});
+
+test('a second press cancels the pending tap while waiting for a long press', () => {
+  const onTap = jest.fn();
+  const onLongPress = jest.fn();
+  renderImage({ onTap, onLongPress });
+  act(() => {
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }]), gesture());
+    captured.onPanResponderRelease(touchEvent([]), gesture());
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }]), gesture());
+    jest.advanceTimersByTime(600);
+  });
+  expect(onTap).not.toHaveBeenCalled();
+  expect(onLongPress).toHaveBeenCalledTimes(1);
+});
+
+test('a second finger cancels a pending tap and releases the paging lock on termination', () => {
+  const onTap = jest.fn();
+  const onZoomedChange = jest.fn();
+  renderImage({ onTap, onZoomedChange });
+  act(() => {
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }]), gesture());
+    captured.onPanResponderRelease(touchEvent([]), gesture());
+    captured.onPanResponderGrant(touchEvent([{ pageX: 100, pageY: 150 }]), gesture());
+    captured.onPanResponderStart(touchEvent([{ pageX: 100, pageY: 150 }, { pageX: 200, pageY: 150 }]), gesture());
+    jest.advanceTimersByTime(600);
+  });
+  expect(onTap).not.toHaveBeenCalled();
+  expect(onZoomedChange).toHaveBeenLastCalledWith(true);
+  act(() => captured.onPanResponderTerminate());
+  expect(onZoomedChange).toHaveBeenLastCalledWith(false);
+});
+
+test('double-tap reset and a subsequent short downward swipe share the JS animation driver', () => {
+  const timing = jest.spyOn(Animated, 'timing');
+  const spring = jest.spyOn(Animated, 'spring');
+  renderImage();
+  act(() => {
+    for (let i = 0; i < 4; i++) {
+      captured.onPanResponderGrant(touchEvent([{ pageX: 150, pageY: 150 }]), gesture());
+      captured.onPanResponderRelease(touchEvent([]), gesture());
+    }
+    captured.onPanResponderGrant(touchEvent([{ pageX: 150, pageY: 150 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 150, pageY: 180 }]), gesture(0, 30));
+    captured.onPanResponderRelease(touchEvent([]), { dx: 0, dy: 30, vy: 0 });
+    jest.advanceTimersByTime(2000);
+  });
+  expect(timing).toHaveBeenCalled();
+  expect(timing.mock.calls.every(([, config]) => config.useNativeDriver === false)).toBe(true);
+  expect(spring).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ toValue: 0, useNativeDriver: false }));
+  expect(transformValues()[1]).toBeCloseTo(0);
+  timing.mockRestore();
+  spring.mockRestore();
 });

@@ -1044,6 +1044,9 @@
     "detail": {
       "loadFailed": "No se pudo cargar la nota, inténtalo de nuevo",
       "notFound": "Nota no encontrada",
+      "added": "Añadida",
+      "addFailed": "No se pudo añadir la nota",
+      "addSourceUnavailable": "No se puede añadir esta nota desde este origen. Vuelve al chat y ábrela desde el mensaje original.",
       "exportFailedTitle": "Error al exportar",
       "exportFailedMessage": "Inténtalo de nuevo más tarde",
       "locationFallback": "Ubicación",

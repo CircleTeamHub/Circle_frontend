@@ -2695,6 +2695,9 @@
     "detail": {
       "loadFailed": "Failed to load note, please try again",
       "notFound": "Note not found",
+      "added": "Added",
+      "addFailed": "Could not add note",
+      "addSourceUnavailable": "This note cannot be added from this source. Return to the chat and reopen the original message.",
       "exportFailedTitle": "Export failed",
       "exportFailedMessage": "Please try again later",
       "locationFallback": "Location",

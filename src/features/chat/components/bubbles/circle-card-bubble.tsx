@@ -14,6 +14,7 @@ interface CircleCardBubbleProps {
   selfAvatarUri?: string;
   onPress?: (card: CircleCardData) => void;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
 }
@@ -29,6 +30,7 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
   selfAvatarUri,
   onPress,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
 }) => {
@@ -65,6 +67,7 @@ export const CircleCardBubble: React.FC<CircleCardBubbleProps> = ({
       footer={t('circle.card.footer')}
       onPress={onPress ? () => onPress(card) : undefined}
       onAvatarPress={onAvatarPress}
+      onAvatarLongPress={onAvatarLongPress}
       onLongPress={onLongPress}
       hideStatus={hideStatus}
     />

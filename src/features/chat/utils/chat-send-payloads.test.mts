@@ -78,3 +78,10 @@ test('buildQuotePreviewText returns compact text for text and media messages', (
   assert.equal(buildQuotePreviewText({ id: 'm2', type: 'image' }, t), '[图片]');
   assert.equal(buildQuotePreviewText({ id: 'm3', type: 'note-card', noteCard: { noteId: 'n1', title: 'Trip', contentPreview: null, coverUrl: null, imageCount: 0, videoCount: 0, groupNames: [] } }, t), '[笔记] Trip');
 });
+
+
+test('mentions can follow CJK text without a space', () => {
+  const target = { userID: 'u1', nickname: '小明' };
+  assert.equal(getActiveMentionQuery('你好@小', 5), '小');
+  assert.deepEqual(getMentionsPresentInText('你好@小明 ', [target]), [target]);
+});

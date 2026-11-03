@@ -658,3 +658,21 @@ test('媒体发送复用已上屏气泡的 d,不会再造一条', async () => {
   const sentPayload = calls.sentPayloads.at(-1);
   assert.equal(sentPayload.d, 'd-existing');
 });
+
+
+test('quoted replies preserve mention metadata and omit empty optional fields', async () => {
+  const { api, calls } = loadClient({ blocked: false });
+  await api.sendQuoteMessage({
+    conversationId: 'c1', text: '@Alice reply', quotedText: 'original', replyToId: 'source-message',
+    mentions: [{ userId: 'alice', nickname: 'Alice' }], atAll: true,
+  });
+  const quote = calls.sentPayloads[0];
+  assert.equal(quote.replyToId, 'source-message');
+  assert.deepEqual(JSON.parse(JSON.stringify(quote.content)), {
+    text: '@Alice reply', quotedText: 'original',
+    mentions: [{ userId: 'alice', nickname: 'Alice' }], atAll: true,
+  });
+  const plain = loadClient({ blocked: false });
+  await plain.api.sendQuoteMessage({ conversationId: 'c1', text: 'reply', quotedText: 'original', mentions: [], atAll: false });
+  assert.deepEqual(JSON.parse(JSON.stringify(plain.calls.sentPayloads[0].content)), { text: 'reply', quotedText: 'original' });
+});

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   Pressable,
+  type TextInput,
   useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, useSegments } from 'expo-router';
@@ -103,6 +104,8 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   // 位置 / 笔记 / 名片 / 转账 6 条发送路径共享同一道闸。
   const inFlightRef = useRef(false);
   const [draft, setDraft] = useState('');
+  const composerInputRef = useRef<TextInput>(null);
+  const [mentionFocusRequested, setMentionFocusRequested] = useState(false);
   const [mentionPickerVisible, setMentionPickerVisible] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionCandidates, setMentionCandidates] = useState<MentionTarget[]>([]);
@@ -394,37 +397,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     isPreviewMode,
   });
 
-  const {
-    renderItem,
-    keyExtractor,
-    imageViewer,
-  } = useMessageRenderer({
-    messages,
-    handleImageViewed,
-    selectedMessageIds,
-    handleToggleSelectedMessage,
-    colors,
-    scope,
-    groupMemberNames,
-    selfDestructEnabled,
-    selfDestructCacheKey,
-    isGroupChat,
-    conversationTitle,
-    avatarUrl,
-    handleOpenMessageSender,
-    handleOpenSelfProfile,
-    handleOpenUserCard,
-    hideChatAvatar,
-    d,
-    highlightedMessageID,
-    handleQuotePress,
-    selfAvatarUri,
-    selfName,
-    handleToggleReaction,
-    handleRetryMessage,
-    getMessageLongPressHandler,
-    handleStartCall,
-  });
 
   const {
     attachmentOpen,
@@ -440,6 +412,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     closeInputPanels,
     attachmentPanResponder,
   } = useComposerPanels({
+    mentionPickerVisible,
     setMentionPickerVisible,
   });
 
@@ -450,6 +423,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     handleSelectionChange,
     handleDraftChange,
     handlePickMention,
+    handleInsertMention,
   } = useComposerInput({
     currentUserID,
     draft,
@@ -507,6 +481,58 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     conversationType,
     isGroupChat,
     isPreviewMode,
+  });
+
+  const handleMentionSender = useCallback((message: ChatMessage) => {
+    if (!message.senderID || message.outgoing) return;
+    handleInsertMention({
+      userID: message.senderID,
+      nickname: groupMemberNames[message.senderID]?.trim() || message.senderName?.trim() || message.senderID,
+    });
+    closeInputPanels(false);
+    if (voiceInputMode) toggleVoiceInputMode();
+    setMentionFocusRequested(true);
+  }, [closeInputPanels, groupMemberNames, handleInsertMention, toggleVoiceInputMode, voiceInputMode]);
+
+  useEffect(() => {
+    if (!mentionFocusRequested || voiceInputMode) return;
+    setMentionFocusRequested(false);
+    composerInputRef.current?.focus();
+  }, [mentionFocusRequested, voiceInputMode]);
+
+  const {
+    renderItem,
+    keyExtractor,
+    imageViewer,
+  } = useMessageRenderer({
+    messages,
+    handleImageViewed,
+    selectedMessageIds,
+    handleToggleSelectedMessage,
+    colors,
+    scope,
+    conversationID,
+    groupMemberNames,
+    selfDestructEnabled,
+    selfDestructCacheKey,
+    isGroupChat,
+    conversationTitle,
+    avatarUrl,
+    handleOpenMessageSender,
+    onMentionSender: isGroupChat && canViewGroupMemberProfiles && !composerLocked && !isPreviewMode && !isVoiceRecording
+      ? handleMentionSender : undefined,
+    handleOpenSelfProfile,
+    handleOpenUserCard,
+    hideChatAvatar,
+    d,
+    highlightedMessageID,
+    handleQuotePress,
+    selfAvatarUri,
+    selfName,
+    handleToggleReaction,
+    handleRetryMessage,
+    getMessageLongPressHandler,
+    handleStartCall,
   });
 
   const {
@@ -747,6 +773,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
             setPendingCard={setPendingCard}
           />
           <ChatComposerBar
+        inputRef={composerInputRef}
             blurTarget={messageBlurTarget}
             insets={insets}
             colors={colors}

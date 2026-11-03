@@ -20,6 +20,7 @@ interface CallRecordBubbleProps {
   selfName?: string;
   selfAvatarUri?: string;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   /** 点卡片回拨（仅 1:1 会话传入；群通话回拨走群通话入口）。 */
   onCallBack?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
@@ -108,6 +109,7 @@ export function CallRecordBubble({
   selfName,
   selfAvatarUri,
   onAvatarPress,
+  onAvatarLongPress,
   onCallBack,
   onLongPress,
   hideStatus,
@@ -135,7 +137,7 @@ export function CallRecordBubble({
   return (
     <View style={[sCallRecord.row, outgoing && sCallRecord.rowOutgoing]}>
       {!outgoing ? (
-        <Pressable onPress={onAvatarPress} disabled={!onAvatarPress}>
+        <Pressable onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350} disabled={!onAvatarPress && !onAvatarLongPress}>
           <MessageAvatar
             message={message}
             outgoing={false}

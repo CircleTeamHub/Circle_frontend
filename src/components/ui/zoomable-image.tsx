@@ -42,7 +42,7 @@ interface ZoomableImageProps {
   height: number;
   /** 离开当前页时复位缩放（查看器翻页用）。 */
   active: boolean;
-  /** 缩放态变化：外层据此开关列表滚动。 */
+  /** 放大或正在双指操作时，外层须暂停翻页。 */
   onZoomedChange?: (zoomed: boolean) => void;
   onTap?: () => void;
   onLongPress?: () => void;
@@ -78,6 +78,12 @@ export function ZoomableImage({
     pinchStartScale: 1,
     panStartTx: 0,
     panStartTy: 0,
+    panStartX: 0,
+    panStartY: 0,
+    pinchStartX: 0,
+    pinchStartY: 0,
+    pinchStartTx: 0,
+    pinchStartTy: 0,
     moved: false,
     /** 本次手势出现过双指：松手时即使回到 1x 也不能当成下滑关闭。 */
     multiTouch: false,
@@ -87,6 +93,7 @@ export function ZoomableImage({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<View>(null);
+  const pagerLocked = useRef(false);
   /** 图片固有尺寸（onLoad 后才知道），用来推算 contain 后的渲染框。 */
   const natural = useRef<{ w: number; h: number } | null>(null);
 
@@ -104,14 +111,20 @@ export function ZoomableImage({
     }
   }, []);
 
+  const updatePagerLock = useCallback((locked: boolean) => {
+    if (pagerLocked.current === locked) return;
+    pagerLocked.current = locked;
+    onZoomedChange?.(locked);
+  }, [onZoomedChange]);
+
   const apply = useCallback(() => {
     scale.setValue(view.current.scale);
     translateX.setValue(view.current.tx);
     translateY.setValue(view.current.ty);
   }, [scale, translateX, translateY]);
 
-  const clampTranslate = useCallback((value: number, extent: number) => {
-    const limit = Math.max(0, ((view.current.scale - 1) * extent) / 2);
+  const clampTranslate = useCallback((value: number, extent: number, container: number) => {
+    const limit = Math.max(0, (view.current.scale * extent - container) / 2);
     return Math.max(-limit, Math.min(limit, value));
   }, []);
 
@@ -131,7 +144,6 @@ export function ZoomableImage({
 
   const setScale = useCallback(
     (next: number, animated = false) => {
-      const wasZoomed = view.current.scale > 1.01;
       const clamped = Math.max(1, Math.min(MAX_SCALE, next));
       view.current.scale = clamped;
       if (clamped <= 1.01) {
@@ -139,8 +151,8 @@ export function ZoomableImage({
         view.current.ty = 0;
       } else {
         const extent = renderedExtent();
-        view.current.tx = clampTranslate(view.current.tx, extent.w);
-        view.current.ty = clampTranslate(view.current.ty, extent.h);
+        view.current.tx = clampTranslate(view.current.tx, extent.w, width);
+        view.current.ty = clampTranslate(view.current.ty, extent.h, height);
       }
 
       if (animated) {
@@ -165,13 +177,14 @@ export function ZoomableImage({
         apply();
       }
 
-      const zoomed = clamped > 1.01;
-      if (zoomed !== wasZoomed) onZoomedChange?.(zoomed);
+      updatePagerLock(clamped > 1.01 || gesture.current.pinchStartDistance > 0);
     },
     [
       apply,
       clampTranslate,
-      onZoomedChange,
+      updatePagerLock,
+      width,
+      height,
       renderedExtent,
       scale,
       translateX,
@@ -181,8 +194,14 @@ export function ZoomableImage({
 
   // 翻到别的图时复位，回来是干净的 1x。
   useEffect(() => {
-    if (!active && view.current.scale !== 1) setScale(1);
-  }, [active, setScale]);
+    if (!active) {
+      clearLongPress();
+      clearTapTimer();
+      gesture.current.pinchStartDistance = 0;
+      gesture.current.lastTapAt = 0;
+      setScale(1);
+    }
+  }, [active, clearLongPress, clearTapTimer, setScale]);
 
   useEffect(
     () => () => {
@@ -196,6 +215,7 @@ export function ZoomableImage({
     (event: GestureResponderEvent) => {
       const now = Date.now();
       if (now - gesture.current.lastTapAt < DOUBLE_TAP_WINDOW_MS) {
+        clearTapTimer();
         gesture.current.lastTapAt = 0;
         if (view.current.scale > 1.01) {
           setScale(1, true);
@@ -220,33 +240,81 @@ export function ZoomableImage({
     [clearTapTimer, height, onTap, setScale, width],
   );
 
+  const beginPinch = useCallback((event: GestureResponderEvent) => {
+    const touches = event.nativeEvent.touches;
+    if (touches.length < 2 || gesture.current.pinchStartDistance > 0) return;
+    clearLongPress();
+    clearTapTimer();
+    gesture.current.moved = true;
+    gesture.current.multiTouch = true;
+    gesture.current.lastTapAt = 0;
+    gesture.current.pinchStartDistance = Math.max(1, distance(touches));
+    gesture.current.pinchStartScale = view.current.scale;
+    gesture.current.pinchStartTx = view.current.tx;
+    gesture.current.pinchStartTy = view.current.ty;
+    // Children do not receive touches, so these coordinates stay local to the
+    // untransformed root, including after a prefetched page scrolls into view.
+    gesture.current.pinchStartX = (touches[0].locationX + touches[1].locationX) / 2;
+    gesture.current.pinchStartY = (touches[0].locationY + touches[1].locationY) / 2;
+    updatePagerLock(true);
+  }, [clearLongPress, clearTapTimer, updatePagerLock]);
+
+  const finishPinch = useCallback(() => {
+    clearLongPress();
+    gesture.current.pinchStartDistance = 0;
+    updatePagerLock(view.current.scale > 1.01);
+  }, [clearLongPress, updatePagerLock]);
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: (event) => event.nativeEvent.touches.length >= 2 || view.current.scale > 1.01,
+        onMoveShouldSetPanResponderCapture: (event) => event.nativeEvent.touches.length >= 2 || view.current.scale > 1.01,
         onMoveShouldSetPanResponder: (event, gestureState) => {
-          if (event.nativeEvent.touches.length === 2) return true;
+          if (event.nativeEvent.touches.length >= 2) return true;
           if (view.current.scale > 1.01) return true;
           // 未放大：横向手势留给外层列表翻页。
           return Math.abs(gestureState.dy) > MOVE_TOLERANCE * 2;
         },
         // 1x 时允许外层列表把手势抢走（翻页）；放大后拒绝，保住平移。
-        onPanResponderTerminationRequest: () => view.current.scale <= 1.01,
-        onPanResponderGrant: () => {
+        onPanResponderTerminationRequest: () => gesture.current.pinchStartDistance === 0 && view.current.scale <= 1.01,
+        onShouldBlockNativeResponder: () => pagerLocked.current,
+        onPanResponderGrant: (event) => {
           gesture.current.moved = false;
           gesture.current.multiTouch = false;
           gesture.current.longPressFired = false;
           gesture.current.panStartTx = view.current.tx;
           gesture.current.panStartTy = view.current.ty;
+          gesture.current.panStartX = event.nativeEvent.touches[0].pageX;
+          gesture.current.panStartY = event.nativeEvent.touches[0].pageY;
           gesture.current.pinchStartDistance = 0;
+          scale.stopAnimation();
+          translateX.stopAnimation();
+          translateY.stopAnimation();
           if (view.current.scale <= 1.01) translateY.setValue(0);
           clearLongPress();
+          clearTapTimer();
+          beginPinch(event);
+          if (gesture.current.pinchStartDistance > 0) return;
           longPressTimer.current = setTimeout(() => {
             if (!gesture.current.moved) {
               gesture.current.longPressFired = true;
               onLongPress?.();
             }
           }, LONG_PRESS_MS);
+        },
+        onPanResponderStart: beginPinch,
+        onPanResponderEnd: (event) => {
+          const touches = event.nativeEvent.touches;
+          if (touches.length >= 2) return;
+          finishPinch();
+          if (touches.length === 1) {
+            gesture.current.panStartTx = view.current.tx;
+            gesture.current.panStartTy = view.current.ty;
+            gesture.current.panStartX = touches[0].pageX;
+            gesture.current.panStartY = touches[0].pageY;
+          }
         },
         onPanResponderMove: (event, gestureState) => {
           const touches = event.nativeEvent.touches;
@@ -256,20 +324,22 @@ export function ZoomableImage({
           ) {
             gesture.current.moved = true;
             clearLongPress();
+            clearTapTimer();
+            gesture.current.lastTapAt = 0;
           }
 
-          if (touches.length === 2) {
-            gesture.current.moved = true;
-            gesture.current.multiTouch = true;
-            clearLongPress();
-            const current = distance(touches);
-            if (gesture.current.pinchStartDistance === 0) {
-              gesture.current.pinchStartDistance = current;
-              gesture.current.pinchStartScale = view.current.scale;
-              return;
-            }
-            const ratio = current / gesture.current.pinchStartDistance;
-            setScale(gesture.current.pinchStartScale * ratio);
+          if (touches.length >= 2) {
+            beginPinch(event);
+            const nextScale = Math.max(1, Math.min(MAX_SCALE,
+              gesture.current.pinchStartScale * distance(touches) / gesture.current.pinchStartDistance));
+            const ratio = nextScale / gesture.current.pinchStartScale;
+            const centerX = (touches[0].locationX + touches[1].locationX) / 2;
+            const centerY = (touches[0].locationY + touches[1].locationY) / 2;
+            view.current.tx = centerX - width / 2 - ratio *
+              (gesture.current.pinchStartX - width / 2 - gesture.current.pinchStartTx);
+            view.current.ty = centerY - height / 2 - ratio *
+              (gesture.current.pinchStartY - height / 2 - gesture.current.pinchStartTy);
+            setScale(nextScale);
             return;
           }
 
@@ -284,18 +354,19 @@ export function ZoomableImage({
 
           const extent = renderedExtent();
           view.current.tx = clampTranslate(
-            gesture.current.panStartTx + gestureState.dx,
+            gesture.current.panStartTx + touches[0].pageX - gesture.current.panStartX,
             extent.w,
+            width,
           );
           view.current.ty = clampTranslate(
-            gesture.current.panStartTy + gestureState.dy,
+            gesture.current.panStartTy + touches[0].pageY - gesture.current.panStartY,
             extent.h,
+            height,
           );
           apply();
         },
         onPanResponderRelease: (event, gestureState) => {
-          clearLongPress();
-          gesture.current.pinchStartDistance = 0;
+          finishPinch();
 
           // 只有越过移动阈值的单指下拉才算关闭手势；几像素的手指抖动仍是点击，
           // 位移归零后落到下面的点击判定。
@@ -327,8 +398,9 @@ export function ZoomableImage({
           }
         },
         onPanResponderTerminate: () => {
-          clearLongPress();
-          gesture.current.pinchStartDistance = 0;
+          finishPinch();
+          clearTapTimer();
+          gesture.current.lastTapAt = 0;
           if (view.current.scale <= 1.01) {
             Animated.spring(translateY, {
               toValue: 0,
@@ -339,13 +411,20 @@ export function ZoomableImage({
       }),
     [
       apply,
+      beginPinch,
       clampTranslate,
       clearLongPress,
+      clearTapTimer,
+      finishPinch,
       handleTap,
       onLongPress,
       renderedExtent,
       setScale,
+      scale,
+      translateX,
       translateY,
+      width,
+      height,
       onSwipeDown,
     ],
   );
@@ -357,11 +436,13 @@ export function ZoomableImage({
     if (!node?.addEventListener) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
+      clearTapTimer();
+      gesture.current.lastTapAt = 0;
       setScale(view.current.scale * Math.exp(-event.deltaY / 300));
     };
     node.addEventListener('wheel', onWheel, { passive: false });
     return () => node.removeEventListener('wheel', onWheel);
-  }, [active, setScale]);
+  }, [active, clearTapTimer, setScale]);
 
   return (
     <View
@@ -370,6 +451,7 @@ export function ZoomableImage({
       {...panResponder.panHandlers}
     >
       <Animated.View
+        pointerEvents="none"
         style={[
           s.fill,
           { transform: [{ translateX }, { translateY }, { scale }] },
@@ -380,11 +462,15 @@ export function ZoomableImage({
           cachePolicy={cachePolicy}
           style={s.fill}
           contentFit="contain"
+          enforceEarlyResizing
           transition={150}
           onLoad={(event) => {
             // 固有尺寸决定 contain 后的渲染框，平移边界据此收紧。
             const { width: w, height: h } = event.source ?? {};
-            if (w && h) natural.current = { w, h };
+            if (w && h) {
+              natural.current = { w, h };
+              setScale(view.current.scale);
+            }
           }}
         />
       </Animated.View>

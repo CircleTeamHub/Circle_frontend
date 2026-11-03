@@ -67,6 +67,9 @@ export function useComposerInput({
   // 记录输入框光标位置：表情面板按光标处插入，而不是一律拼到末尾。
   // 用 ref 持续跟踪、用 state 只在插入后短暂受控，避免长期受控干扰中文输入法。
   const selectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  // 原生的文本和选区事件先后顺序不固定，选区处理须读取刚收到的文本。
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const [selection, setSelection] = useState<
     { start: number; end: number } | undefined
   >(undefined);
@@ -96,7 +99,7 @@ export function useComposerInput({
       const nextSelection = event.nativeEvent.selection;
       selectionRef.current = nextSelection;
       if (isGroupChat && canViewGroupMemberProfiles) {
-        const activeQuery = getActiveMentionQuery(draft, nextSelection.start);
+        const activeQuery = getActiveMentionQuery(draftRef.current, nextSelection.start);
         setMentionQuery(activeQuery);
         if (activeQuery === null) {
           setMentionPickerVisible(false);
@@ -107,7 +110,7 @@ export function useComposerInput({
       // 插入后短暂受控把光标移到表情之后；用户再次移动光标时释放受控，交还输入法。
       setSelection((current) => (current ? undefined : current));
     },
-    [canViewGroupMemberProfiles, draft, isGroupChat, setMentionPickerVisible, setMentionQuery],
+    [canViewGroupMemberProfiles, isGroupChat, setMentionPickerVisible, setMentionQuery],
   );
 
   const loadMentionCandidates = useCallback(async () => {
@@ -185,6 +188,17 @@ export function useComposerInput({
 
   const handleDraftChange = useCallback(
     (next: string) => {
+      const previous = draftRef.current;
+      // 预测候选位置，让中间插入 @ 不必等选区事件；插入操作仍以原生选区为准。
+      let prefix = 0;
+      while (prefix < previous.length && prefix < next.length && previous[prefix] === next[prefix]) prefix++;
+      let suffix = 0;
+      while (suffix < previous.length - prefix && suffix < next.length - prefix &&
+        previous[previous.length - 1 - suffix] === next[next.length - 1 - suffix]) suffix++;
+      const inferredCursor = previous === next
+        ? Math.min(selectionRef.current.start, next.length)
+        : next.length - suffix;
+      draftRef.current = next;
       setDraft(next);
       // 「正在输入」上报:只在有内容时发(清空不算输入)。隐私页的单聊/群聊
       // 开关与节流(2s)都收在 socket-manager 的 sendChatTyping 里。
@@ -197,12 +211,11 @@ export function useComposerInput({
         setMentionPickerVisible(false);
         return;
       }
-      const selectionStart = selectionRef.current.start;
-      const inferredCursor =
-        selectionStart === draft.length && next.length >= draft.length
-          ? next.length
-          : Math.min(selectionStart, next.length);
-      const activeQuery = getActiveMentionQuery(next, inferredCursor);
+      // 重复字符无法唯一推断插入点，不能覆盖已经先到达的原生光标。
+      const nativeCursor = selectionRef.current.start;
+      const nativeQuery = getActiveMentionQuery(next, nativeCursor);
+      const activeQuery = nativeCursor < previous.length && nativeQuery !== null
+        ? nativeQuery : getActiveMentionQuery(next, inferredCursor);
       setMentionQuery(activeQuery);
       if (activeQuery !== null) {
         setMentionPickerVisible(true);
@@ -214,7 +227,6 @@ export function useComposerInput({
     [
       canViewGroupMemberProfiles,
       conversationID,
-      draft,
       isGroupChat,
       loadMentionCandidates,
       setDraft,
@@ -224,28 +236,36 @@ export function useComposerInput({
     ],
   );
 
-  const handlePickMention = useCallback((target: MentionTarget) => {
+  const insertMention = useCallback((target: MentionTarget, replaceQuery: boolean) => {
     setDraft((current) => {
       const cursor = Math.min(selectionRef.current.start, current.length);
-      const beforeCursor = current.slice(0, cursor);
-      const atIndex = beforeCursor.lastIndexOf('@');
+      const end = Math.min(selectionRef.current.end, current.length);
+      const atIndex = replaceQuery && getActiveMentionQuery(current, cursor) !== null
+        ? current.slice(0, cursor).lastIndexOf('@') : cursor;
       const insert = `@${target.nickname} `;
-      const next =
-        atIndex >= 0
-          ? `${current.slice(0, atIndex)}${insert}${current.slice(cursor)}`
-          : `${current}${insert}`;
-      const nextCursor = (atIndex >= 0 ? atIndex : current.length) + insert.length;
+      const next = `${current.slice(0, atIndex)}${insert}${current.slice(end)}`;
+      const nextCursor = atIndex + insert.length;
+      draftRef.current = next;
       selectionRef.current = { start: nextCursor, end: nextCursor };
       setSelection({ start: nextCursor, end: nextCursor });
       return next;
     });
     setMentionTargets((current) => {
-      if (current.some((item) => item.userID === target.userID)) return current;
+      if (current.some((item) => item.userID === target.userID)) {
+        return current.map((item) => item.userID === target.userID ? target : item);
+      }
       return [...current, target];
     });
     setMentionQuery(null);
     setMentionPickerVisible(false);
   }, [setDraft, setMentionPickerVisible, setMentionQuery, setMentionTargets]);
+
+  const handlePickMention = useCallback((target: MentionTarget) => {
+    insertMention(target, true);
+  }, [insertMention]);
+  const handleInsertMention = useCallback((target: MentionTarget) => {
+    insertMention(target, false);
+  }, [insertMention]);
 
   return {
     selection,
@@ -254,5 +274,6 @@ export function useComposerInput({
     handleSelectionChange,
     handleDraftChange,
     handlePickMention,
+    handleInsertMention,
   };
 }

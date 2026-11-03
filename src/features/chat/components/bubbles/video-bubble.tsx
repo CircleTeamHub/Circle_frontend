@@ -28,6 +28,7 @@ interface VideoBubbleProps {
   selfName?: string;
   selfAvatarUri?: string;
   onAvatarPress?: () => void;
+  onAvatarLongPress?: () => void;
   onLongPress?: (event: GestureResponderEvent) => void;
   hideStatus?: boolean;
   /** 本人开了阅后即焚:封面和图片一样只进内存缓存,不落盘。 */
@@ -170,6 +171,7 @@ export function VideoBubble({
   selfName,
   selfAvatarUri,
   onAvatarPress,
+  onAvatarLongPress,
   onLongPress,
   hideStatus,
   selfDestructEnabled = false,
@@ -293,8 +295,8 @@ export function VideoBubble({
   return (
     <>
       <View style={s.row}>
-        {onAvatarPress ? (
-          <Pressable style={s.avatarSlot} onPress={onAvatarPress}>
+        {onAvatarPress || onAvatarLongPress ? (
+          <Pressable style={s.avatarSlot} onPress={onAvatarPress} onLongPress={onAvatarLongPress} delayLongPress={350}>
             {avatarNode}
           </Pressable>
         ) : (
