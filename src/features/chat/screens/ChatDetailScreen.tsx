@@ -7,8 +7,9 @@ import {
 import { useLocalSearchParams, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, Spacing } from '@/theme';
+import { useTheme, Spacing, Typography } from '@/theme';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { BlurTargetView } from 'expo-blur';
 import { Divider } from '@/components/ui/divider';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { EmojiPicker } from '@/features/chat/components/emoji-picker';
@@ -70,6 +71,8 @@ interface ChatDetailScreenProps {
 
 export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {}) {
   const insets = useSafeAreaInsets();
+  const messageBlurTarget = useRef<View>(null);
+  const [composerDockHeight, setComposerDockHeight] = useState(80 + Math.max(insets.bottom, 12));
   const { colors } = useTheme();
   const { t } = useTranslation();
   const routeParams = useLocalSearchParams<{
@@ -642,89 +645,117 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           </Text>
         </View>
       ) : null}
-      <ChatMessageArea
-        colors={colors}
-        t={t}
-        sendError={sendError}
-        mountedRef={mountedRef}
-        isPreviewMode={isPreviewMode}
-        backgroundImageUri={backgroundImageUri}
-        d={d}
-        flatListRef={flatListRef}
-        scrollRetryCountRef={scrollRetryCountRef}
-        scrollRetryTimerRef={scrollRetryTimerRef}
-        messagesLengthRef={messagesLengthRef}
-        handleLoadOlder={handleLoadOlder}
-        historyWindowFull={historyWindowFull}
-        unreadCount={entryUnreadCount}
-        showUnreadJump={showUnreadJump}
-        unreadStartMessageID={unreadStartMessageID}
-        messages={messages}
-        displayMessages={displayMessages}
-        handleMessageListScroll={handleMessageListScroll}
-        handleJumpToUnread={handleJumpToUnread}
-        handleUnreadStartVisibilityChange={handleUnreadStartVisibilityChange}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        closeInputPanels={closeInputPanels}
-        isVoiceRecording={isVoiceRecording}
-        voiceElapsedSeconds={voiceElapsedSeconds}
-      />
+      <View style={s.chatBody}>
+        <BlurTargetView ref={messageBlurTarget} style={s.messageArea}>
+          <ChatMessageArea
+            composerInset={composerDockHeight}
+            colors={colors}
+            t={t}
+            mountedRef={mountedRef}
+            backgroundImageUri={backgroundImageUri}
+            d={d}
+            flatListRef={flatListRef}
+            scrollRetryCountRef={scrollRetryCountRef}
+            scrollRetryTimerRef={scrollRetryTimerRef}
+            messagesLengthRef={messagesLengthRef}
+            handleLoadOlder={handleLoadOlder}
+            historyWindowFull={historyWindowFull}
+            unreadCount={entryUnreadCount}
+            showUnreadJump={showUnreadJump}
+            unreadStartMessageID={unreadStartMessageID}
+            messages={messages}
+            displayMessages={displayMessages}
+            handleMessageListScroll={handleMessageListScroll}
+            handleJumpToUnread={handleJumpToUnread}
+            handleUnreadStartVisibilityChange={handleUnreadStartVisibilityChange}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            closeInputPanels={closeInputPanels}
+          />
+        </BlurTargetView>
+        <View
+          testID="chat-composer-dock"
+          pointerEvents="box-none"
+          style={s.composerDock}
+          onLayout={(event) => setComposerDockHeight(event.nativeEvent.layout.height)}
+        >
+          {isPreviewMode ? (
+            <Text style={[s.previewNotice, Typography.small, { color: colors.text }]}>
+              {t('chat.detail.previewNotice', {
+                defaultValue: '连接尚未完成，请稍后重试',
+              })}
+            </Text>
+          ) : null}
+          {sendError ? (
+            <Text style={[s.sendError, Typography.small, { color: colors.error }]}>
+              {sendError}
+            </Text>
+          ) : null}
+          {isVoiceRecording ? (
+            <Text style={[s.voiceStatus, { color: colors.primary }]}>
+              {t('chat.detail.recordingSeconds', {
+                defaultValue: '正在录音 {{seconds}} 秒',
+                seconds: voiceElapsedSeconds,
+              })}
+            </Text>
+          ) : null}
+          <MentionPickerPanel
+            colors={colors}
+            t={t}
+            mentionPickerVisible={mentionPickerVisible}
+            d={d}
+            visibleMentionCandidates={visibleMentionCandidates}
+            handlePickMention={handlePickMention}
+          />
+          <ComposerBanners
+            colors={colors}
+            t={t}
+            setDraft={setDraft}
+            selfSilencedUntil={selfSilencedUntil}
+            selfSilenced={selfSilenced}
+            composerLocked={composerLocked}
+            d={d}
+            quoteTarget={quoteTarget}
+            setQuoteTarget={setQuoteTarget}
+            editingMessageId={editingMessageId}
+            setEditingMessageId={setEditingMessageId}
+            pendingCard={pendingCard}
+            setPendingCard={setPendingCard}
+          />
+          <ChatComposerBar
+            blurTarget={messageBlurTarget}
+            insets={insets}
+            colors={colors}
+            t={t}
+            draft={draft}
+            setMentionPickerVisible={setMentionPickerVisible}
+            selfSilenced={selfSilenced}
+            composerLocked={composerLocked}
+            isPreviewMode={isPreviewMode}
+            keyboardVisible={keyboardVisible}
+            d={d}
+            attachmentOpen={attachmentOpen}
+            setAttachmentOpen={setAttachmentOpen}
+            emojiOpen={emojiOpen}
+            setEmojiOpen={setEmojiOpen}
+            handleAttachmentToggle={handleAttachmentToggle}
+            handleEmojiToggle={handleEmojiToggle}
+            selection={selection}
+            handleSelectionChange={handleSelectionChange}
+            handleDraftChange={handleDraftChange}
+            voiceInputMode={voiceInputMode}
+            cancelArmed={cancelArmed}
+            isVoiceRecording={isVoiceRecording}
+            voiceElapsedSeconds={voiceElapsedSeconds}
+            toggleVoiceInputMode={toggleVoiceInputMode}
+            voicePanResponder={voicePanResponder}
+            sending={sending}
+            pendingCard={pendingCard}
+            handleSend={handleSend}
+          />
+        </View>
+      </View>
       {imageViewer}
-      <Divider />
-      <MentionPickerPanel
-        colors={colors}
-        t={t}
-        mentionPickerVisible={mentionPickerVisible}
-        d={d}
-        visibleMentionCandidates={visibleMentionCandidates}
-        handlePickMention={handlePickMention}
-      />
-      <ComposerBanners
-        colors={colors}
-        t={t}
-        setDraft={setDraft}
-        selfSilencedUntil={selfSilencedUntil}
-        selfSilenced={selfSilenced}
-        composerLocked={composerLocked}
-        d={d}
-        quoteTarget={quoteTarget}
-        setQuoteTarget={setQuoteTarget}
-        editingMessageId={editingMessageId}
-        setEditingMessageId={setEditingMessageId}
-        pendingCard={pendingCard}
-        setPendingCard={setPendingCard}
-      />
-      <ChatComposerBar
-        insets={insets}
-        colors={colors}
-        t={t}
-        draft={draft}
-        setMentionPickerVisible={setMentionPickerVisible}
-        selfSilenced={selfSilenced}
-        composerLocked={composerLocked}
-        isPreviewMode={isPreviewMode}
-        keyboardVisible={keyboardVisible}
-        d={d}
-        attachmentOpen={attachmentOpen}
-        setAttachmentOpen={setAttachmentOpen}
-        emojiOpen={emojiOpen}
-        setEmojiOpen={setEmojiOpen}
-        handleAttachmentToggle={handleAttachmentToggle}
-        handleEmojiToggle={handleEmojiToggle}
-        selection={selection}
-        handleSelectionChange={handleSelectionChange}
-        handleDraftChange={handleDraftChange}
-        voiceInputMode={voiceInputMode}
-        cancelArmed={cancelArmed}
-        isVoiceRecording={isVoiceRecording}
-        voiceElapsedSeconds={voiceElapsedSeconds}
-        toggleVoiceInputMode={toggleVoiceInputMode}
-        voicePanResponder={voicePanResponder}
-        sending={sending}
-        pendingCard={pendingCard}
-        handleSend={handleSend}
-      />
       {emojiOpen ? (
         <View
           style={[

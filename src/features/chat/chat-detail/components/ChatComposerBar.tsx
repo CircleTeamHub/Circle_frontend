@@ -17,7 +17,7 @@ import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { PANEL_LAYOUT_ANIM } from '@/features/chat/chat-detail/constants';
 import { type EdgeInsets } from 'react-native-safe-area-context';
 import { type TFunction } from 'i18next';
-import { type Dispatch, type SetStateAction } from 'react';
+import { type Dispatch, type RefObject, type SetStateAction } from 'react';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
@@ -25,6 +25,7 @@ import { type PlazaPostCardData } from '@/types';
 
 export interface ChatComposerBarProps {
   insets: EdgeInsets;
+  blurTarget?: RefObject<View | null>;
   colors: ThemeColors;
   t: TFunction<"translation", undefined>;
   draft: string;
@@ -59,6 +60,7 @@ export interface ChatComposerBarProps {
  */
 export function ChatComposerBar({
   insets,
+  blurTarget,
   colors,
   t,
   draft,
@@ -95,29 +97,30 @@ export function ChatComposerBar({
   const buttonFill = withAlpha(colors.text, dark ? 0.09 : 0.05);
   return (
     <View
+      pointerEvents="box-none"
       style={[
         s.inputBar,
         d.inputBar,
         {
           // 键盘弹起 / 面板展开时无需安全区 padding（键盘或面板已占住底部），紧贴即可；
-          // 仅在底部裸露时使用系统实际报告的安全区；不能在 0 时硬补高度，
-          // Android 三键导航栏已由系统占位，再补会在输入栏下方形成白带。
+          // 底部裸露时保留安全区与至少 12pt 的悬浮间距；间距透明，消息仍从后方滚过。
           paddingBottom:
             attachmentOpen || emojiOpen || keyboardVisible
               ? Spacing.sm
-              : insets.bottom,
+              : Math.max(insets.bottom, 12),
         },
       ]}
     >
       <GlassSurface
         material="composer"
+        blurTarget={blurTarget}
         radius={35}
         style={[
           s.composerShell,
           {
             gap: hasContent ? 4 : 10,
             borderColor: withAlpha(colors.text, dark ? 0.12 : 0.1),
-            boxShadow: `inset 0 1px 4px ${withAlpha(colors.white, dark ? 0.12 : 0.7)}`,
+            boxShadow: `0 6px 18px ${withAlpha(colors.black, 0.12)}, inset 0 1px 4px ${withAlpha(colors.white, dark ? 0.12 : 0.7)}`,
           },
         ]}
       >
@@ -126,7 +129,7 @@ export function ChatComposerBar({
           style={[
             s.composerSheen,
             {
-              backgroundColor: withAlpha(colors.white, dark ? 0.09 : 0.3),
+              backgroundColor: withAlpha(colors.white, dark ? 0.04 : 0.12),
               borderTopColor: withAlpha(colors.white, dark ? 0.12 : 0.75),
             },
           ]}

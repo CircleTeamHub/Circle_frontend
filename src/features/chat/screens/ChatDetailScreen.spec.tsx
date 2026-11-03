@@ -1,6 +1,6 @@
 import React from 'react';
 // jest.mock 工厂里只能引用 mock 前缀的外部变量。
-import { Keyboard, Pressable as MockPressable, Text as MockText, View as MockView } from 'react-native';
+import { Keyboard, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
 import {
   act,
   fireEvent,
@@ -439,6 +439,22 @@ test('leaving a deeply scrolled conversation hands its memory back', async () =>
   expect(kept).toHaveLength(200);
   expect(kept[0].height).toBe(251);
   expect(state.historyFloorByConversation[CONVERSATION]).toBe(251);
+});
+
+test('the floating composer leaves scrollable space for the latest message as its height changes', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  const dock = screen.getByTestId('chat-composer-dock');
+  expect(dock).toHaveStyle({ position: 'absolute', bottom: 0 });
+  for (const height of [114, 180]) {
+    fireEvent(dock, 'layout', {
+      nativeEvent: { layout: { x: 0, y: 300, width: 390, height } },
+    });
+    const list = screen.getByTestId(E2E_TEST_IDS.chatMessageList);
+    // 倒序列表的 paddingTop 在视觉底部，给输入栏/回复预览留位，但视口仍延伸到屏幕底。
+    expect(StyleSheet.flatten(list.props.contentContainerStyle).paddingTop).toBe(height + 8);
+    expect(StyleSheet.flatten(list.props.style).paddingBottom).toBeUndefined();
+  }
 });
 
 test('typing in the composer does not re-render the message bubbles', async () => {

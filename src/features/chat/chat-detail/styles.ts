@@ -27,6 +27,8 @@ export const chatDetailStyles = StyleSheet.create({
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   onlineDot: { width: 8, height: 8, borderRadius: 4 },
   headerStatusText: { ...Typography.small },
+  chatBody: { flex: 1 },
+  composerDock: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3 },
   messageArea: {
     flex: 1,
     overflow: 'hidden',

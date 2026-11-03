@@ -12,7 +12,7 @@ import {
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { MAX_SCROLL_TO_INDEX_RETRIES } from '@/features/chat/chat-detail/constants';
-import { type ThemeColors, Typography } from '@/theme';
+import { Spacing, type ThemeColors, Typography } from '@/theme';
 import { type TFunction } from 'i18next';
 import { useCallback, type ReactElement, type RefObject } from 'react';
 import {
@@ -24,11 +24,10 @@ import { Ionicons } from '@expo/vector-icons';
 const UNREAD_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 1 } as const;
 
 export interface ChatMessageAreaProps {
+  composerInset: number;
   colors: ThemeColors;
   t: TFunction<"translation", undefined>;
-  sendError: string | null;
   mountedRef: RefObject<boolean>;
-  isPreviewMode: boolean;
   backgroundImageUri: string | null;
   d: ChatDetailThemedStyles;
   flatListRef: RefObject<FlatList<ChatMessage> | null>;
@@ -49,8 +48,6 @@ export interface ChatMessageAreaProps {
   renderItem: (info: { item: ChatMessage }) => ReactElement | null;
   keyExtractor: (item: ChatMessage) => string;
   closeInputPanels: () => void;
-  isVoiceRecording: boolean;
-  voiceElapsedSeconds: number;
 }
 
 /**
@@ -58,11 +55,10 @@ export interface ChatMessageAreaProps {
  * 还没测量的行上,失败后按上限重试并在开火时重新校验列表边界。
  */
 export function ChatMessageArea({
+  composerInset,
   colors,
   t,
-  sendError,
   mountedRef,
-  isPreviewMode,
   backgroundImageUri,
   d,
   flatListRef,
@@ -82,8 +78,6 @@ export function ChatMessageArea({
   renderItem,
   keyExtractor,
   closeInputPanels,
-  isVoiceRecording,
-  voiceElapsedSeconds,
 }: ChatMessageAreaProps) {
   const handleViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -154,7 +148,8 @@ export function ChatMessageArea({
         }
         windowSize={11}
         removeClippedSubviews={Platform.OS === 'android'}
-        contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset]}
+        // inverted 的 paddingTop 是视觉底部：最新消息停在悬浮栏上方，滚动时仍能从后面经过。
+        contentContainerStyle={[s.messageList, s.messageListContent, s.messageListInset, { paddingTop: composerInset + Spacing.sm }]}
         showsVerticalScrollIndicator={false}
         // 下拉/滚动消息列表即收起底部面板与键盘（微信式）。on-drag 让键盘跟手滑落。
         keyboardDismissMode="on-drag"
@@ -227,7 +222,7 @@ export function ChatMessageArea({
             defaultValue: `跳转到未读消息起点，共 ${unreadCount} 条`,
           })}
           onPress={handleJumpToUnread}
-          style={[s.unreadJumpButton, d.unreadJumpButton]}
+          style={[s.unreadJumpButton, d.unreadJumpButton, { bottom: composerInset + Spacing.md }]}
         >
           <Ionicons name="chevron-up" size={18} color={d.unreadJumpText.color} />
           <Text
@@ -241,26 +236,6 @@ export function ChatMessageArea({
             })}
           </Text>
         </Pressable>
-      ) : null}
-      {isPreviewMode ? (
-        <Text style={[s.previewNotice, Typography.small, { color: colors.text }]}>
-          {t('chat.detail.previewNotice', {
-            defaultValue: '连接尚未完成，请稍后重试',
-          })}
-        </Text>
-      ) : null}
-      {sendError ? (
-        <Text style={[s.sendError, Typography.small, { color: colors.error }]}>
-          {sendError}
-        </Text>
-      ) : null}
-      {isVoiceRecording ? (
-        <Text style={[s.voiceStatus, { color: colors.primary }]}>
-          {t('chat.detail.recordingSeconds', {
-            defaultValue: '正在录音 {{seconds}} 秒',
-            seconds: voiceElapsedSeconds,
-          })}
-        </Text>
       ) : null}
     </View>
   );

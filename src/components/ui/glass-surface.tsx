@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 import {
@@ -23,6 +23,8 @@ interface GlassSurfaceProps {
   material: GlassMaterial;
   radius: number;
   style?: StyleProp<ViewStyle>;
+  /** 悬浮栏只采样下方的消息层，避免把自身采进模糊背景。 */
+  blurTarget?: RefObject<View | null>;
   children: ReactNode;
 }
 
@@ -102,7 +104,7 @@ const s = StyleSheet.create({
  * 注意：UIVisualEffectView / GlassView 的任何祖先 opacity < 1 都会让材质失效
  * （Apple 文档明说）。要做淡入淡出只能动它里面的内容，容器只做位移 / 缩放。
  */
-export function GlassSurface({ material, radius, style, children }: GlassSurfaceProps) {
+export function GlassSurface({ material, radius, style, blurTarget, children }: GlassSurfaceProps) {
   const { colors, resolvedMode } = useTheme();
   const spec = MATERIALS[material];
   const tint = { backgroundColor: withAlpha(colors.surface, spec.tintAlpha) };
@@ -113,7 +115,21 @@ export function GlassSurface({ material, radius, style, children }: GlassSurface
     // GlassView 在旧系统只是普通 View；API 可用性检查同时规避早期 iOS 26 beta
     // 实例化会崩的问题（与 tab bar 同一套判断）。
     const liquid = isGlassEffectAPIAvailable() && isLiquidGlassAvailable();
-    const frostIntensity = liquid ? spec.intensity : spec.intensity + LEGACY_FROST_BOOST;
+    if (liquid && material === 'composer') {
+      // 与 tabbar 一样只用 clear 原生材质，额外盖一层磨砂会吃掉后面的消息。
+      return (
+        <GlassView
+          colorScheme={resolvedMode}
+          glassEffectStyle={{ style: 'clear', animate: false }}
+          style={frame}
+        >
+          {children}
+        </GlassView>
+      );
+    }
+    const frostIntensity = material === 'composer'
+      ? 30
+      : liquid ? spec.intensity : spec.intensity + LEGACY_FROST_BOOST;
     const frost = (
       <BlurView
         intensity={frostIntensity}
@@ -142,7 +158,7 @@ export function GlassSurface({ material, radius, style, children }: GlassSurface
     );
   }
 
-  const androidTarget = Platform.OS === 'android' ? getAppBlurTarget() : null;
+  const androidTarget = Platform.OS === 'android' ? blurTarget ?? getAppBlurTarget() : null;
   if (androidTarget) {
     return (
       <View style={frame}>
@@ -172,7 +188,7 @@ export function GlassSurface({ material, radius, style, children }: GlassSurface
     <View
       style={[
         frame,
-        { backgroundColor: withAlpha(colors.surface, material === 'composer' ? 0.64 : FALLBACK_SURFACE_ALPHA) },
+        { backgroundColor: withAlpha(colors.surface, material === 'composer' ? 0.2 : FALLBACK_SURFACE_ALPHA) },
         // RNW 支持就有真磨砂，不支持就是普通半透明 —— 两种结果都可接受。
         Platform.OS === 'web' ? WEB_BACKDROP_BLUR : null,
       ]}
