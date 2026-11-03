@@ -4152,8 +4152,9 @@ export default function EditNoteScreen() {
         transparent
         animationType="slide"
         onRequestClose={closeCardPicker}
+        statusBarTranslucent
       >
-        <View style={s.cardPickerBackdrop}>
+        <KeyboardAvoidingContainer style={s.cardPickerBackdrop}>
           <View
             style={[
               s.cardPickerSheet,
@@ -4305,7 +4306,7 @@ export default function EditNoteScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingContainer>
       </Modal>
       <BottomSheetModal
         visible={groupSheetVisible}

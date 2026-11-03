@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert, Platform, StyleSheet } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, View, type KeyboardEvent } from 'react-native';
 import { setAudioModeAsync } from 'expo-audio';
 import EditNoteScreen, { draftRecordFromServer, draftFingerprint } from './EditNoteScreen';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
@@ -2035,6 +2035,67 @@ test('does not publish while audio recording is active', async () => {
   expect(createNote).not.toHaveBeenCalled();
   expect(mockRouter.back).not.toHaveBeenCalled();
   rendered.unmount();
+});
+
+test.each([
+  ['ios', 'contact'], ['ios', 'group'], ['android', 'contact'], ['android', 'group'],
+] as const)('%s: searching %s cards keeps the picker above the keyboard and allows selection', async (platform, kind) => {
+  const platformOverride = jest.replaceProperty(Platform, 'OS', platform);
+  const visibility = jest.spyOn(Keyboard, 'isVisible').mockReturnValue(false);
+  const listeners = new Map<string, Set<(event: KeyboardEvent) => void>>();
+  const subscribe = jest.spyOn(Keyboard, 'addListener').mockImplementation((name, callback) => {
+    const callbacks = listeners.get(name) ?? new Set();
+    callbacks.add(callback);
+    listeners.set(name, callbacks);
+    return { remove: () => { callbacks.delete(callback); } } as ReturnType<typeof Keyboard.addListener>;
+  });
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockPickerFriends.mockResolvedValue([
+    { id: 'match', nickname: 'Needle contact', remark: '', accountId: 'match' },
+    { id: 'other', nickname: 'Other contact', remark: '', accountId: 'other' },
+  ]);
+  mockPickerCircles.mockResolvedValue([{ id: 'match', name: 'Needle group' }, { id: 'other', name: 'Other group' }]);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await screen.findByDisplayValue('remote');
+    fireEvent.press(screen.getByRole('button', { name: `notes.edit.composer.${kind}` }));
+    if (kind === 'contact') fireEvent.press(screen.getByText('notes.edit.addContact'));
+    const placeholder = `notes.edit.${kind === 'contact' ? 'contact' : 'group'}SearchPlaceholder`;
+    const search = await screen.findByPlaceholderText(placeholder);
+    await screen.findByRole('radio', { name: `Needle ${kind}` });
+    const modal = screen.UNSAFE_getAllByType(Modal).find((node) => node.findAllByProps({ placeholder }).length > 0)!;
+    expect(modal.props.statusBarTranslucent).toBe(true);
+    const avoidingView = modal.findByType(KeyboardAvoidingView);
+    expect(avoidingView.props.behavior).toBe('padding');
+    const root = avoidingView.findAllByType(View)[0];
+    await act(async () => {
+      fireEvent(root, 'layout', { persist: () => undefined, nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 800 } } });
+    });
+    const emit = async (show: boolean) => {
+      const name = `${platform === 'ios' ? 'keyboardWill' : 'keyboardDid'}${show ? 'Show' : 'Hide'}`;
+      await act(async () => {
+        for (const callback of listeners.get(name) ?? []) callback({ duration: 0, easing: 'keyboard', endCoordinates: {
+          screenX: 0, screenY: show ? 500 : 800, width: 390, height: show ? 300 : 0,
+        } });
+      });
+    };
+    await emit(true);
+    expect(StyleSheet.flatten(root.props.style).paddingBottom).toBe(300);
+    fireEvent.changeText(search, 'Needle');
+    expect(screen.queryByRole('radio', { name: `Other ${kind}` })).toBeNull();
+    await emit(false);
+    expect(StyleSheet.flatten(root.props.style).paddingBottom).toBe(0);
+    await emit(true);
+    fireEvent.press(screen.getByRole('radio', { name: `Needle ${kind}` }));
+    fireEvent.press(screen.getByText('common.done'));
+    expect(screen.queryByPlaceholderText(placeholder)).toBeNull();
+    expect(screen.getByText(`Needle ${kind}`)).toBeTruthy();
+  } finally {
+    rendered.unmount();
+    expect([...listeners.values()].every((callbacks) => callbacks.size === 0)).toBe(true);
+    subscribe.mockRestore(); visibility.mockRestore(); platformOverride.restore();
+  }
 });
 
 test('the group-card toolbar opens the picker directly and displays and saves the chosen group', async () => {
