@@ -466,8 +466,9 @@ test('EditNoteScreen stacks full-width media previews and opens images in the vi
 test('EditNoteScreen reports upload state in the affected media section without remounting its controls', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
 
-  assert.match(src, /const mediaSectionStatus =/);
-  assert.match(src, /const showcaseSectionStatus =/);
+  assert.match(src, /getMediaSectionStatus\('media', 'image', block.id\)/);
+  assert.match(src, /getMediaSectionStatus\('media', 'video', block.id\)/);
+  assert.match(src, /getMediaSectionStatus\('showcase', 'video', block.id\)/);
   assert.match(src, /notes\.edit\.mediaUploading/);
   assert.match(src, /const renderMediaList = useCallback/);
 });
@@ -585,7 +586,8 @@ test('NoteDetailScreen follows the divider + icon-chip section design', () => {
   // 正文是主角，不加章头直接展开。
   assert.match(renderer, /divider:\s*\{\s*height:\s*1,/);
   assert.match(renderer, /sectionIconChip/);
-  assert.match(renderer, /renderSectionHeader\(\s*'image-outline'/);
+  assert.match(renderer, /'image-outline'/);
+  assert.match(renderer, /'videocam-outline'/);
   // 文字区也有自己的 heading（text-outline）—— 所有区域结构一致。
   assert.match(renderer, /renderSectionHeader\(\s*'text-outline'/);
   assert.doesNotMatch(renderer, /sectionCard:/);
