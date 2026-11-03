@@ -3,7 +3,7 @@ import { getGroupEntryHref } from '@/features/groups/routes';
 import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetry';
 import { messageRowKey } from '@/chat-core/local-message-id';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
-import { memo, type ReactElement, useCallback, useRef } from 'react';
+import { memo, type ReactElement, useCallback, useEffect, useRef } from 'react';
 import { type ChatMessage } from '@/types';
 import { type GestureResponderEvent, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -143,10 +143,19 @@ export function useMessageRenderer({
   const allRemarkOverrides = useFriendRemarkStore((state) => state.remarks);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  const galleryListenersRef = useRef(new Set<() => void>());
   const getGalleryMessages = useCallback(
     () => messagesRef.current.filter((message) => message.type === 'image').reverse(),
     [],
   );
+  // Only the open gallery subscribes; unchanged message rows keep their memoized props.
+  const subscribeGalleryMessages = useCallback((listener: () => void) => {
+    galleryListenersRef.current.add(listener);
+    return () => { galleryListenersRef.current.delete(listener); };
+  }, []);
+  useEffect(() => {
+    galleryListenersRef.current.forEach((listener) => listener());
+  }, [messages]);
   const receivedDisplayName = useCallback(
     (msg: ChatMessage) => {
       const override = msg.senderID
@@ -268,6 +277,7 @@ export function useMessageRenderer({
           <ImageBubble
             message={item}
             getGalleryMessages={getGalleryMessages}
+            subscribeGalleryMessages={subscribeGalleryMessages}
             outgoing={Boolean(item.outgoing)}
             senderName={receivedDisplayName(item)}
             senderAvatarUri={receivedAvatarUri(item)}
@@ -468,6 +478,7 @@ export function useMessageRenderer({
     }
   }, [
     getGalleryMessages,
+    subscribeGalleryMessages,
     receivedAvatarUri,
     receivedDisplayName,
     withGroupSenderLabel,

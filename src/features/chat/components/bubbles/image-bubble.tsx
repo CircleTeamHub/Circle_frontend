@@ -1,4 +1,5 @@
 import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
+import { messageRowKey } from '@/chat-core/local-message-id';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Image } from 'expo-image';
@@ -12,6 +13,7 @@ import { useEphemeralImageDiskCacheSweep } from './ephemeral-image-cache';
 interface ImageBubbleProps {
   message: ChatMessage;
   getGalleryMessages?: () => ChatMessage[];
+  subscribeGalleryMessages?: (listener: () => void) => () => void;
   outgoing: boolean;
   senderName?: string;
   senderAvatarUri?: string;
@@ -73,6 +75,7 @@ const sImage = StyleSheet.create({
 export const ImageBubble: React.FC<ImageBubbleProps> = ({
   message,
   getGalleryMessages,
+  subscribeGalleryMessages,
   outgoing,
   senderName,
   senderAvatarUri,
@@ -88,7 +91,7 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   // Only this message’s author-stamped duration controls media retention.
   const ephemeral = isEphemeralMessage(message, selfDestructEnabled);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const galleryMessagesRef = useRef<ChatMessage[]>([]);
+  const [galleryMessages, setGalleryMessages] = useState<ChatMessage[]>([]);
   const previewPolicyRef = useRef(`${ephemeral}:${selfDestructCacheKey}`);
   const avatarNode = (
     <MessageAvatar
@@ -124,6 +127,21 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
     }
   }, [ephemeral, selfDestructCacheKey]);
 
+  useEffect(() => {
+    if (!previewVisible || !subscribeGalleryMessages) return;
+    const refresh = () => {
+      const liveMessages = getGalleryMessages?.() ?? [message];
+      setGalleryMessages((current) => {
+        // Keep the page opened by the user, but replace its snapshots with live messages.
+        const openedKeys = new Set(current.map(messageRowKey));
+        return liveMessages.filter((item) => openedKeys.has(messageRowKey(item)));
+      });
+    };
+    const unsubscribe = subscribeGalleryMessages(refresh);
+    refresh();
+    return unsubscribe;
+  }, [getGalleryMessages, message, previewVisible, subscribeGalleryMessages]);
+
   // 列表气泡优先渲染缩略图；缺失时回退到原图。原图查看留给点击放大流程。
   const displayUri = message.imageThumbUrl ?? message.imageUrl;
   const previewUri = message.imageUrl ?? displayUri;
@@ -133,15 +151,16 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   );
   const previewMessages = useMemo(() => {
     if (!previewVisible || ephemeral) return [message];
-    const photos = galleryMessagesRef.current.filter((item) =>
+    const photos = galleryMessages.filter((item) =>
+      item.type === 'image' &&
       (item.imageUrl || item.imageThumbUrl) &&
       !isEphemeralMessage(item, selfDestructEnabled),
     );
-    return photos.some((item) => item.id === message.id) ? photos : [message];
-  }, [ephemeral, message, previewVisible, selfDestructEnabled]);
+    return photos.some((item) => messageRowKey(item) === messageRowKey(message)) ? photos : [message];
+  }, [ephemeral, galleryMessages, message, previewVisible, selfDestructEnabled]);
   const handleOpenPreview = useCallback(() => {
     if (!previewUri) return;
-    galleryMessagesRef.current = getGalleryMessages?.() ?? [message];
+    setGalleryMessages(getGalleryMessages?.() ?? [message]);
     setPreviewVisible(true);
   }, [getGalleryMessages, message, previewUri]);
   const imageNode = (
@@ -201,12 +220,14 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   // open. Mount it only for the image the user is actively previewing.
   const imageViewer = previewVisible ? (
     <ImageViewer
+      // A removed photo invalidates the viewer's page index and any open save menu.
+      key={JSON.stringify(previewMessages.map(messageRowKey))}
       images={previewMessages.map((item) => (item.imageUrl ?? item.imageThumbUrl)!)}
       cacheKeys={previewMessages.map((item) => remoteCacheKey(
         item.imageUrl ?? item.imageThumbUrl,
         item.imageUrl ? item.imageKey : item.imageThumbKey,
       ))}
-      initialIndex={Math.max(0, previewMessages.findIndex((item) => item.id === message.id))}
+      initialIndex={Math.max(0, previewMessages.findIndex((item) => messageRowKey(item) === messageRowKey(message)))}
       visible
       privacyMode={ephemeral ? 'ephemeral' : 'standard'}
       onClose={() => setPreviewVisible(false)}
