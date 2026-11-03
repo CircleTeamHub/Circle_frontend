@@ -142,7 +142,11 @@ export function NotificationSnackbarHost() {
     }).start(({ finished }) => {
       if (finished) setShown(current);
     });
-  }, [current, shown, anim, isVisible]);
+    // activeConversationId 也要触发:点横幅进它的会话时,退场动画还在播,宿主就不再渲染
+    // 这条横幅了。原生驱动的动画随视图卸下被打断,上面的回调拿不到 finished,换不过去;
+    // 返回列表后这条旧横幅会以半截位置重新冒出来、计时器早已走完,再也不收(实机截图)。
+    // 当前会话一变就重跑:横幅已看不见,走上面的分支直接换下一条。
+  }, [current, shown, anim, isVisible, activeConversationId]);
 
   // Entrance + auto-dismiss effect, keyed on which banner is shown — not on its
   // content: a newer message replacing the banner on screen must not re-animate,

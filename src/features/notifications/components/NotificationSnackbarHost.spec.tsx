@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react-native';
+import { Animated } from 'react-native';
 import { NotificationSnackbarHost } from './NotificationSnackbarHost';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
 
@@ -6,6 +7,7 @@ import { useNotificationSnackbarStore } from '@/features/notifications/store/use
 // 不重新计时(否则一个活跃的群就能让横幅一直挂着,别的会话也轮不到)。
 
 const mockNotify = jest.fn();
+let mockActiveConversationId: string | null = null;
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 0, left: 0, right: 0 }),
@@ -19,7 +21,7 @@ jest.mock('react-i18next', () => ({
 }));
 jest.mock('@/chat-core/store', () => ({
   useChatStore: (selector: (state: unknown) => unknown) =>
-    selector({ activeConversationId: null }),
+    selector({ activeConversationId: mockActiveConversationId }),
 }));
 jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/ui/top-banner-card', () => ({
@@ -65,6 +67,7 @@ function chat(id: string, summary: string, conversationID = 'group-a') {
 beforeEach(() => {
   jest.useFakeTimers();
   mockNotify.mockClear();
+  mockActiveConversationId = null;
   useNotificationSnackbarStore.getState().reset();
 });
 
@@ -123,4 +126,36 @@ it('a replacement that lands while the previous banner is leaving still enters o
     jest.advanceTimersByTime(4_000);
   });
   expect(useNotificationSnackbarStore.getState().current).toBeNull();
+});
+
+// 点横幅进会话、再返回:横幅退场途中它的会话成了当前会话,宿主不再渲染这条横幅。真机上
+// 退场是原生驱动的动画,视图一卸下动画就被打断,完成回调拿不到 finished —— 原来就停在
+// 「等退场播完再换下一条」,返回列表后这条旧横幅以半截位置重新冒出来、再也不收(实机截图)。
+it('a banner whose conversation is opened mid-exit does not come back after leaving it', () => {
+  const timing = jest
+    .spyOn(Animated, 'timing')
+    // 模拟原生驱动:动画被打断后完成回调不会以「播完」到达。
+    .mockImplementation(() => ({ start: () => undefined, stop: () => undefined, reset: () => undefined }));
+  try {
+    const view = render(<NotificationSnackbarHost />);
+    act(() => {
+      useNotificationSnackbarStore.getState().enqueueChatMessage(chat('a1', 'A 的图片', 'conv-a'));
+    });
+    expect(screen.getByText('A 的图片')).toBeTruthy();
+
+    // 点横幅:先出队、开始退场,再跳进 A 的会话。
+    act(() => {
+      useNotificationSnackbarStore.getState().dismissCurrent();
+    });
+    mockActiveConversationId = 'conv-a';
+    view.rerender(<NotificationSnackbarHost />);
+    expect(screen.queryByText('A 的图片')).toBeNull();
+
+    // 返回消息列表:旧横幅不能再出现。
+    mockActiveConversationId = null;
+    view.rerender(<NotificationSnackbarHost />);
+    expect(screen.queryByText('A 的图片')).toBeNull();
+  } finally {
+    timing.mockRestore();
+  }
 });
