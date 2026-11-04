@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,10 +24,9 @@ export interface SettingsDetailRow {
   valueKey?: string;
   valueText?: string;
   type?: 'link' | 'toggle' | 'info';
-  initialValue?: boolean;
-  /** When provided, the toggle is controlled (persisted) instead of local-only. */
   value?: boolean;
   onValueChange?: (value: boolean) => void;
+  /** 危险操作（清空、退出）：红字、无箭头。 */
   destructive?: boolean;
   icon?: keyof typeof Ionicons.glyphMap;
   iconMuted?: boolean;
@@ -36,10 +36,14 @@ export interface SettingsDetailRow {
   statusColor?: string;
   onPress?: () => void;
   disabled?: boolean;
+  /** 覆盖默认的 settingsDetailRow 测试 ID（主设置页沿用自己的 e2e 定位）。 */
+  testID?: string;
 }
 
 export interface SettingsDetailSection {
   titleKey?: string;
+  /** 卡片下方的说明小字。 */
+  footerKey?: string;
   rows: SettingsDetailRow[];
 }
 
@@ -50,102 +54,87 @@ interface SettingsDetailScreenProps {
   testIDPrefix?: string;
 }
 
+const ICON_BOX_SIZE = 32;
+const ROW_GAP = 12;
+
 const s = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    gap: Spacing.lg,
+  },
   section: {
     gap: Spacing.sm,
   },
+  sectionText: {
+    paddingHorizontal: Spacing.md,
+  },
   card: {
     borderRadius: Radius.xl,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     overflow: 'hidden',
   },
   row: {
-    minHeight: 72,
+    minHeight: 56,
+    paddingVertical: ROW_GAP,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: Spacing.md,
   },
   rowDisabled: {
-    opacity: 0.55,
+    opacity: 0.5,
+  },
+  rowPressed: {
+    opacity: 0.6,
   },
   rowLeft: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: ROW_GAP,
   },
   textBlock: {
     flex: 1,
-    gap: 3,
+    gap: Spacing.xs,
   },
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     flexShrink: 1,
     justifyContent: 'flex-end',
-    maxWidth: '55%',
+    maxWidth: '50%',
   },
   iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.md,
+    width: ICON_BOX_SIZE,
+    height: ICON_BOX_SIZE,
+    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // 有图标的行，分隔线从文字起点开始，图标列保持连贯。
+  dividerInset: {
+    marginLeft: ICON_BOX_SIZE + ROW_GAP,
+  },
 });
 
-function SettingsSwitch({
-  initialValue,
-  value,
-  onValueChange,
-  disabled,
-}: {
-  initialValue?: boolean;
-  value?: boolean;
-  onValueChange?: (value: boolean) => void;
-  disabled?: boolean;
-}) {
+function useSettingsStyles() {
   const { colors } = useTheme();
-  const [localValue, setLocalValue] = useState(initialValue ?? false);
-  const isControlled = onValueChange !== undefined;
-
-  return (
-    <ThemedSwitch
-      tint={colors.primary}
-      value={isControlled ? value ?? false : localValue}
-      onValueChange={isControlled ? onValueChange : setLocalValue}
-      disabled={disabled}
-    />
-  );
-}
-
-export function SettingsDetailScreen({
-  titleKey,
-  sections,
-  footer,
-  testIDPrefix,
-}: SettingsDetailScreenProps) {
-  const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const { t } = useTranslation();
-
-  const d = useMemo(
+  return useMemo(
     () => ({
-      container: {
-        flex: 1,
-        backgroundColor: colors.background,
-      },
-      content: {
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: insets.bottom + Spacing.xl,
-        gap: Spacing.xl,
-      },
+      colors,
       sectionTitle: {
         color: colors.textSecondary,
         ...Typography.caption,
-        fontWeight: '700' as const,
+        fontWeight: '600' as const,
+      },
+      footnote: {
+        color: colors.textSecondary,
+        ...Typography.small,
+        lineHeight: 18,
       },
       card: {
         backgroundColor: colors.surface,
@@ -161,16 +150,14 @@ export function SettingsDetailScreen({
       subtitle: {
         color: colors.textSecondary,
         ...Typography.caption,
-        lineHeight: 19,
+        fontWeight: '400' as const,
+        lineHeight: 18,
       },
       value: {
-        color: colors.text,
+        color: colors.textSecondary,
         ...Typography.caption,
         flexShrink: 1,
         textAlign: 'right' as const,
-      },
-      mutedValue: {
-        color: colors.textSecondary,
       },
       successValue: {
         color: colors.success,
@@ -182,100 +169,179 @@ export function SettingsDetailScreen({
         backgroundColor: colors.surfaceBorder,
       },
     }),
-    [colors, insets.bottom],
+    [colors],
   );
+}
 
-  const handleLinkPress = (row: SettingsDetailRow) => {
+interface SettingsRowViewProps {
+  row: SettingsDetailRow;
+  testID?: string;
+  showDivider: boolean;
+  dividerInset: boolean;
+}
+
+function SettingsRowView({ row, testID, showDivider, dividerInset }: SettingsRowViewProps) {
+  const { t } = useTranslation();
+  const d = useSettingsStyles();
+  const { colors } = d;
+  const label = t(row.labelKey);
+  const valueText = row.valueText ?? (row.valueKey ? t(row.valueKey) : null);
+  const accessibilityLabel = [
+    label,
+    row.subtitleKey ? t(row.subtitleKey) : null,
+    valueText,
+    row.statusKey ? t(row.statusKey) : null,
+  ].filter(Boolean).join(', ');
+  const isToggle = row.type === 'toggle';
+  const isInfo = row.type === 'info';
+  const showChevron = !isToggle && !isInfo && !row.destructive;
+
+  const handlePress = () => {
+    if (isToggle) {
+      row.onValueChange?.(!row.value);
+      return;
+    }
     if (row.onPress) {
       row.onPress();
       return;
     }
-
-    Alert.alert(t(row.labelKey), t('settingsPage.unsupported'));
+    Alert.alert(label, t('settingsPage.unsupported'));
   };
 
-  const renderRow = (row: SettingsDetailRow, index: number, total: number) => {
-    const valueText = row.valueText ?? (row.valueKey ? t(row.valueKey) : null);
-
-    return (
-      <View key={row.id}>
-        <Pressable
-          testID={
-            testIDPrefix
-              ? E2E_TEST_IDS.settingsDetailRow(`${testIDPrefix}.${row.id}`)
-              : undefined
-          }
-          style={[s.row, row.disabled ? s.rowDisabled : null]}
-          disabled={row.type === 'info' || row.disabled}
-          onPress={() =>
-            row.type === 'toggle' || row.type === 'info' || row.disabled
-              ? undefined
-              : handleLinkPress(row)
-          }
-        >
-          <View style={s.rowLeft}>
-            {row.icon ? (
-              <View
-                style={[
-                  s.iconBox,
-                  row.iconMuted ? d.iconBoxMuted : d.iconBox,
-                  row.iconBackgroundColor
-                    ? { backgroundColor: row.iconBackgroundColor }
-                    : null,
-                ]}
-              >
-                <Ionicons
-                  name={row.icon}
-                  size={24}
-                  color={
-                    row.iconColor ??
-                    (row.iconMuted ? colors.textSecondary : colors.success)
-                  }
-                />
-              </View>
-            ) : null}
-            <View style={s.textBlock}>
-              <Text style={[d.rowLabel, row.destructive ? d.rowLabelDestructive : null]}>
-                {t(row.labelKey)}
-              </Text>
-              {row.subtitleKey ? (
-                <Text style={d.subtitle}>{t(row.subtitleKey)}</Text>
-              ) : null}
-            </View>
-          </View>
-          <View style={s.rowRight}>
-            {valueText ? (
-              <Text numberOfLines={2} style={d.value}>
-                {valueText}
-              </Text>
-            ) : null}
-            {row.statusKey ? (
-              <Text
-                style={[
-                  d.value,
-                  row.iconMuted ? d.mutedValue : d.successValue,
-                  row.statusColor ? { color: row.statusColor } : null,
-                ]}
-              >
-                {t(row.statusKey)}
-              </Text>
-            ) : null}
-            {row.type === 'toggle' ? (
-              <SettingsSwitch
-                initialValue={row.initialValue}
-                value={row.value}
-                onValueChange={row.onValueChange}
-                disabled={row.disabled}
+  return (
+    <View>
+      <Pressable
+        testID={testID}
+        style={({ pressed }) => [
+          s.row,
+          row.disabled ? s.rowDisabled : null,
+          pressed ? s.rowPressed : null,
+        ]}
+        disabled={isInfo || row.disabled}
+        onPress={handlePress}
+        accessible={!isToggle}
+        tabIndex={isToggle ? -1 : undefined}
+        accessibilityRole={isInfo || isToggle ? undefined : 'button'}
+        accessibilityLabel={isToggle ? undefined : accessibilityLabel}
+        accessibilityState={{ disabled: row.disabled }}
+      >
+        <View style={s.rowLeft}>
+          {row.icon ? (
+            <View
+              style={[
+                s.iconBox,
+                row.iconMuted ? d.iconBoxMuted : d.iconBox,
+                row.iconBackgroundColor ? { backgroundColor: row.iconBackgroundColor } : null,
+              ]}
+            >
+              <Ionicons
+                name={row.icon}
+                size={18}
+                color={row.iconColor ?? (row.iconMuted ? colors.textSecondary : colors.success)}
               />
-            ) : row.type === 'info' ? null : (
-              <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
-            )}
+            </View>
+          ) : null}
+          <View style={s.textBlock}>
+            <Text style={[d.rowLabel, row.destructive ? d.rowLabelDestructive : null]}>
+              {label}
+            </Text>
+            {row.subtitleKey ? <Text style={d.subtitle}>{t(row.subtitleKey)}</Text> : null}
           </View>
-        </Pressable>
-        {index < total - 1 ? <Divider /> : null}
+        </View>
+        <View
+          style={s.rowRight}
+          {...(isToggle && Platform.OS === 'web'
+            ? { onClick: (event: { stopPropagation: () => void }) => event.stopPropagation() }
+            : {})}
+        >
+          {valueText ? (
+            <Text numberOfLines={2} style={d.value}>
+              {valueText}
+            </Text>
+          ) : null}
+          {row.statusKey ? (
+            <Text
+              style={[
+                d.value,
+                row.iconMuted ? null : d.successValue,
+                row.statusColor ? { color: row.statusColor } : null,
+              ]}
+            >
+              {t(row.statusKey)}
+            </Text>
+          ) : null}
+          {isToggle ? (
+            <ThemedSwitch
+              accessibilityLabel={accessibilityLabel}
+              tint={colors.primary}
+              value={row.value ?? false}
+              onValueChange={row.onValueChange}
+              disabled={row.disabled}
+            />
+          ) : null}
+          {showChevron ? (
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          ) : null}
+        </View>
+      </Pressable>
+      {showDivider ? (
+        <View style={dividerInset ? s.dividerInset : null}>
+          <Divider />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+interface SettingsSectionViewProps {
+  section: SettingsDetailSection;
+  testIDPrefix?: string;
+}
+
+/** 一组设置：小标题 + 圆角卡片 + 可选的底部说明。各设置页与主设置页共用。 */
+export function SettingsSectionView({ section, testIDPrefix }: SettingsSectionViewProps) {
+  const { t } = useTranslation();
+  const d = useSettingsStyles();
+  const { rows } = section;
+  if (rows.length === 0) return null;
+
+  return (
+    <View style={s.section}>
+      {section.titleKey ? (
+        <Text style={[s.sectionText, d.sectionTitle]}>{t(section.titleKey)}</Text>
+      ) : null}
+      <View style={[s.card, d.card]}>
+        {rows.map((row, index) => (
+          <SettingsRowView
+            key={row.id}
+            row={row}
+            testID={
+              row.testID ??
+              (testIDPrefix
+                ? E2E_TEST_IDS.settingsDetailRow(`${testIDPrefix}.${row.id}`)
+                : undefined)
+            }
+            showDivider={index < rows.length - 1}
+            dividerInset={Boolean(row.icon)}
+          />
+        ))}
       </View>
-    );
-  };
+      {section.footerKey ? (
+        <Text style={[s.sectionText, d.footnote]}>{t(section.footerKey)}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+export function SettingsDetailScreen({
+  titleKey,
+  sections,
+  footer,
+  testIDPrefix,
+}: SettingsDetailScreenProps) {
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <View
@@ -284,24 +350,19 @@ export function SettingsDetailScreen({
           ? E2E_TEST_IDS.settingsDetailScreen(testIDPrefix)
           : undefined
       }
-      style={[d.container, { paddingTop: insets.top }]}
+      style={[s.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}
     >
       <NavHeader title={t(titleKey)} />
       <ScrollView
-        contentContainerStyle={d.content}
+        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + Spacing.xl }]}
         showsVerticalScrollIndicator={false}
       >
         {sections.map((section, index) => (
-          <View key={`${section.titleKey ?? 'section'}-${index}`} style={s.section}>
-            {section.titleKey ? (
-              <Text style={d.sectionTitle}>{t(section.titleKey)}</Text>
-            ) : null}
-            <View style={[s.card, d.card]}>
-              {section.rows.map((row, rowIndex) =>
-                renderRow(row, rowIndex, section.rows.length),
-              )}
-            </View>
-          </View>
+          <SettingsSectionView
+            key={`${section.titleKey ?? 'section'}-${index}`}
+            section={section}
+            testIDPrefix={testIDPrefix}
+          />
         ))}
         {footer}
       </ScrollView>

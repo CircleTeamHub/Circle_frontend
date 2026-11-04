@@ -167,7 +167,10 @@
       "showCollapsedPinned": "残り{{count}}件のピン留めを表示",
       "unlimited": "無制限",
       "batteryOptimization": "バッテリー最適化の案内",
-      "batteryOptimizationHint": "Androidのみ有効。オフにするとバックグラウンド権限の案内は表示されません"
+      "batteryOptimizationHint": "Androidのみ有効。オフにするとバックグラウンド権限の案内は表示されません",
+      "displaySection": "表示",
+      "chatSection": "チャット",
+      "conversationListSection": "トーク一覧"
     },
     "privacy": {
       "title": "プライバシー",
@@ -219,7 +222,12 @@
         "byQrCode": "QRコードで",
         "byGroup": "グループ・サークルで",
         "shareCard": "個人カードを共有"
-      }
+      },
+      "chatSection": "チャットとモーメンツ",
+      "presenceSection": "オンライン・入力中の表示",
+      "profileVisibilitySection": "プロフィールの公開",
+      "contactSection": "追加と招待",
+      "blacklistBlockedAt": "{{date}} にブロック"
     },
     "permissions": {
       "title": "システム権限",
@@ -232,11 +240,11 @@
       "bluetooth": "Bluetooth",
       "authorized": "許可済み",
       "unauthorized": "未許可",
-      "onlyVisibleAuthorized": "確認できる権限のみ表示します",
+      "onlyVisibleAuthorized": "項目をタップすると許可をリクエストします。一度拒否した権限はシステム設定でオンにしてください。",
       "openSystemSettings": "システム設定を開く"
     },
     "storage": {
-      "title": "設定",
+      "title": "ストレージとキャッシュ",
       "storageSpace": "ストレージ容量",
       "clearCache": "キャッシュを削除",
       "cacheSize": "計算中...",
@@ -249,15 +257,16 @@
       "clearCacheFailedMessage": "現在キャッシュを削除できません。後でもう一度お試しください。",
       "clearAllChats": "すべてのチャット履歴を削除",
       "clearAllChatsAction": "削除",
-      "clearAllChatsWarning": "この端末のローカルなチャット履歴のみを削除します。サーバーの履歴は削除されず、同期後に一部の履歴が戻る場合があります。",
+      "clearAllChatsWarning": "このアカウントのすべての端末のトーク履歴を削除します。元に戻せません。他の参加者の履歴には影響しません。",
       "clearAllChatsDone": "チャット履歴を削除しました",
-      "clearAllChatsDoneMessage": "この端末のローカルなチャット履歴を削除しました。",
+      "clearAllChatsDoneMessage": "このアカウントのすべての端末のトーク履歴を削除しました。",
       "clearAllChatsPartialTitle": "一部のチャットを消去できませんでした",
       "clearAllChatsPartialMessage": "{{count}} 件のチャットを消去できませんでした（通信の問題の可能性があります）。もう一度「すべてのチャットを消去」を実行してください。",
       "clearAllChatsFailed": "削除に失敗しました",
-      "clearAllChatsFailedMessage": "現在この端末のローカルなチャット履歴を削除できません。後でもう一度お試しください。",
+      "clearAllChatsFailedMessage": "現在トーク履歴を削除できません。後でもう一度お試しください。",
       "switchAccount": "アカウントを切り替え",
-      "logout": "ログアウト"
+      "logout": "ログアウト",
+      "clearSectionHint": "キャッシュを削除してもトーク履歴は残ります。トーク履歴の削除は、このアカウントのすべての端末に反映されます。"
     },
     "storageUsage": {
       "title": "ストレージ容量",
@@ -2541,7 +2550,7 @@
     "tags": "タグ",
     "description": "説明",
     "permission": "友だちの権限",
-    "moreInfo": "詳細情報",
+    "moreInfo": "友だち設定",
     "editProfile": "プロフィールを編集",
     "fieldNotEditable": "この項目は編集できません",
     "returnToSettings": "設定に戻ってください。",
@@ -2765,7 +2774,7 @@
         "label": "システム権限"
       },
       "clearCache": {
-        "label": "キャッシュを削除"
+        "label": "ストレージとキャッシュ"
       },
       "about": {
         "label": "私たちについて"

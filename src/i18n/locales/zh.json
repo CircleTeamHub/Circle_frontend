@@ -1929,7 +1929,7 @@
     "tags": "标签",
     "description": "描述",
     "permission": "朋友权限",
-    "moreInfo": "更多信息",
+    "moreInfo": "好友设置",
     "editProfile": "编辑资料",
     "fieldNotEditable": "该字段暂不支持编辑",
     "returnToSettings": "请返回账号设置页。",
@@ -2290,7 +2290,7 @@
         "label": "系统权限管理"
       },
       "clearCache": {
-        "label": "清除缓存"
+        "label": "存储与缓存"
       },
       "about": {
         "label": "关于我们"
@@ -2442,7 +2442,10 @@
       "showCollapsedPinned": "显示其余 {{count}} 个置顶会话",
       "unlimited": "无限制",
       "batteryOptimization": "电池优化提醒",
-      "batteryOptimizationHint": "仅安卓生效，关闭后不再弹出后台运行权限引导"
+      "batteryOptimizationHint": "仅安卓生效，关闭后不再弹出后台运行权限引导",
+      "displaySection": "显示",
+      "chatSection": "聊天",
+      "conversationListSection": "会话列表"
     },
     "privacy": {
       "title": "隐私设置",
@@ -2494,7 +2497,12 @@
         "byQrCode": "通过二维码",
         "byGroup": "通过群聊/圈子",
         "shareCard": "分享个人名片"
-      }
+      },
+      "chatSection": "聊天与动态",
+      "presenceSection": "在线与输入状态",
+      "profileVisibilitySection": "资料展示",
+      "contactSection": "添加与邀请",
+      "blacklistBlockedAt": "{{date}} 加入黑名单"
     },
     "permissions": {
       "title": "系统权限管理",
@@ -2507,11 +2515,11 @@
       "bluetooth": "蓝牙",
       "authorized": "已授权",
       "unauthorized": "未授权",
-      "onlyVisibleAuthorized": "仅展示能查询到的已授权系统权限",
+      "onlyVisibleAuthorized": "点按某项可申请授权；已经拒绝过的权限，需要前往系统设置开启。",
       "openSystemSettings": "前往系统设置"
     },
     "storage": {
-      "title": "设置",
+      "title": "存储与缓存",
       "storageSpace": "存储空间",
       "clearCache": "清除缓存",
       "cacheSize": "计算中...",
@@ -2524,15 +2532,16 @@
       "clearCacheFailedMessage": "暂时无法清理缓存，请稍后重试。",
       "clearAllChats": "清空所有聊天记录",
       "clearAllChatsAction": "清空",
-      "clearAllChatsWarning": "将清空本机聊天记录，不会删除服务器历史记录，重新同步后可能恢复部分历史。",
+      "clearAllChatsWarning": "将清空本账号在所有设备上的聊天记录，且无法恢复。不会影响其他参与者的记录。",
       "clearAllChatsDone": "聊天记录已清空",
-      "clearAllChatsDoneMessage": "本机聊天记录已清空。",
+      "clearAllChatsDoneMessage": "本账号在所有设备上的聊天记录已清空。",
       "clearAllChatsPartialTitle": "部分会话未清空",
       "clearAllChatsPartialMessage": "有 {{count}} 个会话没能清空(可能是网络问题)。再点一次「清空全部聊天」即可补上。",
       "clearAllChatsFailed": "清空失败",
-      "clearAllChatsFailedMessage": "暂时无法清空本机聊天记录，请稍后重试。",
+      "clearAllChatsFailedMessage": "暂时无法清空聊天记录，请稍后重试。",
       "switchAccount": "切换账号",
-      "logout": "退出登录"
+      "logout": "退出登录",
+      "clearSectionHint": "清除缓存不会删除聊天记录；清空聊天记录会影响本账号的所有设备。"
     },
     "storageUsage": {
       "title": "存储空间",

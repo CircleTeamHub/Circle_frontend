@@ -51,6 +51,8 @@ export default function NotificationSettingsScreen() {
               id: 'message-ringtone',
               labelKey: 'settingsDetails.notifications.messageRingtone',
               valueKey: 'settingsDetails.notifications.messageDefault',
+              // 铃声还不能换：只展示当前值，不给一个点了只弹「暂不支持」的箭头。
+              type: 'info',
             },
             {
               id: 'auto-reply',
@@ -147,6 +149,7 @@ export default function NotificationSettingsScreen() {
               id: 'circle-ringtone',
               labelKey: 'settingsDetails.notifications.circleRingtone',
               valueKey: 'settingsDetails.notifications.circleDefault',
+              type: 'info',
             },
           ],
         },

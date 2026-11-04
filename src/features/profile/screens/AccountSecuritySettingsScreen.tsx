@@ -193,7 +193,6 @@ export default function AccountSecuritySettingsScreen() {
             {
               id: "login-device-management",
               labelKey: "settingsDetails.accountSecurity.loginDeviceManagement",
-              destructive: true,
               onPress: () =>
                 router.push("/(tabs)/profile/login-devices" as never),
             },

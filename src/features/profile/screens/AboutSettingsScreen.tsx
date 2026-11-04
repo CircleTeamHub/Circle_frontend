@@ -7,7 +7,7 @@ export default function AboutSettingsScreen() {
   const router = useRouter();
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
-  const rows: SettingsDetailRow[] = [
+  const productRows: SettingsDetailRow[] = [
     {
       id: 'product-intro',
       labelKey: 'settingsDetails.about.productIntro',
@@ -20,6 +20,15 @@ export default function AboutSettingsScreen() {
       valueText: appVersion,
       onPress: () => router.push('/(tabs)/profile/settings-about-version' as never),
     },
+    {
+      // 不在这里写死「已是最新」：没查过就不报状态，点进去再真正检查。
+      id: 'check-updates',
+      labelKey: 'settingsDetails.about.checkUpdates',
+      onPress: () => router.push('/(tabs)/profile/settings-about-version' as never),
+    },
+  ];
+
+  const legalRows: SettingsDetailRow[] = [
     {
       id: 'user-agreement',
       labelKey: 'settingsDetails.about.userAgreement',
@@ -35,17 +44,16 @@ export default function AboutSettingsScreen() {
         router.push('/(tabs)/profile/settings-about-privacy-policy' as never),
     },
     {
-      id: 'check-updates',
-      labelKey: 'settingsDetails.about.checkUpdates',
-      valueKey: 'settingsDetails.about.latest',
-      onPress: () => router.push('/(tabs)/profile/settings-about-version' as never),
+      id: 'third-party-licenses',
+      labelKey: 'settingsDetails.about.thirdPartyLicenses',
+      onPress: () => router.push('/(tabs)/profile/settings-about-licenses' as never),
     },
   ];
 
   return (
     <SettingsDetailScreen
       titleKey="settingsDetails.about.title"
-      sections={[{ rows }]}
+      sections={[{ rows: productRows }, { rows: legalRows }]}
     />
   );
 }

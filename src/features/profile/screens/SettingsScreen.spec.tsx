@@ -74,3 +74,8 @@ test('an avatar PATCH response cannot replace the newly logged-in account', asyn
   await act(async () => { finish({ id: 'user-a' }); await request; });
   expect(mockSetUser).not.toHaveBeenCalled();
 });
+
+test('the profile row accessible name includes its current field value', () => {
+  render(<SettingsScreen />);
+  expect(screen.getByRole('button', { name: 'profileFields.nickname, Ada' })).toBeTruthy();
+});

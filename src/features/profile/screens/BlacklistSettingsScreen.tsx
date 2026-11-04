@@ -2,16 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
+import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   type BlockedUser,
@@ -21,46 +24,72 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
+const AVATAR_SIZE = 40;
+
 const s = StyleSheet.create({
   container: { flex: 1 },
   content: {
     paddingHorizontal: Spacing.lg,
-    gap: Spacing.md,
+    paddingTop: Spacing.sm,
+    flexGrow: 1,
   },
   stateBlock: {
-    minHeight: 180,
+    minHeight: 240,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
   },
-  card: {
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    gap: Spacing.md,
+  // 所有人放进同一张卡片，行间用分隔线；首尾行各自带圆角。
+  item: {
+    paddingHorizontal: Spacing.md,
+  },
+  itemFirst: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+  },
+  itemLast: {
+    borderBottomLeftRadius: Radius.xl,
+    borderBottomRightRadius: Radius.xl,
   },
   row: {
+    minHeight: 64,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: 12,
+  },
+  separatorInset: {
+    marginLeft: AVATAR_SIZE + 12,
   },
   textBlock: {
     flex: 1,
-    gap: 4,
+    gap: Spacing.xs,
   },
   button: {
-    minHeight: 36,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.md,
+    minHeight: 32,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonPressed: {
+    opacity: 0.6,
+  },
+  error: {
+    paddingTop: Spacing.md,
+    textAlign: 'center',
+  },
 });
 
-function formatDate(value: string, fallback: string) {
+function formatBlockedAt(value: string, t: TFunction) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return fallback;
-  return date.toLocaleDateString();
+  if (Number.isNaN(date.getTime())) {
+    return t('settingsDetails.privacy.blacklistUnknownTime');
+  }
+  return t('settingsDetails.privacy.blacklistBlockedAt', {
+    date: date.toLocaleDateString(),
+  });
 }
 
 export default function BlacklistSettingsScreen() {
@@ -81,14 +110,13 @@ export default function BlacklistSettingsScreen() {
       title: {
         color: colors.text,
         ...Typography.body,
-        fontWeight: '700' as const,
       },
-      caption: { color: colors.textSecondary, ...Typography.caption },
-      button: { borderColor: colors.error },
+      caption: { color: colors.textSecondary, ...Typography.small },
+      // 移出黑名单是解除限制，不是危险操作：用中性描边，不用红色。
+      button: { borderColor: colors.surfaceBorder },
       buttonText: {
-        color: colors.error,
+        color: colors.text,
         ...Typography.caption,
-        fontWeight: '700' as const,
       },
       error: { color: colors.error, ...Typography.caption },
     }),
@@ -159,10 +187,14 @@ export default function BlacklistSettingsScreen() {
     );
   }
 
+  const lastIndex = users.length - 1;
+
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader title={t('settingsDetails.privacy.blacklist')} />
-      <ScrollView
+      <FlatList
+        data={loading ? [] : users}
+        keyExtractor={(user) => user.id}
         contentContainerStyle={[s.content, d.content]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -172,51 +204,75 @@ export default function BlacklistSettingsScreen() {
             tintColor={colors.primary}
           />
         }
-      >
-        {loading ? (
-          <View style={s.stateBlock}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={d.caption}>
-              {t('settingsDetails.privacy.blacklistLoading')}
-            </Text>
-          </View>
-        ) : users.length === 0 ? (
-          <View style={s.stateBlock}>
-            <Text style={d.caption}>
-              {t('settingsDetails.privacy.blacklistEmpty')}
-            </Text>
-          </View>
-        ) : (
-          users.map((user) => (
-            <View key={user.id} style={[s.card, d.card]}>
-              <View style={s.row}>
-                <Avatar uri={user.avatarUrl ?? undefined} size={44} />
-                <View style={s.textBlock}>
-                  <Text style={d.title}>{user.nickname}</Text>
-                  <Text style={d.caption}>
-                    {formatDate(
-                      user.blockedAt,
-                      t('settingsDetails.privacy.blacklistUnknownTime'),
-                    )}
-                  </Text>
-                </View>
-                <Pressable
-                  style={[s.button, d.button]}
-                  disabled={submittingId !== null}
-                  onPress={() => confirmRemove(user)}
-                >
-                  <Text style={d.buttonText}>
-                    {submittingId === user.id
-                      ? t('common.loading', { defaultValue: '处理中' })
-                      : t('settingsDetails.privacy.blacklistRemove')}
-                  </Text>
-                </Pressable>
-              </View>
+        ItemSeparatorComponent={() => (
+          <View style={[s.item, d.card]}>
+            <View style={s.separatorInset}>
+              <Divider />
             </View>
-          ))
+          </View>
         )}
-        {error ? <Text style={d.error}>{error}</Text> : null}
-      </ScrollView>
+        ListEmptyComponent={
+          loading ? (
+            <View style={s.stateBlock}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={d.caption}>
+                {t('settingsDetails.privacy.blacklistLoading')}
+              </Text>
+            </View>
+          ) : (
+            <View style={s.stateBlock}>
+              <Ionicons name="ban-outline" size={40} color={colors.textSecondary} />
+              <Text style={d.caption}>
+                {t('settingsDetails.privacy.blacklistEmpty')}
+              </Text>
+            </View>
+          )
+        }
+        renderItem={({ item: user, index }) => (
+          <View
+            style={[
+              s.item,
+              d.card,
+              index === 0 ? s.itemFirst : null,
+              index === lastIndex ? s.itemLast : null,
+            ]}
+          >
+            <View style={s.row}>
+              <Avatar
+                uri={user.avatarUrl ?? undefined}
+                name={user.nickname}
+                size={AVATAR_SIZE}
+              />
+              <View style={s.textBlock}>
+                <Text style={d.title} numberOfLines={1}>
+                  {user.nickname}
+                </Text>
+                <Text style={d.caption}>
+                  {formatBlockedAt(user.blockedAt, t)}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('settingsDetails.privacy.blacklistRemove')}
+                style={({ pressed }) => [s.button, d.button, pressed ? s.buttonPressed : null]}
+                disabled={submittingId !== null}
+                onPress={() => confirmRemove(user)}
+              >
+                {submittingId === user.id ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : (
+                  <Text style={d.buttonText}>
+                    {t('settingsDetails.privacy.blacklistRemove')}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        )}
+        ListFooterComponent={
+          error ? <Text style={[s.error, d.error]}>{error}</Text> : null
+        }
+      />
     </View>
   );
 }

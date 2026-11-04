@@ -112,14 +112,15 @@ test('license artifacts are deterministic, complete, and machine-readable', () =
 });
 
 test('the About screen exposes bundled selectable third-party notices', () => {
-  const versionScreen = read('src/features/profile/screens/AboutVersionScreen.tsx');
+  const aboutScreen = read('src/features/profile/screens/AboutSettingsScreen.tsx');
   const licenseScreen = read(
     'src/features/profile/screens/ThirdPartyLicensesScreen.tsx',
   );
   const route = read('app/(tabs)/profile/settings-about-licenses.tsx');
 
-  assert.match(versionScreen, /settings-about-licenses/);
-  assert.match(versionScreen, /settingsDetails\.about\.thirdPartyLicenses/);
+  // 开源许可是「关于我们」列表里的一行，和用户协议、隐私政策放在一起。
+  assert.match(aboutScreen, /settings-about-licenses/);
+  assert.match(aboutScreen, /settingsDetails\.about\.thirdPartyLicenses/);
   assert.match(licenseScreen, /third-party-notices\.json/);
   assert.match(licenseScreen, /selectable/);
   assert.match(route, /ThirdPartyLicensesScreen/);

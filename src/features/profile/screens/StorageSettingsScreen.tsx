@@ -24,6 +24,12 @@ export default function StorageSettingsScreen() {
               onPress: () =>
                 router.push('/(tabs)/profile/settings-storage-usage' as never),
             },
+          ],
+        },
+        // 清理类操作单独一组，和「查看占用」分开，免得误触。
+        {
+          footerKey: 'settingsDetails.storage.clearSectionHint',
+          rows: [
             {
               id: 'clear-cache',
               labelKey: 'settingsDetails.storage.clearCache',

@@ -236,20 +236,7 @@ export function ChatComposerBar({
           />
         )}
 
-        {/* 发送入口按草稿显示；麦克风固定在表情按钮左边。 */}
-        {hasContent ? (
-          <Pressable
-            key="send"
-            testID={E2E_TEST_IDS.chatSend}
-            style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
-            onPress={handleSend}
-            disabled={sending || isPreviewMode || isVoiceRecording || composerLocked}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.send')}
-          >
-            <Ionicons name="arrow-up" size={24} color={colors.text} />
-          </Pressable>
-        ) : null}
+        {/* 麦克风固定在表情按钮左边；发送入口按草稿显示，排在最右。 */}
         <Pressable
           key="voice"
           style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
@@ -280,6 +267,19 @@ export function ChatComposerBar({
         >
           <Ionicons name="happy-outline" size={26} color={emojiOpen ? colors.primaryDeep : colors.black} />
         </Pressable>
+        {hasContent ? (
+          <Pressable
+            key="send"
+            testID={E2E_TEST_IDS.chatSend}
+            style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
+            onPress={handleSend}
+            disabled={sending || isPreviewMode || isVoiceRecording || composerLocked}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.send')}
+          >
+            <Ionicons name="arrow-up" size={24} color={colors.text} />
+          </Pressable>
+        ) : null}
       </GlassSurface>
     </View>
   );

@@ -15,7 +15,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { AvatarPhotoViewer } from '@/components/ui/avatar-photo-viewer';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
-import { Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
 import { useChangeAvatar } from '@/hooks/use-change-avatar';
 import { updateUserProfile } from '@/services/api/profile';
@@ -52,17 +52,30 @@ const s = StyleSheet.create({
   section: {
     gap: Spacing.sm,
   },
+  sectionTitle: {
+    paddingHorizontal: Spacing.md,
+  },
+  // 与其他设置页同一套卡片：圆角底板 + 行内分隔线。
+  card: {
+    borderRadius: Radius.xl,
+    paddingHorizontal: Spacing.md,
+    overflow: 'hidden',
+  },
   row: {
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.md,
-    paddingVertical: Spacing.md,
+    paddingVertical: 12,
+  },
+  rowPressed: {
+    opacity: 0.6,
   },
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     flexShrink: 1,
   },
 });
@@ -135,13 +148,18 @@ export default function SettingsScreen() {
       },
       content: {
         paddingHorizontal: Spacing.lg,
-        paddingBottom: insets.bottom + Spacing.lg,
-        gap: Spacing.xl,
+        paddingTop: Spacing.sm,
+        paddingBottom: insets.bottom + Spacing.xl,
+        gap: Spacing.lg,
       },
       sectionTitle: {
         color: colors.textSecondary,
         ...Typography.caption,
         fontWeight: '600' as const,
+      },
+      card: {
+        backgroundColor: colors.surface,
+        boxShadow: '0 10px 26px rgba(59, 130, 246, 0.08)',
       },
       rowLabel: {
         color: colors.text,
@@ -159,7 +177,12 @@ export default function SettingsScreen() {
 
   const renderRow = (item: SettingsRowItem, index: number, total: number) => (
     <View key={item.id}>
-      <Pressable style={s.row} onPress={() => handleRowPress(item)}>
+      <Pressable
+        style={({ pressed }) => [s.row, pressed ? s.rowPressed : null]}
+        onPress={() => handleRowPress(item)}
+        accessibilityRole="button"
+        accessibilityLabel={[item.label, item.type !== 'avatar' ? item.value : null].filter(Boolean).join(', ')}
+      >
         <Text style={d.rowLabel}>{item.label}</Text>
         <View style={s.rowRight}>
           {item.type === 'avatar' ? (
@@ -218,10 +241,14 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={s.section}>
-          <Text style={d.sectionTitle}>{t('settingsPage.profileSection')}</Text>
-          {profileRows.map((item, index) =>
-            renderRow(item, index, profileRows.length),
-          )}
+          <Text style={[s.sectionTitle, d.sectionTitle]}>
+            {t('settingsPage.profileSection')}
+          </Text>
+          <View style={[s.card, d.card]}>
+            {profileRows.map((item, index) =>
+              renderRow(item, index, profileRows.length),
+            )}
+          </View>
         </View>
       </ScrollView>
       <ProfileFieldEditSheet fieldId={editingFieldId} onClose={closeEditor} />
