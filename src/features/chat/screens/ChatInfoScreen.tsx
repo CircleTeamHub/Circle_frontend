@@ -20,6 +20,7 @@ import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
+import { AvatarPhotoViewer } from '@/components/ui/avatar-photo-viewer';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import {
@@ -360,6 +361,7 @@ export default function ChatInfoScreen() {
   // 还没有该会话,置顶/免打扰的当前值与目标会话 id 都以它兜底。
   const [groupConversation, setGroupConversation] = useState<ChatConversationDto | null>(null);
   const [groupMembersExpanded, setGroupMembersExpanded] = useState(false);
+  const [avatarPreviewKey, setAvatarPreviewKey] = useState<string | null>(null);
   // TEMP/独立群没有圈子角色 hook；缓存不能替代本次进入后的座位校验。
   const [standaloneDirectoryAccess, setStandaloneDirectoryAccess] = useState<
     'pending' | 'allowed' | 'denied'
@@ -586,6 +588,7 @@ export default function ChatInfoScreen() {
         ? `circle:${groupID}`
         : `direct:${friendId}`;
   const basePinned = activeConversation?.pinned ?? false;
+  const avatarSubjectKey = `${sessionEpoch}:${groupDataKey}`;
   const baseMuted = activeConversation?.muted ?? false;
   const backHref = useMemo(() => {
     if (originScope === 'messages') {
@@ -2029,12 +2032,7 @@ export default function ChatInfoScreen() {
                 <Divider />
                 <GroupInfoRow
                   label={t('chat.groupAvatar', { defaultValue: '群头像' })}
-                  onPress={
-                    canChangeGroupAvatar && !groupAvatarChanging
-                      ? () => void changeGroupAvatar()
-                      : undefined
-                  }
-                  showArrow={canChangeGroupAvatar}
+                  onPress={() => setAvatarPreviewKey(avatarSubjectKey)}
                   rightElement={
                     <GroupChatAvatar size={32} name={groupTitle} uri={groupAvatarUrl} />
                   }
@@ -2226,6 +2224,17 @@ export default function ChatInfoScreen() {
           onSelect={handleSelectBurnDuration}
           onClose={() => setBurnPickerVisible(false)}
         />
+        {avatarPreviewKey === avatarSubjectKey ? (
+          <AvatarPhotoViewer
+            key={avatarSubjectKey}
+            visible
+            uri={groupAvatarUrl}
+            name={groupTitle}
+            changing={groupAvatarChanging}
+            onChange={canChangeGroupAvatar ? changeGroupAvatar : undefined}
+            onClose={() => setAvatarPreviewKey(null)}
+          />
+        ) : null}
         <Modal
           transparent
           animationType="fade"

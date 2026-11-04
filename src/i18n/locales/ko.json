@@ -1,4 +1,11 @@
 {
+  "avatarPhoto": {
+    "actions": "프로필 사진 옵션",
+    "title": "프로필 사진",
+    "view": "프로필 사진 보기",
+    "takePhoto": "사진 촬영",
+    "chooseFromPhotos": "앨범에서 선택"
+  },
   "assistant": {
     "name": "WindNote 어시스턴트",
     "open": "WindNote 어시스턴트 열기",

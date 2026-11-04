@@ -1,4 +1,11 @@
 {
+  "avatarPhoto": {
+    "actions": "Opciones de la foto de perfil",
+    "title": "Foto de perfil",
+    "view": "Ver foto de perfil",
+    "takePhoto": "Tomar foto",
+    "chooseFromPhotos": "Elegir de la galería"
+  },
   "assistant": {
     "name": "Asistente de WindNote",
     "open": "Abrir el asistente de WindNote",

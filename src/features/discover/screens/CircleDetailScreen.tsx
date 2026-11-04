@@ -33,6 +33,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { Divider } from '@/components/ui/divider';
 import { GradientCover } from '@/components/ui/gradient-cover';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
+import { AvatarPhotoViewer } from '@/components/ui/avatar-photo-viewer';
 import {
   fetchCircleDetail,
   uploadCircleIcon,
@@ -295,6 +296,8 @@ export default function CircleDetailScreen() {
   const [enteringGroupChat, setEnteringGroupChat] = useState(false);
   const [joining, setJoining] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [avatarPreviewKey, setAvatarPreviewKey] = useState<string | null>(null);
+  const avatarSubjectKey = `${sessionEpoch}:${id}`;
   const refreshInFlightRef = useRef(false);
   // 首次成功加载后置 true：之后 focus 回本页只做静默刷新，不再进 loading 分支
   //（loading 分支会卸载整个 ScrollView，重挂后滚动位置归零 = 返回跳回顶部）。
@@ -471,7 +474,7 @@ export default function CircleDetailScreen() {
     [id, sessionEpoch],
   );
   // 仅圈主可换(服务端 assertOwner);与群头像共用同一个上传/落库流程。
-  const { changeAvatar: changeCircleAvatar } = useChangeAvatar({
+  const { changeAvatar: changeCircleAvatar, changing: circleAvatarChanging } = useChangeAvatar({
     submit: submitCircleAvatar,
     onChanged: handleCircleAvatarChanged,
     failureTitle: t('circle.avatarUpdateFailed', { defaultValue: '头像更新失败' }),
@@ -747,8 +750,9 @@ export default function CircleDetailScreen() {
           {/* Avatar */}
           <Pressable
             style={s.avatarWrap}
-            onPress={isOwner ? changeCircleAvatar : undefined}
-            disabled={!isOwner}
+            onPress={() => setAvatarPreviewKey(avatarSubjectKey)}
+            accessibilityRole="button"
+            accessibilityLabel={t('avatarPhoto.view')}
           >
             <CircleAvatar
               uri={circle.avatarUrl}
@@ -1037,6 +1041,17 @@ export default function CircleDetailScreen() {
           ) : null}
         </View>
       </ScrollView>
+      {avatarPreviewKey === avatarSubjectKey ? (
+        <AvatarPhotoViewer
+          key={avatarSubjectKey}
+          visible
+          uri={circle.avatarUrl}
+          name={circle.name}
+          changing={circleAvatarChanging}
+          onChange={isOwner ? changeCircleAvatar : undefined}
+          onClose={() => setAvatarPreviewKey(null)}
+        />
+      ) : null}
     </View>
   );
 }

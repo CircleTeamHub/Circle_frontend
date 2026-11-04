@@ -1334,8 +1334,9 @@ test("profile info rows edit in a bottom sheet instead of pushing a separate pag
 
   assert.doesNotMatch(screen, /profile\/edit\/\[field\]/);
   assert.match(screen, /<ProfileFieldEditSheet fieldId=\{editingFieldId\}/);
-  // 头像直接唤起相册,不经过面板。
-  assert.match(screen, /item\.type === 'avatar'[\s\S]*?changeAvatar\(\)/);
+  // 头像先进入大图预览，由预览菜单发起更换。
+  assert.match(screen, /item\.type === 'avatar'[\s\S]*?setAvatarPreviewKey\(avatarSubjectKey\)/);
+  assert.match(screen, /<AvatarPhotoViewer[\s\S]*?onChange=\{changeAvatar\}/);
   // 设置搜索带 ?field= 进来时直接弹出对应面板。
   assert.match(screen, /useLocalSearchParams<\{ field\?: string \}>/);
 
