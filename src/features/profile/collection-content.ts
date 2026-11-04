@@ -7,7 +7,7 @@ import type { ChatMessage } from '@/types';
 export type CollectionContent = {
   message: ChatMessage | null;
   dto?: ChatMessageDto;
-  kind: 'image' | 'video' | 'voice' | 'text' | 'friend-card' | 'location' | 'other';
+  kind: 'image' | 'video' | 'voice' | 'text' | 'friend-card' | 'transfer-card' | 'location' | 'other';
   text: string;
   imageUri?: string;
   videoUri?: string;
@@ -34,7 +34,7 @@ function fallbackText(item: UserCollection): string {
 
 function kindOf(type: string): CollectionContent['kind'] {
   switch (type) {
-    case 'image': case 'video': case 'voice': case 'friend-card': case 'location': return type;
+    case 'image': case 'video': case 'voice': case 'friend-card': case 'transfer-card': case 'location': return type;
     case 'sent': case 'received': case 'text': case 'quote': return 'text';
     default: return 'other';
   }
@@ -69,6 +69,7 @@ export function resolveCollectionContent(item: UserCollection, currentUserID: st
         break;
       }
       case 'friend-card': content = record(legacy.friendCard); break;
+      case 'transfer-card': content = record(legacy.transferCard); break;
       case 'location': content = record(legacy.location); break;
       default:
         if (type !== 'note-card') return { message: null, kind, text: body };

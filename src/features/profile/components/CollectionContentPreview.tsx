@@ -160,6 +160,15 @@ export function CollectionContentPreview({ content, playing = false }: Collectio
         </View>
       </View>
     );
+  } else if (content.kind === 'transfer-card' && (content.message?.transferCard || content.text)) {
+    const receipt = content.message?.transferCard;
+    preview = (
+      <View style={s.textColumn}>
+        <Text style={[s.title, { color: colors.text }]}>{t('chat.transfer.title')}</Text>
+        <Text style={[s.body, { color: colors.text }]}>{receipt ? `${receipt.amount.toLocaleString()} ${t('common.coin')}` : content.text}</Text>
+        {receipt?.message ? <Text style={[s.secondary, { color: colors.textSecondary }]} numberOfLines={3}>{receipt.message}</Text> : null}
+      </View>
+    );
   } else {
     preview = unavailable;
   }

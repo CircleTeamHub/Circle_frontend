@@ -5,7 +5,7 @@ import SharePickerScreen from './SharePickerScreen';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 
-const mockRouter = { push: jest.fn(), back: jest.fn() };
+const mockRouter = { push: jest.fn(), navigate: jest.fn(), back: jest.fn() };
 const mockPending = jest.fn();
 const mockFetchNotes = jest.fn();
 const mockRefreshConversation = jest.fn();
@@ -75,7 +75,8 @@ test.each(['messages', 'profile', 'discover', 'contacts', 'explore'])('personal 
   const stop = jest.fn();
   fireEvent.press(screen.getByText('Ada'), { stopPropagation: stop });
   expect(stop).toHaveBeenCalledTimes(1);
-  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: `/(tabs)/${scope}/user/[id]`, params: { id: 'person', name: 'Ada' } });
+  expect(mockRouter.navigate).toHaveBeenCalledWith({ pathname: `/(tabs)/${scope}/user/[id]`, params: { id: 'person', name: 'Ada' } });
+  expect(mockRouter.push).not.toHaveBeenCalled();
   expect(mockPending).not.toHaveBeenCalled();
   expect(screen.queryByText('发送 (1)')).toBeNull();
 });
@@ -109,7 +110,7 @@ test('source personal card retains its original group context for profile privac
   render(<SharePickerScreen />);
   await screen.findByText('With cards');
   fireEvent.press(screen.getByText('Source person'), { stopPropagation: jest.fn() });
-  await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/user/[id]', params: { id: 'source-person', name: 'Source person', viaConversationID: 'source-conversation' } }));
+  await waitFor(() => expect(mockRouter.navigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/user/[id]', params: { id: 'source-person', name: 'Source person', viaConversationID: 'source-conversation' } }));
 });
 
 test.each(['MEMBER', 'ADMIN', 'OWNER', 'self'])('source sender profile obeys group policy for %s', async (role) => {
@@ -123,9 +124,9 @@ test.each(['MEMBER', 'ADMIN', 'OWNER', 'self'])('source sender profile obeys gro
   fireEvent.press(screen.getByText('Source person'), { stopPropagation: jest.fn() });
   if (role === 'MEMBER') {
     await waitFor(() => expect(alert).toHaveBeenCalledWith('该群未开放查看成员资料'));
-    expect(mockRouter.push).not.toHaveBeenCalled();
+    expect(mockRouter.navigate).not.toHaveBeenCalled();
   } else {
-    await waitFor(() => expect(mockRouter.push).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRouter.navigate).toHaveBeenCalledTimes(1));
   }
   if (role === 'self') expect(mockFetchMembers).not.toHaveBeenCalled();
   expect(mockPending).not.toHaveBeenCalled();
@@ -147,7 +148,7 @@ test.each(['denied', 'left group', 'blurred', 'account changed'])('source profil
   if (transition === 'blurred') mockNavigation.isFocused.mockReturnValue(false);
   if (transition === 'account changed') mockAuthState.sessionEpoch += 1;
   await act(async () => finish());
-  expect(mockRouter.push).not.toHaveBeenCalled();
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
   expect(mockPending).not.toHaveBeenCalled();
   alert.mockRestore();
 });
@@ -163,7 +164,7 @@ test('source profile uses refreshed policies rather than a previously open snaps
   fireEvent.press(screen.getByText('Source person'), { stopPropagation: jest.fn() });
   await waitFor(() => expect(alert).toHaveBeenCalledWith('该群未开放查看成员资料'));
   expect(mockRefreshConversation).toHaveBeenCalledWith('source-conversation', { shouldApply: expect.any(Function) });
-  expect(mockRouter.push).not.toHaveBeenCalled();
+  expect(mockRouter.navigate).not.toHaveBeenCalled();
   alert.mockRestore();
 });
 
@@ -182,7 +183,7 @@ test('an unrelated explicit personal card does not inherit the collected sender 
   render(<SharePickerScreen />);
   await screen.findByText('With cards');
   fireEvent.press(screen.getByText('Ada'), { stopPropagation: jest.fn() });
-  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/user/[id]', params: { id: 'person', name: 'Ada' } });
+  expect(mockRouter.navigate).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/user/[id]', params: { id: 'person', name: 'Ada' } });
 });
 
 test('ordinary note-list multi-selection keeps source navigation disabled by default', () => {

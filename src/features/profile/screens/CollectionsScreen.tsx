@@ -204,7 +204,7 @@ export default function CollectionsScreen() {
     }
     const friend = content.message?.friendCard;
     if (friend) { router.navigate(getUserProfileHref('profile', friend.userID, friend.nickname)); return; }
-    if (content.text && content.kind === 'text') { setTextPreview(content.text); return; }
+    if (content.text && (content.kind === 'text' || content.kind === 'transfer-card')) { setTextPreview(content.text); return; }
     setStatusText(t('profile.collections.unavailable', { defaultValue: '内容暂不可用' }));
   }
 
@@ -252,7 +252,7 @@ export default function CollectionsScreen() {
       </Pressable>)}
     </ScrollView>
     {!selectionMode && items.length > 0 ? <Text style={[s.hint, { color: colors.textSecondary }]}>{t('profile.collections.longPressHint', { defaultValue: '长按收藏可多选编辑' })}</Text> : null}
-    {isOffline ? <Text style={[s.hint, { color: colors.textSecondary }]}>{t('network.offlineBanner', { defaultValue: '当前无网络连接，部分功能可能不可用' })}</Text> : null}
+    {isOffline ? <Text style={[s.hint, { color: colors.textSecondary }]}>{t('common.offline')}</Text> : null}
     {statusText ? <Text accessibilityLiveRegion="polite" style={[s.hint, { color: colors.textSecondary }]}>{statusText}</Text> : null}
     {loadError && items.length > 0 ? <Text style={[s.hint, { color: colors.textSecondary }]}>{loadError}</Text> : null}
   </View>;

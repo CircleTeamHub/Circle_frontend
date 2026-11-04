@@ -102,6 +102,22 @@ test('shows the actual location title and address', () => {
   expect(screen.getByText('New York, NY')).toBeTruthy();
 });
 
+test('shows the amount and note of a saved transfer receipt', () => {
+  render(<CollectionContentPreview content={content({ kind: 'transfer-card', text: '125 Credits',
+    message: { id: 'transfer', type: 'transfer-card', transferCard: { amount: 125, message: 'Lunch' } },
+  })} />);
+  expect(screen.getByText('Coin Transfer')).toBeTruthy();
+  expect(screen.getByText('125 Credits')).toBeTruthy();
+  expect(screen.getByText('Lunch')).toBeTruthy();
+  expect(screen.queryByText('Content unavailable')).toBeNull();
+});
+
+test('keeps a saved transfer summary readable when no source receipt is available', () => {
+  render(<CollectionContentPreview content={content({ kind: 'transfer-card', text: '125 Credits' })} />);
+  expect(screen.getByText('125 Credits')).toBeTruthy();
+  expect(screen.queryByText('Content unavailable')).toBeNull();
+});
+
 test.each([
   content({ kind: 'other', text: '[Unrecognized attachment]' }),
   content({ kind: 'image' }),

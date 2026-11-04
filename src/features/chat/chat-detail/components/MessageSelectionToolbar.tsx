@@ -49,12 +49,12 @@ export function MessageSelectionToolbar({
           <Pressable accessibilityRole="button" accessibilityLabel={t('common.cancel')}
             accessibilityState={{ disabled: busy }} disabled={busy} onPress={onCancel}
             style={({ pressed }) => [s.cancel, { opacity: busy ? 0.4 : 1, backgroundColor: pressed ? colors.background : 'transparent' }]}>
-            <Text style={[s.cancelLabel, { color: colors.textSecondary }]}>{t('common.cancel')}</Text>
+            <Text style={[s.cancelLabel, { color: colors.text }]}>{t('common.cancel')}</Text>
             <Ionicons name="close" size={16} color={colors.textSecondary} />
           </Pressable>
         </View>
         {count > 0 && !canSave && !busy ? (
-          <Text style={[s.hint, { color: colors.textSecondary }]}>
+          <Text style={[s.hint, { color: colors.text }]}>
             {t('chat.selection.saveHint', { defaultValue: '保存仅支持普通图片和视频' })}
           </Text>
         ) : null}

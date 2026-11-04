@@ -28,6 +28,18 @@ const legacy = (messageType: string, content: Record<string, unknown> = {}) => (
   messageType, senderID: 'peer', senderName: 'Peer', time: '10:30', ...content,
 });
 
+test.each(['source', 'legacy'])('preserves a saved transfer receipt from its %s without making it forwardable', (origin) => {
+  const receipt = { amount: 125, message: 'Lunch' };
+  const collection = item({ title: '积分转账', summary: '125 Credits',
+    payload: legacy('transfer-card', { transferCard: receipt }),
+    ...(origin === 'source' ? { message: source({ type: 'transfer-card', content: receipt }) } : {}),
+  });
+  expect(resolveCollectionContent(collection, 'me')).toMatchObject({
+    kind: 'transfer-card', text: '125 Credits', message: { transferCard: receipt },
+  });
+  expect(getCollectionForwardItem(collection, 'me')).toBeNull();
+});
+
 test('resolves an old image through the authoritative message even when the payload has no media', () => {
   const collection = item({ message: source(), payload: legacy('image') });
   expect(resolveCollectionContent(collection, 'me')).toMatchObject({

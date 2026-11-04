@@ -380,13 +380,14 @@ export default function SharePickerScreen() {
           sourceOpeningRef.current = false;
         }
       }
-      router.push(getUserProfileHref(scope, contact.id, contact.name,
+      router.navigate(getUserProfileHref(scope, contact.id, contact.name,
         viaConversationID ? { viaConversationID } : undefined,
       ));
     } else if (target === 'group' && group) {
-      router.push(group.target === 'circle'
-        ? getCircleDetailHref(toCircleScope(scope), group.id)
-        : getChatInfoTopHref(scope, {
+      if (group.target === 'circle') {
+        router.push(getCircleDetailHref(toCircleScope(scope), group.id));
+      } else {
+        router.push(getChatInfoTopHref(scope, {
           sourceID: group.id,
           ...(group.conversationID ? { conversationID: group.conversationID } : {}),
           conversationType: 'group',
@@ -394,6 +395,7 @@ export default function SharePickerScreen() {
           title: group.name,
           originScope: scope,
         }));
+      }
     }
   }, [navigation, router, scope]);
 
