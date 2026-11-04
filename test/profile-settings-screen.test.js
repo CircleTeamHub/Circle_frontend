@@ -470,7 +470,9 @@ test("account actions live at the bottom of the app settings home, not the profi
   assert.match(appSettingsSource, /onPress=\{logout\}/);
   assert.match(appSettingsSource, /settingsPage\.switchAccount/);
   assert.match(appSettingsSource, /settingsPage\.logout/);
-  assert.match(appSettingsSource, /style=\{s\.footer\}/);
+  // 切换账号/退出登录在页尾单独一张卡里，退出登录是红字行而不是实心红按钮。
+  assert.match(appSettingsSource, /style=\{\[s\.footer, d\.card\]\}/);
+  assert.doesNotMatch(appSettingsSource, /log-out-outline/);
 });
 
 test("app settings rows route to their dedicated detail pages", () => {
@@ -890,9 +892,10 @@ test("system permissions screen uses bright icon accents and a real settings but
 
   assert.match(screenSource, /iconColor:\s*colors\.iconAccent/);
   assert.match(screenSource, /iconBackgroundColor:\s*colors\.primaryLight/);
-  // 行内状态文字与行图标同色：暗色下图标提亮而文字留在 primary，
-  // 同一行就会出现两种紫。
-  assert.match(screenSource, /statusColor:\s*colors\.iconAccent/);
+  // 状态文字不跟图标同为紫色：已授权绿、未授权灰，一眼分得出哪项还没开；
+  // 也不能退回 primary（暗色下图标提亮而文字留在 primary，同一行两种紫）。
+  assert.match(screenSource, /statusColor:\s*granted \? colors\.success : colors\.textSecondary/);
+  assert.doesNotMatch(screenSource, /statusColor:\s*colors\.primary/);
   assert.match(screenSource, /settingsButton/);
   assert.match(screenSource, /backgroundColor:\s*colors\.primary/);
   assert.match(screenSource, /color:\s*colors\.white/);
@@ -1079,11 +1082,9 @@ test("app settings pages use profile settings row font scale", () => {
   assert.match(detailSource, /rowLabel:\s*\{[\s\S]*?Typography\.body/);
   assert.match(detailSource, /subtitle:\s*\{[\s\S]*?Typography\.caption/);
   assert.doesNotMatch(detailSource, /rowLabel:\s*\{[\s\S]*?Typography\.h3/);
-  assert.match(appSettingsSource, /rowLabel:\s*\{[\s\S]*?Typography\.body/);
-  assert.doesNotMatch(
-    appSettingsSource,
-    /rowLabel:\s*\{[\s\S]*?Typography\.h3/,
-  );
+  // 主设置页直接复用设置详情页的分组与行组件，字号天然一致。
+  assert.match(appSettingsSource, /<SettingsSectionView/);
+  assert.doesNotMatch(appSettingsSource, /Typography\.h3/);
 });
 
 test("notification settings toggles are backed by persisted app settings instead of local placeholders", () => {

@@ -2293,7 +2293,7 @@
         "label": "System Permissions"
       },
       "clearCache": {
-        "label": "Clear Cache"
+        "label": "Storage & Cache"
       },
       "about": {
         "label": "About Us"
@@ -2442,7 +2442,10 @@
       "showCollapsedPinned": "Show {{count}} more pinned conversations",
       "unlimited": "Unlimited",
       "batteryOptimization": "Battery Optimization Reminder",
-      "batteryOptimizationHint": "Android only. When off, background permission guidance will no longer pop up"
+      "batteryOptimizationHint": "Android only. When off, background permission guidance will no longer pop up",
+      "displaySection": "Display",
+      "chatSection": "Chats",
+      "conversationListSection": "Chat List"
     },
     "privacy": {
       "title": "Privacy",
@@ -2494,7 +2497,12 @@
         "byQrCode": "By QR code",
         "byGroup": "By group / circle",
         "shareCard": "Share my personal card"
-      }
+      },
+      "chatSection": "Chats & Moments",
+      "presenceSection": "Online & Typing Status",
+      "profileVisibilitySection": "Profile Visibility",
+      "contactSection": "Adding & Invitations",
+      "blacklistBlockedAt": "Blocked on {{date}}"
     },
     "permissions": {
       "title": "System Permissions",
@@ -2507,11 +2515,11 @@
       "bluetooth": "Bluetooth",
       "authorized": "Authorized",
       "unauthorized": "Unauthorized",
-      "onlyVisibleAuthorized": "Only permissions that can be queried are shown",
+      "onlyVisibleAuthorized": "Tap an item to request access. Permissions you already denied must be turned on in system settings.",
       "openSystemSettings": "Open System Settings"
     },
     "storage": {
-      "title": "Settings",
+      "title": "Storage & Cache",
       "storageSpace": "Storage Space",
       "clearCache": "Clear Cache",
       "cacheSize": "Calculating...",
@@ -2532,7 +2540,8 @@
       "clearAllChatsFailed": "Clear Failed",
       "clearAllChatsFailedMessage": "Unable to clear local chat records right now. Please try again later.",
       "switchAccount": "Switch Account",
-      "logout": "Log Out"
+      "logout": "Log Out",
+      "clearSectionHint": "Clearing the cache keeps your chats. Clearing chat history only affects this device, not the history on the server."
     },
     "storageUsage": {
       "title": "Storage Space",

@@ -164,7 +164,10 @@
       "showCollapsedPinned": "Mostrar {{count}} chats fijados más",
       "unlimited": "Sin límite",
       "batteryOptimization": "Aviso de optimización de batería",
-      "batteryOptimizationHint": "Solo en Android. Si se desactiva, no aparecerá la guía de permisos en segundo plano"
+      "batteryOptimizationHint": "Solo en Android. Si se desactiva, no aparecerá la guía de permisos en segundo plano",
+      "displaySection": "Pantalla",
+      "chatSection": "Chats",
+      "conversationListSection": "Lista de chats"
     },
     "privacy": {
       "title": "Privacidad",
@@ -216,7 +219,12 @@
         "byQrCode": "Por código QR",
         "byGroup": "Por grupo o Círculo",
         "shareCard": "Compartir mi tarjeta personal"
-      }
+      },
+      "chatSection": "Chats y momentos",
+      "presenceSection": "Estado en línea y escritura",
+      "profileVisibilitySection": "Visibilidad del perfil",
+      "contactSection": "Agregar e invitaciones",
+      "blacklistBlockedAt": "Bloqueado el {{date}}"
     },
     "permissions": {
       "title": "Permisos del sistema",
@@ -229,11 +237,11 @@
       "bluetooth": "Bluetooth",
       "authorized": "Autorizado",
       "unauthorized": "Sin autorizar",
-      "onlyVisibleAuthorized": "Solo se muestran los permisos que se pueden consultar",
+      "onlyVisibleAuthorized": "Toca un elemento para solicitar acceso. Los permisos que ya denegaste deben activarse en los ajustes del sistema.",
       "openSystemSettings": "Abrir ajustes del sistema"
     },
     "storage": {
-      "title": "Ajustes",
+      "title": "Almacenamiento y caché",
       "storageSpace": "Espacio de almacenamiento",
       "clearCache": "Borrar caché",
       "cacheSize": "Calculando...",
@@ -254,7 +262,8 @@
       "clearAllChatsFailed": "Error al borrar",
       "clearAllChatsFailedMessage": "Ahora no se puede borrar el historial local de chats. Inténtalo más tarde.",
       "switchAccount": "Cambiar de cuenta",
-      "logout": "Cerrar sesión"
+      "logout": "Cerrar sesión",
+      "clearSectionHint": "Borrar la caché conserva tus chats. Borrar el historial de chats solo afecta a este dispositivo, no al historial del servidor."
     },
     "storageUsage": {
       "title": "Espacio de almacenamiento",
@@ -2770,7 +2779,7 @@
         "label": "Permisos del sistema"
       },
       "clearCache": {
-        "label": "Borrar caché"
+        "label": "Almacenamiento y caché"
       },
       "about": {
         "label": "Sobre nosotros"

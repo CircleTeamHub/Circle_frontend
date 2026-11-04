@@ -268,6 +268,7 @@ export default function PrivacySettingsScreen() {
         titleKey="settingsDetails.privacy.title"
         sections={[
           {
+            titleKey: 'settingsDetails.privacy.chatSection',
             rows: [
               {
                 id: 'self-destruct',
@@ -307,6 +308,7 @@ export default function PrivacySettingsScreen() {
             ],
           },
           {
+            titleKey: 'settingsDetails.privacy.presenceSection',
             rows: [
               {
                 id: 'online-time',
@@ -339,6 +341,7 @@ export default function PrivacySettingsScreen() {
             ],
           },
           {
+            titleKey: 'settingsDetails.privacy.profileVisibilitySection',
             rows: [
               {
                 id: 'show-phone',
@@ -377,6 +380,7 @@ export default function PrivacySettingsScreen() {
             ],
           },
           {
+            titleKey: 'settingsDetails.privacy.contactSection',
             rows: [
               {
                 id: 'add-me-methods',

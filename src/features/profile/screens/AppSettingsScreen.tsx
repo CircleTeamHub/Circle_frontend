@@ -13,8 +13,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import {
+  SettingsSectionView,
+  type SettingsDetailRow,
+} from '@/features/profile/components/settings-detail';
 import { formatCacheSize, getAppCacheSize } from '@/services/cache/clear-app-cache';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, iconForeground, useTheme, withAlpha } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { useAuth } from '@/hooks/use-auth';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
@@ -33,22 +37,40 @@ interface AppSettingsRow {
   route?: AppSettingsRoute;
   valueKey?: string;
   valueText?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  /** 图标色，沿用「我的」页宫格的同一组色值。 */
+  accent?: string;
+  /** 搜索结果所在的设置页，显示在标题下面。 */
+  parentLabelKey?: string;
 }
 
 type Translate = ReturnType<typeof useTranslation>['t'];
 
-const ACCOUNT_ROWS: AppSettingsRow[] = [
-  {
-    id: 'profile',
-    labelKey: 'appSettings.rows.profile.label',
-    route: '/(tabs)/profile/settings',
-  },
-  {
-    id: 'accountSecurity',
-    labelKey: 'appSettings.rows.accountSecurity.label',
-    route: '/(tabs)/profile/settings-account-security',
-  },
-];
+const PROFILE_ROW: AppSettingsRow = {
+  id: 'profile',
+  labelKey: 'appSettings.rows.profile.label',
+  route: '/(tabs)/profile/settings',
+  icon: 'person-circle-outline',
+  accent: '#387BE5',
+};
+const ACCOUNT_SECURITY_ROW: AppSettingsRow = {
+  id: 'accountSecurity',
+  labelKey: 'appSettings.rows.accountSecurity.label',
+  route: '/(tabs)/profile/settings-account-security',
+  icon: 'shield-checkmark-outline',
+  accent: '#168C91',
+};
+const ACCOUNT_ROWS = [PROFILE_ROW, ACCOUNT_SECURITY_ROW];
+
+// 搜索命中的子项带上所在页面的图标和名称，同名项也分得清在哪一页。
+function underPage(page: AppSettingsRow, rows: AppSettingsRow[]): AppSettingsRow[] {
+  return rows.map((row) => ({
+    ...row,
+    icon: page.icon,
+    accent: page.accent,
+    parentLabelKey: page.labelKey,
+  }));
+}
 
 const PROFILE_SEARCH_ROWS: AppSettingsRow[] = [
   'avatar',
@@ -109,36 +131,51 @@ const ACCOUNT_SECURITY_SEARCH_ROWS: AppSettingsRow[] = [
 
 const ACCOUNT_SEARCH_ROWS = [
   ...ACCOUNT_ROWS,
-  ...PROFILE_SEARCH_ROWS,
-  ...ACCOUNT_SECURITY_SEARCH_ROWS,
+  ...underPage(PROFILE_ROW, PROFILE_SEARCH_ROWS),
+  ...underPage(ACCOUNT_SECURITY_ROW, ACCOUNT_SECURITY_SEARCH_ROWS),
 ];
 
-const GENERAL_ROWS: AppSettingsRow[] = [
-  {
-    id: 'notifications',
-    labelKey: 'appSettings.rows.notifications.label',
-    route: '/(tabs)/profile/settings-notifications',
-  },
-  {
-    id: 'appearance',
-    labelKey: 'appSettings.rows.appearance.label',
-    route: '/(tabs)/profile/settings-appearance',
-  },
-  {
-    id: 'privacy',
-    labelKey: 'appSettings.rows.privacy.label',
-    route: '/(tabs)/profile/settings-privacy',
-  },
-  {
-    id: 'permissions',
-    labelKey: 'appSettings.rows.permissions.label',
-    route: '/(tabs)/profile/settings-permissions',
-  },
-  {
-    id: 'clearCache',
-    labelKey: 'appSettings.rows.clearCache.label',
-    route: '/(tabs)/profile/settings-storage',
-  },
+const NOTIFICATIONS_ROW: AppSettingsRow = {
+  id: 'notifications',
+  labelKey: 'appSettings.rows.notifications.label',
+  route: '/(tabs)/profile/settings-notifications',
+  icon: 'notifications-outline',
+  accent: '#D97732',
+};
+const APPEARANCE_ROW: AppSettingsRow = {
+  id: 'appearance',
+  labelKey: 'appSettings.rows.appearance.label',
+  route: '/(tabs)/profile/settings-appearance',
+  icon: 'color-palette-outline',
+  accent: '#8B5CF6',
+};
+const PRIVACY_ROW: AppSettingsRow = {
+  id: 'privacy',
+  labelKey: 'appSettings.rows.privacy.label',
+  route: '/(tabs)/profile/settings-privacy',
+  icon: 'lock-closed-outline',
+  accent: '#6366F1',
+};
+const PERMISSIONS_ROW: AppSettingsRow = {
+  id: 'permissions',
+  labelKey: 'appSettings.rows.permissions.label',
+  route: '/(tabs)/profile/settings-permissions',
+  icon: 'key-outline',
+  accent: '#D95688',
+};
+const STORAGE_ROW: AppSettingsRow = {
+  id: 'clearCache',
+  labelKey: 'appSettings.rows.clearCache.label',
+  route: '/(tabs)/profile/settings-storage',
+  icon: 'server-outline',
+  accent: '#168C91',
+};
+const GENERAL_ROWS = [
+  NOTIFICATIONS_ROW,
+  APPEARANCE_ROW,
+  PRIVACY_ROW,
+  PERMISSIONS_ROW,
+  STORAGE_ROW,
 ];
 
 const NOTIFICATION_SEARCH_ROWS: AppSettingsRow[] = [
@@ -273,11 +310,6 @@ const PERMISSIONS_SEARCH_ROWS: AppSettingsRow[] = [
 
 const STORAGE_SEARCH_ROWS: AppSettingsRow[] = [
   {
-    id: 'storage-settings',
-    labelKey: 'settingsDetails.storage.title',
-    route: '/(tabs)/profile/settings-storage',
-  },
-  {
     id: 'storage-space',
     labelKey: 'settingsDetails.storage.storageSpace',
     route: '/(tabs)/profile/settings-storage-usage',
@@ -291,20 +323,21 @@ const STORAGE_SEARCH_ROWS: AppSettingsRow[] = [
 
 const GENERAL_SEARCH_ROWS = [
   ...GENERAL_ROWS,
-  ...NOTIFICATION_SEARCH_ROWS,
-  ...APPEARANCE_SEARCH_ROWS,
-  ...PRIVACY_SEARCH_ROWS,
-  ...PERMISSIONS_SEARCH_ROWS,
-  ...STORAGE_SEARCH_ROWS,
+  ...underPage(NOTIFICATIONS_ROW, NOTIFICATION_SEARCH_ROWS),
+  ...underPage(APPEARANCE_ROW, APPEARANCE_SEARCH_ROWS),
+  ...underPage(PRIVACY_ROW, PRIVACY_SEARCH_ROWS),
+  ...underPage(PERMISSIONS_ROW, PERMISSIONS_SEARCH_ROWS),
+  ...underPage(STORAGE_ROW, STORAGE_SEARCH_ROWS),
 ];
 
-const HELP_ROWS: AppSettingsRow[] = [
-  {
-    id: 'about',
-    labelKey: 'appSettings.rows.about.label',
-    route: '/(tabs)/profile/settings-about',
-  },
-];
+const ABOUT_ROW: AppSettingsRow = {
+  id: 'about',
+  labelKey: 'appSettings.rows.about.label',
+  route: '/(tabs)/profile/settings-about',
+  icon: 'information-circle-outline',
+  accent: '#6366F1',
+};
+const HELP_ROWS = [ABOUT_ROW];
 
 const ABOUT_SEARCH_ROWS: AppSettingsRow[] = [
   {
@@ -332,21 +365,22 @@ const ABOUT_SEARCH_ROWS: AppSettingsRow[] = [
     labelKey: 'settingsDetails.about.checkUpdates',
     route: '/(tabs)/profile/settings-about-version',
   },
+  {
+    id: 'about-third-party-licenses',
+    labelKey: 'settingsDetails.about.thirdPartyLicenses',
+    route: '/(tabs)/profile/settings-about-licenses',
+  },
 ];
 
-const HELP_SEARCH_ROWS = [...HELP_ROWS, ...ABOUT_SEARCH_ROWS];
+const HELP_SEARCH_ROWS = [...HELP_ROWS, ...underPage(ABOUT_ROW, ABOUT_SEARCH_ROWS)];
 
 const s = StyleSheet.create({
-  section: {
-    gap: Spacing.sm,
-  },
   searchBox: {
-    height: 54,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
+    height: 44,
+    borderRadius: Radius.md,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: 12,
     gap: Spacing.sm,
   },
   searchInput: {
@@ -354,54 +388,34 @@ const s = StyleSheet.create({
     padding: 0,
     minHeight: 24,
   },
-  card: {
-    borderRadius: Radius.xl,
-    paddingHorizontal: Spacing.lg,
-    overflow: 'hidden',
-  },
-  row: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
-  },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
   emptyState: {
     alignItems: 'center',
+    gap: Spacing.sm,
     paddingVertical: Spacing.xl,
   },
+  // 切换账号 / 退出登录：单独一张卡，两行居中，退出登录用红字而不是整块红按钮。
   footer: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    paddingTop: Spacing.sm,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Spacing.md,
+    overflow: 'hidden',
   },
-  secondaryButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: Radius.lg,
-    justifyContent: 'center',
+  footerAction: {
+    minHeight: 52,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  dangerButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: Radius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: Spacing.sm,
+  footerActionPressed: {
+    opacity: 0.6,
+  },
+  footerActionDisabled: {
+    opacity: 0.5,
   },
 });
 
 export default function AppSettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, resolvedMode } = useTheme();
   const { t } = useTranslation();
   const { logout, switchAccount, submitting } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -417,48 +431,32 @@ export default function AppSettingsScreen() {
       },
       content: {
         paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.sm,
         paddingBottom: insets.bottom + Spacing.xl,
-        gap: Spacing.xl,
+        gap: Spacing.lg,
       },
       searchBox: {
         backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
       },
       searchText: {
         color: colors.text,
         ...Typography.body,
       },
       searchPlaceholder: colors.textSecondary,
-      sectionTitle: {
-        color: colors.textSecondary,
-        ...Typography.caption,
-        fontWeight: '700' as const,
-      },
       card: {
         backgroundColor: colors.surface,
         boxShadow: '0 10px 26px rgba(59, 130, 246, 0.08)',
       },
-      rowLabel: {
-        color: colors.text,
-        ...Typography.body,
-      },
-      rowValue: {
+      emptyText: {
         color: colors.textSecondary,
         ...Typography.caption,
       },
-      secondaryButton: {
-        backgroundColor: colors.surface,
-      },
-      secondaryButtonText: {
-        color: colors.primary,
+      footerText: {
+        color: colors.text,
         ...Typography.body,
-        fontWeight: '600' as const,
       },
-      dangerButton: {
-        backgroundColor: colors.error,
-      },
-      dangerButtonText: {
-        color: colors.white,
+      footerDangerText: {
+        color: colors.error,
         ...Typography.body,
         fontWeight: '600' as const,
       },
@@ -547,45 +545,27 @@ export default function AppSettingsScreen() {
     router.push('/(tabs)/profile/settings-storage' as never);
   };
 
-  const renderRows = (rows: AppSettingsRow[]) =>
-    rows.map((row, index) => {
-      const valueText = row.valueText ?? (row.valueKey ? t(row.valueKey) : null);
-
-      return (
-        <View key={row.id}>
-          <Pressable
-            testID={E2E_TEST_IDS.settingsRow(row.id)}
-            style={s.row}
-            onPress={() => handleRowPress(row)}
-          >
-            <Text style={d.rowLabel}>{t(row.labelKey)}</Text>
-            <View style={s.rowRight}>
-              {valueText ? <Text style={d.rowValue}>{valueText}</Text> : null}
-              <Ionicons
-                name="chevron-forward"
-                size={22}
-                color={colors.textSecondary}
-              />
-            </View>
-          </Pressable>
-          {index < rows.length - 1 ? <Divider /> : null}
-        </View>
-      );
-    });
-
-  const renderSection = (
-    titleKey: string,
-    rows: AppSettingsRow[],
-  ) => {
-    if (rows.length === 0) return null;
-
-    return (
-      <View style={s.section}>
-        <Text style={d.sectionTitle}>{t(titleKey)}</Text>
-        <View style={[s.card, d.card]}>{renderRows(rows)}</View>
-      </View>
-    );
+  const toDetailRow = (row: AppSettingsRow): SettingsDetailRow => {
+    const tint = row.accent ? iconForeground(row.accent, resolvedMode) : undefined;
+    return {
+      id: row.id,
+      labelKey: row.labelKey,
+      subtitleKey: row.parentLabelKey,
+      valueKey: row.valueKey,
+      valueText: row.valueText,
+      icon: row.icon,
+      iconColor: tint,
+      iconBackgroundColor: tint
+        ? withAlpha(tint, resolvedMode === 'dark' ? 0.16 : 0.1)
+        : undefined,
+      testID: E2E_TEST_IDS.settingsRow(row.id),
+      onPress: () => handleRowPress(row),
+    };
   };
+
+  const renderSection = (titleKey: string, rows: AppSettingsRow[]) => (
+    <SettingsSectionView section={{ titleKey, rows: rows.map(toDetailRow) }} />
+  );
 
   return (
     <View
@@ -599,7 +579,7 @@ export default function AppSettingsScreen() {
         {...keyboardDismissOnDragProps}
       >
         <View style={[s.searchBox, d.searchBox]}>
-          <Ionicons name="search-outline" size={26} color={colors.textSecondary} />
+          <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -621,34 +601,39 @@ export default function AppSettingsScreen() {
           </>
         ) : (
           <View style={s.emptyState}>
-            <Text style={d.rowValue}>{t('appSettings.searchNoResults')}</Text>
+            <Ionicons name="search-outline" size={32} color={colors.textSecondary} />
+            <Text style={d.emptyText}>{t('appSettings.searchNoResults')}</Text>
           </View>
         )}
 
-        <View style={s.footer}>
+        <View style={[s.footer, d.card]}>
           <Pressable
             testID={E2E_TEST_IDS.settingsLogout}
-            style={[
-              s.secondaryButton,
-              d.secondaryButton,
-              submitting ? { opacity: 0.6 } : null,
+            accessibilityRole="button"
+            accessibilityLabel={t('settingsPage.switchAccount')}
+            style={({ pressed }) => [
+              s.footerAction,
+              pressed ? s.footerActionPressed : null,
+              submitting ? s.footerActionDisabled : null,
             ]}
             onPress={switchAccount}
             disabled={submitting}
           >
-            <Text style={d.secondaryButtonText}>{t('settingsPage.switchAccount')}</Text>
+            <Text style={d.footerText}>{t('settingsPage.switchAccount')}</Text>
           </Pressable>
+          <Divider />
           <Pressable
-            style={[
-              s.dangerButton,
-              d.dangerButton,
-              submitting ? { opacity: 0.6 } : null,
+            accessibilityRole="button"
+            accessibilityLabel={t('settingsPage.logout')}
+            style={({ pressed }) => [
+              s.footerAction,
+              pressed ? s.footerActionPressed : null,
+              submitting ? s.footerActionDisabled : null,
             ]}
             onPress={logout}
             disabled={submitting}
           >
-            <Ionicons name="log-out-outline" size={20} color={colors.white} />
-            <Text style={d.dangerButtonText}>{t('settingsPage.logout')}</Text>
+            <Text style={d.footerDangerText}>{t('settingsPage.logout')}</Text>
           </Pressable>
         </View>
       </ScrollView>

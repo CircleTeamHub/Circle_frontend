@@ -164,7 +164,10 @@
       "showCollapsedPinned": "고정 대화 {{count}}개 더 보기",
       "unlimited": "무제한",
       "batteryOptimization": "배터리 최적화 안내",
-      "batteryOptimizationHint": "Android에서만 적용됩니다. 끄면 백그라운드 권한 안내가 더 이상 표시되지 않습니다"
+      "batteryOptimizationHint": "Android에서만 적용됩니다. 끄면 백그라운드 권한 안내가 더 이상 표시되지 않습니다",
+      "displaySection": "표시",
+      "chatSection": "채팅",
+      "conversationListSection": "대화 목록"
     },
     "privacy": {
       "title": "개인정보 보호",
@@ -216,7 +219,12 @@
         "byQrCode": "QR 코드로",
         "byGroup": "그룹·서클로",
         "shareCard": "내 개인 카드 공유"
-      }
+      },
+      "chatSection": "채팅 및 모멘트",
+      "presenceSection": "온라인 및 입력 상태",
+      "profileVisibilitySection": "프로필 공개",
+      "contactSection": "추가 및 초대",
+      "blacklistBlockedAt": "{{date}}에 차단함"
     },
     "permissions": {
       "title": "시스템 권한",
@@ -229,11 +237,11 @@
       "bluetooth": "블루투스",
       "authorized": "허용됨",
       "unauthorized": "허용 안 됨",
-      "onlyVisibleAuthorized": "조회할 수 있는 권한만 표시합니다",
+      "onlyVisibleAuthorized": "항목을 누르면 권한을 요청합니다. 이미 거부한 권한은 시스템 설정에서 켜야 합니다.",
       "openSystemSettings": "시스템 설정 열기"
     },
     "storage": {
-      "title": "설정",
+      "title": "저장공간 및 캐시",
       "storageSpace": "저장공간",
       "clearCache": "캐시 삭제",
       "cacheSize": "계산 중...",
@@ -254,7 +262,8 @@
       "clearAllChatsFailed": "삭제 실패",
       "clearAllChatsFailedMessage": "지금은 이 기기의 로컬 채팅 기록을 삭제할 수 없습니다. 나중에 다시 시도하세요.",
       "switchAccount": "계정 전환",
-      "logout": "로그아웃"
+      "logout": "로그아웃",
+      "clearSectionHint": "캐시를 지워도 채팅 기록은 유지됩니다. 채팅 기록 삭제는 이 기기에만 적용되며 서버의 기록은 삭제되지 않습니다."
     },
     "storageUsage": {
       "title": "저장공간",
@@ -2762,7 +2771,7 @@
         "label": "시스템 권한"
       },
       "clearCache": {
-        "label": "캐시 지우기"
+        "label": "저장공간 및 캐시"
       },
       "about": {
         "label": "회사 소개"

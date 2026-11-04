@@ -11,7 +11,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { AboutArticleScreen } from '@/features/profile/screens/about-article-screen';
 import {
@@ -45,7 +44,6 @@ const styles = StyleSheet.create({
 });
 
 export default function AboutVersionScreen() {
-  const router = useRouter();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const checkingRef = useRef(false);
@@ -261,26 +259,6 @@ export default function AboutVersionScreen() {
               {checkingOta
                 ? t('appUpdate.checkingCodeUpdates')
                 : t('appUpdate.checkCodeUpdates')}
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('settingsDetails.about.thirdPartyLicenses')}
-            onPress={() => {
-              router.push('/(tabs)/profile/settings-about-licenses' as never);
-            }}
-            style={({ pressed }) => [
-              styles.button,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.surfaceBorder,
-                borderWidth: StyleSheet.hairlineWidth,
-                opacity: pressed ? 0.65 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.buttonText, { color: colors.text }]}>
-              {t('settingsDetails.about.thirdPartyLicenses')}
             </Text>
           </Pressable>
         </View>
