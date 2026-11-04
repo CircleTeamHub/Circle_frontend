@@ -521,6 +521,10 @@ export default function NotesScreen() {
       const { contact, group } = resolveNoteCardButtons(note);
       const card = target === 'group' ? group : contact;
       if (!card) return;
+      if (target === 'sender' && card.id === currentUserId) {
+        Alert.alert(t('qr.thisIsYou'));
+        return;
+      }
       if (target === 'group' && card.target === 'chat') {
         router.push(getGroupEntryHref(scope, { groupId: card.conversationID ?? card.id, searchedMsgID: card.clientMsgID }));
         return;
@@ -543,7 +547,7 @@ export default function NotesScreen() {
         ),
       );
     },
-    [router, scope],
+    [currentUserId, router, scope, t],
   );
 
   const handleMultiSelectFromMenu = useCallback(
