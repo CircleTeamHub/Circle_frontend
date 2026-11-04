@@ -2526,16 +2526,16 @@
       "clearCacheFailedMessage": "暂时无法清理缓存，请稍后重试。",
       "clearAllChats": "清空所有聊天记录",
       "clearAllChatsAction": "清空",
-      "clearAllChatsWarning": "将清空本机聊天记录，不会删除服务器历史记录，重新同步后可能恢复部分历史。",
+      "clearAllChatsWarning": "将清空本账号在所有设备上的聊天记录，且无法恢复。不会影响其他参与者的记录。",
       "clearAllChatsDone": "聊天记录已清空",
-      "clearAllChatsDoneMessage": "本机聊天记录已清空。",
+      "clearAllChatsDoneMessage": "本账号在所有设备上的聊天记录已清空。",
       "clearAllChatsPartialTitle": "部分会话未清空",
       "clearAllChatsPartialMessage": "有 {{count}} 个会话没能清空(可能是网络问题)。再点一次「清空全部聊天」即可补上。",
       "clearAllChatsFailed": "清空失败",
-      "clearAllChatsFailedMessage": "暂时无法清空本机聊天记录，请稍后重试。",
+      "clearAllChatsFailedMessage": "暂时无法清空聊天记录，请稍后重试。",
       "switchAccount": "切换账号",
       "logout": "退出登录",
-      "clearSectionHint": "清除缓存不会删除聊天记录；清空聊天记录只影响本机，不会删除服务器上的历史。"
+      "clearSectionHint": "清除缓存不会删除聊天记录；清空聊天记录会影响本账号的所有设备。"
     },
     "storageUsage": {
       "title": "存储空间",

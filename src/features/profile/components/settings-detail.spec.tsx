@@ -7,12 +7,6 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
-jest.mock('@/components/ui/themed-switch', () => ({
-  ThemedSwitch: ({ value }: { value: boolean }) => {
-    const { Text } = jest.requireActual('react-native');
-    return <Text>{`switch:${String(value)}`}</Text>;
-  },
-}));
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: ({ name }: { name: string }) => {
     const { Text } = jest.requireActual('react-native');
@@ -52,6 +46,7 @@ test('tapping anywhere on a toggle row flips it, and a disabled toggle row stays
   fireEvent.press(screen.getByText('locked'));
   expect(onLocked).not.toHaveBeenCalled();
   expect(screen.getByRole('switch', { name: 'push' })).toBeTruthy();
+  expect(screen.getAllByRole('switch')).toHaveLength(2);
 });
 
 test('destructive action rows drop the chevron while navigation rows keep it', () => {
@@ -77,4 +72,18 @@ test('a section can carry a footnote under its card', () => {
 test('a row can override its test id so callers keep their e2e locators', () => {
   renderSections([{ rows: [{ id: 'profile', labelKey: 'profile', testID: 'custom.row', onPress: jest.fn() }] }]);
   expect(screen.getByTestId('custom.row')).toBeTruthy();
+});
+
+test('assistive names retain visible setting values, permission status and row context', () => {
+  renderSections([{
+    rows: [
+      { id: 'size', labelKey: 'size', type: 'info', valueText: '3 MB' },
+      { id: 'permission', labelKey: 'camera', statusKey: 'authorized', onPress: jest.fn() },
+      { id: 'result', labelKey: 'vibration', subtitleKey: 'notifications', onPress: jest.fn() },
+    ],
+  }]);
+
+  expect(screen.getByLabelText('size, 3 MB')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'camera, authorized' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'vibration, notifications' })).toBeTruthy();
 });

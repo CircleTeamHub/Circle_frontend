@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -185,6 +186,12 @@ function SettingsRowView({ row, testID, showDivider, dividerInset }: SettingsRow
   const { colors } = d;
   const label = t(row.labelKey);
   const valueText = row.valueText ?? (row.valueKey ? t(row.valueKey) : null);
+  const accessibilityLabel = [
+    label,
+    row.subtitleKey ? t(row.subtitleKey) : null,
+    valueText,
+    row.statusKey ? t(row.statusKey) : null,
+  ].filter(Boolean).join(', ');
   const isToggle = row.type === 'toggle';
   const isInfo = row.type === 'info';
   const showChevron = !isToggle && !isInfo && !row.destructive;
@@ -212,13 +219,11 @@ function SettingsRowView({ row, testID, showDivider, dividerInset }: SettingsRow
         ]}
         disabled={isInfo || row.disabled}
         onPress={handlePress}
-        accessibilityRole={isInfo ? undefined : isToggle ? 'switch' : 'button'}
-        accessibilityLabel={label}
-        accessibilityState={
-          isToggle
-            ? { checked: row.value ?? false, disabled: row.disabled }
-            : { disabled: row.disabled }
-        }
+        accessible={!isToggle}
+        tabIndex={isToggle ? -1 : undefined}
+        accessibilityRole={isInfo || isToggle ? undefined : 'button'}
+        accessibilityLabel={isToggle ? undefined : accessibilityLabel}
+        accessibilityState={{ disabled: row.disabled }}
       >
         <View style={s.rowLeft}>
           {row.icon ? (
@@ -243,7 +248,12 @@ function SettingsRowView({ row, testID, showDivider, dividerInset }: SettingsRow
             {row.subtitleKey ? <Text style={d.subtitle}>{t(row.subtitleKey)}</Text> : null}
           </View>
         </View>
-        <View style={s.rowRight}>
+        <View
+          style={s.rowRight}
+          {...(isToggle && Platform.OS === 'web'
+            ? { onClick: (event: { stopPropagation: () => void }) => event.stopPropagation() }
+            : {})}
+        >
           {valueText ? (
             <Text numberOfLines={2} style={d.value}>
               {valueText}
@@ -262,6 +272,7 @@ function SettingsRowView({ row, testID, showDivider, dividerInset }: SettingsRow
           ) : null}
           {isToggle ? (
             <ThemedSwitch
+              accessibilityLabel={accessibilityLabel}
               tint={colors.primary}
               value={row.value ?? false}
               onValueChange={row.onValueChange}

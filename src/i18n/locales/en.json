@@ -2532,16 +2532,16 @@
       "clearCacheFailedMessage": "Unable to clear cache right now. Please try again later.",
       "clearAllChats": "Clear All Chat Records",
       "clearAllChatsAction": "Clear",
-      "clearAllChatsWarning": "This clears local chat records on this device only. Server history is not deleted, and some history may return after sync.",
+      "clearAllChatsWarning": "This clears your chat history on all your devices and cannot be undone. Other participants' history is not affected.",
       "clearAllChatsDone": "Chat Records Cleared",
-      "clearAllChatsDoneMessage": "Local chat records on this device have been cleared.",
+      "clearAllChatsDoneMessage": "Your chat history has been cleared on all your devices.",
       "clearAllChatsPartialTitle": "Some chats were not cleared",
       "clearAllChatsPartialMessage": "{{count}} chat(s) could not be cleared, likely a network issue. Tap Clear All Chats again to finish.",
       "clearAllChatsFailed": "Clear Failed",
-      "clearAllChatsFailedMessage": "Unable to clear local chat records right now. Please try again later.",
+      "clearAllChatsFailedMessage": "Unable to clear chat history right now. Please try again later.",
       "switchAccount": "Switch Account",
       "logout": "Log Out",
-      "clearSectionHint": "Clearing the cache keeps your chats. Clearing chat history only affects this device, not the history on the server."
+      "clearSectionHint": "Clearing the cache keeps your chats. Clearing chat history affects all your devices."
     },
     "storageUsage": {
       "title": "Storage Space",

@@ -181,7 +181,7 @@ export default function SettingsScreen() {
         style={({ pressed }) => [s.row, pressed ? s.rowPressed : null]}
         onPress={() => handleRowPress(item)}
         accessibilityRole="button"
-        accessibilityLabel={item.label}
+        accessibilityLabel={[item.label, item.type !== 'avatar' ? item.value : null].filter(Boolean).join(', ')}
       >
         <Text style={d.rowLabel}>{item.label}</Text>
         <View style={s.rowRight}>

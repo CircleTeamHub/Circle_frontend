@@ -254,16 +254,16 @@
       "clearCacheFailedMessage": "지금은 캐시를 삭제할 수 없습니다. 나중에 다시 시도하세요.",
       "clearAllChats": "모든 채팅 기록 삭제",
       "clearAllChatsAction": "삭제",
-      "clearAllChatsWarning": "이 기기의 로컬 채팅 기록만 삭제합니다. 서버 기록은 삭제되지 않으며 동기화 후 일부 기록이 복원될 수 있습니다.",
+      "clearAllChatsWarning": "이 계정의 모든 기기에서 채팅 기록을 삭제하며 되돌릴 수 없습니다. 다른 참여자의 기록에는 영향을 주지 않습니다.",
       "clearAllChatsDone": "채팅 기록 삭제됨",
-      "clearAllChatsDoneMessage": "이 기기의 로컬 채팅 기록을 삭제했습니다.",
+      "clearAllChatsDoneMessage": "이 계정의 모든 기기에서 채팅 기록을 삭제했습니다.",
       "clearAllChatsPartialTitle": "일부 대화를 지우지 못했습니다",
       "clearAllChatsPartialMessage": "{{count}}개의 대화를 지우지 못했습니다(네트워크 문제일 수 있음). '모든 대화 지우기'를 다시 실행해 주세요.",
       "clearAllChatsFailed": "삭제 실패",
-      "clearAllChatsFailedMessage": "지금은 이 기기의 로컬 채팅 기록을 삭제할 수 없습니다. 나중에 다시 시도하세요.",
+      "clearAllChatsFailedMessage": "지금은 채팅 기록을 삭제할 수 없습니다. 나중에 다시 시도하세요.",
       "switchAccount": "계정 전환",
       "logout": "로그아웃",
-      "clearSectionHint": "캐시를 지워도 채팅 기록은 유지됩니다. 채팅 기록 삭제는 이 기기에만 적용되며 서버의 기록은 삭제되지 않습니다."
+      "clearSectionHint": "캐시를 지워도 채팅 기록은 유지됩니다. 채팅 기록 삭제는 이 계정의 모든 기기에 반영됩니다."
     },
     "storageUsage": {
       "title": "저장공간",

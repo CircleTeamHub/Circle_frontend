@@ -254,16 +254,16 @@
       "clearCacheFailedMessage": "Ahora no se puede borrar la caché. Inténtalo más tarde.",
       "clearAllChats": "Borrar todo el historial de chats",
       "clearAllChatsAction": "Borrar",
-      "clearAllChatsWarning": "Esto borra el historial local solo en este dispositivo. El historial del servidor no se elimina y parte podría volver tras la sincronización.",
+      "clearAllChatsWarning": "Se borrará tu historial de chats en todos tus dispositivos. Esta acción no se puede deshacer. No afecta al historial de otros participantes.",
       "clearAllChatsDone": "Historial de chats borrado",
-      "clearAllChatsDoneMessage": "Se borró el historial local de chats en este dispositivo.",
+      "clearAllChatsDoneMessage": "Se ha borrado tu historial de chats en todos tus dispositivos.",
       "clearAllChatsPartialTitle": "Algunos chats no se borraron",
       "clearAllChatsPartialMessage": "No se pudieron borrar {{count}} chat(s), probablemente por un problema de red. Vuelve a tocar Borrar todos los chats.",
       "clearAllChatsFailed": "Error al borrar",
-      "clearAllChatsFailedMessage": "Ahora no se puede borrar el historial local de chats. Inténtalo más tarde.",
+      "clearAllChatsFailedMessage": "Ahora no se puede borrar el historial de chats. Inténtalo más tarde.",
       "switchAccount": "Cambiar de cuenta",
       "logout": "Cerrar sesión",
-      "clearSectionHint": "Borrar la caché conserva tus chats. Borrar el historial de chats solo afecta a este dispositivo, no al historial del servidor."
+      "clearSectionHint": "Borrar la caché conserva tus chats. Borrar el historial de chats afecta a todos tus dispositivos."
     },
     "storageUsage": {
       "title": "Espacio de almacenamiento",

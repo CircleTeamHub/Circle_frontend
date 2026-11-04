@@ -1350,3 +1350,19 @@ test("profile info rows edit in a bottom sheet instead of pushing a separate pag
   assert.match(sheet, /useModalInputAutoFocus\(inputRef/);
   assert.match(sheet, /autoFocus=\{MODAL_INPUT_NATIVE_AUTO_FOCUS\}/);
 });
+
+test('storage clearing copy warns that account history is cleared across devices in every locale', () => {
+  const scopes = {
+    en: /all your devices/i,
+    zh: /所有设备/,
+    es: /todos tus dispositivos/i,
+    ja: /すべての端末/,
+    ko: /모든 기기/,
+  };
+  for (const [locale, scope] of Object.entries(scopes)) {
+    const { storage } = JSON.parse(fs.readFileSync(path.join(process.cwd(), `src/i18n/locales/${locale}.json`), 'utf8')).settingsDetails;
+    for (const key of ['clearSectionHint', 'clearAllChatsWarning', 'clearAllChatsDoneMessage']) {
+      assert.match(storage[key], scope, `${locale}.${key} must state the cross-device scope`);
+    }
+  }
+});
