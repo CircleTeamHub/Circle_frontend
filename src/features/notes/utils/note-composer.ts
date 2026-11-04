@@ -1,4 +1,5 @@
 import type { NoteSections } from '@/features/notes/types';
+import type { NoteSections as ResolvedNoteSections, StructuredNoteMediaItem } from './note-sections';
 
 /** The blocks that can be placed in the note composer. */
 export type NoteComposerBlockKind =
@@ -176,6 +177,40 @@ export function readNoteComposerMediaBlocks(blocks: unknown): NoteComposerMediaB
       objectKeys: item.objectKeys.filter((key): key is string => typeof key === 'string'),
     }];
   });
+}
+
+/** Recover typed regions from older notes that stored images and videos together. */
+export function restoreNoteComposerMediaBlocks(
+  blocks: readonly NoteComposerBlock[],
+  sections: Pick<ResolvedNoteSections, 'media' | 'showcase'>,
+): NoteComposerBlock[] {
+  const next = [...blocks];
+  const required: NoteComposerBlockKind[] = [
+    ...(sections.media.items.some((item) => item.type === 'IMAGE') ? ['image' as const] : []),
+    ...(sections.media.items.some((item) => item.type === 'VIDEO') ? ['video' as const] : []),
+    ...(sections.showcase.items.length ? ['showcase' as const] : []),
+  ];
+  for (const kind of required) {
+    if (next.some((block) => block.kind === kind)) continue;
+    let index = next.length;
+    while (next.some((block) => block.id === createLegacyBlockId(kind, index))) index++;
+    const recovered = { id: createLegacyBlockId(kind, index), kind };
+    const imageIndex = kind === 'video' ? next.findIndex((block) => block.kind === 'image') : -1;
+    if (imageIndex >= 0) next.splice(imageIndex + 1, 0, recovered);
+    else next.push(recovered);
+  }
+  return next;
+}
+
+export function getNoteComposerMediaOwner(
+  blocks: readonly NoteComposerBlock[],
+  target: 'media' | 'showcase',
+  type: StructuredNoteMediaItem['type'],
+  preferredId?: string,
+): string | undefined {
+  const kind = target === 'showcase' ? 'showcase' : type === 'VIDEO' ? 'video' : 'image';
+  return blocks.find((block) => block.id === preferredId && block.kind === kind)?.id
+    ?? blocks.find((block) => block.kind === kind)?.id;
 }
 
 /** Reads the per-instance rich text payload written by the editor. */

@@ -1,6 +1,6 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, Platform, StyleSheet } from 'react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, View, type KeyboardEvent } from 'react-native';
 import { setAudioModeAsync } from 'expo-audio';
 import EditNoteScreen, { draftRecordFromServer, draftFingerprint } from './EditNoteScreen';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
@@ -13,6 +13,58 @@ import { ApiError } from '@/services/api/api-error';
 import { stageLocalNoteDraftDeletion, loadLocalNoteDraft, loadPendingNoteDraftDeletions } from '@/features/notes/utils/note-editor-drafts';
 
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: jest.fn(() => null) }));
+
+test('loads old mixed media into independent regions and deleting images preserves both video regions', async () => {
+  mockRouteId = 'mixed-media-note';
+  const image = { type: 'IMAGE', objectKey: 'notes/photo.jpg', url: 'https://cdn/photo.jpg', sortOrder: 0 };
+  const video = { type: 'VIDEO', objectKey: 'notes/video.mp4', url: 'https://cdn/video.mp4', sortOrder: 1 };
+  const verification = { type: 'VIDEO', objectKey: 'notes/check.mp4', url: 'https://cdn/check.mp4', sortOrder: 0 };
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Mixed media', contentJson: [], media: [image, video, verification],
+    sections: {
+      text: { content: '', contentJson: [{ type: 'noteLayout', props: {
+        blocks: [{ id: 'pictures', kind: 'image' }, { id: 'verification', kind: 'showcase' }],
+        mediaBlocks: [{ id: 'pictures', target: 'media', objectKeys: [image.objectKey, video.objectKey] }],
+      } }] }, media: { items: [image, video] }, showcase: { items: [verification] },
+    }, groups: [], pinned: false, createdAt: '2026-01-01T00:00:00Z',
+  });
+  render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Mixed media');
+  expect(within(screen.getByTestId('note-image-section')).getAllByTestId('note-media-preview-tile')).toHaveLength(1);
+  expect(within(screen.getByTestId('note-video-section')).getAllByTestId('note-media-preview-tile')).toHaveLength(1);
+  expect(within(screen.getByTestId('note-showcase-section')).getAllByTestId('note-media-preview-tile')).toHaveLength(1);
+  for (const kind of ['image', 'video', 'showcase']) {
+    expect(within(screen.getByTestId(`note-${kind}-section`)).getByText('1 notes.edit.itemsCount')).toBeTruthy();
+  }
+  fireEvent.press(screen.getByRole('button', { name: 'notes.actions.deletenotes.edit.composer.image' }));
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(updateNote).toHaveBeenCalled());
+  const input = jest.mocked(updateNote).mock.calls.at(-1)?.[1];
+  expect(input?.sections?.media?.items.map((item) => item.objectKey)).toEqual([video.objectKey]);
+  expect(input?.sections?.showcase?.items.map((item) => item.objectKey)).toEqual([verification.objectKey]);
+  const marker = input?.contentJson?.find((block) => block.type === 'noteLayout') as any;
+  const videoBlock = marker.props.blocks.find((block: any) => block.kind === 'video');
+  expect(marker.props.mediaBlocks).toEqual(expect.arrayContaining([
+    { id: videoBlock.id, target: 'media', objectKeys: [video.objectKey] },
+    { id: 'verification', target: 'showcase', objectKeys: [verification.objectKey] },
+  ]));
+});
+
+test('server drafts recover a separate video region from old mixed ownership', () => {
+  const record = draftRecordFromServer(reviewDraft({ sections: {
+    text: { content: '', contentJson: [{ type: 'noteLayout', props: {
+      blocks: [{ id: 'pictures', kind: 'image' }],
+      mediaBlocks: [{ id: 'pictures', target: 'media', objectKeys: ['image', 'video'] }],
+    } }] }, media: { items: [
+      { type: 'IMAGE', objectKey: 'image', url: 'https://cdn/image', sortOrder: 0 },
+      { type: 'VIDEO', objectKey: 'video', url: 'https://cdn/video', sortOrder: 1 },
+    ] },
+  } }), 'mixed-draft');
+  const videoBlock = record.composerBlocks.find((block) => block.kind === 'video');
+  expect(videoBlock).toBeDefined();
+  expect(record.mediaOwnerByClientId[record.mediaItems[0].clientId]).toBe('pictures');
+  expect(record.mediaOwnerByClientId[record.mediaItems[1].clientId]).toBe(videoBlock?.id);
+});
 
 test('offers separate image and video blocks without a recording toolbar entry', async () => {
   render(<EditNoteScreen />);
@@ -27,6 +79,10 @@ test('offers separate image and video blocks without a recording toolbar entry',
   await waitFor(() => expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ mediaTypes: ['images'] })));
   pressComposer('video');
   await waitFor(() => expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ mediaTypes: ['videos'] })));
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.showcase' }));
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.addShowcaseVideo' }));
+  await waitFor(() => expect(mockLaunchPicker).toHaveBeenCalledTimes(3));
+  expect(mockLaunchPicker).toHaveBeenLastCalledWith(expect.objectContaining({ mediaTypes: ['videos'] }));
 });
 
 test('stacks complete editor images at full width and opens the tapped image in the viewer', async () => {
@@ -1401,6 +1457,33 @@ test('unrecoverable legacy media blocks save with an actionable warning', async 
   );
 });
 
+test.each(['IMAGE', 'VIDEO'] as const)('deleting another region keeps protection for an unrecoverable %s', async (missingType) => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockRouteId = 'missing-media-in-other-region';
+  const validType = missingType === 'IMAGE' ? 'VIDEO' : 'IMAGE';
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Missing media', contentJson: [], media: [], sections: {
+      media: { items: [
+        { type: missingType, url: 'https://removed.example/missing', sortOrder: 0 },
+        { type: validType, objectKey: 'notes/valid', url: 'https://cdn/valid', sortOrder: 1 },
+      ] },
+    }, groups: [], pinned: false, createdAt: '2026-01-01T00:00:00Z',
+  });
+  render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Missing media');
+  const removedKind = validType === 'IMAGE' ? 'image' : 'video';
+  fireEvent.press(screen.getByRole('button', { name: `notes.actions.deletenotes.edit.composer.${removedKind}` }));
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  expect(updateNote).not.toHaveBeenCalled();
+  expect(alert).toHaveBeenCalledWith('notes.edit.legacyMediaUnavailableTitle', 'notes.edit.legacyMediaUnavailableMessage');
+  const missingKind = missingType === 'IMAGE' ? 'image' : 'video';
+  fireEvent.press(screen.getByRole('button', { name: `notes.actions.deletenotes.edit.composer.${missingKind}` }));
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(updateNote).toHaveBeenCalled());
+  expect(jest.mocked(updateNote).mock.calls.at(-1)?.[1].sections?.media?.items).toEqual([]);
+  alert.mockRestore();
+});
+
 // 这些旧媒体渲染不出来也删不掉，所以「完成」被永久挡住。此前这件事只在点「完成」
 // 时才弹一次 —— 作者已经改完标题和正文，才发现这篇笔记根本存不了。
 test('无法恢复的旧媒体一进页面就给出警告，而不是等到点完成', async () => {
@@ -1803,6 +1886,33 @@ test('server draft hydration restores each media region rather than combining th
   expect(draftFingerprint({ ...pending, mediaItems: [{ ...pending.mediaItems[0], previewUri: 'file:///replacement.jpg' }] })).not.toBe(draftFingerprint(pending));
 });
 
+test('a local mixed draft restores typed regions before previewing and saving', async () => {
+  signedInDraft();
+  const local = draftRecordFromServer(reviewDraft({ title: 'Local mixed', updatedAt: '2026-10-07T00:00:00Z', sections: {
+    media: { items: [
+      { type: 'IMAGE', objectKey: 'photo', url: 'https://cdn/photo.jpg', sortOrder: 0 },
+      { type: 'VIDEO', objectKey: 'video', url: 'https://cdn/video.mp4', sortOrder: 1 },
+    ] },
+  } }), 'review-draft');
+  // Reproduce a snapshot written by the old editor, with both types owned by one image block.
+  local.composerBlocks = [{ id: 'old-media', kind: 'image' }];
+  local.mediaOwnerByClientId = Object.fromEntries(local.mediaItems.map((item) => [item.clientId, 'old-media']));
+  jest.mocked(storage.getString).mockImplementation((key) => key.startsWith('circle-im-note-draft:v1:') ? JSON.stringify(local) : undefined);
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Local mixed');
+  expect(within(screen.getByTestId('note-image-section')).getAllByTestId('note-media-preview-tile')).toHaveLength(1);
+  expect(within(screen.getByTestId('note-video-section')).getAllByTestId('note-media-preview-tile')).toHaveLength(1);
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(createNote).toHaveBeenCalled());
+  const marker = jest.mocked(createNote).mock.calls.at(-1)?.[0].contentJson?.find((block) => block.type === 'noteLayout') as any;
+  const videoBlock = marker.props.blocks.find((block: any) => block.kind === 'video');
+  expect(marker.props.mediaBlocks).toEqual(expect.arrayContaining([
+    { id: 'old-media', target: 'media', objectKeys: ['photo'] },
+    { id: videoBlock.id, target: 'media', objectKeys: ['video'] },
+  ]));
+});
+
 test.each([true, false])('draft hydration chooses the newest saved snapshot (remote newer: %s)', async (remoteNewer) => {
   signedInDraft();
   const local = draftRecordFromServer(reviewDraft({ title: 'local', updatedAt: remoteNewer ? '2026-10-05T00:00:00Z' : '2026-10-07T00:00:00Z' }), 'review-draft');
@@ -1925,6 +2035,67 @@ test('does not publish while audio recording is active', async () => {
   expect(createNote).not.toHaveBeenCalled();
   expect(mockRouter.back).not.toHaveBeenCalled();
   rendered.unmount();
+});
+
+test.each([
+  ['ios', 'contact'], ['ios', 'group'], ['android', 'contact'], ['android', 'group'],
+] as const)('%s: searching %s cards keeps the picker above the keyboard and allows selection', async (platform, kind) => {
+  const platformOverride = jest.replaceProperty(Platform, 'OS', platform);
+  const visibility = jest.spyOn(Keyboard, 'isVisible').mockReturnValue(false);
+  const listeners = new Map<string, Set<(event: KeyboardEvent) => void>>();
+  const subscribe = jest.spyOn(Keyboard, 'addListener').mockImplementation((name, callback) => {
+    const callbacks = listeners.get(name) ?? new Set();
+    callbacks.add(callback);
+    listeners.set(name, callbacks);
+    return { remove: () => { callbacks.delete(callback); } } as ReturnType<typeof Keyboard.addListener>;
+  });
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  mockPickerFriends.mockResolvedValue([
+    { id: 'match', nickname: 'Needle contact', remark: '', accountId: 'match' },
+    { id: 'other', nickname: 'Other contact', remark: '', accountId: 'other' },
+  ]);
+  mockPickerCircles.mockResolvedValue([{ id: 'match', name: 'Needle group' }, { id: 'other', name: 'Other group' }]);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await screen.findByDisplayValue('remote');
+    fireEvent.press(screen.getByRole('button', { name: `notes.edit.composer.${kind}` }));
+    if (kind === 'contact') fireEvent.press(screen.getByText('notes.edit.addContact'));
+    const placeholder = `notes.edit.${kind === 'contact' ? 'contact' : 'group'}SearchPlaceholder`;
+    const search = await screen.findByPlaceholderText(placeholder);
+    await screen.findByRole('radio', { name: `Needle ${kind}` });
+    const modal = screen.UNSAFE_getAllByType(Modal).find((node) => node.findAllByProps({ placeholder }).length > 0)!;
+    expect(modal.props.statusBarTranslucent).toBe(true);
+    const avoidingView = modal.findByType(KeyboardAvoidingView);
+    expect(avoidingView.props.behavior).toBe('padding');
+    const root = avoidingView.findAllByType(View)[0];
+    await act(async () => {
+      fireEvent(root, 'layout', { persist: () => undefined, nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 800 } } });
+    });
+    const emit = async (show: boolean) => {
+      const name = `${platform === 'ios' ? 'keyboardWill' : 'keyboardDid'}${show ? 'Show' : 'Hide'}`;
+      await act(async () => {
+        for (const callback of listeners.get(name) ?? []) callback({ duration: 0, easing: 'keyboard', endCoordinates: {
+          screenX: 0, screenY: show ? 500 : 800, width: 390, height: show ? 300 : 0,
+        } });
+      });
+    };
+    await emit(true);
+    expect(StyleSheet.flatten(root.props.style).paddingBottom).toBe(300);
+    fireEvent.changeText(search, 'Needle');
+    expect(screen.queryByRole('radio', { name: `Other ${kind}` })).toBeNull();
+    await emit(false);
+    expect(StyleSheet.flatten(root.props.style).paddingBottom).toBe(0);
+    await emit(true);
+    fireEvent.press(screen.getByRole('radio', { name: `Needle ${kind}` }));
+    fireEvent.press(screen.getByText('common.done'));
+    expect(screen.queryByPlaceholderText(placeholder)).toBeNull();
+    expect(screen.getByText(`Needle ${kind}`)).toBeTruthy();
+  } finally {
+    rendered.unmount();
+    expect([...listeners.values()].every((callbacks) => callbacks.size === 0)).toBe(true);
+    subscribe.mockRestore(); visibility.mockRestore(); platformOverride.restore();
+  }
 });
 
 test('the group-card toolbar opens the picker directly and displays and saves the chosen group', async () => {

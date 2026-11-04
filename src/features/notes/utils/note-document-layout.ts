@@ -3,11 +3,13 @@ import {
   readNoteComposerBlocks,
   readNoteComposerTextBlocks,
   readNoteComposerMediaBlocks,
+  restoreNoteComposerMediaBlocks,
+  getNoteComposerMediaOwner,
   type NoteComposerBlockKind,
 } from '@/features/notes/utils/note-composer';
 import type { NoteSectionKind, NoteSections, StructuredNoteMediaItem } from './note-sections';
 
-export type NoteDocumentInstance = { id: string; kind: NoteSectionKind; sections: NoteSections };
+export type NoteDocumentInstance = { id: string; kind: NoteSectionKind; mediaKind?: 'image' | 'video'; sections: NoteSections };
 
 function sectionKind(kind: NoteComposerBlockKind): NoteSectionKind | null {
   if (kind === 'title') return null;
@@ -20,24 +22,18 @@ export function getNoteDocumentInstances(
   order: readonly NoteSectionKind[],
   layout: unknown,
 ): NoteDocumentInstance[] {
-  const blocks = readNoteComposerBlocks(layout);
+  const savedBlocks = readNoteComposerBlocks(layout);
   const textBlocks = readNoteComposerTextBlocks(layout);
   const mediaBlocks = readNoteComposerMediaBlocks(layout);
-  if (!blocks || (!textBlocks.length && !mediaBlocks.length)) {
-    return order.map((kind) => ({ id: kind, kind, sections }));
-  }
+  const blocks = restoreNoteComposerMediaBlocks(savedBlocks ?? order.map((kind) => ({
+    id: kind, kind: kind === 'media' ? 'image' : kind,
+  })), sections);
   const firstText = blocks.find((block) => block.kind === 'text')?.id;
-  const firstMedia = blocks.find((block) => block.kind === 'image' || block.kind === 'video')?.id;
-  const firstShowcase = blocks.find((block) => block.kind === 'showcase')?.id;
-  const mediaFor = (id: string, target: 'media' | 'showcase', firstId?: string) => {
-    const validOwners = mediaBlocks.filter((owner) => owner.target === target && blocks.some(
-      (block) => block.id === owner.id && (target === 'showcase' ? block.kind === 'showcase' : block.kind === 'image' || block.kind === 'video'),
-    ));
-    const ownKeys = new Set(validOwners.filter((owner) => owner.id === id).flatMap((owner) => owner.objectKeys));
-    const assignedKeys = new Set(validOwners.flatMap((owner) => owner.objectKeys));
+  const mediaFor = (id: string, target: 'media' | 'showcase') => {
     return sections[target].items.filter((item) => {
       const key = item.objectKey || item.url || '';
-      return ownKeys.has(key) || (id === firstId && !assignedKeys.has(key));
+      const preferred = mediaBlocks.find((owner) => owner.target === target && owner.objectKeys.includes(key))?.id;
+      return getNoteComposerMediaOwner(blocks, target, item.type, preferred) === id;
     });
   };
   const entries = blocks.flatMap((block): NoteDocumentInstance[] => {
@@ -52,11 +48,11 @@ export function getNoteDocumentInstances(
         content: saved ? extractPlainText(saved.content) : block.id === firstText ? sections.text.content : '',
       } };
     } else if (kind === 'media') {
-      ownSections = { ...sections, media: { items: mediaFor(block.id, 'media', firstMedia) } };
+      ownSections = { ...sections, media: { items: mediaFor(block.id, 'media') } };
     } else if (kind === 'showcase') {
-      ownSections = { ...sections, showcase: { items: mediaFor(block.id, 'showcase', firstShowcase) } };
+      ownSections = { ...sections, showcase: { items: mediaFor(block.id, 'showcase') } };
     }
-    return [{ id: block.id, kind, sections: ownSections }];
+    return [{ id: block.id, kind, ...(block.kind === 'image' || block.kind === 'video' ? { mediaKind: block.kind } : {}), sections: ownSections }];
   });
   // Retain readable legacy sections when a partially upgraded server lacks ownership metadata.
   for (const kind of order) {

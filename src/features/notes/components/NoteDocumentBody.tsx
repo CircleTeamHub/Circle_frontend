@@ -41,7 +41,7 @@ type NoteDocumentBodyProps = {
 };
 
 type VirtualizedNoteRow =
-  | { type: 'section'; id: string; kind: NoteSectionKind; divider: boolean; trackLayout: boolean }
+  | { type: 'section'; id: string; kind: NoteSectionKind; mediaKind?: NoteDocumentInstance['mediaKind']; divider: boolean; trackLayout: boolean }
   | { type: 'block'; id: string; block: Record<string, unknown> }
   | { type: 'text'; id: string; content: string | null; empty: boolean }
   | { type: 'location'; id: string; title: string | null; address: string | null }
@@ -89,12 +89,14 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
       kind: NoteSectionKind,
       instanceId: string,
       blocks: Record<string, unknown>[] = [],
+      mediaKind?: NoteDocumentInstance['mediaKind'],
     ) => {
       rows.push({
         type: 'section',
         id: `section-${instanceId}`,
         trackLayout: documentInstances.find((entry) => entry.kind === kind)?.id === instanceId,
         kind,
+        mediaKind,
         divider: kind !== 'text',
       });
       blocks.forEach((block, index) => {
@@ -132,7 +134,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
           }
           break;
         case 'media':
-          if (availability.hasMedia) appendSection(kind, entry.id, mediaBlocks);
+          if (availability.hasMedia) appendSection(kind, entry.id, mediaBlocks, entry.mediaKind);
           break;
         case 'showcase':
           if (availability.hasShowcase) appendSection(kind, entry.id, showcaseBlocks);
@@ -176,7 +178,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
     </View>
   );
 
-  const renderSection = ({ id, kind, sections }: NoteDocumentInstance) => {
+  const renderSection = ({ id, kind, mediaKind, sections }: NoteDocumentInstance) => {
     const onLayout = documentInstances.find((entry) => entry.kind === kind)?.id === id ? onSectionLayout?.(kind) : undefined;
     const availability = getNoteSectionAvailability(sections);
     const mediaBlocks = noteMediaBlocks(sections.media.items);
@@ -216,8 +218,10 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
           <View onLayout={onLayout} style={s.section}>
             <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} />
             {renderSectionHeader(
-              'image-outline',
-              t('notes.section.media', { defaultValue: '图片 · 视频' }),
+              mediaKind === 'video' ? 'videocam-outline' : 'image-outline',
+              mediaKind === 'video'
+                ? t('notes.section.video', { defaultValue: '视频' })
+                : t('notes.section.image', { defaultValue: '图片' }),
             )}
             <NoteBlockRenderer
               blocks={mediaBlocks}
@@ -233,7 +237,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
             <View style={[s.divider, { backgroundColor: colors.surfaceBorder }]} />
             {renderSectionHeader(
               'albums-outline',
-              t('notes.section.showcase', { defaultValue: '展示' }),
+              t('notes.section.showcase', { defaultValue: '验证视频' }),
             )}
             <NoteBlockRenderer
               blocks={showcaseBlocks}
@@ -322,14 +326,16 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
     </>
   );
 
-  const getSectionMeta = (kind: NoteSectionKind) => {
+  const getSectionMeta = (kind: NoteSectionKind, mediaKind?: NoteDocumentInstance['mediaKind']) => {
     switch (kind) {
       case 'text':
         return { icon: 'text-outline' as const, label: t('notes.section.text', { defaultValue: '文字' }) };
       case 'media':
-        return { icon: 'image-outline' as const, label: t('notes.section.media', { defaultValue: '图片 · 视频' }) };
+        return mediaKind === 'video'
+          ? { icon: 'videocam-outline' as const, label: t('notes.section.video', { defaultValue: '视频' }) }
+          : { icon: 'image-outline' as const, label: t('notes.section.image', { defaultValue: '图片' }) };
       case 'showcase':
-        return { icon: 'albums-outline' as const, label: t('notes.section.showcase', { defaultValue: '展示' }) };
+        return { icon: 'albums-outline' as const, label: t('notes.section.showcase', { defaultValue: '验证视频' }) };
       case 'audio':
         return { icon: 'mic-outline' as const, label: t('notes.section.audio', { defaultValue: '录音' }) };
       case 'contact':
@@ -346,7 +352,7 @@ export const NoteDocumentBody = memo(function NoteDocumentBody({
   const renderVirtualizedRow = ({ item }: { item: VirtualizedNoteRow }) => {
     switch (item.type) {
       case 'section': {
-        const meta = getSectionMeta(item.kind);
+        const meta = getSectionMeta(item.kind, item.mediaKind);
         return (
           <View
             onLayout={item.trackLayout ? onSectionLayout?.(item.kind) : undefined}
