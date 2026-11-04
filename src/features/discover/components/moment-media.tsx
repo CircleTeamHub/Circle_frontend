@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
 import { ImageViewer } from '@/components/ui/image-viewer';
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { Radius, Spacing } from '@/theme';
 import type { ImageMediaVariant, MomentAttachment } from '@/types';
 import { ImageGrid } from './image-grid';
@@ -31,6 +32,7 @@ function MomentVideo({ url, onClose }: { url: string; onClose: () => void }) {
         <Pressable style={s.close} onPress={close} accessibilityRole="button" accessibilityLabel={t('common.close')} hitSlop={12}>
           <Ionicons name="close" size={28} color="#fff" />
         </Pressable>
+        <UploadProgressHost />
       </View>
     </Modal>
   );

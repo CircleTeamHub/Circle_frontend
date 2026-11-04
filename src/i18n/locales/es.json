@@ -1,4 +1,14 @@
 {
+  "mediaUpload": {
+    "sessionChanged": "Has cambiado de cuenta. Selecciona el archivo de nuevo para subirlo.",
+    "uploading": "Subiendo",
+    "image": "Imagen",
+    "video": "Vídeo",
+    "preparing": "Preparando…",
+    "confirming": "Confirmando…",
+    "processing": "Procesando…",
+    "additional": "+{{count}} más"
+  },
   "avatarPhoto": {
     "actions": "Opciones de la foto de perfil",
     "title": "Foto de perfil",

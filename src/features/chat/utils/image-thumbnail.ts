@@ -40,6 +40,7 @@ export async function uploadChatImageThumbnail(
   uri: string,
   originalWidth: number | undefined,
   filename: string,
+  beforeUpload?: () => void,
 ): Promise<{ key: string; width: number; height: number } | null> {
   try {
     const thumbnail = await generateChatImageThumbnail(uri, originalWidth);
@@ -51,6 +52,7 @@ export async function uploadChatImageThumbnail(
       folder: 'chat',
       fileUri: thumbnail.uri,
     });
+    beforeUpload?.();
     await uploadLocalFileToPresignedUrl(
       presign.uploadUrl,
       'image/jpeg',

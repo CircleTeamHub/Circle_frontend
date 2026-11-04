@@ -1,4 +1,14 @@
 {
+  "mediaUpload": {
+    "sessionChanged": "Your account changed. Please select the file again to upload.",
+    "uploading": "Uploading",
+    "image": "Image",
+    "video": "Video",
+    "preparing": "Preparing…",
+    "confirming": "Confirming…",
+    "processing": "Processing…",
+    "additional": "+{{count}} more"
+  },
   "avatarPhoto": {
     "actions": "Profile photo actions",
     "title": "Profile Photo",

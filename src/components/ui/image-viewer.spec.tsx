@@ -3,6 +3,11 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { FlatList, Modal } from 'react-native';
 import { ImageViewer } from './image-viewer';
 
+jest.mock('@/components/app/UploadProgressHost', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { UploadProgressHost: () => <View testID="upload-progress-modal-host" /> };
+});
+
 jest.mock('@/components/ui/zoomable-image', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
@@ -206,4 +211,9 @@ test('ignores prefetched page zoom callbacks and clears the old page lock during
   act(() => next!.props.onZoomedChange(true));
   act(() => current.props.onZoomedChange(false));
   expect(list.props.scrollEnabled).toBe(false);
+});
+
+test('keeps upload progress visible inside its existing native modal', () => {
+  render(<ImageViewer images={['image.jpg']} visible onClose={jest.fn()} />);
+  expect(screen.getByTestId('upload-progress-modal-host')).toBeTruthy();
 });

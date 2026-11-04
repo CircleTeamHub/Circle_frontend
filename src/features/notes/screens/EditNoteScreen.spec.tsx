@@ -13,6 +13,18 @@ import type { CreateNoteInput, NoteDetail, NoteDraftDetail } from '@/features/no
 import { ApiError } from '@/services/api/api-error';
 import { stageLocalNoteDraftDeletion, loadLocalNoteDraft, loadPendingNoteDraftDeletions } from '@/features/notes/utils/note-editor-drafts';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { resetUploadProgress, startUploadProgress } from '@/stores/upload-progress-store';
+
+test('note preview keeps live upload progress visible inside its native modal', async () => {
+  const transfer = startUploadProgress('video/mp4');
+  transfer.update(50, 100);
+  const rendered = render(<EditNoteScreen />);
+  try {
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.preview' }));
+    await waitFor(() => expect(screen.getByRole('progressbar').props.accessibilityValue.now).toBe(50));
+    expect(screen.UNSAFE_getAllByType(Modal).some(modal => modal.props.visible && within(modal).queryAllByRole('progressbar').length > 0)).toBe(true);
+  } finally { act(() => { transfer.finish(); resetUploadProgress(); }); rendered.unmount(); }
+});
 
 let mockSaveClock = 0;
 jest.mock('@/observability/http-diagnostics', () => ({

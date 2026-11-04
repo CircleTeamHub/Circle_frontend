@@ -56,6 +56,10 @@ jest.mock('expo-video', () => {
     VideoView: () => <View testID="video-player" />,
   };
 });
+jest.mock('@/components/app/UploadProgressHost', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { UploadProgressHost: () => <View testID="modal-upload-progress-host" /> };
+});
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -93,7 +97,9 @@ beforeEach(() => {
 test('a tap opens full-screen playback and closing releases the active player', async () => {
   render(<VideoBubble message={video} outgoing={false} />);
   expect(screen.queryByTestId('video-player')).toBeNull();
+  expect(screen.queryByTestId('modal-upload-progress-host')).toBeNull();
   fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+  expect(screen.getByTestId('modal-upload-progress-host')).toBeTruthy();
   expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
   await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
   expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(video.videoUrl);
@@ -230,5 +236,29 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
     );
     await Promise.resolve();
     expect(clearDiskCache).not.toHaveBeenCalled();
+  });
+});
+
+describe('VideoBubble upload progress', () => {
+  const pending = { ...video, videoUrl: 'file:///clip.mp4', deliveryId: 'video-delivery', sendStatus: 1 } as ChatMessage;
+
+  it('shows queued upload progress without blocking playback or long press', async () => {
+    const onLongPress = jest.fn();
+    render(<VideoBubble message={pending} outgoing onLongPress={onLongPress} />);
+    expect(screen.getByRole('progressbar')).toBeTruthy();
+    const preview = screen.getByLabelText('chat.detail.playVideo');
+    fireEvent(preview, 'longPress');
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+    fireEvent.press(preview);
+    await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+  });
+
+  it.each([
+    { sendStatus: 2, outgoing: true },
+    { sendStatus: 3, outgoing: true },
+    { sendStatus: 1, outgoing: false },
+  ])('hides progress for status $sendStatus with outgoing=$outgoing', ({ sendStatus, outgoing }) => {
+    render(<VideoBubble message={{ ...pending, sendStatus } as ChatMessage} outgoing={outgoing} />);
+    expect(screen.queryByRole('progressbar')).toBeNull();
   });
 });

@@ -1,3 +1,4 @@
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -82,6 +83,7 @@ export function NoteVideoViewer({ uri, onClose }: { uri: string; onClose: () => 
         >
           <Ionicons name="close" size={26} color="#fff" />
         </Pressable>
+        <UploadProgressHost />
       </View>
     </Modal>
   );

@@ -53,6 +53,7 @@ export async function uploadChatVideoPoster(
   durationSeconds: number | undefined,
   filename: string,
   folder: 'chat' | 'posts' = 'chat',
+  beforeUpload?: () => void,
 ): Promise<{ key: string } | null> {
   try {
     const poster = await generateChatVideoPoster(uri, durationSeconds);
@@ -64,6 +65,7 @@ export async function uploadChatVideoPoster(
       folder,
       fileUri: poster.uri,
     });
+    beforeUpload?.();
     await uploadLocalFileToPresignedUrl(
       presign.uploadUrl,
       'image/jpeg',

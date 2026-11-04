@@ -17,6 +17,11 @@ let mockVideoViewMounted = false;
 let mockVideoViewProps: Record<string, unknown>;
 let mockStatusListener: (event: { status: string; error?: unknown }) => void;
 
+jest.mock('@/components/app/UploadProgressHost', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { UploadProgressHost: () => <View testID="upload-progress-modal-host" /> };
+});
+
 jest.mock('expo-video', () => {
   const { useEffect, useLayoutEffect } = jest.requireActual<typeof import('react')>('react');
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -171,4 +176,10 @@ test('unmounting ignores late load failures and removes the status listener', as
   expect(mockPlayer.play).not.toHaveBeenCalled();
   expect(mockRemoveListener).toHaveBeenCalledTimes(1);
   expect(mockRelease).toHaveBeenCalledTimes(1);
+});
+
+test('keeps upload progress visible inside its existing native modal', async () => {
+  render(<NoteVideoViewer uri={uri} onClose={jest.fn()} />);
+  await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+  expect(screen.getByTestId('upload-progress-modal-host')).toBeTruthy();
 });

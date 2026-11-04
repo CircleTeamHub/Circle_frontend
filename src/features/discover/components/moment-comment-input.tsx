@@ -1,3 +1,4 @@
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -557,6 +558,7 @@ export const MomentCommentInput: React.FC<MomentCommentInputProps> = ({
           }}
         />
       </KeyboardAvoidingContainer>
+      <UploadProgressHost />
     </Modal>
   );
 };

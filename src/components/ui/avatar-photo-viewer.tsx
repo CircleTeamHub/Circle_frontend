@@ -1,3 +1,4 @@
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView,
@@ -128,6 +129,7 @@ export function AvatarPhotoViewer({ visible, uri, name, changing = false, onChan
             </View>
           </View>
         ) : null}
+        <UploadProgressHost />
       </View>
     </Modal>
   );

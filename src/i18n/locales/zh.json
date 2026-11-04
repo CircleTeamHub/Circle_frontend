@@ -1,4 +1,14 @@
 {
+  "mediaUpload": {
+    "sessionChanged": "账号已切换，请重新选择文件后上传",
+    "uploading": "正在上传",
+    "image": "图片",
+    "video": "视频",
+    "preparing": "准备中…",
+    "confirming": "确认中…",
+    "processing": "处理中…",
+    "additional": "还有 {{count}} 项"
+  },
   "avatarPhoto": {
     "actions": "头像操作",
     "title": "头像",

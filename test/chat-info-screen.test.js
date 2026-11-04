@@ -449,9 +449,9 @@ test('non-chat filesystem features keep deferring native filesystem loading', ()
     /^import\s+(?!type\b)[^\n]*from\s+['"]react-native-fs['"]/m,
   );
   assert.doesNotMatch(uploadSource, /import\(['"]react-native-fs['"]\)/);
-  assert.match(uploadSource, /require\(['"]react-native-fs['"]\)/);
-  assert.match(uploadSource, /function loadNativeFS/);
-  assert.match(uploadSource, /stopUpload/);
+  assert.doesNotMatch(uploadSource, /require\(['"]react-native-fs['"]\)/);
+  assert.match(uploadSource, /FileSystem\.createUploadTask/);
+  assert.match(uploadSource, /task\.cancelAsync/);
   assert.match(uploadSource, /expo-file-system\/legacy/);
 
   const checkedFiles = ['src/services/cache/clear-app-cache.ts'];

@@ -4,6 +4,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { AvatarPhotoViewer } from './avatar-photo-viewer';
 import { saveImageToLibrary } from '@/utils/save-image';
 
+jest.mock('@/components/app/UploadProgressHost', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { UploadProgressHost: () => <View testID="upload-progress-modal-host" /> };
+});
+
 jest.mock('@/components/ui/zoomable-image', () => {
   const { View } = jest.requireActual('react-native');
   return { ZoomableImage: (props: Record<string, unknown>) => <View testID="avatar-full-image" {...props} /> };
@@ -149,4 +154,9 @@ test('uploading keeps camera, album and save actions disabled', () => {
 test('a hidden viewer retains no native modal or image resources', () => {
   render(<AvatarPhotoViewer {...props} visible={false} />);
   expect(screen.UNSAFE_queryAllByType(Modal)).toHaveLength(0);
+});
+
+test('keeps upload progress visible inside its existing native modal', () => {
+  render(<AvatarPhotoViewer {...props} />);
+  expect(screen.getByTestId('upload-progress-modal-host')).toBeTruthy();
 });

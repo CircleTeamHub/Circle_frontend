@@ -9,6 +9,7 @@ import { BubbleStatusText, MessageAvatar } from './shared';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { useEphemeralImageDiskCacheSweep } from './ephemeral-image-cache';
+import { MediaUploadProgress } from './media-upload-progress';
 
 interface ImageBubbleProps {
   message: ChatMessage;
@@ -172,40 +173,44 @@ export const ImageBubble: React.FC<ImageBubbleProps> = ({
   }, [getGalleryMessages, message, onImagePress, previewUri]);
   const imageNode = (
     <View style={[sImage.body, outgoing ? sImage.bodyOutgoing : null]}>
-      <Pressable
-        style={sImage.imageWrap}
-        testID="chat-image-preview"
-        onPress={handleOpenPreview}
-        onLongPress={onLongPress}
-        delayLongPress={350}
-      >
-        {displayUri ? (
-          <Image
-            source={
-              displayCacheKey
-                ? { uri: displayUri, cacheKey: displayCacheKey }
-                : { uri: displayUri }
-            }
-            style={[sImage.image, dimensions]}
-            contentFit="cover"
-            transition={150}
-            cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
-            // 图片尺寸由对端决定，本地无从预判。Android 走 Glide 会读图片头、按目标
-            // 尺寸挑 inSampleSize，超大图只是多下载一些字节；iOS 不会——不开这个开关
-            // 时 expo-image 会把整张位图解进内存，一张 20000x20000 就是 ~1.6GB，直接
-            // OOM 崩溃。这是 iOS-only 的 prop，在 Android 上是无害的空操作，所以现在
-            // 就加上，而不是等真正出 iOS 包时再补（那时容易漏）。
-            enforceEarlyResizing
-            onError={(event) => {
-              reportHandledFailure(
-                'chatMedia',
-                'imageLoad',
-                new Error(event.error),
-              );
-            }}
-          />
+      <View style={sImage.imageWrap}>
+        <Pressable
+          testID="chat-image-preview"
+          onPress={handleOpenPreview}
+          onLongPress={onLongPress}
+          delayLongPress={350}
+        >
+          {displayUri ? (
+            <Image
+              source={
+                displayCacheKey
+                  ? { uri: displayUri, cacheKey: displayCacheKey }
+                  : { uri: displayUri }
+              }
+              style={[sImage.image, dimensions]}
+              contentFit="cover"
+              transition={150}
+              cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
+              // 图片尺寸由对端决定，本地无从预判。Android 走 Glide 会读图片头、按目标
+              // 尺寸挑 inSampleSize，超大图只是多下载一些字节；iOS 不会——不开这个开关
+              // 时 expo-image 会把整张位图解进内存，一张 20000x20000 就是 ~1.6GB，直接
+              // OOM 崩溃。这是 iOS-only 的 prop，在 Android 上是无害的空操作，所以现在
+              // 就加上，而不是等真正出 iOS 包时再补（那时容易漏）。
+              enforceEarlyResizing
+              onError={(event) => {
+                reportHandledFailure(
+                  'chatMedia',
+                  'imageLoad',
+                  new Error(event.error),
+                );
+              }}
+            />
+          ) : null}
+        </Pressable>
+        {outgoing && message.sendStatus === 1 && message.deliveryId ? (
+          <MediaUploadProgress deliveryId={message.deliveryId} kind="image" />
         ) : null}
-      </Pressable>
+      </View>
       {message.time ? (
         <View style={sImage.timeRow}>
           <Text

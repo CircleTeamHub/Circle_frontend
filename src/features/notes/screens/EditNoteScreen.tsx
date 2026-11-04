@@ -166,6 +166,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
 
 LogBox.ignoreLogs([
@@ -4166,6 +4167,7 @@ export default function EditNoteScreen() {
                 <ActivityIndicator color={colors.primary} />
               </View>
             )}
+            <UploadProgressHost />
           </View>
         </Modal>
       ) : null}
@@ -4350,6 +4352,7 @@ export default function EditNoteScreen() {
             </View>
           </View>
         </KeyboardAvoidingContainer>
+        <UploadProgressHost />
       </Modal>
       <BottomSheetModal
         visible={groupSheetVisible}

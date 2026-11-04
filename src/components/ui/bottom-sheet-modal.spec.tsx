@@ -3,6 +3,11 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Animated, PanResponder, StyleSheet, Text } from 'react-native';
 import { BottomSheetFlatList, BottomSheetModal } from './bottom-sheet-modal';
 
+jest.mock('@/components/app/UploadProgressHost', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { UploadProgressHost: () => <View testID="upload-progress-modal-host" /> };
+});
+
 jest.mock('@/theme', () => ({
   useTheme: () => ({ colors: { overlay: 'overlay-token' } }),
 }));
@@ -165,4 +170,9 @@ test('a caller backdropStyle still overrides the default dim', () => {
   );
   const style = StyleSheet.flatten(screen.getByTestId('bottom-sheet-backdrop').props.style);
   expect(style.backgroundColor).toBe('red');
+});
+
+test('keeps upload progress visible inside its existing native modal', () => {
+  render(<BottomSheetModal visible onClose={jest.fn()}><Text>content</Text></BottomSheetModal>);
+  expect(screen.getByTestId('upload-progress-modal-host')).toBeTruthy();
 });

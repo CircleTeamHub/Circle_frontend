@@ -1,3 +1,4 @@
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -323,6 +324,7 @@ export function ImageViewer({
               </View>
             </View>
           ) : null}
+          <UploadProgressHost />
         </View>
       </Modal>
 

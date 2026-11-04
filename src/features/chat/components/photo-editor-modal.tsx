@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import {
   ActivityIndicator,
   Alert,
@@ -703,6 +704,7 @@ export function PhotoEditorModal({
             })}
           </ScrollView>
         )}
+        <UploadProgressHost />
       </View>
     </Modal>
   );

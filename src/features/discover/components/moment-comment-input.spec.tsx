@@ -17,6 +17,11 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 
+jest.mock('@/components/app/UploadProgressHost', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { UploadProgressHost: () => <View testID="upload-progress-modal-host" /> };
+});
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -364,4 +369,9 @@ test('submit rejection retains the draft and selected mention for retry', async 
     undefined,
     ['alice-id'],
   );
+});
+
+test('keeps upload progress visible inside its existing native modal', () => {
+  render(<MomentCommentInput replyTo={null} onSubmit={jest.fn()} onDismiss={jest.fn()} />);
+  expect(screen.getByTestId('upload-progress-modal-host')).toBeTruthy();
 });

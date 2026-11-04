@@ -1,4 +1,14 @@
 {
+  "mediaUpload": {
+    "sessionChanged": "アカウントが切り替わりました。ファイルを選び直してアップロードしてください。",
+    "uploading": "アップロード中",
+    "image": "画像",
+    "video": "動画",
+    "preparing": "準備中…",
+    "confirming": "確認中…",
+    "processing": "処理中…",
+    "additional": "ほか {{count}} 件"
+  },
   "avatarPhoto": {
     "actions": "プロフィール写真の操作",
     "title": "プロフィール写真",

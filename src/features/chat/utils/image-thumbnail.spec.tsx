@@ -46,4 +46,23 @@ describe('uploadChatImageThumbnail', () => {
 
     expect(mockUploadLocalFile).not.toHaveBeenCalled();
   });
+
+  it('checks the session after deferred presign and skips upload when the guard throws', async () => {
+    let resolvePresign!: (value: never) => void;
+    let markPresignStarted!: () => void;
+    const presignStarted = new Promise<void>((resolve) => { markPresignStarted = resolve; });
+    const presignWait = new Promise<never>((resolve) => { resolvePresign = resolve; });
+    mockRequestUploadPresign.mockImplementationOnce(() => {
+      markPresignStarted();
+      return presignWait;
+    });
+    const beforeUpload = jest.fn(() => { throw new Error('session changed'); });
+    const uploading = uploadChatImageThumbnail('file:///original.jpg', 2048, 'original.jpg', beforeUpload);
+    await presignStarted;
+    expect(beforeUpload).not.toHaveBeenCalled();
+    resolvePresign({ uploadUrl: 'https://upload.test/thumb', key: 'chat/thumb.jpg', requiredHeaders: {} } as never);
+    await expect(uploading).resolves.toBeNull();
+    expect(beforeUpload).toHaveBeenCalledTimes(1);
+    expect(mockUploadLocalFile).not.toHaveBeenCalled();
+  });
 });

@@ -1,3 +1,5 @@
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
+import { resetUploadProgress } from '@/stores/upload-progress-store';
 import { AppOperationsHost } from "@/components/app/AppOperationsHost";
 // 导入 React Navigation 的主题系统，用于给导航栏（header、tab bar 等）应用深色/浅色主题
 import {
@@ -291,6 +293,16 @@ function RootLayout() {
   // 导航追踪：冷启动指标和 XHR span 都要挂在导航 transaction 上才会被发出。
   const navigationRef = useNavigationContainerRef();
 
+  useEffect(() => {
+    let sessionEpoch = useAuthStore.getState().sessionEpoch;
+    return useAuthStore.subscribe((state) => {
+      if (state.sessionEpoch !== sessionEpoch) {
+        sessionEpoch = state.sessionEpoch;
+        resetUploadProgress();
+      }
+    });
+  }, []);
+
   /**
    * 旧版 AsyncStorage → MMKV 一次性数据迁移闸门。
    *
@@ -363,6 +375,7 @@ function RootLayout() {
           <NotificationSnackbarHost />
           {/* 顶部提醒（操作回执 toast），与消息横幅同一套外壳。 */}
           <TopNoticeHost />
+          <UploadProgressHost />
           <PushNotificationRouteHandler />
           <PushNotificationTokenRegistrar />
           <CallInviteHost />

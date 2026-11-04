@@ -1,18 +1,20 @@
 import { apiClient } from '@/services/api/client';
 import { API_URL } from '@/constants/config';
 import { Platform } from 'react-native';
-// #112（有意保留 legacy）：仅剩 uploadAsync 一个用途。SDK 55 的新版
+// #112（有意保留 legacy）：原生流式上传使用 createUploadTask。SDK 55 的新版
 // expo-file-system 没有对等的原生流式上传 —— File.bytes() 会把整个视频读进
 // JS 内存，expo/fetch 也尚不支持请求体流式。等上游补齐后随 SDK 升级迁移。
 import * as FileSystem from 'expo-file-system/legacy';
-import type * as NativeFS from 'react-native-fs';
 import {
   expectShape,
   isNonEmptyString,
   isPlainObject,
 } from '@/utils/validate';
 import { reportError } from '@/observability/sentry';
+import { captureUploadProgressScope, startUploadProgress, type UploadProgressOptions } from '@/stores/upload-progress-store';
 import i18n from '@/i18n';
+
+export type { UploadProgressOptions } from '@/stores/upload-progress-store';
 
 const SIGNED_URL_PATTERN = /https?:\/\/[^\s"'<>)]*\?[^\s"'<>)]*/gi;
 
@@ -235,6 +237,18 @@ export type UploadRequiredHeaders = {
   'If-None-Match': string;
 };
 
+// Keep queued transfers attached to the session that obtained their presign.
+// Weak references retain no URL, filename or account identifier.
+const uploadSessionScopes = new WeakMap<UploadRequiredHeaders, () => boolean>();
+
+function assertUploadSessionCurrent(isCurrent?: () => boolean): void {
+  if (isCurrent && !isCurrent()) {
+    throw new Error(i18n.t('mediaUpload.sessionChanged', {
+      defaultValue: '登录状态已变更，请重新选择文件后重试',
+    }));
+  }
+}
+
 function isUploadRequiredHeaders(value: unknown): value is UploadRequiredHeaders {
   if (!isPlainObject(value)) return false;
   return (
@@ -439,11 +453,13 @@ export async function requestUploadPresign<F extends UploadFolder>(
     folder: F;
   } & UploadSizeSource,
 ): Promise<UploadPresignResponseFor<F>> {
+  const isSessionCurrent = captureUploadProgressScope();
   const sizeBytes = assertUploadSize(
     typeof payload.sizeBytes === 'number'
       ? payload.sizeBytes
       : await resolveLocalFileSize(payload.fileUri),
   );
+  assertUploadSessionCurrent(isSessionCurrent);
   const raw = await apiClient<UploadPresignResponse>('/upload/presign', {
     method: 'POST',
     // 逐字段拼:fileUri 只是本地取值用的,绝不能进请求体(后端 DTO 不认)。
@@ -454,6 +470,7 @@ export async function requestUploadPresign<F extends UploadFolder>(
       sizeBytes,
     },
   });
+  assertUploadSessionCurrent(isSessionCurrent);
   const response = expectShape(
     raw,
     (value: unknown): value is UploadPresignResponse =>
@@ -464,24 +481,12 @@ export async function requestUploadPresign<F extends UploadFolder>(
   );
 
   // 形状已按目录校验：公开目录必带 fileUrl，私有目录不要求 —— 与返回类型一一对应。
-  return assertUploadUrlReachableOnCurrentPlatform(
-    response,
-  ) as UploadPresignResponseFor<F>;
+  const presign = assertUploadUrlReachableOnCurrentPlatform(response);
+  uploadSessionScopes.set(presign.requiredHeaders, isSessionCurrent);
+  return presign as UploadPresignResponseFor<F>;
 }
 
 const UPLOAD_TIMEOUT_MS = 60_000;
-type NativeFSModule = typeof NativeFS & { default?: typeof NativeFS };
-let rnfsModule: typeof NativeFS | null = null;
-
-function loadNativeFS() {
-  if (!rnfsModule) {
-    // Keep react-native-fs out of web/Expo Go startup paths.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const loaded = require('react-native-fs') as NativeFSModule;
-    rnfsModule = loaded.default ?? loaded;
-  }
-  return rnfsModule;
-}
 
 export async function uploadFileToPresignedUrl(
   uploadUrl: string,
@@ -489,67 +494,89 @@ export async function uploadFileToPresignedUrl(
   body: Blob,
   requiredHeaders: UploadRequiredHeaders,
   timeoutMs: number = UPLOAD_TIMEOUT_MS,
+  options?: UploadProgressOptions,
 ) {
+  assertUploadSessionCurrent(uploadSessionScopes.get(requiredHeaders));
   return runStorageUpload({ kind: 'presigned-put', contentType }, async () => {
-    assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    let response: Response;
+    const progress = startUploadProgress(contentType, options);
     try {
-      response = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: requiredHeaders,
-        body,
-        signal: controller.signal,
-      });
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(
-          i18n.t('common.errors.uploadTimeout', {
-            defaultValue: '上传超时，请检查网络后重试',
-          }),
-        );
+      assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
+      if (Platform.OS === 'web' && typeof XMLHttpRequest !== 'undefined') {
+        const xhr = new XMLHttpRequest();
+        try {
+          await withUploadTimeout(() => ({
+            promise: new Promise<void>((resolve, reject) => {
+              xhr.upload.onprogress = (event) => {
+                progress.update(event.loaded, event.lengthComputable ? event.total : null);
+              };
+              xhr.onload = () => resolve();
+              xhr.onerror = xhr.onabort = () => reject(uploadStatusError(0));
+              xhr.open('PUT', uploadUrl);
+              for (const [name, value] of Object.entries(requiredHeaders)) {
+                xhr.setRequestHeader(name, value);
+              }
+              xhr.send(body);
+            }),
+            cancel: () => xhr.abort(),
+          }), timeoutMs);
+          if (xhr.status < 200 || xhr.status >= 300) {
+            throw uploadStatusError(xhr.status, xhr.responseText);
+          }
+        } finally {
+          xhr.upload.onprogress = null;
+          xhr.onload = xhr.onerror = xhr.onabort = null;
+        }
+        return;
       }
-      throw error;
-    } finally {
-      clearTimeout(timer);
-    }
 
-    if (!response.ok) {
-      // 这个函数也被聊天图片 / 笔记附件 / 动态图等用，"头像上传失败" 误导用户。
-      const body = await response.text().catch(() => '');
-      throw uploadStatusError(response.status, body);
+      // Non-browser runtimes without XHR retain the existing Blob PUT path.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let response: Response;
+      try {
+        response = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: requiredHeaders,
+          body,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error(
+            i18n.t('common.errors.uploadTimeout', {
+              defaultValue: '上传超时，请检查网络后重试',
+            }),
+          );
+        }
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!response.ok) {
+        const responseBody = await response.text().catch(() => '');
+        throw uploadStatusError(response.status, responseBody);
+      }
+    } finally {
+      progress.finish();
     }
   });
 }
 
 /**
- * Race a long-running upload against a manual timeout. Android exposes an
- * RNFS job id, so that path can hard-cancel the native request on timeout.
+ * Cancel the underlying request on timeout or transport failure. Expo's failed
+ * upload tasks also need cancellation to remove their progress subscription.
  */
 async function withUploadTimeout<T>(
-  task: () => { promise: Promise<T>; jobId?: number },
+  task: () => { promise: Promise<T>; cancel: () => void | Promise<void> },
   timeoutMs: number = UPLOAD_TIMEOUT_MS,
 ): Promise<T> {
-  const { promise, jobId } = task();
+  const { promise, cancel } = task();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
       promise,
       new Promise<T>((_, reject) => {
         timeoutId = setTimeout(() => {
-          if (typeof jobId === 'number') {
-            const fs = loadNativeFS();
-            if (typeof fs.stopUpload === 'function') {
-              try {
-                fs.stopUpload(jobId);
-              } catch {
-                // The Promise.race already rejects below; failed cleanup should
-                // not mask the timeout reason shown to the user.
-              }
-            }
-          }
           reject(new Error(
             i18n.t('common.errors.uploadTimeout', {
               defaultValue: '上传超时，请检查网络后重试',
@@ -558,6 +585,13 @@ async function withUploadTimeout<T>(
         }, timeoutMs);
       }),
     ]);
+  } catch (error) {
+    try {
+      void Promise.resolve(cancel()).catch(() => {});
+    } catch {
+      // Cleanup must not replace the original upload failure.
+    }
+    throw error;
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
@@ -569,9 +603,11 @@ export async function uploadLocalFileToPresignedUrl(
   fileUri: string,
   requiredHeaders: UploadRequiredHeaders,
   timeoutMs: number = UPLOAD_TIMEOUT_MS,
+  options?: UploadProgressOptions,
 ) {
+  assertUploadSessionCurrent(uploadSessionScopes.get(requiredHeaders));
   if (Platform.OS === 'web') {
-    // Web 没有 RNFS/uploadAsync：blob:/data: URI 取成 Blob 后走通用 fetch PUT
+    // Web 没有原生上传任务：blob:/data: URI 取成 Blob 后走通用 XHR PUT
     // 通道（同一套超时与错误语义；requiredHeaders 原样转发，见 presign 契约）。
     const blob = await readLocalBlobOnWeb(fileUri);
     // timeoutMs 必须透传：视频那几个调用点传的是 VIDEO_UPLOAD_TIMEOUT_MS（分钟级），
@@ -583,54 +619,38 @@ export async function uploadLocalFileToPresignedUrl(
       blob,
       requiredHeaders,
       timeoutMs,
+      options,
     );
     return;
   }
   return runStorageUpload({ kind: 'local-file', contentType }, async () => {
-    assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
+    const progress = startUploadProgress(contentType, options);
+    try {
+      assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
+      // Expo streams the file natively on both platforms; Android's RNFS raw
+      // upload path buffers the whole request before its bytes reach the socket.
+      const task = FileSystem.createUploadTask(uploadUrl, fileUri, {
+        headers: requiredHeaders,
+        httpMethod: 'PUT',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      }, ({ totalBytesSent, totalBytesExpectedToSend }) => {
+        progress.update(totalBytesSent, totalBytesExpectedToSend);
+      });
+      const response = await withUploadTimeout(
+        () => ({
+          promise: task.uploadAsync(),
+          cancel: () => task.cancelAsync(),
+        }),
+        timeoutMs,
+      );
 
-    if (Platform.OS === 'android') {
-      const RNFS = loadNativeFS();
-      const response = await withUploadTimeout(() => {
-        const handle = RNFS.uploadFiles({
-          toUrl: uploadUrl,
-          binaryStreamOnly: true,
-          files: [
-            {
-              name: 'file',
-              filename: fileUri.split('/').pop() || 'upload',
-              filepath: fileUri.replace(/^file:\/\//, ''),
-              filetype: contentType,
-            },
-          ],
-          headers: requiredHeaders,
-          method: 'PUT',
-        });
-        return { promise: handle.promise, jobId: handle.jobId };
-      }, timeoutMs);
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw uploadStatusError(response.statusCode, response.body);
+      if (!response || response.status < 200 || response.status >= 300) {
+        throw uploadStatusError(response?.status ?? 0, response?.body);
       }
 
       return response;
+    } finally {
+      progress.finish();
     }
-
-    const response = await withUploadTimeout(
-      () => ({
-        promise: FileSystem.uploadAsync(uploadUrl, fileUri, {
-          headers: requiredHeaders,
-          httpMethod: 'PUT',
-          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-        }),
-      }),
-      timeoutMs,
-    );
-
-    if (response.status < 200 || response.status >= 300) {
-      throw uploadStatusError(response.status, response.body);
-    }
-
-    return response;
   });
 }
