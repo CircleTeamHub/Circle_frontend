@@ -22,10 +22,12 @@ interface Props {
   onMorePress?: (note: NoteSummary) => void;
   /** 长按进入多选（父层切 selectionMode） */
   onLongPress?: (note: NoteSummary) => void;
-  /** 点来源 chip（发送者/群）→ 父层负责跳转进对应聊天 */
+  /** 点来源 chip（发送者/群）→ 父层负责跳转 */
   onSourcePress?: (note: NoteSummary, target: NoteSourceTarget) => void;
   /** 多选模式：右侧 ⋯ 槽位换成选择圈，整卡点击由父层当作勾选处理 */
   selectionMode?: boolean;
+  /** 发送笔记选择页允许查看名片资料；其他多选页默认禁用来源按钮。 */
+  selectionSourceDetails?: boolean;
   selected?: boolean;
   /** 定位跳转后的短暂高亮（「查看」从聊天跳进列表时用） */
   highlighted?: boolean;
@@ -41,6 +43,7 @@ function NoteCardInner({
   onLongPress,
   onSourcePress,
   selectionMode = false,
+  selectionSourceDetails = false,
   selected = false,
   highlighted = false,
   showActions = true,
@@ -119,8 +122,7 @@ function NoteCardInner({
     [note, onSourcePress],
   );
 
-  // 多选模式下 chip 不再跳聊天，避免和「点卡片=勾选」抢手势。
-  const chipsEnabled = Boolean(onSourcePress) && !selectionMode;
+  const chipsEnabled = Boolean(onSourcePress) && (!selectionMode || selectionSourceDetails);
   const canShowActions = showActions && Boolean(onMorePress) && !selectionMode;
 
   return (
@@ -249,12 +251,12 @@ function NoteCardInner({
         <View style={s.sourceRow}>
           {senderChip ? (
             <Pressable
-              style={[s.sourceChip, d.sourceChip]}
+              style={[s.sourceChip, d.sourceChip, selectionSourceDetails ? s.sourceDetailsChip : null]}
               onPress={chipsEnabled ? handleSenderPress : undefined}
               disabled={!chipsEnabled}
               accessibilityRole="button"
-              accessibilityLabel={t('notes.list.openSenderChat', {
-                defaultValue: '和 {{name}} 私聊',
+              accessibilityLabel={t(selectionSourceDetails ? 'notes.list.viewContactDetails' : 'notes.list.openSenderChat', {
+                defaultValue: selectionSourceDetails ? '查看 {{name}} 的个人资料' : '和 {{name}} 私聊',
                 name: senderChip.name,
               })}
             >
@@ -278,12 +280,12 @@ function NoteCardInner({
           ) : null}
           {groupChip ? (
             <Pressable
-              style={[s.sourceChip, d.sourceChip]}
+              style={[s.sourceChip, d.sourceChip, selectionSourceDetails ? s.sourceDetailsChip : null]}
               onPress={chipsEnabled ? handleGroupPress : undefined}
               disabled={!chipsEnabled}
               accessibilityRole="button"
-              accessibilityLabel={t('notes.list.openGroupChat', {
-                defaultValue: '进入群聊 {{name}}',
+              accessibilityLabel={t(selectionSourceDetails ? 'notes.list.viewGroupDetails' : 'notes.list.openGroupChat', {
+                defaultValue: selectionSourceDetails ? '查看 {{name}} 的群资料' : '进入群聊 {{name}}',
                 name: groupChip.name,
               })}
             >
@@ -404,6 +406,9 @@ const s = StyleSheet.create({
     flex: 1,
     ...Typography.small,
     fontWeight: '500',
+  },
+  sourceDetailsChip: {
+    height: 44,
   },
   moreBtn: {
     width: 32,

@@ -45,6 +45,24 @@ type PendingForward = {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
+  targetTabs: {
+    flexDirection: 'row',
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+    padding: Spacing.xs,
+    gap: Spacing.xs,
+    borderRadius: Radius.lg,
+  },
+  targetTab: {
+    flex: 1,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    borderRadius: Radius.md,
+  },
+  targetTabLabel: { ...Typography.body, fontWeight: '600' },
   searchWrap: {
     marginHorizontal: Spacing.lg,
     marginVertical: Spacing.sm,
@@ -77,6 +95,8 @@ const s = StyleSheet.create({
   },
   rowText: { flex: 1, gap: 3 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
+  listEmpty: { paddingVertical: Spacing.xl * 2, alignItems: 'center' },
+  emptyText: { textAlign: 'center' },
 });
 
 // 可直接按原 payload 重发的卡片类型 —— 即客户端本来就能发的那几种(ChatCardType)。
@@ -230,6 +250,7 @@ export default function ForwardPickerScreen() {
   const clearPending = useMessageForwardStore((state) => state.clear);
   const conversations = useChatStore((state) => state.conversations);
   const [query, setQuery] = useState('');
+  const [targetType, setTargetType] = useState<'single' | 'group'>('single');
   const [sendingID, setSendingID] = useState<string | null>(null);
   const mountedRef = useRef(true);
   // 转发前的来源状态重取进行中；防止连点弹出多个确认框。
@@ -252,11 +273,13 @@ export default function ForwardPickerScreen() {
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    if (!keyword) return conversations;
-    return conversations.filter((conversation) =>
-      conversationDisplayName(conversation).toLowerCase().includes(keyword),
-    );
-  }, [conversations, query]);
+    return conversations.filter((conversation) => {
+      const matchesType = targetType === 'single'
+        ? conversation.type === 'DIRECT'
+        : conversation.type === 'GROUP' || conversation.type === 'TEMP';
+      return matchesType && (!keyword || conversationDisplayName(conversation).toLowerCase().includes(keyword));
+    });
+  }, [conversations, query, targetType]);
 
   /**
    * 卡片上的开工/打烊/下架是消息发出时的快照；转发前按来源实时状态重取，
@@ -381,6 +404,25 @@ export default function ForwardPickerScreen() {
   return (
     <View style={[s.container, d.container]}>
       <NavHeader title={t('chat.forward.title')} />
+      <View style={[s.targetTabs, { backgroundColor: colors.surface }]} accessibilityRole="tablist">
+        {(['single', 'group'] as const).map((type) => {
+          const selected = targetType === type;
+          return (
+            <Pressable
+              key={type}
+              style={[s.targetTab, selected && { backgroundColor: colors.primaryLight }]}
+              accessibilityRole="tab"
+              accessibilityLabel={t(`chat.forward.${type}`)}
+              accessibilityState={{ selected }}
+              disabled={Boolean(sendingID)}
+              onPress={() => setTargetType(type)}
+            >
+              <Ionicons name={type === 'single' ? 'person-outline' : 'people-outline'} size={20} color={selected ? colors.iconAccent : colors.textSecondary} />
+              <Text style={[s.targetTabLabel, { color: selected ? colors.iconAccent : colors.textSecondary }]}>{t(`chat.forward.${type}`)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
       <View style={[s.searchWrap, d.searchWrap]}>
         <Ionicons name="search" size={20} color={colors.textSecondary} />
         <TextInput
@@ -395,6 +437,11 @@ export default function ForwardPickerScreen() {
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + Spacing.xl }]}
+        ListEmptyComponent={
+          <View style={s.listEmpty}>
+            <Text style={[d.subtitle, s.emptyText]}>{t(query.trim() ? 'chat.forward.noMatches' : targetType === 'single' ? 'chat.forward.noPrivateChats' : 'chat.forward.noGroupChats')}</Text>
+          </View>
+        }
         {...keyboardDismissOnDragProps}
         renderItem={({ item }) => {
           const busy = sendingID === item.id;

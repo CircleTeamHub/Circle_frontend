@@ -191,14 +191,14 @@ test('user profile screen uses a compact rounded-square avatar stage', () => {
   const source = fs.readFileSync(filePath, 'utf8');
 
   assert.match(source, /avatarStage:\s*\{[\s\S]*width: AVATAR_RING_SIZE,[\s\S]*height: AVATAR_RING_SIZE,/);
-  assert.match(source, /avatarRing:\s*\{[\s\S]*borderRadius: Radius\.md/);
+  assert.match(source, /avatarRing:\s*\{[^}]*borderRadius: Radius\.lg/);
   assert.doesNotMatch(
     source,
     /AVATAR_FRAME_SIZE|membershipFrameOverlay|avatarRingFramed/,
   );
 });
 
-test('user profile screen places likes below the header and reuses more-info settings navigation', () => {
+test('user profile screen places likes with profile metadata and reuses more-info settings navigation', () => {
   const filePath = path.join(
     process.cwd(),
     'src/features/user/screens/UserProfileScreen.tsx',
@@ -209,7 +209,8 @@ test('user profile screen places likes below the header and reuses more-info set
   assert.match(source, /icon: 'settings-outline'/);
   assert.match(source, /onPress: handleOpenChatInfo/);
   assert.match(source, /disabled: !canOpenChatInfo/);
-  assert.ok(source.indexOf('style={s.recognitionRow}') > source.indexOf('<ScrollView'));
+  assert.ok(source.indexOf('style={s.heroMeta}') > source.indexOf('<ScrollView'));
+  assert.ok(source.indexOf('style={[s.recognitionPill, d.recognitionPill]}') > source.indexOf('style={s.heroMeta}'));
   assert.match(source, /recognitionPill/);
   assert.match(source, /like-outline\.png/);
   assert.match(source, /recognitionIconImage/);
@@ -581,20 +582,20 @@ test('user profile screen renders the contact card from server-filtered fields o
   assert.match(source, /reportHandledFailure\('userProfile', 'copyContact'/);
 });
 
-test('contact rows share the info cards container so the gap between them survives', () => {
+test('contact and information rows share one continuous profile card', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/user/screens/UserProfileScreen.tsx'),
     'utf8',
   );
 
-  // s.sections 只有 gap，而 gap 作用于同一个 flex 容器的直接子节点。联系方式卡
-  // 若自己包一层 sections，两张卡之间就没有留白、会贴死成一张长卡。
   assert.match(
     source,
-    /\{contactRows\.length > 0 \|\| infoRowGroups\.length > 0 \? \([\s\S]*?<View style=\{s\.sections\}>/,
+    /\{contactRows\.length > 0 \|\| infoRowItems\.length > 0 \|\| showPhotoNotes \? \(\s*<View style=\{\[s\.card, d\.card\]\}>/,
   );
-  const sectionsOpenings = source.match(/<View style=\{s\.sections\}>/g) ?? [];
-  assert.equal(sectionsOpenings.length, 1);
+  assert.equal((source.match(/<View style=\{\[s\.card, d\.card\]\}>/g) ?? []).length, 1);
+  assert.doesNotMatch(source, /INFO_ROW_GROUPS|infoRowGroups|s\.sections/);
+  assert.match(source, /contactRows\.map/);
+  assert.match(source, /infoRowItems\.map/);
 });
 
 test('contact rows are copy targets, not navigation rows', () => {

@@ -141,18 +141,23 @@ export function useMediaSend({
           folder: 'chat',
           fileUri: prepared.uri,
         });
+        assertMediaSendSessionCurrent(deliveryId);
         await uploadLocalFileToPresignedUrl(
           presign.uploadUrl,
           prepared.contentType,
           prepared.uri,
           presign.requiredHeaders,
+          undefined,
+          { progressKey: deliveryId },
         );
 
+        assertMediaSendSessionCurrent(deliveryId);
         // 生成并上传一张缩略图供列表气泡显示；失败 / 原图已够小时退化为原图（thumb* 留空）。
         const thumbnail = await uploadChatImageThumbnail(
           prepared.uri,
           prepared.width,
           prepared.filename,
+          () => assertMediaSendSessionCurrent(deliveryId),
         );
 
         await turn?.wait;
@@ -293,18 +298,23 @@ export function useMediaSend({
             folder: 'chat',
             fileUri: asset.uri,
           });
+          assertMediaSendSessionCurrent(deliveryId);
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,
             contentType,
             asset.uri,
             presign.requiredHeaders,
             VIDEO_UPLOAD_TIMEOUT_MS,
+            { progressKey: deliveryId },
           );
+          assertMediaSendSessionCurrent(deliveryId);
           // 截一帧当封面:没有它,气泡在点播放之前是一块黑框。截不到就不带。
           const poster = await uploadChatVideoPoster(
             asset.uri,
             durationSeconds,
             filename,
+            'chat',
+            () => assertMediaSendSessionCurrent(deliveryId),
           );
           uploaded = { key: presign.key, thumbKey: poster?.key };
           uploadedVideoKeysRef.current.set(deliveryId, uploaded);

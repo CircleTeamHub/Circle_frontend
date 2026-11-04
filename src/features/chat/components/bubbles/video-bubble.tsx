@@ -17,6 +17,8 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
 import { useEphemeralImageDiskCacheSweep } from './ephemeral-image-cache';
 import { BubbleStatusText, MessageAvatar } from './shared';
+import { MediaUploadProgress } from './media-upload-progress';
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -204,6 +206,7 @@ export function VideoBubble({
         <Pressable style={[s.closeButton, { top: insets.top + Spacing.sm }]} onPress={() => setPreviewVisible(false)} accessibilityRole="button" accessibilityLabel={t('common.close')}>
           <Ionicons name="close" size={26} color="#fff" />
         </Pressable>
+        <UploadProgressHost />
       </View>
     </Modal>
   ) : null;
@@ -221,55 +224,59 @@ export function VideoBubble({
   );
   const body = (
     <View style={[s.body, outgoing ? s.bodyOutgoing : null]}>
-      <Pressable
-        style={s.frame}
-        onPress={videoUrl ? () => setPreviewVisible(true) : undefined}
-        onLongPress={onLongPress}
-        delayLongPress={350}
-        accessibilityRole={videoUrl ? 'button' : undefined}
-        accessibilityLabel={
-          videoUrl
-            ? t('chat.detail.playVideo', { defaultValue: '播放视频' })
-            : undefined
-        }
-      >
-        {videoUrl ? (
-          <View style={{ aspectRatio }}>
-            {!posterUrl ? null : (
-              <Image
-                testID="chat-video-poster"
-                source={
-                  message.videoThumbKey
-                    ? { uri: posterUrl, cacheKey: message.videoThumbKey }
-                    : { uri: posterUrl }
-                }
-                style={StyleSheet.absoluteFillObject}
-                contentFit="cover"
-                cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
+      <View style={s.frame}>
+        <Pressable
+          onPress={videoUrl ? () => setPreviewVisible(true) : undefined}
+          onLongPress={onLongPress}
+          delayLongPress={350}
+          accessibilityRole={videoUrl ? 'button' : undefined}
+          accessibilityLabel={
+            videoUrl
+              ? t('chat.detail.playVideo', { defaultValue: '播放视频' })
+              : undefined
+          }
+        >
+          {videoUrl ? (
+            <View style={{ aspectRatio }}>
+              {!posterUrl ? null : (
+                <Image
+                  testID="chat-video-poster"
+                  source={
+                    message.videoThumbKey
+                      ? { uri: posterUrl, cacheKey: message.videoThumbKey }
+                      : { uri: posterUrl }
+                  }
+                  style={StyleSheet.absoluteFillObject}
+                  contentFit="cover"
+                  cachePolicy={ephemeral ? 'memory' : 'memory-disk'}
+                  pointerEvents="none"
+                />
+              )}
+              <View
+                style={[s.poster, posterUrl ? s.posterOverImage : null]}
                 pointerEvents="none"
-              />
-            )}
-            <View
-              style={[s.poster, posterUrl ? s.posterOverImage : null]}
-              pointerEvents="none"
-            >
-              <View style={s.playBadge}>
-                <Ionicons name="play" size={26} color="#FFFFFF" />
+              >
+                <View style={s.playBadge}>
+                  <Ionicons name="play" size={26} color="#FFFFFF" />
+                </View>
+                {durationLabel ? (
+                  <Text style={s.duration}>{durationLabel}</Text>
+                ) : null}
               </View>
-              {durationLabel ? (
-                <Text style={s.duration}>{durationLabel}</Text>
-              ) : null}
             </View>
-          </View>
-        ) : (
-          <View style={s.unavailable}>
-            <Ionicons name="videocam-off-outline" size={30} color={colors.textSecondary} />
-            <Text style={[s.unavailableText, { color: colors.text }]}>
-              {t('chat.detail.videoUnavailable', { defaultValue: '视频不可用' })}
-            </Text>
-          </View>
-        )}
-      </Pressable>
+          ) : (
+            <View style={s.unavailable}>
+              <Ionicons name="videocam-off-outline" size={30} color={colors.textSecondary} />
+              <Text style={[s.unavailableText, { color: colors.text }]}>
+                {t('chat.detail.videoUnavailable', { defaultValue: '视频不可用' })}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+        {outgoing && message.sendStatus === 1 && message.deliveryId ? (
+          <MediaUploadProgress deliveryId={message.deliveryId} kind="video" />
+        ) : null}
+      </View>
       {message.time ? (
         <View style={s.timeRow}>
           <Text style={{ ...Typography.tinyRegular, color: colors.text }}>

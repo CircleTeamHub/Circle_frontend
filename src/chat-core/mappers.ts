@@ -137,7 +137,9 @@ export function getChatMessagePreview(message: ChatMessageDto | null): string {
     case 'note-card':
       return tCardPreview('note', '[笔记]', 'title', message.content['title']);
     case 'group-invitation':
-      return i18n.t('groupAdmission.preview');
+      return i18n.t(typeof message.content['circleInvitationId'] === 'string' && message.content['circleInvitationId'].trim()
+        ? 'groupAdmission.circlePreview'
+        : 'groupAdmission.preview');
     case 'verification-card':
       return tCardPreview(
         'verification',

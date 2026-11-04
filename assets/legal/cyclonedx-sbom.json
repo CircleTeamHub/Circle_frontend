@@ -6875,6 +6875,26 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:npm/base64-arraybuffer@1.0.2",
+      "name": "base64-arraybuffer",
+      "version": "1.0.2",
+      "purl": "pkg:npm/base64-arraybuffer@1.0.2",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/niklasvh/base64-arraybuffer"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:npm/base64-js@1.5.1",
       "name": "base64-js",
       "version": "1.5.1",
@@ -8152,6 +8172,26 @@
         {
           "type": "vcs",
           "url": "https://github.com/robinweser/css-in-js-utils.git"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/css-line-break@2.1.0",
+      "name": "css-line-break",
+      "version": "2.1.0",
+      "purl": "pkg:npm/css-line-break@2.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/niklasvh/css-line-break"
         }
       ]
     },
@@ -11944,6 +11984,26 @@
         {
           "type": "vcs",
           "url": "https://github.com/rehypejs/rehype-minify/tree/main/packages/html-whitespace-sensitive-tag-names"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/html2canvas@1.4.1",
+      "name": "html2canvas",
+      "version": "1.4.1",
+      "purl": "pkg:npm/html2canvas@1.4.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/niklasvh/html2canvas.git"
         }
       ]
     },
@@ -18579,6 +18639,26 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:npm/react-native-view-shot@4.0.3",
+      "name": "react-native-view-shot",
+      "version": "4.0.3",
+      "purl": "pkg:npm/react-native-view-shot@4.0.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/gre/react-native-view-shot.git"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:npm/react-native-web@0.21.2",
       "name": "react-native-web",
       "version": "0.21.2",
@@ -20989,6 +21069,26 @@
     },
     {
       "type": "library",
+      "bom-ref": "pkg:npm/text-segmentation@1.0.3",
+      "name": "text-segmentation",
+      "version": "1.0.3",
+      "purl": "pkg:npm/text-segmentation@1.0.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/niklasvh/text-segmentation"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "pkg:npm/throat@5.0.0",
       "name": "throat",
       "version": "5.0.0",
@@ -21880,6 +21980,26 @@
           "license": {
             "id": "MIT"
           }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/utrie@1.0.2",
+      "name": "utrie",
+      "version": "1.0.2",
+      "purl": "pkg:npm/utrie@1.0.2",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/niklasvh/utrie"
         }
       ]
     },

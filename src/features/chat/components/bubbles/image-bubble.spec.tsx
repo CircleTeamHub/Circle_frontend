@@ -49,6 +49,8 @@ jest.mock('@/components/ui/image-viewer', () => {
   };
 });
 
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+
 jest.mock('./shared', () => ({
   MessageAvatar: () => null,
   BubbleStatusText: () => null,
@@ -323,4 +325,28 @@ test('disappearing images keep their isolated save-disabled preview', () => {
   openPreview();
   expect(viewerProps.at(-1)?.images).toEqual([burning.imageUrl]);
   expect(viewerModes.at(-1)).toBe('ephemeral');
+});
+
+describe('ImageBubble upload progress', () => {
+  const pending = { ...imageMessage, imageUrl: 'file:///photo.jpg', imageThumbUrl: undefined, deliveryId: 'image-delivery', sendStatus: 1 } as ChatMessage;
+
+  it('shows indeterminate progress while a local image waits for upload and preserves touch handlers', () => {
+    const onImagePress = jest.fn();
+    const onLongPress = jest.fn();
+    render(<ImageBubble message={pending} outgoing onImagePress={onImagePress} onLongPress={onLongPress} />);
+    expect(screen.getByRole('progressbar')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('chat-image-preview'));
+    fireEvent(screen.getByTestId('chat-image-preview'), 'longPress');
+    expect(onImagePress).toHaveBeenCalledWith(pending);
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { sendStatus: 2, outgoing: true },
+    { sendStatus: 3, outgoing: true },
+    { sendStatus: 1, outgoing: false },
+  ])('hides progress for status $sendStatus with outgoing=$outgoing', ({ sendStatus, outgoing }) => {
+    render(<ImageBubble message={{ ...pending, sendStatus } as ChatMessage} outgoing={outgoing} />);
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
 });

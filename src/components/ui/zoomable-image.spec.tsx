@@ -24,13 +24,16 @@ type Handlers = {
 };
 
 let captured: Handlers;
+const createNativeResponder = PanResponder.create;
+
+const captureHandlers = (config: Parameters<typeof PanResponder.create>[0]) => {
+  captured = config as unknown as Handlers;
+  return { panHandlers: {} } as ReturnType<typeof PanResponder.create>;
+};
 
 const createSpy = jest
   .spyOn(PanResponder, 'create')
-  .mockImplementation((config) => {
-    captured = config as unknown as Handlers;
-    return { panHandlers: {} } as ReturnType<typeof PanResponder.create>;
-  });
+  .mockImplementation(captureHandlers);
 
 function touchEvent(points: { pageX: number; pageY: number; locationX?: number; locationY?: number }[], location = {}) {
   return {
@@ -63,6 +66,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  createSpy.mockImplementation(captureHandlers);
   jest.useRealTimers();
 });
 
@@ -107,6 +111,101 @@ test('a downward swipe at 1x requests dismissal after the threshold', () => {
 
   expect(onSwipeDown).toHaveBeenCalledTimes(1);
 });
+
+test('a downward drag locks the pager through touch end and unlocks after release', () => {
+  const onZoomedChange = jest.fn();
+  const onSwipeDown = jest.fn();
+  renderImage({ onZoomedChange, onSwipeDown });
+  act(() => {
+    captured.onPanResponderGrant(touchEvent([{ pageX: 150, pageY: 120 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 155, pageY: 240 }]), gesture(5, 120));
+  });
+  expect(transformValues()[1]).toBe(120);
+  expect(onZoomedChange).toHaveBeenLastCalledWith(true);
+  expect(captured.onPanResponderTerminationRequest()).toBe(false);
+
+  act(() => captured.onPanResponderEnd(touchEvent([]), gesture(5, 120)));
+  expect(captured.onPanResponderTerminationRequest()).toBe(false);
+  act(() => captured.onPanResponderRelease(touchEvent([]), { dx: 5, dy: 120, vy: 0 }));
+  expect(onSwipeDown).toHaveBeenCalledTimes(1);
+  expect(onZoomedChange).toHaveBeenLastCalledWith(false);
+});
+
+test('keeps native swipe distance when the viewer rerenders its paging callback', () => {
+  createSpy.mockImplementation(createNativeResponder);
+  const onSwipeDown = jest.fn();
+  const props = { uri: 'a.jpg', width: 300, height: 300, active: true, onSwipeDown };
+  const view = render(<ZoomableImage {...props} onZoomedChange={() => {}} />);
+  const root = () => screen.UNSAFE_root.findAll(
+    (node: { props: Record<string, unknown> }) => typeof node.props.onResponderGrant === 'function',
+  )[0];
+  const nativeEvent = (previousY: number, y: number, time: number) => ({
+    ...touchEvent([{ pageX: 150, pageY: y }]),
+    touchHistory: {
+      numberActiveTouches: 1,
+      indexOfSingleActiveTouch: 0,
+      mostRecentTimeStamp: time,
+      touchBank: [{
+        touchActive: true,
+        startPageX: 150, startPageY: 120, startTimeStamp: 1,
+        previousPageX: 150, previousPageY: previousY, previousTimeStamp: time - 10,
+        currentPageX: 150, currentPageY: y, currentTimeStamp: time,
+      }],
+    },
+  });
+  act(() => {
+    root().props.onStartShouldSetResponderCapture(nativeEvent(120, 120, 1));
+    root().props.onResponderGrant(nativeEvent(120, 120, 1));
+    root().props.onResponderMove(nativeEvent(120, 190, 701));
+  });
+  view.rerender(<ZoomableImage {...props} onZoomedChange={() => {}} />);
+  act(() => {
+    root().props.onResponderMove(nativeEvent(190, 240, 1201));
+    root().props.onResponderRelease(nativeEvent(240, 240, 1202));
+  });
+  expect(onSwipeDown).toHaveBeenCalledTimes(1);
+});
+
+test('horizontal drags with downward drift do not move or dismiss the image', () => {
+  const onSwipeDown = jest.fn();
+  const onZoomedChange = jest.fn();
+  renderImage({ onSwipeDown, onZoomedChange });
+  act(() => {
+    captured.onPanResponderGrant(touchEvent([{ pageX: 150, pageY: 120 }]), gesture());
+    captured.onPanResponderMove(touchEvent([{ pageX: 350, pageY: 220 }]), gesture(200, 100));
+  });
+  expect(transformValues()[1]).toBe(0);
+  expect(captured.onPanResponderTerminationRequest()).toBe(true);
+  act(() => captured.onPanResponderRelease(touchEvent([]), { dx: 200, dy: 100, vy: 0 }));
+  expect(onSwipeDown).not.toHaveBeenCalled();
+  expect(onZoomedChange).not.toHaveBeenCalledWith(true);
+});
+
+test.each(['release', 'terminate', 'deactivate'])(
+  'a short downward drag resets and unlocks paging on %s',
+  (ending) => {
+    const onSwipeDown = jest.fn();
+    const onTap = jest.fn();
+    const onZoomedChange = jest.fn();
+    const props = { uri: 'a.jpg', width: 300, height: 300, onSwipeDown, onTap, onZoomedChange };
+    const view = render(<ZoomableImage {...props} active />);
+    act(() => {
+      captured.onPanResponderGrant(touchEvent([{ pageX: 150, pageY: 120 }]), gesture());
+      captured.onPanResponderMove(touchEvent([{ pageX: 150, pageY: 150 }]), gesture(0, 30));
+    });
+    expect(onZoomedChange).toHaveBeenLastCalledWith(true);
+    act(() => {
+      if (ending === 'release') captured.onPanResponderRelease(touchEvent([]), { dx: 0, dy: 30, vy: 0 });
+      else if (ending === 'terminate') captured.onPanResponderTerminate();
+      else view.rerender(<ZoomableImage {...props} active={false} />);
+      jest.advanceTimersByTime(2000);
+    });
+    expect(onZoomedChange).toHaveBeenLastCalledWith(false);
+    expect(transformValues()[1]).toBeCloseTo(0);
+    expect(onSwipeDown).not.toHaveBeenCalled();
+    expect(onTap).not.toHaveBeenCalled();
+  },
+);
 
 test('a tap with a few pixels of downward jitter still counts as a tap', () => {
   const onTap = jest.fn();

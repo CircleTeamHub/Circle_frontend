@@ -7,6 +7,7 @@ import { GradientCover } from '@/components/ui/gradient-cover';
 interface CircleAvatarProps {
   /** 圈子头像 URL；为空时回落到品牌渐变默认头像。 */
   uri?: string | null;
+  onImageReady?: () => void;
   size: number;
   /** 圆角，默认圆形（size/2）。方形头像传 Radius.sm/md 等。 */
   borderRadius?: number;
@@ -23,6 +24,7 @@ const GLYPH_COLOR = 'rgba(70,58,140,0.7)';
  */
 export function CircleAvatar({
   uri,
+  onImageReady,
   size,
   borderRadius,
   style,
@@ -52,7 +54,8 @@ export function CircleAvatar({
           recyclingKey={imageUri}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          onError={() => { if (currentUriRef.current === uri) setFailedUri(uri ?? null); }}
+          onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
+          onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}
         />
       </View>
     );

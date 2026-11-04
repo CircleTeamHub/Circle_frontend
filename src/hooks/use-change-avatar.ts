@@ -9,8 +9,11 @@ import {
   uploadLocalFileToPresignedUrl,
 } from '@/services/api/upload';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { useAuthStore } from '@/stores/authStore';
 
 const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
+
+export type AvatarImageSource = 'camera' | 'library';
 
 export interface ChangeAvatarOptions {
   /** 落库:拿到已上传的 fileUrl,写到对应端点(群/圈子各自的)。 */
@@ -28,12 +31,12 @@ export interface ChangeAvatarOptions {
 }
 
 export interface ChangeAvatarResult {
-  changeAvatar: () => Promise<void>;
+  changeAvatar: (source?: AvatarImageSource) => Promise<void>;
   changing: boolean;
 }
 
 /**
- * 更换方形头像(群聊 / 圈子共用):相册选图(1:1)→ 上传 avatars → 交给调用方的
+ * 更换方形头像(个人 / 群聊 / 圈子共用):拍照或相册选图(1:1)→ 上传 avatars → 交给调用方的
  * submit 落库 → onChanged 本机回写。
  *
  * 群头像与圈子头像原来是两份逐字复制的 115 行,只差落库调用和一个文案 key;
@@ -52,20 +55,28 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
   // changing 只在上传开始后才翻,两次快速点击会各开一个选择器、各发一次上传。
   // ref 在整段操作(选图 → 上传 → 落库)上同步关窗。
   const inFlightRef = useRef(false);
+  const mountedRef = useRef(true);
 
   // 头像页加载时就把原生模块准备好，点击行时直接进入相册；不能把首次
   // require 的桥接初始化时间叠加到用户的点击反馈上。
   useEffect(() => {
+    mountedRef.current = true;
     try {
       loadImagePickerModule();
     } catch {
       // 点击时会再次加载并按现有错误路径提示，预加载不改变失败语义。
     }
+    return () => { mountedRef.current = false; };
   }, []);
 
-  const changeAvatar = useCallback(async () => {
+  const changeAvatar = useCallback(async (source: AvatarImageSource = 'library') => {
     if (inFlightRef.current || changing) return;
     inFlightRef.current = true;
+    const { sessionEpoch, user } = useAuthStore.getState();
+    const stillCurrent = () => {
+      const current = useAuthStore.getState();
+      return mountedRef.current && current.sessionEpoch === sessionEpoch && current.user?.id === user?.id;
+    };
     try {
       const imagePicker = loadImagePickerModule();
       if (!imagePicker) {
@@ -76,10 +87,7 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
         return;
       }
 
-      // 先直接唤起系统选择器。点击后先 get/request 权限会把原生权限桥接
-      // 延迟叠加到呈现动画上，部分 iOS 设备会因此等数秒才看到相册。
       // 系统编辑器让用户在上传前确认头像裁剪。
-      // 原生选择器自己能处理已授权状态；只有它明确失败时才走权限兜底。
       const pickerOptions: Parameters<typeof imagePicker.launchImageLibraryAsync>[0] = {
         quality: 0.8,
         mediaTypes: ['images'],
@@ -87,38 +95,64 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
         aspect: [1, 1],
       };
       let result: Awaited<ReturnType<typeof imagePicker.launchImageLibraryAsync>>;
-      try {
-        result = await imagePicker.launchImageLibraryAsync(pickerOptions);
-      } catch {
-        let permission;
+      if (source === 'camera') {
         try {
-          permission = await imagePicker.requestMediaLibraryPermissionsAsync();
-        } catch (permissionError) {
-          onFailure(permissionError);
+          const permission = await imagePicker.requestCameraPermissionsAsync();
+          if (!stillCurrent()) return;
+          if (!permission.granted) {
+            Alert.alert(t('permissions.insufficientTitle'), t('permissions.camera'));
+            return;
+          }
+          result = await imagePicker.launchCameraAsync(pickerOptions);
+        } catch (error) {
+          if (!stillCurrent()) return;
+          onFailure(error);
           Alert.alert(
             failureTitle,
-            getApiErrorMessage(permissionError, t('common.networkError')),
+            getApiErrorMessage(error, t('common.networkError')),
           );
           return;
         }
-        if (!permission.granted) {
-          Alert.alert(
-            t('validation.cannotSelectImage'),
-            t('validation.albumPermission'),
-          );
-          return;
-        }
+      } else {
+        // 先直接唤起系统选择器，只有失败时才等待权限桥接，避免延迟相册呈现。
         try {
           result = await imagePicker.launchImageLibraryAsync(pickerOptions);
-        } catch (retryError) {
-          onFailure(retryError);
-          Alert.alert(
-            failureTitle,
-            getApiErrorMessage(retryError, t('common.networkError')),
-          );
-          return;
+        } catch {
+          if (!stillCurrent()) return;
+          let permission;
+          try {
+            permission = await imagePicker.requestMediaLibraryPermissionsAsync();
+          } catch (permissionError) {
+            if (!stillCurrent()) return;
+            onFailure(permissionError);
+            Alert.alert(
+              failureTitle,
+              getApiErrorMessage(permissionError, t('common.networkError')),
+            );
+            return;
+          }
+          if (!stillCurrent()) return;
+          if (!permission.granted) {
+            Alert.alert(
+              t('validation.cannotSelectImage'),
+              t('validation.albumPermission'),
+            );
+            return;
+          }
+          try {
+            result = await imagePicker.launchImageLibraryAsync(pickerOptions);
+          } catch (retryError) {
+            if (!stillCurrent()) return;
+            onFailure(retryError);
+            Alert.alert(
+              failureTitle,
+              getApiErrorMessage(retryError, t('common.networkError')),
+            );
+            return;
+          }
         }
       }
+      if (!stillCurrent()) return;
       if (result.canceled || !result.assets[0]) return;
 
       const asset = result.assets[0];
@@ -151,22 +185,26 @@ export function useChangeAvatar(options: ChangeAvatarOptions): ChangeAvatarResul
           folder: 'avatars',
           fileUri: asset.uri,
         });
+        if (!stillCurrent()) return;
         await uploadLocalFileToPresignedUrl(
           uploadUrl,
           contentType,
           asset.uri,
           requiredHeaders,
         );
+        if (!stillCurrent()) return;
         await submit(fileUrl);
+        if (!stillCurrent()) return;
         onChanged(fileUrl);
       } catch (error) {
+        if (!stillCurrent()) return;
         onFailure(error);
         Alert.alert(
           failureTitle,
           getApiErrorMessage(error, t('common.networkError')),
         );
       } finally {
-        setChanging(false);
+        if (mountedRef.current) setChanging(false);
       }
     } finally {
       inFlightRef.current = false;

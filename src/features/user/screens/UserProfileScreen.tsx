@@ -82,14 +82,6 @@ const SELF_INFO_ROW_IDS = ['moments'] as const;
 
 type InfoRowId = (typeof INFO_ROW_IDS)[number];
 
-// 资料行按语义分成多张卡片渲染（卡间留白），避免全部挤在一张长卡里。
-// 顺序沿用 INFO_ROW_IDS，只在语义边界处切开：内容 / 我的标注 / 权限与更多。
-const INFO_ROW_GROUPS = [
-  ['moments'],
-  ['setRemark', 'tags', 'description'],
-  ['permission', 'moreInfo'],
-] as const;
-
 interface InfoRowItem {
   id: InfoRowId;
   label: string;
@@ -99,7 +91,7 @@ interface InfoRowItem {
   onPress?: () => void;
 }
 
-// 每行的图标与主题配色（彩色圆角图标块 + 白色字形，iOS 设置风）
+// 资料行使用同一尺寸的柔和图标底，颜色区分各项用途。
 const ROW_ICON: Record<InfoRowId, keyof typeof Ionicons.glyphMap> = {
   moments: 'images',
   setRemark: 'create',
@@ -118,19 +110,19 @@ const ROW_COLOR: Record<InfoRowId, keyof ThemeColors> = {
   moreInfo: 'purple',
 };
 
-const AVATAR_SIZE = 68;
-const AVATAR_RING_SIZE = AVATAR_SIZE + 10;
-const CARD_GAP = 12; // 分组卡片之间的垂直留白
+const AVATAR_SIZE = 64;
+const AVATAR_RING_SIZE = AVATAR_SIZE + 8;
 const RECOGNITION_COUNT_ICON_SOURCE = require('../../../../assets/images/like-outline.png');
 
 const s = StyleSheet.create({
-  // 居中身份 Hero：头像 → 名字/标签 → 账号 → 性别地区 → 签名 → 徽章，逐层拉开间距。
   hero: {
-    alignItems: 'center',
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.md,
-    gap: Spacing.sm,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+    paddingHorizontal: Spacing.xs,
+    gap: 12,
   },
+  heroHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  heroMeta: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   avatarStage: {
     position: 'relative',
     width: AVATAR_RING_SIZE,
@@ -141,15 +133,17 @@ const s = StyleSheet.create({
   avatarRing: {
     width: AVATAR_RING_SIZE,
     height: AVATAR_RING_SIZE,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   identity: {
-    alignItems: 'center',
-    gap: 2,
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'flex-start',
+    gap: Spacing.xs,
   },
   presenceDot: {
     width: 8,
@@ -157,39 +151,34 @@ const s = StyleSheet.create({
     borderRadius: 4,
   },
   metaRow: {
+    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: Spacing.xs,
   },
   metaChip: {
+    maxWidth: '100%',
     borderRadius: Radius.full,
     paddingHorizontal: 9,
     paddingVertical: 4,
-    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
   signature: {
-    textAlign: 'center',
-    paddingHorizontal: Spacing.md,
+    textAlign: 'left',
   },
   badgeIconRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: Spacing.sm,
     alignItems: 'center',
   },
-  recognitionRow: {
-    paddingTop: Spacing.lg,
-    alignItems: 'flex-end',
-    paddingBottom: Spacing.sm,
-  },
   recognitionPill: {
-    minWidth: 58,
-    height: 32,
+    minWidth: 48,
+    height: 28,
     borderRadius: Radius.full,
     paddingLeft: 6,
     paddingRight: 10,
@@ -197,24 +186,21 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderWidth: StyleSheet.hairlineWidth,
+    flexShrink: 0,
   },
   recognitionIconImage: {
     width: 18,
     height: 18,
   },
-  // 资料行按语义拆成多张分组卡片，卡间留白；卡内行间用内缩分隔线（左缩进对齐文字起点）。
-  sections: {
-    gap: CARD_GAP,
-  },
   card: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   rowDivider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: ROW_PADDING_H + ICON_BADGE_SIZE + ROW_GAP,
+    marginRight: ROW_PADDING_H,
   },
   photoNotesTitle: {
     ...Typography.small,
@@ -235,17 +221,24 @@ const s = StyleSheet.create({
   },
   actionSection: {
     marginTop: Spacing.md,
-    gap: Spacing.xs,
+    gap: 12,
   },
+  actionButtonsRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
   actionButton: {
-    width: '100%',
-    height: 48,
+    flex: 1,
+    minHeight: 52,
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButton: {
-    height: 48,
+    minHeight: 52,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -588,6 +581,8 @@ export default function UserProfileScreen() {
     remarkOverride === undefined
       ? friendSettings?.remark?.trim() || profile.remarkHint || profile.name
       : remarkOverride.remark ?? remarkOverride.fallbackName ?? profile.name;
+  const activeRemark = remarkOverride === undefined ? friendSettings?.remark?.trim() : remarkOverride.remark;
+  const originalNickname = !isCurrentUser && activeRemark && remoteProfile ? remoteProfile.name : null;
   const tagValue = friendSettings?.assignedTags.length
     ? friendSettings.assignedTags.map((tag) => tag.name).join('、')
     : t('profileFields.notSet');
@@ -988,16 +983,7 @@ export default function UserProfileScreen() {
     ],
   );
 
-  const infoRowGroups = useMemo(() => {
-    const itemById = new Map(
-      infoRowItems.map((item) => [item.id, item] as const),
-    );
-    return INFO_ROW_GROUPS.map((group) =>
-      group
-        .map((id) => itemById.get(id))
-        .filter((item): item is InfoRowItem => item !== undefined),
-    ).filter((group) => group.length > 0);
-  }, [infoRowItems]);
+  const showPhotoNotes = !isCurrentUser && friendStatus === 'ACCEPTED' && photoNotes.length > 0;
 
   const d = useMemo(
     () => ({
@@ -1006,12 +992,12 @@ export default function UserProfileScreen() {
         backgroundColor: colors.background,
       },
       content: {
-        paddingHorizontal: Spacing.lg,
+        paddingHorizontal: Spacing.md,
         paddingBottom: insets.bottom + 24,
       },
       avatarRing: {
         backgroundColor: colors.surface,
-        borderColor: colors.primaryLight,
+        borderColor: colors.surfaceBorder,
       },
       name: {
         color: colors.text,
@@ -1022,17 +1008,18 @@ export default function UserProfileScreen() {
         ...Typography.caption,
       },
       metaChip: {
-        backgroundColor: colors.surface,
-        borderColor: colors.surfaceBorder,
+        backgroundColor: colors.surfaceMuted,
       },
       metaChipText: {
         color: colors.textSecondary,
         ...Typography.small,
         fontWeight: '600' as const,
+        flexShrink: 1,
       },
       friendStatusChip: {
         backgroundColor: colors.surface,
         borderColor: colors.surfaceBorder,
+        borderWidth: StyleSheet.hairlineWidth,
       },
       friendStatusText: {
         color: colors.textSecondary,
@@ -1052,8 +1039,7 @@ export default function UserProfileScreen() {
         lineHeight: 20,
       },
       recognitionPill: {
-        backgroundColor: colors.surface,
-        borderColor: colors.primaryLight,
+        backgroundColor: colors.surfaceMuted,
       },
       recognitionText: {
         color: colors.primary,
@@ -1077,6 +1063,8 @@ export default function UserProfileScreen() {
         color: colors.white,
         ...Typography.body,
         fontWeight: '600' as const,
+        flexShrink: 1,
+        textAlign: 'center' as const,
       },
       actionButton: {
         backgroundColor: colors.primary,
@@ -1122,32 +1110,6 @@ export default function UserProfileScreen() {
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={s.recognitionRow}>
-          <View
-            style={[s.recognitionPill, d.recognitionPill]}
-            accessibilityLabel={t('userProfile.likesReceived', {
-              count: likeCount,
-              defaultValue: `获赞 ${likeCount}`,
-            })}
-          >
-            {recognitionIconImageFailed ? (
-              <Ionicons
-                name="thumbs-up-outline"
-                size={18}
-                color={colors.primary}
-              />
-            ) : (
-              <Image
-                source={RECOGNITION_COUNT_ICON_SOURCE}
-                style={s.recognitionIconImage}
-                contentFit="contain"
-                tintColor={colors.primary}
-                onError={() => setRecognitionIconImageFailed(true)}
-              />
-            )}
-            <Text style={d.recognitionText}>{likeCount}</Text>
-          </View>
-        </View>
         {/* 看自己时整块资料头(头像/名字/性别地区/签名)都是「编辑个人信息」的入口;看别人时不可点。 */}
         <Pressable
           style={s.hero}
@@ -1158,92 +1120,122 @@ export default function UserProfileScreen() {
             isCurrentUser ? t('appSettings.rows.profile.label') : undefined
           }
         >
-          <View style={s.avatarStage}>
-            <View
-              style={[s.avatarRing, d.avatarRing]}
-            >
-              <Avatar
-                size={AVATAR_SIZE}
-                name={profile.name}
-                uri={profile.avatarUrl}
-              />
-            </View>
-          </View>
-
-          <View style={s.identity}>
-            <MemberName
-              name={displayName}
-              vipLevel={profileVipLevel}
-              userId={profileId}
-              style={d.name}
-              animated
-            />
-            <Text style={d.account}>{t('contacts.accountId', { id: profile.accountId })}</Text>
-            {friendStatusLabelKey ? (
+          <View style={s.heroHeader}>
+            <View style={s.avatarStage}>
               <View
-                style={[
-                  s.metaChip,
-                  d.friendStatusChip,
-                  friendStatusIsWarning && d.friendStatusChipWarning,
-                ]}
-                accessibilityRole="text"
+                style={[s.avatarRing, d.avatarRing]}
               >
-                {friendStatusIsWarning ? (
-                  <Ionicons
-                    name="alert-circle-outline"
-                    size={14}
-                    color={colors.warningText}
-                  />
-                ) : null}
-                <Text
-                  style={[
-                    d.metaChipText,
-                    d.friendStatusText,
-                    friendStatusIsWarning && d.friendStatusTextWarning,
-                  ]}
-                >
-                  {t(friendStatusLabelKey)}
-                </Text>
+                <Avatar
+                  size={AVATAR_SIZE}
+                  name={profile.name}
+                  uri={profile.avatarUrl}
+                />
               </View>
-            ) : null}
-          </View>
+            </View>
 
-          {profileMetaItems.length > 0 || peerPresence.known ? (
-            <View style={s.metaRow}>
-              {profileMetaItems.map((item, index) => (
-                <View key={`${item}-${index}`} style={[s.metaChip, d.metaChip]}>
-                  <Ionicons
-                    name={
-                      index === 0
-                        ? item === t('profileFields.female')
-                          ? 'female-outline'
-                          : item === t('profileFields.male')
-                            ? 'male-outline'
-                            : 'person-outline'
-                        : 'location-outline'
-                    }
-                    size={14}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={d.metaChipText}>{item}</Text>
-                </View>
-              ))}
-              {/*
-                在线状态与性别/地区同排:三者都是「这个人此刻的一句话」。
-                对方关了「显示在线时间」(或状态还没拿到)时这一枚不画 ——
-                画「离线」仍然是在泄露信息,与聊天头部同一条规则。
-              */}
-              {peerPresence.known ? (
+            <View style={s.identity}>
+              <MemberName
+                name={displayName}
+                vipLevel={profileVipLevel}
+                userId={profileId}
+                style={d.name}
+                numberOfLines={1}
+                animated
+              />
+              {originalNickname ? (
+                <Text style={d.account} numberOfLines={1}>
+                  {t('userProfile.originalNickname', { name: originalNickname })}
+                </Text>
+              ) : null}
+              <Text style={d.account} numberOfLines={1}>{t('contacts.accountId', { id: profile.accountId })}</Text>
+              {friendStatusLabelKey ? (
                 <View
-                  style={[s.metaChip, d.metaChip]}
-                  accessibilityLabel={peerPresence.label}
+                  style={[
+                    s.metaChip,
+                    d.friendStatusChip,
+                    friendStatusIsWarning && d.friendStatusChipWarning,
+                  ]}
+                  accessibilityRole="text"
                 >
-                  <View style={[s.presenceDot, presenceStyles.dot]} />
-                  <Text style={presenceStyles.text}>{peerPresence.label}</Text>
+                  {friendStatusIsWarning ? (
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={14}
+                      color={colors.warningText}
+                    />
+                  ) : null}
+                  <Text
+                    style={[
+                      d.metaChipText,
+                      d.friendStatusText,
+                      friendStatusIsWarning && d.friendStatusTextWarning,
+                    ]}
+                  >
+                    {t(friendStatusLabelKey)}
+                  </Text>
                 </View>
               ) : null}
             </View>
-          ) : null}
+          </View>
+
+          <View style={s.heroMeta}>
+            {profileMetaItems.length > 0 || peerPresence.known ? (
+              <View style={s.metaRow}>
+                {profileMetaItems.map((item, index) => (
+                  <View key={`${item}-${index}`} style={[s.metaChip, d.metaChip]}>
+                    <Ionicons
+                      name={
+                        index === 0
+                          ? item === t('profileFields.female')
+                            ? 'female-outline'
+                            : item === t('profileFields.male')
+                              ? 'male-outline'
+                              : 'person-outline'
+                          : 'location-outline'
+                      }
+                      size={14}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={d.metaChipText}>{item}</Text>
+                  </View>
+                ))}
+                {/*
+                  在线状态与性别/地区同排:三者都是「这个人此刻的一句话」。
+                  对方关了「显示在线时间」(或状态还没拿到)时这一枚不画 ——
+                  画「离线」仍然是在泄露信息,与聊天头部同一条规则。
+                */}
+                {peerPresence.known ? (
+                  <View
+                    style={[s.metaChip, d.metaChip]}
+                    accessibilityLabel={peerPresence.label}
+                  >
+                    <View style={[s.presenceDot, presenceStyles.dot]} />
+                    <Text style={presenceStyles.text}>{peerPresence.label}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+            <View
+              style={[s.recognitionPill, d.recognitionPill]}
+              accessibilityLabel={t('userProfile.likesReceived', {
+                count: likeCount,
+                defaultValue: `获赞 ${likeCount}`,
+              })}
+            >
+              {recognitionIconImageFailed ? (
+                <Ionicons name="thumbs-up-outline" size={18} color={colors.primary} />
+              ) : (
+                <Image
+                  source={RECOGNITION_COUNT_ICON_SOURCE}
+                  style={s.recognitionIconImage}
+                  contentFit="contain"
+                  tintColor={colors.primary}
+                  onError={() => setRecognitionIconImageFailed(true)}
+                />
+              )}
+              <Text style={d.recognitionText}>{likeCount}</Text>
+            </View>
+          </View>
 
           {profile.signature ? (
             <Text style={[s.signature, d.signature]} numberOfLines={2}>
@@ -1258,12 +1250,10 @@ export default function UserProfileScreen() {
           ) : null}
         </Pressable>
 
-        {contactRows.length > 0 || infoRowGroups.length > 0 ? (
-          // 联系方式卡与下面的资料卡共用同一个 s.sections 容器 —— gap 只作用于
-          // 同一个 flex 容器的直接子节点,拆成两个并列的 sections 会让这两张卡贴死。
-          <View style={s.sections}>
+        {contactRows.length > 0 || infoRowItems.length > 0 || showPhotoNotes ? (
+          <View style={[s.card, d.card]}>
             {contactRows.length > 0 ? (
-              <View style={[s.card, d.card]}>
+              <>
                 {contactRows.map((row, index) => (
                   <View key={row.id}>
                     <ProfileActionRow
@@ -1280,36 +1270,32 @@ export default function UserProfileScreen() {
                         void handleCopyContact(row);
                       }}
                     />
-                    {index < contactRows.length - 1 ? (
+                    {index < contactRows.length - 1 || infoRowItems.length > 0 || showPhotoNotes ? (
                       <View style={[s.rowDivider, d.rowDivider]} />
                     ) : null}
                   </View>
                 ))}
-              </View>
+              </>
             ) : null}
 
-            {infoRowGroups.map((group, groupIndex) => (
-              <View key={`info-group-${groupIndex}`} style={[s.card, d.card]}>
-                {group.map((item, index) => (
-                  <View key={item.id}>
-                    <ProfileActionRow
-                      icon={item.icon}
-                      iconColor={item.iconColor}
-                      label={item.label}
-                      value={item.value}
-                      onPress={item.onPress}
-                      showChevron={Boolean(item.onPress)}
-                    />
-                    {index < group.length - 1 ? (
-                      <View style={[s.rowDivider, d.rowDivider]} />
-                    ) : null}
-                  </View>
-                ))}
+            {infoRowItems.map((item, index) => (
+              <View key={item.id}>
+                <ProfileActionRow
+                  icon={item.icon}
+                  iconColor={item.iconColor}
+                  label={item.label}
+                  value={item.value}
+                  onPress={item.onPress}
+                  showChevron={Boolean(item.onPress)}
+                />
+                {index < infoRowItems.length - 1 || showPhotoNotes ? (
+                  <View style={[s.rowDivider, d.rowDivider]} />
+                ) : null}
               </View>
             ))}
 
-            {!isCurrentUser && friendStatus === 'ACCEPTED' && photoNotes.length > 0 ? (
-              <View style={[s.card, d.card]}>
+            {showPhotoNotes ? (
+              <View>
                 <Text style={[s.photoNotesTitle, d.photoNotesTitle]}>
                   {t('userProfile.photoNotesTitle')}
                 </Text>
@@ -1330,42 +1316,46 @@ export default function UserProfileScreen() {
 
         {showProfileActions ? (
           <View style={s.actionSection}>
-            <Pressable
-              style={({ pressed }) => [
-                s.actionButton,
-                d.actionButton,
-                pressed && d.actionButtonPressed,
-              ]}
-              onPress={() => {
-                void handleOpenChat();
-              }}
-              disabled={openingChat || canonicalProfileUserId === null}
-            >
-              <Text style={d.actionText}>
-                {openingChat ? t('userProfile.openingChat') : t('userProfile.startChat')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                s.actionButton,
-                d.actionButton,
-                pressed && d.actionButtonPressed,
-              ]}
-              // 1:1 语音（circle_be#113 / 本仓 #90）：好友/拉黑门禁由后端裁决，
-              // 403 CALL_NOT_FRIEND 走 serverErrors 文案。
-              onPress={() => {
-                void handleStartVoiceCall();
-              }}
-              disabled={startingCall || canonicalProfileUserId === null}
-            >
-              <Text style={d.actionText}>
-                {startingCall ? t('userProfile.callStarting') : t('userProfile.avCall')}
-              </Text>
-            </Pressable>
-            {showAddFriendButton ? (
+            <View style={s.actionButtonsRow}>
               <Pressable
                 style={({ pressed }) => [
                   s.actionButton,
+                  d.actionButton,
+                  pressed && d.actionButtonPressed,
+                ]}
+                onPress={() => {
+                  void handleOpenChat();
+                }}
+                disabled={openingChat || canonicalProfileUserId === null}
+              >
+                <Ionicons name="chatbubble-outline" size={19} color={colors.white} />
+                <Text style={d.actionText}>
+                  {openingChat ? t('userProfile.openingChat') : t('userProfile.startChat')}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  s.actionButton,
+                  d.actionButton,
+                  pressed && d.actionButtonPressed,
+                ]}
+                // 1:1 语音（circle_be#113 / 本仓 #90）：好友/拉黑门禁由后端裁决，
+                // 403 CALL_NOT_FRIEND 走 serverErrors 文案。
+                onPress={() => {
+                  void handleStartVoiceCall();
+                }}
+                disabled={startingCall || canonicalProfileUserId === null}
+              >
+                <Ionicons name="call-outline" size={19} color={colors.white} />
+                <Text style={d.actionText}>
+                  {startingCall ? t('userProfile.callStarting') : t('userProfile.avCall')}
+                </Text>
+              </Pressable>
+            </View>
+            {showAddFriendButton ? (
+              <Pressable
+                style={({ pressed }) => [
+                  s.addButton,
                   d.addButton,
                   pressed && d.actionButtonPressed,
                 ]}

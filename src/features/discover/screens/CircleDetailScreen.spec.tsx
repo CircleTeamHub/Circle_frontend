@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import CircleDetailScreen from './CircleDetailScreen';
 import { fetchCircleDetail, fetchMyApplications, leaveCircle } from '@/services/api/circles';
+const mockChangeAvatar = jest.fn();
 
 // 圈子详情:看过的圈子再进先用内存缓存画出来,后台照常重拉;没缓存过才整页转圈。
 let mockEpoch = 0;
@@ -53,8 +54,12 @@ jest.mock('@/features/discover/hooks/use-change-circle-cover', () => ({
   useChangeCircleCover: () => ({ changeCover: jest.fn() }),
 }));
 jest.mock('@/hooks/use-change-avatar', () => ({
-  useChangeAvatar: () => ({ changeAvatar: jest.fn() }),
+  useChangeAvatar: () => ({ changeAvatar: mockChangeAvatar, changing: false }),
 }));
+jest.mock('@/components/ui/avatar-photo-viewer', () => {
+  const { View } = jest.requireActual('react-native');
+  return { AvatarPhotoViewer: (props: Record<string, unknown>) => <View testID="avatar-preview" {...props} /> };
+});
 jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: jest.fn(), MediaTypeOptions: {} }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -113,6 +118,22 @@ async function visitOnce(loaded = circle()) {
   expect(await screen.findByText(loaded.name as string)).toBeTruthy();
   view.unmount();
 }
+
+test.each(['OWNER', 'ADMIN', 'MEMBER'])('circle avatar previews before picking and only OWNER can edit: %s', async (role) => {
+  jest.mocked(fetchCircleDetail).mockResolvedValueOnce(circle({ myRole: role, avatarUrl: 'https://example.test/circle.jpg' }) as never);
+  render(<CircleDetailScreen />);
+  await screen.findByText('徒步圈');
+  fireEvent.press(screen.getByLabelText('avatarPhoto.view'));
+  expect(mockChangeAvatar).not.toHaveBeenCalled();
+  const preview = screen.getByTestId('avatar-preview');
+  expect(preview.props.uri).toBe('https://example.test/circle.jpg');
+  if (role === 'OWNER') {
+    fireEvent(preview, 'change', 'library');
+    expect(mockChangeAvatar).toHaveBeenCalledWith('library');
+  } else {
+    expect(preview.props.onChange).toBeUndefined();
+  }
+});
 
 const neverSettles = () => new Promise<never>(() => {});
 

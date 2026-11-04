@@ -46,6 +46,7 @@ import {
   MAX_NOTE_GROUPS,
 } from '@/features/notes/constants';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
+import { NoteVideoViewer } from '@/features/notes/components/NoteVideoViewer';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
@@ -101,6 +102,8 @@ import {
 import {
   buildNoteComposerBlocksMetadata,
   normalizeNoteComposerBlocks,
+  restoreNoteComposerMediaBlocks,
+  getNoteComposerMediaOwner,
   readNoteComposerBlocks,
   readNoteComposerMediaBlocks,
   readNoteComposerTextBlocks,
@@ -161,6 +164,9 @@ import {
 } from '@/services/api/upload';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { diagnosticNow } from '@/observability/http-diagnostics';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
 
 LogBox.ignoreLogs([
@@ -211,15 +217,15 @@ const COMPOSER_ACTIONS: readonly {
   translationKey: string;
   defaultLabel: string;
 }[] = [
+  { kind: 'title', icon: 'text-outline', translationKey: 'title', defaultLabel: '标题' },
   { kind: 'text', icon: 'text', translationKey: 'text', defaultLabel: '文字' },
   { kind: 'image', icon: 'images-outline', translationKey: 'image', defaultLabel: '图片' },
   { kind: 'video', icon: 'videocam-outline', translationKey: 'video', defaultLabel: '视频' },
   { kind: 'audio', icon: 'mic-outline', translationKey: 'audio', defaultLabel: '录音' },
-  { kind: 'showcase', icon: 'play-circle-outline', translationKey: 'showcase', defaultLabel: '展示' },
+  { kind: 'showcase', icon: 'play-circle-outline', translationKey: 'showcase', defaultLabel: '验证视频' },
   { kind: 'location', icon: 'location-outline', translationKey: 'location', defaultLabel: '位置' },
   { kind: 'contact', icon: 'person-outline', translationKey: 'contact', defaultLabel: '名片' },
   { kind: 'group', icon: 'people-outline', translationKey: 'group', defaultLabel: '群名片' },
-  { kind: 'title', icon: 'text-outline', translationKey: 'title', defaultLabel: '标题' },
 ];
 
 const FIXED_TITLE_BLOCK: NoteComposerBlock = { id: 'title-fixed', kind: 'title' };
@@ -295,12 +301,6 @@ function normalizeSectionMedia(
     }));
 }
 
-function countUnrecoverableSectionMedia(items: readonly StructuredNoteMediaItem[]) {
-  return items.filter(
-    (item) => typeof item.objectKey !== 'string' || !item.objectKey.trim(),
-  ).length;
-}
-
 function mergeMedia<T extends CreateNoteMediaInput>(items: T[]) {
   return items.reduce<T[]>((merged, item) => {
     const key = `${item.objectKey}:${item.url ?? ''}`;
@@ -336,10 +336,10 @@ export function draftRecordFromServer(
   const rawBlocks = draft.sections?.text?.contentJson ?? draft.contentJson ?? [];
   const topLevelMedia = getNoteInlineMediaItems(rawBlocks.map((block) => ({ ...block, children: [] })));
   const sections = buildNoteSections({ ...draft, media: topLevelMedia });
-  const normalizedComposerBlocks = (
+  const normalizedComposerBlocks = restoreNoteComposerMediaBlocks((
     readNoteComposerBlocks(rawBlocks) ??
     normalizeNoteComposerBlocks(null, sections as Partial<NoteSections>, true)
-  ).filter((block) => block.kind !== 'title');
+  ).filter((block) => block.kind !== 'title'), sections);
   const normalizedMedia = normalizeSectionMedia(
     (sections.media?.items ?? []) as StructuredNoteMediaItem[],
   );
@@ -366,21 +366,11 @@ export function draftRecordFromServer(
           (index === 0 ? fallbackText : []),
       ]),
   ) as Record<string, Record<string, unknown>[]>;
-  const firstMediaBlockId = normalizedComposerBlocks.find(
-    (block) => block.kind === 'image' || block.kind === 'video',
-  )?.id;
-  const firstShowcaseBlockId = normalizedComposerBlocks.find(
-    (block) => block.kind === 'showcase',
-  )?.id;
   const mediaOwnerByClientId: Record<string, string> = {};
-  if (firstMediaBlockId) {
-    normalizedMedia.forEach((item) => {
-      mediaOwnerByClientId[item.clientId] = firstMediaBlockId;
-    });
-  }
-  if (firstShowcaseBlockId) {
-    normalizedShowcase.forEach((item) => {
-      mediaOwnerByClientId[item.clientId] = firstShowcaseBlockId;
+  for (const [target, items] of [['media', normalizedMedia], ['showcase', normalizedShowcase]] as const) {
+    items.forEach((item) => {
+      const owner = getNoteComposerMediaOwner(normalizedComposerBlocks, target, item.type);
+      if (owner) mediaOwnerByClientId[item.clientId] = owner;
     });
   }
   for (const block of readNoteComposerMediaBlocks(rawBlocks)) {
@@ -389,7 +379,10 @@ export function draftRecordFromServer(
     const keys = new Set(block.objectKeys);
     const items = block.target === 'showcase' ? normalizedShowcase : normalizedMedia;
     for (const item of items) {
-      if (keys.has(item.objectKey)) mediaOwnerByClientId[item.clientId] = block.id;
+      if (keys.has(item.objectKey)) {
+        const owner = getNoteComposerMediaOwner(normalizedComposerBlocks, block.target, item.type, block.id);
+        if (owner) mediaOwnerByClientId[item.clientId] = owner;
+      }
     }
   }
   return {
@@ -649,7 +642,9 @@ export default function EditNoteScreen() {
     images: { uri: string; objectKey: string }[];
     index: number;
   } | null>(null);
+  const [editorVideoViewer, setEditorVideoViewer] = useState<{ routeKey: string; clientId: string } | null>(null);
   const [unrecoverableMediaCount, setUnrecoverableMediaCount] = useState(0);
+  const unrecoverableMediaByBlockRef = useRef<Record<string, number>>({});
   const [uploadingSection, setUploadingSection] = useState<UploadingSection>(null);
   const [locationDraft, setLocationDraft] = useState<LocationDraft>({
     title: '',
@@ -952,12 +947,6 @@ export default function EditNoteScreen() {
         content: getTextOnlyBlocks(textBlocksByIdRef.current[block.id] ?? []),
       }));
     const currentBlocks = currentTextBlocks.flatMap((block) => block.content);
-    const firstMediaBlockId = currentComposerBlocks.find(
-      (block) => block.kind === 'image' || block.kind === 'video',
-    )?.id;
-    const firstShowcaseBlockId = currentComposerBlocks.find(
-      (block) => block.kind === 'showcase',
-    )?.id;
     const mediaBlocks = currentComposerBlocks.flatMap((block) => {
       const target: 'media' | 'showcase' | null = block.kind === 'showcase'
         ? 'showcase'
@@ -966,12 +955,11 @@ export default function EditNoteScreen() {
           : null;
       if (!target) return [];
       const items = target === 'showcase' ? showcaseItems : mediaItems;
-      const fallbackId = target === 'showcase' ? firstShowcaseBlockId : firstMediaBlockId;
       return [{
         id: block.id,
         target,
         objectKeys: items
-          .filter((item) => (mediaOwnerByClientIdRef.current[item.clientId] ?? fallbackId) === block.id)
+          .filter((item) => getNoteComposerMediaOwner(currentComposerBlocks, target, item.type, mediaOwnerByClientIdRef.current[item.clientId]) === block.id)
           .map((item) => item.objectKey)
           .filter((key): key is string => Boolean(key)),
       }];
@@ -1117,6 +1105,7 @@ export default function EditNoteScreen() {
   useEffect(() => {
     let cancelled = false;
 
+    unrecoverableMediaByBlockRef.current = {};
     fetchNoteGroups()
       .then((groups) => {
         if (!cancelled) setAvailableGroups(groups);
@@ -1211,14 +1200,13 @@ export default function EditNoteScreen() {
         const normalizedSections = buildNoteSections(note);
         const rawBlocks = note.sections?.text?.contentJson ?? note.contentJson ?? [];
         const savedComposerBlocks = readNoteComposerBlocks(rawBlocks);
-        // Once instance metadata exists it is the author's source of truth,
-        // including intentional removals. Only legacy notes without a marker
-        // should infer blocks from their section fields.
-        const normalizedComposerBlocks = (savedComposerBlocks ?? normalizeNoteComposerBlocks(
+        // Keep authored instances and order; recover typed media regions for
+        // attachments that an older editor placed in one mixed region.
+        const normalizedComposerBlocks = restoreNoteComposerMediaBlocks((savedComposerBlocks ?? normalizeNoteComposerBlocks(
           null,
           normalizedSections as unknown as Partial<NoteSections>,
           true,
-        )).filter((block) => block.kind !== 'title');
+        )).filter((block) => block.kind !== 'title'), normalizedSections);
         setComposerBlocks(normalizedComposerBlocks);
         composerIdRef.current = normalizedComposerBlocks.length;
         const loaded = stripNoteComposerMetadata(normalizedSections.text.contentJson ?? []);
@@ -1257,24 +1245,22 @@ export default function EditNoteScreen() {
         setMediaItems(storedMediaItems);
         setShowcaseItems(storedShowcaseItems);
         setAudioItems(normalizeSectionMedia((normalizedSections as any).audio?.items));
-        const firstMediaBlockId = normalizedComposerBlocks.find(
-          (block) => block.kind === 'image' || block.kind === 'video',
-        )?.id;
-        const firstShowcaseBlockId = normalizedComposerBlocks.find((block) => block.kind === 'showcase')?.id;
         const savedMediaBlocks = readNoteComposerMediaBlocks(rawBlocks);
-        const storedOwnerMap = Object.fromEntries([
-          ...(firstMediaBlockId
-            ? storedMediaItems.map((item) => [item.clientId, firstMediaBlockId] as const)
-            : []),
-          ...(firstShowcaseBlockId
-            ? storedShowcaseItems.map((item) => [item.clientId, firstShowcaseBlockId] as const)
-            : []),
-        ]);
+        const storedOwnerMap: Record<string, string> = {};
+        for (const [target, items] of [['media', storedMediaItems], ['showcase', storedShowcaseItems]] as const) {
+          items.forEach((item) => {
+            const owner = getNoteComposerMediaOwner(normalizedComposerBlocks, target, item.type);
+            if (owner) storedOwnerMap[item.clientId] = owner;
+          });
+        }
         savedMediaBlocks.forEach((mediaBlock) => {
           const items = mediaBlock.target === 'showcase' ? storedShowcaseItems : storedMediaItems;
           const keys = new Set(mediaBlock.objectKeys);
           items.forEach((item) => {
-            if (keys.has(item.objectKey)) storedOwnerMap[item.clientId] = mediaBlock.id;
+            if (keys.has(item.objectKey)) {
+              const owner = getNoteComposerMediaOwner(normalizedComposerBlocks, mediaBlock.target, item.type, mediaBlock.id);
+              if (owner) storedOwnerMap[item.clientId] = owner;
+            }
           });
         });
         mediaOwnerByClientIdRef.current = storedOwnerMap;
@@ -1282,12 +1268,17 @@ export default function EditNoteScreen() {
         setContactItems(((normalizedSections as any).contacts?.items ?? []) as NoteCardDraft[]);
         setGroupCardItems(((normalizedSections as any).groups?.items ?? []) as NoteCardDraft[]);
         setSourceGroupCardLocked(Boolean(note.collectedFrom?.group));
-        setUnrecoverableMediaCount(
-          countUnrecoverableSectionMedia([
-            ...normalizedSections.media.items,
-            ...normalizedSections.showcase.items,
-          ]),
-        );
+        const missingByBlock: Record<string, number> = {};
+        for (const target of ['media', 'showcase'] as const) {
+          normalizedSections[target].items.forEach((item) => {
+            if (typeof item.objectKey === 'string' && item.objectKey.trim()) return;
+            const preferred = savedMediaBlocks.find((owner) => owner.target === target && owner.objectKeys.includes(item.url ?? ''))?.id;
+            const owner = getNoteComposerMediaOwner(normalizedComposerBlocks, target, item.type, preferred);
+            if (owner) missingByBlock[owner] = (missingByBlock[owner] ?? 0) + 1;
+          });
+        }
+        unrecoverableMediaByBlockRef.current = missingByBlock;
+        setUnrecoverableMediaCount(Object.values(missingByBlock).reduce((sum, count) => sum + count, 0));
         setLocationDraft(buildLocationDraft(note.sections?.location));
         setSelectedGroupIds(note.groups.map((group) => group.id));
         pinnedRef.current = note.pinned;
@@ -1416,9 +1407,19 @@ export default function EditNoteScreen() {
       if (record) {
         pendingSubmissionRef.current = record.pendingSubmission ?? null;
         setPendingSubmission(record.pendingSubmission ?? null);
-        if (record.composerBlocks.length) {
-          record = { ...record, composerBlocks: normalizeNoteComposerBlocks(record.composerBlocks, null, false) };
+        const restoredBlocks = restoreNoteComposerMediaBlocks(
+          record.composerBlocks.length ? normalizeNoteComposerBlocks(record.composerBlocks, null, false) : [],
+          { media: { items: record.mediaItems }, showcase: { items: record.showcaseItems } },
+        );
+        const restoredOwners: Record<string, string> = {};
+        const savedOwners = record.mediaOwnerByClientId;
+        for (const [target, items] of [['media', record.mediaItems], ['showcase', record.showcaseItems]] as const) {
+          items.forEach((item) => {
+            const owner = getNoteComposerMediaOwner(restoredBlocks, target, item.type, savedOwners[item.clientId]);
+            if (owner) restoredOwners[item.clientId] = owner;
+          });
         }
+        record = { ...record, composerBlocks: restoredBlocks, mediaOwnerByClientId: restoredOwners };
         draftPersistedFingerprintRef.current = draftFingerprint(record);
         setTitle(record.title);
         composerBlocksRef.current = record.composerBlocks;
@@ -1437,6 +1438,7 @@ export default function EditNoteScreen() {
         setGroupCardItems(record.groupCardItems as NoteCardDraft[]);
         setSelectedGroupIds(record.groupIds);
         setLocationDraft(record.location);
+        unrecoverableMediaByBlockRef.current = {};
         setUnrecoverableMediaCount(0);
       }
       if (!record && draftPersistedFingerprintRef.current == null) {
@@ -1714,10 +1716,14 @@ export default function EditNoteScreen() {
   useFocusEffect(
     useCallback(() => {
       resetUploadOwnership();
+      const leaveEditor = () => {
+        invalidateUploadOwnership();
+        setEditorVideoViewer(null);
+      };
       if (isLocalNoteDraftDeleted(currentUser?.id, editorDraftId)) {
         draftRemoteQueue.cancel();
         completeNavigation(undefined, true);
-        return invalidateUploadOwnership;
+        return leaveEditor;
       }
       const picked = consumePickedLocation();
       if (picked && !pendingSubmissionRef.current && !saveInFlightRef.current) {
@@ -1732,7 +1738,7 @@ export default function EditNoteScreen() {
         // 成一块灰板。
         setMapRevealed(true);
       }
-      return invalidateUploadOwnership;
+      return leaveEditor;
     }, [completeNavigation, currentUser?.id, draftRemoteQueue, editorDraftId, consumePickedLocation, invalidateUploadOwnership, resetUploadOwnership]),
   );
 
@@ -2479,6 +2485,11 @@ export default function EditNoteScreen() {
     composerBlocksRef.current = remainingBlocks;
     setComposerBlocks(remainingBlocks);
 
+    if (unrecoverableMediaByBlockRef.current[block.id]) {
+      delete unrecoverableMediaByBlockRef.current[block.id];
+      setUnrecoverableMediaCount(Object.values(unrecoverableMediaByBlockRef.current).reduce((sum, count) => sum + count, 0));
+    }
+
     if (block.kind === 'title') {
       setTitle('');
     } else if (block.kind === 'text') {
@@ -2488,12 +2499,9 @@ export default function EditNoteScreen() {
       setTextBlocksById(nextTextBlocks);
       textStatsStore.setBlocks(Object.values(nextTextBlocks).flat());
     } else if (block.kind === 'image' || block.kind === 'video') {
-      const fallbackBlockId = currentBlocks.find(
-        (item) => item.kind === 'image' || item.kind === 'video',
-      )?.id;
       const removedClientIds = new Set(
         mediaItems
-          .filter((item) => (mediaOwnerByClientIdRef.current[item.clientId] ?? fallbackBlockId) === block.id)
+          .filter((item) => getNoteComposerMediaOwner(currentBlocks, 'media', item.type, mediaOwnerByClientIdRef.current[item.clientId]) === block.id)
           .map((item) => item.clientId),
       );
       setMediaItems((current) => current
@@ -2507,7 +2515,6 @@ export default function EditNoteScreen() {
       removedClientIds.forEach((clientId) => delete nextOwners[clientId]);
       mediaOwnerByClientIdRef.current = nextOwners;
       setMediaOwnerByClientId(nextOwners);
-      if (fallbackBlockId === block.id) setUnrecoverableMediaCount(0);
     } else if (block.kind === 'showcase') {
       const fallbackBlockId = currentBlocks.find((item) => item.kind === 'showcase')?.id;
       const removedClientIds = new Set(
@@ -2526,7 +2533,6 @@ export default function EditNoteScreen() {
       removedClientIds.forEach((clientId) => delete nextOwners[clientId]);
       mediaOwnerByClientIdRef.current = nextOwners;
       setMediaOwnerByClientId(nextOwners);
-      if (fallbackBlockId === block.id) setUnrecoverableMediaCount(0);
     } else if (block.kind === 'audio') {
       if (recordingAudioRef.current) {
         recordingAudioRef.current = false;
@@ -2687,6 +2693,7 @@ export default function EditNoteScreen() {
     }
   }, [t]);
   const handleSubmit = useCallback(async () => {
+    const saveStartedAt = diagnosticNow();
     if (
       loading ||
       !isRouteDataReady ||
@@ -2740,13 +2747,11 @@ export default function EditNoteScreen() {
     const saveGeneration = saveGenerationRef.current;
     setIsSubmitting(true);
     let requestStarted = false;
+    let savePhase: 'prepare' | 'request' | 'reconcile' = 'prepare';
+    let phaseStartedAt = saveStartedAt;
     const retryingPending = pendingSubmissionRef.current !== null;
     try {
       const plainText = extractPlainText(currentBlocks);
-      const firstMediaBlockId = composerBlocks.find(
-        (block) => block.kind === 'image' || block.kind === 'video',
-      )?.id;
-      const firstShowcaseBlockId = composerBlocks.find((block) => block.kind === 'showcase')?.id;
       const mediaBlocks = composerBlocks.flatMap((block) => {
         const target: 'media' | 'showcase' | null = block.kind === 'showcase'
           ? 'showcase'
@@ -2755,12 +2760,11 @@ export default function EditNoteScreen() {
             : null;
         if (!target) return [];
         const items = target === 'showcase' ? showcaseItems : mediaItems;
-        const fallbackId = target === 'showcase' ? firstShowcaseBlockId : firstMediaBlockId;
         return [{
           id: block.id,
           target,
           objectKeys: items
-            .filter((item) => (mediaOwnerByClientIdRef.current[item.clientId] ?? fallbackId) === block.id)
+            .filter((item) => getNoteComposerMediaOwner(composerBlocks, target, item.type, mediaOwnerByClientIdRef.current[item.clientId]) === block.id)
             .map((item) => item.objectKey)
             .filter((key): key is string => typeof key === 'string' && key.length > 0),
         }];
@@ -2830,11 +2834,19 @@ export default function EditNoteScreen() {
       setSortMode(false);
       setCardPickerKind(null);
       cardPickerRequestRef.current += 1;
+      const requestStartedAt = diagnosticNow();
+      logClientDiagnostic('note.save.phase', { stage: savePhase, durationMs: Math.max(0, Math.round(requestStartedAt - phaseStartedAt)) });
+      savePhase = 'request';
+      phaseStartedAt = requestStartedAt;
       requestStarted = true;
       const result = submission.noteId
         ? await updateNote(submission.noteId, submission.input)
         : await createNote(submission.input);
       if (saveGenerationRef.current !== saveGeneration) return;
+      const responseReceivedAt = diagnosticNow();
+      logClientDiagnostic('note.save.phase', { stage: savePhase, durationMs: Math.max(0, Math.round(responseReceivedAt - phaseStartedAt)) });
+      savePhase = 'reconcile';
+      phaseStartedAt = responseReceivedAt;
       const resultMatchesSubmission = submission.noteId !== null
         ? noteUpdateResultMatchesTarget(submission, result)
         : noteSubmissionMatchesResult(submission, result);
@@ -2857,9 +2869,13 @@ export default function EditNoteScreen() {
       void deleteNoteDraft(editorDraftId).catch((error) => {
         reportHandledFailure('noteEditor', 'deleteConsumedDraft', error);
       });
+      const completedAt = diagnosticNow();
+      logClientDiagnostic('note.save.phase', { stage: savePhase, durationMs: Math.max(0, Math.round(completedAt - phaseStartedAt)) });
+      logClientDiagnostic('note.save.completed', { durationMs: Math.max(0, Math.round(completedAt - saveStartedAt)) });
       completeNavigation(undefined, true);
     } catch (error) {
       if (saveGenerationRef.current !== saveGeneration) return;
+      logClientDiagnostic('note.save.failed', { stage: savePhase, durationMs: Math.max(0, Math.round(diagnosticNow() - phaseStartedAt)) });
       if (requestStarted && !retryingPending && isDefinitiveNoteSubmissionFailure(error)) {
         try {
           saveLocalNoteDraft(currentUser?.id, { ...buildCurrentDraftRecord(), pendingSubmission: undefined });
@@ -3054,14 +3070,6 @@ export default function EditNoteScreen() {
         )
       : null;
   const hasLocation = hasLocationDraftValue(locationDraft);
-  const mediaSectionStatus =
-    uploadingSection?.startsWith('media:')
-      ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
-      : `${mediaItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
-  const showcaseSectionStatus =
-    uploadingSection?.startsWith('showcase:')
-      ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
-      : `${showcaseItems.length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
   const audioSectionStatus = uploadingSection === 'audio'
     ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
     : recordingAudioStartedAt !== null
@@ -3106,11 +3114,13 @@ export default function EditNoteScreen() {
     target: SectionMediaTarget,
     blockId: string,
   ) => {
-    const fallbackBlockId = composerBlocks.find((block) =>
-      target === 'showcase' ? block.kind === 'showcase' : block.kind === 'image' || block.kind === 'video',
-    )?.id;
-    return items.filter((item) => (mediaOwnerByClientId[item.clientId] ?? fallbackBlockId) === blockId);
+    return items.filter((item) => getNoteComposerMediaOwner(composerBlocks, target, item.type, mediaOwnerByClientId[item.clientId]) === blockId);
   }, [composerBlocks, mediaOwnerByClientId]);
+
+  const getMediaSectionStatus = (target: SectionMediaTarget, kind: 'image' | 'video', blockId: string) =>
+    uploadingSection === `${target}:${kind}`
+      ? t('notes.edit.mediaUploading', { defaultValue: '正在上传' })
+      : `${getMediaItemsForBlock(target === 'showcase' ? showcaseItems : mediaItems, target, blockId).length} ${t('notes.edit.itemsCount', { defaultValue: '项' })}`;
 
   const renderMediaList = useCallback((
     items: EditorNoteMediaDraft[],
@@ -3151,6 +3161,7 @@ export default function EditNoteScreen() {
         {items.map((item) => {
           const thumbUri =
             item.type === 'VIDEO' ? item.posterUrl : item.previewUri ?? item.url;
+          const videoUri = item.type === 'VIDEO' ? item.previewUri ?? item.url : undefined;
           return (
             <View
               key={item.clientId}
@@ -3163,10 +3174,16 @@ export default function EditNoteScreen() {
             >
               <Pressable
                 style={s.mediaThumb}
-                disabled={item.type !== 'IMAGE' || !thumbUri}
-                accessibilityRole={item.type === 'IMAGE' ? 'button' : undefined}
-                accessibilityLabel={t('notes.edit.imageItem', { defaultValue: '图片' })}
+                disabled={item.type === 'VIDEO' ? !videoUri : !thumbUri}
+                accessibilityRole="button"
+                accessibilityLabel={item.type === 'VIDEO'
+                  ? t('chat.detail.playVideo')
+                  : t('notes.edit.imageItem', { defaultValue: '图片' })}
                 onPress={() => {
+                  if (item.type === 'VIDEO') {
+                    setEditorVideoViewer({ routeKey: draftRouteKey, clientId: item.clientId });
+                    return;
+                  }
                   const imageItems = items.filter((image) => image.type === 'IMAGE' && (image.previewUri || image.url));
                   setEditorImageViewer({
                     routeKey: draftRouteKey,
@@ -3196,6 +3213,11 @@ export default function EditNoteScreen() {
                   />
                 </View>
               )}
+              {videoUri ? (
+                <View style={s.videoPlayOverlay} pointerEvents="none">
+                  <Ionicons name="play-circle" size={48} color="#FFFFFF" />
+                </View>
+              ) : null}
               </Pressable>
               <View style={[s.mediaBadge, d.mediaBadge]}>
                 <Ionicons
@@ -3400,11 +3422,11 @@ export default function EditNoteScreen() {
           </View>
         ) : null}
 
-        <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
+        <View testID="note-image-section" style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
           {renderSectionHeader(
             'images-outline',
             t('notes.edit.composer.image', { defaultValue: '图片' }),
-            mediaSectionStatus,
+            getMediaSectionStatus('media', 'image', block.id),
             () => handleRemoveComposerBlock(block),
           )}
           {renderMediaList(
@@ -3419,11 +3441,11 @@ export default function EditNoteScreen() {
         );
       case 'video':
         return (
-          <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
+          <View testID="note-video-section" style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
             {renderSectionHeader(
               'videocam-outline',
               t('notes.edit.composer.video', { defaultValue: '视频' }),
-              mediaSectionStatus,
+              getMediaSectionStatus('media', 'video', block.id),
               () => handleRemoveComposerBlock(block),
             )}
             {renderMediaList(
@@ -3437,18 +3459,18 @@ export default function EditNoteScreen() {
       case 'showcase':
         return (
           <>
-        <View style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
+        <View testID="note-showcase-section" style={[s.sectionBlock, s.secondarySection, d.secondarySection]}>
           {renderSectionHeader(
             'albums-outline',
-            t('notes.edit.sections.showcase', { defaultValue: '展示' }),
-            showcaseSectionStatus,
+            t('notes.edit.sections.showcase', { defaultValue: '验证视频' }),
+            getMediaSectionStatus('showcase', 'video', block.id),
             () => handleRemoveComposerBlock(block),
           )}
           {renderMediaList(
             getMediaItemsForBlock(showcaseItems, 'showcase', block.id),
             'showcase',
             () => void handleAddSectionMedia({ target: 'showcase', kind: 'video', blockId: block.id }),
-            t('notes.edit.addShowcaseVideo', { defaultValue: '添加展示视频' }),
+            t('notes.edit.addShowcaseVideo', { defaultValue: '添加验证视频' }),
           )}
         </View>
 
@@ -3840,6 +3862,11 @@ export default function EditNoteScreen() {
     }
   }, [currentUser?.id, draftRouteKey, persistDraft, router, sessionEpoch, t]);
 
+  const editorVideoItem = editorVideoViewer?.routeKey === draftRouteKey
+    ? [...mediaItems, ...showcaseItems].find((item) => item.type === 'VIDEO' && item.clientId === editorVideoViewer.clientId)
+    : undefined;
+  const editorVideoUri = editorVideoItem?.previewUri ?? editorVideoItem?.url;
+
   if (loading || isDraftLoading) {
     return (
       <View style={[s.container, d.container, s.center, { paddingTop: insets.top }]}>
@@ -4140,8 +4167,12 @@ export default function EditNoteScreen() {
                 <ActivityIndicator color={colors.primary} />
               </View>
             )}
+            <UploadProgressHost />
           </View>
         </Modal>
+      ) : null}
+      {editorVideoUri ? (
+        <NoteVideoViewer uri={editorVideoUri} onClose={() => setEditorVideoViewer(null)} />
       ) : null}
       {editorImageViewer?.routeKey === draftRouteKey ? (
         <ImageViewer
@@ -4166,8 +4197,9 @@ export default function EditNoteScreen() {
         transparent
         animationType="slide"
         onRequestClose={closeCardPicker}
+        statusBarTranslucent
       >
-        <View style={s.cardPickerBackdrop}>
+        <KeyboardAvoidingContainer style={s.cardPickerBackdrop}>
           <View
             style={[
               s.cardPickerSheet,
@@ -4319,7 +4351,8 @@ export default function EditNoteScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingContainer>
+        <UploadProgressHost />
       </Modal>
       <BottomSheetModal
         visible={groupSheetVisible}
@@ -4814,6 +4847,12 @@ const s = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
   mediaBadge: {
     position: 'absolute',

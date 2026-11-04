@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Avatar } from './avatar';
 import { CircleAvatar } from './circle-avatar';
 import { GroupChatAvatar } from './group-chat-avatar';
@@ -7,11 +7,48 @@ import { GroupChatAvatar } from './group-chat-avatar';
 jest.mock('@/features/profile/membership-frames', () => ({ AVATAR_FRAME_SCALE: 1.6, AVATAR_FRAME_COMPACT_SCALE: 1.2 }));
 jest.mock('expo-image', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return { Image: (props: object) => <View {...props} testID="avatar-image" /> };
+  const React = jest.requireActual<typeof import('react')>('react');
+  return { Image: function MockImage(props: { source: { uri: string }; recyclingKey?: string }) {
+    const [displayedUri, setDisplayedUri] = React.useState<string>();
+    React.useLayoutEffect(() => setDisplayedUri(undefined), [props.recyclingKey]);
+    const loadProps = { onLoad: () => setDisplayedUri(props.source.uri) };
+    return <View {...props} {...loadProps} testID="avatar-image" accessibilityLabel={displayedUri ?? 'loading'} />;
+  } };
 });
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('./gradient-cover', () => ({ GradientCover: () => null }));
 jest.mock('@/theme', () => ({ Radius: { sm: 8 }, useTheme: () => ({ colors: { surface: '#fff' } }) }));
+
+test('keeps the displayed avatar while the same account replacement is loading', () => {
+  const view = render(<Avatar identityKey="account-a" uri="https://image.test/old" />);
+  fireEvent(screen.getByTestId('avatar-image'), 'load');
+  view.rerender(<Avatar identityKey="account-a" uri="https://image.test/new" />);
+  expect(screen.getByLabelText('https://image.test/old')).toBeTruthy();
+  fireEvent(screen.getByTestId('avatar-image'), 'load');
+  expect(screen.getByLabelText('https://image.test/new')).toBeTruthy();
+});
+
+test('clears the previous account image when its identity changes, even with the same URL', () => {
+  const view = render(<Avatar identityKey="account-a" uri="https://image.test/shared" />);
+  fireEvent(screen.getByTestId('avatar-image'), 'load');
+  view.rerender(<Avatar identityKey="account-b" uri="https://image.test/shared" />);
+  expect(screen.queryByLabelText('https://image.test/shared')).toBeNull();
+});
+
+test('avatars without an identity still clear an old list item when their source changes', () => {
+  const view = render(<Avatar uri="https://image.test/a" />);
+  fireEvent(screen.getByTestId('avatar-image'), 'load');
+  view.rerender(<Avatar uri="https://image.test/b" />);
+  expect(screen.queryByLabelText('https://image.test/a')).toBeNull();
+});
+
+test('keeps the default avatar behind a pending image and after a failed load', () => {
+  render(<Avatar identityKey="account-a" uri="https://image.test/pending" />);
+  expect(screen.getByTestId('avatar-fallback')).toBeTruthy();
+  fireEvent(screen.getByTestId('avatar-image'), 'error');
+  expect(screen.getByTestId('avatar-fallback')).toBeTruthy();
+  expect(screen.queryByTestId('avatar-image')).toBeNull();
+});
 
 test.each([Avatar, CircleAvatar, GroupChatAvatar])('ignores an old avatar request error after the source changes', (Component) => {
   const view = render(<Component uri="https://image.test/a" size={40} />);
@@ -26,6 +63,22 @@ test.each([Avatar, CircleAvatar, GroupChatAvatar])('ignores an old avatar reques
   expect(screen.queryByTestId('avatar-image')).toBeNull();
   view.rerender(<Component uri="https://image.test/c" size={40} />);
   expect(screen.getByTestId('avatar-image').props.source.uri).toBe('https://image.test/c');
+});
+
+test.each([Avatar, CircleAvatar, GroupChatAvatar])('reports image readiness after display or an error fallback, ignoring the old source', (Component) => {
+  const ready = jest.fn();
+  const view = render(<Component uri="https://image.test/a" size={40} onImageReady={ready} />);
+  const displayA = screen.getByTestId('avatar-image').props.onDisplay;
+  expect(ready).not.toHaveBeenCalled();
+  view.rerender(<Component uri="https://image.test/b" size={40} onImageReady={ready} />);
+  act(() => displayA());
+  expect(ready).not.toHaveBeenCalled();
+  fireEvent(screen.getByTestId('avatar-image'), 'display');
+  expect(ready).toHaveBeenCalledTimes(1);
+  view.rerender(<Component uri="https://image.test/c" size={40} onImageReady={ready} />);
+  fireEvent(screen.getByTestId('avatar-image'), 'error');
+  expect(ready).toHaveBeenCalledTimes(2);
+  expect(screen.queryByTestId('avatar-image')).toBeNull();
 });
 
 test.each([Avatar, CircleAvatar, GroupChatAvatar])('retries a previously failed URI after another source was active', (Component) => {

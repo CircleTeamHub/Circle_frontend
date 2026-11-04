@@ -100,4 +100,24 @@ describe('uploadChatVideoPoster', () => {
       uploadChatVideoPoster('file:///picked/trip.mov', 42, 'trip.mov'),
     ).resolves.toBeNull();
   });
+
+  it('checks the session after deferred presign and skips upload when the guard throws', async () => {
+    mockPlayer([{ width: 512, height: 288 }]);
+    let resolvePresign!: (value: object) => void;
+    let markPresignStarted!: () => void;
+    const presignStarted = new Promise<void>((resolve) => { markPresignStarted = resolve; });
+    const presignWait = new Promise<object>((resolve) => { resolvePresign = resolve; });
+    mockPresign.mockImplementationOnce(() => {
+      markPresignStarted();
+      return presignWait;
+    });
+    const beforeUpload = jest.fn(() => { throw new Error('session changed'); });
+    const uploading = uploadChatVideoPoster('file:///video.mp4', 42, 'video.mp4', 'chat', beforeUpload);
+    await presignStarted;
+    expect(beforeUpload).not.toHaveBeenCalled();
+    resolvePresign({ uploadUrl: 'https://upload.test/poster', key: 'chat/poster.jpg', requiredHeaders: {} });
+    await expect(uploading).resolves.toBeNull();
+    expect(beforeUpload).toHaveBeenCalledTimes(1);
+    expect(mockUpload).not.toHaveBeenCalled();
+  });
 });

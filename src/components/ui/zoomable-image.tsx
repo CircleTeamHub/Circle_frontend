@@ -20,7 +20,7 @@ import { Image } from 'expo-image';
  * - 放大后单指拖拽平移，平移量按缩放比夹在图内
  * - 1x 时下拉跟手，达到距离或速度阈值后关闭查看器
  * - 未放大时**不拦截**横向手势，交还给外层列表翻页（关键：
- *   onPanResponderTerminationRequest 在 1x 时放行，列表才抢得走）
+ *   onPanResponderTerminationRequest 在未下拉的 1x 状态放行）
  * - 长按触发菜单（保存图片）；web 上鼠标按住同样触发
  * - Web 额外支持滚轮 / 触控板捏合缩放
  */
@@ -42,7 +42,7 @@ interface ZoomableImageProps {
   height: number;
   /** 离开当前页时复位缩放（查看器翻页用）。 */
   active: boolean;
-  /** 放大或正在双指操作时，外层须暂停翻页。 */
+  /** 放大、双指操作或下滑关闭时，外层须暂停翻页。 */
   onZoomedChange?: (zoomed: boolean) => void;
   onTap?: () => void;
   onLongPress?: () => void;
@@ -85,6 +85,7 @@ export function ZoomableImage({
     pinchStartTx: 0,
     pinchStartTy: 0,
     moved: false,
+    swipingDown: false,
     /** 本次手势出现过双指：松手时即使回到 1x 也不能当成下滑关闭。 */
     multiTouch: false,
     longPressFired: false,
@@ -94,6 +95,9 @@ export function ZoomableImage({
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<View>(null);
   const pagerLocked = useRef(false);
+  // 查看器锁定翻页时会重渲染；保持 responder 不变，避免清掉正在累计的 dx/dy。
+  const onZoomedChangeRef = useRef(onZoomedChange);
+  onZoomedChangeRef.current = onZoomedChange;
   /** 图片固有尺寸（onLoad 后才知道），用来推算 contain 后的渲染框。 */
   const natural = useRef<{ w: number; h: number } | null>(null);
 
@@ -114,8 +118,8 @@ export function ZoomableImage({
   const updatePagerLock = useCallback((locked: boolean) => {
     if (pagerLocked.current === locked) return;
     pagerLocked.current = locked;
-    onZoomedChange?.(locked);
-  }, [onZoomedChange]);
+    onZoomedChangeRef.current?.(locked);
+  }, []);
 
   const apply = useCallback(() => {
     scale.setValue(view.current.scale);
@@ -177,7 +181,7 @@ export function ZoomableImage({
         apply();
       }
 
-      updatePagerLock(clamped > 1.01 || gesture.current.pinchStartDistance > 0);
+      updatePagerLock(clamped > 1.01 || gesture.current.pinchStartDistance > 0 || gesture.current.swipingDown);
     },
     [
       apply,
@@ -198,6 +202,7 @@ export function ZoomableImage({
       clearLongPress();
       clearTapTimer();
       gesture.current.pinchStartDistance = 0;
+      gesture.current.swipingDown = false;
       gesture.current.lastTapAt = 0;
       setScale(1);
     }
@@ -247,6 +252,7 @@ export function ZoomableImage({
     clearTapTimer();
     gesture.current.moved = true;
     gesture.current.multiTouch = true;
+    gesture.current.swipingDown = false;
     gesture.current.lastTapAt = 0;
     gesture.current.pinchStartDistance = Math.max(1, distance(touches));
     gesture.current.pinchStartScale = view.current.scale;
@@ -262,7 +268,7 @@ export function ZoomableImage({
   const finishPinch = useCallback(() => {
     clearLongPress();
     gesture.current.pinchStartDistance = 0;
-    updatePagerLock(view.current.scale > 1.01);
+    updatePagerLock(view.current.scale > 1.01 || gesture.current.swipingDown);
   }, [clearLongPress, updatePagerLock]);
 
   const panResponder = useMemo(
@@ -277,12 +283,13 @@ export function ZoomableImage({
           // 未放大：横向手势留给外层列表翻页。
           return Math.abs(gestureState.dy) > MOVE_TOLERANCE * 2;
         },
-        // 1x 时允许外层列表把手势抢走（翻页）；放大后拒绝，保住平移。
-        onPanResponderTerminationRequest: () => gesture.current.pinchStartDistance === 0 && view.current.scale <= 1.01,
+        // 横滑交给列表；下滑、捏合和平移期间保住手势，直到松手或取消。
+        onPanResponderTerminationRequest: () => !pagerLocked.current,
         onShouldBlockNativeResponder: () => pagerLocked.current,
         onPanResponderGrant: (event) => {
           gesture.current.moved = false;
           gesture.current.multiTouch = false;
+          gesture.current.swipingDown = false;
           gesture.current.longPressFired = false;
           gesture.current.panStartTx = view.current.tx;
           gesture.current.panStartTy = view.current.ty;
@@ -347,8 +354,17 @@ export function ZoomableImage({
           // 双指过的手势不跟手，避免捏合回到 1x 时画面被带着往下走。
           if (view.current.scale <= 1.01) {
             if (gesture.current.multiTouch) return;
-            const dragY = Math.max(0, gestureState.dy);
-            translateY.setValue(dragY);
+            if (
+              !gesture.current.swipingDown &&
+              gestureState.dy > MOVE_TOLERANCE * 2 &&
+              gestureState.dy > Math.abs(gestureState.dx) * 1.5
+            ) {
+              gesture.current.swipingDown = true;
+              updatePagerLock(true);
+            }
+            if (gesture.current.swipingDown) {
+              translateY.setValue(Math.max(0, gestureState.dy));
+            }
             return;
           }
 
@@ -366,6 +382,8 @@ export function ZoomableImage({
           apply();
         },
         onPanResponderRelease: (event, gestureState) => {
+          const wasSwipingDown = gesture.current.swipingDown;
+          gesture.current.swipingDown = false;
           finishPinch();
 
           // 只有越过移动阈值的单指下拉才算关闭手势；几像素的手指抖动仍是点击，
@@ -374,6 +392,7 @@ export function ZoomableImage({
             view.current.scale <= 1.01 &&
             gesture.current.moved &&
             !gesture.current.multiTouch &&
+            wasSwipingDown &&
             gestureState.dy > 0;
           if (!isSwipeDown && view.current.scale <= 1.01) {
             translateY.setValue(0);
@@ -398,6 +417,7 @@ export function ZoomableImage({
           }
         },
         onPanResponderTerminate: () => {
+          gesture.current.swipingDown = false;
           finishPinch();
           clearTapTimer();
           gesture.current.lastTapAt = 0;
@@ -426,6 +446,7 @@ export function ZoomableImage({
       width,
       height,
       onSwipeDown,
+      updatePagerLock,
     ],
   );
 

@@ -739,8 +739,8 @@ test('乐观消息（local: 临时 id）不提供收藏入口，处理函数也�
   // 长按菜单与发送 ack 之间存在竞态，处理函数里也要挡一次。
   const handlerAt = detail.indexOf('const handleCollectMessage = useCallback(');
   assert.ok(handlerAt > 0);
-  const handlerHead = detail.slice(handlerAt, handlerAt + 600);
-  assert.match(handlerHead, /if \(isLocalMessageId\(message\.id\)\) return;/);
+  const handlerHead = detail.slice(handlerAt, handlerAt + 1200);
+  assert.match(handlerHead, /if \(isLocalMessageId\(message\.id\)\) return 'skipped';/);
 
   // 判定只认这一处定义，调用点不再各写一次字符串字面量。
   assert.match(

@@ -1,9 +1,9 @@
-import { useEffect, useRef, useId, useMemo, useState } from 'react';
+import { useEffect, useRef, useId, useState } from 'react';
 import { View, StyleSheet, type ImageSourcePropType } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { FEATURE_FLAGS } from '@/constants/feature-flags';
-import { useTheme, Radius } from '@/theme';
+import { Radius } from '@/theme';
 import {
   AVATAR_FRAME_SCALE,
   AVATAR_FRAME_COMPACT_SCALE,
@@ -13,6 +13,10 @@ interface AvatarProps {
   size?: number;
   name?: string;
   uri?: string;
+  /** The photo is displayed, or its error fallback is ready. */
+  onImageReady?: () => void;
+  /** Stable owner identity for a non-recycled profile avatar; retain its image while replacing it. */
+  identityKey?: string;
   shape?: 'circle' | 'square';
   /**
    * 头像框(如会员框):透明 PNG,内孔占画布 1/AVATAR_FRAME_SCALE。仅圆形头像生效
@@ -83,11 +87,12 @@ export const Avatar: React.FC<AvatarProps> = ({
   size = 40,
   name,
   uri,
+  onImageReady,
+  identityKey,
   shape = 'square',
   frameSource,
   compactFrame = false,
 }) => {
-  const { colors } = useTheme();
   const defaultAvatarGradientId = `default-avatar-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const hasFrame =
     FEATURE_FLAGS.avatarFrames && Boolean(frameSource) && shape === 'circle';
@@ -105,33 +110,9 @@ export const Avatar: React.FC<AvatarProps> = ({
   const photoSize = hasFrame ? frameSize / AVATAR_FRAME_SCALE : size;
   const borderRadius = shape === 'square' ? Radius.sm : photoSize / 2;
 
-  const d = useMemo(
-    () => ({
-      image: {
-        backgroundColor: colors.surface,
-      },
-    }),
-    [colors],
-  );
-
   // 空字符串的 uri 也走 fallback —— `<Image source={{ uri: '' }} />` 直接渲染空白。
   const hasImage = Boolean(uri && uri.length > 0) && failedUri !== uri;
-  const core =
-    hasImage ? (
-      <Image
-        source={{ uri }}
-        recyclingKey={uri}
-        style={[
-          d.image,
-          {
-            width: photoSize,
-            height: photoSize,
-            borderRadius,
-          },
-        ]}
-        onError={() => { if (currentUriRef.current === uri) setFailedUri(uri ?? null); }}
-      />
-    ) : (
+  const core = (
       <View
         accessibilityLabel={name || undefined}
         style={[
@@ -145,7 +126,24 @@ export const Avatar: React.FC<AvatarProps> = ({
           },
         ]}
       >
-        <DefaultAvatar size={photoSize} gradientId={defaultAvatarGradientId} />
+        {!hasImage || identityKey !== undefined ? (
+          <View testID="avatar-fallback" pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <DefaultAvatar size={photoSize} gradientId={defaultAvatarGradientId} />
+          </View>
+        ) : null}
+        {hasImage ? (
+          <Image
+            key={identityKey}
+            source={{ uri }}
+            // Reused list cells still clear by URL. A profile retains only the
+            // same owner's image; switching accounts resets the native view.
+            recyclingKey={identityKey ?? uri}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
+            onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}
+          />
+        ) : null}
       </View>
     );
 

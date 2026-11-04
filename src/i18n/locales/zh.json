@@ -1,4 +1,21 @@
 {
+  "mediaUpload": {
+    "sessionChanged": "账号已切换，请重新选择文件后上传",
+    "uploading": "正在上传",
+    "image": "图片",
+    "video": "视频",
+    "preparing": "准备中…",
+    "confirming": "确认中…",
+    "processing": "处理中…",
+    "additional": "还有 {{count}} 项"
+  },
+  "avatarPhoto": {
+    "actions": "头像操作",
+    "title": "头像",
+    "view": "查看头像",
+    "takePhoto": "拍照",
+    "chooseFromPhotos": "从相册选择"
+  },
   "accountSwitcher": {
     "title": "切换账号",
     "current": "当前",
@@ -256,6 +273,13 @@
     "imServerUnreachable": "无法连接服务器，正在重试…",
     "imServerError": "服务器异常，请稍后再试",
     "swipeMarkRead": "标记已读",
+    "selectChats": "选择聊天",
+    "selectAll": "全选",
+    "deselectAll": "取消全选",
+    "selectedCount": "已选 {{count}} 个聊天",
+    "batchDeleteConfirm": "删除所选 {{count}} 个聊天及本人的聊天记录？此操作无法撤销。",
+    "batchDeleteFailedTitle": "删除未完成",
+    "batchDeleteFailedMessage": "有 {{count}} 个聊天未完成删除，已保留选中，请重试。",
     "swipeMarkUnread": "标记未读",
     "swipeHide": "隐藏聊天",
     "swipePin": "置顶",
@@ -390,6 +414,15 @@
     "chatChannelDescription": "好友和群聊的新消息"
   },
   "chat": {
+    "selection": {
+      "selectedCount": "已选 {{count}} 条消息",
+      "saving": "正在保存 {{current}}/{{total}}",
+      "collecting": "正在收藏 {{current}}/{{total}}",
+      "noEligible": "没有可处理的消息",
+      "saveHint": "保存仅支持普通图片和视频",
+      "saveResult": "已保存 {{success}} 项，{{failed}} 项失败，{{skipped}} 项不支持保存",
+      "collectResult": "已收藏 {{success}} 项，{{failed}} 项失败，{{skipped}} 项已跳过"
+    },
     "detail": {
       "title": "聊天详情",
       "statusSelf": "自己",
@@ -497,6 +530,9 @@
       "empty": "暂无可 @ 的成员"
     },
     "forward": {
+      "noPrivateChats": "暂无私聊会话",
+      "noGroupChats": "暂无群聊会话",
+      "noMatches": "当前分类没有匹配的聊天",
       "title": "选择转发对象",
       "searchPlaceholder": "搜索会话",
       "empty": "没有待转发消息",
@@ -1806,6 +1842,22 @@
       "deleteError": "删除收藏失败，请稍后重试",
       "conversationFallback": "聊天",
       "fromSource": "来自 {{title}}",
+      "longPressHint": "长按收藏可选择或管理",
+      "unavailable": "内容暂不可用",
+      "textPreviewTitle": "收藏的消息",
+      "selectedCount": "已选择 {{count}} 项",
+      "selectAll": "全选",
+      "deselectAll": "取消全选",
+      "batchDeleteConfirm": "确定删除选中的 {{count}} 条收藏吗？",
+      "batchDeleteResult": "已删除 {{succeeded}} 项，失败 {{failed}} 项",
+      "batchSaveResult": "已保存 {{succeeded}} 项，失败 {{failed}} 项，跳过 {{skipped}} 项",
+      "operationProgress": "正在处理 {{current}} / {{total}}",
+      "saveDenied": "请在系统设置中允许访问相册后再保存媒体",
+      "unsupportedForward": "这条收藏暂不支持转发",
+      "imagePreviewLabel": "收藏的图片",
+      "videoPreviewLabel": "收藏的视频",
+      "voicePreviewLabel": "语音消息",
+      "voicePlayingLabel": "正在播放",
       "tabs": {
         "all": "全部",
         "chat": "聊天记录",
@@ -2045,6 +2097,7 @@
   },
   "userProfile": {
     "title": "个人信息",
+    "originalNickname": "昵称：{{name}}",
     "like": "点赞",
     "unlike": "取消点赞",
     "likesReceived": "收到的赞",
@@ -2726,7 +2779,7 @@
       "addImage": "添加图片",
       "addMedia": "添加多媒体",
       "addShowcaseImage": "添加展示图片",
-      "addShowcaseVideo": "添加展示视频",
+      "addShowcaseVideo": "添加验证视频",
       "addVideo": "添加视频",
       "done": "完成",
       "editTitle": "编辑笔记",
@@ -2785,8 +2838,8 @@
         "locationSelected": "已选择",
         "media": "多媒体",
         "mediaHint": "正文图片和视频素材",
-        "showcase": "展示",
-        "showcaseHint": "群卡片展示区素材",
+        "showcase": "验证视频",
+        "showcaseHint": "用于验证的视频",
         "text": "文字",
         "textHint": "只编辑文字内容"
       },
@@ -2810,7 +2863,7 @@
         "media": "多媒体",
         "audio": "录音",
         "video": "视频",
-        "showcase": "展示",
+        "showcase": "验证视频",
         "location": "位置",
         "contact": "名片",
         "group": "群名片",
@@ -2914,9 +2967,11 @@
       "ungrouped": "未分组"
     },
     "section": {
+      "image": "图片",
+      "video": "视频",
       "text": "文字",
       "media": "图片 · 视频",
-      "showcase": "展示",
+      "showcase": "验证视频",
       "audio": "录音",
       "contact": "名片",
       "group": "群名片",
@@ -2938,7 +2993,9 @@
       "statusClosed": "打烊",
       "remark": "备注：{{text}}",
       "openSenderChat": "和 {{name}} 私聊",
-      "openGroupChat": "进入群聊 {{name}}"
+      "openGroupChat": "进入群聊 {{name}}",
+      "viewContactDetails": "查看 {{name}} 的个人资料",
+      "viewGroupDetails": "查看 {{name}} 的群资料"
     },
     "groupPicker": {
       "title": "编辑分组",
@@ -3646,6 +3703,13 @@
     "unnamed": "未命名",
     "saveImage": "保存图片",
     "shareQr": "分享二维码",
+    "accountId": "ID：{{id}}",
+    "copyId": "复制 ID",
+    "idCopied": "ID 已复制",
+    "copyIdFailed": "复制失败，请重试",
+    "personalCardCaption": "扫描二维码，\n在风信开启聊天吧",
+    "groupCardCaption": "扫描二维码，\n在风信加入群聊吧",
+    "circleCardCaption": "扫描二维码，\n在风信加入圈子吧",
     "reset": "重置二维码",
     "resetConfirmTitle": "重置个人二维码？",
     "resetConfirmMessage": "重置后，之前分享的个人二维码会立即失效。",
@@ -3726,6 +3790,10 @@
     "recoveryNotice": "这是一个找回申请：如果不拒绝，对方将在 {{value}} 之后登录你的账号，并让你的其他设备退出。"
   },
   "groupAdmission": {
+    "circleSentInvitation": "你邀请对方加入圈子",
+    "circleInvitedBy": "{{name}} 邀请你加入圈子",
+    "circleJoined": "已加入圈子",
+    "circlePreview": "[圈子邀请]",
     "createdAt": "申请或邀请时间：{{time}}",
     "updatedAt": "状态更新时间：{{time}}",
     "title": "群资料与邀请",

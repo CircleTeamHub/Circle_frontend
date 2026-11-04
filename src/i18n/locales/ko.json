@@ -1,4 +1,21 @@
 {
+  "mediaUpload": {
+    "sessionChanged": "계정이 변경되었습니다. 업로드할 파일을 다시 선택해 주세요.",
+    "uploading": "업로드 중",
+    "image": "이미지",
+    "video": "동영상",
+    "preparing": "준비 중…",
+    "confirming": "확인 중…",
+    "processing": "처리 중…",
+    "additional": "{{count}}개 더"
+  },
+  "avatarPhoto": {
+    "actions": "프로필 사진 옵션",
+    "title": "프로필 사진",
+    "view": "프로필 사진 보기",
+    "takePhoto": "사진 촬영",
+    "chooseFromPhotos": "앨범에서 선택"
+  },
   "assistant": {
     "name": "WindNote 어시스턴트",
     "open": "WindNote 어시스턴트 열기",
@@ -278,6 +295,15 @@
     }
   },
   "chat": {
+    "selection": {
+      "selectedCount": "메시지 {{count}}개 선택됨",
+      "saving": "저장 중 {{current}}/{{total}}",
+      "collecting": "즐겨찾기 추가 중 {{current}}/{{total}}",
+      "noEligible": "처리할 수 있는 메시지가 없습니다",
+      "saveHint": "사라지지 않는 사진과 동영상만 저장할 수 있습니다",
+      "saveResult": "저장: {{success}}개, 실패: {{failed}}개, 지원 안 됨: {{skipped}}개",
+      "collectResult": "즐겨찾기: {{success}}개, 실패: {{failed}}개, 건너뜀: {{skipped}}개"
+    },
     "detail": {
       "title": "채팅",
       "statusSelf": "나",
@@ -385,6 +411,9 @@
       "empty": "멘션할 수 있는 멤버가 없습니다"
     },
     "forward": {
+      "noPrivateChats": "아직 개인 채팅이 없습니다",
+      "noGroupChats": "아직 그룹 채팅이 없습니다",
+      "noMatches": "현재 분류에 검색 결과가 없습니다",
       "title": "채팅 선택",
       "searchPlaceholder": "채팅 검색",
       "empty": "전달할 메시지가 없습니다",
@@ -904,6 +933,13 @@
     "imServerUnreachable": "서버에 연결할 수 없습니다. 다시 연결하는 중…",
     "imServerError": "서버에 문제가 있습니다. 잠시 후 다시 시도해 주세요.",
     "swipeMarkRead": "읽음 표시",
+    "selectChats": "채팅 선택",
+    "selectAll": "모두 선택",
+    "deselectAll": "전체 선택 해제",
+    "selectedCount": "{{count}}개 선택됨",
+    "batchDeleteConfirm": "선택한 채팅 {{count}}개와 내 대화 기록을 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+    "batchDeleteFailedTitle": "삭제 미완료",
+    "batchDeleteFailedMessage": "채팅 {{count}}개를 삭제하지 못했습니다. 선택이 유지되므로 다시 시도해 주세요.",
     "swipeMarkUnread": "안 읽음 표시",
     "swipeHide": "채팅 숨기기",
     "swipePin": "고정",
@@ -1077,7 +1113,7 @@
       "addImage": "이미지 추가",
       "addMedia": "미디어 추가",
       "addShowcaseImage": "대표 이미지 추가",
-      "addShowcaseVideo": "대표 동영상 추가",
+      "addShowcaseVideo": "인증 동영상 추가",
       "addVideo": "동영상 추가",
       "done": "완료",
       "editTitle": "노트 편집",
@@ -1136,8 +1172,8 @@
         "locationSelected": "선택됨",
         "media": "미디어",
         "mediaHint": "본문 이미지 및 동영상 콘텐츠",
-        "showcase": "대표",
-        "showcaseHint": "공유 그룹 카드에 표시되는 콘텐츠",
+        "showcase": "인증 동영상",
+        "showcaseHint": "인증용 동영상",
         "text": "텍스트",
         "textHint": "텍스트 내용만 편집"
       },
@@ -1161,7 +1197,7 @@
         "media": "미디어",
         "audio": "녹음",
         "video": "동영상",
-        "showcase": "표시",
+        "showcase": "인증 동영상",
         "location": "위치",
         "contact": "명함",
         "group": "그룹 명함",
@@ -1265,9 +1301,11 @@
       "ungrouped": "미분류"
     },
     "section": {
+      "image": "사진",
+      "video": "동영상",
       "text": "텍스트",
       "media": "사진 · 동영상",
-      "showcase": "쇼케이스",
+      "showcase": "인증 동영상",
       "audio": "녹음",
       "contact": "명함",
       "group": "그룹 명함",
@@ -1289,7 +1327,9 @@
       "statusClosed": "영업 종료",
       "remark": "메모: {{text}}",
       "openSenderChat": "{{name}}님과 채팅",
-      "openGroupChat": "그룹 채팅 {{name}} 열기"
+      "openGroupChat": "그룹 채팅 {{name}} 열기",
+      "viewContactDetails": "{{name}}님의 프로필 보기",
+      "viewGroupDetails": "{{name}} 그룹 정보 보기"
     },
     "groupPicker": {
       "title": "그룹 편집",
@@ -2187,6 +2227,7 @@
   },
   "userProfile": {
     "title": "프로필",
+    "originalNickname": "닉네임: {{name}}",
     "like": "좋아요",
     "unlike": "좋아요 취소",
     "likesReceived": "받은 좋아요",
@@ -2413,6 +2454,22 @@
       "deleteError": "컬렉션 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.",
       "conversationFallback": "채팅",
       "fromSource": "{{title}}에서",
+      "longPressHint": "길게 눌러 저장한 항목을 선택하거나 관리하세요",
+      "unavailable": "콘텐츠를 사용할 수 없습니다",
+      "textPreviewTitle": "저장한 메시지",
+      "selectedCount": "{{count}}개 선택됨",
+      "selectAll": "전체 선택",
+      "deselectAll": "전체 선택 해제",
+      "batchDeleteConfirm": "선택한 저장 항목 {{count}}개를 삭제하시겠어요?",
+      "batchDeleteResult": "{{succeeded}}개 삭제, {{failed}}개 실패",
+      "batchSaveResult": "{{succeeded}}개 저장, {{failed}}개 실패, {{skipped}}개 건너뜀",
+      "operationProgress": "{{current}} / {{total}}개 처리 중",
+      "saveDenied": "미디어를 저장하려면 설정에서 사진 접근을 허용해 주세요",
+      "unsupportedForward": "이 저장된 콘텐츠는 전달할 수 없습니다",
+      "imagePreviewLabel": "저장한 사진",
+      "videoPreviewLabel": "저장한 동영상",
+      "voicePreviewLabel": "음성 메시지",
+      "voicePlayingLabel": "재생 중",
       "tabs": {
         "all": "전체",
         "chat": "채팅 기록",
@@ -3646,6 +3703,13 @@
     "unnamed": "이름 없음",
     "saveImage": "이미지 저장",
     "shareQr": "QR 코드 공유",
+    "accountId": "ID: {{id}}",
+    "copyId": "ID 복사",
+    "idCopied": "ID를 복사했습니다",
+    "copyIdFailed": "ID를 복사하지 못했습니다. 다시 시도해 주세요.",
+    "personalCardCaption": "QR 코드를 스캔하고,\nWindNote에서 대화하세요",
+    "groupCardCaption": "QR 코드를 스캔하고,\nWindNote 그룹에 참여하세요",
+    "circleCardCaption": "QR 코드를 스캔하고,\nWindNote 서클에 가입하세요",
     "reset": "QR 코드 재설정",
     "resetConfirmTitle": "개인 QR 코드를 재설정할까요?",
     "resetConfirmMessage": "이전에 공유한 개인 QR 코드는 즉시 사용할 수 없게 됩니다.",
@@ -3726,6 +3790,10 @@
     "recoveryNotice": "계정 복구 신청입니다. 거부하지 않으면 {{value}} 이후 이 기기가 계정에 로그인하고 다른 기기는 로그아웃됩니다."
   },
   "groupAdmission": {
+    "circleSentInvitation": "상대방을 서클에 초대했습니다",
+    "circleInvitedBy": "{{name}}님이 서클에 초대했습니다",
+    "circleJoined": "서클 가입 완료",
+    "circlePreview": "[서클 초대]",
     "createdAt": "신청 또는 초대 시간: {{time}}",
     "updatedAt": "상태 업데이트 시간: {{time}}",
     "title": "그룹 정보 및 초대",

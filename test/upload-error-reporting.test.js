@@ -56,6 +56,11 @@ function loadUpload({
           };
         case '@/observability/sentry':
           return { reportError: onReport };
+        case '@/stores/upload-progress-store':
+          return {
+            captureUploadProgressScope: () => () => true,
+            startUploadProgress: () => ({ update: () => {}, finish: () => {} }),
+          };
         case '@/i18n':
           return {
             __esModule: true,

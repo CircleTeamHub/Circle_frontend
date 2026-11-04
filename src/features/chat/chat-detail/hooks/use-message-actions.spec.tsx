@@ -190,6 +190,109 @@ test('canceling selection restores ordinary message interaction', () => {
   expect(result.current.selectedMessageIds).toBeNull();
 });
 
+function selectMessages(result: { current: ReturnType<typeof useMessageActions> }, messages: ChatMessage[]) {
+  act(() => result.current.setActionMenu({ message: messages[0], x: 0, y: 0 }));
+  act(() => result.current.messageActions.find((action) => action.key === 'multi-select')?.onPress());
+  for (const message of messages.slice(1)) act(() => result.current.handleToggleSelectedMessage(message.id));
+}
+
+test('batch saving saves eligible media in message order and reports unsupported items once', async () => {
+  params.messages = [
+    { id: 'video', type: 'video', videoUrl: 'https://media/video.mp4' },
+    { id: 'text', type: 'received', text: 'hello' },
+    { id: 'image', type: 'image', imageUrl: 'https://media/photo.jpg' },
+    { id: 'private', type: 'image', imageUrl: 'https://media/private.jpg', burnDurationSec: 30 },
+    { id: 'local:pending', type: 'image', imageUrl: 'file:///pending.jpg' },
+  ];
+  const { result } = renderHook(() => useMessageActions(params));
+  selectMessages(result, params.messages);
+  expect(result.current.canSaveSelectedMessages).toBe(true);
+  await act(async () => { await result.current.handleSaveSelectedMessages(); });
+  expect(mockSaveMedia.mock.calls).toEqual([
+    ['https://media/photo.jpg', undefined], ['https://media/video.mp4', { mimeType: 'video/mp4' }],
+  ]);
+  expect(Alert.alert).toHaveBeenCalledTimes(1);
+  expect(Alert.alert).toHaveBeenCalledWith('media.savedTitle', 'chat.selection.saveResult');
+  expect(result.current.selectedMessageIds).toBeNull();
+});
+
+test('partial batch save keeps failed messages selected and blocks duplicate presses', async () => {
+  let finish!: (value: string) => void;
+  mockSaveMedia.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; })).mockResolvedValueOnce('failed');
+  params.messages = [
+    { id: 'last', type: 'image', imageUrl: 'https://media/last' },
+    { id: 'first', type: 'image', imageUrl: 'https://media/first' },
+  ];
+  const { result } = renderHook(() => useMessageActions(params));
+  selectMessages(result, params.messages);
+  let saving!: Promise<void>;
+  act(() => { saving = result.current.handleSaveSelectedMessages(); });
+  expect(result.current.selectionProgress?.action).toBe('save');
+  await act(async () => { await result.current.handleSaveSelectedMessages(); });
+  expect(mockSaveMedia).toHaveBeenCalledTimes(1);
+  await act(async () => { finish('saved'); await saving; });
+  expect([...result.current.selectedMessageIds!]).toEqual(['last']);
+  expect(result.current.selectionProgress).toBeNull();
+});
+
+test.each(['session', 'conversation', 'revoke', 'blur'] as const)('batch save rechecks the next message after %s changes', async (change) => {
+  let finish!: (value: string) => void;
+  mockSaveMedia.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+  params.messages = [
+    { id: 'next', type: 'image', imageUrl: 'https://media/next' },
+    { id: 'first', type: 'image', imageUrl: 'https://media/first' },
+  ];
+  const { result, rerender } = renderHook(() => useMessageActions(params));
+  selectMessages(result, params.messages);
+  let saving!: Promise<void>;
+  act(() => { saving = result.current.handleSaveSelectedMessages(); });
+  if (change === 'session') mockAuth.sessionEpoch++;
+  if (change === 'blur') mockChat.activeConversationId = '';
+  if (change === 'conversation') { params = { ...params, conversationID: 'c2' }; rerender(undefined); }
+  if (change === 'revoke') { params = { ...params, messages: [{ id: 'next', type: 'system-notice' }, params.messages[1]] }; rerender(undefined); }
+  await act(async () => { finish('saved'); await saving; });
+  expect(mockSaveMedia).toHaveBeenCalledTimes(1);
+  if (change !== 'revoke') expect(Alert.alert).not.toHaveBeenCalled();
+  if (change === 'blur') expect([...result.current.selectedMessageIds!]).toEqual(['next']);
+});
+
+test('batch collection awaits each result, skips protected messages and retains failures', async () => {
+  params.messages = [
+    { id: 'failed', type: 'received', text: 'later' },
+    { id: 'protected', type: 'received', text: 'secret', burnDurationSec: 10 },
+    { id: 'first', type: 'received', text: 'first' },
+  ];
+  jest.mocked(params.handleCollectMessage).mockResolvedValueOnce('collected').mockResolvedValueOnce('failed');
+  const { result } = renderHook(() => useMessageActions(params));
+  selectMessages(result, params.messages);
+  expect(result.current.canCollectSelectedMessages).toBe(true);
+  await act(async () => { await result.current.handleCollectSelectedMessages(); });
+  expect(params.handleCollectMessage).toHaveBeenNthCalledWith(1, params.messages[2], { silent: true });
+  expect(params.handleCollectMessage).toHaveBeenNthCalledWith(2, params.messages[0], { silent: true });
+  expect([...result.current.selectedMessageIds!]).toEqual(['failed']);
+  expect(Alert.alert).toHaveBeenCalledTimes(1);
+});
+
+test('denied album permission stops the batch and preserves unsaved selection', async () => {
+  mockSaveMedia.mockResolvedValueOnce('denied');
+  params.messages = [{ id: 'one', type: 'image', imageUrl: 'https://media/one' }, { id: 'two', type: 'image', imageUrl: 'https://media/two' }];
+  const { result } = renderHook(() => useMessageActions(params));
+  selectMessages(result, params.messages);
+  await act(async () => { await result.current.handleSaveSelectedMessages(); });
+  expect(mockSaveMedia).toHaveBeenCalledTimes(1);
+  expect(result.current.selectedMessageIds?.size).toBe(2);
+  expect(Alert.alert).toHaveBeenCalledWith('media.saveDeniedTitle', 'media.saveDeniedMessage');
+});
+
+test('an entirely skipped batch does not claim a successful collection', async () => {
+  params.messages = [{ id: 'note', type: 'note-card' }];
+  jest.mocked(params.handleCollectMessage).mockResolvedValue('skipped');
+  const { result } = renderHook(() => useMessageActions(params));
+  selectMessages(result, params.messages);
+  await act(async () => { await result.current.handleCollectSelectedMessages(); });
+  expect(Alert.alert).toHaveBeenCalledWith('chat.selection.noEligible', 'chat.selection.collectResult');
+});
+
 test('save-as-sticker uses only the confirmed message ID and shows success', async () => {
   const { result } = renderHook(() => useMessageActions(params));
   act(() => result.current.setActionMenu({ message: { id: 'confirmed', type: 'image', imageUrl: 'https://media.test/signed' }, x: 0, y: 0 }));

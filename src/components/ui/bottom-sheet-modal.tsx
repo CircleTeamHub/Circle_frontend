@@ -1,3 +1,4 @@
+import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -269,6 +270,7 @@ export function BottomSheetModal({
           <View style={s.keyboardArea}>{sheetContent}</View>
         )}
       </Pressable>
+      <UploadProgressHost />
     </Modal>
   );
 }

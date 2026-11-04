@@ -92,12 +92,12 @@ test('NoteCard renders selection state, owner remark, and tappable source chips'
   assert.match(card, /note\.remark/);
   assert.match(card, /notes\.list\.remark/);
 
-  // 来源双 chip：发送者 + 来源群，带头像；多选模式禁用跳转；点击不冒泡到整卡。
+  // 普通多选禁用来源跳转；发送笔记的选择页显式允许查看资料，点击不冒泡到整卡。
   assert.match(card, /onSourcePress/);
   assert.match(card, /senderChip/);
   assert.match(card, /groupChip/);
   assert.match(card, /<Avatar/);
-  assert.match(card, /chipsEnabled = Boolean\(onSourcePress\) && !selectionMode/);
+  assert.match(card, /chipsEnabled = Boolean\(onSourcePress\) && \(!selectionMode \|\| selectionSourceDetails\)/);
   assert.match(card, /stopPropagation/);
 });
 

@@ -1,4 +1,21 @@
 {
+  "mediaUpload": {
+    "sessionChanged": "Your account changed. Please select the file again to upload.",
+    "uploading": "Uploading",
+    "image": "Image",
+    "video": "Video",
+    "preparing": "Preparing…",
+    "confirming": "Confirming…",
+    "processing": "Processing…",
+    "additional": "+{{count}} more"
+  },
+  "avatarPhoto": {
+    "actions": "Profile photo actions",
+    "title": "Profile Photo",
+    "view": "View profile photo",
+    "takePhoto": "Take Photo",
+    "chooseFromPhotos": "Choose from Photos"
+  },
   "accountSwitcher": {
     "title": "Switch Account",
     "current": "Current",
@@ -256,6 +273,13 @@
     "imServerUnreachable": "Can't reach the server. Retrying…",
     "imServerError": "The server is having a problem. Please try again later.",
     "swipeMarkRead": "Mark Read",
+    "selectChats": "Select chats",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "selectedCount": "Selected: {{count}}",
+    "batchDeleteConfirm": "Delete the selected {{count}} chats and your chat history? This cannot be undone.",
+    "batchDeleteFailedTitle": "Deletion incomplete",
+    "batchDeleteFailedMessage": "Could not finish deleting {{count}} chats. They remain selected. Please try again.",
     "swipeMarkUnread": "Mark Unread",
     "swipeHide": "Hide Chat",
     "swipePin": "Pin",
@@ -390,6 +414,15 @@
     "chatChannelDescription": "New messages from friends and groups"
   },
   "chat": {
+    "selection": {
+      "selectedCount": "{{count}} messages selected",
+      "saving": "Saving {{current}}/{{total}}",
+      "collecting": "Saving favorites {{current}}/{{total}}",
+      "noEligible": "No eligible messages",
+      "saveHint": "Only non-disappearing photos and videos can be saved",
+      "saveResult": "Saved: {{success}}. Failed: {{failed}}. Unsupported: {{skipped}}.",
+      "collectResult": "Favorited: {{success}}. Failed: {{failed}}. Skipped: {{skipped}}."
+    },
     "detail": {
       "title": "Chat",
       "statusSelf": "Me",
@@ -500,6 +533,9 @@
       "empty": "No members available to mention"
     },
     "forward": {
+      "noPrivateChats": "No private chats yet",
+      "noGroupChats": "No group chats yet",
+      "noMatches": "No matching chats in this category",
       "title": "Choose a chat",
       "searchPlaceholder": "Search chats",
       "empty": "No message to forward",
@@ -1812,6 +1848,22 @@
       "deleteError": "Failed to delete collection. Please try again later.",
       "conversationFallback": "Chat",
       "fromSource": "From {{title}}",
+      "longPressHint": "Long-press to select or manage saved items",
+      "unavailable": "Content unavailable",
+      "textPreviewTitle": "Saved message",
+      "selectedCount": "{{count}} selected",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "batchDeleteConfirm": "Delete {{count}} selected saved items?",
+      "batchDeleteResult": "Deleted {{succeeded}}; failed {{failed}}",
+      "batchSaveResult": "Saved {{succeeded}}; failed {{failed}}; skipped {{skipped}}",
+      "operationProgress": "Processing {{current}} / {{total}}",
+      "saveDenied": "Allow photo library access in Settings to save media",
+      "unsupportedForward": "This saved content cannot be forwarded",
+      "imagePreviewLabel": "Saved photo",
+      "videoPreviewLabel": "Saved video",
+      "voicePreviewLabel": "Voice message",
+      "voicePlayingLabel": "Playing",
       "tabs": {
         "all": "All",
         "chat": "Chat History",
@@ -2051,6 +2103,7 @@
   },
   "userProfile": {
     "title": "Profile",
+    "originalNickname": "Nickname: {{name}}",
     "like": "Like",
     "unlike": "Unlike",
     "likesReceived": "Likes received",
@@ -2734,7 +2787,7 @@
       "addImage": "Add image",
       "addMedia": "Add media",
       "addShowcaseImage": "Add showcase image",
-      "addShowcaseVideo": "Add showcase video",
+      "addShowcaseVideo": "Add verification video",
       "addVideo": "Add video",
       "done": "Done",
       "editTitle": "Edit note",
@@ -2793,8 +2846,8 @@
         "locationSelected": "Selected",
         "media": "Media",
         "mediaHint": "Main note images and videos",
-        "showcase": "Showcase",
-        "showcaseHint": "Media shown on the shared group card",
+        "showcase": "Verification videos",
+        "showcaseHint": "Videos used for verification",
         "text": "Text",
         "textHint": "Edit text content only"
       },
@@ -2818,7 +2871,7 @@
         "media": "Media",
         "audio": "Audio",
         "video": "Video",
-        "showcase": "Showcase",
+        "showcase": "Verification videos",
         "location": "Location",
         "contact": "Contact",
         "group": "Group card",
@@ -2922,9 +2975,11 @@
       "ungrouped": "Ungrouped"
     },
     "section": {
+      "image": "Images",
+      "video": "Videos",
       "text": "Text",
       "media": "Photos · Videos",
-      "showcase": "Showcase",
+      "showcase": "Verification videos",
       "audio": "Audio",
       "contact": "Contact",
       "group": "Group card",
@@ -2946,7 +3001,9 @@
       "statusClosed": "Closed",
       "remark": "Remark: {{text}}",
       "openSenderChat": "Chat with {{name}}",
-      "openGroupChat": "Open group chat {{name}}"
+      "openGroupChat": "Open group chat {{name}}",
+      "viewContactDetails": "View {{name}}'s profile",
+      "viewGroupDetails": "View group details for {{name}}"
     },
     "groupPicker": {
       "title": "Edit groups",
@@ -3654,6 +3711,13 @@
     "unnamed": "Unnamed",
     "saveImage": "Save Image",
     "shareQr": "Share QR Code",
+    "accountId": "ID: {{id}}",
+    "copyId": "Copy ID",
+    "idCopied": "ID copied",
+    "copyIdFailed": "Could not copy the ID. Please try again.",
+    "personalCardCaption": "Scan the QR code,\nlet's chat on WindNote",
+    "groupCardCaption": "Scan the QR code,\njoin our WindNote group",
+    "circleCardCaption": "Scan the QR code,\njoin our WindNote circle",
     "reset": "Reset QR Code",
     "resetConfirmTitle": "Reset your QR code?",
     "resetConfirmMessage": "Previously shared personal QR codes will stop working immediately.",
@@ -3734,6 +3798,10 @@
     "recoveryNotice": "This is a recovery request: unless you decline, it can sign in to your account after {{value}} and sign out your other devices."
   },
   "groupAdmission": {
+    "circleSentInvitation": "You invited them to join the circle",
+    "circleInvitedBy": "{{name}} invited you to join the circle",
+    "circleJoined": "Joined the circle",
+    "circlePreview": "[Circle invitation]",
     "createdAt": "Requested or invited at: {{time}}",
     "updatedAt": "Status updated at: {{time}}",
     "title": "Group details and invitation",

@@ -36,6 +36,9 @@ export function GroupInvitationBubble({
   const user = useAuthStore((s) => s.user?.id);
   const circleId = message.groupInvitation?.circleInvitationId ?? "";
   const id = circleId || message.groupInvitation?.admissionId || "";
+  const subtitleKey = circleId
+    ? message.outgoing ? 'groupAdmission.circleSentInvitation' : 'groupAdmission.circleInvitedBy'
+    : message.outgoing ? 'groupAdmission.sentInvitation' : 'groupAdmission.invitedBy';
   const name =
     typeof message.groupInvitation?.groupName === "string"
       ? message.groupInvitation.groupName
@@ -88,12 +91,12 @@ export function GroupInvitationBubble({
       }
       leading={<GroupChatAvatar name={name} uri={uri} size={48} />}
       title={name}
-      subtitle={t(message.outgoing ? "groupAdmission.sentInvitation" : "groupAdmission.invitedBy", {
+      subtitle={t(subtitleKey, {
         name: senderName ?? selfName ?? "",
       })}
       footer={
         status
-          ? t(`groupAdmission.status.${status}`)
+          ? t(circleId && status === 'JOINED' ? 'groupAdmission.circleJoined' : `groupAdmission.status.${status}`)
           : t("groupAdmission.viewInvitation")
       }
       onPress={() => onPress(id, Boolean(circleId))}
