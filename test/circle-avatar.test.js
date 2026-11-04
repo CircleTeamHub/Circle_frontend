@@ -29,16 +29,17 @@ test('circle avatar: API + upload hook are wired', () => {
   assert.match(screen, /await setCircleAvatar\(id, fileUrl\)/);
 });
 
-test('CircleDetailScreen: avatar is tappable only for the owner to change it', () => {
+test('CircleDetailScreen: avatar opens a preview and only the owner can change it', () => {
   const src = read(
     'src/features/discover/screens/CircleDetailScreen.tsx',
   );
   assert.match(src, /useChangeAvatar\(\{/);
   assert.match(src, /const isOwner = circle\?\.myRole === 'OWNER'/);
-  // the avatar wrapper is a Pressable gated on ownership, not admin status.
+  assert.match(src, /onPress=\{\(\) => setAvatarPreviewKey\(avatarSubjectKey\)\}/);
+  // Viewing remains available; editing is gated on ownership, not admin status.
   assert.match(
     src,
-    /onPress=\{isOwner \? changeCircleAvatar : undefined\}/,
+    /onChange=\{isOwner \? changeCircleAvatar : undefined\}/,
   );
 });
 

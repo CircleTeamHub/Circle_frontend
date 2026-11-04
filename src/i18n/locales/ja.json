@@ -1,4 +1,11 @@
 {
+  "avatarPhoto": {
+    "actions": "プロフィール写真の操作",
+    "title": "プロフィール写真",
+    "view": "プロフィール写真を表示",
+    "takePhoto": "写真を撮る",
+    "chooseFromPhotos": "写真から選ぶ"
+  },
   "assistant": {
     "name": "風信アシスタント",
     "open": "風信アシスタントを開く",

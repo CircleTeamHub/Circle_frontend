@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
+import { AvatarPhotoViewer } from '@/components/ui/avatar-photo-viewer';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { Spacing, Typography, useTheme } from '@/theme';
@@ -82,20 +83,25 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   const setUser = useAuthStore((state) => state.setUser);
   // 设置搜索结果可以带 ?field= 直达某一项,进页面就弹出对应面板。
   const params = useLocalSearchParams<{ field?: string }>();
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [avatarPreviewKey, setAvatarPreviewKey] = useState<string | null>(null);
+  const avatarSubjectKey = `${sessionEpoch}:${user?.id ?? ''}`;
 
   const submitAvatar = useCallback(
     async (fileUrl: string) => {
-      const current = useAuthStore.getState().user;
-      if (!current) return;
-      setUser(await updateUserProfile(current.id, { avatarUrl: fileUrl }, current));
+      const { user: current, sessionEpoch: epoch } = useAuthStore.getState();
+      if (!current || current.id !== user?.id) return;
+      const updated = await updateUserProfile(current.id, { avatarUrl: fileUrl }, current);
+      const latest = useAuthStore.getState();
+      if (latest.sessionEpoch === epoch && latest.user?.id === current.id) setUser(updated);
     },
-    [setUser],
+    [setUser, user?.id],
   );
-  const { changeAvatar } = useChangeAvatar({
+  const { changeAvatar, changing } = useChangeAvatar({
     submit: submitAvatar,
     // submit 里已经回写了全局用户,这里不用再做什么。
     onChanged: () => {},
@@ -183,9 +189,8 @@ export default function SettingsScreen() {
       Alert.alert(item.label, item.unsupportedMessage ?? t('settingsPage.unsupported'));
       return;
     }
-    // 头像直接唤起相册;其余字段在底部面板里改,不再跳单独的编辑页。
     if (item.type === 'avatar') {
-      void changeAvatar();
+      setAvatarPreviewKey(avatarSubjectKey);
       return;
     }
     setEditingFieldId(item.id);
@@ -195,7 +200,7 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (!deepLinkedField) return;
     if (deepLinkedField === 'avatar') {
-      void changeAvatar();
+      setAvatarPreviewKey(avatarSubjectKey);
       return;
     }
     setEditingFieldId(deepLinkedField);
@@ -220,6 +225,17 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
       <ProfileFieldEditSheet fieldId={editingFieldId} onClose={closeEditor} />
+      {user && avatarPreviewKey === avatarSubjectKey ? (
+        <AvatarPhotoViewer
+          key={avatarSubjectKey}
+          visible
+          uri={user.avatarUrl}
+          name={user.nickname ?? user.accountId}
+          changing={changing}
+          onChange={changeAvatar}
+          onClose={() => setAvatarPreviewKey(null)}
+        />
+      ) : null}
     </View>
   );
 }

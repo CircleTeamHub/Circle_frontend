@@ -1,4 +1,11 @@
 {
+  "avatarPhoto": {
+    "actions": "Profile photo actions",
+    "title": "Profile Photo",
+    "view": "View profile photo",
+    "takePhoto": "Take Photo",
+    "chooseFromPhotos": "Choose from Photos"
+  },
   "accountSwitcher": {
     "title": "Switch Account",
     "current": "Current",

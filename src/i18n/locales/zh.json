@@ -1,4 +1,11 @@
 {
+  "avatarPhoto": {
+    "actions": "头像操作",
+    "title": "头像",
+    "view": "查看头像",
+    "takePhoto": "拍照",
+    "chooseFromPhotos": "从相册选择"
+  },
   "accountSwitcher": {
     "title": "切换账号",
     "current": "当前",
