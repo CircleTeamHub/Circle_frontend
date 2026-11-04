@@ -2546,7 +2546,7 @@
     "tags": "Etiquetas",
     "description": "Descripción",
     "permission": "Permisos de amigo",
-    "moreInfo": "Más información",
+    "moreInfo": "Ajustes de amigo",
     "editProfile": "Editar perfil",
     "fieldNotEditable": "Este campo no se puede editar",
     "returnToSettings": "Vuelve a Ajustes.",

@@ -2538,7 +2538,7 @@
     "tags": "タグ",
     "description": "説明",
     "permission": "友だちの権限",
-    "moreInfo": "詳細情報",
+    "moreInfo": "友だち設定",
     "editProfile": "プロフィールを編集",
     "fieldNotEditable": "この項目は編集できません",
     "returnToSettings": "設定に戻ってください。",

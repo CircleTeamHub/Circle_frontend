@@ -733,6 +733,19 @@ test('the left attachment button stays available with a draft and the right emoj
   expect(sendTextMessage).not.toHaveBeenCalled();
 });
 
+test('with a draft the send button sits at the far right, after the emoji button', async () => {
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+  fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), '你好');
+
+  const composerIcons = ['icon:add', 'icon:mic-outline', 'icon:happy-outline', 'icon:arrow-up'];
+  const order = screen
+    .getAllByText(/^icon:/)
+    .map((node) => String(node.props.children))
+    .filter((name) => composerIcons.includes(name));
+  expect(order).toEqual(composerIcons);
+});
+
 test('the white emoji button switches from voice mode back to an editable draft', async () => {
   render(<ChatDetailScreen />);
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);

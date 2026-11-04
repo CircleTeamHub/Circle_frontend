@@ -1932,7 +1932,7 @@
     "tags": "Tags",
     "description": "Description",
     "permission": "Friend Permissions",
-    "moreInfo": "More Info",
+    "moreInfo": "Friend Settings",
     "editProfile": "Edit Profile",
     "fieldNotEditable": "This field cannot be edited",
     "returnToSettings": "Please return to settings.",

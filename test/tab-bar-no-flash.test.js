@@ -25,6 +25,12 @@ test('五个 tab 依次是 消息/联系人/圈子/探索/我的，圈子用 App
   // 裁掉右下各一截,看着像被压扁(实机反馈)。
   assert.match(bar, /<Circle cx="50%" cy="50%" r="50%" fill=\{`url\(#\$\{gradientId\}\)`\} \/>/);
   assert.doesNotMatch(bar, /cx=\{TAB_FEATURED_SIZE \/ 2\}/);
+  // 百分比也挡不住:深色模式的 1pt 布局描边仍让玻璃里的渐变圆右下被裁(实机反馈,浅色无描边就正常)。
+  // 圆面本身一律不带描边,深色亮边改成盖在最上面的覆盖圈,不占布局。
+  const featuredSurface = bar.slice(bar.indexOf('featuredSurface: {'), bar.indexOf('featuredFill: {'));
+  assert.match(featuredSurface, /borderWidth: 0,/);
+  assert.match(bar, /featuredRim: \{\s*\.\.\.StyleSheet\.absoluteFillObject,[\s\S]{0,200}?borderWidth: resolvedMode === 'light' \? 0 : 1,/);
+  assert.match(bar, /<View pointerEvents="none" style=\{styles\.featuredRim\} \/>\s*<\/TabBarSurface>/);
   assert.match(
     bar,
     /<PlaneLogoIcon size=\{TAB_FEATURED_LOGO_SIZE\} color=\{colors\.white\} filled=\{focused\} \/>/,
