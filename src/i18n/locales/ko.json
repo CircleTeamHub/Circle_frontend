@@ -278,6 +278,15 @@
     }
   },
   "chat": {
+    "selection": {
+      "selectedCount": "메시지 {{count}}개 선택됨",
+      "saving": "저장 중 {{current}}/{{total}}",
+      "collecting": "즐겨찾기 추가 중 {{current}}/{{total}}",
+      "noEligible": "처리할 수 있는 메시지가 없습니다",
+      "saveHint": "사라지지 않는 사진과 동영상만 저장할 수 있습니다",
+      "saveResult": "저장: {{success}}개, 실패: {{failed}}개, 지원 안 됨: {{skipped}}개",
+      "collectResult": "즐겨찾기: {{success}}개, 실패: {{failed}}개, 건너뜀: {{skipped}}개"
+    },
     "detail": {
       "title": "채팅",
       "statusSelf": "나",

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  Pressable,
   type TextInput,
   useWindowDimensions,
 } from 'react-native';
@@ -59,6 +58,7 @@ import { ChatConnectionBanner } from '@/features/chat/components/ChatConnectionB
 import { MentionPickerPanel } from '@/features/chat/chat-detail/components/MentionPickerPanel';
 import { ComposerBanners } from '@/features/chat/chat-detail/components/ComposerBanners';
 import { ChatComposerBar } from '@/features/chat/chat-detail/components/ChatComposerBar';
+import { MessageSelectionToolbar } from '@/features/chat/chat-detail/components/MessageSelectionToolbar';
 import { AttachmentPanel } from '@/features/chat/chat-detail/components/AttachmentPanel';
 
 export type { EmbeddedChatParams } from '@/features/chat/chat-detail/types';
@@ -352,6 +352,11 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const {
     selectedMessageIds,
     selectedMessages,
+    selectionProgress,
+    canSaveSelectedMessages,
+    canCollectSelectedMessages,
+    handleSaveSelectedMessages,
+    handleCollectSelectedMessages,
     handleCancelMessageSelection,
     handleToggleSelectedMessage,
     handleDeleteSelectedMessages,
@@ -720,14 +725,14 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
           onLayout={(event) => setComposerDockHeight(event.nativeEvent.layout.height)}
         >
           {selectedMessageIds !== null ? (
-            <View style={{ padding: Spacing.md, paddingBottom: insets.bottom || Spacing.md, backgroundColor: colors.surface }}>
-              <Text style={{ color: colors.text }}>{t('notes.selection.selectedCount', { count: selectedMessages.length })}</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Pressable onPress={handleCancelMessageSelection} accessibilityRole="button" accessibilityLabel={t('common.cancel')} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.text }}>{t('common.cancel')}</Text></Pressable>
-                <Pressable onPress={handleForwardSelectedMessages} disabled={!canForwardSelectedMessages} accessibilityRole="button" accessibilityState={{ disabled: !canForwardSelectedMessages }} style={{ minHeight: 44, justifyContent: 'center', opacity: canForwardSelectedMessages ? 1 : 0.4 }}><Text style={{ color: colors.iconAccent }}>{t('chat.messageActions.forward')}</Text></Pressable>
-                <Pressable onPress={handleDeleteSelectedMessages} disabled={selectedMessages.length === 0} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', opacity: selectedMessages.length ? 1 : 0.4 }}><Text style={{ color: colors.text }}>{t('common.delete')}</Text></Pressable>
-              </View>
-            </View>
+            <MessageSelectionToolbar
+              count={selectedMessages.length} bottomInset={insets.bottom}
+              canSave={canSaveSelectedMessages} canForward={canForwardSelectedMessages} canCollect={canCollectSelectedMessages}
+              progress={selectionProgress}
+              onSave={() => void handleSaveSelectedMessages()} onForward={handleForwardSelectedMessages}
+              onCollect={() => void handleCollectSelectedMessages()} onDelete={handleDeleteSelectedMessages}
+              onCancel={handleCancelMessageSelection}
+            />
           ) : <>
           {isPreviewMode ? (
             <Text style={[s.previewNotice, Typography.small, { color: colors.text }]}>

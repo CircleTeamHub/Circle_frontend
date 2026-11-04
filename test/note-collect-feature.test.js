@@ -70,7 +70,9 @@ test('collect waits for the chat keyboard window to settle before presenting the
   const hook = read('src/features/chat/chat-detail/hooks/use-collect-message.ts');
 
   assert.match(hook, /function waitForKeyboardToHide\(\)/);
-  assert.match(hook, /await waitForKeyboardToHide\(\)/);
+  assert.match(hook, /const keyboard = waitForKeyboardToHide\(\)/);
+  assert.match(hook, /await keyboard\.promise/);
+  assert.match(hook, /request\.cancelKeyboard = keyboard\.cancel/);
   assert.match(hook, /noteCollectOpening/);
   assert.match(hook, /noteCollectTarget !== null \|\| noteCollectOpening/);
   const sheet = read('src/features/notes/components/AddNoteToNotesSheet.tsx');

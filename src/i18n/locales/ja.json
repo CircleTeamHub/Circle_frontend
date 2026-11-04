@@ -278,6 +278,15 @@
     }
   },
   "chat": {
+    "selection": {
+      "selectedCount": "{{count}}件のメッセージを選択中",
+      "saving": "保存中 {{current}}/{{total}}",
+      "collecting": "お気に入り登録中 {{current}}/{{total}}",
+      "noEligible": "処理できるメッセージがありません",
+      "saveHint": "消える設定のない画像と動画のみ保存できます",
+      "saveResult": "保存済み：{{success}}件、失敗：{{failed}}件、非対応：{{skipped}}件",
+      "collectResult": "登録済み：{{success}}件、失敗：{{failed}}件、スキップ：{{skipped}}件"
+    },
     "detail": {
       "title": "チャット",
       "statusSelf": "自分",

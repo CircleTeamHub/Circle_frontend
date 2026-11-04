@@ -42,6 +42,16 @@ function loadTsModule(relativePath) {
   return context.module.exports;
 }
 
+test('video collections use the video category and keep their authoritative source reference', () => {
+  const { buildCollectionInputFromMessage } = loadTsModule('src/features/chat/utils/message-collection.ts');
+  const input = buildCollectionInputFromMessage({ id: 'video-1', type: 'video', videoUrl: 'https://media/video.mp4' }, {
+    conversationID: 'conversation', conversationTitle: 'Chat',
+  });
+  assert.equal(input.type, 'VIDEO');
+  assert.equal(input.sourceID, 'video-1');
+  assert.equal(input.payload.messageID, 'video-1');
+});
+
 test('buildCollectionInputFromMessage stores voice OpenIM metadata without uploading again', () => {
   const { buildCollectionInputFromMessage } = loadTsModule(
     'src/features/chat/utils/message-collection.ts',
