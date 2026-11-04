@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 
 interface ProfileActionRowProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -26,12 +26,13 @@ const s = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 56,
     gap: ROW_GAP,
     paddingVertical: 12,
     paddingHorizontal: ROW_PADDING_H,
   },
   pressed: {
-    opacity: 0.55,
+    opacity: 0.7,
   },
   iconBadge: {
     width: ICON_BADGE_SIZE,
@@ -42,6 +43,7 @@ const s = StyleSheet.create({
   },
   body: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -52,6 +54,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.xs,
     flexShrink: 1,
+    maxWidth: '55%',
   },
   value: {
     flexShrink: 1,
@@ -72,8 +75,8 @@ export const ProfileActionRow = ({
 
   const d = useMemo(
     () => ({
-      iconBadge: { backgroundColor: iconColor },
-      label: { color: colors.text, ...Typography.body },
+      iconBadge: { backgroundColor: withAlpha(iconColor, 0.12) },
+      label: { color: colors.text, ...Typography.body, flexShrink: 1 },
       value: { color: colors.textSecondary, ...Typography.caption },
     }),
     [colors, iconColor],
@@ -87,7 +90,7 @@ export const ProfileActionRow = ({
       accessibilityLabel={accessibilityLabel}
     >
       <View style={[s.iconBadge, d.iconBadge]}>
-        <Ionicons name={icon} size={17} color={colors.white} />
+        <Ionicons name={icon} size={18} color={iconColor} />
       </View>
       <View style={s.body}>
         <Text style={d.label}>{label}</Text>

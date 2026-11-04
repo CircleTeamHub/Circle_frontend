@@ -184,7 +184,7 @@ test('leaving then receiving a new invitation or application keeps one row and i
 });
 
 
-test.each([['APPROVED','已加入群聊'],['ADMIN_APPROVED','已加入群聊'],['REJECTED','申请未通过'],['CANCELLED','申请已取消']])('circle status %s is rendered accurately', async (status, label) => {
+test.each([['APPROVED','已加入圈子'],['ADMIN_APPROVED','已加入圈子'],['REJECTED','申请未通过'],['CANCELLED','申请已取消']])('circle status %s is rendered accurately', async (status, label) => {
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [], nextCursor: null });
   jest.mocked(fetchMyApplications).mockResolvedValue([{ id: 'status-circle', circleId: 'circle', circleName: '圈', status, inviter: {}, applicant: {} }] as any);
   const ui = render(<GroupAdmissionsList />);
@@ -231,10 +231,10 @@ test('retry after a failed refresh uses page one instead of the old pagination c
 
 test('a joined circle merged with approved invitation history opens its conversation', async () => {
   jest.mocked(fetchGroupAdmissions).mockResolvedValue({ items: [], nextCursor: null });
-  jest.mocked(fetchMyApplications).mockResolvedValue([{ id: 'history', circleId: 'circle', circleName: '已加入圈子', status: 'APPROVED', inviter: {}, applicant: {} }] as never);
-  mockConversations = [{ id: 'chat', type: 'GROUP', circleId: 'circle', name: '已加入圈子', unreadCount: 0 }];
+  jest.mocked(fetchMyApplications).mockResolvedValue([{ id: 'history', circleId: 'circle', circleName: '摄影圈', status: 'APPROVED', inviter: {}, applicant: {} }] as never);
+  mockConversations = [{ id: 'chat', type: 'GROUP', circleId: 'circle', name: '摄影圈', unreadCount: 0 }];
   const ui = render(<GroupAdmissionsList includeJoined />);
-  fireEvent.press(await ui.findByText('已加入圈子'));
+  fireEvent.press(await ui.findByText('摄影圈'));
   expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(tabs)/contacts/chat-detail' }));
 });
 

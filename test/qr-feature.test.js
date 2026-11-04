@@ -163,8 +163,8 @@ test('chat info exposes a group QR row that forks standalone vs circle', () => {
   const source = read('src/features/chat/screens/ChatInfoScreen.tssx'.replace('tssx', 'tsx'));
   assert.match(source, /qr\.groupEntry/);
   assert.match(source, /const handleOpenGroupQr = useCallback/);
-  assert.match(source, /params: \{ type: 'group', id, name: groupTitle \}/);
-  assert.match(source, /params: \{ type: 'circle', id: groupID, name: groupTitle \}/);
+  assert.match(source, /params: \{ type: 'group', id, name: groupTitle, avatarUrl: groupAvatarUrl \?\? undefined \}/);
+  assert.match(source, /params: \{ type: 'circle', id: groupID, name: groupTitle, avatarUrl: groupAvatarUrl \?\? undefined \}/);
   // 临时房不发码(有自己的邀请链接),入口在非临时分支里。
   assert.match(source, /isTempConversation \?[\s\S]{0,400}tempChats\.inviteLink[\s\S]{0,700}qr\.groupEntry/);
 });

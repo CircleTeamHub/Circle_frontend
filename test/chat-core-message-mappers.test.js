@@ -640,6 +640,12 @@ function loadRealListMappers() {
   return ctx.module.exports;
 }
 
+test('invitation previews distinguish circle and standalone group invitations', () => {
+  const { getChatMessagePreview } = loadRealListMappers();
+  assert.equal(getChatMessagePreview(dto({ type: 'group-invitation', content: { circleInvitationId: 'circle-invite', groupName: 'Circle' } })), 'groupAdmission.circlePreview');
+  assert.equal(getChatMessagePreview(dto({ type: 'group-invitation', content: { admissionId: 'group-invite', groupName: 'Group' } })), 'groupAdmission.preview');
+});
+
 test('assistant note reminders read 打烊 and 开工 in the chat bubble', () => {
   const list = loadRealListMappers();
   const { mapChatMessageDtoToUI } = loadMappers({

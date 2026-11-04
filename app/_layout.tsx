@@ -287,7 +287,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
 }
 
 // RootLayout：应用真正的根组件
-// 职责：完成认证所需的本地存储初始化 → 立即隐藏原生启动屏 → 挂载主题 Provider → 渲染路由结构
+// 职责：后台初始化本地存储和认证状态，挂载主题 Provider 与路由结构。
 function RootLayout() {
   const sentryUserId = useAuthStore((state) => state.user?.id ?? null);
   // 导航追踪：冷启动指标和 XHR span 都要挂在导航 transaction 上才会被发出。

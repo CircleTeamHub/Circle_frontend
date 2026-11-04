@@ -6,6 +6,7 @@ import type { ChatConversationDto } from '@/chat-core/protocol';
 
 let mockConversations: ChatConversationDto[];
 const mockGroupAvatar = jest.fn<null, [unknown]>(() => null);
+const mockAvatar = jest.fn<null, [unknown]>(() => null);
 const mockPending = { message: { type: 'received', text: 'hello' } };
 let mockPendingBatch: typeof mockPending[] | null;
 const mockSetPendingBatch = jest.fn((items: typeof mockPending[]) => { mockPendingBatch = items; });
@@ -27,7 +28,7 @@ jest.mock('@/i18n', () => ({
 }));
 jest.mock('@/services/api/utils', () => ({ normalizeMediaUrl: (url: string) => url }));
 jest.mock('@/utils/locale', () => ({ getLocalizedDateTimeLocale: () => 'en-US' }));
-jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
+jest.mock('@/components/ui/avatar', () => ({ Avatar: (props: unknown) => mockAvatar(props) }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({
   GroupChatAvatar: (props: unknown) => mockGroupAvatar(props),
 }));
@@ -40,7 +41,7 @@ jest.mock('@/features/chat/store/use-message-forward-store', () => ({
 jest.mock('@/chat-core/store', () => ({
   useChatStore: (selector: (state: unknown) => unknown) => selector({ conversations: mockConversations }),
 }));
-jest.mock('@/chat-core/api', () => ({ loadChatConversations: jest.fn() }));
+jest.mock('@/chat-core/api', () => ({ loadChatConversations: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@/chat-core/send-handle', () => ({ startChatSend: (send: (onCreate: () => void) => Promise<unknown>) => mockStartChatSend(send) }));
 jest.mock('@/chat-core/client', () => ({
   sendCardMessage: jest.fn(), sendForwardedMediaMessage: jest.fn(),
@@ -69,8 +70,67 @@ beforeEach(() => {
   mockStartChatSend.mockImplementation((send: (onCreate: () => void) => Promise<unknown>) => ({ queued: true, delivered: send(jest.fn()) }));
 });
 
+function showGroups() {
+  fireEvent.press(screen.getByRole('tab', { name: 'chat.forward.group' }));
+}
+
+const direct = (overrides: Partial<ChatConversationDto> = {}): ChatConversationDto => group({
+  id: 'direct-1', type: 'DIRECT', name: '私聊',
+  peer: { id: 'peer-1', nickname: '小王', avatarUrl: 'https://cdn.example/person.jpg' } as ChatConversationDto['peer'],
+  ...overrides,
+});
+
+test('defaults to private chats and keeps group, temporary and assistant targets out of that list', () => {
+  mockConversations = [direct(), group(), group({ id: 'temp-1', type: 'TEMP', tempChat: { id: 'room', title: '临时接待房' } }), group({ id: 'assistant', type: 'SUPPORT' })];
+  render(<ForwardPickerScreen />);
+  expect(screen.getByRole('tab', { name: 'chat.forward.single' }).props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('小王')).toBeTruthy();
+  expect(mockAvatar).toHaveBeenCalledWith(expect.objectContaining({ name: '小王', uri: 'https://cdn.example/person.jpg' }));
+  expect(screen.queryByText('周末爬山')).toBeNull();
+  expect(screen.queryByText('临时接待房')).toBeNull();
+  expect(screen.queryByText('AI小助手')).toBeNull();
+  showGroups();
+  expect(screen.getByRole('tab', { name: 'chat.forward.group' }).props.accessibilityState.selected).toBe(true);
+  expect(screen.getByText('周末爬山')).toBeTruthy();
+  expect(screen.getByText('临时接待房')).toBeTruthy();
+  expect(screen.queryByText('小王')).toBeNull();
+  expect(screen.queryByText('AI小助手')).toBeNull();
+  expect(mockSendText).not.toHaveBeenCalled();
+});
+
+test('search stays within the selected category and switches scope with the tabs', () => {
+  mockConversations = [direct(), group({ name: '小王的群' })];
+  render(<ForwardPickerScreen />);
+  fireEvent.changeText(screen.getByPlaceholderText('chat.forward.searchPlaceholder'), '小王');
+  expect(screen.getByText('小王')).toBeTruthy();
+  expect(screen.queryByText('小王的群')).toBeNull();
+  showGroups();
+  expect(screen.getByText('小王的群')).toBeTruthy();
+  expect(screen.queryByText('小王')).toBeNull();
+  fireEvent.changeText(screen.getByPlaceholderText('chat.forward.searchPlaceholder'), '不存在');
+  expect(screen.getByText('chat.forward.noMatches')).toBeTruthy();
+  expect(screen.queryByText('小王的群')).toBeNull();
+});
+
+test('empty private and group lists show their own empty states', () => {
+  mockConversations = [];
+  render(<ForwardPickerScreen />);
+  expect(screen.getByText('chat.forward.noPrivateChats')).toBeTruthy();
+  showGroups();
+  expect(screen.getByText('chat.forward.noGroupChats')).toBeTruthy();
+});
+
+test('a private target forwards to its conversation id and preserves the displayed peer identity', async () => {
+  mockConversations = [direct()];
+  render(<ForwardPickerScreen />);
+  fireEvent.press(screen.getByText('小王'));
+  await waitFor(() => expect(mockSendText).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'direct-1', text: 'hello' })));
+  expect(mockClearPending).toHaveBeenCalled();
+});
+
 test('standalone group forwarding shows and searches its group name and avatar', () => {
   render(<ForwardPickerScreen />);
+  showGroups();
   expect(screen.getByText('周末爬山')).toBeTruthy();
   expect(mockGroupAvatar).toHaveBeenCalledWith(expect.objectContaining({
     name: '周末爬山', uri: 'https://cdn.example/group.jpg',
@@ -82,6 +142,7 @@ test('standalone group forwarding shows and searches its group name and avatar',
 test('forward targets use the same personal group remark as the conversation list', () => {
   mockConversations = [group({ myRemark: '  我的登山队  ' })];
   render(<ForwardPickerScreen />);
+  showGroups();
   expect(screen.getByText('我的登山队')).toBeTruthy();
   fireEvent.changeText(screen.getByPlaceholderText('chat.forward.searchPlaceholder'), '登山队');
   expect(screen.getByText('我的登山队')).toBeTruthy();
@@ -90,12 +151,14 @@ test('forward targets use the same personal group remark as the conversation lis
 test('an unnamed standalone group uses the group fallback title', () => {
   mockConversations = [group({ name: null })];
   render(<ForwardPickerScreen />);
+  showGroups();
   expect(screen.getByText('群聊')).toBeTruthy();
 });
 
 test('TEMP targets render and search the room title through the shared conversation mapper', () => {
   mockConversations = [group({ type: 'TEMP', name: '旧群名', tempChat: { id: 'room-1', title: '临时接待房' } })];
   render(<ForwardPickerScreen />);
+  showGroups();
   expect(screen.getByText('临时接待房')).toBeTruthy();
   expect(mockGroupAvatar).toHaveBeenCalledWith(expect.objectContaining({ name: '临时接待房', temporary: true }));
   fireEvent.changeText(screen.getByPlaceholderText('chat.forward.searchPlaceholder'), '接待');
@@ -107,6 +170,7 @@ test('TEMP targets render and search the room title through the shared conversat
 test('a selected batch forwards each message to the chosen target in order', async () => {
   mockPendingBatch = [{ message: { type: 'received', text: 'first' } }, { message: { type: 'received', text: 'second' } }];
   render(<ForwardPickerScreen />);
+  showGroups();
   fireEvent.press(screen.getByText('周末爬山'));
   await waitFor(() => expect(mockSendText).toHaveBeenCalledTimes(2));
   expect(mockSendText.mock.calls.map(([options]) => options.text)).toEqual(['first', 'second']);
@@ -122,6 +186,7 @@ test('a partial batch failure retains only unsent messages for retry', async () 
     .mockImplementationOnce(() => ({ queued: false, delivered: Promise.reject(new Error('blocked')) }));
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   render(<ForwardPickerScreen />);
+  showGroups();
   fireEvent.press(screen.getByText('周末爬山'));
   await waitFor(() => expect(alert).toHaveBeenCalledWith('chat.forward.failed', 'chat.forward.failedRetry'));
   expect(mockSetPendingBatch).toHaveBeenLastCalledWith([second]);

@@ -1054,16 +1054,16 @@ export default function ChatInfoScreen() {
       if (!id) return;
       router.push({
         pathname: '/qr-code',
-        params: { type: 'group', id, name: groupTitle },
+        params: { type: 'group', id, name: groupTitle, avatarUrl: groupAvatarUrl ?? undefined },
       });
       return;
     }
     if (!groupID) return;
     router.push({
       pathname: '/qr-code',
-      params: { type: 'circle', id: groupID, name: groupTitle },
+      params: { type: 'circle', id: groupID, name: groupTitle, avatarUrl: groupAvatarUrl ?? undefined },
     });
-  }, [conversationID, groupID, groupTitle, isStandaloneGroup, resolvedConversationID]);
+  }, [conversationID, groupAvatarUrl, groupID, groupTitle, isStandaloneGroup, resolvedConversationID]);
 
   const handleOpenSearchHistory = useCallback(() => {
     void (async () => {

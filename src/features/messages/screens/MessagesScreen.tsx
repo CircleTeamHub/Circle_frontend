@@ -33,19 +33,25 @@ import { SplitPaneResizer } from "@/components/app/split-pane-resizer";
 import { useDesktopSplitLayout } from "@/hooks/use-desktop-split-layout";
 import { useScreenLive } from "@/hooks/use-screen-live";
 import { useStoreWhileActive } from "@/hooks/use-store-while-active";
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { useSplitPaneStore } from "@/stores/splitPaneStore";
 import { getApiErrorMessage } from "@/services/api/errors";
 import { useTabBadgeStore } from "@/stores/tabBadgeStore";
-import { Radius, Spacing, Typography, useTheme } from "@/theme";
+import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
+import { fetchFriends, friendsMutatedSince } from '@/services/api/friends';
+import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, useFocusEffect, useRouter } from "expo-router";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type Href, useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
+  ActivityIndicator,
   Animated,
+  BackHandler,
+  Easing,
   FlatList,
   ListRenderItemInfo,
   Modal,
@@ -67,6 +73,7 @@ const SWIPE_OPEN_THRESHOLD = SWIPE_ACTION_WIDTH;
 // 桌面分栏时 tabbar 统一居中到整个视口底部；右侧聊天区要留出这段空间，
 // 否则 tabbar 会盖住 ChatComposerBar 的输入框。
 const DESKTOP_TAB_BAR_RESERVED_HEIGHT = 64;
+const selectFriendRemarks = (state: ReturnType<typeof useFriendRemarkStore.getState>) => state.remarks;
 
 const BASE_FILTER_KEYS = [
   { id: "all", key: "messages.all" },
@@ -143,6 +150,38 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  quickAddIcon: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickAddStroke: { position: 'absolute', width: 18, height: 4, borderRadius: 2 },
+  selectionHeaderSection: { gap: Spacing.md, paddingTop: Spacing.sm },
+  selectionTopRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  selectionHeaderAction: { width: 80, minHeight: 44, justifyContent: 'center' },
+  selectionHeaderActionEnd: { alignItems: 'flex-end' },
+  selectionHeading: { flex: 1, minWidth: 0, alignItems: 'center', gap: Spacing.xs },
+  selectionHeaderLabel: { ...Typography.body },
+  selectionTitle: { ...Typography.h3, textAlign: 'center' },
+  selectionCount: { ...Typography.caption, textAlign: 'center' },
+  selectionCheckbox: { minWidth: 28, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  selectionFooter: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.md, paddingHorizontal: Spacing.lg },
+  selectionFooterRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
+  selectionActionButton: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 12,
+    paddingVertical: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  selectionActionLabel: { ...Typography.body, fontWeight: '600', flexShrink: 1, textAlign: 'center' },
+  selectionActionDisabled: { opacity: 0.4 },
   filterRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -348,6 +387,10 @@ type ConversationRowProps = {
   onTogglePinnedFold?: () => void;
   /** 桌面分栏下禁用：鼠标点击/框选的横向抖动会误触滑动，把操作条卡在半开。 */
   swipeEnabled: boolean;
+  selectionMode: boolean;
+  selected: boolean;
+  selectionBusy: boolean;
+  onToggleSelection: (conversation: Conversation) => void;
 };
 
 function ConversationRowImpl({
@@ -373,11 +416,22 @@ function ConversationRowImpl({
   pinnedFoldHiddenCount = 0,
   onTogglePinnedFold,
   swipeEnabled,
+  selectionMode,
+  selected,
+  selectionBusy,
+  onToggleSelection,
 }: ConversationRowProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const translateX = useRef(new Animated.Value(0)).current;
   const currentXRef = useRef(0);
+
+  useEffect(() => {
+    if (selectionMode) {
+      currentXRef.current = 0;
+      translateX.setValue(0);
+    }
+  }, [selectionMode, translateX]);
 
   const getPinnedRowStyle = (position: PinnedGroupPosition) => {
     switch (position) {
@@ -504,7 +558,7 @@ function ConversationRowImpl({
   // Web 的右键:RN 没有这个手势,直接给宿主节点挂 DOM 监听。
   const rowRef = useRef<View>(null);
   useEffect(() => {
-    if (Platform.OS !== 'web' || swipeEnabled) return;
+    if (Platform.OS !== 'web' || swipeEnabled || selectionMode) return;
     const node = rowRef.current as unknown as HTMLElement | null;
     if (!node?.addEventListener) return;
     const onContextMenu = (event: Event) => {
@@ -513,7 +567,7 @@ function ConversationRowImpl({
     };
     node.addEventListener('contextmenu', onContextMenu);
     return () => node.removeEventListener('contextmenu', onContextMenu);
-  }, [showRowActionMenu, swipeEnabled]);
+  }, [selectionMode, showRowActionMenu, swipeEnabled]);
 
   const renderSwipeActions = () => (
     <Animated.View style={[s.swipeActions, { opacity: swipeActionsOpacity }]}>
@@ -594,15 +648,29 @@ function ConversationRowImpl({
               : null,
           ]}
         >
+          {selectionMode ? (
+            <Pressable
+              style={s.selectionCheckbox}
+              accessibilityRole="checkbox"
+              accessibilityLabel={item.name}
+              accessibilityState={{ checked: selected, disabled: selectionBusy }}
+              disabled={selectionBusy}
+              onPress={() => onToggleSelection(item)}
+              hitSlop={8}
+            >
+              <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={25} color={selected ? colors.primary : colors.textSecondary} />
+            </Pressable>
+          ) : null}
           {item.isAssistant ? (
-            <Pressable onPress={() => onOpenConversation(item)}>
+            <Pressable disabled={selectionMode && selectionBusy} onPress={() => selectionMode ? onToggleSelection(item) : onOpenConversation(item)}>
               <AssistantAvatar size={40} />
             </Pressable>
           ) : item.conversationType === "private" ? (
-            <Pressable onPress={() => onOpenUserProfile(item)}>
+            <Pressable disabled={selectionMode && selectionBusy} onPress={() => selectionMode ? onToggleSelection(item) : onOpenUserProfile(item)}>
               <Avatar size={40} name={item.name} uri={item.avatarUrl} />
             </Pressable>
           ) : (
+            <Pressable disabled={!selectionMode || selectionBusy} onPress={() => onToggleSelection(item)}>
             <GroupChatAvatar
               size={40}
               name={item.name}
@@ -610,12 +678,14 @@ function ConversationRowImpl({
               temporary={item.isTempChat}
               badgeBorderColor={badgeBorderColor}
             />
+            </Pressable>
           )}
           <Pressable
             testID={testID}
             style={s.rowContent}
-            onPress={() => onOpenConversation(item)}
-            onLongPress={showRowActionMenu}
+            disabled={selectionMode && selectionBusy}
+            onPress={() => selectionMode ? onToggleSelection(item) : onOpenConversation(item)}
+            onLongPress={selectionMode ? undefined : showRowActionMenu}
           >
             <View style={s.rowTop}>
               <View style={s.nameRow}>
@@ -690,7 +760,7 @@ function ConversationRowImpl({
 // MessagesScreen：消息列表主页面
 // 功能：
 //   1. 展示所有会话，支持按标签筛选（全部/未读/群聊/私聊/自定义群组）
-//   2. 头部操作栏：搜索；长按会话可标记已读、删除或修改偏好
+//   2. 头部操作栏：多选、搜索；长按会话可标记已读、删除或修改偏好
 //   3. 点击头像可进入用户主页（仅私聊），点击会话行进入聊天详情
 // memo 化会话行：配合上游稳定的 item 引用，未变化的行跳过重渲染。
 const ConversationRow = memo(ConversationRowImpl);
@@ -698,6 +768,7 @@ const ConversationRow = memo(ConversationRowImpl);
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
   const { t } = useTranslation();
 
@@ -734,6 +805,8 @@ export default function MessagesScreen() {
     isLive,
   );
   const currentUserID = useChatStore((state) => state.currentUserId);
+  const friendRemarks = useStoreWhileActive(useFriendRemarkStore, selectFriendRemarks, isLive);
+  const remarkReloadGate = useFocusReloadGate({ key: currentUserID, mutatedSince: friendsMutatedSince });
   const connectionError = useChatStore((state) => state.error);
   const imConnected = useChatStore((state) => state.connected);
   const conversationsSnapshotLoaded = useChatStore(
@@ -743,13 +816,78 @@ export default function MessagesScreen() {
   const filterOrder = useMessageGroupsStore((state) => state.filterOrder);
   const [activeFilterId, setActiveFilterId] = useState("all"); // 当前激活的筛选标签 id
   const [menuVisible, setMenuVisible] = useState(false);        // 右上角弹出菜单的显隐
+  const [quickAddExpanded, setQuickAddExpanded] = useState(false);
+  const quickAddProgress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.timing(quickAddProgress, {
+      toValue: quickAddExpanded ? 1 : 0,
+      duration: 140,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [quickAddExpanded, quickAddProgress]);
+  const handleOpenMenu = useCallback(() => {
+    setQuickAddExpanded(true);
+    setMenuVisible(true);
+  }, []);
+  const handleCloseMenu = useCallback(() => {
+    setMenuVisible(false);
+    setQuickAddExpanded(false);
+  }, []);
+  // 进入菜单里的页面时保留 ×，返回首页时再复原。
+  useEffect(() => { if (isLive) setQuickAddExpanded(false); }, [isLive]);
   const [refreshing, setRefreshing] = useState(false);
   const [showAllPinned, setShowAllPinned] = useState(false);
+  const [selectedConversationIds, setSelectedConversationIds] = useState<Set<string> | null>(null);
+  const selecting = selectedConversationIds !== null;
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const batchDeleteInFlightRef = useRef(false);
   const pinnedFoldCount = useAppSettingsStore((state) => state.pinnedFoldCount);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
   const wasConnectedRef = useRef(imConnected);
   const preferenceWriteInFlightRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    setSelectedConversationIds(null);
+    handleCloseMenu();
+  }, [currentUserID, handleCloseMenu]);
+
+  useLayoutEffect(() => {
+    const tabs = navigation.getParent();
+    tabs?.setOptions({ tabBarStyle: selecting ? { display: 'none' } : undefined });
+    return () => tabs?.setOptions({ tabBarStyle: undefined });
+  }, [navigation, selecting]);
+
+  const handleStartSelection = useCallback(() => {
+    if (batchDeleteInFlightRef.current) return;
+    handleCloseMenu();
+    setSelectedConversationIds(new Set());
+  }, [handleCloseMenu]);
+  const handleExitSelection = useCallback(() => {
+    if (!batchDeleteInFlightRef.current) setSelectedConversationIds(null);
+  }, []);
+  const handleToggleSelection = useCallback((conversation: Conversation) => {
+    if (batchDeleteInFlightRef.current) return;
+    setSelectedConversationIds((current) => {
+      if (!current) return current;
+      const next = new Set(current);
+      if (next.has(conversation.id)) next.delete(conversation.id);
+      else next.add(conversation.id);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!selecting || !isLive) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleExitSelection();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [handleExitSelection, isLive, selecting]);
 
   useEffect(
     () => () => {
@@ -780,6 +918,21 @@ export default function MessagesScreen() {
       });
     }, [currentUserID]),
   );
+
+  useFocusEffect(useCallback(() => {
+    if (!currentUserID || remarkReloadGate.shouldSkip()) return;
+    let cancelled = false;
+    const startedAt = Date.now();
+    const snapshot = useFriendRemarkStore.getState().remarks;
+    fetchFriends().then((friends) => {
+      if (cancelled || useChatStore.getState().currentUserId !== currentUserID) return;
+      useFriendRemarkStore.getState().syncServerRemarks(friends, snapshot);
+      remarkReloadGate.markLoaded(startedAt);
+    }).catch((error) => {
+      if (!cancelled) reportHandledFailure('messages', 'syncFriendRemarks', error);
+    });
+    return () => { cancelled = true; };
+  }, [currentUserID, remarkReloadGate]));
 
   // 首次进消息页时 REST 可能正好撞上后端重启，且 socket 恢复后页面仍保持焦点，
   // 原来的 focus effect 不会再跑一次，结果只能等用户点进某个会话才看到内容。
@@ -877,19 +1030,23 @@ export default function MessagesScreen() {
   }, [colors]);
 
   // 筛选标签列表 = 固定标签 + 用户自定义群组（动态追加）
-  // 按源 ConversationItem 引用缓存映射结果：未变化的会话保持同一 UI 对象引用。
+  // 会话和有效备注都未变化时，沿用同一列表项引用。
   // 配合 memo 化的 ConversationRow，新消息到达时只有变化的那几行重渲染，而非整列表。
   const convMapCacheRef = useRef<
-    WeakMap<object, ReturnType<typeof mapChatConversationToUI>>
+    WeakMap<object, { mapped: ReturnType<typeof mapChatConversationToUI>; name: string | undefined }>
   >(new WeakMap());
   const rawMappedConversations = useMemo(() => {
     const cache = convMapCacheRef.current;
     return rawConversations.reduce<ReturnType<typeof mapChatConversationToUI>[]>(
       (items, raw) => {
-        let mapped = cache.get(raw);
-        if (!mapped) {
+        const remark = raw.type === 'DIRECT' && raw.peer ? friendRemarks[raw.peer.id] : undefined;
+        const name = remark ? remark.remark ?? remark.fallbackName : undefined;
+        const cached = cache.get(raw);
+        let mapped = cached?.mapped;
+        if (!mapped || cached?.name !== name) {
           mapped = mapChatConversationToUI(raw);
-          cache.set(raw, mapped);
+          if (name !== undefined) mapped = { ...mapped, name };
+          cache.set(raw, { mapped, name });
         }
         // AI 小助手是独立入口，不混入普通消息列表或消息 tab 未读口径。
         if (!mapped.isAssistant) items.push(mapped);
@@ -897,7 +1054,7 @@ export default function MessagesScreen() {
       },
       [],
     );
-  }, [rawConversations]);
+  }, [friendRemarks, rawConversations]);
 
   // 最新一条发送失败的会话 id 集合,拼成排序串让引用比较退化成值比较:
   // 只在失败集合真变了才触发下游 useMemo,消息洪泛不抖动列表。选择器按会话缓存判定,
@@ -1011,6 +1168,16 @@ export default function MessagesScreen() {
     return conversations;
   }, [activeFilterId, conversationGroups, conversations]);
 
+  const selectedConversations = useMemo(
+    () => visibleConversations.filter((conversation) => selectedConversationIds?.has(conversation.id)),
+    [selectedConversationIds, visibleConversations],
+  );
+  const allSelected = visibleConversations.length > 0 && selectedConversations.length === visibleConversations.length;
+  const handleToggleAll = useCallback(() => {
+    if (batchDeleteInFlightRef.current) return;
+    setSelectedConversationIds(allSelected ? new Set() : new Set(visibleConversations.map((conversation) => conversation.id)));
+  }, [allSelected, visibleConversations]);
+
   const visiblePinnedCount = useMemo(
     () => visibleConversations.filter((conversation) => conversation.pinned).length,
     [visibleConversations],
@@ -1025,14 +1192,14 @@ export default function MessagesScreen() {
     pinnedFoldEnabled && !showAllPinned ? visiblePinnedCount - pinnedFoldCount : 0;
 
   const displayedConversations = useMemo(() => {
-    if (!pinnedFoldEnabled || showAllPinned) return visibleConversations;
+    if (selecting || !pinnedFoldEnabled || showAllPinned) return visibleConversations;
     let visiblePinned = 0;
     return visibleConversations.filter((conversation) => {
       if (!conversation.pinned) return true;
       visiblePinned += 1;
       return visiblePinned <= pinnedFoldCount;
     });
-  }, [pinnedFoldCount, pinnedFoldEnabled, showAllPinned, visibleConversations]);
+  }, [pinnedFoldCount, pinnedFoldEnabled, selecting, showAllPinned, visibleConversations]);
 
   // 箭头嵌在第 pinnedFoldCount 条置顶会话的右下角，收起/展开都不挪窝。
   const pinnedFoldAnchorIndex = useMemo(() => {
@@ -1253,9 +1420,11 @@ export default function MessagesScreen() {
 
   const handleFilterPress = useCallback(
     (index: number) => {
+      if (batchDeleteInFlightRef.current) return;
       const filter = filterItems[index];
       if (!filter) return;
       setActiveFilterId(filter.id);
+      setSelectedConversationIds((current) => current ? new Set() : null);
     },
     [filterItems],
   );
@@ -1268,6 +1437,50 @@ export default function MessagesScreen() {
     const latest = useChatStore.getState().conversations.find((item) => item.id === conversation.id);
     markConversationRead(conversation.id, latest?.lastMessage?.height ?? 0);
   }, []);
+
+  const handleMarkSelectedRead = useCallback(() => {
+    if (batchDeleteInFlightRef.current || useChatStore.getState().currentUserId !== currentUserID) return;
+    selectedConversations.forEach(handleMarkConversationRead);
+    setSelectedConversationIds(null);
+  }, [currentUserID, handleMarkConversationRead, selectedConversations]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!currentUserID || selectedConversations.length === 0 || batchDeleteInFlightRef.current) return;
+    const ids = selectedConversations.map((conversation) => conversation.id);
+    const sameUser = () => mountedRef.current && useChatStore.getState().currentUserId === currentUserID;
+    const deleteSelected = async () => {
+      if (batchDeleteInFlightRef.current || !sameUser()) return;
+      batchDeleteInFlightRef.current = true;
+      setBatchDeleting(true);
+      const failed: string[] = [];
+      try {
+        // ponytail: sequential writes bound load; use limited concurrency if large selections become slow.
+        for (const id of ids) {
+          if (!sameUser()) return;
+          try {
+            await clearChatConversationHistory(id, { forEveryone: false });
+            if (!sameUser()) return;
+            await updateChatConversationPreferences(id, { hidden: true });
+            if (!sameUser()) return;
+            setEmbeddedChat((current) => current?.conversationID === id ? null : current);
+          } catch (error) {
+            if (!sameUser()) return;
+            failed.push(id);
+            reportHandledFailure('messages', 'batchDelete', error);
+          }
+        }
+        setSelectedConversationIds(failed.length ? new Set(failed) : null);
+        if (failed.length) Alert.alert(t('messages.batchDeleteFailedTitle'), t('messages.batchDeleteFailedMessage', { count: failed.length }));
+      } finally {
+        batchDeleteInFlightRef.current = false;
+        if (mountedRef.current) setBatchDeleting(false);
+      }
+    };
+    Alert.alert(t('messages.deleteChat'), t('messages.batchDeleteConfirm', { count: ids.length }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => void deleteSelected() },
+    ]);
+  }, [currentUserID, selectedConversations, t]);
 
   // 菜单项点击处理：关闭菜单并按 id 路由跳转
   const handleMenuAction = useCallback(
@@ -1326,13 +1539,18 @@ export default function MessagesScreen() {
           index === pinnedFoldAnchorIndex ? collapsedPinnedCount : undefined
         }
         onTogglePinnedFold={
-          index === pinnedFoldAnchorIndex ? handleTogglePinnedFold : undefined
+          !selecting && index === pinnedFoldAnchorIndex ? handleTogglePinnedFold : undefined
         }
-        swipeEnabled={!isSplitLayout}
+        swipeEnabled={!isSplitLayout && !selecting}
+        selectionMode={selecting}
+        selected={selectedConversationIds?.has(item.id) ?? false}
+        selectionBusy={batchDeleting}
+        onToggleSelection={handleToggleSelection}
       />
     ),
     [
       collapsedPinnedCount,
+      batchDeleting,
       colors.background,
       colors.primaryLight,
       d,
@@ -1344,10 +1562,13 @@ export default function MessagesScreen() {
       handleToggleConversationPinned,
       handleOpenUserProfile,
       handleTogglePinnedFold,
+      handleToggleSelection,
       isSplitLayout,
       pinnedFoldAnchorIndex,
       pinnedLayout,
       showAllPinned,
+      selecting,
+      selectedConversationIds,
       swipeLabels,
     ],
   );
@@ -1365,20 +1586,56 @@ export default function MessagesScreen() {
 
   // 列表 Header：标题行（含操作按钮）+ 筛选 Tab 栏
   const ListHeader = useMemo(() => (
-    <View style={s.headerSection}>
-      <View style={s.titleRow}>
+    <View style={[s.headerSection, selecting && s.selectionHeaderSection, { backgroundColor: colors.background }]}>
+      {selecting ? <View style={s.selectionTopRow}>
+        <Pressable
+          style={[s.selectionHeaderAction, batchDeleting && s.selectionActionDisabled]}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.cancel')}
+          disabled={batchDeleting}
+          onPress={handleExitSelection}
+        >
+          <Text style={[s.selectionHeaderLabel, { color: colors.text }]}>{t('common.cancel')}</Text>
+        </Pressable>
+        <View style={s.selectionHeading}>
+          <Text style={[s.selectionTitle, { color: colors.text }]}>{t('messages.selectChats')}</Text>
+          <Text style={[s.selectionCount, { color: colors.textSecondary }]}>{t('messages.selectedCount', { count: selectedConversations.length })}</Text>
+        </View>
+        <Pressable
+          style={[s.selectionHeaderAction, s.selectionHeaderActionEnd, (batchDeleting || visibleConversations.length === 0) && s.selectionActionDisabled]}
+          accessibilityRole="button"
+          accessibilityLabel={t(allSelected ? 'messages.deselectAll' : 'messages.selectAll')}
+          disabled={batchDeleting || visibleConversations.length === 0}
+          onPress={handleToggleAll}
+        >
+          <Text style={[s.selectionHeaderLabel, { color: colors.link }]}>{t(allSelected ? 'messages.deselectAll' : 'messages.selectAll')}</Text>
+        </Pressable>
+      </View> : <View style={s.titleRow}>
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
+          <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('messages.selectChats')} hitSlop={10} onPress={handleStartSelection}>
+            <Ionicons name="checkmark-done-outline" size={24} color={colors.text} />
+          </Pressable>
           {/* 搜索按钮：跳转到统一搜索页（会话 + 联系人） */}
           <Pressable style={s.actionButton} onPress={handleOpenFind}>
             <Ionicons name="search-outline" size={24} color={colors.text} />
           </Pressable>
           {/* 「+」按钮：展开快捷操作菜单 */}
-          <Pressable onPress={() => setMenuVisible(true)}>
-            <Ionicons name="add-circle-outline" size={24} color={colors.text} />
+          <Pressable
+            style={s.actionButton}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.add')}
+            accessibilityState={{ expanded: quickAddExpanded }}
+            hitSlop={10}
+            onPress={handleOpenMenu}
+          >
+            <Animated.View pointerEvents="none" style={[s.quickAddIcon, { transform: [{ rotate: quickAddProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }] }]}>
+              <View style={[s.quickAddStroke, { backgroundColor: colors.text }]} />
+              <View style={[s.quickAddStroke, { backgroundColor: colors.text, transform: [{ rotate: '90deg' }] }]} />
+            </Animated.View>
           </Pressable>
         </View>
-      </View>
+      </View>}
       <View style={s.filterRow}>
         <View style={s.filterTabsSlot}>
           <FilterTabs
@@ -1389,7 +1646,7 @@ export default function MessagesScreen() {
             compact
           />
         </View>
-        <Pressable
+        {!selecting ? <Pressable
           style={[s.addGroupButton, { backgroundColor: colors.background }]}
           onPress={handleOpenGroups}
           accessibilityRole="button"
@@ -1397,18 +1654,29 @@ export default function MessagesScreen() {
           hitSlop={6}
         >
           <Text style={[s.addGroupIcon, { color: colors.textSecondary }]}>＋</Text>
-        </Pressable>
+        </Pressable> : null}
       </View>
       <ChatConnectionBanner />
     </View>
   ), [
     activeTab,
+    allSelected,
+    batchDeleting,
     colors,
     d,
     filterItems,
     handleFilterPress,
     handleOpenFind,
     handleOpenGroups,
+    handleOpenMenu,
+    handleStartSelection,
+    handleExitSelection,
+    handleToggleAll,
+    selectedConversations.length,
+    selecting,
+    quickAddExpanded,
+    quickAddProgress,
+    visibleConversations.length,
     t,
   ]);
 
@@ -1417,13 +1685,14 @@ export default function MessagesScreen() {
       testID={E2E_TEST_IDS.messagesScreen}
       style={[d.container, { paddingTop: insets.top }]}
     >
+      {selecting ? <View style={{ paddingHorizontal: Spacing.lg }}>{ListHeader}</View> : null}
       <FlatList
         testID={E2E_TEST_IDS.messagesList}
         data={displayedConversations}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ItemSeparatorComponent={renderSeparator}
-        ListHeaderComponent={ListHeader}
+        ListHeaderComponent={selecting ? null : ListHeader}
         ListEmptyComponent={
           <Text style={d.emptyText}>
             {connectionError
@@ -1431,7 +1700,7 @@ export default function MessagesScreen() {
               : t('messages.noConversations')}
           </Text>
         }
-        contentContainerStyle={s.listContent}
+        contentContainerStyle={[s.listContent, selecting && { paddingBottom: Spacing.md }]}
         showsVerticalScrollIndicator={false}
         refreshing={refreshing}
         onRefresh={handleRefreshConversations}
@@ -1441,14 +1710,44 @@ export default function MessagesScreen() {
         windowSize={11}
       />
 
+      {selecting ? <View style={[s.selectionFooter, {
+        backgroundColor: colors.background,
+        borderTopColor: colors.divider,
+        paddingBottom: insets.bottom + Spacing.md,
+      }]}>
+        <View style={s.selectionFooterRow}>
+          <Pressable
+            style={({ pressed }) => [s.selectionActionButton, { backgroundColor: colors.primaryDeep, opacity: pressed ? 0.8 : 1 }, (batchDeleting || selectedConversations.length === 0) && s.selectionActionDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel={t('messages.swipeMarkRead')}
+            disabled={batchDeleting || selectedConversations.length === 0}
+            onPress={handleMarkSelectedRead}
+          >
+            <Ionicons name="checkmark-done-outline" size={21} color={colors.white} />
+            <Text style={[s.selectionActionLabel, { color: colors.white }]}>{t('messages.swipeMarkRead')}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [s.selectionActionButton, { backgroundColor: withAlpha(colors.dangerFill, 0.1), opacity: pressed ? 0.7 : 1 }, selectedConversations.length === 0 && s.selectionActionDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel={t('messages.swipeDelete')}
+            accessibilityState={{ busy: batchDeleting }}
+            disabled={batchDeleting || selectedConversations.length === 0}
+            onPress={handleDeleteSelected}
+          >
+            {batchDeleting ? <ActivityIndicator size="small" color={colors.danger} /> : <Ionicons name="trash-outline" size={20} color={colors.danger} />}
+            <Text style={[s.selectionActionLabel, { color: colors.danger }]}>{t('messages.swipeDelete')}</Text>
+          </Pressable>
+        </View>
+      </View> : null}
+
       {/* 右上角「+」弹出菜单（Modal 实现，点击蒙层关闭） */}
       <Modal
         visible={menuVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
+        onRequestClose={handleCloseMenu}
       >
-        <Pressable style={s.overlay} onPress={() => setMenuVisible(false)}>
+        <Pressable style={s.overlay} onPress={handleCloseMenu}>
           <View
             style={[
               s.menu,

@@ -278,7 +278,7 @@ test('messages screen compacts the tab gap and reserves a separate trailing slot
   assert.match(addGroupButtonStyle[1], /width:\s*32/);
   assert.match(
     source,
-    /<View style=\{s\.filterTabsSlot\}>\s*<FilterTabs[\s\S]*?<\/View>\s*<Pressable/s,
+    /<View style=\{s\.filterTabsSlot\}>\s*<FilterTabs[\s\S]*?<\/View>\s*\{!selecting \? <Pressable/s,
   );
   assert.match(source, /style=\{\[s\.addGroupButton, \{ backgroundColor: colors\.background \}\]\}/);
   assert.match(source, /addGroupIcon: \{\s*fontSize: 22,\s*lineHeight: 24,/);

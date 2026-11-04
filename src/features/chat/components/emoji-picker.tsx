@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, Platform, Alert, AppState, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useTranslation } from 'react-i18next';
@@ -26,8 +27,13 @@ const emojiFontFamily = Platform.select({
 
 const s = StyleSheet.create({
   container: {
-    maxHeight: 240,
+    height: 240,
   },
+  tabs: { flexGrow: 0 },
+  tabContent: { paddingHorizontal: Spacing.md, gap: Spacing.xs, alignItems: 'center' },
+  tab: { width: 48, height: 44, marginVertical: 6, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  tabEmoji: { fontSize: 24, fontFamily: emojiFontFamily },
+  pager: { flex: 1 },
   content: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.md,
@@ -66,6 +72,16 @@ export const EmojiPicker = memo(function EmojiPicker({ onSelect, onSelectSticker
   const addingRef = useRef(false);
   const [adding, setAdding] = useState(false);
   const customEnabled = Boolean(onSelectSticker);
+  const pages = customEnabled ? [EMOJI_GROUPS[0], null, ...EMOJI_GROUPS.slice(1)] : EMOJI_GROUPS;
+  const [activePage, setActivePage] = useState(0);
+  const [pageWidth, setPageWidth] = useState(0);
+  const pagerRef = useRef<ScrollView>(null);
+  const tabsRef = useRef<ScrollView>(null);
+  const selectPage = (index: number, scroll = true) => {
+    setActivePage(index);
+    tabsRef.current?.scrollTo({ x: index * (48 + Spacing.xs), animated: true });
+    if (scroll) pagerRef.current?.scrollTo({ x: index * pageWidth, animated: true });
+  };
   useEffect(() => {
     if (!customEnabled) return;
     mounted.current = true;
@@ -128,38 +144,62 @@ export const EmojiPicker = memo(function EmojiPicker({ onSelect, onSelectSticker
     ]);
   };
   return (
-    <View style={[s.container, { backgroundColor: colors.background }]}>
+    <View
+      testID="emoji-picker"
+      style={[s.container, { backgroundColor: colors.background }]}
+      onLayout={({ nativeEvent }) => setPageWidth(nativeEvent.layout.width)}
+    >
       <ScrollView
-        contentContainerStyle={s.content}
+        ref={tabsRef}
+        horizontal
+        style={s.tabs}
+        contentContainerStyle={s.tabContent}
+        showsHorizontalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
       >
-        {customEnabled ? <>
-        <Text style={[s.groupLabel, { color: colors.textSecondary }]}>{t('chat.stickers.title')}</Text>
-        {loading ? <ActivityIndicator /> : null}
-        {error ? <Pressable accessibilityRole="button" onPress={() => void refresh()}><Text style={{ color: colors.textSecondary }}>{t('chat.stickers.loadFailed')}</Text></Pressable> : null}
-        <View style={s.grid}>
-          {items.map((sticker) => (
-            <View key={sticker.id} style={s.stickerCell}>
-              <Pressable testID={`custom-sticker-${sticker.id}`} accessibilityRole="button" accessibilityLabel={t('chat.stickers.title')} onPress={() => onSelectSticker?.(sticker)}>
-                <Image testID={`custom-sticker-image-${sticker.id}`} source={{ uri: sticker.url }} style={s.stickerImage} contentFit="contain" enforceEarlyResizing cachePolicy="memory" recyclingKey={sticker.id} />
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={t('chat.stickers.remove')} hitSlop={8} style={s.removeSticker} onPress={() => handleRemoveSticker(sticker.id)}>
-                <Text style={{ color: colors.textSecondary }}>×</Text>
-              </Pressable>
-            </View>
-          ))}
-          <Pressable style={[s.stickerCell, s.addSticker]} accessibilityRole="button" accessibilityLabel={t('chat.stickers.add')} disabled={adding} onPress={() => void handleAddSticker()}>
-            {adding ? <ActivityIndicator /> : <Text style={{ color: colors.textSecondary, fontSize: 32 }}>+</Text>}
+        {pages.map((group, index) => (
+          <Pressable
+            key={group?.labelKey ?? 'custom'}
+            accessibilityRole="tab"
+            accessibilityLabel={group ? t(`emojis.${group.labelKey}`) : t('chat.stickers.title')}
+            accessibilityState={{ selected: index === activePage }}
+            style={[s.tab, index === activePage && { backgroundColor: colors.surface }]}
+            onPress={() => selectPage(index)}
+          >
+            {!group || group.labelKey === 'face' ? (
+              <Ionicons name={group ? 'happy-outline' : 'heart-outline'} size={28} color={index === activePage ? colors.iconAccent : colors.textSecondary} />
+            ) : <Text style={s.tabEmoji}>{group.emojis[0]}</Text>}
           </Pressable>
-        </View>
-        </> : null}
-        {EMOJI_GROUPS.map((group) => (
-          <View key={group.labelKey}>
-            <Text style={[s.groupLabel, { color: colors.textSecondary }]}>
-              {t(`emojis.${group.labelKey}`)}
-            </Text>
-            <View style={s.grid}>
+        ))}
+      </ScrollView>
+      <ScrollView
+        ref={pagerRef}
+        testID="emoji-picker-pages"
+        horizontal
+        pagingEnabled
+        nestedScrollEnabled
+        directionalLockEnabled
+        style={s.pager}
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onMomentumScrollEnd={({ nativeEvent }) => selectPage(Math.round(nativeEvent.contentOffset.x / nativeEvent.layoutMeasurement.width), false)}
+        onContentSizeChange={() => pagerRef.current?.scrollTo({ x: activePage * pageWidth, animated: false })}
+      >
+        {pages.map((group, index) => (
+          <ScrollView
+            key={group?.labelKey ?? 'custom'}
+            testID={`emoji-page-${group?.labelKey ?? 'custom'}`}
+            style={{ width: pageWidth }}
+            contentContainerStyle={s.content}
+            nestedScrollEnabled
+            directionalLockEnabled
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            accessibilityElementsHidden={index !== activePage}
+            importantForAccessibility={index === activePage ? 'auto' : 'no-hide-descendants'}
+          >
+            <Text style={[s.groupLabel, { color: colors.textSecondary }]}>{group ? t(`emojis.${group.labelKey}`) : t('chat.stickers.title')}</Text>
+            {group ? <View style={s.grid}>
               {group.emojis.map((emoji) => (
                 <Pressable
                   key={emoji}
@@ -171,8 +211,26 @@ export const EmojiPicker = memo(function EmojiPicker({ onSelect, onSelectSticker
                   <Text style={s.emoji}>{emoji}</Text>
                 </Pressable>
               ))}
-            </View>
-          </View>
+            </View> : <>
+              {loading ? <ActivityIndicator /> : null}
+              {error ? <Pressable accessibilityRole="button" onPress={() => void refresh()}><Text style={{ color: colors.textSecondary }}>{t('chat.stickers.loadFailed')}</Text></Pressable> : null}
+              <View style={s.grid}>
+                {items.map((sticker) => (
+                  <View key={sticker.id} style={s.stickerCell}>
+                    <Pressable testID={`custom-sticker-${sticker.id}`} accessibilityRole="button" accessibilityLabel={t('chat.stickers.title')} onPress={() => onSelectSticker?.(sticker)}>
+                      <Image testID={`custom-sticker-image-${sticker.id}`} source={{ uri: sticker.url }} style={s.stickerImage} contentFit="contain" enforceEarlyResizing cachePolicy="memory" recyclingKey={sticker.id} />
+                    </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel={t('chat.stickers.remove')} hitSlop={8} style={s.removeSticker} onPress={() => handleRemoveSticker(sticker.id)}>
+                      <Text style={{ color: colors.textSecondary }}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+                <Pressable style={[s.stickerCell, s.addSticker]} accessibilityRole="button" accessibilityLabel={t('chat.stickers.add')} disabled={adding} onPress={() => void handleAddSticker()}>
+                  {adding ? <ActivityIndicator /> : <Text style={{ color: colors.textSecondary, fontSize: 32 }}>+</Text>}
+                </Pressable>
+              </View>
+            </>}
+          </ScrollView>
         ))}
       </ScrollView>
     </View>

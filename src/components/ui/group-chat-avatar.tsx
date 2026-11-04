@@ -16,6 +16,7 @@ interface GroupChatAvatarProps {
   size?: number;
   name?: string;
   uri?: string | null;
+  onImageReady?: () => void;
   /** 临时群聊额外显示金色时钟角标；普通群聊不显示。 */
   temporary?: boolean;
   /** 让临时角标外圈融入所在列表或标题栏的背景。 */
@@ -32,6 +33,7 @@ export function GroupChatAvatar({
   size = 40,
   name,
   uri,
+  onImageReady,
   temporary = false,
   badgeBorderColor = FALLBACK_BADGE_BORDER,
 }: GroupChatAvatarProps) {
@@ -69,7 +71,8 @@ export function GroupChatAvatar({
             recyclingKey={imageUri}
             contentFit="cover"
             style={StyleSheet.absoluteFill}
-            onError={() => { if (currentUriRef.current === uri) setFailedUri(uri ?? null); }}
+            onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
+            onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}
           />
         ) : (
           <Svg

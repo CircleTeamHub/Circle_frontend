@@ -13,6 +13,8 @@ interface AvatarProps {
   size?: number;
   name?: string;
   uri?: string;
+  /** The photo is displayed, or its error fallback is ready. */
+  onImageReady?: () => void;
   /** Stable owner identity for a non-recycled profile avatar; retain its image while replacing it. */
   identityKey?: string;
   shape?: 'circle' | 'square';
@@ -85,6 +87,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   size = 40,
   name,
   uri,
+  onImageReady,
   identityKey,
   shape = 'square',
   frameSource,
@@ -137,7 +140,8 @@ export const Avatar: React.FC<AvatarProps> = ({
             recyclingKey={identityKey ?? uri}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            onError={() => { if (currentUriRef.current === uri) setFailedUri(uri ?? null); }}
+            onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
+            onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}
           />
         ) : null}
       </View>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { FlatList, Modal } from 'react-native';
+import { FlatList, Modal, View } from 'react-native';
 import { ImageViewer } from './image-viewer';
 
 jest.mock('@/components/app/UploadProgressHost', () => {
@@ -98,6 +98,32 @@ test('does not interrupt a horizontal drag when the parent tracks the selected m
   fireEvent.scroll(screen.UNSAFE_getByType(FlatList), { nativeEvent: { contentOffset: { x: 750, y: 0 } } });
   expect(scrollToIndex).not.toHaveBeenCalled();
   scrollToIndex.mockRestore();
+});
+
+test('horizontal paging changes the photo, then swiping down returns to the conversation', () => {
+  const onIndexChange = jest.fn();
+  function Conversation() {
+    const [visible, setVisible] = React.useState(true);
+    return (
+      <View testID="conversation">
+        <ImageViewer images={['0.jpg', '1.jpg']} visible={visible}
+          onIndexChange={onIndexChange} onClose={() => setVisible(false)} />
+      </View>
+    );
+  }
+  render(<Conversation />);
+  const list = screen.UNSAFE_getByType(FlatList);
+  const pageWidth = list.props.getItemLayout(null, 1).offset;
+  fireEvent.scroll(list, { nativeEvent: { contentOffset: { x: pageWidth, y: 0 } } });
+  expect(onIndexChange).toHaveBeenCalledTimes(1);
+  expect(onIndexChange).toHaveBeenLastCalledWith(1);
+  const current = screen.getAllByTestId('zoomable-image').find((image) => image.props.active)!;
+  expect(current.props.uri).toBe('1.jpg');
+
+  fireEvent(current, 'swipeDown');
+  expect(screen.queryByTestId('zoomable-image')).toBeNull();
+  expect(screen.getByTestId('conversation')).toBeTruthy();
+  expect(onIndexChange).toHaveBeenCalledTimes(1);
 });
 
 test('long press opens the save menu inside the viewer modal and cancel closes it', () => {

@@ -65,6 +65,22 @@ test.each([Avatar, CircleAvatar, GroupChatAvatar])('ignores an old avatar reques
   expect(screen.getByTestId('avatar-image').props.source.uri).toBe('https://image.test/c');
 });
 
+test.each([Avatar, CircleAvatar, GroupChatAvatar])('reports image readiness after display or an error fallback, ignoring the old source', (Component) => {
+  const ready = jest.fn();
+  const view = render(<Component uri="https://image.test/a" size={40} onImageReady={ready} />);
+  const displayA = screen.getByTestId('avatar-image').props.onDisplay;
+  expect(ready).not.toHaveBeenCalled();
+  view.rerender(<Component uri="https://image.test/b" size={40} onImageReady={ready} />);
+  act(() => displayA());
+  expect(ready).not.toHaveBeenCalled();
+  fireEvent(screen.getByTestId('avatar-image'), 'display');
+  expect(ready).toHaveBeenCalledTimes(1);
+  view.rerender(<Component uri="https://image.test/c" size={40} onImageReady={ready} />);
+  fireEvent(screen.getByTestId('avatar-image'), 'error');
+  expect(ready).toHaveBeenCalledTimes(2);
+  expect(screen.queryByTestId('avatar-image')).toBeNull();
+});
+
 test.each([Avatar, CircleAvatar, GroupChatAvatar])('retries a previously failed URI after another source was active', (Component) => {
   const view = render(<Component uri="https://image.test/a" size={40} />);
   act(() => screen.getByTestId('avatar-image').props.onError());

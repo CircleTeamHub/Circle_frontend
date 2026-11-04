@@ -26,19 +26,19 @@ jest.mock('@/theme', () => ({
   useTheme: () => ({ colors: { background: '#000', surfaceBorder: '#333', text: '#fff' } }),
 }));
 
-it('offers every chat emoji in the reaction picker, including all six legacy reactions', () => {
+it('offers every chat emoji through the reaction category tabs', () => {
   render(<ReactionPickerSheet visible onSelect={jest.fn()} onClose={jest.fn()} />);
-  for (const emoji of EMOJI_GROUPS.flatMap((group) => group.emojis)) {
-    expect(screen.getByLabelText(emoji)).toBeTruthy();
-  }
-  for (const emoji of ['👍', '❤️', '😂', '😮', '😢', '🙏']) {
-    expect(screen.getByLabelText(emoji)).toBeTruthy();
+  for (const group of EMOJI_GROUPS) {
+    fireEvent.press(screen.getByRole('tab', { name: `emojis.${group.labelKey}` }));
+    for (const emoji of group.emojis) expect(screen.getByLabelText(emoji)).toBeTruthy();
   }
 });
 
 it.each(['🤔', '✌️', '❤️', '🐼', '🍕', '🚀'])('selects %s once', (emoji) => {
   const select = jest.fn();
   render(<ReactionPickerSheet visible onSelect={select} onClose={jest.fn()} />);
+  const group = EMOJI_GROUPS.find((item) => item.emojis.includes(emoji))!;
+  fireEvent.press(screen.getByRole('tab', { name: `emojis.${group.labelKey}` }));
   fireEvent.press(screen.getByLabelText(emoji));
   expect(select).toHaveBeenCalledTimes(1);
   expect(select).toHaveBeenCalledWith(emoji);

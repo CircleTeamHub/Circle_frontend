@@ -18,6 +18,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) =>
 jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign(() => mockAuth.sessionEpoch, { getState: () => mockAuth }) }));
 jest.mock('@/features/chat/store/use-sticker-store', () => ({ useStickerStore: Object.assign(() => mockState, { getState: () => mockState }) }));
 jest.mock('expo-image', () => ({ Image: 'Image' }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('expo-image-picker', () => ({}));
 jest.mock('expo-image-manipulator', () => ({ manipulateAsync: (...args: unknown[]) => mockManipulate(...args), SaveFormat: { PNG: 'png', JPEG: 'jpeg' } }));
 jest.mock('@/features/profile/image-picker', () => ({ launchImageLibraryFast: (...args: unknown[]) => mockPick(...args) }));
@@ -36,11 +37,47 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
+function openCustomStickers() {
+  fireEvent.press(screen.getByRole('tab', { name: 'chat.stickers.title' }));
+}
+
+test('starts with emoji and switches custom stickers in the horizontal category bar', () => {
+  const onSelect = jest.fn();
+  render(<EmojiPicker onSelect={onSelect} onSelectSticker={jest.fn()} />);
+  expect(screen.getByRole('tab', { name: 'emojis.face' }).props.accessibilityState.selected).toBe(true);
+  expect(screen.queryByTestId('custom-sticker-s1')).toBeNull();
+  fireEvent.press(screen.getByLabelText('😀'));
+  expect(onSelect).toHaveBeenCalledWith('😀');
+  openCustomStickers();
+  expect(screen.getByRole('tab', { name: 'chat.stickers.title' }).props.accessibilityState.selected).toBe(true);
+  expect(screen.getByTestId('custom-sticker-s1')).toBeTruthy();
+  expect(screen.queryByLabelText('😀')).toBeNull();
+  fireEvent.press(screen.getByRole('tab', { name: 'emojis.face' }));
+  expect(screen.getByLabelText('😀')).toBeTruthy();
+});
+
+test('horizontal paging switches category and still inserts emojis from the selected page', () => {
+  const onSelect = jest.fn();
+  render(<EmojiPicker onSelect={onSelect} onSelectSticker={jest.fn()} />);
+  fireEvent(screen.getByTestId('emoji-picker'), 'layout', { nativeEvent: { layout: { width: 340 } } });
+  const swipeTo = (x: number) => fireEvent(screen.getByTestId('emoji-picker-pages'), 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x }, layoutMeasurement: { width: 340 } },
+  });
+  swipeTo(340);
+  expect(screen.getByTestId('custom-sticker-s1')).toBeTruthy();
+  swipeTo(680);
+  expect(screen.getByRole('tab', { name: 'emojis.gesture' }).props.accessibilityState.selected).toBe(true);
+  expect(screen.queryByTestId('custom-sticker-s1')).toBeNull();
+  fireEvent.press(screen.getByLabelText('👍'));
+  expect(onSelect).toHaveBeenCalledWith('👍');
+});
+
 test('renders saved stickers, forwards selection, and refreshes on open/foreground', async () => {
   let foreground!: (state: AppStateStatus) => void;
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, callback) => { foreground = callback; return { remove: jest.fn() }; });
   const onSelectSticker = jest.fn(); render(<EmojiPicker onSelect={jest.fn()} onSelectSticker={onSelectSticker} />);
   expect(mockRefresh).toHaveBeenCalledTimes(1);
+  openCustomStickers();
   fireEvent.press(screen.getByTestId('custom-sticker-s1'));
   expect(onSelectSticker).toHaveBeenCalledWith(mockState.items[0]);
   const thumbnail = screen.getByTestId('custom-sticker-image-s1');
@@ -53,6 +90,7 @@ test('renders saved stickers, forwards selection, and refreshes on open/foregrou
 test('unicode-only consumers never fetch or display custom stickers and still insert emoji', () => {
   const select = jest.fn(); render(<EmojiPicker onSelect={select} />);
   expect(mockRefresh).not.toHaveBeenCalled();
+  expect(screen.queryByRole('tab', { name: 'chat.stickers.title' })).toBeNull();
   expect(screen.queryByLabelText('chat.stickers.add')).toBeNull();
   fireEvent.press(screen.getByLabelText('😀'));
   expect(select).toHaveBeenCalledWith('😀');
@@ -60,6 +98,7 @@ test('unicode-only consumers never fetch or display custom stickers and still in
 
 test('photo addition uploads privately before saving its canonical key', async () => {
   render(<EmojiPicker onSelect={jest.fn()} onSelectSticker={jest.fn()} />);
+  openCustomStickers();
   await act(async () => fireEvent.press(screen.getByLabelText('chat.stickers.add')));
   expect(mockPresign).toHaveBeenCalledWith(expect.objectContaining({ folder: 'stickers', contentType: 'image/png' }));
   expect(mockUpload).toHaveBeenCalledTimes(1);
@@ -69,6 +108,7 @@ test('photo addition uploads privately before saving its canonical key', async (
 test.each([['image/png', 'png'], ['image/webp', 'png'], ['image/jpeg', 'jpeg'], ['image/heic', 'jpeg']])('strips metadata from %s while preserving alpha with %s output', async (contentType, format) => {
   mockContentType.mockReturnValue(contentType);
   render(<EmojiPicker onSelect={jest.fn()} onSelectSticker={jest.fn()} />);
+  openCustomStickers();
   await act(async () => fireEvent.press(screen.getByLabelText('chat.stickers.add')));
   expect(mockManipulate).toHaveBeenCalledWith('file:///sticker.png', [], expect.objectContaining({ format }));
   expect(mockUpload.mock.calls[0][2]).toBe('file:///prepared.png');
@@ -78,6 +118,7 @@ test.each([['image/png', 'png'], ['image/webp', 'png'], ['image/jpeg', 'jpeg'], 
 test('keeps GIF animation and fails closed if static-image metadata stripping fails', async () => {
   mockContentType.mockReturnValue('image/gif');
   const view = render(<EmojiPicker onSelect={jest.fn()} onSelectSticker={jest.fn()} />);
+  openCustomStickers();
   await act(async () => fireEvent.press(screen.getByLabelText('chat.stickers.add')));
   expect(mockManipulate).not.toHaveBeenCalled();
   expect(mockUpload.mock.calls[0][2]).toBe('file:///sticker.png');
@@ -93,6 +134,7 @@ test.each(['denied', 'upload', 'size', 'account'])('does not save a sticker on %
   if (reason === 'size') mockSize.mockResolvedValue(5 * 1024 * 1024 + 1);
   if (reason === 'account') mockUpload.mockImplementation(async () => { mockAuth.sessionEpoch++; });
   render(<EmojiPicker onSelect={jest.fn()} onSelectSticker={jest.fn()} />);
+  openCustomStickers();
   await act(async () => fireEvent.press(screen.getByLabelText('chat.stickers.add')));
   expect(mockSave).not.toHaveBeenCalled();
   if (reason !== 'account') expect(Alert.alert).toHaveBeenCalled();

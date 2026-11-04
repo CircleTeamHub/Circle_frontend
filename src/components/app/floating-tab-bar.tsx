@@ -676,6 +676,9 @@ interface FloatingTabBarProps {
 export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
   const { colors, resolvedMode } = useTheme();
   const insets = useSafeAreaInsets();
+  const activeRoute = tabProps.state.routes[tabProps.state.index];
+  const tabBarStyle = StyleSheet.flatten(tabProps.descriptors[activeRoute.key].options.tabBarStyle);
+  const hiddenByScreen = !!tabBarStyle && 'display' in tabBarStyle && tabBarStyle.display === 'none';
   // 桌面网页版分栏：所有 tab 共用同一个视口居中位置，避免消息页的导航
   // 因为左侧列表栏而和联系人、动态、我的页面错位。
   const isSplitLayout = useDesktopSplitLayout();
@@ -860,7 +863,7 @@ export function FloatingTabBar({ tabProps, hidden }: FloatingTabBarProps) {
   return (
     <CustomTabBar
       {...tabProps}
-      hidden={hidden}
+      hidden={hidden || hiddenByScreen}
       colorScheme={resolvedMode}
       colors={colors}
       badgeMap={badgeMap}

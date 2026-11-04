@@ -12,8 +12,7 @@ import { reportHandledFailure } from '@/observability/report-failure';
  *
  * 启动时序约束：SecureStore 只有异步 API，而旧代码在模块求值期就同步用
  * storage —— 因此拆成「同步壳 + 异步初始化」：
- * - initEncryptedStorage() 在 app/_layout 的启动门（splash 未隐藏）内 await，
- *   完成后才渲染应用；
+ * - app/_layout 在后台引导中 await initEncryptedStorage()，完成后再恢复认证状态；
  * - 初始化前的同步读走 storage 壳的未就绪回退（返回 undefined + dev 告警），
  *   仅 i18n 模块求值和主题首读会触达，二者都有「门后重应用」补偿。
  *
