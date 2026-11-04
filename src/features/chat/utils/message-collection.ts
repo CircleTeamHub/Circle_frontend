@@ -57,6 +57,7 @@ function compactText(value: string | null | undefined, max = 80) {
 }
 
 function getCollectionType(message: ChatMessage): CreateCollectionInput['type'] {
+  if (message.type === 'video') return 'VIDEO';
   if (message.type === 'voice') return 'VOICE';
   return 'MESSAGE';
 }

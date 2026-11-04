@@ -390,6 +390,15 @@
     "chatChannelDescription": "好友和群聊的新消息"
   },
   "chat": {
+    "selection": {
+      "selectedCount": "已选 {{count}} 条消息",
+      "saving": "正在保存 {{current}}/{{total}}",
+      "collecting": "正在收藏 {{current}}/{{total}}",
+      "noEligible": "没有可处理的消息",
+      "saveHint": "保存仅支持普通图片和视频",
+      "saveResult": "已保存 {{success}} 项，{{failed}} 项失败，{{skipped}} 项不支持保存",
+      "collectResult": "已收藏 {{success}} 项，{{failed}} 项失败，{{skipped}} 项已跳过"
+    },
     "detail": {
       "title": "聊天详情",
       "statusSelf": "自己",

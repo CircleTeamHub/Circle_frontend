@@ -278,6 +278,15 @@
     }
   },
   "chat": {
+    "selection": {
+      "selectedCount": "{{count}} mensajes seleccionados",
+      "saving": "Guardando {{current}}/{{total}}",
+      "collecting": "Añadiendo a favoritos {{current}}/{{total}}",
+      "noEligible": "No hay mensajes compatibles",
+      "saveHint": "Solo se guardan fotos y videos que no desaparecen",
+      "saveResult": "Guardados: {{success}}. Fallidos: {{failed}}. No compatibles: {{skipped}}.",
+      "collectResult": "Favoritos: {{success}}. Fallidos: {{failed}}. Omitidos: {{skipped}}."
+    },
     "detail": {
       "title": "Chat",
       "statusSelf": "Yo",

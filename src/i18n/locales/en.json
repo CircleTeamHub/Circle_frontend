@@ -390,6 +390,15 @@
     "chatChannelDescription": "New messages from friends and groups"
   },
   "chat": {
+    "selection": {
+      "selectedCount": "{{count}} messages selected",
+      "saving": "Saving {{current}}/{{total}}",
+      "collecting": "Saving favorites {{current}}/{{total}}",
+      "noEligible": "No eligible messages",
+      "saveHint": "Only non-disappearing photos and videos can be saved",
+      "saveResult": "Saved: {{success}}. Failed: {{failed}}. Unsupported: {{skipped}}.",
+      "collectResult": "Favorited: {{success}}. Failed: {{failed}}. Skipped: {{skipped}}."
+    },
     "detail": {
       "title": "Chat",
       "statusSelf": "Me",

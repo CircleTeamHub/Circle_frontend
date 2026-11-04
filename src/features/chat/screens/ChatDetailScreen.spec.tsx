@@ -1,6 +1,6 @@
 import React from 'react';
 // jest.mock 工厂里只能引用 mock 前缀的外部变量。
-import { Keyboard, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
+import { Alert, Keyboard, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
 import {
   act,
   fireEvent,
@@ -23,6 +23,7 @@ import type { ChatMessage } from '@/types';
 import i18n from '@/i18n';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { API_URL } from '@/constants/config';
+import { createCollection } from '@/services/api/collections';
 
 /**
  * 聊天详情页的挂载冒烟:页面由二十来个 hooks 和几块组件拼成(见 chat-detail/),
@@ -487,9 +488,48 @@ test('message multi-select toggles chat rows and cancel restores the composer', 
   const other = screen.getByRole('checkbox', { name: '晚上吃什么' });
   fireEvent.press(other);
   expect(screen.getByRole('checkbox', { name: '晚上吃什么' }).props.accessibilityState.checked).toBe(true);
+  for (const name of ['common.save', 'chat.messageActions.forward', 'chat.messageActions.collect', 'common.delete']) {
+    expect(screen.getByRole('button', { name })).toBeTruthy();
+  }
+  expect(screen.getByRole('button', { name: 'common.save' })).toBeDisabled();
   fireEvent.press(screen.getByLabelText('common.cancel'));
   expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   expect(screen.getByTestId(E2E_TEST_IDS.chatInput)).toBeTruthy();
+});
+
+test('the multi-select favorite action persists each selected message once and restores the composer', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  // The store keeps ascending heights; the timeline reverses them for its inverted list.
+  useChatStore.setState({ messagesByConversation: { [CONVERSATION]: [message(1, PEER, '在吗'), message(2, ME, '晚上吃什么')], [GROUP]: [] } });
+  const rendered = render(<ChatDetailScreen />);
+  try {
+    const received = await screen.findByText('received:在吗', {}, SETTLE);
+    fireEvent(received, 'longPress', { nativeEvent: { pageX: 100, pageY: 200 } });
+    fireEvent.press(screen.getByLabelText('message-action-multi-select'));
+    fireEvent.press(screen.getByRole('checkbox', { name: '晚上吃什么' }));
+    fireEvent.press(screen.getByRole('button', { name: 'chat.messageActions.collect' }));
+    await waitFor(() => expect(createCollection).toHaveBeenCalledTimes(2));
+    expect(createCollection).toHaveBeenNthCalledWith(1, expect.objectContaining({ sourceID: 'msg-1' }));
+    expect(createCollection).toHaveBeenNthCalledWith(2, expect.objectContaining({ sourceID: 'msg-2' }));
+    await screen.findByTestId(E2E_TEST_IDS.chatInput);
+    expect(alert).toHaveBeenCalledTimes(1);
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
+test('the multi-select delete action requires confirmation and removes only the chosen message', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  const rendered = render(<ChatDetailScreen />);
+  try {
+    const received = await screen.findByText('received:在吗', {}, SETTLE);
+    fireEvent(received, 'longPress', { nativeEvent: { pageX: 100, pageY: 200 } });
+    fireEvent.press(screen.getByLabelText('message-action-multi-select'));
+    fireEvent.press(screen.getByRole('button', { name: 'common.delete' }));
+    expect(useChatStore.getState().messagesByConversation[CONVERSATION]).toHaveLength(2);
+    const actions = alert.mock.calls.at(-1)?.[2];
+    act(() => actions?.find((action) => action.style === 'destructive')?.onPress?.());
+    expect(useChatStore.getState().messagesByConversation[CONVERSATION].map((item) => item.id)).toEqual(['msg-2']);
+    expect(screen.getByTestId(E2E_TEST_IDS.chatInput)).toBeTruthy();
+  } finally { rendered.unmount(); alert.mockRestore(); }
 });
 
 test('a read receipt re-renders only the message whose status changed', async () => {

@@ -26,6 +26,9 @@ import { saveMediaToLibrary } from '@/utils/save-image';
 import { useStickerStore } from '@/features/chat/store/use-sticker-store';
 import { getStickerErrorMessage } from '@/features/chat/utils/sticker-error';
 import { type TFunction } from 'i18next';
+import type { CollectMessageResult } from './use-collect-message';
+
+export type MessageSelectionProgress = { action: 'save' | 'collect'; current: number; total: number };
 
 export interface MessageActionsParams {
   messages: ChatMessage[];
@@ -41,7 +44,7 @@ export interface MessageActionsParams {
   conversationTitle: string;
   setQuoteTarget: Dispatch<SetStateAction<ChatMessage | null>>;
   setEditingMessageId: Dispatch<SetStateAction<string | null>>;
-  handleCollectMessage: (message: ChatMessage) => Promise<void>;
+  handleCollectMessage: (message: ChatMessage, options?: { silent?: boolean }) => Promise<CollectMessageResult>;
 }
 
 /**
@@ -67,17 +70,30 @@ export function useMessageActions({
   const setPendingForward = useMessageForwardStore((s) => s.setPending);
   const setPendingForwardBatch = useMessageForwardStore((s) => s.setPendingBatch);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string> | null>(null);
-  useEffect(() => setSelectedMessageIds(null), [conversationID]);
+  const [selectionProgress, setSelectionProgress] = useState<MessageSelectionProgress | null>(null);
+  const selectionOperationRef = useRef<symbol | null>(null);
+  const selectionContextRef = useRef({ conversationID, messages });
+  selectionContextRef.current = { conversationID, messages };
+  useEffect(() => {
+    setSelectedMessageIds(null);
+    setSelectionProgress(null);
+    selectionOperationRef.current = null;
+    return () => { selectionOperationRef.current = null; };
+  }, [conversationID]);
   const selectedMessages = useMemo(
     () => messages.filter((message) => selectedMessageIds?.has(message.id)),
     [messages, selectedMessageIds],
   );
-  const handleCancelMessageSelection = useCallback(() => setSelectedMessageIds(null), []);
+  const handleCancelMessageSelection = useCallback(() => {
+    if (!selectionOperationRef.current) setSelectedMessageIds(null);
+  }, []);
   const handleStartMessageSelection = useCallback((message: ChatMessage) => {
+    if (selectionOperationRef.current) return;
     Keyboard.dismiss();
     setSelectedMessageIds(new Set([message.id]));
   }, []);
   const handleToggleSelectedMessage = useCallback((id: string) => {
+    if (selectionOperationRef.current) return;
     setSelectedMessageIds((previous) => {
       if (!previous) return previous;
       const next = new Set(previous);
@@ -86,11 +102,84 @@ export function useMessageActions({
       return next;
     });
   }, []);
+  const canSaveSelectionMessage = useCallback((message: ChatMessage) =>
+    !isLocalMessageId(message.id) && !isEphemeralMessage(message, conversationBurnEnabled) &&
+    ((message.type === 'image' && Boolean(message.imageUrl)) || (message.type === 'video' && Boolean(message.videoUrl))),
+  [conversationBurnEnabled]);
+  const canCollectSelectionMessage = useCallback((message: ChatMessage) =>
+    !isLocalMessageId(message.id) && !isEphemeralPeerMessage(message, conversationBurnEnabled) &&
+    !['date', 'system-notice', 'call-record', 'verification-card'].includes(message.type),
+  [conversationBurnEnabled]);
+  const canSaveSelectedMessages = selectedMessages.some(canSaveSelectionMessage);
+  const canCollectSelectedMessages = selectedMessages.some(canCollectSelectionMessage);
+
+  const handleSelectedMessageBatch = useCallback(async (action: 'save' | 'collect') => {
+    if (selectionOperationRef.current || selectedMessages.length === 0 || useChatStore.getState().activeConversationId !== conversationID) return;
+    const operation = Symbol(action);
+    const epoch = useAuthStore.getState().sessionEpoch;
+    const pending = selectedMessages.slice().reverse();
+    const remaining = new Set(pending.map((message) => message.id));
+    const ownsOperation = () => mountedRef.current && selectionOperationRef.current === operation &&
+      selectionContextRef.current.conversationID === conversationID && useAuthStore.getState().sessionEpoch === epoch;
+    const isCurrent = () => ownsOperation() && useChatStore.getState().activeConversationId === conversationID;
+    let success = 0;
+    let failed = 0;
+    let skipped = 0;
+    let permissionDenied = false;
+    let cancelled = false;
+    selectionOperationRef.current = operation;
+    setSelectionProgress({ action, current: 0, total: pending.length });
+    try {
+      for (let index = 0; index < pending.length; index++) {
+        if (!isCurrent()) return;
+        const message = selectionContextRef.current.messages.find((item) => item.id === pending[index].id);
+        const eligible = message && (action === 'save' ? canSaveSelectionMessage(message) : canCollectSelectionMessage(message));
+        if (!eligible || !message) {
+          skipped++;
+          remaining.delete(pending[index].id);
+          continue;
+        }
+        setSelectionProgress({ action, current: index + 1, total: pending.length });
+        const outcome = action === 'save'
+          ? await saveMediaToLibrary(message.type === 'video' ? message.videoUrl! : message.imageUrl!, message.type === 'video' ? { mimeType: 'video/mp4' } : undefined)
+          : await handleCollectMessage(message, { silent: true });
+        if (!ownsOperation()) return;
+        if (outcome === 'denied') { permissionDenied = true; break; }
+        if (outcome === 'cancelled' || outcome === 'pending') { cancelled = true; break; }
+        if (outcome === 'saved' || outcome === 'collected') { success++; remaining.delete(message.id); }
+        else if (outcome === 'skipped') { skipped++; remaining.delete(message.id); }
+        else failed++;
+      }
+      if (!isCurrent()) return;
+      if (cancelled) return;
+      if (permissionDenied) Alert.alert(t('media.saveDeniedTitle'), t('media.saveDeniedMessage'));
+      else {
+        const title = success > 0
+          ? action === 'save' ? 'media.savedTitle' : 'chat.messageActions.collected'
+          : failed > 0
+            ? action === 'save' ? 'media.saveFailedTitle' : 'chat.messageActions.collectFailed'
+            : 'chat.selection.noEligible';
+        Alert.alert(t(title), t(`chat.selection.${action}Result`, { success, failed, skipped,
+          defaultValue: action === 'save' ? '已保存 {{success}} 项，{{failed}} 项失败，{{skipped}} 项不支持保存' : '已收藏 {{success}} 项，{{failed}} 项失败，{{skipped}} 项已跳过',
+        }));
+      }
+    } finally {
+      if (selectionOperationRef.current === operation) {
+        selectionOperationRef.current = null;
+        if (mountedRef.current && selectionContextRef.current.conversationID === conversationID) {
+          setSelectionProgress(null);
+          setSelectedMessageIds(useAuthStore.getState().sessionEpoch !== epoch || remaining.size === 0 ? null : remaining);
+        }
+      }
+    }
+  }, [canCollectSelectionMessage, canSaveSelectionMessage, conversationID, handleCollectMessage, mountedRef, selectedMessages, t]);
+  const handleSaveSelectedMessages = useCallback(() => handleSelectedMessageBatch('save'), [handleSelectedMessageBatch]);
+  const handleCollectSelectedMessages = useCallback(() => handleSelectedMessageBatch('collect'), [handleSelectedMessageBatch]);
   const canForwardSelectedMessages = selectedMessages.length > 0 && selectedMessages.every((message) =>
     canForwardMessage(message, useChatStore.getState().messagesByConversation[conversationID]?.find((item) => item.id === message.id), conversationBurnEnabled),
   );
   const handleForwardSelectedMessages = useCallback(() => {
-    if (!canForwardSelectedMessages) return;
+    if (!canForwardSelectedMessages || selectionOperationRef.current) return;
     const dtos = useChatStore.getState().messagesByConversation[conversationID];
     setPendingForwardBatch(selectedMessages.slice().reverse().map((message) => ({
       message,
@@ -100,7 +189,7 @@ export function useMessageActions({
     router.push({ pathname: '/(tabs)/messages/forward-picker' });
   }, [canForwardSelectedMessages, conversationID, selectedMessages, setPendingForwardBatch]);
   const handleDeleteSelectedMessages = useCallback(() => {
-    if (selectedMessages.length === 0) return;
+    if (selectedMessages.length === 0 || selectionOperationRef.current) return;
     const epoch = useAuthStore.getState().sessionEpoch;
     Alert.alert(t('chat.messageActions.delete'), t('chat.messageActions.deleteSelectedConfirm', {
       count: selectedMessages.length,
@@ -108,7 +197,7 @@ export function useMessageActions({
     }), [
       { text: t('common.cancel'), style: 'cancel' },
       { text: t('common.delete'), style: 'destructive', onPress: () => {
-        if (!mountedRef.current || useAuthStore.getState().sessionEpoch !== epoch) return;
+        if (!mountedRef.current || useAuthStore.getState().sessionEpoch !== epoch || selectionContextRef.current.conversationID !== conversationID) return;
         for (const message of selectedMessages) useChatStore.getState().removeMessage(conversationID, message.id);
         setSelectedMessageIds(null);
       } },
@@ -136,7 +225,7 @@ export function useMessageActions({
   }, [conversationBurnEnabled, mountedRef, t]);
   const handleSaveMedia = useCallback(async (message: ChatMessage) => {
     const url = message.type === 'video' ? message.videoUrl : message.imageUrl;
-    if (!url || savingMediaRef.current) return;
+    if (!url || savingMediaRef.current || selectionOperationRef.current) return;
     savingMediaRef.current = true;
     const epoch = useAuthStore.getState().sessionEpoch;
     try {
@@ -630,6 +719,11 @@ export function useMessageActions({
   return {
     selectedMessageIds,
     selectedMessages,
+    selectionProgress,
+    canSaveSelectedMessages,
+    canCollectSelectedMessages,
+    handleSaveSelectedMessages,
+    handleCollectSelectedMessages,
     handleCancelMessageSelection,
     handleToggleSelectedMessage,
     handleDeleteSelectedMessages,

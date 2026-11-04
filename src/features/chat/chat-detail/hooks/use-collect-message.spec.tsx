@@ -1,0 +1,250 @@
+import { act, renderHook } from '@testing-library/react-native';
+import type { ReactElement } from 'react';
+import { Alert, Keyboard } from 'react-native';
+import { useAuthStore } from '@/stores/authStore';
+import { useChatStore } from '@/chat-core/store';
+import type { ChatMessage } from '@/types';
+import { useCollectMessage, type CollectMessageParams } from './use-collect-message';
+
+const mockCreateCollection = jest.fn();
+const mockCollectNote = jest.fn();
+const mockFetchGroups = jest.fn();
+const mockBump = jest.fn();
+const mockReportFailure = jest.fn();
+jest.mock('@/services/api/collections', () => ({ createCollection: (...args: unknown[]) => mockCreateCollection(...args) }));
+jest.mock('@/services/api/notes', () => ({ collectNote: (...args: unknown[]) => mockCollectNote(...args), fetchNoteGroups: () => mockFetchGroups() }));
+jest.mock('@/features/notes/store/use-note-list-signal-store', () => ({ useNoteListSignalStore: { getState: () => ({ bump: mockBump }) } }));
+jest.mock('@/features/notes/components/AddNoteToNotesSheet', () => ({ AddNoteToNotesSheet: () => null }));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: (...args: unknown[]) => mockReportFailure(...args) }));
+jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_error: unknown, fallback: string) => fallback }));
+jest.mock('@/i18n', () => ({ t: (key: string) => key }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('@/stores/authStore', () => {
+  const { create } = jest.requireActual('zustand');
+  return { useAuthStore: create(() => ({ user: { id: 'me' }, sessionEpoch: 1 })) };
+});
+jest.mock('@/chat-core/store', () => {
+  const { create } = jest.requireActual('zustand');
+  return { useChatStore: create(() => ({ activeConversationId: 'c1', messagesByConversation: {} })) };
+});
+
+const textMessage: ChatMessage = { id: 'm1', type: 'received', text: 'hello' };
+const noteMessage: ChatMessage = {
+  id: 'note-message', type: 'note-card',
+  noteCard: { noteId: 'n1', ownerId: 'peer', title: 'Original title' } as ChatMessage['noteCard'],
+};
+let params: CollectMessageParams;
+type SheetProps = {
+  visible: boolean;
+  noteTitle: string;
+  groups: unknown[];
+  loading: boolean;
+  onClose: () => void;
+  onConfirm: (selection: { targetNoteGroupId: string | null; title: string }) => Promise<void>;
+};
+const sheet = (value: ReturnType<typeof useCollectMessage>) => (value.noteCollectSheet as ReactElement<SheetProps>).props;
+
+beforeEach(() => {
+  jest.useFakeTimers();
+  mockCreateCollection.mockReset().mockResolvedValue({ id: 'collection' });
+  mockCollectNote.mockReset().mockResolvedValue({ note: { id: 'copy' }, alreadyCollected: false });
+  mockFetchGroups.mockReset().mockResolvedValue([{ id: 'private-group', name: 'Private' }]);
+  mockBump.mockReset(); mockReportFailure.mockReset();
+  useAuthStore.setState({ user: { id: 'me' } as never, sessionEpoch: 1 });
+  useChatStore.setState({ activeConversationId: 'c1', messagesByConversation: {} });
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  jest.spyOn(Keyboard, 'isVisible').mockReturnValue(false);
+  jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+  params = {
+    t: ((key: string) => key) as CollectMessageParams['t'], currentUserID: 'me', sourceID: 'peer',
+    conversationID: 'c1', isGroupChat: false, conversationTitle: 'Peer', avatarUrl: undefined,
+    selfAvatarUri: undefined, selfName: 'Me', selfUsername: 'me',
+  };
+});
+afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
+
+async function showSheet() {
+  await act(async () => { jest.advanceTimersByTime(32); });
+}
+
+test('silent collection returns success using the confirmed message snapshot source and shows no alert', async () => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  let outcome: unknown;
+  await act(async () => { outcome = await result.current.handleCollectMessage(textMessage, { silent: true }); });
+  expect(outcome).toBe('collected');
+  expect(mockCreateCollection).toHaveBeenCalledWith(expect.objectContaining({
+    sourceID: 'm1', payload: expect.objectContaining({ messageID: 'm1', conversationID: 'c1', sourceID: 'peer' }),
+  }));
+  expect(Alert.alert).not.toHaveBeenCalled();
+});
+
+test('silent collection returns failure once and retains redacted diagnostics without alerting', async () => {
+  const error = new Error('offline'); mockCreateCollection.mockRejectedValue(error);
+  const { result } = renderHook(() => useCollectMessage(params));
+  let outcome: unknown;
+  await act(async () => { outcome = await result.current.handleCollectMessage(textMessage, { silent: true }); });
+  expect(outcome).toBe('failed');
+  expect(mockCreateCollection).toHaveBeenCalledTimes(1);
+  expect(mockReportFailure).toHaveBeenCalledWith('chatDetail', 'collectMessage', error);
+  expect(Alert.alert).not.toHaveBeenCalled();
+});
+
+test('ordinary single collection keeps its success alert and returns collected', async () => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  let outcome: unknown;
+  await act(async () => { outcome = await result.current.handleCollectMessage(textMessage); });
+  expect(outcome).toBe('collected');
+  expect(Alert.alert).toHaveBeenCalledWith('chat.messageActions.collected', 'chat.messageActions.collectedHint');
+});
+
+test.each([
+  { id: 'local:unconfirmed', type: 'received' },
+  { id: 'date', type: 'date' },
+  { ...noteMessage, noteCard: undefined },
+  { ...noteMessage, noteCard: { ...noteMessage.noteCard, ownerId: 'me' } },
+] as ChatMessage[])('silent unsupported, local, or owned item is skipped (%o)', async (message) => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  let outcome: unknown;
+  await act(async () => { outcome = await result.current.handleCollectMessage(message, { silent: true }); });
+  expect(outcome).toBe('skipped');
+  expect(mockCreateCollection).not.toHaveBeenCalled(); expect(mockCollectNote).not.toHaveBeenCalled();
+  expect(result.current.noteCollectVisible).toBe(false); expect(Alert.alert).not.toHaveBeenCalled();
+});
+
+test('silent note waits for the existing group and title confirmation before resolving collected', async () => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  let settled = false; let pending!: Promise<unknown>;
+  act(() => { pending = result.current.handleCollectMessage(noteMessage, { silent: true }); void pending.then(() => { settled = true; }); });
+  await showSheet();
+  expect(settled).toBe(false);
+  expect(sheet(result.current)).toEqual(expect.objectContaining({ visible: true, noteTitle: 'Original title', groups: [{ id: 'private-group', name: 'Private' }] }));
+  expect(mockCollectNote).not.toHaveBeenCalled();
+  await act(async () => { await sheet(result.current).onConfirm({ targetNoteGroupId: 'private-group', title: 'Edited title' }); });
+  await expect(pending).resolves.toBe('collected');
+  expect(mockCollectNote).toHaveBeenCalledWith('n1', expect.objectContaining({ clientMsgID: 'note-message', conversationID: 'c1' }), { targetNoteGroupId: 'private-group', title: 'Edited title' });
+  expect(mockBump).toHaveBeenCalledTimes(1); expect(Alert.alert).not.toHaveBeenCalled();
+  expect(result.current.noteCollectVisible).toBe(false);
+});
+
+test('closing a silent note resolves cancellation and performs no collection write', async () => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  let pending!: Promise<unknown>;
+  act(() => { pending = result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  await showSheet();
+  act(() => sheet(result.current).onClose());
+  await expect(pending).resolves.toBe('cancelled');
+  expect(mockCollectNote).not.toHaveBeenCalled(); expect(result.current.noteCollectVisible).toBe(false);
+});
+
+test('single note returns pending and keeps the existing confirmation success alert', async () => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  let pending!: Promise<unknown>;
+  act(() => { pending = result.current.handleCollectMessage(noteMessage); });
+  await showSheet();
+  await expect(pending).resolves.toBe('pending');
+  await act(async () => { await sheet(result.current).onConfirm({ targetNoteGroupId: null, title: 'Saved' }); });
+  expect(Alert.alert).toHaveBeenCalledWith('chat.messageActions.noteCollected', 'chat.messageActions.noteCollectedHint', expect.any(Array));
+});
+
+test('silent note write failure resolves failed, closes the sheet, and reports without an item alert', async () => {
+  const error = new Error('offline'); mockCollectNote.mockRejectedValue(error);
+  const { result } = renderHook(() => useCollectMessage(params));
+  let pending!: Promise<unknown>;
+  act(() => { pending = result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  await showSheet();
+  await act(async () => { await sheet(result.current).onConfirm({ targetNoteGroupId: null, title: 'Saved' }); });
+  await expect(pending).resolves.toBe('failed');
+  expect(mockCollectNote).toHaveBeenCalledTimes(1); expect(mockBump).not.toHaveBeenCalled();
+  expect(mockReportFailure).toHaveBeenCalledWith('chatDetail', 'collectNote', error);
+  expect(Alert.alert).not.toHaveBeenCalled(); expect(result.current.noteCollectVisible).toBe(false);
+});
+
+test('an open note sheet is not replaced by another collection request', async () => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  let first!: Promise<unknown>;
+  act(() => { first = result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  await showSheet();
+  let second: unknown;
+  act(() => { void result.current.handleCollectMessage({ ...noteMessage, id: 'second', noteCard: { ...noteMessage.noteCard!, noteId: 'n2', title: 'Other' } }, { silent: true }).then((value) => { second = value; }); });
+  await showSheet();
+  expect(second).toBe('pending'); expect(sheet(result.current).noteTitle).toBe('Original title');
+  act(() => sheet(result.current).onClose()); await expect(first).resolves.toBe('cancelled');
+});
+
+test.each(['account', 'conversation', 'unmount'] as const)('pending note cancels on %s and ignores late group results', async (change) => {
+  let finishGroups!: (groups: unknown[]) => void;
+  mockFetchGroups.mockImplementation(() => new Promise((resolve) => { finishGroups = resolve; }));
+  const view = renderHook(() => useCollectMessage(params));
+  let pending!: Promise<unknown>;
+  act(() => { pending = view.result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  await showSheet();
+  const oldConfirm = sheet(view.result.current).onConfirm;
+  act(() => {
+    if (change === 'account') useAuthStore.setState({ sessionEpoch: 2, user: { id: 'other' } as never });
+    if (change === 'conversation') useChatStore.setState({ activeConversationId: 'c2' });
+    if (change === 'unmount') view.unmount();
+  });
+  let outcome: unknown = 'unresolved'; void pending.then((value) => { outcome = value; });
+  await act(async () => { await Promise.resolve(); });
+  expect(outcome).toBe('cancelled');
+  await act(async () => { finishGroups([{ id: 'old-private-group' }]); await oldConfirm({ targetNoteGroupId: null, title: 'Stale' }); });
+  expect(mockCollectNote).not.toHaveBeenCalled(); expect(mockBump).not.toHaveBeenCalled(); expect(Alert.alert).not.toHaveBeenCalled();
+  if (change !== 'unmount') { expect(view.result.current.noteCollectVisible).toBe(false); expect(sheet(view.result.current).groups).toEqual([]); }
+});
+
+test('unmount while waiting for keyboard closes its timer and cancels before mounting a sheet', async () => {
+  const view = renderHook(() => useCollectMessage(params));
+  let pending!: Promise<unknown>;
+  act(() => { pending = view.result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  act(() => view.unmount());
+  expect(jest.getTimerCount()).toBe(0);
+  await expect(pending).resolves.toBe('cancelled'); expect(mockFetchGroups).not.toHaveBeenCalled();
+});
+
+test.each(['account', 'conversation', 'unmount'] as const)('normal write completion after %s returns cancelled and cannot show stale success', async (change) => {
+  let finish!: () => void; mockCreateCollection.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
+  const view = renderHook(() => useCollectMessage(params));
+  let pending!: Promise<unknown>;
+  act(() => { pending = view.result.current.handleCollectMessage(textMessage); });
+  act(() => {
+    if (change === 'account') useAuthStore.setState({ sessionEpoch: 2 });
+    if (change === 'conversation') useChatStore.setState({ activeConversationId: 'c2' });
+    if (change === 'unmount') view.unmount();
+  });
+  await act(async () => { finish(); });
+  await expect(pending).resolves.toBe('cancelled'); expect(Alert.alert).not.toHaveBeenCalled();
+});
+
+test('note saved after account change cannot dirty the next account notes or show an alert', async () => {
+  let finish!: (value: unknown) => void; mockCollectNote.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  const { result } = renderHook(() => useCollectMessage(params));
+  let pending!: Promise<unknown>; let confirmation!: Promise<void>;
+  act(() => { pending = result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  await showSheet();
+  act(() => { confirmation = sheet(result.current).onConfirm({ targetNoteGroupId: null, title: 'Saved' }); });
+  act(() => useAuthStore.setState({ sessionEpoch: 2 }));
+  await act(async () => { finish({ note: { id: 'copy' } }); await confirmation; });
+  await expect(pending).resolves.toBe('cancelled'); expect(mockBump).not.toHaveBeenCalled(); expect(Alert.alert).not.toHaveBeenCalled();
+});
+
+
+test('a callback retained across account change cannot create a collection for the next account', async () => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  const oldCollect = result.current.handleCollectMessage;
+  act(() => useAuthStore.setState({ sessionEpoch: 2, user: { id: 'other' } as never }));
+  let outcome: unknown;
+  await act(async () => { outcome = await oldCollect(textMessage, { silent: true }); });
+  expect(outcome).toBe('cancelled'); expect(mockCreateCollection).not.toHaveBeenCalled();
+});
+
+test('cancelling a visible-keyboard wait removes both native listeners and its fallback timer', async () => {
+  jest.spyOn(Keyboard, 'isVisible').mockReturnValue(true);
+  const remove = jest.fn(); jest.spyOn(Keyboard, 'addListener').mockReturnValue({ remove } as unknown as ReturnType<typeof Keyboard.addListener>);
+  const view = renderHook(() => useCollectMessage(params));
+  let pending!: Promise<unknown>;
+  act(() => { pending = view.result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  act(() => view.unmount());
+  await expect(pending).resolves.toBe('cancelled');
+  expect(remove).toHaveBeenCalledTimes(2); expect(jest.getTimerCount()).toBe(0);
+  expect(mockFetchGroups).not.toHaveBeenCalled();
+});
