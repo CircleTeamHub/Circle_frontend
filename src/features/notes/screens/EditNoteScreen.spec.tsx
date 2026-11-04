@@ -4,6 +4,7 @@ import { Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Vie
 import { setAudioModeAsync } from 'expo-audio';
 import EditNoteScreen, { draftRecordFromServer, draftFingerprint } from './EditNoteScreen';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
+import { NoteVideoViewer } from '@/features/notes/components/NoteVideoViewer';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { createNote, updateNote } from '@/services/api/notes';
 import { storage } from '@/storage';
@@ -13,6 +14,79 @@ import { ApiError } from '@/services/api/api-error';
 import { stageLocalNoteDraftDeletion, loadLocalNoteDraft, loadPendingNoteDraftDeletions } from '@/features/notes/utils/note-editor-drafts';
 
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: jest.fn(() => null) }));
+jest.mock('@/features/notes/components/NoteVideoViewer', () => ({ NoteVideoViewer: jest.fn(() => null) }));
+
+test('ordinary and verification videos open their own full-screen source without saving the note', async () => {
+  mockRouteId = 'playable-videos';
+  const video = { type: 'VIDEO', objectKey: 'notes/video.mp4', url: 'https://cdn/video.mp4', posterUrl: 'https://cdn/poster.jpg', sortOrder: 0 };
+  const verification = { type: 'VIDEO', objectKey: 'notes/check.mp4', url: 'https://cdn/check.mp4', sortOrder: 0 };
+  mockFetchNoteDetail.mockResolvedValue({
+    title: 'Videos', contentJson: [], media: [video, verification],
+    sections: { media: { items: [video] }, showcase: { items: [verification] } },
+    groups: [], pinned: false, createdAt: '2026-01-01T00:00:00Z',
+  });
+  render(<EditNoteScreen />);
+  await screen.findByDisplayValue('Videos');
+  expect(screen.UNSAFE_queryByType(NoteVideoViewer)).toBeNull();
+  for (const [section, uri] of [['video', video.url], ['showcase', verification.url]]) {
+    fireEvent.press(within(screen.getByTestId(`note-${section}-section`)).getByRole('button', { name: 'chat.detail.playVideo' }));
+    expect(jest.mocked(NoteVideoViewer).mock.calls.at(-1)?.[0].uri).toBe(uri);
+    act(() => jest.mocked(NoteVideoViewer).mock.calls.at(-1)?.[0].onClose());
+    expect(screen.UNSAFE_queryByType(NoteVideoViewer)).toBeNull();
+  }
+  expect(createNote).not.toHaveBeenCalled();
+  expect(updateNote).not.toHaveBeenCalled();
+});
+
+test('a selected local video can play while uploading and remains local after upload', async () => {
+  const upload = createDeferred<void>();
+  mockLaunchPicker.mockResolvedValue({ canceled: false, assets: [{ type: 'video', uri: 'file:///selected-video.mp4', duration: 1000, width: 100, height: 80 }] });
+  mockRequestPresign.mockResolvedValue({ uploadUrl: 'https://upload/video', fileUrl: 'https://cdn/video', key: 'notes/video.mp4', requiredHeaders: {} });
+  mockUploadFile.mockReturnValue(upload.promise);
+  render(<EditNoteScreen />);
+  pressComposer('video');
+  const play = await screen.findByRole('button', { name: 'chat.detail.playVideo' });
+  fireEvent.press(play);
+  expect(jest.mocked(NoteVideoViewer).mock.calls.at(-1)?.[0].uri).toBe('file:///selected-video.mp4');
+  await act(async () => { upload.resolve(); await upload.promise; });
+  expect(screen.UNSAFE_getByType(NoteVideoViewer).props.uri).toBe('file:///selected-video.mp4');
+});
+
+test('a failed upload removes its video preview and closes the player', async () => {
+  const upload = createDeferred<void>();
+  mockLaunchPicker.mockResolvedValue({ canceled: false, assets: [{ type: 'video', uri: 'file:///failed-video.mp4', duration: 1000 }] });
+  mockRequestPresign.mockResolvedValue({ uploadUrl: 'https://upload/video', key: 'notes/video.mp4', requiredHeaders: {} });
+  mockUploadFile.mockReturnValue(upload.promise);
+  render(<EditNoteScreen />);
+  pressComposer('video');
+  fireEvent.press(await screen.findByRole('button', { name: 'chat.detail.playVideo' }));
+  expect(screen.UNSAFE_queryByType(NoteVideoViewer)).toBeTruthy();
+  await act(async () => upload.reject(new Error('upload failed')));
+  await waitFor(() => expect(screen.UNSAFE_queryByType(NoteVideoViewer)).toBeNull());
+});
+
+test('switching editor routes closes the previous note video preview', async () => {
+  mockRouteId = 'first-video-note';
+  const video = { type: 'VIDEO', objectKey: 'notes/video.mp4', url: 'https://cdn/video.mp4', sortOrder: 0 };
+  mockFetchNoteDetail.mockResolvedValue({ title: 'First', contentJson: [], media: [video], sections: { media: { items: [video] } }, groups: [], pinned: false, createdAt: '2026-01-01T00:00:00Z' });
+  const rendered = render(<EditNoteScreen />);
+  fireEvent.press(await screen.findByRole('button', { name: 'chat.detail.playVideo' }));
+  expect(screen.UNSAFE_queryByType(NoteVideoViewer)).toBeTruthy();
+  mockRouteId = 'replacement-note';
+  rendered.rerender(<EditNoteScreen />);
+  expect(screen.UNSAFE_queryByType(NoteVideoViewer)).toBeNull();
+});
+
+test('leaving the editor focus closes the selected video', async () => {
+  mockRouteId = 'video-focus';
+  const video = { type: 'VIDEO', objectKey: 'notes/video.mp4', url: 'https://cdn/video.mp4', sortOrder: 0 };
+  mockFetchNoteDetail.mockResolvedValue({ title: 'Video focus', contentJson: [], media: [video], sections: { media: { items: [video] } }, groups: [], pinned: false, createdAt: '2026-01-01T00:00:00Z' });
+  render(<EditNoteScreen />);
+  fireEvent.press(await screen.findByRole('button', { name: 'chat.detail.playVideo' }));
+  expect(screen.UNSAFE_queryByType(NoteVideoViewer)).toBeTruthy();
+  act(() => mockFocusCleanup?.());
+  expect(screen.UNSAFE_queryByType(NoteVideoViewer)).toBeNull();
+});
 
 test('loads old mixed media into independent regions and deleting images preserves both video regions', async () => {
   mockRouteId = 'mixed-media-note';

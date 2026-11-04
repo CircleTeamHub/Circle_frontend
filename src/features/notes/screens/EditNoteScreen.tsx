@@ -46,6 +46,7 @@ import {
   MAX_NOTE_GROUPS,
 } from '@/features/notes/constants';
 import { VideoDraftPreview } from '@/features/notes/components/VideoDraftPreview';
+import { NoteVideoViewer } from '@/features/notes/components/NoteVideoViewer';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
@@ -638,6 +639,7 @@ export default function EditNoteScreen() {
     images: { uri: string; objectKey: string }[];
     index: number;
   } | null>(null);
+  const [editorVideoViewer, setEditorVideoViewer] = useState<{ routeKey: string; clientId: string } | null>(null);
   const [unrecoverableMediaCount, setUnrecoverableMediaCount] = useState(0);
   const unrecoverableMediaByBlockRef = useRef<Record<string, number>>({});
   const [uploadingSection, setUploadingSection] = useState<UploadingSection>(null);
@@ -1711,10 +1713,14 @@ export default function EditNoteScreen() {
   useFocusEffect(
     useCallback(() => {
       resetUploadOwnership();
+      const leaveEditor = () => {
+        invalidateUploadOwnership();
+        setEditorVideoViewer(null);
+      };
       if (isLocalNoteDraftDeleted(currentUser?.id, editorDraftId)) {
         draftRemoteQueue.cancel();
         completeNavigation(undefined, true);
-        return invalidateUploadOwnership;
+        return leaveEditor;
       }
       const picked = consumePickedLocation();
       if (picked && !pendingSubmissionRef.current && !saveInFlightRef.current) {
@@ -1729,7 +1735,7 @@ export default function EditNoteScreen() {
         // 成一块灰板。
         setMapRevealed(true);
       }
-      return invalidateUploadOwnership;
+      return leaveEditor;
     }, [completeNavigation, currentUser?.id, draftRemoteQueue, editorDraftId, consumePickedLocation, invalidateUploadOwnership, resetUploadOwnership]),
   );
 
@@ -3137,6 +3143,7 @@ export default function EditNoteScreen() {
         {items.map((item) => {
           const thumbUri =
             item.type === 'VIDEO' ? item.posterUrl : item.previewUri ?? item.url;
+          const videoUri = item.type === 'VIDEO' ? item.previewUri ?? item.url : undefined;
           return (
             <View
               key={item.clientId}
@@ -3149,10 +3156,16 @@ export default function EditNoteScreen() {
             >
               <Pressable
                 style={s.mediaThumb}
-                disabled={item.type !== 'IMAGE' || !thumbUri}
-                accessibilityRole={item.type === 'IMAGE' ? 'button' : undefined}
-                accessibilityLabel={t('notes.edit.imageItem', { defaultValue: '图片' })}
+                disabled={item.type === 'VIDEO' ? !videoUri : !thumbUri}
+                accessibilityRole="button"
+                accessibilityLabel={item.type === 'VIDEO'
+                  ? t('chat.detail.playVideo')
+                  : t('notes.edit.imageItem', { defaultValue: '图片' })}
                 onPress={() => {
+                  if (item.type === 'VIDEO') {
+                    setEditorVideoViewer({ routeKey: draftRouteKey, clientId: item.clientId });
+                    return;
+                  }
                   const imageItems = items.filter((image) => image.type === 'IMAGE' && (image.previewUri || image.url));
                   setEditorImageViewer({
                     routeKey: draftRouteKey,
@@ -3182,6 +3195,11 @@ export default function EditNoteScreen() {
                   />
                 </View>
               )}
+              {videoUri ? (
+                <View style={s.videoPlayOverlay} pointerEvents="none">
+                  <Ionicons name="play-circle" size={48} color="#FFFFFF" />
+                </View>
+              ) : null}
               </Pressable>
               <View style={[s.mediaBadge, d.mediaBadge]}>
                 <Ionicons
@@ -3826,6 +3844,11 @@ export default function EditNoteScreen() {
     }
   }, [currentUser?.id, draftRouteKey, persistDraft, router, sessionEpoch, t]);
 
+  const editorVideoItem = editorVideoViewer?.routeKey === draftRouteKey
+    ? [...mediaItems, ...showcaseItems].find((item) => item.type === 'VIDEO' && item.clientId === editorVideoViewer.clientId)
+    : undefined;
+  const editorVideoUri = editorVideoItem?.previewUri ?? editorVideoItem?.url;
+
   if (loading || isDraftLoading) {
     return (
       <View style={[s.container, d.container, s.center, { paddingTop: insets.top }]}>
@@ -4128,6 +4151,9 @@ export default function EditNoteScreen() {
             )}
           </View>
         </Modal>
+      ) : null}
+      {editorVideoUri ? (
+        <NoteVideoViewer uri={editorVideoUri} onClose={() => setEditorVideoViewer(null)} />
       ) : null}
       {editorImageViewer?.routeKey === draftRouteKey ? (
         <ImageViewer
@@ -4801,6 +4827,12 @@ const s = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  videoPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
   mediaBadge: {
     position: 'absolute',

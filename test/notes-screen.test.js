@@ -498,7 +498,8 @@ test('EditNoteScreen resets media upload ownership when its route loses focus', 
 
   assert.match(src, /const invalidateUploadOwnership = useCallback\(\(\) => \{[\s\S]*?invalidate\(\)[\s\S]*?uploadInFlightRef\.current = false/);
   assert.match(src, /const resetUploadOwnership = useCallback\(\(\) => \{[\s\S]*?invalidateUploadOwnership\(\)[\s\S]*?setUploadingSection\(null\)/);
-  assert.match(src, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*resetUploadOwnership\(\);[\s\S]*?return invalidateUploadOwnership/);
+  assert.match(src, /const leaveEditor = \(\) => \{\s*invalidateUploadOwnership\(\);\s*setEditorVideoViewer\(null\);/);
+  assert.match(src, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*resetUploadOwnership\(\);[\s\S]*?return leaveEditor/);
   assert.match(src, /if \(pendingSubmissionRef\.current \|\| saveInFlightRef\.current \|\| !isRouteDataReady \|\| uploadInFlightRef\.current\) return;[\s\S]*?router\.push/);
   assert.match(src, /onPress=\{handleOpenLocationPicker\}[\s\S]*?disabled=\{!isRouteDataReady \|\| uploadingSection !== null\}/);
   assert.match(src, /loading \|\|\s*!isRouteDataReady \|\|\s*isSubmitting/);
