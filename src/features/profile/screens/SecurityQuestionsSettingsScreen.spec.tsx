@@ -136,3 +136,16 @@ test('leaving while the save is in flight does not pop the page underneath', asy
 
   expect(mockBack).not.toHaveBeenCalled();
 });
+
+test('switching a slot to another question clears the answer typed for the old one', async () => {
+  render(<SecurityQuestionsSettingsScreen />);
+  await waitFor(() => expect(fetchSecurityQuestions).toHaveBeenCalled());
+  pick(0, 'bestFriendName');
+  fireEvent.changeText(screen.getByTestId('security-question-answer-0'), '张三');
+
+  pick(0, 'bestFriendName'); // 重选同一题：答案保留
+  expect(screen.getByTestId('security-question-answer-0').props.value).toBe('张三');
+
+  pick(0, 'birthCity'); // 换题：旧答案不能跟着新题一起存
+  expect(screen.getByTestId('security-question-answer-0').props.value).toBe('');
+});

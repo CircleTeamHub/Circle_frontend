@@ -60,6 +60,10 @@ export default function AccountSecuritySettingsScreen() {
         setSecurityQuestionsSet(keys.length > 0);
       }
     } catch (requestError) {
+      // 刷新失败就不再显示上一次的结论（可能已经过时），回到「不知道」。
+      if (securityQuestionsRequestRef.current === requestId) {
+        setSecurityQuestionsSet(null);
+      }
       reportHandledFailure("securityQuestions", "statusCheck", requestError);
     }
   }, []);

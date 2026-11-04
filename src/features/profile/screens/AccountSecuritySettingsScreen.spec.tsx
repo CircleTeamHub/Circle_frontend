@@ -56,3 +56,20 @@ test('an older status response arriving last does not overwrite the newer one', 
     'settingsDetails.accountSecurity.securityQuestionsSet',
   );
 });
+
+test('a failed refresh hides the last known status instead of showing it as current', async () => {
+  jest
+    .mocked(fetchSecurityQuestions)
+    .mockResolvedValueOnce(['birthCity', 'firstPetName'])
+    .mockRejectedValueOnce(new Error('offline'));
+  render(<AccountSecuritySettingsScreen />);
+  await waitFor(() =>
+    expect(securityQuestionsRow()?.valueKey).toBe(
+      'settingsDetails.accountSecurity.securityQuestionsSet',
+    ),
+  );
+
+  await act(async () => mockRefocus!());
+
+  expect(securityQuestionsRow()?.valueKey).toBeUndefined();
+});

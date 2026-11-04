@@ -206,7 +206,10 @@ export default function SecurityQuestionsSettingsScreen() {
         options={pickerOptions}
         selectedValue={pickingSlot !== null ? (slots[pickingSlot]?.questionKey ?? null) : null}
         onSelect={(questionKey) => {
-          if (pickingSlot !== null) updateSlot(pickingSlot, { questionKey });
+          // 换了题就清掉答案：旧题的答案跟新题一起存，本人以后会答不上来。
+          if (pickingSlot !== null && slots[pickingSlot]?.questionKey !== questionKey) {
+            updateSlot(pickingSlot, { questionKey, answer: '' });
+          }
           setPickingSlot(null);
         }}
         onClose={() => setPickingSlot(null)}
