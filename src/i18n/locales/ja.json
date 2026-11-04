@@ -1300,7 +1300,9 @@
       "statusClosed": "終了",
       "remark": "メモ：{{text}}",
       "openSenderChat": "{{name}}とチャット",
-      "openGroupChat": "グループチャット{{name}}を開く"
+      "openGroupChat": "グループチャット{{name}}を開く",
+      "viewContactDetails": "{{name}}のプロフィールを表示",
+      "viewGroupDetails": "{{name}}のグループ情報を表示"
     },
     "groupPicker": {
       "title": "グループを編集",

@@ -1306,7 +1306,9 @@
       "statusClosed": "Cerrado",
       "remark": "Comentario: {{text}}",
       "openSenderChat": "Chatear con {{name}}",
-      "openGroupChat": "Abrir el chat del grupo {{name}}"
+      "openGroupChat": "Abrir el chat del grupo {{name}}",
+      "viewContactDetails": "Ver el perfil de {{name}}",
+      "viewGroupDetails": "Ver la información del grupo {{name}}"
     },
     "loadFailed": "No se pudieron cargar las notas. Revisa tu conexión e inténtalo de nuevo",
     "collect": {

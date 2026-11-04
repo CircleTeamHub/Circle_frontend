@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -33,6 +34,7 @@ import {
   clearChatConversationHistory,
   createCircleChatConversation,
   fetchChatMembers,
+  refreshChatConversation,
   dissolveGroupChatConversation,
   leaveGroupChatConversation,
   renameGroupChatConversation,
@@ -114,6 +116,17 @@ import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.md,
+  },
+  retry: {
+    minHeight: 44,
+    justifyContent: 'center',
+    padding: Spacing.md,
+  },
   content: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
@@ -356,6 +369,7 @@ export default function ChatInfoScreen() {
   const [deletePending, setDeletePending] = useState(false);
   const [groupInfo, setGroupInfo] = useState<CircleGroupInfo | null>(null);
   const [groupMembers, setGroupMembers] = useState<ChatMemberDto[]>([]);
+  const [standaloneConversationLoadFailed, setStandaloneConversationLoadFailed] = useState(false);
   // 圈子群会话 DTO(get-or-create 结果):从圈子详情等入口进来时 store 里可能
   // 还没有该会话,置顶/免打扰的当前值与目标会话 id 都以它兜底。
   const [groupConversation, setGroupConversation] = useState<ChatConversationDto | null>(null);
@@ -421,10 +435,17 @@ export default function ChatInfoScreen() {
     params.conversationKind === 'temp' || conversation?.type === 'TEMP';
   // 独立群聊(微信群):GROUP 会话但不挂圈子。它没有圈子详情/角色/公告,
   // 成员与改名/退群走 /chat/conversations/:id/* 专属端点。
+  // 笔记来源可在会话未缓存时直进:明确的 group 路由以会话 id 同时作 sourceID。
+  // 已有 DTO 时仍以它的 circleId 为准,不能把圈子群误判成独立群。
   const isStandaloneGroup =
     !isTempConversation &&
-    conversation?.type === 'GROUP' &&
-    conversation.circleId == null;
+    (conversation
+      ? conversation.type === 'GROUP' && conversation.circleId == null
+      : params.conversationKind === 'group' &&
+        params.conversationType === 'group' &&
+        Boolean(conversationID) &&
+        routeSourceID === conversationID);
+  const needsStandaloneConversation = isStandaloneGroup && !conversation;
   const isGroupConversation =
     isTempConversation ||
     params.conversationType === 'group' ||
@@ -685,7 +706,23 @@ export default function ChatInfoScreen() {
     setGroupMembers(cached?.members ?? []);
     setGroupConversation(null);
     setStandaloneDirectoryAccess('pending');
+    setStandaloneConversationLoadFailed(false);
   }, [groupDataKey, sessionEpoch]);
+  // 笔记来源直进时补齐公告、头像、策略和偏好设置,只读已存在的会话,不建群/入群。
+  useFocusEffect(
+    useCallback(() => {
+      if (!needsStandaloneConversation || standaloneConversationLoadFailed) return;
+      let cancelled = false;
+      const shouldApply = () => !cancelled && useAuthStore.getState().sessionEpoch === sessionEpoch;
+      void refreshChatConversation(conversationID, { shouldApply })
+        .catch((error: unknown) => {
+          if (!shouldApply()) return;
+          setStandaloneConversationLoadFailed(true);
+          reportHandledFailure('chatInfo', 'loadConversation', error);
+        });
+      return () => { cancelled = true; };
+    }, [conversationID, needsStandaloneConversation, sessionEpoch, standaloneConversationLoadFailed]),
+  );
   // 本页就地改了成员/群名:缓存作废,下次进来重新拉,不先显示改之前的样子。
   const evictGroupCache = useCallback(
     () => evictGroupInfoCache(sessionEpoch, groupDataKey),
@@ -1932,6 +1969,29 @@ export default function ChatInfoScreen() {
     }),
     [colors],
   );
+
+  // 元信息未到时不展示缺省开放的成员/邀请策略,也不提供尚未解析会话 id 的设置。
+  if (needsStandaloneConversation) {
+    return (
+      <View style={[d.container, { paddingTop: insets.top }]}>
+        <NavHeader title={t('chat.groupInfo')} fallbackHref={backHref} />
+        <View style={s.loading}>
+          {standaloneConversationLoadFailed ? (
+            <>
+              <Text style={{ color: colors.textSecondary }}>{t('chat.loadFailed')}</Text>
+              <Pressable
+                style={s.retry}
+                accessibilityRole="button"
+                onPress={() => setStandaloneConversationLoadFailed(false)}
+              >
+                <Text style={{ color: colors.primary }}>{t('common.retry')}</Text>
+              </Pressable>
+            </>
+          ) : <ActivityIndicator color={colors.primary} />}
+        </View>
+      </View>
+    );
+  }
 
   if (isGroupConversation) {
     return (

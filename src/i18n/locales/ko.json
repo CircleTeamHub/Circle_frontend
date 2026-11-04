@@ -1300,7 +1300,9 @@
       "statusClosed": "영업 종료",
       "remark": "메모: {{text}}",
       "openSenderChat": "{{name}}님과 채팅",
-      "openGroupChat": "그룹 채팅 {{name}} 열기"
+      "openGroupChat": "그룹 채팅 {{name}} 열기",
+      "viewContactDetails": "{{name}}님의 프로필 보기",
+      "viewGroupDetails": "{{name}} 그룹 정보 보기"
     },
     "groupPicker": {
       "title": "그룹 편집",
