@@ -4,6 +4,7 @@ import { SettingsDetailScreen } from "@/features/profile/components/settings-det
 import { useAuth } from "@/hooks/use-auth";
 import {
   fetchLoginSecurityCodeStatus,
+  fetchSecurityQuestions,
   fetchSingleDeviceLoginStatus,
   setSingleDeviceLogin,
 } from "@/services/api/auth";
@@ -46,11 +47,22 @@ export default function AccountSecuritySettingsScreen() {
     }
   }, []);
 
+  // null = 还不知道（加载中 / 拉取失败），行尾不显示状态。
+  const [securityQuestionsSet, setSecurityQuestionsSet] = useState<boolean | null>(null);
+  const loadSecurityQuestionsStatus = useCallback(async () => {
+    try {
+      setSecurityQuestionsSet((await fetchSecurityQuestions()).length > 0);
+    } catch (requestError) {
+      reportHandledFailure("securityQuestions", "statusCheck", requestError);
+    }
+  }, []);
+
   // 每次回到本页都重新拉取：从设置/修改/关闭子页返回后开关状态保持同步。
   useFocusEffect(
     useCallback(() => {
       void loadSecurityCodeStatus();
-    }, [loadSecurityCodeStatus]),
+      void loadSecurityQuestionsStatus();
+    }, [loadSecurityCodeStatus, loadSecurityQuestionsStatus]),
   );
 
   function handleSecurityCodeToggle(next: boolean) {
@@ -141,6 +153,18 @@ export default function AccountSecuritySettingsScreen() {
                   pathname: SECURITY_CODE_ROUTE,
                   params: { mode: "change" },
                 }),
+            },
+            {
+              id: "security-questions",
+              labelKey: "settingsDetails.accountSecurity.securityQuestions",
+              valueKey:
+                securityQuestionsSet === null
+                  ? undefined
+                  : securityQuestionsSet
+                    ? "settingsDetails.accountSecurity.securityQuestionsSet"
+                    : "settingsDetails.accountSecurity.securityQuestionsNotSet",
+              onPress: () =>
+                router.push("/(tabs)/profile/security-questions" as never),
             },
           ],
         },

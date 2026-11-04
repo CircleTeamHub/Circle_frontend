@@ -44,7 +44,8 @@ test('the new device can resend once the approved code has expired', () => {
   );
   assert.match(
     screen,
-    /needsResend =\s*phase === 'expired' \|\| \(phase === 'codeExpired' && !useSecurityCode\)/,
+    // 用安全码 / 密保时不需要受信任设备，60 秒的码过期也不必重发。
+    /needsResend =\s*phase === 'expired' \|\| \(phase === 'codeExpired' && !usingFallback\)/,
   );
   assert.match(screen, /\) : needsResend \? \(/);
 });

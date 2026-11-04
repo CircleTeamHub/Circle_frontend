@@ -91,6 +91,11 @@ const ACCOUNT_SECURITY_SEARCH_ROWS: AppSettingsRow[] = [
     },
   },
   {
+    id: 'account-security-security-questions',
+    labelKey: 'settingsDetails.accountSecurity.securityQuestions',
+    route: '/(tabs)/profile/security-questions',
+  },
+  {
     id: 'account-security-single-device-login',
     labelKey: 'settingsDetails.accountSecurity.singleDeviceLogin',
     route: '/(tabs)/profile/settings-account-security',

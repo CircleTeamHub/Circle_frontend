@@ -218,7 +218,9 @@
       "recoveryWaiting": "已申请找回。{{time}} 之后，回到登录页在这台设备上重新登录即可进入账号。期间你的受信任设备会收到提醒，可以拒绝。",
       "recoveryReady": "等待期已过。回到登录页，在这台设备上用密码重新登录即可完成找回。",
       "recoveryGoLogin": "去登录",
-      "recoveryUnderstood": "我知道了"
+      "recoveryUnderstood": "我知道了",
+      "useSecurityQuestions": "受信任设备不在身边？通过密保问题验证登录",
+      "securityQuestionsIntro": "回答你设置的两个密保问题完成验证。"
     }
   },
   "onboarding": {
@@ -2360,7 +2362,10 @@
       "accountActionsSection": "账户操作",
       "switchAccount": "切换账号",
       "logout": "退出登录",
-      "cancelAccount": "注销账号"
+      "cancelAccount": "注销账号",
+      "securityQuestions": "密保问题",
+      "securityQuestionsSet": "已设置",
+      "securityQuestionsNotSet": "未设置"
     },
     "notifications": {
       "title": "消息通知",
@@ -3687,7 +3692,10 @@
     "CHAT_GROUP_ACCEPT_REQUIRED": "请先处理并接受群邀请",
     "CHAT_GROUP_INVITATION_INVALID": "邀请已过期或失效",
     "CHAT_GROUP_APPLICATION_DISABLED": "该群暂不接受名片申请",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "找回申请过多，请等现有申请处理完后再试"
+    "AUTH_LOGIN_RECOVERY_LIMITED": "找回申请过多，请等现有申请处理完后再试",
+    "AUTH_SECURITY_QUESTIONS_INVALID": "请选择两个不同的问题并填写答案",
+    "AUTH_SECURITY_QUESTIONS_NOT_SET": "未设置密保问题，请在受信任设备上确认登录",
+    "AUTH_SECURITY_ANSWERS_INVALID": "密保答案不正确"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",
@@ -3832,5 +3840,26 @@
       "CANCELLED": "申请已取消"
     },
     "sentInvitation": "你邀请对方加入群聊"
+  },
+  "securityQuestions": {
+    "title": "密保问题",
+    "intro": "设置两个只有你知道答案的问题。受信任设备都用不了时（比如手机重装、丢失），可以在陌生设备登录验证页回答它们完成验证。",
+    "introReplace": "你已经设置过密保问题。重新保存会替换原来的问题和答案。",
+    "slotLabel": "问题 {{number}}",
+    "pickQuestion": "选择问题",
+    "answerPlaceholder": "填写答案",
+    "answerHint": "答案不区分大小写，空格会被忽略。请选只有你自己知道、别人查不到的答案。",
+    "incomplete": "请选择两个问题并填写答案",
+    "saveFailed": "保存失败，请重试",
+    "questions": {
+      "bestFriendName": "你最好的朋友叫什么名字？",
+      "primarySchool": "你就读的小学叫什么名字？",
+      "firstTeacher": "你小学班主任叫什么名字？",
+      "childhoodNickname": "你小时候的小名是什么？",
+      "birthCity": "你出生在哪个城市？",
+      "firstPetName": "你养的第一只宠物叫什么名字？",
+      "motherName": "你母亲的名字是什么？",
+      "fatherName": "你父亲的名字是什么？"
+    }
   }
 }

@@ -218,7 +218,9 @@
       "recoveryWaiting": "Recovery requested. After {{time}}, sign in again on this device to get into your account. Your trusted devices are notified in the meantime and can decline.",
       "recoveryReady": "The waiting period is over. Go back and sign in with your password on this device to finish the recovery.",
       "recoveryGoLogin": "Go to sign in",
-      "recoveryUnderstood": "Got it"
+      "recoveryUnderstood": "Got it",
+      "useSecurityQuestions": "Trusted device not nearby? Verify with security questions",
+      "securityQuestionsIntro": "Answer the two security questions you set to finish verification."
     }
   },
   "onboarding": {
@@ -2366,7 +2368,10 @@
       "accountActionsSection": "Account Actions",
       "switchAccount": "Switch Account",
       "logout": "Log Out",
-      "cancelAccount": "Cancel Account"
+      "cancelAccount": "Cancel Account",
+      "securityQuestions": "Security questions",
+      "securityQuestionsSet": "Set",
+      "securityQuestionsNotSet": "Not set"
     },
     "notifications": {
       "title": "Notifications",
@@ -3695,7 +3700,10 @@
     "CHAT_GROUP_ACCEPT_REQUIRED": "Please accept the group invitation first",
     "CHAT_GROUP_INVITATION_INVALID": "This invitation has expired or is no longer valid",
     "CHAT_GROUP_APPLICATION_DISABLED": "This group is not accepting requests through cards",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "Too many recovery requests. Please wait for the existing ones to finish"
+    "AUTH_LOGIN_RECOVERY_LIMITED": "Too many recovery requests. Please wait for the existing ones to finish",
+    "AUTH_SECURITY_QUESTIONS_INVALID": "Choose two different questions and fill in both answers",
+    "AUTH_SECURITY_QUESTIONS_NOT_SET": "No security questions are set. Please confirm the login on a trusted device.",
+    "AUTH_SECURITY_ANSWERS_INVALID": "The security answers are incorrect"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",
@@ -3840,5 +3848,26 @@
       "CANCELLED": "Application cancelled"
     },
     "sentInvitation": "You invited them to join the group"
+  },
+  "securityQuestions": {
+    "title": "Security questions",
+    "intro": "Choose two questions only you can answer. If none of your trusted devices are available (for example after reinstalling the app or losing your phone), you can answer them on the new-device verification screen.",
+    "introReplace": "You've already set security questions. Saving again replaces your previous questions and answers.",
+    "slotLabel": "Question {{number}}",
+    "pickQuestion": "Choose a question",
+    "answerPlaceholder": "Your answer",
+    "answerHint": "Answers ignore letter case and spaces. Pick answers only you know and others can't look up.",
+    "incomplete": "Choose two questions and fill in both answers",
+    "saveFailed": "Couldn't save. Please try again.",
+    "questions": {
+      "bestFriendName": "What is your best friend's name?",
+      "primarySchool": "What was the name of your primary school?",
+      "firstTeacher": "What was the name of your primary school homeroom teacher?",
+      "childhoodNickname": "What was your childhood nickname?",
+      "birthCity": "In which city were you born?",
+      "firstPetName": "What was the name of your first pet?",
+      "motherName": "What is your mother's name?",
+      "fatherName": "What is your father's name?"
+    }
   }
 }

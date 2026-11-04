@@ -18,9 +18,14 @@ import {
   type DeviceVerificationPhase,
 } from '@/features/auth/hooks/use-device-verification';
 import { DeviceRecoverySection } from '@/features/auth/components/DeviceRecoverySection';
+import { SecurityAnswerFields } from '@/features/auth/components/SecurityAnswerFields';
+import { useLoginChallengeSecurityQuestions } from '@/features/auth/hooks/use-login-challenge-security-questions';
 
 const CODE_PATTERN = /^\d{6}$/;
 const SECURITY_CODE_PATTERN = /^\d{4,6}$/;
+
+/** 受信任设备不在身边时的两种兜底：登录安全码、密保问题。 */
+type VerificationMode = 'trustedDevice' | 'securityCode' | 'securityQuestions';
 
 const s = StyleSheet.create({
   container: { paddingHorizontal: Spacing.lg, gap: 20 },
@@ -65,7 +70,7 @@ function formatCountdown(seconds: number): string {
 
 /**
  * 陌生设备登录验证：等受信任设备批准，输入它显示的 6 位验证码后才登录。
- * 受信任设备不在身边且设置过登录安全码时，可改用安全码。
+ * 受信任设备不在身边时，设置过登录安全码 / 密保问题的账号可改用它们。
  */
 export default function DeviceVerificationScreen() {
   const challenge = useDeviceVerificationStore((state) => state.challenge);
@@ -85,8 +90,13 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
   const { completeVerifiedLogin, committing } = useAuth();
   usePreventRemove(Boolean(committing), () => {});
   const [code, setCode] = useState('');
-  const [useSecurityCode, setUseSecurityCode] = useState(false);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [mode, setMode] = useState<VerificationMode>('trustedDevice');
+  const useSecurityCode = mode === 'securityCode';
+  const useSecurityQuestions = mode === 'securityQuestions';
+  const usingFallback = mode !== 'trustedDevice';
   const securityCodeAvailable = challenge.securityCodeAvailable;
+  const questionKeys = useLoginChallengeSecurityQuestions(challenge.id);
 
   const verification = useDeviceVerification({
     challengeId: challenge.id,
@@ -98,21 +108,35 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
   const isTerminal = phase === 'rejected' || phase === 'expired';
   const inRecoveryView = phase === 'recoveryWaiting' || phase === 'recoveryReady';
   // 批准过但 60 秒的码已过期：重新发起会把请求退回受信任设备、再次弹窗确认。
-  // 用安全码时不需要受信任设备，窗口内照样能输，所以只在验证码模式下切成重发。
+  // 用安全码 / 密保时不需要受信任设备，窗口内照样能输，所以只在验证码模式下切成重发。
   const needsResend =
-    phase === 'expired' || (phase === 'codeExpired' && !useSecurityCode);
-  const pattern = useSecurityCode ? SECURITY_CODE_PATTERN : CODE_PATTERN;
-  const canSubmit = !submitting && !isTerminal && pattern.test(code.trim());
+    phase === 'expired' || (phase === 'codeExpired' && !usingFallback);
+  const inputReady = useSecurityQuestions
+    ? questionKeys.length > 0 &&
+      questionKeys.every((_, index) => (answers[index] ?? '').trim() !== '')
+    : (useSecurityCode ? SECURITY_CODE_PATTERN : CODE_PATTERN).test(code.trim());
+  const canSubmit = !submitting && !isTerminal && inputReady;
 
   const onSubmit = useCallback(() => {
     if (!canSubmit) return;
-    if (useSecurityCode) void verification.submitSecurityCode(code);
+    if (useSecurityQuestions) void verification.submitSecurityAnswers(answers);
+    else if (useSecurityCode) void verification.submitSecurityCode(code);
     else void verification.submitCode(code);
-  }, [canSubmit, code, useSecurityCode, verification]);
+  }, [answers, canSubmit, code, useSecurityCode, useSecurityQuestions, verification]);
 
-  const toggleMode = useCallback(() => {
-    setUseSecurityCode((value) => !value);
+  /** 再点一次同一个入口就退回受信任设备验证。 */
+  const toggleMode = useCallback((target: Exclude<VerificationMode, 'trustedDevice'>) => {
+    setMode((current) => (current === target ? 'trustedDevice' : target));
     setCode('');
+    setAnswers([]);
+  }, []);
+
+  const onChangeAnswer = useCallback((index: number, answer: string) => {
+    setAnswers((current) => {
+      const next = [...current];
+      next[index] = answer;
+      return next;
+    });
   }, []);
 
   const onResend = useCallback(() => {
@@ -148,9 +172,10 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
       }),
       recoveryReady: t('auth.deviceVerification.recoveryReady'),
     };
-    return useSecurityCode && !isTerminal && !inRecoveryView
+    if (!usingFallback || isTerminal || inRecoveryView) return texts[phase];
+    return useSecurityCode
       ? t('auth.deviceVerification.securityCodeIntro')
-      : texts[phase];
+      : t('auth.deviceVerification.securityQuestionsIntro');
   }, [
     i18n.language,
     inRecoveryView,
@@ -159,6 +184,7 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
     remainingSeconds,
     t,
     useSecurityCode,
+    usingFallback,
     verification.recoveryAvailableAt,
   ]);
 
@@ -203,7 +229,13 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
 
         {isTerminal ||
         inRecoveryView ||
-        (phase === 'codeExpired' && !useSecurityCode) ? null : (
+        (phase === 'codeExpired' && !usingFallback) ? null : useSecurityQuestions ? (
+          <SecurityAnswerFields
+            questionKeys={questionKeys}
+            answers={answers}
+            onChangeAnswer={onChangeAnswer}
+          />
+        ) : (
           <AuthInput
             placeholder={
               useSecurityCode
@@ -274,8 +306,18 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
           </Pressable>
         </View>
 
+        {questionKeys.length > 0 && !isTerminal && !inRecoveryView ? (
+          <Pressable onPress={() => toggleMode('securityQuestions')} hitSlop={8}>
+            <Text style={[s.link, d.link]}>
+              {useSecurityQuestions
+                ? t('auth.deviceVerification.useTrustedDevice')
+                : t('auth.deviceVerification.useSecurityQuestions')}
+            </Text>
+          </Pressable>
+        ) : null}
+
         {securityCodeAvailable && !isTerminal && !inRecoveryView ? (
-          <Pressable onPress={toggleMode} hitSlop={8}>
+          <Pressable onPress={() => toggleMode('securityCode')} hitSlop={8}>
             <Text style={[s.link, d.link]}>
               {useSecurityCode
                 ? t('auth.deviceVerification.useTrustedDevice')

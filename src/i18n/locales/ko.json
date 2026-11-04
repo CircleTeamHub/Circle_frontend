@@ -88,7 +88,10 @@
       "accountActionsSection": "계정 작업",
       "switchAccount": "계정 전환",
       "logout": "로그아웃",
-      "cancelAccount": "계정 삭제"
+      "cancelAccount": "계정 삭제",
+      "securityQuestions": "보안 질문",
+      "securityQuestionsSet": "설정됨",
+      "securityQuestionsNotSet": "설정 안 됨"
     },
     "notifications": {
       "title": "알림",
@@ -2961,7 +2964,9 @@
       "recoveryWaiting": "복구를 신청했습니다. {{time}} 이후 이 기기에서 다시 로그인하면 계정에 들어갈 수 있습니다. 그동안 신뢰할 수 있는 기기에 알림이 가며 거부할 수 있습니다.",
       "recoveryReady": "대기 기간이 끝났습니다. 로그인 화면으로 돌아가 이 기기에서 비밀번호로 다시 로그인하면 복구가 완료됩니다.",
       "recoveryGoLogin": "로그인하기",
-      "recoveryUnderstood": "알겠습니다"
+      "recoveryUnderstood": "알겠습니다",
+      "useSecurityQuestions": "신뢰할 수 있는 기기가 곁에 없나요? 보안 질문으로 인증",
+      "securityQuestionsIntro": "설정한 보안 질문 2개에 답해 인증을 완료하세요."
     }
   },
   "media": {
@@ -3687,7 +3692,10 @@
     "CHAT_GROUP_ACCEPT_REQUIRED": "먼저 그룹 초대를 수락해 주세요",
     "CHAT_GROUP_INVITATION_INVALID": "초대가 만료되었거나 유효하지 않습니다",
     "CHAT_GROUP_APPLICATION_DISABLED": "이 그룹은 명함을 통한 가입 신청을 받지 않습니다",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "복구 신청이 너무 많습니다. 기존 신청이 처리된 뒤 다시 시도해 주세요"
+    "AUTH_LOGIN_RECOVERY_LIMITED": "복구 신청이 너무 많습니다. 기존 신청이 처리된 뒤 다시 시도해 주세요",
+    "AUTH_SECURITY_QUESTIONS_INVALID": "서로 다른 질문 2개를 선택하고 답을 입력하세요",
+    "AUTH_SECURITY_QUESTIONS_NOT_SET": "설정된 보안 질문이 없습니다. 신뢰할 수 있는 기기에서 로그인을 확인하세요",
+    "AUTH_SECURITY_ANSWERS_INVALID": "보안 질문의 답이 올바르지 않습니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",
@@ -3832,5 +3840,26 @@
       "CANCELLED": "신청이 취소되었습니다"
     },
     "sentInvitation": "상대방을 그룹에 초대했어요"
+  },
+  "securityQuestions": {
+    "title": "보안 질문",
+    "intro": "나만 답을 아는 질문 2개를 설정하세요. 신뢰할 수 있는 기기를 모두 쓸 수 없을 때(앱 재설치, 휴대폰 분실 등) 새 기기 로그인 인증 화면에서 답하면 인증할 수 있습니다.",
+    "introReplace": "이미 보안 질문을 설정했습니다. 다시 저장하면 이전 질문과 답이 바뀝니다.",
+    "slotLabel": "질문 {{number}}",
+    "pickQuestion": "질문 선택",
+    "answerPlaceholder": "답 입력",
+    "answerHint": "답은 대소문자와 공백을 구분하지 않습니다. 나만 알고 다른 사람이 찾아볼 수 없는 답을 고르세요.",
+    "incomplete": "질문 2개를 선택하고 답을 입력하세요",
+    "saveFailed": "저장하지 못했습니다. 다시 시도해 주세요",
+    "questions": {
+      "bestFriendName": "가장 친한 친구의 이름은?",
+      "primarySchool": "다녔던 초등학교 이름은?",
+      "firstTeacher": "초등학교 담임 선생님의 이름은?",
+      "childhoodNickname": "어릴 적 별명은?",
+      "birthCity": "태어난 도시는?",
+      "firstPetName": "처음 키운 반려동물의 이름은?",
+      "motherName": "어머니의 이름은?",
+      "fatherName": "아버지의 이름은?"
+    }
   }
 }

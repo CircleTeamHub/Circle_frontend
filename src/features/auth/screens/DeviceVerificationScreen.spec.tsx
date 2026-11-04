@@ -19,9 +19,12 @@ jest.mock('@/theme', () => {
 });
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ completeVerifiedLogin: jest.fn(), committing: mockCommitting }) }));
-jest.mock('@/features/auth/hooks/use-device-verification', () => ({ useDeviceVerification: () => ({ phase: 'waiting', remainingSeconds: 300, recoveryAvailableAt: null, submitting: mockSubmitting, error: null }) }));
+const mockSubmitSecurityAnswers = jest.fn();
+let mockQuestionKeys: string[] = [];
+jest.mock('@/features/auth/hooks/use-device-verification', () => ({ useDeviceVerification: () => ({ phase: 'waiting', remainingSeconds: 300, recoveryAvailableAt: null, submitting: mockSubmitting, error: null, submitSecurityAnswers: mockSubmitSecurityAnswers }) }));
+jest.mock('@/features/auth/hooks/use-login-challenge-security-questions', () => ({ useLoginChallengeSecurityQuestions: () => mockQuestionKeys }));
 
-beforeEach(() => { jest.clearAllMocks(); mockSubmitting = false; mockCommitting = false; useDeviceVerificationStore.getState().setChallenge({ id: 'challenge', expiresAt: new Date(Date.now()+300000).toISOString(), securityCodeAvailable: false, recoveryAvailableAt: null }); });
+beforeEach(() => { jest.clearAllMocks(); mockSubmitting = false; mockCommitting = false; mockQuestionKeys = []; useDeviceVerificationStore.getState().setChallenge({ id: 'challenge', expiresAt: new Date(Date.now()+300000).toISOString(), securityCodeAvailable: false, recoveryAvailableAt: null }); });
 afterEach(() => { useDeviceVerificationStore.getState().setChallenge(null); });
 test('offers email recovery without requiring a trusted device or security code', () => {
  render(<DeviceVerificationScreen />);
@@ -33,4 +36,23 @@ test.each(['verification', 'commit'])('does not leave while %s is in flight', (p
  mockSubmitting = phase === 'verification'; mockCommitting = phase === 'commit';
  render(<DeviceVerificationScreen />); fireEvent.press(screen.getByRole('link'));
  expect(mockReplace).not.toHaveBeenCalled();
+});
+test('hides the security-question option for accounts that never set one', () => {
+ render(<DeviceVerificationScreen />);
+ expect(screen.queryByText('auth.deviceVerification.useSecurityQuestions')).toBeNull();
+});
+test('answers the security questions instead of waiting for a trusted device', () => {
+ mockQuestionKeys = ['bestFriendName', 'primarySchool'];
+ render(<DeviceVerificationScreen />);
+ fireEvent.press(screen.getByText('auth.deviceVerification.useSecurityQuestions'));
+ expect(screen.getByText('auth.deviceVerification.securityQuestionsIntro')).toBeTruthy();
+ expect(screen.getByText('securityQuestions.questions.bestFriendName')).toBeTruthy();
+ fireEvent.press(screen.getByText('auth.deviceVerification.submit'));
+ expect(mockSubmitSecurityAnswers).not.toHaveBeenCalled();
+ fireEvent.changeText(screen.getByTestId('security-answer-0'), '张三');
+ fireEvent.changeText(screen.getByTestId('security-answer-1'), '阳光小学');
+ fireEvent.press(screen.getByText('auth.deviceVerification.submit'));
+ expect(mockSubmitSecurityAnswers).toHaveBeenCalledWith(['张三', '阳光小学']);
+ fireEvent.press(screen.getByText('auth.deviceVerification.useTrustedDevice'));
+ expect(screen.queryByTestId('security-answer-0')).toBeNull();
 });

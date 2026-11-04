@@ -103,6 +103,7 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'search',
   'search-group-members',
   'seats',
+  'security-questions',
   'select-circle',
   'select-city',
   'select-filter-circles',
