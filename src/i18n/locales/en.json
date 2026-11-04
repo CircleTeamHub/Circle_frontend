@@ -220,7 +220,8 @@
       "recoveryGoLogin": "Go to sign in",
       "recoveryUnderstood": "Got it",
       "useSecurityQuestions": "Trusted device not nearby? Verify with security questions",
-      "securityQuestionsIntro": "Answer the two security questions you set to finish verification."
+      "securityQuestionsIntro": "Answer the two security questions you set to finish verification.",
+      "securityQuestionsRetry": "Couldn't load security questions. Tap to retry."
     }
   },
   "onboarding": {

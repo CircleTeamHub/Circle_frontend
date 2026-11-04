@@ -2966,7 +2966,8 @@
       "recoveryGoLogin": "ログインへ",
       "recoveryUnderstood": "了解",
       "useSecurityQuestions": "信頼済みデバイスが手元にない場合は秘密の質問で認証",
-      "securityQuestionsIntro": "設定した 2 つの秘密の質問に答えて認証を完了してください。"
+      "securityQuestionsIntro": "設定した 2 つの秘密の質問に答えて認証を完了してください。",
+      "securityQuestionsRetry": "秘密の質問を読み込めませんでした。タップして再試行してください。"
     }
   },
   "media": {

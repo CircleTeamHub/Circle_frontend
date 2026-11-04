@@ -2966,7 +2966,8 @@
       "recoveryGoLogin": "로그인하기",
       "recoveryUnderstood": "알겠습니다",
       "useSecurityQuestions": "신뢰할 수 있는 기기가 곁에 없나요? 보안 질문으로 인증",
-      "securityQuestionsIntro": "설정한 보안 질문 2개에 답해 인증을 완료하세요."
+      "securityQuestionsIntro": "설정한 보안 질문 2개에 답해 인증을 완료하세요.",
+      "securityQuestionsRetry": "보안 질문을 불러오지 못했습니다. 눌러서 다시 시도하세요."
     }
   },
   "media": {

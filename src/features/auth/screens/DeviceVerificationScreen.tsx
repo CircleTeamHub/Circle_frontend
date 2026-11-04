@@ -104,7 +104,8 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
     onVerified: completeVerifiedLogin,
   });
   // 按当前验证单查：重新发起后换了单，第一次没查到（如原单已过期）也能补上。
-  const questionKeys = useLoginChallengeSecurityQuestions(verification.challengeId);
+  const { questionKeys, failed: questionsFailed, retry: retryQuestions } =
+    useLoginChallengeSecurityQuestions(verification.challengeId);
   const { phase, remainingSeconds, submitting } = verification;
   const isTerminal = phase === 'rejected' || phase === 'expired';
   const inRecoveryView = phase === 'recoveryWaiting' || phase === 'recoveryReady';
@@ -307,7 +308,21 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
           </Pressable>
         </View>
 
-        {questionKeys.length > 0 && !isTerminal && !inRecoveryView ? (
+        {questionsFailed && !isTerminal && !inRecoveryView ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: submitting || committing }}
+            disabled={submitting || committing}
+            onPress={retryQuestions}
+            hitSlop={8}
+          >
+            <Text style={[s.link, d.link]}>
+              {t('auth.deviceVerification.securityQuestionsRetry')}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {(questionKeys.length > 0 || useSecurityQuestions) && !isTerminal && !inRecoveryView ? (
           <Pressable onPress={() => toggleMode('securityQuestions')} hitSlop={8}>
             <Text style={[s.link, d.link]}>
               {useSecurityQuestions

@@ -22,10 +22,12 @@ jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ completeVerifiedLogin: 
 const mockSubmitSecurityAnswers = jest.fn();
 let mockQuestionKeys: string[] = [];
 const mockQuestionsFor = jest.fn();
+const mockRetryQuestions = jest.fn();
+let mockQuestionsFailed = false;
 jest.mock('@/features/auth/hooks/use-device-verification', () => ({ useDeviceVerification: () => ({ challengeId: 'resent-challenge', phase: 'waiting', remainingSeconds: 300, recoveryAvailableAt: null, submitting: mockSubmitting, error: null, submitSecurityAnswers: mockSubmitSecurityAnswers }) }));
-jest.mock('@/features/auth/hooks/use-login-challenge-security-questions', () => ({ useLoginChallengeSecurityQuestions: (challengeId: string) => { mockQuestionsFor(challengeId); return mockQuestionKeys; } }));
+jest.mock('@/features/auth/hooks/use-login-challenge-security-questions', () => ({ useLoginChallengeSecurityQuestions: (challengeId: string) => { mockQuestionsFor(challengeId); return { questionKeys: mockQuestionKeys, failed: mockQuestionsFailed, retry: mockRetryQuestions }; } }));
 
-beforeEach(() => { jest.clearAllMocks(); mockSubmitting = false; mockCommitting = false; mockQuestionKeys = []; useDeviceVerificationStore.getState().setChallenge({ id: 'challenge', expiresAt: new Date(Date.now()+300000).toISOString(), securityCodeAvailable: false, recoveryAvailableAt: null }); });
+beforeEach(() => { jest.clearAllMocks(); mockSubmitting = false; mockCommitting = false; mockQuestionKeys = []; mockQuestionsFailed = false; useDeviceVerificationStore.getState().setChallenge({ id: 'challenge', expiresAt: new Date(Date.now()+300000).toISOString(), securityCodeAvailable: false, recoveryAvailableAt: null }); });
 afterEach(() => { useDeviceVerificationStore.getState().setChallenge(null); });
 test('offers email recovery without requiring a trusted device or security code', () => {
  render(<DeviceVerificationScreen />);
@@ -60,4 +62,23 @@ test('answers the security questions instead of waiting for a trusted device', (
 test('looks up the security questions on the current challenge, not the one the screen opened with', () => {
  render(<DeviceVerificationScreen />);
  expect(mockQuestionsFor).toHaveBeenLastCalledWith('resent-challenge');
+});
+
+test('offers retry when question lookup fails instead of treating it as no configured questions', () => {
+ mockQuestionsFailed = true;
+ render(<DeviceVerificationScreen />);
+ fireEvent.press(screen.getByRole('button', { name: 'auth.deviceVerification.securityQuestionsRetry' }));
+ expect(mockRetryQuestions).toHaveBeenCalledTimes(1);
+ expect(screen.queryByText('auth.deviceVerification.useSecurityQuestions')).toBeNull();
+});
+
+test('can return to trusted-device verification while replacement questions fail to load', () => {
+ mockQuestionKeys = ['bestFriendName', 'primarySchool'];
+ const view = render(<DeviceVerificationScreen />);
+ fireEvent.press(screen.getByText('auth.deviceVerification.useSecurityQuestions'));
+ mockQuestionKeys = [];
+ mockQuestionsFailed = true;
+ view.rerender(<DeviceVerificationScreen />);
+ fireEvent.press(screen.getByText('auth.deviceVerification.useTrustedDevice'));
+ expect(screen.getByPlaceholderText('auth.deviceVerification.codePlaceholder')).toBeTruthy();
 });

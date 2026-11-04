@@ -2974,7 +2974,8 @@
       "recoveryGoLogin": "Ir a iniciar sesión",
       "recoveryUnderstood": "Entendido",
       "useSecurityQuestions": "¿No tienes un dispositivo de confianza cerca? Verifica con preguntas de seguridad",
-      "securityQuestionsIntro": "Responde las dos preguntas de seguridad que configuraste para completar la verificación."
+      "securityQuestionsIntro": "Responde las dos preguntas de seguridad que configuraste para completar la verificación.",
+      "securityQuestionsRetry": "No se pudieron cargar las preguntas de seguridad. Toca para reintentar."
     }
   },
   "media": {

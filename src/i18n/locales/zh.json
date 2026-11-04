@@ -220,7 +220,8 @@
       "recoveryGoLogin": "去登录",
       "recoveryUnderstood": "我知道了",
       "useSecurityQuestions": "受信任设备不在身边？通过密保问题验证登录",
-      "securityQuestionsIntro": "回答你设置的两个密保问题完成验证。"
+      "securityQuestionsIntro": "回答你设置的两个密保问题完成验证。",
+      "securityQuestionsRetry": "密保问题加载失败，点击重试"
     }
   },
   "onboarding": {
