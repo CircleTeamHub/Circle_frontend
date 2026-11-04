@@ -675,3 +675,57 @@ test('a newer session bypasses an older refresh singleton without resetting it',
   assert.equal(harness.setTokenCalls.length, 1);
   assert.equal(harness.setTokenCalls[0].accessToken, 'access-b-next');
 });
+
+test('refresh carries the stable device id; ordinary requests do not', async () => {
+  const harness = loadApiClientHarness();
+  harness.registerDeviceIdProvider(async () => 'legacy-random-id-0001');
+  harness.registerStableDeviceIdProvider(async () => `a1-${'ab'.repeat(32)}`);
+  harness.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) },
+  );
+  harness.refreshResponses.push({
+    promise: Promise.resolve(
+      response(true, 200, {
+        code: 0,
+        message: 'ok',
+        data: { accessToken: 'access-a-next', refreshToken: 'refresh-a-next' },
+      }),
+    ),
+  });
+
+  await harness.apiClient('/wallet/balance');
+
+  const [first, refresh, retry] = harness.fetchCalls.map(([, options]) => options.headers);
+  assert.equal(refresh['X-Device-Id'], 'legacy-random-id-0001');
+  assert.equal(refresh['X-Stable-Device-Id'], `a1-${'ab'.repeat(32)}`);
+  assert.equal(first['X-Stable-Device-Id'], undefined);
+  assert.equal(retry['X-Stable-Device-Id'], undefined);
+});
+
+test('a stalled stable-device lookup cannot hold the refresh back', async () => {
+  const harness = loadApiClientHarness();
+  harness.registerDeviceIdProvider(async () => 'legacy-random-id-0001');
+  // 原生取 ANDROID_ID / 摘要卡住：续签要照发，只是这次不带稳定 ID。
+  harness.registerStableDeviceIdProvider(() => new Promise(() => {}));
+  harness.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) },
+  );
+  harness.refreshResponses.push({
+    promise: Promise.resolve(
+      response(true, 200, {
+        code: 0,
+        message: 'ok',
+        data: { accessToken: 'access-a-next', refreshToken: 'refresh-a-next' },
+      }),
+    ),
+  });
+
+  const result = await harness.apiClient('/wallet/balance');
+
+  assert.equal(result.ok, true);
+  const refresh = harness.fetchCalls.find(([url]) => String(url).endsWith('/auth/refresh'));
+  assert.ok(refresh, 'refresh was sent');
+  assert.equal(refresh[1].headers['X-Stable-Device-Id'], undefined);
+});

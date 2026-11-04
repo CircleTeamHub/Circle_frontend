@@ -4,6 +4,7 @@ import { SettingsDetailScreen } from "@/features/profile/components/settings-det
 import { useAuth } from "@/hooks/use-auth";
 import {
   fetchLoginSecurityCodeStatus,
+  fetchSecurityQuestions,
   fetchSingleDeviceLoginStatus,
   setSingleDeviceLogin,
 } from "@/services/api/auth";
@@ -46,11 +47,33 @@ export default function AccountSecuritySettingsScreen() {
     }
   }, []);
 
+  // null = 还不知道（加载中 / 拉取失败），行尾不显示状态。
+  const [securityQuestionsSet, setSecurityQuestionsSet] = useState<boolean | null>(null);
+  const securityQuestionsRequestRef = useRef(0);
+  const loadSecurityQuestionsStatus = useCallback(async () => {
+    // 每次聚焦都会重拉：只认最后一次请求，晚到的旧响应不覆盖新状态。
+    const requestId = securityQuestionsRequestRef.current + 1;
+    securityQuestionsRequestRef.current = requestId;
+    try {
+      const keys = await fetchSecurityQuestions();
+      if (securityQuestionsRequestRef.current === requestId) {
+        setSecurityQuestionsSet(keys.length > 0);
+      }
+    } catch (requestError) {
+      // 刷新失败就不再显示上一次的结论（可能已经过时），回到「不知道」。
+      if (securityQuestionsRequestRef.current === requestId) {
+        setSecurityQuestionsSet(null);
+      }
+      reportHandledFailure("securityQuestions", "statusCheck", requestError);
+    }
+  }, []);
+
   // 每次回到本页都重新拉取：从设置/修改/关闭子页返回后开关状态保持同步。
   useFocusEffect(
     useCallback(() => {
       void loadSecurityCodeStatus();
-    }, [loadSecurityCodeStatus]),
+      void loadSecurityQuestionsStatus();
+    }, [loadSecurityCodeStatus, loadSecurityQuestionsStatus]),
   );
 
   function handleSecurityCodeToggle(next: boolean) {
@@ -141,6 +164,18 @@ export default function AccountSecuritySettingsScreen() {
                   pathname: SECURITY_CODE_ROUTE,
                   params: { mode: "change" },
                 }),
+            },
+            {
+              id: "security-questions",
+              labelKey: "settingsDetails.accountSecurity.securityQuestions",
+              valueKey:
+                securityQuestionsSet === null
+                  ? undefined
+                  : securityQuestionsSet
+                    ? "settingsDetails.accountSecurity.securityQuestionsSet"
+                    : "settingsDetails.accountSecurity.securityQuestionsNotSet",
+              onPress: () =>
+                router.push("/(tabs)/profile/security-questions" as never),
             },
           ],
         },

@@ -88,7 +88,10 @@
       "accountActionsSection": "Acciones de la cuenta",
       "switchAccount": "Cambiar de cuenta",
       "logout": "Cerrar sesión",
-      "cancelAccount": "Eliminar cuenta"
+      "cancelAccount": "Eliminar cuenta",
+      "securityQuestions": "Preguntas de seguridad",
+      "securityQuestionsSet": "Configuradas",
+      "securityQuestionsNotSet": "Sin configurar"
     },
     "notifications": {
       "title": "Notificaciones",
@@ -2969,7 +2972,10 @@
       "recoveryWaiting": "Recuperación solicitada. A partir de {{time}}, vuelve a iniciar sesión en este dispositivo para entrar en tu cuenta. Mientras tanto, tus dispositivos de confianza reciben un aviso y pueden rechazarla.",
       "recoveryReady": "El periodo de espera terminó. Vuelve e inicia sesión con tu contraseña en este dispositivo para completar la recuperación.",
       "recoveryGoLogin": "Ir a iniciar sesión",
-      "recoveryUnderstood": "Entendido"
+      "recoveryUnderstood": "Entendido",
+      "useSecurityQuestions": "¿No tienes un dispositivo de confianza cerca? Verifica con preguntas de seguridad",
+      "securityQuestionsIntro": "Responde las dos preguntas de seguridad que configuraste para completar la verificación.",
+      "securityQuestionsRetry": "No se pudieron cargar las preguntas de seguridad. Toca para reintentar."
     }
   },
   "media": {
@@ -3695,7 +3701,10 @@
     "CHAT_GROUP_ACCEPT_REQUIRED": "Acepta primero la invitación al grupo",
     "CHAT_GROUP_INVITATION_INVALID": "La invitación ha caducado o ya no es válida",
     "CHAT_GROUP_APPLICATION_DISABLED": "Este grupo no acepta solicitudes desde tarjetas",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "Demasiadas solicitudes de recuperación. Espera a que se resuelvan las actuales"
+    "AUTH_LOGIN_RECOVERY_LIMITED": "Demasiadas solicitudes de recuperación. Espera a que se resuelvan las actuales",
+    "AUTH_SECURITY_QUESTIONS_INVALID": "Elige dos preguntas distintas y escribe ambas respuestas",
+    "AUTH_SECURITY_QUESTIONS_NOT_SET": "No hay preguntas de seguridad configuradas. Confirma el inicio de sesión en un dispositivo de confianza",
+    "AUTH_SECURITY_ANSWERS_INVALID": "Las respuestas de seguridad no son correctas"
   },
   "qr": {
     "loginDeprecatedTitle": "El inicio de sesión por QR ya no está disponible",
@@ -3840,5 +3849,26 @@
       "CANCELLED": "Solicitud cancelada"
     },
     "sentInvitation": "Invitaste a esta persona al grupo"
+  },
+  "securityQuestions": {
+    "title": "Preguntas de seguridad",
+    "intro": "Elige dos preguntas cuya respuesta solo tú conozcas. Si no puedes usar ninguno de tus dispositivos de confianza (por ejemplo, tras reinstalar la app o perder el teléfono), podrás responderlas en la pantalla de verificación de nuevo dispositivo.",
+    "introReplace": "Ya configuraste preguntas de seguridad. Si guardas de nuevo, se reemplazarán las preguntas y respuestas anteriores.",
+    "slotLabel": "Pregunta {{number}}",
+    "pickQuestion": "Elige una pregunta",
+    "answerPlaceholder": "Tu respuesta",
+    "answerHint": "Las respuestas no distinguen mayúsculas ni espacios. Elige respuestas que solo tú sepas y que nadie pueda averiguar.",
+    "incomplete": "Elige dos preguntas y escribe ambas respuestas",
+    "saveFailed": "No se pudo guardar. Inténtalo de nuevo",
+    "questions": {
+      "bestFriendName": "¿Cómo se llama tu mejor amigo?",
+      "primarySchool": "¿Cómo se llamaba tu escuela primaria?",
+      "firstTeacher": "¿Cómo se llamaba tu maestro o maestra de primaria?",
+      "childhoodNickname": "¿Cuál era tu apodo de la infancia?",
+      "birthCity": "¿En qué ciudad naciste?",
+      "firstPetName": "¿Cómo se llamaba tu primera mascota?",
+      "motherName": "¿Cómo se llama tu madre?",
+      "fatherName": "¿Cómo se llama tu padre?"
+    }
   }
 }

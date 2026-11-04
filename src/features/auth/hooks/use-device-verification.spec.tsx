@@ -5,6 +5,7 @@ import {
   requestLoginRecovery,
   resendLoginChallenge,
   verifyLoginChallengeCode,
+  verifyLoginChallengeSecurityQuestions,
 } from '@/services/api/auth';
 import { ApiError } from '@/services/api/api-error';
 
@@ -14,6 +15,7 @@ jest.mock('@/services/api/auth', () => ({
   resendLoginChallenge: jest.fn(),
   verifyLoginChallengeCode: jest.fn(),
   verifyLoginChallengeSecurityCode: jest.fn(),
+  verifyLoginChallengeSecurityQuestions: jest.fn(),
 }));
 jest.mock('@/i18n', () => ({ t: (key: string) => key }));
 
@@ -113,6 +115,8 @@ test('an expired request can be resent and returns to waiting', async () => {
   expect(resendLoginChallenge).toHaveBeenCalledWith('c1');
   await waitFor(() => expect(fetchLoginChallengeStatus).toHaveBeenCalledWith('c2'));
   expect(result.current.phase).toBe('waiting');
+  // 页面上其他按验证单查询的东西（密保题目）跟着换到新单。
+  expect(result.current.challengeId).toBe('c2');
 });
 
 test('retries session completion with retained tokens instead of consuming the code again', async () => {
@@ -246,4 +250,19 @@ test('a failed recovery poll retries before an approval code can expire',async()
  jest.useFakeTimers();jest.mocked(fetchLoginChallengeStatus).mockRejectedValueOnce(new Error('timeout')).mockResolvedValue({status:'APPROVED',expiresAt:inFiveMinutes(),codeExpiresAt:new Date(Date.now()+60000).toISOString(),recoveryAvailableAt:null});
  const {result,unmount}=renderHook(()=>useDeviceVerification({challengeId:'c1',expiresAt:inFiveMinutes(),recoveryAvailableAt:new Date(Date.now()+86400000).toISOString(),onVerified:jest.fn()}));
  await act(async()=>{});await act(async()=>{jest.advanceTimersByTime(3000);});expect(result.current.phase).toBe('approved');unmount();jest.useRealTimers();
+});
+
+test('security answers are trimmed and their tokens finish the login', async () => {
+  jest.mocked(verifyLoginChallengeSecurityQuestions).mockResolvedValue(tokens);
+  const onVerified = jest.fn().mockResolvedValue(undefined);
+  const { result } = renderHook(() =>
+    useDeviceVerification({ challengeId: 'c1', expiresAt: inFiveMinutes(), onVerified }),
+  );
+
+  await act(async () => {
+    await result.current.submitSecurityAnswers([' 张三 ', '阳光小学']);
+  });
+
+  expect(verifyLoginChallengeSecurityQuestions).toHaveBeenCalledWith('c1', ['张三', '阳光小学']);
+  expect(onVerified).toHaveBeenCalledWith(tokens);
 });

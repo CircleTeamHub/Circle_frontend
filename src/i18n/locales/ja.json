@@ -88,7 +88,10 @@
       "accountActionsSection": "アカウント操作",
       "switchAccount": "アカウントを切り替え",
       "logout": "ログアウト",
-      "cancelAccount": "アカウントを削除"
+      "cancelAccount": "アカウントを削除",
+      "securityQuestions": "秘密の質問",
+      "securityQuestionsSet": "設定済み",
+      "securityQuestionsNotSet": "未設定"
     },
     "notifications": {
       "title": "通知",
@@ -2961,7 +2964,10 @@
       "recoveryWaiting": "復旧を申請しました。{{time}} 以降にこのデバイスで再度ログインするとアカウントに入れます。その間、信頼済みデバイスに通知が届き、拒否することができます。",
       "recoveryReady": "待機期間が終わりました。ログイン画面に戻り、このデバイスでパスワードを入力して復旧を完了してください。",
       "recoveryGoLogin": "ログインへ",
-      "recoveryUnderstood": "了解"
+      "recoveryUnderstood": "了解",
+      "useSecurityQuestions": "信頼済みデバイスが手元にない場合は秘密の質問で認証",
+      "securityQuestionsIntro": "設定した 2 つの秘密の質問に答えて認証を完了してください。",
+      "securityQuestionsRetry": "秘密の質問を読み込めませんでした。タップして再試行してください。"
     }
   },
   "media": {
@@ -3687,7 +3693,10 @@
     "CHAT_GROUP_ACCEPT_REQUIRED": "先にグループ招待を承諾してください",
     "CHAT_GROUP_INVITATION_INVALID": "招待の期限が切れたか、無効になりました",
     "CHAT_GROUP_APPLICATION_DISABLED": "このグループは名刺からの参加申請を受け付けていません",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "復旧の申請が多すぎます。既存の申請が処理されてからもう一度お試しください"
+    "AUTH_LOGIN_RECOVERY_LIMITED": "復旧の申請が多すぎます。既存の申請が処理されてからもう一度お試しください",
+    "AUTH_SECURITY_QUESTIONS_INVALID": "異なる質問を 2 つ選び、答えを入力してください",
+    "AUTH_SECURITY_QUESTIONS_NOT_SET": "秘密の質問が設定されていません。信頼済みデバイスでログインを確認してください",
+    "AUTH_SECURITY_ANSWERS_INVALID": "秘密の質問の答えが正しくありません"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",
@@ -3832,5 +3841,26 @@
       "CANCELLED": "申請が取り消されました"
     },
     "sentInvitation": "相手をグループに招待しました"
+  },
+  "securityQuestions": {
+    "title": "秘密の質問",
+    "intro": "自分だけが答えを知っている質問を 2 つ設定します。信頼済みデバイスがすべて使えないとき（アプリの再インストールや端末の紛失など）、新しいデバイスのログイン認証画面で答えると認証できます。",
+    "introReplace": "秘密の質問は設定済みです。保存し直すと、以前の質問と答えは置き換えられます。",
+    "slotLabel": "質問 {{number}}",
+    "pickQuestion": "質問を選択",
+    "answerPlaceholder": "答えを入力",
+    "answerHint": "答えは大文字・小文字とスペースを区別しません。自分しか知らず、他人が調べられない答えを選んでください。",
+    "incomplete": "質問を 2 つ選び、答えを入力してください",
+    "saveFailed": "保存できませんでした。もう一度お試しください",
+    "questions": {
+      "bestFriendName": "親友の名前は？",
+      "primarySchool": "通っていた小学校の名前は？",
+      "firstTeacher": "小学校の担任の先生の名前は？",
+      "childhoodNickname": "子どもの頃のあだ名は？",
+      "birthCity": "生まれた都市は？",
+      "firstPetName": "最初に飼ったペットの名前は？",
+      "motherName": "母親の名前は？",
+      "fatherName": "父親の名前は？"
+    }
   }
 }

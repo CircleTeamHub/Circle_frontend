@@ -13,6 +13,11 @@ import { isDisplayIconShape } from "@/services/api/response-shapes";
 import { normalizeUser } from "@/services/api/utils";
 import type { AvatarFrameAppearance, DisplayIcon } from "@/types";
 import { UserFacingError } from "@/utils/user-facing-error";
+import {
+  isSecurityQuestionKey,
+  SECURITY_QUESTION_COUNT,
+  type SecurityQuestionKey,
+} from "@/features/auth/security-questions";
 
 export type AuthTokens = {
   accessToken: string;
@@ -260,6 +265,42 @@ export async function verifyLoginChallengeSecurityCode(
   return ensureAuthTokens(raw);
 }
 
+/**
+ * 服务端返回的密保问题 key。不认识的 key（比 App 新的服务端）显示不了题目，
+ * 也就没法按顺序作答，整组当作没有。
+ */
+function parseSecurityQuestionKeys(value: unknown): SecurityQuestionKey[] {
+  const keys = (value as { questionKeys?: unknown } | null)?.questionKeys;
+  if (!Array.isArray(keys) || keys.length !== SECURITY_QUESTION_COUNT) return [];
+  return keys.every(isSecurityQuestionKey) ? keys : [];
+}
+
+/** 新设备：这个账号设置的密保问题；没设置为空数组。 */
+export async function fetchLoginChallengeSecurityQuestions(challengeId: string) {
+  const raw = await apiClient<unknown>(
+    `/auth/login-challenges/${encodeURIComponent(challengeId)}/security-questions`,
+    { method: "GET", auth: false },
+  );
+  return parseSecurityQuestionKeys(raw);
+}
+
+/** 新设备：受信任设备不在身边时回答密保问题（按设置顺序）。 */
+export async function verifyLoginChallengeSecurityQuestions(
+  challengeId: string,
+  answers: string[],
+) {
+  const raw = await apiClient<AuthTokens>(
+    `/auth/login-challenges/${encodeURIComponent(challengeId)}/security-questions`,
+    {
+      method: "POST",
+      auth: false,
+      headers: { "x-device-name": getDeviceName() },
+      body: { answers },
+    },
+  );
+  return ensureAuthTokens(raw);
+}
+
 /** 新设备：验证请求过期后重新发起（服务端沿用原设备信息，计入频率限制）。 */
 export async function resendLoginChallenge(challengeId: string) {
   const raw = await apiClient<unknown>(
@@ -458,6 +499,25 @@ export async function verifyLoginSecurityCode(securityCode: string) {
   return apiClient<{ ok: boolean }>("/auth/security-code/verify", {
     method: "POST",
     body: { securityCode },
+  });
+}
+
+/** 已设置的密保问题；没设置为空数组。 */
+export async function fetchSecurityQuestions() {
+  const raw = await apiClient<unknown>("/auth/security-questions", {
+    method: "GET",
+  });
+  return parseSecurityQuestionKeys(raw);
+}
+
+/** 设置 / 替换密保问题（需要当前密码）。 */
+export async function setSecurityQuestions(payload: {
+  password: string;
+  questions: { questionKey: SecurityQuestionKey; answer: string }[];
+}) {
+  return apiClient<void>("/auth/security-questions", {
+    method: "PUT",
+    body: payload,
   });
 }
 
