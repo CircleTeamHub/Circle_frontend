@@ -2938,7 +2938,9 @@
       "statusClosed": "打烊",
       "remark": "备注：{{text}}",
       "openSenderChat": "和 {{name}} 私聊",
-      "openGroupChat": "进入群聊 {{name}}"
+      "openGroupChat": "进入群聊 {{name}}",
+      "viewContactDetails": "查看 {{name}} 的个人资料",
+      "viewGroupDetails": "查看 {{name}} 的群资料"
     },
     "groupPicker": {
       "title": "编辑分组",

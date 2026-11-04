@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams, useNavigation, useRouter, useSegments } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -12,7 +14,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
+import { fetchChatMembers, refreshChatConversation } from '@/chat-core/api';
+import { useChatStore } from '@/chat-core/store';
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
+import { allowsMemberProfiles } from '@/features/chat/utils/group-policy';
 import { canResendCollection } from '@/features/chat/utils/message-collection';
 import {
   MAX_NOTE_BATCH_SELECTION,
@@ -21,8 +26,16 @@ import {
   withAllNoteSendOptions,
   type NoteSendOptions,
 } from '@/features/chat/utils/note-batch-send';
-import { NoteCard } from '@/features/notes/components/NoteCard';
+import { NoteCard, type NoteSourceTarget } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
+import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
+import {
+  getChatInfoTopHref,
+  getCircleDetailHref,
+  getUserProfileHref,
+  getUserProfileScopeFromSegments,
+  toCircleScope,
+} from '@/features/user/utils/routes';
 import { fetchCollections, type UserCollection } from '@/services/api/collections';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { fetchFriends, type FriendProfile } from '@/services/api/friends';
@@ -41,6 +54,7 @@ import {
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
 
 type ShareType = 'note' | 'friend' | 'favorite' | 'quick-reply';
 
@@ -190,11 +204,15 @@ function NoteOptionChip({
 
 export default function SharePickerScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const segments = useSegments();
+  const scope = getUserProfileScopeFromSegments(segments);
   const insets = useSafeAreaInsets();
   const { colors, resolvedMode } = useTheme();
   const { type } = useLocalSearchParams<{ type?: ShareType }>();
   const shareType: ShareType = (type as ShareType) ?? 'note';
   const setPending = useSharePickerStore((s) => s.setPending);
+  const sourceOpeningRef = useRef(false);
 
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -321,6 +339,64 @@ export default function SharePickerScreen() {
 
   const atSelectionLimit = selectedNotes.length >= MAX_NOTE_BATCH_SELECTION;
 
+  const handleSourcePress = useCallback(async (note: NoteSummary, target: NoteSourceTarget) => {
+    if (sourceOpeningRef.current) return;
+    const { contact, group } = resolveNoteCardButtons(note);
+    Keyboard.dismiss();
+    if (target === 'sender' && contact) {
+      const from = note.collectedFrom;
+      const viaConversationID = from?.conversationType === 'group' && from.sender.id === contact.id
+        ? from.conversationID
+        : undefined;
+      const currentUserID = useChatStore.getState().currentUserId;
+      if (viaConversationID && contact.id !== currentUserID) {
+        const epoch = useAuthStore.getState().sessionEpoch;
+        const stillHere = () => navigation.isFocused() && useAuthStore.getState().sessionEpoch === epoch;
+        sourceOpeningRef.current = true;
+        try {
+          // 来源群的成员资料入口沿用群策略；不信笔记保存时的身份或会话快照。
+          const [, members] = await Promise.all([
+            refreshChatConversation(viaConversationID, { shouldApply: stillHere }),
+            fetchChatMembers(viaConversationID),
+          ]);
+          if (!stillHere()) return;
+          const conversation = useChatStore.getState().conversations.find((item) => item.id === viaConversationID);
+          const self = members.find((member) => member.userId === currentUserID);
+          if (!conversation || !self || (conversation.circleId && !self.role)) {
+            Alert.alert(i18n.t('chat.groupMembersRestricted', { defaultValue: '无法查看该群成员资料' }));
+            return;
+          }
+          if (conversation.type !== 'TEMP' && !allowsMemberProfiles({ role: self.role, policies: conversation.policies })) {
+            Alert.alert(i18n.t('chat.profilesRestrictedByGroup', { defaultValue: '该群未开放查看成员资料' }));
+            return;
+          }
+        } catch (error) {
+          if (stillHere()) {
+            reportHandledFailure('sharePicker', 'openSourceProfile', error);
+            Alert.alert(getApiErrorMessage(error, i18n.t('chat.groupMembersRestricted', { defaultValue: '无法查看该群成员资料' })));
+          }
+          return;
+        } finally {
+          sourceOpeningRef.current = false;
+        }
+      }
+      router.push(getUserProfileHref(scope, contact.id, contact.name,
+        viaConversationID ? { viaConversationID } : undefined,
+      ));
+    } else if (target === 'group' && group) {
+      router.push(group.target === 'circle'
+        ? getCircleDetailHref(toCircleScope(scope), group.id)
+        : getChatInfoTopHref(scope, {
+          sourceID: group.id,
+          ...(group.conversationID ? { conversationID: group.conversationID } : {}),
+          conversationType: 'group',
+          conversationKind: 'group',
+          title: group.name,
+          originScope: scope,
+        }));
+    }
+  }, [navigation, router, scope]);
+
   const handleConfirmSend = useCallback(() => {
     if (selectedNotes.length === 0 || !hasAnyNoteSendOption(sendOptions)) {
       return;
@@ -339,8 +415,10 @@ export default function SharePickerScreen() {
     <NoteCard
       note={item}
       onPress={toggleNote}
+      onSourcePress={handleSourcePress}
       showActions={false}
       selectionMode
+      selectionSourceDetails
       selected={selectedNotes.some((n) => n.id === item.id)}
     />
   );
@@ -505,9 +583,7 @@ export default function SharePickerScreen() {
           keyExtractor={(it) => it.id}
           renderItem={renderNote}
           extraData={selectedNotes}
-          ItemSeparatorComponent={() => (
-            <View style={[s.divider, { backgroundColor: colors.surface }]} />
-          )}
+          ItemSeparatorComponent={() => <View style={s.noteItemGap} />}
           contentContainerStyle={[
             s.noteListContent,
             selectedNotes.length > 0 ? s.noteListContentWithBar : null,
@@ -672,6 +748,8 @@ const s = StyleSheet.create({
     paddingVertical: 0,
   },
   noteListContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
     paddingBottom: Spacing.xl,
   },
   // 底栏最高态(上限提示行 + 常驻选项行 + 发送键 + 34pt 刘海 inset)约 175pt,
@@ -762,8 +840,7 @@ const s = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   rowTitle: { ...Typography.body, fontWeight: '600' },
   rowSubtitle: { ...Typography.small, lineHeight: 18 },
-  divider: {
-    height: 1,
-    marginLeft: Spacing.lg,
+  noteItemGap: {
+    height: Spacing.md,
   },
 });

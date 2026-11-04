@@ -2946,7 +2946,9 @@
       "statusClosed": "Closed",
       "remark": "Remark: {{text}}",
       "openSenderChat": "Chat with {{name}}",
-      "openGroupChat": "Open group chat {{name}}"
+      "openGroupChat": "Open group chat {{name}}",
+      "viewContactDetails": "View {{name}}'s profile",
+      "viewGroupDetails": "View group details for {{name}}"
     },
     "groupPicker": {
       "title": "Edit groups",
