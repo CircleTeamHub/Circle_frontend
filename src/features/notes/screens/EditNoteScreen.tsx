@@ -214,6 +214,7 @@ const COMPOSER_ACTIONS: readonly {
   translationKey: string;
   defaultLabel: string;
 }[] = [
+  { kind: 'title', icon: 'text-outline', translationKey: 'title', defaultLabel: '标题' },
   { kind: 'text', icon: 'text', translationKey: 'text', defaultLabel: '文字' },
   { kind: 'image', icon: 'images-outline', translationKey: 'image', defaultLabel: '图片' },
   { kind: 'video', icon: 'videocam-outline', translationKey: 'video', defaultLabel: '视频' },
@@ -222,7 +223,6 @@ const COMPOSER_ACTIONS: readonly {
   { kind: 'location', icon: 'location-outline', translationKey: 'location', defaultLabel: '位置' },
   { kind: 'contact', icon: 'person-outline', translationKey: 'contact', defaultLabel: '名片' },
   { kind: 'group', icon: 'people-outline', translationKey: 'group', defaultLabel: '群名片' },
-  { kind: 'title', icon: 'text-outline', translationKey: 'title', defaultLabel: '标题' },
 ];
 
 const FIXED_TITLE_BLOCK: NoteComposerBlock = { id: 'title-fixed', kind: 'title' };
