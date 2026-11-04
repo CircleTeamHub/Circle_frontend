@@ -164,6 +164,8 @@ import {
 } from '@/services/api/upload';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { diagnosticNow } from '@/observability/http-diagnostics';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
 
 LogBox.ignoreLogs([
@@ -2690,6 +2692,7 @@ export default function EditNoteScreen() {
     }
   }, [t]);
   const handleSubmit = useCallback(async () => {
+    const saveStartedAt = diagnosticNow();
     if (
       loading ||
       !isRouteDataReady ||
@@ -2743,6 +2746,8 @@ export default function EditNoteScreen() {
     const saveGeneration = saveGenerationRef.current;
     setIsSubmitting(true);
     let requestStarted = false;
+    let savePhase: 'prepare' | 'request' | 'reconcile' = 'prepare';
+    let phaseStartedAt = saveStartedAt;
     const retryingPending = pendingSubmissionRef.current !== null;
     try {
       const plainText = extractPlainText(currentBlocks);
@@ -2828,11 +2833,19 @@ export default function EditNoteScreen() {
       setSortMode(false);
       setCardPickerKind(null);
       cardPickerRequestRef.current += 1;
+      const requestStartedAt = diagnosticNow();
+      logClientDiagnostic('note.save.phase', { stage: savePhase, durationMs: Math.max(0, Math.round(requestStartedAt - phaseStartedAt)) });
+      savePhase = 'request';
+      phaseStartedAt = requestStartedAt;
       requestStarted = true;
       const result = submission.noteId
         ? await updateNote(submission.noteId, submission.input)
         : await createNote(submission.input);
       if (saveGenerationRef.current !== saveGeneration) return;
+      const responseReceivedAt = diagnosticNow();
+      logClientDiagnostic('note.save.phase', { stage: savePhase, durationMs: Math.max(0, Math.round(responseReceivedAt - phaseStartedAt)) });
+      savePhase = 'reconcile';
+      phaseStartedAt = responseReceivedAt;
       const resultMatchesSubmission = submission.noteId !== null
         ? noteUpdateResultMatchesTarget(submission, result)
         : noteSubmissionMatchesResult(submission, result);
@@ -2855,9 +2868,13 @@ export default function EditNoteScreen() {
       void deleteNoteDraft(editorDraftId).catch((error) => {
         reportHandledFailure('noteEditor', 'deleteConsumedDraft', error);
       });
+      const completedAt = diagnosticNow();
+      logClientDiagnostic('note.save.phase', { stage: savePhase, durationMs: Math.max(0, Math.round(completedAt - phaseStartedAt)) });
+      logClientDiagnostic('note.save.completed', { durationMs: Math.max(0, Math.round(completedAt - saveStartedAt)) });
       completeNavigation(undefined, true);
     } catch (error) {
       if (saveGenerationRef.current !== saveGeneration) return;
+      logClientDiagnostic('note.save.failed', { stage: savePhase, durationMs: Math.max(0, Math.round(diagnosticNow() - phaseStartedAt)) });
       if (requestStarted && !retryingPending && isDefinitiveNoteSubmissionFailure(error)) {
         try {
           saveLocalNoteDraft(currentUser?.id, { ...buildCurrentDraftRecord(), pendingSubmission: undefined });

@@ -454,6 +454,7 @@ export default function ProfileScreen() {
               size={56}
               name={displayName}
               uri={user?.avatarUrl ?? undefined}
+              identityKey={user?.id}
               shape="circle"
               compactFrame
               frameSource={getAvatarFrameSource(user?.avatarFrameAppearance) ?? undefined}

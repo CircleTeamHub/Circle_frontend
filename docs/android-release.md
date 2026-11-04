@@ -21,6 +21,10 @@ The preproduction APK takes its version and `versionCode` from `app.json` for ea
 
 These values identify the Singapore test stack (`43.134.85.95`), not production. The Tokyo stack (`43.133.201.42`) expired in 2026-10 and its IP was reassigned, so its `sslip.io` hostnames are listed as forbidden. A preproduction workflow must verify every expected hostname is embedded and that obsolete tunnel/OpenIM hostnames are absent before retaining its private artifact.
 
+For local Expo/development-client testing, set `EXPO_PUBLIC_API_URL=https://api-43-134-85-95.sslip.io` in the ignored `.env.local`. If explicitly configured, chat and geocoder origins must use the same stack. Restart Metro with `npx expo start --clear` and reload the phone after changing public environment variables. Do not commit `.env.local` or its credentials.
+
+To investigate slow note saves in a development build, the Expo console emits `note.save.phase` with `stage=prepare`, `request`, and `reconcile`, followed by `note.save.completed` (or `note.save.failed` with the failing phase). Durations are milliseconds; no note text, title, account ID, media URL, or request body is logged. The request phase includes auth refresh and response mapping; correlate nearby `api.request.slow`/`api.request.completed` records with backend logs using their `requestId`. A fast `/healthz` is only a liveness check and does not measure authenticated note writes or database pressure.
+
 ## Preproduction APK
 
 `.github/workflows/android-preprod-build.yml` is the controlled Android inner-test path. It runs automatically for every push to `main`; `workflow_dispatch` remains available for an explicit rebuild or a verified rollback. Only a run whose ref is the current `refs/heads/main` may publish to the website download channel. Up to 100 runs can wait in the concurrency queue instead of cancelling or replacing one another, and a run rechecks the current `main` SHA immediately before and after promotion so a historical rerun cannot become `latest`.

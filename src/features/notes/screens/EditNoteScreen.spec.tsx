@@ -12,6 +12,56 @@ import { usePreventRemove } from '@react-navigation/native';
 import type { CreateNoteInput, NoteDetail, NoteDraftDetail } from '@/features/notes/types';
 import { ApiError } from '@/services/api/api-error';
 import { stageLocalNoteDraftDeletion, loadLocalNoteDraft, loadPendingNoteDraftDeletions } from '@/features/notes/utils/note-editor-drafts';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
+
+let mockSaveClock = 0;
+jest.mock('@/observability/http-diagnostics', () => ({
+  ...jest.requireActual('@/observability/http-diagnostics'),
+  diagnosticNow: () => mockSaveClock,
+}));
+jest.mock('@/utils/client-diagnostics', () => ({
+  ...jest.requireActual('@/utils/client-diagnostics'),
+  logClientDiagnostic: jest.fn(),
+}));
+
+test('measures text save preparation, request waiting and reconciliation without logging note contents', async () => {
+  const gate = createDeferred<void>();
+  jest.mocked(createNote).mockImplementationOnce(async (input) => { await gate.promise; return noteResult(input); });
+  render(<EditNoteScreen />);
+  pressComposer('title');
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Private title');
+  mockSaveClock = 100;
+  fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+  await waitFor(() => expect(createNote).toHaveBeenCalled());
+  expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.phase', { stage: 'prepare', durationMs: 0 });
+  expect(logClientDiagnostic).not.toHaveBeenCalledWith('note.save.phase', expect.objectContaining({ stage: 'request' }));
+  mockSaveClock = 2600;
+  await act(async () => { gate.resolve(); await gate.promise; });
+  expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.phase', { stage: 'request', durationMs: 2500 });
+  expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.phase', { stage: 'reconcile', durationMs: 0 });
+  expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.completed', { durationMs: 2500 });
+  expect(mockRequestPresign).not.toHaveBeenCalled();
+  expect(mockUploadFile).not.toHaveBeenCalled();
+  expect(JSON.stringify(jest.mocked(logClientDiagnostic).mock.calls)).not.toContain('Private title');
+});
+
+test('reports the failed save phase without logging an API error body or the pending note', async () => {
+  jest.mocked(createNote).mockImplementationOnce(async () => { mockSaveClock = 3100; throw new ApiError('private server error', { status: 0 }); });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    render(<EditNoteScreen />);
+    pressComposer('title');
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Private title');
+    mockSaveClock = 100;
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(alert).toHaveBeenCalled());
+    expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.failed', { stage: 'request', durationMs: 3000 });
+    expect(logClientDiagnostic).not.toHaveBeenCalledWith('note.save.completed', expect.anything());
+    const diagnostic = JSON.stringify(jest.mocked(logClientDiagnostic).mock.calls);
+    expect(diagnostic).not.toContain('Private title');
+    expect(diagnostic).not.toContain('private server error');
+  } finally { alert.mockRestore(); }
+});
 
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: jest.fn(() => null) }));
 jest.mock('@/features/notes/components/NoteVideoViewer', () => ({ NoteVideoViewer: jest.fn(() => null) }));
