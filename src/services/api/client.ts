@@ -265,6 +265,23 @@ export function registerStableDeviceIdProvider(provider: DeviceIdProvider | null
   stableDeviceIdProvider = provider;
 }
 
+// 稳定 ID 只是顺带上报（这次没报，下次续签再报），绝不能为它拖住续签：
+// 续签是单例，它卡住所有等着 401 重试的请求都跟着挂住。
+const STABLE_DEVICE_ID_WAIT_MS = 1_000;
+
+async function readStableDeviceId(): Promise<string | null> {
+  if (!stableDeviceIdProvider) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const giveUp = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), STABLE_DEVICE_ID_WAIT_MS);
+  });
+  try {
+    return await Promise.race([stableDeviceIdProvider().catch(() => null), giveUp]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function executeRequest<T>(
   endpoint: string,
   options: RequestOptions,
@@ -481,9 +498,7 @@ async function refreshAccessToken(sessionEpoch: number) {
       );
     }
 
-    const stableDeviceId = stableDeviceIdProvider
-      ? await stableDeviceIdProvider().catch(() => null)
-      : null;
+    const stableDeviceId = await readStableDeviceId();
     const { res, payload, requestId, durationMs } = await executeRequest<{
       accessToken: string;
       refreshToken: string;
