@@ -62,6 +62,14 @@ export default function SecurityQuestionsSettingsScreen() {
   const inFlightRef = useRef(false);
   // 用户动过表单之后，晚到的状态不再覆盖已填的内容。
   const editedRef = useRef(false);
+  // 保存途中用户已经返回：成功后别替他再退一层（会把下面那页也关掉）。
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const d = useMemo(
     () => ({
@@ -130,7 +138,7 @@ export default function SecurityQuestionsSettingsScreen() {
     setSubmitting(true);
     try {
       await setSecurityQuestions({ password, questions });
-      router.back();
+      if (mountedRef.current) router.back();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, t('securityQuestions.saveFailed')));
     } finally {

@@ -115,6 +115,8 @@ test('an expired request can be resent and returns to waiting', async () => {
   expect(resendLoginChallenge).toHaveBeenCalledWith('c1');
   await waitFor(() => expect(fetchLoginChallengeStatus).toHaveBeenCalledWith('c2'));
   expect(result.current.phase).toBe('waiting');
+  // 页面上其他按验证单查询的东西（密保题目）跟着换到新单。
+  expect(result.current.challengeId).toBe('c2');
 });
 
 test('retries session completion with retained tokens instead of consuming the code again', async () => {

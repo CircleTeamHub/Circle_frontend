@@ -21,8 +21,9 @@ jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ completeVerifiedLogin: jest.fn(), committing: mockCommitting }) }));
 const mockSubmitSecurityAnswers = jest.fn();
 let mockQuestionKeys: string[] = [];
-jest.mock('@/features/auth/hooks/use-device-verification', () => ({ useDeviceVerification: () => ({ phase: 'waiting', remainingSeconds: 300, recoveryAvailableAt: null, submitting: mockSubmitting, error: null, submitSecurityAnswers: mockSubmitSecurityAnswers }) }));
-jest.mock('@/features/auth/hooks/use-login-challenge-security-questions', () => ({ useLoginChallengeSecurityQuestions: () => mockQuestionKeys }));
+const mockQuestionsFor = jest.fn();
+jest.mock('@/features/auth/hooks/use-device-verification', () => ({ useDeviceVerification: () => ({ challengeId: 'resent-challenge', phase: 'waiting', remainingSeconds: 300, recoveryAvailableAt: null, submitting: mockSubmitting, error: null, submitSecurityAnswers: mockSubmitSecurityAnswers }) }));
+jest.mock('@/features/auth/hooks/use-login-challenge-security-questions', () => ({ useLoginChallengeSecurityQuestions: (challengeId: string) => { mockQuestionsFor(challengeId); return mockQuestionKeys; } }));
 
 beforeEach(() => { jest.clearAllMocks(); mockSubmitting = false; mockCommitting = false; mockQuestionKeys = []; useDeviceVerificationStore.getState().setChallenge({ id: 'challenge', expiresAt: new Date(Date.now()+300000).toISOString(), securityCodeAvailable: false, recoveryAvailableAt: null }); });
 afterEach(() => { useDeviceVerificationStore.getState().setChallenge(null); });
@@ -55,4 +56,8 @@ test('answers the security questions instead of waiting for a trusted device', (
  expect(mockSubmitSecurityAnswers).toHaveBeenCalledWith(['张三', '阳光小学']);
  fireEvent.press(screen.getByText('auth.deviceVerification.useTrustedDevice'));
  expect(screen.queryByTestId('security-answer-0')).toBeNull();
+});
+test('looks up the security questions on the current challenge, not the one the screen opened with', () => {
+ render(<DeviceVerificationScreen />);
+ expect(mockQuestionsFor).toHaveBeenLastCalledWith('resent-challenge');
 });

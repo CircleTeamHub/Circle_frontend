@@ -49,9 +49,16 @@ export default function AccountSecuritySettingsScreen() {
 
   // null = 还不知道（加载中 / 拉取失败），行尾不显示状态。
   const [securityQuestionsSet, setSecurityQuestionsSet] = useState<boolean | null>(null);
+  const securityQuestionsRequestRef = useRef(0);
   const loadSecurityQuestionsStatus = useCallback(async () => {
+    // 每次聚焦都会重拉：只认最后一次请求，晚到的旧响应不覆盖新状态。
+    const requestId = securityQuestionsRequestRef.current + 1;
+    securityQuestionsRequestRef.current = requestId;
     try {
-      setSecurityQuestionsSet((await fetchSecurityQuestions()).length > 0);
+      const keys = await fetchSecurityQuestions();
+      if (securityQuestionsRequestRef.current === requestId) {
+        setSecurityQuestionsSet(keys.length > 0);
+      }
     } catch (requestError) {
       reportHandledFailure("securityQuestions", "statusCheck", requestError);
     }

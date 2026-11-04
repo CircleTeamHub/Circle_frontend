@@ -112,3 +112,27 @@ test('a slow status response does not wipe what the user already filled in', asy
   expect(screen.getByTestId('security-question-answer-0').props.value).toBe('张三');
   expect(screen.getByText('securityQuestions.introReplace')).toBeTruthy();
 });
+
+test('leaving while the save is in flight does not pop the page underneath', async () => {
+  let finishSave!: () => void;
+  jest.mocked(setSecurityQuestions).mockReturnValue(
+    new Promise<void>((resolve) => {
+      finishSave = resolve;
+    }),
+  );
+  const view = render(<SecurityQuestionsSettingsScreen />);
+  await waitFor(() => expect(fetchSecurityQuestions).toHaveBeenCalled());
+  pick(0, 'bestFriendName');
+  pick(1, 'primarySchool');
+  fireEvent.changeText(screen.getByTestId('security-question-answer-0'), '张三');
+  fireEvent.changeText(screen.getByTestId('security-question-answer-1'), '阳光小学');
+  fireEvent.changeText(screen.getByTestId('security-questions-password'), 'password1');
+  fireEvent.press(screen.getByTestId('security-questions-save'));
+
+  view.unmount(); // 用户点了返回
+  await act(async () => {
+    finishSave();
+  });
+
+  expect(mockBack).not.toHaveBeenCalled();
+});

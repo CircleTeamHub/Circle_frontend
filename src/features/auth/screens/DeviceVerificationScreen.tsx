@@ -96,7 +96,6 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
   const useSecurityQuestions = mode === 'securityQuestions';
   const usingFallback = mode !== 'trustedDevice';
   const securityCodeAvailable = challenge.securityCodeAvailable;
-  const questionKeys = useLoginChallengeSecurityQuestions(challenge.id);
 
   const verification = useDeviceVerification({
     challengeId: challenge.id,
@@ -104,6 +103,8 @@ function DeviceVerificationContent({ challenge }: { challenge: PendingDeviceVeri
     recoveryAvailableAt: challenge.recoveryAvailableAt,
     onVerified: completeVerifiedLogin,
   });
+  // 按当前验证单查：重新发起后换了单，第一次没查到（如原单已过期）也能补上。
+  const questionKeys = useLoginChallengeSecurityQuestions(verification.challengeId);
   const { phase, remainingSeconds, submitting } = verification;
   const isTerminal = phase === 'rejected' || phase === 'expired';
   const inRecoveryView = phase === 'recoveryWaiting' || phase === 'recoveryReady';

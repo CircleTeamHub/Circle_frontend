@@ -278,6 +278,8 @@ export function useDeviceVerification({
         : expiresAt - now;
 
   return {
+    /** 当前验证单：重新发起后会换成新单。 */
+    challengeId,
     phase,
     remainingSeconds: Math.max(0, Math.ceil(remainingMs / 1000)),
     submitting,
