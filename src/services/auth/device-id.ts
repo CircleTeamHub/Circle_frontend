@@ -10,6 +10,8 @@
  *   - 安卓：安全存储随卸载清空，所以新装时改由 ANDROID_ID 推导（同一台手机、同一个
  *     签名的 App 重装后不变，恢复出厂才变）。只发它的加盐摘要，不发原值。
  * - 已经存过 ID 的安装继续用原来的：会话在服务端绑定了原 ID，换掉就成了陌生设备。
+ *   这类老安装（随机 ID）续签时另带上稳定 ID（getStableDeviceId），服务端登记成
+ *   同一台设备的别名，重装后改用稳定 ID 登录也能认出来。
  * - THIS_DEVICE_ONLY：不随 iCloud 备份迁到新手机 —— 新手机就该算新设备。
  * - 读写失败时返回 null（请求照发、不带头），不阻断任何业务请求；下次再试。
  */
@@ -30,8 +32,8 @@ const ANDROID_ID_NAMESPACE = 'circle-device-v1';
 
 let deviceIdPromise: Promise<string | null> | null = null;
 
-/** 安卓：由 ANDROID_ID 推导、重装后不变的设备 ID；拿不到时返回 null。 */
-async function stableAndroidDeviceId(): Promise<string | null> {
+/** 安卓：由 ANDROID_ID 推导、重装后不变的设备 ID；其他平台或拿不到时返回 null。 */
+export async function getStableDeviceId(): Promise<string | null> {
   if (Platform.OS !== 'android' || !Number.isFinite(Number(Platform.Version)) || Number(Platform.Version) < 26) return null;
   try {
     const androidId = Application.getAndroidId();
@@ -53,7 +55,7 @@ async function loadOrCreateDeviceId(): Promise<string> {
   if (existing && DEVICE_ID_PATTERN.test(existing)) {
     return existing;
   }
-  const created = (await stableAndroidDeviceId()) ?? randomUUID();
+  const created = (await getStableDeviceId()) ?? randomUUID();
   await kv.setItemAsync(DEVICE_ID_KEY, created, {
     keychainAccessible: kv.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
   });

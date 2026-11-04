@@ -675,3 +675,30 @@ test('a newer session bypasses an older refresh singleton without resetting it',
   assert.equal(harness.setTokenCalls.length, 1);
   assert.equal(harness.setTokenCalls[0].accessToken, 'access-b-next');
 });
+
+test('refresh carries the stable device id; ordinary requests do not', async () => {
+  const harness = loadApiClientHarness();
+  harness.registerDeviceIdProvider(async () => 'legacy-random-id-0001');
+  harness.registerStableDeviceIdProvider(async () => `a1-${'ab'.repeat(32)}`);
+  harness.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) },
+  );
+  harness.refreshResponses.push({
+    promise: Promise.resolve(
+      response(true, 200, {
+        code: 0,
+        message: 'ok',
+        data: { accessToken: 'access-a-next', refreshToken: 'refresh-a-next' },
+      }),
+    ),
+  });
+
+  await harness.apiClient('/wallet/balance');
+
+  const [first, refresh, retry] = harness.fetchCalls.map(([, options]) => options.headers);
+  assert.equal(refresh['X-Device-Id'], 'legacy-random-id-0001');
+  assert.equal(refresh['X-Stable-Device-Id'], `a1-${'ab'.repeat(32)}`);
+  assert.equal(first['X-Stable-Device-Id'], undefined);
+  assert.equal(retry['X-Stable-Device-Id'], undefined);
+});

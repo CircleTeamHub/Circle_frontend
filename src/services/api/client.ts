@@ -258,6 +258,13 @@ export function registerDeviceIdProvider(provider: DeviceIdProvider | null) {
   deviceIdProvider = provider;
 }
 
+// 续签时另报安卓的稳定设备 ID：老安装（随机 ID）借此在服务端登记重装后会用的 ID。
+let stableDeviceIdProvider: DeviceIdProvider | null = null;
+
+export function registerStableDeviceIdProvider(provider: DeviceIdProvider | null) {
+  stableDeviceIdProvider = provider;
+}
+
 async function executeRequest<T>(
   endpoint: string,
   options: RequestOptions,
@@ -474,6 +481,9 @@ async function refreshAccessToken(sessionEpoch: number) {
       );
     }
 
+    const stableDeviceId = stableDeviceIdProvider
+      ? await stableDeviceIdProvider().catch(() => null)
+      : null;
     const { res, payload, requestId, durationMs } = await executeRequest<{
       accessToken: string;
       refreshToken: string;
@@ -483,6 +493,9 @@ async function refreshAccessToken(sessionEpoch: number) {
         method: 'POST',
         body: { refreshToken },
         auth: false,
+        ...(stableDeviceId
+          ? { headers: { 'X-Stable-Device-Id': stableDeviceId } }
+          : {}),
       }
     );
     const tokens = unwrapResponse(res, payload, {

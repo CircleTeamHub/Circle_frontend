@@ -100,3 +100,22 @@ test('a high-entropy unpadded Android ID remains stable across reinstalls', asyn
  expect(first).toMatch(/^a1-[0-9a-f]{64}$/);
  await expect(loadFresh().getDeviceId()).resolves.toBe(first);
 });
+
+test('android: a legacy random-id install reports the stable id it would use after a reinstall', async () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
+  store.set('circle.device-id.v1', 'legacy-random-id-0001');
+  const legacy = loadFresh();
+
+  const stable = await legacy.getStableDeviceId();
+  expect(await legacy.getDeviceId()).toBe('legacy-random-id-0001');
+  expect(stable).toMatch(/^a1-[0-9a-f]{64}$/);
+
+  store.clear(); // 卸载重装
+  await expect(loadFresh().getDeviceId()).resolves.toBe(stable);
+});
+
+test('ios has no stable android id to report', async () => {
+  jest.replaceProperty(Platform, 'OS', 'ios');
+  await expect(loadFresh().getStableDeviceId()).resolves.toBeNull();
+  expect(mockGetAndroidId).not.toHaveBeenCalled();
+});
