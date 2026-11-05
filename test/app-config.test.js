@@ -15,6 +15,7 @@ function loadConfig(env = {}) {
     EXPO_PUBLIC_AMAP_ANDROID_KEY: process.env.EXPO_PUBLIC_AMAP_ANDROID_KEY,
     EXPO_PUBLIC_AMAP_IOS_KEY: process.env.EXPO_PUBLIC_AMAP_IOS_KEY,
     EXPO_PUBLIC_AMAP_NATIVE_KEY: process.env.EXPO_PUBLIC_AMAP_NATIVE_KEY,
+    ANDROID_PREPROD_VERSION_CODE: process.env.ANDROID_PREPROD_VERSION_CODE,
   };
 
   for (const key of Object.keys(previous)) {
@@ -217,4 +218,21 @@ test('the JPush plugin gives an autolinked Android build its manifest placeholde
   // 没有 key 就不是 JPush 构建:不声明远程推送后台模式,也不改 APNs 环境。
   assert.equal(config.mods.ios?.infoPlist, undefined);
   assert.equal(config.mods.ios?.entitlements, undefined);
+});
+
+test('preproduction builds take the CI-derived versionCode so each one installs over the last', () => {
+  const preprod = loadConfig({ APP_VARIANT: 'preprod', ANDROID_PREPROD_VERSION_CODE: '100004321' });
+  assert.equal(preprod.android.versionCode, 100004321);
+
+  // 正式包的版本号只由语义化版本推出来，预发的环境变量不能串过去。
+  const production = loadConfig({ ANDROID_PREPROD_VERSION_CODE: '100004321' });
+  assert.equal(production.android.versionCode, appJson.expo.android.versionCode);
+
+  // 本地不带变量打预发包：沿用 app.json。
+  assert.equal(loadConfig({ APP_VARIANT: 'preprod' }).android.versionCode, appJson.expo.android.versionCode);
+
+  assert.throws(
+    () => loadConfig({ APP_VARIANT: 'preprod', ANDROID_PREPROD_VERSION_CODE: '12abc' }),
+    /ANDROID_PREPROD_VERSION_CODE/,
+  );
 });

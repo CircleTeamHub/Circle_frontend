@@ -33,6 +33,8 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.sha }}
+          # 预发 versionCode = 基数 + main 的提交数，浅克隆数不全。
+          fetch-depth: 0
           persist-credentials: false
 
       # `npm run ci` 里的跨仓契约测试按 ../circle_be 读后端源码；工作区旁边没有后端时，
@@ -47,6 +49,16 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+
+      # 每一版预发包的 versionCode 都要比上一版大，已装的手机才能直接覆盖更新（一样的话
+      # 安装器只会「打开」旧 App，只能卸载重装，登录态和设备 ID 一起丢）。后面的元数据
+      # 校验、prebuild 和 APK 核对都读这个环境变量。
+      - name: Derive preproduction versionCode
+        run: |
+          set -euo pipefail
+          version_code="$(node .github/scripts/verify-android-preprod.js version-code)"
+          echo "Preproduction versionCode: $version_code"
+          echo "ANDROID_PREPROD_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
 
       - name: Setup Java
         uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
@@ -149,7 +161,8 @@ jobs:
             exit 1
           fi
           app_version="$(node -p "require('./app.json').expo.version")"
-          version_code="$(node -p "require('./app.json').expo.android.versionCode")"
+          # versionCode 来自前面 Derive preproduction versionCode 推出来的值，不是 app.json。
+          version_code="$ANDROID_PREPROD_VERSION_CODE"
           badging="$("$aapt_path" dump badging "$apk_source" | head -n 1)"
           grep -Fq "package: name='com.yiboding.circleim.preprod'" <<< "$badging"
           grep -Fq "versionCode='$version_code'" <<< "$badging"

@@ -856,7 +856,7 @@ test('preproduction build verifies signing, identity, version, and embedded endp
   assert.match(verify, /apksigner.*verify --verbose --print-certs/);
   assert.match(verify, /aapt.*dump badging/);
   assert.match(verify, /com\.yiboding\.circleim\.preprod/);
-  assert.match(verify, /version_code=\"\$\(node -p/);
+  assert.match(verify, /version_code=\"\$ANDROID_PREPROD_VERSION_CODE\"/);
   assert.match(verify, /app_version=\"\$\(node -p/);
   assert.match(verify, /versionCode='\$version_code'/);
   assert.match(verify, /versionName='\$app_version'/);
@@ -909,9 +909,10 @@ test('preproduction verifier fails closed for metadata and APK endpoint drift', 
     name: EXPECTED.appName,
     version: EXPECTED.version,
     extra: { appVariant: EXPECTED.appVariant },
-    android: { versionCode: EXPECTED.versionCode, package: EXPECTED.packageName },
+    android: { versionCode: 100004321, package: EXPECTED.packageName },
   };
   const env = {
+    ANDROID_PREPROD_VERSION_CODE: '100004321',
     EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_MEDIA_ORIGINS: EXPECTED.mediaOrigins.join(','),
@@ -926,7 +927,7 @@ test('preproduction verifier fails closed for metadata and APK endpoint drift', 
     validateMetadata({
       app: {
         ...app,
-        android: { ...app.android, versionCode: EXPECTED.versionCode + 1 },
+        android: { ...app.android, versionCode: 100004322 },
       },
       env,
     }).join('\n'),
@@ -1066,9 +1067,10 @@ test('preproduction media origins pin the COS bucket and the rate-limited delive
     name: EXPECTED.appName,
     version: EXPECTED.version,
     extra: { appVariant: EXPECTED.appVariant },
-    android: { versionCode: EXPECTED.versionCode, package: EXPECTED.packageName },
+    android: { versionCode: 100004321, package: EXPECTED.packageName },
   };
   const env = {
+    ANDROID_PREPROD_VERSION_CODE: '100004321',
     EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_MEDIA_ORIGINS: `${cos},${delivery}`,
@@ -1103,4 +1105,47 @@ test('preproduction media origins pin the COS bucket and the rate-limited delive
       new RegExp(stale.replace(/\./g, '\\.')),
     );
   }
+});
+
+test('every preproduction build gets a larger versionCode than the one before it', () => {
+  const { preprodVersionCode, validateMetadata, EXPECTED } = require('../.github/scripts/verify-android-preprod');
+  const appJsonVersionCode = require('../app.json').expo.android.versionCode;
+
+  // 已经装着 1000001（app.json 原值）的手机，点新包必须是「更新」而不是「打开」。
+  assert.ok(preprodVersionCode(1) > appJsonVersionCode);
+  assert.ok(preprodVersionCode(5001) > preprodVersionCode(5000));
+  assert.equal(preprodVersionCode(5000), preprodVersionCode(5000));
+  for (const bad of [0, -1, 1.5, Number.NaN]) {
+    assert.throws(() => preprodVersionCode(bad), /commit count/i);
+  }
+
+  // 少了 CI 推出来的 versionCode 就不能发预发包：否则又会回到每版同一个号。
+  const app = {
+    name: EXPECTED.appName,
+    version: EXPECTED.version,
+    extra: { appVariant: EXPECTED.appVariant },
+    android: { versionCode: appJsonVersionCode, package: EXPECTED.packageName },
+  };
+  const env = {
+    EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
+    EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
+    EXPO_PUBLIC_MEDIA_ORIGINS: EXPECTED.mediaOrigins.join(','),
+  };
+  assert.match(validateMetadata({ app, env }).join('\n'), /ANDROID_PREPROD_VERSION_CODE/);
+});
+
+test('the workflow derives the preproduction versionCode from full main history before validating', () => {
+  const workflow = read(WORKFLOW_PATH);
+  const build = workflowJob(workflow, 'build');
+  const checkout = workflowStep(build, 'Checkout selected commit');
+  // 浅克隆数出来的提交数是 1，版本号会倒退：必须拿完整历史。
+  assert.match(checkout, /fetch-depth: 0/);
+
+  const derive = workflowStep(build, 'Derive preproduction versionCode');
+  assert.match(derive, /verify-android-preprod\.js version-code/);
+  assert.match(derive, /ANDROID_PREPROD_VERSION_CODE=.*>> "\$GITHUB_ENV"/);
+  assert.ok(
+    build.indexOf('Derive preproduction versionCode') < build.indexOf('Validate preproduction metadata'),
+    'versionCode is derived before metadata validation and prebuild',
+  );
 });
