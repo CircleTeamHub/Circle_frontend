@@ -39,7 +39,7 @@ readSessionDiagnostics(): Promise<readonly SessionDiagnosticRecord[]>;
 - [x] Run focused tests, typecheck, lint and the full Node suite; run the affected behavior tests.
 - [x] Request an independent correctness/privacy review and resolve actionable findings. Changes prepared for ready-for-review PR #336 with the final behavior and verified limits.
 
-Final verification: 3568 Node tests, 42 targeted behavior tests, typecheck and lint passed. Review regressions cover Clipboard resolving false and temporary journal reads failing while writes remain available. The latter must never overwrite unknown previous incidents; recovery merges the retained memory and disk copies. No remaining P1/P2 review findings. New retention/export code requires a new App build; the previously installed private diagnostic APK contains the earlier Sentry-only diagnostics.
+Final verification: 3568 Node tests, 63 targeted behavior tests, typecheck and lint passed. Login/settings integration tests also verify the real export control appears when evidence exists, with only its storage boundary mocked. Review regressions cover Clipboard resolving false and temporary journal reads failing while writes remain available. The latter must never overwrite unknown previous incidents; recovery merges the retained memory and disk copies. No remaining P1/P2 review findings. New retention/export code requires a new App build; the previously installed private diagnostic APK contains the earlier Sentry-only diagnostics.
 
 ## Verification
 
@@ -48,7 +48,7 @@ node --test test/session-diagnostics.test.js test/auth-session.test.js test/auth
 npm run typecheck
 npm run lint
 npm test
-npm run test:behavior -- --runInBand src/components/app/session-diagnostics-button.spec.tsx src/components/app/session-bootstrap.spec.tsx src/hooks/use-auth.spec.tsx
+npm run test:behavior -- --runInBand src/components/app/session-diagnostics-button.spec.tsx src/components/app/session-bootstrap.spec.tsx src/hooks/use-auth.spec.tsx src/components/app/login-security-code-gate.spec.tsx src/features/auth/screens/LoginScreen.spec.tsx src/features/profile/screens/AppSettingsScreen.spec.tsx
 ```
 
 Expected: persistence survives a new module/runtime using the same backing store; exports contain no supplied secret or identifier canaries; failed native storage does not interrupt auth; all current auth regression tests continue to pass.
