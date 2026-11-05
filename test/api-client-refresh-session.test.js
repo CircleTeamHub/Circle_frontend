@@ -46,6 +46,7 @@ function loadApiClientHarness() {
   const requestResponses = [];
   const setTokenCalls = [];
   let clearCalls = 0;
+  const clearOptions = [];
   let clearPause = null;
   let logoutHandler = null;
   const authState = {
@@ -59,8 +60,9 @@ function loadApiClientHarness() {
     },
   };
 
-  async function clearLocalSession(expectedSessionEpoch) {
+  async function clearLocalSession(expectedSessionEpoch, options) {
     clearCalls += 1;
+    clearOptions.push(options);
     if (clearPause) {
       clearPause.started.resolve();
       await clearPause.release.promise;
@@ -165,6 +167,7 @@ function loadApiClientHarness() {
     requestResponses,
     setTokenCalls,
     getClearCalls: () => clearCalls,
+    getClearOptions: () => clearOptions,
     getLogoutHandler: () => logoutHandler,
     pauseClearSession: () => {
       clearPause = { started: deferred(), release: deferred() };
@@ -490,7 +493,7 @@ test('refresh returning a malformed token pair clears the session', async () => 
   const harness = loadApiClientHarness();
   harness.refreshResponses.push({
     promise: Promise.resolve(
-      response(true, 200, {
+      response(true, 201, {
         code: 0,
         message: 'ok',
         data: { accessToken: 'only-half-a-pair' },
@@ -507,7 +510,28 @@ test('refresh returning a malformed token pair clears the session', async () => 
     return true;
   });
   assert.equal(harness.getClearCalls(), 1);
+  assert.equal(harness.getClearOptions()[0]?.reason, 'refresh-response-invalid');
+  assert.equal(harness.getClearOptions()[0]?.status, 201);
+  assert.equal(harness.getClearOptions()[0]?.requestId, harness.fetchCalls[1][1].headers['X-Request-Id']);
   assert.equal(harness.authState.accessToken, null);
+});
+
+test('a request rejected after a successful refresh retains the retry request id in logout diagnostics', async () => {
+  const harness = loadApiClientHarness();
+  harness.refreshResponses.push({ promise: Promise.resolve(response(true, 201, {
+    code: 0, message: 'ok', data: { accessToken: 'access-next', refreshToken: 'refresh-next' },
+  })) });
+  harness.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'revoked', data: null })) },
+  );
+  await assert.rejects(harness.apiClient('/auth/me'));
+  assert.equal(harness.getClearCalls(), 1);
+  const details = harness.getClearOptions()[0];
+  assert.equal(details?.reason, 'request-rejected-after-refresh');
+  assert.equal(details?.endpointPath, '/auth/me');
+  assert.equal(details?.status, 401);
+  assert.equal(details?.requestId, harness.fetchCalls[2][1].headers['X-Request-Id']);
 });
 
 test('isDefinitiveAuthFailure only treats a server auth verdict as a logout signal', () => {

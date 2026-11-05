@@ -18,6 +18,7 @@ import type { AvatarFrameAppearance, DisplayIcon } from '@/types';
 import { migrateAuthPersist, AUTH_PERSIST_VERSION } from './authPersist';
 import { sanitizeUserForPersist } from './persisted-user';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { reportError } from '@/observability/sentry';
 
 export interface AuthUser {
   id: string;
@@ -223,6 +224,13 @@ export const useAuthStore = create<AuthState>()(
         if (!hasValidTokens) {
           // 认证凭证缺失时仍可能残留上个账号的 MMKV 缓存。保持启动门禁，
           // 交给 SessionBootstrap 走完整 clearLocalSession 后再开放登录页。
+          if (nextState.isAuthenticated || nextState.accessToken || nextState.refreshToken) {
+            reportError(new Error('Authentication session cleared: hydration-tokens-invalid'), {
+              operation: 'session',
+              kind: 'forcedLogout',
+              reason: 'hydration-tokens-invalid',
+            });
+          }
           nextState.clearSession({ preserveLoading: true });
         }
       },

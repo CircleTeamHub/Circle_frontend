@@ -1150,13 +1150,45 @@ test("initSentry wires navigation tracing so cold start and XHR spans have a roo
 
   assert.equal(created.length, 1);
   assert.equal(created[0].useFullPathsForNavigationRoutes, true);
-  assert.equal(calls[0].integrations.length, 1);
-  assert.equal(calls[0].integrations[0], integration);
+  const integrations = calls[0].integrations([]);
+  assert.equal(integrations.length, 1);
+  assert.equal(integrations[0], integration);
 
   const ref = { current: { addListener() {} } };
   registerSentryNavigationContainer(ref);
   assert.equal(registered.length, 1);
   assert.equal(registered[0], ref);
+});
+
+test("forced logout events retain distinct request ids through SDK deduplication", () => {
+  const { dedupeIntegration } = require('@sentry/core');
+  const { initSentry, reportError } = loadSentry();
+  let config;
+  initSentry({ client: { init: (o) => { config = o; }, wrap: (c) => c }, dsn: "https://a@o/1" });
+  const [dedupe] = config.integrations([dedupeIntegration()]);
+  const events = [];
+  const capture = { captureException: (error, context) => events.push({
+    ...context,
+    exception: { values: [{ type: error.name, value: error.message }] },
+  }) };
+  for (const requestId of [
+    '12345678-1234-4234-8234-123456789abc',
+    '87654321-4321-4321-8321-cba987654321',
+  ]) {
+    reportError(new Error('fixed logout cause'), {
+      operation: 'session', kind: 'forcedLogout', reason: 'refresh-rejected',
+      endpointPath: '/auth/refresh', method: 'POST', status: 401, requestId,
+    }, capture);
+  }
+  assert.equal(events.length, 2);
+  assert.deepEqual(events[0].fingerprint, events[1].fingerprint);
+  assert.notEqual(events[0].extra.requestId, events[1].extra.requestId);
+  for (const event of events) assert.equal(dedupe.processEvent(event), event);
+
+  // Other errors retain the SDK's default duplicate suppression.
+  const ordinary = { exception: { values: [{ type: 'Error', value: 'ordinary failure' }] } };
+  assert.equal(dedupe.processEvent(ordinary), ordinary);
+  assert.equal(dedupe.processEvent({ ...ordinary }), null);
 });
 
 test("navigation registration is inert without Sentry and never throws", () => {

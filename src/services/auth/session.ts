@@ -9,6 +9,7 @@ import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { resetDiagnosticBreadcrumbs } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { reportError } from '@/observability/sentry';
 
 type PersistCapableAuthStore = {
   persist?: {
@@ -201,6 +202,19 @@ export function registerLogoutHandler(handler: LogoutHandler): () => void {
 
 interface ClearLocalSessionOptions {
   preserveLoading?: boolean;
+  reason?:
+    | 'refresh-token-missing'
+    | 'refresh-rejected'
+    | 'refresh-response-invalid'
+    | 'request-rejected-after-refresh'
+    | 'realtime-revoked'
+    | 'bootstrap-rejected'
+    | 'bootstrap-tokens-missing';
+  endpointPath?: string;
+  method?: string;
+  status?: number;
+  requestId?: string;
+  failureKind?: string;
 }
 
 async function performClearLocalSession(
@@ -242,7 +256,22 @@ async function performClearLocalSession(
     return;
   }
 
-  useAuthStore.getState().clearSession({
+  const auth = useAuthStore.getState();
+  // Capture the cause while its account scope and breadcrumbs still exist.
+  // An ordinary logout, account switch, or empty startup has no forced-logout event.
+  if (options.reason && (auth.isAuthenticated || auth.accessToken || auth.refreshToken)) {
+    reportError(new Error(`Authentication session cleared: ${options.reason}`), {
+      operation: 'session',
+      kind: 'forcedLogout',
+      reason: options.reason,
+      endpointPath: options.endpointPath,
+      method: options.method,
+      status: options.status,
+      requestId: options.requestId,
+      failureKind: options.failureKind,
+    });
+  }
+  auth.clearSession({
     preserveLoading: options.preserveLoading,
   });
   const clearedSessionEpoch = useAuthStore.getState().sessionEpoch;

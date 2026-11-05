@@ -19,11 +19,15 @@ function loadAuthStore() {
 
   let persistOptions;
   const storageSetCalls = [];
+  const reports = [];
   const context = {
     module: { exports: {} },
     exports: {},
     console,
     require: withObservabilityStubs((request) => {
+      if (request === '@/observability/sentry') return {
+        reportError: (_error, details) => reports.push(details),
+      };
       if (request === 'zustand') {
         return {
           create: () => (initializer) => {
@@ -79,7 +83,7 @@ function loadAuthStore() {
   context.exports = context.module.exports;
 
   vm.runInNewContext(transpiled, context, { filename: filePath });
-  return { ...context.module.exports, persistOptions, storageSetCalls };
+  return { ...context.module.exports, persistOptions, storageSetCalls, reports };
 }
 
 function spyClearSession(useAuthStore) {
@@ -108,6 +112,25 @@ test('authStore unblocks startup but does NOT clearSession when hydration read f
   // 关键回归：读失败绝不能 clearSession —— 否则会把空态写回、删掉磁盘上完好的 token，
   // 让一次瞬时 Keychain 抖动变成永久登出。
   assert.equal(cleared.calls, 0);
+});
+
+test('partial credentials with authenticated metadata report before hydration clears the session', () => {
+  const { useAuthStore, persistOptions, reports } = loadAuthStore();
+  useAuthStore.setState({ isAuthenticated: true, accessToken: 'access-only', refreshToken: null });
+  const finishHydration = persistOptions.onRehydrateStorage();
+  finishHydration(useAuthStore.getState(), undefined);
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].reason, 'hydration-tokens-invalid');
+  assert.equal(reports[0].operation, 'session');
+  assert.equal(reports[0].kind, 'forcedLogout');
+  assert.equal(useAuthStore.getState().accessToken, null);
+  assert.doesNotMatch(JSON.stringify(reports), /access-only/);
+});
+
+test('empty native startup does not report a forced logout', () => {
+  const { useAuthStore, persistOptions, reports } = loadAuthStore();
+  persistOptions.onRehydrateStorage()(useAuthStore.getState(), undefined);
+  assert.equal(reports.length, 0);
 });
 
 test('authStore clears the session when hydration succeeds but tokens are structurally invalid', () => {

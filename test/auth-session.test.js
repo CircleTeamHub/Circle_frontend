@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { loadTsModule } = require('./helpers/load-ts-module');
 
 function deferred() {
   let resolve;
@@ -73,6 +74,7 @@ function makeBaseMocks() {
   };
 
   const mocks = {
+    '@/observability/sentry': { reportError() {} },
     '@/stores/authStore': {
       useAuthStore: authStore,
       persistCurrentAuthState: async () => {
@@ -191,6 +193,73 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetDiagnosticBreadcrumbs',
     'clearStorage',
   ]);
+});
+
+test('forced logout records its cause before auth and diagnostic breadcrumbs are cleared', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  const reports = [];
+  mocks['@/observability/sentry'] = {
+    reportError: (_error, details) => {
+      if (details.operation !== 'session' || details.kind !== 'forcedLogout') return;
+      assert.equal(authState.accessToken, 'access-a');
+      reports.push(JSON.parse(JSON.stringify(details)));
+      calls.push('reportForcedLogout');
+    },
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+  await clearLocalSession(1, {
+    reason: 'refresh-response-invalid', endpointPath: '/auth/refresh', method: 'POST',
+    status: 201, requestId: '12345678-1234-4234-8234-123456789abc',
+  });
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].reason, 'refresh-response-invalid');
+  assert.equal(reports[0].status, 201);
+  assert.equal(reports[0].requestId, '12345678-1234-4234-8234-123456789abc');
+  assert.ok(calls.indexOf('reportForcedLogout') < calls.indexOf('clearSession'));
+  assert.ok(calls.indexOf('reportForcedLogout') < calls.indexOf('resetDiagnosticBreadcrumbs'));
+  assert.doesNotMatch(JSON.stringify(reports), /access-a|refresh-a/);
+});
+
+test('manual logout and stale-session cleanup do not report a forced logout', async () => {
+  const { mocks, authState } = makeBaseMocks();
+  const reports = [];
+  mocks['@/observability/sentry'] = {
+    reportError: (_error, details) => {
+      if (details.operation === 'session' && details.kind === 'forcedLogout') reports.push(details.kind);
+    },
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+  await clearLocalSession(0, { reason: 'refresh-rejected' });
+  assert.equal(authState.sessionEpoch, 1);
+  await clearLocalSession();
+  assert.equal(reports.length, 0);
+});
+
+test('the same forced-logout cause after re-login retains each session request id', async () => {
+  const { mocks, authState } = makeBaseMocks();
+  const reports = [];
+  const sentry = { reportError: (_error, details) => {
+    if (details.operation === 'session' && details.kind === 'forcedLogout') reports.push(details);
+  } };
+  mocks['@/observability/sentry'] = sentry;
+  mocks['@/observability/report-failure'] = loadTsModule('src/observability/report-failure.ts', {
+    requireShim: request => {
+      if (request === './sentry') return sentry;
+      if (request === '@/utils/redact') return { redactSensitiveFields: value => value };
+      return require(request);
+    },
+  });
+  const { clearLocalSession } = loadSessionModule(mocks);
+  const first = '12345678-1234-4234-8234-123456789abc';
+  const second = '87654321-4321-4321-8321-cba987654321';
+  await clearLocalSession(1, { reason: 'refresh-rejected', requestId: first });
+  authState.accessToken = 'access-next';
+  authState.refreshToken = 'refresh-next';
+  authState.sessionEpoch++;
+  await clearLocalSession(authState.sessionEpoch, { reason: 'refresh-rejected', requestId: second });
+  assert.equal(reports.length, 2);
+  assert.equal(reports[0].requestId, first);
+  assert.equal(reports[1].requestId, second);
 });
 
 test('clearLocalSession preserves the startup gate until account cleanup settles', async () => {

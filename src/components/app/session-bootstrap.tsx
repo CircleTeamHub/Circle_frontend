@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 import { fetchCurrentUser } from '@/services/api/auth';
-import { isDefinitiveAuthFailure } from '@/services/api/client';
+import { isDefinitiveAuthFailure, type ApiError } from '@/services/api/client';
 import {
   connectChat,
   disconnectChat,
@@ -170,7 +170,10 @@ export function SessionBootstrap() {
         // Web 凭证只驻内存，刷新后 token 会消失，但账号级 MMKV 缓存仍在
         // localStorage。先走完整登出清理，避免下一账号水合出前一账号的数据。
         try {
-          await clearLocalSession(undefined, { preserveLoading: true });
+          await clearLocalSession(undefined, {
+            preserveLoading: true,
+            reason: 'bootstrap-tokens-missing',
+          });
         } catch (error) {
           reportError(error, {
             component: 'SessionBootstrap',
@@ -224,7 +227,15 @@ export function SessionBootstrap() {
           logClientDiagnostic('session.bootstrap.rejected', {
             reason: 'credentials_rejected',
           });
-          await clearLocalSession();
+          const failure = error as ApiError;
+          await clearLocalSession(undefined, {
+            reason: 'bootstrap-rejected',
+            endpointPath: '/auth/me',
+            method: 'GET',
+            status: failure.status,
+            requestId: failure.requestId,
+            failureKind: failure.failureKind,
+          });
         } else {
           // 瞬时失败只留面包屑（ApiError 已由 api/client 决定过是否上报）；
           // 非 API 错误（存储 / 序列化）才会真的进 Sentry。

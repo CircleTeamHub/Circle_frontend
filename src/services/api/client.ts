@@ -485,11 +485,12 @@ async function refreshAccessToken(sessionEpoch: number) {
 
   assertSessionEpoch(sessionEpoch);
 
+  let refreshResponseStatus: number | undefined;
   const activeRefreshPromise = (async () => {
     const { refreshToken } = useAuthStore.getState();
 
     if (!refreshToken) {
-      await clearLocalSession(sessionEpoch);
+      await clearLocalSession(sessionEpoch, { reason: 'refresh-token-missing' });
       throw new ApiError(
         i18n.t('common.errors.sessionExpired', {
           defaultValue: '登录已过期，请重新登录',
@@ -513,6 +514,7 @@ async function refreshAccessToken(sessionEpoch: number) {
           : {}),
       }
     );
+    refreshResponseStatus = res.status;
     const tokens = unwrapResponse(res, payload, {
       endpoint: '/auth/refresh',
       method: 'POST',
@@ -528,6 +530,7 @@ async function refreshAccessToken(sessionEpoch: number) {
         }),
         {
           status: 401,
+          failureKind: 'refresh-response-invalid',
           reportEndpoint: '/auth/refresh',
           reportMethod: 'POST',
           requestId,
@@ -550,7 +553,16 @@ async function refreshAccessToken(sessionEpoch: number) {
         isDefinitiveAuthFailure(error) &&
         useAuthStore.getState().sessionEpoch === sessionEpoch
       ) {
-        await clearLocalSession(sessionEpoch);
+        await clearLocalSession(sessionEpoch, {
+          reason: error.failureKind === 'refresh-response-invalid'
+            ? 'refresh-response-invalid'
+            : 'refresh-rejected',
+          endpointPath: '/auth/refresh',
+          method: 'POST',
+          status: refreshResponseStatus ?? error.status,
+          requestId: error.requestId,
+          failureKind: error.failureKind,
+        });
       }
       throw error;
     })
@@ -619,7 +631,14 @@ export async function apiClient<T>(
         // 通用报错；这里改为清 session（幂等，epoch 守卫防止误伤新会话）并抛出
         // 带 failureKind 的「请重新登录」，让用户落在干净的登录页而不是报错弹窗。
         assertSessionEpoch(requestSessionEpoch);
-        await clearLocalSession(requestSessionEpoch);
+        await clearLocalSession(requestSessionEpoch, {
+          reason: 'request-rejected-after-refresh',
+          endpointPath: safeHttpEndpoint(endpoint),
+          method: options.method ?? 'GET',
+          status: retryRequest.res.status,
+          requestId: retryRequest.requestId,
+          failureKind: 'auth-retry-failed',
+        });
         // round 3 review：clearLocalSession 的 await 期间用户可能已登入新会话
         //（epoch 前进，clear 对它是 no-op）。此时再抛 auth-retry-failed 会被
         // 调用方当「当前会话已死」处理（登录路由/清理），伤到新会话 ——

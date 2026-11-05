@@ -11,6 +11,7 @@ import type {
   Event,
   EventHint,
   ErrorEvent,
+  Integration,
   Metric,
   SpanJSON,
   TransactionEvent,
@@ -149,7 +150,24 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // 对 IM 产品，「消息发送慢」到底慢在哪一段就无法回答。5% 足够看趋势，
       // 又把 Sentry 配额消耗控制在可预期范围内。
       tracesSampleRate,
-      integrations: navigation ? [navigation] : [],
+      integrations: (defaults: Integration[]) => [
+        ...defaults.map((integration): Integration => {
+          const processEvent = integration.processEvent;
+          if (integration.name !== 'Dedupe' || !processEvent) return integration;
+          return {
+            ...integration,
+            processEvent(event, hint, client) {
+              // Each automatic session clear needs its own request correlation,
+              // even when re-login is followed by the same failure in this process.
+              if (event.tags?.operation === 'session' && event.tags?.kind === 'forcedLogout') {
+                return event;
+              }
+              return processEvent(event, hint, client);
+            },
+          };
+        }),
+        ...(navigation ? [navigation] : []),
+      ],
       // 原生端默认是 [/.*/]：每个 XHR 都带 sentry-trace / baggage 头，连发往第三方
       // 存储的预签名上传 PUT 也带，等于把 release 和 DSN public key 发给第三方。
       // 后端不消费这两个头（请求串联走 X-Request-Id），所以一个都不发。空数组会
