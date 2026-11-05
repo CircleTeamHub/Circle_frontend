@@ -819,7 +819,7 @@ test("system permissions screen queries native permission APIs instead of hardco
   assert.match(source, /notifications\.requestPermissionsAsync/);
   assert.match(source, /refreshPermissions/);
   assert.match(source, /requestPermission/);
-  assert.match(source, /Linking\.openSettings/);
+  assert.match(source, /openSystemSettings/);
   assert.doesNotMatch(source, /statusKey:\s*'settingsDetails\.permissions\.authorized'/);
 });
 

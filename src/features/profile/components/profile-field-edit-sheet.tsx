@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -142,6 +142,11 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
   const [city, setCity] = useState<CityDraft>(() => parseCityValue(initialValue));
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const isTextField = field.editorType === undefined;
   useModalInputAutoFocus(inputRef, isTextField ? field.id : null);
@@ -161,22 +166,26 @@ function ProfileFieldEditor({ field, onClose }: ProfileFieldEditorProps) {
     }
     savingRef.current = true;
     setSaving(true);
+    const sessionEpoch = useAuthStore.getState().sessionEpoch;
+    const isCurrentSave = () => mountedRef.current && useAuthStore.getState().sessionEpoch === sessionEpoch;
     try {
       const nextUser = await updateUserProfile(
         user.id,
         toProfileUpdatePayload(field.id, nextValue),
         user,
       );
+      if (!isCurrentSave()) return;
       setUser(nextUser);
       onClose();
     } catch (error) {
+      if (!isCurrentSave()) return;
       Alert.alert(
         t('validation.saveFailed'),
         getApiErrorMessage(error, t('validation.saveFailed')),
       );
     } finally {
       savingRef.current = false;
-      setSaving(false);
+      if (isCurrentSave()) setSaving(false);
     }
   }
 

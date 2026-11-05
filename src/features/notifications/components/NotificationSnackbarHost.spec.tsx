@@ -2,12 +2,15 @@ import { act, render, screen } from '@testing-library/react-native';
 import { Animated } from 'react-native';
 import { NotificationSnackbarHost } from './NotificationSnackbarHost';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
+import { appSettingsDefaults, useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 
 // 同一个会话的新消息替换正在显示的横幅:只换内容 —— 不重新进场、不再响一次、
 // 不重新计时(否则一个活跃的群就能让横幅一直挂着,别的会话也轮不到)。
 
 const mockNotify = jest.fn();
 let mockActiveConversationId: string | null = null;
+
+jest.mock('@/storage', () => ({ mmkvJsonStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } }));
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 0, left: 0, right: 0 }),
@@ -69,10 +72,24 @@ beforeEach(() => {
   mockNotify.mockClear();
   mockActiveConversationId = null;
   useNotificationSnackbarStore.getState().reset();
+  useAppSettingsStore.setState({ settings: { ...appSettingsDefaults } });
 });
 
 afterEach(() => {
   jest.useRealTimers();
+});
+
+it('changing group reminder preferences clears current and queued group banners', () => {
+  render(<NotificationSnackbarHost />);
+  act(() => {
+    useNotificationSnackbarStore.getState().enqueueChatMessage(chat('a1', 'First'));
+    useNotificationSnackbarStore.getState().enqueueChatMessage(chat('b1', 'Second', 'group-b'));
+  });
+  expect(screen.getByText('First')).toBeTruthy();
+  act(() => useAppSettingsStore.getState().setSetting('groupOnlinePush', false));
+  expect(useNotificationSnackbarStore.getState().queue).toHaveLength(0);
+  act(() => jest.advanceTimersByTime(500));
+  expect(screen.queryByText('First')).toBeNull();
 });
 
 it('a newer message from the same conversation only updates the banner on screen', () => {

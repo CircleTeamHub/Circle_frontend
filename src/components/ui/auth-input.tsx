@@ -14,6 +14,7 @@ import { useTheme, Spacing, Radius, Typography } from '@/theme';
 
 interface AuthInputProps {
   testID?: string;
+  editable?: boolean;
   label?: string;
   placeholder: string;
   value: string;
@@ -61,6 +62,7 @@ const s = StyleSheet.create({
 
 export const AuthInput: React.FC<AuthInputProps> = ({
   testID,
+  editable,
   label,
   placeholder,
   value,
@@ -116,6 +118,7 @@ export const AuthInput: React.FC<AuthInputProps> = ({
         ) : null}
         <TextInput
           testID={testID}
+          editable={editable}
           style={[s.input, d.input]}
           placeholder={placeholder}
           placeholderTextColor={colors.textSecondary + '80'}

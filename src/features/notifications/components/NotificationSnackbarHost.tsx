@@ -32,6 +32,7 @@ import {
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 
 const AUTO_DISMISS_MS = 4_000;
 const ENTER_MS = 220;
@@ -49,6 +50,10 @@ export function NotificationSnackbarHost() {
   const dismissCurrent = useNotificationSnackbarStore(
     (state) => state.dismissCurrent,
   );
+  const notificationSettings = useAppSettingsStore(state => state.settings);
+  useEffect(() => {
+    useNotificationSnackbarStore.getState().pruneDisabled();
+  }, [notificationSettings]);
 
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const notificationScope = getNotificationScope(segments);
@@ -175,7 +180,7 @@ export function NotificationSnackbarHost() {
       item.kind === 'notification' &&
       item.type.startsWith('CIRCLE_') &&
       !circleSoundAllowed(useCircleNotificationStore.getState());
-    notify({ silent });
+    notify({ silent, kind: item.kind === 'notification' && item.type.startsWith('CIRCLE_') ? 'circle' : 'message' });
 
     timerRef.current = setTimeout(dismissCurrent, AUTO_DISMISS_MS);
     return clearTimer;

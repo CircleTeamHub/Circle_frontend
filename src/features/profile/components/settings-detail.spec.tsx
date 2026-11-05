@@ -1,4 +1,6 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { SettingsDetailScreen, type SettingsDetailSection } from './settings-detail';
 
@@ -86,4 +88,25 @@ test('assistive names retain visible setting values, permission status and row c
   expect(screen.getByLabelText('size, 3 MB')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'camera, authorized' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'vibration, notifications' })).toBeTruthy();
+});
+
+test('a controlled toggle label changes its value once, and switch changes do not trigger the label', () => {
+  const onChange = jest.fn();
+  render(<SettingsDetailScreen titleKey="settings" sections={[{ rows: [{
+    id: 'privacy', labelKey: 'Share presence', type: 'toggle', value: true, onValueChange: onChange,
+  }] }]} />);
+  fireEvent.press(screen.getByText('Share presence'));
+  expect(onChange.mock.calls).toEqual([[false]]);
+  onChange.mockClear();
+  fireEvent(screen.getByRole('switch'), 'valueChange', false);
+  expect(onChange.mock.calls).toEqual([[false]]);
+});
+
+
+test('pages can lock controls without changing the opacity of every row', () => {
+  render(<SettingsDetailScreen titleKey="settings" testIDPrefix="privacy" dimDisabledRows={false} sections={[{ rows: [{
+    id: 'privacy', labelKey: 'Share presence', type: 'toggle', value: true, onValueChange: jest.fn(), disabled: true,
+  }] }]} />);
+  const row = screen.getByTestId(E2E_TEST_IDS.settingsDetailRow('privacy.privacy'));
+  expect(StyleSheet.flatten(row.props.style)?.opacity).toBeUndefined();
 });

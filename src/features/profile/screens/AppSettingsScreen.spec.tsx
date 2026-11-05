@@ -78,3 +78,17 @@ test('switch account and logout sit in their own action card as full-width rows'
   // 退出登录是红字行，不再是一整块实心红按钮。
   expect(screen.queryByText('icon:log-out-outline')).toBeNull();
 });
+
+test.each([
+  ['profileFields.email', '/(tabs)/profile/change-email'],
+  ['settingsDetails.accountSecurity.cancelAccount', '/(tabs)/profile/cancel-account'],
+  ['settingsDetails.privacy.onlineTime', '/(tabs)/profile/settings-privacy'],
+  ['settingsDetails.privacy.singleTyping', '/(tabs)/profile/settings-privacy'],
+  ['settingsDetails.privacy.groupTyping', '/(tabs)/profile/settings-privacy'],
+  ['settingsDetails.privacy.allowFriendGroupDirectJoin', '/(tabs)/profile/settings-privacy'],
+])('search finds %s with its dedicated route', (label, route) => {
+  render(<AppSettingsScreen />);
+  fireEvent.changeText(screen.getByPlaceholderText('appSettings.searchPlaceholder'), label);
+  fireEvent.press(screen.getByText(label));
+  expect(mockPush).toHaveBeenCalledWith(route);
+});

@@ -50,6 +50,8 @@ export interface SettingsDetailSection {
 interface SettingsDetailScreenProps {
   titleKey: string;
   sections: SettingsDetailSection[];
+  header?: React.ReactNode;
+  dimDisabledRows?: boolean;
   footer?: React.ReactNode;
   testIDPrefix?: string;
 }
@@ -178,9 +180,10 @@ interface SettingsRowViewProps {
   testID?: string;
   showDivider: boolean;
   dividerInset: boolean;
+  dimDisabledRows?: boolean;
 }
 
-function SettingsRowView({ row, testID, showDivider, dividerInset }: SettingsRowViewProps) {
+function SettingsRowView({ row, testID, showDivider, dividerInset, dimDisabledRows = true }: SettingsRowViewProps) {
   const { t } = useTranslation();
   const d = useSettingsStyles();
   const { colors } = d;
@@ -214,7 +217,7 @@ function SettingsRowView({ row, testID, showDivider, dividerInset }: SettingsRow
         testID={testID}
         style={({ pressed }) => [
           s.row,
-          row.disabled ? s.rowDisabled : null,
+          row.disabled && dimDisabledRows ? s.rowDisabled : null,
           pressed ? s.rowPressed : null,
         ]}
         disabled={isInfo || row.disabled}
@@ -296,10 +299,11 @@ function SettingsRowView({ row, testID, showDivider, dividerInset }: SettingsRow
 interface SettingsSectionViewProps {
   section: SettingsDetailSection;
   testIDPrefix?: string;
+  dimDisabledRows?: boolean;
 }
 
 /** 一组设置：小标题 + 圆角卡片 + 可选的底部说明。各设置页与主设置页共用。 */
-export function SettingsSectionView({ section, testIDPrefix }: SettingsSectionViewProps) {
+export function SettingsSectionView({ section, testIDPrefix, dimDisabledRows }: SettingsSectionViewProps) {
   const { t } = useTranslation();
   const d = useSettingsStyles();
   const { rows } = section;
@@ -323,6 +327,7 @@ export function SettingsSectionView({ section, testIDPrefix }: SettingsSectionVi
             }
             showDivider={index < rows.length - 1}
             dividerInset={Boolean(row.icon)}
+            dimDisabledRows={dimDisabledRows}
           />
         ))}
       </View>
@@ -336,6 +341,8 @@ export function SettingsSectionView({ section, testIDPrefix }: SettingsSectionVi
 export function SettingsDetailScreen({
   titleKey,
   sections,
+  header,
+  dimDisabledRows = true,
   footer,
   testIDPrefix,
 }: SettingsDetailScreenProps) {
@@ -357,11 +364,13 @@ export function SettingsDetailScreen({
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + Spacing.xl }]}
         showsVerticalScrollIndicator={false}
       >
+        {header}
         {sections.map((section, index) => (
           <SettingsSectionView
             key={`${section.titleKey ?? 'section'}-${index}`}
             section={section}
             testIDPrefix={testIDPrefix}
+            dimDisabledRows={dimDisabledRows}
           />
         ))}
         {footer}

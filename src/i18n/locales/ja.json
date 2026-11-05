@@ -91,7 +91,9 @@
       "cancelAccount": "アカウントを削除",
       "securityQuestions": "秘密の質問",
       "securityQuestionsSet": "設定済み",
-      "securityQuestionsNotSet": "未設定"
+      "securityQuestionsNotSet": "未設定",
+      "singleDeviceStatusFailed": "単一端末ログインの状態を取得できません。再試行してください。",
+      "singleDeviceUpdateFailed": "単一端末ログインの設定を保存できません。再試行してください。"
     },
     "notifications": {
       "title": "通知",
@@ -123,7 +125,16 @@
       "circleOffline": "オフライン通知",
       "circleOfflineHint": "アプリがオフラインのときにサークル通知を受け取る",
       "circleRingtone": "サークル通知の着信音",
-      "circleDefault": "サークル既定"
+      "circleDefault": "サークル既定",
+      "syncFailed": "グループ通知設定を同期できません。再試行してください。",
+      "inAppHint": "アプリ内の通知のみを設定します",
+      "systemSettings": "システム通知設定",
+      "systemSettingsHint": "バックグラウンド通知の音、振動、権限を変更します",
+      "ringtones": {
+        "default": "標準",
+        "soft": "ソフト",
+        "bell": "ベル"
+      }
     },
     "autoReply": {
       "title": "DM自動返信",
@@ -227,7 +238,9 @@
       "presenceSection": "オンライン・入力中の表示",
       "profileVisibilitySection": "プロフィールの公開",
       "contactSection": "追加と招待",
-      "blacklistBlockedAt": "{{date}} にブロック"
+      "blacklistBlockedAt": "{{date}} にブロック",
+      "unavailable": "利用不可",
+      "unsupportedHint": "現在のサービスはこの設定に対応していません。更新後にお試しください。"
     },
     "permissions": {
       "title": "システム権限",
@@ -241,7 +254,9 @@
       "authorized": "許可済み",
       "unauthorized": "未許可",
       "onlyVisibleAuthorized": "項目をタップすると許可をリクエストします。一度拒否した権限はシステム設定でオンにしてください。",
-      "openSystemSettings": "システム設定を開く"
+      "openSystemSettings": "システム設定を開く",
+      "browserSettingsHint": "ブラウザーのアドレスバーにあるサイト設定から、通知・カメラ・マイクなどの権限を変更してください。",
+      "openSettingsFailed": "システム設定を開けません。端末の設定からこのアプリの権限を開いてください。"
     },
     "storage": {
       "title": "ストレージとキャッシュ",
@@ -304,6 +319,29 @@
       "thirdPartyLicensesDescription": "このバージョンに含まれるライセンスと通知をオフラインで確認できます。テキストは選択できます。",
       "updateTitle": "バージョンの状況",
       "updateBody": "このバージョンは今後も改善を続けます。新しいセキュリティ、チャット、サークルの機能は、システム通知やリリースノートで優先的にお知らせします。"
+    },
+    "changeEmail": {
+      "title": "メールアドレスの変更",
+      "newEmail": "新しいメールアドレス",
+      "password": "現在のパスワード",
+      "code": "新しいメール宛ての確認コード",
+      "sendCode": "コードを送信",
+      "sendAgain": "{{seconds}}秒後に再送信",
+      "sendFailed": "コードを送信できません。再試行してください。",
+      "saveFailed": "メールアドレスを変更できません。再試行してください。",
+      "help": "現在のパスワードと新しいメールアドレスを確認します。変更後は再ログインが必要です。",
+      "success": "メールアドレスを変更しました。再ログインしてください。",
+      "submit": "変更を確定",
+      "invalidCode": "6桁の確認コードを入力してください。",
+      "passwordRequired": "現在のパスワードを入力してください。",
+      "sameEmail": "現在とは異なるメールアドレスを入力してください。"
+    },
+    "cancelAccount": {
+      "title": "アカウント削除",
+      "warning": "すべての端末からログアウトされ、このアカウントでログインできなくなります。必要な情報を先に保存してください。",
+      "confirmation": "削除を確認するため現在のアカウントIDを入力",
+      "action": "アカウント削除を確定",
+      "failed": "アカウントを削除できません。再試行してください。"
     }
   },
   "chat": {

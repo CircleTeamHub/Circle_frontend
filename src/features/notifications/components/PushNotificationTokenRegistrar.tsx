@@ -23,6 +23,11 @@ export function PushNotificationTokenRegistrar() {
     [],
   );
 
+  // Group offline state mirrors an account field; leave device appearance preferences intact.
+  useEffect(() => registerLogoutHandler((context) => {
+    if (context.isCurrent()) useAppSettingsStore.getState().resetGroupPushSettings();
+  }), []);
+
   // iOS 的来电走单独登记的 PushKit VoIP token：跟普通推送同一个开关、同一套登出撤销。
   useEffect(() => {
     const voip = getVoipPushTokenRegistrationOrchestrator();

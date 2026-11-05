@@ -91,7 +91,9 @@
       "cancelAccount": "Eliminar cuenta",
       "securityQuestions": "Preguntas de seguridad",
       "securityQuestionsSet": "Configuradas",
-      "securityQuestionsNotSet": "Sin configurar"
+      "securityQuestionsNotSet": "Sin configurar",
+      "singleDeviceStatusFailed": "No se pudo cargar el estado de inicio en un solo dispositivo. Reinténtalo.",
+      "singleDeviceUpdateFailed": "No se pudo guardar el ajuste de un solo dispositivo. Reinténtalo."
     },
     "notifications": {
       "title": "Notificaciones",
@@ -123,7 +125,16 @@
       "circleOffline": "Aviso sin conexión",
       "circleOfflineHint": "Recibir push de círculos con la app sin conexión",
       "circleRingtone": "Tono de notificaciones de Círculo",
-      "circleDefault": "Predeterminado de Círculo"
+      "circleDefault": "Predeterminado de Círculo",
+      "syncFailed": "No se pudo sincronizar el ajuste de avisos de grupo. Reinténtalo.",
+      "inAppHint": "Solo controla los avisos dentro de la app",
+      "systemSettings": "Ajustes de notificaciones del sistema",
+      "systemSettingsHint": "Cambia el sonido, la vibración y los permisos de avisos en segundo plano",
+      "ringtones": {
+        "default": "Predeterminado",
+        "soft": "Suave",
+        "bell": "Campana"
+      }
     },
     "autoReply": {
       "title": "Respuesta automática de mensajes directos",
@@ -227,7 +238,9 @@
       "presenceSection": "Estado en línea y escritura",
       "profileVisibilitySection": "Visibilidad del perfil",
       "contactSection": "Agregar e invitaciones",
-      "blacklistBlockedAt": "Bloqueado el {{date}}"
+      "blacklistBlockedAt": "Bloqueado el {{date}}",
+      "unavailable": "No disponible",
+      "unsupportedHint": "El servicio actual no admite este ajuste. Inténtalo después de una actualización."
     },
     "permissions": {
       "title": "Permisos del sistema",
@@ -241,7 +254,9 @@
       "authorized": "Autorizado",
       "unauthorized": "Sin autorizar",
       "onlyVisibleAuthorized": "Toca un elemento para solicitar acceso. Los permisos que ya denegaste deben activarse en los ajustes del sistema.",
-      "openSystemSettings": "Abrir ajustes del sistema"
+      "openSystemSettings": "Abrir ajustes del sistema",
+      "browserSettingsHint": "Usa los ajustes del sitio en la barra de direcciones del navegador para gestionar los permisos de notificaciones, cámara y micrófono.",
+      "openSettingsFailed": "No se pudieron abrir los ajustes. Abre los permisos de esta app desde los ajustes del dispositivo."
     },
     "storage": {
       "title": "Almacenamiento y caché",
@@ -304,6 +319,29 @@
       "thirdPartyLicensesDescription": "Estas licencias y avisos se incluyen con esta versión para consultarlos sin conexión. El texto se puede seleccionar.",
       "updateTitle": "Estado de la versión",
       "updateBody": "Esta versión seguirá evolucionando. Las nuevas funciones de seguridad, chat y Círculo se anunciarán en avisos del sistema y notas de la versión."
+    },
+    "changeEmail": {
+      "title": "Cambiar correo",
+      "newEmail": "Nuevo correo",
+      "password": "Contraseña actual",
+      "code": "Código enviado al nuevo correo",
+      "sendCode": "Enviar código",
+      "sendAgain": "Reenviar en {{seconds}} s",
+      "sendFailed": "No se pudo enviar el código. Reinténtalo.",
+      "saveFailed": "No se pudo cambiar el correo. Reinténtalo.",
+      "help": "Verifica tu contraseña actual y el nuevo correo. Tendrás que volver a iniciar sesión.",
+      "success": "Correo actualizado. Vuelve a iniciar sesión.",
+      "submit": "Confirmar cambio",
+      "invalidCode": "Introduce el código de seis dígitos.",
+      "passwordRequired": "Introduce tu contraseña actual.",
+      "sameEmail": "El nuevo correo debe ser distinto del actual."
+    },
+    "cancelAccount": {
+      "title": "Eliminar cuenta",
+      "warning": "Se cerrará la sesión en todos los dispositivos y no podrás volver a entrar con esta cuenta. Guarda primero la información que necesites.",
+      "confirmation": "Introduce el ID de tu cuenta actual para confirmar",
+      "action": "Confirmar eliminación de cuenta",
+      "failed": "No se pudo eliminar la cuenta. Reinténtalo."
     }
   },
   "chat": {

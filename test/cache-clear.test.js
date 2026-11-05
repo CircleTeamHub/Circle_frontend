@@ -37,6 +37,10 @@ function loadCacheModule(rnfsMock) {
         };
       }
 
+      if (request === 'expo-sqlite') {
+        return { defaultDatabaseDirectory: '/app/documents/SQLite' };
+      }
+
       if (request === 'react-native') {
         // clear-app-cache 只用 Platform.OS 判断是否走原生 FS 路径；
         // 这些用例都覆盖原生平台，所以 mock 成 'ios'。
@@ -237,4 +241,24 @@ test('getAppStorageUsage separates chat storage from cache storage', async () =>
     temporaryBytes: 3_072,
     totalBytes: 4_199_424,
   });
+});
+
+test('chat usage includes current SQLite databases and sidecars when OpenIM is absent', async () => {
+  const rnfsMock = {
+    DocumentDirectoryPath: '/app/documents',
+    CachesDirectoryPath: '/app/cache',
+    TemporaryDirectoryPath: '/app/tmp',
+    exists: async (target) => target === '/app/documents/SQLite',
+    readDir: async () => [
+      { path: '/app/documents/SQLite/chat-core-v1-a.db', size: 100 },
+      { path: '/app/documents/SQLite/chat-core-v1-a.db-wal', size: 30 },
+      { path: '/app/documents/SQLite/chat-core-v1-a.db-shm', size: 20 },
+      { path: '/app/documents/SQLite/chat-core-v1-b.db', size: 80 },
+      { path: '/app/documents/SQLite/another.db', size: 500 },
+    ],
+  };
+  const { getAppStorageUsage } = loadCacheModule(rnfsMock);
+  const usage = await getAppStorageUsage();
+  assert.equal(usage.chatBytes, 230);
+  assert.equal(usage.totalBytes, 230);
 });

@@ -24,6 +24,8 @@ export const STATIC_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   'assistant',
   'avatar-frame',
   'avatar-frames',
+  'cancel-account',
+  'change-email',
   'change-password',
   'change-security-code',
   'chat-background',

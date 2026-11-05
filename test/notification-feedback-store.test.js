@@ -66,3 +66,13 @@ test("notification feedback toggles are independent", () => {
   assert.equal(useNotificationFeedbackStore.getState().soundEnabled, true);
   assert.equal(useNotificationFeedbackStore.getState().hapticsEnabled, false);
 });
+
+test('message and circle ringtone selections are independently persisted', () => {
+  const store = useNotificationFeedbackStore.getState();
+  assert.equal(store.messageRingtone, 'default');
+  assert.equal(store.circleRingtone, 'default');
+  store.setMessageRingtone('soft');
+  store.setCircleRingtone('bell');
+  assert.equal(useNotificationFeedbackStore.getState().messageRingtone, 'soft');
+  assert.equal(useNotificationFeedbackStore.getState().circleRingtone, 'bell');
+});

@@ -1,0 +1,32 @@
+import React from 'react';
+import { act, render, waitFor } from '@testing-library/react-native';
+import { AppState, type AppStateStatus } from 'react-native';
+import * as Location from 'expo-location';
+import SystemPermissionsScreen from './SystemPermissionsScreen';
+jest.mock('expo-router', () => ({ useFocusEffect: (callback: () => void) => { jest.requireActual<typeof import('react')>('react').useEffect(callback, [callback]); } }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('@/i18n', () => ({ __esModule: true, default: { t: (key: string) => key } }));
+jest.mock('@/theme', () => ({ Radius: {}, Spacing: {}, Typography: {}, useTheme: () => ({ colors: {} }) }));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+jest.mock('expo-location', () => ({ getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false })) }));
+jest.mock('expo-camera', () => ({ Camera: { getCameraPermissionsAsync: jest.fn(async () => ({ granted: false })) } }));
+jest.mock('expo-image-picker', () => ({ getMediaLibraryPermissionsAsync: jest.fn(async () => ({ granted: false })) }));
+jest.mock('expo-audio', () => ({ getRecordingPermissionsAsync: jest.fn(async () => ({ granted: false })) }));
+jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn(async () => ({ granted: false })), IosAuthorizationStatus: { PROVISIONAL: 3 } }));
+jest.mock('@/features/profile/components/settings-detail', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { SettingsDetailScreen: ({ sections }: { sections: { rows: { id: string; statusKey: string }[] }[] }) => <>{sections[0].rows.map(row => <Text key={row.id}>{row.id}:{row.statusKey}</Text>)}</> };
+});
+test('returning from system settings refreshes native permissions and removes the listener on unmount', async () => {
+  let onChange!: (state: AppStateStatus) => void;
+  const remove = jest.fn();
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => { onChange = listener; return { remove }; });
+  const ui = render(<SystemPermissionsScreen />);
+  await waitFor(() => expect(ui.getByText('location:settingsDetails.permissions.unauthorized')).toBeTruthy());
+  jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+  await act(async () => { onChange('active'); });
+  expect(ui.getByText('location:settingsDetails.permissions.authorized')).toBeTruthy();
+  ui.unmount();
+  expect(remove).toHaveBeenCalledTimes(1);
+  jest.restoreAllMocks();
+});
