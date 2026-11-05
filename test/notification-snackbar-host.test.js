@@ -114,7 +114,7 @@ test("notification feedback lazily creates the native audio player", () => {
   assert.ok(mountEffect);
   assert.doesNotMatch(mountEffect[0], /createAudioPlayer/);
   assert.match(hook, /function ensureNotificationPlayer/);
-  assert.match(hook, /ensureNotificationPlayer\(\)/);
+  assert.match(hook, /ensureNotificationPlayer\(ringtone\)/);
 });
 
 test("notification feedback does not load expo-audio at module startup", () => {

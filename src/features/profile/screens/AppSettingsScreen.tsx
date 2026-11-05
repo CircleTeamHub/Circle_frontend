@@ -130,13 +130,13 @@ const ACCOUNT_SECURITY_SEARCH_ROWS: AppSettingsRow[] = [
   {
     id: 'account-security-cancel-account',
     labelKey: 'settingsDetails.accountSecurity.cancelAccount',
-    route: '/(tabs)/profile/settings-account-security',
+    route: '/(tabs)/profile/cancel-account',
   },
 ];
 
 const ACCOUNT_SEARCH_ROWS = [
   ...ACCOUNT_ROWS,
-  ...underPage(PROFILE_ROW, PROFILE_SEARCH_ROWS),
+  ...underPage(PROFILE_ROW, [...PROFILE_SEARCH_ROWS, { id: 'profile-email', labelKey: 'profileFields.email', route: '/(tabs)/profile/change-email' }]),
   ...underPage(ACCOUNT_SECURITY_ROW, ACCOUNT_SECURITY_SEARCH_ROWS),
 ];
 
@@ -244,6 +244,11 @@ const APPEARANCE_SEARCH_ROWS: AppSettingsRow[] = [
 ];
 
 const PRIVACY_SEARCH_ROWS: AppSettingsRow[] = [
+  ...['onlineTime', 'singleTyping', 'groupTyping', 'allowFriendGroupDirectJoin'].map(key => ({
+    id: `privacy-${key}`,
+    labelKey: `settingsDetails.privacy.${key}`,
+    route: '/(tabs)/profile/settings-privacy',
+  })),
   {
     id: 'privacy-self-destruct',
     labelKey: 'settingsDetails.privacy.selfDestruct',

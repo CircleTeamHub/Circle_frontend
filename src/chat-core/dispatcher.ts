@@ -854,13 +854,13 @@ function enqueueForegroundBanner(
   if (conversation.muted) return 'suppressed';
 
   const isAssistant = conversation.type === 'SUPPORT';
-  const isGroup = conversation.type === 'GROUP';
+  const isGroup = conversation.type === 'GROUP' || conversation.type === 'TEMP';
   // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
   const title = isAssistant
     ? conversation.name?.trim() ||
       i18n.t('assistant.name', { defaultValue: 'AI小助手' })
     : isGroup
-      ? (conversation.circle?.name ??
+      ? (conversation.circle?.name ?? conversation.tempChat?.title ??
         (conversation.name?.trim() ||
           i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' })))
       : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');

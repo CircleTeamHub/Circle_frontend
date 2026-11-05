@@ -2372,7 +2372,9 @@
       "cancelAccount": "Cancel Account",
       "securityQuestions": "Security questions",
       "securityQuestionsSet": "Set",
-      "securityQuestionsNotSet": "Not set"
+      "securityQuestionsNotSet": "Not set",
+      "singleDeviceStatusFailed": "Could not load single-device login status. Please retry.",
+      "singleDeviceUpdateFailed": "Could not save single-device login. Please retry."
     },
     "notifications": {
       "title": "Notifications",
@@ -2404,7 +2406,16 @@
       "circleOffline": "Offline Push",
       "circleOfflineHint": "Receive circle push while the app is offline",
       "circleRingtone": "Circle Notification Ringtone",
-      "circleDefault": "Circle Default"
+      "circleDefault": "Circle Default",
+      "syncFailed": "Could not sync group push settings. Please retry.",
+      "inAppHint": "Controls in-app alerts only",
+      "systemSettings": "System notification settings",
+      "systemSettingsHint": "Change background notification sound, vibration and permissions",
+      "ringtones": {
+        "default": "Default",
+        "soft": "Soft",
+        "bell": "Bell"
+      }
     },
     "autoReply": {
       "title": "Direct-message auto reply",
@@ -2508,7 +2519,9 @@
       "presenceSection": "Online & Typing Status",
       "profileVisibilitySection": "Profile Visibility",
       "contactSection": "Adding & Invitations",
-      "blacklistBlockedAt": "Blocked on {{date}}"
+      "blacklistBlockedAt": "Blocked on {{date}}",
+      "unavailable": "Unavailable",
+      "unsupportedHint": "This setting is not supported by the current service. Please try again after an update."
     },
     "permissions": {
       "title": "System Permissions",
@@ -2522,7 +2535,9 @@
       "authorized": "Authorized",
       "unauthorized": "Unauthorized",
       "onlyVisibleAuthorized": "Tap an item to request access. Permissions you already denied must be turned on in system settings.",
-      "openSystemSettings": "Open System Settings"
+      "openSystemSettings": "Open System Settings",
+      "browserSettingsHint": "Use the site settings in your browser address bar to manage notifications, camera and microphone permissions.",
+      "openSettingsFailed": "Could not open system settings. Open this app’s permissions from your device settings."
     },
     "storage": {
       "title": "Storage & Cache",
@@ -2585,6 +2600,29 @@
       "thirdPartyLicensesDescription": "These licenses and notices are bundled with this version for offline access. The text is selectable.",
       "updateTitle": "Version Status",
       "updateBody": "This version will continue to evolve. New security, chat, and circle features will be shared through system notices and release updates."
+    },
+    "changeEmail": {
+      "title": "Change email",
+      "newEmail": "New email",
+      "password": "Current password",
+      "code": "Code sent to your new email",
+      "sendCode": "Send code",
+      "sendAgain": "Resend in {{seconds}}s",
+      "sendFailed": "Could not send the code. Please retry.",
+      "saveFailed": "Could not change email. Please retry.",
+      "help": "Verify your current password and new email. You will need to sign in again.",
+      "success": "Email changed. Please sign in again.",
+      "submit": "Confirm change",
+      "invalidCode": "Enter the six-digit verification code.",
+      "passwordRequired": "Enter your current password.",
+      "sameEmail": "The new email must differ from the current email."
+    },
+    "cancelAccount": {
+      "title": "Delete account",
+      "warning": "This signs out all devices and prevents further sign-in. Save any information you need first.",
+      "confirmation": "Enter your current account ID to confirm deletion",
+      "action": "Confirm account deletion",
+      "failed": "Could not delete account. Please retry."
     }
   },
   "appUpdate": {

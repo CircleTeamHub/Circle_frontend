@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
+import { Pressable, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { SettingsDetailScreen } from "@/features/profile/components/settings-detail";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -9,16 +11,23 @@ import {
   setSingleDeviceLogin,
 } from "@/services/api/auth";
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
+import { Spacing, Typography, useTheme } from '@/theme';
 
 const SECURITY_CODE_ROUTE = "/(tabs)/profile/change-security-code" as const;
 
 export default function AccountSecuritySettingsScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   const { logout, switchAccount, submitting } = useAuth();
   const [singleDeviceLogin, setSingleDeviceLoginValue] = useState(false);
   const [singleDeviceLoading, setSingleDeviceLoading] = useState(true);
   const [singleDeviceSubmitting, setSingleDeviceSubmitting] = useState(false);
   const singleDeviceInFlightRef = useRef(false);
+  const singleDeviceRequestRef = useRef(0);
+  const [singleDeviceError, setSingleDeviceError] = useState<'status' | 'update' | null>(null);
 
   const [securityCodeEnabled, setSecurityCodeEnabled] = useState(false);
   const [securityCodeLoading, setSecurityCodeLoading] = useState(true);
@@ -33,19 +42,19 @@ export default function AccountSecuritySettingsScreen() {
 
     try {
       const status = await fetchLoginSecurityCodeStatus();
-      if (securityCodeRequestRef.current !== requestId) return;
+      if (securityCodeRequestRef.current !== requestId || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
       setSecurityCodeEnabled(status.enabled);
     } catch (requestError) {
-      if (securityCodeRequestRef.current !== requestId) return;
+      if (securityCodeRequestRef.current !== requestId || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
       // 拿不到状态时不静默当作「未开启」——置为错误态并禁用开关，避免误导用户。
       setSecurityCodeError(true);
       reportHandledFailure("securityCode", "statusCheck", requestError);
     } finally {
-      if (securityCodeRequestRef.current === requestId) {
+      if (securityCodeRequestRef.current === requestId && useAuthStore.getState().sessionEpoch === sessionEpoch) {
         setSecurityCodeLoading(false);
       }
     }
-  }, []);
+  }, [sessionEpoch]);
 
   // null = 还不知道（加载中 / 拉取失败），行尾不显示状态。
   const [securityQuestionsSet, setSecurityQuestionsSet] = useState<boolean | null>(null);
@@ -73,6 +82,10 @@ export default function AccountSecuritySettingsScreen() {
     useCallback(() => {
       void loadSecurityCodeStatus();
       void loadSecurityQuestionsStatus();
+      return () => {
+        securityCodeRequestRef.current += 1;
+        securityQuestionsRequestRef.current += 1;
+      };
     }, [loadSecurityCodeStatus, loadSecurityQuestionsStatus]),
   );
 
@@ -85,54 +98,77 @@ export default function AccountSecuritySettingsScreen() {
     });
   }
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSingleDeviceLogin() {
-      try {
-        const status = await fetchSingleDeviceLoginStatus();
-        if (!cancelled) {
-          setSingleDeviceLoginValue(status.enabled);
-        }
-      } catch (requestError) {
-        if (!cancelled) {
-          reportHandledFailure("singleDeviceLogin", "statusCheck", requestError);
-        }
-      } finally {
-        if (!cancelled) {
-          setSingleDeviceLoading(false);
-        }
+  const loadSingleDeviceLogin = useCallback(async () => {
+    const requestId = ++singleDeviceRequestRef.current;
+    const isCurrentRequest = () => singleDeviceRequestRef.current === requestId && useAuthStore.getState().sessionEpoch === sessionEpoch;
+    setSingleDeviceLoading(true);
+    setSingleDeviceError(null);
+    try {
+      const status = await fetchSingleDeviceLoginStatus();
+      if (isCurrentRequest()) {
+        setSingleDeviceLoginValue(status.enabled);
+      }
+    } catch (requestError) {
+      if (isCurrentRequest()) {
+        setSingleDeviceError('status');
+        reportHandledFailure("singleDeviceLogin", "statusCheck", requestError);
+      }
+    } finally {
+      if (isCurrentRequest()) {
+        setSingleDeviceLoading(false);
       }
     }
+  }, [sessionEpoch]);
 
+  useEffect(() => {
+    singleDeviceInFlightRef.current = false;
+    setSingleDeviceSubmitting(false);
     void loadSingleDeviceLogin();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => { singleDeviceRequestRef.current += 1; };
+  }, [loadSingleDeviceLogin]);
 
   async function handleSingleDeviceLoginChange(value: boolean) {
-    if (singleDeviceInFlightRef.current) return;
+    if (singleDeviceInFlightRef.current || singleDeviceLoading || singleDeviceError === 'status' || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
 
+    const requestId = singleDeviceRequestRef.current;
+    const isCurrentRequest = () => singleDeviceRequestRef.current === requestId && useAuthStore.getState().sessionEpoch === sessionEpoch;
     const previousValue = singleDeviceLogin;
     singleDeviceInFlightRef.current = true;
     setSingleDeviceLoginValue(value);
     setSingleDeviceSubmitting(true);
+    setSingleDeviceError(null);
     try {
       await setSingleDeviceLogin(value);
     } catch (requestError) {
+      if (!isCurrentRequest()) return;
       setSingleDeviceLoginValue(previousValue);
+      setSingleDeviceError('update');
       reportHandledFailure("singleDeviceLogin", "update", requestError);
     } finally {
-      singleDeviceInFlightRef.current = false;
-      setSingleDeviceSubmitting(false);
+      if (isCurrentRequest()) {
+        singleDeviceInFlightRef.current = false;
+        setSingleDeviceSubmitting(false);
+      }
     }
   }
 
   return (
     <SettingsDetailScreen
       titleKey="settingsDetails.accountSecurity.title"
+      header={singleDeviceError ? (
+        <View style={{ gap: Spacing.sm }}>
+          <Text accessibilityRole="alert" style={{ color: colors.error, ...Typography.body }}>
+            {t(singleDeviceError === 'status'
+              ? 'settingsDetails.accountSecurity.singleDeviceStatusFailed'
+              : 'settingsDetails.accountSecurity.singleDeviceUpdateFailed')}
+          </Text>
+          {singleDeviceError === 'status' ? (
+            <Pressable accessibilityRole="button" onPress={() => void loadSingleDeviceLogin()} style={{ paddingVertical: Spacing.sm }}>
+              <Text style={{ color: colors.primary, ...Typography.body }}>{t('common.retry')}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : undefined}
       sections={[
         {
           titleKey: "settingsDetails.accountSecurity.credentialSection",
@@ -187,7 +223,7 @@ export default function AccountSecuritySettingsScreen() {
               labelKey: "settingsDetails.accountSecurity.singleDeviceLogin",
               type: "toggle",
               value: singleDeviceLogin,
-              disabled: singleDeviceLoading || singleDeviceSubmitting,
+              disabled: singleDeviceLoading || singleDeviceSubmitting || singleDeviceError === 'status',
               onValueChange: handleSingleDeviceLoginChange,
             },
             {
@@ -218,6 +254,7 @@ export default function AccountSecuritySettingsScreen() {
               id: "cancel-account",
               labelKey: "settingsDetails.accountSecurity.cancelAccount",
               destructive: true,
+              onPress: () => router.push('/(tabs)/profile/cancel-account' as never),
             },
           ],
         },

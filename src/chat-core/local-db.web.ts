@@ -12,6 +12,8 @@
  */
 import type { ChatConversationDto, ChatMessageDto } from './protocol';
 
+export const CHAT_DATABASE_DIRECTORY = '';
+
 export async function initChatLocalDb(_userId: string): Promise<boolean> {
   return false;
 }

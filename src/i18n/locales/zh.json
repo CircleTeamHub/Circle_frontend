@@ -2366,7 +2366,9 @@
       "cancelAccount": "注销账号",
       "securityQuestions": "密保问题",
       "securityQuestionsSet": "已设置",
-      "securityQuestionsNotSet": "未设置"
+      "securityQuestionsNotSet": "未设置",
+      "singleDeviceStatusFailed": "无法读取单设备登录状态，请重试",
+      "singleDeviceUpdateFailed": "单设备登录设置保存失败，请重试"
     },
     "notifications": {
       "title": "消息通知",
@@ -2398,7 +2400,16 @@
       "circleOffline": "离线提醒",
       "circleOfflineHint": "APP 离线时是否接收圈子推送",
       "circleRingtone": "圈子通知铃声",
-      "circleDefault": "圈子默认"
+      "circleDefault": "圈子默认",
+      "syncFailed": "群聊推送设置同步失败，请重试",
+      "inAppHint": "仅控制应用内提醒",
+      "systemSettings": "系统通知设置",
+      "systemSettingsHint": "修改后台通知的声音、震动和权限",
+      "ringtones": {
+        "default": "默认",
+        "soft": "轻提示",
+        "bell": "铃声"
+      }
     },
     "autoReply": {
       "title": "私信自动回复",
@@ -2502,7 +2513,9 @@
       "presenceSection": "在线与输入状态",
       "profileVisibilitySection": "资料展示",
       "contactSection": "添加与邀请",
-      "blacklistBlockedAt": "{{date}} 加入黑名单"
+      "blacklistBlockedAt": "{{date}} 加入黑名单",
+      "unavailable": "不可用",
+      "unsupportedHint": "当前服务暂不支持此设置，请更新后重试"
     },
     "permissions": {
       "title": "系统权限管理",
@@ -2516,7 +2529,9 @@
       "authorized": "已授权",
       "unauthorized": "未授权",
       "onlyVisibleAuthorized": "点按某项可申请授权；已经拒绝过的权限，需要前往系统设置开启。",
-      "openSystemSettings": "前往系统设置"
+      "openSystemSettings": "前往系统设置",
+      "browserSettingsHint": "请在浏览器地址栏的站点设置中调整通知、相机和麦克风等权限。",
+      "openSettingsFailed": "无法打开系统设置，请从设备设置中手动打开本应用的权限页面。"
     },
     "storage": {
       "title": "存储与缓存",
@@ -2579,6 +2594,29 @@
       "thirdPartyLicensesDescription": "以下许可与声明随当前版本离线提供，可长按选择和复制文本。",
       "updateTitle": "版本状态",
       "updateBody": "当前版本会持续迭代。新的安全、聊天和圈子能力会优先在系统通知和更新说明里同步。"
+    },
+    "changeEmail": {
+      "title": "修改邮箱",
+      "newEmail": "新邮箱",
+      "password": "当前密码",
+      "code": "新邮箱验证码",
+      "sendCode": "发送验证码",
+      "sendAgain": "{{seconds}} 秒后重发",
+      "sendFailed": "验证码发送失败，请重试",
+      "saveFailed": "邮箱修改失败，请重试",
+      "help": "验证当前密码和新邮箱后修改，成功后需重新登录。",
+      "success": "邮箱已修改，请重新登录",
+      "submit": "确认修改",
+      "invalidCode": "请输入六位数字验证码",
+      "passwordRequired": "请输入当前密码",
+      "sameEmail": "新邮箱不能与当前邮箱相同"
+    },
+    "cancelAccount": {
+      "title": "注销账号",
+      "warning": "注销后将退出所有设备，账号无法继续登录。请先保存需要保留的资料。",
+      "confirmation": "输入当前账号 ID 以确认注销",
+      "action": "确认注销账号",
+      "failed": "注销失败，请重试"
     }
   },
   "appUpdate": {

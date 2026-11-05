@@ -5,6 +5,7 @@ import { updateUserProfile } from '@/services/api/profile';
 
 const mockChangeAvatar = jest.fn();
 const mockSetUser = jest.fn();
+const mockPush = jest.fn();
 let mockAvatarOptions: { submit: (url: string) => Promise<void> };
 let mockField: string | undefined;
 const mockAuth = { user: { id: 'user-a', nickname: 'Ada', avatarUrl: 'https://example.test/a.jpg' }, sessionEpoch: 1, setUser: mockSetUser };
@@ -17,7 +18,7 @@ jest.mock('@/hooks/use-change-avatar', () => ({
 }));
 jest.mock('@/services/api/profile', () => ({ updateUserProfile: jest.fn() }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ field: mockField }) }));
+jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPush(...args) }, useLocalSearchParams: () => ({ field: mockField }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockT }) }));
 jest.mock('@/i18n', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('@/theme', () => ({ ...jest.requireActual('@/theme/tokens'), useTheme: () => ({ colors: {} }) }));
@@ -78,4 +79,16 @@ test('an avatar PATCH response cannot replace the newly logged-in account', asyn
 test('the profile row accessible name includes its current field value', () => {
   render(<SettingsScreen />);
   expect(screen.getByRole('button', { name: 'profileFields.nickname, Ada' })).toBeTruthy();
+});
+
+test('email opens the password and mailbox verification screen', () => {
+  render(<SettingsScreen />);
+  fireEvent.press(screen.getByText('profileFields.email'));
+  expect(mockPush).toHaveBeenCalledWith('/(tabs)/profile/change-email');
+});
+
+test('the legacy email field deep link opens verified email change', () => {
+  mockField = 'email';
+  render(<SettingsScreen />);
+  expect(mockPush).toHaveBeenCalledWith('/(tabs)/profile/change-email');
 });

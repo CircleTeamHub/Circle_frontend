@@ -630,6 +630,17 @@ test('known conversations use their own metadata, not the sender\'s', () => {
   assert.equal(state.banners[0].title, '备注名');
 });
 
+test('temporary group banners use the group preference category and room title', () => {
+  const { socket, state } = loadDispatcher({ conversations: [directConversation({
+    type: 'TEMP', peer: null, circle: null, circleId: null, tempChat: { id: 'temp', title: 'Temporary room' },
+  })] });
+  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
+  assert.equal(state.banners.length, 1);
+  assert.equal(state.banners[0].conversationType, 'group');
+  assert.equal(state.banners[0].title, 'Temporary room');
+  assert.equal(state.banners[0].sourceID, DIRECT_ID);
+});
+
 test('banner avatars go through the media allowlist', () => {
   const { socket, state } = loadDispatcher({
     conversations: [

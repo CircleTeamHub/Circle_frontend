@@ -1,6 +1,6 @@
 import { Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
-// 旧 OpenIM SDK 的本地数据目录(自研 chat 无本地消息库)。升级用户的磁盘上
+// 旧 OpenIM SDK 的本地数据目录。升级用户的磁盘上
 // 可能还留着这份历史数据,统计照旧计入「聊天占用」,并由「清空聊天记录」删除。
 const LEGACY_IM_DATA_DIR_NAME = 'openim';
 
@@ -136,8 +136,8 @@ async function getOpenIMDirectory() {
 }
 
 /**
- * 删除旧 OpenIM SDK 遗留的本地聊天数据目录(自研 chat 的消息在服务端,
- * 本地无库)。目录不存在时是 no-op;失败抛错交由调用方提示。
+ * 删除旧 OpenIM SDK 遗留的本地聊天数据目录。
+ * 目录不存在时是 no-op;失败抛错交由调用方提示。
  */
 export async function clearLegacyImData(): Promise<void> {
   const directory = await getOpenIMDirectory();
@@ -195,6 +195,23 @@ async function getDirectoriesSize(paths: string[]) {
   );
 }
 
+async function getChatDatabaseSize() {
+  if (!canUseNativeFS()) return 0;
+  // The platform entry keeps SQLite's native directory out of the Web bundle.
+  const [{ CHAT_DATABASE_DIRECTORY }, RNFS] = await Promise.all([
+    import('@/chat-core/local-db'),
+    loadNativeFS(),
+  ]);
+  if (!CHAT_DATABASE_DIRECTORY) return 0;
+  const directory = normalizePath(CHAT_DATABASE_DIRECTORY);
+  if (!(await RNFS.exists(directory))) return 0;
+  const entries = await RNFS.readDir(directory);
+  return entries.reduce((total, entry) =>
+    /^chat-core-v1-.+\.db(?:-wal|-shm)?$/.test(basename(entry.path))
+      ? total + (entry.size ?? 0)
+      : total, 0);
+}
+
 async function clearDirectoryContents(directoryPath: string) {
   const normalizedPath = normalizePath(directoryPath);
 
@@ -242,11 +259,14 @@ export async function getAppStorageUsage(): Promise<AppStorageUsage> {
       getTemporaryDirectories(),
     ]);
 
-  const [chatBytes, cacheBytes, temporaryBytes] = await Promise.all([
+  const [legacyChatBytes, cacheBytes, temporaryBytes, databaseSize] = await Promise.all([
     getDirectoriesSize(openIMDirectory ? [openIMDirectory] : []),
     getDirectoriesSize(primaryCacheDirectories),
     getDirectoriesSize(temporaryDirectories),
+    getChatDatabaseSize().catch(() => 0),
   ]);
+
+  const chatBytes = legacyChatBytes + databaseSize;
 
   return {
     chatBytes,

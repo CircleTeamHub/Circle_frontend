@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { AudioPlayer } from 'expo-audio';
-import { useNotificationFeedbackStore } from '@/features/notifications/store/use-notification-feedback-store';
+import { useNotificationFeedbackStore, type NotificationRingtone } from '@/features/notifications/store/use-notification-feedback-store';
 
 // Generated placeholder chime — replace assets/sounds/notification.wav to
 // rebrand without touching code.
-const CHIME = require('../../../../assets/sounds/notification.wav');
+const CHIMES = {
+  default: require('../../../../assets/sounds/notification.wav'),
+  soft: require('../../../../assets/sounds/notification-soft.wav'),
+  bell: require('../../../../assets/sounds/notification-bell.wav'),
+};
 
 // Don't machine-gun the cue when several banners advance in quick succession.
 const MIN_GAP_MS = 1500;
@@ -17,16 +21,18 @@ const MIN_GAP_MS = 1500;
  */
 export function useNotificationFeedback(): (options?: {
   silent?: boolean;
+  kind?: 'message' | 'circle';
 }) => void {
   const playerRef = useRef<AudioPlayer | null>(null);
+  const playerRingtoneRef = useRef<NotificationRingtone | null>(null);
   const audioModuleRef = useRef<typeof import('expo-audio') | null>(null);
   const audioModulePromiseRef = useRef<Promise<typeof import('expo-audio') | null> | null>(null);
   const hapticsModuleRef = useRef<typeof import('expo-haptics') | null>(null);
   const hapticsModulePromiseRef = useRef<Promise<typeof import('expo-haptics') | null> | null>(null);
   const lastFiredRef = useRef(0);
 
-  const ensureNotificationPlayer = useCallback(async function ensureNotificationPlayer() {
-    if (playerRef.current) {
+  const ensureNotificationPlayer = useCallback(async function ensureNotificationPlayer(ringtone: NotificationRingtone) {
+    if (playerRef.current && playerRingtoneRef.current === ringtone) {
       return playerRef.current;
     }
 
@@ -45,8 +51,11 @@ export function useNotificationFeedback(): (options?: {
     }
 
     try {
-      const player = audioModule.createAudioPlayer(CHIME);
+      if (playerRef.current && playerRingtoneRef.current === ringtone) return playerRef.current;
+      playerRef.current?.remove();
+      const player = audioModule.createAudioPlayer(CHIMES[ringtone] ?? CHIMES.default);
       playerRef.current = player;
+      playerRingtoneRef.current = ringtone;
       // Respect the iOS silent switch — never force audio in silent mode.
       void audioModule.setAudioModeAsync({ playsInSilentMode: false }).catch(() => {});
       return player;
@@ -92,12 +101,12 @@ export function useNotificationFeedback(): (options?: {
 
   // silent：调用方已知这条通知不该出声（例如圈子通知的「声音提醒」被关掉）。
   // 震动不受它影响 —— 产品语义是「静音」，不是「无提醒」。
-  return useCallback((options?: { silent?: boolean }) => {
+  return useCallback((options?: { silent?: boolean; kind?: 'message' | 'circle' }) => {
     const now = Date.now();
     if (now - lastFiredRef.current < MIN_GAP_MS) return;
     lastFiredRef.current = now;
 
-    const { soundEnabled, hapticsEnabled } =
+    const { soundEnabled, hapticsEnabled, messageRingtone, circleRingtone } =
       useNotificationFeedbackStore.getState();
 
     if (hapticsEnabled) {
@@ -105,7 +114,8 @@ export function useNotificationFeedback(): (options?: {
     }
 
     if (soundEnabled && !options?.silent) {
-      void ensureNotificationPlayer().then((player) => {
+      const ringtone = (options?.kind === 'circle' ? circleRingtone : messageRingtone) ?? 'default';
+      void ensureNotificationPlayer(ringtone).then((player) => {
         if (!player) return;
 
         try {

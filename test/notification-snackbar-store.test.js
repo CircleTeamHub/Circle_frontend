@@ -5,7 +5,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
 
-function load(rel) {
+function load(rel, settings = {}) {
   const filePath = path.join(process.cwd(), rel);
   const source = fs.readFileSync(filePath, "utf8");
   const transpiled = ts.transpileModule(source, {
@@ -20,7 +20,9 @@ function load(rel) {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: (s) => (s.startsWith("@/") ? {} : require(s)),
+    require: (s) => s === '@/features/profile/store/use-app-settings-store'
+      ? { useAppSettingsStore: { getState: () => ({ settings: { friendRequestNotifications: true, groupRequestNotifications: true, groupGlobalPush: true, groupOnlinePush: true, ...settings } }) } }
+      : (s.startsWith("@/") ? {} : require(s)),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });
@@ -40,6 +42,41 @@ const notification = {
   fromCirclePost: null,
   fromInvitation: null,
 };
+
+test('disabled request reminders never enter the banner queue', () => {
+  const { useNotificationSnackbarStore } = load('src/features/notifications/store/use-notification-snackbar-store.ts', { friendRequestNotifications: false, groupRequestNotifications: false });
+  const store = useNotificationSnackbarStore.getState();
+  for (const type of ['FRIEND_REQUEST_RECEIVED', 'FRIEND_REQUEST_MESSAGE', 'GROUP_ADMISSION', 'CIRCLE_VERIFICATION_REQUESTED']) {
+    store.enqueueNotification({ ...notification, id: type, type });
+  }
+  assert.equal(useNotificationSnackbarStore.getState().queue.length, 0);
+  store.enqueueNotification(notification);
+  assert.equal(useNotificationSnackbarStore.getState().current.id, notification.id);
+});
+
+test('group banners obey both switches while private chat remains available', () => {
+  for (const settings of [{ groupGlobalPush: false }, { groupOnlinePush: false }]) {
+    const { useNotificationSnackbarStore } = load('src/features/notifications/store/use-notification-snackbar-store.ts', settings);
+    const store = useNotificationSnackbarStore.getState();
+    const message = { id: 'group', title: 'group', summary: 'text', avatarUrl: null, conversationID: 'c', sourceID: 'c', conversationType: 'group' };
+    store.enqueueChatMessage(message);
+    assert.equal(useNotificationSnackbarStore.getState().current, null);
+    store.enqueueChatMessage({ ...message, id: 'private', conversationType: 'private' });
+    assert.equal(useNotificationSnackbarStore.getState().current.id, 'private');
+  }
+});
+
+test('disabling reminders removes already queued banners and preserves other kinds', () => {
+  const preferences = { friendRequestNotifications: true };
+  const { useNotificationSnackbarStore } = load('src/features/notifications/store/use-notification-snackbar-store.ts', preferences);
+  const store = useNotificationSnackbarStore.getState();
+  store.enqueueNotification({ ...notification, id: 'friend', type: 'FRIEND_REQUEST_RECEIVED' });
+  store.enqueueNotification(notification);
+  preferences.friendRequestNotifications = false;
+  store.pruneDisabled();
+  assert.equal(useNotificationSnackbarStore.getState().queue.length, 1);
+  assert.equal(useNotificationSnackbarStore.getState().current.id, notification.id);
+});
 
 test("notification snackbar store queues and deduplicates notifications", () => {
   const { useNotificationSnackbarStore } = load(

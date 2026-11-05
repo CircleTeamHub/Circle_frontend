@@ -252,7 +252,7 @@ test('三档 store 的形状与每一档的落点', () => {
   assert.match(client, /circleBannerAllowed/);
   assert.match(client, /gateCircleUnread/);
   assert.match(snackbar, /circleSoundAllowed/);
-  assert.match(snackbar, /notify\(\{ silent \}\)/);
+  assert.match(snackbar, /notify\(\{\s*silent(?:,|\s*\})/);
   assert.match(toggles, /useCircleNotificationTiers/);
   const hook = read(
     'src/features/discover/hooks/use-circle-notification-tiers.ts',

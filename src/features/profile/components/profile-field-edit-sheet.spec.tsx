@@ -3,9 +3,12 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import { ProfileFieldEditSheet } from './profile-field-edit-sheet';
 import { updateUserProfile } from '@/services/api/profile';
 
+const mockSetUser = jest.fn();
+let mockSessionEpoch = 1;
+
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: () => 'failed' }));
 jest.mock('@/services/api/profile', () => ({ updateUserProfile: jest.fn() }));
-jest.mock('@/stores/authStore', () => ({ useAuthStore: (select: (s: unknown) => unknown) => select({ user: { id: 'u', gender: '男' }, setUser: jest.fn() }) }));
+jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign((select: (s: unknown) => unknown) => select({ user: { id: 'u', gender: '男' }, setUser: mockSetUser }), { getState: () => ({ sessionEpoch: mockSessionEpoch }) }) }));
 jest.mock('@/theme', () => ({ Radius: { lg: 12 }, Spacing: { md: 12, lg: 16 }, Typography: { body: {} }, useTheme: () => ({ colors: {} }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/i18n', () => ({ __esModule: true, default: { t: (key: string) => key } }));
@@ -23,4 +26,18 @@ test('two gender taps in one render submit only one update', () => {
     fireEvent.press(ui.getByText('profileFields.female'));
   });
   expect(updateUserProfile).toHaveBeenCalledTimes(1);
+});
+
+test.each([false, true])('a save cannot update the next session (editor unmounted: %s)', async (unmount) => {
+  mockSetUser.mockClear();
+  let resolve!: (user: never) => void;
+  jest.mocked(updateUserProfile).mockReturnValue(new Promise((done) => { resolve = done; }));
+  const onClose = jest.fn();
+  const ui = render(<ProfileFieldEditSheet fieldId="gender" onClose={onClose} />);
+  fireEvent.press(ui.getByText('profileFields.male'));
+  if (unmount) ui.unmount();
+  mockSessionEpoch += 1;
+  await act(async () => { resolve({ id: 'u', gender: '男' } as never); });
+  expect(mockSetUser).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
 });

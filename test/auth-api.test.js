@@ -109,6 +109,19 @@ test("changePassword posts old and new password to the auth endpoint", async () 
   ]);
 });
 
+test("account settings use authenticated endpoints with normal expired-token recovery", async () => {
+  const calls = [];
+  const { requestEmailChange, changeEmail, deleteAccount } = loadAuthApi(async (endpoint, options) => { calls.push({ endpoint, options }); });
+  await requestEmailChange({ email: " New@Example.com ", password: " password " });
+  await changeEmail({ email: " New@Example.com ", password: " password ", code: " 123456 " });
+  await deleteAccount("user/a");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    { endpoint: "/auth/email/change-request", options: { method: "POST", body: { email: "new@example.com", password: " password " } } },
+    { endpoint: "/auth/email/change", options: { method: "POST", body: { email: "new@example.com", password: " password ", code: "123456" } } },
+    { endpoint: "/user/user%2Fa", options: { method: "DELETE" } },
+  ]);
+});
+
 test("fetchLoginSecurityCodeStatus gets the account-level security code status", async () => {
   const calls = [];
   const apiClientMock = async (endpoint, options) => {

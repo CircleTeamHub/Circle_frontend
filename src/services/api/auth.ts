@@ -468,6 +468,26 @@ export async function changePassword(payload: {
   });
 }
 
+export async function requestEmailChange(payload: { email: string; password: string }) {
+  return apiClient<void>("/auth/email/change-request", {
+    method: "POST",
+    body: { email: payload.email.trim().toLowerCase(), password: payload.password },
+  });
+}
+
+export async function changeEmail(payload: { email: string; password: string; code: string }) {
+  return apiClient<void>("/auth/email/change", {
+    method: "POST",
+    body: { email: payload.email.trim().toLowerCase(), password: payload.password, code: payload.code.trim() },
+  });
+}
+
+export async function deleteAccount(userId: string) {
+  return apiClient<void>(`/user/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+  });
+}
+
 export type LoginSecurityCodeStatus = {
   enabled: boolean;
 };

@@ -37,6 +37,10 @@ function loadCacheModule(rnfsMock) {
         };
       }
 
+      if (request === '@/chat-core/local-db') {
+        return { CHAT_DATABASE_DIRECTORY: '/app/documents/SQLite' };
+      }
+
       if (request === 'react-native') {
         // clear-app-cache 只用 Platform.OS 判断是否走原生 FS 路径；
         // 这些用例都覆盖原生平台，所以 mock 成 'ios'。
@@ -62,6 +66,12 @@ function loadCacheModule(rnfsMock) {
   vm.runInNewContext(transpiled, context, { filename: filePath });
   return context.module.exports;
 }
+
+test('storage statistics keep SQLite out of the shared web dependency graph', () => {
+  const source = fs.readFileSync('src/services/cache/clear-app-cache.ts', 'utf8');
+  // Metro resolves dynamic imports even when a native-only runtime guard skips them.
+  assert.doesNotMatch(source, /['"]expo-sqlite['"]/);
+});
 
 test('clearAppCache removes cache directory contents without clearing persistent storage', async () => {
   const calls = [];
@@ -237,4 +247,24 @@ test('getAppStorageUsage separates chat storage from cache storage', async () =>
     temporaryBytes: 3_072,
     totalBytes: 4_199_424,
   });
+});
+
+test('chat usage includes current SQLite databases and sidecars when OpenIM is absent', async () => {
+  const rnfsMock = {
+    DocumentDirectoryPath: '/app/documents',
+    CachesDirectoryPath: '/app/cache',
+    TemporaryDirectoryPath: '/app/tmp',
+    exists: async (target) => target === '/app/documents/SQLite',
+    readDir: async () => [
+      { path: '/app/documents/SQLite/chat-core-v1-a.db', size: 100 },
+      { path: '/app/documents/SQLite/chat-core-v1-a.db-wal', size: 30 },
+      { path: '/app/documents/SQLite/chat-core-v1-a.db-shm', size: 20 },
+      { path: '/app/documents/SQLite/chat-core-v1-b.db', size: 80 },
+      { path: '/app/documents/SQLite/another.db', size: 500 },
+    ],
+  };
+  const { getAppStorageUsage } = loadCacheModule(rnfsMock);
+  const usage = await getAppStorageUsage();
+  assert.equal(usage.chatBytes, 230);
+  assert.equal(usage.totalBytes, 230);
 });
