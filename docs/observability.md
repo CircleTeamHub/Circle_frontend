@@ -37,7 +37,7 @@ HTTP 成功不等于客户端已拿到可用凭证。该分支不再构造虚假
 
 每次 HTTP 尝试保留发出的 `clientRequestId` 和响应返回的 `requestId`。正常情况下后端回显当前尝试的 ID；没有有效响应头时，`requestId` 仅回落为客户端生成的 ID，不能当作响应重放的证据。仅当原 401 和续期后重试的 401 都带有有效、大小写归一化后相同的服务器 UUID，客户端才记录 `auth-retry-response-replayed`，保留已取得的完整凭证，不设置 `refreshUncertain`。对业务调用抛出 status 0 的固定响应异常；实际 HTTP 401 保存在档案和 Sentry 上下文中。默认 retry 工具不重试这种错误，避免再次发起续期或重复写操作。新的、不同 ID 的 401，以及响应 ID 缺失/无效时，保留原有拒绝处理。
 
-2026-11-05 的预生产 Android 样本中，`session/forcedLogout` 指向 `/auth/login-challenges` 的 `request-rejected-after-refresh`；该响应 ID 对应后端续期完成前的 401，同账号的续期为 201、后继会话未撤销。实际 APK 字节码确认 ID 来自重试响应，排除了埋点填错字段。这能定位到客户端将旧响应当成新凭证失效并清理会话的判定缺陷；旧响应在哪一层被复用仍缺证据，不能据此断言为 Android/代理缓存，也不能将此样本解释为此前所有设备统一退出的共同根因。
+2026-11-05 的预生产 Android 样本中，`session/forcedLogout` 指向 `/auth/login-challenges` 的 `request-rejected-after-refresh`，实际 APK 字节码确认所记 ID 来自重试响应。源站存在该 ID 的 401，随后同账号另有一次 201 续期且后继会话未撤销。但是旧事件没有初次请求和续期请求的 ID，不能证明这条 201 与退出属于同一次续期链路，也不能证明旧响应实际被复用。已确认的是重试 401 清理分支和未解释的时间顺序。重复响应保护有合成回归用例；历史事故尚未复现，Android/代理缓存及此前所有设备统一退出的共同根因仍未确认。
 
 Sentry 设置 `normalizeDepth=4`，使 `extra.clientDiagnostics[].details` 在 SDK 归一化之后仍为对象，再由 `beforeSend` 白名单过滤。默认深度 3 会先把该字段变成 `[Object]`，造成请求详情丢失。测试按真实 SDK 的归一化、隐私过滤和去重顺序运行，并检查凭证、设备标识和正文不会进入事件。
 
