@@ -197,13 +197,13 @@ async function getDirectoriesSize(paths: string[]) {
 
 async function getChatDatabaseSize() {
   if (!canUseNativeFS()) return 0;
-  // Use SQLite's native directory: Documents/SQLite on iOS, files/SQLite on Android.
-  const [{ defaultDatabaseDirectory }, RNFS] = await Promise.all([
-    import('expo-sqlite'),
+  // The platform entry keeps SQLite's native directory out of the Web bundle.
+  const [{ CHAT_DATABASE_DIRECTORY }, RNFS] = await Promise.all([
+    import('@/chat-core/local-db'),
     loadNativeFS(),
   ]);
-  if (!defaultDatabaseDirectory) return 0;
-  const directory = normalizePath(defaultDatabaseDirectory);
+  if (!CHAT_DATABASE_DIRECTORY) return 0;
+  const directory = normalizePath(CHAT_DATABASE_DIRECTORY);
   if (!(await RNFS.exists(directory))) return 0;
   const entries = await RNFS.readDir(directory);
   return entries.reduce((total, entry) =>
