@@ -17,6 +17,8 @@ export class ApiError extends Error {
   durationMs?: number;
   // 后端稳定错误码(如 AUTH_INVALID_CREDENTIALS);前端据此做 i18n 映射,缺失回落 message。
   errorCode?: string;
+  // 传输层失败（status 0）时「卡在哪一步」的枚举与计数，随上报离开设备；只放无用户内容的值。
+  diagnostics?: Readonly<Record<string, string | number | boolean>>;
 
   constructor(
     message: string,
