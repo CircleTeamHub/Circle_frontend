@@ -150,6 +150,9 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // 对 IM 产品，「消息发送慢」到底慢在哪一段就无法回答。5% 足够看趋势，
       // 又把 Sentry 配额消耗控制在可预期范围内。
       tracesSampleRate,
+      // extra.clientDiagnostics[].details must reach beforeSend as an object.
+      // The SDK's default depth (3) collapses it before our privacy whitelist.
+      normalizeDepth: 4,
       integrations: (defaults: Integration[]) => [
         ...defaults.map((integration): Integration => {
           const processEvent = integration.processEvent;
@@ -159,7 +162,7 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
             processEvent(event, hint, client) {
               // Each auth incident needs its own request correlation,
               // even when re-login is followed by the same failure in this process.
-              if (event.tags?.operation === 'session' && ['forcedLogout', 'refreshResponseInvalid'].includes(String(event.tags?.kind))) {
+              if (event.tags?.operation === 'session' && ['forcedLogout', 'refreshResponseInvalid', 'authRetryResponseReplayed'].includes(String(event.tags?.kind))) {
                 return event;
               }
               return processEvent(event, hint, client);
@@ -311,6 +314,8 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'reason',
   'traceId',
   'requestId',
+  'clientRequestId',
+  'initialRequestId',
   'durationMs',
   'page',
   'diagnosticId',
@@ -336,6 +341,8 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'kind',
   'traceId',
   'requestId',
+  'clientRequestId',
+  'initialRequestId',
   'code',
   'storageCode',
 ]);
@@ -363,6 +370,7 @@ const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'status',
   'durationMs',
   'requestId',
+  'clientRequestId',
   'failureKind',
 ]);
 
@@ -516,7 +524,7 @@ function sanitizeReportContext(
     ) {
       continue;
     }
-    if ((key === 'requestId' || key === 'diagnosticId') && (typeof value !== 'string' || !SAFE_REQUEST_ID.test(value))) {
+    if (['requestId', 'clientRequestId', 'initialRequestId', 'diagnosticId'].includes(key) && (typeof value !== 'string' || !SAFE_REQUEST_ID.test(value))) {
       continue;
     }
     if (key === 'durationMs' && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
@@ -630,7 +638,7 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
     ) {
       continue;
     }
-    if ((key === 'requestId' || key === 'diagnosticId') && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
+    if (['requestId', 'clientRequestId', 'initialRequestId', 'diagnosticId'].includes(key) && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
       continue;
     }
     if (!isSafeReportField(key, child)) continue;
@@ -678,7 +686,7 @@ function sanitizeClientDiagnostics(value: unknown): unknown[] | undefined {
 }
 
 function isSafeDiagnosticDetail(key: string, value: unknown): boolean {
-  if (key === 'requestId') return typeof value === 'string' && SAFE_REQUEST_ID.test(value);
+  if (key === 'requestId' || key === 'clientRequestId') return typeof value === 'string' && SAFE_REQUEST_ID.test(value);
   if (key === 'durationMs') return typeof value === 'number' && Number.isFinite(value) && value >= 0;
   if (key === 'status') return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 599;
   if (key === 'method') return typeof value === 'string' && /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(value);
@@ -1148,6 +1156,8 @@ function buildCaptureContext(
     'kind',
     'traceId',
     'requestId',
+    'clientRequestId',
+    'initialRequestId',
     'code',
     'storageCode',
   ];

@@ -14,6 +14,7 @@ export class ApiError extends Error {
   reportEndpoint?: string;
   reportMethod?: string;
   requestId?: string;
+  clientRequestId?: string;
   durationMs?: number;
   // Actual HTTP headers received, even if reading the body later failed.
   responseStatus?: number;
@@ -31,6 +32,7 @@ export class ApiError extends Error {
       reportMethod,
       errorCode,
       requestId,
+      clientRequestId,
       durationMs,
     }: {
       status: number;
@@ -41,6 +43,7 @@ export class ApiError extends Error {
       reportMethod?: string;
       errorCode?: string;
       requestId?: string;
+      clientRequestId?: string;
       durationMs?: number;
     }
   ) {
@@ -54,6 +57,7 @@ export class ApiError extends Error {
     this.reportMethod = reportMethod;
     this.errorCode = errorCode;
     this.requestId = requestId;
+    this.clientRequestId = clientRequestId;
     this.durationMs = durationMs;
   }
 }

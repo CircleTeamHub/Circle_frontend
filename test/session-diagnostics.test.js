@@ -61,6 +61,25 @@ test('preserved-session refresh anomalies retain safe response metadata across r
   assert.equal(restored.context.status, 201);
 });
 
+test('replayed auth response correlation survives restart without admitting arbitrary identifiers', async () => {
+  const disk = new Map();
+  const journal = loadJournal({ disk });
+  const initialRequestId = '12345678-1234-4234-8234-123456789abc';
+  const clientRequestId = '87654321-4321-4321-8321-cba987654321';
+  journal.recordSessionDiagnostic('auth-retry-response-replayed', {
+    requestId: initialRequestId, initialRequestId, clientRequestId,
+    failureKind: 'auth-retry-response-replayed', status: 401, sessionPreserved: true,
+  });
+  await journal.readSessionDiagnostics();
+  const [restored] = await loadJournal({ disk }).readSessionDiagnostics();
+  assert.equal(restored.reason, 'auth-retry-response-replayed');
+  assert.equal(restored.context.initialRequestId, initialRequestId);
+  assert.equal(restored.context.clientRequestId, clientRequestId);
+  const bad = loadJournal();
+  bad.recordSessionDiagnostic('auth-retry-response-replayed', { clientRequestId: 'PRIVATE_CANARY', initialRequestId: 'PRIVATE_CANARY' });
+  assert.doesNotMatch(JSON.stringify(await bad.readSessionDiagnostics()), /PRIVATE_CANARY/);
+});
+
 test('journal never keeps arbitrary strings, credentials, raw routes or account identifiers', async () => {
   const disk = new Map();
   const secret = 'PRIVATE_CANARY';

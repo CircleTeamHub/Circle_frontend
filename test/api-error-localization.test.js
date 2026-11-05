@@ -23,6 +23,7 @@ const I18N = {
         'common.errors.requestTimeout': 'Request timed out. Please try again.',
         'common.errors.networkUnavailable': 'Check your connection and try again.',
         'common.errors.refreshResponseInvalid': 'Please sign in again to restore your session.',
+        'common.errors.invalidServerResponse': 'Invalid server response. Please try again.',
         'common.errors.uploadFailed': 'Upload failed. Please try again later.',
         'serverErrors.MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED':
           "You've reached your membership tier's joined-circle limit",
@@ -125,6 +126,13 @@ test('an uncertain refresh gives safe sign-in guidance at the original and block
     error.failureKind = 'refresh-response-invalid';
     assert.equal(getApiErrorMessage(error, 'fallback'), 'Please sign in again to restore your session.');
   }
+});
+
+test('a replayed auth response uses trusted retry guidance without asking for another login', () => {
+  const error = new FakeApiError('PRIVATE_RESPONSE');
+  error.status = 0;
+  error.failureKind = 'auth-retry-response-replayed';
+  assert.equal(getApiErrorMessage(error, 'fallback'), 'Invalid server response. Please try again.');
 });
 
 test('maps a known errorCode to its localized serverErrors string', () => {

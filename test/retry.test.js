@@ -69,6 +69,15 @@ test('retry does not replay operations after an uncertain refresh requiring fres
   }
 });
 
+test('retry does not repeat an operation after detecting a replayed auth response', async () => {
+  const { retry, FakeApiError } = loadRetryModule();
+  let calls = 0;
+  const error = new FakeApiError('response replayed', 0);
+  error.failureKind = 'auth-retry-response-replayed';
+  await assert.rejects(retry(async () => { calls += 1; throw error; }, { backoffMs: 0 }), e => e === error);
+  assert.equal(calls, 1);
+});
+
 test('retry retries once on a transient network-style error and succeeds', async () => {
   const { retry } = loadRetryModule();
   let calls = 0;

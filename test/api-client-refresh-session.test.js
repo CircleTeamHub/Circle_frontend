@@ -14,11 +14,12 @@ function deferred() {
   return { promise, resolve };
 }
 
-function response(ok, status, body) {
+function response(ok, status, body, requestId) {
   return {
     ok,
     status,
     text: async () => JSON.stringify(body),
+    ...(requestId ? { headers: { get: name => name.toLowerCase() === 'x-request-id' ? requestId : null } } : {}),
   };
 }
 
@@ -663,6 +664,108 @@ test('a request rejected after a successful refresh retains the retry request id
   assert.equal(details?.endpointPath, '/auth/me');
   assert.equal(details?.status, 401);
   assert.equal(details?.requestId, harness.fetchCalls[2][1].headers['X-Request-Id']);
+});
+
+test('a replayed pre-refresh response cannot invalidate newly rotated credentials', async () => {
+  const h = loadApiClientHarness();
+  const id = '12345678-1234-4234-8234-123456789abc';
+  const old = response(false, 401, { code: 1, message: 'PRIVATE_RESPONSE', data: null }, id);
+  h.requestResponses.push({ promise: Promise.resolve(old) }, { promise: Promise.resolve(
+    response(false, 401, { code: 1, message: 'PRIVATE_RESPONSE', data: null }, id.toUpperCase()),
+  ) });
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, {
+    code: 0, message: 'ok', data: { accessToken: 'fresh-access', refreshToken: 'fresh-refresh' },
+  })) });
+  await assert.rejects(h.apiClient('/auth/login-challenges'), error => {
+    assert.equal(error.status, 0);
+    assert.equal(error.failureKind, 'auth-retry-response-replayed');
+    return true;
+  });
+  assert.equal(h.getClearCalls(), 0);
+  assert.equal(h.authState.isAuthenticated, true);
+  assert.equal(h.authState.accessToken, 'fresh-access');
+  assert.equal(h.authState.refreshToken, 'fresh-refresh');
+  assert.equal(h.authState.refreshUncertain, false, 'rotation completed with a complete credential pair');
+  assert.equal(h.diagnostics.length, 1);
+  assert.equal(h.reports.length, 1);
+  assert.equal(h.diagnostics[0].reason, 'auth-retry-response-replayed');
+  const context = h.diagnostics[0].context;
+  assert.equal(context.sessionPreserved, true);
+  assert.equal(context.status, 401);
+  assert.equal(context.initialRequestId, id);
+  assert.equal(context.requestId, id);
+  assert.equal(context.clientRequestId, h.fetchCalls[2][1].headers['X-Request-Id']);
+  assert.notEqual(context.clientRequestId, id);
+  assert.equal(h.reports[0].context.kind, 'authRetryResponseReplayed');
+  assert.equal(h.reports[0].context.diagnosticId, '12345678-1234-4234-8234-123456789def');
+  assert.doesNotMatch(JSON.stringify(h.diagnostics) + JSON.stringify(h.reports), /PRIVATE_RESPONSE|fresh-access|fresh-refresh/);
+  h.requestResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) });
+  assert.equal((await h.apiClient('/auth/me')).ok, true);
+  assert.equal(h.fetchCalls.filter(([url]) => url.endsWith('/auth/refresh')).length, 1);
+});
+
+test('a fresh, distinct 401 after rotation still clears a rejected session', async () => {
+  const h = loadApiClientHarness();
+  h.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, null, '12345678-1234-4234-8234-123456789abc')) },
+    { promise: Promise.resolve(response(false, 401, null, '87654321-4321-4321-8321-cba987654321')) },
+  );
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, {
+    code: 0, message: 'ok', data: { accessToken: 'fresh-access', refreshToken: 'fresh-refresh' },
+  })) });
+  await assert.rejects(h.apiClient('/auth/me'));
+  assert.equal(h.getClearCalls(), 1);
+  assert.equal(h.getClearOptions()[0].requestId, '87654321-4321-4321-8321-cba987654321');
+});
+
+test('missing or invalid server correlation never counts as proof of a replay', async () => {
+  const validId = '12345678-1234-4234-8234-123456789abc';
+  for (const [initialId, retryId] of [[undefined, undefined], [validId, undefined], [undefined, validId], ['not-a-uuid', 'not-a-uuid']]) {
+    const h = loadApiClientHarness();
+    h.requestResponses.push(
+      { promise: Promise.resolve(response(false, 401, null, initialId)) },
+      { promise: Promise.resolve(response(false, 401, null, retryId)) },
+    );
+    h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, {
+      code: 0, message: 'ok', data: { accessToken: 'fresh-access', refreshToken: 'fresh-refresh' },
+    })) });
+    await assert.rejects(h.apiClient('/auth/me'));
+    assert.equal(h.getClearCalls(), 1);
+    assert.equal(h.getClearOptions()[0].failureKind, 'auth-retry-failed');
+    assert.equal(h.reports.length, 0);
+  }
+});
+
+test('a late replayed response cannot report or clear a newer login', async () => {
+  const h = loadApiClientHarness();
+  const id = '12345678-1234-4234-8234-123456789abc';
+  const pending = deferred();
+  h.requestResponses.push({ promise: Promise.resolve(response(false, 401, null, id)) }, pending);
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, {
+    code: 0, message: 'ok', data: { accessToken: 'fresh-access', refreshToken: 'fresh-refresh' },
+  })) });
+  const request = h.apiClient('/auth/me');
+  await waitFor(() => h.fetchCalls.length === 3);
+  h.authState.sessionEpoch += 1;
+  h.authState.setTokens({ accessToken: 'new-login-access', refreshToken: 'new-login-refresh' });
+  pending.resolve(response(false, 401, null, id));
+  await assert.rejects(request, error => error.failureKind === 'session-changed');
+  assert.equal(h.authState.accessToken, 'new-login-access');
+  assert.equal(h.getClearCalls(), 0);
+  assert.equal(h.reports.length, 0);
+  assert.equal(h.diagnostics.length, 0);
+});
+
+test('a replayed auth response never adds another attempt for a business POST', async () => {
+  const h = loadApiClientHarness();
+  const old = response(false, 401, null, '12345678-1234-4234-8234-123456789abc');
+  h.requestResponses.push({ promise: Promise.resolve(old) }, { promise: Promise.resolve(old) });
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, {
+    code: 0, message: 'ok', data: { accessToken: 'fresh-access', refreshToken: 'fresh-refresh' },
+  })) });
+  await assert.rejects(h.apiClient('/wallet/transfer', { method: 'POST', body: { amount: 1 } }), error => error.failureKind === 'auth-retry-response-replayed');
+  assert.equal(h.fetchCalls.length, 3);
+  assert.equal(h.getClearCalls(), 0);
 });
 
 test('isDefinitiveAuthFailure only treats a server auth verdict as a logout signal', () => {

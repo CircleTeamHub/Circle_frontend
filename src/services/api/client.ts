@@ -301,7 +301,9 @@ async function executeRequest<T>(
     (auth ? useAuthStore.getState().accessToken : null);
   const url = `${API_URL}${endpoint}`;
   const diagnosticSessionEpoch = useAuthStore.getState().sessionEpoch;
-  let requestId = createHttpRequestId();
+  const clientRequestId = createHttpRequestId();
+  let requestId = clientRequestId;
+  let responseRequestId: string | undefined;
   const startedAt = diagnosticNow();
   let status = 0;
   let failureKind: string | undefined;
@@ -385,7 +387,8 @@ async function executeRequest<T>(
 
     status = res.status;
     try {
-      requestId = safeHttpRequestId(res.headers?.get('X-Request-Id')) ?? requestId;
+      responseRequestId = safeHttpRequestId(res.headers?.get('X-Request-Id'));
+      requestId = responseRequestId ?? clientRequestId;
     } catch {
       // Keep locally generated correlation if a response/header shim misbehaves.
     }
@@ -396,7 +399,7 @@ async function executeRequest<T>(
     );
     if (!res.ok) failureKind = 'http';
     else if (isWrappedResponse(payload) && payload.code !== 0) failureKind = 'api-code';
-    return { res, payload, requestId, durationMs: Math.max(0, Math.round(diagnosticNow() - startedAt)) };
+    return { res, payload, requestId, clientRequestId, responseRequestId, durationMs: Math.max(0, Math.round(diagnosticNow() - startedAt)) };
   } catch (error) {
     if (error instanceof ApiError) {
       failure = error;
@@ -412,9 +415,10 @@ async function executeRequest<T>(
     const durationMs = Math.max(0, Math.round(diagnosticNow() - startedAt));
     if (failure) {
       failure.requestId = requestId;
+      failure.clientRequestId = clientRequestId;
       failure.durationMs = durationMs;
     }
-    const details = { endpointPath, method: diagnosticMethod, status, requestId, durationMs, failureKind };
+    const details = { endpointPath, method: diagnosticMethod, status, requestId, clientRequestId, durationMs, failureKind };
     logApiEvent('complete', details);
     try {
       if (useAuthStore.getState().sessionEpoch === diagnosticSessionEpoch) {
@@ -429,7 +433,7 @@ async function executeRequest<T>(
 function unwrapResponse<T>(
   res: Response,
   payload: ApiResponse<T> | null,
-  reportContext?: { endpoint: string; method: string; requestId?: string; durationMs?: number }
+  reportContext?: { endpoint: string; method: string; requestId?: string; clientRequestId?: string; durationMs?: number }
 ): T {
   if (!res.ok) {
     throw new ApiError(
@@ -446,6 +450,7 @@ function unwrapResponse<T>(
         reportEndpoint: reportContext?.endpoint,
         reportMethod: reportContext?.method,
         requestId: reportContext?.requestId,
+        clientRequestId: reportContext?.clientRequestId,
         durationMs: reportContext?.durationMs,
         errorCode: (payload as { errorCode?: string } | null)?.errorCode,
       }
@@ -465,6 +470,7 @@ function unwrapResponse<T>(
           reportEndpoint: reportContext?.endpoint,
           reportMethod: reportContext?.method,
           requestId: reportContext?.requestId,
+          clientRequestId: reportContext?.clientRequestId,
           durationMs: reportContext?.durationMs,
           errorCode: payload.errorCode,
         }
@@ -509,7 +515,7 @@ async function refreshAccessToken(sessionEpoch: number) {
     }
 
     const stableDeviceId = await readStableDeviceId();
-    const { res, payload, requestId, durationMs } = await executeRequest<{
+    const { res, payload, requestId, clientRequestId, durationMs } = await executeRequest<{
       accessToken: string;
       refreshToken: string;
     }>(
@@ -529,6 +535,7 @@ async function refreshAccessToken(sessionEpoch: number) {
       endpoint: '/auth/refresh',
       method: 'POST',
       requestId,
+      clientRequestId,
       durationMs,
     });
 
@@ -553,6 +560,7 @@ async function refreshAccessToken(sessionEpoch: number) {
           reportEndpoint: '/auth/refresh',
           reportMethod: 'POST',
           requestId,
+          clientRequestId,
           durationMs,
         }
       );
@@ -575,7 +583,7 @@ async function refreshAccessToken(sessionEpoch: number) {
         const persistence = state.markRefreshUncertain();
         const context: SessionDiagnosticContext = {
           endpointPath: '/auth/refresh', method: 'POST', status: responseStatus,
-          requestId: error.requestId, durationMs: error.durationMs, failureKind: error.failureKind,
+          requestId: error.requestId, clientRequestId: error.clientRequestId, durationMs: error.durationMs, failureKind: error.failureKind,
           responseShape: 'unknown', ...refreshResponseDetails,
           authenticated: state.isAuthenticated, hasAccessToken: Boolean(state.accessToken),
           hasRefreshToken: Boolean(state.refreshToken), sessionPreserved: true,
@@ -595,7 +603,7 @@ async function refreshAccessToken(sessionEpoch: number) {
         throw new ApiError(
           i18n.t('common.errors.refreshResponseInvalid', { defaultValue: '暂时无法更新登录状态，请重新登录后再试' }),
           { status: responseStatus, failureKind: 'refresh-response-invalid',
-            reportEndpoint: '/auth/refresh', reportMethod: 'POST', requestId: error.requestId, durationMs: error.durationMs },
+            reportEndpoint: '/auth/refresh', reportMethod: 'POST', requestId: error.requestId, clientRequestId: error.clientRequestId, durationMs: error.durationMs },
         );
       }
       // 只有服务端明确否认 refresh token 时才清 session。网络 / 超时 / 5xx 一律原样抛出：
@@ -610,6 +618,7 @@ async function refreshAccessToken(sessionEpoch: number) {
           method: 'POST',
           status: refreshResponseStatus ?? error.status,
           requestId: error.requestId,
+          clientRequestId: error.clientRequestId,
           failureKind: error.failureKind,
           ...refreshResponseDetails,
         });
@@ -641,8 +650,8 @@ export function refreshSessionAccessToken(): Promise<string> {
 }
 
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
-  // Captured once at the refresh boundary; blocked attempts add no new evidence.
-  if (error instanceof ApiError && error.failureKind === 'refresh-response-invalid') return false;
+  // Auth anomalies are captured once at their decision boundary.
+  if (error instanceof ApiError && ['refresh-response-invalid', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
     return true;
   }
@@ -678,17 +687,42 @@ export async function apiClient<T>(
 
       if (retryRequest.res.status === 401 &&
         (retryRequest.payload as { errorCode?: string } | null)?.errorCode !== 'AUTH_PASSWORD_INCORRECT') {
-        // 刷新成功、刚签发的 accessToken 却仍被拒 —— 服务端已明确否认当前会话
-        // （改密码全端下线 / 会话被撤销等）。旧行为是让裸 ApiError 逃逸成一条
-        // 通用报错；这里改为清 session（幂等，epoch 守卫防止误伤新会话）并抛出
-        // 带 failureKind 的「请重新登录」，让用户落在干净的登录页而不是报错弹窗。
         assertSessionEpoch(requestSessionEpoch);
+        // An old response cannot establish that newly issued credentials failed.
+        // Compare actual server UUIDs, never the generated fallback correlation.
+        if (initialRequest.responseRequestId && initialRequest.responseRequestId === retryRequest.responseRequestId) {
+          const state = useAuthStore.getState();
+          const context: SessionDiagnosticContext = {
+            endpointPath: safeHttpEndpoint(endpoint), method: options.method ?? 'GET',
+            status: 401, failureKind: 'auth-retry-response-replayed',
+            initialRequestId: initialRequest.responseRequestId,
+            requestId: retryRequest.requestId, clientRequestId: retryRequest.clientRequestId,
+            durationMs: retryRequest.durationMs, sessionPreserved: true,
+            authenticated: state.isAuthenticated, hasAccessToken: Boolean(state.accessToken),
+            hasRefreshToken: Boolean(state.refreshToken),
+          };
+          const diagnosticId = recordSessionDiagnostic('auth-retry-response-replayed', context);
+          reportError(new Error('Authentication retry received a repeated response'), {
+            ...context, diagnosticId, operation: 'session', kind: 'authRetryResponseReplayed',
+          });
+          // No extra business retry: a write may already have reached the server.
+          throw new ApiError(
+            i18n.t('common.errors.invalidServerResponse', { defaultValue: '服务器返回了无效响应，请稍后重试' }),
+            { status: 0, failureKind: 'auth-retry-response-replayed',
+              reportEndpoint: endpoint, reportMethod: options.method ?? 'GET',
+              requestId: retryRequest.requestId, clientRequestId: retryRequest.clientRequestId,
+              durationMs: retryRequest.durationMs },
+          );
+        }
+        // A distinct rejection retains the existing session revocation behavior.
         await clearLocalSession(requestSessionEpoch, {
           reason: 'request-rejected-after-refresh',
           endpointPath: safeHttpEndpoint(endpoint),
           method: options.method ?? 'GET',
           status: retryRequest.res.status,
           requestId: retryRequest.requestId,
+          clientRequestId: retryRequest.clientRequestId,
+          initialRequestId: initialRequest.responseRequestId,
           failureKind: 'auth-retry-failed',
         });
         // round 3 review：clearLocalSession 的 await 期间用户可能已登入新会话
@@ -713,6 +747,7 @@ export async function apiClient<T>(
         endpoint,
         method: options.method ?? 'GET',
         requestId: retryRequest.requestId,
+        clientRequestId: retryRequest.clientRequestId,
         durationMs: retryRequest.durationMs,
       });
       options.onResponseHeaders?.(retryRequest.res.headers);
@@ -723,6 +758,7 @@ export async function apiClient<T>(
       endpoint,
       method: options.method ?? 'GET',
       requestId: initialRequest.requestId,
+      clientRequestId: initialRequest.clientRequestId,
       durationMs: initialRequest.durationMs,
     });
     options.onResponseHeaders?.(initialRequest.res.headers);
@@ -743,7 +779,7 @@ export async function apiClient<T>(
         endpointPath: safeHttpEndpoint(reportEndpoint),
         method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(reportMethod) ? reportMethod.toUpperCase() : 'OTHER',
         status,
-        ...(error instanceof ApiError ? { requestId: error.requestId, durationMs: error.durationMs } : {}),
+        ...(error instanceof ApiError ? { requestId: error.requestId, clientRequestId: error.clientRequestId, durationMs: error.durationMs } : {}),
         ...(error instanceof ApiError && typeof error.code === 'number' && Number.isSafeInteger(error.code)
           ? { apiCode: error.code }
           : {}),

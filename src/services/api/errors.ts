@@ -24,6 +24,9 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
     if (error.failureKind === 'refresh-response-invalid') {
       return i18n.t('common.errors.refreshResponseInvalid', { defaultValue: fallback });
     }
+    if (error.failureKind === 'auth-retry-response-replayed') {
+      return i18n.t('common.errors.invalidServerResponse', { defaultValue: fallback });
+    }
     if (error.errorCode) {
       if (!isKnownServerErrorCode(error.errorCode)) {
         return fallback;

@@ -46,6 +46,7 @@ const SENTRY_BREADCRUMB_ALLOWLIST: ReadonlySet<string> = new Set([
   'method',
   'status',
   'requestId',
+  'clientRequestId',
   'durationMs',
   'failureKind',
 ]);

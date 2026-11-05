@@ -9,7 +9,7 @@ const MAX_RECORDS = 5;
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const REASONS = [
   'refresh-token-missing', 'refresh-rejected', 'refresh-response-invalid',
-  'request-rejected-after-refresh', 'realtime-revoked', 'bootstrap-rejected',
+  'request-rejected-after-refresh', 'auth-retry-response-replayed', 'realtime-revoked', 'bootstrap-rejected',
   'bootstrap-tokens-missing', 'hydration-tokens-invalid', 'hydration-read-failed',
   'startup-storage-failed', 'user-logout', 'account-switch', 'account-switch-rejected',
   'failed-login-cleanup', 'password-change', 'email-change', 'account-cancel',
@@ -22,6 +22,8 @@ export interface SessionDiagnosticContext {
   method?: string;
   status?: number;
   requestId?: string;
+  clientRequestId?: string;
+  initialRequestId?: string;
   failureKind?: string;
   durationMs?: number;
   closeCode?: number;
@@ -52,7 +54,7 @@ export interface SessionDiagnosticRecord {
 
 const FAILURE_KINDS = new Set([
   'http', 'api-code', 'invalid-json', 'network', 'timeout', 'body-read',
-  'unexpected', 'session-changed', 'auth-retry-failed', 'refresh-response-invalid',
+  'unexpected', 'session-changed', 'auth-retry-failed', 'refresh-response-invalid', 'auth-retry-response-replayed',
 ]);
 const REQUEST_EVENTS = new Set(['api.request.completed', 'api.request.failed', 'api.request.slow']);
 let memory: SessionDiagnosticRecord[] = [];
@@ -70,8 +72,10 @@ function safeContext(value: unknown): SessionDiagnosticContext {
   if (typeof source.endpointPath === 'string') safe.endpointPath = safeHttpEndpoint(source.endpointPath);
   if (typeof source.method === 'string' && /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(source.method)) safe.method = source.method;
   if (typeof source.status === 'number' && Number.isInteger(source.status) && source.status >= 0 && source.status <= 599) safe.status = source.status;
-  const requestId = safeHttpRequestId(source.requestId);
-  if (requestId) safe.requestId = requestId;
+  for (const key of ['requestId', 'clientRequestId', 'initialRequestId'] as const) {
+    const requestId = safeHttpRequestId(source[key]);
+    if (requestId) safe[key] = requestId;
+  }
   if (typeof source.failureKind === 'string' && FAILURE_KINDS.has(source.failureKind)) safe.failureKind = source.failureKind;
   if (typeof source.durationMs === 'number' && Number.isFinite(source.durationMs) && source.durationMs >= 0) safe.durationMs = source.durationMs;
   if (typeof source.closeCode === 'number' && Number.isInteger(source.closeCode) && source.closeCode >= 1000 && source.closeCode <= 4999) safe.closeCode = source.closeCode;
