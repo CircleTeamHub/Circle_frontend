@@ -50,6 +50,17 @@ test('release harness discovers configurable or PATH-provided Git Bash', () => {
   assert.equal(releaseScriptShell({ platform: 'win32', env: { GIT_BASH_PATH: configured }, existsSync: (file) => file === configured, canRun: () => false }), configured);
 });
 
+test('release harness prefers installed Git Bash over a runnable WSL bash', () => {
+  const programFiles = 'C:\\Program Files';
+  const gitBash = path.join(programFiles, 'Git', 'bin', 'bash.exe');
+  assert.equal(releaseScriptShell({
+    platform: 'win32',
+    env: { ProgramFiles: programFiles },
+    existsSync: (file) => file === gitBash,
+    canRun: () => true,
+  }), gitBash);
+});
+
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
