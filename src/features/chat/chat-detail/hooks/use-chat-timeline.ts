@@ -322,14 +322,13 @@ export function useChatTimeline({
     () => findUnreadStart(conversationMessages ?? [])?.id ?? null,
     [conversationMessages, findUnreadStart],
   );
-  const [unreadStartVisible, setUnreadStartVisible] = useState(false);
   const [unreadJumpDismissed, setUnreadJumpDismissed] = useState(false);
   useEffect(() => {
-    setUnreadStartVisible(false);
     setUnreadJumpDismissed(false);
   }, [conversationID, entryReadHeight, entryUnreadCount]);
   const handleUnreadStartVisibilityChange = useCallback((visible: boolean) => {
-    setUnreadStartVisible(visible);
+    // 看过后立即消除提示，键盘或滚动让消息移出视口时不能恢复旧未读。
+    if (visible) setUnreadJumpDismissed(true);
   }, []);
 
   const handleJumpToUnread = useCallback(() => {
@@ -609,7 +608,6 @@ export function useChatTimeline({
     showUnreadJump:
       entryUnreadCount > 0 &&
       unreadStartMessageID !== null &&
-      !unreadStartVisible &&
       !unreadJumpDismissed,
     unreadStartMessageID,
     highlightedMessageID,
