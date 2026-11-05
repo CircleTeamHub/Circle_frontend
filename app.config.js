@@ -9,6 +9,14 @@ module.exports = () => {
       : undefined);
   const googleServicesFile = process.env.GOOGLE_SERVICES_FILE?.trim();
   const isPreproduction = process.env.APP_VARIANT?.trim() === 'preprod';
+  // 预发包的 versionCode 由 CI 按 main 的提交数推出来（verify-android-preprod.js version-code），
+  // 保证每一版都比上一版大、能覆盖安装；本地不带这个变量打预发包时沿用 app.json。
+  const preprodVersionCodeRaw = process.env.ANDROID_PREPROD_VERSION_CODE?.trim();
+  if (preprodVersionCodeRaw && !/^[1-9]\d*$/.test(preprodVersionCodeRaw)) {
+    throw new Error(
+      `ANDROID_PREPROD_VERSION_CODE must be a positive integer, received ${preprodVersionCodeRaw}`,
+    );
+  }
   const jpushAppKey = process.env.EXPO_PUBLIC_JPUSH_APP_KEY?.trim();
   const configuredPushProvider = process.env.EXPO_PUBLIC_PUSH_PROVIDER?.trim();
   if (
@@ -131,7 +139,12 @@ module.exports = () => {
         ]),
       ),
       ...(isPreproduction
-        ? { package: `${baseConfig.android.package}.preprod` }
+        ? {
+            package: `${baseConfig.android.package}.preprod`,
+            ...(preprodVersionCodeRaw
+              ? { versionCode: Number(preprodVersionCodeRaw) }
+              : {}),
+          }
         : {}),
       ...(googleServicesFile ? { googleServicesFile } : {}),
     },

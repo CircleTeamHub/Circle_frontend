@@ -52,10 +52,11 @@ test('preproduction workflow builds and verifies the isolated app variant', () =
 });
 
 test('preproduction metadata CLI loads the dynamic app variant', () => {
-  const { EXPECTED } = require('../.github/scripts/verify-android-preprod');
+  const { EXPECTED, preprodVersionCode } = require('../.github/scripts/verify-android-preprod');
   const metadataEnv = {
     ...process.env,
     APP_VARIANT: 'preprod',
+    ANDROID_PREPROD_VERSION_CODE: String(preprodVersionCode(4321)),
     EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_MEDIA_ORIGINS: EXPECTED.mediaOrigins.join(','),
