@@ -81,12 +81,19 @@ module.exports = () => {
         }
       : {}),
     plugins: [
-      // 通知模式的来电铃声要进 iOS 包（APNs 的 sound 只能引用包内文件）；CallKit 包用系统铃声。
+      // 离线通知声音必须打进原生包；通知模式的来电另带独立铃声。
       ...(baseConfig.plugins ?? []).map((plugin) =>
-        plugin === 'expo-notifications' && iosCallMode === 'notification'
-          ? ['expo-notifications', { sounds: ['./assets/sounds/call_ring.caf'] }]
+        plugin === 'expo-notifications'
+          ? ['expo-notifications', {
+              sounds: [
+                './assets/sounds/notification_swift_gesture.wav',
+                ...(iosCallMode === 'notification' ? ['./assets/sounds/call_ring.caf'] : []),
+              ],
+              defaultChannel: 'activity_swift_gesture',
+            }]
           : plugin,
       ),
+      ['./plugins/with-notification-sound', { pushProvider }],
       ...(amapAndroidKey || amapIosKey
         ? [
             [

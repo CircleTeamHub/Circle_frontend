@@ -2,10 +2,9 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { AudioPlayer } from 'expo-audio';
 import { useNotificationFeedbackStore, type NotificationRingtone } from '@/features/notifications/store/use-notification-feedback-store';
 
-// Generated placeholder chime — replace assets/sounds/notification.wav to
-// rebrand without touching code.
+// Swift gesture by notificationsounds.com (CC BY 4.0); see assets/legal/asset-notices.json.
 const CHIMES = {
-  default: require('../../../../assets/sounds/notification.wav'),
+  default: require('../../../../assets/sounds/notification_swift_gesture.wav'),
   soft: require('../../../../assets/sounds/notification-soft.wav'),
   bell: require('../../../../assets/sounds/notification-bell.wav'),
 };

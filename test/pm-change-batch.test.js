@@ -106,7 +106,7 @@ test('group chat offers local and two-sided deletion plus management log access'
 test('new messages keep sound and badge feedback wired', () => {
   assert.match(
     read('src/features/notifications/hooks/use-notification-feedback.ts'),
-    /notification\.wav/,
+    /notification_swift_gesture\.wav/,
   );
   assert.match(read('src/chat-core/app-badge.ts'), /setBadgeCountAsync/);
 });
