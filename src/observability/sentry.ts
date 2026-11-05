@@ -157,9 +157,9 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
           return {
             ...integration,
             processEvent(event, hint, client) {
-              // Each automatic session clear needs its own request correlation,
+              // Each auth incident needs its own request correlation,
               // even when re-login is followed by the same failure in this process.
-              if (event.tags?.operation === 'session' && event.tags?.kind === 'forcedLogout') {
+              if (event.tags?.operation === 'session' && ['forcedLogout', 'refreshResponseInvalid'].includes(String(event.tags?.kind))) {
                 return event;
               }
               return processEvent(event, hint, client);
@@ -320,6 +320,7 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'responseShape',
   'responseHasAccessToken',
   'responseHasRefreshToken',
+  'sessionPreserved',
   'closeCode',
 ]);
 const SAFE_EVENT_TAG_KEYS = new Set([
@@ -487,8 +488,8 @@ const SAFE_ERROR_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 const SAFE_STORAGE_CODE = /^[A-Za-z]{1,64}$/;
 
 function isSafeReportField(key: string, value: unknown): boolean {
-  if (['authenticated', 'hasAccessToken', 'hasRefreshToken', 'responseHasAccessToken', 'responseHasRefreshToken'].includes(key)) return typeof value === 'boolean';
-  if (key === 'responseShape') return typeof value === 'string' && ['empty', 'object', 'array', 'primitive'].includes(value);
+  if (['authenticated', 'hasAccessToken', 'hasRefreshToken', 'responseHasAccessToken', 'responseHasRefreshToken', 'sessionPreserved'].includes(key)) return typeof value === 'boolean';
+  if (key === 'responseShape') return typeof value === 'string' && ['empty', 'object', 'array', 'primitive', 'unknown'].includes(value);
   if (key === 'closeCode') return typeof value === 'number' && Number.isInteger(value) && value >= 1000 && value <= 4999;
   if (key === 'code') {
     return (

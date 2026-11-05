@@ -14,7 +14,7 @@ import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 import { createHttpRequestId, diagnosticNow, safeHttpEndpoint, safeHttpRequestId } from '@/observability/http-diagnostics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
-import type { SessionDiagnosticContext } from '@/observability/session-diagnostics';
+import { recordSessionDiagnostic, type SessionDiagnosticContext } from '@/observability/session-diagnostics';
 import { ApiError } from './api-error';
 
 // 定义搬去 api-error.ts（零依赖），这里原样 re-export 保住既有导入路径。
@@ -108,7 +108,7 @@ function logApiEvent(label: string, data: Record<string, unknown>) {
 /**
  * 「服务端明确否认了这份凭证」——只有这种失败才允许销毁本地 session。
  *
- * 401 / 403 是服务端给出的认证结论（含刷新返回体形状异常时我们自己抛的 401）。
+ * 401 / 403 是服务端给出的认证结论；2xx 响应异常不能伪装成认证拒绝。
  * 而网络不可达 / 超时 / 5xx / 网关脏响应只说明「这一刻够不到服务器」，
  * 把它们也当成登出信号，等于让后端抖一下就把所有在线用户踢下线。
  * session-changed 是本地会话已被换掉（新登录 / 已登出），不是服务端的认证结论。
@@ -401,6 +401,7 @@ async function executeRequest<T>(
     if (error instanceof ApiError) {
       failure = error;
       failureKind = error.failureKind;
+      if (status !== undefined && status > 0) error.responseStatus = status;
       status = error.status;
     } else {
       failureKind = 'unexpected';
@@ -485,6 +486,12 @@ async function refreshAccessToken(sessionEpoch: number) {
   }
 
   assertSessionEpoch(sessionEpoch);
+  if (useAuthStore.getState().refreshUncertain) {
+    throw new ApiError(
+      i18n.t('common.errors.refreshResponseInvalid', { defaultValue: '暂时无法更新登录状态，请重新登录后再试' }),
+      { status: 0, failureKind: 'refresh-response-invalid' },
+    );
+  }
 
   let refreshResponseStatus: number | undefined;
   let refreshResponseDetails: SessionDiagnosticContext = {};
@@ -517,6 +524,7 @@ async function refreshAccessToken(sessionEpoch: number) {
       }
     );
     refreshResponseStatus = res.status;
+    assertSessionEpoch(sessionEpoch);
     const tokens = unwrapResponse(res, payload, {
       endpoint: '/auth/refresh',
       method: 'POST',
@@ -534,13 +542,13 @@ async function refreshAccessToken(sessionEpoch: number) {
         responseHasAccessToken: typeof fields.accessToken === 'string' && fields.accessToken.length > 0,
         responseHasRefreshToken: typeof fields.refreshToken === 'string' && fields.refreshToken.length > 0,
       };
-      // 后端字段缺失 / 重命名 / 类型异常 — 视为刷新失败，避免后续带着 Bearer undefined 死循环。
+      // This is an unusable response, not a server authentication rejection.
       throw new ApiError(
         i18n.t('common.errors.refreshResponseInvalid', {
-          defaultValue: '刷新返回数据格式异常，请重新登录',
+          defaultValue: '暂时无法更新登录状态，请重新登录后再试',
         }),
         {
-          status: 401,
+          status: res.status,
           failureKind: 'refresh-response-invalid',
           reportEndpoint: '/auth/refresh',
           reportMethod: 'POST',
@@ -558,6 +566,38 @@ async function refreshAccessToken(sessionEpoch: number) {
     return tokens.accessToken;
   })()
     .catch(async (error) => {
+      assertSessionEpoch(sessionEpoch);
+      const responseStatus = refreshResponseStatus ?? (error instanceof ApiError ? error.responseStatus : undefined);
+      if (error instanceof ApiError && responseStatus !== undefined && responseStatus >= 200 && responseStatus < 300) {
+        // The server may already have consumed the refresh token. Retain the
+        // session, but persistently stop rotation until fresh login credentials.
+        const state = useAuthStore.getState();
+        const persistence = state.markRefreshUncertain();
+        const context: SessionDiagnosticContext = {
+          endpointPath: '/auth/refresh', method: 'POST', status: responseStatus,
+          requestId: error.requestId, durationMs: error.durationMs, failureKind: error.failureKind,
+          responseShape: 'unknown', ...refreshResponseDetails,
+          authenticated: state.isAuthenticated, hasAccessToken: Boolean(state.accessToken),
+          hasRefreshToken: Boolean(state.refreshToken), sessionPreserved: true,
+        };
+        const diagnosticId = recordSessionDiagnostic('refresh-response-invalid', context);
+        reportError(new Error('Authentication refresh response invalid'), {
+          ...context, diagnosticId, operation: 'session', kind: 'refreshResponseInvalid',
+        });
+        try {
+          await persistence;
+        } catch {
+          reportError(new Error('Authentication refresh recovery state could not be persisted'), {
+            diagnosticId, operation: 'session', kind: 'refreshStatePersist',
+          });
+        }
+        assertSessionEpoch(sessionEpoch);
+        throw new ApiError(
+          i18n.t('common.errors.refreshResponseInvalid', { defaultValue: '暂时无法更新登录状态，请重新登录后再试' }),
+          { status: responseStatus, failureKind: 'refresh-response-invalid',
+            reportEndpoint: '/auth/refresh', reportMethod: 'POST', requestId: error.requestId, durationMs: error.durationMs },
+        );
+      }
       // 只有服务端明确否认 refresh token 时才清 session。网络 / 超时 / 5xx 一律原样抛出：
       // 登录态保留，singleton 已在 finally 里释放，下一个请求会重新发起刷新。
       if (
@@ -565,9 +605,7 @@ async function refreshAccessToken(sessionEpoch: number) {
         useAuthStore.getState().sessionEpoch === sessionEpoch
       ) {
         await clearLocalSession(sessionEpoch, {
-          reason: error.failureKind === 'refresh-response-invalid'
-            ? 'refresh-response-invalid'
-            : 'refresh-rejected',
+          reason: 'refresh-rejected',
           endpointPath: '/auth/refresh',
           method: 'POST',
           status: refreshResponseStatus ?? error.status,
@@ -603,6 +641,8 @@ export function refreshSessionAccessToken(): Promise<string> {
 }
 
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
+  // Captured once at the refresh boundary; blocked attempts add no new evidence.
+  if (error instanceof ApiError && error.failureKind === 'refresh-response-invalid') return false;
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
     return true;
   }

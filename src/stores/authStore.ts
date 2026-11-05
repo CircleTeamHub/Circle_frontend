@@ -59,6 +59,9 @@ interface AuthState {
   refreshToken: string | null;
   user: AuthUser | null;
   isAuthenticated: boolean;
+  // A successful refresh may have rotated the server token without delivering
+  // usable credentials. Never replay that old refresh token, even after restart.
+  refreshUncertain: boolean;
   onboardingRequired: boolean;
   // Runtime-only auth session identity generation. This advances when a session
   // starts or ends, but remains stable while that session's tokens rotate.
@@ -69,9 +72,10 @@ interface AuthState {
   setSession: (
     tokens: { accessToken: string; refreshToken: string },
     user: AuthUser,
-    options?: { onboardingRequired?: boolean }
+    options?: { onboardingRequired?: boolean; refreshUncertain?: boolean }
   ) => void;
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
+  markRefreshUncertain: () => Promise<void>;
   setUser: (user: AuthUser) => void;
   setOnboardingRequired: (required: boolean) => void;
   clearSession: (options?: { preserveLoading?: boolean }) => void;
@@ -87,6 +91,7 @@ function partializeAuthState(state: AuthState) {
     refreshToken: state.refreshToken,
     user: sanitizeUserForPersist(state.user),
     isAuthenticated: state.isAuthenticated,
+    refreshUncertain: state.refreshUncertain,
     onboardingRequired: state.onboardingRequired,
   };
 }
@@ -108,6 +113,7 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       user: null,
       isAuthenticated: false,
+      refreshUncertain: false,
       onboardingRequired: false,
       sessionEpoch: 0,
       isLoading: true,
@@ -119,6 +125,7 @@ export const useAuthStore = create<AuthState>()(
           refreshToken,
           user,
           isAuthenticated: true,
+          refreshUncertain: options?.refreshUncertain ?? false,
           onboardingRequired: options?.onboardingRequired ?? false,
           isLoading: false,
           sessionEpoch: state.sessionEpoch + 1,
@@ -129,7 +136,10 @@ export const useAuthStore = create<AuthState>()(
           accessToken,
           refreshToken,
           isAuthenticated: true,
+          refreshUncertain: false,
         })),
+
+      markRefreshUncertain: async () => { await set({ refreshUncertain: true }); },
 
       setUser: (user) => set({ user }),
 
@@ -142,6 +152,7 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           user: null,
           isAuthenticated: false,
+          refreshUncertain: false,
           onboardingRequired: false,
           isLoading: options?.preserveLoading ? state.isLoading : false,
           sessionEpoch: state.sessionEpoch + 1,
@@ -179,11 +190,12 @@ export const useAuthStore = create<AuthState>()(
         if (memoryHasLiveSession) {
           return currentState;
         }
+        const persisted = persistedState && typeof persistedState === 'object'
+          ? persistedState as Partial<AuthState> : {};
         return {
           ...currentState,
-          ...(persistedState && typeof persistedState === 'object'
-            ? (persistedState as Partial<AuthState>)
-            : {}),
+          ...persisted,
+          refreshUncertain: persisted.refreshUncertain === true,
         };
       },
       partialize: partializeAuthState,

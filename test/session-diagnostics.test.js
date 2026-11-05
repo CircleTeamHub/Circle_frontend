@@ -47,6 +47,20 @@ test('session diagnostics survive logout-style buffer clearing and a new runtime
   assert.equal(restored[0].platform, 'android');
 });
 
+test('preserved-session refresh anomalies retain safe response metadata across restart', async () => {
+  const disk = new Map();
+  const journal = loadJournal({ disk });
+  journal.recordSessionDiagnostic('refresh-response-invalid', {
+    status: 201, responseShape: 'unknown', failureKind: 'body-read', sessionPreserved: true,
+  });
+  await journal.readSessionDiagnostics();
+  const [restored] = await loadJournal({ disk }).readSessionDiagnostics();
+  assert.equal(restored.context.sessionPreserved, true);
+  assert.equal(restored.context.responseShape, 'unknown');
+  assert.equal(restored.context.failureKind, 'body-read');
+  assert.equal(restored.context.status, 201);
+});
+
 test('journal never keeps arbitrary strings, credentials, raw routes or account identifiers', async () => {
   const disk = new Map();
   const secret = 'PRIVATE_CANARY';

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 // getApiErrorMessage turns a backend stable errorCode into a localized string
 // (serverErrors.<code>), falling back to the caller's fallback. Backend attaches
@@ -21,6 +22,7 @@ const I18N = {
         'serverErrors.TRACE_EMPTY_COMMENT': 'Comment cannot be empty',
         'common.errors.requestTimeout': 'Request timed out. Please try again.',
         'common.errors.networkUnavailable': 'Check your connection and try again.',
+        'common.errors.refreshResponseInvalid': 'Please sign in again to restore your session.',
         'common.errors.uploadFailed': 'Upload failed. Please try again later.',
         'serverErrors.MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED':
           "You've reached your membership tier's joined-circle limit",
@@ -115,6 +117,15 @@ function loadErrors() {
 }
 
 const { getApiErrorMessage } = loadErrors();
+
+test('an uncertain refresh gives safe sign-in guidance at the original and blocked status', () => {
+  for (const status of [201, 0]) {
+    const error = new FakeApiError('PRIVATE_RESPONSE');
+    error.status = status;
+    error.failureKind = 'refresh-response-invalid';
+    assert.equal(getApiErrorMessage(error, 'fallback'), 'Please sign in again to restore your session.');
+  }
+});
 
 test('maps a known errorCode to its localized serverErrors string', () => {
   const err = new FakeApiError('邮箱或密码错误', 'AUTH_INVALID_CREDENTIALS');
@@ -278,7 +289,7 @@ test('client.ts threads errorCode onto ApiError', () => {
   fn(
     moduleObj,
     moduleObj.exports,
-    shimRequire,
+    withObservabilityStubs(shimRequire),
     async () => ({
       ok: false,
       status: 400,
@@ -353,7 +364,7 @@ test('ApiError accepts an options object for optional fields', () => {
   fn(
     moduleObj,
     moduleObj.exports,
-    shimRequire,
+    withObservabilityStubs(shimRequire),
     async () => {
       throw new Error('fetch should not be called');
     },

@@ -11,6 +11,7 @@ export interface KnownAccount {
   user: AuthUser;
   accessToken: string;
   refreshToken: string;
+  refreshUncertain?: boolean;
   updatedAt: number;
 }
 

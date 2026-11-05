@@ -32,6 +32,7 @@ export interface SessionDiagnosticContext {
   responseShape?: string;
   responseHasAccessToken?: boolean;
   responseHasRefreshToken?: boolean;
+  sessionPreserved?: boolean;
 }
 interface RequestSnapshot {
   timestamp: number;
@@ -74,8 +75,8 @@ function safeContext(value: unknown): SessionDiagnosticContext {
   if (typeof source.failureKind === 'string' && FAILURE_KINDS.has(source.failureKind)) safe.failureKind = source.failureKind;
   if (typeof source.durationMs === 'number' && Number.isFinite(source.durationMs) && source.durationMs >= 0) safe.durationMs = source.durationMs;
   if (typeof source.closeCode === 'number' && Number.isInteger(source.closeCode) && source.closeCode >= 1000 && source.closeCode <= 4999) safe.closeCode = source.closeCode;
-  if (typeof source.responseShape === 'string' && ['empty', 'object', 'array', 'primitive'].includes(source.responseShape)) safe.responseShape = source.responseShape;
-  for (const key of ['userInitiated', 'authenticated', 'hasAccessToken', 'hasRefreshToken', 'responseHasAccessToken', 'responseHasRefreshToken'] as const) {
+  if (typeof source.responseShape === 'string' && ['empty', 'object', 'array', 'primitive', 'unknown'].includes(source.responseShape)) safe.responseShape = source.responseShape;
+  for (const key of ['userInitiated', 'authenticated', 'hasAccessToken', 'hasRefreshToken', 'responseHasAccessToken', 'responseHasRefreshToken', 'sessionPreserved'] as const) {
     if (typeof source[key] === 'boolean') safe[key] = source[key];
   }
   return safe;

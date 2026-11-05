@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 function loadApiClient({
   responseText,
@@ -59,7 +60,7 @@ function loadApiClient({
     console: {
       log: (...args) => logs.push(args),
     },
-    require: (request) => {
+    require: withObservabilityStubs((request) => {
       if (request === '@/constants/config') {
         return { API_URL: 'http://192.168.1.65:3000/api/v1' };
       }
@@ -115,7 +116,7 @@ function loadApiClient({
         };
       }
       return require(request);
-    },
+    }),
   };
   context.exports = context.module.exports;
 

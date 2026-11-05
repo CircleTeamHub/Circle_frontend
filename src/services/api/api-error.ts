@@ -15,6 +15,8 @@ export class ApiError extends Error {
   reportMethod?: string;
   requestId?: string;
   durationMs?: number;
+  // Actual HTTP headers received, even if reading the body later failed.
+  responseStatus?: number;
   // 后端稳定错误码(如 AUTH_INVALID_CREDENTIALS);前端据此做 i18n 映射,缺失回落 message。
   errorCode?: string;
 

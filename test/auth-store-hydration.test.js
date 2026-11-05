@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
-function loadAuthStore() {
+function loadAuthStore({ realPersist = false } = {}) {
   const filePath = path.join(process.cwd(), 'src/stores/authStore.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -21,6 +21,7 @@ function loadAuthStore() {
   const storageSetCalls = [];
   const reports = [];
   const retained = [];
+  let writeFailure = false;
   const context = {
     module: { exports: {} },
     exports: {},
@@ -36,6 +37,7 @@ function loadAuthStore() {
         reportError: (_error, details) => reports.push(details),
       };
       if (request === 'zustand') {
+        if (realPersist) return require('zustand');
         return {
           create: () => (initializer) => {
             const state = {};
@@ -57,6 +59,7 @@ function loadAuthStore() {
         };
       }
       if (request === 'zustand/middleware') {
+        if (realPersist) return require('zustand/middleware');
         return {
           createJSONStorage: (getStorage) => getStorage(),
           persist: (config, options) => {
@@ -70,6 +73,7 @@ function loadAuthStore() {
           secureAuthStorage: {
             setItem: async (...args) => {
               storageSetCalls.push(args);
+              if (writeFailure) throw new Error('fixture storage failure');
             },
           },
         };
@@ -90,7 +94,8 @@ function loadAuthStore() {
   context.exports = context.module.exports;
 
   vm.runInNewContext(transpiled, context, { filename: filePath });
-  return { ...context.module.exports, persistOptions, storageSetCalls, reports, retained };
+  return { ...context.module.exports, persistOptions, storageSetCalls, reports, retained,
+    failWrites: () => { writeFailure = true; } };
 }
 
 function spyClearSession(useAuthStore) {
@@ -105,6 +110,48 @@ function spyClearSession(useAuthStore) {
   });
   return counter;
 }
+
+test('uncertain refresh survives auth persistence and hydration without losing credentials', async () => {
+  const first = loadAuthStore();
+  first.useAuthStore.getState().setSession({ accessToken: 'saved-access', refreshToken: 'saved-refresh' }, { id: 'saved-user' });
+  assert.equal(typeof first.useAuthStore.getState().markRefreshUncertain, 'function');
+  await first.useAuthStore.getState().markRefreshUncertain();
+  await first.persistCurrentAuthState();
+  const envelope = JSON.parse(first.storageSetCalls.at(-1)[1]);
+  assert.equal(envelope.state.refreshUncertain, true);
+  const next = loadAuthStore();
+  next.useAuthStore.setState(next.persistOptions.merge(envelope.state, next.useAuthStore.getState()));
+  next.persistOptions.onRehydrateStorage()(next.useAuthStore.getState(), undefined);
+  assert.equal(next.useAuthStore.getState().refreshUncertain, true);
+  assert.equal(next.useAuthStore.getState().isAuthenticated, true);
+  assert.equal(next.useAuthStore.getState().accessToken, 'saved-access');
+  assert.equal(next.useAuthStore.getState().refreshToken, 'saved-refresh');
+  next.useAuthStore.getState().setTokens({ accessToken: 'fresh-access', refreshToken: 'fresh-refresh' });
+  assert.equal(next.useAuthStore.getState().refreshUncertain, false);
+});
+
+test('marking an uncertain refresh exposes the single real Zustand persistence failure to its caller', async () => {
+  const h = loadAuthStore({ realPersist: true });
+  h.useAuthStore.getState().setSession({ accessToken: 'saved-access', refreshToken: 'saved-refresh' }, { id: 'saved-user' });
+  await h.persistCurrentAuthState();
+  const writesBefore = h.storageSetCalls.length;
+  h.failWrites();
+  await assert.rejects(h.useAuthStore.getState().markRefreshUncertain(), /fixture storage failure/);
+  assert.equal(h.storageSetCalls.length - writesBefore, 1);
+  assert.equal(h.useAuthStore.getState().refreshUncertain, true);
+  assert.equal(h.useAuthStore.getState().isAuthenticated, true);
+});
+
+test('a fresh same-account login advances the epoch and resets the uncertain marker', async () => {
+  const h = loadAuthStore();
+  const state = h.useAuthStore.getState();
+  state.setSession({ accessToken: 'old', refreshToken: 'old-refresh' }, { id: 'saved-user' });
+  await state.markRefreshUncertain();
+  const oldEpoch = state.sessionEpoch;
+  state.setSession({ accessToken: 'new', refreshToken: 'new-refresh' }, { id: 'saved-user' });
+  assert.equal(state.sessionEpoch, oldEpoch + 1);
+  assert.equal(state.refreshUncertain, false);
+});
 
 test('authStore unblocks startup but does NOT clearSession when hydration read fails', () => {
   const { useAuthStore, persistOptions, retained } = loadAuthStore();

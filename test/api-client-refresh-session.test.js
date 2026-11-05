@@ -30,7 +30,7 @@ async function waitFor(condition) {
   throw new Error('timed out waiting for condition');
 }
 
-function loadApiClientHarness() {
+function loadApiClientHarness({ persistError = false } = {}) {
   const filePath = path.join(process.cwd(), 'src/services/api/client.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -45,6 +45,9 @@ function loadApiClientHarness() {
   const refreshResponses = [];
   const requestResponses = [];
   const setTokenCalls = [];
+  const diagnostics = [];
+  const reports = [];
+  const persisted = [];
   let clearCalls = 0;
   const clearOptions = [];
   let clearPause = null;
@@ -52,11 +55,19 @@ function loadApiClientHarness() {
   const authState = {
     accessToken: 'access-a',
     refreshToken: 'refresh-a',
+    isAuthenticated: true,
+    refreshUncertain: false,
     sessionEpoch: 1,
     setTokens: (tokens) => {
       setTokenCalls.push(tokens);
       authState.accessToken = tokens.accessToken;
       authState.refreshToken = tokens.refreshToken;
+      authState.refreshUncertain = false;
+    },
+    markRefreshUncertain: async () => {
+      authState.refreshUncertain = true;
+      if (persistError) throw new Error('fixture storage failure');
+      persisted.push({ refreshUncertain: true });
     },
   };
 
@@ -75,6 +86,8 @@ function loadApiClientHarness() {
     }
     authState.accessToken = null;
     authState.refreshToken = null;
+    authState.isAuthenticated = false;
+    authState.refreshUncertain = false;
     authState.sessionEpoch += 1;
   }
 
@@ -133,10 +146,16 @@ function loadApiClientHarness() {
       }
       if (request === '@/observability/sentry') {
         return {
-          reportError: () => {},
+          reportError: (error, context) => reports.push({ message: error.message, data: error.data, context }),
           shouldReportHttpFailure: () => false,
         };
       }
+      if (request === '@/observability/session-diagnostics') return {
+        recordSessionDiagnostic: (reason, context) => {
+          diagnostics.push({ reason, context });
+          return '12345678-1234-4234-8234-123456789def';
+        },
+      };
       if (request === '@/i18n') {
         return {
           __esModule: true,
@@ -166,6 +185,9 @@ function loadApiClientHarness() {
     refreshResponses,
     requestResponses,
     setTokenCalls,
+    diagnostics,
+    reports,
+    persisted,
     getClearCalls: () => clearCalls,
     getClearOptions: () => clearOptions,
     getLogoutHandler: () => logoutHandler,
@@ -489,7 +511,7 @@ test('a transient refresh failure does not stop the next request from refreshing
   assert.equal(harness.authState.sessionEpoch, 1);
 });
 
-test('refresh returning a malformed token pair clears the session', async () => {
+test('refresh returning a malformed token pair preserves the session and records the anomaly', async () => {
   const harness = loadApiClientHarness();
   harness.refreshResponses.push({
     promise: Promise.resolve(
@@ -502,21 +524,127 @@ test('refresh returning a malformed token pair clears the session', async () => 
   });
 
   await assert.rejects(harness.apiClient('/profile/me'), (error) => {
-    assert.equal(error.status, 401);
+    assert.equal(error.status, 201);
+    assert.equal(error.failureKind, 'refresh-response-invalid');
     assert.equal(error.reportEndpoint, '/auth/refresh');
     assert.equal(error.reportMethod, 'POST');
     assert.equal(error.requestId, harness.fetchCalls[1][1].headers['X-Request-Id']);
     assert.ok(Number.isFinite(error.durationMs) && error.durationMs >= 0);
     return true;
   });
-  assert.equal(harness.getClearCalls(), 1);
-  assert.equal(harness.getClearOptions()[0]?.reason, 'refresh-response-invalid');
-  assert.equal(harness.getClearOptions()[0]?.status, 201);
-  assert.equal(harness.getClearOptions()[0]?.responseShape, 'object');
-  assert.equal(harness.getClearOptions()[0]?.responseHasAccessToken, true);
-  assert.equal(harness.getClearOptions()[0]?.responseHasRefreshToken, false);
-  assert.equal(harness.getClearOptions()[0]?.requestId, harness.fetchCalls[1][1].headers['X-Request-Id']);
-  assert.equal(harness.authState.accessToken, null);
+  assert.equal(harness.getClearCalls(), 0);
+  assert.equal(harness.authState.accessToken, 'access-a');
+  assert.equal(harness.authState.refreshToken, 'refresh-a');
+  assert.equal(harness.authState.isAuthenticated, true);
+  assert.equal(harness.authState.refreshUncertain, true);
+  assert.deepEqual(harness.persisted, [{ refreshUncertain: true }]);
+  assert.equal(harness.diagnostics.length, 1);
+  const diagnostic = harness.diagnostics[0];
+  assert.equal(diagnostic.reason, 'refresh-response-invalid');
+  assert.equal(diagnostic.context.status, 201);
+  assert.equal(diagnostic.context.responseShape, 'object');
+  assert.equal(diagnostic.context.responseHasAccessToken, true);
+  assert.equal(diagnostic.context.responseHasRefreshToken, false);
+  assert.equal(diagnostic.context.sessionPreserved, true);
+  assert.equal(diagnostic.context.requestId, harness.fetchCalls[1][1].headers['X-Request-Id']);
+  assert.equal(harness.reports.length, 1);
+  assert.equal(harness.reports[0].context.operation, 'session');
+  assert.equal(harness.reports[0].context.kind, 'refreshResponseInvalid');
+  assert.equal(harness.reports[0].context.diagnosticId, '12345678-1234-4234-8234-123456789def');
+  assert.doesNotMatch(JSON.stringify(harness.diagnostics) + JSON.stringify(harness.reports), /only-half-a-pair|access-a|refresh-a/);
+});
+
+for (const [label, refresh, shape, failureKind] of [
+  ['empty body', { ok: true, status: 201, text: async () => '' }, 'empty', 'refresh-response-invalid'],
+  ['JSON null', response(true, 201, null), 'empty', 'refresh-response-invalid'],
+  ['array', response(true, 201, { code: 0, message: 'ok', data: [] }), 'array', 'refresh-response-invalid'],
+  ['primitive', response(true, 201, { code: 0, message: 'ok', data: 'PRIVATE_BODY' }), 'primitive', 'refresh-response-invalid'],
+  ['invalid JSON', { ok: true, status: 201, text: async () => '{PRIVATE_BODY' }, 'unknown', 'invalid-json'],
+  ['body read failure', { ok: true, status: 201, text: async () => { throw new Error('PRIVATE_BODY'); } }, 'unknown', 'body-read'],
+  ['error envelope', response(true, 201, { code: 1, message: 'PRIVATE_BODY', data: 'PRIVATE_BODY' }), 'unknown', 'api-code'],
+]) {
+  test(`uncertain 201 refresh with ${label} is retained, diagnosed once and never replayed automatically`, async () => {
+    const h = loadApiClientHarness();
+    h.refreshResponses.push({ promise: Promise.resolve(refresh) });
+    await assert.rejects(h.apiClient('/profile/me'), error => error.status === 201 && error.failureKind === 'refresh-response-invalid');
+    await assert.rejects(h.apiClient('/profile/me'), error => error.failureKind === 'refresh-response-invalid');
+    assert.equal(h.fetchCalls.filter(([url]) => url.endsWith('/auth/refresh')).length, 1);
+    assert.equal(h.getClearCalls(), 0);
+    assert.equal(h.authState.isAuthenticated, true);
+    assert.equal(h.authState.accessToken, 'access-a');
+    assert.equal(h.authState.refreshToken, 'refresh-a');
+    assert.equal(h.diagnostics.length, 1);
+    assert.equal(h.reports.length, 1);
+    assert.equal(h.diagnostics[0].context.status, 201);
+    assert.equal(h.diagnostics[0].context.failureKind, failureKind);
+    assert.equal(h.diagnostics[0].context.responseShape, shape);
+    assert.doesNotMatch(JSON.stringify(h.diagnostics) + JSON.stringify(h.reports), /PRIVATE_BODY|access-a|refresh-a/);
+  });
+}
+
+test('a restored uncertain refresh blocks rotation without clearing the cached session', async () => {
+  const h = loadApiClientHarness();
+  h.authState.refreshUncertain = true;
+  await assert.rejects(h.refreshSessionAccessToken(), error => error.failureKind === 'refresh-response-invalid');
+  assert.equal(h.fetchCalls.length, 0);
+  assert.equal(h.getClearCalls(), 0);
+  h.requestResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) });
+  assert.equal((await h.apiClient('/profile/me')).ok, true);
+  assert.equal(h.fetchCalls.length, 1, 'an access token which still works remains usable');
+});
+
+test('concurrent REST and proactive refresh failures produce one preserved-session incident', async () => {
+  const h = loadApiClientHarness();
+  const pending = deferred();
+  h.refreshResponses.push(pending);
+  const results = Promise.allSettled([h.apiClient('/profile/me'), h.apiClient('/auth/me'), h.refreshSessionAccessToken()]);
+  await waitFor(() => h.fetchCalls.length === 3);
+  pending.resolve(response(true, 201, null));
+  for (const result of await results) {
+    assert.equal(result.status, 'rejected');
+    assert.equal(result.reason.failureKind, 'refresh-response-invalid');
+  }
+  assert.equal(h.fetchCalls.filter(([url]) => url.endsWith('/auth/refresh')).length, 1);
+  assert.equal(h.diagnostics.length, 1);
+  assert.equal(h.reports.length, 1);
+  assert.equal(h.getClearCalls(), 0);
+});
+
+test('fresh valid credentials recover an uncertain session and allow subsequent rotation', async () => {
+  const h = loadApiClientHarness();
+  h.authState.refreshUncertain = true;
+  h.authState.setTokens({ accessToken: 'fresh-access', refreshToken: 'fresh-refresh' });
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, { code: 0, message: 'ok', data: { accessToken: 'next-access', refreshToken: 'next-refresh' } })) });
+  assert.equal(await h.refreshSessionAccessToken(), 'next-access');
+  assert.equal(JSON.parse(h.fetchCalls[0][1].body).refreshToken, 'fresh-refresh');
+  assert.equal(h.getClearCalls(), 0);
+});
+
+test('a malformed late refresh cannot quarantine or report against a newer login', async () => {
+  const h = loadApiClientHarness();
+  const pending = deferred();
+  h.refreshResponses.push({ promise: pending.promise });
+  const request = h.apiClient('/profile/me');
+  await waitFor(() => h.fetchCalls.length === 2);
+  h.authState.sessionEpoch += 1;
+  h.authState.setTokens({ accessToken: 'new-login-access', refreshToken: 'new-login-refresh' });
+  pending.resolve(response(true, 201, null));
+  await assert.rejects(request, error => error.failureKind === 'session-changed');
+  assert.equal(h.authState.refreshUncertain, false);
+  assert.equal(h.authState.accessToken, 'new-login-access');
+  assert.equal(h.diagnostics.length, 0);
+  assert.equal(h.reports.length, 0);
+  assert.equal(h.getClearCalls(), 0);
+});
+
+test('uncertain refresh keeps memory and local diagnostics when auth persistence fails', async () => {
+  const h = loadApiClientHarness({ persistError: true });
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, null)) });
+  await assert.rejects(h.refreshSessionAccessToken(), error => error.failureKind === 'refresh-response-invalid');
+  assert.equal(h.authState.refreshUncertain, true);
+  assert.equal(h.authState.isAuthenticated, true);
+  assert.equal(h.diagnostics.length, 1);
+  assert.equal(h.getClearCalls(), 0);
 });
 
 test('a request rejected after a successful refresh retains the retry request id in logout diagnostics', async () => {

@@ -52,12 +52,13 @@ type AuthSuccessOptions = {
  * 过期账号移除。
  */
 function rememberCurrentAccount() {
-  const { user, accessToken, refreshToken } = useAuthStore.getState();
+  const { user, accessToken, refreshToken, refreshUncertain } = useAuthStore.getState();
   if (!user || !accessToken || !refreshToken) return;
   useKnownAccountsStore.getState().upsertAccount({
     user,
     accessToken,
     refreshToken,
+    refreshUncertain,
     updatedAt: Date.now(),
   });
 }
@@ -145,11 +146,11 @@ export function useAuth() {
       const replacingSession = current.isAuthenticated;
       if (replacingSession && current.user?.id === user.id) {
         // 「添加账号」登的就是当前账号:拆会话会清掉本账号的草稿、待发媒体、聊天背景
-        // 等本地数据,所以只换上新 token;被顶替的旧 token 在服务端撤销,别留一个没人
+        // 等本地数据,所以只建立新会话、不拆本地数据。推进 epoch 隔离旧续期回包;
+        // 被顶替的旧 token 在服务端撤销,别留一个没人
         // 持有的活会话挂在登录设备列表里。
         const supersededRefreshToken = current.refreshToken;
-        current.setTokens(tokens);
-        current.setUser(user);
+        setSession(tokens, user, { onboardingRequired: current.onboardingRequired });
         if (supersededRefreshToken) {
           void logoutRequest(supersededRefreshToken).catch((err) => {
             reportHandledFailure('auth', 'revokeSupersededSession', err);
@@ -165,7 +166,7 @@ export function useAuth() {
           finally { if (mountedRef.current) setCommitting(false); }
           if (!mountedRef.current || (options.isAttemptCurrent && !options.isAttemptCurrent())) {
             if (!useAuthStore.getState().isAuthenticated && current.user && current.accessToken && current.refreshToken) {
-              setSession({ accessToken: current.accessToken, refreshToken: current.refreshToken }, current.user, { onboardingRequired: current.onboardingRequired });
+              setSession({ accessToken: current.accessToken, refreshToken: current.refreshToken }, current.user, { onboardingRequired: current.onboardingRequired, refreshUncertain: current.refreshUncertain });
             }
             void logoutRequest(tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
             return;
@@ -396,6 +397,7 @@ export function useAuth() {
             refreshToken: account.refreshToken,
           },
           account.user,
+          { refreshUncertain: account.refreshUncertain === true },
         );
 
         // 校验 session：/auth/me 命中 401 时 apiClient 会用 refreshToken 自动续期；
@@ -404,12 +406,13 @@ export function useAuth() {
         useAuthStore.getState().setUser(user);
 
         // 续期可能换了新 token，把最新值写回账号列表。
-        const { accessToken, refreshToken } = useAuthStore.getState();
+        const { accessToken, refreshToken, refreshUncertain } = useAuthStore.getState();
         if (accessToken && refreshToken) {
           useKnownAccountsStore.getState().upsertAccount({
             user,
             accessToken,
             refreshToken,
+            refreshUncertain,
             updatedAt: Date.now(),
           });
         }
@@ -439,12 +442,13 @@ export function useAuth() {
           // review 修复①：/auth/me 的 401 前置续期可能已轮换 token —— 降级
           // 进入前把 auth store 里的最新值写回账号列表，否则切走再切回会拿
           // 旧 refreshToken 撞 401，把一个好账号误判成死账号移除。
-          const { accessToken, refreshToken } = useAuthStore.getState();
+          const { accessToken, refreshToken, refreshUncertain } = useAuthStore.getState();
           if (accessToken && refreshToken) {
             useKnownAccountsStore.getState().upsertAccount({
               user: account.user,
               accessToken,
               refreshToken,
+              refreshUncertain,
               updatedAt: Date.now(),
             });
           }
