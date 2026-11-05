@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "ログイン診断情報をコピー",
+    "copied": "診断情報をコピーしました。サポートに送信してください。",
+    "copyFailed": "コピーできませんでした。もう一度お試しください。"
+  },
   "mediaUpload": {
     "sessionChanged": "アカウントが切り替わりました。ファイルを選び直してアップロードしてください。",
     "uploading": "アップロード中",

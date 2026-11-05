@@ -20,11 +20,18 @@ function loadAuthStore() {
   let persistOptions;
   const storageSetCalls = [];
   const reports = [];
+  const retained = [];
   const context = {
     module: { exports: {} },
     exports: {},
     console,
     require: withObservabilityStubs((request) => {
+      if (request === '@/observability/session-diagnostics') return {
+        recordSessionDiagnostic: (reason, context) => {
+          retained.push({ reason, context });
+          return '12345678-1234-4234-8234-123456789def';
+        },
+      };
       if (request === '@/observability/sentry') return {
         reportError: (_error, details) => reports.push(details),
       };
@@ -83,7 +90,7 @@ function loadAuthStore() {
   context.exports = context.module.exports;
 
   vm.runInNewContext(transpiled, context, { filename: filePath });
-  return { ...context.module.exports, persistOptions, storageSetCalls, reports };
+  return { ...context.module.exports, persistOptions, storageSetCalls, reports, retained };
 }
 
 function spyClearSession(useAuthStore) {
@@ -100,7 +107,7 @@ function spyClearSession(useAuthStore) {
 }
 
 test('authStore unblocks startup but does NOT clearSession when hydration read fails', () => {
-  const { useAuthStore, persistOptions } = loadAuthStore();
+  const { useAuthStore, persistOptions, retained } = loadAuthStore();
   const cleared = spyClearSession(useAuthStore);
 
   const finishHydration = persistOptions.onRehydrateStorage();
@@ -112,10 +119,11 @@ test('authStore unblocks startup but does NOT clearSession when hydration read f
   // 关键回归：读失败绝不能 clearSession —— 否则会把空态写回、删掉磁盘上完好的 token，
   // 让一次瞬时 Keychain 抖动变成永久登出。
   assert.equal(cleared.calls, 0);
+  assert.equal(retained[0].reason, 'hydration-read-failed');
 });
 
 test('partial credentials with authenticated metadata report before hydration clears the session', () => {
-  const { useAuthStore, persistOptions, reports } = loadAuthStore();
+  const { useAuthStore, persistOptions, reports, retained } = loadAuthStore();
   useAuthStore.setState({ isAuthenticated: true, accessToken: 'access-only', refreshToken: null });
   const finishHydration = persistOptions.onRehydrateStorage();
   finishHydration(useAuthStore.getState(), undefined);
@@ -123,6 +131,8 @@ test('partial credentials with authenticated metadata report before hydration cl
   assert.equal(reports[0].reason, 'hydration-tokens-invalid');
   assert.equal(reports[0].operation, 'session');
   assert.equal(reports[0].kind, 'forcedLogout');
+  assert.equal(retained[0].reason, 'hydration-tokens-invalid');
+  assert.equal(reports[0].diagnosticId, '12345678-1234-4234-8234-123456789def');
   assert.equal(useAuthStore.getState().accessToken, null);
   assert.doesNotMatch(JSON.stringify(reports), /access-only/);
 });

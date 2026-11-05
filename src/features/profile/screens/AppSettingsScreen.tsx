@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
+import { SessionDiagnosticsButton } from '@/components/app/session-diagnostics-button';
 import {
   SettingsSectionView,
   type SettingsDetailRow,
@@ -646,6 +647,7 @@ export default function AppSettingsScreen() {
             <Text style={d.footerDangerText}>{t('settingsPage.logout')}</Text>
           </Pressable>
         </View>
+        <SessionDiagnosticsButton />
       </ScrollView>
     </View>
   );

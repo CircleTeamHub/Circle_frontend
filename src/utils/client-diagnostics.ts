@@ -54,6 +54,7 @@ const SENTRY_BREADCRUMB_ALLOWLIST: ReadonlySet<string> = new Set([
 const MAX_BREADCRUMBS = 20;
 
 export interface DiagnosticBreadcrumb {
+  readonly timestamp: number;
   readonly event: string;
   readonly details: Readonly<Record<string, DiagnosticValue>>;
 }
@@ -113,7 +114,7 @@ export function logClientDiagnostic(
 
   breadcrumbs = [
     ...breadcrumbs,
-    { event, details: toBreadcrumbDetails(sanitized) },
+    { timestamp: Date.now(), event, details: toBreadcrumbDetails(sanitized) },
   ].slice(-MAX_BREADCRUMBS);
 
   if (!isDev) {

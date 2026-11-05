@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "复制登录诊断信息",
+    "copied": "已复制诊断信息，请发给技术支持",
+    "copyFailed": "复制失败，请重试"
+  },
   "mediaUpload": {
     "sessionChanged": "账号已切换，请重新选择文件后上传",
     "uploading": "正在上传",

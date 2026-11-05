@@ -1160,6 +1160,25 @@ test("initSentry wires navigation tracing so cold start and XHR spans have a roo
   assert.equal(registered[0], ref);
 });
 
+test("session diagnostic correlation and response-shape flags survive Sentry sanitization", () => {
+  const { initSentry, reportError } = loadSentry();
+  let config;
+  initSentry({ client: { init: o => { config = o; }, wrap: c => c }, dsn: 'https://a@o/1' });
+  let captured;
+  const diagnosticId = '12345678-1234-4234-8234-123456789abc';
+  reportError(new Error('fixed cause'), {
+    operation: 'session', kind: 'forcedLogout', diagnosticId,
+    reason: 'refresh-response-invalid', responseShape: 'object',
+    responseHasAccessToken: true, responseHasRefreshToken: false,
+    hasAccessToken: true, hasRefreshToken: true, closeCode: 1008,
+  }, { captureException: (_error, context) => { captured = context; } });
+  const sanitized = config.beforeSend({ tags: captured.tags, extra: captured.extra });
+  assert.equal(sanitized.tags.diagnosticId, diagnosticId);
+  assert.equal(sanitized.extra.responseShape, 'object');
+  assert.equal(sanitized.extra.responseHasRefreshToken, false);
+  assert.equal(sanitized.extra.closeCode, 1008);
+});
+
 test("forced logout events retain distinct request ids through SDK deduplication", () => {
   const { dedupeIntegration } = require('@sentry/core');
   const { initSentry, reportError } = loadSentry();

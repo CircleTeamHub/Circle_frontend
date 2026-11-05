@@ -14,6 +14,7 @@ import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 import { createHttpRequestId, diagnosticNow, safeHttpEndpoint, safeHttpRequestId } from '@/observability/http-diagnostics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import type { SessionDiagnosticContext } from '@/observability/session-diagnostics';
 import { ApiError } from './api-error';
 
 // 定义搬去 api-error.ts（零依赖），这里原样 re-export 保住既有导入路径。
@@ -486,6 +487,7 @@ async function refreshAccessToken(sessionEpoch: number) {
   assertSessionEpoch(sessionEpoch);
 
   let refreshResponseStatus: number | undefined;
+  let refreshResponseDetails: SessionDiagnosticContext = {};
   const activeRefreshPromise = (async () => {
     const { refreshToken } = useAuthStore.getState();
 
@@ -523,6 +525,15 @@ async function refreshAccessToken(sessionEpoch: number) {
     });
 
     if (!isTokenPair(tokens)) {
+      const invalid: unknown = tokens;
+      const fields = invalid && typeof invalid === 'object'
+        ? invalid as Record<string, unknown> : {};
+      refreshResponseDetails = {
+        responseShape: invalid == null ? 'empty' : Array.isArray(invalid) ? 'array'
+          : typeof invalid === 'object' ? 'object' : 'primitive',
+        responseHasAccessToken: typeof fields.accessToken === 'string' && fields.accessToken.length > 0,
+        responseHasRefreshToken: typeof fields.refreshToken === 'string' && fields.refreshToken.length > 0,
+      };
       // 后端字段缺失 / 重命名 / 类型异常 — 视为刷新失败，避免后续带着 Bearer undefined 死循环。
       throw new ApiError(
         i18n.t('common.errors.refreshResponseInvalid', {
@@ -562,6 +573,7 @@ async function refreshAccessToken(sessionEpoch: number) {
           status: refreshResponseStatus ?? error.status,
           requestId: error.requestId,
           failureKind: error.failureKind,
+          ...refreshResponseDetails,
         });
       }
       throw error;

@@ -222,7 +222,7 @@ export function LoginSecurityCodeGate() {
 
   async function handleLogout() {
     try {
-      await clearLocalSession();
+      await clearLocalSession(undefined, { reason: 'user-logout', userInitiated: true });
     } catch (error) {
       reportHandledFailure('securityCodeGate', 'logoutCleanup', error);
     } finally {

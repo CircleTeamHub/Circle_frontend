@@ -19,6 +19,7 @@ import { migrateAuthPersist, AUTH_PERSIST_VERSION } from './authPersist';
 import { sanitizeUserForPersist } from './persisted-user';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { reportError } from '@/observability/sentry';
+import { recordSessionDiagnostic } from '@/observability/session-diagnostics';
 
 export interface AuthUser {
   id: string;
@@ -196,7 +197,8 @@ export const useAuthStore = create<AuthState>()(
           // 关键：绝不能在这里 clearSession —— 它会把空态写回，连带删掉磁盘上完好的 token，
           // 让「一次读抖动 = 永久登出」。这里只解除启动阻塞、保留磁盘凭证，留待下次启动恢复；
           // secureAuthStorage 已进入 degraded 模式，会拦截随后写回的空态、不动磁盘数据。
-          reportHandledFailure('authStore', 'hydrationRead', error);
+          const diagnosticId = recordSessionDiagnostic('hydration-read-failed');
+          reportHandledFailure('authStore', 'hydrationRead', error, { diagnosticId });
           nextState.setLoading(false);
           return;
         }
@@ -225,7 +227,15 @@ export const useAuthStore = create<AuthState>()(
           // 认证凭证缺失时仍可能残留上个账号的 MMKV 缓存。保持启动门禁，
           // 交给 SessionBootstrap 走完整 clearLocalSession 后再开放登录页。
           if (nextState.isAuthenticated || nextState.accessToken || nextState.refreshToken) {
+            const context = {
+              authenticated: nextState.isAuthenticated,
+              hasAccessToken: Boolean(nextState.accessToken),
+              hasRefreshToken: Boolean(nextState.refreshToken),
+            };
+            const diagnosticId = recordSessionDiagnostic('hydration-tokens-invalid', context);
             reportError(new Error('Authentication session cleared: hydration-tokens-invalid'), {
+              ...context,
+              diagnosticId,
               operation: 'session',
               kind: 'forcedLogout',
               reason: 'hydration-tokens-invalid',

@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "Copiar diagnóstico de inicio de sesión",
+    "copied": "Diagnóstico copiado. Envíalo a soporte.",
+    "copyFailed": "No se pudo copiar. Inténtalo de nuevo."
+  },
   "mediaUpload": {
     "sessionChanged": "Has cambiado de cuenta. Selecciona el archivo de nuevo para subirlo.",
     "uploading": "Subiendo",

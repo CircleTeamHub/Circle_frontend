@@ -61,6 +61,7 @@ import {
   setSentryUserId,
 } from '@/observability/sentry';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { recordSessionDiagnostic } from '@/observability/session-diagnostics';
 import { devWarn } from '@/utils/dev-log';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
@@ -159,7 +160,8 @@ function ensureStartupBootstrap(): Promise<void> {
       await initEncryptedStorage();
       await migrateFromAsyncStorage();
     } catch (err) {
-      reportHandledFailure('startup', 'storageInit', err);
+      const diagnosticId = recordSessionDiagnostic('startup-storage-failed');
+      reportHandledFailure('startup', 'storageInit', err, { diagnosticId });
     }
     // 认证 hydration 决定首屏该进主界面还是登录页，必须在启动门内完成。
     await rehydratePersistedStore('auth', useAuthStore);

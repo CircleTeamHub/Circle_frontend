@@ -10,6 +10,7 @@ import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { resetDiagnosticBreadcrumbs } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { reportError } from '@/observability/sentry';
+import { recordSessionDiagnostic, type SessionDiagnosticContext, type SessionDiagnosticReason } from '@/observability/session-diagnostics';
 
 type PersistCapableAuthStore = {
   persist?: {
@@ -200,21 +201,9 @@ export function registerLogoutHandler(handler: LogoutHandler): () => void {
   };
 }
 
-interface ClearLocalSessionOptions {
+interface ClearLocalSessionOptions extends SessionDiagnosticContext {
   preserveLoading?: boolean;
-  reason?:
-    | 'refresh-token-missing'
-    | 'refresh-rejected'
-    | 'refresh-response-invalid'
-    | 'request-rejected-after-refresh'
-    | 'realtime-revoked'
-    | 'bootstrap-rejected'
-    | 'bootstrap-tokens-missing';
-  endpointPath?: string;
-  method?: string;
-  status?: number;
-  requestId?: string;
-  failureKind?: string;
+  reason?: SessionDiagnosticReason;
 }
 
 async function performClearLocalSession(
@@ -257,18 +246,20 @@ async function performClearLocalSession(
   }
 
   const auth = useAuthStore.getState();
-  // Capture the cause while its account scope and breadcrumbs still exist.
-  // An ordinary logout, account switch, or empty startup has no forced-logout event.
-  if (options.reason && (auth.isAuthenticated || auth.accessToken || auth.refreshToken)) {
-    reportError(new Error(`Authentication session cleared: ${options.reason}`), {
+  if (auth.isAuthenticated || auth.accessToken || auth.refreshToken) {
+    const context = {
+      ...options,
+      authenticated: auth.isAuthenticated,
+      hasAccessToken: Boolean(auth.accessToken),
+      hasRefreshToken: Boolean(auth.refreshToken),
+    };
+    const diagnosticId = recordSessionDiagnostic(options.reason ?? 'unspecified-clear', context);
+    // User actions remain local support records, not error events.
+    if (options.reason && !options.userInitiated) reportError(new Error(`Authentication session cleared: ${options.reason}`), {
+      ...context,
+      diagnosticId,
       operation: 'session',
       kind: 'forcedLogout',
-      reason: options.reason,
-      endpointPath: options.endpointPath,
-      method: options.method,
-      status: options.status,
-      requestId: options.requestId,
-      failureKind: options.failureKind,
     });
   }
   auth.clearSession({

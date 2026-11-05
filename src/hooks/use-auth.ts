@@ -79,7 +79,7 @@ function clearFailedLoginSession(preservedEpoch: number | null): Promise<void> {
   ) {
     return Promise.resolve();
   }
-  return clearLocalSession();
+  return clearLocalSession(undefined, { reason: 'failed-login-cleanup', userInitiated: true });
 }
 
 export function useAuth() {
@@ -161,7 +161,7 @@ export function useAuth() {
           // 持久化),不撤销服务端会话 —— 它留在账号列表里,随时能切回来。
           rememberCurrentAccount();
           setCommitting(true);
-          try { await clearLocalSession(); }
+          try { await clearLocalSession(undefined, { reason: 'account-switch', userInitiated: true }); }
           finally { if (mountedRef.current) setCommitting(false); }
           if (!mountedRef.current || (options.isAttemptCurrent && !options.isAttemptCurrent())) {
             if (!useAuthStore.getState().isAuthenticated && current.user && current.accessToken && current.refreshToken) {
@@ -347,7 +347,7 @@ export function useAuth() {
     }
 
     try {
-      await clearLocalSession();
+      await clearLocalSession(undefined, { reason: 'user-logout', userInitiated: true });
     } finally {
       inFlightRef.current = false;
       safeSetSubmitting(false);
@@ -387,7 +387,7 @@ export function useAuth() {
       try {
         // teardown 当前账号（IM 登出、清空依赖 store、清持久化会话）。
         rememberCurrentAccount();
-        await clearLocalSession();
+        await clearLocalSession(undefined, { reason: 'account-switch', userInitiated: true });
 
         // 先用存储的资料乐观激活，UI 立即切到目标账号。
         setSession(
@@ -424,7 +424,7 @@ export function useAuth() {
         // 等于把一个好账号连同当前会话一起炸掉（#101）。
         if (isDefinitiveAuthFailure(switchError)) {
           useKnownAccountsStore.getState().removeAccount(account.user.id);
-          await clearLocalSession();
+          await clearLocalSession(undefined, { reason: 'account-switch-rejected' });
           useAccountSwitcherStore.getState().close();
           reportHandledFailure('auth', 'switchAccountExpired', switchError);
           router.replace({

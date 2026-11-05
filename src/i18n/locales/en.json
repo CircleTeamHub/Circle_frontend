@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "Copy login diagnostics",
+    "copied": "Diagnostics copied. Send them to support.",
+    "copyFailed": "Could not copy. Please try again."
+  },
   "mediaUpload": {
     "sessionChanged": "Your account changed. Please select the file again to upload.",
     "uploading": "Uploading",

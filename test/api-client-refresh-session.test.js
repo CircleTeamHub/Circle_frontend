@@ -512,6 +512,9 @@ test('refresh returning a malformed token pair clears the session', async () => 
   assert.equal(harness.getClearCalls(), 1);
   assert.equal(harness.getClearOptions()[0]?.reason, 'refresh-response-invalid');
   assert.equal(harness.getClearOptions()[0]?.status, 201);
+  assert.equal(harness.getClearOptions()[0]?.responseShape, 'object');
+  assert.equal(harness.getClearOptions()[0]?.responseHasAccessToken, true);
+  assert.equal(harness.getClearOptions()[0]?.responseHasRefreshToken, false);
   assert.equal(harness.getClearOptions()[0]?.requestId, harness.fetchCalls[1][1].headers['X-Request-Id']);
   assert.equal(harness.authState.accessToken, null);
 });
