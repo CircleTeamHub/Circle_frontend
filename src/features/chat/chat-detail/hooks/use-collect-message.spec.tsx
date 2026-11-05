@@ -11,6 +11,10 @@ const mockCollectNote = jest.fn();
 const mockFetchGroups = jest.fn();
 const mockBump = jest.fn();
 const mockReportFailure = jest.fn();
+const mockRecordMetric = jest.fn();
+let mockClock = 0;
+jest.mock('@/observability/metrics', () => ({ recordMetric: (...args: unknown[]) => mockRecordMetric(...args) }));
+jest.mock('@/observability/http-diagnostics', () => ({ diagnosticNow: () => mockClock }));
 jest.mock('@/services/api/collections', () => ({ createCollection: (...args: unknown[]) => mockCreateCollection(...args) }));
 jest.mock('@/services/api/notes', () => ({ collectNote: (...args: unknown[]) => mockCollectNote(...args), fetchNoteGroups: () => mockFetchGroups() }));
 jest.mock('@/features/notes/store/use-note-list-signal-store', () => ({ useNoteListSignalStore: { getState: () => ({ bump: mockBump }) } }));
@@ -50,6 +54,7 @@ beforeEach(() => {
   mockCollectNote.mockReset().mockResolvedValue({ note: { id: 'copy' }, alreadyCollected: false });
   mockFetchGroups.mockReset().mockResolvedValue([{ id: 'private-group', name: 'Private' }]);
   mockBump.mockReset(); mockReportFailure.mockReset();
+  mockRecordMetric.mockReset(); mockClock = 0;
   useAuthStore.setState({ user: { id: 'me' } as never, sessionEpoch: 1 });
   useChatStore.setState({ activeConversationId: 'c1', messagesByConversation: {} });
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -119,7 +124,12 @@ test('silent note waits for the existing group and title confirmation before res
   expect(settled).toBe(false);
   expect(sheet(result.current)).toEqual(expect.objectContaining({ visible: true, noteTitle: 'Original title', groups: [{ id: 'private-group', name: 'Private' }] }));
   expect(mockCollectNote).not.toHaveBeenCalled();
+  mockCollectNote.mockImplementation(async () => {
+    mockClock += 1500;
+    return { note: { id: 'copy' }, alreadyCollected: false };
+  });
   await act(async () => { await sheet(result.current).onConfirm({ targetNoteGroupId: 'private-group', title: 'Edited title' }); });
+  expect(mockRecordMetric).toHaveBeenCalledWith('app.operation.duration', 1500, { operation: 'noteCollect', outcome: 'success' });
   await expect(pending).resolves.toBe('collected');
   expect(mockCollectNote).toHaveBeenCalledWith('n1', expect.objectContaining({ clientMsgID: 'note-message', conversationID: 'c1' }), { targetNoteGroupId: 'private-group', title: 'Edited title' });
   expect(mockBump).toHaveBeenCalledTimes(1); expect(Alert.alert).not.toHaveBeenCalled();
@@ -156,6 +166,7 @@ test('silent note write failure resolves failed, closes the sheet, and reports w
   await expect(pending).resolves.toBe('failed');
   expect(mockCollectNote).toHaveBeenCalledTimes(1); expect(mockBump).not.toHaveBeenCalled();
   expect(mockReportFailure).toHaveBeenCalledWith('chatDetail', 'collectNote', error);
+  expect(mockRecordMetric).toHaveBeenCalledWith('app.operation.duration', 0, { operation: 'noteCollect', outcome: 'failed' });
   expect(Alert.alert).not.toHaveBeenCalled(); expect(result.current.noteCollectVisible).toBe(false);
 });
 

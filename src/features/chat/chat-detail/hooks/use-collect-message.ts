@@ -15,6 +15,8 @@ import {
 import { Alert, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { diagnosticNow } from '@/observability/http-diagnostics';
+import { recordMetric } from '@/observability/metrics';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChatStore } from '@/chat-core/store';
 import { useAuthStore } from '@/stores/authStore';
@@ -325,6 +327,7 @@ export function useCollectMessage({
       if (!request || request.target !== noteCollectTarget || request.saving || !isCurrentContext(request)) return;
       request.saving = true;
       setNoteCollectSaving(true);
+      const startedAt = diagnosticNow();
       try {
         const target = request.target;
         const result = await collectNote(target.noteId, target.source, {
@@ -332,6 +335,7 @@ export function useCollectMessage({
           title,
         });
         if (noteRequestRef.current !== request || !isCurrentContext(request)) return;
+        recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - startedAt), { operation: 'noteCollect', outcome: 'success' });
         // The notes screen may already be mounted in another tab stack. Mark
         // it stale after the server confirms the write so returning to the
         // list fetches the saved (possibly edited) title immediately.
@@ -369,6 +373,7 @@ export function useCollectMessage({
       } catch (error) {
         reportHandledFailure('chatDetail', 'collectNote', error);
         if (noteRequestRef.current !== request || !isCurrentContext(request)) return;
+        recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - startedAt), { operation: 'noteCollect', outcome: 'failed' });
         if (request.silent) {
           finishNoteCollect('failed');
         } else {

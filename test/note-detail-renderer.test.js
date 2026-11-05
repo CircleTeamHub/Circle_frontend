@@ -79,7 +79,7 @@ test('EditNoteScreen saves with createNote or updateNote', () => {
 test('EditNoteScreen preserves structured note sections it cannot edit', () => {
   const src = read('src/features/notes/screens/EditNoteScreen.tsx');
   assert.match(src, /existingSectionsRef/);
-  assert.match(src, /const normalizedSections = buildNoteSections\(note\)/);
+  assert.match(src, /const normalizedSections = buildNoteSectionsWithCards\(note\)/);
   assert.match(src, /setLocationDraft\(buildLocationDraft\(note\.sections\?\.location\)\)/);
   assert.match(src, /const nextLocation =/);
   assert.match(src, /location: nextLocation/);

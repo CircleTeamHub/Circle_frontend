@@ -1,10 +1,7 @@
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from 'react';
 import { router } from 'expo-router';
-import {
-  type AttachmentId,
-  PANEL_LAYOUT_ANIM,
-} from '@/features/chat/chat-detail/constants';
-import { Alert, LayoutAnimation } from 'react-native';
+import { type AttachmentId } from '@/features/chat/chat-detail/constants';
+import { Alert } from 'react-native';
 import { type FriendProfile } from '@/services/api/friends';
 import { sendCardMessage, sendVoiceMessage } from '@/chat-core/client';
 import { startChatSend } from '@/chat-core/send-handle';
@@ -70,7 +67,7 @@ export function useAttachmentActions({
 
   const handleAttachmentAction = useCallback(
     (id: AttachmentId) => {
-      LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
+      // 页面/弹层接管转场，避免全局布局动画同时作用到新挂载的目标视图。
       setAttachmentOpen(false);
       switch (id) {
         case 'media':

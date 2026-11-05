@@ -1,4 +1,5 @@
 import type { NoteCardPeer, NoteSummary } from '@/features/notes/types';
+import { buildNoteSections, type StructuredNoteInput } from './note-sections';
 
 /** 卡片底部按钮的跳转目标：个人名片 → 私聊，群名片 → 群聊。 */
 export interface NoteCardButton {
@@ -22,9 +23,10 @@ export interface NoteCardButtons {
   group: NoteCardButton | null;
 }
 
-type CardSource = Pick<NoteSummary, 'cardPreview' | 'collectedFrom'>;
+type CardSource = Pick<NoteSummary, 'cardPreview' | 'collectedFrom'> & Pick<StructuredNoteInput, 'sections'>;
+type CardPeer = NoteCardPeer & { avatarUrl?: string | null };
 
-function firstValid(peers: readonly NoteCardPeer[] | undefined): NoteCardPeer | null {
+function firstValid(peers: readonly CardPeer[] | undefined): CardPeer | null {
   return peers?.find((peer) => Boolean(peer?.id && peer.name)) ?? null;
 }
 
@@ -42,8 +44,8 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
   const sourceGroup =
     from?.conversationType === 'group' && from.group?.id && from.group.name ? from.group : null;
 
-  const contact = firstValid(note.cardPreview?.contacts) ?? sourceSender;
-  const group = firstValid(note.cardPreview?.groups) ?? sourceGroup;
+  const contact: CardPeer | null = firstValid(note.sections?.contacts?.items ?? note.cardPreview?.contacts) ?? sourceSender;
+  const group: CardPeer | null = firstValid(note.sections?.groups?.items ?? note.cardPreview?.groups) ?? sourceGroup;
   const contactIsSource =
     contact !== null && from?.conversationType === 'private' && sourceSender?.id === contact.id;
   const groupConversationID =
@@ -65,7 +67,7 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
       ? {
           id: contact.id,
           name: contact.name,
-          faceURL: contact.faceURL ?? null,
+          faceURL: contact.faceURL || contact.avatarUrl || null,
           target: 'chat',
           ...(contactIsSource && from ? { conversationID: from.conversationID } : {}),
         }
@@ -74,7 +76,7 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
       ? {
           id: groupCircleId ?? group.id,
           name: group.name,
-          faceURL: group.faceURL ?? null,
+          faceURL: group.faceURL || group.avatarUrl || null,
           target: groupIsSource || groupConversationID ? 'chat' : 'circle',
           // 独立群名片由服务端标注会话 id（卡片 id 不是圈子 id），必须按会话进群；
           // 与收藏来源是同一个群时还带原消息 id，进群直接定位。
@@ -85,5 +87,25 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
               : {}),
         }
       : null,
+  };
+}
+
+/** 编辑器、浏览页和列表使用同一名片来源；缺省名片随编辑保存到真实分区。 */
+export function buildNoteSectionsWithCards(note: CardSource & StructuredNoteInput) {
+  const sections = buildNoteSections(note);
+  const { contact, group } = resolveNoteCardButtons(note);
+  return {
+    ...sections,
+    contacts: { items: sections.contacts.items.length ? sections.contacts.items : contact
+      ? [{ id: contact.id, name: contact.name, faceURL: contact.faceURL }]
+      : [] },
+    groups: { items: group ? [
+      {
+        ...(sections.groups.items[0] ?? { id: group.id, name: group.name, faceURL: group.faceURL }),
+        id: group.id,
+        ...(group.conversationID ? { conversationID: group.conversationID } : {}),
+      },
+      ...sections.groups.items.slice(1),
+    ] : [] },
   };
 }
