@@ -82,7 +82,7 @@ test('mounts the native view before loading and plays the selected video', async
   render(<NoteVideoViewer uri={uri} onClose={jest.fn()} />);
 
   expect(mockUseVideoPlayer).toHaveBeenCalledWith(null);
-  expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(uri);
+  expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(expect.objectContaining({ uri, useCaching: true }));
   expect(mockPlayer.play).not.toHaveBeenCalled();
   expect(screen.UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
   expect(mockVideoViewProps).toMatchObject({

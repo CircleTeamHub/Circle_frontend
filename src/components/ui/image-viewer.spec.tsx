@@ -79,12 +79,25 @@ test('standard previews keep disk caching and the save gesture', () => {
 test('applies each conversation image privacy policy and reports horizontal paging', () => {
   const onIndexChange = jest.fn();
   render(<ImageViewer images={['ordinary.jpg', 'private.jpg']} privacyModes={['standard', 'ephemeral']} visible onClose={jest.fn()} onIndexChange={onIndexChange} />);
-  const images = screen.getAllByTestId('zoomable-image');
-  expect(images[0].props.cachePolicy).toBe('memory-disk');
-  expect(images[1].props.cachePolicy).toBe('none');
-  expect(images[1].props.onLongPress).toBeUndefined();
+  expect(screen.getByTestId('zoomable-image').props.cachePolicy).toBe('memory-disk');
   fireEvent.scroll(screen.UNSAFE_getByType(FlatList), { nativeEvent: { contentOffset: { x: 750, y: 0 } } });
   expect(onIndexChange).toHaveBeenCalledWith(1);
+  expect(screen.getByTestId('zoomable-image').props.cachePolicy).toBe('none');
+  expect(screen.getByTestId('zoomable-image').props.onLongPress).toBeUndefined();
+});
+
+test('only mounts the active full-size image and retains empty pages for swipe navigation', () => {
+  render(<ImageViewer images={['0.jpg', '1.jpg', '2.jpg']} cacheKeys={['zero', 'one', 'two']} initialIndex={1} visible onClose={jest.fn()} />);
+  const list = screen.UNSAFE_getByType(FlatList);
+  expect(screen.getAllByTestId('zoomable-image')).toHaveLength(1);
+  expect(screen.getByTestId('zoomable-image').props).toMatchObject({ uri: '1.jpg', cacheKey: 'one' });
+  const placeholder = list.props.renderItem({ item: '0.jpg', index: 0 });
+  expect(placeholder.type).toBe(View);
+  expect(placeholder.props.style).toMatchObject({ width: expect.any(Number), height: expect.any(Number) });
+  const pageWidth = list.props.getItemLayout(null, 2).length;
+  fireEvent.scroll(list, { nativeEvent: { contentOffset: { x: pageWidth * 2, y: 0 } } });
+  expect(screen.getAllByTestId('zoomable-image')).toHaveLength(1);
+  expect(screen.getByTestId('zoomable-image').props).toMatchObject({ uri: '2.jpg', cacheKey: 'two' });
 });
 
 test('does not interrupt a horizontal drag when the parent tracks the selected message', () => {
@@ -223,19 +236,18 @@ test('starts rendering a nonadjacent destination while a fling is still in progr
   expect(screen.getAllByTestId('zoomable-image').some((image) => image.props.uri === 'https://example.test/2.jpg')).toBe(true);
 });
 
-test('ignores prefetched page zoom callbacks and clears the old page lock during paging', () => {
+test('ignores old page zoom callbacks and clears the old page lock during paging', () => {
   render(<ImageViewer images={['0.jpg', '1.jpg']} visible onClose={jest.fn()} />);
   const list = screen.UNSAFE_getByType(FlatList);
-  const [current, prefetched] = screen.getAllByTestId('zoomable-image');
-  act(() => prefetched.props.onZoomedChange(true));
-  expect(list.props.scrollEnabled).toBe(true);
-  act(() => current.props.onZoomedChange(true));
+  const current = screen.getByTestId('zoomable-image');
+  const onOldPageZoomedChange = current.props.onZoomedChange;
+  act(() => onOldPageZoomedChange(true));
   expect(list.props.scrollEnabled).toBe(false);
   fireEvent.scroll(list, { nativeEvent: { contentOffset: { x: 750, y: 0 } } });
   expect(list.props.scrollEnabled).toBe(true);
   const next = screen.getAllByTestId('zoomable-image').find((image) => image.props.active);
   act(() => next!.props.onZoomedChange(true));
-  act(() => current.props.onZoomedChange(false));
+  act(() => onOldPageZoomedChange(false));
   expect(list.props.scrollEnabled).toBe(false);
 });
 

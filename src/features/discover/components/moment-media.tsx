@@ -3,6 +3,7 @@ import { AppState, Modal, Pressable, StyleSheet, Text, View } from 'react-native
 import { useEventListener } from 'expo';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { cachedVideoSource } from '@/utils/video-source';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
@@ -10,11 +11,11 @@ import { ImageViewer } from '@/components/ui/image-viewer';
 import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { Radius, Spacing } from '@/theme';
 import type { ImageMediaVariant, MomentAttachment } from '@/types';
-import { ImageGrid } from './image-grid';
+import { getDisplayImages, ImageGrid } from './image-grid';
 
 function MomentVideo({ url, onClose }: { url: string; onClose: () => void }) {
   const { t } = useTranslation();
-  const player = useVideoPlayer(url, (instance) => { instance.loop = false; });
+  const player = useVideoPlayer(cachedVideoSource(url), (instance) => { instance.loop = false; });
   const [failed, setFailed] = useState(false);
   useEventListener(player, 'statusChange', ({ status }) => setFailed(status === 'error'));
   const close = () => { player.pause(); onClose(); };
@@ -52,16 +53,26 @@ export function MomentMedia({ images, media, attachments, containerWidth }: {
   const cols = attachments.length === 1 ? 1 : attachments.length <= 4 ? 2 : 3;
   const size = attachments.length === 1 ? width * 0.65 : (width - Spacing.xs * (cols - 1)) / cols;
   const photos = attachments.filter((item) => item.type === 'image');
+  const displayPhotos = getDisplayImages(
+    photos.map((item) => item.url),
+    photos.map((item, index) => ({ ...media?.[index], key: media?.[index]?.key ?? item.key })),
+  );
   return (
     <View style={s.grid}>
-      {attachments.map((item, index) => (
+      {attachments.map((item, index) => {
+        const photo = item.type === 'image' ? displayPhotos[photos.indexOf(item)] : undefined;
+        const source = photo
+          ? { uri: photo.thumbUri, cacheKey: photo.thumbCacheKey }
+          : item.posterUrl ? { uri: item.posterUrl, cacheKey: item.posterKey ?? `${item.key}:poster` } : undefined;
+        return (
         <Pressable key={`${item.key}-${index}`} style={[s.tile, { width: size, height: size }]} onPress={() => setSelected(item)} accessibilityRole="button" accessibilityLabel={t(item.type === 'video' ? 'moment.playVideo' : 'moment.openImage', { defaultValue: item.type === 'video' ? '播放视频' : '查看图片' })}>
-          {item.type === 'image' || item.posterUrl ? <Image source={{ uri: item.type === 'image' ? (media?.[photos.indexOf(item)]?.thumbUrl ?? media?.[photos.indexOf(item)]?.thumb ?? item.url) : item.posterUrl }} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory" enforceEarlyResizing recyclingKey={item.key} /> : null}
+          {source ? <Image source={source} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" enforceEarlyResizing recyclingKey={source.cacheKey} /> : null}
           {item.type === 'video' ? <Ionicons name="play-circle" size={40} color="#fff" /> : null}
         </Pressable>
-      ))}
+        );
+      })}
       {selected?.type === 'video' ? <MomentVideo key={selected.url} url={selected.url} onClose={() => setSelected(null)} /> : null}
-      {selected?.type === 'image' ? <ImageViewer images={photos.map((item) => item.url)} visible initialIndex={photos.findIndex((item) => item.key === selected.key)} onClose={() => setSelected(null)} /> : null}
+      {selected?.type === 'image' ? <ImageViewer images={displayPhotos.map((item) => item.originalUri)} cacheKeys={displayPhotos.map((item) => item.originalCacheKey)} visible initialIndex={photos.findIndex((item) => item.key === selected.key)} onClose={() => setSelected(null)} /> : null}
     </View>
   );
 }
