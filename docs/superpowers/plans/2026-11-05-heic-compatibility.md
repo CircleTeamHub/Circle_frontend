@@ -1,6 +1,6 @@
 # HEIC compatibility implementation plan
 
-> Execute sequentially in isolated App and admin checkouts, with failing regression tests before each implementation.
+> Executed sequentially in isolated App and admin checkouts, with failing regression tests before each implementation.
 
 **Goal:** Display existing HEIC avatars/circle icons in the admin, normalize future native App HEIC uploads, and render the new-user badge.
 
@@ -25,13 +25,21 @@
 ## Delivery
 
 - [x] Review the diff and verify no unrelated files were included.
-- [ ] Create ready-for-review PRs and provide precise verification/deployment status. Keep any online rollout separate from local completion claims.
-- [ ] Stop temporary development processes and verify they exited.
+- [x] Create ready-for-review PRs and provide precise verification/deployment status. Keep any online rollout separate from local completion claims.
+- [x] Stop temporary development processes and verify they exited.
 
 ## Verification evidence
 
 - App: TypeScript 5.9.3 typecheck and targeted ESLint passed; 58 upload/progress/privacy/note-logic tests passed; both note-editor behavior suites passed 170 tests.
 - Note image metadata now uses the signed Content-Type and Content-Length so a converted JPEG exports with the matching MIME and byte size. Both editor paths have regression coverage.
 - Browser decoded the affected account's existing avatar and circle icon as 3024x4032 JPEG previews; the App's copied new-user badge decoded as 280x358.
-- Admin: initial full suite passed 318 tests; final rerun and build pending.
+- Admin: final full suite passed all 318 tests; TypeScript and production Vite build passed.
 - Native decoding is exercised via the installed Expo API and mocked decoder in unit tests; no physical-device upload was performed.
+
+## Delivery
+
+- App ready-for-review PR: https://github.com/CircleTeamHub/Circle_frontend/pull/339
+- Admin ready-for-review PR: https://github.com/CircleTeamHub/circle_admin_web/pull/15
+- Both PRs remain unmerged and undeployed.
+- Independent review's note MIME/size finding was fixed and re-reviewed without further blockers.
+- Local preview port 5187 stopped; its exact Vite PID was checked and confirmed exited. Test processes completed; generated test cache and preview files removed.
