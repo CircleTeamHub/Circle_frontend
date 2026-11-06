@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Modal, StyleSheet, Text } from 'react-native';
+import { Modal, StyleSheet, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { sendTextMessage } from '@/chat-core/client';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
-import {
-  ChatTargetPicker,
-  type ChatTargetPickerHandle,
-} from '@/features/chat/components/chat-target-picker/ChatTargetPicker';
+import { showTopNotice } from '@/components/app/top-notice-store';
+import { announceSent } from '@/features/chat/components/chat-target-picker/announce-sent';
+import { ChatTargetPicker } from '@/features/chat/components/chat-target-picker/ChatTargetPicker';
 import {
   chatTargetResolveFailureMessage,
   resolveChatTargets,
+  type ResolvedChatTarget,
 } from '@/features/chat/components/chat-target-picker/resolve-chat-target';
 import type { ChatTarget } from '@/features/chat/components/chat-target-picker/types';
 import { useRecentForwardTargetsStore } from '@/features/chat/components/chat-target-picker/use-recent-forward-targets-store';
@@ -48,6 +48,7 @@ const s = StyleSheet.create({
 /**
  * 分享笔记到聊天：用统一的「选择一个聊天」页选一个或多个对象，确认时可以附一句留言。
  * 每个对象按勾选的分块依次发出（媒体由服务端拷进我的聊天目录），留言排在最后。
+ * 点发送立刻提示「已发送」，内容在后台接着发，不用对着选择页等。
  */
 export function ShareNoteSheet({ request, onClose }: ShareNoteSheetProps) {
   const { colors } = useTheme();
@@ -56,120 +57,95 @@ export function ShareNoteSheet({ request, onClose }: ShareNoteSheetProps) {
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const recordRecent = useRecentForwardTargetsStore((state) => state.record);
   const [confirmTargets, setConfirmTargets] = useState<ChatTarget[] | null>(null);
-  const [sending, setSending] = useState(false);
-  const mountedRef = useRef(true);
-  const inFlightRef = useRef(false);
+  // 用户级 20 条/10s 的发送桶,面板多次打开、几批同时在路上也共用这一个。
   const sendTimestampsRef = useRef<number[]>([]);
-  const pickerRef = useRef<ChatTargetPickerHandle>(null);
-  // 面板一次「打开」的代数：关闭即作废。关掉后还在路上的发送停发剩余内容，
-  // 收尾（关面板 / 报错）也不能落到已经关掉或重新打开的面板上。
-  const openGenerationRef = useRef(0);
 
   useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!visible) {
-      setConfirmTargets(null);
-      openGenerationRef.current += 1;
-    }
+    if (!visible) setConfirmTargets(null);
   }, [visible]);
 
-  const handleConfirm = useCallback(
-    async (chosen: ChatTarget[], caption: string) => {
-      if (!request || inFlightRef.current) return;
-      inFlightRef.current = true;
-      setSending(true);
-      const generation = openGenerationRef.current;
-      const isCurrent = () => mountedRef.current && openGenerationRef.current === generation;
-      let failures = 0;
-      let firstError: unknown = null;
-      const delivered: ChatTarget[] = [];
-      // 选择页里的原 key(通讯录好友是 user:<id>),部分失败后按它从多选里去掉。
-      const deliveredKeys: string[] = [];
-      let resolveFailureMessage: string | null = null;
-      try {
-        // 先把所有对象都落到会话 id:建单聊失败时一条都不发,重试不会给已发过的人再发一份。
-        const { resolved, failed } = await resolveChatTargets(chosen);
-        if (failed.length > 0) {
-          failed.forEach((item) => reportHandledFailure('noteShare', 'resolveTarget', item.error));
-          resolveFailureMessage = chatTargetResolveFailureMessage(
+  /**
+   * 后台把笔记(和留言)发给每个对象。关掉面板不影响:点「确定」就是要它接着发;
+   * 只有换了账号才停发剩下的。失败用顶部提示报,这时面板多半已经关了。
+   */
+  const sendInBackground = useCallback(
+    async (
+      shared: NoteShareRequest,
+      chosen: ChatTarget[],
+      caption: string,
+    ): Promise<ResolvedChatTarget[]> => {
+      const failedTitle = t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' });
+      const isActive = () => useAuthStore.getState().user?.id === userId;
+      const { resolved, failed } = await resolveChatTargets(chosen);
+      if (failed.length > 0) {
+        failed.forEach((item) => reportHandledFailure('noteShare', 'resolveTarget', item.error));
+        showTopNotice({
+          type: 'error',
+          title: failedTitle,
+          message: chatTargetResolveFailureMessage(
             failed,
             t,
             t('common.retryLater', { defaultValue: '请稍后重试' }),
-          );
-        } else {
-          for (const { target, conversationId } of resolved) {
-            if (!isCurrent()) break;
-            const result = await sendNotesToConversation({
-              conversationId,
-              notes: request.notes,
-              options: request.options,
-              ownerId: userId,
-              sendTimestamps: sendTimestampsRef,
-              isActive: isCurrent,
-            });
-            failures += result.failures;
-            firstError ??= result.firstError;
-            if (caption && isCurrent()) {
-              if (result.sent === 0) {
-                // 内容一条都没送达,单独把留言发过去没有意义:算作这一项也没发出。
-                failures += 1;
-              } else {
-                try {
-                  await sendTextMessage({ conversationId, text: caption });
-                } catch (error) {
-                  failures += 1;
-                  firstError ??= error;
-                }
-              }
-            }
-            // 有内容送达的对象才从多选里去掉:再点发送不会给它重复发一份。
-            if (result.sent > 0) {
-              delivered.push({ ...target, key: conversationId, conversationId });
-              deliveredKeys.push(target.key);
+          ),
+        });
+      }
+      let failures = 0;
+      let firstError: unknown = null;
+      const delivered: ChatTarget[] = [];
+      for (const { target, conversationId } of resolved) {
+        if (!isActive()) break;
+        const result = await sendNotesToConversation({
+          conversationId,
+          notes: shared.notes,
+          options: shared.options,
+          ownerId: userId,
+          sendTimestamps: sendTimestampsRef,
+          isActive,
+        });
+        failures += result.failures;
+        firstError ??= result.firstError;
+        if (caption && isActive()) {
+          if (result.sent === 0) {
+            // 内容一条都没送达,单独把留言发过去没有意义:算作这一项也没发出。
+            failures += 1;
+          } else {
+            try {
+              await sendTextMessage({ conversationId, text: caption });
+            } catch (error) {
+              failures += 1;
+              firstError ??= error;
             }
           }
         }
-      } finally {
-        inFlightRef.current = false;
-        if (mountedRef.current) setSending(false);
-        if (userId && delivered.length > 0) recordRecent(userId, delivered);
+        if (result.sent > 0) delivered.push({ ...target, key: conversationId, conversationId });
       }
-      if (!isCurrent()) return;
-      if (resolveFailureMessage) {
-        Alert.alert(
-          t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
-          resolveFailureMessage,
-        );
-        return;
+      if (userId && delivered.length > 0) recordRecent(userId, delivered);
+      if (failures > 0) {
+        const countMessage = t('notes.shareToChat.partialFailed', {
+          count: failures,
+          defaultValue: `有 ${failures} 条内容发送失败。`,
+        });
+        showTopNotice({
+          type: 'error',
+          title: failedTitle,
+          message: firstError ? getChatSendErrorMessage(firstError, countMessage) : countMessage,
+        });
       }
-      if (failures === 0) {
-        // 全部成功直接收起，不再弹「已发送」。
-        onClose();
-        return;
-      }
-      pickerRef.current?.deselect(deliveredKeys);
-      const countMessage = t('notes.shareToChat.partialFailed', {
-        count: failures,
-        defaultValue: `有 ${failures} 条内容发送失败。`,
-      });
-      const reason = firstError ? getChatSendErrorMessage(firstError, countMessage) : countMessage;
-      Alert.alert(
-        t('notes.shareToChat.failedTitle', { defaultValue: '发送失败' }),
-        deliveredKeys.length > 0 && deliveredKeys.length < chosen.length
-          ? `${t('chat.targetPicker.partialDelivered', {
-              count: deliveredKeys.length,
-              defaultValue: '已发送给 {{count}} 个聊天，已从选择中移除。',
-            })}\n${reason}`
-          : reason,
-      );
+      return resolved;
     },
-    [onClose, recordRecent, request, t, userId],
+    [recordRecent, t, userId],
+  );
+
+  const handleConfirm = useCallback(
+    (chosen: ChatTarget[], caption: string) => {
+      if (!request) return;
+      const resolution = sendInBackground(request, chosen, caption).catch((error: unknown) => {
+        reportHandledFailure('noteShare', 'send', error);
+        return [];
+      });
+      announceSent({ t, targets: chosen, resolution, onDismiss: onClose });
+    },
+    [onClose, request, sendInBackground, t],
   );
 
   const notes = request?.notes ?? [];
@@ -183,14 +159,9 @@ export function ShareNoteSheet({ request, onClose }: ShareNoteSheetProps) {
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
-      // 发送中也能关(含安卓返回键):关掉即作废这一代,剩下的内容停发,
-      // 不能让弱网下慢吞吞的发送把人锁在全屏页里。
       onRequestClose={onClose}
     >
       <ChatTargetPicker
-        ref={pickerRef}
-        busy={sending}
-        closableWhileBusy
         onClose={onClose}
         onConfirm={setConfirmTargets}
       />
@@ -212,7 +183,7 @@ export function ShareNoteSheet({ request, onClose }: ShareNoteSheetProps) {
         onConfirm={(caption) => {
           const chosen = confirmTargets;
           setConfirmTargets(null);
-          if (chosen) void handleConfirm(chosen, caption);
+          if (chosen) handleConfirm(chosen, caption);
         }}
       >
         <Text style={[s.preview, { color: colors.textSecondary }]} numberOfLines={3}>

@@ -1026,7 +1026,9 @@
       "sendSelected": "送信（{{count}}）",
       "nameSeparator": "、",
       "resolveFailed": "{{names}} に送信できません：{{reason}}",
-      "partialDelivered": "{{count}} 件のチャットには送信済みのため、選択から外しました。"
+      "partialDelivered": "{{count}} 件のチャットには送信済みのため、選択から外しました。",
+      "sent": "送信しました",
+      "view": "表示"
     },
     "quickChat": {
       "expand": "チャット全体を開く"
@@ -1510,18 +1512,18 @@
     "loadFailed": "ノートを読み込めませんでした。ネットワークを確認して再試行してください",
     "collect": {
       "chooseGroup": "どのノートグループに追加しますか？",
-      "editTitle": "保存タイトルを編集",
+      "editTitle": "タイトルを編集",
       "groupHint": "先にグループを選び、次にタイトルを編集できます。",
       "ungrouped": "未分類",
-      "titleHint": "見つけやすいタイトルを入力してください。空欄なら元のタイトルを使います。",
-      "titleLabel": "保存タイトル",
+      "titleLabel": "タイトル",
       "untitled": "無題のノート",
       "skipTitleNextTime": "次回からタイトルを編集しない",
       "createGroup": "新しいグループ",
       "createGroupPlaceholder": "グループ名を入力",
       "createGroupConfirm": "作成",
       "createGroupFailed": "グループを作成できませんでした",
-      "createGroupFailedHint": "しばらくしてからもう一度お試しください。"
+      "createGroupFailedHint": "しばらくしてからもう一度お試しください。",
+      "createGroupShort": "新規"
     },
     "shareToChat": {
       "partialFailed": "{{count}} 件を送信できませんでした。失敗した項目のみ再送できます。",

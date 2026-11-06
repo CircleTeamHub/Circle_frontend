@@ -9,8 +9,8 @@ import type { ChatTarget } from '@/features/chat/components/chat-target-picker/t
 import type { NoteSummary } from '@/features/notes/types';
 
 const mockRecord = jest.fn();
-const mockDeselect = jest.fn();
-let mockPickerProps: { closableWhileBusy?: boolean } = {};
+const mockShowTopNotice = jest.fn();
+let mockUserId = 'me';
 let mockPickTargets: ChatTarget[] = [];
 
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -24,7 +24,14 @@ jest.mock('@/chat-core/send-errors', () => ({
 }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { user: { id: string } }) => unknown) => selector({ user: { id: 'me' } }),
+  useAuthStore: Object.assign(
+    (selector: (state: { user: { id: string } }) => unknown) => selector({ user: { id: 'me' } }),
+    { getState: () => ({ user: { id: mockUserId } }) },
+  ),
+}));
+jest.mock('expo-router', () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
+jest.mock('@/components/app/top-notice-store', () => ({
+  showTopNotice: (...args: unknown[]) => mockShowTopNotice(...args),
 }));
 jest.mock('@/features/chat/utils/send-notes-to-conversation', () => ({
   sendNotesToConversation: jest.fn(() => Promise.resolve({ failures: 0, firstError: null, sent: 1 })),
@@ -57,16 +64,11 @@ jest.mock('@/features/chat/components/chat-target-picker/use-recent-forward-targ
 }));
 jest.mock('@/features/chat/components/chat-target-picker/ChatTargetPicker', () => {
   const { Pressable, Text } = jest.requireActual('react-native');
-  const { useImperativeHandle } = jest.requireActual('react');
   return {
     ChatTargetPicker: (props: {
-      ref?: React.Ref<unknown>;
-      closableWhileBusy?: boolean;
       onConfirm: (targets: ChatTarget[]) => void;
       onClose: () => void;
     }) => {
-      mockPickerProps = props;
-      useImperativeHandle(props.ref, () => ({ deselect: mockDeselect }));
       return (
         <>
           <Pressable onPress={() => props.onConfirm(mockPickTargets)}><Text>picker.pick</Text></Pressable>
@@ -104,20 +106,44 @@ async function pickAndSend(button = 'dialog.send') {
   await act(async () => { await Promise.resolve(); });
 }
 
+let alertSpy: jest.SpyInstance;
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUserId = 'me';
   mockPickTargets = [chat('conv-1')];
+  alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
+
+afterEach(() => alertSpy.mockRestore());
+
+/** 「已发送」弹窗的两个按钮:确定、查看。 */
+function sentButtons(): { text: string; onPress?: () => void }[] {
+  const call = alertSpy.mock.calls.find(([title]) => title === 'chat.targetPicker.sent');
+  if (!call) throw new Error('「已发送」弹窗没有弹出');
+  return call[2] as { text: string; onPress?: () => void }[];
+}
 
 test('nothing renders while there is no share request', () => {
   render(<ShareNoteSheet request={null} onClose={jest.fn()} />);
   expect(screen.queryByText('picker.pick')).toBeNull();
 });
 
-test('the chosen sections go to the chosen chat and the sheet closes', async () => {
+test('sending says "sent" at once and "confirm" closes the sheet without waiting', async () => {
+  jest.mocked(sendNotesToConversation).mockReturnValueOnce(new Promise(() => undefined));
   const onClose = jest.fn();
+  render(<ShareNoteSheet request={request} onClose={onClose} />);
+  fireEvent.press(screen.getByText('picker.pick'));
+  fireEvent.press(screen.getByText('dialog.send'));
+  expect(sentButtons().map((button) => button.text)).toEqual(['common.confirm', 'chat.targetPicker.view']);
+  expect(onClose).not.toHaveBeenCalled();
+  sentButtons()[0].onPress?.();
+  expect(onClose).toHaveBeenCalled();
+});
+
+test('the chosen sections go to the chosen chat', async () => {
   const options = { card: true, media: true, showcase: false, location: true };
-  render(<ShareNoteSheet request={{ notes: [note], options }} onClose={onClose} />);
+  render(<ShareNoteSheet request={{ notes: [note], options }} onClose={jest.fn()} />);
   expect(screen.queryByText('dialog.send')).toBeNull();
   await pickAndSend();
   expect(sendNotesToConversation).toHaveBeenCalledWith(
@@ -125,7 +151,7 @@ test('the chosen sections go to the chosen chat and the sheet closes', async () 
   );
   expect(sendTextMessage).not.toHaveBeenCalled();
   expect(mockRecord).toHaveBeenCalledWith('me', [expect.objectContaining({ conversationId: 'conv-1' })]);
-  expect(onClose).toHaveBeenCalled();
+  expect(mockShowTopNotice).not.toHaveBeenCalled();
 });
 
 test('each selected chat gets the notes followed by the caption', async () => {
@@ -138,87 +164,58 @@ test('each selected chat gets the notes followed by the caption', async () => {
   expect(sendTextMessage).toHaveBeenNthCalledWith(2, { conversationId: 'direct-u2', text: '一起看看' });
 });
 
-test('failures are reported once and keep the sheet open', async () => {
+test('failures show up as one top notice', async () => {
   jest.mocked(sendNotesToConversation).mockResolvedValueOnce({ failures: 2, firstError: new Error('blocked'), sent: 0 });
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  const onClose = jest.fn();
-  try {
-    render(<ShareNoteSheet request={request} onClose={onClose} />);
-    await pickAndSend();
-    expect(alert).toHaveBeenCalledWith('notes.shareToChat.failedTitle', 'notes.shareToChat.partialFailed');
-    expect(onClose).not.toHaveBeenCalled();
-  } finally { alert.mockRestore(); }
+  render(<ShareNoteSheet request={request} onClose={jest.fn()} />);
+  await pickAndSend();
+  expect(mockShowTopNotice).toHaveBeenCalledTimes(1);
+  expect(mockShowTopNotice).toHaveBeenCalledWith(expect.objectContaining({
+    type: 'error', title: 'notes.shareToChat.failedTitle', message: 'notes.shareToChat.partialFailed',
+  }));
 });
 
-test('closing the sheet mid-send stops the rest and shows nothing afterwards', async () => {
+test('closing the sheet keeps sending to the remaining chats', async () => {
   let finish!: (value: { failures: number; firstError: unknown; sent: number }) => void;
   jest.mocked(sendNotesToConversation).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
   mockPickTargets = [chat('conv-1'), chat('conv-2')];
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const onClose = jest.fn();
-  try {
-    const view = render(<ShareNoteSheet request={request} onClose={onClose} />);
-    await pickAndSend();
-    const { isActive } = jest.mocked(sendNotesToConversation).mock.calls[0][0];
-    expect(isActive()).toBe(true);
-    view.rerender(<ShareNoteSheet request={null} onClose={onClose} />);
-    expect(isActive()).toBe(false);
-    await act(async () => { finish({ failures: 1, firstError: null, sent: 0 }); await Promise.resolve(); });
-    expect(sendNotesToConversation).toHaveBeenCalledTimes(1);
-    expect(alert).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-  } finally { alert.mockRestore(); }
+  const view = render(<ShareNoteSheet request={request} onClose={onClose} />);
+  await pickAndSend();
+  sentButtons()[0].onPress?.();
+  view.rerender(<ShareNoteSheet request={null} onClose={onClose} />);
+  const { isActive } = jest.mocked(sendNotesToConversation).mock.calls[0][0];
+  expect(isActive()).toBe(true);
+  await act(async () => { finish({ failures: 0, firstError: null, sent: 1 }); await Promise.resolve(); });
+  await act(async () => { await Promise.resolve(); });
+  expect(jest.mocked(sendNotesToConversation).mock.calls.map(([input]) => input.conversationId)).toEqual(['conv-1', 'conv-2']);
 });
 
-test('a chat that cannot be opened stops the whole send, so retrying never repeats a delivery', async () => {
+test('switching account stops what is left of the send', async () => {
+  render(<ShareNoteSheet request={request} onClose={jest.fn()} />);
+  await pickAndSend();
+  const { isActive } = jest.mocked(sendNotesToConversation).mock.calls[0][0];
+  mockUserId = 'someone-else';
+  expect(isActive()).toBe(false);
+});
+
+test('a chat that cannot be opened is reported, and the others still get the notes', async () => {
   const stranger: ChatTarget = { key: 'user:u9', conversationId: null, userId: 'u9', name: '拉黑我的人', kind: 'direct' };
   mockPickTargets = [chat('conv-1'), stranger];
   jest.mocked(resolveChatTargetConversationId)
     .mockResolvedValueOnce('conv-1')
     .mockRejectedValueOnce(new Error('CHAT_BLOCKED'));
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  try {
-    render(<ShareNoteSheet request={request} onClose={jest.fn()} />);
-    await pickAndSend();
-    expect(sendNotesToConversation).not.toHaveBeenCalled();
-    expect(alert).toHaveBeenCalledWith('notes.shareToChat.failedTitle', 'resolve.failed');
-
-    // 用户去掉那个人再发一次:第一个聊天只收到一份。
-    mockPickTargets = [chat('conv-1')];
-    await pickAndSend();
-    expect(jest.mocked(sendNotesToConversation).mock.calls.map(([input]) => input.conversationId)).toEqual(['conv-1']);
-  } finally { alert.mockRestore(); }
-});
-
-test('after a partial failure the chats that got it are dropped from the selection', async () => {
-  mockPickTargets = [chat('conv-1'), chat('conv-2')];
-  jest.mocked(sendNotesToConversation)
-    .mockResolvedValueOnce({ failures: 0, firstError: null, sent: 1 })
-    .mockResolvedValueOnce({ failures: 1, firstError: null, sent: 0 });
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  try {
-    render(<ShareNoteSheet request={request} onClose={jest.fn()} />);
-    await pickAndSend();
-    expect(mockDeselect).toHaveBeenCalledWith(['conv-1']);
-    expect(alert).toHaveBeenCalledWith(
-      'notes.shareToChat.failedTitle',
-      'chat.targetPicker.partialDelivered\nnotes.shareToChat.partialFailed',
-    );
-  } finally { alert.mockRestore(); }
+  render(<ShareNoteSheet request={request} onClose={jest.fn()} />);
+  await pickAndSend();
+  expect(mockShowTopNotice).toHaveBeenCalledWith(expect.objectContaining({
+    title: 'notes.shareToChat.failedTitle', message: 'resolve.failed',
+  }));
+  expect(jest.mocked(sendNotesToConversation).mock.calls.map(([input]) => input.conversationId)).toEqual(['conv-1']);
 });
 
 test('the caption is not sent to a chat where none of the content arrived', async () => {
   jest.mocked(sendNotesToConversation).mockResolvedValueOnce({ failures: 1, firstError: null, sent: 0 });
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-  try {
-    render(<ShareNoteSheet request={request} onClose={jest.fn()} />);
-    await pickAndSend('dialog.sendWithCaption');
-    expect(sendTextMessage).not.toHaveBeenCalled();
-    expect(alert).toHaveBeenCalled();
-  } finally { alert.mockRestore(); }
-});
-
-test('the sheet stays closable while it is sending', () => {
   render(<ShareNoteSheet request={request} onClose={jest.fn()} />);
-  expect(mockPickerProps.closableWhileBusy).toBe(true);
+  await pickAndSend('dialog.sendWithCaption');
+  expect(sendTextMessage).not.toHaveBeenCalled();
+  expect(mockShowTopNotice).toHaveBeenCalled();
 });

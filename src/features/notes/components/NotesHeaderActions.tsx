@@ -15,7 +15,7 @@ interface HeaderAction {
 }
 
 interface NotesHeaderActionsProps {
-  /** 窄屏（手机）用独立的圆角小方块，宽屏沿用横排胶囊。 */
+  /** 窄屏（手机）图标在上、文字在下，宽屏图标和文字横排。 */
   compact: boolean;
   onOpenRecycleBin: () => void;
   onOpenUnlisted: () => void;
@@ -26,8 +26,7 @@ interface NotesHeaderActionsProps {
 /**
  * 我的笔记页右上角的入口（回收站 / 已下架 / 草稿箱 / 设置）。
  *
- * 手机上几个「图标+文字」横排放不下（英文标签更长），改成独立的圆角小方块：
- * 图标在上、文字在下。只给图标会看不出用途，每个入口都必须带文字。
+ * 手机上几个「图标+文字」横排放不下（英文标签更长），改成图标在上、文字在下。只给图标会看不出用途，每个入口都必须带文字。
  */
 export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
   function NotesHeaderActions({ compact, onOpenRecycleBin, onOpenUnlisted, onOpenDrafts, onOpenSettings }) {
@@ -64,13 +63,8 @@ export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
       [t, onOpenRecycleBin, onOpenUnlisted, onOpenDrafts, onOpenSettings],
     );
 
-    const d = useMemo(
-      () => ({
-        surface: { backgroundColor: colors.surface },
-        label: { color: colors.text },
-      }),
-      [colors],
-    );
+    // 入口不再垫底色块:只留图标和文字,按下时变淡做反馈。
+    const d = useMemo(() => ({ label: { color: colors.text } }), [colors]);
 
     if (!compact) {
       return (
@@ -78,7 +72,7 @@ export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
           {actions.map((action) => (
             <Pressable
               key={action.key}
-              style={[s.pill, d.surface]}
+              style={({ pressed }) => [s.pill, pressed && s.tilePressed]}
               onPress={action.onPress}
               accessibilityRole="button"
               accessibilityLabel={action.label}
@@ -102,7 +96,7 @@ export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
         {actions.map((action) => (
           <Pressable
             key={action.key}
-            style={({ pressed }) => [s.tile, d.surface, pressed && s.tilePressed]}
+            style={({ pressed }) => [s.tile, pressed && s.tilePressed]}
             onPress={action.onPress}
             accessibilityRole="button"
             accessibilityLabel={action.label}

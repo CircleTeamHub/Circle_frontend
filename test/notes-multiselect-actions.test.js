@@ -167,16 +167,18 @@ test('ShareNoteSheet sends the selected notes to each chosen conversation throug
   // 先把所有对象都落到会话 id 再发:建单聊失败时一条都不发,重试不会重复投递。
   assert.match(sheet, /await resolveChatTargets\(chosen\)/);
   assert.match(sheet, /for \(const \{ target, conversationId \} of resolved\)/);
-  assert.match(sheet, /pickerRef\.current\?\.deselect\(deliveredKeys\)/);
   assert.match(
     sheet,
-    /sendNotesToConversation\(\{\s*conversationId,\s*notes: request\.notes,\s*options: request\.options,/,
+    /sendNotesToConversation\(\{\s*conversationId,\s*notes: shared\.notes,\s*options: shared\.options,/,
   );
+  // 点发送立刻提示「已发送」(确定 / 查看),内容在后台接着发;关掉面板不停发,换账号才停。
+  assert.match(sheet, /announceSent\(\{ t, targets: chosen, resolution, onDismiss: onClose \}\)/);
+  assert.match(sheet, /const isActive = \(\) => useAuthStore\.getState\(\)\.user\?\.id === userId;/);
   assert.match(sheet, /failures \+= result\.failures/);
   assert.match(sheet, /sendTextMessage\(\{ conversationId, text: caption \}\)/);
   assert.doesNotMatch(sheet, /retryTasks|setRetryTasks/);
-  // 选完对象只弹一次「发送给」确认框（可附留言）；全部成功直接收起，不弹「已发送」，
-  // 订单状态提醒也已去掉。
+  // 选完对象只弹一次「发送给」确认框（可附留言），之后是统一的「已发送」；
+  // 订单状态提醒已去掉。
   assert.match(sheet, /<SendConfirmDialog/);
   assert.doesNotMatch(sheet, /notes\.shareToChat\.(title|confirmTitle|confirmRecipientsMessage|confirmRetryMessage|sentTitle|sentRecipientsMessage|workStatusWarning)\b/);
   assert.match(sheet, /notes\.shareToChat\.partialFailed/);

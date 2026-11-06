@@ -69,6 +69,7 @@ export function AddNoteToNotesSheet({
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [skipTitleNextTime, setSkipTitleNextTime] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const titleInputRef = useRef<TextInput>(null);
   // 不再预填拼出来的标题,由用户自己写;留空就不传,由服务端沿用原笔记标题。卡片上的
   // 标题截断过,也不能拿来当真标题发回去,只用作占位提示。
@@ -83,6 +84,7 @@ export function AddNoteToNotesSheet({
     setSelectedGroupId(null);
     setTitle('');
     setSkipTitleNextTime(false);
+    setCreatingGroup(false);
   }, [visible, noteTitle, chooseGroup]);
 
   useEffect(() => {
@@ -112,6 +114,7 @@ export function AddNoteToNotesSheet({
     if (!onCreateGroup) return false;
     const created = await onCreateGroup(name);
     if (!created) return false;
+    setCreatingGroup(false);
     handlePickGroup(created.id);
     return true;
   };
@@ -150,11 +153,30 @@ export function AddNoteToNotesSheet({
     >
       <View style={[s.sheet, d.sheet, { paddingBottom: insets.bottom || Spacing.lg }]}>
         <View style={[s.handle, d.handle]} />
-        <Text style={[s.title, d.title]}>
-          {step === 'group'
-            ? t('notes.collect.chooseGroup', { defaultValue: '添加到哪个笔记分组？' })
-            : t('notes.collect.editTitle', { defaultValue: '编辑收藏标题' })}
-        </Text>
+        <View style={s.header}>
+          <Text style={[s.title, d.title]}>
+            {step === 'group'
+              ? t('notes.collect.chooseGroup', { defaultValue: '添加到哪个笔记分组？' })
+              : t('notes.collect.editTitle', { defaultValue: '编辑标题' })}
+          </Text>
+          {step === 'group' && onCreateGroup && !loading && !error ? (
+            // 新建分组放在右上角,不占分组列表的位置;再点一次收起输入行。
+            <Pressable
+              style={s.headerAction}
+              onPress={() => setCreatingGroup((value) => !value)}
+              disabled={saving}
+              hitSlop={8}
+              accessibilityRole="button"
+            >
+              {creatingGroup ? null : <Ionicons name="add" size={18} color={colors.primary} />}
+              <Text style={[s.headerActionText, { color: colors.primary }]}>
+                {creatingGroup
+                  ? t('common.cancel', { defaultValue: '取消' })
+                  : t('notes.collect.createGroupShort', { defaultValue: '新建' })}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         {step === 'group' ? (
           <>
             <Text style={[s.caption, d.caption]}>
@@ -181,6 +203,9 @@ export function AddNoteToNotesSheet({
                 contentContainerStyle={s.listContent}
                 {...keyboardDismissOnDragProps}
               >
+                {onCreateGroup && creatingGroup ? (
+                  <CollectCreateGroupRow disabled={saving} onCreate={handleCreateGroup} />
+                ) : null}
                 <Pressable
                   style={[s.row, d.row]}
                   onPress={() => handlePickGroup(null)}
@@ -194,9 +219,6 @@ export function AddNoteToNotesSheet({
                   </Text>
                   <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                 </Pressable>
-                {onCreateGroup ? (
-                  <CollectCreateGroupRow disabled={saving} onCreate={handleCreateGroup} />
-                ) : null}
                 {groups.map((group) => (
                   <Pressable
                     key={group.id}
@@ -223,9 +245,6 @@ export function AddNoteToNotesSheet({
             bounces={false}
             {...keyboardDismissOnDragProps}
           >
-            <Text style={[s.caption, d.caption]}>
-              {t('notes.collect.titleHint', { defaultValue: '输入一个方便自己查找的标题，不填就用原笔记标题。' })}
-            </Text>
             <TextInput
               ref={titleInputRef}
               // Keep the input controlled by the draft. Falling back to the
@@ -241,7 +260,7 @@ export function AddNoteToNotesSheet({
               returnKeyType="done"
               onSubmitEditing={handleConfirm}
               editable={!saving}
-              accessibilityLabel={t('notes.collect.titleLabel', { defaultValue: '收藏标题' })}
+              accessibilityLabel={t('notes.collect.titleLabel', { defaultValue: '标题' })}
             />
             <Pressable
               style={s.skipRow}
@@ -314,7 +333,19 @@ const s = StyleSheet.create({
     borderRadius: Radius.xxl,
   },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: Radius.full, marginBottom: Spacing.md },
-  title: { ...Typography.h3, textAlign: 'center', marginBottom: Spacing.xs },
+  // 右侧给「新建」按钮让位,左侧对称留白,标题仍居中。
+  header: { justifyContent: 'center', paddingHorizontal: 64, marginBottom: Spacing.xs },
+  title: { ...Typography.h3, textAlign: 'center' },
+  headerAction: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerActionText: { ...Typography.body, fontWeight: '600' },
   caption: { ...Typography.small, textAlign: 'center', marginBottom: Spacing.md },
   loader: { marginVertical: Spacing.xl },
   errorBox: { alignItems: 'center', paddingVertical: Spacing.lg },

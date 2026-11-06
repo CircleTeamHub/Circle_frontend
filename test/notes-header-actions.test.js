@@ -21,6 +21,11 @@ test('页头入口在窄屏大字号下能收缩，不会被挤出屏幕', () =>
   assert.doesNotMatch(screen, /headerRow: \{[^}]*\bheight: 44,/);
 });
 
+test('页头入口不垫底色块，只有图标和文字', () => {
+  assert.doesNotMatch(actions, /backgroundColor/);
+  assert.doesNotMatch(actions, /colors\.surface/);
+});
+
 test('三个入口都带文字标签和无障碍名称', () => {
   for (const key of ['notes.recycleBin', 'notes.unlisted', 'notes.drafts.title']) {
     assert.match(actions, new RegExp(key.replace(/\./g, '\\.')));

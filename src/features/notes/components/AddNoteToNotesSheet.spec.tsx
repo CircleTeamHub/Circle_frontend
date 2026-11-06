@@ -64,7 +64,7 @@ function renderSheet(props: Partial<React.ComponentProps<typeof AddNoteToNotesSh
 test('collect sheet keeps the edited title and sends it on save', () => {
   const { onConfirm } = renderSheet();
   fireEvent.press(screen.getByText('上海场地'));
-  fireEvent.changeText(screen.getByLabelText('收藏标题'), '客户专用标题');
+  fireEvent.changeText(screen.getByLabelText('标题'), '客户专用标题');
   fireEvent.press(screen.getByText('保存'));
   expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'group-1', title: '客户专用标题' });
 });
@@ -72,7 +72,7 @@ test('collect sheet keeps the edited title and sends it on save', () => {
 test('a blank title is left out so the server keeps the full original title', () => {
   const { onConfirm } = renderSheet();
   fireEvent.press(screen.getByText('上海场地'));
-  const input = screen.getByLabelText('收藏标题');
+  const input = screen.getByLabelText('标题');
   expect(input.props.value).toBe('');
   expect(input.props.placeholder).toBe('原始标题');
   fireEvent.press(screen.getByText('保存'));
@@ -96,7 +96,7 @@ test('ticking "do not edit the title next time" is passed along with the save', 
 test('with group choice off the sheet opens on the title step and cancel closes it', () => {
   const { onConfirm, onClose } = renderSheet({ chooseGroup: false });
   expect(screen.queryByText('上海场地')).toBeNull();
-  expect(screen.getByLabelText('收藏标题')).toBeTruthy();
+  expect(screen.getByLabelText('标题')).toBeTruthy();
   fireEvent.press(screen.getByText('取消'));
   expect(onClose).toHaveBeenCalled();
   expect(onConfirm).not.toHaveBeenCalled();
@@ -107,16 +107,27 @@ test('with title editing off picking a group saves right away without a title', 
   fireEvent.press(screen.getByText('上海场地'));
   expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'group-1' });
   expect(onConfirm.mock.calls[0][0]).not.toHaveProperty('title');
-  expect(screen.queryByLabelText('收藏标题')).toBeNull();
+  expect(screen.queryByLabelText('标题')).toBeNull();
+});
+
+test('new group lives behind the top-right button, not in the group list', () => {
+  renderSheet({ onCreateGroup: jest.fn() });
+  expect(screen.queryByText('新建分组')).toBeNull();
+  expect(screen.queryByPlaceholderText('输入分组名称')).toBeNull();
+  fireEvent.press(screen.getByText('新建'));
+  expect(screen.getByPlaceholderText('输入分组名称')).toBeTruthy();
+  // 再点一次(这时是「取消」)收起输入行。
+  fireEvent.press(screen.getByText('取消'));
+  expect(screen.queryByPlaceholderText('输入分组名称')).toBeNull();
 });
 
 test('a group created from the sheet is selected and moves on to the title step', async () => {
   const onCreateGroup = jest.fn().mockResolvedValue({ id: 'new-group', name: '新分组', sortOrder: 1, noteCount: 0 });
   const { onConfirm } = renderSheet({ onCreateGroup });
-  fireEvent.press(screen.getByText('新建分组'));
+  fireEvent.press(screen.getByText('新建'));
   fireEvent.changeText(screen.getByPlaceholderText('输入分组名称'), '  新分组  ');
   fireEvent.press(screen.getByText('创建'));
-  await waitFor(() => expect(screen.getByLabelText('收藏标题')).toBeTruthy());
+  await waitFor(() => expect(screen.getByLabelText('标题')).toBeTruthy());
   expect(onCreateGroup).toHaveBeenCalledWith('新分组');
   fireEvent.press(screen.getByText('保存'));
   expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'new-group' });
@@ -125,15 +136,23 @@ test('a group created from the sheet is selected and moves on to the title step'
 test('a failed group creation keeps the name so the user can retry', async () => {
   const onCreateGroup = jest.fn().mockResolvedValue(null);
   renderSheet({ onCreateGroup });
-  fireEvent.press(screen.getByText('新建分组'));
+  fireEvent.press(screen.getByText('新建'));
   fireEvent.changeText(screen.getByPlaceholderText('输入分组名称'), '重复');
   fireEvent.press(screen.getByText('创建'));
   await waitFor(() => expect(onCreateGroup).toHaveBeenCalled());
   expect(screen.getByPlaceholderText('输入分组名称').props.value).toBe('重复');
-  expect(screen.queryByLabelText('收藏标题')).toBeNull();
+  expect(screen.queryByLabelText('标题')).toBeNull();
+});
+
+test('the title step is headed "编辑标题" with no extra hint line', async () => {
+  renderSheet();
+  fireEvent.press(screen.getByText('上海场地'));
+  await waitFor(() => expect(screen.getByText('编辑标题')).toBeTruthy());
+  expect(screen.queryByText(/方便自己查找/)).toBeNull();
+  expect(screen.queryByText('编辑收藏标题')).toBeNull();
 });
 
 test('the create-group entry is hidden when the caller cannot create groups', () => {
   renderSheet();
-  expect(screen.queryByText('新建分组')).toBeNull();
+  expect(screen.queryByText('新建')).toBeNull();
 });
