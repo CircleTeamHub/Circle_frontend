@@ -2117,6 +2117,30 @@ test('adding a region after restoring gapped IDs creates a distinct composer ID'
   expect(new Set(ids).size).toBe(ids.length);
 });
 
+// 右滑返回:拦下 → 存草稿 → 放行并重发返回。重发若赶在重新渲染之前,守卫还是旧值又拦一次;
+// 这时已经决定离开,不能再当成「保存进行中」弹「请先完成当前操作」把人困在空白编辑页里。
+test('a back gesture re-prevented while already leaving still leaves instead of getting stuck on saving', async () => {
+  signedInDraft();
+  mockFetchDraft.mockResolvedValue(reviewDraft());
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockNavigation.dispatch.mockClear();
+  const rendered = render(<EditNoteScreen />);
+  try {
+    await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    const staleGuard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
+    await act(async () => {
+      staleGuard?.({ data: { action: { type: 'GO_BACK' } } } as never);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      staleGuard?.({ data: { action: { type: 'GO_BACK' } } } as never);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await waitFor(() => expect(mockNavigation.dispatch).toHaveBeenCalledWith({ type: 'GO_BACK' }));
+    expect(alert).not.toHaveBeenCalledWith('notes.edit.waitForMediaTitle', expect.anything());
+  } finally { rendered.unmount(); alert.mockRestore(); }
+});
+
 test('save and exit stays in the editor when both local and server persistence fail', async () => {
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());

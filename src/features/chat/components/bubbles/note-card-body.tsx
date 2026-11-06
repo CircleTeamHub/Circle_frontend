@@ -49,10 +49,10 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
   cover: { width: 56, height: 56, borderRadius: Radius.sm },
   coverPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  headerText: { flex: 1, gap: Spacing.xs },
+  headerText: { flex: 1, gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  title: { ...Typography.h3, fontWeight: '700', lineHeight: 24, flexShrink: 1 },
-  preview: { ...Typography.bodyRegular, lineHeight: 20 },
+  title: { fontSize: 16, fontWeight: '700', lineHeight: 22, flexShrink: 1 },
+  preview: { fontSize: 13, fontWeight: '400', lineHeight: 18 },
   meta: { ...Typography.small, lineHeight: 16 },
   // 与笔记页的开工/打烊/下架标签同一套实心底(noteWorkStatusFill + onStatusFill)。
   statusPill: { borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },

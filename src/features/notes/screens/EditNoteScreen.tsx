@@ -563,6 +563,10 @@ export default function EditNoteScreen() {
   const saveGenerationRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const [editorMounted, setEditorMounted] = useState(false);
+  // 离开时要重发的那个返回动作:等编辑器真的卸载、守卫已放行(这一次提交之后)再发,
+  // 否则重发赶在重新渲染之前会被守卫拿旧值再拦一次。
+  const pendingExitActionRef = useRef<NavigationAction | null>(null);
+  const [exitRequest, setExitRequest] = useState(0);
   const [navigating, setNavigating] = useState(false);
   const [mediaItems, setMediaItems] = useState<EditorNoteMediaDraft[]>([]);
   const [showcaseItems, setShowcaseItems] = useState<EditorNoteMediaDraft[]>([]);
@@ -1633,12 +1637,13 @@ export default function EditNoteScreen() {
       invalidateUploadOwnership();
       setEditorMounted(false);
       if (action) {
-        setTimeout(() => navigation.dispatch(action), 0);
+        pendingExitActionRef.current = action;
+        setExitRequest((request) => request + 1);
       } else {
         setNavigating(true);
       }
     },
-    [invalidateUploadOwnership, navigation],
+    [invalidateUploadOwnership],
   );
 
   const promptDraftExit = useCallback(
@@ -1741,8 +1746,26 @@ export default function EditNoteScreen() {
   // refs to avoid re-rendering the whole note while typing, so the callback
   // computes the latest fingerprint when navigation is actually attempted.
   usePreventRemove(editorMounted && !navigationRequestedRef.current, ({ data }) => {
+    // 已经决定离开(草稿已存、编辑器在卸载),这次被拦只是重新渲染慢了一拍、守卫还是旧值:
+    // 挂起这次返回,放行后再发。不能再走 promptDraftExit —— 那里看到「保存进行中」只会弹
+    // 「请先完成当前操作」,人就卡在一个正文空白、按钮一直「保存中」的页面上。
+    if (navigationRequestedRef.current) {
+      pendingExitActionRef.current = data.action;
+      setExitRequest((request) => request + 1);
+      return;
+    }
     promptDraftExit(data.action);
   });
+
+  // 放在守卫之后:同一次提交里守卫先拿到「不拦」,这里再重发返回。编辑器(WebView)在这一次
+  // 提交里已经卸载,也满足「先卸 WebView 再导航」(DOM 桥 injectJavaScript 崩溃)。
+  useEffect(() => {
+    if (editorMounted) return;
+    const action = pendingExitActionRef.current;
+    if (!action) return;
+    pendingExitActionRef.current = null;
+    navigation.dispatch(action);
+  }, [editorMounted, exitRequest, navigation]);
 
   useFocusEffect(
     useCallback(() => {
