@@ -474,8 +474,7 @@
       "empty": "No hay miembros para mencionar",
       "title": "Mencionar a alguien",
       "count": "{{count}} miembros",
-      "all": "Todos",
-      "allHint": "Avisa a todo el grupo"
+      "all": "Todos"
     },
     "forward": {
       "title": "Elige un chat",

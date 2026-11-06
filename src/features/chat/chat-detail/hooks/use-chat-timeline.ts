@@ -458,6 +458,36 @@ export function useChatTimeline({
     });
   }, [conversationID, isFocused, messages, mountedRef]);
 
+  const [highlightedMessageID, setHighlightedMessageID] = useState<string | null>(
+    null,
+  );
+  // 所有跳转(搜索、引用、置顶)共用一个高亮定时器。高亮是「我带你跳到了这里」的一次性
+  // 提示,不是选中态:HIGHLIGHT_VISIBLE_MS 后自动褪去。定时器不挂在依赖 messages 的
+  // effect 上 —— 进会话后消息列表一变(已读回执、翻页)effect 就重跑,清理函数把定时器
+  // 清掉,而重跑又因「已定位过」直接返回,高亮就会一直挂着。
+  const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const flashHighlight = useCallback(
+    (messageId: string) => {
+      setHighlightedMessageID(messageId);
+      if (highlightClearTimerRef.current) clearTimeout(highlightClearTimerRef.current);
+      highlightClearTimerRef.current = setTimeout(() => {
+        highlightClearTimerRef.current = null;
+        if (mountedRef.current) setHighlightedMessageID(null);
+      }, HIGHLIGHT_VISIBLE_MS);
+    },
+    [mountedRef],
+  );
+  useEffect(
+    () => () => {
+      if (highlightClearTimerRef.current) {
+        clearTimeout(highlightClearTimerRef.current);
+      }
+    },
+    [],
+  );
+
   // 搜索定位：在 inverted 列表里 scrollToIndex 仍然按 index 计数，找到就跳。
   useEffect(() => {
     if (messages.length === 0 || !searchedMsgID || scrolledToSearchRef.current) {
@@ -475,13 +505,8 @@ export function useChatTimeline({
         animated: true,
         viewPosition: 0.3,
       });
-      setHighlightedMessageID(searchedMsgID);
-      const timer = setTimeout(() => {
-        if (mountedRef.current) {
-          setHighlightedMessageID(null);
-        }
-      }, HIGHLIGHT_VISIBLE_MS);
-      return () => clearTimeout(timer);
+      flashHighlight(searchedMsgID);
+      return;
     }
 
     // 目标不在当前窗口里:从全局搜索或一条陈旧通知跳进来时,目标往往比最新一页
@@ -497,23 +522,7 @@ export function useChatTimeline({
       .finally(() => {
         searchPagingRef.current = false;
       });
-  }, [messages, searchedMsgID, conversationID, mountedRef]);
-
-  const [highlightedMessageID, setHighlightedMessageID] = useState<string | null>(
-    null,
-  );
-  // 引用跳转的高亮定时器(搜索跳转那条路径自带 effect 清理,这条是命令式的)。
-  const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  useEffect(
-    () => () => {
-      if (highlightClearTimerRef.current) {
-        clearTimeout(highlightClearTimerRef.current);
-      }
-    },
-    [],
-  );
+  }, [messages, searchedMsgID, conversationID, flashHighlight]);
 
   // 真引用点击定位:原消息还在内存窗口就滚过去;不在窗口(更早的历史)先不跳,
   // 批 1 本地库落地后升级成「按 height 拉一页再滚」。
@@ -538,16 +547,7 @@ export function useChatTimeline({
           if (timeline.some((m) => m.id === targetId)) {
             // 命中之后交给 searchedMsgID 那条既有的滚动路径:它已经处理好了
             // 「列表还没重新布局完」的重试与高亮。
-            setHighlightedMessageID(targetId);
-            // 高亮是「我带你跳到了这里」的一次性提示,不是选中态 —— 到点自动
-            // 褪去(与 searchedMsgID / 朋友圈评论定位同一节奏)。漏了这一笔的话
-            // 高亮会一直挂在那条消息上。
-            if (highlightClearTimerRef.current) {
-              clearTimeout(highlightClearTimerRef.current);
-            }
-            highlightClearTimerRef.current = setTimeout(() => {
-              if (mountedRef.current) setHighlightedMessageID(null);
-            }, HIGHLIGHT_VISIBLE_MS);
+            flashHighlight(targetId);
             const index = messagesRef.current.findIndex(
               (m) => m.id === targetId,
             );
@@ -567,7 +567,7 @@ export function useChatTimeline({
         quotePagingRef.current = false;
       }
     },
-    [conversationID, mountedRef],
+    [conversationID, flashHighlight, mountedRef],
   );
 
   /** 跳到指定消息(引用块、置顶横幅共用):在窗口里就滚过去,不在就往回翻。 */
@@ -582,6 +582,7 @@ export function useChatTimeline({
           viewPosition: 0.5,
           animated: true,
         });
+        flashHighlight(targetId);
         return;
       }
       // 原消息比当前内存窗口更早。原来直接 return —— 引用块照样是可点的,
@@ -589,7 +590,7 @@ export function useChatTimeline({
       // 翻到目标进窗口为止(有界),然后再滚过去。
       void loadUntilQuoteVisible(targetId);
     },
-    [loadUntilQuoteVisible],
+    [flashHighlight, loadUntilQuoteVisible],
   );
 
   const handleQuotePress = useCallback(

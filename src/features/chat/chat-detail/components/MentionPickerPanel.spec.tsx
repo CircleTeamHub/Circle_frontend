@@ -39,7 +39,8 @@ test('nothing renders while the picker is closed', () => {
 test('"everyone" is shown as its own row with a hint, members with their role', () => {
   renderPanel([all, owner, member]);
   expect(screen.getByText('chat.mentions.all')).toBeTruthy();
-  expect(screen.getByText('chat.mentions.allHint')).toBeTruthy();
+  // 「所有人」只留名字,不再带「提醒群里每一个人」那行说明。
+  expect(screen.queryByText('chat.mentions.allHint')).toBeNull();
   expect(screen.getByText('chat.mentions.count:2')).toBeTruthy();
   expect(screen.getByText('chat.groupOwner')).toBeTruthy();
   expect(screen.queryByText('chat.groupAdmin')).toBeNull();

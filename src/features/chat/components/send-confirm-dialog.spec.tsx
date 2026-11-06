@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { SEND_CAPTION_MAX_LENGTH, SendConfirmDialog } from './send-confirm-dialog';
 
 jest.mock('react-i18next', () => ({
@@ -51,6 +51,23 @@ test('the caption placeholder is a faint tint of the text colour, not the second
   renderDialog();
   // 暗色主题的 textSecondary 是纯白:占位提示要淡,不能直接用它。
   expect(screen.getByPlaceholderText('留言').props.placeholderTextColor).toBe('#111/0.35');
+});
+
+test('the caption is an underlined line that turns the accent colour while typing, with a counter', () => {
+  renderDialog();
+  const input = () => screen.getByPlaceholderText('留言');
+  const style = () => StyleSheet.flatten(input().props.style);
+  // 不垫底色(暗色主题里和卡片同色),只靠下划线。
+  expect(style().backgroundColor).toBeUndefined();
+  expect(style().borderBottomColor).toBe('#111/0.25');
+  fireEvent(input(), 'focus');
+  expect(style().borderBottomColor).toBe('#70f');
+  expect(style().borderBottomWidth).toBe(2);
+  expect(screen.queryByText(`0/${SEND_CAPTION_MAX_LENGTH}`)).toBeNull();
+  fireEvent.changeText(input(), '晚上见');
+  expect(screen.getByText(`3/${SEND_CAPTION_MAX_LENGTH}`)).toBeTruthy();
+  fireEvent(input(), 'blur');
+  expect(style().borderBottomColor).toBe('#111/0.25');
 });
 
 test('confirming hands back the trimmed caption', () => {

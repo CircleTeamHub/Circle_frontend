@@ -58,7 +58,6 @@ const s = StyleSheet.create({
   },
   rowText: { flex: 1, gap: 2 },
   name: { ...Typography.body },
-  hint: { ...Typography.small },
   roleChip: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
@@ -146,11 +145,6 @@ export function MentionPickerPanel({
                   ? t('chat.mentions.all', { defaultValue: '所有人' })
                   : member.nickname}
               </Text>
-              {member.isAll ? (
-                <Text style={[s.hint, { color: colors.text }]} numberOfLines={1}>
-                  {t('chat.mentions.allHint', { defaultValue: '提醒群里每一个人' })}
-                </Text>
-              ) : null}
             </View>
             {member.isAll ? null : renderRole(member.role)}
           </Pressable>

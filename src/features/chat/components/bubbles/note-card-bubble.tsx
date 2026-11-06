@@ -197,6 +197,8 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
       })
     : null;
 
+  const previewUrls = note.previewUrls ?? [];
+  const hasPreviews = previewUrls.length > 0;
   const cardBg = outgoing ? colors.sentBubble : colors.receivedBubble;
   const onCardColor = outgoing ? colors.white : colors.text;
   const onCardSecondary = outgoing
@@ -212,7 +214,9 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
         delayLongPress={350}
       >
         <View style={sNote.topRow}>
-          {note.coverUrl ? (
+          {/* 有四宫格时不再放左上角的封面大图:图都在下面那一排里,封面只是重复。
+              没有四宫格(旧卡片、笔记没图)才保留封面/文档图标。 */}
+          {hasPreviews ? null : note.coverUrl ? (
             <Image
               source={{ uri: note.coverUrl }}
               style={sNote.cover}
@@ -267,9 +271,9 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
           <Text style={[sNote.meta, { color: onCardSecondary }]}>{metaLine}</Text>
         ) : null}
 
-        {note.previewUrls && note.previewUrls.length > 0 ? (
+        {hasPreviews ? (
           <View style={sNote.previewRow} testID="note-card-previews">
-            {note.previewUrls.map((uri) => (
+            {previewUrls.map((uri) => (
               <Image
                 key={uri}
                 source={{ uri }}

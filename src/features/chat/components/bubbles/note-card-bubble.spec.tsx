@@ -47,3 +47,27 @@ test('older cards without previews render no thumbnail row', () => {
   render(<NoteCardBubble message={message(card())} outgoing={false} />);
   expect(screen.queryByTestId('note-card-previews')).toBeNull();
 });
+
+test('with the four-image grid the top-left cover is dropped, the rest of the card stays', () => {
+  render(
+    <NoteCardBubble
+      message={message(card({
+        coverUrl: 'https://cdn/cover.jpg',
+        contentPreview: '沪 真实学生假期兼职',
+        previewUrls: ['https://cdn/a.jpg', 'https://cdn/b.jpg', 'https://cdn/c.jpg', 'https://cdn/d.jpg'],
+      }))}
+      outgoing={false}
+    />,
+  );
+  expect(screen.queryByTestId('img:https://cdn/cover.jpg')).toBeNull();
+  expect(screen.getAllByTestId(/^img:https:\/\/cdn\/[a-d]\.jpg$/)).toHaveLength(4);
+  expect(screen.getByText('北京大妞')).toBeTruthy();
+  expect(screen.getByText('沪 真实学生假期兼职')).toBeTruthy();
+  expect(screen.getByText('chat.noteCard.includes')).toBeTruthy();
+  expect(screen.getByText('chat.noteCard.chips.video')).toBeTruthy();
+});
+
+test('older cards without the grid keep their cover image', () => {
+  render(<NoteCardBubble message={message(card({ coverUrl: 'https://cdn/cover.jpg' }))} outgoing={false} />);
+  expect(screen.getByTestId('img:https://cdn/cover.jpg')).toBeTruthy();
+});

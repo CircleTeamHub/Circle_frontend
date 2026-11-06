@@ -46,9 +46,25 @@ test('chat detail highlights a searched notification message after scrolling', (
   const source = readChatDetailSource();
 
   assert.match(source, /highlightedMessageID/);
-  assert.match(source, /setHighlightedMessageID\(searchedMsgID\)/);
+  assert.match(source, /flashHighlight\(searchedMsgID\)/);
   assert.match(source, /targetMessageHighlight/);
   assert.match(source, /message\.id === highlightedMessageID/);
+});
+
+test('every jump highlight fades after HIGHLIGHT_VISIBLE_MS, even when the message list keeps updating', () => {
+  const timeline = read('src/features/chat/chat-detail/hooks/use-chat-timeline.ts');
+  const searchEffect = timeline.slice(
+    timeline.indexOf('// 搜索定位'),
+    timeline.indexOf('}, [messages, searchedMsgID, conversationID, flashHighlight]);'),
+  );
+  assert.ok(searchEffect.length > 0, 'search-jump effect not found');
+  // 搜索定位 effect 依赖 messages:它自己不能挂会被重跑清理掉的定时器。
+  assert.doesNotMatch(searchEffect, /setTimeout|clearTimeout/);
+  // 搜索、引用翻页、窗口内跳转(引用块 / 置顶横幅)都走同一个会自动褪去的高亮。
+  assert.equal((timeline.match(/flashHighlight\((searchedMsgID|targetId)\)/g) ?? []).length, 3);
+  assert.match(timeline, /highlightClearTimerRef\.current = setTimeout\(\(\) => \{[\s\S]*?setHighlightedMessageID\(null\);[\s\S]*?\}, HIGHLIGHT_VISIBLE_MS\);/);
+  assert.equal((timeline.match(/setHighlightedMessageID\(/g) ?? []).length, 2);
+  assert.match(read('src/features/chat/chat-detail/constants.ts'), /HIGHLIGHT_VISIBLE_MS = 3000;/);
 });
 
 test('push notification data resolves to app routes with anchors', () => {

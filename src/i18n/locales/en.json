@@ -547,8 +547,7 @@
       "empty": "No members available to mention",
       "title": "Mention someone",
       "count": "{{count}} members",
-      "all": "Everyone",
-      "allHint": "Notify everyone in the group"
+      "all": "Everyone"
     },
     "forward": {
       "title": "Choose a chat",
