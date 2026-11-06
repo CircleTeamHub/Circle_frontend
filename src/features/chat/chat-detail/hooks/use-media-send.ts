@@ -20,6 +20,7 @@ import {
 } from '@/services/api/upload';
 import { uploadChatImageThumbnail } from '@/features/chat/utils/image-thumbnail';
 import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
+import { prepareChatVideoForUpload } from '@/features/chat/utils/chat-video-compress';
 import { uploadChatVideoPoster } from '@/features/chat/utils/chat-video-poster';
 import { hideTopNotice, showTopNotice } from '@/components/app/top-notice-store';
 import {
@@ -91,7 +92,7 @@ export function useMediaSend({
   // 视频可能接近 100MB。上传成功但 socket ack 失败时，重发只应复用已上传的 key，
   // 不能再传一遍并制造孤儿对象；成功发送或卸载后释放这份内存索引。封面同理。
   const uploadedVideoKeysRef = useRef(
-    new Map<string, { key: string; thumbKey?: string }>(),
+    new Map<string, { key: string; thumbKey?: string; width?: number; height?: number; duration?: number; size?: number }>(),
   );
   // A picker can return dozens of assets at once. Keep expensive compression,
   // presign, and upload work bounded without putting queue state in React. The
@@ -286,38 +287,49 @@ export function useMediaSend({
         if (isTempChat) {
           await assertMyTempChatConversationOpen(conversationID);
         }
-        const durationSeconds =
-          typeof asset.duration === 'number'
-            ? Math.max(1, Math.ceil(asset.duration / 1000))
-            : undefined;
         let uploaded = uploadedVideoKeysRef.current.get(deliveryId);
         if (!uploaded) {
-          const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(filename),
-            contentType,
-            folder: 'chat',
-            fileUri: asset.uri,
-          });
-          assertMediaSendSessionCurrent(deliveryId);
-          await uploadLocalFileToPresignedUrl(
-            presign.uploadUrl,
-            contentType,
-            asset.uri,
-            presign.requiredHeaders,
-            VIDEO_UPLOAD_TIMEOUT_MS,
-            { progressKey: deliveryId },
-          );
-          assertMediaSendSessionCurrent(deliveryId);
-          // 截一帧当封面:没有它,气泡在点播放之前是一块黑框。截不到就不带。
-          const poster = await uploadChatVideoPoster(
-            asset.uri,
-            durationSeconds,
-            filename,
-            'chat',
-            () => assertMediaSendSessionCurrent(deliveryId),
-          );
-          uploaded = { key: presign.key, thumbKey: poster?.key };
-          uploadedVideoKeysRef.current.set(deliveryId, uploaded);
+          const prepared = await prepareChatVideoForUpload(asset, filename, contentType);
+          try {
+            assertMediaSendSessionCurrent(deliveryId);
+            const durationSeconds = typeof prepared.asset.duration === 'number'
+              ? Math.max(1, Math.ceil(prepared.asset.duration / 1000))
+              : undefined;
+            const presign = await requestUploadPresign({
+              filename: sanitizeUploadFilename(prepared.filename),
+              contentType: prepared.contentType,
+              folder: 'chat',
+              fileUri: prepared.asset.uri,
+            });
+            assertMediaSendSessionCurrent(deliveryId);
+            await uploadLocalFileToPresignedUrl(
+              presign.uploadUrl,
+              prepared.contentType,
+              prepared.asset.uri,
+              presign.requiredHeaders,
+              VIDEO_UPLOAD_TIMEOUT_MS,
+              { progressKey: deliveryId },
+            );
+            assertMediaSendSessionCurrent(deliveryId);
+            const poster = await uploadChatVideoPoster(
+              prepared.asset.uri,
+              durationSeconds,
+              prepared.filename,
+              'chat',
+              () => assertMediaSendSessionCurrent(deliveryId),
+            );
+            uploaded = {
+              key: presign.key,
+              thumbKey: poster?.key,
+              width: prepared.asset.width ?? undefined,
+              height: prepared.asset.height ?? undefined,
+              duration: durationSeconds,
+              size: prepared.asset.fileSize ?? undefined,
+            };
+            uploadedVideoKeysRef.current.set(deliveryId, uploaded);
+          } finally {
+            await prepared.cleanup?.();
+          }
         }
         await turn?.wait;
         assertMediaSendSessionCurrent(deliveryId);
@@ -326,10 +338,10 @@ export function useMediaSend({
           key: uploaded.key,
           thumbKey: uploaded.thumbKey,
           localUri: asset.uri,
-          width: asset.width ?? undefined,
-          height: asset.height ?? undefined,
-          duration: durationSeconds,
-          size: asset.fileSize ?? undefined,
+          width: uploaded.width,
+          height: uploaded.height,
+          duration: uploaded.duration,
+          size: uploaded.size,
           deliveryId,
         });
         uploadedVideoKeysRef.current.delete(deliveryId);
