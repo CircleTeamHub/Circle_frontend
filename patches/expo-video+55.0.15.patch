@@ -1,0 +1,470 @@
+diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/VideoModule.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/VideoModule.kt
+--- a/node_modules/expo-video/android/src/main/java/expo/modules/video/VideoModule.kt
++++ b/node_modules/expo-video/android/src/main/java/expo/modules/video/VideoModule.kt
+@@ -59,8 +59,8 @@ class VideoModule : Module() {
+       VideoManager.cache.setMaxCacheSize(size)
+     }
+ 
+-    AsyncFunction("clearVideoCacheAsync") {
+-      VideoManager.cache.clear()
++    AsyncFunction("clearVideoCacheAsync") { waitForIdle: Boolean?, promise: Promise ->
++      VideoManager.clearVideoCache(waitForIdle == true, promise)
+     }
+ 
+     View(SurfaceVideoView::class) {
+diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/managers/VideoManager.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/managers/VideoManager.kt
+--- a/node_modules/expo-video/android/src/main/java/expo/modules/video/managers/VideoManager.kt
++++ b/node_modules/expo-video/android/src/main/java/expo/modules/video/managers/VideoManager.kt
+@@ -3,6 +3,7 @@ package expo.modules.video.managers
+ import androidx.annotation.OptIn
+ import androidx.media3.common.util.UnstableApi
+ import expo.modules.kotlin.AppContext
++import expo.modules.kotlin.Promise
+ import expo.modules.kotlin.exception.Exceptions
+ import expo.modules.video.FullscreenPlayerActivity
+ import expo.modules.video.VideoCache
+@@ -12,6 +13,7 @@ import expo.modules.video.listeners.VideoManagerListener
+ import expo.modules.video.player.VideoPlayer
+ import expo.modules.video.utils.weakMutableHashSetOf
+ import java.lang.ref.WeakReference
++import kotlinx.coroutines.launch
+ 
+ // Helper class used to keep track of all existing VideoViews and VideoPlayers
+ @OptIn(UnstableApi::class)
+@@ -26,6 +28,7 @@ object VideoManager {
+ 
+   // Keeps track of all existing VideoPlayers, and whether they are attached to a VideoView
+   private var videoPlayersToVideoViews = mutableMapOf<VideoPlayer, MutableList<VideoView>>()
++  private val pendingCacheClears = mutableListOf<Promise>()
+ 
+   private var playersRequestingKeepAwake = weakMutableHashSetOf<VideoPlayer>()
+ 
+@@ -83,14 +86,42 @@ object VideoManager {
+     }
+   }
+ 
+-  fun registerVideoPlayer(videoPlayer: VideoPlayer) {
++  fun registerVideoPlayer(videoPlayer: VideoPlayer) = synchronized(this) {
+     videoPlayersToVideoViews[videoPlayer] = videoPlayersToVideoViews[videoPlayer] ?: mutableListOf()
+     audioFocusManager.registerPlayer(videoPlayer)
+   }
+ 
+-  fun unregisterVideoPlayer(videoPlayer: VideoPlayer) {
++  fun unregisterVideoPlayer(videoPlayer: VideoPlayer) = synchronized(this) {
+     videoPlayersToVideoViews.remove(videoPlayer)
+     audioFocusManager.unregisterPlayer(videoPlayer)
++    if (pendingCacheClears.isNotEmpty()) {
++      appContext.get()?.backgroundCoroutineScope?.launch {
++        synchronized(this@VideoManager) {
++          if (!hasRegisteredPlayers() && pendingCacheClears.isNotEmpty()) {
++            val promises = pendingCacheClears.toList()
++            pendingCacheClears.clear()
++            clearVideoCacheNow(promises)
++          }
++        }
++      }
++    }
++  }
++
++  fun clearVideoCache(waitForIdle: Boolean, promise: Promise) = synchronized(this) {
++    if (waitForIdle && hasRegisteredPlayers()) {
++      pendingCacheClears.add(promise)
++    } else {
++      clearVideoCacheNow(listOf(promise))
++    }
++  }
++
++  private fun clearVideoCacheNow(promises: List<Promise>) {
++    try {
++      cache.clear()
++      promises.forEach { it.resolve() }
++    } catch (error: Exception) {
++      promises.forEach { it.reject("ERR_VIDEO_CACHE", error.message, error) }
++    }
+   }
+ 
+   fun registerFullscreenPlayerActivity(id: String, fullscreenActivity: FullscreenPlayerActivity) {
+diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
+--- a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
++++ b/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
+@@ -376,8 +376,6 @@ class VideoPlayer(val context: Context, appContext: AppContext, source: VideoSou
+     serviceConnection.playbackServiceBinder?.service?.unregisterPlayer(player)
+     mediaSession.release()
+ 
+-    VideoManager.unregisterVideoPlayer(this@VideoPlayer)
+-
+     // Run on global scope (not appContext.mainQueue) so that reloading doesn't cancel the release process
+     // https://github.com/expo/expo/blob/cdf592a7fea56fc01b0149e9b2e5dbd294bcdc4c/packages/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt#L277-L279
+     GlobalScope.launch(Dispatchers.Main) {
+@@ -385,6 +383,7 @@ class VideoPlayer(val context: Context, appContext: AppContext, source: VideoSou
+       player.removeListener(playerListener)
+       player.removeAnalyticsListener(analyticsListener)
+       player.release()
++      VideoManager.unregisterVideoPlayer(this@VideoPlayer)
+     }
+     uncommittedSource = null
+     commitedSource = null
+diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/records/VideoSource.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/records/VideoSource.kt
+--- a/node_modules/expo-video/android/src/main/java/expo/modules/video/records/VideoSource.kt
++++ b/node_modules/expo-video/android/src/main/java/expo/modules/video/records/VideoSource.kt
+@@ -26,6 +26,7 @@ class VideoSource(
+   @Field var metadata: VideoMetadata? = null,
+   @Field var headers: Map<String, String>? = null,
+   @Field var useCaching: Boolean = false,
++  @Field var cacheKey: String? = null,
+   @Field val contentType: ContentType = ContentType.AUTO
+ ) : Record, Serializable {
+   private fun toMediaId(): String {
+@@ -51,6 +52,7 @@ class VideoSource(
+     .Builder()
+     .apply {
+       setUri(parseLocalAssetId(uri, context))
++      setCustomCacheKey(cacheKey)
+       contentType.toMimeTypeString()?.let {
+         setMimeType(it)
+       }
+diff --git a/node_modules/expo-video/build/NativeVideoModule.d.ts b/node_modules/expo-video/build/NativeVideoModule.d.ts
+--- a/node_modules/expo-video/build/NativeVideoModule.d.ts
++++ b/node_modules/expo-video/build/NativeVideoModule.d.ts
+@@ -5,9 +5,9 @@ type ExpoVideoModule = {
+     VideoThumbnail: typeof VideoThumbnail;
+     isPictureInPictureSupported(): boolean;
+     setVideoCacheSizeAsync(sizeBytes: number): Promise<void>;
+-    clearVideoCacheAsync(): Promise<void>;
++    clearVideoCacheAsync(waitForIdle?: boolean): Promise<void>;
+     getCurrentVideoCacheSize(): number;
+ };
+ declare const _default: ExpoVideoModule;
+ export default _default;
+-//# sourceMappingURL=NativeVideoModule.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=NativeVideoModule.d.ts.map
+diff --git a/node_modules/expo-video/build/VideoModule.d.ts b/node_modules/expo-video/build/VideoModule.d.ts
+--- a/node_modules/expo-video/build/VideoModule.d.ts
++++ b/node_modules/expo-video/build/VideoModule.d.ts
+@@ -8,13 +8,14 @@
+ export declare function isPictureInPictureSupported(): boolean;
+ /**
+  * Clears all video cache.
+- * > This function can be called only if there are no existing `VideoPlayer` instances.
++ * Pass `waitForIdle` to defer clearing until all existing `VideoPlayer` instances are released.
++ * Otherwise rejects if any players exist.
+  *
+  * @returns A promise that fulfills after the cache has been cleaned.
+  * @platform android
+  * @platform ios
+  */
+-export declare function clearVideoCacheAsync(): Promise<void>;
++export declare function clearVideoCacheAsync(waitForIdle?: boolean): Promise<void>;
+ /**
+  * Sets desired video cache size in bytes. The default video cache size is 1GB. Value set by this function is persistent.
+  * The cache size is not guaranteed to be exact and the actual cache size may be slightly larger. The cache is evicted on a least-recently-used basis.
+@@ -32,4 +33,4 @@ export declare function setVideoCacheSizeAsync(sizeBytes: number): Promise<void>
+  * @platform ios
+  */
+ export declare function getCurrentVideoCacheSize(): number;
+-//# sourceMappingURL=VideoModule.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=VideoModule.d.ts.map
+diff --git a/node_modules/expo-video/build/VideoModule.js b/node_modules/expo-video/build/VideoModule.js
+--- a/node_modules/expo-video/build/VideoModule.js
++++ b/node_modules/expo-video/build/VideoModule.js
+@@ -11,14 +11,15 @@ export function isPictureInPictureSupported() {
+ }
+ /**
+  * Clears all video cache.
+- * > This function can be called only if there are no existing `VideoPlayer` instances.
++ * Pass `waitForIdle` to defer clearing until all existing `VideoPlayer` instances are released.
++ * Otherwise rejects if any players exist.
+  *
+  * @returns A promise that fulfills after the cache has been cleaned.
+  * @platform android
+  * @platform ios
+  */
+-export function clearVideoCacheAsync() {
+-    return NativeVideoModule.clearVideoCacheAsync();
++export function clearVideoCacheAsync(waitForIdle = false) {
++    return NativeVideoModule.clearVideoCacheAsync(waitForIdle);
+ }
+ /**
+  * Sets desired video cache size in bytes. The default video cache size is 1GB. Value set by this function is persistent.
+@@ -41,4 +42,4 @@ export function setVideoCacheSizeAsync(sizeBytes) {
+ export function getCurrentVideoCacheSize() {
+     return NativeVideoModule.getCurrentVideoCacheSize();
+ }
+-//# sourceMappingURL=VideoModule.js.map
+\ No newline at end of file
++//# sourceMappingURL=VideoModule.js.map
+diff --git a/node_modules/expo-video/build/VideoPlayer.types.d.ts b/node_modules/expo-video/build/VideoPlayer.types.d.ts
+--- a/node_modules/expo-video/build/VideoPlayer.types.d.ts
++++ b/node_modules/expo-video/build/VideoPlayer.types.d.ts
+@@ -334,6 +334,8 @@ export type VideoSourceObject = {
+      * @platform ios
+      */
+     useCaching?: boolean;
++    /** Stable cache identity for progressive media; the signed network URI is unchanged. */
++    cacheKey?: string;
+     /**
+      * Specifies the content type of the video source. When set to `'auto'`, the player will try to automatically determine the content type.
+      *
+diff --git a/node_modules/expo-video/ios/Cache/CachedResource.swift b/node_modules/expo-video/ios/Cache/CachedResource.swift
+--- a/node_modules/expo-video/ios/Cache/CachedResource.swift
++++ b/node_modules/expo-video/ios/Cache/CachedResource.swift
+@@ -39,7 +39,7 @@ class CachedResource {
+     self.dataPath = dataPath
+     self.url = resourceUrl
+     self.fileHandle = MediaFileHandle(filePath: dataFileUrl)
+-    self.mediaInfo = MediaInfo(forResourceUrl: resourceUrl)
++    self.mediaInfo = MediaInfo(at: dataPath + VideoCacheManager.mediaInfoSuffix)
+   }
+ 
+   func onResponseReceived(response: HTTPURLResponse) {
+diff --git a/node_modules/expo-video/ios/Cache/MediaInfo.swift b/node_modules/expo-video/ios/Cache/MediaInfo.swift
+--- a/node_modules/expo-video/ios/Cache/MediaInfo.swift
++++ b/node_modules/expo-video/ios/Cache/MediaInfo.swift
+@@ -71,8 +71,8 @@ class MediaInfo: Codable {
+     self.init(data: mediaInfoData, dataPath: path)
+   }
+ 
+-  convenience init?(forResourceUrl url: URL) {
+-    guard let filePath = VideoAsset.pathForUrl(url: url, fileExtension: url.pathExtension) else {
++  convenience init?(forResourceUrl url: URL, cacheKey: String? = nil) {
++    guard let filePath = VideoAsset.pathForUrl(url: url, fileExtension: url.pathExtension, cacheKey: cacheKey) else {
+       return nil
+     }
+     let mediaInfoPath = filePath + VideoCacheManager.mediaInfoSuffix
+diff --git a/node_modules/expo-video/ios/Cache/VideoCacheManager.swift b/node_modules/expo-video/ios/Cache/VideoCacheManager.swift
+--- a/node_modules/expo-video/ios/Cache/VideoCacheManager.swift
++++ b/node_modules/expo-video/ios/Cache/VideoCacheManager.swift
+@@ -131,19 +131,20 @@ class VideoCacheManager {
+     }
+   }
+ 
+-  private func deleteAllFilesInCacheDirectory() throws {
++  func deleteAllFilesInCacheDirectory() throws {
+     if VideoManager.shared.hasRegisteredPlayers {
+       throw VideoCacheException("Cannot clear cache while there are active players")
+     }
+ 
+-    guard let cacheDirectory = getCacheDirectory() else {
++    guard let cacheDirectory = getCacheDirectory(),
++      FileManager.default.fileExists(atPath: cacheDirectory.path) else {
+       return
+     }
+ 
+     let fileUrls = try FileManager.default.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil, options: [])
+ 
+     for fileUrl in fileUrls {
+-      try removeVideoAndMimeTypeFile(at: fileUrl)
++      try FileManager.default.removeItem(at: fileUrl)
+     }
+   }
+ 
+diff --git a/node_modules/expo-video/ios/Records/VideoSource.swift b/node_modules/expo-video/ios/Records/VideoSource.swift
+--- a/node_modules/expo-video/ios/Records/VideoSource.swift
++++ b/node_modules/expo-video/ios/Records/VideoSource.swift
+@@ -19,6 +19,9 @@ internal struct VideoSource: Record {
+   @Field
+   var useCaching: Bool = false
+ 
++  @Field
++  var cacheKey: String? = nil
++
+   @Field
+   var contentType: ContentType = .auto
+ }
+diff --git a/node_modules/expo-video/ios/VideoAsset.swift b/node_modules/expo-video/ios/VideoAsset.swift
+--- a/node_modules/expo-video/ios/VideoAsset.swift
++++ b/node_modules/expo-video/ios/VideoAsset.swift
+@@ -18,10 +18,10 @@ internal class VideoAsset: AVURLAsset, @unchecked Sendable {
+ 
+   init(url: URL, videoSource: VideoSource) {
+     self.videoSource = videoSource
+-    let cachedMimeType = MediaInfo(forResourceUrl: url)?.mimeType
++    let cachedMimeType = MediaInfo(forResourceUrl: url, cacheKey: videoSource.cacheKey)?.mimeType
+     let cachedExtension = mimeTypeToExtension(mimeType: cachedMimeType) ?? ""
+     let fileExtension = url.pathExtension.isEmpty ? cachedExtension : url.pathExtension
+-    self.saveFilePath = Self.pathForUrl(url: url, fileExtension: fileExtension)
++    self.saveFilePath = Self.pathForUrl(url: url, fileExtension: fileExtension, cacheKey: videoSource.cacheKey)
+     self.urlRequestHeaders = videoSource.headers
+     self.initialScheme = URLComponents(url: url, resolvingAgainstBaseURL: false)?.scheme
+ 
+@@ -37,11 +37,11 @@ internal class VideoAsset: AVURLAsset, @unchecked Sendable {
+     let canCache = Self.canCache(videoSource: videoSource)
+ 
+     if saveFilePath == nil && videoSource.useCaching {
+-      log.warn("[expo-video] Failed to create a cache file path for the provided source with uri: \(videoSource.uri?.absoluteString ?? "null")")
++      log.warn("[expo-video] Failed to create a video cache file path")
+     }
+ 
+     if !canCache && videoSource.useCaching {
+-      log.warn("[expo-video] Provided source with uri: \(videoSource.uri?.absoluteString ?? "null") cannot be cached. Caching will be disabled")
++      log.warn("[expo-video] Provided video source cannot be cached. Caching will be disabled")
+     }
+ 
+     if urlWithCustomScheme == nil && videoSource.useCaching {
+@@ -78,8 +78,8 @@ internal class VideoAsset: AVURLAsset, @unchecked Sendable {
+     VideoCacheManager.shared.ensureCacheSize()
+   }
+ 
+-  static func pathForUrl(url: URL, fileExtension: String) -> String? {
+-    let hashedData = SHA256.hash(data: Data(url.absoluteString.utf8))
++  static func pathForUrl(url: URL, fileExtension: String, cacheKey: String? = nil) -> String? {
++    let hashedData = SHA256.hash(data: Data((cacheKey ?? url.absoluteString).utf8))
+     let hashString = hashedData.compactMap { String(format: "%02x", $0) }.joined()
+     let parsedExtension = fileExtension.starts(with: ".") || fileExtension.isEmpty ? fileExtension : ("." + fileExtension)
+     let hashFilename = hashString + parsedExtension
+diff --git a/node_modules/expo-video/ios/VideoManager.swift b/node_modules/expo-video/ios/VideoManager.swift
+--- a/node_modules/expo-video/ios/VideoManager.swift
++++ b/node_modules/expo-video/ios/VideoManager.swift
+@@ -13,9 +13,11 @@ class VideoManager {
+   private static var managerQueue = DispatchQueue(label: "com.expo.video.manager.managerQueue")
+   private var videoViews = NSHashTable<VideoView>.weakObjects()
+   private var videoPlayers = NSHashTable<VideoPlayer>.weakObjects()
++  private var registeredPlayerIds = Set<ObjectIdentifier>()
++  private var pendingCacheClears: [Promise] = []
+ 
+   var hasRegisteredPlayers: Bool {
+-    return !videoPlayers.allObjects.isEmpty
++    return !registeredPlayerIds.isEmpty
+   }
+ 
+   func register(videoPlayer: VideoPlayer) {
+@@ -24,15 +26,41 @@ class VideoManager {
+         return
+       }
+       self.videoPlayers.add(videoPlayer)
++      self.registeredPlayerIds.insert(ObjectIdentifier(videoPlayer))
+     }
+   }
+ 
+-  func unregister(videoPlayer: VideoPlayer) {
+-    Self.managerQueue.async { [weak self, weak videoPlayer] in
+-      guard let self = self, let videoPlayer = videoPlayer else {
++  func unregister(videoPlayerId: ObjectIdentifier) {
++    Self.managerQueue.async { [weak self] in
++      guard let self else {
+         return
+       }
+-      self.videoPlayers.remove(videoPlayer)
++      self.registeredPlayerIds.remove(videoPlayerId)
++      self.clearPendingVideoCache()
++    }
++  }
++
++  func clearVideoCacheWhenIdle(promise: Promise) {
++    Self.managerQueue.async {
++      self.pendingCacheClears.append(promise)
++      self.clearPendingVideoCache()
++    }
++  }
++
++  private func clearPendingVideoCache() {
++    guard !hasRegisteredPlayers, !pendingCacheClears.isEmpty else {
++      return
++    }
++    let promises = pendingCacheClears
++    pendingCacheClears.removeAll()
++    // Hold the lifecycle queue until deletion finishes so registration cannot race the clear.
++    VideoCacheManager.shared.cacheQueue.sync {
++      do {
++        try VideoCacheManager.shared.deleteAllFilesInCacheDirectory()
++        promises.forEach { $0.resolve() }
++      } catch {
++        promises.forEach { $0.reject(error) }
++      }
+     }
+   }
+ 
+diff --git a/node_modules/expo-video/ios/VideoModule.swift b/node_modules/expo-video/ios/VideoModule.swift
+--- a/node_modules/expo-video/ios/VideoModule.swift
++++ b/node_modules/expo-video/ios/VideoModule.swift
+@@ -19,8 +19,19 @@ public final class VideoModule: Module {
+       try VideoCacheManager.shared.setMaxCacheSize(newSize: size)
+     }
+ 
+-    AsyncFunction("clearVideoCacheAsync") {
+-      return try await VideoCacheManager.shared.clearAllCache()
++    AsyncFunction("clearVideoCacheAsync") { (waitForIdle: Bool?, promise: Promise) in
++      if waitForIdle == true {
++        VideoManager.shared.clearVideoCacheWhenIdle(promise: promise)
++      } else {
++        Task {
++          do {
++            try await VideoCacheManager.shared.clearAllCache()
++            promise.resolve()
++          } catch {
++            promise.reject(error)
++          }
++        }
++      }
+     }
+ 
+     View(VideoView.self) {
+diff --git a/node_modules/expo-video/ios/VideoPlayer.swift b/node_modules/expo-video/ios/VideoPlayer.swift
+--- a/node_modules/expo-video/ios/VideoPlayer.swift
++++ b/node_modules/expo-video/ios/VideoPlayer.swift
+@@ -183,7 +183,7 @@ internal final class VideoPlayer: SharedRef<AVPlayer>, Hashable, VideoPlayerObse
+   deinit {
+     observer?.cleanup()
+     NowPlayingManager.shared.unregisterPlayer(self)
+-    VideoManager.shared.unregister(videoPlayer: self)
++    let videoPlayerId = ObjectIdentifier(self)
+ 
+     videoSourceLoader.cancelCurrentTask()
+     tracksLoadingTask?.cancel()
+@@ -193,6 +193,7 @@ internal final class VideoPlayer: SharedRef<AVPlayer>, Hashable, VideoPlayerObse
+     // If we don't do this AVPlayer doesn't get deallocated
+     DispatchQueue.main.async { [ref] in
+       ref.replaceCurrentItem(with: nil)
++      VideoManager.shared.unregister(videoPlayerId: videoPlayerId)
+     }
+   }
+ 
+diff --git a/node_modules/expo-video/src/NativeVideoModule.ts b/node_modules/expo-video/src/NativeVideoModule.ts
+--- a/node_modules/expo-video/src/NativeVideoModule.ts
++++ b/node_modules/expo-video/src/NativeVideoModule.ts
+@@ -9,7 +9,7 @@ type ExpoVideoModule = {
+ 
+   isPictureInPictureSupported(): boolean;
+   setVideoCacheSizeAsync(sizeBytes: number): Promise<void>;
+-  clearVideoCacheAsync(): Promise<void>;
++  clearVideoCacheAsync(waitForIdle?: boolean): Promise<void>;
+   getCurrentVideoCacheSize(): number;
+ };
+ 
+diff --git a/node_modules/expo-video/src/VideoModule.ts b/node_modules/expo-video/src/VideoModule.ts
+--- a/node_modules/expo-video/src/VideoModule.ts
++++ b/node_modules/expo-video/src/VideoModule.ts
+@@ -13,14 +13,15 @@ export function isPictureInPictureSupported(): boolean {
+ 
+ /**
+  * Clears all video cache.
+- * > This function can be called only if there are no existing `VideoPlayer` instances.
++ * Pass `waitForIdle` to defer clearing until all existing `VideoPlayer` instances are released.
++ * Otherwise rejects if any players exist.
+  *
+  * @returns A promise that fulfills after the cache has been cleaned.
+  * @platform android
+  * @platform ios
+  */
+-export function clearVideoCacheAsync(): Promise<void> {
+-  return NativeVideoModule.clearVideoCacheAsync();
++export function clearVideoCacheAsync(waitForIdle = false): Promise<void> {
++  return NativeVideoModule.clearVideoCacheAsync(waitForIdle);
+ }
+ 
+ /**
+diff --git a/node_modules/expo-video/src/VideoPlayer.types.ts b/node_modules/expo-video/src/VideoPlayer.types.ts
+--- a/node_modules/expo-video/src/VideoPlayer.types.ts
++++ b/node_modules/expo-video/src/VideoPlayer.types.ts
+@@ -391,6 +391,9 @@ export type VideoSourceObject = {
+    */
+   useCaching?: boolean;
+ 
++  /** Stable cache identity for progressive media; the signed network URI is unchanged. */
++  cacheKey?: string;
++
+   /**
+    * Specifies the content type of the video source. When set to `'auto'`, the player will try to automatically determine the content type.
+    *
