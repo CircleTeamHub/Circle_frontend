@@ -26,17 +26,20 @@ const EXPECTED = Object.freeze({
   appVariant: 'preprod',
   apiUrl: 'https://api-43-134-85-95.sslip.io',
   apiHost: 'api-43-134-85-95.sslip.io',
-  // 顺序即 EXPO_PUBLIC_MEDIA_ORIGINS 的逗号顺序。COS 直连域名给私有媒体的预签名
-  // 地址用;限流的投递域名是后端 OBJECT_STORAGE_DELIVERY_URL,公开目录(头像、
-  // 封面……)的永久地址由它拼出。少了哪个,App 都会把那一类媒体整片丢掉。
-  // 新加坡测试机把投递挂在 API 域的 /circle 下(Caddy 反代到 COS),所以第二项就是 API 域。
+  // 顺序即 EXPO_PUBLIC_MEDIA_ORIGINS 的逗号顺序。保留 COS/API 旧媒体来源和回滚路径，
+  // R2 公开目录走 Worker，私有媒体的预签名地址直连 R2 S3 API。少了哪个来源，
+  // App 都会把那一类媒体整片丢掉。
   mediaOrigins: Object.freeze([
     'https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com',
     'https://api-43-134-85-95.sslip.io',
+    'https://windnote-media-preprod-delivery.yiboding1998.workers.dev',
+    'https://0bea489023c1d8692a19dadaf15dcf95.r2.cloudflarestorage.com',
   ]),
   mediaHosts: Object.freeze([
     'windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com',
     'api-43-134-85-95.sslip.io',
+    'windnote-media-preprod-delivery.yiboding1998.workers.dev',
+    '0bea489023c1d8692a19dadaf15dcf95.r2.cloudflarestorage.com',
   ]),
   forbiddenStrings: [
     'application-diary-papua-dining.trycloudflare.com',

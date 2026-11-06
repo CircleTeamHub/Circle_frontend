@@ -2,6 +2,7 @@ import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { cachedVideoSource } from '@/utils/video-source';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -30,7 +31,7 @@ export function NoteVideoViewer({ uri, onClose }: { uri: string; onClose: () => 
       }
     });
     // Attach the VideoView before replacing the source, including for local uploads.
-    void player.replaceAsync(uri).then(() => {
+    void player.replaceAsync(cachedVideoSource(uri)).then(() => {
       if (!cancelled) player.play();
     }).catch(() => {
       if (!cancelled) {

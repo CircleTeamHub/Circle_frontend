@@ -22,7 +22,6 @@ interface DisplayImage {
   originalUri: string;
   thumbCacheKey?: string;
   originalCacheKey?: string;
-  previewUri?: string;
 }
 
 const GAP = Spacing.xs;
@@ -35,7 +34,7 @@ function firstString(
   );
 }
 
-function getDisplayImages(
+export function getDisplayImages(
   images: string[],
   media?: ImageMediaVariant[],
 ): DisplayImage[] {
@@ -52,21 +51,21 @@ function getDisplayImages(
         variant?.thumb,
       ) ?? legacyUri;
     const previewUri = firstString(variant?.previewUrl, variant?.preview);
-    const thumbUri =
-      firstString(variant?.thumbUrl, variant?.thumb, previewUri, originalUri) ??
-      originalUri;
-    const hasSeparateThumb = thumbUri !== originalUri;
+    const thumb = firstString(variant?.thumbUrl, variant?.thumb);
+    const thumbUri = thumb ?? previewUri ?? originalUri;
+    const originalCacheKey = firstString(variant?.originalKey, variant?.key) ?? originalUri;
+    const variantName = thumb ? 'thumb' : 'preview';
     return {
       thumbUri,
       originalUri,
-      previewUri,
       thumbCacheKey:
-        firstString(
-          variant?.thumbKey,
-          hasSeparateThumb ? undefined : variant?.key,
-        ) ?? thumbUri,
-      originalCacheKey:
-        firstString(variant?.originalKey, variant?.key) ?? originalUri,
+        thumbUri === originalUri
+          ? originalCacheKey
+          : firstString(
+              thumb ? variant?.thumbKey : variant?.previewKey,
+              variant?.key ? `${variant.key}:${variantName}` : undefined,
+            ) ?? thumbUri,
+      originalCacheKey,
     };
   });
 }
@@ -137,15 +136,8 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
               uri: item.thumbUri,
               ...(item.thumbCacheKey ? { cacheKey: item.thumbCacheKey } : {}),
             }}
-            placeholder={
-              item.previewUri && item.previewUri !== item.thumbUri
-                ? { uri: item.previewUri }
-                : undefined
-            }
             recyclingKey={item.thumbCacheKey ?? item.thumbUri}
-            // Feed cells should not persist every thumbnail indefinitely; the
-            // full-size viewer owns disk caching for images the user opens.
-            cachePolicy="memory"
+            cachePolicy="memory-disk"
             enforceEarlyResizing
             style={s.image}
             contentFit="cover"

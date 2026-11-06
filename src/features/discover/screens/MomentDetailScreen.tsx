@@ -589,7 +589,7 @@ export default function MomentDetailScreen() {
               source={{ uri: commentImageUri }}
               style={[s.commentImage, { backgroundColor: colors.surface }]}
               contentFit="cover"
-              cachePolicy="memory"
+              cachePolicy="memory-disk"
               recyclingKey={commentImageCacheKey}
               enforceEarlyResizing
             />

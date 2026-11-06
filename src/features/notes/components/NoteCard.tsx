@@ -144,8 +144,9 @@ function NoteCardInner({
       <View style={s.topRow}>
       {note.cover ? (
         <Image
-          source={{ uri: note.cover.url }}
-          recyclingKey={note.cover.url}
+          source={{ uri: note.cover.url, cacheKey: `note:${note.id}:cover:${note.cover.id}` }}
+          recyclingKey={`note:${note.id}:cover:${note.cover.id}`}
+          cachePolicy="memory-disk"
           style={s.thumbnail}
           contentFit="cover"
           // 封面走 presign-on-read，签名过期会 403 变空白。列表本身有 focus/下拉刷新会
