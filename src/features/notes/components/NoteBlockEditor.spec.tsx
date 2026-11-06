@@ -24,7 +24,7 @@ jest.mock('@/theme', () => ({
 
 jest.mock('@/services/api/upload', () => ({
   requestUploadPresign: (...args: unknown[]) => mockRequestPresign(...args),
-  resolveUploadContentType: () => 'image/jpeg',
+  resolveUploadContentType: ({ mimeType }: { mimeType?: string }) => mimeType || 'image/jpeg',
   sanitizeUploadFilename: (name: string) => name,
   uploadLocalFileToPresignedUrl: (...args: unknown[]) => mockUploadFile(...args),
 }));
@@ -73,6 +73,16 @@ beforeEach(() => {
     }),
   );
   mockUploadFile.mockResolvedValue(undefined);
+});
+
+test('converted HEIC keeps JPEG MIME and byte size in standalone media and pending blocks', async () => {
+  mockLaunchPicker.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///photo.heic', mimeType: 'image/heic', fileSize: 9999 }] });
+  mockRequestPresign.mockResolvedValue({ uploadUrl: 'https://upload.example/photo.jpg', key: 'notes/photo.jpg', fileUrl: null, requiredHeaders: { 'Content-Type': 'image/jpeg', 'Content-Length': '4321' } });
+  const onMediaUploaded = jest.fn();
+  render(<NoteBlockEditor initialContent={null} onContentChange={jest.fn()} onMediaUploaded={onMediaUploaded} />);
+  fireEvent.press(screen.getByTestId('request-image'));
+  await waitFor(() => expect(onMediaUploaded).toHaveBeenCalledWith(expect.objectContaining({ objectKey: 'notes/photo.jpg', mimeType: 'image/jpeg', size: 4321 })));
+  expect(mockDomProps?.pendingInserts).toEqual([expect.objectContaining({ objectKey: 'notes/photo.jpg', mimeType: 'image/jpeg', size: 4321 })]);
 });
 
 test('caps standalone editor web-overflow uploads in picker order and reports omitted files', async () => {

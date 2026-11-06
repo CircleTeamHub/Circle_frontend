@@ -1906,8 +1906,8 @@ export default function EditNoteScreen() {
             objectKey: presign.key,
             width: asset.width ?? undefined,
             height: asset.height ?? undefined,
-            mimeType: contentType,
-            size: asset.fileSize ?? undefined,
+            mimeType: presign.requiredHeaders['Content-Type'],
+            size: Number(presign.requiredHeaders['Content-Length']),
             durationMs:
               isVideo && typeof asset.duration === 'number'
                 ? Math.round(asset.duration)
