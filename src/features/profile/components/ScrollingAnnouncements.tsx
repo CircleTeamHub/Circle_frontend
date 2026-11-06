@@ -26,11 +26,11 @@ function ScrollingAnnouncementsContent() {
   const announcementVersion = useAnnouncementSignalStore(state=>state.version);
   const accountKey = useAuthStore(state => `${state.user?.id ?? ''}:${state.sessionEpoch}`);
   const owner = `${accountKey}:${announcementVersion}`;
-  const [data, setData] = useState<{ owner: string; items: ScrollingAnnouncement[] }>(() => ({
-    owner,
-    items: readPageSnapshot<ScrollingAnnouncement[]>(useAuthStore.getState().user?.id, 'announcements:scrolling')?.value ?? [],
-  }));
-  const items = data.owner === owner ? data.items : [];
+  // 外层已按账号换 key,这里的内容只属于当前账号。失效信号(重连补拉)不清空:旧横幅留到
+  // 新结果回来再换,否则每次从后台回来都会先消失再出现(闪一下)。过期的响应由 isCurrent 挡掉。
+  const [items, setItems] = useState<ScrollingAnnouncement[]>(
+    () => readPageSnapshot<ScrollingAnnouncement[]>(useAuthStore.getState().user?.id, 'announcements:scrolling')?.value ?? [],
+  );
   const current = items[0];
   const title = current ? current.title?.trim() || t('notifications.system') : '';
   const body = current ? current.content.replace(/\s+/g, ' ').trim() : '';
@@ -53,9 +53,9 @@ function ScrollingAnnouncementsContent() {
       try {
         const values = await fetchScrollingAnnouncements();
         if (isCurrent()) {
-          const items = values.slice(0,1);
-          setData({owner, items});
-          if (getPageSnapshotRevision() === revision) writePageSnapshot(identity.userId, 'announcements:scrolling', items, startedAt);
+          const next = values.slice(0,1);
+          setItems(next);
+          if (getPageSnapshotRevision() === revision) writePageSnapshot(identity.userId, 'announcements:scrolling', next, startedAt);
           bannerReloadGate.markLoaded(startedAt);
         }
       } catch (error) {
@@ -63,7 +63,7 @@ function ScrollingAnnouncementsContent() {
           removePageSnapshot(identity.userId, 'announcements:scrolling');
         }
         if (isCurrent()) {
-          if (isDefinitiveAuthFailure(error)) setData({owner, items: []});
+          if (isDefinitiveAuthFailure(error)) setItems([]);
           reportHandledFailure('profile', 'scrollingAnnouncements', error);
         }
       } finally { fetching = false; }
@@ -73,7 +73,7 @@ function ScrollingAnnouncementsContent() {
     const subscription = AppState.addEventListener('change', activate);
     const refresh = setInterval(() => { if (AppState.currentState === 'active') void load(); }, 60000);
     return () => { alive = false; clearInterval(refresh); subscription.remove(); };
-  }, [announcementVersion, bannerReloadGate, owner]));
+  }, [announcementVersion, bannerReloadGate]));
 
   if (!current) return null;
   return <ScrollingAnnouncementBanner title={title} body={body}
