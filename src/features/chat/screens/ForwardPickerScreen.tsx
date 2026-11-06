@@ -16,9 +16,17 @@ import {
   type ChatCardType,
 } from '@/chat-core/client';
 import { getChatMessagePreview } from '@/chat-core/mappers';
+import { getChatSendErrorMessage } from '@/chat-core/send-errors';
+import { showTopNotice } from '@/components/app/top-notice-store';
 import { SendConfirmDialog } from '@/features/chat/components/send-confirm-dialog';
-import { ChatTargetPicker } from '@/features/chat/components/chat-target-picker/ChatTargetPicker';
-import { resolveChatTargetConversationId } from '@/features/chat/components/chat-target-picker/resolve-chat-target';
+import {
+  ChatTargetPicker,
+  type ChatTargetPickerHandle,
+} from '@/features/chat/components/chat-target-picker/ChatTargetPicker';
+import {
+  chatTargetResolveFailureMessage,
+  resolveChatTargets,
+} from '@/features/chat/components/chat-target-picker/resolve-chat-target';
 import type { ChatTarget } from '@/features/chat/components/chat-target-picker/types';
 import { useRecentForwardTargetsStore } from '@/features/chat/components/chat-target-picker/use-recent-forward-targets-store';
 import type { ChatMessageDto } from '@/chat-core/protocol';
@@ -190,6 +198,7 @@ export default function ForwardPickerScreen() {
   const [confirmTargets, setConfirmTargets] = useState<ChatTarget[] | null>(null);
   const mountedRef = useRef(true);
   const sendingRef = useRef(false);
+  const pickerRef = useRef<ChatTargetPickerHandle>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -198,16 +207,59 @@ export default function ForwardPickerScreen() {
     };
   }, []);
 
-  /** 进队即算成功;没进队(本地门禁)直接抛,由外层报「转发失败」。 */
-  async function queueSend(send: (onCreate: () => void) => Promise<unknown>, step: string) {
+  /**
+   * 进队即算成功,返回「最终是否送达」的结果但不等它;没进队(本地门禁)直接抛,
+   * 由外层报「转发失败」。包在对象里:async 函数直接返回 promise 会被摊平成等待。
+   */
+  async function queueSend(
+    send: (onCreate: () => void) => Promise<unknown>,
+    step: string,
+  ): Promise<{ delivered: Promise<boolean> }> {
     const handle = startChatSend(send);
-    if (handle.queued) {
-      void handle.delivered.catch((error: unknown) => {
-        reportHandledFailure('forward', step, error);
-      });
-    } else {
+    if (!handle.queued) {
       await handle.delivered;
+      return { delivered: Promise.resolve(true) };
     }
+    return {
+      delivered: handle.delivered.then(
+        () => true,
+        (error: unknown) => {
+          reportHandledFailure('forward', step, error);
+          return false;
+        },
+      ),
+    };
+  }
+
+  /**
+   * 留言是一条普通文字消息,等这个对象的转发内容都有了结果再发:一条都没送达
+   * (服务端拒收)时不单独把留言发过去,改成顶部提示。
+   */
+  function queueCaptionAfter(
+    deliveries: readonly Promise<boolean>[],
+    conversationId: string,
+    caption: string,
+  ) {
+    void Promise.all(deliveries)
+      .then(async (results) => {
+        if (!results.some(Boolean)) {
+          showTopNotice({
+            type: 'error',
+            title: t('chat.forward.captionSkipped', {
+              defaultValue: '转发内容没有发出，留言也没有发送',
+            }),
+          });
+          return;
+        }
+        const { delivered } = await queueSend(
+          (onCreate) => sendTextMessage({ conversationId, text: caption, onCreate }),
+          'forwardCaption',
+        );
+        await delivered;
+      })
+      .catch((error: unknown) => {
+        reportHandledFailure('forward', 'forwardCaption', error);
+      });
   }
 
   async function handleForward(targets: ChatTarget[], caption: string) {
@@ -215,29 +267,39 @@ export default function ForwardPickerScreen() {
     sendingRef.current = true;
     setSending(true);
     const delivered: ChatTarget[] = [];
+    // 选择页里的原 key(通讯录好友是 user:<id>),部分失败后按它从多选里去掉。
+    const deliveredKeys: string[] = [];
     try {
+      // 先把所有对象都落到会话 id:建单聊失败时一条都不发,重试不会给已发过的人再发一份。
+      const { resolved, failed } = await resolveChatTargets(targets);
+      if (failed.length > 0) {
+        failed.forEach((item) => reportHandledFailure('forward', 'resolveTarget', item.error));
+        if (mountedRef.current) {
+          Alert.alert(
+            t('chat.forward.failed'),
+            chatTargetResolveFailureMessage(failed, t, t('chat.forward.failedRetry')),
+          );
+        }
+        return;
+      }
       // sendWithOptimism 已把发出的消息写进 chat-core store,无需手动 append。
       // 进了发送队列就算转发成功,不等送达:断线时队列会等到重连,之后仍发不出去的
       // 在目标会话里标红、可以长按重发。没进队(类型不支持、本地门禁)才报失败。
       const items = pendingBatch ?? [pending];
-      for (const target of targets) {
-        const conversationId = await resolveChatTargetConversationId(target);
+      for (const { target, conversationId } of resolved) {
+        const deliveries: Promise<boolean>[] = [];
         for (let index = 0; index < items.length; index++) {
-          await queueSend(
+          const { delivered: itemDelivered } = await queueSend(
             (onCreate) => sendForwardedMessage(items[index], conversationId, onCreate),
             'forwardMessage',
           );
+          deliveries.push(itemDelivered);
           // 只发给一个对象时,本地失败后只把没发出去的留在选择页里重试。
-          if (pendingBatch && targets.length === 1) setPendingBatch(items.slice(index + 1));
+          if (pendingBatch && resolved.length === 1) setPendingBatch(items.slice(index + 1));
         }
-        if (caption) {
-          // 留言是一条普通文字消息,排在转发内容之后进同一个发送队列。
-          await queueSend(
-            (onCreate) => sendTextMessage({ conversationId, text: caption, onCreate }),
-            'forwardCaption',
-          );
-        }
+        if (caption) queueCaptionAfter(deliveries, conversationId, caption);
         delivered.push({ ...target, key: conversationId, conversationId });
+        deliveredKeys.push(target.key);
       }
       clearPending();
       if (!mountedRef.current) return;
@@ -250,7 +312,18 @@ export default function ForwardPickerScreen() {
     } catch (error) {
       reportHandledFailure('forward', 'forwardMessage', error);
       if (!mountedRef.current) return;
-      Alert.alert(t('chat.forward.failed'), t('chat.forward.failedRetry'));
+      // 已经发出去的对象从多选里去掉,再点发送只发给剩下的。
+      pickerRef.current?.deselect(deliveredKeys);
+      const reason = getChatSendErrorMessage(error, t('chat.forward.failedRetry'));
+      Alert.alert(
+        t('chat.forward.failed'),
+        deliveredKeys.length > 0
+          ? `${t('chat.targetPicker.partialDelivered', {
+              count: deliveredKeys.length,
+              defaultValue: '已发送给 {{count}} 个聊天，已从选择中移除。',
+            })}\n${reason}`
+          : reason,
+      );
     } finally {
       if (userId && delivered.length > 0) recordRecent(userId, delivered);
       sendingRef.current = false;
@@ -281,6 +354,7 @@ export default function ForwardPickerScreen() {
   return (
     <View style={s.container}>
       <ChatTargetPicker
+        ref={pickerRef}
         busy={sending}
         onClose={() => router.back()}
         onConfirm={setConfirmTargets}

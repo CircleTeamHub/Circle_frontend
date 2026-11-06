@@ -106,9 +106,13 @@ test('contacts load on demand and reuse an existing private chat', async () => {
 });
 
 test('search spans every source and shows the same person once', async () => {
-  renderPicker();
-  fireEvent.press(screen.getByText('chat.targetPicker.contacts'));
+  const onConfirm = renderPicker();
+  // 不切到通讯录页签直接搜,也能搜到还没聊过天的好友。
+  fireEvent.changeText(screen.getByPlaceholderText('chat.targetPicker.searchPlaceholder'), '李哥');
   await act(async () => { await Promise.resolve(); });
+  expect(fetchFriends).toHaveBeenCalledTimes(1);
+  fireEvent.press(screen.getByText('李哥'));
+  expect(onConfirm).toHaveBeenLastCalledWith([expect.objectContaining({ key: 'user:u3', conversationId: null })]);
   fireEvent.changeText(screen.getByPlaceholderText('chat.targetPicker.searchPlaceholder'), '小王');
   expect(screen.getAllByText('小王')).toHaveLength(1);
   fireEvent.changeText(screen.getByPlaceholderText('chat.targetPicker.searchPlaceholder'), '不存在');

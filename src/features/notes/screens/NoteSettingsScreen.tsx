@@ -1,9 +1,14 @@
+import { useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { MenuRow } from '@/components/ui/menu-row';
 import { NavHeader } from '@/components/ui/nav-header';
-import { useNoteCollectPreferencesStore } from '@/features/notes/store/use-note-collect-preferences-store';
+import {
+  useNoteCollectPreferences,
+  useNoteCollectPreferencesStore,
+} from '@/features/notes/store/use-note-collect-preferences-store';
+import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 const s = StyleSheet.create({
@@ -31,10 +36,21 @@ export default function NoteSettingsScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const chooseGroup = useNoteCollectPreferencesStore((state) => state.chooseGroup);
-  const editTitle = useNoteCollectPreferencesStore((state) => state.editTitle);
-  const setChooseGroup = useNoteCollectPreferencesStore((state) => state.setChooseGroup);
-  const setEditTitle = useNoteCollectPreferencesStore((state) => state.setEditTitle);
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const { chooseGroup, editTitle } = useNoteCollectPreferences(userId);
+  const setPreference = useNoteCollectPreferencesStore((state) => state.setPreference);
+  const setChooseGroup = useCallback(
+    (value: boolean) => {
+      if (userId) setPreference(userId, { chooseGroup: value });
+    },
+    [setPreference, userId],
+  );
+  const setEditTitle = useCallback(
+    (value: boolean) => {
+      if (userId) setPreference(userId, { editTitle: value });
+    },
+    [setPreference, userId],
+  );
 
   return (
     <View style={[s.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>

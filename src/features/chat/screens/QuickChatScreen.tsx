@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import ChatDetailScreen from '@/features/chat/screens/ChatDetailScreen';
 import type { EmbeddedChatParams } from '@/features/chat/chat-detail/types';
+import { ChatSheetNavigationContext } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { Radius, useTheme } from '@/theme';
 
 /** 面板占屏幕(键盘以上)的比例;上面一截留着能看见原来的页面。 */
@@ -68,6 +69,8 @@ export default function QuickChatScreen() {
     });
   }, [close, conversationID, params.avatarUrl, params.conversationType, params.sourceID, params.title]);
 
+  const sheetNavigation = useMemo(() => ({ dismiss: close, expand }), [close, expand]);
+
   if (!conversationID) return null;
 
   return (
@@ -86,7 +89,9 @@ export default function QuickChatScreen() {
         ]}
       >
         <View style={[s.grabber, { backgroundColor: colors.surfaceBorder }]} />
-        <ChatDetailScreen key={conversationID} embedded={embedded} sheet={{ onClose: close, onExpand: expand }} />
+        <ChatSheetNavigationContext.Provider value={sheetNavigation}>
+          <ChatDetailScreen key={conversationID} embedded={embedded} sheet={{ onClose: close, onExpand: expand }} />
+        </ChatSheetNavigationContext.Provider>
       </Animated.View>
     </KeyboardAvoidingContainer>
   );

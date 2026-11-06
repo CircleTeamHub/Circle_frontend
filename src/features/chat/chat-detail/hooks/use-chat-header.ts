@@ -1,4 +1,5 @@
 import { router, useNavigation } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   getChatInfoTopHref,
@@ -53,6 +54,7 @@ export function useChatHeader({
   revalidateMemberViewAccess,
   conversationTitle,
 }: ChatHeaderParams) {
+  const chatRouter = useChatRouter();
   const navigation = useNavigation();
   const handleBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -64,7 +66,7 @@ export function useChatHeader({
   }, [navigation, scope]);
 
   const openGroupInfo = useCallback(() => {
-    router.push(
+    chatRouter.push(
       getChatInfoTopHref(scope, {
         conversationID,
         sourceID,
@@ -74,7 +76,7 @@ export function useChatHeader({
         originScope: scope,
       }),
     );
-  }, [scope, conversationID, sourceID, conversationTitle, isTempChat]);
+  }, [chatRouter, scope, conversationID, sourceID, conversationTitle, isTempChat]);
 
   const handleOpenMessageSender = useCallback(
     async (msg: ChatMessage) => {
@@ -99,7 +101,7 @@ export function useChatHeader({
           );
           return;
         }
-        router.navigate(
+        chatRouter.navigate(
           getUserProfileHref(scope, msg.senderID, msg.senderName, {
             viaConversationID: conversationID,
           }),
@@ -107,9 +109,9 @@ export function useChatHeader({
         return;
       }
       // 单聊：对方即会话 sourceID。
-      router.navigate(getUserProfileHref(scope, sourceID, conversationTitle));
+      chatRouter.navigate(getUserProfileHref(scope, sourceID, conversationTitle));
     },
-    [
+    [chatRouter, 
       canViewMemberProfilesByPolicy,
       conversationID,
       conversationTitle,
@@ -128,8 +130,8 @@ export function useChatHeader({
     const profileName = authUser?.nickname ?? authUser?.accountId;
     // 资料页必须进入当前聊天所在的 tab 栈。这样返回时沿原栈回到聊天，
     // 不会因为写死 profile scope 而跳到「我的」页面。
-    router.navigate(getUserProfileHref(scope, profileId, profileName));
-  }, [authUser?.accountId, authUser?.id, authUser?.nickname, currentUserID, scope]);
+    chatRouter.navigate(getUserProfileHref(scope, profileId, profileName));
+  }, [chatRouter, authUser?.accountId, authUser?.id, authUser?.nickname, currentUserID, scope]);
 
   const handleOpenUserCard = useCallback(
     async (userID: string, nickname?: string) => {
@@ -152,9 +154,9 @@ export function useChatHeader({
           }
         }
       }
-      router.navigate(getUserProfileHref(scope, userID, nickname));
+      chatRouter.navigate(getUserProfileHref(scope, userID, nickname));
     },
-    [conversationID, currentUserID, isGroupChat, revalidateMemberViewAccess, scope, t],
+    [chatRouter, conversationID, currentUserID, isGroupChat, revalidateMemberViewAccess, scope, t],
   );
 
   const handleOpenHeaderTarget = useCallback(() => {
@@ -164,8 +166,8 @@ export function useChatHeader({
       openGroupInfo();
       return;
     }
-    router.navigate(getUserProfileHref(scope, sourceID, conversationTitle));
-  }, [conversationTitle, isAssistantConversation, isGroupChat, openGroupInfo, scope, sourceID]);
+    chatRouter.navigate(getUserProfileHref(scope, sourceID, conversationTitle));
+  }, [chatRouter, conversationTitle, isAssistantConversation, isGroupChat, openGroupInfo, scope, sourceID]);
 
   // 单聊场景下订阅对方在线状态。订阅 Promise 立刻返回当前快照，
   // 之后由全局 onUserStatusChanged 维护增量。

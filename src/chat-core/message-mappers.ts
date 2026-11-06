@@ -226,6 +226,7 @@ function sanitizeNoteCard(content: Record<string, unknown>): NoteCardData {
   const workStatus =
     content['workStatus'] === 'WORKING' ||
     content['workStatus'] === 'CLOSED' ||
+    content['workStatus'] === 'OFF_SHELF' ||
     content['workStatus'] === 'UNSET'
       ? content['workStatus']
       : 'UNSET';

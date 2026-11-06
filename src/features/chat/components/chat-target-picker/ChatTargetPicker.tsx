@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useMemo, useState } from 'react';
+import { type Ref, useCallback, useImperativeHandle, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,10 +28,18 @@ import { useRecentForwardTargetsStore } from './use-recent-forward-targets-store
 /** 多选一次最多发给几个聊天,和笔记批量分享的上限一致。 */
 export const CHAT_TARGET_MAX_SELECTION = 9;
 
+export interface ChatTargetPickerHandle {
+  /** 部分发送失败后,把已经发出去的对象从多选里去掉:再点「发送」只发给剩下的,不会重复发。 */
+  deselect: (keys: readonly string[]) => void;
+}
+
 interface ChatTargetPickerProps {
+  ref?: Ref<ChatTargetPickerHandle>;
   title?: string;
   /** 发送中锁住选择,防止重复点。 */
   busy?: boolean;
+  /** 发送中仍允许关闭(调用方关掉即停发剩余内容),默认发送中连关闭也锁住。 */
+  closableWhileBusy?: boolean;
   onClose: () => void;
   /** 单选点中一行、或多选点「发送」后回调;确认框和真正的发送由调用方负责。 */
   onConfirm: (targets: ChatTarget[]) => void;
@@ -92,7 +100,14 @@ const s = StyleSheet.create({
  * 转发、发笔记、发名片共用的「选择一个聊天」页:搜索 + 最近转发 + 最近聊天/通讯录/我的群聊,
  * 右上角切多选。只负责选人,发不发、怎么发由调用方决定。
  */
-export function ChatTargetPicker({ title, busy = false, onClose, onConfirm }: ChatTargetPickerProps) {
+export function ChatTargetPicker({
+  ref,
+  title,
+  busy = false,
+  closableWhileBusy = false,
+  onClose,
+  onConfirm,
+}: ChatTargetPickerProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -100,12 +115,23 @@ export function ChatTargetPicker({ title, busy = false, onClose, onConfirm }: Ch
   const [query, setQuery] = useState('');
   const [multiSelect, setMultiSelect] = useState(false);
   const [selected, setSelected] = useState<ChatTarget[]>([]);
-  const sources = useChatTargetSources(tab);
+  const searching = query.trim().length > 0;
+  const sources = useChatTargetSources(tab, searching);
   const removeRecent = useRecentForwardTargetsStore((state) => state.remove);
   const clearRecent = useRecentForwardTargetsStore((state) => state.clear);
 
   const selectedKeys = useMemo(() => new Set(selected.map((target) => target.key)), [selected]);
-  const searching = query.trim().length > 0;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      deselect: (keys) => {
+        const drop = new Set(keys);
+        setSelected((current) => current.filter((target) => !drop.has(target.key)));
+      },
+    }),
+    [],
+  );
   const list = searching
     ? searchChatTargets(query, [sources.recentChats, sources.contacts, sources.groups])
     : tab === 'recent'
@@ -196,7 +222,7 @@ export function ChatTargetPicker({ title, busy = false, onClose, onConfirm }: Ch
         <Pressable
           style={s.headerSide}
           onPress={onClose}
-          disabled={busy}
+          disabled={busy && !closableWhileBusy}
           accessibilityRole="button"
           accessibilityLabel={t('common.close')}
         >

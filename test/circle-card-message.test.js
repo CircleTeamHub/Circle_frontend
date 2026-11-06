@@ -88,7 +88,10 @@ test('ShareCircleCardScreen sends the card to the chats picked in the shared cha
   assert.match(share, /<SendConfirmDialog/);
   // 契约随自研栈迁移更新(意图不变):卡片经 chat-core 发进所选会话。
   assert.match(share, /sendCardMessage/);
-  assert.match(share, /resolveChatTargetConversationId\(target\)/);
+  // 先把所有对象都落到会话 id 再发:建单聊失败时一条都不发,重试不会重复投递。
+  assert.match(share, /await resolveChatTargets\(targets\)/);
+  assert.match(share, /for \(const \{ target, conversationId \} of resolved\)/);
+  assert.match(share, /pickerRef\.current\?\.deselect\(deliveredKeys\)/);
   assert.match(share, /type: 'circle-card'/);
 });
 
@@ -97,7 +100,8 @@ test('ShareCircleCardScreen treats a queued send as sent so a stalled network ca
     'src/features/discover/screens/ShareCircleCardScreen.tsx',
   );
   assert.match(share, /const handle = startChatSend\(send\);/);
-  assert.match(share, /if \(handle\.queued\) \{/);
+  // 没进队才等(本地门禁会立即 reject);进了队只返回送达结果,不等它。
+  assert.match(share, /if \(!handle\.queued\) \{\s*await handle\.delivered;/);
   assert.match(share, /const mountedRef = useRef\(true\)/);
   assert.match(share, /mountedRef\.current = false/);
   assert.match(share, /if \(!mountedRef\.current\) return;\s*setSending\(false\)/);

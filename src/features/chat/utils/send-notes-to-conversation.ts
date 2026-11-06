@@ -37,6 +37,8 @@ export interface SendNotesToConversationInput {
 export interface SendNotesToConversationResult {
   failures: number;
   firstError: unknown;
+  /** 确认送达的条数:一条都没送达时,调用方不该再单独把附言发过去。 */
+  sent: number;
 }
 
 /**
@@ -56,10 +58,11 @@ export async function sendNotesToConversation({
   const sections = sectionsToImport(options);
   let failures = 0;
   let firstError: unknown = null;
+  let sent = 0;
 
   const perNote: NoteSendTask[][] = [];
   for (const note of notes) {
-    if (!isActive()) return { failures, firstError };
+    if (!isActive()) return { failures, firstError, sent };
     let imported: ImportedNoteChatMedia[] = [];
     // mediaCount=0 的笔记没有任何可拷对象,别浪费服务端 20 次/分钟的拷贝配额。
     if (sections.length > 0 && note.mediaCount > 0) {
@@ -106,7 +109,7 @@ export async function sendNotesToConversation({
     devWarn('[ChatDetail] note batch send failed', error);
   };
   for (let i = 0; i < tasks.length; i += 1) {
-    if (!isActive()) return { failures, firstError };
+    if (!isActive()) return { failures, firstError, sent };
     while (isActive()) {
       const now = Date.now();
       const delay = noteSendWindowDelayMs(sendTimestamps.current, now);
@@ -119,7 +122,7 @@ export async function sendNotesToConversation({
       }
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
-    if (!isActive()) return { failures, firstError };
+    if (!isActive()) return { failures, firstError, sent };
     const task = tasks[i];
     const handle = startChatSend((onCreate) => {
       switch (task.kind) {
@@ -165,18 +168,21 @@ export async function sendNotesToConversation({
     if (handle.queued) {
       deliveries.push(
         handle.delivered.then(
-          () => undefined,
+          () => {
+            sent += 1;
+          },
           (error: unknown) => recordFailure(task.kind, error),
         ),
       );
     } else {
       try {
         await handle.delivered;
+        sent += 1;
       } catch (error) {
         recordFailure(task.kind, error);
       }
     }
   }
   await Promise.all(deliveries);
-  return { failures, firstError };
+  return { failures, firstError, sent };
 }

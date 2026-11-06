@@ -4,7 +4,10 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { NoteCard, type NoteSourceTarget } from '@/features/notes/components/NoteCard';
-import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
+import {
+  type NoteSourceStatusChange,
+  useNoteStatusSignalStore,
+} from '@/features/notes/store/use-note-status-signal-store';
 import type { NoteSummary } from '@/features/notes/types';
 import { applyNoteSourceStatusToSummaries } from '@/features/notes/utils/note-sync';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -43,15 +46,22 @@ export function GroupBoundNotesReadOnly({
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const sequenceRef = useRef(0);
+  // 请求在途时到达的状态事件:快照可能是事件之前读的,回来后要再叠一遍,不能被旧快照盖掉。
+  const inFlightRef = useRef<{ startVersion: number; changes: NoteSourceStatusChange[] } | null>(null);
   const statusChange = useNoteStatusSignalStore((store) => store.lastChange);
   const recoveryVersion = useNoteStatusSignalStore((store) => store.recoveryVersion);
 
   const load = useCallback(async () => {
     const sequence = ++sequenceRef.current;
+    const inFlight = {
+      startVersion: useNoteStatusSignalStore.getState().version,
+      changes: [] as NoteSourceStatusChange[],
+    };
+    inFlightRef.current = inFlight;
     try {
       const next = await fetchGroupBoundNotes(conversationID);
       if (sequence !== sequenceRef.current) return;
-      setNotes(next);
+      setNotes(inFlight.changes.reduce(applyNoteSourceStatusToSummaries, next));
       setState({ kind: 'loaded' });
     } catch (error) {
       if (sequence !== sequenceRef.current) return;
@@ -63,6 +73,8 @@ export function GroupBoundNotesReadOnly({
           t('chat.groupManagement.loadFailed', { defaultValue: '笔记管理加载失败' }),
         ),
       });
+    } finally {
+      if (inFlightRef.current === inFlight) inFlightRef.current = null;
     }
   }, [conversationID, t]);
 
@@ -79,6 +91,10 @@ export function GroupBoundNotesReadOnly({
 
   useEffect(() => {
     if (!statusChange) return;
+    const inFlight = inFlightRef.current;
+    const changeVersion =
+      useNoteStatusSignalStore.getState().sourceVersions[statusChange.sourceNoteId] ?? 0;
+    if (inFlight && changeVersion > inFlight.startVersion) inFlight.changes.push(statusChange);
     setNotes((current) => applyNoteSourceStatusToSummaries(current, statusChange));
   }, [statusChange]);
 

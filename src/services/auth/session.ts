@@ -107,6 +107,8 @@ type PersistedResettableStore = {
  * - circle-im-app-settings          —— 语言/主题等设备设置
  * - circle-im-notification-feedback —— 设备级通知反馈
  * - circle-im-known-accounts        —— 账号切换器本体，语义就是跨会话
+ * - circle-im-note-collect-preferences —— 收藏笔记的两步确认开关:只有两个布尔值、
+ *   已按 userId 分开存，不引用任何会话/笔记 id；留下来重登时沿用自己的选择
  * - circle-im-auth                  —— 由上方 persist.clearStorage 单独处理
  *
  * 新增持久化 store 时必须把它加进这里或上面的幸存名单 —— 让「随账号还是随设备」
@@ -146,6 +148,19 @@ const ACCOUNT_SCOPED_STORE_LOADERS: (() => Promise<PersistedResettableStore>)[] 
   async () =>
     (await import('@/features/discover/store/use-circle-notification-store'))
       .useCircleNotificationStore,
+  // 「最近转发」:按账号存的会话 id + 对方昵称头像。显示时虽按当前会话列表过滤,
+  // 不会给下一个账号看到,但这是上一个账号的社交足迹,登出时一起清掉。
+  async () => {
+    const { useRecentForwardTargetsStore } = await import(
+      '@/features/chat/components/chat-target-picker/use-recent-forward-targets-store'
+    );
+    return {
+      getState: () => ({
+        resetForLogout: () => useRecentForwardTargetsStore.setState({ byUser: {} }),
+      }),
+      persist: useRecentForwardTargetsStore.persist,
+    };
+  },
   async () => {
     const { useCircleShortcutOrderStore } = await import(
       '@/features/discover/store/use-circle-shortcut-order-store'

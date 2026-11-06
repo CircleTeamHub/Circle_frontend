@@ -15,6 +15,8 @@ const mockStartChatSend = jest.fn();
 const mockRecord = jest.fn();
 const mockResolve = jest.fn();
 const mockBack = jest.fn();
+const mockDeselect = jest.fn();
+const mockShowTopNotice = jest.fn();
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -49,17 +51,38 @@ jest.mock('@/theme', () => ({
   useTheme: () => ({ colors: { background: '#fff', textSecondary: '#666' } }),
 }));
 jest.mock('@/features/chat/components/chat-target-picker/resolve-chat-target', () => ({
-  resolveChatTargetConversationId: (target: ChatTarget) => mockResolve(target),
+  resolveChatTargets: async (targets: ChatTarget[]) => {
+    const resolved: { target: ChatTarget; conversationId: string }[] = [];
+    const failed: { target: ChatTarget; error: unknown }[] = [];
+    for (const target of targets) {
+      try {
+        resolved.push({ target, conversationId: await mockResolve(target) });
+      } catch (error) {
+        failed.push({ target, error });
+      }
+    }
+    return { resolved, failed };
+  },
+  chatTargetResolveFailureMessage: () => 'resolve.failed',
 }));
+jest.mock('@/chat-core/send-errors', () => ({
+  getChatSendErrorMessage: (_error: unknown, fallback: string) => fallback,
+}));
+jest.mock('@/components/app/top-notice-store', () => ({ showTopNotice: (...args: unknown[]) => mockShowTopNotice(...args) }));
 jest.mock('@/features/chat/components/chat-target-picker/use-recent-forward-targets-store', () => ({
   useRecentForwardTargetsStore: (selector: (state: { record: jest.Mock }) => unknown) => selector({ record: mockRecord }),
 }));
 jest.mock('@/features/chat/components/chat-target-picker/ChatTargetPicker', () => {
   const { Pressable, Text } = jest.requireActual('react-native');
+  const { useImperativeHandle } = jest.requireActual('react');
   return {
-    ChatTargetPicker: ({ onConfirm }: { onConfirm: (targets: ChatTarget[]) => void }) => (
-      <Pressable onPress={() => onConfirm(mockPickTargets)}><Text>picker.pick</Text></Pressable>
-    ),
+    ChatTargetPicker: ({ ref, onConfirm }: {
+      ref?: React.Ref<unknown>;
+      onConfirm: (targets: ChatTarget[]) => void;
+    }) => {
+      useImperativeHandle(ref, () => ({ deselect: mockDeselect }));
+      return <Pressable onPress={() => onConfirm(mockPickTargets)}><Text>picker.pick</Text></Pressable>;
+    },
   };
 });
 jest.mock('@/features/chat/components/send-confirm-dialog', () => {
@@ -148,10 +171,13 @@ test('several targets each get every message, then the caption', async () => {
   fireEvent.changeText(screen.getByPlaceholderText('chat.forward.captionPlaceholder'), '  一起看看  ');
   fireEvent.press(screen.getByText('dialog.send'));
   await waitFor(() => expect(mockSendText).toHaveBeenCalledTimes(6));
-  expect(mockSendText.mock.calls.map(([options]) => `${options.conversationId}:${options.text}`)).toEqual([
-    'group-1:first', 'group-1:second', 'group-1:一起看看',
-    'created-u2:first', 'created-u2:second', 'created-u2:一起看看',
-  ]);
+  // 留言等这个聊天的转发内容都送达后才发:每个聊天里都排在最后。
+  const sentTo = (conversationId: string) => mockSendText.mock.calls
+    .map(([options]) => options)
+    .filter((options) => options.conversationId === conversationId)
+    .map((options) => options.text);
+  expect(sentTo('group-1')).toEqual(['first', 'second', '一起看看']);
+  expect(sentTo('created-u2')).toEqual(['first', 'second', '一起看看']);
   expect(mockClearPending).toHaveBeenCalled();
 });
 
@@ -179,7 +205,53 @@ test('a chat that cannot be opened reports failure without sending', async () =>
   try {
     render(<ForwardPickerScreen />);
     pick();
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('chat.forward.failed', 'chat.forward.failedRetry'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('chat.forward.failed', 'resolve.failed'));
     expect(mockStartChatSend).not.toHaveBeenCalled();
   } finally { alert.mockRestore(); }
+});
+
+test('with several chats, one that cannot be opened stops the whole send so a retry never repeats', async () => {
+  mockPickTargets = [chat('direct-1'), { key: 'user:u9', conversationId: null, userId: 'u9', name: '拉黑我的人', kind: 'direct' }];
+  mockResolve
+    .mockImplementationOnce((target: ChatTarget) => Promise.resolve(target.conversationId))
+    .mockImplementationOnce(() => Promise.reject(new Error('CHAT_BLOCKED')));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    render(<ForwardPickerScreen />);
+    pick();
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('chat.forward.failed', 'resolve.failed'));
+    expect(mockStartChatSend).not.toHaveBeenCalled();
+
+    // 去掉那个人再发:第一个聊天只收到一份。
+    mockPickTargets = [chat('direct-1')];
+    pick();
+    await waitFor(() => expect(mockClearPending).toHaveBeenCalled());
+    expect(mockSendText.mock.calls.map(([options]) => options.conversationId)).toEqual(['direct-1']);
+  } finally { alert.mockRestore(); }
+});
+
+test('after a partial failure the chats that already got it are dropped from the selection', async () => {
+  mockPickTargets = [chat('direct-1'), chat('group-2', 'group')];
+  mockStartChatSend
+    .mockImplementationOnce((send: (onCreate: () => void) => Promise<unknown>) => ({ queued: true, delivered: send(jest.fn()) }))
+    .mockImplementationOnce(() => ({ queued: false, delivered: Promise.reject(new Error('credit')) }));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    render(<ForwardPickerScreen />);
+    pick();
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(
+      'chat.forward.failed',
+      'chat.targetPicker.partialDelivered\nchat.forward.failedRetry',
+    ));
+    expect(mockDeselect).toHaveBeenCalledWith(['direct-1']);
+    expect(mockClearPending).not.toHaveBeenCalled();
+  } finally { alert.mockRestore(); }
+});
+
+test('the caption is held back when the forwarded content was rejected', async () => {
+  mockStartChatSend.mockImplementationOnce(() => ({ queued: true, delivered: Promise.reject(new Error('rejected')) }));
+  render(<ForwardPickerScreen />);
+  pick('看看这个');
+  await waitFor(() => expect(mockShowTopNotice).toHaveBeenCalled());
+  expect(mockStartChatSend).toHaveBeenCalledTimes(1);
 });

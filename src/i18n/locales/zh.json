@@ -299,7 +299,7 @@
     "swipeDelete": "删除",
     "deleteChat": "删除聊天",
     "deleteChatConfirm": "删除「{{name}}」的聊天和本地消息？",
-    "deleteChatConfirmDirect": "删除「{{name}}」的聊天记录？对方的记录也会同时删除，此操作无法撤销。",
+    "deleteChatConfirmDirect": "删除「{{name}}」的聊天记录？只删除你这边的记录，对方的不受影响。",
     "newGroupTitle": "发起群聊",
     "newGroupNamePlaceholder": "群聊名称",
     "newGroupSelectMembers": "选择联系人",
@@ -482,7 +482,8 @@
       "favoriteSendFailed": "收藏内容发送失败，请重试",
       "favoriteLegacyVoiceUnsupported": "这条旧版语音收藏无法重新发送",
       "mediaPreparing": "正在处理所选内容…",
-      "mediaSendFailed": "图片或视频发送失败，请重试"
+      "mediaSendFailed": "图片或视频发送失败，请重试",
+      "captionNotSent": "图片或视频没有发出，附言也没有发送"
     },
     "stickers": {
       "title": "自定义表情",
@@ -557,7 +558,8 @@
       "sendTo": "发送给 {{name}}",
       "captionPlaceholder": "给朋友留言（可选）",
       "batchPreview": "共 {{count}} 条消息",
-      "sendToMany": "分别发送给 {{count}} 个聊天"
+      "sendToMany": "分别发送给 {{count}} 个聊天",
+      "captionSkipped": "转发内容没有发出，留言也没有发送"
     },
     "avatarA11y": {
       "self": "查看我的资料",
@@ -1040,7 +1042,8 @@
         "unlisted": "已下架，状态可能变化",
         "offShelf": "下架"
       },
-      "sectionSendFailed": "发送失败，请重试"
+      "sectionSendFailed": "发送失败，请重试",
+      "sectionSending": "正在发送…"
     },
     "voice": {
       "cancelTip": "松开手指，取消发送",
@@ -1093,7 +1096,10 @@
       "noChats": "暂无聊天",
       "contactsFailed": "通讯录加载失败",
       "limitReached": "一次最多选 {{count}} 个聊天",
-      "sendSelected": "发送（{{count}}）"
+      "sendSelected": "发送（{{count}}）",
+      "nameSeparator": "、",
+      "resolveFailed": "无法发送给 {{names}}：{{reason}}",
+      "partialDelivered": "已发送给 {{count}} 个聊天，已从选择中移除。"
     },
     "quickChat": {
       "expand": "展开完整聊天"
@@ -1114,6 +1120,7 @@
     "clearHistoryBothSides": "双向清空",
     "clearHistoryBothSidesHint": "申请双向清空需好友「确定授权」才会清空对方的消息记录",
     "clearHistoryConfirmTitle": "确定要清空聊天记录？",
+    "clearHistoryRequestFailed": "已清空你的记录，双向清空申请发送失败",
     "clearHistoryRequestSent": "已清空，已向对方发送双向清空申请"
   },
   "contacts": {
@@ -2837,6 +2844,7 @@
       "unpin": "取消置顶",
       "edit": "编辑",
       "unlist": "下架",
+      "venueOffShelf": "场地下架",
       "relist": "上架",
       "more": "更多",
       "restore": "恢复",

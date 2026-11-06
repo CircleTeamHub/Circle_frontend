@@ -1583,3 +1583,25 @@ test('logging out drops pending single refreshes', async () => {
   await flushMicrotasks();
   assert.deepEqual(state.refreshed, []);
 });
+
+test('editing the pinned message refreshes the conversation for the new banner preview', async () => {
+  const { socket, state, dispatcher } = loadDispatcher({
+    conversations: [
+      { id: 'c1', type: 'GROUP', pinnedMessage: { messageId: 'm9', height: 9, preview: 'old', pinnedAt: 'x' } },
+      { id: 'c2', type: 'GROUP', pinnedMessage: null },
+    ],
+  });
+  const edit = (conversationId, messageId) =>
+    socket.emit('chat:edit', {
+      conversationId,
+      messageId,
+      content: { text: 'edited' },
+      editedAt: '2026-11-06T00:00:00.000Z',
+    });
+  edit('c1', 'm9');
+  edit('c2', 'm9');
+  edit('c1', 'm1');
+  await state.runBackfill();
+  assert.deepEqual(state.refreshed, ['c1']);
+  dispatcher.cancelConversationBackfill();
+});

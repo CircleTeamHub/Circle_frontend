@@ -227,6 +227,9 @@ function NoteManagementContent() {
   const [circleRole, setCircleRole] = useState<GroupRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // 群上下文至少成功加载过一次,身份(群主/成员)已经确定。回到页面时的重载和重载失败
+  // 都不再把成员的只读列表换成转圈或群主视图。
+  const [contextLoaded, setContextLoaded] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [cachedNotes] = useState(getCachedNotes);
   const [notes, setNotes] = useState<NoteSummary[]>(cachedNotes?.value ?? []);
@@ -281,6 +284,7 @@ function NoteManagementContent() {
       if (!isCurrent()) return;
       setMembers(directory);
       setAccessDenied(false);
+      setContextLoaded(true);
       setCircleRole(
         detail && detail.myStatus === 'ACTIVE' ? detail.myRole : null,
       );
@@ -652,13 +656,24 @@ function NoteManagementContent() {
   );
 
   let body: React.ReactNode;
-  if (loading && !cachedNotes) {
+  if (accessDenied) {
+    body = (
+      <View style={s.center}>
+        <Text style={d.centerText}>
+          {t('chat.groupManagement.noteRestricted', {
+            defaultValue: '仅群主可以管理本群笔记',
+          })}
+        </Text>
+      </View>
+    );
+  } else if (!contextLoaded && loading) {
+    // 身份还没确定时不先画群主视图(哪怕有笔记缓存),免得成员先看到「本群还没有关联笔记」。
     body = (
       <View style={s.center}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
-  } else if (error && !cachedNotes) {
+  } else if (!contextLoaded) {
     body = (
       <View style={s.center}>
         <Text style={d.centerText}>
@@ -671,24 +686,14 @@ function NoteManagementContent() {
         </Pressable>
       </View>
     );
-  } else if (!accessDenied && !loading && !error && !isOwner) {
-    // 普通成员:只读看群主绑到本群的笔记和状态。
+  } else if (!isOwner) {
+    // 普通成员:只读看群主绑到本群的笔记和状态。重载期间保持挂载,不丢列表和滚动位置。
     body = (
       <GroupBoundNotesReadOnly
         conversationID={conversationID}
         onOpenNote={handleOpenNote}
         onSourcePress={handleSourcePress}
       />
-    );
-  } else if (accessDenied) {
-    body = (
-      <View style={s.center}>
-        <Text style={d.centerText}>
-          {t('chat.groupManagement.noteRestricted', {
-            defaultValue: '仅群主可以管理本群笔记',
-          })}
-        </Text>
-      </View>
     );
   } else {
     body = (
@@ -737,7 +742,7 @@ function NoteManagementContent() {
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
         title={
-          isOwner || loading
+          isOwner || !contextLoaded
             ? t('chat.groupManagement.noteManagement', { defaultValue: '笔记管理' })
             : t('chat.groupManagement.groupNotes', { defaultValue: '群笔记' })
         }

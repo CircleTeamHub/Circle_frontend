@@ -14,6 +14,7 @@ import { sendNotesToConversation } from '@/features/chat/utils/send-notes-to-con
 import { fetchNoteDetail } from '@/services/api/notes';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
+import { showTopNotice } from '@/components/app/top-notice-store';
 import { type TFunction } from 'i18next';
 import { type AuthUser } from '@/stores/authStore';
 
@@ -48,6 +49,9 @@ export function useNoteBatchSend({
   const noteBatchQueueRef = useRef<Promise<void>>(Promise.resolve());
   // 真实滚动窗口跨批保留；批量最多用 17/20 个槽位，余下 3 个留给手动发送。
   const noteSendTimestampsRef = useRef<number[]>([]);
+  // 卡片小标签「视频 / 展示 / 位置」正在发的 noteId:section。先拉详情再拷媒体,弱网下要好几秒,
+  // 期间再点同一块直接忽略,否则同一组内容会被发两三遍。
+  const sectionSendsInFlightRef = useRef<Set<string>>(new Set());
   /**
    * 批量发笔记(SharePicker 多选 + 发送选项 sheet 的执行端)。
    *
@@ -114,6 +118,14 @@ export function useNoteBatchSend({
   const handleSendNoteSection = useCallback(
     (noteId: string, section: NoteCardSendSection) => {
       if (!sourceID || isPreviewMode) return Promise.resolve();
+      const inFlightKey = `${noteId}:${section}`;
+      const inFlight = sectionSendsInFlightRef.current;
+      if (inFlight.has(inFlightKey)) return Promise.resolve();
+      inFlight.add(inFlightKey);
+      showTopNotice({
+        type: 'info',
+        title: t('chat.noteCard.sectionSending', { defaultValue: '正在发送…' }),
+      });
       const run = appendNoteBatchRun(noteBatchQueueRef.current, async () => {
         if (!mountedRef.current) return;
         let note: NoteSummary;
@@ -139,7 +151,10 @@ export function useNoteBatchSend({
           location: section === 'location',
         });
       });
-      noteBatchQueueRef.current = run.catch(() => undefined);
+      const settled = run.catch(() => undefined).finally(() => {
+        inFlight.delete(inFlightKey);
+      });
+      noteBatchQueueRef.current = settled;
       return run;
     },
     [isPreviewMode, mountedRef, runNoteBatchSend, setSendError, sourceID, t],

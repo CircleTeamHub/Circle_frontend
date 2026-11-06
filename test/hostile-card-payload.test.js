@@ -387,3 +387,16 @@ test('card sanitization keeps well-formed values intact', () => {
   assert.deepEqual([...ui.noteCard.groupNames], []);
   assert.equal(ui.noteCard.coverUrl, 'https://cdn.trusted/c.jpg');
 });
+
+test('note card keeps the 下架 work status and drops unknown ones', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const card = (workStatus) =>
+    mapChatMessageDtoToUI(
+      { ...friendCardDto({ noteId: 'n1', title: '笔记', workStatus }), type: 'note-card' },
+      'me',
+      0,
+    ).noteCard.workStatus;
+  assert.equal(card('OFF_SHELF'), 'OFF_SHELF');
+  assert.equal(card('WORKING'), 'WORKING');
+  assert.equal(card('PAUSED'), 'UNSET');
+});

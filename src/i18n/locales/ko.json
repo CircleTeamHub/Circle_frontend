@@ -409,7 +409,8 @@
       "favoriteSendFailed": "즐겨찾기를 보내지 못했습니다. 다시 시도해 주세요",
       "favoriteLegacyVoiceUnsupported": "이 이전 버전 음성 즐겨찾기는 다시 보낼 수 없습니다",
       "mediaPreparing": "선택한 항목을 처리하는 중…",
-      "mediaSendFailed": "사진 또는 동영상을 보내지 못했습니다. 다시 시도해 주세요"
+      "mediaSendFailed": "사진 또는 동영상을 보내지 못했습니다. 다시 시도해 주세요",
+      "captionNotSent": "사진이나 동영상이 전송되지 않아 설명도 보내지 않았습니다"
     },
     "stickers": {
       "title": "사용자 지정 스티커",
@@ -484,7 +485,8 @@
       "sendTo": "{{name}}에게 보내기",
       "captionPlaceholder": "메시지 남기기 (선택)",
       "batchPreview": "메시지 {{count}}개",
-      "sendToMany": "{{count}}개 채팅에 각각 보내기"
+      "sendToMany": "{{count}}개 채팅에 각각 보내기",
+      "captionSkipped": "전달 내용이 전송되지 않아 메시지도 보내지 않았습니다"
     },
     "avatarA11y": {
       "self": "내 프로필 보기",
@@ -967,7 +969,8 @@
         "unlisted": "게시 중지, 상태가 바뀌었을 수 있음",
         "offShelf": "판매 중지"
       },
-      "sectionSendFailed": "보내지 못했습니다. 다시 시도해 주세요"
+      "sectionSendFailed": "보내지 못했습니다. 다시 시도해 주세요",
+      "sectionSending": "보내는 중…"
     },
     "voice": {
       "cancelTip": "손을 떼면 전송 취소",
@@ -1020,7 +1023,10 @@
       "noChats": "아직 채팅이 없습니다",
       "contactsFailed": "연락처를 불러오지 못했습니다",
       "limitReached": "한 번에 최대 {{count}}개까지 선택할 수 있습니다",
-      "sendSelected": "보내기 ({{count}})"
+      "sendSelected": "보내기 ({{count}})",
+      "nameSeparator": ", ",
+      "resolveFailed": "{{names}}에게 보낼 수 없습니다: {{reason}}",
+      "partialDelivered": "{{count}}개 채팅에는 이미 보내서 선택에서 제외했습니다."
     },
     "quickChat": {
       "expand": "전체 채팅 열기"
@@ -1041,6 +1047,7 @@
     "clearHistoryBothSides": "양쪽 모두 삭제",
     "clearHistoryBothSidesHint": "상대방이 동의해야 상대방의 기록도 삭제됩니다",
     "clearHistoryConfirmTitle": "대화 기록을 삭제할까요?",
+    "clearHistoryRequestFailed": "내 기록은 삭제했지만 양쪽 삭제 요청을 보내지 못했습니다",
     "clearHistoryRequestSent": "삭제했습니다. 상대방에게 삭제 요청을 보냈습니다"
   },
   "messages": {
@@ -1096,7 +1103,7 @@
     "swipeDelete": "삭제",
     "deleteChat": "채팅 삭제",
     "deleteChatConfirm": "'{{name}}'의 채팅과 로컬 메시지를 삭제할까요?",
-    "deleteChatConfirmDirect": "'{{name}}'님과의 채팅 기록을 삭제할까요? 상대방의 기록도 함께 삭제되며 되돌릴 수 없습니다.",
+    "deleteChatConfirmDirect": "'{{name}}'님과의 채팅 기록을 삭제할까요? 내 기록만 삭제되며 상대방의 기록은 유지됩니다.",
     "newGroupTitle": "그룹 채팅 시작",
     "newGroupNamePlaceholder": "그룹 이름",
     "newGroupSelectMembers": "연락처 선택",
@@ -1174,6 +1181,7 @@
       "unpin": "고정 해제",
       "edit": "편집",
       "unlist": "내리기",
+      "venueOffShelf": "매장 판매 중지로 표시",
       "relist": "올리기",
       "more": "더보기",
       "restore": "복원",

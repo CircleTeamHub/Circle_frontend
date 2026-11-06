@@ -69,14 +69,15 @@ test('collect sheet keeps the edited title and sends it on save', () => {
   expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'group-1', title: '客户专用标题' });
 });
 
-test('the title starts empty and falls back to the original title when left blank', () => {
+test('a blank title is left out so the server keeps the full original title', () => {
   const { onConfirm } = renderSheet();
   fireEvent.press(screen.getByText('上海场地'));
   const input = screen.getByLabelText('收藏标题');
   expect(input.props.value).toBe('');
   expect(input.props.placeholder).toBe('原始标题');
   fireEvent.press(screen.getByText('保存'));
-  expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'group-1', title: '原始标题' });
+  expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'group-1' });
+  expect(onConfirm.mock.calls[0][0]).not.toHaveProperty('title');
 });
 
 test('ticking "do not edit the title next time" is passed along with the save', () => {
@@ -88,7 +89,6 @@ test('ticking "do not edit the title next time" is passed along with the save', 
   fireEvent.press(screen.getByText('保存'));
   expect(onConfirm).toHaveBeenCalledWith({
     targetNoteGroupId: 'group-1',
-    title: '原始标题',
     disableTitleEditing: true,
   });
 });
@@ -102,10 +102,11 @@ test('with group choice off the sheet opens on the title step and cancel closes 
   expect(onConfirm).not.toHaveBeenCalled();
 });
 
-test('with title editing off picking a group saves right away with the original title', () => {
+test('with title editing off picking a group saves right away without a title', () => {
   const { onConfirm } = renderSheet({ editTitle: false });
   fireEvent.press(screen.getByText('上海场地'));
-  expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'group-1', title: '原始标题' });
+  expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'group-1' });
+  expect(onConfirm.mock.calls[0][0]).not.toHaveProperty('title');
   expect(screen.queryByLabelText('收藏标题')).toBeNull();
 });
 
@@ -118,7 +119,7 @@ test('a group created from the sheet is selected and moves on to the title step'
   await waitFor(() => expect(screen.getByLabelText('收藏标题')).toBeTruthy());
   expect(onCreateGroup).toHaveBeenCalledWith('新分组');
   fireEvent.press(screen.getByText('保存'));
-  expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'new-group', title: '原始标题' });
+  expect(onConfirm).toHaveBeenCalledWith({ targetNoteGroupId: 'new-group' });
 });
 
 test('a failed group creation keeps the name so the user can retry', async () => {

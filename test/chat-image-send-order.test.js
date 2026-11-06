@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
 function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, assets } = {}) {
-  const sent = [], failed = [], uploading = [], pickerOptions = [], editorAssets = [], pendingBatches = [];
+  const sent = [], failed = [], uploading = [], pickerOptions = [], editorAssets = [], pendingBatches = [], sendErrors = [];
   // 迷你 hooks 运行时:按调用顺序记住 state/ref,render() 重新执行 hook 就能读到最新状态。
   const states = [], refs = [];
   let stateIndex = 0, refIndex = 0;
@@ -88,7 +88,7 @@ function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, asset
     },
   });
   const params = {
-    t: (key) => key, inFlightRef: { current: false }, setSendError() {}, mountedRef: { current: true },
+    t: (key) => key, inFlightRef: { current: false }, setSendError: (message) => sendErrors.push(message), mountedRef: { current: true },
     reuploadPendingMediaRef: { current: null }, sourceID: 'me', conversationID: 'chat',
     isTempChat: false, conversationType: 'single', isGroupChat: false, isPreviewMode: false, uploadAndSendVoice: async () => {},
   };
@@ -104,7 +104,7 @@ function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, asset
     await until(() => pendingBatches.length === 1);
     render().handleSendPendingMedia(caption);
   };
-  return { controls, render, pickAndConfirm, sent, failed, uploading, pickerOptions, editorAssets, pendingBatches, resolveFirst, rejectFirst };
+  return { controls, render, pickAndConfirm, sent, failed, uploading, pickerOptions, editorAssets, pendingBatches, sendErrors, resolveFirst, rejectFirst };
 }
 
 async function until(predicate) {
@@ -189,6 +189,14 @@ test('a failed upload still lets the caption go out after the rest of the batch'
   await until(() => h.sent.length === 2);
   assert.deepEqual(h.failed, ['first.jpg']);
   assert.deepEqual(h.sent, ['second.jpg', 'text:说明']);
+});
+
+test('when every item in the batch fails the caption is held back and the user is told', async () => {
+  const h = harness({ kind: 'video', rejectedAsset: 'first.mp4', assets: [{ uri: 'first.mp4', mimeType: 'video/mp4', type: 'video' }] });
+  await h.pickAndConfirm('说明');
+  await until(() => h.failed.length === 1);
+  await until(() => h.sendErrors.includes('chat.detail.captionNotSent'));
+  assert.deepEqual(h.sent, []);
 });
 
 test('an empty caption sends no text message', async () => {

@@ -53,16 +53,21 @@ import {
   type MediaUploadScheduler,
 } from '@/features/chat/utils/media-upload-scheduler';
 
-type MediaSendTurn = { wait: Promise<void>; release: () => void };
+/** sent:这一项真的发出去了(服务端已确认),附言据此判断是否还要发。 */
+type MediaSendTurn = { wait: Promise<void>; release: () => void; sent?: () => void };
 
 /**
  * 给一批媒体排好上屏后的发送顺序:每一项等前一项发完(或失败)才真正发出,
- * 返回的 done 在最后一项结束后才 resolve,附言就挂在它后面。
+ * 返回的 done 在最后一项结束后才 resolve(值为是否至少有一项发出),附言就挂在它后面。
  */
 function chainMediaSends<T>(
   items: readonly T[],
   send: (item: T, turn: MediaSendTurn) => Promise<unknown>,
-): { started: Promise<unknown[]>; done: Promise<void> } {
+): { started: Promise<unknown[]>; done: Promise<boolean> } {
+  let anySent = false;
+  const sent = () => {
+    anySent = true;
+  };
   let previousSend = Promise.resolve();
   const started = Promise.all(
     items.map((item) => {
@@ -72,10 +77,10 @@ function chainMediaSends<T>(
         // A skipped/failed asset still follows its predecessor in the chain.
         release = () => { void wait.then(resolve); };
       });
-      return send(item, { wait, release });
+      return send(item, { wait, release, sent });
     }),
   );
-  return { started, done: previousSend };
+  return { started, done: previousSend.then(() => anySent) };
 }
 
 export interface MediaSendParams {
@@ -207,6 +212,7 @@ export function useMediaSend({
           deliveryId,
         });
         finishMediaSend(deliveryId);
+        turn?.sent?.();
       } catch (error) {
         logChatSendFailure(error, {
           kind: 'image',
@@ -381,6 +387,7 @@ export function useMediaSend({
         });
         uploadedVideoKeysRef.current.delete(deliveryId);
         finishMediaSend(deliveryId);
+        turn?.sent?.();
       } catch (error) {
         logChatSendFailure(error, {
           kind: 'video',
@@ -596,11 +603,24 @@ export function useMediaSend({
     if (sendable.length > 0) setPendingMediaAssets(sendable);
   }, [isPreviewMode, sourceID, t, inFlightRef, mountedRef, setSendError]);
 
-  /** 附言作为一条普通文字消息,等这一批媒体都发完(或失败)再发,保证排在它们后面。 */
+  /**
+   * 附言作为一条普通文字消息,等这一批媒体都发完(或失败)再发,保证排在它们后面。
+   * 一项都没发出去时不发附言:否则红气泡长按重发后会排到附言后面,附言也成了孤零零一句。
+   */
   const sendCaptionAfter = useCallback(
-    (done: Promise<void>, caption: string) => {
+    (done: Promise<boolean>, caption: string) => {
       if (!caption) return;
-      void done.then(() => {
+      void done.then((anySent) => {
+        if (!anySent) {
+          if (mountedRef.current) {
+            setSendError(
+              t('chat.detail.captionNotSent', {
+                defaultValue: '图片或视频没有发出，附言也没有发送',
+              }),
+            );
+          }
+          return;
+        }
         const handle = startChatSend((onCreate) =>
           sendTextMessage({ conversationId: conversationID, text: caption, onCreate }),
         );

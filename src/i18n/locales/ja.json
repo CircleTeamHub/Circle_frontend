@@ -409,7 +409,8 @@
       "favoriteSendFailed": "お気に入りを送信できませんでした。もう一度お試しください",
       "favoriteLegacyVoiceUnsupported": "この旧バージョンの音声お気に入りは再送信できません",
       "mediaPreparing": "選択した項目を処理中…",
-      "mediaSendFailed": "写真または動画を送信できませんでした。もう一度お試しください"
+      "mediaSendFailed": "写真または動画を送信できませんでした。もう一度お試しください",
+      "captionNotSent": "写真・動画が送信されなかったため、キャプションも送信していません"
     },
     "stickers": {
       "title": "カスタムスタンプ",
@@ -484,7 +485,8 @@
       "sendTo": "{{name}} に送信",
       "captionPlaceholder": "メッセージを添える（任意）",
       "batchPreview": "{{count}} 件のメッセージ",
-      "sendToMany": "{{count}} 件のチャットにそれぞれ送信"
+      "sendToMany": "{{count}} 件のチャットにそれぞれ送信",
+      "captionSkipped": "転送内容が送信されなかったため、メッセージも送信していません"
     },
     "avatarA11y": {
       "self": "自分のプロフィールを見る",
@@ -967,7 +969,8 @@
         "unlisted": "非公開・状態が変わっている可能性があります",
         "offShelf": "掲載停止"
       },
-      "sectionSendFailed": "送信できませんでした。もう一度お試しください"
+      "sectionSendFailed": "送信できませんでした。もう一度お試しください",
+      "sectionSending": "送信中…"
     },
     "voice": {
       "cancelTip": "指を離すと送信をキャンセル",
@@ -1020,7 +1023,10 @@
       "noChats": "チャットはまだありません",
       "contactsFailed": "連絡先を読み込めませんでした",
       "limitReached": "一度に選べるのは {{count}} 件までです",
-      "sendSelected": "送信（{{count}}）"
+      "sendSelected": "送信（{{count}}）",
+      "nameSeparator": "、",
+      "resolveFailed": "{{names}} に送信できません：{{reason}}",
+      "partialDelivered": "{{count}} 件のチャットには送信済みのため、選択から外しました。"
     },
     "quickChat": {
       "expand": "チャット全体を開く"
@@ -1041,6 +1047,7 @@
     "clearHistoryBothSides": "双方から削除",
     "clearHistoryBothSidesHint": "相手が「承認する」を押すと相手側の履歴も削除されます",
     "clearHistoryConfirmTitle": "チャット履歴を削除しますか？",
+    "clearHistoryRequestFailed": "自分の履歴は消去しましたが、双方消去の申請を送信できませんでした",
     "clearHistoryRequestSent": "削除しました。相手に削除の申請を送りました"
   },
   "messages": {
@@ -1096,7 +1103,7 @@
     "swipeDelete": "削除",
     "deleteChat": "チャットを削除",
     "deleteChatConfirm": "「{{name}}」のチャットとローカルメッセージを削除しますか？",
-    "deleteChatConfirmDirect": "「{{name}}」とのチャット履歴を削除しますか？相手側の履歴も削除され、元に戻せません。",
+    "deleteChatConfirmDirect": "「{{name}}」とのチャット履歴を削除しますか？削除されるのは自分の履歴だけで、相手側には残ります。",
     "newGroupTitle": "グループチャットを開始",
     "newGroupNamePlaceholder": "グループ名",
     "newGroupSelectMembers": "連絡先を選択",
@@ -1174,6 +1181,7 @@
       "unpin": "固定を解除",
       "edit": "編集",
       "unlist": "非公開にする",
+      "venueOffShelf": "店舗を掲載停止にする",
       "relist": "公開に戻す",
       "more": "その他",
       "restore": "復元",

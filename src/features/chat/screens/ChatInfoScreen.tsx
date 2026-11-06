@@ -1732,7 +1732,19 @@ export default function ChatInfoScreen() {
             forEveryone: false,
           });
           if (bothSides) {
-            await requestChatHistoryClear(resolvedConversationID, clearedBeforeHeight);
+            try {
+              await requestChatHistoryClear(resolvedConversationID, clearedBeforeHeight);
+            } catch (error) {
+              // 自己这边已经清掉了,只是申请没发出去:别让用户以为什么都没清。
+              reportHandledFailure('chatInfo', 'requestDirectHistoryClear', error);
+              Alert.alert(
+                t('chat.clearHistoryRequestFailed', {
+                  defaultValue: '已清空你的记录，双向清空申请发送失败',
+                }),
+                getApiErrorMessage(error, t('common.networkError')),
+              );
+              return;
+            }
           }
           Alert.alert(
             bothSides

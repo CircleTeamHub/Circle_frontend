@@ -146,7 +146,7 @@ test('点卡片走扫码同一条落地页，路径写死在本端', () => {
   // 目的地由本端的 helper 决定,对端只能提供令牌 —— 这是「路径写死在本端」的实质。
   assert.match(
     screen,
-    /router\.push\(getQrLandingHref\(scope, card\.token\)\)/,
+    /chatRouter\.push\(getQrLandingHref\(scope, card\.token\)\)/,
   );
 });
 

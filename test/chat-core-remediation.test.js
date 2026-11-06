@@ -479,7 +479,12 @@ test('swipe delete sequences hide-after-clear and surfaces failures', () => {
 
 test('reader receipts open a full-page list that discloses the 200-reader cap', () => {
   const screen = readChatDetailSource();
-  assert.match(screen, /pathname: '\/\(tabs\)\/messages\/message-readers'/);
+  assert.match(screen, /getMessageReadersHref\(scope/);
+  const routes = read('src/features/user/utils/routes.ts');
+  for (const stack of ['messages', 'contacts', 'profile', 'discover', 'explore']) {
+    assert.match(routes, new RegExp(`'/\\(tabs\\)/${stack}/message-readers'`));
+    assert.ok(fs.existsSync(path.join(process.cwd(), `app/(tabs)/${stack}/message-readers.tsx`)), stack);
+  }
   const page = read('src/features/chat/screens/MessageReadersScreen.tsx');
   assert.match(page, /readersMoreFooter/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {

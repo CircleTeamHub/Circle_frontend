@@ -18,10 +18,10 @@ export type ChatTargetTab = 'recent' | 'contacts' | 'groups';
 const EMPTY_RECENT: ChatTarget[] = [];
 
 /**
- * 选择页的三路数据:最近聊天(会话列表顺序)、通讯录(好友,点开页签才拉)、我的群聊。
+ * 选择页的三路数据:最近聊天(会话列表顺序)、通讯录(好友,点开页签或开始搜索才拉)、我的群聊。
  * 「最近转发」从本地记录里取,名字头像按当前会话列表刷新,已退出的会话不再显示。
  */
-export function useChatTargetSources(activeTab: ChatTargetTab) {
+export function useChatTargetSources(activeTab: ChatTargetTab, searching = false) {
   const conversations = useChatStore(selectConversations);
   const snapshotLoaded = useChatStore((state) => state.conversationsSnapshotLoaded);
   const userId = useAuthStore((state) => state.user?.id ?? null);
@@ -39,7 +39,8 @@ export function useChatTargetSources(activeTab: ChatTargetTab) {
     });
   }, [snapshotLoaded]);
 
-  const wantsFriends = activeTab === 'contacts';
+  // 搜索也要覆盖还没聊过天的好友,不能等用户先切到通讯录页签。
+  const wantsFriends = activeTab === 'contacts' || searching;
   useEffect(() => {
     if (!wantsFriends || friends) return;
     let cancelled = false;

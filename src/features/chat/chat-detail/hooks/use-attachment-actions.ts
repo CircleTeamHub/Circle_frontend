@@ -1,5 +1,5 @@
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from 'react';
-import { router } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { type AttachmentId } from '@/features/chat/chat-detail/constants';
 import { Alert } from 'react-native';
 import { type FriendProfile } from '@/services/api/friends';
@@ -55,14 +55,15 @@ export function useAttachmentActions({
   handleOpenLocationPicker,
   setMediaSourceSheetVisible,
 }: AttachmentActionsParams) {
+  const chatRouter = useChatRouter();
   const openSharePicker = useCallback(
     (type: 'note' | 'friend' | 'favorite' | 'quick-reply') => {
-      router.push({
+      chatRouter.pushOverChat({
         pathname: '/(tabs)/messages/share-picker',
         params: { type, ...(type === 'favorite' ? { conversationID } : {}) },
       });
     },
-    [conversationID],
+    [chatRouter, conversationID],
   );
 
 
@@ -98,7 +99,7 @@ export function useAttachmentActions({
             return;
           }
           if (!sourceID) return;
-          router.push({
+          chatRouter.pushOverChat({
             pathname: '/(tabs)/messages/transfer-composer',
             params: {
               recipientId: sourceID,
@@ -109,7 +110,7 @@ export function useAttachmentActions({
           return;
       }
     },
-    [
+    [chatRouter, 
       avatarUrl,
       conversationTitle,
       conversationType,

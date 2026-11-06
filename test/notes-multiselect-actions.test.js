@@ -164,8 +164,10 @@ test('ShareNoteSheet sends the selected notes to each chosen conversation throug
   // 留言排在最后；部分失败给计数提示（不再有面板内的「重试失败项」）。
   assert.match(sheet, /request: NoteShareRequest \| null/);
   assert.match(sheet, /export interface NoteShareRequest \{\s*notes: NoteSummary\[\];\s*options: NoteSendOptions;/);
-  assert.match(sheet, /for \(const target of chosen\)/);
-  assert.match(sheet, /resolveChatTargetConversationId\(target\)/);
+  // 先把所有对象都落到会话 id 再发:建单聊失败时一条都不发,重试不会重复投递。
+  assert.match(sheet, /await resolveChatTargets\(chosen\)/);
+  assert.match(sheet, /for \(const \{ target, conversationId \} of resolved\)/);
+  assert.match(sheet, /pickerRef\.current\?\.deselect\(deliveredKeys\)/);
   assert.match(
     sheet,
     /sendNotesToConversation\(\{\s*conversationId,\s*notes: request\.notes,\s*options: request\.options,/,

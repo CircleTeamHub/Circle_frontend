@@ -28,7 +28,8 @@ const s = StyleSheet.create({
   clear: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: Radius.full },
   clearText: { ...Typography.small },
   row: { paddingHorizontal: Spacing.md, gap: Spacing.md },
-  item: { width: AVATAR_SIZE, alignItems: 'center', gap: Spacing.xs },
+  item: { width: AVATAR_SIZE },
+  itemButton: { alignItems: 'center', gap: Spacing.xs },
   remove: {
     position: 'absolute',
     top: -6,
@@ -72,41 +73,43 @@ export function RecentForwardStrip({
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
         {targets.map((target) => (
-          <Pressable
-            key={target.key}
-            style={s.item}
-            onPress={() => onPress(target)}
-            accessibilityRole="button"
-            accessibilityLabel={target.name}
-            accessibilityState={{ selected: selectedKeys.has(target.key) }}
-          >
-            <View>
-              <ChatTargetAvatar target={target} size={AVATAR_SIZE} />
-              <Pressable
-                style={[s.remove, { backgroundColor: colors.error }]}
-                onPress={() => onRemove(target)}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={t('chat.targetPicker.removeRecent', {
-                  name: target.name,
-                  defaultValue: '从最近转发移除 {{name}}',
-                })}
-              >
-                <Ionicons name="close" size={12} color={colors.white} />
-              </Pressable>
-              {selectedKeys.has(target.key) ? (
-                <Ionicons
-                  name="checkmark-circle"
-                  size={20}
-                  color={colors.primary}
-                  style={s.selectedMark}
-                />
-              ) : null}
-            </View>
-            <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>
-              {target.name}
-            </Text>
-          </Pressable>
+          // 头像按钮和 × 是兄弟节点:web 上 role=button 会渲染成真 <button>,嵌套会告警、点击还会串。
+          <View key={target.key} style={s.item}>
+            <Pressable
+              style={s.itemButton}
+              onPress={() => onPress(target)}
+              accessibilityRole="button"
+              accessibilityLabel={target.name}
+              accessibilityState={{ selected: selectedKeys.has(target.key) }}
+            >
+              <View>
+                <ChatTargetAvatar target={target} size={AVATAR_SIZE} />
+                {selectedKeys.has(target.key) ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color={colors.primary}
+                    style={s.selectedMark}
+                  />
+                ) : null}
+              </View>
+              <Text style={[s.label, { color: colors.textSecondary }]} numberOfLines={1}>
+                {target.name}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[s.remove, { backgroundColor: colors.error }]}
+              onPress={() => onRemove(target)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.targetPicker.removeRecent', {
+                name: target.name,
+                defaultValue: '从最近转发移除 {{name}}',
+              })}
+            >
+              <Ionicons name="close" size={12} color={colors.white} />
+            </Pressable>
+          </View>
         ))}
       </ScrollView>
     </View>

@@ -412,7 +412,8 @@
       "favoriteSendFailed": "No se pudo enviar el favorito, inténtalo de nuevo",
       "favoriteLegacyVoiceUnsupported": "Este favorito de voz antiguo ya no se puede enviar",
       "mediaPreparing": "Preparando la selección…",
-      "mediaSendFailed": "No se pudieron enviar las fotos o los vídeos. Inténtalo de nuevo."
+      "mediaSendFailed": "No se pudieron enviar las fotos o los vídeos. Inténtalo de nuevo.",
+      "captionNotSent": "Las fotos o videos no se enviaron, así que el texto tampoco"
     },
     "stickers": {
       "title": "Stickers personalizados",
@@ -487,7 +488,8 @@
       "sendTo": "Enviar a {{name}}",
       "captionPlaceholder": "Añade un mensaje (opcional)",
       "batchPreview": "{{count}} mensajes",
-      "sendToMany": "Enviar a {{count}} chats"
+      "sendToMany": "Enviar a {{count}} chats",
+      "captionSkipped": "El contenido reenviado no se envió, así que tu mensaje tampoco"
     },
     "avatarA11y": {
       "self": "Ver mi perfil",
@@ -971,7 +973,8 @@
         "unlisted": "Retirado; el estado puede haber cambiado",
         "offShelf": "Retirado"
       },
-      "sectionSendFailed": "No se pudo enviar. Inténtalo de nuevo."
+      "sectionSendFailed": "No se pudo enviar. Inténtalo de nuevo.",
+      "sectionSending": "Enviando…"
     },
     "voice": {
       "cancelTip": "Suelta para cancelar",
@@ -1024,7 +1027,10 @@
       "noChats": "Aún no tienes chats",
       "contactsFailed": "No se pudieron cargar los contactos",
       "limitReached": "Puedes elegir hasta {{count}} chats a la vez",
-      "sendSelected": "Enviar ({{count}})"
+      "sendSelected": "Enviar ({{count}})",
+      "nameSeparator": ", ",
+      "resolveFailed": "No se pudo enviar a {{names}}: {{reason}}",
+      "partialDelivered": "Ya se envió a {{count}} de los chats; se quitaron de tu selección."
     },
     "quickChat": {
       "expand": "Abrir el chat completo"
@@ -1045,6 +1051,7 @@
     "clearHistoryBothSides": "Borrar para ambos",
     "clearHistoryBothSidesHint": "La otra persona debe aceptar para borrar su copia",
     "clearHistoryConfirmTitle": "¿Borrar el historial del chat?",
+    "clearHistoryRequestFailed": "Se borró tu historial, pero no se pudo enviar la solicitud de borrado para ambos",
     "clearHistoryRequestSent": "Borrado. Se envió la solicitud a la otra persona."
   },
   "messages": {
@@ -1100,7 +1107,7 @@
     "swipeDelete": "Eliminar",
     "deleteChat": "Eliminar chat",
     "deleteChatConfirm": "¿Eliminar el chat y los mensajes locales de «{{name}}»?",
-    "deleteChatConfirmDirect": "¿Eliminar el historial con «{{name}}»? También se eliminará para la otra persona y no se podrá deshacer.",
+    "deleteChatConfirmDirect": "¿Eliminar el historial con «{{name}}»? Solo se elimina tu copia; la otra persona conserva la suya.",
     "newGroupTitle": "Iniciar chat de grupo",
     "newGroupNamePlaceholder": "Nombre del grupo",
     "newGroupSelectMembers": "Selecciona contactos",
@@ -1178,6 +1185,7 @@
       "unpin": "Dejar de fijar",
       "edit": "Editar",
       "unlist": "Retirar",
+      "venueOffShelf": "Marcar local como retirado",
       "relist": "Volver a publicar",
       "more": "Más",
       "restore": "Restaurar",

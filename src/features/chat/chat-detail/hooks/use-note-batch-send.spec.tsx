@@ -136,6 +136,31 @@ describe('handleSendNoteSection', () => {
     expect(sendCardMessage).not.toHaveBeenCalled();
   });
 
+  test('tapping the same chip again while it is still sending sends it only once', async () => {
+    let resolveDetail!: (value: unknown) => void;
+    const pendingDetail = new Promise((resolve) => { resolveDetail = resolve; });
+    jest.mocked(fetchNoteDetail).mockImplementationOnce(() => pendingDetail as never);
+    jest.mocked(importNoteChatMedia).mockResolvedValue({ items: [] } as never);
+    const hook = create('conversation-a');
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = hook.result.current.handleSendNoteSection('note-a', 'media');
+      second = hook.result.current.handleSendNoteSection('note-a', 'media');
+    });
+    await act(async () => {
+      resolveDetail(detail);
+      await Promise.all([first, second]);
+    });
+    expect(fetchNoteDetail).toHaveBeenCalledTimes(1);
+    expect(importNoteChatMedia).toHaveBeenCalledTimes(1);
+
+    // 发完之后再点是一次新的发送。
+    jest.mocked(fetchNoteDetail).mockResolvedValueOnce(detail as never);
+    await act(async () => { await hook.result.current.handleSendNoteSection('note-a', 'media'); });
+    expect(fetchNoteDetail).toHaveBeenCalledTimes(2);
+  });
+
   test('a note that cannot be loaded reports a send error and sends nothing', async () => {
     jest.mocked(fetchNoteDetail).mockRejectedValueOnce(new Error('gone'));
     const setSendError = jest.fn();

@@ -299,7 +299,7 @@
     "swipeDelete": "Delete",
     "deleteChat": "Delete Chat",
     "deleteChatConfirm": "Delete the chat and local messages for \"{{name}}\"?",
-    "deleteChatConfirmDirect": "Delete the chat history with \"{{name}}\"? It will also be deleted for the other person and cannot be undone.",
+    "deleteChatConfirmDirect": "Delete the chat history with \"{{name}}\"? Only your copy is deleted; the other person keeps theirs.",
     "newGroupTitle": "Start Group Chat",
     "newGroupNamePlaceholder": "Group name",
     "newGroupSelectMembers": "Select contacts",
@@ -485,7 +485,8 @@
       "favoriteSendFailed": "Failed to send favorite, please try again",
       "favoriteLegacyVoiceUnsupported": "This legacy voice favorite can no longer be sent",
       "mediaPreparing": "Preparing your selection…",
-      "mediaSendFailed": "Couldn't send photos or videos. Please try again."
+      "mediaSendFailed": "Couldn't send photos or videos. Please try again.",
+      "captionNotSent": "The photos or videos weren't sent, so the caption wasn't sent either"
     },
     "stickers": {
       "title": "Custom stickers",
@@ -560,7 +561,8 @@
       "sendTo": "Send to {{name}}",
       "captionPlaceholder": "Add a message (optional)",
       "batchPreview": "{{count}} messages",
-      "sendToMany": "Send to {{count}} chats"
+      "sendToMany": "Send to {{count}} chats",
+      "captionSkipped": "The forwarded content wasn't sent, so your note wasn't sent either"
     },
     "avatarA11y": {
       "self": "View my profile",
@@ -1044,7 +1046,8 @@
         "unlisted": "Unlisted; status may have changed",
         "offShelf": "Off shelf"
       },
-      "sectionSendFailed": "Couldn't send. Please try again."
+      "sectionSendFailed": "Couldn't send. Please try again.",
+      "sectionSending": "Sending…"
     },
     "voice": {
       "cancelTip": "Release to cancel",
@@ -1097,7 +1100,10 @@
       "noChats": "No chats yet",
       "contactsFailed": "Couldn't load contacts",
       "limitReached": "You can pick up to {{count}} chats at a time",
-      "sendSelected": "Send ({{count}})"
+      "sendSelected": "Send ({{count}})",
+      "nameSeparator": ", ",
+      "resolveFailed": "Couldn't send to {{names}}: {{reason}}",
+      "partialDelivered": "Already sent to {{count}} of the chats; they have been removed from your selection."
     },
     "quickChat": {
       "expand": "Open full chat"
@@ -1118,6 +1124,7 @@
     "clearHistoryBothSides": "Clear for both",
     "clearHistoryBothSidesHint": "The other person must agree before their copy is cleared",
     "clearHistoryConfirmTitle": "Clear chat history?",
+    "clearHistoryRequestFailed": "Your history was cleared, but the two-way clear request could not be sent",
     "clearHistoryRequestSent": "Cleared. A request to clear their copy was sent."
   },
   "contacts": {
@@ -2843,6 +2850,7 @@
       "unpin": "Unpin",
       "edit": "Edit",
       "unlist": "Unlist",
+      "venueOffShelf": "Mark venue off shelf",
       "relist": "Relist",
       "more": "More",
       "restore": "Restore",

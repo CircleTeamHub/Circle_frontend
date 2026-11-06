@@ -69,6 +69,19 @@ test('a live status change is applied without reloading', async () => {
   expect(fetchGroupBoundNotes).toHaveBeenCalledTimes(1);
 });
 
+test('a status change that lands while the list is loading is not overwritten by the older snapshot', async () => {
+  let resolveNotes: (value: NoteSummary[]) => void = () => undefined;
+  jest.mocked(fetchGroupBoundNotes).mockReturnValueOnce(new Promise((resolve) => { resolveNotes = resolve; }));
+  render(<GroupBoundNotesReadOnly conversationID="conv-1" onOpenNote={jest.fn()} onSourcePress={jest.fn()} />);
+  act(() => {
+    useNoteStatusSignalStore.getState().bump({
+      sourceNoteId: '1', workStatus: 'CLOSED', status: 'ACTIVE', available: true, changedAt: '2026-11-06T00:00:00.000Z',
+    });
+  });
+  await act(async () => { resolveNotes([note('1', 'WORKING')]); });
+  expect(screen.getByText('笔记1:CLOSED')).toBeTruthy();
+});
+
 test('an empty group says nothing is bound yet', async () => {
   jest.mocked(fetchGroupBoundNotes).mockResolvedValue([]);
   await renderView();

@@ -50,7 +50,8 @@ test('chat collect action routes note cards to collectNote instead of collection
   assert.match(src, /setNoteCollectTarget\(/);
   assert.match(src, /collectNote\(target\.noteId, target\.source/);
   assert.match(src, /targetNoteGroupId/);
-  assert.match(src, /title,\s*\n?\s*\}\);/);
+  // 标题留空就不传,由服务端沿用原笔记的完整标题。
+  assert.match(src, /\.\.\.\(title \? \{ title \} : \{\}\),\s*\n?\s*\}\);/);
   assert.match(src, /useNoteListSignalStore\.getState\(\)\.bump\(\)/);
   assert.match(src, /noteAlreadyCollected/);
   assert.match(src, /noteCollected/);
@@ -125,7 +126,11 @@ test('NoteCard makes the source work status visible on every notes list', () => 
   assert.match(src, /NOTE_WORK_STATUS_ICON\[note\.workStatus\]/);
   const workStatus = read('src/features/notes/utils/work-status.ts');
   assert.match(workStatus, /CLOSED: 'moon-outline'/);
-  assert.match(workStatus, /OFF_SHELF: 'archive-outline'/);
+  assert.match(workStatus, /OFF_SHELF: 'pause-circle-outline'/);
+  // 场地下架和真正下架笔记(archive-outline)必须一眼能分开。
+  const sheet = read('src/features/notes/components/NoteActionsSheet.tsx');
+  assert.match(sheet, /notes\.actions\.venueOffShelf/);
+  assert.doesNotMatch(sheet, /chat\.groupManagement\.noteOffShelf/);
 });
 
 test('note source i18n keys exist across all five locales', () => {

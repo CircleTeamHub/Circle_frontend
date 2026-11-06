@@ -13,7 +13,7 @@ import { type ChatMessage } from '@/types';
 import { useChatStore, type StoredChatMessage } from '@/chat-core/store';
 import { isGroupManager } from '@/features/chat/group-admin-permissions';
 import { useAuthStore } from '@/stores/authStore';
-import { router } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { Alert, Keyboard, Platform, type GestureResponderEvent } from 'react-native';
 import { revokeChatMessage, sendChatReaction } from '@/chat-core/socket-manager';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
@@ -27,6 +27,7 @@ import { canManageChatPins } from '@/features/chat/utils/chat-pins';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { saveMediaToLibrary } from '@/utils/save-image';
+import { getMessageReadersHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { useStickerStore } from '@/features/chat/store/use-sticker-store';
 import { getStickerErrorMessage } from '@/features/chat/utils/sticker-error';
 import { type TFunction } from 'i18next';
@@ -46,6 +47,8 @@ export interface MessageActionsParams {
   conversationBurnEnabled: boolean;
   isGroupChat: boolean;
   conversationTitle: string;
+  /** 聊天页所在的 tab 栈:子页面(已读成员)要压在同一个栈里。 */
+  scope: UserProfileScope;
   setQuoteTarget: Dispatch<SetStateAction<ChatMessage | null>>;
   setEditingMessageId: Dispatch<SetStateAction<string | null>>;
   handleCollectMessage: (message: ChatMessage, options?: { silent?: boolean }) => Promise<CollectMessageResult>;
@@ -67,10 +70,12 @@ export function useMessageActions({
   conversationBurnEnabled,
   isGroupChat,
   conversationTitle,
+  scope,
   setQuoteTarget,
   setEditingMessageId,
   handleCollectMessage,
 }: MessageActionsParams) {
+  const chatRouter = useChatRouter();
   const setPendingForward = useMessageForwardStore((s) => s.setPending);
   const setPendingForwardBatch = useMessageForwardStore((s) => s.setPendingBatch);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string> | null>(null);
@@ -190,8 +195,8 @@ export function useMessageActions({
       dto: dtos?.find((item) => item.id === message.id),
     })));
     setSelectedMessageIds(null);
-    router.push({ pathname: '/(tabs)/messages/forward-picker' });
-  }, [canForwardSelectedMessages, conversationID, selectedMessages, setPendingForwardBatch]);
+    chatRouter.push({ pathname: '/(tabs)/messages/forward-picker' });
+  }, [chatRouter, canForwardSelectedMessages, conversationID, selectedMessages, setPendingForwardBatch]);
   const handleDeleteSelectedMessages = useCallback(() => {
     if (selectedMessages.length === 0 || selectionOperationRef.current) return;
     const epoch = useAuthStore.getState().sessionEpoch;
@@ -271,9 +276,9 @@ export function useMessageActions({
           (item) => item.id === message.id,
         );
       setPendingForward({ message, dto });
-      router.push({ pathname: '/(tabs)/messages/forward-picker' });
+      chatRouter.push({ pathname: '/(tabs)/messages/forward-picker' });
     },
-    [conversationID, setPendingForward],
+    [chatRouter, conversationID, setPendingForward],
   );
 
   const handleQuoteMessage = useCallback((message: ChatMessage) => {
@@ -308,7 +313,7 @@ export function useMessageActions({
 
   const handleReportMessage = useCallback(() => {
     if (isGroupChat) {
-      router.push({
+      chatRouter.push({
         pathname: '/(tabs)/messages/report-friend',
         params: {
           targetType: 'group',
@@ -318,7 +323,7 @@ export function useMessageActions({
       });
       return;
     }
-    router.push({
+    chatRouter.push({
       pathname: '/(tabs)/messages/report-friend',
       params: {
         targetType: 'friend',
@@ -326,7 +331,7 @@ export function useMessageActions({
         friendName: conversationTitle,
       },
     });
-  }, [conversationTitle, isGroupChat, sourceID]);
+  }, [chatRouter, conversationTitle, isGroupChat, sourceID]);
 
   const handleMessageLongPress = useCallback(
     (message: ChatMessage, event: GestureResponderEvent) => {
@@ -473,12 +478,11 @@ export function useMessageActions({
   // 人多时弹窗放不下,整页列表展示。
   const handleShowReaders = useCallback(
     (message: ChatMessage) => {
-      router.push({
-        pathname: '/(tabs)/messages/message-readers',
-        params: { conversationId: conversationID, messageId: message.id },
-      });
+      chatRouter.push(
+        getMessageReadersHref(scope, { conversationId: conversationID, messageId: message.id }),
+      );
     },
-    [conversationID],
+    [chatRouter, conversationID, scope],
   );
 
   const resendMessage = useCallback(

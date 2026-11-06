@@ -358,6 +358,16 @@ test('long-press deletion retains confirmation and does not delete immediately',
   expect(mockNavigate).not.toHaveBeenCalled();
 });
 
+test('deleting a direct chat clears only my side before hiding it', async () => {
+  render(<MessagesScreen />);
+  const actions = openConversationMenu();
+  act(() => actions.find((action) => action.text === 'messages.swipeDelete')!.onPress!());
+  const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)![2] as { text: string; onPress?: () => void }[];
+  await act(async () => buttons.find((button) => button.text === 'common.delete')!.onPress!());
+  expect(clearChatConversationHistory).toHaveBeenCalledWith('first', { forEveryone: false });
+  expect(updateChatConversationPreferences).toHaveBeenCalledWith('first', { hidden: true });
+});
+
 test('desktop split layout also exposes the selected conversation read action', () => {
   mockSplitLayout = true;
   render(<MessagesScreen />);

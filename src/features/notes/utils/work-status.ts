@@ -18,7 +18,7 @@ type IoniconName = ComponentProps<typeof Ionicons>['name'];
 export const NOTE_WORK_STATUS_ICON: Record<SetNoteWorkStatus, IoniconName> = {
   WORKING: 'checkmark-circle-outline',
   CLOSED: 'moon-outline',
-  OFF_SHELF: 'archive-outline',
+  OFF_SHELF: 'pause-circle-outline',
 };
 
 export function noteWorkStatusFill(status: SetNoteWorkStatus, colors: ThemeColors): string {

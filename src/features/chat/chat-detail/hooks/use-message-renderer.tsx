@@ -29,7 +29,7 @@ import {
   VideoBubble,
   VoiceBubble,
 } from '@/features/chat/components/chat-bubble';
-import { router } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import {
   getCircleDetailHref,
   getInvitationDetailHref,
@@ -152,6 +152,7 @@ export function useMessageRenderer({
   handleRetryMessage,
   handleSendNoteSection,
 }: MessageRendererParams) {
+  const chatRouter = useChatRouter();
   const { imageViewer, openImage } = useConversationImageViewer(messages, selfDestructEnabled, selfDestructCacheKey, handleImageViewed);
   // 群聊接收消息的显示名：本地备注覆盖 > 群成员权威昵称 > 消息自带昵称 > 会话标题。
   // 群成员昵称排在消息自带 senderNickname 之前——后者可能为空而回落成原始 hex id，
@@ -368,7 +369,7 @@ export function useMessageRenderer({
             onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             onPress={(note) =>
-              router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', '', {
+              chatRouter.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', '', {
                 conversationId: conversationID, messageId: item.id,
                 messageHeight: useChatStore.getState().messagesByConversation[conversationID]
                   ?.find((message) => message.id === item.id)?.height,
@@ -380,7 +381,7 @@ export function useMessageRenderer({
                 handleSendNoteSection(note.noteId, section);
                 return;
               }
-              router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', section, {
+              chatRouter.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', section, {
                 conversationId: conversationID, messageId: item.id,
                 messageHeight: useChatStore.getState().messagesByConversation[conversationID]
                   ?.find((message) => message.id === item.id)?.height,
@@ -406,7 +407,7 @@ export function useMessageRenderer({
           />
         ));
       case 'group-invitation':
-        return withMessageActions(item, (<GroupInvitationBubble message={item} onLongPress={getMessageLongPressHandler(item)} senderName={receivedDisplayName(item)} senderAvatarUri={receivedAvatarUri(item)} selfName={selfName} selfAvatarUri={selfAvatarUri} onPress={(admissionId, circle) => { if (circle) router.push(getInvitationDetailHref(toCircleScope(scope), admissionId)); else router.push(getGroupEntryHref(scope, { admissionId })); }} />));
+        return withMessageActions(item, (<GroupInvitationBubble message={item} onLongPress={getMessageLongPressHandler(item)} senderName={receivedDisplayName(item)} senderAvatarUri={receivedAvatarUri(item)} selfName={selfName} selfAvatarUri={selfAvatarUri} onPress={(admissionId, circle) => { if (circle) chatRouter.push(getInvitationDetailHref(toCircleScope(scope), admissionId)); else chatRouter.push(getGroupEntryHref(scope, { admissionId })); }} />));
       case 'circle-card':
         return withMessageActions(item, (
           <CircleCardBubble
@@ -421,7 +422,7 @@ export function useMessageRenderer({
             onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
               // 在当前栈内打开圈子详情（从哪进从哪出），不跨 tab 压栈。
-              router.push(
+              chatRouter.push(
                 getCircleDetailHref(
                   toCircleScope(scope),
                   card.circleId,
@@ -449,7 +450,7 @@ export function useMessageRenderer({
             // 下一跳只会落回 messages 栈,把用户甩出他出发的 tab,返回也不是上一层。
             // 同理 push 不能改成 replace:顶掉当前页,落地页走完就没有可返回的上一层
             // 了,正是 #202 修掉的那个 bug。
-            onPress={(card) => router.push(getQrLandingHref(scope, card.token))}
+            onPress={(card) => chatRouter.push(getQrLandingHref(scope, card.token))}
             hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
@@ -466,7 +467,7 @@ export function useMessageRenderer({
             onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) =>
-              router.push(
+              chatRouter.push(
                 getPlazaPostDetailHref(
                   toCircleScope(scope),
                   card.postId,
@@ -488,7 +489,7 @@ export function useMessageRenderer({
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
             onAvatarLongPress={getAvatarLongPressHandler(item)}
             onPress={(card) =>
-              router.push(
+              chatRouter.push(
                 getVerificationDetailHref(
                   toCircleScope(scope),
                   card.invitationId,
@@ -532,7 +533,7 @@ export function useMessageRenderer({
         );
       default: return null;
     }
-  }, [
+  }, [chatRouter, 
     receivedAvatarUri,
     receivedDisplayName,
     withGroupSenderLabel,

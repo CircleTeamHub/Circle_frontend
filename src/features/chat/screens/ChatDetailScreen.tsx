@@ -393,6 +393,7 @@ export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenPr
     conversationBurnEnabled,
     isGroupChat,
     conversationTitle,
+    scope,
     setQuoteTarget,
     setEditingMessageId,
     handleCollectMessage,

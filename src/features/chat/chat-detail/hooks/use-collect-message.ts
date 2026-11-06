@@ -13,7 +13,7 @@ import {
   type AddNoteToNotesSelection,
 } from '@/features/notes/components/AddNoteToNotesSheet';
 import { Alert, Keyboard } from 'react-native';
-import { router } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { recordMetric } from '@/observability/metrics';
@@ -23,7 +23,11 @@ import { useAuthStore } from '@/stores/authStore';
 import { createCollection } from '@/services/api/collections';
 import { type TFunction } from 'i18next';
 import { useNoteListSignalStore } from '@/features/notes/store/use-note-list-signal-store';
-import { useNoteCollectPreferencesStore } from '@/features/notes/store/use-note-collect-preferences-store';
+import {
+  selectNoteCollectPreferences,
+  useNoteCollectPreferences,
+  useNoteCollectPreferencesStore,
+} from '@/features/notes/store/use-note-collect-preferences-store';
 
 /**
  * React Native Modal measures its iOS host window when it is presented. If the
@@ -107,14 +111,14 @@ export function useCollectMessage({
   selfAvatarUri,
   selfName,
 }: CollectMessageParams) {
-  const chooseGroup = useNoteCollectPreferencesStore((state) => state.chooseGroup);
-  const editTitle = useNoteCollectPreferencesStore((state) => state.editTitle);
+  const { chooseGroup, editTitle } = useNoteCollectPreferences(currentUserID);
   const [noteGroups, setNoteGroups] = useState<NoteGroup[]>([]);
   const [noteGroupsLoading, setNoteGroupsLoading] = useState(false);
   const [noteGroupsError, setNoteGroupsError] = useState<string | null>(null);
   const [noteCollectTarget, setNoteCollectTarget] = useState<NoteCollectTarget | null>(null);
   const [noteCollectOpening, setNoteCollectOpening] = useState(false);
   const [noteCollectSaving, setNoteCollectSaving] = useState(false);
+  const chatRouter = useChatRouter();
   const sessionEpoch = useAuthStore.getState().sessionEpoch;
   const mountedRef = useRef(false);
   const contextRef = useRef({ conversationID, currentUserID });
@@ -187,7 +191,7 @@ export function useCollectMessage({
   const saveNoteCollect = useCallback(
     async (
       request: NoteCollectRequest,
-      { targetNoteGroupId, title }: AddNoteToNotesSelection,
+      { targetNoteGroupId, title, disableTitleEditing }: AddNoteToNotesSelection,
       { sheetOpen }: { sheetOpen: boolean },
     ) => {
       request.saving = true;
@@ -197,10 +201,15 @@ export function useCollectMessage({
         const target = request.target;
         const result = await collectNote(target.noteId, target.source, {
           targetNoteGroupId,
-          title,
+          ...(title ? { title } : {}),
         });
         if (noteRequestRef.current !== request || !isCurrentContext(request)) return;
         recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - startedAt), { operation: 'noteCollect', outcome: 'success' });
+        // 「下次不再编辑标题」只在这次真的存上之后才生效:保存失败、用户回退或取消时
+        // 不能先把偏好改掉。
+        if (disableTitleEditing && request.currentUserID) {
+          useNoteCollectPreferencesStore.getState().setPreference(request.currentUserID, { editTitle: false });
+        }
         // The notes screen may already be mounted in another tab stack. Mark
         // it stale after the server confirms the write so returning to the
         // list fetches the saved (possibly edited) title immediately.
@@ -225,7 +234,7 @@ export function useCollectMessage({
                   text: t('common.view', { defaultValue: '查看' }),
                   onPress: () => {
                     if (!isCurrentContext(request)) return;
-                    router.push({
+                    chatRouter.push({
                       pathname: '/(tabs)/profile/notes',
                       params: { highlightNoteId: copiedNoteId },
                     } as never);
@@ -253,7 +262,7 @@ export function useCollectMessage({
         }
       }
     },
-    [t, isCurrentContext, finishNoteCollect],
+    [t, isCurrentContext, finishNoteCollect, chatRouter],
   );
 
   const handleCollectMessage = useCallback(
@@ -329,10 +338,14 @@ export function useCollectMessage({
           ? new Promise<CollectMessageResult>((resolve) => { request.resolve = resolve; })
           : undefined;
         noteRequestRef.current = request;
-        const preferences = useNoteCollectPreferencesStore.getState();
+        const preferences = selectNoteCollectPreferences(
+          useNoteCollectPreferencesStore.getState(),
+          request.currentUserID,
+        );
         if (!preferences.chooseGroup && !preferences.editTitle) {
-          // 两步确认都关掉了:不弹窗,直接按原标题放进「未分组」。
-          void saveNoteCollect(request, { targetNoteGroupId: null, title: request.target.noteTitle }, { sheetOpen: false });
+          // 两步确认都关掉了:不弹窗,直接放进「未分组」。不传标题,由服务端沿用原笔记的
+          // 完整标题(卡片上的标题是截断过的)。
+          void saveNoteCollect(request, { targetNoteGroupId: null }, { sheetOpen: false });
           return completion ?? 'pending';
         }
         // Close the chat composer keyboard before mounting the separate Modal.
@@ -426,9 +439,6 @@ export function useCollectMessage({
       const request = noteRequestRef.current;
       if (!request || request.target !== noteCollectTarget || request.saving || !isCurrentContext(request)) {
         return Promise.resolve();
-      }
-      if (selection.disableTitleEditing) {
-        useNoteCollectPreferencesStore.getState().setEditTitle(false);
       }
       return saveNoteCollect(request, selection, { sheetOpen: true });
     },

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { Avatar } from '@/components/ui/avatar';
 import { AssistantFloatingHeader } from '@/features/assistant/components/AssistantFloatingHeader';
-import { router } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { getChatInfoTopHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { type ChatSheetActions, type EmbeddedChatParams } from '@/features/chat/chat-detail/types';
 import { type ThemeColors } from '@/theme';
@@ -55,6 +55,7 @@ export function ChatDetailHeader({
   assistantSpinning = false,
   d,
 }: ChatDetailHeaderProps) {
+  const chatRouter = useChatRouter();
   const { t } = useTranslation();
   if (isAssistant) {
     return (
@@ -125,7 +126,7 @@ export function ChatDetailHeader({
         <Pressable
           hitSlop={8}
           onPress={() =>
-            router.push(
+            chatRouter.push(
               getChatInfoTopHref(scope, {
                 conversationID,
                 sourceID,

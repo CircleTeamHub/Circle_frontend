@@ -766,6 +766,13 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           revision,
         );
       noteLiveMutationRevision(validPayload.conversationId, revision, applied);
+      // 置顶横幅的预览是服务端算的:改的正好是置顶那条,重拉会话拿新预览。
+      const pinned = useChatStore
+        .getState()
+        .conversations.find((c) => c.id === validPayload.conversationId)?.pinnedMessage;
+      if (pinned?.messageId === validPayload.messageId) {
+        scheduleConversationRefresh(validPayload.conversationId, isLive);
+      }
     });
   });
 

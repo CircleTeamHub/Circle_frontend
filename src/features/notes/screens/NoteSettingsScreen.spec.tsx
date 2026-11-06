@@ -4,17 +4,21 @@ import { Switch } from 'react-native';
 import NoteSettingsScreen from './NoteSettingsScreen';
 import { useNoteCollectPreferencesStore } from '@/features/notes/store/use-note-collect-preferences-store';
 
-jest.mock('@/features/notes/store/use-note-collect-preferences-store', () => {
-  const { create } = jest.requireActual('zustand');
+let mockUserId: string | null = 'user-a';
+jest.mock('@/storage', () => {
+  const values = new Map<string, string>();
   return {
-    useNoteCollectPreferencesStore: create((set: (partial: object) => void) => ({
-      chooseGroup: true,
-      editTitle: true,
-      setChooseGroup: (chooseGroup: boolean) => set({ chooseGroup }),
-      setEditTitle: (editTitle: boolean) => set({ editTitle }),
-    })),
+    mmkvJsonStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    },
   };
 });
+jest.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector: (state: { user: { id: string } | null }) => unknown) =>
+    selector({ user: mockUserId ? { id: mockUserId } : null }),
+}));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -41,7 +45,8 @@ jest.mock('@/theme', () => ({
 }));
 
 beforeEach(() => {
-  useNoteCollectPreferencesStore.setState({ chooseGroup: true, editTitle: true });
+  mockUserId = 'user-a';
+  useNoteCollectPreferencesStore.setState({ byUser: {} });
 });
 
 test('both collect steps start on and reflect the saved preferences', () => {
@@ -50,12 +55,18 @@ test('both collect steps start on and reflect the saved preferences', () => {
   expect(screen.getByLabelText('编辑标题').props.value).toBe(true);
 });
 
-test('turning a switch off saves the preference', () => {
-  render(<NoteSettingsScreen />);
+test('turning a switch off saves the preference for the signed-in account only', () => {
+  const view = render(<NoteSettingsScreen />);
   fireEvent(screen.getByLabelText('选择分组'), 'valueChange', false);
   fireEvent(screen.getByLabelText('编辑标题'), 'valueChange', false);
-  expect(useNoteCollectPreferencesStore.getState()).toEqual(
-    expect.objectContaining({ chooseGroup: false, editTitle: false }),
-  );
+  expect(useNoteCollectPreferencesStore.getState().byUser['user-a']).toEqual({
+    chooseGroup: false,
+    editTitle: false,
+  });
   expect(screen.UNSAFE_getAllByType(Switch).map((item) => item.props.value)).toEqual([false, false]);
+
+  // 同一台手机切到另一个账号:仍是默认的两步确认。
+  mockUserId = 'user-b';
+  view.rerender(<NoteSettingsScreen />);
+  expect(screen.UNSAFE_getAllByType(Switch).map((item) => item.props.value)).toEqual([true, true]);
 });

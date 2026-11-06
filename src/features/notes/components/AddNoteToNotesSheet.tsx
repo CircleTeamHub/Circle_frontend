@@ -20,7 +20,8 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 export type AddNoteToNotesSelection = {
   targetNoteGroupId: string | null;
-  title: string;
+  /** 用户写了标题才有;不传时服务端沿用原笔记的完整标题。 */
+  title?: string;
   /** 用户勾了「下次不再编辑标题」。 */
   disableTitleEditing?: boolean;
 };
@@ -69,8 +70,9 @@ export function AddNoteToNotesSheet({
   const [title, setTitle] = useState('');
   const [skipTitleNextTime, setSkipTitleNextTime] = useState(false);
   const titleInputRef = useRef<TextInput>(null);
-  // 不再预填拼出来的标题,由用户自己写;留空就沿用原笔记标题。
-  const fallbackTitle = noteTitle.trim() || t('notes.collect.untitled', { defaultValue: '未命名笔记' });
+  // 不再预填拼出来的标题,由用户自己写;留空就不传,由服务端沿用原笔记标题。卡片上的
+  // 标题截断过,也不能拿来当真标题发回去,只用作占位提示。
+  const placeholderTitle = noteTitle.trim() || t('notes.collect.untitled', { defaultValue: '未命名笔记' });
 
   useEffect(() => {
     if (!visible) {
@@ -99,7 +101,7 @@ export function AddNoteToNotesSheet({
     Keyboard.dismiss();
     if (!editTitle) {
       if (saving) return;
-      onConfirm({ targetNoteGroupId: groupId, title: fallbackTitle });
+      onConfirm({ targetNoteGroupId: groupId });
       return;
     }
     setSelectedGroupId(groupId);
@@ -117,9 +119,10 @@ export function AddNoteToNotesSheet({
   const handleConfirm = () => {
     if (saving) return;
     Keyboard.dismiss();
+    const trimmed = title.trim();
     onConfirm({
       targetNoteGroupId: selectedGroupId,
-      title: title.trim() || fallbackTitle,
+      ...(trimmed ? { title: trimmed } : {}),
       ...(skipTitleNextTime ? { disableTitleEditing: true } : {}),
     });
   };
@@ -232,7 +235,7 @@ export function AddNoteToNotesSheet({
               value={title}
               onChangeText={setTitle}
               style={[s.input, { color: colors.text, borderColor: colors.surfaceBorder }]}
-              placeholder={fallbackTitle}
+              placeholder={placeholderTitle}
               placeholderTextColor={colors.textSecondary}
               maxLength={120}
               returnKeyType="done"
