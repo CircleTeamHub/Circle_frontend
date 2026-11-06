@@ -892,7 +892,7 @@ function openRealtimeSocket(normalizedToken: string) {
     // 走和 HTTP 401 相同的出口，把用户送回登录页。
     if (isRevokedClose(event)) {
       currentToken = null;
-      void clearLocalSession();
+      void clearLocalSession(undefined, { reason: 'realtime-revoked', closeCode: REVOKED_CLOSE_CODE });
       return;
     }
 

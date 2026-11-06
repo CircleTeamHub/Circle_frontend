@@ -14,6 +14,10 @@ function makeObservabilityStubs() {
       reportError() {},
       shouldReportHttpFailure: status => status === undefined || status === 0 || status >= 500,
     },
+    '@/observability/session-diagnostics': {
+      recordSessionDiagnostic: () => '00000000-0000-4000-8000-000000000001',
+      readSessionDiagnostics: async () => [],
+    },
     '@/observability/report-failure': {
       reportHandledFailure() {},
       isExpectedFailure: () => false,

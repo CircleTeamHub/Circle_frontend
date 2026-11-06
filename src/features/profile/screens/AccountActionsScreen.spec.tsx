@@ -84,7 +84,7 @@ test('six digit code is required and a successful change clears only the capture
   expect(screen.getByText('settingsDetails.changeEmail.invalidCode')).toBeTruthy();
   fireEvent.changeText(screen.getByPlaceholderText('settingsDetails.changeEmail.code'), '123456');
   fireEvent.press(screen.getByText('settingsDetails.changeEmail.submit'));
-  await waitFor(() => expect(clearLocalSession).toHaveBeenCalledWith(1));
+  await waitFor(() => expect(clearLocalSession).toHaveBeenCalledWith(1, { reason: 'email-change', userInitiated: true }));
   expect(changeEmail).toHaveBeenCalledWith({ email: 'new@example.com', password: 'current-password', code: '123456' });
   expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
 });
@@ -109,7 +109,7 @@ test.each(['switch', 'unmount'])('email success after %s clears only the origina
   if (transition === 'switch') { mockAuth.sessionEpoch += 1; } else { ui.unmount(); }
   await act(async () => { resolve(); });
   if (transition === 'switch') expect(clearLocalSession).not.toHaveBeenCalled();
-  else expect(clearLocalSession).toHaveBeenCalledWith(1);
+  else expect(clearLocalSession).toHaveBeenCalledWith(1, { reason: 'email-change', userInitiated: true });
   expect(mockReplace).not.toHaveBeenCalled();
 });
 
@@ -119,7 +119,7 @@ test('email save is single flight and cannot navigate over a login during local 
   render(<ChangeEmailScreen />); fillEmail();
   const save = screen.getByText('settingsDetails.changeEmail.submit');
   act(() => { fireEvent.press(save); fireEvent.press(save); });
-  await waitFor(() => expect(clearLocalSession).toHaveBeenCalledWith(1));
+  await waitFor(() => expect(clearLocalSession).toHaveBeenCalledWith(1, { reason: 'email-change', userInitiated: true }));
   expect(changeEmail).toHaveBeenCalledTimes(1);
   mockAuth.sessionEpoch = 3;
   mockAuth.user = { id: 'user-b', accountId: 'ACCOUNT-B', email: 'b@example.com' };
@@ -148,7 +148,7 @@ test('account deletion requires account ID and explicit destructive confirmation
   fireEvent.press(screen.getByText('settingsDetails.cancelAccount.action'));
   expect(deleteAccount).not.toHaveBeenCalled();
   confirmDeletion(); confirmDeletion();
-  await waitFor(() => expect(clearLocalSession).toHaveBeenCalledWith(1));
+  await waitFor(() => expect(clearLocalSession).toHaveBeenCalledWith(1, { reason: 'account-cancel', userInitiated: true }));
   expect(deleteAccount).toHaveBeenCalledTimes(1);
   expect(deleteAccount).toHaveBeenCalledWith('user-a');
   expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
@@ -196,6 +196,6 @@ test.each(['switch', 'unmount'])('deletion success after %s clears only the orig
   if (transition === 'switch') { mockAuth.sessionEpoch += 1; } else { ui.unmount(); }
   await act(async () => { resolve(); });
   if (transition === 'switch') expect(clearLocalSession).not.toHaveBeenCalled();
-  else expect(clearLocalSession).toHaveBeenCalledWith(1);
+  else expect(clearLocalSession).toHaveBeenCalledWith(1, { reason: 'account-cancel', userInitiated: true });
   expect(mockReplace).not.toHaveBeenCalled();
 });

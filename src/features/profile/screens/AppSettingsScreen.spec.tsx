@@ -2,6 +2,9 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import AppSettingsScreen from './AppSettingsScreen';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { readSessionDiagnostics } from '@/observability/session-diagnostics';
+
+jest.mock('@/observability/session-diagnostics', () => ({ readSessionDiagnostics: jest.fn(async () => []) }));
 
 const mockPush = jest.fn();
 const mockLogout = jest.fn();
@@ -77,6 +80,16 @@ test('switch account and logout sit in their own action card as full-width rows'
   expect(mockLogout).toHaveBeenCalledTimes(1);
   // 退出登录是红字行，不再是一整块实心红按钮。
   expect(screen.queryByText('icon:log-out-outline')).toBeNull();
+});
+
+test('settings keeps the diagnostic export accessible after logging back in', async () => {
+  jest.mocked(readSessionDiagnostics).mockResolvedValueOnce([{
+    id: '12345678-1234-4234-8234-123456789abc', timestamp: Date.now(),
+    reason: 'refresh-rejected', context: { status: 401 }, requests: [],
+    platform: 'android', appVersion: '1.0.1', buildVersion: '100001291',
+  }]);
+  render(<AppSettingsScreen />);
+  expect(await screen.findByRole('button', { name: 'sessionDiagnostics.copy' })).toBeTruthy();
 });
 
 test.each([

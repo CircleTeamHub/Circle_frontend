@@ -1,5 +1,6 @@
 import { usePreventRemove } from '@react-navigation/native';
 import { AuthInput } from '@/components/ui/auth-input';
+import { SessionDiagnosticsButton } from '@/components/app/session-diagnostics-button';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { AddAccountBackButton } from '@/features/auth/components/AddAccountBackButton';
@@ -254,6 +255,7 @@ export default function LoginScreen() {
           </Pressable>
 
       </View>
+      <SessionDiagnosticsButton />
     </View>
   );
 

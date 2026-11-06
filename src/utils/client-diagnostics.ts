@@ -46,6 +46,7 @@ const SENTRY_BREADCRUMB_ALLOWLIST: ReadonlySet<string> = new Set([
   'method',
   'status',
   'requestId',
+  'clientRequestId',
   'durationMs',
   'failureKind',
   'errorName',
@@ -55,8 +56,8 @@ const SENTRY_BREADCRUMB_ALLOWLIST: ReadonlySet<string> = new Set([
 const MAX_BREADCRUMBS = 20;
 
 export interface DiagnosticBreadcrumb {
-  readonly event: string;
   readonly timestamp: number;
+  readonly event: string;
   readonly details: Readonly<Record<string, DiagnosticValue>>;
 }
 

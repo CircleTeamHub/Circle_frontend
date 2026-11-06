@@ -15,6 +15,7 @@ import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 import { createHttpRequestId, diagnosticNow, safeHttpEndpoint, safeHttpRequestId } from '@/observability/http-diagnostics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { recordMetric } from '@/observability/metrics';
+import { recordSessionDiagnostic, type SessionDiagnosticContext } from '@/observability/session-diagnostics';
 import { ApiError } from './api-error';
 
 // 定义搬去 api-error.ts（零依赖），这里原样 re-export 保住既有导入路径。
@@ -108,7 +109,7 @@ function logApiEvent(label: string, data: Record<string, unknown>) {
 /**
  * 「服务端明确否认了这份凭证」——只有这种失败才允许销毁本地 session。
  *
- * 401 / 403 是服务端给出的认证结论（含刷新返回体形状异常时我们自己抛的 401）。
+ * 401 / 403 是服务端给出的认证结论；2xx 响应异常不能伪装成认证拒绝。
  * 而网络不可达 / 超时 / 5xx / 网关脏响应只说明「这一刻够不到服务器」，
  * 把它们也当成登出信号，等于让后端抖一下就把所有在线用户踢下线。
  * session-changed 是本地会话已被换掉（新登录 / 已登出），不是服务端的认证结论。
@@ -312,7 +313,8 @@ const GET_RETRYABLE_FAILURES: ReadonlySet<string> = new Set(['stalled', 'network
 const GET_RETRY_MIN_TIMEOUT_MS = 3_000;
 
 type RequestStage = 'device-id' | 'awaiting-response' | 'reading-body';
-type RequestBudget = { timeoutMs?: number; stallCheckMs?: number };
+// preparedRequestId：续签在发送前已把这个 X-Request-Id 写盘做围栏，必须原样发出。
+type RequestBudget = { timeoutMs?: number; stallCheckMs?: number; preparedRequestId?: string };
 
 // 稳定 ID 只是顺带上报（这次没报，下次续签再报），绝不能为它拖住续签：
 // 续签是单例，它卡住所有等着 401 重试的请求都跟着挂住。
@@ -335,7 +337,7 @@ async function executeRequest<T>(
   endpoint: string,
   options: RequestOptions,
   accessTokenOverride?: string | null,
-  { timeoutMs = REQUEST_TIMEOUT_MS, stallCheckMs }: RequestBudget = {},
+  { timeoutMs = REQUEST_TIMEOUT_MS, stallCheckMs, preparedRequestId }: RequestBudget = {},
 ) {
   const {
     method = 'GET',
@@ -350,9 +352,11 @@ async function executeRequest<T>(
     (auth ? useAuthStore.getState().accessToken : null);
   const url = `${API_URL}${endpoint}`;
   const diagnosticSessionEpoch = useAuthStore.getState().sessionEpoch;
-  let requestId = createHttpRequestId();
+  const clientRequestId = preparedRequestId ?? createHttpRequestId();
+  let requestId = clientRequestId;
+  let responseRequestId: string | undefined;
   // 诊断钩子按「发出去的 X-Request-Id」记账；requestId 之后可能被服务端回显覆盖。
-  const traceRequestId = requestId;
+  const traceRequestId = clientRequestId;
   let stage: RequestStage = 'device-id';
   let stalled = false;
   const startedAt = diagnosticNow();
@@ -452,7 +456,8 @@ async function executeRequest<T>(
 
     status = res.status;
     try {
-      requestId = safeHttpRequestId(res.headers?.get('X-Request-Id')) ?? requestId;
+      responseRequestId = safeHttpRequestId(res.headers?.get('X-Request-Id'));
+      requestId = responseRequestId ?? clientRequestId;
     } catch {
       // Keep locally generated correlation if a response/header shim misbehaves.
     }
@@ -465,13 +470,14 @@ async function executeRequest<T>(
     );
     if (!res.ok) failureKind = 'http';
     else if (isWrappedResponse(payload) && payload.code !== 0) failureKind = 'api-code';
-    return { res, payload, requestId, durationMs: Math.max(0, Math.round(diagnosticNow() - startedAt)) };
+    return { res, payload, requestId, clientRequestId, responseRequestId, durationMs: Math.max(0, Math.round(diagnosticNow() - startedAt)) };
   } catch (error) {
     if (error instanceof ApiError) {
       // 卡顿检查叫停的不是「预算用完」：标成 stalled，apiClient 据此换新请求重试。
       if (stalled && error.failureKind === 'timeout') error.failureKind = 'stalled';
       failure = error;
       failureKind = error.failureKind;
+      if (status !== undefined && status > 0) error.responseStatus = status;
       status = error.status;
     } else {
       failureKind = 'unexpected';
@@ -491,6 +497,7 @@ async function executeRequest<T>(
     }
     if (failure) {
       failure.requestId = requestId;
+      failure.clientRequestId = clientRequestId;
       failure.durationMs = durationMs;
       if (transportFailure) failure.diagnostics = { ...trace, stage };
     }
@@ -499,6 +506,7 @@ async function executeRequest<T>(
       method: diagnosticMethod,
       status,
       requestId,
+      clientRequestId,
       durationMs,
       failureKind,
       ...(transportFailure ? { stage } : {}),
@@ -520,7 +528,7 @@ async function executeRequest<T>(
 function unwrapResponse<T>(
   res: Response,
   payload: ApiResponse<T> | null,
-  reportContext?: { endpoint: string; method: string; requestId?: string; durationMs?: number }
+  reportContext?: { endpoint: string; method: string; requestId?: string; clientRequestId?: string; durationMs?: number }
 ): T {
   if (!res.ok) {
     throw new ApiError(
@@ -537,6 +545,7 @@ function unwrapResponse<T>(
         reportEndpoint: reportContext?.endpoint,
         reportMethod: reportContext?.method,
         requestId: reportContext?.requestId,
+        clientRequestId: reportContext?.clientRequestId,
         durationMs: reportContext?.durationMs,
         errorCode: (payload as { errorCode?: string } | null)?.errorCode,
       }
@@ -556,6 +565,7 @@ function unwrapResponse<T>(
           reportEndpoint: reportContext?.endpoint,
           reportMethod: reportContext?.method,
           requestId: reportContext?.requestId,
+          clientRequestId: reportContext?.clientRequestId,
           durationMs: reportContext?.durationMs,
           errorCode: payload.errorCode,
         }
@@ -577,12 +587,22 @@ async function refreshAccessToken(sessionEpoch: number) {
   }
 
   assertSessionEpoch(sessionEpoch);
+  if (useAuthStore.getState().refreshUncertain) {
+    throw new ApiError(
+      i18n.t('common.errors.refreshOutcomeUnknown', { defaultValue: '登录状态暂时无法确认，请重新登录后继续' }),
+      { status: 0, failureKind: 'refresh-outcome-unknown' },
+    );
+  }
 
+  let refreshResponseStatus: number | undefined;
+  let refreshResponseDetails: SessionDiagnosticContext = {};
+  const refreshRequestId = createHttpRequestId();
+  let stage = 'prepare';
   const activeRefreshPromise = (async () => {
     const { refreshToken } = useAuthStore.getState();
 
     if (!refreshToken) {
-      await clearLocalSession(sessionEpoch);
+      await clearLocalSession(sessionEpoch, { reason: 'refresh-token-missing' });
       throw new ApiError(
         i18n.t('common.errors.sessionExpired', {
           defaultValue: '登录已过期，请重新登录',
@@ -591,8 +611,14 @@ async function refreshAccessToken(sessionEpoch: number) {
       );
     }
 
+    // Rotation can commit even if the response is lost or this process is killed.
+    // Fence the old credential on disk before sending it, not after an error.
+    await useAuthStore.getState().prepareRefresh(refreshRequestId);
+    assertSessionEpoch(sessionEpoch);
     const stableDeviceId = await readStableDeviceId();
-    const { res, payload, requestId, durationMs } = await executeRequest<{
+    assertSessionEpoch(sessionEpoch);
+    stage = 'request';
+    const { res, payload, requestId, clientRequestId, durationMs } = await executeRequest<{
       accessToken: string;
       refreshToken: string;
     }>(
@@ -604,26 +630,42 @@ async function refreshAccessToken(sessionEpoch: number) {
         ...(stableDeviceId
           ? { headers: { 'X-Stable-Device-Id': stableDeviceId } }
           : {}),
-      }
+      },
+      undefined,
+      { preparedRequestId: refreshRequestId },
     );
+    refreshResponseStatus = res.status;
+    assertSessionEpoch(sessionEpoch);
     const tokens = unwrapResponse(res, payload, {
       endpoint: '/auth/refresh',
       method: 'POST',
       requestId,
+      clientRequestId,
       durationMs,
     });
 
     if (!isTokenPair(tokens)) {
-      // 后端字段缺失 / 重命名 / 类型异常 — 视为刷新失败，避免后续带着 Bearer undefined 死循环。
+      const invalid: unknown = tokens;
+      const fields = invalid && typeof invalid === 'object'
+        ? invalid as Record<string, unknown> : {};
+      refreshResponseDetails = {
+        responseShape: invalid == null ? 'empty' : Array.isArray(invalid) ? 'array'
+          : typeof invalid === 'object' ? 'object' : 'primitive',
+        responseHasAccessToken: typeof fields.accessToken === 'string' && fields.accessToken.length > 0,
+        responseHasRefreshToken: typeof fields.refreshToken === 'string' && fields.refreshToken.length > 0,
+      };
+      // This is an unusable response, not a server authentication rejection.
       throw new ApiError(
         i18n.t('common.errors.refreshResponseInvalid', {
-          defaultValue: '刷新返回数据格式异常，请重新登录',
+          defaultValue: '暂时无法更新登录状态，请重新登录后再试',
         }),
         {
-          status: 401,
+          status: res.status,
+          failureKind: 'refresh-response-invalid',
           reportEndpoint: '/auth/refresh',
           reportMethod: 'POST',
           requestId,
+          clientRequestId,
           durationMs,
         }
       );
@@ -632,18 +674,78 @@ async function refreshAccessToken(sessionEpoch: number) {
     const currentAuthState = useAuthStore.getState();
     assertSessionEpoch(sessionEpoch);
 
-    currentAuthState.setTokens(tokens);
+    stage = 'persist';
+    await currentAuthState.setTokens(tokens);
+    assertSessionEpoch(sessionEpoch);
 
     return tokens.accessToken;
   })()
     .catch(async (error) => {
-      // 只有服务端明确否认 refresh token 时才清 session。网络 / 超时 / 5xx 一律原样抛出：
-      // 登录态保留，singleton 已在 finally 里释放，下一个请求会重新发起刷新。
+      assertSessionEpoch(sessionEpoch);
+      const responseStatus = refreshResponseStatus ?? (error instanceof ApiError ? error.responseStatus ?? error.status : undefined);
+      // 连接都没建成（离线、电梯里、切 Wi-Fi）：保留会话、解除围栏，下次照常续签。
+      // 就算服务端其实已经轮换，重放也只撤销本设备这一个会话族，结果和围栏一样是
+      // 重新登录；而远更常见的离线回前台，就不必逼用户输密码。超时 / 5xx / 网关
+      // 这类请求确实到过服务器的不确定结果，仍走下面的围栏。
+      if (stage === 'request' && error instanceof ApiError && error.failureKind === 'network') {
+        try {
+          await useAuthStore.getState().releaseRefreshAttempt(refreshRequestId);
+        } catch {
+          reportError(new Error('Authentication refresh fence could not be released'), {
+            operation: 'session', kind: 'refreshStatePersist',
+          });
+        }
+        assertSessionEpoch(sessionEpoch);
+        throw error;
+      }
+      if (!isDefinitiveAuthFailure(error)) {
+        const invalidResponse = stage === 'request' && responseStatus !== undefined && responseStatus >= 200 && responseStatus < 300;
+        const state = useAuthStore.getState();
+        const persistence = state.markRefreshUncertain(refreshRequestId);
+        const context: SessionDiagnosticContext = {
+          endpointPath: '/auth/refresh', method: 'POST', status: responseStatus, stage,
+          requestId: error instanceof ApiError ? error.requestId : undefined,
+          clientRequestId: refreshRequestId,
+          durationMs: error instanceof ApiError ? error.durationMs : undefined,
+          failureKind: error instanceof ApiError ? error.failureKind : 'unexpected',
+          responseShape: 'unknown', ...refreshResponseDetails,
+          authenticated: state.isAuthenticated, hasAccessToken: Boolean(state.accessToken),
+          hasRefreshToken: Boolean(state.refreshToken), sessionPreserved: true,
+        };
+        const diagnosticId = recordSessionDiagnostic(invalidResponse ? 'refresh-response-invalid' : 'refresh-outcome-unknown', context);
+        reportError(new Error('Authentication refresh outcome unavailable'), {
+          ...context, diagnosticId, operation: 'session', kind: invalidResponse ? 'refreshResponseInvalid' : 'refreshOutcomeUnknown',
+        });
+        try {
+          await persistence;
+        } catch {
+          reportError(new Error('Authentication refresh recovery state could not be persisted'), {
+            diagnosticId, operation: 'session', kind: 'refreshStatePersist',
+          });
+        }
+        assertSessionEpoch(sessionEpoch);
+        throw new ApiError(
+          i18n.t(invalidResponse ? 'common.errors.refreshResponseInvalid' : 'common.errors.refreshOutcomeUnknown', { defaultValue: '登录状态暂时无法确认，请重新登录后继续' }),
+          { status: responseStatus ?? 0, failureKind: invalidResponse ? 'refresh-response-invalid' : 'refresh-outcome-unknown',
+            reportEndpoint: '/auth/refresh', reportMethod: 'POST', requestId: context.requestId, clientRequestId: refreshRequestId, durationMs: context.durationMs },
+        );
+      }
+      // Only an explicit server rejection clears the session. Ambiguous failures
+      // retain the session and fence the credential rather than replaying it.
       if (
         isDefinitiveAuthFailure(error) &&
         useAuthStore.getState().sessionEpoch === sessionEpoch
       ) {
-        await clearLocalSession(sessionEpoch);
+        await clearLocalSession(sessionEpoch, {
+          reason: 'refresh-rejected',
+          endpointPath: '/auth/refresh',
+          method: 'POST',
+          status: refreshResponseStatus ?? error.status,
+          requestId: error.requestId,
+          clientRequestId: error.clientRequestId,
+          failureKind: error.failureKind,
+          ...refreshResponseDetails,
+        });
       }
       throw error;
     })
@@ -672,6 +774,8 @@ export function refreshSessionAccessToken(): Promise<string> {
 }
 
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
+  // Auth anomalies are captured once at their decision boundary.
+  if (error instanceof ApiError && ['refresh-response-invalid', 'refresh-outcome-unknown', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
     return true;
   }
@@ -703,7 +807,7 @@ function reportApiFailure(
     endpointPath: safeHttpEndpoint(reportEndpoint),
     method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(reportMethod) ? reportMethod.toUpperCase() : 'OTHER',
     status,
-    ...(error instanceof ApiError ? { requestId: error.requestId, durationMs: error.durationMs } : {}),
+    ...(error instanceof ApiError ? { requestId: error.requestId, clientRequestId: error.clientRequestId, durationMs: error.durationMs } : {}),
     ...(error instanceof ApiError && typeof error.code === 'number' && Number.isSafeInteger(error.code)
       ? { apiCode: error.code }
       : {}),
@@ -799,12 +903,44 @@ export async function apiClient<T>(
 
       if (retryRequest.res.status === 401 &&
         (retryRequest.payload as { errorCode?: string } | null)?.errorCode !== 'AUTH_PASSWORD_INCORRECT') {
-        // 刷新成功、刚签发的 accessToken 却仍被拒 —— 服务端已明确否认当前会话
-        // （改密码全端下线 / 会话被撤销等）。旧行为是让裸 ApiError 逃逸成一条
-        // 通用报错；这里改为清 session（幂等，epoch 守卫防止误伤新会话）并抛出
-        // 带 failureKind 的「请重新登录」，让用户落在干净的登录页而不是报错弹窗。
         assertSessionEpoch(requestSessionEpoch);
-        await clearLocalSession(requestSessionEpoch);
+        // An old response cannot establish that newly issued credentials failed.
+        // Compare actual server UUIDs, never the generated fallback correlation.
+        if (initialRequest.responseRequestId && initialRequest.responseRequestId === retryRequest.responseRequestId) {
+          const state = useAuthStore.getState();
+          const context: SessionDiagnosticContext = {
+            endpointPath: safeHttpEndpoint(endpoint), method: options.method ?? 'GET',
+            status: 401, failureKind: 'auth-retry-response-replayed',
+            initialRequestId: initialRequest.responseRequestId,
+            requestId: retryRequest.requestId, clientRequestId: retryRequest.clientRequestId,
+            durationMs: retryRequest.durationMs, sessionPreserved: true,
+            authenticated: state.isAuthenticated, hasAccessToken: Boolean(state.accessToken),
+            hasRefreshToken: Boolean(state.refreshToken),
+          };
+          const diagnosticId = recordSessionDiagnostic('auth-retry-response-replayed', context);
+          reportError(new Error('Authentication retry received a repeated response'), {
+            ...context, diagnosticId, operation: 'session', kind: 'authRetryResponseReplayed',
+          });
+          // No extra business retry: a write may already have reached the server.
+          throw new ApiError(
+            i18n.t('common.errors.invalidServerResponse', { defaultValue: '服务器返回了无效响应，请稍后重试' }),
+            { status: 0, failureKind: 'auth-retry-response-replayed',
+              reportEndpoint: endpoint, reportMethod: options.method ?? 'GET',
+              requestId: retryRequest.requestId, clientRequestId: retryRequest.clientRequestId,
+              durationMs: retryRequest.durationMs },
+          );
+        }
+        // A distinct rejection retains the existing session revocation behavior.
+        await clearLocalSession(requestSessionEpoch, {
+          reason: 'request-rejected-after-refresh',
+          endpointPath: safeHttpEndpoint(endpoint),
+          method: options.method ?? 'GET',
+          status: retryRequest.res.status,
+          requestId: retryRequest.requestId,
+          clientRequestId: retryRequest.clientRequestId,
+          initialRequestId: initialRequest.responseRequestId,
+          failureKind: 'auth-retry-failed',
+        });
         // round 3 review：clearLocalSession 的 await 期间用户可能已登入新会话
         //（epoch 前进，clear 对它是 no-op）。此时再抛 auth-retry-failed 会被
         // 调用方当「当前会话已死」处理（登录路由/清理），伤到新会话 ——
@@ -827,6 +963,7 @@ export async function apiClient<T>(
         endpoint,
         method: options.method ?? 'GET',
         requestId: retryRequest.requestId,
+        clientRequestId: retryRequest.clientRequestId,
         durationMs: retryRequest.durationMs,
       });
       options.onResponseHeaders?.(retryRequest.res.headers);
@@ -837,6 +974,7 @@ export async function apiClient<T>(
       endpoint,
       method: options.method ?? 'GET',
       requestId: initialRequest.requestId,
+      clientRequestId: initialRequest.clientRequestId,
       durationMs: initialRequest.durationMs,
     });
     options.onResponseHeaders?.(initialRequest.res.headers);

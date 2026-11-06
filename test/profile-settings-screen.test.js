@@ -332,7 +332,7 @@ test("login security code gate only appears after backend confirms the account h
   assert.match(gate, /securityCodeEnabledRef\.current/);
   assert.match(
     gate,
-    /const visible =\s*isAuthenticated &&\s*!isLoading &&\s*!onboardingRequired &&\s*\(gateState === 'locked' \|\| gateState === 'verifying'\)/,
+    /const locked =\s*isAuthenticated &&\s*!isLoading &&\s*!onboardingRequired &&\s*\(gateState === 'locked' \|\| gateState === 'verifying'\)/,
   );
 });
 

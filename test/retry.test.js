@@ -58,6 +58,28 @@ test('retry returns the value on the first successful attempt without delay', as
   assert.ok(elapsed < 50, `should not delay on success (took ${elapsed}ms)`);
 });
 
+test('retry does not replay operations after an uncertain refresh requiring fresh credentials', async () => {
+  const { retry, FakeApiError } = loadRetryModule();
+  for (const failureKind of ['refresh-response-invalid', 'refresh-outcome-unknown']) {
+    for (const status of [201, 0]) {
+      let calls = 0;
+      const error = new FakeApiError('sign in again', status);
+      error.failureKind = failureKind;
+      await assert.rejects(retry(async () => { calls += 1; throw error; }, { backoffMs: 0 }), e => e === error);
+      assert.equal(calls, 1);
+    }
+  }
+});
+
+test('retry does not repeat an operation after detecting a replayed auth response', async () => {
+  const { retry, FakeApiError } = loadRetryModule();
+  let calls = 0;
+  const error = new FakeApiError('response replayed', 0);
+  error.failureKind = 'auth-retry-response-replayed';
+  await assert.rejects(retry(async () => { calls += 1; throw error; }, { backoffMs: 0 }), e => e === error);
+  assert.equal(calls, 1);
+});
+
 test('retry retries once on a transient network-style error and succeeds', async () => {
   const { retry } = loadRetryModule();
   let calls = 0;

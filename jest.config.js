@@ -21,6 +21,7 @@ const nestedWorktreeCheckouts = [
 
 module.exports = {
   preset: 'jest-expo',
+  setupFilesAfterEnv: ['<rootDir>/test/jest/setup.js'],
   testMatch: ['**/*.spec.tsx'],
   // Replaces jest's default, so '/node_modules/' has to be repeated here.
   testPathIgnorePatterns: ['/node_modules/', ...nestedWorktreeCheckouts],

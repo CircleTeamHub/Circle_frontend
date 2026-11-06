@@ -31,6 +31,15 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('explicit session recovery permits the auth form while preserving onboarding on cached routes', () => {
+  const { getAuthRouteDecision } = loadPolicy();
+  const input = { isAuthenticated: true, isLoading: false, onboardingRequired: true, addingAccount: true, sessionRecoveryRequired: true };
+  assert.deepEqual(plain(getAuthRouteDecision({ ...input, firstSegment: '(auth)' })), { type: 'allow' });
+  assert.deepEqual(plain(getAuthRouteDecision({ ...input, firstSegment: '(tabs)' })), { type: 'redirect', href: '/(onboarding)/profile' });
+  assert.deepEqual(plain(getAuthRouteDecision({ ...input, firstSegment: '(auth)', sessionRecoveryRequired: false })), { type: 'redirect', href: '/(onboarding)/profile' });
+  assert.deepEqual(plain(getAuthRouteDecision({ ...input, firstSegment: '(auth)', addingAccount: false })), { type: 'redirect', href: '/(onboarding)/profile' });
+});
+
 test('unauthenticated users can only access auth routes', () => {
   const { getAuthRouteDecision } = loadPolicy();
 
