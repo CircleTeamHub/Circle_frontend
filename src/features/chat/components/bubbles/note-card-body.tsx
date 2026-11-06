@@ -18,13 +18,12 @@ interface NoteCardBodyProps {
 }
 
 const NOTE_CARD_ACTIVE_GREEN = '#16A34A';
-const GRID_GAP = 6;
-const CARD_INNER_WIDTH = CHAT_CARD_STANDARD_WIDTH - Spacing.md * 2;
-/**
- * 四宫格与下面的按钮共用同一套四列:最多 4 张等宽方图,按钮与图片列对齐,
- * 四个按钮永远一行放得下(原来和图片数挤在一行,「位置」会被挤到第二行)。
- */
-const COLUMN_WIDTH = Math.floor((CARD_INNER_WIDTH - GRID_GAP * 3) / 4);
+const GRID_GAP = 4;
+/** 左右内边距收到 12,把宽度让给四宫格:标题区和图片是主角,按钮只是小标签。 */
+const CARD_PADDING_HORIZONTAL = Spacing.sm + Spacing.xs;
+const CARD_INNER_WIDTH = CHAT_CARD_STANDARD_WIDTH - CARD_PADDING_HORIZONTAL * 2;
+/** 最多 4 张等宽方图;不足 4 张保持同样大小、靠左排。 */
+const TILE_SIZE = Math.floor((CARD_INNER_WIDTH - GRID_GAP * 3) / 4);
 
 const SECTIONS: {
   id: NoteCardSection;
@@ -43,37 +42,37 @@ const s = StyleSheet.create({
     borderRadius: Radius.lg,
     overflow: 'hidden',
     paddingVertical: CHAT_CARD_PADDING_VERTICAL,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: CARD_PADDING_HORIZONTAL,
     // 块与块之间留足空隙:标题区 / 四宫格 / 按钮三段分得开,不挤。
     gap: Spacing.sm + Spacing.xs,
   },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
-  cover: { width: 48, height: 48, borderRadius: Radius.sm },
+  cover: { width: 56, height: 56, borderRadius: Radius.sm },
   coverPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   headerText: { flex: 1, gap: Spacing.xs },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  title: { ...Typography.body, fontWeight: '700', flexShrink: 1 },
-  preview: { ...Typography.small, lineHeight: 18 },
-  meta: { ...Typography.tinyRegular, lineHeight: 16 },
+  title: { ...Typography.h3, fontWeight: '700', lineHeight: 24, flexShrink: 1 },
+  preview: { ...Typography.bodyRegular, lineHeight: 20 },
+  meta: { ...Typography.small, lineHeight: 16 },
   // 与笔记页的开工/打烊/下架标签同一套实心底(noteWorkStatusFill + onStatusFill)。
   statusPill: { borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
-  statusText: { ...Typography.tiny, fontWeight: '700' },
-  unlisted: { ...Typography.tiny, fontWeight: '600' },
+  statusText: { ...Typography.small, fontWeight: '700' },
+  unlisted: { ...Typography.small, fontWeight: '600' },
   grid: { flexDirection: 'row', gap: GRID_GAP },
-  tile: { width: COLUMN_WIDTH, height: COLUMN_WIDTH, borderRadius: Radius.sm, overflow: 'hidden' },
+  tile: { width: TILE_SIZE, height: TILE_SIZE, borderRadius: Radius.sm, overflow: 'hidden' },
   tileImage: { width: '100%', height: '100%' },
-  chips: { flexDirection: 'row', gap: GRID_GAP },
+  // 按钮是小方块标签:宽度随文字、靠左排,不和图片抢视觉。
+  chips: { flexDirection: 'row', gap: Spacing.xs + 2 },
   chip: {
-    width: COLUMN_WIDTH,
-    height: 28,
-    // 方块按钮:圆角和上面的四宫格同一档,看起来是一套。
-    borderRadius: Radius.sm,
+    height: 22,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
   chipEnabled: { backgroundColor: NOTE_CARD_ACTIVE_GREEN },
   chipDisabled: { borderWidth: 1 },
-  chipText: { ...Typography.small, fontWeight: '600' },
+  chipText: { ...Typography.tinyRegular, fontWeight: '600' },
 });
 
 /**
