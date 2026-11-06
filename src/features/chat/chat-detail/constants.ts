@@ -59,19 +59,11 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// 底部面板展开/收起的协调布局过渡：面板高度变化与消息区缩放一起平滑动，
-// 输入栏位置由 flex 决定、始终在面板上方，不会割裂。稍慢一点更顺眼。
+// 只过渡已有视图的位置/尺寸；全局 create/delete 淡入淡出会让表情网格、
+// 玻璃输入栏和同一帧挂载的页面闪烁。
 export const PANEL_LAYOUT_ANIM = {
   duration: 300,
-  create: {
-    type: LayoutAnimation.Types.easeInEaseOut,
-    property: LayoutAnimation.Properties.opacity,
-  },
   update: { type: LayoutAnimation.Types.easeInEaseOut },
-  delete: {
-    type: LayoutAnimation.Types.easeInEaseOut,
-    property: LayoutAnimation.Properties.opacity,
-  },
 };
 
 /** 引用跳转最多往回翻几页(一页 50 条);翻不到就放弃,不能无界翻。 */

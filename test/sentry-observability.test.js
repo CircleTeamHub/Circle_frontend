@@ -1249,7 +1249,7 @@ test('SDK normalization preserves request detail before the final privacy bounda
     token: 'PRIVATE_CANARY', deviceId: 'PRIVATE_CANARY', body: 'PRIVATE_CANARY',
   } }] };
   assert.equal(normalize(extra, 3).clientDiagnostics[0].details, '[Object]');
-  assert.equal(config.normalizeDepth, 4);
+  assert.ok(config.normalizeDepth >= 4);
   const sent = config.beforeSend({ extra: normalize(extra, config.normalizeDepth) });
   const [request] = sent.extra.clientDiagnostics;
   assert.equal(request.timestamp, 1793909363263);
@@ -1485,4 +1485,105 @@ test("web unhandled rejections (browser global handler mechanism) pass the same 
   assert.equal(calls[0].beforeSend(...webEvent(new Error("DomWebView: injectJavaScript after unmount"))), null);
   assert.notEqual(calls[0].beforeSend(...webEvent(new Error("web flake"))), null);
   assert.equal(calls[0].beforeSend(...webEvent(new Error("web flake"))), null);
+});
+
+// 2026-11 请求卡顿埋点：「卡在哪一步」的枚举与计数要能离开设备（并能按 tag 搜），
+// 形状不对的值照样拦下 —— 这些字段由客户端拼出，不能成为自由文本的出口。
+test("reportError keeps request-stall diagnostics and tags the searchable ones", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  reportError(
+    new Error("timeout"),
+    {
+      endpointPath: "/note",
+      method: "GET",
+      status: 0,
+      failureKind: "timeout",
+      stage: "awaiting-response",
+      xhrStage: "acked",
+      xhrAckMs: 40,
+      xhrHeadersMs: 300,
+      xhrDoneMs: 320,
+      xhrEarlyEvent: true,
+      inflight: 3,
+      completedWhileWaiting: 2,
+      loopLagMs: 5000,
+      appState: "active",
+      appStateChanged: false,
+      attempts: 1,
+      retry: "recovered",
+    },
+    { captureException: (...args) => calls.push(args) },
+  );
+
+  const { extra, tags } = calls[0][1];
+  assert.equal(extra.xhrStage, "acked");
+  assert.equal(extra.xhrAckMs, 40);
+  assert.equal(extra.xhrHeadersMs, 300);
+  assert.equal(extra.xhrDoneMs, 320);
+  assert.equal(extra.xhrEarlyEvent, true);
+  assert.equal(extra.inflight, 3);
+  assert.equal(extra.completedWhileWaiting, 2);
+  assert.equal(extra.loopLagMs, 5000);
+  assert.equal(extra.appState, "active");
+  assert.equal(extra.appStateChanged, false);
+  assert.equal(extra.retry, "recovered");
+  assert.equal(tags.stage, "awaiting-response");
+  assert.equal(tags.xhrStage, "acked");
+  assert.equal(tags.retry, "recovered");
+  assert.equal(tags.appState, "active");
+});
+
+test("reportError drops request-stall diagnostics with the wrong shape", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  reportError(
+    new Error("timeout"),
+    {
+      endpointPath: "/note",
+      failureKind: "timeout",
+      xhrStage: "https://evil.example/?token=abc",
+      xhrAckMs: -5,
+      loopLagMs: "5000",
+      inflight: 1.5,
+      xhrEarlyEvent: "yes",
+      appState: "user typed text",
+      retry: "maybe",
+    },
+    { captureException: (...args) => calls.push(args) },
+  );
+
+  const { extra } = calls[0][1];
+  for (const key of ["xhrStage", "xhrAckMs", "loopLagMs", "inflight", "xhrEarlyEvent", "appState", "retry"]) {
+    assert.equal(extra[key], undefined, `${key} should be dropped`);
+  }
+  assert.doesNotMatch(JSON.stringify(calls[0][1]), /evil|token|user typed/);
+});
+
+test("recovered and failed request stalls land in separate Sentry issues", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  const client = { captureException: (...args) => calls.push(args) };
+  const base = { endpointPath: "/note", method: "GET", status: 0, failureKind: "stalled" };
+  reportError(new Error("stall"), { ...base, retry: "recovered" }, client);
+  reportError(new Error("stall"), { ...base, retry: "failed" }, client);
+  reportError(new Error("timeout"), { ...base, failureKind: "timeout" }, client);
+
+  const [recovered, failed, plain] = calls.map(([, context]) => context.fingerprint.join("|"));
+  assert.notEqual(recovered, failed);
+  assert.match(recovered, /recovered$/);
+  assert.doesNotMatch(plain, /recovered|failed/);
+});
+
+// SDK 在 beforeSend 之前按 normalizeDepth（默认 3）规整事件：extra.clientDiagnostics[i].details.*
+// 是第 4 层，会被压成 "[Object]"，再经 sanitizeClientDiagnostics 变成 {} —— 线上每条事件的
+// 「出错前 20 个请求」一直是空的。深度必须够到 details 的字段。
+test("initSentry keeps breadcrumb details deep enough to survive SDK normalization", () => {
+  const { initSentry } = loadSentry();
+  const initCalls = [];
+  initSentry({
+    dsn: "https://a@o/1",
+    client: { init: (options) => initCalls.push(options), wrap: (component) => component },
+  });
+  assert.ok(initCalls[0].normalizeDepth >= 4, `normalizeDepth=${initCalls[0].normalizeDepth}`);
 });

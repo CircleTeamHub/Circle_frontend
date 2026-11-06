@@ -35,6 +35,7 @@ type StoredPushRegistration = {
   revocationSecret: string;
   status: 'pending' | 'registered';
   deviceBindingVersion?: 1;
+  appVersion?: string | null;
   /** 登记时附带字段（来电推送版本等）的指纹：变了就要重新登记一次，哪怕 token 没变。 */
   fingerprint?: string;
 };
@@ -817,15 +818,16 @@ export function createPushTokenRegistrationOrchestrator(
           revocationSecret: dependencies.generateRevocationSecret(),
           status: 'pending',
           fingerprint,
+          appVersion: dependencies.appVersion,
         };
         if (legacy && dependencies.replaceLegacyRegistration) {
           dependencies.replaceLegacyRegistration(candidate);
         } else {
           dependencies.setStoredRegistration(candidate);
         }
-      } else if ((candidate.fingerprint ?? '{}') !== fingerprint) {
-        // 同一个 token，附带字段变了（例如升级到支持来电推送的版本）：同一把撤销密钥重新登记。
-        candidate = { ...candidate, status: 'pending', fingerprint };
+      } else if ((candidate.fingerprint ?? '{}') !== fingerprint || candidate.appVersion !== dependencies.appVersion) {
+        // 升级原生版本或附带字段变化时，用同一把撤销密钥更新服务端能力信息。
+        candidate = { ...candidate, status: 'pending', fingerprint, appVersion: dependencies.appVersion };
         dependencies.setStoredRegistration(candidate);
       }
       if (candidate.status === 'registered' && candidate.deviceBindingVersion === 1) return;

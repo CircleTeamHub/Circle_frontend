@@ -39,7 +39,10 @@ test('dynamic app config preserves the static Expo config', () => {
 
   assert.equal(config.name, appJson.expo.name);
   assert.equal(config.slug, appJson.expo.slug);
-  assert.deepEqual(config.plugins.slice(0, appJson.expo.plugins.length), appJson.expo.plugins);
+  const expectedPlugins = appJson.expo.plugins.map((plugin) => plugin === 'expo-notifications'
+    ? ['expo-notifications', { sounds: ['./assets/sounds/notification_swift_gesture.wav'], defaultChannel: 'activity_swift_gesture' }]
+    : plugin);
+  assert.deepEqual(config.plugins.slice(0, appJson.expo.plugins.length), expectedPlugins);
   assert.deepEqual(config.ios, appJson.expo.ios);
   assert.equal(config.android.package, appJson.expo.android.package);
 });

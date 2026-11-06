@@ -226,7 +226,8 @@ test('the request timeout still covers the response body read', async () => {
     },
   });
 
-  const pending = apiClient('/circle');
+  // 用非 GET：GET 卡住会换新请求重试（见 api-client-stall-retry.test.js），这里只钉定时器覆盖面。
+  const pending = apiClient('/circle', { method: 'POST', body: {} });
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(
@@ -260,7 +261,8 @@ test('a stalled device ID provider is covered by the whole-request timeout', asy
   const timers = makeFakeTimers();
   const { apiClient, registerDeviceIdProvider } = loadApiClient({ timers });
   registerDeviceIdProvider(() => new Promise(() => {}));
-  const pending = apiClient('/circle');
+  // 非 GET：只钉「设备 ID 卡住也在预算内」，不掺进 GET 的卡顿重试。
+  const pending = apiClient('/circle', { method: 'POST', body: {} });
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(timers.isArmed(), true);
   timers.fire();

@@ -8,10 +8,10 @@ import { useChatStore } from './store';
  * 对应的通知收起来」。
  *
  * 渠道 id 是跨仓契约:后端聊天推送带 channelId = CHAT_PUSH_CHANNEL_ID
- * (circle_be src/chat/chat.constants.ts),两边必须同值。设备上没建这个渠道时
- * expo-notifications 会回落到默认渠道,所以老版本 App 照样收得到。
+ * (circle_be src/chat/chat.constants.ts),两边必须同值。后端按登记的 App 版本
+ * 选择新/旧渠道，新客户端会在原生启动时创建带声音的新渠道。
  */
-export const CHAT_NOTIFICATION_CHANNEL_ID = 'chat';
+export const CHAT_NOTIFICATION_CHANNEL_ID = 'chat_swift_gesture';
 
 type NotificationsModule = typeof import('expo-notifications');
 
@@ -39,12 +39,8 @@ export async function ensureChatNotificationChannel(
     name: i18n.t('notifications.chatChannelName'),
     description: i18n.t('notifications.chatChannelDescription'),
     importance: notifications.AndroidImportance.HIGH,
-    // Android's new NotificationChannel already has the system default sound.
-    // Omission also preserves the user's settings on an existing channel;
-    // Android ignores sound changes and restores deleted channel settings.
-    // The literal "default" here is treated as a custom resource filename by
-    // recent expo-notifications versions and produces a user-visible LogBox
-    // error when the dev client does not bundle a file with that name.
+    // 原生启动时先迁移旧渠道的用户设置；重复设置不会覆盖已有静音或自选声音。
+    sound: 'notification_swift_gesture.wav',
     vibrationPattern: [0, 250, 250, 250],
     // 锁屏上只显示「有新消息」,正文要解锁才看得到。
     lockscreenVisibility: notifications.AndroidNotificationVisibility.PRIVATE,

@@ -1,6 +1,7 @@
 import React from 'react';
 // jest.mock 工厂里只能引用 mock 前缀的外部变量。
-import { Alert, Keyboard, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
+import { Alert, Keyboard, LayoutAnimation, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
+import { router } from 'expo-router';
 import {
   act,
   fireEvent,
@@ -744,6 +745,47 @@ test('with a draft the send button sits at the far right, after the emoji button
     .map((node) => String(node.props.children))
     .filter((name) => composerIcons.includes(name));
   expect(order).toEqual(composerIcons);
+});
+
+test.each(['emoji', 'attachment'])('opening the %s panel animates layout without fading newly mounted views', async (panel) => {
+  const animate = jest.spyOn(LayoutAnimation, 'configureNext');
+  try {
+    render(<ChatDetailScreen />);
+    await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+    animate.mockClear();
+    await act(async () => fireEvent.press(screen.getByLabelText(`chat.detail.${panel}PanelLabel`)));
+    expect(animate).toHaveBeenCalledWith({
+      duration: 300,
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+    });
+  } finally {
+    animate.mockRestore();
+  }
+});
+
+test.each([
+  ['notes', 'share-picker', { type: 'note' }],
+  ['friendCard', 'share-picker', { type: 'friend' }],
+  ['favorites', 'share-picker', { type: 'favorite' }],
+  ['quickReply', 'share-picker', { type: 'quick-reply' }],
+  ['transfer', 'transfer-composer', { recipientId: PEER, recipientName: '对方', recipientAvatar: '' }],
+  ['mediaHub', null, null],
+] as const)('opening the %s tool does not apply a global layout animation to the destination', async (label, route, params) => {
+  const animate = jest.spyOn(LayoutAnimation, 'configureNext');
+  try {
+    render(<ChatDetailScreen />);
+    await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+    await act(async () => fireEvent.press(screen.getByLabelText('chat.detail.attachmentPanelLabel')));
+    animate.mockClear();
+    await act(async () => fireEvent.press(screen.getByText(`chat.attachments.${label}`)));
+    expect(animate).not.toHaveBeenCalled();
+    expect(screen.queryByText('chat.attachments.notes')).toBeNull();
+    if (route) {
+      expect(router.push).toHaveBeenCalledWith({ pathname: `/(tabs)/messages/${route}`, params });
+    }
+  } finally {
+    animate.mockRestore();
+  }
 });
 
 test('the white emoji button switches from voice mode back to an editable draft', async () => {

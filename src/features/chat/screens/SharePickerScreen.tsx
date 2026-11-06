@@ -29,8 +29,8 @@ import {
 import { NoteCard, type NoteSourceTarget } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
+import { getGroupEntryHref } from '@/features/groups/routes';
 import {
-  getChatInfoTopHref,
   getCircleDetailHref,
   getUserProfileHref,
   getUserProfileScopeFromSegments,
@@ -387,14 +387,7 @@ export default function SharePickerScreen() {
       if (group.target === 'circle') {
         router.push(getCircleDetailHref(toCircleScope(scope), group.id));
       } else {
-        router.push(getChatInfoTopHref(scope, {
-          sourceID: group.id,
-          ...(group.conversationID ? { conversationID: group.conversationID } : {}),
-          conversationType: 'group',
-          conversationKind: 'group',
-          title: group.name,
-          originScope: scope,
-        }));
+        router.push(getGroupEntryHref(scope, { groupId: group.conversationID ?? group.id, searchedMsgID: group.clientMsgID }));
       }
     }
   }, [navigation, router, scope]);

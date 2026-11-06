@@ -64,6 +64,19 @@ test("known metrics are recorded with their fixed type, unit and allowed attribu
   ]);
 });
 
+test("note operations retain their allowed outcome labels without note identifiers", () => {
+  const { sdk, calls } = recordingSdk();
+  const { recordMetric } = loadMetrics(sdk);
+  for (const operation of ['noteCreate', 'noteUpdate', 'noteCollect']) {
+    recordMetric('app.operation.duration', 1200, { operation, outcome: 'success', noteId: 'private-note' });
+  }
+  assert.deepEqual(plain(calls.map((call) => call.options.attributes)), [
+    { operation: 'noteCreate', outcome: 'success' },
+    { operation: 'noteUpdate', outcome: 'success' },
+    { operation: 'noteCollect', outcome: 'success' },
+  ]);
+});
+
 test("attribute keys and values outside the table are stripped", () => {
   const { sdk, calls } = recordingSdk();
   const { recordMetric } = loadMetrics(sdk);

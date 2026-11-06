@@ -29,15 +29,23 @@ export function isDefinitiveNoteSubmissionFailure(error: unknown): boolean {
     error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 409;
 }
 
-function canonicalBlocks(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalBlocks);
-  if (!value || typeof value !== 'object') return value;
-  const record = value as Record<string, unknown>;
-  return Object.fromEntries(Object.keys(record).sort().flatMap((key) => {
-    if (typeof record.objectKey === 'string' && (key === 'url' || key === 'posterUrl')) return [];
-    if (typeof record.type === 'string' && key === 'id') return [];
-    return [[key, canonicalBlocks(record[key])]];
-  }));
+function sameCanonicalValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left)) {
+    return Array.isArray(right) && left.length === right.length && left.every((value, index) => sameCanonicalValue(value, right[index]));
+  }
+  if (Array.isArray(right) || !left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  const a = left as Record<string, unknown>;
+  const b = right as Record<string, unknown>;
+  const keys = (record: Record<string, unknown>) => Object.keys(record).filter((key) =>
+    record[key] !== undefined &&
+    !(typeof record.objectKey === 'string' && (key === 'url' || key === 'posterUrl')) &&
+    !(typeof record.type === 'string' && key === 'id'),
+  );
+  const aKeys = keys(a);
+  return aKeys.length === keys(b).length && aKeys.every((key) =>
+    Object.prototype.hasOwnProperty.call(b, key) && sameCanonicalValue(a[key], b[key]),
+  );
 }
 
 /**
@@ -51,7 +59,7 @@ export function noteSubmissionMatchesResult(pending: PendingNoteSubmission, resu
   const title = Array.from(input.title.trim()).slice(0, MAX_NOTE_TITLE_LENGTH).join('');
   if (!result || typeof result.id !== 'string' || (title && result.title !== title) ||
     (pending.noteId !== null && result.id !== pending.noteId)) return false;
-  const same = (a: unknown, b: unknown) => JSON.stringify(canonicalBlocks(a)) === JSON.stringify(canonicalBlocks(b));
+  const same = sameCanonicalValue;
   if (!(input.contentJson?.length || input.sections?.text?.contentJson?.length) &&
     (input.sections?.text?.content ?? input.content ?? '').trim() !== (result.content ?? '').trim()) return false;
   if (!same(input.sections?.text?.contentJson ?? input.contentJson ?? [], result.sections?.text?.contentJson ?? result.contentJson ?? [])) return false;
