@@ -31,6 +31,10 @@ export function groupEventText(event: ChatGroupEventDto): string {
       return eventText('memberLeft', { targets });
     case 'member-removed':
       return eventText('memberRemoved', { actor, targets });
+    case 'admission-reviewed':
+      return eventText('admissionReviewed', { actor, targets });
+    case 'member-banned':
+      return eventText('memberBanned', { actor, targets });
     case 'member-role-changed':
       return payload['role'] === 'ADMIN'
         ? eventText('memberPromoted', { actor, targets })

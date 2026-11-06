@@ -29,6 +29,8 @@ const EVENT_KINDS = [
   'mute-all-changed',
   'policy-changed',
   'history-cleared',
+  'admission-reviewed',
+  'member-banned',
 ];
 
 const NEW_ERROR_CODES = [
@@ -228,6 +230,7 @@ test('the five locales define copy for every event kind and the management scree
     'ownerTransferred', 'groupRenamed', 'groupNoticeUpdated', 'historyCleared',
     'muteAllEnabled', 'muteAllDisabled', 'groupAvatarUpdated',
     'policyEnabled', 'policyDisabled',
+    'admissionReviewed', 'memberBanned',
   ];
   const manageKeys = [
     'admins', 'adminsHint', 'addAdmin', 'noAdmins', 'removeAdmin',
