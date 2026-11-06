@@ -7,6 +7,11 @@ import { getPageSnapshotRevision, readPageSnapshot, writePageSnapshot } from '@/
 import type { Conversation } from '@/types';
 
 const KEY = 'chat:conversation-list';
+// The shell only paints the first frame of a cold start, so seconds-stale is fine.
+// Throttle (not debounce): an active group chat changes `conversations` on every
+// message and each flush re-maps and synchronously rewrites encrypted MMKV.
+// Backgrounding and unmount still flush immediately.
+const WRITE_THROTTLE_MS = 30_000;
 
 /** Synchronous list shell while encrypted SQLite opens; never a live chat snapshot. */
 export function useConversationListSnapshot(live: Conversation[], snapshotLoaded: boolean) {
@@ -42,8 +47,7 @@ export function useConversationListSnapshot(live: Conversation[], snapshotLoaded
     };
     const queue = () => {
       queuedRevision = getPageSnapshotRevision();
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(flush, 250);
+      if (!timer) timer = setTimeout(flush, WRITE_THROTTLE_MS);
     };
     const unsubscribe = useChatStore.subscribe((state, previous) => {
       if (state.conversations !== previous.conversations ||
