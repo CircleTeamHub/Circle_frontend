@@ -6,6 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import type { NoteSummary } from '@/features/notes/types';
+import {
+  isSetNoteWorkStatus,
+  NOTE_WORK_STATUS_ICON,
+  noteWorkStatusFill,
+} from '@/features/notes/utils/work-status';
 import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
 import { buildNoteMeta } from '@/features/notes/utils/note-format';
 import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
@@ -191,20 +196,18 @@ function NoteCardInner({
           </Text>
         ) : null}
         {/* 已下架的笔记只出现在「已下架」页，那里不再重复挂状态标签。 */}
-        {note.status === 'UNLISTED' ? null : note.workStatus === 'WORKING' || note.workStatus === 'CLOSED' ? (
+        {note.status === 'UNLISTED' || !isSetNoteWorkStatus(note.workStatus) ? null : (
           <View
             style={[
               s.statusBadge,
               {
-                backgroundColor:
-                  note.workStatus === 'WORKING' ? colors.workingFill : colors.closedFill,
-                borderColor:
-                  note.workStatus === 'WORKING' ? colors.workingFill : colors.closedFill,
+                backgroundColor: noteWorkStatusFill(note.workStatus, colors),
+                borderColor: noteWorkStatusFill(note.workStatus, colors),
               },
             ]}
           >
             <Ionicons
-              name={note.workStatus === 'WORKING' ? 'checkmark-circle-outline' : 'moon-outline'}
+              name={NOTE_WORK_STATUS_ICON[note.workStatus]}
               size={13}
               color={colors.onStatusFill}
             />
@@ -217,10 +220,12 @@ function NoteCardInner({
             >
               {note.workStatus === 'WORKING'
                 ? t('notes.list.statusWorking', { defaultValue: '开工' })
-                : t('notes.list.statusClosed', { defaultValue: '打烊' })}
+                : note.workStatus === 'CLOSED'
+                  ? t('notes.list.statusClosed', { defaultValue: '打烊' })
+                  : t('notes.list.statusOffShelf', { defaultValue: '下架' })}
             </Text>
           </View>
-        ) : null}
+        )}
         <Text style={[s.meta, d.meta]} numberOfLines={1}>
           {meta}
         </Text>

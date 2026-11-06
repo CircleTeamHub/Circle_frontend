@@ -132,6 +132,8 @@ export function useComposerInput({
               userID: member.userId,
               // @ 出去的名字也用群昵称:群里认得的是这个。
               nickname: groupMemberDisplayName(member),
+              avatarUrl: member.avatarUrl ?? undefined,
+              role: member.role ?? undefined,
             })),
         )
         .then((candidates) => {

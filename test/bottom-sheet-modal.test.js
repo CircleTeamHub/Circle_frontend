@@ -77,9 +77,9 @@ test("sheet drag starts from the header, or from the body once its list is at th
   assert.match(sharedSheet, /gesture\.vy > DISMISS_VELOCITY && dragged > DISMISS_FLING_MIN_DISTANCE/);
   assert.doesNotMatch(sharedSheet, /DISMISS_VELOCITY = 1\.1/);
 
-  // 两个「分享给好友或群聊」面板的会话列表都要接入面板的滚动位置。
+  // 「分享给好友或群聊」面板的会话列表要接入面板的滚动位置。
+  // (笔记分享已改成全屏「选择一个聊天」页,不再是底部面板。)
   for (const relativePath of [
-    "src/features/notes/components/ShareNoteSheet.tsx",
     "src/features/qr/components/ShareQrSheet.tsx",
   ]) {
     const source = read(relativePath);

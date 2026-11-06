@@ -351,6 +351,26 @@ export function getChatInfoTopHref(
   }
 }
 
+/** 已读成员整页:留在聊天所在的 tab 栈里,返回才能回到原聊天。 */
+export function getMessageReadersHref(
+  scope: UserProfileScope,
+  params: { conversationId: string; messageId: string },
+): Href {
+  switch (scope) {
+    case 'contacts':
+      return { pathname: '/(tabs)/contacts/message-readers', params };
+    case 'profile':
+      return { pathname: '/(tabs)/profile/message-readers', params };
+    case 'discover':
+      return { pathname: '/(tabs)/discover/message-readers', params };
+    case 'explore':
+      return { pathname: '/(tabs)/explore/message-readers', params };
+    case 'messages':
+    default:
+      return { pathname: '/(tabs)/messages/message-readers', params };
+  }
+}
+
 export function getChatInfoHref(
   scope: UserProfileScope,
   id: string,

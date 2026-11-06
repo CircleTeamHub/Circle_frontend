@@ -6,14 +6,14 @@ import {
   buildCollectionInputFromMessage,
   buildNoteCollectSource,
 } from '@/features/chat/utils/message-collection';
-import { collectNote, fetchNoteGroups, findCollectedNote } from '@/services/api/notes';
+import { collectNote, createNoteGroup, fetchNoteGroups, findCollectedNote } from '@/services/api/notes';
 import type { CollectNoteSource, NoteGroup } from '@/features/notes/types';
 import {
   AddNoteToNotesSheet,
   type AddNoteToNotesSelection,
 } from '@/features/notes/components/AddNoteToNotesSheet';
 import { Alert, Keyboard } from 'react-native';
-import { router } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { recordMetric } from '@/observability/metrics';
@@ -23,6 +23,11 @@ import { useAuthStore } from '@/stores/authStore';
 import { createCollection } from '@/services/api/collections';
 import { type TFunction } from 'i18next';
 import { useNoteListSignalStore } from '@/features/notes/store/use-note-list-signal-store';
+import {
+  selectNoteCollectPreferences,
+  useNoteCollectPreferences,
+  useNoteCollectPreferencesStore,
+} from '@/features/notes/store/use-note-collect-preferences-store';
 
 /**
  * React Native Modal measures its iOS host window when it is presented. If the
@@ -89,7 +94,6 @@ export interface CollectMessageParams {
   avatarUrl: string | undefined;
   selfAvatarUri: string | undefined;
   selfName: string | undefined;
-  selfUsername?: string;
 }
 
 /**
@@ -106,14 +110,15 @@ export function useCollectMessage({
   avatarUrl,
   selfAvatarUri,
   selfName,
-  selfUsername,
 }: CollectMessageParams) {
+  const { chooseGroup, editTitle } = useNoteCollectPreferences(currentUserID);
   const [noteGroups, setNoteGroups] = useState<NoteGroup[]>([]);
   const [noteGroupsLoading, setNoteGroupsLoading] = useState(false);
   const [noteGroupsError, setNoteGroupsError] = useState<string | null>(null);
   const [noteCollectTarget, setNoteCollectTarget] = useState<NoteCollectTarget | null>(null);
   const [noteCollectOpening, setNoteCollectOpening] = useState(false);
   const [noteCollectSaving, setNoteCollectSaving] = useState(false);
+  const chatRouter = useChatRouter();
   const sessionEpoch = useAuthStore.getState().sessionEpoch;
   const mountedRef = useRef(false);
   const contextRef = useRef({ conversationID, currentUserID });
@@ -178,6 +183,87 @@ export function useCollectMessage({
       if (noteRequestRef.current === request && isCurrentContext(request)) setNoteGroupsLoading(false);
     }
   }, [isCurrentContext]);
+
+  /**
+   * sheetOpen=false 是两步确认都关掉、没有弹窗的直接保存:失败时没有弹窗可以停留重试,
+   * 必须结束这次请求,否则后续的收藏会一直被当成「进行中」挡掉。
+   */
+  const saveNoteCollect = useCallback(
+    async (
+      request: NoteCollectRequest,
+      { targetNoteGroupId, title, disableTitleEditing }: AddNoteToNotesSelection,
+      { sheetOpen }: { sheetOpen: boolean },
+    ) => {
+      request.saving = true;
+      setNoteCollectSaving(true);
+      const startedAt = diagnosticNow();
+      try {
+        const target = request.target;
+        const result = await collectNote(target.noteId, target.source, {
+          targetNoteGroupId,
+          ...(title ? { title } : {}),
+        });
+        if (noteRequestRef.current !== request || !isCurrentContext(request)) return;
+        recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - startedAt), { operation: 'noteCollect', outcome: 'success' });
+        // 「下次不再编辑标题」只在这次真的存上之后才生效:保存失败、用户回退或取消时
+        // 不能先把偏好改掉。
+        if (disableTitleEditing && request.currentUserID) {
+          useNoteCollectPreferencesStore.getState().setPreference(request.currentUserID, { editTitle: false });
+        }
+        // The notes screen may already be mounted in another tab stack. Mark
+        // it stale after the server confirms the write so returning to the
+        // list fetches the saved (possibly edited) title immediately.
+        useNoteListSignalStore.getState().bump();
+        finishNoteCollect('collected');
+        if (request.silent) return;
+        const copiedNoteId = result.note?.id;
+        Alert.alert(
+          result.alreadyCollected
+            ? t('chat.messageActions.noteAlreadyCollected', {
+                defaultValue: '已在我的笔记中',
+              })
+            : t('chat.messageActions.noteCollected', {
+                defaultValue: '已添加到我的笔记',
+              }),
+          t('chat.messageActions.noteCollectedHint', {
+            defaultValue: '可在「我的笔记」中查看',
+          }),
+          copiedNoteId
+            ? [
+                {
+                  text: t('common.view', { defaultValue: '查看' }),
+                  onPress: () => {
+                    if (!isCurrentContext(request)) return;
+                    chatRouter.push({
+                      pathname: '/(tabs)/profile/notes',
+                      params: { highlightNoteId: copiedNoteId },
+                    } as never);
+                  },
+                },
+                { text: t('common.confirm', { defaultValue: '确认' }) },
+              ]
+            : undefined,
+        );
+      } catch (error) {
+        reportHandledFailure('chatDetail', 'collectNote', error);
+        if (noteRequestRef.current !== request || !isCurrentContext(request)) return;
+        recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - startedAt), { operation: 'noteCollect', outcome: 'failed' });
+        if (!request.silent) {
+          Alert.alert(
+            t('chat.messageActions.collectFailed'),
+            getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
+          );
+        }
+        if (request.silent || !sheetOpen) finishNoteCollect('failed');
+      } finally {
+        if (noteRequestRef.current === request && isCurrentContext(request)) {
+          request.saving = false;
+          setNoteCollectSaving(false);
+        }
+      }
+    },
+    [t, isCurrentContext, finishNoteCollect, chatRouter],
+  );
 
   const handleCollectMessage = useCallback(
     async (message: ChatMessage, options?: { silent?: boolean }): Promise<CollectMessageResult> => {
@@ -252,6 +338,16 @@ export function useCollectMessage({
           ? new Promise<CollectMessageResult>((resolve) => { request.resolve = resolve; })
           : undefined;
         noteRequestRef.current = request;
+        const preferences = selectNoteCollectPreferences(
+          useNoteCollectPreferencesStore.getState(),
+          request.currentUserID,
+        );
+        if (!preferences.chooseGroup && !preferences.editTitle) {
+          // 两步确认都关掉了:不弹窗,直接放进「未分组」。不传标题,由服务端沿用原笔记的
+          // 完整标题(卡片上的标题是截断过的)。
+          void saveNoteCollect(request, { targetNoteGroupId: null }, { sheetOpen: false });
+          return completion ?? 'pending';
+        }
         // Close the chat composer keyboard before mounting the separate Modal.
         // Otherwise iOS can size the new window from the keyboard-adjusted
         // presenting view, leaving the sheet anchored above a dimmed gap.
@@ -334,90 +430,59 @@ export function useCollectMessage({
       sessionEpoch,
       loadNoteGroups,
       isCurrentContext,
+      saveNoteCollect,
     ],
   );
 
   const handleConfirmNoteCollect = useCallback(
-    async ({ targetNoteGroupId, title }: AddNoteToNotesSelection) => {
+    (selection: AddNoteToNotesSelection) => {
       const request = noteRequestRef.current;
-      if (!request || request.target !== noteCollectTarget || request.saving || !isCurrentContext(request)) return;
-      request.saving = true;
-      setNoteCollectSaving(true);
-      const startedAt = diagnosticNow();
+      if (!request || request.target !== noteCollectTarget || request.saving || !isCurrentContext(request)) {
+        return Promise.resolve();
+      }
+      return saveNoteCollect(request, selection, { sheetOpen: true });
+    },
+    [noteCollectTarget, isCurrentContext, saveNoteCollect],
+  );
+
+  const handleCreateNoteGroup = useCallback(
+    async (name: string): Promise<NoteGroup | null> => {
+      const request = noteRequestRef.current;
+      if (!request || !isCurrentContext(request)) return null;
       try {
-        const target = request.target;
-        const result = await collectNote(target.noteId, target.source, {
-          targetNoteGroupId,
-          title,
-        });
-        if (noteRequestRef.current !== request || !isCurrentContext(request)) return;
-        recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - startedAt), { operation: 'noteCollect', outcome: 'success' });
-        // The notes screen may already be mounted in another tab stack. Mark
-        // it stale after the server confirms the write so returning to the
-        // list fetches the saved (possibly edited) title immediately.
+        const created = await createNoteGroup(name);
+        if (noteRequestRef.current !== request || !isCurrentContext(request)) return null;
+        setNoteGroups((current) => [...current, created]);
         useNoteListSignalStore.getState().bump();
-        finishNoteCollect('collected');
-        if (request.silent) return;
-        const copiedNoteId = result.note?.id;
-        Alert.alert(
-          result.alreadyCollected
-            ? t('chat.messageActions.noteAlreadyCollected', {
-                defaultValue: '已在我的笔记中',
-              })
-            : t('chat.messageActions.noteCollected', {
-                defaultValue: '已添加到我的笔记',
-              }),
-          t('chat.messageActions.noteCollectedHint', {
-            defaultValue: '可在「我的笔记」中查看',
-          }),
-          copiedNoteId
-            ? [
-                {
-                  text: t('common.view', { defaultValue: '查看' }),
-                  onPress: () => {
-                    if (!isCurrentContext(request)) return;
-                    router.push({
-                      pathname: '/(tabs)/profile/notes',
-                      params: { highlightNoteId: copiedNoteId },
-                    } as never);
-                  },
-                },
-                { text: t('common.confirm', { defaultValue: '确认' }) },
-              ]
-            : undefined,
-        );
+        return created;
       } catch (error) {
-        reportHandledFailure('chatDetail', 'collectNote', error);
-        if (noteRequestRef.current !== request || !isCurrentContext(request)) return;
-        recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - startedAt), { operation: 'noteCollect', outcome: 'failed' });
-        if (request.silent) {
-          finishNoteCollect('failed');
-        } else {
+        reportHandledFailure('noteGroups', 'createForCollection', error);
+        if (noteRequestRef.current === request && isCurrentContext(request)) {
           Alert.alert(
-            t('chat.messageActions.collectFailed'),
-            getApiErrorMessage(error, t('chat.messageActions.collectFailedHint')),
+            t('notes.collect.createGroupFailed', { defaultValue: '分组创建失败' }),
+            getApiErrorMessage(error, t('notes.collect.createGroupFailedHint', {
+              defaultValue: '请稍后重试。',
+            })),
           );
         }
-      } finally {
-        if (noteRequestRef.current === request && isCurrentContext(request)) {
-          request.saving = false;
-          setNoteCollectSaving(false);
-        }
+        return null;
       }
     },
-    [noteCollectTarget, t, isCurrentContext, finishNoteCollect],
+    [isCurrentContext, t],
   );
 
   const noteCollectSheet: ReactNode = createElement(AddNoteToNotesSheet, {
     visible: noteCollectTarget !== null,
     noteTitle: noteCollectTarget?.noteTitle ?? '',
-    username: selfUsername ?? selfName,
+    chooseGroup,
+    editTitle,
     groups: noteGroups,
     loading: noteGroupsLoading,
     saving: noteCollectSaving,
     error: noteGroupsError,
     onClose: () => finishNoteCollect('cancelled'),
     onRetryGroups: loadNoteGroups,
+    onCreateGroup: handleCreateNoteGroup,
     onConfirm: handleConfirmNoteCollect,
   });
 

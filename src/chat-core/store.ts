@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { clearImagePreviews } from './image-preview';
 import { storage } from '@/storage';
+import type { SetNoteWorkStatus } from '@/features/notes/utils/work-status';
 import { isBurnDurationChoice } from './burn-durations';
 import {
   isMessageDeletedLocally,
@@ -642,7 +643,7 @@ interface ChatStoreState {
    */
   applyNoteSourceStatus: (
     sourceNoteId: string,
-    workStatus: 'WORKING' | 'CLOSED' | null,
+    workStatus: SetNoteWorkStatus | null,
     publicationStatus: 'ACTIVE' | 'UNLISTED' | 'DELETED',
   ) => void;
   /** S-01:会话级焚毁档位变更(REST 回执/系统消息驱动)。 */
@@ -1164,7 +1165,7 @@ export function sortConversations(
 export function patchNoteSourceStatus(
   message: ChatMessageDto,
   sourceNoteId: string,
-  workStatus: 'WORKING' | 'CLOSED' | null,
+  workStatus: SetNoteWorkStatus | null,
   publicationStatus: 'ACTIVE' | 'UNLISTED' | 'DELETED',
 ): ChatMessageDto {
   if (message.type !== 'note-card') return message;
@@ -2767,21 +2768,64 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   clearConversationLocal: (conversationId, clearedBeforeHeight) => {
-    void clearLocalConversationMessages(conversationId);
     const {
       conversations,
       messagesByConversation,
       clearedBeforeHeightByConversation,
     } = get();
+    const timeline = messagesByConversation[conversationId] ?? [];
+    // 服务端水位低于本地已确认的消息:只清到水位。同意一条几天前的双向清空申请时,
+    // 水位是申请那一刻的高度,之后双方的聊天不能跟着被清掉。
+    if (
+      typeof clearedBeforeHeight === 'number' &&
+      timeline.some((m) => m.height > clearedBeforeHeight)
+    ) {
+      const floor = Math.max(
+        clearedBeforeHeight,
+        clearedBeforeHeightByConversation[conversationId] ?? 0,
+      );
+      void deleteLocalMessagesBelow(conversationId, floor + 1);
+      const index = conversations.findIndex((c) => c.id === conversationId);
+      const current = index >= 0 ? conversations[index] : null;
+      const lastCleared = (current?.lastMessage?.height ?? 0) <= floor;
+      const nextConversation = current
+        ? {
+            ...current,
+            ...(lastCleared ? { lastMessage: null, unreadCount: 0 } : {}),
+            ...((current.pinnedMessage?.height ?? Infinity) <= floor
+              ? { pinnedMessage: null }
+              : {}),
+          }
+        : null;
+      set({
+        messagesByConversation: dropTimelineThrough(
+          messagesByConversation,
+          new Map([[conversationId, floor]]),
+        ),
+        clearedBeforeHeightByConversation: {
+          ...clearedBeforeHeightByConversation,
+          [conversationId]: floor,
+        },
+        ...(nextConversation
+          ? {
+              conversations: [
+                ...conversations.slice(0, index),
+                nextConversation,
+                ...conversations.slice(index + 1),
+              ],
+            }
+          : {}),
+      });
+      if (nextConversation) void upsertLocalConversation(nextConversation);
+      return;
+    }
+    void clearLocalConversationMessages(conversationId);
     // 服务端没回水位时(离线清空)退而用本地已知最高 height:总比 0 强。
     // 显式传 null = 不留水位(见类型上的说明)。
     const localMax =
       clearedBeforeHeight === null
         ? 0
-        : (messagesByConversation[conversationId] ?? []).reduce(
-            (max, m) => (m.height > max ? m.height : max),
-            0,
-          );
+        : timeline.reduce((max, m) => (m.height > max ? m.height : max), 0);
     const floor = Math.max(
       clearedBeforeHeight ?? 0,
       localMax,
@@ -2796,6 +2840,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
             ...conversations[index],
             lastMessage: null,
             unreadCount: 0,
+            ...((conversations[index].pinnedMessage?.height ?? Infinity) <= floor
+              ? { pinnedMessage: null }
+              : {}),
           }
         : null;
     set({
@@ -2915,11 +2962,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     );
     const unreadNeedsUpdate =
       countedAsUnread && target !== null && target.unreadCount > 0;
+    // 撤回了被置顶的那条:横幅跟着收掉。服务端撤回时只清库里的置顶列,不另发取消置顶的通知。
+    const pinNeedsUpdate = target?.pinnedMessage?.messageId === messageId;
     if (
       !timelineChanged &&
       !previewNeedsUpdate &&
       !previewRevisionNeedsUpdate &&
-      !unreadNeedsUpdate
+      !unreadNeedsUpdate &&
+      !pinNeedsUpdate
     ) {
       return existing
         ? quoteRedaction.then((scrubbed) => scrubbed)
@@ -2927,9 +2977,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     }
     const nextConversation =
       target &&
-      (previewNeedsUpdate || previewRevisionNeedsUpdate || unreadNeedsUpdate)
+      (previewNeedsUpdate ||
+        previewRevisionNeedsUpdate ||
+        unreadNeedsUpdate ||
+        pinNeedsUpdate)
         ? {
             ...target,
+            ...(pinNeedsUpdate ? { pinnedMessage: null } : {}),
             ...(previewNeedsUpdate
               ? {
                   lastMessage: {

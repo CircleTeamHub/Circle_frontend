@@ -45,6 +45,7 @@ export const darkColors: ThemeColors = {
   warning: '#FB8C00',
   workingFill: '#22C55E',
   closedFill: '#FFA500',
+  offShelfFill: '#8E8E93',
   onStatusFill: '#FFFFFF',
   // 深色面上原色对比度已足够，文字直接沿用。
   warningText: '#FB8C00',
@@ -114,6 +115,7 @@ export const lightColors: ThemeColors = {
   warning: '#FB8C00',
   workingFill: '#22C55E',
   closedFill: '#FFA500',
+  offShelfFill: '#8E8E93',
   onStatusFill: '#1C1C1E',
   // 白底上 #FB8C00 只有约 2.4:1；文字和图标用深一档的琥珀色（约 5:1）。
   warningText: '#B45309',

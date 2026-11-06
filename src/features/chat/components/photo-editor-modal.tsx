@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -26,6 +27,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Radius, Spacing, Typography } from '@/theme';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
+import { SEND_CAPTION_MAX_LENGTH } from '@/features/chat/components/send-confirm-dialog';
 import { FreePhotoCropper } from '@/features/chat/components/free-photo-cropper';
 import {
   PhotoMarkupEditor,
@@ -37,7 +40,8 @@ import type { PhotoMarkupTool } from '@/features/chat/utils/photo-markup';
 interface PhotoEditorModalProps {
   asset: ImagePickerAsset | null;
   onCancel: () => void;
-  onSend: (asset: ImagePickerAsset) => Promise<boolean>;
+  /** caption 已去掉首尾空白,没填时是空字符串。 */
+  onSend: (asset: ImagePickerAsset, caption: string) => Promise<boolean>;
 }
 
 interface EditTool {
@@ -107,6 +111,18 @@ const s = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  captionInput: {
+    ...Typography.body,
+    color: '#FFFFFF',
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    minHeight: 44,
+    maxHeight: 96,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   busyOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -228,6 +244,7 @@ export function PhotoEditorModal({
   const [drawColor, setDrawColor] = useState(DRAW_COLORS[2]);
   const [markupCanUndo, setMarkupCanUndo] = useState(false);
   const [markupReady, setMarkupReady] = useState(false);
+  const [caption, setCaption] = useState('');
   const markupRef = useRef<PhotoMarkupEditorHandle>(null);
   const submitLockRef = useRef(false);
 
@@ -240,6 +257,7 @@ export function PhotoEditorModal({
     setMarkupMode(null);
     setMarkupCanUndo(false);
     setMarkupReady(false);
+    setCaption('');
     submitLockRef.current = false;
   }, [asset]);
 
@@ -439,12 +457,12 @@ export function PhotoEditorModal({
     setSubmitting(true);
     vibrate();
     try {
-      await onSend(workingAsset);
+      await onSend(workingAsset, caption.trim());
     } finally {
       submitLockRef.current = false;
       setSubmitting(false);
     }
-  }, [busy, onSend, submitting, vibrate, workingAsset]);
+  }, [busy, caption, onSend, submitting, vibrate, workingAsset]);
 
   const editorLocked = busy || submitting;
   // asset 从 null 切到已选照片后的第一帧，effect 尚未同步 workingAsset；直接回退到
@@ -480,232 +498,248 @@ export function PhotoEditorModal({
       onRequestClose={exitSubtool}
     >
       <StatusBar style="light" />
-      <View
-        style={[
-          s.root,
-          {
-            paddingTop: insets.top,
-            paddingBottom: Math.max(insets.bottom, Spacing.sm),
-          },
-        ]}
-      >
-        <View style={s.header}>
-          <Pressable
-            style={s.headerSide}
-            onPress={exitSubtool}
-            disabled={editorLocked}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.cancel')}
-          >
-            <Text style={[s.cancelText, editorLocked && { opacity: 0.45 }]}>
-              {t('common.cancel')}
-            </Text>
-          </Pressable>
-          <Text style={s.title} numberOfLines={1}>
-            {headerTitle}
-          </Text>
-          <View style={[s.headerSide, { alignItems: 'flex-end' }]}>
+      <KeyboardAvoidingContainer style={s.root}>
+        <View
+          style={[
+            s.root,
+            {
+              paddingTop: insets.top,
+              paddingBottom: Math.max(insets.bottom, Spacing.sm),
+            },
+          ]}
+        >
+          <View style={s.header}>
             <Pressable
-              style={[
-                s.sendButton,
-                { backgroundColor: colors.primary },
-                headerActionDisabled && { opacity: 0.45 },
-              ]}
-              onPress={() => {
-                if (cropMode) {
-                  void handleApplyCrop();
-                } else if (markupMode) {
-                  void handleApplyMarkup();
-                } else {
-                  void handleSend();
-                }
-              }}
-              disabled={headerActionDisabled}
+              style={s.headerSide}
+              onPress={exitSubtool}
+              disabled={editorLocked}
               accessibilityRole="button"
-              accessibilityLabel={headerActionLabel}
+              accessibilityLabel={t('common.cancel')}
             >
-              {editorLocked ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={s.sendText}>{headerActionLabel}</Text>
-              )}
+              <Text style={[s.cancelText, editorLocked && { opacity: 0.45 }]}>
+                {t('common.cancel')}
+              </Text>
             </Pressable>
-          </View>
-        </View>
-
-        <View style={s.preview}>
-          {previewAsset && cropMode ? (
-            <FreePhotoCropper
-              asset={previewAsset}
-              onCropChange={setPendingCrop}
-              accessibilityLabel={t('chat.photoEditor.cropFrame', {
-                defaultValue: '自由裁剪框',
-              })}
-            />
-          ) : previewAsset && markupMode ? (
-            <PhotoMarkupEditor
-              key={previewAsset.uri}
-              ref={markupRef}
-              asset={previewAsset}
-              tool={markupMode}
-              color={drawColor}
-              onCanUndoChange={setMarkupCanUndo}
-              onReadyChange={setMarkupReady}
-              accessibilityLabel={t('chat.photoEditor.markupCanvas', {
-                defaultValue: '照片编辑画布',
-              })}
-            />
-          ) : previewAsset ? (
-            <Image
-              source={{ uri: previewAsset.uri }}
-              style={s.image}
-              contentFit="contain"
-              accessibilityLabel={t('chat.photoEditor.preview', {
-                defaultValue: '待发送照片预览',
-              })}
-            />
-          ) : null}
-          {busy ? (
-            <View style={s.busyOverlay} pointerEvents="auto">
-              <ActivityIndicator size="large" color="#FFFFFF" />
-            </View>
-          ) : null}
-        </View>
-
-        {cropMode ? (
-          <View style={s.cropHint}>
-            <Text style={s.cropHintText}>
-              {t('chat.photoEditor.cropHint', {
-                defaultValue: '拖动四角调整范围，拖动框内移动位置',
-              })}
+            <Text style={s.title} numberOfLines={1}>
+              {headerTitle}
             </Text>
-          </View>
-        ) : markupMode ? (
-          <View style={s.markupControls}>
-            <View style={s.markupControlRow}>
+            <View style={[s.headerSide, { alignItems: 'flex-end' }]}>
               <Pressable
                 style={[
-                  s.modeButton,
-                  markupMode === 'mosaic' && { backgroundColor: colors.primary },
+                  s.sendButton,
+                  { backgroundColor: colors.primary },
+                  headerActionDisabled && { opacity: 0.45 },
                 ]}
                 onPress={() => {
-                  setMarkupMode('mosaic');
-                  vibrate();
+                  if (cropMode) {
+                    void handleApplyCrop();
+                  } else if (markupMode) {
+                    void handleApplyMarkup();
+                  } else {
+                    void handleSend();
+                  }
                 }}
+                disabled={headerActionDisabled}
                 accessibilityRole="button"
-                accessibilityState={{ selected: markupMode === 'mosaic' }}
-                accessibilityLabel={t('chat.photoEditor.mosaic', {
-                  defaultValue: '马赛克',
-                })}
+                accessibilityLabel={headerActionLabel}
               >
-                <Ionicons name="grid-outline" size={19} color="#FFFFFF" />
-                <Text style={s.modeButtonText}>
-                  {t('chat.photoEditor.mosaic', { defaultValue: '马赛克' })}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  s.modeButton,
-                  markupMode === 'draw' && { backgroundColor: colors.primary },
-                ]}
-                onPress={() => {
-                  setMarkupMode('draw');
-                  vibrate();
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: markupMode === 'draw' }}
-                accessibilityLabel={t('chat.photoEditor.draw', {
-                  defaultValue: '涂鸦',
-                })}
-              >
-                <Ionicons name="pencil-outline" size={19} color="#FFFFFF" />
-                <Text style={s.modeButtonText}>
-                  {t('chat.photoEditor.draw', { defaultValue: '涂鸦' })}
-                </Text>
-              </Pressable>
-            </View>
-            <View style={s.markupControlRow}>
-              {markupMode === 'draw'
-                ? DRAW_COLORS.map((color) => (
-                    <Pressable
-                      key={color}
-                      style={[
-                        s.colorButton,
-                        drawColor === color && {
-                          borderWidth: 2,
-                          borderColor: '#FFFFFF',
-                        },
-                      ]}
-                      onPress={() => {
-                        setDrawColor(color);
-                        vibrate();
-                      }}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: drawColor === color }}
-                      accessibilityLabel={t('chat.photoEditor.drawColor', {
-                        defaultValue: '画笔颜色',
-                      })}
-                    >
-                      <View style={[s.colorSwatch, { backgroundColor: color }]} />
-                    </Pressable>
-                  ))
-                : (
-                    <Text style={s.cropHintText}>
-                      {t('chat.photoEditor.mosaicHint', {
-                        defaultValue: '手指滑动涂抹需要隐藏的区域',
-                      })}
-                    </Text>
-                  )}
-              <Pressable
-                style={[s.undoButton, !markupCanUndo && { opacity: 0.35 }]}
-                onPress={() => {
-                  markupRef.current?.undo();
-                  vibrate();
-                }}
-                disabled={!markupCanUndo}
-                accessibilityRole="button"
-                accessibilityLabel={t('chat.photoEditor.undo', {
-                  defaultValue: '撤销',
-                })}
-                accessibilityState={{ disabled: !markupCanUndo }}
-              >
-                <Ionicons name="arrow-undo-outline" size={22} color="#FFFFFF" />
+                {editorLocked ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={s.sendText}>{headerActionLabel}</Text>
+                )}
               </Pressable>
             </View>
           </View>
-        ) : (
-          <ScrollView
-            horizontal
-            bounces={false}
-            showsHorizontalScrollIndicator={false}
-            style={s.toolsViewport}
-            contentContainerStyle={s.tools}
-          >
-            {tools.map((tool) => {
-              const disabled = editorLocked || tool.disabled;
-              return (
+
+          <View style={s.preview}>
+            {previewAsset && cropMode ? (
+              <FreePhotoCropper
+                asset={previewAsset}
+                onCropChange={setPendingCrop}
+                accessibilityLabel={t('chat.photoEditor.cropFrame', {
+                  defaultValue: '自由裁剪框',
+                })}
+              />
+            ) : previewAsset && markupMode ? (
+              <PhotoMarkupEditor
+                key={previewAsset.uri}
+                ref={markupRef}
+                asset={previewAsset}
+                tool={markupMode}
+                color={drawColor}
+                onCanUndoChange={setMarkupCanUndo}
+                onReadyChange={setMarkupReady}
+                accessibilityLabel={t('chat.photoEditor.markupCanvas', {
+                  defaultValue: '照片编辑画布',
+                })}
+              />
+            ) : previewAsset ? (
+              <Image
+                source={{ uri: previewAsset.uri }}
+                style={s.image}
+                contentFit="contain"
+                accessibilityLabel={t('chat.photoEditor.preview', {
+                  defaultValue: '待发送照片预览',
+                })}
+              />
+            ) : null}
+            {busy ? (
+              <View style={s.busyOverlay} pointerEvents="auto">
+                <ActivityIndicator size="large" color="#FFFFFF" />
+              </View>
+            ) : null}
+          </View>
+
+          {cropMode ? (
+            <View style={s.cropHint}>
+              <Text style={s.cropHintText}>
+                {t('chat.photoEditor.cropHint', {
+                  defaultValue: '拖动四角调整范围，拖动框内移动位置',
+                })}
+              </Text>
+            </View>
+          ) : markupMode ? (
+            <View style={s.markupControls}>
+              <View style={s.markupControlRow}>
                 <Pressable
-                  key={tool.id}
-                  style={[s.tool, disabled && { opacity: 0.4 }]}
-                  onPress={tool.onPress}
-                  disabled={disabled}
+                  style={[
+                    s.modeButton,
+                    markupMode === 'mosaic' && { backgroundColor: colors.primary },
+                  ]}
+                  onPress={() => {
+                    setMarkupMode('mosaic');
+                    vibrate();
+                  }}
                   accessibilityRole="button"
-                  accessibilityLabel={tool.label}
-                  accessibilityState={{ disabled }}
+                  accessibilityState={{ selected: markupMode === 'mosaic' }}
+                  accessibilityLabel={t('chat.photoEditor.mosaic', {
+                    defaultValue: '马赛克',
+                  })}
                 >
-                  <View style={s.toolIcon}>
-                    <Ionicons name={tool.icon} size={23} color="#FFFFFF" />
-                  </View>
-                  <Text style={s.toolLabel} numberOfLines={2}>
-                    {tool.label}
+                  <Ionicons name="grid-outline" size={19} color="#FFFFFF" />
+                  <Text style={s.modeButtonText}>
+                    {t('chat.photoEditor.mosaic', { defaultValue: '马赛克' })}
                   </Text>
                 </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
-        <UploadProgressHost />
-      </View>
+                <Pressable
+                  style={[
+                    s.modeButton,
+                    markupMode === 'draw' && { backgroundColor: colors.primary },
+                  ]}
+                  onPress={() => {
+                    setMarkupMode('draw');
+                    vibrate();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: markupMode === 'draw' }}
+                  accessibilityLabel={t('chat.photoEditor.draw', {
+                    defaultValue: '涂鸦',
+                  })}
+                >
+                  <Ionicons name="pencil-outline" size={19} color="#FFFFFF" />
+                  <Text style={s.modeButtonText}>
+                    {t('chat.photoEditor.draw', { defaultValue: '涂鸦' })}
+                  </Text>
+                </Pressable>
+              </View>
+              <View style={s.markupControlRow}>
+                {markupMode === 'draw'
+                  ? DRAW_COLORS.map((color) => (
+                      <Pressable
+                        key={color}
+                        style={[
+                          s.colorButton,
+                          drawColor === color && {
+                            borderWidth: 2,
+                            borderColor: '#FFFFFF',
+                          },
+                        ]}
+                        onPress={() => {
+                          setDrawColor(color);
+                          vibrate();
+                        }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: drawColor === color }}
+                        accessibilityLabel={t('chat.photoEditor.drawColor', {
+                          defaultValue: '画笔颜色',
+                        })}
+                      >
+                        <View style={[s.colorSwatch, { backgroundColor: color }]} />
+                      </Pressable>
+                    ))
+                  : (
+                      <Text style={s.cropHintText}>
+                        {t('chat.photoEditor.mosaicHint', {
+                          defaultValue: '手指滑动涂抹需要隐藏的区域',
+                        })}
+                      </Text>
+                    )}
+                <Pressable
+                  style={[s.undoButton, !markupCanUndo && { opacity: 0.35 }]}
+                  onPress={() => {
+                    markupRef.current?.undo();
+                    vibrate();
+                  }}
+                  disabled={!markupCanUndo}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('chat.photoEditor.undo', {
+                    defaultValue: '撤销',
+                  })}
+                  accessibilityState={{ disabled: !markupCanUndo }}
+                >
+                  <Ionicons name="arrow-undo-outline" size={22} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <>
+              <TextInput
+                style={s.captionInput}
+                value={caption}
+                onChangeText={setCaption}
+                placeholder={t('chat.mediaSend.captionPlaceholder', {
+                  defaultValue: '添加描述（可选）',
+                })}
+                placeholderTextColor="rgba(255,255,255,0.55)"
+                maxLength={SEND_CAPTION_MAX_LENGTH}
+                multiline
+                editable={!editorLocked}
+              />
+              <ScrollView
+                horizontal
+                bounces={false}
+                showsHorizontalScrollIndicator={false}
+                style={s.toolsViewport}
+                contentContainerStyle={s.tools}
+              >
+                {tools.map((tool) => {
+                  const disabled = editorLocked || tool.disabled;
+                  return (
+                    <Pressable
+                      key={tool.id}
+                      style={[s.tool, disabled && { opacity: 0.4 }]}
+                      onPress={tool.onPress}
+                      disabled={disabled}
+                      accessibilityRole="button"
+                      accessibilityLabel={tool.label}
+                      accessibilityState={{ disabled }}
+                    >
+                      <View style={s.toolIcon}>
+                        <Ionicons name={tool.icon} size={23} color="#FFFFFF" />
+                      </View>
+                      <Text style={s.toolLabel} numberOfLines={2}>
+                        {tool.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
+          <UploadProgressHost />
+        </View>
+      </KeyboardAvoidingContainer>
     </Modal>
   );
 }

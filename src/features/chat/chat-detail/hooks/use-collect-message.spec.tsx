@@ -5,11 +5,13 @@ import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/chat-core/store';
 import type { ChatMessage } from '@/types';
 import { useCollectMessage, type CollectMessageParams } from './use-collect-message';
+import { useNoteCollectPreferencesStore } from '@/features/notes/store/use-note-collect-preferences-store';
 
 const mockCreateCollection = jest.fn();
 const mockCollectNote = jest.fn();
 const mockFetchGroups = jest.fn();
 const mockFindCollectedNote = jest.fn();
+const mockCreateNoteGroup = jest.fn();
 const mockBump = jest.fn();
 const mockReportFailure = jest.fn();
 const mockRecordMetric = jest.fn();
@@ -17,7 +19,7 @@ let mockClock = 0;
 jest.mock('@/observability/metrics', () => ({ recordMetric: (...args: unknown[]) => mockRecordMetric(...args) }));
 jest.mock('@/observability/http-diagnostics', () => ({ diagnosticNow: () => mockClock }));
 jest.mock('@/services/api/collections', () => ({ createCollection: (...args: unknown[]) => mockCreateCollection(...args) }));
-jest.mock('@/services/api/notes', () => ({ collectNote: (...args: unknown[]) => mockCollectNote(...args), fetchNoteGroups: () => mockFetchGroups(), findCollectedNote: (...args: unknown[]) => mockFindCollectedNote(...args) }));
+jest.mock('@/services/api/notes', () => ({ collectNote: (...args: unknown[]) => mockCollectNote(...args), fetchNoteGroups: () => mockFetchGroups(), findCollectedNote: (...args: unknown[]) => mockFindCollectedNote(...args), createNoteGroup: (...args: unknown[]) => mockCreateNoteGroup(...args) }));
 jest.mock('@/features/notes/store/use-note-list-signal-store', () => ({ useNoteListSignalStore: { getState: () => ({ bump: mockBump }) } }));
 jest.mock('@/features/notes/components/AddNoteToNotesSheet', () => ({ AddNoteToNotesSheet: () => null }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: (...args: unknown[]) => mockReportFailure(...args) }));
@@ -44,9 +46,15 @@ type SheetProps = {
   noteTitle: string;
   groups: unknown[];
   loading: boolean;
+  chooseGroup: boolean;
+  editTitle: boolean;
   onClose: () => void;
-  onConfirm: (selection: { targetNoteGroupId: string | null; title: string }) => Promise<void>;
+  onCreateGroup: (name: string) => Promise<{ id: string; name: string } | null>;
+  onConfirm: (selection: { targetNoteGroupId: string | null; title?: string; disableTitleEditing?: boolean }) => Promise<void>;
 };
+const setMyPreferences = (value: { chooseGroup: boolean; editTitle: boolean }) =>
+  useNoteCollectPreferencesStore.setState({ byUser: { me: value } });
+const myPreferences = () => useNoteCollectPreferencesStore.getState().byUser.me;
 const sheet = (value: ReturnType<typeof useCollectMessage>) => (value.noteCollectSheet as ReactElement<SheetProps>).props;
 
 beforeEach(() => {
@@ -55,6 +63,8 @@ beforeEach(() => {
   mockCollectNote.mockReset().mockResolvedValue({ note: { id: 'copy' }, alreadyCollected: false });
   mockFetchGroups.mockReset().mockResolvedValue([{ id: 'private-group', name: 'Private' }]);
   mockFindCollectedNote.mockReset().mockResolvedValue(null);
+  mockCreateNoteGroup.mockReset().mockResolvedValue({ id: 'new-group', name: '新分组' });
+  useNoteCollectPreferencesStore.setState({ byUser: {} });
   mockBump.mockReset(); mockReportFailure.mockReset();
   mockRecordMetric.mockReset(); mockClock = 0;
   useAuthStore.setState({ user: { id: 'me' } as never, sessionEpoch: 1 });
@@ -65,7 +75,7 @@ beforeEach(() => {
   params = {
     t: ((key: string) => key) as CollectMessageParams['t'], currentUserID: 'me', sourceID: 'peer',
     conversationID: 'c1', isGroupChat: false, conversationTitle: 'Peer', avatarUrl: undefined,
-    selfAvatarUri: undefined, selfName: 'Me', selfUsername: 'me',
+    selfAvatarUri: undefined, selfName: 'Me',
   };
 });
 afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
@@ -271,4 +281,96 @@ test('duplicate notes report already added without reopening group and title ent
  await act(async()=>{await result.current.handleCollectMessage(noteMessage);});
  expect(Alert.alert).toHaveBeenCalledWith('chat.messageActions.noteAlreadyCollected');
  expect(result.current.noteCollectVisible).toBe(false); expect(mockCollectNote).not.toHaveBeenCalled();
+});
+
+test('with both confirmation steps turned off a note is saved straight into ungrouped and the server keeps the full title', async () => {
+  setMyPreferences({ chooseGroup: false, editTitle: false });
+  const { result } = renderHook(() => useCollectMessage(params));
+  let outcome: unknown;
+  await act(async () => { outcome = await result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  expect(outcome).toBe('collected');
+  // 卡片标题是截断过的,不能当真标题发回去;不传 title 由服务端沿用原标题。
+  expect(mockCollectNote).toHaveBeenCalledWith('n1', expect.any(Object), { targetNoteGroupId: null });
+  expect(mockCollectNote.mock.calls[0][2]).not.toHaveProperty('title');
+  expect(mockFetchGroups).not.toHaveBeenCalled();
+  expect(result.current.noteCollectVisible).toBe(false);
+});
+
+test('a failed direct save alerts and frees the request so the next collect can start', async () => {
+  setMyPreferences({ chooseGroup: false, editTitle: false });
+  mockCollectNote.mockRejectedValueOnce(new Error('offline'));
+  const { result } = renderHook(() => useCollectMessage(params));
+  await act(async () => { await result.current.handleCollectMessage(noteMessage); await Promise.resolve(); });
+  expect(Alert.alert).toHaveBeenCalledWith('chat.messageActions.collectFailed', 'chat.messageActions.collectFailedHint');
+  let second: unknown;
+  await act(async () => { second = await result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  expect(second).toBe('collected');
+  expect(mockCollectNote).toHaveBeenCalledTimes(2);
+});
+
+test('the sheet receives the saved confirmation preferences', async () => {
+  setMyPreferences({ chooseGroup: false, editTitle: true });
+  const { result } = renderHook(() => useCollectMessage(params));
+  act(() => { void result.current.handleCollectMessage(noteMessage); });
+  await showSheet();
+  expect(sheet(result.current)).toEqual(expect.objectContaining({ visible: true, chooseGroup: false, editTitle: true }));
+});
+
+test('ticking "do not edit the title next time" turns title editing off after this save', async () => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  act(() => { void result.current.handleCollectMessage(noteMessage); });
+  await showSheet();
+  await act(async () => {
+    await sheet(result.current).onConfirm({ targetNoteGroupId: null, title: 'Saved', disableTitleEditing: true });
+  });
+  expect(myPreferences()?.editTitle).toBe(false);
+  expect(mockCollectNote).toHaveBeenCalledWith('n1', expect.any(Object), { targetNoteGroupId: null, title: 'Saved' });
+});
+
+test('a failed save keeps title editing on even when "do not edit next time" was ticked', async () => {
+  mockCollectNote.mockRejectedValueOnce(new Error('offline'));
+  const { result } = renderHook(() => useCollectMessage(params));
+  act(() => { void result.current.handleCollectMessage(noteMessage); });
+  await showSheet();
+  await act(async () => {
+    await sheet(result.current).onConfirm({ targetNoteGroupId: null, title: 'Saved', disableTitleEditing: true });
+  });
+  expect(myPreferences()?.editTitle ?? true).toBe(true);
+  expect(sheet(result.current).editTitle).toBe(true);
+});
+
+test('collect preferences belong to the signed-in account', async () => {
+  useNoteCollectPreferencesStore.setState({ byUser: { someoneElse: { chooseGroup: false, editTitle: false } } });
+  const { result } = renderHook(() => useCollectMessage(params));
+  act(() => { void result.current.handleCollectMessage(noteMessage); });
+  await showSheet();
+  // 另一个账号关掉了两步确认,当前账号仍然弹窗。
+  expect(sheet(result.current)).toEqual(expect.objectContaining({ visible: true, chooseGroup: true, editTitle: true }));
+  expect(mockCollectNote).not.toHaveBeenCalled();
+});
+
+test('creating a group from the sheet adds it to the list and hands it back', async () => {
+  const { result } = renderHook(() => useCollectMessage(params));
+  act(() => { void result.current.handleCollectMessage(noteMessage); });
+  await showSheet();
+  let created: unknown;
+  await act(async () => { created = await sheet(result.current).onCreateGroup('新分组'); });
+  expect(mockCreateNoteGroup).toHaveBeenCalledWith('新分组');
+  expect(created).toEqual({ id: 'new-group', name: '新分组' });
+  expect(sheet(result.current).groups).toEqual([
+    { id: 'private-group', name: 'Private' },
+    { id: 'new-group', name: '新分组' },
+  ]);
+});
+
+test('a failed group creation alerts and returns nothing to select', async () => {
+  mockCreateNoteGroup.mockRejectedValueOnce(new Error('dup'));
+  const { result } = renderHook(() => useCollectMessage(params));
+  act(() => { void result.current.handleCollectMessage(noteMessage); });
+  await showSheet();
+  let created: unknown = 'unset';
+  await act(async () => { created = await sheet(result.current).onCreateGroup('重复'); });
+  expect(created).toBeNull();
+  expect(Alert.alert).toHaveBeenCalledWith('notes.collect.createGroupFailed', 'notes.collect.createGroupFailedHint');
+  expect(sheet(result.current).groups).toEqual([{ id: 'private-group', name: 'Private' }]);
 });

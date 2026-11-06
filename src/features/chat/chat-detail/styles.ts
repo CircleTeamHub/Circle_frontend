@@ -118,25 +118,6 @@ export const chatDetailStyles = StyleSheet.create({
     flex: 1,
     ...Typography.small,
   },
-  mentionPicker: {
-    maxHeight: 220,
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.sm,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
-  mentionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  mentionName: {
-    ...Typography.bodyRegular,
-    flex: 1,
-  },
   silencedBar: {
     flexDirection: 'row',
     alignItems: 'center',

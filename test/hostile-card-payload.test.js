@@ -223,6 +223,32 @@ test('card avatars go through the media allowlist', () => {
   assert.equal(trusted.friendCard.faceURL, 'https://cdn.trusted/a.jpg');
 });
 
+test('note card preview images go through the allowlist and are capped at four', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const good = (n) => `https://cdn.trusted/${n}.jpg`;
+  const ui = mapChatMessageDtoToUI(
+    {
+      ...friendCardDto({
+        noteId: 'n1',
+        title: '笔记',
+        previewUrls: ['https://attacker.example/1x1.gif', good(1), 42, good(2), good(3), good(4), good(5)],
+      }),
+      type: 'note-card',
+    },
+    'me',
+    0,
+  );
+  // 收件方一打开会话就会自动请求这些地址:未授权来源和非字符串一律丢掉。
+  assert.deepEqual(ui.noteCard.previewUrls, [good(1), good(2), good(3), good(4)]);
+
+  const none = mapChatMessageDtoToUI(
+    { ...friendCardDto({ noteId: 'n1', title: '笔记', previewUrls: 'not-an-array' }), type: 'note-card' },
+    'me',
+    0,
+  );
+  assert.equal(none.noteCard.previewUrls, undefined);
+});
+
 test('every card type routes its image fields through the allowlist', () => {
   const { mapChatMessageDtoToUI } = loadMappers();
   const beacon = 'https://attacker.example/1x1.gif';
@@ -360,4 +386,17 @@ test('card sanitization keeps well-formed values intact', () => {
   assert.equal(ui.noteCard.imageCount, 3);
   assert.deepEqual([...ui.noteCard.groupNames], []);
   assert.equal(ui.noteCard.coverUrl, 'https://cdn.trusted/c.jpg');
+});
+
+test('note card keeps the 下架 work status and drops unknown ones', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const card = (workStatus) =>
+    mapChatMessageDtoToUI(
+      { ...friendCardDto({ noteId: 'n1', title: '笔记', workStatus }), type: 'note-card' },
+      'me',
+      0,
+    ).noteCard.workStatus;
+  assert.equal(card('OFF_SHELF'), 'OFF_SHELF');
+  assert.equal(card('WORKING'), 'WORKING');
+  assert.equal(card('PAUSED'), 'UNSET');
 });

@@ -403,12 +403,14 @@
       "videoTooLong": "10분 이하의 동영상을 선택하세요",
       "videoUnsupported": "MP4, MOV, M4V 동영상만 지원됩니다",
       "videoUnavailable": "동영상을 사용할 수 없습니다",
-      "videoPreparing": "동영상을 처리하는 중…",
       "playVideo": "동영상 재생",
       "noteBatchPartialFailed": "{{count}}개 항목을 보내지 못했습니다",
       "cardSendFailed": "프로필 카드를 보내지 못했습니다. 다시 시도해 주세요",
       "favoriteSendFailed": "즐겨찾기를 보내지 못했습니다. 다시 시도해 주세요",
-      "favoriteLegacyVoiceUnsupported": "이 이전 버전 음성 즐겨찾기는 다시 보낼 수 없습니다"
+      "favoriteLegacyVoiceUnsupported": "이 이전 버전 음성 즐겨찾기는 다시 보낼 수 없습니다",
+      "mediaPreparing": "선택한 항목을 처리하는 중…",
+      "mediaSendFailed": "사진 또는 동영상을 보내지 못했습니다. 다시 시도해 주세요",
+      "captionNotSent": "사진이나 동영상이 전송되지 않아 설명도 보내지 않았습니다"
     },
     "stickers": {
       "title": "사용자 지정 스티커",
@@ -457,31 +459,34 @@
       "edit": "수정",
       "readers": "읽은 멤버",
       "readersNone": "아직 아무도 읽지 않았습니다",
-      "readersMore": "{{names}} 외 {{count}}명",
       "editing": "메시지 수정",
       "resend": "다시 보내기",
       "resendConfirm": "이 메시지를 다시 보내시겠습니까?",
-      "retryFailed": "전송 실패. 눌러서 다시 보내기"
+      "retryFailed": "전송 실패. 눌러서 다시 보내기",
+      "readersTitle": "읽은 멤버 ({{count}})",
+      "readersFailed": "읽은 멤버를 불러오지 못했습니다",
+      "readersMoreFooter": "처음 {{shown}}명만 표시합니다. {{count}}명이 더 읽었습니다"
     },
     "mentions": {
-      "empty": "멘션할 수 있는 멤버가 없습니다"
+      "empty": "멘션할 수 있는 멤버가 없습니다",
+      "title": "언급할 사람",
+      "count": "멤버 {{count}}명",
+      "all": "모두",
+      "allHint": "그룹의 모든 사람에게 알림"
     },
     "forward": {
-      "noPrivateChats": "아직 개인 채팅이 없습니다",
-      "noGroupChats": "아직 그룹 채팅이 없습니다",
-      "noMatches": "현재 분류에 검색 결과가 없습니다",
       "title": "채팅 선택",
-      "searchPlaceholder": "채팅 검색",
       "empty": "전달할 메시지가 없습니다",
-      "group": "그룹",
-      "single": "1:1",
       "done": "전달됨",
       "failed": "전달 실패",
       "failedRetry": "나중에 다시 시도해 주세요",
       "locationWithDetail": "[위치] {{detail}}",
       "unsupported": "이 메시지 유형은 아직 전달할 수 없습니다",
-      "workStatusWarningTitle": "주문 상태가 변경되었을 수 있습니다",
-      "workStatusWarning": "이 노트는 영업 종료 또는 게시 중지 상태입니다. 확인 후에도 보낼 수 있습니다."
+      "sendTo": "{{name}}에게 보내기",
+      "captionPlaceholder": "메시지 남기기 (선택)",
+      "batchPreview": "메시지 {{count}}개",
+      "sendToMany": "{{count}}개 채팅에 각각 보내기",
+      "captionSkipped": "전달 내용이 전송되지 않아 메시지도 보내지 않았습니다"
     },
     "avatarA11y": {
       "self": "내 프로필 보기",
@@ -735,7 +740,10 @@
         "batchLimit": "한 번에 최대 {{n}}명",
         "removeSelected": "내보내기 ({{n}})",
         "loadFailed": "주의 멤버를 불러오지 못했습니다"
-      }
+      },
+      "noteOffShelf": "판매 중지",
+      "groupNotes": "그룹 노트",
+      "boundNotesHint": "그룹 소유자가 이 그룹에 연결한 노트입니다. 상태는 소유자의 설정에 따라 업데이트됩니다."
     },
     "groupEvent": {
       "system": "시스템",
@@ -765,7 +773,9 @@
       "muteAllDisabled": "{{actor}} 님이 전체 채팅 금지를 해제했습니다",
       "groupAvatarUpdated": "{{actor}} 님이 그룹 프로필 사진을 바꿨습니다",
       "policyEnabled": "{{actor}} 님이 “{{policy}}”을(를) 켰습니다",
-      "policyDisabled": "{{actor}} 님이 “{{policy}}”을(를) 껐습니다"
+      "policyDisabled": "{{actor}} 님이 “{{policy}}”을(를) 껐습니다",
+      "messagePinned": "{{actor}}님이 메시지를 고정했습니다",
+      "messageUnpinned": "{{actor}}님이 메시지 고정을 해제했습니다"
     },
     "clearHistoryWarning": "이 대화의 모든 메시지가 영구적으로 삭제됩니다.",
     "clear": "지우기",
@@ -826,8 +836,6 @@
     "attachments": {
       "photos": "사진/동영상",
       "mediaHub": "미디어",
-      "mediaPhoto": "사진",
-      "mediaVideo": "동영상",
       "camera": "카메라",
       "voiceCall": "음성/영상 통화",
       "location": "위치",
@@ -835,7 +843,8 @@
       "friendCard": "명함",
       "favorites": "즐겨찾기",
       "quickReply": "빠른 답장",
-      "transfer": "송금"
+      "transfer": "송금",
+      "mediaAlbum": "앨범"
     },
     "photoEditor": {
       "title": "사진 편집",
@@ -957,8 +966,11 @@
       "workStatus": {
         "working": "영업 중",
         "closed": "영업 종료",
-        "unlisted": "게시 중지, 상태가 바뀌었을 수 있음"
-      }
+        "unlisted": "게시 중지, 상태가 바뀌었을 수 있음",
+        "offShelf": "판매 중지"
+      },
+      "sectionSendFailed": "보내지 못했습니다. 다시 시도해 주세요",
+      "sectionSending": "보내는 중…"
     },
     "voice": {
       "cancelTip": "손을 떼면 전송 취소",
@@ -988,7 +1000,55 @@
     "clearHistoryConfirmGroupOwner": "‘내 기록만 삭제’는 본인 기록만 지웁니다. ‘모두의 기록 삭제’는 모든 멤버의 대화 기록을 삭제하며 되돌릴 수 없습니다.",
     "clearHistoryConfirmDirect": "채팅 기록을 삭제할까요? 상대방의 기록도 함께 삭제되며 되돌릴 수 없습니다.",
     "clearHistoryDone": "지웠습니다",
-    "clearHistoryDoneDirect": "양쪽 채팅 기록을 삭제했습니다"
+    "clearHistoryDoneDirect": "양쪽 채팅 기록을 삭제했습니다",
+    "mediaSend": {
+      "title": "{{count}}개 항목 보내기",
+      "captionPlaceholder": "설명 추가 (선택)",
+      "confirm": "보내기 ({{count}})"
+    },
+    "targetPicker": {
+      "title": "채팅 선택",
+      "multi": "여러 개 선택",
+      "single": "하나만 선택",
+      "searchPlaceholder": "친구 또는 그룹 검색",
+      "recentForwards": "최근 전달",
+      "clearRecent": "지우기",
+      "removeRecent": "최근 전달에서 {{name}} 삭제",
+      "recentChats": "최근 채팅",
+      "contacts": "연락처",
+      "groups": "내 그룹",
+      "noMatch": "일치하는 채팅이 없습니다",
+      "noContacts": "아직 친구가 없습니다",
+      "noGroups": "아직 그룹이 없습니다",
+      "noChats": "아직 채팅이 없습니다",
+      "contactsFailed": "연락처를 불러오지 못했습니다",
+      "limitReached": "한 번에 최대 {{count}}개까지 선택할 수 있습니다",
+      "sendSelected": "보내기 ({{count}})",
+      "nameSeparator": ", ",
+      "resolveFailed": "{{names}}에게 보낼 수 없습니다: {{reason}}",
+      "partialDelivered": "{{count}}개 채팅에는 이미 보내서 선택에서 제외했습니다."
+    },
+    "quickChat": {
+      "expand": "전체 채팅 열기"
+    },
+    "pin": {
+      "pin": "고정",
+      "unpin": "고정 해제",
+      "tag": "고정",
+      "failed": "작업에 실패했습니다",
+      "fallbackPreview": "[메시지]",
+      "bannerA11y": "고정 메시지: {{preview}}"
+    },
+    "clearRequest": {
+      "accept": "동의",
+      "decline": "거절",
+      "failed": "작업에 실패했습니다"
+    },
+    "clearHistoryBothSides": "양쪽 모두 삭제",
+    "clearHistoryBothSidesHint": "상대방이 동의해야 상대방의 기록도 삭제됩니다",
+    "clearHistoryConfirmTitle": "대화 기록을 삭제할까요?",
+    "clearHistoryRequestFailed": "내 기록은 삭제했지만 양쪽 삭제 요청을 보내지 못했습니다",
+    "clearHistoryRequestSent": "삭제했습니다. 상대방에게 삭제 요청을 보냈습니다"
   },
   "messages": {
     "title": "메시지",
@@ -1043,7 +1103,7 @@
     "swipeDelete": "삭제",
     "deleteChat": "채팅 삭제",
     "deleteChatConfirm": "'{{name}}'의 채팅과 로컬 메시지를 삭제할까요?",
-    "deleteChatConfirmDirect": "'{{name}}'님과의 채팅 기록을 삭제할까요? 상대방의 기록도 함께 삭제되며 되돌릴 수 없습니다.",
+    "deleteChatConfirmDirect": "'{{name}}'님과의 채팅 기록을 삭제할까요? 내 기록만 삭제되며 상대방의 기록은 유지됩니다.",
     "newGroupTitle": "그룹 채팅 시작",
     "newGroupNamePlaceholder": "그룹 이름",
     "newGroupSelectMembers": "연락처 선택",
@@ -1121,6 +1181,7 @@
       "unpin": "고정 해제",
       "edit": "편집",
       "unlist": "내리기",
+      "venueOffShelf": "매장 판매 중지로 표시",
       "relist": "올리기",
       "more": "더보기",
       "restore": "복원",
@@ -1422,7 +1483,8 @@
       "openSenderChat": "{{name}}님과 채팅",
       "openGroupChat": "그룹 채팅 {{name}} 열기",
       "viewContactDetails": "{{name}}님의 프로필 보기",
-      "viewGroupDetails": "{{name}} 그룹 정보 보기"
+      "viewGroupDetails": "{{name}} 그룹 정보 보기",
+      "statusOffShelf": "판매 중지"
     },
     "groupPicker": {
       "title": "그룹 편집",
@@ -1442,7 +1504,8 @@
       "selectedCount": "{{count}}개 선택됨",
       "selectAll": "전체 선택",
       "clearAll": "선택 해제",
-      "next": "다음"
+      "send": "보내기 ({{count}})",
+      "moreOptions": "기타 옵션"
     },
     "loadFailed": "노트를 불러오지 못했어요. 네트워크 확인 후 다시 시도해 주세요",
     "collect": {
@@ -1450,29 +1513,34 @@
       "editTitle": "저장 제목 편집",
       "groupHint": "먼저 그룹을 선택한 뒤 제목을 수정할 수 있습니다.",
       "ungrouped": "미분류",
-      "titleHint": "저장하기 전에 기본 제목을 수정할 수 있습니다.",
-      "titleLabel": "저장 제목"
+      "titleHint": "찾기 쉬운 제목을 입력하세요. 비워 두면 원래 제목을 사용합니다.",
+      "titleLabel": "저장 제목",
+      "untitled": "제목 없는 노트",
+      "skipTitleNextTime": "다음부터 제목 편집 안 함",
+      "createGroup": "새 그룹",
+      "createGroupPlaceholder": "그룹 이름 입력",
+      "createGroupConfirm": "만들기",
+      "createGroupFailed": "그룹을 만들지 못했습니다",
+      "createGroupFailedHint": "잠시 후 다시 시도해 주세요."
     },
     "shareToChat": {
-      "workStatusWarning": "주문이 영업 종료 또는 게시 중지일 수 있습니다. 확인 후에도 보낼 수 있습니다.",
-      "confirmTitle": "노트 보내기",
       "partialFailed": "{{count}}건을 보내지 못했습니다. 실패한 항목만 다시 보낼 수 있어요.",
       "limitExceeded": "한 번에 최대 {{count}}개의 노트를 공유할 수 있습니다. 다른 일괄 작업에는 제한이 없습니다.",
       "failedTitle": "전송 실패",
-      "failedMessage": "지금은 이 노트를 보낼 수 없습니다. 다시 시도해 주세요.",
-      "sending": "보내는 중...",
-      "sendSelected": "채팅 {{count}}곳에 보내기",
-      "retryFailed": "실패한 {{count}}건 다시 보내기",
-      "loadFailed": "채팅을 불러오지 못했어요. 다시 시도해 주세요",
-      "empty": "보낼 수 있는 채팅이 없어요",
-      "groupHint": "그룹",
-      "friendHint": "친구",
-      "searchPlaceholder": "친구 또는 그룹 검색",
-      "noMatch": "일치하는 친구나 그룹이 없습니다"
+      "batchPreview": "노트 {{count}}개",
+      "singlePreview": "[노트] {{title}}"
     },
     "recycleBin": "휴지통",
     "recycleBinHint": "삭제한 노트를 여기에서 복원할 수 있으며 30일 후 자동으로 지워집니다.",
-    "recycleBinTitle": "휴지통"
+    "recycleBinTitle": "휴지통",
+    "settings": {
+      "entry": "설정",
+      "title": "노트 설정",
+      "collectSection": "노트를 추가할 때",
+      "chooseGroup": "그룹 선택",
+      "editTitle": "제목 편집",
+      "collectHint": "「그룹 선택」을 끄면 미분류에 저장되고, 「제목 편집」을 끄면 원래 제목을 그대로 사용합니다."
+    }
   },
   "tempChats": {
     "title": "좌석",
@@ -1621,17 +1689,8 @@
     },
     "shareCard": {
       "title": "서클 카드 보내기",
-      "confirmTitle": "서클 카드 보내기",
-      "confirmMessage": "'{{circleName}}'을(를) {{conversationName}}에게 보낼까요?",
-      "sentTitle": "전송됨",
-      "sentMessage": "서클 카드를 보냈습니다.",
       "failedTitle": "전송 실패",
-      "loadFailed": "채팅을 불러오지 못했습니다. 나중에 다시 시도하세요.",
-      "sending": "전송 중...",
-      "rowFallback": "서클 카드 보내기",
-      "pickConversation": "채팅 선택",
-      "description": "'{{circleName}}' 서클 카드를 채팅으로 보냅니다. 상대는 탭하여 가입을 신청할 수 있습니다.",
-      "empty": "보낼 수 있는 채팅 없음"
+      "preview": "[서클 카드] {{circleName}}"
     },
     "create": {
       "title": "서클 만들기",
@@ -3354,7 +3413,18 @@
       "muteAllDisabled": "전체 채팅 금지가 해제되었습니다",
       "groupAvatarUpdated": "그룹 프로필 사진이 바뀌었습니다",
       "policyEnabled": "“{{policy}}”이(가) 켜졌습니다",
-      "policyDisabled": "“{{policy}}”이(가) 꺼졌습니다"
+      "policyDisabled": "“{{policy}}”이(가) 꺼졌습니다",
+      "messagePinned": "메시지가 고정되었습니다",
+      "messageUnpinned": "고정 메시지가 해제되었습니다",
+      "clearRequestSent": "양쪽 대화 기록 삭제를 요청했습니다. 상대방의 동의를 기다리는 중입니다",
+      "clearRequestReceived": "상대방이 양쪽 대화 기록 삭제를 요청했습니다",
+      "clearRequestAcceptedBySelf": "동의했습니다. 내 대화 기록이 삭제되었습니다",
+      "clearRequestDeclinedBySelf": "양쪽 기록 삭제를 거절했습니다",
+      "clearRequestAcceptedByPeer": "상대방이 동의하여 상대방의 대화 기록이 삭제되었습니다",
+      "clearRequestDeclinedByPeer": "상대방이 양쪽 기록 삭제를 거절했습니다",
+      "clearRequestNeutral": "양쪽 대화 기록 삭제 요청",
+      "clearRequestAcceptedNeutral": "양쪽 기록 삭제가 승인되었습니다",
+      "clearRequestDeclinedNeutral": "양쪽 기록 삭제가 거절되었습니다"
     },
     "silence": {
       "minutes": "{{n}}분",
@@ -3801,7 +3871,8 @@
     "AUTH_LOGIN_RECOVERY_LIMITED": "복구 신청이 너무 많습니다. 기존 신청이 처리된 뒤 다시 시도해 주세요",
     "AUTH_SECURITY_QUESTIONS_INVALID": "서로 다른 질문 2개를 선택하고 답을 입력하세요",
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "설정된 보안 질문이 없습니다. 신뢰할 수 있는 기기에서 로그인을 확인하세요",
-    "AUTH_SECURITY_ANSWERS_INVALID": "보안 질문의 답이 올바르지 않습니다"
+    "AUTH_SECURITY_ANSWERS_INVALID": "보안 질문의 답이 올바르지 않습니다",
+    "CHAT_CLEAR_REQUEST_HANDLED": "이미 처리된 요청입니다"
   },
   "qr": {
     "loginDeprecatedTitle": "QR 로그인을 사용할 수 없습니다",

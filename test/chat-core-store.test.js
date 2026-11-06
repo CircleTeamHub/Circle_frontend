@@ -2846,3 +2846,86 @@ test('loadChatConversations hands callers the list without conversations left mi
   const returned = await pending;
   assert.deepEqual(Array.from(returned, (c) => c.id), ['stay']);
 });
+
+test('accepting an old two-way clear keeps the messages sent after the request', () => {
+  const deleted = [];
+  let wiped = false;
+  const { useChatStore } = loadChatStore({
+    localDb: {
+      deleteLocalMessagesBelow: async (id, height) => { deleted.push([id, height]); },
+      clearLocalConversationMessages: async () => { wiped = true; },
+    },
+  });
+  const store = useChatStore.getState();
+  const later = msg({ id: 'm8', height: 8 });
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      lastMessage: later,
+      unreadCount: 2,
+      pinnedMessage: { messageId: 'm4', height: 4, preview: 'old', pinnedAt: '2026-11-01T00:00:00Z' },
+    }),
+  ]);
+  store.ingestMessages('conv-1', [
+    msg({ id: 'm4', height: 4 }),
+    msg({ id: 'm5', height: 5 }),
+    msg({ id: 'm7', height: 7 }),
+    later,
+  ]);
+
+  // 申请发起时对方清到了 5,同意时双方已经又聊到了 8。
+  useChatStore.getState().clearConversationLocal('conv-1', 5);
+
+  const state = useChatStore.getState();
+  assert.equal(state.messagesByConversation['conv-1'].map((m) => m.id).join(','), 'm7,m8');
+  assert.equal(state.clearedBeforeHeightByConversation['conv-1'], 5);
+  assert.equal(JSON.stringify(deleted), JSON.stringify([['conv-1', 6]]));
+  assert.equal(wiped, false);
+  const row = state.conversations.find((c) => c.id === 'conv-1');
+  assert.equal(row.lastMessage.id, 'm8');
+  assert.equal(row.unreadCount, 2);
+  // 置顶的那条在水位之下,横幅一起收掉。
+  assert.equal(row.pinnedMessage, null);
+
+  // 水位之上的消息照常入库。
+  useChatStore.getState().ingestMessages('conv-1', [msg({ id: 'm9', height: 9 })]);
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 3);
+});
+
+test('a full clear also drops the pinned banner', () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      pinnedMessage: { messageId: 'm2', height: 2, preview: 'hi', pinnedAt: '2026-11-01T00:00:00Z' },
+    }),
+  ]);
+  store.ingestMessages('conv-1', [msg({ id: 'm1', height: 1 }), msg({ id: 'm2', height: 2 })]);
+  useChatStore.getState().clearConversationLocal('conv-1', 2);
+  const row = useChatStore.getState().conversations.find((c) => c.id === 'conv-1');
+  assert.equal(row.pinnedMessage, null);
+  assert.equal(useChatStore.getState().messagesByConversation['conv-1'].length, 0);
+});
+
+test('revoking the pinned message removes the banner', async () => {
+  const { useChatStore } = loadChatStore();
+  const store = useChatStore.getState();
+  store.setCurrentUserId('me');
+  store.setConversations([
+    conversation({
+      id: 'conv-1',
+      pinnedMessage: { messageId: 'm1', height: 1, preview: 'secret', pinnedAt: '2026-11-01T00:00:00Z' },
+    }),
+    conversation({
+      id: 'conv-2',
+      pinnedMessage: { messageId: 'other', height: 1, preview: 'keep', pinnedAt: '2026-11-01T00:00:00Z' },
+    }),
+  ]);
+  // 会话没打开过、内存里没有这条消息,横幅也要收掉。
+  await useChatStore.getState().applyRevoke('conv-1', 'm1', 'peer', { height: 1, senderId: 'peer' });
+  await useChatStore.getState().applyRevoke('conv-2', 'm1', 'peer', { height: 1, senderId: 'peer' });
+  const rows = useChatStore.getState().conversations;
+  assert.equal(rows.find((c) => c.id === 'conv-1').pinnedMessage, null);
+  assert.equal(rows.find((c) => c.id === 'conv-2').pinnedMessage.messageId, 'other');
+});

@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { useTheme, Radius, Spacing, Typography } from '@/theme';
 
-export type MediaSourceAction = 'photo' | 'video' | 'camera';
+export type MediaSourceAction = 'album' | 'camera';
 
 interface MediaSourceSheetProps {
   visible: boolean;
@@ -22,16 +22,11 @@ const MEDIA_ACTIONS: readonly {
   fallback: string;
 }[] = [
   {
-    id: 'photo',
+    // 照片和视频在同一个系统相册里一起选,不再分两个入口。
+    id: 'album',
     icon: 'images-outline',
-    labelKey: 'chat.attachments.mediaPhoto',
-    fallback: '照片',
-  },
-  {
-    id: 'video',
-    icon: 'videocam-outline',
-    labelKey: 'chat.attachments.mediaVideo',
-    fallback: '视频',
+    labelKey: 'chat.attachments.mediaAlbum',
+    fallback: '相册',
   },
   {
     id: 'camera',

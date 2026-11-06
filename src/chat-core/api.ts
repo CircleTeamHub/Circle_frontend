@@ -1116,10 +1116,11 @@ export async function setChatBurnDuration(
  * G-14 清空聊天记录:私聊由服务端推进双方水位，群聊只推进本人水位；
  * 本地时间线/预览/未读同步清空 —— 不再是「清内存转头又拉回来」的假清空。
  */
+/** 返回服务端清到的水位(没有可清的为 0)。 */
 export async function clearChatConversationHistory(
   conversationId: string,
   options: { forEveryone?: boolean } = {},
-): Promise<void> {
+): Promise<number> {
   const sameSession = sessionGate();
   const forEveryone = options.forEveryone ?? false;
   const operation = getPendingHistoryClear(conversationId, forEveryone);
@@ -1151,6 +1152,45 @@ export async function clearChatConversationHistory(
       .getState()
       .clearConversationLocal(conversationId, result?.clearedBeforeHeight);
   }
+  return result?.clearedBeforeHeight ?? 0;
+}
+
+/** 私聊:申请双向清空。先清了自己的(拿到 clearedBeforeHeight),再请对方授权清到同一位置。 */
+export async function requestChatHistoryClear(
+  conversationId: string,
+  targetHeight: number,
+): Promise<{ requestId: string }> {
+  return apiClient<{ requestId: string }>(
+    `/chat/conversations/${conversationId}/clear-requests`,
+    { method: 'POST', body: { targetHeight } },
+  );
+}
+
+/** 私聊:同意 / 拒绝对方的双向清空申请。同意后服务端会清掉我这边的记录并推送。 */
+export async function respondChatHistoryClear(
+  requestId: string,
+  accept: boolean,
+): Promise<{ accepted: boolean }> {
+  return apiClient<{ accepted: boolean }>(
+    `/chat/clear-requests/${requestId}/respond`,
+    { method: 'POST', body: { accept } },
+  );
+}
+
+/**
+ * 置顶 / 取消置顶一条消息(群里群主管理员,私聊双方)。成功后重拉这个会话,
+ * 横幅立刻跟着变;其他成员靠服务端那条系统提示触发各自的刷新。
+ */
+export async function setChatPinnedMessage(
+  conversationId: string,
+  messageId: string | null,
+): Promise<void> {
+  const sameSession = sessionGate();
+  await apiClient(
+    `/chat/conversations/${conversationId}/pinned-message`,
+    messageId ? { method: 'PUT', body: { messageId } } : { method: 'DELETE' },
+  );
+  if (sameSession()) await refreshChatConversation(conversationId, { shouldApply: sameSession });
 }
 
 export async function updateChatConversationPreferences(

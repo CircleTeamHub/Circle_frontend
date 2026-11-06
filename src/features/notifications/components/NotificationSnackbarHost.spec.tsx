@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Animated } from 'react-native';
 import { NotificationSnackbarHost } from './NotificationSnackbarHost';
 import { useNotificationSnackbarStore } from '@/features/notifications/store/use-notification-snackbar-store';
@@ -8,6 +8,7 @@ import { appSettingsDefaults, useAppSettingsStore } from '@/features/profile/sto
 // 不重新计时(否则一个活跃的群就能让横幅一直挂着,别的会话也轮不到)。
 
 const mockNotify = jest.fn();
+const mockPush = jest.fn();
 let mockActiveConversationId: string | null = null;
 
 jest.mock('@/storage', () => ({ mmkvJsonStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } }));
@@ -16,7 +17,7 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 0, left: 0, right: 0 }),
 }));
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), navigate: jest.fn() }),
+  useRouter: () => ({ push: mockPush, navigate: jest.fn() }),
   useSegments: () => [],
 }));
 jest.mock('react-i18next', () => ({
@@ -70,6 +71,7 @@ function chat(id: string, summary: string, conversationID = 'group-a') {
 beforeEach(() => {
   jest.useFakeTimers();
   mockNotify.mockClear();
+  mockPush.mockClear();
   mockActiveConversationId = null;
   useNotificationSnackbarStore.getState().reset();
   useAppSettingsStore.setState({ settings: { ...appSettingsDefaults } });
@@ -175,4 +177,16 @@ it('a banner whose conversation is opened mid-exit does not come back after leav
   } finally {
     timing.mockRestore();
   }
+});
+
+it('tapping a chat banner opens the half-screen quick chat on top of the current page', () => {
+  render(<NotificationSnackbarHost />);
+  act(() => {
+    useNotificationSnackbarStore.getState().enqueueChatMessage(chat('m1', '在吗'));
+  });
+  fireEvent.press(screen.getByLabelText('group-a. 在吗'));
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/quick-chat',
+    params: expect.objectContaining({ conversationID: 'group-a', sourceID: 'group-a', searchedMsgID: 'm1' }),
+  });
 });

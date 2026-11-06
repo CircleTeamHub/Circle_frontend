@@ -63,6 +63,13 @@ import {
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { reuseUnchanged } from '@/utils/structural-sharing';
 import { useAuthStore } from '@/stores/authStore';
+import { GroupBoundNotesReadOnly } from '@/features/notes/components/GroupBoundNotesReadOnly';
+import {
+  NOTE_WORK_STATUS_ICON,
+  noteWorkStatusFill,
+  SET_NOTE_WORK_STATUSES,
+  type SetNoteWorkStatus,
+} from '@/features/notes/utils/work-status';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -220,6 +227,9 @@ function NoteManagementContent() {
   const [circleRole, setCircleRole] = useState<GroupRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // 群上下文至少成功加载过一次,身份(群主/成员)已经确定。回到页面时的重载和重载失败
+  // 都不再把成员的只读列表换成转圈或群主视图。
+  const [contextLoaded, setContextLoaded] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [cachedNotes] = useState(getCachedNotes);
   const [notes, setNotes] = useState<NoteSummary[]>(cachedNotes?.value ?? []);
@@ -274,6 +284,7 @@ function NoteManagementContent() {
       if (!isCurrent()) return;
       setMembers(directory);
       setAccessDenied(false);
+      setContextLoaded(true);
       setCircleRole(
         detail && detail.myStatus === 'ACTIVE' ? detail.myRole : null,
       );
@@ -549,25 +560,17 @@ function NoteManagementContent() {
 
   const renderNoteRow = (note: NoteSummary) => {
     const workStatus = resolveManagedWorkStatus(note);
-    const statusButtons: {
-      value: Exclude<NoteWorkStatus, 'UNSET'>;
-      label: string;
-      icon: 'checkmark-circle-outline' | 'moon-outline';
-      fill: string;
-    }[] = [
-      {
-        value: 'WORKING',
-        label: t('chat.groupManagement.noteWorking', { defaultValue: '开工' }),
-        icon: 'checkmark-circle-outline',
-        fill: colors.workingFill,
-      },
-      {
-        value: 'CLOSED',
-        label: t('chat.groupManagement.noteClosed', { defaultValue: '打烊' }),
-        icon: 'moon-outline',
-        fill: colors.closedFill,
-      },
-    ];
+    const statusLabels: Record<SetNoteWorkStatus, string> = {
+      WORKING: t('chat.groupManagement.noteWorking', { defaultValue: '开工' }),
+      CLOSED: t('chat.groupManagement.noteClosed', { defaultValue: '打烊' }),
+      OFF_SHELF: t('chat.groupManagement.noteOffShelf', { defaultValue: '下架' }),
+    };
+    const statusButtons = SET_NOTE_WORK_STATUSES.map((value) => ({
+      value,
+      label: statusLabels[value],
+      icon: NOTE_WORK_STATUS_ICON[value],
+      fill: noteWorkStatusFill(value, colors),
+    }));
     return (
       <View key={note.id} style={s.noteItem}>
         <NoteCard
@@ -653,13 +656,24 @@ function NoteManagementContent() {
   );
 
   let body: React.ReactNode;
-  if (loading && !cachedNotes) {
+  if (accessDenied) {
+    body = (
+      <View style={s.center}>
+        <Text style={d.centerText}>
+          {t('chat.groupManagement.noteRestricted', {
+            defaultValue: '仅群主可以管理本群笔记',
+          })}
+        </Text>
+      </View>
+    );
+  } else if (!contextLoaded && loading) {
+    // 身份还没确定时不先画群主视图(哪怕有笔记缓存),免得成员先看到「本群还没有关联笔记」。
     body = (
       <View style={s.center}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
-  } else if (error && !cachedNotes) {
+  } else if (!contextLoaded) {
     body = (
       <View style={s.center}>
         <Text style={d.centerText}>
@@ -672,15 +686,14 @@ function NoteManagementContent() {
         </Pressable>
       </View>
     );
-  } else if (accessDenied || (!loading && !error && !isOwner)) {
+  } else if (!isOwner) {
+    // 普通成员:只读看群主绑到本群的笔记和状态。重载期间保持挂载,不丢列表和滚动位置。
     body = (
-      <View style={s.center}>
-        <Text style={d.centerText}>
-          {t('chat.groupManagement.noteRestricted', {
-            defaultValue: '仅群主可以管理本群笔记',
-          })}
-        </Text>
-      </View>
+      <GroupBoundNotesReadOnly
+        conversationID={conversationID}
+        onOpenNote={handleOpenNote}
+        onSourcePress={handleSourcePress}
+      />
     );
   } else {
     body = (
@@ -728,9 +741,11 @@ function NoteManagementContent() {
   return (
     <View style={[s.container, d.container, { paddingTop: insets.top }]}>
       <NavHeader
-        title={t('chat.groupManagement.noteManagement', {
-          defaultValue: '笔记管理',
-        })}
+        title={
+          isOwner || !contextLoaded
+            ? t('chat.groupManagement.noteManagement', { defaultValue: '笔记管理' })
+            : t('chat.groupManagement.groupNotes', { defaultValue: '群笔记' })
+        }
         rightIcon={canBindNotes ? 'add' : undefined}
         onRightPress={canBindNotes ? openNotePicker : undefined}
         rightAccessibilityLabel={bindNoteLabel}

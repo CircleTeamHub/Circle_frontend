@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { SetNoteWorkStatus } from '@/features/notes/utils/work-status';
 import type { NoteStatus } from '@/features/notes/types';
 
 /**
@@ -10,7 +11,7 @@ import type { NoteStatus } from '@/features/notes/types';
  */
 export interface NoteSourceStatusChange {
   sourceNoteId: string;
-  workStatus: 'WORKING' | 'CLOSED' | null;
+  workStatus: SetNoteWorkStatus | null;
   status: NoteStatus;
   available: boolean;
   changedAt: string;

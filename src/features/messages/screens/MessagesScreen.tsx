@@ -1386,7 +1386,7 @@ export default function MessagesScreen() {
               // Fast Refresh 不一定重建已初始化的 i18next resource bundle；
               // 新增词条还没进当前内存时也不能把裸 key 展示给用户。
               defaultValue:
-                "删除「{{name}}」的聊天记录？对方的记录也会同时删除，此操作无法撤销。",
+                "删除「{{name}}」的聊天记录？只删除你这边的记录，对方的不受影响。",
             })
           : t("messages.deleteChatConfirm", { name: conversation.name }),
         conversation.conversationType === "group"
@@ -1411,7 +1411,8 @@ export default function MessagesScreen() {
           {
             text: t("common.delete"),
             style: "destructive",
-            onPress: () => deleteConversation(true),
+            // 私聊左滑只删自己这边;要清对方的记录走聊天信息页的「双向清空」申请,对方同意才清。
+            onPress: () => deleteConversation(false),
           },
         ],
       );

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { DialogOverlay } from '@/components/app/dialog-overlay';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
@@ -48,10 +48,19 @@ export function FloatingModal({
   closeOnBackdropPress = true,
   avoidKeyboard = true,
 }: FloatingModalProps) {
+  // 键盘弹着时点空白处只收键盘:用户多半只是想看清弹窗,不是要放弃正在填的内容。
+  const handleBackdropPress = () => {
+    if (Keyboard.isVisible()) {
+      Keyboard.dismiss();
+      return;
+    }
+    if (closeOnBackdropPress) onClose();
+  };
   const content = (
     <Pressable
       style={s.center}
-      onPress={closeOnBackdropPress ? onClose : undefined}
+      onPress={handleBackdropPress}
+      testID="floating-modal-backdrop"
       accessibilityViewIsModal
     >
       <View

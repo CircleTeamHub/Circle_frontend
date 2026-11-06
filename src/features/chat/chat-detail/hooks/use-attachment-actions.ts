@@ -1,5 +1,5 @@
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from 'react';
-import { router } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { type AttachmentId } from '@/features/chat/chat-detail/constants';
 import { Alert } from 'react-native';
 import { type FriendProfile } from '@/services/api/friends';
@@ -13,8 +13,6 @@ import { type UserCollection } from '@/services/api/collections';
 import { resolveCollectionSendPlan } from '@/features/chat/utils/message-collection';
 import { logChatSendFailure } from '@/features/chat/chat-detail/helpers';
 import { type TFunction } from 'i18next';
-import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
-import { withFreshNoteSourceStatus } from '@/features/chat/utils/note-card-fresh-status';
 
 export interface AttachmentActionsParams {
   t: TFunction<"translation", undefined>;
@@ -57,14 +55,15 @@ export function useAttachmentActions({
   handleOpenLocationPicker,
   setMediaSourceSheetVisible,
 }: AttachmentActionsParams) {
+  const chatRouter = useChatRouter();
   const openSharePicker = useCallback(
     (type: 'note' | 'friend' | 'favorite' | 'quick-reply') => {
-      router.push({
+      chatRouter.pushOverChat({
         pathname: '/(tabs)/messages/share-picker',
         params: { type, ...(type === 'favorite' ? { conversationID } : {}) },
       });
     },
-    [conversationID],
+    [chatRouter, conversationID],
   );
 
 
@@ -100,7 +99,7 @@ export function useAttachmentActions({
             return;
           }
           if (!sourceID) return;
-          router.push({
+          chatRouter.pushOverChat({
             pathname: '/(tabs)/messages/transfer-composer',
             params: {
               recipientId: sourceID,
@@ -111,7 +110,7 @@ export function useAttachmentActions({
           return;
       }
     },
-    [
+    [chatRouter, 
       avatarUrl,
       conversationTitle,
       conversationType,
@@ -229,7 +228,7 @@ export function useAttachmentActions({
   );
 
   const handlePickFavorite = useCallback(
-    async (item: UserCollection, additionalMessage = '', skipStatusWarning = false) => {
+    async (item: UserCollection, additionalMessage = '') => {
       if (!sourceID || isPreviewMode) return;
 
       // 收藏的是啥就原样发啥：能按原类型还原的（文本/语音/笔记/名片）忠实重建，
@@ -248,29 +247,6 @@ export function useAttachmentActions({
             }),
           );
         }
-        return;
-      }
-
-      // 收藏里的笔记卡片是收藏时的状态快照，提醒前按来源实时状态重取。
-      const freshNoteCard =
-        plan.kind === 'note' && !skipStatusWarning
-          ? ((await withFreshNoteSourceStatus([plan.noteCard]))[0] ?? plan.noteCard)
-          : null;
-      if (!mountedRef.current) return;
-      if (freshNoteCard && shouldWarnNoteWorkStatus(freshNoteCard)) {
-        Alert.alert(
-          t('chat.forward.workStatusWarningTitle', { defaultValue: '订单状态可能变化' }),
-          t('chat.forward.workStatusWarning', {
-            defaultValue: '这条笔记标记为打烊或已下架，确认后仍会继续发送。',
-          }),
-          [
-            { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-            {
-              text: t('common.send', { defaultValue: '继续发送' }),
-              onPress: () => void handlePickFavorite(item, additionalMessage, true),
-            },
-          ],
-        );
         return;
       }
 

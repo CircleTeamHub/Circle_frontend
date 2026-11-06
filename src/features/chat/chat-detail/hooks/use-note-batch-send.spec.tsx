@@ -1,19 +1,11 @@
 import { startChatSend } from '@/chat-core/send-handle';
-import { sendCardMessage } from '@/chat-core/client';
-import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { sendCardMessage, sendLocationMessage } from '@/chat-core/client';
+import { fetchNoteDetail, importNoteChatMedia } from '@/services/api/notes';
+import { act, renderHook } from '@testing-library/react-native';
 import type { NoteSummary } from '@/features/notes/types';
-import {
-  dismissDialog,
-  useAppDialogStore,
-} from '@/components/app/app-dialog-store';
+import { useAppDialogStore } from '@/components/app/app-dialog-store';
 import { useNoteBatchSend } from './use-note-batch-send';
 
-const mockWithFreshNoteSourceStatus = jest.fn();
-
-jest.mock('@/features/chat/utils/note-card-fresh-status', () => ({
-  withFreshNoteSourceStatus: (...args: unknown[]) =>
-    mockWithFreshNoteSourceStatus(...args),
-}));
 jest.mock('@/services/api/notes', () => ({
   fetchNoteDetail: jest.fn(),
   importNoteChatMedia: jest.fn(),
@@ -27,8 +19,9 @@ jest.mock('@/chat-core/client', () => ({
 jest.mock('@/chat-core/send-handle', () => ({
   startChatSend: jest.fn(),
 }));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/chat-core/send-errors', () => ({
-  getChatSendErrorMessage: jest.fn(),
+  getChatSendErrorMessage: jest.fn((_error: unknown, fallback: string) => fallback),
   reportChatSendFailure: jest.fn(),
 }));
 
@@ -49,7 +42,11 @@ const note: NoteSummary = {
 };
 
 beforeEach(() => {
-  mockWithFreshNoteSourceStatus.mockReset();
+  jest.clearAllMocks();
+  jest.mocked(startChatSend).mockReset().mockImplementation(
+    (send: (callback: () => void) => Promise<unknown>) => ({ queued: true, delivered: Promise.resolve(send(() => {})) }),
+  );
+  jest.mocked(sendCardMessage).mockReset().mockResolvedValue({} as never);
   useAppDialogStore.getState().reset();
 });
 
@@ -57,126 +54,128 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-test('queued status refresh does not show a warning after the chat unmounts', async () => {
-  let resolveFresh!: (value: unknown[]) => void;
-  mockWithFreshNoteSourceStatus.mockReturnValue(
-    new Promise((resolve) => {
-      resolveFresh = resolve;
-    }),
-  );
-  const mountedRef = { current: true };
-  const hook = renderHook(() =>
-    useNoteBatchSend({
-      t: ((key: string) => key) as never,
-      authUser: null,
-      setSendError: jest.fn(),
-      mountedRef,
-      sourceID: 'source-a',
-      conversationID: 'conversation-a',
-      isPreviewMode: false,
-    }),
-  );
+const create = (conversationID: string) => renderHook(() => useNoteBatchSend({
+  t: ((key: string) => key) as never,
+  authUser: null,
+  setSendError: jest.fn(),
+  mountedRef: { current: true },
+  sourceID: conversationID,
+  conversationID,
+  isPreviewMode: false,
+}));
+const cardOnly = { card: true, media: false, showcase: false, location: false };
 
-  let run!: Promise<void>;
-  act(() => {
-    run = hook.result.current.handlePickNoteBatch([note], {
-      card: false,
-      media: false,
-      showcase: false,
-      location: false,
-    });
-  });
-  await waitFor(() => expect(mockWithFreshNoteSourceStatus).toHaveBeenCalled());
-
-  mountedRef.current = false;
-  hook.unmount();
+test('a closed or off-shelf note is sent straight away without a status warning', async () => {
+  const hook = create('conversation-a');
+  const closed: NoteSummary = { ...note, workStatus: 'CLOSED' };
+  const offShelf: NoteSummary = { ...note, id: 'note-b', workStatus: 'OFF_SHELF' };
   await act(async () => {
-    resolveFresh([
-      {
-        noteId: 'note-a',
-        workStatus: 'CLOSED',
-        publicationStatus: 'ACTIVE',
-      },
-    ]);
-    await run;
+    await hook.result.current.handlePickNoteBatch([closed, offShelf], cardOnly);
   });
-
   expect(useAppDialogStore.getState().queue).toHaveLength(0);
+  expect(sendCardMessage).toHaveBeenCalledTimes(2);
+  expect(sendCardMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'conversation-a' }));
 });
 
-test('a second warning waits for the first dialog to be removed', async () => {
-  mockWithFreshNoteSourceStatus.mockImplementation(async (cards: unknown[]) =>
-    cards.map((card) => ({
-      ...(card as object),
-      workStatus: 'CLOSED',
-      publicationStatus: 'ACTIVE',
-    })),
-  );
-  const hook = renderHook(() =>
-    useNoteBatchSend({
+test('batches picked in two chats each send to their own conversation', async () => {
+  const first = create('a');
+  const second = create('b');
+  let a!: Promise<void>;
+  let b!: Promise<void>;
+  act(() => {
+    a = first.result.current.handlePickNoteBatch([note], cardOnly);
+    b = second.result.current.handlePickNoteBatch([note], cardOnly);
+  });
+  await act(async () => { await Promise.all([a, b]); });
+  expect(sendCardMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'a' }));
+  expect(sendCardMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'b' }));
+});
+
+test('nothing is sent once the chat has gone away before the batch starts', async () => {
+  const mountedRef = { current: false };
+  const hook = renderHook(() => useNoteBatchSend({
+    t: ((key: string) => key) as never,
+    authUser: null,
+    setSendError: jest.fn(),
+    mountedRef,
+    sourceID: 'source-a',
+    conversationID: 'conversation-a',
+    isPreviewMode: false,
+  }));
+  await act(async () => {
+    await hook.result.current.handlePickNoteBatch([note], cardOnly);
+  });
+  expect(sendCardMessage).not.toHaveBeenCalled();
+});
+
+describe('handleSendNoteSection', () => {
+  const detail = { ...note, mediaCount: 2, hasLocation: true };
+
+  test.each([
+    ['media', ['media']],
+    ['showcase', ['showcase']],
+  ] as const)('the %s chip copies only that section and sends no card', async (section, expected) => {
+    jest.mocked(fetchNoteDetail).mockResolvedValueOnce(detail as never);
+    jest.mocked(importNoteChatMedia).mockResolvedValueOnce({ items: [] } as never);
+    const hook = create('conversation-a');
+    await act(async () => { await hook.result.current.handleSendNoteSection('note-a', section); });
+    expect(fetchNoteDetail).toHaveBeenCalledWith('note-a');
+    expect(importNoteChatMedia).toHaveBeenCalledWith('note-a', expected);
+    expect(sendCardMessage).not.toHaveBeenCalled();
+  });
+
+  test('the location chip sends the note location as my message', async () => {
+    jest.mocked(fetchNoteDetail).mockResolvedValueOnce({
+      ...detail,
+      sections: { location: { latitude: 31.2, longitude: 121.4, title: '静安', address: '上海' } },
+    } as never);
+    const hook = create('conversation-a');
+    await act(async () => { await hook.result.current.handleSendNoteSection('note-a', 'location'); });
+    expect(importNoteChatMedia).not.toHaveBeenCalled();
+    expect(sendLocationMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'conversation-a' }));
+    expect(sendCardMessage).not.toHaveBeenCalled();
+  });
+
+  test('tapping the same chip again while it is still sending sends it only once', async () => {
+    let resolveDetail!: (value: unknown) => void;
+    const pendingDetail = new Promise((resolve) => { resolveDetail = resolve; });
+    jest.mocked(fetchNoteDetail).mockImplementationOnce(() => pendingDetail as never);
+    jest.mocked(importNoteChatMedia).mockResolvedValue({ items: [] } as never);
+    const hook = create('conversation-a');
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = hook.result.current.handleSendNoteSection('note-a', 'media');
+      second = hook.result.current.handleSendNoteSection('note-a', 'media');
+    });
+    await act(async () => {
+      resolveDetail(detail);
+      await Promise.all([first, second]);
+    });
+    expect(fetchNoteDetail).toHaveBeenCalledTimes(1);
+    expect(importNoteChatMedia).toHaveBeenCalledTimes(1);
+
+    // 发完之后再点是一次新的发送。
+    jest.mocked(fetchNoteDetail).mockResolvedValueOnce(detail as never);
+    await act(async () => { await hook.result.current.handleSendNoteSection('note-a', 'media'); });
+    expect(fetchNoteDetail).toHaveBeenCalledTimes(2);
+  });
+
+  test('a note that cannot be loaded reports a send error and sends nothing', async () => {
+    jest.mocked(fetchNoteDetail).mockRejectedValueOnce(new Error('gone'));
+    const setSendError = jest.fn();
+    const hook = renderHook(() => useNoteBatchSend({
       t: ((key: string) => key) as never,
       authUser: null,
-      setSendError: jest.fn(),
+      setSendError,
       mountedRef: { current: true },
       sourceID: 'source-a',
       conversationID: 'conversation-a',
       isPreviewMode: false,
-    }),
-  );
-  const options = { card: false, media: false, showcase: false, location: false };
-  let first!: Promise<void>;
-  let second!: Promise<void>;
-  act(() => {
-    first = hook.result.current.handlePickNoteBatch([note], options);
-    second = hook.result.current.handlePickNoteBatch([note], options);
+    }));
+    await act(async () => { await hook.result.current.handleSendNoteSection('note-a', 'media'); });
+    expect(setSendError).toHaveBeenCalled();
+    expect(sendCardMessage).not.toHaveBeenCalled();
+    expect(sendLocationMessage).not.toHaveBeenCalled();
   });
-  await waitFor(() => expect(useAppDialogStore.getState().queue).toHaveLength(1));
-  const firstDialog = useAppDialogStore.getState().queue[0];
-
-  let firstSettled = false;
-  void first.then(() => {
-    firstSettled = true;
-  });
-  act(() => {
-    firstDialog.buttons?.find((button) => button.style === 'cancel')?.onPress?.();
-  });
-  await Promise.resolve();
-  expect(firstSettled).toBe(false);
-
-  act(() => {
-    dismissDialog(firstDialog.id);
-  });
-  await first;
-  await waitFor(() => {
-    const [next] = useAppDialogStore.getState().queue;
-    expect(next?.id).toBeDefined();
-    expect(next?.id).not.toBe(firstDialog.id);
-  });
-
-  const secondDialog = useAppDialogStore.getState().queue[0];
-  act(() => {
-    secondDialog.buttons?.find((button) => button.style === 'cancel')?.onPress?.();
-    dismissDialog(secondDialog.id);
-  });
-  await second;
-});
-
-
-test('separate chat warnings preserve each confirmed batch', async () => {
-  jest.mocked(startChatSend).mockImplementation((send: (callback: () => void) => Promise<unknown>) => ({ queued: true, delivered: Promise.resolve(send(() => {})) }));
-  jest.mocked(sendCardMessage).mockResolvedValue({} as never);
-  mockWithFreshNoteSourceStatus.mockImplementation(async (cards: unknown[]) => cards.map(card => ({ ...(card as object), workStatus: 'CLOSED', publicationStatus: 'ACTIVE' })));
-  const create = (conversationID: string) => renderHook(() => useNoteBatchSend({ t: ((key: string) => key) as never, authUser: null, setSendError: jest.fn(), mountedRef: { current: true }, sourceID: conversationID, conversationID, isPreviewMode: false }));
-  const first = create('a'); const second = create('b');
-  const options = { card: true, media: false, showcase: false, location: false };
-  let a!: Promise<void>; let b!: Promise<void>;
-  act(() => { a = first.result.current.handlePickNoteBatch([note], options); b = second.result.current.handlePickNoteBatch([note], options); });
-  await waitFor(() => expect(useAppDialogStore.getState().queue).toHaveLength(2));
-  for (const dialog of [...useAppDialogStore.getState().queue]) {
-    act(() => { dialog.buttons?.[1].onPress?.(); dismissDialog(dialog.id); });
-  }
-  await act(async () => { await Promise.all([a, b]); });
-  expect(sendCardMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'a' }));
-  expect(sendCardMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'b' }));
-  expect(useAppDialogStore.getState().queue).toHaveLength(0);
 });

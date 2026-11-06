@@ -403,12 +403,14 @@
       "videoTooLong": "10分以内の動画を選択してください",
       "videoUnsupported": "MP4、MOV、M4V動画のみ対応しています",
       "videoUnavailable": "動画を再生できません",
-      "videoPreparing": "動画を処理しています…",
       "playVideo": "動画を再生",
       "noteBatchPartialFailed": "{{count}} 件の送信に失敗しました",
       "cardSendFailed": "プロフィールカードを送信できませんでした。もう一度お試しください",
       "favoriteSendFailed": "お気に入りを送信できませんでした。もう一度お試しください",
-      "favoriteLegacyVoiceUnsupported": "この旧バージョンの音声お気に入りは再送信できません"
+      "favoriteLegacyVoiceUnsupported": "この旧バージョンの音声お気に入りは再送信できません",
+      "mediaPreparing": "選択した項目を処理中…",
+      "mediaSendFailed": "写真または動画を送信できませんでした。もう一度お試しください",
+      "captionNotSent": "写真・動画が送信されなかったため、キャプションも送信していません"
     },
     "stickers": {
       "title": "カスタムスタンプ",
@@ -457,31 +459,34 @@
       "edit": "編集",
       "readers": "既読メンバー",
       "readersNone": "まだ誰も読んでいません",
-      "readersMore": "{{names}} ほか {{count}} 人",
       "editing": "メッセージを編集",
       "resend": "再送信",
       "resendConfirm": "このメッセージを再送信しますか？",
-      "retryFailed": "送信失敗。タップして再送信"
+      "retryFailed": "送信失敗。タップして再送信",
+      "readersTitle": "既読メンバー（{{count}}）",
+      "readersFailed": "既読メンバーを読み込めませんでした",
+      "readersMoreFooter": "最初の {{shown}} 人を表示中。ほかに {{count}} 人が既読です"
     },
     "mentions": {
-      "empty": "メンションできるメンバーがいません"
+      "empty": "メンションできるメンバーがいません",
+      "title": "メンションする相手",
+      "count": "メンバー {{count}} 人",
+      "all": "全員",
+      "allHint": "グループの全員に通知"
     },
     "forward": {
-      "noPrivateChats": "個人チャットはまだありません",
-      "noGroupChats": "グループチャットはまだありません",
-      "noMatches": "この分類に一致するチャットがありません",
       "title": "チャットを選択",
-      "searchPlaceholder": "チャットを検索",
       "empty": "転送するメッセージがありません",
-      "group": "グループ",
-      "single": "個人",
       "done": "転送しました",
       "failed": "転送に失敗しました",
       "failedRetry": "後でもう一度お試しください",
       "locationWithDetail": "[位置情報] {{detail}}",
       "unsupported": "このメッセージはまだ転送できません",
-      "workStatusWarningTitle": "注文状態が変わっている可能性があります",
-      "workStatusWarning": "このノートは終了または非公開です。確認後も送信できます。"
+      "sendTo": "{{name}} に送信",
+      "captionPlaceholder": "メッセージを添える（任意）",
+      "batchPreview": "{{count}} 件のメッセージ",
+      "sendToMany": "{{count}} 件のチャットにそれぞれ送信",
+      "captionSkipped": "転送内容が送信されなかったため、メッセージも送信していません"
     },
     "avatarA11y": {
       "self": "自分のプロフィールを見る",
@@ -735,7 +740,10 @@
         "batchLimit": "一度に最大 {{n}} 人まで",
         "removeSelected": "削除 ({{n}})",
         "loadFailed": "要注意メンバーを読み込めませんでした"
-      }
+      },
+      "noteOffShelf": "掲載停止",
+      "groupNotes": "グループのノート",
+      "boundNotesHint": "グループのオーナーがこのグループに関連付けたノートです。状態はオーナーの設定に合わせて更新されます。"
     },
     "groupEvent": {
       "system": "システム",
@@ -765,7 +773,9 @@
       "muteAllDisabled": "{{actor}} が全員発言禁止を解除しました",
       "groupAvatarUpdated": "{{actor}} がグループアイコンを更新しました",
       "policyEnabled": "{{actor}} が「{{policy}}」をオンにしました",
-      "policyDisabled": "{{actor}} が「{{policy}}」をオフにしました"
+      "policyDisabled": "{{actor}} が「{{policy}}」をオフにしました",
+      "messagePinned": "{{actor}} がメッセージを固定しました",
+      "messageUnpinned": "{{actor}} がメッセージの固定を解除しました"
     },
     "clearHistoryWarning": "この会話のすべてのメッセージが完全に削除されます。",
     "clear": "消去",
@@ -826,8 +836,6 @@
     "attachments": {
       "photos": "写真/動画",
       "mediaHub": "メディア",
-      "mediaPhoto": "写真",
-      "mediaVideo": "動画",
       "camera": "カメラ",
       "voiceCall": "音声/ビデオ通話",
       "location": "位置情報",
@@ -835,7 +843,8 @@
       "friendCard": "名刺",
       "favorites": "お気に入り",
       "quickReply": "定型文",
-      "transfer": "送金"
+      "transfer": "送金",
+      "mediaAlbum": "アルバム"
     },
     "photoEditor": {
       "title": "写真を編集",
@@ -957,8 +966,11 @@
       "workStatus": {
         "working": "稼働中",
         "closed": "終了",
-        "unlisted": "非公開・状態が変わっている可能性があります"
-      }
+        "unlisted": "非公開・状態が変わっている可能性があります",
+        "offShelf": "掲載停止"
+      },
+      "sectionSendFailed": "送信できませんでした。もう一度お試しください",
+      "sectionSending": "送信中…"
     },
     "voice": {
       "cancelTip": "指を離すと送信をキャンセル",
@@ -988,7 +1000,55 @@
     "clearHistoryConfirmGroupOwner": "「自分の記録のみ削除」は自分の分だけを消します。「全員の記録を削除」は全メンバーのチャット履歴を削除し、取り消せません。",
     "clearHistoryConfirmDirect": "チャット履歴を削除しますか？相手側の履歴も削除され、元に戻せません。",
     "clearHistoryDone": "削除しました",
-    "clearHistoryDoneDirect": "双方のチャット履歴を削除しました"
+    "clearHistoryDoneDirect": "双方のチャット履歴を削除しました",
+    "mediaSend": {
+      "title": "{{count}} 件を送信",
+      "captionPlaceholder": "説明を追加（任意）",
+      "confirm": "送信（{{count}}）"
+    },
+    "targetPicker": {
+      "title": "チャットを選択",
+      "multi": "複数選択",
+      "single": "単一選択",
+      "searchPlaceholder": "友だちやグループを検索",
+      "recentForwards": "最近の転送先",
+      "clearRecent": "クリア",
+      "removeRecent": "{{name}} を最近の転送先から削除",
+      "recentChats": "最近のチャット",
+      "contacts": "連絡先",
+      "groups": "マイグループ",
+      "noMatch": "一致するチャットはありません",
+      "noContacts": "友だちはまだいません",
+      "noGroups": "グループはまだありません",
+      "noChats": "チャットはまだありません",
+      "contactsFailed": "連絡先を読み込めませんでした",
+      "limitReached": "一度に選べるのは {{count}} 件までです",
+      "sendSelected": "送信（{{count}}）",
+      "nameSeparator": "、",
+      "resolveFailed": "{{names}} に送信できません：{{reason}}",
+      "partialDelivered": "{{count}} 件のチャットには送信済みのため、選択から外しました。"
+    },
+    "quickChat": {
+      "expand": "チャット全体を開く"
+    },
+    "pin": {
+      "pin": "固定",
+      "unpin": "固定を解除",
+      "tag": "固定",
+      "failed": "操作に失敗しました",
+      "fallbackPreview": "[メッセージ]",
+      "bannerA11y": "固定メッセージ：{{preview}}"
+    },
+    "clearRequest": {
+      "accept": "承認する",
+      "decline": "拒否",
+      "failed": "操作に失敗しました"
+    },
+    "clearHistoryBothSides": "双方から削除",
+    "clearHistoryBothSidesHint": "相手が「承認する」を押すと相手側の履歴も削除されます",
+    "clearHistoryConfirmTitle": "チャット履歴を削除しますか？",
+    "clearHistoryRequestFailed": "自分の履歴は消去しましたが、双方消去の申請を送信できませんでした",
+    "clearHistoryRequestSent": "削除しました。相手に削除の申請を送りました"
   },
   "messages": {
     "title": "メッセージ",
@@ -1043,7 +1103,7 @@
     "swipeDelete": "削除",
     "deleteChat": "チャットを削除",
     "deleteChatConfirm": "「{{name}}」のチャットとローカルメッセージを削除しますか？",
-    "deleteChatConfirmDirect": "「{{name}}」とのチャット履歴を削除しますか？相手側の履歴も削除され、元に戻せません。",
+    "deleteChatConfirmDirect": "「{{name}}」とのチャット履歴を削除しますか？削除されるのは自分の履歴だけで、相手側には残ります。",
     "newGroupTitle": "グループチャットを開始",
     "newGroupNamePlaceholder": "グループ名",
     "newGroupSelectMembers": "連絡先を選択",
@@ -1121,6 +1181,7 @@
       "unpin": "固定を解除",
       "edit": "編集",
       "unlist": "非公開にする",
+      "venueOffShelf": "店舗を掲載停止にする",
       "relist": "公開に戻す",
       "more": "その他",
       "restore": "復元",
@@ -1422,7 +1483,8 @@
       "openSenderChat": "{{name}}とチャット",
       "openGroupChat": "グループチャット{{name}}を開く",
       "viewContactDetails": "{{name}}のプロフィールを表示",
-      "viewGroupDetails": "{{name}}のグループ情報を表示"
+      "viewGroupDetails": "{{name}}のグループ情報を表示",
+      "statusOffShelf": "掲載停止"
     },
     "groupPicker": {
       "title": "グループを編集",
@@ -1442,7 +1504,8 @@
       "selectedCount": "{{count}}件選択中",
       "selectAll": "すべて選択",
       "clearAll": "選択を解除",
-      "next": "次へ"
+      "send": "送信（{{count}}）",
+      "moreOptions": "その他のオプション"
     },
     "loadFailed": "ノートを読み込めませんでした。ネットワークを確認して再試行してください",
     "collect": {
@@ -1450,29 +1513,34 @@
       "editTitle": "保存タイトルを編集",
       "groupHint": "先にグループを選び、次にタイトルを編集できます。",
       "ungrouped": "未分類",
-      "titleHint": "保存前に初期タイトルを編集できます。",
-      "titleLabel": "保存タイトル"
+      "titleHint": "見つけやすいタイトルを入力してください。空欄なら元のタイトルを使います。",
+      "titleLabel": "保存タイトル",
+      "untitled": "無題のノート",
+      "skipTitleNextTime": "次回からタイトルを編集しない",
+      "createGroup": "新しいグループ",
+      "createGroupPlaceholder": "グループ名を入力",
+      "createGroupConfirm": "作成",
+      "createGroupFailed": "グループを作成できませんでした",
+      "createGroupFailedHint": "しばらくしてからもう一度お試しください。"
     },
     "shareToChat": {
-      "workStatusWarning": "注文は終了または非公開の可能性があります。確認後も送信できます。",
-      "confirmTitle": "ノートを送信",
       "partialFailed": "{{count}} 件を送信できませんでした。失敗した項目のみ再送できます。",
       "limitExceeded": "一度に共有できるノートは {{count}} 件までです。他の一括操作には影響しません。",
       "failedTitle": "送信に失敗しました",
-      "failedMessage": "現在このノートを送信できません。もう一度お試しください。",
-      "sending": "送信中...",
-      "sendSelected": "{{count}} 件のチャットに送信",
-      "retryFailed": "失敗した {{count}} 件を再送",
-      "loadFailed": "チャットを読み込めませんでした。もう一度お試しください",
-      "empty": "送信できるチャットがありません",
-      "groupHint": "グループ",
-      "friendHint": "友だち",
-      "searchPlaceholder": "友達やグループを検索",
-      "noMatch": "一致する友達やグループがありません"
+      "batchPreview": "{{count}} 件のノート",
+      "singlePreview": "[ノート] {{title}}"
     },
     "recycleBin": "ごみ箱",
     "recycleBinHint": "削除したノートはここから復元できます。30日後に自動的に消去されます。",
-    "recycleBinTitle": "ごみ箱"
+    "recycleBinTitle": "ごみ箱",
+    "settings": {
+      "entry": "設定",
+      "title": "ノート設定",
+      "collectSection": "ノートを追加するとき",
+      "chooseGroup": "グループを選ぶ",
+      "editTitle": "タイトルを編集",
+      "collectHint": "「グループを選ぶ」をオフにすると未分類に、「タイトルを編集」をオフにすると元のタイトルのまま保存します。"
+    }
   },
   "tempChats": {
     "title": "座席",
@@ -1621,17 +1689,8 @@
     },
     "shareCard": {
       "title": "サークルカードを送る",
-      "confirmTitle": "サークルカードを送る",
-      "confirmMessage": "「{{circleName}}」を{{conversationName}}に送りますか？",
-      "sentTitle": "送信しました",
-      "sentMessage": "サークルカードを送信しました。",
       "failedTitle": "送信に失敗しました",
-      "loadFailed": "チャットを読み込めませんでした。後でもう一度お試しください。",
-      "sending": "送信中...",
-      "rowFallback": "サークルカードを送る",
-      "pickConversation": "チャットを選ぶ",
-      "description": "「{{circleName}}」のサークルカードをチャットに送ります。相手はタップして参加申請できます。",
-      "empty": "送信できるチャットがありません"
+      "preview": "[サークル名刺] {{circleName}}"
     },
     "create": {
       "title": "サークルを作成",
@@ -3354,7 +3413,18 @@
       "muteAllDisabled": "全員発言禁止が解除されました",
       "groupAvatarUpdated": "グループアイコンが更新されました",
       "policyEnabled": "「{{policy}}」がオンになりました",
-      "policyDisabled": "「{{policy}}」がオフになりました"
+      "policyDisabled": "「{{policy}}」がオフになりました",
+      "messagePinned": "メッセージが固定されました",
+      "messageUnpinned": "固定メッセージが解除されました",
+      "clearRequestSent": "双方の履歴削除を申請しました。相手の同意を待っています",
+      "clearRequestReceived": "相手が双方の履歴削除を申請しました",
+      "clearRequestAcceptedBySelf": "同意しました。こちらの履歴は削除されました",
+      "clearRequestDeclinedBySelf": "双方の履歴削除を拒否しました",
+      "clearRequestAcceptedByPeer": "相手が同意し、相手側の履歴が削除されました",
+      "clearRequestDeclinedByPeer": "相手が双方の履歴削除を拒否しました",
+      "clearRequestNeutral": "双方の履歴削除の申請",
+      "clearRequestAcceptedNeutral": "双方の履歴削除が承認されました",
+      "clearRequestDeclinedNeutral": "双方の履歴削除が拒否されました"
     },
     "silence": {
       "minutes": "{{n}}分",
@@ -3801,7 +3871,8 @@
     "AUTH_LOGIN_RECOVERY_LIMITED": "復旧の申請が多すぎます。既存の申請が処理されてからもう一度お試しください",
     "AUTH_SECURITY_QUESTIONS_INVALID": "異なる質問を 2 つ選び、答えを入力してください",
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "秘密の質問が設定されていません。信頼済みデバイスでログインを確認してください",
-    "AUTH_SECURITY_ANSWERS_INVALID": "秘密の質問の答えが正しくありません"
+    "AUTH_SECURITY_ANSWERS_INVALID": "秘密の質問の答えが正しくありません",
+    "CHAT_CLEAR_REQUEST_HANDLED": "この申請はすでに処理されています"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",

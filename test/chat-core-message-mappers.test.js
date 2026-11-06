@@ -478,6 +478,37 @@ test('system messages render as localized system notices', () => {
   assert.equal(unknown.text, '');
 });
 
+test('two-way clear notices say who asked and who answered, and carry the request id', () => {
+  const { mapChatMessageDtoToUI } = loadMappers();
+  const system = (content) => dto({ type: 'system', sender: null, content });
+
+  const mine = mapChatMessageDtoToUI(system({ kind: 'clear-request', requestId: 'r1', actorId: 'u1' }), 'u1', 0);
+  assert.equal(mine.text, 'im.notification.clearRequestSent');
+  assert.deepEqual({ ...mine.clearRequest }, { requestId: 'r1', fromSelf: true });
+
+  const theirs = mapChatMessageDtoToUI(system({ kind: 'clear-request', requestId: 'r1', actorId: 'u2' }), 'u1', 0);
+  assert.equal(theirs.text, 'im.notification.clearRequestReceived');
+  assert.deepEqual({ ...theirs.clearRequest }, { requestId: 'r1', fromSelf: false });
+
+  const accepted = mapChatMessageDtoToUI(
+    system({ kind: 'clear-request-answered', requestId: 'r1', accepted: true, actorId: 'u2' }),
+    'u1',
+    0,
+  );
+  assert.equal(accepted.text, 'im.notification.clearRequestAcceptedByPeer');
+  assert.deepEqual({ ...accepted.clearRequestAnswer }, { requestId: 'r1' });
+
+  const declinedBySelf = mapChatMessageDtoToUI(
+    system({ kind: 'clear-request-answered', requestId: 'r1', accepted: false, actorId: 'u1' }),
+    'u1',
+    0,
+  );
+  assert.equal(declinedBySelf.text, 'im.notification.clearRequestDeclinedBySelf');
+
+  const pinned = mapChatMessageDtoToUI(system({ kind: 'message-pinned', actorId: 'u2' }), 'u1', 0);
+  assert.equal(pinned.text, 'im.notification.messagePinned');
+});
+
 test('maps server call-record messages onto the call-record bubble', () => {
   const { mapChatMessageDtoToUI } = loadMappers();
   const ui = mapChatMessageDtoToUI(

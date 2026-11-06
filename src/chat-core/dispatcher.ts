@@ -331,6 +331,9 @@ function rememberRemovedConversation(conversationId: string): void {
 
 const GROUP_METADATA_CHANGE_KINDS: ReadonlySet<string> = new Set([
   'group-notice-updated',
+  // 置顶横幅在会话 DTO 上,收到这两条提示就重拉会话(私聊、群聊都是)。
+  'message-pinned',
+  'message-unpinned',
   'group-avatar-updated',
   'owner-transferred',
 ]);
@@ -763,6 +766,13 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           revision,
         );
       noteLiveMutationRevision(validPayload.conversationId, revision, applied);
+      // 置顶横幅的预览是服务端算的:改的正好是置顶那条,重拉会话拿新预览。
+      const pinned = useChatStore
+        .getState()
+        .conversations.find((c) => c.id === validPayload.conversationId)?.pinnedMessage;
+      if (pinned?.messageId === validPayload.messageId) {
+        scheduleConversationRefresh(validPayload.conversationId, isLive);
+      }
     });
   });
 
@@ -854,12 +864,28 @@ function notifyRemovedFromGroup(
   if (conversation) showTopNotice({ type: 'warning', title });
 }
 
+/** 这条消息是否点名了当前用户,或者是 @所有人。 */
+function mentionsCurrentUser(message: ChatMessageDto, selfId: string | null): boolean {
+  if (message.content['atAll'] === true) return true;
+  const mentions = message.content['mentions'];
+  return (
+    selfId !== null &&
+    Array.isArray(mentions) &&
+    mentions.some(
+      (mention) =>
+        typeof mention === 'object' &&
+        mention !== null &&
+        (mention as { userId?: unknown }).userId === selfId,
+    )
+  );
+}
+
 /**
  * 前台应用内横幅。拆栈时把旧的 chat-snackbar 生产者删掉了,
  * enqueueChatMessage 至今零调用方(NotificationSnackbarHost 仍支持 chat 项),
  * 于是在非会话页收到消息完全没有提示、也没有点进去的入口。
  *
- * 抑制规则:自己发的不弹;当前正打开的那个会话不弹;系统消息不弹;免打扰的会话不弹;
+ * 抑制规则:自己发的不弹;当前正打开的那个会话不弹;系统消息不弹;免打扰的会话不弹(@我 / @所有人 除外);
  * 元信息不足以给出正确标题与跳转目标的不弹。
  *
  * 返回 'needs-conversation' 表示「这条本该弹,但会话元信息还没到」——
@@ -883,7 +909,8 @@ function enqueueForegroundBanner(
   );
   if (!conversation) return 'needs-conversation';
   // 免打扰就是不打扰:端内横幅也不弹。原来只是不响、横幅照弹,群一多横幅停不下来。
-  if (conversation.muted) return 'suppressed';
+  // 例外是强提醒:点名我或 @所有人 的那条照弹(离线推送服务端同样放行这一条)。
+  if (conversation.muted && !mentionsCurrentUser(message, selfId)) return 'suppressed';
 
   const isAssistant = conversation.type === 'SUPPORT';
   const isGroup = conversation.type === 'GROUP' || conversation.type === 'TEMP';

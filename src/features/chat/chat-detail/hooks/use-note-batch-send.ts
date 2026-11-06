@@ -3,55 +3,23 @@ import {
   type RefObject,
   type SetStateAction,
   useCallback,
-  useEffect,
   useRef,
 } from 'react';
 import { type NoteSummary } from '@/features/notes/types';
 import {
-  buildNoteSendTasks,
   appendNoteBatchRun,
-  type ImportedNoteChatMedia,
   type NoteSendOptions,
-  type NoteSendTask,
-  noteSendWindowDelayMs,
-  recordNoteSendAttempt,
-  resolveSendableNoteLocation,
-  sectionsToImport,
 } from '@/features/chat/utils/note-batch-send';
-import { fetchNoteDetail, importNoteChatMedia } from '@/services/api/notes';
+import { sendNotesToConversation } from '@/features/chat/utils/send-notes-to-conversation';
+import { fetchNoteDetail } from '@/services/api/notes';
 import { reportHandledFailure } from '@/observability/report-failure';
-import {
-  sendCardMessage,
-  sendImageMessage,
-  sendLocationMessage,
-  sendVideoMessage,
-} from '@/chat-core/client';
-import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
-import { startChatSend } from '@/chat-core/send-handle';
-import { getChatSendErrorMessage, reportChatSendFailure } from '@/chat-core/send-errors';
-import { devWarn } from '@/utils/dev-log';
+import { getChatSendErrorMessage } from '@/chat-core/send-errors';
+import { showTopNotice } from '@/components/app/top-notice-store';
 import { type TFunction } from 'i18next';
 import { type AuthUser } from '@/stores/authStore';
-import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
-import { withFreshNoteSourceStatus } from '@/features/chat/utils/note-card-fresh-status';
-import {
-  dismissDialog,
-  showDialog,
-  useAppDialogStore,
-} from '@/components/app/app-dialog-store';
 
-function waitForDialogRemoval(id: number): Promise<void> {
-  const isRemoved = () =>
-    !useAppDialogStore.getState().queue.some((dialog) => dialog.id === id);
-  if (isRemoved()) return Promise.resolve();
-  return new Promise((resolve) => {
-    const unsubscribe = useAppDialogStore.subscribe(() => {
-      if (!isRemoved()) return;
-      unsubscribe();
-      resolve();
-    });
-  });
-}
+/** 笔记卡片下方能直接发出的三块内容;「笔记」那块仍然是打开详情。 */
+export type NoteCardSendSection = 'media' | 'showcase' | 'location';
 
 export interface NoteBatchSendParams {
   t: TFunction<"translation", undefined>;
@@ -79,21 +47,11 @@ export function useNoteBatchSend({
   // 批量发笔记的串行队列:第二批在上一批发完之前不开跑,避免两次突发叠进
   // 服务端同一个 20 条/10s 的用户级 send 桶(消息触限会被直接拒收)。
   const noteBatchQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const warningDialogRef = useRef<{
-    id: number;
-    cancel: () => void;
-  } | null>(null);
-  useEffect(
-    () => () => {
-      const pending = warningDialogRef.current;
-      if (!pending) return;
-      warningDialogRef.current = null;
-      pending.cancel();
-    },
-    [],
-  );
   // 真实滚动窗口跨批保留；批量最多用 17/20 个槽位，余下 3 个留给手动发送。
   const noteSendTimestampsRef = useRef<number[]>([]);
+  // 卡片小标签「视频 / 展示 / 位置」正在发的 noteId:section。先拉详情再拷媒体,弱网下要好几秒,
+  // 期间再点同一块直接忽略,否则同一组内容会被发两三遍。
+  const sectionSendsInFlightRef = useRef<Set<string>>(new Set());
   /**
    * 批量发笔记(SharePicker 多选 + 发送选项 sheet 的执行端)。
    *
@@ -110,134 +68,14 @@ export function useNoteBatchSend({
    */
   const runNoteBatchSend = useCallback(
     async (notes: NoteSummary[], options: NoteSendOptions) => {
-      const sections = sectionsToImport(options);
-      let failures = 0;
-      let firstError: unknown = null;
-
-      const perNote: NoteSendTask[][] = [];
-      for (const note of notes) {
-        if (!mountedRef.current) return;
-        let imported: ImportedNoteChatMedia[] = [];
-        // mediaCount=0 的笔记没有任何可拷对象,别浪费服务端 20 次/分钟的拷贝配额。
-        if (sections.length > 0 && note.mediaCount > 0) {
-          try {
-            const importedResult = await importNoteChatMedia(note.id, sections);
-            failures += importedResult.failedCount ?? 0;
-            imported = importedResult.items;
-          } catch (error) {
-            failures += 1;
-            firstError ??= error;
-            reportHandledFailure('chatDetail', 'importNoteMedia', error);
-          }
-        }
-        let location = note.sections?.location ?? null;
-        if (
-          options.location &&
-          !resolveSendableNoteLocation(location) &&
-          // 摘要只带 hasLocation 布尔;明确没有地址的笔记不值得为它拉详情。
-          note.hasLocation !== false
-        ) {
-          try {
-            location = (await fetchNoteDetail(note.id)).sections?.location ?? null;
-          } catch (error) {
-            // 拉不到详情=这条的地址发不出去。必须计入失败,否则「只勾了地址,
-            // 网络一抖」会变成什么都没发还零提示的静默丢失。
-            failures += 1;
-            firstError ??= error;
-            location = null;
-            reportHandledFailure('chatDetail', 'fetchNoteLocation', error);
-          }
-        }
-        perNote.push(buildNoteSendTasks(note, options, imported, location));
-      }
-
-      const tasks = perNote.flat();
-      // 进了发送队列就接着排下一条,不逐条等送达:断线时队列会等重连(最长一分钟),
-      // 逐条等的话一批几十条要一分钟一分钟地挨个超时。节奏照旧按进队时刻控制,
-      // 失败等全部有了结果再汇总。
-      const deliveries: Promise<void>[] = [];
-      const recordFailure = (kind: NoteSendTask['kind'], error: unknown) => {
-        failures += 1;
-        firstError ??= error;
-        reportChatSendFailure(kind, error);
-        devWarn('[ChatDetail] note batch send failed', error);
-      };
-      for (let i = 0; i < tasks.length; i += 1) {
-        if (!mountedRef.current) return;
-        while (mountedRef.current) {
-          const now = Date.now();
-          const delay = noteSendWindowDelayMs(noteSendTimestampsRef.current, now);
-          if (delay <= 0) {
-            noteSendTimestampsRef.current = recordNoteSendAttempt(
-              noteSendTimestampsRef.current,
-              now,
-            );
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-        if (!mountedRef.current) return;
-        const task = tasks[i];
-        const handle = startChatSend((onCreate) => {
-          switch (task.kind) {
-            case 'note-card':
-              return sendCardMessage({
-                conversationId: conversationID,
-                type: 'note-card',
-                payload: {
-                  ...buildNoteCardPayloadFromSummary(
-                    task.note,
-                    authUser?.id ?? null,
-                  ),
-                  ownerId: authUser?.id ?? null,
-                },
-                onCreate,
-              });
-            case 'image':
-              return sendImageMessage({
-                conversationId: conversationID,
-                key: task.key,
-                width: task.width,
-                height: task.height,
-                onCreate,
-              });
-            case 'video':
-              return sendVideoMessage({
-                conversationId: conversationID,
-                key: task.key,
-                width: task.width,
-                height: task.height,
-                duration: task.duration,
-                size: task.size,
-                onCreate,
-              });
-            case 'location':
-              return sendLocationMessage({
-                conversationId: conversationID,
-                latitude: task.latitude,
-                longitude: task.longitude,
-                title: task.title,
-                address: task.address,
-                onCreate,
-              });
-          }
-        });
-        if (handle.queued) {
-          deliveries.push(
-            handle.delivered.then(
-              () => undefined,
-              (error: unknown) => recordFailure(task.kind, error),
-            ),
-          );
-        } else {
-          try {
-            await handle.delivered;
-          } catch (error) {
-            recordFailure(task.kind, error);
-          }
-        }
-      }
-      await Promise.all(deliveries);
+      const { failures, firstError } = await sendNotesToConversation({
+        conversationId: conversationID,
+        notes,
+        options,
+        ownerId: authUser?.id ?? null,
+        sendTimestamps: noteSendTimestampsRef,
+        isActive: () => mountedRef.current,
+      });
 
       if (failures > 0 && mountedRef.current) {
         const countMessage = t('chat.detail.noteBatchPartialFailed', {
@@ -263,98 +101,67 @@ export function useNoteBatchSend({
       }
       const run = appendNoteBatchRun(noteBatchQueueRef.current, async () => {
         if (!mountedRef.current) return;
-        const freshCards = await withFreshNoteSourceStatus(
-          notes.map((note) =>
-            buildNoteCardPayloadFromSummary(note, authUser?.id ?? null),
-          ),
-        );
-        if (!mountedRef.current) return;
-        const freshNotes = notes.map((note, index) => ({
-          ...note,
-          workStatus: freshCards[index]?.workStatus ?? note.workStatus,
-          status: freshCards[index]?.publicationStatus ?? note.status,
-        }));
-        if (freshNotes.some((note) => shouldWarnNoteWorkStatus(note))) {
-          await new Promise<void>((resolve, reject) => {
-            let settled = false;
-            let sending = false;
-            let dialogId = 0;
-            let removed = Promise.resolve();
-            const clear = () => {
-              if (warningDialogRef.current?.id === dialogId) {
-                warningDialogRef.current = null;
-              }
-            };
-            const settle = () => {
-              if (settled) return;
-              settled = true;
-              clear();
-              resolve();
-            };
-            const fail = (error: unknown) => {
-              if (settled) return;
-              settled = true;
-              clear();
-              reject(error);
-            };
-            const settleAfterRemoval = () => {
-              void removed.then(settle);
-            };
-            dialogId = showDialog({
-              deduplicate: false,
-              title: t('chat.forward.workStatusWarningTitle', {
-                defaultValue: '订单状态可能变化',
-              }),
-              message: t('chat.forward.workStatusWarning', {
-                defaultValue:
-                  '这批笔记中有订单标记为打烊或已下架，确认后仍会继续发送。',
-              }),
-              buttons: [
-                {
-                  text: t('common.cancel', { defaultValue: '取消' }),
-                  style: 'cancel',
-                  onPress: settleAfterRemoval,
-                },
-                {
-                  text: t('common.send', { defaultValue: '继续发送' }),
-                  onPress: () => {
-                    if (!mountedRef.current) {
-                      settleAfterRemoval();
-                      return;
-                    }
-                    sending = true;
-                    void runNoteBatchSend(freshNotes, options).then(
-                      () => removed.then(settle),
-                      (error: unknown) => removed.then(() => fail(error)),
-                    );
-                  },
-                },
-              ],
-              cancelable: true,
-              onDismiss: settleAfterRemoval,
-            });
-            removed = waitForDialogRemoval(dialogId);
-            void removed.then(() => { if (!sending) settle(); });
-            warningDialogRef.current = {
-              id: dialogId,
-              cancel: () => {
-                dismissDialog(dialogId);
-                settleAfterRemoval();
-              },
-            };
-          });
-          return;
-        }
-        await runNoteBatchSend(freshNotes, options);
+        await runNoteBatchSend(notes, options);
       });
       // 队列尾永不 reject,后续批次才接得上。
       noteBatchQueueRef.current = run.catch(() => undefined);
       return run;
     },
-    [authUser?.id, isPreviewMode, mountedRef, runNoteBatchSend, sourceID, t],
+    [isPreviewMode, mountedRef, runNoteBatchSend, sourceID],
+  );
+
+  /**
+   * 聊天里笔记卡片下方的「视频 / 展示 / 位置」:以我的名义把这条笔记对应的那一块
+   * 发到当前聊天。卡片上只有计数,先拉详情拿到真实的媒体数和地址,再走同一条
+   * 批量发送管线(媒体由服务端拷进我的 chat/ 命名空间,和批量发笔记同一套限流)。
+   */
+  const handleSendNoteSection = useCallback(
+    (noteId: string, section: NoteCardSendSection) => {
+      if (!sourceID || isPreviewMode) return Promise.resolve();
+      const inFlightKey = `${noteId}:${section}`;
+      const inFlight = sectionSendsInFlightRef.current;
+      if (inFlight.has(inFlightKey)) return Promise.resolve();
+      inFlight.add(inFlightKey);
+      showTopNotice({
+        type: 'info',
+        title: t('chat.noteCard.sectionSending', { defaultValue: '正在发送…' }),
+      });
+      const run = appendNoteBatchRun(noteBatchQueueRef.current, async () => {
+        if (!mountedRef.current) return;
+        let note: NoteSummary;
+        try {
+          note = await fetchNoteDetail(noteId);
+        } catch (error) {
+          reportHandledFailure('chatDetail', 'fetchNoteForSection', error);
+          if (mountedRef.current) {
+            setSendError(
+              getChatSendErrorMessage(
+                error,
+                t('chat.noteCard.sectionSendFailed', { defaultValue: '发送失败，请重试' }),
+              ),
+            );
+          }
+          return;
+        }
+        if (!mountedRef.current) return;
+        await runNoteBatchSend([note], {
+          card: false,
+          media: section === 'media',
+          showcase: section === 'showcase',
+          location: section === 'location',
+        });
+      });
+      const settled = run.catch(() => undefined).finally(() => {
+        inFlight.delete(inFlightKey);
+      });
+      noteBatchQueueRef.current = settled;
+      return run;
+    },
+    [isPreviewMode, mountedRef, runNoteBatchSend, setSendError, sourceID, t],
   );
 
   return {
     handlePickNoteBatch,
+    handleSendNoteSection,
   };
 }

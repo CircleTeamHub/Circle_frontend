@@ -180,8 +180,11 @@ test('登出清理清单点名每一个账号级持久化 store，幸存者留�
     /circle-im-circle-notification.*—— 只有/,
     '它不再是幸存者，旧的「无账号数据」理由必须一起删掉',
   );
+  // 最近转发记的是会话 id 和对方昵称头像,随账号走。
+  assert.match(session, /use-recent-forward-targets-store/);
   // 幸存者是显式决定，不是遗漏
   assert.match(session, /circle-im-app-settings/);
+  assert.match(session, /circle-im-note-collect-preferences/);
   assert.match(session, /circle-im-notification-feedback/);
   // 清单在 performClearLocalSession 里被消费：先重置内存再删持久化
   assert.match(

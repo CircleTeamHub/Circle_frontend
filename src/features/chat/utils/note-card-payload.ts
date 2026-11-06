@@ -60,7 +60,10 @@ export function buildNoteCardPayloadFromSummary(
     // NoteSummary.groups 是当前用户的私人分组；聊天投影不携带它。
     groupNames: [],
     workStatus:
-      note.workStatus === 'WORKING' || note.workStatus === 'CLOSED' || note.workStatus === 'UNSET'
+      note.workStatus === 'WORKING' ||
+      note.workStatus === 'CLOSED' ||
+      note.workStatus === 'OFF_SHELF' ||
+      note.workStatus === 'UNSET'
         ? note.workStatus
         : 'UNSET',
     publicationStatus:

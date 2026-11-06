@@ -27,10 +27,10 @@ test('all group conversation surfaces use the shared default avatar', () => {
     'src/features/messages/screens/MessagesScreen.tsx',
     'src/features/messages/components/TempChatRow.tsx',
     'src/features/search/screens/SearchScreen.tsx',
-    'src/features/chat/screens/ForwardPickerScreen.tsx',
     'src/features/chat/screens/ChatDetailScreen.tsx',
     'src/features/contacts/screens/GroupsScreen.tsx',
-    'src/features/notes/components/ShareNoteSheet.tsx',
+    // 转发 / 笔记分享 / 圈子名片分享共用「选择一个聊天」页,头像统一走 ChatTargetAvatar。
+    'src/features/chat/components/chat-target-picker/ChatTargetAvatar.tsx',
     'src/features/messages/screens/GroupManagementScreen.tsx',
   ];
 
@@ -38,8 +38,18 @@ test('all group conversation surfaces use the shared default avatar', () => {
     assert.match(read(rel), /GroupChatAvatar/, `${rel} 应使用 GroupChatAvatar`);
   }
 
-  const forwardPicker = read(
-    'src/features/chat/screens/ForwardPickerScreen.tsx',
+  // 群聊和临时会话都走群头像(临时会话带时钟角标),只有单聊用人像。
+  const targetAvatar = read(
+    'src/features/chat/components/chat-target-picker/ChatTargetAvatar.tsx',
   );
-  assert.match(forwardPicker, /item\.type === 'GROUP' \|\| item\.type === 'TEMP'/);
+  assert.match(targetAvatar, /if \(target\.kind === 'direct'\) \{\s*return <Avatar\b/);
+  assert.match(targetAvatar, /temporary=\{target\.kind === 'temp'\}/);
+  const targetTypes = read('src/features/chat/components/chat-target-picker/types.ts');
+  assert.match(targetTypes, /kind: dto\.type === 'GROUP' \? 'group' : dto\.type === 'TEMP' \? 'temp' : 'direct'/);
+  for (const rel of [
+    'src/features/chat/components/chat-target-picker/ChatTargetRow.tsx',
+    'src/features/chat/components/chat-target-picker/RecentForwardStrip.tsx',
+  ]) {
+    assert.match(read(rel), /<ChatTargetAvatar\b/, `${rel} 应使用 ChatTargetAvatar`);
+  }
 });

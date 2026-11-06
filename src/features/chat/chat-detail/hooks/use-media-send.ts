@@ -29,9 +29,11 @@ import {
   finishMediaSend,
   type PendingMediaUpload,
   sendImageMessage,
+  sendTextMessage,
   sendVideoMessage,
   startMediaSend,
 } from '@/chat-core/client';
+import { startChatSend } from '@/chat-core/send-handle';
 import { logChatSendFailure } from '@/features/chat/chat-detail/helpers';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import {
@@ -51,7 +53,35 @@ import {
   type MediaUploadScheduler,
 } from '@/features/chat/utils/media-upload-scheduler';
 
-type MediaSendTurn = { wait: Promise<void>; release: () => void };
+/** sent:这一项真的发出去了(服务端已确认),附言据此判断是否还要发。 */
+type MediaSendTurn = { wait: Promise<void>; release: () => void; sent?: () => void };
+
+/**
+ * 给一批媒体排好上屏后的发送顺序:每一项等前一项发完(或失败)才真正发出,
+ * 返回的 done 在最后一项结束后才 resolve(值为是否至少有一项发出),附言就挂在它后面。
+ */
+function chainMediaSends<T>(
+  items: readonly T[],
+  send: (item: T, turn: MediaSendTurn) => Promise<unknown>,
+): { started: Promise<unknown[]>; done: Promise<boolean> } {
+  let anySent = false;
+  const sent = () => {
+    anySent = true;
+  };
+  let previousSend = Promise.resolve();
+  const started = Promise.all(
+    items.map((item) => {
+      const wait = previousSend;
+      let release!: () => void;
+      previousSend = new Promise<void>((resolve) => {
+        // A skipped/failed asset still follows its predecessor in the chain.
+        release = () => { void wait.then(resolve); };
+      });
+      return send(item, { wait, release, sent });
+    }),
+  );
+  return { started, done: previousSend.then(() => anySent) };
+}
 
 export interface MediaSendParams {
   t: TFunction<"translation", undefined>;
@@ -66,6 +96,11 @@ export interface MediaSendParams {
   isGroupChat: boolean;
   isPreviewMode: boolean;
   uploadAndSendVoice: (soundPath: string, duration: number, deliveryId: string) => Promise<void>;
+}
+
+function isVideoAsset(asset: ImagePicker.ImagePickerAsset): boolean {
+  // web 端的选择器不一定带 type,再看一眼 mimeType。
+  return asset.type === 'video' || asset.mimeType?.startsWith('video/') === true;
 }
 
 /**
@@ -89,6 +124,9 @@ export function useMediaSend({
   const [mediaSourceSheetVisible, setMediaSourceSheetVisible] = useState(false);
   const [photoEditorAsset, setPhotoEditorAsset] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
+  // 一次选了多项(或选的是视频)时,先停在确认弹窗里让用户补一句描述。
+  const [pendingMediaAssets, setPendingMediaAssets] =
+    useState<ImagePicker.ImagePickerAsset[] | null>(null);
   // 视频可能接近 100MB。上传成功但 socket ack 失败时，重发只应复用已上传的 key，
   // 不能再传一遍并制造孤儿对象；成功发送或卸载后释放这份内存索引。封面同理。
   const uploadedVideoKeysRef = useRef(
@@ -174,6 +212,7 @@ export function useMediaSend({
           deliveryId,
         });
         finishMediaSend(deliveryId);
+        turn?.sent?.();
       } catch (error) {
         logChatSendFailure(error, {
           kind: 'image',
@@ -348,6 +387,7 @@ export function useMediaSend({
         });
         uploadedVideoKeysRef.current.delete(deliveryId);
         finishMediaSend(deliveryId);
+        turn?.sent?.();
       } catch (error) {
         logChatSendFailure(error, {
           kind: 'video',
@@ -497,117 +537,125 @@ export function useMediaSend({
     reuploadPendingMediaRef.current = reuploadPendingMedia;
   }, [reuploadPendingMedia, reuploadPendingMediaRef]);
 
-  const handlePickLibraryMedia = useCallback(
-    async (kind: 'photo' | 'video') => {
-      if (!sourceID || isPreviewMode) return;
-      if (inFlightRef.current) return;
-      // iOS 选视频时让系统导出成 720p H.264:手机拍的 4K 视频一分钟几百 MB,
-      // 原样上传既慢又常常超过 100MB 上限发不出去。导出发生在选择器关掉之后、
-      // 结果回来之前,长视频要十几秒,期间在顶部提示一下。安卓的选择器不转码。
-      const transcodeOnPick = kind === 'video' && Platform.OS === 'ios';
-      const preparingNotice = transcodeOnPick
-        ? showTopNotice({
-            type: 'info',
-            title: t('chat.detail.videoPreparing', {
-              defaultValue: '正在处理视频…',
-            }),
-            durationMs: 10 * 60 * 1000,
-          })
-        : null;
-      let result: ImagePicker.ImagePickerResult;
-      try {
-        // 直接唤起相册:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
-        const outcome = await launchImageLibraryFast(ImagePicker, {
-          mediaTypes: kind === 'photo' ? ['images'] : ['videos'],
-          preferredAssetRepresentationMode:
-            ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-          quality: 0.85,
-          allowsMultipleSelection: true,
-          selectionLimit: MAX_CHAT_IMAGE_SELECTION,
-          ...(transcodeOnPick
-            ? { videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720 }
-            : {}),
-        });
-        if (outcome.status === 'denied') {
-          Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
-          return;
-        }
-        result = outcome.result;
-      } catch (error) {
-        // 读不出所选文件、iOS 转码不支持这个视频编码或转码失败。调用方是 void 调用,
-        // 不接住的话用户选完什么都没发生,也没有任何提示。
-        reportHandledFailure('chatDetail', 'pickLibraryMedia', error);
-        if (mountedRef.current) {
-          setSendError(
-            kind === 'video'
-              ? t('chat.detail.videoSendFailed', {
-                  defaultValue: '视频发送失败，请重试',
-                })
-              : t('chat.detail.imageSendFailed', {
-                  defaultValue: '图片发送失败，请重试',
-                }),
-          );
-        }
-        return;
-      } finally {
-        if (preparingNotice !== null) hideTopNotice(preparingNotice);
-      }
-      if (result.canceled || result.assets.length === 0) return;
-      const pickedAsset = result.assets[0];
-      if (kind === 'photo') {
-        if (result.assets.length === 1) {
-          // Keep the existing single-photo editor flow intact.
-          setPhotoEditorAsset(pickedAsset);
-          return;
-        }
-        // Every selected photo gets its own optimistic bubble and enters the
-        // bounded scheduler immediately; one failed upload cannot hide others.
-        const oversizedCount = result.assets.reduce(
-          (count, asset) => count + (isChatImageTooLarge(asset.fileSize) ? 1 : 0),
-          0,
-        );
-        if (oversizedCount > 0) {
-          Alert.alert(
-            t('validation.imageTooLarge'),
-            t('validation.imageSizeLimit'),
-          );
-        }
-        let previousSend = Promise.resolve();
-        await Promise.all(
-          result.assets
-            .filter((asset) => !isChatImageTooLarge(asset.fileSize))
-            .map((asset) => {
-              const wait = previousSend;
-              let release!: () => void;
-              previousSend = new Promise<void>((resolve) => {
-                release = () => { void wait.then(resolve); };
-              });
-              return uploadAndSendImageAsset(asset, { wait, release });
-            }),
-        );
+  const handlePickLibraryMedia = useCallback(async () => {
+    if (!sourceID || isPreviewMode) return;
+    if (inFlightRef.current) return;
+    // iOS 选视频时让系统导出成 720p H.264:手机拍的 4K 视频一分钟几百 MB,
+    // 原样上传既慢又常常超过 100MB 上限发不出去。导出发生在选择器关掉之后、
+    // 结果回来之前,长视频要十几秒,期间在顶部提示一下(只选照片时一闪而过)。
+    // 安卓的选择器不转码。
+    const transcodeOnPick = Platform.OS === 'ios';
+    const preparingNotice = transcodeOnPick
+      ? showTopNotice({
+          type: 'info',
+          title: t('chat.detail.mediaPreparing', {
+            defaultValue: '正在处理所选内容…',
+          }),
+          durationMs: 10 * 60 * 1000,
+        })
+      : null;
+    let result: ImagePicker.ImagePickerResult;
+    try {
+      // 直接唤起相册:见 launchImageLibraryFast 的说明(iOS 走秒开的 PHPicker)。
+      const outcome = await launchImageLibraryFast(ImagePicker, {
+        mediaTypes: ['images', 'videos'],
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+        quality: 0.85,
+        allowsMultipleSelection: true,
+        selectionLimit: MAX_CHAT_IMAGE_SELECTION,
+        ...(transcodeOnPick
+          ? { videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720 }
+          : {}),
+      });
+      if (outcome.status === 'denied') {
+        Alert.alert(t('permissions.insufficientTitle'), t('permissions.photoLibrary'));
         return;
       }
-      let previousSend = Promise.resolve();
-      await Promise.all(result.assets.map((asset) => {
-        const wait = previousSend;
-        let release!: () => void;
-        previousSend = new Promise<void>((resolve) => {
-          // A skipped/failed asset still follows its predecessor in the chain.
-          release = () => { void wait.then(resolve); };
+      result = outcome.result;
+    } catch (error) {
+      // 读不出所选文件、iOS 转码不支持这个视频编码或转码失败。调用方是 void 调用,
+      // 不接住的话用户选完什么都没发生,也没有任何提示。
+      reportHandledFailure('chatDetail', 'pickLibraryMedia', error);
+      if (mountedRef.current) {
+        setSendError(
+          t('chat.detail.mediaSendFailed', {
+            defaultValue: '图片或视频发送失败，请重试',
+          }),
+        );
+      }
+      return;
+    } finally {
+      if (preparingNotice !== null) hideTopNotice(preparingNotice);
+    }
+    if (result.canceled || result.assets.length === 0) return;
+    if (result.assets.length === 1 && !isVideoAsset(result.assets[0])) {
+      // 单张照片沿用编辑器:编辑完连同描述一起发。
+      setPhotoEditorAsset(result.assets[0]);
+      return;
+    }
+    const sendable = result.assets.filter(
+      (asset) => isVideoAsset(asset) || !isChatImageTooLarge(asset.fileSize),
+    );
+    if (sendable.length < result.assets.length) {
+      Alert.alert(t('validation.imageTooLarge'), t('validation.imageSizeLimit'));
+    }
+    if (sendable.length > 0) setPendingMediaAssets(sendable);
+  }, [isPreviewMode, sourceID, t, inFlightRef, mountedRef, setSendError]);
+
+  /**
+   * 附言作为一条普通文字消息,等这一批媒体都发完(或失败)再发,保证排在它们后面。
+   * 一项都没发出去时不发附言:否则红气泡长按重发后会排到附言后面,附言也成了孤零零一句。
+   */
+  const sendCaptionAfter = useCallback(
+    (done: Promise<boolean>, caption: string) => {
+      if (!caption) return;
+      void done.then((anySent) => {
+        if (!anySent) {
+          if (mountedRef.current) {
+            setSendError(
+              t('chat.detail.captionNotSent', {
+                defaultValue: '图片或视频没有发出，附言也没有发送',
+              }),
+            );
+          }
+          return;
+        }
+        const handle = startChatSend((onCreate) =>
+          sendTextMessage({ conversationId: conversationID, text: caption, onCreate }),
+        );
+        // 进了队列之后的失败会在气泡上标红、可长按重发;没进队列是本地门禁直接拦下。
+        handle.delivered.catch((error: unknown) => {
+          if (handle.queued) return;
+          if (mountedRef.current) {
+            setSendError(
+              getChatSendErrorMessage(
+                error,
+                t('chat.sendFailed', { defaultValue: '消息发送失败，请重试' }),
+              ),
+            );
+          }
         });
-        return uploadAndSendVideoAsset(asset, { wait, release });
-      }));
+      });
     },
-    [
-      isPreviewMode,
-      sourceID,
-      t,
-      uploadAndSendVideoAsset,
-      uploadAndSendImageAsset,
-      inFlightRef,
-      mountedRef,
-      setSendError,
-    ],
+    [conversationID, mountedRef, setSendError, t],
+  );
+
+  const handleSendPendingMedia = useCallback(
+    (caption: string) => {
+      const assets = pendingMediaAssets;
+      setPendingMediaAssets(null);
+      if (!assets || assets.length === 0) return;
+      // Every selected item gets its own optimistic bubble and enters the
+      // bounded scheduler immediately; one failed upload cannot hide others.
+      const { done } = chainMediaSends(assets, (asset, turn) =>
+        isVideoAsset(asset)
+          ? uploadAndSendVideoAsset(asset, turn)
+          : uploadAndSendImageAsset(asset, turn),
+      );
+      sendCaptionAfter(done, caption);
+    },
+    [pendingMediaAssets, sendCaptionAfter, uploadAndSendImageAsset, uploadAndSendVideoAsset],
   );
 
   const handleTakePhoto = useCallback(async () => {
@@ -627,14 +675,18 @@ export function useMediaSend({
   }, [isPreviewMode, sourceID, t, inFlightRef]);
 
   const handleSendEditedPhoto = useCallback(
-    async (asset: ImagePicker.ImagePickerAsset) => {
-      const accepted = await uploadAndSendImageAsset(asset);
-      if (accepted && mountedRef.current) {
-        setPhotoEditorAsset(null);
-      }
-      return accepted;
+    async (asset: ImagePicker.ImagePickerAsset, caption: string) => {
+      let accepted = false;
+      const { started, done } = chainMediaSends([asset], async (item, turn) => {
+        accepted = await uploadAndSendImageAsset(item, turn);
+      });
+      await started;
+      if (!accepted) return false;
+      sendCaptionAfter(done, caption);
+      if (mountedRef.current) setPhotoEditorAsset(null);
+      return true;
     },
-    [uploadAndSendImageAsset, mountedRef],
+    [uploadAndSendImageAsset, mountedRef, sendCaptionAfter],
   );
 
   const handleMediaSourceSelect = useCallback(
@@ -642,10 +694,8 @@ export function useMediaSend({
       setMediaSourceSheetVisible(false);
       requestAnimationFrame(() => {
         if (!mountedRef.current) return;
-        if (action === 'photo') {
-          void handlePickLibraryMedia('photo');
-        } else if (action === 'video') {
-          void handlePickLibraryMedia('video');
+        if (action === 'album') {
+          void handlePickLibraryMedia();
         } else {
           void handleTakePhoto();
         }
@@ -660,6 +710,9 @@ export function useMediaSend({
     photoEditorAsset,
     setPhotoEditorAsset,
     handleSendEditedPhoto,
+    pendingMediaAssets,
+    setPendingMediaAssets,
+    handleSendPendingMedia,
     handleMediaSourceSelect,
   };
 }

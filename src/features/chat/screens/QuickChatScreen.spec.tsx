@@ -1,0 +1,92 @@
+import React from 'react';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import QuickChatScreen from './QuickChatScreen';
+
+let mockParams: Record<string, string | undefined> = {};
+const mockBack = jest.fn();
+const mockPush = jest.fn();
+const mockChat = jest.fn();
+
+jest.mock('expo-router', () => ({
+  router: { back: () => mockBack(), push: (route: unknown) => mockPush(route), canGoBack: () => true },
+  useLocalSearchParams: () => mockParams,
+}));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('@/components/ui/keyboard-avoiding-container', () => ({
+  KeyboardAvoidingContainer: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@/theme', () => ({
+  Radius: { xxl: 24, full: 99 },
+  useTheme: () => ({ colors: { overlay: 'rgba(0,0,0,0.4)', background: '#fff', surfaceBorder: '#ddd' } }),
+}));
+jest.mock('@/features/chat/screens/ChatDetailScreen', () => {
+  const { Pressable, Text } = jest.requireActual('react-native');
+  function MockChatDetailScreen(props: { embedded: unknown; sheet: { onClose: () => void; onExpand: () => void } }) {
+      mockChat(props);
+      const { useChatRouter } = jest.requireActual('@/features/chat/chat-detail/hooks/use-chat-router');
+      const chatRouter = useChatRouter();
+      return (
+        <>
+          <Pressable onPress={props.sheet.onClose}><Text>chat.close</Text></Pressable>
+          <Pressable onPress={props.sheet.onExpand}><Text>chat.expand</Text></Pressable>
+          <Pressable onPress={() => chatRouter.push('/(tabs)/messages/user/peer-1')}><Text>chat.openProfile</Text></Pressable>
+          <Pressable onPress={() => chatRouter.pushOverChat('/(tabs)/messages/share-picker')}><Text>chat.openPicker</Text></Pressable>
+        </>
+      );
+  }
+  return { __esModule: true, default: MockChatDetailScreen };
+});
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockParams = { conversationID: 'conv-1', sourceID: 'peer-1', title: '小王', conversationType: 'private', searchedMsgID: 'm9' };
+});
+
+test('renders the chat in sheet mode for the banner conversation', () => {
+  render(<QuickChatScreen />);
+  expect(mockChat).toHaveBeenCalledWith(expect.objectContaining({
+    embedded: expect.objectContaining({ conversationID: 'conv-1', sourceID: 'peer-1', title: '小王', searchedMsgID: 'm9' }),
+    sheet: expect.objectContaining({ onClose: expect.any(Function), onExpand: expect.any(Function) }),
+  }));
+});
+
+test('tapping the dimmed area or the close button closes the sheet', () => {
+  render(<QuickChatScreen />);
+  fireEvent.press(screen.getByLabelText('common.close'));
+  fireEvent.press(screen.getByText('chat.close'));
+  expect(mockBack).toHaveBeenCalledTimes(2);
+  expect(mockPush).not.toHaveBeenCalled();
+});
+
+test('expand closes the sheet and opens the full chat page', () => {
+  render(<QuickChatScreen />);
+  fireEvent.press(screen.getByText('chat.expand'));
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/(tabs)/messages/chat-detail',
+    params: expect.objectContaining({ conversationID: 'conv-1', sourceID: 'peer-1', title: '小王' }),
+  });
+});
+
+test('nothing renders without a conversation id', () => {
+  mockParams = {};
+  render(<QuickChatScreen />);
+  expect(mockChat).not.toHaveBeenCalled();
+});
+
+test('leaving the sheet closes it before navigating so no second tab stack is pushed', () => {
+  render(<QuickChatScreen />);
+  fireEvent.press(screen.getByText('chat.openProfile'));
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(mockPush).toHaveBeenCalledTimes(1);
+  expect(mockPush).toHaveBeenCalledWith('/(tabs)/messages/user/peer-1');
+  expect(mockBack.mock.invocationCallOrder[0]).toBeLessThan(mockPush.mock.invocationCallOrder[0]);
+});
+
+test('pages that return to the chat open over the expanded full chat', () => {
+  render(<QuickChatScreen />);
+  fireEvent.press(screen.getByText('chat.openPicker'));
+  expect(mockBack).toHaveBeenCalledTimes(1);
+  expect(mockPush).toHaveBeenNthCalledWith(1, expect.objectContaining({ pathname: '/(tabs)/messages/chat-detail' }));
+  expect(mockPush).toHaveBeenNthCalledWith(2, '/(tabs)/messages/share-picker');
+});

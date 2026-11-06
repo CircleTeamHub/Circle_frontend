@@ -8,7 +8,8 @@ test('unset, null and legacy-missing work status stay unset instead of WORKING',
   assert.equal(resolveManagedWorkStatus({}), 'UNSET');
 });
 
-test('explicit WORKING and CLOSED pass through', () => {
+test('explicit WORKING, CLOSED and OFF_SHELF pass through', () => {
   assert.equal(resolveManagedWorkStatus({ workStatus: 'WORKING' }), 'WORKING');
   assert.equal(resolveManagedWorkStatus({ workStatus: 'CLOSED' }), 'CLOSED');
+  assert.equal(resolveManagedWorkStatus({ workStatus: 'OFF_SHELF' }), 'OFF_SHELF');
 });

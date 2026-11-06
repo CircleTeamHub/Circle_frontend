@@ -56,10 +56,12 @@ test('chat attachment panel merges photos, videos, and camera into one media ent
   assert.match(attachmentItems, /chat\.attachments\.mediaHub/);
   assert.doesNotMatch(attachmentItems, /id: 'camera'/);
 
-  assert.match(mediaSheetSource, /id: 'photo'/);
-  assert.match(mediaSheetSource, /id: 'video'/);
+  // 照片和视频合并成一个「相册」入口,一次选择里可以混选。
+  assert.match(mediaSheetSource, /id: 'album'/);
+  assert.doesNotMatch(mediaSheetSource, /id: 'photo'/);
+  assert.doesNotMatch(mediaSheetSource, /id: 'video'/);
   assert.match(mediaSheetSource, /id: 'camera'/);
-  assert.match(source, /mediaTypes: kind === 'photo' \? \['images'\] : \['videos'\]/);
+  assert.match(source, /mediaTypes: \['images', 'videos'\]/);
   assert.match(source, /setMediaSourceSheetVisible\(true\)/);
   assert.match(source, /<MediaSourceSheet/);
   assert.match(mediaSheetSource, /justifyContent: 'center'/);
@@ -67,11 +69,11 @@ test('chat attachment panel merges photos, videos, and camera into one media ent
 });
 
 test('picked and captured photos open the editor before any upload starts', () => {
-  assert.match(source, /setPhotoEditorAsset\(pickedAsset\)/);
+  assert.match(source, /setPhotoEditorAsset\(result\.assets\[0\]\);\n      return;/);
   assert.match(source, /setPhotoEditorAsset\(result\.assets\[0\]\)/);
   assert.match(source, /<PhotoEditorModal/);
   assert.match(source, /onSend=\{handleSendEditedPhoto\}/);
-  assert.match(source, /const accepted = await uploadAndSendImageAsset\(asset\)/);
+  assert.match(source, /accepted = await uploadAndSendImageAsset\(item, turn\)/);
 
   // Editor-before-upload and video bypass are exercised by chat-image-send-order.test.js.
 });

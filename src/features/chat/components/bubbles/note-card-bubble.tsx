@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, Radius } from '@/theme';
 import type { ChatMessage, NoteCardData } from '@/types';
+import { isSetNoteWorkStatus, noteWorkStatusFill } from '@/features/notes/utils/work-status';
 import {
   BubbleStatusText,
   CHAT_CARD_GAP,
@@ -86,6 +87,17 @@ const sNote = StyleSheet.create({
   meta: {
     ...Typography.tinyRegular,
     marginTop: 6,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+  },
+  // 最多 4 张等宽方图;不足 4 张时保持同样大小,靠左排。
+  previewImage: {
+    width: '23.5%',
+    aspectRatio: 1,
+    borderRadius: Radius.sm,
   },
   chips: {
     flexDirection: 'row',
@@ -232,22 +244,19 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
               <Text style={[sNote.workStatus, { color: colors.warning }]}>
                 {t('chat.noteCard.workStatus.unlisted', { defaultValue: '已下架，状态可能变化' })}
               </Text>
-            ) : note.workStatus === 'WORKING' || note.workStatus === 'CLOSED' ? (
+            ) : isSetNoteWorkStatus(note.workStatus) ? (
               <View
                 style={[
                   sNote.workStatusPill,
-                  {
-                    backgroundColor:
-                      note.workStatus === 'WORKING'
-                        ? colors.workingFill
-                        : colors.closedFill,
-                  },
+                  { backgroundColor: noteWorkStatusFill(note.workStatus, colors) },
                 ]}
               >
                 <Text style={[sNote.workStatusPillText, { color: colors.onStatusFill }]}>
                   {note.workStatus === 'WORKING'
                     ? t('chat.noteCard.workStatus.working', { defaultValue: '开工' })
-                    : t('chat.noteCard.workStatus.closed', { defaultValue: '打烊' })}
+                    : note.workStatus === 'CLOSED'
+                      ? t('chat.noteCard.workStatus.closed', { defaultValue: '打烊' })
+                      : t('chat.noteCard.workStatus.offShelf', { defaultValue: '下架' })}
                 </Text>
               </View>
             ) : null}
@@ -256,6 +265,21 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
 
         {metaLine ? (
           <Text style={[sNote.meta, { color: onCardSecondary }]}>{metaLine}</Text>
+        ) : null}
+
+        {note.previewUrls && note.previewUrls.length > 0 ? (
+          <View style={sNote.previewRow} testID="note-card-previews">
+            {note.previewUrls.map((uri) => (
+              <Image
+                key={uri}
+                source={{ uri }}
+                style={sNote.previewImage}
+                contentFit="cover"
+                recyclingKey={uri}
+                accessibilityIgnoresInvertColors
+              />
+            ))}
+          </View>
         ) : null}
 
         <View style={sNote.chips}>

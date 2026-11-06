@@ -196,6 +196,17 @@ function mediaField(
   return allowPeerMediaUrl(str(content[key]));
 }
 
+/** 笔记卡片的预览图:最多 4 张,每张都要过媒体白名单。 */
+const NOTE_CARD_PREVIEW_MAX = 4;
+function notePreviewUrls(content: Record<string, unknown>): string[] {
+  const raw = content['previewUrls'];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((value) => allowPeerMediaUrl(str(value)))
+    .filter((url): url is string => Boolean(url))
+    .slice(0, NOTE_CARD_PREVIEW_MAX);
+}
+
 function notePeerSnapshot(
   value: unknown,
 ): NoteCardData['personalCardSnapshot'] | undefined {
@@ -215,6 +226,7 @@ function sanitizeNoteCard(content: Record<string, unknown>): NoteCardData {
   const workStatus =
     content['workStatus'] === 'WORKING' ||
     content['workStatus'] === 'CLOSED' ||
+    content['workStatus'] === 'OFF_SHELF' ||
     content['workStatus'] === 'UNSET'
       ? content['workStatus']
       : 'UNSET';
@@ -226,6 +238,7 @@ function sanitizeNoteCard(content: Record<string, unknown>): NoteCardData {
       : 'ACTIVE';
   const personalCardSnapshot = notePeerSnapshot(content['personalCardSnapshot']);
   const sourceGroupCardSnapshot = notePeerSnapshot(content['sourceGroupCardSnapshot']);
+  const previewUrls = notePreviewUrls(content);
   return {
     noteId: textField(content, 'noteId', 64),
     ...(typeof content['sourceNoteId'] === 'string' && content['sourceNoteId'].length > 0
@@ -237,6 +250,7 @@ function sanitizeNoteCard(content: Record<string, unknown>): NoteCardData {
     title: textField(content, 'title', 80),
     contentPreview: optionalTextField(content, 'contentPreview', 200),
     coverUrl: mediaField(content, 'coverUrl'),
+    ...(previewUrls.length > 0 ? { previewUrls } : {}),
     imageCount: countField(content, 'imageCount'),
     videoCount: countField(content, 'videoCount'),
     // 对端不应把自己的私有笔记分组带进聊天；兼容旧消息但丢弃该字段。
@@ -545,7 +559,8 @@ export function mapChatMessageDtoToUI(
         id: dto.id,
         type: 'system-notice',
         time: formatChatTimestamp(dto.createdAt),
-        text: systemNoticeText(content),
+        text: clearRequestNoticeText(content, currentUserId) ?? systemNoticeText(content),
+        ...clearRequestFields(content, currentUserId),
       };
     default:
       break;
@@ -658,6 +673,53 @@ export function mapChatMessageDtosToUI(
 }
 
 /** 结构化系统消息 → 本地化文案(im.notification.* 词表;未知 kind 兜底空串隐藏)。 */
+/** 双向清空申请/结果的提示文案要分「我」和「对方」;其他系统消息返回 null。 */
+function clearRequestNoticeText(
+  content: Record<string, unknown>,
+  currentUserId: string | null,
+): string | null {
+  const kind = content['kind'];
+  const bySelf = currentUserId !== null && content['actorId'] === currentUserId;
+  if (kind === 'clear-request') {
+    return bySelf
+      ? i18n.t('im.notification.clearRequestSent')
+      : i18n.t('im.notification.clearRequestReceived');
+  }
+  if (kind === 'clear-request-answered') {
+    const accepted = content['accepted'] === true;
+    if (bySelf) {
+      return accepted
+        ? i18n.t('im.notification.clearRequestAcceptedBySelf')
+        : i18n.t('im.notification.clearRequestDeclinedBySelf');
+    }
+    return accepted
+      ? i18n.t('im.notification.clearRequestAcceptedByPeer')
+      : i18n.t('im.notification.clearRequestDeclinedByPeer');
+  }
+  return null;
+}
+
+/** 对方发来的双向清空申请带上 id,气泡据此给「同意 / 拒绝」;结果提示带上它答复的是哪条。 */
+function clearRequestFields(
+  content: Record<string, unknown>,
+  currentUserId: string | null,
+): Pick<ChatMessage, 'clearRequest' | 'clearRequestAnswer'> {
+  const requestId = str(content['requestId']);
+  if (!requestId) return {};
+  if (content['kind'] === 'clear-request') {
+    return {
+      clearRequest: {
+        requestId,
+        fromSelf: currentUserId !== null && content['actorId'] === currentUserId,
+      },
+    };
+  }
+  if (content['kind'] === 'clear-request-answered') {
+    return { clearRequestAnswer: { requestId } };
+  }
+  return {};
+}
+
 export function systemNoticeText(content: Record<string, unknown>): string {
   const kind = typeof content['kind'] === 'string' ? content['kind'] : '';
   switch (kind) {
@@ -708,6 +770,16 @@ export function systemNoticeText(content: Record<string, unknown>): string {
     }
     case 'group-notice-updated':
       return i18n.t('im.notification.groupNoticeUpdated');
+    case 'clear-request':
+      return i18n.t('im.notification.clearRequestNeutral');
+    case 'clear-request-answered':
+      return content['accepted'] === true
+        ? i18n.t('im.notification.clearRequestAcceptedNeutral')
+        : i18n.t('im.notification.clearRequestDeclinedNeutral');
+    case 'message-pinned':
+      return i18n.t('im.notification.messagePinned');
+    case 'message-unpinned':
+      return i18n.t('im.notification.messageUnpinned');
     // 逐人禁言/解除:载荷同样只有 ID,文案被动不点名;时长带上(有的话)。
     case 'member-silenced': {
       const durationSec =

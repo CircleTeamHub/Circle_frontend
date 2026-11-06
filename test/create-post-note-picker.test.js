@@ -92,17 +92,20 @@ test('share note picker sends through the inline always-visible options row', ()
   assert.match(src, /MAX_NOTE_BATCH_SELECTION/);
   assert.doesNotMatch(src, /prev\.length >= 9\b/);
   // 五个选项常驻底栏(发送键上方一行横排 icon+短标签),不再点发送后弹确认 sheet。
+  // 这一行已抽成共享组件 NoteSendOptionsRow(笔记页多选底栏也用它)。
+  assert.match(src, /<NoteSendOptionsRow value=\{sendOptions\} onChange=\{setSendOptions\} \/>/);
+  const row = read('src/features/chat/components/note-send-options-row.tsx');
   for (const key of ['optionCard', 'optionMedia', 'optionShowcase', 'optionLocation', 'optionAll']) {
-    assert.match(src, new RegExp(`share\\.noteBatch\\.${key}`));
+    assert.match(row, new RegExp(`share\\.noteBatch\\.${key}`));
   }
-  assert.match(src, /NOTE_OPTION_CHIPS/);
+  assert.match(row, /NOTE_OPTION_CHIPS/);
   // 五个开关共用一个 chip 组件（含常驻对号：选中实心/未选空心），不许再复制粘贴。
-  assert.match(src, /function NoteOptionChip/);
-  assert.match(src, /checked \? 'checkmark-circle' : 'ellipse-outline'/);
+  assert.match(row, /function NoteOptionChip/);
+  assert.match(row, /checked \? 'checkmark-circle' : 'ellipse-outline'/);
   assert.doesNotMatch(src, /BottomSheetModal/);
   assert.doesNotMatch(src, /optionsOpen/);
-  assert.match(src, /withAllNoteSendOptions/);
-  assert.match(src, /isAllNoteSendOptions/);
+  assert.match(row, /withAllNoteSendOptions/);
+  assert.match(row, /isAllNoteSendOptions/);
   // 至少勾一项才能发送;发送键直接按当前勾选以 note-batch 形态交给聊天页消费。
   assert.match(src, /hasAnyNoteSendOption/);
   assert.match(src, /onPress=\{handleConfirmSend\}/);

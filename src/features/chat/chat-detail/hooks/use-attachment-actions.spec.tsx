@@ -8,7 +8,6 @@ jest.mock('@/chat-core/client', () => ({ sendCardMessage: jest.fn(), sendVoiceMe
 jest.mock('@/chat-core/send-handle', () => ({ startChatSend: (send: (onCreate: () => void) => Promise<unknown>) => ({ queued: false, delivered: send(() => undefined) }) }));
 jest.mock('@/chat-core/send-errors', () => ({ getChatSendErrorMessage: (_error: unknown, fallback: string) => fallback }));
 jest.mock('@/features/chat/chat-detail/helpers', () => ({ logChatSendFailure: jest.fn() }));
-jest.mock('@/features/chat/utils/note-card-fresh-status', () => ({ withFreshNoteSourceStatus: jest.fn() }));
 jest.mock('@/i18n', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('@/services/api/qr', () => ({ issueQrToken: jest.fn() }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_error: unknown, fallback: string) => `api:${fallback}` }));

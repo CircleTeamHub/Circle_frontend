@@ -656,7 +656,9 @@ export type ChatGroupEventKind =
   | 'policy-changed'
   | 'history-cleared'
   | 'admission-reviewed'
-  | 'member-banned';
+  | 'member-banned'
+  | 'message-pinned'
+  | 'message-unpinned';
 
 /** 群日志一条(GET /chat/conversations/:id/events)。 */
 export interface ChatGroupEventDto {
@@ -746,6 +748,8 @@ export interface ChatConversationDto {
   notice?: string | null;
   /** 公告是否在群聊天顶部滚动播报。旧服务端缺省为关闭。 */
   noticePinned?: boolean;
+  /** 会话里置顶的那条消息(所有人可见);旧服务端没有这个字段。 */
+  pinnedMessage?: ChatPinnedMessageDto | null;
   /** 独立群聊头像;圈子群走 circle.avatarUrl。 */
   avatarUrl?: string | null;
   /** 独立群聊成员上限;圈子群走圈子详情。 */
@@ -811,3 +815,11 @@ export const SERVER_COMPENSATED_TYPES = new Set<string>([
   'transfer-card',
   'verification-card',
 ]);
+
+/** 置顶消息横幅:点它跳到这条消息。 */
+export interface ChatPinnedMessageDto {
+  messageId: string;
+  height: number;
+  preview: string;
+  pinnedAt: string;
+}

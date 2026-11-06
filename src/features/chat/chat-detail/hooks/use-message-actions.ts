@@ -13,17 +13,21 @@ import { type ChatMessage } from '@/types';
 import { useChatStore, type StoredChatMessage } from '@/chat-core/store';
 import { isGroupManager } from '@/features/chat/group-admin-permissions';
 import { useAuthStore } from '@/stores/authStore';
-import { router } from 'expo-router';
+import { useChatRouter } from '@/features/chat/chat-detail/hooks/use-chat-router';
 import { Alert, Keyboard, Platform, type GestureResponderEvent } from 'react-native';
 import { revokeChatMessage, sendChatReaction } from '@/chat-core/socket-manager';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
-import { fetchMessageReaders } from '@/chat-core/api';
 import { type MessageAction } from '@/features/chat/components/MessageActionMenu';
 import { type PendingMediaUpload, retryFailedChatMessage } from '@/chat-core/client';
 import { canForwardMessage } from '@/features/chat/screens/ForwardPickerScreen';
 import { isEphemeralMessage, isEphemeralPeerMessage } from '@/features/chat/utils/ephemeral-message';
 import { isLocalMessageId } from '@/chat-core/local-message-id';
+import { setChatPinnedMessage } from '@/chat-core/api';
+import { canManageChatPins } from '@/features/chat/utils/chat-pins';
+import { getApiErrorMessage } from '@/services/api/errors';
+import { reportHandledFailure } from '@/observability/report-failure';
 import { saveMediaToLibrary } from '@/utils/save-image';
+import { getMessageReadersHref, type UserProfileScope } from '@/features/user/utils/routes';
 import { useStickerStore } from '@/features/chat/store/use-sticker-store';
 import { getStickerErrorMessage } from '@/features/chat/utils/sticker-error';
 import { type TFunction } from 'i18next';
@@ -43,6 +47,8 @@ export interface MessageActionsParams {
   conversationBurnEnabled: boolean;
   isGroupChat: boolean;
   conversationTitle: string;
+  /** 聊天页所在的 tab 栈:子页面(已读成员)要压在同一个栈里。 */
+  scope: UserProfileScope;
   setQuoteTarget: Dispatch<SetStateAction<ChatMessage | null>>;
   setEditingMessageId: Dispatch<SetStateAction<string | null>>;
   handleCollectMessage: (message: ChatMessage, options?: { silent?: boolean }) => Promise<CollectMessageResult>;
@@ -64,10 +70,12 @@ export function useMessageActions({
   conversationBurnEnabled,
   isGroupChat,
   conversationTitle,
+  scope,
   setQuoteTarget,
   setEditingMessageId,
   handleCollectMessage,
 }: MessageActionsParams) {
+  const chatRouter = useChatRouter();
   const setPendingForward = useMessageForwardStore((s) => s.setPending);
   const setPendingForwardBatch = useMessageForwardStore((s) => s.setPendingBatch);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string> | null>(null);
@@ -187,8 +195,8 @@ export function useMessageActions({
       dto: dtos?.find((item) => item.id === message.id),
     })));
     setSelectedMessageIds(null);
-    router.push({ pathname: '/(tabs)/messages/forward-picker' });
-  }, [canForwardSelectedMessages, conversationID, selectedMessages, setPendingForwardBatch]);
+    chatRouter.push({ pathname: '/(tabs)/messages/forward-picker' });
+  }, [chatRouter, canForwardSelectedMessages, conversationID, selectedMessages, setPendingForwardBatch]);
   const handleDeleteSelectedMessages = useCallback(() => {
     if (selectedMessages.length === 0 || selectionOperationRef.current) return;
     const epoch = useAuthStore.getState().sessionEpoch;
@@ -268,9 +276,9 @@ export function useMessageActions({
           (item) => item.id === message.id,
         );
       setPendingForward({ message, dto });
-      router.push({ pathname: '/(tabs)/messages/forward-picker' });
+      chatRouter.push({ pathname: '/(tabs)/messages/forward-picker' });
     },
-    [conversationID, setPendingForward],
+    [chatRouter, conversationID, setPendingForward],
   );
 
   const handleQuoteMessage = useCallback((message: ChatMessage) => {
@@ -305,7 +313,7 @@ export function useMessageActions({
 
   const handleReportMessage = useCallback(() => {
     if (isGroupChat) {
-      router.push({
+      chatRouter.push({
         pathname: '/(tabs)/messages/report-friend',
         params: {
           targetType: 'group',
@@ -315,7 +323,7 @@ export function useMessageActions({
       });
       return;
     }
-    router.push({
+    chatRouter.push({
       pathname: '/(tabs)/messages/report-friend',
       params: {
         targetType: 'friend',
@@ -323,7 +331,7 @@ export function useMessageActions({
         friendName: conversationTitle,
       },
     });
-  }, [conversationTitle, isGroupChat, sourceID]);
+  }, [chatRouter, conversationTitle, isGroupChat, sourceID]);
 
   const handleMessageLongPress = useCallback(
     (message: ChatMessage, event: GestureResponderEvent) => {
@@ -449,44 +457,32 @@ export function useMessageActions({
     [conversationID, setDraft, setEditingMessageId, setQuoteTarget],
   );
 
+  /** 置顶 / 取消置顶:会话里所有人顶部都会出现横幅。 */
+  const handleTogglePin = useCallback(
+    async (message: ChatMessage, pinned: boolean) => {
+      try {
+        await setChatPinnedMessage(conversationID, pinned ? null : message.id);
+      } catch (error) {
+        reportHandledFailure('chatDetail', 'togglePinMessage', error);
+        if (!mountedRef.current) return;
+        Alert.alert(
+          t('chat.pin.failed', { defaultValue: '操作失败' }),
+          getApiErrorMessage(error, t('common.retryLater', { defaultValue: '请稍后重试' })),
+        );
+      }
+    },
+    [conversationID, mountedRef, t],
+  );
+
   // G-07 逐条已读(群聊自己的消息):读者列表来自已读水位,无回执表。
+  // 人多时弹窗放不下,整页列表展示。
   const handleShowReaders = useCallback(
     (message: ChatMessage) => {
-      const requestedFor = conversationID;
-      void fetchMessageReaders(conversationID, message.id)
-        .then((result) => {
-          // 响应回来时可能已经退出这个会话、甚至换了账号 —— 那时候弹一个装着
-          // 上一个会话成员名字的全局 Alert,是弹在一个毫不相干的页面上。
-          if (!mountedRef.current) return;
-          if (useChatStore.getState().activeConversationId !== requestedFor) {
-            return;
-          }
-          const names = result.readers
-            .map((reader) => reader.nickname)
-            .filter(Boolean);
-          // total 可能大于这一页(服务端上限 200)。只渲染 readers 的话,
-          // 3000 人的群里会显示成「正好这 200 个人读了」,看不出还有更多。
-          const hidden = Math.max(0, (result.total ?? names.length) - names.length);
-          const body =
-            names.length > 0
-              ? hidden > 0
-                ? t('chat.messageActions.readersMore', {
-                    names: names.join('、'),
-                    count: hidden,
-                    defaultValue: '{{names}} 等 {{count}} 人以上',
-                  })
-                : names.join('、')
-              : t('chat.messageActions.readersNone', {
-                  defaultValue: '还没有人读到这条消息',
-                });
-          Alert.alert(
-            t('chat.messageActions.readers', { defaultValue: '已读成员' }),
-            body,
-          );
-        })
-        .catch(() => undefined);
+      chatRouter.push(
+        getMessageReadersHref(scope, { conversationId: conversationID, messageId: message.id }),
+      );
     },
-    [conversationID, t, mountedRef],
+    [chatRouter, conversationID, scope],
   );
 
   const resendMessage = useCallback(
@@ -634,6 +630,32 @@ export function useMessageActions({
       label: t('chat.messageActions.quote', { defaultValue: '回复' }),
       onPress: () => handleQuoteMessage(message),
     });
+    // 置顶:任何类型的消息都能置顶(图片、笔记卡片也行),系统提示、通话记录、
+    // 还没 ack 的乐观气泡除外;群里只有群主/管理员,私聊双方都能。
+    const pinConversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === conversationID);
+    if (
+      pinConversation &&
+      canManageChatPins(pinConversation) &&
+      !isLocalMessageId(message.id) &&
+      // 阅后即焚的不能置顶:横幅上的预览会比消息本身活得久。服务端同样拒绝。
+      !isEphemeralMessage(message, conversationBurnEnabled) &&
+      message.type !== 'system-notice' &&
+      message.type !== 'call-record' &&
+      message.type !== 'date' &&
+      (message.sendStatus === undefined || message.sendStatus === 2)
+    ) {
+      const pinned = pinConversation.pinnedMessage?.messageId === message.id;
+      actions.push({
+        key: pinned ? 'unpin' : 'pin',
+        icon: pinned ? 'pin' : 'pin-outline',
+        label: pinned
+          ? t('chat.pin.unpin', { defaultValue: '取消置顶' })
+          : t('chat.pin.pin', { defaultValue: '置顶' }),
+        onPress: () => void handleTogglePin(message, pinned),
+      });
+    }
     // 只在真能转发时给入口:通话记录走到转发页只会抛「不支持」,
     // 而 catch 提示的是「请重试」—— 一个永远不会成功的重试。
     if (canForwardMessage(message, dto, conversationBurnEnabled)) {
@@ -690,6 +712,7 @@ export function useMessageActions({
     return actions;
   }, [
     actionMenu,
+    handleTogglePin,
     canEditMessage,
     canRevokeMessage,
     conversationBurnEnabled,

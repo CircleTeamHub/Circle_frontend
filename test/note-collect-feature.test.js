@@ -50,7 +50,8 @@ test('chat collect action routes note cards to collectNote instead of collection
   assert.match(src, /setNoteCollectTarget\(/);
   assert.match(src, /collectNote\(target\.noteId, target\.source/);
   assert.match(src, /targetNoteGroupId/);
-  assert.match(src, /title,\s*\n?\s*\}\);/);
+  // 标题留空就不传,由服务端沿用原笔记的完整标题。
+  assert.match(src, /\.\.\.\(title \? \{ title \} : \{\}\),\s*\n?\s*\}\);/);
   assert.match(src, /useNoteListSignalStore\.getState\(\)\.bump\(\)/);
   assert.match(src, /noteAlreadyCollected/);
   assert.match(src, /noteCollected/);
@@ -63,7 +64,8 @@ test('chat page disables its keyboard padding while the collect sheet is open', 
   // The sheet is a separate full-screen modal. Leaving the chat composer KAV
   // enabled while it is mounted lifts the sheet by the composer height on iOS.
   assert.match(hook, /noteCollectVisible: noteCollectTarget !== null \|\| noteCollectOpening/);
-  assert.match(screen, /enabled=\{!noteCollectVisible && !attachmentOpen && !emojiOpen\}/);
+  // 半屏快捷聊天(sheet)的键盘避让交给外层容器,这里同样关掉。
+  assert.match(screen, /enabled=\{!sheet && !noteCollectVisible && !attachmentOpen && !emojiOpen\}/);
 });
 
 test('collect waits for the chat keyboard window to settle before presenting the sheet', () => {
@@ -120,7 +122,15 @@ test('NoteCard makes the source work status visible on every notes list', () => 
   assert.match(src, /notes\.list\.statusClosed/);
   assert.match(src, /defaultValue: '打烊'/);
   assert.doesNotMatch(src, /statusClosed', \{ defaultValue: '打烊，状态可能变化' \}/);
-  assert.match(src, /moon-outline/);
+  assert.match(src, /notes\.list\.statusOffShelf/);
+  assert.match(src, /NOTE_WORK_STATUS_ICON\[note\.workStatus\]/);
+  const workStatus = read('src/features/notes/utils/work-status.ts');
+  assert.match(workStatus, /CLOSED: 'moon-outline'/);
+  assert.match(workStatus, /OFF_SHELF: 'pause-circle-outline'/);
+  // 场地下架和真正下架笔记(archive-outline)必须一眼能分开。
+  const sheet = read('src/features/notes/components/NoteActionsSheet.tsx');
+  assert.match(sheet, /notes\.actions\.venueOffShelf/);
+  assert.doesNotMatch(sheet, /chat\.groupManagement\.noteOffShelf/);
 });
 
 test('note source i18n keys exist across all five locales', () => {
@@ -203,27 +213,32 @@ test('悬浮列无障碍文案五语言齐备', () => {
 });
 
 test('分享 sheet 支持就地搜索会话', () => {
-  const src = read('src/features/notes/components/ShareNoteSheet.tsx');
+  // 笔记分享改用共享的「选择一个聊天」页,搜索框在 ChatTargetPicker 里。
+  const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
+  const src = read('src/features/chat/components/chat-target-picker/ChatTargetPicker.tsx');
+  const sources = read('src/features/chat/components/chat-target-picker/use-chat-target-sources.ts');
 
+  assert.match(sheet, /<ChatTargetPicker\b/);
   assert.match(src, /const \[query, setQuery\] = useState\(''\)/);
-  assert.match(src, /item\.name\.toLowerCase\(\)\.includes\(trimmedQuery\)/);
-  assert.match(src, /data=\{visibleConversations\}/);
-  // 关闭时清搜索词，否则下次打开停在旧过滤结果上，看着像会话丢了。
-  assert.match(src, /if \(!visible\) \{\s*setQuery\(''\)/);
+  assert.match(src, /searchChatTargets\(query, \[sources\.recentChats, sources\.contacts, sources\.groups\]\)/);
+  assert.match(sources, /target\.name\.toLowerCase\(\)\.includes\(keyword\)/);
+  assert.match(src, /data=\{list\}/);
+  // 关闭时清搜索词:选择页挂在 Modal 里,关掉即卸载,下次打开从空搜索词开始。
+  assert.match(sheet, /<Modal\s+visible=\{visible\}[\s\S]*?<ChatTargetPicker\b/);
   // 搜不到 ≠ 一个会话都没有，两种空态文案分开。
-  assert.match(src, /notes\.shareToChat\.noMatch/);
-  assert.match(src, /notes\.shareToChat\.empty/);
-  // 点列表项不该被键盘吞掉第一次触摸。
-  assert.match(src, /keyboardShouldPersistTaps="handled"/);
+  assert.match(src, /chat\.targetPicker\.noMatch/);
+  assert.match(src, /chat\.targetPicker\.noChats/);
+  // 点列表项不该被键盘吞掉第一次触摸(keyboardDismissOnDragProps 带 keyboardShouldPersistTaps: 'handled')。
+  assert.match(src, /\{\.\.\.keyboardDismissOnDragProps\}/);
 
   for (const lng of ['zh', 'en', 'ja', 'ko', 'es']) {
     const json = JSON.parse(read(`src/i18n/locales/${lng}.json`));
     assert.equal(
-      typeof json.notes.shareToChat.searchPlaceholder,
+      typeof json.chat.targetPicker.searchPlaceholder,
       'string',
       `${lng} searchPlaceholder`,
     );
-    assert.equal(typeof json.notes.shareToChat.noMatch, 'string', `${lng} noMatch`);
+    assert.equal(typeof json.chat.targetPicker.noMatch, 'string', `${lng} noMatch`);
   }
 });
 
@@ -248,4 +263,13 @@ test('笔记卡片的群来源用群头像组件', () => {
 
   // 群没头像时该回落成群组渐变图，不是通用 Avatar 的灰色人形（「人」的语义）。
   assert.match(src, /<GroupChatAvatar[\s\S]{0,120}?uri=\{groupChip\.faceURL \?\? null\}/);
+});
+
+test('chat target picker search text has a complete vertical line box', () => {
+  // iOS 上中文占位文字在没有 lineHeight/minHeight 的单行输入框里会被裁掉上下边。
+  const picker = read('src/features/chat/components/chat-target-picker/ChatTargetPicker.tsx');
+  const style = picker.slice(picker.indexOf('searchInput: {'), picker.indexOf('},', picker.indexOf('searchInput: {')));
+  assert.match(style, /lineHeight: 20/);
+  assert.match(style, /minHeight: 24/);
+  assert.match(style, /textAlignVertical: 'center'/);
 });
