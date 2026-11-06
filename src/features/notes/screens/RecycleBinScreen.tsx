@@ -17,7 +17,8 @@ import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { detachLocalNoteDraftsFromNote } from '@/features/notes/utils/note-editor-drafts';
 import { ApiError } from '@/services/api/api-error';
-import { fetchDeletedNotes, purgeNote, restoreNote } from '@/services/api/notes';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { fetchDeletedNotes, getCachedDeletedNotes, purgeNote, restoreNote } from '@/services/api/notes';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -29,12 +30,19 @@ const keyExtractor = (item: NoteSummary) => item.id;
  * 恢复后后端置回 ACTIVE。不提供彻底删除：保留语义交给后端保留期策略统一处理。
  */
 export default function RecycleBinScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  return sessionKey ? <RecycleBinContent key={sessionKey} /> : null;
+}
+
+function RecycleBinContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const [notes, setNotes] = useState<NoteSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [cached] = useState(getCachedDeletedNotes);
+  const [notes, setNotes] = useState<NoteSummary[]>(cached?.value ?? []);
+  const [loading, setLoading] = useState(!cached);
+  const loadedRef = useRef(cached !== null);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [menuNote, setMenuNote] = useState<NoteSummary | null>(null);
@@ -54,21 +62,25 @@ export default function RecycleBinScreen() {
   const requestSequenceRef = useRef(0);
   const successfulRequestRef = useRef(0);
   const load = useCallback(async () => {
+    if (!mountedRef.current) return;
+    const epoch = useAuthStore.getState().sessionEpoch;
     const generation = loadGenerationRef.current;
     const request = ++requestSequenceRef.current;
     const notesData = await fetchDeletedNotes();
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || useAuthStore.getState().sessionEpoch !== epoch) return;
     if (generation !== loadGenerationRef.current || request < successfulRequestRef.current) return;
     successfulRequestRef.current = request;
     setNotes(notesData);
     setLoadError(false);
     setLoading(false);
+    loadedRef.current = true;
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
-      void load().catch(() => {
+      setLoading(!loadedRef.current);
+      void load().catch((error) => {
+        reportHandledFailure('noteRecycleBin', 'load', error);
         if (mountedRef.current) {
           setLoadError(true);
           setLoading(false);
@@ -83,7 +95,8 @@ export default function RecycleBinScreen() {
     setRefreshing(true);
     try {
       await load();
-    } catch {
+    } catch (error) {
+      reportHandledFailure('noteRecycleBin', 'refresh', error);
       // round 2 review：下拉刷新/重试失败此前直接外抛（void 调用方 →
       // unhandled rejection），且已有列表下 loadError 恒 false、用户毫无
       // 感知。吞掉异常 + 提示一条轻量报错；已加载的数据原样保留。
@@ -118,7 +131,8 @@ export default function RecycleBinScreen() {
       setNotes((prev) => prev.filter((item) => item.id !== noteId));
       try {
         await load();
-      } catch {
+      } catch (error) {
+        reportHandledFailure('noteRecycleBin', 'refreshAfterMutation', error);
         // 列表下次 focus / 下拉时自然重试
       }
     },
@@ -140,6 +154,7 @@ export default function RecycleBinScreen() {
           text: t('notes.actions.purge', { defaultValue: '立即删除' }),
           style: 'destructive',
           onPress: async () => {
+            if (!mountedRef.current) return;
             if (pendingIdsRef.current.has(note.id)) return;
             pendingIdsRef.current.add(note.id);
             try {
@@ -149,6 +164,7 @@ export default function RecycleBinScreen() {
                 // 404：已经被到期清理或另一台设备删掉 —— 目标状态已达成，按成功处理，
                 // 否则用户会对着一条不存在的笔记反复重试。
                 if (!(error instanceof ApiError && error.status === 404)) {
+                  reportHandledFailure('noteRecycleBin', 'purge', error);
                   if (mountedRef.current) {
                     Alert.alert(
                       t('notes.alerts.deleteFailedTitle', { defaultValue: '删除失败' }),
@@ -162,7 +178,8 @@ export default function RecycleBinScreen() {
               if (userId) {
                 try {
                   detachLocalNoteDraftsFromNote(userId, note.id);
-                } catch {
+                } catch (error) {
+                  reportHandledFailure('noteRecycleBin', 'detachDrafts', error);
                   // 本地存储失败不影响删除结果；草稿保存时会按 404 提示。
                 }
               }
@@ -185,7 +202,8 @@ export default function RecycleBinScreen() {
     try {
       try {
         await restoreNote(note.id);
-      } catch {
+      } catch (error) {
+        reportHandledFailure('noteRecycleBin', 'restore', error);
         if (mountedRef.current) {
           Alert.alert(
             t('notes.alerts.restoreFailedTitle', { defaultValue: '恢复失败' }),

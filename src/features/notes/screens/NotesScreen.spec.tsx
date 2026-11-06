@@ -20,11 +20,18 @@ jest.mock('@expo/vector-icons', () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return { Ionicons: ({ name }: { name: string }) => <Text>{name}</Text> };
 });
-jest.mock('@/stores/authStore', () => ({ useAuthStore: (selector: (state: { user: { id: string } }) => unknown) => selector({ user: { id: 'owner' } }) }));
+jest.mock('@/stores/authStore', () => {
+  // Both screens key their content by `${user.id}:${sessionEpoch}` and re-check the epoch via getState().
+  const state = { user: { id: 'owner' }, sessionEpoch: 1 };
+  return { useAuthStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), { getState: () => state }) };
+});
 jest.mock('@/features/notes/store/use-notes-tab-order-store', () => ({ useNotesTabOrderStore: (selector: (state: { orderIds: string[] }) => unknown) => selector({ orderIds: mockOrder }) }));
 jest.mock('@/storage', () => ({ storage: { getString: () => undefined } }));
 jest.mock('@/features/notes/utils/note-recording-storage', () => ({}));
-jest.mock('@/services/api/notes', () => ({ fetchNotes: jest.fn(() => Promise.reject(new Error('offline'))), fetchNoteGroups: jest.fn(() => Promise.reject(new Error('offline'))), fetchNoteDraft: jest.fn() }));
+jest.mock('@/services/api/notes', () => ({ fetchNotes: jest.fn(() => Promise.reject(new Error('offline'))), fetchNoteGroups: jest.fn(() => Promise.reject(new Error('offline'))), fetchNoteDraft: jest.fn(),
+  // No persisted page snapshot: every screen starts from the network load under test.
+  getCachedNotes: () => null, getCachedNoteGroups: () => null }));
+jest.mock('@/services/api/client', () => ({ ApiError: class ApiError extends Error { status = 0; } }));
 jest.mock('@/features/notes/components/NoteCard', () => {
   const { Pressable, Text, View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { NoteCard: ({ note, onSourcePress }: { note: NoteSummary; onSourcePress?: (note: NoteSummary, target: 'sender' | 'group') => void }) => (

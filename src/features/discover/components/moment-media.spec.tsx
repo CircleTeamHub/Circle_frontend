@@ -1,4 +1,5 @@
 import React from 'react';
+import { ActivityIndicator } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { MomentMedia } from './moment-media';
 import { ImageViewer } from '@/components/ui/image-viewer';
@@ -54,6 +55,18 @@ test('only starts a persistent video cache after the selected video is opened', 
 test('continues to render legacy image posts', () => {
   render(<MomentMedia images={['https://cdn.test/old.jpg']} />);
   expect(screen.getByText('legacy images')).toBeTruthy();
+});
+
+test('fullscreen video keeps loading progress until the player is ready', () => {
+  render(<MomentMedia images={[]} attachments={[{ type: 'video', key: 'clip', url: 'https://cdn.test/clip.mp4' }]} />);
+  fireEvent.press(screen.getByLabelText('moment.playVideo'));
+  expect(screen.getByRole('progressbar')).toBeTruthy();
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  act(() => mockStatusListener?.({ status: 'readyToPlay' }));
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  act(() => mockStatusListener?.({ status: 'loading' }));
+  expect(screen.getByRole('progressbar')).toBeTruthy();
 });
 
 test('keeps the selected image index when a feed refresh replaces attachment objects', () => {

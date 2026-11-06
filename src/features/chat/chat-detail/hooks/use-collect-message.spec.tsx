@@ -9,10 +9,15 @@ import { useCollectMessage, type CollectMessageParams } from './use-collect-mess
 const mockCreateCollection = jest.fn();
 const mockCollectNote = jest.fn();
 const mockFetchGroups = jest.fn();
+const mockFindCollectedNote = jest.fn();
 const mockBump = jest.fn();
 const mockReportFailure = jest.fn();
+const mockRecordMetric = jest.fn();
+let mockClock = 0;
+jest.mock('@/observability/metrics', () => ({ recordMetric: (...args: unknown[]) => mockRecordMetric(...args) }));
+jest.mock('@/observability/http-diagnostics', () => ({ diagnosticNow: () => mockClock }));
 jest.mock('@/services/api/collections', () => ({ createCollection: (...args: unknown[]) => mockCreateCollection(...args) }));
-jest.mock('@/services/api/notes', () => ({ collectNote: (...args: unknown[]) => mockCollectNote(...args), fetchNoteGroups: () => mockFetchGroups() }));
+jest.mock('@/services/api/notes', () => ({ collectNote: (...args: unknown[]) => mockCollectNote(...args), fetchNoteGroups: () => mockFetchGroups(), findCollectedNote: (...args: unknown[]) => mockFindCollectedNote(...args) }));
 jest.mock('@/features/notes/store/use-note-list-signal-store', () => ({ useNoteListSignalStore: { getState: () => ({ bump: mockBump }) } }));
 jest.mock('@/features/notes/components/AddNoteToNotesSheet', () => ({ AddNoteToNotesSheet: () => null }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: (...args: unknown[]) => mockReportFailure(...args) }));
@@ -49,7 +54,9 @@ beforeEach(() => {
   mockCreateCollection.mockReset().mockResolvedValue({ id: 'collection' });
   mockCollectNote.mockReset().mockResolvedValue({ note: { id: 'copy' }, alreadyCollected: false });
   mockFetchGroups.mockReset().mockResolvedValue([{ id: 'private-group', name: 'Private' }]);
+  mockFindCollectedNote.mockReset().mockResolvedValue(null);
   mockBump.mockReset(); mockReportFailure.mockReset();
+  mockRecordMetric.mockReset(); mockClock = 0;
   useAuthStore.setState({ user: { id: 'me' } as never, sessionEpoch: 1 });
   useChatStore.setState({ activeConversationId: 'c1', messagesByConversation: {} });
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -64,6 +71,7 @@ beforeEach(() => {
 afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
 
 async function showSheet() {
+  await act(async () => { await Promise.resolve(); });
   await act(async () => { jest.advanceTimersByTime(32); });
 }
 
@@ -119,7 +127,12 @@ test('silent note waits for the existing group and title confirmation before res
   expect(settled).toBe(false);
   expect(sheet(result.current)).toEqual(expect.objectContaining({ visible: true, noteTitle: 'Original title', groups: [{ id: 'private-group', name: 'Private' }] }));
   expect(mockCollectNote).not.toHaveBeenCalled();
+  mockCollectNote.mockImplementation(async () => {
+    mockClock += 1500;
+    return { note: { id: 'copy' }, alreadyCollected: false };
+  });
   await act(async () => { await sheet(result.current).onConfirm({ targetNoteGroupId: 'private-group', title: 'Edited title' }); });
+  expect(mockRecordMetric).toHaveBeenCalledWith('app.operation.duration', 1500, { operation: 'noteCollect', outcome: 'success' });
   await expect(pending).resolves.toBe('collected');
   expect(mockCollectNote).toHaveBeenCalledWith('n1', expect.objectContaining({ clientMsgID: 'note-message', conversationID: 'c1' }), { targetNoteGroupId: 'private-group', title: 'Edited title' });
   expect(mockBump).toHaveBeenCalledTimes(1); expect(Alert.alert).not.toHaveBeenCalled();
@@ -156,6 +169,7 @@ test('silent note write failure resolves failed, closes the sheet, and reports w
   await expect(pending).resolves.toBe('failed');
   expect(mockCollectNote).toHaveBeenCalledTimes(1); expect(mockBump).not.toHaveBeenCalled();
   expect(mockReportFailure).toHaveBeenCalledWith('chatDetail', 'collectNote', error);
+  expect(mockRecordMetric).toHaveBeenCalledWith('app.operation.duration', 0, { operation: 'noteCollect', outcome: 'failed' });
   expect(Alert.alert).not.toHaveBeenCalled(); expect(result.current.noteCollectVisible).toBe(false);
 });
 
@@ -243,8 +257,18 @@ test('cancelling a visible-keyboard wait removes both native listeners and its f
   const view = renderHook(() => useCollectMessage(params));
   let pending!: Promise<unknown>;
   act(() => { pending = view.result.current.handleCollectMessage(noteMessage, { silent: true }); });
+  await act(async () => { await Promise.resolve(); });
+  act(() => { jest.advanceTimersByTime(32); });
   act(() => view.unmount());
   await expect(pending).resolves.toBe('cancelled');
   expect(remove).toHaveBeenCalledTimes(2); expect(jest.getTimerCount()).toBe(0);
   expect(mockFetchGroups).not.toHaveBeenCalled();
+});
+
+test('duplicate notes report already added without reopening group and title entry', async () => {
+ mockFindCollectedNote.mockResolvedValue({id:'copy'});
+ const {result}=renderHook(()=>useCollectMessage(params));
+ await act(async()=>{await result.current.handleCollectMessage(noteMessage);});
+ expect(Alert.alert).toHaveBeenCalledWith('chat.messageActions.noteAlreadyCollected');
+ expect(result.current.noteCollectVisible).toBe(false); expect(mockCollectNote).not.toHaveBeenCalled();
 });

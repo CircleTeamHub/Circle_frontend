@@ -180,7 +180,9 @@ test('wallet balance renders without waiting for transaction history', () => {
   assert.doesNotMatch(wallet, /await Promise\.allSettled\(\[/);
   assert.match(wallet, /async function loadBalance\(\)/);
   assert.match(wallet, /async function loadHistory\(\)/);
-  assert.match(wallet, /const \[loadingHistory, setLoadingHistory\]/);
+  // 余额与流水各有一份按账号归属的状态,加载态互不牵连。
+  assert.match(wallet, /const loadingWallet = currentWallet\?\.loading \?\? true;/);
+  assert.match(wallet, /const loadingHistory = currentHistory\?\.loading \?\? true;/);
   // 余额的等待态只受余额请求影响,空列表文案只受流水请求影响。
   assert.match(wallet, /loading=\{loadingWallet\}/);
   assert.match(
@@ -188,7 +190,7 @@ test('wallet balance renders without waiting for transaction history', () => {
     /\{loading \? '\.\.\.' : hidden \? '••••••' : formattedBalance\}/,
   );
   // 流水单独一个 effect(可单独重试),列表组件只拿流水自己的加载态。
-  assert.match(wallet, /\}, \[t, walletVersion, historyReloadKey\]\);/);
+  assert.match(wallet, /\}, \[ownerKey, t, walletVersion, historyReloadKey\]\);/);
   assert.match(wallet, /loading=\{loadingHistory\}/);
   const history = read('src/features/profile/components/wallet-history.tsx');
   assert.match(history, /if \(loading && transactions\.length === 0\)/);
@@ -267,9 +269,13 @@ test('invite link waits for session bootstrap, not just hydration', () => {
 test('realtime reconciliation does not blank the wallet balance', () => {
   const wallet = read('src/features/profile/screens/WalletScreen.tsx');
 
-  assert.match(wallet, /const balanceSettledRef = useRef\(false\)/);
-  assert.match(wallet, /if \(!balanceSettledRef\.current\) setLoadingWallet\(true\)/);
-  assert.match(wallet, /balanceSettledRef\.current = true;/);
+  // 实时通道推来的余额直接落进状态,不为 version 变化再 GET 一次;
+  // 余额请求只随账号变化重跑,而且已知余额时不回到「...」。
+  assert.match(wallet, /setWalletState\(\{ owner: ownerKey, balance: realtimeBalance, loading: false, error: null \}\);/);
+  assert.match(wallet, /return \{ owner: ownerKey, balance: knownBalance, loading: knownBalance === null, error: null \};/);
+  assert.match(wallet, /void loadBalance\(\);\s*\n\s*return \(\) => \{\s*\n\s*cancelled = true;\s*\n\s*\};\s*\n\s*\}, \[ownerKey, t\]\);/);
+  // 请求期间实时余额变过,这次 GET 的旧值作废。
+  assert.match(wallet, /useWalletRealtimeStore\.getState\(\)\.version !== initial\.version\) return;/);
 });
 
 // 页面下面已经有明细卡，「当前页面仅显示余额」变成假话。

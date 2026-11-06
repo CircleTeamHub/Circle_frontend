@@ -10,6 +10,11 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: mockInvitationId }),
   useRouter: () => ({ push: jest.fn() }),
   useSegments: () => ['(tabs)', 'discover'],
+  // 验证单每次聚焦(过了重拉闸门)都重拉。
+  useFocusEffect: (callback: () => void) => {
+    const { useEffect } = jest.requireActual('react');
+    useEffect(callback, [callback]);
+  },
 }));
 jest.mock('react-i18next', () => {
   const t = (key: string, options?: { approved?: number; total?: number }) =>
@@ -25,12 +30,17 @@ jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
 jest.mock('@/features/user/utils/routes', () => ({
   getCircleScopeFromSegments: () => 'discover', getSelectVerifierHref: jest.fn(),
 }));
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (select: (state: unknown) => unknown) => select({ user: { id: mockViewerId } }),
-}));
+jest.mock('@/stores/authStore', () => {
+  // 在途请求回来时按 getState().sessionEpoch 判断还是不是同一次登录。
+  const getState = () => ({ user: { id: mockViewerId }, sessionEpoch: 1 });
+  return {
+    useAuthStore: Object.assign((select: (state: unknown) => unknown) => select(getState()), { getState }),
+  };
+});
 jest.mock('@/services/api/circles', () => ({
   fetchInvitation: jest.fn(), respondToCircleInvitation: jest.fn(),
   markCircleInvitationSeen: jest.fn().mockResolvedValue(undefined),
+  circlesMutatedSince: () => false,
 }));
 jest.mock('@/services/api/group-admissions', () => ({
   refreshGroupAdmissionUnread: jest.fn().mockResolvedValue(undefined),

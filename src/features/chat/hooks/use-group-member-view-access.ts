@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { fetchCircleDetail } from '@/services/api/circles';
 import { canViewCircleMembers } from '@/features/chat/group-member-permissions';
+import { evictGroupInfoCache, readGroupInfoCache, writeGroupInfoCache } from '@/features/chat/group-info-cache';
+import { useAuthStore } from '@/stores/authStore';
+import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
 
 export interface GroupSelfMember {
   userID: string;
@@ -46,6 +49,7 @@ export function useGroupMemberViewAccess(params: {
   canViewMembers: boolean;
   selfMember: GroupSelfMember | null;
   resolved: boolean;
+  verificationFailed: boolean;
   revalidate: () => Promise<boolean>;
 } {
   const {
@@ -56,31 +60,53 @@ export function useGroupMemberViewAccess(params: {
     active = true,
     roleHint = null,
   } = params;
-  const [selfMember, setSelfMember] = useState<GroupSelfMember | null>(null);
-  const [resolved, setResolved] = useState(false);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const cacheKey = `circle:${groupID}`;
+  // Carry the just-validated chat role into its info screen, retaining live refresh below.
+  const cachedMember = useMemo(() => {
+    const cached = enabled ? readGroupInfoCache(sessionEpoch, cacheKey)?.validatedAccess : undefined;
+    return cached && cached.userID === currentUserID && cached.roleHint === roleHint &&
+      Date.now() - cached.checkedAt < 30_000
+      ? { userID: cached.userID, role: cached.role } : null;
+  }, [cacheKey, currentUserID, enabled, roleHint, sessionEpoch]);
+  const [selfMember, setSelfMember] = useState<GroupSelfMember | null>(cachedMember);
+  const [resolved, setResolved] = useState(Boolean(cachedMember));
+  const [verificationFailed, setVerificationFailed] = useState(false);
   // 换群/卸载后丢弃在途查询结果。
   const queryGenRef = useRef(0);
   const revalidateRef = useRef<(() => Promise<boolean>) | null>(null);
 
   const fetchSelf = useCallback(async (): Promise<GroupSelfMember | null> => {
     if (!enabled || !groupID || !currentUserID) return null;
+    const gen = queryGenRef.current;
     const detail = await fetchCircleDetail(groupID);
     const role = detail.myStatus === 'ACTIVE' ? detail.myRole : null;
+    if (gen === queryGenRef.current && useAuthStore.getState().sessionEpoch === sessionEpoch) {
+      if (role) {
+        writeGroupInfoCache(sessionEpoch, cacheKey, {
+          validatedAccess: { userID: currentUserID, role, roleHint, checkedAt: Date.now() },
+        });
+      } else {
+        evictGroupInfoCache(sessionEpoch, cacheKey);
+      }
+    }
     if (!role) return null;
     return {
       userID: currentUserID,
       role,
     };
-  }, [currentUserID, enabled, groupID]);
+  }, [cacheKey, currentUserID, enabled, groupID, roleHint, sessionEpoch]);
 
   useEffect(() => {
     if (!enabled || !groupID || !currentUserID) {
       setSelfMember(null);
       setResolved(true);
+      setVerificationFailed(false);
       return;
     }
-    setSelfMember(null);
-    setResolved(false);
+    setSelfMember(cachedMember);
+    setResolved(Boolean(cachedMember));
+    setVerificationFailed(false);
     queryGenRef.current += 1;
     const gen = queryGenRef.current;
     fetchSelf()
@@ -88,17 +114,22 @@ export function useGroupMemberViewAccess(params: {
         if (queryGenRef.current !== gen) return;
         setSelfMember(member);
         setResolved(true);
+        setVerificationFailed(false);
       })
-      .catch(() => {
+      .catch((error) => {
         if (queryGenRef.current !== gen) return;
         // fail-closed:查不到身份按无权处理。
         setSelfMember(null);
         setResolved(true);
+        const denied = isDefinitiveAuthFailure(error) || (error instanceof ApiError && error.status === 404);
+        setVerificationFailed(!denied);
+        if (denied) evictGroupInfoCache(sessionEpoch, cacheKey);
+        else writeGroupInfoCache(sessionEpoch, cacheKey, { validatedAccess: undefined });
       });
     return () => {
       queryGenRef.current += 1;
     };
-  }, [currentUserID, enabled, fetchSelf, groupID]);
+  }, [cachedMember, currentUserID, enabled, fetchSelf, groupID, sessionEpoch, cacheKey]);
 
   // 回前台 + 页面在前台时的兜底重校验:用户一直停在本屏不做任何操作时,撤职也要能
   // 生效。页面是否在前台由调用方传入(active)—— 刻意不用 useFocusEffect,那会把这个
@@ -117,19 +148,16 @@ export function useGroupMemberViewAccess(params: {
     };
   }, [active, currentUserID, enabled, groupID]);
 
-  // 从被盖住回到前台、或者缓存里的角色变了:立刻重查一次(首次挂载由上面的查询负责)。
+  // 从被盖住回到前台时重查；角色变化由上面的入口查询负责。
   const lastActiveRef = useRef(active);
-  const lastRoleHintRef = useRef(roleHint);
   useEffect(() => {
     const becameActive = active && !lastActiveRef.current;
-    const roleChanged = roleHint !== lastRoleHintRef.current;
     lastActiveRef.current = active;
-    lastRoleHintRef.current = roleHint;
     if (!enabled || !groupID || !currentUserID) return;
-    if (becameActive || (active && roleChanged)) {
+    if (becameActive) {
       void revalidateRef.current?.();
     }
-  }, [active, currentUserID, enabled, groupID, roleHint]);
+  }, [active, currentUserID, enabled, groupID]);
 
   const revalidate = useCallback(async () => {
     if (!enabled || !groupID || !currentUserID) return false;
@@ -139,20 +167,25 @@ export function useGroupMemberViewAccess(params: {
       if (queryGenRef.current === gen) {
         setSelfMember(member);
         setResolved(true);
+        setVerificationFailed(false);
       }
       return (
         canViewCircleMembers(member?.role ?? null) ||
         (member?.role === 'MEMBER' && membersCanViewRoster === true)
       );
-    } catch {
+    } catch (error) {
       // fail-closed:查询失败一律按无权处理,绝不放行受保护操作。
       if (queryGenRef.current === gen) {
         setSelfMember(null);
         setResolved(true);
+        const denied = isDefinitiveAuthFailure(error) || (error instanceof ApiError && error.status === 404);
+        setVerificationFailed(!denied);
+        if (denied) evictGroupInfoCache(sessionEpoch, cacheKey);
+        else writeGroupInfoCache(sessionEpoch, cacheKey, { validatedAccess: undefined });
       }
       return false;
     }
-  }, [currentUserID, enabled, fetchSelf, groupID, membersCanViewRoster]);
+  }, [cacheKey, currentUserID, enabled, fetchSelf, groupID, membersCanViewRoster, sessionEpoch]);
 
   // 定时/焦点回调里引用 revalidate 会形成声明顺序上的循环,用 ref 转一手。
   revalidateRef.current = revalidate;
@@ -164,5 +197,5 @@ export function useGroupMemberViewAccess(params: {
     [membersCanViewRoster, selfMember],
   );
 
-  return { canViewMembers, selfMember, resolved, revalidate };
+  return { canViewMembers, selfMember, resolved, verificationFailed, revalidate };
 }

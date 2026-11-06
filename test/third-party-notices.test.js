@@ -68,7 +68,7 @@ test('license artifacts are deterministic, complete, and machine-readable', () =
 
   assert.equal(sbom.bomFormat, 'CycloneDX');
   assert.equal(sbom.specVersion, '1.5');
-  assert.equal(sbom.metadata.component.version, '1.0.1');
+  assert.equal(sbom.metadata.component.version, '1.0.2');
   assert.ok(sbom.components.length > 100);
   const componentNames = new Set(sbom.components.map((component) => component.name));
   for (const platformPackage of [

@@ -15,6 +15,7 @@ import {
   isChatRevokeBroadcast,
   isChatTypingBroadcast,
   type ChatConversationBroadcast,
+  type ChatConversationDto,
   type ChatHistoryClearedBroadcast,
   type ChatMessageDto,
   type ChatPresenceBroadcast,
@@ -34,7 +35,8 @@ import { isConversationGoneError, loadChatConversations, refreshChatConversation
 import { dismissChatNotifications } from './chat-notifications';
 import { isMessageDeletedLocally } from './deleted-messages';
 import { reportChatDelivered } from './socket-manager';
-import { getChatMessagePreview } from './mappers';
+import { getChatMessagePreview, mapChatConversationToUI } from './mappers';
+import { showTopNotice } from '@/components/app/top-notice-store';
 import { useChatStore } from './store';
 import { noteLiveRevision } from './sync';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -68,7 +70,8 @@ let incomingMessageIsLive: (() => boolean) | null = null;
 let chatEventBindingEpoch = 0;
 /** 会话元信息在事件到达时缺失；flush 时即使补拉先把它带回也仍只弹最新一条。 */
 const incomingMissingConversationIds = new Set<string>();
-const reportedChatEventFailures = new Set<string>();
+const reportedChatEventFailures = new Map<string, number>();
+const CHAT_EVENT_FAILURE_REPORT_WINDOW_MS = 60_000;
 
 /**
  * A burst of image messages otherwise notifies every chat subscriber twice per
@@ -84,8 +87,12 @@ function batchStoreUpdates<T>(work: () => T): T {
 
 function reportChatEventFailureOnce(operation: string, kind: string): void {
   const signature = `${operation}:${kind}`;
+  const now = Date.now();
+  for (const [entry, reportedAt] of reportedChatEventFailures) {
+    if (now - reportedAt >= CHAT_EVENT_FAILURE_REPORT_WINDOW_MS) reportedChatEventFailures.delete(entry);
+  }
   if (reportedChatEventFailures.has(signature)) return;
-  reportedChatEventFailures.add(signature);
+  reportedChatEventFailures.set(signature, now);
   reportError(new Error('chat event failure'), {
     component: 'chatDispatcher',
     operation,
@@ -793,6 +800,10 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
         return;
       }
       if (validPayload.kind === 'removed' || validPayload.kind === 'left') {
+        // 摘行之前取会话:提示里要用群名。
+        const removedConversation = store.conversations.find(
+          (candidate) => candidate.id === validPayload.conversationId,
+        );
         rememberRemovedConversation(validPayload.conversationId);
         // 还排着的单个刷新作废:否则拿回来的是 403,再白白触发一次整表重拉。
         pendingConversationRefreshes.delete(validPayload.conversationId);
@@ -809,9 +820,9 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
           store.clearConversationLocal(validPayload.conversationId, null);
           store.setActiveConversationId(null);
         }
-        // 正看着这个群被移出才提示;left 是本人在别处的主动动作,静默收走即可。
-        if (validPayload.kind === 'removed' && wasActive) {
-          Alert.alert(i18n.t('im.conversation.removedFromGroup'));
+        // left 是本人在别处的主动动作,静默收走即可;removed 是被别人移出,要告诉本人。
+        if (validPayload.kind === 'removed') {
+          notifyRemovedFromGroup(removedConversation, wasActive);
         }
         return;
       }
@@ -820,6 +831,27 @@ export function bindChatEvents(socket: Socket, isLive: () => boolean): void {
       scheduleConversationRefresh(validPayload.conversationId, isLive);
     });
   });
+}
+
+/**
+ * 被移出群聊的提示:正开着这个群就弹窗(界面随即被收空,得说清楚为什么);
+ * 在别的页面就给一条顶部提醒,不然群只是从列表里无声消失。本地列表里没有这个会话
+ * (从没加载过)又不在前台看着它时不提示 —— 没有群名,用户无从知道说的是哪个群。
+ */
+function notifyRemovedFromGroup(
+  conversation: ChatConversationDto | undefined,
+  wasActive: boolean,
+): void {
+  const title = conversation
+    ? i18n.t('im.conversation.removedFromNamedGroup', {
+        name: mapChatConversationToUI(conversation).name,
+      })
+    : i18n.t('im.conversation.removedFromGroup');
+  if (wasActive) {
+    Alert.alert(title);
+    return;
+  }
+  if (conversation) showTopNotice({ type: 'warning', title });
 }
 
 /**

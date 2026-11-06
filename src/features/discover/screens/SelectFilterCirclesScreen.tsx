@@ -17,7 +17,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
 import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { useCirclesStore } from '@/features/discover/store/use-circles-store';
+import { useCirclesStore, useHydrateCirclesSnapshot } from '@/features/discover/store/use-circles-store';
 import { useDiscoverFilterStore } from '@/features/discover/store/use-discover-filter-store';
 import {
   MAX_CIRCLE_FILTER_SELECTION,
@@ -90,6 +90,7 @@ const s = StyleSheet.create({
 });
 
 export default function SelectFilterCirclesScreen() {
+  useHydrateCirclesSnapshot();
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();

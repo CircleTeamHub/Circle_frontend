@@ -24,6 +24,12 @@ function loadUploadApi() {
   let presignHost = 'http://localhost:9000';
   // 逐用例覆盖 presign 响应字段(比如私有目录的 fileUrl 为 null / 缺省)。
   let presignOverrides = {};
+  const convertedImages = [];
+  const deletedFiles = [];
+  const presignCalls = [];
+  let conversionFails = false;
+  let presignFails = false;
+  let uploadStatus = 200;
 
   const context = {
     module: { exports: {} },
@@ -32,9 +38,13 @@ function loadUploadApi() {
     setTimeout,
     clearTimeout,
     require: (request) => {
+      if (request === '@/observability/tracing') return { startOperationSpan: () => ({ end() {} }) };
       if (request === '@/services/api/client') {
         return {
-          apiClient: (...args) => ({
+          apiClient: (...args) => {
+            presignCalls.push(args);
+            if (presignFails) throw new Error('presign failed');
+            return ({
             uploadUrl: `${presignHost}/circle/avatars/test.jpeg?signature=123`,
             fileUrl: `${presignHost}/circle/avatars/test.jpeg`,
             key: 'avatars/test.jpeg',
@@ -46,7 +56,8 @@ function loadUploadApi() {
             mocked: true,
             args,
             ...presignOverrides,
-          }),
+          });
+          },
         };
       }
       if (request === '@/constants/config') {
@@ -93,14 +104,15 @@ function loadUploadApi() {
           getInfoAsync: async (uri) =>
             uri.includes('missing')
               ? { exists: false }
-              : { exists: true, uri, size: 12345, isDirectory: false },
+              : { exists: true, uri, size: uri === 'file:///converted.jpg' ? 4321 : 12345, isDirectory: false },
+          deleteAsync: async (uri) => { deletedFiles.push(uri); },
           createUploadTask: (...args) => {
             nativeUploadTaskCalled = true;
             return {
               uploadAsync: () => nativeShouldHang
                 ? new Promise(() => {})
                 : Promise.resolve({
-                  status: 200,
+                  status: uploadStatus,
                   headers: {},
                   mimeType: null,
                   body: '',
@@ -108,6 +120,16 @@ function loadUploadApi() {
                 }),
               cancelAsync: async () => { nativeTaskCancelled = true; },
             };
+          },
+        };
+      }
+      if (request === 'expo-image-manipulator') {
+        return {
+          SaveFormat: { JPEG: 'jpeg' },
+          manipulateAsync: async (...args) => {
+            convertedImages.push(args);
+            if (conversionFails) throw new Error('conversion failed');
+            return { uri: 'file:///converted.jpg', width: 100, height: 100 };
           },
         };
       }
@@ -140,8 +162,75 @@ function loadUploadApi() {
   context.module.exports.__setPlatformOS = (value) => {
     platformOS = value;
   };
+  context.module.exports.__convertedImages = convertedImages;
+  context.module.exports.__deletedFiles = deletedFiles;
+  context.module.exports.__presignCalls = presignCalls;
+  context.module.exports.__setConversionFails = (value) => { conversionFails = value; };
+  context.module.exports.__setPresignFails = (value) => { presignFails = value; };
+  context.module.exports.__setUploadStatus = (value) => { uploadStatus = value; };
   return context.module.exports;
 }
+
+for (const [filename, contentType, platform] of [
+  ['avatar.HEIC', 'image/heic', 'ios'],
+  ['cover.heif', 'image/heif', 'android'],
+  ['circle.heic', 'image/jpeg', 'ios'],
+]) {
+  test(`${platform} ${filename} is converted before signing and PUT uses the same JPEG`, async () => {
+    const api = loadUploadApi();
+    api.__setPlatformOS(platform);
+    const sourceUri = `file:///${filename}`;
+    api.__setPresignHost('https://storage.example.test');
+    const presign = await api.requestUploadPresign({ filename, contentType, folder: 'avatars', fileUri: sourceUri });
+    const body = api.__presignCalls[0][1].body;
+    assert.equal(body.filename, filename.replace(/\.[^.]+$/, '.jpg'));
+    assert.equal(body.contentType, 'image/jpeg');
+    assert.equal(body.sizeBytes, 4321);
+    assert.equal(api.__convertedImages[0][0], sourceUri);
+    assert.equal(api.__convertedImages[0][2].format, 'jpeg');
+    const result = await api.uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, sourceUri, presign.requiredHeaders);
+    assert.equal(result.mockedUploadArgs[1], 'file:///converted.jpg');
+    assert.deepEqual(api.__deletedFiles, ['file:///converted.jpg']);
+  });
+}
+
+test('JPEG and GIF uploads retain their original files', async () => {
+  for (const [filename, contentType] of [['avatar.jpg', 'image/jpeg'], ['sticker.gif', 'image/gif']]) {
+    const api = loadUploadApi();
+    const fileUri = `file:///${filename}`;
+    api.__setPresignHost('https://storage.example.test');
+    const presign = await api.requestUploadPresign({ filename, contentType, folder: 'avatars', fileUri });
+    const result = await api.uploadLocalFileToPresignedUrl(presign.uploadUrl, contentType, fileUri, presign.requiredHeaders);
+    assert.equal(result.mockedUploadArgs[1], fileUri);
+    assert.equal(api.__convertedImages.length, 0);
+    assert.equal(api.__deletedFiles.length, 0);
+  }
+});
+
+test('failed HEIC conversion stops before presigning or uploading', async () => {
+  const api = loadUploadApi();
+  api.__setConversionFails(true);
+  api.__setPresignHost('https://storage.example.test');
+  await assert.rejects(api.requestUploadPresign({ filename: 'avatar.heic', contentType: 'image/heic', folder: 'avatars', fileUri: 'file:///avatar.heic' }), /conversion failed/);
+  assert.equal(api.__presignCalls.length, 0);
+  assert.equal(api.__getNativeUploadTaskCalled(), false);
+});
+
+test('failed presign cleans the converted HEIC file', async () => {
+  const api = loadUploadApi();
+  api.__setPresignFails(true);
+  await assert.rejects(api.requestUploadPresign({ filename: 'avatar.heic', contentType: 'image/heic', folder: 'avatars', fileUri: 'file:///avatar.heic' }), /presign failed/);
+  assert.deepEqual(api.__deletedFiles, ['file:///converted.jpg']);
+});
+
+test('failed HEIC PUT cleans the converted file without reporting success', async () => {
+  const api = loadUploadApi();
+  api.__setPresignHost('https://storage.example.test');
+  const presign = await api.requestUploadPresign({ filename: 'avatar.heic', contentType: 'image/heic', folder: 'avatars', fileUri: 'file:///avatar.heic' });
+  api.__setUploadStatus(403);
+  await assert.rejects(api.uploadLocalFileToPresignedUrl(presign.uploadUrl, 'image/heic', 'file:///avatar.heic', presign.requiredHeaders));
+  assert.deepEqual(api.__deletedFiles, ['file:///converted.jpg']);
+});
 
 test('upload helpers sanitize filenames and infer supported content types', () => {
   const { sanitizeUploadFilename, resolveUploadContentType } = loadUploadApi();

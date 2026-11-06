@@ -15,7 +15,7 @@ import { useFocusEffect, useRouter, useSegments } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { Spacing, Typography, useTheme } from '@/theme';
-import { useMomentsStore } from '@/features/discover/store/use-moments-store';
+import { useMomentsStore, useHydrateMomentsSnapshot } from '@/features/discover/store/use-moments-store';
 import { useMomentsFeedSignalStore } from '@/features/discover/store/use-moments-feed-signal-store';
 import {
   addMomentComment,
@@ -73,6 +73,7 @@ const ItemSeparator = memo(function ItemSeparator() {
 });
 
 export const MomentsFeed: React.FC = () => {
+  useHydrateMomentsSnapshot();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();

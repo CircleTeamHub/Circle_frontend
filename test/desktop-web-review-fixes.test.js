@@ -158,7 +158,7 @@ test('the web upload path honors the caller-supplied timeout', () => {
     /setTimeout\(\(\) => controller\.abort\(\), timeoutMs\)/,
     'presigned PUT 仍在用写死的 UPLOAD_TIMEOUT_MS',
   );
-  const webBranch = /const blob = await readLocalBlobOnWeb\(fileUri\);[\s\S]*?\n    return;/.exec(
+  const webBranch = /const blob = await readLocalBlobOnWeb\(fileUri\);[\s\S]*?\n\s*return;/.exec(
     source,
   );
   assert.ok(webBranch, '找不到 web 上传分支');

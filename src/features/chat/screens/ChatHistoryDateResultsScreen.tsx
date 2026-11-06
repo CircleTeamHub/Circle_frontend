@@ -19,6 +19,7 @@ import {
 import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
 
 const PAGE_SIZE = 50;
 const s = StyleSheet.create({
@@ -43,6 +44,12 @@ const s = StyleSheet.create({
 });
 
 export default function ChatHistoryDateResultsScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  const { conversationID, date } = useLocalSearchParams<{ conversationID?: string; date?: string }>();
+  return sessionKey ? <ChatHistoryDateResultsContent key={`${sessionKey}:${conversationID ?? ''}:${date ?? ''}`} /> : null;
+}
+
+function ChatHistoryDateResultsContent() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();

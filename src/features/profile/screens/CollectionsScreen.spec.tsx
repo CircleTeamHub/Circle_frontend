@@ -7,13 +7,41 @@ import { useMessageForwardStore } from '@/features/chat/store/use-message-forwar
 import { saveMediaToLibrary } from '@/utils/save-image';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { NoteVideoViewer } from '@/features/notes/components/NoteVideoViewer';
+import { reportHandledFailure } from '@/observability/report-failure';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
 const mockRouter = { push: jest.fn(), navigate: jest.fn() };
 const mockAuth = { user: { id: 'me' }, sessionEpoch: 1 };
-const mockPlayer = { replace: jest.fn(), play: jest.fn(), pause: jest.fn(), playing: false, addListener: jest.fn(() => ({ remove: jest.fn() })) };
-jest.mock('expo-router', () => ({ get router() { return mockRouter; }, useFocusEffect: jest.fn() }));
+let mockPlayerReleased = false;
+const mockPlayer = {
+  replace: jest.fn(), play: jest.fn(), playing: false,
+  pause: jest.fn(() => { if (mockPlayerReleased) throw new Error('Audio player already released'); }),
+  release: jest.fn(() => { mockPlayerReleased = true; }),
+  addListener: jest.fn(() => ({ remove: jest.fn() })),
+};
+// 一个事件可以有多个订阅者:页面里每个 useFocusEffect 各挂一组 focus/blur。
+const mockNavigationListeners = new Map<string, Set<() => void>>();
+const mockNavigation = {
+  isFocused: () => true,
+  addListener: (event: string, listener: () => void) => {
+    const listeners = mockNavigationListeners.get(event) ?? new Set<() => void>();
+    listeners.add(listener);
+    mockNavigationListeners.set(event, listeners);
+    return () => { listeners.delete(listener); };
+  },
+};
+const emitNavigation = (event: string) => { for (const listener of [...mockNavigationListeners.get(event) ?? []]) listener(); };
+jest.mock('expo-router', () => ({ get router() { return mockRouter; }, useFocusEffect: jest.requireActual('expo-router/build/useFocusEffect').useFocusEffect }));
+jest.mock('expo-router/build/link/useLoadedNavigation', () => ({ useOptionalNavigation: () => mockNavigation }));
+jest.mock('expo-router/build/useNavigation', () => ({ useNavigation: () => mockNavigation }));
 jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign((select: (state: typeof mockAuth) => unknown) => select(mockAuth), { getState: () => mockAuth }) }));
-jest.mock('expo-audio', () => ({ useAudioPlayer: () => mockPlayer, setAudioModeAsync: jest.fn(async () => undefined) }));
+jest.mock('expo-audio', () => ({
+  useAudioPlayer: () => jest.requireActual('expo-modules-core').useReleasingSharedObject(() => {
+    mockPlayerReleased = false;
+    return mockPlayer;
+  }, []),
+  setAudioModeAsync: jest.fn(async () => undefined),
+}));
 const mockTranslate = (key: string, options?: Record<string, unknown>) => {
   let value = String(options?.defaultValue ?? key);
   for (const [name, replacement] of Object.entries(options ?? {})) value = value.replaceAll('{{' + name + '}}', String(replacement));
@@ -30,9 +58,15 @@ jest.mock('@/components/ui/nav-header', () => {
   return { NavHeader: ({ title, rightSlot, onBackPress }: { title: string; rightSlot?: React.ReactNode; onBackPress?: () => void }) => <View><Text>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="返回" onPress={onBackPress} />{rightSlot}</View> };
 });
 jest.mock('@/hooks/use-network-status', () => ({ useNetworkStatus: () => ({ isOffline: false }) }));
-jest.mock('@/services/api/collections', () => ({ fetchCollections: jest.fn(), deleteCollection: jest.fn() }));
-jest.mock('@/services/api/client', () => ({ apiClient: jest.fn() }));
+// 会话内存快照由真实 fetchCollections 填;这里替身掉 API,快照恒为空(每次进页都走网络)。
+jest.mock('@/services/api/collections', () => ({
+  fetchCollections: jest.fn(), deleteCollection: jest.fn(),
+  getCachedCollections: () => null, collectionsMutatedSince: () => false,
+}));
+jest.mock('@/services/api/client', () => ({ apiClient: jest.fn(), ApiError: jest.requireActual('@/services/api/api-error').ApiError }));
 jest.mock('@/utils/save-image', () => ({ saveMediaToLibrary: jest.fn() }));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+jest.mock('@/utils/client-diagnostics', () => ({ logClientDiagnostic: jest.fn() }));
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: jest.fn(() => null) }));
 jest.mock('@/features/notes/components/NoteVideoViewer', () => ({ NoteVideoViewer: jest.fn(() => null) }));
 jest.mock('expo-image', () => {
@@ -54,6 +88,7 @@ function mediaItem(type: 'image' | 'video', id: string = type): UserCollection {
 const row = (id: string) => screen.getByTestId('collection-item-' + id);
 beforeEach(() => {
   jest.clearAllMocks();
+  mockNavigationListeners.clear();
   mockAuth.user = { id: 'me' }; mockAuth.sessionEpoch += 1;
   useMessageForwardStore.getState().clear();
   jest.mocked(fetchCollections).mockReset().mockResolvedValue([]);
@@ -66,12 +101,38 @@ test('shows the page title and actionable empty state', async () => {
   expect(screen.getByText('我的收藏')).toBeTruthy();
   expect(await screen.findByText('还没有收藏')).toBeTruthy();
 });
+
+test('returning from collections does not pause an already released audio player', async () => {
+  const view = render(<CollectionsScreen />);
+  await screen.findByText('还没有收藏');
+  mockPlayer.pause.mockClear();
+
+  expect(() => view.unmount()).not.toThrow();
+  expect(mockPlayer.release).toHaveBeenCalledTimes(1);
+  expect(mockPlayer.pause).not.toHaveBeenCalled();
+});
+
+test('leaving collections while it remains mounted still pauses audio', async () => {
+  const view = render(<CollectionsScreen />);
+  await screen.findByText('还没有收藏');
+  mockPlayer.pause.mockClear();
+
+  act(() => { emitNavigation('blur'); });
+
+  expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
+  expect(mockPlayer.release).not.toHaveBeenCalled();
+  view.unmount();
+  expect(mockPlayer.release).toHaveBeenCalledTimes(1);
+  expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
+});
 test('failed loads can retry and show actual text', async () => {
-  jest.mocked(fetchCollections).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([chatItem]);
+  const error = new Error('offline');
+  jest.mocked(fetchCollections).mockRejectedValueOnce(error).mockResolvedValueOnce([chatItem]);
   render(<CollectionsScreen />);
   fireEvent.press(await screen.findByText('重试'));
   expect(await screen.findByText('周末去爬山，早上八点集合')).toBeTruthy();
   expect(fetchCollections).toHaveBeenCalledTimes(2);
+  expect(reportHandledFailure).toHaveBeenCalledWith('collections', 'load', error);
 });
 test('shows the image and readable date; tapping previews instead of jumping to chat', async () => {
   jest.mocked(fetchCollections).mockResolvedValue([mediaItem('image')]);
@@ -112,6 +173,8 @@ test('mixed selection saves media only and leaves unsupported text selected', as
   expect(saveMediaToLibrary).toHaveBeenCalledWith('https://cdn.example.com/image', { mimeType: 'image/jpeg' });
   await waitFor(() => expect(row('image')).not.toBeChecked());
   expect(row('c-text')).toBeChecked();
+  expect(logClientDiagnostic).toHaveBeenCalledWith('collections.batch.started', { stage: 'save', selectedCount: 2, total: 1 });
+  expect(logClientDiagnostic).toHaveBeenCalledWith('collections.batch.completed', { stage: 'save', succeeded: 1, failed: 0, total: 1 });
 });
 test('forwards media using real source DTOs through the existing batch picker', async () => {
   jest.mocked(fetchCollections).mockResolvedValue([chatItem, mediaItem('image')]);
@@ -140,6 +203,15 @@ test('text opens a selectable content sheet and can close without navigating awa
   expect(screen.getAllByText('周末去爬山，早上八点集合').some(text => text.props.selectable)).toBe(true);
   fireEvent.press(screen.getByRole('button', { name: '关闭' }));
   expect(mockRouter.push).not.toHaveBeenCalled();
+  expect(logClientDiagnostic).toHaveBeenCalledWith('collections.open', { stage: 'text' });
+});
+test('selection back records the action before clearing selection without identifiers', async () => {
+  jest.mocked(fetchCollections).mockResolvedValue([chatItem]);
+  render(<CollectionsScreen />);
+  fireEvent(await screen.findByTestId('collection-item-c-text'), 'longPress');
+  fireEvent.press(screen.getByRole('button', { name: '返回' }));
+  expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+  expect(logClientDiagnostic).toHaveBeenCalledWith('collections.back', { reason: 'header', selectedCount: 1 });
 });
 test('saving cannot submit twice or cancel while the album write is in progress', async () => {
   let finish!: (result: 'saved') => void;
@@ -156,8 +228,9 @@ test('saving cannot submit twice or cancel while the album write is in progress'
   await waitFor(() => expect(screen.queryAllByRole('checkbox')).toHaveLength(0));
 });
 test('batch delete confirms once, removes successes and retains failed selection', async () => {
+  const error = new Error('offline');
   jest.mocked(fetchCollections).mockResolvedValue([chatItem, mediaItem('image')]);
-  jest.mocked(deleteCollection).mockImplementation(async id => { if (id === 'c-text') throw new Error('offline'); });
+  jest.mocked(deleteCollection).mockImplementation(async id => { if (id === 'c-text') throw error; });
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   try {
     render(<CollectionsScreen />);
@@ -168,7 +241,40 @@ test('batch delete confirms once, removes successes and retains failed selection
     await act(async () => { await alert.mock.calls.at(-1)?.[2]?.find(button => button.style === 'destructive')?.onPress?.(); });
     await waitFor(() => expect(screen.queryByTestId('collection-item-image')).toBeNull());
     expect(row('c-text')).toBeChecked();
+    expect(reportHandledFailure).toHaveBeenCalledWith('collections', 'batch', error, { reason: 'delete' });
   } finally { alert.mockRestore(); }
+});
+test('a thrown album save keeps selection and reports without collection content', async () => {
+  const error = new Error('album unavailable');
+  jest.mocked(fetchCollections).mockResolvedValue([mediaItem('image')]);
+  jest.mocked(saveMediaToLibrary).mockRejectedValueOnce(error);
+  render(<CollectionsScreen />);
+  fireEvent(await screen.findByTestId('collection-item-image'), 'longPress');
+  fireEvent.press(screen.getByRole('button', { name: '保存' }));
+  await screen.findByText('已保存 0 项，1 项失败，0 项不支持保存');
+  expect(row('image')).toBeChecked();
+  expect(reportHandledFailure).toHaveBeenCalledWith('collections', 'batch', error, { reason: 'save' });
+});
+test('album permission denial keeps selection without reporting an exception', async () => {
+  jest.mocked(fetchCollections).mockResolvedValue([mediaItem('image')]);
+  jest.mocked(saveMediaToLibrary).mockResolvedValueOnce('denied');
+  render(<CollectionsScreen />);
+  fireEvent(await screen.findByTestId('collection-item-image'), 'longPress');
+  fireEvent.press(screen.getByRole('button', { name: '保存' }));
+  await screen.findByText('请允许访问相册后重试');
+  expect(reportHandledFailure).not.toHaveBeenCalled();
+});
+test('a failed voice play reports the native failure without the media URL', async () => {
+  const voice = mediaItem('image', 'voice');
+  voice.type = 'VOICE';
+  voice.message = { ...voice.message!, type: 'voice', content: { url: 'https://cdn.example.com/private-voice', duration: 2 } };
+  const error = new Error('player unavailable');
+  mockPlayer.play.mockImplementationOnce(() => { throw error; });
+  jest.mocked(fetchCollections).mockResolvedValue([voice]);
+  render(<CollectionsScreen />);
+  fireEvent.press(await screen.findByTestId('collection-item-voice'));
+  await screen.findByText('内容暂不可用');
+  expect(reportHandledFailure).toHaveBeenCalledWith('collections', 'voicePlayback', error);
 });
 test('previous-account delete confirmation cannot act after account switch', async () => {
   jest.mocked(fetchCollections).mockResolvedValue([chatItem]);

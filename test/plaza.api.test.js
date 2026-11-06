@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withNativeStorageStubs } = require('./helpers/native-storage-stubs');
 
 function loadPlazaApi(apiResponses) {
   const filePath = path.join(process.cwd(), 'src/services/api/plaza.ts');
@@ -24,7 +25,7 @@ function loadPlazaApi(apiResponses) {
     module: { exports: {} },
     exports: {},
     URL,
-    require: (specifier) => {
+    require: withNativeStorageStubs((specifier) => {
       if (specifier === '@/services/api/client') {
         return {
           apiClient: async (...args) => {
@@ -73,7 +74,7 @@ function loadPlazaApi(apiResponses) {
         };
       }
       return require(specifier);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

@@ -7,7 +7,7 @@ import { PlaneLogoIcon } from '@/components/app/plane-logo-icon';
 import { Gradients, Radius, Spacing, useTheme, withAlpha } from '@/theme';
 import { getLocalizedDateTimeLocale } from '@/utils/locale';
 
-const [GOLD_LIGHT, GOLD, GOLD_DEEP] = Gradients.goldFoil;
+const [GOLD_LIGHT, GOLD] = Gradients.goldFoil;
 // 卡面画布：ISO 7810 ID-1 比例（85.6×54mm ≈ 1.586），随卡面拉伸。
 const CARD_W = 400;
 const CARD_H = 252;
@@ -43,12 +43,8 @@ const s = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  chipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    justifyContent: 'flex-end',
+    minHeight: 30,
   },
   brandRow: {
     flexDirection: 'row',
@@ -105,40 +101,6 @@ const s = StyleSheet.create({
   },
 });
 
-/** EMV 芯片：金箔渐变底 + 触点分区线。 */
-function CardChip() {
-  return (
-    <Svg width={40} height={30} viewBox="0 0 40 30">
-      <Defs>
-        <LinearGradient id="chipGold" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={GOLD_LIGHT} />
-          <Stop offset="0.55" stopColor={GOLD} />
-          <Stop offset="1" stopColor={GOLD_DEEP} />
-        </LinearGradient>
-      </Defs>
-      <Rect x={0.5} y={0.5} width={39} height={29} rx={6} fill="url(#chipGold)" stroke={GOLD_DEEP} strokeWidth={1} />
-      <G stroke={GOLD_DEEP} strokeWidth={1} fill="none" strokeOpacity={0.8}>
-        <Path d="M0 10H13M0 20H13M27 10H40M27 20H40" />
-        <Path d="M13 0V30M27 0V30" />
-        <Rect x={13} y={8} width={14} height={14} rx={3} />
-      </G>
-    </Svg>
-  );
-}
-
-/** 非接触支付标识：三道渐大的弧。 */
-function ContactlessMark() {
-  return (
-    <Svg width={18} height={22} viewBox="0 0 18 22">
-      <G stroke={GOLD} strokeWidth={1.8} strokeLinecap="round" fill="none">
-        <Path d="M3 7.5C4.6 9.6 4.6 12.4 3 14.5" />
-        <Path d="M7.5 5C10.4 8.6 10.4 13.4 7.5 17" />
-        <Path d="M12 2.5C16.2 7.6 16.2 14.4 12 19.5" />
-      </G>
-    </Svg>
-  );
-}
-
 interface WalletBalanceCardProps {
   balance: number;
   loading: boolean;
@@ -194,10 +156,6 @@ export function WalletBalanceCard({ balance, loading, accountId, holder }: Walle
       </Svg>
 
       <View style={s.topRow}>
-        <View style={s.chipRow}>
-          <CardChip />
-          <ContactlessMark />
-        </View>
         <View style={s.brandRow}>
           <PlaneLogoIcon size={18} color={GOLD} filled />
           <Text style={[s.brand, { color: GOLD }]}>WindNote</Text>

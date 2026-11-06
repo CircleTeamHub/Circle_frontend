@@ -31,8 +31,12 @@ function loadCirclesStore({ fetchMyCirclesImpl, fetchCirclesImpl, circlesMutated
         if (fetchCirclesImpl) return fetchCirclesImpl();
         return { items: [], total: 0 };
       },
-      circlesMutatedSince: circlesMutatedSince ?? (() => false),
     },
+    // 圈子列表现在只看「群或圈子写过没有」这一个闸门。
+    '@/features/chat/utils/group-reload-key': {
+      groupOrCircleMutatedSince: circlesMutatedSince ?? (() => false),
+    },
+    react: require('react'),
     '@/services/api/errors': {
       getApiErrorMessage: (_e, fallback) => fallback,
     },

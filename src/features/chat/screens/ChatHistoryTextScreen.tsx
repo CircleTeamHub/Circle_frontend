@@ -23,6 +23,7 @@ import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-h
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
 
 const PAGE_SIZE = 20;
 
@@ -69,6 +70,12 @@ const s = StyleSheet.create({
 });
 
 export default function ChatHistoryTextScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  const { conversationID } = useLocalSearchParams<{ conversationID?: string }>();
+  return sessionKey ? <ChatHistoryTextContent key={`${sessionKey}:${conversationID ?? ''}`} /> : null;
+}
+
+function ChatHistoryTextContent() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();

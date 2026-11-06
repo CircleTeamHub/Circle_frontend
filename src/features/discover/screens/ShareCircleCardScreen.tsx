@@ -90,6 +90,7 @@ export default function ShareCircleCardScreen() {
     typeof params.avatar === 'string' && params.avatar ? params.avatar : null;
 
   const rawConversations = useChatStore((state) => state.conversations);
+  const snapshotLoaded = useChatStore((state) => state.conversationsSnapshotLoaded);
   const [sendingConversationID, setSendingConversationID] = useState('');
   const [loadingConversations, setLoadingConversations] = useState(
     rawConversations.length === 0,
@@ -122,7 +123,7 @@ export default function ShareCircleCardScreen() {
   );
 
   useEffect(() => {
-    if (rawConversations.length > 0) {
+    if (snapshotLoaded) {
       setLoadingConversations(false);
       setLoadFailed(false);
       return;
@@ -149,7 +150,7 @@ export default function ShareCircleCardScreen() {
     return () => {
       cancelled = true;
     };
-  }, [loadAttempt, rawConversations.length]);
+  }, [loadAttempt, snapshotLoaded]);
 
   const conversations = useMemo(
     () => rawConversations.map(mapChatConversationToUI),

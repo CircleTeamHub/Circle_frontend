@@ -1,8 +1,10 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
+import { evictUserProfileCache, writeUserProfileCache } from '../profile-cache';
 import EditFriendPermissionScreen from './EditFriendPermissionScreen';
 import { fetchFriendSettings, setFriendPermission } from '@/services/api/friends';
+import { getEncryptedInstance } from '@/storage/encrypted-init';
 
 const mockRouter = { back: jest.fn() };
 const mockTranslate = (key: string) => key;
@@ -23,14 +25,22 @@ jest.mock('@/theme', () => ({
   Radius: { lg: 12, xl: 18 }, Spacing: { sm: 8, md: 12, lg: 16, xl: 24 }, Typography: { body: {}, bodyRegular: {}, small: {} },
   useTheme: () => ({ colors: { background: '#fff', surface: '#fff', surfaceBorder: '#ddd', text: '#111', textSecondary: '#666', primary: '#6200ee', white: '#fff' } }),
 }));
-jest.mock('@/services/api/friends', () => ({ fetchFriendSettings: jest.fn(), setFriendPermission: jest.fn() }));
+jest.mock('@/services/api/friends', () => ({ fetchFriendSettings: jest.fn(), setFriendPermission: jest.fn(), friendsMutatedSince: () => false }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_error: unknown, fallback: string) => fallback }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+// 资料缓存在原生端只在加密库就绪后才工作;给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 beforeEach(() => {
   jest.clearAllMocks();
+  // 缓存按当前登录账号定域:先复位账号,再清掉上一个用例落盘/留在内存里的资料。
+  Object.assign(mockAuth, { isAuthenticated: true, user: { id: 'owner-a' }, sessionEpoch: 1 });
+  getEncryptedInstance()?.clearAll();
+  evictUserProfileCache(1, 'friend-id');
   jest.mocked(fetchFriendSettings).mockReset();
   jest.mocked(setFriendPermission).mockReset().mockResolvedValue(undefined);
-  Object.assign(mockAuth, { isAuthenticated: true, user: { id: 'owner-a' }, sessionEpoch: 1 });
   mockParams = { id: 'friend-id', name: 'Private remark' };
 });
 afterEach(() => { jest.restoreAllMocks(); });
@@ -123,4 +133,13 @@ test('a rapid double press submits the permission once', async () => {
   act(() => { fireEvent.press(save); fireEvent.press(save); });
   expect(setFriendPermission).toHaveBeenCalledTimes(1);
   await act(async () => { finish(); });
+});
+
+test('uses settings already loaded by the profile without a loading screen or duplicate request', () => {
+  writeUserProfileCache(1, 'friend-id', { friendSettings: { value: { permission: 'CHAT_ONLY' } as Awaited<ReturnType<typeof fetchFriendSettings>>, at: Date.now() } });
+  jest.mocked(fetchFriendSettings).mockReturnValue(new Promise(() => {}));
+  render(<EditFriendPermissionScreen />);
+  expect(screen.queryByText('userProfile.editPermission.loading')).toBeNull();
+  expect(screen.getByRole('radio', { selected: true })).toBeTruthy();
+  expect(fetchFriendSettings).not.toHaveBeenCalled();
 });

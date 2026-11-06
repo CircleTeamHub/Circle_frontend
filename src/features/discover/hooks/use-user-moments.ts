@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getApiErrorMessage } from '@/services/api/errors';
-import { fetchUserMoments } from '@/services/api/moments';
+import { fetchUserMoments, momentsMutatedSince } from '@/services/api/moments';
 import type { MomentPost } from '@/types';
 import { useAuthStore } from '@/stores/authStore';
+import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
+import { getPageSnapshotRevision, readPageSnapshot, removePageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 
 const PAGE_SIZE = 20;
 
@@ -13,6 +15,7 @@ interface UseUserMomentsResult {
   refreshing: boolean;
   hasMore: boolean;
   error: string | null;
+  lastLoadedAt: number | null;
   refresh: () => Promise<void>;
   loadMore: () => Promise<void>;
 }
@@ -23,6 +26,7 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   const ownerId = useAuthStore((state) => state.isAuthenticated ? state.user?.id : undefined);
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   const scopeKey = `${ownerId ?? ''}:${sessionEpoch}:${userId}`;
+  const [initialSnapshot] = useState(() => readPageSnapshot<{ items: MomentPost[]; nextCursor: string | null; hasMore: boolean }>(ownerId, `social:user-moments:${userId}`));
   const [dataScope, setDataScope] = useState(scopeKey);
   const currentTargetRef = useRef(userId);
   currentTargetRef.current = userId;
@@ -30,13 +34,14 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   // ref，避免它成为 load 的依赖，进而让初次加载 effect 因为函数身份变化重复发请求。
   const translateRef = useRef(t);
   translateRef.current = t;
-  const [moments, setMoments] = useState<MomentPost[]>([]);
+  const [moments, setMoments] = useState<MomentPost[]>(() => initialSnapshot?.value.items ?? []);
   // Keyset cursor for the next page (null = start from newest).
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [cursor, setCursor] = useState<string | null>(initialSnapshot?.value.nextCursor ?? null);
+  const [hasMore, setHasMore] = useState(initialSnapshot?.value.hasMore ?? true);
+  const [loading, setLoading] = useState(!initialSnapshot);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
   // 卸载后禁止再 setState：慢网下打开相册又快速返回会触发
   // update-on-unmounted 警告，并可能污染复用的组件状态。
   const mountedRef = useRef(true);
@@ -61,6 +66,8 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
       if (!auth.isAuthenticated || auth.user?.id !== ownerId || auth.sessionEpoch !== sessionEpoch ||
         currentTargetRef.current !== userId) return;
       const requestSeq = ++requestSeqRef.current;
+      const startedAt = Date.now();
+      const requestRevision = getPageSnapshotRevision();
       const requestUserId = userId;
       const isCurrent = () => {
         const auth = useAuthStore.getState();
@@ -91,8 +98,19 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
         setHasMore(result.hasMore);
         cursorRef.current = result.nextCursor ?? null;
         setCursor(cursorRef.current);
+        if (replace) {
+          setLastLoadedAt(startedAt);
+          if (requestRevision === getPageSnapshotRevision() && !momentsMutatedSince(startedAt)) writePageSnapshot(ownerId, `social:user-moments:${userId}`, {
+            items: result.items, nextCursor: result.nextCursor ?? null, hasMore: result.hasMore,
+          }, startedAt);
+        }
       } catch (err) {
         if (!isCurrent()) return;
+        if (isDefinitiveAuthFailure(err) || (err instanceof ApiError && err.status === 404)) {
+          removePageSnapshot(ownerId, `social:user-moments:${userId}`);
+          setMoments([]);
+          setHasMore(false);
+        }
         // A failed refresh keeps the last successful page usable. Only failed
         // pagination or an initial load without a cursor stops automatic loads.
         if (!replace || !cursorRef.current) pageFailedRef.current = true;
@@ -112,6 +130,7 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
   );
 
   useEffect(() => {
+    setLastLoadedAt(null);
     if (!userId || !ownerId) {
       // 使旧用户的慢请求失效；否则路由切换到空 id 的这一帧里，旧响应仍可能
       // 通过原 requestSeq 写回列表，造成用户短暂看到上一位用户的朋友圈。
@@ -130,16 +149,17 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
       return;
     }
 
+    const saved = readPageSnapshot<{ items: MomentPost[]; nextCursor: string | null; hasMore: boolean }>(ownerId, `social:user-moments:${userId}`);
     setDataScope(scopeKey);
-    setMoments([]);
-    setCursor(null);
-    cursorRef.current = null;
-    setHasMore(true);
+    setMoments(saved?.value.items ?? []);
+    setCursor(saved?.value.nextCursor ?? null);
+    cursorRef.current = saved?.value.nextCursor ?? null;
+    setHasMore(saved?.value.hasMore ?? true);
     pageFailedRef.current = false;
     inFlightRef.current = false;
     refreshInFlightRef.current = false;
     setRefreshing(false);
-    setLoading(true);
+    setLoading(!saved);
     void load(undefined, true);
   }, [load, ownerId, scopeKey, userId]);
 
@@ -173,6 +193,7 @@ export function useUserMoments(userId: string): UseUserMomentsResult {
     refreshing: isCurrentData && refreshing,
     hasMore: isCurrentData && hasMore,
     error: isCurrentData ? error : null,
+    lastLoadedAt: isCurrentData ? lastLoadedAt : null,
     refresh, loadMore,
   };
 }

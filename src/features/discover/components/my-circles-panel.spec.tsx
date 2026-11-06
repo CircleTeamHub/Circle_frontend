@@ -7,6 +7,8 @@ const circle = (id: string, name: string) => ({ id, name, avatarUrl: null });
 let mockCircles: Record<string, unknown>;
 jest.mock('@/features/discover/store/use-circles-store', () => ({
   useCirclesStore: (selector: (state: unknown) => unknown) => selector(mockCircles),
+  // 快照回灌由 store 自己负责;这里直接给 mockCircles。
+  useHydrateCirclesSnapshot: () => {},
 }));
 jest.mock('@/features/discover/store/use-discover-filter-store', () => ({
   useDiscoverFilterStore: (selector: (state: unknown) => unknown) =>
@@ -19,7 +21,14 @@ jest.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: jest.fn() },
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: jest.fn() }),
+  // 每次聚焦都后台刷新「我的圈子」。
+  useFocusEffect: (callback: () => void) => {
+    const { useEffect } = jest.requireActual('react');
+    useEffect(callback, [callback]);
+  },
+}));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/components/ui/circle-avatar', () => ({ CircleAvatar: () => null }));
 

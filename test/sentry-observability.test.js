@@ -109,6 +109,7 @@ test("production Expo transform inlines the public DSN before runtime", () => {
       if (name === "./tracing") return { TRACED_SPAN_NAMES: new Set() };
       if (name === "./unhandled-rejection-filter") return load("src/observability/unhandled-rejection-filter.ts");
       if (name === "./metrics") return load("src/observability/metrics.ts", { "@sentry/react-native": {} });
+      if (name === "./http-diagnostics") return load("src/observability/http-diagnostics.ts");
       if (name === "@/utils/redact") return load("src/utils/redact.ts");
       return require(name);
     },
@@ -558,7 +559,7 @@ test("initSentry attaches explicit release and distribution identifiers", () => 
   assert.equal(calls[0].dist, "1002003");
 });
 
-test("setSentryUserId never sends the backend account id", () => {
+test("setSentryUserId sends only the internal account id and clears it on logout", () => {
   const { setSentryUserId } = loadSentry();
   const calls = [];
   const client = { setUser: (user) => calls.push(user) };
@@ -568,11 +569,11 @@ test("setSentryUserId never sends the backend account id", () => {
   setSentryUserId(null, client);
 
   assert.equal(calls.length, 2);
-  assert.equal(calls[0], null);
+  assert.equal(JSON.stringify(calls[0]), JSON.stringify({ id: "user-1" }));
   assert.equal(calls[1], null);
 });
 
-test("beforeSend preserves reportError allowlisted extra but removes account identity", () => {
+test("beforeSend preserves reportError allowlisted extra and only the internal user id", () => {
   const { initSentry, reportError } = loadSentry();
   const initCalls = [];
   initSentry({
@@ -591,7 +592,7 @@ test("beforeSend preserves reportError allowlisted extra but removes account ide
       clientDiagnostics: [{ event: "api.request", details: { stage: "connect", page: 1 } }],
       token: "secret-token",
     },
-    user: { id: "backend-user-1" },
+    user: { id: "backend-user-1", email: "private@example.test", username: "private-name", ip_address: "192.0.2.1" },
   });
 
   assert.equal(event.extra.attempts, 3);
@@ -600,12 +601,12 @@ test("beforeSend preserves reportError allowlisted extra but removes account ide
   assert.equal(
     JSON.stringify(event.extra.clientDiagnostics),
     JSON.stringify([
-      { event: "api.request", details: { stage: "connect", page: 1 } },
+      { summary: "应用记录：api.request", event: "api.request", details: { stage: "connect", page: 1 } },
     ]),
   );
   assert.equal(event.extra.token, undefined);
-  assert.equal(event.user, undefined);
-  assert.doesNotMatch(JSON.stringify(event), /backend-user-1|secret-token/);
+  assert.equal(JSON.stringify(event.user), JSON.stringify({ id: "backend-user-1" }));
+  assert.doesNotMatch(JSON.stringify(event), /secret-token|private@example|private-name|192\.0\.2\.1/);
 });
 
 test("wrapWithSentry wraps only when enabled", () => {
@@ -660,7 +661,7 @@ test("reportError forwards to captureException with extra context", () => {
 
   assert.equal(calls.length, 1);
   assert.notEqual(calls[0][0], err);
-  assert.equal(calls[0][0].message, "handled application error");
+  assert.equal(calls[0][0].message, "应用异常｜运行时错误（原始文本已隐藏）");
   // Property-level checks: the captureContext object is built inside the
   // vm-loaded module (a different realm), so deepStrictEqual would fail on the
   // mismatched prototype even though the structure is identical.
@@ -784,10 +785,11 @@ test("reportError preserves bounded request metadata without changing grouping",
 test("request metadata rejects malformed UUIDs and invalid durations", () => {
   const { reportError } = loadSentry();
   const captures = [];
-  reportError(new Error("failed"), { requestId: "not-a-uuid", durationMs: -1 }, {
+  reportError(new Error("failed"), { requestId: "not-a-uuid", clientRequestId: "PRIVATE_CANARY", initialRequestId: "PRIVATE_CANARY", durationMs: -1 }, {
     captureException: (_error, context) => captures.push(context),
   });
-  assert.equal(captures[0], undefined);
+  assert.equal(captures[0].extra, undefined);
+  assert.equal(captures[0].user.id, undefined);
 });
 
 test("reportError is a no-op by default when Sentry was not initialized", () => {
@@ -833,7 +835,7 @@ test("reportError captures a generic error copy without custom data or user cont
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0].name, "Error");
-  assert.equal(calls[0][0].message, "upload error failure");
+  assert.equal(calls[0][0].message, "upload 失败｜运行时错误（原始文本已隐藏）");
   assert.equal(calls[0][0].data, undefined);
   assert.doesNotMatch(
     JSON.stringify(calls),
@@ -849,7 +851,8 @@ test("reportError omits extra when no context is given", () => {
 
   reportError(new Error("x"), undefined, client);
 
-  assert.equal(calls[0][1], undefined);
+  assert.equal(calls[0][1].extra, undefined);
+  assert.equal(calls[0][1].user.id, undefined);
 });
 
 test("shouldReportHttpFailure reports network(0)/5xx, skips 4xx", () => {
@@ -1150,13 +1153,138 @@ test("initSentry wires navigation tracing so cold start and XHR spans have a roo
 
   assert.equal(created.length, 1);
   assert.equal(created[0].useFullPathsForNavigationRoutes, true);
-  assert.equal(calls[0].integrations.length, 1);
-  assert.equal(calls[0].integrations[0], integration);
+  const integrations = calls[0].integrations([]);
+  assert.equal(integrations.length, 1);
+  assert.equal(integrations[0], integration);
 
   const ref = { current: { addListener() {} } };
   registerSentryNavigationContainer(ref);
   assert.equal(registered.length, 1);
   assert.equal(registered[0], ref);
+});
+
+test("session diagnostic correlation and response-shape flags survive Sentry sanitization", () => {
+  const { initSentry, reportError } = loadSentry();
+  let config;
+  initSentry({ client: { init: o => { config = o; }, wrap: c => c }, dsn: 'https://a@o/1' });
+  let captured;
+  const diagnosticId = '12345678-1234-4234-8234-123456789abc';
+  reportError(new Error('fixed cause'), {
+    operation: 'session', kind: 'forcedLogout', diagnosticId,
+    reason: 'refresh-response-invalid', responseShape: 'object',
+    responseHasAccessToken: true, responseHasRefreshToken: false,
+    hasAccessToken: true, hasRefreshToken: true, closeCode: 1008,
+  }, { captureException: (_error, context) => { captured = context; } });
+  const sanitized = config.beforeSend({ tags: captured.tags, extra: captured.extra });
+  assert.equal(sanitized.tags.diagnosticId, diagnosticId);
+  assert.equal(sanitized.extra.responseShape, 'object');
+  assert.equal(sanitized.extra.responseHasRefreshToken, false);
+  assert.equal(sanitized.extra.closeCode, 1008);
+});
+
+test("forced logout events retain distinct request ids through SDK deduplication", () => {
+  const { dedupeIntegration } = require('@sentry/core');
+  const { initSentry, reportError } = loadSentry();
+  let config;
+  initSentry({ client: { init: (o) => { config = o; }, wrap: (c) => c }, dsn: "https://a@o/1" });
+  const [dedupe] = config.integrations([dedupeIntegration()]);
+  const events = [];
+  const capture = { captureException: (error, context) => events.push({
+    ...context,
+    exception: { values: [{ type: error.name, value: error.message }] },
+  }) };
+  for (const requestId of [
+    '12345678-1234-4234-8234-123456789abc',
+    '87654321-4321-4321-8321-cba987654321',
+  ]) {
+    reportError(new Error('fixed logout cause'), {
+      operation: 'session', kind: 'forcedLogout', reason: 'refresh-rejected',
+      endpointPath: '/auth/refresh', method: 'POST', status: 401, requestId,
+    }, capture);
+  }
+  assert.equal(events.length, 2);
+  assert.deepEqual(events[0].fingerprint, events[1].fingerprint);
+  assert.notEqual(events[0].extra.requestId, events[1].extra.requestId);
+  for (const event of events) assert.equal(dedupe.processEvent(event), event);
+
+  // Other errors retain the SDK's default duplicate suppression.
+  const ordinary = { exception: { values: [{ type: 'Error', value: 'ordinary failure' }] } };
+  assert.equal(dedupe.processEvent(ordinary), ordinary);
+  assert.equal(dedupe.processEvent({ ...ordinary }), null);
+});
+
+test("preserved refresh anomalies retain correlation, unknown shape and distinct events", () => {
+  const { dedupeIntegration } = require('@sentry/core');
+  const { initSentry, reportError } = loadSentry();
+  let config;
+  initSentry({ client: { init: o => { config = o; }, wrap: c => c }, dsn: 'https://a@o/1' });
+  const [dedupe] = config.integrations([dedupeIntegration()]);
+  const events = [];
+  for (const kind of ['refreshResponseInvalid', 'refreshOutcomeUnknown']) {
+    for (const diagnosticId of ['12345678-1234-4234-8234-123456789abc', '87654321-4321-4321-8321-cba987654321']) {
+      reportError(new Error('Authentication refresh response invalid'), {
+        operation: 'session', kind, diagnosticId,
+        status: 201, responseShape: 'unknown', sessionPreserved: true, failureKind: 'invalid-json',
+      }, { captureException: (error, context) => events.push({ ...config.beforeSend(context),
+        exception: { values: [{ type: error.name, value: error.message }] },
+      }) });
+    }
+  }
+  assert.equal(events.length, 4);
+  for (const event of events) {
+    assert.equal(event.extra.sessionPreserved, true);
+    assert.equal(event.extra.responseShape, 'unknown');
+    assert.equal(event.extra.status, 201);
+    assert.equal(dedupe.processEvent(event), event);
+  }
+  assert.notEqual(events[0].tags.diagnosticId, events[1].tags.diagnosticId);
+});
+
+test('SDK normalization preserves request detail before the final privacy boundary', () => {
+  const { normalize } = require('@sentry/core');
+  const { initSentry } = loadSentry();
+  let config;
+  initSentry({ client: { init: o => { config = o; }, wrap: c => c }, dsn: 'https://a@o/1' });
+  const requestId = '12345678-1234-4234-8234-123456789abc';
+  const clientRequestId = '87654321-4321-4321-8321-cba987654321';
+  const extra = { clientDiagnostics: [{ timestamp: 1793909363263, event: 'api.request.failed', details: {
+    endpointPath: '/auth/login-challenges', method: 'GET', status: 401, requestId, clientRequestId,
+    token: 'PRIVATE_CANARY', deviceId: 'PRIVATE_CANARY', body: 'PRIVATE_CANARY',
+  } }] };
+  assert.equal(normalize(extra, 3).clientDiagnostics[0].details, '[Object]');
+  assert.ok(config.normalizeDepth >= 4);
+  const sent = config.beforeSend({ extra: normalize(extra, config.normalizeDepth) });
+  const [request] = sent.extra.clientDiagnostics;
+  assert.equal(request.timestamp, 1793909363263);
+  assert.equal(request.details.status, 401);
+  assert.equal(request.details.requestId, requestId);
+  assert.equal(request.details.clientRequestId, clientRequestId);
+  assert.doesNotMatch(JSON.stringify(sent), /PRIVATE_CANARY|"token"|"deviceId"|"body"/);
+});
+
+test('replayed auth incidents preserve both correlation ids through normalization and deduplication', () => {
+  const { normalize, dedupeIntegration } = require('@sentry/core');
+  const { initSentry, reportError } = loadSentry();
+  let config;
+  initSentry({ client: { init: o => { config = o; }, wrap: c => c }, dsn: 'https://a@o/1' });
+  const [dedupe] = config.integrations([dedupeIntegration()]);
+  const events = [];
+  const initialRequestId = '12345678-1234-4234-8234-123456789abc';
+  const clientRequestId = '87654321-4321-4321-8321-cba987654321';
+  for (const diagnosticId of [initialRequestId, clientRequestId]) {
+    reportError(new Error('fixed replay cause'), {
+      operation: 'session', kind: 'authRetryResponseReplayed', diagnosticId,
+      requestId: initialRequestId, initialRequestId, clientRequestId, status: 401, sessionPreserved: true,
+    }, { captureException: (error, context) => events.push({
+      ...config.beforeSend({ ...context, extra: normalize(context.extra, config.normalizeDepth) }),
+      exception: { values: [{ type: error.name, value: error.message }] },
+    }) });
+  }
+  for (const event of events) {
+    assert.equal(event.extra.initialRequestId, initialRequestId);
+    assert.equal(event.extra.clientRequestId, clientRequestId);
+    assert.equal(dedupe.processEvent(event), event);
+  }
 });
 
 test("navigation registration is inert without Sentry and never throws", () => {
@@ -1360,4 +1488,105 @@ test("web unhandled rejections (browser global handler mechanism) pass the same 
   assert.equal(calls[0].beforeSend(...webEvent(new Error("DomWebView: injectJavaScript after unmount"))), null);
   assert.notEqual(calls[0].beforeSend(...webEvent(new Error("web flake"))), null);
   assert.equal(calls[0].beforeSend(...webEvent(new Error("web flake"))), null);
+});
+
+// 2026-11 请求卡顿埋点：「卡在哪一步」的枚举与计数要能离开设备（并能按 tag 搜），
+// 形状不对的值照样拦下 —— 这些字段由客户端拼出，不能成为自由文本的出口。
+test("reportError keeps request-stall diagnostics and tags the searchable ones", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  reportError(
+    new Error("timeout"),
+    {
+      endpointPath: "/note",
+      method: "GET",
+      status: 0,
+      failureKind: "timeout",
+      stage: "awaiting-response",
+      xhrStage: "acked",
+      xhrAckMs: 40,
+      xhrHeadersMs: 300,
+      xhrDoneMs: 320,
+      xhrEarlyEvent: true,
+      inflight: 3,
+      completedWhileWaiting: 2,
+      loopLagMs: 5000,
+      appState: "active",
+      appStateChanged: false,
+      attempts: 1,
+      retry: "recovered",
+    },
+    { captureException: (...args) => calls.push(args) },
+  );
+
+  const { extra, tags } = calls[0][1];
+  assert.equal(extra.xhrStage, "acked");
+  assert.equal(extra.xhrAckMs, 40);
+  assert.equal(extra.xhrHeadersMs, 300);
+  assert.equal(extra.xhrDoneMs, 320);
+  assert.equal(extra.xhrEarlyEvent, true);
+  assert.equal(extra.inflight, 3);
+  assert.equal(extra.completedWhileWaiting, 2);
+  assert.equal(extra.loopLagMs, 5000);
+  assert.equal(extra.appState, "active");
+  assert.equal(extra.appStateChanged, false);
+  assert.equal(extra.retry, "recovered");
+  assert.equal(tags.stage, "awaiting-response");
+  assert.equal(tags.xhrStage, "acked");
+  assert.equal(tags.retry, "recovered");
+  assert.equal(tags.appState, "active");
+});
+
+test("reportError drops request-stall diagnostics with the wrong shape", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  reportError(
+    new Error("timeout"),
+    {
+      endpointPath: "/note",
+      failureKind: "timeout",
+      xhrStage: "https://evil.example/?token=abc",
+      xhrAckMs: -5,
+      loopLagMs: "5000",
+      inflight: 1.5,
+      xhrEarlyEvent: "yes",
+      appState: "user typed text",
+      retry: "maybe",
+    },
+    { captureException: (...args) => calls.push(args) },
+  );
+
+  const { extra } = calls[0][1];
+  for (const key of ["xhrStage", "xhrAckMs", "loopLagMs", "inflight", "xhrEarlyEvent", "appState", "retry"]) {
+    assert.equal(extra[key], undefined, `${key} should be dropped`);
+  }
+  assert.doesNotMatch(JSON.stringify(calls[0][1]), /evil|token|user typed/);
+});
+
+test("recovered and failed request stalls land in separate Sentry issues", () => {
+  const { reportError } = loadSentry();
+  const calls = [];
+  const client = { captureException: (...args) => calls.push(args) };
+  const base = { endpointPath: "/note", method: "GET", status: 0, failureKind: "stalled" };
+  reportError(new Error("stall"), { ...base, retry: "recovered" }, client);
+  reportError(new Error("stall"), { ...base, retry: "failed" }, client);
+  reportError(new Error("timeout"), { ...base, failureKind: "timeout" }, client);
+
+  const [recovered, failed, plain] = calls.map(([, context]) => context.fingerprint.join("|"));
+  assert.notEqual(recovered, failed);
+  assert.match(recovered, /recovered$/);
+  assert.doesNotMatch(plain, /recovered|failed/);
+});
+
+// SDK 在 beforeSend 之前按 normalizeDepth（默认 3）规整事件：extra.clientDiagnostics[i].details.*
+// 是第 4 层，会被压成 "[Object]"，再经 sanitizeClientDiagnostics 变成 {} —— 线上每条事件的
+// 「出错前 20 个请求」一直是空的。深度必须够到 details 的字段。
+test("initSentry keeps breadcrumb details deep enough to survive SDK normalization", () => {
+  const { initSentry } = loadSentry();
+  const initCalls = [];
+  initSentry({
+    dsn: "https://a@o/1",
+    client: { init: (options) => initCalls.push(options), wrap: (component) => component },
+  });
+  assert.ok(initCalls[0].normalizeDepth >= 4, `normalizeDepth=${initCalls[0].normalizeDepth}`);
 });

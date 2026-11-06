@@ -10,7 +10,7 @@ const ts = require("typescript");
 // 的值会在接收端被丢掉，失败率就算不出来）；SDK 出任何问题都不能反过来影响
 // 发消息 / 建连。
 
-function loadTracing(sdk) {
+function loadTracing(sdk, { metrics = [], diagnostics = [], now = () => Date.now() } = {}) {
   const filePath = path.join(process.cwd(), "src/observability/tracing.ts");
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, "utf8"), {
     compilerOptions: {
@@ -25,6 +25,9 @@ function loadTracing(sdk) {
     exports: {},
     require: (name) => {
       if (name === "@sentry/react-native") return sdk;
+      if (name === './metrics') return { recordMetric: (...args) => metrics.push(args) };
+      if (name === './http-diagnostics') return { diagnosticNow: now };
+      if (name === '@/utils/client-diagnostics') return { logClientDiagnostic: (...args) => diagnostics.push(args) };
       throw new Error(`unexpected require: ${name}`);
     },
   };
@@ -134,5 +137,25 @@ test("the span name allowlist exported to the privacy filter matches the table",
   assert.deepEqual([...TRACED_SPAN_NAMES].sort(), [
     "chat.message.send",
     "chat.socket.connect",
+    "media.upload",
   ]);
+});
+
+test('operation metrics survive unavailable tracing and finish once with a safe outcome', () => {
+  const metrics = [];
+  const diagnostics = [];
+  let now = 10;
+  const { startOperationSpan } = loadTracing({}, { metrics, diagnostics, now: () => now });
+  const span = startOperationSpan('chatSend');
+  now = 90;
+  span.end('deadline_exceeded');
+  span.end();
+  startOperationSpan('mediaUpload').end('cancelled');
+  assert.deepEqual(metrics.map(([name, value, attrs]) => [name, value, { ...attrs }]), [
+    ['app.operation.duration', 80, { operation: 'chatSend', outcome: 'failed' }],
+    ['app.operation.duration', 0, { operation: 'mediaUpload', outcome: 'cancelled' }],
+  ]);
+  assert.equal(diagnostics[0][0], 'chatSend.completed');
+  assert.equal(diagnostics[0][1].reason, 'deadline_exceeded');
+  assert.doesNotMatch(JSON.stringify({ metrics, diagnostics }), /user|token|conversation/);
 });

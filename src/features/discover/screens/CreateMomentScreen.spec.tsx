@@ -23,7 +23,7 @@ jest.mock('@/features/discover/store/use-moments-store', () => ({ useMomentsStor
 jest.mock('@/services/api/moments', () => ({ createMoment: jest.fn() }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_e: unknown, fallback: string) => fallback }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
-jest.mock('@/constants/config', () => ({ LIMITS: { IMAGE_MAX_SIZE_MB: 50, VIDEO_MAX_SIZE_MB: 500 } }));
+jest.mock('@/constants/config', () => ({ LIMITS: { POST_MAX_MEDIA: 9, IMAGE_MAX_SIZE_MB: 50, VIDEO_MAX_SIZE_MB: 500 } }));
 jest.mock('@/features/chat/utils/chat-image-compress', () => ({ prepareChatImageForUpload: jest.fn(async (input: unknown) => input) }));
 jest.mock('@/features/chat/utils/chat-video-poster', () => ({ uploadChatVideoPoster: jest.fn(async () => null) }));
 jest.mock('@/services/api/upload', () => ({
@@ -83,4 +83,35 @@ test('rejects video over the server 100 MB limit before uploading', async () => 
   expect(Alert.alert).toHaveBeenCalledWith('moment.publishFailed', 'upload.errors.fileTooLarge:100');
   expect(requestUploadPresign).not.toHaveBeenCalled();
   expect(createMoment).not.toHaveBeenCalled();
+});
+
+test.each(['image', 'video', 'mixed'])('limits %s selections to nine total media and publishes all nine', async (kind) => {
+  const selected = Array.from({ length: 10 }, (_, index) => {
+    const asset = assets[kind === 'video' || (kind === 'mixed' && index % 2 === 0) ? 0 : 1];
+    return { ...asset, uri: `file:///media-${index}`, fileName: `media-${index}.${asset.type === 'video' ? 'mp4' : 'jpg'}` };
+  });
+  jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValue({ canceled: false, assets: selected } as never);
+  render(<CreateMomentScreen />);
+  fireEvent.press(screen.getByText('0/9'));
+  await waitFor(() => expect(screen.getAllByLabelText('moment.removeMedia')).toHaveLength(9));
+  expect(screen.queryByLabelText('moment.selectMedia')).toBeNull();
+  expect(screen.getByText('moment.mediaLimitHint')).toBeTruthy();
+  fireEvent.changeText(screen.getByPlaceholderText('moment.contentPlaceholder'), 'nine media');
+  fireEvent.press(screen.getByText('moment.publish'));
+  await waitFor(() => expect(createMoment).toHaveBeenCalledTimes(1));
+  expect(jest.mocked(createMoment).mock.calls[0][0].attachments?.map(item => item.type)).toEqual(selected.slice(0, 9).map(item => item.type));
+  expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledTimes(9);
+});
+
+test('reserves remaining shared slots when adding another batch of images and videos', async () => {
+  jest.mocked(ImagePicker.launchImageLibraryAsync)
+    .mockResolvedValueOnce({ canceled: false, assets: [...assets, ...assets] } as never)
+    .mockResolvedValueOnce({ canceled: false, assets: [...assets, ...assets] } as never);
+  render(<CreateMomentScreen />);
+  fireEvent.press(screen.getByText('0/9'));
+  await waitFor(() => expect(screen.getByText('6/9')).toBeTruthy());
+  fireEvent.press(screen.getByText('6/9'));
+  await waitFor(() => expect(screen.getAllByLabelText('moment.removeMedia')).toHaveLength(9));
+  expect(ImagePicker.launchImageLibraryAsync).toHaveBeenLastCalledWith(expect.objectContaining({ selectionLimit: 3 }));
+  expect(screen.queryByLabelText('moment.selectMedia')).toBeNull();
 });

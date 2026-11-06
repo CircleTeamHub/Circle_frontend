@@ -11,18 +11,21 @@ import type {
   Event,
   EventHint,
   ErrorEvent,
+  Integration,
   Metric,
   SpanJSON,
   TransactionEvent,
 } from '@sentry/core';
 import {
   readDiagnosticBreadcrumbs,
+  resetDiagnosticBreadcrumbs,
   type DiagnosticBreadcrumb,
 } from '@/utils/client-diagnostics';
 import { isSensitiveFieldKey } from '@/utils/redact';
 import { STATIC_ROUTE_SEGMENTS } from './route-segments';
 import { TRACED_SPAN_NAMES } from './tracing';
 import { allowedMetricAttributes, metricDefinition } from './metrics';
+import { safeHttpEndpoint } from './http-diagnostics';
 import {
   isBenignDomBridgeRejection,
   rejectionMessage,
@@ -149,7 +152,24 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // 对 IM 产品，「消息发送慢」到底慢在哪一段就无法回答。5% 足够看趋势，
       // 又把 Sentry 配额消耗控制在可预期范围内。
       tracesSampleRate,
-      integrations: navigation ? [navigation] : [],
+      integrations: (defaults: Integration[]) => [
+        ...defaults.map((integration): Integration => {
+          const processEvent = integration.processEvent;
+          if (integration.name !== 'Dedupe' || !processEvent) return integration;
+          return {
+            ...integration,
+            processEvent(event, hint, client) {
+              // Each auth incident needs its own request correlation,
+              // even when re-login is followed by the same failure in this process.
+              if (event.tags?.operation === 'session' && ['forcedLogout', 'refreshResponseInvalid', 'refreshOutcomeUnknown', 'authRetryResponseReplayed'].includes(String(event.tags?.kind))) {
+                return event;
+              }
+              return processEvent(event, hint, client);
+            },
+          };
+        }),
+        ...(navigation ? [navigation] : []),
+      ],
       // 原生端默认是 [/.*/]：每个 XHR 都带 sentry-trace / baggage 头，连发往第三方
       // 存储的预签名上传 PUT 也带，等于把 release 和 DSN public key 发给第三方。
       // 后端不消费这两个头（请求串联走 X-Request-Id），所以一个都不发。空数组会
@@ -158,13 +178,17 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       tracePropagationTargets: [],
       // 会话统计（release health：崩溃率 / 无崩溃会话比例）。原生 SDK 默认就开；
       // web 端只有显式为 true 才挂 browserSessionIntegration，之前 web 一条会话都没有。
-      // 会话的 did 取自 Sentry user，而 setSentryUserId 恒清空，所以不带账号标识。
+      // 账号关联只设置内部 user.id，邮箱、手机号等仍不发送。
       enableAutoSessionTracking: true,
       // Never attach PII (IP, cookies, request bodies) by default.
       sendDefaultPii: false,
       attachScreenshot: false,
       attachViewHierarchy: false,
       enableCaptureFailedRequests: false,
+      // SDK 在 beforeSend 之前按这个深度规整事件（默认 3）。诊断面包屑在
+      // extra.clientDiagnostics[i].details.* —— 第 4 层，默认深度下会被压成 "[Object]"，
+      // 「出错前 20 个请求」就整段丢了。值本身仍由 beforeSend 的白名单逐项把关。
+      normalizeDepth: 5,
       replaysSessionSampleRate: 0,
       replaysOnErrorSampleRate: 0,
       // Native crash capture remains enabled by the SDK default. These JS
@@ -200,17 +224,45 @@ export function registerSentryNavigationContainer(navigationContainerRef: unknow
   }
 }
 
-/**
- * Sentry is a third party, so never associate an event with our backend account
- * identifier. Clearing the SDK user also handles account switches safely.
- */
+let sentryUserId: string | null = null;
+
+/** 身份入口只接受内部不透明 ID，不接受邮箱、昵称或其他个人资料。 */
+function normalizedUserId(value: unknown): string | null {
+  const id = typeof value === 'string' ? value.trim() : '';
+  return /^[A-Za-z0-9_-]{1,128}$/.test(id) ? id : null;
+}
+
+interface UserIdentityClient {
+  setUser: (user: { id: string } | null) => void;
+  getIsolationScope?: () => { clearBreadcrumbs: () => void };
+  getCurrentScope?: () => { clearBreadcrumbs: () => void };
+}
+
+/** 用户明确授权按内部 ID 排障；身份改变时丢弃上一账号的操作记录。 */
 export function setSentryUserId(
-  _userId: string | null | undefined,
-  client: Pick<typeof Sentry, 'setUser'> = Sentry,
+  userId: string | null | undefined,
+  client: UserIdentityClient = Sentry,
 ): void {
+  const nextUserId = normalizedUserId(userId);
+  if (nextUserId !== sentryUserId) {
+    sentryUserId = nextUserId;
+    navigationHistory = [];
+    routeContext = routeContext.currentRoute ? { currentRoute: routeContext.currentRoute } : {};
+    try {
+      resetDiagnosticBreadcrumbs();
+    } catch {
+      // 可选诊断失败不能阻断用户 scope 更新。
+    }
+    try {
+      client.getIsolationScope?.().clearBreadcrumbs();
+      client.getCurrentScope?.().clearBreadcrumbs();
+    } catch {
+      // SDK 面包屑清理失败不能阻断登录/退出。
+    }
+  }
   if (!sentryInitialized && client === Sentry) return;
   try {
-    client.setUser(null);
+    client.setUser(nextUserId ? { id: nextUserId } : null);
   } catch {
     // Observability must never change auth/session behavior.
   }
@@ -253,6 +305,7 @@ export interface ReportErrorContext {
 }
 
 type SentryCaptureContext = {
+  user: { id: string | undefined };
   extra?: Record<string, unknown>;
   tags?: Record<string, string>;
   fingerprint?: string[];
@@ -270,6 +323,41 @@ const PRESIGNED_URL_MARKERS = [
 ];
 // 嵌套字段的敏感名单只有一份，在 utils/redact.ts（isSensitiveFieldKey）。这里曾经
 // 抄过一份，与日志那份分叉过两次。
+const STALL_DIAGNOSTIC_COUNTS = [
+  'xhrAckMs',
+  'xhrHeadersMs',
+  'xhrDoneMs',
+  'inflight',
+  'completedWhileWaiting',
+  'loopLagMs',
+] as const;
+const STALL_DIAGNOSTIC_FLAGS = ['xhrEarlyEvent', 'appStateChanged'] as const;
+const STALL_DIAGNOSTIC_ENUMS: Readonly<Record<string, RegExp>> = {
+  xhrStage: /^(untracked|sent|acked|headers|loading|done)$/,
+  appState: /^(active|background|inactive|unknown|extension)$/,
+  retry: /^(recovered|failed)$/,
+};
+const STALL_DIAGNOSTIC_KEYS = [
+  ...STALL_DIAGNOSTIC_COUNTS,
+  ...STALL_DIAGNOSTIC_FLAGS,
+  ...Object.keys(STALL_DIAGNOSTIC_ENUMS),
+];
+// 能在 Sentry 里按 tag 筛的那几项：「卡在哪一步」「重试救没救回来」「前后台」。
+const STALL_DIAGNOSTIC_TAG_KEYS = ['stage', 'xhrStage', 'retry', 'appState'];
+
+function isSafeStallDiagnostic(key: string, value: unknown): boolean {
+  // stage 也进 tag：现有取值都是代码里的标识符（handshake / local-read / reading-body…）。
+  if (key === 'stage') return typeof value === 'string' && SAFE_ERROR_CODE.test(value);
+  if ((STALL_DIAGNOSTIC_COUNTS as readonly string[]).includes(key)) {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  }
+  if ((STALL_DIAGNOSTIC_FLAGS as readonly string[]).includes(key)) {
+    return typeof value === 'boolean';
+  }
+  const pattern = STALL_DIAGNOSTIC_ENUMS[key];
+  return pattern ? typeof value === 'string' && pattern.test(value) : true;
+}
+
 const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'endpointPath',
   'method',
@@ -293,10 +381,27 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'reason',
   'traceId',
   'requestId',
+  'clientRequestId',
+  'initialRequestId',
   'durationMs',
   'page',
+  'currentRoute',
+  'previousRoute',
+  'diagnosticId',
+  'authenticated',
+  'hasAccessToken',
+  'hasRefreshToken',
+  'responseShape',
+  'responseHasAccessToken',
+  'responseHasRefreshToken',
+  'sessionPreserved',
+  'closeCode',
+  // 请求卡顿现场（observability/request-trace + services/api/client）：只收枚举与计数，
+  // 形状由 isSafeStallDiagnostic 把关。
+  ...STALL_DIAGNOSTIC_KEYS,
 ]);
 const SAFE_EVENT_TAG_KEYS = new Set([
+  'diagnosticId',
   'endpointPath',
   'method',
   'status',
@@ -308,8 +413,13 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'kind',
   'traceId',
   'requestId',
+  'clientRequestId',
+  'initialRequestId',
   'code',
   'storageCode',
+  'currentRoute',
+  'previousRoute',
+  ...STALL_DIAGNOSTIC_TAG_KEYS,
 ]);
 const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'circleId',
@@ -335,7 +445,9 @@ const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'status',
   'durationMs',
   'requestId',
+  'clientRequestId',
   'failureKind',
+  'errorName',
 ]);
 
 const REDACTED_TRANSACTION = '[REDACTED_TRANSACTION]';
@@ -412,6 +524,26 @@ function sanitizeNavigationRouteName(value: unknown): string {
   return sanitizeTransactionName(`/${segments.join('/')}`);
 }
 
+let routeContext: { currentRoute?: string; previousRoute?: string } = {};
+interface NavigationStep {
+  readonly timestamp: number;
+  readonly from?: string;
+  readonly to: string;
+}
+let navigationHistory: readonly NavigationStep[] = [];
+const MAX_NAVIGATION_STEPS = 20;
+
+/** 只接受路由模板，参数值再次按路由白名单移除。 */
+export function setSentryRoute(route: string): void {
+  const currentRoute = sanitizeNavigationRouteName(route);
+  if (routeContext.currentRoute === currentRoute && navigationHistory.length > 0) return;
+  const previousRoute = navigationHistory.length > 0 ? routeContext.currentRoute : undefined;
+  routeContext = { currentRoute, previousRoute };
+  navigationHistory = [...navigationHistory, {
+    timestamp: Date.now(), ...(previousRoute ? { from: previousRoute } : {}), to: currentRoute,
+  }].slice(-MAX_NAVIGATION_STEPS);
+}
+
 /**
  * 导航 transaction（source=component）按路由名归一化；tracing.ts 固定表里的自定义
  * span 名原样保留；其余仍走 URL 路径规则。
@@ -459,7 +591,10 @@ function sanitizeContextForSentry(value: unknown, depth = 0): unknown {
 const SAFE_ERROR_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 const SAFE_STORAGE_CODE = /^[A-Za-z]{1,64}$/;
 
-function isSafeErrorCode(key: string, value: unknown): boolean {
+function isSafeReportField(key: string, value: unknown): boolean {
+  if (['authenticated', 'hasAccessToken', 'hasRefreshToken', 'responseHasAccessToken', 'responseHasRefreshToken', 'sessionPreserved'].includes(key)) return typeof value === 'boolean';
+  if (key === 'responseShape') return typeof value === 'string' && ['empty', 'object', 'array', 'primitive', 'unknown'].includes(value);
+  if (key === 'closeCode') return typeof value === 'number' && Number.isInteger(value) && value >= 1000 && value <= 4999;
   if (key === 'code') {
     return (
       (typeof value === 'number' && Number.isSafeInteger(value)) ||
@@ -479,19 +614,24 @@ function sanitizeReportContext(
   for (const key of SAFE_REPORT_CONTEXT_KEYS) {
     if (!(key in context)) continue;
     const value = context[key];
+    if (key === 'currentRoute' || key === 'previousRoute') {
+      if (typeof value === 'string') safe[key] = sanitizeNavigationRouteName(value);
+      continue;
+    }
     if (
       key === 'traceId' &&
       (typeof value !== 'string' || !SAFE_WS_TRACE_ID.test(value))
     ) {
       continue;
     }
-    if (key === 'requestId' && (typeof value !== 'string' || !SAFE_REQUEST_ID.test(value))) {
+    if (['requestId', 'clientRequestId', 'initialRequestId', 'diagnosticId'].includes(key) && (typeof value !== 'string' || !SAFE_REQUEST_ID.test(value))) {
       continue;
     }
     if (key === 'durationMs' && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
       continue;
     }
-    if (!isSafeErrorCode(key, value)) continue;
+    if (!isSafeReportField(key, value)) continue;
+    if (!isSafeStallDiagnostic(key, value)) continue;
     if (
       value == null ||
       typeof value === 'string' ||
@@ -532,7 +672,7 @@ function sanitizeStacktrace(value: unknown): unknown {
   };
 }
 
-function sanitizeException(value: unknown): unknown {
+function sanitizeException(value: unknown, context: Record<string, unknown>): unknown {
   if (!value || typeof value !== 'object') return undefined;
   const values = (value as Record<string, unknown>).values;
   if (!Array.isArray(values)) return undefined;
@@ -541,7 +681,7 @@ function sanitizeException(value: unknown): unknown {
       if (!entry || typeof entry !== 'object') return {};
       const source = entry as Record<string, unknown>;
       const safe: Record<string, unknown> = {
-        value: '[REDACTED_EXCEPTION]',
+        value: safeErrorMessage(context, { name: source.type, message: source.value }),
       };
       if (typeof source.type === 'string') {
         safe.type = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(source.type)
@@ -593,16 +733,21 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
   const safe: Record<string, unknown> = {};
   for (const key of SAFE_EVENT_TAG_KEYS) {
     const child = (value as Record<string, unknown>)[key];
+    if (key === 'currentRoute' || key === 'previousRoute') {
+      if (typeof child === 'string') safe[key] = sanitizeNavigationRouteName(child);
+      continue;
+    }
     if (
       key === 'traceId' &&
       (typeof child !== 'string' || !SAFE_WS_TRACE_ID.test(child))
     ) {
       continue;
     }
-    if (key === 'requestId' && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
+    if (['requestId', 'clientRequestId', 'initialRequestId', 'diagnosticId'].includes(key) && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
       continue;
     }
-    if (!isSafeErrorCode(key, child)) continue;
+    if (!isSafeReportField(key, child)) continue;
+    if (!isSafeStallDiagnostic(key, child)) continue;
     if (typeof child === 'string' || typeof child === 'number') {
       safe[key] = sanitizeContextForSentry(child);
     }
@@ -638,13 +783,30 @@ function sanitizeClientDiagnostics(value: unknown): unknown[] | undefined {
         }
       }
     }
-    return [{ event: source.event, details }];
+    const labels: Record<string, string> = {
+      'api.request.completed': '请求完成',
+      'api.request.failed': '请求失败',
+      'api.request.slow': '请求耗时较长',
+      'route.render.failed': '页面显示或退出失败',
+      'navigation.back.pressed': '点击左上角返回',
+      'chatSend.completed': '消息发送结束',
+      'chatConnect.completed': '聊天连接结束',
+      'mediaUpload.completed': '文件上传结束',
+    };
+    const label = labels[source.event] ?? `应用记录：${source.event}`;
+    const summary = source.event.startsWith('api.request.')
+      ? requestSummary(label, details)
+      : label;
+    const timestamp = typeof source.timestamp === 'number' && Number.isFinite(source.timestamp) && source.timestamp >= 0
+      ? source.timestamp : undefined;
+    return [{ summary, event: source.event, ...(timestamp !== undefined ? { timestamp } : {}), details }];
   });
   return safe.length > 0 ? safe : undefined;
 }
 
 function isSafeDiagnosticDetail(key: string, value: unknown): boolean {
-  if (key === 'requestId') return typeof value === 'string' && SAFE_REQUEST_ID.test(value);
+  if (key === 'errorName') return typeof value === 'string' && /^(Error|TypeError|ReferenceError|RangeError|SyntaxError|AbortError|ApiError|StorageUploadError|ChatSendError|UserFacingError)$/.test(value);
+  if (key === 'requestId' || key === 'clientRequestId') return typeof value === 'string' && SAFE_REQUEST_ID.test(value);
   if (key === 'durationMs') return typeof value === 'number' && Number.isFinite(value) && value >= 0;
   if (key === 'status') return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 599;
   if (key === 'method') return typeof value === 'string' && /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(value);
@@ -659,7 +821,27 @@ function sanitizeEventExtra(value: unknown): Record<string, unknown> | undefined
   const safe = sanitizeReportContext(source);
   const clientDiagnostics = sanitizeClientDiagnostics(source.clientDiagnostics);
   if (clientDiagnostics) safe.clientDiagnostics = clientDiagnostics;
+  const history = sanitizeNavigationHistory(source.navigationHistory);
+  if (history) safe.navigationHistory = history;
   return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
+function sanitizeNavigationHistory(value: unknown): unknown[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const history = value.slice(-MAX_NAVIGATION_STEPS).flatMap(entry => {
+    if (!isRecord(entry) || typeof entry.to !== 'string' ||
+      typeof entry.timestamp !== 'number' || !Number.isFinite(entry.timestamp) || entry.timestamp < 0) return [];
+    const to = sanitizeNavigationRouteName(entry.to);
+    const from = typeof entry.from === 'string' ? sanitizeNavigationRouteName(entry.from) : undefined;
+    return [{ timestamp: entry.timestamp, ...(from ? { from } : {}), to,
+      summary: from ? `页面跳转：${from} → ${to}` : `进入页面：${to}` }];
+  });
+  return history.length > 0 ? history : undefined;
+}
+
+function sanitizedEventUser(value: unknown): { id: string } | undefined {
+  const id = isRecord(value) ? normalizedUserId(value.id) : null;
+  return id ? { id } : undefined;
 }
 
 function sanitizeAutomaticBaseEvent(event: Event): Event {
@@ -680,23 +862,28 @@ function sanitizeAutomaticBaseEvent(event: Event): Event {
   ]) {
     if (key in source) safe[key] = sanitizeContextForSentry(source[key]);
   }
-  if ('message' in source) safe.message = '[REDACTED_EVENT_MESSAGE]';
+  const tags = sanitizeEventTags(source.tags);
+  if (tags) safe.tags = tags;
+  const user = sanitizedEventUser(source.user);
+  if (user) safe.user = user;
+  const extra = sanitizeEventExtra(source.extra);
+  if (extra) safe.extra = extra;
+  const errorContext = { ...tags, ...extra };
+  if ('message' in source) {
+    safe.message = safeErrorMessage(errorContext, { message: source.message });
+  }
   if ('transaction' in source) {
     safe.transaction = sanitizeEventTransactionName(
       source.transaction,
       readTransactionSource(source.transaction_info),
     );
   }
-  const exception = sanitizeException(source.exception);
+  const exception = sanitizeException(source.exception, errorContext);
   if (exception) safe.exception = exception;
   const stacktrace = sanitizeStacktrace(source.stacktrace);
   if (stacktrace) safe.stacktrace = stacktrace;
   const threads = sanitizeThreads(source.threads);
   if (threads) safe.threads = threads;
-  const tags = sanitizeEventTags(source.tags);
-  if (tags) safe.tags = tags;
-  const extra = sanitizeEventExtra(source.extra);
-  if (extra) safe.extra = extra;
   const contexts = sanitizeEventContexts(source.contexts);
   if (contexts) safe.contexts = contexts;
   if (Array.isArray(source.fingerprint)) {
@@ -753,8 +940,19 @@ function filterAndSanitizeErrorEvent(
 }
 
 function sanitizeAutomaticEvent(event: ErrorEvent): ErrorEvent {
+  // SDK 在捕获时已快照 user。旧账号/匿名事件延迟发送时不能搭载新账号的现场。
+  const sameUser = (sanitizedEventUser(event.user)?.id ?? null) === sentryUserId;
   return {
-    ...sanitizeAutomaticBaseEvent(event),
+    ...sanitizeAutomaticBaseEvent({
+      ...event,
+      extra: {
+        ...(sameUser ? routeContext : {}),
+        ...event.extra,
+        clientDiagnostics: event.extra?.clientDiagnostics ?? (sameUser ? safeReadBreadcrumbs() : []),
+        navigationHistory: event.extra?.navigationHistory ?? (sameUser ? navigationHistory : []),
+      },
+      tags: { ...(sameUser ? routeContext : {}), ...event.tags },
+    }),
     type: undefined,
   };
 }
@@ -770,7 +968,7 @@ const SAFE_SDK_METRIC_ATTRIBUTES = [
 /**
  * 指标的最后一道白名单：名字和类型必须与 metrics.ts 的表一致，单位取表里的，
  * 属性只留表里声明的枚举值和上面几项 SDK 元数据。SDK 自动补的 user.id /
- * user.email / user.name 在这里被剥掉（setSentryUserId 恒清空，这是第二道保险）。
+ * user.email / user.name 在这里被剥掉；用户 ID 只用于事件归属，不作为指标标签。
  */
 function sanitizeMetric(metric: Metric): Metric | null {
   if (!metric || typeof metric !== 'object') return null;
@@ -801,7 +999,32 @@ function sanitizeAutomaticBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
   for (const key of ['type', 'category', 'level', 'timestamp']) {
     if (key in source) safe[key] = sanitizeContextForSentry(source[key]);
   }
-  if ('message' in source) safe.message = '[REDACTED_BREADCRUMB]';
+  const data = isRecord(source.data) ? source.data : {};
+  if (source.category === 'navigation') {
+    const routes: Record<string, string> = {};
+    for (const key of ['from', 'to']) {
+      const route = sanitizeNavigationRouteName(data[key]);
+      if (route !== REDACTED_TRANSACTION) routes[key] = route;
+    }
+    safe.data = routes;
+    safe.message = `页面跳转：${routes.from ?? '未知页面'} → ${routes.to ?? '未知页面'}`;
+  } else if (source.type === 'http' || ['http', 'xhr', 'fetch'].includes(String(source.category))) {
+    const details: Record<string, unknown> = {};
+    if (isSafeDiagnosticDetail('method', data.method)) details.method = data.method;
+    const endpoint = data.endpointPath ?? data.url;
+    if (typeof endpoint === 'string') {
+      const path = endpoint.replace(/^https?:\/\/[^/?#]+/i, '').replace(/^\/api\/v1(?=\/|$)/, '');
+      details.endpointPath = safeHttpEndpoint(path);
+    }
+    const status = data.status ?? data.status_code;
+    if (isSafeDiagnosticDetail('status', status)) details.status = status;
+    safe.data = details;
+    safe.message = requestSummary('接口请求', details);
+  } else {
+    safe.message = source.category === 'touch'
+      ? '用户触摸界面（不记录界面文字）'
+      : '应用记录（原始文本已隐藏）';
+  }
   return safe as Breadcrumb;
 }
 
@@ -1069,18 +1292,59 @@ function toSafeError(error: unknown, safeMessage: string): Error {
   return new Error(safeMessage);
 }
 
-function safeErrorMessage(context: Record<string, unknown> | undefined): string {
-  const operation = context ? readTagValue(context, 'operation') : undefined;
-  if (operation && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(operation)) {
-    const kind = readTagValue(context ?? {}, 'kind');
-    const safeKind =
-      kind && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(kind) ? kind : 'error';
-    return `${operation} ${safeKind} failure`;
+/** 只将已知故障翻译成固定说明，绝不回传任意 error.message。 */
+function errorExplanation(error: unknown, context?: Record<string, unknown>): string {
+  const source = isRecord(error) ? error : {};
+  const message = typeof source.message === 'string' ? source.message : '';
+  const releasedExplanation = '原生资源已释放或不可用';
+  if ([
+    'Unable to find the native shared object',
+    'Cannot use shared object that was already released',
+    'NativeSharedObjectNotFoundException',
+    releasedExplanation,
+  ].some(part => message.includes(part))) return releasedExplanation;
+  if (context?.failureKind === 'timeout') return '请求超时';
+  if (context?.failureKind === 'network') return '网络连接失败';
+  if (context?.failureKind === 'invalid-json') return '服务端响应格式无法解析';
+  switch (source.name) {
+    case 'ResponseShapeError': return '服务端返回的数据结构不符合预期';
+    case 'TypeError': return '类型错误：调用或数据类型不符合预期';
+    case 'ReferenceError': return '引用错误：访问了未定义的变量';
+    case 'RangeError': return '数值或调用深度超出限制';
+    case 'SyntaxError': return '代码或数据格式无法解析';
+    default: return '运行时错误（原始文本已隐藏）';
+  }
+}
+
+/** 共享同一套安全格式，给接口错误、自动 HTTP 面包屑和本地诊断使用。 */
+function requestSummary(label: string, details: Record<string, unknown>): string {
+  const parts = [label];
+  const method = typeof details.method === 'string' && isSafeDiagnosticDetail('method', details.method)
+    ? details.method : '';
+  const endpoint = typeof details.endpointPath === 'string' ? safeHttpEndpoint(details.endpointPath) : '';
+  if (method || endpoint) parts.push(`${method} ${endpoint}`.trim());
+  const status = typeof details.status === 'string' && /^\d{1,3}$/.test(details.status)
+    ? Number(details.status) : details.status;
+  if (isSafeDiagnosticDetail('status', status)) parts.push(status === 0 ? '未收到响应' : `HTTP ${status}`);
+  if (isSafeDiagnosticDetail('durationMs', details.durationMs)) parts.push(`${details.durationMs} ms`);
+  return parts.join('｜');
+}
+
+function safeErrorMessage(context: Record<string, unknown> | undefined, error?: unknown): string {
+  const explanation = errorExplanation(error, context);
+  if (context?.operation === 'render' && context.kind === 'route') {
+    return `页面显示或退出失败｜${explanation}`;
   }
   if (context && readTagValue(context, 'endpointPath')) {
-    return 'api request failure';
+    return `${requestSummary('接口请求失败', context)}｜${explanation}`;
   }
-  return 'handled application error';
+  const operation = context ? readTagValue(context, 'operation') : undefined;
+  if (operation && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(operation)) {
+    const component = readTagValue(context ?? {}, 'component');
+    const prefix = component && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(component) ? `${component}.` : '';
+    return `${prefix}${operation} 失败｜${explanation}`;
+  }
+  return `应用异常｜${explanation}`;
 }
 
 function readTagValue(context: Record<string, unknown>, key: string): string | undefined {
@@ -1098,11 +1362,11 @@ function readTagValue(context: Record<string, unknown>, key: string): string | u
 function buildCaptureContext(
   safeContext: Record<string, unknown> | undefined,
   breadcrumbs: readonly DiagnosticBreadcrumb[],
-): SentryCaptureContext | undefined {
+): SentryCaptureContext {
   const hasBreadcrumbs = breadcrumbs.length > 0;
-  if (!safeContext && !hasBreadcrumbs) return undefined;
 
   const tagKeys = [
+    'diagnosticId',
     'endpointPath',
     'method',
     'status',
@@ -1113,8 +1377,13 @@ function buildCaptureContext(
     'kind',
     'traceId',
     'requestId',
+    'clientRequestId',
+    'initialRequestId',
     'code',
     'storageCode',
+    'currentRoute',
+    'previousRoute',
+    ...STALL_DIAGNOSTIC_TAG_KEYS,
   ];
   const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
     const value = safeContext ? readTagValue(safeContext, key) : undefined;
@@ -1128,12 +1397,21 @@ function buildCaptureContext(
   if (hasBreadcrumbs) {
     extra.clientDiagnostics = sanitizeContextForSentry(breadcrumbs);
   }
+  const history = sanitizeNavigationHistory(navigationHistory);
+  if (history) extra.navigationHistory = history;
 
-  const captureContext: SentryCaptureContext = { extra };
+  const captureContext: SentryCaptureContext = {
+    // Scope.update 不接受 null；显式 id: undefined 才能覆盖此前账号的 scope。
+    user: { id: sentryUserId ?? undefined },
+    ...(Object.keys(extra).length > 0 ? { extra } : {}),
+  };
   if (Object.keys(tags).length > 0) {
     captureContext.tags = tags;
   }
-  if (tags.endpointPath && tags.method) {
+  if (tags.operation === 'render' && tags.kind === 'route') {
+    // 页面异常仍按原始堆栈分组，避免所有页面、所有根因挤进同一个 render/route issue。
+    captureContext.fingerprint = ['{{ default }}', 'route-render'];
+  } else if (tags.endpointPath && tags.method) {
     captureContext.fingerprint = [
       'api',
       tags.method,
@@ -1141,6 +1419,8 @@ function buildCaptureContext(
       tags.status ?? 'unknown-status',
       tags.apiCode ?? 'no-api-code',
       tags.failureKind ?? 'http',
+      // 卡顿救回来（用户无感）与重试也失败（用户看到报错）各成一个 issue，计数与告警不混。
+      ...(tags.retry ? [tags.retry] : []),
     ];
   } else if (tags.operation) {
     // 非 API 失败（如 upload）：error.message 已本地化，若沿用 Sentry 默认按消息分组，
@@ -1190,13 +1470,13 @@ export function reportError(
   }
 
   try {
-    const sanitizedContext = context ? sanitizeReportContext(context) : undefined;
+    const sanitizedContext = sanitizeReportContext({ ...routeContext, ...context });
     const safeContext =
       sanitizedContext && Object.keys(sanitizedContext).length > 0
         ? sanitizedContext
         : undefined;
     client.captureException(
-      toSafeError(error, safeErrorMessage(safeContext)),
+      toSafeError(error, safeErrorMessage(safeContext, error)),
       buildCaptureContext(safeContext, safeReadBreadcrumbs()),
     );
   } catch {

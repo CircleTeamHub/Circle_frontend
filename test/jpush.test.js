@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadJPush(nativeModule, extra = {}, dev = false) {
+function loadJPush(nativeModule, extra = {}, dev = false, failures = []) {
   const filePath = path.join(
     process.cwd(),
     'src/features/notifications/services/jpush.ts',
@@ -30,7 +30,13 @@ function loadJPush(nativeModule, extra = {}, dev = false) {
       if (specifier === 'expo-constants') {
         return { __esModule: true, default: { expoConfig: { extra } } };
       }
-      if (specifier === 'jpush-react-native') return nativeModule;
+      if (specifier === '@/observability/report-failure') {
+        return { reportHandledFailure: (...args) => failures.push(args) };
+      }
+      if (specifier === 'jpush-react-native') {
+        if (nativeModule instanceof Error) throw nativeModule;
+        return nativeModule;
+      }
       return require(specifier);
     },
   };
@@ -38,6 +44,25 @@ function loadJPush(nativeModule, extra = {}, dev = false) {
   vm.runInNewContext(transpiled, context, { filename: filePath });
   return context.module.exports;
 }
+
+test('reports a configured JPush native module load failure once', () => {
+  const failures = [];
+  const error = new Error('native JPush module unavailable');
+  const api = loadJPush(error, { pushProvider: 'jpush', jpushAppKey: 'key' }, false, failures);
+
+  assert.equal(api.initializeJPush(), false);
+  assert.equal(api.initializeJPush(), false);
+
+  assert.deepEqual(failures, [['notifications', 'jpushModuleUnavailable', error]]);
+});
+
+test('an unused JPush module does not report when the Expo provider is configured', () => {
+  const failures = [];
+  const api = loadJPush(new Error('native JPush module unavailable'), { pushProvider: 'expo' }, false, failures);
+
+  assert.equal(api.initializeJPush(), false);
+  assert.equal(failures.length, 0);
+});
 
 test('uses the build-configured APNs environment at runtime', () => {
   let initOptions;

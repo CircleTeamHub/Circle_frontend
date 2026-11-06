@@ -10,7 +10,8 @@ const VISIBLE_TASKS = 2;
 /** A view overlay, including inside existing native modals; it never owns task lifetimes. */
 export function UploadProgressHost() {
   const tasks = useUploadProgressStore((state) => state.tasks);
-  const activeTasks = Object.values(tasks);
+  // Chat media already shows its transfer inside the image/video bubble.
+  const activeTasks = Object.values(tasks).filter(task => !task.progressKey);
   // Inactive viewers and sheets need no additional native views or context hooks.
   return activeTasks.length > 0 ? <UploadProgressCard tasks={activeTasks} /> : null;
 }

@@ -14,8 +14,8 @@
  *    已在各自模块上报过。真正留给这里的是从不经过 apiClient 的那类：SQLite / MMKV /
  *    SecureStore 抛错、expo 模块不可用、导航抛错、原生模块调用失败、JSON 解析失败。
  *
- * 去重：按 `operation:kind` 每个 app 生命周期最多 3 个不同签名（错误名 + 消息前
- * 200 字），签名相同只报一次。与通知链路 report-failure 同一套取舍——按次上报的话，
+ * 去重：按 `operation:kind` 每 60 秒最多 3 个不同签名（错误名 + 消息前
+ * 200 字），窗口内签名相同只报一次；持续或再次发生的故障仍能被发现。按次上报的话，
  * 一个系统性故障能按「用户数 × 触发次数」刷爆配额，后面真正的新问题反而发不出去。
  *
  * operation / kind 必须是稳定的代码字面量（sentry.ts 用它们组 fingerprint），不能带
@@ -47,19 +47,21 @@ const EXPECTED_ERROR_NAMES: ReadonlySet<string> = new Set([
   'TempChatUnavailableError',
   'UserFacingError',
   'StorageUploadError',
+  'ResponseShapeError',
 ]);
 
 const MAX_SIGNATURES_PER_KEY = 3;
 const MAX_SIGNATURE_MESSAGE_LENGTH = 200;
+const REPORT_WINDOW_MS = 60_000;
 
 export type HandledFailureContext = Record<
   string,
   string | number | boolean | null | undefined
 >;
 
-const reportedSignatures = new Map<string, Set<string>>();
+const reportedSignatures = new Map<string, { startedAt: number; signatures: Set<string> }>();
 
-/** 测试隔离用：清掉「本生命周期已上报」的记账。 */
+/** 会话结束及测试隔离时重置限流记录。 */
 export function resetHandledFailureTelemetry(): void {
   reportedSignatures.clear();
 }
@@ -114,31 +116,38 @@ export function reportHandledFailure(
     const safeKind = stableTag(kind, 'unknownKind');
     const details = primitiveContext(context);
 
-    logClientDiagnostic(`${safeOperation}.${safeKind}.failed`, {
-      ...details,
-      errorName: errorName(error),
-    });
+    try {
+      logClientDiagnostic(`${safeOperation}.${safeKind}.failed`, {
+        ...details,
+        errorName: errorName(error),
+      });
 
-    if (isDev) {
-      console.warn(
-        `[${safeOperation}] ${safeKind} failed`,
-        redactSensitiveFields({
-          ...details,
-          errorName: errorName(error),
-        }),
-      );
+      if (isDev) {
+        console.warn(
+          `[${safeOperation}] ${safeKind} failed`,
+          redactSensitiveFields({ ...details, errorName: errorName(error) }),
+        );
+      }
+    } catch {
+      // 可选的本地诊断失败不能阻断真正的异常上报。
     }
 
     if (isExpectedFailure(error)) return;
 
     const key = `${safeOperation}:${safeKind}`;
-    const seen = reportedSignatures.get(key) ?? new Set<string>();
+    const now = Date.now();
+    for (const [entry, value] of reportedSignatures) {
+      if (now - value.startedAt >= REPORT_WINDOW_MS) reportedSignatures.delete(entry);
+    }
+    const window = reportedSignatures.get(key) ?? { startedAt: now, signatures: new Set<string>() };
+    const seen = window.signatures;
     if (seen.size >= MAX_SIGNATURES_PER_KEY) return;
     const signature = `${errorName(error)} ${diagnosticErrorMessage(
       error,
     ).slice(0, MAX_SIGNATURE_MESSAGE_LENGTH)}`;
     if (seen.has(signature)) return;
-    reportedSignatures.set(key, new Set([...seen, signature]));
+    seen.add(signature);
+    reportedSignatures.set(key, window);
 
     // operation + kind 排在 context 之后：sentry.ts 靠这两个 tag 组稳定 fingerprint，
     // 被调用方 context 覆盖掉就会退回按 message 分组。

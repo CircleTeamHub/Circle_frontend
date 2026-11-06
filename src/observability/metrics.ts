@@ -14,6 +14,7 @@
  * 可观测性绝不能改变业务行为：SDK 缺失（Jest 桩、未初始化）或抛错时静默。
  */
 import * as Sentry from '@sentry/react-native';
+import { HTTP_ROUTE_TEMPLATES } from './http-diagnostics';
 
 const PUSH_PROVIDERS = ['jpush', 'expo'] as const;
 const PUSH_CATEGORIES = ['chat', 'social', 'circle', 'system', 'other'] as const;
@@ -49,6 +50,23 @@ interface MetricDefinition {
 }
 
 export const TELEMETRY_METRICS = {
+  'api.request.duration': {
+    type: 'distribution',
+    unit: 'millisecond',
+    attributes: {
+      method: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'OTHER'],
+      route: [...HTTP_ROUTE_TEMPLATES, '/__other__'],
+      outcome: ['success', 'http', 'api-code', 'timeout', 'network', 'stalled', 'body-read', 'invalid-json', 'unexpected'],
+    },
+  },
+  'app.operation.duration': {
+    type: 'distribution',
+    unit: 'millisecond',
+    attributes: {
+      operation: ['chatSend', 'chatConnect', 'mediaUpload', 'noteCreate', 'noteUpdate', 'noteCollect'],
+      outcome: ['success', 'failed', 'cancelled'],
+    },
+  },
   'push.received': {
     type: 'counter',
     attributes: { provider: PUSH_PROVIDERS, category: PUSH_CATEGORIES },

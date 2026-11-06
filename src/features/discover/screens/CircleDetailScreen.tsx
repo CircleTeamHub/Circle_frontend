@@ -41,10 +41,9 @@ import {
   joinCircle,
   fetchMyApplications,
   setCircleAvatar,
-  circlesMutatedSince,
 } from '@/services/api/circles';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
-import { ApiError } from '@/services/api/client';
+import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useChangeCircleCover } from '@/features/discover/hooks/use-change-circle-cover';
 import { useChangeAvatar } from '@/hooks/use-change-avatar';
@@ -68,6 +67,7 @@ import {
 import { groupOrCircleMutatedSince } from '@/features/chat/utils/group-reload-key';
 import { useAuthStore } from '@/stores/authStore';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -274,6 +274,12 @@ function readFreshCircleCache(epoch: number, circleId: string) {
 }
 
 export default function CircleDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const epoch = useAuthStore((state) => state.sessionEpoch);
+  return <CircleDetailContent key={`${epoch}:${id}`} />;
+}
+
+function CircleDetailContent() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -291,6 +297,7 @@ export default function CircleDetailScreen() {
     () => readFreshCircleCache(sessionEpoch, id)?.circle ?? null,
   );
   const [loading, setLoading] = useState(circle === null);
+  const [circleValidated, setCircleValidated] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [iconSaving, setIconSaving] = useState(false);
   const [enteringGroupChat, setEnteringGroupChat] = useState(false);
@@ -351,19 +358,22 @@ export default function CircleDetailScreen() {
     if (showInitialLoading) setLoading(true);
     setLoadError(null);
     const startedAt = Date.now();
+    const requestRevision = getPageSnapshotRevision();
     try {
       const data = await fetchCircleDetail(id);
       if (!mountedRef.current || requestId !== circleRequestRef.current) return false;
       setCircle(data);
-      writeCircleDetailCache(sessionEpoch, id, { circle: data, at: startedAt });
+      setCircleValidated(true);
+      writeCircleDetailCache(sessionEpoch, id, { circle: data, at: startedAt }, requestRevision);
       hasLoadedRef.current = true;
       return true;
     } catch (error) {
       if (!mountedRef.current || requestId !== circleRequestRef.current) return false;
       const isNotFound = error instanceof ApiError && error.status === 404;
+      setCircleValidated(false);
       // 圈子没了(解散/不可见):缓存一并作废,下次别再先画出来。其余失败保留缓存,
       // 与页面上「已有内容不清空」一致。
-      if (isNotFound) evictCircleDetailCache(sessionEpoch, id);
+      if (isDefinitiveAuthFailure(error) || isNotFound) evictCircleDetailCache(sessionEpoch, id);
       setLoadError(
         isNotFound ? null : getApiErrorMessage(error, t('circle.loadError')),
       );
@@ -393,6 +403,8 @@ export default function CircleDetailScreen() {
   // 「邀请好友为我验证」入口——invitation 流程的接收侧本来没有前端入口。
   const loadMyInvitation = useCallback(async () => {
     const requestId = ++invitationRequestRef.current;
+    const requestRevision = getPageSnapshotRevision();
+    const startedAt = Date.now();
     // 先换成这个圈子缓存里的申请(没有就清空):换了圈子不残留上一个圈子的入口,
     // 同一个圈子重拉期间按钮也不先闪成「审核中」。
     setMyInvitation(readFreshCircleCache(sessionEpoch, id)?.invitation ?? null);
@@ -406,7 +418,7 @@ export default function CircleDetailScreen() {
         apps.find((inv) => inv.circleId === id && inv.status === 'PENDING') ??
         null;
       setMyInvitation(invitation);
-      writeCircleDetailCache(sessionEpoch, id, { invitation });
+      writeCircleDetailCache(sessionEpoch, id, { invitation }, requestRevision, startedAt);
     } catch {
       // 非关键路径，失败不阻塞详情页展示
       if (mountedRef.current && requestId === invitationRequestRef.current) {
@@ -415,9 +427,9 @@ export default function CircleDetailScreen() {
     }
   }, [id, sessionEpoch]);
 
-  // 从编辑/审核/邀请等子页面回来:那些操作都走圈子写请求(circlesMutatedSince),有改动必重拉;
+  // 编辑/审核/邀请与群成员操作都会改变圈子资料,有过相关写请求就重拉;
   // 只是看了看就回来、30 秒内,不再重发详情和「我的申请」整表。
-  const reloadGate = useFocusReloadGate({ key: id, mutatedSince: circlesMutatedSince });
+  const reloadGate = useFocusReloadGate({ key: id, mutatedSince: groupOrCircleMutatedSince });
   useFocusEffect(
     useCallback(() => {
       if (reloadGate.shouldSkip()) return;
@@ -446,9 +458,9 @@ export default function CircleDetailScreen() {
     }
   }, [loadCircle, loadMyInvitation]);
 
-  const isOwner = circle?.myRole === 'OWNER';
-  const isOwnerOrAdmin = isOwner || circle?.myRole === 'ADMIN';
-  const isActiveMember = circle?.myStatus === 'ACTIVE';
+  const isOwner = circleValidated && circle?.myRole === 'OWNER';
+  const isOwnerOrAdmin = circleValidated && (isOwner || circle?.myRole === 'ADMIN');
+  const isActiveMember = circleValidated && circle?.myStatus === 'ACTIVE';
 
   const { changeCover: changeCircleCover } = useChangeCircleCover(id, (url) => {
     setCircle((current) => (current ? { ...current, cover: url } : current));
@@ -484,10 +496,10 @@ export default function CircleDetailScreen() {
   // Active members who are not the owner can leave. Owners must transfer or
   // dissolve the circle instead, so they never see the leave action.
   const canLeaveCircle =
-    circle?.myStatus === 'ACTIVE' && circle?.myRole !== 'OWNER';
+    circleValidated && circle?.myStatus === 'ACTIVE' && circle?.myRole !== 'OWNER';
 
   const handleJoinCircle = useCallback(async () => {
-    if (!id || joining) return;
+    if (!id || joining || !circleValidated) return;
     setJoining(true);
     try {
       await joinCircle(id);
@@ -509,7 +521,7 @@ export default function CircleDetailScreen() {
     } finally {
       setJoining(false);
     }
-  }, [id, joining, loadCircle, sessionEpoch, t]);
+  }, [circleValidated, id, joining, loadCircle, sessionEpoch, t]);
 
   const handleLeaveCircle = useCallback(() => {
     if (!id) return;
@@ -729,6 +741,8 @@ export default function CircleDetailScreen() {
               source={{ uri: circle.cover }}
               style={s.cover}
               contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
             />
           ) : (
             <View style={s.cover}>
@@ -802,7 +816,7 @@ export default function CircleDetailScreen() {
               {circle.currentIconUrl ? (
                 <View style={[s.iconAssetCard, d.iconAssetCard]}>
                   <View style={s.iconAssetPreview}>
-                    <Image source={{ uri: circle.currentIconUrl }} style={s.iconAssetImage} contentFit="cover" />
+                    <Image source={{ uri: circle.currentIconUrl }} style={s.iconAssetImage} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                   </View>
                   <Text style={{ color: colors.text }}>
                     {t('circle.icon.current', { defaultValue: '当前图标' })}
@@ -924,7 +938,7 @@ export default function CircleDetailScreen() {
         {/* ── Actions ── */}
         <View style={s.actionRow}>
           {/* 加入圈子 (non-members) */}
-          {!isActiveMember ? (
+          {circleValidated && !isActiveMember ? (
             circle.myStatus === 'PENDING' ? (
               myInvitation ? (
                 <Pressable

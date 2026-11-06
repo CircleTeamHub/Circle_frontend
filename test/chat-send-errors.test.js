@@ -8,7 +8,7 @@ const ts = require('typescript');
 // 除了敏感词,所有 ack 拒绝都落到同一句「发送失败,请重试」—— 而被禁言、被拉黑、
 // 对方不收陌生人消息这些状态,不改权限/关系/时机的话重试多少次都不会成功。
 // 同时:拆栈后这条最关键的链路在 release 包里完全没有 Sentry 信号。
-function loadSendErrors({ dev = false } = {}) {
+function loadSendErrors({ dev = false, now = () => Date.now() } = {}) {
   const filePath = path.join(process.cwd(), 'src/chat-core/send-errors.ts');
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {
     compilerOptions: {
@@ -39,6 +39,7 @@ function loadSendErrors({ dev = false } = {}) {
 
   const context = {
     __DEV__: dev,
+    Date: class extends Date { static now() { return now(); } },
     Error,
     Set,
     module: { exports: {} },
@@ -215,6 +216,21 @@ test('a persistent outage cannot burn the Sentry budget', () => {
   api.resetChatSendFailureTelemetry();
   api.reportChatSendFailure('text', new ChatSendError('CHAT_ACK_TIMEOUT'));
   assert.equal(reports.length, 4);
+});
+
+test('send failure recurrence becomes visible again after sixty seconds', () => {
+  let now = 0;
+  const { api, reports, ChatSendError } = loadSendErrors({ now: () => now });
+  api.reportChatSendFailure('text', new ChatSendError('CHAT_ACK_TIMEOUT'));
+  now = 59_999;
+  api.reportChatSendFailure('text', new ChatSendError('CHAT_ACK_TIMEOUT'));
+  assert.equal(reports.length, 1);
+
+  now = 60_000;
+  api.reportChatSendFailure('text', new ChatSendError('CHAT_ACK_TIMEOUT'));
+  api.reportChatSendFailure('text', new ChatSendError('CHAT_ACK_TIMEOUT'));
+  assert.equal(reports.length, 2);
+  assert.equal(reports[1].ctx.code, 'CHAT_ACK_TIMEOUT');
 });
 
 test('the failing send path actually calls the reporter', () => {

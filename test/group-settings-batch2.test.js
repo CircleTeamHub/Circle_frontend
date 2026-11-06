@@ -36,7 +36,8 @@ test('chat-core exposes the five group settings endpoints', () => {
   assert.match(api, /export function transferGroupChatOwner\(/);
   assert.match(api, /\/owner`, \{\s*method: 'POST',\s*body: \{ userId \}/);
   assert.match(api, /export function setGroupChatNotice\(/);
-  assert.match(api, /\/notice`,\s*\{ method: 'PATCH', body: \{ notice \} \}/);
+  // 置顶开关是可选字段:不传时请求体和旧版一模一样,老后端照常认。
+  assert.match(api, /\/notice`,\s*\{ method: 'PATCH', body: \{ notice, \.\.\.\(noticePinned === undefined \? \{\} : \{ noticePinned \}\) \} \}/);
   assert.match(api, /export function setGroupChatAvatar\(/);
   assert.match(api, /\/avatar`,\s*\{ method: 'PATCH', body: \{ avatarUrl \} \}/);
   assert.match(api, /export function updateGroupChatPolicies\(/);
@@ -124,7 +125,7 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   // 只需要这一个群的 DTO(policies):单个取,失败才退回整表(见 refreshConversationOrList)。
   assert.match(screen, /const conversationsPromise = refreshConversationOrList\(conversationID\)\.catch/);
   assert.match(screen, /await conversationsPromise;/);
-  assert.match(screen, /disabled: policies === null/);
+  assert.match(screen, /disabled=\{policies === null \|\| Boolean\(settingPending\)\}/);
   assert.match(screen, /transferGroupChatOwner\(conversationID, member\.userId\)/);
   // 乐观更新 + 失败回滚:开关按下即翻,请求失败翻回去。
   assert.match(screen, /patchConversation\(\{ muteAll: next \}\)/);
@@ -140,13 +141,11 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   assert.match(screen, /const resyncConversations = useCallback\(/);
   // 只重拉这一个群(失败才退回整表),服务端上真正的状态说了算。
   assert.match(screen, /void refreshConversationOrList\(conversationID\)/);
-  // 群主转让只属于独立群聊;提升成员上限只属于圈子群。
-  assert.match(screen, /isStandaloneGroup\s*\?\s*renderLinkRow\(/);
-  assert.match(screen, /pathname: '\/\(tabs\)\/profile\/group-expansion'/);
+  // 群主转让只属于独立群聊;提升成员上限只属于圈子群:两者互斥,同一个分支二选一。
+  assert.match(screen, /\{groupID \? \([\s\S]{0,400}group-manage-raise-limit[\s\S]{0,600}group-manage-transfer-owner/);
+  assert.match(screen, /pathname: `\/\(tabs\)\/\$\{scope\}\/group-expansion`/);
   assert.match(screen, /params: \{ circleId: groupID \}/);
-  assert.match(screen, /returnScope: originScope/);
-  assert.match(screen, /returnConversationID: conversationID/);
-  assert.match(screen, /returnGroupID: groupID/);
+  assert.doesNotMatch(screen, /returnScope:|returnConversationID:|returnGroupID:/);
   // 添加管理员与添加禁言共用多选面板,确认后分别走批量角色/禁言动作。
   assert.match(screen, /multiSelect=\{pickerMode === 'admin' \|\| pickerMode === 'silence'\}/);
   assert.match(screen, /selectedMemberIDs=\{selectedMemberIDs\}/);
@@ -154,9 +153,7 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   assert.match(screen, /silenceBatch\(targets, seconds\)/);
   const expansion = read('src/features/profile/screens/GroupExpansionScreen.tsx');
   assert.match(expansion, /preselectedCircleId/);
-  assert.match(expansion, /getGroupManageHref\(returnScope/);
-  assert.match(expansion, /router\.replace\(backHref as never\)/);
-  assert.match(expansion, /onBackPress=\{returnsToGroupManage \? handleBackPress : undefined\}/);
+  assert.doesNotMatch(expansion, /router\.replace|onBackPress=/);
 });
 
 test('chat info exposes the avatar row, the member row and hides the QR entry when joining is off', () => {
@@ -176,14 +173,16 @@ test('chat info exposes the avatar row, the member row and hides the QR entry wh
   assert.match(info, /chat\.groupManagement\.noteManagement/);
   assert.match(info, /handleOpenNoteManagement/);
   assert.match(info, /getNoteManagementHref\(/);
-  // 群成员目录可按群规开放,但群日志只给群主/管理员。
-  assert.match(info, /\{canManageGroup \? \([\s\S]*?chat\.groupLog/);
+  // 群成员目录可按群规开放,但群日志只给群主/管理员:入口在群管理页,群资料页没有。
+  assert.doesNotMatch(info, /chat\.groupLog/);
+  assert.match(read('src/features/chat/screens/GroupManageScreen.tsx'), /testID="group-manage-log"/);
   // 二维码入群关掉后群码入口一并收起:留着只会让人扫一张必然被拒的码。
   assert.match(info, /\) : qrJoinEnabled \? \(/);
   // 独立群聊的公告读写会话行。
   assert.match(info, /activeConversation\?\.notice\?\.trim\(\)/);
   const noticeScreen = read('src/features/chat/screens/EditGroupNoticeScreen.tsx');
-  assert.match(noticeScreen, /await setGroupChatNotice\(conversationID, nextNotice\)/);
+  // 圈子群也走同一个会话公告端点(先补建圈子群会话拿到 targetID),带上置顶开关。
+  assert.match(noticeScreen, /setGroupChatNotice\(targetID, nextNotice, nextPinned\)/);
 });
 
 test('note management is a separate page from group management', () => {

@@ -25,8 +25,10 @@ test('CircleDetailScreen: non-members get a join button', () => {
   const src = read(DETAIL);
   assert.match(src, /handleJoinCircle/);
   assert.match(src, /await joinCircle\(id\)/);
-  assert.match(src, /const isActiveMember = circle\?\.myStatus === 'ACTIVE'/);
-  assert.match(src, /\{!isActiveMember \? \(/);
+  // 从快照恢复的成员关系不算数:本次拉到详情(circleValidated)之后才决定画不画加入按钮。
+  assert.match(src, /const isActiveMember = circleValidated && circle\?\.myStatus === 'ACTIVE'/);
+  assert.match(src, /\{circleValidated && !isActiveMember \? \(/);
+  assert.match(src, /if \(!id \|\| joining \|\| !circleValidated\) return;/);
 });
 
 test('MyCirclesScreen: open a circle by a pasted id', () => {

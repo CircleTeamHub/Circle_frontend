@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/ui/avatar';
+import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
 import { MemberName } from '@/components/ui/member-name';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import {
@@ -105,6 +106,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
+  const contentWidth = useContentColumnWidth() - Spacing.lg * 2 - 40 - (Spacing.sm + 2);
 
   const d = useMemo(
     () => ({
@@ -193,7 +195,7 @@ export const MomentCard: React.FC<MomentCardProps> = ({
 
         {/* Images：点图看大图（ImageGrid 内置查看器）；进详情留给文字区，
             否则外层 Pressable 会把点击抢走。 */}
-        <MomentMedia images={post.images} media={post.media} attachments={post.attachments} />
+        <MomentMedia images={post.images} media={post.media} attachments={post.attachments} containerWidth={contentWidth} />
 
         {/* Time + Actions */}
         <View style={s.headerRow}>

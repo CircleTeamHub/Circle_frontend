@@ -2,7 +2,7 @@
   "expo": {
     "name": "风信",
     "slug": "windnote-ai",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": [
@@ -42,7 +42,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "allowBackup": false,
-      "versionCode": 1000001,
+      "versionCode": 1000002,
       "package": "com.yiboding.circleim"
     },
     "web": {
@@ -115,6 +115,7 @@
       "./plugins/with-android-release-signing",
       "./plugins/with-android-gradle-memory",
       "./plugins/with-android-startup",
+      "./plugins/with-android-okhttp-health",
       "./plugins/with-ios-xcode27-compat"
     ],
     "experiments": {

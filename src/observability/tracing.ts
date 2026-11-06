@@ -2,24 +2,28 @@
  * tracing.ts — 业务关键链路的自定义 Sentry span。
  *
  * 导航 transaction 回答「哪个屏幕慢」，回答不了「消息发送慢在哪一段」：发消息和
- * 聊天 socket 建连都不走 XHR，没有自动 span。这里给它们各一个手动 span。
+ * 聊天 socket 建连和原生对象存储上传缺少完整自动 span。这里为这些入口记录结果与耗时。
  *
  * 隐私边界与 sentry.ts 一致：
  * - span 名和 op 只来自下面的固定表，调用方只能传表里的键，不能拼字符串；
  * - 不设置任何属性 —— 用户、会话、消息内容、token 都不可能经由这里离开设备；
  * - 结果只记 Sentry 认得的状态枚举（SpanFailureStatus），其余一律降级成 unknown_error。
  *
- * 两个 span 都是根 span（parentSpan: null），各自成为一条 transaction：发消息最多
+ * span 都是根 span（parentSpan: null），各自成为一条 transaction：发消息最多
  * 排队等一分钟、离线时建连可能一直不成功，挂到导航 idle span 下面会把那条导航
  * transaction 一直撑开，屏幕耗时数据就失真了。
  *
- * 可观测性绝不能改变业务行为：SDK 缺失（Jest 桩、web）或抛错时退化成无操作 span。
+ * 指标独立于 trace 采样；trace SDK 不可用时仍尝试记录指标和本地诊断。
  */
 import * as Sentry from '@sentry/react-native';
+import { recordMetric } from './metrics';
+import { diagnosticNow } from './http-diagnostics';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
 const TRACED_OPERATIONS = {
   chatSend: { name: 'chat.message.send', op: 'chat.send' },
   chatConnect: { name: 'chat.socket.connect', op: 'websocket.connect' },
+  mediaUpload: { name: 'media.upload', op: 'file.upload' },
 } as const;
 
 export type TracedOperation = keyof typeof TRACED_OPERATIONS;
@@ -83,44 +87,45 @@ export function startOperationSpan(
   operation: TracedOperation,
   client: TracingClient = Sentry as unknown as TracingClient,
 ): OperationSpan {
+  const definition = Object.prototype.hasOwnProperty.call(TRACED_OPERATIONS, operation)
+    ? TRACED_OPERATIONS[operation] : undefined;
+  if (!definition) return NOOP_SPAN;
+  const startedAt = diagnosticNow();
+  let span: SpanLike | undefined;
   try {
-    const definition = Object.prototype.hasOwnProperty.call(TRACED_OPERATIONS, operation)
-      ? TRACED_OPERATIONS[operation]
-      : undefined;
-    if (!definition || typeof client.startInactiveSpan !== 'function') {
-      return NOOP_SPAN;
-    }
-    const span = client.startInactiveSpan({
+    span = client.startInactiveSpan?.({
       name: definition.name,
       op: definition.op,
       parentSpan: null,
     });
-    let ended = false;
-    return {
-      end(failureStatus) {
-        if (ended) return;
-        ended = true;
-        try {
-          try {
-            span.setStatus(
-              failureStatus === undefined
-                ? { code: SPAN_STATUS_OK }
-                : {
-                    code: SPAN_STATUS_ERROR,
-                    message: KNOWN_FAILURE_STATUSES.has(failureStatus)
-                      ? failureStatus
-                      : 'unknown_error',
-                  },
-            );
-          } finally {
-            span.end();
-          }
-        } catch {
-          // 可观测性绝不能改变业务行为。
-        }
-      },
-    };
   } catch {
-    return NOOP_SPAN;
+    // Trace 不可用时仍保留结果指标，避免采样/SDK 差异导致失败率缺失。
   }
+  let ended = false;
+  return {
+    end(failureStatus) {
+      if (ended) return;
+      ended = true;
+      const reason = failureStatus === undefined ? 'success'
+        : KNOWN_FAILURE_STATUSES.has(failureStatus) ? failureStatus : 'unknown_error';
+      const durationMs = Math.max(0, Math.round(diagnosticNow() - startedAt));
+      const outcome = reason === 'success' ? 'success' : reason === 'cancelled' || reason === 'aborted' ? 'cancelled' : 'failed';
+      recordMetric('app.operation.duration', durationMs, { operation, outcome });
+      try {
+        logClientDiagnostic(`${operation}.completed`, { durationMs, reason });
+      } catch {
+        // 本地诊断不影响 span 结束。
+      }
+      try {
+        try {
+          span?.setStatus(reason === 'success' ? { code: SPAN_STATUS_OK }
+            : { code: SPAN_STATUS_ERROR, message: reason });
+        } finally {
+          span?.end();
+        }
+      } catch {
+        // 可观测性绝不能改变业务行为。
+      }
+    },
+  };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,14 +12,18 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/stores/authStore';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   assignFriendTag,
   createFriendTag,
   fetchFriendSettings,
+  friendsMutatedSince,
   type FriendTag,
   removeFriendTag,
 } from '@/services/api/friends';
+import { isProfileCacheFresh, readUserProfileCache, writeUserProfileCache } from '../profile-cache';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
@@ -105,25 +109,27 @@ export default function EditFriendTagsScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string; name?: string }>();
   const profileId = typeof params.id === 'string' ? params.id : '';
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const cachedStamp = readUserProfileCache(sessionEpoch, profileId)?.friendSettings;
+  const cachedSettings = cachedStamp && !friendsMutatedSince(cachedStamp.at) ? cachedStamp.value : null;
 
-  const [availableTags, setAvailableTags] = useState<FriendTag[]>([]);
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+
+  const [availableTags, setAvailableTags] = useState<FriendTag[]>(() => sortTags(cachedSettings?.availableTags ?? []));
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => cachedSettings?.assignedTags.map((tag) => tag.id) ?? []);
   const [initialSelectedTagIds, setInitialSelectedTagIds] = useState<string[]>([]);
   const [newTagName, setNewTagName] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!cachedSettings);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
-  useEffect(
-    () => () => {
-      mountedRef.current = false;
-    },
-    [],
-  );
-
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useLayoutEffect(() => {
     let cancelled = false;
 
     if (!profileId) {
@@ -132,6 +138,22 @@ export default function EditFriendTagsScreen() {
       return;
     }
 
+    const cached = readUserProfileCache(sessionEpoch, profileId)?.friendSettings;
+    setAvailableTags(sortTags(cached?.value?.availableTags ?? []));
+    const cachedIds = cached?.value?.assignedTags.map((tag) => tag.id) ?? [];
+    setSelectedTagIds(cachedIds);
+    setInitialSelectedTagIds(cachedIds);
+    if (isProfileCacheFresh(cached, Date.now(), friendsMutatedSince) && cached.value) {
+      setAvailableTags(sortTags(cached.value.availableTags));
+      const ids = cached.value.assignedTags.map((tag) => tag.id);
+      setSelectedTagIds(ids);
+      setInitialSelectedTagIds(ids);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+    const startedAt = Date.now();
+    const requestRevision = getPageSnapshotRevision();
     setIsLoading(true);
     setError(null);
 
@@ -141,6 +163,8 @@ export default function EditFriendTagsScreen() {
           return;
         }
 
+        if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+        writeUserProfileCache(sessionEpoch, profileId, { friendSettings: { value: settings, at: startedAt } }, requestRevision);
         const nextAvailableTags = sortTags(settings.availableTags);
         const nextSelectedTagIds = settings.assignedTags.map((tag) => tag.id);
 
@@ -162,7 +186,7 @@ export default function EditFriendTagsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [profileId, t]);
+  }, [profileId, sessionEpoch, t]);
 
   const d = useMemo(
     () => ({
@@ -298,17 +322,18 @@ export default function EditFriendTagsScreen() {
     }
   };
 
-  const stateBlock = isLoading ? (
+  const stateBlock = isLoading && !cachedSettings ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
       <Text style={d.stateText}>{t('contacts.tagsScreen.loading')}</Text>
     </View>
-  ) : error ? (
+  ) : error && !cachedSettings ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
     </View>
   ) : (
     <View style={[s.card, d.card]}>
+      {error ? <Text style={d.stateText}>{error}</Text> : null}
       <Text style={[s.fieldLabel, d.fieldLabel]}>{t('userProfile.editTags.label')}</Text>
       <Text style={[s.helper, d.helper]}>
         {t('userProfile.editTags.helper')}
@@ -328,7 +353,7 @@ export default function EditFriendTagsScreen() {
             d.addButton,
             !newTagName.trim() || isCreatingTag ? d.addButtonDisabled : null,
           ]}
-          disabled={!newTagName.trim() || isCreatingTag}
+          disabled={isLoading || !newTagName.trim() || isCreatingTag}
           onPress={handleCreateTag}
         >
           <Text style={d.addButtonText}>
@@ -346,6 +371,7 @@ export default function EditFriendTagsScreen() {
                 key={tag.id}
                 style={[s.tagChip, d.tagChip, isActive ? d.tagChipActive : null]}
                 onPress={() => toggleTag(tag.id)}
+                disabled={isLoading}
               >
                 <Text
                   style={[d.tagText, isActive ? d.tagTextActive : null]}

@@ -7,7 +7,8 @@ import { fetchCoinTransactions, fetchWallet } from '@/services/api/coin';
 const longWalletError =
   '积分余额加载失败，请检查网络连接后稍后重试；你的现有积分不会受到影响。';
 const mockAuthState = {
-  user: { accountId: 'account-123', nickname: 'Test User' },
+  user: { id: 'user-123', accountId: 'account-123', nickname: 'Test User' },
+  sessionEpoch: 1,
 };
 const mockWalletState = { balance: null, version: 0 };
 const mockTranslate = (key: string, options?: { defaultValue?: string }) =>
@@ -40,14 +41,21 @@ jest.mock('@/services/api/coin', () => ({
 }));
 
 jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: typeof mockAuthState) => unknown) =>
-    selector(mockAuthState),
+  useAuthStore: Object.assign(
+    (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
+    { getState: () => mockAuthState },
+  ),
 }));
 
 jest.mock('@/stores/walletRealtimeStore', () => ({
-  useWalletRealtimeStore: (
-    selector: (state: typeof mockWalletState) => unknown,
-  ) => selector(mockWalletState),
+  useWalletRealtimeStore: Object.assign(
+    (selector: (state: typeof mockWalletState) => unknown) => selector(mockWalletState),
+    { getState: () => mockWalletState },
+  ),
+}));
+
+jest.mock('@/services/api/client', () => ({
+  isDefinitiveAuthFailure: () => false,
 }));
 
 // 真实 token 与浅色色板，只替换掉会牵出原生存储的 ThemeProvider。

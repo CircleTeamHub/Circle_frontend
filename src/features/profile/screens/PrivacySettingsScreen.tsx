@@ -16,6 +16,7 @@ import {
   type UpdatePrivacySettingsPayload,
 } from '@/services/api/privacy';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { isDefinitiveAuthFailure } from '@/services/api/client';
 import {
   BURN_DURATION_CHOICES,
   BURN_DURATION_OFF,
@@ -28,7 +29,6 @@ import {
 } from '@/chat-core/store';
 import {
   readPrivacySettingsCache,
-  writePrivacySettingsCache,
 } from '@/features/profile/privacy-settings-cache';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -118,6 +118,11 @@ const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
 };
 
 export default function PrivacySettingsScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  return sessionKey ? <PrivacySettingsContent key={sessionKey} /> : null;
+}
+
+function PrivacySettingsContent() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -159,7 +164,6 @@ export default function PrivacySettingsScreen() {
       if (!isCurrent()) return;
       setSettings(loaded);
       setLoaded(true);
-      writePrivacySettingsCache(sessionEpoch, loaded);
       // 服务端不下发全局阅后即焚的开启时间：store 在档位变化时记本机观察到的时刻。
       if (useChatStore.getState().viewerSelfDestructSec !== loaded.messageSelfDestructSec) {
         useChatStore.getState().setViewerSelfDestructSec(loaded.messageSelfDestructSec);
@@ -169,6 +173,10 @@ export default function PrivacySettingsScreen() {
         .setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(loaded));
     } catch (requestError) {
       if (!isCurrent()) return;
+      if (isDefinitiveAuthFailure(requestError)) {
+        setSettings(null);
+        setLoaded(false);
+      }
       setError(
         getApiErrorMessage(
           requestError,
@@ -208,7 +216,6 @@ export default function PrivacySettingsScreen() {
       const updated = await updatePrivacySettings(payload);
       // A confirmed save still applies to this session after the user leaves this screen.
       if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
-      writePrivacySettingsCache(sessionEpoch, updated);
       // 服务端不下发全局阅后即焚的开启时间：store 在档位变化时记本机观察到的时刻。
       if (payload.messageSelfDestructSec !== undefined &&
         useChatStore.getState().viewerSelfDestructSec !== updated.messageSelfDestructSec) {
@@ -225,7 +232,10 @@ export default function PrivacySettingsScreen() {
       }
     } catch (requestError) {
       if (!isCurrent()) return;
-      setSettings(previous);
+      if (isDefinitiveAuthFailure(requestError)) {
+        setSettings(null);
+        setLoaded(false);
+      } else setSettings(previous);
       setError(
         getApiErrorMessage(
           requestError,
@@ -279,7 +289,7 @@ export default function PrivacySettingsScreen() {
         titleKey="settingsDetails.privacy.title"
         header={
           <View style={s.footer}>
-            {loading || saving ? (
+            {(loading && settings === null) || saving ? (
               <ActivityIndicator
                 testID={saving ? 'privacy-saving' : undefined}
                 accessibilityLabel={saving ? t('common.saving') : undefined}

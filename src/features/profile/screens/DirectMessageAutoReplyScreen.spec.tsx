@@ -7,18 +7,25 @@ import {
 } from '@/services/api/privacy';
 import { useDirectMessageAutoReplyStore } from '@/features/profile/store/use-direct-message-auto-reply-store';
 
-const mockChatState = { currentUserId: 'user-1' as string | null };
+const mockAuthState = {
+  user: { id: 'user-1' } as { id: string } | null,
+  sessionEpoch: 1,
+};
 const mockTranslate = (key: string, options?: { defaultValue?: string }) =>
   options?.defaultValue ?? key;
 
-jest.mock('@/chat-core/store', () => {
-  const useChatStore = Object.assign(
-    (selector: (state: typeof mockChatState) => unknown) =>
-      selector(mockChatState),
-    { getState: () => mockChatState },
+jest.mock('@/stores/authStore', () => {
+  const useAuthStore = Object.assign(
+    (selector: (state: typeof mockAuthState) => unknown) =>
+      selector(mockAuthState),
+    { getState: () => mockAuthState },
   );
-  return { useChatStore };
+  return { useAuthStore };
 });
+
+jest.mock('@/services/api/client', () => ({
+  isDefinitiveAuthFailure: () => false,
+}));
 
 jest.mock('@/services/api/privacy', () => ({
   fetchPrivacySettings: jest.fn(),
@@ -124,7 +131,8 @@ const settings = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockChatState.currentUserId = 'user-1';
+  mockAuthState.user = { id: 'user-1' };
+  mockAuthState.sessionEpoch = 1;
   useDirectMessageAutoReplyStore.setState({ byUserId: {} });
 });
 

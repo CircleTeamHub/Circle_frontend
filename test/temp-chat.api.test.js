@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
+const { withNativeStorageStubs } = require('./helpers/native-storage-stubs');
 
 function loadTempChatApi(apiResponse) {
   const filePath = path.join(process.cwd(), "src/services/api/temp-chat.ts");
@@ -22,7 +23,7 @@ function loadTempChatApi(apiResponse) {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: (specifier) => {
+    require: withNativeStorageStubs((specifier) => {
       if (specifier === "@/services/api/client") {
         return {
           apiClient: async (...args) => {
@@ -32,7 +33,7 @@ function loadTempChatApi(apiResponse) {
         };
       }
       return require(specifier);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

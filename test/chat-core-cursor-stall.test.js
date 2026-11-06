@@ -74,7 +74,8 @@ const dto = (over = {}) => ({
 
 function loadDateWindow() {
   return runModule('src/features/chat/chat-history-date-window.ts', (request) => {
-    throw new Error(`unexpected require: ${request}`);
+    if (request === '@/features/chat/group-info-cache') return require('./helpers/chat-core-stubs').loadGroupInfoCache();
+      throw new Error(`unexpected require: ${request}`);
   });
 }
 
@@ -115,7 +116,8 @@ function loadApi({ respond, clearTargetHeight = () => undefined }) {
     }
     if (request === './protocol') return {};
     if (request === './local-db') return localDbStub;
-    throw new Error(`unexpected require: ${request}`);
+    if (request === '@/features/chat/group-info-cache') return require('./helpers/chat-core-stubs').loadGroupInfoCache();
+      throw new Error(`unexpected require: ${request}`);
   });
 }
 
@@ -292,7 +294,8 @@ function loadClient({ pages, storeState = {} }) {
       });
     }
     if (request === './local-db') return localDbStub;
-    throw new Error(`unexpected require: ${request}`);
+    if (request === '@/features/chat/group-info-cache') return require('./helpers/chat-core-stubs').loadGroupInfoCache();
+      throw new Error(`unexpected require: ${request}`);
   });
   return { api, requested, state, clearedFloors };
 }

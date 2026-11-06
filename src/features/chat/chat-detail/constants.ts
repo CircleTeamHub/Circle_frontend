@@ -25,7 +25,7 @@ export const ATTACHMENT_ITEMS: readonly {
   { id: 'voice-call', icon: 'call-outline', labelKey: 'chat.attachments.voiceCall', label: '语/视频通话' },
   { id: 'location', icon: 'location-outline', labelKey: 'chat.attachments.location', label: '位置' },
   { id: 'notes', icon: 'document-text-outline', labelKey: 'chat.attachments.notes', label: '笔记' },
-  { id: 'friend-card', icon: 'person-outline', labelKey: 'chat.attachments.friendCard', label: '好友名片' },
+  { id: 'friend-card', icon: 'person-outline', labelKey: 'chat.attachments.friendCard', label: '名片' },
   { id: 'favorites', icon: 'star-outline', labelKey: 'chat.attachments.favorites', label: '我的收藏' },
   { id: 'transfer', icon: 'card-outline', labelKey: 'chat.attachments.transfer', label: '转账' },
   { id: 'quick-reply', icon: 'rocket-outline', labelKey: 'chat.attachments.quickReply', label: '快捷语' },
@@ -59,19 +59,11 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// 底部面板展开/收起的协调布局过渡：面板高度变化与消息区缩放一起平滑动，
-// 输入栏位置由 flex 决定、始终在面板上方，不会割裂。稍慢一点更顺眼。
+// 只过渡已有视图的位置/尺寸；全局 create/delete 淡入淡出会让表情网格、
+// 玻璃输入栏和同一帧挂载的页面闪烁。
 export const PANEL_LAYOUT_ANIM = {
   duration: 300,
-  create: {
-    type: LayoutAnimation.Types.easeInEaseOut,
-    property: LayoutAnimation.Properties.opacity,
-  },
   update: { type: LayoutAnimation.Types.easeInEaseOut },
-  delete: {
-    type: LayoutAnimation.Types.easeInEaseOut,
-    property: LayoutAnimation.Properties.opacity,
-  },
 };
 
 /** 引用跳转最多往回翻几页(一页 50 条);翻不到就放弃,不能无界翻。 */

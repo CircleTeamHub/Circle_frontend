@@ -41,6 +41,13 @@ function loadCacheModule(rnfsMock) {
         return { CHAT_DATABASE_DIRECTORY: '/app/documents/SQLite' };
       }
 
+      if (request === '@/storage/page-snapshots') {
+        return {
+          clearPageSnapshots() {},
+          getPageSnapshotStorageUsage: () => ({ entries: 0, bytes: 0 }),
+        };
+      }
+
       if (request === 'react-native') {
         // clear-app-cache 只用 Platform.OS 判断是否走原生 FS 路径；
         // 这些用例都覆盖原生平台，所以 mock 成 'ios'。

@@ -4,6 +4,7 @@ import { type Href, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, Spacing, Typography, withAlpha } from '@/theme';
+import { logClientDiagnostic } from '@/utils/client-diagnostics';
 
 type NavHeaderAction = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -60,6 +61,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const { colors } = useTheme();
   const { t } = useTranslation();
   const handleBackPress = useCallback(() => {
+    logClientDiagnostic('navigation.back.pressed', { source: 'header' });
     if (onBackPress) {
       onBackPress();
       return;

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const { withNativeStorageStubs } = require('./helpers/native-storage-stubs');
 
 function loadMomentsApi(apiClient) {
   const filePath = path.join(process.cwd(), 'src/services/api/moments.ts');
@@ -18,7 +19,7 @@ function loadMomentsApi(apiClient) {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: (specifier) => {
+    require: withNativeStorageStubs((specifier) => {
       if (specifier === '@/services/api/client') return { apiClient };
       if (specifier === '@/services/api/utils') {
         return { buildQuery: () => '', normalizeMediaUrl: (value) => value };
@@ -34,7 +35,7 @@ function loadMomentsApi(apiClient) {
         };
       }
       throw new Error(`Unexpected import: ${specifier}`);
-    },
+    }),
   };
   context.exports = context.module.exports;
   vm.runInNewContext(transpiled, context, { filename: filePath });

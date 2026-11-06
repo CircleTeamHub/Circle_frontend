@@ -4,6 +4,7 @@ import PrivacySettingsScreen from './PrivacySettingsScreen';
 import {
   fetchPrivacySettings,
   type PrivacySettings,
+  type UpdatePrivacySettingsPayload,
   updatePrivacySettings,
 } from '@/services/api/privacy';
 
@@ -87,19 +88,40 @@ jest.mock('@/features/profile/components/settings-detail', () => {
     </>,
   };
 });
-jest.mock('@/services/api/privacy', () => ({
-  fetchPrivacySettings: jest.fn(),
-  updatePrivacySettings: jest.fn(),
+// 服务端应答。真实 API 层在服务端确认后写展示快照(privacy-settings-cache),
+// 屏幕「再进来先画上次的真实设置」读的就是那份快照 —— 替身照做同一步。
+const mockServerFetch = jest.fn<Promise<PrivacySettings>, []>();
+const mockServerUpdate = jest.fn<Promise<PrivacySettings>, [UpdatePrivacySettingsPayload]>();
+jest.mock('@/services/api/privacy', () => {
+  const { writePrivacySettingsCache } = jest.requireActual<
+    typeof import('@/features/profile/privacy-settings-cache')
+  >('@/features/profile/privacy-settings-cache');
+  const confirm = async (epoch: number, pending: Promise<PrivacySettings>) => {
+    const settings = await pending;
+    writePrivacySettingsCache(epoch, settings);
+    return settings;
+  };
+  return {
+    fetchPrivacySettings: jest.fn(() => confirm(mockSessionEpoch, mockServerFetch())),
+    updatePrivacySettings: jest.fn((payload: UpdatePrivacySettingsPayload) =>
+      confirm(mockSessionEpoch, mockServerUpdate(payload))),
+  };
+});
+jest.mock('@/services/api/client', () => ({
+  isDefinitiveAuthFailure: () => false,
 }));
 jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: Object.assign(
-    (select: (state: { sessionEpoch: number }) => unknown) => select({ sessionEpoch: mockSessionEpoch }),
-    { getState: () => ({ sessionEpoch: mockSessionEpoch }) },
-  ),
-}));
+jest.mock('@/stores/authStore', () => {
+  const getState = () => ({ user: { id: 'me' }, sessionEpoch: mockSessionEpoch });
+  return {
+    useAuthStore: Object.assign(
+      (select: (state: ReturnType<typeof getState>) => unknown) => select(getState()),
+      { getState },
+    ),
+  };
+});
 
 // 刻意与默认值相反:默认 showPhone=false、showWechat=true。
 const REAL_SETTINGS: PrivacySettings = {
@@ -130,7 +152,7 @@ async function waitUntilLoaded() {
 }
 
 async function visitOnce(settings: PrivacySettings) {
-  jest.mocked(fetchPrivacySettings).mockResolvedValueOnce(settings);
+  mockServerFetch.mockResolvedValueOnce(settings);
   const view = render(<PrivacySettingsScreen />);
   await waitUntilLoaded();
   return view;
@@ -138,18 +160,20 @@ async function visitOnce(settings: PrivacySettings) {
 
 beforeEach(() => {
   mockSessionEpoch += 1;
-  jest.mocked(fetchPrivacySettings).mockReset();
-  jest.mocked(updatePrivacySettings).mockReset();
+  jest.mocked(fetchPrivacySettings).mockClear();
+  jest.mocked(updatePrivacySettings).mockClear();
+  mockServerFetch.mockReset();
+  mockServerUpdate.mockReset();
   mockSetBurn.mockClear();
   mockSetTyping.mockClear();
 });
 
 test('failed loading keeps settings locked and offers a visible retry', async () => {
-  jest.mocked(fetchPrivacySettings).mockRejectedValueOnce(new Error('offline'));
+  mockServerFetch.mockRejectedValueOnce(new Error('offline'));
   render(<PrivacySettingsScreen />);
   await screen.findByText('settingsDetails.privacy.loadFailed');
   expect(rowText('show-phone')).toHaveTextContent('false|disabled');
-  jest.mocked(fetchPrivacySettings).mockResolvedValueOnce(REAL_SETTINGS);
+  mockServerFetch.mockResolvedValueOnce(REAL_SETTINGS);
   fireEvent.press(screen.getByText('common.retry'));
   await waitUntilLoaded();
   expect(rowText('show-phone')).toHaveTextContent('true|enabled');
@@ -158,7 +182,7 @@ test('failed loading keeps settings locked and offers a visible retry', async ()
 test('saving one toggle explicitly locks controls until it finishes', async () => {
   await visitOnce(REAL_SETTINGS);
   let finish!: (value: PrivacySettings) => void;
-  jest.mocked(updatePrivacySettings).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+  mockServerUpdate.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
   fireEvent.press(rowText('show-qq'));
   expect(rowText('show-phone')).toHaveTextContent('true|disabled');
   expect(screen.getByTestId('privacy-saving')).toBeTruthy();
@@ -184,7 +208,7 @@ test.each([
   ['group-typing', 'shareTypingInGroup'],
 ] as const)('a PATCH omitting %s does not silently confirm consent was saved', async (id, field) => {
   await visitOnce({ ...REAL_SETTINGS, [field]: true });
-  jest.mocked(updatePrivacySettings).mockResolvedValueOnce(REAL_SETTINGS);
+  mockServerUpdate.mockResolvedValueOnce(REAL_SETTINGS);
   await act(async () => { fireEvent.press(rowText(id)); });
   expect(updatePrivacySettings).toHaveBeenCalledWith({ [field]: false });
   expect(rowText(id)).toHaveTextContent(/settingsDetails.privacy.unavailable\|disabled/);
@@ -194,7 +218,7 @@ test.each([
 test.each(['resolve', 'reject'] as const)('a load that %ss after session replacement cannot update the screen or chat policy', async (result) => {
   let resolve!: (value: PrivacySettings) => void;
   let reject!: (error: Error) => void;
-  jest.mocked(fetchPrivacySettings).mockReturnValueOnce(new Promise((yes, no) => { resolve = yes; reject = no; }));
+  mockServerFetch.mockReturnValueOnce(new Promise((yes, no) => { resolve = yes; reject = no; }));
   render(<PrivacySettingsScreen />);
   mockSessionEpoch += 1; // Same chat user ID, but the auth session has changed.
   await act(async () => { if (result === 'resolve') resolve(REAL_SETTINGS); else reject(new Error('offline')); });
@@ -209,13 +233,13 @@ test('a confirmed typing save after leaving the screen still updates the live po
   const view = await visitOnce(saved);
   mockSetTyping.mockClear();
   let finish!: (value: PrivacySettings) => void;
-  jest.mocked(updatePrivacySettings).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+  mockServerUpdate.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
   fireEvent.press(rowText('single-typing'));
   view.unmount();
   await act(async () => { finish({ ...saved, shareTypingInDirect: false }); });
   expect(mockSetTyping).toHaveBeenCalledTimes(1);
   expect(mockSetTyping).toHaveBeenCalledWith({ direct: false, group: true });
-  jest.mocked(fetchPrivacySettings).mockReturnValueOnce(new Promise(() => {}));
+  mockServerFetch.mockReturnValueOnce(new Promise(() => {}));
   render(<PrivacySettingsScreen />);
   expect(rowText('single-typing')).toHaveTextContent('false|disabled');
 });
@@ -223,14 +247,14 @@ test('a confirmed typing save after leaving the screen still updates the live po
 test('a confirmed burn save after leaving the screen still updates the live policy and cache', async () => {
   const view = await visitOnce(REAL_SETTINGS);
   let finish!: (value: PrivacySettings) => void;
-  jest.mocked(updatePrivacySettings).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+  mockServerUpdate.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
   fireEvent.press(rowText('self-destruct'));
   fireEvent.press(screen.getByTestId('burn-30'));
   view.unmount();
   await act(async () => { finish({ ...REAL_SETTINGS, messageSelfDestructSec: 30 }); });
   expect(mockSetBurn).toHaveBeenCalledTimes(1);
   expect(mockSetBurn).toHaveBeenCalledWith(30);
-  jest.mocked(fetchPrivacySettings).mockReturnValueOnce(new Promise(() => {}));
+  mockServerFetch.mockReturnValueOnce(new Promise(() => {}));
   render(<PrivacySettingsScreen />);
   expect(rowText('self-destruct')).toHaveTextContent('30s|disabled');
 });
@@ -240,7 +264,7 @@ test.each(['resolve', 'reject'] as const)('a save that %ss after session replace
   mockSetTyping.mockClear();
   let resolve!: (value: PrivacySettings) => void;
   let reject!: (error: Error) => void;
-  jest.mocked(updatePrivacySettings).mockReturnValueOnce(new Promise((yes, no) => { resolve = yes; reject = no; }));
+  mockServerUpdate.mockReturnValueOnce(new Promise((yes, no) => { resolve = yes; reject = no; }));
   fireEvent.press(rowText('show-phone'));
   mockSessionEpoch += 1;
   await act(async () => { if (result === 'resolve') resolve({ ...REAL_SETTINGS, showPhone: false }); else reject(new Error('offline')); });
@@ -251,7 +275,7 @@ test.each(['resolve', 'reject'] as const)('a save that %ss after session replace
 
 test('changing the burn duration still synchronizes the confirmed policy', async () => {
   await visitOnce(REAL_SETTINGS);
-  jest.mocked(updatePrivacySettings).mockResolvedValueOnce({ ...REAL_SETTINGS, messageSelfDestructSec: 30 });
+  mockServerUpdate.mockResolvedValueOnce({ ...REAL_SETTINGS, messageSelfDestructSec: 30 });
   fireEvent.press(rowText('self-destruct'));
   await act(async () => { fireEvent.press(screen.getByTestId('burn-30')); });
   expect(updatePrivacySettings).toHaveBeenCalledWith({ messageSelfDestructSec: 30 });
@@ -262,7 +286,7 @@ test('changing the burn duration still synchronizes the confirmed policy', async
 test('a second visit draws the last loaded settings, never the defaults', async () => {
   (await visitOnce(REAL_SETTINGS)).unmount();
 
-  jest.mocked(fetchPrivacySettings).mockReturnValue(new Promise(() => {}));
+  mockServerFetch.mockReturnValue(new Promise(() => {}));
   render(<PrivacySettingsScreen />);
 
   // 首帧就是用户自己的设置;后台重拉回来之前仍不可拨(与首次进入一致)。
@@ -272,7 +296,7 @@ test('a second visit draws the last loaded settings, never the defaults', async 
 });
 
 test('the first visit still starts from the defaults while loading', () => {
-  jest.mocked(fetchPrivacySettings).mockReturnValue(new Promise(() => {}));
+  mockServerFetch.mockReturnValue(new Promise(() => {}));
   render(<PrivacySettingsScreen />);
 
   expect(rowText('show-phone')).toHaveTextContent('false|disabled');
@@ -282,8 +306,8 @@ test('the first visit still starts from the defaults while loading', () => {
 test('a saved toggle is what the next visit draws first', async () => {
   (await visitOnce(REAL_SETTINGS)).unmount();
 
-  jest.mocked(fetchPrivacySettings).mockResolvedValueOnce(REAL_SETTINGS);
-  jest.mocked(updatePrivacySettings).mockResolvedValueOnce({
+  mockServerFetch.mockResolvedValueOnce(REAL_SETTINGS);
+  mockServerUpdate.mockResolvedValueOnce({
     ...REAL_SETTINGS,
     showQQ: false,
   });
@@ -298,7 +322,7 @@ test('a saved toggle is what the next visit draws first', async () => {
   expect(rowText('show-qq')).toHaveTextContent('false|enabled');
   view.unmount();
 
-  jest.mocked(fetchPrivacySettings).mockReturnValue(new Promise(() => {}));
+  mockServerFetch.mockReturnValue(new Promise(() => {}));
   render(<PrivacySettingsScreen />);
   expect(rowText('show-qq')).toHaveTextContent('false|disabled');
 });
@@ -306,8 +330,8 @@ test('a saved toggle is what the next visit draws first', async () => {
 test('a failed save does not leave the optimistic value for the next visit', async () => {
   (await visitOnce(REAL_SETTINGS)).unmount();
 
-  jest.mocked(fetchPrivacySettings).mockResolvedValueOnce(REAL_SETTINGS);
-  jest.mocked(updatePrivacySettings).mockRejectedValueOnce(new Error('offline'));
+  mockServerFetch.mockResolvedValueOnce(REAL_SETTINGS);
+  mockServerUpdate.mockRejectedValueOnce(new Error('offline'));
   const view = render(<PrivacySettingsScreen />);
   await waitUntilLoaded();
   await act(async () => {
@@ -317,7 +341,7 @@ test('a failed save does not leave the optimistic value for the next visit', asy
   expect(rowText('show-qq')).toHaveTextContent('true|enabled');
   view.unmount();
 
-  jest.mocked(fetchPrivacySettings).mockReturnValue(new Promise(() => {}));
+  mockServerFetch.mockReturnValue(new Promise(() => {}));
   render(<PrivacySettingsScreen />);
   expect(rowText('show-qq')).toHaveTextContent('true|disabled');
 });
@@ -326,7 +350,7 @@ test('another account starts from the defaults, not the previous account setting
   (await visitOnce(REAL_SETTINGS)).unmount();
 
   mockSessionEpoch += 1;
-  jest.mocked(fetchPrivacySettings).mockReturnValue(new Promise(() => {}));
+  mockServerFetch.mockReturnValue(new Promise(() => {}));
   render(<PrivacySettingsScreen />);
 
   expect(rowText('show-phone')).toHaveTextContent('false|disabled');
@@ -335,8 +359,8 @@ test('another account starts from the defaults, not the previous account setting
 
 test('direct group joining is off for legacy settings and saves only explicit opt-in', async () => {
   (await visitOnce(REAL_SETTINGS)).unmount();
-  jest.mocked(fetchPrivacySettings).mockResolvedValueOnce(REAL_SETTINGS);
-  jest.mocked(updatePrivacySettings).mockResolvedValueOnce({
+  mockServerFetch.mockResolvedValueOnce(REAL_SETTINGS);
+  mockServerUpdate.mockResolvedValueOnce({
     ...REAL_SETTINGS, allowFriendGroupDirectJoin: true,
   } as PrivacySettings);
   render(<PrivacySettingsScreen />);
@@ -349,8 +373,8 @@ test('direct group joining is off for legacy settings and saves only explicit op
 
 test('failed direct-join consent changes restore the previous saved choice', async () => {
   const saved = { ...REAL_SETTINGS, allowFriendGroupDirectJoin: true } as PrivacySettings;
-  jest.mocked(fetchPrivacySettings).mockResolvedValueOnce(saved);
-  jest.mocked(updatePrivacySettings).mockRejectedValueOnce(new Error('offline'));
+  mockServerFetch.mockResolvedValueOnce(saved);
+  mockServerUpdate.mockRejectedValueOnce(new Error('offline'));
   render(<PrivacySettingsScreen />);
   await waitUntilLoaded();
   expect(rowText('friend-group-direct-join')).toHaveTextContent('true|enabled');

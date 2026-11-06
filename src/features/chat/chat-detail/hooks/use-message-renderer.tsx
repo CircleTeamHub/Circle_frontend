@@ -94,6 +94,7 @@ export interface MessageRendererParams {
   selfDestructEnabled: boolean;
   selfDestructCacheKey: string;
   isGroupChat: boolean;
+  isAssistantConversation?: boolean;
   conversationTitle: string;
   avatarUrl: string | undefined;
   handleOpenMessageSender: (msg: ChatMessage) => Promise<void>;
@@ -128,6 +129,7 @@ export function useMessageRenderer({
   selfDestructEnabled,
   selfDestructCacheKey,
   isGroupChat,
+  isAssistantConversation = false,
   conversationTitle,
   avatarUrl,
   handleOpenMessageSender,
@@ -249,7 +251,7 @@ export function useMessageRenderer({
             selfName={selfName}
             selfAvatarUri={selfAvatarUri}
             onAvatarPress={handleOpenSelfProfile}
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
             onQuotePress={
               item.quoteMessageId && !item.quoteRevoked
                 ? () => handleQuotePress(item)
@@ -285,7 +287,7 @@ export function useMessageRenderer({
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
             onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
             selfDestructEnabled={selfDestructEnabled}
             selfDestructCacheKey={selfDestructCacheKey}
           />
@@ -302,7 +304,7 @@ export function useMessageRenderer({
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
             onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
             selfDestructEnabled={selfDestructEnabled}
             selfDestructCacheKey={selfDestructCacheKey}
           />
@@ -319,7 +321,7 @@ export function useMessageRenderer({
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
             onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
       case 'note-card':
@@ -348,7 +350,7 @@ export function useMessageRenderer({
                   ?.find((message) => message.id === item.id)?.height,
               }))
             }
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
       case 'friend-card':
@@ -364,7 +366,7 @@ export function useMessageRenderer({
             onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
             onPress={(card) => handleOpenUserCard(card.userID, card.nickname)}
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
       case 'group-invitation':
@@ -390,7 +392,7 @@ export function useMessageRenderer({
                 ),
               )
             }
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
       case 'qr-card':
@@ -412,7 +414,7 @@ export function useMessageRenderer({
             // 同理 push 不能改成 replace:顶掉当前页,落地页走完就没有可返回的上一层
             // 了,正是 #202 修掉的那个 bug。
             onPress={(card) => router.push(getQrLandingHref(scope, card.token))}
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
       case 'plaza-post-card':
@@ -435,7 +437,7 @@ export function useMessageRenderer({
                 ),
               )
             }
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
       case 'verification-card':
@@ -457,7 +459,7 @@ export function useMessageRenderer({
                 ),
               )
             }
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
           />
         );
       case 'transfer-card':
@@ -472,7 +474,7 @@ export function useMessageRenderer({
             onAvatarPress={item.outgoing ? handleOpenSelfProfile : () => handleOpenMessageSender(item)}
             onAvatarLongPress={getAvatarLongPressHandler(item)}
             onLongPress={getMessageLongPressHandler(item)}
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
       case 'call-record':
@@ -489,7 +491,7 @@ export function useMessageRenderer({
             // 1:1 里点通话记录 = 回拨；群聊回拨走标题栏通话入口，避免误触发全群振铃。
             onCallBack={isGroupChat ? undefined : handleStartCall}
             onLongPress={getMessageLongPressHandler(item)}
-            hideStatus={isGroupChat}
+            hideStatus={isGroupChat || isAssistantConversation}
           />
         );
       default: return null;
@@ -505,6 +507,7 @@ export function useMessageRenderer({
     handleQuotePress,
     handleToggleReaction,
     isGroupChat,
+    isAssistantConversation,
     selfDestructCacheKey,
     selfDestructEnabled,
     selfAvatarUri,

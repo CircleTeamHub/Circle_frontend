@@ -5,7 +5,7 @@ import {
   useCallback,
   useState,
 } from 'react';
-import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
+import { type GroupCardTarget, useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
 import {
   usePendingChatCardStore,
 } from '@/features/chat/store/use-pending-chat-card-store';
@@ -52,7 +52,8 @@ export interface ComposerSendParams {
   clearPersistedDraft: () => void;
   handlePickNoteBatch: (notes: NoteSummary[], options: NoteSendOptions) => Promise<void>;
   handlePickFriend: (friend: FriendProfile) => Promise<void>;
-  handlePickFavorite: (item: UserCollection) => Promise<void>;
+  handlePickGroupCard: (group: GroupCardTarget) => Promise<void>;
+  handlePickFavorite: (item: UserCollection, message?: string) => Promise<void>;
   handlePickQuickReply: (phrase: string) => Promise<void>;
 }
 
@@ -83,6 +84,7 @@ export function useComposerSend({
   clearPersistedDraft,
   handlePickNoteBatch,
   handlePickFriend,
+  handlePickGroupCard,
   handlePickFavorite,
   handlePickQuickReply,
 }: ComposerSendParams) {
@@ -109,8 +111,11 @@ export function useComposerSend({
         case 'friend':
           void handlePickFriend(item.data);
           return;
+        case 'group-card':
+          void handlePickGroupCard(item.data);
+          return;
         case 'favorite':
-          void handlePickFavorite(item.data);
+          void handlePickFavorite(item.data, item.message);
           return;
         case 'quick-reply':
           void handlePickQuickReply(item.data);
@@ -122,6 +127,7 @@ export function useComposerSend({
       sourceID,
       handlePickFavorite,
       handlePickFriend,
+      handlePickGroupCard,
       handlePickNoteBatch,
       handlePickQuickReply,
       setDraft,

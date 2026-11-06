@@ -14,6 +14,9 @@ import { ApiError } from '@/services/api/api-error';
 import { stageLocalNoteDraftDeletion, loadLocalNoteDraft, loadPendingNoteDraftDeletions } from '@/features/notes/utils/note-editor-drafts';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { resetUploadProgress, startUploadProgress } from '@/stores/upload-progress-store';
+import * as noteSections from '@/features/notes/utils/note-sections';
+import { recordMetric } from '@/observability/metrics';
+jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 
 test('note preview keeps live upload progress visible inside its native modal', async () => {
   const transfer = startUploadProgress('video/mp4');
@@ -52,6 +55,7 @@ test('measures text save preparation, request waiting and reconciliation without
   expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.phase', { stage: 'request', durationMs: 2500 });
   expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.phase', { stage: 'reconcile', durationMs: 0 });
   expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.completed', { durationMs: 2500 });
+  expect(recordMetric).toHaveBeenCalledWith('app.operation.duration', 2500, { operation: 'noteCreate', outcome: 'success' });
   expect(mockRequestPresign).not.toHaveBeenCalled();
   expect(mockUploadFile).not.toHaveBeenCalled();
   expect(JSON.stringify(jest.mocked(logClientDiagnostic).mock.calls)).not.toContain('Private title');
@@ -485,7 +489,7 @@ jest.mock('@/services/api/errors', () => ({
 
 jest.mock('@/services/api/upload', () => ({
   requestUploadPresign: (...args: unknown[]) => mockRequestPresign(...args),
-  resolveUploadContentType: () => 'image/jpeg',
+  resolveUploadContentType: ({ mimeType }: { mimeType?: string }) => mimeType || 'image/jpeg',
   sanitizeUploadFilename: (name: string) => name,
   uploadLocalFileToPresignedUrl: (...args: unknown[]) => mockUploadFile(...args),
 }));
@@ -1052,6 +1056,23 @@ test('失焦期间传完的媒体，回到页面后仍然保存得出去', async
   });
   // notes/ 是私有目录：直连地址读不到，媒体只按 objectKey 上送。
   expect(createdNoteMediaItems()[0]).not.toHaveProperty('url');
+});
+
+test('converted HEIC keeps JPEG MIME and byte size when a section note is saved', async () => {
+  jest.mocked(createNote).mockImplementation(async (input) => noteResult(input));
+  mockRequestPermission.mockResolvedValue({ granted: true });
+  mockLaunchPicker.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///photo.heic', mimeType: 'image/heic', fileSize: 9999 }] });
+  mockRequestPresign.mockResolvedValue({ uploadUrl: 'https://upload.example/photo.jpg', key: 'notes/photo.jpg', fileUrl: null, requiredHeaders: { 'Content-Type': 'image/jpeg', 'Content-Length': '4321' } });
+  mockUploadFile.mockResolvedValue(undefined);
+  render(<EditNoteScreen />);
+  pressComposer('image');
+  await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
+  pressComposer('title');
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'HEIC test');
+  fireEvent.press(screen.getByText('notes.edit.done'));
+  await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+  expect(createdNoteMediaItems()[0]).toEqual(expect.objectContaining({ objectKey: 'notes/photo.jpg', mimeType: 'image/jpeg', size: 4321 }));
+  expect(jest.mocked(createNote).mock.calls[0][0].media[0]).toEqual(expect.objectContaining({ mimeType: 'image/jpeg', size: 4321 }));
 });
 
 test('presign 不返回 fileUrl 时，笔记媒体照常上传、预览并按 objectKey 保存', async () => {
@@ -1909,6 +1930,19 @@ test('a note with real rich text is never overwritten by the legacy content fiel
 
 // 正文统计原来是 EditNoteScreen 的 state：每敲一个字整屏（分组 chip、媒体/展示
 // 九宫格、地图预览）重渲染一次。计数要继续实时，但重渲染必须只发生在计数那一格。
+test('opening a grouping sheet does not rebuild the unchanged note snapshot', async () => {
+  const normalize = jest.spyOn(noteSections, 'normalizeNoteMediaSections');
+  const view = render(<EditNoteScreen />);
+  try {
+    pressComposer('title');
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Unchanged body');
+    await act(async () => {});
+    const before = normalize.mock.calls.length;
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.groupsLabel' }));
+    expect(normalize.mock.calls.length).toBe(before);
+  } finally { view.unmount(); normalize.mockRestore(); }
+});
+
 test('typing in the body updates the live counter without re-rendering the screen', async () => {
   mockTranslate = (key, options) =>
     key === 'notes.edit.textCount' ? `字数:${options?.count}` : key;
@@ -1991,9 +2025,17 @@ test('accepts a successful PATCH when the server canonicalizes the edited note',
   } finally { rendered.unmount(); }
 });
 
+// Publishing or deleting a draft fences its ID in note-editor-drafts' module
+// memory for the rest of the process (a consumed lifecycle ID never comes
+// back). Jest keeps that module across tests, so each test resumes its own
+// draft ID; otherwise one test's publication leaves the next editor loading.
+let reviewDraftId = 'review-draft';
+let reviewDraftSequence = 0;
+beforeEach(() => { reviewDraftSequence += 1; reviewDraftId = `review-draft-${reviewDraftSequence}`; });
+
 function reviewDraft(overrides: Partial<NoteDraftDetail> = {}): NoteDraftDetail {
   return {
-    id: 'review-draft', title: 'remote', content: null, contentJson: [], sections: null,
+    id: reviewDraftId, title: 'remote', content: null, contentJson: [], sections: null,
     contentPreview: null, mediaCount: 0, groupIds: [], mediaKeys: [],
     createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-06T00:00:00Z', ...overrides,
   };
@@ -2001,7 +2043,7 @@ function reviewDraft(overrides: Partial<NoteDraftDetail> = {}): NoteDraftDetail 
 
 function signedInDraft() {
   mockDraftAuth.user = { id: 'owner-a', nickname: 'A' };
-  mockRouteDraftId = 'review-draft';
+  mockRouteDraftId = reviewDraftId;
 }
 
 test('server draft hydration restores each media region rather than combining them', () => {
@@ -2011,7 +2053,7 @@ test('server draft hydration restores each media region rather than combining th
       mediaBlocks: [{ id: 'i1', target: 'media', objectKeys: ['one'] }, { id: 'i2', target: 'media', objectKeys: ['two'] }],
     } }] },
     media: { items: [{ type: 'IMAGE', objectKey: 'one', url: 'https://cdn/one', sortOrder: 0 }, { type: 'IMAGE', objectKey: 'two', url: 'https://cdn/two', sortOrder: 1 }] },
-  } }), 'review-draft');
+  } }), reviewDraftId);
   expect(record.mediaOwnerByClientId[record.mediaItems[0].clientId]).toBe('i1');
   expect(record.mediaOwnerByClientId[record.mediaItems[1].clientId]).toBe('i2');
   const refreshed = { ...record, mediaItems: record.mediaItems.map((item) => ({ ...item, url: item.url + '?new-signature', clientId: 'new-' + item.clientId })),
@@ -2029,7 +2071,7 @@ test('a local mixed draft restores typed regions before previewing and saving', 
       { type: 'IMAGE', objectKey: 'photo', url: 'https://cdn/photo.jpg', sortOrder: 0 },
       { type: 'VIDEO', objectKey: 'video', url: 'https://cdn/video.mp4', sortOrder: 1 },
     ] },
-  } }), 'review-draft');
+  } }), reviewDraftId);
   // Reproduce a snapshot written by the old editor, with both types owned by one image block.
   local.composerBlocks = [{ id: 'old-media', kind: 'image' }];
   local.mediaOwnerByClientId = Object.fromEntries(local.mediaItems.map((item) => [item.clientId, 'old-media']));
@@ -2051,12 +2093,12 @@ test('a local mixed draft restores typed regions before previewing and saving', 
 
 test.each([true, false])('draft hydration chooses the newest saved snapshot (remote newer: %s)', async (remoteNewer) => {
   signedInDraft();
-  const local = draftRecordFromServer(reviewDraft({ title: 'local', updatedAt: remoteNewer ? '2026-10-05T00:00:00Z' : '2026-10-07T00:00:00Z' }), 'review-draft');
+  const local = draftRecordFromServer(reviewDraft({ title: 'local', updatedAt: remoteNewer ? '2026-10-05T00:00:00Z' : '2026-10-07T00:00:00Z' }), reviewDraftId);
   jest.mocked(storage.getString).mockImplementation((key) => key.startsWith('circle-im-note-draft:v1:') ? JSON.stringify(local) : undefined);
   mockFetchDraft.mockResolvedValue(reviewDraft());
   render(<EditNoteScreen />);
   await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe(remoteNewer ? 'remote' : 'local'));
-  expect(mockFetchDraft).toHaveBeenCalledWith('review-draft');
+  expect(mockFetchDraft).toHaveBeenCalledWith(reviewDraftId);
 });
 
 test('adding a region after restoring gapped IDs creates a distinct composer ID', async () => {
@@ -2079,11 +2121,11 @@ test('save and exit stays in the editor when both local and server persistence f
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
   mockSaveDraft.mockRejectedValue(new Error('offline'));
-  jest.mocked(storage.set).mockImplementation(() => { throw new Error('full'); });
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    jest.mocked(storage.set).mockImplementation(() => { throw new Error('full'); });
     fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'unsaved');
     const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
     act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
@@ -2091,6 +2133,8 @@ test('save and exit stays in the editor when both local and server persistence f
     expect(save).toBeDefined();
     await act(async () => { save?.onPress?.(); await Promise.resolve(); });
     await waitFor(() => expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.saveFailed'));
+    expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'draftLocalSave', expect.any(Error));
+    expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'draftRemoteSave', expect.any(Error));
     expect(mockRouter.back).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('unsaved');
   } finally { rendered.unmount(); alert.mockRestore(); }
@@ -2232,6 +2276,56 @@ test.each([
     expect([...listeners.values()].every((callbacks) => callbacks.size === 0)).toBe(true);
     subscribe.mockRestore(); visibility.mockRestore(); platformOverride.restore();
   }
+});
+
+function mockCollectedNote(sections: Record<string, unknown>) {
+  const sender = { id: 'sender', name: 'Default sender', faceURL: 'https://cdn/sender.jpg' };
+  const group = { id: 'source-circle', name: 'Default group', faceURL: 'https://cdn/group.jpg' };
+  const layout = [{ type: 'noteLayout', props: { blocks: [{ id: 'text-a', kind: 'text' }], order: ['text'] } }];
+  mockRouteId = 'collected-note';
+  mockFetchNoteDetail.mockResolvedValue({
+    id: mockRouteId, title: 'Collected', content: 'Body', contentJson: layout, media: [], groups: [], pinned: false,
+    createdAt: '2026-01-01T00:00:00Z', collectedFrom: {
+      conversationType: 'group', conversationID: 'source-chat', clientMsgID: 'original', sender, group,
+    }, sections: { text: { content: 'Body', contentJson: layout }, ...sections },
+  });
+  return { sender, group };
+}
+
+test('editing a collected note restores stored cards missing from the saved block layout', async () => {
+  const { sender, group } = mockCollectedNote({
+    contacts: { items: [{ id: 'sender', name: 'Default sender', faceURL: 'https://cdn/sender.jpg' }] },
+    groups: { items: [{ id: 'old-group-id', circleId: 'source-circle', name: 'Default group', faceURL: 'https://cdn/group.jpg' }] },
+  });
+  const view = render(<EditNoteScreen />);
+  try {
+    await screen.findByText('Default sender');
+    expect(screen.getByText('Default group')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
+    const input = jest.mocked(updateNote).mock.calls.at(-1)![1];
+    expect(input.sections?.contacts?.items).toEqual([sender]);
+    // 旧版圈子群名片的 id 原样回传，服务端才认得是库里已有的那张。
+    expect(input.sections?.groups?.items).toEqual([expect.objectContaining({ ...group, id: 'old-group-id' })]);
+    const marker = input.contentJson?.find((block) => block.type === 'noteLayout');
+    expect(marker?.props).toMatchObject({ blocks: expect.arrayContaining([
+      expect.objectContaining({ kind: 'contact' }), expect.objectContaining({ kind: 'group' }),
+    ]) });
+  } finally { view.unmount(); }
+});
+
+test('editing a legacy collected note without stored cards does not attach source cards the server would reject', async () => {
+  mockCollectedNote({});
+  const view = render(<EditNoteScreen />);
+  try {
+    await screen.findByDisplayValue('Collected');
+    expect(screen.queryByText('Default sender')).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
+    const input = jest.mocked(updateNote).mock.calls.at(-1)![1];
+    expect(input.sections?.contacts?.items ?? []).toEqual([]);
+    expect(input.sections?.groups?.items ?? []).toEqual([]);
+  } finally { view.unmount(); }
 });
 
 test('the group-card toolbar opens the picker directly and displays and saves the chosen group', async () => {
@@ -2378,7 +2472,7 @@ test('a resumed draft gates editing and submission until its remote contents arr
   jest.mocked(createNote).mockImplementation(async (input) => noteResult(input));
   const rendered = render(<EditNoteScreen />);
   try {
-    await waitFor(() => expect(mockFetchDraft).toHaveBeenCalledWith('review-draft'));
+    await waitFor(() => expect(mockFetchDraft).toHaveBeenCalledWith(reviewDraftId));
     expect(screen.queryByPlaceholderText('notes.edit.titlePlaceholder')).toBeNull();
     expect(screen.queryByRole('button', { name: 'notes.edit.done' })).toBeNull();
     expect(createNote).not.toHaveBeenCalled();
@@ -2418,7 +2512,7 @@ test.each(['contentJson', 'sectionText'] as const)(
         sections: { text: { content: 'Draft body', contentJson: blocks } },
       }),
     });
-    const record = draftRecordFromServer(draft, 'review-draft');
+    const record = draftRecordFromServer(draft, reviewDraftId);
     expect(record.mediaItems).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'IMAGE', objectKey: 'notes/owner-a/photo.jpg', width: 800, height: 600 }),
       expect.objectContaining({ type: 'VIDEO', objectKey: 'notes/owner-a/video.mp4', durationMs: 2400 }),
@@ -2451,7 +2545,7 @@ test.each(['contentJson', 'sectionText'] as const)(
     ] };
     const record = draftRecordFromServer(reviewDraft(source === 'contentJson'
       ? { contentJson: [nested] }
-      : { sections: { text: { content: 'Parent\nChild', contentJson: [nested] } } }), 'review-draft');
+      : { sections: { text: { content: 'Parent\nChild', contentJson: [nested] } } }), reviewDraftId);
     expect(Object.values(record.textBlocksById).flat()).toEqual([nested]);
   },
 );
@@ -2637,7 +2731,8 @@ test('a pending recording restores its current durable URI and retries after reo
 test('failed recording storage and upload keep the playable item but cannot claim Save and Exit succeeded', async () => {
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
-  mockPersistRecording.mockRejectedValue(new Error('full'));
+  const storageError = new Error('full');
+  mockPersistRecording.mockRejectedValue(storageError);
   mockRequestPresign.mockReset().mockRejectedValue(new Error('offline'));
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const rendered = render(<EditNoteScreen />);
@@ -2654,6 +2749,8 @@ test('failed recording storage and upload keep the playable item but cannot clai
     const choices = alert.mock.calls.at(-1)?.[2];
     act(() => choices?.find((button) => button.text === 'notes.drafts.save')?.onPress?.());
     await waitFor(() => expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.saveFailed'));
+    expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'audioLocalStorage', storageError);
+    expect(mockReportHandledFailure).not.toHaveBeenCalledWith('noteEditor', 'draftLocalSave', expect.anything());
     expect(mockRouter.back).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeDisabled();
@@ -2724,7 +2821,7 @@ test.each(['account', 'route'] as const)('a deferred Save copy cannot persist th
     await waitFor(() => expect(mockRemoveRecording).toHaveBeenCalledWith('owner-a', 'recording-stale.m4a'));
     expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('Replacement private content');
     expect(screen.queryByRole('button', { name: 'common.retry' })).toBeNull();
-    expect(jest.mocked(storage.set).mock.calls.some(([key, value]) => key.includes('owner-a') && key.includes('review-draft') && String(value).includes('Replacement private content'))).toBe(false);
+    expect(jest.mocked(storage.set).mock.calls.some(([key, value]) => key.includes('owner-a') && key.includes(reviewDraftId) && String(value).includes('Replacement private content'))).toBe(false);
   } finally { await act(async () => { pending.resolve({ localRecordingId: 'recording-stale.m4a', uri: 'file:///documents/stale.m4a' }); await pending.promise; rendered.unmount(); }); alert.mockRestore(); }
 });
 
@@ -2753,10 +2850,10 @@ test('successful upload remains publishable when the durable recording copy fail
 test.each(['unmount', 'account', 'route', 'remove'] as const)('a restored recording Blob URL stays active until %s and is then revoked once', async (change) => {
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
-  const record = { ...draftRecordFromServer(reviewDraft(), 'review-draft'), audioItems: [{
+  const record = { ...draftRecordFromServer(reviewDraft(), reviewDraftId), audioItems: [{
     type: 'AUDIO', objectKey: '', clientId: 'recording:restored', localRecordingId: 'recording-restored.webm', uploadStatus: 'PENDING', sortOrder: 0,
   }] };
-  jest.mocked(storage.getString).mockImplementation((key) => key.includes('owner-a') && key.includes('review-draft') ? JSON.stringify(record) : undefined);
+  jest.mocked(storage.getString).mockImplementation((key) => key.includes('owner-a') && key.includes(reviewDraftId) ? JSON.stringify(record) : undefined);
   mockRestoreRecording.mockResolvedValue('blob:restored-recording');
   const previousWindow = global.window;
   const previousURL = global.URL;
@@ -2780,10 +2877,10 @@ test.each(['unmount', 'account', 'route', 'remove'] as const)('a restored record
 test('a restored Blob from stale hydration is revoked without entering the new account', async () => {
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
-  const record = { ...draftRecordFromServer(reviewDraft(), 'review-draft'), audioItems: [{
+  const record = { ...draftRecordFromServer(reviewDraft(), reviewDraftId), audioItems: [{
     type: 'AUDIO', objectKey: '', clientId: 'recording:restored', localRecordingId: 'recording-restored.webm', uploadStatus: 'PENDING', sortOrder: 0,
   }] };
-  jest.mocked(storage.getString).mockImplementation((key) => key.includes('owner-a') && key.includes('review-draft') ? JSON.stringify(record) : undefined);
+  jest.mocked(storage.getString).mockImplementation((key) => key.includes('owner-a') && key.includes(reviewDraftId) ? JSON.stringify(record) : undefined);
   const pending = createDeferred<string>();
   mockRestoreRecording.mockReturnValueOnce(pending.promise);
   const previousWindow = global.window;
@@ -3005,7 +3102,7 @@ function durableDraftStorage() {
   return values;
 }
 function storedReviewDraft(values: Map<string, string>) {
-  const value = [...values.entries()].find(([key]) => key.startsWith('circle-im-note-draft:v1:') && key.endsWith(':review-draft'))?.[1];
+  const value = [...values.entries()].find(([key]) => key.startsWith('circle-im-note-draft:v1:') && key.endsWith(`:${reviewDraftId}`))?.[1];
   return value ? JSON.parse(value) as { title: string; pendingSubmission?: { noteId: string | null; input: CreateNoteInput } } : undefined;
 }
 
@@ -3038,7 +3135,7 @@ test.each(['POST', 'PATCH'] as const)('an ambiguous %s freezes keyboard/DOM edit
     expect(JSON.stringify(storedReviewDraft(values))).not.toContain('Late keyboard input');
     expect(mockDeleteDraft).not.toHaveBeenCalled();
     fireEvent.press(screen.getByRole('button', { name: 'common.retry' }));
-    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith('review-draft'));
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith(reviewDraftId));
     const inputs = method === 'POST' ? jest.mocked(createNote).mock.calls.map(([input]) => input) : jest.mocked(updateNote).mock.calls.map(([, input]) => input);
     expect(inputs).toHaveLength(2); expect(inputs[1]).toEqual(inputs[0]);
     expect(storedReviewDraft(values)).toBeUndefined();
@@ -3069,7 +3166,7 @@ test.each(['POST', 'PATCH'] as const)('a pending %s survives safe exit/restart a
     expect(mockFetchDraft).not.toHaveBeenCalled(); expect(mockFetchNoteDetail).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.editable).toBe(false);
     fireEvent.press(screen.getByRole('button', { name: 'common.retry' }));
-    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith('review-draft'));
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith(reviewDraftId));
   } finally { second.unmount(); alert.mockRestore(); }
 });
 
@@ -3107,8 +3204,8 @@ test('a normal save does not show the pending-result prompt while the request is
       save.resolve(noteResult(jest.mocked(createNote).mock.calls[0][0]));
       await save.promise;
     });
-    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith('review-draft'));
-  } finally { save.resolve(noteResult({ title: 'remote', content: '', contentJson: [], media: [], clientDraftID: 'review-draft' })); rendered.unmount(); }
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith(reviewDraftId));
+  } finally { save.resolve(noteResult({ title: 'remote', content: '', contentJson: [], media: [], clientDraftID: reviewDraftId })); rendered.unmount(); }
 });
 
 test('a submission is never sent when the durable pending snapshot cannot be stored', async () => {
@@ -3137,7 +3234,7 @@ test('a complete HTTP 400 rejection clears pending durably and permits correctio
     await waitFor(() => expect(alert).toHaveBeenCalled());
     expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.editable).toBe(true); expect(storedReviewDraft(values)?.pendingSubmission).toBeUndefined();
     fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Corrected input'); fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
-    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalled()); expect(jest.mocked(createNote).mock.calls.map(([input]) => input.clientDraftID)).toEqual(['review-draft', 'review-draft']);
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalled()); expect(jest.mocked(createNote).mock.calls.map(([input]) => input.clientDraftID)).toEqual([reviewDraftId, reviewDraftId]);
   } finally { rendered.unmount(); alert.mockRestore(); }
 });
 
@@ -3202,7 +3299,7 @@ test('an old account submit result cannot delete its recovery snapshot or lock t
 test('pending audio recovery refreshes uploaded picker media while preserving its original region', async () => {
   signedInDraft();
   const remote = reviewDraft({ contentJson: [{ type: 'noteLayout', props: { blocks: [{ id: 'image-region', kind: 'image' }, { id: 'audio-region', kind: 'audio' }], mediaBlocks: [{ id: 'image-region', target: 'media', objectKeys: ['notes/owner-a/photo'] }] } }], sections: { media: { items: [{ type: 'IMAGE', objectKey: 'notes/owner-a/photo', url: 'https://private.test/photo?fresh', sortOrder: 0 }] } } });
-  const local = draftRecordFromServer({ ...remote, title: 'Local pending audio', updatedAt: '2026-10-05' }, 'review-draft');
+  const local = draftRecordFromServer({ ...remote, title: 'Local pending audio', updatedAt: '2026-10-05' }, reviewDraftId);
   local.mediaItems = local.mediaItems.map((item) => ({ ...item, url: undefined, previewUri: 'blob:revoked-picker' }));
   local.audioItems = [{ type: 'AUDIO', objectKey: '', clientId: 'recording:pending', localRecordingId: 'recording-pending.m4a', uploadStatus: 'PENDING', sortOrder: 0 }];
   jest.mocked(storage.getString).mockImplementation((key) => key.startsWith('circle-im-note-draft:v1:') ? JSON.stringify(local) : undefined); mockFetchDraft.mockResolvedValue(remote);
@@ -3216,9 +3313,9 @@ test('pending audio recovery refreshes uploaded picker media while preserving it
 });
 
 test('a resumed uncertain submit stays frozen on a later HTTP 400/429 instead of discarding its original outcome', async () => {
-  signedInDraft(); const values = durableDraftStorage(); const local = draftRecordFromServer(reviewDraft(), 'review-draft');
-  local.pendingSubmission = { noteId: null, input: { title: 'remote', contentJson: [], media: [], clientDraftID: 'review-draft' } };
-  values.set('circle-im-note-draft:v1:owner-a:review-draft', JSON.stringify(local));
+  signedInDraft(); const values = durableDraftStorage(); const local = draftRecordFromServer(reviewDraft(), reviewDraftId);
+  local.pendingSubmission = { noteId: null, input: { title: 'remote', contentJson: [], media: [], clientDraftID: reviewDraftId } };
+  values.set(`circle-im-note-draft:v1:owner-a:${reviewDraftId}`, JSON.stringify(local));
   jest.mocked(createNote).mockRejectedValueOnce(new ApiError('Rate limit', { status: 429, failureKind: 'http' })).mockRejectedValueOnce(new ApiError('Invalid input', { status: 400, failureKind: 'http' }));
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); const rendered = render(<EditNoteScreen />);
   try {
@@ -3271,7 +3368,7 @@ test.each(['account', 'epoch', 'route'].flatMap((change) => ['success', 'error']
     await waitFor(() => expect(mockCreateNoteGroup).toHaveBeenCalledWith('Private A group'));
     if (change === 'account') mockDraftAuth.user = { id: 'owner-b', nickname: 'B' };
     if (change !== 'route') mockDraftAuth.sessionEpoch += 1;
-    else mockRouteDraftId = 'other-draft';
+    else mockRouteDraftId = `other-${reviewDraftId}`;
     rendered.rerender(<EditNoteScreen />); await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
     fireEvent.press(screen.getByRole('button', { name: 'notes.edit.groupsLabel' })); fireEvent.press(screen.getByText('notes.manageGroups.createNew')); fireEvent.changeText(screen.getByPlaceholderText('notes.manageGroups.namePlaceholder'), 'New session group');
     const nextPending = createDeferred<unknown>(); mockCreateNoteGroup.mockReturnValueOnce(nextPending.promise); fireEvent.press(screen.getByRole('button', { name: 'common.confirm' }));
@@ -3304,7 +3401,7 @@ test('a successful canonical response accepts refreshed media metadata and canon
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
     fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
-    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith('review-draft'));
+    await waitFor(() => expect(mockDeleteDraft).toHaveBeenCalledWith(reviewDraftId));
     expect(screen.queryByText('notes.edit.pendingSubmitConflict')).toBeNull();
   } finally { rendered.unmount(); }
 });

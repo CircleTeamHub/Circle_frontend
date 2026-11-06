@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Image } from 'expo-image';
+import { MediaImage } from '@/components/ui/media-image';
 import { useContentColumnWidth } from '@/components/app/desktop-centered-column';
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { Radius, Spacing } from '@/theme';
@@ -90,12 +90,10 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
     const count = displayImages.length;
     if (count === 0) return { cols: 0, rows: 0, itemSize: 0 };
     if (count === 1) return { cols: 1, rows: 1, itemSize: containerWidth * 0.65 };
-    if (count === 2) return { cols: 2, rows: 1, itemSize: (containerWidth - GAP) / 2 };
-    if (count === 4) return { cols: 2, rows: 2, itemSize: (containerWidth - GAP) / 2 };
     return {
       cols: 3,
       rows: Math.ceil(count / 3),
-      itemSize: (containerWidth - GAP * 2) / 3,
+      itemSize: Math.floor((containerWidth - GAP * 2) / 3),
     };
   }, [displayImages.length, containerWidth]);
 
@@ -131,7 +129,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
             },
           ]}
         >
-          <Image
+          <MediaImage
             source={{
               uri: item.thumbUri,
               ...(item.thumbCacheKey ? { cacheKey: item.thumbCacheKey } : {}),
@@ -141,7 +139,7 @@ export const ImageGrid: React.FC<ImageGridProps> = ({
             enforceEarlyResizing
             style={s.image}
             contentFit="cover"
-            transition={120}
+            transition={0}
           />
         </Pressable>
       ))}

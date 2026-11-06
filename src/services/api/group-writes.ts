@@ -1,3 +1,6 @@
+import { useAuthStore } from '@/stores/authStore';
+import { clearPageSnapshots } from '@/storage/page-snapshots';
+
 let lastGroupMutationAt = 0;
 
 /**
@@ -10,8 +13,14 @@ let lastGroupMutationAt = 0;
  * apiClient 本身:每个调用点仍然是静态路径,诊断路由覆盖照常能扫到。
  */
 export async function markGroupWrite<T>(request: Promise<T>): Promise<T> {
+  const { user, sessionEpoch } = useAuthStore.getState();
   const result = await request;
   lastGroupMutationAt = Date.now();
+  if (user?.id && useAuthStore.getState().sessionEpoch === sessionEpoch) {
+    clearPageSnapshots(user?.id, 'social:group-info');
+    clearPageSnapshots(user?.id, 'social:circle-detail');
+    clearPageSnapshots(user?.id, 'social:my-circles');
+  }
   return result;
 }
 

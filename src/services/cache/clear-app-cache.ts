@@ -1,5 +1,6 @@
 import { Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
+import { clearPageSnapshots, getPageSnapshotStorageUsage } from '@/storage/page-snapshots';
 // 旧 OpenIM SDK 的本地数据目录。升级用户的磁盘上
 // 可能还留着这份历史数据,统计照旧计入「聊天占用」,并由「清空聊天记录」删除。
 const LEGACY_IM_DATA_DIR_NAME = 'openim';
@@ -248,7 +249,7 @@ async function clearDirectoryContents(directoryPath: string) {
 }
 
 export async function getAppCacheSize(): Promise<number> {
-  return getDirectoriesSize(await getCacheDirectories());
+  return await getDirectoriesSize(await getCacheDirectories()) + getPageSnapshotStorageUsage().bytes;
 }
 
 export async function getAppStorageUsage(): Promise<AppStorageUsage> {
@@ -267,12 +268,13 @@ export async function getAppStorageUsage(): Promise<AppStorageUsage> {
   ]);
 
   const chatBytes = legacyChatBytes + databaseSize;
+  const snapshotBytes = getPageSnapshotStorageUsage().bytes;
 
   return {
     chatBytes,
-    cacheBytes,
+    cacheBytes: cacheBytes + snapshotBytes,
     temporaryBytes,
-    totalBytes: chatBytes + cacheBytes + temporaryBytes,
+    totalBytes: chatBytes + cacheBytes + temporaryBytes + snapshotBytes,
   };
 }
 
@@ -296,6 +298,9 @@ export function formatCacheSize(bytes: number) {
 }
 
 export async function clearAppCache(): Promise<ClearAppCacheResult> {
+  const snapshots = getPageSnapshotStorageUsage().entries;
+  clearPageSnapshots();
+  const remainingSnapshots = getPageSnapshotStorageUsage().entries;
   const results = await Promise.allSettled(
     (await getCacheDirectories()).map((path) => clearDirectoryContents(path)),
   );
@@ -314,6 +319,6 @@ export async function clearAppCache(): Promise<ClearAppCacheResult> {
         failedEntries: summary.failedEntries + result.value.failedEntries,
       };
     },
-    { clearedEntries: 0, failedEntries: 0 },
+    { clearedEntries: Math.max(0, snapshots - remainingSnapshots), failedEntries: Math.min(snapshots, remainingSnapshots) },
   );
 }

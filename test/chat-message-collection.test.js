@@ -543,3 +543,15 @@ test('a collection with no rebuildable payload falls back to clean text without 
   assert.equal(plan.kind, 'text');
   assert.equal(plan.text, '聊天记录收藏');
 });
+
+test('saved images forward their source instead of placeholder text', () => {
+ const { resolveCollectionSendPlan } = loadTsModule('src/features/chat/utils/message-collection.ts');
+ const plan = resolveCollectionSendPlan({title:'[图片]',summary:'[图片]',sourceID:'image-message',payload:{kind:'openim-message',messageID:'image-message',messageType:'image'}});
+ assert.equal(plan.kind,'media'); assert.equal(plan.sourceMessageId,'image-message'); assert.equal(plan.type,'image');
+});
+
+test('unavailable source media cannot fall back to placeholder text', () => {
+ const {resolveCollectionSendPlan,canResendCollection}=loadTsModule('src/features/chat/utils/message-collection.ts');
+ const item={title:'[图片]',summary:'[图片]',message:null,payload:{kind:'openim-message',messageID:'image',messageType:'image'}};
+ assert.equal(resolveCollectionSendPlan(item).kind,'unsupported'); assert.equal(canResendCollection(item),false);
+});

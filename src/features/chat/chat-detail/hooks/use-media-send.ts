@@ -159,6 +159,7 @@ export function useMediaSend({
           prepared.width,
           prepared.filename,
           () => assertMediaSendSessionCurrent(deliveryId),
+          deliveryId,
         );
 
         await turn?.wait;
@@ -317,6 +318,7 @@ export function useMediaSend({
               prepared.filename,
               'chat',
               () => assertMediaSendSessionCurrent(deliveryId),
+              deliveryId,
             );
             uploaded = {
               key: presign.key,

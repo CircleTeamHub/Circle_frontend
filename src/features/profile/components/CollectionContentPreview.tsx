@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
+import { MediaImage } from '@/components/ui/media-image';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
@@ -10,22 +10,23 @@ import type { CollectionContent } from '../collection-content';
 interface CollectionContentPreviewProps {
   content: CollectionContent;
   playing?: boolean;
+  expanded?: boolean;
 }
 
 const s = StyleSheet.create({
   container: { width: '100%', minWidth: 0, gap: Spacing.sm },
-  body: { ...Typography.bodyRegular, lineHeight: 22 },
+  body: { ...Typography.bodyRegular, fontSize: 17, lineHeight: 24 },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   textColumn: { flex: 1, minWidth: 0, gap: Spacing.xs },
   title: { ...Typography.body, lineHeight: 21 },
   secondary: { ...Typography.caption, lineHeight: 19 },
   media: {
-    width: '100%', maxWidth: 360, height: 190,
-    borderRadius: Radius.md, overflow: 'hidden',
+    width: 60, height: 60, flexShrink: 0,
+    borderRadius: 2, overflow: 'hidden',
     alignItems: 'center', justifyContent: 'center',
   },
   play: {
-    width: 48, height: 48, borderRadius: Radius.full,
+    width: 30, height: 30, borderRadius: Radius.full,
     alignItems: 'center', justifyContent: 'center',
   },
   duration: {
@@ -49,7 +50,7 @@ const s = StyleSheet.create({
 });
 
 /** Content only: the collection row owns gestures, playback and navigation. */
-export function CollectionContentPreview({ content, playing = false }: CollectionContentPreviewProps) {
+export function CollectionContentPreview({ content, playing = false, expanded = false }: CollectionContentPreviewProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [failedUri, setFailedUri] = useState<string>();
@@ -78,15 +79,15 @@ export function CollectionContentPreview({ content, playing = false }: Collectio
         accessibilityLabel={isVideo
           ? t('profile.collections.videoPreviewLabel', { defaultValue: 'Saved video' })
           : t('profile.collections.imagePreviewLabel', { defaultValue: 'Saved photo' })}
-        style={[s.media, { backgroundColor: isVideo ? colors.black : colors.background }]}
+        style={[s.media, expanded && { width: 200, height: 128, borderRadius: 0, alignSelf: 'center' }, { backgroundColor: isVideo ? colors.black : expanded ? 'transparent' : colors.surface }]}
       >
         {imageUri && imageUri !== failedUri ? (
-          <Image
+          <MediaImage
             key={imageUri}
             testID="collection-preview-image"
             source={{ uri: imageUri }}
             style={StyleSheet.absoluteFill}
-            contentFit="contain"
+            contentFit={expanded ? 'contain' : 'cover'}
             enforceEarlyResizing
             recyclingKey={imageUri}
             onError={() => {
@@ -109,7 +110,7 @@ export function CollectionContentPreview({ content, playing = false }: Collectio
       </View>
     );
   } else if (content.kind === 'text' && content.text) {
-    preview = <Text style={[s.body, { color: colors.text }]} numberOfLines={5}>{content.text}</Text>;
+    preview = <Text style={[s.body, { color: colors.text }]} numberOfLines={3}>{content.text}</Text>;
   } else if (content.kind === 'voice' && content.voiceUri) {
     preview = (
       <View style={[s.row, s.voice, { backgroundColor: withAlpha(colors.primary, 0.08) }]}>

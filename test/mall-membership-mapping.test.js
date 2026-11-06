@@ -71,6 +71,7 @@ function makeLoader(stubs) {
 
   const req = (specifier, fromDir) => {
     if (specifier in stubs) return stubs[specifier];
+    if (specifier === '@/observability/sentry') return { reportError() {} };
     if (specifier === '@/i18n') return I18N_STUB;
     if (specifier.startsWith('@/')) {
       return loadFile(resolveTs(path.join(process.cwd(), 'src', specifier.slice(2))));

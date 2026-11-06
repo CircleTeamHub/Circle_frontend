@@ -1,5 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { Alert } from 'react-native';
+import { useAuthStore } from '@/stores/authStore';
+import { readUserProfileCache, writeUserProfileCache } from '@/features/user/profile-cache';
 import { useChangeCover } from './use-change-cover';
 import { loadImagePickerModule } from '@/features/profile/image-picker';
 import {
@@ -23,10 +25,16 @@ jest.mock('@/services/api/upload', () => ({
 jest.mock('@/services/api/profile', () => ({ updateUserProfile: jest.fn() }));
 jest.mock('react-i18next', () => {
   const t = (key: string) => key;
-  return { useTranslation: () => ({ t }) };
+  // profile-cache → services/api/friends → api client 会把 @/i18n 带进来。
+  return { useTranslation: () => ({ t }), initReactI18next: { type: '3rdParty', init: () => {} } };
+});
+// 资料缓存在原生端只在加密库就绪后才工作;给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
 });
 jest.mock('@/stores/authStore', () => {
-  const store = { user: { id: 'user-1' }, setUser: jest.fn() };
+  const store = { sessionEpoch: 11, user: { id: 'user-1' }, setUser: jest.fn() };
   const useAuthStore = (selector: (s: typeof store) => unknown) =>
     selector(store);
   useAuthStore.getState = () => store;
@@ -40,6 +48,7 @@ const mockPicker = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  Object.assign(useAuthStore.getState(), { sessionEpoch: 11, user: { id: 'user-1' } });
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   (loadImagePickerModule as jest.Mock).mockReturnValue(mockPicker);
   mockPicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({
@@ -134,4 +143,25 @@ test('upload failures show generic copy and log redacted diagnostics', async () 
   );
   expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('upload.example.com');
   warnSpy.mockRestore();
+});
+
+test('successful cover update refreshes the existing account-scoped album cache', async () => {
+  writeUserProfileCache(11, 'user-1', { album: { at: 1, value: { id: 'user-1', nickname: 'Me', avatarUrl: 'avatar', cover: 'old', signature: '' } } });
+  const { result } = renderHook(() => useChangeCover('user-1', jest.fn()));
+  await act(async () => { await result.current.changeCover(); });
+  expect(readUserProfileCache(11, 'user-1')?.album?.value.cover).toBe('https://cdn/cover.jpg');
+});
+
+test('a completed cover update cannot replace another signed-in account', async () => {
+  let finishUpdate: (user: Awaited<ReturnType<typeof updateUserProfile>>) => void = () => {};
+  (updateUserProfile as jest.Mock).mockImplementation(() => new Promise((resolve) => { finishUpdate = resolve; }));
+  const onChanged = jest.fn();
+  const { result } = renderHook(() => useChangeCover('user-1', onChanged));
+  let operation: Promise<void>;
+  await act(async () => { operation = result.current.changeCover(); });
+  expect(updateUserProfile).toHaveBeenCalled();
+  Object.assign(useAuthStore.getState(), { sessionEpoch: 12, user: { id: 'another-user' } });
+  await act(async () => { finishUpdate({ id: 'user-1', cover: 'https://cdn/cover.jpg' } as Awaited<ReturnType<typeof updateUserProfile>>); await operation; });
+  expect(useAuthStore.getState().setUser).not.toHaveBeenCalled();
+  expect(onChanged).not.toHaveBeenCalled();
 });

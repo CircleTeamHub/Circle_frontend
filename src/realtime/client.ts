@@ -363,8 +363,9 @@ function runPostAuthenticationRecovery(): void {
   // 认证成功后网关会立刻回推一帧 badge.snapshot；这里再补一次 HTTP
   // recovery，把断线期间错过的 notification.created 列表项拉回来。
   void recoverTabBadgeSnapshot({ force: shouldForceRecovery });
-  useAnnouncementSignalStore.getState().bump();
   if (!shouldForceRecovery) return;
+  // 首次认证时页面会后台核对,保留跨重启展示快照;重连才清掉可能错过撤回的公告。
+  useAnnouncementSignalStore.getState().bump();
   // review P2：断线重连的空窗里错过的 moments.feed.updated 补不回来 ——
   // 重连成功后 bump 一次信号，让 feed 组件自查新帖数（app 全程前台、
   // 无 AppState 变化的场景就靠这条兜住）。
@@ -891,7 +892,7 @@ function openRealtimeSocket(normalizedToken: string) {
     // 走和 HTTP 401 相同的出口，把用户送回登录页。
     if (isRevokedClose(event)) {
       currentToken = null;
-      void clearLocalSession();
+      void clearLocalSession(undefined, { reason: 'realtime-revoked', closeCode: REVOKED_CLOSE_CODE });
       return;
     }
 

@@ -209,8 +209,7 @@ export const CHAT_WS_URL = assertSecureTransport(
 
 export const LIMITS = {
   POST_MAX_LENGTH: 5000,
-  POST_MAX_IMAGES: 9,
-  POST_MAX_VIDEOS: 1,
+  POST_MAX_MEDIA: 9,
   IMAGE_MAX_SIZE_MB: 50,
   VIDEO_MAX_SIZE_MB: 500,
   FILE_MAX_SIZE_MB: 2048,

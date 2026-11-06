@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "ログイン診断情報をコピー",
+    "copied": "診断情報をコピーしました。サポートに送信してください。",
+    "copyFailed": "コピーできませんでした。もう一度お試しください。"
+  },
   "mediaUpload": {
     "sessionChanged": "アカウントが切り替わりました。ファイルを選び直してアップロードしてください。",
     "uploading": "アップロード中",
@@ -89,11 +94,11 @@
       "switchAccount": "アカウントを切り替え",
       "logout": "ログアウト",
       "cancelAccount": "アカウントを削除",
+      "singleDeviceStatusFailed": "単一端末ログインの状態を取得できません。再試行してください。",
+      "singleDeviceUpdateFailed": "単一端末ログインの設定を保存できません。再試行してください。",
       "securityQuestions": "秘密の質問",
       "securityQuestionsSet": "設定済み",
-      "securityQuestionsNotSet": "未設定",
-      "singleDeviceStatusFailed": "単一端末ログインの状態を取得できません。再試行してください。",
-      "singleDeviceUpdateFailed": "単一端末ログインの設定を保存できません。再試行してください。"
+      "securityQuestionsNotSet": "未設定"
     },
     "notifications": {
       "title": "通知",
@@ -234,13 +239,13 @@
         "byGroup": "グループ・サークルで",
         "shareCard": "個人カードを共有"
       },
+      "unavailable": "利用不可",
+      "unsupportedHint": "現在のサービスはこの設定に対応していません。更新後にお試しください。",
       "chatSection": "チャットとモーメンツ",
       "presenceSection": "オンライン・入力中の表示",
       "profileVisibilitySection": "プロフィールの公開",
       "contactSection": "追加と招待",
-      "blacklistBlockedAt": "{{date}} にブロック",
-      "unavailable": "利用不可",
-      "unsupportedHint": "現在のサービスはこの設定に対応していません。更新後にお試しください。"
+      "blacklistBlockedAt": "{{date}} にブロック"
     },
     "permissions": {
       "title": "システム権限",
@@ -372,6 +377,7 @@
       "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
       "historyWindowFull": "これより前のメッセージは、チャット履歴で検索してください。",
       "jumpToUnread": "未読{{count}}件の先頭へ移動",
+      "jumpToLatest": "最新のメッセージに移動",
       "unreadMessages": "未読 {{count}}件",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",
@@ -526,6 +532,8 @@
     "searchGroupMembersNoMatches": "一致するグループメンバーはいません",
     "groupName": "グループ名",
     "groupNotice": "グループのお知らせ",
+    "noticePinned": "お知らせを上部に表示",
+    "noticePinnedHint": "グループチャット上部でお知らせをスクロール表示します",
     "noGroupNotice": "グループのお知らせはありません",
     "moreGroupMembers": "その他のグループメンバー",
     "addGroupMember": "グループメンバーを追加",
@@ -696,7 +704,38 @@
       "noteUnbindTitle": "元グループとの関連付けを解除しますか？",
       "noteUnbindHint": "このノートはグループのノート管理に表示されなくなります。",
       "noteUnbindAction": "削除（グループとの紐付けを解除）",
-      "noteUnbind": "関連付けを解除"
+      "noteUnbind": "関連付けを解除",
+      "memberSection": "メンバー管理",
+      "silenceSection": "発言禁止",
+      "removeBatchConfirm": "選択した {{n}} 人のメンバーをグループから削除しますか？",
+      "removeBatchDone": "{{n}} 人のメンバーを削除しました",
+      "overview": {
+        "members": "メンバー",
+        "admins": "管理者",
+        "silenced": "発言禁止中"
+      },
+      "abnormal": {
+        "entry": "要注意メンバー",
+        "entryHint": "長期間ログインしていない、または信用スコアが低いメンバー",
+        "title": "要注意メンバー",
+        "rules": "{{days}} 日以上ログインしていない、または信用スコアが {{threshold}} 未満のメンバーが表示されます。あなたが削除できるメンバーのみ表示されます。オンライン状態を非公開にしているメンバーはログイン判定の対象外です。",
+        "inactiveFor": "未ログイン期間",
+        "days": "{{n}} 日",
+        "filterAll": "すべて {{n}}",
+        "filterInactive": "長期未ログイン {{n}}",
+        "filterLowCredit": "信用スコア低 {{n}}",
+        "tagInactiveDays": "{{n}} 日未ログイン",
+        "tagInactiveOver": "{{n}} 日以上未ログイン",
+        "tagLowCredit": "信用スコア {{score}}",
+        "adminBadge": "管理者",
+        "empty": "要注意メンバーはいません",
+        "emptyHint": "メンバーは全員アクティブで、信用状態も良好です",
+        "selectAll": "すべて選択",
+        "clearAll": "選択を解除",
+        "batchLimit": "一度に最大 {{n}} 人まで",
+        "removeSelected": "削除 ({{n}})",
+        "loadFailed": "要注意メンバーを読み込めませんでした"
+      }
     },
     "groupEvent": {
       "system": "システム",
@@ -793,7 +832,7 @@
       "voiceCall": "音声/ビデオ通話",
       "location": "位置情報",
       "notes": "ノート",
-      "friendCard": "連絡先カード",
+      "friendCard": "名刺",
       "favorites": "お気に入り",
       "quickReply": "定型文",
       "transfer": "送金"
@@ -1484,6 +1523,7 @@
     }
   },
   "moment": {
+    "mediaLimitHint": "写真と動画は合計{{max}}件まで",
     "selectMedia": "写真や動画を追加",
     "removeMedia": "写真や動画を削除",
     "playVideo": "動画を再生",
@@ -2531,7 +2571,8 @@
         "voice": "音声",
         "message": "メッセージ"
       },
-      "menuLabel": "コレクション"
+      "menuLabel": "コレクション",
+      "today": "今日"
     },
     "viewCollections": "見る",
     "notes": "ノート",
@@ -2873,7 +2914,7 @@
   "share": {
     "title": {
       "favorite": "お気に入りを選択",
-      "friend": "友だちカードを選択",
+      "friend": "名刺を送信",
       "note": "ノートを選択",
       "quickReply": "定型文"
     },
@@ -2897,6 +2938,16 @@
       "optionLocation": "位置",
       "optionMedia": "写真・動画",
       "optionShowcase": "ショーケース"
+    },
+    "favoriteConfirm": {
+      "sendTo": "送信先",
+      "messageLabel": "追加メッセージ",
+      "messagePlaceholder": "メッセージを追加（任意）",
+      "missingRecipient": "チャットを開き直して、もう一度お試しください。"
+    },
+    "cardKind": {
+      "friend": "友だちの名刺",
+      "group": "グループの名刺"
     }
   },
   "accountSwitcher": {
@@ -3084,6 +3135,7 @@
       "requestFailed": "操作を完了できませんでした。もう一度お試しください。",
       "sessionExpired": "セッションの有効期限が切れました。もう一度サインインしてください。",
       "refreshResponseInvalid": "更新レスポンスが無効です。もう一度サインインしてください。",
+      "refreshOutcomeUnknown": "ログイン状態を確認できません。もう一度ログインしてください。",
       "sessionChangedDuringRefresh": "セッション更新中にアカウントが切り替わりました。もう一度お試しください。",
       "uploadTimeout": "アップロードがタイムアウトしました。接続を確認して再試行してください。",
       "uploadFailed": "アップロードに失敗しました。しばらくしてから再試行してください。",
@@ -3269,7 +3321,8 @@
   },
   "im": {
     "conversation": {
-      "removedFromGroup": "このグループチャットから削除されました"
+      "removedFromGroup": "このグループチャットから削除されました",
+      "removedFromNamedGroup": "グループ「{{name}}」から削除されました"
     },
     "time": {
       "yesterday": "昨日"
@@ -3893,6 +3946,78 @@
       "CANCELLED": "申請が取り消されました"
     },
     "sentInvitation": "相手をグループに招待しました"
+  },
+  "groupReview": {
+    "entry": "申請管理",
+    "title": "グループ審査",
+    "log": "ログ",
+    "searchPlaceholder": "名前・アカウント番号",
+    "selectAll": "すべて選択",
+    "selectApplicant": "{{name}} を選択",
+    "selectionLimit": "一度に選択できる申請は50件までです",
+    "approve": "承認",
+    "reject": "拒否",
+    "blacklist": "グループへの参加禁止",
+    "confirmBody": "{{count}} 件の申請を処理します。",
+    "blacklistBody": "{{count}} 件の申請を拒否し、このアカウントからの再申請と招待による参加を禁止します。",
+    "partialResult": "完了 {{succeeded}} 件、失敗 {{failed}} 件。更新して最新の状態を確認してください。",
+    "completed": "{{count}} 件完了",
+    "empty": "申請や招待はありません",
+    "noResults": "該当する申請はありません",
+    "loadFailed": "申請を読み込めませんでした。再試行してください。",
+    "actionUncertain": "結果を確認できません。再操作する前に一覧を更新してください。",
+    "invitedBy": "{{name}} からの招待",
+    "sourcePrefix": "申請元：{{source}}",
+    "unknownMember": "不明なメンバー",
+    "processing": "処理中…",
+    "confirm": {
+      "approve": "申請を承認しますか？",
+      "reject": "申請を拒否しますか？",
+      "blacklist": "参加を禁止しますか？"
+    },
+    "source": {
+      "INVITE": "メンバーの招待",
+      "QR": "QRコード",
+      "APPLICATION": "参加申請",
+      "UNKNOWN": "不明な申請元"
+    },
+    "status": {
+      "PENDING": "審査待ち",
+      "INVITED": "招待への回答待ち",
+      "JOINED": "承認済み",
+      "REJECTED": "拒否済み",
+      "BLACKLISTED": "参加禁止",
+      "EXPIRED": "期限切れ",
+      "LEFT": "退会済み",
+      "DECLINED": "辞退済み",
+      "CANCELLED": "取消済み"
+    }
+  },
+  "groupLog": {
+    "searchRole": "検索対象",
+    "target": "対象メンバー",
+    "actor": "操作者",
+    "date": "日時",
+    "status": "状態",
+    "source": "申請元",
+    "inviter": "招待者",
+    "operator": "操作者",
+    "detail": "詳細",
+    "events": {
+      "created": "グループ作成",
+      "joined": "グループ参加",
+      "left": "グループ退会",
+      "removed": "メンバー削除",
+      "roleChanged": "役割変更",
+      "silenced": "発言禁止",
+      "unsilenced": "発言禁止解除",
+      "ownerTransferred": "オーナー譲渡",
+      "historyCleared": "履歴削除",
+      "muteAll": "全員の発言設定",
+      "policy": "権限変更",
+      "application": "参加申請",
+      "blacklist": "参加禁止"
+    }
   },
   "securityQuestions": {
     "title": "秘密の質問",

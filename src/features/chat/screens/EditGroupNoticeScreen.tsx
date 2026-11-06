@@ -14,9 +14,10 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { NavHeader } from '@/components/ui/nav-header';
-import { setGroupChatNotice } from '@/chat-core/api';
+import { ThemedSwitch } from '@/components/ui/themed-switch';
+import { createCircleChatConversation, setGroupChatNotice } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
-import { updateCircle } from '@/services/api/circles';
+import { markCircleWrite } from '@/services/api/circles';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 
@@ -41,6 +42,8 @@ const s = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },
+  broadcastRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: Radius.lg },
+  broadcastText: { flex: 1, gap: Spacing.xs },
   saveButton: {
     minHeight: 48,
     borderRadius: Radius.lg,
@@ -58,6 +61,7 @@ export default function EditGroupNoticeScreen() {
     conversationID?: string;
     groupTitle?: string;
     notice?: string;
+    noticePinned?: string;
   }>();
   const groupID = typeof params.groupID === 'string' ? params.groupID : '';
   // 独立群聊:公告写在会话上,没有圈子 id。
@@ -65,7 +69,9 @@ export default function EditGroupNoticeScreen() {
     typeof params.conversationID === 'string' ? params.conversationID : '';
   const canSave = Boolean(groupID || conversationID);
   const initialNotice = typeof params.notice === 'string' ? params.notice : '';
+  const initialPinned = params.noticePinned === 'true';
   const [draft, setDraft] = useState(initialNotice);
+  const [pinned, setPinned] = useState(initialPinned);
   const [submitting, setSubmitting] = useState(false);
 
   const d = useMemo(
@@ -96,23 +102,20 @@ export default function EditGroupNoticeScreen() {
     }
 
     const nextNotice = draft.trim();
-    if (nextNotice === initialNotice) {
+    const nextPinned = Boolean(nextNotice) && pinned;
+    if (nextNotice === initialNotice && nextPinned === initialPinned) {
       router.back();
       return;
     }
 
     setSubmitting(true);
     try {
-      if (groupID) {
-        // 自研栈下「群=圈子」:群公告即圈子简介,读写统一走 circle.description。
-        await updateCircle(groupID, { description: nextNotice });
-      } else {
-        const result = await setGroupChatNotice(conversationID, nextNotice);
-        // 群信息页从会话 dto 读公告:回写本机缓存,退回去立刻看到新公告。
-        const store = useChatStore.getState();
-        const cached = store.conversations.find((item) => item.id === conversationID);
-        if (cached) store.upsertConversation({ ...cached, notice: result.notice });
-      }
+      const targetID = conversationID || (await createCircleChatConversation(groupID)).id;
+      const request = setGroupChatNotice(targetID, nextNotice, nextPinned);
+      const result = await (groupID ? markCircleWrite(request) : request);
+      const store = useChatStore.getState();
+      const cached = store.conversations.find((item) => item.id === targetID);
+      if (cached) store.upsertConversation({ ...cached, notice: result.notice, noticePinned: result.noticePinned ?? false });
       router.back();
     } catch (error) {
       reportHandledFailure('chatInfo', 'updateGroupNotice', error);
@@ -120,7 +123,7 @@ export default function EditGroupNoticeScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [canSave, conversationID, draft, groupID, initialNotice, submitting, t]);
+  }, [canSave, conversationID, draft, groupID, initialNotice, initialPinned, pinned, submitting, t]);
 
   return (
     <KeyboardAvoidingContainer
@@ -142,6 +145,14 @@ export default function EditGroupNoticeScreen() {
           autoFocus
           editable={!submitting}
         />
+        <View style={[s.broadcastRow, { backgroundColor: colors.surface }]}>
+          <View style={s.broadcastText}>
+            <Text style={[Typography.bodyRegular, { color: colors.text }]}>{t('chat.noticePinned')}</Text>
+            <Text style={[Typography.small, { color: colors.textSecondary }]}>{t('chat.noticePinnedHint')}</Text>
+          </View>
+          <ThemedSwitch accessibilityRole="switch" accessibilityLabel={t('chat.noticePinned')}
+            value={Boolean(draft.trim()) && pinned} onValueChange={setPinned} disabled={submitting || !draft.trim()} />
+        </View>
       </ScrollView>
       <View style={[s.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
         <Pressable

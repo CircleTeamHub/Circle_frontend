@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Alert } from 'react-native';
 import UnlistedNotesScreen from './UnlistedNotesScreen';
 import { deleteNote, fetchNotes, relistNote } from '@/services/api/notes';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const mockRouter = { push: jest.fn(), back: jest.fn() };
 const mockTranslate = (key: string) => key;
@@ -44,16 +45,20 @@ jest.mock('@/features/notes/components/NoteCard', () => {
 });
 jest.mock('@/services/api/notes', () => ({
   fetchNotes: jest.fn(),
+  // 没有本地页面快照:每个用例都从网络加载开始。
+  getCachedNotes: () => null,
   deleteNote: jest.fn(),
   relistNote: jest.fn(),
   // 回到页面跳过重拉的判定:这里一律当作「之后改过」,每次聚焦照常重拉。
   notesMutatedSince: jest.fn(() => true),
 }));
-// 聚焦重拉的判定按账号区分(useFocusReloadGate 读 sessionEpoch)。
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { sessionEpoch: number }) => unknown) =>
-    selector({ sessionEpoch: 1 }),
-}));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+// 聚焦重拉的判定按账号区分(useFocusReloadGate 读 sessionEpoch);页面内容按
+// `${user.id}:${sessionEpoch}` 建 key,加载结果落地前还会经 getState() 复核账号。
+jest.mock('@/stores/authStore', () => {
+  const state = { user: { id: 'owner' }, sessionEpoch: 1 };
+  return { useAuthStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), { getState: () => state }) };
+});
 
 const note = { id: 'n1', title: '已下架的笔记', groups: [], status: 'UNLISTED' };
 
@@ -80,6 +85,8 @@ test('a successful delete whose list refresh fails removes the row and does not 
     expect(deleteNote).toHaveBeenCalledWith('n1');
     await waitFor(() => expect(screen.queryByText('已下架的笔记')).toBeNull());
     expect(alert).not.toHaveBeenCalledWith('notes.alerts.deleteFailedTitle', expect.anything());
+    expect(reportHandledFailure).toHaveBeenCalledWith('unlistedNotes', 'refreshAfterMutation', expect.any(Error));
+    expect(reportHandledFailure).toHaveBeenCalledTimes(1);
   } finally { alert.mockRestore(); }
 });
 
@@ -93,6 +100,7 @@ test('a failed delete keeps the row and tells the user', async () => {
     await pressAlertButton(alert, 'notes.actions.delete');
     expect(alert).toHaveBeenCalledWith('notes.alerts.deleteFailedTitle', 'common.retryLater');
     expect(screen.getByText('已下架的笔记')).toBeTruthy();
+    expect(reportHandledFailure).toHaveBeenCalledWith('unlistedNotes', 'delete', expect.any(Error));
   } finally { alert.mockRestore(); }
 });
 
@@ -107,5 +115,27 @@ test('a successful relist whose list refresh fails removes the row and does not 
     expect(relistNote).toHaveBeenCalledWith('n1');
     await waitFor(() => expect(screen.queryByText('已下架的笔记')).toBeNull());
     expect(alert).not.toHaveBeenCalledWith('notes.alerts.relistFailedTitle', expect.anything());
+    expect(reportHandledFailure).toHaveBeenCalledWith('unlistedNotes', 'refreshAfterMutation', expect.any(Error));
+    expect(reportHandledFailure).toHaveBeenCalledTimes(1);
   } finally { alert.mockRestore(); }
+});
+
+test('a rejected relist reports the action and keeps the row', async () => {
+  const error = new Error('relist unavailable');
+  jest.mocked(relistNote).mockRejectedValueOnce(error);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<UnlistedNotesScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText('more:n1'));
+    fireEvent.press(screen.getByLabelText('notes.actions.relist'));
+    await waitFor(() => expect(reportHandledFailure).toHaveBeenCalledWith('unlistedNotes', 'relist', error));
+    expect(screen.getByText('已下架的笔记')).toBeTruthy();
+  } finally { alert.mockRestore(); }
+});
+
+test('an initial unlisted load failure is observable', async () => {
+  const error = new Error('load unavailable');
+  jest.mocked(fetchNotes).mockReset().mockRejectedValueOnce(error);
+  render(<UnlistedNotesScreen />);
+  await waitFor(() => expect(reportHandledFailure).toHaveBeenCalledWith('unlistedNotes', 'load', error));
 });

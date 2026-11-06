@@ -46,6 +46,8 @@ export interface GroupAdminActions {
   ) => Promise<void>;
   /** 带确认弹窗。 */
   kick: (member: ChatMemberDto) => void;
+  /** 批量移出,带确认弹窗;逐个请求,成功的逐个回调 onMemberRemoved。 */
+  kickBatch: (members: readonly ChatMemberDto[]) => void;
   silence: (member: ChatMemberDto, durationSec: number | null) => void;
   silenceBatch: (
     members: readonly ChatMemberDto[],
@@ -268,6 +270,53 @@ export function useGroupAdminActions(
     [run, t],
   );
 
+  const kickBatch = useCallback(
+    (members: readonly ChatMemberDto[]) => {
+      if (members.length === 0) return;
+      Alert.alert(
+        t('chat.removeMember'),
+        t('chat.groupManagement.removeBatchConfirm', { n: members.length }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('chat.remove'),
+            style: 'destructive',
+            onPress: () => {
+              void runBatch(
+                members,
+                (fresh) =>
+                  members.every((member) => canManageGroupTarget(fresh, targetRole(member))),
+                async () => {
+                  const { conversationID, groupID, isStandaloneGroup } =
+                    paramsRef.current;
+                  const failures: unknown[] = [];
+                  for (const member of members) {
+                    try {
+                      if (isStandaloneGroup) {
+                        await removeGroupChatMember(conversationID, member.userId);
+                      } else {
+                        await removeGroupMember(groupID, member.userId);
+                      }
+                      paramsRef.current.onMemberRemoved(member.userId);
+                    } catch (error) {
+                      failures.push(error);
+                    }
+                  }
+                  if (failures.length > 0) throw failures[0];
+                  Alert.alert(
+                    t('chat.deleted'),
+                    t('chat.groupManagement.removeBatchDone', { n: members.length }),
+                  );
+                },
+              );
+            },
+          },
+        ],
+      );
+    },
+    [runBatch, t],
+  );
+
   const silence = useCallback(
     (member: ChatMemberDto, durationSec: number | null) => {
       void run(
@@ -367,6 +416,7 @@ export function useGroupAdminActions(
       changeRole,
       changeRoleBatch,
       kick,
+      kickBatch,
       silence,
       silenceBatch,
       unsilence,
@@ -377,6 +427,7 @@ export function useGroupAdminActions(
       changeRole,
       changeRoleBatch,
       kick,
+      kickBatch,
       pendingUserID,
       silence,
       silenceBatch,

@@ -16,11 +16,12 @@
 /** Expo DOM 组件在导航卸载竞态时 reject 的 injectJavaScript：良性，不上报。 */
 const SILENCED_FRAGMENTS = ['injectJavaScript', 'DomWebView'];
 
-// 和 reportHandledFailure / RouteErrorBoundary 一样封顶：同一签名只上报一次，
-// 不同签名总量也有上限。一个反复 reject 的第三方库或一段被刷的 socket 载荷，
-// 否则会在一个进程生命周期里制造成百上千条 Sentry 事件，把真正的信号淹掉。
+// 每分钟内同一签名只上报一次，不同签名总量也封顶。持续故障下一分钟仍可见，
+// 避免长期运行的 App 达到上限后再也不报告新的 rejection。
 const MAX_REPORTED_REJECTION_SIGNATURES = 20;
+const REPORT_WINDOW_MS = 60_000;
 const reportedRejectionSignatures = new Set<string>();
+let windowStartedAt: number | undefined;
 
 export function rejectionMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? '');
@@ -40,6 +41,11 @@ export function shouldReportUnhandledRejection(
   error: unknown,
   message: string,
 ): boolean {
+  const now = Date.now();
+  if (windowStartedAt === undefined || now - windowStartedAt >= REPORT_WINDOW_MS) {
+    reportedRejectionSignatures.clear();
+    windowStartedAt = now;
+  }
   const signature = rejectionSignature(error, message);
   if (reportedRejectionSignatures.has(signature)) return false;
   if (reportedRejectionSignatures.size >= MAX_REPORTED_REJECTION_SIGNATURES) {
@@ -52,4 +58,5 @@ export function shouldReportUnhandledRejection(
 /** 仅供测试重置去重状态。 */
 export function resetUnhandledRejectionTelemetry(): void {
   reportedRejectionSignatures.clear();
+  windowStartedAt = undefined;
 }

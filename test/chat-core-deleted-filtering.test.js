@@ -93,7 +93,8 @@ function loadDeleted() {
     }
     if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
     if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
-    throw new Error(`unexpected require: ${request}`);
+    if (request === '@/features/chat/group-info-cache') return require('./helpers/chat-core-stubs').loadGroupInfoCache();
+      throw new Error(`unexpected require: ${request}`);
   });
 }
 
@@ -108,6 +109,7 @@ function loadDateWindow() {
       }
       if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
       if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
+      if (request === '@/features/chat/group-info-cache') return require('./helpers/chat-core-stubs').loadGroupInfoCache();
       throw new Error(`unexpected require: ${request}`);
     },
   );
@@ -163,7 +165,8 @@ test('search responses drop locally deleted messages', () => {
     }
     if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
     if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
-    throw new Error(`unexpected require: ${request}`);
+    if (request === '@/features/chat/group-info-cache') return require('./helpers/chat-core-stubs').loadGroupInfoCache();
+      throw new Error(`unexpected require: ${request}`);
   });
 
   deleted.markMessageDeletedLocally('gone');
@@ -234,7 +237,8 @@ function loadApi(deleted, respond) {
     }
     if (request === '@/observability/report-failure') return { reportHandledFailure: () => {} };
     if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
-    throw new Error(`unexpected require: ${request}`);
+    if (request === '@/features/chat/group-info-cache') return require('./helpers/chat-core-stubs').loadGroupInfoCache();
+      throw new Error(`unexpected require: ${request}`);
   });
 }
 

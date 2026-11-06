@@ -16,7 +16,7 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { CircleAvatar } from '@/components/ui/circle-avatar';
 import { Divider } from '@/components/ui/divider';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { useCirclesStore } from '@/features/discover/store/use-circles-store';
+import { useCirclesStore, useHydrateCirclesSnapshot } from '@/features/discover/store/use-circles-store';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
 import {
   arePostFormCircleSelectionsEqual,
@@ -63,6 +63,7 @@ const s = StyleSheet.create({
 });
 
 export default function SelectCircleScreen() {
+  useHydrateCirclesSnapshot();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();

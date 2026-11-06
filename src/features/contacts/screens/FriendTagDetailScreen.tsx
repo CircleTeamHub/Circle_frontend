@@ -12,14 +12,18 @@ import {
   assignFriendTag,
   fetchFriends,
   fetchFriendsByTag,
+  friendsMutatedSince,
   type FriendProfile,
 } from '@/services/api/friends';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { useAuthStore } from '@/stores/authStore';
+import { readPageSnapshot } from '@/storage/page-snapshots';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -156,6 +160,31 @@ export default function FriendTagDetailScreen() {
 
   const tagId = typeof params.id === 'string' ? params.id : '';
   const tagName = typeof params.name === 'string' ? params.name : t('contacts.tagDetail.fallbackTitle');
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const [initialFriends] = useState(() => readPageSnapshot<FriendProfile[]>(useAuthStore.getState().user?.id, `social:friend-tag:${tagId}`));
+  const hasLoadedRef = useRef(Boolean(initialFriends));
+  const scopeKey = `${sessionEpoch}:${tagId}`;
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
+  const reloadGate = useFocusReloadGate({ key: tagId, mutatedSince: friendsMutatedSince });
+
+  useLayoutEffect(() => {
+    friendsRequestRef.current += 1;
+    candidateRequestRef.current += 1;
+    optimisticFriendsRef.current.clear();
+    assigningFriendRef.current = null;
+    const saved = readPageSnapshot<FriendProfile[]>(useAuthStore.getState().user?.id, `social:friend-tag:${tagId}`);
+    hasLoadedRef.current = Boolean(saved);
+    setFriends(saved?.value ?? []);
+    setCandidateFriends([]);
+    setAssigningFriendId(null);
+    setCandidateLoading(false);
+    setRefreshing(false);
+    setLoading(!saved);
+    setAddFriendsVisible(false);
+    setError(null);
+    setCandidateError(null);
+  }, [scopeKey, tagId]);
 
   const loadFriends = useCallback(async () => {
     if (!tagId) {
@@ -166,11 +195,14 @@ export default function FriendTagDetailScreen() {
     }
 
     const request = ++friendsRequestRef.current;
-    setLoading(true);
+    const startedAt = Date.now();
+    const isCurrent = () => mountedRef.current && request === friendsRequestRef.current &&
+      scopeRef.current === scopeKey && useAuthStore.getState().sessionEpoch === sessionEpoch;
+    if (!hasLoadedRef.current) setLoading(true);
 
     try {
       const nextFriends = await fetchFriendsByTag(tagId);
-      if (!mountedRef.current || request !== friendsRequestRef.current) return;
+      if (!isCurrent()) return;
       const nextFriendIds = new Set(nextFriends.map((friend) => friend.id));
       const optimisticFriends = [...optimisticFriendsRef.current.values()]
         .filter((friend) => !nextFriendIds.has(friend.id));
@@ -178,18 +210,20 @@ export default function FriendTagDetailScreen() {
         optimisticFriendsRef.current.delete(friend.id);
       }
       setFriends([...nextFriends, ...optimisticFriends]);
+      hasLoadedRef.current = true;
       setError(null);
+      reloadGate.markLoaded(startedAt);
     } catch {
-      if (!mountedRef.current || request !== friendsRequestRef.current) return;
+      if (!isCurrent()) return;
       setError(t('contacts.tagDetail.loadFailed'));
     } finally {
-      if (mountedRef.current && request === friendsRequestRef.current) setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [t, tagId]);
+  }, [reloadGate, scopeKey, sessionEpoch, t, tagId]);
 
-  useEffect(() => {
-    loadFriends();
-  }, [loadFriends]);
+  useFocusEffect(useCallback(() => {
+    if (!reloadGate.shouldSkip()) void loadFriends();
+  }, [loadFriends, reloadGate]));
 
   useEffect(
     () => () => {
@@ -213,23 +247,25 @@ export default function FriendTagDetailScreen() {
   const loadCandidateFriends = useCallback(async () => {
     if (!tagId) return;
     const request = ++candidateRequestRef.current;
+    const isCurrent = () => mountedRef.current && request === candidateRequestRef.current &&
+      scopeRef.current === scopeKey && useAuthStore.getState().sessionEpoch === sessionEpoch;
     setCandidateLoading(true);
     setCandidateError(null);
     try {
       const nextFriends = await fetchFriends();
-      if (!mountedRef.current || request !== candidateRequestRef.current) return;
+      if (!isCurrent()) return;
       setCandidateFriends(nextFriends);
     } catch (caughtError) {
-      if (!mountedRef.current || request !== candidateRequestRef.current) return;
+      if (!isCurrent()) return;
       setCandidateError(
         getApiErrorMessage(caughtError, t('contacts.tagDetail.candidatesLoadFailed')),
       );
     } finally {
-      if (mountedRef.current && request === candidateRequestRef.current) {
+      if (isCurrent()) {
         setCandidateLoading(false);
       }
     }
-  }, [t, tagId]);
+  }, [scopeKey, sessionEpoch, t, tagId]);
 
   useEffect(() => {
     if (addFriendsVisible) {
@@ -246,7 +282,8 @@ export default function FriendTagDetailScreen() {
       setAssigningFriendId(friend.id);
       try {
         await assignFriendTag(friend.id, tagId);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || scopeRef.current !== scopeKey ||
+          useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
         // Only a successful assignment invalidates older list responses. Doing
         // this before the POST would also invalidate their finally blocks on a
         // failed POST and could leave the screen permanently loading.
@@ -257,17 +294,21 @@ export default function FriendTagDetailScreen() {
         );
         void loadFriends();
       } catch (caughtError) {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || scopeRef.current !== scopeKey ||
+          useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
         Alert.alert(
           t('contacts.tagDetail.addFailedTitle'),
           getApiErrorMessage(caughtError, t('contacts.tagDetail.addFailed')),
         );
       } finally {
-        assigningFriendRef.current = null;
-        if (mountedRef.current) setAssigningFriendId(null);
+        if (mountedRef.current && scopeRef.current === scopeKey &&
+          useAuthStore.getState().sessionEpoch === sessionEpoch) {
+          assigningFriendRef.current = null;
+          setAssigningFriendId(null);
+        }
       }
     },
-    [loadFriends, t, tagId],
+    [loadFriends, scopeKey, sessionEpoch, t, tagId],
   );
 
   const sections = useMemo(() => buildContactSections(friends), [friends]);

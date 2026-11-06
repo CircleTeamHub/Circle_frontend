@@ -7,6 +7,17 @@ jest.mock('@/services/api/circles', () => ({
 }));
 
 const mockFetchCircleDetail = fetchCircleDetail as jest.Mock;
+const mockAuth = { sessionEpoch: 0 };
+jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign(
+  (select: (state: typeof mockAuth) => unknown) => select(mockAuth),
+  { getState: () => mockAuth },
+) }));
+// The validated-role carry-over lives in the group-info cache, which only runs once the
+// encrypted store is ready on native; give it an in-memory MMKV.
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 
 const GROUP_ID = 'circle-1';
 const USER_ID = 'user-1';
@@ -21,6 +32,7 @@ function circleWithRole(
 describe('useGroupMemberViewAccess', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuth.sessionEpoch += 1;
   });
 
   function renderAccessHook(
@@ -48,6 +60,56 @@ describe('useGroupMemberViewAccess', () => {
     });
   });
 
+  it('reuses a validated chat role on info entry while checking the backend again', async () => {
+    mockFetchCircleDetail.mockResolvedValueOnce(circleWithRole('ADMIN'));
+    const chat = renderAccessHook();
+    await waitFor(() => expect(chat.result.current.canViewMembers).toBe(true));
+    chat.unmount();
+    mockFetchCircleDetail.mockImplementation(() => new Promise(() => {}));
+    const info = renderAccessHook();
+    expect(info.result.current.resolved).toBe(true);
+    expect(info.result.current.canViewMembers).toBe(true);
+    expect(mockFetchCircleDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it('a conversation role hint alone cannot authorize the directory', () => {
+    mockFetchCircleDetail.mockImplementation(() => new Promise(() => {}));
+    const { result } = renderHook(() => useGroupMemberViewAccess({ enabled: true,
+      groupID: GROUP_ID, currentUserID: USER_ID, roleHint: 'ADMIN' }));
+    expect(result.current.resolved).toBe(false);
+    expect(result.current.canViewMembers).toBe(false);
+  });
+
+  it.each(['account', 'viewer', 'expired', 'role'])(
+    'does not reuse validated access after %s changes', async (change) => {
+      mockFetchCircleDetail.mockResolvedValueOnce(circleWithRole('ADMIN'));
+      const chat = renderAccessHook();
+      await waitFor(() => expect(chat.result.current.canViewMembers).toBe(true));
+      chat.unmount();
+      if (change === 'account') mockAuth.sessionEpoch += 1;
+      if (change === 'expired') jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 30_001);
+      mockFetchCircleDetail.mockImplementation(() => new Promise(() => {}));
+      const info = renderHook(() => useGroupMemberViewAccess({ enabled: true,
+        groupID: GROUP_ID, currentUserID: change === 'viewer' ? 'other' : USER_ID,
+        roleHint: change === 'role' ? 'MEMBER' : null }));
+      expect(info.result.current.canViewMembers).toBe(false);
+      expect(info.result.current.resolved).toBe(false);
+      jest.restoreAllMocks();
+    },
+  );
+
+  it('a failed refresh removes validated access for the following entry', async () => {
+    mockFetchCircleDetail.mockResolvedValueOnce(circleWithRole('ADMIN'));
+    const chat = renderAccessHook();
+    await waitFor(() => expect(chat.result.current.canViewMembers).toBe(true));
+    mockFetchCircleDetail.mockRejectedValue(new Error('removed'));
+    await act(async () => { await chat.result.current.revalidate(); });
+    chat.unmount();
+    mockFetchCircleDetail.mockImplementation(() => new Promise(() => {}));
+    const info = renderAccessHook();
+    expect(info.result.current.canViewMembers).toBe(false);
+  });
+
   it('denies plain members and non-active memberships', async () => {
     mockFetchCircleDetail.mockResolvedValue(circleWithRole('MEMBER'));
     const { result } = renderAccessHook();
@@ -56,7 +118,7 @@ describe('useGroupMemberViewAccess', () => {
 
     mockFetchCircleDetail.mockResolvedValue(circleWithRole('OWNER', 'PENDING'));
     const second = renderAccessHook();
-    await waitFor(() => expect(second.result.current.resolved).toBe(true));
+    await waitFor(() => expect(second.result.current.selfMember).toBeNull());
     expect(second.result.current.canViewMembers).toBe(false);
     expect(second.result.current.selfMember).toBeNull();
   });

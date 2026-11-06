@@ -265,11 +265,12 @@ export function buildCollectionInputFromMessage(
  * 重发一条收藏时「该发什么」的计划（纯数据，不依赖组件作用域）。
  *
  * 原则：收藏的是啥就原样发啥 —— 不加 title / ⭐ 等装饰。能按原类型还原的
- * （文本 / 语音 / 笔记 / 名片）就忠实重建；其余（图片等暂无法脱离原始消息
- * 还原的类型）回退成一段干净文本，绝不重复正文。
+ * （文本 / 语音 / 笔记 / 名片）就忠实重建；媒体通过源消息授权转发，
+ * 不把图片或视频的占位摘要当作正文发送。
  */
 export type CollectionSendPlan =
   | { kind: 'text'; text: string }
+  | { kind: 'media'; type: 'image' | 'video' | 'voice'; sourceMessageId: string; previewContent: Record<string, unknown> }
   | {
       kind: 'voice';
       /** 对象存储 key —— 自研栈重发语音的唯一凭据。 */
@@ -284,12 +285,23 @@ export type CollectionSendPlan =
    * 发送流程再抛错 —— 抛出来会被当成一次普通发送失败提示「请重试」,
    * 而重试一万次都不可能成功。调用方据此禁用入口并给迁移说明。
    */
-  | { kind: 'unsupported'; reason: 'legacy-voice' };
+  | { kind: 'unsupported'; reason: 'legacy-voice' | 'unavailable-media' };
 
 export function resolveCollectionSendPlan(
-  item: Pick<UserCollection, 'title' | 'summary' | 'payload'>,
+  item: Pick<UserCollection, 'title' | 'summary' | 'payload'> & Partial<Pick<UserCollection, 'message' | 'sourceID'>>,
 ): CollectionSendPlan {
   const payload = getCollectedOpenIMMessagePayload(item.payload);
+
+  const source = item.message;
+  if (source === null) return { kind: 'unsupported', reason: 'unavailable-media' };
+  const mediaType = source?.type ?? payload?.messageType;
+  if (mediaType === 'image' || mediaType === 'video' || (mediaType === 'voice' && source)) {
+    const sourceMessageId = source?.id ?? item.sourceID ?? payload?.messageID;
+    if (source?.deleted || source?.revokedAt || !sourceMessageId || sourceMessageId.startsWith('local:')) {
+      return { kind: 'unsupported', reason: 'unavailable-media' };
+    }
+    return { kind: 'media', type: mediaType, sourceMessageId, previewContent: source?.content ?? {} };
+  }
 
   if (payload) {
     if (

@@ -63,7 +63,7 @@ test('chat page disables its keyboard padding while the collect sheet is open', 
   // The sheet is a separate full-screen modal. Leaving the chat composer KAV
   // enabled while it is mounted lifts the sheet by the composer height on iOS.
   assert.match(hook, /noteCollectVisible: noteCollectTarget !== null \|\| noteCollectOpening/);
-  assert.match(screen, /enabled=\{!noteCollectVisible\}/);
+  assert.match(screen, /enabled=\{!noteCollectVisible && !attachmentOpen && !emojiOpen\}/);
 });
 
 test('collect waits for the chat keyboard window to settle before presenting the sheet', () => {
@@ -82,20 +82,20 @@ test('collect waits for the chat keyboard window to settle before presenting the
 
 // ── 详情页来源名片：群名片 / 用户名片 + 跳回聊天定位 ─────────────────────────
 
-test('NoteDetailScreen hides both card sections and source card actions', () => {
+test('NoteDetailScreen limits private cards and chat actions to owned or collected notes', () => {
   const src = read('src/features/notes/screens/NoteDetailScreen.tsx');
 
-  assert.match(src, /kind !== 'contact' && kind !== 'group'/);
-  assert.doesNotMatch(src, /handleChatWithSender/);
-  assert.doesNotMatch(src, /handleOpenGroupSource/);
-  assert.doesNotMatch(src, /collectedSource\?\.sender/);
+  assert.match(src, /const privateCardNote = ownsNote \? note : addedNote \? collectionState\?\.note : null/);
+  assert.match(src, /privateCardNote \? buildNoteSectionsWithCards\(privateCardNote\) : null/);
+  assert.match(src, /notes\.list\.openSenderChat/);
+  assert.match(src, /notes\.list\.openGroupChat/);
 });
 
 test('read-only details keep source card snapshots sanitized for forwarding payloads', () => {
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
   const payload = read('src/features/chat/utils/note-card-payload.ts');
 
-  assert.match(detail, /kind !== 'contact' && kind !== 'group'/);
+  assert.match(detail, /privateCardNote/);
   assert.match(payload, /sourceGroupCardSnapshot/);
   assert.match(payload, /personalCardSnapshot/);
   assert.match(payload, /groupNames: \[\]/);
@@ -184,7 +184,7 @@ test('NoteCard is memoized and NotesScreen feeds it stable callbacks', () => {
   assert.doesNotMatch(screen, /ItemSeparatorComponent=\{\(\) =>/);
 });
 
-test('笔记详情保留下载入口但不渲染来源名片按钮', () => {
+test('笔记详情的下载入口与名片聊天按钮共存', () => {
   const detail = read('src/features/notes/screens/NoteDetailScreen.tsx');
 
   assert.match(detail, /floatingDock/);

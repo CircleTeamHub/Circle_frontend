@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { loadTsModule } = require('./helpers/load-ts-module');
 
 function deferred() {
   let resolve;
@@ -73,6 +74,7 @@ function makeBaseMocks() {
   };
 
   const mocks = {
+    '@/observability/sentry': { reportError() {} },
     '@/stores/authStore': {
       useAuthStore: authStore,
       persistCurrentAuthState: async () => {
@@ -142,6 +144,14 @@ function makeBaseMocks() {
     '@/utils/client-diagnostics': {
       resetDiagnosticBreadcrumbs: () => calls.push('resetDiagnosticBreadcrumbs'),
     },
+    '@/features/discover/store/use-post-form-store': {
+      usePostFormStore: {
+        getState: () => ({ reset: () => calls.push('resetPostForm') }),
+      },
+    },
+    '@/storage/page-snapshots': {
+      clearPageSnapshots: (userId) => calls.push(`clearPageSnapshots:${userId}`),
+    },
   };
 
   return {
@@ -182,6 +192,7 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetFriendRemark',
     'resetTabBadge',
     'resetWalletRealtime',
+    'resetPostForm',
     'resetDiscover',
     'resetMoments',
     'resetNotifications',
@@ -191,6 +202,114 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetDiagnosticBreadcrumbs',
     'clearStorage',
   ]);
+});
+
+test('clearLocalSession wipes the signed-out account page snapshots before the session is cleared', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  authState.user = { id: 'user-a' };
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  await clearLocalSession();
+
+  // 页面快照是按账号加密落盘的私有内容(会话列表、好友、笔记…),登出必须连盘一起清。
+  const wipe = calls.indexOf('clearPageSnapshots:user-a');
+  assert.notEqual(wipe, -1);
+  assert.ok(wipe < calls.indexOf('clearSession'));
+});
+
+test('forced logout records its cause before auth and diagnostic breadcrumbs are cleared', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  const reports = [];
+  mocks['@/observability/session-diagnostics'] = {
+    recordSessionDiagnostic: (reason, context) => {
+      assert.equal(authState.accessToken, 'access-a');
+      assert.equal(reason, 'refresh-response-invalid');
+      assert.equal(context.hasAccessToken, true);
+      assert.equal(context.hasRefreshToken, true);
+      calls.push('retainLocalDiagnostic');
+      return '12345678-1234-4234-8234-123456789def';
+    },
+  };
+  mocks['@/observability/sentry'] = {
+    reportError: (_error, details) => {
+      if (details.operation !== 'session' || details.kind !== 'forcedLogout') return;
+      assert.equal(authState.accessToken, 'access-a');
+      reports.push(JSON.parse(JSON.stringify(details)));
+      calls.push('reportForcedLogout');
+    },
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+  await clearLocalSession(1, {
+    reason: 'refresh-response-invalid', endpointPath: '/auth/refresh', method: 'POST',
+    status: 201, requestId: '12345678-1234-4234-8234-123456789abc',
+  });
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].reason, 'refresh-response-invalid');
+  assert.equal(reports[0].status, 201);
+  assert.equal(reports[0].requestId, '12345678-1234-4234-8234-123456789abc');
+  assert.equal(reports[0].diagnosticId, '12345678-1234-4234-8234-123456789def');
+  assert.ok(calls.indexOf('retainLocalDiagnostic') < calls.indexOf('reportForcedLogout'));
+  assert.ok(calls.indexOf('reportForcedLogout') < calls.indexOf('clearSession'));
+  assert.ok(calls.indexOf('reportForcedLogout') < calls.indexOf('resetDiagnosticBreadcrumbs'));
+  assert.doesNotMatch(JSON.stringify(reports), /access-a|refresh-a/);
+});
+
+test('user logout is retained locally even when error reporting is disabled', async () => {
+  const { mocks, calls } = makeBaseMocks();
+  const retained = [];
+  mocks['@/observability/session-diagnostics'] = {
+    recordSessionDiagnostic: (reason, context) => { retained.push({ reason, context }); return 'local-id'; },
+  };
+  mocks['@/observability/sentry'] = { reportError: () => assert.fail('user action is not a forced logout') };
+  const { clearLocalSession } = loadSessionModule(mocks);
+  await clearLocalSession(1, { reason: 'user-logout', userInitiated: true });
+  assert.equal(retained.length, 1);
+  assert.equal(retained[0].reason, 'user-logout');
+  assert.equal(retained[0].context.userInitiated, true);
+  assert.ok(calls.includes('clearSession'));
+  assert.doesNotMatch(JSON.stringify(retained), /access-a|refresh-a/);
+});
+
+test('manual logout and stale-session cleanup do not report a forced logout', async () => {
+  const { mocks, authState } = makeBaseMocks();
+  const reports = [];
+  mocks['@/observability/sentry'] = {
+    reportError: (_error, details) => {
+      if (details.operation === 'session' && details.kind === 'forcedLogout') reports.push(details.kind);
+    },
+  };
+  const { clearLocalSession } = loadSessionModule(mocks);
+  await clearLocalSession(0, { reason: 'refresh-rejected' });
+  assert.equal(authState.sessionEpoch, 1);
+  await clearLocalSession();
+  assert.equal(reports.length, 0);
+});
+
+test('the same forced-logout cause after re-login retains each session request id', async () => {
+  const { mocks, authState } = makeBaseMocks();
+  const reports = [];
+  const sentry = { reportError: (_error, details) => {
+    if (details.operation === 'session' && details.kind === 'forcedLogout') reports.push(details);
+  } };
+  mocks['@/observability/sentry'] = sentry;
+  mocks['@/observability/report-failure'] = loadTsModule('src/observability/report-failure.ts', {
+    requireShim: request => {
+      if (request === './sentry') return sentry;
+      if (request === '@/utils/redact') return { redactSensitiveFields: value => value };
+      return require(request);
+    },
+  });
+  const { clearLocalSession } = loadSessionModule(mocks);
+  const first = '12345678-1234-4234-8234-123456789abc';
+  const second = '87654321-4321-4321-8321-cba987654321';
+  await clearLocalSession(1, { reason: 'refresh-rejected', requestId: first });
+  authState.accessToken = 'access-next';
+  authState.refreshToken = 'refresh-next';
+  authState.sessionEpoch++;
+  await clearLocalSession(authState.sessionEpoch, { reason: 'refresh-rejected', requestId: second });
+  assert.equal(reports.length, 2);
+  assert.equal(reports[0].requestId, first);
+  assert.equal(reports[1].requestId, second);
 });
 
 test('clearLocalSession preserves the startup gate until account cleanup settles', async () => {
@@ -272,6 +391,7 @@ test('clearLocalSession still clears local state when a teardown handler throws'
     'resetFriendRemark',
     'resetTabBadge',
     'resetWalletRealtime',
+    'resetPostForm',
     'resetDiscover',
     'resetMoments',
     'resetNotifications',

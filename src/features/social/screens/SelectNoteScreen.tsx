@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Divider } from '@/components/ui/divider';
@@ -17,7 +17,9 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { usePostFormStore } from '@/features/discover/store/use-post-form-store';
 import { NoteCard } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
-import { fetchNotes } from '@/services/api/notes';
+import { fetchNotes, getCachedNotes, notesMutatedSince } from '@/services/api/notes';
+import { useAuthStore } from '@/stores/authStore';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 
@@ -65,40 +67,55 @@ const s = StyleSheet.create({
 });
 
 export default function SelectNoteScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  return sessionKey ? <SelectNoteContent key={sessionKey} /> : null;
+}
+
+function SelectNoteContent() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const selectedNote = usePostFormStore((state) => state.selectedNote);
   const setSelectedNote = usePostFormStore((state) => state.setSelectedNote);
-  const [notes, setNotes] = useState<NoteSummary[]>([]);
+  const [cached] = useState(getCachedNotes);
+  const [notes, setNotes] = useState<NoteSummary[]>(cached?.value ?? []);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const loadedRef = useRef(cached !== null);
+  const reloadGate = useFocusReloadGate({ key: sessionEpoch, mutatedSince: notesMutatedSince });
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    if (reloadGate.shouldSkip()) return;
     let cancelled = false;
-    setLoading(true);
+    const startedAt = Date.now();
+    const isCurrent = () => !cancelled && useAuthStore.getState().sessionEpoch === sessionEpoch;
+    setLoading(!loadedRef.current);
     setError(null);
 
     // No status filter: omitting status returns all non-deleted notes (ACTIVE +
     // UNLISTED). Filtering to ACTIVE hid unlisted notes, so the picker looked empty.
     fetchNotes()
       .then((data) => {
-        if (!cancelled) setNotes(data);
+        if (!isCurrent()) return;
+        setNotes(data);
+        loadedRef.current = true;
+        reloadGate.markLoaded(startedAt);
       })
       .catch(() => {
-        if (!cancelled) {
+        if (isCurrent()) {
           setError(t('plaza.notePicker.loadFailed'));
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (isCurrent()) setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [reloadGate, sessionEpoch, t]));
 
   const filteredNotes = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -112,10 +129,11 @@ export default function SelectNoteScreen() {
 
   const handleSelectNote = useCallback(
     (note: NoteSummary) => {
+      if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
       setSelectedNote({ id: note.id, title: note.title });
       router.back();
     },
-    [setSelectedNote],
+    [sessionEpoch, setSelectedNote],
   );
 
   const handleClearNote = useCallback(() => {
@@ -184,11 +202,11 @@ export default function SelectNoteScreen() {
         </Pressable>
         <Divider />
 
-        {loading ? (
+        {loading && notes.length === 0 ? (
           <View style={s.empty}>
             <ActivityIndicator color={colors.primary} />
           </View>
-        ) : error ? (
+        ) : error && notes.length === 0 ? (
           <View style={s.empty}>
             <Text style={[s.emptyText, { color: colors.textSecondary }]}>
               {error}

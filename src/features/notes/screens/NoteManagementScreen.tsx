@@ -31,6 +31,7 @@ import {
 import { useChatStore } from '@/chat-core/store';
 import { fetchCircleDetail } from '@/services/api/circles';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { ApiError } from '@/services/api/client';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import {
@@ -54,12 +55,14 @@ import {
 } from '@/features/notes/utils/note-sync';
 import {
   fetchNotes,
+  getCachedNotes,
   notesMutatedSince,
   setNoteSourceGroup,
   setNoteWorkStatus,
 } from '@/services/api/notes';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { reuseUnchanged } from '@/utils/structural-sharing';
+import { useAuthStore } from '@/stores/authStore';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -187,6 +190,12 @@ function isOwnedSourceNote(
 
 /** 群主专用的笔记管理页,与群策略/成员管理使用独立路由和页面。 */
 export default function NoteManagementScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  const { conversationID, groupID } = useLocalSearchParams<{ conversationID?: string; groupID?: string }>();
+  return sessionKey ? <NoteManagementContent key={`${sessionKey}:${conversationID ?? ''}:${groupID ?? ''}`} /> : null;
+}
+
+function NoteManagementContent() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -211,7 +220,9 @@ export default function NoteManagementScreen() {
   const [circleRole, setCircleRole] = useState<GroupRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [notes, setNotes] = useState<NoteSummary[]>([]);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [cachedNotes] = useState(getCachedNotes);
+  const [notes, setNotes] = useState<NoteSummary[]>(cachedNotes?.value ?? []);
   const [notesLoading, setNotesLoading] = useState(false);
   const [notePickerVisible, setNotePickerVisible] = useState(false);
   const noteStatusChange = useNoteStatusSignalStore((state) => state.lastChange);
@@ -219,6 +230,12 @@ export default function NoteManagementScreen() {
     (state) => state.recoveryVersion,
   );
   const notesLoadSequenceRef = useRef(0);
+  const contextSequenceRef = useRef(0);
+  const mountedRef = useRef(true);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const isCurrentSession = useCallback(() => mountedRef.current &&
+    useAuthStore.getState().sessionEpoch === sessionEpoch, [sessionEpoch]);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   useEffect(() => {
     if (!noteStatusChange) return;
@@ -233,6 +250,8 @@ export default function NoteManagementScreen() {
   const isOwner = selfRole === 'OWNER';
 
   const loadGroupContext = useCallback(async () => {
+    const sequence = ++contextSequenceRef.current;
+    const isCurrent = () => isCurrentSession() && sequence === contextSequenceRef.current;
     if (!conversationID) {
       setLoading(false);
       setError(true);
@@ -252,34 +271,44 @@ export default function NoteManagementScreen() {
         fetchChatMembers(conversationID),
         groupID ? fetchCircleDetail(groupID) : Promise.resolve(null),
       ]);
+      if (!isCurrent()) return;
       setMembers(directory);
+      setAccessDenied(false);
       setCircleRole(
         detail && detail.myStatus === 'ACTIVE' ? detail.myRole : null,
       );
       await conversationsPromise;
     } catch (err) {
+      if (!isCurrent()) return;
+      if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
+        setAccessDenied(true);
+        setNotes([]);
+        setNotePickerVisible(false);
+      }
       setError(true);
       reportHandledFailure('noteManagement', 'loadGroupContext', err);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [conversationID, groupID]);
+  }, [conversationID, groupID, isCurrentSession]);
 
   useFocusEffect(
     useCallback(() => {
       void loadGroupContext();
+      return () => { contextSequenceRef.current += 1; };
     }, [loadGroupContext]),
   );
 
   const openActionError = useCallback(
     (err: unknown) => {
+      if (!isCurrentSession()) return;
       reportHandledFailure('noteManagement', 'action', err);
       Alert.alert(
         t('common.errorOccurred'),
         getApiErrorMessage(err, t('common.networkError')),
       );
     },
-    [t],
+    [isCurrentSession, t],
   );
 
   // 回到页面时:刚拉过、之后没有任何笔记写请求、重连恢复信号也没变,就不重拉整页笔记。
@@ -289,23 +318,23 @@ export default function NoteManagementScreen() {
   });
 
   const loadNotes = useCallback(async () => {
-    if (!isOwner) return;
+    if (!isOwner || !isCurrentSession()) return;
     const sequence = ++notesLoadSequenceRef.current;
     const startedAt = Date.now();
     setNotesLoading(true);
     try {
       const nextNotes = await withNoteSyncRetry(() => fetchNotes());
-      if (sequence !== notesLoadSequenceRef.current) return;
+      if (sequence !== notesLoadSequenceRef.current || !isCurrentSession()) return;
       setNotes((current) => reuseUnchanged(current, nextNotes));
       notesReloadGate.markLoaded(startedAt);
     } catch (err) {
-      if (sequence !== notesLoadSequenceRef.current) return;
+      if (sequence !== notesLoadSequenceRef.current || !isCurrentSession()) return;
       reportHandledFailure('noteManagement', 'loadNotes', err);
       openActionError(err);
     } finally {
-      if (sequence === notesLoadSequenceRef.current) setNotesLoading(false);
+      if (sequence === notesLoadSequenceRef.current && isCurrentSession()) setNotesLoading(false);
     }
-  }, [isOwner, notesReloadGate, openActionError]);
+  }, [isCurrentSession, isOwner, notesReloadGate, openActionError]);
 
   useFocusEffect(
     useCallback(() => {
@@ -345,8 +374,10 @@ export default function NoteManagementScreen() {
       action: () => Promise<unknown>,
       patch: Partial<NoteSummary>,
     ) => {
+      if (!isCurrentSession() || !isOwner || loading || error) return false;
       try {
         await action();
+        if (!isCurrentSession()) return false;
         setNotes((current) =>
           current.map((item) =>
             item.id === note.id ? { ...item, ...patch } : item,
@@ -358,23 +389,25 @@ export default function NoteManagementScreen() {
       }
       return true;
     },
-    [openActionError],
+    [error, isCurrentSession, isOwner, loading, openActionError],
   );
 
   const handleBindNote = useCallback(
     (noteId: string) => {
       setNotePickerVisible(false);
       const note = notes.find((item) => item.id === noteId);
-      if (!note || !isOwnedSourceNote(note, currentUserID)) return;
+      if (!note || !isOwnedSourceNote(note, currentUserID) || !isOwner || loading || error) return;
       // 新关联进群的笔记默认开工；已经设过开工/打烊的保留原状态。
       const needsDefaultStatus = resolveManagedWorkStatus(note) === 'UNSET';
       void (async () => {
+        if (!isCurrentSession()) return;
         try {
           await setNoteSourceGroup(note.id, conversationID);
         } catch (err) {
           openActionError(err);
           return;
         }
+        if (!isCurrentSession()) return;
         setNotes((current) =>
           current.map((item) =>
             item.id === note.id
@@ -389,6 +422,7 @@ export default function NoteManagementScreen() {
             { workStatus: 'WORKING' },
           );
           if (!updated) {
+            if (!isCurrentSession()) return;
             try { await setNoteSourceGroup(note.id, note.sourceConversationID ?? null); }
             catch (rollbackError) { openActionError(rollbackError); }
             await loadNotes();
@@ -396,7 +430,7 @@ export default function NoteManagementScreen() {
         }
       })();
     },
-    [conversationID, currentUserID, notes, openActionError, updateManagedNote, loadNotes],
+    [conversationID, currentUserID, error, isCurrentSession, isOwner, loading, notes, openActionError, updateManagedNote, loadNotes],
   );
 
   const handleUnbindNote = useCallback(
@@ -543,7 +577,7 @@ export default function NoteManagementScreen() {
           showActions={false}
           accessibilityLabel={note.title}
         />
-        <View style={s.noteActions}>
+        {canBindNotes ? <View style={s.noteActions}>
           {statusButtons.map((option) => {
             const active = workStatus === option.value;
             return (
@@ -596,7 +630,7 @@ export default function NoteManagementScreen() {
               {t('common.remove', { defaultValue: '移除' })}
             </Text>
           </Pressable>
-        </View>
+        </View> : null}
       </View>
     );
   };
@@ -619,13 +653,13 @@ export default function NoteManagementScreen() {
   );
 
   let body: React.ReactNode;
-  if (loading) {
+  if (loading && !cachedNotes) {
     body = (
       <View style={s.center}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
-  } else if (error) {
+  } else if (error && !cachedNotes) {
     body = (
       <View style={s.center}>
         <Text style={d.centerText}>
@@ -638,7 +672,7 @@ export default function NoteManagementScreen() {
         </Pressable>
       </View>
     );
-  } else if (!isOwner) {
+  } else if (accessDenied || (!loading && !error && !isOwner)) {
     body = (
       <View style={s.center}>
         <Text style={d.centerText}>
@@ -655,6 +689,12 @@ export default function NoteManagementScreen() {
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 96 }]}
         showsVerticalScrollIndicator={false}
       >
+        {error ? <View style={s.emptyRow}>
+          <Text style={d.centerText}>{t('chat.groupManagement.loadFailed', { defaultValue: '笔记管理加载失败' })}</Text>
+          <Pressable style={[s.retry, d.retry]} onPress={() => void loadGroupContext()}>
+            <Text style={d.retryText}>{t('common.retry')}</Text>
+          </Pressable>
+        </View> : null}
         <View style={s.listHeader}>
           <View style={s.sectionTitleRow}>
             <Text style={d.title}>

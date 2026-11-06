@@ -96,7 +96,11 @@ export function getCachedNotePickerGroups(accountId: string | null | undefined) 
 }
 
 export function isNotePickerFriendsFresh(accountId: string | null | undefined) {
-  return isFresh(friendsCache, accountId);
+  if (!friendsCache || !isFresh(friendsCache, accountId)) return false;
+  // Keep the friends session graph lazy, as in the loader below.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { friendsMutatedSince } = require('@/services/api/friends') as typeof import('@/services/api/friends');
+  return !friendsMutatedSince(friendsCache.updatedAt);
 }
 
 export function isNotePickerGroupsFresh(accountId: string | null | undefined) {
@@ -108,6 +112,7 @@ export async function loadNotePickerFriends(accountId: string | null | undefined
   if (friendsInFlight?.accountId === key) return friendsInFlight.promise;
 
   let promise: Promise<FriendProfile[]>;
+  const startedAt = Date.now();
   promise = Promise.resolve()
     .then(() => {
       // The friends API remains lazy so opening the editor does not load its session graph.
@@ -119,7 +124,7 @@ export async function loadNotePickerFriends(accountId: string | null | undefined
       friendsCache = {
         accountId: key,
         value: friends,
-        updatedAt: Date.now(),
+        updatedAt: startedAt,
       };
       return friends;
     })

@@ -78,10 +78,15 @@ jest.mock('@/stores/tabBadgeStore', () => ({
   useTabBadgeStore: (select: (state: { groupAdmissionsUnread: number }) => unknown) =>
     select({ groupAdmissionsUnread: 0 }),
 }));
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (select: (state: { sessionEpoch: number }) => unknown) =>
-    select({ sessionEpoch: mockSessionEpoch }),
-}));
+jest.mock('@/stores/authStore', () => {
+  const getState = () => ({ user: { id: 'me' }, sessionEpoch: mockSessionEpoch });
+  return {
+    useAuthStore: Object.assign(
+      (select: (state: ReturnType<typeof getState>) => unknown) => select(getState()),
+      { getState },
+    ),
+  };
+});
 
 function activity(nickname: string): FriendActivity {
   return {
@@ -222,4 +227,11 @@ test('a list that lands after the page was left is still there next time', async
   jest.mocked(fetchFriendActivities).mockReturnValue(new Promise(() => {}));
   render(<NewFriendsScreen />);
   expect(screen.getByText('阿青')).toBeTruthy();
+});
+
+test('StrictMode effect replay completes the inbox request instead of staying on the spinner', async () => {
+  jest.mocked(fetchFriendActivities).mockResolvedValue([activity('Replay')]);
+  render(<React.StrictMode><NewFriendsScreen /></React.StrictMode>, { concurrentRoot: true });
+  expect(await screen.findByText('Replay')).toBeTruthy();
+  expect(screen.queryByText('contacts.friendActivity.loading')).toBeNull();
 });

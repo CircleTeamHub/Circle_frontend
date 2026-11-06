@@ -1,5 +1,8 @@
 import type { BurnDurationSec } from '@/chat-core/burn-durations';
-import { apiClient } from '@/services/api/client';
+import { apiClient, isDefinitiveAuthFailure } from '@/services/api/client';
+import { clearPrivacySettingsCache, writePrivacySettingsCache } from '@/features/profile/privacy-settings-cache';
+import { useAuthStore } from '@/stores/authStore';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 import { expectShape, isPlainObject } from '@/utils/validate';
 
 export type MomentsVisibility = 'ALL' | 'FRIENDS_ONLY' | 'PRIVATE';
@@ -54,6 +57,7 @@ const PRIVACY_PERMISSIONS = new Set<PrivacyPermission>([
   'FRIENDS_ONLY',
   'NONE',
 ]);
+let privacyMutationVersion = 0;
 
 function isPrivacySettings(value: unknown): value is PrivacySettings {
   if (!isPlainObject(value)) return false;
@@ -89,16 +93,38 @@ function isPrivacySettings(value: unknown): value is PrivacySettings {
 }
 
 export async function fetchPrivacySettings() {
-  const raw = await apiClient<unknown>('/privacy/settings');
-  return expectShape(raw, isPrivacySettings, '隐私设置数据格式异常');
+  const sessionEpoch = useAuthStore.getState().sessionEpoch;
+  const mutationVersion = privacyMutationVersion;
+  const revision = getPageSnapshotRevision();
+  const startedAt = Date.now();
+  try {
+    const raw = await apiClient<unknown>('/privacy/settings');
+    const settings = expectShape(raw, isPrivacySettings, '隐私设置数据格式异常');
+    if (mutationVersion === privacyMutationVersion) writePrivacySettingsCache(sessionEpoch, settings, revision, startedAt);
+    return settings;
+  } catch (error) {
+    if (isDefinitiveAuthFailure(error)) clearPrivacySettingsCache(sessionEpoch);
+    throw error;
+  }
 }
 
 export async function updatePrivacySettings(
   payload: UpdatePrivacySettingsPayload,
 ) {
-  const raw = await apiClient<unknown>('/privacy/settings', {
-    method: 'PATCH',
-    body: payload,
-  });
-  return expectShape(raw, isPrivacySettings, '隐私设置数据格式异常');
+  const sessionEpoch = useAuthStore.getState().sessionEpoch;
+  const revision = getPageSnapshotRevision();
+  const startedAt = Date.now();
+  try {
+    const raw = await apiClient<unknown>('/privacy/settings', {
+      method: 'PATCH',
+      body: payload,
+    });
+    const settings = expectShape(raw, isPrivacySettings, '隐私设置数据格式异常');
+    privacyMutationVersion += 1;
+    writePrivacySettingsCache(sessionEpoch, settings, revision, startedAt);
+    return settings;
+  } catch (error) {
+    if (isDefinitiveAuthFailure(error)) clearPrivacySettingsCache(sessionEpoch);
+    throw error;
+  }
 }

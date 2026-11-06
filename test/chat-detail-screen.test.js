@@ -172,9 +172,9 @@ test('chat detail screen wires a tappable emoji picker into the composer', () =>
 test('re-sending a collected favorite rebuilds by original type via resolveCollectionSendPlan', () => {
   const source = readChatDetailSource();
 
-  // 按 plan 分发：文本走草稿、语音/笔记/名片按原类型重建。
+  // 按 plan 分发，收藏与附加消息不修改聊天页原有草稿。
   assert.match(source, /resolveCollectionSendPlan\(item\)/);
-  assert.match(source, /plan\.kind === 'text'/);
+  assert.match(source, /case 'text':\s*return sendTextMessage\(/);
   assert.match(source, /case 'voice':/);
   assert.match(source, /case 'note':/);
   assert.match(source, /case 'friend':/);
@@ -837,7 +837,7 @@ test('group member access stays live while the chat screen is mounted', () => {
     hook,
     /canViewCircleMembers\(member\?\.role \?\? null\)[\s\S]{0,160}membersCanViewRoster === true/,
   );
-  assert.match(hook, /catch \{[\s\S]{0,400}return false;/);
+  assert.match(hook, /\} catch \(error\) \{\s*\n\s*\/\/ fail-closed[\s\S]{0,600}return false;/);
   // 换群/卸载后的在途查询结果按代际丢弃。
   assert.match(hook, /const queryGenRef = useRef\(0\)/);
   assert.match(hook, /if \(queryGenRef\.current !== gen\) return;/);

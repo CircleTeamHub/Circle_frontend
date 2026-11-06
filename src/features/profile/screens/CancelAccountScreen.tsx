@@ -40,7 +40,7 @@ function CancelAccountForm({ epoch }: { epoch: number }) {
     try {
       await deleteAccount(user.id);
       if (useAuthStore.getState().sessionEpoch !== epoch) return;
-      await clearLocalSession(epoch);
+      await clearLocalSession(epoch, { reason: 'account-cancel', userInitiated: true });
       const latest = useAuthStore.getState();
       if (mounted.current && latest.sessionEpoch === epoch + 1 && !latest.user) router.replace('/(auth)/login');
     } catch (failure) {

@@ -235,6 +235,8 @@ export const PlazaPostCardBubble: React.FC<PlazaPostCardBubbleProps> = ({
               source={{ uri: coverUrl }}
               style={s.coverImage}
               contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
               // 封面来自对端可控的卡片 payload；理由同 image-bubble。
               enforceEarlyResizing
               recyclingKey={coverUrl}

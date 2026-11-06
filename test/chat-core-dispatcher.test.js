@@ -74,7 +74,7 @@ function fakeSocket() {
 
 const deletedIds = new Set();
 
-function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
+function loadDispatcher(storeOverrides = {}, actionOverrides = {}, now = () => Date.now()) {
   const state = {
     currentUserId: 'me',
     activeConversationId: null,
@@ -84,6 +84,7 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
     banners: [],
     removed: [],
     alerts: [],
+    notices: [],
     revokes: [],
     deliveredReports: [],
     deliveredApplied: [],
@@ -268,7 +269,13 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
       };
     }
     if (request === './mappers') {
-      return { getChatMessagePreview: (m) => String(m.content?.text ?? '[消息]') };
+      return {
+        getChatMessagePreview: (m) => String(m.content?.text ?? '[消息]'),
+        mapChatConversationToUI: (c) => ({ name: c.name ?? '' }),
+      };
+    }
+    if (request === '@/components/app/top-notice-store') {
+      return { showTopNotice: (notice) => state.notices.push({ ...notice }) };
     }
     if (request === '@/services/api/utils') {
       // 白名单替身:只放行本站来源(与其它 chat 用例同款)。
@@ -334,11 +341,13 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
       return { Alert: { alert: (text) => state.alerts.push(text) } };
     }
     if (request === '@/i18n') {
-      return { default: { t: (key) => key }, t: (key) => key };
+      const t = (key, options) => (options?.name ? `${key}:${options.name}` : key);
+      return { default: { t }, t };
     }
     if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   }, {
+    Date: class extends Date { static now() { return now(); } },
     setTimeout: (fn, delay) => {
       const token = { fn, delay };
       if (delay === 800) pendingBackfill = token;
@@ -500,6 +509,21 @@ test('cancelling the chat lifecycle resets malformed-payload reporting', () => {
   dispatcher.cancelConversationBackfill();
   socket.emit('chat:msg', null);
   assert.equal(state.sentryReports.length, 2);
+});
+
+test('malformed event recurrence becomes visible after sixty seconds without a lifecycle reset', () => {
+  let now = 0;
+  const { socket, state } = loadDispatcher({}, {}, () => now);
+  socket.emit('chat:msg', null);
+  now = 59_999;
+  socket.emit('chat:msg', null);
+  assert.equal(state.sentryReports.length, 1);
+
+  now = 60_000;
+  socket.emit('chat:msg', null);
+  socket.emit('chat:msg', null);
+  assert.equal(state.sentryReports.length, 2);
+  assert.equal(state.sentryReports[1].context.kind, 'malformedPayload');
 });
 
 test('system messages with a null sender are still valid', () => {
@@ -1012,9 +1036,9 @@ test('a redelivered message this device deleted still counts as received for the
 
 // ---- chat:conversation(G-11/S-02):本人会话成员关系变化 ----
 
-test('chat:conversation removed collapses the conversation and alerts only when active', () => {
+test('chat:conversation removed collapses the active conversation and explains why in a dialog', () => {
   const { socket, state } = loadDispatcher();
-  state.conversations = [{ id: 'c1', type: 'GROUP' }];
+  state.conversations = [{ id: 'c1', type: 'GROUP', name: '周末羽毛球' }];
   state.activeConversationId = 'c1';
 
   socket.emit('chat:conversation', {
@@ -1024,8 +1048,9 @@ test('chat:conversation removed collapses the conversation and alerts only when 
   });
 
   assert.deepEqual(state.removed, ['c1']);
-  // 正看着这个群才提示,文案走 im.conversation.removedFromGroup 词条。
-  assert.deepEqual(state.alerts, ['im.conversation.removedFromGroup']);
+  // 正看着这个群:弹窗说明被移出了哪个群(群名在摘行之前取)。
+  assert.deepEqual(state.alerts, ['im.conversation.removedFromNamedGroup:周末羽毛球']);
+  assert.deepEqual(state.notices, []);
   // 正开着的会话要连时间线一起收走:只摘列表行的话,被移出的人还能继续
   // 翻聊天记录、继续按发送。
   assert.deepEqual(state.cleared, [
@@ -1036,6 +1061,32 @@ test('chat:conversation removed collapses the conversation and alerts only when 
   // 防复活:被移除会话的迟到广播既不入库也不触发补拉。
   socket.emit('chat:msg', dto({ conversationId: 'c1', id: 'late-1' }));
   assert.equal(state.ingested.length, 0);
+});
+
+test('being removed from a group you are not viewing raises a top notice instead of vanishing silently', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [{ id: 'c1', type: 'GROUP', name: '周末羽毛球' }];
+  state.activeConversationId = 'other';
+
+  socket.emit('chat:conversation', { kind: 'removed', conversationId: 'c1', userId: 'me' });
+
+  assert.deepEqual(state.removed, ['c1']);
+  assert.deepEqual(state.alerts, []);
+  assert.deepEqual(state.notices, [
+    { type: 'warning', title: 'im.conversation.removedFromNamedGroup:周末羽毛球' },
+  ]);
+});
+
+test('a removal for a conversation this device never listed stays quiet unless it is on screen', () => {
+  const { socket, state } = loadDispatcher();
+  state.conversations = [];
+  socket.emit('chat:conversation', { kind: 'removed', conversationId: 'c9', userId: 'me' });
+  assert.deepEqual(state.alerts, []);
+  assert.deepEqual(state.notices, []);
+
+  state.activeConversationId = 'c8';
+  socket.emit('chat:conversation', { kind: 'removed', conversationId: 'c8', userId: 'me' });
+  assert.deepEqual(state.alerts, ['im.conversation.removedFromGroup']);
 });
 
 test('chat:conversation left removes silently and joined lifts the guard', () => {
@@ -1051,6 +1102,7 @@ test('chat:conversation left removes silently and joined lifts the guard', () =>
   assert.deepEqual(state.removed, ['c1']);
   // left 是本人在别处的主动动作:静默收走,不弹提示。
   assert.deepEqual(state.alerts, []);
+  assert.deepEqual(state.notices, []);
 
   // 重新入群:解除防复活标记,消息恢复入库。
   socket.emit('chat:conversation', {

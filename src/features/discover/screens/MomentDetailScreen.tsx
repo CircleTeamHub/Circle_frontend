@@ -41,11 +41,12 @@ import {
 import { useMomentsStore } from '@/features/discover/store/use-moments-store';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { useAuthStore } from '@/stores/authStore';
-import { ApiError } from '@/services/api/client';
+import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { MomentPost } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { readPageSnapshot } from '@/storage/page-snapshots';
 
 // Unified icon scale for the post action row so like / comment read as one
 // system instead of 26 / 24.
@@ -153,6 +154,12 @@ const s = StyleSheet.create({
 });
 
 export default function MomentDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const epoch = useAuthStore((state) => state.sessionEpoch);
+  return <MomentDetailContent key={`${epoch}:${id}`} />;
+}
+
+function MomentDetailContent() {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -171,14 +178,16 @@ export default function MomentDetailScreen() {
   const storeRemoveMoment = useMomentsStore((s) => s.removeMoment);
   const storeRemoveComment = useMomentsStore((s) => s.removeComment);
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
 
-  const [post, setPost] = useState<MomentPost | null>(storeMoment ?? null);
-  const [loading, setLoading] = useState(!storeMoment);
+  const [initialPost] = useState(() => storeMoment ?? readPageSnapshot<MomentPost>(currentUserId, `social:moment:${id}`)?.value ?? null);
+  const [post, setPost] = useState<MomentPost | null>(initialPost);
+  const [loading, setLoading] = useState(!initialPost);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mentionNotice, setMentionNotice] = useState<string | null>(null);
   const dismissMentionNotice = useCallback(() => setMentionNotice(null), []);
   const [refreshing, setRefreshing] = useState(false);
-  const postRef = useRef<MomentPost | null>(storeMoment ?? null);
+  const postRef = useRef<MomentPost | null>(initialPost);
   const mountedRef = useRef(true);
   const requestRef = useRef(0);
   const refreshInFlightRef = useRef(false);
@@ -224,11 +233,11 @@ export default function MomentDetailScreen() {
 
     try {
       const found = await fetchMomentById(id);
-      if (!mountedRef.current || requestId !== requestRef.current) return;
+      if (!mountedRef.current || requestId !== requestRef.current || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
       setPost(found);
     } catch (error) {
-      if (!mountedRef.current || requestId !== requestRef.current) return;
-      if (error instanceof ApiError && error.status === 404) {
+      if (!mountedRef.current || requestId !== requestRef.current || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+      if (isDefinitiveAuthFailure(error) || (error instanceof ApiError && error.status === 404)) {
         setPost(null);
         setLoadError(t('moment.notExist'));
         return;
@@ -244,7 +253,7 @@ export default function MomentDetailScreen() {
         setLoading(false);
       }
     }
-  }, [id, t]);
+  }, [id, sessionEpoch, t]);
 
   // Fallback: fetch from API if not in store
   useEffect(() => {
@@ -300,14 +309,16 @@ export default function MomentDetailScreen() {
 
     try {
       const result = await toggleMomentLike(post.id);
+      if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
       setPost((p) => p ? { ...p, isLikedByMe: result.liked, likeCount: result.likeCount } : p);
       storeToggleLike(post.id, result.liked, result.likeCount);
     } catch (error) {
+      if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
       setPost((p) => p ? { ...p, isLikedByMe: post.isLikedByMe, likeCount: post.likeCount } : p);
       storeToggleLike(post.id, post.isLikedByMe, post.likeCount);
       reportHandledFailure('moments', 'toggleLike', error);
     }
-  }, [post, storeToggleLike]);
+  }, [post, sessionEpoch, storeToggleLike]);
 
   const handleSubmitComment = useCallback(
     async (
@@ -324,6 +335,7 @@ export default function MomentDetailScreen() {
           images,
           mentionedUserIds,
         });
+        if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
         setPost((p) =>
           p
             ? { ...p, comments: [...p.comments, comment], commentCount: p.commentCount + 1 }
@@ -354,7 +366,7 @@ export default function MomentDetailScreen() {
         throw error;
       }
     },
-    [post, storeAddComment, t],
+    [post, sessionEpoch, storeAddComment, t],
   );
 
   const timeLabel = useMemo(
@@ -435,6 +447,7 @@ export default function MomentDetailScreen() {
           onPress: async () => {
             try {
               await deleteMoment(id);
+              if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
               storeRemoveMoment(id);
               router.back();
             } catch (error) {
@@ -450,7 +463,7 @@ export default function MomentDetailScreen() {
         },
       ],
     );
-  }, [id, router, storeRemoveMoment, t]);
+  }, [id, router, sessionEpoch, storeRemoveMoment, t]);
 
   const handleDeleteComment = useCallback(
     (commentId: string) => {
@@ -470,6 +483,7 @@ export default function MomentDetailScreen() {
             onPress: async () => {
               try {
                 await deleteMomentComment(commentId);
+                if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
                 setPost((p) =>
                   p
                     ? {
@@ -496,7 +510,7 @@ export default function MomentDetailScreen() {
         ],
       );
     },
-    [id, storeRemoveComment, t],
+    [id, sessionEpoch, storeRemoveComment, t],
   );
 
   if (loading) {

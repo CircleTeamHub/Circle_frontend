@@ -35,6 +35,7 @@ type StoredPushRegistration = {
   revocationSecret: string;
   status: 'pending' | 'registered';
   deviceBindingVersion?: 1;
+  appVersion?: string | null;
   /** 登记时附带字段（来电推送版本等）的指纹：变了就要重新登记一次，哪怕 token 没变。 */
   fingerprint?: string;
 };
@@ -94,7 +95,7 @@ type PushTokenRegistrationOrchestratorDependencies = {
     | Promise<PushRegistrationExtras>;
   /**
    * 请求权限之前准备通知渠道(聊天渠道)。安卓 13 起应用一个渠道都没有时系统不弹
-   * 权限框;失败只记诊断,不挡注册 —— 推送会回落到默认渠道。
+   * 权限框;失败会上报,不挡注册 —— 推送会回落到默认渠道。
    */
   prepareNotifications?: (notifications: NotificationsModule) => Promise<void>;
   registerPushToken: typeof registerPushToken;
@@ -635,8 +636,8 @@ export function createPushTokenRegistrationOrchestrator(
     if (dependencies.prepareNotifications) {
       try {
         await dependencies.prepareNotifications(notifications);
-      } catch {
-        dependencies.reportDiagnostic('push_notification_channels_failed', {
+      } catch (error) {
+        dependencies.reportFailure('push_notification_channels_failed', error, {
           platform: dependencies.platform,
         });
       }
@@ -768,9 +769,11 @@ export function createPushTokenRegistrationOrchestrator(
 
       const projectId = dependencies.getProjectId();
       if (provider === 'expo' && !projectId) {
-        dependencies.reportDiagnostic('push_token_project_id_missing', {
-          platform: dependencies.platform,
-        });
+        dependencies.reportFailure(
+          'push_token_project_id_missing',
+          new Error('Expo push project ID is missing'),
+          { platform: dependencies.platform },
+        );
         return;
       }
 
@@ -817,15 +820,16 @@ export function createPushTokenRegistrationOrchestrator(
           revocationSecret: dependencies.generateRevocationSecret(),
           status: 'pending',
           fingerprint,
+          appVersion: dependencies.appVersion,
         };
         if (legacy && dependencies.replaceLegacyRegistration) {
           dependencies.replaceLegacyRegistration(candidate);
         } else {
           dependencies.setStoredRegistration(candidate);
         }
-      } else if ((candidate.fingerprint ?? '{}') !== fingerprint) {
-        // 同一个 token，附带字段变了（例如升级到支持来电推送的版本）：同一把撤销密钥重新登记。
-        candidate = { ...candidate, status: 'pending', fingerprint };
+      } else if ((candidate.fingerprint ?? '{}') !== fingerprint || candidate.appVersion !== dependencies.appVersion) {
+        // 升级原生版本或附带字段变化时，用同一把撤销密钥更新服务端能力信息。
+        candidate = { ...candidate, status: 'pending', fingerprint, appVersion: dependencies.appVersion };
         dependencies.setStoredRegistration(candidate);
       }
       if (candidate.status === 'registered' && candidate.deviceBindingVersion === 1) return;

@@ -205,6 +205,8 @@ export const NoteCardBubble: React.FC<NoteCardBubbleProps> = ({
               source={{ uri: note.coverUrl }}
               style={sNote.cover}
               contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
               // 封面来自对端可控的卡片 payload，尺寸无从预判；理由同 image-bubble。
               enforceEarlyResizing
             />

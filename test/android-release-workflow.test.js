@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { Buffer } = require('node:buffer');
 const { spawnSync } = require('node:child_process');
 
 const read = (relativePath) =>
@@ -171,11 +172,11 @@ test('release rollout documentation records the fail-closed operating contract',
   assert.match(documentation, /keystore[^\n]*backup/i);
 });
 
-test('Android release candidate metadata is v1.0.1', () => {
+test('Android release candidate metadata is v1.0.2', () => {
   const app = JSON.parse(read('app.json')).expo;
 
-  assert.equal(app.version, '1.0.1');
-  assert.equal(app.android.versionCode, 1_000_001);
+  assert.equal(app.version, '1.0.2');
+  assert.equal(app.android.versionCode, 1_000_002);
 });
 
 test('Android release workflow has one controlled release entry point', () => {
@@ -770,7 +771,7 @@ test('release validation CLI supports scoped and legacy validation', () => {
     '.github/scripts/validate-android-release.js',
   );
   const metadataEnv = {
-    RELEASE_TAG: 'v1.0.1',
+    RELEASE_TAG: 'v1.0.2',
     EXPO_PUBLIC_API_URL: 'https://api.windnote.test',
     EXPO_PUBLIC_MEDIA_ORIGINS: 'https://media.windnote.test',
   };

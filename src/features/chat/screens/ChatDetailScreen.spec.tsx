@@ -1,6 +1,7 @@
 import React from 'react';
 // jest.mock 工厂里只能引用 mock 前缀的外部变量。
-import { Alert, Keyboard, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
+import { Alert, FlatList, Keyboard, LayoutAnimation, Pressable as MockPressable, StyleSheet, Text as MockText, View as MockView } from 'react-native';
+import { router } from 'expo-router';
 import {
   act,
   fireEvent,
@@ -24,6 +25,7 @@ import i18n from '@/i18n';
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { API_URL } from '@/constants/config';
 import { createCollection } from '@/services/api/collections';
+import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
 
 /**
  * 聊天详情页的挂载冒烟:页面由二十来个 hooks 和几块组件拼成(见 chat-detail/),
@@ -340,6 +342,21 @@ function standaloneGroup(): ChatConversationDto {
   } as ChatConversationDto;
 }
 
+test('a shared pinned group notice appears below the header and disappears when turned off', async () => {
+  const group = { ...standaloneGroup(), notice: '完整群公告第一行\n第二行', noticePinned: true };
+  mockParams = { conversationID: GROUP, sourceID: GROUP, title: group.name!, conversationType: 'group', conversationKind: 'group' };
+  useChatStore.getState().upsertConversation(group);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    render(<ChatDetailScreen />);
+    expect(await screen.findByTestId('group-notice-banner')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: '完整群公告第一行 第二行' }));
+    expect(alert).toHaveBeenCalledWith(expect.any(String), group.notice);
+    act(() => useChatStore.getState().upsertConversation({ ...group, noticePinned: false }));
+    expect(screen.queryByTestId('group-notice-banner')).toBeNull();
+  } finally { alert.mockRestore(); }
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockFocused = true;
@@ -459,6 +476,43 @@ test('the floating composer leaves scrollable space for the latest message as it
     expect(StyleSheet.flatten(list.props.contentContainerStyle).paddingTop).toBe(height + 8);
     expect(StyleSheet.flatten(list.props.style).paddingBottom).toBeUndefined();
   }
+});
+
+test('seen unread messages do not become unread again when typing shrinks the viewport', async () => {
+  mockParams = { ...mockParams, initialUnreadCount: '2', initialReadHeight: '0' };
+  useChatStore.setState({
+    messagesByConversation: {
+      [CONVERSATION]: [message(1, PEER, '第一条'), message(2, PEER, '第二条')],
+      [GROUP]: [],
+    },
+  });
+  render(<ChatDetailScreen />);
+  await screen.findByTestId(E2E_TEST_IDS.chatUnreadJump, {}, SETTLE);
+
+  // Only the newest message is visible: the unseen start must still be offered.
+  await act(async () => screen.UNSAFE_getByType(FlatList).props.onViewableItemsChanged({
+    viewableItems: [{ item: { id: 'msg-2' }, isViewable: true, index: 0, key: 'msg-2' }],
+    changed: [],
+  }));
+  expect(screen.getByTestId(E2E_TEST_IDS.chatUnreadJump)).toBeTruthy();
+
+  // The full viewport reveals the unread start, so the prompt clears immediately.
+  await act(async () => screen.UNSAFE_getByType(FlatList).props.onViewableItemsChanged({
+    viewableItems: [
+      { item: { id: 'msg-2' }, isViewable: true, index: 0, key: 'msg-2' },
+      { item: { id: 'msg-1' }, isViewable: true, index: 1, key: 'msg-1' },
+    ],
+    changed: [],
+  }));
+  expect(screen.queryByTestId(E2E_TEST_IDS.chatUnreadJump)).toBeNull();
+
+  await act(async () => fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), '回复'));
+  // Opening the keyboard moves the already seen start outside the visible area.
+  await act(async () => screen.UNSAFE_getByType(FlatList).props.onViewableItemsChanged({
+    viewableItems: [{ item: { id: 'msg-2' }, isViewable: true, index: 0, key: 'msg-2' }],
+    changed: [],
+  }));
+  expect(screen.queryByTestId(E2E_TEST_IDS.chatUnreadJump)).toBeNull();
 });
 
 test('typing in the composer does not re-render the message bubbles', async () => {
@@ -703,7 +757,7 @@ test('a send refused before it reaches the screen keeps the draft', async () => 
   expect(screen.getByTestId(E2E_TEST_IDS.chatInput).props.value).toBe('留着我');
 });
 
-test('the left attachment button stays available with a draft and the right emoji button inserts into it', async () => {
+test('the attachment button stays available with a draft and the emoji button inserts into it', async () => {
   render(<ChatDetailScreen />);
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
 
@@ -733,12 +787,73 @@ test('the left attachment button stays available with a draft and the right emoj
   expect(sendTextMessage).not.toHaveBeenCalled();
 });
 
+test.each(['emoji', 'attachment'])('opening the %s panel animates layout without fading newly mounted views', async (panel) => {
+  const animate = jest.spyOn(LayoutAnimation, 'configureNext');
+  try {
+    render(<ChatDetailScreen />);
+    await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+    animate.mockClear();
+    await act(async () => fireEvent.press(screen.getByLabelText(`chat.detail.${panel}PanelLabel`)));
+    expect(animate).toHaveBeenCalledWith({
+      duration: 300,
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+    });
+  } finally {
+    animate.mockRestore();
+  }
+});
+
+test.each(['emoji', 'attachment'])('%s panels replace keyboard avoidance while the native keyboard is still closing', async (panel) => {
+  const visible = jest.spyOn(Keyboard, 'isVisible').mockReturnValue(true);
+  const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+  try {
+    render(<ChatDetailScreen />);
+    const input = await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+    expect(screen.UNSAFE_getByType(KeyboardAvoidingContainer).props.enabled).toBe(true);
+    await act(async () => fireEvent.press(screen.getByLabelText(`chat.detail.${panel}PanelLabel`)));
+    expect(dismiss).toHaveBeenCalled();
+    // Dismissal is asynchronous: no keyboard hide event has arrived yet.
+    expect(Keyboard.isVisible()).toBe(true);
+    expect(screen.UNSAFE_getByType(KeyboardAvoidingContainer).props.enabled).toBe(false);
+    fireEvent(input, 'focus');
+    expect(screen.UNSAFE_getByType(KeyboardAvoidingContainer).props.enabled).toBe(true);
+  } finally {
+    visible.mockRestore();
+    dismiss.mockRestore();
+  }
+});
+
+test.each([
+  ['notes', 'share-picker', { type: 'note' }],
+  ['friendCard', 'share-picker', { type: 'friend' }],
+  ['favorites', 'share-picker', { type: 'favorite', conversationID: CONVERSATION }],
+  ['quickReply', 'share-picker', { type: 'quick-reply' }],
+  ['transfer', 'transfer-composer', { recipientId: PEER, recipientName: '对方', recipientAvatar: '' }],
+  ['mediaHub', null, null],
+] as const)('opening the %s tool does not apply a global layout animation to the destination', async (label, route, params) => {
+  const animate = jest.spyOn(LayoutAnimation, 'configureNext');
+  try {
+    render(<ChatDetailScreen />);
+    await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
+    await act(async () => fireEvent.press(screen.getByLabelText('chat.detail.attachmentPanelLabel')));
+    animate.mockClear();
+    await act(async () => fireEvent.press(screen.getByText(`chat.attachments.${label}`)));
+    expect(animate).not.toHaveBeenCalled();
+    expect(screen.queryByText('chat.attachments.notes')).toBeNull();
+    if (route) {
+      expect(router.push).toHaveBeenCalledWith({ pathname: `/(tabs)/messages/${route}`, params });
+    }
+  } finally {
+    animate.mockRestore();
+  }
+});
+
 test('with a draft the send button sits at the far right, after the emoji button', async () => {
   render(<ChatDetailScreen />);
   await screen.findByTestId(E2E_TEST_IDS.chatInput, {}, SETTLE);
   fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), '你好');
 
-  const composerIcons = ['icon:add', 'icon:mic-outline', 'icon:happy-outline', 'icon:arrow-up'];
+  const composerIcons = ['icon:mic-outline', 'icon:happy-outline', 'icon:add', 'icon:arrow-up'];
   const order = screen
     .getAllByText(/^icon:/)
     .map((node) => String(node.props.children))
@@ -851,4 +966,19 @@ test.each(['direct', 'muted'])('avatar mentions are unavailable in a %s chat', a
   render(<ChatDetailScreen />);
   const avatar = await screen.findByTestId('avatar:msg-1', {}, SETTLE);
   expect(avatar.props.onLongPress).toBeUndefined();
+});
+
+test('scrolling back in history shows a button that returns to the latest message', async () => {
+  const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => undefined);
+  const view = render(<ChatDetailScreen />);
+  try {
+    await screen.findByText('received:在吗', {}, SETTLE);
+    expect(screen.queryByTestId('chat-jump-to-latest')).toBeNull();
+    fireEvent.scroll(screen.getByTestId(E2E_TEST_IDS.chatMessageList), {
+      nativeEvent: { contentOffset: { x: 0, y: 800 }, contentSize: { width: 390, height: 2000 }, layoutMeasurement: { width: 390, height: 600 } },
+    });
+    fireEvent.press(screen.getByTestId('chat-jump-to-latest'));
+    expect(scroll).toHaveBeenCalledWith({ offset: 0, animated: true });
+    expect(screen.queryByTestId('chat-jump-to-latest')).toBeNull();
+  } finally { view.unmount(); scroll.mockRestore(); }
 });

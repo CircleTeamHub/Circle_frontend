@@ -165,6 +165,7 @@ import {
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
+import { recordMetric } from '@/observability/metrics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
@@ -938,13 +939,16 @@ export default function EditNoteScreen() {
     setUploadingSection(null);
   }, [invalidateUploadOwnership]);
 
-  const buildCurrentDraftRecord = useCallback((): NoteEditorDraftRecord => {
-    const currentComposerBlocks = composerBlocksRef.current;
+  const buildCurrentDraftRecord = useCallback((
+    currentComposerBlocks = composerBlocksRef.current,
+    currentTextById = textBlocksByIdRef.current,
+    currentOwners = mediaOwnerByClientIdRef.current,
+  ): NoteEditorDraftRecord => {
     const currentTextBlocks = currentComposerBlocks
       .filter((block) => block.kind === 'text')
       .map((block) => ({
         id: block.id,
-        content: getTextOnlyBlocks(textBlocksByIdRef.current[block.id] ?? []),
+        content: getTextOnlyBlocks(currentTextById[block.id] ?? []),
       }));
     const currentBlocks = currentTextBlocks.flatMap((block) => block.content);
     const mediaBlocks = currentComposerBlocks.flatMap((block) => {
@@ -959,7 +963,7 @@ export default function EditNoteScreen() {
         id: block.id,
         target,
         objectKeys: items
-          .filter((item) => getNoteComposerMediaOwner(currentComposerBlocks, target, item.type, mediaOwnerByClientIdRef.current[item.clientId]) === block.id)
+          .filter((item) => getNoteComposerMediaOwner(currentComposerBlocks, target, item.type, currentOwners[item.clientId]) === block.id)
           .map((item) => item.objectKey)
           .filter((key): key is string => Boolean(key)),
       }];
@@ -1018,12 +1022,12 @@ export default function EditNoteScreen() {
         .map((item) => item.objectKey)
         .filter((key): key is string => Boolean(key)),
       composerBlocks: currentComposerBlocks,
-      textBlocksById: { ...textBlocksByIdRef.current },
+      textBlocksById: { ...currentTextById },
       mediaItems: uploadedMediaItems.filter((item) => mediaItems.includes(item)),
       showcaseItems: uploadedMediaItems.filter((item) => showcaseItems.includes(item)),
       audioItems: [...audioItems],
       mediaOwnerByClientId: Object.fromEntries(
-        Object.entries(mediaOwnerByClientIdRef.current).filter(([clientId]) => uploadedClientIds.has(clientId)),
+        Object.entries(currentOwners).filter(([clientId]) => uploadedClientIds.has(clientId)),
       ),
       contactItems,
       groupCardItems,
@@ -1110,7 +1114,8 @@ export default function EditNoteScreen() {
       .then((groups) => {
         if (!cancelled) setAvailableGroups(groups);
       })
-      .catch(() => {
+      .catch((error) => {
+        reportHandledFailure('noteEditor', 'groupsLoad', error);
         if (!cancelled) setAvailableGroups([]);
       });
 
@@ -1197,6 +1202,8 @@ export default function EditNoteScreen() {
         setTitle(note.title);
         existingSectionsRef.current = note.sections ?? null;
 
+        // 只编辑库里真实存着的名片：旧收藏补出来的来源发送方/群未必是本人好友或
+        // 仍在的群，带上就会被服务端名片校验整单拒绝（列表/浏览页照旧展示来源兜底）。
         const normalizedSections = buildNoteSections(note);
         const rawBlocks = note.sections?.text?.contentJson ?? note.contentJson ?? [];
         const savedComposerBlocks = readNoteComposerBlocks(rawBlocks);
@@ -1207,6 +1214,13 @@ export default function EditNoteScreen() {
           normalizedSections as unknown as Partial<NoteSections>,
           true,
         )).filter((block) => block.kind !== 'title'), normalizedSections);
+        // 收藏时服务端写入的默认名片可能没有对应的旧编辑区块。
+        for (const kind of ['contact', 'group'] as const) {
+          const items = kind === 'contact' ? normalizedSections.contacts.items : normalizedSections.groups.items;
+          if (items.length && !normalizedComposerBlocks.some((block) => block.kind === kind)) {
+            normalizedComposerBlocks.push({ id: `collected-${kind}`, kind });
+          }
+        }
         setComposerBlocks(normalizedComposerBlocks);
         composerIdRef.current = normalizedComposerBlocks.length;
         const loaded = stripNoteComposerMetadata(normalizedSections.text.contentJson ?? []);
@@ -1391,7 +1405,8 @@ export default function EditNoteScreen() {
             record = refreshLocalNoteDraftMedia(record, remoteRecord);
           }
         }
-      } catch {
+      } catch (error) {
+        reportHandledFailure('noteEditor', 'draftLoad', error);
         // Keep the local snapshot available while offline.
       }
       if (isLocalNoteDraftDeleted(currentUser.id, editorDraftId)) record = null;
@@ -1464,8 +1479,14 @@ export default function EditNoteScreen() {
     textStatsStore,
   ]);
 
-  // Composer/text refs change without changing the builder's identity.
-  const currentDraftFingerprint = draftFingerprint(buildCurrentDraftRecord());
+  // 正文/区块引用也会独立更新；仅弹层、保存进度等界面状态变化时复用快照。
+  const draftTextSnapshot = textBlocksByIdRef.current;
+  const draftBlockSnapshot = composerBlocksRef.current;
+  const draftOwnerSnapshot = mediaOwnerByClientIdRef.current;
+  const currentDraftFingerprint = useMemo(
+    () => draftFingerprint(buildCurrentDraftRecord(draftBlockSnapshot, draftTextSnapshot, draftOwnerSnapshot)),
+    [buildCurrentDraftRecord, draftTextSnapshot, draftBlockSnapshot, draftOwnerSnapshot],
+  );
   const hasUndurableRecording = audioItems.some((item) => item.uploadStatus !== 'UPLOADED' && item.clientId.startsWith('recording:') && (!item.localRecordingId || !item.previewUri));
   const isDraftDirty = Boolean(
     draftHydratedKey === draftRouteKey &&
@@ -1488,7 +1509,8 @@ export default function EditNoteScreen() {
     if (record.pendingSubmission) {
       // The server may already have consumed this draft. Keep the recovery
       // snapshot locally; never overwrite it with a subsequent draft PUT.
-      try { saveLocalNoteDraft(currentUser.id, record); return true; } catch { return false; }
+      try { saveLocalNoteDraft(currentUser.id, record); return true; }
+      catch (error) { reportHandledFailure('noteEditor', 'draftLocalSave', error); return false; }
     }
     const initialFingerprint = draftFingerprint(record);
     if (!hasUndurableRecording && baselineFingerprintRef.current === initialFingerprint && draftPersistedFingerprintRef.current === initialFingerprint) return true;
@@ -1507,12 +1529,16 @@ export default function EditNoteScreen() {
     const prepareAndSaveLocal = async () => {
       if (!isCurrentSession() || navigationRequestedRef.current) return false;
       const restored = new Map<string, EditorNoteMediaDraft>();
+      let recordingPersistenceFailed = false;
       for (const item of record.audioItems) {
         if (item.uploadStatus === 'UPLOADED' || !item.clientId.startsWith('recording:') || item.localRecordingId || !item.previewUri) continue;
         try {
           const stored = await persistNoteRecording(currentUser.id, item.previewUri);
           restored.set(item.clientId, { ...item, localRecordingId: stored.localRecordingId, previewUri: stored.uri });
-        } catch { /* A failed upload can only be saved after its recording is durable. */ }
+        } catch (error) {
+          recordingPersistenceFailed = true;
+          reportHandledFailure('noteEditor', 'audioLocalStorage', error);
+        }
       }
       const latest = buildCurrentDraftRecordRef.current();
       const retained = new Set(latest.audioItems.map((item) => item.clientId));
@@ -1538,7 +1564,11 @@ export default function EditNoteScreen() {
         saveLocalNoteDraft(currentUser.id, record);
         markPersisted(recordFingerprint);
         return true;
-      } catch { return false; }
+      } catch (error) {
+        // A missing durable recording was already reported at the failed copy.
+        if (!recordingPersistenceFailed) reportHandledFailure('noteEditor', 'draftLocalSave', error);
+        return false;
+      }
     };
     // Local snapshots remain fast; remote writes keep only the latest queued
     // snapshot. Deferred copies are fenced by account and route.
@@ -1552,7 +1582,8 @@ export default function EditNoteScreen() {
         if (!isCurrentSession() || navigationRequestedRef.current) return false;
         if (!hasLocalRecording) markPersisted(draftFingerprint(record));
         return !hasLocalRecording;
-      } catch {
+      } catch (error) {
+        reportHandledFailure('noteEditor', 'draftRemoteSave', error);
         return false;
       }
     });
@@ -1666,7 +1697,7 @@ export default function EditNoteScreen() {
               if (!isCurrentEditor()) return;
               if (currentUser?.id) {
                 try { if (!stageLocalNoteDraftDeletion(currentUser.id, editorDraftId, buildCurrentDraftRecord().audioItems.flatMap((item) => item.localRecordingId ? [item.localRecordingId] : []))) return; }
-                catch { Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
+                catch (error) { reportHandledFailure('noteEditor', 'draftDiscard', error); Alert.alert(t('common.errorOccurred'), t('notes.drafts.deleteFailed')); return; }
               } else removeLocalNoteDraft(currentUser?.id, editorDraftId);
               draftRemoteQueue.cancel();
               completeNavigation(action);
@@ -1678,7 +1709,7 @@ export default function EditNoteScreen() {
                   if (!isCurrentEditor()) return;
                   await deleteNoteDraft(editorDraftId);
                   if (isCurrentEditor()) confirmNoteDraftDeletion(currentUser.id, editorDraftId, cleanedRecordings);
-                } catch { /* DraftsScreen retains and retries both cleanup and server deletion. */ }
+                } catch (error) { reportHandledFailure('noteEditor', 'draftDeleteCleanup', error); }
               });
             },
           },
@@ -1906,8 +1937,8 @@ export default function EditNoteScreen() {
             objectKey: presign.key,
             width: asset.width ?? undefined,
             height: asset.height ?? undefined,
-            mimeType: contentType,
-            size: asset.fileSize ?? undefined,
+            mimeType: presign.requiredHeaders['Content-Type'],
+            size: Number(presign.requiredHeaders['Content-Length']),
             durationMs:
               isVideo && typeof asset.duration === 'number'
                 ? Math.round(asset.duration)
@@ -2246,10 +2277,10 @@ export default function EditNoteScreen() {
         try {
           const stored = await persistNoteRecording(ownerId, localUri);
           item = { ...item, localRecordingId: stored.localRecordingId, previewUri: stored.uri };
-        } catch {
+        } catch (error) {
           // Keep the cache recording playable. Saving cannot succeed until a
           // later durable copy or the upload succeeds.
-          reportHandledFailure('noteEditor', 'audioLocalStorage', new Error('Recording storage failed'));
+          reportHandledFailure('noteEditor', 'audioLocalStorage', error);
         }
       }
       if (!isCurrentStop()) {
@@ -2872,16 +2903,22 @@ export default function EditNoteScreen() {
       const completedAt = diagnosticNow();
       logClientDiagnostic('note.save.phase', { stage: savePhase, durationMs: Math.max(0, Math.round(completedAt - phaseStartedAt)) });
       logClientDiagnostic('note.save.completed', { durationMs: Math.max(0, Math.round(completedAt - saveStartedAt)) });
+      recordMetric('app.operation.duration', Math.max(0, completedAt - saveStartedAt), {
+        operation: isEdit ? 'noteUpdate' : 'noteCreate', outcome: 'success',
+      });
       completeNavigation(undefined, true);
     } catch (error) {
       if (saveGenerationRef.current !== saveGeneration) return;
       logClientDiagnostic('note.save.failed', { stage: savePhase, durationMs: Math.max(0, Math.round(diagnosticNow() - phaseStartedAt)) });
+      recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - saveStartedAt), {
+        operation: isEdit ? 'noteUpdate' : 'noteCreate', outcome: 'failed',
+      });
       if (requestStarted && !retryingPending && isDefinitiveNoteSubmissionFailure(error)) {
         try {
           saveLocalNoteDraft(currentUser?.id, { ...buildCurrentDraftRecord(), pendingSubmission: undefined });
           pendingSubmissionRef.current = null;
           setPendingSubmission(null);
-        } catch { /* Retain the recovery marker until it can be cleared durably. */ }
+        } catch (storageError) { reportHandledFailure('noteEditor', 'draftRecoveryClear', storageError); }
       }
       saveInFlightRef.current = false;
       navigationRequestedRef.current = false;
@@ -3544,7 +3581,7 @@ export default function EditNoteScreen() {
               return (
                 <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
                   {avatar ? (
-                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" />
+                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                   ) : (
                     <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
                       <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
@@ -3587,7 +3624,7 @@ export default function EditNoteScreen() {
               return (
                 <View key={item.id} style={[s.cardRow, d.locationPreviewCard]}>
                   {avatar ? (
-                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" />
+                    <Image source={{ uri: avatar }} style={s.cardRowAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                   ) : (
                     <View style={[s.cardRowAvatar, s.cardRowAvatarFallback, { backgroundColor: colors.primaryLight }]}>
                       <Ionicons name="people-outline" size={19} color={colors.iconAccent} />
@@ -3638,7 +3675,8 @@ export default function EditNoteScreen() {
                         source={tile.url}
                         style={[s.locationMapTile, { left: tile.left, top: tile.top }]}
                         contentFit="cover"
-                        transition={150}
+                        cachePolicy="memory-disk"
+                        transition={0}
                       />
                     ))}
                     <View pointerEvents="none" style={s.locationMapMarker}>
@@ -4275,7 +4313,7 @@ export default function EditNoteScreen() {
                         accessibilityState={{ checked: selected }}
                       >
                         {item.avatarUrl ? (
-                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" />
+                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                         ) : (
                           <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
                             <Ionicons name="person-outline" size={19} color={colors.iconAccent} />
@@ -4311,7 +4349,7 @@ export default function EditNoteScreen() {
                         accessibilityState={{ checked: selected }}
                       >
                         {item.avatarUrl ? (
-                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" />
+                          <Image source={{ uri: item.avatarUrl }} style={s.cardPickerAvatar} contentFit="cover" cachePolicy="memory-disk" transition={0} />
                         ) : (
                           <View style={[s.cardPickerAvatar, s.cardPickerAvatarFallback, { backgroundColor: colors.primaryLight }]}>
                             <Ionicons name="people-outline" size={19} color={colors.iconAccent} />

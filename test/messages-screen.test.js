@@ -519,8 +519,16 @@ test('the conversation FlatList keeps a bounded render window', () => {
     path.join(process.cwd(), 'src/features/messages/screens/MessagesScreen.tsx'),
     'utf8',
   );
-  const list = source.slice(source.indexOf('<FlatList'));
-  const props = list.slice(0, list.indexOf('/>'));
+  const ts = require('typescript');
+  const file = ts.createSourceFile('MessagesScreen.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let props;
+  function visit(node) {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(file) === 'FlatList') {
+      props = node.attributes.getText(file);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(file);
   assert.match(props, /initialNumToRender=\{\d+\}/);
   assert.match(props, /maxToRenderPerBatch=\{\d+\}/);
   assert.match(props, /windowSize=\{\d+\}/);

@@ -141,7 +141,7 @@ function makeHarness(options = {}) {
   const orchestrator = createPushTokenRegistrationOrchestrator({
     platform: options.platform ?? 'ios',
     ...(options.provider ? { provider: options.provider } : {}),
-    appVersion: '1.0.0',
+    appVersion: options.appVersion ?? '1.0.0',
     getProjectId: () =>
       Object.prototype.hasOwnProperty.call(options, 'projectId')
         ? options.projectId
@@ -506,6 +506,7 @@ test('first native run requests permission and registers a persisted pending sec
 
 test('notification channels are prepared before the permission prompt, and a failure does not block registration', async () => {
   const order = [];
+  const channelError = new Error('channel api unavailable');
   const notifications = {
     IosAuthorizationStatus: { PROVISIONAL: 'provisional' },
     getPermissionsAsync: async () => {
@@ -525,7 +526,7 @@ test('notification channels are prepared before the permission prompt, and a fai
     prepareNotifications: async (module) => {
       assert.equal(module, notifications);
       order.push('prepare');
-      throw new Error('channel api unavailable');
+      throw channelError;
     },
   });
 
@@ -534,9 +535,11 @@ test('notification channels are prepared before the permission prompt, and a fai
   assert.deepEqual(order, ['prepare', 'getPermissions', 'requestPermissions']);
   assert.equal(harness.registerCalls.length, 1);
   assert.deepEqual(
-    harness.diagnostics.map(([event]) => event),
+    harness.failures.map(([event]) => event),
     ['push_notification_channels_failed'],
   );
+  assert.equal(harness.failures[0][1], channelError);
+  assert.deepEqual({ ...harness.failures[0][2] }, { platform: 'android' });
 });
 
 test('permanently denied permission is not requested or registered', async () => {
@@ -574,7 +577,7 @@ test('completed denial prompts once per user, while a request exception may retr
   assert.equal(requestCalls, 2);
 });
 
-test('web never loads native registration and missing project id stops with a diagnostic', async () => {
+test('web never loads native registration and missing Expo project ID reports the blocked registration', async () => {
   const web = makeHarness({ platform: 'web' });
   web.orchestrator.flushPendingRevocations();
   await web.orchestrator.sync(enabled());
@@ -584,7 +587,10 @@ test('web never loads native registration and missing project id stops with a di
   const missing = makeHarness({ projectId: null });
   await missing.orchestrator.sync(enabled());
   assert.equal(missing.registerCalls.length, 0);
-  assert.equal(missing.diagnostics[0][0], 'push_token_project_id_missing');
+  assert.equal(missing.failures.length, 1);
+  assert.equal(missing.failures[0][0], 'push_token_project_id_missing');
+  assert.equal(missing.failures[0][1].message, 'Expo push project ID is missing');
+  assert.deepEqual({ ...missing.failures[0][2] }, { platform: 'ios' });
 });
 
 test('logout returns immediately during a hung PUT and persists a revocation tombstone', async () => {
@@ -1273,7 +1279,21 @@ test('re-registers the same token once when its call-push declaration changes', 
   assert.equal(harness.getRevocations().length, 0);
 });
 
-test('treats registrations stored before extras existed as declaring nothing', async () => {
+test('an app upgrade refreshes the server version for an unchanged push token once', async () => {
+  const input = { isAuthenticated: true, userId: 'user-1', pushEnabled: true };
+  const previous = makeHarness({ appVersion: '1.0.1' });
+  await previous.orchestrator.sync(input);
+  const upgraded = makeHarness({ appVersion: '1.0.2', stored: previous.getStored() });
+  await upgraded.orchestrator.sync(input);
+  assert.equal(upgraded.registerCalls.length, 1);
+  assert.equal(upgraded.registerCalls[0].appVersion, '1.0.2');
+  assert.equal(upgraded.registerCalls[0].revocationSecret, previous.getStored().revocationSecret);
+  assert.equal(upgraded.getRevocations().length, 0);
+  await upgraded.orchestrator.sync(input);
+  assert.equal(upgraded.registerCalls.length, 1);
+});
+
+test('refreshes a registration with an unknown app version once without adding call capabilities', async () => {
   const harness = makeHarness({
     stored: {
       token: 'ExponentPushToken[default]',
@@ -1291,8 +1311,11 @@ test('treats registrations stored before extras existed as declaring nothing', a
     pushEnabled: true,
   });
 
-  // 升级后不该让每台设备都无谓地重新登记一次。
-  assert.equal(harness.registerCalls.length, 0);
+  assert.equal(harness.registerCalls.length, 1);
+  assert.equal(harness.registerCalls[0].appVersion, '1.0.0');
+  assert.equal(Object.hasOwn(harness.registerCalls[0], 'callPushVersion'), false);
+  await harness.orchestrator.sync({ isAuthenticated: true, userId: 'user-1', pushEnabled: true });
+  assert.equal(harness.registerCalls.length, 1);
 });
 
 test('the default registrar declares call push only when the JPush token carries calls', () => {

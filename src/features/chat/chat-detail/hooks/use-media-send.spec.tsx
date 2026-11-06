@@ -60,7 +60,7 @@ beforeEach(() => {
   };
 });
 
-test('correlates the main image transfer while keeping its thumbnail independent', async () => {
+test('correlates both image and thumbnail transfers with the same media bubble', async () => {
   renderHook(() => useMediaSend(params));
   await act(async () => params.reuploadPendingMediaRef.current!({
     deliveryId: 'image-delivery',
@@ -70,14 +70,14 @@ test('correlates the main image transfer while keeping its thumbnail independent
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
     'https://upload.test/file', 'image/jpeg', 'file:///image.jpg', { 'If-None-Match': '*' }, undefined, { progressKey: 'image-delivery' },
   );
-  expect(uploadChatImageThumbnail).toHaveBeenCalledWith('file:///image.jpg', 1200, 'image.jpg', expect.any(Function));
+  expect(uploadChatImageThumbnail).toHaveBeenCalledWith('file:///image.jpg', 1200, 'image.jpg', expect.any(Function), 'image-delivery');
   const beforeUpload = jest.mocked(uploadChatImageThumbnail).mock.calls[0][3]!;
   sessionCurrent = false;
   expect(beforeUpload).toThrow('session changed');
   expect(assertMediaSendSessionCurrent).toHaveBeenLastCalledWith('image-delivery');
 });
 
-test('preserves video timeout and main transfer identity while keeping its poster independent', async () => {
+test('preserves video timeout and correlates the poster with the same media bubble', async () => {
   renderHook(() => useMediaSend(params));
   await act(async () => params.reuploadPendingMediaRef.current!({
     deliveryId: 'video-delivery',
@@ -87,7 +87,7 @@ test('preserves video timeout and main transfer identity while keeping its poste
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith(
     'https://upload.test/file', 'video/mp4', 'file:///video.mp4', { 'If-None-Match': '*' }, VIDEO_UPLOAD_TIMEOUT_MS, { progressKey: 'video-delivery' },
   );
-  expect(uploadChatVideoPoster).toHaveBeenCalledWith('file:///video.mp4', 42, 'video.mp4', 'chat', expect.any(Function));
+  expect(uploadChatVideoPoster).toHaveBeenCalledWith('file:///video.mp4', 42, 'video.mp4', 'chat', expect.any(Function), 'video-delivery');
   const beforeUpload = jest.mocked(uploadChatVideoPoster).mock.calls[0][4]!;
   sessionCurrent = false;
   expect(beforeUpload).toThrow('session changed');
@@ -155,7 +155,7 @@ test('uploads the prepared MP4 and sends its metadata while preserving the origi
   await act(async () => params.reuploadPendingMediaRef.current!(retryVideo as never));
   expect(requestUploadPresign).toHaveBeenCalledWith(expect.objectContaining({ filename: 'original.mp4', contentType: 'video/mp4', fileUri: compressedAsset.uri }));
   expect(uploadLocalFileToPresignedUrl).toHaveBeenCalledWith('https://upload.test/file', 'video/mp4', compressedAsset.uri, expect.any(Object), VIDEO_UPLOAD_TIMEOUT_MS, { progressKey: retryVideo.deliveryId });
-  expect(uploadChatVideoPoster).toHaveBeenCalledWith(compressedAsset.uri, 42, 'original.mp4', 'chat', expect.any(Function));
+  expect(uploadChatVideoPoster).toHaveBeenCalledWith(compressedAsset.uri, 42, 'original.mp4', 'chat', expect.any(Function), retryVideo.deliveryId);
   expect(sendVideoMessage).toHaveBeenCalledWith(expect.objectContaining({ localUri: retryVideo.uri, width: 1280, height: 720, size: 1_000_000, duration: 42 }));
   expect(cleanup).toHaveBeenCalledTimes(1);
 });

@@ -614,6 +614,28 @@ export interface ChatMemberSilenceDto {
   silencedUntil: string | null;
 }
 
+/** 「长期未登录」可选天数,与后端 ABNORMAL_INACTIVE_DAY_OPTIONS 逐值镜像(契约测试守住)。 */
+export const ABNORMAL_INACTIVE_DAY_OPTIONS = [7, 30, 90] as const;
+export type AbnormalInactiveDays = (typeof ABNORMAL_INACTIVE_DAY_OPTIONS)[number];
+export type ChatAbnormalMemberReason = 'INACTIVE' | 'LOW_CREDIT';
+
+/** 异常成员一行(GET /chat/conversations/:id/abnormal-members):只有判定结果,展示信息用成员目录补。 */
+export interface ChatAbnormalMemberDto {
+  userId: string;
+  reasons: ChatAbnormalMemberReason[];
+  /** 命中「长期未登录」且有在线记录时的最近在线时刻。 */
+  lastActiveAt: string | null;
+  /** 命中「信誉值低」时的分数;正常成员的分数不下发。 */
+  creditScore: number | null;
+}
+
+export interface ChatAbnormalMembersDto {
+  inactiveDays: number;
+  creditThreshold: number;
+  /** 只含本人有权移出的成员(管理员看不到其他管理员/群主)。 */
+  members: ChatAbnormalMemberDto[];
+}
+
 /**
  * 群事件账本(群日志)的种类 —— 与后端 ChatGroupEventKind 逐项镜像。
  * 未知种类(后端先发新版本)由 groupEventText 兜底成「群聊活动」,不会渲染空行。
@@ -646,6 +668,13 @@ export interface ChatGroupEventDto {
   targets: ChatSenderInfo[];
   /** {name} / {role} / {durationSec} / {via} / {status, source, inviterId, blacklisted}。 */
   payload: Record<string, unknown> | null;
+  review?: {
+    status: string;
+    source: string;
+    inviter: ChatSenderInfo | null;
+    operator: ChatSenderInfo | null;
+    blacklisted: boolean;
+  };
   createdAt: string;
 }
 
@@ -713,8 +742,10 @@ export interface ChatConversationDto {
    * 显示未设置、改名 prompt 的默认值也是空的。成员表只当兜底。
    */
   myAlias?: string | null;
-  /** 独立群聊公告;圈子群走圈子详情。 */
+  /** 群公告；圈子群由服务端映射圈子简介。 */
   notice?: string | null;
+  /** 公告是否在群聊天顶部滚动播报。旧服务端缺省为关闭。 */
+  noticePinned?: boolean;
   /** 独立群聊头像;圈子群走 circle.avatarUrl。 */
   avatarUrl?: string | null;
   /** 独立群聊成员上限;圈子群走圈子详情。 */

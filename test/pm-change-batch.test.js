@@ -95,7 +95,8 @@ test('group chat offers local and two-sided deletion plus management log access'
     api,
     /operation\.targetHeight !== undefined[\s\S]{0,80}targetHeight: operation\.targetHeight/,
   );
-  assert.match(info, /groupLog/);
+  // 群日志入口在群管理页(只有群主/管理员进得去)。
+  assert.match(read('src/features/chat/screens/GroupManageScreen.tsx'), /getGroupLogHref/);
   assert.match(messages, /deleteForEveryone/);
   // 群日志读的是独立于聊天记录的事件账本,不再从 system 消息里筛。
   assert.match(logScreen, /fetchChatGroupEvents/);
@@ -106,7 +107,7 @@ test('group chat offers local and two-sided deletion plus management log access'
 test('new messages keep sound and badge feedback wired', () => {
   assert.match(
     read('src/features/notifications/hooks/use-notification-feedback.ts'),
-    /notification\.wav/,
+    /notification_swift_gesture\.wav/,
   );
   assert.match(read('src/chat-core/app-badge.ts'), /setBadgeCountAsync/);
 });

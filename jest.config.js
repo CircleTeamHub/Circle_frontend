@@ -21,12 +21,14 @@ const nestedWorktreeCheckouts = [
 
 module.exports = {
   preset: 'jest-expo',
+  setupFilesAfterEnv: ['<rootDir>/test/jest/setup.js'],
   testMatch: ['**/*.spec.tsx'],
   // Replaces jest's default, so '/node_modules/' has to be repeated here.
   testPathIgnorePatterns: ['/node_modules/', ...nestedWorktreeCheckouts],
   // Keeps the worktree copies out of the haste map, which also silences the
   // "Haste module naming collision" warnings their package.json files cause.
   modulePathIgnorePatterns: [...nestedWorktreeCheckouts],
+  setupFiles: ['<rootDir>/test/jest/native-storage.setup.js'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@sentry/react-native$': '<rootDir>/test/jest/sentry-react-native.mock.js',

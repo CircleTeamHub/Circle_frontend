@@ -13,11 +13,11 @@ import {
   useNavigationContainerRef,
   useSegments,
 } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 // 必须在入口文件最早引入，启用动画引擎。
 import 'react-native-reanimated';
-import { ActivityIndicator, NativeModules, Platform, View } from 'react-native';
+import { ActivityIndicator, AppState, NativeModules, Platform, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { installAlertBridge } from '@/utils/alert-bridge';
 import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
@@ -34,6 +34,7 @@ import {
 import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
 import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate';
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
+import { SessionRecoveryPrompt } from '@/components/app/session-recovery-prompt';
 import { MemberNameAnimationProvider } from '@/components/ui/member-name-animation';
 import { AccountSwitcherSheet } from '@/features/profile/components/account-switcher-sheet';
 import { useAccountSwitcherStore } from '@/stores/accountSwitcherStore';
@@ -44,8 +45,11 @@ import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { LoginApprovalHost } from '@/features/security/components/LoginApprovalHost';
 import {
   registerDeviceIdProvider,
+  registerRequestTraceHooks,
   registerStableDeviceIdProvider,
 } from '@/services/api/client';
+import { diagnosticNow } from '@/observability/http-diagnostics';
+import { createRequestTraceHooks } from '@/observability/request-trace';
 import { getDeviceId, getStableDeviceId } from '@/services/auth/device-id';
 import { AppBlurTarget } from '@/components/app/app-blur-target';
 import { AppDialogHost } from '@/components/app/app-dialog-host';
@@ -59,8 +63,10 @@ import {
   captureSentryTestError,
   registerSentryNavigationContainer,
   setSentryUserId,
+  setSentryRoute,
 } from '@/observability/sentry';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { recordSessionDiagnostic } from '@/observability/session-diagnostics';
 import { devWarn } from '@/utils/dev-log';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
@@ -88,6 +94,24 @@ silenceDomBridgeRejection();
 // 每个 API 请求带上本机设备 ID（陌生设备登录验证），要早于任何请求注册。
 registerDeviceIdProvider(getDeviceId);
 registerStableDeviceIdProvider(getStableDeviceId);
+
+// 请求卡住时记下「卡在哪一步」，随超时上报带走（见 observability/request-trace）。
+// 只在原生端：web 的 fetch 不经过 RN 的 XMLHttpRequest。
+if (Platform.OS !== 'web') {
+  registerRequestTraceHooks(
+    createRequestTraceHooks({
+      now: diagnosticNow,
+      getAppState: () => AppState.currentState ?? 'unknown',
+      // 进程级常驻：随 app 生命周期存在，不需要移除。
+      subscribeAppState: (listener) => {
+        AppState.addEventListener('change', listener);
+      },
+      setInterval: (callback, ms) => setInterval(callback, ms),
+      clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
+      xhrPrototype: (globalThis.XMLHttpRequest?.prototype ?? null) as unknown as Record<string, unknown> | null,
+    }),
+  );
+}
 
 async function registerLiveKitGlobals() {
   if (!NativeModules.WebRTCModule) {
@@ -159,7 +183,8 @@ function ensureStartupBootstrap(): Promise<void> {
       await initEncryptedStorage();
       await migrateFromAsyncStorage();
     } catch (err) {
-      reportHandledFailure('startup', 'storageInit', err);
+      const diagnosticId = recordSessionDiagnostic('startup-storage-failed');
+      reportHandledFailure('startup', 'storageInit', err, { diagnosticId });
     }
     // 认证 hydration 决定首屏该进主界面还是登录页，必须在启动门内完成。
     await rehydratePersistedStore('auth', useAuthStore);
@@ -246,6 +271,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
   );
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const accountSwitching = useAccountSwitcherStore((state) => state.switching);
+  const sessionRecoveryRequired = useAuthStore((state) => state.refreshUncertain);
   const addingAccount = useAccountSwitcherStore((state) => state.addingAccount);
   const { colors } = useTheme();
   const decision = getAuthRouteDecision({
@@ -255,6 +281,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
     hasCachedSession,
     onboardingRequired,
     accountSwitching,
+    sessionRecoveryRequired,
     addingAccount,
   });
 
@@ -293,13 +320,26 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
 // RootLayout：应用真正的根组件
 // 职责：后台初始化本地存储和认证状态，挂载主题 Provider 与路由结构。
 function RootLayout() {
-  const sentryUserId = useAuthStore((state) => state.user?.id ?? null);
+  const sentryRoute = `/${useSegments().join('/')}`;
   // 导航追踪：冷启动指标和 XHR span 都要挂在导航 transaction 上才会被发出。
   const navigationRef = useNavigationContainerRef();
 
   useEffect(() => {
-    let sessionEpoch = useAuthStore.getState().sessionEpoch;
+    setSentryRoute(sentryRoute);
+  }, [sentryRoute]);
+
+  useLayoutEffect(() => {
+    const initial = useAuthStore.getState();
+    let sessionEpoch = initial.sessionEpoch;
+    let userId = initial.isAuthenticated ? initial.user?.id ?? null : null;
+    setSentryUserId(userId);
+    // 直接订阅，避免登录/退出后等下一次 React effect 才更新，期间报错归到旧账号。
     return useAuthStore.subscribe((state) => {
+      const nextUserId = state.isAuthenticated ? state.user?.id ?? null : null;
+      if (nextUserId !== userId) {
+        userId = nextUserId;
+        setSentryUserId(userId);
+      }
       if (state.sessionEpoch !== sessionEpoch) {
         sessionEpoch = state.sessionEpoch;
         resetUploadProgress();
@@ -315,10 +355,6 @@ function RootLayout() {
    * 在认证水合后后台重新读取。ThemeProvider 与路由会立即挂载，AuthRouteGuard
    * 在认证状态可用前负责渲染加载态。
    */
-  useEffect(() => {
-    setSentryUserId(sentryUserId);
-  }, [sentryUserId]);
-
   useEffect(() => {
     registerSentryNavigationContainer(navigationRef);
   }, [navigationRef]);
@@ -389,6 +425,7 @@ function RootLayout() {
           <LoginSecurityCodeGate />
           {/* 三端统一的弹窗宿主：Alert.alert / Alert.prompt 经 alert-bridge 全部投到这里。 */}
           <AppDialogHost />
+          <SessionRecoveryPrompt />
           {/* Web 专属：标签页标题 + 未读数前缀（经 expo-router/head）。 */}
           {Platform.OS === 'web' ? <WebDocumentTitle /> : null}
         </AuthRouteGuard>

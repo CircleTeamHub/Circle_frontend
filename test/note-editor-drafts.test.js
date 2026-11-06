@@ -2,9 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadTsModule } = require('./helpers/load-ts-module');
 
-function loadDraftUtils(recordings = {}, storageOverride) {
+function loadDraftUtils(recordings = {}, storageOverride, reportHandledFailure = () => {}) {
   return loadTsModule('src/features/notes/utils/note-editor-drafts.ts', {
     requireShim: (request) => {
+      if (request === '@/observability/report-failure') return { reportHandledFailure };
       if (request === '@/storage') {
         return {
           storage: storageOverride ?? {
@@ -70,6 +71,38 @@ test('server draft payload strips local editor metadata from nested sections', (
       ],
     },
   });
+});
+
+test('recording restore failures report once and leave the draft available without a preview', async () => {
+  const error = new Error('recording database unavailable');
+  const reports = [];
+  const utils = loadDraftUtils({ restoreNoteRecording: async () => { throw error; } }, memoryStorage(), (...args) => reports.push(args));
+  const record = draft('private-draft', [{ localRecordingId: 'recording-one.m4a', clientId: 'recording:one' }]);
+  const restored = await utils.restoreLocalNoteDraftRecordings('private-owner', record);
+  assert.equal(restored.id, 'private-draft');
+  assert.equal(restored.audioItems[0].previewUri, undefined);
+  assert.deepEqual(reports, [['noteDrafts', 'recordingRestore', error]]);
+});
+
+test('unreferenced recording cleanup failures report without recording or account identifiers', async () => {
+  const error = new Error('recording removal failed');
+  const reports = [];
+  const utils = loadDraftUtils({ removeNoteRecording: async () => { throw error; } }, memoryStorage(), (...args) => reports.push(args));
+  utils.removeUnreferencedLocalNoteRecordings('private-owner', ['recording-one.m4a']);
+  await Promise.resolve();
+  assert.deepEqual(reports, [['noteDrafts', 'recordingCleanup', error]]);
+});
+
+test('malformed saved draft JSON keeps the null recovery behavior and reports without serialized content context', () => {
+  const reports = [];
+  const storage = memoryStorage();
+  const utils = loadDraftUtils({}, storage, (...args) => reports.push(args));
+  storage.set('circle-im-note-draft:v1:private-owner:private-draft', '{"content":"Private note body", }');
+  assert.equal(utils.loadLocalNoteDraft('private-owner', 'private-draft'), null);
+  assert.equal(reports.length, 1);
+  assert.deepEqual(reports[0].slice(0, 2), ['noteDrafts', 'parse']);
+  assert.equal(reports[0][2].name, 'SyntaxError');
+  assert.equal(reports[0].length, 3);
 });
 
 test('pending write metadata survives exit/restart locally and never enters the draft API DTO', () => {

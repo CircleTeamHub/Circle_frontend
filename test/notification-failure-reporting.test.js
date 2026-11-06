@@ -12,7 +12,7 @@ class ApiError extends Error {
   }
 }
 
-function loadReportFailure({ dev = false } = {}) {
+function loadReportFailure({ dev = false, breakDiagnostics = false, now = () => Date.now() } = {}) {
   const reports = [];
   const diagnostics = [];
   const warnCalls = [];
@@ -24,8 +24,10 @@ function loadReportFailure({ dev = false } = {}) {
         switch (request) {
           case '@/utils/client-diagnostics':
             return {
-              logClientDiagnostic: (event, details) =>
-                diagnostics.push([event, details]),
+              logClientDiagnostic: (event, details) => {
+                if (breakDiagnostics) throw new Error('diagnostics failed');
+                diagnostics.push([event, details]);
+              },
             };
           case '@/observability/sentry':
             return {
@@ -39,6 +41,7 @@ function loadReportFailure({ dev = false } = {}) {
       },
       context: {
         __DEV__: dev,
+        Date: class extends Date { static now() { return now(); } },
         console: { warn: (...args) => warnCalls.push(args) },
       },
     },
@@ -87,6 +90,16 @@ test('does not double-report API failures the api client already reported', () =
   assert.equal(reports.length, 0);
 });
 
+test('does not double-report response validation failures captured at the API boundary', () => {
+  const { reportNotificationFailure, reports } = loadReportFailure();
+  const error = new Error('invalid response shape');
+  error.name = 'ResponseShapeError';
+
+  reportNotificationFailure('notification_load_more_failed', error);
+
+  assert.equal(reports.length, 0);
+});
+
 test('does not report expected 4xx API failures', () => {
   const { reportNotificationFailure, reports } = loadReportFailure();
 
@@ -99,7 +112,7 @@ test('does not report expected 4xx API failures', () => {
   assert.equal(reports.length, 0);
 });
 
-test('collapses the same root cause repeating within a session', () => {
+test('collapses the same root cause repeating within the rate-limit window', () => {
   const { reportNotificationFailure, reports, resetNotificationFailureTelemetry } =
     loadReportFailure();
 
@@ -157,6 +170,45 @@ test('caps signatures per event when the message varies every time', () => {
   );
 });
 
+test('notification failures recur after the rate-limit window, including a saturated event', () => {
+  let now = 0;
+  const { reportNotificationFailure, reports } = loadReportFailure({ now: () => now });
+  for (let index = 0; index < 4; index += 1) {
+    reportNotificationFailure('push_token_register_failed', new Error(`cause ${index}`));
+  }
+  assert.equal(reports.length, 3);
+
+  now = 59_999;
+  reportNotificationFailure('push_token_register_failed', new Error('cause 0'));
+  assert.equal(reports.length, 3);
+  now = 60_000;
+  reportNotificationFailure('push_token_register_failed', new Error('cause 0'));
+  reportNotificationFailure('push_token_register_failed', new Error('cause 0'));
+  reportNotificationFailure('push_token_register_failed', new Error('new cause'));
+  assert.equal(reports.length, 5);
+});
+
+test('a broken local diagnostic does not prevent the production report', () => {
+  const { reportNotificationFailure, reports } = loadReportFailure({ breakDiagnostics: true });
+
+  assert.doesNotThrow(() => reportNotificationFailure('push_token_register_failed', new Error('native failed')));
+  assert.equal(reports.length, 1);
+});
+
+test('dev console reports redacted metadata without the raw error or its private text', () => {
+  const { reportNotificationFailure, warnCalls } = loadReportFailure({ dev: true });
+  const error = new Error('private notification contents');
+  error.name = 'native error with private contents';
+
+  reportNotificationFailure('push_token_register_failed', error, { token: 'secret-token', platform: 'ios' });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(warnCalls)), [[
+    '[notifications] push_token_register_failed',
+    { token: '[REDACTED]', platform: 'ios', errorName: 'Error' },
+  ]]);
+  assert.equal(warnCalls[0].includes(error), false);
+});
+
 test('a noisy event cannot starve a different event of its budget', () => {
   const { reportNotificationFailure, reports } = loadReportFailure();
 
@@ -204,7 +256,7 @@ test('reports a push tap abandoned after its retries ran out', () => {
   assert.equal(reports[0].context.reason, 'navigate-failed');
 });
 
-test('an API failure does not consume the per-session budget', () => {
+test('an API failure does not consume the rate-limit window budget', () => {
   const { reportNotificationFailure, reports } = loadReportFailure();
 
   // 先来一个被跳过的 ApiError,不能把同事件后续真正该报的原生错误一起吃掉。

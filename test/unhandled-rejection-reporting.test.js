@@ -77,7 +77,7 @@ test('other rejections reach Sentry once per signature, with dev output every ti
   assert.equal(reports.length, 3);
 });
 
-test('the number of distinct signatures reported per process is bounded', () => {
+test('the number of distinct signatures reported per window is bounded', () => {
   const { handlers, reports, resetUnhandledRejectionTelemetry } = loadTracker();
   for (let i = 0; i < 100; i += 1) {
     handlers.onUnhandled(i, new Error(`flood ${i}`));
@@ -93,4 +93,16 @@ test('the number of distinct signatures reported per process is bounded', () => 
   resetUnhandledRejectionTelemetry();
   handlers.onUnhandled(1000, new Error('after reset'));
   assert.equal(reports.length, cap + 1);
+});
+
+test('unhandled rejection suppression expires so a later incident is visible', () => {
+  let now = 1000;
+  const { shouldReportUnhandledRejection } = loadTsModule('src/observability/unhandled-rejection-filter.ts', {
+    context: { Date: class extends Date { static now() { return now; } } },
+  });
+  const error = new TypeError('native failed');
+  assert.equal(shouldReportUnhandledRejection(error, error.message), true);
+  assert.equal(shouldReportUnhandledRejection(error, error.message), false);
+  now += 60_000;
+  assert.equal(shouldReportUnhandledRejection(error, error.message), true);
 });

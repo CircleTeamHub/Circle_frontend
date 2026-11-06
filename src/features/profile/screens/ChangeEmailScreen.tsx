@@ -53,7 +53,7 @@ function ChangeEmailForm({ epoch }: { epoch: number }) {
       } else {
         await changeEmail({ email, password, code });
         if (useAuthStore.getState().sessionEpoch !== epoch) return;
-        await clearLocalSession(epoch);
+        await clearLocalSession(epoch, { reason: 'email-change', userInitiated: true });
         const latest = useAuthStore.getState();
         if (mounted.current && latest.sessionEpoch === epoch + 1 && !latest.user) router.replace('/(auth)/login');
       }

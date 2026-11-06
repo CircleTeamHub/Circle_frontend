@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "Copiar diagnóstico de inicio de sesión",
+    "copied": "Diagnóstico copiado. Envíalo a soporte.",
+    "copyFailed": "No se pudo copiar. Inténtalo de nuevo."
+  },
   "mediaUpload": {
     "sessionChanged": "Has cambiado de cuenta. Selecciona el archivo de nuevo para subirlo.",
     "uploading": "Subiendo",
@@ -89,11 +94,11 @@
       "switchAccount": "Cambiar de cuenta",
       "logout": "Cerrar sesión",
       "cancelAccount": "Eliminar cuenta",
+      "singleDeviceStatusFailed": "No se pudo cargar el estado de inicio en un solo dispositivo. Reinténtalo.",
+      "singleDeviceUpdateFailed": "No se pudo guardar el ajuste de un solo dispositivo. Reinténtalo.",
       "securityQuestions": "Preguntas de seguridad",
       "securityQuestionsSet": "Configuradas",
-      "securityQuestionsNotSet": "Sin configurar",
-      "singleDeviceStatusFailed": "No se pudo cargar el estado de inicio en un solo dispositivo. Reinténtalo.",
-      "singleDeviceUpdateFailed": "No se pudo guardar el ajuste de un solo dispositivo. Reinténtalo."
+      "securityQuestionsNotSet": "Sin configurar"
     },
     "notifications": {
       "title": "Notificaciones",
@@ -234,13 +239,13 @@
         "byGroup": "Por grupo o Círculo",
         "shareCard": "Compartir mi tarjeta personal"
       },
+      "unavailable": "No disponible",
+      "unsupportedHint": "El servicio actual no admite este ajuste. Inténtalo después de una actualización.",
       "chatSection": "Chats y momentos",
       "presenceSection": "Estado en línea y escritura",
       "profileVisibilitySection": "Visibilidad del perfil",
       "contactSection": "Agregar e invitaciones",
-      "blacklistBlockedAt": "Bloqueado el {{date}}",
-      "unavailable": "No disponible",
-      "unsupportedHint": "El servicio actual no admite este ajuste. Inténtalo después de una actualización."
+      "blacklistBlockedAt": "Bloqueado el {{date}}"
     },
     "permissions": {
       "title": "Permisos del sistema",
@@ -375,6 +380,7 @@
       "previewNotice": "La conexión aún no está lista. Vuelve a intentarlo en un momento.",
       "historyWindowFull": "Para ver mensajes anteriores, busca en el historial del chat.",
       "jumpToUnread": "Ir al inicio de {{count}} mensajes sin leer",
+      "jumpToLatest": "Ir al último mensaje",
       "unreadMessages": "{{count}} mensajes sin leer",
       "recordingSeconds": "Grabando {{seconds}} s",
       "voiceReleaseCancel": "Suelta para cancelar",
@@ -529,6 +535,8 @@
     "searchGroupMembersNoMatches": "No hay miembros coincidentes",
     "groupName": "Nombre del grupo",
     "groupNotice": "Aviso del grupo",
+    "noticePinned": "Fijar aviso en un banner",
+    "noticePinnedHint": "Mostrar el aviso desplazándose arriba del chat grupal",
     "noGroupNotice": "No hay aviso del grupo",
     "moreGroupMembers": "Más miembros del grupo",
     "addGroupMember": "Añadir miembro al grupo",
@@ -700,7 +708,38 @@
       "noteUnbindTitle": "¿Quitar la asociación con el grupo de origen?",
       "noteUnbindHint": "La nota dejará de aparecer en la gestión de notas de este grupo.",
       "noteUnbindAction": "Quitar (desvincular del grupo)",
-      "noteUnbind": "Quitar asociación"
+      "noteUnbind": "Quitar asociación",
+      "memberSection": "Miembros",
+      "silenceSection": "Silenciamiento",
+      "removeBatchConfirm": "¿Expulsar del grupo a los miembros seleccionados ({{n}})?",
+      "removeBatchDone": "Miembros expulsados: {{n}}",
+      "overview": {
+        "members": "Miembros",
+        "admins": "Administradores",
+        "silenced": "Silenciados"
+      },
+      "abnormal": {
+        "entry": "Miembros a revisar",
+        "entryHint": "Inactivos durante mucho tiempo o con baja reputación",
+        "title": "Miembros a revisar",
+        "rules": "Aquí aparecen los miembros que llevan más de {{days}} días sin iniciar sesión o cuya reputación es inferior a {{threshold}}. Solo se muestran los miembros que puedes expulsar. Quienes ocultan su estado en línea no se evalúan por inactividad.",
+        "inactiveFor": "Inactivo durante",
+        "days": "{{n}} días",
+        "filterAll": "Todos {{n}}",
+        "filterInactive": "Inactivos {{n}}",
+        "filterLowCredit": "Baja reputación {{n}}",
+        "tagInactiveDays": "{{n}} días inactivo",
+        "tagInactiveOver": "Más de {{n}} días inactivo",
+        "tagLowCredit": "Reputación {{score}}",
+        "adminBadge": "Admin",
+        "empty": "No hay miembros a revisar",
+        "emptyHint": "Todos están activos y con buena reputación",
+        "selectAll": "Seleccionar todo",
+        "clearAll": "Deseleccionar todo",
+        "batchLimit": "Hasta {{n}} a la vez",
+        "removeSelected": "Expulsar ({{n}})",
+        "loadFailed": "No se pudieron cargar los miembros a revisar"
+      }
     },
     "groupEvent": {
       "system": "Sistema",
@@ -797,7 +836,7 @@
       "voiceCall": "Llamada de audio/video",
       "location": "Ubicación",
       "notes": "Notas",
-      "friendCard": "Tarjeta de contacto",
+      "friendCard": "Tarjeta",
       "favorites": "Favoritos",
       "quickReply": "Respuesta rápida",
       "transfer": "Transferencia"
@@ -1490,6 +1529,7 @@
     }
   },
   "moment": {
+    "mediaLimitHint": "Hasta {{max}} fotos y vídeos en total",
     "selectMedia": "Añadir fotos o vídeos",
     "removeMedia": "Eliminar foto o vídeo",
     "playVideo": "Reproducir vídeo",
@@ -2539,7 +2579,8 @@
         "voice": "Voz",
         "message": "Mensaje"
       },
-      "menuLabel": "Guardados"
+      "menuLabel": "Guardados",
+      "today": "Hoy"
     },
     "viewCollections": "Ver",
     "notes": "Notas",
@@ -2881,7 +2922,7 @@
   "share": {
     "title": {
       "favorite": "Elige un favorito",
-      "friend": "Elige una tarjeta de amigo",
+      "friend": "Enviar tarjeta",
       "note": "Elige una nota",
       "quickReply": "Respuestas rápidas"
     },
@@ -2905,6 +2946,16 @@
       "optionLocation": "Ubicación",
       "optionMedia": "Multimedia",
       "optionShowcase": "Exhibición"
+    },
+    "favoriteConfirm": {
+      "sendTo": "Enviar a",
+      "messageLabel": "Mensaje adicional",
+      "messagePlaceholder": "Añadir un mensaje (opcional)",
+      "missingRecipient": "Este chat no está disponible. Vuelve al chat e inténtalo de nuevo."
+    },
+    "cardKind": {
+      "friend": "Tarjeta de amigo",
+      "group": "Tarjeta de grupo"
     }
   },
   "accountSwitcher": {
@@ -3092,6 +3143,7 @@
       "requestFailed": "No se pudo completar la operación. Inténtalo de nuevo.",
       "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo.",
       "refreshResponseInvalid": "Respuesta de actualización no válida. Inicia sesión de nuevo.",
+      "refreshOutcomeUnknown": "No se pudo confirmar tu sesión. Inicia sesión de nuevo.",
       "sessionChangedDuringRefresh": "La cuenta cambió mientras se actualizaba la sesión. Inténtalo de nuevo.",
       "uploadTimeout": "Se agotó el tiempo de la subida. Comprueba tu conexión e inténtalo de nuevo.",
       "uploadFailed": "La subida falló. Inténtalo de nuevo más tarde.",
@@ -3277,7 +3329,8 @@
   },
   "im": {
     "conversation": {
-      "removedFromGroup": "Te han eliminado de este chat de grupo"
+      "removedFromGroup": "Te han eliminado de este chat de grupo",
+      "removedFromNamedGroup": "Te han eliminado del grupo «{{name}}»"
     },
     "time": {
       "yesterday": "Ayer"
@@ -3901,6 +3954,78 @@
       "CANCELLED": "Solicitud cancelada"
     },
     "sentInvitation": "Invitaste a esta persona al grupo"
+  },
+  "groupReview": {
+    "entry": "Gestionar solicitudes",
+    "title": "Revisión del grupo",
+    "log": "Registro",
+    "searchPlaceholder": "Nombre o número de cuenta",
+    "selectAll": "Seleccionar todo",
+    "selectApplicant": "Seleccionar a {{name}}",
+    "selectionLimit": "Selecciona hasta 50 solicitudes",
+    "approve": "Aceptar",
+    "reject": "Rechazar",
+    "blacklist": "Bloquear en el grupo",
+    "confirmBody": "Procesar {{count}} solicitudes.",
+    "blacklistBody": "Se rechazarán {{count}} solicitudes y estas cuentas no podrán volver a solicitar ni ser invitadas a este grupo.",
+    "partialResult": "Completadas: {{succeeded}}. Fallidas: {{failed}}. Actualiza para consultar el estado.",
+    "completed": "Completadas: {{count}}",
+    "empty": "No hay solicitudes ni invitaciones",
+    "noResults": "No hay coincidencias",
+    "loadFailed": "No se pudieron cargar las solicitudes. Reinténtalo.",
+    "actionUncertain": "No se pudo confirmar el resultado. Actualiza la lista antes de volver a intentarlo.",
+    "invitedBy": "Invitación de {{name}}",
+    "sourcePrefix": "Origen: {{source}}",
+    "unknownMember": "Miembro desconocido",
+    "processing": "Procesando…",
+    "confirm": {
+      "approve": "¿Aceptar solicitudes?",
+      "reject": "¿Rechazar solicitudes?",
+      "blacklist": "¿Bloquear estas cuentas?"
+    },
+    "source": {
+      "INVITE": "Invitación de miembro",
+      "QR": "Código QR",
+      "APPLICATION": "Solicitud",
+      "UNKNOWN": "Origen desconocido"
+    },
+    "status": {
+      "PENDING": "Pendiente",
+      "INVITED": "Esperando aceptación",
+      "JOINED": "Aceptada",
+      "REJECTED": "Rechazada",
+      "BLACKLISTED": "Bloqueada",
+      "EXPIRED": "Caducada",
+      "LEFT": "Salió",
+      "DECLINED": "Declinada",
+      "CANCELLED": "Cancelada"
+    }
+  },
+  "groupLog": {
+    "searchRole": "Buscar por",
+    "target": "Miembro afectado",
+    "actor": "Operador",
+    "date": "Fecha",
+    "status": "Estado",
+    "source": "Origen",
+    "inviter": "Invitante",
+    "operator": "Operador",
+    "detail": "Detalles",
+    "events": {
+      "created": "Grupo creado",
+      "joined": "Se unió al grupo",
+      "left": "Salió del grupo",
+      "removed": "Expulsado del grupo",
+      "roleChanged": "Cambio de rol",
+      "silenced": "Miembro silenciado",
+      "unsilenced": "Silencio desactivado",
+      "ownerTransferred": "Propiedad transferida",
+      "historyCleared": "Historial borrado",
+      "muteAll": "Silencio del grupo",
+      "policy": "Permisos del grupo",
+      "application": "Solicitud de ingreso",
+      "blacklist": "Bloqueado en el grupo"
+    }
   },
   "securityQuestions": {
     "title": "Preguntas de seguridad",

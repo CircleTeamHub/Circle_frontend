@@ -65,6 +65,8 @@ import {
   deleteNote,
   fetchNoteGroups,
   fetchNotes,
+  getCachedNoteGroups,
+  getCachedNotes,
   notesMutatedSince,
   setNoteWorkStatus,
   togglePinNote,
@@ -90,6 +92,11 @@ const ItemSeparator = memo(function ItemSeparator() {
 /** 回到笔记列表时的重拉节流窗口(期间有任何笔记写请求都会照常重拉)。 */
 const NOTES_FOCUS_RELOAD_FRESH_MS = 30_000;
 export default function NotesScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  return sessionKey ? <NotesContent key={sessionKey} /> : null;
+}
+
+function NotesContent() {
   const { width, fontScale } = useWindowDimensions();
   const compactActions = width < 520 || fontScale > 1.2;
   const router = useRouter();
@@ -102,11 +109,14 @@ export default function NotesScreen() {
   const currentUserId = useAuthStore((state) => state.user?.id);
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
 
-  const [notes, setNotes] = useState<NoteSummary[]>([]);
-  const [groups, setGroups] = useState<NoteGroup[]>([]);
+  const [cachedNotes] = useState(() => getCachedNotes('ACTIVE'));
+  const [cachedGroups] = useState(getCachedNoteGroups);
+  const [notes, setNotes] = useState<NoteSummary[]>(cachedNotes?.value ?? []);
+  const [groups, setGroups] = useState<NoteGroup[]>(cachedGroups?.value ?? []);
   const [activeTab, setActiveTab] = useState<TabId>('all');
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedNotes);
+  const loadedRef = useRef(cachedNotes !== null);
   const [loadError, setLoadError] = useState(false);
   // 「⋯」动作菜单针对的笔记（null = 关闭）
   const [menuNote, setMenuNote] = useState<NoteSummary | null>(null);
@@ -167,12 +177,14 @@ export default function NotesScreen() {
 
   // 返回这次结果是否真的落到了界面上(被更新的一次加载顶掉时为 false)。
   const load = useCallback(async (): Promise<boolean> => {
+    if (!mountedRef.current) return false;
+    const epoch = useAuthStore.getState().sessionEpoch;
     const sequence = ++loadSequenceRef.current;
     try {
       const [notesData, groupsData] = await withNoteSyncRetry(() =>
         Promise.all([fetchNotes({ status: 'ACTIVE' }), fetchNoteGroups()]),
       );
-      if (!mountedRef.current || sequence !== loadSequenceRef.current) return false;
+      if (!mountedRef.current || sequence !== loadSequenceRef.current || useAuthStore.getState().sessionEpoch !== epoch) return false;
       // 内容没变的笔记/分组沿用旧对象:NoteCard 是 memo 的,几百条笔记重拉一次
       // 不至于整张列表重渲染;什么都没变时连数组都不换。
       setNotes((current) => reuseUnchanged(current, notesData));
@@ -186,10 +198,11 @@ export default function NotesScreen() {
       );
       setLoadError(false);
       setLoading(false);
+      loadedRef.current = true;
       return true;
     } catch (error) {
       // A newer focus/realtime refresh owns the result and error state.
-      if (!mountedRef.current || sequence !== loadSequenceRef.current) return false;
+      if (!mountedRef.current || sequence !== loadSequenceRef.current || useAuthStore.getState().sessionEpoch !== epoch) return false;
       throw error;
     }
   }, []);
@@ -220,7 +233,7 @@ export default function NotesScreen() {
       ) {
         return;
       }
-      setLoading(true);
+      setLoading(!loadedRef.current);
       void load()
         .then((applied) => {
           // 被更新的一次加载顶掉了:那次若失败,下次回来不能误以为刚拉过。
@@ -652,6 +665,7 @@ export default function NotesScreen() {
             text: t('notes.actions.unlist', { defaultValue: '下架' }),
             style: 'destructive',
             onPress: async () => {
+              if (!mountedRef.current) return;
               try {
                 await unlistNote(note.id);
                 if (mountedRef.current) await load();
@@ -684,6 +698,7 @@ export default function NotesScreen() {
             text: t('notes.actions.delete', { defaultValue: '删除' }),
             style: 'destructive',
             onPress: async () => {
+              if (!mountedRef.current) return;
               try {
                 await deleteNote(note.id);
                 if (mountedRef.current) await load();
@@ -708,7 +723,8 @@ export default function NotesScreen() {
   // 批量删除/下架共用：settle 后重拉列表；失败的留在选中集里方便直接重试。
   const runBatchAction = useCallback(
     async (ids: string[], task: (id: string) => Promise<void>) => {
-      const { failed } = await runNoteBatch(ids, task);
+      if (!mountedRef.current) return;
+      const { failed } = await runNoteBatch(ids, (id) => mountedRef.current ? task(id) : Promise.resolve());
       if (!mountedRef.current) return;
       await load().catch(() => {});
       if (!mountedRef.current) return;

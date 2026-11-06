@@ -54,6 +54,8 @@ export function CircleAvatar({
           recyclingKey={imageUri}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={0}
           onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
           onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}
         />

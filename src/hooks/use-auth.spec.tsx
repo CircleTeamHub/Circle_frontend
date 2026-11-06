@@ -11,6 +11,7 @@ import {
   register as registerRequest,
 } from '@/services/api/auth';
 import { clearLocalSession } from '@/services/auth/session';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const mockSetSession = jest.fn();
 const mockUpsertAccount = jest.fn();
@@ -78,6 +79,7 @@ jest.mock('@/services/api/auth', () => ({
 }));
 
 jest.mock('@/services/auth/session', () => ({ clearLocalSession: jest.fn() }));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/services/api/client', () => ({
   isDefinitiveAuthFailure: jest.fn(() => false),
 }));
@@ -157,6 +159,28 @@ test('login clears partial credentials and reports failure', async () => {
   expect(mockSetSession).not.toHaveBeenCalled();
   expect(result.current.error).toBe('auth.errors.loginFailed');
 });
+
+test.each(['login', 'register', 'completeVerifiedLogin'] as const)(
+  '%s reports native session completion failure once without auth data',
+  async (flow) => {
+    const error = new Error('native session activation failed');
+    jest.mocked(loginRequest).mockResolvedValue({ kind: 'tokens', tokens });
+    jest.mocked(registerRequest).mockResolvedValue(tokens as never);
+    jest.mocked(fetchCurrentUserWithToken).mockResolvedValue(user as never);
+    mockSetSession.mockImplementationOnce(() => { throw error; });
+    const { result } = renderHook(() => useAuth());
+
+    await act(async () => {
+      if (flow === 'login') await result.current.login('user_123', 'password1');
+      else if (flow === 'register') await result.current.register('new@test.dev', 'password1', 'password1', 'New');
+      else await expect(result.current.completeVerifiedLogin(tokens)).rejects.toBe(error);
+    });
+
+    expect(reportHandledFailure).toHaveBeenCalledTimes(1);
+    expect(reportHandledFailure).toHaveBeenCalledWith('auth', flow, error, ...(flow === 'register' ? [{ stage: 'session' }] : []));
+    expect(clearLocalSession).toHaveBeenCalledTimes(1);
+  },
+);
 
 test('an unknown device goes to verification without creating a session', async () => {
   jest.mocked(loginRequest).mockResolvedValue({
@@ -290,6 +314,43 @@ test('switching accounts records the current account with its latest tokens befo
   expect(rememberOrder).toBeLessThan(clearOrder);
 });
 
+test('switching accounts preserves an uncertain refresh marker when saving and restoring credentials', async () => {
+  signInPreviousAccount();
+  mockAuthState.refreshUncertain = true;
+  const target = { user: { id: 'user-2', nickname: 'Target' },
+    accessToken: 'target-access', refreshToken: 'target-refresh', refreshUncertain: true, updatedAt: 1 };
+  mockSetSession.mockImplementationOnce((tokens, nextUser, options) => {
+    mockAuthState = { ...mockAuthState, ...tokens, user: nextUser, isAuthenticated: true,
+      refreshUncertain: options?.refreshUncertain ?? false };
+  });
+  jest.mocked(fetchCurrentUser).mockResolvedValue(target.user as never);
+  const { result } = renderHook(() => useAuth());
+  await act(async () => { await result.current.switchToAccount(target as never); });
+  expect(mockUpsertAccount).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    user: previousUser, refreshUncertain: true,
+  }));
+  expect(mockSetSession).toHaveBeenCalledWith(
+    { accessToken: target.accessToken, refreshToken: target.refreshToken }, target.user,
+    { refreshUncertain: true },
+  );
+  expect(mockUpsertAccount).toHaveBeenLastCalledWith(expect.objectContaining({
+    user: target.user, refreshUncertain: true,
+  }));
+});
+
+test('leaving an account during rotation quarantines its saved pre-rotation credential', async () => {
+  signInPreviousAccount();
+  mockAuthState.refreshUncertain = false;
+  mockAuthState.refreshAttemptId = '12345678-1234-4234-8234-123456789abc';
+  const target = { user: { id: 'user-2' }, accessToken: 'target-access', refreshToken: 'target-refresh', updatedAt: 1 };
+  jest.mocked(fetchCurrentUser).mockResolvedValue(target.user as never);
+  const { result } = renderHook(() => useAuth());
+  await act(async () => { await result.current.switchToAccount(target as never); });
+  expect(mockUpsertAccount).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    user: previousUser, refreshToken: 'rotated-refresh', refreshUncertain: true,
+  }));
+});
+
 test('adding an account still lands on messages if the previous account was signed out remotely meanwhile', async () => {
   // 停在「添加账号」登录页期间,旧账号被远端踢下线:会话已清空,标记还在。
   mockAddingAccount = true;
@@ -321,9 +382,8 @@ test('adding the account that is already signed in keeps its local data and revo
 
   // 拆会话会清掉本账号的草稿、待发媒体、聊天背景等本地数据 —— 同一个人不该拆。
   expect(clearLocalSession).not.toHaveBeenCalled();
-  expect(mockSetSession).not.toHaveBeenCalled();
-  expect(mockSetTokens).toHaveBeenCalledWith(tokens);
-  expect(mockSetUser).toHaveBeenCalledWith(previousUser);
+  expect(mockSetSession).toHaveBeenCalledWith(tokens, previousUser, { onboardingRequired: undefined });
+  expect(mockSetTokens).not.toHaveBeenCalled();
   // 被顶替的那对 token 在服务端撤销,别留一个没人持有的活会话挂在登录设备列表里。
   expect(logoutRequest).toHaveBeenCalledWith('rotated-refresh');
   expect(mockUpsertAccount).toHaveBeenLastCalledWith(
