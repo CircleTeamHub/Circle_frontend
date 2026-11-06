@@ -9,7 +9,7 @@ function sourceFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const filePath = path.join(directory, entry.name);
     if (entry.isDirectory()) return sourceFiles(filePath);
-    return /\.(?:ts|tsx)$/.test(entry.name) ? [filePath] : [];
+    return /\.(?:ts|tsx)$/.test(entry.name) && !/\.(?:spec|test)\.(?:ts|tsx)$/.test(entry.name) ? [filePath] : [];
   });
 }
 

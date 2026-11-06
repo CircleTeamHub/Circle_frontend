@@ -104,6 +104,7 @@ function loadApiClientHarness() {
         : response(false, 401, { code: 1, message: 'expired', data: null });
     },
     require: (request) => {
+      if (request === '@/observability/metrics') return { recordMetric() {} };
       if (request === '@/observability/http-diagnostics') {
         return loadTsModule('src/observability/http-diagnostics.ts');
       }
@@ -172,6 +173,40 @@ function loadApiClientHarness() {
     },
   };
 }
+
+test('wrong current password is a business error and never refreshes or clears a valid session', async () => {
+  const harness = loadApiClientHarness();
+  harness.requestResponses.push({ promise: Promise.resolve(response(false, 401, { code: 1, message: 'incorrect password', errorCode: 'AUTH_PASSWORD_INCORRECT', data: null })) });
+  await assert.rejects(harness.apiClient('/auth/change-password', { method: 'POST', body: { oldPassword: 'wrong', newPassword: 'new-password' } }), error => error.errorCode === 'AUTH_PASSWORD_INCORRECT');
+  assert.equal(harness.fetchCalls.length, 1);
+  assert.equal(harness.getClearCalls(), 0);
+  assert.equal(harness.authState.accessToken, 'access-a');
+});
+
+test('a wrong password after token refresh does not clear the refreshed session', async () => {
+  const harness = loadApiClientHarness();
+  harness.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'incorrect password', errorCode: 'AUTH_PASSWORD_INCORRECT', data: null })) },
+  );
+  harness.refreshResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { accessToken: 'next-access', refreshToken: 'next-refresh' } })) });
+  await assert.rejects(harness.apiClient('/auth/email/change', { method: 'POST', body: { password: 'wrong' } }), error => error.errorCode === 'AUTH_PASSWORD_INCORRECT');
+  assert.equal(harness.fetchCalls.length, 3);
+  assert.equal(harness.getClearCalls(), 0);
+  assert.equal(harness.authState.accessToken, 'next-access');
+});
+
+test('email changes still recover an ordinarily expired access token', async () => {
+  const harness = loadApiClientHarness();
+  harness.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: null })) },
+  );
+  harness.refreshResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { accessToken: 'next-access', refreshToken: 'next-refresh' } })) });
+  await harness.apiClient('/auth/email/change-request', { method: 'POST', body: { email: 'new@example.com', password: 'correct' } });
+  assert.equal(harness.fetchCalls.length, 3);
+  assert.equal(harness.getClearCalls(), 0);
+});
 
 test('request is not refreshed or replayed after the session changes before its 401 response', async () => {
   const harness = loadApiClientHarness();

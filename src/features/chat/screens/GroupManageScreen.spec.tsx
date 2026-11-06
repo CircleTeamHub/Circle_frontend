@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActivityIndicator } from 'react-native';
-import { act, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { router } from 'expo-router';
 import GroupManageScreen from './GroupManageScreen';
 import { fetchChatMembers, refreshConversationOrList } from '@/chat-core/api';
 import { fetchCircleDetail } from '@/services/api/circles';
@@ -13,7 +14,8 @@ jest.setTimeout(30_000);
 const SETTLE = { timeout: 10_000 };
 
 const mockAuth = { sessionEpoch: 0 };
-const mockParams: { conversationID?: string; groupID?: string } = {};
+const mockParams: { conversationID?: string; groupID?: string; originScope?: string } = {};
+let mockScope = 'messages';
 const mockChatState: {
   currentUserId: string;
   conversations: Record<string, unknown>[];
@@ -116,7 +118,8 @@ jest.mock('@/services/api/errors', () => ({
 }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/features/user/utils/routes', () => ({
-  getUserProfileScopeFromSegments: () => 'messages',
+  ...jest.requireActual('@/features/user/utils/routes'),
+  getUserProfileScopeFromSegments: () => mockScope,
 }));
 jest.mock('@/features/groups/routes', () => ({ getGroupEntryHref: () => ({}) }));
 
@@ -154,6 +157,8 @@ beforeEach(() => {
   mockAdminParams = null;
   delete mockParams.conversationID;
   delete mockParams.groupID;
+  delete mockParams.originScope;
+  mockScope = 'messages';
   mockChatState.conversations = [];
   jest.mocked(refreshConversationOrList).mockResolvedValue(null as never);
 });
@@ -179,6 +184,16 @@ describe('standalone group', () => {
     });
     expect(await screen.findByText('张三', {}, SETTLE)).toBeTruthy();
     expect(cachedIDs('standalone:conv-1')).toEqual(['me', 'u2']);
+  });
+
+  test.each(['messages', 'contacts', 'discover', 'explore', 'profile'])('opens application management and logs in the originating %s stack', async (scope) => {
+    mockScope = scope;
+    jest.mocked(fetchChatMembers).mockResolvedValue([member('me', '我', 'OWNER')] as never);
+    render(<GroupManageScreen />);
+    fireEvent.press(await screen.findByTestId('group-manage-applications'));
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: `/(tabs)/${scope}/group-review`, params: { conversationID: 'conv-1', title: undefined } });
+    fireEvent.press(screen.getByTestId('group-manage-log'));
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: `/(tabs)/${scope}/group-log`, params: { conversationID: 'conv-1' } });
   });
 
   test('a cached standalone roster stays hidden until the seat check succeeds', async () => {
@@ -243,6 +258,24 @@ describe('circle group', () => {
       members: [member('me', '我', 'OWNER'), member('u2', '张三', 'ADMIN')] as never,
     });
   });
+
+  test.each(['messages', 'contacts', 'discover', 'explore', 'profile'])(
+    'opens expansion in the current %s stack so native back retains its source',
+    async (scope) => {
+      mockScope = scope;
+      mockParams.originScope = 'profile';
+      jest.mocked(fetchCircleDetail).mockResolvedValueOnce({ myStatus: 'ACTIVE', myRole: 'OWNER' } as never);
+      jest.mocked(fetchChatMembers).mockResolvedValueOnce([member('me', '我', 'OWNER')] as never);
+
+      render(<GroupManageScreen />);
+      fireEvent.press(await screen.findByTestId('group-manage-raise-limit', {}, SETTLE));
+
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: `/(tabs)/${scope}/group-expansion`,
+        params: { circleId: 'circle-1' },
+      });
+    },
+  );
 
   test('keeps cached circle management data hidden until the live role answers', async () => {
     mockChatState.conversations = [

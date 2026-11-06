@@ -13,13 +13,15 @@ import {
 import { getUserProfileHref } from '@/features/user/utils/routes';
 import { fetchFriends, friendsMutatedSince, type FriendProfile } from '@/services/api/friends';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
+import { useAuthStore } from '@/stores/authStore';
+import { readPageSnapshot } from '@/storage/page-snapshots';
 import { reuseUnchanged } from '@/utils/structural-sharing';
 import { useFriendActivityUnreadStore } from '@/stores/friendActivityUnreadStore';
 import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -121,12 +123,22 @@ export default function ContactsScreen() {
       })),
     [t],
   );
-  const [friends, setFriends] = useState<FriendProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const [initialFriends] = useState(() => readPageSnapshot<FriendProfile[]>(useAuthStore.getState().user?.id, 'social:friends'));
+  const [friends, setFriends] = useState<FriendProfile[]>(() => initialFriends?.value ?? []);
+  const hasLoadedRef = useRef(Boolean(initialFriends));
+  const [loading, setLoading] = useState(!initialFriends);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
+  useLayoutEffect(() => {
+    const saved = readPageSnapshot<FriendProfile[]>(useAuthStore.getState().user?.id, 'social:friends');
+    hasLoadedRef.current = Boolean(saved);
+    setFriends(saved?.value ?? []);
+    setLoading(!saved);
+    setError(null);
+  }, [sessionEpoch]);
   const unreadFriendActivityCount = useFriendActivityUnreadStore(
     (state) => state.count,
   );
@@ -147,24 +159,25 @@ export default function ContactsScreen() {
 
   const loadFriends = useCallback(async () => {
     const startedAt = Date.now();
-    setLoading(true);
+    if (!hasLoadedRef.current) setLoading(true);
 
     try {
       const nextFriends = await fetchFriends();
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+      hasLoadedRef.current = true;
       useChatStore.getState().syncPeerAvatars(nextFriends);
       // 内容没变的好友沿用旧对象,列表行不必全部重渲染。
       setFriends((current) => reuseUnchanged(current, nextFriends));
       setError(null);
       friendsReloadGate.markLoaded(startedAt);
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
       setError(t('contacts.loadFailed'));
       reportHandledFailure('contacts', 'fetchFriends', error);
     } finally {
-      if (mountedRef.current) setLoading(false);
+      if (mountedRef.current && useAuthStore.getState().sessionEpoch === sessionEpoch) setLoading(false);
     }
-  }, [friendsReloadGate, t]);
+  }, [friendsReloadGate, sessionEpoch, t]);
 
   useFocusEffect(
     useCallback(() => {

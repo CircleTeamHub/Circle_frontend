@@ -286,3 +286,20 @@ test.each(['unmount', 'session change'])('a cold metadata response is discarded 
   expect(useChatStore.getState().conversations).toEqual([]);
   expect(reportHandledFailure).not.toHaveBeenCalled();
 });
+
+test('known standalone membership paints warmed members before revalidation', () => {
+  useChatStore.setState({ conversations: [standaloneConversation] });
+  writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
+  render(<ChatInfoScreen />);
+  expect(screen.getByText('Live member')).toBeTruthy();
+  expect(fetchChatMembers).toHaveBeenCalledWith('group-conversation');
+});
+
+test('warmed members remain hidden when the current roster policy forbids them', () => {
+  useChatStore.setState({ conversations: [{ ...standaloneConversation,
+    policies: { ...standaloneConversation.policies!, membersCanViewRoster: false },
+  }] });
+  writeGroupInfoCache(mockAuth.sessionEpoch, 'standalone:group-conversation', { members: members as never });
+  render(<ChatInfoScreen />);
+  expect(screen.queryByText('Live member')).toBeNull();
+});

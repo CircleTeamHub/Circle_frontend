@@ -1,8 +1,14 @@
 import { create } from 'zustand';
-import { circlesMutatedSince, fetchMyCircles } from '@/services/api/circles';
+import { fetchMyCircles } from '@/services/api/circles';
+import { groupOrCircleMutatedSince } from '@/features/chat/utils/group-reload-key';
 import { getApiErrorMessage } from '@/services/api/errors';
 import type { Circle } from '@/types';
 import { deriveManagedCircles } from './managed-circles';
+import { useLayoutEffect } from 'react';
+import { Platform } from 'react-native';
+import { useAuthStore } from '@/stores/authStore';
+import { getEncryptedInstance } from '@/storage/encrypted-init';
+import { getPageSnapshotRevision, readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 
 // fetchMyCircles 的「本次 run 快照」——即便随后被更新代际（force/reset）取代、
 // guardedSet 写入被丢弃，调用方拿到的仍是这次请求自己的权威结果。
@@ -19,6 +25,8 @@ interface CirclesState {
   appliedCircles: Circle[];
   myCirclesLoading: boolean;
   myCirclesError: string | null;
+  myCirclesLoaded: boolean;
+  hydrate: () => void;
 
   // force：变更后（建圈/退圈等）绕过在飞合并强制重拉 —— 否则可能 await 到
   // 变更前就出发的快照。
@@ -43,15 +51,23 @@ interface CirclesState {
 let myCirclesInFlight: Promise<MyCirclesFetchResult> | null = null;
 let myCirclesRunSeq = 0;
 // 发现页每次切 tab、从帖子详情回来都会聚焦调一次(3 个请求)。上次完整拉成功(按请求发出
-// 时刻计)之后 30 秒内、也没有圈子写请求,就直接用 store 里的。别人那边的变化(审批通过、
+// 时刻计)之后 30 秒内、也没有群/圈子写请求,就直接用 store 里的。别人那边的变化(审批通过、
 // 被移出、解散)最多晚 30 秒出现;下拉刷新与变更后的 force 不受影响。
 const MY_CIRCLES_MAX_AGE_MS = 30_000;
 let myCirclesLoadedAt: number | null = null;
+let hydratedScope = '';
+type CircleListsSnapshot = { joined: Circle[]; created: Circle[]; applied: Circle[] };
+
+function persistCircleLists(state: CirclesState, at = Date.now()): void {
+  writePageSnapshot(useAuthStore.getState().user?.id, 'social:my-circles', {
+    joined: state.joinedCircles, created: state.createdCircles, applied: state.appliedCircles,
+  }, at);
+}
 
 function myCirclesFresh(): boolean {
   if (myCirclesLoadedAt === null) return false;
   const age = Date.now() - myCirclesLoadedAt;
-  return age >= 0 && age <= MY_CIRCLES_MAX_AGE_MS && !circlesMutatedSince(myCirclesLoadedAt);
+  return age >= 0 && age <= MY_CIRCLES_MAX_AGE_MS && !groupOrCircleMutatedSince(myCirclesLoadedAt);
 }
 
 export const useCirclesStore = create<CirclesState>((set, get) => ({
@@ -61,8 +77,29 @@ export const useCirclesStore = create<CirclesState>((set, get) => ({
   appliedCircles: [],
   myCirclesLoading: false,
   myCirclesError: null,
+  myCirclesLoaded: false,
+
+  hydrate: () => {
+    const auth = useAuthStore.getState();
+    if (!auth.isAuthenticated || !auth.user?.id || (Platform.OS !== 'web' && !getEncryptedInstance())) return;
+    const scope = `${auth.user.id}:${auth.sessionEpoch}:${getPageSnapshotRevision()}`;
+    if (hydratedScope === scope) return;
+    hydratedScope = scope;
+    myCirclesRunSeq += 1;
+    myCirclesInFlight = null;
+    myCirclesLoadedAt = null;
+    const saved = readPageSnapshot<CircleListsSnapshot>(auth.user.id, 'social:my-circles');
+    const joined = saved?.value.joined ?? [];
+    const created = saved?.value.created ?? [];
+    set({
+      joinedCircles: joined, createdCircles: created, appliedCircles: saved?.value.applied ?? [],
+      managedCircles: deriveManagedCircles({ createdCircles: created, joinedCircles: joined }),
+      myCirclesLoaded: Boolean(saved), myCirclesLoading: false, myCirclesError: null,
+    });
+  },
 
   fetchMyCircles: (options = {}) => {
+    get().hydrate();
     if (myCirclesInFlight && !options.force) {
       return myCirclesInFlight;
     }
@@ -72,12 +109,16 @@ export const useCirclesStore = create<CirclesState>((set, get) => ({
     }
     const runId = ++myCirclesRunSeq;
     const startedAt = Date.now();
+    const requestRevision = getPageSnapshotRevision();
+    const requestAuth = useAuthStore.getState();
+    const isCurrent = () => runId === myCirclesRunSeq && useAuthStore.getState().user?.id === requestAuth.user?.id &&
+      useAuthStore.getState().sessionEpoch === requestAuth.sessionEpoch;
     // 只有最新代际的运行可写 store；reset()/force 之后陈旧响应静默丢弃。
     const guardedSet: typeof set = (partial) => {
-      if (runId === myCirclesRunSeq) set(partial);
+      if (isCurrent()) set(partial);
     };
     const run = (async (): Promise<MyCirclesFetchResult> => {
-      guardedSet({ myCirclesLoading: true, myCirclesError: null });
+      guardedSet({ myCirclesLoading: !get().myCirclesLoaded, myCirclesError: null });
       try {
         const [joined, created, applied] = await Promise.all([
           fetchMyCircles('joined'),
@@ -100,8 +141,10 @@ export const useCirclesStore = create<CirclesState>((set, get) => ({
           managedCircles,
           appliedCircles: applied,
           myCirclesError: null,
+          myCirclesLoaded: true,
         });
-        if (runId === myCirclesRunSeq) myCirclesLoadedAt = startedAt;
+        if (isCurrent()) myCirclesLoadedAt = startedAt;
+        if (isCurrent() && requestRevision === getPageSnapshotRevision() && !groupOrCircleMutatedSince(startedAt)) persistCircleLists(get(), startedAt);
         // 返回本次 run 的快照 —— 调用方（如发帖提交前校验）据此判断，不必回读 store，
         // 从而不受并发 force/reset 代际覆盖的影响。
         return { ok: true, joined, created };
@@ -125,7 +168,7 @@ export const useCirclesStore = create<CirclesState>((set, get) => ({
     return run;
   },
 
-  patchCircle: (id, patch) =>
+  patchCircle: (id, patch) => {
     set((state) => {
       const apply = (list: Circle[]) =>
         list.map((circle) =>
@@ -137,7 +180,9 @@ export const useCirclesStore = create<CirclesState>((set, get) => ({
         managedCircles: apply(state.managedCircles),
         appliedCircles: apply(state.appliedCircles),
       };
-    }),
+    });
+    persistCircleLists(get());
+  },
 
   removeCircle: (id) => {
     // round 2 review：成员关系已变更 —— 变更**前**出发的在飞 /circle/my
@@ -159,6 +204,7 @@ export const useCirclesStore = create<CirclesState>((set, get) => ({
         myCirclesLoading: false,
       };
     });
+    persistCircleLists(get());
   },
 
   reset: () => {
@@ -168,6 +214,7 @@ export const useCirclesStore = create<CirclesState>((set, get) => ({
     myCirclesRunSeq += 1;
     myCirclesInFlight = null;
     myCirclesLoadedAt = null;
+    hydratedScope = '';
     set({
       joinedCircles: [],
       createdCircles: [],
@@ -175,6 +222,12 @@ export const useCirclesStore = create<CirclesState>((set, get) => ({
       appliedCircles: [],
       myCirclesLoading: false,
       myCirclesError: null,
+      myCirclesLoaded: false,
     });
   },
 }));
+
+export function useHydrateCirclesSnapshot(): void {
+  const epoch = useAuthStore((state) => state.sessionEpoch);
+  useLayoutEffect(() => useCirclesStore.getState().hydrate(), [epoch]);
+}

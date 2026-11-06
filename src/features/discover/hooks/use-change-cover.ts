@@ -13,6 +13,7 @@ import {
 } from '@/services/api/upload';
 import { updateUserProfile } from '@/services/api/profile';
 import { useAuthStore } from '@/stores/authStore';
+import { readUserProfileCache, writeUserProfileCache } from '@/features/user/profile-cache';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 const MAX_COVER_BYTES = 10 * 1024 * 1024;
@@ -41,6 +42,7 @@ export function useChangeCover(
   const changeCover = useCallback(async () => {
     if (inFlightRef.current || changing) return;
     inFlightRef.current = true;
+    const sessionEpoch = useAuthStore.getState().sessionEpoch;
     try {
       const imagePicker = loadImagePickerModule();
       if (!imagePicker) {
@@ -107,12 +109,18 @@ export function useChangeCover(
           requiredHeaders,
         );
 
-        const currentUser = useAuthStore.getState().user;
+        const auth = useAuthStore.getState();
+        if (auth.sessionEpoch !== sessionEpoch || auth.user?.id !== userId) return;
+        const currentUser = auth.user;
         const nextUser = await updateUserProfile(
           userId,
           { cover: fileUrl },
           currentUser,
         );
+        const currentAuth = useAuthStore.getState();
+        if (currentAuth.sessionEpoch !== sessionEpoch || currentAuth.user?.id !== userId) return;
+        const album = readUserProfileCache(sessionEpoch, userId)?.album;
+        if (album) writeUserProfileCache(sessionEpoch, userId, { album: { value: { ...album.value, cover: fileUrl }, at: Date.now() } });
         setUser(nextUser);
         onChanged(fileUrl);
       } catch (error) {

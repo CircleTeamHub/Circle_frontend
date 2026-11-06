@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,13 +15,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   fetchFriendSettings,
+  friendsMutatedSince,
   setFriendPermission,
   type FriendPermission,
 } from '@/services/api/friends';
+import { isProfileCacheFresh, readUserProfileCache, writeUserProfileCache } from '../profile-cache';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { useAuthStore } from '@/stores/authStore';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 
 const PERMISSION_OPTIONS: readonly FriendPermission[] = ['FULL', 'CHAT_ONLY'];
 
@@ -75,15 +78,18 @@ export default function EditFriendPermissionScreen() {
   const profileId = typeof params.id === 'string' ? params.id : '';
   const ownerId = useAuthStore((state) => state.isAuthenticated ? state.user?.id : undefined);
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+
+  const cachedStamp = readUserProfileCache(sessionEpoch, profileId)?.friendSettings;
+  const cachedSettings = cachedStamp && !friendsMutatedSince(cachedStamp.at) ? cachedStamp.value : null;
   const scopeKey = `${ownerId ?? ''}:${sessionEpoch}:${profileId}`;
   const scopeRef = useRef(scopeKey);
   scopeRef.current = scopeKey;
   const originOwner = useRef(ownerId);
   const targetName =
     originOwner.current === ownerId && typeof params.name === 'string' ? params.name : t('chat.friend');
-  const [permission, setPermission] = useState<FriendPermission | null>(null);
-  const [loadedScope, setLoadedScope] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [permission, setPermission] = useState<FriendPermission | null>(cachedSettings?.permission ?? null);
+  const [loadedScope, setLoadedScope] = useState(isProfileCacheFresh(cachedStamp, Date.now(), friendsMutatedSince) && cachedSettings ? scopeKey : '');
+  const [isLoading, setIsLoading] = useState(!cachedSettings);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryVersion, setRetryVersion] = useState(0);
@@ -95,7 +101,7 @@ export default function EditFriendPermissionScreen() {
     return () => { mountedRef.current = false; };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     let cancelled = false;
     const isCurrent = () => {
       const auth = useAuthStore.getState();
@@ -105,7 +111,6 @@ export default function EditFriendPermissionScreen() {
     saveRef.current = null;
     setIsSaving(false);
     setLoadedScope('');
-    setPermission(null);
 
     if (!profileId || !ownerId) {
       setError(t(!profileId ? 'userProfile.editPermission.missingFriend' : 'userProfile.editPermission.loadFailed'));
@@ -113,6 +118,17 @@ export default function EditFriendPermissionScreen() {
       return;
     }
 
+    const cached = readUserProfileCache(sessionEpoch, profileId)?.friendSettings;
+    setPermission(cached?.value?.permission ?? null);
+    if (isProfileCacheFresh(cached, Date.now(), friendsMutatedSince) && cached.value) {
+      setPermission(cached.value.permission);
+      setLoadedScope(scopeKey);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+    const startedAt = Date.now();
+    const requestRevision = getPageSnapshotRevision();
     setIsLoading(true);
     setError(null);
     fetchFriendSettings(profileId)
@@ -121,6 +137,7 @@ export default function EditFriendPermissionScreen() {
         if (settings?.permission !== 'FULL' && settings?.permission !== 'CHAT_ONLY') {
           throw new Error('Unsupported friend permission response');
         }
+        writeUserProfileCache(sessionEpoch, profileId, { friendSettings: { value: settings, at: startedAt } }, requestRevision);
         setPermission(settings.permission);
         setLoadedScope(scopeKey);
       })
@@ -189,12 +206,12 @@ export default function EditFriendPermissionScreen() {
 
   const waitingForScope = Boolean(ownerId && profileId) && !error && loadedScope !== scopeKey;
   const saveDisabled = isLoading || waitingForScope || Boolean(error) || isSaving || permission === null;
-  const stateBlock = isLoading || waitingForScope ? (
+  const stateBlock = (isLoading || waitingForScope) && permission === null ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
       <Text style={d.stateText}>{t('userProfile.editPermission.loading')}</Text>
     </View>
-  ) : error ? (
+  ) : error && permission === null ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
       {profileId && ownerId ? <Pressable onPress={() => setRetryVersion((version) => version + 1)} accessibilityRole="button" style={[s.saveButton, d.saveButton, { paddingHorizontal: Spacing.lg }]}>
@@ -203,6 +220,7 @@ export default function EditFriendPermissionScreen() {
     </View>
   ) : (
     <View style={[s.card, d.card]}>
+      {error ? <Text style={d.stateText}>{error}</Text> : null}
       <Text style={d.title}>{t('userProfile.editPermission.label', { name: targetName })}</Text>
       <Text style={d.helper}>{t('userProfile.editPermission.helper')}</Text>
       {PERMISSION_OPTIONS.map((option) => {
@@ -212,6 +230,7 @@ export default function EditFriendPermissionScreen() {
             key={option}
             style={[s.option, d.option, selected ? d.optionActive : null]}
             onPress={() => setPermission(option)}
+            disabled={isLoading || waitingForScope}
             accessibilityRole="radio"
             accessibilityState={{ selected }}
           >

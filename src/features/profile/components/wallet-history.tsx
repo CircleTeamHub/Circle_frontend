@@ -126,8 +126,7 @@ export function WalletHistory({ transactions, loading, error, onRetry, labelFor 
     return byMonth;
   }, [locale, transactions]);
 
-  if (error) {
-    return (
+  const failure = error ? (
       <View style={[s.state, { backgroundColor: colors.surface }]}>
         <Ionicons name="cloud-offline-outline" size={28} color={colors.textSecondary} />
         <Text selectable style={[Typography.caption, { color: colors.error }]}>
@@ -143,8 +142,9 @@ export function WalletHistory({ transactions, loading, error, onRetry, labelFor 
           </Text>
         </Pressable>
       </View>
-    );
-  }
+    ) : null;
+
+  if (failure && transactions.length === 0) return failure;
 
   if (loading && transactions.length === 0) {
     return (
@@ -167,6 +167,7 @@ export function WalletHistory({ transactions, loading, error, onRetry, labelFor 
 
   return (
     <>
+      {failure}
       {groups.map((group) => (
         <View key={group.key} style={s.section}>
           <Text style={[s.monthLabel, { color: colors.textSecondary }]}>{group.label}</Text>

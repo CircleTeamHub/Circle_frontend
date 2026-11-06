@@ -1,4 +1,5 @@
 import { apiClient } from '@/services/api/client';
+import { writeGroupInfoCache } from '@/features/chat/group-info-cache';
 import { markGroupWrite } from '@/services/api/group-writes';
 import { collectCursorPages, readHasMore } from '@/services/api/pagination';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -564,16 +565,17 @@ export function renameGroupChatConversation(
 }
 
 /**
- * 群日志:独立于聊天记录的群事件账本(进退群/移出/角色/禁言/改名/公告/清空/转让),
- * 倒序游标分页。圈子群与成员目录同闸(圈主/管理员),独立群聊全员可读。
+ * 群日志:独立于聊天记录的重要群事件账本,倒序游标分页,仅群主/管理员可读。
  */
 export function fetchChatGroupEvents(
   conversationId: string,
-  options: { cursor?: string | null; limit?: number } = {},
+  options: { cursor?: string | null; limit?: number; keyword?: string; person?: 'target' | 'actor' } = {},
 ): Promise<ChatGroupEventsPageDto> {
   const query = [
     options.cursor ? `cursor=${encodeURIComponent(options.cursor)}` : '',
     options.limit ? `limit=${options.limit}` : '',
+    options.keyword ? `keyword=${encodeURIComponent(options.keyword)}` : '',
+    options.keyword && options.person ? `person=${options.person}` : '',
   ]
     .filter(Boolean)
     .join('&');
@@ -675,14 +677,15 @@ export function transferGroupChatOwner(
   }));
 }
 
-/** 独立群聊:群公告(群主/管理员;空串清空)。 */
+/** 群公告与播报开关同事务保存(群主/管理员;空串清空)。 */
 export function setGroupChatNotice(
   conversationId: string,
   notice: string,
-): Promise<{ notice: string | null }> {
-  return markGroupWrite(apiClient<{ notice: string | null }>(
+  noticePinned?: boolean,
+): Promise<{ notice: string | null; noticePinned?: boolean }> {
+  return markGroupWrite(apiClient<{ notice: string | null; noticePinned?: boolean }>(
     `/chat/conversations/${conversationId}/notice`,
-    { method: 'PATCH', body: { notice } },
+    { method: 'PATCH', body: { notice, ...(noticePinned === undefined ? {} : { noticePinned }) } },
   ));
 }
 
@@ -991,9 +994,21 @@ export function fetchChatMessageDays(
 export function fetchChatMembers(
   conversationId: string,
 ): Promise<ChatMemberDto[]> {
+  const epoch = useAuthStore.getState().sessionEpoch;
   return apiClient<ChatMemberDto[]>(
     `/chat/conversations/${conversationId}/members`,
-  );
+  ).then((members) => {
+    if (useAuthStore.getState().sessionEpoch === epoch) {
+      const conversation = useChatStore.getState().conversations.find((item) => item.id === conversationId);
+      if (conversation && (conversation.type === 'GROUP' || conversation.type === 'TEMP')) {
+        const key = conversation.type === 'TEMP'
+          ? `temp:${conversationId}`
+          : conversation.circleId ? `circle:${conversation.circleId}` : `standalone:${conversationId}`;
+        writeGroupInfoCache(epoch, key, { members });
+      }
+    }
+    return members;
+  });
 }
 
 /** 全局搜索(服务端):跨本人全部会话搜文本(最新在前,扁平)。 */

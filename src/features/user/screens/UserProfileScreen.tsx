@@ -16,6 +16,7 @@ import { UserIconRow } from '@/components/ui/user-icon-row';
 import { ensureDirectConversation } from '@/chat-core/client';
 import { usePeerPresence } from '@/chat-core/use-peer-presence';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
 import { createDirectCall } from '@/services/api/calls';
 import { useCallStore } from '@/features/call/store/use-call-store';
 import type { CallType } from '@/features/call/types';
@@ -65,6 +66,7 @@ import {
   writeUserProfileCache,
 } from '@/features/user/profile-cache';
 import { fetchUserProfile } from '@/services/api/profile';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 import { useAuthStore } from '@/stores/authStore';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -254,6 +256,12 @@ function cachedFriendValue<T>(stamp: { value: T; at: number } | undefined): T | 
 }
 
 export default function UserProfileScreen() {
+  const params = useLocalSearchParams<{ id?: string }>();
+  const epoch = useAuthStore((state) => state.sessionEpoch);
+  return <UserProfileContent key={`${epoch}:${typeof params.id === 'string' ? params.id : 'unknown'}`} />;
+}
+
+function UserProfileContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const segments = useSegments();
@@ -408,6 +416,7 @@ export default function UserProfileScreen() {
         };
       }
       const startedAt = Date.now();
+      const requestRevision = getPageSnapshotRevision();
 
       fetchUserProfile(profileId)
         .then((profile) => {
@@ -448,13 +457,13 @@ export default function UserProfileScreen() {
           setRemoteProfile(loaded);
           writeUserProfileCache(sessionEpoch, profileId, {
             profile: { value: loaded, at: startedAt },
-          });
+          }, requestRevision);
         })
         .catch((error) => {
-          // 拉不到(含被群规矩挡住、无权查看)就别再拿缓存里的旧资料给人看。
-          evictUserProfileCache(sessionEpoch, profileId);
+          const denied = isDefinitiveAuthFailure(error) || (error instanceof ApiError && error.status === 404);
+          if (denied) evictUserProfileCache(sessionEpoch, profileId);
           if (!cancelled) {
-            setRemoteProfile(null);
+            if (denied) setRemoteProfile(null);
             // 「成员可查看他人资料」关掉的群里打开对方资料,服务端回
             // CHAT_MEMBER_PROFILE_FORBIDDEN —— 那不是「加载失败」,得说清是群规矩
             // 挡住的(原始错误文本仍然不透出,走同一个漏斗)。
@@ -499,18 +508,20 @@ export default function UserProfileScreen() {
         };
       }
       const startedAt = Date.now();
+      const requestRevision = getPageSnapshotRevision();
 
       fetchFriendStatus(canonicalProfileUserId)
         .then((status) => {
           writeUserProfileCache(sessionEpoch, profileId, {
             friendStatus: { value: status.status, at: startedAt },
-          });
+          }, requestRevision);
           if (!cancelled) {
             setFriendStatusLoadError(false);
             setFriendStatus(status.status);
           }
         })
         .catch((error) => {
+          if (isDefinitiveAuthFailure(error)) evictUserProfileCache(sessionEpoch, profileId);
           if (!cancelled) {
             setFriendStatusLoadError(true);
             setFriendStatus(null);
@@ -547,17 +558,19 @@ export default function UserProfileScreen() {
         };
       }
       const startedAt = Date.now();
+      const requestRevision = getPageSnapshotRevision();
 
       fetchFriendSettings(canonicalProfileUserId)
         .then((settings) => {
           writeUserProfileCache(sessionEpoch, profileId, {
             friendSettings: { value: settings, at: startedAt },
-          });
+          }, requestRevision);
           if (!cancelled) {
             setFriendSettings(settings);
           }
         })
         .catch((error) => {
+          if (isDefinitiveAuthFailure(error)) evictUserProfileCache(sessionEpoch, profileId);
           if (!cancelled) {
             setFriendSettings(null);
           }
@@ -1306,6 +1319,8 @@ export default function UserProfileScreen() {
                       source={{ uri }}
                       style={[s.photoNote, d.photoNote]}
                       contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={0}
                     />
                   ))}
                 </View>

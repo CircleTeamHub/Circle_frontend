@@ -172,9 +172,9 @@ test('chat detail screen wires a tappable emoji picker into the composer', () =>
 test('re-sending a collected favorite rebuilds by original type via resolveCollectionSendPlan', () => {
   const source = readChatDetailSource();
 
-  // 按 plan 分发：文本走草稿、语音/笔记/名片按原类型重建。
+  // 按 plan 分发，收藏与附加消息不修改聊天页原有草稿。
   assert.match(source, /resolveCollectionSendPlan\(item\)/);
-  assert.match(source, /plan\.kind === 'text'/);
+  assert.match(source, /case 'text':\s*return sendTextMessage\(/);
   assert.match(source, /case 'voice':/);
   assert.match(source, /case 'note':/);
   assert.match(source, /case 'friend':/);

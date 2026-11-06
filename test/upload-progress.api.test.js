@@ -63,6 +63,7 @@ function loadUpload({ platform = 'web', nativeResult, nativeError, hang = false,
       return { ok: true, blob: async () => { if (blobWait) await blobWait; return blob; } };
     },
     require: (request) => {
+      if (request === '@/observability/tracing') return { startOperationSpan: () => ({ end() {} }) };
       switch (request) {
         case '@/services/api/client': return { apiClient: async (...args) => {
           apiCalls.push(args);

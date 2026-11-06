@@ -15,7 +15,7 @@ const source = fs.readFileSync(
 test('video bubble mounts an empty player and loads the source only on play', () => {
   assert.match(source, /useVideoPlayer\(\s*null/);
   assert.doesNotMatch(source, /useVideoPlayer\(\s*message\.videoUrl/);
-  assert.match(source, /replaceAsync\(videoUrl\)/);
+  assert.match(source, /replaceAsync\(cachedVideoSource\(videoUrl, !ephemeral\)\)/);
 });
 
 // 签名 URL 过期后读路径会换发一条新的；播放器还钉着旧 URL 的话，

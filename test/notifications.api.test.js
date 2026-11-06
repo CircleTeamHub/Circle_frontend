@@ -54,6 +54,16 @@ function loadApi(filePathRel, apiResponse) {
   return { api: context.module.exports, calls };
 }
 
+test('group offline preference reads and saves real booleans', async () => {
+  const { api, calls } = loadApi('src/services/api/notifications.ts', { groupOfflinePushEnabled: false });
+  assert.equal(await api.fetchGroupOfflinePushEnabled(), false);
+  assert.equal(await api.updateGroupOfflinePushEnabled(false), false);
+  assert.equal(calls[0][0], '/notification/group-push-preference');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), ['/notification/group-push-preference', { method: 'PUT', body: { groupOfflinePushEnabled: false } }]);
+  const malformed = loadApi('src/services/api/notifications.ts', { groupOfflinePushEnabled: 'false' });
+  await assert.rejects(malformed.api.fetchGroupOfflinePushEnabled(), /invalid shape/);
+});
+
 test("fetchNotifications calls /notification/list with page", async () => {
   const { api, calls } = loadApi("src/services/api/notifications.ts", []);
   await api.fetchNotifications(2);

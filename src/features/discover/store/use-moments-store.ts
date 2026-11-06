@@ -1,8 +1,12 @@
 import { create } from 'zustand';
 import { useAuthStore } from '@/stores/authStore';
-import { fetchMomentsFeed } from '@/services/api/moments';
+import { fetchMomentsFeed, momentsMutatedSince } from '@/services/api/moments';
 import type { MomentComment, MomentPost } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useLayoutEffect } from 'react';
+import { Platform } from 'react-native';
+import { getEncryptedInstance } from '@/storage/encrypted-init';
+import { getPageSnapshotRevision, readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 
 interface MomentsState {
   moments: MomentPost[];
@@ -18,6 +22,7 @@ interface MomentsState {
   fetchError: boolean;
   latestRequestId: number;
   lastRefreshTime: string | null;
+  hydrate: () => void;
 
   fetchMoments: (reset?: boolean) => Promise<void>;
   prependMoment: (moment: MomentPost) => void;
@@ -27,6 +32,11 @@ interface MomentsState {
   removeComment: (momentId: string, commentId: string) => void;
   reset: () => void;
 }
+
+let snapshotScope = '';
+let snapshotOwner: string | null = null;
+let snapshotEpoch = -1;
+let snapshotRevision = -1;
 
 function mergeMoments(
   currentMoments: MomentPost[],
@@ -50,7 +60,22 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
   latestRequestId: 0,
   lastRefreshTime: null,
 
+  hydrate: () => {
+    const auth = useAuthStore.getState();
+    if (!auth.isAuthenticated || !auth.user?.id || (Platform.OS !== 'web' && !getEncryptedInstance())) return;
+    const revision = getPageSnapshotRevision();
+    const scope = `${auth.user.id}:${auth.sessionEpoch}:${revision}`;
+    if (snapshotScope === scope) return;
+    snapshotScope = scope;
+    snapshotOwner = auth.user.id;
+    snapshotEpoch = auth.sessionEpoch;
+    snapshotRevision = revision;
+    const saved = readPageSnapshot<MomentPost[]>(auth.user.id, 'social:moments-feed');
+    set({ moments: saved?.value ?? [], cursor: null, hasMore: !saved, loading: false, refreshing: false, fetchError: false, latestRequestId: get().latestRequestId + 1 });
+  },
+
   fetchMoments: async (reset = false) => {
+    get().hydrate();
     const state = get();
     // reset (pull-to-refresh) 抢占在飞的 paginate —— 否则下拉刷新会因分页正在进行而静默失败。
     // 同模式并发请求才早退。
@@ -65,6 +90,8 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
     const cursor = reset ? undefined : (state.cursor ?? undefined);
     const requestId = state.latestRequestId + 1;
     const { user, sessionEpoch } = useAuthStore.getState();
+    const requestRevision = getPageSnapshotRevision();
+    const startedAt = Date.now();
     const isCurrentSession = () => {
       const auth = useAuthStore.getState();
       return auth.user?.id === user?.id && auth.sessionEpoch === sessionEpoch;
@@ -85,10 +112,12 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
         if (!isCurrentSession() || current.latestRequestId !== requestId) {
           return {};
         }
-        return {
-          moments: reset
+        const moments = reset
             ? result.items
-            : mergeMoments(current.moments, result.items),
+            : mergeMoments(current.moments, result.items);
+        if (requestRevision === getPageSnapshotRevision() && !momentsMutatedSince(startedAt)) writePageSnapshot(user?.id, 'social:moments-feed', moments.slice(0, 100));
+        return {
+          moments,
           cursor: result.nextCursor ?? null,
           hasMore: result.hasMore,
           fetchError: false,
@@ -115,13 +144,17 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
     }
   },
 
-  prependMoment: (moment) =>
+  prependMoment: (moment) => {
     set((s) => ({
       moments: [moment, ...s.moments.filter((item) => item.id !== moment.id)],
-    })),
+    }));
+    persistMomentFeed();
+  },
 
-  removeMoment: (id) =>
-    set((s) => ({ moments: s.moments.filter((m) => m.id !== id) })),
+  removeMoment: (id) => {
+    set((s) => ({ moments: s.moments.filter((m) => m.id !== id) }));
+    persistMomentFeed();
+  },
 
   toggleLike: (momentId, liked, likeCount) =>
     set((s) => ({
@@ -130,7 +163,7 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
       ),
     })),
 
-  addComment: (momentId, comment) =>
+  addComment: (momentId, comment) => {
     set((s) => ({
       moments: s.moments.map((m) =>
         m.id === momentId
@@ -141,9 +174,11 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
             }
           : m,
       ),
-    })),
+    }));
+    persistMomentFeed();
+  },
 
-  removeComment: (momentId, commentId) =>
+  removeComment: (momentId, commentId) => {
     set((s) => ({
       moments: s.moments.map((m) =>
         m.id === momentId
@@ -154,9 +189,13 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
             }
           : m,
       ),
-    })),
+    }));
+    persistMomentFeed();
+  },
 
-  reset: () =>
+  reset: () => {
+    snapshotScope = '';
+    snapshotOwner = null;
     set((current) => ({
       moments: [],
       cursor: null,
@@ -166,5 +205,18 @@ export const useMomentsStore = create<MomentsState>((set, get) => ({
       fetchError: false,
       latestRequestId: current.latestRequestId + 1,
       lastRefreshTime: null,
-    })),
+    }));
+  },
 }));
+
+function persistMomentFeed(): void {
+  const auth = useAuthStore.getState();
+  if (!snapshotOwner || auth.user?.id !== snapshotOwner ||
+    auth.sessionEpoch !== snapshotEpoch || getPageSnapshotRevision() !== snapshotRevision) return;
+  writePageSnapshot(snapshotOwner, 'social:moments-feed', useMomentsStore.getState().moments.slice(0, 100));
+}
+
+export function useHydrateMomentsSnapshot(): void {
+  const epoch = useAuthStore((state) => state.sessionEpoch);
+  useLayoutEffect(() => useMomentsStore.getState().hydrate(), [epoch]);
+}

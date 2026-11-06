@@ -11,7 +11,10 @@ function loadUpload({
   responseBody = '',
   onReport = () => {},
   fetchError,
+  onFetch = () => {},
+  isSessionCurrent = () => true,
   now,
+  spans = [],
 } = {}) {
   const filePath = path.join(process.cwd(), 'src/services/api/upload.ts');
   const source = fs.readFileSync(filePath, 'utf8');
@@ -31,11 +34,15 @@ function loadUpload({
     setTimeout,
     clearTimeout,
     fetch: async () => {
+      onFetch();
       if (fetchError) throw fetchError;
       return { ok, status, text: async () => responseBody };
     },
     console: { log: () => {} },
     require: (request) => {
+      if (request === '@/observability/tracing') return {
+        startOperationSpan: operation => ({ end: status => spans.push({ operation, status }) }),
+      };
       switch (request) {
         case '@/services/api/client':
           return { apiClient: async () => ({}) };
@@ -58,7 +65,7 @@ function loadUpload({
           return { reportError: onReport };
         case '@/stores/upload-progress-store':
           return {
-            captureUploadProgressScope: () => () => true,
+            captureUploadProgressScope: () => isSessionCurrent,
             startUploadProgress: () => ({ update: () => {}, finish: () => {} }),
           };
         case '@/i18n':
@@ -214,11 +221,13 @@ test('a storage outage reports once per failure shape per minute, not once per u
   // 反而发不出去。与 services/api/client.ts 同一套：按签名 60 秒一次。
   let clock = 1_000;
   const reports = [];
+  const spans = [];
   const { uploadFileToPresignedUrl } = loadUpload({
     status: 503,
     responseBody: '<Error><Code>SlowDown</Code></Error>',
     onReport: (_err, ctx) => reports.push(ctx),
     now: () => clock,
+    spans,
   });
   const upload = (contentType = 'image/png') =>
     assert.rejects(() => uploadFileToPresignedUrl('https://store/x', contentType, {}, {}));
@@ -227,6 +236,8 @@ test('a storage outage reports once per failure shape per minute, not once per u
   await upload();
   await upload();
   assert.equal(reports.length, 1);
+  assert.equal(spans.length, 3, 'every attempt finishes its operation even if error events are throttled');
+  assert.ok(spans.every(span => span.operation === 'mediaUpload' && span.status === 'internal_error'));
 
   // 不同的失败形状（这里是内容类型）各有自己的额度。
   await upload('video/mp4');
@@ -235,4 +246,35 @@ test('a storage outage reports once per failure shape per minute, not once per u
   clock += 60_000;
   await upload();
   assert.equal(reports.length, 3, 'the same shape reports again after the window');
+});
+
+test('successful uploads finish their operation as success without reporting an error', async () => {
+  const spans = [];
+  const reports = [];
+  const { uploadFileToPresignedUrl } = loadUpload({ ok: true, status: 200, spans,
+    onReport: (...args) => reports.push(args),
+  });
+  await uploadFileToPresignedUrl('https://store/private?token=secret', 'image/png', {}, {});
+  assert.deepEqual(spans, [{ operation: 'mediaUpload', status: undefined }]);
+  assert.equal(reports.length, 0);
+});
+
+test('an upload failing after an account change never reports against the new account', async () => {
+  let currentSession = true;
+  const original = new Error('connection failed');
+  const reports = [];
+  const spans = [];
+  const { uploadFileToPresignedUrl } = loadUpload({
+    fetchError: original,
+    onFetch: () => { currentSession = false; },
+    isSessionCurrent: () => currentSession,
+    onReport: (...args) => reports.push(args),
+    spans,
+  });
+  await assert.rejects(
+    uploadFileToPresignedUrl('https://store/x', 'image/png', {}, {}),
+    error => error === original,
+  );
+  assert.equal(reports.length, 0);
+  assert.deepEqual(spans, [{ operation: 'mediaUpload', status: 'internal_error' }]);
 });

@@ -96,7 +96,9 @@ export function useVoiceRecording({
     if (recordingAudioModeEnabledRef.current) {
       recordingAudioModeEnabledRef.current = false;
       recordingAudioModeSessionRef.current = 0;
-      setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
+      setAudioModeAsync({ allowsRecording: false }).catch((error) =>
+        reportHandledFailure('chatDetail', 'voiceAudioModeRestore', error),
+      );
     }
   }, []);
   // 录音状态完全由 JS 侧的 voiceRecordingStartedAt 决定：录音是纯按住/松手驱动的
@@ -289,6 +291,7 @@ export function useVoiceRecording({
         });
         void uploadAndSendVoice(soundPath, duration, deliveryId);
       } catch (error) {
+        reportHandledFailure('chatDetail', 'voiceRecordStop', error);
         logChatSendFailure(error, {
           kind: 'voice',
           sessionType: conversationType,

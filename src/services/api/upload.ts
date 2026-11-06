@@ -11,6 +11,7 @@ import {
   isPlainObject,
 } from '@/utils/validate';
 import { reportError } from '@/observability/sentry';
+import { startOperationSpan } from '@/observability/tracing';
 import { captureUploadProgressScope, startUploadProgress, type UploadProgressOptions } from '@/stores/upload-progress-store';
 import i18n from '@/i18n';
 
@@ -85,9 +86,13 @@ async function runStorageUpload<T>(
   context: { kind: string; contentType: string },
   task: () => Promise<T>,
 ): Promise<T> {
+  const isSessionCurrent = captureUploadProgressScope();
+  const span = startOperationSpan('mediaUpload');
+  let failed = false;
   try {
     return await task();
   } catch (error) {
+    failed = true;
     const storage: { status?: number; storageCode?: string } = error instanceof StorageUploadError
       ? { status: error.status, ...(error.storageCode ? { storageCode: error.storageCode } : {}) }
       : {};
@@ -99,7 +104,7 @@ async function runStorageUpload<T>(
       error instanceof Error ? error.name : typeof error,
     ].join(':');
     try {
-      if (shouldReportUploadFailure(signature)) {
+      if (isSessionCurrent() && shouldReportUploadFailure(signature)) {
         reportError(sanitizeUploadErrorForReport(error), {
           operation: 'upload',
           platform: Platform.OS,
@@ -111,6 +116,8 @@ async function runStorageUpload<T>(
       // A reporting failure must not replace the original upload error.
     }
     throw error;
+  } finally {
+    span.end(failed ? 'internal_error' : undefined);
   }
 }
 

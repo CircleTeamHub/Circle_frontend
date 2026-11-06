@@ -13,7 +13,10 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { NavHeader } from '@/components/ui/nav-header';
 import { ThemedSwitch } from '@/components/ui/themed-switch';
-import { useChatStore } from '@/chat-core/store';
+import { useAuthStore } from '@/stores/authStore';
+import {
+  readPrivacySettingsCache,
+} from '@/features/profile/privacy-settings-cache';
 import {
   type DirectMessageAutoReplyPreference,
   useDirectMessageAutoReplyStore,
@@ -24,6 +27,7 @@ import {
   updatePrivacySettings,
 } from '@/services/api/privacy';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 // 版式对齐 settings-detail：分区标题 + 圆角卡片 + 卡片下方的脚注说明。
@@ -94,10 +98,17 @@ export default function DirectMessageAutoReplyScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const userId = useChatStore((state) => state.currentUserId) ?? '';
-  const preference = useDirectMessageAutoReplyStore(
+  const userId = useAuthStore((state) => state.user?.id ?? '');
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const owner = `${sessionEpoch}:${userId}`;
+  const storedPreference = useDirectMessageAutoReplyStore(
     (state) => state.byUserId[userId] ?? EMPTY_PREFERENCE,
   );
+  const formOwner = useRef<string | null>(null);
+  const cachedSettings = readPrivacySettingsCache(sessionEpoch);
+  const preference = formOwner.current === owner
+    ? storedPreference
+    : cachedSettings ? preferenceFromSettings(cachedSettings) : EMPTY_PREFERENCE;
   const setPreference = useDirectMessageAutoReplyStore(
     (state) => state.setPreference,
   );
@@ -108,7 +119,8 @@ export default function DirectMessageAutoReplyScreen() {
     (state) => state.setDraftMessage,
   );
   const [loading, setLoading] = useState(true);
-  const [loaded, setLoaded] = useState(false);
+  const [loadedOwner, setLoadedOwner] = useState<string | null>(null);
+  const loaded = Boolean(userId) && loadedOwner === owner;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
@@ -140,14 +152,19 @@ export default function DirectMessageAutoReplyScreen() {
 
   const loadSettings = useCallback(async () => {
     const request = ++requestSequence.current;
-    serverPreference.current = EMPTY_PREFERENCE;
-    setLoaded(false);
+    setLoadedOwner(null);
     if (!userId) {
       setLoading(false);
       return;
     }
 
-    setPreference(userId, EMPTY_PREFERENCE);
+    if (formOwner.current !== owner) {
+      const cached = readPrivacySettingsCache(sessionEpoch);
+      const confirmed = cached ? preferenceFromSettings(cached) : EMPTY_PREFERENCE;
+      serverPreference.current = confirmed;
+      formOwner.current = owner;
+      setPreference(userId, confirmed);
+    }
     setLoading(true);
     setSaving(false);
     setError(null);
@@ -155,20 +172,26 @@ export default function DirectMessageAutoReplyScreen() {
       const settings = await fetchPrivacySettings();
       if (
         request !== requestSequence.current ||
-        useChatStore.getState().currentUserId !== userId
+        useAuthStore.getState().sessionEpoch !== sessionEpoch ||
+        useAuthStore.getState().user?.id !== userId
       ) {
         return;
       }
       const next = preferenceFromSettings(settings);
       serverPreference.current = next;
       setPreference(userId, next);
-      setLoaded(true);
+      setLoadedOwner(owner);
     } catch (requestError) {
       if (
         request !== requestSequence.current ||
-        useChatStore.getState().currentUserId !== userId
+        useAuthStore.getState().sessionEpoch !== sessionEpoch ||
+        useAuthStore.getState().user?.id !== userId
       ) {
         return;
+      }
+      if (isDefinitiveAuthFailure(requestError)) {
+        serverPreference.current = EMPTY_PREFERENCE;
+        setPreference(userId, EMPTY_PREFERENCE);
       }
       setError(
         getApiErrorMessage(
@@ -181,7 +204,7 @@ export default function DirectMessageAutoReplyScreen() {
     } finally {
       if (request === requestSequence.current) setLoading(false);
     }
-  }, [setPreference, t, userId]);
+  }, [owner, sessionEpoch, setPreference, t, userId]);
 
   useEffect(() => {
     void loadSettings();
@@ -197,6 +220,8 @@ export default function DirectMessageAutoReplyScreen() {
         !loaded ||
         loading ||
         saving ||
+        useAuthStore.getState().sessionEpoch !== sessionEpoch ||
+        useAuthStore.getState().user?.id !== userId ||
         (next.enabled && !next.message.trim())
       ) {
         return;
@@ -213,7 +238,8 @@ export default function DirectMessageAutoReplyScreen() {
         });
         if (
           request !== requestSequence.current ||
-          useChatStore.getState().currentUserId !== userId
+          useAuthStore.getState().sessionEpoch !== sessionEpoch ||
+          useAuthStore.getState().user?.id !== userId
         ) {
           return;
         }
@@ -223,11 +249,16 @@ export default function DirectMessageAutoReplyScreen() {
       } catch (requestError) {
         if (
           request !== requestSequence.current ||
-          useChatStore.getState().currentUserId !== userId
+          useAuthStore.getState().sessionEpoch !== sessionEpoch ||
+          useAuthStore.getState().user?.id !== userId
         ) {
           return;
         }
-        setPreference(userId, previous);
+        if (isDefinitiveAuthFailure(requestError)) {
+          serverPreference.current = EMPTY_PREFERENCE;
+          setPreference(userId, EMPTY_PREFERENCE);
+          setLoadedOwner(null);
+        } else setPreference(userId, previous);
         setError(
           getApiErrorMessage(
             requestError,
@@ -240,7 +271,7 @@ export default function DirectMessageAutoReplyScreen() {
         if (request === requestSequence.current) setSaving(false);
       }
     },
-    [loaded, loading, saving, setPreference, t, userId],
+    [loaded, loading, saving, sessionEpoch, setPreference, t, userId],
   );
 
   const dirty =
@@ -358,7 +389,7 @@ export default function DirectMessageAutoReplyScreen() {
           </View>
         </View>
 
-        {loading || saving ? (
+        {(loading && cachedSettings === null) || saving ? (
           <View style={s.loadingRow}>
             <ActivityIndicator color={colors.primary} />
           </View>

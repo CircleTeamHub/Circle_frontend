@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -205,7 +205,19 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
   const [signed, setSigned] = useState(post.signedByMe);
   const [signupCount, setSignupCount] = useState(post.signupCount);
   const [busy, setBusy] = useState(false);
+  const signupInFlightRef = useRef(false);
+  const deferredSignupRef = useRef<{ signed: boolean; count: number } | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
+
+  useEffect(() => {
+    // A refresh may finish during signup; the action's response owns that update.
+    if (signupInFlightRef.current) {
+      deferredSignupRef.current = { signed: post.signedByMe, count: post.signupCount };
+      return;
+    }
+    setSigned(post.signedByMe);
+    setSignupCount(post.signupCount);
+  }, [post.signedByMe, post.signupCount]);
 
   const currentUserId = useAuthStore((state) => state.user?.id);
   const isOwnPost = !!currentUserId && currentUserId === post.author.id;
@@ -336,7 +348,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
   );
 
   const handleToggleSignup = useCallback(async () => {
-    if (busy) return;
+    if (signupInFlightRef.current) return;
     // 取消报名不校验门槛；仅当未报名且不满足资格时拦截并提示。
     if (!signed && !post.canSignup) {
       // 后端可能因为一个前端当前不展示的门槛(例如靓号)判定不可报名,这时
@@ -355,6 +367,7 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       );
       return;
     }
+    signupInFlightRef.current = true;
     setBusy(true);
     const next = !signed;
     // 乐观更新
@@ -368,12 +381,15 @@ export const PlazaPostCard: React.FC<PlazaPostCardProps> = ({
       setSignupCount(res.signupCount);
     } catch {
       // 回滚
-      setSigned(!next);
-      setSignupCount((c) => Math.max(0, c + (next ? -1 : 1)));
+      const latest = deferredSignupRef.current;
+      setSigned(latest?.signed ?? !next);
+      setSignupCount((c) => latest?.count ?? Math.max(0, c + (next ? -1 : 1)));
     } finally {
+      deferredSignupRef.current = null;
+      signupInFlightRef.current = false;
       setBusy(false);
     }
-  }, [busy, signed, post.id, post.canSignup, buildSignupReasonText, t]);
+  }, [signed, post.id, post.canSignup, buildSignupReasonText, t]);
 
   const handleAvatarPress = useCallback(() => {
     if (!post.canInteract) {

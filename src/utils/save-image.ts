@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 /**
  * 把一份网络媒体存进系统相册（原生档）。
@@ -41,7 +42,10 @@ export async function downloadMediaToCache(
       options?.mimeType,
     )}`;
     const download = await FileSystem.downloadAsync(url, target);
-    if (download.status < 200 || download.status >= 300) return null;
+    if (download.status < 200 || download.status >= 300) {
+      reportHandledFailure('mediaSave', 'download', new Error('Media download failed'), { status: download.status });
+      return null;
+    }
     return {
       uri: download.uri,
       cleanup: () =>
@@ -49,7 +53,8 @@ export async function downloadMediaToCache(
           () => undefined,
         ),
     };
-  } catch {
+  } catch (error) {
+    reportHandledFailure('mediaSave', 'download', error);
     return null;
   }
 }
@@ -71,7 +76,8 @@ export async function saveMediaToLibrary(
       void cached.cleanup();
     }
     return 'saved';
-  } catch {
+  } catch (error) {
+    reportHandledFailure('mediaSave', 'save', error);
     return 'failed';
   }
 }

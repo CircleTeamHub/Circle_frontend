@@ -135,7 +135,7 @@ test('temporary chat info loads its member directory from the conversation endpo
   // 再叠一层(群主/管理员不受限),判据与服务端 listMembers 一致。
   assert.match(
     source,
-    /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup\s*\? standaloneDirectoryAccess === 'allowed'\s*: canViewCircleMemberDirectory\) &&/,
+    /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup\s*\? \(standaloneDirectoryAccess === 'allowed'[\s\S]*?: canViewCircleMemberDirectory\) &&/,
   );
   assert.match(source, /if \(isTempConversation\) \{[\s\S]{0,700}fetchChatMembers\(tempConversationID\)/);
   // 临时房没有圈子,这两条圈子专属请求绝不能落到 tmp... id 上。
@@ -288,15 +288,16 @@ test('chat info screen uses the shared primary switch color for group toggles', 
   assert.doesNotMatch(source, /tint=\{colors\.(?:success|green)\}/);
 });
 
-// 契约随自研栈迁移更新(意图不变):群公告即圈子简介,保存走 updateCircle。
-test('group notice editor screen updates the circle description and returns', () => {
+// 两种群都走公告专用接口；服务端在同一事务保存正文与播报状态。
+test('group notice editor saves text and broadcast state atomically and returns', () => {
   const screenPath = path.join(process.cwd(), 'src/features/chat/screens/EditGroupNoticeScreen.tsx');
   const source = fs.readFileSync(screenPath, 'utf8');
 
   assert.match(source, /useLocalSearchParams/);
   assert.match(source, /TextInput/);
   assert.match(source, /multiline/);
-  assert.match(source, /updateCircle\(groupID,\s*\{\s*description:\s*nextNotice\s*\}\)/);
+  assert.match(source, /setGroupChatNotice\(targetID, nextNotice, nextPinned\)/);
+  assert.match(source, /createCircleChatConversation\(groupID\)/);
   assert.doesNotMatch(source, /@\/im\//);
   assert.match(source, /router\.back\(\)/);
   assert.match(source, /NavHeader/);
@@ -717,7 +718,7 @@ test('chat info only exposes group logs to members allowed by the backend', () =
     /canManageGroup \? \(\s*<>\s*<Divider \/>\s*<GroupInfoRow\s*label=\{t\('chat\.groupLog'/s,
   );
   assert.match(source, /const canManageGroup = isOwner \|\| isAdmin;/);
-  assert.match(source, /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup\s*\? standaloneDirectoryAccess === 'allowed'\s*: canViewCircleMemberDirectory\) &&/s);
+  assert.match(source, /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup\s*\? \(standaloneDirectoryAccess === 'allowed'[\s\S]*?: canViewCircleMemberDirectory\) &&/s);
   assert.match(source, /rosterVisibleToMembers/);
   assert.match(source, /const \[silenceClock, setSilenceClock\] = useState\(\(\) => Date\.now\(\)\);/);
   assert.match(source, /const silenceOptions = SILENCE_DURATION_OPTIONS\.map\(\(seconds\) => \(\{/);

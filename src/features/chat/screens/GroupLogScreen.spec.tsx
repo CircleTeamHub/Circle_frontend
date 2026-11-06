@@ -5,6 +5,8 @@ import { fetchChatGroupEvents } from '@/chat-core/api';
 import type { ChatConversationDto } from '@/chat-core/protocol';
 
 let mockConversations: Partial<ChatConversationDto>[] = [];
+const mockAuth = { sessionEpoch: 1, user: { id: 'me' } };
+const mockT = (key: string) => key;
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ conversationID: 'group-1' }),
@@ -23,7 +25,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: mockT }),
 }));
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -41,8 +43,18 @@ jest.mock('@/theme', () => ({
 }));
 
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
+jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
+jest.mock('@/components/ui/member-name', () => {
+  const { Text } = jest.requireActual('react-native');
+  return { MemberName: ({ name }: { name: string }) => <Text>{name}</Text> };
+});
+jest.mock('@/components/ui/option-picker-sheet', () => {
+  const { Pressable, Text } = jest.requireActual('react-native');
+  return { OptionPickerSheet: ({ visible, options, onSelect }: any) => visible ? <>{options.map((option: any) => <Pressable key={option.value} onPress={() => onSelect(option.value)}><Text>{option.label}</Text></Pressable>)}</> : null };
+});
+jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign((select: (state: unknown) => unknown) => select(mockAuth), { getState: () => mockAuth }) }));
 jest.mock('@/chat-core/group-events', () => ({
-  groupEventText: (event: { payload: { text: string } }) => event.payload.text,
+  groupEventText: (event: { kind: string }) => event.kind,
 }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/chat-core/api', () => ({ fetchChatGroupEvents: jest.fn() }));
@@ -60,8 +72,8 @@ function event(id: string, text: string) {
     id,
     kind: 'member-joined',
     actor: null,
-    targets: [],
-    payload: { text },
+    targets: [{ id: `person-${id}`, nickname: text, avatarUrl: null }],
+    payload: null,
     createdAt: '2026-01-01T00:00:00.000Z',
   };
 }
@@ -71,14 +83,46 @@ beforeEach(() => {
   jest.mocked(fetchChatGroupEvents).mockReset();
 });
 
-test('standalone managers can open application and invitation history from group logs', async () => {
+test('shows admission details in a key/value card without the old application tabs', async () => {
   mockConversations = [{ id: 'group-1', type: 'GROUP', circleId: null, myRole: 'OWNER' }];
+  const reviewed = { ...event('reviewed', 'Applicant'), review: { status: 'JOINED', source: 'INVITE', inviter: { id: 'inviter', nickname: 'Inviter', avatarUrl: null }, operator: { id: 'manager', nickname: 'Manager', avatarUrl: null }, blacklisted: false } };
+  jest.mocked(fetchChatGroupEvents).mockResolvedValue({ events: [reviewed], nextCursor: null });
+  render(<GroupLogScreen />);
+  await screen.findByText('Applicant');
+  expect(screen.getByText('groupLog.date')).toBeTruthy();
+  expect(screen.getByText('groupLog.status')).toBeTruthy();
+  expect(screen.getByText('Inviter')).toBeTruthy();
+  expect(screen.getByText('Manager')).toBeTruthy();
+  expect(screen.queryByText('chat.groupLogAdmissions')).toBeNull();
+});
+
+test('omits name/avatar/notice edits from the important log list', async () => {
+  jest.mocked(fetchChatGroupEvents).mockResolvedValue({ events: [{ ...event('routine', 'Routine edit'), kind: 'group-renamed' }, event('important', 'Important member')], nextCursor: null });
+  render(<GroupLogScreen />);
+  await screen.findByText('Important member');
+  expect(screen.queryByText('Routine edit')).toBeNull();
+});
+
+test('keeps group aliases and the unknown-account fallback on identity cards', async () => {
+  jest.mocked(fetchChatGroupEvents).mockResolvedValue({ events: [{ ...event('alias', 'Account name'), targets: [
+    { id: 'alias-user', nickname: 'Account name', alias: 'Group alias', avatarUrl: null },
+    { id: 'deleted-user', nickname: '', avatarUrl: null },
+  ] }], nextCursor: null });
+  render(<GroupLogScreen />);
+  await screen.findByText('Group alias');
+  expect(screen.queryByText('Account name')).toBeNull();
+  expect(screen.getByText('groupReview.unknownMember')).toBeTruthy();
+});
+
+test('searches all pages for the selected target/operator role', async () => {
   jest.mocked(fetchChatGroupEvents).mockResolvedValue({ events: [], nextCursor: null });
   render(<GroupLogScreen />);
-  fireEvent.press(await screen.findByText('chat.groupLogAdmissions'));
-  expect(screen.getByText('admissions:group-1')).toBeTruthy();
-  fireEvent.press(screen.getByText('chat.groupLogEvents'));
   await screen.findByText('chat.noGroupLog');
+  fireEvent.changeText(screen.getByTestId('group-log-search'), '144442');
+  fireEvent.press(screen.getByLabelText('groupLog.searchRole'));
+  fireEvent.press(screen.getByText('groupLog.actor'));
+  fireEvent.press(screen.getByLabelText('common.search'));
+  await waitFor(() => expect(fetchChatGroupEvents).toHaveBeenLastCalledWith('group-1', { limit: 50, keyword: '144442', person: 'actor' }));
 });
 
 test.each([

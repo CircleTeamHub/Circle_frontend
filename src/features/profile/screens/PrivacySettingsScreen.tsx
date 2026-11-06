@@ -16,6 +16,7 @@ import {
   type UpdatePrivacySettingsPayload,
 } from '@/services/api/privacy';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { isDefinitiveAuthFailure } from '@/services/api/client';
 import {
   BURN_DURATION_CHOICES,
   BURN_DURATION_OFF,
@@ -28,7 +29,6 @@ import {
 } from '@/chat-core/store';
 import {
   readPrivacySettingsCache,
-  writePrivacySettingsCache,
 } from '@/features/profile/privacy-settings-cache';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -118,6 +118,11 @@ const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
 };
 
 export default function PrivacySettingsScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  return sessionKey ? <PrivacySettingsContent key={sessionKey} /> : null;
+}
+
+function PrivacySettingsContent() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -128,11 +133,14 @@ export default function PrivacySettingsScreen() {
   );
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const privacyRequestSequence = useRef(0);
+  const savingRequest = useRef<number | null>(null);
 
   const currentSettings = settings ?? DEFAULT_PRIVACY_SETTINGS;
+  const controlsDisabled = loading || !loaded || saving;
 
   const d = useMemo(
     () => ({
@@ -147,27 +155,28 @@ export default function PrivacySettingsScreen() {
 
   const loadSettings = useCallback(async () => {
     const request = ++privacyRequestSequence.current;
-    const chatUserId = useChatStore.getState().currentUserId;
+    const isCurrent = () => request === privacyRequestSequence.current &&
+      useAuthStore.getState().sessionEpoch === sessionEpoch;
     setLoading(true);
     setError(null);
     try {
       const loaded = await fetchPrivacySettings();
-      if (
-        request !== privacyRequestSequence.current ||
-        useChatStore.getState().currentUserId !== chatUserId
-      ) {
-        return;
-      }
+      if (!isCurrent()) return;
       setSettings(loaded);
-      writePrivacySettingsCache(sessionEpoch, loaded);
+      setLoaded(true);
       // 服务端不下发全局阅后即焚的开启时间：store 在档位变化时记本机观察到的时刻。
-      useChatStore
-        .getState()
-        .setViewerSelfDestructSec(loaded.messageSelfDestructSec);
+      if (useChatStore.getState().viewerSelfDestructSec !== loaded.messageSelfDestructSec) {
+        useChatStore.getState().setViewerSelfDestructSec(loaded.messageSelfDestructSec);
+      }
       useChatStore
         .getState()
         .setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(loaded));
     } catch (requestError) {
+      if (!isCurrent()) return;
+      if (isDefinitiveAuthFailure(requestError)) {
+        setSettings(null);
+        setLoaded(false);
+      }
       setError(
         getApiErrorMessage(
           requestError,
@@ -175,48 +184,58 @@ export default function PrivacySettingsScreen() {
         ),
       );
     } finally {
-      if (request === privacyRequestSequence.current) setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [sessionEpoch, t]);
 
   useEffect(() => {
+    setSettings(readPrivacySettingsCache(sessionEpoch));
+    setLoaded(false);
+    setSaving(false);
+    setActiveSheet(null);
     void loadSettings();
-  }, [loadSettings]);
+    return () => {
+      privacyRequestSequence.current += 1;
+      savingRequest.current = null;
+    };
+  }, [loadSettings, sessionEpoch]);
 
   async function patchSettings(payload: UpdatePrivacySettingsPayload) {
+    if (controlsDisabled || savingRequest.current !== null ||
+      useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
     const request = ++privacyRequestSequence.current;
-    const chatUserId = useChatStore.getState().currentUserId;
+    savingRequest.current = request;
+    setSaving(true);
+    const isCurrent = () => request === privacyRequestSequence.current &&
+      useAuthStore.getState().sessionEpoch === sessionEpoch;
     const previous = currentSettings;
     const next = { ...previous, ...payload };
     setSettings(next);
-    setSaving(true);
     setError(null);
     try {
       const updated = await updatePrivacySettings(payload);
-      if (
-        request !== privacyRequestSequence.current ||
-        useChatStore.getState().currentUserId !== chatUserId
-      ) {
-        return;
-      }
-      setSettings(updated);
-      writePrivacySettingsCache(sessionEpoch, updated);
+      // A confirmed save still applies to this session after the user leaves this screen.
+      if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
       // 服务端不下发全局阅后即焚的开启时间：store 在档位变化时记本机观察到的时刻。
-      useChatStore
-        .getState()
-        .setViewerSelfDestructSec(updated.messageSelfDestructSec);
+      if (payload.messageSelfDestructSec !== undefined &&
+        useChatStore.getState().viewerSelfDestructSec !== updated.messageSelfDestructSec) {
+        useChatStore.getState().setViewerSelfDestructSec(updated.messageSelfDestructSec);
+      }
       // 输入状态开关的门禁在 socket-manager 里读 chat store,这里保存后立刻同步。
       useChatStore
         .getState()
         .setViewerTypingPolicy(viewerTypingPolicyFromPrivacy(updated));
-    } catch (requestError) {
-      if (
-        request !== privacyRequestSequence.current ||
-        useChatStore.getState().currentUserId !== chatUserId
-      ) {
-        return;
+      if (!isCurrent()) return;
+      setSettings(updated);
+      if ((Object.keys(payload) as (keyof PrivacySettings)[]).some((key) => updated[key] === undefined)) {
+        setError(t('settingsDetails.privacy.saveFailed'));
       }
-      setSettings(previous);
+    } catch (requestError) {
+      if (!isCurrent()) return;
+      if (isDefinitiveAuthFailure(requestError)) {
+        setSettings(null);
+        setLoaded(false);
+      } else setSettings(previous);
       setError(
         getApiErrorMessage(
           requestError,
@@ -224,7 +243,8 @@ export default function PrivacySettingsScreen() {
         ),
       );
     } finally {
-      if (request === privacyRequestSequence.current) setSaving(false);
+      if (isCurrent()) setSaving(false);
+      if (savingRequest.current === request) savingRequest.current = null;
     }
   }
 
@@ -265,7 +285,25 @@ export default function PrivacySettingsScreen() {
     <>
       <SettingsDetailScreen
         testIDPrefix="privacy"
+        dimDisabledRows={false}
         titleKey="settingsDetails.privacy.title"
+        header={
+          <View style={s.footer}>
+            {(loading && settings === null) || saving ? (
+              <ActivityIndicator
+                testID={saving ? 'privacy-saving' : undefined}
+                accessibilityLabel={saving ? t('common.saving') : undefined}
+                color={colors.primary}
+              />
+            ) : null}
+            {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
+            {error && !loaded && !loading ? (
+              <Pressable onPress={() => void loadSettings()} accessibilityRole="button">
+                <Text style={{ color: colors.primary }}>{t('common.retry')}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        }
         sections={[
           {
             rows: [
@@ -277,7 +315,7 @@ export default function PrivacySettingsScreen() {
                   t,
                 ),
                 onPress: () => setActiveSheet('self-destruct'),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
               {
                 id: 'blacklist',
@@ -293,7 +331,7 @@ export default function PrivacySettingsScreen() {
                   t,
                 ),
                 onPress: () => setActiveSheet('moments-visibility'),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
               {
                 id: 'stranger-message',
@@ -302,7 +340,7 @@ export default function PrivacySettingsScreen() {
                 value: currentSettings.allowStrangerMessages,
                 onValueChange: (value) =>
                   void patchSettings({ allowStrangerMessages: value }),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
             ],
           },
@@ -311,30 +349,35 @@ export default function PrivacySettingsScreen() {
               {
                 id: 'online-time',
                 labelKey: 'settingsDetails.privacy.onlineTime',
-                type: 'toggle',
-                // 滚动发布期间旧服务端不返回这三项,缺省按 true(与后端默认一致)。
-                value: currentSettings.shareOnlineStatus ?? true,
+                type: currentSettings.shareOnlineStatus === undefined ? 'info' : 'toggle',
+                value: currentSettings.shareOnlineStatus,
+                valueText: currentSettings.shareOnlineStatus === undefined ? t('settingsDetails.privacy.unavailable') : undefined,
+                subtitleKey: currentSettings.shareOnlineStatus === undefined ? 'settingsDetails.privacy.unsupportedHint' : undefined,
                 onValueChange: (value) =>
                   void patchSettings({ shareOnlineStatus: value }),
-                disabled: loading || saving,
+                disabled: controlsDisabled || currentSettings.shareOnlineStatus === undefined,
               },
               {
                 id: 'single-typing',
                 labelKey: 'settingsDetails.privacy.singleTyping',
-                type: 'toggle',
-                value: currentSettings.shareTypingInDirect ?? true,
+                type: currentSettings.shareTypingInDirect === undefined ? 'info' : 'toggle',
+                value: currentSettings.shareTypingInDirect,
+                valueText: currentSettings.shareTypingInDirect === undefined ? t('settingsDetails.privacy.unavailable') : undefined,
+                subtitleKey: currentSettings.shareTypingInDirect === undefined ? 'settingsDetails.privacy.unsupportedHint' : undefined,
                 onValueChange: (value) =>
                   void patchSettings({ shareTypingInDirect: value }),
-                disabled: loading || saving,
+                disabled: controlsDisabled || currentSettings.shareTypingInDirect === undefined,
               },
               {
                 id: 'group-typing',
                 labelKey: 'settingsDetails.privacy.groupTyping',
-                type: 'toggle',
-                value: currentSettings.shareTypingInGroup ?? true,
+                type: currentSettings.shareTypingInGroup === undefined ? 'info' : 'toggle',
+                value: currentSettings.shareTypingInGroup,
+                valueText: currentSettings.shareTypingInGroup === undefined ? t('settingsDetails.privacy.unavailable') : undefined,
+                subtitleKey: currentSettings.shareTypingInGroup === undefined ? 'settingsDetails.privacy.unsupportedHint' : undefined,
                 onValueChange: (value) =>
                   void patchSettings({ shareTypingInGroup: value }),
-                disabled: loading || saving,
+                disabled: controlsDisabled || currentSettings.shareTypingInGroup === undefined,
               },
             ],
           },
@@ -346,7 +389,7 @@ export default function PrivacySettingsScreen() {
                 type: 'toggle',
                 value: currentSettings.showPhone,
                 onValueChange: (value) => void patchSettings({ showPhone: value }),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
               {
                 id: 'show-email',
@@ -355,7 +398,7 @@ export default function PrivacySettingsScreen() {
                 value: currentSettings.showEmail,
                 onValueChange: (value) =>
                   void patchSettings({ showEmail: value }),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
               {
                 id: 'show-wechat',
@@ -364,7 +407,7 @@ export default function PrivacySettingsScreen() {
                 value: currentSettings.showWechat,
                 onValueChange: (value) =>
                   void patchSettings({ showWechat: value }),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
               {
                 id: 'show-qq',
@@ -372,7 +415,7 @@ export default function PrivacySettingsScreen() {
                 type: 'toggle',
                 value: currentSettings.showQQ,
                 onValueChange: (value) => void patchSettings({ showQQ: value }),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
             ],
           },
@@ -385,7 +428,7 @@ export default function PrivacySettingsScreen() {
                   count: addMeCount,
                 }),
                 onPress: () => setActiveSheet('add-me-methods'),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
               {
                 id: 'call-permission',
@@ -396,7 +439,7 @@ export default function PrivacySettingsScreen() {
                   t,
                 ),
                 onPress: () => setActiveSheet('call-permission'),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
               {
                 id: 'group-invite-permission',
@@ -407,7 +450,7 @@ export default function PrivacySettingsScreen() {
                   t,
                 ),
                 onPress: () => setActiveSheet('group-invite-permission'),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
               {
                 id: 'friend-group-direct-join',
@@ -416,17 +459,11 @@ export default function PrivacySettingsScreen() {
                 value: currentSettings.allowFriendGroupDirectJoin ?? false,
                 onValueChange: (value) =>
                   void patchSettings({ allowFriendGroupDirectJoin: value }),
-                disabled: loading || saving,
+                disabled: controlsDisabled,
               },
             ],
           },
         ]}
-        footer={
-          <View style={s.footer}>
-            {loading ? <ActivityIndicator color={colors.primary} /> : null}
-            {error ? <Text style={[s.error, d.error]}>{error}</Text> : null}
-          </View>
-        }
       />
       <OptionPickerSheet
         visible={activeSheet === 'self-destruct'}
@@ -463,7 +500,7 @@ export default function PrivacySettingsScreen() {
       <AddMeMethodsSheet
         visible={activeSheet === 'add-me-methods'}
         settings={currentSettings}
-        disabled={loading || saving}
+        disabled={controlsDisabled}
         onClose={() => setActiveSheet(null)}
         onChange={(payload) => void patchSettings(payload)}
         onShareCard={() => {

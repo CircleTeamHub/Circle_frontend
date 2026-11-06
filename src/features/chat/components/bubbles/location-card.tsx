@@ -297,7 +297,8 @@ export const LocationCard: React.FC<LocationCardProps> = ({
                     { left: tile.left, top: tile.top },
                   ]}
                   contentFit="cover"
-                  transition={150}
+                  cachePolicy="memory-disk"
+                  transition={0}
                 />
               ))}
               <View pointerEvents="none" style={sLocation.locationMarker}>

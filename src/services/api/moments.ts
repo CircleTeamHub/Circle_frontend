@@ -1,10 +1,12 @@
-import { apiClient } from '@/services/api/client';
+import { ApiError, apiClient, isDefinitiveAuthFailure } from '@/services/api/client';
 import {
   buildQuery,
   normalizeUserAvatarFrameAppearance,
   allowPeerMediaUrl,
 } from '@/services/api/utils';
 import { normalizeImageMedia } from './image-media';
+import { useAuthStore } from '@/stores/authStore';
+import { clearPageSnapshots, getPageSnapshotRevision, removePageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 import type {
   CreateMomentInput,
   MomentComment,
@@ -19,6 +21,24 @@ type BackendMomentPost = Omit<MomentPost, 'author'> & {
     avatarFrameAppearance?: AvatarFrameAppearance | null;
   };
 };
+
+let lastMomentMutationAt = 0;
+
+async function markMomentWrite<T>(request: Promise<T>): Promise<T> {
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const result = await request;
+  lastMomentMutationAt = Date.now();
+  if (user?.id && useAuthStore.getState().sessionEpoch === sessionEpoch) {
+    clearPageSnapshots(user?.id, 'social:user-moments:');
+    clearPageSnapshots(user?.id, 'social:moments-feed');
+    clearPageSnapshots(user?.id, 'social:moment:');
+  }
+  return result;
+}
+
+export function momentsMutatedSince(since: number): boolean {
+  return lastMomentMutationAt >= since;
+}
 
 export function normalizeMomentComment(comment: MomentComment): MomentComment {
   const normalizedMedia = normalizeImageMedia(
@@ -111,31 +131,40 @@ export async function fetchNewMomentsCount(since: string): Promise<number> {
 }
 
 export async function fetchMomentById(id: string): Promise<MomentPost> {
-  const result = await apiClient<BackendMomentPost>(`/trace/${id}`);
-  return normalizeMoment(result);
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const revision = getPageSnapshotRevision();
+  const at = Date.now();
+  try {
+    const result = normalizeMoment(await apiClient<BackendMomentPost>(`/trace/${id}`));
+    if (useAuthStore.getState().sessionEpoch === sessionEpoch && revision === getPageSnapshotRevision() && !momentsMutatedSince(at)) writePageSnapshot(user?.id, `social:moment:${id}`, result, at);
+    return result;
+  } catch (error) {
+    if (isDefinitiveAuthFailure(error) || (error instanceof ApiError && error.status === 404)) removePageSnapshot(user?.id, `social:moment:${id}`);
+    throw error;
+  }
 }
 
 export async function createMoment(
   input: CreateMomentInput,
 ): Promise<MomentPost> {
-  const post = await apiClient<BackendMomentPost>('/trace', {
+  const post = await markMomentWrite(apiClient<BackendMomentPost>('/trace', {
     method: 'POST',
     body: input,
-  });
+  }));
   return normalizeMoment(post);
 }
 
 export async function deleteMoment(id: string): Promise<void> {
-  await apiClient<void>(`/trace/${id}`, { method: 'DELETE' });
+  await markMomentWrite(apiClient<void>(`/trace/${id}`, { method: 'DELETE' }));
 }
 
 export async function toggleMomentLike(
   id: string,
 ): Promise<{ liked: boolean; likeCount: number }> {
-  return apiClient<{ liked: boolean; likeCount: number }>(
+  return markMomentWrite(apiClient<{ liked: boolean; likeCount: number }>(
     `/trace/${id}/like`,
     { method: 'POST' },
-  );
+  ));
 }
 
 export async function addMomentComment(
@@ -148,18 +177,18 @@ export async function addMomentComment(
   },
 ): Promise<MomentComment> {
   const { mentionedUserIds, ...commentInput } = input;
-  const comment = await apiClient<MomentComment>(`/trace/${traceId}/comment`, {
+  const comment = await markMomentWrite(apiClient<MomentComment>(`/trace/${traceId}/comment`, {
     method: 'POST',
     body: {
       ...commentInput,
       ...(mentionedUserIds?.length ? { mentionedUserIds } : {}),
     },
-  });
+  }));
   return normalizeMomentComment(comment);
 }
 
 export async function deleteMomentComment(
   commentId: string,
 ): Promise<void> {
-  await apiClient<void>(`/trace/comment/${commentId}`, { method: 'DELETE' });
+  await markMomentWrite(apiClient<void>(`/trace/comment/${commentId}`, { method: 'DELETE' }));
 }

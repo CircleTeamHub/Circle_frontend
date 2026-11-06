@@ -35,6 +35,22 @@ test('builds source from the exact stored note card', async () => {
   expect(fetchChatHistoryPage).not.toHaveBeenCalled();
 });
 
+test('restores missing conversation and exact source message in parallel instead of adding two network round trips', async () => {
+  const conversation = mockChat.conversations[0];
+  mockChat.conversations = [];
+  mockChat.messagesByConversation = {};
+  let finish!: () => void;
+  jest.mocked(loadChatConversations).mockReturnValue(new Promise((resolve) => { finish = () => {
+    mockChat.conversations = [conversation]; resolve(undefined as never);
+  }; }));
+  jest.mocked(fetchChatHistoryPage).mockResolvedValue({ messages: [message()], nextBeforeHeight: null } as any);
+  const pending = resolveNoteCollectSource('note', 'conversation', 'message', '50');
+  try {
+    expect(fetchChatHistoryPage).toHaveBeenCalledWith('conversation', { beforeHeight: 51, limit: 1 });
+  } finally { finish(); }
+  expect(await pending).toMatchObject({ clientMsgID: 'message' });
+});
+
 test.each([
   { content: { noteId: 'other' } }, { conversationId: 'other' }, { revokedAt: 'today' },
   { deleted: true }, { burnDurationSec: 60 }, { burnExpiresAt: 'tomorrow' },

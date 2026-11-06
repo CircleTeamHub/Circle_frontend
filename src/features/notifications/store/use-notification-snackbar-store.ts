@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { NotificationItem } from '@/types';
+import { useAppSettingsStore } from '@/features/profile/store/use-app-settings-store';
 
 export type ChatSnackbarItem = {
   kind: 'chat';
@@ -45,6 +46,7 @@ interface NotificationSnackbarState {
   enqueueNotification: (notification: NotificationItem) => void;
   enqueueChatMessage: (message: Omit<ChatSnackbarItem, 'kind'>) => void;
   dismissCurrent: () => void;
+  pruneDisabled: () => void;
   reset: () => void;
 }
 
@@ -53,11 +55,20 @@ export function snackbarBannerKey(item: NotificationSnackbarItem): string {
   return item.kind === 'chat' ? (item.bannerId ?? item.id) : item.id;
 }
 
+function bannerAllowed(item: NotificationSnackbarItem): boolean {
+  const settings = useAppSettingsStore.getState().settings;
+  if (item.kind === 'chat') return item.conversationType !== 'group' || (settings.groupGlobalPush && settings.groupOnlinePush);
+  if (item.type.startsWith('FRIEND_REQUEST')) return settings.friendRequestNotifications;
+  if (item.type === 'GROUP_ADMISSION' || item.type === 'CIRCLE_VERIFICATION_REQUESTED') return settings.groupRequestNotifications;
+  return true;
+}
+
 function enqueue(
   get: () => NotificationSnackbarState,
   set: (partial: Partial<NotificationSnackbarState>) => void,
   item: NotificationSnackbarItem,
 ) {
+  if (!bannerAllowed(item)) return;
   const { queue, current } = get();
   if (
     queue.some(
@@ -119,6 +130,10 @@ export const useNotificationSnackbarStore = create<NotificationSnackbarState>(
         queue: remaining,
         current: remaining[0] ?? null,
       });
+    },
+    pruneDisabled: () => {
+      const queue = get().queue.filter(bannerAllowed);
+      if (queue.length !== get().queue.length) set({ queue, current: queue[0] ?? null });
     },
     reset: () => set({ queue: [], current: null }),
   }),

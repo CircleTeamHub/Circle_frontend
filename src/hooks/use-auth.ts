@@ -236,6 +236,7 @@ export function useAuth() {
         }
         await onAuthSuccess(result.tokens, { isAttemptCurrent, expectedSessionEpoch: preservedEpoch });
       } catch (requestError) {
+        reportHandledFailure('auth', 'login', requestError);
         if (!isAttemptCurrent()) return;
         await clearFailedLoginSession(preservedEpoch);
         safeSetError(getApiErrorMessage(requestError, i18n.t('auth.errors.loginFailed')));
@@ -254,6 +255,7 @@ export function useAuth() {
       try {
         await onAuthSuccess(tokens);
       } catch (requestError) {
+        reportHandledFailure('auth', 'completeVerifiedLogin', requestError);
         await clearFailedLoginSession(preservedEpoch);
         throw requestError;
       }
@@ -306,6 +308,7 @@ export function useAuth() {
           onboardingRequired: false,
         });
       } catch (requestError) {
+        reportHandledFailure('auth', 'register', requestError, { stage: accountCreated ? 'session' : 'request' });
         if (accountCreated) {
           // 注册成功、只是建会话那步崩了（真实事故：/auth/me 连着 500）。
           // 这里若报「注册失败」，用户会原样重试并撞上自己刚占掉的邮箱拿 409，

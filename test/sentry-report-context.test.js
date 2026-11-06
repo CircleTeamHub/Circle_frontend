@@ -35,7 +35,13 @@ function findReportContexts() {
     );
 
     const visit = (node) => {
-      if (ts.isObjectLiteralExpression(node)) {
+      if (
+        ts.isObjectLiteralExpression(node) &&
+        ts.isCallExpression(node.parent) &&
+        ts.isIdentifier(node.parent.expression) &&
+        node.parent.expression.text === 'reportError' &&
+        node.parent.arguments[1] === node
+      ) {
         const names = node.properties
           .map((p) => p.name && ts.isIdentifier(p.name) && p.name.text)
           .filter(Boolean);

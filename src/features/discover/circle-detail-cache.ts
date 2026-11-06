@@ -1,10 +1,15 @@
 import type { CircleDetail, CircleInvitation } from '@/types';
+import { Platform } from 'react-native';
+import { useAuthStore } from '@/stores/authStore';
+import { getEncryptedInstance } from '@/storage/encrypted-init';
+import { getPageSnapshotRevision, readPageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
+import { groupOrCircleMutatedSince } from '@/features/chat/utils/group-reload-key';
 
 /**
  * 圈子详情页的内存缓存:再进看过的圈子,先用上次拉到的详情画出来,后台照常重拉 ——
  * 不再每次打开都整页转圈。
  *
- * - 只在内存:myStatus/myRole 是当前账号在该圈的成员关系,不落盘;App 重启即清空。
+ * - 加密保存同账号展示快照;恢复的 myStatus/myRole 不能充当本次授权。
  * - 按账号隔离:sessionEpoch 变了(登录/退出/切号)整个缓存作废。
  * - 只留最近看过的 MAX_CIRCLES 个圈子,按最近使用淘汰。
  * - 只用于首屏展示:加入/退出/管理按钮先按缓存里的成员关系画,每次打开都会重拉校准;
@@ -22,19 +27,32 @@ export interface CachedCircleDetail {
 }
 
 let cacheEpoch: number | null = null;
+let cacheOwner: string | null = null;
+let cacheRevision = -1;
 const entries = new Map<string, CachedCircleDetail>();
+const SNAPSHOT_KEY = 'social:circle-detail';
 
-function scopeToEpoch(epoch: number): void {
-  if (cacheEpoch === epoch) return;
+function scopeToEpoch(epoch: number): boolean {
+  const auth = useAuthStore.getState();
+  if (auth.sessionEpoch !== epoch) return false;
+  const owner = auth.isAuthenticated ? auth.user?.id ?? null : null;
+  const revision = getPageSnapshotRevision();
+  if (cacheEpoch === epoch && cacheOwner === owner && cacheRevision === revision) return true;
+  if (Platform.OS !== 'web' && !getEncryptedInstance()) return false;
   entries.clear();
   cacheEpoch = epoch;
+  cacheOwner = owner;
+  cacheRevision = revision;
+  const saved = readPageSnapshot<[string, CachedCircleDetail][]>(owner, SNAPSHOT_KEY);
+  for (const [key, value] of saved?.value ?? []) entries.set(key, value);
+  return true;
 }
 
 export function readCircleDetailCache(
   epoch: number,
   circleId: string,
 ): CachedCircleDetail | undefined {
-  scopeToEpoch(epoch);
+  if (!scopeToEpoch(epoch)) return undefined;
   const hit = entries.get(circleId);
   if (hit) {
     // Map 按插入顺序迭代:删了再放回就成了最近使用。
@@ -48,8 +66,11 @@ export function writeCircleDetailCache(
   epoch: number,
   circleId: string,
   patch: CachedCircleDetail,
+  requestRevision = getPageSnapshotRevision(),
+  requestStartedAt = patch.at,
 ): void {
-  scopeToEpoch(epoch);
+  if (requestRevision !== getPageSnapshotRevision() || (requestStartedAt !== undefined && groupOrCircleMutatedSince(requestStartedAt))) return;
+  if (!scopeToEpoch(epoch)) return;
   const next = { ...entries.get(circleId), ...patch };
   entries.delete(circleId);
   entries.set(circleId, next);
@@ -58,6 +79,7 @@ export function writeCircleDetailCache(
     if (oldest === undefined) break;
     entries.delete(oldest);
   }
+  if (requestRevision === getPageSnapshotRevision()) writePageSnapshot(cacheOwner, SNAPSHOT_KEY, [...entries]);
 }
 
 /** 本页就地改了头像/封面:改进缓存里那份;没缓存过就不凭空造一个只有半截字段的圈子。 */
@@ -72,6 +94,7 @@ export function patchCachedCircle(
 }
 
 export function evictCircleDetailCache(epoch: number, circleId: string): void {
-  scopeToEpoch(epoch);
+  if (!scopeToEpoch(epoch)) return;
   entries.delete(circleId);
+  writePageSnapshot(cacheOwner, SNAPSHOT_KEY, [...entries]);
 }

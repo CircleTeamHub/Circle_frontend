@@ -74,7 +74,7 @@ function fakeSocket() {
 
 const deletedIds = new Set();
 
-function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
+function loadDispatcher(storeOverrides = {}, actionOverrides = {}, now = () => Date.now()) {
   const state = {
     currentUserId: 'me',
     activeConversationId: null,
@@ -339,6 +339,7 @@ function loadDispatcher(storeOverrides = {}, actionOverrides = {}) {
     if (request === './local-db') return __localDbStub;
     throw new Error(`unexpected require: ${request}`);
   }, {
+    Date: class extends Date { static now() { return now(); } },
     setTimeout: (fn, delay) => {
       const token = { fn, delay };
       if (delay === 800) pendingBackfill = token;
@@ -502,6 +503,21 @@ test('cancelling the chat lifecycle resets malformed-payload reporting', () => {
   assert.equal(state.sentryReports.length, 2);
 });
 
+test('malformed event recurrence becomes visible after sixty seconds without a lifecycle reset', () => {
+  let now = 0;
+  const { socket, state } = loadDispatcher({}, {}, () => now);
+  socket.emit('chat:msg', null);
+  now = 59_999;
+  socket.emit('chat:msg', null);
+  assert.equal(state.sentryReports.length, 1);
+
+  now = 60_000;
+  socket.emit('chat:msg', null);
+  socket.emit('chat:msg', null);
+  assert.equal(state.sentryReports.length, 2);
+  assert.equal(state.sentryReports[1].context.kind, 'malformedPayload');
+});
+
 test('system messages with a null sender are still valid', () => {
   const { socket, state } = loadDispatcher();
   socket.emit('chat:msg', dto({ type: 'system', sender: null }));
@@ -628,6 +644,17 @@ test('known conversations use their own metadata, not the sender\'s', () => {
   );
   // 会话行上的名字(可能是本地备注)优先于消息里的昵称。
   assert.equal(state.banners[0].title, '备注名');
+});
+
+test('temporary group banners use the group preference category and room title', () => {
+  const { socket, state } = loadDispatcher({ conversations: [directConversation({
+    type: 'TEMP', peer: null, circle: null, circleId: null, tempChat: { id: 'temp', title: 'Temporary room' },
+  })] });
+  socket.emit('chat:msg', dto({ conversationId: DIRECT_ID }));
+  assert.equal(state.banners.length, 1);
+  assert.equal(state.banners[0].conversationType, 'group');
+  assert.equal(state.banners[0].title, 'Temporary room');
+  assert.equal(state.banners[0].sourceID, DIRECT_ID);
 });
 
 test('banner avatars go through the media allowlist', () => {

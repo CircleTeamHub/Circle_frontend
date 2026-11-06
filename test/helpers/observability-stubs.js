@@ -10,6 +10,10 @@
  */
 function makeObservabilityStubs() {
   return {
+    '@/observability/sentry': {
+      reportError() {},
+      shouldReportHttpFailure: status => status === undefined || status === 0 || status >= 500,
+    },
     '@/observability/report-failure': {
       reportHandledFailure() {},
       isExpectedFailure: () => false,

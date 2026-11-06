@@ -13,7 +13,7 @@ import {
   useNavigationContainerRef,
   useSegments,
 } from 'expo-router';          // Expo Router 的 Stack 导航（页面栈）
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 // 必须在入口文件最早引入，启用动画引擎。
 import 'react-native-reanimated';
@@ -56,6 +56,7 @@ import {
   captureSentryTestError,
   registerSentryNavigationContainer,
   setSentryUserId,
+  setSentryRoute,
 } from '@/observability/sentry';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { devWarn } from '@/utils/dev-log';
@@ -289,13 +290,26 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
 // RootLayout：应用真正的根组件
 // 职责：后台初始化本地存储和认证状态，挂载主题 Provider 与路由结构。
 function RootLayout() {
-  const sentryUserId = useAuthStore((state) => state.user?.id ?? null);
+  const sentryRoute = `/${useSegments().join('/')}`;
   // 导航追踪：冷启动指标和 XHR span 都要挂在导航 transaction 上才会被发出。
   const navigationRef = useNavigationContainerRef();
 
   useEffect(() => {
-    let sessionEpoch = useAuthStore.getState().sessionEpoch;
+    setSentryRoute(sentryRoute);
+  }, [sentryRoute]);
+
+  useLayoutEffect(() => {
+    const initial = useAuthStore.getState();
+    let sessionEpoch = initial.sessionEpoch;
+    let userId = initial.isAuthenticated ? initial.user?.id ?? null : null;
+    setSentryUserId(userId);
+    // 直接订阅，避免登录/退出后等下一次 React effect 才更新，期间报错归到旧账号。
     return useAuthStore.subscribe((state) => {
+      const nextUserId = state.isAuthenticated ? state.user?.id ?? null : null;
+      if (nextUserId !== userId) {
+        userId = nextUserId;
+        setSentryUserId(userId);
+      }
       if (state.sessionEpoch !== sessionEpoch) {
         sessionEpoch = state.sessionEpoch;
         resetUploadProgress();
@@ -311,10 +325,6 @@ function RootLayout() {
    * 在认证水合后后台重新读取。ThemeProvider 与路由会立即挂载，AuthRouteGuard
    * 在认证状态可用前负责渲染加载态。
    */
-  useEffect(() => {
-    setSentryUserId(sentryUserId);
-  }, [sentryUserId]);
-
   useEffect(() => {
     registerSentryNavigationContainer(navigationRef);
   }, [navigationRef]);

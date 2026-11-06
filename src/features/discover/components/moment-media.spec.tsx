@@ -1,4 +1,5 @@
 import React from 'react';
+import { ActivityIndicator } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { MomentMedia } from './moment-media';
 import { ImageViewer } from '@/components/ui/image-viewer';
@@ -12,7 +13,7 @@ jest.mock('expo-image', () => ({ Image: ({ source }: { source: { uri: string } }
 jest.mock('@/theme', () => ({ Spacing: { xs: 4, lg: 16, md: 12 }, Radius: { sm: 4 } }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: jest.fn(() => null) }));
-jest.mock('./image-grid', () => ({ ImageGrid: () => {
+jest.mock('./image-grid', () => ({ ...jest.requireActual('./image-grid'), ImageGrid: () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
   return <Text>legacy images</Text>;
 } }));
@@ -36,14 +37,36 @@ test('renders mixed tiles in order and only creates a player after the selected 
   expect(screen.getAllByRole('button').map((button) => button.props.accessibilityLabel)).toEqual(['moment.playVideo', 'moment.openImage', 'moment.playVideo']);
   expect(useVideoPlayer).not.toHaveBeenCalled();
   fireEvent.press(screen.getAllByLabelText('moment.playVideo')[1]);
-  expect(useVideoPlayer).toHaveBeenCalledWith('https://cdn.test/clip2.mp4', expect.any(Function));
+  expect(useVideoPlayer).toHaveBeenCalledWith(expect.objectContaining({ uri: 'https://cdn.test/clip2.mp4', useCaching: true }), expect.any(Function));
   fireEvent.press(screen.getByLabelText('common.close'));
   expect(mockPause).toHaveBeenCalled();
+});
+
+test('only starts a persistent video cache after the selected video is opened', () => {
+  const { useVideoPlayer } = jest.requireMock('expo-video');
+  jest.clearAllMocks();
+  const url = 'https://cdn.test/clip.mp4';
+  render(<MomentMedia images={[]} attachments={[{ type: 'video', key: 'clip', url }]} />);
+  expect(useVideoPlayer).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByLabelText('moment.playVideo'));
+  expect(useVideoPlayer).toHaveBeenCalledWith(expect.objectContaining({ uri: url, useCaching: true }), expect.any(Function));
 });
 
 test('continues to render legacy image posts', () => {
   render(<MomentMedia images={['https://cdn.test/old.jpg']} />);
   expect(screen.getByText('legacy images')).toBeTruthy();
+});
+
+test('fullscreen video keeps loading progress until the player is ready', () => {
+  render(<MomentMedia images={[]} attachments={[{ type: 'video', key: 'clip', url: 'https://cdn.test/clip.mp4' }]} />);
+  fireEvent.press(screen.getByLabelText('moment.playVideo'));
+  expect(screen.getByRole('progressbar')).toBeTruthy();
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  act(() => mockStatusListener?.({ status: 'readyToPlay' }));
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  act(() => mockStatusListener?.({ status: 'loading' }));
+  expect(screen.getByRole('progressbar')).toBeTruthy();
 });
 
 test('keeps the selected image index when a feed refresh replaces attachment objects', () => {

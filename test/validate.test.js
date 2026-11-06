@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function loadValidate() {
+function loadValidate(reports = []) {
   const filePath = path.join(process.cwd(), 'src/utils/validate.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -19,8 +19,9 @@ function loadValidate() {
   const context = {
     module: { exports: {} },
     exports: {},
-    require: () => {
-      throw new Error('validate.ts should have no imports');
+    require: (request) => {
+      if (request === '@/observability/sentry') return { reportError: (...args) => reports.push(args) };
+      throw new Error(`unexpected import: ${request}`);
     },
   };
   context.exports = context.module.exports;
@@ -81,4 +82,19 @@ test('expectShape throws with the given message when predicate fails', () => {
     () => expectShape(null, isPlainObject, '数据格式异常'),
     /数据格式异常/,
   );
+});
+
+test('invalid response shapes are reported once at the boundary without attaching the payload', () => {
+  const reports = [];
+  const { expectShape } = loadValidate(reports);
+  const payload = { privateText: 'private data', token: 'secret' };
+  let thrown;
+  try { expectShape(payload, () => false, '数据格式异常'); } catch (error) { thrown = error; }
+  assert.equal(thrown.name, 'ResponseShapeError');
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0][0], thrown);
+  assert.equal(reports[0][1].component, 'ResponseValidation');
+  assert.doesNotMatch(JSON.stringify(reports), /private data|secret|privateText|token/);
+  expectShape(payload, () => true, 'unused');
+  assert.equal(reports.length, 1);
 });

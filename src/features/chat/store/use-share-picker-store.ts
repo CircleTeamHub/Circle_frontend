@@ -13,7 +13,7 @@ import { create } from 'zustand';
 export type SharePickedItem =
   | { kind: 'note-batch'; notes: NoteSummary[]; options: NoteSendOptions }
   | { kind: 'friend'; data: FriendProfile }
-  | { kind: 'favorite'; data: UserCollection }
+  | { kind: 'favorite'; data: UserCollection; message?: string }
   | { kind: 'quick-reply'; data: string };
 
 interface SharePickerState {

@@ -137,14 +137,16 @@ export function ChatComposerBar({
           ]}
         />
         <Pressable
+          key="voice"
           style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
-          onPress={handleAttachmentToggle}
-          disabled={isPreviewMode || isVoiceRecording || composerLocked}
+          onPress={toggleVoiceInputMode}
+          // 网页端的 webm/opus 语音尚不能跨端播放，仅展示入口；App 保留原录音流程。
+          disabled={Platform.OS === 'web' || isPreviewMode || isVoiceRecording || composerLocked}
           accessibilityRole="button"
-          accessibilityLabel={t('chat.detail.attachmentPanelLabel', { defaultValue: '打开附件面板' })}
-          accessibilityState={{ expanded: attachmentOpen }}
+          accessibilityLabel={t('chat.detail.voiceInputLabel')}
+          accessibilityState={{ selected: voiceInputMode }}
         >
-          <Ionicons name="add" size={26} color={mutedInk} />
+          <Ionicons name={voiceInputMode ? 'keypad-outline' : 'mic-outline'} size={24} color={mutedInk} />
         </Pressable>
 
         {/* 中间：文本模式=输入框；语音模式=按住说话（gesture 元素全程保持挂载）。 */}
@@ -236,32 +238,7 @@ export function ChatComposerBar({
           />
         )}
 
-        {/* 发送入口按草稿显示；麦克风固定在表情按钮左边。 */}
-        {hasContent ? (
-          <Pressable
-            key="send"
-            testID={E2E_TEST_IDS.chatSend}
-            style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
-            onPress={handleSend}
-            disabled={sending || isPreviewMode || isVoiceRecording || composerLocked}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.send')}
-          >
-            <Ionicons name="arrow-up" size={24} color={colors.text} />
-          </Pressable>
-        ) : null}
-        <Pressable
-          key="voice"
-          style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
-          onPress={toggleVoiceInputMode}
-          // 网页端的 webm/opus 语音尚不能跨端播放，仅展示入口；App 保留原录音流程。
-          disabled={Platform.OS === 'web' || isPreviewMode || isVoiceRecording || composerLocked}
-          accessibilityRole="button"
-          accessibilityLabel={t('chat.detail.voiceInputLabel')}
-          accessibilityState={{ selected: voiceInputMode }}
-        >
-          <Ionicons name={voiceInputMode ? 'keypad-outline' : 'mic-outline'} size={24} color={mutedInk} />
-        </Pressable>
+        {/* 右侧依次为表情、附件；发送入口按草稿显示在最右边。 */}
         <Pressable
           style={[
             s.circleBtn,
@@ -280,6 +257,29 @@ export function ChatComposerBar({
         >
           <Ionicons name="happy-outline" size={26} color={emojiOpen ? colors.primaryDeep : colors.black} />
         </Pressable>
+        <Pressable
+          style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
+          onPress={handleAttachmentToggle}
+          disabled={isPreviewMode || isVoiceRecording || composerLocked}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.detail.attachmentPanelLabel', { defaultValue: '打开附件面板' })}
+          accessibilityState={{ expanded: attachmentOpen }}
+        >
+          <Ionicons name="add" size={26} color={mutedInk} />
+        </Pressable>
+        {hasContent ? (
+          <Pressable
+            key="send"
+            testID={E2E_TEST_IDS.chatSend}
+            style={[s.circleBtn, compactButton, { backgroundColor: buttonFill }]}
+            onPress={handleSend}
+            disabled={sending || isPreviewMode || isVoiceRecording || composerLocked}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.send')}
+          >
+            <Ionicons name="arrow-up" size={24} color={colors.text} />
+          </Pressable>
+        ) : null}
       </GlassSurface>
     </View>
   );

@@ -44,3 +44,11 @@ test('MomentAlbumHeader renders the profile signature under the avatar', () => {
   assert.match(src, /\{trimmedSignature\}/);
   assert.match(src, /avatarColumn/);
 });
+
+test('MomentAlbumHeader bounds long nicknames beside the avatar', () => {
+  const src = read('src/features/discover/components/moment-album-header.tsx');
+  const row = src.match(/identityRow: \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.match(row, /left: Spacing.lg/);
+  assert.match(row, /right: Spacing.lg/);
+  assert.match(src, /nickname: \{[\s\S]*?flexShrink: 1/);
+});

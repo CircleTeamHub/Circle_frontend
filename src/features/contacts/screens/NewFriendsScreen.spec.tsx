@@ -223,3 +223,10 @@ test('a list that lands after the page was left is still there next time', async
   render(<NewFriendsScreen />);
   expect(screen.getByText('阿青')).toBeTruthy();
 });
+
+test('StrictMode effect replay completes the inbox request instead of staying on the spinner', async () => {
+  jest.mocked(fetchFriendActivities).mockResolvedValue([activity('Replay')]);
+  render(<React.StrictMode><NewFriendsScreen /></React.StrictMode>, { concurrentRoot: true });
+  expect(await screen.findByText('Replay')).toBeTruthy();
+  expect(screen.queryByText('contacts.friendActivity.loading')).toBeNull();
+});

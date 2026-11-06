@@ -37,15 +37,16 @@ test('the privacy API declares the three switches as optional (old backends omit
   }
 });
 
-test('the privacy screen binds each switch to its server field and mirrors the backend default', () => {
+test('the privacy screen binds supported switches and marks missing server fields unavailable', () => {
   const screen = read('src/features/profile/screens/PrivacySettingsScreen.tsx');
   const defaults = screen.slice(
     screen.indexOf('const DEFAULT_PRIVACY_SETTINGS'),
     screen.indexOf('export default function PrivacySettingsScreen'),
   );
   for (const field of FIELDS) {
-    // 读当前值(旧服务端缺省 true)+ 写回服务端 + 默认值与后端一致。
-    assert.match(screen, new RegExp(`value: currentSettings\\.${field} \\?\\? true`), field);
+    // Legacy read defaults remain true, but the UI cannot advertise an unsupported write.
+    assert.match(screen, new RegExp(`value: currentSettings\\.${field},`), field);
+    assert.match(screen, new RegExp(`disabled: controlsDisabled \\|\\| currentSettings\\.${field} === undefined`), field);
     assert.match(screen, new RegExp(`patchSettings\\(\\{ ${field}: value \\}\\)`), field);
     assert.match(defaults, new RegExp(`${field}: true`), field);
     assert.match(screen, new RegExp(`settingsDetails\\.privacy\\.${ROW_LABELS[field]}'`));

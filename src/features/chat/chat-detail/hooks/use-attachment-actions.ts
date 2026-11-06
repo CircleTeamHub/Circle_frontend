@@ -1,12 +1,9 @@
 import { type Dispatch, type RefObject, type SetStateAction, useCallback } from 'react';
 import { router } from 'expo-router';
-import {
-  type AttachmentId,
-  PANEL_LAYOUT_ANIM,
-} from '@/features/chat/chat-detail/constants';
-import { Alert, LayoutAnimation } from 'react-native';
+import { type AttachmentId } from '@/features/chat/chat-detail/constants';
+import { Alert } from 'react-native';
 import { type FriendProfile } from '@/services/api/friends';
-import { sendCardMessage, sendVoiceMessage } from '@/chat-core/client';
+import { sendCardMessage, sendVoiceMessage, sendForwardedMediaMessage, sendTextMessage } from '@/chat-core/client';
 import { startChatSend } from '@/chat-core/send-handle';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
 import { type UserCollection } from '@/services/api/collections';
@@ -61,16 +58,16 @@ export function useAttachmentActions({
     (type: 'note' | 'friend' | 'favorite' | 'quick-reply') => {
       router.push({
         pathname: '/(tabs)/messages/share-picker',
-        params: { type },
+        params: { type, ...(type === 'favorite' ? { conversationID } : {}) },
       });
     },
-    [],
+    [conversationID],
   );
 
 
   const handleAttachmentAction = useCallback(
     (id: AttachmentId) => {
-      LayoutAnimation.configureNext(PANEL_LAYOUT_ANIM);
+      // 页面/弹层接管转场，避免全局布局动画同时作用到新挂载的目标视图。
       setAttachmentOpen(false);
       switch (id) {
         case 'media':
@@ -171,18 +168,12 @@ export function useAttachmentActions({
   );
 
   const handlePickFavorite = useCallback(
-    async (item: UserCollection, skipStatusWarning = false) => {
+    async (item: UserCollection, additionalMessage = '', skipStatusWarning = false) => {
       if (!sourceID || isPreviewMode) return;
 
       // 收藏的是啥就原样发啥：能按原类型还原的（文本/语音/笔记/名片）忠实重建，
-      // 不加 title 等装饰；其余回退成干净文本。
+      // 不加 title 等装饰；图片/视频通过源消息授权转发。
       const plan = resolveCollectionSendPlan(item);
-
-      // 文本走统一草稿发送路径（自带 inFlightRef 防抖）。
-      if (plan.kind === 'text') {
-        await sendDraftAsText(plan.text);
-        return;
-      }
 
       // 旧语音收藏(只存了会过期的播放地址、推不回 object key)是永久不可发的。
       // 这里必须在进入发送流程之前就拦下:抛异常的话会被下面的 catch 统一
@@ -191,8 +182,8 @@ export function useAttachmentActions({
       if (plan.kind === 'unsupported') {
         if (mountedRef.current) {
           setSendError(
-            t('chat.detail.favoriteLegacyVoiceUnsupported', {
-              defaultValue: '这条旧版语音收藏无法重新发送',
+            t(plan.reason === 'legacy-voice' ? 'chat.detail.favoriteLegacyVoiceUnsupported' : 'profile.collections.unavailable', {
+              defaultValue: plan.reason === 'legacy-voice' ? '这条旧版语音收藏无法重新发送' : '内容暂不可用',
             }),
           );
         }
@@ -215,7 +206,7 @@ export function useAttachmentActions({
             { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
             {
               text: t('common.send', { defaultValue: '继续发送' }),
-              onPress: () => void handlePickFavorite(item, true),
+              onPress: () => void handlePickFavorite(item, additionalMessage, true),
             },
           ],
         );
@@ -245,6 +236,10 @@ export function useAttachmentActions({
       try {
         const handle = startChatSend((onCreate) => {
           switch (plan.kind) {
+            case 'text':
+              return sendTextMessage({ conversationId: conversationID, text: plan.text, onCreate });
+            case 'media':
+              return sendForwardedMediaMessage({ conversationId: conversationID, sourceMessageId: plan.sourceMessageId, type: plan.type, previewContent: plan.previewContent, onCreate });
             case 'voice':
               // 收藏时存下的 object key 直接重发,不重新上传音频。
               return sendVoiceMessage({
@@ -281,6 +276,11 @@ export function useAttachmentActions({
         } else {
           await handle.delivered;
         }
+        if (additionalMessage.trim()) {
+          const extra = startChatSend(onCreate => sendTextMessage({ conversationId: conversationID, text: additionalMessage.trim(), onCreate }));
+          if (extra.queued) void extra.delivered.catch(reportSendFailure);
+          else await extra.delivered;
+        }
       } catch (error) {
         reportSendFailure(error);
       } finally {
@@ -292,7 +292,6 @@ export function useAttachmentActions({
       conversationType,
       isGroupChat,
       isPreviewMode,
-      sendDraftAsText,
       sourceID,
       t,
       inFlightRef,

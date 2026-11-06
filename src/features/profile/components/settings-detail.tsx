@@ -46,8 +46,10 @@ export interface SettingsDetailSection {
 interface SettingsDetailScreenProps {
   titleKey: string;
   sections: SettingsDetailSection[];
+  header?: React.ReactNode;
   footer?: React.ReactNode;
   testIDPrefix?: string;
+  dimDisabledRows?: boolean;
 }
 
 const s = StyleSheet.create({
@@ -124,8 +126,10 @@ function SettingsSwitch({
 export function SettingsDetailScreen({
   titleKey,
   sections,
+  header,
   footer,
   testIDPrefix,
+  dimDisabledRows = true,
 }: SettingsDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -205,7 +209,7 @@ export function SettingsDetailScreen({
               ? E2E_TEST_IDS.settingsDetailRow(`${testIDPrefix}.${row.id}`)
               : undefined
           }
-          style={[s.row, row.disabled ? s.rowDisabled : null]}
+          style={[s.row, row.disabled && dimDisabledRows ? s.rowDisabled : null]}
           disabled={row.type === 'info' || row.disabled}
           onPress={() =>
             row.type === 'toggle' || row.type === 'info' || row.disabled
@@ -213,7 +217,12 @@ export function SettingsDetailScreen({
               : handleLinkPress(row)
           }
         >
-          <View style={s.rowLeft}>
+          <Pressable
+            style={s.rowLeft}
+            disabled={row.disabled || row.type !== 'toggle' || !row.onValueChange}
+            onPress={() => row.onValueChange?.(!row.value)}
+            accessible={false}
+          >
             {row.icon ? (
               <View
                 style={[
@@ -242,7 +251,7 @@ export function SettingsDetailScreen({
                 <Text style={d.subtitle}>{t(row.subtitleKey)}</Text>
               ) : null}
             </View>
-          </View>
+          </Pressable>
           <View style={s.rowRight}>
             {valueText ? (
               <Text numberOfLines={2} style={d.value}>
@@ -291,6 +300,7 @@ export function SettingsDetailScreen({
         contentContainerStyle={d.content}
         showsVerticalScrollIndicator={false}
       >
+        {header}
         {sections.map((section, index) => (
           <View key={`${section.titleKey ?? 'section'}-${index}`} style={s.section}>
             {section.titleKey ? (

@@ -1,7 +1,6 @@
-import { useEventListener } from 'expo';
-import { Image } from 'expo-image';
+import { MediaImage } from '@/components/ui/media-image';
+import { NoteVideoViewer } from './NoteVideoViewer';
 import { useAudioPlayer, type AudioStatus } from 'expo-audio';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -61,7 +60,7 @@ function NoteImageView({
         style={s.mediaFrame}
       >
         {visible ? (
-          <Image
+          <MediaImage
             source={{ uri: url, ...(objectKey ? { cacheKey: objectKey } : {}) }}
             recyclingKey={objectKey ?? url}
             cachePolicy="memory-disk"
@@ -95,56 +94,7 @@ function resolveMediaAspectRatio(
   return fallback;
 }
 
-function ActiveVideoBlock({
-  url,
-  caption,
-  captionColor,
-  aspectRatio,
-  backgroundColor,
-  onMediaError,
-  autoPlay = false,
-}: {
-  url: string;
-  caption: string;
-  captionColor: string;
-  aspectRatio: number;
-  backgroundColor: string;
-  onMediaError?: () => void;
-  autoPlay?: boolean;
-}) {
-  // useVideoPlayer is called unconditionally — the empty-url guard lives in the
-  // caller (BlockView), so this component always receives a valid source.
-  const player = useVideoPlayer(url, (p) => {
-    p.loop = false;
-  });
-  useEffect(() => {
-    // Run after VideoView attaches: the web player cannot play before it has
-    // a mounted video element. Native players retain play intent while loading.
-    if (autoPlay) player.play();
-  }, [autoPlay, player]);
-  useEventListener(player, 'statusChange', ({ status }) => {
-    if (status === 'error') {
-      onMediaError?.();
-    }
-  });
-  return (
-    <View>
-      <View style={[s.mediaFrame, { backgroundColor }]}>
-        <VideoView
-          style={[s.media, { aspectRatio }]}
-          player={player}
-          nativeControls
-          contentFit="contain"
-        />
-      </View>
-      {caption ? (
-        <Text style={[s.caption, { color: captionColor }]}>{caption}</Text>
-      ) : null}
-    </View>
-  );
-}
-
-function VideoBlock(props: {
+function VideoBlock({ url, caption, captionColor, aspectRatio, backgroundColor, onMediaError }: {
   url: string;
   caption: string;
   captionColor: string;
@@ -154,49 +104,24 @@ function VideoBlock(props: {
   lazy?: boolean;
 }) {
   const { t } = useTranslation();
-  const {
-    url,
-    caption,
-    captionColor,
-    aspectRatio,
-    backgroundColor,
-    onMediaError,
-    lazy = false,
-  } = props;
-  const [activated, setActivated] = useState(!lazy);
-
-  if (!activated) {
-    return (
-      <View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('chat.detail.playVideo')}
-          onPress={() => setActivated(true)}
-          style={[s.mediaFrame, { backgroundColor }]}
-        >
-          <View style={[s.media, s.videoPlaceholder, { aspectRatio, backgroundColor }]}>
-            <View style={[s.videoPlayButton, { backgroundColor: captionColor }]}>
-              <Text style={[s.videoPlayGlyph, { color: backgroundColor }]}>▶</Text>
-            </View>
-          </View>
-        </Pressable>
-        {caption ? (
-          <Text style={[s.caption, { color: captionColor }]}>{caption}</Text>
-        ) : null}
-      </View>
-    );
-  }
-
+  const [activated, setActivated] = useState(false);
   return (
-    <ActiveVideoBlock
-      autoPlay={lazy}
-      url={url}
-      caption={caption}
-      captionColor={captionColor}
-      aspectRatio={aspectRatio}
-      backgroundColor={backgroundColor}
-      onMediaError={onMediaError}
-    />
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('chat.detail.playVideo')}
+        onPress={() => setActivated(true)}
+        style={[s.mediaFrame, { backgroundColor }]}
+      >
+        <View style={[s.media, s.videoPlaceholder, { aspectRatio, backgroundColor }]}>
+          <View style={[s.videoPlayButton, { backgroundColor: captionColor }]}>
+            <Text style={[s.videoPlayGlyph, { color: backgroundColor }]}>▶</Text>
+          </View>
+        </View>
+      </Pressable>
+      {caption ? <Text style={[s.caption, { color: captionColor }]}>{caption}</Text> : null}
+      {activated ? <NoteVideoViewer key={url} uri={url} onClose={() => setActivated(false)} onMediaError={onMediaError} /> : null}
+    </View>
   );
 }
 
@@ -391,7 +316,7 @@ function ContactCard({
       accessibilityLabel={name || id}
     >
       {avatar ? (
-        <Image source={{ uri: avatar }} style={s.peerAvatar} contentFit="cover" />
+        <MediaImage source={{ uri: avatar }} style={s.peerAvatar} contentFit="cover" />
       ) : (
         <View style={[s.peerAvatar, { backgroundColor: colors.primaryLight }]}>
           <Text style={[s.peerAvatarFallback, { color: colors.primary }]}> {group ? '群' : '人'} </Text>

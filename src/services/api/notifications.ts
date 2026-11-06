@@ -279,6 +279,22 @@ export async function updateCircleOfflinePushEnabled(
     .circleOfflinePushEnabled;
 }
 
+function isGroupPushPreference(value: unknown): value is { groupOfflinePushEnabled: boolean } {
+  return isPlainObject(value) && typeof value.groupOfflinePushEnabled === 'boolean';
+}
+
+export async function fetchGroupOfflinePushEnabled(): Promise<boolean> {
+  const raw = await apiClient<unknown>('/notification/group-push-preference');
+  return expectShape(raw, isGroupPushPreference, '群聊推送设置格式异常').groupOfflinePushEnabled;
+}
+
+export async function updateGroupOfflinePushEnabled(groupOfflinePushEnabled: boolean): Promise<boolean> {
+  const raw = await apiClient<unknown>('/notification/group-push-preference', {
+    method: 'PUT', body: { groupOfflinePushEnabled },
+  });
+  return expectShape(raw, isGroupPushPreference, '群聊推送设置格式异常').groupOfflinePushEnabled;
+}
+
 export interface ScrollingAnnouncement {
   notificationID: string;
   id: string;

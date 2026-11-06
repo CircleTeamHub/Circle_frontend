@@ -48,6 +48,7 @@ interface AppSettingsState {
   settings: AppSettingsValues;
   pinnedFoldCount: number;
   setSetting: (key: AppSettingKey, value: boolean) => void;
+  resetGroupPushSettings: () => void;
   setPinnedFoldCount: (value: number) => void;
 }
 
@@ -65,6 +66,12 @@ export const useAppSettingsStore = create<AppSettingsState>()(
         })),
       setPinnedFoldCount: (value) =>
         set({ pinnedFoldCount: normalizePinnedFoldCount(value) }),
+      resetGroupPushSettings: () => set((state) => ({ settings: {
+        ...state.settings,
+        groupGlobalPush: appSettingsDefaults.groupGlobalPush,
+        groupOnlinePush: appSettingsDefaults.groupOnlinePush,
+        groupOfflinePush: appSettingsDefaults.groupOfflinePush,
+      } })),
     }),
     {
       name: 'circle-im-app-settings',

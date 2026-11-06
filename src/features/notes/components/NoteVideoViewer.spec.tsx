@@ -58,6 +58,14 @@ jest.mock('@/theme', () => ({
 
 const uri = 'https://private.example.com/note.mp4?signature=secret';
 
+test('reports failed playback to the note so expired media URLs can be refreshed', async () => {
+  const onMediaError = jest.fn();
+  render(<NoteVideoViewer uri={uri} onClose={jest.fn()} onMediaError={onMediaError} />);
+  await waitFor(() => expect(mockPlayer.play).toHaveBeenCalled());
+  act(() => mockStatusListener({ status: 'error' }));
+  expect(onMediaError).toHaveBeenCalledTimes(1);
+});
+
 function ViewerHost() {
   const [open, setOpen] = useState(true);
   return open ? <NoteVideoViewer uri={uri} onClose={() => setOpen(false)} /> : null;
@@ -82,9 +90,10 @@ test('mounts the native view before loading and plays the selected video', async
   render(<NoteVideoViewer uri={uri} onClose={jest.fn()} />);
 
   expect(mockUseVideoPlayer).toHaveBeenCalledWith(null);
-  expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(uri);
+  expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(expect.objectContaining({ uri, useCaching: true, cacheKey: expect.any(String) }));
   expect(mockPlayer.play).not.toHaveBeenCalled();
-  expect(screen.UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
   expect(mockVideoViewProps).toMatchObject({
     player: mockPlayer,
     nativeControls: true,
@@ -101,7 +110,11 @@ test('mounts the native view before loading and plays the selected video', async
 
   await act(async () => resolve());
   expect(mockPlayer.play).toHaveBeenCalledTimes(1);
-  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+  act(() => mockStatusListener({ status: 'readyToPlay' }));
+  expect(screen.queryByTestId('media-progress-track')).toBeNull();
+  act(() => mockStatusListener({ status: 'loading' }));
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
 });
 
 test.each(['button', 'android back'])('%s dismisses the viewer and releases its player', async (action) => {

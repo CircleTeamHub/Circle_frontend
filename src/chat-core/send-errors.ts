@@ -111,12 +111,13 @@ export function getChatSendErrorMessage(
 }
 
 /**
- * 高频路径的上报去重:按「消息类型 + 错误码」每个 app 生命周期只报一次。
+ * 高频路径的上报去重:按「消息类型 + 错误码」每 60 秒只报一次。
  * 发送是最高频的操作,服务端一旦持续性故障,按次上报能用「用户数 × 发送次数」
  * 把配额瞬间烧穿,后面真正的新问题反而发不出去(与 credit-policy 的
  * reportGateEventOnce、通知链路的 report-failure 同一套取舍)。
  */
-const reportedSendFailures = new Set<string>();
+const reportedSendFailures = new Map<string, number>();
+const SEND_FAILURE_REPORT_WINDOW_MS = 60_000;
 
 const CHAT_ERROR_CODE_SHAPE = /^[A-Z][A-Z0-9_]{0,63}$/;
 
@@ -150,8 +151,12 @@ export function reportChatSendFailure(
   if (EXPECTED_CHAT_SEND_ERROR_CODES.has(code)) return;
 
   const key = `${messageType}:${code}`;
+  const now = Date.now();
+  for (const [entry, reportedAt] of reportedSendFailures) {
+    if (now - reportedAt >= SEND_FAILURE_REPORT_WINDOW_MS) reportedSendFailures.delete(entry);
+  }
   if (reportedSendFailures.has(key)) return;
-  reportedSendFailures.add(key);
+  reportedSendFailures.set(key, now);
 
   reportError(new Error(`chat send failed: ${code}`), {
     operation: 'chatSend',

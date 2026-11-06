@@ -10,6 +10,7 @@
  */
 function makeChatCoreStubs() {
   return {
+    get '@/features/chat/group-info-cache'() { return require('./load-ts-module').loadTsModule('src/features/chat/group-info-cache.ts'); },
     // 已处理失败的上报(chat-core/api 翻页失败时用);观测层另有专门的桩,这里只兜底。
     '@/observability/report-failure': { reportHandledFailure: () => {} },
     // 列表翻页收集:纯函数,用真实实现(chat-core/api 拉会话快照时用它按游标翻到底)。

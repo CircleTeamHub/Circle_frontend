@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,11 +12,15 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/stores/authStore';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 import { NavHeader } from '@/components/ui/nav-header';
 import {
   fetchFriendSettings,
+  friendsMutatedSince,
   setFriendRemark,
 } from '@/services/api/friends';
+import { isProfileCacheFresh, readUserProfileCache, writeUserProfileCache } from '../profile-cache';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
@@ -71,26 +75,28 @@ export default function EditFriendRemarkScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string; name?: string; fallbackName?: string }>();
   const profileId = typeof params.id === 'string' ? params.id : '';
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const cachedStamp = readUserProfileCache(sessionEpoch, profileId)?.friendSettings;
+  const cachedSettings = cachedStamp && !friendsMutatedSince(cachedStamp.at) ? cachedStamp.value : null;
+
   const routeFallbackName =
     typeof params.fallbackName === 'string' ? params.fallbackName.trim() : '';
   const targetName =
     typeof params.name === 'string' ? params.name : routeFallbackName || t('chat.friend');
   const remarkFallbackName = routeFallbackName || targetName;
 
-  const [value, setValue] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [value, setValue] = useState(cachedSettings?.remark ?? '');
+  const [isLoading, setIsLoading] = useState(!cachedSettings);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
-  useEffect(
-    () => () => {
-      mountedRef.current = false;
-    },
-    [],
-  );
-
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useLayoutEffect(() => {
     let cancelled = false;
 
     if (!profileId) {
@@ -99,6 +105,16 @@ export default function EditFriendRemarkScreen() {
       return;
     }
 
+    const cached = readUserProfileCache(sessionEpoch, profileId)?.friendSettings;
+    setValue(cached?.value?.remark ?? '');
+    if (isProfileCacheFresh(cached, Date.now(), friendsMutatedSince) && cached.value) {
+      setValue(cached.value.remark ?? '');
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+    const startedAt = Date.now();
+    const requestRevision = getPageSnapshotRevision();
     setIsLoading(true);
     setError(null);
 
@@ -108,6 +124,8 @@ export default function EditFriendRemarkScreen() {
           return;
         }
 
+        if (useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+        writeUserProfileCache(sessionEpoch, profileId, { friendSettings: { value: settings, at: startedAt } }, requestRevision);
         setValue(settings.remark ?? '');
         setError(null);
       })
@@ -126,7 +144,7 @@ export default function EditFriendRemarkScreen() {
     return () => {
       cancelled = true;
     };
-  }, [profileId, t]);
+  }, [profileId, sessionEpoch, t]);
 
   const d = useMemo(
     () => ({
@@ -187,17 +205,18 @@ export default function EditFriendRemarkScreen() {
     }
   }, [isSaving, profileId, remarkFallbackName, t, value]);
 
-  const stateBlock = isLoading ? (
+  const stateBlock = isLoading && !cachedSettings ? (
     <View style={s.stateBlock}>
       <ActivityIndicator color={colors.primary} />
       <Text style={d.stateText}>{t('userProfile.editRemark.loading')}</Text>
     </View>
-  ) : error ? (
+  ) : error && !cachedSettings ? (
     <View style={s.stateBlock}>
       <Text style={d.stateText}>{error}</Text>
     </View>
   ) : (
     <View style={[s.card, d.card]}>
+      {error ? <Text style={d.stateText}>{error}</Text> : null}
       <Text style={[s.fieldLabel, d.fieldLabel]}>
         {t('userProfile.editRemark.label', { name: targetName })}
       </Text>

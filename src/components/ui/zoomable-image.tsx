@@ -7,7 +7,7 @@ import {
   View,
   type GestureResponderEvent,
 } from 'react-native';
-import { Image } from 'expo-image';
+import { MediaImage } from '@/components/ui/media-image';
 
 /**
  * 可缩放的单张图片（大图查看器的每一页）。
@@ -478,13 +478,12 @@ export function ZoomableImage({
           { transform: [{ translateX }, { translateY }, { scale }] },
         ]}
       >
-        <Image
+        <MediaImage
           source={cacheKey ? { uri, cacheKey } : { uri }}
           cachePolicy={cachePolicy}
           style={s.fill}
           contentFit="contain"
           enforceEarlyResizing
-          transition={150}
           onLoad={(event) => {
             // 固有尺寸决定 contain 后的渲染框，平移边界据此收紧。
             const { width: w, height: h } = event.source ?? {};

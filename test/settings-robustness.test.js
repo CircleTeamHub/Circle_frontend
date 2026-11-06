@@ -7,6 +7,21 @@ const ts = require('typescript');
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), 'utf8');
 
+test('logout resets account group push mirrors without changing device appearance', () => {
+  const { useAppSettingsStore } = runModule('src/features/profile/store/use-app-settings-store.ts', request => {
+    if (request === '@/storage') return { mmkvJsonStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } };
+    return require(request);
+  });
+  const store = useAppSettingsStore.getState();
+  store.setSetting('groupGlobalPush', false);
+  store.setSetting('groupOnlinePush', false);
+  store.setSetting('hideChatAvatar', true);
+  store.resetGroupPushSettings();
+  assert.equal(useAppSettingsStore.getState().settings.groupGlobalPush, true);
+  assert.equal(useAppSettingsStore.getState().settings.groupOnlinePush, true);
+  assert.equal(useAppSettingsStore.getState().settings.hideChatAvatar, true);
+});
+
 function runModule(rel, requireFn = () => ({})) {
   const filePath = path.join(process.cwd(), rel);
   const transpiled = ts.transpileModule(fs.readFileSync(filePath, 'utf8'), {

@@ -14,6 +14,9 @@ import { ApiError } from '@/services/api/api-error';
 import { stageLocalNoteDraftDeletion, loadLocalNoteDraft, loadPendingNoteDraftDeletions } from '@/features/notes/utils/note-editor-drafts';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { resetUploadProgress, startUploadProgress } from '@/stores/upload-progress-store';
+import * as noteSections from '@/features/notes/utils/note-sections';
+import { recordMetric } from '@/observability/metrics';
+jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 
 test('note preview keeps live upload progress visible inside its native modal', async () => {
   const transfer = startUploadProgress('video/mp4');
@@ -52,6 +55,7 @@ test('measures text save preparation, request waiting and reconciliation without
   expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.phase', { stage: 'request', durationMs: 2500 });
   expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.phase', { stage: 'reconcile', durationMs: 0 });
   expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.completed', { durationMs: 2500 });
+  expect(recordMetric).toHaveBeenCalledWith('app.operation.duration', 2500, { operation: 'noteCreate', outcome: 'success' });
   expect(mockRequestPresign).not.toHaveBeenCalled();
   expect(mockUploadFile).not.toHaveBeenCalled();
   expect(JSON.stringify(jest.mocked(logClientDiagnostic).mock.calls)).not.toContain('Private title');
@@ -1909,6 +1913,19 @@ test('a note with real rich text is never overwritten by the legacy content fiel
 
 // 正文统计原来是 EditNoteScreen 的 state：每敲一个字整屏（分组 chip、媒体/展示
 // 九宫格、地图预览）重渲染一次。计数要继续实时，但重渲染必须只发生在计数那一格。
+test('opening a grouping sheet does not rebuild the unchanged note snapshot', async () => {
+  const normalize = jest.spyOn(noteSections, 'normalizeNoteMediaSections');
+  const view = render(<EditNoteScreen />);
+  try {
+    pressComposer('title');
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Unchanged body');
+    await act(async () => {});
+    const before = normalize.mock.calls.length;
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.groupsLabel' }));
+    expect(normalize.mock.calls.length).toBe(before);
+  } finally { view.unmount(); normalize.mockRestore(); }
+});
+
 test('typing in the body updates the live counter without re-rendering the screen', async () => {
   mockTranslate = (key, options) =>
     key === 'notes.edit.textCount' ? `字数:${options?.count}` : key;
@@ -2079,11 +2096,11 @@ test('save and exit stays in the editor when both local and server persistence f
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
   mockSaveDraft.mockRejectedValue(new Error('offline'));
-  jest.mocked(storage.set).mockImplementation(() => { throw new Error('full'); });
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const rendered = render(<EditNoteScreen />);
   try {
     await waitFor(() => expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('remote'));
+    jest.mocked(storage.set).mockImplementation(() => { throw new Error('full'); });
     fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'unsaved');
     const guard = jest.mocked(usePreventRemove).mock.calls.at(-1)?.[1];
     act(() => guard?.({ data: { action: { type: 'GO_BACK' } } } as never));
@@ -2091,6 +2108,8 @@ test('save and exit stays in the editor when both local and server persistence f
     expect(save).toBeDefined();
     await act(async () => { save?.onPress?.(); await Promise.resolve(); });
     await waitFor(() => expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.saveFailed'));
+    expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'draftLocalSave', expect.any(Error));
+    expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'draftRemoteSave', expect.any(Error));
     expect(mockRouter.back).not.toHaveBeenCalled();
     expect(screen.getByPlaceholderText('notes.edit.titlePlaceholder').props.value).toBe('unsaved');
   } finally { rendered.unmount(); alert.mockRestore(); }
@@ -2232,6 +2251,35 @@ test.each([
     expect([...listeners.values()].every((callbacks) => callbacks.size === 0)).toBe(true);
     subscribe.mockRestore(); visibility.mockRestore(); platformOverride.restore();
   }
+});
+
+test.each(['source-defaults', 'stored-cards'])('editing a collected note restores and saves %s missing from the saved block layout', async (mode) => {
+  mockRouteId = 'collected-note';
+  const sender = { id: 'sender', name: 'Default sender', faceURL: 'https://cdn/sender.jpg' };
+  const group = { id: 'source-circle', name: 'Default group', faceURL: 'https://cdn/group.jpg' };
+  const layout = [{ type: 'noteLayout', props: { blocks: [{ id: 'text-a', kind: 'text' }], order: ['text'] } }];
+  mockFetchNoteDetail.mockResolvedValue({
+    id: mockRouteId, title: 'Collected', content: 'Body', contentJson: layout, media: [], groups: [], pinned: false,
+    createdAt: '2026-01-01T00:00:00Z', collectedFrom: {
+      conversationType: 'group', conversationID: 'source-chat', clientMsgID: 'original', sender, group,
+    }, sections: { text: { content: 'Body', contentJson: layout },
+      ...(mode === 'stored-cards' ? { contacts: { items: [sender] }, groups: { items: [group] } } : {}),
+    },
+  });
+  const view = render(<EditNoteScreen />);
+  try {
+    await screen.findByText('Default sender');
+    expect(screen.getByText('Default group')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
+    const input = jest.mocked(updateNote).mock.calls.at(-1)![1];
+    expect(input.sections?.contacts?.items).toEqual([sender]);
+    expect(input.sections?.groups?.items).toEqual([expect.objectContaining(group)]);
+    const marker = input.contentJson?.find((block) => block.type === 'noteLayout');
+    expect(marker?.props).toMatchObject({ blocks: expect.arrayContaining([
+      expect.objectContaining({ kind: 'contact' }), expect.objectContaining({ kind: 'group' }),
+    ]) });
+  } finally { view.unmount(); }
 });
 
 test('the group-card toolbar opens the picker directly and displays and saves the chosen group', async () => {
@@ -2637,7 +2685,8 @@ test('a pending recording restores its current durable URI and retries after reo
 test('failed recording storage and upload keep the playable item but cannot claim Save and Exit succeeded', async () => {
   signedInDraft();
   mockFetchDraft.mockResolvedValue(reviewDraft());
-  mockPersistRecording.mockRejectedValue(new Error('full'));
+  const storageError = new Error('full');
+  mockPersistRecording.mockRejectedValue(storageError);
   mockRequestPresign.mockReset().mockRejectedValue(new Error('offline'));
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const rendered = render(<EditNoteScreen />);
@@ -2654,6 +2703,8 @@ test('failed recording storage and upload keep the playable item but cannot clai
     const choices = alert.mock.calls.at(-1)?.[2];
     act(() => choices?.find((button) => button.text === 'notes.drafts.save')?.onPress?.());
     await waitFor(() => expect(alert).toHaveBeenCalledWith('common.errorOccurred', 'notes.drafts.saveFailed'));
+    expect(mockReportHandledFailure).toHaveBeenCalledWith('noteEditor', 'audioLocalStorage', storageError);
+    expect(mockReportHandledFailure).not.toHaveBeenCalledWith('noteEditor', 'draftLocalSave', expect.anything());
     expect(mockRouter.back).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'common.retry' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'notes.edit.done' })).toBeDisabled();

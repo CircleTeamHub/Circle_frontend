@@ -88,7 +88,9 @@
       "accountActionsSection": "アカウント操作",
       "switchAccount": "アカウントを切り替え",
       "logout": "ログアウト",
-      "cancelAccount": "アカウントを削除"
+      "cancelAccount": "アカウントを削除",
+      "singleDeviceStatusFailed": "単一端末ログインの状態を取得できません。再試行してください。",
+      "singleDeviceUpdateFailed": "単一端末ログインの設定を保存できません。再試行してください。"
     },
     "notifications": {
       "title": "通知",
@@ -120,7 +122,16 @@
       "circleOffline": "オフライン通知",
       "circleOfflineHint": "アプリがオフラインのときにサークル通知を受け取る",
       "circleRingtone": "サークル通知の着信音",
-      "circleDefault": "サークル既定"
+      "circleDefault": "サークル既定",
+      "syncFailed": "グループ通知設定を同期できません。再試行してください。",
+      "inAppHint": "アプリ内の通知のみを設定します",
+      "systemSettings": "システム通知設定",
+      "systemSettingsHint": "バックグラウンド通知の音、振動、権限を変更します",
+      "ringtones": {
+        "default": "標準",
+        "soft": "ソフト",
+        "bell": "ベル"
+      }
     },
     "autoReply": {
       "title": "DM自動返信",
@@ -216,7 +227,9 @@
         "byQrCode": "QRコードで",
         "byGroup": "グループ・サークルで",
         "shareCard": "個人カードを共有"
-      }
+      },
+      "unavailable": "利用不可",
+      "unsupportedHint": "現在のサービスはこの設定に対応していません。更新後にお試しください。"
     },
     "permissions": {
       "title": "システム権限",
@@ -230,7 +243,9 @@
       "authorized": "許可済み",
       "unauthorized": "未許可",
       "onlyVisibleAuthorized": "確認できる権限のみ表示します",
-      "openSystemSettings": "システム設定を開く"
+      "openSystemSettings": "システム設定を開く",
+      "browserSettingsHint": "ブラウザーのアドレスバーにあるサイト設定から、通知・カメラ・マイクなどの権限を変更してください。",
+      "openSettingsFailed": "システム設定を開けません。端末の設定からこのアプリの権限を開いてください。"
     },
     "storage": {
       "title": "設定",
@@ -292,6 +307,29 @@
       "thirdPartyLicensesDescription": "このバージョンに含まれるライセンスと通知をオフラインで確認できます。テキストは選択できます。",
       "updateTitle": "バージョンの状況",
       "updateBody": "このバージョンは今後も改善を続けます。新しいセキュリティ、チャット、サークルの機能は、システム通知やリリースノートで優先的にお知らせします。"
+    },
+    "changeEmail": {
+      "title": "メールアドレスの変更",
+      "newEmail": "新しいメールアドレス",
+      "password": "現在のパスワード",
+      "code": "新しいメール宛ての確認コード",
+      "sendCode": "コードを送信",
+      "sendAgain": "{{seconds}}秒後に再送信",
+      "sendFailed": "コードを送信できません。再試行してください。",
+      "saveFailed": "メールアドレスを変更できません。再試行してください。",
+      "help": "現在のパスワードと新しいメールアドレスを確認します。変更後は再ログインが必要です。",
+      "success": "メールアドレスを変更しました。再ログインしてください。",
+      "submit": "変更を確定",
+      "invalidCode": "6桁の確認コードを入力してください。",
+      "passwordRequired": "現在のパスワードを入力してください。",
+      "sameEmail": "現在とは異なるメールアドレスを入力してください。"
+    },
+    "cancelAccount": {
+      "title": "アカウント削除",
+      "warning": "すべての端末からログアウトされ、このアカウントでログインできなくなります。必要な情報を先に保存してください。",
+      "confirmation": "削除を確認するため現在のアカウントIDを入力",
+      "action": "アカウント削除を確定",
+      "failed": "アカウントを削除できません。再試行してください。"
     }
   },
   "chat": {
@@ -322,6 +360,7 @@
       "previewNotice": "接続がまだ完了していません。しばらくしてから再試行してください。",
       "historyWindowFull": "これより前のメッセージは、チャット履歴で検索してください。",
       "jumpToUnread": "未読{{count}}件の先頭へ移動",
+      "jumpToLatest": "最新のメッセージに移動",
       "unreadMessages": "未読 {{count}}件",
       "recordingSeconds": "録音中 {{seconds}}秒",
       "voiceReleaseCancel": "指を離してキャンセル",
@@ -476,6 +515,8 @@
     "searchGroupMembersNoMatches": "一致するグループメンバーはいません",
     "groupName": "グループ名",
     "groupNotice": "グループのお知らせ",
+    "noticePinned": "お知らせを上部に表示",
+    "noticePinnedHint": "グループチャット上部でお知らせをスクロール表示します",
     "noGroupNotice": "グループのお知らせはありません",
     "moreGroupMembers": "その他のグループメンバー",
     "addGroupMember": "グループメンバーを追加",
@@ -1430,6 +1471,7 @@
     }
   },
   "moment": {
+    "mediaLimitHint": "写真と動画は合計{{max}}件まで",
     "selectMedia": "写真や動画を追加",
     "removeMedia": "写真や動画を削除",
     "playVideo": "動画を再生",
@@ -2477,7 +2519,8 @@
         "voice": "音声",
         "message": "メッセージ"
       },
-      "menuLabel": "コレクション"
+      "menuLabel": "コレクション",
+      "today": "今日"
     },
     "viewCollections": "見る",
     "notes": "ノート",
@@ -2843,6 +2886,12 @@
       "optionLocation": "位置",
       "optionMedia": "写真・動画",
       "optionShowcase": "ショーケース"
+    },
+    "favoriteConfirm": {
+      "sendTo": "送信先",
+      "messageLabel": "追加メッセージ",
+      "messagePlaceholder": "メッセージを追加（任意）",
+      "missingRecipient": "チャットを開き直して、もう一度お試しください。"
     }
   },
   "accountSwitcher": {
@@ -3687,7 +3736,8 @@
     "CHAT_GROUP_ACCEPT_REQUIRED": "先にグループ招待を承諾してください",
     "CHAT_GROUP_INVITATION_INVALID": "招待の期限が切れたか、無効になりました",
     "CHAT_GROUP_APPLICATION_DISABLED": "このグループは名刺からの参加申請を受け付けていません",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "復旧の申請が多すぎます。既存の申請が処理されてからもう一度お試しください"
+    "AUTH_LOGIN_RECOVERY_LIMITED": "復旧の申請が多すぎます。既存の申請が処理されてからもう一度お試しください",
+    "CHAT_GROUP_JOIN_BLOCKED": "このアカウントはこのグループに参加できません"
   },
   "qr": {
     "loginDeprecatedTitle": "QRログインは利用できません",
@@ -3832,5 +3882,77 @@
       "CANCELLED": "申請が取り消されました"
     },
     "sentInvitation": "相手をグループに招待しました"
+  },
+  "groupReview": {
+    "entry": "申請管理",
+    "title": "グループ審査",
+    "log": "ログ",
+    "searchPlaceholder": "名前・アカウント番号",
+    "selectAll": "すべて選択",
+    "selectApplicant": "{{name}} を選択",
+    "selectionLimit": "一度に選択できる申請は50件までです",
+    "approve": "承認",
+    "reject": "拒否",
+    "blacklist": "グループへの参加禁止",
+    "confirmBody": "{{count}} 件の申請を処理します。",
+    "blacklistBody": "{{count}} 件の申請を拒否し、このアカウントからの再申請と招待による参加を禁止します。",
+    "partialResult": "完了 {{succeeded}} 件、失敗 {{failed}} 件。更新して最新の状態を確認してください。",
+    "completed": "{{count}} 件完了",
+    "empty": "申請や招待はありません",
+    "noResults": "該当する申請はありません",
+    "loadFailed": "申請を読み込めませんでした。再試行してください。",
+    "actionUncertain": "結果を確認できません。再操作する前に一覧を更新してください。",
+    "invitedBy": "{{name}} からの招待",
+    "sourcePrefix": "申請元：{{source}}",
+    "unknownMember": "不明なメンバー",
+    "processing": "処理中…",
+    "confirm": {
+      "approve": "申請を承認しますか？",
+      "reject": "申請を拒否しますか？",
+      "blacklist": "参加を禁止しますか？"
+    },
+    "source": {
+      "INVITE": "メンバーの招待",
+      "QR": "QRコード",
+      "APPLICATION": "参加申請",
+      "UNKNOWN": "不明な申請元"
+    },
+    "status": {
+      "PENDING": "審査待ち",
+      "INVITED": "招待への回答待ち",
+      "JOINED": "承認済み",
+      "REJECTED": "拒否済み",
+      "BLACKLISTED": "参加禁止",
+      "EXPIRED": "期限切れ",
+      "LEFT": "退会済み",
+      "DECLINED": "辞退済み",
+      "CANCELLED": "取消済み"
+    }
+  },
+  "groupLog": {
+    "searchRole": "検索対象",
+    "target": "対象メンバー",
+    "actor": "操作者",
+    "date": "日時",
+    "status": "状態",
+    "source": "申請元",
+    "inviter": "招待者",
+    "operator": "操作者",
+    "detail": "詳細",
+    "events": {
+      "created": "グループ作成",
+      "joined": "グループ参加",
+      "left": "グループ退会",
+      "removed": "メンバー削除",
+      "roleChanged": "役割変更",
+      "silenced": "発言禁止",
+      "unsilenced": "発言禁止解除",
+      "ownerTransferred": "オーナー譲渡",
+      "historyCleared": "履歴削除",
+      "muteAll": "全員の発言設定",
+      "policy": "権限変更",
+      "application": "参加申請",
+      "blacklist": "参加禁止"
+    }
   }
 }

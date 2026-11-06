@@ -1,4 +1,5 @@
 import React, { Profiler } from 'react';
+import { ActivityIndicator } from 'react-native';
 import { act, render, screen } from '@testing-library/react-native';
 import { useUploadProgressStore, type UploadProgressTask } from '@/stores/upload-progress-store';
 import { MediaUploadProgress } from './media-upload-progress';
@@ -31,6 +32,8 @@ test('keeps an unknown total indeterminate without an invented percentage', () =
   expect(screen.getByRole('progressbar')).toHaveAccessibilityValue({ text: 'mediaUpload.uploading' });
   expect(screen.getByRole('progressbar').props.accessibilityValue.now).toBeUndefined();
   expect(screen.queryByText(/%/)).toBeNull();
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
 });
 
 test('shows confirmation rather than completed upload when all bytes have left the device', () => {

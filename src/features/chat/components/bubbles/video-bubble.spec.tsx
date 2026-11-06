@@ -1,8 +1,9 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Modal } from 'react-native';
+import { ActivityIndicator, Modal } from 'react-native';
 import { Image } from 'expo-image';
 import { VideoBubble } from './video-bubble';
+import { ImageBubble } from './image-bubble';
 import type { ChatMessage } from '@/types';
 
 // 只观察封面:expo-video 的播放器/视图、主题和头像全部顶掉。
@@ -21,7 +22,7 @@ jest.mock('expo-image', () => {
         source?: { uri?: string; cacheKey?: string };
       }) => {
         posterProps.push(props);
-        return <View testID={props.testID} />;
+        return <View {...props} />;
       },
       {
         clearDiskCache: jest.fn(() => Promise.resolve()),
@@ -42,27 +43,38 @@ jest.mock('@/storage', () => ({
     set: (key: string, value: string) => mockStorageValues().set(key, value),
   },
 }));
-const mockPlayer = { replaceAsync: jest.fn(() => Promise.resolve()), play: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })), loop: false };
+let mockStatusListener: ((event: { status: string }) => void) | undefined;
+const mockPlayer = { replaceAsync: jest.fn(() => Promise.resolve()), play: jest.fn(), addListener: jest.fn((_event: string, listener: typeof mockStatusListener) => { mockStatusListener = listener; return { remove: jest.fn() }; }), loop: false };
 const mockRelease = jest.fn();
+let mockRegistered = false;
+let mockNativeIdle: (() => void) | undefined;
 jest.mock('expo-video', () => {
   const { useEffect } = jest.requireActual<typeof import('react')>('react');
   const { View } =
     jest.requireActual<typeof import('react-native')>('react-native');
   return {
+    clearVideoCacheAsync: jest.fn(() => Promise.resolve()),
     useVideoPlayer: () => {
-      useEffect(() => () => mockRelease(), []);
+      useEffect(() => {
+        mockRegistered = true;
+        return () => mockRelease();
+      }, []);
       return mockPlayer;
     },
     VideoView: () => <View testID="video-player" />,
   };
 });
+jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: () => null }));
 jest.mock('@/components/app/UploadProgressHost', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { UploadProgressHost: () => <View testID="modal-upload-progress-host" /> };
 });
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return <Text>{name}</Text>;
+} }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -92,6 +104,9 @@ beforeEach(() => {
   mockPlayer.replaceAsync.mockReset().mockResolvedValue(undefined);
   mockPlayer.play.mockClear();
   mockRelease.mockClear();
+  mockRegistered = false;
+  mockNativeIdle = undefined;
+  jest.requireMock('expo-video').clearVideoCacheAsync.mockReset().mockResolvedValue(undefined);
 });
 
 test('a tap opens full-screen playback and closing releases the active player', async () => {
@@ -102,10 +117,28 @@ test('a tap opens full-screen playback and closing releases the active player', 
   expect(screen.getByTestId('modal-upload-progress-host')).toBeTruthy();
   expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
   await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
-  expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(video.videoUrl);
+  expect(mockPlayer.replaceAsync).toHaveBeenCalledWith(expect.objectContaining({ uri: video.videoUrl, useCaching: true }));
   fireEvent.press(screen.getByLabelText('common.close'));
   expect(screen.queryByTestId('video-player')).toBeNull();
   expect(mockRelease).toHaveBeenCalledTimes(1);
+});
+
+test('shows only a central loading bar until playback is ready and while rebuffering', async () => {
+  let resolve!: () => void;
+  mockPlayer.replaceAsync.mockImplementationOnce(() => new Promise<void>(done => { resolve = done; }));
+  render(<VideoBubble message={video} outgoing={false} />);
+  fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+  expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
+  await act(async () => resolve());
+  expect(screen.getByRole('progressbar')).toBeTruthy();
+  act(() => mockStatusListener?.({ status: 'readyToPlay' }));
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  act(() => mockStatusListener?.({ status: 'loading' }));
+  expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+  act(() => mockStatusListener?.({ status: 'error' }));
+  expect(screen.queryByRole('progressbar')).toBeNull();
+  expect(screen.getByLabelText('common.retry')).toBeTruthy();
 });
 
 test('failed video loading exposes retry in full screen and retries without another inline player', async () => {
@@ -134,11 +167,28 @@ test('a refreshed signed URL replaces the open full-screen source', async () => 
   fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
   await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
   view.rerender(<VideoBubble message={{ ...video, videoUrl: 'https://media.example.com/clip.mp4?fresh' }} outgoing={false} />);
-  await waitFor(() => expect(mockPlayer.replaceAsync).toHaveBeenLastCalledWith('https://media.example.com/clip.mp4?fresh'));
+  await waitFor(() => expect(mockPlayer.replaceAsync).toHaveBeenLastCalledWith(expect.objectContaining({ uri: 'https://media.example.com/clip.mp4?fresh', useCaching: true })));
   expect(mockRelease).toHaveBeenCalledTimes(1);
 });
 
 describe('VideoBubble poster', () => {
+  it('keeps disappearing video bytes out of persistent storage', async () => {
+    render(<VideoBubble message={{ ...video, burnDurationSec: 30 } as ChatMessage} outgoing={false} />);
+    fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+    await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+    expect(mockPlayer.replaceAsync).toHaveBeenCalledWith({ uri: video.videoUrl, useCaching: false });
+  });
+
+  it('keeps the play badge from covering the central poster download progress', () => {
+    render(<VideoBubble message={{ ...video, videoThumbUrl: 'https://media.example.com/poster.jpg' }} outgoing={false} />);
+    fireEvent(screen.getByTestId('chat-video-poster'), 'loadStart');
+    expect(screen.getByTestId('media-progress-track')).toBeTruthy();
+    expect(screen.queryByText('play')).toBeNull();
+    fireEvent(screen.getByTestId('chat-video-poster'), 'loadEnd');
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.getByText('play')).toBeTruthy();
+  });
+
   it('shows the poster frame, cached by its object key, before the video is played', () => {
     render(
       <VideoBubble
@@ -191,9 +241,50 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
     videoThumbKey: 'chat/u2/poster-clip.jpg',
   } as ChatMessage;
 
+  it('purges previously cached ordinary video bytes when a burning policy is first encountered', async () => {
+    const { clearVideoCacheAsync } = jest.requireMock('expo-video');
+    clearVideoCacheAsync.mockClear();
+    render(<VideoBubble message={burning} outgoing={false} selfDestructCacheKey="burn-policy-video-cache" />);
+    await waitFor(() => expect(clearVideoCacheAsync).toHaveBeenCalledTimes(1));
+  });
+
   beforeEach(() => {
     clearDiskCache.mockClear();
     mockStorageValues().clear();
+  });
+
+  it.each([false, true])('waits for native idle after a policy closes playback (sibling image: %s)', async (siblingImage) => {
+    const { clearVideoCacheAsync } = jest.requireMock('expo-video');
+    let rejectBusy!: (error: Error) => void;
+    clearVideoCacheAsync.mockImplementation((waitForIdle?: boolean) => {
+      if (!mockRegistered) return Promise.resolve();
+      return new Promise<void>((resolve, reject) => {
+        rejectBusy = reject;
+        if (waitForIdle) mockNativeIdle = resolve;
+      });
+    });
+    const policy = `active-video-policy-${siblingImage}`;
+    const tree = (enabled: boolean) => <>
+      {siblingImage && enabled ? <ImageBubble message={{ ...video, type: 'image', imageUrl: 'https://media.example.com/photo.jpg', burnDurationSec: 30 }} outgoing={false} selfDestructCacheKey={policy} /> : null}
+      <VideoBubble message={video} outgoing={false} selfDestructEnabled={enabled} selfDestructCacheKey={policy} />
+    </>;
+    const view = render(tree(false));
+    fireEvent.press(screen.getByLabelText('chat.detail.playVideo'));
+    await waitFor(() => expect(mockPlayer.play).toHaveBeenCalledTimes(1));
+    view.rerender(tree(true));
+    await waitFor(() => expect(clearVideoCacheAsync).toHaveBeenCalledTimes(1));
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockStorageValues().get('chat.mediaDiskCacheClearedPolicies')).toBeUndefined();
+    await act(async () => {
+      // JS unmount precedes native unregister. The old API can reject only now,
+      // after both sibling hooks have already run and deduplicated the sweep.
+      mockRegistered = false;
+      if (mockNativeIdle) mockNativeIdle();
+      else rejectBusy(new Error('Cannot clear cache while there are active players'));
+    });
+    await waitFor(() => expect(mockStorageValues().get('chat.mediaDiskCacheClearedPolicies')).toContain(policy));
+    expect(clearVideoCacheAsync).toHaveBeenCalledWith(true);
+    expect(clearDiskCache).toHaveBeenCalledTimes(1);
   });
 
   // 封面在焚毁开启之前按普通图片落过盘。只有图片气泡会清磁盘缓存的话,只发视频的
@@ -208,7 +299,7 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
     );
     await waitFor(() => expect(clearDiskCache).toHaveBeenCalledTimes(1));
     await waitFor(() =>
-      expect(mockStorageValues().get('chat.imageDiskCacheClearedPolicies')).toContain(
+      expect(mockStorageValues().get('chat.mediaDiskCacheClearedPolicies')).toContain(
         'u1|viewer:off|burn:c1@t1',
       ),
     );
@@ -216,7 +307,7 @@ describe('VideoBubble disk cache clearing for disappearing videos', () => {
 
   it('does not clear again for a policy an image bubble already handled', async () => {
     mockStorageValues().set(
-      'chat.imageDiskCacheClearedPolicies',
+      'chat.mediaDiskCacheClearedPolicies',
       JSON.stringify(['u1|viewer:off|burn:c1@t1']),
     );
     render(

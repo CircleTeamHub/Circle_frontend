@@ -142,11 +142,9 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   assert.match(screen, /void refreshConversationOrList\(conversationID\)/);
   // 群主转让只属于独立群聊;提升成员上限只属于圈子群。
   assert.match(screen, /isStandaloneGroup\s*\?\s*renderLinkRow\(/);
-  assert.match(screen, /pathname: '\/\(tabs\)\/profile\/group-expansion'/);
+  assert.match(screen, /pathname: `\/\(tabs\)\/\$\{scope\}\/group-expansion`/);
   assert.match(screen, /params: \{ circleId: groupID \}/);
-  assert.match(screen, /returnScope: originScope/);
-  assert.match(screen, /returnConversationID: conversationID/);
-  assert.match(screen, /returnGroupID: groupID/);
+  assert.doesNotMatch(screen, /returnScope:|returnConversationID:|returnGroupID:/);
   // 添加管理员与添加禁言共用多选面板,确认后分别走批量角色/禁言动作。
   assert.match(screen, /multiSelect=\{pickerMode === 'admin' \|\| pickerMode === 'silence'\}/);
   assert.match(screen, /selectedMemberIDs=\{selectedMemberIDs\}/);
@@ -154,9 +152,7 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   assert.match(screen, /silenceBatch\(targets, seconds\)/);
   const expansion = read('src/features/profile/screens/GroupExpansionScreen.tsx');
   assert.match(expansion, /preselectedCircleId/);
-  assert.match(expansion, /getGroupManageHref\(returnScope/);
-  assert.match(expansion, /router\.replace\(backHref as never\)/);
-  assert.match(expansion, /onBackPress=\{returnsToGroupManage \? handleBackPress : undefined\}/);
+  assert.doesNotMatch(expansion, /router\.replace|onBackPress=/);
 });
 
 test('chat info exposes the avatar row, the member row and hides the QR entry when joining is off', () => {

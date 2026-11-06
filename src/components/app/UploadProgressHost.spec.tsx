@@ -80,7 +80,7 @@ test('labels transferred bytes as confirming until the request actually complete
   expect(screen.queryByTestId('upload-progress-host')).toBeNull();
 });
 
-test('preserves concurrent uploads including chat tasks and bounds the visible rows', () => {
+test('keeps chat transfers in their media bubbles and bounds other upload rows', () => {
   useUploadProgressStore.setState({ tasks: {
     image: { id: 'image', kind: 'image', loaded: 100, total: 1000 },
     video: { id: 'video', kind: 'video', progressKey: 'message-id', loaded: 700, total: 1000 },
@@ -89,9 +89,18 @@ test('preserves concurrent uploads including chat tasks and bounds the visible r
   } });
   render(<UploadProgressHost />);
   expect(screen.getByText('10%')).toBeTruthy();
-  expect(screen.getByText('70%')).toBeTruthy();
+  expect(screen.queryByText('70%')).toBeNull();
   expect(screen.getAllByRole('progressbar')).toHaveLength(2);
-  expect(screen.getByText('+2 more')).toBeTruthy();
+  expect(screen.getByText('+1 more')).toBeTruthy();
+});
+
+test('does not duplicate a chat video transfer in the upper-right card', () => {
+  useUploadProgressStore.setState({ tasks: {
+    video: { id: 'video', kind: 'video', progressKey: 'message-id', loaded: 700, total: 1000 },
+  } });
+  render(<UploadProgressHost />);
+  expect(screen.queryByTestId('upload-progress-host')).toBeNull();
+  expect(useUploadProgressStore.getState().tasks.video.loaded).toBe(700);
 });
 
 test('mounting and unmounting another modal host does not clear shared tasks', () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getCircleScopeFromSegments,
@@ -21,7 +21,8 @@ import { NavHeader } from '@/components/ui/nav-header';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { refreshGroupAdmissionUnread } from '@/services/api/group-admissions';
-import { markCircleInvitationSeen, respondToCircleInvitation, fetchInvitation } from '@/services/api/circles';
+import { circlesMutatedSince, markCircleInvitationSeen, respondToCircleInvitation, fetchInvitation } from '@/services/api/circles';
+import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { markMatchingTargetNotificationsRead } from '@/features/notifications/utils/seen-target';
 import type { CircleInvitation, CircleInvitationVerifier } from '@/types';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -115,14 +116,40 @@ export default function InvitationVerificationScreen() {
   const [invitation, setInvitation] = useState<CircleInvitation | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [responding, setResponding] = useState(false);
+  const consentPending = useRef<symbol | null>(null);
   const currentUserId = useAuthStore(state => state.user?.id);
+  const sessionEpoch = useAuthStore(state => state.sessionEpoch);
+  const scopeKey = `${sessionEpoch}:${id}`;
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
+  const requestRef = useRef(0);
+  const loadedScopeRef = useRef<string | null>(null);
+  const reloadGate = useFocusReloadGate({ key: id, mutatedSince: circlesMutatedSince });
   const repairAttempted = useRef(new Set<string>());
+
+  useLayoutEffect(() => {
+    requestRef.current += 1;
+    loadedScopeRef.current = null;
+    setInvitation(null);
+    setLoadError(null);
+    setLoading(Boolean(id));
+    consentPending.current = null;
+    setResponding(false);
+    repairAttempted.current.clear();
+  }, [id, scopeKey]);
 
   const loadInvitation = useCallback(async () => {
     if (!id) return;
+    const request = ++requestRef.current;
+    const startedAt = Date.now();
+    const isCurrent = () => request === requestRef.current && scopeRef.current === scopeKey &&
+      useAuthStore.getState().sessionEpoch === sessionEpoch;
+    if (loadedScopeRef.current !== scopeKey) setLoading(true);
     setLoadError(null);
     try {
       let data = await fetchInvitation(id);
+      if (!isCurrent()) return;
       // 旧待验证单可能漏了邀请人首票；已有本人同意，只通过原接受接口补一次。
       if (
         data.status === 'PENDING' && data.approvedCount === 0 &&
@@ -138,8 +165,12 @@ export default function InvitationVerificationScreen() {
           reportHandledFailure('circleInvitation', 'repairInviterVote', error);
         }
       }
+      if (!isCurrent()) return;
       setInvitation(data);
+      loadedScopeRef.current = scopeKey;
+      reloadGate.markLoaded(startedAt);
     } catch (error) {
+      if (!isCurrent()) return;
       // 之前是 Alert + setInvitation(null) 渲染 "不存在" —— 把临时网络错误误判成 404。
       // 改成 loadError + 重试按钮，跟 MomentDetailScreen 对齐。
       setLoadError(
@@ -147,13 +178,14 @@ export default function InvitationVerificationScreen() {
       );
       reportHandledFailure('circleInvitation', 'fetch', error);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [id, t, currentUserId]);
+  }, [id, t, currentUserId, reloadGate, scopeKey, sessionEpoch]);
 
-  useEffect(() => {
-    loadInvitation();
-  }, [loadInvitation]);
+  useFocusEffect(useCallback(() => {
+    if (!reloadGate.shouldSkip()) void loadInvitation();
+    return () => { requestRef.current += 1; };
+  }, [loadInvitation, reloadGate]));
 
   useEffect(() => {
     void markCircleInvitationSeen(id).then(() => refreshGroupAdmissionUnread()).catch(error => reportHandledFailure('circleInvitation', 'markSeen', error));
@@ -173,15 +205,27 @@ export default function InvitationVerificationScreen() {
     [colors],
   );
 
-  const [responding, setResponding] = useState(false);
-  const consentPending = useRef(false);
   const handleConsent = async (accept: boolean) => {
     if (consentPending.current || !invitation) return;
-    consentPending.current = true;
+    const operation = Symbol('circleConsent');
+    consentPending.current = operation;
+    const isCurrent = () => consentPending.current === operation && scopeRef.current === scopeKey &&
+      useAuthStore.getState().sessionEpoch === sessionEpoch;
     setResponding(true);
-    try { const next = await respondToCircleInvitation(invitation.id, accept); setInvitation(next); await markMatchingTargetNotificationsRead({ invitationId: invitation.id }); await refreshGroupAdmissionUnread(); }
-    catch (error) { reportHandledFailure('circleInvitation', 'consent', error); Alert.alert(t('groupAdmission.actionFailed')); void loadInvitation(); }
-    finally { consentPending.current = false; setResponding(false); }
+    try {
+      const next = await respondToCircleInvitation(invitation.id, accept);
+      if (!isCurrent()) return;
+      setInvitation(next);
+      await markMatchingTargetNotificationsRead({ invitationId: invitation.id });
+      await refreshGroupAdmissionUnread();
+    } catch (error) {
+      if (!isCurrent()) return;
+      reportHandledFailure('circleInvitation', 'consent', error);
+      Alert.alert(t('groupAdmission.actionFailed'));
+      void loadInvitation();
+    } finally {
+      if (isCurrent()) { consentPending.current = null; setResponding(false); }
+    }
   };
 
   const totalSlots = Math.max(MIN_SLOTS, invitation?.requiredCount ?? MIN_SLOTS);

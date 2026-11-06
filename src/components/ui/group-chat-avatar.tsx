@@ -70,6 +70,8 @@ export function GroupChatAvatar({
             source={{ uri: imageUri }}
             recyclingKey={imageUri}
             contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={0}
             style={StyleSheet.absoluteFill}
             onDisplay={() => { if (currentUriRef.current === uri) onImageReady?.(); }}
             onError={() => { if (currentUriRef.current === uri) { setFailedUri(uri ?? null); onImageReady?.(); } }}

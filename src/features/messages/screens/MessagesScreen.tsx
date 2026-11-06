@@ -33,6 +33,7 @@ import { SplitPaneResizer } from "@/components/app/split-pane-resizer";
 import { useDesktopSplitLayout } from "@/hooks/use-desktop-split-layout";
 import { useScreenLive } from "@/hooks/use-screen-live";
 import { useStoreWhileActive } from "@/hooks/use-store-while-active";
+import { useConversationListSnapshot } from '@/features/messages/hooks/use-conversation-list-snapshot';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { useSplitPaneStore } from "@/stores/splitPaneStore";
 import { getApiErrorMessage } from "@/services/api/errors";
@@ -43,6 +44,7 @@ import { Radius, Spacing, Typography, useTheme, withAlpha } from "@/theme";
 import type { Conversation } from "@/types";
 import { E2E_TEST_IDS } from "@/testing/e2e-test-ids";
 import { Ionicons } from "@expo/vector-icons";
+import { CheckCheck, Search } from 'lucide-react-native';
 import { type Href, useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -139,7 +141,7 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  // 右侧操作按钮组（搜索、+）
+  // 右侧操作按钮组（多选、搜索、+）
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -147,6 +149,8 @@ const s = StyleSheet.create({
   },
   actionButton: {
     position: "relative",
+    width: 24,
+    height: 24,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -156,7 +160,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickAddStroke: { position: 'absolute', width: 18, height: 4, borderRadius: 2 },
+  quickAddStroke: { position: 'absolute', width: 22, height: 4, borderRadius: 2 },
   selectionHeaderSection: { gap: Spacing.md, paddingTop: Spacing.sm },
   selectionTopRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   selectionHeaderAction: { width: 80, minHeight: 44, justifyContent: 'center' },
@@ -1035,7 +1039,7 @@ export default function MessagesScreen() {
   const convMapCacheRef = useRef<
     WeakMap<object, { mapped: ReturnType<typeof mapChatConversationToUI>; name: string | undefined }>
   >(new WeakMap());
-  const rawMappedConversations = useMemo(() => {
+  const liveMappedConversations = useMemo(() => {
     const cache = convMapCacheRef.current;
     return rawConversations.reduce<ReturnType<typeof mapChatConversationToUI>[]>(
       (items, raw) => {
@@ -1055,6 +1059,8 @@ export default function MessagesScreen() {
       [],
     );
   }, [friendRemarks, rawConversations]);
+  const { conversations: rawMappedConversations, snapshotKnown: cachedListKnown } =
+    useConversationListSnapshot(liveMappedConversations, conversationsSnapshotLoaded);
 
   // 最新一条发送失败的会话 id 集合,拼成排序串让引用比较退化成值比较:
   // 只在失败集合真变了才触发下游 useMemo,消息洪泛不抖动列表。选择器按会话缓存判定,
@@ -1614,11 +1620,11 @@ export default function MessagesScreen() {
         <Text style={d.title}>{t('messages.title')}</Text>
         <View style={s.actionRow}>
           <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('messages.selectChats')} hitSlop={10} onPress={handleStartSelection}>
-            <Ionicons name="checkmark-done-outline" size={24} color={colors.text} />
+            <CheckCheck size={22} strokeWidth={4} absoluteStrokeWidth color={colors.text} />
           </Pressable>
           {/* 搜索按钮：跳转到统一搜索页（会话 + 联系人） */}
-          <Pressable style={s.actionButton} onPress={handleOpenFind}>
-            <Ionicons name="search-outline" size={24} color={colors.text} />
+          <Pressable style={s.actionButton} accessibilityRole="button" accessibilityLabel={t('common.search')} hitSlop={10} onPress={handleOpenFind}>
+            <Search size={24} strokeWidth={4} color={colors.text} />
           </Pressable>
           {/* 「+」按钮：展开快捷操作菜单 */}
           <Pressable
@@ -1694,7 +1700,9 @@ export default function MessagesScreen() {
         ItemSeparatorComponent={renderSeparator}
         ListHeaderComponent={selecting ? null : ListHeader}
         ListEmptyComponent={
-          <Text style={d.emptyText}>
+          !conversationsSnapshotLoaded && !cachedListKnown && !connectionError && conversations.length === 0 ? (
+            <ActivityIndicator testID="conversations-loading" accessibilityLabel={t('common.loading')} color={colors.primary} />
+          ) : <Text style={d.emptyText}>
             {connectionError
               ? t('messages.loadFailed')
               : t('messages.noConversations')}

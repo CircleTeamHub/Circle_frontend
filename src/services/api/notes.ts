@@ -1,6 +1,8 @@
 import { apiClient, ApiError } from './client';
 import { collectOffsetPages, readHasMore } from './pagination';
 import { allowPeerMediaUrl } from '@/services/api/utils';
+import { useAuthStore } from '@/stores/authStore';
+import { clearPageSnapshots, getPageSnapshotRevision, readPageSnapshot, removePageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 import type {
   CollectNoteSource,
   CreateNoteInput,
@@ -24,6 +26,37 @@ const NOTE_PAGE_SIZE = 500;
 const NOTE_MAX_PAGES = 20;
 
 let lastNoteMutationAt = 0;
+let noteMutationVersion = 0;
+let collectedNoteSnapshot: { sessionEpoch: number; version: number; revision: number; loadedAt: number; notes: NoteSummary[] } | null = null;
+let collectedNoteLookup: { sessionEpoch: number; version: number; revision: number; promise: Promise<NoteSummary[]> } | null = null;
+
+export function getCachedNotes(status?: 'ACTIVE' | 'UNLISTED') {
+  return readPageSnapshot<NoteSummary[]>(useAuthStore.getState().user?.id, `notes:${status ?? 'ALL'}`);
+}
+
+export function getCachedNoteGroups() {
+  return readPageSnapshot<NoteGroup[]>(useAuthStore.getState().user?.id, 'notes:groups');
+}
+
+export function getCachedNoteDetail(id: string | undefined) {
+  return id ? readPageSnapshot<NoteDetail>(useAuthStore.getState().user?.id, `notes:detail:${id}`) : null;
+}
+
+export function getCachedCollectedNote(sourceNoteId: string | undefined) {
+  if (!sourceNoteId) return null;
+  const cached = readPageSnapshot<NoteSummary | null>(useAuthStore.getState().user?.id, `notes:collected:${sourceNoteId}`);
+  if (cached) return cached;
+  const notes = getCachedNotes();
+  return notes ? { value: notes.value.find((note) => note.collectedFrom?.sourceNoteId === sourceNoteId) ?? null, at: notes.at } : null;
+}
+
+export function getCachedNoteDrafts() {
+  return readPageSnapshot<NoteDraftSummary[]>(useAuthStore.getState().user?.id, 'drafts:summaries');
+}
+
+export function getCachedDeletedNotes() {
+  return readPageSnapshot<NoteSummary[]>(useAuthStore.getState().user?.id, 'notes:recycle');
+}
 
 function sanitizeNoteMediaItem<T extends Record<string, unknown>>(item: T): T {
   const next = { ...item };
@@ -82,9 +115,13 @@ function sanitizeNoteDetail(note: NoteDetail): NoteDetail {
  * 判断能不能跳过重拉:拉过之后只要改过任何东西,就必须重拉。宁可多拉,不显示旧数据。
  * 包的是 Promise 而不是 apiClient 本身:每个调用点仍然是静态路径,诊断路由覆盖照常能扫到。
  */
-async function markNoteWrite<T>(request: Promise<T>): Promise<T> {
+async function markNoteWrite<T>(request: Promise<T>, invalidatePages = true): Promise<T> {
+  const { user, sessionEpoch } = useAuthStore.getState();
   const result = await request;
   lastNoteMutationAt = Date.now();
+  noteMutationVersion += 1;
+  collectedNoteSnapshot = null;
+  if (invalidatePages && user?.id && useAuthStore.getState().sessionEpoch === sessionEpoch) clearPageSnapshots(user.id, 'notes:');
   return result;
 }
 
@@ -98,11 +135,15 @@ export function notesMutatedSince(since: number): boolean {
  * 笔记超过 500 条的用户,后面的笔记会从列表里静默消失。
  */
 export async function fetchNotes(params?: ListNotesParams): Promise<NoteSummary[]> {
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const version = noteMutationVersion;
+  const revision = getPageSnapshotRevision();
+  const startedAt = Date.now();
   const base = new URLSearchParams();
   if (params?.status) base.set('status', params.status);
   if (params?.groupId) base.set('groupId', params.groupId);
   if (params?.search) base.set('search', params.search);
-  return collectOffsetPages(
+  const notes = await collectOffsetPages(
     async (page) => {
       const q = new URLSearchParams(base);
       if (page > 1) q.set('page', String(page));
@@ -117,15 +158,80 @@ export async function fetchNotes(params?: ListNotesParams): Promise<NoteSummary[
     },
     { pageSize: NOTE_PAGE_SIZE, maxPages: NOTE_MAX_PAGES },
   );
+  if (!params?.groupId && !params?.search && useAuthStore.getState().sessionEpoch === sessionEpoch &&
+      version === noteMutationVersion && revision === getPageSnapshotRevision()) {
+    writePageSnapshot(user?.id, `notes:${params?.status ?? 'ALL'}`, notes, startedAt);
+    if (!params?.status) {
+      writePageSnapshot(user?.id, 'notes:ACTIVE', notes.filter((note) => note.status === 'ACTIVE'), startedAt);
+      writePageSnapshot(user?.id, 'notes:UNLISTED', notes.filter((note) => note.status === 'UNLISTED'), startedAt);
+    }
+  }
+  return notes;
+}
+
+/** 仅收藏状态查询复用 30 秒快照；列表刷新仍直接请求，账号切换/写入立即失效。 */
+export async function findCollectedNote(sourceNoteId: string, sessionEpoch: number): Promise<NoteSummary | null> {
+  const auth = useAuthStore.getState();
+  if (auth.sessionEpoch !== sessionEpoch) return null;
+  const userId = auth.user?.id;
+  const revision = getPageSnapshotRevision();
+  const snapshot = collectedNoteSnapshot;
+  if (snapshot?.sessionEpoch === sessionEpoch && snapshot.version === noteMutationVersion && snapshot.revision === revision && Date.now() - snapshot.loadedAt < 30_000) {
+    const copy = snapshot.notes.find((note) => note.collectedFrom?.sourceNoteId === sourceNoteId) ?? null;
+    writePageSnapshot(userId, `notes:collected:${sourceNoteId}`, copy, snapshot.loadedAt);
+    return copy;
+  }
+  let lookup = collectedNoteLookup;
+  if (!lookup || lookup.sessionEpoch !== sessionEpoch || lookup.version !== noteMutationVersion || lookup.revision !== revision) {
+    const request = { sessionEpoch, version: noteMutationVersion, revision, promise: fetchNotes() };
+    collectedNoteLookup = lookup = request;
+    const clear = () => { if (collectedNoteLookup === request) collectedNoteLookup = null; };
+    void request.promise.then((notes) => {
+      if (collectedNoteLookup === request && request.version === noteMutationVersion && request.revision === getPageSnapshotRevision() && useAuthStore.getState().sessionEpoch === sessionEpoch) {
+        collectedNoteSnapshot = { sessionEpoch, version: request.version, revision, loadedAt: Date.now(), notes };
+      }
+      clear();
+    }, clear);
+  }
+  const notes = await lookup.promise;
+  if (lookup.version !== noteMutationVersion) return null;
+  const copy = notes.find((note) => note.collectedFrom?.sourceNoteId === sourceNoteId) ?? null;
+  if (useAuthStore.getState().sessionEpoch === sessionEpoch && revision === getPageSnapshotRevision()) {
+    writePageSnapshot(userId, `notes:collected:${sourceNoteId}`, copy);
+  }
+  return copy;
 }
 
 export async function fetchNoteDetail(id: string): Promise<NoteDetail> {
-  const note = await apiClient<NoteDetail>(`/note/${id}`);
-  return sanitizeNoteDetail(note);
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const version = noteMutationVersion;
+  const revision = getPageSnapshotRevision();
+  const startedAt = Date.now();
+  try {
+    const note = sanitizeNoteDetail(await apiClient<NoteDetail>(`/note/${id}`));
+    if (useAuthStore.getState().sessionEpoch === sessionEpoch && version === noteMutationVersion && revision === getPageSnapshotRevision()) {
+      writePageSnapshot(user?.id, `notes:detail:${id}`, note, startedAt);
+    }
+    return note;
+  } catch (error) {
+    if (useAuthStore.getState().sessionEpoch === sessionEpoch && error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+      removePageSnapshot(user?.id, `notes:detail:${id}`);
+      removePageSnapshot(user?.id, `notes:collected:${id}`);
+    }
+    throw error;
+  }
 }
 
 export async function fetchNoteDrafts(): Promise<NoteDraftSummary[]> {
-  return apiClient<NoteDraftSummary[]>('/note/drafts');
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const version = noteMutationVersion;
+  const revision = getPageSnapshotRevision();
+  const startedAt = Date.now();
+  const drafts = await apiClient<NoteDraftSummary[]>('/note/drafts');
+  if (useAuthStore.getState().sessionEpoch === sessionEpoch && version === noteMutationVersion && revision === getPageSnapshotRevision()) {
+    writePageSnapshot(user?.id, 'drafts:summaries', drafts, startedAt);
+  }
+  return drafts;
 }
 
 export async function fetchNoteDraft(id: string): Promise<NoteDraftDetail> {
@@ -136,16 +242,33 @@ export async function saveNoteDraft(
   id: string,
   input: SaveNoteDraftInput,
 ): Promise<NoteDraftDetail> {
-  return markNoteWrite(apiClient<NoteDraftDetail>(`/note/drafts/${encodeURIComponent(id)}`, {
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const revision = getPageSnapshotRevision();
+  const draft = await markNoteWrite(apiClient<NoteDraftDetail>(`/note/drafts/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: input,
-  }));
+  }), false);
+  if (useAuthStore.getState().sessionEpoch === sessionEpoch && revision === getPageSnapshotRevision()) {
+    const cached = getCachedNoteDrafts();
+    if (cached) {
+      const { id: draftId, title, contentPreview, mediaCount, createdAt, updatedAt, sourceNoteId } = draft;
+      writePageSnapshot(user?.id, 'drafts:summaries', [...cached.value.filter((item) => item.id !== id),
+        { id: draftId, title, contentPreview, mediaCount, createdAt, updatedAt, sourceNoteId }], cached.at);
+    }
+  }
+  return draft;
 }
 
 export async function deleteNoteDraft(id: string): Promise<void> {
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const revision = getPageSnapshotRevision();
   await markNoteWrite(apiClient<void>(`/note/drafts/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-  }));
+  }), false);
+  if (useAuthStore.getState().sessionEpoch === sessionEpoch && revision === getPageSnapshotRevision()) {
+    const cached = getCachedNoteDrafts();
+    if (cached) writePageSnapshot(user?.id, 'drafts:summaries', cached.value.filter((item) => item.id !== id), cached.at);
+  }
 }
 
 /**
@@ -159,15 +282,22 @@ export async function importNoteChatMedia(
   return markNoteWrite(apiClient<NoteChatMediaImportResult>(`/note/${noteId}/chat-media`, {
     method: 'POST',
     body: { sections },
-  }));
+  }), false);
+}
+
+function noteWriteBody(input: CreateNoteInput): CreateNoteInput {
+  if (input.sections?.text?.contentJson == null) return input;
+  // 服务端优先使用 sections.text；保留本地提交快照，只移除传输中的重复正文。
+  const { contentJson: _duplicate, ...body } = input;
+  return body;
 }
 
 export async function createNote(input: CreateNoteInput): Promise<NoteDetail> {
-  return markNoteWrite(apiClient<NoteDetail>('/note', { method: 'POST', body: input }));
+  return markNoteWrite(apiClient<NoteDetail>('/note', { method: 'POST', body: noteWriteBody(input) }));
 }
 
 export async function updateNote(id: string, input: CreateNoteInput): Promise<NoteDetail> {
-  return markNoteWrite(apiClient<NoteDetail>(`/note/${id}`, { method: 'PATCH', body: input }));
+  return markNoteWrite(apiClient<NoteDetail>(`/note/${id}`, { method: 'PATCH', body: noteWriteBody(input) }));
 }
 
 // 仅替换 note 的 group 归属。批量调整分组成员时使用 —— 避免对每条 note 先 fetch 详情再
@@ -382,7 +512,15 @@ export async function setNoteSourceGroup(
 
 /** FE#92 回收站：已软删笔记列表。 */
 export async function fetchDeletedNotes(): Promise<NoteSummary[]> {
-  return apiClient<NoteSummary[]>('/note/recycle-bin');
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const version = noteMutationVersion;
+  const revision = getPageSnapshotRevision();
+  const startedAt = Date.now();
+  const notes = (await apiClient<NoteSummary[]>('/note/recycle-bin')).map(sanitizeNoteSummary);
+  if (useAuthStore.getState().sessionEpoch === sessionEpoch && version === noteMutationVersion && revision === getPageSnapshotRevision()) {
+    writePageSnapshot(user?.id, 'notes:recycle', notes, startedAt);
+  }
+  return notes;
 }
 
 /** FE#92 回收站：恢复软删笔记（后端恢复为 ACTIVE）。 */
@@ -406,11 +544,19 @@ export async function createNoteExport(
   return markNoteWrite(apiClient<NoteExportResult>(`/note/${noteId}/exports`, {
     method: 'POST',
     body: input,
-  }));
+  }), false);
 }
 
 export async function fetchNoteGroups(): Promise<NoteGroup[]> {
-  return apiClient<NoteGroup[]>('/note/group');
+  const { user, sessionEpoch } = useAuthStore.getState();
+  const version = noteMutationVersion;
+  const revision = getPageSnapshotRevision();
+  const startedAt = Date.now();
+  const groups = await apiClient<NoteGroup[]>('/note/group');
+  if (useAuthStore.getState().sessionEpoch === sessionEpoch && version === noteMutationVersion && revision === getPageSnapshotRevision()) {
+    writePageSnapshot(user?.id, 'notes:groups', groups, startedAt);
+  }
+  return groups;
 }
 
 export async function createNoteGroup(name: string): Promise<NoteGroup> {

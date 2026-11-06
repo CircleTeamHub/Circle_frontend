@@ -1,6 +1,6 @@
 // Reviewed API route shapes only. New/unrecognized routes become /__other__.
 // Parameters are position-based, never guessed from the spelling of an identifier.
-const ROUTE_TEMPLATES = [
+export const HTTP_ROUTE_TEMPLATES: readonly string[] = [
   '/assistant/bootstrap',
   '/assistant/preferences',
   '/assistant/subscriptions',
@@ -8,6 +8,8 @@ const ROUTE_TEMPLATES = [
   "/app-operations/open", "/app-operations/update",
   "/chat/groups/:id/preview",
   "/chat/groups/:id/applications",
+  "/chat/groups/:id/reviews",
+  "/chat/groups/:id/reviews/actions",
   "/chat/group-admissions",
   "/chat/group-admissions/unread",
   "/chat/group-admissions/:id",
@@ -88,6 +90,8 @@ const ROUTE_TEMPLATES = [
   "/circle-plaza/feed/search",
   "/circle-plaza/me/posts",
   "/auth/change-password",
+  "/auth/email/change-request",
+  "/auth/email/change",
   "/auth/login",
   "/auth/logout",
   "/auth/logout-all",
@@ -225,7 +229,7 @@ const ROUTE_TEMPLATES = [
 // Prefer a route with more literal segments when templates have the same
 // length. For example, `/note/drafts` must not be swallowed by the generic
 // `/note/:id` fallback when a new endpoint is added later.
-const routes = ROUTE_TEMPLATES
+const routes = HTTP_ROUTE_TEMPLATES
   .map((template) => ({ template, segments: template.split('/') }))
   .sort((left, right) => {
     const leftDynamic = left.segments.filter((segment) => segment === ':id').length;

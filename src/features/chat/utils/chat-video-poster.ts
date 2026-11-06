@@ -54,6 +54,7 @@ export async function uploadChatVideoPoster(
   filename: string,
   folder: 'chat' | 'posts' = 'chat',
   beforeUpload?: () => void,
+  progressKey?: string,
 ): Promise<{ key: string } | null> {
   try {
     const poster = await generateChatVideoPoster(uri, durationSeconds);
@@ -71,6 +72,8 @@ export async function uploadChatVideoPoster(
       'image/jpeg',
       poster.uri,
       presign.requiredHeaders,
+      undefined,
+      progressKey ? { progressKey } : undefined,
     );
     // chat/ 是私有目录:消息体只存 object key,读时由服务端签 URL。
     return { key: presign.key };

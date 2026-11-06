@@ -16,9 +16,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { fetchChatMembers, refreshChatConversation } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
+import { mapChatConversationToUI } from '@/chat-core/mappers';
 import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
 import { allowsMemberProfiles } from '@/features/chat/utils/group-policy';
-import { canResendCollection } from '@/features/chat/utils/message-collection';
+import { CollectionListItem } from '@/features/profile/components/CollectionListItem';
+import { CollectionListToolbar, type CollectionTab } from '@/features/profile/components/CollectionListToolbar';
+import { FavoriteSendSheet } from '@/features/chat/components/FavoriteSendSheet';
+import { resolveCollectionContent } from '@/features/profile/collection-content';
+import { canResendCollection, resolveCollectionSendPlan } from '@/features/chat/utils/message-collection';
 import {
   MAX_NOTE_BATCH_SELECTION,
   hasAnyNoteSendOption,
@@ -29,8 +34,8 @@ import {
 import { NoteCard, type NoteSourceTarget } from '@/features/notes/components/NoteCard';
 import type { NoteSummary } from '@/features/notes/types';
 import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
+import { getGroupEntryHref } from '@/features/groups/routes';
 import {
-  getChatInfoTopHref,
   getCircleDetailHref,
   getUserProfileHref,
   getUserProfileScopeFromSegments,
@@ -209,10 +214,13 @@ export default function SharePickerScreen() {
   const scope = getUserProfileScopeFromSegments(segments);
   const insets = useSafeAreaInsets();
   const { colors, resolvedMode } = useTheme();
-  const { type } = useLocalSearchParams<{ type?: ShareType }>();
+  const { type, conversationID } = useLocalSearchParams<{ type?: ShareType; conversationID?: string }>();
   const shareType: ShareType = (type as ShareType) ?? 'note';
   const setPending = useSharePickerStore((s) => s.setPending);
   const sourceOpeningRef = useRef(false);
+  const favoriteConfirmedRef = useRef(false);
+  const conversation = useChatStore(state => state.conversations.find(item => item.id === conversationID));
+  const recipient = conversation ? mapChatConversationToUI(conversation) : null;
 
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -220,6 +228,8 @@ export default function SharePickerScreen() {
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [favorites, setFavorites] = useState<UserCollection[]>([]);
+  const [favoriteType, setFavoriteType] = useState<CollectionTab>('ALL');
+  const [selectedFavorite, setSelectedFavorite] = useState<UserCollection | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
   // 笔记走多选:「发什么」是底栏常驻的一行横排开关(默认只发卡片),
   // 点「发送」直接按当前勾选发 —— 不再经过确认 sheet。
@@ -298,13 +308,13 @@ export default function SharePickerScreen() {
   }, [friends, trimmed]);
 
   const filteredFavorites = useMemo(() => {
-    if (!trimmed) return favorites;
     return favorites.filter(
       (c) =>
-        c.title.toLowerCase().includes(trimmed) ||
-        (c.summary ?? '').toLowerCase().includes(trimmed),
+        (favoriteType === 'ALL' || c.type === favoriteType) &&
+        (!trimmed || c.title.toLowerCase().includes(trimmed) ||
+        (c.summary ?? '').toLowerCase().includes(trimmed)),
     );
-  }, [favorites, trimmed]);
+  }, [favorites, favoriteType, trimmed]);
 
   const filteredQuickReply = useMemo(() => {
     if (!trimmed) return quickReplyPhrases;
@@ -318,7 +328,10 @@ export default function SharePickerScreen() {
       if (shareType === 'friend') {
         setPending({ kind: 'friend', data: item as FriendProfile });
       } else if (shareType === 'favorite') {
-        setPending({ kind: 'favorite', data: item as UserCollection });
+        Keyboard.dismiss();
+        favoriteConfirmedRef.current = false;
+        setSelectedFavorite(item as UserCollection);
+        return;
       } else {
         setPending({ kind: 'quick-reply', data: item as string });
       }
@@ -387,14 +400,7 @@ export default function SharePickerScreen() {
       if (group.target === 'circle') {
         router.push(getCircleDetailHref(toCircleScope(scope), group.id));
       } else {
-        router.push(getChatInfoTopHref(scope, {
-          sourceID: group.id,
-          ...(group.conversationID ? { conversationID: group.conversationID } : {}),
-          conversationType: 'group',
-          conversationKind: 'group',
-          title: group.name,
-          originScope: scope,
-        }));
+        router.push(getGroupEntryHref(scope, { groupId: group.conversationID ?? group.id, searchedMsgID: group.clientMsgID }));
       }
     }
   }, [navigation, router, scope]);
@@ -458,38 +464,20 @@ export default function SharePickerScreen() {
    */
   const renderFavorite = ({ item }: { item: UserCollection }) => {
     const resendable = canResendCollection(item);
+    const plan = resolveCollectionSendPlan(item);
     const subtitle = resendable
-      ? item.summary
-      : i18n.t('share.favoriteLegacyVoiceUnsupported', {
-          defaultValue: '旧版语音收藏，无法重新发送',
-        });
+      ? null
+      : plan.kind === 'unsupported' && plan.reason === 'legacy-voice'
+        ? i18n.t('share.favoriteLegacyVoiceUnsupported', { defaultValue: '旧版语音收藏，无法重新发送' })
+        : i18n.t('profile.collections.unavailable', { defaultValue: '内容暂不可用' });
     return (
-      <Pressable
-        style={[
-          s.row,
-          { backgroundColor: colors.surface },
-          resendable ? null : s.rowDisabled,
-        ]}
+      <CollectionListItem
+        item={item}
+        content={resolveCollectionContent(item, useChatStore.getState().currentUserId)}
         disabled={!resendable}
+        unavailableReason={subtitle}
         onPress={() => handleSelect(item)}
-      >
-        <View style={s.rowText}>
-          <Text style={[s.rowTitle, { color: colors.text }]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          {subtitle ? (
-            <Text
-              style={[s.rowSubtitle, { color: colors.textSecondary }]}
-              numberOfLines={2}
-            >
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
-        {resendable ? (
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-        ) : null}
-      </Pressable>
+      />
     );
   };
 
@@ -511,12 +499,13 @@ export default function SharePickerScreen() {
 
   return (
     <KeyboardAvoidingContainer
+      enabled={!selectedFavorite}
       // 笔记发送栏是 position:absolute; bottom:0，底部 padding 顶不动绝对定位的子元素：
       // 改成缩容器高度，发送栏跟着容器底边一起抬到键盘上方。
       behavior="height"
       style={[
         s.container,
-        { backgroundColor: colors.background, paddingTop: insets.top },
+        { backgroundColor: shareType === 'favorite' && resolvedMode !== 'dark' ? colors.pinnedSurface : colors.background, paddingTop: insets.top },
       ]}
     >
       <View style={s.header}>
@@ -529,7 +518,9 @@ export default function SharePickerScreen() {
         <View style={s.headerSpacer} />
       </View>
 
-      <View style={[s.searchWrap, { backgroundColor: colors.surface }]}>
+      {shareType === 'favorite' ? <View style={s.favoriteToolbar}>
+        <CollectionListToolbar query={query} onQueryChange={setQuery} activeType={favoriteType} onTypeChange={setFavoriteType} />
+      </View> : <View style={[s.searchWrap, { backgroundColor: colors.surface }]}>
         <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
         <TextInput
           style={[s.searchInput, { color: colors.text }]}
@@ -545,7 +536,7 @@ export default function SharePickerScreen() {
             <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
           </Pressable>
         ) : null}
-      </View>
+      </View>}
 
       {loading ? (
         <View style={s.center}>
@@ -608,7 +599,7 @@ export default function SharePickerScreen() {
           keyExtractor={(it) => it.id}
           renderItem={renderFavorite}
           ItemSeparatorComponent={Sep}
-          contentContainerStyle={s.listContent}
+          contentContainerStyle={s.favoriteListContent}
         {...keyboardDismissOnDragProps}
         />
       ) : (
@@ -713,6 +704,14 @@ export default function SharePickerScreen() {
           </Pressable>
         </View>
       ) : null}
+      {selectedFavorite ? <FavoriteSendSheet item={selectedFavorite} recipient={recipient} onCancel={() => setSelectedFavorite(null)}
+        onConfirm={message => {
+          if (!recipient || favoriteConfirmedRef.current) return;
+          favoriteConfirmedRef.current = true;
+          setPending({ kind: 'favorite', data: selectedFavorite, ...(message ? { message } : {}) });
+          setSelectedFavorite(null);
+          router.back();
+        }} /> : null}
     </KeyboardAvoidingContainer>
   );
 }
@@ -723,6 +722,8 @@ function Sep() {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
+  favoriteToolbar: { width: '100%', maxWidth: 780, alignSelf: 'center', paddingHorizontal: 12 },
+  favoriteListContent: { width: '100%', maxWidth: 780, alignSelf: 'center', paddingHorizontal: 12, paddingBottom: Spacing.xl },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

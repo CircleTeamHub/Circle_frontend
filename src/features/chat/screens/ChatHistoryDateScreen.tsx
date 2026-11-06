@@ -16,6 +16,7 @@ import {
 import { useChatHistoryConversationType } from '@/features/chat/hooks/use-chat-history-conversation-type';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { useAuthStore } from '@/stores/authStore';
 
 const CALENDAR_COLUMNS = 7;
 // Localized single-letter weekday headers (2023-01-01 is a Sunday).
@@ -152,6 +153,12 @@ const s = StyleSheet.create({
 });
 
 export default function ChatHistoryDateScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  const { conversationID } = useLocalSearchParams<{ conversationID?: string }>();
+  return sessionKey ? <ChatHistoryDateContent key={`${sessionKey}:${conversationID ?? ''}`} /> : null;
+}
+
+function ChatHistoryDateContent() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { t } = useTranslation();

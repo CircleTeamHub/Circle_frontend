@@ -7,7 +7,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -185,6 +185,10 @@ export default function SettingsScreen() {
   );
 
   function handleRowPress(item: SettingsRowItem) {
+    if (item.id === 'email') {
+      router.push('/(tabs)/profile/change-email');
+      return;
+    }
     if (!item.editable) {
       Alert.alert(item.label, item.unsupportedMessage ?? t('settingsPage.unsupported'));
       return;
@@ -199,6 +203,10 @@ export default function SettingsScreen() {
   const deepLinkedField = typeof params.field === 'string' ? params.field : null;
   useEffect(() => {
     if (!deepLinkedField) return;
+    if (deepLinkedField === 'email') {
+      router.push('/(tabs)/profile/change-email');
+      return;
+    }
     if (deepLinkedField === 'avatar') {
       setAvatarPreviewKey(avatarSubjectKey);
       return;

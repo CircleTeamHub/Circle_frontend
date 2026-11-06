@@ -444,6 +444,7 @@
       "previewNotice": "The connection isn't ready yet. Please try again shortly.",
       "historyWindowFull": "To see older messages, search the chat history.",
       "jumpToUnread": "Jump to the start of {{count}} unread messages",
+      "jumpToLatest": "Jump to latest message",
       "unreadMessages": "{{count}} unread messages",
       "recordingSeconds": "Recording {{seconds}}s",
       "voiceReleaseCancel": "Release to cancel",
@@ -598,6 +599,8 @@
     "searchGroupMembersNoMatches": "No matching group members",
     "groupName": "Group Name",
     "groupNotice": "Group Notice",
+    "noticePinned": "Pin announcement banner",
+    "noticePinnedHint": "Scroll the announcement at the top of the group chat",
     "noGroupNotice": "No group notice",
     "moreGroupMembers": "More Group Members",
     "addGroupMember": "Add Group Member",
@@ -1513,6 +1516,7 @@
     }
   },
   "moment": {
+    "mediaLimitHint": "Up to {{max}} photos and videos in total",
     "selectMedia": "Add photos or videos",
     "removeMedia": "Remove photo or video",
     "playVideo": "Play video",
@@ -1871,7 +1875,8 @@
         "voice": "Voice",
         "message": "Message"
       },
-      "menuLabel": "Collections"
+      "menuLabel": "Collections",
+      "today": "Today"
     },
     "viewCollections": "View",
     "notes": "Notes",
@@ -2366,7 +2371,9 @@
       "accountActionsSection": "Account Actions",
       "switchAccount": "Switch Account",
       "logout": "Log Out",
-      "cancelAccount": "Cancel Account"
+      "cancelAccount": "Cancel Account",
+      "singleDeviceStatusFailed": "Could not load single-device login status. Please retry.",
+      "singleDeviceUpdateFailed": "Could not save single-device login. Please retry."
     },
     "notifications": {
       "title": "Notifications",
@@ -2398,7 +2405,16 @@
       "circleOffline": "Offline Push",
       "circleOfflineHint": "Receive circle push while the app is offline",
       "circleRingtone": "Circle Notification Ringtone",
-      "circleDefault": "Circle Default"
+      "circleDefault": "Circle Default",
+      "syncFailed": "Could not sync group push settings. Please retry.",
+      "inAppHint": "Controls in-app alerts only",
+      "systemSettings": "System notification settings",
+      "systemSettingsHint": "Change background notification sound, vibration and permissions",
+      "ringtones": {
+        "default": "Default",
+        "soft": "Soft",
+        "bell": "Bell"
+      }
     },
     "autoReply": {
       "title": "Direct-message auto reply",
@@ -2494,7 +2510,9 @@
         "byQrCode": "By QR code",
         "byGroup": "By group / circle",
         "shareCard": "Share my personal card"
-      }
+      },
+      "unavailable": "Unavailable",
+      "unsupportedHint": "This setting is not supported by the current service. Please try again after an update."
     },
     "permissions": {
       "title": "System Permissions",
@@ -2508,7 +2526,9 @@
       "authorized": "Authorized",
       "unauthorized": "Unauthorized",
       "onlyVisibleAuthorized": "Only permissions that can be queried are shown",
-      "openSystemSettings": "Open System Settings"
+      "openSystemSettings": "Open System Settings",
+      "browserSettingsHint": "Use the site settings in your browser address bar to manage notifications, camera and microphone permissions.",
+      "openSettingsFailed": "Could not open system settings. Open this app’s permissions from your device settings."
     },
     "storage": {
       "title": "Settings",
@@ -2570,6 +2590,29 @@
       "thirdPartyLicensesDescription": "These licenses and notices are bundled with this version for offline access. The text is selectable.",
       "updateTitle": "Version Status",
       "updateBody": "This version will continue to evolve. New security, chat, and circle features will be shared through system notices and release updates."
+    },
+    "changeEmail": {
+      "title": "Change email",
+      "newEmail": "New email",
+      "password": "Current password",
+      "code": "Code sent to your new email",
+      "sendCode": "Send code",
+      "sendAgain": "Resend in {{seconds}}s",
+      "sendFailed": "Could not send the code. Please retry.",
+      "saveFailed": "Could not change email. Please retry.",
+      "help": "Verify your current password and new email. You will need to sign in again.",
+      "success": "Email changed. Please sign in again.",
+      "submit": "Confirm change",
+      "invalidCode": "Enter the six-digit verification code.",
+      "passwordRequired": "Enter your current password.",
+      "sameEmail": "The new email must differ from the current email."
+    },
+    "cancelAccount": {
+      "title": "Delete account",
+      "warning": "This signs out all devices and prevents further sign-in. Save any information you need first.",
+      "confirmation": "Enter your current account ID to confirm deletion",
+      "action": "Confirm account deletion",
+      "failed": "Could not delete account. Please retry."
     }
   },
   "appUpdate": {
@@ -3094,6 +3137,12 @@
       "optionLocation": "Location",
       "optionMedia": "Media",
       "optionShowcase": "Showcase"
+    },
+    "favoriteConfirm": {
+      "sendTo": "Send to",
+      "messageLabel": "Additional message",
+      "messagePlaceholder": "Add a message (optional)",
+      "missingRecipient": "This chat is unavailable. Return to the chat and try again."
     }
   },
   "profileDisplay": {
@@ -3695,7 +3744,8 @@
     "CHAT_GROUP_ACCEPT_REQUIRED": "Please accept the group invitation first",
     "CHAT_GROUP_INVITATION_INVALID": "This invitation has expired or is no longer valid",
     "CHAT_GROUP_APPLICATION_DISABLED": "This group is not accepting requests through cards",
-    "AUTH_LOGIN_RECOVERY_LIMITED": "Too many recovery requests. Please wait for the existing ones to finish"
+    "AUTH_LOGIN_RECOVERY_LIMITED": "Too many recovery requests. Please wait for the existing ones to finish",
+    "CHAT_GROUP_JOIN_BLOCKED": "This account cannot join this group"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",
@@ -3840,5 +3890,77 @@
       "CANCELLED": "Application cancelled"
     },
     "sentInvitation": "You invited them to join the group"
+  },
+  "groupReview": {
+    "entry": "Application management",
+    "title": "Group review",
+    "log": "Logs",
+    "searchPlaceholder": "Name or account number",
+    "selectAll": "Select all",
+    "selectApplicant": "Select {{name}}",
+    "selectionLimit": "Select up to 50 requests at a time",
+    "approve": "Approve",
+    "reject": "Reject",
+    "blacklist": "Block from group",
+    "confirmBody": "Process {{count}} requests.",
+    "blacklistBody": "Reject {{count}} requests and prevent these accounts from applying or being invited to this group again.",
+    "partialResult": "Completed {{succeeded}}; {{failed}} failed. Refresh to check the latest status.",
+    "completed": "Completed {{count}}",
+    "empty": "No requests or invitations",
+    "noResults": "No matching requests",
+    "loadFailed": "Could not load requests. Please retry.",
+    "actionUncertain": "The result could not be confirmed. Refresh the list before trying again.",
+    "invitedBy": "Invited by {{name}}",
+    "sourcePrefix": "Source: {{source}}",
+    "unknownMember": "Unknown member",
+    "processing": "Processing…",
+    "confirm": {
+      "approve": "Approve requests?",
+      "reject": "Reject requests?",
+      "blacklist": "Block these accounts?"
+    },
+    "source": {
+      "INVITE": "Member invitation",
+      "QR": "QR code",
+      "APPLICATION": "Application",
+      "UNKNOWN": "Unknown source"
+    },
+    "status": {
+      "PENDING": "Pending",
+      "INVITED": "Awaiting acceptance",
+      "JOINED": "Approved",
+      "REJECTED": "Rejected",
+      "BLACKLISTED": "Blocked",
+      "EXPIRED": "Expired",
+      "LEFT": "Left",
+      "DECLINED": "Declined",
+      "CANCELLED": "Cancelled"
+    }
+  },
+  "groupLog": {
+    "searchRole": "Search by",
+    "target": "Affected member",
+    "actor": "Operator",
+    "date": "Date",
+    "status": "Status",
+    "source": "Source",
+    "inviter": "Inviter",
+    "operator": "Operator",
+    "detail": "Details",
+    "events": {
+      "created": "Group created",
+      "joined": "Joined group",
+      "left": "Left group",
+      "removed": "Removed from group",
+      "roleChanged": "Member role changed",
+      "silenced": "Member muted",
+      "unsilenced": "Member unmuted",
+      "ownerTransferred": "Ownership transferred",
+      "historyCleared": "History cleared",
+      "muteAll": "Group mute setting",
+      "policy": "Group policy changed",
+      "application": "Join request",
+      "blacklist": "Blocked from group"
+    }
   }
 }

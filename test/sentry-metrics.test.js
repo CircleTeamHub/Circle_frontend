@@ -24,7 +24,7 @@ function loadMetrics(sdk) {
   return loadTsModule("src/observability/metrics.ts", {
     requireShim: (request) => {
       if (request === "@sentry/react-native") return sdk;
-      throw new Error(`unexpected import: ${request}`);
+      return require(request);
     },
   });
 }
@@ -64,6 +64,19 @@ test("known metrics are recorded with their fixed type, unit and allowed attribu
   ]);
 });
 
+test("note operations retain their allowed outcome labels without note identifiers", () => {
+  const { sdk, calls } = recordingSdk();
+  const { recordMetric } = loadMetrics(sdk);
+  for (const operation of ['noteCreate', 'noteUpdate', 'noteCollect']) {
+    recordMetric('app.operation.duration', 1200, { operation, outcome: 'success', noteId: 'private-note' });
+  }
+  assert.deepEqual(plain(calls.map((call) => call.options.attributes)), [
+    { operation: 'noteCreate', outcome: 'success' },
+    { operation: 'noteUpdate', outcome: 'success' },
+    { operation: 'noteCollect', outcome: 'success' },
+  ]);
+});
+
 test("attribute keys and values outside the table are stripped", () => {
   const { sdk, calls } = recordingSdk();
   const { recordMetric } = loadMetrics(sdk);
@@ -77,6 +90,28 @@ test("attribute keys and values outside the table are stripped", () => {
 
   assert.deepEqual(plain(calls[0].options.attributes), { provider: "jpush" });
   assert.doesNotMatch(JSON.stringify(calls), /private|c-private|u-1/);
+});
+
+test('client request and operation metrics retain bounded labels through the final privacy hook', () => {
+  const options = loadSentryInit();
+  const kept = options.beforeSendMetric({
+    name: 'api.request.duration', type: 'distribution', value: 85,
+    attributes: { route: '/collections/:id', method: 'GET', outcome: 'body-read',
+      requestId: 'private-request', 'user.id': 'private-user' },
+  });
+  assert.equal(kept.unit, 'millisecond');
+  assert.deepEqual(plain(kept.attributes), { method: 'GET', route: '/collections/:id', outcome: 'body-read' });
+  const droppedLabels = options.beforeSendMetric({
+    name: 'api.request.duration', type: 'distribution', value: 10,
+    attributes: { route: '/collections/private-id?token=secret', method: 'private-method', outcome: 'raw error text' },
+  });
+  assert.deepEqual(plain(droppedLabels.attributes), {});
+  const operation = options.beforeSendMetric({
+    name: 'app.operation.duration', type: 'distribution', value: 100,
+    attributes: { operation: 'mediaUpload', outcome: 'failed', url: 'https://private-file' },
+  });
+  assert.deepEqual(plain(operation.attributes), { operation: 'mediaUpload', outcome: 'failed' });
+  assert.doesNotMatch(JSON.stringify([kept, droppedLabels, operation]), /private-|token|secret|raw error/);
 });
 
 test("unknown metric names and invalid values are dropped, and SDK failures never throw", () => {

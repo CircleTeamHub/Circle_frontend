@@ -4,11 +4,12 @@
  *
  * 设计取舍：
  *  - 不引入新依赖；不破坏 TypeScript 推断。
- *  - 失败时抛 `Error('xxx 返回数据格式异常')`，与 client.ts 现有错误风格一致。
+ *  - 失败时上报并抛 `ResponseShapeError`，保留调用方的展示文案，不附带原始数据。
  *  - 调用方仍以 `apiClient<T>` 拿到 TS 推断的 T，运行时通过 `expect*` 守一层。
  *
  * 后续若要全量做 schema，建议迁 Zod；这套 helper 只是当前的够用版本。
  */
+import { reportError } from '@/observability/sentry';
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -36,7 +37,10 @@ export function expectShape<T>(
   message: string,
 ): T {
   if (!predicate(value)) {
-    throw new Error(message);
+    const error = new Error(message);
+    error.name = 'ResponseShapeError';
+    reportError(error, { component: 'ResponseValidation' });
+    throw error;
   }
   return value;
 }

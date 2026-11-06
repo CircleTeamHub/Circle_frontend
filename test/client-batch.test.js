@@ -150,7 +150,7 @@ test('回收站：恢复成功与刷新失败分离；刷新失败可感知 (rou
     screen.indexOf('const handlePurge'),
   );
   assert.match(settle, /setNotes\(\(prev\) => prev\.filter/);
-  assert.match(settle, /await load\(\);\s*\} catch \{/);
+  assert.match(settle, /await load\(\);\s*\} catch(?: \(error\))? \{/);
   // 下拉刷新失败被捕获并提示（不再 unhandled rejection）
   const refresh = screen.slice(
     screen.indexOf('const handleRefresh'),

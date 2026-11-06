@@ -14,6 +14,7 @@ import i18n from '@/i18n';
 import { reportError, shouldReportHttpFailure } from '@/observability/sentry';
 import { createHttpRequestId, diagnosticNow, safeHttpEndpoint, safeHttpRequestId } from '@/observability/http-diagnostics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
+import { recordMetric } from '@/observability/metrics';
 import { ApiError } from './api-error';
 
 // 定义搬去 api-error.ts（零依赖），这里原样 re-export 保住既有导入路径。
@@ -389,6 +390,9 @@ async function executeRequest<T>(
       failure.durationMs = durationMs;
     }
     const details = { endpointPath, method: diagnosticMethod, status, requestId, durationMs, failureKind };
+    recordMetric('api.request.duration', durationMs, {
+      method: diagnosticMethod, route: endpointPath, outcome: failureKind ?? 'success',
+    });
     logApiEvent('complete', details);
     try {
       if (useAuthStore.getState().sessionEpoch === diagnosticSessionEpoch) {
@@ -569,7 +573,9 @@ export async function apiClient<T>(
   try {
     const initialRequest = await executeRequest<T>(endpoint, options);
 
-    if (initialRequest.res.status === 401 && auth && retryOnAuthError) {
+    // An authenticated current-password check can fail without invalidating the session.
+    if (initialRequest.res.status === 401 && auth && retryOnAuthError &&
+      (initialRequest.payload as { errorCode?: string } | null)?.errorCode !== 'AUTH_PASSWORD_INCORRECT') {
       if (requestSessionEpoch === null) {
         throw sessionChangedError();
       }
@@ -582,7 +588,8 @@ export async function apiClient<T>(
         nextAccessToken
       );
 
-      if (retryRequest.res.status === 401) {
+      if (retryRequest.res.status === 401 &&
+        (retryRequest.payload as { errorCode?: string } | null)?.errorCode !== 'AUTH_PASSWORD_INCORRECT') {
         // 刷新成功、刚签发的 accessToken 却仍被拒 —— 服务端已明确否认当前会话
         // （改密码全端下线 / 会话被撤销等）。旧行为是让裸 ApiError 逃逸成一条
         // 通用报错；这里改为清 session（幂等，epoch 守卫防止误伤新会话）并抛出

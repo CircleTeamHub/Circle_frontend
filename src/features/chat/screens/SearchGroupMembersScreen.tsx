@@ -39,6 +39,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { useChatStore } from '@/chat-core/store';
 import { useAuthStore } from '@/stores/authStore';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -196,6 +197,8 @@ export default function SearchGroupMembersScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    const requestRevision = getPageSnapshotRevision();
+    const startedAt = Date.now();
     // 圈子成员角色与「显示群成员」策略是两道闸。即使当前普通成员还
     // 没权限,也必须先取到会话 DTO,否则策略打开后 effect 永远不会重跑。
     // 独立群聊直接按会话 id 取成员;圈子群先取/建会话再按策略决定是否拉目录。
@@ -217,7 +220,7 @@ export default function SearchGroupMembersScreen() {
       .then((nextMembers) => {
         if (cancelled) return;
         if (nextMembers) {
-          writeGroupInfoCache(sessionEpoch, groupDataKey, { members: nextMembers });
+          writeGroupInfoCache(sessionEpoch, groupDataKey, { members: nextMembers }, requestRevision, startedAt);
           setDirectoryAccess('allowed');
         } else {
           // 没有目录权限:缓存里的名单也不能再给他看(群聊信息页同一份)。

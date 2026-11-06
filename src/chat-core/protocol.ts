@@ -644,6 +644,13 @@ export interface ChatGroupEventDto {
   targets: ChatSenderInfo[];
   /** {name} / {role} / {durationSec} / {via}。 */
   payload: Record<string, unknown> | null;
+  review?: {
+    status: string;
+    source: string;
+    inviter: ChatSenderInfo | null;
+    operator: ChatSenderInfo | null;
+    blacklisted: boolean;
+  };
   createdAt: string;
 }
 
@@ -711,8 +718,10 @@ export interface ChatConversationDto {
    * 显示未设置、改名 prompt 的默认值也是空的。成员表只当兜底。
    */
   myAlias?: string | null;
-  /** 独立群聊公告;圈子群走圈子详情。 */
+  /** 群公告；圈子群由服务端映射圈子简介。 */
   notice?: string | null;
+  /** 公告是否在群聊天顶部滚动播报。旧服务端缺省为关闭。 */
+  noticePinned?: boolean;
   /** 独立群聊头像;圈子群走 circle.avatarUrl。 */
   avatarUrl?: string | null;
   /** 独立群聊成员上限;圈子群走圈子详情。 */

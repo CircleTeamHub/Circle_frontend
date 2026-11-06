@@ -66,6 +66,7 @@ export default function RecommendFriendScreen() {
     friendName?: string;
   }>();
   const rawConversations = useChatStore((state) => state.conversations);
+  const snapshotLoaded = useChatStore((state) => state.conversationsSnapshotLoaded);
   const [sendingConversationID, setSendingConversationID] = useState('');
   // Pattern D 第二道：sendingConversationID 是 state，fast double-tap 下可能晚一帧；
   // 用 ref 在入口处兜底，避免给同一个会话连发两张名片。
@@ -80,7 +81,7 @@ export default function RecommendFriendScreen() {
       : t('chat.recommend.fallbackFriend', { defaultValue: '这位好友' });
 
   useEffect(() => {
-    if (rawConversations.length > 0) {
+    if (snapshotLoaded) {
       return;
     }
 
@@ -88,7 +89,7 @@ export default function RecommendFriendScreen() {
       // 失败时保留已有的会话（即便为空），dev 下让我们知道这里失败过。
       reportHandledFailure('recommendFriend', 'loadConversations', err);
     });
-  }, [rawConversations.length]);
+  }, [snapshotLoaded]);
 
   const conversations = useMemo(
     () =>

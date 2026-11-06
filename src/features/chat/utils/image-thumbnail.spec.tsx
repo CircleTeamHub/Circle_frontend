@@ -47,6 +47,13 @@ describe('uploadChatImageThumbnail', () => {
     expect(mockUploadLocalFile).not.toHaveBeenCalled();
   });
 
+  it('keeps the thumbnail upload attached to the image message progress', async () => {
+    mockRequestUploadPresign.mockResolvedValue({ uploadUrl: 'https://upload.test/thumb', key: 'chat/thumb.jpg', requiredHeaders: {} } as never);
+    mockUploadLocalFile.mockResolvedValue(undefined);
+    await uploadChatImageThumbnail('file:///original.jpg', 2048, 'original.jpg', undefined, 'image-delivery');
+    expect(mockUploadLocalFile).toHaveBeenCalledWith('https://upload.test/thumb', 'image/jpeg', 'file:///thumb.jpg', {}, undefined, { progressKey: 'image-delivery' });
+  });
+
   it('checks the session after deferred presign and skips upload when the guard throws', async () => {
     let resolvePresign!: (value: never) => void;
     let markPresignStarted!: () => void;

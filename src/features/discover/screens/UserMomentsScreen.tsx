@@ -21,6 +21,7 @@ import Animated, {
   type AnimatedProps,
 } from 'react-native-reanimated';
 import {
+  useFocusEffect,
   useLocalSearchParams,
   useRouter,
   useSegments,
@@ -35,6 +36,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Spacing, Typography, useTheme } from '@/theme';
 import { fetchUserProfile } from '@/services/api/profile';
+import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
+import { momentsMutatedSince } from '@/services/api/moments';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { useAuthStore } from '@/stores/authStore';
 import { useUserMoments } from '@/features/discover/hooks/use-user-moments';
@@ -45,6 +49,7 @@ import { MomentAlbumRow } from '@/features/discover/components/moment-album-row'
 import { E2E_TEST_IDS } from '@/testing/e2e-test-ids';
 import { getProfileSignature } from '@/features/profile/profile-display';
 import type { MomentPost } from '@/types';
+import { evictUserProfileCache, isProfileCacheFresh, readUserProfileCache, writeUserProfileCache } from '@/features/user/profile-cache';
 import { reportHandledFailure } from '@/observability/report-failure';
 
 const s = StyleSheet.create({
@@ -80,8 +85,12 @@ export default function UserMomentsScreen() {
   const fallbackHref = { pathname: `/(tabs)/${scope}` } as Href;
   const params = useLocalSearchParams<{ id: string; name?: string }>();
   const routeUserId = typeof params.id === 'string' ? params.id : '';
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const currentUser = useAuthStore((state) => state.user);
+  const initialCache = readUserProfileCache(sessionEpoch, routeUserId);
+  const ownProfile = currentUser?.id === routeUserId ? currentUser : null;
   const [canonicalUserId, setCanonicalUserId] = useState(() =>
-    isUuid(routeUserId) ? routeUserId : '',
+    initialCache?.album?.value.id ?? initialCache?.profile?.value.id ?? (isUuid(routeUserId) ? routeUserId : ''),
   );
   const currentUserId = useAuthStore((state) => state.user?.id);
   const isOwn = !!currentUserId && currentUserId === canonicalUserId;
@@ -91,13 +100,17 @@ export default function UserMomentsScreen() {
     scrollY.value = event.contentOffset.y;
   });
 
-  const { moments, loading, refreshing, hasMore, error, refresh, loadMore } =
+  const { moments, loading, refreshing, hasMore, error, lastLoadedAt, refresh, loadMore } =
     useUserMoments(canonicalUserId);
 
-  const [cover, setCover] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [nickname, setNickname] = useState<string>(params.name ?? '');
-  const [signature, setSignature] = useState('');
+  useFocusEffect(useCallback(() => {
+    if (lastLoadedAt != null && momentsMutatedSince(lastLoadedAt)) void refresh();
+  }, [lastLoadedAt, refresh]));
+
+  const [cover, setCover] = useState<string | null>(() => ownProfile?.cover ?? initialCache?.album?.value.cover ?? null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => ownProfile?.avatarUrl ?? initialCache?.album?.value.avatarUrl ?? initialCache?.profile?.value.avatarUrl ?? null);
+  const [nickname, setNickname] = useState<string>(() => ownProfile?.nickname ?? initialCache?.album?.value.nickname ?? initialCache?.profile?.value.name ?? params.name ?? '');
+  const [signature, setSignature] = useState(() => ownProfile ? getProfileSignature(ownProfile.persona, ownProfile.helloWords) : initialCache?.album?.value.signature ?? initialCache?.profile?.value.signature ?? '');
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileResolving, setProfileResolving] = useState(false);
 
@@ -105,11 +118,14 @@ export default function UserMomentsScreen() {
 
   useEffect(() => {
     let active = true;
-    setCanonicalUserId(isUuid(routeUserId) ? routeUserId : '');
-    setCover(null);
-    setAvatarUrl(null);
-    setNickname(params.name ?? '');
-    setSignature('');
+    const cached = readUserProfileCache(sessionEpoch, routeUserId);
+    const own = useAuthStore.getState().user;
+    const ownAlbum = own?.id === routeUserId ? own : null;
+    setCanonicalUserId(ownAlbum?.id ?? cached?.album?.value.id ?? cached?.profile?.value.id ?? (isUuid(routeUserId) ? routeUserId : ''));
+    setCover(ownAlbum?.cover ?? cached?.album?.value.cover ?? null);
+    setAvatarUrl(ownAlbum?.avatarUrl ?? cached?.album?.value.avatarUrl ?? cached?.profile?.value.avatarUrl ?? null);
+    setNickname(ownAlbum?.nickname ?? cached?.album?.value.nickname ?? cached?.profile?.value.name ?? params.name ?? '');
+    setSignature(ownAlbum ? getProfileSignature(ownAlbum.persona, ownAlbum.helloWords) : cached?.album?.value.signature ?? cached?.profile?.value.signature ?? '');
     setProfileError(null);
     setProfileResolving(Boolean(routeUserId));
 
@@ -121,10 +137,17 @@ export default function UserMomentsScreen() {
       };
     }
 
+    if (ownAlbum || isProfileCacheFresh(cached?.album, Date.now(), () => false)) {
+      setProfileResolving(false);
+      return () => { active = false; };
+    }
+    const startedAt = Date.now();
+    const requestRevision = getPageSnapshotRevision();
     void (async () => {
       try {
         const profile = await fetchUserProfile(routeUserId);
-        if (!active) return;
+        if (!active || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+        writeUserProfileCache(sessionEpoch, routeUserId, { album: { value: { id: profile.id, nickname: profile.nickname, avatarUrl: profile.avatarUrl, cover: profile.cover, signature: getProfileSignature(profile.persona, profile.helloWords) }, at: startedAt } }, requestRevision);
         setCanonicalUserId(profile.id);
         setCover(profile.cover);
         setAvatarUrl(profile.avatarUrl);
@@ -133,7 +156,14 @@ export default function UserMomentsScreen() {
           getProfileSignature(profile.persona, profile.helloWords),
         );
       } catch (err) {
-        if (!active) return;
+        if (!active || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+        if (isDefinitiveAuthFailure(err) || (err instanceof ApiError && err.status === 404)) {
+          evictUserProfileCache(sessionEpoch, routeUserId);
+          setCover(null);
+          setAvatarUrl(null);
+          setNickname(params.name ?? '');
+          setSignature('');
+        }
         setProfileError(
           getApiErrorMessage(
             err,
@@ -148,7 +178,7 @@ export default function UserMomentsScreen() {
     return () => {
       active = false;
     };
-  }, [params.name, routeUserId]);
+  }, [params.name, routeUserId, sessionEpoch]);
 
   const title = nickname
     ? t('moment.albumTitle', { name: nickname })

@@ -13,10 +13,16 @@ import {
   fetchWallet,
   type CoinTransaction,
 } from '@/services/api/coin';
+import { isDefinitiveAuthFailure } from '@/services/api/client';
 import { useAuthStore } from '@/stores/authStore';
+import {
+  captureAuthSessionIdentity,
+  isAuthSessionIdentityCurrent,
+} from '@/stores/auth-session-identity';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { getPageSnapshotRevision, readPageSnapshot, removePageSnapshot, writePageSnapshot } from '@/storage/page-snapshots';
 
 const s = StyleSheet.create({
   content: {
@@ -59,56 +65,84 @@ const s = StyleSheet.create({
 });
 
 export default function WalletScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  return sessionKey ? <WalletContent key={sessionKey} /> : null;
+}
+
+function WalletContent() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { isOffline } = useNetworkStatus();
-  const [balance, setBalance] = useState(0);
-  const [loadingWallet, setLoadingWallet] = useState(true);
-  // 余额与流水分开各自的加载态:两者绑在同一个 allSettled 上时,慢一拍的流水
-  // 请求会把已经拿到的余额一直压在「...」上,最坏要等满 15s 的接口超时 ——
-  // 而余额是这个页面的主信息。
-  const [loadingHistory, setLoadingHistory] = useState(true);
-  const [walletError, setWalletError] = useState<string | null>(null);
-  const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
-  const [historyError, setHistoryError] = useState<string | null>(null);
   const realtimeBalance = useWalletRealtimeStore((state) => state.balance);
   // 信用卡下沿:左侧直接展示账号 ID(与个人页「ID: xxxxxx」同一口径),
   // 右侧持卡人昵称。
   const authUser = useAuthStore((state) => state.user);
+  const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
+  const ownerKey = `${sessionEpoch}:${authUser?.id ?? ''}`;
   const cardNumber = authUser?.accountId ?? '';
   const cardHolder = authUser?.nickname ?? '';
   const walletVersion = useWalletRealtimeStore((state) => state.version);
-  // 首屏之后由 walletVersion 触发的那几次只是对账:实时通道已经把权威余额写
-  // 进来了,再翻回「...」等一次 GET(最坏 15s 超时)是把已经正确的数字藏起来。
-  const balanceSettledRef = useRef(false);
+  const presentationRevision = useRef(getPageSnapshotRevision()).current;
+  const [walletState, setWalletState] = useState(() => {
+    const balance = realtimeBalance ?? readPageSnapshot<number>(authUser?.id, 'wallet:balance')?.value ?? null;
+    return { owner: ownerKey, balance, loading: balance === null, error: null as string | null };
+  });
+  const [historyState, setHistoryState] = useState(() => {
+    const snapshot = readPageSnapshot<CoinTransaction[]>(authUser?.id, 'wallet:history');
+    return { owner: ownerKey, transactions: snapshot?.value ?? [], loaded: Boolean(snapshot), loading: !snapshot, error: null as string | null };
+  });
+  const currentWallet = walletState.owner === ownerKey ? walletState : null;
+  const currentHistory = historyState.owner === ownerKey ? historyState : null;
+  const balance = currentWallet?.balance ?? 0;
+  const loadingWallet = currentWallet?.loading ?? true;
+  const walletError = currentWallet?.error ?? null;
+  const transactions = currentHistory?.transactions ?? [];
+  const loadingHistory = currentHistory?.loading ?? true;
+  const historyError = currentHistory?.error ?? null;
   // 流水加载失败后点「重试」：只重拉流水，不动已经显示的余额。
   const [historyReloadKey, setHistoryReloadKey] = useState(0);
   const retryHistory = useCallback(() => setHistoryReloadKey((key) => key + 1), []);
 
   useEffect(() => {
     let cancelled = false;
+    const owner = captureAuthSessionIdentity(useAuthStore.getState());
+    if (!owner) return;
+    const ownerId = owner.userId;
+    const isCurrent = () => !cancelled &&
+      isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
+    const initial = useWalletRealtimeStore.getState();
+    const revision = getPageSnapshotRevision();
+    const startedAt = Date.now();
 
     async function loadBalance() {
-      if (!balanceSettledRef.current) setLoadingWallet(true);
-      setWalletError(null);
+      setWalletState((current) => {
+        const knownBalance = current.owner === ownerKey ? current.balance : initial.balance;
+        return { owner: ownerKey, balance: knownBalance, loading: knownBalance === null, error: null };
+      });
       try {
         const wallet = await fetchWallet();
-        if (cancelled) return;
-        setBalance(wallet.balance);
+        if (!isCurrent() || useWalletRealtimeStore.getState().version !== initial.version) return;
+        setWalletState((current) => ({ ...current, balance: wallet.balance }));
+        if (getPageSnapshotRevision() === revision) writePageSnapshot(ownerId, 'wallet:balance', wallet.balance, startedAt);
       } catch (error) {
-        if (cancelled) return;
-        setWalletError(
-          t('profile.wallet.loadError', {
+        if (isAuthSessionIdentityCurrent(owner, useAuthStore.getState()) &&
+          useWalletRealtimeStore.getState().version === initial.version && isDefinitiveAuthFailure(error)) {
+          removePageSnapshot(owner.userId, 'wallet:balance');
+        }
+        if (!isCurrent() || useWalletRealtimeStore.getState().version !== initial.version) return;
+        setWalletState((current) => ({
+          ...current,
+          balance: isDefinitiveAuthFailure(error) ? null : current.balance,
+          error: t('profile.wallet.loadError', {
             defaultValue: '积分余额加载失败，请稍后重试',
           }),
-        );
+        }));
         reportHandledFailure('wallet', 'fetch', error);
       } finally {
-        if (!cancelled) {
-          balanceSettledRef.current = true;
-          setLoadingWallet(false);
+        if (isCurrent()) {
+          setWalletState((current) => ({ ...current, loading: false }));
         }
       }
     }
@@ -117,28 +151,47 @@ export default function WalletScreen() {
     return () => {
       cancelled = true;
     };
-  }, [t, walletVersion]);
+  }, [ownerKey, t]);
 
   useEffect(() => {
     let cancelled = false;
+    const owner = captureAuthSessionIdentity(useAuthStore.getState());
+    if (!owner) return;
+    const ownerId = owner.userId;
+    const isCurrent = () => !cancelled &&
+      isAuthSessionIdentityCurrent(owner, useAuthStore.getState());
+    const revision = getPageSnapshotRevision();
+    const startedAt = Date.now();
 
     async function loadHistory() {
-      setLoadingHistory(true);
-      setHistoryError(null);
+      setHistoryState((current) => ({
+        owner: ownerKey,
+        transactions: current.owner === ownerKey ? current.transactions : [],
+        loaded: current.owner === ownerKey && current.loaded,
+        loading: current.owner !== ownerKey || !current.loaded,
+        error: null,
+      }));
       try {
         const rows = await fetchCoinTransactions();
-        if (cancelled) return;
-        setTransactions(rows);
+        if (!isCurrent()) return;
+        setHistoryState((current) => ({ ...current, transactions: rows, loaded: true }));
+        if (getPageSnapshotRevision() === revision) writePageSnapshot(ownerId, 'wallet:history', rows, startedAt);
       } catch (error) {
-        if (cancelled) return;
-        setHistoryError(
-          t('profile.wallet.historyLoadError', {
+        if (isAuthSessionIdentityCurrent(owner, useAuthStore.getState()) && isDefinitiveAuthFailure(error)) {
+          removePageSnapshot(owner.userId, 'wallet:history');
+        }
+        if (!isCurrent()) return;
+        setHistoryState((current) => ({
+          ...current,
+          transactions: isDefinitiveAuthFailure(error) ? [] : current.transactions,
+          loaded: !isDefinitiveAuthFailure(error) && current.loaded,
+          error: t('profile.wallet.historyLoadError', {
             defaultValue: '积分流水加载失败',
           }),
-        );
+        }));
         reportHandledFailure('wallet', 'fetchTransactions', error);
       } finally {
-        if (!cancelled) setLoadingHistory(false);
+        if (isCurrent()) setHistoryState((current) => ({ ...current, loading: false }));
       }
     }
 
@@ -146,11 +199,17 @@ export default function WalletScreen() {
     return () => {
       cancelled = true;
     };
-  }, [t, walletVersion, historyReloadKey]);
+  }, [ownerKey, t, walletVersion, historyReloadKey]);
 
+  // 实时通道已经读过权威余额;这里只消费结果,不再为 version 变化重复 GET。
   useEffect(() => {
-    if (typeof realtimeBalance === 'number') setBalance(realtimeBalance);
-  }, [realtimeBalance, walletVersion]);
+    if (typeof realtimeBalance === 'number') {
+      setWalletState({ owner: ownerKey, balance: realtimeBalance, loading: false, error: null });
+      if (getPageSnapshotRevision() === presentationRevision) {
+        writePageSnapshot(useAuthStore.getState().user?.id, 'wallet:balance', realtimeBalance);
+      }
+    }
+  }, [ownerKey, presentationRevision, realtimeBalance, walletVersion]);
 
   const transactionLabel = (transaction: CoinTransaction) => {
     switch (transaction.type) {

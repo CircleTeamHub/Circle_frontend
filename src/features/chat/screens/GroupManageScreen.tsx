@@ -1,5 +1,4 @@
-import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
-import { getGroupEntryHref } from '@/features/groups/routes';
+import { getGroupLogHref, getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams, useSegments } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams, useSegments, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,6 +50,7 @@ import {
   writeGroupInfoCache,
 } from '@/features/chat/group-info-cache';
 import { useAuthStore } from '@/stores/authStore';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 import { fetchCircleDetail } from '@/services/api/circles';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import {
@@ -119,6 +119,12 @@ const s = StyleSheet.create({
  * 差异只在 useGroupAdminActions 里选哪套端点。本人角色每次聚焦都重查,不吃快照。
  */
 export default function GroupManageScreen() {
+  const sessionKey = useAuthStore((state) => state.user?.id ? `${state.user.id}:${state.sessionEpoch}` : null);
+  const { conversationID, groupID } = useLocalSearchParams<{ conversationID?: string; groupID?: string }>();
+  return sessionKey ? <GroupManageContent key={`${sessionKey}:${conversationID ?? ''}:${groupID ?? ''}`} /> : null;
+}
+
+function GroupManageContent() {
   const scope = getUserProfileScopeFromSegments(useSegments());
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -127,7 +133,6 @@ export default function GroupManageScreen() {
     conversationID?: string;
     groupID?: string;
     title?: string;
-    originScope?: string;
   }>();
   const conversationID =
     typeof params.conversationID === 'string' ? params.conversationID : '';
@@ -215,6 +220,7 @@ export default function GroupManageScreen() {
       return;
     }
     const startedAt = Date.now();
+    const requestRevision = getPageSnapshotRevision();
     // 已经有内容时后台刷新,不整屏转圈(回到页面时那一下闪烁)。
     if (!loadedRef.current) setLoading(true);
     setError(false);
@@ -235,7 +241,7 @@ export default function GroupManageScreen() {
         groupID ? fetchCircleDetail(groupID) : Promise.resolve(null),
       ]);
       setMembers(directory);
-      writeGroupInfoCache(sessionEpoch, groupDataKey, { members: directory });
+      writeGroupInfoCache(sessionEpoch, groupDataKey, { members: directory }, requestRevision, startedAt);
       setCircleRole(
         detail && detail.myStatus === 'ACTIVE' ? detail.myRole : null,
       );
@@ -457,30 +463,12 @@ export default function GroupManageScreen() {
 
   const handleOpenGroupExpansion = useCallback(() => {
     if (!groupID) return;
-    // 跨到 profile tab 后需要记住当前群管理栈，否则扩容页会按商城入口返回。
-    const originScope =
-      params.originScope === 'contacts' ||
-      params.originScope === 'profile' ||
-      params.originScope === 'discover' ||
-      params.originScope === 'explore' ||
-      params.originScope === 'messages'
-        ? params.originScope
-        : 'messages';
-    const expansionHref = {
-      pathname: '/(tabs)/profile/group-expansion',
-      params: { circleId: groupID },
-    };
+    // 留在当前栈，按钮、系统返回和侧滑都自然退回这个群管理页。
     router.push({
-      ...expansionHref,
-      params: {
-        ...expansionHref.params,
-        returnScope: originScope,
-        returnConversationID: conversationID,
-        returnGroupID: groupID,
-        ...(params.title ? { returnTitle: params.title } : {}),
-      },
+      pathname: `/(tabs)/${scope}/group-expansion`,
+      params: { circleId: groupID },
     } as never);
-  }, [conversationID, groupID, params.originScope, params.title]);
+  }, [groupID, scope]);
 
   const openPicker = useCallback((mode: Exclude<PickerMode, null>) => {
     setSelectedMemberIDs(new Set());
@@ -671,7 +659,18 @@ export default function GroupManageScreen() {
   );
 
   let body: React.ReactNode;
-  if (loading) {
+  if (loading && cachedMembers !== undefined) {
+    body = (
+      <ScrollView contentContainerStyle={s.content}>
+        <View style={[s.section, d.section]}>
+          {members.map((member) => <View key={member.userId} style={s.row}>
+            <Avatar size={40} name={groupMemberDisplayName(member)} uri={member.avatarUrl ?? undefined} />
+            <Text style={d.name}>{groupMemberDisplayName(member)}</Text>
+          </View>)}
+        </View>
+      </ScrollView>
+    );
+  } else if (loading) {
     body = (
       <View style={s.center}>
         <ActivityIndicator color={colors.primary} />
@@ -742,7 +741,11 @@ export default function GroupManageScreen() {
           {renderPolicyRows(MEMBER_POLICY_KEYS)}
         </View>
 
-        {isStandaloneGroup ? <View style={[s.section, d.section]}>{renderLinkRow(t('groupAdmission.manage'), () => router.push(getGroupEntryHref(scope, { groupId: conversationID, manage: '1' })), 'group-admissions-manage')}</View> : null}
+        <View style={[s.section, d.section]}>
+          {renderLinkRow(t('groupReview.entry'), () => router.push({ pathname: `/(tabs)/${scope}/group-review`, params: { conversationID, title: params.title } } as unknown as Href), 'group-manage-applications')}
+          <Divider />
+          {renderLinkRow(t('chat.groupLog'), () => router.push(getGroupLogHref(scope, { conversationID, title: params.title })), 'group-manage-log')}
+        </View>
         {isOwner ? (
           <View style={[s.section, d.section]}>
             <View style={s.sectionHeader}>

@@ -68,7 +68,8 @@ let incomingMessageIsLive: (() => boolean) | null = null;
 let chatEventBindingEpoch = 0;
 /** 会话元信息在事件到达时缺失；flush 时即使补拉先把它带回也仍只弹最新一条。 */
 const incomingMissingConversationIds = new Set<string>();
-const reportedChatEventFailures = new Set<string>();
+const reportedChatEventFailures = new Map<string, number>();
+const CHAT_EVENT_FAILURE_REPORT_WINDOW_MS = 60_000;
 
 /**
  * A burst of image messages otherwise notifies every chat subscriber twice per
@@ -84,8 +85,12 @@ function batchStoreUpdates<T>(work: () => T): T {
 
 function reportChatEventFailureOnce(operation: string, kind: string): void {
   const signature = `${operation}:${kind}`;
+  const now = Date.now();
+  for (const [entry, reportedAt] of reportedChatEventFailures) {
+    if (now - reportedAt >= CHAT_EVENT_FAILURE_REPORT_WINDOW_MS) reportedChatEventFailures.delete(entry);
+  }
   if (reportedChatEventFailures.has(signature)) return;
-  reportedChatEventFailures.add(signature);
+  reportedChatEventFailures.set(signature, now);
   reportError(new Error('chat event failure'), {
     component: 'chatDispatcher',
     operation,
@@ -854,13 +859,13 @@ function enqueueForegroundBanner(
   if (conversation.muted) return 'suppressed';
 
   const isAssistant = conversation.type === 'SUPPORT';
-  const isGroup = conversation.type === 'GROUP';
+  const isGroup = conversation.type === 'GROUP' || conversation.type === 'TEMP';
   // 独立群聊(无 circleId):标题用群名(空名兜底「群聊」),sourceID = 会话 id。
   const title = isAssistant
     ? conversation.name?.trim() ||
       i18n.t('assistant.name', { defaultValue: 'AI小助手' })
     : isGroup
-      ? (conversation.circle?.name ??
+      ? (conversation.circle?.name ?? conversation.tempChat?.title ??
         (conversation.name?.trim() ||
           i18n.t('messages.newGroupDefaultName', { defaultValue: '群聊' })))
       : (conversation.peer?.nickname ?? message.sender?.nickname ?? '');

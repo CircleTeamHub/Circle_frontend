@@ -65,6 +65,7 @@ import {
   writeGroupInfoCache,
 } from '@/features/chat/group-info-cache';
 import { useAuthStore } from '@/stores/authStore';
+import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 import {
   allowsMemberInvites,
   allowsMemberProfiles,
@@ -82,7 +83,6 @@ import {
   getEditGroupNoticeHref,
   getEditFriendRemarkHref,
   getEditFriendTagsHref,
-  getGroupLogHref,
   getGroupManageHref,
   getGroupMemberSearchHref,
   getNoteManagementHref,
@@ -111,6 +111,7 @@ import {
 import { leaveGroup } from '@/services/api/groups';
 import { fetchMyTempChats } from '@/services/api/temp-chat';
 import { getApiErrorMessage } from '@/services/api/errors';
+import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
 import { topNotice } from '@/components/app/top-notice-store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
@@ -370,6 +371,7 @@ export default function ChatInfoScreen() {
   const [deletePending, setDeletePending] = useState(false);
   const [groupInfo, setGroupInfo] = useState<CircleGroupInfo | null>(null);
   const [groupMembers, setGroupMembers] = useState<ChatMemberDto[]>([]);
+  const [hasGroupSnapshot, setHasGroupSnapshot] = useState(false);
   const [standaloneConversationLoadFailed, setStandaloneConversationLoadFailed] = useState(false);
   // 圈子群会话 DTO(get-or-create 结果):从圈子详情等入口进来时 store 里可能
   // 还没有该会话,置顶/免打扰的当前值与目标会话 id 都以它兜底。
@@ -378,7 +380,7 @@ export default function ChatInfoScreen() {
   const [avatarPreviewKey, setAvatarPreviewKey] = useState<string | null>(null);
   // TEMP/独立群没有圈子角色 hook；缓存不能替代本次进入后的座位校验。
   const [standaloneDirectoryAccess, setStandaloneDirectoryAccess] = useState<
-    'pending' | 'allowed' | 'denied'
+    'pending' | 'allowed' | 'denied' | 'failed'
   >('pending');
   // 头像长按选了「禁言」的目标:先挑时长再调接口。
   const [silenceTarget, setSilenceTarget] = useState<ChatMemberDto | null>(null);
@@ -502,6 +504,7 @@ export default function ChatInfoScreen() {
     selfMember: liveGroupMember,
     canViewMembers: liveCanViewCircleMemberDirectory,
     resolved: liveGroupRoleResolved,
+    verificationFailed: circleVerificationFailed,
     revalidate: revalidateMemberAccess,
   } = useGroupMemberViewAccess({
     enabled: Boolean(isGroupConversation && groupID && currentUserID),
@@ -533,7 +536,8 @@ export default function ChatInfoScreen() {
   // 群主/管理员不受限(判据与服务端 listMembers 一致,免得摆个必然 403 的入口)。
   const canViewMemberDirectory =
     (isTempConversation || isStandaloneGroup
-      ? standaloneDirectoryAccess === 'allowed'
+      ? (standaloneDirectoryAccess === 'allowed' ||
+          (standaloneDirectoryAccess === 'pending' && Boolean(conversation) && groupMembers.length > 0))
       : canViewCircleMemberDirectory) &&
     (isTempConversation ||
       isGroupManager(selfGroupRoleForRoster) ||
@@ -542,15 +546,15 @@ export default function ChatInfoScreen() {
   // 取 —— 服务端按 ownerId + 座位上的管理员标记派生;目录还没到位时按会话 dto 的
   // ownerId 兜底认群主。圈子群仍按圈子角色。
   const selfGroupRole: GroupRole | null = isStandaloneGroup
-    ? resolveStandaloneSelfRole({
+    ? standaloneDirectoryAccess === 'allowed' && !needsStandaloneConversation ? resolveStandaloneSelfRole({
         members: groupMembers,
         currentUserID,
         ownerId: conversation?.ownerId ?? null,
-      })
+      }) : null
     : (currentGroupMember?.role ?? null);
   const isOwner = selfGroupRole === 'OWNER';
   const isStandaloneGroupOwner =
-    isStandaloneGroup &&
+    isStandaloneGroup && standaloneDirectoryAccess === 'allowed' && !needsStandaloneConversation &&
     (conversation?.ownerId === currentUserID || isOwner);
   // 圈子群的圈主同样按不了「退出」——后端 CIRCLE_OWNER_CANNOT_LEAVE 直接 403。
   // 圈主要撤掉圈子只有解散一条路,与独立群聊的群主同一语义,只是作用域是整个
@@ -571,9 +575,7 @@ export default function ChatInfoScreen() {
   // 群设置第二批:公告/头像/上限/二维码开关与「成员可查看他人资料」。
   // 圈子群的公告与头像在圈子上(groupInfo / circle),独立群聊在会话行上。
   const activeConversationPolicies = activeConversation?.policies ?? null;
-  const groupNotice = isStandaloneGroup
-    ? (activeConversation?.notice?.trim() ?? '')
-    : (groupInfo?.notice?.trim() ?? '');
+  const groupNotice = activeConversation?.notice?.trim() ?? groupInfo?.notice?.trim() ?? '';
   const groupAvatarUrl = isStandaloneGroup
     ? (activeConversation?.avatarUrl ?? null)
     : (conversation?.circle?.avatarUrl ?? null);
@@ -596,7 +598,11 @@ export default function ChatInfoScreen() {
   // 圈子群仍只给管理员(那是担保邀请进圈的流程)。
   const canInviteGroupMembers =
     canManageGroup ||
-    (isStandaloneGroup && allowsMemberInvites(groupPolicyActor));
+    (isStandaloneGroup && standaloneDirectoryAccess === 'allowed' && !needsStandaloneConversation && allowsMemberInvites(groupPolicyActor));
+  const canPresentCachedDirectory = groupMembers.length > 0 &&
+    (isStandaloneGroup || isTempConversation
+      ? standaloneDirectoryAccess === 'pending' || standaloneDirectoryAccess === 'failed'
+      : !liveGroupRoleResolved || circleVerificationFailed || standaloneDirectoryAccess === 'failed');
   const resolvedConversationID = activeConversation?.id ?? '';
   currentConversationIDRef.current = resolvedConversationID;
   // 只用路由中的稳定身份做缓存键。圈子会话 DTO 首次补齐时不应被当成
@@ -707,6 +713,7 @@ export default function ChatInfoScreen() {
     const cached = readGroupInfoCache(sessionEpoch, groupDataKey);
     setGroupInfo(cached?.groupInfo ?? null);
     setGroupMembers(cached?.members ?? []);
+    setHasGroupSnapshot(cached?.groupInfo !== undefined || cached?.members !== undefined);
     setGroupConversation(null);
     setStandaloneDirectoryAccess('pending');
     setStandaloneConversationLoadFailed(false);
@@ -741,6 +748,7 @@ export default function ChatInfoScreen() {
         };
       }
       const startedAt = Date.now();
+      const requestRevision = getPageSnapshotRevision();
 
       // 临时房走会话自己的成员端点:没有圈子详情可查(没有 name/description/
       // memberCount),会话 id 也已经在手上,不需要 get-or-create。
@@ -758,14 +766,15 @@ export default function ChatInfoScreen() {
             if (cancelled) return;
             setGroupMembers(members);
             setStandaloneDirectoryAccess('allowed');
-            writeGroupInfoCache(sessionEpoch, groupDataKey, { members });
+            writeGroupInfoCache(sessionEpoch, groupDataKey, { members }, requestRevision, startedAt);
             groupReloadGate.markLoaded(startedAt);
           })
-          .catch(() => {
-            // 屏上保留已显示的名单(网络抖动不闪);缓存作废 —— 失败也可能是已被移出,
-            // 下次进来不能再先画出旧名单。下一次聚焦继续重试。
-            evictGroupInfoCache(sessionEpoch, groupDataKey);
-            setStandaloneDirectoryAccess('denied');
+          .catch((error) => {
+            // 断网时保留只读快照;服务端确认失权才清空并移除磁盘快照。
+            if (cancelled) return;
+            const denied = isDefinitiveAuthFailure(error) || (error instanceof ApiError && error.status === 404);
+            setStandaloneDirectoryAccess(denied ? 'denied' : 'failed');
+            if (denied) { evictGroupInfoCache(sessionEpoch, groupDataKey); setGroupMembers([]); }
           });
         return () => {
           cancelled = true;
@@ -780,13 +789,15 @@ export default function ChatInfoScreen() {
             if (cancelled) return;
             setGroupMembers(members);
             setStandaloneDirectoryAccess('allowed');
-            writeGroupInfoCache(sessionEpoch, groupDataKey, { members });
+            writeGroupInfoCache(sessionEpoch, groupDataKey, { members }, requestRevision, startedAt);
             groupReloadGate.markLoaded(startedAt);
           })
-          .catch(() => {
-            // 同上:屏上保留,缓存作废。
-            evictGroupInfoCache(sessionEpoch, groupDataKey);
-            setStandaloneDirectoryAccess('denied');
+          .catch((error) => {
+            // 同上:断网沿用只读快照,确认失权才清空。
+            if (cancelled) return;
+            const denied = isDefinitiveAuthFailure(error) || (error instanceof ApiError && error.status === 404);
+            setStandaloneDirectoryAccess(denied ? 'denied' : 'failed');
+            if (denied) { evictGroupInfoCache(sessionEpoch, groupDataKey); setGroupMembers([]); }
           });
         return () => {
           cancelled = true;
@@ -818,7 +829,7 @@ export default function ChatInfoScreen() {
               memberCount: detail.memberCount,
             };
             setGroupInfo(info);
-            writeGroupInfoCache(sessionEpoch, groupDataKey, { groupInfo: info });
+            writeGroupInfoCache(sessionEpoch, groupDataKey, { groupInfo: info }, requestRevision, startedAt);
             detailLoaded = true;
             markIfComplete();
           }
@@ -839,6 +850,7 @@ export default function ChatInfoScreen() {
           // group-policy-changed 才能更新本页,不必退出重进才能看到权限变化。
           useChatStore.getState?.().upsertConversation?.(conversationDto);
           if (!canViewMemberDirectory) {
+            if (!liveGroupRoleResolved || circleVerificationFailed) return;
             setGroupMembers([]);
             // 刚被撤权:缓存里的名单也不能再给他看。
             evictGroupInfoCache(sessionEpoch, groupDataKey);
@@ -851,13 +863,17 @@ export default function ChatInfoScreen() {
           const members = await fetchChatMembers(conversationDto.id);
           if (!cancelled) {
             setGroupMembers(members);
-            writeGroupInfoCache(sessionEpoch, groupDataKey, { members });
+            setStandaloneDirectoryAccess('allowed');
+            writeGroupInfoCache(sessionEpoch, groupDataKey, { members }, requestRevision, startedAt);
             directoryLoaded = true;
             markIfComplete();
           }
-        } catch {
+        } catch (error) {
           // 屏上保留已渲染的名单;缓存作废(非成员时取或建会话直接 403,走不到上面的撤权分支)。
-          evictGroupInfoCache(sessionEpoch, groupDataKey);
+          if (cancelled) return;
+          const denied = isDefinitiveAuthFailure(error) || (error instanceof ApiError && error.status === 404);
+          setStandaloneDirectoryAccess(denied ? 'denied' : 'failed');
+          if (denied) { evictGroupInfoCache(sessionEpoch, groupDataKey); setGroupMembers([]); }
         }
       };
       void loadMemberDirectory();
@@ -867,6 +883,7 @@ export default function ChatInfoScreen() {
       };
     }, [
       canViewMemberDirectory,
+      circleVerificationFailed,
       conversationID,
       groupID,
       groupDataKey,
@@ -874,6 +891,7 @@ export default function ChatInfoScreen() {
       isGroupConversation,
       isStandaloneGroup,
       isTempConversation,
+      liveGroupRoleResolved,
       resolvedConversationID,
       sessionEpoch,
     ]),
@@ -1214,15 +1232,17 @@ export default function ChatInfoScreen() {
     router.push(
       getEditGroupNoticeHref(scope, {
         groupID,
-        ...(groupID ? {} : { conversationID: noticeConversationID }),
+        conversationID: noticeConversationID,
         groupTitle,
         notice: groupNotice,
+        noticePinned: activeConversation?.noticePinned ?? false,
       }),
     );
   }, [
     conversationID,
     groupID,
     groupNotice,
+    activeConversation?.noticePinned,
     groupTitle,
     resolvedConversationID,
     scope,
@@ -1453,6 +1473,7 @@ export default function ChatInfoScreen() {
   }, [groupID, groupTitle]);
 
   const handleLeaveGroup = useCallback(() => {
+    if (isStandaloneGroup && standaloneDirectoryAccess !== 'allowed') return;
     if (!groupID && !isStandaloneGroup) {
       return;
     }
@@ -1480,7 +1501,7 @@ export default function ChatInfoScreen() {
         },
       },
     ]);
-  }, [conversationID, groupID, isStandaloneGroup, openActionError, t]);
+  }, [conversationID, groupID, isStandaloneGroup, openActionError, standaloneDirectoryAccess, t]);
 
   const handleDissolveGroup = useCallback(() => {
     if (!isStandaloneGroupOwner) {
@@ -1773,16 +1794,6 @@ export default function ChatInfoScreen() {
     t,
   ]);
 
-  const handleOpenGroupLog = useCallback(() => {
-    if (!resolvedConversationID) return;
-    router.push(
-      getGroupLogHref(scope, {
-        conversationID: resolvedConversationID,
-        title: groupTitle,
-      }),
-    );
-  }, [groupTitle, resolvedConversationID, scope]);
-
   // 群备注:我给这个群起的名字,只有我看得见(与好友备注同一语义)。
   // 设了之后会话列表与聊天标题都显示它,清空则回落群名。
   const myGroupRemark = activeConversation?.myRemark ?? '';
@@ -1974,7 +1985,7 @@ export default function ChatInfoScreen() {
   );
 
   // 元信息未到时不展示缺省开放的成员/邀请策略,也不提供尚未解析会话 id 的设置。
-  if (needsStandaloneConversation) {
+  if (needsStandaloneConversation && !hasGroupSnapshot) {
     return (
       <View style={[d.container, { paddingTop: insets.top }]}>
         <NavHeader title={t('chat.groupInfo')} fallbackHref={backHref} />
@@ -2016,7 +2027,7 @@ export default function ChatInfoScreen() {
           contentContainerStyle={[s.groupContent, { paddingBottom: insets.bottom + Spacing.xl }]}
           showsVerticalScrollIndicator={false}
         >
-          {canViewMemberDirectory ? (
+          {canViewMemberDirectory || canPresentCachedDirectory ? (
             <View style={s.groupMemberSection}>
             <View style={s.groupMemberGrid}>
               {visibleGroupMembers.map((member) => {
@@ -2038,7 +2049,7 @@ export default function ChatInfoScreen() {
                     style={s.groupMemberCell}
                     onPress={() => handleOpenMemberProfile(member)}
                     onLongPress={hasMemberActions ? () => handleMemberActions(member) : undefined}
-                    disabled={groupAdmin.pendingUserID === member.userId}
+                    disabled={!canViewMemberDirectory || standaloneDirectoryAccess === 'failed' || groupAdmin.pendingUserID === member.userId}
                   >
                     <Avatar size={56} shape="square" name={memberName} uri={member.avatarUrl ?? undefined} />
                     <Text style={[s.groupMemberName, d.groupMemberName]} numberOfLines={1}>
@@ -2166,15 +2177,6 @@ export default function ChatInfoScreen() {
             ) : null}
             <Divider />
             <GroupInfoRow label={t('chat.searchHistory')} onPress={handleOpenSearchHistory} />
-            {canManageGroup ? (
-              <>
-                <Divider />
-                <GroupInfoRow
-                  label={t('chat.groupLog', { defaultValue: '群日志' })}
-                  onPress={handleOpenGroupLog}
-                />
-              </>
-            ) : null}
             {isTempConversation ? null : (
               <>
                 <Divider />

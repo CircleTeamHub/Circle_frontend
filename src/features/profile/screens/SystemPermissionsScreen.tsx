@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as Location from 'expo-location';
@@ -12,6 +12,7 @@ import {
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { openSystemSettings } from '@/utils/open-system-settings';
 
 type PermissionId =
   | 'location'
@@ -125,7 +126,7 @@ async function requestPermission(id: PermissionId) {
       case 'notifications': {
         const notifications = await loadNotificationsModule();
         if (!notifications) {
-          await Linking.openSettings();
+          await openSystemSettings();
           return false;
         }
         result = await notifications.requestPermissionsAsync({
@@ -142,16 +143,16 @@ async function requestPermission(id: PermissionId) {
     }
 
     if (typeof result === 'boolean') {
-      if (!result) await Linking.openSettings();
+      if (!result) await openSystemSettings();
       return result;
     }
 
     if (!result.granted && result.canAskAgain === false) {
-      await Linking.openSettings();
+      await openSystemSettings();
     }
     return Boolean(result.granted);
   } catch {
-    await Linking.openSettings();
+    await openSystemSettings();
     return false;
   }
 }
@@ -170,7 +171,10 @@ export default function SystemPermissionsScreen() {
   }, []);
 
   useEffect(() => {
-    void refreshPermissions();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshPermissions();
+    });
+    return () => subscription.remove();
   }, [refreshPermissions]);
 
   useFocusEffect(
@@ -214,7 +218,7 @@ export default function SystemPermissionsScreen() {
           <Pressable
             accessibilityRole="button"
             style={[s.settingsButton, { backgroundColor: colors.primary }]}
-            onPress={() => Linking.openSettings()}
+            onPress={() => void openSystemSettings()}
           >
             <Text style={{ color: colors.white, ...Typography.h3 }}>
               {t('settingsDetails.permissions.openSystemSettings')}

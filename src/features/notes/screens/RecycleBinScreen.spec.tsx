@@ -5,6 +5,7 @@ import RecycleBinScreen from './RecycleBinScreen';
 import { ApiError } from '@/services/api/api-error';
 import { fetchDeletedNotes, purgeNote, restoreNote } from '@/services/api/notes';
 import { detachLocalNoteDraftsFromNote } from '@/features/notes/utils/note-editor-drafts';
+import { reportHandledFailure } from '@/observability/report-failure';
 
 const mockRouter = { push: jest.fn(), back: jest.fn() };
 const mockTranslate = (key: string) => key;
@@ -42,6 +43,7 @@ jest.mock('@/features/notes/components/NoteCard', () => {
 });
 jest.mock('@/features/notes/utils/note-editor-drafts', () => ({ detachLocalNoteDraftsFromNote: jest.fn() }));
 jest.mock('@/services/api/notes', () => ({ fetchDeletedNotes: jest.fn(), purgeNote: jest.fn(), restoreNote: jest.fn() }));
+jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 
 const note = { id: 'n1', title: '回收站里的笔记', groups: [], status: 'DELETED' };
 
@@ -76,6 +78,7 @@ test('a 404 from delete-now means it is already gone: the row leaves and no fail
     await confirmPurge(alert);
     await waitFor(() => expect(screen.queryByText('回收站里的笔记')).toBeNull());
     expect(alert).not.toHaveBeenCalledWith('notes.alerts.deleteFailedTitle', expect.anything());
+    expect(reportHandledFailure).not.toHaveBeenCalled();
   } finally { alert.mockRestore(); }
 });
 
@@ -88,6 +91,65 @@ test('delete-now detaches local drafts that still edit the purged note', async (
     await confirmPurge(alert);
     expect(detachLocalNoteDraftsFromNote).toHaveBeenCalledWith('owner', 'n1');
   } finally { alert.mockRestore(); }
+});
+
+test('a local draft detach failure remains observable after successful purge', async () => {
+  const error = new Error('storage unavailable');
+  jest.mocked(purgeNote).mockResolvedValueOnce(undefined);
+  jest.mocked(detachLocalNoteDraftsFromNote).mockImplementationOnce(() => { throw error; });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<RecycleBinScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText('more:n1'));
+    await confirmPurge(alert);
+    expect(reportHandledFailure).toHaveBeenCalledWith('noteRecycleBin', 'detachDrafts', error);
+    expect(screen.queryByText('回收站里的笔记')).toBeNull();
+    expect(alert).not.toHaveBeenCalledWith('notes.alerts.deleteFailedTitle', expect.anything());
+  } finally { alert.mockRestore(); }
+});
+
+test('an initial recycle-bin load failure is observable', async () => {
+  const error = new Error('load unavailable');
+  jest.mocked(fetchDeletedNotes).mockReset().mockRejectedValueOnce(error);
+  render(<RecycleBinScreen />);
+  await waitFor(() => expect(reportHandledFailure).toHaveBeenCalledWith('noteRecycleBin', 'load', error));
+});
+
+test('a rejected restore keeps the row and reports the failed action', async () => {
+  const error = new Error('restore unavailable');
+  jest.mocked(restoreNote).mockRejectedValueOnce(error);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<RecycleBinScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText('more:n1'));
+    fireEvent.press(screen.getByLabelText('notes.actions.restore'));
+    await waitFor(() => expect(reportHandledFailure).toHaveBeenCalledWith('noteRecycleBin', 'restore', error));
+    expect(screen.getByText('回收站里的笔记')).toBeTruthy();
+  } finally { alert.mockRestore(); }
+});
+
+test('a rejected purge reports the failed action without removing the row', async () => {
+  const error = new Error('purge unavailable');
+  jest.mocked(purgeNote).mockRejectedValueOnce(error);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  render(<RecycleBinScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText('more:n1'));
+    await confirmPurge(alert);
+    expect(reportHandledFailure).toHaveBeenCalledWith('noteRecycleBin', 'purge', error);
+    expect(screen.getByText('回收站里的笔记')).toBeTruthy();
+  } finally { alert.mockRestore(); }
+});
+
+test('a refresh failure after restore reports refresh rather than another restore failure', async () => {
+  const error = new Error('refresh unavailable');
+  jest.mocked(restoreNote).mockResolvedValueOnce(undefined);
+  jest.mocked(fetchDeletedNotes).mockRejectedValueOnce(error);
+  render(<RecycleBinScreen />);
+  fireEvent.press(await screen.findByLabelText('more:n1'));
+  fireEvent.press(screen.getByLabelText('notes.actions.restore'));
+  await waitFor(() => expect(reportHandledFailure).toHaveBeenCalledWith('noteRecycleBin', 'refreshAfterMutation', error));
+  expect(reportHandledFailure).toHaveBeenCalledTimes(1);
 });
 
 test('a real delete-now failure keeps the row and tells the user', async () => {
@@ -160,6 +222,7 @@ test('a failed newer refresh does not discard the successful initial load', asyn
     await waitFor(() => expect(fetchDeletedNotes).toHaveBeenCalledTimes(1));
     fireEvent(screen.UNSAFE_getByType(FlatList), 'refresh');
     await act(async () => refresh.reject(new Error('network')));
+    expect(reportHandledFailure).toHaveBeenCalledWith('noteRecycleBin', 'refresh', expect.any(Error));
     await act(async () => focus.resolve([note] as never));
     expect(screen.getByText('回收站里的笔记')).toBeTruthy();
     expect(screen.UNSAFE_getByType(FlatList).props.refreshing).toBe(false);

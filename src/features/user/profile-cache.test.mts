@@ -60,3 +60,12 @@ test('freshness: inside the window, no clock rollback, no related write since', 
   assert.equal(isProfileCacheFresh({ at: 1_000 }, 999, never), false);
   assert.equal(isProfileCacheFresh({ at: 1_000 }, 2_000, (since) => since <= 1_500), false);
 });
+
+test('canonical child routes reuse and invalidate a profile cached under an account ID', () => {
+  writeUserProfileCache(61, 'account-number', { profile: { value: profile('uuid'), at: 1 }, friendSettings: { value: { remark: 'Known' } as never, at: 1 } });
+  assert.equal(readUserProfileCache(61, 'uuid')?.friendSettings?.value?.remark, 'Known');
+  writeUserProfileCache(61, 'uuid', { friendSettings: { value: { remark: 'Updated' } as never, at: 2 } });
+  assert.equal(readUserProfileCache(61, 'account-number')?.friendSettings?.value?.remark, 'Updated');
+  evictUserProfileCache(61, 'uuid');
+  assert.equal(readUserProfileCache(61, 'account-number'), undefined);
+});

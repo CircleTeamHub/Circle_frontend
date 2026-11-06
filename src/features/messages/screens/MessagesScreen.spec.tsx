@@ -1,4 +1,5 @@
 import React from 'react';
+import { CheckCheck, Search } from 'lucide-react-native';
 import { Alert, BackHandler, Modal } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import MessagesScreen from './MessagesScreen';
@@ -13,6 +14,7 @@ let mockSplitLayout = false;
 let mockCurrentUserId = 'me';
 let mockPinnedFoldCount = 0;
 let mockScreenLive = true;
+let mockSnapshotLoaded = true;
 const mockNavigate = jest.fn();
 const mockSetTabOptions = jest.fn();
 const mockTabNavigation = { setOptions: mockSetTabOptions };
@@ -21,7 +23,7 @@ const mockSetUnread = jest.fn();
 const mockRemarkReloadGate = { shouldSkip: () => true, markLoaded: jest.fn() };
 const mockTranslate = (key: string) => key;
 const mockColors = { text: '#111', textSecondary: '#666', background: '#fff', dangerFill: '#E5484D' };
-const mockChatState = () => ({ conversations: mockConversations, currentUserId: mockCurrentUserId, readWatermarks: {}, connected: true, conversationsSnapshotLoaded: true });
+const mockChatState = () => ({ conversations: mockConversations, currentUserId: mockCurrentUserId, readWatermarks: {}, connected: true, conversationsSnapshotLoaded: mockSnapshotLoaded });
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockNavigate, navigate: mockNavigate }), useNavigation: () => mockNavigation, useFocusEffect: jest.fn() }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockTranslate }) }));
@@ -76,6 +78,7 @@ beforeEach(() => {
   mockCurrentUserId = 'me';
   mockPinnedFoldCount = 0;
   mockScreenLive = true;
+  mockSnapshotLoaded = true;
   useFriendRemarkStore.getState().reset();
   jest.mocked(clearChatConversationHistory).mockReset().mockResolvedValue(undefined);
   jest.mocked(updateChatConversationPreferences).mockReset().mockResolvedValue({} as ChatConversationDto);
@@ -193,7 +196,8 @@ test('switching accounts exits selection and restores tab navigation', () => {
 
 test('header double check enters selection without reading chats or navigating', () => {
   render(<MessagesScreen />);
-  expect(screen.getByText('checkmark-done-outline')).toBeTruthy();
+  expect(screen.UNSAFE_getByType(CheckCheck).props.strokeWidth).toBe(4);
+  expect(screen.UNSAFE_getByType(Search).props.strokeWidth).toBe(4);
   startSelection();
   selectRow('first');
   expect(screen.getByRole('checkbox', { name: 'first' }).props.accessibilityState.checked).toBe(true);
@@ -347,3 +351,7 @@ test('desktop split layout also exposes the selected conversation read action', 
   act(() => actions.find((action) => action.text === 'messages.swipeMarkRead')!.onPress!());
   expect(markConversationRead).toHaveBeenCalledWith('first', 10);
 });
+
+test('startup waits instead of declaring the account empty', () => { mockConversations = []; mockSnapshotLoaded = false; const view = render(<MessagesScreen />); expect(screen.queryByText('messages.noConversations')).toBeNull(); expect(screen.getByTestId('conversations-loading')).toBeTruthy(); mockSnapshotLoaded = true; view.rerender(<MessagesScreen />); expect(screen.getByText('messages.noConversations')).toBeTruthy(); });
+
+test('local conversation rows remain visible while the remote snapshot is pending', () => { mockSnapshotLoaded = false; render(<MessagesScreen />); expect(screen.getByText('first')).toBeTruthy(); expect(screen.queryByTestId('conversations-loading')).toBeNull(); });

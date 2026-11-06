@@ -109,6 +109,7 @@ test("production Expo transform inlines the public DSN before runtime", () => {
       if (name === "./tracing") return { TRACED_SPAN_NAMES: new Set() };
       if (name === "./unhandled-rejection-filter") return load("src/observability/unhandled-rejection-filter.ts");
       if (name === "./metrics") return load("src/observability/metrics.ts", { "@sentry/react-native": {} });
+      if (name === "./http-diagnostics") return load("src/observability/http-diagnostics.ts");
       if (name === "@/utils/redact") return load("src/utils/redact.ts");
       return require(name);
     },
@@ -558,7 +559,7 @@ test("initSentry attaches explicit release and distribution identifiers", () => 
   assert.equal(calls[0].dist, "1002003");
 });
 
-test("setSentryUserId never sends the backend account id", () => {
+test("setSentryUserId sends only the internal account id and clears it on logout", () => {
   const { setSentryUserId } = loadSentry();
   const calls = [];
   const client = { setUser: (user) => calls.push(user) };
@@ -568,11 +569,11 @@ test("setSentryUserId never sends the backend account id", () => {
   setSentryUserId(null, client);
 
   assert.equal(calls.length, 2);
-  assert.equal(calls[0], null);
+  assert.equal(JSON.stringify(calls[0]), JSON.stringify({ id: "user-1" }));
   assert.equal(calls[1], null);
 });
 
-test("beforeSend preserves reportError allowlisted extra but removes account identity", () => {
+test("beforeSend preserves reportError allowlisted extra and only the internal user id", () => {
   const { initSentry, reportError } = loadSentry();
   const initCalls = [];
   initSentry({
@@ -591,7 +592,7 @@ test("beforeSend preserves reportError allowlisted extra but removes account ide
       clientDiagnostics: [{ event: "api.request", details: { stage: "connect", page: 1 } }],
       token: "secret-token",
     },
-    user: { id: "backend-user-1" },
+    user: { id: "backend-user-1", email: "private@example.test", username: "private-name", ip_address: "192.0.2.1" },
   });
 
   assert.equal(event.extra.attempts, 3);
@@ -600,12 +601,12 @@ test("beforeSend preserves reportError allowlisted extra but removes account ide
   assert.equal(
     JSON.stringify(event.extra.clientDiagnostics),
     JSON.stringify([
-      { event: "api.request", details: { stage: "connect", page: 1 } },
+      { summary: "应用记录：api.request", event: "api.request", details: { stage: "connect", page: 1 } },
     ]),
   );
   assert.equal(event.extra.token, undefined);
-  assert.equal(event.user, undefined);
-  assert.doesNotMatch(JSON.stringify(event), /backend-user-1|secret-token/);
+  assert.equal(JSON.stringify(event.user), JSON.stringify({ id: "backend-user-1" }));
+  assert.doesNotMatch(JSON.stringify(event), /secret-token|private@example|private-name|192\.0\.2\.1/);
 });
 
 test("wrapWithSentry wraps only when enabled", () => {
@@ -660,7 +661,7 @@ test("reportError forwards to captureException with extra context", () => {
 
   assert.equal(calls.length, 1);
   assert.notEqual(calls[0][0], err);
-  assert.equal(calls[0][0].message, "handled application error");
+  assert.equal(calls[0][0].message, "应用异常｜运行时错误（原始文本已隐藏）");
   // Property-level checks: the captureContext object is built inside the
   // vm-loaded module (a different realm), so deepStrictEqual would fail on the
   // mismatched prototype even though the structure is identical.
@@ -787,7 +788,8 @@ test("request metadata rejects malformed UUIDs and invalid durations", () => {
   reportError(new Error("failed"), { requestId: "not-a-uuid", durationMs: -1 }, {
     captureException: (_error, context) => captures.push(context),
   });
-  assert.equal(captures[0], undefined);
+  assert.equal(captures[0].extra, undefined);
+  assert.equal(captures[0].user.id, undefined);
 });
 
 test("reportError is a no-op by default when Sentry was not initialized", () => {
@@ -833,7 +835,7 @@ test("reportError captures a generic error copy without custom data or user cont
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0].name, "Error");
-  assert.equal(calls[0][0].message, "upload error failure");
+  assert.equal(calls[0][0].message, "upload 失败｜运行时错误（原始文本已隐藏）");
   assert.equal(calls[0][0].data, undefined);
   assert.doesNotMatch(
     JSON.stringify(calls),
@@ -849,7 +851,8 @@ test("reportError omits extra when no context is given", () => {
 
   reportError(new Error("x"), undefined, client);
 
-  assert.equal(calls[0][1], undefined);
+  assert.equal(calls[0][1].extra, undefined);
+  assert.equal(calls[0][1].user.id, undefined);
 });
 
 test("shouldReportHttpFailure reports network(0)/5xx, skips 4xx", () => {

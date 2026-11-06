@@ -75,7 +75,8 @@ function deferred() {
 function loadDateWindow() {
   return runModule('src/features/chat/chat-history-date-window.ts', (request) => {
     if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
-    throw new Error(`unexpected require: ${request}`);
+    if (request === '@/features/chat/group-info-cache') return require('./helpers/load-ts-module').loadTsModule('src/features/chat/group-info-cache.ts');
+      throw new Error(`unexpected require: ${request}`);
   });
 }
 
@@ -86,7 +87,8 @@ function loadDateWindow() {
 function loadPagination() {
   return runModule('src/services/api/pagination.ts', (request) => {
     if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
-    throw new Error(`unexpected require: ${request}`);
+    if (request === '@/features/chat/group-info-cache') return require('./helpers/load-ts-module').loadTsModule('src/features/chat/group-info-cache.ts');
+      throw new Error(`unexpected require: ${request}`);
   });
 }
 
@@ -197,7 +199,8 @@ function loadApi(options = {}) {
       };
     }
     if (request === '@/services/api/group-writes') return { markGroupWrite: (request) => request, groupsMutatedSince: () => false };
-    throw new Error(`unexpected require: ${request}`);
+    if (request === '@/features/chat/group-info-cache') return require('./helpers/load-ts-module').loadTsModule('src/features/chat/group-info-cache.ts');
+      throw new Error(`unexpected require: ${request}`);
   });
   return { api, calls, snapshots, snapshotRevisions, burnUpdates, state, reported, ingested, localReads, merged };
 }

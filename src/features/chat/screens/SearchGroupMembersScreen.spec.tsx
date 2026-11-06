@@ -112,6 +112,7 @@ beforeEach(() => {
     canViewMembers: true,
     selfMember: null,
     resolved: true,
+    verificationFailed: false,
     revalidate: jest.fn().mockResolvedValue(true),
   });
   jest
@@ -239,6 +240,7 @@ describe('a group seen before', () => {
       canViewMembers: false,
       selfMember: null,
       resolved: false,
+      verificationFailed: false,
       revalidate: jest.fn().mockResolvedValue(true),
     });
     writeGroupInfoCache(mockAuth.sessionEpoch, 'circle:circle-1', { members: cached as never });
@@ -258,6 +260,7 @@ describe('a group seen before', () => {
       canViewMembers: false,
       selfMember: null,
       resolved: false,
+      verificationFailed: false,
       revalidate: jest.fn().mockResolvedValue(false),
     });
     writeGroupInfoCache(mockAuth.sessionEpoch, 'circle:circle-1', { members: cached as never });
@@ -277,6 +280,7 @@ describe('a group seen before', () => {
       canViewMembers: false,
       selfMember: { userID: 'me', role: 'MEMBER' },
       resolved: true,
+      verificationFailed: false,
       revalidate: jest.fn().mockResolvedValue(false),
     });
     writeGroupInfoCache(mockAuth.sessionEpoch, 'circle:circle-1', { members: cached as never });
@@ -316,6 +320,7 @@ test('live circle revocation hides an already loaded roster before the replaceme
     canViewMembers: false,
     selfMember: { userID: 'me', role: 'MEMBER' },
     resolved: true,
+    verificationFailed: false,
     revalidate: jest.fn().mockResolvedValue(false),
   });
   view.rerender(<SearchGroupMembersScreen />);
