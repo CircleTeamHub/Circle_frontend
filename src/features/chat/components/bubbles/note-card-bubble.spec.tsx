@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { NoteCardBubble } from './note-card-bubble';
 import type { ChatMessage, NoteCardData } from '@/types';
 
@@ -83,7 +83,8 @@ test('the grid shows at most four images and no extra count overlay', () => {
   expect(screen.queryByText(/^\+\d+$/)).toBeNull();
 });
 
-test('only the sections the note actually has are offered, the status sits next to the title', () => {
+test('all four section buttons are always there; the ones the note lacks are disabled', () => {
+  const onSectionPress = jest.fn();
   render(
     <NoteCardBubble
       message={message(card({
@@ -95,12 +96,16 @@ test('only the sections the note actually has are offered, the status sits next 
         workStatus: 'CLOSED',
       }))}
       outgoing={false}
+      onSectionPress={onSectionPress}
     />,
   );
-  expect(screen.getByText('chat.noteCard.chips.note')).toBeTruthy();
-  expect(screen.queryByText('chat.noteCard.chips.video')).toBeNull();
-  expect(screen.queryByText('chat.noteCard.chips.display')).toBeNull();
-  expect(screen.queryByText('chat.noteCard.chips.location')).toBeNull();
+  for (const key of ['note', 'video', 'display', 'location']) {
+    expect(screen.getByText(`chat.noteCard.chips.${key}`)).toBeTruthy();
+  }
+  fireEvent.press(screen.getByText('chat.noteCard.chips.location'));
+  expect(onSectionPress).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByText('chat.noteCard.chips.note'));
+  expect(onSectionPress).toHaveBeenCalledWith(expect.objectContaining({ noteId: 'n1' }), 'text');
   expect(screen.getByText('chat.noteCard.workStatus.closed')).toBeTruthy();
 });
 

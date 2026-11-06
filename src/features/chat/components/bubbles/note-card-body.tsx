@@ -66,18 +66,20 @@ const s = StyleSheet.create({
   chip: {
     width: COLUMN_WIDTH,
     height: 28,
-    borderRadius: Radius.full,
+    // 方块按钮:圆角和上面的四宫格同一档,看起来是一套。
+    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: NOTE_CARD_ACTIVE_GREEN,
   },
+  chipEnabled: { backgroundColor: NOTE_CARD_ACTIVE_GREEN },
+  chipDisabled: { borderWidth: 1 },
   chipText: { ...Typography.small, fontWeight: '600' },
 });
 
 /**
  * 聊天里的笔记卡片主体:标题(右侧状态标签)→ 一行简介 → 图片/视频数 → 四宫格 → 可直接发送的分块。
  * 有四宫格就不放左上角封面(图都在格子里);旧卡片没有四宫格才保留小封面。
- * 只列出这条笔记真的有的分块,点一下以我的名义把那部分发到当前聊天。
+ * 四个分块按钮始终都在:有的那块是绿色实心,点一下以我的名义把那部分发到当前聊天;没有的是灰色描边。
  */
 export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPress }: NoteCardBodyProps) {
   const { colors } = useTheme();
@@ -94,7 +96,6 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
     showcase: (note.showcaseCount ?? note.imageCount) > 0,
     location: note.hasLocation ?? false,
   };
-  const sections = SECTIONS.filter((section) => available[section.id]);
 
   const countSegments = [
     note.imageCount > 0
@@ -181,23 +182,34 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
         </View>
       ) : null}
 
-      {sections.length > 0 ? (
-        <View style={s.chips}>
-          {sections.map((section) => (
+      {/* 四个按钮始终都在、和四宫格对齐;这条笔记没有的那块是描边灰钮、点不了,
+          每张卡片的排版因此一致。 */}
+      <View style={s.chips}>
+        {SECTIONS.map((section) => {
+          const enabled = available[section.id];
+          return (
             <Pressable
               key={section.id}
-              style={({ pressed }) => [s.chip, pressed && { opacity: 0.75 }]}
+              style={({ pressed }) => [
+                s.chip,
+                enabled
+                  ? s.chipEnabled
+                  : [s.chipDisabled, { borderColor: onCardMuted }],
+                enabled && pressed && { opacity: 0.75 },
+              ]}
+              disabled={!enabled}
               onLongPress={onLongPress}
               delayLongPress={350}
-              onPress={onSectionPress ? () => onSectionPress(note, section.id) : undefined}
+              onPress={enabled && onSectionPress ? () => onSectionPress(note, section.id) : undefined}
+              accessibilityState={{ disabled: !enabled }}
             >
-              <Text style={[s.chipText, { color: colors.white }]}>
+              <Text style={[s.chipText, { color: enabled ? colors.white : onCardMuted }]}>
                 {t(section.labelKey, { defaultValue: section.defaultLabel })}
               </Text>
             </Pressable>
-          ))}
-        </View>
-      ) : null}
+          );
+        })}
+      </View>
     </Pressable>
   );
 }
