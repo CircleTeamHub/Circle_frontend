@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { FloatingModal } from '@/components/ui/floating-modal';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { Radius, Spacing, Typography, useTheme, withAlpha } from '@/theme';
+
+const PLACEHOLDER_ALPHA = 0.35;
 
 /** 附言是一句话的补充说明,不当长文输入框用。 */
 export const SEND_CAPTION_MAX_LENGTH = 500;
@@ -112,7 +114,8 @@ export function SendConfirmDialog({
           value={caption}
           onChangeText={setCaption}
           placeholder={placeholder}
-          placeholderTextColor={colors.textSecondary}
+          // 「给朋友留言（可选）」只是提示，用淡灰；暗色主题的 textSecondary 是纯白，太抢眼。
+          placeholderTextColor={withAlpha(colors.text, PLACEHOLDER_ALPHA)}
           maxLength={SEND_CAPTION_MAX_LENGTH}
           multiline
           editable={!sending}
