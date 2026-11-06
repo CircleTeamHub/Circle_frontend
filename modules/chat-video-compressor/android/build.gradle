@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.chatvideocompressor'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.chatvideocompressor'
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // Keep aligned with expo-video 55.0.15; do not upgrade the playback stack.
+  implementation 'androidx.media3:media3-transformer:1.8.0'
+  implementation 'androidx.media3:media3-effect:1.8.0'
+  testImplementation 'junit:junit:4.13.2'
+}

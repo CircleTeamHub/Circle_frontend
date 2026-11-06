@@ -46,6 +46,7 @@ function harness({ kind = 'photo', rejectedAsset, delayFirstVideo = false, asset
         };
         case '@/features/chat/utils/image-thumbnail': return { uploadChatImageThumbnail: async () => null };
         case '@/features/chat/utils/chat-image-compress': return { prepareChatImageForUpload: async (input) => input };
+        case '@/features/chat/utils/chat-video-compress': return { prepareChatVideoForUpload: async (asset, filename, contentType) => ({ asset, filename, contentType }) };
         case '@/features/chat/utils/chat-video-poster': return { uploadChatVideoPoster: async () => null };
         case '@/components/app/top-notice-store': return { hideTopNotice() {}, showTopNotice() {} };
         case '@/chat-core/client': return client;

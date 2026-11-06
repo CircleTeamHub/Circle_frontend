@@ -24,7 +24,7 @@ test('photos are shrunk and re-encoded before they are uploaded', () => {
 test('videos carry a poster frame and reuse it when a failed send is retried', () => {
   const src = read('src/features/chat/chat-detail/hooks/use-media-send.ts');
   assert.match(src, /await uploadChatVideoPoster\(/);
-  assert.match(src, /uploaded = \{ key: presign\.key, thumbKey: poster\?\.key \}/);
+  assert.match(src, /uploaded = \{\s*key: presign\.key,\s*thumbKey: poster\?\.key,/);
   assert.match(src, /thumbKey: uploaded\.thumbKey/);
   const client = read('src/chat-core/client.ts');
   assert.match(client, /\.\.\.\(options\.thumbKey \? \{ thumbKey: options\.thumbKey \} : \{\}\)/);
