@@ -18,10 +18,13 @@ interface NoteCardBodyProps {
 }
 
 const NOTE_CARD_ACTIVE_GREEN = '#16A34A';
-const GRID_GAP = 4;
+const GRID_GAP = 6;
 const CARD_INNER_WIDTH = CHAT_CARD_STANDARD_WIDTH - Spacing.md * 2;
-/** 最多 4 张等宽方图;不足 4 张保持同样大小、靠左排。 */
-const TILE_SIZE = Math.floor((CARD_INNER_WIDTH - GRID_GAP * 3) / 4);
+/**
+ * 四宫格与下面的按钮共用同一套四列:最多 4 张等宽方图,按钮与图片列对齐,
+ * 四个按钮永远一行放得下(原来和图片数挤在一行,「位置」会被挤到第二行)。
+ */
+const COLUMN_WIDTH = Math.floor((CARD_INNER_WIDTH - GRID_GAP * 3) / 4);
 
 const SECTIONS: {
   id: NoteCardSection;
@@ -41,47 +44,38 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     paddingVertical: CHAT_CARD_PADDING_VERTICAL,
     paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
+    // 块与块之间留足空隙:标题区 / 四宫格 / 按钮三段分得开,不挤。
+    gap: Spacing.sm + Spacing.xs,
   },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
   cover: { width: 48, height: 48, borderRadius: Radius.sm },
   coverPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  headerText: { flex: 1, gap: 2 },
+  headerText: { flex: 1, gap: Spacing.xs },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   title: { ...Typography.body, fontWeight: '700', flexShrink: 1 },
   preview: { ...Typography.small, lineHeight: 18 },
+  meta: { ...Typography.tinyRegular, lineHeight: 16 },
   // 与笔记页的开工/打烊/下架标签同一套实心底(noteWorkStatusFill + onStatusFill)。
   statusPill: { borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
   statusText: { ...Typography.tiny, fontWeight: '700' },
   unlisted: { ...Typography.tiny, fontWeight: '600' },
   grid: { flexDirection: 'row', gap: GRID_GAP },
-  tile: { width: TILE_SIZE, height: TILE_SIZE, borderRadius: Radius.sm, overflow: 'hidden' },
+  tile: { width: COLUMN_WIDTH, height: COLUMN_WIDTH, borderRadius: Radius.sm, overflow: 'hidden' },
   tileImage: { width: '100%', height: '100%' },
-  moreOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  moreText: { ...Typography.body, fontWeight: '700' },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  counts: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexShrink: 0 },
-  count: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  countText: { ...Typography.tinyRegular },
-  chips: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: Spacing.xs },
+  chips: { flexDirection: 'row', gap: GRID_GAP },
   chip: {
-    minHeight: 24,
-    paddingHorizontal: Spacing.sm + 2,
+    width: COLUMN_WIDTH,
+    height: 28,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: NOTE_CARD_ACTIVE_GREEN,
   },
-  chipText: { ...Typography.tiny, fontWeight: '700' },
+  chipText: { ...Typography.small, fontWeight: '600' },
 });
 
 /**
- * 聊天里的笔记卡片主体:标题(右侧状态标签)→ 一行简介 → 四宫格 → 图片/视频数 + 可直接发送的分块。
+ * 聊天里的笔记卡片主体:标题(右侧状态标签)→ 一行简介 → 图片/视频数 → 四宫格 → 可直接发送的分块。
  * 有四宫格就不放左上角封面(图都在格子里);旧卡片没有四宫格才保留小封面。
  * 只列出这条笔记真的有的分块,点一下以我的名义把那部分发到当前聊天。
  */
@@ -92,8 +86,6 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
   const onCardMuted = outgoing ? 'rgba(255,255,255,0.78)' : colors.text;
   const previewUrls = note.previewUrls ?? [];
   const hasPreviews = previewUrls.length > 0;
-  const mediaTotal = note.imageCount + note.videoCount;
-  const hiddenMedia = hasPreviews ? Math.max(0, mediaTotal - previewUrls.length) : 0;
   const unlisted = note.publicationStatus === 'UNLISTED' || note.publicationStatus === 'DELETED';
 
   const available: Record<NoteCardSection, boolean> = {
@@ -112,9 +104,6 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
       ? t('chat.noteCard.videoCount', { defaultValue: '{{count}}个视频', count: note.videoCount })
       : null,
   ].filter((segment): segment is string => segment !== null);
-  const countsLabel = countSegments.length
-    ? t('chat.noteCard.includes', { defaultValue: '包含: {{segments}}', segments: countSegments.join('|') })
-    : undefined;
 
   const statusNode = unlisted ? (
     <Text style={[s.unlisted, { color: colors.warning }]} numberOfLines={1}>
@@ -168,12 +157,17 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
               {note.contentPreview}
             </Text>
           ) : null}
+          {countSegments.length > 0 ? (
+            <Text style={[s.meta, { color: onCardMuted }]} numberOfLines={1} testID="note-card-counts">
+              {countSegments.join(' · ')}
+            </Text>
+          ) : null}
         </View>
       </View>
 
       {hasPreviews ? (
         <View style={s.grid} testID="note-card-previews">
-          {previewUrls.map((uri, index) => (
+          {previewUrls.map((uri) => (
             <View key={uri} style={[s.tile, { backgroundColor: 'rgba(0,0,0,0.12)' }]}>
               <Image
                 source={{ uri }}
@@ -182,49 +176,26 @@ export function NoteCardBody({ note, outgoing, onPress, onSectionPress, onLongPr
                 recyclingKey={uri}
                 accessibilityIgnoresInvertColors
               />
-              {hiddenMedia > 0 && index === previewUrls.length - 1 ? (
-                <View style={s.moreOverlay} testID="note-card-more">
-                  <Text style={[s.moreText, { color: colors.white }]}>+{hiddenMedia}</Text>
-                </View>
-              ) : null}
             </View>
           ))}
         </View>
       ) : null}
 
-      {countsLabel || sections.length > 0 ? (
-        <View style={s.footer}>
-          {countsLabel ? (
-            <View style={s.counts} accessible accessibilityLabel={countsLabel} testID="note-card-counts">
-              {note.imageCount > 0 ? (
-                <View style={s.count}>
-                  <Ionicons name="image-outline" size={13} color={onCardMuted} />
-                  <Text style={[s.countText, { color: onCardMuted }]}>{note.imageCount}</Text>
-                </View>
-              ) : null}
-              {note.videoCount > 0 ? (
-                <View style={s.count}>
-                  <Ionicons name="videocam-outline" size={14} color={onCardMuted} />
-                  <Text style={[s.countText, { color: onCardMuted }]}>{note.videoCount}</Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-          <View style={s.chips}>
-            {sections.map((section) => (
-              <Pressable
-                key={section.id}
-                style={s.chip}
-                onLongPress={onLongPress}
-                delayLongPress={350}
-                onPress={onSectionPress ? () => onSectionPress(note, section.id) : undefined}
-              >
-                <Text style={[s.chipText, { color: colors.white }]}>
-                  {t(section.labelKey, { defaultValue: section.defaultLabel })}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+      {sections.length > 0 ? (
+        <View style={s.chips}>
+          {sections.map((section) => (
+            <Pressable
+              key={section.id}
+              style={({ pressed }) => [s.chip, pressed && { opacity: 0.75 }]}
+              onLongPress={onLongPress}
+              delayLongPress={350}
+              onPress={onSectionPress ? () => onSectionPress(note, section.id) : undefined}
+            >
+              <Text style={[s.chipText, { color: colors.white }]}>
+                {t(section.labelKey, { defaultValue: section.defaultLabel })}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       ) : null}
     </Pressable>

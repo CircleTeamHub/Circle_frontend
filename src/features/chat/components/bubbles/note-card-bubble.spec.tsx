@@ -63,14 +63,12 @@ test('with the four-image grid the top-left cover is dropped, the rest of the ca
   expect(screen.getAllByTestId(/^img:https:\/\/cdn\/[a-d]\.jpg$/)).toHaveLength(4);
   expect(screen.getByText('北京大妞')).toBeTruthy();
   expect(screen.getByText('沪 真实学生假期兼职')).toBeTruthy();
-  // 图片/视频数改成图标 + 数字,读屏仍念完整的「包含: …」。
-  expect(screen.getByTestId('note-card-counts').props.accessibilityLabel).toBe('chat.noteCard.includes');
-  expect(screen.getByText('5')).toBeTruthy();
-  expect(screen.getByText('1')).toBeTruthy();
+  // 图片/视频数是标题区里单独的一行小字,不再和按钮挤在一行。
+  expect(screen.getByTestId('note-card-counts').props.children).toBe('chat.noteCard.imageCount · chat.noteCard.videoCount');
   expect(screen.getByText('chat.noteCard.chips.video')).toBeTruthy();
 });
 
-test('the last tile shows how many more images and videos the note has', () => {
+test('the grid shows at most four images and no extra count overlay', () => {
   render(
     <NoteCardBubble
       message={message(card({
@@ -81,7 +79,8 @@ test('the last tile shows how many more images and videos the note has', () => {
       outgoing={false}
     />,
   );
-  expect(screen.getByText('+5')).toBeTruthy();
+  expect(screen.getAllByTestId(/^img:/)).toHaveLength(4);
+  expect(screen.queryByText(/^\+\d+$/)).toBeNull();
 });
 
 test('only the sections the note actually has are offered, the status sits next to the title', () => {
