@@ -18,15 +18,23 @@ import * as noteSections from '@/features/notes/utils/note-sections';
 import { recordMetric } from '@/observability/metrics';
 jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 
-test('note preview keeps live upload progress visible inside its native modal', async () => {
-  const transfer = startUploadProgress('video/mp4');
-  transfer.update(50, 100);
-  const rendered = render(<EditNoteScreen />);
+// 上传进度画在每张图自己的格子上(圆圈),不再有右上角的全局上传卡片;一张传完它的圆圈就消失。
+test('each uploading image shows its own progress ring and no global upload card', async () => {
+  render(<EditNoteScreen />);
+  const upload = await beginDeferredImageUpload();
+  const options = mockUploadFile.mock.calls[0][5] as { progressKey?: string };
+  expect(options?.progressKey).toEqual(expect.any(String));
+  let transfer!: ReturnType<typeof startUploadProgress>;
+  act(() => {
+    transfer = startUploadProgress('image/jpeg', { progressKey: options.progressKey });
+    transfer.update(30, 100);
+  });
   try {
-    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.composer.preview' }));
-    await waitFor(() => expect(screen.getByRole('progressbar').props.accessibilityValue.now).toBe(50));
-    expect(screen.UNSAFE_getAllByType(Modal).some(modal => modal.props.visible && within(modal).queryAllByRole('progressbar').length > 0)).toBe(true);
-  } finally { act(() => { transfer.finish(); resetUploadProgress(); }); rendered.unmount(); }
+    expect(within(screen.getByTestId('note-media-preview-tile')).getByText('30%')).toBeTruthy();
+    expect(screen.queryByTestId('upload-progress-host')).toBeNull();
+    await act(async () => { transfer.finish(); upload.resolve(); });
+    await waitFor(() => expect(screen.queryByTestId('note-media-upload-ring')).toBeNull());
+  } finally { act(() => resetUploadProgress()); }
 });
 
 let mockSaveClock = 0;

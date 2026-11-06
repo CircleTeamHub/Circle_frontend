@@ -63,6 +63,7 @@ import { ApiError } from '@/services/api/client';
 import { downloadMediaToCache, saveMediaToLibrary } from '@/utils/save-image';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { useChatStore } from '@/chat-core/store';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { recordMetric } from '@/observability/metrics';
@@ -745,9 +746,27 @@ function NoteDetailContent() {
               onPress={() => {
                 if (group.target === 'circle') {
                   router.push(getCircleDetailHref(toCircleScope(scope), group.id));
-                } else {
-                  router.push(getGroupEntryHref(scope, { groupId: group.conversationID ?? group.id, searchedMsgID: group.clientMsgID }));
+                  return;
                 }
+                const groupId = group.conversationID ?? group.id;
+                // 本地会话列表里有这个群 = 已经是成员:直接进群聊。经群入口页的话要先查一次
+                // 成员资格,中间会闪一下群资料与申请页。不在列表里(没进过、已退)才走入口页。
+                const joined = useChatStore.getState().conversations.find(
+                  (conversation) => conversation.id === groupId && conversation.type === 'GROUP',
+                );
+                if (joined) {
+                  router.push(getChatDetailHref(
+                    scope,
+                    joined.circleId ?? joined.id,
+                    group.name,
+                    group.faceURL ?? undefined,
+                    joined.id,
+                    group.clientMsgID,
+                    'group',
+                  ));
+                  return;
+                }
+                router.push(getGroupEntryHref(scope, { groupId, searchedMsgID: group.clientMsgID }));
               }}
             >
               <View style={s.floatingAvatar}>

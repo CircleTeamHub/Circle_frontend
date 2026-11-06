@@ -167,7 +167,8 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
 import { recordMetric } from '@/observability/metrics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
-import { UploadProgressHost } from '@/components/app/UploadProgressHost';
+import { NoteMediaUploadRing } from '@/features/notes/components/NoteMediaUploadRing';
+import { prepareChatImageForUpload } from '@/features/chat/utils/chat-image-compress';
 import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
 
 LogBox.ignoreLogs([
@@ -566,6 +567,11 @@ export default function EditNoteScreen() {
   // 离开时要重发的那个返回动作:等编辑器真的卸载、守卫已放行(这一次提交之后)再发,
   // 否则重发赶在重新渲染之前会被守卫拿旧值再拦一次。
   const pendingExitActionRef = useRef<NavigationAction | null>(null);
+  // 一批里先传完的那几张:不必等整批收尾,这张的圆圈进度立刻消失。
+  const [uploadedClientIds, setUploadedClientIds] = useState<ReadonlySet<string>>(() => new Set());
+  const markClientUploaded = useCallback((clientId: string) => {
+    setUploadedClientIds((current) => new Set(current).add(clientId));
+  }, []);
   const [exitRequest, setExitRequest] = useState(0);
   const [navigating, setNavigating] = useState(false);
   const [mediaItems, setMediaItems] = useState<EditorNoteMediaDraft[]>([]);
@@ -1939,27 +1945,41 @@ export default function EditNoteScreen() {
           const contentType =
             resolveUploadContentType({ mimeType: asset.mimeType, fileName: filename }) ??
             fallbackType;
+          // 图片和聊天、朋友圈一样先压缩(长边 2048、JPEG 0.82,去掉 EXIF 定位)再传:相册原图
+          // 动辄几 MB,远距离链路上要传很久。视频、GIF 原样传;压缩失败就传原图。
+          const upload = isVideo
+            ? { uri: asset.uri, contentType, filename, width: asset.width ?? undefined, height: asset.height ?? undefined }
+            : await prepareChatImageForUpload({
+                uri: asset.uri,
+                width: asset.width ?? undefined,
+                height: asset.height ?? undefined,
+                contentType,
+                filename,
+              });
           const presign = await requestUploadPresign({
-            filename: sanitizeUploadFilename(filename),
-            contentType,
+            filename: sanitizeUploadFilename(upload.filename),
+            contentType: upload.contentType,
             folder: 'notes',
-            fileUri: asset.uri,
+            fileUri: upload.uri,
           });
           await uploadLocalFileToPresignedUrl(
             presign.uploadUrl,
-            contentType,
-            asset.uri,
+            upload.contentType,
+            upload.uri,
             presign.requiredHeaders,
             isVideo ? VIDEO_UPLOAD_TIMEOUT_MS : undefined,
+            // 进度画在这张图自己的格子上(圆圈),不进全局的上传卡片。
+            { progressKey: clientId },
           );
+          markClientUploaded(clientId);
           // notes/ 是私有目录：直连地址一律 403，读取由服务端按 objectKey 现签。
           // 所以这里只上送 key，落库地址交给服务端派生 —— 不传 url，也不造假地址。
           return {
             clientId,
             type: isVideo ? 'VIDEO' : 'IMAGE',
             objectKey: presign.key,
-            width: asset.width ?? undefined,
-            height: asset.height ?? undefined,
+            width: upload.width,
+            height: upload.height,
             mimeType: presign.requiredHeaders['Content-Type'],
             size: Number(presign.requiredHeaders['Content-Length']),
             durationMs:
@@ -2033,7 +2053,7 @@ export default function EditNoteScreen() {
         }
       }
     },
-    [isRouteDataReady, t],
+    [isRouteDataReady, markClientUploaded, t],
   );
 
   const handleRemoveSectionMedia = useCallback((target: SectionMediaTarget, clientId: string) => {
@@ -3273,10 +3293,13 @@ export default function EditNoteScreen() {
                   />
                 </View>
               )}
-              {videoUri ? (
+              {videoUri && item.uploadStatus !== 'PENDING' ? (
                 <View style={s.videoPlayOverlay} pointerEvents="none">
                   <Ionicons name="play-circle" size={48} color="#FFFFFF" />
                 </View>
+              ) : null}
+              {item.uploadStatus === 'PENDING' && !uploadedClientIds.has(item.clientId) ? (
+                <NoteMediaUploadRing progressKey={item.clientId} />
               ) : null}
               </Pressable>
               <View style={[s.mediaBadge, d.mediaBadge]}>
@@ -3315,6 +3338,7 @@ export default function EditNoteScreen() {
     draftRouteKey,
     handleRemoveSectionMedia,
     isRouteDataReady,
+    uploadedClientIds,
     uploadingSection,
     t,
   ]);
@@ -4228,7 +4252,6 @@ export default function EditNoteScreen() {
                 <ActivityIndicator color={colors.primary} />
               </View>
             )}
-            <UploadProgressHost />
           </View>
         </Modal>
       ) : null}
@@ -4413,7 +4436,6 @@ export default function EditNoteScreen() {
             </View>
           </View>
         </KeyboardAvoidingContainer>
-        <UploadProgressHost />
       </Modal>
       <BottomSheetModal
         visible={groupSheetVisible}

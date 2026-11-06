@@ -15,6 +15,7 @@ let mockAuth = { user: { id: 'me' }, sessionEpoch: 1 };
 const mockRouter = { push: jest.fn(), back: jest.fn(), navigate: jest.fn() };
 const mockTranslate = (key: string) => key;
 let mockBodyProps: any;
+let mockConversations: { id: string; type: string; circleId: string | null }[] = [];
 let mockViewport: NoteImageViewport | null = null;
 let mockClock = 0;
 jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
@@ -50,6 +51,9 @@ jest.mock('@/features/notes/components/NoteDocumentBody', () => ({ NoteDocumentB
 } }));
 jest.mock('@/features/notes/components/ShareNoteSheet', () => ({ ShareNoteSheet: () => null }));
 jest.mock('@/components/ui/image-viewer', () => ({ ImageViewer: () => null }));
+jest.mock('@/chat-core/store', () => ({
+  useChatStore: { getState: () => ({ conversations: mockConversations }) },
+}));
 jest.mock('@/theme', () => ({
   Radius: { full: 50 }, Spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 }, Typography: {},
   useTheme: () => ({ colors: { background: '#fff', surface: '#fff', surfaceBorder: '#ddd', text: '#111', primary: '#6200ee', white: '#fff' } }),
@@ -62,6 +66,7 @@ const note = {
 const source = { conversationID: 'conversation', clientMsgID: 'message', conversationType: 'private', sender: { id: 'peer', name: 'Peer' } };
 
 beforeEach(() => {
+  mockConversations = [];
   jest.clearAllMocks();
   mockClock = 0;
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -176,6 +181,21 @@ const privateCards = {
   group: { id: 'circle', name: 'Saved group', faceURL: 'https://cdn/group.jpg' },
 };
 const savedCopy = { ...note, id: 'saved-copy', ownerId: 'me', canEdit: true, collectedFrom: privateCards, cardPreview: null };
+
+test('the group avatar opens a group the viewer already belongs to straight into the chat', async () => {
+  const owned = { ...note, ownerId: 'me', canEdit: true,
+    sections: { contacts: { items: [privateCards.sender] }, groups: { items: [{ ...privateCards.group, conversationID: 'group-chat' }] } } };
+  jest.mocked(fetchNoteDetail).mockResolvedValue(owned as any);
+  mockConversations = [{ id: 'group-chat', type: 'GROUP', circleId: null }];
+  render(<NoteDetailScreen />);
+  fireEvent.press(await screen.findByTestId('note-group-chat'));
+  // 已是成员不经群入口页:那一页会先查成员资格,中间闪一下群资料与申请。
+  expect(mockRouter.push).toHaveBeenCalledWith(expect.objectContaining({
+    pathname: '/(tabs)/messages/chat-detail',
+    params: expect.objectContaining({ conversationID: 'group-chat', sourceID: 'group-chat', conversationType: 'group' }),
+  }));
+  expect(mockRouter.push).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(tabs)/messages/group-entry' }));
+});
 
 test.each(['created', 'collected'])('an owned %s note shows its group card and circular avatar actions linked to the same chats', async (kind) => {
   const owned = kind === 'collected' ? { ...savedCopy, id: 'note' } : { ...note, ownerId: 'me', canEdit: true,

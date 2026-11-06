@@ -182,6 +182,8 @@ it("a group member enters chat in the original tab after authoritative membershi
       expect.objectContaining({ pathname: "/(tabs)/profile/chat-detail" }),
     ),
   );
+  // 直接进群聊时不先画群资料与申请页(那一帧就是「闪一下」),加载圈一直留到跳走。
+  expect(screen.queryByText("Group")).toBeNull();
 });
 it("a submission failure refreshes the status instead of retrying the mutation", async () => {
   render(<GroupEntryScreen />);
