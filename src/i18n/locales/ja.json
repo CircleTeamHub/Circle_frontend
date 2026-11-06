@@ -969,7 +969,7 @@
         "offShelf": "掲載停止"
       },
       "sectionSendFailed": "送信できませんでした。もう一度お試しください",
-      "sectionSending": "送信中…"
+      "noLocation": "このノートには送信できる位置情報がありません"
     },
     "voice": {
       "cancelTip": "指を離すと送信をキャンセル",

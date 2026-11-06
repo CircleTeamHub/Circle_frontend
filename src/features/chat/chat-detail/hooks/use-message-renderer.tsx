@@ -6,7 +6,7 @@ import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetr
 import { messageRowKey } from '@/chat-core/local-message-id';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
 import { memo, type ReactElement, useCallback, useMemo } from 'react';
-import { type ChatMessage } from '@/types';
+import { type ChatMessage, type NoteCardData } from '@/types';
 import { type GestureResponderEvent, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MemberName } from '@/components/ui/member-name';
@@ -114,7 +114,7 @@ export interface MessageRendererParams {
   handleStartCall: () => void;
   handleRetryMessage: (message: ChatMessage) => void;
   /** 卡片下方的「视频 / 展示 / 位置」:以我的名义把这块内容发到当前聊天。 */
-  handleSendNoteSection: (noteId: string, section: NoteCardSendSection) => void;
+  handleSendNoteSection: (note: NoteCardData, section: NoteCardSendSection) => void;
 }
 
 /**
@@ -378,7 +378,7 @@ export function useMessageRenderer({
             onSectionPress={(note, section) => {
               // 「笔记」仍然打开详情;其余三块直接以我的名义发到当前聊天。
               if (section !== 'text') {
-                handleSendNoteSection(note.noteId, section);
+                handleSendNoteSection(note, section);
                 return;
               }
               chatRouter.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', section, {

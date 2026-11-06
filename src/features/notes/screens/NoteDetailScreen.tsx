@@ -722,7 +722,7 @@ function NoteDetailContent() {
           {contact ? (
             <Pressable
               testID="note-contact-chat"
-              style={[s.floatingBtn, d.floatingBtn]}
+              style={s.floatingAvatarBtn}
               accessibilityRole="button"
               accessibilityLabel={t('notes.list.openSenderChat', { name: contact.name })}
               onPress={() => {
@@ -733,13 +733,13 @@ function NoteDetailContent() {
                 router.push(getChatDetailHref(scope, contact.id, contact.name, contact.faceURL ?? undefined, contact.conversationID));
               }}
             >
-              <Avatar size={36} shape="circle" name={contact.name} uri={contact.faceURL ?? undefined} />
+              <Avatar size={FLOATING_AVATAR_SIZE} shape="circle" name={contact.name} uri={contact.faceURL ?? undefined} />
             </Pressable>
           ) : null}
           {group ? (
             <Pressable
               testID="note-group-chat"
-              style={[s.floatingBtn, d.floatingBtn]}
+              style={s.floatingAvatarBtn}
               accessibilityRole="button"
               accessibilityLabel={t('notes.list.openGroupChat', { name: group.name })}
               onPress={() => {
@@ -751,7 +751,7 @@ function NoteDetailContent() {
               }}
             >
               <View style={s.floatingAvatar}>
-                <GroupChatAvatar size={36} name={group.name} uri={group.faceURL} />
+                <GroupChatAvatar size={FLOATING_AVATAR_SIZE} name={group.name} uri={group.faceURL} />
               </View>
             </Pressable>
           ) : null}
@@ -842,6 +842,10 @@ function NoteDetailContent() {
   );
 }
 
+/** 右下角头像钮:48 的圆里头像铺满,只剩 1.5 的细白边。 */
+const FLOATING_AVATAR_RING = 1.5;
+const FLOATING_AVATAR_SIZE = 48 - FLOATING_AVATAR_RING * 2;
+
 const s = StyleSheet.create({
   container: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
@@ -895,9 +899,24 @@ const s = StyleSheet.create({
     elevation: 4,
   },
   floatingBtnBusy: { opacity: 0.6 },
+  floatingAvatarBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.full,
+    // 头像铺满,只留一圈细白边把它和底下的图片分开(不再垫一圈粗底色)。
+    borderWidth: FLOATING_AVATAR_RING,
+    borderColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
   floatingAvatar: {
-    width: 36,
-    height: 36,
+    width: FLOATING_AVATAR_SIZE,
+    height: FLOATING_AVATAR_SIZE,
     borderRadius: Radius.full,
     overflow: 'hidden',
     alignItems: 'center',

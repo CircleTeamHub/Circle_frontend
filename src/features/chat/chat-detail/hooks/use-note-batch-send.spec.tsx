@@ -1,6 +1,8 @@
 import { startChatSend } from '@/chat-core/send-handle';
 import { sendCardMessage, sendLocationMessage } from '@/chat-core/client';
-import { fetchNoteDetail, importNoteChatMedia } from '@/services/api/notes';
+import { fetchNoteDetail, getCachedNoteDetail, importNoteChatMedia } from '@/services/api/notes';
+import { showTopNotice } from '@/components/app/top-notice-store';
+import type { NoteCardData } from '@/types';
 import { act, renderHook } from '@testing-library/react-native';
 import type { NoteSummary } from '@/features/notes/types';
 import { useAppDialogStore } from '@/components/app/app-dialog-store';
@@ -8,8 +10,10 @@ import { useNoteBatchSend } from './use-note-batch-send';
 
 jest.mock('@/services/api/notes', () => ({
   fetchNoteDetail: jest.fn(),
+  getCachedNoteDetail: jest.fn(() => null),
   importNoteChatMedia: jest.fn(),
 }));
+jest.mock('@/components/app/top-notice-store', () => ({ showTopNotice: jest.fn() }));
 jest.mock('@/chat-core/client', () => ({
   sendCardMessage: jest.fn(),
   sendImageMessage: jest.fn(),
@@ -109,59 +113,89 @@ test('nothing is sent once the chat has gone away before the batch starts', asyn
 });
 
 describe('handleSendNoteSection', () => {
-  const detail = { ...note, mediaCount: 2, hasLocation: true };
+  const card = { noteId: 'note-a', title: 'n', imageCount: 2, videoCount: 1 } as NoteCardData;
+  const located = {
+    ...note,
+    sections: { location: { latitude: 31.2, longitude: 121.4, title: '静安', address: '上海' } },
+  };
 
   test.each([
     ['media', ['media']],
     ['showcase', ['showcase']],
-  ] as const)('the %s chip copies only that section and sends no card', async (section, expected) => {
-    jest.mocked(fetchNoteDetail).mockResolvedValueOnce(detail as never);
+  ] as const)('the %s chip copies only that section straight away, without loading the note first', async (section, expected) => {
     jest.mocked(importNoteChatMedia).mockResolvedValueOnce({ items: [] } as never);
     const hook = create('conversation-a');
-    await act(async () => { await hook.result.current.handleSendNoteSection('note-a', section); });
-    expect(fetchNoteDetail).toHaveBeenCalledWith('note-a');
+    await act(async () => { await hook.result.current.handleSendNoteSection(card, section); });
+    expect(fetchNoteDetail).not.toHaveBeenCalled();
     expect(importNoteChatMedia).toHaveBeenCalledWith('note-a', expected);
     expect(sendCardMessage).not.toHaveBeenCalled();
+    // 消息进队就出现在会话里:不再弹「正在发送…」。
+    expect(showTopNotice).not.toHaveBeenCalled();
   });
 
   test('the location chip sends the note location as my message', async () => {
-    jest.mocked(fetchNoteDetail).mockResolvedValueOnce({
-      ...detail,
-      sections: { location: { latitude: 31.2, longitude: 121.4, title: '静安', address: '上海' } },
-    } as never);
+    jest.mocked(fetchNoteDetail).mockResolvedValueOnce(located as never);
     const hook = create('conversation-a');
-    await act(async () => { await hook.result.current.handleSendNoteSection('note-a', 'location'); });
+    await act(async () => { await hook.result.current.handleSendNoteSection(card, 'location'); });
     expect(importNoteChatMedia).not.toHaveBeenCalled();
-    expect(sendLocationMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'conversation-a' }));
+    expect(sendLocationMessage).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'conversation-a', latitude: 31.2, longitude: 121.4,
+    }));
     expect(sendCardMessage).not.toHaveBeenCalled();
   });
 
+  test('the location chip uses the cached note when there is one', async () => {
+    jest.mocked(getCachedNoteDetail).mockReturnValueOnce({ value: located, at: 1 } as never);
+    const hook = create('conversation-a');
+    await act(async () => { await hook.result.current.handleSendNoteSection(card, 'location'); });
+    expect(fetchNoteDetail).not.toHaveBeenCalled();
+    expect(sendLocationMessage).toHaveBeenCalledTimes(1);
+  });
+
+  test('a note whose location is an empty 0,0 placeholder sends nothing and says so', async () => {
+    jest.mocked(fetchNoteDetail).mockResolvedValueOnce({
+      ...note,
+      sections: { location: { latitude: 0, longitude: 0 } },
+    } as never);
+    const setSendError = jest.fn();
+    const hook = renderHook(() => useNoteBatchSend({
+      t: ((key: string) => key) as never,
+      authUser: null,
+      setSendError,
+      mountedRef: { current: true },
+      sourceID: 'source-a',
+      conversationID: 'conversation-a',
+      isPreviewMode: false,
+    }));
+    await act(async () => { await hook.result.current.handleSendNoteSection(card, 'location'); });
+    expect(sendLocationMessage).not.toHaveBeenCalled();
+    expect(setSendError).toHaveBeenCalledWith('chat.noteCard.noLocation');
+  });
+
   test('tapping the same chip again while it is still sending sends it only once', async () => {
-    let resolveDetail!: (value: unknown) => void;
-    const pendingDetail = new Promise((resolve) => { resolveDetail = resolve; });
-    jest.mocked(fetchNoteDetail).mockImplementationOnce(() => pendingDetail as never);
-    jest.mocked(importNoteChatMedia).mockResolvedValue({ items: [] } as never);
+    let resolveImport!: (value: unknown) => void;
+    const pendingImport = new Promise((resolve) => { resolveImport = resolve; });
+    jest.mocked(importNoteChatMedia).mockImplementationOnce(() => pendingImport as never);
     const hook = create('conversation-a');
     let first!: Promise<void>;
     let second!: Promise<void>;
     act(() => {
-      first = hook.result.current.handleSendNoteSection('note-a', 'media');
-      second = hook.result.current.handleSendNoteSection('note-a', 'media');
+      first = hook.result.current.handleSendNoteSection(card, 'media');
+      second = hook.result.current.handleSendNoteSection(card, 'media');
     });
     await act(async () => {
-      resolveDetail(detail);
+      resolveImport({ items: [] });
       await Promise.all([first, second]);
     });
-    expect(fetchNoteDetail).toHaveBeenCalledTimes(1);
     expect(importNoteChatMedia).toHaveBeenCalledTimes(1);
 
     // 发完之后再点是一次新的发送。
-    jest.mocked(fetchNoteDetail).mockResolvedValueOnce(detail as never);
-    await act(async () => { await hook.result.current.handleSendNoteSection('note-a', 'media'); });
-    expect(fetchNoteDetail).toHaveBeenCalledTimes(2);
+    jest.mocked(importNoteChatMedia).mockResolvedValueOnce({ items: [] } as never);
+    await act(async () => { await hook.result.current.handleSendNoteSection(card, 'media'); });
+    expect(importNoteChatMedia).toHaveBeenCalledTimes(2);
   });
 
-  test('a note that cannot be loaded reports a send error and sends nothing', async () => {
+  test('a note that cannot be loaded for its location reports a send error and sends nothing', async () => {
     jest.mocked(fetchNoteDetail).mockRejectedValueOnce(new Error('gone'));
     const setSendError = jest.fn();
     const hook = renderHook(() => useNoteBatchSend({
@@ -173,7 +207,7 @@ describe('handleSendNoteSection', () => {
       conversationID: 'conversation-a',
       isPreviewMode: false,
     }));
-    await act(async () => { await hook.result.current.handleSendNoteSection('note-a', 'media'); });
+    await act(async () => { await hook.result.current.handleSendNoteSection(card, 'location'); });
     expect(setSendError).toHaveBeenCalled();
     expect(sendCardMessage).not.toHaveBeenCalled();
     expect(sendLocationMessage).not.toHaveBeenCalled();

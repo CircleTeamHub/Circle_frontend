@@ -63,8 +63,46 @@ test('with the four-image grid the top-left cover is dropped, the rest of the ca
   expect(screen.getAllByTestId(/^img:https:\/\/cdn\/[a-d]\.jpg$/)).toHaveLength(4);
   expect(screen.getByText('北京大妞')).toBeTruthy();
   expect(screen.getByText('沪 真实学生假期兼职')).toBeTruthy();
-  expect(screen.getByText('chat.noteCard.includes')).toBeTruthy();
+  // 图片/视频数改成图标 + 数字,读屏仍念完整的「包含: …」。
+  expect(screen.getByTestId('note-card-counts').props.accessibilityLabel).toBe('chat.noteCard.includes');
+  expect(screen.getByText('5')).toBeTruthy();
+  expect(screen.getByText('1')).toBeTruthy();
   expect(screen.getByText('chat.noteCard.chips.video')).toBeTruthy();
+});
+
+test('the last tile shows how many more images and videos the note has', () => {
+  render(
+    <NoteCardBubble
+      message={message(card({
+        imageCount: 6,
+        videoCount: 3,
+        previewUrls: ['https://cdn/a.jpg', 'https://cdn/b.jpg', 'https://cdn/c.jpg', 'https://cdn/d.jpg'],
+      }))}
+      outgoing={false}
+    />,
+  );
+  expect(screen.getByText('+5')).toBeTruthy();
+});
+
+test('only the sections the note actually has are offered, the status sits next to the title', () => {
+  render(
+    <NoteCardBubble
+      message={message(card({
+        contentPreview: '简介',
+        videoCount: 0,
+        imageCount: 0,
+        showcaseCount: 0,
+        hasLocation: false,
+        workStatus: 'CLOSED',
+      }))}
+      outgoing={false}
+    />,
+  );
+  expect(screen.getByText('chat.noteCard.chips.note')).toBeTruthy();
+  expect(screen.queryByText('chat.noteCard.chips.video')).toBeNull();
+  expect(screen.queryByText('chat.noteCard.chips.display')).toBeNull();
+  expect(screen.queryByText('chat.noteCard.chips.location')).toBeNull();
+  expect(screen.getByText('chat.noteCard.workStatus.closed')).toBeTruthy();
 });
 
 test('older cards without the grid keep their cover image', () => {

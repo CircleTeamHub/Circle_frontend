@@ -143,7 +143,7 @@ test('the video, showcase and location chips send that part of the note instead 
   render(<Messages messages={[message]} />);
   for (const section of ['media', 'showcase', 'location'] as const) {
     fireEvent.press(screen.getByTestId(`send-note-${section}`));
-    expect(params.handleSendNoteSection).toHaveBeenLastCalledWith('note-1', section);
+    expect(params.handleSendNoteSection).toHaveBeenLastCalledWith(expect.objectContaining({ noteId: 'note-1' }), section);
   }
   expect(params.handleSendNoteSection).toHaveBeenCalledTimes(3);
   expect(getNoteDetailHref).not.toHaveBeenCalled();

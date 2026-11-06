@@ -189,6 +189,11 @@ test.each(['created', 'collected'])('an owned %s note shows its group card and c
   expect(screen.UNSAFE_getByType(Avatar).props.uri).toBe(privateCards.sender.faceURL);
   expect(screen.UNSAFE_getByType(GroupChatAvatar).props.uri).toBe(privateCards.group.faceURL);
   expect(person).toHaveStyle({ width: 48, height: 48, borderRadius: 50 });
+  // 头像铺满圆钮,只留一圈细白边:不再垫一圈粗的底色。
+  expect(StyleSheet.flatten(person.props.style).backgroundColor).toBeUndefined();
+  expect(StyleSheet.flatten(person.props.style).borderWidth).toBe(1.5);
+  expect(screen.UNSAFE_getByType(Avatar).props.size).toBe(45);
+  expect(screen.UNSAFE_getByType(GroupChatAvatar).props.size).toBe(45);
   expect(StyleSheet.flatten(group.findByType(View).props.style)).toMatchObject({ borderRadius: 50, overflow: 'hidden' });
   fireEvent.press(person);
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/chat-detail', params: {

@@ -969,7 +969,7 @@
         "offShelf": "판매 중지"
       },
       "sectionSendFailed": "보내지 못했습니다. 다시 시도해 주세요",
-      "sectionSending": "보내는 중…"
+      "noLocation": "이 노트에는 보낼 수 있는 위치가 없습니다"
     },
     "voice": {
       "cancelTip": "손을 떼면 전송 취소",

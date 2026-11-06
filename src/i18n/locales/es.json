@@ -973,7 +973,7 @@
         "offShelf": "Retirado"
       },
       "sectionSendFailed": "No se pudo enviar. Inténtalo de nuevo.",
-      "sectionSending": "Enviando…"
+      "noLocation": "Esta nota no tiene una ubicación para enviar"
     },
     "voice": {
       "cancelTip": "Suelta para cancelar",

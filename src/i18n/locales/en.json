@@ -1046,7 +1046,7 @@
         "offShelf": "Off shelf"
       },
       "sectionSendFailed": "Couldn't send. Please try again.",
-      "sectionSending": "Sending…"
+      "noLocation": "This note has no location to send"
     },
     "voice": {
       "cancelTip": "Release to cancel",
