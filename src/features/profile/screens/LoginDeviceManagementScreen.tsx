@@ -228,7 +228,7 @@ export default function LoginDeviceManagementScreen() {
     try {
       await revokeAuthSession(session.id);
       if (session.isCurrent) {
-        await clearLocalSession();
+        await clearLocalSession(undefined, { reason: 'user-session-revoke', userInitiated: true });
         router.replace("/(auth)/login");
         return;
       }

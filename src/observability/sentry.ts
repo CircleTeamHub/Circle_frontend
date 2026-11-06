@@ -11,6 +11,7 @@ import type {
   Event,
   EventHint,
   ErrorEvent,
+  Integration,
   Metric,
   SpanJSON,
   TransactionEvent,
@@ -149,7 +150,24 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       // 对 IM 产品，「消息发送慢」到底慢在哪一段就无法回答。5% 足够看趋势，
       // 又把 Sentry 配额消耗控制在可预期范围内。
       tracesSampleRate,
-      integrations: navigation ? [navigation] : [],
+      integrations: (defaults: Integration[]) => [
+        ...defaults.map((integration): Integration => {
+          const processEvent = integration.processEvent;
+          if (integration.name !== 'Dedupe' || !processEvent) return integration;
+          return {
+            ...integration,
+            processEvent(event, hint, client) {
+              // Each auth incident needs its own request correlation,
+              // even when re-login is followed by the same failure in this process.
+              if (event.tags?.operation === 'session' && ['forcedLogout', 'refreshResponseInvalid', 'refreshOutcomeUnknown', 'authRetryResponseReplayed'].includes(String(event.tags?.kind))) {
+                return event;
+              }
+              return processEvent(event, hint, client);
+            },
+          };
+        }),
+        ...(navigation ? [navigation] : []),
+      ],
       // 原生端默认是 [/.*/]：每个 XHR 都带 sentry-trace / baggage 头，连发往第三方
       // 存储的预签名上传 PUT 也带，等于把 release 和 DSN public key 发给第三方。
       // 后端不消费这两个头（请求串联走 X-Request-Id），所以一个都不发。空数组会
@@ -332,13 +350,25 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'reason',
   'traceId',
   'requestId',
+  'clientRequestId',
+  'initialRequestId',
   'durationMs',
   'page',
+  'diagnosticId',
+  'authenticated',
+  'hasAccessToken',
+  'hasRefreshToken',
+  'responseShape',
+  'responseHasAccessToken',
+  'responseHasRefreshToken',
+  'sessionPreserved',
+  'closeCode',
   // 请求卡顿现场（observability/request-trace + services/api/client）：只收枚举与计数，
   // 形状由 isSafeStallDiagnostic 把关。
   ...STALL_DIAGNOSTIC_KEYS,
 ]);
 const SAFE_EVENT_TAG_KEYS = new Set([
+  'diagnosticId',
   'endpointPath',
   'method',
   'status',
@@ -350,6 +380,8 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'kind',
   'traceId',
   'requestId',
+  'clientRequestId',
+  'initialRequestId',
   'code',
   'storageCode',
   ...STALL_DIAGNOSTIC_TAG_KEYS,
@@ -378,6 +410,7 @@ const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'status',
   'durationMs',
   'requestId',
+  'clientRequestId',
   'failureKind',
 ]);
 
@@ -502,7 +535,10 @@ function sanitizeContextForSentry(value: unknown, depth = 0): unknown {
 const SAFE_ERROR_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 const SAFE_STORAGE_CODE = /^[A-Za-z]{1,64}$/;
 
-function isSafeErrorCode(key: string, value: unknown): boolean {
+function isSafeReportField(key: string, value: unknown): boolean {
+  if (['authenticated', 'hasAccessToken', 'hasRefreshToken', 'responseHasAccessToken', 'responseHasRefreshToken', 'sessionPreserved'].includes(key)) return typeof value === 'boolean';
+  if (key === 'responseShape') return typeof value === 'string' && ['empty', 'object', 'array', 'primitive', 'unknown'].includes(value);
+  if (key === 'closeCode') return typeof value === 'number' && Number.isInteger(value) && value >= 1000 && value <= 4999;
   if (key === 'code') {
     return (
       (typeof value === 'number' && Number.isSafeInteger(value)) ||
@@ -528,13 +564,13 @@ function sanitizeReportContext(
     ) {
       continue;
     }
-    if (key === 'requestId' && (typeof value !== 'string' || !SAFE_REQUEST_ID.test(value))) {
+    if (['requestId', 'clientRequestId', 'initialRequestId', 'diagnosticId'].includes(key) && (typeof value !== 'string' || !SAFE_REQUEST_ID.test(value))) {
       continue;
     }
     if (key === 'durationMs' && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
       continue;
     }
-    if (!isSafeErrorCode(key, value)) continue;
+    if (!isSafeReportField(key, value)) continue;
     if (!isSafeStallDiagnostic(key, value)) continue;
     if (
       value == null ||
@@ -643,10 +679,10 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
     ) {
       continue;
     }
-    if (key === 'requestId' && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
+    if (['requestId', 'clientRequestId', 'initialRequestId', 'diagnosticId'].includes(key) && (typeof child !== 'string' || !SAFE_REQUEST_ID.test(child))) {
       continue;
     }
-    if (!isSafeErrorCode(key, child)) continue;
+    if (!isSafeReportField(key, child)) continue;
     if (!isSafeStallDiagnostic(key, child)) continue;
     if (typeof child === 'string' || typeof child === 'number') {
       safe[key] = sanitizeContextForSentry(child);
@@ -683,13 +719,16 @@ function sanitizeClientDiagnostics(value: unknown): unknown[] | undefined {
         }
       }
     }
-    return [{ event: source.event, details }];
+    return [{
+      ...(typeof source.timestamp === 'number' && Number.isFinite(source.timestamp) ? { timestamp: source.timestamp } : {}),
+      event: source.event, details,
+    }];
   });
   return safe.length > 0 ? safe : undefined;
 }
 
 function isSafeDiagnosticDetail(key: string, value: unknown): boolean {
-  if (key === 'requestId') return typeof value === 'string' && SAFE_REQUEST_ID.test(value);
+  if (key === 'requestId' || key === 'clientRequestId') return typeof value === 'string' && SAFE_REQUEST_ID.test(value);
   if (key === 'durationMs') return typeof value === 'number' && Number.isFinite(value) && value >= 0;
   if (key === 'status') return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 599;
   if (key === 'method') return typeof value === 'string' && /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(value);
@@ -1148,6 +1187,7 @@ function buildCaptureContext(
   if (!safeContext && !hasBreadcrumbs) return undefined;
 
   const tagKeys = [
+    'diagnosticId',
     'endpointPath',
     'method',
     'status',
@@ -1158,6 +1198,8 @@ function buildCaptureContext(
     'kind',
     'traceId',
     'requestId',
+    'clientRequestId',
+    'initialRequestId',
     'code',
     'storageCode',
     ...STALL_DIAGNOSTIC_TAG_KEYS,

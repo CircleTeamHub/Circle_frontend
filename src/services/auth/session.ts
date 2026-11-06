@@ -9,6 +9,8 @@ import { useTabBadgeStore } from '@/stores/tabBadgeStore';
 import { useWalletRealtimeStore } from '@/stores/walletRealtimeStore';
 import { resetDiagnosticBreadcrumbs } from '@/utils/client-diagnostics';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { reportError } from '@/observability/sentry';
+import { recordSessionDiagnostic, type SessionDiagnosticContext, type SessionDiagnosticReason } from '@/observability/session-diagnostics';
 
 type PersistCapableAuthStore = {
   persist?: {
@@ -199,8 +201,9 @@ export function registerLogoutHandler(handler: LogoutHandler): () => void {
   };
 }
 
-interface ClearLocalSessionOptions {
+interface ClearLocalSessionOptions extends SessionDiagnosticContext {
   preserveLoading?: boolean;
+  reason?: SessionDiagnosticReason;
 }
 
 async function performClearLocalSession(
@@ -242,7 +245,24 @@ async function performClearLocalSession(
     return;
   }
 
-  useAuthStore.getState().clearSession({
+  const auth = useAuthStore.getState();
+  if (auth.isAuthenticated || auth.accessToken || auth.refreshToken) {
+    const context = {
+      ...options,
+      authenticated: auth.isAuthenticated,
+      hasAccessToken: Boolean(auth.accessToken),
+      hasRefreshToken: Boolean(auth.refreshToken),
+    };
+    const diagnosticId = recordSessionDiagnostic(options.reason ?? 'unspecified-clear', context);
+    // User actions remain local support records, not error events.
+    if (options.reason && !options.userInitiated) reportError(new Error(`Authentication session cleared: ${options.reason}`), {
+      ...context,
+      diagnosticId,
+      operation: 'session',
+      kind: 'forcedLogout',
+    });
+  }
+  auth.clearSession({
     preserveLoading: options.preserveLoading,
   });
   const clearedSessionEpoch = useAuthStore.getState().sessionEpoch;

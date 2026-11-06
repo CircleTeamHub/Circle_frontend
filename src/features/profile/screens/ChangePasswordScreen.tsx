@@ -119,7 +119,7 @@ export default function ChangePasswordScreen() {
         // 服务端登出全部设备失败不阻断本地退出流程，但 dev 还是想看到原因。
         reportHandledFailure('auth', 'logoutAllAfterPasswordChange', logoutError);
       }
-      await clearLocalSession();
+      await clearLocalSession(undefined, { reason: 'password-change', userInitiated: true });
       router.replace('/(auth)/login');
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, t('profile.passwordChangeFailed')));

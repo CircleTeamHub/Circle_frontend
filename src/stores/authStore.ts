@@ -18,6 +18,9 @@ import type { AvatarFrameAppearance, DisplayIcon } from '@/types';
 import { migrateAuthPersist, AUTH_PERSIST_VERSION } from './authPersist';
 import { sanitizeUserForPersist } from './persisted-user';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { reportError } from '@/observability/sentry';
+import { recordSessionDiagnostic } from '@/observability/session-diagnostics';
+import { safeHttpRequestId } from '@/observability/http-diagnostics';
 
 export interface AuthUser {
   id: string;
@@ -57,6 +60,10 @@ interface AuthState {
   refreshToken: string | null;
   user: AuthUser | null;
   isAuthenticated: boolean;
+  // An ambiguous result requires fresh credentials; an in-flight UUID alone
+  // does not show recovery UI until a failed outcome or the next cold start.
+  refreshUncertain: boolean;
+  refreshAttemptId: string | null;
   onboardingRequired: boolean;
   // Runtime-only auth session identity generation. This advances when a session
   // starts or ends, but remains stable while that session's tokens rotate.
@@ -67,9 +74,12 @@ interface AuthState {
   setSession: (
     tokens: { accessToken: string; refreshToken: string },
     user: AuthUser,
-    options?: { onboardingRequired?: boolean }
+    options?: { onboardingRequired?: boolean; refreshUncertain?: boolean }
   ) => void;
-  setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
+  setTokens: (tokens: { accessToken: string; refreshToken: string }) => Promise<void>;
+  prepareRefresh: (requestId: string) => Promise<void>;
+  markRefreshUncertain: (requestId?: string) => Promise<void>;
+  releaseRefreshAttempt: (requestId: string) => Promise<void>;
   setUser: (user: AuthUser) => void;
   setOnboardingRequired: (required: boolean) => void;
   clearSession: (options?: { preserveLoading?: boolean }) => void;
@@ -85,6 +95,8 @@ function partializeAuthState(state: AuthState) {
     refreshToken: state.refreshToken,
     user: sanitizeUserForPersist(state.user),
     isAuthenticated: state.isAuthenticated,
+    refreshUncertain: state.refreshUncertain,
+    refreshAttemptId: state.refreshAttemptId,
     onboardingRequired: state.onboardingRequired,
   };
 }
@@ -106,6 +118,8 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       user: null,
       isAuthenticated: false,
+      refreshUncertain: false,
+      refreshAttemptId: null,
       onboardingRequired: false,
       sessionEpoch: 0,
       isLoading: true,
@@ -117,17 +131,31 @@ export const useAuthStore = create<AuthState>()(
           refreshToken,
           user,
           isAuthenticated: true,
+          refreshUncertain: options?.refreshUncertain ?? false,
+          refreshAttemptId: null,
           onboardingRequired: options?.onboardingRequired ?? false,
           isLoading: false,
           sessionEpoch: state.sessionEpoch + 1,
         })),
 
-      setTokens: ({ accessToken, refreshToken }) =>
-        set(() => ({
+      setTokens: async ({ accessToken, refreshToken }) => {
+        await set(() => ({
           accessToken,
           refreshToken,
           isAuthenticated: true,
-        })),
+          refreshUncertain: false,
+          refreshAttemptId: null,
+        }));
+      },
+
+      markRefreshUncertain: async (requestId) => {
+        await set((state) => ({ refreshUncertain: true, refreshAttemptId: requestId ?? state.refreshAttemptId }));
+      },
+      prepareRefresh: async (requestId) => { await set({ refreshAttemptId: requestId }); },
+      // 只解除这一次尝试的围栏；期间若已换成别的尝试或新会话，不动它。
+      releaseRefreshAttempt: async (requestId) => {
+        await set((state) => (state.refreshAttemptId === requestId ? { refreshAttemptId: null } : {}));
+      },
 
       setUser: (user) => set({ user }),
 
@@ -140,6 +168,8 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           user: null,
           isAuthenticated: false,
+          refreshUncertain: false,
+          refreshAttemptId: null,
           onboardingRequired: false,
           isLoading: options?.preserveLoading ? state.isLoading : false,
           sessionEpoch: state.sessionEpoch + 1,
@@ -177,11 +207,14 @@ export const useAuthStore = create<AuthState>()(
         if (memoryHasLiveSession) {
           return currentState;
         }
+        const persisted = persistedState && typeof persistedState === 'object'
+          ? persistedState as Partial<AuthState> : {};
+        const refreshAttemptId = safeHttpRequestId(persisted.refreshAttemptId) ?? null;
         return {
           ...currentState,
-          ...(persistedState && typeof persistedState === 'object'
-            ? (persistedState as Partial<AuthState>)
-            : {}),
+          ...persisted,
+          refreshUncertain: persisted.refreshUncertain === true || Boolean(refreshAttemptId),
+          refreshAttemptId,
         };
       },
       partialize: partializeAuthState,
@@ -195,7 +228,8 @@ export const useAuthStore = create<AuthState>()(
           // 关键：绝不能在这里 clearSession —— 它会把空态写回，连带删掉磁盘上完好的 token，
           // 让「一次读抖动 = 永久登出」。这里只解除启动阻塞、保留磁盘凭证，留待下次启动恢复；
           // secureAuthStorage 已进入 degraded 模式，会拦截随后写回的空态、不动磁盘数据。
-          reportHandledFailure('authStore', 'hydrationRead', error);
+          const diagnosticId = recordSessionDiagnostic('hydration-read-failed');
+          reportHandledFailure('authStore', 'hydrationRead', error, { diagnosticId });
           nextState.setLoading(false);
           return;
         }
@@ -211,6 +245,16 @@ export const useAuthStore = create<AuthState>()(
           typeof live.refreshToken === 'string' &&
           live.refreshToken.length > 0;
         if (memoryHasLiveSession) {
+          if (live.refreshUncertain && live.refreshAttemptId) {
+            const context = {
+              endpointPath: '/auth/refresh', method: 'POST', stage: 'restore',
+              clientRequestId: live.refreshAttemptId, sessionPreserved: true,
+            };
+            const diagnosticId = recordSessionDiagnostic('refresh-interrupted', context);
+            reportError(new Error('Authentication refresh was interrupted'), {
+              ...context, diagnosticId, operation: 'session', kind: 'refreshOutcomeUnknown',
+            });
+          }
           return;
         }
 
@@ -223,6 +267,21 @@ export const useAuthStore = create<AuthState>()(
         if (!hasValidTokens) {
           // 认证凭证缺失时仍可能残留上个账号的 MMKV 缓存。保持启动门禁，
           // 交给 SessionBootstrap 走完整 clearLocalSession 后再开放登录页。
+          if (nextState.isAuthenticated || nextState.accessToken || nextState.refreshToken) {
+            const context = {
+              authenticated: nextState.isAuthenticated,
+              hasAccessToken: Boolean(nextState.accessToken),
+              hasRefreshToken: Boolean(nextState.refreshToken),
+            };
+            const diagnosticId = recordSessionDiagnostic('hydration-tokens-invalid', context);
+            reportError(new Error('Authentication session cleared: hydration-tokens-invalid'), {
+              ...context,
+              diagnosticId,
+              operation: 'session',
+              kind: 'forcedLogout',
+              reason: 'hydration-tokens-invalid',
+            });
+          }
           nextState.clearSession({ preserveLoading: true });
         }
       },

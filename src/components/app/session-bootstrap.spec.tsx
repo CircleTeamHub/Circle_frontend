@@ -26,6 +26,7 @@ jest.mock('@/stores/authStore', () => ({
 }));
 jest.mock('@/services/api/auth', () => ({ fetchCurrentUser: jest.fn() }));
 jest.mock('@/observability/sentry', () => ({ reportError: jest.fn() }));
+jest.mock('@/observability/session-diagnostics', () => ({ recordSessionDiagnostic: jest.fn() }));
 // 真实 api/client 要进来（isDefinitiveAuthFailure / ApiError 是被测逻辑的一部分），
 // 但它的 i18n 依赖会一路拉起 AsyncStorage native module。
 jest.mock('@/i18n', () => ({
@@ -140,15 +141,39 @@ test('a backend 5xx on cold start keeps the session', async () => {
   expect(mockClearLocalSession).not.toHaveBeenCalled();
 });
 
+test.each([201, 0])('an uncertain refresh on cold start keeps cached auth (status %s)', async status => {
+  mockAuth.state.refreshUncertain = true;
+  mockFetchCurrentUser.mockRejectedValue(new ApiError('sign in again', {
+    status, failureKind: 'refresh-response-invalid',
+  }));
+  render(<SessionBootstrap />);
+  await waitFor(() => expect(mockAuth.state.setLoading).toHaveBeenCalledWith(false));
+  expect(mockClearLocalSession).not.toHaveBeenCalled();
+  expect(mockAuth.state.isAuthenticated).toBe(true);
+  expect(mockAuth.state.refreshUncertain).toBe(true);
+});
+
 // 反面：服务端明确否认凭证时必须照常登出，否则用户会卡在一个死会话里。
 test('a rejected credential on cold start still clears the session', async () => {
   mockFetchCurrentUser.mockRejectedValue(
-    new ApiError('unauthorized', { status: 401 }),
+    new ApiError('unauthorized', {
+      status: 401,
+      requestId: '12345678-1234-4234-8234-123456789abc',
+      failureKind: 'http',
+    }),
   );
 
   render(<SessionBootstrap />);
 
   await waitFor(() => expect(mockClearLocalSession).toHaveBeenCalledTimes(1));
+  expect(mockClearLocalSession).toHaveBeenCalledWith(undefined, {
+    reason: 'bootstrap-rejected',
+    endpointPath: '/auth/me',
+    method: 'GET',
+    status: 401,
+    requestId: '12345678-1234-4234-8234-123456789abc',
+    failureKind: 'http',
+  });
 });
 
 test('a forbidden account on cold start still clears the session', async () => {
@@ -182,6 +207,7 @@ test('an authless hydration clears account-scoped state before unlocking login',
   await waitFor(() =>
     expect(mockClearLocalSession).toHaveBeenCalledWith(undefined, {
       preserveLoading: true,
+      reason: 'bootstrap-tokens-missing',
     }),
   );
   expect(mockAuth.state.setLoading).not.toHaveBeenCalledWith(false);
@@ -210,6 +236,7 @@ test('an authless hydration unlocks login even when local cleanup rejects', asyn
   );
   expect(mockClearLocalSession).toHaveBeenCalledWith(undefined, {
     preserveLoading: true,
+    reason: 'bootstrap-tokens-missing',
   });
   expect(mockReportError).toHaveBeenCalledTimes(1);
   expect(mockReportError).toHaveBeenCalledWith(cleanupError, {

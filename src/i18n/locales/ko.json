@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "로그인 진단 정보 복사",
+    "copied": "진단 정보를 복사했습니다. 고객 지원팀에 보내 주세요.",
+    "copyFailed": "복사하지 못했습니다. 다시 시도해 주세요."
+  },
   "mediaUpload": {
     "sessionChanged": "계정이 변경되었습니다. 업로드할 파일을 다시 선택해 주세요.",
     "uploading": "업로드 중",
@@ -3084,6 +3089,7 @@
       "requestFailed": "작업을 완료할 수 없습니다. 다시 시도해 주세요.",
       "sessionExpired": "세션이 만료되었습니다. 다시 로그인해 주세요.",
       "refreshResponseInvalid": "갱신 응답이 잘못되었습니다. 다시 로그인해 주세요.",
+      "refreshOutcomeUnknown": "로그인 상태를 확인할 수 없습니다. 다시 로그인해 주세요.",
       "sessionChangedDuringRefresh": "세션을 갱신하는 동안 계정이 변경되었습니다. 다시 시도해 주세요.",
       "uploadTimeout": "업로드 시간이 초과되었습니다. 연결을 확인한 후 다시 시도해 주세요.",
       "uploadFailed": "업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.",

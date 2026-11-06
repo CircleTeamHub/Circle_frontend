@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 const { loadTsModule } = require('./helpers/load-ts-module');
+const { withObservabilityStubs } = require('./helpers/observability-stubs');
 
 // getApiErrorMessage turns a backend stable errorCode into a localized string
 // (serverErrors.<code>), falling back to the caller's fallback. Backend attaches
@@ -21,6 +22,9 @@ const I18N = {
         'serverErrors.TRACE_EMPTY_COMMENT': 'Comment cannot be empty',
         'common.errors.requestTimeout': 'Request timed out. Please try again.',
         'common.errors.networkUnavailable': 'Check your connection and try again.',
+        'common.errors.refreshResponseInvalid': 'Please sign in again to restore your session.',
+        'common.errors.refreshOutcomeUnknown': 'Your session could not be confirmed. Please sign in again.',
+        'common.errors.invalidServerResponse': 'Invalid server response. Please try again.',
         'common.errors.uploadFailed': 'Upload failed. Please try again later.',
         'serverErrors.MEMBERSHIP_JOINED_CIRCLE_QUOTA_REACHED':
           "You've reached your membership tier's joined-circle limit",
@@ -115,6 +119,31 @@ function loadErrors() {
 }
 
 const { getApiErrorMessage } = loadErrors();
+
+test('an uncertain refresh gives safe sign-in guidance at the original and blocked status', () => {
+  for (const status of [201, 0]) {
+    const error = new FakeApiError('PRIVATE_RESPONSE');
+    error.status = status;
+    error.failureKind = 'refresh-response-invalid';
+    assert.equal(getApiErrorMessage(error, 'fallback'), 'Please sign in again to restore your session.');
+  }
+});
+
+test('a replayed auth response uses trusted retry guidance without asking for another login', () => {
+  const error = new FakeApiError('PRIVATE_RESPONSE');
+  error.status = 0;
+  error.failureKind = 'auth-retry-response-replayed';
+  assert.equal(getApiErrorMessage(error, 'fallback'), 'Invalid server response. Please try again.');
+});
+
+test('an unknown refresh outcome gives trusted guidance instead of a server or transport message', () => {
+  for (const status of [0, 201, 502]) {
+    const error = new FakeApiError('PRIVATE_RESPONSE');
+    error.status = status;
+    error.failureKind = 'refresh-outcome-unknown';
+    assert.equal(getApiErrorMessage(error, 'fallback'), 'Your session could not be confirmed. Please sign in again.');
+  }
+});
 
 test('maps a known errorCode to its localized serverErrors string', () => {
   const err = new FakeApiError('邮箱或密码错误', 'AUTH_INVALID_CREDENTIALS');
@@ -295,7 +324,7 @@ test('client.ts threads errorCode onto ApiError', () => {
   fn(
     moduleObj,
     moduleObj.exports,
-    shimRequire,
+    withObservabilityStubs(shimRequire),
     async () => ({
       ok: false,
       status: 400,
@@ -370,7 +399,7 @@ test('ApiError accepts an options object for optional fields', () => {
   fn(
     moduleObj,
     moduleObj.exports,
-    shimRequire,
+    withObservabilityStubs(shimRequire),
     async () => {
       throw new Error('fetch should not be called');
     },

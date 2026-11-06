@@ -34,6 +34,7 @@ import {
 import { getAuthRouteDecision } from '@/components/app/auth-route-policy';
 import { LoginSecurityCodeGate } from '@/components/app/login-security-code-gate';
 import { SessionBootstrap } from '@/components/app/session-bootstrap';
+import { SessionRecoveryPrompt } from '@/components/app/session-recovery-prompt';
 import { MemberNameAnimationProvider } from '@/components/ui/member-name-animation';
 import { AccountSwitcherSheet } from '@/features/profile/components/account-switcher-sheet';
 import { useAccountSwitcherStore } from '@/stores/accountSwitcherStore';
@@ -64,6 +65,7 @@ import {
   setSentryUserId,
 } from '@/observability/sentry';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { recordSessionDiagnostic } from '@/observability/session-diagnostics';
 import { devWarn } from '@/utils/dev-log';
 
 // 将 expo-router 内置的 ErrorBoundary 重新导出，使其在根路由层生效（捕获页面级报错）
@@ -180,7 +182,8 @@ function ensureStartupBootstrap(): Promise<void> {
       await initEncryptedStorage();
       await migrateFromAsyncStorage();
     } catch (err) {
-      reportHandledFailure('startup', 'storageInit', err);
+      const diagnosticId = recordSessionDiagnostic('startup-storage-failed');
+      reportHandledFailure('startup', 'storageInit', err, { diagnosticId });
     }
     // 认证 hydration 决定首屏该进主界面还是登录页，必须在启动门内完成。
     await rehydratePersistedStore('auth', useAuthStore);
@@ -267,6 +270,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
   );
   const onboardingRequired = useAuthStore((state) => state.onboardingRequired);
   const accountSwitching = useAccountSwitcherStore((state) => state.switching);
+  const sessionRecoveryRequired = useAuthStore((state) => state.refreshUncertain);
   const addingAccount = useAccountSwitcherStore((state) => state.addingAccount);
   const { colors } = useTheme();
   const decision = getAuthRouteDecision({
@@ -276,6 +280,7 @@ function AuthRouteGuard({ children }: { children: ReactNode }) {
     hasCachedSession,
     onboardingRequired,
     accountSwitching,
+    sessionRecoveryRequired,
     addingAccount,
   });
 
@@ -410,6 +415,7 @@ function RootLayout() {
           <LoginSecurityCodeGate />
           {/* 三端统一的弹窗宿主：Alert.alert / Alert.prompt 经 alert-bridge 全部投到这里。 */}
           <AppDialogHost />
+          <SessionRecoveryPrompt />
           {/* Web 专属：标签页标题 + 未读数前缀（经 expo-router/head）。 */}
           {Platform.OS === 'web' ? <WebDocumentTitle /> : null}
         </AuthRouteGuard>

@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "ログイン診断情報をコピー",
+    "copied": "診断情報をコピーしました。サポートに送信してください。",
+    "copyFailed": "コピーできませんでした。もう一度お試しください。"
+  },
   "mediaUpload": {
     "sessionChanged": "アカウントが切り替わりました。ファイルを選び直してアップロードしてください。",
     "uploading": "アップロード中",
@@ -3084,6 +3089,7 @@
       "requestFailed": "操作を完了できませんでした。もう一度お試しください。",
       "sessionExpired": "セッションの有効期限が切れました。もう一度サインインしてください。",
       "refreshResponseInvalid": "更新レスポンスが無効です。もう一度サインインしてください。",
+      "refreshOutcomeUnknown": "ログイン状態を確認できません。もう一度ログインしてください。",
       "sessionChangedDuringRefresh": "セッション更新中にアカウントが切り替わりました。もう一度お試しください。",
       "uploadTimeout": "アップロードがタイムアウトしました。接続を確認して再試行してください。",
       "uploadFailed": "アップロードに失敗しました。しばらくしてから再試行してください。",

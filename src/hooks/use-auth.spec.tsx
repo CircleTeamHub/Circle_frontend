@@ -290,6 +290,43 @@ test('switching accounts records the current account with its latest tokens befo
   expect(rememberOrder).toBeLessThan(clearOrder);
 });
 
+test('switching accounts preserves an uncertain refresh marker when saving and restoring credentials', async () => {
+  signInPreviousAccount();
+  mockAuthState.refreshUncertain = true;
+  const target = { user: { id: 'user-2', nickname: 'Target' },
+    accessToken: 'target-access', refreshToken: 'target-refresh', refreshUncertain: true, updatedAt: 1 };
+  mockSetSession.mockImplementationOnce((tokens, nextUser, options) => {
+    mockAuthState = { ...mockAuthState, ...tokens, user: nextUser, isAuthenticated: true,
+      refreshUncertain: options?.refreshUncertain ?? false };
+  });
+  jest.mocked(fetchCurrentUser).mockResolvedValue(target.user as never);
+  const { result } = renderHook(() => useAuth());
+  await act(async () => { await result.current.switchToAccount(target as never); });
+  expect(mockUpsertAccount).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    user: previousUser, refreshUncertain: true,
+  }));
+  expect(mockSetSession).toHaveBeenCalledWith(
+    { accessToken: target.accessToken, refreshToken: target.refreshToken }, target.user,
+    { refreshUncertain: true },
+  );
+  expect(mockUpsertAccount).toHaveBeenLastCalledWith(expect.objectContaining({
+    user: target.user, refreshUncertain: true,
+  }));
+});
+
+test('leaving an account during rotation quarantines its saved pre-rotation credential', async () => {
+  signInPreviousAccount();
+  mockAuthState.refreshUncertain = false;
+  mockAuthState.refreshAttemptId = '12345678-1234-4234-8234-123456789abc';
+  const target = { user: { id: 'user-2' }, accessToken: 'target-access', refreshToken: 'target-refresh', updatedAt: 1 };
+  jest.mocked(fetchCurrentUser).mockResolvedValue(target.user as never);
+  const { result } = renderHook(() => useAuth());
+  await act(async () => { await result.current.switchToAccount(target as never); });
+  expect(mockUpsertAccount).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    user: previousUser, refreshToken: 'rotated-refresh', refreshUncertain: true,
+  }));
+});
+
 test('adding an account still lands on messages if the previous account was signed out remotely meanwhile', async () => {
   // 停在「添加账号」登录页期间,旧账号被远端踢下线:会话已清空,标记还在。
   mockAddingAccount = true;
@@ -321,9 +358,8 @@ test('adding the account that is already signed in keeps its local data and revo
 
   // 拆会话会清掉本账号的草稿、待发媒体、聊天背景等本地数据 —— 同一个人不该拆。
   expect(clearLocalSession).not.toHaveBeenCalled();
-  expect(mockSetSession).not.toHaveBeenCalled();
-  expect(mockSetTokens).toHaveBeenCalledWith(tokens);
-  expect(mockSetUser).toHaveBeenCalledWith(previousUser);
+  expect(mockSetSession).toHaveBeenCalledWith(tokens, previousUser, { onboardingRequired: undefined });
+  expect(mockSetTokens).not.toHaveBeenCalled();
   // 被顶替的那对 token 在服务端撤销,别留一个没人持有的活会话挂在登录设备列表里。
   expect(logoutRequest).toHaveBeenCalledWith('rotated-refresh');
   expect(mockUpsertAccount).toHaveBeenLastCalledWith(

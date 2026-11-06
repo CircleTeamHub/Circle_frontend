@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "Copiar diagnóstico de inicio de sesión",
+    "copied": "Diagnóstico copiado. Envíalo a soporte.",
+    "copyFailed": "No se pudo copiar. Inténtalo de nuevo."
+  },
   "mediaUpload": {
     "sessionChanged": "Has cambiado de cuenta. Selecciona el archivo de nuevo para subirlo.",
     "uploading": "Subiendo",
@@ -3092,6 +3097,7 @@
       "requestFailed": "No se pudo completar la operación. Inténtalo de nuevo.",
       "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo.",
       "refreshResponseInvalid": "Respuesta de actualización no válida. Inicia sesión de nuevo.",
+      "refreshOutcomeUnknown": "No se pudo confirmar tu sesión. Inicia sesión de nuevo.",
       "sessionChangedDuringRefresh": "La cuenta cambió mientras se actualizaba la sesión. Inténtalo de nuevo.",
       "uploadTimeout": "Se agotó el tiempo de la subida. Comprueba tu conexión e inténtalo de nuevo.",
       "uploadFailed": "La subida falló. Inténtalo de nuevo más tarde.",

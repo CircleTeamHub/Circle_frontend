@@ -14,7 +14,10 @@ export class ApiError extends Error {
   reportEndpoint?: string;
   reportMethod?: string;
   requestId?: string;
+  clientRequestId?: string;
   durationMs?: number;
+  // Actual HTTP headers received, even if reading the body later failed.
+  responseStatus?: number;
   // 后端稳定错误码(如 AUTH_INVALID_CREDENTIALS);前端据此做 i18n 映射,缺失回落 message。
   errorCode?: string;
   // 传输层失败（status 0）时「卡在哪一步」的枚举与计数，随上报离开设备；只放无用户内容的值。
@@ -31,6 +34,7 @@ export class ApiError extends Error {
       reportMethod,
       errorCode,
       requestId,
+      clientRequestId,
       durationMs,
     }: {
       status: number;
@@ -41,6 +45,7 @@ export class ApiError extends Error {
       reportMethod?: string;
       errorCode?: string;
       requestId?: string;
+      clientRequestId?: string;
       durationMs?: number;
     }
   ) {
@@ -54,6 +59,7 @@ export class ApiError extends Error {
     this.reportMethod = reportMethod;
     this.errorCode = errorCode;
     this.requestId = requestId;
+    this.clientRequestId = clientRequestId;
     this.durationMs = durationMs;
   }
 }

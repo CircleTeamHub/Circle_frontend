@@ -1,4 +1,9 @@
 {
+  "sessionDiagnostics": {
+    "copy": "复制登录诊断信息",
+    "copied": "已复制诊断信息，请发给技术支持",
+    "copyFailed": "复制失败，请重试"
+  },
   "mediaUpload": {
     "sessionChanged": "账号已切换，请重新选择文件后上传",
     "uploading": "正在上传",
@@ -118,6 +123,7 @@
       "requestFailed": "操作未完成，请稍后重试",
       "sessionExpired": "登录已过期，请重新登录",
       "refreshResponseInvalid": "刷新返回数据格式异常，请重新登录",
+      "refreshOutcomeUnknown": "登录状态暂时无法确认，请重新登录后继续",
       "sessionChangedDuringRefresh": "账号已切换，请重新操作",
       "uploadTimeout": "上传超时，请检查网络后重试",
       "uploadFailed": "上传失败，请稍后重试",
