@@ -511,10 +511,8 @@ export default function ChatInfoScreen() {
   // 缓存名单只是首屏/断网时的只读展示:同样受「显示群成员」策略约束;独立群聊/临时房
   // 还要本地已知这个会话(即已知自己在座),会话资料没到之前不先画别人的名单。
   const canPresentCachedDirectory = groupMembers.length > 0 && rosterPolicyAllows &&
-    (isStandaloneGroup || isTempConversation
-      ? Boolean(conversation) &&
-        (standaloneDirectoryAccess === 'pending' || standaloneDirectoryAccess === 'failed')
-      : !liveGroupRoleResolved || circleVerificationFailed || standaloneDirectoryAccess === 'failed');
+    (isStandaloneGroup || isTempConversation) && Boolean(conversation) &&
+    (standaloneDirectoryAccess === 'pending' || standaloneDirectoryAccess === 'failed');
   const resolvedConversationID = activeConversation?.id ?? '';
   currentConversationIDRef.current = resolvedConversationID;
   // 只用路由中的稳定身份做缓存键。圈子会话 DTO 首次补齐时不应被当成

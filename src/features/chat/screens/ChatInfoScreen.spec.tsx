@@ -224,6 +224,23 @@ test('an uncached circle group still uses its distinct source circle ID', () => 
   expect(fetchChatMembers).not.toHaveBeenCalled();
 });
 
+test('a cached circle roster stays hidden until current access is verified', () => {
+  mockParams.sourceID = 'circle-1';
+  useChatStore.setState({
+    conversations: [{
+      id: 'group-conversation', type: 'GROUP', circleId: 'circle-1', myRole: 'ADMIN',
+      policies: { membersCanViewRoster: true },
+    }] as ChatConversationDto[],
+  });
+  writeGroupInfoCache(mockAuth.sessionEpoch, 'circle:circle-1', {
+    members: [{ userId: 'peer', nickname: 'Cached member', role: 'MEMBER' }] as never,
+  });
+
+  render(<ChatInfoScreen />);
+
+  expect(screen.queryByText('Cached member')).toBeNull();
+});
+
 test('a cached circle ID takes precedence over standalone route hints', () => {
   useChatStore.setState({
     conversations: [{ id: 'group-conversation', type: 'GROUP', circleId: 'circle-1' }] as ChatConversationDto[],
