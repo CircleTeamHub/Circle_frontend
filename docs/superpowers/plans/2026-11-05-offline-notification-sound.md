@@ -25,7 +25,7 @@
 ### Task 2: Configure Android delivery channels
 
 - [x] Add `plugins/with-notification-sound.js` using `withMainApplication` and `mergeContents`; register the two channels after `super.onCreate()`.
-- [x] Read the old `chat`/Expo fallback channels, preserve their importance and custom/null sound, and replace only `Settings.System.DEFAULT_NOTIFICATION_URI` with the bundled resource URI.
+- [x] Read the prior provider channel (`chat`/Expo fallback for Expo; `JPush_3_7` for JPush), preserve its importance and custom/null sound, and replace only `Settings.System.DEFAULT_NOTIFICATION_URI` with the bundled resource URI.
 - [x] Update the JS chat channel ID and sound; add focused plugin/config contract coverage and run `node --test test/chat-notifications.test.js test/with-notification-sound.test.js`.
 
 ### Task 3: Coordinate backend payloads and verify
@@ -42,3 +42,11 @@
 - Native: generated channel initialization compiled against Android SDK 35; the Expo Android resource copy matched the PCM WAV bytes.
 - Temporary audio/compiler files were removed and recorded worker processes exited.
 - APK/IPA release builds, deployment, and physical-device offline push delivery were not run.
+
+## PR verification on latest main
+
+- Frontend complete Node suite: 3,557 passed; notification/settings Jest behavior tests: 30 passed.
+- Backend notification/outbox/chat suites: 117 passed; both repositories passed TypeScript checks.
+- Changed frontend files passed ESLint; Expo and JPush generated Kotlin both compiled against Android SDK 35.
+- Read-only review findings were fixed: provider-specific legacy channel migration and omission of channel_id for old/unknown JPush clients. Re-review found no remaining actionable issues.
+- Frontend cross-repository tests used the matching backend branch. Windows shell tests used Git Bash on PATH.

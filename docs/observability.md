@@ -172,3 +172,11 @@ Grafana 欢迎页不会自动展示项目数据。点左侧 **Dashboards**，或
 - [Sentry React Native 7.11 原生桥接边界](https://github.com/getsentry/sentry-react-native/blob/7.11.0/packages/core/src/js/wrapper.ts)
 - [Prometheus 抓取标签冲突规则](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config)
 - [Alloy 日志发送重试/丢弃指标](https://grafana.com/docs/alloy/latest/reference/components/loki/loki.write/#debug-metrics)
+
+## 笔记操作耗时
+
+app.operation.duration 记录创建、编辑、添加笔记的总操作耗时（毫秒），按 noteCreate / noteUpdate / noteCollect 及 success / failed 聚合。创建和编辑从有效提交开始，添加从确认按钮开始，不包含用户填写内容或选择分组的时间。
+
+本地 note.save.phase 诊断分别记录 prepare / request / reconcile，详情页的 note.collect.phase 记录 source / request；只记录阶段名和毫秒耗时，不记录正文、名片、笔记或消息标识。结合现有 HTTP 诊断和服务端 Prometheus 区分客户端准备、网络等待和结果处理；客户端 HTTP 耗时包含网络开销，不能直接当作服务端处理时间。
+
+新指标需要发布新客户端并启用现有 Sentry 配置后才能观察；本地合成正文的 CPU/体积基准不能代替手机端到端验收。

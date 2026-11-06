@@ -2278,18 +2278,24 @@ test.each([
   }
 });
 
-test.each(['source-defaults', 'stored-cards'])('editing a collected note restores and saves %s missing from the saved block layout', async (mode) => {
-  mockRouteId = 'collected-note';
+function mockCollectedNote(sections: Record<string, unknown>) {
   const sender = { id: 'sender', name: 'Default sender', faceURL: 'https://cdn/sender.jpg' };
   const group = { id: 'source-circle', name: 'Default group', faceURL: 'https://cdn/group.jpg' };
   const layout = [{ type: 'noteLayout', props: { blocks: [{ id: 'text-a', kind: 'text' }], order: ['text'] } }];
+  mockRouteId = 'collected-note';
   mockFetchNoteDetail.mockResolvedValue({
     id: mockRouteId, title: 'Collected', content: 'Body', contentJson: layout, media: [], groups: [], pinned: false,
     createdAt: '2026-01-01T00:00:00Z', collectedFrom: {
       conversationType: 'group', conversationID: 'source-chat', clientMsgID: 'original', sender, group,
-    }, sections: { text: { content: 'Body', contentJson: layout },
-      ...(mode === 'stored-cards' ? { contacts: { items: [sender] }, groups: { items: [group] } } : {}),
-    },
+    }, sections: { text: { content: 'Body', contentJson: layout }, ...sections },
+  });
+  return { sender, group };
+}
+
+test('editing a collected note restores stored cards missing from the saved block layout', async () => {
+  const { sender, group } = mockCollectedNote({
+    contacts: { items: [{ id: 'sender', name: 'Default sender', faceURL: 'https://cdn/sender.jpg' }] },
+    groups: { items: [{ id: 'old-group-id', circleId: 'source-circle', name: 'Default group', faceURL: 'https://cdn/group.jpg' }] },
   });
   const view = render(<EditNoteScreen />);
   try {
@@ -2299,11 +2305,26 @@ test.each(['source-defaults', 'stored-cards'])('editing a collected note restore
     await waitFor(() => expect(updateNote).toHaveBeenCalled());
     const input = jest.mocked(updateNote).mock.calls.at(-1)![1];
     expect(input.sections?.contacts?.items).toEqual([sender]);
-    expect(input.sections?.groups?.items).toEqual([expect.objectContaining(group)]);
+    // 旧版圈子群名片的 id 原样回传，服务端才认得是库里已有的那张。
+    expect(input.sections?.groups?.items).toEqual([expect.objectContaining({ ...group, id: 'old-group-id' })]);
     const marker = input.contentJson?.find((block) => block.type === 'noteLayout');
     expect(marker?.props).toMatchObject({ blocks: expect.arrayContaining([
       expect.objectContaining({ kind: 'contact' }), expect.objectContaining({ kind: 'group' }),
     ]) });
+  } finally { view.unmount(); }
+});
+
+test('editing a legacy collected note without stored cards does not attach source cards the server would reject', async () => {
+  mockCollectedNote({});
+  const view = render(<EditNoteScreen />);
+  try {
+    await screen.findByDisplayValue('Collected');
+    expect(screen.queryByText('Default sender')).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
+    const input = jest.mocked(updateNote).mock.calls.at(-1)![1];
+    expect(input.sections?.contacts?.items ?? []).toEqual([]);
+    expect(input.sections?.groups?.items ?? []).toEqual([]);
   } finally { view.unmount(); }
 });
 

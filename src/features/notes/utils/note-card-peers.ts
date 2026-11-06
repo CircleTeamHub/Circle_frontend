@@ -90,7 +90,11 @@ export function resolveNoteCardButtons(note: CardSource): NoteCardButtons {
   };
 }
 
-/** 编辑器、浏览页和列表使用同一名片来源；缺省名片随编辑保存到真实分区。 */
+/**
+ * 浏览页与列表使用同一名片来源（仅用于展示）。已存的名片原样保留 id：服务端按库里
+ * 已有的 id 放行名片、判断群绑定是否变化，把旧版 groupID 换成圈子 id 会被当成新绑定
+ * 而 403。编辑器不用它：补出来的来源名片未必是本人能挂的好友/群，保存会被拒。
+ */
 export function buildNoteSectionsWithCards(note: CardSource & StructuredNoteInput) {
   const sections = buildNoteSections(note);
   const { contact, group } = resolveNoteCardButtons(note);

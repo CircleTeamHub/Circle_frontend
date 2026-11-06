@@ -18,7 +18,7 @@ function collectSourceFiles(dir) {
 }
 
 /**
- * 找出所有「上报给 Sentry 的 context 字面量」——即带 operation 属性的对象字面量。
+ * 找出 reportError 第二个参数里的 context 字面量，避免把指标属性当成错误上下文。
  * 用 AST 而不是正则：源码里还有名为 operation 的函数参数
  * （push-token-registration 的 enqueueRemoteMutation），正则会误伤。
  */

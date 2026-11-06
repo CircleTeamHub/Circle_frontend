@@ -515,43 +515,6 @@ test('seen unread messages do not become unread again when typing shrinks the vi
   expect(screen.queryByTestId(E2E_TEST_IDS.chatUnreadJump)).toBeNull();
 });
 
-test('seen unread messages do not become unread again when typing shrinks the viewport', async () => {
-  mockParams = { ...mockParams, initialUnreadCount: '2', initialReadHeight: '0' };
-  useChatStore.setState({
-    messagesByConversation: {
-      [CONVERSATION]: [message(1, PEER, '第一条'), message(2, PEER, '第二条')],
-      [GROUP]: [],
-    },
-  });
-  render(<ChatDetailScreen />);
-  await screen.findByTestId(E2E_TEST_IDS.chatUnreadJump, {}, SETTLE);
-
-  // Only the newest message is visible: the unseen start must still be offered.
-  await act(async () => screen.UNSAFE_getByType(FlatList).props.onViewableItemsChanged({
-    viewableItems: [{ item: { id: 'msg-2' }, isViewable: true, index: 0, key: 'msg-2' }],
-    changed: [],
-  }));
-  expect(screen.getByTestId(E2E_TEST_IDS.chatUnreadJump)).toBeTruthy();
-
-  // The full viewport reveals the unread start, so the prompt clears immediately.
-  await act(async () => screen.UNSAFE_getByType(FlatList).props.onViewableItemsChanged({
-    viewableItems: [
-      { item: { id: 'msg-2' }, isViewable: true, index: 0, key: 'msg-2' },
-      { item: { id: 'msg-1' }, isViewable: true, index: 1, key: 'msg-1' },
-    ],
-    changed: [],
-  }));
-  expect(screen.queryByTestId(E2E_TEST_IDS.chatUnreadJump)).toBeNull();
-
-  await act(async () => fireEvent.changeText(screen.getByTestId(E2E_TEST_IDS.chatInput), '回复'));
-  // Opening the keyboard moves the already seen start outside the visible area.
-  await act(async () => screen.UNSAFE_getByType(FlatList).props.onViewableItemsChanged({
-    viewableItems: [{ item: { id: 'msg-2' }, isViewable: true, index: 0, key: 'msg-2' }],
-    changed: [],
-  }));
-  expect(screen.queryByTestId(E2E_TEST_IDS.chatUnreadJump)).toBeNull();
-});
-
 test('typing in the composer does not re-render the message bubbles', async () => {
   render(<ChatDetailScreen />);
   await screen.findByText('received:在吗', {}, SETTLE);
