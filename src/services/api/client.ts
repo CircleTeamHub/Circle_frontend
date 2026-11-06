@@ -679,6 +679,21 @@ async function refreshAccessToken(sessionEpoch: number) {
     .catch(async (error) => {
       assertSessionEpoch(sessionEpoch);
       const responseStatus = refreshResponseStatus ?? (error instanceof ApiError ? error.responseStatus ?? error.status : undefined);
+      // 连接都没建成（离线、电梯里、切 Wi-Fi）：保留会话、解除围栏，下次照常续签。
+      // 就算服务端其实已经轮换，重放也只撤销本设备这一个会话族，结果和围栏一样是
+      // 重新登录；而远更常见的离线回前台，就不必逼用户输密码。超时 / 5xx / 网关
+      // 这类请求确实到过服务器的不确定结果，仍走下面的围栏。
+      if (stage === 'request' && error instanceof ApiError && error.failureKind === 'network') {
+        try {
+          await useAuthStore.getState().releaseRefreshAttempt(refreshRequestId);
+        } catch {
+          reportError(new Error('Authentication refresh fence could not be released'), {
+            operation: 'session', kind: 'refreshStatePersist',
+          });
+        }
+        assertSessionEpoch(sessionEpoch);
+        throw error;
+      }
       if (!isDefinitiveAuthFailure(error)) {
         const invalidResponse = stage === 'request' && responseStatus !== undefined && responseStatus >= 200 && responseStatus < 300;
         const state = useAuthStore.getState();

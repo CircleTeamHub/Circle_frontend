@@ -82,6 +82,10 @@ function loadApiClientHarness({ persistError = false, commitError = false, pause
       if (persistError) throw new Error('fixture storage failure');
       persisted.push({ refreshUncertain: false, refreshAttemptId: requestId });
     },
+    releaseRefreshAttempt: async (requestId) => {
+      if (authState.refreshAttemptId === requestId) authState.refreshAttemptId = null;
+      persisted.push({ refreshUncertain: authState.refreshUncertain, refreshAttemptId: authState.refreshAttemptId });
+    },
   };
 
   async function clearLocalSession(expectedSessionEpoch, options) {
@@ -496,18 +500,41 @@ test('same-session refresh failing on a network error keeps the session', async 
 
   await assert.rejects(request, (error) => {
     assert.equal(error.status, 0);
-    assert.equal(error.failureKind, 'refresh-outcome-unknown');
+    assert.equal(error.failureKind, 'network');
     return true;
   });
   assert.equal(harness.getClearCalls(), 0);
   assert.equal(harness.authState.accessToken, 'access-a');
   assert.equal(harness.authState.refreshToken, 'refresh-a');
+  // No connection was made: the attempt fence is released, not escalated to a re-login.
+  assert.equal(harness.authState.refreshUncertain, false);
+  assert.equal(harness.authState.refreshAttemptId, null);
+});
+
+test('an offline refresh failure does not block the next refresh', async () => {
+  const harness = loadApiClientHarness();
+  harness.refreshResponses.push(
+    { error: new TypeError('Network request failed') },
+    { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { accessToken: 'access-b', refreshToken: 'refresh-b' } })) },
+  );
+  harness.requestResponses.push(
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(false, 401, { code: 1, message: 'expired', data: null })) },
+    { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) },
+  );
+
+  await assert.rejects(harness.apiClient('/profile/me'));
+  assert.equal(JSON.stringify(await harness.apiClient('/profile/me')), '{"ok":true}');
+  assert.equal(harness.fetchCalls.filter(([url]) => url.endsWith('/auth/refresh')).length, 2);
+  assert.equal(harness.authState.refreshToken, 'refresh-b');
+  assert.equal(harness.getClearCalls(), 0);
 });
 
 test('a lost rotation response never causes the consumed refresh credential to be sent again', async () => {
   const harness = loadApiClientHarness();
   harness.refreshResponses.push(
-    { error: new TypeError('Network request failed') },
+    // The request reached the gateway: rotation may have committed behind it.
+    { promise: Promise.resolve(response(false, 502, {})) },
     {
       promise: Promise.resolve(response(false, 401, { message: 'token family reuse detected' })),
     },
@@ -518,8 +545,8 @@ test('a lost rotation response never causes the consumed refresh credential to b
     { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) },
   );
 
-  // The server consumed refresh-a, but its 201 was lost. A second POST would
-  // revoke the family: a transport failure does not prove rotation rolled back.
+  // The server consumed refresh-a, but its 201 was lost behind the gateway. A
+  // second POST would revoke the family: a 5xx does not prove rotation rolled back.
   await assert.rejects(harness.apiClient('/profile/me'));
   assert.equal(harness.getClearCalls(), 0);
 
@@ -530,7 +557,7 @@ test('a lost rotation response never causes the consumed refresh credential to b
   assert.equal(harness.authState.refreshUncertain, true);
   assert.equal(harness.authState.sessionEpoch, 1);
   assert.equal(harness.diagnostics[0].reason, 'refresh-outcome-unknown');
-  assert.equal(harness.diagnostics[0].context.failureKind, 'network');
+  assert.equal(harness.diagnostics[0].context.status, 502);
   assert.equal(harness.diagnostics[0].context.clientRequestId, harness.fetchCalls[1][1].headers['X-Request-Id']);
   assert.doesNotMatch(JSON.stringify(harness.diagnostics) + JSON.stringify(harness.reports), /refresh-a|access-a|token family reuse detected/);
 });

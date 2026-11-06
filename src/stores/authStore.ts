@@ -79,6 +79,7 @@ interface AuthState {
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => Promise<void>;
   prepareRefresh: (requestId: string) => Promise<void>;
   markRefreshUncertain: (requestId?: string) => Promise<void>;
+  releaseRefreshAttempt: (requestId: string) => Promise<void>;
   setUser: (user: AuthUser) => void;
   setOnboardingRequired: (required: boolean) => void;
   clearSession: (options?: { preserveLoading?: boolean }) => void;
@@ -151,6 +152,10 @@ export const useAuthStore = create<AuthState>()(
         await set((state) => ({ refreshUncertain: true, refreshAttemptId: requestId ?? state.refreshAttemptId }));
       },
       prepareRefresh: async (requestId) => { await set({ refreshAttemptId: requestId }); },
+      // 只解除这一次尝试的围栏；期间若已换成别的尝试或新会话，不动它。
+      releaseRefreshAttempt: async (requestId) => {
+        await set((state) => (state.refreshAttemptId === requestId ? { refreshAttemptId: null } : {}));
+      },
 
       setUser: (user) => set({ user }),
 
