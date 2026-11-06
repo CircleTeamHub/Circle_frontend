@@ -16,8 +16,12 @@ The preproduction APK takes its version and `versionCode` from `app.json` for ea
 
 - API and chat fallback: `https://api-43-134-85-95.sslip.io`
 - media origins, in this order (`EXPO_PUBLIC_MEDIA_ORIGINS`):
-  - `https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com` — the COS bucket; presigned URLs for private media still point here
-  - `https://api-43-134-85-95.sslip.io` — the rate-limited delivery origin the backend's `OBJECT_STORAGE_DELIVERY_URL` uses for permanent public-folder URLs (avatars, covers, posts); Caddy serves it under `/circle/*` on the API domain and proxies to the COS bucket
+  - `https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com` — retain the COS origin for existing private presigned media URLs and rollback
+  - `https://api-43-134-85-95.sslip.io` — retain the existing public delivery origin under `/circle/*`, where Caddy proxies to COS, for saved URLs and rollback
+  - `https://windnote-media-preprod-delivery.yiboding1998.workers.dev` — the R2 public delivery Worker for permanent public-folder URLs
+  - `https://0bea489023c1d8692a19dadaf15dcf95.r2.cloudflarestorage.com` — the R2 S3 API origin for authorized private presigned media URLs; private objects must not use the public Worker
+
+Before backend R2 cutover, coordinate the repository's `EXPO_PUBLIC_MEDIA_ORIGINS` variable with this exact four-origin order, build a new APK, and verify both its metadata and embedded hosts with the preproduction verifier. Verify public Worker and authorized private signed media in the installed new client before switching backend storage. Installed old clients do not gain new media origins from a server switch; keep COS/API delivery available for existing references and rollback. This source change alone does not authorize a repository-variable change, APK publication, or backend cutover.
 
 These values identify the Singapore test stack (`43.134.85.95`), not production. The Tokyo stack (`43.133.201.42`) expired in 2026-10 and its IP was reassigned, so its `sslip.io` hostnames are listed as forbidden. A preproduction workflow must verify every expected hostname is embedded and that obsolete tunnel/OpenIM hostnames are absent before retaining its private artifact.
 

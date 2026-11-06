@@ -165,6 +165,10 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
       attachScreenshot: false,
       attachViewHierarchy: false,
       enableCaptureFailedRequests: false,
+      // SDK 在 beforeSend 之前按这个深度规整事件（默认 3）。诊断面包屑在
+      // extra.clientDiagnostics[i].details.* —— 第 4 层，默认深度下会被压成 "[Object]"，
+      // 「出错前 20 个请求」就整段丢了。值本身仍由 beforeSend 的白名单逐项把关。
+      normalizeDepth: 5,
       replaysSessionSampleRate: 0,
       replaysOnErrorSampleRate: 0,
       // Native crash capture remains enabled by the SDK default. These JS
@@ -270,6 +274,41 @@ const PRESIGNED_URL_MARKERS = [
 ];
 // 嵌套字段的敏感名单只有一份，在 utils/redact.ts（isSensitiveFieldKey）。这里曾经
 // 抄过一份，与日志那份分叉过两次。
+const STALL_DIAGNOSTIC_COUNTS = [
+  'xhrAckMs',
+  'xhrHeadersMs',
+  'xhrDoneMs',
+  'inflight',
+  'completedWhileWaiting',
+  'loopLagMs',
+] as const;
+const STALL_DIAGNOSTIC_FLAGS = ['xhrEarlyEvent', 'appStateChanged'] as const;
+const STALL_DIAGNOSTIC_ENUMS: Readonly<Record<string, RegExp>> = {
+  xhrStage: /^(untracked|sent|acked|headers|loading|done)$/,
+  appState: /^(active|background|inactive|unknown|extension)$/,
+  retry: /^(recovered|failed)$/,
+};
+const STALL_DIAGNOSTIC_KEYS = [
+  ...STALL_DIAGNOSTIC_COUNTS,
+  ...STALL_DIAGNOSTIC_FLAGS,
+  ...Object.keys(STALL_DIAGNOSTIC_ENUMS),
+];
+// 能在 Sentry 里按 tag 筛的那几项：「卡在哪一步」「重试救没救回来」「前后台」。
+const STALL_DIAGNOSTIC_TAG_KEYS = ['stage', 'xhrStage', 'retry', 'appState'];
+
+function isSafeStallDiagnostic(key: string, value: unknown): boolean {
+  // stage 也进 tag：现有取值都是代码里的标识符（handshake / local-read / reading-body…）。
+  if (key === 'stage') return typeof value === 'string' && SAFE_ERROR_CODE.test(value);
+  if ((STALL_DIAGNOSTIC_COUNTS as readonly string[]).includes(key)) {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  }
+  if ((STALL_DIAGNOSTIC_FLAGS as readonly string[]).includes(key)) {
+    return typeof value === 'boolean';
+  }
+  const pattern = STALL_DIAGNOSTIC_ENUMS[key];
+  return pattern ? typeof value === 'string' && pattern.test(value) : true;
+}
+
 const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'endpointPath',
   'method',
@@ -295,6 +334,9 @@ const SAFE_REPORT_CONTEXT_KEYS = new Set([
   'requestId',
   'durationMs',
   'page',
+  // 请求卡顿现场（observability/request-trace + services/api/client）：只收枚举与计数，
+  // 形状由 isSafeStallDiagnostic 把关。
+  ...STALL_DIAGNOSTIC_KEYS,
 ]);
 const SAFE_EVENT_TAG_KEYS = new Set([
   'endpointPath',
@@ -310,6 +352,7 @@ const SAFE_EVENT_TAG_KEYS = new Set([
   'requestId',
   'code',
   'storageCode',
+  ...STALL_DIAGNOSTIC_TAG_KEYS,
 ]);
 const SAFE_DIAGNOSTIC_DETAIL_KEYS = new Set([
   'circleId',
@@ -492,6 +535,7 @@ function sanitizeReportContext(
       continue;
     }
     if (!isSafeErrorCode(key, value)) continue;
+    if (!isSafeStallDiagnostic(key, value)) continue;
     if (
       value == null ||
       typeof value === 'string' ||
@@ -603,6 +647,7 @@ function sanitizeEventTags(value: unknown): Record<string, unknown> | undefined 
       continue;
     }
     if (!isSafeErrorCode(key, child)) continue;
+    if (!isSafeStallDiagnostic(key, child)) continue;
     if (typeof child === 'string' || typeof child === 'number') {
       safe[key] = sanitizeContextForSentry(child);
     }
@@ -1115,6 +1160,7 @@ function buildCaptureContext(
     'requestId',
     'code',
     'storageCode',
+    ...STALL_DIAGNOSTIC_TAG_KEYS,
   ];
   const tags = tagKeys.reduce<Record<string, string>>((nextTags, key) => {
     const value = safeContext ? readTagValue(safeContext, key) : undefined;
@@ -1141,6 +1187,8 @@ function buildCaptureContext(
       tags.status ?? 'unknown-status',
       tags.apiCode ?? 'no-api-code',
       tags.failureKind ?? 'http',
+      // 卡顿救回来（用户无感）与重试也失败（用户看到报错）各成一个 issue，计数与告警不混。
+      ...(tags.retry ? [tags.retry] : []),
     ];
   } else if (tags.operation) {
     // 非 API 失败（如 upload）：error.message 已本地化，若沿用 Sentry 默认按消息分组，
