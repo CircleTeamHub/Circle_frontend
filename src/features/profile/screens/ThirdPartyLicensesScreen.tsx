@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import notices from '../../../../assets/legal/third-party-notices.json';
+import assetNotices from '../../../../assets/legal/asset-notices.json';
 import { SettingsDetailScreen } from '@/features/profile/components/settings-detail';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
@@ -43,6 +44,7 @@ export default function ThirdPartyLicensesScreen() {
             {t('settingsDetails.about.thirdPartyLicensesDescription')}
           </Text>
           <Text selectable style={[styles.notice, { color: colors.text }]}>
+            {assetNotices.text}{'\n\n'}
             {notices.text}
           </Text>
         </View>

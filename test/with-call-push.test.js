@@ -97,7 +97,7 @@ function pluginEntry(config, name) {
   );
 }
 
-test('the app config defaults iOS calls to CallKit and bundles no ringtone', () => {
+test('the app config defaults iOS calls to CallKit and bundles the notification sound', () => {
   const config = loadAppConfig({
     EXPO_PUBLIC_IOS_CALL_MODE: undefined,
     EXPO_PUBLIC_JPUSH_APP_KEY: undefined,
@@ -109,7 +109,10 @@ test('the app config defaults iOS calls to CallKit and bundles no ringtone', () 
     { iosMode: 'callkit' },
   ]);
   assert.equal(config.extra.iosCallMode, 'callkit');
-  assert.equal(pluginEntry(config, 'expo-notifications'), 'expo-notifications');
+  assert.deepEqual(pluginEntry(config, 'expo-notifications'), [
+    'expo-notifications',
+    { sounds: ['./assets/sounds/notification_swift_gesture.wav'], defaultChannel: 'activity_swift_gesture' },
+  ]);
 });
 
 test('a China App Store build switches to time-sensitive notifications at build time', () => {
@@ -127,7 +130,7 @@ test('a China App Store build switches to time-sensitive notifications at build 
   // APNs 的 sound 只能引用包内文件：铃声要进包。
   assert.deepEqual(pluginEntry(config, 'expo-notifications'), [
     'expo-notifications',
-    { sounds: ['./assets/sounds/call_ring.caf'] },
+    { sounds: ['./assets/sounds/notification_swift_gesture.wav', './assets/sounds/call_ring.caf'], defaultChannel: 'activity_swift_gesture' },
   ]);
   assert.ok(fs.existsSync(path.join(process.cwd(), 'assets/sounds/call_ring.caf')));
 });

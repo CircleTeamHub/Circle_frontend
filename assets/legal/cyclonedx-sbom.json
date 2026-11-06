@@ -7,7 +7,7 @@
     "component": {
       "type": "application",
       "name": "windnote-ai",
-      "version": "1.0.1"
+      "version": "1.0.2"
     }
   },
   "components": [
