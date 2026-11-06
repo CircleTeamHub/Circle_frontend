@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { AppState } from 'react-native';
+import { useConversationListSnapshot } from './use-conversation-list-snapshot';
 
 const mockWritePageSnapshot = jest.fn();
 jest.mock('@/storage/page-snapshots', () => ({
@@ -31,8 +32,6 @@ jest.mock('@/stores/authStore', () => {
   useAuthStore.getState = () => state;
   return { useAuthStore };
 });
-
-import { useConversationListSnapshot } from './use-conversation-list-snapshot';
 
 function pushConversations(n: number) {
   const previous = mockChat.state;

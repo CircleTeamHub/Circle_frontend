@@ -115,10 +115,6 @@ jobs:
             codex/pr-notes-editor-media|codex/pr-reliability-notifications)
               backend_ref=codex/pr-notes-audio-drafts
               ;;
-            codex/fix-note-self-contact-20261103)
-              # 异常成员接口与独立群聊管理员撤回在配套后端分支上(合入后删掉这条)。
-              backend_ref=feat/group-abnormal-members
-              ;;
           esac
           if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$HEAD_REF" ] \
             && git ls-remote --exit-code --heads \
