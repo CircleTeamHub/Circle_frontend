@@ -489,7 +489,7 @@ jest.mock('@/services/api/errors', () => ({
 
 jest.mock('@/services/api/upload', () => ({
   requestUploadPresign: (...args: unknown[]) => mockRequestPresign(...args),
-  resolveUploadContentType: () => 'image/jpeg',
+  resolveUploadContentType: ({ mimeType }: { mimeType?: string }) => mimeType || 'image/jpeg',
   sanitizeUploadFilename: (name: string) => name,
   uploadLocalFileToPresignedUrl: (...args: unknown[]) => mockUploadFile(...args),
 }));
@@ -1056,6 +1056,23 @@ test('失焦期间传完的媒体，回到页面后仍然保存得出去', async
   });
   // notes/ 是私有目录：直连地址读不到，媒体只按 objectKey 上送。
   expect(createdNoteMediaItems()[0]).not.toHaveProperty('url');
+});
+
+test('converted HEIC keeps JPEG MIME and byte size when a section note is saved', async () => {
+  jest.mocked(createNote).mockImplementation(async (input) => noteResult(input));
+  mockRequestPermission.mockResolvedValue({ granted: true });
+  mockLaunchPicker.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///photo.heic', mimeType: 'image/heic', fileSize: 9999 }] });
+  mockRequestPresign.mockResolvedValue({ uploadUrl: 'https://upload.example/photo.jpg', key: 'notes/photo.jpg', fileUrl: null, requiredHeaders: { 'Content-Type': 'image/jpeg', 'Content-Length': '4321' } });
+  mockUploadFile.mockResolvedValue(undefined);
+  render(<EditNoteScreen />);
+  pressComposer('image');
+  await waitFor(() => expect(mockUploadFile).toHaveBeenCalledTimes(1));
+  pressComposer('title');
+  fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'HEIC test');
+  fireEvent.press(screen.getByText('notes.edit.done'));
+  await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+  expect(createdNoteMediaItems()[0]).toEqual(expect.objectContaining({ objectKey: 'notes/photo.jpg', mimeType: 'image/jpeg', size: 4321 }));
+  expect(jest.mocked(createNote).mock.calls[0][0].media[0]).toEqual(expect.objectContaining({ mimeType: 'image/jpeg', size: 4321 }));
 });
 
 test('presign 不返回 fileUrl 时，笔记媒体照常上传、预览并按 objectKey 保存', async () => {

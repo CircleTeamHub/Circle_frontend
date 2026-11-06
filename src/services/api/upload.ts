@@ -247,6 +247,12 @@ export type UploadRequiredHeaders = {
 // Keep queued transfers attached to the session that obtained their presign.
 // Weak references retain no URL, filename or account identifier.
 const uploadSessionScopes = new WeakMap<UploadRequiredHeaders, () => boolean>();
+// 与签名使用同一个 headers 对象绑定，PUT 必须上传计算签名尺寸时的 JPEG。
+const convertedUploadFiles = new WeakMap<UploadRequiredHeaders, string>();
+
+async function removeConvertedUploadFile(fileUri?: string) {
+  if (fileUri) await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+}
 
 function assertUploadSessionCurrent(isCurrent?: () => boolean): void {
   if (isCurrent && !isCurrent()) {
@@ -461,36 +467,62 @@ export async function requestUploadPresign<F extends UploadFolder>(
   } & UploadSizeSource,
 ): Promise<UploadPresignResponseFor<F>> {
   const isSessionCurrent = captureUploadProgressScope();
-  const sizeBytes = assertUploadSize(
-    typeof payload.sizeBytes === 'number'
-      ? payload.sizeBytes
-      : await resolveLocalFileSize(payload.fileUri),
-  );
-  assertUploadSessionCurrent(isSessionCurrent);
-  const raw = await apiClient<UploadPresignResponse>('/upload/presign', {
-    method: 'POST',
-    // 逐字段拼:fileUri 只是本地取值用的,绝不能进请求体(后端 DTO 不认)。
-    body: {
-      filename: ensureFilenameExtension(payload.filename, payload.contentType),
-      contentType: payload.contentType,
-      folder: payload.folder,
-      sizeBytes,
-    },
-  });
-  assertUploadSessionCurrent(isSessionCurrent);
-  const response = expectShape(
-    raw,
-    (value: unknown): value is UploadPresignResponse =>
-      isUploadPresignShape(value, payload.folder),
-    i18n.t('upload.errors.presignDataInvalid', {
-      defaultValue: '暂时无法上传，请稍后重试',
-    }),
-  );
+  let convertedUri: string | undefined;
+  let filename = payload.filename;
+  let contentType = payload.contentType;
+  if (
+    Platform.OS !== 'web' && payload.fileUri && contentType.startsWith('image/') &&
+    (/^image\/hei[cf]$/i.test(contentType) || /\.hei[cf]$/i.test(filename))
+  ) {
+    assertUploadSize(await resolveLocalFileSize(payload.fileUri));
+    assertUploadSessionCurrent(isSessionCurrent);
+    const { manipulateAsync, SaveFormat } = await import('expo-image-manipulator');
+    const image = await manipulateAsync(payload.fileUri, [], {
+      format: SaveFormat.JPEG,
+      compress: 0.9,
+    });
+    convertedUri = image.uri;
+    filename = `${filename.replace(/\.[^.]+$/, '')}.jpg`;
+    contentType = 'image/jpeg';
+  }
+  try {
+    const sizeBytes = assertUploadSize(
+      convertedUri
+        ? await resolveLocalFileSize(convertedUri)
+        : typeof payload.sizeBytes === 'number'
+          ? payload.sizeBytes
+          : await resolveLocalFileSize(payload.fileUri),
+    );
+    assertUploadSessionCurrent(isSessionCurrent);
+    const raw = await apiClient<UploadPresignResponse>('/upload/presign', {
+      method: 'POST',
+      // 逐字段拼:fileUri 只是本地取值用的,绝不能进请求体(后端 DTO 不认)。
+      body: {
+        filename: ensureFilenameExtension(filename, contentType),
+        contentType,
+        folder: payload.folder,
+        sizeBytes,
+      },
+    });
+    assertUploadSessionCurrent(isSessionCurrent);
+    const response = expectShape(
+      raw,
+      (value: unknown): value is UploadPresignResponse =>
+        isUploadPresignShape(value, payload.folder),
+      i18n.t('upload.errors.presignDataInvalid', {
+        defaultValue: '暂时无法上传，请稍后重试',
+      }),
+    );
 
-  // 形状已按目录校验：公开目录必带 fileUrl，私有目录不要求 —— 与返回类型一一对应。
-  const presign = assertUploadUrlReachableOnCurrentPlatform(response);
-  uploadSessionScopes.set(presign.requiredHeaders, isSessionCurrent);
-  return presign as UploadPresignResponseFor<F>;
+    // 形状已按目录校验：公开目录必带 fileUrl，私有目录不要求 —— 与返回类型一一对应。
+    const presign = assertUploadUrlReachableOnCurrentPlatform(response);
+    uploadSessionScopes.set(presign.requiredHeaders, isSessionCurrent);
+    if (convertedUri) convertedUploadFiles.set(presign.requiredHeaders, convertedUri);
+    return presign as UploadPresignResponseFor<F>;
+  } catch (error) {
+    await removeConvertedUploadFile(convertedUri);
+    throw error;
+  }
 }
 
 const UPLOAD_TIMEOUT_MS = 60_000;
@@ -612,52 +644,62 @@ export async function uploadLocalFileToPresignedUrl(
   timeoutMs: number = UPLOAD_TIMEOUT_MS,
   options?: UploadProgressOptions,
 ) {
-  assertUploadSessionCurrent(uploadSessionScopes.get(requiredHeaders));
-  if (Platform.OS === 'web') {
-    // Web 没有原生上传任务：blob:/data: URI 取成 Blob 后走通用 XHR PUT
-    // 通道（同一套超时与错误语义；requiredHeaders 原样转发，见 presign 契约）。
-    const blob = await readLocalBlobOnWeb(fileUri);
-    // timeoutMs 必须透传：视频那几个调用点传的是 VIDEO_UPLOAD_TIMEOUT_MS（分钟级），
-    // 丢掉就退回 60 秒默认值 —— 网页端发稍大一点的视频必然超时失败，
-    // 而原生端同样的文件是好的，很难联想到是平台分支吃掉了参数。
-    await uploadFileToPresignedUrl(
-      uploadUrl,
-      contentType,
-      blob,
-      requiredHeaders,
-      timeoutMs,
-      options,
-    );
-    return;
-  }
-  return runStorageUpload({ kind: 'local-file', contentType }, async () => {
-    const progress = startUploadProgress(contentType, options);
-    try {
-      assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
-      // Expo streams the file natively on both platforms; Android's RNFS raw
-      // upload path buffers the whole request before its bytes reach the socket.
-      const task = FileSystem.createUploadTask(uploadUrl, fileUri, {
-        headers: requiredHeaders,
-        httpMethod: 'PUT',
-        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      }, ({ totalBytesSent, totalBytesExpectedToSend }) => {
-        progress.update(totalBytesSent, totalBytesExpectedToSend);
-      });
-      const response = await withUploadTimeout(
-        () => ({
-          promise: task.uploadAsync(),
-          cancel: () => task.cancelAsync(),
-        }),
-        timeoutMs,
-      );
-
-      if (!response || response.status < 200 || response.status >= 300) {
-        throw uploadStatusError(response?.status ?? 0, response?.body);
-      }
-
-      return response;
-    } finally {
-      progress.finish();
+  const convertedUri = convertedUploadFiles.get(requiredHeaders);
+  try {
+    assertUploadSessionCurrent(uploadSessionScopes.get(requiredHeaders));
+    if (convertedUri) {
+      fileUri = convertedUri;
+      contentType = 'image/jpeg';
     }
-  });
+    if (Platform.OS === 'web') {
+      // Web 没有原生上传任务：blob:/data: URI 取成 Blob 后走通用 XHR PUT
+      // 通道（同一套超时与错误语义；requiredHeaders 原样转发，见 presign 契约）。
+      const blob = await readLocalBlobOnWeb(fileUri);
+      // timeoutMs 必须透传：视频那几个调用点传的是 VIDEO_UPLOAD_TIMEOUT_MS（分钟级），
+      // 丢掉就退回 60 秒默认值 —— 网页端发稍大一点的视频必然超时失败，
+      // 而原生端同样的文件是好的，很难联想到是平台分支吃掉了参数。
+      await uploadFileToPresignedUrl(
+        uploadUrl,
+        contentType,
+        blob,
+        requiredHeaders,
+        timeoutMs,
+        options,
+      );
+      return;
+    }
+    return await runStorageUpload({ kind: 'local-file', contentType }, async () => {
+      const progress = startUploadProgress(contentType, options);
+      try {
+        assertPresignedUploadUrlReachableOnCurrentPlatform(uploadUrl);
+        // Expo streams the file natively on both platforms; Android's RNFS raw
+        // upload path buffers the whole request before its bytes reach the socket.
+        const task = FileSystem.createUploadTask(uploadUrl, fileUri, {
+          headers: requiredHeaders,
+          httpMethod: 'PUT',
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        }, ({ totalBytesSent, totalBytesExpectedToSend }) => {
+          progress.update(totalBytesSent, totalBytesExpectedToSend);
+        });
+        const response = await withUploadTimeout(
+          () => ({
+            promise: task.uploadAsync(),
+            cancel: () => task.cancelAsync(),
+          }),
+          timeoutMs,
+        );
+
+        if (!response || response.status < 200 || response.status >= 300) {
+          throw uploadStatusError(response?.status ?? 0, response?.body);
+        }
+
+        return response;
+      } finally {
+        progress.finish();
+      }
+    });
+  } finally {
+    convertedUploadFiles.delete(requiredHeaders);
+    await removeConvertedUploadFile(convertedUri);
+  }
 }

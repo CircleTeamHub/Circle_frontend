@@ -472,9 +472,10 @@ test('transport failures remain visible in request metrics', async () => {
     onFetch: () => { now = 81; throw new Error('native failure with private data'); },
   });
   await assert.rejects(() => apiClient('/collections'));
-  assert.equal(metrics.length, 1);
+  // A GET that fails on the network is retried once; each attempt is its own metric.
+  assert.equal(metrics.length, 2);
   assert.equal(metrics[0][1], 80);
-  assert.equal(metrics[0][2].outcome, 'network');
+  assert.deepEqual(metrics.map(([, , attributes]) => attributes.outcome), ['network', 'network']);
 });
 
 test('diagnostic sink failures do not replace the original API error', async () => {

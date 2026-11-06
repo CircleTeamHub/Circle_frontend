@@ -17,7 +17,7 @@ import { useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar'; // 控制顶部状态栏样式（文字颜色等）
 // 必须在入口文件最早引入，启用动画引擎。
 import 'react-native-reanimated';
-import { ActivityIndicator, NativeModules, Platform, View } from 'react-native';
+import { ActivityIndicator, AppState, NativeModules, Platform, View } from 'react-native';
 import { rehydrateLanguageFromStorage } from '@/i18n';
 import { installAlertBridge } from '@/utils/alert-bridge';
 import { initEncryptedStorage, migrateFromAsyncStorage } from '@/storage';
@@ -44,8 +44,11 @@ import { CallInviteHost } from '@/features/call/components/CallInviteHost';
 import { LoginApprovalHost } from '@/features/security/components/LoginApprovalHost';
 import {
   registerDeviceIdProvider,
+  registerRequestTraceHooks,
   registerStableDeviceIdProvider,
 } from '@/services/api/client';
+import { diagnosticNow } from '@/observability/http-diagnostics';
+import { createRequestTraceHooks } from '@/observability/request-trace';
 import { getDeviceId, getStableDeviceId } from '@/services/auth/device-id';
 import { AppBlurTarget } from '@/components/app/app-blur-target';
 import { AppDialogHost } from '@/components/app/app-dialog-host';
@@ -89,6 +92,24 @@ silenceDomBridgeRejection();
 // 每个 API 请求带上本机设备 ID（陌生设备登录验证），要早于任何请求注册。
 registerDeviceIdProvider(getDeviceId);
 registerStableDeviceIdProvider(getStableDeviceId);
+
+// 请求卡住时记下「卡在哪一步」，随超时上报带走（见 observability/request-trace）。
+// 只在原生端：web 的 fetch 不经过 RN 的 XMLHttpRequest。
+if (Platform.OS !== 'web') {
+  registerRequestTraceHooks(
+    createRequestTraceHooks({
+      now: diagnosticNow,
+      getAppState: () => AppState.currentState ?? 'unknown',
+      // 进程级常驻：随 app 生命周期存在，不需要移除。
+      subscribeAppState: (listener) => {
+        AppState.addEventListener('change', listener);
+      },
+      setInterval: (callback, ms) => setInterval(callback, ms),
+      clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
+      xhrPrototype: (globalThis.XMLHttpRequest?.prototype ?? null) as unknown as Record<string, unknown> | null,
+    }),
+  );
+}
 
 async function registerLiveKitGlobals() {
   if (!NativeModules.WebRTCModule) {

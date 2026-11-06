@@ -169,7 +169,7 @@ function isAbortError(error: unknown): boolean {
 // shouldReportApiFailure 只给 invalid-json 开了后门,取 res.status 会让 200 上的断流
 // 被判成「无需上报」,信号彻底丢掉。
 //
-// AbortError 只可能来自本文件那个 15s 定时器(RequestOptions 不暴露 signal),
+// AbortError 只可能来自本文件的请求定时器(RequestOptions 不暴露 signal),
 // 而定时器一直活到 body 读完(见 executeRequest),所以 body 读到一半超时会在这里
 // reject——归入既有 timeout 分支。
 function bodyReadError(
@@ -194,13 +194,28 @@ function bodyReadError(
   );
 }
 
+// 请求的每一段等待都必须自己认中止信号，不能指望下层：RN 的 fetch（whatwg-fetch）在
+// XHR 完成时就摘掉了中止监听，之后若 resolve 前出错（状态码 0 时 new Response 在
+// setTimeout 里抛错）或 res.text()（Blob → FileReader）挂住，abort 根本叫不停——
+// 页面永远转圈，一条超时都不上报。下层本来就会因 abort 而 reject 时，这里赛跑无害。
+function untilAborted<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+  const aborted = () => Object.assign(new Error('Request timed out'), { name: 'AbortError' });
+  if (signal.aborted) return Promise.reject(aborted());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(aborted());
+    signal.addEventListener('abort', onAbort, { once: true });
+    pending.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
 async function readPayload<T>(
   res: Response,
   reportContext: { endpoint: string; method: string },
+  signal: AbortSignal,
 ): Promise<ApiResponse<T> | null> {
   let text: string;
   try {
-    text = await res.text();
+    text = await untilAborted(res.text(), signal);
   } catch (error) {
     logApiEvent('body-read-error', {
       endpointPath: safeHttpEndpoint(reportContext.endpoint),
@@ -266,6 +281,39 @@ export function registerStableDeviceIdProvider(provider: DeviceIdProvider | null
   stableDeviceIdProvider = provider;
 }
 
+// 请求诊断钩子：原生端在启动时注册（见 app/_layout、observability/request-trace），
+// 记下 XHR 走到哪一步、等待期间 JS 线程卡没卡。client 只拿结果，不碰 XHR 内部。
+export type RequestTrace = Readonly<Record<string, string | number | boolean>>;
+export type RequestTraceHooks = {
+  begin: (requestId: string) => void;
+  finish: (requestId: string, failed: boolean) => RequestTrace | undefined;
+  /** 响应头已到、body 还在往下走：慢，但没卡死。 */
+  isReceiving: (requestId: string) => boolean;
+};
+let requestTraceHooks: RequestTraceHooks | null = null;
+
+export function registerRequestTraceHooks(hooks: RequestTraceHooks | null) {
+  requestTraceHooks = hooks;
+}
+
+// 整个请求的预算（headers + body）。
+const REQUEST_TIMEOUT_MS = 15_000;
+// GET 到这个时刻还「没动静」就判定卡住，换一个新请求：2026-11 实测服务器 30ms 内回了、
+// 回包也到了手机，个别请求仍在客户端卡死，同一连接上前后的请求却正常——卡住的那次等满
+// 也不会回来，新请求通常立刻成功。响应头已到、body 还在下载的慢请求不算卡住，照常等满
+// 整段预算（判断靠 request-trace 钩子；没装钩子的 web 不做这一步）。重试只用剩下的预算，
+// 总耗时仍是 REQUEST_TIMEOUT_MS——服务器整个不回包时（冷启动 /auth/me 外面还有一层
+// retry）不至于把等待翻倍。
+const GET_STALL_CHECK_MS = 8_000;
+// 连接被判死（安卓 OkHttp 心跳没回音，见 plugins/with-android-okhttp-health）时，挂在上面的
+// 请求直接以 network 失败；GET 换新请求（会走新连接）再试一次，同样只用剩下的预算。
+const GET_RETRYABLE_FAILURES: ReadonlySet<string> = new Set(['stalled', 'network']);
+// 剩余预算再少也给这么多：刚建一条新连接（TLS 握手 + 一个往返）就要这个量级。
+const GET_RETRY_MIN_TIMEOUT_MS = 3_000;
+
+type RequestStage = 'device-id' | 'awaiting-response' | 'reading-body';
+type RequestBudget = { timeoutMs?: number; stallCheckMs?: number };
+
 // 稳定 ID 只是顺带上报（这次没报，下次续签再报），绝不能为它拖住续签：
 // 续签是单例，它卡住所有等着 401 重试的请求都跟着挂住。
 const STABLE_DEVICE_ID_WAIT_MS = 1_000;
@@ -286,7 +334,8 @@ async function readStableDeviceId(): Promise<string | null> {
 async function executeRequest<T>(
   endpoint: string,
   options: RequestOptions,
-  accessTokenOverride?: string | null
+  accessTokenOverride?: string | null,
+  { timeoutMs = REQUEST_TIMEOUT_MS, stallCheckMs }: RequestBudget = {},
 ) {
   const {
     method = 'GET',
@@ -302,6 +351,10 @@ async function executeRequest<T>(
   const url = `${API_URL}${endpoint}`;
   const diagnosticSessionEpoch = useAuthStore.getState().sessionEpoch;
   let requestId = createHttpRequestId();
+  // 诊断钩子按「发出去的 X-Request-Id」记账；requestId 之后可能被服务端回显覆盖。
+  const traceRequestId = requestId;
+  let stage: RequestStage = 'device-id';
+  let stalled = false;
   const startedAt = diagnosticNow();
   let status = 0;
   let failureKind: string | undefined;
@@ -322,20 +375,34 @@ async function executeRequest<T>(
   const serializedBody = body == null ? undefined : serializeRequestBody(body);
   // 每个请求都带本机设备 ID：登录 / 续签据此判断是否受信任设备。
   const controller = new AbortController();
-  // 15s 是整个请求的预算:headers + body。定时器必须活到 body 读完为止——
+  // timeoutMs 是整个请求的预算:headers + body。定时器必须活到 body 读完为止——
   // 流式 fetch(web)下 fetch 只等到 headers 就 resolve,body 还在传;
   // 若在那时就 clearTimeout,body 读将没有任何上限,卡住的流会永久挂起。
-  const timer = setTimeout(() => controller.abort(), 15_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // 到点还没动静（没收到响应头，或 XHR 已完成却没交到 JS）就提前叫停，交给调用方重试。
+  const stallTimer = stallCheckMs === undefined ? undefined : setTimeout(() => {
+    try {
+      if (!requestTraceHooks || requestTraceHooks.isReceiving(traceRequestId)) return;
+    } catch {
+      return;
+    }
+    stalled = true;
+    controller.abort();
+  }, stallCheckMs);
+  try {
+    requestTraceHooks?.begin(traceRequestId);
+  } catch {
+    // Diagnostics must never change the request outcome.
+  }
 
   try {
     let res: Response;
     try {
-      const deviceId = deviceIdProvider ? await new Promise<string | null>((resolve, reject) => {
-        const abort = () => reject(Object.assign(new Error('Request timed out'), { name: 'AbortError' }));
-        controller.signal.addEventListener('abort', abort, { once: true });
-        void deviceIdProvider!().catch(() => null).then(resolve).finally(() => controller.signal.removeEventListener('abort', abort));
-      }) : null;
-      res = await fetch(url, {
+      const deviceId = deviceIdProvider
+        ? await untilAborted(deviceIdProvider().catch(() => null), controller.signal)
+        : null;
+      stage = 'awaiting-response';
+      res = await untilAborted(fetch(url, {
         method,
         headers: {
           // 只有 JSON / urlencoded 才由我们设置 Content-Type；
@@ -350,7 +417,7 @@ async function executeRequest<T>(
         },
         ...(serializedBody ? { body: serializedBody.body } : {}),
         signal: controller.signal,
-      });
+      }), controller.signal);
     } catch (error) {
       logApiEvent('network-error', {
         endpointPath,
@@ -390,15 +457,19 @@ async function executeRequest<T>(
       // Keep locally generated correlation if a response/header shim misbehaves.
     }
 
+    stage = 'reading-body';
     const payload = await readPayload<T>(
       res,
       { endpoint, method },
+      controller.signal,
     );
     if (!res.ok) failureKind = 'http';
     else if (isWrappedResponse(payload) && payload.code !== 0) failureKind = 'api-code';
     return { res, payload, requestId, durationMs: Math.max(0, Math.round(diagnosticNow() - startedAt)) };
   } catch (error) {
     if (error instanceof ApiError) {
+      // 卡顿检查叫停的不是「预算用完」：标成 stalled，apiClient 据此换新请求重试。
+      if (stalled && error.failureKind === 'timeout') error.failureKind = 'stalled';
       failure = error;
       failureKind = error.failureKind;
       status = error.status;
@@ -408,12 +479,30 @@ async function executeRequest<T>(
     throw error;
   } finally {
     clearTimeout(timer);
+    clearTimeout(stallTimer);
     const durationMs = Math.max(0, Math.round(diagnosticNow() - startedAt));
+    // 只有传输层失败（status 0：超时 / 断网 / body 断流）才需要「卡在哪」。
+    const transportFailure = failure?.status === 0;
+    let trace: RequestTrace | undefined;
+    try {
+      trace = requestTraceHooks?.finish(traceRequestId, transportFailure);
+    } catch {
+      // Diagnostics must never change the request outcome.
+    }
     if (failure) {
       failure.requestId = requestId;
       failure.durationMs = durationMs;
+      if (transportFailure) failure.diagnostics = { ...trace, stage };
     }
-    const details = { endpointPath, method: diagnosticMethod, status, requestId, durationMs, failureKind };
+    const details = {
+      endpointPath,
+      method: diagnosticMethod,
+      status,
+      requestId,
+      durationMs,
+      failureKind,
+      ...(transportFailure ? { stage } : {}),
+    };
     recordMetric('api.request.duration', durationMs, {
       method: diagnosticMethod, route: endpointPath, outcome: failureKind ?? 'success',
     });
@@ -590,6 +679,57 @@ function shouldReportApiFailure(error: unknown, status: number | undefined): boo
   return shouldReportHttpFailure(status);
 }
 
+type StallRetryReport = { attempts: number; retry: 'recovered' | 'failed' };
+
+// Report unexpected backend failures (network + 5xx) to Sentry; expected
+// 4xx (validation/auth/not-found) are left to normal handling.
+function reportApiFailure(
+  error: unknown,
+  endpoint: string,
+  options: RequestOptions,
+  stallRetry?: StallRetryReport,
+): void {
+  const status = error instanceof ApiError ? error.status : undefined;
+  if (!shouldReportApiFailure(error, status)) return;
+  const reportEndpoint =
+    error instanceof ApiError ? error.reportEndpoint ?? endpoint : endpoint;
+  const reportMethod =
+    error instanceof ApiError
+      ? error.reportMethod ?? options.method ?? 'GET'
+      : options.method ?? 'GET';
+  const captureContext = {
+    // 诊断字段放最前：下面的固定字段同名时以它们为准。
+    ...(error instanceof ApiError ? error.diagnostics : undefined),
+    endpointPath: safeHttpEndpoint(reportEndpoint),
+    method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(reportMethod) ? reportMethod.toUpperCase() : 'OTHER',
+    status,
+    ...(error instanceof ApiError ? { requestId: error.requestId, durationMs: error.durationMs } : {}),
+    ...(error instanceof ApiError && typeof error.code === 'number' && Number.isSafeInteger(error.code)
+      ? { apiCode: error.code }
+      : {}),
+    ...(error instanceof ApiError && error.failureKind
+      ? { failureKind: error.failureKind }
+      : {}),
+    ...(error instanceof ApiError && typeof error.errorCode === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.errorCode)
+      ? { errorCode: error.errorCode }
+      : {}),
+    ...stallRetry,
+  };
+  const signature = [
+    captureContext.endpointPath,
+    captureContext.method,
+    status,
+    captureContext.apiCode,
+    captureContext.failureKind,
+    stallRetry?.retry,
+  ].join(':');
+  try {
+    if (shouldCaptureFailure(signature)) reportError(error, captureContext);
+  } catch {
+    // A reporting SDK must not replace the original business error.
+  }
+}
+
 export async function apiClient<T>(
   endpoint: string,
   options: RequestOptions = {}
@@ -598,8 +738,49 @@ export async function apiClient<T>(
   const diagnosticSessionEpoch = useAuthStore.getState().sessionEpoch;
   const requestSessionEpoch =
     auth && retryOnAuthError ? useAuthStore.getState().sessionEpoch : null;
+  // 只有 GET 在卡住 / 连接判死时自动换新请求重试：幂等，重发不会造成重复写入。
+  const retriesStall = (options.method ?? 'GET').toUpperCase() === 'GET';
+  const sessionUnchanged = () => useAuthStore.getState().sessionEpoch === diagnosticSessionEpoch;
+  // 卡顿已按「第一次的现场」报过时，不再把重试的失败重复报一次。
+  let stallReported = false;
   try {
-    const initialRequest = await executeRequest<T>(endpoint, options);
+    let initialRequest: Awaited<ReturnType<typeof executeRequest<T>>>;
+    try {
+      initialRequest = await executeRequest<T>(
+        endpoint,
+        options,
+        undefined,
+        retriesStall ? { stallCheckMs: GET_STALL_CHECK_MS } : {},
+      );
+    } catch (stall) {
+      if (
+        !retriesStall ||
+        !(stall instanceof ApiError) ||
+        !GET_RETRYABLE_FAILURES.has(stall.failureKind ?? '') ||
+        !sessionUnchanged()
+      ) {
+        throw stall;
+      }
+      // 卡顿是在检查点被叫停的；连接判死则在任意时刻，按实际耗时扣。
+      const spentMs = stall.failureKind === 'stalled' ? GET_STALL_CHECK_MS : stall.durationMs ?? 0;
+      try {
+        initialRequest = await executeRequest<T>(endpoint, options, undefined, {
+          timeoutMs: Math.max(REQUEST_TIMEOUT_MS - spentMs, GET_RETRY_MIN_TIMEOUT_MS),
+        });
+      } catch (retryError) {
+        // 重试也没拿到响应：用户看到的是重试的报错，上报的是第一次卡住的现场。
+        if (retryError instanceof ApiError && retryError.status === 0 && sessionUnchanged()) {
+          reportApiFailure(stall, endpoint, options, { attempts: 2, retry: 'failed' });
+          stallReported = true;
+        }
+        throw retryError;
+      }
+      // 重试拿到了响应（无论状态码）：卡顿救回来了，用户无感，但也要留下现场。
+      // 之后若是 5xx / 刷新失败，那是另一件事，由外层照常上报。
+      if (sessionUnchanged()) {
+        reportApiFailure(stall, endpoint, options, { attempts: 1, retry: 'recovered' });
+      }
+    }
 
     // An authenticated current-password check can fail without invalidating the session.
     if (initialRequest.res.status === 401 && auth && retryOnAuthError &&
@@ -661,39 +842,8 @@ export async function apiClient<T>(
     options.onResponseHeaders?.(initialRequest.res.headers);
     return data;
   } catch (error) {
-    // Report unexpected backend failures (network + 5xx) to Sentry; expected
-    // 4xx (validation/auth/not-found) are left to normal handling. Behavior is
-    // otherwise unchanged — the error is still re-thrown exactly as before.
-    const status = error instanceof ApiError ? error.status : undefined;
-    if (useAuthStore.getState().sessionEpoch === diagnosticSessionEpoch && shouldReportApiFailure(error, status)) {
-      const reportEndpoint =
-        error instanceof ApiError ? error.reportEndpoint ?? endpoint : endpoint;
-      const reportMethod =
-        error instanceof ApiError
-          ? error.reportMethod ?? options.method ?? 'GET'
-          : options.method ?? 'GET';
-      const captureContext = {
-        endpointPath: safeHttpEndpoint(reportEndpoint),
-        method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(reportMethod) ? reportMethod.toUpperCase() : 'OTHER',
-        status,
-        ...(error instanceof ApiError ? { requestId: error.requestId, durationMs: error.durationMs } : {}),
-        ...(error instanceof ApiError && typeof error.code === 'number' && Number.isSafeInteger(error.code)
-          ? { apiCode: error.code }
-          : {}),
-        ...(error instanceof ApiError && error.failureKind
-          ? { failureKind: error.failureKind }
-          : {}),
-        ...(error instanceof ApiError && typeof error.errorCode === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.errorCode)
-          ? { errorCode: error.errorCode }
-          : {}),
-      };
-      const signature = [captureContext.endpointPath, captureContext.method, status, captureContext.apiCode, captureContext.failureKind].join(':');
-      try {
-        if (shouldCaptureFailure(signature)) reportError(error, captureContext);
-      } catch {
-        // A reporting SDK must not replace the original business error.
-      }
-    }
+    // The error is still re-thrown exactly as before; reporting is a side channel.
+    if (!stallReported && sessionUnchanged()) reportApiFailure(error, endpoint, options);
     throw error;
   }
 }

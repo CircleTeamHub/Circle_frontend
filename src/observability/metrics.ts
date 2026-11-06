@@ -56,7 +56,7 @@ export const TELEMETRY_METRICS = {
     attributes: {
       method: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'OTHER'],
       route: [...HTTP_ROUTE_TEMPLATES, '/__other__'],
-      outcome: ['success', 'http', 'api-code', 'timeout', 'network', 'body-read', 'invalid-json', 'unexpected'],
+      outcome: ['success', 'http', 'api-code', 'timeout', 'network', 'stalled', 'body-read', 'invalid-json', 'unexpected'],
     },
   },
   'app.operation.duration': {
