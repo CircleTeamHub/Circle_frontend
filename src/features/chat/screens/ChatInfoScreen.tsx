@@ -33,6 +33,7 @@ import {
   setMyGroupChatAlias,
   setMyGroupChatRemark,
   clearChatConversationHistory,
+  requestChatHistoryClear,
   createCircleChatConversation,
   fetchChatMembers,
   refreshChatConversation,
@@ -115,6 +116,7 @@ import { ApiError, isDefinitiveAuthFailure } from '@/services/api/client';
 import { topNotice } from '@/components/app/top-notice-store';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { ClearHistoryDialog } from '@/features/chat/components/ClearHistoryDialog';
 
 const s = StyleSheet.create({
   scroll: { flex: 1 },
@@ -367,6 +369,7 @@ export default function ChatInfoScreen() {
     originScope?: string;
   }>();
   const [blacklist, setBlacklist] = useState(false);
+  const [clearDialogVisible, setClearDialogVisible] = useState(false);
   const [blacklistPending, setBlacklistPending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const [groupInfo, setGroupInfo] = useState<CircleGroupInfo | null>(null);
@@ -1718,6 +1721,33 @@ export default function ChatInfoScreen() {
 
   // G-14 清空聊天记录:私聊推进双方水位;群聊只有群主可以推进全员水位,
   // 管理员和普通成员只能推进自己的记录。
+  // 私聊清空确认:先清自己的;勾了「双向清空」再拿清到的水位请对方授权。
+  const handleConfirmDirectClear = useCallback(
+    (bothSides: boolean) => {
+      setClearDialogVisible(false);
+      if (!resolvedConversationID) return;
+      void (async () => {
+        try {
+          const clearedBeforeHeight = await clearChatConversationHistory(resolvedConversationID, {
+            forEveryone: false,
+          });
+          if (bothSides) {
+            await requestChatHistoryClear(resolvedConversationID, clearedBeforeHeight);
+          }
+          Alert.alert(
+            bothSides
+              ? t('chat.clearHistoryRequestSent', { defaultValue: '已清空，已向对方发送双向清空申请' })
+              : t('chat.clearHistoryDone'),
+          );
+        } catch (error) {
+          reportHandledFailure('chatInfo', 'clearDirectHistory', error);
+          Alert.alert(t('chat.clearHistory'), getApiErrorMessage(error, t('common.networkError')));
+        }
+      })();
+    },
+    [resolvedConversationID, t],
+  );
+
   const handleClearHistory = useCallback(() => {
     if (!resolvedConversationID) return;
 
@@ -1775,21 +1805,8 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    Alert.alert(
-      t('chat.clearHistory'),
-      t('chat.clearHistoryConfirmDirect', {
-        defaultValue:
-          '确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。',
-      }),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('chat.clearHistory'),
-          style: 'destructive',
-          onPress: () => clearHistory(true),
-        },
-      ],
-    );
+    // 私聊:默认只清自己的;勾「双向清空」再请对方授权清对方那份。
+    setClearDialogVisible(true);
   }, [
     canClearGroupForEveryone,
     isGroupConversation,
@@ -2121,17 +2138,16 @@ export default function ChatInfoScreen() {
               </>
             )}
             {/* 管理入口紧跟群公告(临时群没有公告行时紧跟群名称),群主/管理员不用滚到底找。 */}
-            {isOwner ? (
-              <>
-                <Divider />
-                <GroupInfoRow
-                  label={t('chat.groupManagement.noteManagement', {
-                    defaultValue: '笔记管理',
-                  })}
-                  onPress={handleOpenNoteManagement}
-                />
-              </>
-            ) : null}
+            {/* 群主进来是笔记管理;普通成员进来只读看群笔记和状态。 */}
+            <Divider />
+            <GroupInfoRow
+              label={
+                isOwner
+                  ? t('chat.groupManagement.noteManagement', { defaultValue: '笔记管理' })
+                  : t('chat.groupManagement.groupNotes', { defaultValue: '群笔记' })
+              }
+              onPress={handleOpenNoteManagement}
+            />
             {canManageGroup ? (
               <>
                 <Divider />
@@ -2447,6 +2463,11 @@ export default function ChatInfoScreen() {
           selected={burnDurationSec ?? 0}
           onSelect={handleSelectBurnDuration}
           onClose={() => setBurnPickerVisible(false)}
+        />
+        <ClearHistoryDialog
+          visible={clearDialogVisible}
+          onCancel={() => setClearDialogVisible(false)}
+          onConfirm={handleConfirmDirectClear}
         />
     </View>
   );

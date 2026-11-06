@@ -476,12 +476,13 @@
       "videoTooLong": "请选择 10 分钟以内的视频",
       "videoUnsupported": "仅支持 MP4、MOV、M4V 视频",
       "videoUnavailable": "视频不可用",
-      "videoPreparing": "正在处理视频…",
       "playVideo": "播放视频",
       "noteBatchPartialFailed": "{{count}} 条内容发送失败",
       "cardSendFailed": "名片发送失败，请重试",
       "favoriteSendFailed": "收藏内容发送失败，请重试",
-      "favoriteLegacyVoiceUnsupported": "这条旧版语音收藏无法重新发送"
+      "favoriteLegacyVoiceUnsupported": "这条旧版语音收藏无法重新发送",
+      "mediaPreparing": "正在处理所选内容…",
+      "mediaSendFailed": "图片或视频发送失败，请重试"
     },
     "stickers": {
       "title": "自定义表情",
@@ -530,31 +531,33 @@
       "edit": "编辑",
       "readers": "已读成员",
       "readersNone": "还没有人读到这条消息",
-      "readersMore": "{{names}} 等,共 {{count}} 人以上已读",
       "editing": "编辑消息",
       "resend": "重发",
       "resendConfirm": "重新发送这条消息？",
-      "retryFailed": "发送失败，点击重发"
+      "retryFailed": "发送失败，点击重发",
+      "readersTitle": "已读成员（{{count}}）",
+      "readersFailed": "已读成员加载失败",
+      "readersMoreFooter": "仅显示前 {{shown}} 人，另有 {{count}} 人已读"
     },
     "mentions": {
-      "empty": "暂无可 @ 的成员"
+      "empty": "暂无可 @ 的成员",
+      "title": "选择提醒的人",
+      "count": "{{count}} 位成员",
+      "all": "所有人",
+      "allHint": "提醒群里每一个人"
     },
     "forward": {
-      "noPrivateChats": "暂无私聊会话",
-      "noGroupChats": "暂无群聊会话",
-      "noMatches": "当前分类没有匹配的聊天",
       "title": "选择转发对象",
-      "searchPlaceholder": "搜索会话",
       "empty": "没有待转发消息",
-      "group": "群聊",
-      "single": "私聊",
       "done": "已转发",
       "failed": "转发失败",
       "failedRetry": "请稍后重试",
       "locationWithDetail": "[位置] {{detail}}",
       "unsupported": "该消息类型暂不支持转发",
-      "workStatusWarningTitle": "订单状态可能变化",
-      "workStatusWarning": "这条笔记标记为打烊或已下架，确认后仍会继续发送。"
+      "sendTo": "发送给 {{name}}",
+      "captionPlaceholder": "给朋友留言（可选）",
+      "batchPreview": "共 {{count}} 条消息",
+      "sendToMany": "分别发送给 {{count}} 个聊天"
     },
     "avatarA11y": {
       "self": "查看我的资料",
@@ -808,7 +811,10 @@
         "batchLimit": "一次最多移出 {{n}} 人",
         "removeSelected": "移出 ({{n}})",
         "loadFailed": "异常成员加载失败"
-      }
+      },
+      "noteOffShelf": "下架",
+      "groupNotes": "群笔记",
+      "boundNotesHint": "群主关联到本群的笔记，状态会随群主的设置实时更新。"
     },
     "groupEvent": {
       "system": "系统",
@@ -838,7 +844,9 @@
       "muteAllDisabled": "{{actor}} 解除了全员禁言",
       "groupAvatarUpdated": "{{actor}} 更新了群头像",
       "policyEnabled": "{{actor}} 开启了「{{policy}}」",
-      "policyDisabled": "{{actor}} 关闭了「{{policy}}」"
+      "policyDisabled": "{{actor}} 关闭了「{{policy}}」",
+      "messagePinned": "{{actor}} 置顶了一条消息",
+      "messageUnpinned": "{{actor}} 取消了置顶消息"
     },
     "clearHistoryWarning": "清空后将删除当前会话的聊天记录，且无法恢复。",
     "clear": "清空",
@@ -899,8 +907,6 @@
     "attachments": {
       "photos": "照片/视频",
       "mediaHub": "自媒体",
-      "mediaPhoto": "照片",
-      "mediaVideo": "视频",
       "camera": "拍照",
       "voiceCall": "语/视频通话",
       "location": "位置",
@@ -908,7 +914,8 @@
       "friendCard": "名片",
       "favorites": "我的收藏",
       "quickReply": "快捷语",
-      "transfer": "转账"
+      "transfer": "转账",
+      "mediaAlbum": "相册"
     },
     "photoEditor": {
       "title": "编辑照片",
@@ -1030,8 +1037,10 @@
       "workStatus": {
         "working": "开工",
         "closed": "打烊",
-        "unlisted": "已下架，状态可能变化"
-      }
+        "unlisted": "已下架，状态可能变化",
+        "offShelf": "下架"
+      },
+      "sectionSendFailed": "发送失败，请重试"
     },
     "voice": {
       "cancelTip": "松开手指，取消发送",
@@ -1061,7 +1070,51 @@
     "clearHistoryConfirmGroupOwner": "「仅删除我的记录」只清空你自己的；「删除所有人的记录」会同时删除全部成员的聊天记录，无法撤销。",
     "clearHistoryConfirmDirect": "确定清空聊天记录吗？对方的记录也会同时删除，此操作无法撤销。",
     "clearHistoryDone": "已清空",
-    "clearHistoryDoneDirect": "双方聊天记录已删除"
+    "clearHistoryDoneDirect": "双方聊天记录已删除",
+    "mediaSend": {
+      "title": "发送 {{count}} 项内容",
+      "captionPlaceholder": "添加描述（可选）",
+      "confirm": "发送（{{count}}）"
+    },
+    "targetPicker": {
+      "title": "选择一个聊天",
+      "multi": "多选",
+      "single": "单选",
+      "searchPlaceholder": "搜索好友或群聊",
+      "recentForwards": "最近转发",
+      "clearRecent": "清空",
+      "removeRecent": "从最近转发移除 {{name}}",
+      "recentChats": "最近聊天",
+      "contacts": "通讯录",
+      "groups": "我的群聊",
+      "noMatch": "没有匹配的聊天",
+      "noContacts": "暂无好友",
+      "noGroups": "暂无群聊",
+      "noChats": "暂无聊天",
+      "contactsFailed": "通讯录加载失败",
+      "limitReached": "一次最多选 {{count}} 个聊天",
+      "sendSelected": "发送（{{count}}）"
+    },
+    "quickChat": {
+      "expand": "展开完整聊天"
+    },
+    "pin": {
+      "pin": "置顶",
+      "unpin": "取消置顶",
+      "tag": "置顶",
+      "failed": "操作失败",
+      "fallbackPreview": "[消息]",
+      "bannerA11y": "置顶消息：{{preview}}"
+    },
+    "clearRequest": {
+      "accept": "确定授权",
+      "decline": "拒绝",
+      "failed": "操作失败"
+    },
+    "clearHistoryBothSides": "双向清空",
+    "clearHistoryBothSidesHint": "申请双向清空需好友「确定授权」才会清空对方的消息记录",
+    "clearHistoryConfirmTitle": "确定要清空聊天记录？",
+    "clearHistoryRequestSent": "已清空，已向对方发送双向清空申请"
   },
   "contacts": {
     "title": "联系人",
@@ -1359,17 +1412,8 @@
     },
     "shareCard": {
       "title": "发送圈子名片",
-      "confirmTitle": "发送圈子名片",
-      "confirmMessage": "把「{{circleName}}」发送给 {{conversationName}}？",
-      "sentTitle": "已发送",
-      "sentMessage": "圈子名片已发送。",
       "failedTitle": "发送失败",
-      "loadFailed": "无法加载聊天对象，请稍后重试",
-      "sending": "发送中...",
-      "rowFallback": "发送圈子名片",
-      "pickConversation": "选择一个会话",
-      "description": "把「{{circleName}}」的圈子名片发到聊天里，对方点击即可申请加入。",
-      "empty": "暂无可发送的聊天对象"
+      "preview": "[圈子名片] {{circleName}}"
     },
     "create": {
       "title": "创建圈子",
@@ -3094,7 +3138,8 @@
       "openSenderChat": "和 {{name}} 私聊",
       "openGroupChat": "进入群聊 {{name}}",
       "viewContactDetails": "查看 {{name}} 的个人资料",
-      "viewGroupDetails": "查看 {{name}} 的群资料"
+      "viewGroupDetails": "查看 {{name}} 的群资料",
+      "statusOffShelf": "下架"
     },
     "groupPicker": {
       "title": "编辑分组",
@@ -3114,7 +3159,8 @@
       "selectedCount": "已选 {{count}} 项",
       "selectAll": "全选",
       "clearAll": "取消全选",
-      "next": "下一步"
+      "send": "发送（{{count}}）",
+      "moreOptions": "其他选项"
     },
     "loadFailed": "笔记加载失败，请检查网络后重试",
     "collect": {
@@ -3122,29 +3168,34 @@
       "editTitle": "编辑收藏标题",
       "groupHint": "先选择分组，下一步可以修改标题。",
       "ungrouped": "未分组",
-      "titleHint": "默认标题可以直接修改，保存后生成你的笔记副本。",
-      "titleLabel": "收藏标题"
+      "titleHint": "输入一个方便自己查找的标题，不填就用原笔记标题。",
+      "titleLabel": "收藏标题",
+      "untitled": "未命名笔记",
+      "skipTitleNextTime": "下次不再编辑标题",
+      "createGroup": "新建分组",
+      "createGroupPlaceholder": "输入分组名称",
+      "createGroupConfirm": "创建",
+      "createGroupFailed": "分组创建失败",
+      "createGroupFailedHint": "请稍后重试。"
     },
     "shareToChat": {
-      "workStatusWarning": "订单状态可能已经变化（打烊或已下架），确认后仍会继续发送。",
-      "confirmTitle": "发送笔记",
       "partialFailed": "有 {{count}} 条内容发送失败。重试时只会发送失败项。",
       "limitExceeded": "一次最多分享 {{count}} 条笔记。其他批量操作不受此限制。",
       "failedTitle": "发送失败",
-      "failedMessage": "暂时无法发送这条笔记，请稍后重试。",
-      "sending": "发送中...",
-      "sendSelected": "发送给 {{count}} 个聊天对象",
-      "retryFailed": "重试 {{count}} 条失败内容",
-      "loadFailed": "无法加载聊天对象，请稍后重试",
-      "empty": "暂无可发送的聊天对象",
-      "groupHint": "群聊",
-      "friendHint": "好友",
-      "searchPlaceholder": "搜索好友或群聊",
-      "noMatch": "没有匹配的好友或群聊"
+      "batchPreview": "共 {{count}} 条笔记",
+      "singlePreview": "[笔记] {{title}}"
     },
     "recycleBin": "回收站",
     "recycleBinHint": "已删除的笔记可在这里恢复，30 天后自动清除。",
-    "recycleBinTitle": "回收站"
+    "recycleBinTitle": "回收站",
+    "settings": {
+      "entry": "设置",
+      "title": "笔记设置",
+      "collectSection": "添加笔记时",
+      "chooseGroup": "选择分组",
+      "editTitle": "编辑标题",
+      "collectHint": "关闭「选择分组」会放进未分组；关闭「编辑标题」会沿用原笔记标题。"
+    }
   },
   "search": {
     "loadFriendsFailed": "好友列表加载失败，请稍后重试",
@@ -3319,7 +3370,18 @@
       "muteAllDisabled": "全员禁言已解除",
       "groupAvatarUpdated": "群头像已更新",
       "policyEnabled": "「{{policy}}」已开启",
-      "policyDisabled": "「{{policy}}」已关闭"
+      "policyDisabled": "「{{policy}}」已关闭",
+      "messagePinned": "有一条消息被置顶",
+      "messageUnpinned": "置顶消息已取消",
+      "clearRequestSent": "你申请了双向清空聊天记录，等待对方同意",
+      "clearRequestReceived": "对方申请双向清空聊天记录",
+      "clearRequestAcceptedBySelf": "你已同意双向清空，你这边的聊天记录已清空",
+      "clearRequestDeclinedBySelf": "你已拒绝双向清空",
+      "clearRequestAcceptedByPeer": "对方已同意双向清空，对方的聊天记录已清空",
+      "clearRequestDeclinedByPeer": "对方拒绝了双向清空",
+      "clearRequestNeutral": "双向清空聊天记录申请",
+      "clearRequestAcceptedNeutral": "双向清空已同意",
+      "clearRequestDeclinedNeutral": "双向清空已拒绝"
     },
     "silence": {
       "minutes": "{{n}}分钟",
@@ -3801,7 +3863,8 @@
     "AUTH_LOGIN_RECOVERY_LIMITED": "找回申请过多，请等现有申请处理完后再试",
     "AUTH_SECURITY_QUESTIONS_INVALID": "请选择两个不同的问题并填写答案",
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "未设置密保问题，请在受信任设备上确认登录",
-    "AUTH_SECURITY_ANSWERS_INVALID": "密保答案不正确"
+    "AUTH_SECURITY_ANSWERS_INVALID": "密保答案不正确",
+    "CHAT_CLEAR_REQUEST_HANDLED": "这条申请已经处理过了"
   },
   "qr": {
     "loginDeprecatedTitle": "二维码登录已停用",

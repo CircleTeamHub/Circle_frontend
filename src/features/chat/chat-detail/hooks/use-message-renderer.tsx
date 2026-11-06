@@ -5,7 +5,7 @@ import { getGroupEntryHref } from '@/features/groups/routes';
 import { FailedMessageRetry } from '@/features/chat/components/FailedMessageRetry';
 import { messageRowKey } from '@/chat-core/local-message-id';
 import { useFriendRemarkStore } from '@/stores/friendRemarkStore';
-import { memo, type ReactElement, useCallback } from 'react';
+import { memo, type ReactElement, useCallback, useMemo } from 'react';
 import { type ChatMessage } from '@/types';
 import { type GestureResponderEvent, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +41,8 @@ import {
   toCircleScope,
 } from '@/features/user/utils/routes';
 import { type ThemeColors } from '@/theme';
+import type { NoteCardSendSection } from '@/features/chat/chat-detail/hooks/use-note-batch-send';
+import { ClearRequestNotice } from '@/features/chat/components/bubbles/clear-request-notice';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
@@ -111,6 +113,8 @@ export interface MessageRendererParams {
   getMessageLongPressHandler: (message: ChatMessage) => (event: GestureResponderEvent) => void;
   handleStartCall: () => void;
   handleRetryMessage: (message: ChatMessage) => void;
+  /** 卡片下方的「视频 / 展示 / 位置」:以我的名义把这块内容发到当前聊天。 */
+  handleSendNoteSection: (noteId: string, section: NoteCardSendSection) => void;
 }
 
 /**
@@ -146,6 +150,7 @@ export function useMessageRenderer({
   getMessageLongPressHandler,
   handleStartCall,
   handleRetryMessage,
+  handleSendNoteSection,
 }: MessageRendererParams) {
   const { imageViewer, openImage } = useConversationImageViewer(messages, selfDestructEnabled, selfDestructCacheKey, handleImageViewed);
   // 群聊接收消息的显示名：本地备注覆盖 > 群成员权威昵称 > 消息自带昵称 > 会话标题。
@@ -224,10 +229,36 @@ export function useMessageRenderer({
     ],
   );
 
+  // 已经有答复提示的双向清空申请,不再给「同意 / 拒绝」。先算成字符串:每来一条消息
+  // messages 都会换,集合若跟着换,行渲染函数就跟着换、所有气泡都要重渲染。
+  const answeredClearRequestKey = useMemo(
+    () =>
+      messages
+        .flatMap((message) =>
+          message.clearRequestAnswer ? [message.clearRequestAnswer.requestId] : [],
+        )
+        .join('\n'),
+    [messages],
+  );
+  const answeredClearRequests = useMemo(
+    () => new Set(answeredClearRequestKey ? answeredClearRequestKey.split('\n') : []),
+    [answeredClearRequestKey],
+  );
+
   const renderMessage = useCallback((item: ChatMessage) => {
     switch (item.type) {
       case 'date': return <DatePill text={item.text ?? ''} />;
-      case 'system-notice': return <SystemNoticePill text={item.text ?? ''} />;
+      case 'system-notice':
+        if (item.clearRequest) {
+          return (
+            <ClearRequestNotice
+              text={item.text ?? ''}
+              requestId={item.clearRequest.requestId}
+              actionable={!item.clearRequest.fromSelf && !answeredClearRequests.has(item.clearRequest.requestId)}
+            />
+          );
+        }
+        return <SystemNoticePill text={item.text ?? ''} />;
       case 'received':
         return withMessageActions(item, (
           <ReceivedBubble
@@ -343,13 +374,18 @@ export function useMessageRenderer({
                   ?.find((message) => message.id === item.id)?.height,
               }))
             }
-            onSectionPress={(note, section) =>
+            onSectionPress={(note, section) => {
+              // 「笔记」仍然打开详情;其余三块直接以我的名义发到当前聊天。
+              if (section !== 'text') {
+                handleSendNoteSection(note.noteId, section);
+                return;
+              }
               router.push(getNoteDetailHref(scope, note.noteId, note.ownerId ?? '', section, {
                 conversationId: conversationID, messageId: item.id,
                 messageHeight: useChatStore.getState().messagesByConversation[conversationID]
                   ?.find((message) => message.id === item.id)?.height,
-              }))
-            }
+              }));
+            }}
             hideStatus={isGroupChat || isAssistantConversation}
           />
         ));
@@ -501,6 +537,8 @@ export function useMessageRenderer({
     receivedDisplayName,
     withGroupSenderLabel,
     handleOpenMessageSender,
+    handleSendNoteSection,
+    answeredClearRequests,
     getAvatarLongPressHandler,
     handleOpenSelfProfile,
     handleOpenUserCard,

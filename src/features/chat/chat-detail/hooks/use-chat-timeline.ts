@@ -524,10 +524,8 @@ export function useChatTimeline({
   const quotePagingRef = useRef(false);
 
   const loadUntilQuoteVisible = useCallback(
-    async (item: ChatMessage) => {
+    async (targetId: string) => {
       if (!conversationID || quotePagingRef.current) return;
-      const targetId = item.quoteMessageId;
-      if (!targetId) return;
       quotePagingRef.current = true;
       try {
         for (let page = 0; page < QUOTE_PAGING_MAX; page += 1) {
@@ -572,14 +570,12 @@ export function useChatTimeline({
     [conversationID, mountedRef],
   );
 
-  const handleQuotePress = useCallback(
-    (item: ChatMessage) => {
-      if (!item.quoteMessageId) return;
+  /** 跳到指定消息(引用块、置顶横幅共用):在窗口里就滚过去,不在就往回翻。 */
+  const jumpToMessage = useCallback(
+    (targetId: string) => {
       // 读 ref 而不是依赖 messages:依赖的话每来一条消息这个回调就换一次,
       // 行渲染函数跟着换,列表里所有气泡都要重渲染。
-      const index = messagesRef.current.findIndex(
-        (m) => m.id === item.quoteMessageId,
-      );
+      const index = messagesRef.current.findIndex((m) => m.id === targetId);
       if (index >= 0) {
         flatListRef.current?.scrollToIndex({
           index,
@@ -589,11 +585,18 @@ export function useChatTimeline({
         return;
       }
       // 原消息比当前内存窗口更早。原来直接 return —— 引用块照样是可点的,
-      // 点下去却什么都不发生,而会话稍微长一点这就是常态。按 quoteHeight
-      // 往回翻,翻到目标进窗口为止(有界),然后再滚过去。
-      void loadUntilQuoteVisible(item);
+      // 点下去却什么都不发生,而会话稍微长一点这就是常态。往回翻,
+      // 翻到目标进窗口为止(有界),然后再滚过去。
+      void loadUntilQuoteVisible(targetId);
     },
     [loadUntilQuoteVisible],
+  );
+
+  const handleQuotePress = useCallback(
+    (item: ChatMessage) => {
+      if (item.quoteMessageId) jumpToMessage(item.quoteMessageId);
+    },
+    [jumpToMessage],
   );
 
   return {
@@ -628,5 +631,6 @@ export function useChatTimeline({
     unreadStartMessageID,
     highlightedMessageID,
     handleQuotePress,
+    jumpToMessage,
   };
 }

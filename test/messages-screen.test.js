@@ -545,7 +545,10 @@ test('screens that stay mounted under a pushed screen only subscribe to conversa
     path.join(process.cwd(), 'src/features/notes/components/ShareNoteSheet.tsx'),
     'utf8',
   );
-  assert.match(shareSheet, /useStoreWhileActive\(\s*useChatStore,\s*selectConversations,\s*visible/);
+  // 笔记分享改用全屏「选择一个聊天」:订阅会话的 ChatTargetPicker 只挂在 Modal 里,
+  // Modal 关着时不渲染子树,面板自身也不直接订阅会话列表。
+  assert.match(shareSheet, /<Modal\s+visible=\{visible\}[\s\S]*?<ChatTargetPicker\b[\s\S]*?<\/Modal>/);
+  assert.doesNotMatch(shareSheet, /useChatStore/);
 
   const qrSheet = fs.readFileSync(
     path.join(process.cwd(), 'src/features/qr/components/ShareQrSheet.tsx'),

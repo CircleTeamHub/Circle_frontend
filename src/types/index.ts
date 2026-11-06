@@ -60,11 +60,13 @@ export interface NoteCardData {
   title: string;
   contentPreview: string | null;
   coverUrl: string | null;
+  /** 服务端读消息时现签的前几张图片,卡片上一排缩略图;旧卡片没有。 */
+  previewUrls?: string[];
   imageCount: number;
   videoCount: number;
   groupNames: string[];
   /** 仅展示订单状态，不包含个人名片或群名片。 */
-  workStatus?: 'WORKING' | 'CLOSED' | 'UNSET' | null;
+  workStatus?: 'WORKING' | 'CLOSED' | 'OFF_SHELF' | 'UNSET' | null;
   /** 发布生命周期；下架只触发发送提醒，删除由服务端拒绝。 */
   publicationStatus?: 'ACTIVE' | 'UNLISTED' | 'DELETED' | null;
   hasText?: boolean;
@@ -172,6 +174,10 @@ export interface ChatMessage {
     | 'qr-card'
     | 'call-record';
   text?: string;
+  /** 系统提示:私聊里的双向清空申请(对方发来的才给「同意 / 拒绝」)。 */
+  clearRequest?: { requestId: string; fromSelf: boolean };
+  /** 系统提示:双向清空申请的结果,答复的是哪一条。 */
+  clearRequestAnswer?: { requestId: string };
   quotedText?: string;
   // 真引用(G-09):被引用消息的坐标与状态,点击引用块按 height 定位。
   quoteMessageId?: string;

@@ -7,14 +7,17 @@ import { Avatar } from '@/components/ui/avatar';
 import { AssistantFloatingHeader } from '@/features/assistant/components/AssistantFloatingHeader';
 import { router } from 'expo-router';
 import { getChatInfoTopHref, type UserProfileScope } from '@/features/user/utils/routes';
-import { type EmbeddedChatParams } from '@/features/chat/chat-detail/types';
+import { type ChatSheetActions, type EmbeddedChatParams } from '@/features/chat/chat-detail/types';
 import { type ThemeColors } from '@/theme';
+import { useTranslation } from 'react-i18next';
 import {
   type ChatDetailThemedStyles,
 } from '@/features/chat/chat-detail/hooks/use-chat-detail-themed-styles';
 
 export interface ChatDetailHeaderProps {
   embedded: EmbeddedChatParams | undefined;
+  /** 半屏快捷聊天:左边是关闭,右边是展开成完整聊天页。 */
+  sheet?: ChatSheetActions;
   colors: ThemeColors;
   scope: UserProfileScope;
   sourceID: string;
@@ -36,6 +39,7 @@ export interface ChatDetailHeaderProps {
  */
 export function ChatDetailHeader({
   embedded,
+  sheet,
   colors,
   scope,
   sourceID,
@@ -51,10 +55,11 @@ export function ChatDetailHeader({
   assistantSpinning = false,
   d,
 }: ChatDetailHeaderProps) {
+  const { t } = useTranslation();
   if (isAssistant) {
     return (
       <AssistantFloatingHeader
-        onBack={embedded ? undefined : handleBack}
+        onBack={sheet ? sheet.onClose : embedded ? undefined : handleBack}
         spinning={assistantSpinning}
         title={conversationTitle}
       />
@@ -63,7 +68,16 @@ export function ChatDetailHeader({
 
   return (
     <View style={s.header}>
-      {embedded ? null : (
+      {sheet ? (
+        <Pressable
+          onPress={sheet.onClose}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.close')}
+        >
+          <Ionicons name="close" size={24} color={colors.text} />
+        </Pressable>
+      ) : embedded ? null : (
         <Pressable
           testID={E2E_TEST_IDS.chatBack}
           onPress={handleBack}
@@ -98,7 +112,16 @@ export function ChatDetailHeader({
           ) : null}
         </View>
       </View>
-      {isAssistant ? null : (
+      {sheet ? (
+        <Pressable
+          hitSlop={8}
+          onPress={sheet.onExpand}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.quickChat.expand', { defaultValue: '展开完整聊天' })}
+        >
+          <Ionicons name="expand-outline" size={22} color={colors.textSecondary} />
+        </Pressable>
+      ) : isAssistant ? null : (
         <Pressable
           hitSlop={8}
           onPress={() =>

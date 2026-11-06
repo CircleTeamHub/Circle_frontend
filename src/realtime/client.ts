@@ -504,7 +504,8 @@ function isNoteSourceStatusChange(
     payload.sourceNoteId.length > 0 &&
     (payload.workStatus === null ||
       payload.workStatus === 'WORKING' ||
-      payload.workStatus === 'CLOSED') &&
+      payload.workStatus === 'CLOSED' ||
+      payload.workStatus === 'OFF_SHELF') &&
     (payload.status === 'ACTIVE' ||
       payload.status === 'UNLISTED' ||
       payload.status === 'DELETED') &&

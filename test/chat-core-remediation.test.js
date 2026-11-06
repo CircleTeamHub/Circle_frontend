@@ -341,9 +341,9 @@ test('typing flows end to end: throttle-send behind settings, store expiry, head
 });
 
 test('muted conversations raise no in-app banner', () => {
-  // 免打扰就是不打扰:端内横幅也不弹(行为测试见 chat-core-dispatcher)。
+  // 免打扰就是不打扰:端内横幅也不弹;唯一例外是 @我 / @所有人 的强提醒(行为测试见 chat-core-dispatcher)。
   const dispatcher = read('src/chat-core/dispatcher.ts');
-  assert.match(dispatcher, /if \(conversation\.muted\) return 'suppressed';/);
+  assert.match(dispatcher, /if \(conversation\.muted && !mentionsCurrentUser\(message, selfId\)\) return 'suppressed';/);
 });
 
 test('file and unknown message types render placeholders, never blank bubbles', () => {
@@ -477,12 +477,14 @@ test('swipe delete sequences hide-after-clear and surfaces failures', () => {
   assert.match(screen, /messages\.deleteChat[\s\S]{0,200}getApiErrorMessage/);
 });
 
-test('reader receipts disclose the 200-reader cap', () => {
+test('reader receipts open a full-page list that discloses the 200-reader cap', () => {
   const screen = readChatDetailSource();
-  assert.match(screen, /readersMore/);
+  assert.match(screen, /pathname: '\/\(tabs\)\/messages\/message-readers'/);
+  const page = read('src/features/chat/screens/MessageReadersScreen.tsx');
+  assert.match(page, /readersMoreFooter/);
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
-    assert.ok(dict?.chat?.messageActions?.readersMore, `${locale} readersMore`);
+    assert.ok(dict?.chat?.messageActions?.readersMoreFooter, `${locale} readersMoreFooter`);
   }
 });
 

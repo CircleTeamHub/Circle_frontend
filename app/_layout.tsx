@@ -250,6 +250,17 @@ function RootStack() {
         />
         <Stack.Screen name="(chat)" />
         <Stack.Screen name="(social)" />
+        {/* 点消息横幅弹出的半屏聊天:透明底,下面的页面保持原样。 */}
+        <Stack.Screen
+          name="quick-chat"
+          options={{
+            presentation: 'transparentModal',
+            animation: 'fade',
+            contentStyle: { backgroundColor: 'transparent' },
+            gestureEnabled: false,
+            fullScreenGestureEnabled: false,
+          }}
+        />
       </Stack>
     </NavThemeProvider>
   );

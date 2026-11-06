@@ -8,7 +8,7 @@ import { Radius, Spacing, Typography, useTheme } from '@/theme';
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface HeaderAction {
-  key: 'recycleBin' | 'unlisted' | 'drafts';
+  key: 'recycleBin' | 'unlisted' | 'drafts' | 'settings';
   icon: IoniconName;
   label: string;
   onPress: () => void;
@@ -20,16 +20,17 @@ interface NotesHeaderActionsProps {
   onOpenRecycleBin: () => void;
   onOpenUnlisted: () => void;
   onOpenDrafts: () => void;
+  onOpenSettings: () => void;
 }
 
 /**
- * 我的笔记页右上角的三个入口（回收站 / 已下架 / 草稿箱）。
+ * 我的笔记页右上角的入口（回收站 / 已下架 / 草稿箱 / 设置）。
  *
- * 手机上三个「图标+文字」横排放不下（英文标签更长），改成三个独立的圆角小方块：
+ * 手机上几个「图标+文字」横排放不下（英文标签更长），改成独立的圆角小方块：
  * 图标在上、文字在下。只给图标会看不出用途，每个入口都必须带文字。
  */
 export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
-  function NotesHeaderActions({ compact, onOpenRecycleBin, onOpenUnlisted, onOpenDrafts }) {
+  function NotesHeaderActions({ compact, onOpenRecycleBin, onOpenUnlisted, onOpenDrafts, onOpenSettings }) {
     const { colors } = useTheme();
     const { t } = useTranslation();
 
@@ -53,8 +54,14 @@ export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
           label: t('notes.drafts.title', { defaultValue: '草稿箱' }),
           onPress: onOpenDrafts,
         },
+        {
+          key: 'settings',
+          icon: 'settings-outline',
+          label: t('notes.settings.entry', { defaultValue: '设置' }),
+          onPress: onOpenSettings,
+        },
       ],
-      [t, onOpenRecycleBin, onOpenUnlisted, onOpenDrafts],
+      [t, onOpenRecycleBin, onOpenUnlisted, onOpenDrafts, onOpenSettings],
     );
 
     const d = useMemo(
@@ -116,7 +123,7 @@ export const NotesHeaderActions: React.FC<NotesHeaderActionsProps> = memo(
 );
 
 /**
- * 页头只有一行：返回键 + 三个入口。系统大字号下标签继续放大会把入口挤出屏幕，
+ * 页头只有一行：返回键 + 几个入口。系统大字号下标签继续放大会把入口挤出屏幕，
  * 这里把标签放大上限定在 1.3 倍（无障碍朗读仍读完整标签），超出的宽度靠
  * 方块收缩 + 单行省略消化。
  */
@@ -145,7 +152,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
   },
-  // 可以收缩（窄屏 + 大字号时三块平分剩余宽度），但不小于 44 的点击区域。
+  // 可以收缩（窄屏 + 大字号时几块平分剩余宽度），但不小于 44 的点击区域。
   tile: {
     flexShrink: 1,
     minWidth: 44,

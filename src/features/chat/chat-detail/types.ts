@@ -32,6 +32,13 @@ export type ChatDetailRouteParams = {
 
 // type 而非 interface：路由跳转处要把它原样塞给 router.push 的 params，
 // 只有 type 字面量带隐式索引签名、能赋给 expo-router 的 UnknownInputParams。
+/** 半屏快捷聊天页头的两个动作。 */
+export type ChatSheetActions = {
+  onClose: () => void;
+  /** 展开成完整的聊天页。 */
+  onExpand: () => void;
+};
+
 export type EmbeddedChatParams = {
   conversationID: string;
   sourceID?: string;

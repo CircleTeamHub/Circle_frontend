@@ -1,6 +1,6 @@
 export type NoteStatus = 'ACTIVE' | 'UNLISTED' | 'DELETED';
-/** 老板给场地设置的订单状态；未设置不会阻止发布或转发。 */
-export type NoteWorkStatus = 'WORKING' | 'CLOSED' | 'UNSET';
+/** 老板给场地设置的订单状态；未设置不会阻止发布或转发。下架只是其中一种状态。 */
+export type NoteWorkStatus = 'WORKING' | 'CLOSED' | 'OFF_SHELF' | 'UNSET';
 export type NoteMediaType = 'IMAGE' | 'VIDEO' | 'AUDIO';
 
 export interface NoteMediaSummary {

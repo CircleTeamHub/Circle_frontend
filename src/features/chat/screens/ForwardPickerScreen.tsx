@@ -1,25 +1,12 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Alert,
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '@/i18n';
-import { Avatar } from '@/components/ui/avatar';
-import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { NavHeader } from '@/components/ui/nav-header';
 import { useMessageForwardStore } from '@/features/chat/store/use-message-forward-store';
 import { isEphemeralPeerMessage } from '@/features/chat/utils/ephemeral-message';
-import { loadChatConversations } from '@/chat-core/api';
 import { startChatSend } from '@/chat-core/send-handle';
 import {
   sendCardMessage,
@@ -28,15 +15,17 @@ import {
   sendTextMessage,
   type ChatCardType,
 } from '@/chat-core/client';
-import { useChatStore } from '@/chat-core/store';
-import { mapChatConversationToUI } from '@/chat-core/mappers';
-import type { ChatConversationDto, ChatMessageDto } from '@/chat-core/protocol';
-import { Radius, Spacing, Typography, useTheme } from '@/theme';
+import { getChatMessagePreview } from '@/chat-core/mappers';
+import { SendConfirmDialog } from '@/features/chat/components/send-confirm-dialog';
+import { ChatTargetPicker } from '@/features/chat/components/chat-target-picker/ChatTargetPicker';
+import { resolveChatTargetConversationId } from '@/features/chat/components/chat-target-picker/resolve-chat-target';
+import type { ChatTarget } from '@/features/chat/components/chat-target-picker/types';
+import { useRecentForwardTargetsStore } from '@/features/chat/components/chat-target-picker/use-recent-forward-targets-store';
+import type { ChatMessageDto } from '@/chat-core/protocol';
+import { useAuthStore } from '@/stores/authStore';
+import { Spacing, Typography, useTheme } from '@/theme';
 import type { ChatMessage } from '@/types';
-import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
 import { reportHandledFailure } from '@/observability/report-failure';
-import { shouldWarnNoteWorkStatus } from '@/features/chat/utils/note-work-status';
-import { withFreshNoteSourceStatus } from '@/features/chat/utils/note-card-fresh-status';
 
 type PendingForward = {
   message: ChatMessage;
@@ -45,58 +34,8 @@ type PendingForward = {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  targetTabs: {
-    flexDirection: 'row',
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.sm,
-    padding: Spacing.xs,
-    gap: Spacing.xs,
-    borderRadius: Radius.lg,
-  },
-  targetTab: {
-    flex: 1,
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    borderRadius: Radius.md,
-  },
-  targetTabLabel: { ...Typography.body, fontWeight: '600' },
-  searchWrap: {
-    marginHorizontal: Spacing.lg,
-    marginVertical: Spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    minHeight: 52,
-    borderRadius: Radius.md,
-  },
-  searchInput: {
-    flex: 1,
-    ...Typography.bodyRegular,
-    lineHeight: 20,
-    minHeight: 24,
-    paddingVertical: 0,
-  },
-  listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  row: {
-    minHeight: 68,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  rowText: { flex: 1, gap: 3 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
-  listEmpty: { paddingVertical: Spacing.xl * 2, alignItems: 'center' },
-  emptyText: { textAlign: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.lg },
+  subtitle: { ...Typography.small },
 });
 
 // 可直接按原 payload 重发的卡片类型 —— 即客户端本来就能发的那几种(ChatCardType)。
@@ -117,10 +56,6 @@ function str(value: unknown): string | undefined {
 
 function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function conversationDisplayName(conversation: ChatConversationDto): string {
-  return mapChatConversationToUI(conversation).name;
 }
 
 /**
@@ -248,14 +183,12 @@ export default function ForwardPickerScreen() {
   const pendingBatch = useMessageForwardStore((state) => state.pendingBatch);
   const setPendingBatch = useMessageForwardStore((state) => state.setPendingBatch);
   const clearPending = useMessageForwardStore((state) => state.clear);
-  const conversations = useChatStore((state) => state.conversations);
-  const snapshotLoaded = useChatStore((state) => state.conversationsSnapshotLoaded);
-  const [query, setQuery] = useState('');
-  const [targetType, setTargetType] = useState<'single' | 'group'>('single');
-  const [sendingID, setSendingID] = useState<string | null>(null);
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const recordRecent = useRecentForwardTargetsStore((state) => state.record);
+  const [sending, setSending] = useState(false);
+  // 选中对象后先停在「发送给」确认框,可以附一句留言再转发。
+  const [confirmTargets, setConfirmTargets] = useState<ChatTarget[] | null>(null);
   const mountedRef = useRef(true);
-  // 转发前的来源状态重取进行中；防止连点弹出多个确认框。
-  const statusCheckRef = useRef(false);
   const sendingRef = useRef(false);
 
   useEffect(() => {
@@ -265,86 +198,46 @@ export default function ForwardPickerScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (snapshotLoaded) return;
-    loadChatConversations().catch((err) => {
-      reportHandledFailure('forward', 'loadConversations', err);
-    });
-  }, [snapshotLoaded]);
-
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return conversations.filter((conversation) => {
-      const matchesType = targetType === 'single'
-        ? conversation.type === 'DIRECT'
-        : conversation.type === 'GROUP' || conversation.type === 'TEMP';
-      return matchesType && (!keyword || conversationDisplayName(conversation).toLowerCase().includes(keyword));
-    });
-  }, [conversations, query, targetType]);
-
-  /**
-   * 卡片上的开工/打烊/下架是消息发出时的快照；转发前按来源实时状态重取，
-   * 提醒才对得上老板当前的设置。取不到时退回快照，不阻断转发。
-   */
-  async function confirmForward(conversation: ChatConversationDto) {
-    const noteCards = (pendingBatch ?? (pending ? [pending] : [])).flatMap(({ message }) =>
-      message.type === 'note-card' && message.noteCard ? [message.noteCard] : [],
-    );
-    if (noteCards.length === 0) {
-      void handleForward(conversation);
-      return;
+  /** 进队即算成功;没进队(本地门禁)直接抛,由外层报「转发失败」。 */
+  async function queueSend(send: (onCreate: () => void) => Promise<unknown>, step: string) {
+    const handle = startChatSend(send);
+    if (handle.queued) {
+      void handle.delivered.catch((error: unknown) => {
+        reportHandledFailure('forward', step, error);
+      });
+    } else {
+      await handle.delivered;
     }
-    if (statusCheckRef.current) return;
-    statusCheckRef.current = true;
-    let freshCards = noteCards;
-    try {
-      freshCards = await withFreshNoteSourceStatus(noteCards);
-    } finally {
-      statusCheckRef.current = false;
-    }
-    if (!mountedRef.current) return;
-    if (!freshCards.some(shouldWarnNoteWorkStatus)) {
-      void handleForward(conversation);
-      return;
-    }
-    Alert.alert(
-      t('chat.forward.workStatusWarningTitle', { defaultValue: '订单状态可能变化' }),
-      t('chat.forward.workStatusWarning', {
-        defaultValue: '这条笔记标记为打烊或已下架，确认后仍会继续转发。',
-      }),
-      [
-        { text: t('common.cancel', { defaultValue: '取消' }), style: 'cancel' },
-        {
-          text: t('common.send', { defaultValue: '继续转发' }),
-          onPress: () => void handleForward(conversation),
-        },
-      ],
-    );
   }
 
-  async function handleForward(conversation: ChatConversationDto) {
-    if (!pending || sendingRef.current) return;
+  async function handleForward(targets: ChatTarget[], caption: string) {
+    if (!pending || sendingRef.current || targets.length === 0) return;
     sendingRef.current = true;
-    setSendingID(conversation.id);
+    setSending(true);
+    const delivered: ChatTarget[] = [];
     try {
       // sendWithOptimism 已把发出的消息写进 chat-core store,无需手动 append。
       // 进了发送队列就算转发成功,不等送达:断线时队列会等到重连,之后仍发不出去的
       // 在目标会话里标红、可以长按重发。没进队(类型不支持、本地门禁)才报失败。
       const items = pendingBatch ?? [pending];
-      for (let index = 0; index < items.length; index++) {
-        const handle = startChatSend((onCreate) =>
-          sendForwardedMessage(items[index], conversation.id, onCreate),
-        );
-        if (handle.queued) {
-          void handle.delivered.catch((error: unknown) => {
-            reportHandledFailure('forward', 'forwardMessage', error);
-          });
-        } else {
-          await handle.delivered;
+      for (const target of targets) {
+        const conversationId = await resolveChatTargetConversationId(target);
+        for (let index = 0; index < items.length; index++) {
+          await queueSend(
+            (onCreate) => sendForwardedMessage(items[index], conversationId, onCreate),
+            'forwardMessage',
+          );
+          // 只发给一个对象时,本地失败后只把没发出去的留在选择页里重试。
+          if (pendingBatch && targets.length === 1) setPendingBatch(items.slice(index + 1));
         }
-        // Already queued messages retain their own retry bubble. A later local
-        // failure must leave only the unsent remainder in this picker.
-        if (pendingBatch) setPendingBatch(items.slice(index + 1));
+        if (caption) {
+          // 留言是一条普通文字消息,排在转发内容之后进同一个发送队列。
+          await queueSend(
+            (onCreate) => sendTextMessage({ conversationId, text: caption, onCreate }),
+            'forwardCaption',
+          );
+        }
+        delivered.push({ ...target, key: conversationId, conversationId });
       }
       clearPending();
       if (!mountedRef.current) return;
@@ -359,135 +252,64 @@ export default function ForwardPickerScreen() {
       if (!mountedRef.current) return;
       Alert.alert(t('chat.forward.failed'), t('chat.forward.failedRetry'));
     } finally {
+      if (userId && delivered.length > 0) recordRecent(userId, delivered);
       sendingRef.current = false;
-      if (mountedRef.current) setSendingID(null);
+      if (mountedRef.current) setSending(false);
     }
   }
 
-  const d = useMemo(
-    () => ({
-      container: {
-        backgroundColor: colors.background,
-        paddingTop: insets.top,
-      },
-      searchWrap: {
-        backgroundColor: colors.surface,
-      },
-      searchInput: {
-        color: colors.text,
-      },
-      row: {
-        backgroundColor: colors.surface,
-      },
-      title: {
-        color: colors.text,
-        ...Typography.body,
-      },
-      subtitle: {
-        color: colors.textSecondary,
-        ...Typography.small,
-      },
-    }),
-    [colors, insets.top],
-  );
+  const forwardPreview = pendingBatch && pendingBatch.length > 1
+    ? t('chat.forward.batchPreview', {
+        count: pendingBatch.length,
+        defaultValue: '共 {{count}} 条消息',
+      })
+    : pending
+      ? (pending.dto ? getChatMessagePreview(pending.dto) : getForwardFallbackText(pending.message))
+      : '';
 
   if (!pending) {
     return (
-      <View style={[s.container, d.container]}>
+      <View style={[s.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <NavHeader title={t('chat.forward.title')} />
         <View style={s.center}>
-          <Text style={d.subtitle}>{t('chat.forward.empty')}</Text>
+          <Text style={[s.subtitle, { color: colors.textSecondary }]}>{t('chat.forward.empty')}</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={[s.container, d.container]}>
-      <NavHeader title={t('chat.forward.title')} />
-      <View style={[s.targetTabs, { backgroundColor: colors.surface }]} accessibilityRole="tablist">
-        {(['single', 'group'] as const).map((type) => {
-          const selected = targetType === type;
-          return (
-            <Pressable
-              key={type}
-              style={[s.targetTab, selected && { backgroundColor: colors.primaryLight }]}
-              accessibilityRole="tab"
-              accessibilityLabel={t(`chat.forward.${type}`)}
-              accessibilityState={{ selected }}
-              disabled={Boolean(sendingID)}
-              onPress={() => setTargetType(type)}
-            >
-              <Ionicons name={type === 'single' ? 'person-outline' : 'people-outline'} size={20} color={selected ? colors.iconAccent : colors.textSecondary} />
-              <Text style={[s.targetTabLabel, { color: selected ? colors.iconAccent : colors.textSecondary }]}>{t(`chat.forward.${type}`)}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <View style={[s.searchWrap, d.searchWrap]}>
-        <Ionicons name="search" size={20} color={colors.textSecondary} />
-        <TextInput
-          style={[s.searchInput, d.searchInput]}
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t('chat.forward.searchPlaceholder')}
-          placeholderTextColor={colors.textSecondary}
-        />
-      </View>
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={[s.listContent, { paddingBottom: insets.bottom + Spacing.xl }]}
-        ListEmptyComponent={
-          <View style={s.listEmpty}>
-            <Text style={[d.subtitle, s.emptyText]}>{t(query.trim() ? 'chat.forward.noMatches' : targetType === 'single' ? 'chat.forward.noPrivateChats' : 'chat.forward.noGroupChats')}</Text>
-          </View>
-        }
-        {...keyboardDismissOnDragProps}
-        renderItem={({ item }) => {
-          const busy = sendingID === item.id;
-          const { name, avatarUrl } = mapChatConversationToUI(item);
-          return (
-            <Pressable
-              style={[s.row, d.row]}
-              disabled={Boolean(sendingID)}
-              onPress={() => void confirmForward(item)}
-            >
-              {item.type === 'GROUP' || item.type === 'TEMP' ? (
-                <GroupChatAvatar
-                  size={42}
-                  name={name}
-                  uri={avatarUrl}
-                  temporary={item.type === 'TEMP'}
-                  badgeBorderColor={colors.surface}
-                />
-              ) : (
-                <Avatar
-                  size={42}
-                  shape="square"
-                  name={name}
-                  uri={avatarUrl}
-                />
-              )}
-              <View style={s.rowText}>
-                <Text style={d.title} numberOfLines={1}>
-                  {name}
-                </Text>
-                <Text style={d.subtitle} numberOfLines={1}>
-                  {item.type === 'GROUP' || item.type === 'TEMP'
-                    ? t('chat.forward.group')
-                    : t('chat.forward.single')}
-                </Text>
-              </View>
-              {busy ? (
-                <ActivityIndicator color={colors.primary} />
-              ) : (
-                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-              )}
-            </Pressable>
-          );
-        }}
+    <View style={s.container}>
+      <ChatTargetPicker
+        busy={sending}
+        onClose={() => router.back()}
+        onConfirm={setConfirmTargets}
       />
+      <SendConfirmDialog
+        visible={confirmTargets !== null}
+        title={
+          confirmTargets && confirmTargets.length > 1
+            ? t('chat.forward.sendToMany', {
+                count: confirmTargets.length,
+                defaultValue: '分别发送给 {{count}} 个聊天',
+              })
+            : t('chat.forward.sendTo', {
+                name: confirmTargets?.[0]?.name ?? '',
+                defaultValue: '发送给 {{name}}',
+              })
+        }
+        placeholder={t('chat.forward.captionPlaceholder', { defaultValue: '给朋友留言（可选）' })}
+        onCancel={() => setConfirmTargets(null)}
+        onConfirm={(caption) => {
+          const targets = confirmTargets;
+          setConfirmTargets(null);
+          if (targets) void handleForward(targets, caption);
+        }}
+      >
+        <Text style={[s.subtitle, { color: colors.textSecondary }]} numberOfLines={3}>
+          {forwardPreview}
+        </Text>
+      </SendConfirmDialog>
     </View>
   );
 }

@@ -29,8 +29,11 @@ import { NoteImageViewportContext } from '@/features/notes/components/NoteBlockR
 import { ImageViewer } from '@/components/ui/image-viewer';
 import { Avatar } from '@/components/ui/avatar';
 import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
-import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
-import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
+import {
+  NOTE_SHARE_CARD_ONLY,
+  ShareNoteSheet,
+  type NoteShareRequest,
+} from '@/features/notes/components/ShareNoteSheet';
 import type { NoteDetail, NoteExportFormat, NoteSummary } from '@/features/notes/types';
 import {
   getChatDetailHref,
@@ -493,10 +496,10 @@ function NoteDetailContent() {
   // 分享单条笔记：打开会话选择器，把笔记以卡片消息发给好友/群聊。
   const [shareOpen, setShareOpen] = useState(false);
   const handleShareNote = useCallback(() => { if (detailVerified) setShareOpen(true); }, [detailVerified]);
-  const sharePayloads = useMemo(
+  const shareRequest = useMemo<NoteShareRequest | null>(
     () =>
       shareOpen && note
-        ? [buildNoteCardPayloadFromSummary(note, note.ownerId ?? ownerId)]
+        ? { notes: [{ ...note, ownerId: note.ownerId ?? ownerId }], options: NOTE_SHARE_CARD_ONLY }
         : null,
     [note, ownerId, shareOpen],
   );
@@ -825,7 +828,7 @@ function NoteDetailContent() {
       </Modal>
 
       <ShareNoteSheet
-        payloads={sharePayloads}
+        request={shareRequest}
         onClose={() => setShareOpen(false)}
       />
       <ImageViewer

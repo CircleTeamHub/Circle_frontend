@@ -62,6 +62,10 @@ export function groupEventText(event: ChatGroupEventDto): string {
     }
     case 'group-notice-updated':
       return eventText('groupNoticeUpdated', { actor });
+    case 'message-pinned':
+      return eventText('messagePinned', { actor });
+    case 'message-unpinned':
+      return eventText('messageUnpinned', { actor });
     case 'history-cleared':
       return eventText('historyCleared', { actor });
     case 'mute-all-changed':

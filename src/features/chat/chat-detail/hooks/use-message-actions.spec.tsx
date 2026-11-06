@@ -14,7 +14,7 @@ jest.mock('@/features/chat/utils/sticker-error', () => ({ getStickerErrorMessage
 const mockChat: {
   activeConversationId: string;
   messagesByConversation: Record<string, Record<string, unknown>[]>;
-  conversations: { id: string; myRole?: string | null }[];
+  conversations: { id: string; type?: string; myRole?: string | null; pinnedMessage?: { messageId: string } | null }[];
   removeMessage: jest.Mock;
 } = {
   activeConversationId: 'c1',
@@ -30,7 +30,8 @@ jest.mock('@/features/chat/store/use-message-forward-store', () => ({
   useMessageForwardStore: (selector: (state: unknown) => unknown) => selector({ setPending: jest.fn(), setPendingBatch: mockForwardBatch }),
 }));
 jest.mock('@/chat-core/socket-manager', () => ({}));
-jest.mock('@/chat-core/api', () => ({}));
+const mockSetPinned = jest.fn(() => Promise.resolve());
+jest.mock('@/chat-core/api', () => ({ setChatPinnedMessage: (...args: unknown[]) => mockSetPinned(...(args as [])) }));
 jest.mock('@/chat-core/send-errors', () => ({ getChatSendErrorMessage: () => '发送失败' }));
 jest.mock('@/features/chat/screens/ForwardPickerScreen', () => ({ canForwardMessage: () => false }));
 
@@ -361,5 +362,56 @@ describe('revoke entry', () => {
   test('already revoked messages offer no second revoke', () => {
     arrange('OWNER', { revokedAt: hourAgo() });
     expect(hasRevoke()).toBe(false);
+  });
+});
+
+describe('pinning from the long-press menu', () => {
+  const message: ChatMessage = { id: 'm1', type: 'image', sendStatus: 2 } as ChatMessage;
+  const menuKeys = (current: ReturnType<typeof useMessageActions>) =>
+    current.messageActions.map((action) => action.key);
+
+  beforeEach(() => mockSetPinned.mockClear());
+
+  test('either side of a private chat can pin any message, including images', async () => {
+    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessage: null }];
+    const { result } = renderHook(() => useMessageActions(params));
+    act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
+    const pin = result.current.messageActions.find((action) => action.key === 'pin');
+    expect(pin).toBeDefined();
+    await act(async () => { pin?.onPress(); });
+    expect(mockSetPinned).toHaveBeenCalledWith('c1', 'm1');
+  });
+
+  test('the pinned message offers unpin instead', async () => {
+    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessage: { messageId: 'm1' } }];
+    const { result } = renderHook(() => useMessageActions(params));
+    act(() => result.current.setActionMenu({ message, x: 0, y: 0 }));
+    expect(menuKeys(result.current)).not.toContain('pin');
+    await act(async () => { result.current.messageActions.find((action) => action.key === 'unpin')?.onPress(); });
+    expect(mockSetPinned).toHaveBeenCalledWith('c1', null);
+  });
+
+  test('ordinary group members get no pin entry; admins do', () => {
+    mockChat.conversations = [{ id: 'c1', type: 'GROUP', myRole: 'MEMBER', pinnedMessage: null }];
+    const member = renderHook(() => useMessageActions({ ...params, isGroupChat: true }));
+    act(() => member.result.current.setActionMenu({ message, x: 0, y: 0 }));
+    expect(menuKeys(member.result.current)).not.toContain('pin');
+
+    mockChat.conversations = [{ id: 'c1', type: 'GROUP', myRole: 'ADMIN', pinnedMessage: null }];
+    const admin = renderHook(() => useMessageActions({ ...params, isGroupChat: true }));
+    act(() => admin.result.current.setActionMenu({ message, x: 0, y: 0 }));
+    expect(menuKeys(admin.result.current)).toContain('pin');
+  });
+
+  test.each([
+    { id: 'local:pending', type: 'sent', sendStatus: 1 },
+    { id: 'm2', type: 'call-record' },
+    { id: 'm3', type: 'system-notice' },
+    { id: 'm4', type: 'sent', sendStatus: 2, burnDurationSec: 30 },
+  ])('cannot pin %o', (fields) => {
+    mockChat.conversations = [{ id: 'c1', type: 'DIRECT', myRole: null, pinnedMessage: null }];
+    const { result } = renderHook(() => useMessageActions(params));
+    act(() => result.current.setActionMenu({ message: fields as ChatMessage, x: 0, y: 0 }));
+    expect(menuKeys(result.current)).not.toContain('pin');
   });
 });

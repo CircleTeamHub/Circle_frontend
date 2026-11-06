@@ -32,11 +32,19 @@ test('NotesScreen wires multi-select: long-press/menu entry, select-all, prune o
   assert.match(src, /selected=\{selectedSet\.has\(item\.id\)\}/);
 });
 
-test('NotesScreen selection bar is a single 下一步 that opens the batch actions sheet', () => {
+test('NotesScreen selection bar sends directly and keeps the rest behind 其他选项', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
 
-  // 多选底栏收敛成一个「下一步」；动作全部收进与单选同款的 NoteActionsSheet 批量态。
-  assert.match(src, /notes\.selection\.next/);
+  // 多选底栏：常驻「发什么」选项行 + 「发送」直达选择聊天页；
+  // 其余动作收进「其他选项」，即与单选同款的 NoteActionsSheet 批量态。
+  assert.doesNotMatch(src, /notes\.selection\.next/);
+  assert.match(src, /<NoteSendOptionsRow value=\{sendOptions\} onChange=\{setSendOptions\} \/>/);
+  assert.match(src, /notes\.selection\.send/);
+  assert.match(src, /onPress=\{handleSendSelected\}/);
+  assert.match(src, /disabled=\{selectedIds\.length === 0 \|\| !hasAnyNoteSendOption\(sendOptions\)\}/);
+  assert.match(src, /shareNotes\(selectedNotes, sendOptions\)/);
+  assert.match(src, /notes\.selection\.moreOptions/);
+  assert.match(src, /onPress=\{openBatchSheet\}/);
   assert.match(src, /setBatchSheetNotes\(selectedNotes\)/);
   assert.match(src, /batchNotes=\{batchSheetNotes\}/);
   assert.doesNotMatch(src, /notes\.selection\.group/);
@@ -148,33 +156,33 @@ test('remark is wired end to end: PATCH api, sheet editor, in-place list update'
   );
 });
 
-test('ShareNoteSheet sends every selected note card to each selected conversation and retries only failures', () => {
+test('ShareNoteSheet sends the selected notes to each chosen conversation through the shared pipeline', () => {
   const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
   const screen = read('src/features/notes/screens/NotesScreen.tsx');
 
-  // 单条与批量共用：payloads[] 逐条发卡，部分失败给计数提示。
-  assert.match(sheet, /payloads: NoteCardData\[\] \| null/);
-  assert.match(sheet, /const tasks = isRetry\s*\? retryTasks\s*:\s*selectedConversations\.flatMap/);
-  assert.match(sheet, /targets\.map\(\(payload\) => \(\{ conversationId: conversation\.id, payload \}\)\)/);
-  // 发送的是确认前按来源实时状态重取过的任务列表。
-  // 发送遍历的是按实时状态重取过的任务：freshTasks 交给 performSend 逐条发。
-  assert.match(sheet, /for \(const task of sendTasks\)/);
-  assert.match(sheet, /performSend\(freshTasks\)/);
-  assert.doesNotMatch(sheet, /performSend\(tasks\)/);
-  assert.match(sheet, /withFreshNoteSourceStatus\(\s*tasks\.map\(\(task\) => task\.payload\)/);
-  assert.match(sheet, /conversationId: task\.conversationId/);
-  assert.match(sheet, /payload: task\.payload/);
-  assert.match(sheet, /failures\.push\(task\)/);
-  assert.match(sheet, /setRetryTasks\(failures\)/);
-  // 点「发送」即发：不弹确认、不弹「已发送」，也不再放面板标题。
-  // 唯一保留的确认是订单状态可能已变化的业务提醒。
-  assert.doesNotMatch(sheet, /notes\.shareToChat\.(title|confirmRecipientsMessage|confirmRetryMessage|sentTitle|sentRecipientsMessage)\b/);
-  assert.match(sheet, /if \(!hasUncertainWorkStatus\) \{\s*performSend\(freshTasks\);\s*return;/);
-  assert.match(sheet, /notes\.shareToChat\.workStatusWarning/);
+  // 单条与批量共用：request = 笔记 + 发什么；每个选中的聊天都按同一条笔记管线发出，
+  // 留言排在最后；部分失败给计数提示（不再有面板内的「重试失败项」）。
+  assert.match(sheet, /request: NoteShareRequest \| null/);
+  assert.match(sheet, /export interface NoteShareRequest \{\s*notes: NoteSummary\[\];\s*options: NoteSendOptions;/);
+  assert.match(sheet, /for \(const target of chosen\)/);
+  assert.match(sheet, /resolveChatTargetConversationId\(target\)/);
+  assert.match(
+    sheet,
+    /sendNotesToConversation\(\{\s*conversationId,\s*notes: request\.notes,\s*options: request\.options,/,
+  );
+  assert.match(sheet, /failures \+= result\.failures/);
+  assert.match(sheet, /sendTextMessage\(\{ conversationId, text: caption \}\)/);
+  assert.doesNotMatch(sheet, /retryTasks|setRetryTasks/);
+  // 选完对象只弹一次「发送给」确认框（可附留言）；全部成功直接收起，不弹「已发送」，
+  // 订单状态提醒也已去掉。
+  assert.match(sheet, /<SendConfirmDialog/);
+  assert.doesNotMatch(sheet, /notes\.shareToChat\.(title|confirmTitle|confirmRecipientsMessage|confirmRetryMessage|sentTitle|sentRecipientsMessage|workStatusWarning)\b/);
   assert.match(sheet, /notes\.shareToChat\.partialFailed/);
 
   assert.match(screen, /handleBatchShare/);
-  assert.match(screen, /buildNoteCardPayloadFromSummary/);
+  assert.match(screen, /<ShareNoteSheet request=\{shareNoteRequest\} onClose=\{closeShareNote\} \/>/);
+  // 卡片载荷由管线现拼，屏幕层不再预先拼 NoteCardData。
+  assert.doesNotMatch(screen, /buildNoteCardPayloadFromSummary/);
 
   // 只有分享入口使用聊天批量笔记的 9 条上限；其他批量动作仍可全选。
   assert.match(screen, /MAX_NOTE_BATCH_SELECTION/);
@@ -182,7 +190,7 @@ test('ShareNoteSheet sends every selected note card to each selected conversatio
     screen,
     /if \(notes\.length > MAX_NOTE_BATCH_SELECTION\) \{[\s\S]{0,240}Alert\.alert/,
   );
-  assert.doesNotMatch(sheet, /payloads\.slice\(0, MAX_NOTE_BATCH_SELECTION\)/);
+  assert.doesNotMatch(sheet, /notes\.slice\(0, MAX_NOTE_BATCH_SELECTION\)/);
 });
 
 test('group picker adds/removes membership per note instead of replacing wholesale', () => {
@@ -227,7 +235,8 @@ test('all five locales carry the new multi-select/remark/group-picker keys', () 
     ['notes', 'selection', 'selectedCount'],
     ['notes', 'selection', 'selectAll'],
     ['notes', 'selection', 'clearAll'],
-    ['notes', 'selection', 'next'],
+    ['notes', 'selection', 'send'],
+    ['notes', 'selection', 'moreOptions'],
     ['notes', 'remarkSheet', 'title'],
     ['notes', 'remarkSheet', 'batchTitle'],
     ['notes', 'shareToChat', 'partialFailed'],

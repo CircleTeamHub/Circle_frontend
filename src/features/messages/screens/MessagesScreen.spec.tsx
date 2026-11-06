@@ -86,7 +86,7 @@ beforeEach(() => {
   mockScreenLive = true;
   mockSnapshotLoaded = true;
   useFriendRemarkStore.getState().reset();
-  jest.mocked(clearChatConversationHistory).mockReset().mockResolvedValue(undefined);
+  jest.mocked(clearChatConversationHistory).mockReset().mockResolvedValue(0);
   jest.mocked(updateChatConversationPreferences).mockReset().mockResolvedValue({} as ChatConversationDto);
   mockConversations = ['first', 'second'].map((id, index) => ({ id, type: 'DIRECT', name: id, unreadCount: index + 1, lastMessage: { height: index + 10 } } as ChatConversationDto));
 });
@@ -312,7 +312,7 @@ test.each(['clear', 'hide'])('partial deletion keeps failures selected when %s f
 
 test('deletion ignores duplicate confirmations and stops after an account switch', async () => {
   let finish!: () => void;
-  jest.mocked(clearChatConversationHistory).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+  jest.mocked(clearChatConversationHistory).mockImplementationOnce(() => new Promise<number>((resolve) => { finish = () => resolve(0); }));
   const view = render(<MessagesScreen />);
   startSelection();
   fireEvent.press(screen.getByRole('button', { name: 'messages.selectAll' }));

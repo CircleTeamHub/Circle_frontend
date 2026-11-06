@@ -8,6 +8,12 @@ function read(relPath) {
   return fs.readFileSync(path.join(process.cwd(), relPath), 'utf8');
 }
 
+test('realtime note status events accept the off-shelf venue status', () => {
+  const source = read('src/realtime/client.ts');
+  const validator = source.slice(source.indexOf('function isNoteSourceStatusChange'), source.indexOf('payload.changedAt.length > 0'));
+  assert.match(validator, /payload\.workStatus === 'OFF_SHELF'/);
+});
+
 test('realtime note status events update the note signal and reconnect recovery pokes it', () => {
   const source = read('src/realtime/client.ts');
   assert.match(source, /type: 'note\.source\.status\.changed'/);
@@ -92,7 +98,7 @@ test('chat detail reconciles cached note cards on open and on recovery', () => {
   assert.match(hook, /applyNoteSourceStatus/);
 });
 
-test('every send-time status warning re-reads the live source status first', () => {
+test('sending or forwarding a note never pops a "status may have changed" warning', () => {
   for (const file of [
     'src/features/notes/components/ShareNoteSheet.tsx',
     'src/features/chat/screens/ForwardPickerScreen.tsx',
@@ -100,7 +106,7 @@ test('every send-time status warning re-reads the live source status first', () 
     'src/features/chat/chat-detail/hooks/use-note-batch-send.ts',
   ]) {
     const source = read(file);
-    assert.match(source, /withFreshNoteSourceStatus\(/, file);
+    assert.doesNotMatch(source, /workStatusWarning|shouldWarnNoteWorkStatus|withFreshNoteSourceStatus/, file);
   }
 });
 
@@ -108,7 +114,7 @@ test('note management shows working / closed / remove buttons and defaults newly
   const management = read('src/features/notes/screens/NoteManagementScreen.tsx');
   assert.doesNotMatch(management, /withDefaultWorkingStatus/);
   assert.match(management, /resolveManagedWorkStatus\(note\)/);
-  assert.match(management, /value: 'WORKING',[\s\S]*?value: 'CLOSED',/);
+  assert.match(management, /SET_NOTE_WORK_STATUSES\.map/);
   assert.match(management, /handleSetNoteWorkStatus\(note, option\.value\)/);
   assert.match(management, /handleUnbindNote\(note\)/);
   // 只给「未设置」的笔记补默认开工，已设过的状态在关联时保留。

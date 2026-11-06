@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { clearImagePreviews } from './image-preview';
 import { storage } from '@/storage';
+import type { SetNoteWorkStatus } from '@/features/notes/utils/work-status';
 import { isBurnDurationChoice } from './burn-durations';
 import {
   isMessageDeletedLocally,
@@ -642,7 +643,7 @@ interface ChatStoreState {
    */
   applyNoteSourceStatus: (
     sourceNoteId: string,
-    workStatus: 'WORKING' | 'CLOSED' | null,
+    workStatus: SetNoteWorkStatus | null,
     publicationStatus: 'ACTIVE' | 'UNLISTED' | 'DELETED',
   ) => void;
   /** S-01:会话级焚毁档位变更(REST 回执/系统消息驱动)。 */
@@ -1164,7 +1165,7 @@ export function sortConversations(
 export function patchNoteSourceStatus(
   message: ChatMessageDto,
   sourceNoteId: string,
-  workStatus: 'WORKING' | 'CLOSED' | null,
+  workStatus: SetNoteWorkStatus | null,
   publicationStatus: 'ACTIVE' | 'UNLISTED' | 'DELETED',
 ): ChatMessageDto {
   if (message.type !== 'note-card') return message;

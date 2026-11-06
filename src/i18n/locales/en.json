@@ -479,12 +479,13 @@
       "videoTooLong": "Choose a video under 10 minutes",
       "videoUnsupported": "Only MP4, MOV, and M4V videos are supported",
       "videoUnavailable": "Video unavailable",
-      "videoPreparing": "Preparing video…",
       "playVideo": "Play video",
       "noteBatchPartialFailed": "{{count}} items failed to send",
       "cardSendFailed": "Failed to send contact card, please try again",
       "favoriteSendFailed": "Failed to send favorite, please try again",
-      "favoriteLegacyVoiceUnsupported": "This legacy voice favorite can no longer be sent"
+      "favoriteLegacyVoiceUnsupported": "This legacy voice favorite can no longer be sent",
+      "mediaPreparing": "Preparing your selection…",
+      "mediaSendFailed": "Couldn't send photos or videos. Please try again."
     },
     "stickers": {
       "title": "Custom stickers",
@@ -533,31 +534,33 @@
       "edit": "Edit",
       "readers": "Read by",
       "readersNone": "No one has read this yet",
-      "readersMore": "{{names}} and {{count}} more",
       "editing": "Editing message",
       "resend": "Resend",
       "resendConfirm": "Resend this message?",
-      "retryFailed": "Send failed. Tap to resend"
+      "retryFailed": "Send failed. Tap to resend",
+      "readersTitle": "Read by ({{count}})",
+      "readersFailed": "Couldn't load who read this",
+      "readersMoreFooter": "Showing the first {{shown}}. {{count}} more have read it."
     },
     "mentions": {
-      "empty": "No members available to mention"
+      "empty": "No members available to mention",
+      "title": "Mention someone",
+      "count": "{{count}} members",
+      "all": "Everyone",
+      "allHint": "Notify everyone in the group"
     },
     "forward": {
-      "noPrivateChats": "No private chats yet",
-      "noGroupChats": "No group chats yet",
-      "noMatches": "No matching chats in this category",
       "title": "Choose a chat",
-      "searchPlaceholder": "Search chats",
       "empty": "No message to forward",
-      "group": "Group",
-      "single": "Direct",
       "done": "Forwarded",
       "failed": "Forward failed",
       "failedRetry": "Please try again later",
       "locationWithDetail": "[Location] {{detail}}",
       "unsupported": "This message type cannot be forwarded yet",
-      "workStatusWarningTitle": "Order status may have changed",
-      "workStatusWarning": "This note is closed or unlisted. You can still continue sending it."
+      "sendTo": "Send to {{name}}",
+      "captionPlaceholder": "Add a message (optional)",
+      "batchPreview": "{{count}} messages",
+      "sendToMany": "Send to {{count}} chats"
     },
     "avatarA11y": {
       "self": "View my profile",
@@ -812,7 +815,10 @@
         "batchLimit": "Up to {{n}} at a time",
         "removeSelected": "Remove ({{n}})",
         "loadFailed": "Couldn't load members to review"
-      }
+      },
+      "noteOffShelf": "Off shelf",
+      "groupNotes": "Group notes",
+      "boundNotesHint": "Notes the group owner linked to this group. Their status updates as the owner changes it."
     },
     "groupEvent": {
       "system": "System",
@@ -842,7 +848,9 @@
       "muteAllDisabled": "{{actor}} unmuted everyone",
       "groupAvatarUpdated": "{{actor}} updated the group avatar",
       "policyEnabled": "{{actor}} turned on “{{policy}}”",
-      "policyDisabled": "{{actor}} turned off “{{policy}}”"
+      "policyDisabled": "{{actor}} turned off “{{policy}}”",
+      "messagePinned": "{{actor}} pinned a message",
+      "messageUnpinned": "{{actor}} removed the pinned message"
     },
     "clearHistoryWarning": "This will permanently delete all messages in this conversation.",
     "clear": "Clear",
@@ -903,8 +911,6 @@
     "attachments": {
       "photos": "Photos/Videos",
       "mediaHub": "Media",
-      "mediaPhoto": "Photos",
-      "mediaVideo": "Videos",
       "camera": "Camera",
       "voiceCall": "Audio/Video Call",
       "location": "Location",
@@ -912,7 +918,8 @@
       "friendCard": "Card",
       "favorites": "Favorites",
       "quickReply": "Quick Reply",
-      "transfer": "Transfer"
+      "transfer": "Transfer",
+      "mediaAlbum": "Album"
     },
     "photoEditor": {
       "title": "Edit Photo",
@@ -1034,8 +1041,10 @@
       "workStatus": {
         "working": "Working",
         "closed": "Closed",
-        "unlisted": "Unlisted; status may have changed"
-      }
+        "unlisted": "Unlisted; status may have changed",
+        "offShelf": "Off shelf"
+      },
+      "sectionSendFailed": "Couldn't send. Please try again."
     },
     "voice": {
       "cancelTip": "Release to cancel",
@@ -1065,7 +1074,51 @@
     "clearHistoryConfirmGroupOwner": "“Delete for me” clears only your copy. “Delete for everyone” deletes the chat history for every member and cannot be undone.",
     "clearHistoryConfirmDirect": "Clear this chat history? It will also be deleted for the other person and cannot be undone.",
     "clearHistoryDone": "Cleared",
-    "clearHistoryDoneDirect": "Chat history deleted for both people"
+    "clearHistoryDoneDirect": "Chat history deleted for both people",
+    "mediaSend": {
+      "title": "Send {{count}} items",
+      "captionPlaceholder": "Add a caption (optional)",
+      "confirm": "Send ({{count}})"
+    },
+    "targetPicker": {
+      "title": "Choose a chat",
+      "multi": "Select",
+      "single": "Single",
+      "searchPlaceholder": "Search friends or groups",
+      "recentForwards": "Recent",
+      "clearRecent": "Clear",
+      "removeRecent": "Remove {{name}} from recent",
+      "recentChats": "Recent chats",
+      "contacts": "Contacts",
+      "groups": "My groups",
+      "noMatch": "No matching chats",
+      "noContacts": "No friends yet",
+      "noGroups": "No groups yet",
+      "noChats": "No chats yet",
+      "contactsFailed": "Couldn't load contacts",
+      "limitReached": "You can pick up to {{count}} chats at a time",
+      "sendSelected": "Send ({{count}})"
+    },
+    "quickChat": {
+      "expand": "Open full chat"
+    },
+    "pin": {
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "tag": "Pinned",
+      "failed": "Something went wrong",
+      "fallbackPreview": "[Message]",
+      "bannerA11y": "Pinned message: {{preview}}"
+    },
+    "clearRequest": {
+      "accept": "Agree",
+      "decline": "Decline",
+      "failed": "Something went wrong"
+    },
+    "clearHistoryBothSides": "Clear for both",
+    "clearHistoryBothSidesHint": "The other person must agree before their copy is cleared",
+    "clearHistoryConfirmTitle": "Clear chat history?",
+    "clearHistoryRequestSent": "Cleared. A request to clear their copy was sent."
   },
   "contacts": {
     "title": "Contacts",
@@ -1363,17 +1416,8 @@
     },
     "shareCard": {
       "title": "Send Circle Card",
-      "confirmTitle": "Send Circle Card",
-      "confirmMessage": "Send \"{{circleName}}\" to {{conversationName}}?",
-      "sentTitle": "Sent",
-      "sentMessage": "Circle card sent.",
       "failedTitle": "Send Failed",
-      "loadFailed": "Could not load conversations. Please try again later.",
-      "sending": "Sending...",
-      "rowFallback": "Send circle card",
-      "pickConversation": "Choose a Conversation",
-      "description": "Send the \"{{circleName}}\" circle card to a chat. The recipient can tap it to apply to join.",
-      "empty": "No available conversations"
+      "preview": "[Circle card] {{circleName}}"
     },
     "create": {
       "title": "Create Circle",
@@ -3102,7 +3146,8 @@
       "openSenderChat": "Chat with {{name}}",
       "openGroupChat": "Open group chat {{name}}",
       "viewContactDetails": "View {{name}}'s profile",
-      "viewGroupDetails": "View group details for {{name}}"
+      "viewGroupDetails": "View group details for {{name}}",
+      "statusOffShelf": "Off shelf"
     },
     "groupPicker": {
       "title": "Edit groups",
@@ -3122,7 +3167,8 @@
       "selectedCount": "{{count}} selected",
       "selectAll": "Select all",
       "clearAll": "Deselect all",
-      "next": "Next"
+      "send": "Send ({{count}})",
+      "moreOptions": "More options"
     },
     "loadFailed": "Couldn't load notes. Check your connection and try again",
     "collect": {
@@ -3130,29 +3176,34 @@
       "editTitle": "Edit saved title",
       "groupHint": "Choose a group first; you can edit the title next.",
       "ungrouped": "Ungrouped",
-      "titleHint": "You can edit the default title before saving your note copy.",
-      "titleLabel": "Saved note title"
+      "titleHint": "Give it a title you will recognise. Leave it blank to keep the original title.",
+      "titleLabel": "Saved note title",
+      "untitled": "Untitled note",
+      "skipTitleNextTime": "Skip title editing next time",
+      "createGroup": "New group",
+      "createGroupPlaceholder": "Group name",
+      "createGroupConfirm": "Create",
+      "createGroupFailed": "Couldn't create the group",
+      "createGroupFailedHint": "Please try again later."
     },
     "shareToChat": {
-      "workStatusWarning": "The order may be closed or unlisted. You can still continue sending it.",
-      "confirmTitle": "Send note",
       "partialFailed": "{{count}} sends failed. You can retry only the failed items.",
       "limitExceeded": "You can share up to {{count}} notes at once. Other bulk actions are unaffected.",
       "failedTitle": "Send failed",
-      "failedMessage": "Unable to send this note right now. Please try again.",
-      "sending": "Sending…",
-      "sendSelected": "Send to {{count}} chats",
-      "retryFailed": "Retry {{count}} failed sends",
-      "loadFailed": "Couldn’t load chats. Please try again",
-      "empty": "No chats to send to yet",
-      "groupHint": "Group",
-      "friendHint": "Friend",
-      "searchPlaceholder": "Search friends or groups",
-      "noMatch": "No matching friends or groups"
+      "batchPreview": "{{count}} notes",
+      "singlePreview": "[Note] {{title}}"
     },
     "recycleBin": "Recycle bin",
     "recycleBinHint": "Deleted notes can be restored here and are automatically removed after 30 days.",
-    "recycleBinTitle": "Recycle bin"
+    "recycleBinTitle": "Recycle bin",
+    "settings": {
+      "entry": "Settings",
+      "title": "Note settings",
+      "collectSection": "When adding a note",
+      "chooseGroup": "Choose a group",
+      "editTitle": "Edit the title",
+      "collectHint": "With “Choose a group” off, notes go to Ungrouped. With “Edit the title” off, the original title is kept."
+    }
   },
   "search": {
     "loadFriendsFailed": "Failed to load friends, please try again",
@@ -3327,7 +3378,18 @@
       "muteAllDisabled": "Everyone has been unmuted",
       "groupAvatarUpdated": "The group avatar was updated",
       "policyEnabled": "“{{policy}}” was turned on",
-      "policyDisabled": "“{{policy}}” was turned off"
+      "policyDisabled": "“{{policy}}” was turned off",
+      "messagePinned": "A message was pinned",
+      "messageUnpinned": "The pinned message was removed",
+      "clearRequestSent": "You asked to clear this chat for both of you. Waiting for the other person.",
+      "clearRequestReceived": "The other person asked to clear this chat for both of you",
+      "clearRequestAcceptedBySelf": "You agreed. Your copy of the chat history was cleared.",
+      "clearRequestDeclinedBySelf": "You declined to clear the chat",
+      "clearRequestAcceptedByPeer": "The other person agreed and cleared their copy of the chat",
+      "clearRequestDeclinedByPeer": "The other person declined to clear the chat",
+      "clearRequestNeutral": "Request to clear chat for both",
+      "clearRequestAcceptedNeutral": "Clearing for both was accepted",
+      "clearRequestDeclinedNeutral": "Clearing for both was declined"
     },
     "silence": {
       "minutes": "{{n}} min",
@@ -3809,7 +3871,8 @@
     "AUTH_LOGIN_RECOVERY_LIMITED": "Too many recovery requests. Please wait for the existing ones to finish",
     "AUTH_SECURITY_QUESTIONS_INVALID": "Choose two different questions and fill in both answers",
     "AUTH_SECURITY_QUESTIONS_NOT_SET": "No security questions are set. Please confirm the login on a trusted device.",
-    "AUTH_SECURITY_ANSWERS_INVALID": "The security answers are incorrect"
+    "AUTH_SECURITY_ANSWERS_INVALID": "The security answers are incorrect",
+    "CHAT_CLEAR_REQUEST_HANDLED": "This request has already been handled"
   },
   "qr": {
     "loginDeprecatedTitle": "QR login is no longer available",

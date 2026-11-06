@@ -237,6 +237,11 @@ export function NotificationSnackbarHost() {
       untitledPost: t('notifications.signupMgmt.untitledPost'),
       scope: notificationScope,
     });
+    // 聊天横幅点开是半屏聊天:当场回复,不用离开手上的页面(比如正在写笔记)。
+    if (shown.kind === 'chat' && typeof route === 'object' && 'params' in route) {
+      router.push({ pathname: '/quick-chat', params: route.params });
+      return;
+    }
     if (isUserProfileSnackbarRoute(route)) {
       router.navigate(route);
     } else {

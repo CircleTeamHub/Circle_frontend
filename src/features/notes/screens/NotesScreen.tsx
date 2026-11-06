@@ -31,11 +31,20 @@ import { NotesHeaderActions } from '@/features/notes/components/NotesHeaderActio
 import { resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
 import { NoteRemarkSheet } from '@/features/notes/components/NoteRemarkSheet';
 import { NoteGroupPickerSheet } from '@/features/notes/components/NoteGroupPickerSheet';
-import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
+import {
+  NOTE_SHARE_CARD_ONLY,
+  ShareNoteSheet,
+  type NoteShareRequest,
+} from '@/features/notes/components/ShareNoteSheet';
 import { GroupManagerSheet } from '@/features/notes/components/GroupManagerSheet';
-import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
-import { MAX_NOTE_BATCH_SELECTION } from '@/features/chat/utils/note-batch-send';
-import type { NoteGroup, NoteSummary, NoteWorkStatus } from '@/features/notes/types';
+import {
+  hasAnyNoteSendOption,
+  MAX_NOTE_BATCH_SELECTION,
+  type NoteSendOptions,
+} from '@/features/chat/utils/note-batch-send';
+import { NoteSendOptionsRow } from '@/features/chat/components/note-send-options-row';
+import type { NoteGroup, NoteSummary } from '@/features/notes/types';
+import type { SetNoteWorkStatus } from '@/features/notes/utils/work-status';
 import { runNoteBatch } from '@/features/notes/utils/batch-run';
 import {
   pruneSelection,
@@ -73,7 +82,6 @@ import {
   unlistNote,
 } from '@/services/api/notes';
 import { useAuthStore } from '@/stores/authStore';
-import type { NoteCardData } from '@/types';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { KeyboardAvoidingContainer } from '@/components/ui/keyboard-avoiding-container';
@@ -124,10 +132,10 @@ function NotesContent() {
   const [batchSheetNotes, setBatchSheetNotes] = useState<NoteSummary[] | null>(
     null,
   );
-  // 分享会话选择器：非空即打开，携带要发送的笔记卡片（单条=[payload]，批量=全部）
-  const [shareNotePayloads, setShareNotePayloads] = useState<
-    NoteCardData[] | null
-  >(null);
+  // 分享会话选择器：非空即打开，携带要发送的笔记和每条要发的分块。
+  const [shareNoteRequest, setShareNoteRequest] = useState<NoteShareRequest | null>(null);
+  // 多选底栏「发什么」:默认只发笔记卡片。
+  const [sendOptions, setSendOptions] = useState<NoteSendOptions>(NOTE_SHARE_CARD_ONLY);
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshInFlightRef = useRef(false);
@@ -428,6 +436,10 @@ function NotesContent() {
     () => router.push('/(tabs)/profile/notes/drafts' as never),
     [router],
   );
+  const openSettings = useCallback(
+    () => router.push('/(tabs)/profile/notes/settings' as never),
+    [router],
+  );
 
   const handleActiveGroupDeleted = useCallback(
     (groupId: string) => {
@@ -460,7 +472,7 @@ function NotesContent() {
   const handleSetWorkStatus = useCallback(
     async (
       note: NoteSummary,
-      workStatus: Extract<NoteWorkStatus, 'WORKING' | 'CLOSED'>,
+      workStatus: SetNoteWorkStatus,
     ) => {
       try {
         const result = await setNoteWorkStatus(note.id, workStatus);
@@ -623,16 +635,11 @@ function NotesContent() {
   );
 
   // 分享：打开会话选择器，把笔记以卡片消息发给好友/群聊（批量=逐条发卡）。
-  const handleShareNote = useCallback(
-    (note: NoteSummary) => {
-      setShareNotePayloads([
-        buildNoteCardPayloadFromSummary(note, note.ownerId ?? currentUserId),
-      ]);
-    },
-    [currentUserId],
-  );
-  const handleBatchShare = useCallback(
-    (notes: NoteSummary[]) => {
+  const handleShareNote = useCallback((note: NoteSummary) => {
+    setShareNoteRequest({ notes: [note], options: NOTE_SHARE_CARD_ONLY });
+  }, []);
+  const shareNotes = useCallback(
+    (notes: NoteSummary[], options: NoteSendOptions) => {
       if (notes.length > MAX_NOTE_BATCH_SELECTION) {
         Alert.alert(
           t('notes.shareToChat.failedTitle'),
@@ -642,15 +649,20 @@ function NotesContent() {
         );
         return;
       }
-      setShareNotePayloads(
-        notes.map((note) =>
-          buildNoteCardPayloadFromSummary(note, note.ownerId ?? currentUserId),
-        ),
-      );
+      setShareNoteRequest({ notes, options });
     },
-    [currentUserId, t],
+    [t],
   );
-  const closeShareNote = useCallback(() => setShareNotePayloads(null), []);
+  const handleBatchShare = useCallback(
+    (notes: NoteSummary[]) => shareNotes(notes, NOTE_SHARE_CARD_ONLY),
+    [shareNotes],
+  );
+  // 多选底栏的「发送」:按勾选的分块把选中笔记发出去,选谁由统一的选择页决定。
+  const handleSendSelected = useCallback(() => {
+    if (selectedNotes.length === 0 || !hasAnyNoteSendOption(sendOptions)) return;
+    shareNotes(selectedNotes, sendOptions);
+  }, [selectedNotes, sendOptions, shareNotes]);
+  const closeShareNote = useCallback(() => setShareNoteRequest(null), []);
 
   const handleUnlistNote = useCallback(
     (note: NoteSummary) => {
@@ -802,7 +814,7 @@ function NotesContent() {
     [runBatchAction],
   );
 
-  // 多选「下一步」：把当前选中集交给与 ⋯ 菜单同款的动作 sheet（批量态）。
+  // 多选「其他选项」：把当前选中集交给与 ⋯ 菜单同款的动作 sheet（批量态）。
   const openBatchSheet = useCallback(() => {
     if (selectedNotes.length === 0) return;
     setBatchSheetNotes(selectedNotes);
@@ -833,6 +845,8 @@ function NotesContent() {
       },
       newBtn: { backgroundColor: colors.primary },
       newBtnText: { color: colors.white },
+      secondaryBtn: { backgroundColor: colors.surface },
+      secondaryBtnText: { color: colors.text },
     }),
     [colors],
   );
@@ -903,6 +917,7 @@ function NotesContent() {
                 onOpenRecycleBin={openRecycleBin}
                 onOpenUnlisted={openUnlisted}
                 onOpenDrafts={openDrafts}
+                onOpenSettings={openSettings}
               />
             )}
           </View>
@@ -979,7 +994,7 @@ function NotesContent() {
         contentContainerStyle={{
           paddingHorizontal: Spacing.md,
           paddingTop: Spacing.sm,
-          paddingBottom: insets.bottom + (selectionMode ? 80 : 96),
+          paddingBottom: insets.bottom + (selectionMode ? SELECTION_FOOTER_HEIGHT : 96),
         }}
         showsVerticalScrollIndicator={false}
         initialNumToRender={12}
@@ -1018,18 +1033,37 @@ function NotesContent() {
 
       {selectionMode ? (
         <View style={[s.bottomBar, d.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
+          <NoteSendOptionsRow value={sendOptions} onChange={setSendOptions} />
           <Pressable
             style={[
               s.bottomBtn,
               d.newBtn,
+              selectedIds.length === 0 || !hasAnyNoteSendOption(sendOptions) ? s.btnDisabled : null,
+            ]}
+            onPress={handleSendSelected}
+            disabled={selectedIds.length === 0 || !hasAnyNoteSendOption(sendOptions)}
+            accessibilityRole="button"
+          >
+            <Ionicons name="paper-plane" size={16} color={colors.white} />
+            <Text style={[s.bottomBtnText, d.newBtnText]}>
+              {t('notes.selection.send', {
+                count: selectedIds.length,
+                defaultValue: '发送（{{count}}）',
+              })}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              s.bottomBtn,
+              d.secondaryBtn,
               selectedIds.length === 0 ? s.btnDisabled : null,
             ]}
             onPress={openBatchSheet}
             disabled={selectedIds.length === 0}
             accessibilityRole="button"
           >
-            <Text style={[s.bottomBtnText, d.newBtnText]}>
-              {t('notes.selection.next', { defaultValue: '下一步' })}
+            <Text style={[s.bottomBtnText, d.secondaryBtnText]}>
+              {t('notes.selection.moreOptions', { defaultValue: '其他选项' })}
             </Text>
           </Pressable>
         </View>
@@ -1088,10 +1122,13 @@ function NotesContent() {
         onSaved={handleGroupPickerSaved}
         onGroupCreated={handleGroupCreatedInPicker}
       />
-      <ShareNoteSheet payloads={shareNotePayloads} onClose={closeShareNote} />
+      <ShareNoteSheet request={shareNoteRequest} onClose={closeShareNote} />
     </KeyboardAvoidingContainer>
   );
 }
+
+/** 多选底栏(五个选项 + 发送 + 其他选项)的高度,列表底部要让出来。 */
+const SELECTION_FOOTER_HEIGHT = 220;
 
 const s = StyleSheet.create({
   container: { flex: 1 },
@@ -1171,14 +1208,12 @@ const s = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm + 4,
     gap: Spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   bottomBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

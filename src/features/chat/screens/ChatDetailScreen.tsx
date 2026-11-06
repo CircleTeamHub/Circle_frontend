@@ -17,6 +17,8 @@ import { EmojiPicker } from '@/features/chat/components/emoji-picker';
 import { VoiceRecordingOverlay } from '@/features/chat/components/voice-recording-overlay';
 import { PhotoEditorModal } from '@/features/chat/components/photo-editor-modal';
 import { MediaSourceSheet } from '@/features/chat/components/media-source-sheet';
+import { PinnedMessageBanner } from '@/features/chat/components/PinnedMessageBanner';
+import { MediaSendConfirmDialog } from '@/features/chat/components/media-send-confirm-dialog';
 import { MessageActionMenu } from '@/features/chat/components/MessageActionMenu';
 import { getUserProfileScopeFromSegments } from '@/features/user/utils/routes';
 import { type PendingMediaUpload } from '@/chat-core/client';
@@ -29,7 +31,7 @@ import { useTranslation } from 'react-i18next';
 import type { ChatMessage } from '@/types';
 import { type MentionTarget } from '@/features/chat/utils/chat-send-payloads';
 import { chatDetailStyles as s } from '@/features/chat/chat-detail/styles';
-import type { EmbeddedChatParams } from '@/features/chat/chat-detail/types';
+import type { ChatSheetActions, EmbeddedChatParams } from '@/features/chat/chat-detail/types';
 import { useVoiceRecording } from '@/features/chat/chat-detail/hooks/use-voice-recording';
 import { useMediaSend } from '@/features/chat/chat-detail/hooks/use-media-send';
 import { useStickerSend } from '@/features/chat/chat-detail/hooks/use-sticker-send';
@@ -63,6 +65,7 @@ import { MessageSelectionToolbar } from '@/features/chat/chat-detail/components/
 import { AttachmentPanel } from '@/features/chat/chat-detail/components/AttachmentPanel';
 
 export type { EmbeddedChatParams } from '@/features/chat/chat-detail/types';
+export type { ChatSheetActions } from '@/features/chat/chat-detail/types';
 
 interface ChatDetailScreenProps {
   /**
@@ -71,9 +74,14 @@ interface ChatDetailScreenProps {
    * 父级用 key={conversationID} 整树重挂，保证各会话内部状态互不串扰。
    */
   embedded?: EmbeddedChatParams;
+  /**
+   * 半屏快捷聊天(收到消息点横幅弹出):页头换成「关闭 / 展开」,顶部安全区和
+   * 键盘避让交给外层的半屏容器(它从屏幕顶端铺开,遮挡量算得准)。
+   */
+  sheet?: ChatSheetActions;
 }
 
-export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {}) {
+export default function ChatDetailScreen({ embedded, sheet }: ChatDetailScreenProps = {}) {
   const insets = useSafeAreaInsets();
   const messageBlurTarget = useRef<View>(null);
   const [composerDockHeight, setComposerDockHeight] = useState(80 + Math.max(insets.bottom, 12));
@@ -297,6 +305,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     unreadStartMessageID,
     highlightedMessageID,
     handleQuotePress,
+    jumpToMessage,
   } = useChatTimeline({
     currentUserID,
     setActiveConversationId,
@@ -317,7 +326,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
 
   const selfAvatarUri = authUser?.avatarUrl ?? undefined;
   const selfName = authUser?.nickname ?? authUser?.accountId;
-  const selfUsername = authUser?.accountId ?? authUser?.nickname;
 
   const [quoteTarget, setQuoteTarget] = useState<ChatMessage | null>(null);
   // G-07 编辑态:非空时发送按钮改走 chat:edit,输入框上方出现编辑横条。
@@ -349,7 +357,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     avatarUrl,
     selfAvatarUri,
     selfName,
-    selfUsername,
   });
 
   const {
@@ -509,6 +516,19 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   }, [mentionFocusRequested, voiceInputMode]);
 
   const {
+    handlePickNoteBatch,
+    handleSendNoteSection,
+  } = useNoteBatchSend({
+    t,
+    authUser,
+    setSendError,
+    mountedRef,
+    sourceID,
+    conversationID,
+    isPreviewMode,
+  });
+
+  const {
     renderItem,
     keyExtractor,
     imageViewer,
@@ -542,6 +562,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     handleRetryMessage,
     getMessageLongPressHandler,
     handleStartCall,
+    handleSendNoteSection,
   });
 
   const {
@@ -562,6 +583,9 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     photoEditorAsset,
     setPhotoEditorAsset,
     handleSendEditedPhoto,
+    pendingMediaAssets,
+    setPendingMediaAssets,
+    handleSendPendingMedia,
     handleMediaSourceSelect,
   } = useMediaSend({
     t,
@@ -579,18 +603,6 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   });
 
   const { handleSendSticker } = useStickerSend({ t, inFlightRef, setSendError, mountedRef, sourceID, conversationID, isTempChat, composerLocked, isPreviewMode });
-
-  const {
-    handlePickNoteBatch,
-  } = useNoteBatchSend({
-    t,
-    authUser,
-    setSendError,
-    mountedRef,
-    sourceID,
-    conversationID,
-    isPreviewMode,
-  });
 
   const {
     handleAttachmentAction,
@@ -653,16 +665,17 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   return (
     <KeyboardAvoidingContainer
       testID={E2E_TEST_IDS.chatScreen}
-      style={[d.container, { paddingTop: insets.top }]}
+      style={[d.container, { paddingTop: sheet ? 0 : insets.top }]}
       // The note-collection sheet is a separate full-screen modal. Keeping the
       // chat page's keyboard padding while that modal is mounted leaves the
       // modal content anchored above the composer on iOS.
       // Composer panels replace the keyboard and must not stack on its closing inset.
-      enabled={!noteCollectVisible && !attachmentOpen && !emojiOpen}
+      enabled={!sheet && !noteCollectVisible && !attachmentOpen && !emojiOpen}
       // 共享容器统一处理键盘避让，两端都把输入栏顶到键盘上方。
     >
       <ChatDetailHeader
         embedded={embedded}
+        sheet={sheet}
         colors={colors}
         scope={scope}
         sourceID={sourceID}
@@ -680,6 +693,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
       />
       {isAssistantConversation ? null : <Divider />}
       {isGroupChat ? <GroupNoticeBanner conversationID={conversationID} /> : null}
+      <PinnedMessageBanner conversationID={conversationID} onJump={jumpToMessage} />
       {/* 嵌在桌面分栏里时左侧消息列表已经挂着同一条提示。 */}
       {embedded ? null : <ChatConnectionBanner style={s.connectionBanner} />}
       {conversationBurnNoticeText ? (
@@ -870,6 +884,12 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
         asset={photoEditorAsset}
         onCancel={() => setPhotoEditorAsset(null)}
         onSend={handleSendEditedPhoto}
+      />
+
+      <MediaSendConfirmDialog
+        assets={pendingMediaAssets}
+        onCancel={() => setPendingMediaAssets(null)}
+        onSend={handleSendPendingMedia}
       />
 
       {noteCollectSheet}

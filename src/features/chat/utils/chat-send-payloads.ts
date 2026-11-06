@@ -5,6 +5,9 @@ export type MentionTarget = {
   userID: string;
   nickname: string;
   isAll?: boolean;
+  /** 只用于 @ 面板展示;不进消息载荷。 */
+  avatarUrl?: string;
+  role?: 'OWNER' | 'ADMIN' | 'MEMBER';
 };
 
 // 「@所有人」候选的本地哨兵 id(仅前端内部使用;上行协议是 content.atAll)。

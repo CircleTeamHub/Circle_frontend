@@ -173,3 +173,26 @@ test('buildNoteCardPayloadFromSummary uses flattened backend summary flags', () 
   assert.equal(payload.showcaseCount, 4);
   assert.equal(payload.hasLocation, true);
 });
+
+test('buildNoteCardPayloadFromSummary keeps the off-shelf venue status and drops unknown ones', () => {
+  const summary = {
+    id: 'note-4',
+    title: 'Studio',
+    contentPreview: null,
+    status: 'ACTIVE',
+    available: true,
+    pinned: false,
+    groups: [],
+    cover: null,
+    imageCount: 0,
+    videoCount: 0,
+    mediaCount: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  } as const;
+  assert.equal(buildNoteCardPayloadFromSummary({ ...summary, workStatus: 'OFF_SHELF' }, 'user-1').workStatus, 'OFF_SHELF');
+  assert.equal(
+    buildNoteCardPayloadFromSummary({ ...summary, workStatus: 'PAUSED' as never }, 'user-1').workStatus,
+    'UNSET',
+  );
+});

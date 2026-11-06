@@ -44,6 +44,13 @@ const NON_LITERAL_CALL_ALLOWLIST = new Set([
 
 const STABLE_TAG = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 
+// 只转交 tag 的文件内助手：参数原样交给 reportHandledFailure，tag 由助手的调用点给出。
+// 放行这一个参数名，但助手的每个调用点都必须把它作为最后一个参数、以稳定字面量传入。
+// ForwardPickerScreen 的 queueSend(send, step)：转发正文与留言分别是 'forwardMessage' / 'forwardCaption'。
+const FORWARDED_TAG_HELPERS = new Map([
+  ['src/features/chat/screens/ForwardPickerScreen.tsx', { helper: 'queueSend', param: 'step' }],
+]);
+
 function collectSourceFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
@@ -97,12 +104,27 @@ test('every reportHandledFailure call site uses stable literal operation/kind ta
     const rel = relative(file);
     if (NON_LITERAL_CALL_ALLOWLIST.has(rel)) continue;
     const source = fs.readFileSync(file, 'utf8');
+    const forwarded = FORWARDED_TAG_HELPERS.get(rel);
+    if (forwarded) {
+      const helperCalls = [
+        ...source.matchAll(new RegExp(`await ${forwarded.helper}\\(([\\s\\S]*?)\\n\\s*\\);`, 'g')),
+      ];
+      assert.ok(helperCalls.length > 0, `${rel}: 找不到 ${forwarded.helper} 的调用点`);
+      for (const call of helperCalls) {
+        const lastArg = call[1].trim().replace(/,$/, '').split(',').pop().trim();
+        const literal = /^(['"])(.*)\1$/.exec(lastArg);
+        if (!literal || !STABLE_TAG.test(literal[2])) {
+          offenders.push(`${rel}: ${forwarded.helper}(…, ${lastArg})`);
+        }
+      }
+    }
     const pattern = /reportHandledFailure\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*,/g;
     let match;
     while ((match = pattern.exec(source)) !== null) {
       callSites += 1;
       const [operation, kind] = [match[1], match[2]].map((raw) => raw.trim());
       for (const arg of [operation, kind]) {
+        if (forwarded && arg === forwarded.param) continue;
         const literal = /^(['"])(.*)\1$/.exec(arg);
         if (!literal || !STABLE_TAG.test(literal[2])) {
           offenders.push(`${rel}: ${arg}`);

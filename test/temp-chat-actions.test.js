@@ -74,11 +74,12 @@ test('temp chat routes preserve TEMP identity and preflight media before upload'
 });
 
 test('forward picker names TEMP targets with their stable room title', () => {
-  const forwardPicker = read(
-    'src/features/chat/screens/ForwardPickerScreen.tsx',
+  // 转发页改用共享的「选择一个聊天」页,会话名统一经 targetFromConversation 映射。
+  const targetTypes = read(
+    'src/features/chat/components/chat-target-picker/types.ts',
   );
 
-  assert.match(forwardPicker, /mapChatConversationToUI/);
+  assert.match(targetTypes, /const ui = mapChatConversationToUI\(dto\);[\s\S]{0,200}name: ui\.name/);
   const { mapChatConversationToUI } = loadTsModule('src/chat-core/mappers.ts', {
     requireShim: (name) => {
       if (name === '@/i18n') return { default: { t: (key, options) => options?.defaultValue ?? key } };

@@ -24,10 +24,19 @@ jest.mock('@/features/chat/components/chat-bubble', () => {
     NoteCardBubble: ({ onPress, onSectionPress }: { onPress: (note: { noteId: string; ownerId: string }) => void; onSectionPress: (note: { noteId: string; ownerId: string }, section: string) => void }) => {
       const { Pressable, View } = jest.requireActual<typeof import('react-native')>('react-native');
       const note = { noteId: 'note-1', ownerId: 'owner' };
-      return <View><Pressable testID="open-note" onPress={() => onPress(note)} /><Pressable testID="open-note-media" onPress={() => onSectionPress(note, 'media')} /></View>;
+      return (
+        <View>
+          <Pressable testID="open-note" onPress={() => onPress(note)} />
+          <Pressable testID="open-note-text" onPress={() => onSectionPress(note, 'text')} />
+          <Pressable testID="send-note-media" onPress={() => onSectionPress(note, 'media')} />
+          <Pressable testID="send-note-showcase" onPress={() => onSectionPress(note, 'showcase')} />
+          <Pressable testID="send-note-location" onPress={() => onSectionPress(note, 'location')} />
+        </View>
+      );
     },
   };
 });
+jest.mock('@/features/chat/components/bubbles/clear-request-notice', () => ({ ClearRequestNotice: () => null }));
 jest.mock('@/features/chat/components/bubbles/shared', () => ({
   MessageAvatar: ({ message }: { message: ChatMessage }) => { mockAvatarRender(message.id); return null; },
   BubbleStatusText: () => null,
@@ -87,6 +96,7 @@ const params = {
   getMessageLongPressHandler: jest.fn(() => jest.fn()),
   handleStartCall: jest.fn(),
   handleRetryMessage: jest.fn(),
+  handleSendNoteSection: jest.fn(),
 } as unknown as Omit<MessageRendererParams, 'messages'>;
 
 function Messages({ messages }: { messages: ChatMessage[] }) {
@@ -114,6 +124,7 @@ beforeEach(() => {
   mockAvatarRender.mockClear();
   jest.mocked(saveImageToLibrary).mockClear();
   jest.mocked(getNoteDetailHref).mockClear();
+  jest.mocked(params.handleSendNoteSection).mockClear();
 });
 
 test('note and section navigation preserve the source message and its cached height', () => {
@@ -123,8 +134,19 @@ test('note and section navigation preserve the source message and its cached hei
   const source = { conversationId: 'conversation', messageId: 'note-message', messageHeight: 42 };
   fireEvent.press(screen.getByTestId('open-note'));
   expect(getNoteDetailHref).toHaveBeenLastCalledWith('messages', 'note-1', 'owner', '', source);
-  fireEvent.press(screen.getByTestId('open-note-media'));
-  expect(getNoteDetailHref).toHaveBeenLastCalledWith('messages', 'note-1', 'owner', 'media', source);
+  fireEvent.press(screen.getByTestId('open-note-text'));
+  expect(getNoteDetailHref).toHaveBeenLastCalledWith('messages', 'note-1', 'owner', 'text', source);
+});
+
+test('the video, showcase and location chips send that part of the note instead of opening it', () => {
+  const message: ChatMessage = { id: 'note-message', type: 'note-card' };
+  render(<Messages messages={[message]} />);
+  for (const section of ['media', 'showcase', 'location'] as const) {
+    fireEvent.press(screen.getByTestId(`send-note-${section}`));
+    expect(params.handleSendNoteSection).toHaveBeenLastCalledWith('note-1', section);
+  }
+  expect(params.handleSendNoteSection).toHaveBeenCalledTimes(3);
+  expect(getNoteDetailHref).not.toHaveBeenCalled();
 });
 
 test.each([older, newer])('an open gallery drops revoked neighbor $id while its anchor row stays memoized', (neighbor) => {

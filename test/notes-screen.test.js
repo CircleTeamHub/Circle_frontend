@@ -73,16 +73,14 @@ test('NotesScreen bottom bar keeps only the 新建 button', () => {
   assert.doesNotMatch(src, /qrVisible/);
   // 单条笔记分享改为「弹会话选择器发给好友/群聊」：不再生成网页分享链接。
   assert.match(src, /handleShareNote\b/);
-  assert.match(src, /<ShareNoteSheet/);
-  assert.match(src, /buildNoteCardPayloadFromSummary/);
+  assert.match(src, /<ShareNoteSheet request=\{shareNoteRequest\}/);
+  assert.match(src, /setShareNoteRequest\(\{ notes: \[note\], options: NOTE_SHARE_CARD_ONLY \}\)/);
   assert.doesNotMatch(src, /createNoteShareLink/);
 });
 
-test('NotesScreen no longer exposes the old top-right settings page', () => {
+test('NotesScreen no longer exposes the old notes settings page', () => {
   const src = read('src/features/notes/screens/NotesScreen.tsx');
 
-  assert.doesNotMatch(src, /settings-outline/);
-  assert.doesNotMatch(src, /\/\(tabs\)\/profile\/notes\/settings/);
   assert.doesNotMatch(src, /useNotesSettingsStore/);
   assert.equal(
     fs.existsSync(
@@ -96,9 +94,15 @@ test('NotesScreen no longer exposes the old top-right settings page', () => {
     ),
     false,
   );
-  assert.equal(
-    fs.existsSync(path.join(ROOT, 'app/(tabs)/profile/notes/settings.tsx')),
-    false,
+});
+
+test('the notes settings entry opens the collect preferences page', () => {
+  const src = read('src/features/notes/screens/NotesScreen.tsx');
+  assert.match(src, /onOpenSettings=\{openSettings\}/);
+  assert.match(src, /\/\(tabs\)\/profile\/notes\/settings/);
+  assert.match(
+    read('app/(tabs)/profile/notes/settings.tsx'),
+    /features\/notes\/screens\/NoteSettingsScreen/,
   );
 });
 
@@ -628,8 +632,8 @@ test('NoteDetailScreen header adds a share button left of download', () => {
 
   // 分享按钮在下载按钮左边，点开弹会话选择器发给好友/群聊（非网页链接/系统面板）。
   assert.match(src, /handleShareNote/);
-  assert.match(src, /<ShareNoteSheet/);
-  assert.match(src, /buildNoteCardPayloadFromSummary/);
+  assert.match(src, /<ShareNoteSheet\s+request=\{shareRequest\}/);
+  assert.match(src, /options: NOTE_SHARE_CARD_ONLY/);
   assert.doesNotMatch(src, /createNoteShareLink/);
   const shareIdx = src.indexOf("name=\"share-outline\"");
   const downloadIdx = src.indexOf("name=\"download-outline\"");
@@ -661,30 +665,28 @@ test('GroupManagerSheet name input is a visible shadowed pill', () => {
 
 test('ShareNoteSheet sends the note as a card to a chosen friend/group', () => {
   const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
+  const sources = read('src/features/chat/components/chat-target-picker/use-chat-target-sources.ts');
+  const pipeline = read('src/features/chat/utils/send-notes-to-conversation.ts');
 
-  // 契约随自研栈迁移更新(意图不变):会话选择器列出 chat-core 会话,
-  // 点选把笔记以 note-card 发进所选会话。
-  assert.match(sheet, /loadChatConversations/);
-  assert.match(sheet, /sendCardMessage/);
-  assert.match(sheet, /type: 'note-card'/);
-  assert.match(sheet, /BottomSheetModal/);
+  // 契约随统一「选择一个聊天」页更新(意图不变):选择页列出 chat-core 会话,
+  // 选中后把笔记以 note-card 发进所选会话。
+  assert.match(sheet, /<ChatTargetPicker\b/);
+  assert.match(sources, /loadChatConversations/);
+  assert.match(sheet, /sendNotesToConversation\(/);
+  assert.match(sheet, /export const NOTE_SHARE_CARD_ONLY: NoteSendOptions = \{\s*card: true,/);
+  assert.match(pipeline, /sendCardMessage/);
+  assert.match(pipeline, /type: 'note-card'/);
+  // 全屏选择页,不再是底部面板。
+  assert.match(sheet, /<Modal\b/);
+  assert.doesNotMatch(sheet, /BottomSheetModal/);
   // 面板顶部不再放「分享给好友或群聊」标题。
   assert.doesNotMatch(sheet, /notes\.shareToChat\.title/);
 });
 
-test('ShareNoteSheet search text has a complete vertical line box', () => {
-  const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
-
-  // 明确行高和最小高度，避免 iOS 中文占位文案在 40pt 搜索框中被裁掉。
-  assert.match(sheet, /searchInput:\s*\{[\s\S]*lineHeight:\s*20/);
-  assert.match(sheet, /searchInput:\s*\{[\s\S]*minHeight:\s*24/);
-  assert.match(sheet, /searchInput:\s*\{[\s\S]*textAlignVertical:\s*'center'/);
-});
-
 test('ShareNoteSheet maps send failures to stable user-facing copy', () => {
   const sheet = read('src/features/notes/components/ShareNoteSheet.tsx');
-  assert.match(sheet, /setRetryTasks\(failures\)/);
-  assert.match(sheet, /t\('notes\.shareToChat\.partialFailed', \{\s*count: failures\.length/);
+  assert.match(sheet, /t\('notes\.shareToChat\.partialFailed', \{\s*count: failures/);
+  assert.match(sheet, /getChatSendErrorMessage\(firstError, countMessage\)/);
   assert.doesNotMatch(sheet, /error instanceof Error\s*\?\s*error\.message/);
 });
 

@@ -4,7 +4,9 @@ import type { NoteSummary, NoteWorkStatus } from '../types';
 export function resolveManagedWorkStatus(
   note: Pick<NoteSummary, 'workStatus'>,
 ): NoteWorkStatus {
-  return note.workStatus === 'WORKING' || note.workStatus === 'CLOSED'
+  return note.workStatus === 'WORKING' ||
+    note.workStatus === 'CLOSED' ||
+    note.workStatus === 'OFF_SHELF'
     ? note.workStatus
     : 'UNSET';
 }

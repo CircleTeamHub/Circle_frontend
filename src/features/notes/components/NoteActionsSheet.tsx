@@ -4,7 +4,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BottomSheetModal } from '@/components/ui/bottom-sheet-modal';
-import type { NoteSummary, NoteWorkStatus } from '@/features/notes/types';
+import type { NoteSummary } from '@/features/notes/types';
+import type { SetNoteWorkStatus } from '@/features/notes/utils/work-status';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 interface NoteActionsSheetProps {
@@ -33,7 +34,7 @@ interface NoteActionsSheetProps {
   /** 仅源笔记可用；收藏副本由 source status 统一跟随原笔记。 */
   onSetWorkStatus?: (
     note: NoteSummary,
-    workStatus: Extract<NoteWorkStatus, 'WORKING' | 'CLOSED'>,
+    workStatus: SetNoteWorkStatus,
   ) => void;
   /** 批量置顶/取消置顶（pinned = 目标状态，由「是否全部已置顶」推导） */
   onBatchPin?: (notes: NoteSummary[], pinned: boolean) => void;
@@ -238,6 +239,14 @@ export function NoteActionsSheet({
                   defaultValue: '开工',
                 }),
                 run: () => onSetWorkStatus?.(note, 'WORKING'),
+              },
+              {
+                key: 'work-status-off-shelf',
+                icon: 'archive-outline' as const,
+                label: t('chat.groupManagement.noteOffShelf', {
+                  defaultValue: '下架',
+                }),
+                run: () => onSetWorkStatus?.(note, 'OFF_SHELF'),
               },
             ]
           : []),

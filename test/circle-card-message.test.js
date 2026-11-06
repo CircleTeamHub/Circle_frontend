@@ -79,32 +79,27 @@ test('circle card bubble uses a compact card layout independent of friend cards'
   assert.doesNotMatch(shared, /const CHAT_CARD_WIDTH = 220/);
 });
 
-test('ShareCircleCardScreen sends the card to a chosen conversation', () => {
+test('ShareCircleCardScreen sends the card to the chats picked in the shared chat picker', () => {
   const share = read(
     'src/features/discover/screens/ShareCircleCardScreen.tsx',
   );
   assert.match(share, /useTranslation/);
-  assert.doesNotMatch(share, /Alert\.alert\(\s*'发送圈子名片'/);
+  assert.match(share, /<ChatTargetPicker/);
+  assert.match(share, /<SendConfirmDialog/);
   // 契约随自研栈迁移更新(意图不变):卡片经 chat-core 发进所选会话。
   assert.match(share, /sendCardMessage/);
-  assert.match(share, /conversationId: conversation\.id/);
+  assert.match(share, /resolveChatTargetConversationId\(target\)/);
   assert.match(share, /type: 'circle-card'/);
 });
 
-test('ShareCircleCardScreen does not leave a row stuck in sending state when SDK send hangs', () => {
+test('ShareCircleCardScreen treats a queued send as sent so a stalled network cannot leave it spinning', () => {
   const share = read(
     'src/features/discover/screens/ShareCircleCardScreen.tsx',
   );
-
-  assert.match(share, /SENDING_STATE_FALLBACK_MS/);
-  assert.match(share, /sendingTimeoutRef/);
-  assert.match(share, /setTimeout\(\(\) => \{/);
+  assert.match(share, /const handle = startChatSend\(send\);/);
+  assert.match(share, /if \(handle\.queued\) \{/);
   assert.match(share, /const mountedRef = useRef\(true\)/);
   assert.match(share, /mountedRef\.current = false/);
-  assert.match(share, /if \(mountedRef\.current\) setSendingConversationID\(''\)/);
-  assert.match(share, /if \(!mountedRef\.current\) return;[\s\S]*setSendingConversationID\(''\)/);
-  assert.match(share, /\.then\(\(\) => \{[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*Alert\.alert/);
-  assert.match(share, /\.catch\(\(error: unknown\) => \{[\s\S]*if \(!mountedRef\.current\) return;[\s\S]*Alert\.alert/);
-  assert.match(share, /clearTimeout/);
+  assert.match(share, /if \(!mountedRef\.current\) return;\s*setSending\(false\)/);
 });
 

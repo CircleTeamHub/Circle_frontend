@@ -40,7 +40,8 @@ const INPUT_SCROLL_FILES = [
   'src/features/chat/screens/ChatHistorySearchHubScreen.tsx',
   'src/features/chat/screens/ChatHistoryTextScreen.tsx',
   'src/features/chat/screens/EditGroupNoticeScreen.tsx',
-  'src/features/chat/screens/ForwardPickerScreen.tsx',
+  // 转发页 / 笔记分享 / 圈子名片分享共用「选择一个聊天」组件,搜索框和列表都在它里面。
+  'src/features/chat/components/chat-target-picker/ChatTargetPicker.tsx',
   'src/features/chat/screens/SearchGroupMembersScreen.tsx',
   'src/features/chat/screens/ReportFriendScreen.tsx',
   'src/features/chat/screens/SharePickerScreen.tsx',

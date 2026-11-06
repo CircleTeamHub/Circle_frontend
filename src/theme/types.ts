@@ -58,6 +58,8 @@ export interface ThemeColors {
   workingFill: string;
   /** 打烊状态的实心底:橘黄,比 warning 那个橙色更亮更偏黄。 */
   closedFill: string;
+  /** 场地状态「下架」的实心底:中性灰,两个主题同值。 */
+  offShelfFill: string;
   /**
    * 开工/打烊实心底上的文字与图标。浅色模式用深色字(绿底 7.5:1、橘黄底 8.6:1);
    * 暗色模式按产品要求用白字,对比度只有 2:1 左右,是有意的取舍,别当 bug 改回。

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -14,39 +14,51 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { FloatingModal } from '@/components/ui/floating-modal';
 import { keyboardDismissOnDragProps } from '@/components/ui/keyboard-dismiss';
+import { CollectCreateGroupRow } from '@/features/notes/components/CollectCreateGroupRow';
 import type { NoteGroup } from '@/features/notes/types';
-import { buildCollectedNoteTitle } from '@/features/notes/utils/note-collect-title';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 
 export type AddNoteToNotesSelection = {
   targetNoteGroupId: string | null;
   title: string;
+  /** 用户勾了「下次不再编辑标题」。 */
+  disableTitleEditing?: boolean;
 };
 
 type AddNoteToNotesSheetProps = {
   visible: boolean;
   noteTitle: string;
-  username?: string;
+  /** 关掉后直接放进「未分组」,从编辑标题开始。 */
+  chooseGroup?: boolean;
+  /** 关掉后选完分组就用原标题保存。 */
+  editTitle?: boolean;
   groups: NoteGroup[];
   loading?: boolean;
   saving?: boolean;
   error?: string | null;
   onClose: () => void;
   onRetryGroups?: () => void;
+  /** 新建分组;成功返回新分组,失败返回 null(调用方负责提示)。 */
+  onCreateGroup?: (name: string) => Promise<NoteGroup | null>;
   onConfirm: (selection: AddNoteToNotesSelection) => void;
 };
 
-/** 收藏笔记的两步确认：先选私有分组，再编辑标题并保存。 */
+/**
+ * 收藏笔记的两步确认：先选私有分组，再编辑标题并保存。两步都可以在笔记设置里关掉;
+ * 两步都关掉时调用方直接保存,不会打开这个弹窗。
+ */
 export function AddNoteToNotesSheet({
   visible,
   noteTitle,
-  username,
+  chooseGroup = true,
+  editTitle = true,
   groups,
   loading = false,
   saving = false,
   error = null,
   onClose,
   onRetryGroups,
+  onCreateGroup,
   onConfirm,
 }: AddNoteToNotesSheetProps) {
   const { colors } = useTheme();
@@ -55,28 +67,21 @@ export function AddNoteToNotesSheet({
   const [step, setStep] = useState<'group' | 'title'>('group');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
+  const [skipTitleNextTime, setSkipTitleNextTime] = useState(false);
   const titleInputRef = useRef<TextInput>(null);
-
-  const selectedGroup = groups.find((group) => group.id === selectedGroupId);
-  const defaultTitle = useMemo(
-    () =>
-      buildCollectedNoteTitle({
-        groupName: selectedGroup?.name,
-        username,
-        originalTitle: noteTitle,
-      }),
-    [noteTitle, selectedGroup?.name, username],
-  );
+  // 不再预填拼出来的标题,由用户自己写;留空就沿用原笔记标题。
+  const fallbackTitle = noteTitle.trim() || t('notes.collect.untitled', { defaultValue: '未命名笔记' });
 
   useEffect(() => {
     if (!visible) {
       Keyboard.dismiss();
       return;
     }
-    setStep('group');
+    setStep(chooseGroup ? 'group' : 'title');
     setSelectedGroupId(null);
     setTitle('');
-  }, [visible, noteTitle]);
+    setSkipTitleNextTime(false);
+  }, [visible, noteTitle, chooseGroup]);
 
   useEffect(() => {
     if (step === 'title') {
@@ -92,22 +97,31 @@ export function AddNoteToNotesSheet({
     // keyboard avoidance starts from its own TextInput instead of inheriting a
     // stale inset from the underlying chat screen.
     Keyboard.dismiss();
+    if (!editTitle) {
+      if (saving) return;
+      onConfirm({ targetNoteGroupId: groupId, title: fallbackTitle });
+      return;
+    }
     setSelectedGroupId(groupId);
-    setTitle(
-      buildCollectedNoteTitle({
-        groupName: groups.find((group) => group.id === groupId)?.name,
-        username,
-        originalTitle: noteTitle,
-      }),
-    );
     setStep('title');
   };
 
+  const handleCreateGroup = async (name: string) => {
+    if (!onCreateGroup) return false;
+    const created = await onCreateGroup(name);
+    if (!created) return false;
+    handlePickGroup(created.id);
+    return true;
+  };
+
   const handleConfirm = () => {
-    const trimmed = title.trim();
-    if (!trimmed || saving) return;
+    if (saving) return;
     Keyboard.dismiss();
-    onConfirm({ targetNoteGroupId: selectedGroupId, title: trimmed });
+    onConfirm({
+      targetNoteGroupId: selectedGroupId,
+      title: title.trim() || fallbackTitle,
+      ...(skipTitleNextTime ? { disableTitleEditing: true } : {}),
+    });
   };
 
   const d = {
@@ -177,6 +191,9 @@ export function AddNoteToNotesSheet({
                   </Text>
                   <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                 </Pressable>
+                {onCreateGroup ? (
+                  <CollectCreateGroupRow disabled={saving} onCreate={handleCreateGroup} />
+                ) : null}
                 {groups.map((group) => (
                   <Pressable
                     key={group.id}
@@ -204,7 +221,7 @@ export function AddNoteToNotesSheet({
             {...keyboardDismissOnDragProps}
           >
             <Text style={[s.caption, d.caption]}>
-              {t('notes.collect.titleHint', { defaultValue: '默认标题可以直接修改，保存后生成你的笔记副本。' })}
+              {t('notes.collect.titleHint', { defaultValue: '输入一个方便自己查找的标题，不填就用原笔记标题。' })}
             </Text>
             <TextInput
               ref={titleInputRef}
@@ -215,7 +232,7 @@ export function AddNoteToNotesSheet({
               value={title}
               onChangeText={setTitle}
               style={[s.input, { color: colors.text, borderColor: colors.surfaceBorder }]}
-              placeholder={defaultTitle}
+              placeholder={fallbackTitle}
               placeholderTextColor={colors.textSecondary}
               maxLength={120}
               returnKeyType="done"
@@ -223,23 +240,42 @@ export function AddNoteToNotesSheet({
               editable={!saving}
               accessibilityLabel={t('notes.collect.titleLabel', { defaultValue: '收藏标题' })}
             />
+            <Pressable
+              style={s.skipRow}
+              onPress={() => setSkipTitleNextTime((value) => !value)}
+              disabled={saving}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: skipTitleNextTime }}
+            >
+              <Text style={[s.skipText, d.caption]}>
+                {t('notes.collect.skipTitleNextTime', { defaultValue: '下次不再编辑标题' })}
+              </Text>
+              <Ionicons
+                name={skipTitleNextTime ? 'checkbox' : 'square-outline'}
+                size={20}
+                color={skipTitleNextTime ? colors.primary : colors.textSecondary}
+              />
+            </Pressable>
             <View style={s.actions}>
               <Pressable
                 style={[s.secondaryButton, { borderColor: colors.surfaceBorder }]}
                 onPress={() => {
                   Keyboard.dismiss();
-                  setStep('group');
+                  if (chooseGroup) setStep('group');
+                  else onClose();
                 }}
                 disabled={saving}
               >
                 <Text style={{ ...Typography.body, color: colors.text }}>
-                  {t('common.back', { defaultValue: '上一步' })}
+                  {chooseGroup
+                    ? t('common.back', { defaultValue: '上一步' })
+                    : t('common.cancel', { defaultValue: '取消' })}
                 </Text>
               </Pressable>
               <Pressable
-                style={[s.primaryButton, d.primary, !title.trim() || saving ? s.disabled : null]}
+                style={[s.primaryButton, d.primary, saving ? s.disabled : null]}
                 onPress={handleConfirm}
-                disabled={saving || !title.trim()}
+                disabled={saving}
               >
                 {saving ? <ActivityIndicator color={colors.white} /> : <Text style={{ ...Typography.body, color: colors.white }}>
                   {t('common.save', { defaultValue: '保存' })}
@@ -288,7 +324,9 @@ const s = StyleSheet.create({
   icon: { width: 32, height: 32, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
   rowText: { ...Typography.body, flex: 1 },
   input: { ...Typography.body, minHeight: 48, borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
-  actions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg },
+  skipRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: Spacing.xs, marginTop: Spacing.md, minHeight: 32 },
+  skipText: { ...Typography.small, marginBottom: 0 },
+  actions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
   secondaryButton: { flex: 1, minHeight: 48, borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   primaryButton: { flex: 1, minHeight: 48, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.55 },

@@ -788,6 +788,29 @@ test('muted conversations never raise an in-app banner', () => {
   assert.equal(state.banners.length, 0);
 });
 
+test('a muted group still banners the message that @-mentions me or everyone', () => {
+  // 强提醒:被点名或 @所有人 时,免打扰也要提醒到。
+  const GROUP_ID = '8c4d2e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f';
+  const group = directConversation({ id: GROUP_ID, type: 'GROUP', peer: null, name: '群', muted: true });
+  const mentionMe = loadDispatcher({ conversations: [group] });
+  mentionMe.socket.emit('chat:msg', dto({
+    id: 'm-me', conversationId: GROUP_ID,
+    content: { text: '@我 看一下', mentions: [{ userId: 'me', nickname: '我' }] },
+  }));
+  assert.equal(mentionMe.state.banners.length, 1);
+
+  const atAll = loadDispatcher({ conversations: [group] });
+  atAll.socket.emit('chat:msg', dto({ id: 'm-all', conversationId: GROUP_ID, content: { text: '@所有人', atAll: true } }));
+  assert.equal(atAll.state.banners.length, 1);
+
+  const someoneElse = loadDispatcher({ conversations: [group] });
+  someoneElse.socket.emit('chat:msg', dto({
+    id: 'm-other', conversationId: GROUP_ID,
+    content: { text: '@别人', mentions: [{ userId: 'someone-else', nickname: '别人' }] },
+  }));
+  assert.equal(someoneElse.state.banners.length, 0);
+});
+
 test('background messages do not leave an in-app banner queued for foreground', () => {
   const { socket, state } = loadDispatcher({
     conversations: [directConversation()],
