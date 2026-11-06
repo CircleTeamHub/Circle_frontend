@@ -65,6 +65,17 @@ test('an old prompt cannot navigate after the user has switched sessions', () =>
   expect(mockPush).not.toHaveBeenCalled();
 });
 
+test('leaving the recovery login form offers recovery again without clearing the session', () => {
+  mockAuth.refreshUncertain = true;
+  const screen = render(<SessionRecoveryPrompt />);
+  mockSwitcher.addingAccount = true;
+  screen.rerender(<SessionRecoveryPrompt />);
+  mockSwitcher.addingAccount = false;
+  screen.rerender(<SessionRecoveryPrompt />);
+  expect(Alert.alert).toHaveBeenCalledTimes(2);
+  expect(mockAuth.isAuthenticated).toBe(true);
+});
+
 test.each(['addingAccount', 'switching'] as const)('recovery does not interrupt %s', flag => {
   mockAuth.refreshUncertain = true;
   mockSwitcher[flag] = true;

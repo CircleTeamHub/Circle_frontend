@@ -20,7 +20,8 @@ export function SessionRecoveryPrompt() {
 
   useEffect(() => {
     if (!hydrated || !authenticated || !uncertain) { prompted.current = null; return; }
-    if (addingAccount || switching || prompted.current === epoch) return;
+    if (addingAccount || switching) { prompted.current = null; return; }
+    if (prompted.current === epoch) return;
     prompted.current = epoch;
     Alert.alert(t('auth.login'), t('common.errors.refreshOutcomeUnknown'), [
       { text: t('common.cancel'), style: 'cancel' },
