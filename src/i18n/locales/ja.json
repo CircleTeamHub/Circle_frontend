@@ -699,7 +699,38 @@
       "noteUnbindTitle": "元グループとの関連付けを解除しますか？",
       "noteUnbindHint": "このノートはグループのノート管理に表示されなくなります。",
       "noteUnbindAction": "削除（グループとの紐付けを解除）",
-      "noteUnbind": "関連付けを解除"
+      "noteUnbind": "関連付けを解除",
+      "memberSection": "メンバー管理",
+      "silenceSection": "発言禁止",
+      "removeBatchConfirm": "選択した {{n}} 人のメンバーをグループから削除しますか？",
+      "removeBatchDone": "{{n}} 人のメンバーを削除しました",
+      "overview": {
+        "members": "メンバー",
+        "admins": "管理者",
+        "silenced": "発言禁止中"
+      },
+      "abnormal": {
+        "entry": "要注意メンバー",
+        "entryHint": "長期間ログインしていない、または信用スコアが低いメンバー",
+        "title": "要注意メンバー",
+        "rules": "{{days}} 日以上ログインしていない、または信用スコアが {{threshold}} 未満のメンバーが表示されます。あなたが削除できるメンバーのみ表示されます。オンライン状態を非公開にしているメンバーはログイン判定の対象外です。",
+        "inactiveFor": "未ログイン期間",
+        "days": "{{n}} 日",
+        "filterAll": "すべて {{n}}",
+        "filterInactive": "長期未ログイン {{n}}",
+        "filterLowCredit": "信用スコア低 {{n}}",
+        "tagInactiveDays": "{{n}} 日未ログイン",
+        "tagInactiveOver": "{{n}} 日以上未ログイン",
+        "tagLowCredit": "信用スコア {{score}}",
+        "adminBadge": "管理者",
+        "empty": "要注意メンバーはいません",
+        "emptyHint": "メンバーは全員アクティブで、信用状態も良好です",
+        "selectAll": "すべて選択",
+        "clearAll": "選択を解除",
+        "batchLimit": "一度に最大 {{n}} 人まで",
+        "removeSelected": "削除 ({{n}})",
+        "loadFailed": "要注意メンバーを読み込めませんでした"
+      }
     },
     "groupEvent": {
       "system": "システム",
@@ -792,7 +823,7 @@
       "voiceCall": "音声/ビデオ通話",
       "location": "位置情報",
       "notes": "ノート",
-      "friendCard": "連絡先カード",
+      "friendCard": "名刺",
       "favorites": "お気に入り",
       "quickReply": "定型文",
       "transfer": "送金"
@@ -2874,7 +2905,7 @@
   "share": {
     "title": {
       "favorite": "お気に入りを選択",
-      "friend": "友だちカードを選択",
+      "friend": "名刺を送信",
       "note": "ノートを選択",
       "quickReply": "定型文"
     },
@@ -2904,6 +2935,10 @@
       "messageLabel": "追加メッセージ",
       "messagePlaceholder": "メッセージを追加（任意）",
       "missingRecipient": "チャットを開き直して、もう一度お試しください。"
+    },
+    "cardKind": {
+      "friend": "友だちの名刺",
+      "group": "グループの名刺"
     }
   },
   "accountSwitcher": {
@@ -3276,7 +3311,8 @@
   },
   "im": {
     "conversation": {
-      "removedFromGroup": "このグループチャットから削除されました"
+      "removedFromGroup": "このグループチャットから削除されました",
+      "removedFromNamedGroup": "グループ「{{name}}」から削除されました"
     },
     "time": {
       "yesterday": "昨日"

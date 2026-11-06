@@ -6,6 +6,8 @@ import { reportHandledFailure } from '@/observability/report-failure';
 import { retry } from '@/utils/retry';
 import { useAuthStore } from '@/stores/authStore';
 import type {
+  AbnormalInactiveDays,
+  ChatAbnormalMembersDto,
   ChatBurnPolicyDto,
   ChatConversationDto,
   ChatGroupEventsPageDto,
@@ -581,6 +583,16 @@ export function fetchChatGroupEvents(
     .join('&');
   return apiClient<ChatGroupEventsPageDto>(
     `/chat/conversations/${conversationId}/events${query ? `?${query}` : ''}`,
+  );
+}
+
+/** 异常成员(长期未登录 / 信誉值低):仅群主/管理员,两种群共用。 */
+export function fetchChatAbnormalMembers(
+  conversationId: string,
+  inactiveDays: AbnormalInactiveDays,
+): Promise<ChatAbnormalMembersDto> {
+  return apiClient<ChatAbnormalMembersDto>(
+    `/chat/conversations/${conversationId}/abnormal-members?inactiveDays=${inactiveDays}`,
   );
 }
 

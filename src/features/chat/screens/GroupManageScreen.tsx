@@ -12,12 +12,9 @@ import {
 import { router, useFocusEffect, useLocalSearchParams, useSegments, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
-import { Avatar } from '@/components/ui/avatar';
 import { Divider } from '@/components/ui/divider';
 import { NavHeader } from '@/components/ui/nav-header';
 import { OptionPickerSheet } from '@/components/ui/option-picker-sheet';
-import { ThemedSwitch } from '@/components/ui/themed-switch';
 import {
   fetchChatMembers,
   refreshConversationOrList,
@@ -35,6 +32,15 @@ import {
 import { useChatStore } from '@/chat-core/store';
 import { GroupMemberPickerSheet } from '@/features/chat/components/group-member-picker-sheet';
 import {
+  ManageAddRow,
+  ManageEmptyRow,
+  ManageLinkRow,
+  ManageMemberRow,
+  ManageSection,
+  ManageSwitchRow,
+} from '@/features/chat/components/group-manage/GroupManageParts';
+import { GroupManageOverview } from '@/features/chat/components/group-manage/GroupManageOverview';
+import {
   type GroupRole,
   isGroupManager,
   resolveStandaloneSelfRole,
@@ -44,11 +50,7 @@ import {
   useGroupAdminActions,
 } from '@/features/chat/hooks/use-group-admin-actions';
 import { groupMemberDisplayName } from '@/features/chat/group-member-display';
-import {
-  evictGroupInfoCache,
-  readGroupInfoCache,
-  writeGroupInfoCache,
-} from '@/features/chat/group-info-cache';
+import { evictGroupInfoCache, writeGroupInfoCache } from '@/features/chat/group-info-cache';
 import { useAuthStore } from '@/stores/authStore';
 import { getPageSnapshotRevision } from '@/storage/page-snapshots';
 import { fetchCircleDetail } from '@/services/api/circles';
@@ -74,37 +76,7 @@ type PolicyKey = keyof ChatGroupPoliciesDto;
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: Spacing.lg, gap: Spacing.lg },
-  section: { borderRadius: Radius.xl, overflow: 'hidden' },
-  sectionHeader: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xs,
-    gap: 2,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    minHeight: 56,
-  },
-  rowText: { flex: 1, gap: 2 },
-  rowAction: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-  },
-  emptyRow: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
+  content: { padding: Spacing.md, gap: Spacing.lg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
   retry: {
     marginTop: Spacing.md,
@@ -147,12 +119,7 @@ function GroupManageContent() {
   const sessionEpoch = useAuthStore((state) => state.sessionEpoch);
   // 与 ChatInfoScreen.groupDataKey 同一套键:两页共用一份成员缓存。
   const groupDataKey = groupID ? `circle:${groupID}` : `standalone:${conversationID}`;
-  // 看过这个群(本页或群聊信息页)就先用上次的成员画出来,聚焦回调照常后台重拉;
-  // 一份都没有才整屏转圈。只读挂载那一刻,之后以本页拉到的为准。
-  const [cachedMembers] = useState(
-    () => readGroupInfoCache(sessionEpoch, groupDataKey)?.members,
-  );
-  const [members, setMembers] = useState<ChatMemberDto[]>(cachedMembers ?? []);
+  const [members, setMembers] = useState<ChatMemberDto[]>([]);
   // undefined = 本次进入还没查回圈子详情。
   const [circleRole, setCircleRole] = useState<GroupRole | null | undefined>(undefined);
   // 缓存不是当前授权证明。管理页每次进入都先等成员接口（以及圈子详情）确认
@@ -470,6 +437,24 @@ function GroupManageContent() {
     } as never);
   }, [groupID, scope]);
 
+  const handleOpenReview = useCallback(() => {
+    router.push({
+      pathname: `/(tabs)/${scope}/group-review`,
+      params: { conversationID, title: params.title },
+    } as unknown as Href);
+  }, [conversationID, params.title, scope]);
+
+  const handleOpenLog = useCallback(() => {
+    router.push(getGroupLogHref(scope, { conversationID, title: params.title }));
+  }, [conversationID, params.title, scope]);
+
+  const handleOpenAbnormal = useCallback(() => {
+    router.push({
+      pathname: `/(tabs)/${scope}/group-abnormal-members`,
+      params: groupID ? { conversationID, groupID } : { conversationID },
+    } as unknown as Href);
+  }, [conversationID, groupID, scope]);
+
   const openPicker = useCallback((mode: Exclude<PickerMode, null>) => {
     setSelectedMemberIDs(new Set());
     setPickerMode(mode);
@@ -513,16 +498,6 @@ function GroupManageContent() {
   const d = useMemo(
     () => ({
       container: { backgroundColor: colors.background },
-      section: { backgroundColor: colors.surface },
-      title: { color: colors.text, ...Typography.body },
-      hint: { color: colors.textSecondary, ...Typography.small },
-      name: { color: colors.text, ...Typography.body },
-      meta: { color: colors.textSecondary, ...Typography.small },
-      action: { borderColor: colors.surfaceBorder },
-      actionText: { color: colors.primary, ...Typography.small },
-      actionDestructive: { color: colors.error, ...Typography.small },
-      addText: { color: colors.iconAccent, ...Typography.body },
-      empty: { color: colors.textSecondary, ...Typography.bodyRegular },
       centerText: { color: colors.textSecondary, ...Typography.bodyRegular, textAlign: 'center' as const },
       retry: { backgroundColor: colors.primary },
       retryText: { color: colors.white, ...Typography.body },
@@ -563,114 +538,22 @@ function GroupManageContent() {
     }
   }, [groupAdmin, pickerMembers, pickerMode, selectedMemberIDs]);
 
-  const renderMemberRow = (
-    member: ChatMemberDto,
-    action: { label: string; destructive?: boolean; onPress: () => void },
-    meta?: string,
-  ) => {
-    const name = groupMemberDisplayName(member);
-    const pending = groupAdmin.pendingUserID === member.userId;
-    return (
-      <View key={member.userId} style={s.row}>
-        <Avatar size={40} shape="square" name={name} uri={member.avatarUrl ?? undefined} />
-        <View style={s.rowText}>
-          <Text style={d.name} numberOfLines={1}>
-            {name}
-          </Text>
-          {meta ? (
-            <Text style={d.meta} numberOfLines={1}>
-              {meta}
-            </Text>
-          ) : null}
-        </View>
-        <Pressable
-          style={[s.rowAction, d.action]}
-          onPress={action.onPress}
-          disabled={pending}
-          accessibilityRole="button"
-          accessibilityLabel={action.label}
-        >
-          {pending ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Text style={action.destructive ? d.actionDestructive : d.actionText}>
-              {action.label}
-            </Text>
-          )}
-        </Pressable>
-      </View>
-    );
-  };
-
-  const renderAddRow = (label: string, onPress: () => void, testID: string) => (
-    <Pressable style={s.actionRow} onPress={onPress} accessibilityRole="button" testID={testID}>
-      <Ionicons name="add-circle-outline" size={22} color={colors.iconAccent} />
-      <Text style={d.addText}>{label}</Text>
-    </Pressable>
-  );
-
-  const renderSwitchRow = (params: {
-    key: string;
-    label: string;
-    hint?: string;
-    value: boolean;
-    onToggle: (next: boolean) => void;
-    disabled?: boolean;
-  }) => (
-    <View key={params.key} style={s.row}>
-      <View style={s.rowText}>
-        <Text style={d.name}>{params.label}</Text>
-        {params.hint ? (
-          <Text style={d.meta}>{params.hint}</Text>
-        ) : null}
-      </View>
-      <ThemedSwitch
-        value={params.value}
-        onValueChange={
-          params.disabled || settingPending ? undefined : params.onToggle
-        }
-        disabled={params.disabled || Boolean(settingPending)}
-      />
-    </View>
-  );
-
   const renderPolicyRows = (keys: readonly PolicyKey[]) =>
     keys.map((key, index) => (
       <View key={key}>
         {index > 0 ? <Divider /> : null}
-        {renderSwitchRow({
-          key,
-          label: groupPolicyLabel(key),
-          hint: t(`chat.groupPolicyHint.${key}`),
-          value: policies?.[key] ?? true,
-          onToggle: (next) => handleTogglePolicy(key, next),
-          disabled: policies === null,
-        })}
+        <ManageSwitchRow
+          label={groupPolicyLabel(key)}
+          hint={t(`chat.groupPolicyHint.${key}`)}
+          value={policies?.[key] ?? true}
+          onToggle={(next) => handleTogglePolicy(key, next)}
+          disabled={policies === null || Boolean(settingPending)}
+        />
       </View>
     ));
 
-  const renderLinkRow = (label: string, onPress: () => void, testID: string) => (
-    <Pressable style={s.row} onPress={onPress} accessibilityRole="button" testID={testID}>
-      <View style={s.rowText}>
-        <Text style={d.name}>{label}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-    </Pressable>
-  );
-
   let body: React.ReactNode;
-  if (loading && cachedMembers !== undefined) {
-    body = (
-      <ScrollView contentContainerStyle={s.content}>
-        <View style={[s.section, d.section]}>
-          {members.map((member) => <View key={member.userId} style={s.row}>
-            <Avatar size={40} name={groupMemberDisplayName(member)} uri={member.avatarUrl ?? undefined} />
-            <Text style={d.name}>{groupMemberDisplayName(member)}</Text>
-          </View>)}
-        </View>
-      </ScrollView>
-    );
-  } else if (loading) {
+  if (loading) {
     body = (
       <View style={s.center}>
         <ActivityIndicator color={colors.primary} />
@@ -704,162 +587,150 @@ function GroupManageContent() {
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + Spacing.xl }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[s.section, d.section]}>
-          <View style={s.sectionHeader}>
-            <Text style={d.title}>
-              {t('chat.groupManagement.settings', { defaultValue: '群设置' })}
-            </Text>
-          </View>
-          {renderSwitchRow({
-            key: 'muteAll',
-            label: t('chat.muteAll', { defaultValue: '全员禁言' }),
-            hint: t('chat.muteAllHint', {
-              defaultValue: '开启后仅群主和管理员可以发言',
-            }),
-            value: muteAll,
-            onToggle: handleToggleMuteAll,
-          })}
-        </View>
+        <GroupManageOverview
+          memberCount={members.length}
+          adminCount={admins.length}
+          silencedCount={silencedMembers.length}
+        />
 
-        <View style={[s.section, d.section]}>
-          <View style={s.sectionHeader}>
-            <Text style={d.title}>
-              {t('chat.groupManagement.joinMethods', { defaultValue: '进群允许方式' })}
-            </Text>
-          </View>
-          {renderPolicyRows(isStandaloneGroup ? JOIN_POLICY_KEYS : ['memberCanInvite', 'qrJoinEnabled'])}
-        </View>
-
-        <View style={[s.section, d.section]}>
-          <View style={s.sectionHeader}>
-            <Text style={d.title}>
-              {t('chat.groupManagement.memberPermissions', {
-                defaultValue: '成员权限',
-              })}
-            </Text>
-          </View>
-          {renderPolicyRows(MEMBER_POLICY_KEYS)}
-        </View>
-
-        <View style={[s.section, d.section]}>
-          {renderLinkRow(t('groupReview.entry'), () => router.push({ pathname: `/(tabs)/${scope}/group-review`, params: { conversationID, title: params.title } } as unknown as Href), 'group-manage-applications')}
+        <ManageSection title={t('chat.groupManagement.memberSection')}>
+          <ManageLinkRow
+            icon="person-add-outline"
+            label={t('groupReview.entry')}
+            onPress={handleOpenReview}
+            testID="group-manage-applications"
+          />
           <Divider />
-          {renderLinkRow(t('chat.groupLog'), () => router.push(getGroupLogHref(scope, { conversationID, title: params.title })), 'group-manage-log')}
-        </View>
-        {isOwner ? (
-          <View style={[s.section, d.section]}>
-            <View style={s.sectionHeader}>
-              <Text style={d.title}>
-                {t('chat.groupManagement.ownerSection', { defaultValue: '群主' })}
-              </Text>
-            </View>
-            {/* 独立群聊才有群主转让:圈子群的圈主转让牵涉会员配额与容量,不在这里。 */}
-            {isStandaloneGroup
-              ? renderLinkRow(
-                  t('chat.transferOwner', { defaultValue: '转让群主' }),
-                  () => openPicker('transfer'),
-                  'group-manage-transfer-owner',
-                )
-              : null}
-            {/* 圈子群的成员上限走扩容商品;独立群聊固定 200,没有入口。 */}
-            {groupID ? (
-              <>
-                {isStandaloneGroup ? <Divider /> : null}
-                {renderLinkRow(
-                  t('chat.raiseMemberLimit', { defaultValue: '提升成员上限' }),
-                  handleOpenGroupExpansion,
-                  'group-manage-raise-limit',
-                )}
-              </>
-            ) : null}
-          </View>
-        ) : null}
+          <ManageLinkRow
+            icon="alert-circle-outline"
+            label={t('chat.groupManagement.abnormal.entry')}
+            subtitle={t('chat.groupManagement.abnormal.entryHint')}
+            onPress={handleOpenAbnormal}
+            testID="group-manage-abnormal"
+          />
+          <Divider />
+          <ManageLinkRow
+            icon="person-remove-outline"
+            label={t('chat.groupManagement.removeMembers', { defaultValue: '移出群成员' })}
+            subtitle={t('chat.groupManagement.removeMembersHint', {
+              defaultValue: '选择成员并移出群聊',
+            })}
+            onPress={() => openPicker('remove')}
+            testID="group-manage-remove-member"
+          />
+        </ManageSection>
 
         {isOwner ? (
-          <View style={[s.section, d.section]}>
-            <View style={s.sectionHeader}>
-              <Text style={d.title}>
-                {t('chat.groupManagement.admins', { defaultValue: '群管理员' })}
-              </Text>
-              <Text style={d.hint}>
-                {t('chat.groupManagement.adminsHint', {
-                  defaultValue: '管理员可移出普通成员、禁言成员、删除所有人的聊天记录',
-                })}
-              </Text>
-            </View>
+          <ManageSection
+            title={t('chat.groupManagement.admins', { defaultValue: '群管理员' })}
+            hint={t('chat.groupManagement.adminsHint', {
+              defaultValue: '管理员可移出普通成员、禁言成员、删除所有人的聊天记录',
+            })}
+          >
             {admins.length === 0 ? (
-              <View style={s.emptyRow}>
-                <Text style={d.empty}>
-                  {t('chat.groupManagement.noAdmins', { defaultValue: '暂无管理员' })}
-                </Text>
-              </View>
+              <ManageEmptyRow
+                text={t('chat.groupManagement.noAdmins', { defaultValue: '暂无管理员' })}
+              />
             ) : (
-              admins.map((member) =>
-                renderMemberRow(member, {
-                  label: t('chat.groupManagement.removeAdmin', { defaultValue: '移除' }),
-                  onPress: () => groupAdmin.changeRole(member, 'MEMBER'),
-                }),
-              )
+              admins.map((member) => (
+                <ManageMemberRow
+                  key={member.userId}
+                  name={groupMemberDisplayName(member)}
+                  avatarUrl={member.avatarUrl}
+                  actionLabel={t('chat.groupManagement.removeAdmin', { defaultValue: '移除' })}
+                  pending={groupAdmin.pendingUserID === member.userId}
+                  onPress={() => groupAdmin.changeRole(member, 'MEMBER')}
+                />
+              ))
             )}
             <Divider />
-            {renderAddRow(
-              t('chat.groupManagement.addAdmin', { defaultValue: '添加管理员' }),
-              () => openPicker('admin'),
-              'group-manage-add-admin',
-            )}
-          </View>
+            <ManageAddRow
+              label={t('chat.groupManagement.addAdmin', { defaultValue: '添加管理员' })}
+              onPress={() => openPicker('admin')}
+              testID="group-manage-add-admin"
+            />
+          </ManageSection>
         ) : null}
 
-        <View style={[s.section, d.section]}>
-          <View style={s.sectionHeader}>
-            <Text style={d.title}>
-              {t('chat.groupManagement.silencedMembers', { defaultValue: '禁言成员' })}
-            </Text>
-          </View>
+        <ManageSection title={t('chat.groupManagement.silenceSection')}>
+          <ManageSwitchRow
+            label={t('chat.muteAll', { defaultValue: '全员禁言' })}
+            hint={t('chat.muteAllHint', { defaultValue: '开启后仅群主和管理员可以发言' })}
+            value={muteAll}
+            onToggle={handleToggleMuteAll}
+            disabled={Boolean(settingPending)}
+          />
+          <Divider />
           {silencedMembers.length === 0 ? (
-            <View style={s.emptyRow}>
-              <Text style={d.empty}>
-                {t('chat.groupManagement.noSilenced', { defaultValue: '暂无成员被禁言' })}
-              </Text>
-            </View>
+            <ManageEmptyRow
+              text={t('chat.groupManagement.noSilenced', { defaultValue: '暂无成员被禁言' })}
+            />
           ) : (
-            silencedMembers.map((member) =>
-              renderMemberRow(
-                member,
-                {
-                  label: t('chat.groupManagement.lift', { defaultValue: '解除' }),
-                  onPress: () => groupAdmin.unsilence(member),
-                },
-                silenceStatusLabel(member),
-              ),
-            )
+            silencedMembers.map((member) => (
+              <ManageMemberRow
+                key={member.userId}
+                name={groupMemberDisplayName(member)}
+                avatarUrl={member.avatarUrl}
+                meta={silenceStatusLabel(member)}
+                actionLabel={t('chat.groupManagement.lift', { defaultValue: '解除' })}
+                pending={groupAdmin.pendingUserID === member.userId}
+                onPress={() => groupAdmin.unsilence(member)}
+              />
+            ))
           )}
           <Divider />
-          {renderAddRow(
-            t('chat.groupManagement.addSilence', { defaultValue: '添加禁言' }),
-            () => openPicker('silence'),
-            'group-manage-add-silence',
-          )}
-        </View>
+          <ManageAddRow
+            label={t('chat.groupManagement.addSilence', { defaultValue: '添加禁言' })}
+            onPress={() => openPicker('silence')}
+            testID="group-manage-add-silence"
+          />
+        </ManageSection>
 
-        <View style={[s.section, d.section]}>
-          <View style={s.sectionHeader}>
-            <Text style={d.title}>
-              {t('chat.groupManagement.removeMembers', { defaultValue: '移出群成员' })}
-            </Text>
-            <Text style={d.hint}>
-              {t('chat.groupManagement.removeMembersHint', {
-                defaultValue: '选择成员并移出群聊',
-              })}
-            </Text>
-          </View>
-          <Divider />
-          {renderAddRow(
-            t('chat.groupManagement.pickMember', { defaultValue: '选择成员' }),
-            () => openPicker('remove'),
-            'group-manage-remove-member',
+        <ManageSection
+          title={t('chat.groupManagement.joinMethods', { defaultValue: '进群允许方式' })}
+        >
+          {renderPolicyRows(
+            isStandaloneGroup ? JOIN_POLICY_KEYS : ['memberCanInvite', 'qrJoinEnabled'],
           )}
-        </View>
+        </ManageSection>
+
+        <ManageSection
+          title={t('chat.groupManagement.memberPermissions', { defaultValue: '成员权限' })}
+        >
+          {renderPolicyRows(MEMBER_POLICY_KEYS)}
+        </ManageSection>
+
+        <ManageSection>
+          <ManageLinkRow
+            icon="document-text-outline"
+            label={t('chat.groupLog')}
+            onPress={handleOpenLog}
+            testID="group-manage-log"
+          />
+        </ManageSection>
+
+        {isOwner ? (
+          <ManageSection title={t('chat.groupManagement.ownerSection', { defaultValue: '群主' })}>
+            {/* 圈子群的成员上限走扩容商品;独立群聊固定 200,没有入口。 */}
+            {groupID ? (
+              <ManageLinkRow
+                icon="trending-up-outline"
+                label={t('chat.raiseMemberLimit', { defaultValue: '提升成员上限' })}
+                onPress={handleOpenGroupExpansion}
+                testID="group-manage-raise-limit"
+              />
+            ) : (
+              // 独立群聊才有群主转让:圈子群的圈主转让牵涉会员配额与容量,不在这里。
+              <ManageLinkRow
+                icon="swap-horizontal-outline"
+                label={t('chat.transferOwner', { defaultValue: '转让群主' })}
+                destructive
+                onPress={() => openPicker('transfer')}
+                testID="group-manage-transfer-owner"
+              />
+            )}
+          </ManageSection>
+        ) : null}
       </ScrollView>
     );
   }

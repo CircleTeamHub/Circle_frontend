@@ -238,3 +238,44 @@ test('ordinary note-list multi-selection keeps source navigation disabled by def
   fireEvent.press(screen.getByText('Ada'), { stopPropagation: jest.fn() });
   expect(onSourcePress).not.toHaveBeenCalled();
 });
+
+describe('send card', () => {
+  beforeEach(async () => {
+    mockParams = { type: 'friend', conversationID: 'target' };
+    const { fetchFriends } = jest.requireMock('@/services/api/friends') as { fetchFriends: jest.Mock };
+    fetchFriends.mockResolvedValue([{ id: 'f1', nickname: '好友甲', accountId: 'a1', avatarUrl: null }]);
+    mockChatState.conversations = [
+      { id: 'g1', type: 'GROUP', name: '周末羽毛球' },
+      { id: 'c1', type: 'GROUP', circleId: 'circle-1', name: '圈子群' },
+      { id: 'target', type: 'GROUP', name: '当前群' },
+      { id: 'd1', type: 'DIRECT', name: '私聊' },
+    ] as unknown as typeof mockChatState.conversations;
+  });
+
+  test('is titled send card and starts on friend cards', async () => {
+    render(<SharePickerScreen />);
+    expect(screen.getByText('发送名片')).toBeTruthy();
+    fireEvent.press(await screen.findByText('好友甲'));
+    expect(mockPending).toHaveBeenCalledWith({ kind: 'friend', data: expect.objectContaining({ id: 'f1' }) });
+    expect(mockRouter.back).toHaveBeenCalledTimes(1);
+  });
+
+  test('group cards list only other standalone groups and hand the pick back to the chat', async () => {
+    render(<SharePickerScreen />);
+    await screen.findByText('好友甲');
+    fireEvent.press(screen.getByTestId('share-card-kind-group'));
+
+    expect(screen.getByText('周末羽毛球')).toBeTruthy();
+    expect(screen.queryByText('圈子群')).toBeNull();
+    expect(screen.queryByText('当前群')).toBeNull();
+    expect(screen.queryByText('私聊')).toBeNull();
+    expect(screen.queryByText('好友甲')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('share-group-card-g1'));
+    expect(mockPending).toHaveBeenCalledWith({
+      kind: 'group-card',
+      data: { conversationId: 'g1', name: '周末羽毛球', avatarUrl: null },
+    });
+    expect(mockRouter.back).toHaveBeenCalledTimes(1);
+  });
+});

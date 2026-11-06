@@ -595,6 +595,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
   const {
     handleAttachmentAction,
     handlePickFriend,
+    handlePickGroupCard,
     handlePickFavorite,
     handlePickQuickReply,
   } = useAttachmentActions({
@@ -644,6 +645,7 @@ export default function ChatDetailScreen({ embedded }: ChatDetailScreenProps = {
     clearPersistedDraft,
     handlePickNoteBatch,
     handlePickFriend,
+    handlePickGroupCard,
     handlePickFavorite,
     handlePickQuickReply,
   });

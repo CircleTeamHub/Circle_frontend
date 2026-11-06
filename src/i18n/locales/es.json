@@ -703,7 +703,38 @@
       "noteUnbindTitle": "¿Quitar la asociación con el grupo de origen?",
       "noteUnbindHint": "La nota dejará de aparecer en la gestión de notas de este grupo.",
       "noteUnbindAction": "Quitar (desvincular del grupo)",
-      "noteUnbind": "Quitar asociación"
+      "noteUnbind": "Quitar asociación",
+      "memberSection": "Miembros",
+      "silenceSection": "Silenciamiento",
+      "removeBatchConfirm": "¿Expulsar del grupo a los miembros seleccionados ({{n}})?",
+      "removeBatchDone": "Miembros expulsados: {{n}}",
+      "overview": {
+        "members": "Miembros",
+        "admins": "Administradores",
+        "silenced": "Silenciados"
+      },
+      "abnormal": {
+        "entry": "Miembros a revisar",
+        "entryHint": "Inactivos durante mucho tiempo o con baja reputación",
+        "title": "Miembros a revisar",
+        "rules": "Aquí aparecen los miembros que llevan más de {{days}} días sin iniciar sesión o cuya reputación es inferior a {{threshold}}. Solo se muestran los miembros que puedes expulsar. Quienes ocultan su estado en línea no se evalúan por inactividad.",
+        "inactiveFor": "Inactivo durante",
+        "days": "{{n}} días",
+        "filterAll": "Todos {{n}}",
+        "filterInactive": "Inactivos {{n}}",
+        "filterLowCredit": "Baja reputación {{n}}",
+        "tagInactiveDays": "{{n}} días inactivo",
+        "tagInactiveOver": "Más de {{n}} días inactivo",
+        "tagLowCredit": "Reputación {{score}}",
+        "adminBadge": "Admin",
+        "empty": "No hay miembros a revisar",
+        "emptyHint": "Todos están activos y con buena reputación",
+        "selectAll": "Seleccionar todo",
+        "clearAll": "Deseleccionar todo",
+        "batchLimit": "Hasta {{n}} a la vez",
+        "removeSelected": "Expulsar ({{n}})",
+        "loadFailed": "No se pudieron cargar los miembros a revisar"
+      }
     },
     "groupEvent": {
       "system": "Sistema",
@@ -796,7 +827,7 @@
       "voiceCall": "Llamada de audio/video",
       "location": "Ubicación",
       "notes": "Notas",
-      "friendCard": "Tarjeta de contacto",
+      "friendCard": "Tarjeta",
       "favorites": "Favoritos",
       "quickReply": "Respuesta rápida",
       "transfer": "Transferencia"
@@ -2882,7 +2913,7 @@
   "share": {
     "title": {
       "favorite": "Elige un favorito",
-      "friend": "Elige una tarjeta de amigo",
+      "friend": "Enviar tarjeta",
       "note": "Elige una nota",
       "quickReply": "Respuestas rápidas"
     },
@@ -2912,6 +2943,10 @@
       "messageLabel": "Mensaje adicional",
       "messagePlaceholder": "Añadir un mensaje (opcional)",
       "missingRecipient": "Este chat no está disponible. Vuelve al chat e inténtalo de nuevo."
+    },
+    "cardKind": {
+      "friend": "Tarjeta de amigo",
+      "group": "Tarjeta de grupo"
     }
   },
   "accountSwitcher": {
@@ -3284,7 +3319,8 @@
   },
   "im": {
     "conversation": {
-      "removedFromGroup": "Te han eliminado de este chat de grupo"
+      "removedFromGroup": "Te han eliminado de este chat de grupo",
+      "removedFromNamedGroup": "Te han eliminado del grupo «{{name}}»"
     },
     "time": {
       "yesterday": "Ayer"

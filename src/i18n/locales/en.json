@@ -775,7 +775,38 @@
       "noteUnbindTitle": "Remove source group association?",
       "noteUnbindHint": "This note will no longer appear in this group's note management.",
       "noteUnbindAction": "Remove (unlink from group)",
-      "noteUnbind": "Remove association"
+      "noteUnbind": "Remove association",
+      "memberSection": "Members",
+      "silenceSection": "Muting",
+      "removeBatchConfirm": "Remove the selected members ({{n}}) from the group?",
+      "removeBatchDone": "Members removed: {{n}}",
+      "overview": {
+        "members": "Members",
+        "admins": "Admins",
+        "silenced": "Muted"
+      },
+      "abnormal": {
+        "entry": "Inactive & low-credit members",
+        "entryHint": "Long inactive or low credit score",
+        "title": "Inactive & low-credit",
+        "rules": "Members who haven't signed in for over {{days}} days, or whose credit score is below {{threshold}}, are listed here. Only members you can remove are shown. Members who hide their online status are not checked for inactivity.",
+        "inactiveFor": "Inactive for",
+        "days": "{{n}} days",
+        "filterAll": "All {{n}}",
+        "filterInactive": "Inactive {{n}}",
+        "filterLowCredit": "Low credit {{n}}",
+        "tagInactiveDays": "Inactive {{n}} days",
+        "tagInactiveOver": "Inactive over {{n}} days",
+        "tagLowCredit": "Credit {{score}}",
+        "adminBadge": "Admin",
+        "empty": "No members to review",
+        "emptyHint": "Everyone is active and in good standing",
+        "selectAll": "Select all",
+        "clearAll": "Deselect all",
+        "batchLimit": "Up to {{n}} at a time",
+        "removeSelected": "Remove ({{n}})",
+        "loadFailed": "Couldn't load members to review"
+      }
     },
     "groupEvent": {
       "system": "System",
@@ -868,7 +899,7 @@
       "voiceCall": "Audio/Video Call",
       "location": "Location",
       "notes": "Notes",
-      "friendCard": "Contact Card",
+      "friendCard": "Card",
       "favorites": "Favorites",
       "quickReply": "Quick Reply",
       "transfer": "Transfer"
@@ -3128,7 +3159,7 @@
   "share": {
     "title": {
       "favorite": "Choose a favorite",
-      "friend": "Choose a friend card",
+      "friend": "Send a card",
       "note": "Choose a note",
       "quickReply": "Quick replies"
     },
@@ -3158,6 +3189,10 @@
       "messageLabel": "Additional message",
       "messagePlaceholder": "Add a message (optional)",
       "missingRecipient": "This chat is unavailable. Return to the chat and try again."
+    },
+    "cardKind": {
+      "friend": "Friend card",
+      "group": "Group card"
     }
   },
   "profileDisplay": {
@@ -3249,7 +3284,8 @@
   },
   "im": {
     "conversation": {
-      "removedFromGroup": "You have been removed from this group chat"
+      "removedFromGroup": "You have been removed from this group chat",
+      "removedFromNamedGroup": "You have been removed from the group \"{{name}}\""
     },
     "time": {
       "yesterday": "Yesterday"

@@ -17,7 +17,9 @@ import { Avatar } from '@/components/ui/avatar';
 import { fetchChatMembers, refreshChatConversation } from '@/chat-core/api';
 import { useChatStore } from '@/chat-core/store';
 import { mapChatConversationToUI } from '@/chat-core/mappers';
-import { useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
+import { type GroupCardTarget, useSharePickerStore } from '@/features/chat/store/use-share-picker-store';
+import { FilterTabs } from '@/components/ui/filter-tabs';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { allowsMemberProfiles } from '@/features/chat/utils/group-policy';
 import { CollectionListItem } from '@/features/profile/components/CollectionListItem';
 import { CollectionListToolbar, type CollectionTab } from '@/features/profile/components/CollectionListToolbar';
@@ -69,7 +71,7 @@ function shareTitle(type: ShareType): string {
     case 'note':
       return i18n.t('share.title.note', { defaultValue: '选择笔记' });
     case 'friend':
-      return i18n.t('share.title.friend', { defaultValue: '选择好友名片' });
+      return i18n.t('share.title.friend', { defaultValue: '发送名片' });
     case 'favorite':
       return i18n.t('share.title.favorite', { defaultValue: '选择收藏' });
     case 'quick-reply':
@@ -227,6 +229,9 @@ export default function SharePickerScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
+  // 名片分两类:好友名片(friend-card)与群名片(独立群聊的群码卡片)。
+  const [cardKind, setCardKind] = useState<'friend' | 'group'>('friend');
+  const rawConversations = useChatStore((state) => state.conversations);
   const [favorites, setFavorites] = useState<UserCollection[]>([]);
   const [favoriteType, setFavoriteType] = useState<CollectionTab>('ALL');
   const [selectedFavorite, setSelectedFavorite] = useState<UserCollection | null>(null);
@@ -306,6 +311,22 @@ export default function SharePickerScreen() {
         f.accountId.toLowerCase().includes(trimmed),
     );
   }, [friends, trimmed]);
+
+  // 群名片只列独立群聊:圈子群的准入归圈子,发的是圈子名片。当前会话自己不列。
+  const groupCards = useMemo<GroupCardTarget[]>(
+    () =>
+      rawConversations
+        .filter((dto) => dto.type === 'GROUP' && !dto.circleId && dto.id !== conversationID)
+        .map((dto) => {
+          const ui = mapChatConversationToUI(dto);
+          return { conversationId: dto.id, name: ui.name, avatarUrl: ui.avatarUrl ?? null };
+        }),
+    [conversationID, rawConversations],
+  );
+  const filteredGroups = useMemo(
+    () => (trimmed ? groupCards.filter((g) => g.name.toLowerCase().includes(trimmed)) : groupCards),
+    [groupCards, trimmed],
+  );
 
   const filteredFavorites = useMemo(() => {
     return favorites.filter(
@@ -431,6 +452,29 @@ export default function SharePickerScreen() {
     />
   );
 
+  const handleSelectGroup = (group: GroupCardTarget) => {
+    setPending({ kind: 'group-card', data: group });
+    router.back();
+  };
+
+  const renderGroup = ({ item }: { item: GroupCardTarget }) => (
+    <Pressable
+      style={[s.row, { backgroundColor: colors.surface }]}
+      onPress={() => handleSelectGroup(item)}
+      accessibilityRole="button"
+      accessibilityLabel={item.name}
+      testID={`share-group-card-${item.conversationId}`}
+    >
+      <GroupChatAvatar size={40} name={item.name} uri={item.avatarUrl ?? undefined} />
+      <View style={s.rowText}>
+        <Text style={[s.rowTitle, { color: colors.text }]} numberOfLines={1}>
+          {item.name}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+    </Pressable>
+  );
+
   const renderFriend = ({ item }: { item: FriendProfile }) => (
     <Pressable
       style={[s.row, { backgroundColor: colors.surface }]}
@@ -492,7 +536,8 @@ export default function SharePickerScreen() {
 
   const empty = !loading && (
     shareType === 'note' ? filteredNotes.length === 0
-    : shareType === 'friend' ? filteredFriends.length === 0
+    : shareType === 'friend'
+      ? (cardKind === 'friend' ? filteredFriends : filteredGroups).length === 0
     : shareType === 'favorite' ? filteredFavorites.length === 0
     : filteredQuickReply.length === 0
   );
@@ -537,6 +582,20 @@ export default function SharePickerScreen() {
           </Pressable>
         ) : null}
       </View>}
+
+      {shareType === 'friend' ? (
+        <View style={s.cardTabs}>
+          <FilterTabs
+            tabs={[
+              i18n.t('share.cardKind.friend', { defaultValue: '好友名片' }),
+              i18n.t('share.cardKind.group', { defaultValue: '群名片' }),
+            ]}
+            activeIndex={cardKind === 'friend' ? 0 : 1}
+            onTabPress={(index) => setCardKind(index === 0 ? 'friend' : 'group')}
+            testIDForIndex={(index) => (index === 0 ? 'share-card-kind-friend' : 'share-card-kind-group')}
+          />
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={s.center}>
@@ -583,6 +642,15 @@ export default function SharePickerScreen() {
           ]}
         {...keyboardDismissOnDragProps}
           showsVerticalScrollIndicator={false}
+        />
+      ) : shareType === 'friend' && cardKind === 'group' ? (
+        <FlatList
+          data={filteredGroups}
+          keyExtractor={(it) => it.conversationId}
+          renderItem={renderGroup}
+          ItemSeparatorComponent={Sep}
+          contentContainerStyle={s.listContent}
+        {...keyboardDismissOnDragProps}
         />
       ) : shareType === 'friend' ? (
         <FlatList
@@ -821,6 +889,7 @@ const s = StyleSheet.create({
   optionChipLabelOn: {
     fontWeight: '700',
   },
+  cardTabs: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,

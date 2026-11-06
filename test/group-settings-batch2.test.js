@@ -124,7 +124,7 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   // 只需要这一个群的 DTO(policies):单个取,失败才退回整表(见 refreshConversationOrList)。
   assert.match(screen, /const conversationsPromise = refreshConversationOrList\(conversationID\)\.catch/);
   assert.match(screen, /await conversationsPromise;/);
-  assert.match(screen, /disabled: policies === null/);
+  assert.match(screen, /disabled=\{policies === null \|\| Boolean\(settingPending\)\}/);
   assert.match(screen, /transferGroupChatOwner\(conversationID, member\.userId\)/);
   // 乐观更新 + 失败回滚:开关按下即翻,请求失败翻回去。
   assert.match(screen, /patchConversation\(\{ muteAll: next \}\)/);
@@ -140,8 +140,8 @@ test('the group manage screen switches mute-all, the four policies, transfer and
   assert.match(screen, /const resyncConversations = useCallback\(/);
   // 只重拉这一个群(失败才退回整表),服务端上真正的状态说了算。
   assert.match(screen, /void refreshConversationOrList\(conversationID\)/);
-  // 群主转让只属于独立群聊;提升成员上限只属于圈子群。
-  assert.match(screen, /isStandaloneGroup\s*\?\s*renderLinkRow\(/);
+  // 群主转让只属于独立群聊;提升成员上限只属于圈子群:两者互斥,同一个分支二选一。
+  assert.match(screen, /\{groupID \? \([\s\S]{0,400}group-manage-raise-limit[\s\S]{0,600}group-manage-transfer-owner/);
   assert.match(screen, /pathname: `\/\(tabs\)\/\$\{scope\}\/group-expansion`/);
   assert.match(screen, /params: \{ circleId: groupID \}/);
   assert.doesNotMatch(screen, /returnScope:|returnConversationID:|returnGroupID:/);

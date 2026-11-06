@@ -10,9 +10,17 @@ import { create } from 'zustand';
  *
  * 不持久化 —— 跨屏一次性传值，关 app 就丢，没问题。
  */
+/** 群名片的发送对象:独立群聊(圈子群走圈子名片)。令牌由聊天页发送时现签。 */
+export interface GroupCardTarget {
+  conversationId: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
 export type SharePickedItem =
   | { kind: 'note-batch'; notes: NoteSummary[]; options: NoteSendOptions }
   | { kind: 'friend'; data: FriendProfile }
+  | { kind: 'group-card'; data: GroupCardTarget }
   | { kind: 'favorite'; data: UserCollection; message?: string }
   | { kind: 'quick-reply'; data: string };
 

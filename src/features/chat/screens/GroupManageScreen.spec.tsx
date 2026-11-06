@@ -13,7 +13,7 @@ import {
 jest.setTimeout(30_000);
 const SETTLE = { timeout: 10_000 };
 
-const mockAuth = { sessionEpoch: 0 };
+const mockAuth = { user: { id: 'me' }, isAuthenticated: true, sessionEpoch: 0 };
 const mockParams: { conversationID?: string; groupID?: string; originScope?: string } = {};
 let mockScope = 'messages';
 const mockChatState: {
@@ -89,7 +89,11 @@ jest.mock('@/chat-core/store', () => ({
   ),
 }));
 jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: unknown) => unknown) => selector(mockAuth),
+  // 页面按选择器订阅;成员缓存按 getState() 核对当前账号与会话代次。
+  useAuthStore: Object.assign(
+    (selector: (state: unknown) => unknown) => selector(mockAuth),
+    { getState: () => mockAuth },
+  ),
 }));
 jest.mock('@/features/chat/hooks/use-group-admin-actions', () => ({
   isSilencedMember: (member: { silenced?: boolean }) => Boolean(member.silenced),
@@ -194,6 +198,8 @@ describe('standalone group', () => {
     expect(router.push).toHaveBeenLastCalledWith({ pathname: `/(tabs)/${scope}/group-review`, params: { conversationID: 'conv-1', title: undefined } });
     fireEvent.press(screen.getByTestId('group-manage-log'));
     expect(router.push).toHaveBeenLastCalledWith({ pathname: `/(tabs)/${scope}/group-log`, params: { conversationID: 'conv-1' } });
+    fireEvent.press(screen.getByTestId('group-manage-abnormal'));
+    expect(router.push).toHaveBeenLastCalledWith({ pathname: `/(tabs)/${scope}/group-abnormal-members`, params: { conversationID: 'conv-1' } });
   });
 
   test('a cached standalone roster stays hidden until the seat check succeeds', async () => {
@@ -273,6 +279,12 @@ describe('circle group', () => {
       expect(router.push).toHaveBeenCalledWith({
         pathname: `/(tabs)/${scope}/group-expansion`,
         params: { circleId: 'circle-1' },
+      });
+      // 异常成员页要按圈子角色鉴权,圈子 id 一起带过去。
+      fireEvent.press(screen.getByTestId('group-manage-abnormal'));
+      expect(router.push).toHaveBeenLastCalledWith({
+        pathname: `/(tabs)/${scope}/group-abnormal-members`,
+        params: { conversationID: 'conv-c', groupID: 'circle-1' },
       });
     },
   );

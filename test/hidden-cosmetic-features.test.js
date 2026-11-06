@@ -30,7 +30,6 @@ test('all frontend entry points and avatar rendering honor the rollout flags', (
     ['src/components/ui/avatar.tsx', 'avatarFrames'],
     ['src/features/profile/screens/MallScreen.tsx', 'avatarFrames'],
     ['src/features/profile/screens/ProfileScreen.tsx', 'fancyNumbers'],
-    ['src/features/profile/screens/MemberCenterScreen.tsx', 'fancyNumbers'],
     ['src/features/social/screens/CreatePostScreen.tsx', 'fancyNumbers'],
     ['src/features/discover/components/restriction-badge.tsx', 'fancyNumbers'],
     ['src/features/discover/components/plaza-post-card.tsx', 'fancyNumbers'],

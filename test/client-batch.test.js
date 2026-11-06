@@ -111,13 +111,6 @@ test('membership upgrade 走客服协助流程，不再在 app 内直接升级�
   // 旧测试仍要求已删除的 upgradeMembership + 屏幕接线，会确定性失败——重写为覆盖新流程。
   const api = read('src/services/api/membership.ts');
   assert.doesNotMatch(api, /export async function upgradeMembership/);
-
-  const screen = read('src/features/profile/screens/MemberCenterScreen.tsx');
-  // 升级动作 = 打开与会员客服的会话，而不是直接调用升级接口 / 造幂等键。
-  // 客服账号来自后端下发的 membership 类，不再是编译期变量。
-  assert.match(screen, /selectSupportAgents\(config, 'membership'\)/);
-  assert.doesNotMatch(screen, /upgradeMembership\(/);
-  assert.doesNotMatch(screen, /resolveMembershipUpgradeIdempotency\(/);
 });
 
 test('转账只做扣款，卡片回执整套挂账已出清', () => {

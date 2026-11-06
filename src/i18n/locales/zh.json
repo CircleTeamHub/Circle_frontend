@@ -771,7 +771,38 @@
       "noteUnbindTitle": "解除来源群关联？",
       "noteUnbindHint": "解除后，这条笔记不会再出现在本群的笔记管理里。",
       "noteUnbindAction": "移除（与本群解绑）",
-      "noteUnbind": "解除关联"
+      "noteUnbind": "解除关联",
+      "memberSection": "成员管理",
+      "silenceSection": "禁言管理",
+      "removeBatchConfirm": "确定将选中的 {{n}} 位成员移出群聊？",
+      "removeBatchDone": "已移出 {{n}} 位成员",
+      "overview": {
+        "members": "群成员",
+        "admins": "管理员",
+        "silenced": "禁言中"
+      },
+      "abnormal": {
+        "entry": "异常成员",
+        "entryHint": "长期未登录或信誉值低的成员",
+        "title": "异常成员",
+        "rules": "超过 {{days}} 天未登录，或信誉值低于 {{threshold}} 分的成员会列在这里；只显示你有权移出的成员。关闭了在线状态的成员不参与未登录判断。",
+        "inactiveFor": "未登录时长",
+        "days": "{{n}} 天",
+        "filterAll": "全部 {{n}}",
+        "filterInactive": "长期未登录 {{n}}",
+        "filterLowCredit": "信誉值低 {{n}}",
+        "tagInactiveDays": "{{n}} 天未登录",
+        "tagInactiveOver": "超过 {{n}} 天未登录",
+        "tagLowCredit": "信誉值 {{score}}",
+        "adminBadge": "管理员",
+        "empty": "暂无异常成员",
+        "emptyHint": "成员都在正常活跃，信誉良好",
+        "selectAll": "全选",
+        "clearAll": "取消全选",
+        "batchLimit": "一次最多移出 {{n}} 人",
+        "removeSelected": "移出 ({{n}})",
+        "loadFailed": "异常成员加载失败"
+      }
     },
     "groupEvent": {
       "system": "系统",
@@ -864,7 +895,7 @@
       "voiceCall": "语/视频通话",
       "location": "位置",
       "notes": "笔记",
-      "friendCard": "好友名片",
+      "friendCard": "名片",
       "favorites": "我的收藏",
       "quickReply": "快捷语",
       "transfer": "转账"
@@ -3120,7 +3151,7 @@
   "share": {
     "title": {
       "favorite": "选择收藏",
-      "friend": "选择好友名片",
+      "friend": "发送名片",
       "note": "选择笔记",
       "quickReply": "快捷语"
     },
@@ -3150,6 +3181,10 @@
       "messageLabel": "附加消息",
       "messagePlaceholder": "输入附加消息（可选）",
       "missingRecipient": "当前聊天不可用，请返回后重试"
+    },
+    "cardKind": {
+      "friend": "好友名片",
+      "group": "群名片"
     }
   },
   "profileDisplay": {
@@ -3241,7 +3276,8 @@
   },
   "im": {
     "conversation": {
-      "removedFromGroup": "你已被移出该群聊"
+      "removedFromGroup": "你已被移出该群聊",
+      "removedFromNamedGroup": "你已被移出群聊「{{name}}」"
     },
     "time": {
       "yesterday": "昨天"

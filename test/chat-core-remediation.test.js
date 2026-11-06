@@ -43,11 +43,13 @@ test('being removed from the active conversation surfaces a localized notice', (
 test('removed-from-group notice exists in every locale', () => {
   for (const locale of ['zh', 'en', 'ja', 'ko', 'es']) {
     const dict = JSON.parse(read(`src/i18n/locales/${locale}.json`));
-    const value = dict?.im?.conversation?.removedFromGroup;
-    assert.ok(
-      typeof value === 'string' && value.length > 0,
-      `${locale} missing im.conversation.removedFromGroup`,
-    );
+    for (const key of ['removedFromGroup', 'removedFromNamedGroup']) {
+      const value = dict?.im?.conversation?.[key];
+      assert.ok(
+        typeof value === 'string' && value.length > 0,
+        `${locale} missing im.conversation.${key}`,
+      );
+    }
   }
 });
 

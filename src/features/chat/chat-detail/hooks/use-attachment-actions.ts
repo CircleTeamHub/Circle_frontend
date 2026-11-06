@@ -3,6 +3,9 @@ import { router } from 'expo-router';
 import { type AttachmentId } from '@/features/chat/chat-detail/constants';
 import { Alert } from 'react-native';
 import { type FriendProfile } from '@/services/api/friends';
+import { issueQrToken } from '@/services/api/qr';
+import { getApiErrorMessage } from '@/services/api/errors';
+import { type GroupCardTarget } from '@/features/chat/store/use-share-picker-store';
 import { sendCardMessage, sendVoiceMessage, sendForwardedMediaMessage, sendTextMessage } from '@/chat-core/client';
 import { startChatSend } from '@/chat-core/send-handle';
 import { getChatSendErrorMessage } from '@/chat-core/send-errors';
@@ -150,6 +153,64 @@ export function useAttachmentActions({
               nickname: friend.nickname,
               faceURL: friend.avatarUrl ?? '',
             },
+            onCreate,
+          }),
+        );
+        if (handle.queued) {
+          void handle.delivered.catch(reportSendFailure);
+        } else {
+          await handle.delivered;
+        }
+      } catch (error) {
+        reportSendFailure(error);
+      } finally {
+        inFlightRef.current = false;
+      }
+    },
+    [conversationID, t, inFlightRef, mountedRef, setSendError],
+  );
+
+  // 群名片 = 群二维码卡片(qr-card,qrType group):令牌发送时现签 —— 群码 7 天过期,
+  // 且「二维码入群」关着时服务端拒签,错误码文案直接告诉用户为什么发不了。
+  const handlePickGroupCard = useCallback(
+    async (group: GroupCardTarget) => {
+      if (!conversationID) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      const reportSendFailure = (error: unknown) => {
+        if (mountedRef.current) {
+          setSendError(
+            getChatSendErrorMessage(
+              error,
+              t('chat.detail.cardSendFailed', {
+                defaultValue: '名片发送失败，请重试',
+              }),
+            ),
+          );
+        }
+      };
+      // 签码失败是 HTTP 错误(ApiError),发送失败是 ack 错误(ChatSendError),各走各的漏斗。
+      let token: string;
+      try {
+        token = (await issueQrToken({ type: 'GROUP', targetId: group.conversationId })).token;
+      } catch (error) {
+        inFlightRef.current = false;
+        if (mountedRef.current) {
+          setSendError(
+            getApiErrorMessage(
+              error,
+              t('chat.detail.cardSendFailed', { defaultValue: '名片发送失败，请重试' }),
+            ),
+          );
+        }
+        return;
+      }
+      try {
+        const handle = startChatSend((onCreate) =>
+          sendCardMessage({
+            conversationId: conversationID,
+            type: 'qr-card',
+            payload: { token, qrType: 'group', name: group.name, avatarUrl: group.avatarUrl },
             onCreate,
           }),
         );
@@ -318,6 +379,7 @@ export function useAttachmentActions({
   return {
     handleAttachmentAction,
     handlePickFriend,
+    handlePickGroupCard,
     handlePickFavorite,
     handlePickQuickReply,
   };

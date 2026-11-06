@@ -614,6 +614,28 @@ export interface ChatMemberSilenceDto {
   silencedUntil: string | null;
 }
 
+/** 「长期未登录」可选天数,与后端 ABNORMAL_INACTIVE_DAY_OPTIONS 逐值镜像(契约测试守住)。 */
+export const ABNORMAL_INACTIVE_DAY_OPTIONS = [7, 30, 90] as const;
+export type AbnormalInactiveDays = (typeof ABNORMAL_INACTIVE_DAY_OPTIONS)[number];
+export type ChatAbnormalMemberReason = 'INACTIVE' | 'LOW_CREDIT';
+
+/** 异常成员一行(GET /chat/conversations/:id/abnormal-members):只有判定结果,展示信息用成员目录补。 */
+export interface ChatAbnormalMemberDto {
+  userId: string;
+  reasons: ChatAbnormalMemberReason[];
+  /** 命中「长期未登录」且有在线记录时的最近在线时刻。 */
+  lastActiveAt: string | null;
+  /** 命中「信誉值低」时的分数;正常成员的分数不下发。 */
+  creditScore: number | null;
+}
+
+export interface ChatAbnormalMembersDto {
+  inactiveDays: number;
+  creditThreshold: number;
+  /** 只含本人有权移出的成员(管理员看不到其他管理员/群主)。 */
+  members: ChatAbnormalMemberDto[];
+}
+
 /**
  * 群事件账本(群日志)的种类 —— 与后端 ChatGroupEventKind 逐项镜像。
  * 未知种类(后端先发新版本)由 groupEventText 兜底成「群聊活动」,不会渲染空行。
