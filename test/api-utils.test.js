@@ -379,6 +379,38 @@ test('allowPeerMediaUrl still rejects a CDN host that was not configured', () =>
   assert.equal(allowPeerMediaUrl('https://cdn.example.net/chat/a.jpg'), null);
 });
 
+test('allowPeerMediaUrl accepts configured preproduction R2 origins and rejects other Workers and accounts', () => {
+  const mediaOrigins = [
+    'https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com',
+    'https://api-43-134-85-95.sslip.io',
+    'https://windnote-media-preprod-delivery.yiboding1998.workers.dev',
+    'https://0bea489023c1d8692a19dadaf15dcf95.r2.cloudflarestorage.com',
+  ];
+  const { allowPeerMediaUrl } = loadApiUtils({
+    apiUrl: mediaOrigins[1],
+    mediaOrigins,
+    isDev: false,
+  });
+
+  for (const url of [
+    `${mediaOrigins[0]}/synthetic-legacy.jpg`,
+    `${mediaOrigins[1]}/circle/synthetic-legacy.jpg`,
+    `${mediaOrigins[2]}/avatars/synthetic-avatar.jpg`,
+    `${mediaOrigins[3]}/synthetic-bucket/chat/synthetic-private.jpg?X-Amz-Signature=synthetic-signature`,
+  ]) {
+    assert.equal(allowPeerMediaUrl(url), url);
+  }
+  for (const url of [
+    'https://other-worker.yiboding1998.workers.dev/avatars/synthetic-avatar.jpg',
+    'https://windnote-media-preprod-delivery.other-account.workers.dev/avatars/synthetic-avatar.jpg',
+    'https://00000000000000000000000000000000.r2.cloudflarestorage.com/synthetic-bucket/chat/synthetic-private.jpg',
+    `${mediaOrigins[2]}.evil.test/avatars/synthetic-avatar.jpg`,
+    `${mediaOrigins[3]}.evil.test/synthetic-bucket/chat/synthetic-private.jpg`,
+  ]) {
+    assert.equal(allowPeerMediaUrl(url), null, `must reject ${url}`);
+  }
+});
+
 test('allowPeerMediaUrl matches the exact origin, not just the hostname', () => {
   // 配了 :8443 不等于授权同主机的 :9443 —— 那是另一个服务,操作者没点过头。
   const { allowPeerMediaUrl } = loadApiUtils({

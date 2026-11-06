@@ -197,7 +197,7 @@ export function ImageViewer({
               scrollEventThrottle={16}
               onMomentumScrollEnd={updateVisibleIndex}
               renderItem={({ item, index: itemIndex }) =>
-                Math.abs(itemIndex - index) <= 1 ? (
+                itemIndex === index ? (
                   <ZoomableImage
                     uri={item}
                     cacheKey={cacheKeys?.[itemIndex]}
