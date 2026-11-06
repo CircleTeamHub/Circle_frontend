@@ -94,14 +94,13 @@ test('circle card uses the canonical circle ID and keeps search and selected not
   expect(mockPending).toHaveBeenCalledWith(expect.objectContaining({ kind: 'note-batch', notes: [expect.objectContaining({ id: 'note' })] }));
 });
 
-test('standalone group card opens group information using its server conversation ID', async () => {
+test.each(['messages', 'profile', 'discover', 'contacts', 'explore'])('standalone group card opens the chat entry in the %s stack using its server conversation ID', async (scope) => {
+  mockScope = scope;
   mockFetchNotes.mockResolvedValue([note({ cardPreview: { contacts: [], groups: [{ id: 'group-conversation', conversationID: 'group-conversation', name: 'Project group' }] } })]);
   render(<SharePickerScreen />);
   await screen.findByText('With cards');
   fireEvent.press(screen.getByText('Project group'), { stopPropagation: jest.fn() });
-  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/chat-info', params: {
-    sourceID: 'group-conversation', conversationID: 'group-conversation', conversationType: 'group', conversationKind: 'group', title: 'Project group', originScope: 'messages',
-  } });
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: `/(tabs)/${scope}/group-entry`, params: { groupId: 'group-conversation' } });
   expect(mockPending).not.toHaveBeenCalled();
 });
 
@@ -168,14 +167,16 @@ test('source profile uses refreshed policies rather than a previously open snaps
   alert.mockRestore();
 });
 
-test('source circle card opens group information with its separate circle and conversation IDs', async () => {
+test('source circle card opens the original conversation and message without changing the note selection', async () => {
   mockFetchNotes.mockResolvedValue([note({ cardPreview: null, collectedFrom: { conversationType: 'group', conversationID: 'source-conversation', clientMsgID: 'message', sender: { id: 'source-person', name: 'Source person' }, group: { id: 'source-circle', name: 'Source circle' } } })]);
   render(<SharePickerScreen />);
-  await screen.findByText('With cards');
+  fireEvent.press(await screen.findByText('With cards'));
+  fireEvent.changeText(screen.getByPlaceholderText('搜索'), 'With');
   fireEvent.press(screen.getByText('Source circle'), { stopPropagation: jest.fn() });
-  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/chat-info', params: {
-    sourceID: 'source-circle', conversationID: 'source-conversation', conversationType: 'group', conversationKind: 'group', title: 'Source circle', originScope: 'messages',
-  } });
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/(tabs)/messages/group-entry', params: { groupId: 'source-conversation', searchedMsgID: 'message' } });
+  expect(screen.getByPlaceholderText('搜索').props.value).toBe('With');
+  expect(screen.getByText('发送 (1)')).toBeTruthy();
+  expect(mockPending).not.toHaveBeenCalled();
 });
 
 test('an unrelated explicit personal card does not inherit the collected sender context', async () => {

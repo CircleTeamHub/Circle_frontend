@@ -27,10 +27,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NoteDocumentBody } from '@/features/notes/components/NoteDocumentBody';
 import { NoteImageViewportContext } from '@/features/notes/components/NoteBlockRenderer';
 import { ImageViewer } from '@/components/ui/image-viewer';
+import { Avatar } from '@/components/ui/avatar';
+import { GroupChatAvatar } from '@/components/ui/group-chat-avatar';
 import { ShareNoteSheet } from '@/features/notes/components/ShareNoteSheet';
 import { buildNoteCardPayloadFromSummary } from '@/features/chat/utils/note-card-payload';
-import type { NoteDetail, NoteExportFormat } from '@/features/notes/types';
+import type { NoteDetail, NoteExportFormat, NoteSummary } from '@/features/notes/types';
 import {
+  getChatDetailHref,
   getUserProfileHref,
   getCircleDetailHref,
   getUserProfileScopeFromSegments,
@@ -50,7 +53,7 @@ import {
   readNoteComposerOrder,
 } from '@/features/notes/utils/note-composer';
 import { shouldUseDirectVideoExportFallback } from '@/features/notes/utils/note-export';
-import { collectNote, createNoteExport, fetchNoteDetail, notesMutatedSince } from '@/services/api/notes';
+import { collectNote, createNoteExport, fetchNoteDetail, findCollectedNote, notesMutatedSince } from '@/services/api/notes';
 import { useFocusReloadGate } from '@/hooks/use-focus-reload-gate';
 import { getApiErrorMessage } from '@/services/api/errors';
 import { ApiError } from '@/services/api/client';
@@ -58,10 +61,13 @@ import { downloadMediaToCache, saveMediaToLibrary } from '@/utils/save-image';
 import { useAuthStore } from '@/stores/authStore';
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
+import { diagnosticNow } from '@/observability/http-diagnostics';
+import { recordMetric } from '@/observability/metrics';
 import { useNoteStatusSignalStore } from '@/features/notes/store/use-note-status-signal-store';
 import { withNoteSyncRetry } from '@/features/notes/utils/note-sync';
 import { createNoteImageViewport } from '@/features/notes/utils/note-image-viewport';
 import { resolveNoteCollectSource } from '@/features/notes/utils/collect-note-source';
+import { buildNoteSectionsWithCards, resolveNoteCardButtons } from '@/features/notes/utils/note-card-peers';
 
 function stripNoteCardBlocks(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -113,6 +119,7 @@ export default function NoteDetailScreen() {
   const [collectionState, setCollectionState] = useState<{
     key: string;
     status: 'adding' | 'added';
+    note?: NoteSummary;
   } | null>(null);
   const collectionKey = `${sessionEpoch}:${id}`;
   const currentCollectionKeyRef = useRef(collectionKey);
@@ -133,7 +140,7 @@ export default function NoteDetailScreen() {
   // 从编辑页/群名片回来:编辑会走笔记写请求(notesMutatedSince)必重拉;只是看了看就回来、
   // 30 秒内、来源状态没变,就不再重拉。窗口远小于媒体签名的有效期。
   const reloadGate = useFocusReloadGate({
-    key: `${id ?? ''}:${noteStatusVersion}`,
+    key: `${sessionEpoch}:${id ?? ''}:${noteStatusVersion}`,
     mutatedSince: notesMutatedSince,
   });
 
@@ -151,7 +158,7 @@ export default function NoteDetailScreen() {
     setLoadError(null);
     withNoteSyncRetry(() => fetchNoteDetail(id))
       .then((data) => {
-        if (cancelled) return;
+        if (cancelled || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
         setNote(data);
         setLoading(false);
         noteLoadedRef.current = true;
@@ -176,7 +183,7 @@ export default function NoteDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [id, noteStatusVersion, reloadGate, t]);
+  }, [id, noteStatusVersion, reloadGate, sessionEpoch, t]);
 
   // useFocusEffect 而不是 useEffect：笔记媒体现在走 presign-on-read，URL 是有 TTL 的短时
   // 签名。只在 mount 拉一次的话，从编辑页/别的 tab 回来时手里还是旧签名，过期就整屏空图。
@@ -219,6 +226,25 @@ export default function NoteDetailScreen() {
     router.push(`/(tabs)/profile/notes/edit?id=${note.id}` as never);
   }, [router, note]);
 
+  // 名片只来自当前账号自己的笔记/已收藏副本，路由里的 ownerId 不授予可见性。
+  const ownsNote = Boolean(note?.id === id && currentUserId &&
+    (note?.canEdit === true || note?.ownerId === currentUserId));
+  const privateCardNote = ownsNote ? note : addedNote ? collectionState?.note : null;
+  useEffect(() => {
+    if (!note || note.id !== id || ownsNote || addedNote || !currentUserId) return;
+    let cancelled = false;
+    void findCollectedNote(note.id, sessionEpoch).then((copy) => {
+      if (cancelled || useAuthStore.getState().sessionEpoch !== sessionEpoch) return;
+      if (copy) setCollectionState((current) => current?.key === collectionKey && current.status === 'added'
+        ? current
+        : { key: collectionKey, status: 'added', note: copy });
+    }).catch((error) => {
+      if (!cancelled) reportHandledFailure('notes', 'fetchCollectedCards', error);
+    });
+    return () => { cancelled = true; };
+  }, [addedNote, collectionKey, currentUserId, id, note, ownsNote, sessionEpoch]);
+  const cardSections = useMemo(() => privateCardNote ? buildNoteSectionsWithCards(privateCardNote) : null, [privateCardNote]);
+  const { contact, group } = useMemo(() => resolveNoteCardButtons(privateCardNote ?? {}), [privateCardNote]);
   const sections = useMemo(() => (note ? buildNoteSections(note) : null), [note]);
   const readOnlySections = useMemo(() => {
     if (!sections) return null;
@@ -229,16 +255,16 @@ export default function NoteDetailScreen() {
         contentJson: stripNoteCardBlocks(sections.text.contentJson) as typeof sections.text.contentJson,
       },
       contacts: { items: [] },
-      groups: { items: [] },
+      groups: cardSections?.groups ?? { items: [] },
     };
-  }, [sections]);
+  }, [cardSections, sections]);
   const readOnlyLayout = useMemo(
     () => stripNoteCardBlocks(note?.sections?.text?.contentJson ?? note?.contentJson ?? []),
     [note?.contentJson, note?.sections?.text?.contentJson],
   );
   const availability = useMemo(
-    () => (sections ? getNoteSectionAvailability(sections) : null),
-    [sections],
+    () => (readOnlySections ? getNoteSectionAvailability(readOnlySections) : null),
+    [readOnlySections],
   );
   const detailOrder = useMemo<NoteSectionKind[]>(() => {
     if (!sections || !availability) return [];
@@ -268,9 +294,9 @@ export default function NoteDetailScreen() {
     if (availability.hasContacts) available.add('contact');
     if (availability.hasGroups) available.add('group');
     if (availability.hasLocation) available.add('location');
-    // 个人名片和群名片只在笔记编辑/config 区使用；聊天或只读详情永远不展示。
+    // 已添加的群名片在正文展示；个人名片通过悬浮头像直接私聊。
     return [...new Set([...mapped, ...available])].filter(
-      (kind) => available.has(kind) && kind !== 'contact' && kind !== 'group',
+      (kind) => available.has(kind),
     );
   }, [availability, note?.contentJson, note?.sections?.text?.contentJson, sections]);
   // 拿不到地址的条目渲染出来是空的（服务端读接口没能为这个 objectKey 现签地址），
@@ -473,18 +499,27 @@ export default function NoteDetailScreen() {
       useAuthStore.getState().sessionEpoch === sessionEpoch;
     collectionRequestRef.current = collectionKey;
     setCollectionState({ key: collectionKey, status: 'adding' });
+    const startedAt = diagnosticNow();
+    let phaseStartedAt = startedAt;
     try {
       const source = await resolveNoteCollectSource(
         note.id, sourceConversationId, sourceMessageId, sourceMessageHeight,
       );
       if (!isCurrentRequest()) return;
+      const sourceReadyAt = diagnosticNow();
+      logClientDiagnostic('note.collect.phase', { stage: 'source', durationMs: Math.max(0, Math.round(sourceReadyAt - phaseStartedAt)) });
+      phaseStartedAt = sourceReadyAt;
       if (!source) {
+        recordMetric('app.operation.duration', Math.max(0, sourceReadyAt - startedAt), { operation: 'noteCollect', outcome: 'failed' });
         Alert.alert(t('notes.detail.addFailed'), t('notes.detail.addSourceUnavailable'));
         return;
       }
       const result = await collectNote(note.id, source);
       if (!isCurrentRequest()) return;
-      setCollectionState({ key: collectionKey, status: 'added' });
+      const completedAt = diagnosticNow();
+      logClientDiagnostic('note.collect.phase', { stage: 'request', durationMs: Math.max(0, Math.round(completedAt - phaseStartedAt)) });
+      recordMetric('app.operation.duration', Math.max(0, completedAt - startedAt), { operation: 'noteCollect', outcome: 'success' });
+      setCollectionState({ key: collectionKey, status: 'added', note: result.note });
       Alert.alert(
         t(result.alreadyCollected
           ? 'chat.messageActions.noteAlreadyCollected'
@@ -506,6 +541,7 @@ export default function NoteDetailScreen() {
       );
     } catch (error) {
       if (!isCurrentRequest()) return;
+      recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - startedAt), { operation: 'noteCollect', outcome: 'failed' });
       reportHandledFailure('notes', 'collectNote', error);
       Alert.alert(
         t('notes.detail.addFailed'),
@@ -623,7 +659,7 @@ export default function NoteDetailScreen() {
       <ScrollView
         ref={scrollRef}
         style={s.scroll}
-        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + Spacing.xl + 48 + (contact ? 60 : 0) + (group ? 60 : 0) }]}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={Platform.OS === 'android'}
         onLayout={measureImageViewport}
@@ -650,9 +686,45 @@ export default function NoteDetailScreen() {
         </NoteImageViewportContext.Provider>
       </ScrollView>
 
-      {/* 只读详情保留下载动作；来源个人名片和群名片仅在编辑/config 区可见。 */}
+      {/* 已创建/已添加的笔记提供与列表一致的聊天入口。 */}
       {note ? (
         <View style={[s.floatingDock, { bottom: insets.bottom + Spacing.xl }]}>
+          {contact ? (
+            <Pressable
+              testID="note-contact-chat"
+              style={[s.floatingBtn, d.floatingBtn]}
+              accessibilityRole="button"
+              accessibilityLabel={t('notes.list.openSenderChat', { name: contact.name })}
+              onPress={() => {
+                if (contact.id === currentUserId) {
+                  Alert.alert(t('qr.thisIsYou'));
+                  return;
+                }
+                router.push(getChatDetailHref(scope, contact.id, contact.name, contact.faceURL ?? undefined, contact.conversationID));
+              }}
+            >
+              <Avatar size={36} shape="circle" name={contact.name} uri={contact.faceURL ?? undefined} />
+            </Pressable>
+          ) : null}
+          {group ? (
+            <Pressable
+              testID="note-group-chat"
+              style={[s.floatingBtn, d.floatingBtn]}
+              accessibilityRole="button"
+              accessibilityLabel={t('notes.list.openGroupChat', { name: group.name })}
+              onPress={() => {
+                if (group.target === 'circle') {
+                  router.push(getCircleDetailHref(toCircleScope(scope), group.id));
+                } else {
+                  router.push(getGroupEntryHref(scope, { groupId: group.conversationID ?? group.id, searchedMsgID: group.clientMsgID }));
+                }
+              }}
+            >
+              <View style={s.floatingAvatar}>
+                <GroupChatAvatar size={36} name={group.name} uri={group.faceURL} />
+              </View>
+            </Pressable>
+          ) : null}
           {/* 下载入口从顶栏移到这里：菜单内四种导出（图片/视频/长图/PDF）原样复用。 */}
           <Pressable
             style={[s.floatingBtn, d.floatingBtn, exporting !== null && s.floatingBtnBusy]}
@@ -796,6 +868,7 @@ const s = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: Radius.full,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },

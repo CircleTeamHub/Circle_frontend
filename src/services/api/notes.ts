@@ -24,6 +24,9 @@ const NOTE_PAGE_SIZE = 500;
 const NOTE_MAX_PAGES = 20;
 
 let lastNoteMutationAt = 0;
+let noteMutationVersion = 0;
+let collectedNoteSnapshot: { sessionEpoch: number; version: number; loadedAt: number; notes: NoteSummary[] } | null = null;
+let collectedNoteLookup: { sessionEpoch: number; version: number; promise: Promise<NoteSummary[]> } | null = null;
 
 function sanitizeNoteMediaItem<T extends Record<string, unknown>>(item: T): T {
   const next = { ...item };
@@ -85,6 +88,8 @@ function sanitizeNoteDetail(note: NoteDetail): NoteDetail {
 async function markNoteWrite<T>(request: Promise<T>): Promise<T> {
   const result = await request;
   lastNoteMutationAt = Date.now();
+  noteMutationVersion += 1;
+  collectedNoteSnapshot = null;
   return result;
 }
 
@@ -117,6 +122,29 @@ export async function fetchNotes(params?: ListNotesParams): Promise<NoteSummary[
     },
     { pageSize: NOTE_PAGE_SIZE, maxPages: NOTE_MAX_PAGES },
   );
+}
+
+/** 仅收藏状态查询复用 30 秒快照；列表刷新仍直接请求，账号切换/写入立即失效。 */
+export async function findCollectedNote(sourceNoteId: string, sessionEpoch: number): Promise<NoteSummary | null> {
+  const snapshot = collectedNoteSnapshot;
+  if (snapshot?.sessionEpoch === sessionEpoch && snapshot.version === noteMutationVersion && Date.now() - snapshot.loadedAt < 30_000) {
+    return snapshot.notes.find((note) => note.collectedFrom?.sourceNoteId === sourceNoteId) ?? null;
+  }
+  let lookup = collectedNoteLookup;
+  if (!lookup || lookup.sessionEpoch !== sessionEpoch || lookup.version !== noteMutationVersion) {
+    const request = { sessionEpoch, version: noteMutationVersion, promise: fetchNotes() };
+    collectedNoteLookup = lookup = request;
+    const clear = () => { if (collectedNoteLookup === request) collectedNoteLookup = null; };
+    void request.promise.then((notes) => {
+      if (collectedNoteLookup === request && request.version === noteMutationVersion) {
+        collectedNoteSnapshot = { sessionEpoch, version: request.version, loadedAt: Date.now(), notes };
+      }
+      clear();
+    }, clear);
+  }
+  const notes = await lookup.promise;
+  if (lookup.version !== noteMutationVersion) return null;
+  return notes.find((note) => note.collectedFrom?.sourceNoteId === sourceNoteId) ?? null;
 }
 
 export async function fetchNoteDetail(id: string): Promise<NoteDetail> {
@@ -162,12 +190,19 @@ export async function importNoteChatMedia(
   }));
 }
 
+function noteWriteBody(input: CreateNoteInput): CreateNoteInput {
+  if (input.sections?.text?.contentJson == null) return input;
+  // 服务端优先使用 sections.text；保留本地提交快照，只移除传输中的重复正文。
+  const { contentJson: _duplicate, ...body } = input;
+  return body;
+}
+
 export async function createNote(input: CreateNoteInput): Promise<NoteDetail> {
-  return markNoteWrite(apiClient<NoteDetail>('/note', { method: 'POST', body: input }));
+  return markNoteWrite(apiClient<NoteDetail>('/note', { method: 'POST', body: noteWriteBody(input) }));
 }
 
 export async function updateNote(id: string, input: CreateNoteInput): Promise<NoteDetail> {
-  return markNoteWrite(apiClient<NoteDetail>(`/note/${id}`, { method: 'PATCH', body: input }));
+  return markNoteWrite(apiClient<NoteDetail>(`/note/${id}`, { method: 'PATCH', body: noteWriteBody(input) }));
 }
 
 // 仅替换 note 的 group 归属。批量调整分组成员时使用 —— 避免对每条 note 先 fetch 详情再

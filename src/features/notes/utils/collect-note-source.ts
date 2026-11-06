@@ -22,18 +22,22 @@ export async function resolveNoteCollectSource(
     useChatStore.getState().currentUserId === user.id;
   if (!sameSession()) return null;
 
-  if (!useChatStore.getState().conversations.some((item) => item.id === conversationId)) {
-    await loadChatConversations();
-    if (!sameSession()) return null;
-  }
   let message = useChatStore.getState().messagesByConversation[conversationId]
     ?.find((item) => item.id === messageId);
   // 恢复路由后原消息可能不在内存窗口，用 height 精确取回，不灌入聊天时间线。
   const height = Number(messageHeight);
-  if (!message && Number.isInteger(height) && height > 0 && height < 2_147_483_647) {
-    const page = await fetchChatHistoryPage(conversationId, { beforeHeight: height + 1, limit: 1 });
+  const needsConversation = !useChatStore.getState().conversations.some((item) => item.id === conversationId);
+  const needsMessage = !message && Number.isInteger(height) && height > 0 && height < 2_147_483_647;
+  if (needsConversation || needsMessage) {
+    // 两个受服务端鉴权保护的读取彼此独立，恢复来源时只等一次网络往返。
+    const [, page] = await Promise.all([
+      needsConversation ? loadChatConversations() : undefined,
+      needsMessage ? fetchChatHistoryPage(conversationId, { beforeHeight: height + 1, limit: 1 }) : undefined,
+    ]);
     if (!sameSession()) return null;
-    message = page.messages.find((item) => item.id === messageId);
+    message = useChatStore.getState().messagesByConversation[conversationId]?.find((item) => item.id === messageId)
+      ?? page?.messages.find((item) => item.id === messageId)
+      ?? message;
   }
   const conversation = useChatStore.getState().conversations
     .find((item) => item.id === conversationId);

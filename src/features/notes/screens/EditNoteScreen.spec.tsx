@@ -14,6 +14,9 @@ import { ApiError } from '@/services/api/api-error';
 import { stageLocalNoteDraftDeletion, loadLocalNoteDraft, loadPendingNoteDraftDeletions } from '@/features/notes/utils/note-editor-drafts';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { resetUploadProgress, startUploadProgress } from '@/stores/upload-progress-store';
+import * as noteSections from '@/features/notes/utils/note-sections';
+import { recordMetric } from '@/observability/metrics';
+jest.mock('@/observability/metrics', () => ({ recordMetric: jest.fn() }));
 
 test('note preview keeps live upload progress visible inside its native modal', async () => {
   const transfer = startUploadProgress('video/mp4');
@@ -52,6 +55,7 @@ test('measures text save preparation, request waiting and reconciliation without
   expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.phase', { stage: 'request', durationMs: 2500 });
   expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.phase', { stage: 'reconcile', durationMs: 0 });
   expect(logClientDiagnostic).toHaveBeenCalledWith('note.save.completed', { durationMs: 2500 });
+  expect(recordMetric).toHaveBeenCalledWith('app.operation.duration', 2500, { operation: 'noteCreate', outcome: 'success' });
   expect(mockRequestPresign).not.toHaveBeenCalled();
   expect(mockUploadFile).not.toHaveBeenCalled();
   expect(JSON.stringify(jest.mocked(logClientDiagnostic).mock.calls)).not.toContain('Private title');
@@ -1926,6 +1930,19 @@ test('a note with real rich text is never overwritten by the legacy content fiel
 
 // 正文统计原来是 EditNoteScreen 的 state：每敲一个字整屏（分组 chip、媒体/展示
 // 九宫格、地图预览）重渲染一次。计数要继续实时，但重渲染必须只发生在计数那一格。
+test('opening a grouping sheet does not rebuild the unchanged note snapshot', async () => {
+  const normalize = jest.spyOn(noteSections, 'normalizeNoteMediaSections');
+  const view = render(<EditNoteScreen />);
+  try {
+    pressComposer('title');
+    fireEvent.changeText(screen.getByPlaceholderText('notes.edit.titlePlaceholder'), 'Unchanged body');
+    await act(async () => {});
+    const before = normalize.mock.calls.length;
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.groupsLabel' }));
+    expect(normalize.mock.calls.length).toBe(before);
+  } finally { view.unmount(); normalize.mockRestore(); }
+});
+
 test('typing in the body updates the live counter without re-rendering the screen', async () => {
   mockTranslate = (key, options) =>
     key === 'notes.edit.textCount' ? `字数:${options?.count}` : key;
@@ -2249,6 +2266,56 @@ test.each([
     expect([...listeners.values()].every((callbacks) => callbacks.size === 0)).toBe(true);
     subscribe.mockRestore(); visibility.mockRestore(); platformOverride.restore();
   }
+});
+
+function mockCollectedNote(sections: Record<string, unknown>) {
+  const sender = { id: 'sender', name: 'Default sender', faceURL: 'https://cdn/sender.jpg' };
+  const group = { id: 'source-circle', name: 'Default group', faceURL: 'https://cdn/group.jpg' };
+  const layout = [{ type: 'noteLayout', props: { blocks: [{ id: 'text-a', kind: 'text' }], order: ['text'] } }];
+  mockRouteId = 'collected-note';
+  mockFetchNoteDetail.mockResolvedValue({
+    id: mockRouteId, title: 'Collected', content: 'Body', contentJson: layout, media: [], groups: [], pinned: false,
+    createdAt: '2026-01-01T00:00:00Z', collectedFrom: {
+      conversationType: 'group', conversationID: 'source-chat', clientMsgID: 'original', sender, group,
+    }, sections: { text: { content: 'Body', contentJson: layout }, ...sections },
+  });
+  return { sender, group };
+}
+
+test('editing a collected note restores stored cards missing from the saved block layout', async () => {
+  const { sender, group } = mockCollectedNote({
+    contacts: { items: [{ id: 'sender', name: 'Default sender', faceURL: 'https://cdn/sender.jpg' }] },
+    groups: { items: [{ id: 'old-group-id', circleId: 'source-circle', name: 'Default group', faceURL: 'https://cdn/group.jpg' }] },
+  });
+  const view = render(<EditNoteScreen />);
+  try {
+    await screen.findByText('Default sender');
+    expect(screen.getByText('Default group')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
+    const input = jest.mocked(updateNote).mock.calls.at(-1)![1];
+    expect(input.sections?.contacts?.items).toEqual([sender]);
+    // 旧版圈子群名片的 id 原样回传，服务端才认得是库里已有的那张。
+    expect(input.sections?.groups?.items).toEqual([expect.objectContaining({ ...group, id: 'old-group-id' })]);
+    const marker = input.contentJson?.find((block) => block.type === 'noteLayout');
+    expect(marker?.props).toMatchObject({ blocks: expect.arrayContaining([
+      expect.objectContaining({ kind: 'contact' }), expect.objectContaining({ kind: 'group' }),
+    ]) });
+  } finally { view.unmount(); }
+});
+
+test('editing a legacy collected note without stored cards does not attach source cards the server would reject', async () => {
+  mockCollectedNote({});
+  const view = render(<EditNoteScreen />);
+  try {
+    await screen.findByDisplayValue('Collected');
+    expect(screen.queryByText('Default sender')).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'notes.edit.done' }));
+    await waitFor(() => expect(updateNote).toHaveBeenCalled());
+    const input = jest.mocked(updateNote).mock.calls.at(-1)![1];
+    expect(input.sections?.contacts?.items ?? []).toEqual([]);
+    expect(input.sections?.groups?.items ?? []).toEqual([]);
+  } finally { view.unmount(); }
 });
 
 test('the group-card toolbar opens the picker directly and displays and saves the chosen group', async () => {

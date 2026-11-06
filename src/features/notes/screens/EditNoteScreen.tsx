@@ -165,6 +165,7 @@ import {
 import { Radius, Spacing, Typography, useTheme } from '@/theme';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { diagnosticNow } from '@/observability/http-diagnostics';
+import { recordMetric } from '@/observability/metrics';
 import { logClientDiagnostic } from '@/utils/client-diagnostics';
 import { UploadProgressHost } from '@/components/app/UploadProgressHost';
 import { VOICE_RECORDING_OPTIONS } from '@/features/chat/utils/voice-recording-options';
@@ -938,13 +939,16 @@ export default function EditNoteScreen() {
     setUploadingSection(null);
   }, [invalidateUploadOwnership]);
 
-  const buildCurrentDraftRecord = useCallback((): NoteEditorDraftRecord => {
-    const currentComposerBlocks = composerBlocksRef.current;
+  const buildCurrentDraftRecord = useCallback((
+    currentComposerBlocks = composerBlocksRef.current,
+    currentTextById = textBlocksByIdRef.current,
+    currentOwners = mediaOwnerByClientIdRef.current,
+  ): NoteEditorDraftRecord => {
     const currentTextBlocks = currentComposerBlocks
       .filter((block) => block.kind === 'text')
       .map((block) => ({
         id: block.id,
-        content: getTextOnlyBlocks(textBlocksByIdRef.current[block.id] ?? []),
+        content: getTextOnlyBlocks(currentTextById[block.id] ?? []),
       }));
     const currentBlocks = currentTextBlocks.flatMap((block) => block.content);
     const mediaBlocks = currentComposerBlocks.flatMap((block) => {
@@ -959,7 +963,7 @@ export default function EditNoteScreen() {
         id: block.id,
         target,
         objectKeys: items
-          .filter((item) => getNoteComposerMediaOwner(currentComposerBlocks, target, item.type, mediaOwnerByClientIdRef.current[item.clientId]) === block.id)
+          .filter((item) => getNoteComposerMediaOwner(currentComposerBlocks, target, item.type, currentOwners[item.clientId]) === block.id)
           .map((item) => item.objectKey)
           .filter((key): key is string => Boolean(key)),
       }];
@@ -1018,12 +1022,12 @@ export default function EditNoteScreen() {
         .map((item) => item.objectKey)
         .filter((key): key is string => Boolean(key)),
       composerBlocks: currentComposerBlocks,
-      textBlocksById: { ...textBlocksByIdRef.current },
+      textBlocksById: { ...currentTextById },
       mediaItems: uploadedMediaItems.filter((item) => mediaItems.includes(item)),
       showcaseItems: uploadedMediaItems.filter((item) => showcaseItems.includes(item)),
       audioItems: [...audioItems],
       mediaOwnerByClientId: Object.fromEntries(
-        Object.entries(mediaOwnerByClientIdRef.current).filter(([clientId]) => uploadedClientIds.has(clientId)),
+        Object.entries(currentOwners).filter(([clientId]) => uploadedClientIds.has(clientId)),
       ),
       contactItems,
       groupCardItems,
@@ -1197,6 +1201,8 @@ export default function EditNoteScreen() {
         setTitle(note.title);
         existingSectionsRef.current = note.sections ?? null;
 
+        // 只编辑库里真实存着的名片：旧收藏补出来的来源发送方/群未必是本人好友或
+        // 仍在的群，带上就会被服务端名片校验整单拒绝（列表/浏览页照旧展示来源兜底）。
         const normalizedSections = buildNoteSections(note);
         const rawBlocks = note.sections?.text?.contentJson ?? note.contentJson ?? [];
         const savedComposerBlocks = readNoteComposerBlocks(rawBlocks);
@@ -1207,6 +1213,13 @@ export default function EditNoteScreen() {
           normalizedSections as unknown as Partial<NoteSections>,
           true,
         )).filter((block) => block.kind !== 'title'), normalizedSections);
+        // 收藏时服务端写入的默认名片可能没有对应的旧编辑区块。
+        for (const kind of ['contact', 'group'] as const) {
+          const items = kind === 'contact' ? normalizedSections.contacts.items : normalizedSections.groups.items;
+          if (items.length && !normalizedComposerBlocks.some((block) => block.kind === kind)) {
+            normalizedComposerBlocks.push({ id: `collected-${kind}`, kind });
+          }
+        }
         setComposerBlocks(normalizedComposerBlocks);
         composerIdRef.current = normalizedComposerBlocks.length;
         const loaded = stripNoteComposerMetadata(normalizedSections.text.contentJson ?? []);
@@ -1464,8 +1477,14 @@ export default function EditNoteScreen() {
     textStatsStore,
   ]);
 
-  // Composer/text refs change without changing the builder's identity.
-  const currentDraftFingerprint = draftFingerprint(buildCurrentDraftRecord());
+  // 正文/区块引用也会独立更新；仅弹层、保存进度等界面状态变化时复用快照。
+  const draftTextSnapshot = textBlocksByIdRef.current;
+  const draftBlockSnapshot = composerBlocksRef.current;
+  const draftOwnerSnapshot = mediaOwnerByClientIdRef.current;
+  const currentDraftFingerprint = useMemo(
+    () => draftFingerprint(buildCurrentDraftRecord(draftBlockSnapshot, draftTextSnapshot, draftOwnerSnapshot)),
+    [buildCurrentDraftRecord, draftTextSnapshot, draftBlockSnapshot, draftOwnerSnapshot],
+  );
   const hasUndurableRecording = audioItems.some((item) => item.uploadStatus !== 'UPLOADED' && item.clientId.startsWith('recording:') && (!item.localRecordingId || !item.previewUri));
   const isDraftDirty = Boolean(
     draftHydratedKey === draftRouteKey &&
@@ -2872,10 +2891,16 @@ export default function EditNoteScreen() {
       const completedAt = diagnosticNow();
       logClientDiagnostic('note.save.phase', { stage: savePhase, durationMs: Math.max(0, Math.round(completedAt - phaseStartedAt)) });
       logClientDiagnostic('note.save.completed', { durationMs: Math.max(0, Math.round(completedAt - saveStartedAt)) });
+      recordMetric('app.operation.duration', Math.max(0, completedAt - saveStartedAt), {
+        operation: isEdit ? 'noteUpdate' : 'noteCreate', outcome: 'success',
+      });
       completeNavigation(undefined, true);
     } catch (error) {
       if (saveGenerationRef.current !== saveGeneration) return;
       logClientDiagnostic('note.save.failed', { stage: savePhase, durationMs: Math.max(0, Math.round(diagnosticNow() - phaseStartedAt)) });
+      recordMetric('app.operation.duration', Math.max(0, diagnosticNow() - saveStartedAt), {
+        operation: isEdit ? 'noteUpdate' : 'noteCreate', outcome: 'failed',
+      });
       if (requestStarted && !retryingPending && isDefinitiveNoteSubmissionFailure(error)) {
         try {
           saveLocalNoteDraft(currentUser?.id, { ...buildCurrentDraftRecord(), pendingSubmission: undefined });

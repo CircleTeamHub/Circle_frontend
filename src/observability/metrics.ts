@@ -49,6 +49,14 @@ interface MetricDefinition {
 }
 
 export const TELEMETRY_METRICS = {
+  'app.operation.duration': {
+    type: 'distribution',
+    unit: 'millisecond',
+    attributes: {
+      operation: ['noteCreate', 'noteUpdate', 'noteCollect'],
+      outcome: ['success', 'failed', 'cancelled'],
+    },
+  },
   'push.received': {
     type: 'counter',
     attributes: { provider: PUSH_PROVIDERS, category: PUSH_CATEGORIES },
