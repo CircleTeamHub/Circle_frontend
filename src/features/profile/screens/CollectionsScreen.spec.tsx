@@ -19,14 +19,18 @@ const mockPlayer = {
   release: jest.fn(() => { mockPlayerReleased = true; }),
   addListener: jest.fn(() => ({ remove: jest.fn() })),
 };
-const mockNavigationListeners = new Map<string, () => void>();
+// 一个事件可以有多个订阅者:页面里每个 useFocusEffect 各挂一组 focus/blur。
+const mockNavigationListeners = new Map<string, Set<() => void>>();
 const mockNavigation = {
   isFocused: () => true,
   addListener: (event: string, listener: () => void) => {
-    mockNavigationListeners.set(event, listener);
-    return () => { mockNavigationListeners.delete(event); };
+    const listeners = mockNavigationListeners.get(event) ?? new Set<() => void>();
+    listeners.add(listener);
+    mockNavigationListeners.set(event, listeners);
+    return () => { listeners.delete(listener); };
   },
 };
+const emitNavigation = (event: string) => { for (const listener of [...mockNavigationListeners.get(event) ?? []]) listener(); };
 jest.mock('expo-router', () => ({ get router() { return mockRouter; }, useFocusEffect: jest.requireActual('expo-router/build/useFocusEffect').useFocusEffect }));
 jest.mock('expo-router/build/link/useLoadedNavigation', () => ({ useOptionalNavigation: () => mockNavigation }));
 jest.mock('expo-router/build/useNavigation', () => ({ useNavigation: () => mockNavigation }));
@@ -54,8 +58,12 @@ jest.mock('@/components/ui/nav-header', () => {
   return { NavHeader: ({ title, rightSlot, onBackPress }: { title: string; rightSlot?: React.ReactNode; onBackPress?: () => void }) => <View><Text>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="返回" onPress={onBackPress} />{rightSlot}</View> };
 });
 jest.mock('@/hooks/use-network-status', () => ({ useNetworkStatus: () => ({ isOffline: false }) }));
-jest.mock('@/services/api/collections', () => ({ fetchCollections: jest.fn(), deleteCollection: jest.fn() }));
-jest.mock('@/services/api/client', () => ({ apiClient: jest.fn() }));
+// 会话内存快照由真实 fetchCollections 填;这里替身掉 API,快照恒为空(每次进页都走网络)。
+jest.mock('@/services/api/collections', () => ({
+  fetchCollections: jest.fn(), deleteCollection: jest.fn(),
+  getCachedCollections: () => null, collectionsMutatedSince: () => false,
+}));
+jest.mock('@/services/api/client', () => ({ apiClient: jest.fn(), ApiError: jest.requireActual('@/services/api/api-error').ApiError }));
 jest.mock('@/utils/save-image', () => ({ saveMediaToLibrary: jest.fn() }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 jest.mock('@/utils/client-diagnostics', () => ({ logClientDiagnostic: jest.fn() }));
@@ -109,7 +117,7 @@ test('leaving collections while it remains mounted still pauses audio', async ()
   await screen.findByText('还没有收藏');
   mockPlayer.pause.mockClear();
 
-  act(() => { mockNavigationListeners.get('blur')?.(); });
+  act(() => { emitNavigation('blur'); });
 
   expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
   expect(mockPlayer.release).not.toHaveBeenCalled();

@@ -12,6 +12,12 @@ jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign(
   (select: (state: typeof mockAuth) => unknown) => select(mockAuth),
   { getState: () => mockAuth },
 ) }));
+// The validated-role carry-over lives in the group-info cache, which only runs once the
+// encrypted store is ready on native; give it an in-memory MMKV.
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 
 const GROUP_ID = 'circle-1';
 const USER_ID = 'user-1';

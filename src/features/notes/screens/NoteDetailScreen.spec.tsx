@@ -29,7 +29,9 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign(
   (selector: (state: typeof mockAuth) => unknown) => selector(mockAuth), { getState: () => mockAuth },
 ) }));
-jest.mock('@/services/api/notes', () => ({ fetchNoteDetail: jest.fn(), findCollectedNote: jest.fn(), collectNote: jest.fn(), createNoteExport: jest.fn(), notesMutatedSince: () => false }));
+// No persisted detail / saved-copy snapshot: every test starts from the network load.
+jest.mock('@/services/api/notes', () => ({ fetchNoteDetail: jest.fn(), findCollectedNote: jest.fn(), collectNote: jest.fn(), createNoteExport: jest.fn(), notesMutatedSince: () => false,
+  getCachedNoteDetail: () => null, getCachedCollectedNote: () => null }));
 jest.mock('@/components/ui/avatar', () => ({ Avatar: () => null }));
 jest.mock('@/components/ui/group-chat-avatar', () => ({ GroupChatAvatar: () => null }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_error: unknown, fallback: string) => fallback }));

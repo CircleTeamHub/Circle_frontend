@@ -39,6 +39,12 @@ jest.mock('@/chat-core/store', () => ({
   useChatStore: Object.assign((selector: (state: unknown) => unknown) => selector(mockChatState()), { getState: () => mockChatState(), subscribe: () => () => {} }),
   selectTotalUnread: () => 3,
 }));
+// 会话列表壳(use-conversation-list-snapshot)只放行与登录账号同一人的 live 会话;
+// 账号切换时登录账号与聊天 store 的 currentUserId 一起变。
+jest.mock('@/stores/authStore', () => {
+  const getState = () => ({ user: { id: mockCurrentUserId }, sessionEpoch: 1 });
+  return { useAuthStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), { getState }) };
+});
 jest.mock('@/chat-core/conversation-selectors', () => ({ selectConversations: (state: { conversations: unknown[] }) => state.conversations }));
 jest.mock('@/chat-core/mappers', () => ({ mapChatConversationToUI: (dto: ChatConversationDto) => ({ id: dto.id, sourceID: dto.peer?.id ?? dto.id, name: (dto.type === 'DIRECT' ? dto.peer?.nickname : undefined) ?? dto.name ?? dto.id, conversationType: dto.type === 'DIRECT' ? 'private' : 'group', unreadCount: dto.unreadCount, pinned: dto.pinned ?? false, muted: false, message: '', time: '' }) }));
 jest.mock('@/chat-core/composer-drafts', () => ({ useComposerDraftStore: { getState: () => ({ draftsByUser: {} }), subscribe: () => () => {} } }));

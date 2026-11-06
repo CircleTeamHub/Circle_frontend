@@ -21,6 +21,11 @@ jest.mock('@/stores/friendRemarkStore', () => ({ useFriendRemarkStore: { getStat
 jest.mock('@/services/api/friends', () => ({ fetchFriendSettings: jest.fn(), friendsMutatedSince: () => mockMutated }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_err: unknown, fallback: string) => fallback }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+// 资料缓存在原生端只在加密库就绪后才工作;给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 const settings: FriendSettings = { remark: 'Known remark', permission: 'FULL', availableTags: [{ id: 'tag', ownerID: 'owner', name: 'Known tag', color: null }], assignedTags: [{ id: 'tag', ownerID: 'owner', name: 'Known tag', color: null }], description: null, photos: [] };
 beforeEach(() => {
   mockMutated = false;

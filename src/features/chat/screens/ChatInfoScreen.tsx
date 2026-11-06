@@ -534,14 +534,14 @@ export default function ChatInfoScreen() {
   // 「显示群成员」策略共同判定。
   // 「是否显示群成员」再叠一层:关掉后普通成员看不到网格与成员行,
   // 群主/管理员不受限(判据与服务端 listMembers 一致,免得摆个必然 403 的入口)。
+  const rosterPolicyAllows =
+    isTempConversation || isGroupManager(selfGroupRoleForRoster) || rosterVisibleToMembers;
   const canViewMemberDirectory =
     (isTempConversation || isStandaloneGroup
       ? (standaloneDirectoryAccess === 'allowed' ||
           (standaloneDirectoryAccess === 'pending' && Boolean(conversation) && groupMembers.length > 0))
       : canViewCircleMemberDirectory) &&
-    (isTempConversation ||
-      isGroupManager(selfGroupRoleForRoster) ||
-      rosterVisibleToMembers);
+    rosterPolicyAllows;
   // 独立群聊没有圈子角色(useGroupMemberViewAccess 对它是关的):本人角色从成员目录
   // 取 —— 服务端按 ownerId + 座位上的管理员标记派生;目录还没到位时按会话 dto 的
   // ownerId 兜底认群主。圈子群仍按圈子角色。
@@ -599,9 +599,12 @@ export default function ChatInfoScreen() {
   const canInviteGroupMembers =
     canManageGroup ||
     (isStandaloneGroup && standaloneDirectoryAccess === 'allowed' && !needsStandaloneConversation && allowsMemberInvites(groupPolicyActor));
-  const canPresentCachedDirectory = groupMembers.length > 0 &&
+  // 缓存名单只是首屏/断网时的只读展示:同样受「显示群成员」策略约束;独立群聊/临时房
+  // 还要本地已知这个会话(即已知自己在座),会话资料没到之前不先画别人的名单。
+  const canPresentCachedDirectory = groupMembers.length > 0 && rosterPolicyAllows &&
     (isStandaloneGroup || isTempConversation
-      ? standaloneDirectoryAccess === 'pending' || standaloneDirectoryAccess === 'failed'
+      ? Boolean(conversation) &&
+        (standaloneDirectoryAccess === 'pending' || standaloneDirectoryAccess === 'failed')
       : !liveGroupRoleResolved || circleVerificationFailed || standaloneDirectoryAccess === 'failed');
   const resolvedConversationID = activeConversation?.id ?? '';
   currentConversationIDRef.current = resolvedConversationID;

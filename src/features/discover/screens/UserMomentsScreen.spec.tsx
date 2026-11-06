@@ -3,14 +3,25 @@ import { act, render, screen } from '@testing-library/react-native';
 import UserMomentsScreen from './UserMomentsScreen';
 import { fetchUserProfile } from '@/services/api/profile';
 import { evictUserProfileCache, writeUserProfileCache } from '@/features/user/profile-cache';
+import { ApiError } from '@/services/api/client';
 const mockAuth = { sessionEpoch: 42, user: { id: 'owner', cover: 'own-cover', avatarUrl: 'own-avatar', nickname: 'Owner' } };
 let mockId = 'friend';
 const mockT = (key: string) => key;
 jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { createAnimatedComponent: (component: unknown) => component }, useSharedValue: (value: number) => ({ value }), useAnimatedScrollHandler: () => jest.fn() }));
 jest.mock('@/stores/authStore', () => ({ useAuthStore: Object.assign((select: (s: typeof mockAuth) => unknown) => select(mockAuth), { getState: () => mockAuth }) }));
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ id: mockId }), useSegments: () => [], useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('expo-router', () => ({
+  useLocalSearchParams: () => ({ id: mockId }), useSegments: () => [], useRouter: () => ({ push: jest.fn() }),
+  // 回到相册时按 momentsMutatedSince 补刷一次。
+  useFocusEffect: (callback: () => void) => { const { useEffect } = jest.requireActual('react'); useEffect(callback, [callback]); },
+}));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0 }) }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockT }) }));
+// 本页直接从 @/services/api/client 取失败判别,它会把 @/i18n 带进来。
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockT }), initReactI18next: { type: '3rdParty', init: () => {} } }));
+// 资料缓存在原生端只在加密库就绪后才工作;给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 jest.mock('@/theme', () => ({ Spacing: {}, Typography: {}, useTheme: () => ({ colors: {} }) }));
 jest.mock('@/components/ui/nav-header', () => ({ NavHeader: () => null }));
 jest.mock('@/features/discover/hooks/use-user-moments', () => ({ useUserMoments: () => ({ moments: [], loading: false, refreshing: false, hasMore: false }) }));
@@ -55,6 +66,7 @@ test('a refreshed profile denial removes the cached album identity', async () =>
   jest.mocked(fetchUserProfile).mockReturnValue(new Promise((_resolve, reject) => { rejectRequest = reject; }));
   render(<UserMomentsScreen />);
   expect(screen.getByText('private-cover|private-avatar|Private')).toBeTruthy();
-  await act(async () => { rejectRequest(new Error('forbidden')); });
+  // 只有服务端明确拒绝(401/403/404)才清掉身份;断网等瞬时失败沿用缓存。
+  await act(async () => { rejectRequest(new ApiError('forbidden', { status: 403 })); });
   expect(screen.queryByText('private-cover|private-avatar|Private')).toBeNull();
 });

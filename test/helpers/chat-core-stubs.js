@@ -8,9 +8,21 @@
  * withChatCoreStubs 包在外面:测试显式提供了的模块用测试自己的(便于断言调用),
  * 没提供(抛错)时回落到这里的默认桩。与 observability-stubs 同一套约定。
  */
+/**
+ * 群资料缓存的真实实现。它的「群/圈子写过没有」判定(group-reload-key)会把整个
+ * circles API(apiClient、expo-constants…)带进来,这里恒为没写过。
+ */
+function loadGroupInfoCache() {
+  return require('./load-ts-module').loadTsModule('src/features/chat/group-info-cache.ts', {
+    requireShim: (request) => (request === '@/features/chat/utils/group-reload-key'
+      ? { groupOrCircleMutatedSince: () => false }
+      : require(request)),
+  });
+}
+
 function makeChatCoreStubs() {
   return {
-    get '@/features/chat/group-info-cache'() { return require('./load-ts-module').loadTsModule('src/features/chat/group-info-cache.ts'); },
+    get '@/features/chat/group-info-cache'() { return loadGroupInfoCache(); },
     // 已处理失败的上报(chat-core/api 翻页失败时用);观测层另有专门的桩,这里只兜底。
     '@/observability/report-failure': { reportHandledFailure: () => {} },
     // 列表翻页收集:纯函数,用真实实现(chat-core/api 拉会话快照时用它按游标翻到底)。
@@ -90,4 +102,4 @@ function withChatCoreStubs(requireImpl) {
   };
 }
 
-module.exports = { makeChatCoreStubs, withChatCoreStubs };
+module.exports = { loadGroupInfoCache, makeChatCoreStubs, withChatCoreStubs };

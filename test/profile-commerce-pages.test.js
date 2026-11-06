@@ -650,8 +650,11 @@ test('CollectionsScreen shows collectible content types', () => {
   // Content-type labels and row copy are i18n'd (COLLECTION_TYPES holds labelKeys); the
   // Chinese display strings now live in the locale bundle rather than the component.
   const zh = read('src/i18n/locales/zh.json');
+  const toolbar = read('src/features/profile/components/CollectionListToolbar.tsx');
 
-  assert.match(src, /horizontal/);
+  // 类型页签拆进了 CollectionListToolbar:横向滚动,不换行。
+  assert.match(src, /<CollectionListToolbar/);
+  assert.match(toolbar, /<ScrollView horizontal/);
   assert.match(src, /fetchCollections/);
   assert.doesNotMatch(src, /createCollection/);
   assert.match(src, /deleteCollection/);
@@ -677,7 +680,9 @@ test('CollectionsScreen no longer lists NOTE collections (notes go to My Notes)'
   assert.doesNotMatch(src, /profile\.collections\.tabs\.note/);
   assert.doesNotMatch(src, /normalizeNoteCardPayload/);
   assert.doesNotMatch(src, /getNoteDetailHref/);
-  assert.match(src, /Exclude<CollectionType, 'NOTE'>/);
+  const toolbar = read('src/features/profile/components/CollectionListToolbar.tsx');
+  assert.match(toolbar, /export type CollectionTab = 'ALL' \| Exclude<CollectionType, 'NOTE'>;/);
+  assert.doesNotMatch(toolbar, /'NOTE'\]/);
   assert.match(src, /item\.type !== 'NOTE'/);
 });
 

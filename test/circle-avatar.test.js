@@ -34,7 +34,8 @@ test('CircleDetailScreen: avatar opens a preview and only the owner can change i
     'src/features/discover/screens/CircleDetailScreen.tsx',
   );
   assert.match(src, /useChangeAvatar\(\{/);
-  assert.match(src, /const isOwner = circle\?\.myRole === 'OWNER'/);
+  // 从快照恢复的 myRole 不能当本次授权,所以要先 circleValidated。
+  assert.match(src, /const isOwner = circleValidated && circle\?\.myRole === 'OWNER'/);
   assert.match(src, /onPress=\{\(\) => setAvatarPreviewKey\(avatarSubjectKey\)\}/);
   // Viewing remains available; editing is gated on ownership, not admin status.
   assert.match(

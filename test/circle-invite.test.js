@@ -55,8 +55,9 @@ test('CircleDetailScreen opens the invite menu to active members and passes myRo
     'src/features/discover/screens/CircleDetailScreen.tsx',
   );
 
-  assert.match(src, /const isActiveMember = circle\?\.myStatus === 'ACTIVE'/);
-  assert.match(src, /const isOwnerOrAdmin = isOwner \|\| circle\?\.myRole === 'ADMIN'/);
+  // 角色/成员关系只认本次拉到的详情(circleValidated),不认从快照恢复的。
+  assert.match(src, /const isActiveMember = circleValidated && circle\?\.myStatus === 'ACTIVE'/);
+  assert.match(src, /const isOwnerOrAdmin = circleValidated && \(isOwner \|\| circle\?\.myRole === 'ADMIN'\)/);
   // review R3：邀请入口回到 isActiveMember——菜单里的"发送圈子名片"不读目录，
   // 不能被锁死；myRole 透传给菜单区分"邀请通讯录好友"。
   assert.match(
@@ -86,7 +87,7 @@ test('CircleDetailScreen only exposes group chat to active members', () => {
     'src/features/discover/screens/CircleDetailScreen.tsx',
   );
 
-  assert.match(src, /const isActiveMember = circle\?\.myStatus === 'ACTIVE'/);
+  assert.match(src, /const isActiveMember = circleValidated && circle\?\.myStatus === 'ACTIVE'/);
   assert.match(src, /isActiveMember && circle\.groupID \? \(/);
 });
 

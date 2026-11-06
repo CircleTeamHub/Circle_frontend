@@ -8,7 +8,11 @@ const mockPush = jest.fn();
 let mockOwner = 'user-a';
 let mockReduceMotion = true;
 jest.mock('expo-router', () => ({ useRouter:()=>({push:mockPush}), useFocusEffect: (cb: () => void) => { const React = jest.requireActual<typeof import('react')>('react'); React.useEffect(cb, [cb]); } }));
-jest.mock('@/stores/authStore', () => ({useAuthStore: (select: (state: unknown) => unknown) => select({user:{id:mockOwner},sessionEpoch:1})}));
+jest.mock('@/stores/authStore', () => {
+ const getState = () => ({user:{id:mockOwner},sessionEpoch:1});
+ return {useAuthStore: Object.assign((select: (state: unknown) => unknown) => select(getState()), {getState})};
+});
+jest.mock('@/services/api/client', () => ({isDefinitiveAuthFailure: () => false}));
 jest.mock('@/services/api/notifications', () => ({fetchScrollingAnnouncements:jest.fn()}));
 jest.mock('@/hooks/use-reduce-motion', () => ({useReduceMotion:()=>mockReduceMotion}));
 jest.mock('@/observability/report-failure', () => ({reportHandledFailure:jest.fn()}));

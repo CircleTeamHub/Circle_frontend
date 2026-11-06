@@ -25,7 +25,13 @@ jest.mock('@/services/api/upload', () => ({
 jest.mock('@/services/api/profile', () => ({ updateUserProfile: jest.fn() }));
 jest.mock('react-i18next', () => {
   const t = (key: string) => key;
-  return { useTranslation: () => ({ t }) };
+  // profile-cache → services/api/friends → api client 会把 @/i18n 带进来。
+  return { useTranslation: () => ({ t }), initReactI18next: { type: '3rdParty', init: () => {} } };
+});
+// 资料缓存在原生端只在加密库就绪后才工作;给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
 });
 jest.mock('@/stores/authStore', () => {
   const store = { sessionEpoch: 11, user: { id: 'user-1' }, setUser: jest.fn() };

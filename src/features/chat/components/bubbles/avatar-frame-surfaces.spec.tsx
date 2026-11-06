@@ -154,8 +154,11 @@ jest.mock('@/services/api/avatar-frames', () => ({
 }));
 
 jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: typeof mockAuthState) => unknown) =>
-    selector(mockAuthState),
+  // 资料页里的滚动公告按 getState().user 读本账号的页面快照。
+  useAuthStore: Object.assign(
+    (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
+    { getState: () => mockAuthState },
+  ),
 }));
 
 jest.mock('@/stores/tabBadgeStore', () => ({

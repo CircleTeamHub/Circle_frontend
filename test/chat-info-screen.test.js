@@ -162,7 +162,8 @@ test('chat info screen serves the member directory straight from chat-core membe
   // 中间允许重拉闸门的记账行;撤权翻转 canViewMemberDirectory 会改变闸门的失效键,
   // 所以撤权后回到本页一定重跑、清空目录,不会被「30 秒内刚拉过」跳过。
   // 撤权时连同内存缓存里的名单一起清掉,下次进来不会先显示旧名单。
-  assert.match(source, /if \(!canViewMemberDirectory\) \{\s*\n\s*setGroupMembers\(\[\]\);[\s\S]{0,120}?evictGroupInfoCache\(sessionEpoch, groupDataKey\);[\s\S]{0,160}?\n\s*return;/);
+  // 活体角色还没确认(或圈子校验失败)时先不动名单——渲染层此时本来就不展示它。
+  assert.match(source, /if \(!canViewMemberDirectory\) \{\s*\n\s*if \(!liveGroupRoleResolved \|\| circleVerificationFailed\) return;\s*\n\s*setGroupMembers\(\[\]\);[\s\S]{0,120}?evictGroupInfoCache\(sessionEpoch, groupDataKey\);[\s\S]{0,160}?\n\s*return;/);
   // 换群/首次进入可以先装载缓存数据，但目录权限必须回到 pending；只有本次进入后的
   // 活体角色/座位校验通过，渲染层才能把缓存名单展示出来。
   assert.match(source, /useLayoutEffect\(\(\) => \{\s*const cached = readGroupInfoCache\(sessionEpoch, groupDataKey\);/);
@@ -713,10 +714,14 @@ test('chat info only exposes group logs to members allowed by the backend', () =
 
   // 群日志的门禁已从「能看成员名单」收紧成「能管理群」(isOwner || isAdmin):
   // 日志里是踢人/禁言这类管理动作的留痕,普通成员看得到名单不等于该看到这些。
-  assert.match(
-    source,
-    /canManageGroup \? \(\s*<>\s*<Divider \/>\s*<GroupInfoRow\s*label=\{t\('chat\.groupLog'/s,
+  // 入口随之挪进只有群主/管理员进得去的群管理页,群资料页不再有。
+  assert.doesNotMatch(source, /chat\.groupLog/);
+  const manage = fs.readFileSync(
+    path.join(process.cwd(), 'src/features/chat/screens/GroupManageScreen.tsx'),
+    'utf8',
   );
+  assert.match(manage, /onPress=\{handleOpenLog\}\s*testID="group-manage-log"/);
+  assert.match(manage, /router\.push\(getGroupLogHref\(scope, \{ conversationID, title: params\.title \}\)\)/);
   assert.match(source, /const canManageGroup = isOwner \|\| isAdmin;/);
   assert.match(source, /const canViewMemberDirectory =\s*\(isTempConversation \|\| isStandaloneGroup\s*\? \(standaloneDirectoryAccess === 'allowed'[\s\S]*?: canViewCircleMemberDirectory\) &&/s);
   assert.match(source, /rosterVisibleToMembers/);
@@ -909,19 +914,18 @@ test('group info member count prefers the live directory over the conversation s
   );
 });
 
-// 拉成员失败可能是已被移出:缓存作废且本次授权置为 denied，旧名单继续留在 state
-// 也不会被渲染。
-test('a failed member directory fetch drops the cached roster', () => {
+// 拉成员失败可能是已被移出:服务端确认失权(401/403/404)时缓存作废、名单清空、本次授权置为
+// denied;断网之类的失败只标 failed,保留只读快照,不把用户自己的群名单清掉。
+test('a failed member directory fetch drops the cached roster only when access is definitively gone', () => {
   const source = fs.readFileSync(
     path.join(process.cwd(), 'src/features/chat/screens/ChatInfoScreen.tsx'),
     'utf8',
   );
-  const catches = source.match(/\.catch\(\(\) => \{[\s\S]{0,200}?evictGroupInfoCache\(sessionEpoch, groupDataKey\);/g) ?? [];
+  const denied = /const denied = isDefinitiveAuthFailure\(error\) \|\| \(error instanceof ApiError && error\.status === 404\);\s*\n\s*setStandaloneDirectoryAccess\(denied \? 'denied' : 'failed'\);\s*\n\s*if \(denied\) \{ evictGroupInfoCache\(sessionEpoch, groupDataKey\); setGroupMembers\(\[\]\); \}/g;
+  assert.equal(source.match(denied)?.length, 3, 'temp, standalone and circle directory failures');
+  const catches = source.match(/\.catch\(\(error\) => \{[\s\S]{0,400}?if \(denied\) \{ evictGroupInfoCache/g) ?? [];
   assert.equal(catches.length, 2, 'temp + standalone fetch failures evict');
-  assert.equal(
-    source.match(/setStandaloneDirectoryAccess\('denied'\);/g)?.length,
-    2,
-    'temp + standalone fetch failures hide cached rosters',
-  );
-  assert.match(source, /\} catch \{[\s\S]{0,160}?evictGroupInfoCache\(sessionEpoch, groupDataKey\);\n\s*\}\n\s*\};\n\s*void loadMemberDirectory\(\);/);
+  assert.match(source, /\} catch \(error\) \{[\s\S]{0,300}?if \(denied\) \{ evictGroupInfoCache\(sessionEpoch, groupDataKey\); setGroupMembers\(\[\]\); \}\n\s*\}\n\s*\};\n\s*void loadMemberDirectory\(\);/);
+  // 只有 pending/failed 才允许先画缓存名单;denied 一律不画。
+  assert.match(source, /standaloneDirectoryAccess === 'pending' \|\| standaloneDirectoryAccess === 'failed'/);
 });

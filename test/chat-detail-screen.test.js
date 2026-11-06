@@ -837,7 +837,7 @@ test('group member access stays live while the chat screen is mounted', () => {
     hook,
     /canViewCircleMembers\(member\?\.role \?\? null\)[\s\S]{0,160}membersCanViewRoster === true/,
   );
-  assert.match(hook, /catch \{[\s\S]{0,400}return false;/);
+  assert.match(hook, /\} catch \(error\) \{\s*\n\s*\/\/ fail-closed[\s\S]{0,600}return false;/);
   // 换群/卸载后的在途查询结果按代际丢弃。
   assert.match(hook, /const queryGenRef = useRef\(0\)/);
   assert.match(hook, /if \(queryGenRef\.current !== gen\) return;/);

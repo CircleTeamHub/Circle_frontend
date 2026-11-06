@@ -37,7 +37,7 @@ function readIndex(): IndexEntry[] {
   );
 }
 
-function reportCacheFailure(operation: string) {
+function reportCacheFailure(operation: 'size' | 'read' | 'write' | 'remove' | 'clear') {
   // JSON parse errors can quote cached content; never report the raw exception.
   reportHandledFailure('pageCache', operation, new Error('Page snapshot storage unavailable'));
 }

@@ -29,6 +29,7 @@ test('CircleDetailScreen renders a cover banner editable by the owner', () => {
   assert.match(src, /useChangeCircleCover/);
   assert.match(src, /s\.coverWrap/);
   assert.match(src, /circle\.cover \?/);
-  assert.match(src, /const isOwner = circle\?\.myRole === 'OWNER'/);
+  // 从快照恢复的 myRole 不能当本次授权,所以要先 circleValidated。
+  assert.match(src, /const isOwner = circleValidated && circle\?\.myRole === 'OWNER'/);
   assert.match(src, /isOwner \? changeCircleCover : undefined/);
 });

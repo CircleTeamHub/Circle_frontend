@@ -5,7 +5,13 @@ const { loadTsModule } = require('./helpers/load-ts-module');
 test('chat member prefetch warms info entry for each group kind and ignores old sessions', async () => {
   let epoch = 101;
   let complete;
-  const cache = loadTsModule('src/features/chat/group-info-cache.ts');
+  const authStore = { useAuthStore: { getState: () => ({ sessionEpoch: epoch }) } };
+  // 缓存自己按 authStore 的 sessionEpoch 判断账号有没有变。
+  const cache = loadTsModule('src/features/chat/group-info-cache.ts', { requireShim: (request) => {
+    if (request === '@/stores/authStore') return authStore;
+    if (request === '@/features/chat/utils/group-reload-key') return { groupOrCircleMutatedSince: () => false };
+    return require(request);
+  } });
   const conversations = [
     { id: 'standalone', type: 'GROUP', circleId: null },
     { id: 'circle-chat', type: 'GROUP', circleId: 'circle' },
@@ -13,7 +19,7 @@ test('chat member prefetch warms info entry for each group kind and ignores old 
   ];
   const api = loadTsModule('src/chat-core/api.ts', { requireShim: (request) => {
     if (request === '@/services/api/client') return { apiClient: () => new Promise(resolve => { complete = resolve; }) };
-    if (request === '@/stores/authStore') return { useAuthStore: { getState: () => ({ sessionEpoch: epoch }) } };
+    if (request === '@/stores/authStore') return authStore;
     if (request === './store') return { useChatStore: { getState: () => ({ conversations }) } };
     if (request === '@/features/chat/group-info-cache') return cache;
     return {};

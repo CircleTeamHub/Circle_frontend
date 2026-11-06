@@ -36,7 +36,8 @@ test('chat-core exposes the five group settings endpoints', () => {
   assert.match(api, /export function transferGroupChatOwner\(/);
   assert.match(api, /\/owner`, \{\s*method: 'POST',\s*body: \{ userId \}/);
   assert.match(api, /export function setGroupChatNotice\(/);
-  assert.match(api, /\/notice`,\s*\{ method: 'PATCH', body: \{ notice \} \}/);
+  // 置顶开关是可选字段:不传时请求体和旧版一模一样,老后端照常认。
+  assert.match(api, /\/notice`,\s*\{ method: 'PATCH', body: \{ notice, \.\.\.\(noticePinned === undefined \? \{\} : \{ noticePinned \}\) \} \}/);
   assert.match(api, /export function setGroupChatAvatar\(/);
   assert.match(api, /\/avatar`,\s*\{ method: 'PATCH', body: \{ avatarUrl \} \}/);
   assert.match(api, /export function updateGroupChatPolicies\(/);
@@ -172,14 +173,16 @@ test('chat info exposes the avatar row, the member row and hides the QR entry wh
   assert.match(info, /chat\.groupManagement\.noteManagement/);
   assert.match(info, /handleOpenNoteManagement/);
   assert.match(info, /getNoteManagementHref\(/);
-  // 群成员目录可按群规开放,但群日志只给群主/管理员。
-  assert.match(info, /\{canManageGroup \? \([\s\S]*?chat\.groupLog/);
+  // 群成员目录可按群规开放,但群日志只给群主/管理员:入口在群管理页,群资料页没有。
+  assert.doesNotMatch(info, /chat\.groupLog/);
+  assert.match(read('src/features/chat/screens/GroupManageScreen.tsx'), /testID="group-manage-log"/);
   // 二维码入群关掉后群码入口一并收起:留着只会让人扫一张必然被拒的码。
   assert.match(info, /\) : qrJoinEnabled \? \(/);
   // 独立群聊的公告读写会话行。
   assert.match(info, /activeConversation\?\.notice\?\.trim\(\)/);
   const noticeScreen = read('src/features/chat/screens/EditGroupNoticeScreen.tsx');
-  assert.match(noticeScreen, /await setGroupChatNotice\(conversationID, nextNotice\)/);
+  // 圈子群也走同一个会话公告端点(先补建圈子群会话拿到 targetID),带上置顶开关。
+  assert.match(noticeScreen, /setGroupChatNotice\(targetID, nextNotice, nextPinned\)/);
 });
 
 test('note management is a separate page from group management', () => {

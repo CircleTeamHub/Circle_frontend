@@ -48,10 +48,15 @@ jest.mock('@/stores/friendActivityUnreadStore', () => ({
   useFriendActivityUnreadStore: (select: (state: { count: number }) => unknown) =>
     select({ count: 0 }),
 }));
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (select: (state: { sessionEpoch: number }) => unknown) =>
-    select({ sessionEpoch: 1 }),
-}));
+jest.mock('@/stores/authStore', () => {
+  const state = { user: { id: 'me' }, sessionEpoch: 1 };
+  return {
+    useAuthStore: Object.assign(
+      (select: (value: typeof state) => unknown) => select(state),
+      { getState: () => state },
+    ),
+  };
+});
 jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));

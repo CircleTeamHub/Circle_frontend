@@ -4,6 +4,7 @@ import { Alert } from 'react-native';
 import { evictUserProfileCache, writeUserProfileCache } from '../profile-cache';
 import EditFriendPermissionScreen from './EditFriendPermissionScreen';
 import { fetchFriendSettings, setFriendPermission } from '@/services/api/friends';
+import { getEncryptedInstance } from '@/storage/encrypted-init';
 
 const mockRouter = { back: jest.fn() };
 const mockTranslate = (key: string) => key;
@@ -27,12 +28,19 @@ jest.mock('@/theme', () => ({
 jest.mock('@/services/api/friends', () => ({ fetchFriendSettings: jest.fn(), setFriendPermission: jest.fn(), friendsMutatedSince: () => false }));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: (_error: unknown, fallback: string) => fallback }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
+// 资料缓存在原生端只在加密库就绪后才工作;给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 beforeEach(() => {
   jest.clearAllMocks();
+  // 缓存按当前登录账号定域:先复位账号,再清掉上一个用例落盘/留在内存里的资料。
+  Object.assign(mockAuth, { isAuthenticated: true, user: { id: 'owner-a' }, sessionEpoch: 1 });
+  getEncryptedInstance()?.clearAll();
   evictUserProfileCache(1, 'friend-id');
   jest.mocked(fetchFriendSettings).mockReset();
   jest.mocked(setFriendPermission).mockReset().mockResolvedValue(undefined);
-  Object.assign(mockAuth, { isAuthenticated: true, user: { id: 'owner-a' }, sessionEpoch: 1 });
   mockParams = { id: 'friend-id', name: 'Private remark' };
 });
 afterEach(() => { jest.restoreAllMocks(); });

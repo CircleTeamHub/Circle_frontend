@@ -31,6 +31,8 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+  // 群缓存 → group-reload-key → api client 会把 @/i18n 带进来。
+  initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@/theme', () => ({
@@ -60,8 +62,17 @@ jest.mock('@/chat-core/store', () => ({
   useChatStore: (selector: (state: unknown) => unknown) => selector(mockChatState),
 }));
 jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: unknown) => unknown) => selector(mockAuth),
+  // 群缓存自己读 getState() 核对 sessionEpoch。
+  useAuthStore: Object.assign(
+    (selector: (state: unknown) => unknown) => selector(mockAuth),
+    { getState: () => mockAuth },
+  ),
 }));
+// 群缓存在原生端只在加密库就绪后才工作;给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 jest.mock('@/features/chat/hooks/use-group-member-view-access', () => ({
   useGroupMemberViewAccess: jest.fn(),
 }));

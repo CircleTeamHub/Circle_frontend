@@ -126,6 +126,7 @@ export default function InvitationVerificationScreen() {
   const requestRef = useRef(0);
   const loadedScopeRef = useRef<string | null>(null);
   const reloadGate = useFocusReloadGate({ key: id, mutatedSince: circlesMutatedSince });
+  // 每个「账号 + 申请」只自动补一次邀请人确认;换申请再换回来也不重发。
   const repairAttempted = useRef(new Set<string>());
 
   useLayoutEffect(() => {
@@ -136,7 +137,6 @@ export default function InvitationVerificationScreen() {
     setLoading(Boolean(id));
     consentPending.current = null;
     setResponding(false);
-    repairAttempted.current.clear();
   }, [id, scopeKey]);
 
   const loadInvitation = useCallback(async () => {
@@ -155,9 +155,9 @@ export default function InvitationVerificationScreen() {
         data.status === 'PENDING' && data.approvedCount === 0 &&
         data.applicant.id === currentUserId && data.inviter.id !== data.applicant.id &&
         !data.verifiers.some(slot => slot.verifier.id === data.inviter.id) &&
-        !repairAttempted.current.has(id)
+        !repairAttempted.current.has(scopeKey)
       ) {
-        repairAttempted.current.add(id);
+        repairAttempted.current.add(scopeKey);
         try {
           data = await respondToCircleInvitation(id, true);
           data = await fetchInvitation(id);

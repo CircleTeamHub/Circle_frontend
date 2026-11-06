@@ -45,7 +45,6 @@ test('selected tag and chip controls use solid primary fills', () => {
   const files = [
     'src/features/user/screens/EditFriendTagsScreen.tsx',
     'src/features/social/screens/SendFriendRequestScreen.tsx',
-    'src/features/profile/screens/CollectionsScreen.tsx',
     'src/features/profile/components/badge-grid-item.tsx',
   ];
 
@@ -54,6 +53,16 @@ test('selected tag and chip controls use solid primary fills', () => {
     assert.doesNotMatch(src, /primaryLight/, `${file} should not use translucent selected tags`);
     assert.match(src, /backgroundColor:\s*colors\.primary/, `${file} should use a solid selected fill`);
   }
+});
+
+// 收藏页的类型筛选改成了下划线页签(不再是色块):选中态用实色主色文字 + 下划线,同样不用半透明色。
+test('collection type tabs mark the selection with a solid primary underline', () => {
+  const toolbar = read('src/features/profile/components/CollectionListToolbar.tsx');
+  assert.doesNotMatch(toolbar, /primaryLight/);
+  assert.match(toolbar, /borderBottomColor: activeType === type \? colors\.primary : 'transparent'/);
+  assert.match(toolbar, /color: activeType === type \? colors\.primary : colors\.textSecondary/);
+  assert.match(toolbar, /accessibilityState=\{\{ selected: type === activeType, disabled \}\}/);
+  assert.doesNotMatch(read('src/features/profile/screens/CollectionsScreen.tsx'), /primaryLight/);
 });
 
 test('discover tag chips use solid primary or semantic fills', () => {

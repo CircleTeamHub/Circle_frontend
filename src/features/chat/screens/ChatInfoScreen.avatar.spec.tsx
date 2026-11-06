@@ -15,8 +15,12 @@ const mockTranslate = (key: string) => key;
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), navigate: jest.fn() },
   useLocalSearchParams: () => mockParams,
-  // Data loading is outside this avatar-entry contract; the store/cache below supply its state.
-  useFocusEffect: () => {},
+  // A standalone role only counts after this visit's seat check (fetchChatMembers) succeeds,
+  // so the focus load has to run; everything else it touches stays pending.
+  useFocusEffect: (callback: () => void) => {
+    const { useEffect } = jest.requireActual('react');
+    useEffect(callback, [callback]);
+  },
 }));
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -42,7 +46,11 @@ jest.mock('@/components/ui/avatar-photo-viewer', () => ({
     return visible ? createElement(View, { ...props, testID: 'avatar-preview' }) : null;
   },
 }));
-jest.mock('@/chat-core/api', () => ({}));
+jest.mock('@/chat-core/api', () => ({
+  fetchChatMembers: jest.fn(async () => [{ userId: 'me', nickname: 'Me', role: mockRole }]),
+  refreshChatConversation: jest.fn(() => new Promise(() => {})),
+  createCircleChatConversation: jest.fn(() => new Promise(() => {})),
+}));
 jest.mock('@/chat-core/burn-durations', () => ({
   buildBurnDurationOptions: () => [], formatBurnDuration: () => '',
 }));
@@ -81,11 +89,16 @@ jest.mock('@/features/chat/group-info-cache', () => ({
 jest.mock('@/features/chat/utils/group-reload-key', () => ({
   groupConversationReloadKey: () => '', groupOrCircleMutatedSince: () => false,
 }));
-jest.mock('@/services/api/circles', () => ({}));
+jest.mock('@/services/api/circles', () => ({ fetchCircleDetail: jest.fn(() => new Promise(() => {})) }));
 jest.mock('@/services/api/friends', () => ({ friendsMutatedSince: () => false }));
 jest.mock('@/services/api/groups', () => ({}));
 jest.mock('@/services/api/temp-chat', () => ({}));
 jest.mock('@/services/api/errors', () => ({ getApiErrorMessage: () => '' }));
+// Failure classification only matters to the (disabled) data loading path.
+jest.mock('@/services/api/client', () => ({
+  ApiError: jest.requireActual('@/services/api/api-error').ApiError,
+  isDefinitiveAuthFailure: () => false,
+}));
 jest.mock('@/components/app/top-notice-store', () => ({ topNotice: {} }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 
@@ -99,7 +112,7 @@ beforeEach(() => {
   });
 });
 
-function showGroup(kind: 'standalone' | 'circle', role: typeof mockRole) {
+async function showGroup(kind: 'standalone' | 'circle', role: typeof mockRole) {
   mockRole = role;
   const circleId = kind === 'circle' ? 'circle-1' : null;
   mockParams.sourceID = circleId ?? 'group-1';
@@ -111,6 +124,7 @@ function showGroup(kind: 'standalone' | 'circle', role: typeof mockRole) {
     }] as ChatConversationDto[],
   });
   render(<ChatInfoScreen />);
+  await act(async () => {});
   fireEvent.press(screen.getByText('chat.groupAvatar'));
   return screen.getByTestId('avatar-preview');
 }
@@ -122,8 +136,8 @@ test.each([
   ['circle', 'OWNER', true],
   ['circle', 'ADMIN', false],
   ['circle', 'MEMBER', false],
-] as const)('%s %s opens the avatar preview with editing permission %s', (kind, role, editable) => {
-  const preview = showGroup(kind, role);
+] as const)('%s %s opens the avatar preview with editing permission %s', async (kind, role, editable) => {
+  const preview = await showGroup(kind, role);
 
   expect(mockChangeAvatar).not.toHaveBeenCalled();
   expect(preview.props.uri).toBe(`https://example.com/${kind === 'circle' ? 'circle' : 'group'}.png`);
@@ -132,7 +146,7 @@ test.each([
 });
 
 test.each(['camera', 'library'] as const)('an authorized preview forwards the %s action to the shared hook', async (source: AvatarImageSource) => {
-  const preview = showGroup('standalone', 'ADMIN');
+  const preview = await showGroup('standalone', 'ADMIN');
 
   await act(async () => { await preview.props.onChange(source); });
 
@@ -140,9 +154,9 @@ test.each(['camera', 'library'] as const)('an authorized preview forwards the %s
   expect(mockChangeAvatar).toHaveBeenCalledWith(source);
 });
 
-test('an uploading group avatar can still be previewed and forwards its busy state', () => {
+test('an uploading group avatar can still be previewed and forwards its busy state', async () => {
   mockChanging = true;
-  const preview = showGroup('standalone', 'OWNER');
+  const preview = await showGroup('standalone', 'OWNER');
 
   expect(preview.props.changing).toBe(true);
   expect(mockChangeAvatar).not.toHaveBeenCalled();

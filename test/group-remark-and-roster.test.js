@@ -51,8 +51,11 @@ test('the roster switch gates the member grid for ordinary members only', () => 
   // 群主/管理员不受限,判据与服务端 listMembers 一致。
   assert.match(
     info,
-    /isGroupManager\(selfGroupRoleForRoster\) \|\|\s*\n\s*rosterVisibleToMembers/,
+    /const rosterPolicyAllows =\s*\n\s*isTempConversation \|\| isGroupManager\(selfGroupRoleForRoster\) \|\| rosterVisibleToMembers;/,
   );
+  // 活体名单和缓存名单走同一道策略闸门。
+  assert.match(info, /: canViewCircleMemberDirectory\) &&\s*\n\s*rosterPolicyAllows;/);
+  assert.match(info, /const canPresentCachedDirectory = groupMembers\.length > 0 && rosterPolicyAllows &&/);
 
   const manage = read('src/features/chat/screens/GroupManageScreen.tsx');
   assert.match(manage, /'membersCanViewRoster',/);

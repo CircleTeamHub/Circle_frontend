@@ -9,9 +9,17 @@ const mockChangeAvatar = jest.fn();
 let mockEpoch = 0;
 let mockCircleId = 'circle-1';
 jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (select: (state: { sessionEpoch: number }) => unknown) =>
-    select({ sessionEpoch: mockEpoch }),
+  // 圈子缓存自己按 getState().sessionEpoch 核对账号代次。
+  useAuthStore: Object.assign(
+    (select: (state: { sessionEpoch: number }) => unknown) => select({ sessionEpoch: mockEpoch }),
+    { getState: () => ({ sessionEpoch: mockEpoch }) },
+  ),
 }));
+// 圈子缓存在原生端只在加密库就绪后才工作;给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: mockCircleId }),
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
@@ -39,7 +47,12 @@ jest.mock('@/services/api/client', () => {
       this.status = status;
     }
   }
-  return { ApiError };
+  return {
+    ApiError,
+    // 401/403 与 404 一样会作废缓存;其余失败(断网)保留。
+    isDefinitiveAuthFailure: (error: unknown) =>
+      error instanceof ApiError && (error.status === 401 || error.status === 403),
+  };
 });
 jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
@@ -172,7 +185,10 @@ test('the background refresh recalibrates membership drawn from the cache', asyn
   const refresh = deferred<unknown>();
   jest.mocked(fetchCircleDetail).mockReturnValueOnce(refresh.promise as never);
   render(<CircleDetailScreen />);
-  expect(screen.getByText('加入圈子')).toBeTruthy();
+  // 缓存里的成员关系只用来画资料,不能充当本次的加入/退出依据:校准前两个按钮都不画。
+  expect(screen.getByText('徒步圈')).toBeTruthy();
+  expect(screen.queryByText('加入圈子')).toBeNull();
+  expect(screen.queryByText('退出圈子')).toBeNull();
 
   await act(async () => refresh.resolve(circle()));
   expect(screen.queryByText('加入圈子')).toBeNull();
@@ -219,9 +235,13 @@ test('a pending application is remembered with the circle', async () => {
   expect(await screen.findByText('邀请好友为我验证 ({{approved}}/{{required}})')).toBeTruthy();
   first.unmount();
 
-  // 再进时「我的申请」还在路上:按钮照旧是验证入口,不先闪成「审核中」。
+  // 再进时「我的申请」还在路上:详情一校准,按钮照旧是缓存里的验证入口,不先闪成「审核中」。
   jest.mocked(fetchMyApplications).mockReturnValueOnce(neverSettles());
+  const refresh = deferred<unknown>();
+  jest.mocked(fetchCircleDetail).mockReturnValueOnce(refresh.promise as never);
   render(<CircleDetailScreen />);
+  expect(screen.queryByText('审核中')).toBeNull();
+  await act(async () => refresh.resolve(pending));
   expect(screen.getByText('邀请好友为我验证 ({{approved}}/{{required}})')).toBeTruthy();
   expect(screen.queryByText('审核中')).toBeNull();
 });
@@ -234,9 +254,12 @@ test('leaving the circle forgets it, so the next visit loads fresh', async () =>
   const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
     void buttons?.[1]?.onPress?.();
   });
+  // 退出按钮要等本次详情校准过成员关系才出现。
+  jest.mocked(fetchCircleDetail).mockResolvedValueOnce(circle() as never);
   const second = render(<CircleDetailScreen />);
+  const leave = await screen.findByText('退出圈子');
   await act(async () => {
-    fireEvent.press(screen.getByText('退出圈子'));
+    fireEvent.press(leave);
   });
   expect(leaveCircle).toHaveBeenCalledWith(mockCircleId);
   second.unmount();

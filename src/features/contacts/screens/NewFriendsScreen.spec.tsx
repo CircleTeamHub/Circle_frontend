@@ -78,10 +78,15 @@ jest.mock('@/stores/tabBadgeStore', () => ({
   useTabBadgeStore: (select: (state: { groupAdmissionsUnread: number }) => unknown) =>
     select({ groupAdmissionsUnread: 0 }),
 }));
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (select: (state: { sessionEpoch: number }) => unknown) =>
-    select({ sessionEpoch: mockSessionEpoch }),
-}));
+jest.mock('@/stores/authStore', () => {
+  const getState = () => ({ user: { id: 'me' }, sessionEpoch: mockSessionEpoch });
+  return {
+    useAuthStore: Object.assign(
+      (select: (state: ReturnType<typeof getState>) => unknown) => select(getState()),
+      { getState },
+    ),
+  };
+});
 
 function activity(nickname: string): FriendActivity {
   return {

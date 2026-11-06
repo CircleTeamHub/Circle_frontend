@@ -23,9 +23,11 @@ jest.mock('@/theme', () => ({
   Radius: { pill: 26 }, Spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 }, Typography: { h1: {}, small: {}, bodyRegular: {}, caption: {}, body: {} },
   useTheme: () => ({ colors: { background: '#000', surface: '#111', surfaceBorder: '#333', text: '#fff', overlay: '#0008', iconAccent: '#b18aff', danger: '#f66' } }),
 }));
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { user: { id: string } }) => unknown) => selector({ user: { id: 'owner' } }),
-}));
+jest.mock('@/stores/authStore', () => {
+  // The screen keys its content by `${user.id}:${sessionEpoch}` and re-checks the epoch via getState().
+  const state = { user: { id: 'owner' }, sessionEpoch: 1 };
+  return { useAuthStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), { getState: () => state }) };
+});
 jest.mock('@/components/ui/keyboard-dismiss', () => ({ keyboardDismissOnDragProps: {} }));
 jest.mock('@/components/ui/bottom-sheet-modal', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -42,7 +44,8 @@ jest.mock('@/features/notes/components/NoteCard', () => {
   };
 });
 jest.mock('@/features/notes/utils/note-editor-drafts', () => ({ detachLocalNoteDraftsFromNote: jest.fn() }));
-jest.mock('@/services/api/notes', () => ({ fetchDeletedNotes: jest.fn(), purgeNote: jest.fn(), restoreNote: jest.fn() }));
+// No persisted recycle-bin snapshot: every test starts from the network load.
+jest.mock('@/services/api/notes', () => ({ fetchDeletedNotes: jest.fn(), getCachedDeletedNotes: () => null, purgeNote: jest.fn(), restoreNote: jest.fn() }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
 
 const note = { id: 'n1', title: '回收站里的笔记', groups: [], status: 'DELETED' };

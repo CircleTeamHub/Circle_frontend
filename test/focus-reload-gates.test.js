@@ -35,12 +35,13 @@ test('the profile announcement banner does not refetch on every tab switch', () 
   assert.match(src, /bannerReloadGate\.markLoaded\(startedAt\)/);
 });
 
-test('my circles reuse the store unless stale, and circle detail reloads only after a circle change', () => {
+// 圈子群的成员/角色写请求也会改圈子详情与「我的圈子」,所以两边都看群或圈子的写记号。
+test('my circles reuse the store unless stale, and circle detail reloads only after a circle or group change', () => {
   const store = read('src/features/discover/store/use-circles-store.ts');
-  assert.match(store, /circlesMutatedSince\(/);
+  assert.match(store, /groupOrCircleMutatedSince\(/);
   assert.match(store, /if \(!options\.force/);
   const detail = read('src/features/discover/screens/CircleDetailScreen.tsx');
-  assert.match(detail, /mutatedSince: circlesMutatedSince/);
+  assert.match(detail, /mutatedSince: groupOrCircleMutatedSince/);
   assert.match(detail, /reloadGate\.shouldSkip\(\)/);
 });
 

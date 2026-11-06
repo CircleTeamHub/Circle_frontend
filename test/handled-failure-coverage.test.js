@@ -34,10 +34,12 @@ const CONSOLE_ALLOWLIST = new Set([
 ]);
 
 // reportHandledFailure 的 operation / kind 必须是字符串字面量（sentry.ts 用它们组
-// fingerprint）。例外：定义处本身，以及 local-db 的 warn 助手（key 是内部枚举）。
+// fingerprint）。例外：定义处本身，以及 local-db 的 warn 助手（key 是内部枚举）、
+// page-snapshots 的 reportCacheFailure（operation 的类型是字面量联合）。
 const NON_LITERAL_CALL_ALLOWLIST = new Set([
   'src/observability/report-failure.ts',
   'src/chat-core/local-db.ts',
+  'src/storage/page-snapshots.ts',
 ]);
 
 const STABLE_TAG = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;

@@ -142,6 +142,14 @@ function makeBaseMocks() {
     '@/utils/client-diagnostics': {
       resetDiagnosticBreadcrumbs: () => calls.push('resetDiagnosticBreadcrumbs'),
     },
+    '@/features/discover/store/use-post-form-store': {
+      usePostFormStore: {
+        getState: () => ({ reset: () => calls.push('resetPostForm') }),
+      },
+    },
+    '@/storage/page-snapshots': {
+      clearPageSnapshots: (userId) => calls.push(`clearPageSnapshots:${userId}`),
+    },
   };
 
   return {
@@ -182,6 +190,7 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetFriendRemark',
     'resetTabBadge',
     'resetWalletRealtime',
+    'resetPostForm',
     'resetDiscover',
     'resetMoments',
     'resetNotifications',
@@ -191,6 +200,19 @@ test('clearLocalSession runs registered teardown handlers, then resets stores au
     'resetDiagnosticBreadcrumbs',
     'clearStorage',
   ]);
+});
+
+test('clearLocalSession wipes the signed-out account page snapshots before the session is cleared', async () => {
+  const { mocks, calls, authState } = makeBaseMocks();
+  authState.user = { id: 'user-a' };
+  const { clearLocalSession } = loadSessionModule(mocks);
+
+  await clearLocalSession();
+
+  // 页面快照是按账号加密落盘的私有内容(会话列表、好友、笔记…),登出必须连盘一起清。
+  const wipe = calls.indexOf('clearPageSnapshots:user-a');
+  assert.notEqual(wipe, -1);
+  assert.ok(wipe < calls.indexOf('clearSession'));
 });
 
 test('clearLocalSession preserves the startup gate until account cleanup settles', async () => {
@@ -272,6 +294,7 @@ test('clearLocalSession still clears local state when a teardown handler throws'
     'resetFriendRemark',
     'resetTabBadge',
     'resetWalletRealtime',
+    'resetPostForm',
     'resetDiscover',
     'resetMoments',
     'resetNotifications',

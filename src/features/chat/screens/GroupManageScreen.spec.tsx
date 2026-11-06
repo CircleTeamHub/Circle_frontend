@@ -9,6 +9,7 @@ import {
   readGroupInfoCache,
   writeGroupInfoCache,
 } from '@/features/chat/group-info-cache';
+import { clearPageSnapshots } from '@/storage/page-snapshots';
 
 jest.setTimeout(30_000);
 const SETTLE = { timeout: 10_000 };
@@ -95,6 +96,11 @@ jest.mock('@/stores/authStore', () => ({
     { getState: () => mockAuth },
   ),
 }));
+// 群缓存在原生端只在加密库就绪后才工作(并按账号落盘);给它一个内存 MMKV。
+jest.mock('@/storage/encrypted-init', () => {
+  const instance = jest.requireActual('react-native-mmkv').createMMKV({ id: 'spec' });
+  return { getEncryptedInstance: () => instance, initEncryptedStorage: async () => instance };
+});
 jest.mock('@/features/chat/hooks/use-group-admin-actions', () => ({
   isSilencedMember: (member: { silenced?: boolean }) => Boolean(member.silenced),
   useGroupAdminActions: (params: typeof mockAdminParams) => {
@@ -158,6 +164,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   // 每个用例换一个「账号」:成员缓存按 sessionEpoch 整份作废,用例之间互不串。
   mockAuth.sessionEpoch += 1;
+  // 同一 user.id 的名单还落了盘,换代次后会被读回来;像登出那样一并清掉。
+  clearPageSnapshots();
   mockAdminParams = null;
   delete mockParams.conversationID;
   delete mockParams.groupID;

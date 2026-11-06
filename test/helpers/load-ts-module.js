@@ -3,6 +3,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./observability-stubs');
+const { withNativeStorageStubs } = require('./native-storage-stubs');
 
 /**
  * Transpile a TS source file and run it in a fresh VM context.
@@ -13,6 +14,7 @@ const { withObservabilityStubs } = require('./observability-stubs');
  *
  * 观测层模块（`@/observability/report-failure`、`@/utils/dev-log`）不必逐个测试去
  * 桩：这里默认给无副作用替身，测试自己提供的导出仍然优先（见 observability-stubs）。
+ * 本地持久化层（react-native、MMKV、authStore）同理，见 native-storage-stubs。
  * 其余解析不了的源码 import 回落到真实模块（见 withSourceFallback）。
  */
 /** `@/x` 或相对路径对应的源码文件（.ts / .tsx）；找不到返回 null。 */
@@ -60,7 +62,7 @@ function loadTsModule(relativePath, { requireShim, context: extraContext } = {})
     module: { exports: {} },
     exports: {},
     require: withSourceFallback(
-      withObservabilityStubs(requireShim ?? require),
+      withNativeStorageStubs(withObservabilityStubs(requireShim ?? require), filePath),
       filePath,
       { requireShim, context: extraContext },
     ),

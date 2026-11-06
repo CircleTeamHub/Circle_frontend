@@ -99,6 +99,8 @@ jest.mock('@/features/discover/store/use-circles-store', () => ({
       myCirclesError: null,
       fetchMyCircles: mockFetchMyCircles,
     }),
+  // 快照回灌由 store 自己负责;这里直接给上面的列表。
+  useHydrateCirclesSnapshot: () => {},
 }));
 
 beforeEach(() => {

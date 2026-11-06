@@ -45,17 +45,20 @@ jest.mock('@/features/notes/components/NoteCard', () => {
 });
 jest.mock('@/services/api/notes', () => ({
   fetchNotes: jest.fn(),
+  // 没有本地页面快照:每个用例都从网络加载开始。
+  getCachedNotes: () => null,
   deleteNote: jest.fn(),
   relistNote: jest.fn(),
   // 回到页面跳过重拉的判定:这里一律当作「之后改过」,每次聚焦照常重拉。
   notesMutatedSince: jest.fn(() => true),
 }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
-// 聚焦重拉的判定按账号区分(useFocusReloadGate 读 sessionEpoch)。
-jest.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { sessionEpoch: number }) => unknown) =>
-    selector({ sessionEpoch: 1 }),
-}));
+// 聚焦重拉的判定按账号区分(useFocusReloadGate 读 sessionEpoch);页面内容按
+// `${user.id}:${sessionEpoch}` 建 key,加载结果落地前还会经 getState() 复核账号。
+jest.mock('@/stores/authStore', () => {
+  const state = { user: { id: 'owner' }, sessionEpoch: 1 };
+  return { useAuthStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), { getState: () => state }) };
+});
 
 const note = { id: 'n1', title: '已下架的笔记', groups: [], status: 'UNLISTED' };
 
