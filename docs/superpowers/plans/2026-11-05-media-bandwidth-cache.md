@@ -10,7 +10,7 @@
 
 ## Global constraints
 
-- Preserve all existing uncommitted work; do not commit, deploy, or change cloud settings.
+- Preserve all existing uncommitted work; submit only this task's changes when requested. Do not deploy or change cloud settings.
 - No new dependencies or full-file download cache.
 - Disappearing chat videos must not use persistent video caching.
 - Local picker/file/blob sources remain local and do not use the network cache.
@@ -46,10 +46,11 @@ Files: new `src/utils/video-source.ts` and tests; the chat, moment, and note vid
 
 ## Progress
 
-- Implementation and source review complete. No commits, cloud changes, or releases performed.
+- Implementation and source review complete. PR preparation uses an isolated branch from current `origin/main`, preserving the original dirty workspace. No cloud changes or releases performed.
 - Privacy review fixes: wait for native players to release before clearing video caches; persist the policy marker only after both cache clears succeed; treat a missing native cache directory as a successful empty cache. COS temporary-token rotation is also excluded from cache identity.
-- Full behavior verification: 186 suites / 1,608 tests passed. App/source TypeScript and ESLint passed using the installed tools directly. The npm Expo wrappers have missing Windows command shims, and the unscoped TypeScript command includes unrelated nested test-results checkouts.
-- All 23 focused source/build tests passed. The full source-test run had 3,596 cases with 18 unrelated failures in existing source assertions and Windows Bash/build harnesses; those files were left unchanged.
+- Initial workspace behavior verification: 186 suites / 1,608 tests passed. PR branch verification against current main: 181 suites / 1,520 tests passed, complete TypeScript and App/source ESLint passed using the installed tools directly. The npm Expo wrappers have missing Windows command shims.
+- All 24 focused media source/build tests passed on the PR branch. After the requested follow-up, the complete source suite passed all 3,556 tests with no failures or skips. The 32 focused shell tests also passed.
+- Windows shell follow-up: a runnable PATH `bash` was WSL, but the release fixtures use Git Bash paths. Prefer an installed Git Bash before the PATH fallback; the Sentry tests now share that discovery and quote temporary source-file paths. The new regression failed before this fix, and the Sentry fixtures clean up their temporary directories after each test.
 - Native patch parsing, reverse application against the installed package, and forward application against pristine package sources passed. Android `:expo-video:compileDebugKotlin` passed with a single-use Gradle daemon and in-process Kotlin compilation.
 - Temporary test/build processes have exited, including the five single-use Gradle daemons used during verification. No development servers were started.
 - iOS native compilation, installed-device behavior, and the percentage of bandwidth saved remain unverified. A new native build is required; no APK/IPA was generated or published.

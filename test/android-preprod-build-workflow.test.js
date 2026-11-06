@@ -50,6 +50,17 @@ test('release harness discovers configurable or PATH-provided Git Bash', () => {
   assert.equal(releaseScriptShell({ platform: 'win32', env: { GIT_BASH_PATH: configured }, existsSync: (file) => file === configured, canRun: () => false }), configured);
 });
 
+test('release harness prefers installed Git Bash over a runnable WSL bash', () => {
+  const programFiles = 'C:\\Program Files';
+  const gitBash = path.join(programFiles, 'Git', 'bin', 'bash.exe');
+  assert.equal(releaseScriptShell({
+    platform: 'win32',
+    env: { ProgramFiles: programFiles },
+    existsSync: (file) => file === gitBash,
+    canRun: () => true,
+  }), gitBash);
+});
+
 const read = (relativePath) =>
   fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
@@ -1050,7 +1061,7 @@ test('preproduction distribution validator fails closed', () => {
   }
 });
 
-test('preproduction media origins pin the COS bucket and the rate-limited delivery domain together', () => {
+test('preproduction media origins pin legacy delivery and both R2 origins together', () => {
   const {
     EXPECTED,
     validateApkContents,
@@ -1058,10 +1069,11 @@ test('preproduction media origins pin the COS bucket and the rate-limited delive
   } = require('../.github/scripts/verify-android-preprod');
   const cos = 'https://windnote-preprod-tokyo-1447743949.cos.ap-tokyo.myqcloud.com';
   const delivery = 'https://api-43-134-85-95.sslip.io';
-  // 测试服后端配了 OBJECT_STORAGE_DELIVERY_URL:公开目录(头像、封面……)的永久地址
-  // 走限流的投递域名,私有媒体的预签名地址仍直连 COS。App 的媒体白名单缺哪一个,
-  // 那一类图片、语音、封面就会被客户端整片丢掉。
-  assert.deepEqual(EXPECTED.mediaOrigins, [cos, delivery]);
+  const worker = 'https://windnote-media-preprod-delivery.yiboding1998.workers.dev';
+  const r2 = 'https://0bea489023c1d8692a19dadaf15dcf95.r2.cloudflarestorage.com';
+  const origins = [cos, delivery, worker, r2];
+  // 旧媒体和回滚保留 COS/API，R2 公开媒体走 Worker，私有签名 URL 直连 S3 API。
+  assert.deepEqual(EXPECTED.mediaOrigins, origins);
 
   const app = {
     name: EXPECTED.appName,
@@ -1073,15 +1085,20 @@ test('preproduction media origins pin the COS bucket and the rate-limited delive
     ANDROID_PREPROD_VERSION_CODE: '100004321',
     EXPO_PUBLIC_API_URL: EXPECTED.apiUrl,
     EXPO_PUBLIC_CHAT_WS_URL: EXPECTED.apiUrl,
-    EXPO_PUBLIC_MEDIA_ORIGINS: `${cos},${delivery}`,
+    EXPO_PUBLIC_MEDIA_ORIGINS: origins.join(','),
   };
   assert.deepEqual(validateMetadata({ app, env }), []);
   for (const mediaOrigins of [
     cos,
     delivery,
-    `${cos},${delivery},`,
-    `${cos},http://api-43-134-85-95.sslip.io`,
-    `${cos},${delivery}/`,
+    `${cos},${delivery}`,
+    `${cos},${delivery},${worker}`,
+    `${cos},${delivery},${r2}`,
+    `${cos},${delivery},${r2},${worker}`,
+    `${origins.join(',')},`,
+    `${cos},http://api-43-134-85-95.sslip.io,${worker},${r2}`,
+    `${cos},${delivery}/,${worker},${r2}`,
+    `${origins.join(',')},https://untrusted.example`,
   ]) {
     assert.match(
       validateMetadata({ app, env: { ...env, EXPO_PUBLIC_MEDIA_ORIGINS: mediaOrigins } }).join('\n'),
@@ -1090,10 +1107,10 @@ test('preproduction media origins pin the COS bucket and the rate-limited delive
     );
   }
 
-  const bothHosts = Buffer.from(
+  const allHosts = Buffer.from(
     [EXPECTED.apiHost, ...EXPECTED.mediaHosts].join('\n'),
   );
-  assert.deepEqual(validateApkContents(bothHosts), []);
+  assert.deepEqual(validateApkContents(allHosts), []);
   assert.match(
     validateApkContents(Buffer.from(EXPECTED.apiHost)).join('\n'),
     /windnote-preprod-tokyo-1447743949\.cos\.ap-tokyo\.myqcloud\.com/,
@@ -1101,7 +1118,7 @@ test('preproduction media origins pin the COS bucket and the rate-limited delive
   // 东京旧机的 sslip 域名跟着已易主的 IP 走,残留在包里就是把令牌发给陌生人。
   for (const stale of ['api-43-133-201-42.sslip.io', 'media-43-133-201-42.sslip.io']) {
     assert.match(
-      validateApkContents(Buffer.concat([bothHosts, Buffer.from(`\n${stale}`)])).join('\n'),
+      validateApkContents(Buffer.concat([allHosts, Buffer.from(`\n${stale}`)])).join('\n'),
       new RegExp(stale.replace(/\./g, '\\.')),
     );
   }
