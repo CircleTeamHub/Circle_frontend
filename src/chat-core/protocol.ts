@@ -644,7 +644,7 @@ export interface ChatGroupEventDto {
   actor: ChatSenderInfo | null;
   /** 受影响成员(进群可多人)。 */
   targets: ChatSenderInfo[];
-  /** {name} / {role} / {durationSec} / {via}。 */
+  /** {name} / {role} / {durationSec} / {via} / {status, source, inviterId, blacklisted}。 */
   payload: Record<string, unknown> | null;
   createdAt: string;
 }

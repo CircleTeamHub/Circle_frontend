@@ -220,6 +220,39 @@ test('group log names people by their group alias, falling back to the nickname'
   assert.match(removed[1].targets, /^Bob.*小卡$/);
 });
 
+test('admission events render the backend review outcome without exposing payload identifiers', () => {
+  const cases = [
+    ['admission-reviewed', { status: 'REJECTED', source: 'APPLICATION', blacklisted: false }, 'admissionRejected'],
+    ['admission-reviewed', { status: 'JOINED', source: 'INVITE' }, 'admissionApproved'],
+    ['member-banned', { status: 'REJECTED', source: 'INVITE', blacklisted: true }, 'memberBanned'],
+    ['admission-reviewed', null, 'admissionReviewed'],
+    ['admission-reviewed', { status: 'FUTURE_STATUS' }, 'admissionReviewed'],
+  ];
+  for (const lng of LOCALES) {
+    const translator = require('i18next').createInstance();
+    translator.init({ lng, resources: { [lng]: { translation: locale(lng) } }, initImmediate: false });
+    const calls = [];
+    const format = loadGroupEventText((key, values) => {
+      calls.push([key, values]);
+      return translator.t(key, values);
+    });
+    for (const [kind, payload, expectedKey] of cases) {
+      const text = format({
+        id: 'review-event', kind,
+        actor: { id: 'private-actor-id', nickname: 'Alice', alias: 'Manager', avatarUrl: null },
+        targets: [{ id: 'private-target-id', nickname: 'Bob', alias: 'Applicant', avatarUrl: null }],
+        payload: payload && { ...payload, inviterId: 'private-inviter-id' },
+        createdAt: '',
+      });
+      assert.equal(calls.at(-1)[0], `chat.groupEvent.${expectedKey}`, `${lng}: ${kind}/${payload?.status}`);
+      assert.deepEqual({ ...calls.at(-1)[1] }, { actor: 'Manager', targets: 'Applicant' });
+      assert.match(text, /Manager/);
+      assert.match(text, /Applicant/);
+      assert.doesNotMatch(text, /chat\.groupEvent|\{\{|private-|JOINED|REJECTED|FUTURE_STATUS/);
+    }
+  }
+});
+
 test('the five locales define copy for every event kind and the management screen', () => {
   const eventKeys = [
     'system', 'unknownMember', 'nameSeparator',
@@ -230,7 +263,7 @@ test('the five locales define copy for every event kind and the management scree
     'ownerTransferred', 'groupRenamed', 'groupNoticeUpdated', 'historyCleared',
     'muteAllEnabled', 'muteAllDisabled', 'groupAvatarUpdated',
     'policyEnabled', 'policyDisabled',
-    'admissionReviewed', 'memberBanned',
+    'admissionApproved', 'admissionRejected', 'admissionReviewed', 'memberBanned',
   ];
   const manageKeys = [
     'admins', 'adminsHint', 'addAdmin', 'noAdmins', 'removeAdmin',

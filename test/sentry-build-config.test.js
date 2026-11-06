@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { spawnSync } = require('node:child_process');
+const { releaseScriptShell, shellQuote } = require('./helpers/release-script-shell');
 
 // 把插件写进 ios/.xcode.env 的那段 shell 真正跑一遍：Xcode 的每个构建脚本都会
 // source 它，exit 1 就是这次构建失败。只比对字符串的话，条件写反了也照样全绿。
@@ -11,7 +12,7 @@ function runXcodeEnvGuard(env) {
   } = require('../plugins/with-local-sentry-auto-upload-disabled');
   const block = appendSentryDisableAutoUpload('');
   const result = spawnSync(
-    'bash',
+    releaseScriptShell(),
     ['-c', `${block}\necho "FLAG=\${SENTRY_DISABLE_AUTO_UPLOAD:-unset}"`],
     { env: { PATH: process.env.PATH, ...env }, encoding: 'utf8' },
   );
@@ -123,7 +124,7 @@ test('a CI workflow re-checks the iOS Sentry wiring whenever Expo config or plug
   assert.match(workflow, /node \.github\/scripts\/verify-ios-sentry-config\.js/);
 });
 
-test('the iOS guard never expands the auth token into an xtrace build log', () => {
+test('the iOS guard never expands the auth token into an xtrace build log', (t) => {
   // sentry-xcode-debug-files.sh 先 set -x 再 source .xcode.env：`-z "$SENTRY_AUTH_TOKEN"`
   // 在 xtrace 下会把令牌原文打进 Xcode / EAS 构建日志。
   const fs = require('node:fs');
@@ -133,8 +134,9 @@ test('the iOS guard never expands the auth token into an xtrace build log', () =
     appendSentryDisableAutoUpload,
   } = require('../plugins/with-local-sentry-auto-upload-disabled');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xcode-env-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.writeFileSync(path.join(dir, '.xcode.env'), appendSentryDisableAutoUpload(''));
-  const result = spawnSync('bash', ['-xc', `source "${dir}/.xcode.env"`], {
+  const result = spawnSync(releaseScriptShell(), ['-xc', `source ${shellQuote(path.join(dir, '.xcode.env'))}`], {
     env: {
       PATH: process.env.PATH,
       CONFIGURATION: 'Release',
@@ -148,7 +150,7 @@ test('the iOS guard never expands the auth token into an xtrace build log', () =
   assert.doesNotMatch(result.stderr, /sntrys_SECRET_TOKEN/);
 });
 
-test('a local opt-out in ios/.xcode.env.local covers Xcode GUI Release builds', () => {
+test('a local opt-out in ios/.xcode.env.local covers Xcode GUI Release builds', (t) => {
   // Product > Profile / Archive 从 Xcode 界面启动，带不进环境变量；而 .xcode.env.local
   // 要到守卫之后才被 source。守卫自己读一下同目录 .xcode.env.local 里的显式声明。
   const fs = require('node:fs');
@@ -158,9 +160,10 @@ test('a local opt-out in ios/.xcode.env.local covers Xcode GUI Release builds', 
     appendSentryDisableAutoUpload,
   } = require('../plugins/with-local-sentry-auto-upload-disabled');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xcode-env-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.writeFileSync(path.join(dir, '.xcode.env'), appendSentryDisableAutoUpload(''));
   const sourceIt = () =>
-    spawnSync('bash', ['-c', `source "${dir}/.xcode.env"; echo "FLAG=\${SENTRY_DISABLE_AUTO_UPLOAD:-unset}"`], {
+    spawnSync(releaseScriptShell(), ['-c', `source ${shellQuote(path.join(dir, '.xcode.env'))}; echo "FLAG=\${SENTRY_DISABLE_AUTO_UPLOAD:-unset}"`], {
       env: { PATH: process.env.PATH, CONFIGURATION: 'Release' },
       encoding: 'utf8',
     });

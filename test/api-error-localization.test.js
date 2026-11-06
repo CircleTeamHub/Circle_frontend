@@ -188,6 +188,23 @@ function readLocale(language) {
   return fs.readFileSync(path.join(process.cwd(), `src/i18n/locales/${language}.json`), 'utf8');
 }
 
+test('blocked group admission uses localized copy instead of the raw backend rejection', () => {
+  const original = I18N.default.t;
+  try {
+    for (const language of ['zh', 'en', 'es', 'ja', 'ko']) {
+      const bundle = JSON.parse(readLocale(language));
+      const message = bundle.serverErrors.CHAT_GROUP_JOIN_BLOCKED;
+      assert.ok(typeof message === 'string' && message.trim().length > 0, language);
+      I18N.default.t = (key, options) => bundle.serverErrors[key.slice('serverErrors.'.length)] ?? options.defaultValue;
+      assert.equal(
+        getApiErrorMessage(new FakeApiError('private join-ban diagnostics', 'CHAT_GROUP_JOIN_BLOCKED'), 'fallback'),
+        message,
+      );
+      assert.doesNotMatch(message, /CHAT_GROUP_JOIN_BLOCKED|private/);
+    }
+  } finally { I18N.default.t = original; }
+});
+
 test('maps the empty-comment backend code to localized copy', () => {
   const err = new FakeApiError('评论内容不能为空', 'TRACE_EMPTY_COMMENT');
   assert.equal(getApiErrorMessage(err, 'fallback'), 'Comment cannot be empty');

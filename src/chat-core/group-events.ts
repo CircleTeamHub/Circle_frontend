@@ -32,6 +32,8 @@ export function groupEventText(event: ChatGroupEventDto): string {
     case 'member-removed':
       return eventText('memberRemoved', { actor, targets });
     case 'admission-reviewed':
+      if (payload['status'] === 'JOINED') return eventText('admissionApproved', { actor, targets });
+      if (payload['status'] === 'REJECTED') return eventText('admissionRejected', { actor, targets });
       return eventText('admissionReviewed', { actor, targets });
     case 'member-banned':
       return eventText('memberBanned', { actor, targets });

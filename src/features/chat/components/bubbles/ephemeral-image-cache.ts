@@ -8,9 +8,9 @@ import { storage } from '@/storage';
  * 必须落盘、且记的是跨冷启动稳定的策略指纹(见 useChatConversation 的
  * selfDestructCacheKey):原来记在内存里、用的是每次冷启动都从 0 重新数的策略编号,
  * 结果每次打开 App、第一次看到阅后即焚图片就把所有图片的磁盘缓存清空重下。
- * 键名沿用图片气泡最早的那个,已经记下的策略升级后照样认。
+ * 视频开始持久缓存后使用新的媒体标记，升级后为旧焚毁策略补清一次视频缓存。
  */
-const CLEARED_POLICIES_STORAGE_KEY = 'chat.imageDiskCacheClearedPolicies';
+const CLEARED_POLICIES_STORAGE_KEY = 'chat.mediaDiskCacheClearedPolicies';
 const CLEARED_POLICIES_MAX = 50;
 /** 同一个策略的清理正在进行:一屏多个阅后即焚气泡同时挂载时只清一次。 */
 const clearingPolicies = new Set<string>();
@@ -61,7 +61,15 @@ export function useEphemeralImageDiskCacheSweep(
       return;
     }
     clearingPolicies.add(policy);
-    void Image.clearDiskCache()
+    void Promise.all([
+      Image.clearDiskCache(),
+      Promise.resolve().then(() => {
+        // Keep image-only screens from loading the native player until a sweep is needed.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { clearVideoCacheAsync } = require('expo-video') as typeof import('expo-video');
+        return clearVideoCacheAsync(true);
+      }),
+    ])
       .then(() => rememberClearedPolicy(policy))
       .catch(() => undefined)
       .finally(() => clearingPolicies.delete(policy));

@@ -1,6 +1,7 @@
 import { isEphemeralMessage } from '@/features/chat/utils/ephemeral-message';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { cachedVideoSource } from '@/utils/video-source';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -120,7 +121,7 @@ function formatDuration(seconds?: number): string | null {
 }
 
 /** Mount only while the fullscreen modal is open; useVideoPlayer releases on unmount. */
-function FullscreenVideo({ videoUrl }: { videoUrl: string }) {
+function FullscreenVideo({ videoUrl, ephemeral }: { videoUrl: string; ephemeral: boolean }) {
   const { t } = useTranslation();
   const player = useVideoPlayer(null);
   const [attempt, setAttempt] = useState(0);
@@ -137,7 +138,7 @@ function FullscreenVideo({ videoUrl }: { videoUrl: string }) {
         reportHandledFailure('chatMedia', 'videoPlayback', new Error('Video playback failed'));
       }
     });
-    void player.replaceAsync(videoUrl).then(() => {
+    void player.replaceAsync(cachedVideoSource(videoUrl, !ephemeral)).then(() => {
       if (!cancelled) player.play();
     }).catch(() => {
       if (!cancelled) {
@@ -148,7 +149,7 @@ function FullscreenVideo({ videoUrl }: { videoUrl: string }) {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; subscription.remove(); };
-  }, [attempt, player, videoUrl]);
+  }, [attempt, ephemeral, player, videoUrl]);
   return (
     <>
       <VideoView player={player} style={StyleSheet.absoluteFill} nativeControls contentFit="contain" surfaceType="textureView" />
@@ -202,7 +203,7 @@ export function VideoBubble({
   const videoViewer = previewVisible && videoUrl ? (
     <Modal visible animationType="fade" statusBarTranslucent onRequestClose={() => setPreviewVisible(false)}>
       <View style={s.fullscreen}>
-        <FullscreenVideo key={videoUrl} videoUrl={videoUrl} />
+        <FullscreenVideo key={videoUrl} videoUrl={videoUrl} ephemeral={ephemeral} />
         <Pressable style={[s.closeButton, { top: insets.top + Spacing.sm }]} onPress={() => setPreviewVisible(false)} accessibilityRole="button" accessibilityLabel={t('common.close')}>
           <Ionicons name="close" size={26} color="#fff" />
         </Pressable>

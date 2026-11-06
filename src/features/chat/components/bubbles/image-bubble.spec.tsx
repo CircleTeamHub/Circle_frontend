@@ -4,6 +4,8 @@ import { Image } from 'expo-image';
 import { ImageBubble } from './image-bubble';
 import type { ChatMessage } from '@/types';
 
+jest.mock('expo-video', () => ({ clearVideoCacheAsync: jest.fn(() => Promise.resolve()) }));
+
 // 这条 spec 只关心「这张图片会不会被当成阅后即焚渲染」，所以把主题 / 头像 /
 // 观测层全部顶掉，只留下能观察到判定结果的两个出口：缩略图的 cachePolicy 与
 // 查看器的 privacyMode。与 location-card.spec 同款做法。
@@ -194,7 +196,7 @@ describe('ImageBubble disk cache clearing for disappearing images', () => {
     );
     await waitFor(() => expect(clearDiskCache).toHaveBeenCalledTimes(1));
     await waitFor(() =>
-      expect(mockStorageValues().get('chat.imageDiskCacheClearedPolicies')).toContain(
+      expect(mockStorageValues().get('chat.mediaDiskCacheClearedPolicies')).toContain(
         'u1|viewer:off|burn:c1@t1',
       ),
     );
@@ -210,7 +212,7 @@ describe('ImageBubble disk cache clearing for disappearing images', () => {
 
   it('honours a marker written before this launch', async () => {
     mockStorageValues().set(
-      'chat.imageDiskCacheClearedPolicies',
+      'chat.mediaDiskCacheClearedPolicies',
       JSON.stringify(['u1|viewer:on@2026-09-01|burn:c9@off']),
     );
     render(

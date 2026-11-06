@@ -6,6 +6,9 @@
   "build": {
     "production": {
       "autoIncrement": true,
+      "env": {
+        "EXPO_USE_PRECOMPILED_MODULES": "0"
+      },
       "ios": {
         "resourceClass": "m-medium"
       }
