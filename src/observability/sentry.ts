@@ -162,7 +162,7 @@ export function initSentry(options: InitSentryOptions = {}): boolean {
             processEvent(event, hint, client) {
               // Each auth incident needs its own request correlation,
               // even when re-login is followed by the same failure in this process.
-              if (event.tags?.operation === 'session' && ['forcedLogout', 'refreshResponseInvalid', 'authRetryResponseReplayed'].includes(String(event.tags?.kind))) {
+              if (event.tags?.operation === 'session' && ['forcedLogout', 'refreshResponseInvalid', 'refreshOutcomeUnknown', 'authRetryResponseReplayed'].includes(String(event.tags?.kind))) {
                 return event;
               }
               return processEvent(event, hint, client);

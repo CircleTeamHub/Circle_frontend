@@ -80,6 +80,24 @@ test('replayed auth response correlation survives restart without admitting arbi
   assert.doesNotMatch(JSON.stringify(await bad.readSessionDiagnostics()), /PRIVATE_CANARY/);
 });
 
+test('lost and interrupted rotations retain their stage and original request UUID across restart', async () => {
+  const disk = new Map();
+  const journal = loadJournal({ disk });
+  const clientRequestId = '12345678-1234-4234-8234-123456789abc';
+  for (const [reason, stage] of [['refresh-outcome-unknown', 'request'], ['refresh-interrupted', 'restore']]) {
+    journal.recordSessionDiagnostic(reason, { stage, clientRequestId, sessionPreserved: true, refreshToken: 'PRIVATE_CANARY' });
+  }
+  await journal.readSessionDiagnostics();
+  const restored = await loadJournal({ disk }).readSessionDiagnostics();
+  assert.equal(restored.length, 2);
+  assert.equal(restored[0].context.stage, 'request');
+  assert.equal(restored[1].context.stage, 'restore');
+  assert.ok(restored.every(row => row.context.clientRequestId === clientRequestId));
+  const bad = loadJournal();
+  bad.recordSessionDiagnostic('refresh-outcome-unknown', { stage: 'PRIVATE_CANARY' });
+  assert.doesNotMatch(JSON.stringify(restored) + JSON.stringify(await bad.readSessionDiagnostics()), /PRIVATE_CANARY/);
+});
+
 test('journal never keeps arbitrary strings, credentials, raw routes or account identifiers', async () => {
   const disk = new Map();
   const secret = 'PRIVATE_CANARY';

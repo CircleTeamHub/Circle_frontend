@@ -52,13 +52,13 @@ type AuthSuccessOptions = {
  * 过期账号移除。
  */
 function rememberCurrentAccount() {
-  const { user, accessToken, refreshToken, refreshUncertain } = useAuthStore.getState();
+  const { user, accessToken, refreshToken, refreshUncertain, refreshAttemptId } = useAuthStore.getState();
   if (!user || !accessToken || !refreshToken) return;
   useKnownAccountsStore.getState().upsertAccount({
     user,
     accessToken,
     refreshToken,
-    refreshUncertain,
+    refreshUncertain: refreshUncertain || Boolean(refreshAttemptId),
     updatedAt: Date.now(),
   });
 }
@@ -166,7 +166,7 @@ export function useAuth() {
           finally { if (mountedRef.current) setCommitting(false); }
           if (!mountedRef.current || (options.isAttemptCurrent && !options.isAttemptCurrent())) {
             if (!useAuthStore.getState().isAuthenticated && current.user && current.accessToken && current.refreshToken) {
-              setSession({ accessToken: current.accessToken, refreshToken: current.refreshToken }, current.user, { onboardingRequired: current.onboardingRequired, refreshUncertain: current.refreshUncertain });
+              setSession({ accessToken: current.accessToken, refreshToken: current.refreshToken }, current.user, { onboardingRequired: current.onboardingRequired, refreshUncertain: current.refreshUncertain || Boolean(current.refreshAttemptId) });
             }
             void logoutRequest(tokens.refreshToken).catch(error => reportHandledFailure('auth', 'revokeCancelledLogin', error));
             return;

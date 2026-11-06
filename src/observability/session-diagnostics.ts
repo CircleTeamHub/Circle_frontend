@@ -9,6 +9,7 @@ const MAX_RECORDS = 5;
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const REASONS = [
   'refresh-token-missing', 'refresh-rejected', 'refresh-response-invalid',
+  'refresh-outcome-unknown', 'refresh-interrupted',
   'request-rejected-after-refresh', 'auth-retry-response-replayed', 'realtime-revoked', 'bootstrap-rejected',
   'bootstrap-tokens-missing', 'hydration-tokens-invalid', 'hydration-read-failed',
   'startup-storage-failed', 'user-logout', 'account-switch', 'account-switch-rejected',
@@ -35,6 +36,7 @@ export interface SessionDiagnosticContext {
   responseHasAccessToken?: boolean;
   responseHasRefreshToken?: boolean;
   sessionPreserved?: boolean;
+  stage?: string;
 }
 interface RequestSnapshot {
   timestamp: number;
@@ -55,6 +57,7 @@ export interface SessionDiagnosticRecord {
 const FAILURE_KINDS = new Set([
   'http', 'api-code', 'invalid-json', 'network', 'timeout', 'body-read',
   'unexpected', 'session-changed', 'auth-retry-failed', 'refresh-response-invalid', 'auth-retry-response-replayed',
+  'refresh-outcome-unknown',
 ]);
 const REQUEST_EVENTS = new Set(['api.request.completed', 'api.request.failed', 'api.request.slow']);
 let memory: SessionDiagnosticRecord[] = [];
@@ -80,6 +83,7 @@ function safeContext(value: unknown): SessionDiagnosticContext {
   if (typeof source.durationMs === 'number' && Number.isFinite(source.durationMs) && source.durationMs >= 0) safe.durationMs = source.durationMs;
   if (typeof source.closeCode === 'number' && Number.isInteger(source.closeCode) && source.closeCode >= 1000 && source.closeCode <= 4999) safe.closeCode = source.closeCode;
   if (typeof source.responseShape === 'string' && ['empty', 'object', 'array', 'primitive', 'unknown'].includes(source.responseShape)) safe.responseShape = source.responseShape;
+  if (typeof source.stage === 'string' && ['prepare', 'request', 'persist', 'restore'].includes(source.stage)) safe.stage = source.stage;
   for (const key of ['userInitiated', 'authenticated', 'hasAccessToken', 'hasRefreshToken', 'responseHasAccessToken', 'responseHasRefreshToken', 'sessionPreserved'] as const) {
     if (typeof source[key] === 'boolean') safe[key] = source[key];
   }

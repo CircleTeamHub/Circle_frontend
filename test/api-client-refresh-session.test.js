@@ -31,7 +31,7 @@ async function waitFor(condition) {
   throw new Error('timed out waiting for condition');
 }
 
-function loadApiClientHarness({ persistError = false } = {}) {
+function loadApiClientHarness({ persistError = false, commitError = false, pausePrepare, pauseCommit } = {}) {
   const filePath = path.join(process.cwd(), 'src/services/api/client.ts');
   const source = fs.readFileSync(filePath, 'utf8');
   const transpiled = ts.transpileModule(source, {
@@ -58,17 +58,29 @@ function loadApiClientHarness({ persistError = false } = {}) {
     refreshToken: 'refresh-a',
     isAuthenticated: true,
     refreshUncertain: false,
+    refreshAttemptId: null,
     sessionEpoch: 1,
-    setTokens: (tokens) => {
+    setTokens: async (tokens) => {
       setTokenCalls.push(tokens);
       authState.accessToken = tokens.accessToken;
       authState.refreshToken = tokens.refreshToken;
       authState.refreshUncertain = false;
+      authState.refreshAttemptId = null;
+      if (pauseCommit) await pauseCommit.promise;
+      if (commitError) throw new Error('fixture commit failure');
     },
-    markRefreshUncertain: async () => {
+    markRefreshUncertain: async (requestId) => {
       authState.refreshUncertain = true;
+      if (requestId) authState.refreshAttemptId = requestId;
+      if (pausePrepare) await pausePrepare.promise;
       if (persistError) throw new Error('fixture storage failure');
-      persisted.push({ refreshUncertain: true });
+      persisted.push({ refreshUncertain: true, refreshAttemptId: authState.refreshAttemptId });
+    },
+    prepareRefresh: async (requestId) => {
+      authState.refreshAttemptId = requestId;
+      if (pausePrepare) await pausePrepare.promise;
+      if (persistError) throw new Error('fixture storage failure');
+      persisted.push({ refreshUncertain: false, refreshAttemptId: requestId });
     },
   };
 
@@ -246,6 +258,8 @@ test('request is not refreshed or replayed after the session changes before its 
 
   harness.authState.accessToken = 'access-b';
   harness.authState.refreshToken = 'refresh-b';
+  harness.authState.refreshUncertain = false;
+  harness.authState.refreshAttemptId = null;
   harness.authState.sessionEpoch += 1;
   initial.resolve(response(false, 401, { code: 1, message: 'expired', data: null }));
 
@@ -333,6 +347,8 @@ test('stale successful refresh cannot overwrite tokens after the active session 
 
   harness.authState.accessToken = 'access-b';
   harness.authState.refreshToken = 'refresh-b';
+  harness.authState.refreshUncertain = false;
+  harness.authState.refreshAttemptId = null;
   harness.authState.sessionEpoch += 1;
   refresh.resolve(
     response(true, 200, {
@@ -359,6 +375,8 @@ test('stale failed refresh does not clear a newer active session', async () => {
 
   harness.authState.accessToken = 'access-b';
   harness.authState.refreshToken = 'refresh-b';
+  harness.authState.refreshUncertain = false;
+  harness.authState.refreshAttemptId = null;
   harness.authState.sessionEpoch += 1;
   refresh.resolve(
     response(false, 500, { code: 1, message: 'refresh down', data: null }),
@@ -384,6 +402,8 @@ test('refresh failure cannot clear a newer session after asynchronous logout tea
 
   harness.authState.accessToken = 'access-b';
   harness.authState.refreshToken = 'refresh-b';
+  harness.authState.refreshUncertain = false;
+  harness.authState.refreshAttemptId = null;
   harness.authState.sessionEpoch += 1;
   clearPause.release.resolve();
 
@@ -403,6 +423,8 @@ test('missing refresh token cannot clear a newer session after asynchronous logo
 
   harness.authState.accessToken = 'access-b';
   harness.authState.refreshToken = 'refresh-b';
+  harness.authState.refreshUncertain = false;
+  harness.authState.refreshAttemptId = null;
   harness.authState.sessionEpoch += 1;
   clearPause.release.resolve();
 
@@ -474,7 +496,7 @@ test('same-session refresh failing on a network error keeps the session', async 
 
   await assert.rejects(request, (error) => {
     assert.equal(error.status, 0);
-    assert.equal(error.failureKind, 'network');
+    assert.equal(error.failureKind, 'refresh-outcome-unknown');
     return true;
   });
   assert.equal(harness.getClearCalls(), 0);
@@ -482,18 +504,12 @@ test('same-session refresh failing on a network error keeps the session', async 
   assert.equal(harness.authState.refreshToken, 'refresh-a');
 });
 
-test('a transient refresh failure does not stop the next request from refreshing', async () => {
+test('a lost rotation response never causes the consumed refresh credential to be sent again', async () => {
   const harness = loadApiClientHarness();
   harness.refreshResponses.push(
     { error: new TypeError('Network request failed') },
     {
-      promise: Promise.resolve(
-        response(true, 200, {
-          code: 0,
-          message: 'ok',
-          data: { accessToken: 'access-a-next', refreshToken: 'refresh-a-next' },
-        }),
-      ),
+      promise: Promise.resolve(response(false, 401, { message: 'token family reuse detected' })),
     },
   );
   harness.requestResponses.push(
@@ -502,14 +518,86 @@ test('a transient refresh failure does not stop the next request from refreshing
     { promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) },
   );
 
-  // 网络抖动那次刷新失败，但会话必须留着 —— 网络恢复后的下一个请求应当能正常刷新并成功。
+  // The server consumed refresh-a, but its 201 was lost. A second POST would
+  // revoke the family: a transport failure does not prove rotation rolled back.
   await assert.rejects(harness.apiClient('/profile/me'));
   assert.equal(harness.getClearCalls(), 0);
 
-  const recovered = await harness.apiClient('/profile/me');
-  assert.equal(recovered.ok, true);
-  assert.equal(harness.authState.accessToken, 'access-a-next');
+  await assert.rejects(harness.apiClient('/profile/me'));
+  assert.equal(harness.fetchCalls.filter(([url]) => url.endsWith('/auth/refresh')).length, 1);
+  assert.equal(harness.getClearCalls(), 0);
+  assert.equal(harness.authState.accessToken, 'access-a');
+  assert.equal(harness.authState.refreshUncertain, true);
   assert.equal(harness.authState.sessionEpoch, 1);
+  assert.equal(harness.diagnostics[0].reason, 'refresh-outcome-unknown');
+  assert.equal(harness.diagnostics[0].context.failureKind, 'network');
+  assert.equal(harness.diagnostics[0].context.clientRequestId, harness.fetchCalls[1][1].headers['X-Request-Id']);
+  assert.doesNotMatch(JSON.stringify(harness.diagnostics) + JSON.stringify(harness.reports), /refresh-a|access-a|token family reuse detected/);
+});
+
+test('rotation is not dispatched until the restart fence has been durably saved', async () => {
+  const prepare = deferred();
+  const h = loadApiClientHarness({ pausePrepare: prepare });
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, { accessToken: 'new-access', refreshToken: 'new-refresh' })) });
+  const request = h.refreshSessionAccessToken();
+  await waitFor(() => h.authState.refreshAttemptId !== null);
+  assert.equal(h.authState.refreshUncertain, false, 'ordinary in-flight rotation must not display recovery guidance');
+  assert.equal(h.fetchCalls.length, 0);
+  prepare.resolve();
+  assert.equal(await request, 'new-access');
+  assert.equal(h.persisted[0].refreshAttemptId, h.fetchCalls[0][1].headers['X-Request-Id']);
+});
+
+test('successful rotation waits for secure persistence before releasing the singleton', async () => {
+  const commit = deferred();
+  const h = loadApiClientHarness({ pauseCommit: commit });
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, { accessToken: 'new-access', refreshToken: 'new-refresh' })) });
+  let done = false;
+  const request = h.refreshSessionAccessToken().then(value => { done = true; return value; });
+  await waitFor(() => h.setTokenCalls.length === 1);
+  await Promise.resolve();
+  assert.equal(done, false);
+  const concurrent = h.refreshSessionAccessToken();
+  assert.equal(h.fetchCalls.length, 1);
+  commit.resolve();
+  assert.deepEqual(await Promise.all([request, concurrent]), ['new-access', 'new-access']);
+});
+
+test('a failed restart-fence write prevents the refresh POST altogether', async () => {
+  const h = loadApiClientHarness({ persistError: true });
+  await assert.rejects(h.refreshSessionAccessToken());
+  assert.equal(h.fetchCalls.length, 0);
+  assert.equal(h.getClearCalls(), 0);
+  assert.equal(h.authState.refreshUncertain, true);
+  assert.equal(h.diagnostics[0].context.stage, 'prepare');
+});
+
+test('a failed token commit retains the successor in memory and fences it rather than restoring the consumed token', async () => {
+  const h = loadApiClientHarness({ commitError: true });
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, { accessToken: 'new-access', refreshToken: 'new-refresh' })) });
+  await assert.rejects(h.refreshSessionAccessToken(), error => error.failureKind === 'refresh-outcome-unknown');
+  await assert.rejects(h.refreshSessionAccessToken());
+  assert.equal(h.fetchCalls.length, 1);
+  assert.equal(h.authState.refreshToken, 'new-refresh');
+  assert.equal(h.authState.refreshUncertain, true);
+  assert.equal(h.getClearCalls(), 0);
+  assert.equal(h.diagnostics[0].context.stage, 'persist');
+  assert.equal(h.diagnostics[0].context.status, 201);
+});
+
+test('an old token commit settling after a new login cannot quarantine or clear the new session', async () => {
+  const commit = deferred();
+  const h = loadApiClientHarness({ pauseCommit: commit });
+  h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, { accessToken: 'rotated-access', refreshToken: 'rotated-refresh' })) });
+  const request = h.refreshSessionAccessToken();
+  await waitFor(() => h.setTokenCalls.length === 1);
+  Object.assign(h.authState, { accessToken: 'new-login-access', refreshToken: 'new-login-refresh', refreshUncertain: false, refreshAttemptId: null, sessionEpoch: 2 });
+  commit.resolve();
+  await assert.rejects(request, error => error.failureKind === 'session-changed');
+  assert.equal(h.authState.refreshToken, 'new-login-refresh');
+  assert.equal(h.authState.refreshUncertain, false);
+  assert.equal(h.getClearCalls(), 0);
+  assert.equal(h.diagnostics.length, 0);
 });
 
 test('refresh returning a malformed token pair preserves the session and records the anomaly', async () => {
@@ -538,7 +626,9 @@ test('refresh returning a malformed token pair preserves the session and records
   assert.equal(harness.authState.refreshToken, 'refresh-a');
   assert.equal(harness.authState.isAuthenticated, true);
   assert.equal(harness.authState.refreshUncertain, true);
-  assert.deepEqual(harness.persisted, [{ refreshUncertain: true }]);
+  assert.equal(harness.persisted[0].refreshUncertain, false);
+  assert.equal(harness.persisted.at(-1).refreshUncertain, true);
+  assert.ok(harness.persisted.every(row => row.refreshAttemptId === harness.fetchCalls[1][1].headers['X-Request-Id']));
   assert.equal(harness.diagnostics.length, 1);
   const diagnostic = harness.diagnostics[0];
   assert.equal(diagnostic.reason, 'refresh-response-invalid');
@@ -568,7 +658,7 @@ for (const [label, refresh, shape, failureKind] of [
     const h = loadApiClientHarness();
     h.refreshResponses.push({ promise: Promise.resolve(refresh) });
     await assert.rejects(h.apiClient('/profile/me'), error => error.status === 201 && error.failureKind === 'refresh-response-invalid');
-    await assert.rejects(h.apiClient('/profile/me'), error => error.failureKind === 'refresh-response-invalid');
+    await assert.rejects(h.apiClient('/profile/me'), error => error.failureKind === 'refresh-outcome-unknown');
     assert.equal(h.fetchCalls.filter(([url]) => url.endsWith('/auth/refresh')).length, 1);
     assert.equal(h.getClearCalls(), 0);
     assert.equal(h.authState.isAuthenticated, true);
@@ -586,7 +676,7 @@ for (const [label, refresh, shape, failureKind] of [
 test('a restored uncertain refresh blocks rotation without clearing the cached session', async () => {
   const h = loadApiClientHarness();
   h.authState.refreshUncertain = true;
-  await assert.rejects(h.refreshSessionAccessToken(), error => error.failureKind === 'refresh-response-invalid');
+  await assert.rejects(h.refreshSessionAccessToken(), error => error.failureKind === 'refresh-outcome-unknown');
   assert.equal(h.fetchCalls.length, 0);
   assert.equal(h.getClearCalls(), 0);
   h.requestResponses.push({ promise: Promise.resolve(response(true, 200, { code: 0, message: 'ok', data: { ok: true } })) });
@@ -641,7 +731,7 @@ test('a malformed late refresh cannot quarantine or report against a newer login
 test('uncertain refresh keeps memory and local diagnostics when auth persistence fails', async () => {
   const h = loadApiClientHarness({ persistError: true });
   h.refreshResponses.push({ promise: Promise.resolve(response(true, 201, null)) });
-  await assert.rejects(h.refreshSessionAccessToken(), error => error.failureKind === 'refresh-response-invalid');
+  await assert.rejects(h.refreshSessionAccessToken(), error => error.failureKind === 'refresh-outcome-unknown');
   assert.equal(h.authState.refreshUncertain, true);
   assert.equal(h.authState.isAuthenticated, true);
   assert.equal(h.diagnostics.length, 1);
@@ -817,6 +907,8 @@ test('logout handler drops an in-flight refresh singleton so the next session ca
   logoutHandler();
   harness.authState.accessToken = 'access-b';
   harness.authState.refreshToken = 'refresh-b';
+  harness.authState.refreshUncertain = false;
+  harness.authState.refreshAttemptId = null;
   harness.authState.sessionEpoch += 1;
 
   const newRequest = harness.apiClient('/wallet');
@@ -872,6 +964,8 @@ test('settled stale refresh cleanup does not drop a newer in-flight refresh prom
   logoutHandler();
   harness.authState.accessToken = 'access-b';
   harness.authState.refreshToken = 'refresh-b';
+  harness.authState.refreshUncertain = false;
+  harness.authState.refreshAttemptId = null;
   harness.authState.sessionEpoch += 1;
 
   const newRequest = harness.apiClient('/wallet');
@@ -929,6 +1023,8 @@ test('a newer session bypasses an older refresh singleton without resetting it',
 
   harness.authState.accessToken = 'access-b';
   harness.authState.refreshToken = 'refresh-b';
+  harness.authState.refreshUncertain = false;
+  harness.authState.refreshAttemptId = null;
   harness.authState.sessionEpoch += 1;
 
   const firstNewRequest = harness.apiClient('/wallet/first');

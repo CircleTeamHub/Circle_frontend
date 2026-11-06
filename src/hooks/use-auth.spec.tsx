@@ -314,6 +314,19 @@ test('switching accounts preserves an uncertain refresh marker when saving and r
   }));
 });
 
+test('leaving an account during rotation quarantines its saved pre-rotation credential', async () => {
+  signInPreviousAccount();
+  mockAuthState.refreshUncertain = false;
+  mockAuthState.refreshAttemptId = '12345678-1234-4234-8234-123456789abc';
+  const target = { user: { id: 'user-2' }, accessToken: 'target-access', refreshToken: 'target-refresh', updatedAt: 1 };
+  jest.mocked(fetchCurrentUser).mockResolvedValue(target.user as never);
+  const { result } = renderHook(() => useAuth());
+  await act(async () => { await result.current.switchToAccount(target as never); });
+  expect(mockUpsertAccount).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    user: previousUser, refreshToken: 'rotated-refresh', refreshUncertain: true,
+  }));
+});
+
 test('adding an account still lands on messages if the previous account was signed out remotely meanwhile', async () => {
   // 停在「添加账号」登录页期间,旧账号被远端踢下线:会话已清空,标记还在。
   mockAddingAccount = true;

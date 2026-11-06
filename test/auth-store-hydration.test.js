@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { withObservabilityStubs } = require('./helpers/observability-stubs');
+const { loadTsModule } = require('./helpers/load-ts-module');
 
 function loadAuthStore({ realPersist = false } = {}) {
   const filePath = path.join(process.cwd(), 'src/stores/authStore.ts');
@@ -27,6 +28,7 @@ function loadAuthStore({ realPersist = false } = {}) {
     exports: {},
     console,
     require: withObservabilityStubs((request) => {
+      if (request === '@/observability/http-diagnostics') return loadTsModule('src/observability/http-diagnostics.ts');
       if (request === '@/observability/session-diagnostics') return {
         recordSessionDiagnostic: (reason, context) => {
           retained.push({ reason, context });
@@ -128,6 +130,35 @@ test('uncertain refresh survives auth persistence and hydration without losing c
   assert.equal(next.useAuthStore.getState().refreshToken, 'saved-refresh');
   next.useAuthStore.getState().setTokens({ accessToken: 'fresh-access', refreshToken: 'fresh-refresh' });
   assert.equal(next.useAuthStore.getState().refreshUncertain, false);
+});
+
+test('an interrupted rotation restores its durable request correlation and never loses the cached session', async () => {
+  const id = '12345678-1234-4234-8234-123456789abc';
+  const first = loadAuthStore();
+  first.useAuthStore.getState().setSession({ accessToken: 'saved-access', refreshToken: 'saved-refresh' }, { id: 'saved-user' });
+  assert.equal(typeof first.useAuthStore.getState().prepareRefresh, 'function');
+  await first.useAuthStore.getState().prepareRefresh(id);
+  assert.equal(first.useAuthStore.getState().refreshUncertain, false);
+  await first.persistCurrentAuthState();
+  const envelope = JSON.parse(first.storageSetCalls.at(-1)[1]);
+  assert.equal(envelope.state.refreshAttemptId, id);
+  const next = loadAuthStore();
+  next.useAuthStore.setState(next.persistOptions.merge(envelope.state, next.useAuthStore.getState()));
+  next.persistOptions.onRehydrateStorage()(next.useAuthStore.getState(), undefined);
+  assert.equal(next.useAuthStore.getState().refreshUncertain, true);
+  assert.equal(next.useAuthStore.getState().refreshToken, 'saved-refresh');
+  assert.equal(next.retained[0].reason, 'refresh-interrupted');
+  assert.equal(next.retained[0].context.clientRequestId, id);
+  assert.equal(next.reports[0].kind, 'refreshOutcomeUnknown');
+  assert.doesNotMatch(JSON.stringify(next.retained) + JSON.stringify(next.reports), /saved-refresh|saved-access|saved-user/);
+  await next.useAuthStore.getState().setTokens({ accessToken: 'next-access', refreshToken: 'next-refresh' });
+  assert.equal(next.useAuthStore.getState().refreshAttemptId, null);
+});
+
+test('hydration rejects arbitrary persisted refresh correlation strings at its boundary', () => {
+  const h = loadAuthStore();
+  const state = h.persistOptions.merge({ refreshUncertain: true, refreshAttemptId: 'PRIVATE_CANARY' }, h.useAuthStore.getState());
+  assert.equal(state.refreshAttemptId, null);
 });
 
 test('marking an uncertain refresh exposes the single real Zustand persistence failure to its caller', async () => {

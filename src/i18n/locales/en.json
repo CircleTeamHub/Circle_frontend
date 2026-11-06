@@ -123,6 +123,7 @@
       "requestFailed": "The operation could not be completed. Please try again.",
       "sessionExpired": "Your session has expired. Please sign in again.",
       "refreshResponseInvalid": "Couldn't refresh your session. Please sign in again.",
+      "refreshOutcomeUnknown": "Your session could not be confirmed. Please sign in again.",
       "sessionChangedDuringRefresh": "Your account changed while refreshing the session. Please try again.",
       "uploadTimeout": "Upload timed out. Check your connection and try again.",
       "uploadFailed": "Upload failed. Please try again later.",

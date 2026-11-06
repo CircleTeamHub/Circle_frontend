@@ -15,6 +15,8 @@
 | `refresh-token-missing` | 发起续期时没有 refresh token | 对照此前启动/退出记录；不能仅凭此推断服务端踢人 |
 | `refresh-rejected` | 续期被明确拒绝 | 按请求 ID 查实际 401/403、撤销/密码重置审计 |
 | `refresh-response-invalid` | 2xx 续期响应为空、凭证对无效、JSON 无效、正文读取失败或错误信封 | `status` 保留真实 HTTP 状态，包括 201；`failureKind` 保留底层失败类别。`responseShape=unknown` 表示没有可检查的凭证对象；两个 `responseHas*Token` 仅在解析到凭证值时记录是否存在非空字符串。新路径 `sessionPreserved=true`，不生成 forcedLogout |
+| `refresh-outcome-unknown` | 续期网络/超时/5xx 结果不明，或前置标记、新凭证持久化失败 | `stage=prepare/request/persist` 区分保存发送意图、请求/正文处理和保存后继凭证；`clientRequestId` 是发送前就保存的 UUID，`failureKind` 保留底层类别 |
+| `refresh-interrupted` | 冷启动发现上次轮换尚未完成的持久化 UUID | `stage=restore`，按 `clientRequestId` 找原请求；只能确认上次没有完成本地提交，不能仅凭此认定请求到达服务端 |
 | `request-rejected-after-refresh` | 续期完成后业务请求仍被拒绝 | 本条 ID 属于重试请求；时间线中另查续期 ID |
 | `auth-retry-response-replayed` | 续期后的 401 与原 401 返回相同的有效服务器请求 ID | 保留新凭证；用 `clientRequestId` 查重试是否到达后端，用 `initialRequestId` / `requestId` 查被复用的响应 |
 | `realtime-revoked` | 收到固定的会话撤销关闭信号 | `closeCode=1008`，核对服务端撤销事件；不保存原始关闭文本 |
@@ -29,9 +31,21 @@
 
 HTTP 成功不等于客户端已拿到可用凭证。该分支不再构造虚假的 401 或清除本地登录数据；真实的 401/403 拒绝仍按原规则处理。服务端可能已经轮换 refresh token，所以不能自动重发旧凭证：认证存储记录 `refreshUncertain=true`，暂停这个会话的后续自动续期；已写入的标记跨重启、切换账号保留。仍有效的 access token 可以继续使用；需要重新登录取得完整的新凭证才能恢复续期。新登录、成功设置新凭证、明确退出会重置此标记；普通操作遇到此失败使用可信的本地化文案提示重新登录，默认 retry 工具也不再重试它。
 
-同账号重新登录也建立新的 sessionEpoch，隔离旧请求。已切到另一个会话后才到达的旧回包仍按原 epoch 规则丢弃，不标记或清理新会话。本次没有解决“切号发生时旧账号的续期仍在途，账号列表已提前保存旧 token”的既有竞态，不能将上述标记保留解释为覆盖这种尚未标记的情况。
+同账号重新登录也建立新的 sessionEpoch，隔离旧请求。已切到另一个会话后才到达的旧回包仍按原 epoch 规则丢弃，不标记或清理新会话。切号时已经在途的轮换会折算为暂停标记；尚未设置轮换标记时就已被其他流程捕获的旧凭证快照，仍不能由这个标记追溯保护。
 
 每次实际失败的续期请求只生成一条档案和一条 `session/refreshResponseInvalid` 事件，并发调用共用同一请求。之后被标记拦截的尝试不重复上报；重新登录后再次发生会产生新的诊断 ID。档案记录 HTTP 状态、底层失败类别、形状、凭证存在布尔值、耗时和请求 ID，绝不记录错误响应正文。安全存储写入失败另外上报 `session/refreshStatePersist`，携带同一诊断 ID；此时当前进程仍停止续期，但不能保证跨重启的拦截标记已落盘。
+
+### 续期结果不明与进程重启
+
+续期不是可安全重试的普通 GET：服务端可能已消耗一次性的旧凭证，而客户端遇到超时、网络断开或 5xx。旧实现会保留旧凭证并在下次请求时再次发送；回归用例已证明，这会把“服务端已轮换、客户端丢失响应”转成会话族重放。此用例证明代码缺陷，不代表已经还原某次历史手机事故的底层异常。
+
+现在发送前先将随机 `refreshAttemptId` 与原会话一起持久化，成功收到完整凭证后，等待新凭证和清除标记的实际存储写入完成，再释放续期单例。正常在途请求不置 `refreshUncertain`，不弹恢复提示；错误或冷启动遗留 UUID 才进入暂停状态。网络/超时/5xx 的不明结果以 `operation=session kind=refreshOutcomeUnknown` 上报，本地保存上述两个新原因，并绕过 SDK 相同错误去重。冷启动记录表示恢复到未完成状态，不等同于新发生了一次服务端失败。
+
+这个选择保留登录数据、仍有效的 access token 和聊天缓存，但在无法确认轮换结果时需要重新登录，不再自动重发旧凭证。后台聊天/实时通道主动续期也会触发全局提示，提供现有的登录入口；取消提示可继续浏览本地内容。登录成功前不会主动清会话。发送前标记写入失败时不发送；保存后继凭证失败时保留内存里的新凭证并暂停，不回滚到旧凭证。切号保存/取消登录回滚时，在途 UUID 也折算成暂停标记，避免将它保存成可重放的旧凭证。
+
+应用锁已开启或资料引导尚未完成时，明确的恢复操作也仅放行认证页面。应用锁对缓存页面和陌生设备批准操作仍有效；返回原页面即恢复锁屏。资料引导也不会因恢复操作而被视为完成。
+
+强杀可能发生在新凭证已保存但清标记尚未完成的窗口，这时也会要求重新登录；该策略优先避免重放，未新增服务端幂等恢复或放宽重放检测。服务器已返回 201 不证明客户端已收到、解析或持久化成功。2026-11-05 长测确认了另一个会话族重放导致账号级连带撤销，后端范围修复另见 circle_be PR #309；该旧会话更早的响应/写盘记录缺失，不能将本节的可复现机制当作已证实的历史唯一根因。
 
 ### 续期后收到重复的旧 401
 
@@ -50,7 +64,7 @@ Sentry 设置 `normalizeDepth=4`，使 `extra.clientDiagnostics[].details` 在 S
 1. 记下发生时间和时区，设备系统，以及当时在做什么。多个设备分别收集，不能仅凭同时观察到登录页就认为原因相同。账号 ID 通过授权的排障渠道单独提供，不写进诊断档案；不需要密码、验证码或 Token。
 2. 登录页点 **复制登录诊断信息**，将内容交给技术支持。已经重新登录的，进入 **设置** 底部复制。入口仅在有可读档案时显示；可以离线复制，不要求再次登录。先复制，再卸载、清除数据或继续多次切号，避免覆盖有限的历史。
 3. 保留整个 JSON，重点取 `records[].id`、`timestamp`、`reason`、发生时的 `buildVersion` 和 `context.requestId`。时间为设备的 Unix 毫秒时间戳，转换为 UTC 后与服务器对照；设备时钟可能有偏差，优先用关联 ID。
-4. Sentry 选正确环境和版本，自动退出搜索 `operation:session kind:forcedLogout diagnosticId:<UUID>`；续期响应异常搜索 `operation:session kind:refreshResponseInvalid diagnosticId:<UUID>`；重复响应搜索 `operation:session kind:authRetryResponseReplayed diagnosticId:<UUID>`。后两者确认 `sessionPreserved=true`、实际 status、failureKind。存储恢复/写入失败按其 operation/kind 加同一 ID 查询。没有 Sentry 事件时仍先用本地档案继续，不能据此认定没有故障。
+4. Sentry 选正确环境和版本，自动退出搜索 `operation:session kind:forcedLogout diagnosticId:<UUID>`；续期响应异常搜索 `operation:session kind:refreshResponseInvalid diagnosticId:<UUID>`；轮换结果不明/中断搜索 `operation:session kind:refreshOutcomeUnknown diagnosticId:<UUID>`；重复响应搜索 `operation:session kind:authRetryResponseReplayed diagnosticId:<UUID>`。保留会话的路径确认 `sessionPreserved=true`、实际 status、failureKind 和 stage。存储恢复/写入失败按其 operation/kind 加同一 ID 查询。没有 Sentry 事件时仍先用本地档案继续，不能据此认定没有故障。
 5. 在 Loki 选择事故 UTC 时间前后各 5 分钟，查询 `{service="circle-be"} |= "<REQUEST_UUID>"`，再检查 `http_access` / `http_error` 的 method、path、statusCode、aborted、durationMs。先用精确 UUID 文本匹配可兼容根层和嵌套 message JSON；展开后按实际字段过滤。401 原请求、refresh、retry 各自生成不同的 `clientRequestId`，逐个串起来；若重试返回的 `requestId` 与原 401 相同，分别查发送 ID 和响应 ID，不能把原请求日志误认作一次新凭证拒绝。
 6. 对照同一时间窗的 `security_event`、会话撤销/密码重置审计、发布和进程启动日志。通过受限的只读数据库查询核对会话是否撤销、续期和密码登录的先后；不要导出凭证或整行会话。请求成功但随后本地清理，继续按本地 `reason` 定位分支；服务端明确撤销则追到对应审计操作。需要第二台设备时重复完整采集，再判断是否有共同触发点。
 

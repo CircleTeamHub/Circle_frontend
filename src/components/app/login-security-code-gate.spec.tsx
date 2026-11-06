@@ -1,8 +1,14 @@
 import { act, render, waitFor } from '@testing-library/react-native';
+import { Alert, Modal } from 'react-native';
 import { LoginSecurityCodeGate } from './login-security-code-gate';
 import { fetchLoginSecurityCodeStatus } from '@/services/api/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { useLoginApprovalStore } from '@/features/security/store/login-approval-store';
+import { useAccountSwitcherStore } from '@/stores/accountSwitcherStore';
+import { SessionRecoveryPrompt } from './session-recovery-prompt';
+
+const mockPush = jest.fn();
+let mockSegments = ['(tabs)'];
 
 jest.mock('@/stores/authStore', () => {
   const { create } = jest.requireActual<typeof import('zustand')>('zustand');
@@ -10,6 +16,9 @@ jest.mock('@/stores/authStore', () => {
     isAuthenticated: true,
     isLoading: false,
     onboardingRequired: false,
+    hasHydrated: true,
+    sessionEpoch: 1,
+    refreshUncertain: false,
     user: { id: 'A' } as { id: string } | null,
   }));
   return { useAuthStore };
@@ -25,7 +34,9 @@ jest.mock('@/services/api/errors', () => ({
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
 jest.mock('@/observability/report-failure', () => ({ reportHandledFailure: jest.fn() }));
-jest.mock('expo-router', () => ({ router: { replace: jest.fn() } }));
+jest.mock('expo-router', () => ({
+  router: { replace: jest.fn() }, useRouter: () => ({ push: mockPush }), useSegments: () => mockSegments,
+}));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -47,13 +58,42 @@ function deferred<T>() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSegments = ['(tabs)'];
+  useAccountSwitcherStore.setState({ addingAccount: false, switching: false });
   useLoginApprovalStore.setState({ appLocked: true });
   useAuthStore.setState({
     isAuthenticated: true,
     isLoading: false,
     onboardingRequired: false,
+    hasHydrated: true,
+    sessionEpoch: 1,
+    refreshUncertain: false,
     user: { id: 'A' } as never,
   });
+});
+
+test('locked recovery exposes only the auth form and keeps cached tabs and approval actions locked', async () => {
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  jest.mocked(fetchLoginSecurityCodeStatus).mockResolvedValue({ enabled: true });
+  const screen = render(<><LoginSecurityCodeGate /><SessionRecoveryPrompt /></>);
+  await waitFor(() => expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true));
+  act(() => useAuthStore.setState({ refreshUncertain: true }));
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+  act(() => { jest.mocked(Alert.alert).mock.calls[0][2]?.find(button => button.text === 'auth.login')?.onPress?.(); });
+  expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+  expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
+  mockSegments = ['(auth)'];
+  screen.rerender(<><LoginSecurityCodeGate /><SessionRecoveryPrompt /></>);
+  expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(false);
+  expect(useLoginApprovalStore.getState().appLocked).toBe(true);
+  expect(useAuthStore.getState().isAuthenticated).toBe(true);
+  act(() => useAuthStore.setState({ refreshUncertain: false }));
+  expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
+  act(() => useAuthStore.setState({ refreshUncertain: true }));
+  expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(false);
+  mockSegments = ['(tabs)'];
+  screen.rerender(<><LoginSecurityCodeGate /><SessionRecoveryPrompt /></>);
+  expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
 });
 
 test('the approval prompt stays blocked until the lock status of the current account is known', async () => {

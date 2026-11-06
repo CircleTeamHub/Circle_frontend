@@ -1217,15 +1217,17 @@ test("preserved refresh anomalies retain correlation, unknown shape and distinct
   initSentry({ client: { init: o => { config = o; }, wrap: c => c }, dsn: 'https://a@o/1' });
   const [dedupe] = config.integrations([dedupeIntegration()]);
   const events = [];
-  for (const diagnosticId of ['12345678-1234-4234-8234-123456789abc', '87654321-4321-4321-8321-cba987654321']) {
-    reportError(new Error('Authentication refresh response invalid'), {
-      operation: 'session', kind: 'refreshResponseInvalid', diagnosticId,
-      status: 201, responseShape: 'unknown', sessionPreserved: true, failureKind: 'invalid-json',
-    }, { captureException: (error, context) => events.push({ ...config.beforeSend(context),
-      exception: { values: [{ type: error.name, value: error.message }] },
-    }) });
+  for (const kind of ['refreshResponseInvalid', 'refreshOutcomeUnknown']) {
+    for (const diagnosticId of ['12345678-1234-4234-8234-123456789abc', '87654321-4321-4321-8321-cba987654321']) {
+      reportError(new Error('Authentication refresh response invalid'), {
+        operation: 'session', kind, diagnosticId,
+        status: 201, responseShape: 'unknown', sessionPreserved: true, failureKind: 'invalid-json',
+      }, { captureException: (error, context) => events.push({ ...config.beforeSend(context),
+        exception: { values: [{ type: error.name, value: error.message }] },
+      }) });
+    }
   }
-  assert.equal(events.length, 2);
+  assert.equal(events.length, 4);
   for (const event of events) {
     assert.equal(event.extra.sessionPreserved, true);
     assert.equal(event.extra.responseShape, 'unknown');

@@ -32,7 +32,7 @@ function makeAbortError(): Error {
 function defaultShouldRetry(error: unknown): boolean {
   if (error instanceof Error && error.name === 'AbortError') return false;
   if (error instanceof ApiError) {
-    if (['refresh-response-invalid', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
+    if (['refresh-response-invalid', 'refresh-outcome-unknown', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
     const status = error.status;
     // 408 / 429 是"客户端这次撞墙"的可恢复信号，仍允许重试。
     if (status >= 400 && status < 500 && status !== 408 && status !== 429) {

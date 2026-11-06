@@ -20,6 +20,7 @@ import { sanitizeUserForPersist } from './persisted-user';
 import { reportHandledFailure } from '@/observability/report-failure';
 import { reportError } from '@/observability/sentry';
 import { recordSessionDiagnostic } from '@/observability/session-diagnostics';
+import { safeHttpRequestId } from '@/observability/http-diagnostics';
 
 export interface AuthUser {
   id: string;
@@ -59,9 +60,10 @@ interface AuthState {
   refreshToken: string | null;
   user: AuthUser | null;
   isAuthenticated: boolean;
-  // A successful refresh may have rotated the server token without delivering
-  // usable credentials. Never replay that old refresh token, even after restart.
+  // An ambiguous result requires fresh credentials; an in-flight UUID alone
+  // does not show recovery UI until a failed outcome or the next cold start.
   refreshUncertain: boolean;
+  refreshAttemptId: string | null;
   onboardingRequired: boolean;
   // Runtime-only auth session identity generation. This advances when a session
   // starts or ends, but remains stable while that session's tokens rotate.
@@ -74,8 +76,9 @@ interface AuthState {
     user: AuthUser,
     options?: { onboardingRequired?: boolean; refreshUncertain?: boolean }
   ) => void;
-  setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
-  markRefreshUncertain: () => Promise<void>;
+  setTokens: (tokens: { accessToken: string; refreshToken: string }) => Promise<void>;
+  prepareRefresh: (requestId: string) => Promise<void>;
+  markRefreshUncertain: (requestId?: string) => Promise<void>;
   setUser: (user: AuthUser) => void;
   setOnboardingRequired: (required: boolean) => void;
   clearSession: (options?: { preserveLoading?: boolean }) => void;
@@ -92,6 +95,7 @@ function partializeAuthState(state: AuthState) {
     user: sanitizeUserForPersist(state.user),
     isAuthenticated: state.isAuthenticated,
     refreshUncertain: state.refreshUncertain,
+    refreshAttemptId: state.refreshAttemptId,
     onboardingRequired: state.onboardingRequired,
   };
 }
@@ -114,6 +118,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       refreshUncertain: false,
+      refreshAttemptId: null,
       onboardingRequired: false,
       sessionEpoch: 0,
       isLoading: true,
@@ -126,20 +131,26 @@ export const useAuthStore = create<AuthState>()(
           user,
           isAuthenticated: true,
           refreshUncertain: options?.refreshUncertain ?? false,
+          refreshAttemptId: null,
           onboardingRequired: options?.onboardingRequired ?? false,
           isLoading: false,
           sessionEpoch: state.sessionEpoch + 1,
         })),
 
-      setTokens: ({ accessToken, refreshToken }) =>
-        set(() => ({
+      setTokens: async ({ accessToken, refreshToken }) => {
+        await set(() => ({
           accessToken,
           refreshToken,
           isAuthenticated: true,
           refreshUncertain: false,
-        })),
+          refreshAttemptId: null,
+        }));
+      },
 
-      markRefreshUncertain: async () => { await set({ refreshUncertain: true }); },
+      markRefreshUncertain: async (requestId) => {
+        await set((state) => ({ refreshUncertain: true, refreshAttemptId: requestId ?? state.refreshAttemptId }));
+      },
+      prepareRefresh: async (requestId) => { await set({ refreshAttemptId: requestId }); },
 
       setUser: (user) => set({ user }),
 
@@ -153,6 +164,7 @@ export const useAuthStore = create<AuthState>()(
           user: null,
           isAuthenticated: false,
           refreshUncertain: false,
+          refreshAttemptId: null,
           onboardingRequired: false,
           isLoading: options?.preserveLoading ? state.isLoading : false,
           sessionEpoch: state.sessionEpoch + 1,
@@ -192,10 +204,12 @@ export const useAuthStore = create<AuthState>()(
         }
         const persisted = persistedState && typeof persistedState === 'object'
           ? persistedState as Partial<AuthState> : {};
+        const refreshAttemptId = safeHttpRequestId(persisted.refreshAttemptId) ?? null;
         return {
           ...currentState,
           ...persisted,
-          refreshUncertain: persisted.refreshUncertain === true,
+          refreshUncertain: persisted.refreshUncertain === true || Boolean(refreshAttemptId),
+          refreshAttemptId,
         };
       },
       partialize: partializeAuthState,
@@ -226,6 +240,16 @@ export const useAuthStore = create<AuthState>()(
           typeof live.refreshToken === 'string' &&
           live.refreshToken.length > 0;
         if (memoryHasLiveSession) {
+          if (live.refreshUncertain && live.refreshAttemptId) {
+            const context = {
+              endpointPath: '/auth/refresh', method: 'POST', stage: 'restore',
+              clientRequestId: live.refreshAttemptId, sessionPreserved: true,
+            };
+            const diagnosticId = recordSessionDiagnostic('refresh-interrupted', context);
+            reportError(new Error('Authentication refresh was interrupted'), {
+              ...context, diagnosticId, operation: 'session', kind: 'refreshOutcomeUnknown',
+            });
+          }
           return;
         }
 

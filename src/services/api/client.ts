@@ -286,7 +286,8 @@ async function readStableDeviceId(): Promise<string | null> {
 async function executeRequest<T>(
   endpoint: string,
   options: RequestOptions,
-  accessTokenOverride?: string | null
+  accessTokenOverride?: string | null,
+  preparedRequestId?: string,
 ) {
   const {
     method = 'GET',
@@ -301,7 +302,7 @@ async function executeRequest<T>(
     (auth ? useAuthStore.getState().accessToken : null);
   const url = `${API_URL}${endpoint}`;
   const diagnosticSessionEpoch = useAuthStore.getState().sessionEpoch;
-  const clientRequestId = createHttpRequestId();
+  const clientRequestId = preparedRequestId ?? createHttpRequestId();
   let requestId = clientRequestId;
   let responseRequestId: string | undefined;
   const startedAt = diagnosticNow();
@@ -494,13 +495,15 @@ async function refreshAccessToken(sessionEpoch: number) {
   assertSessionEpoch(sessionEpoch);
   if (useAuthStore.getState().refreshUncertain) {
     throw new ApiError(
-      i18n.t('common.errors.refreshResponseInvalid', { defaultValue: '暂时无法更新登录状态，请重新登录后再试' }),
-      { status: 0, failureKind: 'refresh-response-invalid' },
+      i18n.t('common.errors.refreshOutcomeUnknown', { defaultValue: '登录状态暂时无法确认，请重新登录后继续' }),
+      { status: 0, failureKind: 'refresh-outcome-unknown' },
     );
   }
 
   let refreshResponseStatus: number | undefined;
   let refreshResponseDetails: SessionDiagnosticContext = {};
+  const refreshRequestId = createHttpRequestId();
+  let stage = 'prepare';
   const activeRefreshPromise = (async () => {
     const { refreshToken } = useAuthStore.getState();
 
@@ -514,7 +517,13 @@ async function refreshAccessToken(sessionEpoch: number) {
       );
     }
 
+    // Rotation can commit even if the response is lost or this process is killed.
+    // Fence the old credential on disk before sending it, not after an error.
+    await useAuthStore.getState().prepareRefresh(refreshRequestId);
+    assertSessionEpoch(sessionEpoch);
     const stableDeviceId = await readStableDeviceId();
+    assertSessionEpoch(sessionEpoch);
+    stage = 'request';
     const { res, payload, requestId, clientRequestId, durationMs } = await executeRequest<{
       accessToken: string;
       refreshToken: string;
@@ -527,7 +536,9 @@ async function refreshAccessToken(sessionEpoch: number) {
         ...(stableDeviceId
           ? { headers: { 'X-Stable-Device-Id': stableDeviceId } }
           : {}),
-      }
+      },
+      undefined,
+      refreshRequestId,
     );
     refreshResponseStatus = res.status;
     assertSessionEpoch(sessionEpoch);
@@ -569,28 +580,32 @@ async function refreshAccessToken(sessionEpoch: number) {
     const currentAuthState = useAuthStore.getState();
     assertSessionEpoch(sessionEpoch);
 
-    currentAuthState.setTokens(tokens);
+    stage = 'persist';
+    await currentAuthState.setTokens(tokens);
+    assertSessionEpoch(sessionEpoch);
 
     return tokens.accessToken;
   })()
     .catch(async (error) => {
       assertSessionEpoch(sessionEpoch);
-      const responseStatus = refreshResponseStatus ?? (error instanceof ApiError ? error.responseStatus : undefined);
-      if (error instanceof ApiError && responseStatus !== undefined && responseStatus >= 200 && responseStatus < 300) {
-        // The server may already have consumed the refresh token. Retain the
-        // session, but persistently stop rotation until fresh login credentials.
+      const responseStatus = refreshResponseStatus ?? (error instanceof ApiError ? error.responseStatus ?? error.status : undefined);
+      if (!isDefinitiveAuthFailure(error)) {
+        const invalidResponse = stage === 'request' && responseStatus !== undefined && responseStatus >= 200 && responseStatus < 300;
         const state = useAuthStore.getState();
-        const persistence = state.markRefreshUncertain();
+        const persistence = state.markRefreshUncertain(refreshRequestId);
         const context: SessionDiagnosticContext = {
-          endpointPath: '/auth/refresh', method: 'POST', status: responseStatus,
-          requestId: error.requestId, clientRequestId: error.clientRequestId, durationMs: error.durationMs, failureKind: error.failureKind,
+          endpointPath: '/auth/refresh', method: 'POST', status: responseStatus, stage,
+          requestId: error instanceof ApiError ? error.requestId : undefined,
+          clientRequestId: refreshRequestId,
+          durationMs: error instanceof ApiError ? error.durationMs : undefined,
+          failureKind: error instanceof ApiError ? error.failureKind : 'unexpected',
           responseShape: 'unknown', ...refreshResponseDetails,
           authenticated: state.isAuthenticated, hasAccessToken: Boolean(state.accessToken),
           hasRefreshToken: Boolean(state.refreshToken), sessionPreserved: true,
         };
-        const diagnosticId = recordSessionDiagnostic('refresh-response-invalid', context);
-        reportError(new Error('Authentication refresh response invalid'), {
-          ...context, diagnosticId, operation: 'session', kind: 'refreshResponseInvalid',
+        const diagnosticId = recordSessionDiagnostic(invalidResponse ? 'refresh-response-invalid' : 'refresh-outcome-unknown', context);
+        reportError(new Error('Authentication refresh outcome unavailable'), {
+          ...context, diagnosticId, operation: 'session', kind: invalidResponse ? 'refreshResponseInvalid' : 'refreshOutcomeUnknown',
         });
         try {
           await persistence;
@@ -601,13 +616,13 @@ async function refreshAccessToken(sessionEpoch: number) {
         }
         assertSessionEpoch(sessionEpoch);
         throw new ApiError(
-          i18n.t('common.errors.refreshResponseInvalid', { defaultValue: '暂时无法更新登录状态，请重新登录后再试' }),
-          { status: responseStatus, failureKind: 'refresh-response-invalid',
-            reportEndpoint: '/auth/refresh', reportMethod: 'POST', requestId: error.requestId, clientRequestId: error.clientRequestId, durationMs: error.durationMs },
+          i18n.t(invalidResponse ? 'common.errors.refreshResponseInvalid' : 'common.errors.refreshOutcomeUnknown', { defaultValue: '登录状态暂时无法确认，请重新登录后继续' }),
+          { status: responseStatus ?? 0, failureKind: invalidResponse ? 'refresh-response-invalid' : 'refresh-outcome-unknown',
+            reportEndpoint: '/auth/refresh', reportMethod: 'POST', requestId: context.requestId, clientRequestId: refreshRequestId, durationMs: context.durationMs },
         );
       }
-      // 只有服务端明确否认 refresh token 时才清 session。网络 / 超时 / 5xx 一律原样抛出：
-      // 登录态保留，singleton 已在 finally 里释放，下一个请求会重新发起刷新。
+      // Only an explicit server rejection clears the session. Ambiguous failures
+      // retain the session and fence the credential rather than replaying it.
       if (
         isDefinitiveAuthFailure(error) &&
         useAuthStore.getState().sessionEpoch === sessionEpoch
@@ -651,7 +666,7 @@ export function refreshSessionAccessToken(): Promise<string> {
 
 function shouldReportApiFailure(error: unknown, status: number | undefined): boolean {
   // Auth anomalies are captured once at their decision boundary.
-  if (error instanceof ApiError && ['refresh-response-invalid', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
+  if (error instanceof ApiError && ['refresh-response-invalid', 'refresh-outcome-unknown', 'auth-retry-response-replayed'].includes(error.failureKind ?? '')) return false;
   if (error instanceof ApiError && error.failureKind === 'invalid-json') {
     return true;
   }
