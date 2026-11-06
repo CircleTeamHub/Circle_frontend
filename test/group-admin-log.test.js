@@ -31,6 +31,8 @@ const EVENT_KINDS = [
   'history-cleared',
   'admission-reviewed',
   'member-banned',
+  'message-pinned',
+  'message-unpinned',
 ];
 
 const NEW_ERROR_CODES = [
